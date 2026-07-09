@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "conformer-search"
+version = "1.0.0"
+description = "Automated conformer search pipeline for organic molecules"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "QCcalc Team"}
+]
+keywords = ["computational-chemistry", "conformers", "molecular-modeling", "quantum-chemistry"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering :: Chemistry",
+]
+
+dependencies = [
+    "numpy>=2.1.0",
+    "rdkit>=2022.09.1",
+    "openpyxl>=3.1",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+api = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "python-multipart>=0.0.9",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.4.0",
+    "mypy>=1.8.0",
+    "pre-commit>=3.6.0",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+conformer-search = "conformer_search.cli:main"
+acp = "acp.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["conformer_search*", "acp*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests (require external binaries)",
+    "requires_gaussian: marks tests that need Gaussian 16 installed",
+    "requires_orca: marks tests that need ORCA installed",
+    "requires_crest: marks tests that need CREST installed",
+    "requires_xtb: marks tests that need xTB installed",
+    "requires_isostat: marks tests that need ISOSTAT installed",
+    "requires_shermo: marks tests that need Shermo installed",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+ignore_missing_imports = true
+warn_unused_configs = true
+disallow_untyped_defs = false

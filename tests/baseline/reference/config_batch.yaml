@@ -1,0 +1,85 @@
+executables:
+  gaussian:
+    path: /opt/g16/g16
+    use_wrapper: true
+    wrapper_path: ./scripts/run_g16_worker.sh
+  orca:
+    path: /opt/orca/orca
+    nproc: 4
+    maxcore: null
+  xtb:
+    path: /opt/xtb-dist/bin/xtb
+    fallback_paths:
+    - /opt/xtb/bin/xtb
+    - /usr/local/bin/xtb
+  crest:
+    path: /opt/crest/crest
+    gfn_level: 2
+  isostat:
+    path: /opt/molclus_1.14_Linux/isostat
+  shermo:
+    path: /opt/Shermo_2.6.1/Shermo
+resources:
+  nproc: 4
+  mem: 30GB
+  orca_maxcore_safety: 0.8
+theory:
+  optimization:
+    method: B3LYP
+    basis: def2-SVP
+    dispersion: GD3BJ
+    solvent: toluene
+    solvent_model: cpcm
+    engine: orca
+  frequency:
+    engine: orca
+  single_point:
+    method: PWPB95 D4
+    basis: def2-TZVPD def2/J def2-TZVPD/C
+    solvent: toluene
+    solvent_model: smd
+  preoptimization:
+    gfn_level: 2
+    solvent: toluene
+thermo:
+  temperature_k: 373.15
+  pressure_atm: 1.0
+  scl_zpe: 0.9905
+  shermo_ilowfreq: 2
+  shermo_imagreal: 0
+  shermo_conc: 1.0
+protocols:
+  default: ext
+  ext:
+    stages:
+      crest: true
+      clustering: true
+      optimization: true
+      frequency: true
+      single_point: true
+      shermo: true
+    two_stage_enabled: true
+    ngeom_default: 3
+    ngeom_max: 6
+    funnel:
+      search_mode: crest_two_stage_gfn0_to_gfn2
+      clustering_mode: isostat
+      prescreen_mode: none
+      rerank_mode: none
+    handoff:
+      mode: optimize_all_candidates
+      ranking_after_handoff: final_sp_minimum
+    opt_engine: null
+    freq_engine: null
+    final_opt_sp:
+      final_sp_method: null
+      final_sp_basis: null
+cluster:
+  enabled: false
+  type: local
+  queue: normal
+  walltime: '24:00'
+  extra_flags: ''
+optimization_control:
+  timeout:
+    default_seconds: 86400

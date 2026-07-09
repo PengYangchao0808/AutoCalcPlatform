@@ -1,0 +1,64 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.pyc
+*.pyo
+
+# --- Virtual environments ---
+venv/
+.venv/
+env/
+.env
+
+# --- IDE / editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Sisyphus tool data (keep locally, skip in repo) ---
+.sisyphus/
+
+# --- Local run outputs ---
+ACP_runs/
+conformer_output/
+tmp_bench_top/
+
+# --- Generated HTML reports (except frontend) ---
+*.html
+!frontend/*.html
+
+# --- SQLite databases ---
+*.db
+
+# --- Archives ---
+*.zip
+
+# --- CREST output leaked to root ---
+crest_*.xyz
+crest_*.xyz.*
+crest.restart
+coord
+coord.original
+
+# --- Project-specific ---
+*.log
+*.out
+*.chk
+scratch/
+results/
+output/
+uploads/

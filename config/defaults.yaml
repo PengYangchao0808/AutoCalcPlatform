@@ -1,0 +1,313 @@
+# ConformerSearch Default Configuration
+# ======================================
+#
+# This file matches the Python built-in defaults from
+# src/conformer_search/config.py:_get_default_config().
+# It is the SINGLE source of truth for default values when loaded
+# via load_config(); the Python built-in serves as fallback only.
+#
+# Copy this file and modify as needed for your environment.
+
+# ==================== Executable Paths ====================
+executables:
+  gaussian:
+    path: "g16"  # Gaussian 16 executable
+    use_wrapper: true
+    wrapper_path: "./scripts/run_g16_worker.sh"
+
+  orca:
+    path: "/opt/software/orca/orca"  # ORCA executable
+    ld_library_path: "/opt/software/openmpi/lib:/opt/software/orca"
+    nproc: 10               # ORCA-specific core count (overrides resources.nproc if set)
+    maxcore:            # ORCA-specific maxcore in MB (auto-calculated if not set)
+
+  xtb:
+    path: "xtb"  # xTB executable
+    fallback_paths:  # available via resolve_executable_config() in resource_utils.py
+      - "/opt/xtb/bin/xtb"
+      - "/usr/local/bin/xtb"
+
+  crest:
+    path: "crest"  # CREST executable
+    gfn_level: 2
+
+  isostat:
+    path: "isostat"  # ISOSTAT executable
+
+  shermo:
+    path: "Shermo"  # Shermo executable
+
+# ==================== Computational Resources ====================
+resources:
+  nproc: 20       # Number of CPU cores (built-in default)
+  mem: "30GB"     # Memory limit
+  orca_maxcore_safety: 0.8  # ORCA maxcore safety factor
+
+# ==================== Theory Level Configuration ====================
+theory:
+  # DFT Optimization (for final geometry optimization)
+  optimization:
+    method: B3LYP
+    basis: def2-SVP
+    dispersion: GD3BJ
+    solvent: null
+    solvent_model: smd  # smd, pcm, cpcm
+    engine: gaussian
+
+  frequency:
+    engine: gaussian
+
+  single_point:
+    method: wB97X-D4
+    basis: def2-TZVPP
+    solvent: null
+    solvent_model: smd
+
+  preoptimization:
+    gfn_level: 2
+    solvent: null
+
+  nmr:
+    engine: gaussian
+    method: B3LYP
+    basis: def2-TZVPP
+    solvent: null
+    solvent_model: smd
+
+# ==================== Thermodynamic Parameters ====================
+thermo:
+  temperature_k: 298.15  # built-in default
+  pressure_atm: 1.0
+  scl_zpe: 0.9905
+  shermo_ilowfreq: 2
+  shermo_imagreal: 0
+  shermo_conc: 1.0  # Optional, comment out or set to null to disable concentration correction
+
+# ==================== NMR Parameters ====================
+nmr:
+  temperature_k: 298.15
+  energy_window_kcal: 3.0
+  max_conformers: 10
+  references:
+    "1H": 31.88
+    "13C": 186.10
+    "15N": null
+    "19F": null
+    "31P": null
+
+# ==================== Conformer Search Protocols ====================
+# Per-stage control: set any stage to false to skip it.
+# Stages: crest, clustering, optimization, frequency, single_point, shermo
+protocols:
+  default: ext
+
+  # EXT Protocol: Two-stage CREST (GFN0→GFN2) + full DFT handoff
+  # Recommended for most organic molecules
+  ext:
+    stages:
+      crest: true
+      clustering: true
+      optimization: true
+      frequency: true
+      single_point: true
+      shermo: true
+    two_stage_enabled: true
+    ngeom_default: 3
+    ngeom_max: 6
+    funnel:
+      search_mode: crest_two_stage_gfn0_to_gfn2
+      clustering_mode: isostat
+      prescreen_mode: none
+      rerank_mode: none
+    handoff:
+      mode: optimize_all_candidates
+      ranking_after_handoff: final_sp_minimum
+    opt_engine: null      # Per-protocol override; null = use theory.optimization.engine
+    freq_engine: null     # Per-protocol override; null = use theory.frequency.engine
+    final_opt_sp:
+      final_sp_method: wB97X-D4   # built-in default
+      final_sp_basis: def2-TZVPP  # built-in default
+
+  # CENSO-ZERO Protocol: Economical rank-1 refinement with single-point only
+  censo-zero:
+    stages:
+      crest: true
+      clustering: true
+      optimization: false
+      frequency: false
+      single_point: true
+      shermo: false
+    two_stage_enabled: false
+    ngeom_default: 1
+    ngeom_max: 3
+    funnel:
+      search_mode: crest_gfn2
+      clustering_mode: isostat
+      prescreen_mode: none
+      rerank_mode: none
+      survivor_window_kcal: 1.0
+    handoff:
+      mode: optimize_rank1
+      ranking_after_handoff: xtb_energy
+    opt_engine: null
+    freq_engine: null
+    final_opt_sp:
+      final_sp_method: wB97X-D4
+      final_sp_basis: def2-TZVPP
+
+  # CENSO-LITE Protocol: Low-cost DFT SP rerank economical recipe
+  censo-lite:
+    stages:
+      crest: true
+      clustering: true
+      optimization: false
+      frequency: false
+      single_point: true
+      shermo: false
+    two_stage_enabled: false
+    ngeom_default: 4
+    ngeom_max: 6
+    funnel:
+      search_mode: crest_gfn2
+      clustering_mode: isostat
+      prescreen_mode: none
+      rerank_mode: r2scan3c_sp
+      use_mrrho_like_correction: true
+      optimize_limit: 1
+      top2_fallback_enabled: true
+      boltzmann_cutoff: 0.90
+    handoff:
+      mode: optimize_rank1
+      fallback_mode: optimize_top2_if_gap_small
+      small_gap_kcal: 1.0
+      ranking_after_handoff: final_sp_minimum
+    opt_engine: null
+    freq_engine: null
+    final_opt_sp:
+      final_sp_method: wB97X-D4
+      final_sp_basis: def2-TZVPP
+
+  # CENSO-FULL Protocol: Grimme-style Part0-Part3 full refinement recipe
+  censo-full:
+    stages:
+      crest: true
+      clustering: true
+      optimization: true
+      frequency: true
+      single_point: true
+      shermo: true
+    two_stage_enabled: false
+    ngeom_default: 12
+    ngeom_max: 24
+    funnel:
+      search_mode: crest_gfn2
+      clustering_mode: isostat
+      prescreen_mode: low_cost_dft_sp
+      rerank_mode: r2scan3c_sp_plus_mrrho
+      prescreen_window_kcal: 4.0
+      screening_window_kcal: 3.5
+      survivor_window_kcal: 3.0
+    handoff:
+      mode: optimize_all_survivors_within_window
+      ranking_after_handoff: final_sp_plus_boltzmann
+    opt_engine: null
+    freq_engine: null
+    final_opt_sp:
+      final_sp_method: wB97X-D4
+      final_sp_basis: def2-TZVPP
+
+  # CENSO-FULL-SAFE Protocol: Relaxed windows for reactive or ionic systems
+  censo-full-safe:
+    stages:
+      crest: true
+      clustering: true
+      optimization: true
+      frequency: true
+      single_point: true
+      shermo: true
+    two_stage_enabled: false
+    ngeom_default: 12
+    ngeom_max: 24
+    funnel:
+      search_mode: crest_gfn2
+      clustering_mode: isostat
+      prescreen_mode: low_cost_dft_sp
+      rerank_mode: r2scan3c_sp_plus_mrrho
+      prescreen_window_kcal: 8.0
+      screening_window_kcal: 6.0
+      survivor_window_kcal: 4.0
+      boltzmann_cutoff: 0.99
+    handoff:
+      mode: optimize_all_survivors_within_window
+      ranking_after_handoff: final_sp_plus_boltzmann
+    opt_engine: null
+    freq_engine: null
+    final_opt_sp:
+      final_sp_method: wB97X-D4
+      final_sp_basis: def2-TZVPP
+
+  # ALLOPT Protocol: Exhaustive DFT validation of all clustered candidates
+  allopt:
+    stages:
+      crest: true
+      clustering: true
+      optimization: true
+      frequency: true
+      single_point: true
+      shermo: true
+    two_stage_enabled: true
+    ngeom_default: 48
+    ngeom_max: 48
+    funnel:
+      search_mode: crest_two_stage_gfn0_to_gfn2
+      clustering_mode: isostat
+      prescreen_mode: none
+      rerank_mode: none
+    handoff:
+      mode: optimize_all_candidates
+      ranking_after_handoff: final_sp_plus_boltzmann
+    opt_engine: null
+    freq_engine: null
+    final_opt_sp:
+      final_sp_method: wB97X-D4
+      final_sp_basis: def2-TZVPP
+
+  # REFERENCE-SP Protocol: High-level SP refinement on an existing ensemble
+  reference-sp:
+    stages:
+      crest: false
+      clustering: false
+      optimization: false
+      frequency: false
+      single_point: true
+      shermo: false
+    two_stage_enabled: false
+    ngeom_default: 48
+    ngeom_max: 48
+    funnel:
+      search_mode: external_xyz
+      clustering_mode: none
+      prescreen_mode: none
+      rerank_mode: none
+    handoff:
+      mode: optimize_all_candidates
+      ranking_after_handoff: final_sp_minimum
+    opt_engine: null
+    freq_engine: null
+    final_opt_sp:
+      final_sp_method: DLPNO-CCSD(T)
+      final_sp_basis: def2-TZVPP
+
+# ==================== Cluster Configuration ====================
+# Set 'enabled: true' and specify type for cluster execution
+cluster:
+  enabled: false       # Set to true for cluster execution
+  type: local          # 'local', 'lsf', 'slurm', 'pbs'
+  queue: normal        # Cluster queue name
+  walltime: "24:00"    # Job walltime (HH:MM)
+  extra_flags: ""      # Additional LSF/PBS flags
+
+# ==================== Optimization Control ====================
+optimization_control:
+  timeout:
+    default_seconds: 86400  # Default QC job timeout in seconds

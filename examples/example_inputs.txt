@@ -1,0 +1,12 @@
+# Example Inputs for ConformerSearch
+# ===================================
+
+# Each line can be a SMILES string or a file path
+
+# Simple molecules
+CCO
+c1ccccc1
+CC(=O)O
+
+# More complex molecules
+CC(C)(C)c1ccc(cc1)C(O)c2ccc(cc2)C(C)(C)C

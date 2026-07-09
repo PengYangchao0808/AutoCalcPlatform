@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ACP Workbench</title>
+<style>
+:root {
+  --bg: #0d1117; --bg-2: #010409; --surface: #161b22; --surface-2: #21262d;
+  --border: #30363d; --text: #c9d1d9; --dim: #8b949e; --faint: #6e7681;
+  --accent: #58a6ff; --green: #3fb950; --red: #f85149; --amber: #d29922; --grey: #6e7681;
+  --radius: 8px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans SC', sans-serif;
+  background: var(--bg); color: var(--text); font-size: 13px; height: 100vh;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+a { color: var(--accent); text-decoration: none; }
+
+.topbar {
+  display: flex; align-items: center; gap: 14px; padding: 0 18px; height: 46px;
+  background: var(--bg-2); border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.topbar h1 { font-size: 15px; font-weight: 600; letter-spacing: .2px; }
+.topbar h1 .logo { margin-right: 6px; }
+.topbar .spacer { flex: 1; }
+.status-pill {
+  padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
+  border: 1px solid transparent;
+}
+.status-pill.ok { background: rgba(63,185,80,.14); color: var(--green); border-color: rgba(63,185,80,.3); }
+.status-pill.err { background: rgba(248,81,73,.14); color: var(--red); border-color: rgba(248,81,73,.3); }
+.meta { font-size: 11px; color: var(--dim); max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.backends-bar {
+  display: flex; align-items: center; gap: 8px; padding: 7px 18px; flex-wrap: wrap;
+  background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.backends-bar .label { font-size: 10px; text-transform: uppercase; letter-spacing: .6px; color: var(--faint); margin-right: 4px; }
+.be-chip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border-radius: 6px;
+  background: var(--surface-2); border: 1px solid var(--border); font-size: 11px;
+}
+.be-chip .dot { width: 7px; height: 7px; border-radius: 50%; }
+.be-chip .dot.on { background: var(--green); }
+.be-chip .dot.off { background: var(--red); }
+.be-chip .name { font-weight: 600; }
+.be-chip .caps { color: var(--faint); font-size: 10px; }
+
+.main { display: grid; grid-template-columns: 250px 1fr 340px; flex: 1; overflow: hidden; }
+.panel { background: var(--surface); padding: 14px; overflow-y: auto; }
+.panel.left { border-right: 1px solid var(--border); }
+.panel.right { border-left: 1px solid var(--border); }
+.panel h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--dim); margin-bottom: 10px; }
+.panel h2:not(:first-child) { margin-top: 18px; }
+
+.center { overflow-y: auto; padding: 16px 18px; }
+
+.ctrl { margin-bottom: 11px; }
+.ctrl label { display: block; font-size: 10px; color: var(--dim); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .4px; }
+.ctrl input, .ctrl select {
+  width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 5px; padding: 6px 8px; font-size: 12px; font-family: inherit;
+}
+.ctrl input:focus, .ctrl select:focus { outline: none; border-color: var(--accent); }
+.ctrl .err { color: var(--red); font-size: 10px; margin-top: 3px; }
+.row { display: flex; gap: 8px; }
+.row .ctrl { flex: 1; }
+
+.btn {
+  display: block; width: 100%; padding: 7px; margin-bottom: 7px; border: 1px solid var(--border);
+  border-radius: 5px; background: var(--surface-2); color: var(--text); cursor: pointer;
+  font-size: 12px; font-family: inherit; font-weight: 500; transition: border-color .12s, background .12s;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: rgba(88,166,255,.16); border-color: var(--accent); color: var(--accent); }
+.btn.primary:hover { background: rgba(88,166,255,.26); }
+.btn.danger { background: rgba(248,81,73,.12); border-color: var(--red); color: var(--red); }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+.chip {
+  padding: 2px 9px; border-radius: 10px; font-size: 10px; font-weight: 600; background: var(--surface-2);
+  border: 1px solid var(--border); color: var(--dim);
+}
+.chip q { color: var(--text); font-style: normal; font-weight: 700; }
+.chip.queued { border-color: rgba(210,153,34,.4); color: var(--amber); }
+.chip.running { border-color: rgba(88,166,255,.4); color: var(--accent); }
+.chip.completed { border-color: rgba(63,185,80,.4); color: var(--green); }
+.chip.failed { border-color: rgba(248,81,73,.4); color: var(--red); }
+
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: left; padding: 7px 8px; color: var(--dim); font-size: 10px; text-transform: uppercase; letter-spacing: .4px; border-bottom: 1px solid var(--border); }
+td { padding: 7px 8px; border-bottom: 1px solid var(--border); }
+tbody tr { cursor: pointer; transition: background .1s; }
+tbody tr:hover { background: var(--surface-2); }
+tbody tr.selected { background: rgba(88,166,255,.1); }
+.mono { font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; }
+.dim { color: var(--dim); }
+.empty { color: var(--faint); padding: 14px 8px; text-align: center; }
+
+.badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; }
+.badge.queued { background: rgba(210,153,34,.16); color: var(--amber); }
+.badge.starting, .badge.cancelling { background: rgba(210,153,34,.16); color: var(--amber); }
+.badge.running { background: rgba(88,166,255,.16); color: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+.badge.completed { background: rgba(63,185,80,.16); color: var(--green); }
+.badge.failed { background: rgba(248,81,73,.16); color: var(--red); }
+.badge.cancelled { background: rgba(110,118,129,.18); color: var(--grey); }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+
+.detail-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 14px; }
+.detail-card .head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.detail-card .jid { font-family: 'SF Mono','Fira Code',monospace; font-size: 12px; color: var(--text); }
+.kv { display: grid; grid-template-columns: 110px 1fr; gap: 5px 10px; font-size: 12px; margin-bottom: 10px; }
+.kv .k { color: var(--dim); }
+.progress { height: 7px; background: var(--bg); border-radius: 4px; overflow: hidden; margin: 6px 0; border: 1px solid var(--border); }
+.progress > span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), #4ea0ff); transition: width .4s; }
+.error-box { background: rgba(248,81,73,.1); border: 1px solid var(--red); border-radius: 6px; padding: 8px 10px; color: var(--red); font-size: 12px; margin-top: 8px; white-space: pre-wrap; }
+.timeline { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.timeline .step { display: flex; align-items: center; gap: 8px; font-size: 11px; }
+.timeline .step .b { width: 9px; height: 9px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+.timeline .step.done .b { background: var(--green); }
+.timeline .step.run .b { background: var(--accent); animation: pulse 1.2s infinite; }
+.timeline .step.fail .b { background: var(--red); }
+
+.log {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; font-size: 11px; line-height: 1.65;
+  color: var(--dim); height: calc(100% - 30px); overflow-y: auto; padding-right: 4px;
+}
+.log .line { padding: 1px 0; word-break: break-word; }
+.log .line .ts { color: var(--faint); margin-right: 6px; }
+.log .line.stage { color: var(--accent); }
+.log .line.stage.done { color: var(--green); }
+.log .line.stage.fail { color: var(--red); }
+.log .line.sys { color: var(--amber); }
+.log .line.err { color: var(--red); }
+.log .line.msg { color: var(--text); }
+
+.refresh { font-size: 11px; color: var(--dim); cursor: pointer; }
+.refresh:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>ACP Workbench</h1>
+  <span id="status-pill" class="status-pill err">connecting...</span>
+  <span class="spacer"></span>
+  <span id="meta" class="meta"></span>
+  <span class="refresh" id="btn-refresh" title="Refresh status &amp; backends">refresh</span>
+</div>
+
+<div class="backends-bar" id="backends-bar">
+  <span class="label">Backends</span>
+  <span class="dim" id="be-loading">loading...</span>
+</div>
+
+<div class="main">
+  <aside class="panel left">
+    <h2>New Calculation</h2>
+    <div class="ctrl">
+      <label>Workflow</label>
+      <select id="wf-type"></select>
+    </div>
+    <div class="ctrl">
+      <label>Job name <span class="dim">(optional)</span></label>
+      <input id="wf-name" type="text" placeholder="ethanol_test">
+    </div>
+    <div class="ctrl" id="ctrl-input">
+      <label>Input - SMILES or file path</label>
+      <input id="wf-input" type="text" placeholder='e.g. CCO  or  /path/to/mol.xyz'>
+      <div class="err" id="input-err"></div>
+    </div>
+    <div class="ctrl">
+      <label>Protocol</label>
+      <select id="wf-protocol"></select>
+    </div>
+    <div class="row">
+      <div class="ctrl">
+        <label>nproc</label>
+        <input id="wf-nproc" type="number" min="1" placeholder="auto">
+      </div>
+      <div class="ctrl">
+        <label>memory</label>
+        <input id="wf-mem" type="text" placeholder="32GB">
+      </div>
+    </div>
+    <button class="btn primary" id="btn-run">&gt;&gt; Submit Job</button>
+    <button class="btn" id="btn-new-fake">Quick demo (fake job)</button>
+  </aside>
+
+  <main class="center">
+    <div class="chips" id="queue-chips"></div>
+
+    <h2 style="font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--dim);margin-bottom:10px;">Job Queue</h2>
+    <table id="jobs-table">
+      <thead><tr><th>ID</th><th>Workflow</th><th>Status</th><th>Progress</th><th>Created</th></tr></thead>
+      <tbody id="jobs-tbody"><tr><td colspan="5" class="empty">No jobs yet</td></tr></tbody>
+    </table>
+
+    <div id="detail-area" style="margin-top:18px;"></div>
+  </main>
+
+  <aside class="panel right">
+    <h2 id="log-title">Live Log Stream</h2>
+    <div class="log" id="log"><div class="dim" style="padding:8px 0;">Select or submit a job to view its live event stream.</div></div>
+  </aside>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+
+const WF_META = {
+  fake:       { label: "Fake (demo)",       needs: [] },
+  conformer:  { label: "Conformer Search",  needs: ["crest", "gaussian"] },
+  nmr:        { label: "NMR",               needs: ["gaussian"] },
+  benchmark:  { label: "Benchmark",         needs: ["crest", "gaussian"] },
+};
+const PROTOCOLS_DEFAULT = ["ext","censo-zero","censo-lite","censo-full","allopt","reference-sp"];
+
+let selectedJobId = null;
+let evtSource = null;
+let jobsCache = [];
+let pollTimer = null;
+let statusTimer = null;
+
+function api(path, opts) {
+  return fetch("/api" + path, opts).then((r) => {
+    if (!r.ok) {
+      return r.json().then((b) => Promise.reject(new Error(b.detail || ("HTTP " + r.status))), () => Promise.reject(new Error("HTTP " + r.status)));
+    }
+    return r.json();
+  });
+}
+
+function nowTs() { return new Date().toLocaleTimeString(); }
+function short(id) { return id.length > 22 ? id.slice(0, 22) + "..." : id; }
+function fmt(iso) { if (!iso) return "-"; try { return new Date(iso).toLocaleString(); } catch { return iso; } }
+
+function logLine(html, cls) {
+  const box = $("log");
+  if (box.firstElementChild && box.firstElementChild.classList && box.firstElementChild.classList.contains("dim")) box.innerHTML = "";
+  const div = document.createElement("div");
+  div.className = "line " + (cls || "");
+  div.innerHTML = '<span class="ts">[' + nowTs() + ']</span>' + html;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+// --- status / backends --------------------------------------------------
+async function checkStatus() {
+  try {
+    const s = await api("/status");
+    const pill = $("status-pill");
+    pill.textContent = "OK";
+    pill.className = "status-pill ok";
+    $("meta").textContent = "Python " + s.python + " | WSL " + s.wsl + " | " + s.uptime_seconds + "s | run_root: " + s.run_root;
+    updateQueueChips(s.queue || {});
+  } catch (e) {
+    $("status-pill").textContent = "OFFLINE";
+    $("status-pill").className = "status-pill err";
+  }
+}
+
+async function loadBackends() {
+  try {
+    const data = await api("/backends");
+    const bar = $("backends-bar");
+    bar.innerHTML = '<span class="label">Backends</span>';
+    data.backends.forEach((b) => {
+      const caps = (b.capabilities || []).filter((c) => c.available).map((c) => escapeHtml(c.name)).slice(0, 4);
+      const chip = document.createElement("span");
+      chip.className = "be-chip";
+      chip.innerHTML = '<span class="dot ' + (b.available ? "on" : "off") + '"></span>' +
+        '<span class="name">' + escapeHtml(b.name) + "</span>" +
+        (caps.length ? '<span class="caps">' + caps.join(", ") + "</span>" : "");
+      bar.appendChild(chip);
+    });
+  } catch (e) {
+    $("backends-bar").innerHTML = '<span class="label">Backends</span><span class="dim">unavailable</span>';
+  }
+}
+
+function updateQueueChips(q) {
+  const c = $("queue-chips");
+  c.innerHTML = "";
+  const items = [
+    ["queued", q.queued, "queued"],
+    ["running", q.running, "running"],
+    ["completed", q.completed, "completed"],
+    ["failed", q.failed, "failed"],
+  ];
+  items.forEach(([label, val, cls]) => {
+    const span = document.createElement("span");
+    span.className = "chip " + cls;
+    const q2 = document.createElement("q");
+    q2.textContent = String(val || 0);
+    span.appendChild(q2);
+    span.appendChild(document.createTextNode(" " + label));
+    c.appendChild(span);
+  });
+}
+
+// --- workflows / protocols ---------------------------------------------
+async function loadWorkflows() {
+  try {
+    const data = await api("/workflows");
+    const sel = $("wf-type");
+    sel.innerHTML = "";
+    data.workflows.forEach((w) => {
+      const o = document.createElement("option");
+      o.value = w.name; o.textContent = w.label;
+      sel.appendChild(o);
+    });
+    sel.value = "fake";
+  } catch (e) {
+    const sel = $("wf-type");
+    sel.innerHTML = "";
+    Object.keys(WF_META).forEach((k) => {
+      const o = document.createElement("option");
+      o.value = k; o.textContent = WF_META[k].label; sel.appendChild(o);
+    });
+  }
+}
+
+async function loadProtocols() {
+  let names = PROTOCOLS_DEFAULT;
+  try {
+    const data = await api("/protocols");
+    if (data.protocols && data.protocols.length) names = data.protocols.map((p) => p.name);
+  } catch (e) { /* keep defaults */ }
+  const sel = $("wf-protocol");
+  sel.innerHTML = "";
+  names.forEach((n) => {
+    const o = document.createElement("option");
+    o.value = n; o.textContent = n; sel.appendChild(o);
+  });
+}
+
+// --- jobs ---------------------------------------------------------------
+async function refreshJobs() {
+  try {
+    const data = await api("/jobs");
+    jobsCache = data.jobs;
+    updateQueueChips(data.counts || {});
+    renderJobs();
+    if (selectedJobId) {
+      const rec = data.jobs.find((j) => j.id === selectedJobId);
+      if (rec) renderDetail(rec);
+    }
+  } catch (e) { /* silent */ }
+}
+
+function renderJobs() {
+  const tb = $("jobs-tbody");
+  if (!jobsCache.length) {
+    tb.innerHTML = '<tr><td colspan="5" class="empty">No jobs yet</td></tr>';
+    return;
+  }
+  tb.innerHTML = "";
+  jobsCache.forEach((j) => {
+    const tr = document.createElement("tr");
+    if (j.id === selectedJobId) tr.className = "selected";
+    const pct = Math.round((j.progress || 0) * 100);
+    tr.innerHTML =
+      '<td class="mono" title="' + escapeHtml(j.id) + '">' + escapeHtml(short(j.id)) + "</td>" +
+      "<td>" + escapeHtml(j.spec.workflow) + "</td>" +
+      '<td><span class="badge ' + escapeHtml(j.status) + '">' + escapeHtml(j.status) + "</span></td>" +
+      "<td>" + pct + "%</td>" +
+      '<td class="dim">' + escapeHtml(fmt(j.created_at)) + "</td>";
+    tr.addEventListener("click", () => selectJob(j.id));
+    tb.appendChild(tr);
+  });
+}
+
+function selectJob(jobId) {
+  selectedJobId = jobId;
+  renderJobs();
+  openEventStream(jobId);
+  const rec = jobsCache.find((j) => j.id === jobId);
+  if (rec) renderDetail(rec);
+  else api("/jobs/" + encodeURIComponent(jobId)).then(renderDetail).catch((e) => logLine('<span class="err">load detail failed: ' + escapeHtml(e.message) + "</span>", "err"));
+}
+
+// --- detail -------------------------------------------------------------
+function renderDetail(j) {
+  if (!j) { $("detail-area").innerHTML = ""; return; }
+  const pct = Math.round((j.progress || 0) * 100);
+  const stages = (((j.result || {}).state || {}).stages) || {};
+  const tlSteps = Object.keys(stages).map((name) => {
+    const st = stages[name] && stages[name].status;
+    const cls = st === "completed" ? "done" : st === "failed" ? "fail" : st === "running" ? "run" : "";
+    return '<div class="step ' + cls + '"><span class="b"></span><span>' + escapeHtml(name) + "</span></div>";
+  }).join("");
+  const canCancel = ["queued", "starting", "running", "cancelling"].includes(j.status);
+  const D = "-";
+  $("detail-area").innerHTML =
+    '<div class="detail-card">' +
+      '<div class="head"><span class="badge ' + escapeHtml(j.status) + '">' + escapeHtml(j.status) + "</span>" +
+      '<span class="jid">' + escapeHtml(j.id) + "</span>" +
+      '<span style="flex:1"></span>' +
+      (canCancel ? '<button class="btn danger" id="btn-cancel" style="width:auto;padding:4px 12px;margin:0;">Cancel</button>' : "") +
+      "</div>" +
+      '<div class="kv">' +
+        "<div class='k'>Workflow</div><div>" + escapeHtml(j.spec.workflow) + "</div>" +
+        "<div class='k'>Name</div><div>" + escapeHtml(j.spec.name || D) + "</div>" +
+        "<div class='k'>Current stage</div><div>" + escapeHtml(j.current_stage || D) + "</div>" +
+        "<div class='k'>PID</div><div>" + (j.pid != null ? escapeHtml(j.pid) : D) + "</div>" +
+        "<div class='k'>Created</div><div>" + escapeHtml(fmt(j.created_at)) + "</div>" +
+        "<div class='k'>Started</div><div>" + escapeHtml(fmt(j.started_at)) + "</div>" +
+        "<div class='k'>Completed</div><div>" + escapeHtml(fmt(j.completed_at)) + "</div>" +
+      "</div>" +
+      "<div class='k' style='font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;margin-top:6px;'>Progress " + pct + "%</div>" +
+      '<div class="progress"><span style="width:' + pct + '%"></span></div>' +
+      (j.error ? '<div class="error-box">' + escapeHtml(j.error) + "</div>" : "") +
+      (tlSteps ? '<div class="k" style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px;margin-top:12px;margin-bottom:4px;">Stages</div><div class="timeline">' + tlSteps + "</div>" : "") +
+    "</div>";
+  const cancelBtn = document.getElementById("btn-cancel");
+  if (cancelBtn) cancelBtn.addEventListener("click", () => cancelJob(j.id));
+}
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+window.cancelJob = async function (jobId) {
+  try {
+    await api("/jobs/" + encodeURIComponent(jobId) + "/cancel", { method: "POST" });
+    logLine('<span class="sys">&gt;&gt; cancel requested for ' + escapeHtml(short(jobId)) + "</span>", "sys");
+    refreshJobs();
+  } catch (e) {
+    logLine('<span class="err">cancel failed: ' + escapeHtml(e.message) + "</span>", "err");
+  }
+};
+
+// --- SSE ----------------------------------------------------------------
+function closeEventStream() {
+  if (evtSource) { try { evtSource.close(); } catch (e) {} evtSource = null; }
+}
+
+function openEventStream(jobId) {
+  closeEventStream();
+  $("log-title").textContent = "Live Log Stream | " + short(jobId);
+  $("log").innerHTML = "";
+  logLine('<span class="sys">&gt;&gt; subscribed to ' + escapeHtml(short(jobId)) + "</span>", "sys");
+  try {
+    evtSource = new EventSource("/api/jobs/" + encodeURIComponent(jobId) + "/events");
+  } catch (e) {
+    logLine('<span class="err">EventSource unsupported: ' + escapeHtml(e.message) + "</span>", "err");
+    return;
+  }
+  evtSource.onmessage = (ev) => handleEvent(jobId, "message", ev.data);
+  ["job.created","job.started","stage.started","stage.completed","stage.failed",
+   "log","job.completed","job.failed","job.cancelled","job.cancelling","process.starting","done"
+  ].forEach((t) => evtSource.addEventListener(t, (ev) => handleEvent(jobId, t, ev.data)));
+  evtSource.onerror = () => {
+    if (evtSource && evtSource.readyState === EventSource.CLOSED) {
+      logLine('<span class="sys">## stream closed</span>', "sys");
+    }
+  };
+}
+
+function handleEvent(jobId, type, rawData) {
+  let d = {};
+  try { d = JSON.parse(rawData); } catch (e) { d = { raw: rawData }; }
+  switch (type) {
+    case "stage.started":  logLine('<span class="stage">&gt; stage <b>' + escapeHtml(d.stage) + "</b> started</span>", "stage"); break;
+    case "stage.completed":logLine('<span class="stage done">OK stage <b>' + escapeHtml(d.stage) + "</b> completed</span>", "stage done"); break;
+    case "stage.failed":   logLine('<span class="stage fail">X stage <b>' + escapeHtml(d.stage) + "</b> failed: " + escapeHtml(d.error || "") + "</span>", "stage fail"); break;
+    case "log":            logLine('<span class="msg">' + escapeHtml(d.line || "") + "</span>"); break;
+    case "job.created":    logLine('<span class="sys">* job created (' + escapeHtml(d.workflow || "") + ")</span>", "sys"); break;
+    case "job.started":    logLine('<span class="sys">&gt;&gt; job started</span>", "sys"); break;
+    case "process.starting":logLine('<span class="sys">* process: ' + escapeHtml(d.cmd || "") + "</span>", "sys"); break;
+    case "job.cancelling": logLine('<span class="sys">~ cancelling...</span>", "sys"); break;
+    case "job.completed":  logLine('<span class="stage done">## job COMPLETED (exit ' + escapeHtml(d.exit_code != null ? d.exit_code : "0") + ")</span>", "stage done"); break;
+    case "job.failed":     logLine('<span class="err">## job FAILED' + (d.exit_code != null ? " (exit " + escapeHtml(d.exit_code) + ")" : "") + "</span>", "err"); break;
+    case "job.cancelled":  logLine('<span class="sys">## job CANCELLED</span>", "sys"); break;
+    case "done":
+      logLine('<span class="sys">## terminal state: ' + escapeHtml(d.status || "") + "</span>", "sys");
+      closeEventStream();
+      refreshJobs();
+      api("/jobs/" + encodeURIComponent(jobId)).then(renderDetail).catch(() => {});
+      break;
+    default:               logLine('<span class="msg">' + escapeHtml(type) + ": " + escapeHtml(rawData) + "</span>");
+  }
+}
+
+// --- submit -------------------------------------------------------------
+async function submitJob(quickFake) {
+  const inputEl = $("wf-input");
+  const errEl = $("input-err");
+  errEl.textContent = "";
+
+  const wf = quickFake ? "fake" : $("wf-type").value;
+  const source = quickFake ? "CCO" : inputEl.value.trim();
+  if (!source) {
+    errEl.textContent = "Input source is required (SMILES or file path).";
+    inputEl.focus();
+    return;
+  }
+
+  const body = {
+    workflow: wf,
+    name: $("wf-name").value.trim() || "",
+    input: { source: source },
+    method: { protocol: $("wf-protocol").value },
+    resources: {},
+  };
+  const nproc = $("wf-nproc").value.trim();
+  const mem = $("wf-mem").value.trim();
+  if (nproc) body.resources.nproc = parseInt(nproc, 10);
+  if (mem) body.resources.mem = mem;
+
+  const btn = $("btn-run");
+  btn.disabled = true;
+  try {
+    const r = await api("/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    logLine('<span class="sys">OK submitted ' + escapeHtml(short(r.job_id)) + " (" + escapeHtml(r.workflow) + ", " + escapeHtml(r.status) + ")</span>", "sys");
+    selectedJobId = r.job_id;
+    await refreshJobs();
+    selectJob(r.job_id);
+    if (!quickFake) inputEl.value = "";
+  } catch (e) {
+    errEl.textContent = e.message;
+    logLine('<span class="err">submit failed: ' + escapeHtml(e.message) + "</span>", "err");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// --- init ---------------------------------------------------------------
+function init() {
+  loadWorkflows();
+  loadProtocols();
+  checkStatus();
+  loadBackends();
+  refreshJobs();
+  statusTimer = setInterval(checkStatus, 5000);
+  pollTimer = setInterval(refreshJobs, 2000);
+
+  $("btn-run").addEventListener("click", () => submitJob(false));
+  $("btn-new-fake").addEventListener("click", () => submitJob(true));
+  $("btn-refresh").addEventListener("click", () => { checkStatus(); loadBackends(); refreshJobs(); });
+  $("wf-input").addEventListener("keydown", (e) => { if (e.key === "Enter") submitJob(false); });
+  window.addEventListener("beforeunload", closeEventStream);
+}
+
+init();
+</script>
+</body>
+</html>

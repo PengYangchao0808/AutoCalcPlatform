@@ -1,0 +1,3427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ACP Molecular Workbench</title>
+<script src="https://3Dmol.org/build/3Dmol-min.js"></script>
+<style>
+:root {
+  --bg-base: #0b0f14;
+  --bg-panel: #111821;
+  --bg-elevated: #1a2332;
+  --bg-canvas: #0e1419;
+  --border-subtle: #1e2832;
+  --border-default: #24303b;
+  --text-primary: #e5edf5;
+  --text-secondary: #b0bec8;
+  --text-tertiary: #6b7b8a;
+  --accent: #4ea1ff;
+  --accent-soft: rgba(78, 161, 255, 0.14);
+  --green: #38c172;
+  --amber: #f2b84b;
+  --red: #e55353;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --transition: 0.15s ease;
+  --shadow-panel: 0 16px 48px rgba(0, 0, 0, 0.24);
+}
+
+* { box-sizing: border-box; }
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: "IBM Plex Sans", "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(78, 161, 255, 0.09), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(56, 193, 114, 0.05), transparent 18%),
+    var(--bg-base);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button { cursor: pointer; }
+a { color: var(--accent); }
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: 64px 1fr;
+}
+
+.topbar {
+  height: 64px;
+  display: grid;
+  grid-template-columns: minmax(280px, 1.3fr) minmax(180px, 240px) minmax(260px, 1fr);
+  gap: 14px;
+  align-items: center;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--border-default);
+  background: rgba(11, 15, 20, 0.92);
+  backdrop-filter: blur(16px);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 12px;
+}
+
+.brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  color: #eef6ff;
+  background: linear-gradient(135deg, rgba(78, 161, 255, 0.95), rgba(69, 124, 255, 0.75));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 10px 24px rgba(34, 91, 189, 0.34);
+}
+
+.brand-copy { min-width: 0; }
+.brand-copy h1 { margin: 0; font-size: 16px; line-height: 1.1; letter-spacing: 0.02em; }
+.brand-copy p { margin: 3px 0 0; color: var(--text-tertiary); font-size: 11px; }
+.project-slot,
+.topbar-actions { min-width: 0; }
+
+.project-select,
+.field-input,
+.field-select,
+.field-textarea,
+.modal-input,
+.modal-select {
+  width: 100%;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color var(--transition), background var(--transition), box-shadow var(--transition);
+}
+
+.project-select:focus,
+.field-input:focus,
+.field-select:focus,
+.field-textarea:focus,
+.modal-input:focus,
+.modal-select:focus {
+  border-color: rgba(78, 161, 255, 0.7);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 0 0 3px rgba(78, 161, 255, 0.12);
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.server-summary {
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-align: right;
+  min-width: 0;
+}
+
+.topbar-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lang-toggle,
+.status-pill,
+.queue-toggle,
+.btn,
+.canvas-tab,
+.mobile-tab,
+.folder-toggle,
+.file-action,
+.modal-close,
+.tool-icon,
+.frame-btn {
+  transition: background var(--transition), border-color var(--transition), color var(--transition), transform var(--transition), opacity var(--transition);
+}
+
+.lang-toggle,
+.status-pill {
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 12px;
+}
+
+.lang-toggle:hover,
+.btn:hover,
+.queue-toggle:hover,
+.canvas-tab:hover,
+.mobile-tab:hover,
+.file-action:hover,
+.modal-close:hover,
+.tool-icon:hover,
+.frame-btn:hover {
+  transform: translateY(-1px);
+}
+
+.status-pill.ok { color: var(--green); border-color: rgba(56, 193, 114, 0.32); background: rgba(56, 193, 114, 0.10); }
+.status-pill.warn { color: var(--amber); border-color: rgba(242, 184, 75, 0.28); background: rgba(242, 184, 75, 0.10); }
+.status-pill.err { color: var(--red); border-color: rgba(229, 83, 83, 0.28); background: rgba(229, 83, 83, 0.10); }
+
+.workbench {
+  display: grid;
+  grid-template-columns: 240px 1fr 240px;
+  grid-template-areas: "left-col canvas right-col";
+  height: calc(100vh - 64px);
+  min-height: 0;
+}
+
+.left-col,
+.center-col,
+.right-col { min-height: 0; }
+
+.left-col {
+  grid-area: left-col;
+  display: grid;
+  grid-template-rows: 60% 40%;
+  border-right: 1px solid var(--border-default);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0));
+}
+
+.center-col {
+  grid-area: canvas;
+  min-width: 0;
+  background: linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0));
+}
+
+.right-col {
+  grid-area: right-col;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  border-left: 1px solid var(--border-default);
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+}
+
+.panel-section,
+.queue-panel,
+.measure-panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-section + .panel-section { border-top: 1px solid var(--border-default); }
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px 12px;
+  flex: 0 0 auto;
+}
+
+.panel-head h2,
+.panel-head h3,
+.queue-title,
+.measure-title {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.panel-body { min-height: 0; overflow: auto; padding: 0 16px 16px; }
+
+.placeholder {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  color: var(--text-tertiary);
+  text-align: center;
+  font-size: 12px;
+  padding: 18px;
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.file-tree-root,
+.file-tree-branch {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.file-tree-branch { padding-left: 14px; }
+.tree-folder,
+.tree-file { margin: 2px 0; }
+
+.folder-row,
+.file-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 4px;
+  border-radius: var(--radius-sm);
+}
+
+.folder-row:hover,
+.file-row:hover { background: rgba(255, 255, 255, 0.04); }
+
+.folder-toggle,
+.file-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--text-secondary);
+}
+
+.folder-toggle svg,
+.file-action svg,
+.tool-icon svg,
+.frame-btn svg { pointer-events: none; }
+
+.folder-toggle.open { color: var(--accent); }
+.folder-name,
+.file-name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+
+.folder-name { color: var(--text-secondary); }
+.file-name.ext-xyz,
+.file-name.ext-sdf,
+.file-name.ext-mol { color: var(--green); }
+.file-name.ext-log { color: var(--amber); }
+.file-name.ext-out { color: #7eb6ff; }
+.file-size { color: var(--text-tertiary); font-size: 11px; }
+.file-row.active { background: rgba(78, 161, 255, 0.10); outline: 1px solid rgba(78, 161, 255, 0.22); }
+
+.info-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.info-item { padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.02); }
+.info-label { display: block; margin-bottom: 6px; font-size: 11px; color: var(--text-tertiary); }
+.info-value { font-size: 13px; color: var(--text-primary); word-break: break-word; }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--border-default);
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge.queued,
+.badge.starting,
+.badge.cancelling { color: var(--amber); border-color: rgba(242, 184, 75, 0.28); background: rgba(242, 184, 75, 0.10); }
+.badge.running { color: var(--accent); border-color: rgba(78, 161, 255, 0.35); background: rgba(78, 161, 255, 0.12); }
+.badge.completed { color: var(--green); border-color: rgba(56, 193, 114, 0.32); background: rgba(56, 193, 114, 0.10); }
+.badge.failed { color: var(--red); border-color: rgba(229, 83, 83, 0.28); background: rgba(229, 83, 83, 0.10); }
+.badge.cancelled,
+.badge.idle,
+.badge.pending { color: var(--text-secondary); border-color: rgba(176, 190, 200, 0.22); background: rgba(176, 190, 200, 0.08); }
+
+.canvas-area {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  min-height: 0;
+}
+
+.canvas-tabs {
+  display: flex;
+  gap: 10px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border-default);
+  overflow: auto;
+}
+
+.canvas-tab {
+  flex: 0 0 auto;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 9px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.canvas-tab.active { border-color: rgba(78, 161, 255, 0.44); background: rgba(78, 161, 255, 0.11); color: var(--text-primary); }
+
+.canvas-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  overflow: auto;
+}
+
+.tool-group { display: flex; gap: 2px; align-items: center; }
+
+.tool-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.tool-icon:hover { border-color: var(--border-default); color: var(--text-primary); }
+.tool-icon.active { border-color: var(--accent); color: var(--accent); background: rgba(78,161,255,0.1); }
+.tool-icon.primary { color: var(--accent); }
+
+.tool-select {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.tool-divider { width: 1px; height: 20px; background: var(--border-subtle); margin: 0 4px; }
+
+.viewer-container {
+  position: relative;
+  min-height: 0;
+  background: radial-gradient(circle at 40% 30%, #1a2332, #0a0e14);
+}
+
+#viewer-3d,
+.viewer-coming-soon,
+.viewer-empty {
+  position: absolute;
+  inset: 0;
+}
+
+#viewer-3d { z-index: 1; }
+
+.viewer-empty,
+.viewer-coming-soon {
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+.viewer-empty-inner,
+.viewer-coming-soon-inner {
+  max-width: 360px;
+  padding: 20px 24px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 18, 27, 0.42);
+  backdrop-filter: blur(8px);
+}
+
+.viewer-empty strong,
+.viewer-coming-soon strong { display: block; margin-bottom: 8px; color: var(--text-primary); }
+
+.frame-controller {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px 10px;
+  border-top: 1px solid var(--border-default);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.frame-btn {
+  min-width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.03);
+  color: var(--text-secondary);
+  padding: 0 10px;
+}
+
+.frame-btn:hover { border-color: rgba(78, 161, 255, 0.5); color: var(--text-primary); }
+.frame-info,
+.frame-energy { font-size: 12px; color: var(--text-secondary); }
+.frame-slider { flex: 1 1 auto; min-width: 80px; }
+
+.measure-panel { border-bottom: 1px solid var(--border-default); }
+.measure-panel .measure-title { padding: 14px 14px 0; }
+.measure-list { padding: 10px 14px 14px; min-height: 68px; display: flex; flex-direction: column; gap: 8px; }
+.measure-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: 10px; background: rgba(255,255,255,0.02); }
+.measure-type { font-size: 12px; color: var(--text-secondary); }
+.measure-value { font-size: 12px; color: var(--text-primary); }
+.measure-del { width: 24px; height: 24px; border: 1px solid var(--border-default); border-radius: 999px; background: transparent; color: var(--text-tertiary); }
+.measure-del:hover { color: var(--red); border-color: rgba(229, 83, 83, 0.4); }
+.muted { color: var(--text-tertiary); font-size: 12px; }
+
+.queue-panel { min-height: 0; display: grid; grid-template-rows: auto auto 1fr; }
+.queue-summary { padding: 14px 14px 10px; }
+.queue-summary-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.queue-toggle { border: 1px solid var(--border-default); border-radius: 999px; background: rgba(255, 255, 255, 0.03); color: var(--text-secondary); padding: 6px 10px; font-size: 12px; }
+.queue-counts { margin-top: 10px; color: var(--text-secondary); font-size: 12px; line-height: 1.8; }
+.queue-expanded { display: none; min-height: 0; grid-template-rows: minmax(180px, 1fr) 1px minmax(160px, 1fr); }
+.queue-panel.expanded .queue-expanded { display: grid; }
+.queue-divider { background: var(--border-default); }
+.queue-panel.expanded .queue-summary { border-bottom: 1px solid var(--border-default); }
+.queue-table-wrap,
+.logs-wrap { min-height: 0; overflow: auto; padding: 12px 14px 14px; }
+.queue-list { display: flex; flex-direction: column; gap: 8px; }
+.queue-row { border: 1px solid var(--border-subtle); border-radius: 12px; padding: 10px; background: rgba(255, 255, 255, 0.02); }
+.queue-row.active { border-color: rgba(78, 161, 255, 0.42); background: rgba(78, 161, 255, 0.10); }
+.queue-row-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.queue-name { min-width: 0; }
+.queue-name strong,
+.queue-name span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.queue-name strong { font-size: 13px; }
+.queue-name span { font-size: 11px; color: var(--text-tertiary); margin-top: 3px; }
+.queue-row-actions { display: flex; gap: 6px; align-items: center; }
+.mini-btn { border: 1px solid var(--border-default); border-radius: 999px; background: rgba(255, 255, 255, 0.04); color: var(--text-secondary); font-size: 11px; padding: 4px 9px; }
+.queue-progress { margin-top: 10px; }
+.progress-track { height: 6px; border-radius: 999px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, rgba(78, 161, 255, 0.75), rgba(56, 193, 114, 0.75)); }
+.progress-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; color: var(--text-tertiary); font-size: 11px; }
+.logs-wrap { display: flex; flex-direction: column; }
+.logs-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.logs-title { margin: 0; font-size: 12px; color: var(--text-tertiary); letter-spacing: 0.12em; text-transform: uppercase; }
+.logs-content { flex: 1 1 auto; min-height: 0; overflow: auto; border: 1px solid var(--border-subtle); border-radius: 12px; background: rgba(6, 10, 16, 0.58); padding: 10px 0; }
+.log-line,
+.download-line,
+.text-panel { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; }
+.log-line { display: block; padding: 0 12px 6px; font-size: 11px; line-height: 1.55; color: #b8c6d2; white-space: pre-wrap; word-break: break-word; }
+.log-line.type-stage-started { color: #7eb6ff; }
+.log-line.type-stage-completed { color: #71d896; }
+.log-line.type-stage-failed,
+.log-line.type-job-failed,
+.log-line.type-failed { color: #ff8686; }
+.log-line.type-log { color: #9cb0c2; }
+.text-panel,
+.download-line { display: block; padding: 0 12px 8px; font-size: 11px; line-height: 1.6; color: #cad7e2; white-space: pre-wrap; word-break: break-word; }
+
+.mobile-panels { display: none; border-top: 1px solid var(--border-default); background: rgba(10, 14, 20, 0.94); }
+.mobile-tabs { display: flex; gap: 8px; padding: 12px 12px 8px; overflow: auto; }
+.mobile-tab { flex: 1 1 auto; min-width: 88px; border: 1px solid var(--border-default); border-radius: 999px; background: rgba(255, 255, 255, 0.03); color: var(--text-secondary); padding: 9px 12px; }
+.mobile-tab.active { background: rgba(78, 161, 255, 0.12); border-color: rgba(78, 161, 255, 0.44); color: var(--text-primary); }
+.mobile-panel-body { display: none; padding: 0 12px 12px; min-height: 220px; }
+.mobile-panel-body.active { display: block; }
+.mobile-card { border: 1px solid var(--border-default); border-radius: 14px; background: rgba(255, 255, 255, 0.02); overflow: hidden; min-height: 220px; }
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(4, 7, 11, 0.74);
+  backdrop-filter: blur(10px);
+}
+
+.modal-dialog {
+  width: min(680px, 100%);
+  max-height: calc(100vh - 48px);
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  border: 1px solid var(--border-default);
+  border-radius: 18px;
+  background: radial-gradient(circle at top right, rgba(78, 161, 255, 0.09), transparent 26%), var(--bg-panel);
+  box-shadow: var(--shadow-panel);
+  overflow: hidden;
+}
+.modal-dialog-wide { width: min(860px, 96vw); }
+.modal-body textarea.modal-input { resize: vertical; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; line-height: 1.6; }
+
+.input-mode-tabs { display: flex; gap: 4px; margin-bottom: 14px; }
+.input-mode-tab {
+  flex: 1; padding: 9px 12px; border: 1px solid var(--border-default); border-radius: 8px;
+  background: rgba(255,255,255,0.03); color: var(--text-secondary); font-size: 12px;
+}
+.input-mode-tab.active { border-color: var(--accent); color: var(--accent); background: rgba(78,161,255,0.10); }
+.input-panel label { display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 12px; }
+
+.upload-dropzone {
+  border: 2px dashed var(--border-default); border-radius: 14px; padding: 32px 16px;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  text-align: center; color: var(--text-tertiary); cursor: pointer; transition: border-color 0.15s ease;
+}
+.upload-dropzone:hover, .upload-dropzone.dragover { border-color: var(--accent); color: var(--accent); }
+
+.parse-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.parse-status { font-size: 12px; color: var(--text-secondary); }
+.parse-status.ok { color: var(--green); }
+.parse-status.err { color: var(--red); }
+
+.structure-preview { margin-top: 14px; border: 1px solid var(--border-subtle); border-radius: 10px; overflow: auto; max-height: 240px; }
+.preview-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.preview-table th { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border-default); color: var(--text-tertiary); text-transform: uppercase; font-size: 10px; letter-spacing: 0.08em; position: sticky; top: 0; background: var(--bg-panel); }
+.preview-table td { padding: 7px 10px; border-bottom: 1px solid var(--border-subtle); color: var(--text-primary); }
+.preview-table tr:last-child td { border-bottom: none; }
+.preview-ok { color: var(--green); font-weight: 600; }
+.preview-warn { color: var(--amber); }
+
+.parse-errors { margin-top: 10px; padding: 10px 14px; border: 1px solid rgba(229,83,83,0.3); border-radius: 8px; background: rgba(229,83,83,0.06); color: var(--red); font-size: 12px; }
+
+.wizard-input-section { padding: 16px; border: 1px solid var(--border-subtle); border-radius: 14px; background: rgba(255,255,255,0.02); }
+
+.structure-preview-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+.preview-left { border: 1px solid var(--border-subtle); border-radius: 10px; overflow: auto; max-height: 280px; }
+.preview-right { border: 1px solid var(--border-subtle); border-radius: 10px; position: relative; min-height: 200px; overflow: hidden; }
+.preview-3d-container { position: absolute; inset: 0; }
+.preview-3d-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-tertiary); font-size: 12px; pointer-events: none; }
+.preview-table tbody tr { cursor: pointer; }
+.preview-table tbody tr.selected { background: rgba(78,161,255,0.12); }
+
+.config-cards-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.config-card { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border: 1px solid var(--border-subtle); border-radius: 12px; background: rgba(255,255,255,0.02); }
+.config-card-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-tertiary); white-space: nowrap; }
+.config-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.config-card-body strong { font-size: 13px; }
+.config-card-desc { font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.config-card-btn { padding: 6px 12px; font-size: 11px; flex-shrink: 0; }
+
+.workflow-categories { display: grid; gap: 16px; }
+.workflow-category { }
+.workflow-category-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-tertiary); margin-bottom: 8px; }
+.workflow-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.workflow-option { padding: 12px 14px; border: 1px solid var(--border-default); border-radius: 10px; cursor: pointer; transition: border-color 0.15s ease; background: rgba(255,255,255,0.02); }
+.workflow-option:hover { border-color: var(--accent); }
+.workflow-option.selected { border-color: var(--accent); background: rgba(78,161,255,0.08); }
+.workflow-option.disabled { opacity: 0.45; cursor: not-allowed; }
+.workflow-option-title { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.workflow-option-desc { font-size: 11px; color: var(--text-tertiary); margin-top: 4px; }
+
+.method-config-body { display: grid; gap: 16px; }
+.method-profile-select { padding: 10px 12px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--bg-elevated); color: var(--text-primary); font-size: 13px; width: 100%; }
+.method-stage { padding: 14px; border: 1px solid var(--border-subtle); border-radius: 10px; background: rgba(255,255,255,0.02); }
+.method-stage-title { font-size: 12px; font-weight: 600; margin-bottom: 10px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
+.method-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* Phase2: method config modal w/ left-right layout */
+.mc-wrap { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; min-height: 360px; }
+.mc-left { display: grid; gap: 12px; align-content: start; }
+.mc-right { background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 14px; position: sticky; top: 0; max-height: 400px; overflow: auto; }
+.mc-summary-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-tertiary); margin-bottom: 10px; }
+.mc-summary-line { font-size: 11px; padding: 6px 0; border-bottom: 1px solid var(--border-subtle); }
+.mc-summary-line:last-child { border-bottom: none; }
+.mc-summary-level { color: var(--text-secondary); font-weight: 600; }
+.mc-summary-detail { color: var(--text-primary); font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; }
+.mc-summary-warn { background: rgba(242,184,75,0.08); border: 1px solid rgba(242,184,75,0.2); border-radius: 6px; padding: 6px 8px; font-size: 10px; color: var(--amber); margin-top: 6px; }
+.mc-summary-err { background: rgba(229,83,83,0.08); border: 1px solid rgba(229,83,83,0.2); border-radius: 6px; padding: 6px 8px; font-size: 10px; color: var(--red); margin-top: 6px; }
+
+.mc-level-card { border: 1px solid var(--border-subtle); border-radius: 10px; background: rgba(255,255,255,0.02); overflow: hidden; }
+.mc-level-card.incomplete { border-color: rgba(229,83,83,0.3); }
+.mc-level-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; user-select: none; }
+.mc-level-header:hover { background: rgba(255,255,255,0.03); }
+.mc-level-expand { width: 18px; height: 18px; display: grid; place-items: center; color: var(--text-tertiary); transition: transform 0.15s ease; }
+.mc-level-expand.open { transform: rotate(90deg); }
+.mc-level-name { font-size: 13px; font-weight: 600; flex: 1; }
+.mc-level-engine { font-size: 10px; color: var(--accent); background: rgba(78,161,255,0.08); padding: 2px 8px; border-radius: 999px; }
+.mc-level-status { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.mc-level-status.ok { background: var(--green); }
+.mc-level-status.err { background: var(--red); }
+.mc-level-status.warn { background: var(--amber); }
+.mc-level-body { padding: 0 12px 12px; display: grid; gap: 10px; }
+.mc-level-advanced { margin-top: 4px; }
+.mc-level-advanced-toggle { font-size: 10px; color: var(--text-tertiary); cursor: pointer; padding: 4px 0; }
+.mc-level-advanced-toggle:hover { color: var(--accent); }
+.mc-level-advanced-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
+
+.mc-field { display: flex; flex-direction: column; gap: 3px; }
+.mc-field label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); }
+.mc-field select, .mc-field input { padding: 5px 8px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--bg-elevated); color: var(--text-primary); font-size: 11px; }
+.mc-field select:focus, .mc-field input:focus { border-color: var(--accent); }
+
+.mc-profile-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.mc-profile-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); white-space: nowrap; }
+.mc-profile-select { flex: 1; padding: 8px 10px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--bg-elevated); color: var(--text-primary); font-size: 13px; }
+.mc-profile-select optgroup { font-size: 12px; }
+.method-field { display: flex; flex-direction: column; gap: 4px; }
+.method-field label { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; }
+.method-field select, .method-field input { padding: 6px 8px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--bg-elevated); color: var(--text-primary); font-size: 12px; }
+
+.modal-header,
+.modal-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 18px; }
+.modal-header { border-bottom: 1px solid var(--border-default); }
+.modal-header h2 { margin: 0; font-size: 18px; }
+.modal-close { width: 34px; height: 34px; border-radius: 999px; border: 1px solid var(--border-default); background: rgba(255, 255, 255, 0.04); }
+.modal-body { overflow: auto; padding: 18px; display: grid; gap: 16px; }
+.modal-section { padding: 16px; border: 1px solid var(--border-subtle); border-radius: 14px; background: rgba(255, 255, 255, 0.02); }
+.modal-section label { display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 12px; }
+.modal-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.modal-footer { border-top: 1px solid var(--border-default); }
+
+.btn { border: 1px solid var(--border-default); border-radius: 999px; padding: 10px 16px; background: rgba(255, 255, 255, 0.04); }
+.btn.primary { border-color: rgba(78, 161, 255, 0.5); background: linear-gradient(135deg, rgba(78, 161, 255, 0.24), rgba(78, 161, 255, 0.10)); }
+.btn.ghost { color: var(--text-secondary); }
+.btn:hover { border-color: rgba(78, 161, 255, 0.5); }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 1023px) {
+  body { overflow: auto; }
+  .topbar { height: auto; grid-template-columns: 1fr; gap: 10px; padding: 14px; }
+  .topbar-actions { justify-content: space-between; flex-wrap: wrap; }
+  .server-summary { text-align: left; }
+  .workbench { grid-template-columns: 1fr; grid-template-areas: "canvas" "mobile"; height: auto; min-height: calc(100vh - 64px); }
+  .left-col,
+  .right-col { display: none; }
+  .center-col { min-height: 50vh; }
+  .viewer-container { min-height: 50vh; }
+  .mobile-panels { display: block; grid-area: mobile; }
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">A</div>
+      <div class="brand-copy">
+        <h1 data-i18n="app.title">ACP 分子计算工作台</h1>
+        <p data-i18n="app.subtitle">分子计算与机理研究平台</p>
+      </div>
+    </div>
+    <div class="project-slot">
+      <label class="sr-only" for="project-select" data-i18n="app.project">项目</label>
+      <select id="project-select" class="project-select"></select>
+    </div>
+    <div class="topbar-actions">
+      <div class="server-summary" id="server-summary">--</div>
+      <div class="topbar-tools">
+        <button class="lang-toggle" id="lang-toggle" data-i18n="lang.toggle">中文 | EN</button>
+        <div class="status-pill ok" id="status-pill">ONLINE</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="workbench">
+    <aside class="left-col">
+      <section class="panel-section">
+        <div class="panel-head">
+          <h2 data-i18n="files.title">任务文件</h2>
+        </div>
+        <div class="panel-body" id="file-tree-panel"></div>
+      </section>
+
+      <section class="panel-section">
+        <div class="panel-head">
+          <h2 data-i18n="info.title">信息</h2>
+        </div>
+        <div class="panel-body" id="info-panel"></div>
+      </section>
+    </aside>
+
+    <section class="center-col">
+      <div class="canvas-area">
+        <nav class="canvas-tabs" aria-label="Workbench Tabs">
+          <button class="canvas-tab active" data-tab="3d" data-i18n="tab.3d">三维结构</button>
+          <button class="canvas-tab" data-tab="conformers" data-i18n="tab.conformers">构象集合</button>
+          <button class="canvas-tab" data-tab="path" data-i18n="tab.path">反应路径</button>
+          <button class="canvas-tab" data-tab="energy" data-i18n="tab.energy">能量图</button>
+          <button class="canvas-tab" data-tab="wavefunction" data-i18n="tab.wavefunction">波函数</button>
+        </nav>
+
+        <div class="canvas-toolbar">
+          <div class="tool-group">
+            <button class="tool-icon" id="btn-fit" data-i18n-title="tool.fit" title="适配 (F)">
+              <svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.5">
+                <path d="M3 8V3h5M17 8V3h-5M3 12v5h5M17 12v5h-5"/>
+              </svg>
+            </button>
+            <button class="tool-icon" id="btn-reset-view" data-i18n-title="tool.reset" title="重置 (R)">
+              <svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.5">
+                <path d="M3 10a7 7 0 1 1 7 7M3 10V5M3 10h5"/>
+              </svg>
+            </button>
+            <select id="style-preset-select" class="tool-select" data-i18n-title="tool.style" title="样式">
+              <option value="ball-stick" data-i18n="style.ball_stick">球棍</option>
+              <option value="stick" data-i18n="style.stick">骨架</option>
+              <option value="spacefill" data-i18n="style.spacefill">空间填充</option>
+              <option value="wireframe" data-i18n="style.wireframe">线框</option>
+              <option value="publication" data-i18n="style.publication">出版级</option>
+            </select>
+            <button class="tool-icon" id="btn-bg-toggle" data-i18n-title="tool.bg" title="背景色">
+              <svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.5">
+                <circle cx="10" cy="10" r="7"/><path d="M10 3a7 7 0 0 0 0 14z" fill="currentColor"/>
+              </svg>
+            </button>
+            <button class="tool-icon" id="btn-screenshot" data-i18n-title="tool.screenshot" title="截图">
+              <svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.5">
+                <rect x="3" y="5" width="14" height="11" rx="1"/><circle cx="10" cy="10" r="3"/>
+              </svg>
+            </button>
+            <button class="tool-icon" id="btn-labels" data-i18n-title="tool.labels" title="标签">
+              <svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.5">
+                <rect x="3" y="6" width="14" height="8" rx="1"/><path d="M6 10h2M12 10h2"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="tool-divider"></div>
+
+          <div class="tool-group" id="group-select">
+            <button class="tool-icon" id="btn-mode-select" data-i18n-title="tool.select" title="选择 (2)">
+              <svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.5">
+                <path d="M3 3l6 14 2-6 6-2z"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="tool-divider"></div>
+
+          <div class="tool-group" id="group-measure">
+            <button class="tool-icon" id="btn-measure-distance" data-i18n-title="tool.distance" title="距离 (3)">
+              <svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.5">
+                <circle cx="4" cy="10" r="2"/><circle cx="16" cy="10" r="2"/><path d="M6 10h8" stroke-dasharray="2 2"/>
+              </svg>
+            </button>
+            <button class="tool-icon" id="btn-measure-angle" data-i18n-title="tool.angle" title="角度 (4)">
+              <svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.5">
+                <path d="M3 16L10 4L17 16"/><path d="M3 16A7 7 0 0 0 10 9" stroke-dasharray="2 2"/>
+              </svg>
+            </button>
+            <button class="tool-icon" id="btn-measure-dihedral" data-i18n-title="tool.dihedral" title="二面角 (5)">
+              <svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.5">
+                <path d="M3 6l7 8l7-8"/><circle cx="3" cy="6" r="1.5" fill="currentColor"/><circle cx="10" cy="14" r="1.5" fill="currentColor"/><circle cx="17" cy="6" r="1.5" fill="currentColor"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="tool-divider"></div>
+
+          <div class="tool-group">
+            <button class="tool-icon primary" id="btn-new-calc" data-i18n-title="tool.new_calc" title="新建计算">
+              <svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.5">
+                <path d="M10 4v12M4 10h12"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="viewer-container">
+          <div id="viewer-3d"></div>
+          <div class="viewer-empty" id="viewer-empty">
+            <div class="viewer-empty-inner">
+              <strong data-i18n="viewer.empty_title">等待结构加载</strong>
+              <span data-i18n="viewer.empty">点击左侧文件树中的 .xyz 文件以加载结构</span>
+            </div>
+          </div>
+          <div class="viewer-coming-soon" id="viewer-coming-soon" style="display:none;">
+            <div class="viewer-coming-soon-inner">
+              <strong data-i18n="viewer.coming_title">功能开发中</strong>
+              <span data-i18n="viewer.coming">该工作台将在后续阶段开放</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="frame-controller" id="frame-controller" style="display:none;">
+          <button class="frame-btn" id="frame-prev">
+            <svg viewBox="0 0 20 20" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2"><path d="M12 4L6 10L12 16"/></svg>
+          </button>
+          <span class="frame-info"><span id="frame-current">1</span> / <span id="frame-total">1</span></span>
+          <button class="frame-btn" id="frame-next">
+            <svg viewBox="0 0 20 20" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2"><path d="M8 4L14 10L8 16"/></svg>
+          </button>
+          <button class="frame-btn" id="frame-play" data-i18n="frame.play" title="播放">Play</button>
+          <input type="range" class="frame-slider" id="frame-slider" min="0" max="0" value="0">
+          <span class="frame-energy" id="frame-energy"></span>
+        </div>
+      </div>
+    </section>
+
+    <aside class="right-col">
+      <div class="measure-panel" id="measure-panel">
+        <h3 class="measure-title" data-i18n="measure.title">测量</h3>
+        <div class="measure-list" id="measure-list">
+          <span class="muted" data-i18n="measure.empty">暂无测量</span>
+        </div>
+      </div>
+
+      <section class="queue-panel" id="queue-panel">
+        <div class="queue-summary">
+          <div class="queue-summary-top">
+            <h3 class="queue-title" data-i18n="queue.title">任务队列</h3>
+            <button class="queue-toggle" id="queue-toggle" data-i18n="queue.expand">展开</button>
+          </div>
+          <div class="queue-counts" id="queue-counts">--</div>
+        </div>
+        <div class="queue-expanded" id="queue-expanded">
+          <div class="queue-table-wrap">
+            <div class="queue-list" id="queue-list"></div>
+          </div>
+          <div class="queue-divider"></div>
+          <div class="logs-wrap">
+            <div class="logs-header">
+              <h3 class="logs-title" data-i18n="logs.title">实时日志</h3>
+            </div>
+            <div class="logs-content" id="log-panel"></div>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <section class="mobile-panels">
+      <div class="mobile-tabs">
+        <button class="mobile-tab active" data-mobile-panel="files" data-i18n="files.title">任务文件</button>
+        <button class="mobile-tab" data-mobile-panel="info" data-i18n="info.title">信息</button>
+        <button class="mobile-tab" data-mobile-panel="queue" data-i18n="queue.title">任务队列</button>
+      </div>
+      <div class="mobile-panel-body active" data-mobile-body="files">
+        <div class="mobile-card">
+          <div class="panel-head"><h2 data-i18n="files.title">任务文件</h2></div>
+          <div class="panel-body" id="mobile-file-tree-panel"></div>
+        </div>
+      </div>
+      <div class="mobile-panel-body" data-mobile-body="info">
+        <div class="mobile-card">
+          <div class="panel-head"><h2 data-i18n="info.title">信息</h2></div>
+          <div class="panel-body" id="mobile-info-panel"></div>
+        </div>
+      </div>
+      <div class="mobile-panel-body" data-mobile-body="queue">
+        <div class="mobile-card">
+          <div class="panel-head"><h2 data-i18n="queue.title">任务队列</h2></div>
+          <div class="panel-body">
+            <div class="queue-counts" id="mobile-queue-counts">--</div>
+            <div class="queue-list" id="mobile-queue-list" style="margin-top:12px;"></div>
+            <div class="logs-header" style="margin-top:16px;"><h3 class="logs-title" data-i18n="logs.title">实时日志</h3></div>
+            <div class="logs-content" id="mobile-log-panel" style="min-height:180px;"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modal-overlay" id="job-modal" style="display:none;">
+  <div class="modal-dialog modal-dialog-wide">
+    <div class="modal-header">
+      <h2 data-i18n="modal.title">新建计算任务</h2>
+      <button class="modal-close" id="modal-close">X</button>
+    </div>
+    <div class="modal-body">
+      <div class="wizard-input-section">
+        <div class="input-mode-tabs">
+          <button class="input-mode-tab active" data-input-mode="smiles" data-i18n="modal.mode_smiles">SMILES</button>
+          <button class="input-mode-tab" data-input-mode="paste" data-i18n="modal.mode_paste">粘贴</button>
+          <button class="input-mode-tab" data-input-mode="upload" data-i18n="modal.mode_upload">上传</button>
+        </div>
+
+        <div class="input-panel" id="input-panel-smiles">
+          <label data-i18n="modal.smiles">SMILES（每行一个分子）</label>
+          <textarea id="modal-smiles" class="modal-input" rows="3" placeholder="CCO&#10;c1ccccc1" data-i18n-ph="modal.smiles_ph"></textarea>
+        </div>
+
+        <div class="input-panel" id="input-panel-paste" style="display:none;">
+          <label data-i18n="modal.paste_hint">粘贴 XYZ / MOL / SDF / GJF 文本</label>
+          <textarea id="modal-paste" class="modal-input" rows="6" placeholder="3&#10;water&#10;O 0.0 0.0 0.0&#10;H 0.7586 0.5043 0.0&#10;H -0.7586 0.5043 0.0"></textarea>
+        </div>
+
+        <div class="input-panel" id="input-panel-upload" style="display:none;">
+          <div class="upload-dropzone" id="upload-dropzone">
+            <svg viewBox="0 0 20 20" width="32" height="32" stroke="currentColor" fill="none" stroke-width="1.5">
+              <path d="M10 14V4M6 8l4-4 4 4M3 16v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2"/>
+            </svg>
+            <span data-i18n="modal.upload_hint">拖拽文件到此处，或点击选择</span>
+            <input type="file" id="upload-file-input" style="display:none;" accept=".xyz,.sdf,.mol,.gjf,.com,.inp">
+          </div>
+        </div>
+
+        <div class="parse-actions">
+          <button class="btn ghost" id="btn-parse-preview" data-i18n="modal.validate">解析预览</button>
+          <span class="parse-status" id="parse-status"></span>
+        </div>
+
+        <div class="structure-preview-wrap" id="structure-preview" style="display:none;">
+          <div class="preview-left">
+            <table class="preview-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th data-i18n="modal.col_name">名称</th>
+                  <th data-i18n="modal.col_formula">分子式</th>
+                  <th data-i18n="modal.col_atoms">原子</th>
+                  <th data-i18n="modal.col_ok">状态</th>
+                </tr>
+              </thead>
+              <tbody id="preview-tbody"></tbody>
+            </table>
+          </div>
+          <div class="preview-right">
+            <div id="structure-preview-3d" class="preview-3d-container"></div>
+            <div class="preview-3d-empty" id="preview-3d-empty">无 3D 坐标</div>
+          </div>
+        </div>
+
+        <div class="parse-errors" id="parse-errors" style="display:none;"></div>
+      </div>
+
+      <div class="config-cards-row">
+        <div class="config-card" id="workflow-card">
+          <div class="config-card-label" data-i18n="modal.step2">工作流</div>
+          <div class="config-card-body">
+            <strong id="workflow-card-title">Conformer Search</strong>
+            <span id="workflow-card-desc" class="config-card-desc">CREST → DFT → SP → Thermo</span>
+          </div>
+          <button class="btn ghost config-card-btn" id="btn-config-workflow" data-i18n="modal.configure">配置</button>
+        </div>
+        <div class="config-card" id="method-card">
+          <div class="config-card-label" data-i18n="modal.step3">计算协议</div>
+          <div class="config-card-body">
+            <strong id="method-card-title">censo-lite</strong>
+            <span id="method-card-desc" class="config-card-desc">xTB: GFN2 | DFT opt: wB97X-D/def2-SVP</span>
+          </div>
+          <button class="btn ghost config-card-btn" id="btn-config-method" data-i18n="modal.configure">配置</button>
+        </div>
+      </div>
+
+      <div class="modal-row">
+        <div class="modal-section">
+          <label for="modal-name" data-i18n="modal.job_name">任务名称</label>
+          <input id="modal-name" class="modal-input" type="text" placeholder="ethanol_test">
+        </div>
+        <div class="modal-section">
+          <label for="modal-nproc" data-i18n="modal.nproc">核数</label>
+          <input id="modal-nproc" class="modal-input" type="number" min="1" value="4">
+          <label for="modal-mem" data-i18n="modal.memory">内存</label>
+          <input id="modal-mem" class="modal-input" type="text" value="8GB">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn ghost" id="modal-cancel" data-i18n="modal.cancel">取消</button>
+      <button class="btn primary" id="modal-submit" data-i18n="modal.submit">提交</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="workflow-config-modal" style="display:none;">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h2 data-i18n="modal.workflow_config">选择工作流</h2>
+      <button class="modal-close" id="wf-config-close">X</button>
+    </div>
+    <div class="modal-body">
+      <div class="workflow-categories" id="workflow-categories"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn ghost" id="wf-config-cancel" data-i18n="modal.cancel">取消</button>
+      <button class="btn primary" id="wf-config-ok" data-i18n="modal.confirm">确认</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="method-config-modal" style="display:none;">
+  <div class="modal-dialog modal-dialog-wide">
+    <div class="modal-header">
+      <h2 id="mc-modal-title" data-i18n="modal.method_config">配置计算方法</h2>
+      <button class="modal-close" id="mt-config-close">X</button>
+    </div>
+    <div class="modal-body" style="display:grid;gap:12px;">
+      <div class="mc-profile-row">
+        <span class="mc-profile-label" data-i18n="modal.profile">计算方案</span>
+        <select class="mc-profile-select" id="mc-profile-select"></select>
+      </div>
+      <div class="mc-wrap">
+        <div class="mc-left" id="mc-levels-container"></div>
+        <div class="mc-right" id="mc-summary-container">
+          <div class="mc-summary-title" data-i18n="modal.summary">实时摘要</div>
+          <div id="mc-summary-body"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn ghost" id="mt-config-cancel" data-i18n="modal.cancel">取消</button>
+      <button class="btn primary" id="mt-config-ok" data-i18n="modal.confirm">确认</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = "/api/v1";
+let currentLang = localStorage.getItem("acp-lang") || "zh-CN";
+let selectedProjectId = "";
+let selectedJobId = "";
+let selectedFileKey = "";
+let activeSSE = null;
+let jobsPollTimer = null;
+let jobsCache = [];
+let projectsCache = [];
+let workflowsCache = [];
+let protocolsCache = [];
+let viewer = null;
+let currentModel = null;
+let currentModelAtoms = [];
+let viewerModelLoaded = false;
+let queueExpanded = false;
+let folderState = {};
+let lastStatus = null;
+let lastFileListing = [];
+let lastSelectedJob = null;
+let bgIndex = 0;
+let labelMode = "none";
+let measureBuffer = [];
+let framePlayTimer = null;
+let initialView = null;
+const BG_COLORS = ["0x0e1419", "white", "0x1a1a2e"];
+const molDoc = {
+  frames: [],
+  currentFrame: 0,
+  selection: new Set(),
+  style: "ball-stick",
+  bgColor: "0x0e1419",
+  measures: [],
+  mode: "view",
+  measureType: "distance",
+  meta: { source: "", formula: "", charge: 0, multiplicity: 1 }
+};
+
+const STYLE_PRESETS = {
+  "ball-stick": { style: { stick: { radius: 0.15 }, sphere: { scale: 0.28 } } },
+  "stick": { style: { stick: { radius: 0.15 } } },
+  "spacefill": { style: { sphere: { scale: 1.0 } } },
+  "wireframe": { style: { line: {} } },
+  "publication": { style: { stick: { radius: 0.12 }, sphere: { scale: 0.22 } } }
+};
+
+const I18N = {
+  "zh-CN": {
+    "app.title": "ACP 分子计算工作台",
+    "app.subtitle": "分子计算与机理研究平台",
+    "app.project": "项目",
+    "lang.toggle": "中文 | EN",
+    "status.online": "在线",
+    "status.degraded": "繁忙",
+    "status.offline": "离线",
+    "status.unknown": "未知",
+    "server.summary": "服务器: {host}:{port} | 队列 {queued} | 运行 {running}",
+    "server.summary_short": "服务器状态加载中",
+    "project.all": "项目: 全部",
+    "project.empty": "暂无项目",
+    "files.title": "任务文件",
+    "files.empty": "选择任务以查看文件",
+    "files.too_large": "文件过大，无法直接加载",
+    "files.download": "下载文件",
+    "files.open": "打开文件",
+    "info.title": "信息",
+    "info.empty": "暂无选中任务",
+    "info.current_job": "当前任务",
+    "info.workflow": "工作流",
+    "info.protocol": "协议",
+    "info.status": "状态",
+    "info.energy": "最新能量",
+    "info.progress": "进度",
+    "info.started_at": "开始时间",
+    "info.completed_at": "完成时间",
+    "info.source": "结构来源",
+    "info.formula": "分子式",
+    "info.frame": "当前帧",
+    "info.selection": "选择",
+    "tab.3d": "三维结构",
+    "tab.conformers": "构象集合",
+    "tab.path": "反应路径",
+    "tab.energy": "能量图",
+    "tab.wavefunction": "波函数",
+    "viewer.empty_title": "等待结构加载",
+    "viewer.empty": "点击左侧文件树中的 .xyz 文件以加载结构",
+    "viewer.coming_title": "功能开发中",
+    "viewer.coming": "该工作台将在后续阶段开放",
+    "tool.new_calc": "新建计算",
+    "tool.fit": "适配",
+    "tool.reset": "重置",
+    "tool.style": "样式",
+    "tool.bg": "背景色",
+    "tool.screenshot": "截图",
+    "tool.labels": "标签",
+    "tool.select": "选择",
+    "tool.distance": "距离",
+    "tool.angle": "角度",
+    "tool.dihedral": "二面角",
+    "style.ball_stick": "球棍",
+    "style.stick": "骨架",
+    "style.spacefill": "空间填充",
+    "style.wireframe": "线框",
+    "style.publication": "出版级",
+    "frame.frame": "帧",
+    "frame.play": "播放",
+    "mode.view": "查看",
+    "mode.select": "选择",
+    "mode.measure": "测量",
+    "measure.title": "测量",
+    "measure.empty": "暂无测量",
+    "measure.distance": "距离",
+    "measure.angle": "角度",
+    "measure.dihedral": "二面角",
+    "queue.title": "任务队列",
+    "queue.expand": "展开",
+    "queue.collapse": "收起",
+    "queue.summary": "运行 {running} | 排队 {queued} | 完成 {completed} | 失败 {failed}",
+    "queue.stage": "阶段",
+    "queue.view": "查看",
+    "queue.none": "暂无任务",
+    "logs.title": "实时日志",
+    "logs.empty": "选择任务后将显示实时事件与文件内容",
+    "logs.download_ready": "文件已准备好，可通过下方链接下载:",
+    "logs.no_events": "当前没有事件流数据",
+    "logs.sse_closed": "事件流已结束",
+    "modal.title": "新建计算任务",
+    "modal.mode_smiles": "SMILES",
+    "modal.mode_paste": "粘贴",
+    "modal.mode_upload": "上传",
+    "modal.smiles": "SMILES（每行一个分子）",
+    "modal.smiles_ph": "例如: CCO",
+    "modal.paste_hint": "粘贴 XYZ / MOL / SDF / GJF 文本",
+    "modal.upload_hint": "拖拽文件到此处，或点击选择",
+    "modal.validate": "解析预览",
+    "modal.col_name": "名称",
+    "modal.col_formula": "分子式",
+    "modal.col_atoms": "原子数",
+    "modal.col_charge": "电荷",
+    "modal.col_spin": "自旋",
+    "modal.col_3d": "3D",
+    "modal.col_ok": "状态",
+    "modal.job_name": "任务名称",
+    "modal.configure": "配置",
+    "modal.workflow_config": "选择工作流",
+    "modal.method_config": "配置计算方法",
+    "modal.cat_simple": "简单计算",
+    "modal.cat_preset": "预设工作流",
+    "modal.cat_custom": "自定义",
+    "modal.planned": "计划中",
+    "modal.advanced": "高级",
+    "modal.summary": "实时摘要",
+    "modal.custom": "自定义",
+    "modal.profile": "计算方案",
+    "modal.confirm": "确认",
+    "modal.loading": "加载中...",
+    "modal.retry": "重试",
+    "modal.catalog_empty": "目录为空",
+    "modal.method_settings": "方法设置",
+    "modal.workflow_not_available": "该工作流尚未接入后端，无法提交",
+    "modal.select_file_first": "请先选择文件",
+    "modal.empty_input": "输入为空",
+    "modal.parse_first": "请先解析结构",
+    "modal.structures_parsed": "个结构",
+    "modal.parse_failed": "解析失败",
+    "modal.step2": "2. 选择工作流",
+    "modal.step3": "3. 计算协议",
+    "modal.step4": "4. 资源设置",
+    "modal.nproc": "核数",
+    "modal.memory": "内存",
+    "modal.cancel": "取消",
+    "modal.submit": "提交",
+    "modal.required_smiles": "请输入 SMILES",
+    "modal.submit_failed": "提交失败: {message}",
+    "common.none": "--",
+    "common.na": "暂无",
+    "common.coming": "即将推出",
+    "common.loading": "加载中...",
+    "common.percent": "{value}%",
+    "common.unknown": "未知",
+    "common.done": "完成",
+    "log.file_loaded": "已加载文件: {path}",
+    "log.file_large": "文件过大: {path}",
+    "log.download_link": "下载链接: {path}",
+    "log.event": "[{type}] {message}",
+    "log.terminal": "任务状态已终止: {status}"
+  },
+  "en-US": {
+    "app.title": "ACP Molecular Workbench",
+    "app.subtitle": "Platform for molecular computation and mechanism research",
+    "app.project": "Project",
+    "lang.toggle": "EN | 中文",
+    "status.online": "ONLINE",
+    "status.degraded": "BUSY",
+    "status.offline": "OFFLINE",
+    "status.unknown": "UNKNOWN",
+    "server.summary": "Server: {host}:{port} | Queued {queued} | Running {running}",
+    "server.summary_short": "Loading server status",
+    "project.all": "Project: All",
+    "project.empty": "No projects",
+    "files.title": "Job Files",
+    "files.empty": "Select a job to inspect files",
+    "files.too_large": "File too large to preview",
+    "files.download": "Download file",
+    "files.open": "Open file",
+    "info.title": "Info",
+    "info.empty": "No job selected",
+    "info.current_job": "Current job",
+    "info.workflow": "Workflow",
+    "info.protocol": "Protocol",
+    "info.status": "Status",
+    "info.energy": "Latest energy",
+    "info.progress": "Progress",
+    "info.started_at": "Started",
+    "info.completed_at": "Completed",
+    "info.source": "Source",
+    "info.formula": "Formula",
+    "info.frame": "Frame",
+    "info.selection": "Selection",
+    "tab.3d": "3D Structure",
+    "tab.conformers": "Conformer Set",
+    "tab.path": "Reaction Path",
+    "tab.energy": "Energy Plot",
+    "tab.wavefunction": "Wavefunction",
+    "viewer.empty_title": "Waiting for structure",
+    "viewer.empty": "Click a .xyz file in the file tree to load a structure",
+    "viewer.coming_title": "In development",
+    "viewer.coming": "This workbench view will unlock in a later phase",
+    "tool.new_calc": "New calculation",
+    "tool.fit": "Fit",
+    "tool.reset": "Reset",
+    "tool.style": "Style",
+    "tool.bg": "Background",
+    "tool.screenshot": "Screenshot",
+    "tool.labels": "Labels",
+    "tool.select": "Select",
+    "tool.distance": "Distance",
+    "tool.angle": "Angle",
+    "tool.dihedral": "Dihedral",
+    "style.ball_stick": "Ball-Stick",
+    "style.stick": "Stick",
+    "style.spacefill": "Spacefill",
+    "style.wireframe": "Wireframe",
+    "style.publication": "Publication",
+    "frame.frame": "Frame",
+    "frame.play": "Play",
+    "mode.view": "View",
+    "mode.select": "Select",
+    "mode.measure": "Measure",
+    "measure.title": "Measurements",
+    "measure.empty": "No measurements",
+    "measure.distance": "Distance",
+    "measure.angle": "Angle",
+    "measure.dihedral": "Dihedral",
+    "queue.title": "Queue",
+    "queue.expand": "Expand",
+    "queue.collapse": "Collapse",
+    "queue.summary": "Running {running} | Queued {queued} | Done {completed} | Failed {failed}",
+    "queue.stage": "Stage",
+    "queue.view": "View",
+    "queue.none": "No jobs",
+    "logs.title": "Live Logs",
+    "logs.empty": "Select a job to view live events and file content",
+    "logs.download_ready": "File ready. Use the link below to download:",
+    "logs.no_events": "No event stream data yet",
+    "logs.sse_closed": "Event stream closed",
+    "modal.title": "New Calculation",
+    "modal.mode_smiles": "SMILES",
+    "modal.mode_paste": "Paste",
+    "modal.mode_upload": "Upload",
+    "modal.smiles": "SMILES (one per line)",
+    "modal.smiles_ph": "Example: CCO",
+    "modal.paste_hint": "Paste XYZ / MOL / SDF / GJF text",
+    "modal.upload_hint": "Drag files here, or click to select",
+    "modal.validate": "Parse & Preview",
+    "modal.col_name": "Name",
+    "modal.col_formula": "Formula",
+    "modal.col_atoms": "Atoms",
+    "modal.col_charge": "Charge",
+    "modal.col_spin": "Spin",
+    "modal.col_3d": "3D",
+    "modal.col_ok": "Status",
+    "modal.job_name": "Job Name",
+    "modal.configure": "Configure",
+    "modal.workflow_config": "Select Workflow",
+    "modal.method_config": "Configure Method",
+    "modal.cat_simple": "Simple Calculations",
+    "modal.cat_preset": "Preset Workflows",
+    "modal.cat_custom": "Custom",
+    "modal.planned": "Planned",
+    "modal.advanced": "Advanced",
+    "modal.summary": "Summary",
+    "modal.custom": "Custom",
+    "modal.profile": "Profile",
+    "modal.confirm": "Confirm",
+    "modal.loading": "Loading...",
+    "modal.retry": "Retry",
+    "modal.catalog_empty": "Catalog is empty",
+    "modal.method_settings": "Method Settings",
+    "modal.workflow_not_available": "This workflow is not yet connected to the backend",
+    "modal.select_file_first": "Please select a file first",
+    "modal.empty_input": "Input is empty",
+    "modal.parse_first": "Please parse structures first",
+    "modal.structures_parsed": "structures parsed",
+    "modal.parse_failed": "Parse failed",
+    "modal.step2": "2. Select Workflow",
+    "modal.step3": "3. Calculation Protocol",
+    "modal.step4": "4. Resource Settings",
+    "modal.nproc": "Cores",
+    "modal.memory": "Memory",
+    "modal.cancel": "Cancel",
+    "modal.submit": "Submit",
+    "modal.required_smiles": "Please enter a SMILES string",
+    "modal.submit_failed": "Submit failed: {message}",
+    "common.none": "--",
+    "common.na": "N/A",
+    "common.coming": "Coming soon",
+    "common.loading": "Loading...",
+    "common.percent": "{value}%",
+    "common.unknown": "Unknown",
+    "common.done": "Done",
+    "log.file_loaded": "Loaded file: {path}",
+    "log.file_large": "File too large: {path}",
+    "log.download_link": "Download link: {path}",
+    "log.event": "[{type}] {message}",
+    "log.terminal": "Terminal job status: {status}"
+  }
+};
+
+function currentFrame() { return molDoc.frames[molDoc.currentFrame] || null; }
+function currentAtoms() { const frame = currentFrame(); return frame ? frame.atoms : []; }
+
+function currentAtomById(acpId) {
+  return currentAtoms().find(function(atom) { return atom.id === acpId; }) || null;
+}
+
+function renderedAtomById(acpId) {
+  return currentModelAtoms.find(function(atom) { return atom.acpId === acpId; }) || null;
+}
+
+function formatSelectionIds() {
+  return Array.from(molDoc.selection).sort(function(a, b) { return a - b; }).join(", ");
+}
+
+function syncBgIndex() {
+  const nextIndex = BG_COLORS.indexOf(molDoc.bgColor);
+  bgIndex = nextIndex >= 0 ? nextIndex : 0;
+}
+
+function measurementValue(type, atomIds) {
+  const atoms = atomIds.map(function(atomId) { return currentAtomById(atomId); });
+  if (atoms.some(function(atom) { return !atom; })) return null;
+  if (type === "distance") {
+    const dx = atoms[0].x - atoms[1].x;
+    const dy = atoms[0].y - atoms[1].y;
+    const dz = atoms[0].z - atoms[1].z;
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+  }
+  if (type === "angle") {
+    const v1 = sub3(atoms[0], atoms[1]);
+    const v2 = sub3(atoms[2], atoms[1]);
+    const denom = len3(v1) * len3(v2);
+    if (!denom) return null;
+    const cosA = dot3(v1, v2) / denom;
+    return Math.acos(Math.max(-1, Math.min(1, cosA))) * 180 / Math.PI;
+  }
+  if (type === "dihedral") {
+    const b0 = sub3(atoms[0], atoms[1]);
+    const b1 = sub3(atoms[2], atoms[1]);
+    const b2 = sub3(atoms[3], atoms[2]);
+    const b1len = len3(b1);
+    if (!b1len) return null;
+    const b1u = { x: b1.x / b1len, y: b1.y / b1len, z: b1.z / b1len };
+    const proj0 = dot3(b0, b1u);
+    const proj2 = dot3(b2, b1u);
+    const v = { x: b0.x - (proj0 * b1u.x), y: b0.y - (proj0 * b1u.y), z: b0.z - (proj0 * b1u.z) };
+    const w = { x: b2.x - (proj2 * b1u.x), y: b2.y - (proj2 * b1u.y), z: b2.z - (proj2 * b1u.z) };
+    if (!len3(v) || !len3(w)) return null;
+    const x = dot3(v, w);
+    const y = dot3(cross3(b1u, v), w);
+    return Math.atan2(y, x) * 180 / Math.PI;
+  }
+  return null;
+}
+
+function formatMeasurementDisplay(type, value) {
+  if (value === null || value === undefined || Number.isNaN(value)) return t("common.none");
+  return type === "distance" ? value.toFixed(3) + " A" : value.toFixed(1) + " deg";
+}
+
+function escapeHtml(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+async function api(path, opts) {
+  const response = await fetch(API_BASE + path, opts || {});
+  if (!response.ok) {
+    let msg = "HTTP " + response.status;
+    try {
+      const body = await response.json();
+      if (body && body.detail) msg = String(body.detail);
+    } catch (e) {}
+    throw new Error(msg);
+  }
+  const ct = response.headers.get("content-type") || "";
+  return ct.includes("application/json") ? response.json() : response.text();
+}
+
+function t(key, vars) {
+  const dict = I18N[currentLang] || I18N["zh-CN"];
+  let value = dict[key] || I18N["zh-CN"][key] || key;
+  if (vars) {
+    Object.keys(vars).forEach(function(name) {
+      value = value.split("{" + name + "}").join(String(vars[name]));
+    });
+  }
+  return value;
+}
+
+function applyI18n() {
+  document.documentElement.lang = currentLang;
+  document.querySelectorAll("[data-i18n]").forEach(function(el) {
+    el.textContent = t(el.getAttribute("data-i18n"));
+  });
+  document.querySelectorAll("[data-i18n-ph]").forEach(function(el) {
+    el.setAttribute("placeholder", t(el.getAttribute("data-i18n-ph")));
+  });
+  document.querySelectorAll("[data-i18n-title]").forEach(function(el) {
+    el.setAttribute("title", t(el.getAttribute("data-i18n-title")));
+  });
+  document.title = t("app.title");
+  renderProjects();
+  renderQueue();
+  renderFileTree(lastFileListing || [], selectedJobId);
+  updateInfoPanel(lastSelectedJob);
+  renderMeasurementList();
+  updateFrameController();
+  if (!selectedJobId) renderLogPlaceholder();
+}
+
+function formatDateTime(value) {
+  if (!value) return t("common.none");
+  try {
+    return new Date(value).toLocaleString(currentLang === "zh-CN" ? "zh-CN" : "en-US");
+  } catch (e) {
+    return String(value);
+  }
+}
+
+function formatBytes(size) {
+  const value = Number(size || 0);
+  if (!value) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let unit = 0;
+  let amount = value;
+  while (amount >= 1024 && unit < units.length - 1) {
+    amount /= 1024;
+    unit += 1;
+  }
+  return (amount >= 100 || unit === 0 ? amount.toFixed(0) : amount.toFixed(1)) + " " + units[unit];
+}
+
+function getStatusClass(status) {
+  const s = String(status || "").toLowerCase();
+  if (s === "completed") return "completed";
+  if (s === "failed") return "failed";
+  if (s === "running") return "running";
+  if (s === "queued" || s === "starting" || s === "cancelling") return s;
+  if (s === "cancelled") return "cancelled";
+  return "idle";
+}
+
+function createStatusBadge(status) {
+  const badge = document.createElement("span");
+  badge.className = "badge " + getStatusClass(status);
+  badge.textContent = String(status || t("common.unknown"));
+  return badge;
+}
+
+function normalizedProgress(job) {
+  const raw = job && typeof job.progress === "number" ? job.progress : 0;
+  return Math.max(0, Math.min(100, Math.round(raw * 100)));
+}
+
+function initViewer() {
+  const container = document.getElementById("viewer-3d");
+  viewer = $3Dmol.createViewer(container, { backgroundColor: molDoc.bgColor, antialias: true });
+  window.addEventListener("resize", function() {
+    if (viewer) {
+      viewer.resize();
+      viewer.render();
+    }
+  });
+}
+
+function showEmpty() {
+  viewerModelLoaded = false;
+  document.getElementById("viewer-empty").style.display = "grid";
+  document.getElementById("viewer-coming-soon").style.display = "none";
+}
+
+function hideEmpty() {
+  viewerModelLoaded = true;
+  document.getElementById("viewer-empty").style.display = "none";
+  document.getElementById("viewer-coming-soon").style.display = "none";
+}
+
+function applyStylePreset(name) {
+  const preset = STYLE_PRESETS[name] || STYLE_PRESETS["ball-stick"];
+  molDoc.style = STYLE_PRESETS[name] ? name : "ball-stick";
+  viewer.setStyle({}, preset.style);
+}
+
+function applySelectionHighlight() {
+  molDoc.selection.forEach(function(acpId) {
+    const atom = renderedAtomById(acpId);
+    if (!atom) return;
+    viewer.addStyle({ index: atom.index }, { sphere: { scale: 1.12, color: "yellow", opacity: 0.55 } });
+  });
+}
+
+function renderMeasurements() {
+  molDoc.measures.forEach(function(m) {
+    const atoms = m.atoms.map(function(atomId) { return currentAtomById(atomId); });
+    if (atoms.some(function(atom) { return !atom; })) return;
+    m.value = measurementValue(m.type, m.atoms);
+    if (m.value === null) return;
+    if (m.type === "distance") {
+      viewer.addCylinder({ dashed: true, start: { x: atoms[0].x, y: atoms[0].y, z: atoms[0].z }, end: { x: atoms[1].x, y: atoms[1].y, z: atoms[1].z }, radius: 0.05, color: "magenta", fromCap: 1, toCap: 1 });
+      viewer.addLabel(formatMeasurementDisplay(m.type, m.value), { position: { x: (atoms[0].x + atoms[1].x) / 2, y: (atoms[0].y + atoms[1].y) / 2, z: (atoms[0].z + atoms[1].z) / 2 }, fontSize: 12, fontColor: "magenta", backgroundColor: "rgba(0,0,0,0.7)" });
+      return;
+    }
+    if (m.type === "angle") {
+      viewer.addCylinder({ dashed: true, start: { x: atoms[1].x, y: atoms[1].y, z: atoms[1].z }, end: { x: atoms[0].x, y: atoms[0].y, z: atoms[0].z }, radius: 0.04, color: "cyan", fromCap: 1, toCap: 1 });
+      viewer.addCylinder({ dashed: true, start: { x: atoms[1].x, y: atoms[1].y, z: atoms[1].z }, end: { x: atoms[2].x, y: atoms[2].y, z: atoms[2].z }, radius: 0.04, color: "cyan", fromCap: 1, toCap: 1 });
+      viewer.addLabel(formatMeasurementDisplay(m.type, m.value), { position: { x: atoms[1].x, y: atoms[1].y, z: atoms[1].z }, fontSize: 12, fontColor: "cyan", backgroundColor: "rgba(0,0,0,0.7)" });
+      return;
+    }
+    viewer.addCylinder({ dashed: true, start: { x: atoms[0].x, y: atoms[0].y, z: atoms[0].z }, end: { x: atoms[1].x, y: atoms[1].y, z: atoms[1].z }, radius: 0.035, color: "orange", fromCap: 1, toCap: 1 });
+    viewer.addCylinder({ dashed: true, start: { x: atoms[1].x, y: atoms[1].y, z: atoms[1].z }, end: { x: atoms[2].x, y: atoms[2].y, z: atoms[2].z }, radius: 0.035, color: "orange", fromCap: 1, toCap: 1 });
+    viewer.addCylinder({ dashed: true, start: { x: atoms[2].x, y: atoms[2].y, z: atoms[2].z }, end: { x: atoms[3].x, y: atoms[3].y, z: atoms[3].z }, radius: 0.035, color: "orange", fromCap: 1, toCap: 1 });
+    viewer.addLabel(formatMeasurementDisplay(m.type, m.value), { position: { x: (atoms[1].x + atoms[2].x) / 2, y: (atoms[1].y + atoms[2].y) / 2, z: (atoms[1].z + atoms[2].z) / 2 }, fontSize: 12, fontColor: "orange", backgroundColor: "rgba(0,0,0,0.7)" });
+  });
+  if (labelMode !== "none") {
+    currentAtoms().forEach(function(a) {
+      const text = labelMode === "elem" ? a.elem : String(a.id);
+      viewer.addLabel(text, { position: { x: a.x, y: a.y, z: a.z }, fontSize: 10, fontColor: molDoc.bgColor === "white" ? "black" : "white", backgroundColor: "rgba(0,0,0,0.5)", showBackground: true });
+    });
+  }
+}
+
+function setupClickableForCurrentModel() {
+  if (!currentModel) return;
+  currentModel.setClickable({}, true, function(atom, viewerInstance, event) {
+    if (typeof atom.acpId !== "number") return;
+    if (molDoc.mode === "view") return;
+    if (molDoc.mode === "select") handleSelectClick(atom, event);
+    if (molDoc.mode === "measure") handleMeasureClick(atom);
+  });
+}
+
+function renderMolDoc(options) {
+  options = options || {};
+  if (!viewer) initViewer();
+  viewer.removeAllModels();
+  viewer.removeAllShapes();
+  viewer.removeAllLabels();
+  currentModel = null;
+  currentModelAtoms = [];
+  const atoms = currentAtoms();
+  if (!atoms.length) {
+    showEmpty();
+    viewer.setBackgroundColor(molDoc.bgColor);
+    viewer.render();
+    renderMeasurementList();
+    return;
+  }
+  hideEmpty();
+  currentModel = viewer.addModel(atomsToXYZ(atoms), "xyz");
+  currentModelAtoms = currentModel.selectedAtoms({});
+  currentModelAtoms.forEach(function(atom, index) {
+    const frameAtom = atoms[index];
+    atom.acpId = frameAtom ? frameAtom.id : null;
+  });
+  viewer.setBackgroundColor(molDoc.bgColor);
+  applyStylePreset(molDoc.style);
+  // Invisible 3Dmol clickspheres enlarge picking without changing the visible style preset.
+  viewer.addStyle({}, { clicksphere: { radius: 0.45 } });
+  applySelectionHighlight();
+  renderMeasurements();
+  setupClickableForCurrentModel();
+  if (options.zoomTo) viewer.zoomTo();
+  viewer.render();
+  renderMeasurementList();
+}
+
+function restoreInitialView() {
+  if (!viewer || !initialView) return;
+  viewer.setView(initialView.slice());
+  viewer.render();
+}
+
+function clearViewer() {
+  stopFramePlayback();
+  molDoc.frames = [];
+  molDoc.currentFrame = 0;
+  molDoc.selection.clear();
+  molDoc.measures = [];
+  molDoc.meta.source = "";
+  molDoc.meta.formula = "";
+  measureBuffer = [];
+  initialView = null;
+  currentModel = null;
+  currentModelAtoms = [];
+  if (viewer) {
+    viewer.removeAllModels();
+    viewer.removeAllShapes();
+    viewer.removeAllLabels();
+    viewer.setBackgroundColor(molDoc.bgColor);
+    viewer.render();
+  }
+  showEmpty();
+  renderMeasurementList();
+  updateFrameController();
+}
+
+function setViewerTab(tab) {
+  document.querySelectorAll(".canvas-tab").forEach(function(btn) {
+    btn.classList.toggle("active", btn.getAttribute("data-tab") === tab);
+  });
+  const comingSoon = document.getElementById("viewer-coming-soon");
+  const empty = document.getElementById("viewer-empty");
+  const frameController = document.getElementById("frame-controller");
+  if (tab === "3d") {
+    comingSoon.style.display = "none";
+    empty.style.display = viewerModelLoaded ? "none" : "grid";
+    frameController.style.display = molDoc.frames.length > 1 ? "flex" : "none";
+    return;
+  }
+  comingSoon.style.display = "grid";
+  empty.style.display = "none";
+  frameController.style.display = "none";
+}
+
+function statusPillMode(body) {
+  const queue = body && body.queue ? body.queue : {};
+  if ((queue.failed || 0) > 0) return { label: t("status.degraded"), className: "warn" };
+  if (body && String(body.status || "").toLowerCase() === "online") return { label: t("status.online"), className: "ok" };
+  if (body && body.status) return { label: String(body.status).toUpperCase(), className: "warn" };
+  return { label: t("status.unknown"), className: "err" };
+}
+
+async function loadStatus() {
+  const body = await api("/status");
+  lastStatus = body;
+  const pill = document.getElementById("status-pill");
+  const mode = statusPillMode(body);
+  pill.className = "status-pill " + mode.className;
+  pill.textContent = mode.label;
+  document.getElementById("server-summary").textContent = t("server.summary", {
+    host: body.host || "127.0.0.1",
+    port: body.port || "8765",
+    queued: body.queue && typeof body.queue.queued === "number" ? body.queue.queued : 0,
+    running: body.queue && typeof body.queue.running === "number" ? body.queue.running : 0
+  });
+}
+
+function renderProjects() {
+  const select = document.getElementById("project-select");
+  select.innerHTML = "";
+  const optionAll = document.createElement("option");
+  optionAll.value = "";
+  optionAll.textContent = projectsCache.length ? t("project.all") : t("project.empty");
+  select.appendChild(optionAll);
+  projectsCache.forEach(function(project) {
+    const option = document.createElement("option");
+    option.value = String(project.project_id || "");
+    option.textContent = project.name || String(project.project_id || "");
+    if (option.value === selectedProjectId) option.selected = true;
+    select.appendChild(option);
+  });
+  select.value = selectedProjectId;
+}
+
+async function loadProjects() {
+  const body = await api("/projects");
+  projectsCache = body.projects || [];
+  renderProjects();
+}
+
+async function loadWorkflows() {
+  const body = await api("/workflows");
+  workflowsCache = body.workflows || [];
+  const select = document.getElementById("modal-workflow");
+  select.innerHTML = "";
+  workflowsCache.forEach(function(workflow) {
+    const option = document.createElement("option");
+    option.value = workflow.name;
+    option.textContent = workflow.label || workflow.name;
+    select.appendChild(option);
+  });
+}
+
+async function loadProtocols() {
+  const body = await api("/protocols");
+  protocolsCache = body.protocols || [];
+  const select = document.getElementById("modal-protocol");
+  select.innerHTML = "";
+  protocolsCache.forEach(function(protocol) {
+    const option = document.createElement("option");
+    option.value = protocol.name;
+    option.textContent = protocol.name;
+    select.appendChild(option);
+  });
+}
+
+async function refreshJobs() {
+  const query = new URLSearchParams();
+  query.set("limit", "50");
+  if (selectedProjectId) query.set("project_id", selectedProjectId);
+  const body = await api("/jobs?" + query.toString());
+  jobsCache = body.jobs || [];
+  renderQueue(body.counts || {});
+  if (selectedJobId) highlightQueueRow(selectedJobId);
+}
+
+function getQueueCounts(countsArg) {
+  const counts = countsArg || {};
+  return { running: counts.running || 0, queued: counts.queued || 0, completed: counts.completed || 0, failed: counts.failed || 0 };
+}
+
+function renderQueue(countsArg) {
+  const counts = getQueueCounts(countsArg || (lastStatus && lastStatus.queue) || {});
+  const summary = t("queue.summary", counts);
+  document.getElementById("queue-counts").textContent = summary;
+  document.getElementById("mobile-queue-counts").textContent = summary;
+  const queuePanel = document.getElementById("queue-panel");
+  queuePanel.classList.toggle("expanded", queueExpanded);
+  document.getElementById("queue-toggle").textContent = queueExpanded ? t("queue.collapse") : t("queue.expand");
+  renderQueueList(document.getElementById("queue-list"));
+  renderQueueList(document.getElementById("mobile-queue-list"));
+}
+
+function renderQueueList(container) {
+  container.innerHTML = "";
+  if (!jobsCache.length) {
+    const empty = document.createElement("div");
+    empty.className = "placeholder";
+    empty.textContent = t("queue.none");
+    container.appendChild(empty);
+    return;
+  }
+  jobsCache.forEach(function(job) {
+    const row = document.createElement("div");
+    row.className = "queue-row" + (String(job.id) === String(selectedJobId) ? " active" : "");
+    row.setAttribute("data-job-id", String(job.id));
+    row.addEventListener("click", function() { selectJob(job.id); });
+
+    const head = document.createElement("div");
+    head.className = "queue-row-head";
+    const name = document.createElement("div");
+    name.className = "queue-name";
+    const strong = document.createElement("strong");
+    strong.textContent = job.spec && job.spec.name ? job.spec.name : String(job.id);
+    const span = document.createElement("span");
+    span.textContent = (job.spec && job.spec.workflow ? job.spec.workflow : t("common.na")) + " | " + (job.current_stage || t("queue.stage"));
+    name.appendChild(strong);
+    name.appendChild(span);
+
+    const actions = document.createElement("div");
+    actions.className = "queue-row-actions";
+    const badge = createStatusBadge(job.status);
+    const view = document.createElement("button");
+    view.className = "mini-btn";
+    view.textContent = t("queue.view");
+    view.addEventListener("click", function(event) {
+      event.stopPropagation();
+      selectJob(job.id);
+    });
+    actions.appendChild(badge);
+    actions.appendChild(view);
+    head.appendChild(name);
+    head.appendChild(actions);
+    row.appendChild(head);
+
+    const progress = document.createElement("div");
+    progress.className = "queue-progress";
+    const track = document.createElement("div");
+    track.className = "progress-track";
+    const fill = document.createElement("div");
+    fill.className = "progress-fill";
+    fill.style.width = normalizedProgress(job) + "%";
+    track.appendChild(fill);
+    progress.appendChild(track);
+
+    const meta = document.createElement("div");
+    meta.className = "progress-meta";
+    const left = document.createElement("span");
+    left.textContent = job.current_stage || t("common.na");
+    const right = document.createElement("span");
+    right.textContent = t("common.percent", { value: normalizedProgress(job) });
+    meta.appendChild(left);
+    meta.appendChild(right);
+    progress.appendChild(meta);
+    row.appendChild(progress);
+    container.appendChild(row);
+  });
+}
+
+function highlightQueueRow(jobId) {
+  document.querySelectorAll(".queue-row").forEach(function(row) {
+    row.classList.toggle("active", row.getAttribute("data-job-id") === String(jobId));
+  });
+}
+
+function buildTree(files) {
+  const root = { type: "folder", name: "", children: {} };
+  (files || []).forEach(function(file) {
+    const parts = String(file.path || "").split("/");
+    let cursor = root;
+    parts.forEach(function(part, index) {
+      if (!cursor.children[part]) {
+        cursor.children[part] = { type: index === parts.length - 1 ? "file" : "folder", name: part, path: parts.slice(0, index + 1).join("/"), size: file.size, modified: file.modified, children: {} };
+      }
+      cursor = cursor.children[part];
+      if (index === parts.length - 1) {
+        cursor.size = file.size;
+        cursor.modified = file.modified;
+      }
+    });
+  });
+  return root;
+}
+
+function sortedEntries(node) {
+  return Object.keys(node.children || {}).map(function(key) {
+    return node.children[key];
+  }).sort(function(a, b) {
+    if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function folderToggleSvg(open) {
+  return open
+    ? '<svg viewBox="0 0 20 20" width="14" height="14" stroke="currentColor" fill="none" stroke-width="1.8"><path d="M5 7l5 6l5-6"/></svg>'
+    : '<svg viewBox="0 0 20 20" width="14" height="14" stroke="currentColor" fill="none" stroke-width="1.8"><path d="M7 5l6 5l-6 5"/></svg>';
+}
+
+function fileActionSvg() {
+  return '<svg viewBox="0 0 20 20" width="14" height="14" stroke="currentColor" fill="none" stroke-width="1.5"><path d="M6 4h5l3 3v9H6z"/><path d="M11 4v3h3"/></svg>';
+}
+
+function renderFileTree(files, jobId) {
+  lastFileListing = files || [];
+  renderFileTreeInto(document.getElementById("file-tree-panel"), files || [], jobId);
+  renderFileTreeInto(document.getElementById("mobile-file-tree-panel"), files || [], jobId);
+}
+
+function renderFileTreeInto(container, files, jobId) {
+  container.innerHTML = "";
+  if (!jobId || !files.length) {
+    const empty = document.createElement("div");
+    empty.className = "placeholder";
+    empty.textContent = t("files.empty");
+    container.appendChild(empty);
+    return;
+  }
+  const root = buildTree(files);
+  const list = document.createElement("ul");
+  list.className = "file-tree-root";
+  sortedEntries(root).forEach(function(child) {
+    list.appendChild(renderTreeNode(child, jobId));
+  });
+  container.appendChild(list);
+}
+
+function renderTreeNode(node, jobId) {
+  if (node.type === "folder") {
+    const li = document.createElement("li");
+    li.className = "tree-folder";
+    const row = document.createElement("div");
+    row.className = "folder-row";
+    const toggle = document.createElement("button");
+    const isOpen = folderState[node.path] !== false;
+    toggle.className = "folder-toggle" + (isOpen ? " open" : "");
+    toggle.innerHTML = folderToggleSvg(isOpen);
+    toggle.addEventListener("click", function() {
+      folderState[node.path] = !isOpen;
+      renderFileTree(lastFileListing, jobId);
+    });
+    const name = document.createElement("span");
+    name.className = "folder-name";
+    name.textContent = node.name;
+    const spacer = document.createElement("span");
+    spacer.className = "file-size";
+    row.appendChild(toggle);
+    row.appendChild(name);
+    row.appendChild(spacer);
+    li.appendChild(row);
+    if (isOpen) {
+      const branch = document.createElement("ul");
+      branch.className = "file-tree-branch";
+      sortedEntries(node).forEach(function(child) { branch.appendChild(renderTreeNode(child, jobId)); });
+      li.appendChild(branch);
+    }
+    return li;
+  }
+  const li = document.createElement("li");
+  li.className = "tree-file";
+  const row = document.createElement("div");
+  row.className = "file-row" + (selectedFileKey === String(jobId) + "::" + node.path ? " active" : "");
+  const action = document.createElement("button");
+  action.className = "file-action";
+  action.innerHTML = fileActionSvg();
+  action.setAttribute("title", t("files.open"));
+  const name = document.createElement("span");
+  const ext = node.name.includes(".") ? node.name.split(".").pop().toLowerCase() : "";
+  name.className = "file-name" + (ext ? " ext-" + ext : "");
+  name.textContent = node.name;
+  const size = document.createElement("span");
+  size.className = "file-size";
+  size.textContent = formatBytes(node.size);
+  row.appendChild(action);
+  row.appendChild(name);
+  row.appendChild(size);
+  row.addEventListener("click", function() { openJobFile(jobId, node); });
+  li.appendChild(row);
+  return li;
+}
+
+function parseEnergyValue(value) {
+  if (typeof value === "number" && isFinite(value)) return value;
+  if (!value || typeof value !== "object") return null;
+  const keys = ["energy", "final_energy", "electronic_energy", "free_energy", "gibbs_energy"];
+  for (let i = 0; i < keys.length; i += 1) {
+    const key = keys[i];
+    if (typeof value[key] === "number" && isFinite(value[key])) return value[key];
+  }
+  for (const key in value) {
+    if (Object.prototype.hasOwnProperty.call(value, key)) {
+      const nested = parseEnergyValue(value[key]);
+      if (nested !== null) return nested;
+    }
+  }
+  return null;
+}
+
+function renderInfoInto(container, job) {
+  container.innerHTML = "";
+  if (!job) {
+    const empty = document.createElement("div");
+    empty.className = "placeholder";
+    empty.textContent = t("info.empty");
+    container.appendChild(empty);
+    return;
+  }
+  const energy = parseEnergyValue(job.result);
+  const items = [
+    [t("info.current_job"), job.spec && job.spec.name ? job.spec.name : String(job.id || "")],
+    [t("info.workflow"), job.spec && job.spec.workflow ? job.spec.workflow : t("common.none")],
+    [t("info.protocol"), job.spec && job.spec.method && job.spec.method.protocol ? job.spec.method.protocol : t("common.none")],
+    [t("info.status"), job.status || t("common.unknown")],
+    [t("info.energy"), energy === null ? t("common.none") : String(energy)],
+    [t("info.progress"), t("common.percent", { value: normalizedProgress(job) })],
+    [t("info.started_at"), formatDateTime(job.started_at)],
+    [t("info.completed_at"), formatDateTime(job.completed_at)],
+    [t("info.source"), molDoc.meta.source || t("common.none")],
+    [t("info.formula"), molDoc.meta.formula || t("common.none")],
+    [t("info.frame"), molDoc.frames.length ? String(molDoc.currentFrame + 1) + " / " + String(molDoc.frames.length) : t("common.none")],
+    [t("info.selection"), molDoc.selection.size ? formatSelectionIds() : t("common.none")]
+  ];
+  const grid = document.createElement("div");
+  grid.className = "info-grid";
+  items.forEach(function(entry) {
+    const item = document.createElement("div");
+    item.className = "info-item";
+    const label = document.createElement("span");
+    label.className = "info-label";
+    label.textContent = entry[0];
+    const value = document.createElement("div");
+    value.className = "info-value";
+    if (entry[0] === t("info.status")) value.appendChild(createStatusBadge(entry[1]));
+    else value.textContent = entry[1];
+    item.appendChild(label);
+    item.appendChild(value);
+    grid.appendChild(item);
+  });
+  container.appendChild(grid);
+}
+
+function updateInfoPanel(job) {
+  lastSelectedJob = job || null;
+  renderInfoInto(document.getElementById("info-panel"), job || null);
+  renderInfoInto(document.getElementById("mobile-info-panel"), job || null);
+}
+
+function renderLogPlaceholder() {
+  const line = '<span class="text-panel">' + escapeHtml(t("logs.empty")) + '</span>';
+  document.getElementById("log-panel").innerHTML = line;
+  document.getElementById("mobile-log-panel").innerHTML = line;
+}
+
+function appendLogHtml(html) {
+  [document.getElementById("log-panel"), document.getElementById("mobile-log-panel")].forEach(function(panel) {
+    panel.insertAdjacentHTML("beforeend", html);
+    panel.scrollTop = panel.scrollHeight;
+  });
+}
+
+function resetLogs() {
+  document.getElementById("log-panel").innerHTML = "";
+  document.getElementById("mobile-log-panel").innerHTML = "";
+}
+
+function appendLogLine(type, message) {
+  const cssType = String(type || "log").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+  appendLogHtml('<span class="log-line type-' + escapeHtml(cssType) + '">' + escapeHtml(message) + '</span>');
+}
+
+function parseEnergyFromComment(comment) {
+  const m = comment.match(/(-?\d+\.\d+)/);
+  return m ? parseFloat(m[1]) : null;
+}
+
+function parseMultiFrameXYZ(text) {
+  const lines = String(text || "").trim().split(/\r?\n/);
+  const frames = [];
+  let i = 0;
+  while (i < lines.length) {
+    while (i < lines.length && !String(lines[i] || "").trim()) i += 1;
+    if (i >= lines.length) break;
+    const n = parseInt(String(lines[i] || "").trim(), 10);
+    if (isNaN(n) || i + 1 + n >= lines.length) break;
+    const comment = lines[i + 1] || "";
+    const atoms = [];
+    for (let j = 0; j < n; j += 1) {
+      const parts = (lines[i + 2 + j] || "").trim().split(/\s+/);
+      if (parts.length >= 4) atoms.push({ id: j, elem: parts[0], x: +parts[1], y: +parts[2], z: +parts[3] });
+    }
+    frames.push({ atoms: atoms, comment: comment, energy: parseEnergyFromComment(comment) });
+    i += 2 + n;
+  }
+  return frames;
+}
+
+function atomsToXYZ(atoms) {
+  let out = atoms.length + "\n\n";
+  atoms.forEach(function(a) {
+    out += a.elem + " " + a.x.toFixed(6) + " " + a.y.toFixed(6) + " " + a.z.toFixed(6) + "\n";
+  });
+  return out;
+}
+
+function framesToXYZ(frames) {
+  return frames.map(function(frame) { return atomsToXYZ(frame.atoms); }).join("\n");
+}
+
+function parseXYZBlock(text) {
+  const lines = text.trim().split("\n");
+  const n = parseInt(lines[0], 10);
+  if (isNaN(n) || lines.length < n + 2) return [];
+  const atoms = [];
+  for (let j = 0; j < n; j += 1) {
+    const parts = lines[2 + j].trim().split(/\s+/);
+    if (parts.length >= 4) {
+      atoms.push({ id: j, elem: parts[0], x: +parts[1], y: +parts[2], z: +parts[3] });
+    }
+  }
+  return atoms;
+}
+
+function parseMolTextToFrame(text, format) {
+  if (!viewer) initViewer();
+  const model = viewer.addModel(text, format);
+  const atoms = model.selectedAtoms({}).map(function(atom, idx) {
+    return { id: idx, elem: atom.elem || atom.atom || "X", x: Number(atom.x || 0), y: Number(atom.y || 0), z: Number(atom.z || 0) };
+  });
+  viewer.removeModel(model);
+  return atoms.length ? [{ atoms: atoms, comment: "", energy: null }] : [];
+}
+
+function countFormula(atoms) {
+  const counts = {};
+  atoms.forEach(function(a) { counts[a.elem] = (counts[a.elem] || 0) + 1; });
+  return Object.entries(counts).map(function(entry) { return entry[0] + entry[1]; }).join("");
+}
+
+async function loadStructureFile(jobId, filePath) {
+  try {
+    const content = await api("/jobs/" + encodeURIComponent(jobId) + "/files/" + filePath.split("/").map(encodeURIComponent).join("/"));
+    const ext = filePath.includes(".") ? filePath.split(".").pop().toLowerCase() : "";
+    const frames = ext === "xyz" ? parseMultiFrameXYZ(content) : parseMolTextToFrame(content, ext === "mol" ? "mol" : "sdf");
+    if (!frames.length) return;
+    stopFramePlayback();
+    molDoc.frames = frames;
+    molDoc.currentFrame = 0;
+    molDoc.selection.clear();
+    molDoc.measures = [];
+    measureBuffer = [];
+    molDoc.meta.source = filePath;
+    molDoc.meta.formula = countFormula(frames[0].atoms);
+    renderMolDoc({ zoomTo: true });
+    initialView = viewer ? viewer.getView().slice() : null;
+    updateFrameController();
+    updateInfoPanel(lastSelectedJob);
+  } catch (e) {
+    console.error("Failed to load structure:", e);
+  }
+}
+
+function handleSelectClick(atom, event) {
+  if (typeof atom.acpId !== "number") return;
+  if (event && event.shiftKey) {
+    molDoc.selection.has(atom.acpId) ? molDoc.selection.delete(atom.acpId) : molDoc.selection.add(atom.acpId);
+  } else {
+    molDoc.selection.clear();
+    molDoc.selection.add(atom.acpId);
+  }
+  renderMolDoc();
+  updateInfoPanel(lastSelectedJob);
+}
+
+function sub3(a, b) { return { x: a.x - b.x, y: a.y - b.y, z: a.z - b.z }; }
+function dot3(a, b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+function len3(a) { return Math.sqrt(dot3(a, a)); }
+function cross3(a, b) { return { x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x }; }
+
+function doDistance(idA, idB) {
+  const dist = measurementValue("distance", [idA, idB]);
+  if (dist === null) return;
+  molDoc.measures.push({ type: "distance", atoms: [idA, idB], value: dist });
+}
+
+function doAngle(idA, idB, idC) {
+  const angle = measurementValue("angle", [idA, idB, idC]);
+  if (angle === null) return;
+  molDoc.measures.push({ type: "angle", atoms: [idA, idB, idC], value: angle });
+}
+
+function doDihedral(idA, idB, idC, idD) {
+  const angle = measurementValue("dihedral", [idA, idB, idC, idD]);
+  if (angle === null) return;
+  molDoc.measures.push({ type: "dihedral", atoms: [idA, idB, idC, idD], value: angle });
+}
+
+function handleMeasureClick(atom) {
+  if (typeof atom.acpId !== "number") return;
+  measureBuffer.push(atom.acpId);
+  molDoc.selection.add(atom.acpId);
+  renderMolDoc();
+  const needed = molDoc.measureType === "distance" ? 2 : molDoc.measureType === "angle" ? 3 : 4;
+  if (measureBuffer.length >= needed) {
+    if (molDoc.measureType === "distance") doDistance(measureBuffer[0], measureBuffer[1]);
+    else if (molDoc.measureType === "angle") doAngle(measureBuffer[0], measureBuffer[1], measureBuffer[2]);
+    else if (molDoc.measureType === "dihedral") doDihedral(measureBuffer[0], measureBuffer[1], measureBuffer[2], measureBuffer[3]);
+    measureBuffer = [];
+    molDoc.selection.clear();
+    renderMolDoc();
+    updateInfoPanel(lastSelectedJob);
+  }
+}
+
+function renderMeasurementList() {
+  const panel = document.getElementById("measure-list");
+  if (!panel) return;
+  if (!molDoc.measures.length) {
+    panel.innerHTML = '<span class="muted">' + escapeHtml(t("measure.empty")) + '</span>';
+    return;
+  }
+  let html = "";
+  molDoc.measures.forEach(function(m, i) {
+    const typeLabel = m.type === "distance" ? t("measure.distance") : m.type === "angle" ? t("measure.angle") : t("measure.dihedral");
+    html += '<div class="measure-row">';
+    html += '<span class="measure-type">' + escapeHtml(typeLabel) + '</span>';
+    html += '<span class="measure-value">' + escapeHtml(formatMeasurementDisplay(m.type, m.value)) + '</span>';
+    html += '<button class="measure-del" data-idx="' + i + '">x</button>';
+    html += '</div>';
+  });
+  panel.innerHTML = html;
+  panel.querySelectorAll(".measure-del").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      const idx = parseInt(this.getAttribute("data-idx"), 10);
+      molDoc.measures.splice(idx, 1);
+      renderMolDoc();
+    });
+  });
+}
+
+function setMode(mode) {
+  molDoc.mode = mode;
+  if (mode !== "measure") measureBuffer = [];
+  document.querySelectorAll(".tool-icon").forEach(function(btn) { btn.classList.remove("active"); });
+  if (mode === "select") document.getElementById("btn-mode-select").classList.add("active");
+  if (mode === "measure") {
+    if (molDoc.measureType === "distance") document.getElementById("btn-measure-distance").classList.add("active");
+    if (molDoc.measureType === "angle") document.getElementById("btn-measure-angle").classList.add("active");
+    if (molDoc.measureType === "dihedral") document.getElementById("btn-measure-dihedral").classList.add("active");
+  }
+}
+
+function updateFrameController() {
+  const controller = document.getElementById("frame-controller");
+  const total = molDoc.frames.length;
+  const current = total ? molDoc.currentFrame + 1 : 0;
+  const activeTab = document.querySelector(".canvas-tab.active");
+  document.getElementById("frame-current").textContent = String(current || 1);
+  document.getElementById("frame-total").textContent = String(total || 1);
+  document.getElementById("frame-slider").max = String(Math.max(total - 1, 0));
+  document.getElementById("frame-slider").value = String(Math.max(molDoc.currentFrame, 0));
+  const frame = currentFrame();
+  document.getElementById("frame-energy").textContent = frame && frame.energy !== null ? String(frame.energy) : "";
+  controller.style.display = total > 1 && activeTab && activeTab.getAttribute("data-tab") === "3d" ? "flex" : "none";
+}
+
+function setFrame(index) {
+  if (!molDoc.frames.length) return;
+  molDoc.currentFrame = Math.max(0, Math.min(index, molDoc.frames.length - 1));
+  renderMolDoc();
+  updateFrameController();
+  updateInfoPanel(lastSelectedJob);
+}
+
+function stopFramePlayback() {
+  if (framePlayTimer) {
+    clearInterval(framePlayTimer);
+    framePlayTimer = null;
+    document.getElementById("frame-play").textContent = t("frame.play");
+  }
+}
+
+function toggleFramePlayback() {
+  if (framePlayTimer) {
+    stopFramePlayback();
+    return;
+  }
+  if (molDoc.frames.length <= 1) return;
+  document.getElementById("frame-play").textContent = "Stop";
+  framePlayTimer = setInterval(function() {
+    setFrame((molDoc.currentFrame + 1) % molDoc.frames.length);
+  }, 900);
+}
+
+async function openJobFile(jobId, node) {
+  selectedFileKey = String(jobId) + "::" + node.path;
+  renderFileTree(lastFileListing, jobId);
+  if (Number(node.size || 0) > 10485760) {
+    appendLogLine("file-large", t("log.file_large", { path: node.path }));
+    return;
+  }
+  const ext = node.name.includes(".") ? node.name.split(".").pop().toLowerCase() : "";
+  if (node.path.endsWith(".xyz") || node.path.endsWith(".sdf") || node.path.endsWith(".mol")) {
+    await loadStructureFile(jobId, node.path);
+    setViewerTab("3d");
+    appendLogLine("file-loaded", t("log.file_loaded", { path: node.path }));
+    return;
+  }
+  const pathUrl = "/jobs/" + encodeURIComponent(jobId) + "/files/" + node.path.split("/").map(encodeURIComponent).join("/");
+  if (["log", "out"].indexOf(ext) >= 0) {
+    const text = await api(pathUrl);
+    resetLogs();
+    appendLogHtml('<span class="text-panel">' + escapeHtml(String(text)) + '</span>');
+    return;
+  }
+  if (ext === "json") {
+    const text = await api(pathUrl);
+    resetLogs();
+    const pretty = typeof text === "string" ? (function() {
+      try { return JSON.stringify(JSON.parse(text), null, 2); } catch (e) { return text; }
+    })() : JSON.stringify(text, null, 2);
+    appendLogHtml('<span class="text-panel">' + escapeHtml(pretty) + '</span>');
+    return;
+  }
+  resetLogs();
+  appendLogHtml('<span class="download-line">' + escapeHtml(t("logs.download_ready")) + '</span><span class="download-line"><a href="' + escapeHtml(API_BASE + pathUrl) + '" target="_blank" rel="noopener">' + escapeHtml(t("files.download")) + '</a></span>');
+}
+
+function openSSE(jobId) {
+  if (activeSSE) activeSSE.close();
+  resetLogs();
+  activeSSE = new EventSource(API_BASE + "/jobs/" + encodeURIComponent(jobId) + "/events");
+  const types = ["job.created", "job.started", "stage.started", "stage.completed", "stage.failed", "log", "job.completed", "job.failed", "done"];
+  types.forEach(function(type) {
+    activeSSE.addEventListener(type, function(event) {
+      let payload = {};
+      try { payload = event.data ? JSON.parse(event.data) : {}; } catch (e) { payload = { message: event.data || "" }; }
+      const message = payload.message || payload.stage || payload.status || JSON.stringify(payload);
+      appendLogLine(type, t("log.event", { type: type, message: message }));
+      if (type === "done") {
+        if (activeSSE) {
+          activeSSE.close();
+          activeSSE = null;
+        }
+        appendLogLine("done", t("logs.sse_closed"));
+      }
+    });
+  });
+  activeSSE.onerror = function() {
+    appendLogLine("error", t("logs.sse_closed"));
+    if (activeSSE) {
+      activeSSE.close();
+      activeSSE = null;
+    }
+  };
+}
+
+async function selectJob(jobId) {
+  selectedJobId = jobId;
+  const job = await api("/jobs/" + encodeURIComponent(jobId));
+  const filesResp = await api("/jobs/" + encodeURIComponent(jobId) + "/files");
+  updateInfoPanel(job);
+  renderFileTree(filesResp.files || [], jobId);
+  highlightQueueRow(jobId);
+  if (activeSSE) {
+    activeSSE.close();
+    activeSSE = null;
+  }
+  openSSE(jobId);
+  await refreshJobs();
+}
+
+let wizardStructures = [];
+let wizardInputMode = "smiles";
+let wizardSelectedStructureIndex = 0;
+let wizardUploadFile = null;
+let workflowCatalogCache = [];
+let methodCatalogCache = {};
+let previewViewer = null;
+
+const wizardState = {
+  workflow: { id: "conformer", label: "Conformer Search" },
+  method: {
+    profile_id: "",
+    profile_label: "",
+    stages: {}
+  }
+};
+
+function openModal() {
+  wizardStructures = [];
+  wizardSelectedStructureIndex = 0;
+  document.getElementById("structure-preview").style.display = "none";
+  document.getElementById("parse-errors").style.display = "none";
+  document.getElementById("parse-status").textContent = "";
+  document.getElementById("modal-smiles").value = "";
+  document.getElementById("modal-paste").value = "";
+  document.getElementById("upload-file-input").value = "";
+  wizardUploadFile = null;
+  var dzSpan = document.querySelector(".upload-dropzone span");
+  if (dzSpan) dzSpan.textContent = t("modal.upload_hint");
+  setWizardInputMode("smiles");
+  updateConfigCards();
+  document.getElementById("job-modal").style.display = "flex";
+}
+
+function closeModal() { document.getElementById("job-modal").style.display = "none"; }
+
+function setWizardInputMode(mode) {
+  wizardInputMode = mode;
+  document.querySelectorAll(".input-mode-tab").forEach(function(tab) {
+    tab.classList.toggle("active", tab.getAttribute("data-input-mode") === mode);
+  });
+  document.getElementById("input-panel-smiles").style.display = mode === "smiles" ? "block" : "none";
+  document.getElementById("input-panel-paste").style.display = mode === "paste" ? "block" : "none";
+  document.getElementById("input-panel-upload").style.display = mode === "upload" ? "block" : "none";
+}
+
+async function parseStructuresPreview() {
+  var content = "";
+  var fmt = "auto";
+  var filename = "";
+
+  if (wizardInputMode === "smiles") {
+    content = document.getElementById("modal-smiles").value;
+    fmt = "smiles";
+  } else if (wizardInputMode === "paste") {
+    content = document.getElementById("modal-paste").value;
+    fmt = "auto";
+  } else if (wizardInputMode === "upload") {
+    if (!wizardUploadFile) {
+      showParseStatus(t("modal.select_file_first") || "\u8bf7\u5148\u9009\u62e9\u6587\u4ef6", true);
+      return;
+    }
+    filename = wizardUploadFile.name;
+    content = await wizardUploadFile.text();
+    fmt = "auto";
+  }
+
+  if (!content.trim()) {
+    showParseStatus(t("modal.empty_input") || "\u8f93\u5165\u4e3a\u7a7a", true);
+    return;
+  }
+
+  try {
+    if (wizardInputMode === "upload" && wizardUploadFile) {
+      var formData = new FormData();
+      formData.append("file", wizardUploadFile);
+      var uploadResp = await fetch(API_BASE + "/uploads", { method: "POST", body: formData });
+      if (!uploadResp.ok) {
+        var errBody = await uploadResp.json().catch(function() { return { detail: uploadResp.statusText }; });
+        showParseStatus(errBody.detail || "Upload failed", true);
+        return;
+      }
+      var uploadBody = await uploadResp.json();
+      wizardStructures = uploadBody.structures || [];
+      handleParseResult(uploadBody);
+      return;
+    }
+
+    var resp = await fetch(API_BASE + "/structures/parse", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: content, format: fmt, filename: filename })
+    });
+    var body = await resp.json();
+    wizardStructures = body.structures || [];
+    handleParseResult(body);
+  } catch (e) {
+    showParseStatus(e.message, true);
+  }
+}
+
+function handleParseResult(body) {
+  var errBox = document.getElementById("parse-errors");
+  if (body.errors && body.errors.length) {
+    errBox.style.display = "block";
+    errBox.innerHTML = body.errors.map(function(e) { return "<div>" + escapeHtml(e) + "</div>"; }).join("");
+  } else {
+    errBox.style.display = "none";
+  }
+
+  renderStructurePreview(wizardStructures, body.warnings || []);
+  showParseStatus(
+    body.ok ? wizardStructures.length + " " + (t("modal.structures_parsed") || "\u4e2a\u7ed3\u6784") : (t("modal.parse_failed") || "\u89e3\u6790\u5931\u8d25"),
+    !body.ok
+  );
+}
+
+function showParseStatus(msg, isError) {
+  var el = document.getElementById("parse-status");
+  el.textContent = msg;
+  el.className = "parse-status " + (isError ? "err" : "ok");
+}
+
+function renderStructurePreview(structures, warnings) {
+  var container = document.getElementById("structure-preview");
+  var tbody = document.getElementById("preview-tbody");
+  tbody.innerHTML = "";
+
+  if (!structures.length) {
+    container.style.display = "none";
+    return;
+  }
+
+  structures.forEach(function(s, i) {
+    var tr = document.createElement("tr");
+    if (i === wizardSelectedStructureIndex) tr.className = "selected";
+    tr.innerHTML =
+      "<td>" + (i + 1) + "</td>" +
+      "<td>" + escapeHtml(s.name || "--") + "</td>" +
+      "<td>" + escapeHtml(s.formula || "--") + "</td>" +
+      "<td>" + s.atom_count + "</td>" +
+      "<td class='" + (s.errors.length ? "preview-warn" : "preview-ok") + "'>" +
+        (s.errors.length ? "\u2717" : (s.warnings.length ? "\u26a0" : "OK")) +
+      "</td>";
+    tr.addEventListener("click", function() {
+      wizardSelectedStructureIndex = i;
+      document.querySelectorAll("#preview-tbody tr").forEach(function(r, idx) {
+        r.classList.toggle("selected", idx === i);
+      });
+      renderPreviewStructure3D(structures[i]);
+    });
+    tbody.appendChild(tr);
+  });
+
+  container.style.display = "grid";
+  initPreviewViewer();
+  renderPreviewStructure3D(structures[wizardSelectedStructureIndex] || structures[0]);
+}
+
+function initPreviewViewer() {
+  if (previewViewer) return;
+  var container = document.getElementById("structure-preview-3d");
+  if (!container) return;
+  try {
+    previewViewer = $3Dmol.createViewer(container, { backgroundColor: "0x0e1419", antialias: true });
+  } catch(e) { console.error("Preview viewer init failed:", e); }
+}
+
+function renderPreviewStructure3D(structure) {
+  if (!previewViewer) initPreviewViewer();
+  if (!previewViewer) return;
+  previewViewer.removeAllModels();
+  var emptyEl = document.getElementById("preview-3d-empty");
+  if (!structure || !structure.has_3d) {
+    if (emptyEl) emptyEl.style.display = "grid";
+    previewViewer.render();
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = "none";
+  var modelData = structure.xyz || structure.molfile || "";
+  var fmt = structure.xyz ? "xyz" : "mol";
+  if (modelData) {
+    previewViewer.addModel(modelData, fmt);
+    previewViewer.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.26 } });
+    previewViewer.zoomTo();
+    previewViewer.render();
+  }
+}
+
+function updateConfigCards() {
+  var wfTitle = document.getElementById("workflow-card-title");
+  var wfDesc = document.getElementById("workflow-card-desc");
+  var cat = currentLang === "zh-CN" ? "label_zh" : "label";
+  var wfEntry = workflowCatalogCache.find(function(w) { return w.id === wizardState.workflow.id; });
+  if (wfEntry) {
+    wfTitle.textContent = wfEntry[cat] || wfEntry.label;
+    wfDesc.textContent = wfEntry.description || "";
+  }
+
+  var mtTitle = document.getElementById("method-card-title");
+  var mtDesc = document.getElementById("method-card-desc");
+  if (wizardState.method.profile_label) {
+    mtTitle.textContent = wizardState.method.profile_label;
+  }
+  var stages = wizardState.method.stages || {};
+  var parts = [];
+  if (stages.xtb_preopt && stages.xtb_preopt.gfn) parts.push("xTB: " + stages.xtb_preopt.gfn);
+  if (stages.dft_opt && stages.dft_opt.functional) parts.push("DFT: " + stages.dft_opt.functional + "/" + (stages.dft_opt.basis || ""));
+  if (stages.single_point && stages.single_point.functional) parts.push("SP: " + stages.single_point.functional + "/" + (stages.single_point.basis || ""));
+  mtDesc.textContent = parts.join(" | ") || "--";
+}
+
+async function loadWorkflowCatalog() {
+  try {
+    var resp = await fetch(API_BASE + "/workflow-catalog");
+    workflowCatalogCache = (await resp.json()).workflows || [];
+  } catch(e) { console.error("Failed to load workflow catalog:", e); }
+}
+
+async function loadMethodCatalog() {
+  try {
+    var resp = await fetch(API_BASE + "/method-catalog");
+    methodCatalogCache = await resp.json();
+  } catch(e) { console.error("Failed to load method catalog:", e); }
+}
+
+async function openWorkflowConfig() {
+  var container = document.getElementById("workflow-categories");
+  document.getElementById("workflow-config-modal").style.display = "flex";
+
+  if (!workflowCatalogCache.length) {
+    container.innerHTML = '<div class="muted">' + (t("modal.loading") || "\u52a0\u8f7d\u4e2d...") + '</div>';
+    try {
+      await loadWorkflowCatalog();
+    } catch(e) {
+      container.innerHTML = '<div class="parse-errors" style="display:block">' + escapeHtml(e.message) +
+        '<br><button class="btn ghost" onclick="openWorkflowConfig()">' + (t("modal.retry") || "\u91cd\u8bd5") + '</button></div>';
+      return;
+    }
+    if (!workflowCatalogCache.length) {
+      container.innerHTML = '<div class="muted">' + (t("modal.catalog_empty") || "\u76ee\u5f55\u4e3a\u7a7a") + '</div>';
+      return;
+    }
+  }
+
+  container.innerHTML = "";
+  var categories = {};
+  workflowCatalogCache.forEach(function(wf) {
+    if (!categories[wf.category]) categories[wf.category] = [];
+    categories[wf.category].push(wf);
+  });
+
+  var catLabels = { simple: t("modal.cat_simple") || "\u7b80\u5355\u8ba1\u7b97", preset: t("modal.cat_preset") || "\u9884\u8bbe\u5de5\u4f5c\u6d41", custom: t("modal.cat_custom") || "\u81ea\u5b9a\u4e49" };
+
+  Object.keys(categories).forEach(function(cat) {
+    var catDiv = document.createElement("div");
+    catDiv.className = "workflow-category";
+    var label = document.createElement("div");
+    label.className = "workflow-category-label";
+    label.textContent = catLabels[cat] || cat;
+    catDiv.appendChild(label);
+
+    var grid = document.createElement("div");
+    grid.className = "workflow-grid";
+    categories[cat].forEach(function(wf) {
+      var opt = document.createElement("div");
+      opt.className = "workflow-option";
+      if (wf.id === wizardState.workflow.id) opt.classList.add("selected");
+      if (wf.status === "planned") opt.classList.add("disabled");
+      var cat2 = currentLang === "zh-CN" ? "label_zh" : "label";
+      opt.innerHTML =
+        '<div class="workflow-option-title">' + escapeHtml(wf[cat2] || wf.label) +
+          (wf.status === "planned" ? ' <span style="font-size:10px;color:var(--amber)">(' + (t("modal.planned") || "\u8ba1\u5212\u4e2d") + ')</span>' : '') +
+        '</div>' +
+        '<div class="workflow-option-desc">' + escapeHtml(wf.description || "") + '</div>';
+      if (wf.status !== "planned") {
+        opt.addEventListener("click", function() {
+          wizardState.workflow = { id: wf.id, label: wf.label, schema_id: wf.method_schema_id };
+          container.querySelectorAll(".workflow-option").forEach(function(o) { o.classList.remove("selected"); });
+          opt.classList.add("selected");
+          loadDefaultMethodProfile(wf.method_schema_id);
+        });
+      }
+      grid.appendChild(opt);
+    });
+    catDiv.appendChild(grid);
+    container.appendChild(catDiv);
+  });
+}
+
+function loadDefaultMethodProfile(schemaId) {
+  var schema = (methodCatalogCache.method_schemas || {})[schemaId];
+  if (!schema) return;
+  var profiles = schema.profiles || [];
+  if (profiles.length) {
+    wizardState.method.profile_id = profiles[0].profile_id;
+    wizardState.method.profile_label = profiles[0].label;
+    wizardState.method.stages = JSON.parse(JSON.stringify(profiles[0].stages || {}));
+  }
+  updateConfigCards();
+}
+
+async function openMethodConfig() {
+  var title = document.getElementById("mc-modal-title");
+  var wfEntry = workflowCatalogCache.find(function(w) { return w.id === wizardState.workflow.id; });
+  title.textContent = (t("modal.method_config") || "\u914d\u7f6e\u8ba1\u7b97\u65b9\u6cd5") + " - " + (wfEntry ? (wfEntry.label || wfEntry.id) : "");
+
+  if (!methodCatalogCache.method_schemas) {
+    document.getElementById("mc-levels-container").innerHTML = '<div class="muted">' + (t("modal.loading") || "\u52a0\u8f7d\u4e2d...") + '</div>';
+    document.getElementById("method-config-modal").style.display = "flex";
+    try { await loadMethodCatalog(); } catch(e) {
+      document.getElementById("mc-levels-container").innerHTML = '<div class="parse-errors" style="display:block">' + escapeHtml(e.message) + '</div>';
+      return;
+    }
+  }
+  if (!methodCatalogCache.method_schemas) {
+    document.getElementById("mc-levels-container").innerHTML = '<div class="muted">' + "\u76ee\u5f55\u52a0\u8f7d\u5931\u8d25" + '</div>';
+    document.getElementById("method-config-modal").style.display = "flex";
+    return;
+  }
+
+  var schemaId = wizardState.workflow.schema_id || "confsearch";
+  var schema = (methodCatalogCache.method_schemas || {})[schemaId];
+  if (!schema) {
+    document.getElementById("mc-levels-container").innerHTML = '<div class="muted">' + (t("modal.no_method_schema") || "\u65e0\u65b9\u6cd5\u914d\u7f6e") + '</div>';
+    document.getElementById("method-config-modal").style.display = "flex";
+    return;
+  }
+
+  var fieldDefs = methodCatalogCache.field_definitions || {};
+
+  function getFieldOptions(fieldName, engine) {
+    var fd = fieldDefs[fieldName];
+    if (!fd) return null;
+    if (fd.options) return fd.options;
+    if (fd.per_backend) return fd.per_backend[engine] || null;
+    return null;
+  }
+
+  function getFieldDefault(fieldName, engine) {
+    var fd = fieldDefs[fieldName];
+    if (!fd) return "";
+    var dflt = fd.default || {};
+    if (typeof dflt === "object" && !Array.isArray(dflt)) {
+      if (dflt[engine] !== undefined) return dflt[engine];
+      if (dflt["*"] !== undefined) return dflt["*"];
+    }
+    return typeof dflt === "string" || typeof dflt === "number" ? dflt : "";
+  }
+
+  function isFieldAdvanced(fieldName) {
+    var adv = ["aux_basis", "ri_approximation", "grid", "scf_convergence", "opt_convergence", "max_steps", "charge", "multiplicity", "scale_factor"];
+    return adv.indexOf(fieldName) >= 0;
+  }
+
+  function buildLevelCard(lvDef, stateData) {
+    var engine = (stateData && stateData.engine) || lvDef.allowed_engines[0] || "";
+    var expanded = lvDef.level_id === "dft_opt" || lvDef.level_id === "single_point" || lvDef.required === false;
+    var card = document.createElement("div");
+    card.className = "mc-level-card";
+    card.setAttribute("data-level-id", lvDef.level_id);
+
+    var hdr = document.createElement("div");
+    hdr.className = "mc-level-header";
+
+    var expBtn = document.createElement("span");
+    expBtn.className = "mc-level-expand" + (expanded ? " open" : "");
+    expBtn.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2"><path d="M6 4l4 4-4 4"/></svg>';
+    hdr.appendChild(expBtn);
+
+    var nm = document.createElement("span");
+    nm.className = "mc-level-name";
+    nm.textContent = lvDef.label_zh || lvDef.label || lvDef.level_id;
+    hdr.appendChild(nm);
+
+    if (lvDef.allowed_engines.length === 1) {
+      var engBadge = document.createElement("span");
+      engBadge.className = "mc-level-engine";
+      engBadge.textContent = lvDef.allowed_engines[0];
+      hdr.appendChild(engBadge);
+    }
+
+    var statusDot = document.createElement("span");
+    statusDot.className = "mc-level-status ok";
+    hdr.appendChild(statusDot);
+
+    card.appendChild(hdr);
+
+    var bodyDiv = document.createElement("div");
+    bodyDiv.className = "mc-level-body";
+    bodyDiv.style.display = expanded ? "grid" : "none";
+
+    if (lvDef.allowed_engines.length > 1) {
+      var engField = document.createElement("div");
+      engField.className = "mc-field";
+      var engLbl = document.createElement("label");
+      engLbl.textContent = "engine";
+      engField.appendChild(engLbl);
+      var engSel = document.createElement("select");
+      lvDef.allowed_engines.forEach(function(e) {
+        var o = document.createElement("option");
+        o.value = e;
+        o.textContent = e;
+        if (e === engine) o.selected = true;
+        engSel.appendChild(o);
+      });
+      engSel.addEventListener("change", function() {
+        var newEngine = engSel.value;
+        var levelState = getLevelState(lvDef.level_id);
+        levelState.engine = newEngine;
+        rebuildLevelCard(lvDef.level_id);
+        scheduleValidate();
+      });
+      engField.appendChild(engSel);
+      bodyDiv.appendChild(engField);
+    }
+
+    var coreFields = [];
+    var advancedFields = [];
+    (lvDef.fields || []).forEach(function(fn) {
+      if (isFieldAdvanced(fn)) advancedFields.push(fn);
+      else coreFields.push(fn);
+    });
+
+    function buildFieldRow(fieldName, dest) {
+      var fDiv = document.createElement("div");
+      fDiv.className = "mc-field";
+      var lbl = document.createElement("label");
+      lbl.textContent = fieldName.replace(/_/g, " ");
+      fDiv.appendChild(lbl);
+
+      var opts = getFieldOptions(fieldName, engine);
+      var levelState = getLevelState(lvDef.level_id);
+      var curVal = levelState[fieldName] !== undefined ? levelState[fieldName] : getFieldDefault(fieldName, engine);
+
+      if (opts && opts.length) {
+        var sel = document.createElement("select");
+        opts.forEach(function(o) {
+          var opt = document.createElement("option");
+          opt.value = o;
+          opt.textContent = o;
+          if (String(curVal) === String(o)) opt.selected = true;
+          sel.appendChild(opt);
+        });
+        sel.addEventListener("change", function() {
+          getLevelState(lvDef.level_id)[fieldName] = sel.value;
+          scheduleValidate();
+        });
+        fDiv.appendChild(sel);
+      } else if (fieldDefs[fieldName] && fieldDefs[fieldName].type === "float") {
+        var inp = document.createElement("input");
+        inp.type = "number";
+        inp.step = "any";
+        inp.value = curVal;
+        inp.addEventListener("change", function() {
+          getLevelState(lvDef.level_id)[fieldName] = parseFloat(inp.value) || inp.value;
+          scheduleValidate();
+        });
+        fDiv.appendChild(inp);
+      } else {
+        var inp = document.createElement("input");
+        inp.type = "text";
+        inp.value = curVal;
+        inp.addEventListener("change", function() {
+          getLevelState(lvDef.level_id)[fieldName] = inp.value;
+          scheduleValidate();
+        });
+        fDiv.appendChild(inp);
+      }
+      dest.appendChild(fDiv);
+    }
+
+    function getLevelState(lid) {
+      if (!wizardState.method.stages[lid]) wizardState.method.stages[lid] = {};
+      if (!wizardState.method.stages[lid].engine) wizardState.method.stages[lid].engine = lvDef.allowed_engines[0];
+      return wizardState.method.stages[lid];
+    }
+
+    // Engine selector for single-engine levels
+    if (lvDef.allowed_engines.length === 1 && !getLevelState(lvDef.level_id).engine) {
+      getLevelState(lvDef.level_id).engine = lvDef.allowed_engines[0];
+    }
+
+    var coreDiv = document.createElement("div");
+    coreDiv.className = "method-fields";
+    coreFields.forEach(function(fn) { buildFieldRow(fn, coreDiv); });
+    if (coreFields.length) bodyDiv.appendChild(coreDiv);
+
+    if (advancedFields.length) {
+      var advWrap = document.createElement("div");
+      advWrap.className = "mc-level-advanced";
+      var advToggle = document.createElement("div");
+      advToggle.className = "mc-level-advanced-toggle";
+      advToggle.textContent = "+ " + (t("modal.advanced") || "\u9ad8\u7ea7");
+      advWrap.appendChild(advToggle);
+
+      var advDiv = document.createElement("div");
+      advDiv.className = "mc-level-advanced-fields";
+      advDiv.style.display = "none";
+      advancedFields.forEach(function(fn) { buildFieldRow(fn, advDiv); });
+      advWrap.appendChild(advDiv);
+
+      advToggle.addEventListener("click", function() {
+        var shown = advDiv.style.display !== "none";
+        advDiv.style.display = shown ? "none" : "grid";
+        advToggle.textContent = shown ? "+ " + (t("modal.advanced") || "\u9ad8\u7ea7") : "- " + (t("modal.advanced") || "\u9ad8\u7ea7");
+      });
+
+      bodyDiv.appendChild(advWrap);
+    }
+
+    card.appendChild(bodyDiv);
+
+    hdr.addEventListener("click", function() {
+      var expanded2 = bodyDiv.style.display !== "none";
+      bodyDiv.style.display = expanded2 ? "none" : "grid";
+      expBtn.classList.toggle("open", !expanded2);
+    });
+
+    return card;
+  }
+
+  function rebuildLevelCard(lid) {
+    var ml = schema.method_levels || [];
+    var lvDef = null;
+    for (var idx = 0; idx < ml.length; idx++) {
+      if (ml[idx].level_id === lid) { lvDef = ml[idx]; break; }
+    }
+    if (!lvDef) return;
+    var container = document.getElementById("mc-levels-container");
+    var oldCard = container.querySelector('[data-level-id="' + lid + '"]');
+    var stateData = wizardState.method.stages[lid] || {};
+    stateData.engine = stateData.engine || lvDef.allowed_engines[0];
+    var newCard = buildLevelCard(lvDef, stateData);
+    if (oldCard) oldCard.replaceWith(newCard);
+  }
+
+  var validateTimer = null;
+  function scheduleValidate() {
+    if (validateTimer) clearTimeout(validateTimer);
+    validateTimer = setTimeout(function() {
+      doValidate().then(rebuildSummary);
+    }, 400);
+  }
+
+  async function doValidate() {
+    var levels = {};
+    (schema.method_levels || []).forEach(function(lvDef) {
+      var state = wizardState.method.stages[lvDef.level_id];
+      if (state && state.engine) levels[lvDef.level_id] = JSON.parse(JSON.stringify(state));
+    });
+    try {
+      var resp = await fetch(API_BASE + "/validate-method", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ schema_id: schemaId, levels: levels })
+      });
+      var body = await resp.json();
+      if (body.normalized_levels) {
+        Object.keys(body.normalized_levels).forEach(function(lid) {
+          var norm = body.normalized_levels[lid];
+          if (!wizardState.method.stages[lid]) wizardState.method.stages[lid] = {};
+          Object.keys(norm).forEach(function(k) {
+            if (wizardState.method.stages[lid][k] === undefined || wizardState.method.stages[lid][k] === null || wizardState.method.stages[lid][k] === "") {
+              wizardState.method.stages[lid][k] = norm[k];
+            }
+          });
+        });
+      }
+      return body;
+    } catch(e) { return { valid: false, errors: [e.message], warnings: [] }; }
+  }
+
+  function rebuildSummary() {
+    var sb = document.getElementById("mc-summary-body");
+    var html = "";
+    (schema.method_levels || []).forEach(function(lvDef) {
+      var state = wizardState.method.stages[lvDef.level_id];
+      if (!state || !state.engine) return;
+      var parts = [];
+      fields_summary: for (var k in state) {
+        if (k === "engine") continue;
+        var v = state[k];
+        if (v === "" || v === null || v === undefined) continue;
+        parts.push(k.split("_").map(function(s) { return s[0]; }).join("") + "=" + v);
+      }
+      html += '<div class="mc-summary-line">';
+      html += '<span class="mc-summary-level">' + (lvDef.label_zh || lvDef.label || lvDef.level_id) + '</span>';
+      html += ' <span class="mc-summary-detail">' + state.engine;
+      if (parts.length) html += " " + parts.join(" ");
+      html += '</span></div>';
+    });
+    sb.innerHTML = html;
+
+    // Update status dots
+    (schema.method_levels || []).forEach(function(lvDef) {
+      var cards = document.querySelectorAll('.mc-level-card[data-level-id="' + lvDef.level_id + '"]');
+      cards.forEach(function(c) {
+        var dot = c.querySelector(".mc-level-status");
+        var state = wizardState.method.stages[lvDef.level_id];
+        if (dot) dot.className = "mc-level-status " + (state && state.engine ? "ok" : "err");
+      });
+    });
+  }
+
+  // ---- Build initial UI ----
+  var container = document.getElementById("mc-levels-container");
+  container.innerHTML = "";
+
+  // Profile selector
+  var profileSel = document.getElementById("mc-profile-select");
+  profileSel.innerHTML = "";
+  var profiles = schema.profiles || [];
+  if (profiles.length) {
+    var topicOpt = document.createElement("optgroup");
+    topicOpt.label = t("modal.profile") || "\u9884\u8bbe\u65b9\u6848";
+    profiles.forEach(function(p) {
+      var o = document.createElement("option");
+      o.value = p.profile_id;
+      o.textContent = p.label + " - " + p.summary;
+      if (p.profile_id === wizardState.method.profile_id) o.selected = true;
+      topicOpt.appendChild(o);
+    });
+    profileSel.appendChild(topicOpt);
+  }
+  var customOpt = document.createElement("optgroup");
+  customOpt.label = "\u81ea\u5b9a\u4e49";
+  var co = document.createElement("option");
+  co.value = "__custom__";
+  co.textContent = t("modal.custom") || "\u81ea\u5b9a\u4e49";
+  customOpt.appendChild(co);
+  profileSel.appendChild(customOpt);
+
+  profileSel.addEventListener("change", function() {
+    var pid = profileSel.value;
+    if (pid === "__custom__") return;
+    var chosen = null;
+    for (var pi = 0; pi < profiles.length; pi++) {
+      if (profiles[pi].profile_id === pid) { chosen = profiles[pi]; break; }
+    }
+    if (chosen) {
+      wizardState.method.profile_id = chosen.profile_id;
+      wizardState.method.profile_label = chosen.label;
+      wizardState.method.stages = JSON.parse(JSON.stringify(chosen.levels || {}));
+      // Rebuild level cards
+      var container2 = document.getElementById("mc-levels-container");
+      container2.innerHTML = "";
+      (schema.method_levels || []).forEach(function(lvDef) {
+        var stateData = wizardState.method.stages[lvDef.level_id] || {};
+        container2.appendChild(buildLevelCard(lvDef, stateData));
+      });
+      scheduleValidate();
+      rebuildSummary();
+    }
+  });
+
+  // Build level cards
+  (schema.method_levels || []).forEach(function(lvDef) {
+    var stateData = wizardState.method.stages[lvDef.level_id] || {};
+    if (!stateData.engine) stateData.engine = lvDef.allowed_engines[0];
+    container.appendChild(buildLevelCard(lvDef, stateData));
+  });
+
+  document.getElementById("method-config-modal").style.display = "flex";
+  scheduleValidate();
+  rebuildSummary();
+}
+
+function getMethodOptionsForKey(key) {
+  if (key === "functional") return methodCatalogCache.functionals ? (methodCatalogCache.functionals.gaussian || []) : null;
+  if (key === "basis") return methodCatalogCache.basis_sets ? (methodCatalogCache.basis_sets.gaussian || []) : null;
+  if (key === "dispersion") return methodCatalogCache.dispersion || null;
+  if (key === "solvent" || key === "solvents") return methodCatalogCache.solvents || null;
+  if (key === "solvent_model") return ["none", "CPCM", "SMD", "ALPB", "GBSA"];
+  if (key === "gfn") return ["gfn0", "gfn1", "gfn2"];
+  if (key === "backend") return (methodCatalogCache.backends || []).map(function(b) { return b.id; });
+  return null;
+}
+
+async function submitJobModal() {
+  if (!wizardStructures.length) {
+    window.alert(t("modal.parse_first") || "\u8bf7\u5148\u89e3\u6790\u7ed3\u6784");
+    return;
+  }
+
+  var wfEntry = workflowCatalogCache.find(function(w) { return w.id === wizardState.workflow.id; });
+  if (wfEntry && wfEntry.status === "planned") {
+    window.alert(t("modal.workflow_not_available") || "\u8be5\u5de5\u4f5c\u6d41\u5c1a\u672a\u63a5\u5165\u540e\u7aef\uff0c\u65e0\u6cd5\u63d0\u4ea4");
+    return;
+  }
+
+  var jobName = document.getElementById("modal-name").value.trim();
+  var workflow = wizardState.workflow.id;
+  var nproc = parseInt(document.getElementById("modal-nproc").value, 10) || 4;
+  var mem = document.getElementById("modal-mem").value || "8GB";
+
+  for (var i = 0; i < wizardStructures.length; i++) {
+    var s = wizardStructures[i];
+
+    var inputPayload;
+    if (s.source_type === "smiles" && s.smiles) {
+      inputPayload = { source_type: "smiles", source: s.smiles };
+    } else if (s.normalized_path) {
+      inputPayload = { source_type: "structure_asset", asset_id: s.asset_id, source: s.normalized_path };
+    } else if (s.smiles) {
+      inputPayload = { source_type: "smiles", source: s.smiles };
+    } else if (s.xyz) {
+      inputPayload = { source_type: "xyz_text", source: s.xyz };
+    } else {
+      continue;
+    }
+    inputPayload.charge = s.charge;
+    inputPayload.multiplicity = s.multiplicity;
+
+    var methodPayload = {
+      schema_id: wizardState.workflow.schema_id || "",
+      profile_id: wizardState.method.profile_id,
+      levels: wizardState.method.stages || {}
+    };
+    if (wizardState.method.fields) methodPayload.fields = wizardState.method.fields;
+    if (workflow === "conformer" || workflow === "nmr") {
+      methodPayload.protocol = wizardState.method.profile_id;
+    }
+
+    var body = {
+      workflow: workflow,
+      name: wizardStructures.length > 1 ? (jobName || s.name) + "_" + (i + 1) : jobName,
+      input: inputPayload,
+      method: methodPayload,
+      resources: { nproc: nproc, mem: mem }
+    };
+    if (selectedProjectId) body.project_id = selectedProjectId;
+
+    try {
+      var result = await api("/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (i === wizardStructures.length - 1) {
+        closeModal();
+        await refreshJobs();
+        await selectJob(result.job_id);
+      }
+    } catch (e) {
+      window.alert(t("modal.submit_failed", { message: e.message }));
+      return;
+    }
+  }
+}
+
+function setupEventListeners() {
+  document.getElementById("lang-toggle").addEventListener("click", function() {
+    currentLang = currentLang === "zh-CN" ? "en-US" : "zh-CN";
+    localStorage.setItem("acp-lang", currentLang);
+    applyI18n();
+    if (lastStatus) {
+      const pill = statusPillMode(lastStatus);
+      const node = document.getElementById("status-pill");
+      node.className = "status-pill " + pill.className;
+      node.textContent = pill.label;
+      document.getElementById("server-summary").textContent = t("server.summary", {
+        host: lastStatus.host || "127.0.0.1",
+        port: lastStatus.port || "8765",
+        queued: lastStatus.queue && typeof lastStatus.queue.queued === "number" ? lastStatus.queue.queued : 0,
+        running: lastStatus.queue && typeof lastStatus.queue.running === "number" ? lastStatus.queue.running : 0
+      });
+    }
+  });
+
+  document.getElementById("project-select").addEventListener("change", async function(event) {
+    selectedProjectId = event.target.value;
+    await refreshJobs();
+    if (jobsCache.length) {
+      await selectJob(jobsCache[0].id || jobsCache[0].job_id);
+    } else {
+      selectedJobId = "";
+      lastSelectedJob = null;
+      lastFileListing = [];
+      updateInfoPanel(null);
+      renderFileTree([], "");
+      renderLogPlaceholder();
+      clearViewer();
+    }
+  });
+
+  document.getElementById("queue-toggle").addEventListener("click", function() {
+    queueExpanded = !queueExpanded;
+    renderQueue();
+  });
+
+  document.getElementById("btn-new-calc").addEventListener("click", openModal);
+  document.getElementById("modal-close").addEventListener("click", closeModal);
+  document.getElementById("modal-cancel").addEventListener("click", closeModal);
+  document.getElementById("modal-submit").addEventListener("click", submitJobModal);
+  document.getElementById("job-modal").addEventListener("click", function(event) {
+    if (event.target.id === "job-modal") closeModal();
+  });
+
+  document.getElementById("btn-config-workflow").addEventListener("click", openWorkflowConfig);
+  document.getElementById("btn-config-method").addEventListener("click", openMethodConfig);
+  document.getElementById("wf-config-close").addEventListener("click", function() { document.getElementById("workflow-config-modal").style.display = "none"; });
+  document.getElementById("wf-config-cancel").addEventListener("click", function() { document.getElementById("workflow-config-modal").style.display = "none"; });
+  document.getElementById("wf-config-ok").addEventListener("click", function() {
+    document.getElementById("workflow-config-modal").style.display = "none";
+    updateConfigCards();
+  });
+  document.getElementById("mt-config-close").addEventListener("click", function() { document.getElementById("method-config-modal").style.display = "none"; });
+  document.getElementById("mt-config-cancel").addEventListener("click", function() { document.getElementById("method-config-modal").style.display = "none"; });
+  document.getElementById("mt-config-ok").addEventListener("click", function() {
+    document.getElementById("method-config-modal").style.display = "none";
+    updateConfigCards();
+  });
+
+  document.querySelectorAll(".input-mode-tab").forEach(function(tab) {
+    tab.addEventListener("click", function() {
+      setWizardInputMode(tab.getAttribute("data-input-mode"));
+    });
+  });
+
+  document.getElementById("btn-parse-preview").addEventListener("click", parseStructuresPreview);
+
+  var dropzone = document.getElementById("upload-dropzone");
+  var fileInput = document.getElementById("upload-file-input");
+  dropzone.addEventListener("click", function() { fileInput.click(); });
+  fileInput.addEventListener("change", function() {
+    if (fileInput.files.length) {
+      wizardUploadFile = fileInput.files[0];
+      var status = document.querySelector(".upload-dropzone span");
+      if (status) status.textContent = wizardUploadFile.name;
+    }
+  });
+  dropzone.addEventListener("dragover", function(e) {
+    e.preventDefault();
+    dropzone.classList.add("dragover");
+  });
+  dropzone.addEventListener("dragleave", function() { dropzone.classList.remove("dragover"); });
+  dropzone.addEventListener("drop", function(e) {
+    e.preventDefault();
+    dropzone.classList.remove("dragover");
+    if (e.dataTransfer.files.length) {
+      wizardUploadFile = e.dataTransfer.files[0];
+      var status = document.querySelector(".upload-dropzone span");
+      if (status) status.textContent = wizardUploadFile.name;
+    }
+  });
+
+  document.querySelectorAll(".canvas-tab").forEach(function(btn) {
+    btn.addEventListener("click", function() { setViewerTab(btn.getAttribute("data-tab")); });
+  });
+
+  document.getElementById("btn-fit").addEventListener("click", function() {
+    if (viewer) {
+      viewer.zoomTo();
+      viewer.render();
+    }
+  });
+
+  document.getElementById("btn-reset-view").addEventListener("click", function() {
+    restoreInitialView();
+  });
+
+  document.getElementById("style-preset-select").addEventListener("change", function() {
+    molDoc.style = this.value;
+    renderMolDoc();
+  });
+
+  document.getElementById("btn-bg-toggle").addEventListener("click", function() {
+    syncBgIndex();
+    bgIndex = (bgIndex + 1) % BG_COLORS.length;
+    molDoc.bgColor = BG_COLORS[bgIndex];
+    if (viewer) {
+      viewer.setBackgroundColor(molDoc.bgColor);
+      viewer.render();
+    }
+  });
+
+  document.getElementById("btn-screenshot").addEventListener("click", function() {
+    if (!viewer) return;
+    const uri = viewer.pngURI();
+    const a = document.createElement("a");
+    a.href = uri;
+    a.download = "acp_screenshot.png";
+    a.click();
+  });
+
+  document.getElementById("btn-labels").addEventListener("click", function() {
+    labelMode = labelMode === "none" ? "elem" : labelMode === "elem" ? "index" : "none";
+    renderMolDoc();
+  });
+
+  document.getElementById("btn-mode-select").addEventListener("click", function() {
+    setMode("select");
+  });
+
+  document.getElementById("btn-measure-distance").addEventListener("click", function() {
+    molDoc.measureType = "distance";
+    measureBuffer = [];
+    setMode("measure");
+  });
+
+  document.getElementById("btn-measure-angle").addEventListener("click", function() {
+    molDoc.measureType = "angle";
+    measureBuffer = [];
+    setMode("measure");
+  });
+
+  document.getElementById("btn-measure-dihedral").addEventListener("click", function() {
+    molDoc.measureType = "dihedral";
+    measureBuffer = [];
+    setMode("measure");
+  });
+
+  document.getElementById("frame-prev").addEventListener("click", function() { setFrame(molDoc.currentFrame - 1); });
+  document.getElementById("frame-next").addEventListener("click", function() { setFrame(molDoc.currentFrame + 1); });
+  document.getElementById("frame-slider").addEventListener("input", function() { setFrame(parseInt(this.value, 10) || 0); });
+  document.getElementById("frame-play").addEventListener("click", toggleFramePlayback);
+
+  document.querySelectorAll(".mobile-tab").forEach(function(tab) {
+    tab.addEventListener("click", function() {
+      const target = tab.getAttribute("data-mobile-panel");
+      document.querySelectorAll(".mobile-tab").forEach(function(btn) { btn.classList.toggle("active", btn === tab); });
+      document.querySelectorAll(".mobile-panel-body").forEach(function(body) { body.classList.toggle("active", body.getAttribute("data-mobile-body") === target); });
+    });
+  });
+
+  document.addEventListener("keydown", function(e) {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "SELECT") return;
+    switch (e.key) {
+      case "f":
+      case "F":
+        if (viewer) { viewer.zoomTo(); viewer.render(); }
+        break;
+      case "r":
+      case "R":
+        restoreInitialView();
+        break;
+      case "Escape":
+        molDoc.selection.clear();
+        measureBuffer = [];
+        renderMolDoc();
+        renderMeasurementList();
+        updateInfoPanel(lastSelectedJob);
+        break;
+      case "1":
+        setMode("view");
+        break;
+      case "2":
+        setMode("select");
+        break;
+      case "3":
+        molDoc.measureType = "distance";
+        setMode("measure");
+        break;
+      case "4":
+        molDoc.measureType = "angle";
+        setMode("measure");
+        break;
+      case "5":
+        molDoc.measureType = "dihedral";
+        setMode("measure");
+        break;
+    }
+  });
+}
+
+function startPolling() {
+  if (jobsPollTimer) clearInterval(jobsPollTimer);
+  jobsPollTimer = setInterval(async function() {
+    try {
+      await loadStatus();
+      await refreshJobs();
+    } catch (e) {
+      console.error("Polling error:", e);
+    }
+  }, 5000);
+}
+
+window.addEventListener("DOMContentLoaded", async function() {
+  applyI18n();
+  renderLogPlaceholder();
+  syncBgIndex();
+  clearViewer();
+  document.getElementById("style-preset-select").value = molDoc.style;
+  setMode("view");
+  try {
+    await loadStatus();
+    await loadProjects();
+    await loadWorkflows();
+    await loadProtocols();
+    await loadWorkflowCatalog();
+    await loadMethodCatalog();
+    var confsearchSchema = (methodCatalogCache.method_schemas || {}).confsearch;
+    if (confsearchSchema && confsearchSchema.profiles && confsearchSchema.profiles.length) {
+      var p = confsearchSchema.profiles[0];
+      wizardState.method.profile_id = p.profile_id;
+      wizardState.method.profile_label = p.label;
+      wizardState.method.stages = JSON.parse(JSON.stringify(p.stages || {}));
+    }
+    wizardState.workflow.schema_id = "confsearch";
+    updateConfigCards();
+    await refreshJobs();
+    if (jobsCache.length > 0) await selectJob(jobsCache[0].id || jobsCache[0].job_id);
+    startPolling();
+  } catch (e) {
+    console.error("Init error:", e);
+  }
+  setupEventListeners();
+});
+</script>
+</body>
+</html>
