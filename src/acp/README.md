@@ -8,7 +8,7 @@ conformer-search workflow; Phase 2 will add an API server.
 | Module | Description |
 |--------|-------------|
 | `acp.core` | Generic domain models (`Structure`, `StructureEnsemble`, `StructureRecord`), workflow execution engine, pluggable registry, and state persistence. No chemistry-specific logic. |
-| `acp.backends` | QC backend abstraction layer with capability-based interfaces (`GeometryOptimizer`, `SinglePointCalculator`, `FrequencyCalculator`, `NMRCalculator`, `TSMechanismCalculator`). Wraps GaussianInterface, ORCAInterface, CrestBackend, XTBBackend from the legacy conformer_search package. |
+| `acp.backends` | QC backend abstraction layer with capability-based interfaces (`GeometryOptimizer`, `SinglePointCalculator`, `FrequencyCalculator`, `NMRCalculator`, `TSMechanismCalculator`). Wraps ORCAInterface, CrestBackend, XTBBackend from the legacy conformer_search package. |
 | `acp.io` | Molecular structure readers/writers. Thin wrapper delegating to `conformer_search.io.input_handler`. |
 | `acp.workflows` | Stage-based workflow implementations. `conformer` module wraps ConformerEngine as composable pipeline stages (embed, CREST search, ISOSTAT clustering, DFT optimization, frequency, single-point, Shermo thermo). |
 | `acp.api` | API server stubs (Phase 2). Not yet implemented. |

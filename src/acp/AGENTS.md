@@ -11,7 +11,7 @@ acp/
 ├── __main__.py          # `python -m acp` works (4 lines)
 ├── catalog.py           # Protocol catalog listing
 ├── core/                # Generic mechanism: Structure, WorkflowRunner, Registry, State
-├── backends/            # Protocol-based QC adapters (Gaussian/ORCA/CREST/xTB/Isostat/Molclus/external)
+├── backends/            # Protocol-based QC adapters (ORCA/CREST/xTB/Isostat/Molclus/external)
 ├── chem/                # Chemistry-specific logic (RDKit embedding, enumeration)
 ├── intake/              # Data ingestion: models, parsers, storage
 ├── io/                  # StructureReader, StructureWriter (thin conformer_search wrapper)

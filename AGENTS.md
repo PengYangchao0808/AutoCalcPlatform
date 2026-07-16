@@ -28,12 +28,12 @@ ACP_V1_20260519/
 │   ├── intake/            # Data ingestion: models, parsers, storage (610 lines)
 │   ├── io/                # StructureReader / StructureWriter (thin conformer_search wrapper)
 │   ├── workflows/         # Stage-based conformer search + NMR + benchmark + mechanism (4 files)
-│   ├── nmr/               # Phase 3 NMR: shielding parsing, Boltzmann averaging, calibration
+│   ├── nmr/               # Phase 3 NMR: ORCA shielding parsing, Boltzmann averaging, calibration
 │   ├── reports/           # NMR report serialization (JSON/XLSX)
 │   ├── api/               # Phase 2 FastAPI — server.py/routes.py/v1_routes.py/v1_schemas.py (REAL, ~1600 lines)
 │   └── scheduler/         # Phase 2 task scheduler — jobs, manager, runner, store, provenance (13 files, ~2700 lines)
 ├── frontend/                  # ACP Workbench single-page dashboard (ACP_Workbench.html, dark theme)
-├── scripts/run_g16_worker.sh  # Gaussian 16 job wrapper (scratch, disk checks, cleanup)
+├── scripts/start_acp.sh  # ACP service wrapper (scratch, disk checks, cleanup)
 ├── bin/conformer-search       # Legacy CLI wrapper (deprecated)
 ├── config/defaults.yaml       # Default YAML config (may diverge from Python built-in)
 ├── tests/                     # 29 test files (ACP + legacy), conftest.py, baseline configs
@@ -48,8 +48,8 @@ ACP_V1_20260519/
 | Add new protocol | `src/conformer_search/core/protocols.py` | Update `_get_default_protocol_config()` |
 | Config loading | `src/conformer_search/config.py` | 6-source merge (see NOTES) |
 | ACP backends | `src/acp/backends/` | Protocol-based capability system |
-| Gaussian backend | `src/acp/backends/gaussian.py` | New ACP adapter |
-| Gaussian legacy | `src/conformer_search/qc/interfaces/gaussian.py` | Subprocess via `run_g16_worker.sh` |
+| ORCA backend | `src/acp/backends/orca.py` | New ACP adapter |
+| Gaussian legacy | `src/conformer_search/qc/interfaces/orca.py` | Subprocess via direct ORCA invocation |
 | CREST / xTB legacy | `src/conformer_search/qc/interfaces/crest.py` | CRESTInterface + XTBInterface co-located |
 | ACP conformer workflow | `src/acp/workflows/conformer.py` | Thin wrapper delegating to authoritative `ConformerEngine.run()`; rebuilds ensemble from `all_conformers.xyz` |
 | Core data models | `src/acp/core/models.py` | Structure, StructureRecord, StructureEnsemble |
@@ -58,7 +58,7 @@ ACP_V1_20260519/
 | Input parsing | `src/conformer_search/io/input_handler.py` | SMILES→RDKit embed; XYZ/GJF/LOG/OUT parse |
 | Constants / units | `src/conformer_search/utils/constants.py` | HARTREE_TO_KCAL, element masses |
 | NMR models | `src/acp/nmr/models.py` | NMRAtomShielding, NMRReport, Boltzmann averaging |
-| NMR parsing | `src/acp/nmr/parser.py` | Gaussian GIAO log parser |
+| NMR parsing | `src/acp/nmr/parser.py` | ORCA Gaussian GIAO log parser legacy Gaussian GIAO log parser |
 | NMR reports | `src/acp/reports/nmr_report.py` | JSON/XLSX serialization |
 | ACP API server | `src/acp/api/server.py` | FastAPI app factory + static frontend hosting at `/` |
 | API routes | `src/acp/api/routes.py` | `/api/status`, `/api/backends` implemented; `/api/jobs` + SSE NOT yet |
@@ -89,7 +89,7 @@ ACP_V1_20260519/
 2. **NEVER update `__version__` in one place** — 3 sources: `__init__.py`, `version.py`, `pyproject.toml`
 3. **NEVER change YAML defaults without updating Python built-in** — `config/defaults.yaml` vs `_get_default_config()` diverged historically
 4. **NEVER add protocol to YAML `protocols` section** — unreachable; edit `_get_default_protocol_config()` in `protocols.py`
-5. **NEVER bypass `scripts/run_g16_worker.sh`** — provides scratch isolation, disk checks, cleanup
+5. **
 6. **NEVER put implementation in `__init__.py`** — remaining: `qc/cluster/__init__.py` has `create_cluster_adapter()` factory
 7. **`__main__.py` exists for both packages** — both `python -m conformer_search` and `python -m acp` work (old docs claimed no-op/missing)
 8. **Two annotation styles coexist** — typing import style in conformer_search vs PEP 604 in acp

@@ -21,7 +21,7 @@
 - SMILES / XYZ / GJF / LOG / OUT 多格式输入
 - CREST 构象搜索（单阶段 GFN2 / 两阶段 GFN0→GFN2）
 - ISOSTAT 构象聚类
-- DFT 结构优化（Gaussian 16 / ORCA）
+- DFT 结构优化（ORCA）
 - 高精度单点能计算（wB97X-D4 / DLPNO-CCSD(T)）
 - Shermo 热力学修正 + Boltzmann 加权
 - 8 种精度/速度协议：`ext` / `censo-zero` / `censo-lite` / `censo-full` / `censo-full-safe` / `allopt` / `reference-sp` / `legacy-*`
@@ -59,7 +59,6 @@ src/acp/
 ├── backends/                # QC 后端适配层
 │   ├── base.py              # QCBackend ABC + 能力协议 (Protocol)
 │   ├── registry.py          # 后端注册表 (register/get/require)
-│   ├── gaussian.py          # GaussianBackend
 │   ├── orca.py              # ORCABackend
 │   ├── crest.py             # CrestBackend
 │   ├── xtb.py               # XTBBackend
@@ -79,7 +78,7 @@ src/acp/
 
 ### 设计原则
 
-- **core/ 只放通用机制**：数据模型、工作流引擎、状态管理、注册表——不含任何化学特定逻辑（CREST/Gaussian/Shermo 等）
+- **core/ 只放通用机制**：数据模型、工作流引擎、状态管理、注册表——不含任何化学特定逻辑（CREST/Shermo 等）
 - **能力协议**：QC 后端通过 Protocol 声明能力（GeometryOptimizer, FrequencyCalculator 等），而非巨型 ABC
 - **函数式 Stage 管道**：工作流由 Stage 函数组装，支持灵活组合
 - **向后兼容**：`conformer-search` CLI 完全保留，旧代码通过 `conformer_search` 包继续可用
@@ -99,8 +98,7 @@ src/acp/
 
 | 软件 | 用途 | 路径配置 |
 |------|------|----------|
-| Gaussian 16 | DFT 优化 / 频率 / NMR / TS | `executables.gaussian.path` |
-| ORCA | 单点能 / 优化 / 频率 | `executables.orca.path` |
+| ORCA | 单点能 / 优化 / 频率 / NMR | `executables.orca.path` |
 | CREST | 构象搜索 | `executables.crest.path` |
 | xTB | 预优化 | `executables.xtb.path` |
 | ISOSTAT | 构象聚类 | `executables.isostat.path` |
@@ -280,7 +278,7 @@ pytest tests/test_acp_backends.py -v
                      ▼
 ┌─────────────────────────────────────────────────┐
 │  QC Backends (acp/backends/)                    │
-│  Gaussian / ORCA / CREST / xTB                  │
+│  ORCA / CREST / xTB                             │
 │  能力协议：GeometryOptimizer / FrequencyCalc... │
 └─────────────────────────────────────────────────┘
 ```

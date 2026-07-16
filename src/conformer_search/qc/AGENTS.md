@@ -1,12 +1,12 @@
 # qc/ — Quantum Chemistry Module
 
 ## OVERVIEW
-Quantum chemistry subprocess wrappers and job infrastructure. 3 subpackages: external binary interfaces (Gaussian/ORCA/CREST/xTB), thermochemistry runners (ISOSTAT/Shermo), cluster adapters (LSF/Local).
+Quantum chemistry subprocess wrappers and job infrastructure. 3 subpackages: external binary interfaces (ORCA/CREST/xTB), thermochemistry runners (ISOSTAT/Shermo), cluster adapters (LSF/Local).
 
 ## STRUCTURE
 ```
 qc/
-├── interfaces/       # QCInterfaceBase ABC + Gaussian/ORCA/CREST/xTB wrappers
+├── interfaces/       # QCInterfaceBase ABC + ORCA/CREST/xTB wrappers
 ├── runners/          # ISOSTAT (isostat.py) + Shermo thermo (shermo.py); __init__.py only re-exports
 └── cluster/          # LSF (lsf.py) + Local (local.py) + base.py; __init__.py only re-exports + factory
 ```
@@ -15,7 +15,7 @@ qc/
 | Task | Location | Notes |
 |------|----------|-------|
 | ABC contract | `interfaces/base.py` | `QCInterfaceBase`, `QCResult` dataclass |
-| Gaussian DFT opt | `interfaces/gaussian.py` | Subprocess via `scripts/run_g16_worker.sh` |
+| ORCA DFT opt | `interfaces/orca.py` | Direct ORCA invocation |
 | ORCA SP energy | `interfaces/orca.py` | Direct subprocess; NMR raises NotImplementedError |
 | CREST conformer search | `interfaces/crest.py` | Two-stage GFN0 → GFN2 |
 | xTB preopt | `interfaces/xtb.py` | Now separated from crest.py (Phase 1 fix) |
