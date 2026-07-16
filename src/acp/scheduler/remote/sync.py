@@ -101,13 +101,7 @@ def _build_sync_file_list(project_root: Path) -> list[Path]:
     if cs_root.is_dir():
         files.extend(_walk_dir(cs_root, exclude_dirs=_EXCLUDE_DIR_NAMES))
 
-    # 3. config/defaults.yaml — authoritative default configuration used by
-    #    conformer_search.config.load_config() on the remote node.
-    defaults_yaml = project_root / "config" / "defaults.yaml"
-    if defaults_yaml.is_file():
-        files.append(defaults_yaml)
-
-    # 4. requirements-node.txt — node runtime deps (for bootstrap_node()).
+    # 3. requirements-node.txt — node runtime deps (for bootstrap_node()).
     reqs = project_root / "requirements-node.txt"
     if reqs.is_file():
         files.append(reqs)
