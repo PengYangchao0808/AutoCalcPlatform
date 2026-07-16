@@ -20,7 +20,6 @@ _default_config = _get_default_config()
 _ALL_CONFSEARCH_ENV_VARS = [
     'CONFSEARCH_NPROC',
     'CONFSEARCH_MEM',
-    'CONFSEARCH_GAUSSIAN_PATH',
     'CONFSEARCH_ORCA_PATH',
     'CONFSEARCH_XTB_PATH',
     'CONFSEARCH_CREST_PATH',
@@ -69,19 +68,18 @@ class TestConfig:
         _apply_env_overrides(config)
         assert config['resources']['nproc'] == 8
 
-    def test_apply_env_overrides_gaussian_path(self, monkeypatch):
-        """CONFSEARCH_GAUSSIAN_PATH sets gaussian executable path."""
-        monkeypatch.setenv('CONFSEARCH_GAUSSIAN_PATH', '/tmp/test_g16')
+    def test_apply_env_overrides_orca_path(self, monkeypatch):
+        """CONFSEARCH_ORCA_PATH sets orca executable path."""
+        monkeypatch.setenv('CONFSEARCH_ORCA_PATH', '/tmp/test_orca')
         config = copy.deepcopy(_default_config)
         _apply_env_overrides(config)
-        assert config['executables']['gaussian']['path'] == '/tmp/test_g16'
+        assert config['executables']['orca']['path'] == '/tmp/test_orca'
 
-    def test_apply_env_overrides_all_eight(self, monkeypatch):
-        """All 8 CONFSEARCH_* env vars applied correctly without TypeError."""
+    def test_apply_env_overrides_all_seven(self, monkeypatch):
+        """All 7 CONFSEARCH_* env vars applied correctly without TypeError."""
         env_values = {
             'CONFSEARCH_NPROC': '8',
             'CONFSEARCH_MEM': '64GB',
-            'CONFSEARCH_GAUSSIAN_PATH': '/tmp/g16',
             'CONFSEARCH_ORCA_PATH': '/tmp/orca',
             'CONFSEARCH_XTB_PATH': '/tmp/xtb',
             'CONFSEARCH_CREST_PATH': '/tmp/crest',
@@ -96,7 +94,6 @@ class TestConfig:
 
         assert config['resources']['nproc'] == 8
         assert config['resources']['mem'] == '64GB'
-        assert config['executables']['gaussian']['path'] == '/tmp/g16'
         assert config['executables']['orca']['path'] == '/tmp/orca'
         assert config['executables']['xtb']['path'] == '/tmp/xtb'
         assert config['executables']['crest']['path'] == '/tmp/crest'
@@ -121,7 +118,7 @@ class TestConfig:
         """_get_default_config() includes NMR theory and runtime defaults."""
         config = _get_default_config()
 
-        assert config['theory']['nmr']['engine'] == 'gaussian'
+        assert config['theory']['nmr']['engine'] == 'orca'
         assert config['theory']['nmr']['method'] == 'B3LYP'
         assert config['theory']['nmr']['basis'] == 'def2-TZVPP'
         assert config['theory']['nmr']['solvent'] is None
@@ -146,7 +143,7 @@ class TestConfig:
 
         _validate_config(config)
 
-        assert config['theory']['nmr']['engine'] == 'gaussian'
+        assert config['theory']['nmr']['engine'] == 'orca'
         assert config['nmr']['temperature_k'] == 298.15
         assert config['nmr']['energy_window_kcal'] == 3.0
         assert config['nmr']['max_conformers'] == 10

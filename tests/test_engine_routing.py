@@ -2,7 +2,9 @@
 Tests for Engine Routing
 ========================
 
-Tests for opt/freq engine selection refactor.
+Tests for opt/freq engine routing. Gaussian has been removed from the stack;
+ORCA is the sole supported engine, so these tests cover ORCA routing and the
+backward-compat fallback behaviour.
 """
 
 import pytest
@@ -17,7 +19,7 @@ from conformer_search.core.protocols import (
     FunnelPolicy,
     HandoffPolicy,
 )
-from conformer_search.qc.interfaces import GaussianInterface, ORCAInterface
+from conformer_search.qc.interfaces import ORCAInterface
 from conformer_search.qc.interfaces.base import QCResult
 
 
@@ -29,7 +31,6 @@ def _make_min_config(**overrides):
     """Return a minimal valid config dict that won't trigger subprocess calls."""
     config = {
         'executables': {
-            'gaussian': {'path': 'g16'},
             'orca': {'path': 'orca'},
             'crest': {'path': 'crest'},
             'xtb': {'path': 'xtb'},
@@ -39,12 +40,12 @@ def _make_min_config(**overrides):
         'resources': {'nproc': 1, 'mem': '1GB'},
         'theory': {
             'optimization': {
-                'engine': 'gaussian',
+                'engine': 'orca',
                 'method': 'B3LYP',
                 'basis': 'def2-SVP',
                 'dispersion': 'GD3BJ',
             },
-            'frequency': {'engine': 'gaussian'},
+            'frequency': {'engine': 'orca'},
             'single_point': {'method': 'M062X', 'basis': 'def2-TZVPP'},
             'preoptimization': {'gfn_level': 2},
         },
@@ -89,16 +90,15 @@ def _make_engine(tmp_path, config=None, protocol='ext', **kwargs):
 
 
 # ===========================================================================
-# Test _create_qc_interface() — engine string → interface class
+# Test _create_qc_interface() — engine string -> interface class
 # ===========================================================================
 
 class TestCreateQcInterface:
     """Test _create_qc_interface() returns correct interface class per engine."""
 
-    def _make_config_with_executables(self, gaussian_path='g16', orca_path='orca'):
+    def _make_config_with_executables(self, orca_path='orca'):
         return _make_min_config(
             executables={
-                'gaussian': {'path': gaussian_path},
                 'orca': {'path': orca_path},
                 'crest': {'path': 'crest'},
                 'xtb': {'path': 'xtb'},
@@ -106,15 +106,6 @@ class TestCreateQcInterface:
                 'shermo': {'path': 'Shermo'},
             },
         )
-
-    def test_create_qc_interface_returns_gaussian_for_gaussian_key(self, tmp_path):
-        """_create_qc_interface('gaussian') returns a GaussianInterface."""
-        config = self._make_config_with_executables()
-        engine = _make_engine(tmp_path, config=config)
-        result = engine._create_qc_interface('gaussian', {
-            'method': 'B3LYP', 'basis': 'def2-SVP',
-        })
-        assert isinstance(result, GaussianInterface)
 
     def test_create_qc_interface_returns_orca_for_orca_key(self, tmp_path):
         """_create_qc_interface('orca') returns an ORCAInterface."""
@@ -125,8 +116,15 @@ class TestCreateQcInterface:
         })
         assert isinstance(result, ORCAInterface)
 
+    def test_create_qc_interface_gaussian_raises_valueerror(self, tmp_path):
+        """Gaussian is no longer supported; _create_qc_interface('gaussian') raises."""
+        config = self._make_config_with_executables()
+        engine = _make_engine(tmp_path, config=config)
+        with pytest.raises(ValueError, match="Unknown engine"):
+            engine._create_qc_interface('gaussian', {})
+
     def test_create_qc_interface_unknown_engine_raises_valueerror(self, tmp_path):
-        """_create_qc_interface('unknown') raises ValueError."""
+        """_create_qc_interface('nonexistent') raises ValueError."""
         config = self._make_config_with_executables()
         engine = _make_engine(tmp_path, config=config)
         with pytest.raises(ValueError, match="Unknown engine"):
@@ -134,43 +132,14 @@ class TestCreateQcInterface:
 
 
 # ===========================================================================
-# Test _setup_qc_interfaces() — protocol_spec → opt_interface / freq_interface
+# Test _setup_qc_interfaces() — protocol_spec -> opt_interface / freq_interface
 # ===========================================================================
 
 class TestSetupQcInterfaces:
     """Test _setup_qc_interfaces() sets correct interfaces from protocol_spec."""
 
-    def _make_config_theory_engine(self, opt_engine='gaussian', freq_engine='gaussian'):
-        return _make_min_config(
-            theory={
-                'optimization': {
-                    'engine': opt_engine,
-                    'method': 'B3LYP', 'basis': 'def2-SVP', 'dispersion': 'GD3BJ',
-                },
-                'frequency': {'engine': freq_engine},
-                'single_point': {'method': 'M062X', 'basis': 'def2-TZVPP'},
-                'preoptimization': {'gfn_level': 2},
-            },
-        )
-
-    def test_protocol_opt_gaussian_creates_gaussian_opt_interface(self, tmp_path):
-        """When protocol_spec.opt_engine='gaussian', opt_interface is GaussianInterface."""
-        spec = ProtocolSpec(
-            name='ext',
-            opt_engine='gaussian',
-            freq_engine='gaussian',
-            ngeom_max=1,
-            ngeom_default=1,
-            two_stage_enabled=False,
-            funnel_policy=FunnelPolicy(),
-            handoff_policy=HandoffPolicy(),
-        )
-        config = self._make_config_theory_engine('gaussian', 'gaussian')
-        engine = _make_engine(tmp_path, config=config, protocol_spec=spec)
-        assert isinstance(engine.opt_interface, GaussianInterface)
-
-    def test_protocol_opt_orca_creates_orca_opt_interface(self, tmp_path):
-        """When protocol_spec.opt_engine='orca', opt_interface is ORCAInterface."""
+    def test_protocol_orca_engines_create_orca_interfaces(self, tmp_path):
+        """When protocol_spec opt/freq_engine='orca', both interfaces are ORCA."""
         spec = ProtocolSpec(
             name='ext',
             opt_engine='orca',
@@ -181,33 +150,17 @@ class TestSetupQcInterfaces:
             funnel_policy=FunnelPolicy(),
             handoff_policy=HandoffPolicy(),
         )
-        config = self._make_config_theory_engine('gaussian', 'gaussian')
+        config = _make_min_config()
         engine = _make_engine(tmp_path, config=config, protocol_spec=spec)
         assert isinstance(engine.opt_interface, ORCAInterface)
         assert isinstance(engine.freq_interface, ORCAInterface)
+        assert isinstance(engine.sp_interface, ORCAInterface)
 
-    def test_protocol_mixed_engines_opt_gaussian_freq_orca(self, tmp_path):
-        """Mixed: protocol opt=gaussian freq=orca results in correct mixed interfaces."""
+    def test_protocol_gaussian_engine_raises(self, tmp_path):
+        """Gaussian engine in a protocol spec now raises during setup."""
         spec = ProtocolSpec(
             name='ext',
             opt_engine='gaussian',
-            freq_engine='orca',
-            ngeom_max=1,
-            ngeom_default=1,
-            two_stage_enabled=False,
-            funnel_policy=FunnelPolicy(),
-            handoff_policy=HandoffPolicy(),
-        )
-        config = self._make_config_theory_engine('gaussian', 'gaussian')
-        engine = _make_engine(tmp_path, config=config, protocol_spec=spec)
-        assert isinstance(engine.opt_interface, GaussianInterface)
-        assert isinstance(engine.freq_interface, ORCAInterface)
-
-    def test_protocol_mixed_engines_opt_orca_freq_gaussian(self, tmp_path):
-        """Mixed: protocol opt=orca freq=gaussian results in correct mixed interfaces."""
-        spec = ProtocolSpec(
-            name='ext',
-            opt_engine='orca',
             freq_engine='gaussian',
             ngeom_max=1,
             ngeom_default=1,
@@ -215,25 +168,24 @@ class TestSetupQcInterfaces:
             funnel_policy=FunnelPolicy(),
             handoff_policy=HandoffPolicy(),
         )
-        config = self._make_config_theory_engine('gaussian', 'gaussian')
-        engine = _make_engine(tmp_path, config=config, protocol_spec=spec)
-        assert isinstance(engine.opt_interface, ORCAInterface)
-        assert isinstance(engine.freq_interface, GaussianInterface)
+        config = _make_min_config()
+        with pytest.raises(ValueError, match="Unknown engine"):
+            _make_engine(tmp_path, config=config, protocol_spec=spec)
 
 
 # ===========================================================================
-# Test backward compatibility — defaults to gaussian
+# Test backward compatibility — defaults to ORCA
 # ===========================================================================
 
 class TestBackwardCompatibility:
-    """Test backward compatibility: default engine is gaussian."""
+    """Test backward compatibility: default engine is ORCA."""
 
-    def test_default_opt_is_gaussian_when_no_engine_specified(self, tmp_path):
-        """When neither config theory nor protocol specifies engine, defaults to gaussian."""
+    def test_default_opt_is_orca_when_no_engine_specified(self, tmp_path):
+        """When protocol has no engine, resolve_protocol_spec defaults to 'orca'."""
         config = _make_min_config()
         spec = resolve_protocol_spec(config, 'ext')
-        assert spec.opt_engine == 'gaussian'
-        assert spec.freq_engine == 'gaussian'
+        assert spec.opt_engine == 'orca'
+        assert spec.freq_engine == 'orca'
 
     def test_opt_falls_back_to_theory_engine(self, tmp_path):
         """When protocol has no opt_engine, resolve_protocol_spec uses theory engine."""
@@ -250,12 +202,12 @@ class TestBackwardCompatibility:
         assert spec.opt_engine == 'orca'
         assert spec.freq_engine == 'orca'
 
-    def test_hardcoded_gaussian_when_nothing_specified(self, tmp_path):
-        """When neither protocol nor theory config has engine, hardcoded 'gaussian'."""
+    def test_hardcoded_orca_when_nothing_specified(self, tmp_path):
+        """When neither protocol nor theory config has engine, hardcoded 'orca'."""
         config = _make_min_config(theory={})
         spec = resolve_protocol_spec(config, 'ext')
-        assert spec.opt_engine == 'gaussian'
-        assert spec.freq_engine == 'gaussian'
+        assert spec.opt_engine == 'orca'
+        assert spec.freq_engine == 'orca'
 
 
 # ===========================================================================
@@ -266,14 +218,14 @@ class TestProtocolOverride:
     """Test protocol-level engine override takes precedence."""
 
     def test_protocol_opt_engine_overrides_theory_level(self, tmp_path):
-        """Protocol opt_engine='orca' overrides config theory.optimization.engine='gaussian'."""
+        """Protocol opt_engine='orca' overrides config theory.optimization.engine."""
         config = _make_min_config(
             theory={
                 'optimization': {
-                    'engine': 'gaussian',
+                    'engine': 'orca',
                     'method': 'B3LYP', 'basis': 'def2-SVP', 'dispersion': 'GD3BJ',
                 },
-                'frequency': {'engine': 'gaussian'},
+                'frequency': {'engine': 'orca'},
                 'single_point': {'method': 'M062X', 'basis': 'def2-TZVPP'},
                 'preoptimization': {'gfn_level': 2},
             },
@@ -303,20 +255,20 @@ class TestProtocolOverride:
         assert spec.freq_engine == 'orca'
 
     def test_protocol_freq_engine_overrides_theory_level(self, tmp_path):
-        """Protocol freq_engine='orca' overrides config theory.frequency.engine='gaussian'."""
+        """Protocol freq_engine='orca' overrides config theory.frequency.engine."""
         config = _make_min_config(
             theory={
                 'optimization': {
-                    'engine': 'gaussian',
+                    'engine': 'orca',
                     'method': 'B3LYP', 'basis': 'def2-SVP', 'dispersion': 'GD3BJ',
                 },
-                'frequency': {'engine': 'gaussian'},
+                'frequency': {'engine': 'orca'},
                 'single_point': {'method': 'M062X', 'basis': 'def2-TZVPP'},
                 'preoptimization': {'gfn_level': 2},
             },
             protocols={
                 'ext': {
-                    'opt_engine': 'gaussian',
+                    'opt_engine': 'orca',
                     'freq_engine': 'orca',
                     'two_stage_enabled': True,
                     'ngeom_default': 1,
@@ -336,7 +288,7 @@ class TestProtocolOverride:
             },
         )
         spec = resolve_protocol_spec(config, 'ext')
-        assert spec.opt_engine == 'gaussian'
+        assert spec.opt_engine == 'orca'
         assert spec.freq_engine == 'orca'
 
 
@@ -524,7 +476,7 @@ class TestFreqFailureRecovery:
 # ===========================================================================
 
 class TestFullSuccessPath:
-    """Test full success path: opt → freq → sp → shermo → candidate with thermo."""
+    """Test full success path: opt -> freq -> sp -> shermo -> candidate with thermo."""
 
     def test_full_success_populates_all_fields(self, tmp_path):
         """When all steps succeed, candidate has full thermo data."""
@@ -682,8 +634,8 @@ class TestFullSuccessPath:
 class TestProtocolResolutionEngine:
     """Test resolve_protocol_spec engine resolution edge cases."""
 
-    def test_protocol_level_explicit_engine_blocks_theory_fallback(self, tmp_path):
-        """Protocol-level opt_engine='gaussian' is used even when theory says 'orca'."""
+    def test_protocol_level_explicit_engine_beats_theory_fallback(self, tmp_path):
+        """Protocol-level opt_engine='orca' is used even when theory differs."""
         config = _make_min_config(
             theory={
                 'optimization': {
@@ -696,8 +648,8 @@ class TestProtocolResolutionEngine:
             },
             protocols={
                 'ext': {
-                    'opt_engine': 'gaussian',
-                    'freq_engine': 'gaussian',
+                    'opt_engine': 'orca',
+                    'freq_engine': 'orca',
                     'two_stage_enabled': True,
                     'ngeom_default': 1,
                     'ngeom_max': 1,
@@ -716,15 +668,15 @@ class TestProtocolResolutionEngine:
             },
         )
         spec = resolve_protocol_spec(config, 'ext')
-        assert spec.opt_engine == 'gaussian'
-        assert spec.freq_engine == 'gaussian'
+        assert spec.opt_engine == 'orca'
+        assert spec.freq_engine == 'orca'
 
     def test_freq_engine_missing_uses_theory_frequency_engine(self, tmp_path):
         """When protocol has no freq_engine, theory.frequency.engine is used."""
         config = _make_min_config(
             theory={
                 'optimization': {
-                    'engine': 'gaussian',
+                    'engine': 'orca',
                     'method': 'B3LYP', 'basis': 'def2-SVP', 'dispersion': 'GD3BJ',
                 },
                 'frequency': {'engine': 'orca'},
@@ -733,7 +685,7 @@ class TestProtocolResolutionEngine:
             },
             protocols={
                 'ext': {
-                    'opt_engine': 'gaussian',
+                    'opt_engine': 'orca',
                     'two_stage_enabled': True,
                     'ngeom_default': 1,
                     'ngeom_max': 1,
@@ -754,29 +706,29 @@ class TestProtocolResolutionEngine:
         spec = resolve_protocol_spec(config, 'ext')
         assert spec.freq_engine == 'orca'
 
-    def test_both_engines_missing_hardcoded_gaussian(self, tmp_path):
-        """When neither protocol nor theory has engine, both hardcoded to 'gaussian'."""
+    def test_both_engines_missing_hardcoded_orca(self, tmp_path):
+        """When neither protocol nor theory has engine, both hardcoded to 'orca'."""
         config = _make_min_config(theory={})
         spec = resolve_protocol_spec(config, 'ext')
-        assert spec.opt_engine == 'gaussian'
-        assert spec.freq_engine == 'gaussian'
+        assert spec.opt_engine == 'orca'
+        assert spec.freq_engine == 'orca'
 
-    def test_reference_sp_protocol_default_engines_are_gaussian(self, tmp_path):
-        """reference-sp protocol defaults to gaussian when nothing specified."""
+    def test_reference_sp_protocol_default_engines_are_orca(self, tmp_path):
+        """reference-sp protocol defaults to orca when nothing specified."""
         config = _make_min_config(
             theory={
                 'optimization': {
-                    'engine': 'gaussian',
+                    'engine': 'orca',
                     'method': 'B3LYP', 'basis': 'def2-SVP', 'dispersion': 'GD3BJ',
                 },
-                'frequency': {'engine': 'gaussian'},
+                'frequency': {'engine': 'orca'},
                 'single_point': {'method': 'M062X', 'basis': 'def2-TZVPP'},
                 'preoptimization': {'gfn_level': 2},
             },
         )
         spec = resolve_protocol_spec(config, 'reference-sp')
-        assert spec.opt_engine == 'gaussian'
-        assert spec.freq_engine == 'gaussian'
+        assert spec.opt_engine == 'orca'
+        assert spec.freq_engine == 'orca'
 
 
 if __name__ == '__main__':

@@ -13,7 +13,6 @@ from acp.backends import (
     CAPABILITY_MATRIX,
     CrestBackend,
     ExternalBackend,
-    GaussianBackend,
     ORCABackend,
     XTBBackend,
     list_capabilities,
@@ -29,7 +28,6 @@ from acp.backends.base import (
     ThermoCalculator,
 )
 from acp.backends.external import batch_process_thermo, run_isostat, run_shermo
-from acp.backends.gaussian import GaussianInterface
 from acp.backends.orca import ORCAInterface
 from acp.backends.registry import get_backend, require_backend
 from acp.backends.xtb import XTBInterface
@@ -40,7 +38,6 @@ from tests.conftest import requires_isostat, requires_shermo
 def _make_config() -> dict[str, Any]:
     return {
         "executables": {
-            "gaussian": {"path": "g16"},
             "orca": {"path": "orca"},
             "crest": {"path": "crest", "gfn_level": 2},
             "xtb": {"path": "xtb"},
@@ -50,7 +47,7 @@ def _make_config() -> dict[str, Any]:
         "resources": {"nproc": 1, "mem": "1GB"},
         "theory": {
             "optimization": {
-                "engine": "gaussian",
+                "engine": "orca",
                 "method": "B3LYP",
                 "basis": "def2-SVP",
                 "dispersion": "GD3BJ",
@@ -73,15 +70,10 @@ def _make_config() -> dict[str, Any]:
 def test_backend_imports_and_capabilities() -> None:
     config = _make_config()
 
-    gaussian = GaussianBackend(config)
     orca = ORCABackend(config)
     xtb = XTBBackend(config)
     crest = CrestBackend(config)
 
-    assert isinstance(gaussian, GeometryOptimizer)
-    assert isinstance(gaussian, FrequencyCalculator)
-    assert isinstance(gaussian, NMRCalculator)
-    assert isinstance(gaussian, SinglePointCalculator)
     assert isinstance(orca, GeometryOptimizer)
     assert isinstance(orca, FrequencyCalculator)
     assert isinstance(orca, NMRCalculator)
@@ -93,7 +85,6 @@ def test_backend_imports_and_capabilities() -> None:
 
 
 def test_registry_exposes_registered_backends() -> None:
-    assert get_backend("gaussian") is GaussianBackend
     assert get_backend("orca") is ORCABackend
     assert get_backend("crest") is CrestBackend
     assert get_backend("xtb") is XTBBackend
@@ -110,18 +101,6 @@ def test_require_backend_rejects_unknown_capability() -> None:
         _ = require_backend("imaginary")
 
 
-def test_gaussian_backend_delegates_to_interface(tmp_path: Path) -> None:
-    config = _make_config()
-    backend = GaussianBackend(config)
-    expected = QCResult(success=True, energy=-1.0)
-
-    with patch.object(GaussianInterface, "optimize", return_value=expected) as mock_optimize:
-        result = backend.optimize(np.zeros((1, 3)), ["H"], output_dir=tmp_path)
-
-    assert result is expected
-    mock_optimize.assert_called_once()
-
-
 def test_orca_backend_delegates_to_interface(tmp_path: Path) -> None:
     config = _make_config()
     backend = ORCABackend(config)
@@ -132,24 +111,6 @@ def test_orca_backend_delegates_to_interface(tmp_path: Path) -> None:
 
     assert result is expected
     mock_sp.assert_called_once()
-
-
-def test_gaussian_backend_nmr_delegates_to_interface(tmp_path: Path) -> None:
-    config = _make_config()
-    backend = GaussianBackend(config)
-    expected = QCResult(success=True, energy=-4.0)
-
-    with patch.object(
-        GaussianInterface, "nmr_shielding", autospec=True, return_value=expected
-    ) as mock_nmr:
-        result = backend.nmr_shielding(np.zeros((1, 3)), ["H"], output_dir=tmp_path, method="PBE0")
-
-    assert result is expected
-    mock_nmr.assert_called_once()
-    interface = mock_nmr.call_args.args[0]
-    assert interface.method == "PBE0"
-    assert interface.basis == config["theory"]["nmr"]["basis"]
-    assert interface.solvent == config["theory"]["nmr"]["solvent"]
 
 
 def test_orca_backend_nmr_delegates_to_interface(tmp_path: Path) -> None:
@@ -177,7 +138,6 @@ def test_xtb_backend_delegates_to_interface(tmp_path: Path) -> None:
 
 
 def test_legacy_interface_imports_remain_available() -> None:
-    assert GaussianInterface.__name__ == "GaussianInterface"
     assert ORCAInterface.__name__ == "ORCAInterface"
     assert CRESTInterface.__name__ == "CRESTInterface"
 
@@ -199,8 +159,8 @@ def test_external_runner_exports_match_legacy_exports() -> None:
 
 
 def test_capability_matrix_supports_declared_statuses() -> None:
-    assert supports("gaussian", "frequency") is True
-    assert supports("orca", "nmr") is False
+    assert supports("orca", "frequency") is True
+    assert supports("orca", "nmr") is True
     assert (
         list_capabilities("crest")["conformer_search"]
         == CAPABILITY_MATRIX["crest"]["conformer_search"]
@@ -217,7 +177,6 @@ def test_external_backend_implements_clustering_and_thermo_protocols() -> None:
 @pytest.mark.parametrize(
     ("backend_cls", "exe_name"),
     [
-        (GaussianBackend, "g16"),
         (ORCABackend, "orca"),
         (CrestBackend, "crest"),
         (XTBBackend, "xtb"),
@@ -235,7 +194,7 @@ def test_backend_is_available_when_binary_on_path(backend_cls: type, exe_name: s
 
 @pytest.mark.parametrize(
     "backend_cls",
-    [GaussianBackend, ORCABackend, CrestBackend, XTBBackend],
+    [ORCABackend, CrestBackend, XTBBackend],
 )
 def test_backend_is_unavailable_when_binary_missing(backend_cls: type) -> None:
     config = _make_config()
