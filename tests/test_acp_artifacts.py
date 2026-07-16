@@ -108,8 +108,8 @@ def test_capture_ignores_scratch_files(tmp_path: Path) -> None:
 
 def test_extension_type_mapping() -> None:
     assert infer_artifact_type(Path("molecule.xyz")) == "xyz"
-    assert infer_artifact_type(Path("input.gjf")) == "gaussian_input"
-    assert infer_artifact_type(Path("output.log")) == "gaussian_log"
+    assert infer_artifact_type(Path("input.gjf")) == "gjf_input"
+    assert infer_artifact_type(Path("output.log")) == "output_log"
     assert infer_artifact_type(Path("table.csv")) == "csv"
     assert infer_artifact_type(Path("input_preview.xyz")) == "xyz"
 

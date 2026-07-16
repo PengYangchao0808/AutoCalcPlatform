@@ -243,13 +243,13 @@ def test_build_remote_cli_command_nmr():
     spec = JobSpec(
         workflow="nmr",
         input={"source": "CCO"},
-        method={"protocol": "giao", "backend": "gaussian"},
+        method={"protocol": "giao", "backend": "orca"},
         resources={"nproc": 4},
     )
     cmd = build_remote_cli_command(spec)
     assert "run" in cmd and "nmr" in cmd
     assert "--protocol" in cmd and "giao" in cmd
-    assert "--backend" in cmd and "gaussian" in cmd
+    assert "--backend" in cmd and "orca" in cmd
     print("  [OK] build_remote_cli_command: nmr workflow")
 
 

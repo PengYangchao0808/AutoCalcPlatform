@@ -103,7 +103,7 @@ def test_v1_backends(client: TestClient) -> None:
     response = client.get("/api/v1/backends")
     assert response.status_code == 200
     names = {backend["name"] for backend in response.json()["backends"]}
-    assert {"gaussian", "xtb", "crest", "orca"} <= names
+    assert {"xtb", "crest", "orca"} <= names
 
 
 def test_v1_projects_list_default_exists(client: TestClient) -> None:

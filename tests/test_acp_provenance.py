@@ -19,7 +19,7 @@ def test_compute_input_hash_is_stable() -> None:
     spec = JobSpec(
         workflow="conformer",
         input={"source": "CCO", "charge": 0, "multiplicity": 1},
-        method={"protocol": "ext", "backend": "gaussian"},
+        method={"protocol": "ext", "backend": "orca"},
         resources={"nproc": 4, "mem": "8GB"},
     )
 
@@ -38,7 +38,7 @@ def test_compute_input_hash_excludes_runtime_data() -> None:
         workflow="nmr",
         name="baseline",
         input={"source": "mol.xyz"},
-        method={"protocol": "default", "backend": "gaussian"},
+        method={"protocol": "default", "backend": "orca"},
         resources={"nproc": 8},
         output_dir="/tmp/out-a",
         config_path="a.yaml",

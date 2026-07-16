@@ -115,7 +115,7 @@ def test_parse_long_json_levels():
 
     # Construct a syntactically valid JSON object with many repeated keys.
     inner = (
-        '{"engine": "gaussian", "functional": "wB97X-D", "basis": "def2-SVP", '
+        '{"engine": "orca", "functional": "wB97X-D", "basis": "def2-SVP", '
         '"solvent": "", "solvent_model": "none", "grid": "UltraFine", '
         '"scf_convergence": "Tight", "max_steps": 100, "charge": 0, "multiplicity": 1}'
     )
@@ -131,14 +131,14 @@ def test_convert_frontend_levels_to_protocol_levels():
 
     frontend_levels = {
         "dft_opt": {
-            "engine": "gaussian",
+            "engine": "orca",
             "functional": "wB97X-D",
             "basis": "def2-SVP",
             "solvent": "",
             "solvent_model": "none",
         },
         "single_point": {
-            "engine": "gaussian",
+            "engine": "orca",
             "functional": "wB97X-D",
             "basis": "def2-SVP",
             "solvent": "",
@@ -147,5 +147,5 @@ def test_convert_frontend_levels_to_protocol_levels():
     }
     converted = convert_method_levels_to_protocol_levels(frontend_levels)
     assert converted["optimization"]["method"] == "wB97X-D"
-    assert converted["optimization"]["engine"] == "gaussian"
+    assert converted["optimization"]["engine"] == "orca"
     assert converted["single_point"]["method"] == "wB97X-D"

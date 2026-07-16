@@ -10,7 +10,6 @@ import pytest
 _ALL_CONFSEARCH_ENV_VARS = [
     "CONFSEARCH_NPROC",
     "CONFSEARCH_MEM",
-    "CONFSEARCH_GAUSSIAN_PATH",
     "CONFSEARCH_ORCA_PATH",
     "CONFSEARCH_XTB_PATH",
     "CONFSEARCH_CREST_PATH",
@@ -20,7 +19,6 @@ _ALL_CONFSEARCH_ENV_VARS = [
 ]
 
 _DEFAULT_EXECUTABLES = {
-    "gaussian": "g16",
     "orca": "orca",
     "crest": "crest",
     "xtb": "xtb",
@@ -44,14 +42,12 @@ def _has_executable(name: str, configured_path: str | os.PathLike[str] | None = 
     return shutil.which(_resolve_executable_path(name, configured_path)) is not None
 
 
-HAS_G16 = _has_executable("gaussian")
 HAS_ORCA = _has_executable("orca")
 HAS_CREST = _has_executable("crest")
 HAS_XTB = _has_executable("xtb")
 HAS_ISOSTAT = _has_executable("isostat")
 HAS_SHERMO = _has_executable("shermo")
 
-requires_gaussian = pytest.mark.skipif(not HAS_G16, reason="Gaussian 16 not available")
 requires_orca = pytest.mark.skipif(not HAS_ORCA, reason="ORCA not available")
 requires_crest = pytest.mark.skipif(not HAS_CREST, reason="CREST not available")
 requires_xtb = pytest.mark.skipif(not HAS_XTB, reason="xTB not available")
@@ -71,7 +67,6 @@ def sample_config() -> dict[str, object]:
     """Minimal valid configuration for backend tests."""
     return {
         "executables": {
-            "gaussian": {"path": "g16"},
             "orca": {"path": "orca"},
             "crest": {"path": "crest", "gfn_level": 2},
             "xtb": {"path": "xtb"},
@@ -81,12 +76,12 @@ def sample_config() -> dict[str, object]:
         "resources": {"nproc": 1, "mem": "1GB"},
         "theory": {
             "optimization": {
-                "engine": "gaussian",
+                "engine": "orca",
                 "method": "B3LYP",
                 "basis": "def2-SVP",
                 "dispersion": "GD3BJ",
             },
-            "frequency": {"engine": "gaussian"},
+            "frequency": {"engine": "orca"},
             "single_point": {
                 "method": "wB97X-D4",
                 "basis": "def2-TZVPP",
@@ -124,7 +119,6 @@ def pytest_configure(config: pytest.Config) -> None:
     markers = [
         "slow: marks tests as slow (deselect with '-m \"not slow\"')",
         "integration: marks tests as integration tests (require external binaries)",
-        "requires_gaussian: marks tests that need Gaussian 16 installed",
         "requires_orca: marks tests that need ORCA installed",
         "requires_crest: marks tests that need CREST installed",
         "requires_xtb: marks tests that need xTB installed",

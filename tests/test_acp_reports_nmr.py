@@ -20,7 +20,7 @@ from acp.reports import write_json_report, write_xlsx_report
 def _make_report(log_file: Path) -> NMRReport:
     return NMRReport(
         molecule_name="ethanol",
-        backend="gaussian",
+        backend="orca",
         method="B3LYP",
         basis="def2-TZVPP",
         temperature_k=298.15,
@@ -67,7 +67,7 @@ def test_write_json_report_serializes_nested_paths(tmp_path: Path) -> None:
 
     payload = json.loads(json_path.read_text(encoding="utf-8"))
     assert payload["molecule_name"] == "ethanol"
-    assert payload["backend"] == "gaussian"
+    assert payload["backend"] == "orca"
     assert payload["conformers"][0]["log_file"] == str(log_file)
     assert payload["averaged_atoms"][0]["averaged_shift_ppm"] == 7.6
 

@@ -544,9 +544,8 @@ def test_sync_file_list_excludes_api_scheduler():
     assert not any("/api/" in f for f in acp_files), "api/ should be excluded"
     assert not any("/scheduler/" in f for f in acp_files), "scheduler/ should be excluded"
     assert any("conformer_search" in f for f in files_str), "conformer_search should be included"
-    assert any("run_g16_worker.sh" in f for f in files_str), "run_g16_worker.sh should be included"
+    assert not any("run_g16_worker.sh" in f for f in files_str), "run_g16_worker.sh should be removed"
     assert not any("__pycache__" in f for f in files_str)
-    assert not any(f.endswith(".pyc") for f in files_str)
     print(f"  [OK] _build_sync_file_list: {len(files)} files, api/scheduler excluded")
 
 

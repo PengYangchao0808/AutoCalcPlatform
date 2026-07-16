@@ -1,8 +1,4 @@
 executables:
-  gaussian:
-    path: /opt/g16/g16
-    use_wrapper: true
-    wrapper_path: ./scripts/run_g16_worker.sh
   orca:
     path: /opt/orca/orca
     nproc: 4

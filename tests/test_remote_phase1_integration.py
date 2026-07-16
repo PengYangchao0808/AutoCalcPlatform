@@ -17,6 +17,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from acp.scheduler.remote.config import RemoteNode
 from acp.scheduler.remote.sftp import FileStager
 from acp.scheduler.remote.ssh import SSHConnectionPool
@@ -36,6 +38,12 @@ TEST_BASE = "/home/<user>/acp_test_phase1"
 
 def _check_creds() -> bool:
     return bool(os.environ.get("ACP_REMOTE_PASSWORD_COMPUTE_01"))
+
+
+pytestmark = pytest.mark.skipif(
+    not _check_creds(),
+    reason="Requires ACP_REMOTE_PASSWORD_COMPUTE_01 env var for real SSH node",
+)
 
 
 def _cleanup(pool: SSHConnectionPool, stager: FileStager) -> None:
@@ -113,7 +121,7 @@ def test_codesyncer_real() -> int:
             ("src/acp/scheduler/__init__.py", False),
             ("src/acp/api/server.py", False),
             ("src/conformer_search/cli.py", True),
-            ("scripts/run_g16_worker.sh", True),
+            ("scripts/run_g16_worker.sh", False),
             ("config/defaults.yaml", False),
         ]
         for rel, expected in checks:

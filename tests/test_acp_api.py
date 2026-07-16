@@ -51,7 +51,7 @@ def test_backends_report_capability_dicts(client: TestClient) -> None:
     assert r.status_code == 200
     backends = r.json()["backends"]
     names = {b["name"] for b in backends}
-    assert {"gaussian", "xtb", "crest", "orca"} <= names
+    assert {"xtb", "crest", "orca"} <= names
     for b in backends:
         assert isinstance(b["available"], bool)
         assert isinstance(b["capabilities"], list)
@@ -88,7 +88,7 @@ def test_workflows_are_driven_by_registry(client: TestClient) -> None:
     by_name = {w["name"]: w for w in wf["workflows"]}
     assert "nmr" in by_name
     assert by_name["nmr"]["label"] == "NMR"
-    assert set(by_name["nmr"]["requires_binaries"]) == {"gaussian", "orca"}
+    assert set(by_name["nmr"]["requires_binaries"]) == {"orca"}
     assert "mechanism" in by_name
     assert by_name["mechanism"]["label"] == "Mechanism / TS"
 
