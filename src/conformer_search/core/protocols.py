@@ -55,15 +55,15 @@ class ProtocolSpec:
         handoff_policy: DFT handoff parameters
         final_sp_method: Final SP method
         final_sp_basis: Final SP basis set
-        opt_engine: Optimization engine (gaussian, orca)
-        freq_engine: Frequency engine (gaussian, orca)
+        opt_engine: Optimization engine (deprecated; ORCA is the only engine)
+        freq_engine: Frequency engine (deprecated; ORCA is the only engine)
         enable_crest: Enable CREST conformer search stage
         enable_clustering: Enable ISOSTAT clustering stage
         enable_optimization: Enable DFT geometry optimization stage
         enable_frequency: Enable frequency calculation stage
         enable_single_point: Enable high-precision single-point energy stage
         enable_shermo: Enable Shermo thermodynamic correction stage
-        sp_engine: Single-point engine (gaussian, orca)
+        sp_engine: Single-point engine (deprecated; ORCA is the only engine)
     """
 
     name: str
@@ -75,8 +75,8 @@ class ProtocolSpec:
     mrrho_settings: dict[str, Any] = field(default_factory=dict)
     final_sp_method: str = "wB97X-D4"
     final_sp_basis: str = "def2-TZVPP"
-    opt_engine: str = "gaussian"
-    freq_engine: str = "gaussian"
+    opt_engine: str = "orca"
+    freq_engine: str = "orca"
     sp_engine: str = "orca"
     opt_method: str = "B3LYP"
     opt_basis: str = "def2-SVP"
@@ -229,7 +229,7 @@ def resolve_protocol_spec(
     if opt_engine is None:
         opt_engine = theory_opt.get("engine")
     if opt_engine is None:
-        opt_engine = "gaussian"
+        opt_engine = "orca"
 
     freq_engine = freq_level.get("engine")
     if freq_engine is None:

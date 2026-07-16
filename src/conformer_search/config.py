@@ -120,11 +120,6 @@ def _get_default_config() -> dict[str, Any]:
     """Get built-in default configuration."""
     return {
         'executables': {
-            'gaussian': {
-                'path': 'g16',
-                'use_wrapper': True,
-                'wrapper_path': './scripts/run_g16_worker.sh'
-            },
             'orca': {
                 'path': '/opt/orca/orca',
                 'ld_library_path': '/opt/openmpi/lib:/opt/orca',
@@ -178,7 +173,7 @@ def _get_default_config() -> dict[str, Any]:
                 'solvent': 'toluene'
             },
             'nmr': {
-                'engine': 'gaussian',
+                'engine': 'orca',
                 'method': 'B3LYP',
                 'basis': 'def2-TZVPP',
                 'solvent': None,
@@ -436,23 +431,21 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
     Environment variables:
     - CONFSEARCH_NPROC
     - CONFSEARCH_MEM
-    - CONFSEARCH_GAUSSIAN_PATH
     - CONFSEARCH_ORCA_PATH
     - CONFSEARCH_XTB_PATH
     - CONFSEARCH_CREST_PATH
     - CONFSEARCH_ISOSTAT_PATH
     - CONFSEARCH_SHERMO_PATH
-    
+
     Args:
         config: Configuration dictionary
-        
+
     Returns:
         Configuration with environment overrides applied
     """
     env_mappings = {
         'CONFSEARCH_NPROC': ('resources', 'nproc', int),
         'CONFSEARCH_MEM': ('resources', 'mem', str),
-        'CONFSEARCH_GAUSSIAN_PATH': ('executables', ['gaussian', 'path'], str),
         'CONFSEARCH_ORCA_PATH': ('executables', ['orca', 'path'], str),
         'CONFSEARCH_XTB_PATH': ('executables', ['xtb', 'path'], str),
         'CONFSEARCH_CREST_PATH': ('executables', ['crest', 'path'], str),
@@ -506,23 +499,36 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
         logger.warning(f"Unknown protocol '{protocol}', using 'ext'")
         config['protocols']['default'] = 'ext'
 
-    valid_engines = ('gaussian', 'orca')
+    valid_engines = ('orca',)
     theory = config.setdefault('theory', {})
 
-    opt_engine = theory.setdefault('optimization', {}).get('engine', 'gaussian')
-    if opt_engine not in valid_engines:
-        logger.warning(f"Invalid optimization engine '{opt_engine}', defaulting to 'gaussian'")
-        theory['optimization']['engine'] = 'gaussian'
+    opt_engine = theory.setdefault('optimization', {}).get('engine', 'orca')
+    if opt_engine == 'gaussian':
+        logger.warning(
+            "Optimization engine 'gaussian' is no longer supported; using 'orca'"
+        )
+        theory['optimization']['engine'] = 'orca'
+    elif opt_engine not in valid_engines:
+        logger.warning(f"Invalid optimization engine '{opt_engine}', defaulting to 'orca'")
+        theory['optimization']['engine'] = 'orca'
 
-    freq_engine = theory.setdefault('frequency', {}).get('engine', 'gaussian')
-    if freq_engine not in valid_engines:
-        logger.warning(f"Invalid frequency engine '{freq_engine}', defaulting to 'gaussian'")
-        theory['frequency']['engine'] = 'gaussian'
+    freq_engine = theory.setdefault('frequency', {}).get('engine', 'orca')
+    if freq_engine == 'gaussian':
+        logger.warning(
+            "Frequency engine 'gaussian' is no longer supported; using 'orca'"
+        )
+        theory['frequency']['engine'] = 'orca'
+    elif freq_engine not in valid_engines:
+        logger.warning(f"Invalid frequency engine '{freq_engine}', defaulting to 'orca'")
+        theory['frequency']['engine'] = 'orca'
 
-    nmr_engine = theory.setdefault('nmr', {}).get('engine', 'gaussian')
-    if nmr_engine not in valid_engines:
-        logger.warning(f"Invalid NMR engine '{nmr_engine}', defaulting to 'gaussian'")
-        theory['nmr']['engine'] = 'gaussian'
+    nmr_engine = theory.setdefault('nmr', {}).get('engine', 'orca')
+    if nmr_engine == 'gaussian':
+        logger.warning("NMR engine 'gaussian' is no longer supported; using 'orca'")
+        theory['nmr']['engine'] = 'orca'
+    elif nmr_engine not in valid_engines:
+        logger.warning(f"Invalid NMR engine '{nmr_engine}', defaulting to 'orca'")
+        theory['nmr']['engine'] = 'orca'
 
     nmr = config.setdefault('nmr', {})
 

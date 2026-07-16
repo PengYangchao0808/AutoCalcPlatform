@@ -10,11 +10,6 @@
 
 # ==================== Executable Paths ====================
 executables:
-  gaussian:
-    path: "g16"  # Gaussian 16 executable
-    use_wrapper: true
-    wrapper_path: "./scripts/run_g16_worker.sh"
-
   orca:
     path: "/opt/software/orca/orca"  # ORCA executable
     ld_library_path: "/opt/software/openmpi/lib:/opt/software/orca"
@@ -67,7 +62,7 @@ theory:
     solvent: toluene
 
   nmr:
-    engine: gaussian
+    engine: orca
     method: B3LYP
     basis: def2-TZVPP
     solvent: null
