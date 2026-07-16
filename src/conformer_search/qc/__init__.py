@@ -8,7 +8,6 @@ Quantum chemistry interfaces and runners.
 from conformer_search.qc.interfaces import (
     QCInterfaceBase,
     QCResult,
-    GaussianInterface,
     ORCAInterface,
     CRESTInterface,
     XTBInterface,
@@ -31,7 +30,6 @@ from conformer_search.qc.cluster import (
 __all__ = [
     "QCInterfaceBase",
     "QCResult",
-    "GaussianInterface",
     "ORCAInterface",
     "CRESTInterface",
     "XTBInterface",

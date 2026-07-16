@@ -212,13 +212,6 @@ class ResourceManager:
             self.mem_mb = get_system_resources()['mem_mb']
             self.mem_str = mb_to_mem_str(self.mem_mb)
 
-    def get_gaussian_params(self) -> Dict[str, Any]:
-        """Get Gaussian-specific resource parameters."""
-        return {
-            'nprocshared': self.nproc,
-            'mem': self.mem_str
-        }
-
     def get_orca_params(self) -> Dict[str, Any]:
         """Get ORCA-specific resource parameters."""
         safety = self.config.get('resources', {}).get('orca_maxcore_safety', 0.8)

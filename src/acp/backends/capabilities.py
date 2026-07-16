@@ -6,7 +6,6 @@ from enum import Enum
 
 from acp.backends.crest import CrestBackend
 from acp.backends.external_backend import ExternalBackend
-from acp.backends.gaussian import GaussianBackend
 from acp.backends.isostat_backend import IsostatBackend
 from acp.backends.molclus_backend import MolclusBackend
 from acp.backends.orca import ORCABackend
@@ -24,7 +23,6 @@ class BackendCapabilityStatus(str, Enum):
 
 
 _ = (
-    GaussianBackend,
     ORCABackend,
     CrestBackend,
     XTBBackend,
@@ -51,15 +49,6 @@ _CAPABILITY_ALIASES = {
 }
 
 CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
-    "gaussian": {
-        "geometry_optimization": BackendCapabilityStatus.AVAILABLE,
-        "single_point": BackendCapabilityStatus.AVAILABLE,
-        "frequency": BackendCapabilityStatus.AVAILABLE,
-        "nmr": BackendCapabilityStatus.AVAILABLE,
-        "conformer_search": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
-        "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
-    },
     "orca": {
         "geometry_optimization": BackendCapabilityStatus.AVAILABLE,
         "single_point": BackendCapabilityStatus.AVAILABLE,

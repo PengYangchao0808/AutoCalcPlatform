@@ -168,37 +168,6 @@ def read_gjf(gjf_file: Path) -> Tuple[np.ndarray, List[str], int, int]:
     return np.array(coords), symbols, charge, multiplicity
 
 
-def write_gjf(gjf_file: Path, coordinates: np.ndarray, symbols: List[str],
-              charge: int = 0, multiplicity: int = 1,
-              route_line: str = "", additional_blocks: str = ""):
-    """
-    Write Gaussian input file.
-
-    Args:
-        gjf_file: Output GJF file path
-        coordinates: (N, 3) coordinate array
-        symbols: List of element symbols
-        charge: Molecular charge
-        multiplicity: Spin multiplicity
-        route_line: Route line (e.g., "#p B3LYP/6-31G* opt")
-        additional_blocks: Additional input blocks (links, etc.)
-    """
-    with open(gjf_file, 'w', encoding='utf-8') as f:
-        f.write(f"%mem=16GB\n")
-        f.write(f"%nprocshared=16\n")
-        f.write(f"{route_line}\n")
-        f.write(f"\nTitle\n")
-        f.write(f"\n{charge} {multiplicity}\n")
-        
-        for symbol, coord in zip(symbols, coordinates):
-            f.write(f"{symbol:2s} {coord[0]:15.10f} {coord[1]:15.10f} {coord[2]:15.10f}\n")
-        
-        f.write("\n")
-        if additional_blocks:
-            f.write(additional_blocks)
-        f.write("\n")
-
-
 def read_energy_from_gaussian(log_file: Path) -> Optional[float]:
     """
     Extract SCF energy from Gaussian log file.

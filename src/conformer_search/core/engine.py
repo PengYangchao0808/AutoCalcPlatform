@@ -35,7 +35,6 @@ from conformer_search.core.candidates import (
 from conformer_search.core.state_manager import ConformerStateManager
 from conformer_search.io.input_handler import MolecularInput, InputFormat
 from conformer_search.qc.interfaces import (
-    GaussianInterface,
     ORCAInterface,
     CRESTInterface,
     XTBInterface,
@@ -127,15 +126,7 @@ class ConformerEngine:
 
     def _create_qc_interface(self, engine: str, theory_config: dict):
         """Create QC interface instance based on engine type."""
-        if engine == "gaussian":
-            return GaussianInterface(
-                config=self.config,
-                method=theory_config.get("method"),
-                basis=theory_config.get("basis"),
-                solvent=theory_config.get("solvent"),
-                solvent_model=theory_config.get("solvent_model"),
-            )
-        elif engine == "orca":
+        if engine == "orca":
             return ORCAInterface(
                 config=self.config,
                 method=theory_config.get("method"),
@@ -151,14 +142,6 @@ class ConformerEngine:
         self.theory_opt = self.config.get("theory", {}).get("optimization", {})
         self.theory_sp = self.config.get("theory", {}).get("single_point", {})
         self.theory_preopt = self.config.get("theory", {}).get("preoptimization", {})
-
-        self.gaussian_interface = GaussianInterface(
-            config=self.config,
-            method=self.theory_opt.get("method", "B3LYP"),
-            basis=self.theory_opt.get("basis", "def2-SVP"),
-            solvent=self.theory_opt.get("solvent"),
-            solvent_model=self.theory_opt.get("solvent_model", "smd"),
-        )
 
         # Apply per-protocol opt_method/opt_basis override (protocol > theory)
         theory_opt_effective = dict(self.theory_opt)
@@ -189,14 +172,6 @@ class ConformerEngine:
 
         self.sp_interface = self._create_qc_interface(
             self.protocol_spec.sp_engine, theory_sp_effective
-        )
-
-        self.orca_interface = ORCAInterface(
-            config=self.config,
-            method=self.theory_sp.get("method", "M062X"),
-            basis=self.theory_sp.get("basis", "def2-TZVPP"),
-            solvent=self.theory_sp.get("solvent"),
-            solvent_model=self.theory_sp.get("solvent_model", "smd"),
         )
 
         crest_gfn = self.config.get("executables", {}).get("crest", {}).get("gfn_level", 2)

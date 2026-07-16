@@ -23,7 +23,6 @@ from acp.backends.capabilities import (
 from acp.backends.crest import CrestBackend
 from acp.backends.external import batch_process_thermo, run_isostat, run_shermo
 from acp.backends.external_backend import ExternalBackend
-from acp.backends.gaussian import GaussianBackend
 from acp.backends.isostat_backend import IsostatBackend
 from acp.backends.molclus_backend import MolclusBackend
 from acp.backends.orca import ORCABackend
@@ -48,7 +47,6 @@ __all__ = [
     "list_capabilities",
     "list_backends",
     "backend_status",
-    "GaussianBackend",
     "ORCABackend",
     "CrestBackend",
     "XTBBackend",
