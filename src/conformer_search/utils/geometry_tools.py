@@ -233,6 +233,11 @@ class GeometryUtils:
 class LogParser:
     """
     Log file parser for extracting coordinates from Gaussian/ORCA outputs.
+
+    For ``.log`` files the parser no longer assumes Gaussian by default: ORCA
+    parsing is attempted first and falls back to the Gaussian parser only when
+    the ORCA parser produces no geometry. Historical Gaussian ``.log`` files
+    remain readable via this fallback path (legacy read-only support).
     """
 
     ELEMENT_MAP = {
@@ -265,14 +270,12 @@ class LogParser:
 
         if engine_type == 'auto':
             suffix = log_file.suffix.lower()
-            if suffix == '.log':
-                engine_type = 'gaussian'
-            elif suffix == '.out':
+            if suffix == '.out':
                 engine_type = 'orca'
             else:
                 with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
                     content = f.read(4096)
-                    if 'Gaussian' in content:
+                    if 'Gaussian' in content and 'ORCA' not in content:
                         engine_type = 'gaussian'
                     else:
                         engine_type = 'orca'
@@ -280,10 +283,14 @@ class LogParser:
         try:
             if engine_type == 'gaussian':
                 return LogParser._parse_gaussian_log(log_file)
-            elif engine_type == 'orca':
-                return LogParser._parse_orca_out(log_file)
-            else:
-                return None, None, f"Unknown engine type: {engine_type}"
+            if engine_type == 'orca':
+                coords, symbols, err = LogParser._parse_orca_out(log_file)
+                if coords is not None:
+                    return coords, symbols, err
+                # Fallback to Gaussian parser for legacy .log files that ORCA
+                # cannot parse (e.g. historical Gaussian GIAO logs).
+                return LogParser._parse_gaussian_log(log_file)
+            return None, None, f"Unknown engine type: {engine_type}"
         except Exception as e:
             return None, None, f"Parse error: {str(e)}"
 
@@ -433,7 +440,7 @@ class LogParser:
 
         if engine_type == 'auto':
             suffix = log_file.suffix.lower()
-            engine_type = 'gaussian' if suffix == '.log' else 'orca'
+            engine_type = 'orca' if suffix == '.out' else 'auto_content'
 
         with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
@@ -443,10 +450,15 @@ class LogParser:
             matches = re.findall(scf_pattern, content)
             if matches:
                 return float(matches[-1])
-        else:
-            final_energy_pattern = r'FINAL SINGLE POINT ENERGY\s+([-+]?\d+\.\d+)'
-            matches = re.findall(final_energy_pattern, content)
-            if matches:
-                return float(matches[-1])
+
+        # ORCA first; fall back to Gaussian SCF for legacy .log files.
+        final_energy_pattern = r'FINAL SINGLE POINT ENERGY\s+([-+]?\d+\.\d+)'
+        matches = re.findall(final_energy_pattern, content)
+        if matches:
+            return float(matches[-1])
+        scf_pattern = r'SCF Done:.*E\(.*\)\s*=\s*([-+]?\d+\.\d+)'
+        matches = re.findall(scf_pattern, content)
+        if matches:
+            return float(matches[-1])
 
         return None

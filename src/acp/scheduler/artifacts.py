@@ -18,8 +18,8 @@ from acp.scheduler.provenance import ParserStatus
 
 _EXTENSION_TYPE_MAP = {
     ".xyz": "xyz",
-    ".gjf": "gaussian_input",
-    ".log": "gaussian_log",
+    ".gjf": "gjf_input",
+    ".log": "output_log",
     ".out": "output_log",
     ".chk": "checkpoint",
     ".rwf": "checkpoint",

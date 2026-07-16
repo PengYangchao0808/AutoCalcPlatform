@@ -4026,8 +4026,8 @@ async function openMethodConfig() {
 }
 
 function getMethodOptionsForKey(key) {
-  if (key === "functional") return methodCatalogCache.functionals ? (methodCatalogCache.functionals.gaussian || []) : null;
-  if (key === "basis") return methodCatalogCache.basis_sets ? (methodCatalogCache.basis_sets.gaussian || []) : null;
+  if (key === "functional") return methodCatalogCache.functionals ? (methodCatalogCache.functionals.orca || []) : null;
+  if (key === "basis") return methodCatalogCache.basis_sets ? (methodCatalogCache.basis_sets.orca || []) : null;
   if (key === "dispersion") return methodCatalogCache.dispersion || null;
   if (key === "solvent" || key === "solvents") return methodCatalogCache.solvents || null;
   if (key === "solvent_model") return ["none", "CPCM", "SMD", "ALPB", "GBSA"];

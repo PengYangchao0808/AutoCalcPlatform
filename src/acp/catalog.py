@@ -10,8 +10,8 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "category": "simple",
         "description": "Compute energy at current geometry",
         "method_schema_id": "dft_singlepoint",
-        "default_backend": "gaussian",
-        "requires_binaries": ["gaussian"],
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
         "status": "planned",
     },
     {
@@ -21,8 +21,8 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "category": "simple",
         "description": "Optimize molecular geometry",
         "method_schema_id": "dft_optimize",
-        "default_backend": "gaussian",
-        "requires_binaries": ["gaussian"],
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
         "status": "planned",
     },
     {
@@ -32,8 +32,8 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "category": "simple",
         "description": "Compute vibrational frequencies",
         "method_schema_id": "dft_frequency",
-        "default_backend": "gaussian",
-        "requires_binaries": ["gaussian"],
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
         "status": "planned",
     },
     {
@@ -43,8 +43,8 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "category": "simple",
         "description": "Optimize then compute frequencies",
         "method_schema_id": "dft_optfreq",
-        "default_backend": "gaussian",
-        "requires_binaries": ["gaussian"],
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
         "status": "planned",
     },
     {
@@ -66,7 +66,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "description": "CREST conformer search + DFT refinement + thermo",
         "method_schema_id": "confsearch",
         "default_backend": "crest",
-        "requires_binaries": ["crest", "gaussian"],
+        "requires_binaries": ["crest", "orca"],
         "status": "active",
     },
     {
@@ -76,8 +76,8 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "category": "preset",
         "description": "GIAO NMR shielding + Boltzmann averaging",
         "method_schema_id": "nmr",
-        "default_backend": "gaussian",
-        "requires_binaries": ["gaussian"],
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
         "status": "active",
     },
     {
@@ -87,8 +87,8 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "category": "preset",
         "description": "Compare protocols/methods across test set",
         "method_schema_id": "benchmark",
-        "default_backend": "gaussian",
-        "requires_binaries": ["gaussian"],
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
         "status": "active",
     },
     {
@@ -98,8 +98,8 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "category": "preset",
         "description": "TS guess + optimization + IRC verification",
         "method_schema_id": "mechanism",
-        "default_backend": "gaussian",
-        "requires_binaries": ["gaussian"],
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
         "status": "planned",
     },
     {
@@ -118,9 +118,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
 FIELD_DEFINITIONS: dict[str, Any] = {
     "functional": {
         "type": "select",
-        "per_backend": {
-            "gaussian": ["B3LYP", "PBE0", "M06-2X", "wB97X-D", "wB97X-D4"],
-            "orca": ["B3LYP", "PBE0", "wB97X-D4", "r2SCAN-3c", "DLPNO-CCSD(T)"],
+        "per_backend": {            "orca": ["B3LYP", "PBE0", "wB97X-D4", "r2SCAN-3c", "DLPNO-CCSD(T)"],
             "xtb": ["GFN0-xTB", "GFN1-xTB", "GFN2-xTB"],
         },
         "default": {"*": "wB97X-D"},
@@ -128,15 +126,6 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     "basis": {
         "type": "select",
         "per_backend": {
-            "gaussian": [
-                "def2-SVP",
-                "def2-TZVP",
-                "def2-TZVPP",
-                "def2-TZVPPD",
-                "6-31G(d)",
-                "cc-pVTZ",
-                "aug-cc-pVTZ",
-            ],
             "orca": [
                 "def2-SVP",
                 "def2-TZVP",
@@ -156,9 +145,7 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     },
     "solvent_model": {
         "type": "select",
-        "per_backend": {
-            "gaussian": ["none", "CPCM", "SMD"],
-            "orca": ["none", "CPCM", "COSMO"],
+        "per_backend": {            "orca": ["none", "CPCM", "COSMO"],
             "xtb": ["none", "ALPB", "GBSA"],
         },
         "default": {"*": "none"},
@@ -225,15 +212,13 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     "multiplicity": {"type": "int", "default": {"*": 1}},
     "aux_basis": {
         "type": "select",
-        "per_backend": {
-            "gaussian": ["", "def2-TZVPP/C", "def2-QZVPP/C"],
-            "orca": ["", "def2-TZVPP/C", "cc-pVTZ/C"],
+        "per_backend": {            "orca": ["", "def2-TZVPP/C", "cc-pVTZ/C"],
         },
         "default": {"*": ""},
     },
     "ri_approximation": {
         "type": "select",
-        "per_backend": {"gaussian": ["none", "RIJCOSX"], "orca": ["none", "RI", "RIJCOSX", "RIJK"]},
+        "per_backend": {"orca": ["none", "RI", "RIJCOSX", "RIJK"]},
         "default": {"*": "none"},
     },
 }
@@ -262,7 +247,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "label": "DFT Optimization",
                 "label_zh": "DFT \u4f18\u5316",
                 "required": True,
-                "allowed_engines": ["gaussian", "orca"],
+                "allowed_engines": ["orca"],
                 "fields": [
                     "functional",
                     "basis",
@@ -281,7 +266,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "label": "Single Point Energy",
                 "label_zh": "\u5355\u70b9\u80fd",
                 "required": True,
-                "allowed_engines": ["gaussian", "orca"],
+                "allowed_engines": ["orca"],
                 "fields": [
                     "functional",
                     "basis",
@@ -320,7 +305,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "solvent_model": "none",
                     },
                     "dft_opt": {
-                        "engine": "gaussian",
+                        "engine": "orca",
                         "functional": "wB97X-D",
                         "basis": "def2-SVP",
                         "dispersion": "D3BJ",
@@ -330,7 +315,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "scf_convergence": "Tight",
                     },
                     "single_point": {
-                        "engine": "gaussian",
+                        "engine": "orca",
                         "functional": "wB97X-D4",
                         "basis": "def2-TZVPPD",
                         "aux_basis": "",
@@ -400,7 +385,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "solvent_model": "none",
                     },
                     "dft_opt": {
-                        "engine": "gaussian",
+                        "engine": "orca",
                         "functional": "wB97X-D",
                         "basis": "def2-TZVP",
                         "dispersion": "D3BJ",
@@ -410,7 +395,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "scf_convergence": "Tight",
                     },
                     "single_point": {
-                        "engine": "gaussian",
+                        "engine": "orca",
                         "functional": "wB97X-D4",
                         "basis": "def2-TZVPPD",
                         "aux_basis": "",
@@ -434,7 +419,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "level_id": "singlepoint",
                 "label": "Single Point",
                 "required": True,
-                "allowed_engines": ["gaussian", "orca"],
+                "allowed_engines": ["orca"],
                 "fields": [
                     "functional",
                     "basis",
@@ -454,7 +439,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "level_id": "optimize",
                 "label": "Optimization",
                 "required": True,
-                "allowed_engines": ["gaussian", "orca"],
+                "allowed_engines": ["orca"],
                 "fields": [
                     "functional",
                     "basis",
@@ -476,7 +461,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "level_id": "frequency",
                 "label": "Frequency",
                 "required": True,
-                "allowed_engines": ["gaussian"],
+                "allowed_engines": ["orca"],
                 "fields": ["functional", "basis", "temperature", "pressure", "scale_factor"],
             }
         ],
@@ -488,7 +473,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "level_id": "optfreq",
                 "label": "Opt+Freq",
                 "required": True,
-                "allowed_engines": ["gaussian"],
+                "allowed_engines": ["orca"],
                 "fields": [
                     "functional",
                     "basis",
@@ -520,7 +505,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "level_id": "shielding",
                 "label": "NMR Shielding",
                 "required": True,
-                "allowed_engines": ["gaussian", "orca"],
+                "allowed_engines": ["orca"],
                 "fields": ["functional", "basis"],
             }
         ],
@@ -530,11 +515,6 @@ METHOD_SCHEMAS: dict[str, Any] = {
 
 METHOD_CATALOG: dict[str, Any] = {
     "backends": [
-        {
-            "id": "gaussian",
-            "label": "Gaussian 16",
-            "supports": ["singlepoint", "optimize", "frequency", "nmr"],
-        },
         {
             "id": "orca",
             "label": "ORCA",
@@ -628,14 +608,10 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                 default_val = _resolve_field_default(field_name, engine)
                 normalized[field_name] = default_val
 
-        # Composite-method rules: r2SCAN-3c bundles def2-mTZVPP and its dispersion correction
-        # and is not available in Gaussian.
+        # Composite-method rules: r2SCAN-3c bundles def2-mTZVPP and its dispersion correction.
         if normalized.get("functional") == "r2SCAN-3c":
-            if engine == "gaussian":
-                errors.append(f"Level '{lid}': r2SCAN-3c is not supported by Gaussian")
-            else:
-                normalized["basis"] = "def2-mTZVPP"
-                normalized["dispersion"] = "none"
+            normalized["basis"] = "def2-mTZVPP"
+            normalized["dispersion"] = "none"
 
         levels[lid] = normalized
 

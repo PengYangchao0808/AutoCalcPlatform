@@ -320,7 +320,7 @@ Examples:
         epilog="""\
 Examples:
   acp run nmr --input "CCO" --output ./nmr_results
-  acp run nmr --input molecule.xyz --protocol full --backend gaussian
+  acp run nmr --input molecule.xyz --protocol full --backend orca
   acp run nmr --input "CCO" --reference 1H=31.88 --reference 13C=186.10
         """,
     )
@@ -388,8 +388,8 @@ Examples:
     nmr.add_argument(
         "--backend",
         type=str,
-        choices=["gaussian", "orca"],
-        help="NMR backend engine (default: theory.nmr.engine from config)",
+        choices=["orca"],
+        help="NMR backend engine (only ORCA is supported)",
     )
     nmr.add_argument(
         "--temperature",

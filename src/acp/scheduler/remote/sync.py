@@ -8,7 +8,6 @@ The sync set is:
 * ``src/acp/`` — **excluding** the ``api/`` and ``scheduler/`` sub-packages
   (not needed on the execution side).
 * ``src/conformer_search/`` — the full legacy package.
-* ``scripts/run_g16_worker.sh`` — the Gaussian wrapper script.
 * ``requirements-node.txt`` — the execution-node runtime dependency list,
   consumed by :meth:`NodeManager.bootstrap_node` to install deps on the node
   (see plan "node config portability").  Synced so the dependency set
@@ -107,11 +106,6 @@ def _build_sync_file_list(project_root: Path) -> list[Path]:
     defaults_yaml = project_root / "config" / "defaults.yaml"
     if defaults_yaml.is_file():
         files.append(defaults_yaml)
-
-    # 4. scripts/run_g16_worker.sh
-    worker = project_root / "scripts" / "run_g16_worker.sh"
-    if worker.is_file():
-        files.append(worker)
 
     # 4. requirements-node.txt — node runtime deps (for bootstrap_node()).
     reqs = project_root / "requirements-node.txt"

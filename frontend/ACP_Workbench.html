@@ -216,9 +216,9 @@ const $ = (id) => document.getElementById(id);
 
 const WF_META = {
   fake:       { label: "Fake (demo)",       needs: [] },
-  conformer:  { label: "Conformer Search",  needs: ["crest", "gaussian"] },
-  nmr:        { label: "NMR",               needs: ["gaussian"] },
-  benchmark:  { label: "Benchmark",         needs: ["crest", "gaussian"] },
+  conformer:  { label: "Conformer Search",  needs: ["crest", "orca"] },
+  nmr:        { label: "NMR",               needs: ["orca"] },
+  benchmark:  { label: "Benchmark",         needs: ["crest", "orca"] },
 };
 const PROTOCOLS_DEFAULT = ["ext","censo-zero","censo-lite","censo-full","allopt","reference-sp"];
 

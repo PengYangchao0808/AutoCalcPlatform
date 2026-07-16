@@ -50,7 +50,7 @@ class CrestBackend(QCBackend):
     ) -> QCResult:
         raise NotImplementedError(
             "CrestBackend does not support geometry optimization. "
-            "Use xTB/Gaussian/ORCA backends for optimisation tasks."
+            "Use xTB/ORCA backends for optimisation tasks."
         )
 
     def single_point(
@@ -64,7 +64,7 @@ class CrestBackend(QCBackend):
     ) -> QCResult:
         raise NotImplementedError(
             "CrestBackend does not support single-point energy. "
-            "Use Gaussian/ORCA backends for SP calculations."
+            "Use ORCA backends for SP calculations."
         )
 
     def frequency(
@@ -78,7 +78,7 @@ class CrestBackend(QCBackend):
     ) -> QCResult:
         raise NotImplementedError(
             "CrestBackend does not support frequency calculations. "
-            "Use Gaussian/ORCA backends."
+            "Use ORCA backends."
         )
 
     def run_conformer_search(

@@ -43,7 +43,6 @@ from conformer_search.utils.resource_utils import (
 )
 
 from conformer_search.utils.solvent_map import (
-    gaussian_pcm_keyword,
     orca_smd_solvent,
     xtb_solvent,
     SOLVENT_ALIASES,
@@ -75,7 +74,6 @@ __all__ = [
     "find_executable",
     "resolve_executable_config",
     "ResourceManager",
-    "gaussian_pcm_keyword",
     "orca_smd_solvent",
     "xtb_solvent",
     "SOLVENT_ALIASES",

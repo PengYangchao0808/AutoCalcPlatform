@@ -48,7 +48,6 @@ router = APIRouter()
 _START_TIME = time.time()
 
 _BACKEND_DEFAULT_BINARIES: dict[str, list[str]] = {
-    "gaussian": ["g16", "g09"],
     "xtb": ["xtb"],
     "crest": ["crest"],
     "orca": ["orca"],

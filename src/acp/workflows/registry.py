@@ -41,25 +41,25 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         name="conformer",
         label="Conformer Search",
         description="CREST conformer search → DFT refinement → single-point → thermo.",
-        requires_binaries=["crest", "gaussian"],
+        requires_binaries=["crest", "orca"],
     ),
     "nmr": WorkflowRegistryEntry(
         name="nmr",
         label="NMR",
         description="Conformer selection → GIAO shielding → Boltzmann-averaged report.",
-        requires_binaries=["gaussian", "orca"],
+        requires_binaries=["orca"],
     ),
     "benchmark": WorkflowRegistryEntry(
         name="benchmark",
         label="Benchmark",
         description="Run multiple conformer protocols and compare their results.",
-        requires_binaries=["crest", "gaussian"],
+        requires_binaries=["crest", "orca"],
     ),
     "mechanism": WorkflowRegistryEntry(
         name="mechanism",
         label="Mechanism / TS",
         description="TS search + optimization + IRC validation + energy barrier analysis.",
-        requires_binaries=["gaussian"],
+        requires_binaries=["orca"],
     ),
 }
 
