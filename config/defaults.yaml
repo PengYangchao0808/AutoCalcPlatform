@@ -39,7 +39,7 @@ executables:
 
 # ==================== Computational Resources ====================
 resources:
-  nproc: 20       # Number of CPU cores (built-in default)
+  nproc: 16       # Number of CPU cores (built-in default)
   mem: "30GB"     # Memory limit
   orca_maxcore_safety: 0.8  # ORCA maxcore safety factor
 
@@ -47,25 +47,24 @@ resources:
 theory:
   # DFT Optimization (for final geometry optimization)
   optimization:
-    method: B3LYP
-    basis: def2-SVP
-    dispersion: GD3BJ
-    solvent: null
-    solvent_model: smd  # smd, pcm, cpcm
-    engine: gaussian
+    method: r2SCAN-3c
+    basis: ""
+    solvent: toluene
+    solvent_model: cpcm  # smd, pcm, cpcm
+    engine: orca
 
   frequency:
-    engine: gaussian
+    engine: orca
 
   single_point:
     method: wB97X-D4
     basis: def2-TZVPP
-    solvent: null
+    solvent: toluene
     solvent_model: smd
 
   preoptimization:
     gfn_level: 2
-    solvent: null
+    solvent: toluene
 
   nmr:
     engine: gaussian
@@ -99,7 +98,7 @@ nmr:
 # Per-stage control: set any stage to false to skip it.
 # Stages: crest, clustering, optimization, frequency, single_point, shermo
 protocols:
-  default: ext
+  default: lite
 
   # EXT Protocol: Two-stage CREST (GFN0→GFN2) + full DFT handoff
   # Recommended for most organic molecules
@@ -299,13 +298,35 @@ protocols:
       final_sp_basis: def2-TZVPP
 
 # ==================== Cluster Configuration ====================
-# Set 'enabled: true' and specify type for cluster execution
+# Set 'enabled: true' and specify type for cluster execution.
+# For remote compute-node dispatch (SSH/SFTP to OpenLAVA nodes), set
+# 'execution_mode: remote' and list nodes under 'nodes'.
+# Passwords are provided via env vars (ACP_REMOTE_PASSWORD_<NAME>), never YAML.
 cluster:
   enabled: false       # Set to true for cluster execution
+  execution_mode: local  # 'local' (subprocess) or 'remote' (SSH/SFTP to OpenLAVA nodes)
+  poll_interval: 30    # Remote job status poll interval (seconds)
+  retention_days: 180  # Remote job directory retention before cleanup
+  auto_sync: true      # Auto-sync ACP source to remote nodes before submitting
   type: local          # 'local', 'lsf', 'slurm', 'pbs'
   queue: normal        # Cluster queue name
   walltime: "24:00"    # Job walltime (HH:MM)
   extra_flags: ""      # Additional LSF/PBS flags
+  nodes: []            # Remote compute nodes (see plan §13 for example)
+
+  # Local run_root lifecycle management (Phase 5B — local disk protection).
+  # Protects the ACP Server's own run_root from unbounded growth.
+  local_retention:
+    enabled: true             # Master switch; false disables all local cleanup
+    completed_days: 30        # work_dir retention for completed/cancelled/orphan jobs
+    failed_days: 90           # work_dir retention for failed jobs (kept longer for triage)
+    cancelled_days: 30        # work_dir retention for cancelled jobs
+    db_record_days: 365       # SQLite row retention (independent of work_dir)
+    cleanup_interval_hours: 6 # Background sweeper interval
+    disk_cleanup_threshold: 90  # >this% triggers a retention sweep before submit
+    disk_skip_threshold: 95     # >this% rejects submission (even after sweep)
+    max_dirs_per_sweep: 200   # Cap on dirs removed per sweep
+    vacuum_after_db_cleanup: false  # VACUUM after DB pruning (locks DB; off by default)
 
 # ==================== Optimization Control ====================
 optimization_control:

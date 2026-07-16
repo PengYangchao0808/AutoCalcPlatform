@@ -5,24 +5,20 @@ Top-level package files: CLI entry point, config loading, version management, pa
 
 ## STRUCTURE
 ```
-src/conformer_search/
-├── cli.py           # argparse CLI, main() entry point (372 lines)
-├── config.py        # 6-source YAML config load/merge (427 lines)
-├── __init__.py      # Package init; re-exports; __version__ = "1.0.0"
+src/conformer_search/   # Authoritative version (30 .py; reverse-synced 2026-07-13 from compute node)
+├── cli.py           # argparse CLI, main() entry point
+├── config.py        # 6-source YAML config load/merge (+ NMR + remote-cluster sections)
+├── __init__.py      # Package init; __version__ = "1.0.0"
 ├── __main__.py      # Works — calls conformer_search.cli.main()
-├── version.py       # Duplicate __version__ = "1.0.0"
-├── core/            # ConformerEngine, protocols, candidates, state, funnel
+├── version.py       # __version__ = "1.0.0"
+├── core/            # ConformerEngine (1733 lines), protocols, candidates, state_manager
 ├── io/              # MolecularInputHandler — format detection, RDKit embed
-├── pipeline/        # PipelineExecutor — thin orchestration (78 lines)
-├── qc/              # QC interfaces, runners, cluster adapters
-├── benchmark/       # Benchmark runner (128 lines)
-├── ensemble/        # CandidateSet (Boltzmann, RMSD, sorting) (325 lines)
-├── recipes/         # CENSO adapter + protocol parts (606 lines)
-├── utils/           # 7 shared utility modules (file I/O, geometry, constants)
-├── funnel/          # Empty (placeholder)
-├── search/          # Empty (placeholder)
-└── thermo/          # Empty (placeholder)
+├── pipeline/        # PipelineExecutor — thin orchestration
+├── qc/              # QC interfaces (Gaussian/ORCA/CREST+XTB/xtb_thermo), runners, cluster adapters
+└── utils/           # 7 shared utility modules (file I/O, geometry, constants)
 ```
+
+**Note:** ACP-only subpackages from the previous fork (`benchmark/`, `ensemble/`, `recipes/`, `funnel/`, `search/`, `thermo/`) and files (`core/specs.py`, `core/spec_adapter.py`, `core/method_resolution.py`, `qc/interfaces/xtb.py`, `qc/runners/isostat.py`, `qc/runners/shermo.py`) were **removed** during the 2026-07-13 reverse-sync. ACP features they backed (NMR config, nmr_shielding) were re-merged into the authoritative base; see root `AGENTS.md` and `docs/remote_execution_plan.html` (§conformer_search 版本分歧).
 
 ## WHERE TO LOOK
 | Task | Location | Notes |

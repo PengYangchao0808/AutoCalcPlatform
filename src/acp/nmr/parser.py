@@ -16,10 +16,15 @@ _SECTION_HEADERS = (
     "SCF GIAO Magnetic shielding tensor",
     "GIAO Magnetic shielding tensor",
 )
+_ORCA_SHIELDING_HEADER = "NMR SHIELDING TENSOR"
 _ATOM_HEADER_RE = re.compile(
     r"^\s*(\d+)\s+([A-Za-z]{1,2})\s+Isotropic\s*=\s*([-+]?\d+\.\d+)\s+Anisotropy\s*=\s*([-+]?\d+\.\d+)"
 )
 _TENSOR_RE = re.compile(r"([XYZ]{2})\s*=\s*([-+]?\d+\.\d+)")
+_ORCA_NUCLEUS_RE = re.compile(
+    r"^\s*Nucleus\s+(\d+)([A-Za-z]{1,2}):\s+isotropic\s*=\s*([-+]?\d+\.\d+)\s+anisotropy\s*=\s*([-+]?\d+\.\d+)"
+)
+_ORCA_TENSOR_RE = re.compile(r"([XYZ]{2})\s*=\s*([-+]?\d+\.\d+)")
 
 
 class _AtomParseState(TypedDict):
@@ -70,12 +75,14 @@ def _validate_expected_symbols(
 
     if len(parsed_symbols) != len(normalized_expected):
         raise ValueError(
-            f"Parsed shielding atom count does not match expected symbols: {len(parsed_symbols)} != {len(normalized_expected)}"
+            "Parsed shielding atom count does not match expected symbols: "
+            f"{len(parsed_symbols)} != {len(normalized_expected)}"
         )
 
     if parsed_symbols != normalized_expected:
         raise ValueError(
-            f"Parsed shielding symbols do not match expected symbols: {parsed_symbols} != {normalized_expected}"
+            "Parsed shielding symbols do not match expected symbols: "
+            f"{parsed_symbols} != {normalized_expected}"
         )
 
 
@@ -140,6 +147,77 @@ def parse_gaussian_nmr_log(
     return shieldings
 
 
+def parse_orca_nmr_log(
+    log_file: str | Path,
+    expected_symbols: list[str] | tuple[str, ...] | None = None,
+) -> list[NMRAtomShielding]:
+    """Parse the last ORCA NMR shielding tensor section from a log file.
+
+    ORCA prints the shielding tensor in a section headed by
+    ``NMR SHIELDING TENSOR``.  Each nucleus block starts with
+    ``Nucleus  <idx><symbol>:  isotropic= ... anisotropy= ...`` followed by
+    the nine tensor components on the next three lines.
+    """
+    path = Path(log_file)
+    text = path.read_text(encoding="utf-8", errors="ignore")
+    lines = text.splitlines()
+
+    # Find the last occurrence of the ORCA shielding tensor section header.
+    section_start: int | None = None
+    for index, line in enumerate(lines):
+        if _ORCA_SHIELDING_HEADER in line.upper():
+            section_start = index + 1
+
+    if section_start is None:
+        raise ValueError(f"No ORCA NMR shielding section found in {path}")
+
+    logger.debug("Parsing ORCA NMR shielding section from %s", path)
+    shieldings: list[NMRAtomShielding] = []
+    current_atom: _AtomParseState | None = None
+
+    for line in lines[section_start:]:
+        atom_match = _ORCA_NUCLEUS_RE.match(line)
+        if atom_match is not None:
+            if current_atom is not None:
+                shieldings.append(_finalize_atom(current_atom))
+
+            current_atom = {
+                "atom_index": int(atom_match.group(1)),
+                "symbol": _normalize_symbol(atom_match.group(2)),
+                "isotropic_ppm": float(atom_match.group(3)),
+                "anisotropy_ppm": float(atom_match.group(4)),
+                "tensor_components_ppm": {},
+            }
+            continue
+
+        if current_atom is None:
+            continue
+
+        tensor_matches = [
+            (str(component), float(value))
+            for component, value in cast(list[tuple[str, str]], _ORCA_TENSOR_RE.findall(line))
+        ]
+        if not tensor_matches:
+            # A blank line or unrelated section terminates the current atom.
+            if not line.strip():
+                shieldings.append(_finalize_atom(current_atom))
+                current_atom = None
+            continue
+
+        tensor_components = current_atom["tensor_components_ppm"]
+        for component, value in tensor_matches:
+            tensor_components[component] = value
+
+    if current_atom is not None:
+        shieldings.append(_finalize_atom(current_atom))
+
+    if not shieldings:
+        raise ValueError(f"No ORCA NMR shielding atoms found in {path}")
+
+    _validate_expected_symbols(shieldings, expected_symbols)
+    return shieldings
+
+
 def parse_nmr_output(
     backend_name: str,
     log_file: str | Path,
@@ -149,8 +227,10 @@ def parse_nmr_output(
     backend = backend_name.strip().lower()
     if backend in {"gaussian", "gaussian16", "g16"}:
         return parse_gaussian_nmr_log(log_file, expected_symbols=expected_symbols)
+    if backend in {"orca"}:
+        return parse_orca_nmr_log(log_file, expected_symbols=expected_symbols)
 
     raise ValueError(f"Unsupported NMR backend parser: {backend_name}")
 
 
-__all__ = ["parse_gaussian_nmr_log", "parse_nmr_output"]
+__all__ = ["parse_gaussian_nmr_log", "parse_nmr_output", "parse_orca_nmr_log"]

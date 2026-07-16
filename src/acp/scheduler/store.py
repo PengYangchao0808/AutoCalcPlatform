@@ -159,6 +159,23 @@ class JobStore:
             )
             conn.commit()
 
+    def update_project_id_and_work_dir(
+        self, job_id: str, project_id: str, work_dir: str
+    ) -> None:
+        record = self.get(job_id)
+        if record is None:
+            return
+        record.project_id = project_id
+        record.work_dir = work_dir
+        record.spec = replace(record.spec, project_id=project_id)
+        record.touch()
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                "UPDATE jobs SET project_id=?, work_dir=?, spec_json=?, updated_at=? WHERE id=?",
+                (project_id, work_dir, _spec_to_json(record.spec), record.updated_at, job_id),
+            )
+            conn.commit()
+
 
 def _record_to_row(record: JobRecord) -> tuple[Any, ...]:
     return (

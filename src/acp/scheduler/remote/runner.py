@@ -1,0 +1,727 @@
+"""
+Remote Job Runner
+=================
+
+Core remote execution orchestrator.  Submits an ACP job to a remote
+OpenLAVA (LSF) compute node over SSH/SFTP and monitors it to completion.
+
+The full flow:
+
+1. **Sync code** to the selected node (if ``auto_sync`` and code changed).
+2. **Select node** — explicit ``target_node`` or least-loaded.
+3. **Materialise + upload input** — write ``input.xyz`` locally, SFTP to
+   ``inputs/``.
+4. **Generate + upload LSF script** — BSUB preamble + ``acp.cli`` command.
+5. **Submit** — SSH ``bsub < submit.lsf``, parse the LSF job ID.
+6. **Monitor** (30 s poll):
+   * ``bjobs`` status → update ``record`` + ``remote_execution`` stage.
+   * SFTP tail ``stdout.log`` / ``stderr.log`` → ``JobEventLog`` events.
+   * Check ``cancel_event`` → ``bkill`` (return value checked).
+   * Read ``.exit_code`` on termination.
+7. **Finish** — set ``record.result`` with LSF metadata, build provenance.
+   **No files are downloaded** — results stay on the remote node.
+
+Author: QCcalc Team
+"""
+
+from __future__ import annotations
+
+import logging
+import posixpath
+import re
+import threading
+import time
+import uuid
+from dataclasses import asdict
+from datetime import datetime, timezone
+from pathlib import Path
+
+from acp.scheduler.events import JobEventLog
+from acp.scheduler.jobs import JobRecord, JobSpec
+from acp.scheduler.provenance import build_provenance_for_job
+from acp.scheduler.remote.cleanup import RemoteCleanup
+from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
+from acp.scheduler.remote.monitor import RemoteJobMonitor
+from acp.scheduler.remote.script_gen import (
+    build_lsf_script_spec,
+    generate_lsf_script,
+)
+from acp.scheduler.remote.sftp import FileStager
+from acp.scheduler.remote.ssh import SSHConnectionPool, SSHExecutionError
+from acp.scheduler.remote.sync import CodeSyncer
+from acp.scheduler.runner import materialize_job_input
+from acp.scheduler.stage_tasks import StageTask, StageTaskObserver
+
+logger = logging.getLogger(__name__)
+
+__all__ = [
+    "RemoteJobRunner",
+    "RemoteNodeUnavailableError",
+    "RemoteSubmissionError",
+]
+
+_LSF_JOB_ID_RE = re.compile(r"Job <(\d+)>")
+# Maximum log lines emitted per poll cycle to avoid event explosion.
+_MAX_LOG_LINES_PER_POLL = 1000
+# Seconds to wait for .exit_code to appear after LSF reports terminal state.
+_EXIT_CODE_GRACE = 30
+# Extra buffer (seconds) added on top of the configured walltime before a
+# monitor loop is force-timed-out.  Prevents an indefinite loop if the LSF
+# daemon dies or the node goes offline (plan P1-3).
+_MONITOR_TIMEOUT_BUFFER = 3600
+# Fallback monitor timeout when walltime is unparseable (10 days).
+_MONITOR_TIMEOUT_FALLBACK = 10 * 24 * 3600
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+class RemoteNodeUnavailableError(RuntimeError):
+    """No suitable remote node is available for job dispatch."""
+
+
+class RemoteSubmissionError(RuntimeError):
+    """LSF job submission (``bsub``) failed or produced no job ID."""
+
+
+class RemoteJobRunner:
+    """Submit and monitor a single ACP job on a remote LSF node.
+
+    This runner is a drop-in alternative to :class:`JobRunner.run` for
+    remote execution.  It shares the same ``(record, event_log,
+    cancel_event) -> int`` signature so the :class:`JobManager` can
+    dispatch to either transparently.
+    """
+
+    def __init__(
+        self,
+        ssh_pool: SSHConnectionPool,
+        remote_config: RemoteExecutionConfig,
+        stager: FileStager | None = None,
+        monitor: RemoteJobMonitor | None = None,
+        code_syncer: CodeSyncer | None = None,
+        cleanup: RemoteCleanup | None = None,
+        stage_task_observer: StageTaskObserver | None = None,
+        poll_interval: int | None = None,
+    ) -> None:
+        self._ssh = ssh_pool
+        self._config = remote_config
+        self._stager = stager or FileStager(ssh_pool)
+        self._monitor = monitor or RemoteJobMonitor(ssh_pool, self._stager)
+        self._syncer = code_syncer or CodeSyncer(ssh_pool)
+        self._cleanup = cleanup
+        self._observer = stage_task_observer
+        self._poll_interval = (
+            poll_interval if poll_interval is not None else remote_config.poll_interval
+        )
+        # Per-job cache of the ``remote_execution`` stage task id so we avoid
+        # a full ``list_by_job`` scan on every 30 s poll cycle (plan P2-8).
+        self._remote_stage_task_ids: dict[str, str] = {}
+
+    # ------------------------------------------------------------------ #
+    # Public API
+    # ------------------------------------------------------------------ #
+
+    def select_node(self, spec: JobSpec) -> RemoteNode:
+        """Pick the execution node: ``target_node`` if specified, else least-loaded."""
+        target = getattr(spec, "target_node", None)
+        if target:
+            node = self._find_node_by_name(target)
+            if node is None:
+                raise RemoteNodeUnavailableError(f"Node {target!r} not found in configuration")
+            if not node.enabled:
+                raise RemoteNodeUnavailableError(f"Node {target!r} is disabled")
+            return node
+        return self._select_least_loaded()
+
+    def run(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        cancel_event: threading.Event,
+    ) -> int:
+        """Execute the job remotely and return the process exit code (0 = success)."""
+        spec = record.spec
+        work_dir = Path(record.work_dir)
+        work_dir.mkdir(parents=True, exist_ok=True)
+
+        event_log.append("job.started", job_id=record.id, workflow=spec.workflow, mode="remote")
+
+        try:
+            return self._run_remote(record, event_log, cancel_event)
+        except RemoteNodeUnavailableError as exc:
+            logger.error("No remote node for job %s: %s", record.id, exc)
+            record.error = str(exc)
+            event_log.append("job.failed", job_id=record.id, error=str(exc))
+            self._finalize_stages(record.id, "failed")
+            return 1
+        except RemoteSubmissionError as exc:
+            logger.error("Submission failed for job %s: %s", record.id, exc)
+            record.error = str(exc)
+            event_log.append("job.failed", job_id=record.id, error=str(exc))
+            self._finalize_stages(record.id, "failed")
+            return 1
+        except Exception as exc:
+            logger.exception("Remote job %s crashed", record.id)
+            record.error = str(exc)
+            event_log.append("job.failed", job_id=record.id, error=str(exc))
+            self._finalize_stages(record.id, "failed")
+            return 1
+
+    # ------------------------------------------------------------------ #
+    # Core flow
+    # ------------------------------------------------------------------ #
+
+    def _run_remote(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        cancel_event: threading.Event,
+    ) -> int:
+        spec = record.spec
+        work_dir = Path(record.work_dir)
+
+        # 1. Node selection
+        node = self.select_node(spec)
+        event_log.append("remote.node_selected", job_id=record.id, node=node.name, host=node.host)
+
+        # 1b. Pre-submit housekeeping: disk-pressure check + retention
+        # cleanup.  When the node is too full this raises
+        # RemoteNodeUnavailableError (caught by run()) so the job fails
+        # fast with a clear reason rather than choking on ENOSPC mid-run.
+        self._pre_submit_housekeeping(node, event_log, record.id)
+
+        # 2. Code sync (if enabled and needed)
+        if self._config.auto_sync:
+            self._sync_code_if_needed(node, event_log, record.id)
+
+        remote_job_dir = posixpath.join(node.remote_work_dir, record.id)
+
+        # Steps 3–5: prepare remote dir, upload input + script, submit.
+        # If anything fails before bsub succeeds, clean up the remote
+        # directory so we don't leak stale inputs (plan P2-1).
+        try:
+            lsf_job_id, cli_cmd = self._prepare_and_submit(
+                record, spec, node, remote_job_dir, event_log, work_dir
+            )
+        except Exception:
+            self._cleanup_remote_dir(node, remote_job_dir, event_log, record.id)
+            raise
+
+        self._set_remote_stage_state(record.id, "running", started=True)
+
+        # 6. Monitor loop
+        exit_code = self._monitor_loop(
+            record, event_log, cancel_event, node, lsf_job_id, remote_job_dir
+        )
+
+        # 7. Finish — set result metadata + provenance (no file download)
+        result = dict(record.result or {})
+        result["lsf_job_id"] = lsf_job_id
+        result["node"] = node.name
+        result["host"] = node.host
+        result["remote_dir"] = remote_job_dir
+        result["command_line"] = " ".join(cli_cmd)
+        result["exit_code"] = exit_code
+        record.result = result
+        record.exit_code = exit_code
+        record.progress = 1.0 if exit_code == 0 else record.progress
+
+        cancelled = bool(cancel_event.is_set())
+        if cancelled:
+            self._set_remote_stage_state(record.id, "cancelled", exit_code=exit_code)
+            event_log.append("job.cancelled", job_id=record.id)
+            final_status = "cancelled"
+        elif exit_code == 0:
+            self._set_remote_stage_state(record.id, "completed", exit_code=exit_code)
+            event_log.append("job.completed", job_id=record.id, exit_code=exit_code)
+            final_status = "completed"
+        else:
+            self._set_remote_stage_state(record.id, "failed", exit_code=exit_code)
+            event_log.append("job.failed", job_id=record.id, exit_code=exit_code)
+            final_status = "failed"
+
+        self._build_provenance(record, cli_cmd)
+        self._finalize_stages(record.id, final_status)
+        return exit_code
+
+    # ------------------------------------------------------------------ #
+    # Prepare + submit
+    # ------------------------------------------------------------------ #
+
+    def _prepare_and_submit(
+        self,
+        record: JobRecord,
+        spec: JobSpec,
+        node: RemoteNode,
+        remote_job_dir: str,
+        event_log: JobEventLog,
+        work_dir: Path,
+    ) -> tuple[str, list[str]]:
+        """Prepare remote inputs, generate the LSF script, and bsub.
+
+        Returns ``(lsf_job_id, cli_command)``.  Raises on any failure —
+        the caller is responsible for cleanup.
+        """
+        # 3. Prepare remote directory + upload input
+        self._stager.make_remote_dir(node, remote_job_dir)
+
+        inputs_dir = work_dir / "inputs"
+        inputs_dir.mkdir(parents=True, exist_ok=True)
+        run_root = work_dir.parent.parent
+        materialized = materialize_job_input(spec.input, inputs_dir, run_root)
+
+        remote_input_name = "input.xyz"
+        if materialized and materialized.is_file():
+            remote_inputs_dir = posixpath.join(remote_job_dir, "inputs")
+            self._stager.make_remote_dir(node, remote_inputs_dir)
+            self._stager.upload_file(
+                node, materialized, posixpath.join(remote_inputs_dir, remote_input_name)
+            )
+            event_log.append("remote.input_uploaded", job_id=record.id, node=node.name)
+        else:
+            raise RemoteSubmissionError(f"Failed to materialise input for job {record.id}")
+
+        # 4. Generate + upload LSF script
+        lsf_spec, cli_cmd = build_lsf_script_spec(
+            spec,
+            record.id,
+            node,
+            queue=self._config.queue,
+            walltime=self._config.walltime,
+            extra_flags=self._config.extra_flags,
+        )
+        script_text = generate_lsf_script(lsf_spec)
+        script_remote_path = posixpath.join(remote_job_dir, "submit.lsf")
+        self._stager.upload_text(node, script_text, script_remote_path)
+
+        record.current_stage = "remote_execution"
+        record.progress = 0.0
+        event_log.append(
+            "process.starting",
+            job_id=record.id,
+            cmd=" ".join(cli_cmd),
+            node=node.name,
+            remote_dir=remote_job_dir,
+        )
+
+        # Initialise the remote_execution stage task.
+        self._init_remote_stage(record.id)
+
+        # 5. Submit via bsub
+        lsf_job_id = self._submit_lsf(node, script_remote_path, remote_job_dir)
+        event_log.append(
+            "remote.submitted",
+            job_id=record.id,
+            lsf_job_id=lsf_job_id,
+            node=node.name,
+            remote_dir=remote_job_dir,
+        )
+        return lsf_job_id, cli_cmd
+
+    def _cleanup_remote_dir(
+        self, node: RemoteNode, remote_job_dir: str, event_log: JobEventLog, job_id: str
+    ) -> None:
+        """Best-effort removal of a partially-prepared remote job directory."""
+        try:
+            self._stager.remove_remote_dir(node, remote_job_dir)
+            event_log.append(
+                "remote.cleanup", job_id=job_id, node=node.name, remote_dir=remote_job_dir
+            )
+        except Exception:
+            logger.debug("Remote cleanup failed for %s", remote_job_dir, exc_info=True)
+
+    # ------------------------------------------------------------------ #
+    # Monitoring
+    # ------------------------------------------------------------------ #
+
+    def _monitor_loop(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        cancel_event: threading.Event,
+        node: RemoteNode,
+        lsf_job_id: str,
+        remote_job_dir: str,
+    ) -> int:
+        """Poll LSF status and tail logs until the job terminates.
+
+        Returns the integer exit code (``130`` for cancellation without
+        ``.exit_code``, ``1`` for unknown failure).
+        """
+        stdout_offset = 0
+        stderr_offset = 0
+        exit_code: int | None = None
+        last_lsf_status = ""
+
+        # Absolute deadline — if LSF never reports a terminal state (daemon
+        # crash, node offline) we force-fail rather than block the worker
+        # thread forever (plan P1-3).
+        walltime_s = self._config.walltime_seconds
+        max_seconds = (
+            walltime_s + _MONITOR_TIMEOUT_BUFFER if walltime_s > 0 else _MONITOR_TIMEOUT_FALLBACK
+        )
+        deadline = time.monotonic() + max_seconds
+        timed_out = False
+
+        while True:
+            # --- Hard timeout ---
+            if time.monotonic() >= deadline:
+                timed_out = True
+                logger.error(
+                    "Remote job %s monitor timed out after %ds (walltime=%ds); attempting bkill",
+                    record.id,
+                    max_seconds,
+                    walltime_s,
+                )
+                self._monitor.cancel_job(node, lsf_job_id)
+                break
+
+            # --- Cancellation (check first, every cycle) ---
+            if cancel_event.is_set():
+                ok = self._monitor.cancel_job(node, lsf_job_id)
+                event_log.append(
+                    "remote.cancel_sent",
+                    job_id=record.id,
+                    lsf_job_id=lsf_job_id,
+                    bkill_ok=ok,
+                )
+                # Grace period for .exit_code to appear.
+                exit_code = self._wait_exit_code(node, remote_job_dir, timeout=_EXIT_CODE_GRACE)
+                break
+
+            # --- Definitive terminal signal: .exit_code file ---
+            exit_code = self._monitor.get_exit_code(node, remote_job_dir)
+            if exit_code is not None:
+                break
+
+            # --- LSF status poll ---
+            try:
+                status = self._monitor.get_lsf_status(node, lsf_job_id)
+            except Exception as exc:
+                logger.warning("bjobs poll failed for %s: %s", record.id, exc)
+                status = ""
+
+            if status != last_lsf_status:
+                last_lsf_status = status
+                event_log.append(
+                    "remote.lsf_status",
+                    job_id=record.id,
+                    lsf_job_id=lsf_job_id,
+                    status=status,
+                )
+                self._mirror_lsf_stage(record.id, status)
+
+            # --- Log tailing ---
+            stdout_offset = self._tail_and_emit(
+                node, remote_job_dir, "stdout.log", stdout_offset, event_log, record.id, "stdout"
+            )
+            stderr_offset = self._tail_and_emit(
+                node, remote_job_dir, "stderr.log", stderr_offset, event_log, record.id, "stderr"
+            )
+
+            # --- LSF reports terminal but no .exit_code yet ---
+            if RemoteJobMonitor.is_terminal(status):
+                exit_code = self._wait_exit_code(node, remote_job_dir, timeout=_EXIT_CODE_GRACE)
+                break
+
+            time.sleep(self._poll_interval)
+
+        # Final log flush.
+        self._tail_and_emit(
+            node, remote_job_dir, "stdout.log", stdout_offset, event_log, record.id, "stdout"
+        )
+        self._tail_and_emit(
+            node, remote_job_dir, "stderr.log", stderr_offset, event_log, record.id, "stderr"
+        )
+
+        if exit_code is None:
+            if cancel_event.is_set():
+                return 130
+            if timed_out:
+                record.error = record.error or (
+                    f"Remote job monitor timed out after {max_seconds}s"
+                )
+                return 1
+            record.error = record.error or "Remote job ended without .exit_code"
+            return 1
+        return exit_code
+
+    def _wait_exit_code(
+        self, node: RemoteNode, remote_job_dir: str, timeout: float = _EXIT_CODE_GRACE
+    ) -> int | None:
+        """Poll for ``.exit_code`` for up to *timeout* seconds."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            ec = self._monitor.get_exit_code(node, remote_job_dir)
+            if ec is not None:
+                return ec
+            time.sleep(1.0)
+        return None
+
+    def _tail_and_emit(
+        self,
+        node: RemoteNode,
+        remote_job_dir: str,
+        filename: str,
+        offset: int,
+        event_log: JobEventLog,
+        job_id: str,
+        stream: str,
+    ) -> int:
+        """Tail a remote log file and emit new lines as ``log`` events."""
+        if filename == "stdout.log":
+            text, new_offset = self._monitor.tail_stdout(node, remote_job_dir, offset)
+        else:
+            text, new_offset = self._monitor.tail_stderr(node, remote_job_dir, offset)
+        if not text:
+            return new_offset
+        lines = text.splitlines()
+        if len(lines) > _MAX_LOG_LINES_PER_POLL:
+            lines = lines[-_MAX_LOG_LINES_PER_POLL:]
+        for line in lines:
+            if line.strip():
+                event_log.append("log", job_id=job_id, stream=stream, line=line)
+        return new_offset
+
+    # ------------------------------------------------------------------ #
+    # Code sync
+    # ------------------------------------------------------------------ #
+
+    def _sync_code_if_needed(self, node: RemoteNode, event_log: JobEventLog, job_id: str) -> None:
+        try:
+            if not self._syncer.check_sync_needed(node):
+                logger.debug("Code already in sync with %s", node.name)
+                return
+            event_log.append("remote.sync_start", job_id=job_id, node=node.name)
+            result = self._syncer.sync_code(node)
+            event_log.append(
+                "remote.sync_done",
+                job_id=job_id,
+                node=node.name,
+                uploaded=result.uploaded,
+                total=result.total,
+                errors=result.errors,
+            )
+            if not result.ok:
+                logger.warning("Code sync to %s had errors: %s", node.name, result.errors)
+        except Exception as exc:
+            logger.error("Code sync to %s failed: %s", node.name, exc)
+            event_log.append("remote.sync_failed", job_id=job_id, node=node.name, error=str(exc))
+            raise
+
+    # ------------------------------------------------------------------ #
+    # Pre-submit housekeeping (Phase 5)
+    # ------------------------------------------------------------------ #
+
+    def _pre_submit_housekeeping(
+        self, node: RemoteNode, event_log: JobEventLog, job_id: str
+    ) -> None:
+        """Run disk-pressure housekeeping before submitting to *node*.
+
+        Delegates to :class:`RemoteCleanup` when one is configured.  If the
+        node's disk usage exceeds the skip threshold (even after a retention
+        sweep) this raises :class:`RemoteNodeUnavailableError` so the job
+        fails fast rather than running out of disk mid-computation.
+
+        Housekeeping is fail-open for transient errors: a disk-query or
+        sweep failure is logged but does **not** block submission, since
+        blocking on a flaky SSH probe is worse than proceeding.  Only the
+        explicit ``should_skip`` decision blocks submission.
+        """
+        if self._cleanup is None:
+            return
+
+        try:
+            decision = self._cleanup.pre_submit_housekeeping(node)
+        except Exception as exc:
+            logger.warning("Housekeeping crashed on %s: %s", node.name, exc)
+            event_log.append(
+                "remote.housekeeping_error",
+                job_id=job_id,
+                node=node.name,
+                error=str(exc),
+            )
+            return
+
+        removed = len(decision.cleanup.removed_dirs) if decision.cleanup else 0
+        errors = len(decision.cleanup.errors) if decision.cleanup else 0
+        event_log.append(
+            "remote.housekeeping",
+            job_id=job_id,
+            node=node.name,
+            disk_before=decision.disk_usage_before,
+            disk_after=decision.disk_usage_after,
+            should_skip=decision.should_skip,
+            removed_dirs=removed,
+            cleanup_errors=errors,
+            reason=decision.reason,
+        )
+
+        if decision.should_skip:
+            raise RemoteNodeUnavailableError(f"Node {node.name!r} skipped: {decision.reason}")
+
+    # ------------------------------------------------------------------ #
+    # LSF submission
+    # ------------------------------------------------------------------ #
+
+    def _submit_lsf(self, node: RemoteNode, script_remote_path: str, remote_job_dir: str) -> str:
+        """Run ``bsub < submit.lsf`` on *node* and return the parsed LSF job ID."""
+        cmd = f'cd "{remote_job_dir}" && bsub < "{script_remote_path}"'
+        try:
+            code, out, err = self._ssh.execute(node, cmd, timeout=60)
+        except SSHExecutionError as exc:
+            raise RemoteSubmissionError(f"bsub SSH execution failed on {node.name}: {exc}") from exc
+        if code != 0:
+            raise RemoteSubmissionError(
+                f"bsub failed on {node.name} (exit={code}): {err.strip() or out.strip()}"
+            )
+        match = _LSF_JOB_ID_RE.search(out)
+        if not match:
+            raise RemoteSubmissionError(
+                f"Could not parse LSF job ID from bsub output on {node.name}: {out!r}"
+            )
+        lsf_job_id = match.group(1)
+        logger.info(
+            "Submitted LSF job <%s> on %s, remote_dir=%s",
+            lsf_job_id,
+            node.name,
+            remote_job_dir,
+        )
+        return lsf_job_id
+
+    # ------------------------------------------------------------------ #
+    # Node selection
+    # ------------------------------------------------------------------ #
+
+    def _find_node_by_name(self, name: str) -> RemoteNode | None:
+        return self._config.get_node(name)
+
+    def _select_least_loaded(self) -> RemoteNode:
+        """Return the enabled node with the fewest running LSF jobs."""
+        enabled = self._config.enabled_nodes
+        if not enabled:
+            raise RemoteNodeUnavailableError("No enabled remote nodes configured")
+
+        best: RemoteNode | None = None
+        best_count: int | None = None
+        for node in enabled:
+            try:
+                count = self._monitor.get_running_job_count(node)
+            except Exception:
+                logger.debug("Failed querying job count on %s, skipping", node.name)
+                count = node.max_concurrent_jobs
+            if count >= node.max_concurrent_jobs:
+                continue
+            if best_count is None or count < best_count:
+                best = node
+                best_count = count
+
+        if best is None:
+            raise RemoteNodeUnavailableError("All remote nodes are at capacity")
+        return best
+
+    # ------------------------------------------------------------------ #
+    # Stage task management
+    # ------------------------------------------------------------------ #
+
+    def _init_remote_stage(self, job_id: str) -> None:
+        """Create a single ``remote_execution`` stage task (if observer present).
+
+        The task is created in ``pending`` state with ``started_at=None``;
+        it is filled in when LSF transitions to RUN (plan P2-7).
+        """
+        if self._observer is None:
+            return
+        existing = {t.stage_name for t in self._observer.store.list_by_job(job_id)}
+        if "remote_execution" in existing:
+            return
+        task = StageTask(
+            task_id=str(uuid.uuid4()),
+            job_id=job_id,
+            stage_name="remote_execution",
+            task_type="remote",
+            state="pending",
+            started_at=None,
+            updated_at=_utc_now_iso(),
+        )
+        self._observer.store.create(task)
+        # Cache the task id so _set_remote_stage_state can update it
+        # directly instead of scanning all stage tasks each poll (plan P2-8).
+        self._remote_stage_task_ids[job_id] = task.task_id
+
+    def _set_remote_stage_state(
+        self, job_id: str, state: str, exit_code: int | None = None, started: bool = False
+    ) -> None:
+        if self._observer is None:
+            return
+        task_id = self._remote_stage_task_ids.get(job_id)
+        task: StageTask | None = None
+        if task_id is not None:
+            task = self._observer.store.get(task_id)
+        if task is None or task.stage_name != "remote_execution":
+            # Fallback: scan by job (cache miss or stale entry).
+            for candidate in self._observer.store.list_by_job(job_id):
+                if candidate.stage_name == "remote_execution":
+                    task = candidate
+                    self._remote_stage_task_ids[job_id] = candidate.task_id
+                    break
+        if task is None:
+            return
+
+        task.state = state
+        if started and task.started_at is None:
+            task.started_at = _utc_now_iso()
+        if state in ("completed", "failed", "cancelled"):
+            task.completed_at = task.completed_at or _utc_now_iso()
+        if exit_code is not None:
+            task.exit_status = exit_code
+        task.updated_at = _utc_now_iso()
+        self._observer.store.update(task)
+
+    def _mirror_lsf_stage(self, job_id: str, lsf_status: str) -> None:
+        """Map the current LSF status to the remote_execution stage state."""
+        if lsf_status == "running":
+            self._set_remote_stage_state(job_id, "running", started=True)
+        elif lsf_status == "pending":
+            self._set_remote_stage_state(job_id, "pending")
+
+    def _finalize_stages(self, job_id: str, final_status: str) -> None:
+        """Mark all remaining non-terminal stage tasks with *final_status*."""
+        if self._observer is None:
+            return
+        self._observer.finalize_job(job_id, final_status)
+
+    # ------------------------------------------------------------------ #
+    # Provenance
+    # ------------------------------------------------------------------ #
+
+    def _build_provenance(self, record: JobRecord, cli_cmd: list[str]) -> None:
+        """Build provenance from CLI metadata + LSF info (no artifact capture)."""
+        if record.completed_at is None:
+            record.completed_at = _utc_now_iso()
+        result = dict(record.result or {})
+        if not result.get("command_line"):
+            result["command_line"] = " ".join(cli_cmd)
+        spec = record.spec
+        if not result.get("backend_name") and spec.method.get("backend"):
+            result["backend_name"] = str(spec.method["backend"])
+        if not result.get("method"):
+            method = spec.method.get("protocol") or spec.method.get("benchmark_level")
+            if method is not None:
+                result["method"] = str(method)
+        record.result = result
+
+        try:
+            provenance = build_provenance_for_job(spec, record)
+            # Override hostname — the computation ran on the remote node,
+            # not on this server.  build_provenance_for_job uses
+            # socket.gethostname() which is the local ACP server.
+            remote_host = result.get("host") or result.get("node")
+            if remote_host:
+                provenance.hostname = str(remote_host)
+            record.result = dict(record.result or {})
+            record.result["provenance"] = asdict(provenance)
+        except Exception:
+            logger.debug("Provenance build failed for %s", record.id, exc_info=True)

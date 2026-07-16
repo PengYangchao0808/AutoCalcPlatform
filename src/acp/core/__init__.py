@@ -6,6 +6,7 @@ from acp.core.models import (
     Structure,
     StructureEnsemble,
     StructureRecord,
+    zip_strict,
 )
 from acp.core.registry import Registry
 from acp.core.state import EventLog, WorkflowState
@@ -31,4 +32,5 @@ __all__ = [
     "WorkflowRunner",
     "WorkflowSpec",
     "WorkflowState",
+    "zip_strict",
 ]

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections import Counter
-from collections.abc import Generator
 import os
 import time
+from collections import Counter
+from collections.abc import Generator
 from pathlib import Path
 
 import pytest
@@ -135,6 +135,45 @@ def test_v1_project_create_get_delete(client: TestClient) -> None:
     assert client.get(f"/api/v1/projects/{project_id}").status_code == 404
 
 
+def test_v1_project_delete_with_data(client: TestClient) -> None:
+    project = _create_project(client, name="DeleteWithData")
+    created = _submit_fake_job(
+        client, name="delete-data-job", project_id=str(project["project_id"])
+    )
+    job_id = str(created["job_id"])
+    _wait_for_terminal_job(client, job_id)
+
+    deleted = client.delete(f"/api/v1/projects/{project['project_id']}?delete_data=true")
+    assert deleted.status_code == 200
+
+    assert client.get(f"/api/v1/projects/{project['project_id']}").status_code == 404
+    assert client.get(f"/api/v1/jobs/{job_id}").status_code == 404
+
+
+def test_v1_project_delete_without_data_moves_jobs(client: TestClient) -> None:
+    project = _create_project(client, name="DeleteNoData")
+    created = _submit_fake_job(
+        client, name="move-default-job", project_id=str(project["project_id"])
+    )
+    job_id = str(created["job_id"])
+    _wait_for_terminal_job(client, job_id)
+
+    deleted = client.delete(f"/api/v1/projects/{project['project_id']}")
+    assert deleted.status_code == 200
+
+    assert client.get(f"/api/v1/projects/{project['project_id']}").status_code == 404
+    moved = client.get(f"/api/v1/jobs/{job_id}")
+    assert moved.status_code == 200
+    assert moved.json()["project_id"] is not None
+
+
+def test_v1_project_delete_default_fails(client: TestClient) -> None:
+    default_list = client.get("/api/v1/projects")
+    default_id = default_list.json()["projects"][0]["project_id"]
+    response = client.delete(f"/api/v1/projects/{default_id}?delete_data=true")
+    assert response.status_code == 400
+
+
 def test_v1_job_submit_without_project_gets_default(client: TestClient) -> None:
     created = _submit_fake_job(client, name="default-project")
     assert created["project_id"] is not None
@@ -153,6 +192,97 @@ def test_v1_job_submit_with_project(client: TestClient) -> None:
     project_jobs = client.get(f"/api/v1/projects/{project['project_id']}/jobs")
     assert project_jobs.status_code == 200
     assert [job["id"] for job in project_jobs.json()["jobs"]] == [created["job_id"]]
+
+
+def test_v1_job_move_to_project(client: TestClient) -> None:
+    source = _create_project(client, name="Source")
+    target = _create_project(client, name="Target")
+    created = _submit_fake_job(client, name="move-job", project_id=str(source["project_id"]))
+    job_id = str(created["job_id"])
+    _wait_for_terminal_job(client, job_id)
+
+    moved = client.post(
+        f"/api/v1/jobs/{job_id}/move",
+        json={"project_id": str(target["project_id"])},
+    )
+    assert moved.status_code == 200
+    body = moved.json()
+    assert body["project_id"] == target["project_id"]
+    assert body["spec"]["project_id"] == target["project_id"]
+
+    target_jobs = client.get(f"/api/v1/projects/{target['project_id']}/jobs")
+    assert target_jobs.status_code == 200
+    assert any(job["id"] == job_id for job in target_jobs.json()["jobs"])
+
+    source_jobs = client.get(f"/api/v1/projects/{source['project_id']}/jobs")
+    assert source_jobs.status_code == 200
+    assert not any(job["id"] == job_id for job in source_jobs.json()["jobs"])
+
+
+def test_v1_job_clone_to_project(client: TestClient) -> None:
+    source = _create_project(client, name="SourceClone")
+    target = _create_project(client, name="TargetClone")
+    created = _submit_fake_job(client, name="clone-job", project_id=str(source["project_id"]))
+    job_id = str(created["job_id"])
+    _wait_for_terminal_job(client, job_id)
+
+    cloned = client.post(
+        f"/api/v1/jobs/{job_id}/clone",
+        json={"project_id": str(target["project_id"])},
+    )
+    assert cloned.status_code == 201
+    body = cloned.json()
+    new_job_id = str(body["job_id"])
+    assert new_job_id != job_id
+    assert body["project_id"] == target["project_id"]
+
+    target_jobs = client.get(f"/api/v1/projects/{target['project_id']}/jobs")
+    assert target_jobs.status_code == 200
+    job_ids = [job["id"] for job in target_jobs.json()["jobs"]]
+    assert new_job_id in job_ids
+    assert job_id not in job_ids
+
+    source_jobs = client.get(f"/api/v1/projects/{source['project_id']}/jobs")
+    assert source_jobs.status_code == 200
+    assert any(job["id"] == job_id for job in source_jobs.json()["jobs"])
+
+    cloned_record = _wait_for_terminal_job(client, new_job_id)
+    assert cloned_record["status"] == "completed"
+
+
+def test_v1_job_delete_with_data(client: TestClient) -> None:
+    created = _submit_fake_job(client, name="delete-job")
+    job_id = str(created["job_id"])
+    _wait_for_terminal_job(client, job_id)
+
+    deleted = client.delete(f"/api/v1/jobs/{job_id}?delete_data=true")
+    assert deleted.status_code == 200
+    assert client.get(f"/api/v1/jobs/{job_id}").status_code == 404
+
+
+def test_v1_job_delete_without_data(client: TestClient, tmp_path: Path) -> None:
+    created = _submit_fake_job(client, name="delete-no-data-job")
+    job_id = str(created["job_id"])
+    record = _wait_for_terminal_job(client, job_id)
+    work_dir = Path(record["work_dir"])
+
+    deleted = client.delete(f"/api/v1/jobs/{job_id}?delete_data=false")
+    assert deleted.status_code == 200
+    assert client.get(f"/api/v1/jobs/{job_id}").status_code == 404
+    assert work_dir.exists()
+
+
+def test_v1_job_delete_active_fails(client: TestClient) -> None:
+    created = _submit_fake_job(client, name="active-delete-job")
+    job_id = str(created["job_id"])
+    # fake jobs are usually terminal very quickly; cancel first if still active
+    detail = client.get(f"/api/v1/jobs/{job_id}")
+    if detail.json()["status"] in {"queued", "starting", "running", "cancelling"}:
+        response = client.delete(f"/api/v1/jobs/{job_id}?delete_data=true")
+        assert response.status_code == 409
+        return
+    # If already terminal, the test is not meaningful; skip via pytest
+    pytest.skip("fake job finished before delete could be tested")
 
 
 def test_v1_job_list_filter_by_project(client: TestClient) -> None:

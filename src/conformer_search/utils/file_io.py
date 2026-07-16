@@ -199,6 +199,33 @@ def write_gjf(gjf_file: Path, coordinates: np.ndarray, symbols: List[str],
         f.write("\n")
 
 
+def read_energy_from_gaussian(log_file: Path) -> Optional[float]:
+    """
+    Extract SCF energy from Gaussian log file.
+
+    Args:
+        log_file: Path to Gaussian log file
+
+    Returns:
+        SCF energy in Hartree, or None if not found
+    """
+    log_file = Path(log_file)
+    if not log_file.exists():
+        return None
+
+    energy = None
+    with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+        for line in f:
+            if 'SCF Done' in line:
+                parts = line.split()
+                try:
+                    energy = float(parts[4])
+                except (ValueError, IndexError):
+                    pass
+
+    return energy
+
+
 def read_xyz_with_energy(xyz_file: Path) -> Tuple[np.ndarray, List[str], Optional[float]]:
     """
     Read XYZ file and extract energy from comment line.
@@ -224,6 +251,21 @@ def read_xyz_with_energy(xyz_file: Path) -> Tuple[np.ndarray, List[str], Optiona
             energy = float(energy_match.group(1))
     
     return coords, symbols, energy
+
+
+def write_json(data: Dict[str, Any], json_file: Path):
+    """Write data to JSON file."""
+    import json
+    with open(json_file, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2)
+
+
+def read_json(json_file: Path) -> Dict[str, Any]:
+    """Read JSON file."""
+    json_file = Path(json_file)
+    import json
+    with open(json_file, 'r', encoding='utf-8') as f:
+        return json.load(f)
 
 
 def ensure_dir(directory: Path):

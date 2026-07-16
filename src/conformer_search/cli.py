@@ -11,7 +11,7 @@ import argparse
 import logging
 import sys
 from pathlib import Path
-from typing import Mapping, Optional, List
+from typing import Optional, List
 import json
 from datetime import datetime
 
@@ -19,29 +19,6 @@ from conformer_search import __version__
 from conformer_search.config import load_config, save_config
 from conformer_search.io import MolecularInputHandler, load_batch_inputs
 from conformer_search.core import ConformerEngine
-
-
-ALL_PROTOCOLS = [
-    'ext', 'full', 'lite', 'zero', 'benchmark',
-    'censo-zero', 'censo-lite', 'censo-full',
-    'censo-full-safe', 'allopt', 'reference-sp',
-    
-]
-
-
-def _guard_reference_sp_input(protocol: str, input_source: Optional[str]) -> None:
-    """Reject SMILES-style reference-sp input before the legacy engine runs."""
-    if protocol != 'reference-sp' or not input_source:
-        return
-    if Path(input_source).is_file():
-        return
-
-    print(
-        'reference-sp requires an existing conformer ensemble. Use censo-full or allopt first, then: '
-        'conformer-search --input <output>/final_ensemble.xyz --protocol reference-sp',
-        file=sys.stderr,
-    )
-    sys.exit(1)
 
 
 def setup_logging(level: str = "INFO", log_file: Optional[Path] = None):
@@ -131,7 +108,7 @@ Examples:
     parser.add_argument(
         '--protocol',
         type=str,
-        choices=ALL_PROTOCOLS,
+        choices=['ext', 'full', 'lite', 'zero', 'benchmark'],
         default='ext',
         help='Conformer search protocol (default: ext)'
     )
@@ -192,10 +169,10 @@ Examples:
 def run_single_molecule(
     input_source: str,
     output_dir: Path,
-    config: dict[str, object],
+    config: dict,
     protocol: str,
     args: argparse.Namespace
-) -> Mapping[str, object]:
+) -> dict:
     """
     Run conformer search for a single molecule.
 
@@ -236,6 +213,17 @@ def run_single_molecule(
 
     global_min_xyz, energy, metadata = engine.run(molecular_input)
 
+    if global_min_xyz is None:
+        logger.warning("  No conformers survived — all candidates failed")
+        return {
+            'success': False,
+            'molecule_name': molecular_input.name,
+            'global_min_xyz': None,
+            'energy_hartree': None,
+            'n_conformers': 0,
+            'protocol': protocol
+        }
+
     logger.info(f"  Global minimum: {global_min_xyz}")
     if energy is not None:
         logger.info(f"  Energy: {energy:.6f} Ha")
@@ -255,10 +243,10 @@ def run_single_molecule(
 def run_batch(
     batch_file: Path,
     output_dir: Path,
-    config: dict[str, object],
+    config: dict,
     protocol: str,
     args: argparse.Namespace
-) -> Mapping[str, object]:
+) -> dict:
     """
     Run conformer search for multiple molecules.
 
@@ -293,12 +281,12 @@ def run_batch(
     for i, molecular_input in enumerate(inputs, 1):
         logger.info(f"\n[{i}/{len(inputs)}] Processing {molecular_input.name}")
 
-        # ConformerEngine appends molecule_name to work_dir internally,
-        # so pass output_dir directly to avoid double nesting.
+        mol_output_dir = output_dir / molecular_input.name
+
         try:
             result = run_single_molecule(
                 str(molecular_input.source_path or molecular_input.metadata.get('smiles', '')),
-                output_dir,
+                mol_output_dir,
                 config,
                 protocol,
                 args
@@ -350,6 +338,7 @@ def main(args: Optional[List[str]] = None):
 
     if parsed_args.nproc:
         config.setdefault('resources', {})['nproc'] = parsed_args.nproc
+        config.setdefault('executables', {}).setdefault('orca', {})['nproc'] = parsed_args.nproc
         logger.info(f"Using nproc from command line: {parsed_args.nproc}")
 
     if parsed_args.mem:
@@ -357,7 +346,6 @@ def main(args: Optional[List[str]] = None):
         logger.info(f"Using mem from command line: {parsed_args.mem}")
 
     protocol = parsed_args.protocol
-    _guard_reference_sp_input(protocol, parsed_args.input)
     config.setdefault('protocols', {})['default'] = protocol
 
     if parsed_args.save_config:

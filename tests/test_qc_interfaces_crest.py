@@ -36,35 +36,6 @@ def test_crest_interface_instantiates_with_minimal_config(
     assert interface.threads == 1
 
 
-def test_crest_optimize_parses_mocked_run_into_qcresult(
-    sample_config: dict[str, object], tmp_path: Path
-) -> None:
-    interface = CRESTInterface(sample_config)
-    ensemble_xyz = tmp_path / "crest_conformers.xyz"
-
-    def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        _ = ensemble_xyz.write_text(CREST_ENSEMBLE, encoding="utf-8")
-        return subprocess.CompletedProcess(args="crest", returncode=0, stdout="done", stderr="")
-
-    with patch(
-        "conformer_search.qc.interfaces.crest.subprocess.run",
-        side_effect=fake_run,
-    ) as mock_run:
-        result = interface.optimize(COORDINATES, SYMBOLS, output_dir=tmp_path)
-
-    assert result.success is True
-    assert result.coordinates is not None
-    np.testing.assert_allclose(
-        result.coordinates,
-        np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.5]]),
-    )
-    assert result.symbols == SYMBOLS
-    assert result.output_file == ensemble_xyz
-    assert result.metadata["n_conformers"] == 2
-    assert result.metadata["gfn_level"] == 2
-    mock_run.assert_called_once()
-
-
 @pytest.mark.slow
 @pytest.mark.integration
 @requires_crest

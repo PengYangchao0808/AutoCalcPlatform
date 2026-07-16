@@ -244,3 +244,79 @@ def test_run_nmr_calculation_integrates_conformer_backend_and_reports(
     assert len(backend_instances[0].calls) == 2
     assert backend_instances[0].calls[0]["kwargs"]["method"] == "B3LYP"
     assert backend_instances[0].calls[0]["kwargs"]["basis"] == "def2-TZVPP"
+
+
+def test_run_nmr_calculation_accepts_orca_backend(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ORCA NMR backend no longer raises NotImplementedError."""
+    config = _make_config()
+    config["theory"]["nmr"]["engine"] = "orca"
+
+    monkeypatch.setattr(nmr_workflow, "load_config", lambda *args, **kwargs: config)
+
+    def _fake_run_conformer_search(
+        input_source: str,
+        output_dir: str | Path = "./conformer_output",
+        protocol: str = "ext",
+        config: dict[str, Any] | None = None,
+        name: str | None = None,
+        charge: int | None = None,
+        multiplicity: int | None = None,
+    ) -> WorkflowResult:
+        return WorkflowResult(status="completed", ensemble=_make_ensemble())
+
+    class _FakeOrcaBackend:
+        def __init__(self, backend_config: dict[str, Any]) -> None:
+            self.config = backend_config
+
+        def nmr_shielding(
+            self,
+            coordinates: NDArray[np.float64],
+            symbols: list[str],
+            charge: int = 0,
+            multiplicity: int = 1,
+            output_dir: Path | None = None,
+            output_name: str = "nmr",
+            **kwargs: Any,
+        ) -> QCResult:
+            target_dir = Path(output_dir or tmp_path)
+            target_dir.mkdir(parents=True, exist_ok=True)
+            log_file = target_dir / f"{output_name}.out"
+            input_file = target_dir / f"{output_name}.inp"
+            log_file.write_text(
+                "\n".join(
+                    [
+                        "NMR SHIELDING TENSOR (PPM)",
+                        "  Nucleus   1C:     isotropic=   150.0000   anisotropy=    10.0000",
+                        "  XX= 155.0000   YX=  0.0000   ZX=  0.0000",
+                        "  XY=   0.0000   YY=145.0000   ZY=  0.0000",
+                        "  XZ=   0.0000   YZ=  0.0000   ZZ=150.0000",
+                        "  Nucleus   2H:     isotropic=    28.0000   anisotropy=     2.0000",
+                        "  XX= 30.0000   YX=  0.0000   ZX=  0.0000",
+                        "  XY=  0.0000   YY=27.0000   ZY=  0.0000",
+                        "  XZ=  0.0000   YZ=  0.0000   ZZ=29.0000",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            input_file.write_text("! B3LYP def2-TZVP NMR\n", encoding="utf-8")
+            return QCResult(success=True, energy=-200.0, output_file=input_file, log_file=log_file)
+
+    monkeypatch.setattr(nmr_workflow, "run_conformer_search", _fake_run_conformer_search)
+    monkeypatch.setattr(nmr_workflow, "get_backend", lambda name: _FakeOrcaBackend)
+
+    result = nmr_workflow.run_nmr_calculation(
+        "CCO",
+        output_dir=tmp_path,
+        conformer_protocol="ext",
+        config=config,
+        backend_name="orca",
+        references={"1H": 32.0, "13C": 190.0},
+    )
+
+    assert result.status == "completed"
+    assert result.ensemble is not None
+    assert result.metadata["backend"] == "orca"

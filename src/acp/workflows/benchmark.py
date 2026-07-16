@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from acp.core.models import zip_strict
 from acp.workflows.conformer import run_conformer_search
 from conformer_search.config import load_config
 from conformer_search.utils.constants import HARTREE_TO_KCAL
@@ -17,9 +18,9 @@ from conformer_search.utils.constants import HARTREE_TO_KCAL
 logger = logging.getLogger(__name__)
 
 BENCHMARK_LEVELS: dict[str, list[str]] = {
-    "quick": ["censo-zero", "censo-lite"],
-    "standard": ["censo-zero", "censo-lite", "censo-full", "censo-full-safe"],
-    "strict": ["censo-zero", "censo-lite", "censo-full", "censo-full-safe", "allopt", "reference-sp"],
+    "quick": ["zero", "lite"],
+    "standard": ["lite", "full", "ext"],
+    "strict": ["zero", "lite", "full", "ext", "benchmark"],
 }
 
 _R_HARTREE = 8.314462618 / 2625500.0
@@ -48,7 +49,7 @@ def _spearman_rank_correlation(rank_a: list[int], rank_b: list[int]) -> float:
     if n < 2:
         return 1.0
 
-    d_sq_sum = sum((a - b) ** 2 for a, b in zip(rank_a, rank_b, strict=True))
+    d_sq_sum = sum((a - b) ** 2 for a, b in zip_strict(rank_a, rank_b))
     return 1.0 - (6.0 * d_sq_sum) / (n * (n * n - 1))
 
 
@@ -90,15 +91,19 @@ class BenchmarkRunner:
 
         temperature = float(base_config.get("thermo", {}).get("temperature_k", 298.15))
         protocol_results: dict[str, dict[str, Any]] = {}
+        last_ensemble_input: Path | None = None
 
         for protocol in self.protocols:
             protocol_output_dir = self.output_dir / protocol
             protocol_output_dir.mkdir(parents=True, exist_ok=True)
-            protocol_input = shared_input
+            protocol_input = (
+                last_ensemble_input
+                if last_ensemble_input is not None and "reference" in protocol.lower()
+                else shared_input
+            )
             started_at = time.monotonic()
 
             try:
-                protocol_input = self._resolve_protocol_input(protocol, shared_input, protocol_results)
                 result = run_conformer_search(
                     input_source=str(protocol_input),
                     output_dir=protocol_output_dir,
@@ -120,6 +125,9 @@ class BenchmarkRunner:
                     walltime_seconds=walltime_seconds,
                     temperature=temperature,
                 )
+                resolved_ensemble = self._resolve_final_ensemble_path(result.metadata)
+                if resolved_ensemble is not None and resolved_ensemble.exists():
+                    last_ensemble_input = resolved_ensemble
             except Exception as exc:
                 walltime_seconds = time.monotonic() - started_at
                 logger.exception("Benchmark protocol %s failed", protocol)
@@ -160,10 +168,7 @@ class BenchmarkRunner:
             "=" * 104,
             f"Input: {summary_data['input']}",
             f"Reference protocol: {metrics.get('reference_protocol') or '-'}",
-            (
-                "Global-minimum agreement: "
-                f"{'yes' if metrics.get('global_min_agreement') else 'no'}"
-            ),
+            (f"Global-minimum agreement: {'yes' if metrics.get('global_min_agreement') else 'no'}"),
             "",
             (
                 f"{'Protocol':<16} {'Success':<8} {'Global min':<16} "
@@ -207,30 +212,6 @@ class BenchmarkRunner:
                 lines.append(f"  {pair_name}: {value:.4f}")
 
         return "\n".join(lines)
-
-    def _resolve_protocol_input(
-        self,
-        protocol: str,
-        shared_input: Path,
-        protocol_results: dict[str, dict[str, Any]],
-    ) -> Path:
-        """Return the input path for a protocol, handling ``reference-sp`` specially."""
-        if protocol != "reference-sp":
-            return shared_input
-
-        for previous in reversed(list(protocol_results)):
-            previous_result = protocol_results[previous]
-            ensemble_xyz = previous_result.get("ensemble_xyz")
-            if not previous_result.get("success") or not isinstance(ensemble_xyz, str):
-                continue
-
-            candidate_path = Path(ensemble_xyz)
-            if candidate_path.exists():
-                return candidate_path
-
-        raise RuntimeError(
-            "reference-sp requires a previously generated ensemble from an earlier successful protocol"
-        )
 
     def _build_success_result(
         self,
@@ -326,7 +307,8 @@ class BenchmarkRunner:
                 protocol: int(data.get("n_conformers", 0)) for protocol, data in results.items()
             },
             "walltime_seconds": {
-                protocol: float(data.get("walltime_seconds", 0.0)) for protocol, data in results.items()
+                protocol: float(data.get("walltime_seconds", 0.0))
+                for protocol, data in results.items()
             },
             "success": success_map,
             "reference_protocol": None,
@@ -370,21 +352,20 @@ class BenchmarkRunner:
                 if spearman is not None:
                     metrics["rank_spearman"][pair_name] = round(spearman, 6)
 
-                metrics["boltzmann_overlap"][pair_name] = round(
-                    self._pairwise_boltzmann_overlap(successful[protocol_a], successful[protocol_b]),
-                    6,
+                overlap = self._pairwise_boltzmann_overlap(
+                    successful[protocol_a], successful[protocol_b]
                 )
+                metrics["boltzmann_overlap"][pair_name] = round(overlap, 6)
 
         return metrics
 
     def _reference_protocol(self, successful: dict[str, dict[str, Any]]) -> str:
         """Select the protocol used as the energy reference."""
-        if "reference-sp" in successful:
-            return "reference-sp"
-
         return min(
             successful,
-            key=lambda protocol: float(successful[protocol].get("global_min_energy") or float("inf")),
+            key=lambda protocol: float(
+                successful[protocol].get("global_min_energy") or float("inf")
+            ),
         )
 
     def _candidate_energy(self, candidate: dict[str, Any]) -> float | None:
@@ -437,7 +418,7 @@ class BenchmarkRunner:
                 item["boltzmann_weight"] = equal_weight
             return
 
-        for item, factor in zip(normalized, boltzmann_factors, strict=True):
+        for item, factor in zip_strict(normalized, boltzmann_factors):
             item["boltzmann_weight"] = factor / factor_sum
 
     def _resolve_final_ensemble_path(self, result: dict[str, Any]) -> Path | None:
@@ -491,7 +472,10 @@ class BenchmarkRunner:
         if not union_ids:
             return 0.0
 
-        return sum(min(weights_a.get(conformer_id, 0.0), weights_b.get(conformer_id, 0.0)) for conformer_id in union_ids)
+        return sum(
+            min(weights_a.get(conformer_id, 0.0), weights_b.get(conformer_id, 0.0))
+            for conformer_id in union_ids
+        )
 
 
 __all__ = ["BENCHMARK_LEVELS", "BenchmarkRunner"]

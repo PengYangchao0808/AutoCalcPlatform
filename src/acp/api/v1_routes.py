@@ -7,10 +7,13 @@ FastAPI router for ACP Workbench v2 resources under ``/api/v1``.
 
 from __future__ import annotations
 
+import hashlib
+import logging
+import posixpath
+import urllib.parse
 from collections import Counter
 from pathlib import Path
 from typing import Any
-import re
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -20,20 +23,26 @@ from rdkit.Chem import rdMolDescriptors
 try:
     from rdkit.Chem import rdDetermineBonds
 except ImportError:  # pragma: no cover
-    rdDetermineBonds = None
+    rdDetermineBonds = None  # noqa: N816
 
-from acp.chem.embedding import (
-    count_elements_from_xyz,
-    molfile_to_xyz,
-    parse_xyz_first_frame,
-    smiles_to_xyz,
-    xyz_formula,
-)
+try:
+    from zipstream import ZipStream
+except ImportError:  # pragma: no cover
+    ZipStream = None
+
 from acp.api.routes import (
     get_backends as legacy_get_backends,
+)
+from acp.api.routes import (
     get_protocols as legacy_get_protocols,
+)
+from acp.api.routes import (
     get_status as legacy_get_status,
+)
+from acp.api.routes import (
     get_workflows as legacy_get_workflows,
+)
+from acp.api.routes import (
     stream_job_events as legacy_stream_job_events,
 )
 from acp.api.schemas import (
@@ -47,34 +56,64 @@ from acp.api.schemas import (
 from acp.api.v1_schemas import (
     ArtifactListResponse,
     ArtifactModel,
+    DiskUsageResponse,
+    JobMoveRequest,
+    MaintenanceCleanupResponse,
     MoleculeEmbedRequest,
     MoleculeEmbedResponse,
     MoleculeResolveRequest,
     MoleculeResolveResponse,
+    NodeBootstrapResponse,
+    NodeListResponse,
+    NodePingResponse,
+    NodeStatusModel,
     ProjectCreateRequest,
     ProjectListResponse,
     ProjectModel,
     ProjectUpdateRequest,
+    RemoteFileChecksumResponse,
+    RemoteFileEntry,
+    RemoteFileListResponse,
+    RemoteFilePreviewResponse,
+    RemoteLogTailResponse,
     StageTaskListResponse,
     StageTaskModel,
     StructureAssetModel,
     StructureParseRequest,
     StructureParseResponse,
     UploadResponse,
-    ValidateMethodRequest,
-    ValidateMethodResponse,
-    V1JobCreateRequest,
     V1JobCreatedResponse,
+    V1JobCreateRequest,
     V1JobListResponse,
     V1JobRecordModel,
     V1JobSpecModel,
+    ValidateMethodRequest,
+    ValidateMethodResponse,
+)
+from acp.chem.embedding import (
+    molfile_to_xyz,
+    parse_xyz_first_frame,
+    smiles_to_xyz,
+    xyz_formula,
 )
 from acp.scheduler.artifacts import Artifact, ArtifactRegistry
 from acp.scheduler.files import build_manifest, resolve_safe
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec
 from acp.scheduler.logs import read_log_tail
 from acp.scheduler.manager import JobManager
+from acp.scheduler.remote.fetcher import (
+    _MAX_READ_BYTES,
+    _MAX_TAIL_LINES,
+    RemoteFileError,
+    RemotePreviewConfig,
+)
+from acp.scheduler.remote.fetcher import (
+    RemoteResultFetcher as _RemoteResultFetcher,
+)
+from acp.scheduler.remote.node_manager import NodeManager
 from acp.scheduler.stage_tasks import StageTask, StageTaskStore
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -115,6 +154,7 @@ def _record_to_v1_model(record: JobRecord) -> V1JobRecordModel:
             config_path=spec.config_path,
             tags=spec.tags,
             project_id=spec.project_id,
+            target_node=spec.target_node,
         ),
         status=record.status.value,
         work_dir=record.work_dir,
@@ -261,8 +301,6 @@ def _parse_resolution_input(
     return None, "", "No molecule input provided"
 
 
-
-
 @router.get("/status", response_model=StatusResponse)
 def get_status(request: Request) -> StatusResponse:
     return legacy_get_status(request)
@@ -332,9 +370,10 @@ def delete_project(
     delete_data: bool = Query(default=False),
 ) -> JSONResponse:
     manager = _manager(request)
-    if project_id == manager.default_project_id:
-        raise HTTPException(status_code=400, detail="Default project cannot be deleted")
-    deleted = manager.projects.delete_project(project_id, delete_data=delete_data)
+    try:
+        deleted = manager.delete_project(project_id, delete_data=delete_data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return JSONResponse({"deleted": True, "project_id": project_id})
@@ -378,6 +417,7 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         config_path=req.config_path,
         tags=req.tags,
         project_id=req.project_id,
+        target_node=req.target_node,
     )
     try:
         record = manager.submit(spec)
@@ -429,6 +469,51 @@ def cancel_job(job_id: str, request: Request) -> V1JobRecordModel:
     return _record_to_v1_model(record)
 
 
+@router.post("/jobs/{job_id}/move", response_model=V1JobRecordModel)
+def move_job(job_id: str, req: JobMoveRequest, request: Request) -> V1JobRecordModel:
+    manager = _manager(request)
+    try:
+        record = manager.move_job(job_id, req.project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    return _record_to_v1_model(record)
+
+
+@router.post("/jobs/{job_id}/clone", response_model=V1JobCreatedResponse, status_code=201)
+def clone_job(job_id: str, req: JobMoveRequest, request: Request) -> V1JobCreatedResponse:
+    manager = _manager(request)
+    try:
+        record = manager.clone_job(job_id, req.project_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    return V1JobCreatedResponse(
+        job_id=record.id,
+        status=record.status.value,
+        workflow=record.spec.workflow,
+        project_id=record.project_id,
+    )
+
+
+@router.delete("/jobs/{job_id}")
+def delete_job(
+    job_id: str,
+    request: Request,
+    delete_data: bool = Query(default=False),
+) -> JSONResponse:
+    manager = _manager(request)
+    try:
+        deleted = manager.delete_job(job_id, delete_data=delete_data)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    return JSONResponse({"deleted": True, "job_id": job_id})
+
+
 @router.get("/jobs/{job_id}/events")
 async def stream_job_events(job_id: str, request: Request) -> StreamingResponse:
     return await legacy_stream_job_events(job_id, request)
@@ -460,7 +545,12 @@ def get_job_files(job_id: str, request: Request) -> FileManifestResponse:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     manifest = build_manifest(work_dir)
     entries = [
-        FileEntry(path=item["path"], size=item["size"], modified=item["modified"])
+        FileEntry(
+            path=item["path"],
+            size=item["size"],
+            modified=item["modified"],
+            is_dir=item.get("is_dir", False),
+        )
         for item in manifest["files"]
     ]
     return FileManifestResponse(
@@ -480,6 +570,437 @@ def download_job_file(job_id: str, file_path: str, request: Request) -> FileResp
     if resolved is None:
         raise HTTPException(status_code=404, detail="File not found or outside work directory")
     return FileResponse(str(resolved), filename=resolved.name)
+
+
+# ---------------------------------------------------------------------- #
+# Remote job files / logs (on-demand retrieval over SFTP)
+# ---------------------------------------------------------------------- #
+
+
+def _remote_fetcher(request: Request):
+    """Return the manager's :class:`RemoteResultFetcher` or 503 if disabled."""
+    manager = _manager(request)
+    fetcher = manager.remote_fetcher
+    if fetcher is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Remote execution is not configured on this server",
+        )
+    return fetcher
+
+
+def _get_remote_job_record(
+    job_id: str,
+    request: Request,
+    project_id: str | None = None,
+) -> JobRecord:
+    """Fetch a job record, validating it is a remote job (404/400 otherwise).
+
+    In the trusted-network deployment auth is not enforced, but a caller may
+    supply a *project_id* to verify the job belongs to that project.  If the
+    supplied project id does not match the job's project, a 403 is returned.
+    """
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if project_id is not None:
+        job_project = record.project_id or record.spec.project_id
+        if job_project is not None and job_project != project_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied for this job",
+            )
+    fetcher = _remote_fetcher(request)
+    if not fetcher.is_remote_job(record):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Job {job_id} is not a remote job (use /jobs/{job_id}/files for local jobs)",
+        )
+    return record
+
+
+def _user_from_request(request: Request) -> str:
+    """Return a caller identifier for audit logging.
+
+    When a trusted proxy forwards a user header, use it.  Otherwise fall
+    back to the client IP, which is enough for the current deployment.
+    """
+    user_header = request.headers.get("x-remote-user")
+    if user_header:
+        return user_header
+    client = request.client
+    return client.host if client else "unknown"
+
+
+def _log_remote_access(
+    request: Request,
+    job_id: str,
+    file_path: str,
+    action: str,
+) -> None:
+    """Append a remote-file access event to the job's event log."""
+    from acp.scheduler.events import JobEventLog
+
+    manager = _manager(request)
+    work_dir = manager.work_dir_of(job_id)
+    if work_dir is None:
+        return
+    try:
+        JobEventLog(work_dir / "events.jsonl").append(
+            "remote_file_access",
+            user=_user_from_request(request),
+            job_id=job_id,
+            file_path=file_path,
+            action=action,
+        )
+    except Exception:
+        logger = logging.getLogger(__name__)
+        logger.debug("Failed to write remote access log for %s", job_id, exc_info=True)
+
+
+def _remote_exception_to_http(exc: Exception) -> HTTPException:
+    """Map common remote-file exceptions to a consistent HTTP status code."""
+    if isinstance(exc, RemoteFileError):
+        return HTTPException(status_code=400, detail=str(exc))
+    if isinstance(exc, PermissionError):
+        return HTTPException(status_code=403, detail=str(exc))
+    if isinstance(exc, FileNotFoundError):
+        return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, TimeoutError):
+        return HTTPException(status_code=504, detail=str(exc))
+    if isinstance(exc, OSError):
+        return HTTPException(status_code=502, detail=str(exc))
+    return HTTPException(status_code=502, detail=str(exc))
+
+
+# Whitelist of file extensions that may be previewed as text or structure.
+_PREVIEW_TEXT_EXT = {".log", ".out", ".gjf", ".com", ".txt", ".json", ".csv"}
+_PREVIEW_STRUCTURE_EXT = {".xyz", ".sdf", ".mol"}
+
+
+def _content_type_for(file_path: str) -> str:
+    """Return a reasonable Content-Type for *file_path* based on extension."""
+    ext = Path(file_path).suffix.lower()
+    mapping = {
+        ".log": "text/plain",
+        ".out": "text/plain",
+        ".txt": "text/plain",
+        ".gjf": "text/plain",
+        ".com": "text/plain",
+        ".json": "application/json",
+        ".csv": "text/csv",
+        ".xyz": "chemical/x-xyz",
+        ".sdf": "chemical/x-mdl-sdfile",
+        ".mol": "chemical/x-mdl-molfile",
+    }
+    return mapping.get(ext, "application/octet-stream")
+
+
+def _parse_glob_patterns(value: str | None) -> list[str] | None:
+    """Split a comma-separated glob string into a list of patterns."""
+    if not value:
+        return None
+    return [p.strip() for p in value.split(",") if p.strip()]
+
+
+@router.get("/jobs/{job_id}/remote-files", response_model=RemoteFileListResponse)
+def list_remote_files(
+    job_id: str,
+    request: Request,
+    project_id: str | None = Query(default=None, description="Verify job belongs to project"),
+) -> RemoteFileListResponse:
+    """Recursively list files and directories in a remote job's working directory."""
+    fetcher = _remote_fetcher(request)
+    record = _get_remote_job_record(job_id, request, project_id=project_id)
+    try:
+        files, truncated = fetcher.list_files_recursive(record)
+    except Exception as exc:
+        raise _remote_exception_to_http(exc) from exc
+    _log_remote_access(request, job_id, "", "list")
+    result = record.result or {}
+    return RemoteFileListResponse(
+        job_id=job_id,
+        node=str(result.get("node", "")),
+        remote_dir=str(result.get("remote_dir", "")),
+        files=[
+            RemoteFileEntry(name=f.name, size=f.size, mtime=f.mtime, is_dir=f.is_dir) for f in files
+        ],
+        truncated=truncated,
+    )
+
+
+@router.get("/jobs/{job_id}/remote-files/archive")
+def download_remote_archive(
+    job_id: str,
+    request: Request,
+    include: str | None = Query(
+        default=None, description="Comma-separated glob patterns, e.g. *.log,*.xyz"
+    ),
+    exclude: str | None = Query(
+        default=None, description="Comma-separated exclusion patterns, e.g. *.rwf,*.chk"
+    ),
+) -> StreamingResponse:
+    """Stream the entire remote job directory as a ZIP archive (no disk temp file)."""
+    if ZipStream is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Streaming ZIP support is not available (zipstream-ng not installed)",
+        )
+    fetcher = _remote_fetcher(request)
+    record = _get_remote_job_record(job_id, request)
+    include_patterns = _parse_glob_patterns(include)
+    exclude_patterns = _parse_glob_patterns(exclude)
+
+    try:
+        files = list(
+            fetcher.walk_remote_files(record, include=include_patterns, exclude=exclude_patterns)
+        )
+    except Exception as exc:
+        raise _remote_exception_to_http(exc) from exc
+
+    total_size = sum(info.size for _, info in files)
+    if total_size > RemotePreviewConfig.max_archive_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"Archive contents exceed {RemotePreviewConfig.max_archive_bytes} bytes "
+                f"({total_size} bytes); reduce with include/exclude filters"
+            ),
+        )
+
+    def _files_iter():
+        for rel_path, _info in files:
+            yield rel_path, fetcher.stream_file(record, rel_path)
+
+    safe_job_id = job_id.replace('"', "").replace("\\", "")
+    _log_remote_access(request, job_id, "", "archive")
+    return StreamingResponse(
+        ZipStream(_files_iter()),  # type: ignore[arg-type]
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{safe_job_id}.zip"'},
+    )
+
+
+@router.get(
+    "/jobs/{job_id}/remote-files/{file_path:path}/preview",
+    response_model=RemoteFilePreviewResponse,
+)
+def preview_remote_file(
+    job_id: str,
+    file_path: str,
+    request: Request,
+    mode: str = Query(default="auto", description="text | tail | range | structure | report"),
+    lines: int = Query(default=500, ge=1, le=_MAX_TAIL_LINES),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=1024 * 1024, ge=1, le=_MAX_READ_BYTES),
+) -> JSONResponse | RemoteFilePreviewResponse:
+    """Preview a remote file as text, tail, byte range, or structure content.
+
+    *mode=auto* chooses the preview type based on the file extension:
+    ``.xyz/.sdf/.mol`` -> ``structure``, text extensions -> ``tail`` for
+    ``.log/.out`` and ``text`` otherwise, and ``report`` is not selected
+    automatically because it requires a known report file name.
+
+    Files larger than the online preview limit are automatically downgraded
+    to ``tail`` mode and marked with ``truncated=true``.
+    """
+    fetcher = _remote_fetcher(request)
+    record = _get_remote_job_record(job_id, request)
+
+    ext = Path(file_path).suffix.lower()
+    if mode == "auto":
+        if ext in _PREVIEW_STRUCTURE_EXT:
+            mode = "structure"
+        elif ext in _PREVIEW_TEXT_EXT:
+            if "_nmr_report" in file_path.lower():
+                mode = "report"
+            else:
+                mode = "tail" if ext in (".log", ".out") else "text"
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Preview not available for {file_path!r}; use download",
+            )
+
+    try:
+        info = fetcher.file_stat(record, file_path)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Remote file not found: {file_path}")
+    except Exception as exc:
+        raise _remote_exception_to_http(exc) from exc
+
+    truncated = False
+    if info.size > RemotePreviewConfig.max_text_preview_bytes and mode in (
+        "text",
+        "structure",
+    ):
+        mode = "tail"
+        truncated = True
+
+    content: str | dict[str, Any] | None = None
+    try:
+        if mode == "text":
+            data = fetcher.read_file(record, file_path)
+            content = data.decode("utf-8", errors="replace")
+        elif mode == "tail":
+            content = fetcher.read_tail(record, file_path, lines=lines)
+        elif mode == "range":
+            content = fetcher.read_range(record, file_path, offset, limit).decode(
+                "utf-8", errors="replace"
+            )
+        elif mode == "structure":
+            data = fetcher.read_file(record, file_path)
+            content = data.decode("utf-8", errors="replace")
+        elif mode == "report":
+            content = _parse_remote_report(fetcher, record, file_path)
+        else:
+            raise HTTPException(status_code=400, detail=f"Unknown preview mode: {mode!r}")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _remote_exception_to_http(exc) from exc
+
+    _log_remote_access(request, job_id, file_path, f"preview:{mode}")
+    response = RemoteFilePreviewResponse(
+        job_id=job_id,
+        path=file_path,
+        mode=mode,
+        content=content,
+        truncated=truncated,
+        size=info.size,
+    )
+    headers = {"X-Preview-Truncated": "true"} if truncated else {}
+    return JSONResponse(_model_payload(response), headers=headers)
+
+
+def _parse_remote_report(
+    fetcher: _RemoteResultFetcher,
+    record: JobRecord,
+    file_path: str,
+) -> dict[str, Any]:
+    """Parse a known report file and return a structured JSON payload.
+
+    Supports NMR JSON reports (``*_nmr_report.json``).  Other files are
+    returned as plain text wrapped in a generic envelope.
+    """
+    import json
+
+    ext = Path(file_path).suffix.lower()
+    base_name = Path(file_path).stem.lower()
+    if ext == ".json":
+        data = fetcher.read_file(record, file_path)
+        try:
+            parsed = json.loads(data.decode("utf-8", errors="replace"))
+        except json.JSONDecodeError as exc:
+            raise RemoteFileError(f"Invalid JSON report: {exc}") from exc
+        is_nmr_report = (
+            "nmr_report" in base_name
+            or "averaged_shifts" in parsed
+            or "conformer_results" in parsed
+        )
+        if is_nmr_report:
+            return {
+                "type": "nmr_report",
+                "file_path": file_path,
+                "report": parsed,
+            }
+        return {
+            "type": "json_report",
+            "file_path": file_path,
+            "report": parsed,
+        }
+    # Fallback: return the text content as a generic report envelope.
+    data = fetcher.read_file(record, file_path)
+    return {
+        "type": "unknown_report",
+        "file_path": file_path,
+        "text": data.decode("utf-8", errors="replace"),
+        "generated_at": "",
+    }
+
+
+@router.get(
+    "/jobs/{job_id}/remote-files/{file_path:path}/checksum",
+    response_model=RemoteFileChecksumResponse,
+)
+def remote_file_checksum(
+    job_id: str,
+    file_path: str,
+    request: Request,
+) -> RemoteFileChecksumResponse:
+    """Return the SHA-256 checksum of a remote file."""
+    fetcher = _remote_fetcher(request)
+    record = _get_remote_job_record(job_id, request)
+    try:
+        data = fetcher.read_file(record, file_path)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Remote file not found: {file_path}")
+    except Exception as exc:
+        raise _remote_exception_to_http(exc) from exc
+    _log_remote_access(request, job_id, file_path, "checksum")
+    return RemoteFileChecksumResponse(sha256=hashlib.sha256(data).hexdigest())
+
+
+@router.get("/jobs/{job_id}/remote-files/{file_path:path}")
+def download_remote_file(
+    job_id: str,
+    file_path: str,
+    request: Request,
+    project_id: str | None = Query(default=None, description="Verify job belongs to project"),
+) -> StreamingResponse:
+    """Stream a single file from the remote job directory (on-demand)."""
+    fetcher = _remote_fetcher(request)
+    record = _get_remote_job_record(job_id, request, project_id=project_id)
+    try:
+        info = fetcher.file_stat(record, file_path)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Remote file not found: {file_path}")
+    except Exception as exc:
+        raise _remote_exception_to_http(exc) from exc
+
+    filename = posixpath.basename(file_path) or "download"
+    filename = filename.replace('"', "").replace("\\", "")
+    safe_name = urllib.parse.quote(filename, safe="")
+    headers: dict[str, str] = {
+        "Content-Disposition": f"attachment; filename*=UTF-8''{safe_name}",
+    }
+    if info.size:
+        headers["Content-Length"] = str(info.size)
+    _log_remote_access(request, job_id, file_path, "download")
+    return StreamingResponse(
+        fetcher.stream_file(record, file_path),
+        media_type=_content_type_for(file_path),
+        headers=headers,
+    )
+
+
+@router.get("/jobs/{job_id}/remote-logs/{name}", response_model=RemoteLogTailResponse)
+def get_remote_log_tail(
+    job_id: str,
+    name: str,
+    request: Request,
+    lines: int = Query(default=100, ge=1, le=5000),
+    project_id: str | None = Query(default=None, description="Verify job belongs to project"),
+) -> RemoteLogTailResponse:
+    """Return the tail of a remote job log (``stdout.log`` / ``stderr.log``)."""
+    if name not in ("stdout.log", "stderr.log"):
+        raise HTTPException(
+            status_code=400,
+            detail="Log name must be 'stdout.log' or 'stderr.log'",
+        )
+    fetcher = _remote_fetcher(request)
+    record = _get_remote_job_record(job_id, request, project_id=project_id)
+    try:
+        tail = fetcher.log_tail(record, name, lines=lines)
+    except Exception as exc:
+        raise _remote_exception_to_http(exc) from exc
+    _log_remote_access(request, job_id, name, f"log_tail:{lines}")
+    return RemoteLogTailResponse(
+        job_id=job_id,
+        name=name,
+        lines=tail.splitlines() if tail else [],
+    )
 
 
 @router.get("/jobs/{job_id}/tasks", response_model=StageTaskListResponse)
@@ -620,12 +1141,14 @@ def parse_structures(req: StructureParseRequest) -> StructureParseResponse:
 @router.get("/workflow-catalog")
 def get_workflow_catalog() -> dict[str, Any]:
     from acp.catalog import get_workflow_catalog as _get_catalog
+
     return {"workflows": _get_catalog()}
 
 
 @router.get("/method-catalog")
 def get_method_catalog() -> dict[str, Any]:
     from acp.catalog import get_method_catalog as _get_method_catalog
+
     return _get_method_catalog()
 
 
@@ -694,6 +1217,256 @@ async def upload_structure_file(
         errors=result.errors,
         warnings=result.warnings,
         ok=result.ok,
+    )
+
+
+# ---------------------------------------------------------------------- #
+# Maintenance endpoints (Phase 5B — local disk protection)
+# ---------------------------------------------------------------------- #
+
+
+def _format_bytes(n: int) -> str:
+    if n <= 0:
+        return "0 B"
+    units = ("B", "KiB", "MiB", "GiB", "TiB", "PiB")
+    size = float(n)
+    idx = 0
+    while size >= 1024 and idx < len(units) - 1:
+        size /= 1024.0
+        idx += 1
+    if idx == 0:
+        return f"{int(size)} {units[idx]}"
+    return f"{size:.1f} {units[idx]}"
+
+
+@router.get("/maintenance/disk-usage", response_model=DiskUsageResponse)
+def get_disk_usage(request: Request) -> DiskUsageResponse:
+    """Return local run_root disk usage + job count (Phase 5B).
+
+    No authentication is enforced in the current trusted-network
+    deployment; for production exposure place the server behind a
+    reverse proxy with IP allow-listing.
+    """
+    manager = _manager(request)
+    cleanup = manager.local_cleanup
+    if cleanup is None:
+        # Cleanup disabled — still report basic filesystem stats so the
+        # dashboard has something to show.
+        import shutil as _shutil
+
+        run_root = getattr(request.app.state, "run_root", str(manager.run_root))
+        try:
+            usage = _shutil.disk_usage(run_root)
+            total, used, free = float(usage.total), float(usage.used), float(usage.free)
+            pct = round((used / total) * 100, 2) if total > 0 else 0.0
+        except OSError:
+            total = used = free = 0.0
+            pct = 0.0
+        try:
+            job_count = sum(manager.counts().values())
+        except Exception:
+            job_count = 0
+        return DiskUsageResponse(
+            run_root=str(run_root),
+            total_bytes=total,
+            used_bytes=used,
+            free_bytes=free,
+            percent_used=pct,
+            job_count=job_count,
+            cleanup_enabled=False,
+        )
+    detail = cleanup.disk_usage_detail()
+    return DiskUsageResponse(
+        run_root=str(manager.run_root),
+        total_bytes=detail["total_bytes"],
+        used_bytes=detail["used_bytes"],
+        free_bytes=detail["free_bytes"],
+        percent_used=detail["percent_used"],
+        job_count=detail["job_count"],
+        cleanup_enabled=True,
+    )
+
+
+@router.post("/maintenance/cleanup", response_model=MaintenanceCleanupResponse)
+def trigger_cleanup(
+    request: Request,
+    dry_run: bool = Query(default=False),
+    scope: str = Query(default="all"),
+) -> MaintenanceCleanupResponse:
+    """Trigger a local disk-protection sweep (Phase 5B).
+
+    Args:
+        dry_run: When ``true`` report what *would* be removed without
+            deleting anything.
+        scope: ``all`` (default) sweeps work_dir + DB records; ``work_dirs``
+            only removes job directories; ``db_records`` only prunes SQLite
+            rows.
+
+    No authentication is enforced (trusted-network deployment).
+    """
+    import time as _time
+
+    manager = _manager(request)
+    cleanup = manager.local_cleanup
+    if cleanup is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Local cleanup is disabled (cluster.local_retention.enabled=false)",
+        )
+
+    if scope not in ("all", "work_dirs", "db_records"):
+        raise HTTPException(
+            status_code=400,
+            detail="scope must be one of: all, work_dirs, db_records",
+        )
+
+    started = _time.monotonic()
+    # Reuse the background-thread lock so manual and automatic sweeps
+    # never overlap.  When another sweep holds the lock, return a
+    # conflict-style 409 so the caller can retry.
+    if scope == "all":
+        # full sweep goes through the manager so the cleanup.log audit
+        # trail is written consistently with the background thread.
+        sweep = manager.trigger_local_cleanup(dry_run=dry_run)
+        if sweep is None:
+            raise HTTPException(status_code=409, detail="A cleanup sweep is already in progress")
+        report = sweep
+    else:
+        lock = manager._cleanup_lock  # type: ignore[attr-defined]
+        if not lock.acquire(blocking=False):
+            raise HTTPException(status_code=409, detail="A cleanup sweep is already in progress")
+        try:
+            if scope == "work_dirs":
+                report = cleanup.cleanup_old_work_dirs(dry_run=dry_run)
+            else:  # db_records
+                report = cleanup.cleanup_old_db_records(dry_run=dry_run)
+        finally:
+            lock.release()
+    duration_ms = int((_time.monotonic() - started) * 1000)
+
+    return MaintenanceCleanupResponse(
+        work_dirs_removed=len(report.work_dirs_removed),
+        db_records_removed=report.db_records_removed,
+        freed_bytes_est=report.freed_bytes_est,
+        freed_human=_format_bytes(report.freed_bytes_est),
+        errors=report.errors,
+        dry_run=report.dry_run,
+        disk_usage_before=report.disk_usage_before,
+        disk_usage_after=report.disk_usage_after,
+        capped=report.capped,
+        duration_ms=duration_ms,
+    )
+
+
+# ---------------------------------------------------------------------- #
+# Remote node management (Phase 6)
+# ---------------------------------------------------------------------- #
+
+
+def _node_manager(request: Request) -> NodeManager:
+    """Return the manager's :class:`NodeManager` or 503 if remote is off."""
+    manager = _manager(request)
+    nm = manager.node_manager
+    if nm is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Remote execution is not configured on this server",
+        )
+    return nm
+
+
+def _node_status_to_model(status) -> NodeStatusModel:
+    return NodeStatusModel(
+        name=status.name,
+        host=status.host,
+        status=status.status,
+        running_jobs=status.running_jobs,
+        max_jobs=status.max_jobs,
+        disk_usage_pct=status.disk_usage_pct,
+        last_check=status.last_check,
+        error=status.error,
+    )
+
+
+@router.get("/nodes", response_model=NodeListResponse)
+def list_nodes(request: Request) -> NodeListResponse:
+    """List all configured remote nodes and their cached status."""
+    nm = _node_manager(request)
+    return NodeListResponse(
+        nodes=[_node_status_to_model(s) for s in nm.list_nodes()],
+        auto_select=True,
+    )
+
+
+@router.get("/nodes/{name}/status", response_model=NodeStatusModel)
+def get_node_status(name: str, request: Request) -> NodeStatusModel:
+    """Get the cached status of a single remote node."""
+    nm = _node_manager(request)
+    try:
+        status = nm.get_node_status(name)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return _node_status_to_model(status)
+
+
+@router.post("/nodes/{name}/ping", response_model=NodePingResponse)
+def ping_node(name: str, request: Request) -> NodePingResponse:
+    """Probe SSH connectivity to a remote node and refresh its status."""
+    nm = _node_manager(request)
+    node = nm.config.get_node(name)
+    if node is None:
+        raise HTTPException(status_code=404, detail=f"Node not found: {name}")
+    reachable = nm.ping_node(name)
+    status = nm.get_node_status(name)
+    return NodePingResponse(
+        reachable=reachable,
+        node=name,
+        status=status.status,
+        error=status.error,
+    )
+
+
+@router.post("/nodes/{name}/bootstrap", response_model=NodeBootstrapResponse)
+def bootstrap_node(
+    name: str,
+    request: Request,
+    timeout: int = Query(default=600, ge=10, le=1800),
+    sync: bool = Query(default=True),
+) -> NodeBootstrapResponse:
+    """Provision a remote node with ACP runtime dependencies.
+
+    Syncs the code (so ``requirements-node.txt`` is fresh) then runs
+    ``pip install --user -r <remote_code_dir>/requirements-node.txt`` on the
+    node via SSH.  Use this to bring a newly added or rebuilt node up to the
+    dependency set declared in the repository, so that remote jobs do not
+    fail on missing Python packages (e.g. ``openpyxl``).
+    """
+    nm = _node_manager(request)
+    node = nm.config.get_node(name)
+    if node is None:
+        raise HTTPException(status_code=404, detail=f"Node not found: {name}")
+    try:
+        result = nm.bootstrap_node(name, timeout=timeout, sync=sync)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    def _tail(text: str, n: int = 4000) -> str:
+        if len(text) <= n:
+            return text
+        return "..." + text[-n:]
+
+    return NodeBootstrapResponse(
+        node=result.node,
+        reachable=result.reachable,
+        ok=result.ok,
+        exit_code=result.exit_code,
+        python_executable=result.python_executable,
+        requirements_path=result.requirements_path,
+        sync_uploaded=result.sync_uploaded,
+        sync_errors=result.sync_errors,
+        stdout_tail=_tail(result.stdout),
+        stderr_tail=_tail(result.stderr),
+        error=result.error,
     )
 
 

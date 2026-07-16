@@ -21,6 +21,82 @@ from acp.api.v1_routes import router as v1_router
 _FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent.parent / "frontend"
 
 
+def _load_remote_config():
+    """Load the ``cluster`` section and build a :class:`RemoteExecutionConfig`.
+
+    Called from :func:`create_app`.  Any failure (missing config, bad YAML,
+    paramiko not installed) degrades gracefully to a local-only config so
+    existing deployments keep working.
+    """
+    try:
+        from acp.scheduler.remote.config import RemoteExecutionConfig
+        from conformer_search.config import load_config
+
+        full_config = load_config()
+        cluster_section = full_config.get("cluster", {})
+        return RemoteExecutionConfig.from_config_dict(cluster_section)
+    except Exception as exc:  # noqa: BLE001 — intentional graceful degradation
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "Remote execution config load failed, defaulting to local: %s", exc
+        )
+        from acp.scheduler.remote.config import RemoteExecutionConfig
+
+        return RemoteExecutionConfig(execution_mode="local")
+
+
+def _load_local_retention_config():
+    """Build a :class:`RetentionPolicy` from ``cluster.local_retention`` (Phase 5B).
+
+    Returns ``None`` when local cleanup is disabled (``enabled: false``)
+    or the config cannot be loaded — the server then runs without local
+    disk protection, matching pre-Phase-5B behaviour.
+    """
+    try:
+        from acp.scheduler.local_cleanup import RetentionPolicy
+        from conformer_search.config import load_config
+
+        full_config = load_config()
+    except Exception as exc:  # noqa: BLE001 — graceful degradation
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "Local retention config load failed, local cleanup disabled: %s", exc
+        )
+        return None
+
+    local_cfg = full_config.get("cluster", {}).get("local_retention", {})
+    if not local_cfg.get("enabled", False):
+        return None
+    try:
+        return RetentionPolicy(
+            completed_days=int(local_cfg.get("completed_days", 30)),
+            failed_days=int(local_cfg.get("failed_days", 90)),
+            cancelled_days=int(local_cfg.get("cancelled_days", 30)),
+            db_record_days=int(local_cfg.get("db_record_days", 365)),
+            vacuum_after_db_cleanup=bool(local_cfg.get("vacuum_after_db_cleanup", False)),
+        )
+    except (TypeError, ValueError) as exc:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "Invalid local_retention config, local cleanup disabled: %s", exc
+        )
+        return None
+
+
+def _local_cleanup_interval_hours() -> int:
+    """Read ``cluster.local_retention.cleanup_interval_hours`` (default 6)."""
+    try:
+        from conformer_search.config import load_config
+
+        local_cfg = load_config().get("cluster", {}).get("local_retention", {})
+        return max(1, int(local_cfg.get("cleanup_interval_hours", 6)))
+    except Exception:
+        return 6
+
+
 def create_app(
     run_root: Path | str | None = None,
     host: str | None = None,
@@ -41,7 +117,18 @@ def create_app(
     max_running_env = os.environ.get("ACP_MAX_RUNNING", "1")
     eff_max = int(max_running if max_running is not None else max_running_env)
     run_root_path.mkdir(parents=True, exist_ok=True)
-    manager = JobManager(run_root=run_root_path, max_running=eff_max)
+
+    remote_config = _load_remote_config()
+    local_retention = _load_local_retention_config()
+    local_interval = _local_cleanup_interval_hours()
+
+    manager = JobManager(
+        run_root=run_root_path,
+        max_running=eff_max,
+        remote_config=remote_config,
+        local_retention_config=local_retention,
+        local_cleanup_interval_hours=local_interval,
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

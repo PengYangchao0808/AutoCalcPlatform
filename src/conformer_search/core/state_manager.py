@@ -9,14 +9,14 @@ Author: QCcalc Team (adapted from RPH)
 
 import json
 import logging
-import os
-import tempfile
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 import numpy as np
 
 logger = logging.getLogger(__name__)
+
+
 class ConformerStateManager:
     """
     Manages conformer search state persistence.
@@ -63,20 +63,12 @@ class ConformerStateManager:
             return None
 
     def save_state(self):
-        """Save current state to file atomically using temp file + os.replace."""
+        """Save current state to file."""
         try:
-            tmp = tempfile.NamedTemporaryFile(
-                dir=str(self.work_dir),
-                suffix='.tmp',
-                delete=False,
-                mode='w',
-                encoding='utf-8'
-            )
-            json.dump(self._state, tmp, indent=2)
-            tmp.close()
-            os.replace(tmp.name, str(self.state_file))
+            with open(self.state_file, 'w', encoding='utf-8') as f:
+                json.dump(self._state, f, indent=2)
         except Exception as e:
-            logger.warning(f"Failed to save state: {e}")
+            logger.error(f"Failed to save state: {e}")
 
     def start_run(self, smiles: str, two_stage_enabled: bool):
         """
@@ -243,3 +235,49 @@ class ConformerStateManager:
         self._state = {}
         if self.state_file.exists():
             self.state_file.unlink()
+
+    # -------------------------------------------------------------------------
+    # Intermediate / prescreen / screening stage helpers
+    # -------------------------------------------------------------------------
+
+    def mark_intermediate_clustering(self, status: str, output_file: str):
+        """
+        Mark crest_intermediate_clustering stage as completed.
+
+        Args:
+            status: Clustering status or summary
+            output_file: Path to clustered ensemble file
+        """
+        self.set_stage('crest_intermediate_clustering')
+        self.complete_stage('crest_intermediate_clustering', {
+            'status': status,
+            'output_file': str(output_file)
+        })
+
+    def mark_fastsp_prescreen(self, status: str, output_file: str):
+        """
+        Mark fastsp_prescreen stage as completed.
+
+        Args:
+            status: Prescreen status or summary
+            output_file: Path to prescreen results
+        """
+        self.set_stage('fastsp_prescreen')
+        self.complete_stage('fastsp_prescreen', {
+            'status': status,
+            'output_file': str(output_file)
+        })
+
+    def mark_fastsp_screening(self, status: str, output_file: str):
+        """
+        Mark fastsp_screening stage as completed.
+
+        Args:
+            status: Screening status or summary
+            output_file: Path to screening results
+        """
+        self.set_stage('fastsp_screening')
+        self.complete_stage('fastsp_screening', {
+            'status': status,
+            'output_file': str(output_file)
+        })

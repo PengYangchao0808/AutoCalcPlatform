@@ -13,7 +13,6 @@ Stage progress is observed by polling the workflow's ``state.json`` and emitting
 
 from __future__ import annotations
 
-from dataclasses import asdict
 import json
 import logging
 import os
@@ -22,9 +21,11 @@ import subprocess
 import sys
 import threading
 import time
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
+
 from acp.chem.embedding import smiles_to_xyz, xyz_to_multiframe_demo
 from acp.scheduler.artifacts import ArtifactRegistry, capture_stage_artifacts
 from acp.scheduler.events import JobEventLog
@@ -35,6 +36,32 @@ from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
 logger = logging.getLogger(__name__)
 
 _POLL_INTERVAL = 1.0
+
+
+class JobRunnerRemoteProtocol(Protocol):
+    """Structural type shared by :class:`~acp.scheduler.remote.runner.RemoteJobRunner`.
+
+    Avoids importing ``acp.scheduler.remote`` (which requires paramiko) at
+    module load time when remote execution is not configured.
+    """
+
+    def run(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        cancel_event: threading.Event,
+    ) -> int: ...
+
+
+class LocalCleanupProtocol(Protocol):
+    """Structural type for :class:`~acp.scheduler.local_cleanup.LocalCleanup`.
+
+    Avoids importing the concrete class at module load time.  Only
+    :meth:`pre_submit_housekeeping` is invoked from the runner.
+    """
+
+    def pre_submit_housekeeping(self) -> Any: ...
+
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -98,6 +125,7 @@ def materialize_job_input(
 
     if source_type == "smiles" or _looks_like_smiles(str(source)):
         from acp.chem.embedding import smiles_to_xyz
+
         xyz = smiles_to_xyz(str(source))
         dest.write_text(xyz, encoding="utf-8")
         return dest
@@ -109,6 +137,7 @@ def materialize_job_input(
             return dest
 
     from acp.chem.embedding import smiles_to_xyz
+
     try:
         xyz = smiles_to_xyz(str(source))
         dest.write_text(xyz, encoding="utf-8")
@@ -133,9 +162,31 @@ class JobRunner:
         self,
         python_executable: str | None = None,
         stage_task_observer: StageTaskObserver | None = None,
+        remote_runner: JobRunnerRemoteProtocol | None = None,
+        local_cleanup: LocalCleanupProtocol | None = None,
     ):
         self.python = python_executable or sys.executable
         self.stage_task_observer = stage_task_observer
+        # When set, eligible jobs are dispatched to a remote compute node
+        # instead of a local subprocess.  Populated by ``JobManager`` when
+        # ``remote_config.is_remote`` is True.
+        self.remote_runner = remote_runner
+        # Local disk-protection manager (Phase 5B).  When set, the local
+        # branch runs pre-submit housekeeping before materializing input.
+        # Populated by ``JobManager`` when ``local_retention.enabled``.
+        self.local_cleanup = local_cleanup
+
+    def _should_run_remote(self, spec: JobSpec) -> bool:
+        """True when this job should be dispatched to a remote compute node.
+
+        Requires ``remote_runner`` to be configured (set by
+        :class:`~acp.scheduler.manager.JobManager` when
+        ``remote_config.is_remote``) **and** the workflow to be one that
+        has a remote CLI mapping (``fake`` is always local).
+        """
+        if self.remote_runner is None:
+            return False
+        return spec.workflow != "fake"
 
     def run(
         self,
@@ -146,6 +197,13 @@ class JobRunner:
         """Run the job. Returns process exit code (0 = success)."""
         work_dir = Path(record.work_dir)
         work_dir.mkdir(parents=True, exist_ok=True)
+
+        # Remote dispatch — the fake workflow always stays local so the
+        # workbench remains demoable without QC binaries or SSH access.
+        if self._should_run_remote(record.spec):
+            assert self.remote_runner is not None
+            return self.remote_runner.run(record, event_log, cancel_event)
+
         (work_dir / "inputs").mkdir(exist_ok=True)
         (work_dir / "work").mkdir(exist_ok=True)
         (work_dir / "results").mkdir(exist_ok=True)
@@ -191,6 +249,16 @@ class JobRunner:
         inputs_dir = work_dir / "inputs"
         inputs_dir.mkdir(exist_ok=True)
         run_root = work_dir.parent.parent
+
+        # Phase 5B: local disk-pressure housekeeping before materializing
+        # input.  When the run_root filesystem is critically full the job
+        # is rejected gracefully (exit_code=1) instead of running out of
+        # disk mid-computation.  Local mode does NOT raise — there is no
+        # "switch node" option, so we just fail the job.
+        skip = self._pre_submit_housekeeping_local(record, event_log)
+        if skip:
+            return 1
+
         materialized = None
         try:
             materialized = materialize_job_input(record.spec.input, inputs_dir, run_root)
@@ -198,8 +266,10 @@ class JobRunner:
             event_log.append("job.failed", job_id=record.id, error=str(exc))
             return 1
 
-        effective_input_path = str(materialized) if materialized else (
-            record.spec.input.get("source") or record.spec.input.get("input") or ""
+        effective_input_path = (
+            str(materialized)
+            if materialized
+            else (record.spec.input.get("source") or record.spec.input.get("input") or "")
         )
         cmd = self._build_cmd(record.spec, work_dir, effective_input_path)
         stdout_path = work_dir / "stdout.log"
@@ -207,9 +277,10 @@ class JobRunner:
 
         event_log.append("process.starting", job_id=record.id, cmd=" ".join(cmd))
 
-        with stdout_path.open("w", encoding="utf-8") as out, stderr_path.open(
-            "w", encoding="utf-8"
-        ) as err:
+        with (
+            stdout_path.open("w", encoding="utf-8") as out,
+            stderr_path.open("w", encoding="utf-8") as err,
+        ):
             env = dict(os.environ)
             env["PYTHONUNBUFFERED"] = "1"
             proc = subprocess.Popen(
@@ -313,6 +384,65 @@ class JobRunner:
         except OSError:
             logger.warning("Failed to terminate subprocess", exc_info=True)
 
+    def _pre_submit_housekeeping_local(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+    ) -> bool:
+        """Run local disk-pressure housekeeping before a local submission.
+
+        Delegates to the injected :class:`LocalCleanup` (Phase 5B) when
+        one is configured.  Fail-open for transient errors: a stat or
+        sweep failure is logged but does **not** block submission.  Only
+        the explicit ``should_skip`` decision blocks it.
+
+        Unlike the remote path, the local branch **returns** ``True`` to
+        signal "skip submission" rather than raising — there is no other
+        node to fall back to, so the job is simply marked FAILED with a
+        disk-full error message.
+
+        Returns:
+            ``True`` when submission must be skipped (disk full).
+        """
+        if self.local_cleanup is None:
+            return False
+
+        try:
+            decision = self.local_cleanup.pre_submit_housekeeping()
+        except Exception as exc:
+            # Defensive: housekeeping must never crash the job.  Log and
+            # proceed (fail-open).
+            logger.warning("Local housekeeping crashed: %s", exc)
+            event_log.append(
+                "local.housekeeping_error",
+                job_id=record.id,
+                error=str(exc),
+            )
+            return False
+
+        removed = len(decision.cleanup.work_dirs_removed) if decision.cleanup else 0
+        errors = len(decision.cleanup.errors) if decision.cleanup else 0
+        event_log.append(
+            "local.housekeeping",
+            job_id=record.id,
+            disk_before=decision.disk_usage_before,
+            disk_after=decision.disk_usage_after,
+            should_skip=decision.should_skip,
+            removed_dirs=removed,
+            cleanup_errors=errors,
+            reason=decision.reason,
+        )
+
+        if decision.should_skip:
+            record.error = (
+                f"Local disk full ({decision.disk_usage_after}%), "
+                f"submission blocked: {decision.reason}"
+            )
+            logger.warning("Job %s blocked by disk pressure: %s", record.id, decision.reason)
+            return True
+
+        return False
+
     def _build_cmd(self, spec: JobSpec, work_dir: Path, input_path: str = "") -> list[str]:
         wf = spec.workflow
         if wf not in ("conformer", "nmr", "benchmark", "mechanism"):
@@ -336,6 +466,8 @@ class JobRunner:
                 cmd += ["--protocol", str(method["protocol"])]
             if spec.name:
                 cmd += ["--name", spec.name]
+            if wf == "conformer" and method.get("levels"):
+                cmd += ["--levels", json.dumps(method["levels"])]
         elif wf == "nmr":
             cmd += ["--input", str(source), "--output", str(work_dir)]
             if method.get("protocol"):
@@ -474,6 +606,7 @@ class JobRunner:
             method_levels = record.spec.method.get("levels") if record.spec.method else None
             if method_levels:
                 from acp.catalog import method_levels_to_workflow_config
+
                 schema_id = record.spec.method.get("schema_id", "confsearch")
                 wf_config = method_levels_to_workflow_config(
                     method_levels, schema_id, record.spec.workflow
@@ -590,4 +723,4 @@ class JobRunner:
         path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-__all__ = ["JobRunner", "find_workflow_state", "materialize_job_input"]
+__all__ = ["JobRunner", "JobRunnerRemoteProtocol", "find_workflow_state", "materialize_job_input"]

@@ -137,7 +137,7 @@ class TestProtocols:
         assert 'executables' in config
         assert 'resources' in config
         assert 'protocols' in config
-        assert config['protocols']['default'] == 'ext'
+        assert config['protocols']['default'] == 'lite'
 
     def test_protocol_spec_resolve(self):
         """Test protocol specification resolution."""
@@ -170,38 +170,6 @@ class TestProtocols:
         assert spec.two_stage_enabled == True
         assert spec.ngeom_default == 5
         assert spec.ngeom_max == 10
-
-    def test_protocol_spec_resolve_reference_sp(self):
-        """Test reference-sp protocol specification resolution."""
-        from conformer_search.core import resolve_protocol_spec
-        
-        config = {
-            'protocols': {
-                'reference-sp': {
-                    'two_stage_enabled': False,
-                    'ngeom_default': 48,
-                    'ngeom_max': 48,
-                    'stages': {
-                        'crest': False,
-                        'clustering': False,
-                        'optimization': False,
-                        'frequency': False,
-                        'single_point': True,
-                        'shermo': False,
-                    },
-                    'final_opt_sp': {
-                        'final_sp_method': 'DLPNO-CCSD(T)',
-                        'final_sp_basis': 'def2-TZVPP',
-                    },
-                }
-            }
-        }
-        
-        spec = resolve_protocol_spec(config, 'reference-sp')
-        
-        assert spec.name == 'reference-sp'
-        assert spec.final_sp_method == 'DLPNO-CCSD(T)'
-        assert spec.enable_crest is False
 
 
 class TestMultiFrameXYZ:

@@ -48,15 +48,9 @@ class CrestBackend(QCBackend):
         output_dir: Path | None = None,
         **kwargs: Any,
     ) -> QCResult:
-        return to_qc_result(
-            self._interface.optimize(
-                coordinates,
-                symbols,
-                output_dir=output_dir or Path.cwd(),
-                charge=charge,
-                multiplicity=multiplicity,
-                **kwargs,
-            )
+        raise NotImplementedError(
+            "CrestBackend does not support geometry optimization. "
+            "Use xTB/Gaussian/ORCA backends for optimisation tasks."
         )
 
     def single_point(
@@ -68,15 +62,9 @@ class CrestBackend(QCBackend):
         output_dir: Path | None = None,
         **kwargs: Any,
     ) -> QCResult:
-        return to_qc_result(
-            self._interface.single_point(
-                coordinates,
-                symbols,
-                output_dir=output_dir or Path.cwd(),
-                charge=charge,
-                multiplicity=multiplicity,
-                **kwargs,
-            )
+        raise NotImplementedError(
+            "CrestBackend does not support single-point energy. "
+            "Use Gaussian/ORCA backends for SP calculations."
         )
 
     def frequency(
@@ -88,9 +76,9 @@ class CrestBackend(QCBackend):
         output_dir: Path | None = None,
         **kwargs: Any,
     ) -> QCResult:
-        return QCResult(
-            success=False,
-            error_message="Frequency calculation not supported by CREST backend",
+        raise NotImplementedError(
+            "CrestBackend does not support frequency calculations. "
+            "Use Gaussian/ORCA backends."
         )
 
     def run_conformer_search(

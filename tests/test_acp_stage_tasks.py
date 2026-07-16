@@ -22,10 +22,20 @@ def test_stage_plan_provider_conformer() -> None:
         "embed_smiles",
         "crest_search",
         "isostat_cluster",
-        "censo_part0",
-        "censo_part1",
-        "censo_part2",
-        "censo_part3",
+        "dft_optimize",
+        "frequency",
+        "single_point",
+        "shermo_thermo",
+    ]
+
+
+def test_stage_plan_provider_conformer_zero() -> None:
+    plan = get_stage_plan(JobSpec(workflow="conformer", method={"protocol": "zero"}))
+    assert [stage.stage_name for stage in plan] == [
+        "embed_smiles",
+        "crest_search",
+        "isostat_cluster",
+        "single_point",
     ]
 
 

@@ -33,6 +33,10 @@ api = [
     "fastapi>=0.115",
     "uvicorn>=0.30",
     "python-multipart>=0.0.9",
+    "zipstream-ng>=1.9.0",
+]
+remote = [
+    "paramiko>=3.0",
 ]
 dev = [
     "pytest>=7.4.0",

@@ -5,4 +5,8 @@ Pipeline Package
 Pipeline execution components.
 """
 
-__all__: list[str] = []
+from conformer_search.pipeline.executor import PipelineExecutor
+
+__all__ = [
+    "PipelineExecutor",
+]

@@ -136,6 +136,7 @@ class FileEntry(BaseModel):
     path: str
     size: int
     modified: float
+    is_dir: bool = False
 
 
 class FileManifestResponse(BaseModel):

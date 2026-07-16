@@ -12,13 +12,6 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 import numpy as np
 
-from acp.core.models import Structure, StructureEnsemble, StructureRecord
-
-
-# DEPRECATED: Prefer acp.core.models.Structure / StructureRecord /
-# StructureEnsemble for new ACP code. ConformerCandidate and CandidateSet remain
-# as legacy-compatible wrappers while the conformer workflow is migrated.
-
 
 @dataclass
 class ConformerCandidate:
@@ -55,12 +48,9 @@ class ConformerCandidate:
     u_correction: Optional[float] = None
     s_total: Optional[float] = None
     g_conc: Optional[float] = None
-
-    def __post_init__(self):
-        """Normalize mutable inputs for legacy/new-model interoperability."""
-        self.coordinates = np.asarray(self.coordinates, dtype=float).copy()
-        self.symbols = list(self.symbols)
-        self.metadata = dict(self.metadata)
+    screening_energy: Optional[float] = None
+    xtb_energy: Optional[float] = None
+    xtb_free_energy: Optional[float] = None
 
     @property
     def g_used(self) -> Optional[float]:
@@ -71,51 +61,6 @@ class ConformerCandidate:
     def n_atoms(self) -> int:
         """Number of atoms."""
         return len(self.symbols)
-
-    def to_structure(self) -> Structure:
-        """Convert this legacy candidate into a generic ACP structure."""
-        return Structure(
-            id=str(self.metadata.get('structure_id', f"conf_{self.index:03d}")),
-            charge=int(self.metadata.get('charge', 0)),
-            multiplicity=int(self.metadata.get('multiplicity', 1)),
-            symbols=list(self.symbols),
-            coordinates=np.array(self.coordinates, copy=True),
-            metadata=dict(self.metadata),
-        )
-
-    def to_structure_record(self) -> StructureRecord:
-        """Convert this legacy candidate into a generic ACP structure record."""
-        files = {}
-        if self.source_file is not None:
-            files['source'] = self.source_file
-
-        return StructureRecord(
-            structure=self.to_structure(),
-            energy_hartree=self.energy,
-            free_energy_hartree=self.g_used,
-            weight=self.weight,
-            properties={
-                'index': self.index,
-                'rank': self.rank,
-                'gibbs_energy_hartree': self.gibbs_energy,
-                'gibbs_correction_hartree': self.gibbs_correction,
-                'h_correction_hartree': self.h_correction,
-                'u_correction_hartree': self.u_correction,
-                'entropy_total_au': self.s_total,
-                'g_conc_hartree': self.g_conc,
-            },
-            files=files,
-        )
-
-    @classmethod
-    def from_structure(cls, structure: Structure, **kwargs) -> 'ConformerCandidate':
-        """Create a legacy candidate from a generic ACP structure."""
-        return structure.to_conformer_candidate(**kwargs)
-
-    @classmethod
-    def from_structure_record(cls, record: StructureRecord) -> 'ConformerCandidate':
-        """Create a legacy candidate from a generic ACP structure record."""
-        return record.to_conformer_candidate()
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -131,7 +76,10 @@ class ConformerCandidate:
             'h_correction': self.h_correction,
             'u_correction': self.u_correction,
             's_total': self.s_total,
-            'g_conc': self.g_conc
+            'g_conc': self.g_conc,
+            'screening_energy': self.screening_energy,
+            'xtb_energy': self.xtb_energy,
+            'xtb_free_energy': self.xtb_free_energy,
         }
 
 
@@ -143,19 +91,8 @@ class CandidateSet:
     candidates: List[ConformerCandidate] = field(default_factory=list)
     reference_energy: Optional[float] = None
     temperature: float = 298.15
-
-    def to_structure_ensemble(self) -> StructureEnsemble:
-        """Convert this legacy candidate set into a generic ACP ensemble."""
-        return StructureEnsemble(
-            records=[candidate.to_structure_record() for candidate in self.candidates],
-            temperature=self.temperature,
-            metadata={'reference_energy_hartree': self.reference_energy},
-        )
-
-    @classmethod
-    def from_structure_ensemble(cls, ensemble: StructureEnsemble) -> 'CandidateSet':
-        """Create a legacy candidate set from a generic ACP ensemble."""
-        return ensemble.to_candidate_set()
+    ranking_basis: str = "xtb_energy"
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
     def __len__(self) -> int:
         return len(self.candidates)
@@ -172,7 +109,7 @@ class CandidateSet:
 
     def sort_by_energy(self):
         """Sort candidates by energy (lowest first)."""
-        self.candidates.sort(key=lambda c: c.energy)
+        self.candidates.sort(key=lambda c: c.energy if c.energy is not None else float('inf'))
 
     def calculate_boltzmann_weights(self, temperature: float = 298.15):
         """
@@ -314,10 +251,10 @@ class CandidateSet:
         """Get lowest Gibbs free energy candidate."""
         if not self.candidates:
             return None
-        valid = [c for c in self.candidates if c.g_used is not None]
+        valid = [c for c in self.candidates if c.gibbs_energy is not None]
         if not valid:
             return self.get_lowest_energy()
-        return min(valid, key=lambda c: c.g_used if c.g_used is not None else float('inf'))
+        return min(valid, key=lambda c: c.g_used)
 
 
 def candidate_set_from_paths(
@@ -352,7 +289,8 @@ def candidate_set_from_paths(
                 coordinates=coords,
                 symbols=symbols,
                 energy=energy,
-                source_file=path
+                source_file=path,
+                xtb_energy=energies[i] if energies and i < len(energies) else None,
             )
             candidates.append(candidate)
         except Exception as e:
@@ -384,13 +322,16 @@ def clone_candidate_set(candidate_set: CandidateSet) -> CandidateSet:
     for c in candidate_set.candidates:
         new_candidates.append(ConformerCandidate(
             index=c.index,
-            coordinates=c.coordinates.copy(),
-            symbols=c.symbols.copy(),
+            coordinates=c.coordinates.copy() if c.coordinates is not None else None,
+            symbols=c.symbols.copy() if c.symbols is not None else [],
             energy=c.energy,
             weight=c.weight,
             source_file=c.source_file,
             rank=c.rank,
-            metadata=c.metadata.copy(),
+            metadata=c.metadata.copy() if c.metadata else {},
+            screening_energy=c.screening_energy,
+            xtb_energy=c.xtb_energy,
+            xtb_free_energy=c.xtb_free_energy,
             gibbs_energy=c.gibbs_energy,
             gibbs_correction=c.gibbs_correction,
             h_correction=c.h_correction,

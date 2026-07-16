@@ -30,15 +30,17 @@ _REPORT_KEY = "nmr_report_object"
 def _normalize_backend_name(backend_name: str | None, config: dict[str, Any]) -> str:
     """Resolve the NMR backend name from explicit input or configuration."""
     theory_nmr = cast(dict[str, Any], config.get("theory", {}).get("nmr", {}))
-    resolved = backend_name or theory_nmr.get("engine") or "gaussian"
+    resolved = backend_name or theory_nmr.get("engine") or "orca"
     if not isinstance(resolved, str) or not resolved.strip():
-        return "gaussian"
+        return "orca"
     return resolved.strip().lower()
 
 
 def _sanitize_job_name(name: str) -> str:
     """Return a filesystem-safe job name."""
-    cleaned = "".join(char if char.isalnum() or char in {"-", "_", "."} else "_" for char in name.strip())
+    cleaned = "".join(
+        char if char.isalnum() or char in {"-", "_", "."} else "_" for char in name.strip()
+    )
     return cleaned.strip("._") or "nmr"
 
 
@@ -167,7 +169,9 @@ def _apply_nmr_config_overrides(
         nmr_config["max_conformers"] = int(max_conformers)
     if references is not None:
         merged_references = dict(cast(dict[str, float | None], nmr_config.get("references", {})))
-        merged_references.update({str(nucleus): float(value) for nucleus, value in references.items()})
+        merged_references.update(
+            {str(nucleus): float(value) for nucleus, value in references.items()}
+        )
         nmr_config["references"] = merged_references
 
     return config
@@ -244,11 +248,15 @@ def stage_run_nmr_giao(
         )
         if not qc_result.success:
             error_message = qc_result.error_message or "Unknown NMR backend failure"
-            raise RuntimeError(f"NMR calculation failed for conformer '{record.id}': {error_message}")
+            raise RuntimeError(
+                f"NMR calculation failed for conformer '{record.id}': {error_message}"
+            )
 
         log_file = qc_result.log_file or qc_result.output_file
         if log_file is None:
-            raise RuntimeError(f"NMR backend did not produce a log file for conformer '{record.id}'")
+            raise RuntimeError(
+                f"NMR backend did not produce a log file for conformer '{record.id}'"
+            )
 
         record.files["nmr_input"] = qc_result.output_file or Path(log_file)
         record.files["nmr_log"] = Path(log_file)
@@ -275,7 +283,8 @@ def stage_parse_shieldings(
         conformer_result = _nmr_result_from_record(record)
         if not conformer_result.log_file.exists():
             raise FileNotFoundError(
-                f"NMR log file for conformer '{record.id}' does not exist: {conformer_result.log_file}"
+                f"NMR log file for conformer '{record.id}' does not exist: "
+                f"{conformer_result.log_file}"
             )
         conformer_result.shieldings = parse_nmr_output(
             backend_name,
@@ -410,12 +419,6 @@ def run_nmr_calculation(
         max_conformers=max_conformers,
     )
 
-    resolved_backend = _normalize_backend_name(backend_name, cfg)
-    if resolved_backend == "orca":
-        raise NotImplementedError(
-            "ORCA NMR is not implemented yet. Use Gaussian for NMR shielding calculations."
-        )
-
     output_root = Path(output_dir)
     output_root.mkdir(parents=True, exist_ok=True)
 
@@ -476,8 +479,12 @@ def run_nmr_calculation(
     result.metadata = {
         "backend": _backend_name_from_context(context),
         "conformer_protocol": conformer_protocol,
-        "nmr_report": result.ensemble.metadata.get("nmr_report") if result.ensemble is not None else None,
-        "nmr_report_xlsx": result.ensemble.metadata.get("nmr_report_xlsx") if result.ensemble is not None else None,
+        "nmr_report": result.ensemble.metadata.get("nmr_report")
+        if result.ensemble is not None
+        else None,
+        "nmr_report_xlsx": result.ensemble.metadata.get("nmr_report_xlsx")
+        if result.ensemble is not None
+        else None,
         "selected_conformers": len(result.ensemble.records) if result.ensemble is not None else 0,
     }
     return result

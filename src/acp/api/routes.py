@@ -41,6 +41,7 @@ from acp.api.schemas import (
 from acp.scheduler.files import build_manifest, resolve_safe
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS
 from acp.scheduler.logs import read_log_tail
+from acp.workflows.registry import list_workflow_entries, workflow_to_dict
 
 router = APIRouter()
 
@@ -56,32 +57,14 @@ _BACKEND_DEFAULT_BINARIES: dict[str, list[str]] = {
     "molclus": ["molclus", "Molclus"],
 }
 
-_WORKFLOW_INFO: list[WorkflowInfo] = [
-    WorkflowInfo(
-        name="fake",
-        label="Fake (demo)",
-        description="Built-in no-op workflow; no external binaries required.",
-        requires_binaries=[],
-    ),
-    WorkflowInfo(
-        name="conformer",
-        label="Conformer Search",
-        description="CREST → DFT (Gaussian/ORCA) → single-point → Shermo thermo.",
-        requires_binaries=["crest", "gaussian"],
-    ),
-    WorkflowInfo(
-        name="nmr",
-        label="NMR",
-        description="Conformer selection → GIAO shielding → Boltzmann report.",
-        requires_binaries=["gaussian"],
-    ),
-    WorkflowInfo(
-        name="benchmark",
-        label="Benchmark",
-        description="Run multiple conformer protocols and compare results.",
-        requires_binaries=["crest", "gaussian"],
-    ),
-]
+
+def _build_workflow_info() -> list[WorkflowInfo]:
+    """Return workflow metadata from the ACP workflow registry.
+
+    Keeps the API in sync with ``SUPPORTED_WORKFLOWS`` without hardcoding
+    labels, descriptions, or required binaries in the routing layer.
+    """
+    return [WorkflowInfo(**workflow_to_dict(entry)) for entry in list_workflow_entries()]
 
 
 def _is_wsl() -> bool:
@@ -217,7 +200,7 @@ def get_backends() -> BackendsResponse:
 
 @router.get("/workflows", response_model=WorkflowsResponse)
 def get_workflows() -> WorkflowsResponse:
-    return WorkflowsResponse(workflows=list(_WORKFLOW_INFO))
+    return WorkflowsResponse(workflows=_build_workflow_info())
 
 
 @router.get("/protocols", response_model=ProtocolsResponse)
@@ -326,7 +309,12 @@ def get_job_files(job_id: str, request: Request) -> FileManifestResponse:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     manifest = build_manifest(work_dir)
     entries = [
-        FileEntry(path=f["path"], size=f["size"], modified=f["modified"])
+        FileEntry(
+            path=f["path"],
+            size=f["size"],
+            modified=f["modified"],
+            is_dir=f.get("is_dir", False),
+        )
         for f in manifest["files"]
     ]
     return FileManifestResponse(

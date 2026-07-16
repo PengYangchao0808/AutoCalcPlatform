@@ -117,12 +117,6 @@ class TestConfig:
         _validate_config(config)
         assert config['protocols']['default'] == 'ext'
 
-    def test_default_protocol_config_has_reference_sp(self):
-        """_get_default_protocol_config() includes reference-sp with DLPNO-CCSD(T)."""
-        from conformer_search.core.protocols import _get_default_protocol_config
-        reference = _get_default_protocol_config('reference-sp')
-        assert reference['final_opt_sp']['final_sp_method'] == 'DLPNO-CCSD(T)'
-
     def test_get_default_config_has_nmr_defaults(self):
         """_get_default_config() includes NMR theory and runtime defaults."""
         config = _get_default_config()
@@ -176,7 +170,7 @@ class TestConfig:
         yml_opt = yaml_config['theory']['optimization']
         assert py_opt['method'] == yml_opt['method']
         assert py_opt['basis'] == yml_opt['basis']
-        assert py_opt['dispersion'] == yml_opt['dispersion']
+        assert py_opt.get('dispersion') == yml_opt.get('dispersion')
         assert py_opt['solvent'] == yml_opt['solvent']
         assert py_opt['solvent_model'] == yml_opt['solvent_model']
 

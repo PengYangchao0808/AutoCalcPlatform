@@ -64,7 +64,7 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "geometry_optimization": BackendCapabilityStatus.AVAILABLE,
         "single_point": BackendCapabilityStatus.AVAILABLE,
         "frequency": BackendCapabilityStatus.AVAILABLE,
-        "nmr": BackendCapabilityStatus.STUBBED,
+        "nmr": BackendCapabilityStatus.AVAILABLE,
         "conformer_search": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,

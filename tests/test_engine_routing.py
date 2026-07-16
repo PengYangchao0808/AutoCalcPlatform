@@ -368,7 +368,7 @@ class TestOptFailureRecovery:
         engine.opt_interface.optimize.return_value = failed_opt
 
         engine.freq_interface = MagicMock()
-        engine.orca_interface = MagicMock()
+        engine.sp_interface = MagicMock()
         engine.state_manager.set_stage = MagicMock()
         engine.state_manager.complete_stage = MagicMock()
 
@@ -389,10 +389,10 @@ class TestOptFailureRecovery:
         assert cand.s_total is None
         assert cand.g_conc is None
         engine.freq_interface.frequency.assert_not_called()
-        engine.orca_interface.single_point.assert_not_called()
+        engine.sp_interface.single_point.assert_not_called()
 
     def test_opt_failure_does_not_crash_with_empty_energy(self, tmp_path):
-        """Opt failure with None energy still appends candidate (energy=0.0 default)."""
+        """Opt failure with None energy still appends candidate (energy=inf sentinel)."""
         config = _make_min_config()
         engine = _make_engine(tmp_path, config=config)
         engine._current_charge = 0
@@ -405,7 +405,7 @@ class TestOptFailureRecovery:
         engine.opt_interface = MagicMock()
         engine.opt_interface.optimize.return_value = failed_opt
         engine.freq_interface = MagicMock()
-        engine.orca_interface = MagicMock()
+        engine.sp_interface = MagicMock()
         engine.state_manager.set_stage = MagicMock()
         engine.state_manager.complete_stage = MagicMock()
 
@@ -418,7 +418,7 @@ class TestOptFailureRecovery:
 
         assert len(candidate_set.candidates) == 1
         cand = candidate_set.candidates[0]
-        assert cand.energy == 0.0
+        assert cand.energy == float('inf')
 
 
 # ===========================================================================
@@ -453,8 +453,8 @@ class TestFreqFailureRecovery:
         engine.freq_interface.frequency.return_value = freq_fail
 
         sp_fail = QCResult(success=False, energy=None)
-        engine.orca_interface = MagicMock()
-        engine.orca_interface.single_point.return_value = sp_fail
+        engine.sp_interface = MagicMock()
+        engine.sp_interface.single_point.return_value = sp_fail
 
         engine.state_manager.set_stage = MagicMock()
         engine.state_manager.complete_stage = MagicMock()
@@ -501,8 +501,8 @@ class TestFreqFailureRecovery:
         engine.freq_interface.frequency.return_value = freq_fail
 
         sp_fail = QCResult(success=False, energy=None)
-        engine.orca_interface = MagicMock()
-        engine.orca_interface.single_point.return_value = sp_fail
+        engine.sp_interface = MagicMock()
+        engine.sp_interface.single_point.return_value = sp_fail
 
         engine.state_manager.set_stage = MagicMock()
         engine.state_manager.complete_stage = MagicMock()
@@ -515,7 +515,7 @@ class TestFreqFailureRecovery:
                 with patch('conformer_search.core.engine.run_shermo') as mock_shermo:
                     engine._run_shared_dft_handoff([fake_path])
 
-        engine.orca_interface.single_point.assert_called_once()
+        engine.sp_interface.single_point.assert_called_once()
         mock_shermo.assert_not_called()
 
 
@@ -558,8 +558,8 @@ class TestFullSuccessPath:
             energy=-40.55,
             log_file=tmp_path / 'sp.out',
         )
-        engine.orca_interface = MagicMock()
-        engine.orca_interface.single_point.return_value = sp_ok
+        engine.sp_interface = MagicMock()
+        engine.sp_interface.single_point.return_value = sp_ok
 
         engine.state_manager.set_stage = MagicMock()
         engine.state_manager.complete_stage = MagicMock()
@@ -584,7 +584,7 @@ class TestFullSuccessPath:
         cand = candidate_set.candidates[0]
         assert cand.energy == -40.55
         assert cand.gibbs_energy == -40.40
-        assert cand.gibbs_correction == pytest.approx(0.20, abs=1e-6)
+        assert cand.gibbs_correction == pytest.approx(-40.35, abs=1e-6)
         assert cand.h_correction == -40.38
         assert cand.u_correction == -40.39
         assert cand.s_total == 0.01
@@ -612,8 +612,8 @@ class TestFullSuccessPath:
         engine.freq_interface.frequency.return_value = freq_ok
 
         sp_ok = QCResult(success=True, energy=-40.1, log_file=tmp_path / 'sp.out')
-        engine.orca_interface = MagicMock()
-        engine.orca_interface.single_point.return_value = sp_ok
+        engine.sp_interface = MagicMock()
+        engine.sp_interface.single_point.return_value = sp_ok
 
         engine.state_manager.set_stage = MagicMock()
         engine.state_manager.complete_stage = MagicMock()
@@ -655,8 +655,8 @@ class TestFullSuccessPath:
         engine.freq_interface.frequency.return_value = freq_ok
 
         sp_fail = QCResult(success=False, energy=None)
-        engine.orca_interface = MagicMock()
-        engine.orca_interface.single_point.return_value = sp_fail
+        engine.sp_interface = MagicMock()
+        engine.sp_interface.single_point.return_value = sp_fail
 
         engine.state_manager.set_stage = MagicMock()
         engine.state_manager.complete_stage = MagicMock()

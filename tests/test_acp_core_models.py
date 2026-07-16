@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from acp.core.models import Structure
+from acp.core.models import Structure, StructureEnsemble, StructureRecord
 from acp.core.state import EventLog, WorkflowState
 from conformer_search.core import CandidateSet, ConformerCandidate
 
@@ -51,8 +51,8 @@ def test_conformer_candidate_round_trips_through_structure_record():
         g_conc=-40.200000,
     )
 
-    record = candidate.to_structure_record()
-    rebuilt = ConformerCandidate.from_structure_record(record)
+    record = StructureRecord.from_conformer_candidate(candidate)
+    rebuilt = record.to_conformer_candidate()
 
     assert record.structure.id == 'conf_003'
     assert rebuilt.index == candidate.index
@@ -91,8 +91,8 @@ def test_candidate_set_round_trips_through_structure_ensemble():
         temperature=310.0,
     )
 
-    ensemble = candidate_set.to_structure_ensemble()
-    restored = CandidateSet.from_structure_ensemble(ensemble)
+    ensemble = StructureEnsemble.from_candidate_set(candidate_set)
+    restored = ensemble.to_candidate_set()
     selected = ensemble.window_select(energy_window_kcal=1.0)
 
     assert len(ensemble.records) == 3

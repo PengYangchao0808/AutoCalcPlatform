@@ -4,19 +4,17 @@ Configuration Loader
 
 YAML configuration loading and validation.
 
-Authoritative source: _get_default_config() below is the SINGLE source of truth
-for default values. The config/defaults.yaml file is provided as a user reference
-only and may diverge from these built-in defaults.
-
 Author: QCcalc Team
 """
 
-import os
-import tempfile
-import yaml
-from pathlib import Path
-from typing import Dict, Any, Optional, List
+from __future__ import annotations
+
 import logging
+import os
+from pathlib import Path
+from typing import Any
+
+import yaml
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +22,7 @@ DEFAULT_CONFIG_NAME = "conformer_search.yaml"
 USER_CONFIG_NAME = ".conformer_search.yaml"
 
 
-def _find_project_root() -> Optional[Path]:
+def _find_project_root() -> Path | None:
     """
     Find the project root directory by searching upward for config/defaults.yaml.
     
@@ -41,10 +39,10 @@ def _find_project_root() -> Optional[Path]:
 
 
 def load_config(
-    config_path: Optional[Path] = None,
-    overrides: Optional[Dict[str, Any]] = None,
-    defaults_path: Optional[Path] = None
-) -> Dict[str, Any]:
+    config_path: Path | None = None,
+    overrides: dict[str, Any] | None = None,
+    defaults_path: Path | None = None
+) -> dict[str, Any]:
     """
     Load configuration from multiple sources, merged in order (latest wins):
 
@@ -82,9 +80,8 @@ def load_config(
                 break
 
     if defaults_path and Path(defaults_path).exists():
-        with open(defaults_path, 'r', encoding='utf-8') as f:
-            yaml_config = yaml.safe_load(f) or {}
-        config = _merge_configs(_get_default_config(), yaml_config)
+        with open(defaults_path, encoding='utf-8') as f:
+            config = yaml.safe_load(f) or {}
         logger.info(f"Loaded defaults from: {defaults_path}")
     else:
         config = _get_default_config()
@@ -93,20 +90,21 @@ def load_config(
     user_home = Path.home()
     user_config_path = user_home / USER_CONFIG_NAME
     if user_config_path.exists():
-        with open(user_config_path, 'r', encoding='utf-8') as f:
+        with open(user_config_path, encoding='utf-8') as f:
             user_config = yaml.safe_load(f) or {}
         config = _merge_configs(config, user_config)
 
     local_config = Path.cwd() / DEFAULT_CONFIG_NAME
     if local_config.exists():
-        with open(local_config, 'r', encoding='utf-8') as f:
+        with open(local_config, encoding='utf-8') as f:
             local_cfg = yaml.safe_load(f) or {}
         config = _merge_configs(config, local_cfg)
 
     if config_path and Path(config_path).exists():
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, encoding='utf-8') as f:
             user_config = yaml.safe_load(f) or {}
         config = _merge_configs(config, user_config)
+        logger.info(f"Loaded explicit config from: {config_path}")
 
     config = _apply_env_overrides(config)
 
@@ -118,7 +116,7 @@ def load_config(
     return config
 
 
-def _get_default_config() -> Dict[str, Any]:
+def _get_default_config() -> dict[str, Any]:
     """Get built-in default configuration."""
     return {
         'executables': {
@@ -128,8 +126,8 @@ def _get_default_config() -> Dict[str, Any]:
                 'wrapper_path': './scripts/run_g16_worker.sh'
             },
             'orca': {
-                'path': '/opt/software/orca/orca',
-                'ld_library_path': '/opt/software/openmpi/lib:/opt/software/orca',
+                'path': '/opt/orca/orca',
+                'ld_library_path': '/opt/openmpi/lib:/opt/orca',
                 'nproc': 10,
                 'maxcore': None
             },
@@ -149,43 +147,35 @@ def _get_default_config() -> Dict[str, Any]:
             }
         },
         'resources': {
-            'nproc': 20,
+            'nproc': 16,
             'mem': '30GB',
-            'orca_maxcore_safety': 0.8
+            'orca_maxcore_safety': 0.8,
+            'isostat_gdis': 1.0,
+            'isostat_intermediate_gdis': 0.5,
+            'isostat_energy_window_kcal': 3.0,
+            'isostat_intermediate_energy_window_kcal': 10.0,
         },
         'theory': {
             'optimization': {
-                'engine': 'gaussian',
-                'method': 'B3LYP',
-                'basis': 'def2-SVP',
-                'dispersion': 'GD3BJ',
-                'solvent': None,
-                'solvent_model': 'smd'
+                'engine': 'orca',
+                'method': 'r2SCAN-3c',
+                'basis': '',
+                'solvent': 'toluene',
+                'solvent_model': 'cpcm'
             },
             'frequency': {
-                'engine': 'gaussian'
-            },
-            'low_cost_sp': {
-                'method': 'r2scan3c',
-                'basis': None,
-                'solvent': None,
-                'solvent_model': 'smd'
+                'engine': 'orca'
             },
             'single_point': {
                 'method': 'wB97X-D4',
                 'basis': 'def2-TZVPP',
-                'solvent': None,
-                'solvent_model': 'smd'
-            },
-            'final_sp': {
-                'method': 'wB97X-D4',
-                'basis': 'def2-TZVPP',
-                'solvent': None,
-                'solvent_model': 'smd'
+                'solvent': 'toluene',
+                'solvent_model': 'smd',
+                'engine': 'orca'
             },
             'preoptimization': {
                 'gfn_level': 2,
-                'solvent': None
+                'solvent': 'toluene'
             },
             'nmr': {
                 'engine': 'gaussian',
@@ -203,6 +193,13 @@ def _get_default_config() -> Dict[str, Any]:
             'shermo_imagreal': 0,
             'shermo_conc': 1.0
         },
+        'mrrho_settings': {
+            'gfn_level': 2,
+            'sthr': 50.0,
+            'imagthr': -100.0,
+            'temperature_k': 298.15,
+            'max_parallel': 4,
+        },
         'nmr': {
             'temperature_k': 298.15,
             'energy_window_kcal': 3.0,
@@ -216,7 +213,34 @@ def _get_default_config() -> Dict[str, Any]:
             }
         },
         'protocols': {
-            'default': 'ext',
+            'default': 'lite',
+            'benchmark': {
+                'stages': {
+                    'crest': True,
+                    'clustering': True,
+                    'optimization': True,
+                    'frequency': True,
+                    'single_point': True,
+                    'shermo': True,
+                },
+                'two_stage_enabled': True,
+                'ngeom_default': 3,
+                'ngeom_max': 6,
+                'funnel': {
+                    'search_mode': 'crest_two_stage_gfn0_to_gfn2',
+                    'clustering_mode': 'isostat',
+                    'prescreen_mode': 'none',
+                    'rerank_mode': 'none',
+                },
+                'handoff': {
+                    'mode': 'optimize_all_candidates',
+                    'ranking_after_handoff': 'final_sp_minimum',
+                },
+                'final_opt_sp': {
+                    'final_sp_method': 'DLPNO-CCSD(T)',
+                    'final_sp_basis': 'def2-TZVPP',
+                },
+            },
             'ext': {
                 'stages': {
                     'crest': True,
@@ -244,68 +268,7 @@ def _get_default_config() -> Dict[str, Any]:
                     'final_sp_basis': 'def2-TZVPP',
                 },
             },
-            'censo-zero': {
-                'stages': {
-                    'crest': True,
-                    'clustering': True,
-                    'optimization': False,
-                    'frequency': False,
-                    'single_point': True,
-                    'shermo': False,
-                },
-                'two_stage_enabled': False,
-                'ngeom_default': 1,
-                'ngeom_max': 3,
-                'funnel': {
-                    'search_mode': 'crest_gfn2',
-                    'clustering_mode': 'isostat',
-                    'prescreen_mode': 'none',
-                    'rerank_mode': 'none',
-                    'survivor_window_kcal': 1.0,
-                },
-                'handoff': {
-                    'mode': 'optimize_rank1',
-                    'ranking_after_handoff': 'xtb_energy',
-                },
-                'final_opt_sp': {
-                    'final_sp_method': 'wB97X-D4',
-                    'final_sp_basis': 'def2-TZVPP',
-                },
-            },
-            'censo-lite': {
-                'stages': {
-                    'crest': True,
-                    'clustering': True,
-                    'optimization': False,
-                    'frequency': False,
-                    'single_point': True,
-                    'shermo': False,
-                },
-                'two_stage_enabled': False,
-                'ngeom_default': 4,
-                'ngeom_max': 6,
-                'funnel': {
-                    'search_mode': 'crest_gfn2',
-                    'clustering_mode': 'isostat',
-                    'prescreen_mode': 'none',
-                    'rerank_mode': 'r2scan3c_sp',
-                    'use_mrrho_like_correction': True,
-                    'optimize_limit': 1,
-                    'top2_fallback_enabled': True,
-                    'boltzmann_cutoff': 0.90,
-                },
-                'handoff': {
-                    'mode': 'optimize_rank1',
-                    'fallback_mode': 'optimize_top2_if_gap_small',
-                    'small_gap_kcal': 1.0,
-                    'ranking_after_handoff': 'final_sp_minimum',
-                },
-                'final_opt_sp': {
-                    'final_sp_method': 'wB97X-D4',
-                    'final_sp_basis': 'def2-TZVPP',
-                },
-            },
-            'censo-full': {
+            'full': {
                 'stages': {
                     'crest': True,
                     'clustering': True,
@@ -335,23 +298,103 @@ def _get_default_config() -> Dict[str, Any]:
                     'final_sp_basis': 'def2-TZVPP',
                 },
             },
+            'lite': {
+                'stages': {
+                    'crest': True,
+                    'clustering': True,
+                    'optimization': True,
+                    'frequency': True,
+                    'single_point': True,
+                    'shermo': True,
+                },
+                'two_stage_enabled': False,
+                'ngeom_default': 4,
+                'ngeom_max': 6,
+                'funnel': {
+                    'search_mode': 'crest_gfn2',
+                    'clustering_mode': 'isostat',
+                    'prescreen_mode': 'none',
+                    'rerank_mode': 'r2scan3c_sp',
+                    'use_mrrho_like_correction': True,
+                    'optimize_limit': 1,
+                    'top2_fallback_enabled': True,
+                    'boltzmann_cutoff': 0.90,
+                },
+                'handoff': {
+                    'mode': 'optimize_rank1',
+                    'fallback_mode': 'optimize_top2_if_gap_small',
+                    'small_gap_kcal': 1.0,
+                    'ranking_after_handoff': 'final_sp_minimum',
+                },
+                'final_opt_sp': {
+                    'final_sp_method': 'wB97X-D4',
+                    'final_sp_basis': 'def2-TZVPP',
+                },
+            },
+            'zero': {
+                'stages': {
+                    'crest': True,
+                    'clustering': True,
+                    'optimization': True,
+                    'frequency': True,
+                    'single_point': True,
+                    'shermo': True,
+                },
+                'two_stage_enabled': False,
+                'ngeom_default': 1,
+                'ngeom_max': 3,
+                'funnel': {
+                    'search_mode': 'crest_gfn2',
+                    'clustering_mode': 'isostat',
+                    'prescreen_mode': 'none',
+                    'rerank_mode': 'none',
+                    'narrow_window_kcal': 0.5,
+                    'optimize_limit': 1,
+                },
+                'handoff': {
+                    'mode': 'optimize_rank1',
+                    'fallback_mode': 'optimize_all_within_0p5_kcal',
+                    'ranking_after_handoff': 'final_sp_minimum',
+                },
+                'final_opt_sp': {},
+            },
         },
         'cluster': {
             'enabled': False,
+            'execution_mode': 'local',
+            'poll_interval': 30,
+            'retention_days': 180,
+            'auto_sync': True,
             'type': 'local',
             'queue': 'normal',
             'walltime': '24:00',
-            'extra_flags': ''
+            'extra_flags': '',
+            'nodes': [],
+            # Local run_root lifecycle management (Phase 5B). MUST stay in
+            # sync with config/defaults.yaml cluster.local_retention.
+            'local_retention': {
+                'enabled': True,
+                'completed_days': 30,
+                'failed_days': 90,
+                'cancelled_days': 30,
+                'db_record_days': 365,
+                'cleanup_interval_hours': 6,
+                'disk_cleanup_threshold': 90,
+                'disk_skip_threshold': 95,
+                'max_dirs_per_sweep': 200,
+                'vacuum_after_db_cleanup': False,
+            },
         },
         'optimization_control': {
+            'recalc_hess': 10,  # Hessian recalculation interval for geometry optimization
             'timeout': {
-                'default_seconds': 86400
+                'default_seconds': 864000
             }
         }
     }
 
 
-def _merge_configs(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+def _merge_configs(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """
     Recursively merge two configuration dictionaries.
     
@@ -363,17 +406,17 @@ def _merge_configs(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, 
         Merged configuration
     """
     result = base.copy()
-    
+
     for key, value in override.items():
         if key in result and isinstance(result[key], dict) and isinstance(value, dict):
             result[key] = _merge_configs(result[key], value)
         else:
             result[key] = value
-    
+
     return result
 
 
-def _set_nested(config: Dict[str, Any], keys: List[str], value: Any) -> None:
+def _set_nested(config: dict[str, Any], keys: list[str], value: Any) -> None:
     """Set a value at a nested key path, creating intermediate dicts as needed.
     
     Args:
@@ -386,7 +429,7 @@ def _set_nested(config: Dict[str, Any], keys: List[str], value: Any) -> None:
     config[keys[-1]] = value
 
 
-def _apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
+def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
     """
     Apply environment variable overrides.
     
@@ -416,8 +459,10 @@ def _apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
         'CONFSEARCH_ISOSTAT_PATH': ('executables', ['isostat', 'path'], str),
         'CONFSEARCH_SHERMO_PATH': ('executables', ['shermo', 'path'], str),
         'CONFSEARCH_PROTOCOL': ('protocols', 'default', str),
+        'CONFSEARCH_MRRHO_STHR': ('mrrho_settings', 'sthr', float),
+        'CONFSEARCH_MRRHO_IMAGTHR': ('mrrho_settings', 'imagthr', float),
     }
-    
+
     for env_var, (section, key, value_type) in env_mappings.items():
         env_value = os.environ.get(env_var)
         if env_value:
@@ -428,11 +473,14 @@ def _apply_env_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 section_dict[key] = value_type(env_value)
                 logger.debug(f"Applied env override: {env_var} -> {section}.{key}")
-    
+
+    if os.environ.get('CONFSEARCH_NPROC'):
+        config.setdefault('executables', {}).setdefault('orca', {})['nproc'] = int(os.environ['CONFSEARCH_NPROC'])
+
     return config
 
 
-def _validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
+def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     """
     Validate configuration and apply defaults.
     
@@ -444,36 +492,28 @@ def _validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
     """
     if 'resources' not in config:
         config['resources'] = {}
-    
+
     if config['resources'].get('nproc', 0) <= 0:
         import multiprocessing
         config['resources']['nproc'] = min(multiprocessing.cpu_count(), 32)
         logger.warning(f"Invalid nproc, using {config['resources']['nproc']}")
-    
+
     if not config['resources'].get('mem'):
         config['resources']['mem'] = '32GB'
-    
+
     protocol = config.get('protocols', {}).get('default', 'ext')
-    if protocol not in (
-        'ext',
-        'censo-zero',
-        'censo-lite',
-        'censo-full',
-        'censo-full-safe',
-        'allopt',
-        'reference-sp',
-    ):
+    if protocol not in ('ext', 'full', 'lite', 'zero', 'benchmark'):
         logger.warning(f"Unknown protocol '{protocol}', using 'ext'")
         config['protocols']['default'] = 'ext'
-    
+
     valid_engines = ('gaussian', 'orca')
     theory = config.setdefault('theory', {})
-    
+
     opt_engine = theory.setdefault('optimization', {}).get('engine', 'gaussian')
     if opt_engine not in valid_engines:
         logger.warning(f"Invalid optimization engine '{opt_engine}', defaulting to 'gaussian'")
         theory['optimization']['engine'] = 'gaussian'
-    
+
     freq_engine = theory.setdefault('frequency', {}).get('engine', 'gaussian')
     if freq_engine not in valid_engines:
         logger.warning(f"Invalid frequency engine '{freq_engine}', defaulting to 'gaussian'")
@@ -537,27 +577,70 @@ def _validate_config(config: Dict[str, Any]) -> Dict[str, Any]:
         )
         references[nucleus] = default_value
 
+    _validate_local_retention(config)
+
     return config
 
 
-def save_config(config: Dict[str, Any], output_path: Path):
+def _validate_local_retention(config: dict[str, Any]) -> None:
+    """Validate the ``cluster.local_retention`` section (Phase 5B).
+
+    Ensures retention windows are positive integers and that the disk
+    cleanup threshold stays below the skip threshold.  Coerces/repairs
+    bad values in place with a warning rather than failing hard — config
+    load must never crash the server.
     """
-    Save configuration to YAML file atomically.
+    cluster = config.setdefault('cluster', {})
+    section = cluster.setdefault('local_retention', {})
+
+    def _positive_int(key: str, default: int) -> None:
+        value = section.get(key, default)
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            logger.warning(
+                f"Invalid cluster.local_retention.{key}={value!r}, defaulting to {default}"
+            )
+            value = default
+        section[key] = value
+
+    _positive_int('completed_days', 30)
+    _positive_int('failed_days', 90)
+    _positive_int('cancelled_days', 30)
+    _positive_int('db_record_days', 365)
+    _positive_int('cleanup_interval_hours', 6)
+    _positive_int('max_dirs_per_sweep', 200)
+
+    cleanup_thr = section.get('disk_cleanup_threshold', 90)
+    skip_thr = section.get('disk_skip_threshold', 95)
+    for key, default in (('disk_cleanup_threshold', 90), ('disk_skip_threshold', 95)):
+        value = section.get(key, default)
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not (0 < value <= 100):
+            logger.warning(
+                f"Invalid cluster.local_retention.{key}={value!r}, defaulting to {default}"
+            )
+            section[key] = default
+    cleanup_thr = section['disk_cleanup_threshold']
+    skip_thr = section['disk_skip_threshold']
+    if cleanup_thr >= skip_thr:
+        logger.warning(
+            f"cluster.local_retention.disk_cleanup_threshold ({cleanup_thr}) must be "
+            f"strictly below disk_skip_threshold ({skip_thr}); resetting to 90/95"
+        )
+        section['disk_cleanup_threshold'] = 90
+        section['disk_skip_threshold'] = 95
+
+    if not isinstance(section.get('enabled', True), bool):
+        section['enabled'] = True
+    if not isinstance(section.get('vacuum_after_db_cleanup', False), bool):
+        section['vacuum_after_db_cleanup'] = False
+
+
+def save_config(config: dict[str, Any], output_path: Path):
+    """
+    Save configuration to YAML file.
     
     Args:
         config: Configuration dictionary
         output_path: Output file path
     """
-    try:
-        tmp = tempfile.NamedTemporaryFile(
-            dir=str(output_path.parent),
-            suffix='.tmp',
-            delete=False,
-            mode='w',
-            encoding='utf-8'
-        )
-        yaml.dump(config, tmp, default_flow_style=False, sort_keys=False)
-        tmp.close()
-        os.replace(tmp.name, str(output_path))
-    except Exception as e:
-        logger.warning(f"Failed to save config: {e}")
+    with open(output_path, 'w', encoding='utf-8') as f:
+        yaml.dump(config, f, default_flow_style=False, sort_keys=False)

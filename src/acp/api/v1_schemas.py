@@ -88,6 +88,7 @@ class V1JobSpecModel(BaseModel):
     config_path: str | None = None
     tags: list[str] = Field(default_factory=list)
     project_id: str | None = None
+    target_node: str | None = None
 
 
 class V1JobRecordModel(BaseModel):
@@ -119,6 +120,7 @@ class V1JobCreateRequest(BaseModel):
     config_path: str | None = None
     tags: list[str] = Field(default_factory=list)
     project_id: str | None = None
+    target_node: str | None = None
 
 
 class V1JobCreatedResponse(BaseModel):
@@ -126,6 +128,10 @@ class V1JobCreatedResponse(BaseModel):
     status: str
     workflow: str
     project_id: str | None = None
+
+
+class JobMoveRequest(BaseModel):
+    project_id: str
 
 
 class V1JobListResponse(BaseModel):
@@ -220,17 +226,155 @@ class ValidateMethodResponse(BaseModel):
     normalized_levels: dict[str, Any] = Field(default_factory=dict)
 
 
+class RemoteFileEntry(BaseModel):
+    """A single file or directory entry inside a remote job directory."""
+
+    name: str
+    size: int = 0
+    mtime: float = 0.0
+    is_dir: bool = False
+
+
+class RemoteFileListResponse(BaseModel):
+    """Response for ``GET /jobs/{id}/remote-files``."""
+
+    job_id: str
+    node: str = ""
+    remote_dir: str = ""
+    files: list[RemoteFileEntry] = Field(default_factory=list)
+    truncated: bool = False
+
+
+class RemoteLogTailResponse(BaseModel):
+    """Response for ``GET /jobs/{id}/remote-logs/{name}``."""
+
+    job_id: str
+    name: str
+    lines: list[str] = Field(default_factory=list)
+
+
+class RemoteFilePreviewResponse(BaseModel):
+    """Response for ``GET /jobs/{id}/remote-files/{path}/preview``."""
+
+    job_id: str
+    path: str
+    mode: str
+    content: str | dict[str, Any] | None = None
+    truncated: bool = False
+    size: int = 0
+
+
+class RemoteFileChecksumResponse(BaseModel):
+    """Response for ``GET /jobs/{id}/remote-files/{path}/checksum``."""
+
+    sha256: str
+
+
+class MaintenanceCleanupResponse(BaseModel):
+    """Response for ``POST /api/v1/maintenance/cleanup`` (Phase 5B).
+
+    Carries the outcome of a local disk-protection sweep.  No auth is
+    enforced in the current trusted-network deployment; see the route
+    docstring.
+    """
+
+    work_dirs_removed: int = 0
+    db_records_removed: int = 0
+    freed_bytes_est: int = 0
+    freed_human: str = ""
+    errors: list[str] = Field(default_factory=list)
+    dry_run: bool = False
+    disk_usage_before: int = 0
+    disk_usage_after: int = 0
+    capped: bool = False
+    duration_ms: int = 0
+
+
+class DiskUsageResponse(BaseModel):
+    """Response for ``GET /api/v1/maintenance/disk-usage`` (Phase 5B)."""
+
+    run_root: str
+    total_bytes: float = 0.0
+    used_bytes: float = 0.0
+    free_bytes: float = 0.0
+    percent_used: float = 0.0
+    job_count: int = 0
+    cleanup_enabled: bool = False
+
+
+class NodeStatusModel(BaseModel):
+    """Remote node status item (Phase 6)."""
+
+    name: str
+    host: str
+    status: str  # "online" | "offline" | "degraded"
+    running_jobs: int = 0
+    max_jobs: int = 0
+    disk_usage_pct: int = 0
+    last_check: str = ""
+    error: str | None = None
+
+
+class NodeListResponse(BaseModel):
+    """Response for ``GET /api/v1/nodes`` (Phase 6)."""
+
+    nodes: list[NodeStatusModel] = Field(default_factory=list)
+    auto_select: bool = True
+
+
+class NodePingResponse(BaseModel):
+    """Response for ``POST /api/v1/nodes/{name}/ping`` (Phase 6)."""
+
+    reachable: bool
+    node: str
+    status: str = "offline"
+    error: str | None = None
+
+
+class NodeBootstrapResponse(BaseModel):
+    """Response for ``POST /api/v1/nodes/{name}/bootstrap``.
+
+    Provisions the node with the ACP runtime dependencies from the synced
+    ``requirements-node.txt``.  ``stdout``/``stderr`` are pip's full output;
+    clients typically tail them for display.
+    """
+
+    node: str
+    reachable: bool
+    ok: bool = False
+    exit_code: int | None = None
+    python_executable: str = "python"
+    requirements_path: str = ""
+    sync_uploaded: int = 0
+    sync_errors: list[str] = Field(default_factory=list)
+    stdout_tail: str = ""
+    stderr_tail: str = ""
+    error: str | None = None
+
+
 __all__ = [
     "ArtifactListResponse",
     "ArtifactModel",
+    "DiskUsageResponse",
+    "JobMoveRequest",
+    "MaintenanceCleanupResponse",
     "MoleculeEmbedRequest",
     "MoleculeEmbedResponse",
     "MoleculeResolveRequest",
     "MoleculeResolveResponse",
+    "NodeBootstrapResponse",
+    "NodeListResponse",
+    "NodePingResponse",
+    "NodeStatusModel",
     "ProjectCreateRequest",
     "ProjectListResponse",
     "ProjectModel",
     "ProjectUpdateRequest",
+    "RemoteFileEntry",
+    "RemoteFileListResponse",
+    "RemoteFilePreviewResponse",
+    "RemoteFileChecksumResponse",
+    "RemoteLogTailResponse",
     "StageTaskListResponse",
     "StageTaskModel",
     "StructureAssetModel",

@@ -12,13 +12,13 @@ from acp.nmr.calibration import (
     select_conformers,
 )
 from acp.nmr.models import (
-    NMRAveragedAtomResult,
     NMRAtomShielding,
     NMRAtomShift,
+    NMRAveragedAtomResult,
     NMRConformerResult,
     NMRReport,
 )
-from acp.nmr.parser import parse_gaussian_nmr_log, parse_nmr_output
+from acp.nmr.parser import parse_gaussian_nmr_log, parse_nmr_output, parse_orca_nmr_log
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ __all__ = [
     "NMRAveragedAtomResult",
     "NMRReport",
     "parse_gaussian_nmr_log",
+    "parse_orca_nmr_log",
     "parse_nmr_output",
     "select_conformers",
     "assign_nucleus",

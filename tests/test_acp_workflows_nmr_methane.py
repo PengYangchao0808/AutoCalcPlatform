@@ -49,7 +49,7 @@ def _make_config() -> dict[str, Any]:
         "resources": {"nproc": 1, "mem": "1GB"},
         "theory": {
             "nmr": {
-                "engine": "gaussian",
+                "engine": "orca",
                 "method": "B3LYP",
                 "basis": "def2-TZVPP",
                 "solvent": "chloroform",
@@ -155,7 +155,7 @@ def _make_ensemble() -> StructureEnsemble:
     )
 
 
-def _gaussian_atom_block(
+def _orca_nucleus_block(
     atom_index: int,
     symbol: str,
     isotropic_ppm: float,
@@ -166,24 +166,24 @@ def _gaussian_atom_block(
     yy = isotropic_ppm
     zz = isotropic_ppm - spread
     return [
-        f"    {atom_index:>1}  {symbol}   Isotropic = {isotropic_ppm:8.4f}   Anisotropy = {anisotropy_ppm:8.4f}",
-        f"      XX= {xx:8.4f} XY= 0.0000 XZ= 0.0000",
-        f"      YX= 0.0000 YY= {yy:8.4f} YZ= 0.0000",
-        f"      ZX= 0.0000 ZY= 0.0000 ZZ= {zz:8.4f}",
+        f"Nucleus   {atom_index:<1}{symbol}:   isotropic = {isotropic_ppm:8.4f}   anisotropy = {anisotropy_ppm:8.4f}",
+        f"  XX= {xx:8.4f}  XY= 0.0000  XZ= 0.0000",
+        f"  YX= 0.0000  YY= {yy:8.4f}  YZ= 0.0000",
+        f"  ZX= 0.0000  ZY= 0.0000  ZZ= {zz:8.4f}",
+        "",
     ]
 
 
-def _write_fake_gaussian_log(path: Path, carbon_ppm: float, hydrogen_ppm: float) -> None:
+def _write_fake_orca_log(path: Path, carbon_ppm: float, hydrogen_ppm: float) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     lines = [
-        " Entering Gaussian System, Link 0=g16",
+        "NMR SHIELDING TENSOR",
         "",
-        " GIAO Magnetic shielding tensor (ppm):",
-        *_gaussian_atom_block(1, "C", carbon_ppm, 0.1234, 0.1200),
+        *_orca_nucleus_block(1, "C", carbon_ppm, 0.1234, 0.1200),
     ]
     for atom_index in range(2, 6):
-        lines.extend(_gaussian_atom_block(atom_index, "H", hydrogen_ppm, 0.0450, 0.0300))
-    lines.extend(["", " Normal termination of Gaussian 16."])
+        lines.extend(_orca_nucleus_block(atom_index, "H", hydrogen_ppm, 0.0450, 0.0300))
+    lines.append("Normal termination of ORCA.")
     _ = path.write_text("\n".join(lines), encoding="utf-8")
 
 
@@ -194,7 +194,7 @@ def test_run_nmr_calculation_completes_methane_pipeline_with_mock_backends(
     config = _make_config()
     conformer_calls: dict[str, Any] = {}
     backend_requests: list[str] = []
-    backend_instances: list[_FakeGaussianBackend] = []
+    backend_instances: list[_FakeOrcaBackend] = []
 
     monkeypatch.setattr(nmr_workflow, "load_config", lambda *args, **kwargs: config)
 
@@ -219,7 +219,7 @@ def test_run_nmr_calculation_completes_methane_pipeline_with_mock_backends(
         )
         return WorkflowResult(status="completed", ensemble=_make_ensemble())
 
-    class _FakeGaussianBackend:
+    class _FakeOrcaBackend:
         def __init__(self, backend_config: dict[str, Any]) -> None:
             self.config = backend_config
             self.calls: list[dict[str, Any]] = []
@@ -237,11 +237,11 @@ def test_run_nmr_calculation_completes_methane_pipeline_with_mock_backends(
         ) -> QCResult:
             target_dir = Path(output_dir or tmp_path)
             target_dir.mkdir(parents=True, exist_ok=True)
-            log_file = target_dir / f"{output_name}.log"
-            input_file = target_dir / f"{output_name}.gjf"
+            log_file = target_dir / f"{output_name}.out"
+            input_file = target_dir / f"{output_name}.inp"
             carbon_ppm, hydrogen_ppm = _METHANE_SHIELDINGS[target_dir.name]
-            _write_fake_gaussian_log(log_file, carbon_ppm, hydrogen_ppm)
-            _ = input_file.write_text("# fake methane gjf\n", encoding="utf-8")
+            _write_fake_orca_log(log_file, carbon_ppm, hydrogen_ppm)
+            _ = input_file.write_text("! B3LYP def2-TZVPP NMR\n", encoding="utf-8")
             self.calls.append(
                 {
                     "coordinates": coordinates,
@@ -256,7 +256,7 @@ def test_run_nmr_calculation_completes_methane_pipeline_with_mock_backends(
 
     def _fake_get_backend(name: str):
         backend_requests.append(name)
-        return _FakeGaussianBackend
+        return _FakeOrcaBackend
 
     monkeypatch.setattr(nmr_workflow, "run_conformer_search", _fake_run_conformer_search)
     monkeypatch.setattr(nmr_workflow, "get_backend", _fake_get_backend)
@@ -267,14 +267,14 @@ def test_run_nmr_calculation_completes_methane_pipeline_with_mock_backends(
         conformer_protocol="ext",
         config=config,
         name="methane",
-        backend_name="gaussian",
+        backend_name="orca",
         references=dict(_METHANE_REFERENCES),
     )
 
     assert result.status == "completed"
     assert result.ensemble is not None
     assert result.stages_completed == _EXPECTED_STAGES
-    assert backend_requests == ["gaussian"]
+    assert backend_requests == ["orca"]
     assert conformer_calls == {
         "input_source": "C",
         "output_dir": tmp_path / "conformer",
@@ -308,7 +308,7 @@ def test_run_nmr_calculation_completes_methane_pipeline_with_mock_backends(
 
     payload = json.loads(report_path.read_text(encoding="utf-8"))
     assert payload["molecule_name"] == "methane"
-    assert payload["backend"] == "gaussian"
+    assert payload["backend"] == "orca"
     assert payload["method"] == "B3LYP"
     assert payload["basis"] == "def2-TZVPP"
     assert len(payload["conformers"]) == 3

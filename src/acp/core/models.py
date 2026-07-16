@@ -22,6 +22,35 @@ if TYPE_CHECKING:
     from conformer_search.core.candidates import CandidateSet, ConformerCandidate
 
 
+def zip_strict(*iterables):
+    """Like :func:`zip` with ``strict=True`` (PEP 618), but Python 3.9-safe.
+
+    ``zip(..., strict=True)`` was added in Python 3.10; this helper provides
+    the same length-mismatch safety on interpreters that lack the keyword
+    (e.g. remote compute nodes still on 3.9).  On 3.10+ it defers to the
+    builtin for native performance.
+
+    Raises:
+        ValueError: If the iterables have unequal lengths.
+    """
+    import sys
+
+    if sys.version_info >= (3, 10):
+        return zip(*iterables, strict=True)  # type: ignore[call-arg]
+    # 3.9 fallback: materialise and verify equal length.
+    lists = [list(it) for it in iterables]
+    if not lists:
+        return iter(())
+    first = len(lists[0])
+    for i, lst in enumerate(lists[1:], start=1):
+        if len(lst) != first:
+            raise ValueError(
+                f"zip_strict(): iterable {i} has length {len(lst)} "
+                f"which does not match iterable 0 of length {first}"
+            )
+    return iter(zip(*lists))
+
+
 def _coerce_int(value: object, default: int = 0) -> int:
     """Return an integer value with a safe fallback."""
     if isinstance(value, (int, np.integer)):
@@ -221,7 +250,34 @@ class StructureRecord:
     @classmethod
     def from_conformer_candidate(cls, candidate: ConformerCandidate) -> StructureRecord:
         """Create a generic record from a legacy candidate."""
-        return candidate.to_structure_record()
+        files: dict[str, object] = {}
+        if candidate.source_file is not None:
+            files["source"] = candidate.source_file
+        free_energy = candidate.g_conc if candidate.g_conc is not None else candidate.gibbs_energy
+        return cls(
+            structure=Structure(
+                id=str(candidate.metadata.get("structure_id", f"conf_{candidate.index:03d}")),
+                charge=int(candidate.metadata.get("charge", 0)),
+                multiplicity=int(candidate.metadata.get("multiplicity", 1)),
+                symbols=list(candidate.symbols),
+                coordinates=np.array(candidate.coordinates, copy=True),
+                metadata=dict(candidate.metadata),
+            ),
+            energy_hartree=candidate.energy,
+            free_energy_hartree=free_energy,
+            weight=candidate.weight,
+            properties={
+                "index": candidate.index,
+                "rank": candidate.rank,
+                "gibbs_energy_hartree": candidate.gibbs_energy,
+                "gibbs_correction_hartree": candidate.gibbs_correction,
+                "h_correction_hartree": candidate.h_correction,
+                "u_correction_hartree": candidate.u_correction,
+                "entropy_total_au": candidate.s_total,
+                "g_conc_hartree": candidate.g_conc,
+            },
+            files=files,
+        )
 
 
 @dataclass
@@ -306,7 +362,11 @@ class StructureEnsemble:
     @classmethod
     def from_candidate_set(cls, candidate_set: CandidateSet) -> StructureEnsemble:
         """Create a generic ensemble from a legacy candidate set."""
-        return candidate_set.to_structure_ensemble()
+        return cls(
+            records=[StructureRecord.from_conformer_candidate(c) for c in candidate_set.candidates],
+            temperature=candidate_set.temperature,
+            metadata={"reference_energy_hartree": candidate_set.reference_energy},
+        )
 
 
 @dataclass

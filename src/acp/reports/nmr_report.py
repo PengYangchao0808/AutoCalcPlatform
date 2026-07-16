@@ -9,8 +9,6 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from openpyxl import Workbook
-
 from acp.nmr.models import NMRReport
 
 logger = logging.getLogger(__name__)
@@ -47,7 +45,15 @@ def write_json_report(report: NMRReport, path: Path) -> None:
 
 
 def write_xlsx_report(report: NMRReport, path: Path) -> None:
-    """Write an :class:`NMRReport` to an Excel workbook."""
+    """Write an :class:`NMRReport` to an Excel workbook.
+
+    Raises:
+        ImportError: If ``openpyxl`` is not installed.  The dependency is
+            imported lazily so that merely importing this module (or the NMR
+            workflow) does not require ``openpyxl`` — only XLSX emission does.
+    """
+    from openpyxl import Workbook
+
     workbook = Workbook()
 
     summary_sheet = workbook.active

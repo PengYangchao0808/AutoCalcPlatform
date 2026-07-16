@@ -267,17 +267,18 @@ class MolecularInputHandler:
             MolecularInput instance
         """
         from conformer_search.utils.file_io import read_xyz, read_xyz_with_energy
-        
+
+        xyz_path = Path(xyz_path)
         coordinates, symbols = read_xyz(xyz_path)
-        
+
         coords_with_energy, _, energy = read_xyz_with_energy(xyz_path)
         if energy is not None:
             coordinates = coords_with_energy
-        
+
         charge = charge if charge is not None else 0
         multiplicity = multiplicity if multiplicity is not None else 1
-        
-        name = name or Path(xyz_path).stem
+
+        name = name or xyz_path.stem
         
         return MolecularInput(
             name=name,
@@ -310,14 +311,15 @@ class MolecularInputHandler:
             MolecularInput instance
         """
         from conformer_search.utils.file_io import read_gjf
-        
+
+        gjf_path = Path(gjf_path)
         coordinates, symbols, file_charge, file_multiplicity = read_gjf(gjf_path)
-        
+
         if charge is None:
             charge = file_charge
         if multiplicity is None:
             multiplicity = file_multiplicity
-        
+
         name = name or gjf_path.stem
         
         return MolecularInput(
@@ -351,14 +353,15 @@ class MolecularInputHandler:
             MolecularInput instance
         """
         from conformer_search.utils.geometry_tools import LogParser
-        
+
+        log_path = Path(log_path)
         coords, symbols, error = LogParser.extract_last_converged_coords(log_path)
-        
+
         if coords is None:
             raise ValueError(f"Could not parse coordinates from {log_path}: {error}")
-        
+
         name = name or log_path.stem
-        
+
         return MolecularInput(
             name=name,
             coordinates=coords,

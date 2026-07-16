@@ -6,7 +6,7 @@ from __future__ import annotations
 import logging
 import math
 
-from acp.core.models import StructureEnsemble, StructureRecord
+from acp.core.models import StructureEnsemble, StructureRecord, zip_strict
 from acp.nmr.models import (
     NMRAveragedAtomResult,
     NMRAtomShielding,
@@ -151,7 +151,7 @@ def average_atom_results(
     weights = _boltzmann_weights(conformer_results, temperature)
     grouped: dict[tuple[int, str, str | None], list[tuple[NMRAtomShift, float]]] = {}
 
-    for conformer, weight in zip(conformer_results, weights, strict=True):
+    for conformer, weight in zip_strict(conformer_results, weights):
         for shift in _iter_atom_shifts(conformer):
             key = (shift.atom_index, shift.symbol, shift.nucleus)
             grouped.setdefault(key, []).append((shift, weight))

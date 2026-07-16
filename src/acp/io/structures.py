@@ -38,6 +38,7 @@ class StructureReader:
         source: str | Path,
         charge: int | None = None,
         multiplicity: int | None = None,
+        name: str | None = None,
     ) -> Structure:
         """Auto-detect format and return a Structure.
 
@@ -45,6 +46,8 @@ class StructureReader:
             source: SMILES string or path to a structure file.
             charge: Molecular charge (overrides auto-detected value).
             multiplicity: Spin multiplicity (overrides auto-detected value).
+            name: Optional molecule name forwarded to the parser; when omitted
+                the parser derives it from the file stem.
 
         Returns:
             Structure instance with parsed coordinates and metadata.
@@ -53,6 +56,7 @@ class StructureReader:
 
         result = MolecularInputHandler.from_source(
             source,
+            name=name,
             charge=charge,
             multiplicity=multiplicity,
         )

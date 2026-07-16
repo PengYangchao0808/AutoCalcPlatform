@@ -72,23 +72,24 @@ class _FakeStagePlanProvider:
 
 class _ConformerStagePlanProvider:
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        protocol = str(spec.method.get("protocol") or "censo-full").strip().lower()
-        if protocol == "reference-sp":
-            return [StagePlan("single_point")]
-        if protocol == "ext":
+        protocol = str(spec.method.get("protocol") or "ext").strip().lower()
+        # ``zero`` is a single-point-only pipeline (no opt/freq/thermo).
+        if protocol == "zero":
             return [
                 StagePlan("embed_smiles"),
                 StagePlan("crest_search"),
                 StagePlan("isostat_cluster"),
+                StagePlan("single_point"),
             ]
+        # ext / full / lite / benchmark — full DFT handoff pipeline.
         return [
             StagePlan("embed_smiles"),
             StagePlan("crest_search"),
             StagePlan("isostat_cluster"),
-            StagePlan("censo_part0"),
-            StagePlan("censo_part1"),
-            StagePlan("censo_part2"),
-            StagePlan("censo_part3"),
+            StagePlan("dft_optimize"),
+            StagePlan("frequency"),
+            StagePlan("single_point"),
+            StagePlan("shermo_thermo"),
         ]
 
 

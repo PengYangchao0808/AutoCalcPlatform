@@ -22,13 +22,7 @@ class KeywordTranslator:
 
     @staticmethod
     def to_gaussian_dispersion(dispersion_raw: str) -> str:
-        """
-        Maps generic 'GD3BJ' -> Gaussian 'em=GD3BJ' (Concise format).
-        """
-        if not dispersion_raw: return ""
-        d = dispersion_raw.upper()
-        if d in ["GD3BJ", "D3BJ"]: return "em=GD3BJ"
-        if d in ["GD3", "D3"]: return "em=GD3"
+        # Deprecated: dispersion now embedded in method name
         return ""
 
     @staticmethod

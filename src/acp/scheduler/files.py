@@ -25,13 +25,21 @@ def build_manifest(work_dir: Path | str) -> dict[str, Any]:
     files: list[dict[str, Any]] = []
     truncated = False
     for path in sorted(root.rglob("*")):
-        if path.is_dir():
-            continue
         if path.name in _IGNORED_NAMES or path.suffix in _IGNORED_SUFFIXES:
             continue
         try:
             stat = path.stat()
         except OSError:
+            continue
+        if path.is_dir():
+            files.append(
+                {
+                    "path": str(path.relative_to(root)),
+                    "size": 0,
+                    "modified": stat.st_mtime,
+                    "is_dir": True,
+                }
+            )
             continue
         if stat.st_size > _MAX_FILE_BYTES:
             continue
@@ -40,6 +48,7 @@ def build_manifest(work_dir: Path | str) -> dict[str, Any]:
                 "path": str(path.relative_to(root)),
                 "size": stat.st_size,
                 "modified": stat.st_mtime,
+                "is_dir": False,
             }
         )
         if len(files) >= 1000:

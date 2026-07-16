@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
+import acp.workflows.benchmark as benchmark_workflow
 from acp import cli as acp_cli
 from acp.core.workflow import WorkflowResult
-import acp.workflows.benchmark as benchmark_workflow
 
 
 def _write_input_xyz(path: Path) -> None:
@@ -83,7 +83,9 @@ def test_benchmark_runner_computes_metrics_and_writes_outputs(tmp_path, monkeypa
                 _candidate("conf_000", -10.0015, 0.4),
             ],
         }
-        metadata = _workflow_metadata(Path(output_dir), name or "molecule", candidates_by_protocol[protocol])
+        metadata = _workflow_metadata(
+            Path(output_dir), name or "molecule", candidates_by_protocol[protocol]
+        )
         return WorkflowResult(status="completed", metadata=metadata)
 
     monkeypatch.setattr(benchmark_workflow, "run_conformer_search", _fake_run_conformer_search)
@@ -153,12 +155,7 @@ def test_benchmark_runner_uses_previous_ensemble_for_reference_sp(tmp_path, monk
     summary = runner.run(input_xyz)
 
     censo_ensemble = (
-        tmp_path
-        / "benchmark"
-        / "censo-full"
-        / "molecule"
-        / "finalDFT"
-        / "all_conformers.xyz"
+        tmp_path / "benchmark" / "censo-full" / "molecule" / "finalDFT" / "all_conformers.xyz"
     )
     assert protocol_inputs["censo-full"] == str(tmp_path / "benchmark" / "shared_input.xyz")
     assert protocol_inputs["reference-sp"] == str(censo_ensemble)

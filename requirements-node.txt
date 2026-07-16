@@ -1,0 +1,18 @@
+# ACP remote compute-node runtime dependencies
+# ============================================
+# Installed by `NodeManager.bootstrap_node()` (POST /api/v1/nodes/{name}/bootstrap)
+# and auto-synced to each node's ``remote_code_dir`` by :class:`CodeSyncer`.
+#
+# This is the execution-side subset of the project dependencies declared in
+# ``pyproject.toml`` — the API/server/scheduler/dev tooling
+# (fastapi, uvicorn, paramiko, pytest, ruff, ...) is NOT needed on compute
+# nodes and is deliberately omitted to keep nodes slim.
+#
+# Floors are chosen to remain installable on Python 3.9+ nodes so that a node
+# whose system interpreter is 3.9 can still be bootstrapped; the server may
+# run newer versions.  Add any new runtime import used by ``acp run <workflow>``
+# here as well as in ``pyproject.toml`` so bootstrapped nodes stay in sync.
+numpy>=1.26
+rdkit>=2022.09.1
+openpyxl>=3.1
+pyyaml>=6.0

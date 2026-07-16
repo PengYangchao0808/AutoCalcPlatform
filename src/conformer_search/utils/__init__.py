@@ -22,7 +22,10 @@ from conformer_search.utils.file_io import (
     write_xyz_multiframe,
     read_gjf,
     write_gjf,
+    read_energy_from_gaussian,
     read_xyz_with_energy,
+    read_json,
+    write_json,
     ensure_dir,
 )
 
@@ -45,6 +48,7 @@ from conformer_search.utils.keyword_translator import KeywordTranslator
 from conformer_search.utils.solvent_map import (
     gaussian_pcm_keyword,
     orca_smd_solvent,
+    xtb_solvent,
     SOLVENT_ALIASES,
 )
 
@@ -62,7 +66,10 @@ __all__ = [
     "write_xyz_multiframe",
     "read_gjf",
     "write_gjf",
+    "read_energy_from_gaussian",
     "read_xyz_with_energy",
+    "read_json",
+    "write_json",
     "ensure_dir",
     "GeometryUtils",
     "LogParser",
@@ -75,5 +82,6 @@ __all__ = [
     "KeywordTranslator",
     "gaussian_pcm_keyword",
     "orca_smd_solvent",
+    "xtb_solvent",
     "SOLVENT_ALIASES",
 ]

@@ -28,21 +28,20 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
-from acp.workflows.conformer import run_conformer_search
-from acp.workflows.mechanism import run_mechanism_analysis
-from acp.workflows.nmr import run_nmr_calculation
-
 logger = logging.getLogger(__name__)
 
 ALL_PROTOCOLS = [
     "ext",
-    "censo-zero", "censo-lite", "censo-full",
-    "censo-full-safe", "allopt", "reference-sp",
+    "full",
+    "lite",
+    "zero",
+    "benchmark",
 ]
 
 # ---------------------------------------------------------------------------
 # Logging helpers
 # ---------------------------------------------------------------------------
+
 
 def setup_logging(level: str = "INFO") -> None:
     """Configure root logger with the given level."""
@@ -65,11 +64,37 @@ def _build_config(args: argparse.Namespace) -> dict[str, Any]:
 
     if getattr(args, "nproc", None) is not None:
         config.setdefault("resources", {})["nproc"] = args.nproc
+        config.setdefault("executables", {}).setdefault("orca", {})["nproc"] = args.nproc
 
     if getattr(args, "mem", None) is not None:
         config.setdefault("resources", {})["mem"] = args.mem
 
     return config
+
+
+def _parse_levels(levels_value: str | None) -> dict[str, Any] | None:
+    """Parse ``--levels`` argument: either a JSON string or a JSON file path."""
+    if not levels_value:
+        return None
+
+    text = levels_value.strip()
+
+    # If it looks like JSON, parse it directly. This avoids treating a long JSON
+    # string as a file path, which can fail with "File name too long" on pathlib.
+    if not (text.startswith("{") or text.startswith("[")):
+        candidate = Path(text)
+        if candidate.exists() and candidate.is_file():
+            text = candidate.read_text(encoding="utf-8")
+
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"--levels must be valid JSON or a path to a JSON file: {exc}")
+
+    if not isinstance(parsed, dict):
+        raise ValueError("--levels must be a JSON object mapping stage names to settings")
+
+    return parsed
 
 
 def _parse_nmr_references(values: list[str]) -> dict[str, float] | None:
@@ -81,16 +106,12 @@ def _parse_nmr_references(values: list[str]) -> dict[str, float] | None:
     for item in values:
         nucleus, separator, raw_value = item.partition("=")
         if separator != "=" or not nucleus.strip() or not raw_value.strip():
-            raise ValueError(
-                f"Invalid NMR reference '{item}'. Expected the form NUCLEUS=VALUE."
-            )
+            raise ValueError(f"Invalid NMR reference '{item}'. Expected the form NUCLEUS=VALUE.")
 
         try:
             references[nucleus.strip()] = float(raw_value)
         except ValueError as exc:
-            raise ValueError(
-                f"Invalid NMR reference '{item}'. VALUE must be a float."
-            ) from exc
+            raise ValueError(f"Invalid NMR reference '{item}'. VALUE must be a float.") from exc
 
     return references
 
@@ -124,15 +145,16 @@ def _apply_nmr_config_overrides(
 def _render_protocol_info(spec: Any) -> str:
     """Render a human-readable protocol summary."""
     from acp.workflows.conformer import get_protocol_stages
-    from conformer_search.core.specs import ConformerWorkflowSpec
+    from conformer_search.core.protocols import ProtocolSpec
 
-    assert isinstance(spec, ConformerWorkflowSpec)
+    assert isinstance(spec, ProtocolSpec)
 
     lines = [
         f"Protocol: {spec.name}",
-        f"Family:   {spec.family}",
-        f"Search:   {spec.search.backend} ({spec.search.mode})",
-        f"Cluster:  {spec.search.clusterer}",
+        f"Two-stage CREST: {spec.two_stage_enabled}",
+        f"Ngeom default:   {spec.ngeom_default}",
+        f"Opt engine:      {spec.opt_engine}",
+        f"SP engine:       {spec.sp_engine}",
         "Stages:",
     ]
     try:
@@ -142,51 +164,34 @@ def _render_protocol_info(spec: Any) -> str:
     except Exception:
         lines.append("  (unable to resolve stages)")
 
-    if spec.energy.final_sp_method:
-        lines.append(f"Final SP: {spec.energy.final_sp_method}/{spec.energy.final_basis}")
-    if spec.thermo.backend != "none":
-        lines.append(f"Thermo:   {spec.thermo.backend}")
+    lines.append(f"Final SP: {spec.final_sp_method}/{spec.final_sp_basis}")
     return "\n".join(lines)
 
 
 def _handle_protocol(args: argparse.Namespace) -> int:
     """Execute protocol introspection subcommands."""
-    from conformer_search.core.specs import get_protocol
-
     if args.protocol_action == "list":
         print("\n".join(ALL_PROTOCOLS))
         return 0
 
     if args.protocol_action == "info":
         try:
-            spec = get_protocol(args.name)
+            from conformer_search.config import load_config
+            from conformer_search.core.protocols import resolve_protocol_spec
+
+            cfg = load_config()
+            spec = resolve_protocol_spec(cfg, args.name)
         except KeyError:
             print(f"Unknown protocol: {args.name}", file=sys.stderr)
             return 1
         print(_render_protocol_info(spec))
         return 0
 
-    return 1
-
-
-def _guard_reference_sp_input(protocol: str, input_source: str | None) -> None:
-    """Reject SMILES-style reference-sp input before workflow execution."""
-    if protocol != "reference-sp" or not input_source:
-        return
-    if Path(input_source).is_file():
-        return
-
-    print(
-        "reference-sp requires an existing conformer ensemble. Use censo-full or allopt first, then: "
-        "acp conformer <output>/final_ensemble.xyz --protocol reference-sp",
-        file=sys.stderr,
-    )
-    sys.exit(1)
-
 
 # ---------------------------------------------------------------------------
 # Parser construction
 # ---------------------------------------------------------------------------
+
 
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level ACP argument parser."""
@@ -239,11 +244,19 @@ Examples:
         help="Configuration YAML file",
     )
     conf.add_argument(
+        "--levels",
+        type=str,
+        help=(
+            "JSON string or path to JSON file with per-stage method overrides "
+            '(e.g. \'{"optimization": {"method": "B3LYP", "solvent": "methanol"}}\')'
+        ),
+    )
+    conf.add_argument(
         "--protocol",
         type=str,
         choices=ALL_PROTOCOLS,
-        default="ext",
-        help="Conformer search protocol (default: ext)",
+        default="lite",
+        help="Conformer search protocol (default: lite)",
     )
     conf.add_argument(
         "--list-protocols",
@@ -307,7 +320,7 @@ Examples:
         epilog="""\
 Examples:
   acp run nmr --input "CCO" --output ./nmr_results
-  acp run nmr --input molecule.xyz --protocol censo-full --backend gaussian
+  acp run nmr --input molecule.xyz --protocol full --backend gaussian
   acp run nmr --input "CCO" --reference 1H=31.88 --reference 13C=186.10
         """,
     )
@@ -368,7 +381,7 @@ Examples:
     nmr.add_argument(
         "--protocol",
         type=str,
-        choices=["ext", "censo-zero", "censo-lite", "censo-full"],
+        choices=ALL_PROTOCOLS,
         default="ext",
         help="Conformer pre-step protocol (default: ext)",
     )
@@ -525,7 +538,7 @@ Examples:
 Examples:
   acp benchmark --input molecule.xyz --output ./benchmark_results
   acp benchmark --input molecule.xyz --benchmark-level standard
-  acp benchmark --input molecule.xyz --protocols censo-zero,censo-lite,censo-full
+  acp benchmark --input molecule.xyz --protocols zero,lite,full
         """,
     )
     bench.add_argument("--input", type=str, required=True, help="Input file path (XYZ)")
@@ -573,7 +586,7 @@ Examples:
         epilog="""\
 Examples:
   acp protocol list
-  acp protocol info censo-full
+  acp protocol info full
         """,
     )
     proto_sub = proto.add_subparsers(dest="protocol_action", required=True)
@@ -588,6 +601,7 @@ Examples:
 # Workflow handlers
 # ---------------------------------------------------------------------------
 
+
 def _handle_conformer(args: argparse.Namespace) -> int:
     """Execute the conformer search workflow."""
 
@@ -599,8 +613,12 @@ def _handle_conformer(args: argparse.Namespace) -> int:
     # --show-protocol: look up spec and print summary
     if args.show_protocol:
         try:
-            from conformer_search.core.specs import get_protocol
-            spec = get_protocol(args.show_protocol)
+            from conformer_search.config import load_config
+            from conformer_search.core.protocols import resolve_protocol_spec
+
+            cfg = load_config()
+            levels = _parse_levels(getattr(args, "levels", None))
+            spec = resolve_protocol_spec(cfg, args.show_protocol, levels=levels)
         except KeyError:
             print(f"Unknown protocol: {args.show_protocol}", file=sys.stderr)
             return 1
@@ -611,8 +629,6 @@ def _handle_conformer(args: argparse.Namespace) -> int:
     if not args.input and not args.batch_file:
         print("Error: --input or --batch-file is required", file=sys.stderr)
         return 1
-
-    _guard_reference_sp_input(args.protocol, args.input)
 
     setup_logging(args.log_level)
     cfg = _build_config(args)
@@ -638,6 +654,8 @@ def _handle_conformer_single(
     output_dir: Path,
 ) -> int:
     """Run conformer search for a single molecule."""
+    from acp.workflows.conformer import run_conformer_search
+
     logger.info("ACP conformer workflow — single molecule")
 
     # Save effective config if requested
@@ -653,6 +671,7 @@ def _handle_conformer_single(
         protocol=args.protocol,
         config=cfg,
         name=args.name,
+        levels=_parse_levels(getattr(args, "levels", None)),
     )
 
     if result.status == "completed":
@@ -673,6 +692,7 @@ def _handle_conformer_batch(
     output_dir: Path,
 ) -> int:
     """Run conformer search for multiple molecules (batch mode)."""
+    from acp.workflows.conformer import run_conformer_search
     from conformer_search.io import load_batch_inputs
 
     logger.info("ACP conformer workflow — batch mode")
@@ -693,6 +713,7 @@ def _handle_conformer_batch(
                 protocol=args.protocol,
                 config=cfg,
                 name=mi.name,
+                levels=_parse_levels(getattr(args, "levels", None)),
             )
             if r.status == "completed":
                 results.append(
@@ -732,11 +753,6 @@ def _handle_conformer_batch(
 
 def _handle_nmr(args: argparse.Namespace) -> int:
     """Execute the NMR workflow."""
-    if args.backend and args.backend.strip().lower() == "orca":
-        import sys
-        print("ERROR: ORCA NMR is not implemented yet. Use --backend gaussian.", file=sys.stderr)
-        return 1
-
     setup_logging(args.log_level)
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -751,6 +767,8 @@ def _handle_nmr(args: argparse.Namespace) -> int:
 
             save_cfg(cfg, Path(args.save_config))
             logger.info("Configuration saved to: %s", args.save_config)
+
+        from acp.workflows.nmr import run_nmr_calculation
 
         result = run_nmr_calculation(
             input_source=args.input,
@@ -793,6 +811,8 @@ def _handle_mechanism(args: argparse.Namespace) -> int:
 
     try:
         cfg = _build_config(args)
+        from acp.workflows.mechanism import run_mechanism_analysis
+
         result = run_mechanism_analysis(
             input_source=args.input,
             output_dir=output_dir,
@@ -816,8 +836,12 @@ def _handle_mechanism(args: argparse.Namespace) -> int:
         )
         logger.info("Mechanism workflow completed successfully")
         logger.info("  Structures          : %s", result.metadata.get("n_structures", "N/A"))
-        logger.info("  Forward barrier     : %s", energy_profile.get("forward_barrier_kcal_mol", "N/A"))
-        logger.info("  Reaction energy     : %s", energy_profile.get("reaction_energy_kcal_mol", "N/A"))
+        logger.info(
+            "  Forward barrier     : %s", energy_profile.get("forward_barrier_kcal_mol", "N/A")
+        )
+        logger.info(
+            "  Reaction energy     : %s", energy_profile.get("reaction_energy_kcal_mol", "N/A")
+        )
         return 0
 
     logger.error("Mechanism workflow failed: %s", result.error)
@@ -830,7 +854,7 @@ def _handle_serve(args: argparse.Namespace) -> int:
         import uvicorn
     except ImportError:
         print(
-            "ERROR: uvicorn is not installed. Run: pip install -e \".[api]\"",
+            'ERROR: uvicorn is not installed. Run: pip install -e ".[api]"',
             file=sys.stderr,
         )
         return 1
@@ -954,6 +978,7 @@ def _handle_benchmark(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def main(argv: list[str] | None = None) -> int:
     """

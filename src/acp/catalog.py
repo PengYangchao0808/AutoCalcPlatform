@@ -3,43 +3,123 @@ from __future__ import annotations
 from typing import Any
 
 WORKFLOW_CATALOG: list[dict[str, Any]] = [
-    {"id": "singlepoint", "label": "Single Point Energy", "label_zh": "\u5355\u70b9\u80fd\u8ba1\u7b97", "category": "simple",
-     "description": "Compute energy at current geometry", "method_schema_id": "dft_singlepoint",
-     "default_backend": "gaussian", "requires_binaries": ["gaussian"], "status": "planned"},
-    {"id": "optimize", "label": "Geometry Optimization", "label_zh": "\u51e0\u4f55\u4f18\u5316", "category": "simple",
-     "description": "Optimize molecular geometry", "method_schema_id": "dft_optimize",
-     "default_backend": "gaussian", "requires_binaries": ["gaussian"], "status": "planned"},
-    {"id": "frequency", "label": "Frequency Calculation", "label_zh": "\u9891\u7387\u8ba1\u7b97", "category": "simple",
-     "description": "Compute vibrational frequencies", "method_schema_id": "dft_frequency",
-     "default_backend": "gaussian", "requires_binaries": ["gaussian"], "status": "planned"},
-    {"id": "optfreq", "label": "Optimization + Frequency", "label_zh": "\u4f18\u5316+\u9891\u7387", "category": "simple",
-     "description": "Optimize then compute frequencies", "method_schema_id": "dft_optfreq",
-     "default_backend": "gaussian", "requires_binaries": ["gaussian"], "status": "planned"},
-    {"id": "xtb_optimize", "label": "xTB Optimization", "label_zh": "xTB \u4f18\u5316", "category": "simple",
-     "description": "Fast semi-empirical optimization with xTB", "method_schema_id": "xtb_optimize",
-     "default_backend": "xtb", "requires_binaries": ["xtb"], "status": "planned"},
-    {"id": "conformer", "label": "Conformer Search", "label_zh": "\u6784\u8c61\u641c\u7d22", "category": "preset",
-     "description": "CREST conformer search + DFT refinement + thermo", "method_schema_id": "confsearch",
-     "default_backend": "crest", "requires_binaries": ["crest", "gaussian"], "status": "active"},
-    {"id": "nmr", "label": "NMR Shielding", "label_zh": "NMR \u5c4f\u853d\u8ba1\u7b97", "category": "preset",
-     "description": "GIAO NMR shielding + Boltzmann averaging", "method_schema_id": "nmr",
-     "default_backend": "gaussian", "requires_binaries": ["gaussian"], "status": "active"},
-    {"id": "benchmark", "label": "Benchmark", "label_zh": "\u57fa\u51c6\u6d4b\u8bd5", "category": "preset",
-     "description": "Compare protocols/methods across test set", "method_schema_id": "benchmark",
-     "default_backend": "gaussian", "requires_binaries": ["gaussian"], "status": "active"},
-    {"id": "mechanism", "label": "Mechanism / TS", "label_zh": "\u673a\u7406\u7814\u7a76 / \u8fc7\u6e21\u6001", "category": "preset",
-     "description": "TS guess + optimization + IRC verification", "method_schema_id": "mechanism",
-     "default_backend": "gaussian", "requires_binaries": ["gaussian"], "status": "planned"},
-    {"id": "custom_sequence", "label": "Custom Task Sequence", "label_zh": "\u81ea\u5b9a\u4e49\u4efb\u52a1\u5e8f\u5217", "category": "custom",
-     "description": "Build a linear pipeline of calculation blocks", "method_schema_id": "custom",
-     "default_backend": "", "requires_binaries": [], "status": "planned"},
+    {
+        "id": "singlepoint",
+        "label": "Single Point Energy",
+        "label_zh": "\u5355\u70b9\u80fd\u8ba1\u7b97",
+        "category": "simple",
+        "description": "Compute energy at current geometry",
+        "method_schema_id": "dft_singlepoint",
+        "default_backend": "gaussian",
+        "requires_binaries": ["gaussian"],
+        "status": "planned",
+    },
+    {
+        "id": "optimize",
+        "label": "Geometry Optimization",
+        "label_zh": "\u51e0\u4f55\u4f18\u5316",
+        "category": "simple",
+        "description": "Optimize molecular geometry",
+        "method_schema_id": "dft_optimize",
+        "default_backend": "gaussian",
+        "requires_binaries": ["gaussian"],
+        "status": "planned",
+    },
+    {
+        "id": "frequency",
+        "label": "Frequency Calculation",
+        "label_zh": "\u9891\u7387\u8ba1\u7b97",
+        "category": "simple",
+        "description": "Compute vibrational frequencies",
+        "method_schema_id": "dft_frequency",
+        "default_backend": "gaussian",
+        "requires_binaries": ["gaussian"],
+        "status": "planned",
+    },
+    {
+        "id": "optfreq",
+        "label": "Optimization + Frequency",
+        "label_zh": "\u4f18\u5316+\u9891\u7387",
+        "category": "simple",
+        "description": "Optimize then compute frequencies",
+        "method_schema_id": "dft_optfreq",
+        "default_backend": "gaussian",
+        "requires_binaries": ["gaussian"],
+        "status": "planned",
+    },
+    {
+        "id": "xtb_optimize",
+        "label": "xTB Optimization",
+        "label_zh": "xTB \u4f18\u5316",
+        "category": "simple",
+        "description": "Fast semi-empirical optimization with xTB",
+        "method_schema_id": "xtb_optimize",
+        "default_backend": "xtb",
+        "requires_binaries": ["xtb"],
+        "status": "planned",
+    },
+    {
+        "id": "conformer",
+        "label": "Conformer Search",
+        "label_zh": "\u6784\u8c61\u641c\u7d22",
+        "category": "preset",
+        "description": "CREST conformer search + DFT refinement + thermo",
+        "method_schema_id": "confsearch",
+        "default_backend": "crest",
+        "requires_binaries": ["crest", "gaussian"],
+        "status": "active",
+    },
+    {
+        "id": "nmr",
+        "label": "NMR Shielding",
+        "label_zh": "NMR \u5c4f\u853d\u8ba1\u7b97",
+        "category": "preset",
+        "description": "GIAO NMR shielding + Boltzmann averaging",
+        "method_schema_id": "nmr",
+        "default_backend": "gaussian",
+        "requires_binaries": ["gaussian"],
+        "status": "active",
+    },
+    {
+        "id": "benchmark",
+        "label": "Benchmark",
+        "label_zh": "\u57fa\u51c6\u6d4b\u8bd5",
+        "category": "preset",
+        "description": "Compare protocols/methods across test set",
+        "method_schema_id": "benchmark",
+        "default_backend": "gaussian",
+        "requires_binaries": ["gaussian"],
+        "status": "active",
+    },
+    {
+        "id": "mechanism",
+        "label": "Mechanism / TS",
+        "label_zh": "\u673a\u7406\u7814\u7a76 / \u8fc7\u6e21\u6001",
+        "category": "preset",
+        "description": "TS guess + optimization + IRC verification",
+        "method_schema_id": "mechanism",
+        "default_backend": "gaussian",
+        "requires_binaries": ["gaussian"],
+        "status": "planned",
+    },
+    {
+        "id": "custom_sequence",
+        "label": "Custom Task Sequence",
+        "label_zh": "\u81ea\u5b9a\u4e49\u4efb\u52a1\u5e8f\u5217",
+        "category": "custom",
+        "description": "Build a linear pipeline of calculation blocks",
+        "method_schema_id": "custom",
+        "default_backend": "",
+        "requires_binaries": [],
+        "status": "planned",
+    },
 ]
 
 FIELD_DEFINITIONS: dict[str, Any] = {
     "functional": {
         "type": "select",
         "per_backend": {
-            "gaussian": ["B3LYP", "PBE0", "M06-2X", "wB97X-D", "wB97X-D4", "r2SCAN-3c"],
+            "gaussian": ["B3LYP", "PBE0", "M06-2X", "wB97X-D", "wB97X-D4"],
             "orca": ["B3LYP", "PBE0", "wB97X-D4", "r2SCAN-3c", "DLPNO-CCSD(T)"],
             "xtb": ["GFN0-xTB", "GFN1-xTB", "GFN2-xTB"],
         },
@@ -48,32 +128,94 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     "basis": {
         "type": "select",
         "per_backend": {
-            "gaussian": ["def2-SVP", "def2-TZVP", "def2-TZVPP", "def2-TZVPPD", "6-31G(d)", "cc-pVTZ", "aug-cc-pVTZ"],
-            "orca": ["def2-SVP", "def2-TZVP", "def2-TZVPP", "def2-TZVPPD", "cc-pVTZ", "cc-pwCVTZ"],
+            "gaussian": [
+                "def2-SVP",
+                "def2-TZVP",
+                "def2-TZVPP",
+                "def2-TZVPPD",
+                "6-31G(d)",
+                "cc-pVTZ",
+                "aug-cc-pVTZ",
+            ],
+            "orca": [
+                "def2-SVP",
+                "def2-TZVP",
+                "def2-mTZVPP",
+                "def2-TZVPP",
+                "def2-TZVPPD",
+                "cc-pVTZ",
+                "cc-pwCVTZ",
+            ],
         },
         "default": {"*": "def2-SVP"},
     },
-    "dispersion": {"type": "select", "options": ["none", "D3", "D3BJ", "D4"], "default": {"*": "D4"}},
+    "dispersion": {
+        "type": "select",
+        "options": ["none", "D3", "D3BJ", "D4"],
+        "default": {"*": "D4"},
+    },
     "solvent_model": {
         "type": "select",
-        "per_backend": {"gaussian": ["none", "CPCM", "SMD"], "orca": ["none", "CPCM", "COSMO"], "xtb": ["none", "ALPB", "GBSA"]},
+        "per_backend": {
+            "gaussian": ["none", "CPCM", "SMD"],
+            "orca": ["none", "CPCM", "COSMO"],
+            "xtb": ["none", "ALPB", "GBSA"],
+        },
         "default": {"*": "none"},
     },
     "solvent": {
         "type": "select",
-        "options": ["none", "water", "methanol", "ethanol", "acetone", "dichloromethane", "toluene", "THF", "DMSO", "acetonitrile", "chloroform", "hexane", "benzene"],
+        "options": [
+            "none",
+            "water",
+            "methanol",
+            "ethanol",
+            "acetone",
+            "dichloromethane",
+            "toluene",
+            "THF",
+            "DMSO",
+            "acetonitrile",
+            "chloroform",
+            "hexane",
+            "benzene",
+        ],
         "default": {"*": "none"},
         "depends_on": {"field": "solvent_model", "not_values": ["none"]},
     },
-    "grid": {"type": "select", "options": ["SG1", "Fine", "UltraFine", "SuperFine"], "default": {"*": "UltraFine"}},
-    "scf_convergence": {"type": "select", "options": ["Normal", "Tight", "VeryTight"], "default": {"*": "Tight"}},
-    "opt_convergence": {"type": "select", "options": ["Loose", "Normal", "Tight", "VeryTight"], "default": {"*": "Tight"}},
+    "grid": {
+        "type": "select",
+        "options": ["SG1", "Fine", "UltraFine", "SuperFine"],
+        "default": {"*": "UltraFine"},
+    },
+    "scf_convergence": {
+        "type": "select",
+        "options": ["Normal", "Tight", "VeryTight"],
+        "default": {"*": "Tight"},
+    },
+    "opt_convergence": {
+        "type": "select",
+        "options": ["Loose", "Normal", "Tight", "VeryTight"],
+        "default": {"*": "Tight"},
+    },
     "max_steps": {"type": "int", "min": 1, "max": 10000, "default": {"*": 100}},
     "temperature": {"type": "float", "min": 0, "max": 10000, "default": {"*": 298.15}, "unit": "K"},
     "pressure": {"type": "float", "min": 0, "max": 100000, "default": {"*": 1.0}, "unit": "atm"},
     "scale_factor": {"type": "float", "min": 0, "max": 1.0, "default": {"*": 1.0}},
-    "ewin": {"type": "float", "label": "Energy Window", "min": 0, "default": {"*": 6.0}, "unit": "kcal/mol"},
-    "rthr": {"type": "float", "label": "RMSD Threshold", "min": 0, "default": {"*": 0.125}, "unit": "Angstrom"},
+    "ewin": {
+        "type": "float",
+        "label": "Energy Window",
+        "min": 0,
+        "default": {"*": 6.0},
+        "unit": "kcal/mol",
+    },
+    "rthr": {
+        "type": "float",
+        "label": "RMSD Threshold",
+        "min": 0,
+        "default": {"*": 0.125},
+        "unit": "Angstrom",
+    },
     "gfn": {
         "type": "select",
         "per_backend": {"xtb": ["GFN0-xTB", "GFN1-xTB", "GFN2-xTB"]},
@@ -83,7 +225,10 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     "multiplicity": {"type": "int", "default": {"*": 1}},
     "aux_basis": {
         "type": "select",
-        "per_backend": {"gaussian": ["", "def2-TZVPP/C", "def2-QZVPP/C"], "orca": ["", "def2-TZVPP/C", "cc-pVTZ/C"]},
+        "per_backend": {
+            "gaussian": ["", "def2-TZVPP/C", "def2-QZVPP/C"],
+            "orca": ["", "def2-TZVPP/C", "cc-pVTZ/C"],
+        },
         "default": {"*": ""},
     },
     "ri_approximation": {
@@ -118,7 +263,18 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "label_zh": "DFT \u4f18\u5316",
                 "required": True,
                 "allowed_engines": ["gaussian", "orca"],
-                "fields": ["functional", "basis", "dispersion", "solvent_model", "solvent", "grid", "scf_convergence", "max_steps", "charge", "multiplicity"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "dispersion",
+                    "solvent_model",
+                    "solvent",
+                    "grid",
+                    "scf_convergence",
+                    "max_steps",
+                    "charge",
+                    "multiplicity",
+                ],
             },
             {
                 "level_id": "single_point",
@@ -126,7 +282,19 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "label_zh": "\u5355\u70b9\u80fd",
                 "required": True,
                 "allowed_engines": ["gaussian", "orca"],
-                "fields": ["functional", "basis", "aux_basis", "dispersion", "ri_approximation", "solvent_model", "solvent", "grid", "scf_convergence", "charge", "multiplicity"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "aux_basis",
+                    "dispersion",
+                    "ri_approximation",
+                    "solvent_model",
+                    "solvent",
+                    "grid",
+                    "scf_convergence",
+                    "charge",
+                    "multiplicity",
+                ],
             },
             {
                 "level_id": "thermo",
@@ -144,50 +312,234 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "summary": "CREST GFN0 => GFN2 | DFT opt | SP",
                 "levels": {
                     "preopt": {"engine": "xtb", "gfn": "GFN2-xTB", "solvent_model": "none"},
-                    "crest": {"engine": "crest", "gfn": "GFN2-xTB", "ewin": 6.0, "rthr": 0.125, "solvent_model": "none"},
-                    "dft_opt": {"engine": "gaussian", "functional": "wB97X-D", "basis": "def2-SVP", "dispersion": "D3BJ", "solvent_model": "none", "solvent": "", "grid": "UltraFine", "scf_convergence": "Tight"},
-                    "single_point": {"engine": "gaussian", "functional": "wB97X-D4", "basis": "def2-TZVPPD", "aux_basis": "", "dispersion": "D4", "solvent_model": "none", "solvent": ""},
-                    "thermo": {"engine": "shermo", "temperature": 298.15, "pressure": 1.0, "scale_factor": 1.0},
+                    "crest": {
+                        "engine": "crest",
+                        "gfn": "GFN2-xTB",
+                        "ewin": 6.0,
+                        "rthr": 0.125,
+                        "solvent_model": "none",
+                    },
+                    "dft_opt": {
+                        "engine": "gaussian",
+                        "functional": "wB97X-D",
+                        "basis": "def2-SVP",
+                        "dispersion": "D3BJ",
+                        "solvent_model": "none",
+                        "solvent": "",
+                        "grid": "UltraFine",
+                        "scf_convergence": "Tight",
+                    },
+                    "single_point": {
+                        "engine": "gaussian",
+                        "functional": "wB97X-D4",
+                        "basis": "def2-TZVPPD",
+                        "aux_basis": "",
+                        "dispersion": "D4",
+                        "solvent_model": "none",
+                        "solvent": "",
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                        "scale_factor": 1.0,
+                    },
                 },
             },
             {
-                "profile_id": "censo-lite",
-                "label": "censo-lite",
-                "summary": "CREST GFN2 | r2SCAN-3c opt | wB97X-D SP",
+                "profile_id": "lite",
+                "label": "Lite Protocol",
+                "summary": "CREST GFN2 | r2SCAN-3c opt (ORCA) | wB97X-D4 SP (ORCA)",
                 "levels": {
                     "preopt": {"engine": "xtb", "gfn": "GFN2-xTB", "solvent_model": "none"},
-                    "crest": {"engine": "crest", "gfn": "GFN2-xTB", "ewin": 6.0, "rthr": 0.125, "solvent_model": "none"},
-                    "dft_opt": {"engine": "gaussian", "functional": "r2SCAN-3c", "basis": "def2-mTZVPP", "dispersion": "none", "solvent_model": "none", "solvent": "", "grid": "UltraFine", "scf_convergence": "Tight"},
-                    "single_point": {"engine": "gaussian", "functional": "wB97X-D", "basis": "def2-TZVP", "aux_basis": "", "dispersion": "D3BJ", "solvent_model": "none", "solvent": ""},
-                    "thermo": {"engine": "shermo", "temperature": 298.15, "pressure": 1.0, "scale_factor": 1.0},
+                    "crest": {
+                        "engine": "crest",
+                        "gfn": "GFN2-xTB",
+                        "ewin": 6.0,
+                        "rthr": 0.125,
+                        "solvent_model": "none",
+                    },
+                    "dft_opt": {
+                        "engine": "orca",
+                        "functional": "r2SCAN-3c",
+                        "basis": "def2-mTZVPP",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                        "grid": "UltraFine",
+                        "scf_convergence": "Tight",
+                    },
+                    "single_point": {
+                        "engine": "orca",
+                        "functional": "wB97X-D4",
+                        "basis": "def2-TZVPP",
+                        "aux_basis": "",
+                        "dispersion": "D4",
+                        "solvent_model": "none",
+                        "solvent": "",
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                        "scale_factor": 1.0,
+                    },
                 },
             },
             {
-                "profile_id": "censo-full",
-                "label": "censo-full",
+                "profile_id": "full",
+                "label": "Full Protocol",
                 "summary": "CREST GFN2 | wB97X-D/def2-TZVP opt | wB97X-D4/def2-TZVPPD SP",
                 "levels": {
                     "preopt": {"engine": "xtb", "gfn": "GFN2-xTB", "solvent_model": "none"},
-                    "crest": {"engine": "crest", "gfn": "GFN2-xTB", "ewin": 6.0, "rthr": 0.125, "solvent_model": "none"},
-                    "dft_opt": {"engine": "gaussian", "functional": "wB97X-D", "basis": "def2-TZVP", "dispersion": "D3BJ", "solvent_model": "none", "solvent": "", "grid": "UltraFine", "scf_convergence": "Tight"},
-                    "single_point": {"engine": "gaussian", "functional": "wB97X-D4", "basis": "def2-TZVPPD", "aux_basis": "", "dispersion": "D4", "solvent_model": "none", "solvent": ""},
-                    "thermo": {"engine": "shermo", "temperature": 298.15, "pressure": 1.0, "scale_factor": 1.0},
+                    "crest": {
+                        "engine": "crest",
+                        "gfn": "GFN2-xTB",
+                        "ewin": 6.0,
+                        "rthr": 0.125,
+                        "solvent_model": "none",
+                    },
+                    "dft_opt": {
+                        "engine": "gaussian",
+                        "functional": "wB97X-D",
+                        "basis": "def2-TZVP",
+                        "dispersion": "D3BJ",
+                        "solvent_model": "none",
+                        "solvent": "",
+                        "grid": "UltraFine",
+                        "scf_convergence": "Tight",
+                    },
+                    "single_point": {
+                        "engine": "gaussian",
+                        "functional": "wB97X-D4",
+                        "basis": "def2-TZVPPD",
+                        "aux_basis": "",
+                        "dispersion": "D4",
+                        "solvent_model": "none",
+                        "solvent": "",
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                        "scale_factor": 1.0,
+                    },
                 },
             },
         ],
     },
-    "dft_singlepoint": {"method_levels": [{"level_id": "singlepoint", "label": "Single Point", "required": True, "allowed_engines": ["gaussian", "orca"], "fields": ["functional", "basis", "dispersion", "solvent_model", "solvent", "grid", "scf_convergence"]}], "profiles": []},
-    "dft_optimize": {"method_levels": [{"level_id": "optimize", "label": "Optimization", "required": True, "allowed_engines": ["gaussian", "orca"], "fields": ["functional", "basis", "dispersion", "solvent_model", "solvent", "grid", "scf_convergence", "max_steps", "opt_convergence"]}], "profiles": []},
-    "dft_frequency": {"method_levels": [{"level_id": "frequency", "label": "Frequency", "required": True, "allowed_engines": ["gaussian"], "fields": ["functional", "basis", "temperature", "pressure", "scale_factor"]}], "profiles": []},
-    "dft_optfreq": {"method_levels": [{"level_id": "optfreq", "label": "Opt+Freq", "required": True, "allowed_engines": ["gaussian"], "fields": ["functional", "basis", "dispersion", "solvent_model", "solvent", "temperature", "pressure"]}], "profiles": []},
-    "xtb_optimize": {"method_levels": [{"level_id": "xtb_opt", "label": "xTB Opt", "required": True, "allowed_engines": ["xtb"], "fields": ["gfn", "solvent_model", "solvent", "max_steps"]}], "profiles": []},
-    "nmr": {"method_levels": [{"level_id": "shielding", "label": "NMR Shielding", "required": True, "allowed_engines": ["gaussian"], "fields": ["functional", "basis"]}], "profiles": []},
+    "dft_singlepoint": {
+        "method_levels": [
+            {
+                "level_id": "singlepoint",
+                "label": "Single Point",
+                "required": True,
+                "allowed_engines": ["gaussian", "orca"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "dispersion",
+                    "solvent_model",
+                    "solvent",
+                    "grid",
+                    "scf_convergence",
+                ],
+            }
+        ],
+        "profiles": [],
+    },
+    "dft_optimize": {
+        "method_levels": [
+            {
+                "level_id": "optimize",
+                "label": "Optimization",
+                "required": True,
+                "allowed_engines": ["gaussian", "orca"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "dispersion",
+                    "solvent_model",
+                    "solvent",
+                    "grid",
+                    "scf_convergence",
+                    "max_steps",
+                    "opt_convergence",
+                ],
+            }
+        ],
+        "profiles": [],
+    },
+    "dft_frequency": {
+        "method_levels": [
+            {
+                "level_id": "frequency",
+                "label": "Frequency",
+                "required": True,
+                "allowed_engines": ["gaussian"],
+                "fields": ["functional", "basis", "temperature", "pressure", "scale_factor"],
+            }
+        ],
+        "profiles": [],
+    },
+    "dft_optfreq": {
+        "method_levels": [
+            {
+                "level_id": "optfreq",
+                "label": "Opt+Freq",
+                "required": True,
+                "allowed_engines": ["gaussian"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "dispersion",
+                    "solvent_model",
+                    "solvent",
+                    "temperature",
+                    "pressure",
+                ],
+            }
+        ],
+        "profiles": [],
+    },
+    "xtb_optimize": {
+        "method_levels": [
+            {
+                "level_id": "xtb_opt",
+                "label": "xTB Opt",
+                "required": True,
+                "allowed_engines": ["xtb"],
+                "fields": ["gfn", "solvent_model", "solvent", "max_steps"],
+            }
+        ],
+        "profiles": [],
+    },
+    "nmr": {
+        "method_levels": [
+            {
+                "level_id": "shielding",
+                "label": "NMR Shielding",
+                "required": True,
+                "allowed_engines": ["gaussian", "orca"],
+                "fields": ["functional", "basis"],
+            }
+        ],
+        "profiles": [],
+    },
 }
 
 METHOD_CATALOG: dict[str, Any] = {
     "backends": [
-        {"id": "gaussian", "label": "Gaussian 16", "supports": ["singlepoint", "optimize", "frequency", "nmr"]},
-        {"id": "orca", "label": "ORCA", "supports": ["singlepoint", "optimize", "frequency"]},
+        {
+            "id": "gaussian",
+            "label": "Gaussian 16",
+            "supports": ["singlepoint", "optimize", "frequency", "nmr"],
+        },
+        {
+            "id": "orca",
+            "label": "ORCA",
+            "supports": ["singlepoint", "optimize", "frequency", "nmr"],
+        },
         {"id": "xtb", "label": "xTB (GFN2)", "supports": ["singlepoint", "optimize"]},
         {"id": "crest", "label": "CREST", "supports": ["conformer_search"]},
     ],
@@ -200,6 +552,7 @@ METHOD_CATALOG: dict[str, Any] = {
 # 验证 + 标准化函数
 # ---------------------------------------------------------------------------
 
+
 def _resolve_field_options(field_name: str, engine: str) -> list[str] | None:
     """Return allowed options for a field given a specific engine."""
     fd = FIELD_DEFINITIONS.get(field_name)
@@ -208,7 +561,9 @@ def _resolve_field_options(field_name: str, engine: str) -> list[str] | None:
     if "options" in fd:
         return fd["options"]
     if "per_backend" in fd:
-        return fd["per_backend"].get(engine, list(fd["per_backend"].values())[0] if fd["per_backend"] else [])
+        return fd["per_backend"].get(
+            engine, list(fd["per_backend"].values())[0] if fd["per_backend"] else []
+        )
     return None
 
 
@@ -240,13 +595,14 @@ def _normalize_solvent(levels: dict, schema: dict) -> dict:
 def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[dict, list[str]]:
     """Return (normalized_levels, errors)."""
     errors: list[str] = []
-    warnings: list[str] = []
 
     levels: dict[str, Any] = {}
     for lv_def in schema.get("method_levels", []):
         lid = lv_def["level_id"]
         user_lv = (method.get("levels") or {}).get(lid, {}) or {}
-        engine = user_lv.get("engine") or (lv_def["allowed_engines"][0] if lv_def.get("allowed_engines") else "")
+        engine = user_lv.get("engine") or (
+            lv_def["allowed_engines"][0] if lv_def.get("allowed_engines") else ""
+        )
 
         if not engine:
             if lv_def.get("required"):
@@ -262,12 +618,24 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
             if user_val is not None and user_val != "":
                 options = _resolve_field_options(field_name, engine)
                 if options is not None and user_val not in options:
-                    errors.append(f"Level '{lid}', field '{field_name}': value '{user_val}' not in allowed options")
+                    errors.append(
+                        f"Level '{lid}', field '{field_name}': "
+                        f"value '{user_val}' not in allowed options"
+                    )
                     continue
                 normalized[field_name] = user_val
             else:
                 default_val = _resolve_field_default(field_name, engine)
                 normalized[field_name] = default_val
+
+        # Composite-method rules: r2SCAN-3c bundles def2-mTZVPP and its dispersion correction
+        # and is not available in Gaussian.
+        if normalized.get("functional") == "r2SCAN-3c":
+            if engine == "gaussian":
+                errors.append(f"Level '{lid}': r2SCAN-3c is not supported by Gaussian")
+            else:
+                normalized["basis"] = "def2-mTZVPP"
+                normalized["dispersion"] = "none"
 
         levels[lid] = normalized
 
@@ -281,6 +649,54 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
     levels = _normalize_solvent(levels, schema)
 
     return levels, errors
+
+
+def convert_method_levels_to_protocol_levels(levels: dict[str, Any]) -> dict[str, Any]:
+    """Convert frontend method-level settings into protocol override levels.
+
+    The ACP Workbench (and ``method_levels_to_workflow_config``) uses stage
+    names like ``dft_opt`` and ``single_point`` and stores the functional
+    under the key ``functional``. The legacy protocol resolver expects
+    ``optimization`` / ``single_point`` and ``method`` / ``basis``.
+    """
+    if not isinstance(levels, dict):
+        return {}
+
+    stage_mapping: dict[str, str] = {
+        "dft_opt": "optimization",
+        "single_point": "single_point",
+        "thermo": "thermo",
+    }
+    field_mapping: dict[str, str] = {
+        "functional": "method",
+        "engine": "engine",
+        "basis": "basis",
+        "solvent": "solvent",
+        "solvent_model": "solvent_model",
+    }
+
+    converted: dict[str, Any] = {}
+    for old_stage, new_stage in stage_mapping.items():
+        if old_stage not in levels:
+            continue
+        old_level = levels[old_stage]
+        if not isinstance(old_level, dict):
+            continue
+        new_level: dict[str, Any] = {}
+        for old_key, new_key in field_mapping.items():
+            if old_key in old_level:
+                new_level[new_key] = old_level[old_key]
+        if new_level:
+            converted[new_stage] = new_level
+
+    # The frontend schema for conformer search does not expose a separate
+    # frequency level, so frequency should inherit the optimization engine.
+    if "optimization" in converted and "frequency" not in converted:
+        opt_engine = converted["optimization"].get("engine")
+        if opt_engine is not None:
+            converted["frequency"] = {"engine": opt_engine}
+
+    return converted
 
 
 def method_levels_to_workflow_config(levels: dict, schema_id: str, workflow: str) -> dict:
@@ -312,6 +728,7 @@ def method_levels_to_workflow_config(levels: dict, schema_id: str, workflow: str
 # 原有 API 兼容函数
 # ---------------------------------------------------------------------------
 
+
 def get_workflow_catalog() -> list[dict[str, Any]]:
     return WORKFLOW_CATALOG
 
@@ -341,6 +758,7 @@ __all__ = [
     "METHOD_CATALOG",
     "METHOD_SCHEMAS",
     "WORKFLOW_CATALOG",
+    "convert_method_levels_to_protocol_levels",
     "get_method_catalog",
     "get_method_profiles",
     "get_method_schema",

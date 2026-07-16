@@ -56,11 +56,16 @@ class JobSpec:
         workflow: One of :data:`SUPPORTED_WORKFLOWS`.
         name: Human-readable job label.
         input: Input payload (SMILES string, file path, or structured dict).
-        method: Method/protocol settings (protocol, backend, references, ...).
+        method: Method/protocol settings. For conformer workflows this may
+            contain ``protocol``, ``profile_id``, and an optional ``levels``
+            dict with per-stage method/basis/solvent overrides.
         resources: Resource limits (nproc, mem, ...).
         output_dir: Explicit output directory override (else derived from run root).
         config_path: Optional path to a YAML config file.
         tags: Free-form tags for filtering.
+        target_node: Name of a specific remote node to run on (``None`` = auto
+            select the least-loaded node).  Only meaningful when the manager
+            is configured for remote execution.
     """
 
     workflow: str
@@ -73,6 +78,7 @@ class JobSpec:
     tags: list[str] = field(default_factory=list)
     project_id: str | None = None
     input_hash: str | None = None
+    target_node: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

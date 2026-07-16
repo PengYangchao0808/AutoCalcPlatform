@@ -100,6 +100,52 @@ a { color: var(--accent); }
 .project-slot,
 .topbar-actions { min-width: 0; }
 
+.project-slot { display: flex; align-items: center; gap: 8px; }
+
+.project-new-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition), color var(--transition);
+}
+.project-new-btn:hover {
+  border-color: rgba(78, 161, 255, 0.7);
+  background: rgba(78, 161, 255, 0.12);
+  color: var(--text);
+}
+
+.project-delete-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border-default);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition), color var(--transition);
+}
+.project-delete-btn:hover {
+  border-color: rgba(248, 81, 73, 0.7);
+  background: rgba(248, 81, 73, 0.12);
+  color: var(--red);
+}
+.project-delete-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .project-select,
 .field-input,
 .field-select,
@@ -125,6 +171,11 @@ a { color: var(--accent); }
   background: rgba(255, 255, 255, 0.05);
   box-shadow: 0 0 0 3px rgba(78, 161, 255, 0.12);
 }
+
+.project-hint { font-size: 11px; margin-top: 6px; color: var(--text-tertiary); }
+
+.info-actions { display: flex; gap: 8px; margin-top: 14px; }
+.info-actions .btn { flex: 1; margin: 0; padding: 6px 10px; font-size: 11px; }
 
 .topbar-actions {
   display: flex;
@@ -184,6 +235,9 @@ a { color: var(--accent); }
 .status-pill.ok { color: var(--green); border-color: rgba(56, 193, 114, 0.32); background: rgba(56, 193, 114, 0.10); }
 .status-pill.warn { color: var(--amber); border-color: rgba(242, 184, 75, 0.28); background: rgba(242, 184, 75, 0.10); }
 .status-pill.err { color: var(--red); border-color: rgba(229, 83, 83, 0.28); background: rgba(229, 83, 83, 0.10); }
+.status-pill.disk { color: var(--text-soft); border-color: var(--border); background: var(--surface); font-size: .68rem; cursor: help; }
+.status-pill.disk.warn { color: var(--amber); border-color: rgba(242, 184, 75, 0.28); background: rgba(242, 184, 75, 0.10); }
+.status-pill.disk.err { color: var(--red); border-color: rgba(229, 83, 83, 0.28); background: rgba(229, 83, 83, 0.10); }
 
 .workbench {
   display: grid;
@@ -272,6 +326,38 @@ a { color: var(--accent); }
   padding: 0;
 }
 
+.file-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 4px 10px;
+  border-bottom: 1px solid var(--border-default);
+  margin-bottom: 6px;
+}
+
+.file-tree-header .node-info {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tree-header .tree-btn {
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.file-tree-header .tree-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+
 .file-tree-branch { padding-left: 14px; }
 .tree-folder,
 .tree-file { margin: 2px 0; }
@@ -279,13 +365,15 @@ a { color: var(--accent); }
 .folder-row,
 .file-row {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
   min-height: 28px;
   padding: 0 4px;
   border-radius: var(--radius-sm);
 }
+
+.folder-row { cursor: pointer; }
 
 .folder-row:hover,
 .file-row:hover { background: rgba(255, 255, 255, 0.04); }
@@ -309,6 +397,11 @@ a { color: var(--accent); }
 .frame-btn svg { pointer-events: none; }
 
 .folder-toggle.open { color: var(--accent); }
+.file-actions { display: inline-flex; align-items: center; gap: 4px; }
+.folder-icon,
+.file-icon { display: inline-flex; align-items: center; flex-shrink: 0; }
+.folder-icon { color: var(--amber); margin-right: 6px; }
+.file-icon { color: var(--text-secondary); }
 .folder-name,
 .file-name {
   min-width: 0;
@@ -318,7 +411,7 @@ a { color: var(--accent); }
   font-size: 13px;
 }
 
-.folder-name { color: var(--text-secondary); }
+.folder-name { display: inline-flex; align-items: center; color: var(--text-secondary); font-weight: 500; }
 .file-name.ext-xyz,
 .file-name.ext-sdf,
 .file-name.ext-mol { color: var(--green); }
@@ -492,6 +585,49 @@ a { color: var(--accent); }
 .measure-del { width: 24px; height: 24px; border: 1px solid var(--border-default); border-radius: 999px; background: transparent; color: var(--text-tertiary); }
 .measure-del:hover { color: var(--red); border-color: rgba(229, 83, 83, 0.4); }
 .muted { color: var(--text-tertiary); font-size: 12px; }
+
+.node-panel .node-list { display: flex; flex-direction: column; gap: 8px; }
+.node-row {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.02);
+}
+.node-row.offline { opacity: 0.65; }
+.node-dot { width: 8px; height: 8px; border-radius: 50%; }
+.node-dot.online { background: var(--green); box-shadow: 0 0 6px rgba(56,193,114,0.45); }
+.node-dot.degraded { background: var(--amber); box-shadow: 0 0 6px rgba(242,184,75,0.45); }
+.node-dot.offline { background: var(--red); }
+.node-info { min-width: 0; }
+.node-name { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.node-meta { font-size: 10px; color: var(--text-tertiary); margin-top: 2px; }
+.node-error { font-size: 10px; color: var(--red); margin-top: 2px; }
+.node-actions { display: flex; gap: 6px; }
+.node-btn {
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-secondary);
+  font-size: 10px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.node-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+.node-select {
+  width: 100%;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  padding: 6px 8px;
+  font-size: 12px;
+  outline: none;
+}
+.node-select option:disabled { color: var(--text-tertiary); background: rgba(255,255,255,0.03); }
 
 .queue-panel { min-height: 0; display: grid; grid-template-rows: auto auto 1fr; }
 .queue-summary { padding: 14px 14px 10px; }
@@ -692,7 +828,9 @@ a { color: var(--accent); }
 .btn { border: 1px solid var(--border-default); border-radius: 999px; padding: 10px 16px; background: rgba(255, 255, 255, 0.04); }
 .btn.primary { border-color: rgba(78, 161, 255, 0.5); background: linear-gradient(135deg, rgba(78, 161, 255, 0.24), rgba(78, 161, 255, 0.10)); }
 .btn.ghost { color: var(--text-secondary); }
+.btn.danger { border-color: rgba(248, 81, 73, 0.5); background: linear-gradient(135deg, rgba(248, 81, 73, 0.24), rgba(248, 81, 73, 0.10)); color: var(--red); }
 .btn:hover { border-color: rgba(78, 161, 255, 0.5); }
+.btn.danger:hover { border-color: rgba(248, 81, 73, 0.7); background: linear-gradient(135deg, rgba(248, 81, 73, 0.32), rgba(248, 81, 73, 0.14)); }
 
 .sr-only {
   position: absolute;
@@ -733,11 +871,14 @@ a { color: var(--accent); }
     <div class="project-slot">
       <label class="sr-only" for="project-select" data-i18n="app.project">项目</label>
       <select id="project-select" class="project-select"></select>
+      <button id="btn-new-project" class="project-new-btn" data-i18n-title="project.new_title" title="新建项目">+</button>
+      <button id="btn-delete-project" class="project-delete-btn" data-i18n-title="project.delete_title" title="删除项目" disabled>×</button>
     </div>
     <div class="topbar-actions">
       <div class="server-summary" id="server-summary">--</div>
       <div class="topbar-tools">
         <button class="lang-toggle" id="lang-toggle" data-i18n="lang.toggle">中文 | EN</button>
+        <div class="status-pill disk" id="disk-pill" title="本地磁盘使用率（Phase 5B）" style="display:none">DISK --</div>
         <div class="status-pill ok" id="status-pill">ONLINE</div>
       </div>
     </div>
@@ -879,6 +1020,18 @@ a { color: var(--accent); }
     </section>
 
     <aside class="right-col">
+      <section class="panel-section node-panel" id="node-panel">
+        <div class="panel-head">
+          <h2 data-i18n="nodes.title">远程节点</h2>
+          <button class="btn ghost" id="btn-refresh-nodes" data-i18n="nodes.refresh">刷新</button>
+        </div>
+        <div class="panel-body">
+          <div class="node-list" id="node-list">
+            <div class="placeholder" data-i18n="nodes.loading">加载中…</div>
+          </div>
+        </div>
+      </section>
+
       <div class="measure-panel" id="measure-panel">
         <h3 class="measure-title" data-i18n="measure.title">测量</h3>
         <div class="measure-list" id="measure-list">
@@ -892,7 +1045,7 @@ a { color: var(--accent); }
             <h3 class="queue-title" data-i18n="queue.title">任务队列</h3>
             <button class="queue-toggle" id="queue-toggle" data-i18n="queue.expand">展开</button>
           </div>
-          <div class="queue-counts" id="queue-counts">--</div>
+          <div class="queue-counts" id="queue-counts">加载中…</div>
         </div>
         <div class="queue-expanded" id="queue-expanded">
           <div class="queue-table-wrap">
@@ -931,7 +1084,7 @@ a { color: var(--accent); }
         <div class="mobile-card">
           <div class="panel-head"><h2 data-i18n="queue.title">任务队列</h2></div>
           <div class="panel-body">
-            <div class="queue-counts" id="mobile-queue-counts">--</div>
+            <div class="queue-counts" id="mobile-queue-counts">加载中…</div>
             <div class="queue-list" id="mobile-queue-list" style="margin-top:12px;"></div>
             <div class="logs-header" style="margin-top:16px;"><h3 class="logs-title" data-i18n="logs.title">实时日志</h3></div>
             <div class="logs-content" id="mobile-log-panel" style="min-height:180px;"></div>
@@ -1017,11 +1170,17 @@ a { color: var(--accent); }
         <div class="config-card" id="method-card">
           <div class="config-card-label" data-i18n="modal.step3">计算协议</div>
           <div class="config-card-body">
-            <strong id="method-card-title">censo-lite</strong>
-            <span id="method-card-desc" class="config-card-desc">xTB: GFN2 | DFT opt: wB97X-D/def2-SVP</span>
+            <strong id="method-card-title">Lite Protocol</strong>
+            <span id="method-card-desc" class="config-card-desc">xTB: GFN2 | DFT: r2SCAN-3c | SP: wB97X-D4/def2-TZVPP</span>
           </div>
           <button class="btn ghost config-card-btn" id="btn-config-method" data-i18n="modal.configure">配置</button>
         </div>
+      </div>
+
+      <div class="modal-section" id="modal-project-section">
+        <label for="modal-project-select" data-i18n="modal.project">项目</label>
+        <select id="modal-project-select" class="modal-select"></select>
+        <div class="project-hint dim" id="modal-project-hint" style="font-size:11px;margin-top:6px;display:none;"></div>
       </div>
 
       <div class="modal-row">
@@ -1035,6 +1194,13 @@ a { color: var(--accent); }
           <label for="modal-mem" data-i18n="modal.memory">内存</label>
           <input id="modal-mem" class="modal-input" type="text" value="8GB">
         </div>
+      </div>
+
+      <div class="modal-section" style="margin-top:4px;">
+        <label for="modal-node-select" data-i18n="modal.target_node">目标节点</label>
+        <select id="modal-node-select" class="node-select">
+          <option value="" data-i18n="nodes.auto">自动选择（负载最低）</option>
+        </select>
       </div>
     </div>
     <div class="modal-footer">
@@ -1086,18 +1252,116 @@ a { color: var(--accent); }
   </div>
 </div>
 
+<div class="modal-overlay" id="project-modal" style="display:none;">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h2 data-i18n="project.modal_title">新建项目</h2>
+      <button class="modal-close" id="project-modal-close">X</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <label for="project-modal-name" data-i18n="project.name">项目名称</label>
+        <input id="project-modal-name" class="modal-input" type="text" placeholder="my_project">
+        <div class="err" id="project-modal-name-err" style="color:var(--red);font-size:11px;margin-top:4px;display:none;"></div>
+      </div>
+      <div class="modal-section">
+        <label for="project-modal-desc">
+          <span data-i18n="project.description">描述</span>
+          <span class="dim" data-i18n="project.optional">（可选）</span>
+        </label>
+        <textarea id="project-modal-desc" class="modal-input field-textarea" rows="3" placeholder=""></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn ghost" id="project-modal-cancel" data-i18n="modal.cancel">取消</button>
+      <button class="btn primary" id="project-modal-submit" data-i18n="project.create">创建</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="target-project-modal" style="display:none;">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h2 id="target-project-modal-title" data-i18n="move.title">移动任务</h2>
+      <button class="modal-close" id="target-project-modal-close">X</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <label for="target-project-select" data-i18n="move.target_project">目标项目</label>
+        <select id="target-project-select" class="modal-select"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn ghost" id="target-project-modal-cancel" data-i18n="modal.cancel">取消</button>
+      <button class="btn primary" id="target-project-modal-submit" data-i18n="modal.confirm">确认</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="delete-project-modal" style="display:none;">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h2 data-i18n="project.delete_title">删除项目</h2>
+      <button class="modal-close" id="delete-project-modal-close">X</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <p id="delete-project-prompt" data-i18n="project.delete_prompt">确定要删除此项目吗？</p>
+        <p class="dim" style="font-size:11px;margin-top:8px;" data-i18n="project.delete_warning">此操作无法撤销。项目中的任务和数据将被删除。</p>
+      </div>
+      <div class="modal-section">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;">
+          <input type="checkbox" id="delete-project-data" checked>
+          <span data-i18n="project.delete_data">同时删除本地和远程数据</span>
+        </label>
+      </div>
+      <div class="err" id="delete-project-err" style="color:var(--red);font-size:11px;margin-top:4px;display:none;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn ghost" id="delete-project-modal-cancel" data-i18n="modal.cancel">取消</button>
+      <button class="btn danger" id="delete-project-modal-submit" data-i18n="project.delete_confirm">删除</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="delete-job-modal" style="display:none;">
+  <div class="modal-dialog">
+    <div class="modal-header">
+      <h2 data-i18n="job.delete_title">删除任务</h2>
+      <button class="modal-close" id="delete-job-modal-close">X</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <p id="delete-job-prompt" data-i18n="job.delete_prompt">确定要删除此任务吗？</p>
+        <p class="dim" style="font-size:11px;margin-top:8px;" data-i18n="job.delete_warning">此操作无法撤销。任务文件和数据将被删除。</p>
+      </div>
+      <div class="modal-section">
+        <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;">
+          <input type="checkbox" id="delete-job-data" checked>
+          <span data-i18n="job.delete_data">同时删除本地和远程数据</span>
+        </label>
+      </div>
+      <div class="err" id="delete-job-err" style="color:var(--red);font-size:11px;margin-top:4px;display:none;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn ghost" id="delete-job-modal-cancel" data-i18n="modal.cancel">取消</button>
+      <button class="btn danger" id="delete-job-modal-submit" data-i18n="job.delete_confirm">删除</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const API_BASE = "/api/v1";
 let currentLang = localStorage.getItem("acp-lang") || "zh-CN";
 let selectedProjectId = "";
 let selectedJobId = "";
+let selectedJobIsRemote = false;
+let lastRemoteNode = "";
 let selectedFileKey = "";
 let activeSSE = null;
 let jobsPollTimer = null;
 let jobsCache = [];
 let projectsCache = [];
-let workflowsCache = [];
-let protocolsCache = [];
 let viewer = null;
 let currentModel = null;
 let currentModelAtoms = [];
@@ -1112,6 +1376,11 @@ let labelMode = "none";
 let measureBuffer = [];
 let framePlayTimer = null;
 let initialView = null;
+let selectedNode = "";
+let targetProjectAction = "move";
+let targetProjectJobId = "";
+let deleteJobId = "";
+let nodesCache = [];
 const BG_COLORS = ["0x0e1419", "white", "0x1a1a2e"];
 const molDoc = {
   frames: [],
@@ -1147,10 +1416,39 @@ const I18N = {
     "server.summary_short": "服务器状态加载中",
     "project.all": "项目: 全部",
     "project.empty": "暂无项目",
+    "project.new_title": "新建项目",
+    "project.modal_title": "新建项目",
+    "project.name": "项目名称",
+    "project.description": "描述",
+    "project.optional": "（可选）",
+    "project.create": "创建",
+    "project.name_required": "请输入项目名称",
+    "project.name_exists": "项目名称已存在",
+    "project.delete_title": "删除项目",
+    "project.delete_prompt": "确定要删除项目",
+    "project.delete_warning": "此操作无法撤销。项目中的任务和数据将被删除。",
+    "project.delete_data": "同时删除本地和远程数据",
+    "project.delete_confirm": "删除",
+    "job.cancel": "取消任务",
+    "job.cancel_failed": "取消失败: {message}",
+    "job.delete": "删除",
+    "job.delete_title": "删除任务",
+    "job.delete_prompt": "确定要删除任务",
+    "job.delete_warning": "此操作无法撤销。任务文件和数据将被删除。",
+    "job.delete_data": "同时删除本地和远程数据",
+    "job.delete_confirm": "删除",
+    "move.title": "移动任务",
+    "move.target_project": "目标项目",
+    "move.button": "移动到项目",
+    "move.failed": "移动失败: {message}",
+    "clone.title": "复制任务",
+    "clone.button": "复制到项目",
+    "clone.failed": "复制失败: {message}",
     "files.title": "任务文件",
     "files.empty": "选择任务以查看文件",
     "files.too_large": "文件过大，无法直接加载",
     "files.download": "下载文件",
+    "files.download_all": "下载全部",
     "files.open": "打开文件",
     "info.title": "信息",
     "info.empty": "暂无选中任务",
@@ -1255,12 +1553,26 @@ const I18N = {
     "modal.step2": "2. 选择工作流",
     "modal.step3": "3. 计算协议",
     "modal.step4": "4. 资源设置",
+    "modal.target_node": "目标节点",
+    "modal.project": "项目",
+    "modal.project_default": "(默认)",
+    "modal.project_current": "将提交到项目",
     "modal.nproc": "核数",
     "modal.memory": "内存",
     "modal.cancel": "取消",
     "modal.submit": "提交",
     "modal.required_smiles": "请输入 SMILES",
     "modal.submit_failed": "提交失败: {message}",
+    "nodes.title": "远程节点",
+    "nodes.loading": "加载中…",
+    "nodes.empty": "未配置远程节点",
+    "nodes.auto": "自动选择（负载最低）",
+    "nodes.refresh": "刷新",
+    "nodes.status.online": "在线",
+    "nodes.status.degraded": "高负载",
+    "nodes.status.offline": "离线",
+    "nodes.ping": "测试",
+    "nodes.load_error": "加载节点失败",
     "common.none": "--",
     "common.na": "暂无",
     "common.coming": "即将推出",
@@ -1287,10 +1599,39 @@ const I18N = {
     "server.summary_short": "Loading server status",
     "project.all": "Project: All",
     "project.empty": "No projects",
+    "project.new_title": "New project",
+    "project.modal_title": "New project",
+    "project.name": "Project name",
+    "project.description": "Description",
+    "project.optional": "(optional)",
+    "project.create": "Create",
+    "project.name_required": "Please enter a project name",
+    "project.name_exists": "A project with this name already exists",
+    "project.delete_title": "Delete project",
+    "project.delete_prompt": "Delete project",
+    "project.delete_warning": "This action cannot be undone. Jobs and data in this project will be removed.",
+    "project.delete_data": "Also delete local and remote data",
+    "project.delete_confirm": "Delete",
+    "job.cancel": "Cancel job",
+    "job.cancel_failed": "Cancel failed: {message}",
+    "job.delete": "Delete",
+    "job.delete_title": "Delete job",
+    "job.delete_prompt": "Delete job",
+    "job.delete_warning": "This action cannot be undone. Job files and data will be removed.",
+    "job.delete_data": "Also delete local and remote data",
+    "job.delete_confirm": "Delete",
+    "move.title": "Move job",
+    "move.target_project": "Target project",
+    "move.button": "Move to project",
+    "move.failed": "Move failed: {message}",
+    "clone.title": "Duplicate job",
+    "clone.button": "Copy to project",
+    "clone.failed": "Duplicate failed: {message}",
     "files.title": "Job Files",
     "files.empty": "Select a job to inspect files",
     "files.too_large": "File too large to preview",
     "files.download": "Download file",
+    "files.download_all": "Download all",
     "files.open": "Open file",
     "info.title": "Info",
     "info.empty": "No job selected",
@@ -1395,12 +1736,26 @@ const I18N = {
     "modal.step2": "2. Select Workflow",
     "modal.step3": "3. Calculation Protocol",
     "modal.step4": "4. Resource Settings",
+    "modal.target_node": "Target Node",
+    "modal.project": "Project",
+    "modal.project_default": "(default)",
+    "modal.project_current": "Will submit to project",
     "modal.nproc": "Cores",
     "modal.memory": "Memory",
     "modal.cancel": "Cancel",
     "modal.submit": "Submit",
     "modal.required_smiles": "Please enter a SMILES string",
     "modal.submit_failed": "Submit failed: {message}",
+    "nodes.title": "Remote Nodes",
+    "nodes.loading": "Loading…",
+    "nodes.empty": "No remote nodes configured",
+    "nodes.auto": "Auto (least loaded)",
+    "nodes.refresh": "Refresh",
+    "nodes.status.online": "online",
+    "nodes.status.degraded": "busy",
+    "nodes.status.offline": "offline",
+    "nodes.ping": "Ping",
+    "nodes.load_error": "Failed to load nodes",
     "common.none": "--",
     "common.na": "N/A",
     "common.coming": "Coming soon",
@@ -1774,38 +2129,299 @@ function renderProjects() {
     select.appendChild(option);
   });
   select.value = selectedProjectId;
+  updateDeleteProjectButton();
+}
+
+function updateDeleteProjectButton() {
+  const btn = document.getElementById("btn-delete-project");
+  if (!btn) return;
+  const canDelete = selectedProjectId && selectedProjectId !== "uncategorized";
+  btn.disabled = !canDelete;
+}
+
+function renderModalProjects() {
+  const select = document.getElementById("modal-project-select");
+  select.innerHTML = "";
+  if (!projectsCache.length) {
+    const option = document.createElement("option");
+    option.value = "uncategorized";
+    option.textContent = "Uncategorized";
+    select.appendChild(option);
+    return;
+  }
+  projectsCache.forEach(function(project) {
+    const option = document.createElement("option");
+    option.value = String(project.project_id || "");
+    const name = project.name || String(project.project_id || "");
+    option.textContent = project.project_id === "uncategorized" ? (name + " " + (t("modal.project_default") || "(默认)")) : name;
+    select.appendChild(option);
+  });
+}
+
+function setModalProjectDefault() {
+  const select = document.getElementById("modal-project-select");
+  if (!select) return;
+  let defaultId = selectedProjectId;
+  if (!defaultId) {
+    const fallback = projectsCache.find(function(p) { return p.project_id === "uncategorized"; });
+    defaultId = fallback ? fallback.project_id : (projectsCache[0] && projectsCache[0].project_id ? projectsCache[0].project_id : "uncategorized");
+  }
+  select.value = defaultId;
+  updateModalProjectHint();
+}
+
+function updateModalProjectHint() {
+  const select = document.getElementById("modal-project-select");
+  const hint = document.getElementById("modal-project-hint");
+  if (!select || !hint) return;
+  const selected = select.options[select.selectedIndex];
+  if (selected && selected.value) {
+    hint.textContent = (t("modal.project_current") || "将提交到项目") + ": " + selected.textContent;
+    hint.style.display = "block";
+  } else {
+    hint.style.display = "none";
+  }
+}
+
+function openProjectModal() {
+  document.getElementById("project-modal-name").value = "";
+  document.getElementById("project-modal-desc").value = "";
+  const err = document.getElementById("project-modal-name-err");
+  if (err) err.style.display = "none";
+  document.getElementById("project-modal").style.display = "flex";
+}
+
+function closeProjectModal() {
+  document.getElementById("project-modal").style.display = "none";
+}
+
+function openTargetProjectModal(action, job) {
+  targetProjectAction = action || "move";
+  targetProjectJobId = job ? (job.id || job.job_id || "") : "";
+  if (!targetProjectJobId) return;
+  const titleEl = document.getElementById("target-project-modal-title");
+  const submitBtn = document.getElementById("target-project-modal-submit");
+  if (titleEl) titleEl.textContent = t(action === "clone" ? "clone.title" : "move.title") || (action === "clone" ? "复制任务" : "移动任务");
+  if (submitBtn) submitBtn.textContent = t(action === "clone" ? "clone.button" : "move.button") || (action === "clone" ? "复制" : "移动");
+  const select = document.getElementById("target-project-select");
+  select.innerHTML = "";
+  if (!projectsCache.length) {
+    const option = document.createElement("option");
+    option.value = "uncategorized";
+    option.textContent = "Uncategorized";
+    select.appendChild(option);
+  } else {
+    projectsCache.forEach(function(project) {
+      const option = document.createElement("option");
+      option.value = String(project.project_id || "");
+      option.textContent = project.name || String(project.project_id || "");
+      if (option.value === selectedProjectId) option.selected = true;
+      select.appendChild(option);
+    });
+  }
+  document.getElementById("target-project-modal").style.display = "flex";
+}
+
+function closeTargetProjectModal() {
+  document.getElementById("target-project-modal").style.display = "none";
+  targetProjectJobId = "";
+}
+
+function openDeleteProjectModal() {
+  const project = projectsCache.find(function(p) { return p.project_id === selectedProjectId; });
+  const promptEl = document.getElementById("delete-project-prompt");
+  if (promptEl && project) {
+    promptEl.textContent = (t("project.delete_prompt") || "确定要删除项目") + " \"" + (project.name || project.project_id) + "\" 吗？";
+  }
+  document.getElementById("delete-project-data").checked = true;
+  const err = document.getElementById("delete-project-err");
+  if (err) err.style.display = "none";
+  document.getElementById("delete-project-modal").style.display = "flex";
+}
+
+function closeDeleteProjectModal() {
+  document.getElementById("delete-project-modal").style.display = "none";
+}
+
+async function submitDeleteProjectModal() {
+  if (!selectedProjectId) return;
+  const deleteData = document.getElementById("delete-project-data").checked;
+  const errEl = document.getElementById("delete-project-err");
+  const submitBtn = document.getElementById("delete-project-modal-submit");
+  submitBtn.disabled = true;
+  try {
+    await api("/projects/" + encodeURIComponent(selectedProjectId) + "?delete_data=" + (deleteData ? "true" : "false"), {
+      method: "DELETE"
+    });
+    closeDeleteProjectModal();
+    selectedProjectId = "";
+    await loadProjects();
+    await refreshJobs();
+  } catch (e) {
+    if (errEl) {
+      errEl.textContent = e.message;
+      errEl.style.display = "block";
+    }
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+async function submitDeleteProjectModal() {
+  if (!selectedProjectId) return;
+  const deleteData = document.getElementById("delete-project-data").checked;
+  const errEl = document.getElementById("delete-project-err");
+  const submitBtn = document.getElementById("delete-project-modal-submit");
+  submitBtn.disabled = true;
+  try {
+    await api("/projects/" + encodeURIComponent(selectedProjectId) + "?delete_data=" + (deleteData ? "true" : "false"), {
+      method: "DELETE"
+    });
+    closeDeleteProjectModal();
+    selectedProjectId = "";
+    await loadProjects();
+    await refreshJobs();
+  } catch (e) {
+    if (errEl) {
+      errEl.textContent = e.message;
+      errEl.style.display = "block";
+    }
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+function openDeleteJobModal(job) {
+  deleteJobId = job ? (job.id || job.job_id || "") : "";
+  if (!deleteJobId) return;
+  const jobName = job.spec && job.spec.name ? job.spec.name : deleteJobId;
+  const promptEl = document.getElementById("delete-job-prompt");
+  if (promptEl) {
+    promptEl.textContent = (t("job.delete_prompt") || "确定要删除任务") + " \"" + jobName + "\" 吗？";
+  }
+  document.getElementById("delete-job-data").checked = true;
+  const err = document.getElementById("delete-job-err");
+  if (err) err.style.display = "none";
+  document.getElementById("delete-job-modal").style.display = "flex";
+}
+
+function closeDeleteJobModal() {
+  document.getElementById("delete-job-modal").style.display = "none";
+  deleteJobId = "";
+}
+
+async function submitDeleteJobModal() {
+  if (!deleteJobId) return;
+  const deleteData = document.getElementById("delete-job-data").checked;
+  const errEl = document.getElementById("delete-job-err");
+  const submitBtn = document.getElementById("delete-job-modal-submit");
+  submitBtn.disabled = true;
+  try {
+    await api("/jobs/" + encodeURIComponent(deleteJobId) + "?delete_data=" + (deleteData ? "true" : "false"), {
+      method: "DELETE"
+    });
+    closeDeleteJobModal();
+    selectedJobId = "";
+    lastSelectedJob = null;
+    lastFileListing = [];
+    updateInfoPanel(null);
+    renderFileTree([], "");
+    renderLogPlaceholder();
+    clearViewer();
+    await refreshJobs();
+  } catch (e) {
+    if (errEl) {
+      errEl.textContent = e.message;
+      errEl.style.display = "block";
+    }
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+async function cancelJob(jobId) {
+  if (!jobId) return;
+  try {
+    await api("/jobs/" + encodeURIComponent(jobId) + "/cancel", { method: "POST" });
+    await refreshJobs();
+  } catch (e) {
+    window.alert((t("job.cancel_failed") || "取消失败") + ": " + e.message);
+  }
+}
+
+async function submitTargetProjectModal() {
+  if (!targetProjectJobId) return;
+  const select = document.getElementById("target-project-select");
+  const projectId = select.value;
+  const action = targetProjectAction;
+  const endpoint = action === "clone" ? "/jobs/" + encodeURIComponent(targetProjectJobId) + "/clone" : "/jobs/" + encodeURIComponent(targetProjectJobId) + "/move";
+  const submitBtn = document.getElementById("target-project-modal-submit");
+  submitBtn.disabled = true;
+    try {
+      await api(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: projectId })
+      });
+      closeTargetProjectModal();
+      await refreshJobs();
+    } catch (e) {
+    window.alert(t(action === "clone" ? "clone.failed" : "move.failed", { message: e.message }) || (action === "clone" ? "复制失败" : "移动失败") + ": " + e.message);
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+async function submitProjectModal() {
+  const nameInput = document.getElementById("project-modal-name");
+  const descInput = document.getElementById("project-modal-desc");
+  const errEl = document.getElementById("project-modal-name-err");
+  const name = nameInput.value.trim();
+
+  if (!name) {
+    errEl.textContent = t("project.name_required") || "请输入项目名称";
+    errEl.style.display = "block";
+    nameInput.focus();
+    return;
+  }
+  if (projectsCache.some(function(p) { return p.name === name; })) {
+    errEl.textContent = t("project.name_exists") || "项目名称已存在";
+    errEl.style.display = "block";
+    nameInput.focus();
+    return;
+  }
+  errEl.style.display = "none";
+
+  const submitBtn = document.getElementById("project-modal-submit");
+  submitBtn.disabled = true;
+  try {
+    const result = await api("/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: name,
+        description: descInput.value.trim()
+      })
+    });
+    closeProjectModal();
+    await loadProjects();
+    if (result && result.project_id) {
+      selectedProjectId = result.project_id;
+      document.getElementById("project-select").value = selectedProjectId;
+      await refreshJobs();
+    }
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = "block";
+  } finally {
+    submitBtn.disabled = false;
+  }
 }
 
 async function loadProjects() {
   const body = await api("/projects");
   projectsCache = body.projects || [];
   renderProjects();
-}
-
-async function loadWorkflows() {
-  const body = await api("/workflows");
-  workflowsCache = body.workflows || [];
-  const select = document.getElementById("modal-workflow");
-  select.innerHTML = "";
-  workflowsCache.forEach(function(workflow) {
-    const option = document.createElement("option");
-    option.value = workflow.name;
-    option.textContent = workflow.label || workflow.name;
-    select.appendChild(option);
-  });
-}
-
-async function loadProtocols() {
-  const body = await api("/protocols");
-  protocolsCache = body.protocols || [];
-  const select = document.getElementById("modal-protocol");
-  select.innerHTML = "";
-  protocolsCache.forEach(function(protocol) {
-    const option = document.createElement("option");
-    option.value = protocol.name;
-    option.textContent = protocol.name;
-    select.appendChild(option);
-  });
 }
 
 async function refreshJobs() {
@@ -1913,11 +2529,15 @@ function buildTree(files) {
     const parts = String(file.path || "").split("/");
     let cursor = root;
     parts.forEach(function(part, index) {
+      if (!part) return;
+      const isDir = file.is_dir || false;
+      const isLast = index === parts.length - 1;
       if (!cursor.children[part]) {
-        cursor.children[part] = { type: index === parts.length - 1 ? "file" : "folder", name: part, path: parts.slice(0, index + 1).join("/"), size: file.size, modified: file.modified, children: {} };
+        const type = isLast ? (isDir ? "folder" : "file") : "folder";
+        cursor.children[part] = { type: type, name: part, path: parts.slice(0, index + 1).join("/"), size: file.size, modified: file.modified, children: {} };
       }
       cursor = cursor.children[part];
-      if (index === parts.length - 1) {
+      if (isLast) {
         cursor.size = file.size;
         cursor.modified = file.modified;
       }
@@ -1945,6 +2565,18 @@ function fileActionSvg() {
   return '<svg viewBox="0 0 20 20" width="14" height="14" stroke="currentColor" fill="none" stroke-width="1.5"><path d="M6 4h5l3 3v9H6z"/><path d="M11 4v3h3"/></svg>';
 }
 
+function downloadSvg() {
+  return '<svg viewBox="0 0 20 20" width="14" height="14" stroke="currentColor" fill="none" stroke-width="1.5"><path d="M10 14V4M6 8l4 4 4-4M3 16v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2"/></svg>';
+}
+
+function folderIconSvg() {
+  return '<svg class="folder-icon" viewBox="0 0 20 20" width="14" height="14" fill="currentColor"><path d="M2 5a2 2 0 0 1 2-2h3l2 2h6a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5z"/></svg>';
+}
+
+function fileIconSvg() {
+  return '<svg class="file-icon" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 4h5l3 3v9H6z"/><path d="M11 4v3h3"/></svg>';
+}
+
 function renderFileTree(files, jobId) {
   lastFileListing = files || [];
   renderFileTreeInto(document.getElementById("file-tree-panel"), files || [], jobId);
@@ -1959,6 +2591,23 @@ function renderFileTreeInto(container, files, jobId) {
     empty.textContent = t("files.empty");
     container.appendChild(empty);
     return;
+  }
+  if (selectedJobIsRemote) {
+    const header = document.createElement("div");
+    header.className = "file-tree-header";
+    const nodeInfo = document.createElement("span");
+    nodeInfo.className = "node-info";
+    nodeInfo.textContent = (t("nodes.title") || "Node") + ": " + (lastRemoteNode || "--");
+    const archiveBtn = document.createElement("button");
+    archiveBtn.className = "tree-btn";
+    archiveBtn.textContent = t("files.download_all") || "下载全部";
+    archiveBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      downloadRemoteArchive(jobId);
+    });
+    header.appendChild(nodeInfo);
+    header.appendChild(archiveBtn);
+    container.appendChild(header);
   }
   const root = buildTree(files);
   const list = document.createElement("ul");
@@ -1979,18 +2628,20 @@ function renderTreeNode(node, jobId) {
     const isOpen = folderState[node.path] !== false;
     toggle.className = "folder-toggle" + (isOpen ? " open" : "");
     toggle.innerHTML = folderToggleSvg(isOpen);
-    toggle.addEventListener("click", function() {
-      folderState[node.path] = !isOpen;
-      renderFileTree(lastFileListing, jobId);
-    });
     const name = document.createElement("span");
     name.className = "folder-name";
-    name.textContent = node.name;
+    name.innerHTML = folderIconSvg() + escapeHtml(node.name);
     const spacer = document.createElement("span");
     spacer.className = "file-size";
     row.appendChild(toggle);
     row.appendChild(name);
     row.appendChild(spacer);
+    const toggleFolder = function() {
+      folderState[node.path] = !isOpen;
+      renderFileTree(lastFileListing, jobId);
+    };
+    toggle.addEventListener("click", function(e) { e.stopPropagation(); toggleFolder(); });
+    row.addEventListener("click", function(e) { if (e.target.closest(".folder-toggle")) return; toggleFolder(); });
     li.appendChild(row);
     if (isOpen) {
       const branch = document.createElement("ul");
@@ -2004,10 +2655,9 @@ function renderTreeNode(node, jobId) {
   li.className = "tree-file";
   const row = document.createElement("div");
   row.className = "file-row" + (selectedFileKey === String(jobId) + "::" + node.path ? " active" : "");
-  const action = document.createElement("button");
-  action.className = "file-action";
-  action.innerHTML = fileActionSvg();
-  action.setAttribute("title", t("files.open"));
+  const icon = document.createElement("span");
+  icon.className = "file-icon";
+  icon.innerHTML = fileIconSvg();
   const name = document.createElement("span");
   const ext = node.name.includes(".") ? node.name.split(".").pop().toLowerCase() : "";
   name.className = "file-name" + (ext ? " ext-" + ext : "");
@@ -2015,10 +2665,36 @@ function renderTreeNode(node, jobId) {
   const size = document.createElement("span");
   size.className = "file-size";
   size.textContent = formatBytes(node.size);
-  row.appendChild(action);
+
+  const actions = document.createElement("span");
+  actions.className = "file-actions";
+  const previewBtn = document.createElement("button");
+  previewBtn.className = "file-action";
+  previewBtn.innerHTML = fileActionSvg();
+  previewBtn.setAttribute("title", t("files.open"));
+  previewBtn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    openJobFile(jobId, node);
+  });
+  const downloadBtn = document.createElement("button");
+  downloadBtn.className = "file-action";
+  downloadBtn.innerHTML = downloadSvg();
+  downloadBtn.setAttribute("title", t("files.download"));
+  downloadBtn.addEventListener("click", function(e) {
+    e.stopPropagation();
+    if (selectedJobIsRemote) {
+      downloadRemoteFile(jobId, node.path);
+    } else {
+      downloadLocalFile(jobId, node.path);
+    }
+  });
+  actions.appendChild(previewBtn);
+  actions.appendChild(downloadBtn);
+  actions.appendChild(size);
+  row.appendChild(icon);
   row.appendChild(name);
-  row.appendChild(size);
-  row.addEventListener("click", function() { openJobFile(jobId, node); });
+  row.appendChild(actions);
+  row.addEventListener("click", function(e) { if (e.target.closest(".file-action")) return; openJobFile(jobId, node); });
   li.appendChild(row);
   return li;
 }
@@ -2081,6 +2757,33 @@ function renderInfoInto(container, job) {
     grid.appendChild(item);
   });
   container.appendChild(grid);
+
+  const actions = document.createElement("div");
+  actions.className = "info-actions";
+  const isActive = job.status === "queued" || job.status === "starting" || job.status === "running" || job.status === "cancelling";
+  if (isActive) {
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "btn";
+    cancelBtn.textContent = t("job.cancel") || "取消任务";
+    cancelBtn.addEventListener("click", function() { cancelJob(job.id || job.job_id); });
+    actions.appendChild(cancelBtn);
+  }
+  const moveBtn = document.createElement("button");
+  moveBtn.className = "btn";
+  moveBtn.textContent = t("move.button") || "移动到项目";
+  moveBtn.addEventListener("click", function() { openTargetProjectModal("move", job); });
+  const cloneBtn = document.createElement("button");
+  cloneBtn.className = "btn";
+  cloneBtn.textContent = t("clone.button") || "复制到项目";
+  cloneBtn.addEventListener("click", function() { openTargetProjectModal("clone", job); });
+  const deleteBtn = document.createElement("button");
+  deleteBtn.className = "btn danger";
+  deleteBtn.textContent = t("job.delete") || "删除";
+  deleteBtn.addEventListener("click", function() { openDeleteJobModal(job); });
+  actions.appendChild(moveBtn);
+  actions.appendChild(cloneBtn);
+  actions.appendChild(deleteBtn);
+  container.appendChild(actions);
 }
 
 function updateInfoPanel(job) {
@@ -2203,6 +2906,59 @@ async function loadStructureFile(jobId, filePath) {
   }
 }
 
+async function loadRemoteStructureFile(jobId, filePath) {
+  const previewUrl = "/jobs/" + encodeURIComponent(jobId) + "/remote-files/" + filePath.split("/").map(encodeURIComponent).join("/") + "/preview?mode=structure";
+  const resp = await api(previewUrl);
+  const content = (resp && typeof resp.content === "string") ? resp.content : String(resp);
+  const ext = filePath.includes(".") ? filePath.split(".").pop().toLowerCase() : "";
+  const frames = ext === "xyz" ? parseMultiFrameXYZ(content) : parseMolTextToFrame(content, ext === "mol" ? "mol" : "sdf");
+  if (!frames.length) return;
+  stopFramePlayback();
+  molDoc.frames = frames;
+  molDoc.currentFrame = 0;
+  molDoc.selection.clear();
+  molDoc.measures = [];
+  measureBuffer = [];
+  molDoc.meta.source = filePath;
+  molDoc.meta.formula = countFormula(frames[0].atoms);
+  renderMolDoc({ zoomTo: true });
+  initialView = viewer ? viewer.getView().slice() : null;
+  updateFrameController();
+  updateInfoPanel(lastSelectedJob);
+}
+
+function downloadRemoteFile(jobId, filePath) {
+  if (!filePath || filePath.endsWith("/")) return;
+  const url = API_BASE + "/jobs/" + encodeURIComponent(jobId) + "/remote-files/" + filePath.split("/").map(encodeURIComponent).join("/");
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filePath.split("/").pop() || "download";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function downloadLocalFile(jobId, filePath) {
+  if (!filePath || filePath.endsWith("/")) return;
+  const url = API_BASE + "/jobs/" + encodeURIComponent(jobId) + "/files/" + filePath.split("/").map(encodeURIComponent).join("/");
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filePath.split("/").pop() || "download";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function downloadRemoteArchive(jobId) {
+  const url = API_BASE + "/jobs/" + encodeURIComponent(jobId) + "/remote-files/archive";
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = jobId + ".zip";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 function handleSelectClick(atom, event) {
   if (typeof atom.acpId !== "number") return;
   if (event && event.shiftKey) {
@@ -2281,6 +3037,109 @@ function renderMeasurementList() {
   });
 }
 
+// ----------------------------------------------------------------------
+// Phase 6: remote node selector + status panel
+// ----------------------------------------------------------------------
+
+async function loadNodes() {
+  const list = document.getElementById("node-list");
+  if (!list) return;
+  try {
+    const data = await api("/nodes");
+    nodesCache = data.nodes || [];
+    renderNodePanel();
+    renderNodeSelector();
+  } catch (e) {
+    // 503 = remote execution not configured (expected, show empty placeholder).
+    // Other errors = real failure, show the error message so it's not masked.
+    nodesCache = [];
+    if (list) {
+      if (String(e.message).indexOf("not configured") >= 0) {
+        list.innerHTML = '<div class="muted">' + escapeHtml(t("nodes.empty")) + '</div>';
+      } else {
+        list.innerHTML = '<div class="node-error">' + escapeHtml(t("nodes.load_error") + ": " + e.message) + '</div>';
+      }
+    }
+    renderNodeSelector();
+  }
+}
+
+function renderNodePanel() {
+  const list = document.getElementById("node-list");
+  if (!list) return;
+  list.innerHTML = "";
+  if (!nodesCache.length) {
+    list.innerHTML = '<div class="muted">' + escapeHtml(t("nodes.empty")) + '</div>';
+    return;
+  }
+  nodesCache.forEach(function(node) {
+    const row = document.createElement("div");
+    row.className = "node-row" + (node.status === "offline" ? " offline" : "");
+    const dot = document.createElement("span");
+    dot.className = "node-dot " + (node.status || "offline");
+    const info = document.createElement("div");
+    info.className = "node-info";
+    const name = document.createElement("div");
+    name.className = "node-name";
+    name.textContent = (node.name || "--") + "  " + (node.host || "");
+    const meta = document.createElement("div");
+    meta.className = "node-meta";
+    meta.textContent = t("nodes.status." + (node.status || "offline")) + " · " + (node.running_jobs || 0) + "/" + (node.max_jobs || 0) + " · DISK " + (node.disk_usage_pct || 0) + "%";
+    info.appendChild(name);
+    info.appendChild(meta);
+    if (node.error) {
+      const err = document.createElement("div");
+      err.className = "node-error";
+      err.textContent = node.error;
+      info.appendChild(err);
+    }
+    const actions = document.createElement("div");
+    actions.className = "node-actions";
+    const ping = document.createElement("button");
+    ping.className = "node-btn";
+    ping.textContent = t("nodes.ping");
+    ping.addEventListener("click", function(event) {
+      event.stopPropagation();
+      pingNode(node.name);
+    });
+    actions.appendChild(ping);
+    row.appendChild(dot);
+    row.appendChild(info);
+    row.appendChild(actions);
+    list.appendChild(row);
+  });
+}
+
+function renderNodeSelector() {
+  const select = document.getElementById("modal-node-select");
+  if (!select) return;
+  select.innerHTML = '<option value="" data-i18n="nodes.auto">' + escapeHtml(t("nodes.auto")) + '</option>';
+  nodesCache.forEach(function(node) {
+    const option = document.createElement("option");
+    option.value = node.name;
+    const label = node.name + " " + (node.status === "online" ? "🟢" : node.status === "degraded" ? "🟡" : "🔴") + " " + (node.running_jobs || 0) + "/" + (node.max_jobs || 0);
+    option.textContent = label;
+    option.disabled = node.status === "offline";
+    select.appendChild(option);
+  });
+  // If the previously selected node is now offline/missing, fall back to auto.
+  const exists = nodesCache.some(function(n) { return n.name === selectedNode && n.status !== "offline"; });
+  if (!exists) selectedNode = "";
+  select.value = selectedNode;
+}
+
+async function pingNode(name) {
+  try {
+    const data = await api("/nodes/" + encodeURIComponent(name) + "/ping", { method: "POST" });
+    const status = data.status || "offline";
+    const msg = data.reachable ? t("nodes.status.online") : (data.error || t("nodes.status.offline"));
+    window.alert((data.reachable ? "OK: " : "FAIL: ") + name + " - " + msg);
+    await loadNodes();
+  } catch (e) {
+    window.alert("Ping failed: " + e.message);
+  }
+}
+
 function setMode(mode) {
   molDoc.mode = mode;
   if (mode !== "measure") measureBuffer = [];
@@ -2336,8 +3195,13 @@ function toggleFramePlayback() {
 }
 
 async function openJobFile(jobId, node) {
+  if (!node || node.type === "folder") return;
   selectedFileKey = String(jobId) + "::" + node.path;
   renderFileTree(lastFileListing, jobId);
+  if (selectedJobIsRemote) {
+    await openRemoteFilePreview(jobId, node);
+    return;
+  }
   if (Number(node.size || 0) > 10485760) {
     appendLogLine("file-large", t("log.file_large", { path: node.path }));
     return;
@@ -2367,6 +3231,39 @@ async function openJobFile(jobId, node) {
   }
   resetLogs();
   appendLogHtml('<span class="download-line">' + escapeHtml(t("logs.download_ready")) + '</span><span class="download-line"><a href="' + escapeHtml(API_BASE + pathUrl) + '" target="_blank" rel="noopener">' + escapeHtml(t("files.download")) + '</a></span>');
+}
+
+async function openRemoteFilePreview(jobId, node) {
+  if (!node || node.type === "folder") return;
+  const ext = node.name.includes(".") ? node.name.split(".").pop().toLowerCase() : "";
+  const isStructure = ["xyz", "sdf", "mol"].indexOf(ext) >= 0;
+  if (isStructure) {
+    try {
+      await loadRemoteStructureFile(jobId, node.path);
+      setViewerTab("3d");
+      appendLogLine("file-loaded", t("log.file_loaded", { path: node.path }));
+    } catch (e) {
+      appendLogLine("error", "Preview failed: " + String(e.message || e));
+    }
+    return;
+  }
+  const previewUrl = "/jobs/" + encodeURIComponent(jobId) + "/remote-files/" + node.path.split("/").map(encodeURIComponent).join("/") + "/preview?mode=auto";
+  try {
+    const resp = await api(previewUrl);
+    if (resp && resp.mode === "report" && resp.content && typeof resp.content === "object") {
+      resetLogs();
+      appendLogHtml('<span class="text-panel">' + escapeHtml(JSON.stringify(resp.content, null, 2)) + '</span>');
+      return;
+    }
+    const text = (resp && typeof resp.content === "string") ? resp.content : String(resp);
+    resetLogs();
+    appendLogHtml('<span class="text-panel">' + escapeHtml(text) + '</span>');
+    if (resp && resp.truncated) {
+      appendLogLine("file-large", t("log.file_large", { path: node.path }));
+    }
+  } catch (e) {
+    appendLogLine("error", "Preview failed: " + String(e.message || e));
+  }
 }
 
 function openSSE(jobId) {
@@ -2401,7 +3298,22 @@ function openSSE(jobId) {
 async function selectJob(jobId) {
   selectedJobId = jobId;
   const job = await api("/jobs/" + encodeURIComponent(jobId));
-  const filesResp = await api("/jobs/" + encodeURIComponent(jobId) + "/files");
+  selectedJobIsRemote = !!(job.result && job.result.node);
+  lastRemoteNode = selectedJobIsRemote ? String(job.result.node || "") : "";
+  let filesResp;
+  if (selectedJobIsRemote) {
+    filesResp = await api("/jobs/" + encodeURIComponent(jobId) + "/remote-files");
+    filesResp.files = (filesResp.files || []).map(function(f) {
+      return {
+        path: f.name,
+        size: f.size,
+        modified: f.mtime,
+        is_dir: f.is_dir
+      };
+    });
+  } else {
+    filesResp = await api("/jobs/" + encodeURIComponent(jobId) + "/files");
+  }
   updateInfoPanel(job);
   renderFileTree(filesResp.files || [], jobId);
   highlightQueueRow(jobId);
@@ -2433,6 +3345,7 @@ const wizardState = {
 function openModal() {
   wizardStructures = [];
   wizardSelectedStructureIndex = 0;
+  selectedNode = "";
   document.getElementById("structure-preview").style.display = "none";
   document.getElementById("parse-errors").style.display = "none";
   document.getElementById("parse-status").textContent = "";
@@ -2444,6 +3357,8 @@ function openModal() {
   if (dzSpan) dzSpan.textContent = t("modal.upload_hint");
   setWizardInputMode("smiles");
   updateConfigCards();
+  renderModalProjects();
+  setModalProjectDefault();
   document.getElementById("job-modal").style.display = "flex";
 }
 
@@ -2848,6 +3763,17 @@ async function openMethodConfig() {
       var levelState = getLevelState(lvDef.level_id);
       var curVal = levelState[fieldName] !== undefined ? levelState[fieldName] : getFieldDefault(fieldName, engine);
 
+      var isCompositeLocked = ((fieldName === "basis" || fieldName === "dispersion") && levelState.functional === "r2SCAN-3c");
+      if (isCompositeLocked) {
+        if (fieldName === "basis") {
+          curVal = "def2-mTZVPP";
+          levelState.basis = "def2-mTZVPP";
+        } else if (fieldName === "dispersion") {
+          curVal = "none";
+          levelState.dispersion = "none";
+        }
+      }
+
       if (opts && opts.length) {
         var sel = document.createElement("select");
         opts.forEach(function(o) {
@@ -2857,16 +3783,33 @@ async function openMethodConfig() {
           if (String(curVal) === String(o)) opt.selected = true;
           sel.appendChild(opt);
         });
+        if (isCompositeLocked) {
+          sel.disabled = true;
+        }
         sel.addEventListener("change", function() {
           getLevelState(lvDef.level_id)[fieldName] = sel.value;
           scheduleValidate();
         });
+        if (fieldName === "functional") {
+          sel.addEventListener("change", function() {
+            rebuildLevelCard(lvDef.level_id);
+          });
+        }
         fDiv.appendChild(sel);
+        if (isCompositeLocked) {
+          var note = document.createElement("span");
+          note.className = "muted";
+          note.style.fontSize = "11px";
+          note.style.marginLeft = "4px";
+          note.textContent = fieldName === "basis" ? "built-in (def2-mTZVPP)" : "built-in";
+          fDiv.appendChild(note);
+        }
       } else if (fieldDefs[fieldName] && fieldDefs[fieldName].type === "float") {
         var inp = document.createElement("input");
         inp.type = "number";
         inp.step = "any";
         inp.value = curVal;
+        if (isCompositeLocked) inp.disabled = true;
         inp.addEventListener("change", function() {
           getLevelState(lvDef.level_id)[fieldName] = parseFloat(inp.value) || inp.value;
           scheduleValidate();
@@ -2876,6 +3819,7 @@ async function openMethodConfig() {
         var inp = document.createElement("input");
         inp.type = "text";
         inp.value = curVal;
+        if (isCompositeLocked) inp.disabled = true;
         inp.addEventListener("change", function() {
           getLevelState(lvDef.level_id)[fieldName] = inp.value;
           scheduleValidate();
@@ -3142,9 +4086,11 @@ async function submitJobModal() {
       name: wizardStructures.length > 1 ? (jobName || s.name) + "_" + (i + 1) : jobName,
       input: inputPayload,
       method: methodPayload,
-      resources: { nproc: nproc, mem: mem }
+      resources: { nproc: nproc, mem: mem },
+      target_node: selectedNode || null
     };
-    if (selectedProjectId) body.project_id = selectedProjectId;
+    var modalProjectId = document.getElementById("modal-project-select").value;
+    if (modalProjectId) body.project_id = modalProjectId;
 
     try {
       var result = await api("/jobs", {
@@ -3185,6 +4131,7 @@ function setupEventListeners() {
 
   document.getElementById("project-select").addEventListener("change", async function(event) {
     selectedProjectId = event.target.value;
+    updateDeleteProjectButton();
     await refreshJobs();
     if (jobsCache.length) {
       await selectJob(jobsCache[0].id || jobsCache[0].job_id);
@@ -3199,6 +4146,10 @@ function setupEventListeners() {
     }
   });
 
+  document.getElementById("modal-project-select").addEventListener("change", function() {
+    updateModalProjectHint();
+  });
+
   document.getElementById("queue-toggle").addEventListener("click", function() {
     queueExpanded = !queueExpanded;
     renderQueue();
@@ -3208,6 +4159,10 @@ function setupEventListeners() {
   document.getElementById("modal-close").addEventListener("click", closeModal);
   document.getElementById("modal-cancel").addEventListener("click", closeModal);
   document.getElementById("modal-submit").addEventListener("click", submitJobModal);
+  document.getElementById("modal-node-select").addEventListener("change", function(event) {
+    selectedNode = event.target.value;
+  });
+  document.getElementById("btn-refresh-nodes").addEventListener("click", loadNodes);
   document.getElementById("job-modal").addEventListener("click", function(event) {
     if (event.target.id === "job-modal") closeModal();
   });
@@ -3225,6 +4180,39 @@ function setupEventListeners() {
   document.getElementById("mt-config-ok").addEventListener("click", function() {
     document.getElementById("method-config-modal").style.display = "none";
     updateConfigCards();
+  });
+
+  document.getElementById("btn-new-project").addEventListener("click", openProjectModal);
+  document.getElementById("btn-delete-project").addEventListener("click", openDeleteProjectModal);
+  document.getElementById("project-modal-close").addEventListener("click", closeProjectModal);
+  document.getElementById("project-modal-cancel").addEventListener("click", closeProjectModal);
+  document.getElementById("project-modal-submit").addEventListener("click", submitProjectModal);
+  document.getElementById("project-modal").addEventListener("click", function(event) {
+    if (event.target.id === "project-modal") closeProjectModal();
+  });
+  document.getElementById("project-modal-name").addEventListener("keydown", function(e) {
+    if (e.key === "Enter") submitProjectModal();
+  });
+
+  document.getElementById("delete-project-modal-close").addEventListener("click", closeDeleteProjectModal);
+  document.getElementById("delete-project-modal-cancel").addEventListener("click", closeDeleteProjectModal);
+  document.getElementById("delete-project-modal-submit").addEventListener("click", submitDeleteProjectModal);
+  document.getElementById("delete-project-modal").addEventListener("click", function(event) {
+    if (event.target.id === "delete-project-modal") closeDeleteProjectModal();
+  });
+
+  document.getElementById("delete-job-modal-close").addEventListener("click", closeDeleteJobModal);
+  document.getElementById("delete-job-modal-cancel").addEventListener("click", closeDeleteJobModal);
+  document.getElementById("delete-job-modal-submit").addEventListener("click", submitDeleteJobModal);
+  document.getElementById("delete-job-modal").addEventListener("click", function(event) {
+    if (event.target.id === "delete-job-modal") closeDeleteJobModal();
+  });
+
+  document.getElementById("target-project-modal-close").addEventListener("click", closeTargetProjectModal);
+  document.getElementById("target-project-modal-cancel").addEventListener("click", closeTargetProjectModal);
+  document.getElementById("target-project-modal-submit").addEventListener("click", submitTargetProjectModal);
+  document.getElementById("target-project-modal").addEventListener("click", function(event) {
+    if (event.target.id === "target-project-modal") closeTargetProjectModal();
   });
 
   document.querySelectorAll(".input-mode-tab").forEach(function(tab) {
@@ -3385,10 +4373,45 @@ function startPolling() {
     try {
       await loadStatus();
       await refreshJobs();
+      await loadDiskUsage();
+      await loadNodes();
     } catch (e) {
       console.error("Polling error:", e);
     }
   }, 5000);
+}
+
+// Phase 5B: local disk-usage indicator in the topbar.
+async function loadDiskUsage() {
+  var pill = document.getElementById("disk-pill");
+  if (!pill) return;
+  try {
+    var resp = await fetch(API_BASE + "/maintenance/disk-usage");
+    if (!resp.ok) { pill.style.display = "none"; return; }
+    var data = await resp.json();
+    var pct = Math.round(data.percent_used || 0);
+    pill.style.display = "";
+    pill.textContent = "DISK " + pct + "%";
+    var cls = "status-pill disk";
+    if (pct >= 95) cls += " err";
+    else if (pct >= 90) cls += " warn";
+    pill.className = cls;
+    var human = data.free_bytes != null ? formatBytes(data.free_bytes) : "--";
+    pill.title = "本地磁盘使用率（Phase 5B）\n"
+      + "使用 " + pct + "% · 剩余 " + human + "\n"
+      + "作业数 " + (data.job_count || 0)
+      + (data.cleanup_enabled ? "\n清理：已启用" : "\n清理：未启用");
+  } catch (e) {
+    pill.style.display = "none";
+  }
+}
+
+function formatBytes(n) {
+  if (!n || n <= 0) return "0 B";
+  var units = ["B", "KiB", "MiB", "GiB", "TiB"];
+  var s = n, i = 0;
+  while (s >= 1024 && i < units.length - 1) { s /= 1024; i++; }
+  return (i === 0 ? Math.round(s) : s.toFixed(1)) + " " + units[i];
 }
 
 window.addEventListener("DOMContentLoaded", async function() {
@@ -3398,28 +4421,44 @@ window.addEventListener("DOMContentLoaded", async function() {
   clearViewer();
   document.getElementById("style-preset-select").value = molDoc.style;
   setMode("view");
+
+  async function safeLoad(name, fn) {
+    try {
+      await fn();
+    } catch (e) {
+      console.error(name + " failed:", e);
+    }
+  }
+
+  await safeLoad("loadStatus", loadStatus);
+  await safeLoad("loadProjects", loadProjects);
+  await safeLoad("loadWorkflowCatalog", loadWorkflowCatalog);
+  await safeLoad("loadMethodCatalog", loadMethodCatalog);
+
   try {
-    await loadStatus();
-    await loadProjects();
-    await loadWorkflows();
-    await loadProtocols();
-    await loadWorkflowCatalog();
-    await loadMethodCatalog();
     var confsearchSchema = (methodCatalogCache.method_schemas || {}).confsearch;
     if (confsearchSchema && confsearchSchema.profiles && confsearchSchema.profiles.length) {
-      var p = confsearchSchema.profiles[0];
+      var p = confsearchSchema.profiles.find(function(x) { return x.profile_id === "lite"; })
+             || confsearchSchema.profiles[0];
       wizardState.method.profile_id = p.profile_id;
       wizardState.method.profile_label = p.label;
       wizardState.method.stages = JSON.parse(JSON.stringify(p.stages || {}));
     }
     wizardState.workflow.schema_id = "confsearch";
     updateConfigCards();
-    await refreshJobs();
-    if (jobsCache.length > 0) await selectJob(jobsCache[0].id || jobsCache[0].job_id);
-    startPolling();
   } catch (e) {
-    console.error("Init error:", e);
+    console.error("method catalog init failed:", e);
   }
+
+  await safeLoad("refreshJobs", refreshJobs);
+  if (jobsCache.length > 0) {
+    await safeLoad("selectJob", function() {
+      return selectJob(jobsCache[0].id || jobsCache[0].job_id);
+    });
+  }
+  await safeLoad("loadDiskUsage", loadDiskUsage);
+  await safeLoad("loadNodes", loadNodes);
+  startPolling();
   setupEventListeners();
 });
 </script>

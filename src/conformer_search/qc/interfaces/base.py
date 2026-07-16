@@ -7,7 +7,6 @@ Abstract base class for quantum chemistry software interfaces.
 Author: QCcalc Team (adapted from RPH)
 """
 
-import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -109,6 +108,7 @@ class QCInterfaceBase(ABC):
         """
         pass
 
+    @abstractmethod
     def frequency(
         self,
         coordinates: np.ndarray,
@@ -132,12 +132,7 @@ class QCInterfaceBase(ABC):
         Returns:
             QCResult with frequency results
         """
-        logger = logging.getLogger(__name__)
-        logger.warning("Frequency calculation not supported by this backend")
-        return QCResult(
-            success=False,
-            error_message="Frequency calculation not supported by this backend"
-        )
+        pass
 
     def validate_result(self, result: QCResult) -> bool:
         """
