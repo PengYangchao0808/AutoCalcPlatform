@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 class GeometryUtils:
     """
     Universal geometry utility class.
-    
+
     Provides various geometric calculations and transformations.
     These are low-level utilities without specific chemical reaction logic.
     """
@@ -70,8 +70,9 @@ class GeometryUtils:
         return float(np.degrees(angle))
 
     @staticmethod
-    def calculate_dihedral(coords: np.ndarray, atom_i: int, atom_j: int, 
-                          atom_k: int, atom_l: int) -> float:
+    def calculate_dihedral(
+        coords: np.ndarray, atom_i: int, atom_j: int, atom_k: int, atom_l: int
+    ) -> float:
         """
         Calculate dihedral angle (torsion) between four atoms (i-j-k-l).
 
@@ -114,15 +115,15 @@ class GeometryUtils:
         """
         total_mass = 0.0
         com = np.zeros(3)
-        
+
         for i, symbol in enumerate(symbols):
             mass = ELEMENT_MASS.get(symbol, 1.0)
             com += mass * coords[i]
             total_mass += mass
-        
+
         if total_mass > 0:
             com /= total_mass
-        
+
         return com
 
     @staticmethod
@@ -144,9 +145,9 @@ class GeometryUtils:
         for i, symbol in enumerate(symbols):
             mass = ELEMENT_MASS.get(symbol, 1.0)
             x, y, z = coords_shifted[i]
-            I[0, 0] += mass * (y*y + z*z)
-            I[1, 1] += mass * (x*x + z*z)
-            I[2, 2] += mass * (x*x + y*y)
+            I[0, 0] += mass * (y * y + z * z)
+            I[1, 1] += mass * (x * x + z * z)
+            I[2, 2] += mass * (x * x + y * y)
             I[0, 1] -= mass * x * y
             I[0, 2] -= mass * x * z
             I[1, 2] -= mass * y * z
@@ -170,8 +171,10 @@ class GeometryUtils:
             RMSD value
         """
         if coords1.shape != coords2.shape:
-            raise ValueError(f"Coordinate arrays must have same shape: {coords1.shape} vs {coords2.shape}")
-        
+            raise ValueError(
+                f"Coordinate arrays must have same shape: {coords1.shape} vs {coords2.shape}"
+            )
+
         diff = coords1 - coords2
         return float(np.sqrt(np.mean(np.sum(diff**2, axis=1))))
 
@@ -223,11 +226,13 @@ class GeometryUtils:
         t = 1 - c
 
         x, y, z = axis
-        return np.array([
-            [t*x*x + c, t*x*y - s*z, t*x*z + s*y],
-            [t*x*y + s*z, t*y*y + c, t*y*z - s*x],
-            [t*x*z - s*y, t*y*z + s*x, t*z*z + c]
-        ])
+        return np.array(
+            [
+                [t * x * x + c, t * x * y - s * z, t * x * z + s * y],
+                [t * x * y + s * z, t * y * y + c, t * y * z - s * x],
+                [t * x * z - s * y, t * y * z + s * x, t * z * z + c],
+            ]
+        )
 
 
 class LogParser:
@@ -241,16 +246,36 @@ class LogParser:
     """
 
     ELEMENT_MAP = {
-        1: 'H', 2: 'He', 3: 'Li', 4: 'Be', 5: 'B', 6: 'C', 7: 'N', 8: 'O',
-        9: 'F', 10: 'Ne', 11: 'Na', 12: 'Mg', 13: 'Al', 14: 'Si', 15: 'P',
-        16: 'S', 17: 'Cl', 18: 'Ar', 19: 'K', 20: 'Ca', 26: 'Fe', 29: 'Cu',
-        30: 'Zn', 35: 'Br', 53: 'I'
+        1: "H",
+        2: "He",
+        3: "Li",
+        4: "Be",
+        5: "B",
+        6: "C",
+        7: "N",
+        8: "O",
+        9: "F",
+        10: "Ne",
+        11: "Na",
+        12: "Mg",
+        13: "Al",
+        14: "Si",
+        15: "P",
+        16: "S",
+        17: "Cl",
+        18: "Ar",
+        19: "K",
+        20: "Ca",
+        26: "Fe",
+        29: "Cu",
+        30: "Zn",
+        35: "Br",
+        53: "I",
     }
 
     @staticmethod
     def extract_last_converged_coords(
-        log_file: Path,
-        engine_type: str = 'auto'
+        log_file: Path, engine_type: str = "auto"
     ) -> Tuple[Optional[np.ndarray], Optional[List[str]], Optional[str]]:
         """
         Extract last converged geometry from log file.
@@ -268,22 +293,22 @@ class LogParser:
         if not log_file.exists():
             return None, None, f"Log file not found: {log_file}"
 
-        if engine_type == 'auto':
+        if engine_type == "auto":
             suffix = log_file.suffix.lower()
-            if suffix == '.out':
-                engine_type = 'orca'
+            if suffix == ".out":
+                engine_type = "orca"
             else:
-                with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+                with open(log_file, "r", encoding="utf-8", errors="replace") as f:
                     content = f.read(4096)
-                    if 'Gaussian' in content and 'ORCA' not in content:
-                        engine_type = 'gaussian'
+                    if "Gaussian" in content and "ORCA" not in content:
+                        engine_type = "gaussian"
                     else:
-                        engine_type = 'orca'
+                        engine_type = "orca"
 
         try:
-            if engine_type == 'gaussian':
+            if engine_type == "gaussian":
                 return LogParser._parse_gaussian_log(log_file)
-            if engine_type == 'orca':
+            if engine_type == "orca":
                 coords, symbols, err = LogParser._parse_orca_out(log_file)
                 if coords is not None:
                     return coords, symbols, err
@@ -295,19 +320,23 @@ class LogParser:
             return None, None, f"Parse error: {str(e)}"
 
     @staticmethod
-    def _parse_gaussian_log(log_file: Path) -> Tuple[Optional[np.ndarray], Optional[List[str]], Optional[str]]:
+    def _parse_gaussian_log(
+        log_file: Path,
+    ) -> Tuple[Optional[np.ndarray], Optional[List[str]], Optional[str]]:
         """Parse Gaussian log file for last converged geometry."""
         coords_blocks = []
         symbols = None
 
-        with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+        with open(log_file, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
 
-        standard_orient_pattern = r'Standard orientation:.*?Coordinates \(Angstroms\)(.*?)(\n\s+-+\n)(?=\s+Rotational)'
+        standard_orient_pattern = (
+            r"Standard orientation:.*?Coordinates \(Angstroms\)(.*?)(\n\s+-+\n)(?=\s+Rotational)"
+        )
         matches = re.findall(standard_orient_pattern, content, re.DOTALL)
 
         for match in matches:
-            all_lines = match[0].strip().split('\n')
+            all_lines = match[0].strip().split("\n")
             coords = []
             for line in all_lines:
                 parts = line.split()
@@ -315,7 +344,7 @@ class LogParser:
                     try:
                         atomic_num = int(parts[1])
                         x, y, z = float(parts[3]), float(parts[4]), float(parts[5])
-                        symbol = LogParser.ELEMENT_MAP.get(atomic_num, f'X{atomic_num}')
+                        symbol = LogParser.ELEMENT_MAP.get(atomic_num, f"X{atomic_num}")
                         coords.append((symbol, x, y, z))
                     except (ValueError, IndexError):
                         continue
@@ -324,10 +353,12 @@ class LogParser:
                 coords_blocks.append(coords)
 
         if not coords_blocks:
-            input_orient_pattern = r'Input orientation:.*?Coordinates \(Angstroms\)(.*?)(\n\s+-+\n)(?=\s+Rotational)'
+            input_orient_pattern = (
+                r"Input orientation:.*?Coordinates \(Angstroms\)(.*?)(\n\s+-+\n)(?=\s+Rotational)"
+            )
             matches = re.findall(input_orient_pattern, content, re.DOTALL)
             for match in matches:
-                all_lines = match[0].strip().split('\n')
+                all_lines = match[0].strip().split("\n")
                 coords = []
                 for line in all_lines:
                     parts = line.split()
@@ -335,7 +366,7 @@ class LogParser:
                         try:
                             atomic_num = int(parts[1])
                             x, y, z = float(parts[3]), float(parts[4]), float(parts[5])
-                            symbol = LogParser.ELEMENT_MAP.get(atomic_num, f'X{atomic_num}')
+                            symbol = LogParser.ELEMENT_MAP.get(atomic_num, f"X{atomic_num}")
                             coords.append((symbol, x, y, z))
                         except (ValueError, IndexError):
                             continue
@@ -352,19 +383,21 @@ class LogParser:
         return coordinates, symbols, None
 
     @staticmethod
-    def _parse_orca_out(out_file: Path) -> Tuple[Optional[np.ndarray], Optional[List[str]], Optional[str]]:
+    def _parse_orca_out(
+        out_file: Path,
+    ) -> Tuple[Optional[np.ndarray], Optional[List[str]], Optional[str]]:
         """Parse ORCA output file for last geometry."""
         coords_blocks = []
         symbols = None
 
-        with open(out_file, 'r', encoding='utf-8', errors='replace') as f:
+        with open(out_file, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
 
-        cartesian_pattern = r'CARTESIAN COORDINATES \(ANGSTROEM\)\s+-{3,}(.*?)-{3,}'
+        cartesian_pattern = r"CARTESIAN COORDINATES \(ANGSTROEM\)\s+-{3,}(.*?)-{3,}"
         matches = re.findall(cartesian_pattern, content, re.DOTALL)
 
         for match in matches:
-            lines = match.strip().split('\n')
+            lines = match.strip().split("\n")
             coords = []
             for line in lines:
                 parts = line.split()
@@ -379,17 +412,21 @@ class LogParser:
                 coords_blocks.append(coords)
 
         if not coords_blocks:
-            cartesian_au_pattern = r'CARTESIAN COORDINATES \(A\.U\.\)\s+-{3,}(.*?)-{3,}'
+            cartesian_au_pattern = r"CARTESIAN COORDINATES \(A\.U\.\)\s+-{3,}(.*?)-{3,}"
             matches = re.findall(cartesian_au_pattern, content, re.DOTALL)
             for match in matches:
-                lines = match.strip().split('\n')
+                lines = match.strip().split("\n")
                 coords = []
                 for line in lines:
                     parts = line.split()
                     if len(parts) >= 5 and parts[1].isdigit():
                         try:
                             symbol = parts[2]
-                            x, y, z = float(parts[3]) * 0.529177, float(parts[4]) * 0.529177, float(parts[5]) * 0.529177
+                            x, y, z = (
+                                float(parts[3]) * 0.529177,
+                                float(parts[4]) * 0.529177,
+                                float(parts[5]) * 0.529177,
+                            )
                             coords.append((symbol, x, y, z))
                         except ValueError:
                             continue
@@ -397,10 +434,10 @@ class LogParser:
                     coords_blocks.append(coords)
 
         if not coords_blocks:
-            xyz_pattern = r'\* xyz (\d+) (\d+)(.*?)\*'
+            xyz_pattern = r"\* xyz (\d+) (\d+)(.*?)\*"
             matches = re.findall(xyz_pattern, content, re.DOTALL)
             for match in matches:
-                lines = match[2].strip().split('\n')
+                lines = match[2].strip().split("\n")
                 coords = []
                 for line in lines:
                     parts = line.split()
@@ -424,7 +461,7 @@ class LogParser:
         return coordinates, symbols, None
 
     @staticmethod
-    def extract_energy(log_file: Path, engine_type: str = 'auto') -> Optional[float]:
+    def extract_energy(log_file: Path, engine_type: str = "auto") -> Optional[float]:
         """
         Extract final energy from log file.
 
@@ -438,25 +475,25 @@ class LogParser:
         if not log_file.exists():
             return None
 
-        if engine_type == 'auto':
+        if engine_type == "auto":
             suffix = log_file.suffix.lower()
-            engine_type = 'orca' if suffix == '.out' else 'auto_content'
+            engine_type = "orca" if suffix == ".out" else "auto_content"
 
-        with open(log_file, 'r', encoding='utf-8', errors='replace') as f:
+        with open(log_file, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
 
-        if engine_type == 'gaussian':
-            scf_pattern = r'SCF Done:.*E\(.*\)\s*=\s*([-+]?\d+\.\d+)'
+        if engine_type == "gaussian":
+            scf_pattern = r"SCF Done:.*E\(.*\)\s*=\s*([-+]?\d+\.\d+)"
             matches = re.findall(scf_pattern, content)
             if matches:
                 return float(matches[-1])
 
         # ORCA first; fall back to Gaussian SCF for legacy .log files.
-        final_energy_pattern = r'FINAL SINGLE POINT ENERGY\s+([-+]?\d+\.\d+)'
+        final_energy_pattern = r"FINAL SINGLE POINT ENERGY\s+([-+]?\d+\.\d+)"
         matches = re.findall(final_energy_pattern, content)
         if matches:
             return float(matches[-1])
-        scf_pattern = r'SCF Done:.*E\(.*\)\s*=\s*([-+]?\d+\.\d+)'
+        scf_pattern = r"SCF Done:.*E\(.*\)\s*=\s*([-+]?\d+\.\d+)"
         matches = re.findall(scf_pattern, content)
         if matches:
             return float(matches[-1])
