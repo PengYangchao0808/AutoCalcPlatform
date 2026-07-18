@@ -116,6 +116,90 @@ class _MechanismStagePlanProvider:
         ]
 
 
+class _EnsembleStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        preset = str(spec.method.get("preset") or "censo-light").strip().lower()
+        if preset == "censo-zero":
+            return [
+                StagePlan("embed_smiles"),
+                StagePlan("crest_search"),
+                StagePlan("ensemble_export"),
+            ]
+        if preset == "censo-default":
+            return [
+                StagePlan("embed_smiles"),
+                StagePlan("crest_search"),
+                StagePlan("censo_prescreening"),
+                StagePlan("censo_screening"),
+                StagePlan("censo_optimization"),
+                StagePlan("ensemble_export"),
+            ]
+        # censo-light (default)
+        return [
+            StagePlan("embed_smiles"),
+            StagePlan("crest_search"),
+            StagePlan("censo_prescreening"),
+            StagePlan("censo_screening"),
+            StagePlan("ensemble_export"),
+        ]
+
+
+class _EnergyStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        preset = str(spec.method.get("preset") or "censo-light").strip().lower()
+        no_opt = spec.method.get("no_opt", False)
+        if preset == "censo-zero":
+            if no_opt:
+                return [
+                    StagePlan("embed_smiles"),
+                    StagePlan("crest_search"),
+                    StagePlan("censo_refinement"),
+                    StagePlan("final_format"),
+                ]
+            return [
+                StagePlan("embed_smiles"),
+                StagePlan("crest_search"),
+                StagePlan("dft_optimize"),
+                StagePlan("frequency"),
+                StagePlan("single_point"),
+                StagePlan("shermo_thermo"),
+                StagePlan("final_format"),
+            ]
+        if preset == "censo-default":
+            return [
+                StagePlan("embed_smiles"),
+                StagePlan("crest_search"),
+                StagePlan("censo_prescreening"),
+                StagePlan("censo_screening"),
+                StagePlan("censo_optimization"),
+                StagePlan("censo_refinement"),
+                StagePlan("frequency"),
+                StagePlan("shermo_thermo"),
+                StagePlan("final_format"),
+            ]
+        # censo-light (default)
+        if no_opt:
+            return [
+                StagePlan("embed_smiles"),
+                StagePlan("crest_search"),
+                StagePlan("censo_prescreening"),
+                StagePlan("censo_screening"),
+                StagePlan("censo_refinement"),
+                StagePlan("final_format"),
+            ]
+        return [
+            StagePlan("embed_smiles"),
+            StagePlan("crest_search"),
+            StagePlan("censo_prescreening"),
+            StagePlan("censo_screening"),
+            StagePlan("dft_optimize"),
+            StagePlan("frequency"),
+            StagePlan("single_point"),
+            StagePlan("shermo_thermo"),
+            StagePlan("final_format"),
+        ]
+
+
 class StageTaskStore:
     """Thread-safe SQLite persistence for stage-level task rows."""
 
@@ -391,6 +475,8 @@ register_plan_provider("conformer", _ConformerStagePlanProvider())
 register_plan_provider("nmr", _NmrStagePlanProvider())
 register_plan_provider("benchmark", _BenchmarkStagePlanProvider())
 register_plan_provider("mechanism", _MechanismStagePlanProvider())
+register_plan_provider("ensemble", _EnsembleStagePlanProvider())
+register_plan_provider("energy", _EnergyStagePlanProvider())
 
 
 __all__ = [

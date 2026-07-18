@@ -35,7 +35,7 @@ class ORCAInterface(QCInterfaceBase):
         method: str = "M062X",
         basis: str = "def2-TZVPP",
         solvent: str = None,
-        solvent_model: str = "smd",
+        solvent_model: str = "none",
         **kwargs,
     ):
         """
@@ -46,7 +46,7 @@ class ORCAInterface(QCInterfaceBase):
             method: DFT method
             basis: Basis set
             solvent: Solvent model
-            solvent_model: Solvent model type - smd, cpcm (default smd)
+            solvent_model: Solvent model type - none, smd, cpcm (default none)
             **kwargs: Additional parameters
         """
         super().__init__(config, **kwargs)

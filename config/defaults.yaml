@@ -45,21 +45,22 @@ theory:
     method: r2SCAN-3c
     basis: ""
     solvent: toluene
-    solvent_model: cpcm  # smd, pcm, cpcm
+    solvent_model: none
     engine: orca
 
   frequency:
     engine: orca
 
   single_point:
-    method: wB97X-D4
+    method: wB97M-V
     basis: def2-TZVPP
     solvent: toluene
-    solvent_model: smd
+    solvent_model: none
 
   preoptimization:
     gfn_level: 2
     solvent: toluene
+    solvent_model: none
 
   nmr:
     engine: orca
@@ -119,7 +120,7 @@ protocols:
     opt_engine: null      # Per-protocol override; null = use theory.optimization.engine
     freq_engine: null     # Per-protocol override; null = use theory.frequency.engine
     final_opt_sp:
-      final_sp_method: wB97X-D4   # built-in default
+      final_sp_method: wB97M-V   # built-in default
       final_sp_basis: def2-TZVPP  # built-in default
 
   # CENSO-ZERO Protocol: Economical rank-1 refinement with single-point only
@@ -146,7 +147,7 @@ protocols:
     opt_engine: null
     freq_engine: null
     final_opt_sp:
-      final_sp_method: wB97X-D4
+      final_sp_method: wB97M-V
       final_sp_basis: def2-TZVPP
 
   # CENSO-LITE Protocol: Low-cost DFT SP rerank economical recipe
@@ -178,7 +179,7 @@ protocols:
     opt_engine: null
     freq_engine: null
     final_opt_sp:
-      final_sp_method: wB97X-D4
+      final_sp_method: wB97M-V
       final_sp_basis: def2-TZVPP
 
   # CENSO-FULL Protocol: Grimme-style Part0-Part3 full refinement recipe
@@ -207,7 +208,7 @@ protocols:
     opt_engine: null
     freq_engine: null
     final_opt_sp:
-      final_sp_method: wB97X-D4
+      final_sp_method: wB97M-V
       final_sp_basis: def2-TZVPP
 
   # CENSO-FULL-SAFE Protocol: Relaxed windows for reactive or ionic systems
@@ -237,7 +238,7 @@ protocols:
     opt_engine: null
     freq_engine: null
     final_opt_sp:
-      final_sp_method: wB97X-D4
+      final_sp_method: wB97M-V
       final_sp_basis: def2-TZVPP
 
   # ALLOPT Protocol: Exhaustive DFT validation of all clustered candidates
@@ -263,7 +264,7 @@ protocols:
     opt_engine: null
     freq_engine: null
     final_opt_sp:
-      final_sp_method: wB97X-D4
+      final_sp_method: wB97M-V
       final_sp_basis: def2-TZVPP
 
   # REFERENCE-SP Protocol: High-level SP refinement on an existing ensemble

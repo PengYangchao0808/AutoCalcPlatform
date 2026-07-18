@@ -176,12 +176,18 @@ class ConformerEngine:
 
         crest_gfn = self.config.get("executables", {}).get("crest", {}).get("gfn_level", 2)
         self.crest_interface = CRESTInterface(
-            config=self.config, gfn_level=crest_gfn, solvent=self.theory_preopt.get("solvent")
+            config=self.config,
+            gfn_level=crest_gfn,
+            solvent=self.theory_preopt.get("solvent"),
+            solvent_model=self.theory_preopt.get("solvent_model", "none"),
         )
 
         xtb_gfn = self.theory_preopt.get("gfn_level", 2)
         self.xtb_interface = XTBInterface(
-            config=self.config, gfn_level=xtb_gfn, solvent=self.theory_preopt.get("solvent")
+            config=self.config,
+            gfn_level=xtb_gfn,
+            solvent=self.theory_preopt.get("solvent"),
+            solvent_model=self.theory_preopt.get("solvent_model", "none"),
         )
 
         self.shermo_bin = self.config.get("executables", {}).get("shermo", {}).get("path", "Shermo")
@@ -205,6 +211,7 @@ class ConformerEngine:
             f"  QC — opt({self.protocol_spec.opt_engine}:{opt_m}/{opt_b}), "
             f"freq({self.protocol_spec.freq_engine}:{opt_m}/{opt_b}), "
             f"sp({self.protocol_spec.sp_engine}:{self.protocol_spec.final_sp_method}/{self.protocol_spec.final_sp_basis}, "
+            f"solvent_model={theory_sp_effective.get('solvent_model', 'none')}, "
             f"solvent={theory_sp_effective.get('solvent', 'None')})"
         )
 

@@ -49,6 +49,15 @@ _CAPABILITY_ALIASES = {
 }
 
 CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
+    "censo": {
+        "geometry_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "single_point": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "frequency": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "nmr": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "conformer_search": BackendCapabilityStatus.AVAILABLE,
+        "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
+    },
     "orca": {
         "geometry_optimization": BackendCapabilityStatus.AVAILABLE,
         "single_point": BackendCapabilityStatus.AVAILABLE,

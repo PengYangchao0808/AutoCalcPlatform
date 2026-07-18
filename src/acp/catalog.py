@@ -92,6 +92,28 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "status": "active",
     },
     {
+        "id": "ensemble",
+        "label": "Ensemble Generation",
+        "label_zh": "\u6784\u8c61\u751f\u6210",
+        "category": "preset",
+        "description": "CREST conformer search + CENSO prescreening/screening",
+        "method_schema_id": "censo_ensemble",
+        "default_backend": "censo",
+        "requires_binaries": ["crest", "censo", "orca"],
+        "status": "active",
+    },
+    {
+        "id": "energy",
+        "label": "Conformer Energy",
+        "label_zh": "\u6784\u8c61\u80fd\u91cf",
+        "category": "preset",
+        "description": "CREST + CENSO screening + rank1 DFT refinement (opt+freq+SP+Shermo)",
+        "method_schema_id": "censo_energy",
+        "default_backend": "censo",
+        "requires_binaries": ["crest", "censo", "orca"],
+        "status": "active",
+    },
+    {
         "id": "mechanism",
         "label": "Mechanism / TS",
         "label_zh": "\u673a\u7406\u7814\u7a76 / \u8fc7\u6e21\u6001",
@@ -118,10 +140,10 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
 FIELD_DEFINITIONS: dict[str, Any] = {
     "functional": {
         "type": "select",
-        "per_backend": {            "orca": ["B3LYP", "PBE0", "wB97X-D4", "r2SCAN-3c", "DLPNO-CCSD(T)"],
+        "per_backend": {            "orca": ["B3LYP", "PBE0", "wB97X-D4", "wB97M-V", "r2SCAN-3c", "DLPNO-CCSD(T)"],
             "xtb": ["GFN0-xTB", "GFN1-xTB", "GFN2-xTB"],
         },
-        "default": {"*": "wB97X-D"},
+        "default": {"*": "r2SCAN-3c"},
     },
     "basis": {
         "type": "select",
@@ -145,7 +167,8 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     },
     "solvent_model": {
         "type": "select",
-        "per_backend": {            "orca": ["none", "CPCM", "COSMO"],
+        "per_backend": {
+            "orca": ["none", "CPCM", "SMD"],
             "xtb": ["none", "ALPB", "GBSA"],
         },
         "default": {"*": "none"},
@@ -306,9 +329,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     },
                     "dft_opt": {
                         "engine": "orca",
-                        "functional": "wB97X-D",
-                        "basis": "def2-SVP",
-                        "dispersion": "D3BJ",
+                        "functional": "r2SCAN-3c",
+                        "basis": "def2-mTZVPP",
+                        "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
                         "grid": "UltraFine",
@@ -316,10 +339,10 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     },
                     "single_point": {
                         "engine": "orca",
-                        "functional": "wB97X-D4",
-                        "basis": "def2-TZVPPD",
+                        "functional": "wB97M-V",
+                        "basis": "def2-TZVPP",
                         "aux_basis": "",
-                        "dispersion": "D4",
+                        "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
                     },
@@ -334,7 +357,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "profile_id": "lite",
                 "label": "Lite Protocol",
-                "summary": "CREST GFN2 | r2SCAN-3c opt (ORCA) | wB97X-D4 SP (ORCA)",
+                "summary": "CREST GFN2 | r2SCAN-3c opt (ORCA) | wB97M-V SP (ORCA)",
                 "levels": {
                     "preopt": {"engine": "xtb", "gfn": "GFN2-xTB", "solvent_model": "none"},
                     "crest": {
@@ -356,10 +379,10 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     },
                     "single_point": {
                         "engine": "orca",
-                        "functional": "wB97X-D4",
+                        "functional": "wB97M-V",
                         "basis": "def2-TZVPP",
                         "aux_basis": "",
-                        "dispersion": "D4",
+                        "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
                     },
@@ -374,7 +397,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "profile_id": "full",
                 "label": "Full Protocol",
-                "summary": "CREST GFN2 | wB97X-D/def2-TZVP opt | wB97X-D4/def2-TZVPPD SP",
+                "summary": "CREST GFN2 | r2SCAN-3c/def2-mTZVPP opt | wB97M-V/def2-TZVPP SP",
                 "levels": {
                     "preopt": {"engine": "xtb", "gfn": "GFN2-xTB", "solvent_model": "none"},
                     "crest": {
@@ -386,9 +409,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     },
                     "dft_opt": {
                         "engine": "orca",
-                        "functional": "wB97X-D",
-                        "basis": "def2-TZVP",
-                        "dispersion": "D3BJ",
+                        "functional": "r2SCAN-3c",
+                        "basis": "def2-mTZVPP",
+                        "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
                         "grid": "UltraFine",
@@ -396,10 +419,10 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     },
                     "single_point": {
                         "engine": "orca",
-                        "functional": "wB97X-D4",
-                        "basis": "def2-TZVPPD",
+                        "functional": "wB97M-V",
+                        "basis": "def2-TZVPP",
                         "aux_basis": "",
-                        "dispersion": "D4",
+                        "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
                     },
@@ -511,6 +534,240 @@ METHOD_SCHEMAS: dict[str, Any] = {
         ],
         "profiles": [],
     },
+    "censo_ensemble": {
+        "method_levels": [
+            {
+                "level_id": "censo",
+                "label": "CENSO Ensemble",
+                "label_zh": "CENSO \u6784\u8c61\u7cfb\u7efc",
+                "required": True,
+                "allowed_engines": ["censo"],
+                "fields": ["ewin", "charge", "multiplicity"],
+            },
+            {
+                "level_id": "thermo",
+                "label": "Thermochemistry",
+                "label_zh": "\u70ed\u529b\u5b66\u4fee\u6b63",
+                "required": False,
+                "allowed_engines": ["shermo"],
+                "fields": ["temperature", "pressure"],
+            },
+        ],
+        "profiles": [
+            {
+                "profile_id": "censo-light",
+                "label": "CENSO-light",
+                "summary": "CREST + CENSO prescreening + B97-3c screening",
+                "levels": {
+                    "censo": {
+                        "engine": "censo",
+                        "ewin": 6.0,
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                    },
+                },
+            },
+            {
+                "profile_id": "censo-default",
+                "label": "CENSO-default",
+                "summary": "CREST + full CENSO Part0-Part2 (prescreening+screening+optimization)",
+                "levels": {
+                    "censo": {
+                        "engine": "censo",
+                        "ewin": 6.0,
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                    },
+                },
+            },
+            {
+                "profile_id": "censo-zero",
+                "label": "CENSO-zero",
+                "summary": "CREST only, xTB energy sort, direct ensemble export",
+                "levels": {
+                    "censo": {
+                        "engine": "censo",
+                        "ewin": 6.0,
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                    },
+                },
+            },
+        ],
+    },
+    "censo_energy": {
+        "method_levels": [
+            {
+                "level_id": "censo",
+                "label": "CENSO Screening",
+                "label_zh": "CENSO \u7b5b\u9009",
+                "required": True,
+                "allowed_engines": ["censo"],
+                "fields": ["ewin", "charge", "multiplicity"],
+            },
+            {
+                "level_id": "dft_opt",
+                "label": "DFT Optimization",
+                "label_zh": "DFT \u4f18\u5316",
+                "required": False,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "dispersion",
+                    "solvent_model",
+                    "solvent",
+                    "grid",
+                    "scf_convergence",
+                    "opt_convergence",
+                    "max_steps",
+                    "charge",
+                    "multiplicity",
+                ],
+            },
+            {
+                "level_id": "refinement_sp",
+                "label": "Single Point Energy",
+                "label_zh": "\u5355\u70b9\u80fd",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "aux_basis",
+                    "dispersion",
+                    "ri_approximation",
+                    "solvent_model",
+                    "solvent",
+                    "grid",
+                    "scf_convergence",
+                    "charge",
+                    "multiplicity",
+                ],
+            },
+            {
+                "level_id": "thermo",
+                "label": "Thermochemistry",
+                "label_zh": "\u70ed\u529b\u5b66\u4fee\u6b63",
+                "required": False,
+                "allowed_engines": ["shermo"],
+                "fields": ["temperature", "pressure", "scale_factor"],
+            },
+        ],
+        "profiles": [
+            {
+                "profile_id": "censo-light",
+                "label": "CENSO-light",
+                "summary": "CREST + CENSO PS + rank1 r2SCAN-3c opt/freq + wB97M-V SP + Shermo",
+                "levels": {
+                    "censo": {
+                        "engine": "censo",
+                        "ewin": 6.0,
+                    },
+                    "dft_opt": {
+                        "engine": "orca",
+                        "functional": "r2SCAN-3c",
+                        "basis": "def2-mTZVPP",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                        "grid": "UltraFine",
+                        "scf_convergence": "Tight",
+                        "opt_convergence": "Normal",
+                        "max_steps": 200,
+                    },
+                    "refinement_sp": {
+                        "engine": "orca",
+                        "functional": "wB97M-V",
+                        "basis": "def2-TZVPP",
+                        "aux_basis": "",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                        "scale_factor": 0.9905,
+                    },
+                },
+            },
+            {
+                "profile_id": "censo-default",
+                "label": "CENSO-default",
+                "summary": "Full Part0-Part3 + ACP freq/Shermo on 99% survivors",
+                "levels": {
+                    "censo": {
+                        "engine": "censo",
+                        "ewin": 6.0,
+                    },
+                    "refinement_sp": {
+                        "engine": "orca",
+                        "functional": "wB97M-V",
+                        "basis": "def2-TZVPP",
+                        "aux_basis": "",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                        "scale_factor": 0.9905,
+                    },
+                },
+            },
+            {
+                "profile_id": "censo-zero",
+                "label": "CENSO-zero",
+                "summary": "CREST + xTB rank1 + r2SCAN-3c opt/freq + wB97M-V SP + Shermo",
+                "levels": {
+                    "censo": {
+                        "engine": "censo",
+                        "ewin": 6.0,
+                    },
+                    "dft_opt": {
+                        "engine": "orca",
+                        "functional": "r2SCAN-3c",
+                        "basis": "def2-mTZVPP",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                        "grid": "UltraFine",
+                        "scf_convergence": "Tight",
+                        "opt_convergence": "Normal",
+                        "max_steps": 200,
+                    },
+                    "refinement_sp": {
+                        "engine": "orca",
+                        "functional": "wB97M-V",
+                        "basis": "def2-TZVPP",
+                        "aux_basis": "",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                        "scale_factor": 0.9905,
+                    },
+                },
+            },
+        ],
+    },
 }
 
 METHOD_CATALOG: dict[str, Any] = {
@@ -597,12 +854,23 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
             user_val = user_lv.get(field_name)
             if user_val is not None and user_val != "":
                 options = _resolve_field_options(field_name, engine)
-                if options is not None and user_val not in options:
-                    errors.append(
-                        f"Level '{lid}', field '{field_name}': "
-                        f"value '{user_val}' not in allowed options"
-                    )
-                    continue
+                if options is not None:
+                    # Normalize solvent_model to lowercase for backend compatibility.
+                    if field_name == "solvent_model":
+                        user_val = str(user_val).lower()
+                        lower_options = {str(o).lower() for o in options}
+                        if user_val not in lower_options:
+                            errors.append(
+                                f"Level '{lid}', field '{field_name}': "
+                                f"value '{user_lv.get(field_name)}' not in allowed options"
+                            )
+                            continue
+                    elif user_val not in options:
+                        errors.append(
+                            f"Level '{lid}', field '{field_name}': "
+                            f"value '{user_val}' not in allowed options"
+                        )
+                        continue
                 normalized[field_name] = user_val
             else:
                 default_val = _resolve_field_default(field_name, engine)
@@ -611,6 +879,9 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
         # Composite-method rules: r2SCAN-3c bundles def2-mTZVPP and its dispersion correction.
         if normalized.get("functional") == "r2SCAN-3c":
             normalized["basis"] = "def2-mTZVPP"
+            normalized["dispersion"] = "none"
+        # wB97M-V bundles the VV10 dispersion correction.
+        if normalized.get("functional") == "wB97M-V":
             normalized["dispersion"] = "none"
 
         levels[lid] = normalized
@@ -649,6 +920,9 @@ def convert_method_levels_to_protocol_levels(levels: dict[str, Any]) -> dict[str
         "basis": "basis",
         "solvent": "solvent",
         "solvent_model": "solvent_model",
+        "temperature": "temperature_k",
+        "pressure": "pressure_atm",
+        "scale_factor": "scl_zpe",
     }
 
     converted: dict[str, Any] = {}
@@ -661,7 +935,10 @@ def convert_method_levels_to_protocol_levels(levels: dict[str, Any]) -> dict[str
         new_level: dict[str, Any] = {}
         for old_key, new_key in field_mapping.items():
             if old_key in old_level:
-                new_level[new_key] = old_level[old_key]
+                value = old_level[old_key]
+                if old_key == "solvent_model":
+                    value = str(value).lower()
+                new_level[new_key] = value
         if new_level:
             converted[new_stage] = new_level
 

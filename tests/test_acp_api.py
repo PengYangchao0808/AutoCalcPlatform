@@ -73,11 +73,11 @@ def test_backends_use_real_capability_matrix(client: TestClient) -> None:
 
 def test_workflows_and_protocols(client: TestClient) -> None:
     wf = client.get("/api/workflows").json()
-    assert {"fake", "conformer", "nmr", "benchmark", "mechanism"} <= {
+    assert {"fake", "conformer", "ensemble", "energy", "nmr", "benchmark", "mechanism"} <= {
         w["name"] for w in wf["workflows"]
     }
     names = [w["name"] for w in wf["workflows"]]
-    assert names == ["fake", "conformer", "nmr", "benchmark", "mechanism"]
+    assert names == ["fake", "conformer", "ensemble", "energy", "nmr", "benchmark", "mechanism"]
     pr = client.get("/api/protocols").json()
     assert isinstance(pr["protocols"], list)
 

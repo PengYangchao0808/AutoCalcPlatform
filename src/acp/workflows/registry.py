@@ -43,6 +43,24 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         description="CREST conformer search → DFT refinement → single-point → thermo.",
         requires_binaries=["crest", "orca"],
     ),
+    "ensemble": WorkflowRegistryEntry(
+        name="ensemble",
+        label="Ensemble Generation",
+        description=(
+            "CREST conformer search → CENSO prescreening/screening → "
+            "Boltzmann-weighted ensemble."
+        ),
+        requires_binaries=["crest", "censo", "orca"],
+    ),
+    "energy": WorkflowRegistryEntry(
+        name="energy",
+        label="Conformer Energy",
+        description=(
+            "CREST → CENSO screening → rank1 DFT refinement "
+            "(opt+freq+SP+Shermo) → free energy."
+        ),
+        requires_binaries=["crest", "censo", "orca"],
+    ),
     "nmr": WorkflowRegistryEntry(
         name="nmr",
         label="NMR",

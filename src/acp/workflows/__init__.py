@@ -24,7 +24,9 @@ __all__ = [
     "get_workflow_entry",
     "list_workflow_entries",
     "register_workflow",
+    "run_conformer_energy",
     "run_conformer_search",
+    "run_ensemble_generation",
     "run_mechanism_analysis",
     "run_nmr_calculation",
 ]
@@ -42,6 +44,8 @@ _LAZY_SOURCES: dict[str, str] = {
     "run_mechanism_analysis": "acp.workflows.mechanism",
     "get_nmr_stages": "acp.workflows.nmr",
     "run_nmr_calculation": "acp.workflows.nmr",
+    "run_ensemble_generation": "acp.workflows.ensemble",
+    "run_conformer_energy": "acp.workflows.energy",
     "WorkflowRegistryEntry": "acp.workflows.registry",
     "get_workflow_entry": "acp.workflows.registry",
     "list_workflow_entries": "acp.workflows.registry",

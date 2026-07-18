@@ -217,8 +217,11 @@ const $ = (id) => document.getElementById(id);
 const WF_META = {
   fake:       { label: "Fake (demo)",       needs: [] },
   conformer:  { label: "Conformer Search",  needs: ["crest", "orca"] },
+  ensemble:   { label: "Ensemble Generation",needs: ["crest", "censo", "orca"] },
+  energy:     { label: "Conformer Energy",  needs: ["crest", "censo", "orca"] },
   nmr:        { label: "NMR",               needs: ["orca"] },
   benchmark:  { label: "Benchmark",         needs: ["crest", "orca"] },
+  mechanism:  { label: "Mechanism / TS",    needs: ["orca"] },
 };
 const PROTOCOLS_DEFAULT = ["ext","censo-zero","censo-lite","censo-full","allopt","reference-sp"];
 

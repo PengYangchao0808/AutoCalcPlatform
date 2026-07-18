@@ -45,7 +45,15 @@ class JobStatus(str, Enum):
         return self in active
 
 
-SUPPORTED_WORKFLOWS: tuple[str, ...] = ("conformer", "nmr", "benchmark", "mechanism", "fake")
+SUPPORTED_WORKFLOWS: tuple[str, ...] = (
+    "conformer",
+    "ensemble",
+    "energy",
+    "nmr",
+    "benchmark",
+    "mechanism",
+    "fake",
+)
 
 
 @dataclass(frozen=True)

@@ -20,6 +20,7 @@ from acp.backends.capabilities import (
     list_capabilities,
     supports,
 )
+from acp.backends.censo_backend import CensoBackend
 from acp.backends.crest import CrestBackend
 from acp.backends.external import batch_process_thermo, run_isostat, run_shermo
 from acp.backends.external_backend import ExternalBackend
@@ -47,6 +48,7 @@ __all__ = [
     "list_capabilities",
     "list_backends",
     "backend_status",
+    "CensoBackend",
     "ORCABackend",
     "CrestBackend",
     "XTBBackend",

@@ -130,6 +130,10 @@ class TestConfig:
         assert config["theory"]["nmr"]["solvent"] is None
         assert config["theory"]["nmr"]["solvent_model"] == "smd"
 
+        assert config["theory"]["optimization"]["solvent_model"] == "none"
+        assert config["theory"]["single_point"]["solvent_model"] == "none"
+        assert config["theory"]["preoptimization"]["solvent_model"] == "none"
+
         assert config["nmr"]["temperature_k"] == 298.15
         assert config["nmr"]["energy_window_kcal"] == 3.0
         assert config["nmr"]["max_conformers"] == 10
@@ -199,6 +203,7 @@ class TestConfig:
         yml_preopt = yaml_config["theory"]["preoptimization"]
         assert py_preopt["gfn_level"] == yml_preopt["gfn_level"]
         assert py_preopt["solvent"] == yml_preopt["solvent"]
+        assert py_preopt.get("solvent_model") == yml_preopt.get("solvent_model")
 
         py_nmr_theory = python_config["theory"]["nmr"]
         yml_nmr_theory = yaml_config["theory"]["nmr"]
@@ -224,5 +229,5 @@ class TestConfig:
         yml_ext = yaml_config["protocols"]["ext"]["final_opt_sp"]
         assert py_ext["final_sp_method"] == yml_ext["final_sp_method"]
         assert py_ext["final_sp_basis"] == yml_ext["final_sp_basis"]
-        assert py_ext["final_sp_method"] == "wB97X-D4"
+        assert py_ext["final_sp_method"] == "wB97M-V"
         assert py_ext["final_sp_basis"] == "def2-TZVPP"

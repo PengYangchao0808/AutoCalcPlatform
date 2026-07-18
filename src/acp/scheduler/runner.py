@@ -445,7 +445,7 @@ class JobRunner:
 
     def _build_cmd(self, spec: JobSpec, work_dir: Path, input_path: str = "") -> list[str]:
         wf = spec.workflow
-        if wf not in ("conformer", "nmr", "benchmark", "mechanism"):
+        if wf not in ("conformer", "nmr", "benchmark", "mechanism", "ensemble", "energy"):
             raise ValueError(f"No subprocess mapping for workflow: {wf}")
 
         if wf == "benchmark":
@@ -468,6 +468,18 @@ class JobRunner:
                 cmd += ["--name", spec.name]
             if wf == "conformer" and method.get("levels"):
                 cmd += ["--levels", json.dumps(method["levels"])]
+        elif wf in {"ensemble", "energy"}:
+            cmd += ["--input", str(source), "--output", str(work_dir)]
+            if method.get("preset"):
+                cmd += ["--preset", str(method["preset"])]
+            if spec.name:
+                cmd += ["--name", spec.name]
+            if wf == "energy" and method.get("no_opt"):
+                cmd += ["--no-opt"]
+            if method.get("levels"):
+                cmd += ["--levels", json.dumps(method["levels"])]
+            if method.get("solvent"):
+                cmd += ["--solvent", str(method["solvent"])]
         elif wf == "nmr":
             cmd += ["--input", str(source), "--output", str(work_dir)]
             if method.get("protocol"):

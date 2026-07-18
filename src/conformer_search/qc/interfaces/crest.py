@@ -35,6 +35,7 @@ class CRESTInterface:
         config: Dict[str, Any],
         gfn_level: int = 2,
         solvent: str = None,
+        solvent_model: str = "none",
         **kwargs
     ):
         """
@@ -43,34 +44,45 @@ class CRESTInterface:
         Args:
             config: Configuration dictionary
             gfn_level: GFN-xTB level (0, 1, or 2)
-            solvent: Solvent for COSMO-RS
+            solvent: Solvent for xTB/CREST solvation
+            solvent_model: Solvation model ("none", "alpb", "gbsa")
             **kwargs: Additional parameters
         """
         self.config = config
         executables = config.get('executables', {})
-        
+
         crest_config = executables.get('crest', {})
         self.exe_path = Path(crest_config.get('path', 'crest'))
-        
+
         xtb_config = executables.get('xtb', {})
         self.xtb_path = Path(xtb_config.get('path', 'xtb'))
-        
+
         self.gfn_level = gfn_level
         self.solvent = solvent
-        
+        self.solvent_model = (solvent_model or "none").lower()
+
         resources = config.get('resources', {})
         self.threads = kwargs.get('threads', resources.get('nproc', 16))
         self.energy_window = kwargs.get('energy_window', 6.0)
+
+    def _solvent_args(self, solvent: Optional[str] = None) -> List[str]:
+        """Return CREST solvation command-line flags based on solvent_model."""
+        sol = solvent if solvent is not None else self.solvent
+        if not sol or self.solvent_model == "none":
+            return []
+        if self.solvent_model == "gbsa":
+            return ["--gbsa", xtb_solvent(sol)]
+        return ["--alpb", xtb_solvent(sol)]
 
     def _find_xtb_executable(self) -> Path:
         """Find xTB executable for CREST to use."""
         if self.xtb_path and self.xtb_path.exists():
             return self.xtb_path
-        
+
         xtb_path = shutil.which('xtb')
         if xtb_path:
             return Path(xtb_path)
-        
+
         return Path('/opt/xtb/bin/xtb')
 
     def run_conformer_search(
@@ -101,7 +113,7 @@ class CRESTInterface:
         """
         output_dir = Path(output_dir)
         ensure_dir(output_dir)
-        
+
         input_xyz = output_dir / "crest_input.xyz"
         if len(coordinates) > len(symbols):
             n_frames = len(coordinates) // len(symbols)
@@ -111,7 +123,7 @@ class CRESTInterface:
             )
         else:
             write_xyz(input_xyz, coordinates, symbols, title=f"CREST input for {output_name}")
-        
+
         gfn_level = kwargs.get('gfn_level', self.gfn_level)
         ew = energy_window  # None = no -ewin flag (callers specify explicitly)
 
@@ -127,14 +139,13 @@ class CRESTInterface:
 
         if ew is not None:
             crest_args.extend(["-ewin", str(ew)])
-        
-        if self.solvent:
-            crest_args.extend(["--alpb", xtb_solvent(self.solvent)])
-        
+
+        crest_args.extend(self._solvent_args())
+
         custom_flags = kwargs.get('crest_flags', '')
         if custom_flags:
             crest_args.extend(custom_flags.split())
-        
+
         crest_env = os.environ.copy()
         crest_env["OMP_NUM_THREADS"] = str(self.threads)
         crest_env["MKL_NUM_THREADS"] = str(self.threads)
@@ -159,16 +170,16 @@ class CRESTInterface:
                 )
 
             ensemble_xyz = output_dir / "crest_conformers.xyz"
-            
+
             if not ensemble_xyz.exists():
                 for f in output_dir.glob("*.xyz"):
                     if "conformer" in f.name.lower() or "ensemble" in f.name.lower():
                         ensemble_xyz = f
                         break
-            
+
             if ensemble_xyz.exists():
                 ens_coords, ens_symbols = read_xyz_multiframe(ensemble_xyz)
-                
+
                 if len(ens_symbols) == 0:
                     logger.warning(f"Empty ensemble file: {ensemble_xyz}")
                     return QCResult(
@@ -176,9 +187,9 @@ class CRESTInterface:
                         error_message=f"CREST output empty: {ensemble_xyz}",
                         output_file=input_xyz
                     )
-                
+
                 n_conformers = len(ens_coords) // len(symbols)
-                
+
                 return QCResult(
                     success=True,
                     coordinates=ens_coords,
@@ -196,7 +207,7 @@ class CRESTInterface:
                     error_message=f"CREST output not found in {output_dir}",
                     output_file=input_xyz
                 )
-                
+
         except subprocess.TimeoutExpired:
             logger.error(f"CREST calculation timed out: {input_xyz}")
             return QCResult(
@@ -243,13 +254,13 @@ class CRESTInterface:
         )
         output_dir = Path(output_dir)
         ensure_dir(output_dir)
-        
+
         stage1_dir = output_dir / "stage1_gfn0"
         stage2_dir = output_dir / "stage2_gfn2"
-        
+
         stage1_kwargs = stage1_kwargs or {}
         stage2_kwargs = stage2_kwargs or {}
-        
+
         stage1_result = self.run_conformer_search(
             coordinates,
             symbols,
@@ -260,13 +271,13 @@ class CRESTInterface:
             gfn_level=0,
             **stage1_kwargs
         )
-        
+
         if not stage1_result.success:
             logger.warning("Stage 1 GFN0 search failed, continuing with input")
             stage1_coords = coordinates
         else:
             stage1_coords = stage1_result.coordinates
-        
+
         stage2_result = self.run_conformer_search(
             stage1_coords,
             symbols,
@@ -277,7 +288,7 @@ class CRESTInterface:
             gfn_level=2,
             **stage2_kwargs
         )
-        
+
         return stage1_result, stage2_result
 
     def run_batch_optimization(
@@ -341,8 +352,7 @@ class CRESTInterface:
             crest_args.extend(["-ewin", str(ew)])
 
         sol = solvent if solvent is not None else self.solvent
-        if sol:
-            crest_args.extend(["--alpb", xtb_solvent(sol)])
+        crest_args.extend(self._solvent_args(sol))
 
         if additional_flags:
             crest_args.extend(additional_flags.split())
@@ -426,6 +436,7 @@ class XTBInterface:
         config: Dict[str, Any],
         gfn_level: int = 2,
         solvent: str = None,
+        solvent_model: str = "none",
         **kwargs
     ):
         """
@@ -434,20 +445,31 @@ class XTBInterface:
         Args:
             config: Configuration dictionary
             gfn_level: GFN-xTB level (0, 1, or 2)
-            solvent: Solvent for COSMO-RS
+            solvent: Solvent for xTB solvation
+            solvent_model: Solvation model ("none", "alpb", "gbsa")
             **kwargs: Additional parameters
         """
         self.config = config
         executables = config.get('executables', {})
-        
+
         xtb_config = executables.get('xtb', {})
         self.exe_path = Path(xtb_config.get('path', 'xtb'))
-        
+
         self.gfn_level = gfn_level
         self.solvent = solvent
-        
+        self.solvent_model = (solvent_model or "none").lower()
+
         resources = config.get('resources', {})
         self.nproc = kwargs.get('nproc', resources.get('nproc', 16))
+
+    def _solvent_args(self, solvent: Optional[str] = None) -> List[str]:
+        """Return xTB solvation command-line flags based on solvent_model."""
+        sol = solvent if solvent is not None else self.solvent
+        if not sol or self.solvent_model == "none":
+            return []
+        if self.solvent_model == "gbsa":
+            return ["--gbsa", xtb_solvent(sol)]
+        return ["--alpb", xtb_solvent(sol)]
 
     def optimize(
         self,
@@ -476,13 +498,13 @@ class XTBInterface:
         """
         output_dir = Path(output_dir)
         ensure_dir(output_dir)
-        
+
         input_xyz = output_dir / "xtb_input.xyz"
         output_file = output_dir / "xtb_output.xyz"
         log_file = output_dir / "xtb.log"
-        
+
         write_xyz(input_xyz, coordinates, symbols, title="xTB input")
-        
+
         xtb_args = [
             str(self.exe_path),
             str(input_xyz),
@@ -493,10 +515,9 @@ class XTBInterface:
             "-T", str(self.nproc),
             "-P", str(self.nproc),
         ]
-        
-        if self.solvent:
-            xtb_args.extend(["--solvent", xtb_solvent(self.solvent)])
-        
+
+        xtb_args.extend(self._solvent_args())
+
         try:
             result = subprocess.run(
                 xtb_args,
@@ -505,19 +526,19 @@ class XTBInterface:
                 text=True,
                 timeout=kwargs.get('timeout', None)
             )
-            
+
             with open(log_file, 'w', encoding='utf-8') as f:
                 f.write(result.stdout)
                 if result.stderr:
                     f.write("\nSTDERR:\n")
                     f.write(result.stderr)
-            
+
             coords, syms = None, None
             energy = None
-            
+
             if output_file.exists():
                 coords, syms = read_xyz(output_file)
-            
+
             for line in result.stdout.split('\n'):
                 if 'TOTAL ENERGY' in line:
                     parts = line.split()
@@ -525,7 +546,7 @@ class XTBInterface:
                         energy = float(parts[3])
                     except (ValueError, IndexError):
                         pass
-            
+
             return QCResult(
                 success=coords is not None,
                 coordinates=coords,
@@ -534,7 +555,7 @@ class XTBInterface:
                 output_file=output_file,
                 log_file=log_file
             )
-            
+
         except Exception as e:
             logger.error(f"xTB optimization failed: {e}")
             return QCResult(
@@ -568,12 +589,12 @@ class XTBInterface:
         """
         output_dir = Path(output_dir)
         ensure_dir(output_dir)
-        
+
         input_xyz = output_dir / "xtb_sp_input.xyz"
         log_file = output_dir / "xtb_sp.log"
-        
+
         write_xyz(input_xyz, coordinates, symbols, title="xTB SP input")
-        
+
         xtb_args = [
             str(self.exe_path),
             str(input_xyz),
@@ -583,10 +604,9 @@ class XTBInterface:
             "--uhf", str(multiplicity - 1),
             "-T", str(self.nproc),
         ]
-        
-        if self.solvent:
-            xtb_args.extend(["--solvent", xtb_solvent(self.solvent)])
-        
+
+        xtb_args.extend(self._solvent_args())
+
         try:
             result = subprocess.run(
                 xtb_args,
@@ -595,13 +615,13 @@ class XTBInterface:
                 text=True,
                 timeout=kwargs.get('timeout', None)
             )
-            
+
             with open(log_file, 'w', encoding='utf-8') as f:
                 f.write(result.stdout)
                 if result.stderr:
                     f.write("\nSTDERR:\n")
                     f.write(result.stderr)
-            
+
             energy = None
             for line in result.stdout.split('\n'):
                 if 'TOTAL ENERGY' in line:
@@ -610,7 +630,7 @@ class XTBInterface:
                         energy = float(parts[3])
                     except (ValueError, IndexError):
                         pass
-            
+
             return QCResult(
                 success=energy is not None,
                 coordinates=coordinates,
@@ -618,7 +638,7 @@ class XTBInterface:
                 energy=energy,
                 log_file=log_file
             )
-            
+
         except Exception as e:
             logger.error(f"xTB SP calculation failed: {e}")
             return QCResult(

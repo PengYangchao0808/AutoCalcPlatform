@@ -26,19 +26,12 @@ from conformer_search.core.engine import ConformerEngine
 from conformer_search.core.protocols import resolve_protocol_spec, validate_protocol_methods
 from conformer_search.io.input_handler import InputFormat as LegacyInputFormat
 from conformer_search.io.input_handler import MolecularInput
+from acp.workflows._helpers import sanitize_job_name
 from conformer_search.utils.file_io import read_xyz_multiframe
 
 logger = logging.getLogger(__name__)
 
 _ALL_CONFORMERS_XYZ = "all_conformers.xyz"
-
-
-def _sanitize_job_name(name: str) -> str:
-    """Return a filesystem-safe job name."""
-    cleaned = "".join(
-        char if char.isalnum() or char in {"-", "_", "."} else "_" for char in name.strip()
-    )
-    return cleaned.strip("._") or "job"
 
 
 def boltzmann_weight_ensemble(
@@ -274,7 +267,7 @@ def run_conformer_search(
         name=name,
     )
     if name:
-        safe_name = _sanitize_job_name(name)
+        safe_name = sanitize_job_name(name)
         structure = Structure(
             id=safe_name,
             charge=structure.charge,

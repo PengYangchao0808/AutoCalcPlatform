@@ -132,3 +132,44 @@ def test_orca_nmr_shielding_parses_mocked_run_into_qcresult(
     assert "NMR" in input_text
     assert "B3LYP" in input_text
     assert "def2-TZVP" in input_text
+
+
+def test_orca_build_input_blocks_with_smd(sample_config: dict[str, object]) -> None:
+    interface = ORCAInterface(
+        sample_config, method="wB97X-D4", basis="def2-TZVPP", solvent="toluene", solvent_model="smd"
+    )
+    blocks = interface._build_input_blocks("sp")
+    assert "%cpcm" in blocks
+    assert "smd true" in blocks
+    assert 'SMDsolvent "Toluene"' in blocks
+
+
+def test_orca_build_input_blocks_with_cpcm(sample_config: dict[str, object]) -> None:
+    interface = ORCAInterface(
+        sample_config,
+        method="wB97X-D4",
+        basis="def2-TZVPP",
+        solvent="toluene",
+        solvent_model="cpcm",
+    )
+    blocks = interface._build_input_blocks("sp")
+    assert "%cpcm" in blocks
+    assert "smd true" not in blocks
+    assert 'SMDsolvent "Toluene"' in blocks
+
+
+def test_orca_build_input_blocks_with_no_solvent(sample_config: dict[str, object]) -> None:
+    interface = ORCAInterface(
+        sample_config, method="wB97X-D4", basis="def2-TZVPP", solvent=None, solvent_model="none"
+    )
+    blocks = interface._build_input_blocks("sp")
+    assert "%cpcm" not in blocks
+    assert "SMDsolvent" not in blocks
+
+
+def test_orca_build_input_blocks_uppercase_solvent_model(sample_config: dict[str, object]) -> None:
+    interface = ORCAInterface(
+        sample_config, method="wB97X-D4", basis="def2-TZVPP", solvent="toluene", solvent_model="SMD"
+    )
+    blocks = interface._build_input_blocks("sp")
+    assert "smd true" in blocks

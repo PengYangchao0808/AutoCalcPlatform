@@ -32,6 +32,7 @@ class CrestBackend(QCBackend):
         interface_kwargs = dict(kwargs)
         interface_kwargs.setdefault("gfn_level", crest_config.get("gfn_level", 2))
         interface_kwargs.setdefault("solvent", theory_preopt.get("solvent"))
+        interface_kwargs.setdefault("solvent_model", theory_preopt.get("solvent_model", "none"))
 
         self._interface = CRESTInterface(config=config, **interface_kwargs)
 

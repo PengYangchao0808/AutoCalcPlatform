@@ -1171,7 +1171,7 @@ a { color: var(--accent); }
           <div class="config-card-label" data-i18n="modal.step3">计算协议</div>
           <div class="config-card-body">
             <strong id="method-card-title">Lite Protocol</strong>
-            <span id="method-card-desc" class="config-card-desc">xTB: GFN2 | DFT: r2SCAN-3c | SP: wB97X-D4/def2-TZVPP</span>
+            <span id="method-card-desc" class="config-card-desc">xTB: GFN2 | DFT: r2SCAN-3c | SP: wB97M-V/def2-TZVPP</span>
           </div>
           <button class="btn ghost config-card-btn" id="btn-config-method" data-i18n="modal.configure">配置</button>
         </div>
@@ -3625,7 +3625,7 @@ function loadDefaultMethodProfile(schemaId) {
   if (profiles.length) {
     wizardState.method.profile_id = profiles[0].profile_id;
     wizardState.method.profile_label = profiles[0].label;
-    wizardState.method.stages = JSON.parse(JSON.stringify(profiles[0].stages || {}));
+    wizardState.method.stages = JSON.parse(JSON.stringify(profiles[0].levels || {}));
   }
   updateConfigCards();
 }
@@ -3763,7 +3763,8 @@ async function openMethodConfig() {
       var levelState = getLevelState(lvDef.level_id);
       var curVal = levelState[fieldName] !== undefined ? levelState[fieldName] : getFieldDefault(fieldName, engine);
 
-      var isCompositeLocked = ((fieldName === "basis" || fieldName === "dispersion") && levelState.functional === "r2SCAN-3c");
+      var isCompositeLocked = ((fieldName === "basis" || fieldName === "dispersion") && levelState.functional === "r2SCAN-3c")
+                           || (fieldName === "dispersion" && levelState.functional === "wB97M-V");
       if (isCompositeLocked) {
         if (fieldName === "basis") {
           curVal = "def2-mTZVPP";
@@ -4023,17 +4024,6 @@ async function openMethodConfig() {
   document.getElementById("method-config-modal").style.display = "flex";
   scheduleValidate();
   rebuildSummary();
-}
-
-function getMethodOptionsForKey(key) {
-  if (key === "functional") return methodCatalogCache.functionals ? (methodCatalogCache.functionals.orca || []) : null;
-  if (key === "basis") return methodCatalogCache.basis_sets ? (methodCatalogCache.basis_sets.orca || []) : null;
-  if (key === "dispersion") return methodCatalogCache.dispersion || null;
-  if (key === "solvent" || key === "solvents") return methodCatalogCache.solvents || null;
-  if (key === "solvent_model") return ["none", "CPCM", "SMD", "ALPB", "GBSA"];
-  if (key === "gfn") return ["gfn0", "gfn1", "gfn2"];
-  if (key === "backend") return (methodCatalogCache.backends || []).map(function(b) { return b.id; });
-  return null;
 }
 
 async function submitJobModal() {
@@ -4442,7 +4432,7 @@ window.addEventListener("DOMContentLoaded", async function() {
              || confsearchSchema.profiles[0];
       wizardState.method.profile_id = p.profile_id;
       wizardState.method.profile_label = p.label;
-      wizardState.method.stages = JSON.parse(JSON.stringify(p.stages || {}));
+      wizardState.method.stages = JSON.parse(JSON.stringify(p.levels || {}));
     }
     wizardState.workflow.schema_id = "confsearch";
     updateConfigCards();

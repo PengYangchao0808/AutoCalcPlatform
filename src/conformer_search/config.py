@@ -156,21 +156,22 @@ def _get_default_config() -> dict[str, Any]:
                 'method': 'r2SCAN-3c',
                 'basis': '',
                 'solvent': 'toluene',
-                'solvent_model': 'cpcm'
+                'solvent_model': 'none'
             },
             'frequency': {
                 'engine': 'orca'
             },
             'single_point': {
-                'method': 'wB97X-D4',
+                'method': 'wB97M-V',
                 'basis': 'def2-TZVPP',
                 'solvent': 'toluene',
-                'solvent_model': 'smd',
+                'solvent_model': 'none',
                 'engine': 'orca'
             },
             'preoptimization': {
                 'gfn_level': 2,
-                'solvent': 'toluene'
+                'solvent': 'toluene',
+                'solvent_model': 'none'
             },
             'nmr': {
                 'engine': 'orca',
@@ -194,6 +195,28 @@ def _get_default_config() -> dict[str, Any]:
             'imagthr': -100.0,
             'temperature_k': 298.15,
             'max_parallel': 4,
+        },
+        'censo': {
+            'preset': 'censo-light',
+            'solvent': None,
+            'temperature': 298.15,
+            'scale': 1.0,
+            'keep_all': False,
+            'refinement_threshold': 0.99,
+            'refinement_func': 'wb97m-v',
+            'refinement_basis': 'def2-tzvpp',
+            'optimization': {
+                'enabled': True,
+                'functional': 'r2SCAN-3c',
+                'threshold': 3.0,
+                'optlevel': 'normal',
+                'maxcyc': 200,
+                'optcycles': 8,
+                'macrocycles': True,
+                'xtb_opt': True,
+            },
+            'presets': {},
+            'levels': {},
         },
         'nmr': {
             'temperature_k': 298.15,
@@ -259,7 +282,7 @@ def _get_default_config() -> dict[str, Any]:
                     'ranking_after_handoff': 'final_sp_minimum',
                 },
                 'final_opt_sp': {
-                    'final_sp_method': 'wB97X-D4',
+                    'final_sp_method': 'wB97M-V',
                     'final_sp_basis': 'def2-TZVPP',
                 },
             },
@@ -289,7 +312,7 @@ def _get_default_config() -> dict[str, Any]:
                     'ranking_after_handoff': 'final_sp_plus_boltzmann',
                 },
                 'final_opt_sp': {
-                    'final_sp_method': 'wB97X-D4',
+                    'final_sp_method': 'wB97M-V',
                     'final_sp_basis': 'def2-TZVPP',
                 },
             },
@@ -322,7 +345,7 @@ def _get_default_config() -> dict[str, Any]:
                     'ranking_after_handoff': 'final_sp_minimum',
                 },
                 'final_opt_sp': {
-                    'final_sp_method': 'wB97X-D4',
+                    'final_sp_method': 'wB97M-V',
                     'final_sp_basis': 'def2-TZVPP',
                 },
             },

@@ -414,6 +414,200 @@ Examples:
         help="Override an NMR reference value; repeatable",
     )
 
+    # -- run ensemble -------------------------------------------------------
+    ens = run_sub.add_parser(
+        "ensemble",
+        help="Ensemble generation (CREST → CENSO prescreening+screening)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run ensemble --input "CCO" --output ./result
+  acp run ensemble --input molecule.xyz --preset censo-default
+  acp run ensemble --batch-file molecules.txt --output ./batch_results
+        """,
+    )
+    ens_input = ens.add_mutually_exclusive_group(required=False)
+    ens_input.add_argument(
+        "--input",
+        type=str,
+        help="SMILES string or input file path (XYZ)",
+    )
+    ens_input.add_argument(
+        "--batch-file",
+        type=str,
+        help="File containing multiple inputs (one per line)",
+    )
+    ens.add_argument(
+        "--output",
+        type=str,
+        default="./ensemble_output",
+        help="Output directory (default: ./ensemble_output)",
+    )
+    ens.add_argument(
+        "--config",
+        type=str,
+        help="Configuration YAML file",
+    )
+    ens.add_argument(
+        "--preset",
+        type=str,
+        default="censo-light",
+        choices=["censo-light", "censo-default", "censo-zero"],
+        help="CENSO preset (default: censo-light)",
+    )
+    ens.add_argument(
+        "--solvent",
+        type=str,
+        help="Solvent name (e.g. dcm, water); omit for gas phase",
+    )
+    ens.add_argument(
+        "--nproc",
+        type=int,
+        help="Number of CPU cores (overrides config)",
+    )
+    ens.add_argument(
+        "--mem",
+        type=str,
+        help="Memory limit, e.g. 32GB, 4096MB (overrides config)",
+    )
+    ens.add_argument(
+        "--log-level",
+        type=str,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+    ens.add_argument(
+        "--log-file",
+        type=str,
+        help="Log file path",
+    )
+    ens.add_argument(
+        "--name",
+        type=str,
+        help="Molecule name (auto-generated if not specified)",
+    )
+    ens.add_argument(
+        "--charge",
+        type=int,
+        help="Molecular charge (auto-detected if not specified)",
+    )
+    ens.add_argument(
+        "--multiplicity",
+        type=int,
+        help="Spin multiplicity (auto-detected if not specified)",
+    )
+    ens.add_argument(
+        "--save-config",
+        type=str,
+        help="Save effective configuration to this file",
+    )
+
+    # -- run energy ----------------------------------------------------------
+    energy = run_sub.add_parser(
+        "energy",
+        help="Conformer energy (ensemble + rank1 refinement, CENSO-light semantics)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run energy --input "CCO" --output ./result
+  acp run energy --input "CCO" --preset censo-zero
+  acp run energy --input "CCO" --no-opt
+  acp run energy --input prev/ensemble/ensemble.xyz
+  acp run energy --input "CCO" --preset censo-default
+        """,
+    )
+    energy_input = energy.add_mutually_exclusive_group(required=False)
+    energy_input.add_argument(
+        "--input",
+        type=str,
+        help="SMILES string or input file path (XYZ; multi-frame XYZ skips CREST)",
+    )
+    energy_input.add_argument(
+        "--batch-file",
+        type=str,
+        help="File containing multiple inputs (one per line)",
+    )
+    energy.add_argument(
+        "--output",
+        type=str,
+        default="./energy_output",
+        help="Output directory (default: ./energy_output)",
+    )
+    energy.add_argument(
+        "--config",
+        type=str,
+        help="Configuration YAML file",
+    )
+    energy.add_argument(
+        "--preset",
+        type=str,
+        default="censo-light",
+        choices=["censo-light", "censo-default", "censo-zero"],
+        help="CENSO preset (default: censo-light)",
+    )
+    energy.add_argument(
+        "--no-opt",
+        action="store_true",
+        help="Disable high-accuracy rank1 geometry optimization (cheap RSH//xTB path)",
+    )
+    energy.add_argument(
+        "--levels",
+        type=str,
+        help=(
+            "JSON method-level overrides, e.g. "
+            '\'{"refinement_sp":{"functional":"DLPNO-CCSD(T)","basis":"def2-TZVPP"},'
+            '"thermo":{"scale_factor":0.98}}\''
+        ),
+    )
+    energy.add_argument(
+        "--solvent",
+        type=str,
+        help="Solvent name (e.g. dcm, water); omit for gas phase",
+    )
+    energy.add_argument(
+        "--nproc",
+        type=int,
+        help="Number of CPU cores (overrides config)",
+    )
+    energy.add_argument(
+        "--mem",
+        type=str,
+        help="Memory limit, e.g. 32GB, 4096MB (overrides config)",
+    )
+    energy.add_argument(
+        "--log-level",
+        type=str,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+    energy.add_argument(
+        "--log-file",
+        type=str,
+        help="Log file path",
+    )
+    energy.add_argument(
+        "--name",
+        type=str,
+        help="Molecule name (auto-generated if not specified)",
+    )
+    energy.add_argument(
+        "--charge",
+        type=int,
+        help="Molecular charge (auto-detected if not specified)",
+    )
+    energy.add_argument(
+        "--multiplicity",
+        type=int,
+        help="Spin multiplicity (auto-detected if not specified)",
+    )
+    energy.add_argument(
+        "--save-config",
+        type=str,
+        help="Save effective configuration to this file",
+    )
+
     # -- run mechanism -------------------------------------------------------
     mechanism = run_sub.add_parser(
         "mechanism",
@@ -925,6 +1119,254 @@ def _try_open_browser(url: str) -> None:
                 continue
 
 
+def _handle_ensemble(args: argparse.Namespace) -> int:
+    """Execute the ensemble generation workflow."""
+    setup_logging(args.log_level)
+
+    if not args.input and not args.batch_file:
+        print("Error: --input or --batch-file is required", file=sys.stderr)
+        return 1
+
+    cfg = _build_config(args)
+    output_dir = Path(args.output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.save_config:
+        from conformer_search.config import save_config as save_cfg
+        save_cfg(cfg, Path(args.save_config))
+        logger.info("Configuration saved to: %s", args.save_config)
+
+    if args.batch_file:
+        return _handle_ensemble_batch(args, cfg, output_dir)
+
+    try:
+        from acp.workflows.ensemble import run_ensemble_generation
+
+        result = run_ensemble_generation(
+            input_source=args.input,
+            output_dir=str(output_dir),
+            preset=args.preset,
+            config=cfg,
+            name=args.name,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            solvent=args.solvent,
+            nproc=args.nproc,
+        )
+    except KeyboardInterrupt:
+        logger.warning("Interrupted by user")
+        return 130
+    except Exception as exc:
+        logger.exception("Fatal error: %s", exc)
+        return 1
+
+    if result.status == "completed":
+        meta = result.metadata or {}
+        logger.info("Ensemble generation completed successfully")
+        logger.info("  Conformers         : %s", meta.get("n_conformers", "N/A"))
+        logger.info("  Ensemble XYZ       : %s", meta.get("ensemble_xyz", "N/A"))
+        logger.info("  Ensemble JSON      : %s", meta.get("ensemble_json", "N/A"))
+        return 0
+
+    logger.error("Ensemble generation failed: %s", result.error)
+    return 1
+
+
+def _handle_ensemble_batch(
+    args: argparse.Namespace,
+    cfg: dict[str, Any],
+    output_dir: Path,
+) -> int:
+    """Run ensemble generation for multiple molecules (batch mode)."""
+    from acp.workflows.ensemble import run_ensemble_generation
+    from conformer_search.io import load_batch_inputs
+
+    logger.info("ACP ensemble workflow — batch mode")
+    batch_file = Path(args.batch_file)
+    inputs = load_batch_inputs(batch_file)
+
+    logger.info("Found %d molecules to process", len(inputs))
+    results: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+
+    for i, mi in enumerate(inputs, start=1):
+        source = str(mi.source_path or mi.metadata.get("smiles", ""))
+        logger.info("[%d/%d] Processing %s", i, len(inputs), mi.name)
+        try:
+            r = run_ensemble_generation(
+                input_source=source,
+                output_dir=str(output_dir),
+                preset=args.preset,
+                config=cfg,
+                name=mi.name,
+                charge=getattr(args, "charge", None),
+                multiplicity=getattr(args, "multiplicity", None),
+                solvent=args.solvent,
+                nproc=args.nproc,
+            )
+            if r.status == "completed":
+                results.append({"molecule": mi.name, "status": "completed", "metadata": r.metadata})
+            else:
+                errors.append({"molecule": mi.name, "error": str(r.error)})
+        except Exception as exc:
+            logger.error("  Failed: %s", exc)
+            errors.append({"molecule": mi.name, "error": str(exc)})
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    summary_path = output_dir / f"batch_summary_{timestamp}.json"
+    summary = {
+        "timestamp": timestamp,
+        "total": len(inputs),
+        "successful": len(results),
+        "failed": len(errors),
+        "preset": args.preset,
+        "results": results,
+        "errors": errors,
+    }
+    summary_path.write_text(json.dumps(summary, indent=2))
+    logger.info(
+        "Batch complete: %d/%d successful — summary saved to %s",
+        len(results), len(inputs), summary_path,
+    )
+    return 0 if not errors else 1
+
+
+def _parse_levels_json(levels_str: str | None) -> dict[str, Any] | None:
+    """Parse the --levels JSON string; returns None on error or empty input."""
+    if not levels_str:
+        return None
+    try:
+        parsed = json.loads(levels_str)
+    except json.JSONDecodeError as exc:
+        print(f"Error: invalid --levels JSON: {exc}", file=sys.stderr)
+        return None
+    if not isinstance(parsed, dict):
+        print("Error: --levels must be a JSON object", file=sys.stderr)
+        return None
+    return parsed
+
+
+def _handle_energy(args: argparse.Namespace) -> int:
+    """Execute the conformer energy workflow."""
+    setup_logging(args.log_level)
+
+    if not args.input and not args.batch_file:
+        print("Error: --input or --batch-file is required", file=sys.stderr)
+        return 1
+
+    levels = _parse_levels_json(args.levels)
+    if args.levels and levels is None:
+        return 1
+
+    cfg = _build_config(args)
+    output_dir = Path(args.output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.save_config:
+        from conformer_search.config import save_config as save_cfg
+        save_cfg(cfg, Path(args.save_config))
+        logger.info("Configuration saved to: %s", args.save_config)
+
+    if args.batch_file:
+        return _handle_energy_batch(args, cfg, output_dir, levels)
+
+    try:
+        from acp.workflows.energy import run_conformer_energy
+
+        result = run_conformer_energy(
+            input_source=args.input,
+            output_dir=str(output_dir),
+            preset=args.preset,
+            config=cfg,
+            name=args.name,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            solvent=args.solvent,
+            nproc=args.nproc,
+            no_opt=args.no_opt,
+            levels=levels,
+        )
+    except KeyboardInterrupt:
+        logger.warning("Interrupted by user")
+        return 130
+    except Exception as exc:
+        logger.exception("Fatal error: %s", exc)
+        return 1
+
+    if result.status == "completed":
+        meta = result.metadata or {}
+        logger.info("Conformer energy workflow completed successfully")
+        logger.info("  Conformers         : %s", meta.get("n_conformers", "N/A"))
+        logger.info("  Global minimum     : %s", meta.get("global_min_xyz", "N/A"))
+        logger.info("  Thermo CSV         : %s", meta.get("thermo_csv", "N/A"))
+        return 0
+
+    logger.error("Conformer energy workflow failed: %s", result.error)
+    return 1
+
+
+def _handle_energy_batch(
+    args: argparse.Namespace,
+    cfg: dict[str, Any],
+    output_dir: Path,
+    levels: dict[str, Any] | None,
+) -> int:
+    """Run the conformer energy workflow for multiple molecules (batch mode)."""
+    from acp.workflows.energy import run_conformer_energy
+    from conformer_search.io import load_batch_inputs
+
+    logger.info("ACP energy workflow — batch mode")
+    batch_file = Path(args.batch_file)
+    inputs = load_batch_inputs(batch_file)
+
+    logger.info("Found %d molecules to process", len(inputs))
+    results: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+
+    for i, mi in enumerate(inputs, start=1):
+        source = str(mi.source_path or mi.metadata.get("smiles", ""))
+        logger.info("[%d/%d] Processing %s", i, len(inputs), mi.name)
+        try:
+            r = run_conformer_energy(
+                input_source=source,
+                output_dir=str(output_dir),
+                preset=args.preset,
+                config=cfg,
+                name=mi.name,
+                charge=getattr(args, "charge", None),
+                multiplicity=getattr(args, "multiplicity", None),
+                solvent=args.solvent,
+                nproc=args.nproc,
+                no_opt=args.no_opt,
+                levels=levels,
+            )
+            if r.status == "completed":
+                results.append({"molecule": mi.name, "status": "completed", "metadata": r.metadata})
+            else:
+                errors.append({"molecule": mi.name, "error": str(r.error)})
+        except Exception as exc:
+            logger.error("  Failed: %s", exc)
+            errors.append({"molecule": mi.name, "error": str(exc)})
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    summary_path = output_dir / f"batch_summary_{timestamp}.json"
+    summary = {
+        "timestamp": timestamp,
+        "total": len(inputs),
+        "successful": len(results),
+        "failed": len(errors),
+        "preset": args.preset,
+        "results": results,
+        "errors": errors,
+    }
+    summary_path.write_text(json.dumps(summary, indent=2))
+    logger.info(
+        "Batch complete: %d/%d successful — summary saved to %s",
+        len(results), len(inputs), summary_path,
+    )
+    return 0 if not errors else 1
+
+
 def _handle_benchmark(args: argparse.Namespace) -> int:
     """Execute the benchmark meta-protocol."""
     from acp.workflows.benchmark import BENCHMARK_LEVELS, BenchmarkRunner
@@ -1005,6 +1447,8 @@ def main(argv: list[str] | None = None) -> int:
 
     dispatch: dict[str, Callable[[argparse.Namespace], int]] = {
         "conformer": _handle_conformer,
+        "ensemble": _handle_ensemble,
+        "energy": _handle_energy,
         "nmr": _handle_nmr,
         "mechanism": _handle_mechanism,
         "serve": _handle_serve,

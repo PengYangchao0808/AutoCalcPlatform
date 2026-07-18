@@ -21,11 +21,11 @@ def _make_config_with_theory(method: str, basis: str, sp_method: str, sp_basis: 
     return cfg
 
 
-def test_lite_resolves_to_r2scan3c_and_wb97xd4():
+def test_lite_resolves_to_r2scan3c_and_wb97mv():
     spec = resolve_protocol_spec(_get_default_config(), "lite")
     assert spec.opt_method == "r2SCAN-3c"
     assert spec.opt_basis == ""
-    assert spec.final_sp_method == "wB97X-D4"
+    assert spec.final_sp_method == "wB97M-V"
     assert spec.final_sp_basis == "def2-TZVPP"
 
 
@@ -34,7 +34,7 @@ def test_lite_ignores_custom_theory_methods():
     spec = resolve_protocol_spec(cfg, "lite")
     assert spec.opt_method == "r2SCAN-3c"
     assert spec.opt_basis == ""
-    assert spec.final_sp_method == "wB97X-D4"
+    assert spec.final_sp_method == "wB97M-V"
     assert spec.final_sp_basis == "def2-TZVPP"
 
 
@@ -115,7 +115,7 @@ def test_parse_long_json_levels():
 
     # Construct a syntactically valid JSON object with many repeated keys.
     inner = (
-        '{"engine": "orca", "functional": "wB97X-D", "basis": "def2-SVP", '
+        '{"engine": "orca", "functional": "r2SCAN-3c", "basis": "def2-SVP", '
         '"solvent": "", "solvent_model": "none", "grid": "UltraFine", '
         '"scf_convergence": "Tight", "max_steps": 100, "charge": 0, "multiplicity": 1}'
     )
@@ -132,20 +132,20 @@ def test_convert_frontend_levels_to_protocol_levels():
     frontend_levels = {
         "dft_opt": {
             "engine": "orca",
-            "functional": "wB97X-D",
+            "functional": "r2SCAN-3c",
             "basis": "def2-SVP",
             "solvent": "",
             "solvent_model": "none",
         },
         "single_point": {
             "engine": "orca",
-            "functional": "wB97X-D",
+            "functional": "r2SCAN-3c",
             "basis": "def2-SVP",
             "solvent": "",
             "solvent_model": "none",
         },
     }
     converted = convert_method_levels_to_protocol_levels(frontend_levels)
-    assert converted["optimization"]["method"] == "wB97X-D"
+    assert converted["optimization"]["method"] == "r2SCAN-3c"
     assert converted["optimization"]["engine"] == "orca"
-    assert converted["single_point"]["method"] == "wB97X-D"
+    assert converted["single_point"]["method"] == "r2SCAN-3c"

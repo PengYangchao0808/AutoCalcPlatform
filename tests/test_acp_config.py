@@ -29,7 +29,7 @@ class TestAcpConfigFacade:
 
         assert isinstance(defaults, dict)
         assert defaults["protocols"]["default"] == "lite"
-        assert defaults["theory"]["single_point"]["method"] == "wB97X-D4"
+        assert defaults["theory"]["single_point"]["method"] == "wB97M-V"
 
     def test_merge_configs_deep_merges(self):
         """merge_configs() deeply merges nested dicts."""

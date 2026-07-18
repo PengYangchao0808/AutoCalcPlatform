@@ -73,7 +73,7 @@ class ProtocolSpec:
     funnel_policy: FunnelPolicy = field(default_factory=FunnelPolicy)
     handoff_policy: HandoffPolicy = field(default_factory=HandoffPolicy)
     mrrho_settings: dict[str, Any] = field(default_factory=dict)
-    final_sp_method: str = "wB97X-D4"
+    final_sp_method: str = "wB97M-V"
     final_sp_basis: str = "def2-TZVPP"
     opt_engine: str = "orca"
     freq_engine: str = "orca"
@@ -280,7 +280,7 @@ def resolve_protocol_spec(
     if opt_solvent_model is None:
         opt_solvent_model = theory_opt.get("solvent_model")
     if opt_solvent_model is None:
-        opt_solvent_model = "smd"
+        opt_solvent_model = "none"
 
     sp_solvent = sp_level.get("solvent")
     if sp_solvent is None:
@@ -294,7 +294,7 @@ def resolve_protocol_spec(
     if sp_solvent_model is None:
         sp_solvent_model = theory_sp.get("solvent_model")
     if sp_solvent_model is None:
-        sp_solvent_model = "smd"
+        sp_solvent_model = "none"
 
     # Final SP method/basis: levels (method/basis) > protocol > default protocol > hardcoded
     final_sp_method = sp_level.get("method")
@@ -303,7 +303,7 @@ def resolve_protocol_spec(
     if final_sp_method is None:
         final_sp_method = default_proto_cfg.get("final_opt_sp", {}).get("final_sp_method")
     if final_sp_method is None:
-        final_sp_method = "wB97X-D4"
+        final_sp_method = "wB97M-V"
 
     final_sp_basis = sp_level.get("basis")
     if final_sp_basis is None:
@@ -449,7 +449,7 @@ def _get_default_protocol_config(protocol: str) -> dict[str, Any]:
                 "ranking_after_handoff": "final_sp_minimum",
             },
             "final_opt_sp": {
-                "final_sp_method": "wB97X-D4",
+                "final_sp_method": "wB97M-V",
                 "final_sp_basis": "def2-TZVPP",
             },
             "stages": {
@@ -514,7 +514,7 @@ def _get_default_protocol_config(protocol: str) -> dict[str, Any]:
                 "ranking_after_handoff": "final_sp_plus_boltzmann",
             },
             "final_opt_sp": {
-                "final_sp_method": "wB97X-D4",
+                "final_sp_method": "wB97M-V",
                 "final_sp_basis": "def2-TZVPP",
             },
             "stages": {
@@ -553,7 +553,7 @@ def _get_default_protocol_config(protocol: str) -> dict[str, Any]:
                 "ranking_after_handoff": "final_sp_minimum",
             },
             "final_opt_sp": {
-                "final_sp_method": "wB97X-D4",
+                "final_sp_method": "wB97M-V",
                 "final_sp_basis": "def2-TZVPP",
             },
             "stages": {
