@@ -476,7 +476,7 @@ class JobRunner:
                 cmd += ["--name", spec.name]
             if wf == "energy" and method.get("no_opt"):
                 cmd += ["--no-opt"]
-            if method.get("levels"):
+            if wf == "energy" and method.get("levels"):
                 cmd += ["--levels", json.dumps(method["levels"])]
             if method.get("solvent"):
                 cmd += ["--solvent", str(method["solvent"])]

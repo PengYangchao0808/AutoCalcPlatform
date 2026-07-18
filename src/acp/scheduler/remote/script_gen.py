@@ -81,7 +81,7 @@ def build_remote_cli_command(
 
     The mapping rules are identical to :meth:`JobRunner._build_cmd`:
 
-    * conformer / mechanism → ``acp.cli run <wf>``
+    * conformer / mechanism / ensemble / energy → ``acp.cli run <wf>``
     * nmr → ``acp.cli run nmr``
     * benchmark → ``acp.cli benchmark``
 
@@ -127,7 +127,7 @@ def build_remote_cli_command(
             cmd += ["--name", spec.name]
         if wf == "energy" and method.get("no_opt"):
             cmd += ["--no-opt"]
-        if method.get("levels"):
+        if wf == "energy" and method.get("levels"):
             cmd += ["--levels", json.dumps(method["levels"])]
         if method.get("solvent"):
             cmd += ["--solvent", str(method["solvent"])]
