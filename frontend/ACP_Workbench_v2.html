@@ -780,7 +780,7 @@ option, optgroup {
 
 .modal-dialog {
   width: min(680px, 100%);
-  max-height: calc(100vh - 32px);
+  max-height: calc(100vh - 48px);
   display: grid;
   grid-template-rows: auto 1fr auto;
   border: 1px solid var(--border-default);
@@ -791,13 +791,6 @@ option, optgroup {
 }
 .modal-dialog-wide { width: min(860px, 96vw); }
 .modal-body textarea.modal-input { resize: vertical; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; line-height: 1.6; }
-
-/* Compact mode: keep job-modal and method-config-modal content fitting */
-.modal-overlay.compact .modal-body { padding: 12px 14px; gap: 10px; }
-.modal-overlay.compact .modal-section { padding: 12px; }
-.modal-overlay.compact .wizard-input-section { padding: 12px; }
-.modal-overlay.compact .config-cards-row { gap: 8px; }
-.modal-overlay.compact .modal-row { gap: 8px; }
 
 .input-mode-tabs { display: flex; gap: 4px; margin-bottom: 14px; }
 .input-mode-tab {
@@ -865,11 +858,11 @@ option, optgroup {
 .method-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 /* Phase2: method config modal w/ left-right layout */
-.mc-wrap { display: grid; grid-template-columns: 1.6fr 1fr; gap: 12px; min-height: 0; }
-.mc-left { display: grid; gap: 8px; align-content: start; max-height: calc(100vh - 280px); overflow-y: auto; padding-right: 4px; }
-.mc-right { background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 12px; position: sticky; top: 0; max-height: calc(100vh - 300px); overflow: auto; }
-.mc-summary-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-tertiary); margin-bottom: 8px; }
-.mc-summary-line { font-size: 11px; padding: 4px 0; border-bottom: 1px solid var(--border-subtle); }
+.mc-wrap { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; min-height: 360px; }
+.mc-left { display: grid; gap: 12px; align-content: start; }
+.mc-right { background: rgba(255,255,255,0.02); border: 1px solid var(--border-subtle); border-radius: 10px; padding: 14px; position: sticky; top: 0; max-height: 400px; overflow: auto; }
+.mc-summary-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-tertiary); margin-bottom: 10px; }
+.mc-summary-line { font-size: 11px; padding: 6px 0; border-bottom: 1px solid var(--border-subtle); }
 .mc-summary-line:last-child { border-bottom: none; }
 .mc-summary-level { color: var(--text-secondary); font-weight: 600; }
 .mc-summary-detail { color: var(--text-primary); font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; }
@@ -878,7 +871,7 @@ option, optgroup {
 
 .mc-level-card { border: 1px solid var(--border-subtle); border-radius: 10px; background: rgba(255,255,255,0.02); overflow: hidden; }
 .mc-level-card.incomplete { border-color: rgba(229,83,83,0.3); }
-.mc-level-header { display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: pointer; user-select: none; }
+.mc-level-header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; user-select: none; }
 .mc-level-header:hover { background: rgba(255,255,255,0.03); }
 .mc-level-expand { width: 18px; height: 18px; display: grid; place-items: center; color: var(--text-tertiary); transition: transform 0.15s ease; }
 .mc-level-expand.open { transform: rotate(90deg); }
@@ -889,21 +882,33 @@ option, optgroup {
 .mc-level-status.ok { background: var(--green); }
 .mc-level-status.err { background: var(--red); }
 .mc-level-status.warn { background: var(--amber); }
-.mc-level-body { padding: 0 10px 10px; display: grid; gap: 6px; }
-.mc-level-advanced { margin-top: 2px; }
-.mc-level-advanced-toggle { font-size: 10px; color: var(--text-tertiary); cursor: pointer; padding: 2px 0; }
+.mc-level-body { padding: 0 12px 12px; display: grid; gap: 10px; }
+.mc-level-advanced { margin-top: 4px; }
+.mc-level-advanced-toggle { font-size: 10px; color: var(--text-tertiary); cursor: pointer; padding: 4px 0; }
 .mc-level-advanced-toggle:hover { color: var(--accent); }
-.mc-level-advanced-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+.mc-level-advanced-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
 
-.mc-field { display: flex; flex-direction: column; gap: 2px; }
+.mc-field { display: flex; flex-direction: column; gap: 3px; }
 .mc-field label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); }
-.mc-field select, .mc-field input { appearance: none; -webkit-appearance: none; padding: 4px 24px 4px 6px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--bg-elevated); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='none' stroke='%236b7b8a' stroke-width='1.2' d='M2 3.5l3 3 3-3'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; color: var(--text-primary); font-size: 11px; }
+.mc-field select, .mc-field input { appearance: none; -webkit-appearance: none; padding: 5px 24px 5px 8px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--bg-elevated); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='none' stroke='%236b7b8a' stroke-width='1.2' d='M2 3.5l3 3 3-3'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; color: var(--text-primary); font-size: 11px; }
 .mc-field select:focus, .mc-field input:focus { border-color: var(--accent); }
 .mc-field input { background-image: none; }
 
-.mc-profile-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+/* Prevent horizontal overflow inside modal frames: grid/flex children
+   default to min-width:auto and refuse to shrink below content width. */
+.mc-wrap, .mc-left, .mc-right, .method-fields, .mc-level-advanced-fields,
+.mc-field, .mc-level-name, .structure-preview-wrap, .modal-row,
+.config-cards-row, .workflow-option { min-width: 0; }
+.mc-field select, .mc-field input { width: 100%; box-sizing: border-box; }
+.mc-summary-detail { word-break: break-word; overflow-wrap: anywhere; }
+.workflow-option-title, .workflow-option-desc, .mc-level-name { overflow-wrap: anywhere; }
+.structure-preview-wrap > *, .modal-row > *, .config-cards-row > * { min-width: 0; }
+.modal-body input[type="text"], .modal-body input[type="number"],
+.modal-body select, .modal-body textarea { max-width: 100%; box-sizing: border-box; }
+
+.mc-profile-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .mc-profile-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); white-space: nowrap; }
-.mc-profile-select { appearance: none; -webkit-appearance: none; flex: 1; padding: 6px 32px 6px 8px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--bg-elevated); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%236b7b8a' stroke-width='1.5' d='M3 4.5l3 3 3-3'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; color: var(--text-primary); font-size: 13px; }
+.mc-profile-select { appearance: none; -webkit-appearance: none; flex: 1; padding: 8px 32px 8px 10px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--bg-elevated); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%236b7b8a' stroke-width='1.5' d='M3 4.5l3 3 3-3'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; color: var(--text-primary); font-size: 13px; }
 .mc-profile-select optgroup { font-size: 12px; }
 .method-field { display: flex; flex-direction: column; gap: 4px; }
 .method-field label { font-size: 10px; color: var(--text-tertiary); text-transform: uppercase; }
@@ -914,7 +919,7 @@ option, optgroup {
 .modal-header { border-bottom: 1px solid var(--border-default); }
 .modal-header h2 { margin: 0; font-size: 18px; }
 .modal-close { width: 34px; height: 34px; border-radius: 999px; border: 1px solid var(--border-default); background: rgba(255, 255, 255, 0.04); }
-.modal-body { overflow: auto; padding: 18px; display: grid; gap: 16px; }
+.modal-body { overflow-y: auto; overflow-x: hidden; padding: 18px; display: grid; gap: 16px; }
 .modal-section { padding: 16px; border: 1px solid var(--border-subtle); border-radius: 14px; background: rgba(255, 255, 255, 0.02); }
 .modal-section label { display: block; margin-bottom: 8px; color: var(--text-secondary); font-size: 12px; }
 .modal-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -950,6 +955,16 @@ option, optgroup {
   .center-col { min-height: 50vh; }
   .viewer-container { min-height: 50vh; }
   .mobile-panels { display: block; grid-area: mobile; }
+}
+
+/* Narrow dialogs: collapse the two-column method-config layout to one
+   column so nothing ever forces horizontal scrolling. */
+@media (max-width: 760px) {
+  .mc-wrap { grid-template-columns: 1fr; }
+  .mc-right { position: static; max-height: 200px; }
+  .structure-preview-wrap { grid-template-columns: 1fr; }
+  .config-cards-row { grid-template-columns: 1fr; }
+  .modal-row { grid-template-columns: 1fr; }
 }
 </style>
 </head>
@@ -1191,7 +1206,7 @@ option, optgroup {
   </main>
 </div>
 
-<div class="modal-overlay compact" id="job-modal" style="display:none;">
+<div class="modal-overlay" id="job-modal" style="display:none;">
   <div class="modal-dialog modal-dialog-wide">
     <div class="modal-header">
       <h2 data-i18n="modal.title">新建计算任务</h2>
@@ -1322,7 +1337,7 @@ option, optgroup {
   </div>
 </div>
 
-<div class="modal-overlay compact" id="method-config-modal" style="display:none;">
+<div class="modal-overlay" id="method-config-modal" style="display:none;">
   <div class="modal-dialog modal-dialog-wide">
     <div class="modal-header">
       <h2 id="mc-modal-title" data-i18n="modal.method_config">配置计算方法</h2>
