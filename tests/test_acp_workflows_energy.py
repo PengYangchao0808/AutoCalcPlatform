@@ -78,10 +78,12 @@ def mock_refinement_result() -> CensoRunResult:
 
 @pytest.fixture
 def multiframe_xyz(tmp_path: Path) -> Path:
+    # Title-line xTB energies far apart (~31 kcal/mol) so censo-zero
+    # cumulative-Boltzmann selection deterministically keeps only frame 1.
     xyz = tmp_path / "input.xyz"
     xyz.write_text(
-        "3\nFrame 0\nC 0 0 0\nH 0 0 1.089\nH 1.027 0 -0.363\n"
-        "3\nFrame 1\nC 0 0 0\nH 0 0 1.089\nH -1.027 0 -0.363\n"
+        "3\n-154.80000000\nC 0 0 0\nH 0 0 1.089\nH 1.027 0 -0.363\n"
+        "3\n-154.75000000\nC 0 0 0\nH 0 0 1.089\nH -1.027 0 -0.363\n"
     )
     return xyz
 
@@ -336,30 +338,33 @@ def test_energy_light_opt_on_end_to_end(
     assert result.status == "completed"
     assert result.metadata["preset"] == "censo-light"
     assert result.metadata["opt_enabled"] is True
-    assert result.metadata["n_conformers"] == 1
+    # v15 semantics: both screening records (ΔG ≈ 0.31 kcal/mol) fall inside
+    # the 99% cumulative Boltzmann window → 2-conformer ensemble
+    assert result.metadata["n_conformers"] == 2
+    assert result.metadata["refinement_threshold"] == pytest.approx(0.99)
 
     # CENSO invoked with the light preset, no refinement appended
     _, kwargs = backend.refine_ensemble.call_args
     assert kwargs["preset"] == "censo-light"
     assert kwargs.get("include_refinement", False) is False
 
-    # ACP handoff: opt → freq → SP → Shermo, one call each
-    assert orca.optimize.call_count == 1
-    assert orca.frequency.call_count == 1
-    assert orca.single_point.call_count == 1
-    assert mock_shermo.call_count == 1
+    # ACP handoff: opt → freq → SP → Shermo, one call per selected conformer
+    assert orca.optimize.call_count == 2
+    assert orca.frequency.call_count == 2
+    assert orca.single_point.call_count == 2
+    assert mock_shermo.call_count == 2
 
     # Shermo consumed the SP energy
     assert mock_shermo.call_args.kwargs["sp_energy"] == pytest.approx(-155.001234)
 
-    # finalDFT products (1 frame / 1 row) + global min + screening ranking
+    # finalDFT products (2 frames / 2 rows) + global min + screening ranking
     mol_dir = tmp_path / "out" / "input"
     assert (mol_dir / "finalDFT" / "all_conformers.xyz").exists()
     thermo_csv = mol_dir / "finalDFT" / "conformer_thermo.csv"
     assert thermo_csv.exists()
     lines = thermo_csv.read_text().strip().splitlines()
     assert lines[0].startswith("index,rank,energy_hartree,gibbs_correction,gibbs_hartree")
-    assert len(lines) == 2  # header + rank1 only
+    assert len(lines) == 3  # header + both ensemble members
     assert (mol_dir / "input_global_min.xyz").exists()
     assert (mol_dir / "ensemble" / "screening_ranking.csv").exists()
 
@@ -374,7 +379,7 @@ def test_energy_light_opt_on_rank1_is_lowest_gtot(
     mock_screening_result: CensoRunResult,
     multiframe_xyz: Path,
 ) -> None:
-    """rank1 selection must pick the record with lowest gtot (CONF1)."""
+    """The lowest-gtot record (CONF1) must lead the selected ensemble."""
     from acp.workflows.energy import run_conformer_energy
 
     orca = _mock_orca_instance()
@@ -398,7 +403,8 @@ def test_energy_light_opt_on_rank1_is_lowest_gtot(
     assert result.status == "completed"
     rec = result.ensemble.records[0]
     assert rec.structure.metadata["source"] == "CONF1"
-    assert rec.weight == pytest.approx(1.0)
+    # both conformers selected; identical mock Shermo Gibbs → equal weights
+    assert rec.weight == pytest.approx(0.5)
 
 
 # ---------------------------------------------------------------------------
@@ -435,7 +441,8 @@ def test_energy_light_no_opt_cheap_path(
 
     assert result.status == "completed"
     assert result.metadata["opt_enabled"] is False
-    assert result.metadata["n_conformers"] == 1
+    # v15: refined records (ΔG ≈ 0.70 kcal/mol) both inside the 99% window
+    assert result.metadata["n_conformers"] == 2
 
     # CENSO called once with refinement appended; no ORCA/Shermo involvement
     _, kwargs = backend.refine_ensemble.call_args
@@ -461,7 +468,11 @@ def test_energy_zero_opt_on_bypasses_censo(
     sample_config: dict[str, Any],
     multiframe_xyz: Path,
 ) -> None:
-    """censo-zero opt-on: xTB rank1 passthrough, no CENSO CLI at all."""
+    """censo-zero opt-on: xTB passthrough selection, no CENSO CLI at all.
+
+    The fixture's title energies are ~31 kcal/mol apart, so the cumulative
+    99% Boltzmann window keeps only the lowest frame.
+    """
     from acp.workflows.energy import run_conformer_energy
 
     orca = _mock_orca_instance()
@@ -496,7 +507,10 @@ def test_energy_zero_no_opt_censo_nconf1(
     sample_config: dict[str, Any],
     multiframe_xyz: Path,
 ) -> None:
-    """censo-zero --no-opt: CENSO -n 1 --refinement."""
+    """censo-zero --no-opt: CENSO -n N --refinement (N from xTB preselection).
+
+    With well-separated title energies only frame 1 survives → -n 1.
+    """
     from acp.workflows.energy import run_conformer_energy
 
     refinement = CensoRunResult(

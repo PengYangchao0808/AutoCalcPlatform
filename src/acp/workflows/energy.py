@@ -1,13 +1,17 @@
-"""Conformer energy workflow: CREST → CENSO screening → rank1 refinement.
+"""Conformer energy workflow: CREST → CENSO screening → ensemble refinement.
 
 Implements the ``acp run energy`` workflow (censo-light / censo-default /
-censo-zero presets).  Default path (opt enabled) refines the rank1 conformer
-via the ACP standard handoff — ORCA opt → ORCA freq (same method/basis) →
-high-level SP → Shermo — enforcing the opt/freq consistency rule.  The
-``--no-opt`` cheap path delegates refinement to CENSO itself (xTB geometry +
-xTB SPH mRRHO).  Only ``censo-default`` produces a multi-conformer ensemble
-(99% Boltzmann population cutoff, literature value); ``censo-light`` and
-``censo-zero`` always output a single refined conformer (rank1 semantics).
+censo-zero presets).  The refinement set is the group of lowest-free-energy
+conformers whose cumulative Boltzmann population exceeds the configured
+threshold (``censo.refinement_threshold``, default 0.99 — v15 semantics,
+superseding the v10 rank1-only output for censo-light/censo-zero).  Default
+path (opt enabled) refines each selected conformer via the ACP standard
+handoff — ORCA opt → ORCA freq (same method/basis) → high-level SP →
+Shermo — enforcing the opt/freq consistency rule.  The ``--no-opt`` cheap
+path delegates refinement to CENSO itself (xTB geometry + xTB SPH mRRHO)
+and applies the same cumulative-population selection to the refined
+records.  ``censo-default`` keeps CENSO's native Part3 funnel (0.99
+population cutoff) followed by same-level freq + Shermo re-ranking.
 """
 
 from __future__ import annotations
@@ -29,12 +33,13 @@ from acp.workflows.ensemble import (
     _is_file_input,
     _is_multiframe_xyz,
     _resolve_solvent_config,
+    _xtb_passthrough_result,
 )
 from conformer_search.config import load_config
 from conformer_search.qc.interfaces.crest import CRESTInterface
 from conformer_search.qc.interfaces.orca import ORCAInterface
 from conformer_search.qc.runners import run_shermo
-from conformer_search.utils.file_io import read_xyz_multiframe, write_xyz
+from conformer_search.utils.file_io import write_xyz
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +207,22 @@ def _resolve_levels(
     levels_solvent = sp_solvent or opt_solvent
     levels_solvent_model = sp_solvent_model or opt_solvent_model
 
+    try:
+        refinement_threshold = float(
+            levels.get(
+                "refinement_threshold",
+                censo_cfg.get("refinement_threshold", 0.99),
+            )
+        )
+    except (TypeError, ValueError):
+        refinement_threshold = 0.99
+    if not 0.0 < refinement_threshold <= 1.0:
+        logger.warning(
+            "refinement_threshold %.4f outside (0, 1] — falling back to 0.99",
+            refinement_threshold,
+        )
+        refinement_threshold = 0.99
+
     return {
         "opt_method": opt_method,
         "opt_basis": opt_basis,
@@ -221,6 +242,7 @@ def _resolve_levels(
         "refinement_template_lines": refinement_template_lines,
         "levels_solvent": levels_solvent,
         "levels_solvent_model": levels_solvent_model,
+        "refinement_threshold": refinement_threshold,
         "temperature_k": thermo.get(
             "temperature", thermo_cfg.get("temperature_k", 298.15)
         ),
@@ -437,6 +459,32 @@ def _boltzmann_weights(gibbs_values: list[float], temperature_k: float) -> list[
     return [w / total for w in raw]
 
 
+def _select_cumulative_boltzmann(
+    records: list[Any],
+    temperature_k: float,
+    threshold: float,
+) -> list[Any]:
+    """Select the lowest-gtot conformers up to a cumulative Boltzmann cutoff.
+
+    Records (``.gtot``-bearing, e.g. :class:`CensoConformerRecord`) are
+    sorted by ascending ``gtot``; conformers are accumulated until their
+    cumulative Boltzmann population reaches ``threshold`` (the conformer
+    crossing the threshold is included). Rank1 is always selected.
+    """
+    if not records:
+        return []
+    ordered = sorted(records, key=lambda r: r.gtot)
+    weights = _boltzmann_weights([r.gtot for r in ordered], temperature_k)
+    selected: list[Any] = []
+    cumulative = 0.0
+    for rec, weight in zip(ordered, weights):
+        selected.append(rec)
+        cumulative += weight
+        if cumulative >= threshold:
+            break
+    return selected
+
+
 def _write_final_outputs(
     candidates: list[dict[str, Any]],
     mol_dir: Path,
@@ -587,14 +635,6 @@ def _build_result_ensemble(
 # ---------------------------------------------------------------------------
 
 
-def _read_first_frame(ensemble_xyz: Path) -> tuple[np.ndarray, list[str]]:
-    coords, symbols = read_xyz_multiframe(ensemble_xyz)
-    n_atoms = len(symbols)
-    if n_atoms == 0 or coords.shape[0] < n_atoms:
-        raise ValueError(f"Cannot read first frame from {ensemble_xyz}")
-    return np.asarray(coords[:n_atoms]), list(symbols)
-
-
 def _censo_record_to_candidate(rec: Any, index: int = 0) -> dict[str, Any]:
     """Convert a CensoConformerRecord (cheap path) into a candidate dict.
 
@@ -634,7 +674,7 @@ def run_conformer_energy(
     no_opt: bool = False,
     levels: dict[str, Any] | None = None,
 ) -> WorkflowResult:
-    """Run the conformer energy workflow (rank1 refinement, v10 semantics).
+    """Run the conformer energy workflow (cumulative-Boltzmann ensemble, v15).
 
     Args:
         input_source: SMILES string or path to XYZ file (multi-frame XYZ
@@ -647,14 +687,17 @@ def run_conformer_energy(
         multiplicity: Spin multiplicity.
         solvent: Solvent name or None for gas phase.
         nproc: Number of processors.
-        no_opt: Disable the high-accuracy rank1 geometry optimization
-            (cheap RSH//xTB path). No effect for censo-default.
+        no_opt: Disable the high-accuracy geometry optimization of the
+            selected conformers (cheap RSH//xTB path). No effect for
+            censo-default.
         levels: Method level overrides (dft_opt / refinement_sp /
-            screening_sp / thermo), field names identical to the catalog.
+            screening_sp / thermo / refinement_threshold), field names
+            identical to the catalog.
 
     Returns:
-        WorkflowResult; light/zero yield a single-record ensemble (rank1),
-        censo-default yields the 99% Boltzmann cutoff ensemble.
+        WorkflowResult whose ensemble contains the lowest-free-energy
+        conformers up to the cumulative Boltzmann population threshold
+        (``censo.refinement_threshold``, default 0.99) — for all presets.
     """
     preset = (preset or "censo-light").lower()
     if preset not in _ENERGY_PRESETS:
@@ -793,21 +836,54 @@ def run_conformer_energy(
         stages_completed.append("crest")
 
         temperature_k = float(resolved["temperature_k"])
+        threshold = float(resolved["refinement_threshold"])
         candidates: list[dict[str, Any]]
+
+        def _handoff_selected(selected: list[Any]) -> list[dict[str, Any]]:
+            """Run the ACP handoff on each selected conformer (v15 ensemble).
+
+            Individual failures beyond rank1 are logged and skipped so a
+            single bad conformer does not discard the rest of the ensemble;
+            an empty result raises.
+            """
+            results: list[dict[str, Any]] = []
+            for i, rec in enumerate(selected):
+                handoff_dir = mol_dir / "finalDFT" / f"conf_{i:03d}"
+                try:
+                    cand = _run_rank1_handoff(
+                        cfg, np.asarray(rec.coordinates), list(rec.symbols),
+                        structure.charge, structure.multiplicity,
+                        handoff_dir, resolved, censo_solvent, _solvent_model,
+                        index=i, source=rec.conf_id,
+                    )
+                except RuntimeError as exc:
+                    if i == 0:
+                        raise
+                    logger.warning(
+                        "DFT handoff failed for %s (%s) — dropping this "
+                        "conformer from the ensemble", rec.conf_id, exc,
+                    )
+                    continue
+                results.append(cand)
+            if not results:
+                raise RuntimeError("All conformer handoffs failed")
+            return results
 
         # ---- Preset dispatch ----------------------------------------------
         if preset == "censo-zero" and opt_enabled:
-            # xTB rank1 passthrough → ACP handoff (no CENSO CLI involved)
-            logger.info("censo-zero (opt on): xTB rank1 → ACP handoff")
-            rank1_coords, rank1_symbols = _read_first_frame(crest_ensemble_xyz)
-            handoff_dir = mol_dir / "finalDFT" / "conf_000"
-            candidate = _run_rank1_handoff(
-                cfg, rank1_coords, rank1_symbols,
-                structure.charge, structure.multiplicity,
-                handoff_dir, resolved, censo_solvent, _solvent_model,
-                index=0, source="crest_rank1",
+            # xTB-ranked ensemble → cumulative Boltzmann selection → ACP
+            # handoff for each survivor (no CENSO CLI involved)
+            passthrough = _xtb_passthrough_result(crest_ensemble_xyz, temperature_k)
+            selected = _select_cumulative_boltzmann(
+                passthrough.records, temperature_k, threshold,
             )
-            candidates = [candidate]
+            logger.info(
+                "censo-zero (opt on): %d/%d conformers within %.0f%% cumulative "
+                "Boltzmann (xTB) → ACP handoff",
+                len(selected), len(passthrough.records), threshold * 100,
+            )
+            screening_ranking_csv = _write_screening_ranking(passthrough, mol_dir)
+            candidates = _handoff_selected(selected)
             state.complete_stage("dft_handoff", {"status": "completed"})
             stages_completed.append("dft_handoff")
 
@@ -822,6 +898,8 @@ def run_conformer_energy(
                 part_overrides["screening"] = resolved["screening_overrides"]
             if resolved["refinement_overrides"]:
                 part_overrides["refinement"] = resolved["refinement_overrides"]
+            if abs(threshold - 0.99) > 1e-9:
+                part_overrides.setdefault("refinement", {})["threshold"] = threshold
 
             part_templates: dict[str, list[str]] = {}
             if resolved["screening_template_lines"]:
@@ -860,25 +938,37 @@ def run_conformer_energy(
 
                 screening_ranking_csv = _write_screening_ranking(censo_result, mol_dir)
 
-                rank1 = censo_result.records[0]  # sorted by gtot
+                selected = _select_cumulative_boltzmann(
+                    censo_result.records, temperature_k, threshold,
+                )
                 logger.info(
-                    "censo-light (opt on): rank1 = %s (gtot=%.8f) → ACP handoff",
-                    rank1.conf_id, rank1.gtot,
+                    "censo-light (opt on): %d/%d conformers within %.0f%% "
+                    "cumulative Boltzmann (screening gtot) → ACP handoff",
+                    len(selected), len(censo_result.records), threshold * 100,
                 )
-                handoff_dir = mol_dir / "finalDFT" / "conf_000"
-                candidate = _run_rank1_handoff(
-                    cfg, np.asarray(rank1.coordinates), list(rank1.symbols),
-                    structure.charge, structure.multiplicity,
-                    handoff_dir, resolved, censo_solvent, _solvent_model,
-                    index=0, source=rank1.conf_id,
-                )
-                candidates = [candidate]
+                candidates = _handoff_selected(selected)
                 state.complete_stage("dft_handoff", {"status": "completed"})
                 stages_completed.append("dft_handoff")
 
             elif preset in ("censo-light", "censo-zero"):
-                # Cheap path (--no-opt): CENSO handles refinement itself
+                # Cheap path (--no-opt): CENSO handles refinement itself.
+                # censo-zero preselects the cumulative-population set at the
+                # xTB level and restricts CENSO to those frames (-n N).
                 logger.info("%s (opt off): CENSO refinement cheap path", preset)
+                nconf: int | None = None
+                if preset == "censo-zero":
+                    passthrough = _xtb_passthrough_result(
+                        crest_ensemble_xyz, temperature_k,
+                    )
+                    preselected = _select_cumulative_boltzmann(
+                        passthrough.records, temperature_k, threshold,
+                    )
+                    nconf = max(1, len(preselected))
+                    logger.info(
+                        "censo-zero preselection: %d/%d frames within %.0f%% "
+                        "cumulative Boltzmann (xTB)",
+                        nconf, len(passthrough.records), threshold * 100,
+                    )
                 censo_result = backend.refine_ensemble(
                     crest_ensemble_xyz,
                     censo_dir,
@@ -889,7 +979,7 @@ def run_conformer_energy(
                     solvent=censo_solvent,
                     nproc=safe_nproc,
                     include_refinement=(preset == "censo-light"),
-                    nconf=1 if preset == "censo-zero" else None,
+                    nconf=nconf,
                     part_overrides=part_overrides or None,
                     part_templates=part_templates or None,
                 )
@@ -902,8 +992,19 @@ def run_conformer_energy(
 
                 screening_ranking_csv = _write_screening_ranking(censo_result, mol_dir)
 
-                rank1 = censo_result.records[0]
-                candidates = [_censo_record_to_candidate(rank1, index=0)]
+                selected = _select_cumulative_boltzmann(
+                    censo_result.records, temperature_k, threshold,
+                )
+                logger.info(
+                    "%s (opt off): %d/%d refined conformers within %.0f%% "
+                    "cumulative Boltzmann (gtot)",
+                    preset, len(selected), len(censo_result.records),
+                    threshold * 100,
+                )
+                candidates = [
+                    _censo_record_to_candidate(rec, index=i)
+                    for i, rec in enumerate(selected)
+                ]
 
             else:
                 # censo-default: full Part0–Part3 + same-level freq + Shermo
@@ -970,6 +1071,7 @@ def run_conformer_energy(
         "preset": preset,
         "opt_enabled": opt_enabled,
         "n_conformers": len(candidates),
+        "refinement_threshold": float(resolved["refinement_threshold"]),
         "crest_skipped": crest_skipped,
         **outputs,
     }

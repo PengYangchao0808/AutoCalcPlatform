@@ -582,3 +582,229 @@ def test_ensemble_zero_does_not_invoke_censo(tmp_path: Path, monkeypatch: Any) -
     mock_backend_cls.assert_not_called()
     ensemble_xyz = tmp_path / "out" / "passthrough" / "ensemble" / "ensemble.xyz"
     assert ensemble_xyz.exists()
+
+
+# ---------------------------------------------------------------------------
+# v15: cumulative-Boltzmann ensemble selection (finalDFT logic)
+# ---------------------------------------------------------------------------
+
+
+def _g_record(conf_id: str, frame_index: int, gtot: float) -> Any:
+    import numpy as np
+
+    from acp.backends.censo_backend import CensoConformerRecord
+
+    return CensoConformerRecord(
+        conf_id=conf_id,
+        frame_index=frame_index,
+        energy=gtot,
+        gsolv=0.0,
+        grrho=0.0,
+        gtot=gtot,
+        coordinates=np.zeros((1, 3)),
+        symbols=["H"],
+    )
+
+
+def test_select_cumulative_boltzmann_far_apart_keeps_rank1() -> None:
+    from acp.workflows.energy import _select_cumulative_boltzmann
+
+    records = [_g_record("CONF1", 0, -155.00), _g_record("CONF2", 1, -154.95)]
+    selected = _select_cumulative_boltzmann(records, 298.15, 0.99)
+    assert [r.conf_id for r in selected] == ["CONF1"]
+
+
+def test_select_cumulative_boltzmann_close_keeps_all() -> None:
+    from acp.workflows.energy import _select_cumulative_boltzmann
+
+    # ΔG ≈ 0.31 kcal/mol → weights ~0.63/0.37 → both needed for 99%
+    records = [_g_record("CONF2", 1, -154.9995), _g_record("CONF1", 0, -155.0)]
+    selected = _select_cumulative_boltzmann(records, 298.15, 0.99)
+    assert [r.conf_id for r in selected] == ["CONF1", "CONF2"]
+
+
+def test_select_cumulative_boltzmann_threshold_crossing_included() -> None:
+    from acp.workflows.energy import _select_cumulative_boltzmann
+
+    # Three equal-G conformers: weights 1/3 each; cumsum crosses 0.5 at #2
+    records = [_g_record(f"CONF{i}", i - 1, -155.0) for i in (1, 2, 3)]
+    selected = _select_cumulative_boltzmann(records, 298.15, 0.5)
+    assert len(selected) == 2
+    # threshold 1.0 keeps the full set
+    assert len(_select_cumulative_boltzmann(records, 298.15, 1.0)) == 3
+    # empty input
+    assert _select_cumulative_boltzmann([], 298.15, 0.99) == []
+
+
+def test_resolve_levels_refinement_threshold() -> None:
+    from acp.workflows.energy import _resolve_levels
+
+    resolved = _resolve_levels(_make_config(), {"refinement_threshold": 0.9})
+    assert resolved["refinement_threshold"] == pytest.approx(0.9)
+    # config fallback
+    cfg = _make_config()
+    cfg["censo"]["refinement_threshold"] = 0.95
+    assert _resolve_levels(cfg, None)["refinement_threshold"] == pytest.approx(0.95)
+    # invalid values fall back to 0.99
+    assert _resolve_levels(_make_config(), {"refinement_threshold": 1.7})[
+        "refinement_threshold"
+    ] == pytest.approx(0.99)
+
+
+def test_energy_zero_opt_on_multi_conformer_ensemble(tmp_path: Path) -> None:
+    """censo-zero opt-on with near-degenerate xTB energies → 2 handoffs."""
+    from unittest.mock import MagicMock, patch
+
+    import numpy as np
+
+    from acp.workflows.energy import run_conformer_energy
+
+    xyz = tmp_path / "close.xyz"
+    xyz.write_text(
+        "3\n-154.80000000\nC 0 0 0\nH 0 0 1.089\nH 1.027 0 -0.363\n"
+        "3\n-154.79950000\nC 0 0 0\nH 0 0 1.089\nH -1.027 0 -0.363\n"
+    )
+
+    orca = MagicMock()
+    opt_result = MagicMock(
+        success=True,
+        coordinates=np.zeros((3, 3)),
+        symbols=["C", "H", "H"],
+        energy=-154.9,
+        log_file=Path("/tmp/opt.out"),
+        error_message=None,
+    )
+    orca.optimize.return_value = opt_result
+    orca.frequency.return_value = MagicMock(
+        success=True, log_file=Path("/tmp/freq.out"), error_message=None,
+    )
+    orca.single_point.return_value = MagicMock(
+        success=True, energy=-155.0, log_file=Path("/tmp/sp.out"),
+        error_message=None,
+    )
+    shermo_ok = {"g_sum": -154.95, "g_conc": None, "h_sum": -154.9,
+                 "u_sum": -154.91, "s_total": 0.03}
+
+    with (
+        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
+        patch("acp.workflows.energy.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy.run_shermo", return_value=dict(shermo_ok)),
+    ):
+        result = run_conformer_energy(
+            input_source=str(xyz),
+            output_dir=str(tmp_path / "out"),
+            preset="censo-zero",
+            config=_make_config(),
+            name="close",
+        )
+
+    assert result.status == "completed"
+    mock_backend_cls.assert_not_called()
+    assert result.metadata["n_conformers"] == 2
+    assert orca.optimize.call_count == 2
+    # auxiliary xTB ranking table written for the passthrough path
+    assert (tmp_path / "out" / "close" / "ensemble" / "screening_ranking.csv").exists()
+
+
+def test_energy_light_non_rank1_handoff_failure_is_skipped(tmp_path: Path) -> None:
+    """A failing non-rank1 conformer is dropped; rank1 failure still raises."""
+    from unittest.mock import MagicMock, patch
+
+    import numpy as np
+
+    from acp.backends.censo_backend import CensoRunResult
+    from acp.workflows.energy import run_conformer_energy
+
+    xyz = tmp_path / "in.xyz"
+    xyz.write_text(
+        "3\n-154.80000000\nC 0 0 0\nH 0 0 1.089\nH 1.027 0 -0.363\n"
+        "3\n-154.79950000\nC 0 0 0\nH 0 0 1.089\nH -1.027 0 -0.363\n"
+    )
+    screening = CensoRunResult(
+        preset="censo-light",
+        records=[_g_record("CONF1", 0, -154.9995), _g_record("CONF2", 1, -154.9990)],
+        final_part="screening",
+        temperature=298.15,
+    )
+    screening.sort_by_gtot()
+
+    orca = MagicMock()
+    ok_opt = MagicMock(
+        success=True, coordinates=np.zeros((1, 3)), symbols=["H"],
+        energy=-154.9, log_file=Path("/tmp/opt.out"), error_message=None,
+    )
+    bad_opt = MagicMock(success=False, error_message="SCF blew up")
+    orca.optimize.side_effect = [ok_opt, bad_opt]
+    orca.frequency.return_value = MagicMock(
+        success=True, log_file=Path("/tmp/freq.out"), error_message=None,
+    )
+    orca.single_point.return_value = MagicMock(
+        success=True, energy=-155.0, log_file=Path("/tmp/sp.out"),
+        error_message=None,
+    )
+    shermo_ok = {"g_sum": -154.95, "g_conc": None, "h_sum": -154.9,
+                 "u_sum": -154.91, "s_total": 0.03}
+
+    with (
+        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
+        patch("acp.workflows.energy.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy.run_shermo", return_value=dict(shermo_ok)),
+    ):
+        backend = MagicMock()
+        backend.refine_ensemble.return_value = screening
+        mock_backend_cls.return_value = backend
+
+        result = run_conformer_energy(
+            input_source=str(xyz),
+            output_dir=str(tmp_path / "out"),
+            preset="censo-light",
+            config=_make_config(),
+            name="skipfail",
+        )
+
+    assert result.status == "completed"
+    assert result.metadata["n_conformers"] == 1
+    assert result.ensemble.records[0].structure.metadata["source"] == "CONF1"
+
+
+def test_energy_cheap_path_custom_threshold_propagates(tmp_path: Path) -> None:
+    """--levels refinement_threshold reaches the CENSO rcfile overrides."""
+    from unittest.mock import MagicMock, patch
+
+    from acp.backends.censo_backend import CensoRunResult
+    from acp.workflows.energy import run_conformer_energy
+
+    xyz = tmp_path / "in.xyz"
+    xyz.write_text(
+        "3\n-154.80000000\nC 0 0 0\nH 0 0 1.089\nH 1.027 0 -0.363\n"
+        "3\n-154.79950000\nC 0 0 0\nH 0 0 1.089\nH -1.027 0 -0.363\n"
+    )
+    refinement = CensoRunResult(
+        preset="censo-light",
+        records=[_g_record("CONF1", 0, -154.9995), _g_record("CONF2", 1, -154.9990)],
+        final_part="refinement",
+        temperature=298.15,
+    )
+    refinement.sort_by_gtot()
+
+    with patch("acp.workflows.energy.CensoBackend") as mock_backend_cls:
+        backend = MagicMock()
+        backend.refine_ensemble.return_value = refinement
+        mock_backend_cls.return_value = backend
+
+        result = run_conformer_energy(
+            input_source=str(xyz),
+            output_dir=str(tmp_path / "out"),
+            preset="censo-light",
+            config=_make_config(),
+            name="thr",
+            no_opt=True,
+            levels={"refinement_threshold": 0.5},
+        )
+
+    assert result.status == "completed"
+    _, kwargs = backend.refine_ensemble.call_args
+    assert kwargs["part_overrides"]["refinement"]["threshold"] == pytest.approx(0.5)
+    # ΔG ≈ 0.31 kcal/mol → rank1 weight ≈ 0.63 ≥ 0.5 → only rank1 kept
+    assert result.metadata["n_conformers"] == 1
+    assert result.metadata["refinement_threshold"] == pytest.approx(0.5)

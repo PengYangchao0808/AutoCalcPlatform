@@ -54,7 +54,7 @@ ACP_V1_20260519/
 | ACP conformer workflow | `src/acp/workflows/conformer.py` | Thin wrapper delegating to authoritative `ConformerEngine.run()`; rebuilds ensemble from `all_conformers.xyz` |
 | CENSO backend | `src/acp/backends/censo_backend.py` | Subprocess wrapper: presets, rcfile gen, JSON/XYZ parsing, template injection (per-run HOME), keep_all. Copies input into censo/ (CENSO chdirs to input's parent) |
 | Ensemble workflow | `src/acp/workflows/ensemble.py` | `acp run ensemble` — CREST → CENSO P+S (censo-light/default); censo-zero = CREST xTB passthrough (no CENSO) |
-| Energy workflow | `src/acp/workflows/energy.py` | `acp run energy` — rank1 refinement (v10 semantics); full `--levels` field consumption → ORCA route_extras; opt/freq same-level rule (v7) |
+| Energy workflow | `src/acp/workflows/energy.py` | `acp run energy` — cumulative-Boltzmann ≥99% ensemble (v15 semantics, `censo.refinement_threshold`); full `--levels` field consumption → ORCA route_extras; opt/freq same-level rule (v7) |
 | CENSO dev doc | `docs/ACP_CENSO_Integration_DevDoc.html` | Authoritative design + P1–P5 audit history (v14: acceptance passed) |
 | Core data models | `src/acp/core/models.py` | Structure, StructureRecord, StructureEnsemble |
 | Workflow engine | `src/acp/core/workflow.py` | WorkflowRunner, WorkflowSpec, Stage |

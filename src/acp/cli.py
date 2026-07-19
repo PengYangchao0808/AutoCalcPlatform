@@ -562,7 +562,7 @@ Examples:
         help=(
             "JSON method-level overrides, e.g. "
             '\'{"refinement_sp":{"functional":"DLPNO-CCSD(T)","basis":"def2-TZVPP"},'
-            '"thermo":{"scale_factor":0.98}}\''
+            '"thermo":{"scale_factor":0.98},"refinement_threshold":0.99}\''
         ),
     )
     energy.add_argument(
