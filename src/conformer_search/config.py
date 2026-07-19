@@ -202,6 +202,7 @@ def _get_default_config() -> dict[str, Any]:
             'temperature': 298.15,
             'scale': 1.0,
             'keep_all': False,
+            'ewin': 6.0,
             'refinement_threshold': 0.99,
             'refinement_func': 'wb97m-v',
             'refinement_basis': 'def2-tzvpp',

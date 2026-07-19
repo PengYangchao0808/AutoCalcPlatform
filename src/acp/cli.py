@@ -466,6 +466,11 @@ Examples:
         help="Do not truncate the ensemble at CENSO part thresholds",
     )
     ens.add_argument(
+        "--ewin",
+        type=float,
+        help="CREST energy window in kcal/mol (default: censo.ewin config, 6.0)",
+    )
+    ens.add_argument(
         "--nproc",
         type=int,
         help="Number of CPU cores (overrides config)",
@@ -569,6 +574,11 @@ Examples:
         "--solvent",
         type=str,
         help="Solvent name (e.g. dcm, water); omit for gas phase",
+    )
+    energy.add_argument(
+        "--ewin",
+        type=float,
+        help="CREST energy window in kcal/mol (default: censo.ewin config, 6.0)",
     )
     energy.add_argument(
         "--nproc",
@@ -1158,6 +1168,7 @@ def _handle_ensemble(args: argparse.Namespace) -> int:
             solvent=args.solvent,
             nproc=args.nproc,
             keep_all=True if getattr(args, "keep_all", False) else None,
+            ewin=getattr(args, "ewin", None),
         )
     except KeyboardInterrupt:
         logger.warning("Interrupted by user")
@@ -1210,6 +1221,7 @@ def _handle_ensemble_batch(
                 solvent=args.solvent,
                 nproc=args.nproc,
                 keep_all=True if getattr(args, "keep_all", False) else None,
+                ewin=getattr(args, "ewin", None),
             )
             if r.status == "completed":
                 results.append({"molecule": mi.name, "status": "completed", "metadata": r.metadata})
@@ -1292,6 +1304,7 @@ def _handle_energy(args: argparse.Namespace) -> int:
             nproc=args.nproc,
             no_opt=args.no_opt,
             levels=levels,
+            ewin=getattr(args, "ewin", None),
         )
     except KeyboardInterrupt:
         logger.warning("Interrupted by user")
@@ -1346,6 +1359,7 @@ def _handle_energy_batch(
                 nproc=args.nproc,
                 no_opt=args.no_opt,
                 levels=levels,
+                ewin=getattr(args, "ewin", None),
             )
             if r.status == "completed":
                 results.append({"molecule": mi.name, "status": "completed", "metadata": r.metadata})

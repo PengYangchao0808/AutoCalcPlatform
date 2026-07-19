@@ -95,6 +95,29 @@ def censo_solvent_from_method(method: dict[str, Any]) -> str | None:
     return None
 
 
+def censo_ewin_from_method(method: dict[str, Any]) -> float | None:
+    """Resolve the CREST energy window from a job's method dict.
+
+    Priority: explicit ``method.ewin`` > the wizard's ``censo`` level
+    ``ewin`` field. Non-numeric or non-positive values resolve to ``None``
+    so the workflow/config default applies.
+    """
+    raw = method.get("ewin")
+    if raw is None:
+        levels = method.get("levels")
+        if isinstance(levels, dict):
+            censo_level = levels.get("censo")
+            if isinstance(censo_level, dict):
+                raw = censo_level.get("ewin")
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
 @dataclass(frozen=True)
 class JobSpec:
     """Immutable description of what a job should run.
@@ -183,4 +206,5 @@ __all__ = [
     "SUPPORTED_WORKFLOWS",
     "censo_preset_from_method",
     "censo_solvent_from_method",
+    "censo_ewin_from_method",
 ]

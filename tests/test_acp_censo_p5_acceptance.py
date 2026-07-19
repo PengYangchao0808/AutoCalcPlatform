@@ -808,3 +808,185 @@ def test_energy_cheap_path_custom_threshold_propagates(tmp_path: Path) -> None:
     # ΔG ≈ 0.31 kcal/mol → rank1 weight ≈ 0.63 ≥ 0.5 → only rank1 kept
     assert result.metadata["n_conformers"] == 1
     assert result.metadata["refinement_threshold"] == pytest.approx(0.5)
+
+
+# ---------------------------------------------------------------------------
+# v16: UI ewin → CREST energy_window chain
+# ---------------------------------------------------------------------------
+
+
+def test_censo_ewin_from_method() -> None:
+    from acp.scheduler.jobs import censo_ewin_from_method
+
+    assert censo_ewin_from_method({"ewin": 4.5}) == pytest.approx(4.5)
+    assert censo_ewin_from_method(
+        {"levels": {"censo": {"engine": "censo", "ewin": 5.0}}}
+    ) == pytest.approx(5.0)
+    # explicit method.ewin wins over levels
+    assert censo_ewin_from_method(
+        {"ewin": 3.0, "levels": {"censo": {"ewin": 5.0}}}
+    ) == pytest.approx(3.0)
+    assert censo_ewin_from_method({}) is None
+    assert censo_ewin_from_method({"ewin": "abc"}) is None
+    assert censo_ewin_from_method({"ewin": 0}) is None
+    assert censo_ewin_from_method({"ewin": -2}) is None
+
+
+def test_resolve_crest_ewin_priority() -> None:
+    from acp.workflows.ensemble import _resolve_crest_ewin
+
+    cfg = _make_config()
+    assert _resolve_crest_ewin(cfg, 4.5) == pytest.approx(4.5)
+    # config fallback
+    cfg["censo"]["ewin"] = 3.5
+    assert _resolve_crest_ewin(cfg, None) == pytest.approx(3.5)
+    # built-in default
+    assert _resolve_crest_ewin(_make_config(), None) == pytest.approx(6.0)
+    # invalid values fall through
+    cfg["censo"]["ewin"] = "bad"
+    assert _resolve_crest_ewin(cfg, None) == pytest.approx(6.0)
+    cfg["censo"]["ewin"] = -1
+    assert _resolve_crest_ewin(cfg, None) == pytest.approx(6.0)
+
+
+def test_resolve_levels_crest_ewin_level() -> None:
+    from acp.workflows.energy import _resolve_levels
+
+    resolved = _resolve_levels(
+        _make_config(), {"censo": {"engine": "censo", "ewin": 4.0}},
+    )
+    assert resolved["crest_ewin_level"] == pytest.approx(4.0)
+    assert _resolve_levels(_make_config(), None)["crest_ewin_level"] is None
+    assert _resolve_levels(
+        _make_config(), {"censo": {"ewin": "bad"}},
+    )["crest_ewin_level"] is None
+
+
+def test_runner_build_cmd_ewin_from_ui_levels() -> None:
+    from acp.scheduler.runner import JobRunner
+
+    spec = JobSpec(
+        workflow="ensemble",
+        name="etoh",
+        input={"source": "CCO"},
+        method={
+            "profile_id": "censo-light",
+            "levels": {"censo": {"engine": "censo", "ewin": 4.5}},
+        },
+    )
+    stub = SimpleNamespace(python="python")
+    cmd = JobRunner._build_cmd(stub, spec, Path("/tmp/wd"), input_path="inputs/input.xyz")
+    assert "--ewin" in cmd
+    assert cmd[cmd.index("--ewin") + 1] == "4.5"
+
+
+def test_script_gen_ewin_parity() -> None:
+    from acp.scheduler.remote.script_gen import build_remote_cli_command
+
+    spec = JobSpec(
+        workflow="energy",
+        name="etoh",
+        input={"source": "CCO"},
+        method={
+            "profile_id": "censo-light",
+            "levels": {"censo": {"engine": "censo", "ewin": 4.5}},
+        },
+    )
+    cmd = build_remote_cli_command(spec, python_executable="python3")
+    assert cmd[cmd.index("--ewin") + 1] == "4.5"
+
+
+def test_cli_energy_accepts_ewin() -> None:
+    from acp.cli import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args(["run", "energy", "--input", "CCO", "--ewin", "4.0"])
+    assert args.ewin == pytest.approx(4.0)
+    args2 = parser.parse_args(["run", "ensemble", "--input", "CCO", "--ewin", "3.0"])
+    assert args2.ewin == pytest.approx(3.0)
+
+
+def test_ensemble_ewin_reaches_crest(tmp_path: Path) -> None:
+    from unittest.mock import MagicMock, patch
+
+    from acp.workflows.ensemble import run_ensemble_generation
+
+    single_xyz = tmp_path / "mol.xyz"
+    single_xyz.write_text("1\n-1.0\nH 0 0 0\n")
+
+    def fake_search(**kwargs: Any):
+        out_dir = Path(kwargs["output_dir"])
+        (out_dir / "crest_conformers.xyz").write_text(
+            "1\n-1.00000000\nH 0 0 0\n1\n-1.00010000\nH 0 0 1\n"
+        )
+        return MagicMock(success=True, error_message=None)
+
+    with patch("acp.workflows.ensemble.CRESTInterface") as crest_cls:
+        iface = MagicMock()
+        iface.run_conformer_search.side_effect = fake_search
+        crest_cls.return_value = iface
+
+        result = run_ensemble_generation(
+            input_source=str(single_xyz),
+            output_dir=str(tmp_path / "out"),
+            preset="censo-zero",
+            config=_make_config(),
+            name="ewin_test",
+            ewin=4.5,
+        )
+
+    assert result.status == "completed"
+    assert iface.run_conformer_search.call_args.kwargs["energy_window"] == pytest.approx(4.5)
+    assert result.metadata["crest_ewin"] == pytest.approx(4.5)
+
+
+def test_energy_levels_ewin_reaches_crest(tmp_path: Path) -> None:
+    from unittest.mock import MagicMock, patch
+
+    import numpy as np
+
+    from acp.workflows.energy import run_conformer_energy
+
+    single_xyz = tmp_path / "mol.xyz"
+    single_xyz.write_text("1\n-1.0\nH 0 0 0\n")
+
+    def fake_search(**kwargs: Any):
+        out_dir = Path(kwargs["output_dir"])
+        (out_dir / "crest_conformers.xyz").write_text("1\n-1.00000000\nH 0 0 0\n")
+        return MagicMock(success=True, error_message=None)
+
+    orca = MagicMock()
+    orca.optimize.return_value = MagicMock(
+        success=True, coordinates=np.zeros((1, 3)), symbols=["H"],
+        energy=-1.0, log_file=Path("/tmp/opt.out"), error_message=None,
+    )
+    orca.frequency.return_value = MagicMock(
+        success=True, log_file=Path("/tmp/freq.out"), error_message=None,
+    )
+    orca.single_point.return_value = MagicMock(
+        success=True, energy=-1.1, log_file=Path("/tmp/sp.out"), error_message=None,
+    )
+    shermo_ok = {"g_sum": -1.05, "g_conc": None, "h_sum": -1.0,
+                 "u_sum": -1.01, "s_total": 0.03}
+
+    with (
+        patch("acp.workflows.energy.CRESTInterface") as crest_cls,
+        patch("acp.workflows.energy.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy.run_shermo", return_value=dict(shermo_ok)),
+    ):
+        iface = MagicMock()
+        iface.run_conformer_search.side_effect = fake_search
+        crest_cls.return_value = iface
+
+        result = run_conformer_energy(
+            input_source=str(single_xyz),
+            output_dir=str(tmp_path / "out"),
+            preset="censo-zero",
+            config=_make_config(),
+            name="ewin_lv",
+            levels={"censo": {"engine": "censo", "ewin": 4.0}},
+        )
+
+    assert result.status == "completed"
+    assert iface.run_conformer_search.call_args.kwargs["energy_window"] == pytest.approx(4.0)
+    assert result.metadata["crest_ewin"] == pytest.approx(4.0)

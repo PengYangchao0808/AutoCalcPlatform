@@ -250,6 +250,21 @@ def _resolve_solvent_config(
     return censo_solvent, (solvent_model or "none").lower()
 
 
+def _resolve_crest_ewin(
+    cfg: dict[str, Any],
+    ewin: float | None,
+) -> float:
+    """Resolve the CREST energy window: explicit arg > censo.ewin > 6.0."""
+    if ewin is not None and ewin > 0:
+        return float(ewin)
+    raw = cfg.get("censo", {}).get("ewin", 6.0)
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 6.0
+    return value if value > 0 else 6.0
+
+
 def run_ensemble_generation(
     input_source: str,
     output_dir: str | Path = "./ensemble_output",
@@ -261,6 +276,7 @@ def run_ensemble_generation(
     solvent: str | None = None,
     nproc: int | None = None,
     keep_all: bool | None = None,
+    ewin: float | None = None,
 ) -> WorkflowResult:
     """Run ensemble generation: SMILES/XYZ → CREST → CENSO → sorted ensemble.
 
@@ -278,6 +294,8 @@ def run_ensemble_generation(
         keep_all: Pass ``--keep-all`` to CENSO so the ensemble is not
             truncated at part thresholds (default: ``censo.keep_all`` config,
             False).
+        ewin: CREST energy window in kcal/mol (default: ``censo.ewin``
+            config, 6.0 — literature RTCONF55-16K value).
 
     Returns:
         WorkflowResult with conformer ensemble.
@@ -337,6 +355,8 @@ def run_ensemble_generation(
     if nproc is not None and nproc > 0:
         safe_nproc = nproc
 
+    crest_ewin = _resolve_crest_ewin(cfg, ewin)
+
     stages_completed: list[str] = ["embed"]
     crest_skipped = False
 
@@ -360,6 +380,7 @@ def run_ensemble_generation(
             )
 
             coords = np.asarray(structure.coordinates) if structure.coordinates is not None else np.empty((0, 3))
+            logger.info("CREST energy window: %.2f kcal/mol", crest_ewin)
             crest_result = crest_iface.run_conformer_search(
                 coordinates=coords,
                 symbols=list(structure.symbols),
@@ -367,7 +388,7 @@ def run_ensemble_generation(
                 output_name=safe_name,
                 charge=structure.charge,
                 multiplicity=structure.multiplicity,
-                energy_window=6.0,
+                energy_window=crest_ewin,
             )
 
             if not crest_result.success:
@@ -441,6 +462,7 @@ def run_ensemble_generation(
         metadata={
             "preset": preset,
             "n_conformers": len(ensemble.records),
+            "crest_ewin": crest_ewin,
             "ensemble_xyz": str(mol_dir / "ensemble" / "ensemble.xyz"),
             "ensemble_json": str(mol_dir / "ensemble" / "ensemble.json"),
             "ensemble_csv": str(mol_dir / "ensemble" / "ensemble.csv"),

@@ -32,6 +32,7 @@ from acp.workflows._helpers import sanitize_job_name
 from acp.workflows.ensemble import (
     _is_file_input,
     _is_multiframe_xyz,
+    _resolve_crest_ewin,
     _resolve_solvent_config,
     _xtb_passthrough_result,
 )
@@ -149,6 +150,7 @@ def _resolve_levels(
     refinement_sp = levels.get("refinement_sp", {}) or {}
     screening_sp = levels.get("screening_sp", {}) or {}
     thermo = levels.get("thermo", {}) or {}
+    censo_level = levels.get("censo", {}) or {}
 
     opt_method = dft_opt.get("functional") or opt_cfg.get(
         "functional", _DEFAULT_OPT_FUNCTIONAL
@@ -223,6 +225,16 @@ def _resolve_levels(
         )
         refinement_threshold = 0.99
 
+    crest_ewin_level: float | None = None
+    raw_ewin = censo_level.get("ewin")
+    if raw_ewin is not None:
+        try:
+            candidate_ewin = float(raw_ewin)
+        except (TypeError, ValueError):
+            candidate_ewin = None
+        if candidate_ewin is not None and candidate_ewin > 0:
+            crest_ewin_level = candidate_ewin
+
     return {
         "opt_method": opt_method,
         "opt_basis": opt_basis,
@@ -243,6 +255,7 @@ def _resolve_levels(
         "levels_solvent": levels_solvent,
         "levels_solvent_model": levels_solvent_model,
         "refinement_threshold": refinement_threshold,
+        "crest_ewin_level": crest_ewin_level,
         "temperature_k": thermo.get(
             "temperature", thermo_cfg.get("temperature_k", 298.15)
         ),
@@ -673,6 +686,7 @@ def run_conformer_energy(
     nproc: int | None = None,
     no_opt: bool = False,
     levels: dict[str, Any] | None = None,
+    ewin: float | None = None,
 ) -> WorkflowResult:
     """Run the conformer energy workflow (cumulative-Boltzmann ensemble, v15).
 
@@ -690,9 +704,11 @@ def run_conformer_energy(
         no_opt: Disable the high-accuracy geometry optimization of the
             selected conformers (cheap RSH//xTB path). No effect for
             censo-default.
-        levels: Method level overrides (dft_opt / refinement_sp /
+        levels: Method level overrides (censo / dft_opt / refinement_sp /
             screening_sp / thermo / refinement_threshold), field names
             identical to the catalog.
+        ewin: CREST energy window in kcal/mol. Priority: this argument >
+            ``levels.censo.ewin`` > ``censo.ewin`` config > 6.0.
 
     Returns:
         WorkflowResult whose ensemble contains the lowest-free-energy
@@ -808,6 +824,10 @@ def run_conformer_energy(
                 if structure.coordinates is not None
                 else np.empty((0, 3))
             )
+            crest_ewin = _resolve_crest_ewin(
+                cfg, ewin if ewin is not None else resolved["crest_ewin_level"],
+            )
+            logger.info("CREST energy window: %.2f kcal/mol", crest_ewin)
             crest_result = crest_iface.run_conformer_search(
                 coordinates=coords,
                 symbols=list(structure.symbols),
@@ -815,7 +835,7 @@ def run_conformer_energy(
                 output_name=safe_name,
                 charge=structure.charge,
                 multiplicity=structure.multiplicity,
-                energy_window=6.0,
+                energy_window=crest_ewin,
             )
             if not crest_result.success:
                 msg = crest_result.error_message or "CREST search failed with unknown error"
@@ -1072,6 +1092,9 @@ def run_conformer_energy(
         "opt_enabled": opt_enabled,
         "n_conformers": len(candidates),
         "refinement_threshold": float(resolved["refinement_threshold"]),
+        "crest_ewin": _resolve_crest_ewin(
+            cfg, ewin if ewin is not None else resolved["crest_ewin_level"],
+        ),
         "crest_skipped": crest_skipped,
         **outputs,
     }

@@ -32,6 +32,7 @@ from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
     JobRecord,
     JobSpec,
+    censo_ewin_from_method,
     censo_preset_from_method,
     censo_solvent_from_method,
 )
@@ -489,6 +490,9 @@ class JobRunner:
             solvent = censo_solvent_from_method(method)
             if solvent:
                 cmd += ["--solvent", solvent]
+            ewin = censo_ewin_from_method(method)
+            if ewin is not None:
+                cmd += ["--ewin", str(ewin)]
         elif wf == "nmr":
             cmd += ["--input", str(source), "--output", str(work_dir)]
             if method.get("protocol"):
