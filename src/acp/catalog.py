@@ -96,12 +96,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "label": "Ensemble Generation",
         "label_zh": "构象生成",
         "category": "preset",
-        "description": (
-            "CREST conformer search → CENSO prescreening+screening "
-            "(B97-3c GGA SP ranking + xTB mRRHO) → Boltzmann-weighted "
-            "conformer ensemble (gtot). censo-zero skips CENSO and "
-            "exports the CREST xTB ensemble directly."
-        ),
+        "description": "CREST + CENSO → Boltzmann 构象系综",
         "method_schema_id": "censo_ensemble",
         "default_backend": "censo",
         "requires_binaries": ["crest", "censo", "orca"],
@@ -112,13 +107,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "label": "Conformer Energy",
         "label_zh": "构象能量",
         "category": "preset",
-        "description": (
-            "CREST → CENSO screening → cumulative-Boltzmann ≥99% ensemble "
-            "(v15) → rank1 DFT refinement (opt+freq same-level + high-level "
-            "SP + Shermo thermo). The --no-opt cheap path delegates "
-            "refinement to CENSO (xTB geometry + xTB SPH mRRHO). "
-            "censo-default runs the full Part0–3 Grimme funnel."
-        ),
+        "description": "CREST + CENSO → 99% 系综 → DFT 精修自由能",
         "method_schema_id": "censo_energy",
         "default_backend": "censo",
         "requires_binaries": ["crest", "censo", "orca"],
@@ -568,7 +557,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "profile_id": "censo-light",
                 "label": "CENSO-light",
-                "summary": "CREST (GFN2-xTB) → CENSO prescreening + B97-3c GGA SP screening → Boltzmann ensemble",
+                "summary": "CREST + CENSO 筛选 → Boltzmann 系综（推荐）",
                 "levels": {
                     "censo": {
                         "engine": "censo",
@@ -584,7 +573,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "profile_id": "censo-default",
                 "label": "CENSO-default",
-                "summary": "Full CENSO Part0–2: GGA prescreening → r2SCAN-3c screening → DFT optimization → Boltzmann ensemble",
+                "summary": "完整 CENSO 漏斗（Part0–2，高精度 DFT 优化）",
                 "levels": {
                     "censo": {
                         "engine": "censo",
@@ -600,7 +589,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "profile_id": "censo-zero",
                 "label": "CENSO-zero",
-                "summary": "CREST xTB ensemble only (no CENSO invocation) → xTB energy sort → direct export",
+                "summary": "CREST xTB 直出（不调 CENSO，最快）",
                 "levels": {
                     "censo": {
                         "engine": "censo",
@@ -678,7 +667,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "profile_id": "censo-light",
                 "label": "CENSO-light",
-                "summary": "CREST → CENSO P+S (B97-3c screening) → cumulative-Boltzmann ≥99% ensemble → DFT opt+freq (r2SCAN-3c) + wB97M-V SP + Shermo (recommended)",
+                "summary": "CREST + CENSO → 99% 系综 → DFT 精修（推荐）",
                 "levels": {
                     "censo": {
                         "engine": "censo",
@@ -716,7 +705,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "profile_id": "censo-default",
                 "label": "CENSO-default",
-                "summary": "Full Part0–3 Grimme funnel → same-level freq/Shermo on 99% survivors (~10× cost of light)",
+                "summary": "完整 CENSO Part0–3 → 99% 精修（约 10× light 成本）",
                 "levels": {
                     "censo": {
                         "engine": "censo",
@@ -742,7 +731,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "profile_id": "censo-zero",
                 "label": "CENSO-zero",
-                "summary": "CREST xTB ensemble → cumulative-Boltzmann ≥99% → DFT opt+freq (r2SCAN-3c) + wB97M-V SP + Shermo (no CENSO, cheapest DFT path)",
+                "summary": "CREST xTB → 99% 系综 → DFT 精修（最便宜）",
                 "levels": {
                     "censo": {
                         "engine": "censo",
