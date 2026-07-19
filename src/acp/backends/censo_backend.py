@@ -176,6 +176,7 @@ class CensoBackend(QCBackend, ConformerSearcher):
         self._default_solvent = config.get("censo", {}).get("solvent")
         self._temperature = config.get("censo", {}).get("temperature", 298.15)
         self._keep_all = bool(config.get("censo", {}).get("keep_all", False))
+        self._solvent_model = config.get("censo", {}).get("solvent_model", "cpcm").lower()
         self._nproc = config.get("resources", {}).get("nproc", 16)
 
     # ----- QCBackend ABC ---------------------------------------------------
@@ -222,6 +223,7 @@ class CensoBackend(QCBackend, ConformerSearcher):
         multiplicity: int,
         solvent: str | None,
         templated_parts: set[str] | None = None,
+        solvent_model: str | None = None,
     ) -> Path:
         rcfile = output_dir / "censo2rc"
         lines: list[str] = []
@@ -237,7 +239,7 @@ class CensoBackend(QCBackend, ConformerSearcher):
         lines.append("[general]")
         lines.append(f"temperature = {self._temperature}")
         lines.append("evaluate_rrho = True")
-        lines.append("sm_rrho = gbsa")
+        lines.append("sm_rrho = alpb")
         lines.append("imagthr = -100.0")
         lines.append("sthr = 50.0")
         if solvent_val:
@@ -271,6 +273,20 @@ class CensoBackend(QCBackend, ConformerSearcher):
                     lines.append(f"{key} = {'True' if val else 'False'}")
                 else:
                     lines.append(f"{key} = {val}")
+
+            # CENSO v3.0.8 defaults sm=COSMORS for screening & refinement
+            # parts. When solvent is set (gas_phase=False) this triggers a
+            # cosmotherm path requirement that ACP cannot satisfy (the project
+            # uses ORCA SMD/CPCM, not COSMO-RS). Explicitly set sm to an
+            # ORCA-compatible solvation model to avoid the validation trap.
+            if part_name in ("screening", "refinement") and solvent_val:
+                if "sm" not in part_cfg:
+                    sm_value = (
+                        str(solvent_model).lower()
+                        if solvent_model and str(solvent_model).lower() != "none"
+                        else self._solvent_model
+                    )
+                    lines.append(f"sm = {sm_value}")
 
             lines.append("gfnv = gfn2")
             lines.append(
@@ -362,7 +378,7 @@ class CensoBackend(QCBackend, ConformerSearcher):
 
         cmd.append("--evaluate-rrho")
         cmd.append("--sm-rrho")
-        cmd.append("gbsa")
+        cmd.append("alpb")
         if keep_all:
             cmd.append("--keep-all")
         cmd.append("--ignore-failed")
@@ -546,6 +562,7 @@ class CensoBackend(QCBackend, ConformerSearcher):
         part_overrides: dict[str, dict[str, Any]] | None = None,
         keep_all: bool | None = None,
         part_templates: dict[str, list[str]] | None = None,
+        solvent_model: str | None = None,
     ) -> CensoRunResult:
         """Run CENSO on an ensemble XYZ and return parsed results.
 
@@ -623,6 +640,7 @@ class CensoBackend(QCBackend, ConformerSearcher):
         rcfile = self._generate_rcfile(
             preset_cfg, output_dir, charge, multiplicity, solvent,
             templated_parts=set(effective_templates),
+            solvent_model=solvent_model,
         )
 
         env: dict[str, str] | None = None

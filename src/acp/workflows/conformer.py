@@ -21,12 +21,12 @@ from acp.core.state import WorkflowState
 from acp.core.workflow import Stage, WorkflowContext, WorkflowResult
 from acp.io.structures import InputFormat as ACPInputFormat
 from acp.io.structures import StructureReader
+from acp.workflows._helpers import sanitize_job_name
 from conformer_search.config import load_config
 from conformer_search.core.engine import ConformerEngine
 from conformer_search.core.protocols import resolve_protocol_spec, validate_protocol_methods
 from conformer_search.io.input_handler import InputFormat as LegacyInputFormat
 from conformer_search.io.input_handler import MolecularInput
-from acp.workflows._helpers import sanitize_job_name
 from conformer_search.utils.file_io import read_xyz_multiframe
 
 logger = logging.getLogger(__name__)
@@ -284,7 +284,7 @@ def run_conformer_search(
     )
 
     state = WorkflowState(output_root / structure.id, structure.id)
-    state.initialize(input_source=input_source)
+    state.initialize(input_source=input_source, stage_names=[])
 
     stages_completed = [
         stage.name for stage in get_protocol_stages(protocol_name, config=cfg, levels=levels)

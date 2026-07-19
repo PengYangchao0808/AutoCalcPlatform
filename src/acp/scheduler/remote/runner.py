@@ -13,9 +13,11 @@ The full flow:
    ``inputs/``.
 4. **Generate + upload LSF script** — BSUB preamble + ``acp.cli`` command.
 5. **Submit** — SSH ``bsub < submit.lsf``, parse the LSF job ID.
-6. **Monitor** (30 s poll):
+6. **Monitor** (15 s poll):
    * ``bjobs`` status → update ``record`` + ``remote_execution`` stage.
    * SFTP tail ``stdout.log`` / ``stderr.log`` → ``JobEventLog`` events.
+   * Periodic SFTP read ``state.json`` → fine-grained stage progress
+     (``current_stage``, ``progress``, per-stage events).
    * Check ``cancel_event`` → ``bkill`` (return value checked).
    * Read ``.exit_code`` on termination.
 7. **Finish** — set ``record.result`` with LSF metadata, build provenance.
@@ -37,7 +39,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from acp.scheduler.events import JobEventLog
-from acp.scheduler.jobs import JobRecord, JobSpec
+from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.provenance import build_provenance_for_job
 from acp.scheduler.remote.cleanup import RemoteCleanup
 from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
@@ -71,10 +73,21 @@ _EXIT_CODE_GRACE = 30
 _MONITOR_TIMEOUT_BUFFER = 3600
 # Fallback monitor timeout when walltime is unparseable (10 days).
 _MONITOR_TIMEOUT_FALLBACK = 10 * 24 * 3600
+# Read state.json on every poll cycle for real-time remote progress.
+_STATE_READ_INTERVAL = 1
 
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _safe_timestamp_dt(value: object) -> float:
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).timestamp()
+        except (ValueError, TypeError):
+            return 0.0
+    return 0.0
 
 
 class RemoteNodeUnavailableError(RuntimeError):
@@ -116,11 +129,332 @@ class RemoteJobRunner:
             poll_interval if poll_interval is not None else remote_config.poll_interval
         )
         # Per-job cache of the ``remote_execution`` stage task id so we avoid
-        # a full ``list_by_job`` scan on every 30 s poll cycle (plan P2-8).
+        # a full ``list_by_job`` scan on every 15 s poll cycle (plan P2-8).
         self._remote_stage_task_ids: dict[str, str] = {}
+        # Per-job state for poller-driven (non-blocking) execution.
+        self._job_states: dict[str, dict[str, object]] = {}
 
     # ------------------------------------------------------------------ #
-    # Public API
+    # Non-blocking poller-driven API
+    # ------------------------------------------------------------------ #
+
+    def submit_remote(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+    ) -> str:
+        """Prepare and submit the LSF job, return the LSF job ID immediately.
+
+        Executes steps 1-5 (node selection, housekeeping, binary probe,
+        code sync, upload, LSF script, ``bsub``).  Does **not** enter
+        the monitor loop — that is driven by :meth:`poll_remote`.
+        """
+        spec = record.spec
+        work_dir = Path(record.work_dir)
+        work_dir.mkdir(parents=True, exist_ok=True)
+
+        event_log.append("job.started", job_id=record.id, workflow=spec.workflow, mode="remote")
+
+        node = self.select_node(spec)
+        event_log.append("remote.node_selected", job_id=record.id, node=node.name, host=node.host)
+
+        self._pre_submit_housekeeping(node, event_log, record.id)
+        self._probe_required_binaries(node, spec, event_log, record.id)
+
+        if self._config.auto_sync:
+            self._sync_code_if_needed(node, event_log, record.id)
+
+        remote_job_dir = posixpath.join(node.remote_work_dir, record.id)
+
+        try:
+            lsf_job_id, cli_cmd = self._prepare_and_submit(
+                record, spec, node, remote_job_dir, event_log, work_dir
+            )
+        except Exception:
+            self._cleanup_remote_dir(node, remote_job_dir, event_log, record.id)
+            raise
+
+        self._set_remote_stage_state(record.id, "running", started=True)
+
+        stdout_offset = 0
+        stderr_offset = 0
+        self._tail_and_emit(
+            node, remote_job_dir, "stdout.log", stdout_offset, event_log, record.id, "stdout"
+        )
+        self._tail_and_emit(
+            node, remote_job_dir, "stderr.log", stderr_offset, event_log, record.id, "stderr"
+        )
+
+        self._job_states[record.id] = {
+            "node": node,
+            "remote_job_dir": remote_job_dir,
+            "lsf_job_id": lsf_job_id,
+            "stdout_offset": stdout_offset,
+            "stderr_offset": stderr_offset,
+            "cli_cmd": cli_cmd,
+            "poll_cycle": 0,
+            "seen_stages": set(),
+        }
+
+        # Persist recovery metadata immediately so the poller can
+        # reconnect after a server restart, even before the first poll.
+        result = dict(record.result or {})
+        result["lsf_job_id"] = lsf_job_id
+        result["node"] = node.name
+        result["remote_dir"] = remote_job_dir
+        result["command_line"] = " ".join(cli_cmd)
+        record.result = result
+
+        return lsf_job_id
+
+    def poll_remote(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        cancel_event: threading.Event,
+    ) -> tuple[bool, int | None]:
+        """Single non-blocking check of remote job status.
+
+        Checks ``.exit_code`` first (authoritative), then ``bjobs``
+        (LSF state).  Tails logs and periodically reads ``state.json``
+        for fine-grained stage progress.
+
+        Returns ``(is_terminal, exit_code)``.
+        """
+        state = self._job_states.get(record.id)
+        if state is None:
+            return (True, record.exit_code if record.exit_code is not None else 1)
+
+        node: RemoteNode = state["node"]  # type: ignore[assignment]
+        remote_job_dir: str = state["remote_job_dir"]  # type: ignore[assignment]
+        lsf_job_id: str = state["lsf_job_id"]  # type: ignore[assignment]
+        stdout_offset: int = state["stdout_offset"]  # type: ignore[assignment]
+        stderr_offset: int = state["stderr_offset"]  # type: ignore[assignment]
+        poll_cycle: int = state.get("poll_cycle", 0)  # type: ignore[assignment]
+        seen_stages: set[str] = state.get("seen_stages", set())  # type: ignore[assignment]
+
+        if cancel_event.is_set():
+            ok = self._monitor.cancel_job(node, lsf_job_id)
+            event_log.append(
+                "remote.cancel_sent",
+                job_id=record.id,
+                lsf_job_id=lsf_job_id,
+                bkill_ok=ok,
+            )
+            exit_code = self._wait_exit_code(node, remote_job_dir, timeout=_EXIT_CODE_GRACE)
+            self._cleanup_job_state(record.id)
+            return (True, exit_code if exit_code is not None else 130)
+
+        exit_code = self._monitor.get_exit_code(node, remote_job_dir)
+        if exit_code is not None:
+            self._tail_and_emit(
+                node, remote_job_dir, "stdout.log", stdout_offset, event_log, record.id, "stdout"
+            )
+            self._tail_and_emit(
+                node, remote_job_dir, "stderr.log", stderr_offset, event_log, record.id, "stderr"
+            )
+            # Final state.json read to capture last stage transitions.
+            try:
+                self._observe_remote_state(record, event_log, node, remote_job_dir, seen_stages)
+            except Exception:
+                logger.debug("Final state.json read failed for %s", record.id, exc_info=True)
+            record.exit_code = exit_code
+            record.progress = 1.0 if exit_code == 0 else record.progress
+            result = dict(record.result or {})
+            result["lsf_job_id"] = lsf_job_id
+            result["node"] = node.name
+            result["host"] = node.host
+            result["remote_dir"] = remote_job_dir
+            result["exit_code"] = exit_code
+            result["command_line"] = " ".join(state["cli_cmd"])  # type: ignore[arg-type]
+            record.result = result
+            self._build_provenance(record, state["cli_cmd"])  # type: ignore[arg-type]
+            final_status = "completed" if exit_code == 0 else "failed"
+            self._set_remote_stage_state(record.id, final_status, exit_code=exit_code)
+            self._finalize_stages(record.id, final_status)
+            event_log.append(
+                "job.completed" if exit_code == 0 else "job.failed",
+                job_id=record.id,
+                exit_code=exit_code,
+            )
+            self._cleanup_job_state(record.id)
+            return (True, exit_code)
+
+        # --- Periodic state.json read (every _STATE_READ_INTERVAL cycles) ---
+        poll_cycle += 1
+        state["poll_cycle"] = poll_cycle
+        if poll_cycle % _STATE_READ_INTERVAL == 0:
+            try:
+                self._observe_remote_state(record, event_log, node, remote_job_dir, seen_stages)
+                state["seen_stages"] = seen_stages
+            except Exception:
+                logger.debug("state.json read failed for %s", record.id, exc_info=True)
+
+        try:
+            status = self._monitor.get_lsf_status(node, lsf_job_id)
+        except Exception as exc:
+            logger.warning("bjobs poll failed for %s: %s", record.id, exc)
+            status = ""
+
+        if status:
+            event_log.append(
+                "remote.lsf_status",
+                job_id=record.id,
+                lsf_job_id=lsf_job_id,
+                status=status,
+            )
+            self._mirror_lsf_stage(record.id, status)
+
+            if status == "running" and record.status == JobStatus.PENDING:
+                record.status = JobStatus.RUNNING
+
+            if RemoteJobMonitor.is_terminal(status):
+                exit_code = self._wait_exit_code(node, remote_job_dir, timeout=_EXIT_CODE_GRACE)
+                if exit_code is not None:
+                    try:
+                        self._observe_remote_state(
+                            record, event_log, node, remote_job_dir, seen_stages
+                        )
+                    except Exception:
+                        logger.debug(
+                            "Final state.json read failed for %s", record.id, exc_info=True
+                        )
+                    record.exit_code = exit_code
+                    record.progress = 1.0 if exit_code == 0 else record.progress
+                    result = dict(record.result or {})
+                    result["lsf_job_id"] = lsf_job_id
+                    result["node"] = node.name
+                    result["host"] = node.host
+                    result["remote_dir"] = remote_job_dir
+                    result["exit_code"] = exit_code
+                    result["command_line"] = " ".join(state["cli_cmd"])  # type: ignore[arg-type]
+                    record.result = result
+                    self._build_provenance(record, state["cli_cmd"])  # type: ignore[arg-type]
+                    final_status = "completed" if exit_code == 0 else "failed"
+                    self._set_remote_stage_state(record.id, final_status, exit_code=exit_code)
+                    self._finalize_stages(record.id, final_status)
+                    event_log.append(
+                        "job.completed" if exit_code == 0 else "job.failed",
+                        job_id=record.id,
+                        exit_code=exit_code,
+                    )
+                    self._cleanup_job_state(record.id)
+                    return (True, exit_code)
+
+        stdout_offset = self._tail_and_emit(
+            node, remote_job_dir, "stdout.log", stdout_offset, event_log, record.id, "stdout"
+        )
+        stderr_offset = self._tail_and_emit(
+            node, remote_job_dir, "stderr.log", stderr_offset, event_log, record.id, "stderr"
+        )
+        state["stdout_offset"] = stdout_offset
+        state["stderr_offset"] = stderr_offset
+
+        return (False, None)
+
+    def cancel_remote(self, job_id: str) -> None:
+        """Send ``bkill`` to cancel a remote job (best-effort)."""
+        state = self._job_states.get(job_id)
+        if state is None:
+            return
+        node: RemoteNode = state["node"]  # type: ignore[assignment]
+        lsf_job_id: str = state["lsf_job_id"]  # type: ignore[assignment]
+        self._monitor.cancel_job(node, lsf_job_id)
+
+    def _cleanup_job_state(self, job_id: str) -> None:
+        self._job_states.pop(job_id, None)
+
+    def recover_job_state(self, record: JobRecord) -> bool:
+        """Rebuild in-memory ``_job_states`` after a server restart.
+
+        Uses ``record.remote_job_id``, ``record.result["node"]``, and
+        ``record.result["remote_dir"]`` to reconstruct the polling state
+        so the background poller can reconnect to the remote LSF job.
+
+        Returns True on success, False if required metadata is missing.
+        """
+        if not record.remote_job_id:
+            return False
+        result = record.result or {}
+        node_name = result.get("node")
+        remote_dir = result.get("remote_dir")
+        if not node_name or not remote_dir:
+            return False
+        node = self._config.get_node(str(node_name))
+        if node is None:
+            return False
+        cli_cmd_raw = result.get("command_line", "")
+        self._job_states[record.id] = {
+            "node": node,
+            "remote_job_dir": str(remote_dir),
+            "lsf_job_id": record.remote_job_id,
+            "stdout_offset": 0,
+            "stderr_offset": 0,
+            "cli_cmd": str(cli_cmd_raw).split() if cli_cmd_raw else [],
+            "poll_cycle": 0,
+            "seen_stages": set(),
+        }
+        return True
+
+    # ------------------------------------------------------------------ #
+    # Remote state observation (state.json + .stage_* files)
+    # ------------------------------------------------------------------ #
+
+    def _observe_remote_state(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        node: RemoteNode,
+        remote_job_dir: str,
+        seen: set[str],
+    ) -> None:
+        """Read remote ``state.json`` and mirror progress/stages to *record*.
+
+        Mirrors the logic in :meth:`JobRunner._observe_state` but reads
+        the state file over SFTP instead of the local filesystem.
+        """
+        data = self._monitor.find_remote_state_json(node, remote_job_dir)
+        if data is None:
+            return
+
+        if data.get("status") == "failed":
+            return
+
+        record.current_stage = data.get("current_stage")
+        stages = data.get("stages") if isinstance(data.get("stages"), dict) else {}
+        total = max(len(stages), 1)
+        done = sum(
+            1
+            for stage in stages.values()
+            if isinstance(stage, dict) and stage.get("status") in ("completed", "skipped")
+        )
+        record.progress = round(done / total, 3)
+
+        pending_events: list[tuple[float, str, str, dict[str, object]]] = []
+        for name, info in stages.items():
+            if not isinstance(info, dict):
+                continue
+            status = info.get("status")
+            if status == "running" and f"running:{name}" not in seen:
+                seen.add(f"running:{name}")
+                ts = _safe_timestamp_dt(info.get("started_at"))
+                pending_events.append((ts, "stage.started", name, {"stage": name}))
+            elif status == "completed" and f"done:{name}" not in seen:
+                seen.add(f"done:{name}")
+                ts = _safe_timestamp_dt(info.get("completed_at"))
+                pending_events.append((ts, "stage.completed", name, {"stage": name}))
+            elif status == "failed" and f"failed:{name}" not in seen:
+                seen.add(f"failed:{name}")
+                ts = _safe_timestamp_dt(info.get("completed_at"))
+                pending_events.append(
+                    (ts, "stage.failed", name, {"stage": name, "error": str(info.get("error", ""))})
+                )
+
+        for _ts, event_type, _name, payload in sorted(pending_events, key=lambda x: x[0]):
+            event_log.append(event_type, job_id=record.id, **payload)
+
+    # ------------------------------------------------------------------ #
+    # Legacy blocking API (kept for backward compatibility)
     # ------------------------------------------------------------------ #
 
     def select_node(self, spec: JobSpec) -> RemoteNode:
@@ -361,6 +695,8 @@ class RemoteJobRunner:
         stderr_offset = 0
         exit_code: int | None = None
         last_lsf_status = ""
+        poll_cycle = 0
+        seen_stages: set[str] = set()
 
         # Absolute deadline — if LSF never reports a terminal state (daemon
         # crash, node offline) we force-fail rather than block the worker
@@ -401,7 +737,19 @@ class RemoteJobRunner:
             # --- Definitive terminal signal: .exit_code file ---
             exit_code = self._monitor.get_exit_code(node, remote_job_dir)
             if exit_code is not None:
+                try:
+                    self._observe_remote_state(record, event_log, node, remote_job_dir, seen_stages)
+                except Exception:
+                    logger.debug("Final state.json read failed for %s", record.id, exc_info=True)
                 break
+
+            # --- Periodic state.json read ---
+            poll_cycle += 1
+            if poll_cycle % _STATE_READ_INTERVAL == 0:
+                try:
+                    self._observe_remote_state(record, event_log, node, remote_job_dir, seen_stages)
+                except Exception:
+                    logger.debug("state.json read failed for %s", record.id, exc_info=True)
 
             # --- LSF status poll ---
             try:
@@ -652,15 +1000,15 @@ class RemoteJobRunner:
         if not isinstance(report, dict) or not report:
             logger.warning(
                 "Binary probe on %s returned no report (exit=%s, stderr=%s) — fail-open",
-                node.name, code, (err or "")[-200:],
+                node.name,
+                code,
+                (err or "")[-200:],
             )
             return
 
         missing = [name for name, info in report.items() if not info.get("resolved")]
         versions = {
-            name: info.get("version")
-            for name, info in report.items()
-            if info.get("version")
+            name: info.get("version") for name, info in report.items() if info.get("version")
         }
         event_log.append(
             "remote.binary_probe",
@@ -690,7 +1038,8 @@ class RemoteJobRunner:
                 "Node %s: required binary %r not resolved from login shell "
                 "PATH or ~/.conformer_search.yaml — assuming the LSF job "
                 "environment provides it",
-                node.name, name,
+                node.name,
+                name,
             )
 
     # ------------------------------------------------------------------ #

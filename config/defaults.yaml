@@ -97,6 +97,7 @@ nmr:
 censo:
   preset: censo-light
   solvent: null
+  solvent_model: cpcm
   temperature: 298.15
   scale: 1.0
   keep_all: false
@@ -120,7 +121,7 @@ censo:
 # Per-stage control: set any stage to false to skip it.
 # Stages: crest, clustering, optimization, frequency, single_point, shermo
 protocols:
-  default: lite
+  default: censo-lite
 
   # EXT Protocol: Two-stage CREST (GFN0→GFN2) + full DFT handoff
   # Recommended for most organic molecules

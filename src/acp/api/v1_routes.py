@@ -769,14 +769,14 @@ def download_remote_archive(
             ),
         )
 
-    def _files_iter():
-        for rel_path, _info in files:
-            yield rel_path, fetcher.stream_file(record, rel_path)
+    zs = ZipStream()
+    for rel_path, _info in files:
+        zs.add(fetcher.stream_file(record, rel_path), rel_path)
 
     safe_job_id = job_id.replace('"', "").replace("\\", "")
     _log_remote_access(request, job_id, "", "archive")
     return StreamingResponse(
-        ZipStream(_files_iter()),  # type: ignore[arg-type]
+        zs,
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{safe_job_id}.zip"'},
     )

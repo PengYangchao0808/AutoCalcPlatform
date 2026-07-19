@@ -7,11 +7,11 @@ Generic workflow state persistence and append-only event logging.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 import json
 import logging
 import os
 import tempfile
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
@@ -47,7 +47,14 @@ class EventLog:
 
 
 class WorkflowState:
-    """Generic stage-based workflow state management."""
+    """Generic stage-based workflow state management.
+
+    Declare all stage names in :meth:`initialize` via the required
+    ``stage_names`` parameter.  Once declared the set is **sealed** —
+    :meth:`set_stage`, :meth:`complete_stage`, and :meth:`fail_stage`
+    will silently ignore unknown stage names, keeping the progress
+    denominator constant throughout the workflow lifetime.
+    """
 
     STATE_FILE: str = "state.json"
     work_dir: Path
@@ -61,14 +68,13 @@ class WorkflowState:
         self.work_dir.mkdir(parents=True, exist_ok=True)
         self.state_file = self.work_dir / self.STATE_FILE
         self.state = {}
+        self._known_stages: frozenset[str] = frozenset()
 
     @property
     def completed_stages(self) -> list[str]:
         """Return completed stage names in insertion order."""
         return [
-            name
-            for name, stage in self._stages().items()
-            if stage.get("status") == "completed"
+            name for name, stage in self._stages().items() if stage.get("status") == "completed"
         ]
 
     @property
@@ -103,7 +109,21 @@ class WorkflowState:
         return cast(dict[str, StageState], stages)
 
     def _stage(self, name: str) -> StageState:
-        """Return the state entry for a named stage."""
+        """Return the state entry for a named stage.
+
+        If *name* was not declared in :meth:`initialize` the call is
+        silently ignored and an empty dict is returned so that the
+        caller's ``update()`` / ``setdefault()`` operations are harmless
+        no-ops.  This seals the progress denominator across the
+        workflow lifetime.
+        """
+        if self._known_stages and name not in self._known_stages:
+            logger.warning(
+                "Stage %r was not declared in initialize() — ignored.  Declared stages: %s",
+                name,
+                sorted(self._known_stages),
+            )
+            return {}
         stages = self._stages()
         stage = stages.get(name)
         if isinstance(stage, dict):
@@ -135,14 +155,28 @@ class WorkflowState:
             except OSError:
                 pass
 
-    def initialize(self, input_source: str = "") -> None:
-        """Initialize a fresh workflow state file."""
+    def initialize(self, input_source: str = "", *, stage_names: list[str] | None = None) -> None:
+        """Initialize a fresh workflow state file.
+
+        Args:
+            input_source: Human-readable label for the input structure.
+            stage_names: All possible stage names for this workflow.
+                Once set, the ``stages`` dict is **sealed** — writing to
+                an undeclared stage name produces a warning and is a no-op.
+                Must be passed by every real workflow; the default ``None``
+                exists only for backward-compat (fake/test usage).
+        """
+        known = frozenset(stage_names) if stage_names else frozenset()
+        self._known_stages = known
+        stages: dict[str, StageState] = {}
+        for name in stage_names or []:
+            stages[name] = {"status": "pending"}
         self.state = {
             "version": "1.0",
             "job_name": self.job_name,
             "status": "running",
             "input_source": input_source,
-            "stages": {},
+            "stages": stages,
             "current_stage": None,
             "created_at": _utc_now(),
             "completed_at": None,
@@ -196,9 +230,24 @@ class WorkflowState:
         return None
 
     def mark_completed(self) -> None:
-        """Mark the workflow as completed."""
+        """Mark the workflow as completed.
+
+        Any stages still in ``"pending"`` state are automatically
+        promoted to ``"skipped"`` so the progress denominator stays
+        consistent and the final progress reaches 100 %.
+        """
+        now = _utc_now()
+        for name, stage in self._stages().items():
+            if stage.get("status") == "pending":
+                stage.update(
+                    {
+                        "status": "skipped",
+                        "completed_at": now,
+                        "updated_at": now,
+                    }
+                )
         self.state["status"] = "completed"
-        self.state["completed_at"] = _utc_now()
+        self.state["completed_at"] = now
         self.save()
 
     def get_summary(self) -> JsonObject:

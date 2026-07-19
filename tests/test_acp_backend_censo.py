@@ -249,6 +249,34 @@ def test_rcfile_includes_solvent(tmp_path: Path) -> None:
     content = rcfile.read_text(encoding="utf-8")
     assert "solvent = dcm" in content
     assert "gas_phase = False" in content
+    # CENSO v3.0.8 defaults sm=COSMORS for screening; we override to avoid
+    # requiring the cosmotherm binary (which is not available).
+    assert "sm = cpcm" in content
+
+
+def test_rcfile_solvent_model_smd(tmp_path: Path) -> None:
+    config = _make_config()
+    backend = CensoBackend(config)
+    preset = backend._resolve_preset("censo-light")
+    rcfile = backend._generate_rcfile(
+        preset, tmp_path, charge=0, multiplicity=1, solvent="ethanol",
+        solvent_model="smd",
+    )
+
+    content = rcfile.read_text(encoding="utf-8")
+    assert "sm = smd" in content
+
+
+def test_rcfile_no_sm_when_gas_phase(tmp_path: Path) -> None:
+    config = _make_config()
+    backend = CensoBackend(config)
+    preset = backend._resolve_preset("censo-light")
+    rcfile = backend._generate_rcfile(preset, tmp_path, charge=0, multiplicity=1, solvent=None)
+
+    content = rcfile.read_text(encoding="utf-8")
+    assert "gas_phase = True" in content
+    # No solvent → sm not written (gas-phase CENSO skips cosmotherm check)
+    assert "sm =" not in content
 
 
 def test_rcfile_has_preset_sections(tmp_path: Path) -> None:

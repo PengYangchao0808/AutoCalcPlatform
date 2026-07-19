@@ -85,6 +85,11 @@ CREATE INDEX IF NOT EXISTS idx_artifacts_job_id ON artifacts(job_id);
 CREATE INDEX IF NOT EXISTS idx_artifacts_task_id ON artifacts(task_id);
 """,
     },
+    {
+        "id": "005",
+        "description": "add remote_job_id to jobs",
+        "sql": "-- handled in Python for SQLite ALTER TABLE compatibility",
+    },
 ]
 
 
@@ -127,10 +132,20 @@ def _apply_jobs_column_migration(conn: sqlite3.Connection) -> bool:
     return True
 
 
+def _apply_remote_job_id_column(conn: sqlite3.Connection) -> bool:
+    if not _table_exists(conn, "jobs"):
+        return False
+    if not _column_exists(conn, "jobs", "remote_job_id"):
+        conn.execute("ALTER TABLE jobs ADD COLUMN remote_job_id TEXT")
+    return True
+
+
 def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> bool:
     migration_id = migration["id"]
     if migration_id == "002":
         return _apply_jobs_column_migration(conn)
+    if migration_id == "005":
+        return _apply_remote_job_id_column(conn)
     sql = migration["sql"].strip()
     if sql:
         conn.executescript(sql)

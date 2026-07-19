@@ -6,9 +6,10 @@ Stages are lightweight callable wrappers, not heavy class hierarchies.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from acp.core.models import StructureEnsemble
 from acp.core.state import WorkflowState
@@ -43,6 +44,7 @@ class WorkflowContext:
     config: dict[str, Any]
     backends: dict[str, Any]
     params: dict[str, Any] = field(default_factory=dict)
+    input_source: str = ""
 
 
 @dataclass
@@ -68,9 +70,18 @@ class WorkflowRunner:
         spec: WorkflowSpec,
         initial_data: StructureEnsemble | None = None,
     ) -> WorkflowResult:
-        """Run all stages in *spec*, propagating *initial_data* through the pipeline."""
+        """Run all stages in *spec*, propagating *initial_data* through the pipeline.
+
+        Automatically initialises the :class:`WorkflowState` with the stage
+        names declared in *spec*, so the progress denominator is fixed before
+        the first stage executes and workflow authors never need to manage
+        progress tracking manually.
+        """
         data = StructureEnsemble() if initial_data is None else initial_data
         completed_stages: list[str] = []
+
+        stage_names = [s.name for s in spec.stages]
+        self.state.initialize(input_source=self.context.input_source, stage_names=stage_names)
 
         for stage in spec.stages:
             self.state.set_stage(stage.name)

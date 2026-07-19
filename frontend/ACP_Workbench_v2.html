@@ -1078,12 +1078,12 @@ option, optgroup {
             </button>
             <button class="tool-icon" id="btn-measure-angle" data-i18n-title="tool.angle" title="角度 (4)">
               <svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.5">
-                <path d="M3 16L10 4L17 16"/><path d="M3 16A7 7 0 0 0 10 9" stroke-dasharray="2 2"/>
+                <path d="M5 13.5L9 7M15 13.5L11 7"/><path d="M12.1 8.9A4 4 0 0 1 7.9 8.9" stroke-dasharray="2 1.5"/><circle cx="4" cy="15" r="1.8"/><circle cx="10" cy="5.5" r="1.8"/><circle cx="16" cy="15" r="1.8"/>
               </svg>
             </button>
             <button class="tool-icon" id="btn-measure-dihedral" data-i18n-title="tool.dihedral" title="二面角 (5)">
               <svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.5">
-                <path d="M3 6l7 8l7-8"/><circle cx="3" cy="6" r="1.5" fill="currentColor"/><circle cx="10" cy="14" r="1.5" fill="currentColor"/><circle cx="17" cy="6" r="1.5" fill="currentColor"/>
+                <path d="M4.6 6L6.4 8.5M9.3 10h1.4M13.6 11.5L15.4 14"/><circle cx="3.5" cy="4.5" r="1.8"/><circle cx="7.5" cy="10" r="1.8"/><circle cx="12.5" cy="10" r="1.8"/><circle cx="16.5" cy="15.5" r="1.8"/>
               </svg>
             </button>
           </div>
@@ -2071,11 +2071,20 @@ function applyStylePreset(name) {
   viewer.setStyle({}, preset.style);
 }
 
+function getCurrentSphereScale() {
+  const preset = STYLE_PRESETS[molDoc.style] || STYLE_PRESETS["ball-stick"];
+  const sphereStyle = preset.style.sphere;
+  if (sphereStyle && typeof sphereStyle.scale === "number") return sphereStyle.scale;
+  return 0.25;
+}
+
 function applySelectionHighlight() {
+  var baseScale = getCurrentSphereScale();
+  var highlightScale = baseScale + 0.12;
   molDoc.selection.forEach(function(acpId) {
     const atom = renderedAtomById(acpId);
     if (!atom) return;
-    viewer.addStyle({ index: atom.index }, { sphere: { scale: 1.12, color: "yellow", opacity: 0.55 } });
+    viewer.addStyle({ index: atom.index }, { sphere: { scale: highlightScale, color: "yellow", opacity: 0.55 } });
   });
 }
 
@@ -2145,7 +2154,7 @@ function renderMolDoc(options) {
   viewer.setBackgroundColor(molDoc.bgColor);
   applyStylePreset(molDoc.style);
   // Invisible 3Dmol clickspheres enlarge picking without changing the visible style preset.
-  viewer.addStyle({}, { clicksphere: { radius: 0.45 } });
+  viewer.addStyle({}, { clicksphere: { radius: Math.max(0.3, getCurrentSphereScale() * 1.5) } });
   applySelectionHighlight();
   renderMeasurements();
   setupClickableForCurrentModel();
@@ -3655,7 +3664,7 @@ async function loadWorkflowCatalog() {
   try {
     var resp = await fetch(API_BASE + "/workflow-catalog");
     workflowCatalogCache = (await resp.json()).workflows || [];
-    workflowCatalogCache = workflowCatalogCache.filter(function(w) { return w.id !== "conformer"; });
+    workflowCatalogCache = workflowCatalogCache.filter(function(w) { return w.id !== "conformer" && w.id !== "benchmark"; });
   } catch(e) { console.error("Failed to load workflow catalog:", e); }
 }
 
@@ -4162,8 +4171,7 @@ async function openMethodConfig() {
         var stateData = wizardState.method.stages[lvDef.level_id] || {};
         container2.appendChild(buildLevelCard(lvDef, stateData));
       });
-      scheduleValidate();
-      rebuildSummary();
+      doValidate().then(function() { rebuildSummary(); });
     }
   });
 
@@ -4175,8 +4183,8 @@ async function openMethodConfig() {
   });
 
   document.getElementById("method-config-modal").style.display = "flex";
-  scheduleValidate();
-  rebuildSummary();
+  document.getElementById("mc-summary-body").innerHTML = '<div style="color:var(--text-tertiary);padding:8px 0;">\u52a0\u8f7d\u4e2d...</div>';
+  doValidate().then(function() { rebuildSummary(); });
 }
 
 async function submitJobModal() {
@@ -4605,15 +4613,17 @@ window.addEventListener("DOMContentLoaded", async function() {
   await safeLoad("loadMethodCatalog", loadMethodCatalog);
 
   try {
-    var confsearchSchema = (methodCatalogCache.method_schemas || {}).confsearch;
-    if (confsearchSchema && confsearchSchema.profiles && confsearchSchema.profiles.length) {
-      var p = confsearchSchema.profiles.find(function(x) { return x.profile_id === "lite"; })
-             || confsearchSchema.profiles[0];
+    var defaultWfId = wizardState.workflow.id || "energy";
+    var wfEntry = workflowCatalogCache.find(function(w) { return w.id === defaultWfId; });
+    var schemaId = (wfEntry && wfEntry.method_schema_id) || "confsearch";
+    var schema = (methodCatalogCache.method_schemas || {})[schemaId];
+    if (schema && schema.profiles && schema.profiles.length) {
+      var p = schema.profiles[0];
+      wizardState.workflow.schema_id = schemaId;
       wizardState.method.profile_id = p.profile_id;
       wizardState.method.profile_label = p.label;
       wizardState.method.stages = JSON.parse(JSON.stringify(p.levels || {}));
     }
-    wizardState.workflow.schema_id = "confsearch";
     updateConfigCards();
   } catch (e) {
     console.error("method catalog init failed:", e);

@@ -25,8 +25,7 @@ from acp.backends.censo_backend import (
 from acp.core.models import Structure, StructureEnsemble, StructureRecord
 from acp.core.state import WorkflowState
 from acp.core.workflow import WorkflowResult
-from acp.io.structures import InputFormat
-from acp.io.structures import StructureReader
+from acp.io.structures import InputFormat, StructureReader
 from acp.workflows._helpers import sanitize_job_name
 from conformer_search.config import load_config
 from conformer_search.qc.interfaces.crest import CRESTInterface
@@ -100,7 +99,9 @@ def _xtb_passthrough_result(
     if len(energies) < n_frames:
         logger.warning(
             "Parsed %d/%d title energies from %s — missing values set to 0.0",
-            len(energies), n_frames, ensemble_xyz,
+            len(energies),
+            n_frames,
+            ensemble_xyz,
         )
         energies.extend([0.0] * (n_frames - len(energies)))
 
@@ -115,7 +116,7 @@ def _xtb_passthrough_result(
                 gsolv=0.0,
                 grrho=0.0,
                 gtot=energies[i],
-                coordinates=np.array(all_coords[start:start + n_atoms], dtype=float),
+                coordinates=np.array(all_coords[start : start + n_atoms], dtype=float),
                 symbols=list(symbols),
             )
         )
@@ -185,7 +186,9 @@ def _write_ensemble_outputs(
         weight = rec.weight or 0.0
         title = f"conf{i:03d} gtot={gtot:.8f} weight={weight:.6f}"
         xyz_titles.append(title)
-        coords = np.asarray(s.coordinates) if s.coordinates is not None else np.zeros((len(symbols), 3))
+        coords = (
+            np.asarray(s.coordinates) if s.coordinates is not None else np.zeros((len(symbols), 3))
+        )
         all_coords_list.append(coords)
 
     if all_coords_list:
@@ -199,23 +202,28 @@ def _write_ensemble_outputs(
 
     json_data: list[dict[str, Any]] = []
     for rec in ensemble.records:
-        json_data.append({
-            "conf_id": rec.structure.metadata.get("conf_id", ""),
-            "frame_index": rec.structure.metadata.get("frame_index", 0),
-            "energy_hartree": rec.energy_hartree,
-            "gsolv": rec.properties.get("gsolv"),
-            "grrho": rec.properties.get("grrho"),
-            "gtot": rec.free_energy_hartree,
-            "boltzmann_weight": rec.weight,
-        })
+        json_data.append(
+            {
+                "conf_id": rec.structure.metadata.get("conf_id", ""),
+                "frame_index": rec.structure.metadata.get("frame_index", 0),
+                "energy_hartree": rec.energy_hartree,
+                "gsolv": rec.properties.get("gsolv"),
+                "grrho": rec.properties.get("grrho"),
+                "gtot": rec.free_energy_hartree,
+                "boltzmann_weight": rec.weight,
+            }
+        )
     json_path = base.with_suffix(".json")
     json_path.write_text(
-        json.dumps({
-            "temperature": raw_result.temperature,
-            "preset": raw_result.preset,
-            "n_conformers": len(ensemble.records),
-            "conformers": json_data,
-        }, indent=2),
+        json.dumps(
+            {
+                "temperature": raw_result.temperature,
+                "preset": raw_result.preset,
+                "n_conformers": len(ensemble.records),
+                "conformers": json_data,
+            },
+            indent=2,
+        ),
         encoding="utf-8",
     )
 
@@ -224,14 +232,18 @@ def _write_ensemble_outputs(
         writer = csv.writer(f)
         writer.writerow(["conf_id", "energy_hartree", "gsolv", "grrho", "gtot", "boltzmann_weight"])
         for item in json_data:
-            writer.writerow([
-                item["conf_id"],
-                f"{item['energy_hartree']:.10f}" if item["energy_hartree"] is not None else "",
-                f"{item.get('gsolv'):.10f}" if item.get("gsolv") is not None else "",
-                f"{item.get('grrho'):.10f}" if item.get("grrho") is not None else "",
-                f"{item.get('gtot'):.10f}" if item.get("gtot") is not None else "",
-                f"{item['boltzmann_weight']:.6f}" if item["boltzmann_weight"] is not None else "",
-            ])
+            writer.writerow(
+                [
+                    item["conf_id"],
+                    f"{item['energy_hartree']:.10f}" if item["energy_hartree"] is not None else "",
+                    f"{item.get('gsolv'):.10f}" if item.get("gsolv") is not None else "",
+                    f"{item.get('grrho'):.10f}" if item.get("grrho") is not None else "",
+                    f"{item.get('gtot'):.10f}" if item.get("gtot") is not None else "",
+                    f"{item['boltzmann_weight']:.6f}"
+                    if item["boltzmann_weight"] is not None
+                    else "",
+                ]
+            )
 
     logger.info("Ensemble written to %s.{xyz,json,csv}", base)
 
@@ -240,12 +252,13 @@ def _resolve_solvent_config(
     cfg: dict[str, Any],
     user_solvent: str | None,
 ) -> tuple[str | None, str]:
-    censo_solvent = user_solvent if user_solvent is not None else cfg.get("censo", {}).get("solvent")
+    censo_solvent = (
+        user_solvent if user_solvent is not None else cfg.get("censo", {}).get("solvent")
+    )
     solvent_model = (
         cfg.get("theory", {})
         .get("preoptimization", {})
-        .get("solvent_model",
-            cfg.get("censo", {}).get("solvent_model", "none"))
+        .get("solvent_model", cfg.get("censo", {}).get("solvent_model", "none"))
     )
     return censo_solvent, (solvent_model or "none").lower()
 
@@ -337,7 +350,10 @@ def run_ensemble_generation(
     )
 
     state = WorkflowState(output_root / safe_name, safe_name)
-    state.initialize(input_source=input_source)
+    state.initialize(
+        input_source=input_source,
+        stage_names=["crest", "censo", "ensemble_generation"],
+    )
 
     mol_dir = output_root / safe_name
 
@@ -362,6 +378,7 @@ def run_ensemble_generation(
 
     try:
         is_file = input_format not in (InputFormat.SMILES,) and _is_file_input(input_source)
+        state.set_stage("crest")
         if is_file and _is_multiframe_xyz(Path(input_source)):
             logger.info("Multi-frame XYZ input detected — skipping CREST")
             crest_ensemble_xyz = Path(input_source).resolve()
@@ -379,7 +396,11 @@ def run_ensemble_generation(
                 solvent_model=solvent_model,
             )
 
-            coords = np.asarray(structure.coordinates) if structure.coordinates is not None else np.empty((0, 3))
+            coords = (
+                np.asarray(structure.coordinates)
+                if structure.coordinates is not None
+                else np.empty((0, 3))
+            )
             logger.info("CREST energy window: %.2f kcal/mol", crest_ewin)
             crest_result = crest_iface.run_conformer_search(
                 coordinates=coords,
@@ -399,13 +420,13 @@ def run_ensemble_generation(
 
             crest_ensemble_xyz = crest_dir / "crest_conformers.xyz"
             if not crest_ensemble_xyz.exists():
-                alt = list(crest_dir.glob("*conformer*.xyz")) + list(crest_dir.glob("*ensemble*.xyz"))
+                alt = list(crest_dir.glob("*conformer*.xyz")) + list(
+                    crest_dir.glob("*ensemble*.xyz")
+                )
                 if alt:
                     crest_ensemble_xyz = alt[0]
                 else:
-                    raise FileNotFoundError(
-                        f"CREST output not found in {crest_dir}"
-                    )
+                    raise FileNotFoundError(f"CREST output not found in {crest_dir}")
 
         stages_completed.append("crest")
 
@@ -415,16 +436,21 @@ def run_ensemble_generation(
             logger.info("censo-zero: CREST xTB passthrough (no CENSO call)")
             temperature = cfg.get("censo", {}).get("temperature", 298.15)
             result = _xtb_passthrough_result(crest_ensemble_xyz, temperature)
+            state.set_stage("censo")
             state.complete_stage(
                 "censo",
-                {"status": "skipped", "reason": "censo-zero passthrough",
-                 "n_records": len(result.records)},
+                {
+                    "status": "skipped",
+                    "reason": "censo-zero passthrough",
+                    "n_records": len(result.records),
+                },
             )
         else:
             censo_dir = mol_dir / "censo"
             censo_dir.mkdir(parents=True, exist_ok=True)
 
             backend = CensoBackend(cfg)
+            state.set_stage("censo")
             result = backend.refine_ensemble(
                 crest_ensemble_xyz,
                 censo_dir,
@@ -432,12 +458,11 @@ def run_ensemble_generation(
                 charge=structure.charge,
                 multiplicity=structure.multiplicity,
                 solvent=censo_solvent,
+                solvent_model=solvent_model,
                 nproc=safe_nproc,
                 keep_all=keep_all,
             )
-            state.complete_stage(
-                "censo", {"status": "completed", "n_records": len(result.records)}
-            )
+            state.complete_stage("censo", {"status": "completed", "n_records": len(result.records)})
         stages_completed.append("censo")
 
         ensemble = _build_ensemble_from_censo(result, structure)

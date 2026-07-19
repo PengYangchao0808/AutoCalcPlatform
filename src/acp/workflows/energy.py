@@ -96,9 +96,7 @@ def _base_route_extras(level: dict[str, Any]) -> list[str]:
     if grid_kw:
         extras.append(grid_kw)
 
-    scf_kw = _SCF_ROUTE_MAP.get(
-        str(level.get("scf_convergence") or "").strip().lower()
-    )
+    scf_kw = _SCF_ROUTE_MAP.get(str(level.get("scf_convergence") or "").strip().lower())
     if scf_kw:
         extras.append(scf_kw)
 
@@ -152,24 +150,18 @@ def _resolve_levels(
     thermo = levels.get("thermo", {}) or {}
     censo_level = levels.get("censo", {}) or {}
 
-    opt_method = dft_opt.get("functional") or opt_cfg.get(
-        "functional", _DEFAULT_OPT_FUNCTIONAL
-    )
+    opt_method = dft_opt.get("functional") or opt_cfg.get("functional", _DEFAULT_OPT_FUNCTIONAL)
     opt_basis = dft_opt.get("basis")
 
     sp_method = refinement_sp.get("functional") or censo_cfg.get(
         "refinement_func", _DEFAULT_SP_FUNCTIONAL
     )
-    sp_basis = refinement_sp.get("basis") or censo_cfg.get(
-        "refinement_basis", _DEFAULT_SP_BASIS
-    )
+    sp_basis = refinement_sp.get("basis") or censo_cfg.get("refinement_basis", _DEFAULT_SP_BASIS)
 
     # --- ACP handoff route extras (opt / freq / SP) ------------------------
     opt_base_extras = _base_route_extras(dft_opt)
     opt_route_extras = list(opt_base_extras)
-    opt_conv_kw = _OPT_CONV_ROUTE_MAP.get(
-        str(dft_opt.get("opt_convergence") or "").strip().lower()
-    )
+    opt_conv_kw = _OPT_CONV_ROUTE_MAP.get(str(dft_opt.get("opt_convergence") or "").strip().lower())
     if opt_conv_kw:
         opt_route_extras.append(opt_conv_kw)
 
@@ -197,12 +189,8 @@ def _resolve_levels(
         refinement_overrides["basis"] = str(refinement_sp["basis"]).lower()
 
     screening_extras = _base_route_extras(screening_sp)
-    screening_template_lines = (
-        ["! " + " ".join(screening_extras)] if screening_extras else []
-    )
-    refinement_template_lines = (
-        ["! " + " ".join(sp_route_extras)] if sp_route_extras else []
-    )
+    screening_template_lines = ["! " + " ".join(screening_extras)] if screening_extras else []
+    refinement_template_lines = ["! " + " ".join(sp_route_extras)] if sp_route_extras else []
 
     # Workflow-global solvent fallback derived from levels (UI wizard path):
     # refinement_sp takes precedence over dft_opt.
@@ -256,9 +244,7 @@ def _resolve_levels(
         "levels_solvent_model": levels_solvent_model,
         "refinement_threshold": refinement_threshold,
         "crest_ewin_level": crest_ewin_level,
-        "temperature_k": thermo.get(
-            "temperature", thermo_cfg.get("temperature_k", 298.15)
-        ),
+        "temperature_k": thermo.get("temperature", thermo_cfg.get("temperature_k", 298.15)),
         "pressure_atm": thermo.get("pressure", thermo_cfg.get("pressure_atm", 1.0)),
         "scl_zpe": thermo.get("scale_factor", thermo_cfg.get("scl_zpe", 0.9905)),
         "ilowfreq": thermo_cfg.get("shermo_ilowfreq", 2),
@@ -325,9 +311,7 @@ def _run_rank1_handoff(
         sp_log = None
         logger.info("  [freq] same-level frequency on pre-optimized geometry")
     else:
-        logger.info(
-            "  [opt] geometry optimization (%s)", resolved["opt_method"]
-        )
+        logger.info("  [opt] geometry optimization (%s)", resolved["opt_method"])
 
         opt_result = orca.optimize(
             coordinates,
@@ -342,9 +326,7 @@ def _run_rank1_handoff(
             geom_maxiter=resolved.get("opt_geom_maxiter"),
         )
         if not opt_result.success:
-            raise RuntimeError(
-                f"rank1 geometry optimization failed: {opt_result.error_message}"
-            )
+            raise RuntimeError(f"rank1 geometry optimization failed: {opt_result.error_message}")
         opt_coords = opt_result.coordinates
         opt_symbols = opt_result.symbols or symbols
         opt_log = str(opt_result.log_file) if opt_result.log_file else None
@@ -368,14 +350,13 @@ def _run_rank1_handoff(
         route_extras=resolved.get("opt_freq_route_extras"),
     )
     if not freq_result.success:
-        raise RuntimeError(
-            f"rank1 frequency calculation failed: {freq_result.error_message}"
-        )
+        raise RuntimeError(f"rank1 frequency calculation failed: {freq_result.error_message}")
 
     if not skip_opt_sp:
         logger.info(
             "  [sp] high-level single point (%s/%s)",
-            resolved["sp_method"], resolved["sp_basis"],
+            resolved["sp_method"],
+            resolved["sp_basis"],
         )
         sp_solvent = resolved.get("sp_solvent") or solvent
         sp_solvent_model = (
@@ -384,7 +365,8 @@ def _run_rank1_handoff(
             else (solvent_model if solvent else "none")
         ) or "none"
         if (sp_solvent, sp_solvent_model if sp_solvent else "none") == (
-            opt_solvent, opt_solvent_model if opt_solvent else "none"
+            opt_solvent,
+            opt_solvent_model if opt_solvent else "none",
         ):
             sp_orca = orca
         else:
@@ -407,9 +389,7 @@ def _run_rank1_handoff(
             route_extras=resolved.get("sp_route_extras"),
         )
         if not sp_result.success:
-            raise RuntimeError(
-                f"rank1 single-point failed: {sp_result.error_message}"
-            )
+            raise RuntimeError(f"rank1 single-point failed: {sp_result.error_message}")
         sp_energy = sp_result.energy
         sp_log = str(sp_result.log_file) if sp_result.log_file else None
 
@@ -518,8 +498,7 @@ def _write_final_outputs(
         key=lambda c: c["gibbs"] if c.get("gibbs") is not None else float("inf"),
     )
     gibbs_values = [
-        c["gibbs"] if c.get("gibbs") is not None else c.get("energy", 0.0)
-        for c in candidates
+        c["gibbs"] if c.get("gibbs") is not None else c.get("energy", 0.0) for c in candidates
     ]
     weights = _boltzmann_weights([float(g) for g in gibbs_values], temperature_k)
 
@@ -533,8 +512,7 @@ def _write_final_outputs(
             e_fmt = f"{c['energy']:.6f}" if c.get("energy") is not None else "N/A"
             f.write(f"{len(c['symbols'])}\n")
             f.write(
-                f"Conformer {c['index']}, E={e_fmt}, Rank={c['rank']}, "
-                f"Weight={c['weight']:.4f}\n"
+                f"Conformer {c['index']}, E={e_fmt}, Rank={c['rank']}, Weight={c['weight']:.4f}\n"
             )
             for sym, coord in zip(c["symbols"], c["coordinates"]):
                 f.write(f"{sym:2s} {coord[0]:15.10f} {coord[1]:15.10f} {coord[2]:15.10f}\n")
@@ -553,8 +531,12 @@ def _write_final_outputs(
                 else "N/A,"
             )
             for key in (
-                "gibbs_correction", "gibbs", "h_correction",
-                "u_correction", "s_total", "g_conc",
+                "gibbs_correction",
+                "gibbs",
+                "h_correction",
+                "u_correction",
+                "s_total",
+                "g_conc",
             ):
                 val = c.get(key)
                 f.write(f"{val:.10f}," if val is not None else ",")
@@ -597,18 +579,18 @@ def _write_screening_ranking(result: CensoRunResult, mol_dir: Path) -> str:
     weights = result.boltzmann_weights()
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(
-            ["conf_id", "energy_hartree", "gsolv", "grrho", "gtot", "boltzmann_weight"]
-        )
+        writer.writerow(["conf_id", "energy_hartree", "gsolv", "grrho", "gtot", "boltzmann_weight"])
         for rec in result.records:
-            writer.writerow([
-                rec.conf_id,
-                f"{rec.energy:.10f}",
-                f"{rec.gsolv:.10f}",
-                f"{rec.grrho:.10f}",
-                f"{rec.gtot:.10f}",
-                f"{weights.get(rec.conf_id, 0.0):.6f}",
-            ])
+            writer.writerow(
+                [
+                    rec.conf_id,
+                    f"{rec.energy:.10f}",
+                    f"{rec.gsolv:.10f}",
+                    f"{rec.grrho:.10f}",
+                    f"{rec.gtot:.10f}",
+                    f"{weights.get(rec.conf_id, 0.0):.6f}",
+                ]
+            )
     return str(csv_path)
 
 
@@ -776,14 +758,15 @@ def run_conformer_energy(
     )
 
     state = WorkflowState(output_root / safe_name, safe_name)
-    state.initialize(input_source=input_source)
+    state.initialize(
+        input_source=input_source,
+        stage_names=["crest", "censo", "dft_handoff", "finalize", "conformer_energy"],
+    )
 
     mol_dir = output_root / safe_name
 
     # Solvent priority: CLI --solvent > levels (UI wizard fields) > YAML.
-    effective_solvent_arg = (
-        solvent if solvent is not None else resolved["levels_solvent"]
-    )
+    effective_solvent_arg = solvent if solvent is not None else resolved["levels_solvent"]
     censo_solvent, solvent_model = _resolve_solvent_config(cfg, effective_solvent_arg)
     if censo_solvent and resolved["levels_solvent_model"]:
         solvent_model = resolved["levels_solvent_model"]
@@ -802,6 +785,7 @@ def run_conformer_energy(
     try:
         # ---- Stage: CREST search (or external ensemble) -------------------
         is_file = input_format not in (InputFormat.SMILES,) and _is_file_input(input_source)
+        state.set_stage("crest")
         if is_file and _is_multiframe_xyz(Path(input_source)):
             logger.info("Multi-frame XYZ input detected — skipping CREST")
             crest_ensemble_xyz = Path(input_source).resolve()
@@ -825,7 +809,8 @@ def run_conformer_energy(
                 else np.empty((0, 3))
             )
             crest_ewin = _resolve_crest_ewin(
-                cfg, ewin if ewin is not None else resolved["crest_ewin_level"],
+                cfg,
+                ewin if ewin is not None else resolved["crest_ewin_level"],
             )
             logger.info("CREST energy window: %.2f kcal/mol", crest_ewin)
             crest_result = crest_iface.run_conformer_search(
@@ -871,17 +856,26 @@ def run_conformer_energy(
                 handoff_dir = mol_dir / "finalDFT" / f"conf_{i:03d}"
                 try:
                     cand = _run_rank1_handoff(
-                        cfg, np.asarray(rec.coordinates), list(rec.symbols),
-                        structure.charge, structure.multiplicity,
-                        handoff_dir, resolved, censo_solvent, _solvent_model,
-                        index=i, source=rec.conf_id,
+                        cfg,
+                        np.asarray(rec.coordinates),
+                        list(rec.symbols),
+                        structure.charge,
+                        structure.multiplicity,
+                        handoff_dir,
+                        resolved,
+                        censo_solvent,
+                        _solvent_model,
+                        index=i,
+                        source=rec.conf_id,
                     )
                 except RuntimeError as exc:
                     if i == 0:
                         raise
                     logger.warning(
                         "DFT handoff failed for %s (%s) — dropping this "
-                        "conformer from the ensemble", rec.conf_id, exc,
+                        "conformer from the ensemble",
+                        rec.conf_id,
+                        exc,
                     )
                     continue
                 results.append(cand)
@@ -895,14 +889,19 @@ def run_conformer_energy(
             # handoff for each survivor (no CENSO CLI involved)
             passthrough = _xtb_passthrough_result(crest_ensemble_xyz, temperature_k)
             selected = _select_cumulative_boltzmann(
-                passthrough.records, temperature_k, threshold,
+                passthrough.records,
+                temperature_k,
+                threshold,
             )
             logger.info(
                 "censo-zero (opt on): %d/%d conformers within %.0f%% cumulative "
                 "Boltzmann (xTB) → ACP handoff",
-                len(selected), len(passthrough.records), threshold * 100,
+                len(selected),
+                len(passthrough.records),
+                threshold * 100,
             )
             screening_ranking_csv = _write_screening_ranking(passthrough, mol_dir)
+            state.set_stage("dft_handoff")
             candidates = _handoff_selected(selected)
             state.complete_stage("dft_handoff", {"status": "completed"})
             stages_completed.append("dft_handoff")
@@ -931,12 +930,9 @@ def run_conformer_energy(
                 # CENSO -P -S screens rank1 → ACP handoff. Refinement runs
                 # ACP-side here, so only screening overrides/templates may
                 # reach the CENSO rcfile (CENSO validates all sections).
-                censo_overrides = {
-                    k: v for k, v in part_overrides.items() if k == "screening"
-                }
-                censo_templates = {
-                    k: v for k, v in part_templates.items() if k == "screening"
-                }
+                censo_overrides = {k: v for k, v in part_overrides.items() if k == "screening"}
+                censo_templates = {k: v for k, v in part_templates.items() if k == "screening"}
+                state.set_stage("censo")
                 censo_result = backend.refine_ensemble(
                     crest_ensemble_xyz,
                     censo_dir,
@@ -945,12 +941,14 @@ def run_conformer_energy(
                     multiplicity=structure.multiplicity,
                     temperature=temperature_k,
                     solvent=censo_solvent,
+                    solvent_model=_solvent_model,
                     nproc=safe_nproc,
                     part_overrides=censo_overrides or None,
                     part_templates=censo_templates or None,
                 )
                 state.complete_stage(
-                    "censo", {"status": "completed", "n_records": len(censo_result.records)},
+                    "censo",
+                    {"status": "completed", "n_records": len(censo_result.records)},
                 )
                 stages_completed.append("censo")
                 if not censo_result.records:
@@ -959,13 +957,18 @@ def run_conformer_energy(
                 screening_ranking_csv = _write_screening_ranking(censo_result, mol_dir)
 
                 selected = _select_cumulative_boltzmann(
-                    censo_result.records, temperature_k, threshold,
+                    censo_result.records,
+                    temperature_k,
+                    threshold,
                 )
                 logger.info(
                     "censo-light (opt on): %d/%d conformers within %.0f%% "
                     "cumulative Boltzmann (screening gtot) → ACP handoff",
-                    len(selected), len(censo_result.records), threshold * 100,
+                    len(selected),
+                    len(censo_result.records),
+                    threshold * 100,
                 )
+                state.set_stage("dft_handoff")
                 candidates = _handoff_selected(selected)
                 state.complete_stage("dft_handoff", {"status": "completed"})
                 stages_completed.append("dft_handoff")
@@ -978,17 +981,23 @@ def run_conformer_energy(
                 nconf: int | None = None
                 if preset == "censo-zero":
                     passthrough = _xtb_passthrough_result(
-                        crest_ensemble_xyz, temperature_k,
+                        crest_ensemble_xyz,
+                        temperature_k,
                     )
                     preselected = _select_cumulative_boltzmann(
-                        passthrough.records, temperature_k, threshold,
+                        passthrough.records,
+                        temperature_k,
+                        threshold,
                     )
                     nconf = max(1, len(preselected))
                     logger.info(
                         "censo-zero preselection: %d/%d frames within %.0f%% "
                         "cumulative Boltzmann (xTB)",
-                        nconf, len(passthrough.records), threshold * 100,
+                        nconf,
+                        len(passthrough.records),
+                        threshold * 100,
                     )
+                state.set_stage("censo")
                 censo_result = backend.refine_ensemble(
                     crest_ensemble_xyz,
                     censo_dir,
@@ -997,6 +1006,7 @@ def run_conformer_energy(
                     multiplicity=structure.multiplicity,
                     temperature=temperature_k,
                     solvent=censo_solvent,
+                    solvent_model=_solvent_model,
                     nproc=safe_nproc,
                     include_refinement=(preset == "censo-light"),
                     nconf=nconf,
@@ -1004,7 +1014,8 @@ def run_conformer_energy(
                     part_templates=part_templates or None,
                 )
                 state.complete_stage(
-                    "censo", {"status": "completed", "n_records": len(censo_result.records)},
+                    "censo",
+                    {"status": "completed", "n_records": len(censo_result.records)},
                 )
                 stages_completed.append("censo")
                 if not censo_result.records:
@@ -1013,22 +1024,26 @@ def run_conformer_energy(
                 screening_ranking_csv = _write_screening_ranking(censo_result, mol_dir)
 
                 selected = _select_cumulative_boltzmann(
-                    censo_result.records, temperature_k, threshold,
+                    censo_result.records,
+                    temperature_k,
+                    threshold,
                 )
                 logger.info(
                     "%s (opt off): %d/%d refined conformers within %.0f%% "
                     "cumulative Boltzmann (gtot)",
-                    preset, len(selected), len(censo_result.records),
+                    preset,
+                    len(selected),
+                    len(censo_result.records),
                     threshold * 100,
                 )
                 candidates = [
-                    _censo_record_to_candidate(rec, index=i)
-                    for i, rec in enumerate(selected)
+                    _censo_record_to_candidate(rec, index=i) for i, rec in enumerate(selected)
                 ]
 
             else:
                 # censo-default: full Part0–Part3 + same-level freq + Shermo
                 logger.info("censo-default: full CENSO Part0–Part3 funnel")
+                state.set_stage("censo")
                 censo_result = backend.refine_ensemble(
                     crest_ensemble_xyz,
                     censo_dir,
@@ -1037,33 +1052,45 @@ def run_conformer_energy(
                     multiplicity=structure.multiplicity,
                     temperature=temperature_k,
                     solvent=censo_solvent,
+                    solvent_model=_solvent_model,
                     nproc=safe_nproc,
                     part_overrides=part_overrides or None,
                     part_templates=part_templates or None,
                 )
                 state.complete_stage(
-                    "censo", {"status": "completed", "n_records": len(censo_result.records)},
+                    "censo",
+                    {"status": "completed", "n_records": len(censo_result.records)},
                 )
                 stages_completed.append("censo")
                 if not censo_result.records:
                     raise RuntimeError("CENSO refinement produced no conformer records")
 
+                state.set_stage("dft_handoff")
                 candidates = []
                 for i, rec in enumerate(censo_result.records):
                     handoff_dir = mol_dir / "finalDFT" / f"conf_{i:03d}"
                     try:
                         cand = _run_rank1_handoff(
-                            cfg, np.asarray(rec.coordinates), list(rec.symbols),
-                            structure.charge, structure.multiplicity,
-                            handoff_dir, resolved, censo_solvent, _solvent_model,
-                            index=i, source=rec.conf_id,
+                            cfg,
+                            np.asarray(rec.coordinates),
+                            list(rec.symbols),
+                            structure.charge,
+                            structure.multiplicity,
+                            handoff_dir,
+                            resolved,
+                            censo_solvent,
+                            _solvent_model,
+                            index=i,
+                            source=rec.conf_id,
                             sp_energy_precomputed=rec.energy,
                             skip_opt_sp=True,
                         )
                     except RuntimeError as exc:
                         logger.warning(
                             "Same-level freq+Shermo failed for %s (%s) — "
-                            "falling back to CENSO gtot", rec.conf_id, exc,
+                            "falling back to CENSO gtot",
+                            rec.conf_id,
+                            exc,
                         )
                         cand = _censo_record_to_candidate(rec, index=i)
                     candidates.append(cand)
@@ -1071,6 +1098,7 @@ def run_conformer_energy(
                 stages_completed.append("dft_handoff")
 
         # ---- Finalization ---------------------------------------------------
+        state.set_stage("finalize")
         outputs = _write_final_outputs(candidates, mol_dir, safe_name, temperature_k)
         ensemble = _build_result_ensemble(candidates, structure)
         state.complete_stage("finalize", {"n_conformers": len(candidates)})
@@ -1093,7 +1121,8 @@ def run_conformer_energy(
         "n_conformers": len(candidates),
         "refinement_threshold": float(resolved["refinement_threshold"]),
         "crest_ewin": _resolve_crest_ewin(
-            cfg, ewin if ewin is not None else resolved["crest_ewin_level"],
+            cfg,
+            ewin if ewin is not None else resolved["crest_ewin_level"],
         ),
         "crest_skipped": crest_skipped,
         **outputs,

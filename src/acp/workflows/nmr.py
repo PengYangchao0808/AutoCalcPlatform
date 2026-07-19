@@ -454,7 +454,6 @@ def run_nmr_calculation(
     _ = working_ensemble.metadata.setdefault("molecule_name", molecule_name)
 
     state = WorkflowState(output_root / job_name, job_name)
-    state.initialize(input_source=input_source)
 
     context = WorkflowContext(
         work_dir=output_root,
@@ -467,6 +466,7 @@ def run_nmr_calculation(
             _BACKEND_NAME_KEY: _normalize_backend_name(backend_name, cfg),
             "conformer_protocol": conformer_protocol,
         },
+        input_source=input_source,
     )
 
     spec = WorkflowSpec(name="nmr", stages=get_nmr_stages(config=cfg))

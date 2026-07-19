@@ -130,6 +130,7 @@ def get_status(request: Request) -> StatusResponse:
     counts = manager.counts() if manager else {}
     queue = QueueCounts(
         queued=counts.get("queued", 0),
+        pending=counts.get("pending", 0),
         running=counts.get("running", 0) + counts.get("starting", 0),
         completed=counts.get("completed", 0),
         failed=counts.get("failed", 0),
@@ -211,6 +212,9 @@ def get_protocols() -> ProtocolsResponse:
         names = list(ALL_PROTOCOLS)
     except Exception:
         names = []
+    for preset in ("censo-light", "censo-default", "censo-zero"):
+        if preset not in names:
+            names.append(preset)
     return ProtocolsResponse(protocols=[ProtocolInfo(name=p) for p in names])
 
 
@@ -258,6 +262,7 @@ def list_jobs(
     counts = manager.counts()
     queue = QueueCounts(
         queued=counts.get("queued", 0),
+        pending=counts.get("pending", 0),
         running=counts.get("running", 0) + counts.get("starting", 0),
         completed=counts.get("completed", 0),
         failed=counts.get("failed", 0),

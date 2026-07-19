@@ -121,7 +121,6 @@ def _ensure_role_record(
 
 
 def _start_stage(ctx: WorkflowContext, stage_name: str) -> None:
-    ctx.state.set_stage(stage_name)
     logger.info("Mechanism stage started: %s", stage_name)
 
 
@@ -346,7 +345,6 @@ def run_mechanism_analysis(
 
     ensemble = StructureEnsemble(records=[StructureRecord(structure=structure)])
     state = WorkflowState(output_root / structure.id, structure.id)
-    state.initialize(input_source=input_source)
 
     context = WorkflowContext(
         work_dir=output_root,
@@ -354,6 +352,7 @@ def run_mechanism_analysis(
         config=cfg,
         backends={},
         params={_MOLECULE_NAME_KEY: structure.id},
+        input_source=input_source,
     )
     spec = WorkflowSpec(name="mechanism", stages=get_mechanism_stages())
 
@@ -366,7 +365,9 @@ def run_mechanism_analysis(
     result.metadata = {
         "workflow": "mechanism",
         "molecule_name": structure.id,
-        "energy_profile": result.ensemble.metadata.get("energy_profile") if result.ensemble is not None else None,
+        "energy_profile": result.ensemble.metadata.get("energy_profile")
+        if result.ensemble is not None
+        else None,
         "n_structures": len(result.ensemble.records) if result.ensemble is not None else 0,
         "stage_results": _stage_results(result.ensemble) if result.ensemble is not None else {},
     }

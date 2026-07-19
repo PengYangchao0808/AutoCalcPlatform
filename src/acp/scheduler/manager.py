@@ -2,9 +2,11 @@
 Scheduler Manager
 =================
 
-Owns job lifecycle: submission, queueing, concurrency limits, background
-dispatch, cancellation, and persistence. Runs each job on a bounded thread
-pool; the :class:`~acp.scheduler.runner.JobRunner` performs the actual work.
+Owns job lifecycle: submission, queueing, background dispatch, cancellation,
+and persistence.  Jobs are submitted immediately (fire-and-forget) and a
+background poller periodically queries cluster or subprocess status to
+update job states.  There is **no** artificial concurrency limit — the
+cluster (LSF/Slurm) or local system manages concurrent execution.
 """
 
 from __future__ import annotations
@@ -15,7 +17,6 @@ import random
 import shutil
 import threading
 import time
-from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -49,7 +50,7 @@ def _utc_now_iso() -> str:
 
 
 class JobManager:
-    """Central job orchestrator backed by SQLite + a thread pool."""
+    """Central job orchestrator backed by SQLite + background poller."""
 
     def __init__(
         self,
@@ -57,6 +58,7 @@ class JobManager:
         store: JobStore | None = None,
         runner: JobRunner | None = None,
         max_running: int = 1,
+        poll_interval: int = 15,
         remote_config: RemoteExecutionConfig | None = None,
         local_retention_config: RetentionPolicy | None = None,
         local_cleanup_interval_hours: int = 6,
@@ -64,7 +66,8 @@ class JobManager:
         self.run_root = Path(run_root)
         self.run_root.mkdir(parents=True, exist_ok=True)
         self.store = store or JobStore(self.run_root / "acp_jobs.db")
-        self.max_running = max_running
+        self.max_running = max_running  # retained for API compatibility (unused)
+        self.poll_interval = max(5, int(poll_interval))
 
         self._stage_task_store = StageTaskStore(self.store.db_path)
         self._stage_task_observer = StageTaskObserver(self._stage_task_store)
@@ -78,9 +81,7 @@ class JobManager:
         self._node_manager: NodeManager | None = None
         self.remote_runner = self._create_remote_runner() if self._is_remote_enabled() else None
 
-        # Local disk protection (Phase 5B).  Built eagerly so the
-        # property is available immediately for API endpoints even when
-        # no job has run yet.
+        # Local disk protection (Phase 5B).
         self._local_cleanup = self._create_local_cleanup(local_retention_config)
 
         self.runner = runner or JobRunner(stage_task_observer=self._stage_task_observer)
@@ -92,14 +93,18 @@ class JobManager:
         self._projects = ProjectManager(self.store, self.run_root)
         self.default_project_id = self._projects.ensure_default_project()
 
-        self._executor = ThreadPoolExecutor(max_workers=max(1, max_running))
+        # No ThreadPoolExecutor — all submitted jobs run concurrently via
+        # the cluster/local system.  A background poller tracks status.
         self._cancel_events: dict[str, threading.Event] = {}
-        self._futures: dict[str, Future[Any]] = {}
+        self._poll_failures: dict[str, int] = {}
         self._lock = threading.RLock()
         self._counter = 0
 
-        # Background local-cleanup thread (Phase 5B step 5B.3).  Only
-        # started when local cleanup is enabled.
+        # Background poller thread.
+        self._poll_stop = threading.Event()
+        self._poll_thread = threading.Thread(target=self._poll_loop, daemon=True, name="acp-poller")
+
+        # Background local-cleanup thread (Phase 5B step 5B.3).
         self._cleanup_thread: threading.Thread | None = None
         self._cleanup_stop_event: threading.Event | None = None
         self._cleanup_lock = threading.Lock()
@@ -107,6 +112,7 @@ class JobManager:
         self._start_cleanup_thread()
 
         self._requeue_active_on_startup()
+        self._poll_thread.start()
 
     def _is_remote_enabled(self) -> bool:
         return self._remote_config is not None and self._remote_config.is_remote
@@ -237,14 +243,17 @@ class JobManager:
             logger.debug("Failed to append cleanup.log", exc_info=True)
 
     def submit(self, spec: JobSpec) -> JobRecord:
-        """Validate, persist, and enqueue a new job."""
+        """Validate, persist, and enqueue a new job. Returns immediately.
+
+        Job submission (including SSH sync, upload, bsub for remote mode)
+        runs on a background daemon thread; an immediate first poll follows
+        submission, then the periodic poller takes over.
+        """
         if spec.workflow not in SUPPORTED_WORKFLOWS:
             raise ValueError(
                 f"Unsupported workflow: {spec.workflow}. Supported: {SUPPORTED_WORKFLOWS}"
             )
 
-        # Validate that conformer jobs use the canonical methods for the
-        # requested protocol unless explicit levels are supplied.
         if spec.workflow == "conformer":
             protocol = spec.method.get("protocol") or "ext"
             levels = spec.method.get("levels")
@@ -272,6 +281,10 @@ class JobManager:
         work_dir = self._resolve_work_dir(spec, job_id)
         work_dir.mkdir(parents=True, exist_ok=True)
 
+        cancel_event = threading.Event()
+        with self._lock:
+            self._cancel_events[job_id] = cancel_event
+
         record = JobRecord(
             id=job_id,
             spec=spec,
@@ -285,10 +298,14 @@ class JobManager:
         self._write_job_json(record)
         self._event_log(record).append("job.created", job_id=job_id, workflow=spec.workflow)
 
-        cancel_event = threading.Event()
-        with self._lock:
-            self._cancel_events[job_id] = cancel_event
-            self._futures[job_id] = self._executor.submit(self._run_job, job_id, cancel_event)
+        # Fire-and-forget: submit on a daemon thread, poll immediately after.
+        threading.Thread(
+            target=self._execute_submission,
+            args=(job_id,),
+            daemon=True,
+            name=f"acp-submit-{job_id}",
+        ).start()
+
         return record
 
     def list_jobs(self, status: str | None = None, limit: int = 200) -> list[JobRecord]:
@@ -490,16 +507,17 @@ class JobManager:
 
         if record.status == JobStatus.QUEUED:
             with self._lock:
-                fut = self._futures.get(job_id)
-            if fut is not None and fut.cancel():
-                record.status = JobStatus.CANCELLED
-                record.completed_at = _utc_now_iso()
-                record.touch()
-                self.store.update(record)
-                self._stage_task_observer.finalize_job(job_id, JobStatus.CANCELLED.value)
-                self._write_job_json(record)
-                self._event_log(record).append("job.cancelled", job_id=job_id)
-                return record
+                ev = self._cancel_events.pop(job_id, None)
+            if ev:
+                ev.set()
+            record.status = JobStatus.CANCELLED
+            record.completed_at = _utc_now_iso()
+            record.touch()
+            self.store.update(record)
+            self._stage_task_observer.finalize_job(job_id, JobStatus.CANCELLED.value)
+            self._write_job_json(record)
+            self._event_log(record).append("job.cancelled", job_id=job_id)
+            return record
 
         record.status = JobStatus.CANCELLING
         record.touch()
@@ -508,6 +526,12 @@ class JobManager:
             ev = self._cancel_events.get(job_id)
         if ev:
             ev.set()
+
+        if self._is_remote_enabled() and self.remote_runner is not None and record.remote_job_id:
+            self.remote_runner.cancel_remote(job_id)
+        else:
+            self.runner.cancel_local(job_id)
+
         self._event_log(record).append("job.cancelling", job_id=job_id)
         return record
 
@@ -544,15 +568,16 @@ class JobManager:
         return Path(record.work_dir) if record else None
 
     def shutdown(self) -> None:
-        # Stop the local-cleanup background thread first (fast).
         if self._cleanup_stop_event is not None and self._cleanup_thread is not None:
             self._cleanup_stop_event.set()
             self._cleanup_thread.join(timeout=10)
+        self._poll_stop.set()
+        if self._poll_thread.is_alive():
+            self._poll_thread.join(timeout=10)
         with self._lock:
             for ev in self._cancel_events.values():
                 ev.set()
-        time.sleep(0.2)
-        self._executor.shutdown(wait=False, cancel_futures=True)
+            self._cancel_events.clear()
         for ssh_pool in (self._runner_ssh_pool, self._fetcher_ssh_pool):
             if ssh_pool is not None:
                 try:
@@ -570,49 +595,192 @@ class JobManager:
             encoding="utf-8",
         )
 
-    def _run_job(self, job_id: str, cancel_event: threading.Event) -> None:
-        record = self.store.get(job_id)
-        if record is None:
-            logger.error("Job %s vanished before run", job_id)
+    # ------------------------------------------------------------------ #
+    # Non-blocking submission + background poller
+    # ------------------------------------------------------------------ #
+
+    def _execute_submission(self, job_id: str) -> None:
+        """Background thread: submit job then immediately poll once."""
+        try:
+            self._submit_job(job_id)
+        except Exception as exc:
+            logger.exception("Submission failed for job %s", job_id)
+            record = self.store.get(job_id)
+            if record and not record.status.is_terminal:
+                record.status = JobStatus.FAILED
+                record.error = f"Submission error: {exc}"
+                record.completed_at = _utc_now_iso()
+                record.touch()
+                self.store.update(record)
+                self._write_job_json(record)
+                self._event_log(record).append("job.failed", job_id=job_id, error=str(exc))
+                self._stage_task_observer.finalize_job(job_id, "failed")
             return
 
+        # Only poll if not already terminal (fake workflow finishes in _submit_job)
+        record = self.store.get(job_id)
+        if record and not record.status.is_terminal:
+            self._poll_job(job_id)
+
+    def _submit_job(self, job_id: str) -> None:
+        """Start the job (local subprocess or remote LSF). Non-blocking.
+
+        For the ``fake`` workflow this runs in-process to completion —
+        status is set to COMPLETED directly, avoiding any race with the
+        background poll loop.
+        """
+        record = self.store.get(job_id)
+        if record is None:
+            logger.error("Job %s vanished before submit", job_id)
+            return
+
+        cancel_event = self._cancel_events.get(job_id, threading.Event())
+        event_log = self._event_log(record)
+
+        # ------------------------------------------------------------------
+        # Fake workflow: run in-process to completion, mark COMPLETED now.
+        # ------------------------------------------------------------------
+        if record.spec.workflow == "fake":
+            self.runner.submit(record, event_log, cancel_event)
+            record.status = JobStatus.COMPLETED
+            record.exit_code = record.exit_code if record.exit_code is not None else 0
+            record.progress = 1.0
+            record.completed_at = _utc_now_iso()
+            record.touch()
+            self.store.update(record)
+            self._write_job_json(record)
+            event_log.append("job.completed", job_id=job_id, exit_code=record.exit_code)
+            self._stage_task_observer.finalize_job(job_id, "completed")
+            with self._lock:
+                self._cancel_events.pop(job_id, None)
+            return
+
+        # ------------------------------------------------------------------
+        # Real workflows: STARTING → submit (fire-and-forget).
+        # Remote jobs go to PENDING (waiting for cluster resources);
+        # local jobs go to RUNNING (start immediately).
+        # ------------------------------------------------------------------
         record.status = JobStatus.STARTING
         record.started_at = _utc_now_iso()
         record.touch()
         self.store.update(record)
         self._write_job_json(record)
 
-        record.status = JobStatus.RUNNING
+        if self._is_remote_enabled() and self.remote_runner is not None:
+            lsf_job_id = self.remote_runner.submit_remote(record, event_log)
+            record.remote_job_id = lsf_job_id
+            record.status = JobStatus.PENDING
+        else:
+            self.runner.submit(record, event_log, cancel_event)
+            record.status = JobStatus.RUNNING
+
         record.touch()
         self.store.update(record)
+        self._write_job_json(record)
 
+    _POLL_MAX_RETRIES = 3
+
+    def _poll_job(self, job_id: str) -> None:
+        """Single non-blocking check of one job's status."""
+        record = self.store.get(job_id)
+        if record is None or record.status.is_terminal:
+            return
+
+        cancel_event = self._cancel_events.get(job_id, threading.Event())
         event_log = self._event_log(record)
-        try:
-            exit_code = self.runner.run(record, event_log, cancel_event)
-        except Exception as exc:
-            logger.exception("Runner raised for job %s", job_id)
-            record.status = JobStatus.FAILED
-            record.error = str(exc)
-            record.completed_at = _utc_now_iso()
+        is_remote = self._is_remote_enabled() and bool(record.remote_job_id) and self.remote_runner is not None
+
+        if is_remote:
+            try:
+                is_terminal, exit_code = self.remote_runner.poll_remote(record, event_log, cancel_event)
+                self._poll_failures.pop(job_id, None)
+            except Exception as exc:
+                failures = self._poll_failures.get(job_id, 0) + 1
+                self._poll_failures[job_id] = failures
+                logger.warning(
+                    "Remote poll failed for job %s (attempt %d/%d): %s",
+                    job_id, failures, self._POLL_MAX_RETRIES, exc,
+                )
+                if failures >= self._POLL_MAX_RETRIES:
+                    logger.error("Remote poll failed %d times for job %s, marking FAILED", failures, job_id)
+                    try:
+                        self.remote_runner.cancel_remote(job_id)
+                        self.remote_runner._cleanup_job_state(job_id)
+                    except Exception:
+                        pass
+                    record.status = JobStatus.FAILED
+                    record.error = f"Remote poll failed after {failures} attempts: {exc}"
+                    record.completed_at = _utc_now_iso()
+                    record.touch()
+                    self.store.update(record)
+                    self._write_job_json(record)
+                    event_log.append("job.failed", job_id=job_id, error=str(exc))
+                    self._stage_task_observer.finalize_job(job_id, "failed")
+                    self._poll_failures.pop(job_id, None)
+                return
+        else:
+            try:
+                is_terminal, exit_code = self.runner.poll(record)
+            except Exception as exc:
+                logger.exception("Local poll failed for job %s", job_id)
+                record.status = JobStatus.FAILED
+                record.error = f"Local poll error: {exc}"
+                record.completed_at = _utc_now_iso()
+                record.touch()
+                self.store.update(record)
+                self._write_job_json(record)
+                event_log.append("job.failed", job_id=job_id, error=str(exc))
+                self._stage_task_observer.finalize_job(job_id, "failed")
+                return
+
+        if not is_terminal:
             record.touch()
             self.store.update(record)
-            self._write_job_json(record)
             return
 
         record.exit_code = exit_code
         record.completed_at = _utc_now_iso()
-        if cancel_event.is_set() and exit_code != 0:
+
+        if cancel_event.is_set() and exit_code and exit_code != 0:
             record.status = JobStatus.CANCELLED
         elif exit_code == 0:
             record.status = JobStatus.COMPLETED
             record.progress = 1.0
             record.result = self._collect_result(record)
+            if not is_remote:
+                self.runner._capture_artifacts(record, Path(record.work_dir))
+                self.runner._store_provenance(record, command_line=record.result.get("command_line", ""))
         else:
             record.status = JobStatus.FAILED
             record.error = record.error or f"workflow exited with code {exit_code}"
+
         record.touch()
         self.store.update(record)
         self._write_job_json(record)
+        with self._lock:
+            self._cancel_events.pop(job_id, None)
+
+    def _poll_loop(self) -> None:
+        """Background daemon: periodically poll all RUNNING jobs."""
+        logger.info(
+            "Poll loop started (interval=%ds, remote=%s)",
+            self.poll_interval,
+            self._is_remote_enabled(),
+        )
+        while not self._poll_stop.wait(self.poll_interval):
+            try:
+                for status_val in (JobStatus.RUNNING.value, JobStatus.PENDING.value):
+                    records = self.store.list(status=status_val, limit=10000)
+                    for record in records:
+                        if self._poll_stop.is_set():
+                            break
+                        try:
+                            self._poll_job(record.id)
+                        except Exception:
+                            logger.exception("Poll error for job %s", record.id)
+            except Exception:
+                logger.exception("Poll loop iteration failed")
+        logger.info("Poll loop stopped")
 
     def _collect_result(self, record: JobRecord) -> dict[str, Any]:
         from acp.scheduler.runner import find_workflow_state
@@ -631,9 +799,18 @@ class JobManager:
         # triage.  The ``[RESTART_FAILED]`` prefix lets LocalCleanup
         # apply a shorter retention window (risk 5 mitigation, Phase 5B)
         # since these dirs hold no useful partial results.
+        #
+        # Remote jobs with a valid remote_job_id can be recovered — the
+        # background poller will re-check bjobs + .exit_code.
         restart_marker = "[RESTART_FAILED] interrupted by server restart"
-        for status in (JobStatus.RUNNING, JobStatus.STARTING, JobStatus.CANCELLING):
+        for status in (JobStatus.RUNNING, JobStatus.STARTING, JobStatus.PENDING, JobStatus.CANCELLING):
             for record in self.store.list(status=status.value):
+                if self._try_recover_remote_job(record):
+                    logger.info(
+                        "Recovered remote job %s (lsf=%s) on restart, poller will resume",
+                        record.id, record.remote_job_id,
+                    )
+                    continue
                 record.status = JobStatus.FAILED
                 record.error = restart_marker
                 record.completed_at = _utc_now_iso()
@@ -641,6 +818,18 @@ class JobManager:
                 self.store.update(record)
                 self._stage_task_observer.finalize_job(record.id, JobStatus.FAILED.value)
                 logger.info("Marked interrupted job %s as FAILED", record.id)
+
+    def _try_recover_remote_job(self, record: JobRecord) -> bool:
+        """Attempt to rebuild in-memory state for a remote job after restart.
+
+        Returns True if recovery succeeds (job left in RUNNING for the
+        background poller to pick up), False otherwise.
+        """
+        if not self._is_remote_enabled() or self.remote_runner is None:
+            return False
+        if not record.remote_job_id:
+            return False
+        return self.remote_runner.recover_job_state(record)
 
 
 __all__ = ["JobManager"]

@@ -29,6 +29,7 @@ class JobStatus(str, Enum):
 
     QUEUED = "queued"
     STARTING = "starting"
+    PENDING = "pending"
     RUNNING = "running"
     CANCELLING = "cancelling"
     CANCELLED = "cancelled"
@@ -41,7 +42,10 @@ class JobStatus(str, Enum):
 
     @property
     def is_active(self) -> bool:
-        active = (JobStatus.QUEUED, JobStatus.STARTING, JobStatus.RUNNING, JobStatus.CANCELLING)
+        active = (
+            JobStatus.QUEUED, JobStatus.STARTING, JobStatus.PENDING,
+            JobStatus.RUNNING, JobStatus.CANCELLING,
+        )
         return self in active
 
 
@@ -61,11 +65,11 @@ _CENSO_PRESETS: tuple[str, ...] = ("censo-light", "censo-default", "censo-zero")
 def censo_preset_from_method(method: dict[str, Any]) -> str | None:
     """Resolve the CENSO preset from a job's method dict.
 
-    The frontend v2 wizard submits ``profile_id`` (schema-driven), while the
-    CLI/API path may set ``preset`` explicitly. Unknown values (e.g. the
-    wizard's ``__custom__``) resolve to ``None`` so the CLI default applies.
+    Priority: ``preset`` > ``profile_id`` > ``protocol``. Unknown values
+    (e.g. the wizard's ``__custom__``) resolve to ``None`` so the CLI
+    default applies.
     """
-    raw = method.get("preset") or method.get("profile_id")
+    raw = method.get("preset") or method.get("profile_id") or method.get("protocol")
     if not raw:
         return None
     value = str(raw).strip().lower()
@@ -173,6 +177,7 @@ class JobRecord:
     input_hash: str | None = None
     pid: int | None = None
     exit_code: int | None = None
+    remote_job_id: str | None = None
     result: dict[str, Any] | None = None
 
     def touch(self) -> None:
@@ -195,6 +200,7 @@ class JobRecord:
             "input_hash": self.input_hash,
             "pid": self.pid,
             "exit_code": self.exit_code,
+            "remote_job_id": self.remote_job_id,
             "result": self.result,
         }
 

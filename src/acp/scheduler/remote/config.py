@@ -133,7 +133,7 @@ class RemoteExecutionConfig:
 
     Attributes:
         execution_mode: ``'local'`` (default) or ``'remote'``.
-        poll_interval: Seconds between remote status polls (default 30).
+        poll_interval: Seconds between remote status polls (default 15).
         retention_days: Days before remote job dirs are cleaned up.
         auto_sync: Whether to auto-sync code to nodes before submitting.
         nodes: List of configured :class:`RemoteNode` objects.
@@ -143,7 +143,7 @@ class RemoteExecutionConfig:
     """
 
     execution_mode: str = "local"
-    poll_interval: int = 30
+    poll_interval: int = 15
     retention_days: int = 180
     auto_sync: bool = True
     queue: str = "normal"
@@ -197,7 +197,7 @@ class RemoteExecutionConfig:
             raise ValueError(
                 f"Invalid execution_mode {execution_mode!r}; must be 'local' or 'remote'"
             )
-        poll_interval = int(data.get("poll_interval", 30))
+        poll_interval = int(data.get("poll_interval", 15))
         retention_days = int(data.get("retention_days", 180))
         auto_sync = bool(data.get("auto_sync", True))
         queue = str(data.get("queue", "normal"))

@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     error TEXT,
     pid INTEGER,
     exit_code INTEGER,
+    remote_job_id TEXT,
     result_json TEXT
 )
 """
@@ -62,6 +63,7 @@ class JobStore:
 
     def _init_schema(self) -> None:
         with self._lock, self._connect() as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
             conn.executescript(_SCHEMA)
             conn.commit()
         migrate(self.db_path)
@@ -72,8 +74,8 @@ class JobStore:
                 """INSERT INTO jobs (id, workflow, name, status, work_dir, spec_json,
                        created_at, updated_at, started_at, completed_at, project_id,
                        input_hash, current_stage, progress, error, pid, exit_code,
-                       result_json)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       remote_job_id, result_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 _record_to_row(record),
             )
             conn.commit()
@@ -83,7 +85,7 @@ class JobStore:
         with self._lock, self._connect() as conn:
             conn.execute(
                 """UPDATE jobs SET status=?, current_stage=?, progress=?, error=?,
-                       pid=?, exit_code=?, started_at=?, completed_at=?, updated_at=?,
+                       pid=?, exit_code=?, remote_job_id=?, started_at=?, completed_at=?, updated_at=?,
                        result_json=?, spec_json=?, project_id=?, input_hash=? WHERE id=?""",
                 (
                     record.status.value,
@@ -92,6 +94,7 @@ class JobStore:
                     record.error,
                     record.pid,
                     record.exit_code,
+                    record.remote_job_id,
                     record.started_at,
                     record.completed_at,
                     record.updated_at,
@@ -146,13 +149,14 @@ class JobStore:
             conn.commit()
 
     def update_project_id(self, job_id: str, project_id: str) -> None:
-        record = self.get(job_id)
-        if record is None:
-            return
-        record.project_id = project_id
-        record.spec = replace(record.spec, project_id=project_id)
-        record.touch()
         with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if row is None:
+                return
+            record = _row_to_record(row)
+            record.project_id = project_id
+            record.spec = replace(record.spec, project_id=project_id)
+            record.touch()
             conn.execute(
                 "UPDATE jobs SET project_id=?, spec_json=?, updated_at=? WHERE id=?",
                 (project_id, _spec_to_json(record.spec), record.updated_at, job_id),
@@ -162,14 +166,15 @@ class JobStore:
     def update_project_id_and_work_dir(
         self, job_id: str, project_id: str, work_dir: str
     ) -> None:
-        record = self.get(job_id)
-        if record is None:
-            return
-        record.project_id = project_id
-        record.work_dir = work_dir
-        record.spec = replace(record.spec, project_id=project_id)
-        record.touch()
         with self._lock, self._connect() as conn:
+            row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
+            if row is None:
+                return
+            record = _row_to_record(row)
+            record.project_id = project_id
+            record.work_dir = work_dir
+            record.spec = replace(record.spec, project_id=project_id)
+            record.touch()
             conn.execute(
                 "UPDATE jobs SET project_id=?, work_dir=?, spec_json=?, updated_at=? WHERE id=?",
                 (project_id, work_dir, _spec_to_json(record.spec), record.updated_at, job_id),
@@ -196,6 +201,7 @@ def _record_to_row(record: JobRecord) -> tuple[Any, ...]:
         record.error,
         record.pid,
         record.exit_code,
+        record.remote_job_id,
         json.dumps(record.result) if record.result is not None else None,
     )
 
@@ -234,6 +240,7 @@ def _row_to_record(row: sqlite3.Row) -> JobRecord:
         input_hash=input_hash,
         pid=row["pid"],
         exit_code=row["exit_code"],
+        remote_job_id=row["remote_job_id"] if "remote_job_id" in columns else None,
         result=result,
     )
 

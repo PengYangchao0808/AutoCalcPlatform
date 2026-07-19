@@ -58,6 +58,23 @@ class JobRunnerRemoteProtocol(Protocol):
         cancel_event: threading.Event,
     ) -> int: ...
 
+    def submit_remote(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+    ) -> str: ...
+
+    def poll_remote(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        cancel_event: threading.Event,
+    ) -> tuple[bool, int | None]: ...
+
+    def cancel_remote(self, job_id: str) -> None: ...
+
+    def recover_job_state(self, record: JobRecord) -> bool: ...
+
 
 class LocalCleanupProtocol(Protocol):
     """Structural type for :class:`~acp.scheduler.local_cleanup.LocalCleanup`.
@@ -71,6 +88,17 @@ class LocalCleanupProtocol(Protocol):
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _safe_timestamp(value: object) -> float:
+    """Convert a state.json timestamp to a sortable float.  Unknown / missing
+    timestamps map to 0.0 so they sort earliest (best-effort fallback)."""
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value).timestamp()
+        except (ValueError, TypeError):
+            return 0.0
+    return 0.0
 
 
 def find_workflow_state(work_dir: Path) -> Path | None:
@@ -181,6 +209,183 @@ class JobRunner:
         # branch runs pre-submit housekeeping before materializing input.
         # Populated by ``JobManager`` when ``local_retention.enabled``.
         self.local_cleanup = local_cleanup
+        self._proc_lock = threading.Lock()
+        self._processes: dict[str, subprocess.Popen[Any]] = {}
+        self._seen_stages: dict[str, set[str]] = {}
+        self._cancel_events: dict[str, threading.Event] = {}
+        self._event_logs: dict[str, JobEventLog] = {}
+
+    # ------------------------------------------------------------------ #
+    # New non-blocking API (poller-driven)
+    # ------------------------------------------------------------------ #
+
+    def submit(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        cancel_event: threading.Event,
+    ) -> None:
+        """Start job subprocess, return immediately. Non-blocking.
+
+        For the ``fake`` workflow, runs in-process to completion
+        (still non-blocking from the API caller's perspective since
+        this runs on a daemon submission thread).
+        """
+        work_dir = Path(record.work_dir)
+        work_dir.mkdir(parents=True, exist_ok=True)
+
+        with self._proc_lock:
+            self._cancel_events[record.id] = cancel_event
+            self._event_logs[record.id] = event_log
+
+        if record.spec.workflow == "fake":
+            (work_dir / "results").mkdir(exist_ok=True)
+            self._run_fake(record, event_log, cancel_event)
+            record.exit_code = 0
+            record.completed_at = datetime.now(timezone.utc).isoformat()
+            return
+
+        (work_dir / "inputs").mkdir(exist_ok=True)
+        (work_dir / "work").mkdir(exist_ok=True)
+        (work_dir / "results").mkdir(exist_ok=True)
+
+        observer = self._observer_for_record(record)
+        observer.initialize_job_stages(record.id, record.spec)
+        event_log.append("job.started", job_id=record.id, workflow=record.spec.workflow)
+
+        skip = self._pre_submit_housekeeping_local(record, event_log)
+        if skip:
+            raise RuntimeError(f"Local disk full, submission blocked for job {record.id}")
+
+        materialized = materialize_job_input(
+            record.spec.input, work_dir / "inputs", work_dir.parent.parent
+        )
+
+        effective_input_path = (
+            str(materialized)
+            if materialized
+            else (record.spec.input.get("source") or record.spec.input.get("input") or "")
+        )
+        cmd = self._build_cmd(record.spec, work_dir, effective_input_path)
+        stdout_path = work_dir / "stdout.log"
+        stderr_path = work_dir / "stderr.log"
+
+        event_log.append("process.starting", job_id=record.id, cmd=" ".join(cmd))
+
+        with (
+            stdout_path.open("w", encoding="utf-8") as out,
+            stderr_path.open("w", encoding="utf-8") as err,
+        ):
+            env = dict(os.environ)
+            env["PYTHONUNBUFFERED"] = "1"
+            proc = subprocess.Popen(
+                cmd,
+                stdout=out,
+                stderr=err,
+                cwd=str(work_dir),
+                env=env,
+            )
+            record.pid = proc.pid
+
+        with self._proc_lock:
+            self._processes[record.id] = proc
+            self._seen_stages[record.id] = set()
+        observer.initialize_job_stages(record.id, record.spec)
+
+    def poll(self, record: JobRecord) -> tuple[bool, int | None]:
+        """Single non-blocking check of job status.
+
+        Returns ``(is_terminal, exit_code)``.  *is_terminal* is True when
+        the job has finished (or vanished).
+        """
+        with self._proc_lock:
+            proc = self._processes.get(record.id)
+
+        if proc is None:
+            event_log = self._event_logs.get(record.id)
+            exit_code = record.exit_code if record.exit_code is not None else 1
+            if event_log:
+                event_log.append(
+                    "job.failed" if exit_code != 0 else "job.completed",
+                    job_id=record.id,
+                    exit_code=exit_code,
+                )
+            with self._proc_lock:
+                self._seen_stages.pop(record.id, None)
+                self._cancel_events.pop(record.id, None)
+                self._event_logs.pop(record.id, None)
+            return (True, exit_code)
+
+        with self._proc_lock:
+            cancel_event = self._cancel_events.get(record.id)
+
+        if cancel_event and cancel_event.is_set():
+            self._terminate(proc)
+            event_log = self._event_logs.get(record.id)
+            if event_log:
+                event_log.append("job.cancelled", job_id=record.id, exit_code=130)
+            with self._proc_lock:
+                self._processes.pop(record.id, None)
+                self._seen_stages.pop(record.id, None)
+                self._cancel_events.pop(record.id, None)
+                self._event_logs.pop(record.id, None)
+            return (True, 130)
+
+        ret = proc.poll()
+        if ret is not None:
+            record.exit_code = ret
+            event_log = self._event_logs.get(record.id)
+            with self._proc_lock:
+                seen = self._seen_stages.get(record.id, set()).copy()
+            if event_log:
+                state_path = find_workflow_state(Path(record.work_dir))
+                self._observe_state(record, event_log, state_path, seen)
+            observer = self._observer_for_record(record)
+            observer.poll_and_mirror(record.id, Path(record.work_dir))
+            with self._proc_lock:
+                ce = self._cancel_events.get(record.id)
+            if ce and ce.is_set() and ret != 0:
+                event_log.append(
+                    "job.cancelled", job_id=record.id, exit_code=ret
+                ) if event_log else None
+            elif ret == 0:
+                event_log.append(
+                    "job.completed", job_id=record.id, exit_code=ret
+                ) if event_log else None
+            else:
+                event_log.append(
+                    "job.failed", job_id=record.id, exit_code=ret
+                ) if event_log else None
+            with self._proc_lock:
+                self._processes.pop(record.id, None)
+                self._seen_stages.pop(record.id, None)
+                self._cancel_events.pop(record.id, None)
+                self._event_logs.pop(record.id, None)
+            return (True, ret)
+
+        event_log = self._event_logs.get(record.id)
+        if event_log:
+            with self._proc_lock:
+                seen = self._seen_stages.get(record.id, set()).copy()
+            state_path = find_workflow_state(Path(record.work_dir))
+            self._observe_state(record, event_log, state_path, seen)
+        observer = self._observer_for_record(record)
+        observer.poll_and_mirror(record.id, Path(record.work_dir))
+        return (False, None)
+
+    def cancel_local(self, job_id: str) -> None:
+        """Terminate a locally-running subprocess."""
+        with self._proc_lock:
+            proc = self._processes.pop(job_id, None)
+            self._seen_stages.pop(job_id, None)
+            self._cancel_events.pop(job_id, None)
+            self._event_logs.pop(job_id, None)
+        if proc and proc.poll() is None:
+            self._terminate(proc)
+
+    # ------------------------------------------------------------------ #
+    # Legacy blocking API (kept for backward compat)
+    # ------------------------------------------------------------------ #
 
     def _should_run_remote(self, spec: JobSpec) -> bool:
         """True when this job should be dispatched to a remote compute node.
@@ -349,34 +554,41 @@ class JobRunner:
         except (OSError, json.JSONDecodeError):
             return
 
+        if data.get("status") == "failed":
+            return
+
         record.current_stage = data.get("current_stage")
         stages = data.get("stages") if isinstance(data.get("stages"), dict) else {}
         total = max(len(stages), 1)
         done = sum(
             1
             for stage in stages.values()
-            if isinstance(stage, dict) and stage.get("status") == "completed"
+            if isinstance(stage, dict) and stage.get("status") in ("completed", "skipped")
         )
         record.progress = round(done / total, 3)
 
+        pending_events: list[tuple[float, str, str, dict[str, object]]] = []
         for name, info in stages.items():
             if not isinstance(info, dict):
                 continue
             status = info.get("status")
             if status == "running" and f"running:{name}" not in seen:
                 seen.add(f"running:{name}")
-                event_log.append("stage.started", job_id=record.id, stage=name)
+                ts = _safe_timestamp(info.get("started_at"))
+                pending_events.append((ts, "stage.started", name, {"stage": name}))
             elif status == "completed" and f"done:{name}" not in seen:
                 seen.add(f"done:{name}")
-                event_log.append("stage.completed", job_id=record.id, stage=name)
+                ts = _safe_timestamp(info.get("completed_at"))
+                pending_events.append((ts, "stage.completed", name, {"stage": name}))
             elif status == "failed" and f"failed:{name}" not in seen:
                 seen.add(f"failed:{name}")
-                event_log.append(
-                    "stage.failed",
-                    job_id=record.id,
-                    stage=name,
-                    error=str(info.get("error", "")),
+                ts = _safe_timestamp(info.get("completed_at"))
+                pending_events.append(
+                    (ts, "stage.failed", name, {"stage": name, "error": str(info.get("error", ""))})
                 )
+
+        for _ts, event_type, _name, payload in sorted(pending_events, key=lambda x: x[0]):
+            event_log.append(event_type, job_id=record.id, **payload)
 
     def _terminate(self, proc: subprocess.Popen[Any]) -> None:
         if proc.poll() is not None:
@@ -528,7 +740,7 @@ class JobRunner:
 
         work_dir = Path(record.work_dir)
         state = WorkflowState(work_dir=work_dir, job_name=record.spec.name or record.id)
-        state.initialize(input_source="fake")
+        state.initialize(input_source="fake", stage_names=["init", "compute", "finalize"])
         observer = self._observer_for_record(record)
         tasks = observer.initialize_job_stages(record.id, record.spec)
         tasks_by_stage = {task.stage_name: task for task in tasks}

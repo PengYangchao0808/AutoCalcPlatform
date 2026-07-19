@@ -31,6 +31,7 @@ from typing import Any, cast
 logger = logging.getLogger(__name__)
 
 ALL_PROTOCOLS = [
+    "censo-lite",
     "ext",
     "full",
     "lite",
@@ -255,8 +256,8 @@ Examples:
         "--protocol",
         type=str,
         choices=ALL_PROTOCOLS,
-        default="lite",
-        help="Conformer search protocol (default: lite)",
+        default="censo-lite",
+        help="Conformer search protocol (default: censo-lite)",
     )
     conf.add_argument(
         "--list-protocols",
@@ -718,7 +719,13 @@ Examples:
         "--max-running",
         type=int,
         default=1,
-        help="Maximum concurrently running jobs (default: 1)",
+        help="(Deprecated) No longer limits concurrency — jobs are submitted immediately to the cluster. Use --poll-interval instead.",
+    )
+    serve_parser.add_argument(
+        "--poll-interval",
+        type=int,
+        default=30,
+        help="Seconds between status checks for running jobs (default: 30)",
     )
     serve_parser.add_argument(
         "--reload",
@@ -1073,6 +1080,7 @@ def _handle_serve(args: argparse.Namespace) -> int:
     reload_flag = getattr(args, "reload", False)
     run_root = getattr(args, "run_root", "./ACP_runs")
     max_running = getattr(args, "max_running", 1)
+    poll_interval = getattr(args, "poll_interval", 15)
     log_level = getattr(args, "log_level", "INFO").lower()
     no_browser = getattr(args, "no_browser", False)
 
@@ -1083,13 +1091,14 @@ def _handle_serve(args: argparse.Namespace) -> int:
     os.environ["ACP_HOST"] = host
     os.environ["ACP_PORT"] = str(port)
     os.environ["ACP_MAX_RUNNING"] = str(max_running)
+    os.environ["ACP_POLL_INTERVAL"] = str(poll_interval)
 
     url = f"http://{host}:{port}"
     print(f"ACP Workbench starting at {url}")
-    print(f"  Run root     : {run_root_path}")
-    print(f"  Max running  : {max_running}")
+    print(f"  Run root      : {run_root_path}")
+    print(f"  Poll interval : {poll_interval}s")
     print(f"  Docs (Swagger): {url}/docs")
-    print(f"  Reload       : {'on' if reload_flag else 'off'}")
+    print(f"  Reload        : {'on' if reload_flag else 'off'}")
     if _is_wsl_environment():
         print()
         print("  Running under WSL — open this URL in Windows Chrome:")

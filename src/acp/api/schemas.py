@@ -21,6 +21,7 @@ class ServiceStatus(str, Enum):
 
 class QueueCounts(BaseModel):
     queued: int = 0
+    pending: int = 0
     running: int = 0
     completed: int = 0
     failed: int = 0

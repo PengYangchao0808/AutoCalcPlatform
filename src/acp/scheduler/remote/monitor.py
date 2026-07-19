@@ -2,10 +2,10 @@
 Remote Job Monitor
 ==================
 
-Monitors remote LSF (OpenLAVA) jobs via SSH ``bjobs`` queries and SFTP
-log tailing.  Status detection relies primarily on ``bjobs`` state codes
-and the ``.exit_code`` sentinel file written by the LSF script — it does
-**not** depend on ``state.json``.
+Monitors remote LSF (OpenLAVA) jobs via SSH ``bjobs`` queries, SFTP
+log tailing, and optional ``state.json`` polling for fine-grained progress.
+Status detection relies on ``bjobs`` state codes, the ``.exit_code``
+sentinel file written by the LSF script, and the workflow ``state.json``.
 
 LSF state mapping follows :class:`LSFClusterAdapter.get_status`:
 
@@ -17,6 +17,7 @@ Author: QCcalc Team
 
 from __future__ import annotations
 
+import json
 import logging
 import posixpath
 import shlex
@@ -185,6 +186,58 @@ class RemoteJobMonitor:
         except Exception:
             logger.debug("tail_log_text failed for %s on %s", filename, node.name, exc_info=True)
             return "", offset
+
+    # ------------------------------------------------------------------ #
+    # Workflow state (state.json + .stage_* files)
+    # ------------------------------------------------------------------ #
+
+    def read_state_json(self, node: RemoteNode, remote_job_dir: str) -> dict | None:
+        """Read ``state.json`` from the remote job directory and parse as JSON.
+
+        Returns the decoded dict, or ``None`` if the file does not exist
+        or cannot be parsed (job still in early startup or already purged).
+        """
+        path = posixpath.join(remote_job_dir, "state.json")
+        try:
+            content = self._stager.read_remote_text(node, path)
+        except (FileNotFoundError, OSError):
+            return None
+        except Exception:
+            logger.debug("Failed reading state.json on %s", node.name, exc_info=True)
+            return None
+        if not content.strip():
+            return None
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            logger.debug("Invalid state.json on %s:%s", node.name, path)
+            return None
+        return data if isinstance(data, dict) else None
+
+    def find_remote_state_json(self, node: RemoteNode, remote_job_dir: str) -> dict | None:
+        """Read ``state.json`` from the remote dir, falling back to nested locations.
+
+        Real workflows nest ``state.json`` one level under the output dir; this
+        mirrors :func:`acp.scheduler.runner.find_workflow_state` logic.
+        """
+        data = self.read_state_json(node, remote_job_dir)
+        if data is not None:
+            return data
+        try:
+            entries = self._stager.list_remote_dir(node, remote_job_dir)
+        except (OSError, PermissionError) as exc:
+            logger.debug("Cannot list %s:%s: %s", node.name, remote_job_dir, exc)
+            return None
+        except Exception:
+            return None
+        for entry in sorted(entries, key=lambda e: e.name):
+            if not entry.is_dir:
+                continue
+            sub_path = posixpath.join(remote_job_dir, entry.name)
+            data = self.read_state_json(node, sub_path)
+            if data is not None:
+                return data
+        return None
 
     # ------------------------------------------------------------------ #
     # Capacity & disk

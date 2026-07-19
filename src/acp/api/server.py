@@ -102,12 +102,13 @@ def create_app(
     host: str | None = None,
     port: int | None = None,
     max_running: int | None = None,
+    poll_interval: int | None = None,
 ) -> FastAPI:
     """Build the FastAPI app with a scheduler bound to ``run_root``.
 
-    Reads ``ACP_RUN_ROOT`` / ``ACP_HOST`` / ``ACP_PORT`` / ``ACP_MAX_RUNNING``
-    env vars (set by ``acp run serve``) so the configuration survives uvicorn's
-    module re-import under ``--reload``.
+    Reads ``ACP_RUN_ROOT`` / ``ACP_HOST`` / ``ACP_PORT`` / ``ACP_MAX_RUNNING`` /
+    ``ACP_POLL_INTERVAL`` env vars (set by ``acp run serve``) so the
+    configuration survives uvicorn's module re-import under ``--reload``.
     """
     from acp.scheduler.manager import JobManager
 
@@ -116,6 +117,8 @@ def create_app(
     eff_port = int(port if port is not None else os.environ.get("ACP_PORT", "8765"))
     max_running_env = os.environ.get("ACP_MAX_RUNNING", "1")
     eff_max = int(max_running if max_running is not None else max_running_env)
+    poll_interval_env = os.environ.get("ACP_POLL_INTERVAL", "15")
+    eff_poll = int(poll_interval if poll_interval is not None else poll_interval_env)
     run_root_path.mkdir(parents=True, exist_ok=True)
 
     remote_config = _load_remote_config()
@@ -125,6 +128,7 @@ def create_app(
     manager = JobManager(
         run_root=run_root_path,
         max_running=eff_max,
+        poll_interval=eff_poll,
         remote_config=remote_config,
         local_retention_config=local_retention,
         local_cleanup_interval_hours=local_interval,

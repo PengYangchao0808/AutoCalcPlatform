@@ -232,7 +232,7 @@ def _get_default_config() -> dict[str, Any]:
             }
         },
         'protocols': {
-            'default': 'lite',
+            'default': 'censo-lite',
             'benchmark': {
                 'stages': {
                     'crest': True,
@@ -518,10 +518,10 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     if not config['resources'].get('mem'):
         config['resources']['mem'] = '32GB'
 
-    protocol = config.get('protocols', {}).get('default', 'ext')
-    if protocol not in ('ext', 'full', 'lite', 'zero', 'benchmark'):
-        logger.warning(f"Unknown protocol '{protocol}', using 'ext'")
-        config['protocols']['default'] = 'ext'
+    protocol = config.get('protocols', {}).get('default', 'censo-lite')
+    if protocol not in ('ext', 'full', 'lite', 'zero', 'benchmark', 'censo-lite'):
+        logger.warning(f"Unknown protocol '{protocol}', using 'censo-lite'")
+        config['protocols']['default'] = 'censo-lite'
 
     valid_engines = ('orca',)
     theory = config.setdefault('theory', {})
