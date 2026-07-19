@@ -789,6 +789,7 @@ a { color: var(--accent); }
 .mc-level-header:hover { background: rgba(255,255,255,0.03); }
 .mc-level-expand { width: 18px; height: 18px; display: grid; place-items: center; color: var(--text-tertiary); transition: transform 0.15s ease; }
 .mc-level-expand.open { transform: rotate(90deg); }
+.mc-level-enable { width: 14px; height: 14px; cursor: pointer; accent-color: var(--accent-blue, #4ea1ff); }
 .mc-level-name { font-size: 13px; font-weight: 600; flex: 1; }
 .mc-level-engine { font-size: 10px; color: var(--accent); background: rgba(78,161,255,0.08); padding: 2px 8px; border-radius: 999px; }
 .mc-level-status { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
@@ -3686,6 +3687,10 @@ async function openMethodConfig() {
   function buildLevelCard(lvDef, stateData) {
     var engine = (stateData && stateData.engine) || lvDef.allowed_engines[0] || "";
     var expanded = lvDef.level_id === "dft_opt" || lvDef.level_id === "single_point" || lvDef.required === false;
+    var isOptional = lvDef.required === false;
+    var stored = wizardState.method.stages[lvDef.level_id];
+    var levelDisabled = isOptional && ((stateData && stateData._disabled === true) || !stored || !stored.engine);
+    if (levelDisabled) expanded = false;
     var card = document.createElement("div");
     card.className = "mc-level-card";
     card.setAttribute("data-level-id", lvDef.level_id);
@@ -3698,9 +3703,35 @@ async function openMethodConfig() {
     expBtn.innerHTML = '<svg viewBox="0 0 16 16" width="12" height="12" stroke="currentColor" fill="none" stroke-width="2"><path d="M6 4l4 4-4 4"/></svg>';
     hdr.appendChild(expBtn);
 
+    if (isOptional) {
+      var enableBox = document.createElement("input");
+      enableBox.type = "checkbox";
+      enableBox.className = "mc-level-enable";
+      enableBox.checked = !levelDisabled;
+      enableBox.title = levelDisabled
+        ? (t("modal.level_enable") || "\u542f\u7528\u6b64\u9636\u6bb5")
+        : (t("modal.level_disable") || "\u53d6\u6d88\u542f\u7528\uff08\u7b49\u4ef7 --no-opt \u8bed\u4e49\uff09");
+      enableBox.addEventListener("click", function(ev) { ev.stopPropagation(); });
+      enableBox.addEventListener("change", function(ev) {
+        ev.stopPropagation();
+        var st = wizardState.method.stages[lvDef.level_id];
+        if (enableBox.checked) {
+          if (!st) { st = {}; wizardState.method.stages[lvDef.level_id] = st; }
+          delete st._disabled;
+          if (!st.engine) st.engine = lvDef.allowed_engines[0];
+        } else if (st) {
+          st._disabled = true;
+        }
+        rebuildLevelCard(lvDef.level_id);
+        scheduleValidate();
+      });
+      hdr.appendChild(enableBox);
+    }
+
     var nm = document.createElement("span");
     nm.className = "mc-level-name";
     nm.textContent = lvDef.label_zh || lvDef.label || lvDef.level_id;
+    if (levelDisabled) nm.style.opacity = "0.45";
     hdr.appendChild(nm);
 
     if (lvDef.allowed_engines.length === 1) {
@@ -3719,6 +3750,12 @@ async function openMethodConfig() {
     var bodyDiv = document.createElement("div");
     bodyDiv.className = "mc-level-body";
     bodyDiv.style.display = expanded ? "grid" : "none";
+
+    if (levelDisabled) {
+      card.appendChild(bodyDiv);
+      hdr.addEventListener("click", function() { /* disabled level: no expand */ });
+      return card;
+    }
 
     if (lvDef.allowed_engines.length > 1) {
       var engField = document.createElement("div");
@@ -3907,7 +3944,11 @@ async function openMethodConfig() {
     var levels = {};
     (schema.method_levels || []).forEach(function(lvDef) {
       var state = wizardState.method.stages[lvDef.level_id];
-      if (state && state.engine) levels[lvDef.level_id] = JSON.parse(JSON.stringify(state));
+      if (state && state.engine && state._disabled !== true) {
+        var copy = JSON.parse(JSON.stringify(state));
+        delete copy._disabled;
+        levels[lvDef.level_id] = copy;
+      }
     });
     try {
       var resp = await fetch(API_BASE + "/validate-method", {
@@ -3919,7 +3960,7 @@ async function openMethodConfig() {
       if (body.normalized_levels) {
         Object.keys(body.normalized_levels).forEach(function(lid) {
           var norm = body.normalized_levels[lid];
-          if (!wizardState.method.stages[lid]) wizardState.method.stages[lid] = {};
+          if (!wizardState.method.stages[lid]) return; // don't resurrect disabled/absent levels
           Object.keys(norm).forEach(function(k) {
             if (wizardState.method.stages[lid][k] === undefined || wizardState.method.stages[lid][k] === null || wizardState.method.stages[lid][k] === "") {
               wizardState.method.stages[lid][k] = norm[k];
@@ -3936,10 +3977,10 @@ async function openMethodConfig() {
     var html = "";
     (schema.method_levels || []).forEach(function(lvDef) {
       var state = wizardState.method.stages[lvDef.level_id];
-      if (!state || !state.engine) return;
+      if (!state || !state.engine || state._disabled === true) return;
       var parts = [];
       fields_summary: for (var k in state) {
-        if (k === "engine") continue;
+        if (k === "engine" || k.charAt(0) === "_") continue;
         var v = state[k];
         if (v === "" || v === null || v === undefined) continue;
         parts.push(k.split("_").map(function(s) { return s[0]; }).join("") + "=" + v);
@@ -3958,7 +3999,8 @@ async function openMethodConfig() {
       cards.forEach(function(c) {
         var dot = c.querySelector(".mc-level-status");
         var state = wizardState.method.stages[lvDef.level_id];
-        if (dot) dot.className = "mc-level-status " + (state && state.engine ? "ok" : "err");
+        var okState = (state && state.engine && state._disabled !== true) || lvDef.required === false;
+        if (dot) dot.className = "mc-level-status " + (okState ? "ok" : "err");
       });
     });
   }
@@ -4061,14 +4103,40 @@ async function submitJobModal() {
     inputPayload.charge = s.charge;
     inputPayload.multiplicity = s.multiplicity;
 
+    var cleanedLevels = {};
+    var wizStages = wizardState.method.stages || {};
+    Object.keys(wizStages).forEach(function(lid) {
+      var st = wizStages[lid];
+      if (!st || !st.engine || st._disabled === true) return;
+      var copy = JSON.parse(JSON.stringify(st));
+      delete copy._disabled;
+      cleanedLevels[lid] = copy;
+    });
+
     var methodPayload = {
       schema_id: wizardState.workflow.schema_id || "",
       profile_id: wizardState.method.profile_id,
-      levels: wizardState.method.stages || {}
+      levels: cleanedLevels
     };
     if (wizardState.method.fields) methodPayload.fields = wizardState.method.fields;
     if (workflow === "conformer" || workflow === "nmr") {
       methodPayload.protocol = wizardState.method.profile_id;
+    }
+    if (workflow === "ensemble" || workflow === "energy") {
+      var pid = wizardState.method.profile_id;
+      if (pid && pid !== "__custom__") methodPayload.preset = pid;
+      if (workflow === "energy" && !cleanedLevels.dft_opt) {
+        // dft_opt panel disabled → cheap RSH//xTB path (--no-opt semantics)
+        methodPayload.no_opt = true;
+      }
+      var solvSources = [cleanedLevels.refinement_sp, cleanedLevels.dft_opt];
+      for (var svi = 0; svi < solvSources.length; svi++) {
+        var lvSt = solvSources[svi];
+        if (lvSt && lvSt.solvent && String(lvSt.solvent_model || "none").toLowerCase() !== "none") {
+          methodPayload.solvent = lvSt.solvent;
+          break;
+        }
+      }
     }
 
     var body = {

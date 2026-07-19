@@ -46,6 +46,72 @@ _DEFAULT_OPT_FUNCTIONAL = "r2SCAN-3c"
 _DEFAULT_SP_FUNCTIONAL = "wB97M-V"
 _DEFAULT_SP_BASIS = "def2-TZVPP"
 
+# Route-keyword maps for advanced level fields (catalog enum → ORCA keyword).
+# "Fine" maps to ORCA's default DEFGRID2 and "Normal" to the default SCF
+# convergence — both are omitted so default inputs stay byte-identical.
+_GRID_ROUTE_MAP = {
+    "sg1": "DEFGRID1",
+    "ultrafine": "DEFGRID3",
+    "superfine": "DEFGRID3",
+}
+_SCF_ROUTE_MAP = {
+    "tight": "TightSCF",
+    "verytight": "VeryTightSCF",
+}
+_OPT_CONV_ROUTE_MAP = {
+    "loose": "LooseOpt",
+    "tight": "TightOpt",
+    "verytight": "VeryTightOpt",
+}
+
+
+def _base_route_extras(level: dict[str, Any]) -> list[str]:
+    """Build ORCA route keywords from a level's advanced fields.
+
+    Whitelisted fields only (§10.1): dispersion, ri_approximation,
+    aux_basis, grid, scf_convergence. Values outside the catalog enums are
+    passed through verbatim in upper case where conventional.
+    """
+    extras: list[str] = []
+
+    dispersion = str(level.get("dispersion") or "").strip()
+    if dispersion and dispersion.lower() != "none":
+        extras.append(dispersion.upper())
+
+    ri = str(level.get("ri_approximation") or "").strip()
+    if ri and ri.lower() != "none":
+        extras.append(ri.upper())
+
+    aux_basis = str(level.get("aux_basis") or "").strip()
+    if aux_basis:
+        extras.append(aux_basis)
+
+    grid_kw = _GRID_ROUTE_MAP.get(str(level.get("grid") or "").strip().lower())
+    if grid_kw:
+        extras.append(grid_kw)
+
+    scf_kw = _SCF_ROUTE_MAP.get(
+        str(level.get("scf_convergence") or "").strip().lower()
+    )
+    if scf_kw:
+        extras.append(scf_kw)
+
+    return extras
+
+
+def _solvent_from_level(level: dict[str, Any]) -> tuple[str | None, str | None]:
+    """Extract an explicit per-level solvent override.
+
+    Returns ``(solvent, model)`` only when the level explicitly sets a
+    non-empty solvent with a model other than ``none``; otherwise
+    ``(None, None)`` so the workflow-global solvent applies.
+    """
+    model = str(level.get("solvent_model") or "").strip().lower()
+    solvent = str(level.get("solvent") or "").strip()
+    if not solvent or model in ("", "none"):
+        return None, None
+    return solvent, model
+
 
 # ---------------------------------------------------------------------------
 # Levels resolution (dft_opt / refinement_sp / screening_sp / thermo)
@@ -58,10 +124,16 @@ def _resolve_levels(
 ) -> dict[str, Any]:
     """Merge config defaults with user ``--levels`` overrides.
 
-    Returns a flat dict with keys: ``opt_method``, ``opt_basis``,
-    ``sp_method``, ``sp_basis``, ``screening_overrides``,
-    ``refinement_overrides``, ``temperature_k``, ``pressure_atm``,
-    ``scl_zpe``, ``ilowfreq``, ``imagreal``, ``conc``.
+    Consumes the full §10.1 field sets: ``dft_opt`` (functional, basis,
+    dispersion, solvent_model, solvent, grid, scf_convergence,
+    opt_convergence, max_steps), ``refinement_sp`` (functional, basis,
+    aux_basis, dispersion, ri_approximation, solvent_model, solvent, grid,
+    scf_convergence), ``screening_sp`` (same set, applied to the CENSO
+    screening part) and ``thermo`` (temperature, pressure, scale_factor).
+
+    Advanced ORCA fields are converted to route keywords for the ACP
+    handoff; for CENSO-executed parts they become template lines injected
+    via the per-run HOME mechanism (§6.4).
     """
     levels = levels or {}
     censo_cfg = cfg.get("censo", {})
@@ -85,6 +157,26 @@ def _resolve_levels(
         "refinement_basis", _DEFAULT_SP_BASIS
     )
 
+    # --- ACP handoff route extras (opt / freq / SP) ------------------------
+    opt_base_extras = _base_route_extras(dft_opt)
+    opt_route_extras = list(opt_base_extras)
+    opt_conv_kw = _OPT_CONV_ROUTE_MAP.get(
+        str(dft_opt.get("opt_convergence") or "").strip().lower()
+    )
+    if opt_conv_kw:
+        opt_route_extras.append(opt_conv_kw)
+
+    opt_geom_maxiter: int | None = None
+    max_steps = dft_opt.get("max_steps")
+    if isinstance(max_steps, (int, float)) and int(max_steps) > 0:
+        opt_geom_maxiter = int(max_steps)
+
+    sp_route_extras = _base_route_extras(refinement_sp)
+
+    opt_solvent, opt_solvent_model = _solvent_from_level(dft_opt)
+    sp_solvent, sp_solvent_model = _solvent_from_level(refinement_sp)
+
+    # --- CENSO rcfile overrides + advanced-field templates ------------------
     screening_overrides: dict[str, Any] = {}
     if screening_sp.get("functional"):
         screening_overrides["func"] = str(screening_sp["functional"]).lower()
@@ -97,13 +189,38 @@ def _resolve_levels(
     if refinement_sp.get("basis"):
         refinement_overrides["basis"] = str(refinement_sp["basis"]).lower()
 
+    screening_extras = _base_route_extras(screening_sp)
+    screening_template_lines = (
+        ["! " + " ".join(screening_extras)] if screening_extras else []
+    )
+    refinement_template_lines = (
+        ["! " + " ".join(sp_route_extras)] if sp_route_extras else []
+    )
+
+    # Workflow-global solvent fallback derived from levels (UI wizard path):
+    # refinement_sp takes precedence over dft_opt.
+    levels_solvent = sp_solvent or opt_solvent
+    levels_solvent_model = sp_solvent_model or opt_solvent_model
+
     return {
         "opt_method": opt_method,
         "opt_basis": opt_basis,
+        "opt_route_extras": opt_route_extras,
+        "opt_freq_route_extras": opt_base_extras,
+        "opt_geom_maxiter": opt_geom_maxiter,
+        "opt_solvent": opt_solvent,
+        "opt_solvent_model": opt_solvent_model,
         "sp_method": sp_method,
         "sp_basis": sp_basis,
+        "sp_route_extras": sp_route_extras,
+        "sp_solvent": sp_solvent,
+        "sp_solvent_model": sp_solvent_model,
         "screening_overrides": screening_overrides,
         "refinement_overrides": refinement_overrides,
+        "screening_template_lines": screening_template_lines,
+        "refinement_template_lines": refinement_template_lines,
+        "levels_solvent": levels_solvent,
+        "levels_solvent_model": levels_solvent_model,
         "temperature_k": thermo.get(
             "temperature", thermo_cfg.get("temperature_k", 298.15)
         ),
@@ -150,12 +267,19 @@ def _run_rank1_handoff(
     """
     work_dir.mkdir(parents=True, exist_ok=True)
 
+    opt_solvent = resolved.get("opt_solvent") or solvent
+    opt_solvent_model = (
+        resolved.get("opt_solvent_model")
+        if resolved.get("opt_solvent")
+        else (solvent_model if solvent else "none")
+    ) or "none"
+
     orca = ORCAInterface(
         cfg,
         method=resolved["opt_method"],
         basis=resolved["opt_basis"] or "def2-TZVPP",
-        solvent=solvent,
-        solvent_model=solvent_model if solvent else "none",
+        solvent=opt_solvent,
+        solvent_model=opt_solvent_model if opt_solvent else "none",
     )
 
     if skip_opt_sp:
@@ -179,6 +303,8 @@ def _run_rank1_handoff(
             output_name=f"conf_{index:03d}_opt",
             method=resolved["opt_method"],
             basis=resolved["opt_basis"],
+            route_extras=resolved.get("opt_route_extras"),
+            geom_maxiter=resolved.get("opt_geom_maxiter"),
         )
         if not opt_result.success:
             raise RuntimeError(
@@ -204,6 +330,7 @@ def _run_rank1_handoff(
         output_name=f"conf_{index:03d}_freq",
         method=resolved["opt_method"],
         basis=resolved["opt_basis"],
+        route_extras=resolved.get("opt_freq_route_extras"),
     )
     if not freq_result.success:
         raise RuntimeError(
@@ -215,7 +342,25 @@ def _run_rank1_handoff(
             "  [sp] high-level single point (%s/%s)",
             resolved["sp_method"], resolved["sp_basis"],
         )
-        sp_result = orca.single_point(
+        sp_solvent = resolved.get("sp_solvent") or solvent
+        sp_solvent_model = (
+            resolved.get("sp_solvent_model")
+            if resolved.get("sp_solvent")
+            else (solvent_model if solvent else "none")
+        ) or "none"
+        if (sp_solvent, sp_solvent_model if sp_solvent else "none") == (
+            opt_solvent, opt_solvent_model if opt_solvent else "none"
+        ):
+            sp_orca = orca
+        else:
+            sp_orca = ORCAInterface(
+                cfg,
+                method=resolved["sp_method"],
+                basis=resolved["sp_basis"],
+                solvent=sp_solvent,
+                solvent_model=sp_solvent_model if sp_solvent else "none",
+            )
+        sp_result = sp_orca.single_point(
             opt_coords,
             opt_symbols,
             charge=charge,
@@ -224,6 +369,7 @@ def _run_rank1_handoff(
             output_name=f"conf_{index:03d}_sp",
             method=resolved["sp_method"],
             basis=resolved["sp_basis"],
+            route_extras=resolved.get("sp_route_extras"),
         )
         if not sp_result.success:
             raise RuntimeError(
@@ -529,7 +675,10 @@ def run_conformer_energy(
 
     resolved = _resolve_levels(cfg, levels)
 
-    output_root = Path(output_dir)
+    # Resolve to an absolute path: QC interfaces run subprocesses with
+    # cwd=<stage dir> while passing input paths as given, so relative
+    # output roots (e.g. remote jobs with --output ".") would break.
+    output_root = Path(output_dir).resolve()
     output_root.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -572,7 +721,13 @@ def run_conformer_energy(
 
     mol_dir = output_root / safe_name
 
-    censo_solvent, solvent_model = _resolve_solvent_config(cfg, solvent)
+    # Solvent priority: CLI --solvent > levels (UI wizard fields) > YAML.
+    effective_solvent_arg = (
+        solvent if solvent is not None else resolved["levels_solvent"]
+    )
+    censo_solvent, solvent_model = _resolve_solvent_config(cfg, effective_solvent_arg)
+    if censo_solvent and resolved["levels_solvent_model"]:
+        solvent_model = resolved["levels_solvent_model"]
     _solvent_model = solvent_model if solvent_model else "none"
     if censo_solvent and _solvent_model == "none":
         _solvent_model = "smd"
@@ -590,7 +745,7 @@ def run_conformer_energy(
         is_file = input_format not in (InputFormat.SMILES,) and _is_file_input(input_source)
         if is_file and _is_multiframe_xyz(Path(input_source)):
             logger.info("Multi-frame XYZ input detected — skipping CREST")
-            crest_ensemble_xyz = Path(input_source)
+            crest_ensemble_xyz = Path(input_source).resolve()
             state.complete_stage("crest", {"status": "skipped", "reason": "multi-frame XYZ input"})
             crest_skipped = True
         else:
@@ -668,8 +823,22 @@ def run_conformer_energy(
             if resolved["refinement_overrides"]:
                 part_overrides["refinement"] = resolved["refinement_overrides"]
 
+            part_templates: dict[str, list[str]] = {}
+            if resolved["screening_template_lines"]:
+                part_templates["screening"] = resolved["screening_template_lines"]
+            if resolved["refinement_template_lines"]:
+                part_templates["refinement"] = resolved["refinement_template_lines"]
+
             if preset == "censo-light" and opt_enabled:
-                # CENSO -P -S screens rank1 → ACP handoff
+                # CENSO -P -S screens rank1 → ACP handoff. Refinement runs
+                # ACP-side here, so only screening overrides/templates may
+                # reach the CENSO rcfile (CENSO validates all sections).
+                censo_overrides = {
+                    k: v for k, v in part_overrides.items() if k == "screening"
+                }
+                censo_templates = {
+                    k: v for k, v in part_templates.items() if k == "screening"
+                }
                 censo_result = backend.refine_ensemble(
                     crest_ensemble_xyz,
                     censo_dir,
@@ -679,7 +848,8 @@ def run_conformer_energy(
                     temperature=temperature_k,
                     solvent=censo_solvent,
                     nproc=safe_nproc,
-                    part_overrides=part_overrides or None,
+                    part_overrides=censo_overrides or None,
+                    part_templates=censo_templates or None,
                 )
                 state.complete_stage(
                     "censo", {"status": "completed", "n_records": len(censo_result.records)},
@@ -721,6 +891,7 @@ def run_conformer_energy(
                     include_refinement=(preset == "censo-light"),
                     nconf=1 if preset == "censo-zero" else None,
                     part_overrides=part_overrides or None,
+                    part_templates=part_templates or None,
                 )
                 state.complete_stage(
                     "censo", {"status": "completed", "n_records": len(censo_result.records)},
@@ -747,6 +918,7 @@ def run_conformer_energy(
                     solvent=censo_solvent,
                     nproc=safe_nproc,
                     part_overrides=part_overrides or None,
+                    part_templates=part_templates or None,
                 )
                 state.complete_stage(
                     "censo", {"status": "completed", "n_records": len(censo_result.records)},

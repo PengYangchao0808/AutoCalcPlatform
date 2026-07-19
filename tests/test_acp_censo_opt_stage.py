@@ -168,9 +168,11 @@ def test_opt_and_freq_use_same_method_and_basis(
     assert opt_kwargs["basis"] == freq_kwargs["basis"]
 
     # SP runs at the refinement level, not at the opt level
+    # (config sources use CENSO-style lowercase; ORCA keywords are
+    # case-insensitive, so compare case-insensitively)
     sp_kwargs = orca.single_point.call_args.kwargs
-    assert sp_kwargs["method"] == "wB97M-V"
-    assert sp_kwargs["basis"] == "def2-TZVPP"
+    assert sp_kwargs["method"].lower() == "wb97m-v"
+    assert sp_kwargs["basis"].lower() == "def2-tzvpp"
 
 
 def test_default_opt_functional_is_r2scan3c(

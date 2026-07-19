@@ -55,6 +55,45 @@ SUPPORTED_WORKFLOWS: tuple[str, ...] = (
     "fake",
 )
 
+_CENSO_PRESETS: tuple[str, ...] = ("censo-light", "censo-default", "censo-zero")
+
+
+def censo_preset_from_method(method: dict[str, Any]) -> str | None:
+    """Resolve the CENSO preset from a job's method dict.
+
+    The frontend v2 wizard submits ``profile_id`` (schema-driven), while the
+    CLI/API path may set ``preset`` explicitly. Unknown values (e.g. the
+    wizard's ``__custom__``) resolve to ``None`` so the CLI default applies.
+    """
+    raw = method.get("preset") or method.get("profile_id")
+    if not raw:
+        return None
+    value = str(raw).strip().lower()
+    return value if value in _CENSO_PRESETS else None
+
+
+def censo_solvent_from_method(method: dict[str, Any]) -> str | None:
+    """Resolve the workflow-global solvent from a job's method dict.
+
+    Priority: explicit ``method.solvent`` > per-level solvent fields from
+    the wizard levels (``refinement_sp`` then ``dft_opt``) when the level's
+    solvent_model is not ``none``.
+    """
+    solvent = method.get("solvent")
+    if solvent:
+        return str(solvent)
+    levels = method.get("levels")
+    if isinstance(levels, dict):
+        for level_id in ("refinement_sp", "dft_opt"):
+            level = levels.get(level_id)
+            if not isinstance(level, dict):
+                continue
+            model = str(level.get("solvent_model") or "").strip().lower()
+            value = str(level.get("solvent") or "").strip()
+            if value and model not in ("", "none"):
+                return value
+    return None
+
 
 @dataclass(frozen=True)
 class JobSpec:
@@ -137,4 +176,11 @@ class JobRecord:
         }
 
 
-__all__ = ["JobStatus", "JobSpec", "JobRecord", "SUPPORTED_WORKFLOWS"]
+__all__ = [
+    "JobStatus",
+    "JobSpec",
+    "JobRecord",
+    "SUPPORTED_WORKFLOWS",
+    "censo_preset_from_method",
+    "censo_solvent_from_method",
+]

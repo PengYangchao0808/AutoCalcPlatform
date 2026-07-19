@@ -81,7 +81,13 @@ class ORCAInterface(QCInterfaceBase):
         self.multiplicity = kwargs.get("multiplicity", 1)
 
     def _build_input_blocks(
-        self, calc_type: str = "opt", method: str = None, basis: str = None
+        self,
+        calc_type: str = "opt",
+        method: str = None,
+        basis: str = None,
+        route_extras: list = None,
+        geom_maxiter: int = None,
+        extra_blocks: list = None,
     ) -> str:
         """
         Build ORCA input blocks.
@@ -90,12 +96,17 @@ class ORCAInterface(QCInterfaceBase):
             calc_type: Calculation type
             method: Override method (uses self.method if None)
             basis: Override basis (uses self.basis if None)
+            route_extras: Extra route-line keywords appended to the ``!`` line
+                (e.g. ``["RIJCOSX", "def2-TZVPP/C", "VeryTightSCF"]``)
+            geom_maxiter: Optional MaxIter for the %geom block (opt only)
+            extra_blocks: Extra raw input blocks appended after the route
 
         Returns:
             Input blocks string
         """
         _method = method if method is not None else self.method
         _basis = basis if basis is not None else self.basis
+        _route_extras = [str(x) for x in route_extras if x] if route_extras else []
 
         blocks = []
 
@@ -118,17 +129,18 @@ class ORCAInterface(QCInterfaceBase):
             route = route.replace("Freq", "NumFreq")
 
         # Composite methods (PBEh-3c, r2SCAN-3c) bundle their own basis set
+        extras_str = (" " + " ".join(_route_extras)) if _route_extras else ""
         if _method.lower() in ("pbeh-3c", "r2scan-3c"):
-            blocks.append(f"! {_method} {route}")
+            blocks.append(f"! {_method} {route}{extras_str}")
         elif _method == "DLPNO-CCSD(T)":
-            blocks.append(f"! DLPNO-CCSD(T) TightSCF {route}")
+            blocks.append(f"! DLPNO-CCSD(T) TightSCF {route}{extras_str}")
             blocks.append("%basis")
             blocks.append('  basis "def2-TZVPP"')
             blocks.append('  auxJ  "def2/J"')
             blocks.append('  auxC  "def2-TZVPP/C"')
             blocks.append("end")
         else:
-            blocks.append(f"! {_method} {_basis} {route}")
+            blocks.append(f"! {_method} {_basis} {route}{extras_str}")
 
         blocks.append(f"%maxcore {self.maxcore}")
         blocks.append(f"%pal nprocs {self.nproc} end")
@@ -144,7 +156,14 @@ class ORCAInterface(QCInterfaceBase):
         if route.split()[0] == "Opt":
             blocks.append("%geom")
             blocks.append(f"  Recalc_Hess {recalc_hess}")
+            if geom_maxiter is not None and geom_maxiter > 0:
+                blocks.append(f"  MaxIter {int(geom_maxiter)}")
             blocks.append("end")
+
+        if extra_blocks:
+            for blk in extra_blocks:
+                if blk:
+                    blocks.append(str(blk))
 
         if self.solvent:
             blocks.append("%cpcm")
@@ -167,6 +186,9 @@ class ORCAInterface(QCInterfaceBase):
         multiplicity: int = None,
         method: str = None,
         basis: str = None,
+        route_extras: list = None,
+        geom_maxiter: int = None,
+        extra_blocks: list = None,
     ):
         """
         Write ORCA input file.
@@ -180,11 +202,21 @@ class ORCAInterface(QCInterfaceBase):
             multiplicity: Spin multiplicity
             method: Override method (uses self.method if None)
             basis: Override basis (uses self.basis if None)
+            route_extras: Extra route-line keywords (see _build_input_blocks)
+            geom_maxiter: Optional MaxIter for the %geom block
+            extra_blocks: Extra raw input blocks
         """
         charge = charge if charge is not None else self.charge
         multiplicity = multiplicity if multiplicity is not None else self.multiplicity
 
-        blocks = self._build_input_blocks(calc_type, method=method, basis=basis)
+        blocks = self._build_input_blocks(
+            calc_type,
+            method=method,
+            basis=basis,
+            route_extras=route_extras,
+            geom_maxiter=geom_maxiter,
+            extra_blocks=extra_blocks,
+        )
 
         ensure_dir(input_file.parent)
 
@@ -283,6 +315,9 @@ class ORCAInterface(QCInterfaceBase):
             multiplicity,
             method=method,
             basis=basis,
+            route_extras=kwargs.get("route_extras"),
+            geom_maxiter=kwargs.get("geom_maxiter"),
+            extra_blocks=kwargs.get("extra_blocks"),
         )
 
         success = self._run_orca(input_file, output_file)
@@ -352,7 +387,16 @@ class ORCAInterface(QCInterfaceBase):
         output_file = output_dir / f"{output_name}.out"
 
         self._write_input(
-            input_file, coordinates, symbols, "sp", charge, multiplicity, method=method, basis=basis
+            input_file,
+            coordinates,
+            symbols,
+            "sp",
+            charge,
+            multiplicity,
+            method=method,
+            basis=basis,
+            route_extras=kwargs.get("route_extras"),
+            extra_blocks=kwargs.get("extra_blocks"),
         )
 
         success = self._run_orca(input_file, output_file)
@@ -429,6 +473,8 @@ class ORCAInterface(QCInterfaceBase):
             multiplicity,
             method=method,
             basis=basis,
+            route_extras=kwargs.get("route_extras"),
+            extra_blocks=kwargs.get("extra_blocks"),
         )
 
         success = self._run_orca(input_file, output_file)

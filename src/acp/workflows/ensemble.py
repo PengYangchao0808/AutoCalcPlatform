@@ -2,6 +2,8 @@
 
 Produces a sorted, Boltzmann-weighted conformer ensemble using CENSO's
 B97-3c GGA SP ranking (``censo-light`` preset) as the default protocol.
+The ``censo-zero`` preset bypasses CENSO entirely and exports the CREST
+ensemble sorted by the xTB energies parsed from the title lines (§7).
 """
 
 from __future__ import annotations
@@ -9,12 +11,17 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-from acp.backends.censo_backend import CensoBackend, CensoRunResult
+from acp.backends.censo_backend import (
+    CensoBackend,
+    CensoConformerRecord,
+    CensoRunResult,
+)
 from acp.core.models import Structure, StructureEnsemble, StructureRecord
 from acp.core.state import WorkflowState
 from acp.core.workflow import WorkflowResult
@@ -26,6 +33,8 @@ from conformer_search.qc.interfaces.crest import CRESTInterface
 from conformer_search.utils.file_io import read_xyz_multiframe, write_xyz_multiframe
 
 logger = logging.getLogger(__name__)
+
+_FLOAT_RE = re.compile(r"[-+]?\d+\.\d+")
 
 
 def _is_multiframe_xyz(path: Path) -> bool:
@@ -55,6 +64,71 @@ def _is_file_input(input_source: str) -> bool:
         return path.exists() and path.is_file()
     except OSError:
         return False
+
+
+def _xtb_passthrough_result(
+    ensemble_xyz: Path,
+    temperature: float,
+) -> CensoRunResult:
+    """Build a CensoRunResult directly from a CREST ensemble (censo-zero).
+
+    The censo-zero preset for the ensemble workflow does not invoke CENSO
+    (§7): the CREST ensemble is exported as-is, sorted by the xTB energies
+    parsed from the frame title lines. ``gsolv``/``grrho`` are zero — the
+    ``gtot`` equals the xTB electronic energy.
+    """
+    all_coords, symbols = read_xyz_multiframe(ensemble_xyz)
+    n_atoms = len(symbols)
+    if n_atoms == 0:
+        raise ValueError(f"No atoms found in ensemble: {ensemble_xyz}")
+    n_frames = len(all_coords) // n_atoms
+
+    energies: list[float] = []
+    with open(ensemble_xyz, encoding="utf-8", errors="replace") as f:
+        lines = f.readlines()
+    idx = 0
+    while idx < len(lines) and len(energies) < n_frames:
+        try:
+            frame_atoms = int(lines[idx].strip())
+        except ValueError:
+            break
+        title = lines[idx + 1].strip() if idx + 1 < len(lines) else ""
+        match = _FLOAT_RE.search(title)
+        energies.append(float(match.group()) if match else 0.0)
+        idx += frame_atoms + 2
+
+    if len(energies) < n_frames:
+        logger.warning(
+            "Parsed %d/%d title energies from %s — missing values set to 0.0",
+            len(energies), n_frames, ensemble_xyz,
+        )
+        energies.extend([0.0] * (n_frames - len(energies)))
+
+    records = []
+    for i in range(n_frames):
+        start = i * n_atoms
+        records.append(
+            CensoConformerRecord(
+                conf_id=f"CONF{i + 1}",
+                frame_index=i,
+                energy=energies[i],
+                gsolv=0.0,
+                grrho=0.0,
+                gtot=energies[i],
+                coordinates=np.array(all_coords[start:start + n_atoms], dtype=float),
+                symbols=list(symbols),
+            )
+        )
+
+    result = CensoRunResult(
+        preset="censo-zero",
+        records=records,
+        final_part="crest_passthrough",
+        work_dir=ensemble_xyz.parent,
+        temperature=temperature,
+    )
+    result.sort_by_gtot()
+    return result
 
 
 def _build_ensemble_from_censo(
@@ -186,26 +260,34 @@ def run_ensemble_generation(
     multiplicity: int | None = None,
     solvent: str | None = None,
     nproc: int | None = None,
+    keep_all: bool | None = None,
 ) -> WorkflowResult:
     """Run ensemble generation: SMILES/XYZ → CREST → CENSO → sorted ensemble.
 
     Args:
         input_source: SMILES string or path to XYZ file.
         output_dir: Output directory.
-        preset: CENSO preset (censo-light/censo-default/censo-zero).
+        preset: CENSO preset (censo-light/censo-default/censo-zero);
+            censo-zero exports the CREST ensemble directly (no CENSO call).
         config: Optional configuration dict.
         name: Molecule name.
         charge: Molecular charge.
         multiplicity: Spin multiplicity.
         solvent: Solvent name or None for gas phase.
         nproc: Number of processors.
+        keep_all: Pass ``--keep-all`` to CENSO so the ensemble is not
+            truncated at part thresholds (default: ``censo.keep_all`` config,
+            False).
 
     Returns:
         WorkflowResult with conformer ensemble.
     """
     cfg = load_config(overrides=config) if config is not None else load_config()
 
-    output_root = Path(output_dir)
+    # Resolve to an absolute path: QC interfaces run subprocesses with
+    # cwd=<stage dir> while passing input paths as given, so relative
+    # output roots (e.g. remote jobs with --output ".") would break.
+    output_root = Path(output_dir).resolve()
     output_root.mkdir(parents=True, exist_ok=True)
 
     try:
@@ -262,7 +344,7 @@ def run_ensemble_generation(
         is_file = input_format not in (InputFormat.SMILES,) and _is_file_input(input_source)
         if is_file and _is_multiframe_xyz(Path(input_source)):
             logger.info("Multi-frame XYZ input detected — skipping CREST")
-            crest_ensemble_xyz = Path(input_source)
+            crest_ensemble_xyz = Path(input_source).resolve()
             state.complete_stage("crest", {"status": "skipped", "reason": "multi-frame XYZ input"})
             crest_skipped = True
         else:
@@ -306,20 +388,35 @@ def run_ensemble_generation(
 
         stages_completed.append("crest")
 
-        censo_dir = mol_dir / "censo"
-        censo_dir.mkdir(parents=True, exist_ok=True)
+        if (preset or "").lower() == "censo-zero":
+            # §7: ensemble + censo-zero does NOT invoke CENSO — the CREST
+            # ensemble is exported directly, sorted by xTB title energies.
+            logger.info("censo-zero: CREST xTB passthrough (no CENSO call)")
+            temperature = cfg.get("censo", {}).get("temperature", 298.15)
+            result = _xtb_passthrough_result(crest_ensemble_xyz, temperature)
+            state.complete_stage(
+                "censo",
+                {"status": "skipped", "reason": "censo-zero passthrough",
+                 "n_records": len(result.records)},
+            )
+        else:
+            censo_dir = mol_dir / "censo"
+            censo_dir.mkdir(parents=True, exist_ok=True)
 
-        backend = CensoBackend(cfg)
-        result = backend.refine_ensemble(
-            crest_ensemble_xyz,
-            censo_dir,
-            preset=preset,
-            charge=structure.charge,
-            multiplicity=structure.multiplicity,
-            solvent=censo_solvent,
-            nproc=safe_nproc,
-        )
-        state.complete_stage("censo", {"status": "completed", "n_records": len(result.records)})
+            backend = CensoBackend(cfg)
+            result = backend.refine_ensemble(
+                crest_ensemble_xyz,
+                censo_dir,
+                preset=preset,
+                charge=structure.charge,
+                multiplicity=structure.multiplicity,
+                solvent=censo_solvent,
+                nproc=safe_nproc,
+                keep_all=keep_all,
+            )
+            state.complete_stage(
+                "censo", {"status": "completed", "n_records": len(result.records)}
+            )
         stages_completed.append("censo")
 
         ensemble = _build_ensemble_from_censo(result, structure)

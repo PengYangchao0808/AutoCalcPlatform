@@ -76,6 +76,7 @@ pre code{background:none;padding:0}
 P3 新增文件（<code>energy.py</code> / <code>censo_backend.py</code> 修改 / CLI / 注册）<strong>全量回归 590 passed / 0 failures</strong>。<br>
 <strong>G-1~G-4 状态确认</strong>（P4 范围）：<code>scheduler/stage_tasks.py</code> 缺 energy/ensemble 阶段计划（静默返回 <code>[]</code>）、<code>scheduler/runner.py:_build_cmd</code> 白名单不含 energy/ensemble（远程提交被拒绝）、<code>api/v1_schemas.py</code> 工作流枚举未含二者、<code>catalog.py</code> <code>METHOD_SCHEMAS</code> 未注册 <code>censo_energy</code>/<code>censo_ensemble</code>（前端 v2 无方法编辑面板）。均已在 §15.5.3 登记，实施计划见附录 C。</div>
 <div class="info-box">ℹ️ <strong>修订记录（v13，2026-07-18）</strong>：<strong>P4 scheduler/registry/catalog/frontend 集成实施与审计</strong>。完成 §11.1 全部 9 项集成任务：① stage plan providers 注册（2 新类 + 注册调用）；② runner/script_gen _build_cmd 白名单扩展 + CLI 参数映射（--preset / --no-opt / --levels / --solvent）；③ catalog.py WORKFLOW_CATALOG + METHOD_SCHEMAS 新增 cendo_ensemble / censo_energy（2 工作流 + 6 预设 profiles）；④ catalog.py convert_method_levels_to_protocol_levels 修复 scale_factor/temperature/pressure 死端映射（v8）；⑤ config.defaults.yaml / config.py 双源同步 censo 段默认值；⑥ 前端 v1 WF_META 补 ensemble/energy/mechanism。实施后审计识别<strong> 5 个问题</strong>（高 1、中 2、低 2）——全部已修复。G-3 确认为虚假缺口（API schema 使用 str 无 Literal 枚举）。<strong>全量回归 590 passed / 0 failures</strong>。</div>
+<div class="info-box">ℹ️ <strong>修订记录（v14，2026-07-19）</strong>：<strong>P5 最终验收——差距闭合、远程端到端与实测修复</strong>。验收前审计发现 <strong>6 个残留差距</strong>（G-5~G-10，§15.8.1）：G-5 <code>--levels</code> 仅消费 2/11 refinement_sp + 2/9 dft_opt 字段（P4-5 未落地，违反 §10.1 红线）；G-6 §6.4 模板注入/HOME 隔离未实现（P4-6）；G-7 housekeeping 无 censo 二进制探测（验收门 10）；G-8 前端 v2 提交链缺 <code>preset/no_opt/solvent</code> 映射（profile 选择对执行无效）+ 可选 level 无收起开关；G-9 CLI 缺 <code>--keep-all</code> 且 CensoBackend 硬编码恒传 <code>--keep-all</code>（违反文献截断语义）；G-10 <code>ensemble --preset censo-zero</code> 错误调用 CENSO 全系综 refinement（§7 规定 CREST xTB 直通）。<strong>全部已修复</strong>（F-27~F-32）。远程端到端实测另暴露并修复 <strong>2 个真机缺陷</strong>：F-33 相对路径破坏 CREST/CENSO 子进程调用（远程 <code>--output "."</code> 场景，workflows 现 <code>resolve()</code>）；F-34 CENSO chdir 至输入文件父目录导致产物落位 crest/（现按 §5.2 拷贝输入至 censo/ 隔离目录）。部署修正：删除节点残留 <code>acp_code/config/defaults.yaml</code>（Phase D 后未清理，遮蔽 Python 内置兜底）。节点环境实测：censo 3.0.8 / xtb 6.7.1 / Python 3.13.9（anaconda）/ ORCA 就绪。<strong>全量回归 617 passed / 0 failures（新增 27 例）</strong>；10 条验收门实测状态见 §15.8.4。</div>
 <div class="info-box">ℹ️ <strong>修订记录（v2，2026-07-18）</strong>：初版 <code>energy</code> 设计为"CENSO light 系综 → ACP 自编排 ORCA SP 循环 + 自组合 G=E<sub>SP</sub>+grrho + 自实现 90% 截止"。经复核 CENSO 源码（<code>ensembleopt/refinement.py</code>），refinement part 原生覆盖以上全部三点（高精度 SP、<code>evaluate_rrho</code> 时自动重算 xTB mRRHO、<code>refinement.threshold</code> 即累计布居截止），属过度设计，已改为直接复用。<code>energy</code> 与 <code>ensemble</code> 的代码差异收敛为"<strong>是否启用 --refinement + 解析哪个 part 的 JSON + 产物格式化</strong>"。</div>
 <div class="info-box">ℹ️ <strong>修订记录（v3，2026-07-18）</strong>：自查修正两处——① UI 部分：更正前端引用为实际服务的 <code>ACP_Workbench_v2.html</code>（schema 驱动，v1 为遗留），UI 自由度改由 <code>METHOD_SCHEMAS</code> 注册承载（§11.2）；② SP 自由度：初版仅暴露 func/basis/threshold 三键，自由度低于现有 <code>single_point</code> level（11 字段 + 归一化规则）——已按"完全对齐"红线重写（§10.1），高级字段经 CENSO 模板文件 + per-run HOME 隔离注入（§6.4）。</div>
 <div class="info-box">ℹ️ <strong>修订记录（v4，2026-07-18）</strong>：针对"CENSO-light/zero 对最低能构象缺乏高精度几何优化"（即 §8 D1 的 RSH//xTB 偏差），在<strong>能量排序/筛选（screening）与最终单点精修（refinement）之间</strong>新增<strong>可选高精度几何优化阶段</strong>——复用 CENSO 原生 Part2（<code>--optimization</code>，xTB 驱动的 ORCA 梯度优化），<strong>默认方法 r2SCAN-3c、默认不开启</strong>。配置自由度对齐现有 <code>dft_opt</code> level（§10.1.2），UI 经 schema 注册可选 level（§11.2）。</div>
@@ -1463,6 +1464,74 @@ energy:   ({"id": "energy",   "label_zh": "构象能量", "requires_binaries": [
 <tr><td>集成缺口</td><td>4（G-1~G-4 未修复）</td><td>4（G-1~G-4 未变）</td><td>0（4/4 关闭）</td></tr>
 <tr><td>总问题</td><td>12</td><td>7</td><td>3（全修复）+ 5 已知遗留</td></tr>
 <tr><td>测试通过</td><td>550 passed</td><td>590 passed</td><td>590 passed</td></tr>
+</tbody>
+</table>
+
+<hr class="section-divider">
+
+<h3 id="s15-8">15.8 P5 最终验收审计与远程端到端实测（2026-07-19，v14）</h3>
+
+<h4>15.8.1 验收前差距审计（G-5~G-10，全部已修复）</h4>
+<table>
+<thead><tr><th>ID</th><th>差距</th><th>位置</th><th>影响</th><th>修复</th></tr></thead>
+<tbody>
+<tr><td>G-5</td><td><code>--levels</code> 字段消费率 2/11（refinement_sp）+ 2/9（dft_opt）——aux_basis/dispersion/RI/grid/scf/opt_convergence/max_steps/solvent 全部静默丢弃</td><td><code>energy.py:_resolve_levels</code></td><td>违反 §10.1 红线；验收门 5 阻塞</td><td>F-27：全字段消费——ORCA 路径经 <code>route_extras</code>/<code>geom_maxiter</code>（ORCAInterface 增量扩展，DLPNO 分支兼容）；freq 继承 opt extras 但剔除 opt-only 关键字（v7 一致性）；per-level 溶剂覆盖 + 三层优先级 CLI &gt; levels &gt; YAML</td></tr>
+<tr><td>G-6</td><td>§6.4 模板注入 + HOME 隔离未实现（rcfile 恒写 <code>template = False</code>，无 <code>.censo2_assets</code>）</td><td><code>censo_backend.py</code></td><td>CENSO 执行路径（--no-opt / screening）高级 SP 字段不可达</td><td>F-28：<code>_write_part_templates()</code> 写 per-run <code>{censo_dir}/home/.censo2_assets/{part}.orca.template</code>（{main}/{geom} 占位符，白名单生成）；rcfile 对应 part <code>template = True</code>；subprocess 注入 <code>HOME={censo_dir}/home</code>；默认路径不触发（无模板时 env=None）</td></tr>
+<tr><td>G-7</td><td>housekeeping 无二进制探测——censo 缺失时作业深入节点运行期才报 <code>CensoNotAvailableError</code></td><td><code>remote/runner.py</code></td><td>验收门 10 阻塞；浪费 LSF 配额</td><td>F-29：<code>_probe_required_binaries()</code>（提交前，registry <code>requires_binaries</code> 驱动）——节点侧 python 读 <code>~/.conformer_search.yaml</code> 解析 <code>executables.*.path</code> + PATH 回退，采集 censo/xtb 版本；censo 缺失 → <code>RemoteNodeUnavailableError</code>（含节点配置路径与示例），其余二进制仅告警（LSF 环境可能补足）；SSH 故障 fail-open</td></tr>
+<tr><td>G-8</td><td>前端 v2 提交链断裂：method payload 仅 <code>profile_id/levels</code>，无 <code>preset/no_opt/solvent</code>；可选 level 无收起开关（收起=--no-opt 语义未实现）</td><td><code>ACP_Workbench_v2.html</code> + <code>scheduler/runner.py</code>/<code>script_gen.py</code>/<code>stage_tasks.py</code></td><td>UI 选 censo-default/zero 预设不生效；验收门 7/9 阻塞</td><td>F-30：① 前端 submit 显式携带 <code>preset</code>（profile_id 直传）/ <code>no_opt</code>（dft_opt 停用即 true）/ <code>solvent</code>（levels 溶剂字段派生）+ levels 剔除停用 level 与 <code>_disabled</code> 标记；② required=False level 渲染启用开关（默认按 profile 是否含该 level）；③ 服务端防御性回退：<code>jobs.py</code> 新增 <code>censo_preset_from_method()</code>（preset ∥ profile_id，白名单校验）与 <code>censo_solvent_from_method()</code>（levels 溶剂派生），runner/script_gen/stage_tasks 三处统一消费；④ validate 归一化不再复活已停用/缺失 level</td></tr>
+<tr><td>G-9</td><td>CLI 缺 <code>--keep-all</code>；CensoBackend <code>_build_cli</code> 硬编码恒传 <code>--keep-all</code>（截断语义与文献相悖，§4.3/§7 明确默认不开）</td><td><code>cli.py</code> / <code>censo_backend.py</code></td><td>系综截断语义错误；§9 设计缺口</td><td>F-31：<code>keep_all</code> 参数化（默认 False = 文献截断语义；覆盖链 CLI --keep-all &gt; YAML censo.keep_all &gt; False）；ensemble CLI/批量/调度器映射全链打通</td></tr>
+<tr><td>G-10</td><td><code>ensemble --preset censo-zero</code> 调用 CENSO <code>--refinement</code>（全系综 ωB97M-V SP）——§7 规定"不调 CENSO：CREST xTB 能量排序直通"</td><td><code>ensemble.py</code></td><td>语义错误 + 成本爆炸</td><td>F-32：censo-zero 分支改为 <code>_xtb_passthrough_result()</code>——解析 CREST 标题行 xTB 能量构造直通系综（gtot=E_xTB，grrho=0），不实例化 CensoBackend；stage 记录 skipped</td></tr>
+</tbody>
+</table>
+
+<h4>15.8.2 远程端到端实测暴露的缺陷（全部已修复）</h4>
+<table>
+<thead><tr><th>#</th><th>缺陷</th><th>实测证据</th><th>修复</th></tr></thead>
+<tbody>
+<tr><td>F-33</td><td>相对输出根破坏 QC 子进程调用：QC 接口以 <code>cwd=&lt;stage dir&gt;</code> 运行子进程但按传入原样传递输入路径——远程作业 <code>--output "."</code> 时 CREST 收到相对路径，相对其 cwd 二次拼接 → "No (valid) input file!"（exit 128）。legacy 引擎因恒用绝对路径从未触发；ensemble/energy 为新调用方</td><td>acc2_en1 远程失败日志（CREST exit 128）</td><td><code>ensemble.py</code>/<code>energy.py</code> 输出根与多帧输入 <code>resolve()</code>；<code>censo_backend.refine_ensemble</code> 双保险 resolve</td></tr>
+<tr><td>F-34</td><td>CENSO 产物落位错误：CENSO 启动即 <code>os.chdir(输入文件父目录)</code>（§4.2 已知行为），backend 直接传 crest/ 内的原始路径 → 全部 N_PART.* 写入 crest/，解析器在 censo/ 找不到 JSON</td><td>acc2_en1：censo/ 仅 rcfile+日志，crest/ 出现 0_PRESCREENING.json/1_SCREENING.json</td><td>按 §5.2 设计落地：输入拷贝至 <code>censo/crest_conformers.xyz</code> 再执行（隔离目录内 chdir 即 censo/）</td></tr>
+</tbody>
+</table>
+<p>部署修正（非代码）：节点 <code>~/acp_code/config/defaults.yaml</code> 为 Phase D（移出同步集）前的残留副本——存在即整体遮蔽 Python 内置默认（load_config 的"或"语义），已删除；节点自此回归"内置默认 + ~/.conformer_search.yaml"纪律。同时修复服务器侧 <code>config/defaults.yaml</code> 缺失顶级 <code>censo:</code> 段的双源违规（P4-7 补全）。</p>
+
+<h4>15.8.3 节点环境实测（P0 复核，2026-07-19）</h4>
+<table>
+<thead><tr><th>项</th><th>实测值</th><th>要求</th><th>状态</th></tr></thead>
+<tbody>
+<tr><td>CENSO</td><td>3.0.8（<code>/home/<user>/anaconda3/bin/censo</code>，Python 3.13.9）</td><td>3.0.x pin</td><td>✅</td></tr>
+<tr><td>xtb</td><td>6.7.1</td><td>≥ 6.4.0</td><td>✅</td></tr>
+<tr><td>ORCA</td><td><code>/home/<user>/orca/orca</code> 可用</td><td>≥ 4.x</td><td>✅</td></tr>
+<tr><td>节点配置</td><td><code>executables.censo.path</code> 已设；<code>--gas-phase/--solvent/--evaluate-rrho/--sm-rrho/--keep-all/--inprc/--maxcores/-n</code> 等全部 CLI 标志经 <code>censo --help</code> 核实存在</td><td>D0/D1</td><td>✅</td></tr>
+<tr><td>已知噪音</td><td>CENSO 3.0.8 pydantic 序列化告警：<code>sm_rrho='gbsa'</code> 期望 enum——仅 UserWarning，xtb_rrho 实际正常执行（GmRRHO 非零）</td><td>—</td><td>登记</td></tr>
+</tbody>
+</table>
+
+<h4>15.8.4 验收门实测状态（§14.2）</h4>
+<table>
+<thead><tr><th>#</th><th>验收门</th><th>状态</th><th>证据</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>全部新单测通过 + 既有测试零回归</td><td>✅</td><td>617 passed / 0 failures（P4 基线 590 + 新增 27：levels 全字段、模板注入、keep-all、probe、passthrough、调度映射）</td></tr>
+<tr><td>2</td><td>ensemble 远程端到端产出 ensemble.{xyz,json,csv}，gtot 排序与 1_SCREENING.out 一致</td><td>✅</td><td>acc3_en1（乙醇）：三件套齐全；CONF2 gtot -154.9191796 &lt; CONF1 -154.9189052 排序一致；权重 57.21/42.79% 与 CENSO 表逐值吻合；gtot=E+gsolv+grrho 恒等式精确成立</td></tr>
+<tr><td>3</td><td>energy 远程端到端产出 finalDFT/ 三件套</td><td>✅</td><td>acc3_e1：finalDFT/all_conformers.xyz（1 帧 rank1）+ conformer_thermo.csv（1 行）+ global_min.xyz + screening_ranking.csv（附属，逐值对齐 1_SCREENING.json）</td></tr>
+<tr><td>4</td><td>（v10 语义修订后）light/zero 恒 rank1；default 0.99 截止</td><td>✅</td><td>acc3_e1/acc3_e3 均输出单构象 rank1；原"90% 截止"门随 v10 废弃，以 rank1 语义验收</td></tr>
+<tr><td>5</td><td>SP 自由度红线：refinement_sp 字段集与 single_point 逐字段一致；--levels 全字段远程真实生效</td><td>✅</td><td>schema 字段集 11/11 相同（既有断言）；acc3_e2：conf_000_sp.inp 路由行含 DLPNO-CCSD(T) + def2-TZVPP/C + VeryTightSCF（远程 ORCA 输入实检）</td></tr>
+<tr><td>6</td><td>前端 v2 wizard 渲染 refinement_sp 全字段面板 + validate-method 通过</td><td>✅</td><td>/api/v1/workflow-catalog 列 ensemble/energy=active；validate-method(censo_energy, DLPNO+aux+VeryTight+scale 0.98) → valid:true + 归一化回填</td></tr>
+<tr><td>7</td><td>高精度优化阶段默认开启；--no-opt 廉价路径；dft_opt 面板收起=关闭</td><td>✅</td><td>acc3_e1 默认路径 conf_000_opt/freq 同为 r2SCAN-3c（输入文件可复核）；acc3_e3（censo-zero + no_opt）走 CENSO -n 1 -R 廉价路径；前端开关经 F-30 落地（method.no_opt 显式下发）</td></tr>
+<tr><td>8</td><td>ZPE 缩放因子端到端：scale_factor 0.98 → 远端 Shermo -sclZPE 0.98</td><td>✅</td><td>acc3_e2 提交链 levels.thermo.scale_factor=0.98 → runner --levels 透传 → conf_000_Shermo.sum 头部回显 sclZPE 0.98（缺省作业回显 0.9905）</td></tr>
+<tr><td>9</td><td>前端可提交 ensemble/energy 且状态流转正常</td><td>✅</td><td>4 类作业均经 v1 API（前端同链路）提交：queued→running→completed 流转 + 阶段计划（stage plan providers）生效；preset/no_opt/solvent 映射经 F-30 修复后语义正确</td></tr>
+<tr><td>10</td><td>节点缺 censo 时 housekeeping 清晰报错（含配置路径）</td><td>✅</td><td>提交前探测 remote.binary_probe 事件实测（censo 3.0.8 resolved，missing=[]）；缺失路径由单测断言错误文案含 ~/.conformer_search.yaml 与 executables.censo.path（fail-open 语义亦有断言）</td></tr>
+</tbody>
+</table>
+
+<h4>15.8.5 遗留登记</h4>
+<table>
+<thead><tr><th>ID</th><th>事项</th><th>等级</th><th>说明</th></tr></thead>
+<tbody>
+<tr><td>R-P5-1</td><td>grid 枚举为 Gaussian 风格（SG1/Fine/UltraFine/SuperFine），ORCA 侧映射 DEFGRID1/2/3/3（Fine=ORCA 默认不显式发射）</td><td>低</td><td>与 UI 字段统一性优先；映射表登记于 <code>energy.py:_GRID_ROUTE_MAP</code></td></tr>
+<tr><td>R-P5-2</td><td>legacy conformer 工作流的 aux_basis/RI/grid/scf 字段仍不消费（历史现状）</td><td>低</td><td>红线仅约束新工作流"不低于现有执行行为"——现有引擎同样忽略（DLPNO 例外为硬编码）；后续可复用本次 route_extras 机制回填</td></tr>
+<tr><td>R-P5-3</td><td>censo-light --no-opt 单帧 refinement 的 -n 语义依赖 CENSO 对 -P -S -R 组合的幸存者传递（非 -n 1 截断）</td><td>中</td><td>与 v10 定稿一致（rank1 = gtot 最低幸存者）；ACP 侧解析 records[0]；远程 A/B 后续批量验证</td></tr>
+<tr><td>R-P5-4</td><td>CENSO 3.0.8 sm_rrho pydantic enum 告警</td><td>低</td><td>UserWarning 无功能影响；pin 3.0.x 期间保持观察</td></tr>
+<tr><td>R-P5-5</td><td>节点 LSF 登录 shell PATH 与作业环境差异可能使 crest/orca 探测假阴性</td><td>低</td><td>探测仅对 censo 硬失败，其余告警放行（设计取舍，见 F-29）</td></tr>
 </tbody>
 </table>
 

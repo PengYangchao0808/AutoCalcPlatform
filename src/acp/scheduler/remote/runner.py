@@ -192,6 +192,13 @@ class RemoteJobRunner:
         # fast with a clear reason rather than choking on ENOSPC mid-run.
         self._pre_submit_housekeeping(node, event_log, record.id)
 
+        # 1c. Binary probe: verify workflow-required executables (censo,
+        # crest, orca, xtb, ...) resolve on the node before burning an LSF
+        # slot. Missing `censo` fails fast with configuration guidance;
+        # other binaries only warn (they may be provided by the LSF job
+        # environment, e.g. module load).
+        self._probe_required_binaries(node, spec, event_log, record.id)
+
         # 2. Code sync (if enabled and needed)
         if self._config.auto_sync:
             self._sync_code_if_needed(node, event_log, record.id)
@@ -561,6 +568,130 @@ class RemoteJobRunner:
 
         if decision.should_skip:
             raise RemoteNodeUnavailableError(f"Node {node.name!r} skipped: {decision.reason}")
+
+    # ------------------------------------------------------------------ #
+    # Pre-submit binary probe (P5, acceptance gate 10)
+    # ------------------------------------------------------------------ #
+
+    _BINARY_PROBE_SCRIPT = (
+        "import json, os, shutil, subprocess, sys\n"
+        "names = sys.argv[1:]\n"
+        "cfg = {}\n"
+        "try:\n"
+        "    import yaml\n"
+        "    with open(os.path.expanduser('~/.conformer_search.yaml')) as fh:\n"
+        "        cfg = yaml.safe_load(fh) or {}\n"
+        "except Exception:\n"
+        "    cfg = {}\n"
+        "exes = cfg.get('executables') or {}\n"
+        "report = {}\n"
+        "for name in names:\n"
+        "    configured = ((exes.get(name) or {}).get('path')) or name\n"
+        "    resolved = shutil.which(configured)\n"
+        "    if resolved is None and os.path.isfile(configured) "
+        "and os.access(configured, os.X_OK):\n"
+        "        resolved = configured\n"
+        "    version = None\n"
+        "    if resolved and name in ('censo', 'xtb'):\n"
+        "        flag = '-v' if name == 'censo' else '--version'\n"
+        "        try:\n"
+        "            proc = subprocess.run([resolved, flag], "
+        "capture_output=True, text=True, timeout=20)\n"
+        "            txt = (proc.stdout or proc.stderr).strip()\n"
+        "            lines = [l.strip() for l in txt.splitlines() if l.strip()]\n"
+        "            ver = next((l for l in lines if any(ch.isdigit() for ch in l)), None)\n"
+        "            version = ver[:120] if ver else (lines[0][:120] if lines else None)\n"
+        "        except Exception:\n"
+        "            version = None\n"
+        "    report[name] = {'configured': configured, "
+        "'resolved': resolved, 'version': version}\n"
+        "print(json.dumps(report))\n"
+    )
+
+    def _probe_required_binaries(
+        self, node: RemoteNode, spec: JobSpec, event_log: JobEventLog, job_id: str
+    ) -> None:
+        """Probe workflow-required binaries on *node* before submission.
+
+        Resolves each binary via the node-local ``~/.conformer_search.yaml``
+        (``executables.<name>.path``) falling back to a PATH lookup in a
+        login shell. A missing ``censo`` raises
+        :class:`RemoteNodeUnavailableError` with configuration guidance
+        (acceptance gate 10); other missing binaries only log a warning —
+        they may be provided by the LSF job environment. SSH/transport
+        failures are fail-open, consistent with housekeeping.
+        """
+        try:
+            from acp.workflows.registry import get_workflow_entry
+
+            entry = get_workflow_entry(spec.workflow)
+            binaries = list(entry.requires_binaries) if entry else []
+        except Exception:
+            binaries = []
+        if not binaries:
+            return
+
+        import json as _json
+        import shlex as _shlex
+
+        py = node.python_executable or "python3"
+        script_arg = _shlex.quote(self._BINARY_PROBE_SCRIPT)
+        args = " ".join(_shlex.quote(b) for b in binaries)
+        command = "bash -lc " + _shlex.quote(f"{py} -c {script_arg} {args}")
+
+        try:
+            code, out, err = self._ssh.execute(node, command, timeout=90)
+            report = _json.loads(out.strip().splitlines()[-1]) if out.strip() else {}
+        except Exception as exc:
+            logger.warning("Binary probe crashed on %s (fail-open): %s", node.name, exc)
+            event_log.append(
+                "remote.binary_probe_error", job_id=job_id, node=node.name, error=str(exc)
+            )
+            return
+
+        if not isinstance(report, dict) or not report:
+            logger.warning(
+                "Binary probe on %s returned no report (exit=%s, stderr=%s) — fail-open",
+                node.name, code, (err or "")[-200:],
+            )
+            return
+
+        missing = [name for name, info in report.items() if not info.get("resolved")]
+        versions = {
+            name: info.get("version")
+            for name, info in report.items()
+            if info.get("version")
+        }
+        event_log.append(
+            "remote.binary_probe",
+            job_id=job_id,
+            node=node.name,
+            report=report,
+            missing=missing,
+        )
+        if versions:
+            logger.info("Node %s binary versions: %s", node.name, versions)
+
+        if "censo" in missing:
+            configured = report.get("censo", {}).get("configured", "censo")
+            raise RemoteNodeUnavailableError(
+                f"Node {node.name!r} is missing the CENSO binary "
+                f"(configured path: {configured!r}). Install it on the node "
+                f"(Python >= 3.12: `pip install censo`; otherwise create a "
+                f"dedicated venv) and set `executables.censo.path` in the "
+                f"node-side ~/.conformer_search.yaml, e.g.\n"
+                f"  executables:\n"
+                f"    censo:\n"
+                f"      path: /home/<user>/censo-venv/bin/censo"
+            )
+
+        for name in missing:
+            logger.warning(
+                "Node %s: required binary %r not resolved from login shell "
+                "PATH or ~/.conformer_search.yaml — assuming the LSF job "
+                "environment provides it",
+                node.name, name,
+            )
 
     # ------------------------------------------------------------------ #
     # LSF submission

@@ -461,6 +461,11 @@ Examples:
         help="Solvent name (e.g. dcm, water); omit for gas phase",
     )
     ens.add_argument(
+        "--keep-all",
+        action="store_true",
+        help="Do not truncate the ensemble at CENSO part thresholds",
+    )
+    ens.add_argument(
         "--nproc",
         type=int,
         help="Number of CPU cores (overrides config)",
@@ -1152,6 +1157,7 @@ def _handle_ensemble(args: argparse.Namespace) -> int:
             multiplicity=args.multiplicity,
             solvent=args.solvent,
             nproc=args.nproc,
+            keep_all=True if getattr(args, "keep_all", False) else None,
         )
     except KeyboardInterrupt:
         logger.warning("Interrupted by user")
@@ -1203,6 +1209,7 @@ def _handle_ensemble_batch(
                 multiplicity=getattr(args, "multiplicity", None),
                 solvent=args.solvent,
                 nproc=args.nproc,
+                keep_all=True if getattr(args, "keep_all", False) else None,
             )
             if r.status == "completed":
                 results.append({"molecule": mi.name, "status": "completed", "metadata": r.metadata})

@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
-from acp.scheduler.jobs import JobSpec
+from acp.scheduler.jobs import JobSpec, censo_preset_from_method
 from acp.scheduler.migrations import migrate
 from acp.workflows.nmr import get_nmr_stages
 
@@ -118,7 +118,7 @@ class _MechanismStagePlanProvider:
 
 class _EnsembleStagePlanProvider:
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        preset = str(spec.method.get("preset") or "censo-light").strip().lower()
+        preset = censo_preset_from_method(spec.method) or "censo-light"
         if preset == "censo-zero":
             return [
                 StagePlan("embed_smiles"),
@@ -146,7 +146,7 @@ class _EnsembleStagePlanProvider:
 
 class _EnergyStagePlanProvider:
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        preset = str(spec.method.get("preset") or "censo-light").strip().lower()
+        preset = censo_preset_from_method(spec.method) or "censo-light"
         no_opt = spec.method.get("no_opt", False)
         if preset == "censo-zero":
             if no_opt:

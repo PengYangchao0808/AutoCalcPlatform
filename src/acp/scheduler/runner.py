@@ -29,7 +29,12 @@ from typing import Any, Protocol
 from acp.chem.embedding import smiles_to_xyz, xyz_to_multiframe_demo
 from acp.scheduler.artifacts import ArtifactRegistry, capture_stage_artifacts
 from acp.scheduler.events import JobEventLog
-from acp.scheduler.jobs import JobRecord, JobSpec
+from acp.scheduler.jobs import (
+    JobRecord,
+    JobSpec,
+    censo_preset_from_method,
+    censo_solvent_from_method,
+)
 from acp.scheduler.provenance import Provenance, build_provenance_for_job
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
 
@@ -470,16 +475,20 @@ class JobRunner:
                 cmd += ["--levels", json.dumps(method["levels"])]
         elif wf in {"ensemble", "energy"}:
             cmd += ["--input", str(source), "--output", str(work_dir)]
-            if method.get("preset"):
-                cmd += ["--preset", str(method["preset"])]
+            preset = censo_preset_from_method(method)
+            if preset:
+                cmd += ["--preset", preset]
             if spec.name:
                 cmd += ["--name", spec.name]
             if wf == "energy" and method.get("no_opt"):
                 cmd += ["--no-opt"]
             if wf == "energy" and method.get("levels"):
                 cmd += ["--levels", json.dumps(method["levels"])]
-            if method.get("solvent"):
-                cmd += ["--solvent", str(method["solvent"])]
+            if wf == "ensemble" and method.get("keep_all"):
+                cmd += ["--keep-all"]
+            solvent = censo_solvent_from_method(method)
+            if solvent:
+                cmd += ["--solvent", solvent]
         elif wf == "nmr":
             cmd += ["--input", str(source), "--output", str(work_dir)]
             if method.get("protocol"):

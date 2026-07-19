@@ -90,6 +90,31 @@ nmr:
     "19F": null
     "31P": null
 
+# ==================== CENSO (ensemble / energy workflows) ====================
+# Mirror of Python built-in defaults (config.py::_get_default_config).
+# This file is NOT synced to compute nodes — nodes use Python built-ins plus
+# their own ~/.conformer_search.yaml.
+censo:
+  preset: censo-light
+  solvent: null
+  temperature: 298.15
+  scale: 1.0
+  keep_all: false
+  refinement_threshold: 0.99
+  refinement_func: wb97m-v
+  refinement_basis: def2-tzvpp
+  optimization:
+    enabled: true
+    functional: r2SCAN-3c
+    threshold: 3.0
+    optlevel: normal
+    maxcyc: 200
+    optcycles: 8
+    macrocycles: true
+    xtb_opt: true
+  presets: {}
+  levels: {}
+
 # ==================== Conformer Search Protocols ====================
 # Per-stage control: set any stage to false to skip it.
 # Stages: crest, clustering, optimization, frequency, single_point, shermo

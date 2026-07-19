@@ -21,7 +21,11 @@ import shlex
 from dataclasses import dataclass
 from typing import Any
 
-from acp.scheduler.jobs import JobSpec
+from acp.scheduler.jobs import (
+    JobSpec,
+    censo_preset_from_method,
+    censo_solvent_from_method,
+)
 from acp.scheduler.remote.config import RemoteNode
 
 logger = logging.getLogger(__name__)
@@ -121,16 +125,20 @@ def build_remote_cli_command(
             cmd += ["--levels", json.dumps(method["levels"])]
     elif wf in {"ensemble", "energy"}:
         cmd += ["--input", str(source), "--output", "."]
-        if method.get("preset"):
-            cmd += ["--preset", str(method["preset"])]
+        preset = censo_preset_from_method(method)
+        if preset:
+            cmd += ["--preset", preset]
         if spec.name:
             cmd += ["--name", spec.name]
         if wf == "energy" and method.get("no_opt"):
             cmd += ["--no-opt"]
         if wf == "energy" and method.get("levels"):
             cmd += ["--levels", json.dumps(method["levels"])]
-        if method.get("solvent"):
-            cmd += ["--solvent", str(method["solvent"])]
+        if wf == "ensemble" and method.get("keep_all"):
+            cmd += ["--keep-all"]
+        solvent = censo_solvent_from_method(method)
+        if solvent:
+            cmd += ["--solvent", solvent]
     elif wf == "nmr":
         cmd += ["--input", str(source), "--output", "."]
         if method.get("protocol"):

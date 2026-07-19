@@ -6,6 +6,7 @@ import copy
 import json
 import logging
 import math
+import os
 import re
 import shutil
 import subprocess
@@ -174,6 +175,7 @@ class CensoBackend(QCBackend, ConformerSearcher):
         self._default_preset = config.get("censo", {}).get("preset", "censo-light")
         self._default_solvent = config.get("censo", {}).get("solvent")
         self._temperature = config.get("censo", {}).get("temperature", 298.15)
+        self._keep_all = bool(config.get("censo", {}).get("keep_all", False))
         self._nproc = config.get("resources", {}).get("nproc", 16)
 
     # ----- QCBackend ABC ---------------------------------------------------
@@ -219,9 +221,11 @@ class CensoBackend(QCBackend, ConformerSearcher):
         charge: int,
         multiplicity: int,
         solvent: str | None,
+        templated_parts: set[str] | None = None,
     ) -> Path:
         rcfile = output_dir / "censo2rc"
         lines: list[str] = []
+        templated_parts = templated_parts or set()
 
         uhf = multiplicity - 1 if multiplicity > 0 else 0
 
@@ -252,7 +256,11 @@ class CensoBackend(QCBackend, ConformerSearcher):
             part_cfg = preset_cfg.get(part_name, {})
             if not part_cfg:
                 continue
-            if part_name not in active_parts and part_name != "refinement":
+            # CENSO 3.0.8 validates every section present in the rcfile
+            # (even for parts that are not enabled), so only active parts
+            # may be written — e.g. an ACP-side DLPNO refinement functional
+            # would otherwise fail CENSO's functional-key validation.
+            if part_name not in active_parts:
                 continue
 
             lines.append(f"[{part_name}]")
@@ -265,7 +273,9 @@ class CensoBackend(QCBackend, ConformerSearcher):
                     lines.append(f"{key} = {val}")
 
             lines.append("gfnv = gfn2")
-            lines.append("template = False")
+            lines.append(
+                f"template = {'True' if part_name in templated_parts else 'False'}"
+            )
             lines.append("")
 
         # [paths]
@@ -278,6 +288,40 @@ class CensoBackend(QCBackend, ConformerSearcher):
         logger.debug("Wrote CENSO rcfile to %s", rcfile)
         return rcfile
 
+    # ----- Advanced-field template injection (per-run HOME isolation) -------
+
+    def _write_part_templates(
+        self,
+        output_dir: Path,
+        part_templates: dict[str, list[str]],
+    ) -> Path:
+        """Write ``{part}.orca.template`` files under a per-run HOME.
+
+        CENSO only reads templates from ``$HOME/.censo2_assets/``; to keep
+        concurrent jobs isolated the subprocess HOME is redirected to
+        ``{output_dir}/home``. Template bodies use the official
+        ``{main}``/``{geom}`` placeholders; extra lines are generated from a
+        whitelisted field set only (no free-text injection).
+
+        Returns:
+            The per-run HOME directory to inject into the subprocess env.
+        """
+        home_dir = output_dir / "home"
+        assets_dir = home_dir / ".censo2_assets"
+        assets_dir.mkdir(parents=True, exist_ok=True)
+
+        for part_name, extra_lines in part_templates.items():
+            body_lines = ["{main}"]
+            body_lines.extend(str(line) for line in extra_lines if line)
+            body_lines.append("")
+            body_lines.append("{geom}")
+            body_lines.append("")
+            template_path = assets_dir / f"{part_name}.orca.template"
+            template_path.write_text("\n".join(body_lines), encoding="utf-8")
+            logger.debug("Wrote CENSO template %s", template_path)
+
+        return home_dir
+
     # ----- CLI construction ------------------------------------------------
 
     def _build_cli(
@@ -289,6 +333,7 @@ class CensoBackend(QCBackend, ConformerSearcher):
         temperature: float,
         solvent: str | None,
         nconf: int | None = None,
+        keep_all: bool = False,
     ) -> list[str]:
         cmd = [self._censo_path, "-i", str(input_xyz)]
 
@@ -318,7 +363,8 @@ class CensoBackend(QCBackend, ConformerSearcher):
         cmd.append("--evaluate-rrho")
         cmd.append("--sm-rrho")
         cmd.append("gbsa")
-        cmd.append("--keep-all")
+        if keep_all:
+            cmd.append("--keep-all")
         cmd.append("--ignore-failed")
 
         return cmd
@@ -498,6 +544,8 @@ class CensoBackend(QCBackend, ConformerSearcher):
         include_refinement: bool = False,
         nconf: int | None = None,
         part_overrides: dict[str, dict[str, Any]] | None = None,
+        keep_all: bool | None = None,
+        part_templates: dict[str, list[str]] | None = None,
     ) -> CensoRunResult:
         """Run CENSO on an ensemble XYZ and return parsed results.
 
@@ -517,15 +565,31 @@ class CensoBackend(QCBackend, ConformerSearcher):
             part_overrides: Per-part rcfile key overrides, e.g.
                 ``{"refinement": {"func": "dlpno-ccsd(t)"}}``. Merged on top
                 of the resolved preset configuration.
+            keep_all: Pass ``--keep-all`` so CENSO does not truncate the
+                ensemble at part thresholds. Defaults to the ``censo.keep_all``
+                config value (False — literature truncation semantics).
+            part_templates: Advanced-field template lines per part, e.g.
+                ``{"refinement": ["! RIJCOSX def2-TZVPP/C VeryTightSCF"]}``.
+                Written to a per-run ``$HOME/.censo2_assets/`` and activated
+                via ``template = True`` in the rcfile (§6.4 HOME isolation).
 
         Returns:
             CensoRunResult with parsed conformer records.
         """
-        output_dir = Path(output_dir)
+        output_dir = Path(output_dir).resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        ensemble_xyz = Path(ensemble_xyz).resolve()
         if not ensemble_xyz.exists():
             raise FileNotFoundError(f"Input ensemble XYZ not found: {ensemble_xyz}")
+
+        # CENSO chdirs into the input file's parent directory and writes all
+        # outputs there (§4.2). Copy the ensemble into the isolated per-run
+        # censo/ directory (§5.2) so outputs land in output_dir.
+        local_input = output_dir / "crest_conformers.xyz"
+        if ensemble_xyz != local_input:
+            shutil.copy2(ensemble_xyz, local_input)
+        ensemble_xyz = local_input
 
         if not self.is_available():
             raise CensoNotAvailableError(
@@ -548,14 +612,29 @@ class CensoBackend(QCBackend, ConformerSearcher):
 
         temp = temperature if temperature is not None else self._temperature
         nproc_val = nproc if nproc is not None else self._nproc
+        keep_all_val = self._keep_all if keep_all is None else bool(keep_all)
+
+        effective_templates = {
+            part: lines
+            for part, lines in (part_templates or {}).items()
+            if lines
+        }
 
         rcfile = self._generate_rcfile(
             preset_cfg, output_dir, charge, multiplicity, solvent,
+            templated_parts=set(effective_templates),
         )
+
+        env: dict[str, str] | None = None
+        if effective_templates:
+            home_dir = self._write_part_templates(output_dir, effective_templates)
+            env = dict(os.environ)
+            env["HOME"] = str(home_dir)
+            logger.info("CENSO template injection active (HOME=%s)", home_dir)
 
         cmd = self._build_cli(
             ensemble_xyz, rcfile, preset_cfg, nproc_val, temp, solvent,
-            nconf=nconf,
+            nconf=nconf, keep_all=keep_all_val,
         )
 
         logger.info("Running CENSO: %s", " ".join(cmd))
@@ -571,6 +650,7 @@ class CensoBackend(QCBackend, ConformerSearcher):
                 capture_output=True,
                 text=True,
                 timeout=timeout_seconds,
+                env=env,
             )
         except FileNotFoundError as exc:
             raise CensoExecutionError(
@@ -661,6 +741,7 @@ class CensoBackend(QCBackend, ConformerSearcher):
         solvent = kwargs.pop("solvent", self._default_solvent)
         temperature = kwargs.pop("temperature", self._temperature)
         nproc = kwargs.pop("nproc", self._nproc)
+        keep_all = kwargs.pop("keep_all", None)
 
         result = self.refine_ensemble(
             initial_xyz,
@@ -671,6 +752,7 @@ class CensoBackend(QCBackend, ConformerSearcher):
             temperature=temperature,
             solvent=solvent,
             nproc=nproc,
+            keep_all=keep_all,
         )
 
         if not result.records:
