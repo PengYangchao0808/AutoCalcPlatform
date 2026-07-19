@@ -96,7 +96,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "label": "Ensemble Generation",
         "label_zh": "构象生成",
         "category": "preset",
-        "description": "CREST + CENSO → Boltzmann 构象系综",
+        "description": "CREST + CENSO → Boltzmann conformer ensemble",
         "method_schema_id": "censo_ensemble",
         "default_backend": "censo",
         "requires_binaries": ["crest", "censo", "orca"],
@@ -107,7 +107,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "label": "Conformer Energy",
         "label_zh": "构象能量",
         "category": "preset",
-        "description": "CREST + CENSO → 99% 系综 → DFT 精修自由能",
+        "description": "CREST + CENSO → 99% ensemble → refined free energies",
         "method_schema_id": "censo_energy",
         "default_backend": "censo",
         "requires_binaries": ["crest", "censo", "orca"],
@@ -557,7 +557,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "profile_id": "censo-light",
                 "label": "CENSO-light",
-                "summary": "CREST + CENSO 筛选 → Boltzmann 系综（推荐）",
+                "summary": "CREST + CENSO screening → Boltzmann ensemble (recommended)",
                 "levels": {
                     "censo": {
                         "engine": "censo",
@@ -573,7 +573,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "profile_id": "censo-default",
                 "label": "CENSO-default",
-                "summary": "完整 CENSO 漏斗（Part0–2，高精度 DFT 优化）",
+                "summary": "Full CENSO funnel (Part0–2, high-accuracy DFT opt)",
                 "levels": {
                     "censo": {
                         "engine": "censo",
@@ -589,7 +589,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "profile_id": "censo-zero",
                 "label": "CENSO-zero",
-                "summary": "CREST xTB 直出（不调 CENSO，最快）",
+                "summary": "CREST xTB passthrough (no CENSO, fastest)",
                 "levels": {
                     "censo": {
                         "engine": "censo",
@@ -667,7 +667,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "profile_id": "censo-light",
                 "label": "CENSO-light",
-                "summary": "CREST + CENSO → 99% 系综 → DFT 精修（推荐）",
+                "summary": "CREST + CENSO → 99% ensemble → DFT refinement (recommended)",
                 "levels": {
                     "censo": {
                         "engine": "censo",
@@ -705,7 +705,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "profile_id": "censo-default",
                 "label": "CENSO-default",
-                "summary": "完整 CENSO Part0–3 → 99% 精修（约 10× light 成本）",
+                "summary": "Full CENSO Part0–3 → 99% refinement (~10x light cost)",
                 "levels": {
                     "censo": {
                         "engine": "censo",
@@ -731,7 +731,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "profile_id": "censo-zero",
                 "label": "CENSO-zero",
-                "summary": "CREST xTB → 99% 系综 → DFT 精修（最便宜）",
+                "summary": "CREST xTB → 99% ensemble → DFT refinement (cheapest)",
                 "levels": {
                     "censo": {
                         "engine": "censo",
