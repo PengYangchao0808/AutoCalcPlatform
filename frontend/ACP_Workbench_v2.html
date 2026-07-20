@@ -893,6 +893,10 @@ option, optgroup {
 .mc-field select, .mc-field input { appearance: none; -webkit-appearance: none; padding: 5px 24px 5px 8px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--bg-elevated); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='none' stroke='%236b7b8a' stroke-width='1.2' d='M2 3.5l3 3 3-3'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; color: var(--text-primary); font-size: 11px; }
 .mc-field select:focus, .mc-field input:focus { border-color: var(--accent); }
 .mc-field input { background-image: none; }
+/* Dispersion field "built-in" badge: shown when METHOD_META.builtin_dispersion
+   is non-null (e.g. wB97X-D4 → D4, wB97M-V → VV10). Replaces the dropdown so
+   the user cannot change a value that the functional already hardwires. */
+.mc-builtin-badge { display: inline-block; padding: 4px 10px; border: 1px solid var(--border-default); border-radius: 4px; background: var(--bg-elevated); color: var(--text-secondary); font-size: 11px; cursor: default; }
 
 /* Prevent horizontal overflow inside modal frames: grid/flex children
    default to min-width:auto and refuse to shrink below content width. */
@@ -1659,6 +1663,9 @@ const I18N = {
     "modal.loading": "加载中...",
     "modal.retry": "重试",
     "modal.catalog_empty": "目录为空",
+    "modal.catalog_load_failed": "目录加载失败",
+    "modal.builtin": "内置",
+    "modal.builtin_dispersion_hint": "此泛函已内置色散校正，无需额外指定",
     "modal.method_settings": "方法设置",
     "modal.workflow_not_available": "该工作流尚未接入后端，无法提交",
     "modal.select_file_first": "请先选择文件",
@@ -1845,6 +1852,9 @@ const I18N = {
     "modal.loading": "Loading...",
     "modal.retry": "Retry",
     "modal.catalog_empty": "Catalog is empty",
+    "modal.catalog_load_failed": "Catalog failed to load",
+    "modal.builtin": "built-in",
+    "modal.builtin_dispersion_hint": "This functional has built-in dispersion correction; no need to specify it separately",
     "modal.method_settings": "Method Settings",
     "modal.workflow_not_available": "This workflow is not yet connected to the backend",
     "modal.select_file_first": "Please select a file first",
@@ -3461,6 +3471,91 @@ let workflowCatalogCache = [];
 let methodCatalogCache = {};
 let previewViewer = null;
 
+// ── CatalogUtils — IIFE module for catalog-helper functions ──────────
+// Phase 4.1: extracted from openMethodConfig() closure so that the
+// catalog-access utilities (lookupCI, isFieldAdvanced, getFieldDefault,
+// getFieldOptions) are independently testable and do not pollute the
+// global scope with individual function names.
+// All functions receive the catalog state as explicit parameters
+// (methodCatalogCache / field_definitions / method_meta) rather than
+// capturing a closure variable, eliminating the R26 stale-reference risk.
+var CatalogUtils = (function() {
+  'use strict';
+
+  // Case-insensitive lookup for catalogs whose keys preserve canonical
+  // casing (e.g. METHOD_META / functional_options_map use "wB97M-V",
+  // "DLPNO-CCSD(T)"). Replaces direct subscript access so user input /
+  // dropdown value casing differences do not cause lookup failures.
+  // See DevDoc §2.2 / §8.1.1.
+  function lookupCI(obj, key) {
+    if (!obj || key == null) return undefined;
+    if (Object.prototype.hasOwnProperty.call(obj, key)) return obj[key];
+    var kl = String(key).toLowerCase();
+    for (var k in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, k) && String(k).toLowerCase() === kl) return obj[k];
+    }
+    return undefined;
+  }
+
+  function isFieldAdvanced(catalog, fieldName) {
+    var fd = ((catalog && catalog.field_definitions) || {})[fieldName];
+    return !!(fd && fd.advanced);
+  }
+
+  function getFieldOptions(catalog, fieldName, engine) {
+    var fd = ((catalog && catalog.field_definitions) || {})[fieldName];
+    if (!fd) return null;
+    if (fd.options) return fd.options;
+    if (fd.per_backend) return fd.per_backend[engine] || null;
+    return null;
+  }
+
+  // Resolution priority:
+  //   1. METHOD_META[functional] — functional-level defaults for
+  //      basis / dispersion; RI/aux forced to none/empty when the
+  //      functional declares supports_ri == False.
+  //   2. FIELD_DEFINITIONS — engine-specific → wildcard "*" → scalar.
+  function getFieldDefault(catalog, fieldName, engine, functional) {
+    var fieldDefs = (catalog && catalog.field_definitions) || {};
+    var methodMeta = (catalog && catalog.method_meta) || {};
+
+    // ── Priority 1: functional-level defaults (METHOD_META) ──
+    if (functional) {
+      var funcMeta = lookupCI(methodMeta, functional);
+      if (funcMeta) {
+        if (!funcMeta.supports_ri) {
+          if (fieldName === "ri_approximation") return "none";
+          if (fieldName === "aux_basis") return "";
+        }
+        if (fieldName === "basis" && funcMeta.default_basis !== undefined) return funcMeta.default_basis;
+        if (fieldName === "dispersion" && funcMeta.default_dispersion !== undefined) return funcMeta.default_dispersion;
+      }
+    }
+
+    // ── Priority 2: global default (FIELD_DEFINITIONS) ──
+    var fd = fieldDefs[fieldName];
+    if (!fd) return "";
+    var dflt = fd.default || {};
+    if (typeof dflt === "object" && !Array.isArray(dflt)) {
+      if (dflt[engine] !== undefined) return dflt[engine];
+      if (dflt["*"] !== undefined) return dflt["*"];
+    }
+    return typeof dflt === "string" || typeof dflt === "number" ? dflt : "";
+  }
+
+  return {
+    lookupCI: lookupCI,
+    isFieldAdvanced: isFieldAdvanced,
+    getFieldOptions: getFieldOptions,
+    getFieldDefault: getFieldDefault
+  };
+})();
+
+// Backward-compatible global alias (used extensively in openMethodConfig).
+// When the functions are fully modularised (Phase 4.4 Vite migration),
+// the global alias can be dropped in favour of explicit imports.
+var lookupCI = CatalogUtils.lookupCI;
+
 const wizardState = {
   workflow: { id: "energy", label: "Conformer Energy" },
   method: {
@@ -3677,6 +3772,25 @@ function updateConfigCards() {
   var schemaId = wizardState.workflow.schema_id;
   var schema = (methodCatalogCache.method_schemas || {})[schemaId];
   var parts = [];
+
+  // R5/R16: when the catalog isn't ready yet (or failed to load), show a
+  // loading / retry hint instead of an opaque "--" so the user understands
+  // the empty summary is transient rather than a broken card.
+  var catalogEmpty = !methodCatalogCache.method_schemas;
+  if (catalogEmpty && methodCatalogCache._loadFailed) {
+    mtDesc.innerHTML = '<span style="color:var(--danger)">' +
+      (t("modal.catalog_load_failed") || "目录加载失败") +
+      ' — <a href="#" onclick="loadMethodCatalog().then(updateConfigCards);return false;">' +
+      (t("modal.retry") || "重试") + '</a></span>';
+    updateInputModeVisibility();
+    return;
+  }
+  if (catalogEmpty) {
+    mtDesc.innerHTML = '<span class="muted">' + (t("modal.loading") || "加载中...") + '</span>';
+    updateInputModeVisibility();
+    return;
+  }
+
   if (schema && schema.method_levels) {
     schema.method_levels.forEach(function(lv) {
       var st = stages[lv.level_id];
@@ -3687,7 +3801,13 @@ function updateConfigCards() {
       }
       if (st.functional) {
         var s = lv.label + ": " + st.functional;
-        if (st.basis) s += "/" + st.basis;
+        var basisStr = st.basis;
+        if (!basisStr) {
+          var fMeta = (methodCatalogCache.method_meta || {})[st.functional];
+          if (!fMeta) fMeta = lookupCI(methodCatalogCache.method_meta || {}, st.functional);
+          if (fMeta && fMeta.default_basis) basisStr = fMeta.default_basis;
+        }
+        if (basisStr) s += "/" + basisStr;
         parts.push(s);
       } else if (st.gfn) {
         parts.push(lv.label + ": " + st.gfn);
@@ -3703,7 +3823,13 @@ function updateConfigCards() {
       if (!st || typeof st !== "object" || st._disabled === true) return;
       if (st.functional) {
         var s = st.functional;
-        if (st.basis) s += "/" + st.basis;
+        var basisStr = st.basis;
+        if (!basisStr) {
+          var fMeta2 = (methodCatalogCache.method_meta || {})[st.functional];
+          if (!fMeta2) fMeta2 = lookupCI(methodCatalogCache.method_meta || {}, st.functional);
+          if (fMeta2 && fMeta2.default_basis) basisStr = fMeta2.default_basis;
+        }
+        if (basisStr) s += "/" + basisStr;
         parts.push(lid + ": " + s);
       } else if (st.gfn) {
         parts.push(lid + ": " + st.gfn);
@@ -3719,15 +3845,35 @@ async function loadWorkflowCatalog() {
   try {
     var resp = await fetch(API_BASE + "/workflow-catalog");
     workflowCatalogCache = (await resp.json()).workflows || [];
-    workflowCatalogCache = workflowCatalogCache.filter(function(w) { return w.id !== "conformer" && w.id !== "benchmark"; });
+    // R21: filter by the catalog's `visible` flag (default true) instead
+    // of hardcoding "conformer"/"benchmark" — single source of truth in
+    // acp.catalog.WORKFLOW_CATALOG.
+    workflowCatalogCache = workflowCatalogCache.filter(function(w) { return w.visible !== false; });
   } catch(e) { console.error("Failed to load workflow catalog:", e); }
 }
 
 async function loadMethodCatalog() {
   try {
     var resp = await fetch(API_BASE + "/method-catalog?_t=" + Date.now());
-    methodCatalogCache = await resp.json();
-  } catch(e) { console.error("Failed to load method catalog:", e); }
+    // fetch() only rejects on network errors; HTTP 5xx (e.g. catalog.py raising
+    // at import time) resolves successfully with an error body that resp.json()
+    // may either parse (non-catalog dict) or throw on. Guard explicitly so the
+    // cache never gets silently populated with garbage (audit A15).
+    if (!resp.ok) throw new Error("HTTP " + resp.status + " " + resp.statusText);
+    var parsed = await resp.json();
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("Unexpected catalog response shape");
+    }
+    methodCatalogCache = parsed;
+    methodCatalogCache._loadFailed = false;
+  } catch(e) {
+    // Mark the cache so downstream consumers (updateConfigCards, openMethodConfig)
+    // can surface a retry path instead of silently degrading to "--". (R5 / R16)
+    // Preserve any previously-loaded good data so a hot-reload failure doesn't
+    // tear down a working UI — only first-load failures leave the cache empty.
+    console.error("Failed to load method catalog:", e);
+    methodCatalogCache._loadFailed = true;
+  }
 }
 
 async function openWorkflowConfig() {
@@ -3828,7 +3974,12 @@ async function openMethodConfig() {
     return;
   }
   if (!methodCatalogCache.method_schemas || !methodCatalogCache.functional_options_map) {
-    document.getElementById("mc-levels-container").innerHTML = '<div class="muted">\u76ee\u5f55\u52a0\u8f7d\u5931\u8d25</div>';
+    // R16: surface a retry control instead of dead-end plain text so the user
+    // can recover without a full page reload.
+    var retryHtml = '<div class="muted">' + (t("modal.catalog_load_failed") || "目录加载失败") +
+      '<br><button class="btn ghost" style="margin-top:8px" onclick="openMethodConfig()">' +
+      (t("modal.retry") || "重试") + '</button></div>';
+    document.getElementById("mc-levels-container").innerHTML = retryHtml;
     return;
   }
 
@@ -3840,35 +3991,26 @@ async function openMethodConfig() {
     return;
   }
 
-  var fieldDefs = methodCatalogCache.field_definitions || {};
+  // Phase 4.1: closure helpers delegate to CatalogUtils IIFE so the
+  // catalog-access functions live in a single, independently-testable
+  // module. The delegates here keep existing call sites unchanged while
+  // automatically supplying the current methodCatalogCache state (R26).
 
   function getFieldOptions(fieldName, engine) {
-    var fd = fieldDefs[fieldName];
-    if (!fd) return null;
-    if (fd.options) return fd.options;
-    if (fd.per_backend) return fd.per_backend[engine] || null;
-    return null;
+    return CatalogUtils.getFieldOptions(methodCatalogCache, fieldName, engine);
   }
 
-  function getFieldDefault(fieldName, engine) {
-    var fd = fieldDefs[fieldName];
-    if (!fd) return "";
-    var dflt = fd.default || {};
-    if (typeof dflt === "object" && !Array.isArray(dflt)) {
-      if (dflt[engine] !== undefined) return dflt[engine];
-      if (dflt["*"] !== undefined) return dflt["*"];
-    }
-    return typeof dflt === "string" || typeof dflt === "number" ? dflt : "";
+  function getFieldDefault(fieldName, engine, functional) {
+    return CatalogUtils.getFieldDefault(methodCatalogCache, fieldName, engine, functional);
   }
 
   function isFieldAdvanced(fieldName) {
-    var adv = ["aux_basis", "ri_approximation", "grid", "scf_convergence", "opt_convergence", "max_steps", "recalc_hess", "charge", "multiplicity", "scale_factor"];
-    return adv.indexOf(fieldName) >= 0;
+    return CatalogUtils.isFieldAdvanced(methodCatalogCache, fieldName);
   }
 
   function buildLevelCard(lvDef, stateData) {
     var engine = (stateData && stateData.engine) || lvDef.allowed_engines[0] || "";
-    var expanded = lvDef.level_id === "dft_opt" || lvDef.level_id === "single_point" || lvDef.required === false;
+    var expanded = true;
     var isOptional = lvDef.required === false;
     var stored = wizardState.method.stages[lvDef.level_id];
     var levelDisabled = isOptional && ((stateData && stateData._disabled === true) || !stored || !stored.engine);
@@ -3979,11 +4121,36 @@ async function openMethodConfig() {
       fDiv.appendChild(lbl);
 
       var levelState = getLevelState(lvDef.level_id);
-      var curVal = levelState[fieldName] !== undefined ? levelState[fieldName] : getFieldDefault(fieldName, engine);
-
+      // Resolve functional *first* so we can pass it into getFieldDefault for
+      // functional-level defaults (METHOD_META). The "functional" field itself
+      // does not need the 3rd param (would recurse). See DevDoc §5 / R6.
       var functional = levelState.functional || getFieldDefault("functional", engine) || "";
+      var curVal = levelState[fieldName] !== undefined
+          ? levelState[fieldName]
+          : getFieldDefault(fieldName, engine, fieldName === "functional" ? undefined : functional);
+
+      // ── builtin_dispersion lock (DevDoc §6) ──
+      // If the selected functional hardwires its dispersion (e.g. wB97X-D4 → D4,
+      // wB97M-V → VV10), skip the dropdown entirely and render a read-only badge.
+      // The hidden value is still written into wizardState so /validate-method
+      // receives a value consistent with the functional.
+      if (fieldName === "dispersion") {
+        var funcMeta = lookupCI(methodCatalogCache.method_meta || {}, functional);
+        if (funcMeta && funcMeta.builtin_dispersion) {
+          var badgeSpan = document.createElement("span");
+          badgeSpan.className = "mc-builtin-badge";
+          // i18n the suffix so EN users see "(built-in)" instead of "(内置)" (audit A8).
+          badgeSpan.textContent = funcMeta.builtin_dispersion + " (" + (t("modal.builtin") || "内置") + ")";
+          badgeSpan.title = t("modal.builtin_dispersion_hint") || "此泛函已内置色散校正，无需额外指定";
+          fDiv.appendChild(badgeSpan);
+          getLevelState(lvDef.level_id).dispersion = funcMeta.builtin_dispersion;
+          dest.appendChild(fDiv);
+          return;
+        }
+      }
+
       var funcOptsMap = (methodCatalogCache && methodCatalogCache.functional_options_map) || {};
-      var funcFilter = funcOptsMap[functional];
+      var funcFilter = lookupCI(funcOptsMap, functional);
 
       var opts = null;
       if ((fieldName === "basis" || fieldName === "dispersion") && funcFilter && funcFilter[fieldName]) {
@@ -3995,7 +4162,8 @@ async function openMethodConfig() {
 
       var isSingleLocked = opts && opts.length === 1;
       var isBasisSingleLocked = isSingleLocked && fieldName === "basis";
-      var supportsCustom = fieldName === "basis" && !isBasisSingleLocked && fieldDefs.basis && fieldDefs.basis.supports_custom;
+      var basisFd = (methodCatalogCache.field_definitions || {}).basis;
+      var supportsCustom = fieldName === "basis" && !isBasisSingleLocked && basisFd && basisFd.supports_custom;
       var isCustomActive = supportsCustom && curVal && (
         String(curVal) === "__custom__" || (opts && opts.indexOf(String(curVal)) < 0)
       );
@@ -4034,23 +4202,59 @@ async function openMethodConfig() {
         if (fieldName === "functional") {
           sel.addEventListener("change", function() {
             var newFunctional = sel.value;
-            var newFuncFilter = funcOptsMap[newFunctional];
-            if (newFuncFilter) {
-              var st = getLevelState(lvDef.level_id);
-              if (newFuncFilter.basis) {
-                var curBasis = st.basis;
-                if (curBasis && curBasis !== "__custom__" && newFuncFilter.basis.indexOf(String(curBasis)) < 0) {
-                  st.basis = newFuncFilter.basis[0];
-                }
-              }
-              if (newFuncFilter.dispersion) {
-                var curDisp = st.dispersion;
-                if (curDisp && newFuncFilter.dispersion.indexOf(String(curDisp)) < 0) {
-                  st.dispersion = newFuncFilter.dispersion[0];
-                }
+            var st = getLevelState(lvDef.level_id);
+            // Re-read funcOptsMap from the live cache (R15: avoid stale closure)
+            // and use case-insensitive lookup (R4 / DevDoc §7).
+            var liveFuncOptsMap = (methodCatalogCache && methodCatalogCache.functional_options_map) || {};
+            var liveFuncMeta = lookupCI(methodCatalogCache.method_meta || {}, newFunctional);
+            var newFuncFilter = lookupCI(liveFuncOptsMap, newFunctional);
+
+            // 1. Basis legality check + default-value fill (prefer METHOD_META.default_basis).
+            //    Use an explicit `!== undefined` check rather than `||` so a future
+            //    functional whose default_basis is "" but whose basis list has a
+            //    non-empty first element doesn't silently pick the wrong fallback
+            //    (audit A10).
+            if (newFuncFilter && newFuncFilter.basis) {
+              var curBasis = st.basis;
+              if (!curBasis || curBasis === "__custom__" || newFuncFilter.basis.indexOf(String(curBasis)) < 0) {
+                st.basis = (liveFuncMeta && liveFuncMeta.default_basis !== undefined)
+                    ? liveFuncMeta.default_basis
+                    : newFuncFilter.basis[0];
               }
             }
+
+            // 2. Dispersion legality check + default-value fill (same pattern; audit A11)
+            if (newFuncFilter && newFuncFilter.dispersion) {
+              var curDisp = st.dispersion;
+              if (!curDisp || newFuncFilter.dispersion.indexOf(String(curDisp)) < 0) {
+                st.dispersion = (liveFuncMeta && liveFuncMeta.default_dispersion !== undefined)
+                    ? liveFuncMeta.default_dispersion
+                    : newFuncFilter.dispersion[0];
+              }
+            }
+
+            // 3. RI / aux_basis: if the new functional doesn't support RI, force-clear.
+            //    Otherwise, when the prior state was "none"/empty (e.g. coming from a
+            //    non-RI composite method), reset to the field's global default so users
+            //    don't get stuck on "none" after switching into a RI-capable functional.
+            //    NOTE: `engine` is captured from buildFieldRow's closure. Currently
+            //    RI/aux fields exist only for the orca backend, so a rebuildLevelCard
+            //    always rebinds the listener before this callback can fire on a stale
+            //    engine. If multi-engine RI support lands, re-read currentEngine here (R28).
+            if (liveFuncMeta && !liveFuncMeta.supports_ri) {
+              st.ri_approximation = "none";
+              st.aux_basis = "";
+            } else {
+              if (st.ri_approximation === undefined || st.ri_approximation === "" || st.ri_approximation === "none") {
+                st.ri_approximation = getFieldDefault("ri_approximation", engine, newFunctional);
+              }
+              if (st.aux_basis === undefined || st.aux_basis === "") {
+                st.aux_basis = getFieldDefault("aux_basis", engine, newFunctional);
+              }
+            }
+
             rebuildLevelCard(lvDef.level_id);
+            scheduleValidate();
           });
         }
         fDiv.appendChild(sel);
@@ -4078,10 +4282,10 @@ async function openMethodConfig() {
           customWrap.appendChild(cInp);
           fDiv.appendChild(customWrap);
         }
-      } else if (fieldDefs[fieldName] && (fieldDefs[fieldName].type === "float" || fieldDefs[fieldName].type === "int")) {
+      } else if ((methodCatalogCache.field_definitions || {})[fieldName] && ((methodCatalogCache.field_definitions || {})[fieldName].type === "float" || (methodCatalogCache.field_definitions || {})[fieldName].type === "int")) {
         var inp = document.createElement("input");
         inp.type = "number";
-        var isIntField = fieldDefs[fieldName].type === "int";
+        var isIntField = (methodCatalogCache.field_definitions || {})[fieldName].type === "int";
         inp.step = isIntField ? "1" : "any";
         inp.value = curVal;
         inp.addEventListener("change", function() {
@@ -4169,8 +4373,22 @@ async function openMethodConfig() {
     var oldCard = container.querySelector('[data-level-id="' + lid + '"]');
     var stateData = wizardState.method.stages[lid] || {};
     stateData.engine = stateData.engine || lvDef.allowed_engines[0];
+
+    var wasExpanded = true;
+    if (oldCard) {
+      var oldBody = oldCard.querySelector(".mc-level-body");
+      if (oldBody) wasExpanded = oldBody.style.display !== "none";
+    }
+
     var newCard = buildLevelCard(lvDef, stateData);
     if (oldCard) oldCard.replaceWith(newCard);
+
+    if (!wasExpanded) {
+      var newBody = newCard.querySelector(".mc-level-body");
+      var newExpBtn = newCard.querySelector(".mc-level-expand");
+      if (newBody) newBody.style.display = "none";
+      if (newExpBtn) newExpBtn.classList.remove("open");
+    }
   }
 
   var validateTimer = null;
@@ -4251,7 +4469,20 @@ async function openMethodConfig() {
       fields_summary: for (var k in state) {
         if (k === "engine" || k.charAt(0) === "_") continue;
         var v = state[k];
-        if (v === "" || v === null || v === undefined) continue;
+        if (v === "" || v === null || v === undefined) {
+          // Fallback to functional default_basis for composite methods
+          if (k === "basis" && state.functional) {
+            var fMeta3 = (methodCatalogCache.method_meta || {})[state.functional];
+            if (!fMeta3) fMeta3 = lookupCI(methodCatalogCache.method_meta || {}, state.functional);
+            if (fMeta3 && fMeta3.default_basis) {
+              v = fMeta3.default_basis;
+            } else {
+              continue;
+            }
+          } else {
+            continue;
+          }
+        }
         parts.push(k.split("_").map(function(s) { return s[0]; }).join("") + "=" + v);
       }
       html += '<div class="mc-summary-line">';
@@ -4498,7 +4729,7 @@ function setupEventListeners() {
     selectedNode = event.target.value;
   });
   document.getElementById("btn-refresh-nodes").addEventListener("click", loadNodes);
-  document.getElementById("job-modal").addEventListener("click", function(event) {
+  document.getElementById("job-modal").addEventListener("mousedown", function(event) {
     if (event.target.id === "job-modal") closeModal();
   });
 
@@ -4522,7 +4753,7 @@ function setupEventListeners() {
   document.getElementById("project-modal-close").addEventListener("click", closeProjectModal);
   document.getElementById("project-modal-cancel").addEventListener("click", closeProjectModal);
   document.getElementById("project-modal-submit").addEventListener("click", submitProjectModal);
-  document.getElementById("project-modal").addEventListener("click", function(event) {
+  document.getElementById("project-modal").addEventListener("mousedown", function(event) {
     if (event.target.id === "project-modal") closeProjectModal();
   });
   document.getElementById("project-modal-name").addEventListener("keydown", function(e) {
@@ -4532,21 +4763,21 @@ function setupEventListeners() {
   document.getElementById("delete-project-modal-close").addEventListener("click", closeDeleteProjectModal);
   document.getElementById("delete-project-modal-cancel").addEventListener("click", closeDeleteProjectModal);
   document.getElementById("delete-project-modal-submit").addEventListener("click", submitDeleteProjectModal);
-  document.getElementById("delete-project-modal").addEventListener("click", function(event) {
+  document.getElementById("delete-project-modal").addEventListener("mousedown", function(event) {
     if (event.target.id === "delete-project-modal") closeDeleteProjectModal();
   });
 
   document.getElementById("delete-job-modal-close").addEventListener("click", closeDeleteJobModal);
   document.getElementById("delete-job-modal-cancel").addEventListener("click", closeDeleteJobModal);
   document.getElementById("delete-job-modal-submit").addEventListener("click", submitDeleteJobModal);
-  document.getElementById("delete-job-modal").addEventListener("click", function(event) {
+  document.getElementById("delete-job-modal").addEventListener("mousedown", function(event) {
     if (event.target.id === "delete-job-modal") closeDeleteJobModal();
   });
 
   document.getElementById("target-project-modal-close").addEventListener("click", closeTargetProjectModal);
   document.getElementById("target-project-modal-cancel").addEventListener("click", closeTargetProjectModal);
   document.getElementById("target-project-modal-submit").addEventListener("click", submitTargetProjectModal);
-  document.getElementById("target-project-modal").addEventListener("click", function(event) {
+  document.getElementById("target-project-modal").addEventListener("mousedown", function(event) {
     if (event.target.id === "target-project-modal") closeTargetProjectModal();
   });
 

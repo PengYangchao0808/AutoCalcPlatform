@@ -96,8 +96,22 @@ def _write_optimized_xyz(
     (output_dir / "optimized.xyz").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _find_shermo() -> bool:
-    return shutil.which("shermo") is not None or shutil.which("Shermo") is not None
+def _find_shermo(cfg: dict[str, Any] | None = None) -> str | None:
+    """Return the path to the Shermo binary, or None if not found.
+
+    Checks the configured executable path from the config first (matching
+    ``energy.py``), then falls back to ``shutil.which`` for PATH lookup.
+    Returns the resolved path as a string if found, or None.
+    """
+    if cfg:
+        configured = cfg.get("executables", {}).get("shermo", {}).get("path", "")
+        if configured and Path(configured).is_file():
+            return configured
+    if shutil.which("shermo"):
+        return "shermo"
+    if shutil.which("Shermo"):
+        return "Shermo"
+    return None
 
 
 _SCHEDULER_MARKERS: set[str] = {"inputs", "submit.lsf", ".exit_code", "work", "results"}
@@ -362,10 +376,10 @@ def run_optfreqsp(
     sp_kwargs: dict[str, Any] | None = None,
     thermo_kwargs: dict[str, Any] | None = None,
 ) -> WorkflowResult:
-    if not _find_shermo():
-        return WorkflowResult(status="failed", error="Shermo binary not found in PATH")
-
     cfg = load_config(overrides=config) if config else load_config()
+    shermo_bin = _find_shermo(cfg)
+    if not shermo_bin:
+        return WorkflowResult(status="failed", error="Shermo binary not found")
     out = _resolve_output_dir(output_dir)
     _check_input(input_source)
     coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
@@ -419,6 +433,7 @@ def run_optfreqsp(
         freq_output=log_file,
         sp_energy=sp_energy,
         output_dir=calc_dir,
+        shermo_bin=shermo_bin,
         temperature_k=th.get("temperature", 298.15),
         pressure_atm=th.get("pressure", 1.0),
         scl_zpe=th.get("scale_factor", 0.9905),

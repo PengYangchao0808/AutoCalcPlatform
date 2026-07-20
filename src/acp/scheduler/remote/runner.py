@@ -234,13 +234,15 @@ class RemoteJobRunner:
         seen_stages: set[str] = state.get("seen_stages", set())  # type: ignore[assignment]
 
         if cancel_event.is_set():
-            ok = self._monitor.cancel_job(node, lsf_job_id)
-            event_log.append(
-                "remote.cancel_sent",
-                job_id=record.id,
-                lsf_job_id=lsf_job_id,
-                bkill_ok=ok,
-            )
+            if not state.get("cancel_sent"):
+                ok = self._monitor.cancel_job(node, lsf_job_id)
+                event_log.append(
+                    "remote.cancel_sent",
+                    job_id=record.id,
+                    lsf_job_id=lsf_job_id,
+                    bkill_ok=ok,
+                )
+                state["cancel_sent"] = True
             exit_code = self._wait_exit_code(node, remote_job_dir, timeout=_EXIT_CODE_GRACE)
             self._cleanup_job_state(record.id)
             return (True, exit_code if exit_code is not None else 130)
@@ -352,14 +354,18 @@ class RemoteJobRunner:
 
         return (False, None)
 
-    def cancel_remote(self, job_id: str) -> None:
-        """Send ``bkill`` to cancel a remote job (best-effort)."""
+    def cancel_remote(self, job_id: str) -> bool:
+        """Send ``bkill`` to cancel a remote job (best-effort).
+
+        Returns ``True`` if the cancellation signal was delivered,
+        ``False`` if the job state was not found or bkill failed.
+        """
         state = self._job_states.get(job_id)
         if state is None:
-            return
+            return False
         node: RemoteNode = state["node"]  # type: ignore[assignment]
         lsf_job_id: str = state["lsf_job_id"]  # type: ignore[assignment]
-        self._monitor.cancel_job(node, lsf_job_id)
+        return self._monitor.cancel_job(node, lsf_job_id)
 
     def _cleanup_job_state(self, job_id: str) -> None:
         self._job_states.pop(job_id, None)

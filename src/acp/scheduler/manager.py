@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import random
 import shutil
 import threading
@@ -528,7 +529,11 @@ class JobManager:
             ev.set()
 
         if self._is_remote_enabled() and self.remote_runner is not None and record.remote_job_id:
-            self.remote_runner.cancel_remote(job_id)
+            ok = self.remote_runner.cancel_remote(job_id)
+            if not ok:
+                self._event_log(record).append(
+                    "remote.cancel_failed", job_id=job_id, reason="bkill did not succeed"
+                )
         else:
             self.runner.cancel_local(job_id)
 
@@ -632,6 +637,15 @@ class JobManager:
         record = self.store.get(job_id)
         if record is None:
             logger.error("Job %s vanished before submit", job_id)
+            return
+        if (
+            record.status in (JobStatus.CANCELLED, JobStatus.CANCELLING)
+            or record.status.is_terminal
+        ):
+            logger.info(
+                "Job %s already terminal (%s), skipping submission",
+                job_id, record.status.value,
+            )
             return
 
         cancel_event = self._cancel_events.get(job_id, threading.Event())
@@ -803,7 +817,18 @@ class JobManager:
         # Remote jobs with a valid remote_job_id can be recovered — the
         # background poller will re-check bjobs + .exit_code.
         restart_marker = "[RESTART_FAILED] interrupted by server restart"
-        for status in (JobStatus.RUNNING, JobStatus.STARTING, JobStatus.PENDING, JobStatus.CANCELLING):
+        # CANCELLING jobs that were interrupted mid-cancellation should stay
+        # CANCELLED — the user's cancel intent must survive a restart.
+        for record in self.store.list(status=JobStatus.CANCELLING.value):
+            record.status = JobStatus.CANCELLED
+            record.error = restart_marker
+            record.completed_at = _utc_now_iso()
+            record.touch()
+            self.store.update(record)
+            self._stage_task_observer.finalize_job(record.id, JobStatus.CANCELLED.value)
+            logger.info("Marked CANCELLING job %s as CANCELLED after restart", record.id)
+
+        for status in (JobStatus.RUNNING, JobStatus.STARTING, JobStatus.PENDING):
             for record in self.store.list(status=status.value):
                 if self._try_recover_remote_job(record):
                     logger.info(

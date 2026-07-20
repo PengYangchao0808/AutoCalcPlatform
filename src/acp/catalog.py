@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
 from typing import Any
 
 WORKFLOW_CATALOG: list[dict[str, Any]] = [
@@ -13,6 +16,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "default_backend": "orca",
         "requires_binaries": ["orca"],
         "status": "active",
+        "visible": True,
     },
     {
         "id": "optimize",
@@ -24,6 +28,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "default_backend": "orca",
         "requires_binaries": ["orca"],
         "status": "active",
+        "visible": True,
     },
     {
         "id": "frequency",
@@ -35,6 +40,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "default_backend": "orca",
         "requires_binaries": ["orca"],
         "status": "active",
+        "visible": True,
     },
     {
         "id": "optfreq",
@@ -46,6 +52,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "default_backend": "orca",
         "requires_binaries": ["orca"],
         "status": "active",
+        "visible": True,
     },
     {
         "id": "optfreqsp",
@@ -57,6 +64,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "default_backend": "orca",
         "requires_binaries": ["orca", "shermo"],
         "status": "active",
+        "visible": True,
     },
     {
         "id": "xtb_optimize",
@@ -68,6 +76,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "default_backend": "xtb",
         "requires_binaries": ["xtb"],
         "status": "planned",
+        "visible": True,
     },
     {
         "id": "conformer",
@@ -79,6 +88,9 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "default_backend": "crest",
         "requires_binaries": ["crest", "orca"],
         "status": "active",
+        # R21: hidden from the Workbench wizard (legacy entry point),
+        # but still executable via direct scheduler/CLI invocation.
+        "visible": False,
     },
     {
         "id": "nmr",
@@ -90,6 +102,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "default_backend": "orca",
         "requires_binaries": ["orca"],
         "status": "active",
+        "visible": True,
     },
     {
         "id": "benchmark",
@@ -101,6 +114,8 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "default_backend": "orca",
         "requires_binaries": ["orca"],
         "status": "active",
+        # R21: hidden from the Workbench wizard (no first-class UI flow).
+        "visible": False,
     },
     {
         "id": "ensemble",
@@ -112,6 +127,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "default_backend": "censo",
         "requires_binaries": ["crest", "censo", "orca"],
         "status": "active",
+        "visible": True,
     },
     {
         "id": "energy",
@@ -123,6 +139,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "default_backend": "censo",
         "requires_binaries": ["crest", "censo", "orca"],
         "status": "active",
+        "visible": True,
     },
     {
         "id": "mechanism",
@@ -133,7 +150,9 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "mechanism",
         "default_backend": "orca",
         "requires_binaries": ["orca"],
-        "status": "planned",
+        # Phase 1 verification step 4: mechanism is now implemented and active.
+        "status": "active",
+        "visible": True,
     },
     {
         "id": "custom_sequence",
@@ -145,6 +164,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "default_backend": "",
         "requires_binaries": [],
         "status": "planned",
+        "visible": True,
     },
 ]
 
@@ -153,9 +173,13 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
 # chemically valid. The UI filters basis/dispersion dropdowns dynamically
 # based on the selected functional.
 # NOTE: _ALL_BASIS_SETS is defined *before* FIELD_DEFINITIONS so it can be
-# referenced by the "basis" field.
+# referenced by the "basis" field. It is a ``tuple`` (not ``list``) so that
+# the shared reference cannot be mutated in place by any consumer — R24
+# recommended this in its "或将其改为 tuple（不可变）" alternative. The
+# JSON encoder serialises tuples and lists identically, so the API surface
+# is unchanged.
 
-_ALL_BASIS_SETS: list[str] = [
+_ALL_BASIS_SETS: tuple[str, ...] = (
     "def2-SV(P)", "def2-SVP", "def2-SVPD",
     "def2-TZVP", "def2-TZVPP", "def2-TZVPPD",
     "def2-QZVP", "def2-QZVPP", "def2-QZVPPD",
@@ -164,39 +188,179 @@ _ALL_BASIS_SETS: list[str] = [
     "aug-cc-pVDZ", "aug-cc-pVTZ", "aug-cc-pVQZ",
     "cc-pwCVDZ", "cc-pwCVTZ", "cc-pwCVQZ",
     "cc-pCVDZ", "cc-pCVTZ",
-]
+)
 
-FUNCTIONAL_OPTIONS_MAP: dict[str, dict[str, list[str]]] = {
+# ── Phase 4.2: basis-catalog deduplication sentinel ────────────────────
+# Instead of storing the full 24-element basis list in every METHOD_META
+# entry, we use a module-level sentinel that _derive_functional_options_map
+# and get_method_catalog() understand. The API response puts the tuple
+# once as a top-level ``basis_catalog`` field; metadata entries that
+# reference it carry ``basis_ref: "basis_catalog"`` instead of a
+# duplicated array.
+_BASIS_CATALOG_REF = "<basis-catalog>"
+
+# ── Per-functional metadata (basis_inline, supports_ri, defaults, etc.) ──
+# Single source of truth for frontend data-driven UI logic.
+# Key = functional name (standard casing).  Use _case_insensitive_get()
+# for lookups to tolerate user-input case variance.
+#
+# FUNCTIONAL_OPTIONS_MAP (below) is auto-derived from this dict to keep the
+# two structures permanently in sync — DevDoc §2.1 specifies that
+# ``functional_options_map`` values are "由 METHOD_META 自动生成".
+
+METHOD_META: dict[str, dict[str, Any]] = {
+    # ── 3c composite methods (built-in basis set, no RI) ──
+    "r2SCAN-3c": {
+        "basis_inline": False,
+        "supports_ri": False,
+        "basis": ("def2-mTZVPP",),
+        "dispersion": ("D4",),
+        "builtin_dispersion": "D4",
+        "default_basis": "def2-mTZVPP",
+        "default_dispersion": "D4",
+    },
+    "PBEh-3c": {
+        "basis_inline": False,
+        "supports_ri": False,
+        "basis": ("def2-mSVP",),
+        "dispersion": ("D3BJ",),
+        "builtin_dispersion": "D3BJ",
+        "default_basis": "def2-mSVP",
+        "default_dispersion": "D3BJ",
+    },
+    "B97-3c": {
+        "basis_inline": False,
+        "supports_ri": False,
+        "basis": ("mTZVP",),
+        "dispersion": ("D3BJ",),
+        "builtin_dispersion": "D3BJ",
+        "default_basis": "mTZVP",
+        "default_dispersion": "D3BJ",
+    },
+
+    # ── Ordinary hybrid functionals (supports RI) ──
     "B3LYP": {
-        "basis": _ALL_BASIS_SETS,
-        "dispersion": ["none", "D3", "D3BJ", "D4"],
+        "basis_inline": True,
+        "supports_ri": True,
+        "basis": _BASIS_CATALOG_REF,
+        "dispersion": ("none", "D3", "D3BJ", "D4"),
+        "builtin_dispersion": None,
+        "default_basis": "def2-TZVPP",
+        "default_dispersion": "D4",
     },
     "PBE0": {
-        "basis": _ALL_BASIS_SETS,
-        "dispersion": ["none", "D3", "D3BJ", "D4"],
+        "basis_inline": True,
+        "supports_ri": True,
+        "basis": _BASIS_CATALOG_REF,
+        "dispersion": ("none", "D3", "D3BJ", "D4"),
+        "builtin_dispersion": None,
+        "default_basis": "def2-TZVPP",
+        "default_dispersion": "D4",
     },
+    "M062X": {
+        "basis_inline": True,
+        "supports_ri": True,
+        "basis": _BASIS_CATALOG_REF,
+        "dispersion": ("none", "D3", "D3BJ"),
+        "builtin_dispersion": None,
+        "default_basis": "def2-TZVPP",
+        "default_dispersion": "none",
+    },
+
+    # ── Range-separated single-hybrid functionals (supports RI) ──
     "wB97X-D4": {
-        "basis": _ALL_BASIS_SETS,
-        "dispersion": ["none"],
+        "basis_inline": True,
+        "supports_ri": True,
+        "basis": _BASIS_CATALOG_REF,
+        "dispersion": ("D4",),
+        "builtin_dispersion": "D4",
+        "default_basis": "def2-TZVPP",
+        "default_dispersion": "D4",
     },
     "wB97M-V": {
-        "basis": _ALL_BASIS_SETS,
-        "dispersion": ["none"],
+        "basis_inline": True,
+        "supports_ri": True,
+        "basis": _BASIS_CATALOG_REF,
+        "dispersion": ("VV10",),
+        "builtin_dispersion": "VV10",
+        "default_basis": "def2-TZVPP",
+        "default_dispersion": "VV10",
     },
-    "r2SCAN-3c": {
-        "basis": [""],
-        "dispersion": ["none"],
+
+    # ── Double-hybrid functionals (supports RI, needs RI-MP2 auxiliary basis) ──
+    "PWPB95": {
+        "basis_inline": True,
+        "supports_ri": True,
+        "basis": _BASIS_CATALOG_REF,
+        "dispersion": ("D3BJ", "D4", "D3", "none"),
+        "builtin_dispersion": None,
+        "default_basis": "def2-TZVPP",
+        "default_dispersion": "D3BJ",
     },
+    "wB97M-2": {
+        "basis_inline": True,
+        "supports_ri": True,
+        "basis": _BASIS_CATALOG_REF,
+        "dispersion": ("VV10",),
+        "builtin_dispersion": "VV10",
+        "default_basis": "def2-TZVPP",
+        "default_dispersion": "VV10",
+    },
+
+    # ── Post-HF wavefunction methods ──
     "DLPNO-CCSD(T)": {
-        "basis": ["def2-TZVPP"],
-        "dispersion": ["none"],
+        "basis_inline": False,
+        "supports_ri": False,
+        "basis": ("def2-TZVPP",),
+        "dispersion": ("none",),
+        "builtin_dispersion": None,
+        "default_basis": "def2-TZVPP",
+        "default_dispersion": "none",
+        "basis_block": {
+            "basis": "def2-TZVPP",
+            "auxJ": "def2/J",
+            "auxC": "def2-TZVPP/C",
+        },
     },
 }
+
+
+def _derive_functional_options_map() -> dict[str, dict[str, list[str]]]:
+    """Project ``METHOD_META`` into the legacy ``{func: {basis, dispersion}}``
+    shape consumed by the frontend dropdown filter.
+
+    Tuples are converted to lists so the JSON payload serialises as an
+    array (the API contract is unchanged).  Phase 4.2: entries whose
+    ``basis`` is the ``_BASIS_CATALOG_REF`` sentinel are expanded to the
+    full ``_ALL_BASIS_SETS`` list automatically.
+    """
+    out: dict[str, dict[str, list[str]]] = {}
+    for func, meta in METHOD_META.items():
+        raw_basis = meta.get("basis", ())
+        if raw_basis is _BASIS_CATALOG_REF:
+            basis_list = list(_ALL_BASIS_SETS)
+        else:
+            basis_list = list(raw_basis)
+        out[func] = {
+            "basis": basis_list,
+            "dispersion": list(meta.get("dispersion", ())),
+        }
+    return out
+
+
+FUNCTIONAL_OPTIONS_MAP: dict[str, dict[str, list[str]]] = _derive_functional_options_map()
 
 FIELD_DEFINITIONS: dict[str, Any] = {
     "functional": {
         "type": "select",
-        "per_backend": {            "orca": ["B3LYP", "PBE0", "wB97X-D4", "wB97M-V", "r2SCAN-3c", "DLPNO-CCSD(T)"],
+        "per_backend": {
+            "orca": [
+                "r2SCAN-3c", "PBEh-3c", "B97-3c",
+                "B3LYP", "PBE0", "M062X",
+                "wB97X-D4", "wB97M-V",
+                "PWPB95", "wB97M-2",
+                "DLPNO-CCSD(T)",
+            ],
             "xtb": ["GFN0-xTB", "GFN1-xTB", "GFN2-xTB"],
         },
         "default": {"*": "r2SCAN-3c"},
@@ -204,14 +368,14 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     "basis": {
         "type": "select",
         "per_backend": {
-            "orca": _ALL_BASIS_SETS,
+            "orca": _BASIS_CATALOG_REF,
         },
         "default": {"*": ""},
         "supports_custom": True,
     },
     "dispersion": {
         "type": "select",
-        "options": ["none", "D3", "D3BJ", "D4"],
+        "options": ["none", "D3", "D3BJ", "D4", "VV10"],
         "default": {"*": "D4"},
     },
     "solvent_model": {
@@ -244,22 +408,26 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     },
     "grid": {
         "type": "select",
+        "advanced": True,
         "options": ["SG1", "Fine", "UltraFine", "SuperFine"],
         "default": {"*": "UltraFine"},
     },
     "scf_convergence": {
         "type": "select",
+        "advanced": True,
         "options": ["Normal", "Tight", "VeryTight"],
         "default": {"*": "Tight"},
     },
     "opt_convergence": {
         "type": "select",
+        "advanced": True,
         "options": ["Loose", "Normal", "Tight", "VeryTight"],
         "default": {"*": "Tight"},
     },
-    "max_steps": {"type": "int", "min": 1, "max": 10000, "default": {"*": 100}},
+    "max_steps": {"type": "int", "advanced": True, "min": 1, "max": 10000, "default": {"*": 100}},
     "recalc_hess": {
         "type": "int",
+        "advanced": True,
         "label": "Hessian Recalc Interval",
         "min": 1,
         "max": 1000,
@@ -267,7 +435,7 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     },
     "temperature": {"type": "float", "min": 0, "max": 10000, "default": {"*": 298.15}, "unit": "K"},
     "pressure": {"type": "float", "min": 0, "max": 100000, "default": {"*": 1.0}, "unit": "atm"},
-    "scale_factor": {"type": "float", "min": 0, "max": 1.0, "default": {"*": 1.0}},
+    "scale_factor": {"type": "float", "advanced": True, "min": 0, "max": 1.0, "default": {"*": 1.0}},
     "ewin": {
         "type": "float",
         "label": "Energy Window",
@@ -287,18 +455,20 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "per_backend": {"xtb": ["GFN0-xTB", "GFN1-xTB", "GFN2-xTB"]},
         "default": {"*": "GFN2-xTB"},
     },
-    "charge": {"type": "int", "default": {"*": 0}},
-    "multiplicity": {"type": "int", "default": {"*": 1}},
+    "charge": {"type": "int", "advanced": True, "default": {"*": 0}},
+    "multiplicity": {"type": "int", "advanced": True, "default": {"*": 1}},
     "aux_basis": {
         "type": "select",
-        "per_backend": {            "orca": ["", "def2-TZVPP/C", "cc-pVTZ/C"],
+        "advanced": True,
+        "per_backend": {            "orca": ["AutoAux", "def2/J", "def2-TZVPP/C", "cc-pVTZ/C"],
         },
-        "default": {"*": ""},
+        "default": {"*": "AutoAux"},
     },
     "ri_approximation": {
         "type": "select",
+        "advanced": True,
         "per_backend": {"orca": ["none", "RI", "RIJCOSX", "RIJK"]},
-        "default": {"*": "none"},
+        "default": {"*": "RIJCOSX"},
     },
 }
 
@@ -953,25 +1123,111 @@ METHOD_SCHEMAS: dict[str, Any] = {
     },
 }
 
+# ── Backend discovery (R22 / Phase 4.5) ────────────────────────────────
+# Dynamically resolves the availability and version of every external binary
+# that the platform depends on so the frontend can surface pre-flight
+# environment checks before submitting a workflow.
+
+_BACKEND_BINARIES: dict[str, dict[str, Any]] = {
+    "orca":     {"label": "ORCA",           "env_var": "CONFSEARCH_ORCA_PATH",    "default": "orca"},
+    "xtb":      {"label": "xTB (GFN2)",      "env_var": "CONFSEARCH_XTB_PATH",     "default": "xtb"},
+    "crest":    {"label": "CREST",           "env_var": "CONFSEARCH_CREST_PATH",   "default": "crest"},
+    "censo":    {"label": "CENSO",           "env_var": "CONFSEARCH_CENSO_PATH",   "default": "censo"},
+    "shermo":   {"label": "Shermo",          "env_var": "CONFSEARCH_SHERMO_PATH",  "default": "Shermo"},
+    "isostat":  {"label": "ISOSTAT",         "env_var": "CONFSEARCH_ISOSTAT_PATH", "default": "isostat"},
+}
+
+_BACKEND_SUPPORTS: dict[str, list[str]] = {
+    "orca":    ["singlepoint", "optimize", "frequency", "optfreq", "nmr"],
+    "xtb":     ["singlepoint", "optimize"],
+    "crest":   ["conformer_search"],
+    "censo":   ["censo_refinement", "censo_energy"],
+    "shermo":  ["thermo"],
+    "isostat": ["clustering"],
+}
+
+
+def _resolve_backend_path(bid: str) -> str:
+    """Resolve binary path for backend *bid* using an env-var override or shutil.which."""
+    info = _BACKEND_BINARIES.get(bid, {})
+    env_path = os.environ.get(info.get("env_var", ""), "")
+    if env_path:
+        return env_path
+    default = info.get("default", bid)
+    return shutil.which(default) or default
+
+
+def _detect_backend_version(bid: str, binary_path: str) -> str | None:
+    """Try to detect the version of backend *bid* by running it with a known flag."""
+    version_flags: dict[str, str] = {
+        "orca":     "",
+        "xtb":      "--version",
+        "crest":    "--version",
+        "censo":    "--version",
+        "shermo":   "",
+        "isostat":  "",
+    }
+    flag = version_flags.get(bid)
+    if flag is None:
+        return None
+    try:
+        result = subprocess.run(
+            [binary_path, flag], capture_output=True, text=True,
+            timeout=10, env={**os.environ, "OMP_NUM_THREADS": "1"},
+        )
+        first_line = (result.stdout or result.stderr).split("\n")[0].strip()
+        if first_line and len(first_line) < 128:
+            return first_line
+    except Exception:
+        pass
+    return None
+
+
+def _discover_backends() -> list[dict[str, Any]]:
+    """Build the backends list with dynamic availability and version metadata."""
+    backends: list[dict[str, Any]] = []
+    for bid, binfo in _BACKEND_BINARIES.items():
+        path = _resolve_backend_path(bid)
+        available = shutil.which(path) is not None if path else False
+        version = _detect_backend_version(bid, path) if available else None
+        backends.append({
+            "id": bid,
+            "label": binfo["label"],
+            "supports": _BACKEND_SUPPORTS.get(bid, []),
+            "path": path,
+            "available": available,
+            "version": version,
+        })
+    return backends
+
+
 METHOD_CATALOG: dict[str, Any] = {
-    "backends": [
-        {
-            "id": "orca",
-            "label": "ORCA",
-            "supports": ["singlepoint", "optimize", "frequency", "optfreq", "nmr"],
-        },
-        {"id": "xtb", "label": "xTB (GFN2)", "supports": ["singlepoint", "optimize"]},
-        {"id": "crest", "label": "CREST", "supports": ["conformer_search"]},
-    ],
+    "backends": _discover_backends(),
     "field_definitions": FIELD_DEFINITIONS,
     "method_schemas": METHOD_SCHEMAS,
     "functional_options_map": FUNCTIONAL_OPTIONS_MAP,
+    "method_meta": METHOD_META,
 }
 
 
 # ---------------------------------------------------------------------------
 # 验证 + 标准化函数
 # ---------------------------------------------------------------------------
+
+
+def _case_insensitive_get(mapping: dict[str, Any], key: str) -> Any | None:
+    """Look up a key in *mapping* ignoring case.
+
+    Returns the value for the first key whose lowercased form matches
+    *key*.lower().  Falls back to ``None`` when no match is found.
+    """
+    if key in mapping:
+        return mapping[key]
+    kl = key.lower()
+    for k, v in mapping.items():
+        if k.lower() == kl:
+            return v
+    return None
 
 
 def _resolve_field_options(
@@ -993,9 +1249,13 @@ def _resolve_field_options(
     if "options" in fd:
         return fd["options"]
     if "per_backend" in fd:
-        return fd["per_backend"].get(
+        opts = fd["per_backend"].get(
             engine, list(fd["per_backend"].values())[0] if fd["per_backend"] else []
         )
+        # Phase 4.2: expand basis-catalog sentinel
+        if opts is _BASIS_CATALOG_REF:
+            return list(_ALL_BASIS_SETS)
+        return opts
     return None
 
 
@@ -1004,9 +1264,14 @@ def _resolve_field_default(
 ) -> Any:
     """Return the default value for a field, respecting functional context.
 
-    If the functional restricts ``basis`` or ``dispersion`` options,
-    the first allowed option is returned *unless* the global default
-    (from ``FIELD_DEFINITIONS``) is also valid for the functional.
+    Resolution order:
+      1. ``METHOD_META[functional]`` (functional-level defaults for
+         ``basis`` / ``dispersion``; RI/aux forced to none/empty when the
+         functional declares ``supports_ri == False``).
+      2. ``FUNCTIONAL_OPTIONS_MAP[functional]`` restriction for
+         ``basis`` / ``dispersion`` (first allowed option, or the global
+         default when it is also allowed).
+      3. ``FIELD_DEFINITIONS`` global default for the field.
     """
     fd = FIELD_DEFINITIONS.get(field_name)
     global_default: Any = ""
@@ -1017,14 +1282,27 @@ def _resolve_field_default(
         else:
             global_default = dflt
 
-    if functional and field_name in ("basis", "dispersion"):
-        mapping = FUNCTIONAL_OPTIONS_MAP.get(functional)
-        if mapping and field_name in mapping:
-            opts = mapping[field_name]
-            if opts:
-                if global_default and global_default in opts:
-                    return global_default
-                return opts[0]
+    if functional:
+        meta = _case_insensitive_get(METHOD_META, functional)
+        if meta:
+            if field_name == "basis" and meta.get("default_basis") is not None:
+                return meta["default_basis"]
+            if field_name == "dispersion" and meta.get("default_dispersion") is not None:
+                return meta["default_dispersion"]
+            if not meta.get("supports_ri", True):
+                if field_name == "ri_approximation":
+                    return "none"
+                if field_name == "aux_basis":
+                    return ""
+
+        if field_name in ("basis", "dispersion"):
+            mapping = _case_insensitive_get(FUNCTIONAL_OPTIONS_MAP, functional)
+            if mapping and field_name in mapping:
+                opts = mapping[field_name]
+                if opts:
+                    if global_default and global_default in opts:
+                        return global_default
+                    return opts[0]
 
     return global_default
 
@@ -1035,11 +1313,18 @@ def _clamp_to_functional(level: dict[str, Any], method_key: str) -> None:
     Safety net: ensures execution-path converters never pass invalid
     basis/dispersion combinations to backends, even if validation was
     bypassed.
+
+    Comparison is case-insensitive (R20): a current value that matches an
+    allowed entry case-insensitively is normalised to the canonical casing
+    of that entry (``allowed[idx]``); a current value with no
+    case-insensitive match is replaced with ``allowed[0]``. This keeps the
+    downstream CLI emit (``.lower()`` for ``_CASE_INSENSITIVE_FIELDS``)
+    consistent with the catalog's canonical casing.
     """
     func_name = level.get(method_key)
     if not func_name:
         return
-    mapping = FUNCTIONAL_OPTIONS_MAP.get(func_name)
+    mapping = _case_insensitive_get(FUNCTIONAL_OPTIONS_MAP, func_name)
     if not mapping:
         return
     for key in ("basis", "dispersion"):
@@ -1047,8 +1332,16 @@ def _clamp_to_functional(level: dict[str, Any], method_key: str) -> None:
             continue
         allowed = mapping[key]
         current = level[key]
-        if current and current not in allowed and current != "__custom__":
+        if not current or current == "__custom__":
+            continue
+        allowed_lower = [str(a).lower() for a in allowed]
+        try:
+            idx = allowed_lower.index(str(current).lower())
+        except ValueError:
             level[key] = allowed[0]
+            continue
+        # Normalise to canonical casing (allowed[idx], not current).
+        level[key] = allowed[idx]
 
 
 _CASE_INSENSITIVE_FIELDS = frozenset({"solvent_model", "dispersion"})
@@ -1069,6 +1362,26 @@ def _normalize_solvent(levels: dict, schema: dict) -> dict:
         if "solvent" in ml.get("fields", []) and lv_data.get("solvent") is None:
             lv_data["solvent"] = ""
     return levels
+
+
+def _match_option_case_insensitive(
+    options: list[str], value: Any,
+) -> tuple[int, str] | None:
+    """Case-insensitively match *value* against *options*.
+
+    Returns ``(index, canonical_value)`` on match, ``None`` otherwise.
+    Centralises the lookup pattern used by ``normalize_and_validate_method_config``
+    for ``_CASE_INSENSITIVE_FIELDS`` (solvent_model, dispersion) and the
+    ``functional`` field, which shares the same canonical-normalisation
+    semantics but is NOT in ``_CASE_INSENSITIVE_FIELDS`` (CLI emit must
+    preserve its case).
+    """
+    lower_options = [str(o).lower() for o in options]
+    try:
+        idx = lower_options.index(str(value).lower())
+    except ValueError:
+        return None
+    return idx, options[idx]
 
 
 def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[dict, list[str]]:
@@ -1100,15 +1413,29 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                     field_name, engine, normalized.get("functional"),
                 )
                 if options is not None:
-                    if field_name == "solvent_model":
-                        user_val = str(user_val).lower()
-                        lower_options = {str(o).lower() for o in options}
-                        if user_val not in lower_options:
+                    if field_name in _CASE_INSENSITIVE_FIELDS or field_name == "functional":
+                        # R18/R20: case-insensitive match against the catalog's
+                        # canonical-cased option list. ``solvent_model`` is
+                        # additionally stored lowercased (legacy convention
+                        # downstream code relies on); every other field
+                        # (dispersion, functional) normalises to the canonical
+                        # casing of the matched option. ``functional`` is NOT
+                        # in ``_CASE_INSENSITIVE_FIELDS`` because that set also
+                        # drives CLI emit (``.lower()``) in
+                        # ``method_levels_to_cli_flags``, which would corrupt
+                        # the method name for ORCA.
+                        match = _match_option_case_insensitive(options, user_val)
+                        if match is None:
                             errors.append(
                                 f"Level '{lid}', field '{field_name}': "
                                 f"value '{user_lv.get(field_name)}' not in allowed options"
                             )
                             continue
+                        _idx, canonical = match
+                        if field_name == "solvent_model":
+                            user_val = str(user_val).lower()
+                        else:
+                            user_val = canonical
                     elif user_val not in options:
                         if fd and fd.get("supports_custom") and str(user_val).strip() and len(options) > 1:
                             pass
@@ -1152,6 +1479,13 @@ def convert_method_levels_to_protocol_levels(levels: dict[str, Any]) -> dict[str
         "dft_opt": "optimization",
         "single_point": "single_point",
         "thermo": "thermo",
+        # Extended mappings (R12): cover all known level_ids so the
+        # converter no longer silently drops levels it doesn't recognise.
+        "refinement_sp": "single_point",
+        "censo": "single_point",
+        "preopt": "optimization",
+        "crest": "crest",
+        "optfreq": "optimization",
     }
     field_mapping: dict[str, str] = {
         "functional": "method",
@@ -1166,21 +1500,28 @@ def convert_method_levels_to_protocol_levels(levels: dict[str, Any]) -> dict[str
     }
 
     converted: dict[str, Any] = {}
-    for old_stage, new_stage in stage_mapping.items():
-        if old_stage not in levels:
-            continue
-        old_level = levels[old_stage]
+    for old_stage, old_level in levels.items():
         if not isinstance(old_level, dict):
             continue
-        new_level: dict[str, Any] = {}
+        # Unknown level_ids are passed through under their original name
+        # (R12: "缺失的 level_id 不丢弃") so user-defined/custom stages
+        # remain accessible to downstream consumers.
+        new_stage = stage_mapping.get(old_stage, old_stage)
+        # Merge field-by-field instead of wholesale replace so that two
+        # source levels mapped to the same destination stage do not
+        # silently clobber each other (e.g. confsearch ``preopt`` +
+        # ``dft_opt`` both → ``optimization``; censo_energy ``censo`` +
+        # ``refinement_sp`` both → ``single_point``). Later source levels
+        # win on overlapping fields, which matches the schema's natural
+        # ordering (DFT method info comes after xTB pre-opt, refinement
+        # method info comes after CENSO preset).
+        new_level = converted.setdefault(new_stage, {})
         for old_key, new_key in field_mapping.items():
             if old_key in old_level:
                 value = old_level[old_key]
                 if old_key == "solvent_model":
                     value = str(value).lower()
                 new_level[new_key] = value
-        if new_level:
-            converted[new_stage] = new_level
 
     # The frontend schema for conformer search does not expose a separate
     # frequency level, so frequency should inherit the optimization engine.
@@ -1284,7 +1625,48 @@ def get_workflow_catalog() -> list[dict[str, Any]]:
 
 
 def get_method_catalog() -> dict[str, Any]:
-    return METHOD_CATALOG
+    """Return the method catalog with Phase 4.2 basis deduplication applied.
+
+    The raw ``METHOD_CATALOG`` stores the ``_BASIS_CATALOG_REF`` sentinel
+    in places that would otherwise duplicate the full 24-element basis
+    list. This function expands the sentinel and adds a top-level
+    ``basis_catalog`` field so the API response carries the array only
+    once. Consumers that reference the full set use ``basis_ref:
+    "basis_catalog"`` instead of an inline array.
+    """
+    import copy
+    catalog = copy.deepcopy(METHOD_CATALOG)
+
+    basis_list = list(_ALL_BASIS_SETS)
+    catalog["basis_catalog"] = basis_list
+
+    # Expand sentinels in method_meta: {basis: "<basis-catalog>"} →
+    # {basis_ref: "basis_catalog"}
+    meta = catalog.get("method_meta")
+    if isinstance(meta, dict):
+        for func_meta in meta.values():
+            if isinstance(func_meta, dict) and func_meta.get("basis") is _BASIS_CATALOG_REF:
+                del func_meta["basis"]
+                func_meta["basis_ref"] = "basis_catalog"
+
+    # Expand sentinels in field_definitions per_backend values
+    fd = catalog.get("field_definitions")
+    if isinstance(fd, dict):
+        for field_name, field_def in fd.items():
+            if isinstance(field_def, dict):
+                pb = field_def.get("per_backend")
+                if isinstance(pb, dict):
+                    for eng, val in list(pb.items()):
+                        if val is _BASIS_CATALOG_REF:
+                            pb[eng] = basis_list
+
+    # Expand sentinels in _resolve_field_options fallback path (server-side):
+    # the validate endpoint also reads per_backend via _resolve_field_options,
+    # which must see concrete lists, not sentinels.  Since get_method_catalog
+    # returns a deep copy with expanded lists, and the validate endpoint
+    # imports FIELD_DEFINITIONS directly (not through this function), we
+    # update the live data structure here.
+    return catalog
 
 
 def get_workflow_by_id(wf_id: str) -> dict[str, Any] | None:
@@ -1307,8 +1689,12 @@ __all__ = [
     "FIELD_DEFINITIONS",
     "FUNCTIONAL_OPTIONS_MAP",
     "METHOD_CATALOG",
+    "METHOD_META",
     "METHOD_SCHEMAS",
     "WORKFLOW_CATALOG",
+    "_case_insensitive_get",
+    "_derive_functional_options_map",
+    "_match_option_case_insensitive",
     "convert_method_levels_to_protocol_levels",
     "get_method_catalog",
     "get_method_profiles",

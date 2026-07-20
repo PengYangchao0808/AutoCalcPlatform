@@ -49,20 +49,35 @@ class JobStatus(str, Enum):
         return self in active
 
 
-SUPPORTED_WORKFLOWS: tuple[str, ...] = (
-    "conformer",
-    "ensemble",
-    "energy",
-    "nmr",
-    "benchmark",
-    "mechanism",
-    "singlepoint",
-    "optimize",
-    "frequency",
-    "optfreq",
-    "optfreqsp",
-    "fake",
-)
+def _derive_supported_workflows() -> tuple[str, ...]:
+    """Derive the scheduler's supported workflow set from WORKFLOW_CATALOG.
+
+    R14/D5: previously this was a hand-maintained tuple that drifted out
+    of sync with ``acp.catalog.WORKFLOW_CATALOG``. It now derives from the
+    catalog's ``status == "active"`` entries, plus the synthetic ``fake``
+    workflow that exists only for scheduler tests (kept here, not in the
+    public catalog — see test 3.12 which excludes ``fake`` from the
+    equality assertion against the catalog's active set).
+
+    Falls back to a static list when ``acp.catalog`` cannot be imported
+    (e.g. during early bootstrap or standalone conformer_search use).
+    """
+    try:
+        from acp.catalog import WORKFLOW_CATALOG
+    except ImportError:
+        return (
+            "conformer", "ensemble", "energy", "nmr", "benchmark", "mechanism",
+            "singlepoint", "optimize", "frequency", "optfreq", "optfreqsp",
+            "fake",
+        )
+    active = tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
+    # ``fake`` is a synthetic scheduler-only workflow (no catalog entry);
+    # append it so test 3.12's set difference `SUPPORTED_WORKFLOWS - {"fake"}`
+    # equals the catalog's active id set exactly.
+    return active + ("fake",)
+
+
+SUPPORTED_WORKFLOWS: tuple[str, ...] = _derive_supported_workflows()
 
 _CENSO_PRESETS: tuple[str, ...] = ("censo-light", "censo-default", "censo-zero")
 

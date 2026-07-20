@@ -17,6 +17,7 @@ import json
 import logging
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -284,6 +285,7 @@ class JobRunner:
                 stderr=err,
                 cwd=str(work_dir),
                 env=env,
+                start_new_session=True,
             )
             record.pid = proc.pid
 
@@ -500,6 +502,7 @@ class JobRunner:
                 stderr=err,
                 cwd=str(work_dir),
                 env=env,
+                start_new_session=True,
             )
             record.pid = proc.pid
 
@@ -594,11 +597,16 @@ class JobRunner:
         if proc.poll() is not None:
             return
         try:
-            proc.terminate()
+            pgid = os.getpgid(proc.pid)
+        except ProcessLookupError:
+            return
+        try:
+            os.killpg(pgid, signal.SIGTERM)
             try:
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                proc.kill()
+                os.killpg(pgid, signal.SIGKILL)
+                proc.wait(timeout=5)
         except OSError:
             logger.warning("Failed to terminate subprocess", exc_info=True)
 

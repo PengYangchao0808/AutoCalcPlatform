@@ -8,6 +8,7 @@ FastAPI router for ACP Workbench v2 resources under ``/api/v1``.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import posixpath
 import urllib.parse
@@ -15,7 +16,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from rdkit import Chem
 from rdkit.Chem import rdMolDescriptors
@@ -1146,10 +1147,24 @@ def get_workflow_catalog() -> dict[str, Any]:
 
 
 @router.get("/method-catalog")
-def get_method_catalog() -> dict[str, Any]:
+def get_method_catalog(request: Request) -> Response:
+    """Return the method catalog with content-hash ETag + Cache-Control.
+
+    R11: the catalog payload is large (>15 KB) but changes only on deploy.
+    The response body is pre-serialised here (rather than letting FastAPI
+    re-serialise the dict) so the SHA-256 ETag matches the actual bytes
+    sent to the client. ``If-None-Match`` matches return a body-less 304.
+    """
     from acp.catalog import get_method_catalog as _get_method_catalog
 
-    return _get_method_catalog()
+    payload = _get_method_catalog()
+    body = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+    etag = '"' + hashlib.sha256(body).hexdigest()[:32] + '"'
+    headers = {"ETag": etag, "Cache-Control": "max-age=300"}
+    if request.headers.get("if-none-match") == etag:
+        # 304 must not include a body per RFC 7232 §4.1.
+        return Response(status_code=304, headers=headers)
+    return Response(content=body, media_type="application/json", headers=headers)
 
 
 @router.post("/validate-method", response_model=ValidateMethodResponse)

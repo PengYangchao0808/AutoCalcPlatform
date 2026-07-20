@@ -252,6 +252,8 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
         parser.add_argument("--sp-aux-basis", default="def2/J", help="SP auxiliary basis (default: def2/J)")
         parser.add_argument("--sp-ri-approximation", default="RIJCOSX", choices=["none", "RI", "RIJCOSX", "RIJK"], help="SP RI approximation (default: RIJCOSX)")
         parser.add_argument("--sp-dispersion", default="none", help="SP dispersion correction")
+        parser.add_argument("--sp-solvent", default="", help="SP solvent name (e.g. water; defaults to --solvent)")
+        parser.add_argument("--sp-solvent-model", default="", help="SP solvent model (defaults to --solvent-model)")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1278,10 +1280,12 @@ def _handle_optfreqsp(args: argparse.Namespace) -> int:
         sp_kwargs["aux_basis"] = args.sp_aux_basis
     if args.sp_dispersion and args.sp_dispersion != "none":
         sp_kwargs["dispersion"] = args.sp_dispersion
-    if args.solvent_model != "none":
-        sp_kwargs["solvent_model"] = args.solvent_model
-    if args.solvent:
-        sp_kwargs["solvent"] = args.solvent
+    sp_solvent = args.sp_solvent or args.solvent
+    sp_solvent_model = args.sp_solvent_model or args.solvent_model
+    if sp_solvent_model and sp_solvent_model != "none":
+        sp_kwargs["solvent_model"] = sp_solvent_model
+    if sp_solvent:
+        sp_kwargs["solvent"] = sp_solvent
     thermo_kwargs: dict[str, Any] = {
         "temperature": args.temperature,
         "pressure": args.pressure,

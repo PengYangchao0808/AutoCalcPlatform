@@ -11,7 +11,7 @@ import logging
 import re
 import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 
@@ -22,6 +22,22 @@ from conformer_search.utils.resource_utils import calc_orca_maxcore, mem_to_mb
 from conformer_search.utils.solvent_map import orca_smd_solvent
 
 logger = logging.getLogger(__name__)
+
+
+def _resolve_method_meta(method: Optional[str]) -> Optional[dict[str, Any]]:
+    """Look up ``METHOD_META`` for *method* (case-insensitive).
+
+    Returns ``None`` if ``acp.catalog`` is unavailable or *method* is not
+    declared. Imported lazily so that ``conformer_search`` has no
+    import-time dependency on the ``acp`` package.
+    """
+    if not method:
+        return None
+    try:
+        from acp.catalog import METHOD_META, _case_insensitive_get
+    except ImportError:
+        return None
+    return _case_insensitive_get(METHOD_META, method)
 
 
 class ORCAInterface(QCInterfaceBase):
@@ -91,6 +107,7 @@ class ORCAInterface(QCInterfaceBase):
         recalc_hess: int = None,
         solvent: str = None,
         solvent_model: str = None,
+        aux_basis: str = None,
     ) -> str:
         """
         Build ORCA input blocks.
@@ -107,6 +124,9 @@ class ORCAInterface(QCInterfaceBase):
                 block (opt only); overrides config when given
             solvent: Override solvent (uses self.solvent if None)
             solvent_model: Override solvent model (uses self.solvent_model if None)
+            aux_basis: Override auxiliary basis for the ``%basis`` block of
+                methods that consume one (e.g. DLPNO-CCSD(T) ``auxC``).
+                Ignored for ordinary DFT and composite methods.
 
         Returns:
             Input blocks string
@@ -138,18 +158,64 @@ class ORCAInterface(QCInterfaceBase):
         ):
             route = route.replace("Freq", "NumFreq")
 
-        # Composite methods (PBEh-3c, r2SCAN-3c) bundle their own basis set
+        # ── Phase 1 (R17/R18/R19/R27): data-driven method dispatch ──
+        # Resolve functional metadata from acp.catalog.METHOD_META. The
+        # previous hardcoded branch on ("pbeh-3c", "r2scan-3c") and the
+        # case-sensitive DLPNO comparison are replaced by reading the
+        # ``basis_inline`` and ``basis_block`` attributes. Lazy import
+        # keeps conformer_search free of an acp top-level dependency.
+        meta = _resolve_method_meta(_method)
+        basis_inline = True if meta is None else bool(meta.get("basis_inline", True))
+        basis_block_template = meta.get("basis_block") if meta else None
+
         extras_str = (" " + " ".join(_route_extras)) if _route_extras else ""
-        if _method.lower() in ("pbeh-3c", "r2scan-3c"):
-            blocks.append(f"! {_method} {route}{extras_str}")
-        elif _method == "DLPNO-CCSD(T)":
-            blocks.append(f"! DLPNO-CCSD(T) TightSCF {route}{extras_str}")
-            blocks.append("%basis")
-            blocks.append('  basis "def2-TZVPP"')
-            blocks.append('  auxJ  "def2/J"')
-            blocks.append('  auxC  "def2-TZVPP/C"')
-            blocks.append("end")
+
+        if not basis_inline:
+            # Composite or wavefunction method: do NOT append a basis name
+            # to the ``!`` line (the method either bundles its own basis
+            # like r2SCAN-3c, or declares one via a ``%basis`` block like
+            # DLPNO-CCSD(T)).
+            method_name = _method
+            if _method.lower() == "dlpno-ccsd(t)":
+                # R18: normalise to the canonical casing that ORCA expects.
+                method_name = "DLPNO-CCSD(T)"
+
+            route_prefix = ""
+            if method_name == "DLPNO-CCSD(T)":
+                route_prefix = " TightSCF"
+            blocks.append(f"! {method_name}{route_prefix} {route}{extras_str}")
+
+            # R19/R27: render ``%basis`` block from METHOD_META template,
+            # allowing per-call override of ``basis`` and ``auxC`` (via
+            # ``aux_basis``). Skipped for composite methods that have no
+            # ``basis_block`` entry (r2SCAN-3c / PBEh-3c / B97-3c).
+            if basis_block_template is not None:
+                blocks.append("%basis")
+                # default_basis is the single source of truth; basis_block
+                # is a read-only snapshot that must stay in sync (DevDoc §10 D1).
+                effective_basis = _basis or meta.get("default_basis") or basis_block_template.get("basis", "")
+                if effective_basis:
+                    blocks.append(f'  basis "{effective_basis}"')
+                aux_j = basis_block_template.get("auxJ")
+                aux_c = basis_block_template.get("auxC")
+                # Per-call overrides
+                if aux_basis:
+                    aux_c = str(aux_basis)
+                # ``extra_blocks`` may carry structured overrides (dicts with
+                # ``auxJ``/``auxC`` keys) for advanced use cases (R19).
+                for blk in (extra_blocks or []):
+                    if isinstance(blk, dict):
+                        if "auxJ" in blk:
+                            aux_j = blk["auxJ"]
+                        if "auxC" in blk:
+                            aux_c = blk["auxC"]
+                if aux_j:
+                    blocks.append(f'  auxJ  "{aux_j}"')
+                if aux_c:
+                    blocks.append(f'  auxC  "{aux_c}"')
+                blocks.append("end")
         else:
+            # Ordinary DFT: append the basis name to the ``!`` line.
             blocks.append(f"! {_method} {_basis} {route}{extras_str}")
 
         blocks.append(f"%maxcore {self.maxcore}")
@@ -173,6 +239,11 @@ class ORCAInterface(QCInterfaceBase):
 
         if extra_blocks:
             for blk in extra_blocks:
+                # Skip dict entries — they are structured overrides consumed
+                # earlier (e.g. DLPNO %basis block auxJ/auxC overrides via
+                # R19). Only stringifiable blocks render as raw input.
+                if isinstance(blk, dict):
+                    continue
                 if blk:
                     blocks.append(str(blk))
 
@@ -203,6 +274,7 @@ class ORCAInterface(QCInterfaceBase):
         recalc_hess: int = None,
         solvent: str = None,
         solvent_model: str = None,
+        aux_basis: str = None,
     ):
         """
         Write ORCA input file.
@@ -222,6 +294,7 @@ class ORCAInterface(QCInterfaceBase):
             recalc_hess: Optional Hessian recalc interval for the %geom block
             solvent: Override solvent (uses self.solvent if None)
             solvent_model: Override solvent model (uses self.solvent_model if None)
+            aux_basis: Override auxiliary basis (consumed by DLPNO-CCSD(T) etc.)
         """
         charge = charge if charge is not None else self.charge
         multiplicity = multiplicity if multiplicity is not None else self.multiplicity
@@ -236,6 +309,7 @@ class ORCAInterface(QCInterfaceBase):
             recalc_hess=recalc_hess,
             solvent=solvent,
             solvent_model=solvent_model,
+            aux_basis=aux_basis,
         )
 
         ensure_dir(input_file.parent)
@@ -344,6 +418,7 @@ class ORCAInterface(QCInterfaceBase):
             recalc_hess=kwargs.get("recalc_hess"),
             solvent=_solvent,
             solvent_model=_solvent_model,
+            aux_basis=kwargs.get("aux_basis"),
         )
 
         success = self._run_orca(input_file, output_file)
@@ -428,6 +503,7 @@ class ORCAInterface(QCInterfaceBase):
             extra_blocks=kwargs.get("extra_blocks"),
             solvent=_solvent,
             solvent_model=_solvent_model,
+            aux_basis=kwargs.get("aux_basis"),
         )
 
         success = self._run_orca(input_file, output_file)
@@ -511,6 +587,7 @@ class ORCAInterface(QCInterfaceBase):
             extra_blocks=kwargs.get("extra_blocks"),
             solvent=_solvent,
             solvent_model=_solvent_model,
+            aux_basis=kwargs.get("aux_basis"),
         )
 
         success = self._run_orca(input_file, output_file)
@@ -564,6 +641,7 @@ class ORCAInterface(QCInterfaceBase):
         geom_maxiter: int = None,
         extra_blocks: list = None,
         recalc_hess: int = None,
+        aux_basis: str = None,
         **kwargs,
     ) -> QCResult:
         """Run combined optimization + frequency as single ORCA job.
@@ -613,6 +691,7 @@ class ORCAInterface(QCInterfaceBase):
             recalc_hess=recalc_hess,
             solvent=_solvent,
             solvent_model=_solvent_model,
+            aux_basis=aux_basis,
         )
 
         success = self._run_orca(input_file, output_file)

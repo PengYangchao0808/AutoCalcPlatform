@@ -277,11 +277,12 @@ class RemoteJobMonitor:
     # ------------------------------------------------------------------ #
 
     def cancel_job(self, node: RemoteNode, lsf_job_id: str) -> bool:
-        """Send ``bkill`` and check the return value.
+        """Send ``bkill`` to cancel a remote LSF job, with SSH ``pkill`` fallback.
 
-        Returns ``True`` if ``bkill`` exited 0, ``False`` otherwise (the
-        job may have already finished).  Failures are logged but never
-        raise — cancellation is best-effort.
+        Returns ``True`` if the cancellation signal was delivered successfully
+        (either ``bkill`` exited 0 or the ``pkill`` fallback succeeded),
+        ``False`` otherwise.  Failures are logged but never raise —
+        cancellation is best-effort.
         """
         cmd = f"bkill {lsf_job_id} 2>&1"
         try:
@@ -292,11 +293,49 @@ class RemoteJobMonitor:
         if code == 0:
             logger.info("Cancelled LSF job %s on %s", lsf_job_id, node.name)
             return True
+
         logger.warning(
-            "bkill %s returned non-zero (code=%d) on %s: %s",
+            "bkill %s returned non-zero (code=%d) on %s: %s — trying pkill fallback",
             lsf_job_id,
             code,
             node.name,
             out.strip(),
         )
+        return self._pkill_acp(node, lsf_job_id)
+
+    def _pkill_acp(self, node: RemoteNode, lsf_job_id: str) -> bool:
+        """SSH fallback: kill ``acp run`` processes matching a LSF job ID on the node.
+
+        Searches for ``acp.cli run`` processes whose command line contains
+        the job ID and sends SIGTERM followed by SIGKILL to their process groups.
+        """
+        # Find PIDs of acp run processes tied to this job ID.
+        find_cmd = shlex.quote(
+            f"pgrep -f 'acp.cli run.*{lsf_job_id}'"
+        )
+        try:
+            code, out, _err = self._ssh.execute(
+                node, f"{find_cmd} 2>/dev/null || true", timeout=15
+            )
+        except SSHExecutionError as exc:
+            logger.warning("pkill fallback SSH error on %s: %s", node.name, exc)
+            return False
+
+        if code != 0 or not out.strip():
+            logger.info("No matching acp processes found for job %s on %s", lsf_job_id, node.name)
+            return False
+
+        pids = out.strip().split()
+        logger.info("Killing %d acp processes for job %s on %s", len(pids), lsf_job_id, node.name)
+        kill_cmd = shlex.quote(f"kill -TERM {' '.join(pids)} 2>/dev/null; sleep 5; "
+                               f"kill -KILL {' '.join(pids)} 2>/dev/null || true")
+        try:
+            code, out2, _err = self._ssh.execute(node, kill_cmd, timeout=15)
+            if code == 0:
+                logger.info("pkill fallback succeeded for job %s on %s", lsf_job_id, node.name)
+                return True
+            logger.warning("pkill fallback exited %d for job %s on %s: %s",
+                           code, lsf_job_id, node.name, out2.strip())
+        except SSHExecutionError as exc:
+            logger.warning("pkill fallback SSH error on %s: %s", node.name, exc)
         return False

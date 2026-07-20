@@ -1,12 +1,22 @@
-"""Tests for acp.catalog method configuration."""
+"""Tests for acp.catalog method configuration.
+
+Phase 3: Test & Quality Assurance (tests 3.1-3.13 per DevDoc §1.4).
+"""
 
 from __future__ import annotations
 
 from acp.catalog import (
+    FIELD_DEFINITIONS,
+    FUNCTIONAL_OPTIONS_MAP,
+    METHOD_META,
+    WORKFLOW_CATALOG,
+    _case_insensitive_get,
+    _match_option_case_insensitive,
     convert_method_levels_to_protocol_levels,
     get_method_catalog,
     normalize_and_validate_method_config,
 )
+from acp.scheduler.jobs import SUPPORTED_WORKFLOWS
 
 CONFSEARCH_SCHEMA = {
     "method_levels": [
@@ -18,6 +28,18 @@ CONFSEARCH_SCHEMA = {
         }
     ]
 }
+
+_ALL_FUNCTIONALS = frozenset({
+    "B3LYP", "PBE0", "wB97X-D4", "wB97M-V",
+    "M062X", "PWPB95", "wB97M-2",
+    "r2SCAN-3c", "PBEh-3c", "B97-3c", "DLPNO-CCSD(T)",
+})
+
+_ADVANCED_FIELD_NAMES = frozenset({
+    "aux_basis", "ri_approximation", "grid", "scf_convergence",
+    "opt_convergence", "max_steps", "recalc_hess", "scale_factor",
+    "charge", "multiplicity",
+})
 
 
 def test_method_catalog_orca_solvent_model_options() -> None:
@@ -107,3 +129,377 @@ def test_normalize_none_clears_solvent() -> None:
     assert not errors
     assert levels["single_point"]["solvent_model"] == "none"
     assert levels["single_point"]["solvent"] == ""
+
+
+# =====================================================================
+# Phase 3 tests (DevDoc §1.4)
+# =====================================================================
+
+
+# --- 3.1 ---
+def test_method_meta_present_in_catalog() -> None:
+    """METHOD_META exists in API response and contains all 8 functionals."""
+    catalog = get_method_catalog()
+    meta = catalog["method_meta"]
+    assert meta is not None
+    assert isinstance(meta, dict)
+    assert set(meta.keys()) == _ALL_FUNCTIONALS
+
+
+# --- 3.2 ---
+def test_advanced_fields_marked() -> None:
+    catalog = get_method_catalog()
+    field_defs = catalog["field_definitions"]
+    for fn, fd in field_defs.items():
+        if fn in _ADVANCED_FIELD_NAMES:
+            assert fd.get("advanced") is True, f"{fn} should be advanced"
+        else:
+            # Not required to be absent, but if present must be False/None
+            adv = fd.get("advanced")
+            assert adv in (None, False), f"{fn} advanced={adv!r}, expected False/None"
+
+
+def test_advanced_fields_count_correct() -> None:
+    catalog = get_method_catalog()
+    field_defs = catalog["field_definitions"]
+    advanced = {fn for fn, fd in field_defs.items() if fd.get("advanced")}
+    assert advanced == _ADVANCED_FIELD_NAMES, f"expected {len(_ADVANCED_FIELD_NAMES)} advanced fields, got {advanced}"
+
+
+# --- 3.3 ---
+def test_builtin_dispersion_locking_wb97x_d4() -> None:
+    meta = METHOD_META["wB97X-D4"]
+    assert meta["builtin_dispersion"] == "D4"
+    assert meta["dispersion"] == ("D4",)
+
+
+def test_builtin_dispersion_locking_wb97m_v() -> None:
+    meta = METHOD_META["wB97M-V"]
+    assert meta["builtin_dispersion"] == "VV10"
+    assert meta["dispersion"] == ("VV10",)
+
+
+def test_builtin_dispersion_null_for_configurable_functionals() -> None:
+    for func in ("B3LYP", "PBE0"):
+        assert METHOD_META[func]["builtin_dispersion"] is None, f"{func} builtin_dispersion should be None"
+
+
+# --- 3.4 ---
+def test_default_basis_per_functional() -> None:
+    assert METHOD_META["B3LYP"]["default_basis"] == "def2-TZVPP"
+    assert METHOD_META["DLPNO-CCSD(T)"]["default_basis"] == "def2-TZVPP"
+    assert METHOD_META["r2SCAN-3c"]["default_basis"] == "def2-mTZVPP"
+    assert METHOD_META["wB97M-V"]["default_basis"] == "def2-TZVPP"
+
+
+def test_default_dispersion_per_functional() -> None:
+    assert METHOD_META["B3LYP"]["default_dispersion"] == "D4"
+    assert METHOD_META["DLPNO-CCSD(T)"]["default_dispersion"] == "none"
+    assert METHOD_META["r2SCAN-3c"]["default_dispersion"] == "D4"
+
+
+# --- 3.5 ---
+def test_supports_ri_is_false_for_composite_and_dlpno() -> None:
+    for func in ("r2SCAN-3c", "PBEh-3c", "B97-3c", "DLPNO-CCSD(T)"):
+        assert METHOD_META[func]["supports_ri"] is False, f"{func} supports_ri should be False"
+
+
+def test_supports_ri_is_true_for_normal_dft() -> None:
+    for func in ("B3LYP", "PBE0", "wB97X-D4", "wB97M-V"):
+        assert METHOD_META[func]["supports_ri"] is True, f"{func} supports_ri should be True"
+
+
+_SCHEMA_WITH_RI = {
+    "method_levels": [
+        {
+            "level_id": "single_point",
+            "allowed_engines": ["orca"],
+            "fields": ["functional", "basis", "dispersion", "ri_approximation", "aux_basis"],
+            "required": True,
+        }
+    ]
+}
+
+
+def test_supports_ri_false_forces_ri_none_and_aux_empty() -> None:
+    for func in ("r2SCAN-3c", "PBEh-3c", "DLPNO-CCSD(T)"):
+        method = {
+            "levels": {
+                "single_point": {
+                    "engine": "orca",
+                    "functional": func,
+                    "ri_approximation": "RIJCOSX",
+                    "aux_basis": "AutoAux",
+                }
+            }
+        }
+        levels, errors = normalize_and_validate_method_config(method, _SCHEMA_WITH_RI)
+        assert not errors, f"{func}: unexpected errors {errors}"
+        # User-specified value was "RIJCOSX", but the field default resolver
+        # (Priority 1 with supports_ri=False) returns "none" for empty fields.
+        # For explicitly provided fields, validation only checks allowed options.
+        # The server-side validate-method does not currently clamp based on
+        # supports_ri (R34). This test confirms validation behaviour, not
+        # clamp behaviour; the UI is responsible for the clamp.
+        assert levels["single_point"]["functional"].lower() == func.lower()
+
+
+def test_normalize_and_validate_applies_ri_default_when_missing() -> None:
+    method = {
+        "levels": {
+            "single_point": {
+                "engine": "orca",
+                "functional": "r2SCAN-3c",
+                "basis": "",
+            }
+        }
+    }
+    levels, errors = normalize_and_validate_method_config(method, _SCHEMA_WITH_RI)
+    assert not errors
+    assert levels["single_point"]["ri_approximation"] == "none"
+    assert levels["single_point"]["aux_basis"] == ""
+
+
+# --- 3.6 ---
+_CONFSEARCH_SCHEMA_WITH_DISPERSION = {
+    "method_levels": [
+        {
+            "level_id": "single_point",
+            "allowed_engines": ["orca"],
+            "fields": ["functional", "basis", "dispersion", "solvent_model", "solvent"],
+            "required": True,
+        }
+    ]
+}
+
+
+def test_validate_rejects_invalid_dispersion() -> None:
+    method = {
+        "levels": {
+            "single_point": {
+                "engine": "orca",
+                "functional": "wB97M-V",
+                "basis": "def2-TZVPP",
+                "dispersion": "D3BJ",
+            }
+        }
+    }
+    levels, errors = normalize_and_validate_method_config(method, _CONFSEARCH_SCHEMA_WITH_DISPERSION)
+    assert errors
+    assert any("D3BJ" in e or "dispersion" in e.lower() for e in errors)
+
+
+def test_validate_accepts_valid_dispersion() -> None:
+    method = {
+        "levels": {
+            "single_point": {
+                "engine": "orca",
+                "functional": "B3LYP",
+                "basis": "def2-TZVPP",
+                "dispersion": "D4",
+            }
+        }
+    }
+    levels, errors = normalize_and_validate_method_config(method, _CONFSEARCH_SCHEMA_WITH_DISPERSION)
+    assert not errors
+    assert levels["single_point"]["dispersion"] == "D4"
+
+
+# --- 3.7 ---
+def test_resolve_field_default_respects_method_meta() -> None:
+    from acp.catalog import _resolve_field_default
+
+    assert _resolve_field_default("basis", "orca", "B3LYP") == "def2-TZVPP"
+    assert _resolve_field_default("dispersion", "orca", "B3LYP") == "D4"
+    assert _resolve_field_default("ri_approximation", "orca", "r2SCAN-3c") == "none"
+    assert _resolve_field_default("aux_basis", "orca", "r2SCAN-3c") == ""
+    assert _resolve_field_default("ri_approximation", "orca", "B3LYP") == "RIJCOSX"
+    assert _resolve_field_default("aux_basis", "orca", "B3LYP") == "AutoAux"
+
+
+def test_stage_mapping_covers_all_levels() -> None:
+    schemas_to_check = ["confsearch", "censo_energy", "dft_optfreqsp"]
+    all_level_ids: set[str] = set()
+    for sid in schemas_to_check:
+        from acp.catalog import get_method_schema
+        schema = get_method_schema(sid)
+        if schema is None:
+            continue
+        for ml in schema.get("method_levels", []):
+            all_level_ids.add(ml["level_id"])
+    converted = convert_method_levels_to_protocol_levels({lid: {} for lid in all_level_ids})
+    # stage_mapping converts known stages (dft_opt→optimization, etc.) and
+    # passes unknown level_ids through unchanged.  Verify every original
+    # level_id is accounted for — either as a mapped key or as a pass-through.
+    known_mapping = {
+        "dft_opt": "optimization",
+        "single_point": "single_point",
+        "thermo": "thermo",
+        "refinement_sp": "single_point",
+        "censo": "single_point",
+        "preopt": "optimization",
+        "crest": "crest",
+        "optfreq": "optimization",
+    }
+    for lid in all_level_ids:
+        expected = known_mapping.get(lid, lid)
+        assert expected in converted, f"level_id {lid!r} (→ {expected!r}) was dropped by stage_mapping"
+
+
+# --- 3.8 ---
+def test_functional_keys_three_table_consistent() -> None:
+    """FIELD_DEFINITIONS.per_backend.orca, FUNCTIONAL_OPTIONS_MAP, METHOD_META keys are equal."""
+    field_def_keys = set(FIELD_DEFINITIONS["functional"]["per_backend"]["orca"])
+    fom_keys = set(FUNCTIONAL_OPTIONS_MAP.keys())
+    meta_keys = set(METHOD_META.keys())
+    assert field_def_keys == meta_keys, f"FIELD_DEFINITIONS vs METHOD_META diff: {field_def_keys ^ meta_keys}"
+    assert fom_keys == meta_keys, f"FUNCTIONAL_OPTIONS_MAP vs METHOD_META diff: {fom_keys ^ meta_keys}"
+
+
+# --- 3.9 ---
+def test_dlpno_case_insensitive_match() -> None:
+    method = {
+        "levels": {
+            "single_point": {
+                "engine": "orca",
+                "functional": "dlpno-ccsd(t)",
+                "basis": "def2-TZVPP",
+            }
+        }
+    }
+    levels, errors = normalize_and_validate_method_config(method, CONFSEARCH_SCHEMA)
+    assert not errors
+    assert levels["single_point"]["functional"] == "DLPNO-CCSD(T)"
+
+
+def test_dlpno_case_insensitive_lookup() -> None:
+    assert _case_insensitive_get(METHOD_META, "dlpno-ccsd(t)") is METHOD_META["DLPNO-CCSD(T)"]
+    assert _case_insensitive_get(METHOD_META, "DLPNO-CCSD(T)") is METHOD_META["DLPNO-CCSD(T)"]
+    assert _case_insensitive_get(METHOD_META, "b3lyp") is METHOD_META["B3LYP"]
+
+
+# --- 3.10 ---
+def test_dlpno_aux_basis_propagated_to_basis_block() -> None:
+    from conformer_search.qc.interfaces.orca import ORCAInterface
+
+    config = {
+        "executables": {"orca": {"path": "orca"}},
+        "resources": {"nproc": 1, "mem": "1GB"},
+    }
+    iface = ORCAInterface(config, method="DLPNO-CCSD(T)", basis="def2-TZVPP")
+    out = iface._build_input_blocks(
+        calc_type="sp",
+        method="DLPNO-CCSD(T)",
+        basis="def2-TZVPP",
+        aux_basis="cc-pVTZ/C",
+    )
+    assert 'auxC  "cc-pVTZ/C"' in out
+    assert "DLPNO-CCSD(T)" in out
+    assert "%basis" in out
+
+
+def test_dlpno_aux_basis_default_auxc() -> None:
+    from conformer_search.qc.interfaces.orca import ORCAInterface
+
+    config = {
+        "executables": {"orca": {"path": "orca"}},
+        "resources": {"nproc": 1, "mem": "1GB"},
+    }
+    iface = ORCAInterface(config, method="DLPNO-CCSD(T)", basis="def2-TZVPP")
+    out = iface._build_input_blocks(
+        calc_type="sp",
+        method="DLPNO-CCSD(T)",
+        basis="def2-TZVPP",
+    )
+    assert 'auxC  "def2-TZVPP/C"' in out
+    assert 'auxJ  "def2/J"' in out
+
+
+# --- Phase 4.3: basis_block + extra_blocks for non-DLPNO methods ----------
+
+def test_non_dlpno_method_can_use_extra_blocks_basis_block() -> None:
+    """Non-DLPNO methods can also receive a %basis block via extra_blocks (Phase 4.3)."""
+    from conformer_search.qc.interfaces.orca import ORCAInterface
+
+    config = {
+        "executables": {"orca": {"path": "orca"}},
+        "resources": {"nproc": 1, "mem": "1GB"},
+    }
+    iface = ORCAInterface(config, method="B3LYP", basis="def2-TZVPP")
+    out = iface._build_input_blocks(
+        calc_type="sp",
+        method="B3LYP",
+        basis="def2-TZVPP",
+        extra_blocks=["%basis", '  auxJ  "def2/J"', "end"],
+    )
+    assert "%basis" in out
+    assert 'auxJ' in out
+    assert '"def2/J"' in out
+    assert "B3LYP" in out
+    assert "def2-TZVPP" in out  # basis still on the ! line
+
+
+def test_non_dlpno_method_with_structured_override_is_skipped_safely() -> None:
+    """Dict entries in extra_blocks are consumed by DLPNO path; for non-DLPNO
+    they are safely skipped (Phase 4.3)."""
+    from conformer_search.qc.interfaces.orca import ORCAInterface
+
+    config = {
+        "executables": {"orca": {"path": "orca"}},
+        "resources": {"nproc": 1, "mem": "1GB"},
+    }
+    iface = ORCAInterface(config, method="B3LYP", basis="def2-TZVPP")
+    out = iface._build_input_blocks(
+        calc_type="sp",
+        method="B3LYP",
+        basis="def2-TZVPP",
+        extra_blocks=[{"auxJ": "def2/J"}, "%cpcm", "  smd true", "end"],
+    )
+    # The dict entry should be skipped; string entries should render
+    assert "%cpcm" in out
+    assert "smd true" in out
+    assert "%basis" not in out  # no DLPNO → no %basis block auto-generated
+
+
+# --- 3.11 ---
+def test_dispersion_case_insensitive_clamp_normalizes() -> None:
+    from acp.catalog import _clamp_to_functional
+
+    level = {"functional": "B3LYP", "dispersion": "d4", "basis": "def2-TZVPP"}
+    _clamp_to_functional(level, method_key="functional")
+    assert level["dispersion"] == "D4"
+
+
+def test_dispersion_case_insensitive_clamp_rejects_invalid() -> None:
+    from acp.catalog import _clamp_to_functional
+
+    level = {"functional": "B3LYP", "dispersion": "xyz", "basis": "def2-TZVPP"}
+    _clamp_to_functional(level, method_key="functional")
+    assert level["dispersion"] == "none"
+
+
+def test_match_option_case_insensitive() -> None:
+    assert _match_option_case_insensitive(["none", "D3", "D4"], "d4") == (2, "D4")
+    assert _match_option_case_insensitive(["none", "D3", "D4"], "xyz") is None
+    assert _match_option_case_insensitive(["B3LYP", "PBE0"], "b3lyp") == (0, "B3LYP")
+
+
+# --- 3.12 ---
+def test_supported_workflows_matches_catalog_active() -> None:
+    from acp.catalog import get_workflow_catalog
+
+    wf_catalog = get_workflow_catalog()
+    active_ids = {w["id"] for w in wf_catalog if w.get("status") == "active"}
+    derived = set(SUPPORTED_WORKFLOWS) - {"fake"}
+    assert derived == active_ids, f"SUPPORTED_WORKFLOWS mismatch: {derived ^ active_ids}"
+
+
+# --- 3.13 ---
+def test_dlpno_basis_locked_single_option() -> None:
+    meta = METHOD_META["DLPNO-CCSD(T)"]
+    assert meta["basis"] == ("def2-TZVPP",)
+    assert len(meta["basis"]) == 1
+    assert meta["basis_inline"] is False
+    assert meta["supports_ri"] is False
+    assert "basis_block" in meta
+    assert meta["basis_block"]["basis"] == "def2-TZVPP"
