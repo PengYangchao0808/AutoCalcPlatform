@@ -478,6 +478,37 @@ register_plan_provider("mechanism", _MechanismStagePlanProvider())
 register_plan_provider("ensemble", _EnsembleStagePlanProvider())
 register_plan_provider("energy", _EnergyStagePlanProvider())
 
+# Simple workflow providers
+class _SinglepointStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        return [StagePlan(stage_name="single_point")]
+
+class _OptimizeStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        return [StagePlan(stage_name="optimize")]
+
+class _FrequencyStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        return [StagePlan(stage_name="frequency")]
+
+class _OptfreqStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        return [StagePlan(stage_name="opt_freq")]
+
+class _OptfreqspStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        return [
+            StagePlan(stage_name="opt_freq"),
+            StagePlan(stage_name="single_point"),
+            StagePlan(stage_name="shermo"),
+        ]
+
+register_plan_provider("singlepoint", _SinglepointStagePlanProvider())
+register_plan_provider("optimize", _OptimizeStagePlanProvider())
+register_plan_provider("frequency", _FrequencyStagePlanProvider())
+register_plan_provider("optfreq", _OptfreqStagePlanProvider())
+register_plan_provider("optfreqsp", _OptfreqspStagePlanProvider())
+
 
 __all__ = [
     "StagePlan",

@@ -514,6 +514,106 @@ class ORCAInterface(QCInterfaceBase):
             has_frequencies=len(frequencies) > 0,
         )
 
+    def opt_freq(
+        self,
+        coordinates: np.ndarray,
+        symbols: list[str],
+        charge: int = 0,
+        multiplicity: int = 1,
+        output_dir: Path = None,
+        output_name: str = "orca_optfreq",
+        method: str = None,
+        basis: str = None,
+        route_extras: list = None,
+        geom_maxiter: int = None,
+        extra_blocks: list = None,
+        **kwargs,
+    ) -> QCResult:
+        """Run combined optimization + frequency as single ORCA job.
+
+        Uses calc_type='optfreq' -> generates '! ... Opt Freq ...' route line.
+        NumFreq fallback is handled automatically by _build_input_blocks.
+
+        Args:
+            coordinates: Initial coordinates (N, 3)
+            symbols: Element symbols
+            charge: Molecular charge
+            multiplicity: Spin multiplicity
+            output_dir: Output directory
+            output_name: Base name for output files
+            method: Override method (uses self.method if None)
+            basis: Override basis (uses self.basis if None)
+            route_extras: Extra route-line keywords
+            geom_maxiter: Max geometry iterations
+            extra_blocks: Extra raw input blocks
+            **kwargs: Additional parameters
+
+        Returns:
+            QCResult with opt+freq results
+        """
+        output_dir = Path(output_dir) if output_dir else Path.cwd()
+        ensure_dir(output_dir)
+
+        input_file = output_dir / f"{output_name}.inp"
+        output_file = output_dir / f"{output_name}.out"
+
+        self._write_input(
+            input_file,
+            coordinates,
+            symbols,
+            "optfreq",
+            charge,
+            multiplicity,
+            method=method,
+            basis=basis,
+            route_extras=route_extras,
+            geom_maxiter=geom_maxiter,
+            extra_blocks=extra_blocks,
+        )
+
+        success = self._run_orca(input_file, output_file)
+
+        if not success:
+            return QCResult(
+                success=False,
+                error_message="ORCA opt+freq calculation failed",
+                output_file=input_file,
+                log_file=output_file,
+            )
+
+        coords, syms, error = LogParser.extract_last_converged_coords(output_file, "orca")
+        energy = LogParser.extract_energy(output_file, "orca")
+
+        frequencies: list[float] = []
+        try:
+            with open(output_file, encoding="utf-8", errors="replace") as f:
+                content = f.read()
+            freq_pattern = r"Mode\#\s+\d+\s+:\s+([-+]?\d+\.\d+)\s+cm\*\*-1"
+            matches = re.findall(freq_pattern, content)
+            frequencies = [float(m) for m in matches]
+        except Exception as e:
+            logger.warning(f"Could not parse frequency data from optfreq output: {e}")
+
+        if coords is None:
+            return QCResult(
+                success=False,
+                error_message=error or "Could not extract coordinates from optfreq output",
+                output_file=input_file,
+                log_file=output_file,
+            )
+
+        return QCResult(
+            success=True,
+            energy=energy,
+            coordinates=coords,
+            symbols=syms or symbols,
+            converged=True,
+            output_file=input_file,
+            log_file=output_file,
+            frequencies=frequencies if frequencies else None,
+            has_frequencies=len(frequencies) > 0,
+        )
+
     def nmr_shielding(
         self,
         coordinates: np.ndarray,

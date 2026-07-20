@@ -663,7 +663,10 @@ class JobRunner:
 
     def _build_cmd(self, spec: JobSpec, work_dir: Path, input_path: str = "") -> list[str]:
         wf = spec.workflow
-        if wf not in ("conformer", "nmr", "benchmark", "mechanism", "ensemble", "energy"):
+        if wf not in (
+            "conformer", "nmr", "benchmark", "mechanism", "ensemble", "energy",
+            "singlepoint", "optimize", "frequency", "optfreq", "optfreqsp",
+        ):
             raise ValueError(f"No subprocess mapping for workflow: {wf}")
 
         if wf == "benchmark":
@@ -711,6 +714,16 @@ class JobRunner:
                 cmd += ["--protocol", str(method["protocol"])]
             if method.get("backend"):
                 cmd += ["--backend", str(method["backend"])]
+        elif wf in ("singlepoint", "optimize", "frequency", "optfreq", "optfreqsp"):
+            cmd += ["--input", str(source), "--output", str(work_dir)]
+            levels = method.get("levels", {})
+            if levels:
+                from acp.catalog import method_levels_to_cli_flags
+                if wf == "optfreqsp":
+                    prefix_map = {"optfreq": "", "single_point": "sp-", "thermo": ""}
+                    cmd += method_levels_to_cli_flags(levels, prefix_map)
+                else:
+                    cmd += method_levels_to_cli_flags(levels)
         else:
             cmd += ["--input", str(source), "--output", str(work_dir)]
             if method.get("benchmark_level"):

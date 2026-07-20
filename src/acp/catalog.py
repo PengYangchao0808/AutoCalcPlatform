@@ -12,7 +12,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "dft_singlepoint",
         "default_backend": "orca",
         "requires_binaries": ["orca"],
-        "status": "planned",
+        "status": "active",
     },
     {
         "id": "optimize",
@@ -23,29 +23,40 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "dft_optimize",
         "default_backend": "orca",
         "requires_binaries": ["orca"],
-        "status": "planned",
+        "status": "active",
     },
     {
         "id": "frequency",
         "label": "Frequency Calculation",
-        "label_zh": "\u9891\u7387\u8ba1\u7b97",
+        "label_zh": "频率计算",
         "category": "simple",
         "description": "Compute vibrational frequencies",
         "method_schema_id": "dft_frequency",
         "default_backend": "orca",
         "requires_binaries": ["orca"],
-        "status": "planned",
+        "status": "active",
     },
     {
         "id": "optfreq",
         "label": "Optimization + Frequency",
-        "label_zh": "\u4f18\u5316+\u9891\u7387",
+        "label_zh": "优化+频率",
         "category": "simple",
         "description": "Optimize then compute frequencies",
         "method_schema_id": "dft_optfreq",
         "default_backend": "orca",
         "requires_binaries": ["orca"],
-        "status": "planned",
+        "status": "active",
+    },
+    {
+        "id": "optfreqsp",
+        "label": "Opt+Freq+SP+Thermo",
+        "label_zh": "优化+频率+单点+热化学",
+        "category": "simple",
+        "description": "ORCA opt → freq → SP → Shermo free energy",
+        "method_schema_id": "dft_optfreqsp",
+        "default_backend": "orca",
+        "requires_binaries": ["orca", "shermo"],
+        "status": "active",
     },
     {
         "id": "xtb_optimize",
@@ -439,7 +450,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
     "dft_singlepoint": {
         "method_levels": [
             {
-                "level_id": "singlepoint",
+                "level_id": "single_point",
                 "label": "Single Point",
                 "required": True,
                 "allowed_engines": ["orca"],
@@ -485,7 +496,16 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "label": "Frequency",
                 "required": True,
                 "allowed_engines": ["orca"],
-                "fields": ["functional", "basis", "temperature", "pressure", "scale_factor"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "dispersion",
+                    "solvent_model",
+                    "solvent",
+                    "temperature",
+                    "pressure",
+                    "scale_factor",
+                ],
             }
         ],
         "profiles": [],
@@ -503,12 +523,98 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "dispersion",
                     "solvent_model",
                     "solvent",
+                    "grid",
+                    "scf_convergence",
+                    "max_steps",
                     "temperature",
                     "pressure",
                 ],
             }
         ],
         "profiles": [],
+    },
+    "dft_optfreqsp": {
+        "method_levels": [
+            {
+                "level_id": "optfreq",
+                "label": "Opt+Freq",
+                "label_zh": "优化+频率（同级）",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "dispersion",
+                    "solvent_model",
+                    "solvent",
+                    "grid",
+                    "scf_convergence",
+                    "max_steps",
+                    "opt_convergence",
+                ],
+            },
+            {
+                "level_id": "single_point",
+                "label": "Single Point",
+                "label_zh": "单点能（高精度）",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "aux_basis",
+                    "ri_approximation",
+                    "solvent_model",
+                    "solvent",
+                    "grid",
+                    "scf_convergence",
+                ],
+            },
+            {
+                "level_id": "thermo",
+                "label": "Thermochemistry",
+                "label_zh": "热化学修正",
+                "required": False,
+                "allowed_engines": ["shermo"],
+                "fields": ["temperature", "pressure", "scale_factor"],
+            },
+        ],
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default (r2SCAN-3c / wB97M-V)",
+                "summary": "r2SCAN-3c Opt+Freq | wB97M-V/def2-TZVPP SP | Shermo",
+                "levels": {
+                    "optfreq": {
+                        "engine": "orca",
+                        "functional": "r2SCAN-3c",
+                        "basis": "",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                        "grid": "UltraFine",
+                        "scf_convergence": "Tight",
+                    },
+                    "single_point": {
+                        "engine": "orca",
+                        "functional": "wB97M-V",
+                        "basis": "def2-TZVPP",
+                        "aux_basis": "",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                        "grid": "UltraFine",
+                        "scf_convergence": "Tight",
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                        "scale_factor": 0.9905,
+                    },
+                },
+            },
+        ],
     },
     "xtb_optimize": {
         "method_levels": [
@@ -775,7 +881,7 @@ METHOD_CATALOG: dict[str, Any] = {
         {
             "id": "orca",
             "label": "ORCA",
-            "supports": ["singlepoint", "optimize", "frequency", "nmr"],
+            "supports": ["singlepoint", "optimize", "frequency", "optfreq", "nmr"],
         },
         {"id": "xtb", "label": "xTB (GFN2)", "supports": ["singlepoint", "optimize"]},
         {"id": "crest", "label": "CREST", "supports": ["conformer_search"]},
@@ -977,6 +1083,50 @@ def method_levels_to_workflow_config(levels: dict, schema_id: str, workflow: str
     return config
 
 
+_LEVEL_TO_CLI_FLAG_MAP: dict[str, str] = {
+    "functional": "method",
+    "basis": "basis",
+    "aux_basis": "aux-basis",
+    "ri_approximation": "ri-approximation",
+    "dispersion": "dispersion",
+    "solvent_model": "solvent-model",
+    "solvent": "solvent",
+    "temperature": "temperature",
+    "pressure": "pressure",
+    "scale_factor": "scale-factor",
+    "max_steps": "geom-maxiter",
+    "opt_convergence": "opt-convergence",
+}
+
+
+def method_levels_to_cli_flags(
+    levels: dict[str, Any],
+    prefix_map: dict[str, str] | None = None,
+) -> list[str]:
+    """Convert method levels dict to CLI flag list.
+
+    Args:
+        levels: Nested dict - e.g. {"optfreq": {...}, "single_point": {...}}.
+        prefix_map: level_id -> CLI flag prefix (default: no prefix for all).
+
+    Returns:
+        CLI flag list - e.g. ["--method", "wB97M-V", "--basis", "def2-TZVPP"].
+    """
+    prefix_map = prefix_map or {}
+    cmd: list[str] = []
+    for level_id, level_config in levels.items():
+        prefix = prefix_map.get(level_id, "")
+        for field, value in level_config.items():
+            if field == "engine" or value is None or value == "":
+                continue
+            cli_flag = _LEVEL_TO_CLI_FLAG_MAP.get(field)
+            if cli_flag is None:
+                continue
+            flag = f"--{prefix}{cli_flag}"
+            cmd += [flag, str(value)]
+    return cmd
+
+
 # ---------------------------------------------------------------------------
 # 原有 API 兼容函数
 # ---------------------------------------------------------------------------
@@ -1017,6 +1167,7 @@ __all__ = [
     "get_method_schema",
     "get_workflow_by_id",
     "get_workflow_catalog",
+    "method_levels_to_cli_flags",
     "method_levels_to_workflow_config",
     "normalize_and_validate_method_config",
 ]

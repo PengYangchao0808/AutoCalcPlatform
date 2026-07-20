@@ -56,6 +56,11 @@ SUPPORTED_WORKFLOWS: tuple[str, ...] = (
     "nmr",
     "benchmark",
     "mechanism",
+    "singlepoint",
+    "optimize",
+    "frequency",
+    "optfreq",
+    "optfreqsp",
     "fake",
 )
 
