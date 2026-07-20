@@ -21,6 +21,7 @@ import shlex
 from dataclasses import dataclass
 from typing import Any
 
+from acp.catalog import method_levels_to_cli_flags
 from acp.scheduler.jobs import (
     JobSpec,
     censo_ewin_from_method,
@@ -100,7 +101,10 @@ def build_remote_cli_command(
     """
     py = python_executable or "python"
     wf = spec.workflow
-    if wf not in ("conformer", "nmr", "benchmark", "mechanism", "ensemble", "energy"):
+    if wf not in (
+        "conformer", "nmr", "benchmark", "mechanism", "ensemble", "energy",
+        "singlepoint", "optimize", "frequency", "optfreq", "optfreqsp",
+    ):
         raise ValueError(f"No remote subprocess mapping for workflow: {wf}")
 
     if wf == "benchmark":
@@ -149,6 +153,17 @@ def build_remote_cli_command(
             cmd += ["--protocol", str(method["protocol"])]
         if method.get("backend"):
             cmd += ["--backend", str(method["backend"])]
+    elif wf in ("singlepoint", "optimize", "frequency", "optfreq", "optfreqsp"):
+        cmd += ["--input", str(source), "--output", "."]
+        if spec.name:
+            cmd += ["--name", spec.name]
+        levels = method.get("levels", {})
+        if levels:
+            if wf == "optfreqsp":
+                prefix_map = {"optfreq": "", "single_point": "sp-", "thermo": ""}
+                cmd += method_levels_to_cli_flags(levels, prefix_map)
+            else:
+                cmd += method_levels_to_cli_flags(levels)
     else:  # benchmark
         cmd += ["--input", str(source), "--output", "."]
         if method.get("benchmark_level"):

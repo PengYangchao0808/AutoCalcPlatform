@@ -78,8 +78,8 @@ class ProtocolSpec:
     opt_engine: str = "orca"
     freq_engine: str = "orca"
     sp_engine: str = "orca"
-    opt_method: str = "B3LYP"
-    opt_basis: str = "def2-SVP"
+    opt_method: str = "r2SCAN-3c"
+    opt_basis: str = ""
     opt_solvent: str | None = None
     opt_solvent_model: str | None = None
     sp_solvent: str | None = None
@@ -257,7 +257,7 @@ def resolve_protocol_spec(
     if opt_method is None:
         opt_method = default_proto_cfg.get("opt_method")
     if opt_method is None:
-        opt_method = "B3LYP"
+        opt_method = "r2SCAN-3c"
 
     opt_basis = opt_level.get("basis")
     if opt_basis is None:
@@ -265,7 +265,7 @@ def resolve_protocol_spec(
     if opt_basis is None:
         opt_basis = default_proto_cfg.get("opt_basis")
     if opt_basis is None:
-        opt_basis = "def2-SVP"
+        opt_basis = ""
 
     # Solvents: levels 'solvent' > protocol 'opt_solvent' > theory 'solvent' > None
     opt_solvent = opt_level.get("solvent")

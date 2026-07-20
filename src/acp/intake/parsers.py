@@ -69,11 +69,49 @@ def detect_format(filename: str, content: str) -> str:
         return "mol"
     if stripped.startswith("%") or "!" in stripped[:200]:
         return "inp"
-    if stripped.startswith("#") or stripped[0:1].isdigit():
+    if stripped.startswith("#"):
+        return "gjf"
+    if stripped[0:1].isdigit():
+        return "xyz"
+    if _looks_like_atom_coordinates(stripped):
         return "xyz"
     if len(stripped) < 80 and "\n" not in stripped:
         return "smiles"
     return "smiles"
+
+
+def _looks_like_atom_line(line: str) -> bool:
+    parts = line.split()
+    if len(parts) < 4:
+        return False
+    try:
+        float(parts[1])
+        float(parts[2])
+        float(parts[3])
+    except ValueError:
+        return False
+    # element symbol (e.g. C, H, He, Br) or atomic number (1-118)
+    if len(parts[0]) <= 3 and parts[0][0].isalpha():
+        return True
+    if parts[0].isdigit() and 1 <= int(parts[0]) <= 118:
+        return True
+    return False
+
+
+def _looks_like_atom_coordinates(text: str) -> bool:
+    lines = text.splitlines()
+    atom_lines = 0
+    total_non_empty = 0
+    for line in lines:
+        stripped_line = line.strip()
+        if not stripped_line:
+            continue
+        total_non_empty += 1
+        if _looks_like_atom_line(stripped_line):
+            atom_lines += 1
+    if atom_lines < 1:
+        return False
+    return atom_lines >= total_non_empty * 0.8
 
 
 def parse_structure_text(content: str, fmt: str, filename: str = "") -> StructureParseResult:
@@ -92,6 +130,36 @@ def parse_structure_text(content: str, fmt: str, filename: str = "") -> Structur
     return StructureParseResult(errors=[f"Unsupported format: {fmt}"])
 
 
+def _parse_bare_atom_block(
+    lines: list[str], start: int
+) -> StructureAsset | None:
+    symbols: list[str] = []
+    coords: list[tuple[float, float, float]] = []
+    for line in lines[start:]:
+        if not _looks_like_atom_line(line):
+            continue
+        parts = line.strip().split()
+        symbols.append(parts[0])
+        coords.append((float(parts[1]), float(parts[2]), float(parts[3])))
+
+    if not symbols:
+        return None
+
+    xyz = _xyz_from_symbols_coords(symbols, coords, "")
+    return StructureAsset(
+        asset_id=_next_asset_id(),
+        name="frame_1",
+        source_type="paste",
+        original_format="xyz",
+        xyz=xyz,
+        has_3d=True,
+        charge=0,
+        multiplicity=1,
+        atom_count=len(symbols),
+        formula=_hill_formula(symbols),
+    )
+
+
 def parse_xyz_text(content: str) -> StructureParseResult:
     lines = content.strip().splitlines()
     structures: list[StructureAsset] = []
@@ -106,17 +174,32 @@ def parse_xyz_text(content: str) -> StructureParseResult:
         try:
             n = int(lines[i].strip())
         except ValueError:
-            errors.append(f"Line {i + 1}: expected atom count, got '{lines[i][:40]}'")
-            break
-        if i + 1 + n > len(lines):
+            if _looks_like_atom_line(lines[i]):
+                result = _parse_bare_atom_block(lines, i)
+                if result is not None:
+                    structures.append(result)
+                else:
+                    errors.append(f"Line {i + 1}: expected atom count, got '{lines[i][:40]}'")
+                break
+            else:
+                errors.append(f"Line {i + 1}: expected atom count, got '{lines[i][:40]}'")
+                break
+
+        comment = ""
+        has_comment = False
+        if i + 1 < len(lines) and not _looks_like_atom_line(lines[i + 1]):
+            comment = lines[i + 1]
+            has_comment = True
+
+        header_lines = 2 if has_comment else 1
+        if i + header_lines + n > len(lines):
             errors.append(f"Frame {frame_idx + 1}: declared {n} atoms but file truncated")
             break
 
-        comment = lines[i + 1] if i + 1 < len(lines) else ""
         symbols: list[str] = []
         coords: list[tuple[float, float, float]] = []
         for j in range(n):
-            parts = lines[i + 2 + j].split()
+            parts = lines[i + header_lines + j].split()
             if len(parts) < 4:
                 errors.append(f"Frame {frame_idx + 1}, atom {j + 1}: malformed line")
                 break
@@ -140,7 +223,7 @@ def parse_xyz_text(content: str) -> StructureParseResult:
                 )
             )
             frame_idx += 1
-        i += 2 + n
+        i += header_lines + n
 
     if not structures and not errors:
         errors.append("No valid XYZ frames found")

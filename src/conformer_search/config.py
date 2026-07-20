@@ -155,7 +155,7 @@ def _get_default_config() -> dict[str, Any]:
                 'engine': 'orca',
                 'method': 'r2SCAN-3c',
                 'basis': '',
-                'solvent': 'toluene',
+                'solvent': None,
                 'solvent_model': 'none'
             },
             'frequency': {
@@ -164,13 +164,13 @@ def _get_default_config() -> dict[str, Any]:
             'single_point': {
                 'method': 'wB97M-V',
                 'basis': 'def2-TZVPP',
-                'solvent': 'toluene',
+                'solvent': None,
                 'solvent_model': 'none',
                 'engine': 'orca'
             },
             'preoptimization': {
                 'gfn_level': 2,
-                'solvent': 'toluene',
+                'solvent': None,
                 'solvent_model': 'none'
             },
             'nmr': {

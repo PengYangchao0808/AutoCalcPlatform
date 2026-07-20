@@ -17,6 +17,7 @@ from acp.core.state import WorkflowState
 from acp.core.utils import ensure_unique_dir
 from acp.core.workflow import WorkflowResult
 from acp.io.structures import StructureReader
+from acp.workflows._helpers import sanitize_job_name
 from conformer_search.config import load_config
 
 logger = logging.getLogger(__name__)
@@ -99,16 +100,45 @@ def _find_shermo() -> bool:
     return shutil.which("shermo") is not None or shutil.which("Shermo") is not None
 
 
+_SCHEDULER_MARKERS: set[str] = {"inputs", "submit.lsf", ".exit_code", "work", "results"}
+
+
 def _resolve_output_dir(output_dir: str | Path) -> Path:
     """Resolve output directory.
 
-    If the directory already exists but is empty (e.g. pre-created by the
-    scheduler), reuse it without renaming.  Otherwise, ensure a unique path.
+    If the directory already exists and contains only scheduler/pre-runner
+    artifacts (e.g. ``inputs/``, ``submit.lsf``, ``work/``, ``results/``)
+    or is empty, reuse it directly.  Otherwise, ensure a unique path so that
+    repeated CLI invocations never overwrite previous results.
     """
     base = Path(output_dir).resolve()
-    if base.is_dir() and not any(base.iterdir()):
-        return base
+    if base.is_dir():
+        contents = {p.name for p in base.iterdir()}
+        if not contents or contents <= _SCHEDULER_MARKERS:
+            base.mkdir(parents=True, exist_ok=True)
+            return base
     return ensure_unique_dir(output_dir)
+
+
+def _calc_subdir(output_root: Path, name: str | None, input_source: str, workflow_name: str) -> Path:
+    """Create the per-molecule calculation subdirectory under *output_root*.
+
+    Mirrors the ``output_root / safe_name`` pattern used by the
+    ``energy`` and ``conformer`` workflows.  Falls back to *workflow_name*
+    only when the input file stem is generic (e.g. scheduler materialised
+    ``inputs/input.xyz``) and no explicit name was provided.
+    """
+    if name:
+        safe_name = sanitize_job_name(name)
+    else:
+        stem = Path(input_source).stem
+        if stem in ("", "input"):
+            safe_name = sanitize_job_name(workflow_name)
+        else:
+            safe_name = sanitize_job_name(stem)
+    calc_dir = output_root / safe_name
+    calc_dir.mkdir(parents=True, exist_ok=True)
+    return calc_dir
 
 
 def _build_backend(config: dict[str, Any]) -> ORCABackend:
@@ -177,14 +207,15 @@ def run_singlepoint(
 ) -> WorkflowResult:
     cfg = load_config(overrides=config) if config else load_config()
     out = _resolve_output_dir(output_dir)
-    state = _init_state(out, "singlepoint", input_source)
     _check_input(input_source)
     coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
+    calc_dir = _calc_subdir(out, name, input_source, "singlepoint")
+    state = _init_state(calc_dir, "singlepoint", input_source)
 
     kwargs = _build_method_kwargs(method_kwargs or {})
     backend = _build_backend(cfg)
     state.set_stage("single_point")
-    result = backend.single_point(coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **kwargs)
+    result = backend.single_point(coords, symbols, charge=chg, multiplicity=mult, output_dir=calc_dir, **kwargs)
     if not result.success:
         state.fail_stage("single_point", result.error_message or "SP calculation failed")
         return WorkflowResult(status="failed", error=result.error_message or "SP calculation failed")
@@ -193,11 +224,11 @@ def run_singlepoint(
         state.fail_stage("single_point", "SP returned no energy")
         return WorkflowResult(status="failed", error="SP calculation returned no energy")
     state.complete_stage("single_point")
-    _write_energy_json(out, result.energy)
+    _write_energy_json(calc_dir, result.energy)
     state.mark_completed()
     return WorkflowResult(
         status="completed",
-        metadata={"output_dir": str(out), "energy": result.energy, "unit": "Hartree"},
+        metadata={"output_dir": str(calc_dir), "energy": result.energy, "unit": "Hartree"},
     )
 
 
@@ -212,28 +243,29 @@ def run_optimize(
 ) -> WorkflowResult:
     cfg = load_config(overrides=config) if config else load_config()
     out = _resolve_output_dir(output_dir)
-    state = _init_state(out, "optimize", input_source)
     _check_input(input_source)
     coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
+    calc_dir = _calc_subdir(out, name, input_source, "optimize")
+    state = _init_state(calc_dir, "optimize", input_source)
 
     kwargs = _build_method_kwargs(method_kwargs or {})
     backend = _build_backend(cfg)
     state.set_stage("optimize")
-    result = backend.optimize(coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **kwargs)
+    result = backend.optimize(coords, symbols, charge=chg, multiplicity=mult, output_dir=calc_dir, **kwargs)
     if not result.success:
         state.fail_stage("optimize", result.error_message or "Optimization failed")
         return WorkflowResult(status="failed", error=result.error_message or "Optimization failed")
 
     state.complete_stage("optimize")
     if result.coordinates is not None:
-        _write_optimized_xyz(out, result.coordinates, result.symbols or symbols)
+        _write_optimized_xyz(calc_dir, result.coordinates, result.symbols or symbols)
     if result.energy is not None:
-        _write_energy_json(out, result.energy)
+        _write_energy_json(calc_dir, result.energy)
     state.mark_completed()
     return WorkflowResult(
         status="completed",
         metadata={
-            "output_dir": str(out),
+            "output_dir": str(calc_dir),
             "energy": result.energy,
             "converged": result.converged,
         },
@@ -251,14 +283,15 @@ def run_frequency(
 ) -> WorkflowResult:
     cfg = load_config(overrides=config) if config else load_config()
     out = _resolve_output_dir(output_dir)
-    state = _init_state(out, "frequency", input_source)
     _check_input(input_source)
     coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
+    calc_dir = _calc_subdir(out, name, input_source, "frequency")
+    state = _init_state(calc_dir, "frequency", input_source)
 
     kwargs = _build_method_kwargs(method_kwargs or {})
     backend = _build_backend(cfg)
     state.set_stage("frequency")
-    result = backend.frequency(coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **kwargs)
+    result = backend.frequency(coords, symbols, charge=chg, multiplicity=mult, output_dir=calc_dir, **kwargs)
     if not result.success:
         state.fail_stage("frequency", result.error_message or "Frequency calculation failed")
         return WorkflowResult(status="failed", error=result.error_message or "Frequency calculation failed")
@@ -266,11 +299,11 @@ def run_frequency(
     state.complete_stage("frequency")
     freqs = result.frequencies or []
     if freqs:
-        _write_frequencies_txt(out, freqs)
+        _write_frequencies_txt(calc_dir, freqs)
     state.mark_completed()
     return WorkflowResult(
         status="completed",
-        metadata={"output_dir": str(out), "n_frequencies": len(freqs), "has_frequencies": result.has_frequencies},
+        metadata={"output_dir": str(calc_dir), "n_frequencies": len(freqs), "has_frequencies": result.has_frequencies},
     )
 
 
@@ -285,31 +318,32 @@ def run_optfreq(
 ) -> WorkflowResult:
     cfg = load_config(overrides=config) if config else load_config()
     out = _resolve_output_dir(output_dir)
-    state = _init_state(out, "optfreq", input_source)
     _check_input(input_source)
     coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
+    calc_dir = _calc_subdir(out, name, input_source, "optfreq")
+    state = _init_state(calc_dir, "optfreq", input_source)
 
     kwargs = _build_method_kwargs(method_kwargs or {})
     backend = _build_backend(cfg)
     state.set_stage("opt_freq")
-    result = backend.opt_freq(coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **kwargs)
+    result = backend.opt_freq(coords, symbols, charge=chg, multiplicity=mult, output_dir=calc_dir, **kwargs)
     if not result.success:
         state.fail_stage("opt_freq", result.error_message or "Opt+Freq calculation failed")
         return WorkflowResult(status="failed", error=result.error_message or "Opt+Freq calculation failed")
 
     state.complete_stage("opt_freq")
     if result.coordinates is not None:
-        _write_optimized_xyz(out, result.coordinates, result.symbols or symbols)
+        _write_optimized_xyz(calc_dir, result.coordinates, result.symbols or symbols)
     freqs = result.frequencies or []
     if freqs:
-        _write_frequencies_txt(out, freqs)
+        _write_frequencies_txt(calc_dir, freqs)
     if result.energy is not None:
-        _write_energy_json(out, result.energy)
+        _write_energy_json(calc_dir, result.energy)
     state.mark_completed()
     return WorkflowResult(
         status="completed",
         metadata={
-            "output_dir": str(out),
+            "output_dir": str(calc_dir),
             "energy": result.energy,
             "n_frequencies": len(freqs),
             "converged": result.converged,
@@ -333,15 +367,16 @@ def run_optfreqsp(
 
     cfg = load_config(overrides=config) if config else load_config()
     out = _resolve_output_dir(output_dir)
-    state = _init_state(out, "optfreqsp", input_source)
     _check_input(input_source)
     coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
+    calc_dir = _calc_subdir(out, name, input_source, "optfreqsp")
+    state = _init_state(calc_dir, "optfreqsp", input_source)
 
     # --- Stage 1: Opt+Freq ---
     opt_kwargs = _build_method_kwargs(optfreq_kwargs or {})
     backend = _build_backend(cfg)
     state.set_stage("opt_freq")
-    optfreq_result = backend.opt_freq(coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **opt_kwargs)
+    optfreq_result = backend.opt_freq(coords, symbols, charge=chg, multiplicity=mult, output_dir=calc_dir, **opt_kwargs)
     if not optfreq_result.success:
         state.fail_stage("opt_freq", optfreq_result.error_message or "Opt+Freq stage failed")
         return WorkflowResult(status="failed", error=optfreq_result.error_message or "Opt+Freq stage failed")
@@ -350,15 +385,15 @@ def run_optfreqsp(
     opt_coords = optfreq_result.coordinates if optfreq_result.coordinates is not None else coords
     freqs = optfreq_result.frequencies or []
     if optfreq_result.coordinates is not None:
-        _write_optimized_xyz(out, optfreq_result.coordinates, optfreq_result.symbols or symbols)
+        _write_optimized_xyz(calc_dir, optfreq_result.coordinates, optfreq_result.symbols or symbols)
     if freqs:
-        _write_frequencies_txt(out, freqs)
+        _write_frequencies_txt(calc_dir, freqs)
 
     # --- Stage 2: Single Point ---
     sp_flat = _build_method_kwargs(sp_kwargs or {})
     sp_backend = _build_backend(cfg)
     state.set_stage("single_point")
-    sp_result = sp_backend.single_point(opt_coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **sp_flat)
+    sp_result = sp_backend.single_point(opt_coords, symbols, charge=chg, multiplicity=mult, output_dir=calc_dir, **sp_flat)
     if not sp_result.success:
         state.fail_stage("single_point", sp_result.error_message or "SP stage failed")
         return WorkflowResult(status="failed", error=sp_result.error_message or "SP stage failed")
@@ -383,7 +418,7 @@ def run_optfreqsp(
     thermo = run_shermo(
         freq_output=log_file,
         sp_energy=sp_energy,
-        output_dir=out,
+        output_dir=calc_dir,
         temperature_k=th.get("temperature", 298.15),
         pressure_atm=th.get("pressure", 1.0),
         scl_zpe=th.get("scale_factor", 0.9905),
@@ -396,14 +431,14 @@ def run_optfreqsp(
     else:
         state.fail_stage("shermo", "Shermo returned no output")
 
-    _write_thermo_json(out, thermo or {}, sp_energy)
-    _write_energy_json(out, sp_energy)
+    _write_thermo_json(calc_dir, thermo or {}, sp_energy)
+    _write_energy_json(calc_dir, sp_energy)
     state.mark_completed()
 
     return WorkflowResult(
         status="completed",
         metadata={
-            "output_dir": str(out),
+            "output_dir": str(calc_dir),
             "sp_energy": sp_energy,
             "thermo_success": bool(thermo),
             "n_frequencies": len(freqs),

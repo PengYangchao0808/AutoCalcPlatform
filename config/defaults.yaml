@@ -44,7 +44,7 @@ theory:
   optimization:
     method: r2SCAN-3c
     basis: ""
-    solvent: toluene
+    solvent: null
     solvent_model: none
     engine: orca
 
@@ -54,12 +54,12 @@ theory:
   single_point:
     method: wB97M-V
     basis: def2-TZVPP
-    solvent: toluene
+    solvent: null
     solvent_model: none
 
   preoptimization:
     gfn_level: 2
-    solvent: toluene
+    solvent: null
     solvent_model: none
 
   nmr:

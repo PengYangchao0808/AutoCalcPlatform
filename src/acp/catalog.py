@@ -148,6 +148,51 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
     },
 ]
 
+# ── Functional → basis set + dispersion mapping ──────────────────────────
+# Each functional defines which basis sets and dispersion corrections are
+# chemically valid. The UI filters basis/dispersion dropdowns dynamically
+# based on the selected functional.
+# NOTE: _ALL_BASIS_SETS is defined *before* FIELD_DEFINITIONS so it can be
+# referenced by the "basis" field.
+
+_ALL_BASIS_SETS: list[str] = [
+    "def2-SV(P)", "def2-SVP", "def2-SVPD",
+    "def2-TZVP", "def2-TZVPP", "def2-TZVPPD",
+    "def2-QZVP", "def2-QZVPP", "def2-QZVPPD",
+    "ma-def2-SVP", "ma-def2-TZVP", "ma-def2-TZVPP", "ma-def2-QZVPP",
+    "cc-pVDZ", "cc-pVTZ", "cc-pVQZ", "cc-pV5Z",
+    "aug-cc-pVDZ", "aug-cc-pVTZ", "aug-cc-pVQZ",
+    "cc-pwCVDZ", "cc-pwCVTZ", "cc-pwCVQZ",
+    "cc-pCVDZ", "cc-pCVTZ",
+]
+
+FUNCTIONAL_OPTIONS_MAP: dict[str, dict[str, list[str]]] = {
+    "B3LYP": {
+        "basis": _ALL_BASIS_SETS,
+        "dispersion": ["none", "D3", "D3BJ", "D4"],
+    },
+    "PBE0": {
+        "basis": _ALL_BASIS_SETS,
+        "dispersion": ["none", "D3", "D3BJ", "D4"],
+    },
+    "wB97X-D4": {
+        "basis": _ALL_BASIS_SETS,
+        "dispersion": ["none"],
+    },
+    "wB97M-V": {
+        "basis": _ALL_BASIS_SETS,
+        "dispersion": ["none"],
+    },
+    "r2SCAN-3c": {
+        "basis": [""],
+        "dispersion": ["none"],
+    },
+    "DLPNO-CCSD(T)": {
+        "basis": ["def2-TZVPP"],
+        "dispersion": ["none"],
+    },
+}
+
 FIELD_DEFINITIONS: dict[str, Any] = {
     "functional": {
         "type": "select",
@@ -159,17 +204,10 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     "basis": {
         "type": "select",
         "per_backend": {
-            "orca": [
-                "def2-SVP",
-                "def2-TZVP",
-                "def2-mTZVPP",
-                "def2-TZVPP",
-                "def2-TZVPPD",
-                "cc-pVTZ",
-                "cc-pwCVTZ",
-            ],
+            "orca": _ALL_BASIS_SETS,
         },
-        "default": {"*": "def2-SVP"},
+        "default": {"*": ""},
+        "supports_custom": True,
     },
     "dispersion": {
         "type": "select",
@@ -220,6 +258,13 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "default": {"*": "Tight"},
     },
     "max_steps": {"type": "int", "min": 1, "max": 10000, "default": {"*": 100}},
+    "recalc_hess": {
+        "type": "int",
+        "label": "Hessian Recalc Interval",
+        "min": 1,
+        "max": 1000,
+        "default": {"*": 10},
+    },
     "temperature": {"type": "float", "min": 0, "max": 10000, "default": {"*": 298.15}, "unit": "K"},
     "pressure": {"type": "float", "min": 0, "max": 100000, "default": {"*": 1.0}, "unit": "atm"},
     "scale_factor": {"type": "float", "min": 0, "max": 1.0, "default": {"*": 1.0}},
@@ -341,7 +386,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "dft_opt": {
                         "engine": "orca",
                         "functional": "r2SCAN-3c",
-                        "basis": "def2-mTZVPP",
+                        "basis": "",
                         "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
@@ -381,7 +426,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "dft_opt": {
                         "engine": "orca",
                         "functional": "r2SCAN-3c",
-                        "basis": "def2-mTZVPP",
+                        "basis": "",
                         "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
@@ -408,7 +453,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "profile_id": "full",
                 "label": "Full Protocol",
-                "summary": "CREST GFN2 | r2SCAN-3c/def2-mTZVPP opt | wB97M-V/def2-TZVPP SP",
+                "summary": "CREST GFN2 | r2SCAN-3c opt | wB97M-V/def2-TZVPP SP",
                 "levels": {
                     "preopt": {"engine": "xtb", "gfn": "GFN2-xTB", "solvent_model": "none"},
                     "crest": {
@@ -421,7 +466,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "dft_opt": {
                         "engine": "orca",
                         "functional": "r2SCAN-3c",
-                        "basis": "def2-mTZVPP",
+                        "basis": "",
                         "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
@@ -465,7 +510,23 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 ],
             }
         ],
-        "profiles": [],
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default (wB97M-V)",
+                "summary": "wB97M-V/def2-TZVPP Single Point",
+                "levels": {
+                    "single_point": {
+                        "engine": "orca",
+                        "functional": "wB97M-V",
+                        "basis": "def2-TZVPP",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                    },
+                },
+            },
+        ],
     },
     "dft_optimize": {
         "method_levels": [
@@ -484,10 +545,29 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "scf_convergence",
                     "max_steps",
                     "opt_convergence",
+                    "recalc_hess",
                 ],
             }
         ],
-        "profiles": [],
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default (r2SCAN-3c)",
+                "summary": "r2SCAN-3c Optimization",
+                "levels": {
+                    "optimize": {
+                        "engine": "orca",
+                        "functional": "r2SCAN-3c",
+                        "basis": "",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                        "grid": "UltraFine",
+                        "scf_convergence": "Tight",
+                    },
+                },
+            },
+        ],
     },
     "dft_frequency": {
         "method_levels": [
@@ -502,9 +582,6 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "dispersion",
                     "solvent_model",
                     "solvent",
-                    "temperature",
-                    "pressure",
-                    "scale_factor",
                 ],
             }
         ],
@@ -526,8 +603,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "grid",
                     "scf_convergence",
                     "max_steps",
-                    "temperature",
-                    "pressure",
+                    "recalc_hess",
                 ],
             }
         ],
@@ -551,6 +627,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "scf_convergence",
                     "max_steps",
                     "opt_convergence",
+                    "recalc_hess",
                 ],
             },
             {
@@ -782,7 +859,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "dft_opt": {
                         "engine": "orca",
                         "functional": "r2SCAN-3c",
-                        "basis": "def2-mTZVPP",
+                        "basis": "",
                         "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
@@ -846,7 +923,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "dft_opt": {
                         "engine": "orca",
                         "functional": "r2SCAN-3c",
-                        "basis": "def2-mTZVPP",
+                        "basis": "",
                         "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
@@ -888,6 +965,7 @@ METHOD_CATALOG: dict[str, Any] = {
     ],
     "field_definitions": FIELD_DEFINITIONS,
     "method_schemas": METHOD_SCHEMAS,
+    "functional_options_map": FUNCTIONAL_OPTIONS_MAP,
 }
 
 
@@ -896,8 +974,19 @@ METHOD_CATALOG: dict[str, Any] = {
 # ---------------------------------------------------------------------------
 
 
-def _resolve_field_options(field_name: str, engine: str) -> list[str] | None:
-    """Return allowed options for a field given a specific engine."""
+def _resolve_field_options(
+    field_name: str, engine: str, functional: str | None = None,
+) -> list[str] | None:
+    """Return allowed options for a field given a specific engine.
+
+    For ``basis`` and ``dispersion`` fields, when a functional is provided
+    the options are resolved from ``FUNCTIONAL_OPTIONS_MAP`` so that only
+    chemically valid combinations are offered.
+    """
+    if functional and field_name in ("basis", "dispersion"):
+        mapping = FUNCTIONAL_OPTIONS_MAP.get(functional)
+        if mapping and field_name in mapping:
+            return mapping[field_name]
     fd = FIELD_DEFINITIONS.get(field_name)
     if not fd:
         return None
@@ -910,26 +999,73 @@ def _resolve_field_options(field_name: str, engine: str) -> list[str] | None:
     return None
 
 
-def _resolve_field_default(field_name: str, engine: str) -> Any:
+def _resolve_field_default(
+    field_name: str, engine: str, functional: str | None = None,
+) -> Any:
+    """Return the default value for a field, respecting functional context.
+
+    If the functional restricts ``basis`` or ``dispersion`` options,
+    the first allowed option is returned *unless* the global default
+    (from ``FIELD_DEFINITIONS``) is also valid for the functional.
+    """
     fd = FIELD_DEFINITIONS.get(field_name)
-    if not fd:
-        return ""
-    dflt = fd.get("default", {})
-    if isinstance(dflt, dict):
-        if engine in dflt:
-            return dflt[engine]
-        if "*" in dflt:
-            return dflt["*"]
-    return dflt if not isinstance(dflt, dict) else ""
+    global_default: Any = ""
+    if fd:
+        dflt = fd.get("default", {})
+        if isinstance(dflt, dict):
+            global_default = dflt.get(engine, dflt.get("*", ""))
+        else:
+            global_default = dflt
+
+    if functional and field_name in ("basis", "dispersion"):
+        mapping = FUNCTIONAL_OPTIONS_MAP.get(functional)
+        if mapping and field_name in mapping:
+            opts = mapping[field_name]
+            if opts:
+                if global_default and global_default in opts:
+                    return global_default
+                return opts[0]
+
+    return global_default
+
+
+def _clamp_to_functional(level: dict[str, Any], method_key: str) -> None:
+    """Clamp basis/dispersion to the functional's allowed values.
+
+    Safety net: ensures execution-path converters never pass invalid
+    basis/dispersion combinations to backends, even if validation was
+    bypassed.
+    """
+    func_name = level.get(method_key)
+    if not func_name:
+        return
+    mapping = FUNCTIONAL_OPTIONS_MAP.get(func_name)
+    if not mapping:
+        return
+    for key in ("basis", "dispersion"):
+        if key not in mapping or key not in level:
+            continue
+        allowed = mapping[key]
+        current = level[key]
+        if current and current not in allowed and current != "__custom__":
+            level[key] = allowed[0]
+
+
+_CASE_INSENSITIVE_FIELDS = frozenset({"solvent_model", "dispersion"})
 
 
 def _normalize_solvent(levels: dict, schema: dict) -> dict:
-    """When solvent_model is 'none', force solvent to empty string."""
+    """When solvent_model is 'none', force solvent to empty string. Also
+    lowercases ``solvent_model`` values for case-insensitive matching."""
     for ml in schema.get("method_levels", []):
         lid = ml["level_id"]
         lv_data = levels.get(lid, {})
-        if "solvent" in ml.get("fields", []) and lv_data.get("solvent_model") in (None, "", "none"):
-            lv_data["solvent"] = ""
+        if "solvent" in ml.get("fields", []):
+            sm = lv_data.get("solvent_model")
+            if sm is not None:
+                lv_data["solvent_model"] = str(sm).lower()
+            if lv_data.get("solvent_model") in (None, "", "none"):
+                lv_data["solvent"] = ""
         if "solvent" in ml.get("fields", []) and lv_data.get("solvent") is None:
             lv_data["solvent"] = ""
     return levels
@@ -958,10 +1094,12 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
         normalized: dict[str, Any] = {"engine": engine}
         for field_name in lv_def.get("fields", []):
             user_val = user_lv.get(field_name)
+            fd = FIELD_DEFINITIONS.get(field_name)
             if user_val is not None and user_val != "":
-                options = _resolve_field_options(field_name, engine)
+                options = _resolve_field_options(
+                    field_name, engine, normalized.get("functional"),
+                )
                 if options is not None:
-                    # Normalize solvent_model to lowercase for backend compatibility.
                     if field_name == "solvent_model":
                         user_val = str(user_val).lower()
                         lower_options = {str(o).lower() for o in options}
@@ -972,23 +1110,18 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                             )
                             continue
                     elif user_val not in options:
-                        errors.append(
-                            f"Level '{lid}', field '{field_name}': "
-                            f"value '{user_val}' not in allowed options"
-                        )
-                        continue
+                        if fd and fd.get("supports_custom") and str(user_val).strip() and len(options) > 1:
+                            pass
+                        else:
+                            errors.append(
+                                f"Level '{lid}', field '{field_name}': "
+                                f"value '{user_val}' not in allowed options"
+                            )
+                            continue
                 normalized[field_name] = user_val
             else:
-                default_val = _resolve_field_default(field_name, engine)
+                default_val = _resolve_field_default(field_name, engine, normalized.get("functional"))
                 normalized[field_name] = default_val
-
-        # Composite-method rules: r2SCAN-3c bundles def2-mTZVPP and its dispersion correction.
-        if normalized.get("functional") == "r2SCAN-3c":
-            normalized["basis"] = "def2-mTZVPP"
-            normalized["dispersion"] = "none"
-        # wB97M-V bundles the VV10 dispersion correction.
-        if normalized.get("functional") == "wB97M-V":
-            normalized["dispersion"] = "none"
 
         levels[lid] = normalized
 
@@ -1024,6 +1157,7 @@ def convert_method_levels_to_protocol_levels(levels: dict[str, Any]) -> dict[str
         "functional": "method",
         "engine": "engine",
         "basis": "basis",
+        "dispersion": "dispersion",
         "solvent": "solvent",
         "solvent_model": "solvent_model",
         "temperature": "temperature_k",
@@ -1055,6 +1189,10 @@ def convert_method_levels_to_protocol_levels(levels: dict[str, Any]) -> dict[str
         if opt_engine is not None:
             converted["frequency"] = {"engine": opt_engine}
 
+    # Clamp basis/dispersion to functional-allowed values (safety net).
+    for _stage, level in converted.items():
+        _clamp_to_functional(level, method_key="method")
+
     return converted
 
 
@@ -1070,16 +1208,21 @@ def method_levels_to_workflow_config(levels: dict, schema_id: str, workflow: str
             d = dict(levels["dft_opt"])
             d.pop("charge", None)
             d.pop("multiplicity", None)
+            _clamp_to_functional(d, method_key="functional")
             config["optimize"] = d
         if "single_point" in levels:
             d = dict(levels["single_point"])
             d.pop("charge", None)
             d.pop("multiplicity", None)
+            _clamp_to_functional(d, method_key="functional")
             config["sp"] = d
         if "thermo" in levels:
             config["thermo"] = dict(levels["thermo"])
     else:
         config = dict(levels)
+        for _key, _level in config.items():
+            if isinstance(_level, dict):
+                _clamp_to_functional(_level, method_key="functional")
     return config
 
 
@@ -1096,6 +1239,7 @@ _LEVEL_TO_CLI_FLAG_MAP: dict[str, str] = {
     "scale_factor": "scale-factor",
     "max_steps": "geom-maxiter",
     "opt_convergence": "opt-convergence",
+    "recalc_hess": "recalc-hess",
 }
 
 
@@ -1122,8 +1266,11 @@ def method_levels_to_cli_flags(
             cli_flag = _LEVEL_TO_CLI_FLAG_MAP.get(field)
             if cli_flag is None:
                 continue
+            str_value = str(value)
+            if field in _CASE_INSENSITIVE_FIELDS:
+                str_value = str_value.lower()
             flag = f"--{prefix}{cli_flag}"
-            cmd += [flag, str(value)]
+            cmd += [flag, str_value]
     return cmd
 
 
@@ -1158,6 +1305,7 @@ def get_method_profiles(schema_id: str) -> list[dict[str, Any]]:
 
 __all__ = [
     "FIELD_DEFINITIONS",
+    "FUNCTIONAL_OPTIONS_MAP",
     "METHOD_CATALOG",
     "METHOD_SCHEMAS",
     "WORKFLOW_CATALOG",

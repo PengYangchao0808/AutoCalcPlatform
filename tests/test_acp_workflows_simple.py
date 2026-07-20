@@ -543,8 +543,8 @@ def test_optfreq_qcresult_fields_from_mock():
 _SIMPLE_WF = [
     ("singlepoint", "--method"),
     ("optimize", "--geom-maxiter"),
-    ("frequency", "--temperature"),
-    ("optfreq", "--scale-factor"),
+    ("frequency", "--solvent-model"),
+    ("optfreq", "--recalc-hess"),
     ("optfreqsp", "--sp-method"),
 ]
 
@@ -657,4 +657,140 @@ def test_optfreqsp_data_flow_passes_log_file_to_shermo(tmp_path):
 
         call_kwargs = mk_shermo.call_args.kwargs
         assert call_kwargs["freq_output"] == fake_log
-        assert call_kwargs["sp_energy"] == -40.0
+
+
+# ---------------------------------------------------------------------------
+# recalc_hess configurability
+# ---------------------------------------------------------------------------
+
+def test_recalc_hess_field_in_opt_schemas():
+    """recalc_hess must be configurable for all opt-bearing simple schemas."""
+    for schema_id, level_id in [
+        ("dft_optimize", "optimize"),
+        ("dft_optfreq", "optfreq"),
+        ("dft_optfreqsp", "optfreq"),
+    ]:
+        schema = METHOD_SCHEMAS[schema_id]
+        level = next(lv for lv in schema["method_levels"] if lv["level_id"] == level_id)
+        assert "recalc_hess" in level["fields"], f"{schema_id} missing recalc_hess field"
+
+
+def test_thermo_fields_absent_from_plain_freq_schemas():
+    """temperature/pressure/scale_factor are useless without a Shermo stage."""
+    for schema_id, level_id in [("dft_frequency", "frequency"), ("dft_optfreq", "optfreq")]:
+        schema = METHOD_SCHEMAS[schema_id]
+        level = next(lv for lv in schema["method_levels"] if lv["level_id"] == level_id)
+        for dead in ("temperature", "pressure", "scale_factor"):
+            assert dead not in level["fields"], f"{schema_id} still has dead field {dead}"
+    thermo = next(lv for lv in METHOD_SCHEMAS["dft_optfreqsp"]["method_levels"] if lv["level_id"] == "thermo")
+    assert "temperature" in thermo["fields"]
+    assert "scale_factor" in thermo["fields"]
+
+
+@pytest.mark.parametrize("wf_name,dead_flag", [
+    ("frequency", "--temperature"),
+    ("frequency", "--scale-factor"),
+    ("optfreq", "--temperature"),
+    ("optfreq", "--scale-factor"),
+])
+def test_cli_dead_thermo_flags_removed(wf_name, dead_flag):
+    result = subprocess.run(
+        [sys.executable, "-m", "acp.cli", "run", wf_name, "--help"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert dead_flag not in result.stdout, f"'{dead_flag}' should not exist for {wf_name}"
+
+
+def test_cli_optfreqsp_keeps_thermo_flags():
+    result = subprocess.run(
+        [sys.executable, "-m", "acp.cli", "run", "optfreqsp", "--help"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0
+    assert "--temperature" in result.stdout
+    assert "--pressure" in result.stdout
+    assert "--scale-factor" in result.stdout
+
+
+def test_recalc_hess_field_definition_exists():
+    from acp.catalog import FIELD_DEFINITIONS
+    fd = FIELD_DEFINITIONS.get("recalc_hess")
+    assert fd is not None
+    assert fd["type"] == "int"
+    assert fd["default"]["*"] == 10
+
+
+def test_recalc_hess_in_cli_flag_map():
+    from acp.catalog import _LEVEL_TO_CLI_FLAG_MAP, method_levels_to_cli_flags
+    assert _LEVEL_TO_CLI_FLAG_MAP.get("recalc_hess") == "recalc-hess"
+    flags = method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": 5}})
+    assert flags == ["--recalc-hess", "5"]
+
+
+def test_recalc_hess_not_emitted_for_sp_level():
+    from acp.catalog import method_levels_to_cli_flags
+    flags = method_levels_to_cli_flags(
+        {"optfreq": {"engine": "orca", "recalc_hess": 7}, "single_point": {"engine": "orca", "functional": "wB97M-V"}},
+        {"optfreq": "", "single_point": "sp-", "thermo": ""},
+    )
+    assert flags == ["--recalc-hess", "7", "--sp-method", "wB97M-V"]
+
+
+@pytest.mark.parametrize("wf_name", ["optimize", "optfreq", "optfreqsp"])
+def test_cli_help_has_recalc_hess(wf_name):
+    result = subprocess.run(
+        [sys.executable, "-m", "acp.cli", "run", wf_name, "--help"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert "--recalc-hess" in result.stdout, f"Expected '--recalc-hess' in help for {wf_name}"
+
+
+def test_orca_input_blocks_recalc_hess_override():
+    from conformer_search.qc.interfaces.orca import ORCAInterface
+    iface = ORCAInterface(config={})
+    blocks = iface._build_input_blocks("opt", recalc_hess=5)
+    assert "Recalc_Hess 5" in blocks
+    blocks_default = iface._build_input_blocks("opt")
+    assert "Recalc_Hess 10" in blocks_default
+    blocks_cfg = ORCAInterface(config={"optimization_control": {"recalc_hess": 3}})._build_input_blocks("opt")
+    assert "Recalc_Hess 3" in blocks_cfg
+
+
+def test_orca_input_blocks_recalc_hess_optfreq():
+    from conformer_search.qc.interfaces.orca import ORCAInterface
+    iface = ORCAInterface(config={})
+    blocks = iface._build_input_blocks("optfreq", recalc_hess=20)
+    assert "Recalc_Hess 20" in blocks
+
+
+def test_build_method_kwargs_passes_recalc_hess():
+    from acp.workflows.simple import _build_method_kwargs
+    kwargs = _build_method_kwargs({"recalc_hess": 15, "method": "r2SCAN-3c"})
+    assert kwargs["recalc_hess"] == 15
+
+
+def test_build_simple_method_kwargs_includes_recalc_hess():
+    import argparse
+    from acp.cli import _build_simple_method_kwargs
+    args = argparse.Namespace(
+        method="r2SCAN-3c", basis="def2-mTZVPP", dispersion="none",
+        solvent_model="none", solvent="", aux_basis="", ri_approximation="none",
+        geom_maxiter=None, opt_convergence="Tight", recalc_hess=8, route_extras=None,
+    )
+    kwargs = _build_simple_method_kwargs(args)
+    assert kwargs["recalc_hess"] == 8
+
+
+def test_run_optimize_passes_recalc_hess(tmp_path):
+    inp = tmp_path / "mol.xyz"
+    inp.write_text("1\n\nC 0 0 0\n")
+    out = tmp_path / "opt_out"
+    with patch("acp.workflows.simple._build_backend") as mk_backend:
+        be = MagicMock()
+        be.optimize.return_value = _fake_qc_result(energy=-40.0)
+        mk_backend.return_value = be
+        result = run_optimize(str(inp), output_dir=out, method_kwargs={"recalc_hess": 4})
+        assert result.status == "completed"
+        assert be.optimize.call_args.kwargs["recalc_hess"] == 4

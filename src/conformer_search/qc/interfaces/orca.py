@@ -88,6 +88,9 @@ class ORCAInterface(QCInterfaceBase):
         route_extras: list = None,
         geom_maxiter: int = None,
         extra_blocks: list = None,
+        recalc_hess: int = None,
+        solvent: str = None,
+        solvent_model: str = None,
     ) -> str:
         """
         Build ORCA input blocks.
@@ -100,6 +103,10 @@ class ORCAInterface(QCInterfaceBase):
                 (e.g. ``["RIJCOSX", "def2-TZVPP/C", "VeryTightSCF"]``)
             geom_maxiter: Optional MaxIter for the %geom block (opt only)
             extra_blocks: Extra raw input blocks appended after the route
+            recalc_hess: Optional Hessian recalculation interval for the %geom
+                block (opt only); overrides config when given
+            solvent: Override solvent (uses self.solvent if None)
+            solvent_model: Override solvent model (uses self.solvent_model if None)
 
         Returns:
             Input blocks string
@@ -107,6 +114,8 @@ class ORCAInterface(QCInterfaceBase):
         _method = method if method is not None else self.method
         _basis = basis if basis is not None else self.basis
         _route_extras = [str(x) for x in route_extras if x] if route_extras else []
+        _solvent = solvent if solvent is not None else self.solvent
+        _solvent_model = (solvent_model if solvent_model is not None else self.solvent_model) or "none"
 
         blocks = []
 
@@ -123,8 +132,9 @@ class ORCAInterface(QCInterfaceBase):
         # Fall back to numerical frequencies (NumFreq) to avoid abort.
         if (
             route in ("Freq", "Opt Freq")
-            and self.solvent
-            and (self.solvent_model or "").lower() != "cpcm"
+            and _solvent
+            and _solvent_model.lower() != "cpcm"
+            and _solvent_model.lower() != "none"
         ):
             route = route.replace("Freq", "NumFreq")
 
@@ -147,7 +157,8 @@ class ORCAInterface(QCInterfaceBase):
 
         # Read recalc_hess from config (with fallback default of 10).
         to_cfg = self.config.get("optimization_control") or {}
-        recalc_hess = to_cfg.get("recalc_hess", 10)
+        if recalc_hess is None:
+            recalc_hess = to_cfg.get("recalc_hess", 10)
 
         # Compute Hessian at step 1 and recalculate every 10 steps for better convergence.
         # Recalc_Hess N: calculate Hessian at the beginning and recalculate after N, 2N, ... steps.
@@ -165,13 +176,13 @@ class ORCAInterface(QCInterfaceBase):
                 if blk:
                     blocks.append(str(blk))
 
-        if self.solvent:
+        if _solvent and _solvent_model.lower() != "none":
             blocks.append("%cpcm")
-            if self.solvent_model.lower() == "cpcm":
-                blocks.append(f'  SMDsolvent "{orca_smd_solvent(self.solvent)}"')
+            if _solvent_model.lower() == "cpcm":
+                blocks.append(f'  SMDsolvent "{orca_smd_solvent(_solvent)}"')
             else:  # smd (default)
                 blocks.append("  smd true")
-                blocks.append(f'  SMDsolvent "{orca_smd_solvent(self.solvent)}"')
+                blocks.append(f'  SMDsolvent "{orca_smd_solvent(_solvent)}"')
             blocks.append("end")
 
         return "\n".join(blocks)
@@ -189,6 +200,9 @@ class ORCAInterface(QCInterfaceBase):
         route_extras: list = None,
         geom_maxiter: int = None,
         extra_blocks: list = None,
+        recalc_hess: int = None,
+        solvent: str = None,
+        solvent_model: str = None,
     ):
         """
         Write ORCA input file.
@@ -205,6 +219,9 @@ class ORCAInterface(QCInterfaceBase):
             route_extras: Extra route-line keywords (see _build_input_blocks)
             geom_maxiter: Optional MaxIter for the %geom block
             extra_blocks: Extra raw input blocks
+            recalc_hess: Optional Hessian recalc interval for the %geom block
+            solvent: Override solvent (uses self.solvent if None)
+            solvent_model: Override solvent model (uses self.solvent_model if None)
         """
         charge = charge if charge is not None else self.charge
         multiplicity = multiplicity if multiplicity is not None else self.multiplicity
@@ -216,6 +233,9 @@ class ORCAInterface(QCInterfaceBase):
             route_extras=route_extras,
             geom_maxiter=geom_maxiter,
             extra_blocks=extra_blocks,
+            recalc_hess=recalc_hess,
+            solvent=solvent,
+            solvent_model=solvent_model,
         )
 
         ensure_dir(input_file.parent)
@@ -306,6 +326,9 @@ class ORCAInterface(QCInterfaceBase):
         input_file = output_dir / f"{output_name}.inp"
         output_file = output_dir / f"{output_name}.out"
 
+        _solvent = kwargs.pop("solvent", None)
+        _solvent_model = kwargs.pop("solvent_model", None)
+
         self._write_input(
             input_file,
             coordinates,
@@ -318,6 +341,9 @@ class ORCAInterface(QCInterfaceBase):
             route_extras=kwargs.get("route_extras"),
             geom_maxiter=kwargs.get("geom_maxiter"),
             extra_blocks=kwargs.get("extra_blocks"),
+            recalc_hess=kwargs.get("recalc_hess"),
+            solvent=_solvent,
+            solvent_model=_solvent_model,
         )
 
         success = self._run_orca(input_file, output_file)
@@ -386,6 +412,9 @@ class ORCAInterface(QCInterfaceBase):
         input_file = output_dir / f"{output_name}.inp"
         output_file = output_dir / f"{output_name}.out"
 
+        _solvent = kwargs.pop("solvent", None)
+        _solvent_model = kwargs.pop("solvent_model", None)
+
         self._write_input(
             input_file,
             coordinates,
@@ -397,6 +426,8 @@ class ORCAInterface(QCInterfaceBase):
             basis=basis,
             route_extras=kwargs.get("route_extras"),
             extra_blocks=kwargs.get("extra_blocks"),
+            solvent=_solvent,
+            solvent_model=_solvent_model,
         )
 
         success = self._run_orca(input_file, output_file)
@@ -464,6 +495,9 @@ class ORCAInterface(QCInterfaceBase):
         input_file = output_dir / f"{output_name}.inp"
         output_file = output_dir / f"{output_name}.out"
 
+        _solvent = kwargs.pop("solvent", None)
+        _solvent_model = kwargs.pop("solvent_model", None)
+
         self._write_input(
             input_file,
             coordinates,
@@ -475,6 +509,8 @@ class ORCAInterface(QCInterfaceBase):
             basis=basis,
             route_extras=kwargs.get("route_extras"),
             extra_blocks=kwargs.get("extra_blocks"),
+            solvent=_solvent,
+            solvent_model=_solvent_model,
         )
 
         success = self._run_orca(input_file, output_file)
@@ -527,6 +563,7 @@ class ORCAInterface(QCInterfaceBase):
         route_extras: list = None,
         geom_maxiter: int = None,
         extra_blocks: list = None,
+        recalc_hess: int = None,
         **kwargs,
     ) -> QCResult:
         """Run combined optimization + frequency as single ORCA job.
@@ -546,6 +583,7 @@ class ORCAInterface(QCInterfaceBase):
             route_extras: Extra route-line keywords
             geom_maxiter: Max geometry iterations
             extra_blocks: Extra raw input blocks
+            recalc_hess: Hessian recalculation interval (Recalc_Hess N)
             **kwargs: Additional parameters
 
         Returns:
@@ -556,6 +594,9 @@ class ORCAInterface(QCInterfaceBase):
 
         input_file = output_dir / f"{output_name}.inp"
         output_file = output_dir / f"{output_name}.out"
+
+        _solvent = kwargs.pop("solvent", None)
+        _solvent_model = kwargs.pop("solvent_model", None)
 
         self._write_input(
             input_file,
@@ -569,6 +610,9 @@ class ORCAInterface(QCInterfaceBase):
             route_extras=route_extras,
             geom_maxiter=geom_maxiter,
             extra_blocks=extra_blocks,
+            recalc_hess=recalc_hess,
+            solvent=_solvent,
+            solvent_model=_solvent_model,
         )
 
         success = self._run_orca(input_file, output_file)
@@ -649,6 +693,9 @@ class ORCAInterface(QCInterfaceBase):
         input_file = output_dir / f"{output_name}.inp"
         output_file = output_dir / f"{output_name}.out"
 
+        _solvent = kwargs.pop("solvent", None)
+        _solvent_model = kwargs.pop("solvent_model", None)
+
         self._write_input(
             input_file,
             coordinates,
@@ -658,6 +705,8 @@ class ORCAInterface(QCInterfaceBase):
             multiplicity,
             method=method,
             basis=basis,
+            solvent=_solvent,
+            solvent_model=_solvent_model,
         )
 
         success = self._run_orca(input_file, output_file)

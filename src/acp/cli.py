@@ -202,7 +202,7 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
         ("optimize", "Optimization", "Run ORCA geometry optimization",
          "Examples:\n  acp run optimize --input mol.xyz --output ./out\n  acp run optimize --input mol.gjf --method r2SCAN-3c --geom-maxiter 200"),
         ("frequency", "Frequency", "Run ORCA vibrational frequency calculation",
-         "Examples:\n  acp run frequency --input mol.xyz --output ./out\n  acp run frequency --input mol.inp --temperature 298.15 --pressure 1.0"),
+         "Examples:\n  acp run frequency --input mol.xyz --output ./out\n  acp run frequency --input mol.inp --method wB97M-V --basis def2-TZVPP"),
         ("optfreq", "Opt + Freq", "Run ORCA Opt+Freq as single job",
          "Examples:\n  acp run optfreq --input mol.xyz --output ./out\n  acp run optfreq --input mol.gjf --method r2SCAN-3c"),
         ("optfreqsp", "Opt+Freq+SP+Thermo", "Full pipeline: opt -> freq -> SP -> Shermo",
@@ -221,9 +221,9 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
     parser.add_argument("--multiplicity", type=int, help="Spin multiplicity (auto-detected if not specified)")
     parser.add_argument("--name", type=str, help="Molecule name")
     parser.add_argument("--method", default="r2SCAN-3c", help="DFT functional (default: r2SCAN-3c)")
-    parser.add_argument("--basis", default="def2-mTZVPP", help="Basis set (default: def2-mTZVPP)")
+    parser.add_argument("--basis", default="", help="Basis set (default: empty, composite method)")
     parser.add_argument("--dispersion", default="none", help="Dispersion correction (e.g. D3BJ, D4, none)")
-    parser.add_argument("--solvent-model", default="none", choices=["smd", "cpcm", "none"], help="Solvent model (default: none)")
+    parser.add_argument("--solvent-model", default="none", type=str.lower, choices=["smd", "cpcm", "none"], help="Solvent model (default: none)")
     parser.add_argument("--solvent", default="", help="Solvent name (e.g. water, methanol)")
     parser.add_argument("--nproc", type=int, help="Number of CPU cores")
     parser.add_argument("--mem", type=str, help="Memory limit (e.g. 32GB, 4096MB)")
@@ -239,8 +239,9 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
     if wf in ("optimize", "optfreq", "optfreqsp"):
         parser.add_argument("--geom-maxiter", type=int, help="Max geometry iterations (maps to MaxIter in %%geom block)")
         parser.add_argument("--opt-convergence", default="Tight", choices=["Loose", "Normal", "Tight", "VeryTight"], help="Optimization convergence (default: Tight)")
+        parser.add_argument("--recalc-hess", type=int, default=None, help="Hessian recalculation interval in %%geom block (Recalc_Hess N; default: 10 from config)")
 
-    if wf in ("frequency", "optfreq", "optfreqsp"):
+    if wf == "optfreqsp":
         parser.add_argument("--temperature", type=float, default=298.15, help="Temperature in K (default: 298.15)")
         parser.add_argument("--pressure", type=float, default=1.0, help="Pressure in atm (default: 1.0)")
         parser.add_argument("--scale-factor", type=float, default=0.9905, help="Frequency scale factor for ZPE/thermo (default: 0.9905)")
@@ -1129,7 +1130,8 @@ def _handle_mechanism(args: argparse.Namespace) -> int:
 def _build_simple_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
     kwargs: dict[str, Any] = {}
     for key in ("method", "basis", "dispersion", "solvent_model", "solvent",
-                "aux_basis", "ri_approximation", "geom_maxiter", "opt_convergence"):
+                "aux_basis", "ri_approximation", "geom_maxiter", "opt_convergence",
+                "recalc_hess"):
         val = getattr(args, key, None)
         if val is not None:
             kwargs[key] = val

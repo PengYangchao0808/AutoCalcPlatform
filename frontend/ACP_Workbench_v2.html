@@ -1219,6 +1219,7 @@ option, optgroup {
           <button class="input-mode-tab" data-input-mode="paste" data-i18n="modal.mode_paste">粘贴</button>
           <button class="input-mode-tab" data-input-mode="upload" data-i18n="modal.mode_upload">上传</button>
         </div>
+        <div class="muted" id="simple-input-hint" style="display:none;font-size:11px;margin-top:6px;" data-i18n="modal.simple_input_hint">简单工作流仅接受结构文件（XYZ / GJF / COM / INP），不支持 SMILES</div>
 
         <div class="input-panel" id="input-panel-smiles">
           <label data-i18n="modal.smiles">SMILES（每行一个分子）</label>
@@ -1353,6 +1354,7 @@ option, optgroup {
         <div class="mc-right" id="mc-summary-container">
           <div class="mc-summary-title" data-i18n="modal.summary">实时摘要</div>
           <div id="mc-summary-body"></div>
+          <div id="mc-summary-errors" class="parse-errors" style="display:none;margin-top:10px;"></div>
         </div>
       </div>
     </div>
@@ -1646,6 +1648,9 @@ const I18N = {
     "modal.cat_preset": "预设工作流",
     "modal.cat_custom": "自定义",
     "modal.planned": "计划中",
+    "modal.simple_input_hint": "简单工作流仅接受结构文件（XYZ / GJF / COM / INP），不支持 SMILES",
+    "modal.simple_no_smiles": "简单工作流不支持 SMILES 输入，请改用结构文件（XYZ / GJF / COM / INP）",
+    "modal.default_method": "默认方法",
     "modal.advanced": "高级",
     "modal.summary": "实时摘要",
     "modal.custom": "自定义",
@@ -1829,6 +1834,9 @@ const I18N = {
     "modal.cat_preset": "Preset Workflows",
     "modal.cat_custom": "Custom",
     "modal.planned": "Planned",
+    "modal.simple_input_hint": "Simple workflows accept structure files only (XYZ / GJF / COM / INP); SMILES is not supported",
+    "modal.simple_no_smiles": "Simple workflows do not accept SMILES input; please use a structure file (XYZ / GJF / COM / INP)",
+    "modal.default_method": "Default Method",
     "modal.advanced": "Advanced",
     "modal.summary": "Summary",
     "modal.custom": "Custom",
@@ -3637,6 +3645,20 @@ function renderPreviewStructure3D(structure) {
   }
 }
 
+function isSimpleWorkflowSelected() {
+  var wfEntry = workflowCatalogCache.find(function(w) { return w.id === wizardState.workflow.id; });
+  return !!(wfEntry && wfEntry.category === "simple");
+}
+
+function updateInputModeVisibility() {
+  var simple = isSimpleWorkflowSelected();
+  var smilesTab = document.querySelector('.input-mode-tab[data-input-mode="smiles"]');
+  if (smilesTab) smilesTab.style.display = simple ? "none" : "";
+  var hint = document.getElementById("simple-input-hint");
+  if (hint) hint.style.display = simple ? "block" : "none";
+  if (simple && wizardInputMode === "smiles") setWizardInputMode("upload");
+}
+
 function updateConfigCards() {
   var wfTitle = document.getElementById("workflow-card-title");
   var wfDesc = document.getElementById("workflow-card-desc");
@@ -3649,15 +3671,48 @@ function updateConfigCards() {
 
   var mtTitle = document.getElementById("method-card-title");
   var mtDesc = document.getElementById("method-card-desc");
-  if (wizardState.method.profile_label) {
-    mtTitle.textContent = wizardState.method.profile_label;
-  }
+  mtTitle.textContent = wizardState.method.profile_label || (t("modal.custom") || "Custom");
+
   var stages = wizardState.method.stages || {};
+  var schemaId = wizardState.workflow.schema_id;
+  var schema = (methodCatalogCache.method_schemas || {})[schemaId];
   var parts = [];
-  if (stages.xtb_preopt && stages.xtb_preopt.gfn) parts.push("xTB: " + stages.xtb_preopt.gfn);
-  if (stages.dft_opt && stages.dft_opt.functional) parts.push("DFT: " + stages.dft_opt.functional + "/" + (stages.dft_opt.basis || ""));
-  if (stages.single_point && stages.single_point.functional) parts.push("SP: " + stages.single_point.functional + "/" + (stages.single_point.basis || ""));
-  mtDesc.textContent = parts.join(" | ") || "--";
+  if (schema && schema.method_levels) {
+    schema.method_levels.forEach(function(lv) {
+      var st = stages[lv.level_id];
+      if (!st || !st.engine || st._disabled === true) {
+        var label = lv.label_zh || lv.label || lv.level_id;
+        parts.push('<span style="color:var(--text-tertiary)">' + label + " (default)</span>");
+        return;
+      }
+      if (st.functional) {
+        var s = lv.label + ": " + st.functional;
+        if (st.basis) s += "/" + st.basis;
+        parts.push(s);
+      } else if (st.gfn) {
+        parts.push(lv.label + ": " + st.gfn);
+      } else if (st.temperature !== undefined && st.temperature !== "") {
+        parts.push(lv.label + ": " + st.temperature + "K");
+      } else {
+        parts.push(lv.label + ": " + st.engine);
+      }
+    });
+  } else {
+    Object.keys(stages).forEach(function(lid) {
+      var st = stages[lid];
+      if (!st || typeof st !== "object" || st._disabled === true) return;
+      if (st.functional) {
+        var s = st.functional;
+        if (st.basis) s += "/" + st.basis;
+        parts.push(lid + ": " + s);
+      } else if (st.gfn) {
+        parts.push(lid + ": " + st.gfn);
+      }
+    });
+  }
+  mtDesc.innerHTML = parts.join(" | ") || "--";
+
+  updateInputModeVisibility();
 }
 
 async function loadWorkflowCatalog() {
@@ -3670,7 +3725,7 @@ async function loadWorkflowCatalog() {
 
 async function loadMethodCatalog() {
   try {
-    var resp = await fetch(API_BASE + "/method-catalog");
+    var resp = await fetch(API_BASE + "/method-catalog?_t=" + Date.now());
     methodCatalogCache = await resp.json();
   } catch(e) { console.error("Failed to load method catalog:", e); }
 }
@@ -3741,12 +3796,23 @@ async function openWorkflowConfig() {
 
 function loadDefaultMethodProfile(schemaId) {
   var schema = (methodCatalogCache.method_schemas || {})[schemaId];
-  if (!schema) return;
+  if (!schema) {
+    wizardState.method.profile_id = "";
+    wizardState.method.profile_label = "";
+    wizardState.method.stages = {};
+    updateConfigCards();
+    return;
+  }
   var profiles = schema.profiles || [];
   if (profiles.length) {
     wizardState.method.profile_id = profiles[0].profile_id;
     wizardState.method.profile_label = profiles[0].label;
     wizardState.method.stages = JSON.parse(JSON.stringify(profiles[0].levels || {}));
+  } else {
+    wizardState.method.profile_id = "";
+    var firstLevel = (schema.method_levels || [])[0];
+    wizardState.method.profile_label = firstLevel ? (firstLevel.label_zh || firstLevel.label || firstLevel.level_id) : "";
+    wizardState.method.stages = {};
   }
   updateConfigCards();
 }
@@ -3756,17 +3822,13 @@ async function openMethodConfig() {
   var wfEntry = workflowCatalogCache.find(function(w) { return w.id === wizardState.workflow.id; });
   title.textContent = (t("modal.method_config") || "\u914d\u7f6e\u8ba1\u7b97\u65b9\u6cd5") + " - " + (wfEntry ? (wfEntry.label || wfEntry.id) : "");
 
-  if (!methodCatalogCache.method_schemas) {
-    document.getElementById("mc-levels-container").innerHTML = '<div class="muted">' + (t("modal.loading") || "\u52a0\u8f7d\u4e2d...") + '</div>';
-    document.getElementById("method-config-modal").style.display = "flex";
-    try { await loadMethodCatalog(); } catch(e) {
-      document.getElementById("mc-levels-container").innerHTML = '<div class="parse-errors" style="display:block">' + escapeHtml(e.message) + '</div>';
-      return;
-    }
+  document.getElementById("method-config-modal").style.display = "flex";
+  try { await loadMethodCatalog(); } catch(e) {
+    document.getElementById("mc-levels-container").innerHTML = '<div class="parse-errors" style="display:block">' + escapeHtml(e.message) + '</div>';
+    return;
   }
-  if (!methodCatalogCache.method_schemas) {
-    document.getElementById("mc-levels-container").innerHTML = '<div class="muted">' + "\u76ee\u5f55\u52a0\u8f7d\u5931\u8d25" + '</div>';
-    document.getElementById("method-config-modal").style.display = "flex";
+  if (!methodCatalogCache.method_schemas || !methodCatalogCache.functional_options_map) {
+    document.getElementById("mc-levels-container").innerHTML = '<div class="muted">\u76ee\u5f55\u52a0\u8f7d\u5931\u8d25</div>';
     return;
   }
 
@@ -3800,7 +3862,7 @@ async function openMethodConfig() {
   }
 
   function isFieldAdvanced(fieldName) {
-    var adv = ["aux_basis", "ri_approximation", "grid", "scf_convergence", "opt_convergence", "max_steps", "charge", "multiplicity", "scale_factor"];
+    var adv = ["aux_basis", "ri_approximation", "grid", "scf_convergence", "opt_convergence", "max_steps", "recalc_hess", "charge", "multiplicity", "scale_factor"];
     return adv.indexOf(fieldName) >= 0;
   }
 
@@ -3916,60 +3978,120 @@ async function openMethodConfig() {
       lbl.textContent = fieldName.replace(/_/g, " ");
       fDiv.appendChild(lbl);
 
-      var opts = getFieldOptions(fieldName, engine);
       var levelState = getLevelState(lvDef.level_id);
       var curVal = levelState[fieldName] !== undefined ? levelState[fieldName] : getFieldDefault(fieldName, engine);
 
-      var isCompositeLocked = ((fieldName === "basis" || fieldName === "dispersion") && levelState.functional === "r2SCAN-3c")
-                           || (fieldName === "dispersion" && levelState.functional === "wB97M-V");
-      if (isCompositeLocked) {
-        if (fieldName === "basis") {
-          curVal = "def2-mTZVPP";
-          levelState.basis = "def2-mTZVPP";
-        } else if (fieldName === "dispersion") {
-          curVal = "none";
-          levelState.dispersion = "none";
-        }
+      var functional = levelState.functional || getFieldDefault("functional", engine) || "";
+      var funcOptsMap = (methodCatalogCache && methodCatalogCache.functional_options_map) || {};
+      var funcFilter = funcOptsMap[functional];
+
+      var opts = null;
+      if ((fieldName === "basis" || fieldName === "dispersion") && funcFilter && funcFilter[fieldName]) {
+        opts = funcFilter[fieldName];
       }
+      if (!opts) {
+        opts = getFieldOptions(fieldName, engine);
+      }
+
+      var isSingleLocked = opts && opts.length === 1;
+      var isBasisSingleLocked = isSingleLocked && fieldName === "basis";
+      var supportsCustom = fieldName === "basis" && !isBasisSingleLocked && fieldDefs.basis && fieldDefs.basis.supports_custom;
+      var isCustomActive = supportsCustom && curVal && (
+        String(curVal) === "__custom__" || (opts && opts.indexOf(String(curVal)) < 0)
+      );
 
       if (opts && opts.length) {
         var sel = document.createElement("select");
+        var hasMatch = false;
         opts.forEach(function(o) {
           var opt = document.createElement("option");
           opt.value = o;
           opt.textContent = o;
-          if (String(curVal) === String(o)) opt.selected = true;
+          if (String(curVal) === String(o)) { opt.selected = true; hasMatch = true; }
           sel.appendChild(opt);
         });
-        if (isCompositeLocked) {
+        if (supportsCustom) {
+          var customOpt = document.createElement("option");
+          customOpt.value = "__custom__";
+          customOpt.textContent = "Custom...";
+          if (!hasMatch && curVal) customOpt.selected = true;
+          sel.appendChild(customOpt);
+        }
+        if (isSingleLocked && !supportsCustom) {
           sel.disabled = true;
         }
         sel.addEventListener("change", function() {
+          if (supportsCustom && sel.value === "__custom__") {
+            getLevelState(lvDef.level_id)[fieldName] = "__custom__";
+            rebuildLevelCard(lvDef.level_id);
+            scheduleValidate();
+            return;
+          }
           getLevelState(lvDef.level_id)[fieldName] = sel.value;
+          if (isCustomActive) rebuildLevelCard(lvDef.level_id);
           scheduleValidate();
         });
         if (fieldName === "functional") {
           sel.addEventListener("change", function() {
+            var newFunctional = sel.value;
+            var newFuncFilter = funcOptsMap[newFunctional];
+            if (newFuncFilter) {
+              var st = getLevelState(lvDef.level_id);
+              if (newFuncFilter.basis) {
+                var curBasis = st.basis;
+                if (curBasis && curBasis !== "__custom__" && newFuncFilter.basis.indexOf(String(curBasis)) < 0) {
+                  st.basis = newFuncFilter.basis[0];
+                }
+              }
+              if (newFuncFilter.dispersion) {
+                var curDisp = st.dispersion;
+                if (curDisp && newFuncFilter.dispersion.indexOf(String(curDisp)) < 0) {
+                  st.dispersion = newFuncFilter.dispersion[0];
+                }
+              }
+            }
             rebuildLevelCard(lvDef.level_id);
           });
         }
         fDiv.appendChild(sel);
-        if (isCompositeLocked) {
+        if (isSingleLocked && !supportsCustom) {
           var note = document.createElement("span");
           note.className = "muted";
           note.style.fontSize = "11px";
           note.style.marginLeft = "4px";
-          note.textContent = fieldName === "basis" ? "built-in (def2-mTZVPP)" : "built-in";
+          note.textContent = "built-in";
           fDiv.appendChild(note);
         }
-      } else if (fieldDefs[fieldName] && fieldDefs[fieldName].type === "float") {
+        if (isCustomActive) {
+          var customWrap = document.createElement("div");
+          customWrap.style.marginTop = "4px";
+          var cInp = document.createElement("input");
+          cInp.type = "text";
+          cInp.placeholder = "e.g. def2-QZVP";
+          cInp.value = String(curVal) === "__custom__" ? "" : String(curVal);
+          cInp.style.width = "100%";
+          cInp.style.boxSizing = "border-box";
+          cInp.addEventListener("input", function() {
+            getLevelState(lvDef.level_id)[fieldName] = cInp.value;
+            scheduleValidate();
+          });
+          customWrap.appendChild(cInp);
+          fDiv.appendChild(customWrap);
+        }
+      } else if (fieldDefs[fieldName] && (fieldDefs[fieldName].type === "float" || fieldDefs[fieldName].type === "int")) {
         var inp = document.createElement("input");
         inp.type = "number";
-        inp.step = "any";
+        var isIntField = fieldDefs[fieldName].type === "int";
+        inp.step = isIntField ? "1" : "any";
         inp.value = curVal;
-        if (isCompositeLocked) inp.disabled = true;
         inp.addEventListener("change", function() {
-          getLevelState(lvDef.level_id)[fieldName] = parseFloat(inp.value) || inp.value;
+          if (inp.value === "") {
+            getLevelState(lvDef.level_id)[fieldName] = "";
+          } else if (isIntField) {
+            getLevelState(lvDef.level_id)[fieldName] = parseInt(inp.value, 10);
+          } else {
+            getLevelState(lvDef.level_id)[fieldName] = parseFloat(inp.value) || inp.value;
+          }
           scheduleValidate();
         });
         fDiv.appendChild(inp);
@@ -3977,7 +4099,6 @@ async function openMethodConfig() {
         var inp = document.createElement("input");
         inp.type = "text";
         inp.value = curVal;
-        if (isCompositeLocked) inp.disabled = true;
         inp.addEventListener("change", function() {
           getLevelState(lvDef.level_id)[fieldName] = inp.value;
           scheduleValidate();
@@ -4053,6 +4174,7 @@ async function openMethodConfig() {
   }
 
   var validateTimer = null;
+  var _lastValidationResult = null;
   function scheduleValidate() {
     if (validateTimer) clearTimeout(validateTimer);
     validateTimer = setTimeout(function() {
@@ -4088,11 +4210,38 @@ async function openMethodConfig() {
           });
         });
       }
+      _lastValidationResult = body;
       return body;
     } catch(e) { return { valid: false, errors: [e.message], warnings: [] }; }
   }
 
   function rebuildSummary() {
+    var vr = _lastValidationResult;
+    var errEl = document.getElementById("mc-summary-errors");
+
+    // Show validation errors
+    if (vr && vr.errors && vr.errors.length) {
+      errEl.style.display = "block";
+      errEl.innerHTML = vr.errors.map(function(e) {
+        return "<div>\u2717 " + escapeHtml(e) + "</div>";
+      }).join("");
+    } else {
+      errEl.style.display = "none";
+      errEl.innerHTML = "";
+    }
+
+    // Collect per-level errors for status dots
+    var levelErrors = {};
+    if (vr && vr.errors) {
+      vr.errors.forEach(function(e) {
+        var lid = "";
+        var m = e.match(/Level '([^']+)'/);
+        if (m) lid = m[1];
+        if (!levelErrors[lid]) levelErrors[lid] = [];
+        levelErrors[lid].push(e);
+      });
+    }
+
     var sb = document.getElementById("mc-summary-body");
     var html = "";
     (schema.method_levels || []).forEach(function(lvDef) {
@@ -4119,8 +4268,12 @@ async function openMethodConfig() {
       cards.forEach(function(c) {
         var dot = c.querySelector(".mc-level-status");
         var state = wizardState.method.stages[lvDef.level_id];
-        var okState = (state && state.engine && state._disabled !== true) || lvDef.required === false;
+        var hasErrors = levelErrors[lvDef.level_id] && levelErrors[lvDef.level_id].length > 0;
+        var okState = !hasErrors && ((state && state.engine && state._disabled !== true) || lvDef.required === false);
         if (dot) dot.className = "mc-level-status " + (okState ? "ok" : "err");
+        if (hasErrors && dot) {
+          dot.title = levelErrors[lvDef.level_id].join("\n");
+        }
       });
     });
   }
@@ -4221,6 +4374,11 @@ async function submitJobModal() {
     }
     inputPayload.charge = s.charge;
     inputPayload.multiplicity = s.multiplicity;
+
+    if (isSimpleWorkflowSelected() && inputPayload.source_type === "smiles") {
+      window.alert(t("modal.simple_no_smiles") || "Simple workflows do not accept SMILES input");
+      return;
+    }
 
     var cleanedLevels = {};
     var wizStages = wizardState.method.stages || {};
@@ -4617,12 +4775,19 @@ window.addEventListener("DOMContentLoaded", async function() {
     var wfEntry = workflowCatalogCache.find(function(w) { return w.id === defaultWfId; });
     var schemaId = (wfEntry && wfEntry.method_schema_id) || "confsearch";
     var schema = (methodCatalogCache.method_schemas || {})[schemaId];
-    if (schema && schema.profiles && schema.profiles.length) {
-      var p = schema.profiles[0];
+    if (schema) {
       wizardState.workflow.schema_id = schemaId;
-      wizardState.method.profile_id = p.profile_id;
-      wizardState.method.profile_label = p.label;
-      wizardState.method.stages = JSON.parse(JSON.stringify(p.levels || {}));
+      if (schema.profiles && schema.profiles.length) {
+        var p = schema.profiles[0];
+        wizardState.method.profile_id = p.profile_id;
+        wizardState.method.profile_label = p.label;
+        wizardState.method.stages = JSON.parse(JSON.stringify(p.levels || {}));
+      } else {
+        wizardState.method.profile_id = "";
+        var firstLevel = (schema.method_levels || [])[0];
+        wizardState.method.profile_label = firstLevel ? (firstLevel.label_zh || firstLevel.label || firstLevel.level_id) : "";
+        wizardState.method.stages = {};
+      }
     }
     updateConfigCards();
   } catch (e) {

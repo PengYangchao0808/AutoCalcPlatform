@@ -716,6 +716,8 @@ class JobRunner:
                 cmd += ["--backend", str(method["backend"])]
         elif wf in ("singlepoint", "optimize", "frequency", "optfreq", "optfreqsp"):
             cmd += ["--input", str(source), "--output", str(work_dir)]
+            if spec.name:
+                cmd += ["--name", spec.name]
             levels = method.get("levels", {})
             if levels:
                 from acp.catalog import method_levels_to_cli_flags
