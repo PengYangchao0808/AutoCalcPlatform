@@ -77,7 +77,10 @@ def test_workflows_and_protocols(client: TestClient) -> None:
         w["name"] for w in wf["workflows"]
     }
     names = [w["name"] for w in wf["workflows"]]
-    assert names == ["fake", "conformer", "ensemble", "energy", "nmr", "benchmark", "mechanism"]
+    assert names == [
+        "fake", "conformer", "ensemble", "energy", "nmr", "benchmark", "mechanism",
+        "singlepoint", "optimize", "frequency", "optfreq", "optfreqsp",
+    ]
     pr = client.get("/api/protocols").json()
     assert isinstance(pr["protocols"], list)
 

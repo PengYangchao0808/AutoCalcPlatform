@@ -29,6 +29,11 @@ __all__ = [
     "run_ensemble_generation",
     "run_mechanism_analysis",
     "run_nmr_calculation",
+    "run_singlepoint",
+    "run_optimize",
+    "run_frequency",
+    "run_optfreq",
+    "run_optfreqsp",
 ]
 
 # Maps each public name to the submodule that defines it.  The submodule is
@@ -44,6 +49,11 @@ _LAZY_SOURCES: dict[str, str] = {
     "run_mechanism_analysis": "acp.workflows.mechanism",
     "get_nmr_stages": "acp.workflows.nmr",
     "run_nmr_calculation": "acp.workflows.nmr",
+    "run_singlepoint": "acp.workflows.simple",
+    "run_optimize": "acp.workflows.simple",
+    "run_frequency": "acp.workflows.simple",
+    "run_optfreq": "acp.workflows.simple",
+    "run_optfreqsp": "acp.workflows.simple",
     "run_ensemble_generation": "acp.workflows.ensemble",
     "run_conformer_energy": "acp.workflows.energy",
     "WorkflowRegistryEntry": "acp.workflows.registry",

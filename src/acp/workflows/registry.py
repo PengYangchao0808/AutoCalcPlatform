@@ -79,6 +79,36 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         description="TS search + optimization + IRC validation + energy barrier analysis.",
         requires_binaries=["orca"],
     ),
+    "singlepoint": WorkflowRegistryEntry(
+        name="singlepoint",
+        label="Single Point Energy",
+        description="ORCA single-point energy calculation at current geometry.",
+        requires_binaries=["orca"],
+    ),
+    "optimize": WorkflowRegistryEntry(
+        name="optimize",
+        label="Geometry Optimization",
+        description="ORCA geometry optimization.",
+        requires_binaries=["orca"],
+    ),
+    "frequency": WorkflowRegistryEntry(
+        name="frequency",
+        label="Frequency Calculation",
+        description="ORCA vibrational frequency calculation.",
+        requires_binaries=["orca"],
+    ),
+    "optfreq": WorkflowRegistryEntry(
+        name="optfreq",
+        label="Optimization + Frequency",
+        description="ORCA combined Opt+Freq as a single job.",
+        requires_binaries=["orca"],
+    ),
+    "optfreqsp": WorkflowRegistryEntry(
+        name="optfreqsp",
+        label="Opt+Freq+SP+Thermo",
+        description="Full pipeline: ORCA opt+freq -> SP -> Shermo thermo -> free energy.",
+        requires_binaries=["orca", "shermo"],
+    ),
 }
 
 

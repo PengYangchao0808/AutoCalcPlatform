@@ -194,6 +194,65 @@ def _handle_protocol(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
+    """Register 5 simple workflow subcommand parsers."""
+    for wf, wf_label, wf_desc, wf_epilog in [
+        ("singlepoint", "Single Point", "Run ORCA single-point energy calculation",
+         "Examples:\n  acp run singlepoint --input mol.xyz --output ./out\n  acp run singlepoint --input mol.inp --method wB97M-V --basis def2-TZVPP"),
+        ("optimize", "Optimization", "Run ORCA geometry optimization",
+         "Examples:\n  acp run optimize --input mol.xyz --output ./out\n  acp run optimize --input mol.gjf --method r2SCAN-3c --geom-maxiter 200"),
+        ("frequency", "Frequency", "Run ORCA vibrational frequency calculation",
+         "Examples:\n  acp run frequency --input mol.xyz --output ./out\n  acp run frequency --input mol.inp --temperature 298.15 --pressure 1.0"),
+        ("optfreq", "Opt + Freq", "Run ORCA Opt+Freq as single job",
+         "Examples:\n  acp run optfreq --input mol.xyz --output ./out\n  acp run optfreq --input mol.gjf --method r2SCAN-3c"),
+        ("optfreqsp", "Opt+Freq+SP+Thermo", "Full pipeline: opt -> freq -> SP -> Shermo",
+         "Examples:\n  acp run optfreqsp --input mol.xyz --output ./out\n  acp run optfreqsp --input mol.xyz --method r2SCAN-3c --sp-method wB97M-V"),
+    ]:
+        p = run_sub.add_parser(wf, help=wf_desc, formatter_class=argparse.RawDescriptionHelpFormatter, epilog=wf_epilog)
+        p.set_defaults(workflow=wf)
+        _add_simple_workflow_args(p, wf)
+
+
+def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
+    """Add common arguments for simple workflows."""
+    parser.add_argument("--input", "-i", required=True, help="Input structure file (XYZ, GJF, COM, ORCA .inp)")
+    parser.add_argument("--output", "-o", default="./out", help="Output directory")
+    parser.add_argument("--charge", type=int, default=0, help="Molecular charge (default: 0)")
+    parser.add_argument("--multiplicity", type=int, default=1, help="Spin multiplicity (default: 1)")
+    parser.add_argument("--name", type=str, help="Molecule name")
+    parser.add_argument("--method", default="r2SCAN-3c", help="DFT functional (default: r2SCAN-3c)")
+    parser.add_argument("--basis", default="def2-mTZVPP", help="Basis set (default: def2-mTZVPP)")
+    parser.add_argument("--dispersion", default="none", help="Dispersion correction (e.g. D3BJ, D4, none)")
+    parser.add_argument("--solvent-model", default="none", choices=["smd", "cpcm", "none"], help="Solvent model (default: none)")
+    parser.add_argument("--solvent", default="", help="Solvent name (e.g. water, methanol)")
+    parser.add_argument("--nproc", type=int, help="Number of CPU cores")
+    parser.add_argument("--mem", type=str, help="Memory limit (e.g. 32GB, 4096MB)")
+    parser.add_argument("--config", type=str, help="Configuration YAML file")
+    parser.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING", "ERROR"], default="INFO", help="Logging level (default: INFO)")
+
+    parser.add_argument("--route-extras", type=str, help="Comma-separated ORCA route extras (e.g. SlowConv,NoFinalGrid)")
+
+    if wf in ("singlepoint", "optfreq", "optfreqsp"):
+        parser.add_argument("--aux-basis", default="", help="Auxiliary basis set")
+        parser.add_argument("--ri-approximation", default="none", choices=["none", "RI", "RIJCOSX", "RIJK"], help="RI approximation (default: none)")
+
+    if wf in ("optimize", "optfreq", "optfreqsp"):
+        parser.add_argument("--geom-maxiter", type=int, help="Max geometry iterations (maps to MaxIter in %%geom block)")
+        parser.add_argument("--opt-convergence", default="Tight", choices=["Loose", "Normal", "Tight", "VeryTight"], help="Optimization convergence (default: Tight)")
+
+    if wf in ("frequency", "optfreq", "optfreqsp"):
+        parser.add_argument("--temperature", type=float, default=298.15, help="Temperature in K (default: 298.15)")
+        parser.add_argument("--pressure", type=float, default=1.0, help="Pressure in atm (default: 1.0)")
+        parser.add_argument("--scale-factor", type=float, default=0.9905, help="Frequency scale factor for ZPE/thermo (default: 0.9905)")
+
+    if wf == "optfreqsp":
+        parser.add_argument("--sp-method", default="wB97M-V", help="SP functional (default: wB97M-V)")
+        parser.add_argument("--sp-basis", default="def2-TZVPP", help="SP basis set (default: def2-TZVPP)")
+        parser.add_argument("--sp-aux-basis", default="def2/J", help="SP auxiliary basis (default: def2/J)")
+        parser.add_argument("--sp-ri-approximation", default="RIJCOSX", choices=["none", "RI", "RIJCOSX", "RIJK"], help="SP RI approximation (default: RIJCOSX)")
+        parser.add_argument("--sp-dispersion", default="none", help="SP dispersion correction")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level ACP argument parser."""
     parser = argparse.ArgumentParser(
@@ -623,6 +682,9 @@ Examples:
         type=str,
         help="Save effective configuration to this file",
     )
+
+    # -- simple workflows (singlepoint / optimize / frequency / optfreq / optfreqsp) --
+    _add_simple_workflow_parsers(run_sub)
 
     # -- run mechanism -------------------------------------------------------
     mechanism = run_sub.add_parser(
@@ -1064,6 +1126,173 @@ def _handle_mechanism(args: argparse.Namespace) -> int:
     return 1
 
 
+def _build_simple_method_kwargs(args: argparse.Namespace, wf: str) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {}
+    for key in ("method", "basis", "dispersion", "solvent_model", "solvent",
+                "aux_basis", "ri_approximation", "geom_maxiter", "opt_convergence"):
+        val = getattr(args, key, None)
+        if val is not None:
+            kwargs[key] = val
+    extras = getattr(args, "route_extras", None)
+    if extras:
+        kwargs["route_extras"] = [x.strip() for x in extras.split(",") if x.strip()]
+    return kwargs
+
+
+def _handle_singlepoint(args: argparse.Namespace) -> int:
+    from acp.workflows.simple import run_singlepoint
+    setup_logging(args.log_level)
+    cfg = _build_config(args)
+    out = Path(args.output)
+    method_kwargs = _build_simple_method_kwargs(args, "singlepoint")
+    try:
+        result = run_singlepoint(
+            input_source=args.input,
+            output_dir=out,
+            config=cfg,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            name=getattr(args, "name", None),
+            method_kwargs=method_kwargs,
+        )
+    except Exception as exc:
+        logger.exception("Singlepoint failed: %s", exc)
+        return 1
+    if result.status == "completed":
+        logger.info("Single-point calculation completed")
+        logger.info("  Energy: %s Hartree", result.metadata.get("energy", "N/A"))
+        return 0
+    logger.error("Single-point calculation failed: %s", result.error)
+    return 1
+
+
+def _handle_optimize(args: argparse.Namespace) -> int:
+    from acp.workflows.simple import run_optimize
+    setup_logging(args.log_level)
+    cfg = _build_config(args)
+    out = Path(args.output)
+    method_kwargs = _build_simple_method_kwargs(args, "optimize")
+    try:
+        result = run_optimize(
+            input_source=args.input,
+            output_dir=out,
+            config=cfg,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            name=getattr(args, "name", None),
+            method_kwargs=method_kwargs,
+        )
+    except Exception as exc:
+        logger.exception("Optimization failed: %s", exc)
+        return 1
+    if result.status == "completed":
+        logger.info("Geometry optimization completed")
+        logger.info("  Energy: %s Hartree", result.metadata.get("energy", "N/A"))
+        return 0
+    logger.error("Optimization failed: %s", result.error)
+    return 1
+
+
+def _handle_frequency(args: argparse.Namespace) -> int:
+    from acp.workflows.simple import run_frequency
+    setup_logging(args.log_level)
+    cfg = _build_config(args)
+    out = Path(args.output)
+    method_kwargs = _build_simple_method_kwargs(args, "frequency")
+    try:
+        result = run_frequency(
+            input_source=args.input,
+            output_dir=out,
+            config=cfg,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            name=getattr(args, "name", None),
+            method_kwargs=method_kwargs,
+        )
+    except Exception as exc:
+        logger.exception("Frequency calculation failed: %s", exc)
+        return 1
+    if result.status == "completed":
+        logger.info("Frequency calculation completed")
+        logger.info("  Modes: %s", result.metadata.get("n_frequencies", "N/A"))
+        return 0
+    logger.error("Frequency calculation failed: %s", result.error)
+    return 1
+
+
+def _handle_optfreq(args: argparse.Namespace) -> int:
+    from acp.workflows.simple import run_optfreq
+    setup_logging(args.log_level)
+    cfg = _build_config(args)
+    out = Path(args.output)
+    method_kwargs = _build_simple_method_kwargs(args, "optfreq")
+    try:
+        result = run_optfreq(
+            input_source=args.input,
+            output_dir=out,
+            config=cfg,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            name=getattr(args, "name", None),
+            method_kwargs=method_kwargs,
+        )
+    except Exception as exc:
+        logger.exception("Opt+Freq failed: %s", exc)
+        return 1
+    if result.status == "completed":
+        logger.info("Opt+Freq calculation completed")
+        logger.info("  Energy: %s Hartree", result.metadata.get("energy", "N/A"))
+        logger.info("  Modes: %s", result.metadata.get("n_frequencies", "N/A"))
+        return 0
+    logger.error("Opt+Freq failed: %s", result.error)
+    return 1
+
+
+def _handle_optfreqsp(args: argparse.Namespace) -> int:
+    from acp.workflows.simple import run_optfreqsp
+    setup_logging(args.log_level)
+    cfg = _build_config(args)
+    out = Path(args.output)
+
+    optfreq_kwargs = _build_simple_method_kwargs(args, "optfreq")
+    sp_kwargs: dict[str, Any] = {
+        "method": args.sp_method,
+        "basis": args.sp_basis,
+        "aux_basis": args.sp_aux_basis,
+        "ri_approximation": args.sp_ri_approximation,
+        "dispersion": args.sp_dispersion,
+        "solvent_model": args.solvent_model,
+        "solvent": args.solvent,
+    }
+    thermo_kwargs: dict[str, Any] = {
+        "temperature": args.temperature,
+        "pressure": args.pressure,
+        "scale_factor": args.scale_factor,
+    }
+    try:
+        result = run_optfreqsp(
+            input_source=args.input,
+            output_dir=out,
+            config=cfg,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            name=getattr(args, "name", None),
+            optfreq_kwargs=optfreq_kwargs,
+            sp_kwargs=sp_kwargs,
+            thermo_kwargs=thermo_kwargs,
+        )
+    except Exception as exc:
+        logger.exception("Opt+Freq+SP+Thermo failed: %s", exc)
+        return 1
+    if result.status == "completed":
+        logger.info("Opt+Freq+SP+Thermo completed")
+        logger.info("  SP energy: %s Hartree", result.metadata.get("sp_energy", "N/A"))
+        logger.info("  Free energy: %s Hartree", result.metadata.get("free_energy_hartree", "N/A"))
+        return 0
+    logger.error("Opt+Freq+SP+Thermo failed: %s", result.error)
+    return 1
+
+
 def _handle_serve(args: argparse.Namespace) -> int:
     """Start the FastAPI web dashboard server."""
     try:
@@ -1482,6 +1711,11 @@ def main(argv: list[str] | None = None) -> int:
         "nmr": _handle_nmr,
         "mechanism": _handle_mechanism,
         "serve": _handle_serve,
+        "singlepoint": _handle_singlepoint,
+        "optimize": _handle_optimize,
+        "frequency": _handle_frequency,
+        "optfreq": _handle_optfreq,
+        "optfreqsp": _handle_optfreqsp,
     }
 
     handler = dispatch.get(args.workflow)
