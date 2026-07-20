@@ -1342,6 +1342,127 @@ cmd += method_levels_to_cli_flags(levels, prefix_map)
 
 <hr class="section-divider">
 
+<!-- ======== 14. V7.4 CODE QUALITY AUDIT ======== -->
+<h2 id="v7-4-audit">14. v7.4 全链路代码质量审查</h2>
+<p><span class="tag-new">新增</span> v7.4 · 2026-07-20</p>
+<p>基于测试完成后对 4 个关键模块（simple.py、cli.py、scheduler 集成、ORCA opt_freq）的深度审查，系统梳理 50+ 项隐患并按严重度分类。</p>
+
+<h3>14.1 发现总览</h3>
+<table>
+<tr><th>严重度</th><th>数量</th><th>分布</th></tr>
+<tr><td><strong>Critical</strong>（运行时崩溃/数据静默丢失）</td><td>2</td><td>scheduler 集成</td></tr>
+<tr><td><strong>High</strong>（数据错误/核心功能失效）</td><td>5</td><td>simple.py(2), cli.py(1), scheduler(1), ORCA(1)</td></tr>
+<tr><td><strong>Medium</strong>（行为偏差/可观测错误）</td><td>16</td><td>simple.py(4), cli.py(3), scheduler(3), ORCA(6)</td></tr>
+<tr><td><strong>Low</strong>（代码质量/维护性）</td><td>13</td><td>simple.py(4), cli.py(3), scheduler(0), ORCA(6)</td></tr>
+<tr><td><strong>Design</strong>（架构问题）</td><td>12</td><td>simple.py(5), cli.py(3), scheduler(2), ORCA(2)</td></tr>
+<tr><td><strong>Code Smell</strong>（不良模式）</td><td>14</td><td>simple.py(4), cli.py(3), scheduler(4), ORCA(3)</td></tr>
+<tr><td><strong>合计</strong></td><td><strong>62</strong></td><td></td></tr>
+</table>
+
+<h3>14.2 Critical 隐患（必须立即修复）</h3>
+
+<h4>C1 — scheduler 预创 work_dir 导致 ensure_unique_dir 偏移，所有输出落入错误目录</h4>
+<div class="warn-box">
+⚠️ <strong>影响范围：</strong> 所有 simple 工作流通过 scheduler 提交时，输出写入 <code>work_dir_1/</code> 而非 <code>work_dir/</code>。scheduler 的 <code>_monitor</code>、<code>_capture_artifacts</code>、<code>StageTaskObserver</code> 全部监控 <code>work_dir/</code>——<strong>所有输出、进度追踪、artifacts、provenance 全部丢失。</strong>
+</div>
+<p><strong>根因链：</strong></p>
+<ol>
+<li><code>JobRunner.run()</code> 第 410 行预创建 <code>work_dir.mkdir(parents=True, exist_ok=True)</code></li>
+<li><code>_build_cmd()</code> 第 718 行将同一目录传入 <code>--output</code> CLI 参数</li>
+<li>simple.py 所有入口函数第一件事是调用 <code>ensure_unique_dir(output_dir)</code></li>
+<li><code>ensure_unique_dir</code>（core/utils.py:8）先尝试 <code>mkdir(exist_ok=False)</code> → 因为目录已存在触发 <code>FileExistsError</code> → 进入 counter 循环 → 创建 <code>work_dir_1/</code></li>
+</ol>
+<p><strong>修复方案：</strong> simple.py 入口函数检测已有目录时不再偏移，或 scheduler 不再预创建 work_dir（改为由 simple.py 统一创建），或在 <code>ensure_unique_dir</code> 中检查目录是否为空/是否为已准备的 job 工作目录。</p>
+
+<h4>C2 — simple 工作流完全不生成 state.json / stage_tasks/*.json，scheduler 监控静默失效</h4>
+<p><strong>关联文件：</strong> simple.py（全文件）vs runner.py:524-537、stage_tasks.py:313-316</p>
+<p>simple.py 是纯过程式函数（接收参数 → 调用 ORCABackend → 返回 WorkflowResult），不使用 <code>WorkflowState</code>，不写 <code>state.json</code>，不写 <code>stage_tasks/*.json</code>。但 scheduler 的 <code>StagePlanProvider</code> 为每个 simple 工作流声明了 1-3 个 stage。结果：所有 StageTask 行保持在 <code>"pending"</code> 状态直到 job 结束，然后被批量标记为 <code>"skipped"</code>。用户看到 job COMPLETED 但每个 stage SKIPPED。</p>
+<p><strong>修复方案：</strong> 在 simple.py 的最终阶段手动写 <code>stage_tasks/*.json</code> 文件（每个 stage 标记为 completed），或修改 runner.py 在简单工作流完成时跳过 stage 标记（不做任何标记），或使用 <code>_run_subprocess</code> 中已有的 <code>_write_stage_task_event</code> 基础设施为 simple 工作流生成事件。</p>
+
+<h3>14.3 High 隐患（建议在本迭代修复）</h3>
+<table>
+<tr><th>#</th><th>模块</th><th>位置</th><th>问题</th></tr>
+
+<tr><td>H1</td><td>simple.py</td><td>:63</td><td><strong>zpe_hartree 字段名错误</strong>：<code>zpe_hartree = thermo.get("u_sum", 0.0) - sp_energy</code> 实际计算的是 <strong>total thermal correction to U</strong>（即 ZPE + 热振动/转动/平动修正），而非 ZPE 本身。Shermo 的 <code>u_sum</code> = E_el + U_corr (total)，ZPE 是单独的物理量。输出 thermo.json 中以 <code>zpe_hartree</code> 名义给出的值语义错误。</td></tr>
+
+<tr><td>H2</td><td>simple.py</td><td>:113-114, 141-142, 175-176, 205-206, 249, 261</td><td><strong>kwargs 双重传递到 backend 构造函数和方法调用</strong>：同一字典同时传给 <code>_build_backend(cfg, kwargs)</code>（→ <code>ORCAInterface.__init__</code>，base 层静默丢弃）和 <code>backend.xxx(..., **kwargs)</code>。如果 kwargs 包含与方法签名中命名参数同名的键（如 <code>output_name</code>、<code>method</code>），Python 会抛出 <code>TypeError: got multiple values</code>。</td></tr>
+
+<tr><td>H3</td><td>cli.py</td><td>:220-221</td><td><strong>--charge/--multiplicity 硬编码默认值 0/1 阻止自动检测</strong>：<code>argparse default=0</code> 导致即使用户未设置，<code>args.charge</code> 总是 <code>0</code>，传入 <code>StructureReader.read(charge=0)</code> 从而禁用自旋/电荷自动检测。conformer/nmr CLI 的对应参数设置 <code>default=None</code>，在未设置时保留自动检测。</td></tr>
+
+<tr><td>H4</td><td>scheduler</td><td>runner.py:410, simple.py:108</td><td><strong>simple 工作流缺少 --name 传递</strong>：<code>_build_cmd()</code> 对 conformer/mechanism 传递 <code>--name</code>，但对 nmr 和所有 5 个 simple 工作流未传递。JobSpec.name 被静默丢弃。</td></tr>
+
+<tr><td>H5</td><td>ORCA</td><td>cli.py:1131-1135, orca.py:560</td><td><strong>--aux-basis / --ri-approximation CLI flag 在所有 simple 工作流中静默无效</strong>：<code>_build_simple_method_kwargs</code> 收集这两个字段，通过 kwargs 传递到 <code>ORCAInterface</code> 后，<code>optimize/single_point/frequency/opt_freq</code> 各方法均不将它们转发给 <code>_write_input</code> → <code>_build_input_blocks</code>。用户在 CLI 中设置这些参数获得零效果。正确做法：energy.py:77-93 将它们转为 <code>route_extras</code>。</td></tr>
+</table>
+
+<h3>14.4 Medium 隐患（影响可观测行为或易错）</h3>
+<table>
+<tr><th>#</th><th>模块</th><th>位置</th><th>问题</th></tr>
+
+<tr><td>M1</td><td>simple.py</td><td>:64-65</td><td><strong>enthalpy_hartree/gibbs_hartree 语义模糊</strong>：<code>h_sum</code> 和 <code>g_sum</code> 包含电子能量（总焓/总自由能），而非修正值。与 <code>zpe_hartree</code>（计算差值）的语义不一致。</td></tr>
+
+<tr><td>M2</td><td>simple.py</td><td>:119, 149</td><td><strong>run_singlepoint/run_optimize 写入 result.energy 不检查 None</strong>：<code>_write_energy_json(out, result.energy)</code> 中 <code>result.energy</code> 可为 None，json.dumps 写入 <code>"null"</code> 而非报错。run_optfreq:216 正确做了 None 检查，但前两个方法没有。</td></tr>
+
+<tr><td>M3</td><td>simple.py</td><td>:268-270</td><td><strong>log_file 未验证存在性</strong>：检查 <code>optfreq_result.log_file is None</code> 但未验证文件实际存在于磁盘。ORCA 可能写入路径但文件已被删除/未创建（半失败状态），<code>run_shermo()</code> 会吞异常返回 None。</td></tr>
+
+<tr><td>M4</td><td>simple.py</td><td>:97-98, 243, 248-249</td><td><strong>run_optfreqsp 中 config 加载在 Shermo 检查之后</strong>：如果 Shermo 不存在，<code>load_config()</code> 未执行即返回失败，合理。但如果 Shermo 存在但 config 加载失败（YAML 损坏），错误在 <code>_check_input</code> 之后的第 243 行才出现，部分资源已分配。</td></tr>
+
+<tr><td>M5</td><td>cli.py</td><td>:227, 236, 1131-1134</td><td><strong>空字符串默认值泄漏到 kwargs</strong>：<code>--solvent default=""</code> 和 <code>--aux-basis default=""</code> 的 argparse 默认空字符串通过 <code>if val is not None</code>（空字符串 ≠ None）检查，被传入 <code>ORCABackend(aux_basis="")</code>，可能生成无效的 ORCA 输入。</td></tr>
+
+<tr><td>M6</td><td>cli.py</td><td>:1269-1282</td><td><strong>optfreqsp handler 中 route_extras 遗漏传递给 SP stage</strong>：<code>_build_simple_method_kwargs</code>（给 optfreq_kwargs）包含 <code>route_extras</code>，但手动构建的 <code>sp_kwargs</code> 未包含该字段。用户设置 <code>--route-extras</code> 只对 Opt+Freq stage 生效。</td></tr>
+
+<tr><td>M7</td><td>cli.py</td><td>:243-246</td><td><strong>--temperature/--pressure/--scale-factor 在 frequency/optfreq handler 中被忽略</strong>：<code>_add_simple_workflow_args</code> 为这三个工作流添加这些参数，但 <code>_handle_frequency</code> 和 <code>_handle_optfreq</code> 只传 <code>method_kwargs</code>（不含 thermo 参数），仅 <code>_handle_optfreqsp</code> 显式构建了 <code>thermo_kwargs</code>。</td></tr>
+
+<tr><td>M8</td><td>scheduler</td><td>runner.py:167 vs cli.py:218</td><td><strong>.com/.inp 文件不被 scheduler materialize_job_input 处理</strong>：CLI 和 simple.py 支持 .com/.inp，但 <code>materialize_job_input</code> 只识别 .xyz/.gjf/.sdf。.com/.inp 会落入 SMILES 转换路径并失败，最终使用原始 source 路径（可能是相对路径，在子进程 cwd 上下文中可能错误）。</td></tr>
+
+<tr><td>M9</td><td>scheduler</td><td>runner.py:719 vs cli.py:1129</td><td><strong>scheduler 和 CLI 直调的参数传递路径不一致</strong>：scheduler 期望嵌套的 <code>levels</code> dict → <code>method_levels_to_cli_flags()</code> 转换为 CLI flags；CLI 直调通过 <code>_build_simple_method_kwargs(args)</code> 直接收集 flat args。如果前端通过 API 提交 flat method dict（而非 levels），所有 method/basis 参数被静默忽略。</td></tr>
+
+<tr><td>M10</td><td>scheduler</td><td>runner.py:423, 506</td><td><strong>StageTaskObserver.initialize_job_stages() 双重调用</strong>：在 <code>run()</code> 和 <code>_run_subprocess()</code> 各调用一次，消耗两次 DB round-trip。函数是幂等的所以不损坏状态，但多余开销。</td></tr>
+
+<tr><td>M11</td><td>ORCA</td><td>cli.py:1132</td><td><strong>opt_convergence CLI kwarg 在全链路上无任何消费</strong>：cli → simple.py → ORCABackend → ORCAInterface → 被静默丢弃。无任何代码将其转化为 ORCA 关键字（如 TightOpt 或 %geom convergence），仅给用户造成假象。</td></tr>
+
+<tr><td>M12</td><td>ORCA</td><td>interface/orca.py:274-661</td><td><strong>参数风格不一致</strong>：opt_freq 使用显式命名参数（route_extras、geom_maxiter、extra_blocks），而 optimize/single_point/frequency 使用 <code>kwargs.get()</code> 模式。IDE 自动补全只对 opt_freq 有效，其他方法中拼写错误被静默忽略。</td></tr>
+
+<tr><td>M13</td><td>ORCA</td><td>interface/orca.py:517-615</td><td><strong>opt_freq 是 optimize + frequency 的原样复制</strong>：坐标提取、频率正则可匹配、QCResult 构造三套逻辑重复。未来任一方法中的 bug fix 需三处同步修改。</td></tr>
+
+<tr><td>M14</td><td>ORCA</td><td>backends/base.py</td><td><strong>缺失 OptFreqCalculator Protocol</strong>：base.py 定义了 SinglePointCalculator、GeometryOptimizer、FrequencyCalculator 等 8 个 Protocol，但没有 OptFreqCalculator。opt_freq 方法是 ORCABackend 上的孤立法——无接口契约约束，其他 backend 无法声明该能力。</td></tr>
+
+<tr><td>M15</td><td>ORCA</td><td>interface/orca.py:502, 594</td><td><strong>两处裸 except Exception: 吞频率解析失败</strong>：频率解析用 <code>except Exception as e: logger.warning(...)</code> 包裹，吞没所有异常（含 KeyboardInterrupt、MemoryError）。频率是关键数据（optfreqsp 中传给 Shermo），解析失败只发 warning 不再抛异常。</td></tr>
+
+<tr><td>M16</td><td>ORCA</td><td>interface/orca.py:156-161</td><td><strong>Recalc_Hess + NumFreq 语义矛盾</strong>：当溶剂非 CPCM 时 route 降级为 <code>Opt NumFreq</code>，但 <code>%geom</code> 块中仍写 <code>Recalc_Hess</code>（触发分析 Hessian 重算），与 NumFreq（数值频率）语义矛盾。</td></tr>
+</table>
+
+<h3>14.5 Design 问题一览</h3>
+<table>
+<tr><th>#</th><th>模块</th><th>问题</th></tr>
+<tr><td>D1</td><td>simple.py</td><td><strong>ORCA 硬耦合</strong>：直接 import ORCABackend 而非通过 backend registry，不支持 Gaussian/xTB 切换</td></tr>
+<tr><td>D2</td><td>simple.py</td><td><strong>缺失执行抽象</strong>：5 个入口函数重复相同 preamble（load_config → ensure_unique_dir → _check_input → _read_input → _build_backend → call → check → write → return），应提取为公共模板</td></tr>
+<tr><td>D3</td><td>simple.py</td><td><strong>WorkflowResult 误用</strong>：WorkflowResult 设计于 WorkflowRunner pipeline 环境，simple 工作流不使用 ensemble/stages_completed，自行构建 status/error/metadata</td></tr>
+<tr><td>D4</td><td>simple.py</td><td><strong>Shermo 硬耦合</strong>：二进制检查和 import 硬编码于 run_optfreqsp，不支持 GoodVibes/TAMkin 等替代品</td></tr>
+<tr><td>D5</td><td>simple.py</td><td><strong>零日志</strong>：所有工作流函数完全不输出 log，如果计算运行数小时后失败，唯一记录是最终的 WorkflowResult.error 字符串</td></tr>
+<tr><td>D6</td><td>cli.py</td><td><strong>5 个 handler 近乎相同</strong>：_handle_singlepoint ~ _handle_optfreqsp 遵循完全相同的 try/except 模板，~175 行可压缩为 ~30 行工厂函数</td></tr>
+<tr><td>D7</td><td>cli.py</td><td><strong>参数散落</strong>：_add_simple_workflow_args 中 4 组 <code>if wf in (...)</code> 条件块散布，新增工作流需修改 4 处</td></tr>
+<tr><td>D8</td><td>cli.py</td><td><strong>错误报告通道不一致</strong>：energy/benchmark handler 使用 <code>print(file=sys.stderr)</code>，simple handler 使用 <code>logger.error/exception</code></td></tr>
+<tr><td>D9</td><td>scheduler</td><td><strong>Simple 工作流对 stage monitoring 基础设施完全不可见</strong>：StagePlanProvider 声明 stage，但简单工作流不更新进度 → 所有 stage 始终 pending → skipped</td></tr>
+<tr><td>D10</td><td>scheduler</td><td><strong>benchmark 使用非标准 CLI 子命令路径</strong>：_build_cmd 中 benchmark 构建 <code>acp.cli benchmark</code>（无 run），与其他 10 个工作流（<code>acp.cli run &lt;wf&gt;</code>）不一致，可能导致运行时崩溃</td></tr>
+<tr><td>D11</td><td>ORCA</td><td><strong>Constructor kwargs 静默丢弃链</strong>：ORCAInterface.__init__ → QCInterfaceBase.__init__（不做任何事）。调用方在 constructor 和方法调用两处传递 kwargs 以规避，产生双重传递反模式</td></tr>
+<tr><td>D12</td><td>ORCA</td><td><strong>calc_type 魔法字符串</strong>：calc_type_map 是无 enum 的硬编码 dict。typo（如 "optfreqq"）不报错而是作为垃圾 ORCA 关键字写入输入文件</td></tr>
+</table>
+
+<h3>14.6 修复优先级与工作量估算</h3>
+<table>
+<tr><th>优先级</th><th>项目</th><th>文件</th><th>估算行数</th></tr>
+<tr><td><strong>P0（阻塞）</strong></td><td>C1: ensure_unique_dir 与 scheduler 冲突</td><td>simple.py / core/utils.py</td><td>~20 行</td></tr>
+<tr><td><strong>P0（阻塞）</strong></td><td>C2: state.json / stage_tasks 缺失</td><td>simple.py / runner.py</td><td>~40 行</td></tr>
+<tr><td><strong>P1（本迭代）</strong></td><td>H1: zpe_hartree 修正</td><td>simple.py</td><td>~5 行</td></tr>
+<tr><td><strong>P1（本迭代）</strong></td><td>H2: kwargs 双重传递</td><td>simple.py</td><td>~15 行</td></tr>
+<tr><td><strong>P1（本迭代）</strong></td><td>H3: charge/multiplicity 默认值</td><td>cli.py</td><td>~5 行</td></tr>
+<tr><td><strong>P1（本迭代）</strong></td><td>H5: aux_basis/ri_approximation 死代码</td><td>cli.py / simple.py</td><td>~30 行</td></tr>
+<tr><td><strong>P2（下迭代）</strong></td><td>M1–M16: Medium 隐患 16 项</td><td>多文件</td><td>~200 行</td></tr>
+<tr><td><strong>P3（长期）</strong></td><td>D1–D12: 架构重构 12 项</td><td>多文件</td><td>~500 行</td></tr>
+</table>
+
+<hr class="section-divider">
+
 <h2>修订记录</h2>
 <table>
 <tr><th>版本</th><th>日期</th><th>变更</th></tr>
@@ -1352,6 +1473,7 @@ cmd += method_levels_to_cli_flags(levels, prefix_map)
 <tr><td><strong>v7.1</strong></td><td><strong>2026-07-20</strong></td><td><strong>实施 Step 3–5, 7：简单工作流完整实现（simple.py、CLI、Registry）。Code Review 发现 17 项隐患（4 Critical + 8 Important + 5 Minor）。远程计算节点同步完成。开发文档更新完成情况与代码质量分析。</strong></td></tr>
 <tr><td><strong>v7.2</strong></td><td><strong>2026-07-20</strong></td><td><strong>Code Review 修复：4 Critical + 4 Important + 2 Minor 全部修复。C1: 方法调用 kwargs 透传；C2: SP energy None → 错误；C3: KeyboardInterrupt 处理；C4: TOCTOU 竞态修复。I1–I2, I4–I5: 参数清理 + 类型注解 + 死代码移除。M4–M5: 冗余代码清理。165 测试全部通过。</strong></td></tr>
 <tr><td><strong>v7.3</strong></td><td><strong>2026-07-20</strong></td><td><strong>Step 8 完成：新增 tests/test_acp_workflows_simple.py（47 条测试全通过）。全量回归 677 passed / 7 skipped。GitHub 推送 + 计算节点 rsync 同步 + acp 服务重启完成。</strong></td></tr>
+<tr><td><strong>v7.4</strong></td><td><strong>2026-07-20</strong></td><td><strong>全链路代码质量审查：对 4 个关键模块（simple.py/cli.py/scheduler 集成/ORCA opt_freq）深度审查，发现 62 项隐患（2 Critical + 5 High + 16 Medium + 13 Low + 12 Design + 14 Code Smell）。新增 §14 完整分析章节（分类表 + 详细描述 + 修复优先级）。2 Critical 需阻塞性修复（scheduler work_dir 冲突 + stage 监控静默失效）。</strong></td></tr>
 </table>
 
 </body>
