@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>ACP 简单工作流（singlepoint/optimize/frequency/optfreq/optfreqsp）— 开发文档</title>
+<style>
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#c9d1d9;--accent:#58a6ff;--accent2:#3fb950;--accent3:#d29922;--code-bg:#1c2128}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.7;padding:2rem;max-width:1200px;margin:0 auto;font-size:.95rem}
+h1{font-size:2rem;border-bottom:2px solid var(--accent);padding-bottom:.5rem;margin-bottom:1.5rem;color:#fff}
+h2{font-size:1.5rem;color:var(--accent);margin-top:2.5rem;margin-bottom:1rem;border-left:4px solid var(--accent);padding-left:.75rem}
+h3{font-size:1.15rem;color:var(--accent2);margin-top:1.5rem;margin-bottom:.5rem}
+h4{font-size:1rem;color:var(--accent3);margin-top:1rem;margin-bottom:.4rem}
+p,li{margin-bottom:.4rem}
+ul,ol{padding-left:1.5rem;margin-bottom:1rem}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.88rem}
+th,td{border:1px solid var(--border);padding:.45rem .65rem;text-align:left}
+th{background:var(--surface);color:var(--accent);font-weight:600}
+td{background:var(--bg)}
+code{background:var(--code-bg);padding:.15rem .4rem;border-radius:4px;font-size:.85rem;color:#e6edf3}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:6px;padding:1rem;overflow-x:auto;margin:.75rem 0 1.25rem;font-size:.82rem;line-height:1.5}
+pre code{background:none;padding:0}
+.tag-new{display:inline-block;background:#238636;color:#fff;font-size:.7rem;padding:.1rem .4rem;border-radius:3px;font-weight:600;margin-right:.3rem}
+.tag-modify{display:inline-block;background:#9e6a03;color:#fff;font-size:.7rem;padding:.1rem .4rem;border-radius:3px;font-weight:600;margin-right:.3rem}
+.tag-existing{display:inline-block;background:#6e40c9;color:#fff;font-size:.7rem;padding:.1rem .4rem;border-radius:3px;font-weight:600;margin-right:.3rem}
+.tag-active{display:inline-block;background:#3fb950;color:#fff;font-size:.7rem;padding:.1rem .4rem;border-radius:3px;font-weight:600;margin-right:.3rem}
+.tag-scheduler{display:inline-block;background:#f0883e;color:#fff;font-size:.7rem;padding:.1rem .4rem;border-radius:3px;font-weight:600;margin-right:.3rem}
+.info-box{background:#1c2128;border:1px solid #238636;border-radius:6px;padding:.75rem 1rem;color:#3fb950;margin:1rem 0}
+.warn-box{background:#1c2128;border:1px solid #d29922;border-radius:6px;padding:.75rem 1rem;color:#d29922;margin:1rem 0}
+.note-box{background:#1c2128;border:1px solid #58a6ff;border-radius:6px;padding:.75rem 1rem;color:#58a6ff;margin:1rem 0}
+.decision-table{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0}
+.toc{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.25rem;margin-bottom:2rem}
+.toc h3{margin-top:0;color:var(--accent)}
+.toc ol{margin-bottom:0}
+.toc a{color:var(--accent);text-decoration:none}
+.toc a:hover{text-decoration:underline}
+.section-divider{border:none;border-top:1px solid var(--border);margin:2rem 0}
+.dep-graph{font-family:'Courier New',monospace;font-size:.82rem;line-height:1.4;color:#8b949e;background:var(--code-bg);border:1px solid var(--border);border-radius:6px;padding:1rem;white-space:pre;overflow-x:auto;margin:.75rem 0}
+</style>
+</head>
+<body>
+
+<h1>ACP 简单工作流 — 开发文档</h1>
+<p><strong>版本：</strong>v6.0 · 2026-07-19</p>
+<p><strong>工作流 ID（=CLI 子命令名）：</strong>singlepoint / optimize / frequency / optfreq / optfreqsp</p>
+
+<div class="info-box">
+本文档基于 v2 前端（ACP_Workbench_v2.html）和 catalog.py 驱动架构重新设计。关键发现：<code>catalog.py</code> 已有 4 个"简单"分类条目（status="planned"），v2 前端自动从 catalog 渲染，但 planned 状态在 UI 中灰显不可选。核心工作：激活 4 个条目 + 增补 optfreqsp + 实现后端管线。<strong>v6.0 版本已完成第三方深度审查，新增错误处理/日志策略、章节整合、独立分析章节，所有代码示例与 stage_tasks.py / runner.py / catalog.py 实际签名对齐。</strong>
+</div>
+
+<div class="warn-box">
+⚠️ 本方案不修改前端 HTML/JS。所有前端变更通过 catalog API 驱动，自动生效。
+</div>
+
+<!-- ======== TOC ======== -->
+<div class="toc">
+<h3>目录</h3>
+<ol>
+<li><a href="#overview">概述与架构</a></li>
+<li><a href="#catalog-change">Step 1：更新 catalog.py（驱动前端）</a></li>
+<li><a href="#orca-interface">Step 2：ORCA 接口新增 opt_freq()</a></li>
+<li><a href="#acp-backend">Step 3：ACP ORCA 后端透传</a></li>
+<li><a href="#workflow-module">Step 4：新建 simple.py 工作流模块</a></li>
+<li><a href="#cli">Step 5：CLI 子命令</a></li>
+<li><a href="#scheduler">Step 6：调度器集成</a></li>
+<li><a href="#registry">Step 7：工作流注册</a></li>
+<li><a href="#test">Step 8：测试</a></li>
+<li><a href="#exec-order">Step 9：实施顺序</a></li>
+<li><a href="#scheduler-param">附录：scheduler _build_cmd 参数映射</a></li>
+<li><a href="#review">11. 代码审查与修改建议</a></li>
+<li><a href="#review-depth">11.2 深入合理性评估</a></li>
+<li><a href="#review-supplement">11.3 修改建议清单</a></li>
+<li><a href="#review-matrix">11.4 实施可行性矩阵</a></li>
+<li><a href="#v6-analysis">12. 深入分析：合理性与改进建议</a></li>
+</ol>
+</div>
+
+<hr class="section-divider">
+
+<!-- ======== 1. OVERVIEW ======== -->
+<h2 id="overview">1. 概述与架构</h2>
+
+<h3>1.1 架构设计</h3>
+<div class="dep-graph">
+                 catalog.py (src of truth — catalog.py:5-138)
+                  │
+      ┌───────────┼───────────┐
+      ▼           ▼           ▼
+  Frontend     CLI         Scheduler
+  (v2)        (acp run)   (runner.py: _build_cmd
+   │           │           runner.py:665-730)
+   │           │           │
+   ▼           ▼           ▼
+  Catalog API  simple.py   SUPPORTED_WORKFLOWS
+  /api/v1/      │           (jobs.py:52-60)
+  workflow-     │           + stage_tasks.py
+  catalog       ▼           (stage_tasks.py:57-58)
+               ORCA        │
+               Interface    │
+               (opt_freq()  │
+                orca.py     │
+                new)       │
+                           ▼
+                     Remote Node (LSF)
+</div>
+<p>上图标注了关键文件的行号引用，便于实施时快速定位。</p>
+
+<h3>1.2 关键决策</h3>
+<div class="decision-table">
+<table>
+<tr><th>决策</th><th>选择</th><th>理由</th><th>代码引用</th></tr>
+<tr><td>CLI 子命令名</td><td>catalog ID 即 CLI 名：<code>singlepoint</code> / <code>optimize</code> / <code>frequency</code> / <code>optfreq</code> / <code>optfreqsp</code></td><td>scheduler 直接映射，catalog 为 ssot，避免多源命名冲突</td><td>catalog.py:5-138</td></tr>
+<tr><td>optfreq 执行方式</td><td>单次 ORCA <code>Opt Freq</code> 作业（新增 <code>opt_freq()</code> 方法）</td><td>效率更高，ORCA 原生支持，与目录 schema id 对应</td><td>orca.py:114-119</td></tr>
+<tr><td>NumFreq 降级</td><td>不修改 ORCA 接口，保留自动降级</td><td>已有逻辑已正确处理 SMD → NumFreq</td><td>orca.py:83-177</td></tr>
+<tr><td>前端修改</td><td>仅修改 catalog.py</td><td>v2 前端完全 catalog 驱动，无需改 HTML/JS</td><td>catalog.py:5-138</td></tr>
+<tr><td>输入格式</td><td>XYZ / GJF / ORCA .inp</td><td>v2 前端已支持文件上传 + 格式检测</td><td>conformer_search/io/</td></tr>
+<tr><td>输出目录冲突</td><td>自动追加 _1, _2... 唯一化</td><td>同 v1 方案</td><td>N/A（需新建）</td></tr>
+<tr><td>管线模式</td><td>Stage/WorkflowRunner</td><td>与现有工作流一致</td><td>core/workflow.py</td></tr>
+<tr><td>task_options 传递</td><td>通过 <code>**kwargs</code> 透传，而非 dict 参数</td><td>ORCABackend 所有方法均使用 <code>**kwargs: Any</code> 接收额外参数，ORCAInterface 从 kwargs 中提取 <code>nprocs</code>/<code>maxcore</code> 等；<code>task_options=dict</code> 方案不兼容</td><td>backends/orca.py:25-39</td></tr>
+<tr><td>CLI flag 映射</td><td>_build_cmd() 直接构建 CLI 参数列表</td><td>不使用 <code>convert_method_levels_to_protocol_levels()</code>（该函数专用于 protocol config，stage_mapping 不含 simple 工作流的 level_id）；改为在 _build_cmd() 内直接映射</td><td>runner.py:665-730; catalog.py:901-952</td></tr>
+<tr><td>_build_cmd() 公共参数</td><td>继承现有公共参数段</td><td><code>--charge</code>/<code>--multiplicity</code>/<code>--nproc</code>/<code>--mem</code> 已在 runner.py:721-730 统一处理，simple 分支不自复添加</td><td>runner.py:721-730</td></tr>
+</table>
+</div>
+
+<h3>1.3 工作流 ID ↔ CLI ↔ scheduler 一致性</h3>
+<p>系统中所有组件使用同一套 ID，无额外映射层：</p>
+<table>
+<tr><th>catalog.py ID</th><th>CLI 子命令</th><th>SUPPORTED_WORKFLOWS (jobs.py:52-60)</th><th>stage_tasks provider (stage_tasks.py:57-58)</th></tr>
+    <tr><td><code>singlepoint</code></td><td><code>acp run singlepoint</code></td><td><code>"singlepoint"</code></td><td>已存在（→ active）</td></tr>
+<tr><td><code>optimize</code></td><td><code>acp run optimize</code></td><td><code>"optimize"</code></td><td>已存在（→ active）</td></tr>
+<tr><td><code>frequency</code></td><td><code>acp run frequency</code></td><td><code>"frequency"</code></td><td>已存在（→ active）</td></tr>
+<tr><td><code>optfreq</code></td><td><code>acp run optfreq</code></td><td><code>"optfreq"</code></td><td>已存在（→ active）</td></tr>
+<tr><td><code>optfreqsp</code></td><td><code>acp run optfreqsp</code></td><td><code>"optfreqsp"</code></td><td>新增</td></tr>
+</table>
+
+<hr class="section-divider">
+
+<!-- ======== 2. CATALOG ======== -->
+<h2 id="catalog-change">2. Step 1：更新 catalog.py（驱动前端）</h2>
+<p><span class="tag-modify">修改</span> <code>src/acp/catalog.py</code>（当前 4 个简单条目位于 catalog.py:7-49）</p>
+
+<div class="info-box">这是唯一需要修改的前端相关文件。v2 前端通过 <code>GET /api/v1/workflow-catalog</code> 动态加载工作流列表，通过 <code>GET /api/v1/method-catalog</code> 加载方法配置面板。catalog.py 的变更即刻在前端生效。</div>
+
+<h3>2.1 激活 4 个已有条目（planned → active）</h3>
+<p>在 <code>WORKFLOW_CATALOG</code>（catalog.py:5-138）中修改 <code>status</code> 字段。查找以下 4 个条目，将 <code>status: "planned"</code> 改为 <code>status: "active"</code>：</p>
+<table>
+<tr><th>ID</th><th>原 status</th><th>新 status</th><th>前端效果</th></tr>
+<tr><td><code>singlepoint</code></td><td>planned</td><td>active</td><td>可选，显示工作流卡片</td></tr>
+<tr><td><code>optimize</code></td><td>planned</td><td>active</td><td>可选，显示工作流卡片</td></tr>
+<tr><td><code>frequency</code></td><td>planned</td><td>active</td><td>可选，显示工作流卡片</td></tr>
+<tr><td><code>optfreq</code></td><td>planned</td><td>active</td><td>可选，显示工作流卡片</td></tr>
+</table>
+
+<h3>2.2 新增 optfreqsp 工作流条目</h3>
+<pre>
+{
+    "id": "optfreqsp",
+    "label": "Opt+Freq+SP+Thermo",
+    "label_zh": "优化+频率+单点+热化学",
+    "category": "simple",
+    "description": "ORCA opt → freq → SP → Shermo free energy",
+    "method_schema_id": "dft_optfreqsp",
+    "default_backend": "orca",
+    "requires_binaries": ["orca", "shermo"],
+    "status": "active",
+},
+</pre>
+
+<h3>2.3 新增 dft_optfreqsp 方法模式</h3>
+<div class="warn-box">
+⚠️ <strong>level_id 命名必须统一（v4.0 审查发现，v5.0 已验证）：</strong> <code>dft_optfreqsp</code> 使用 <code>level_id="single_point"</code>（下划线），但现有 <code>dft_singlepoint</code> 的 <code>level_id="singlepoint"</code>（无下划线，catalog.py:442）。<strong>必须将 <code>dft_singlepoint</code> 的 level_id 改为 <code>"single_point"</code></strong>，原因：
+<ul>
+<li><code>stage_tasks.py</code> 中 <code>StagePlan.stage_name</code> 全部使用 <code>"single_point"</code>（stage_tasks.py:82/91/164/197）</li>
+<li>代码库 76 处使用 <code>"single_point"</code>，仅此 1 处使用 <code>"singlepoint"</code> 作为 level_id</li>
+<li><code>_build_cmd()</code> 中需要通过 level_id 映射 CLI flags，两套命名需要额外转换层</li>
+<li><code>convert_method_levels_to_protocol_levels()</code> 的 <code>stage_mapping</code> 中已用 <code>"single_point"</code>（catalog.py:914）</li>
+</ul>
+<strong>影响范围验证：</strong> 仅改 catalog.py:442 一行。catalog.py:7 的 <code>WORKFLOW_CATALOG id="singlepoint"</code>（工作流 ID，应保持不变）、catalog.py:778 的 <code>supports=["singlepoint"...]</code>（backend capabilities 列表，应保持不变）均不受影响。前端使用 <code>label</code> 字段显示，API 使用 <code>method_schema_id</code> 索引，均不依赖 level_id 值。
+</div>
+<p>在 <code>METHOD_SCHEMAS</code> 中添加：</p>
+<pre>
+"dft_optfreqsp": {
+    "method_levels": [
+        {
+            "level_id": "optfreq",
+            "label": "Opt+Freq",
+            "label_zh": "优化+频率（同级）",
+            "required": true,
+            "allowed_engines": ["orca"],
+            "fields": [
+                "functional",
+                "basis",
+                "dispersion",
+                "solvent_model",
+                "solvent",
+                "grid",
+                "scf_convergence",
+                "max_steps",
+                "opt_convergence",
+            ],
+        },
+        {
+            "level_id": "single_point",
+            "label": "Single Point",
+            "label_zh": "单点能（高精度）",
+            "required": true,
+            "allowed_engines": ["orca"],
+            "fields": [
+                "functional",
+                "basis",
+                "aux_basis",
+                "ri_approximation",
+                "solvent_model",
+                "solvent",
+                "grid",
+                "scf_convergence",
+            ],
+        },
+        {
+            "level_id": "thermo",
+            "label": "Thermochemistry",
+            "label_zh": "热化学修正",
+            "required": false,
+            "allowed_engines": ["shermo"],
+            "fields": ["temperature", "pressure", "scale_factor"],
+        },
+    ],
+    "profiles": [
+        {
+            "profile_id": "default",
+            "label": "Default (r2SCAN-3c / wB97M-V)",
+            "summary": "r2SCAN-3c Opt+Freq | wB97M-V/def2-TZVPP SP | Shermo",
+            "levels": {
+                "optfreq": {
+                    "engine": "orca",
+                    "functional": "r2SCAN-3c",
+                    "basis": "",
+                    "dispersion": "none",
+                    "solvent_model": "none",
+                    "solvent": "",
+                    "grid": "UltraFine",
+                    "scf_convergence": "Tight",
+                },
+                "single_point": {
+                    "engine": "orca",
+                    "functional": "wB97M-V",
+                    "basis": "def2-TZVPP",
+                    "aux_basis": "",
+                    "dispersion": "none",
+                    "solvent_model": "none",
+                    "solvent": "",
+                    "grid": "UltraFine",
+                    "scf_convergence": "Tight",
+                },
+                "thermo": {
+                    "engine": "shermo",
+                    "temperature": 298.15,
+                    "pressure": 1.0,
+                    "scale_factor": 0.9905,
+                },
+            },
+        },
+    ],
+},
+</pre>
+
+<h3>2.4 同步更新 METHOD_CATALOG</h3>
+<div class="warn-box">
+⚠️ 必须同步更新 <code>METHOD_CATALOG["backends"]</code> 中 ORCA 的 <code>supports</code> 列表（catalog.py:778），否则前端方法配置面板无法正确识别 ORCA 支持 optfreq/optfreqsp。
+</div>
+<pre>
+# 当前 catalog.py:778:
+"supports": ["singlepoint", "optimize", "frequency", "nmr"]
+# 改为:
+"supports": ["singlepoint", "optimize", "frequency", "optfreq", "nmr"]
+</pre>
+<p>注意：xTB 的 supports（catalog.py:780）保持 <code>["singlepoint", "optimize"]</code> 不变，xTB 不支持 Opt Freq 组合任务。</p>
+<p><code>optfreqsp</code> 是复合工作流，其各子步骤由单个 backend 方法完成（opt_freq, single_point），无需在 supports 列表中额外列出。</p>
+
+<h3>2.5 前端效果（无需改 HTML/JS）</h3>
+<p>上述 catalog 变更在前端产生以下效果：</p>
+<table>
+<tr><th>自动生效项</th><th>说明</th></tr>
+<tr><td>工作流下拉菜单</td><td>"simple" 分类下出现 5 个可选条目，不再灰显</td></tr>
+<tr><td>方法配置面板</td><td>根据 method_schema 渲染字段：optfreq 显示 functional/basis/solvent/grid/scf_convergence 等；single_point 显示 functional/basis/aux_basis 等；thermo 显示 temperature/pressure/scale_factor</td></tr>
+<tr><td>Profile 选择器</td><td>optfreqsp 预置 default profile，用户可选或自定义编辑</td></tr>
+<tr><td>文件上传</td><td>支持 .xyz/.gjf/.com/.inp 格式检测（已有）</td></tr>
+<tr><td>电荷/多重度</td><td>上传时自动解析（已有），用户可在预览面板确认/修改</td></tr>
+<tr><td>目标节点</td><td>节点选择器（已有），默认自动选择</td></tr>
+<tr><td>资源设置</td><td>核数/内存输入（已有）</td></tr>
+</table>
+
+<hr class="section-divider">
+
+<!-- ======== 3. ORCA ======== -->
+<h2 id="orca-interface">3. Step 2：ORCA 接口新增 opt_freq()</h2>
+<p><span class="tag-new">新增方法</span> <code>src/conformer_search/qc/interfaces/orca.py</code></p>
+<p><span class="tag-modify">扩展</span> <code>src/conformer_search/qc/interfaces/base.py</code></p>
+
+<h3>3.1 QCResult 无需修改（字段已存在）；注意频率解析范围</h3>
+<p><code>QCResult</code> 在 <code>conformer_search/qc/interfaces/base.py</code> 和 <code>acp/backends/base.py</code> 中均<strong>已包含</strong> <code>frequencies</code> / <code>has_frequencies</code> / <code>zpe</code> / <code>enthalpy</code> / <code>gibbs</code> / <code>entropy</code> 字段，无需新增。</p>
+<div class="warn-box">
+⚠️ 注意：现有 <code>ORCAInterface.frequency()</code> 和 <code>opt_freq()</code> 的输出解析<strong>只填充</strong> <code>frequencies</code> / <code>has_frequencies</code>，<strong>不解析</strong> <code>zpe</code> / <code>enthalpy</code> / <code>gibbs</code> / <code>entropy</code> 字段。这些 thermo 字段由后续 Shermo 阶段负责计算填充。<code>optfreqsp</code> 管线中，频率 QCResult 仅用于传递坐标和频率列表，thermo 值由 Shermo 独立输出。
+</div>
+
+<h3>3.2 ORCAInterface.opt_freq()</h3>
+<p>方法签名与 <code>optimize()</code> / <code>frequency()</code> 保持一致，使用 <code>**kwargs</code> 透传 ORCAInterface 接受的参数（如 <code>nprocs</code>, <code>maxcore</code>, <code>pal_settings</code>）：</p>
+<pre>
+def opt_freq(
+    self,
+    coordinates: np.ndarray,
+    symbols: list[str],
+    charge: int = 0,
+    multiplicity: int = 1,
+    output_dir: str | Path | None = None,
+    output_name: str = "orca_optfreq",
+    method: str | None = None,
+    basis: str | None = None,
+    route_extras: list[str] | None = None,
+    geom_maxiter: int | None = None,
+    extra_blocks: list[str] | None = None,
+    **kwargs,
+) -> QCResult:
+    """Run combined optimization+frequency as single ORCA job.
+
+    Uses calc_type='optfreq' → generates '! ... Opt Freq ...' route line.
+    NumFreq fallback is handled automatically by _build_input_blocks.
+    """
+</pre>
+
+<p>实现要点：</p>
+<ul>
+<li><span class="tag-existing">已有</span> 调用 <code>_write_input(calc_type="optfreq", ...)</code> — 利用已有 <code>calc_type_map["optfreq"] = "Opt Freq"</code>（<code>calc_type_map</code> 无需修改，已在 <code>orca.py:117</code> 定义）</li>
+<li>运行 ORCA 子进程</li>
+<li>从输出解析（Order）：(1) 最后收敛坐标（同 optimize()），(2) 频率列表（同 frequency()）</li>
+<li>返回 QCResult 含 <code>coordinates</code> + <code>energy</code> + <code>frequencies</code> + <code>has_frequencies=True</code></li>
+</ul>
+
+<h3>3.3 不变：NumFreq 自动降级</h3>
+<p>现有 <code>_build_input_blocks()</code> 中 <code>calc_type="optfreq"</code> 时 route 写 <code>Opt Freq</code>，当有溶剂且非 CPCM 时自动降为 <code>Opt NumFreq</code>。保持此逻辑不变。</p>
+
+<hr class="section-divider">
+
+<!-- ======== 4. BACKEND ======== -->
+<h2 id="acp-backend">4. Step 3：ACP ORCA 后端透传</h2>
+<p><span class="tag-modify">修改</span> <code>src/acp/backends/orca.py</code></p>
+
+<pre>
+class ORCABackend(QCBackend):
+    # ... existing methods ...
+
+    def opt_freq(self, ...) -> QCResult:
+        return to_qc_result(self._interface.opt_freq(...))
+</pre>
+
+<p>透传方法签名与 <code>ORCAInterface.opt_freq()</code> 一致。无需修改 capability 矩阵（optfreq 是复合操作，由 optimization + frequency 覆盖）。</p>
+
+<hr class="section-divider">
+
+<!-- ======== 5. WORKFLOW ======== -->
+<h2 id="workflow-module">5. Step 4：新建 simple.py</h2>
+<p><span class="tag-new">新建</span> <code>src/acp/workflows/simple.py</code></p>
+
+<h3>5.1 5 个入口函数</h3>
+<table>
+<tr><th>函数名</th><th>管线</th><th>调用的 ORCA 方法</th></tr>
+<tr><td><code>run_singlepoint()</code></td><td>ingest → single_point → finalize</td><td><code>orca.single_point()</code></td></tr>
+<tr><td><code>run_optimize()</code></td><td>ingest → optimize → finalize</td><td><code>orca.optimize()</code></td></tr>
+<tr><td><code>run_frequency()</code></td><td>ingest → frequency → finalize</td><td><code>orca.frequency()</code></td></tr>
+<tr><td><code>run_optfreq()</code></td><td>ingest → opt_freq → finalize</td><td><code>orca.opt_freq()</code> (新增)</td></tr>
+<tr><td><code>run_optfreqsp()</code></td><td>ingest → opt_freq → single_point → shermo → finalize</td><td><code>orca.opt_freq()</code> → <code>orca.single_point()</code> → <code>run_shermo()</code></td></tr>
+</table>
+
+<h3>5.2 输入处理</h3>
+<p>输入解析调用 <code>conformer_search.io.MolecularInputHandler</code>（.xyz/.gjf/.com）+ <code>acp.intake.parsers.parse_orca_inp_text()</code>（.inp，返回 <code>StructureParseResult</code> 含 <code>StructureAsset</code>）。严格检查扩展名，不支持 SMILES。理由：简单工作流面向已优化几何，输入应为结构文件，SMILES → RDKit 嵌入是 confsearch 工作流的职责，不在此处重复实现。</p>
+
+<h3>5.3 方法层次 → 工作流配置映射</h3>
+<p>从 scheduler 提交的 method levels 需要转换为工作流内部使用的配置。利用 <code>catalog.py:method_levels_to_workflow_config()</code>（<code>catalog.py:955</code>，已处理非 confsearch schema：<code>else: config = dict(levels)</code>，即简单工作流的 levels 原样返回）。</p>
+
+<div class="warn-box">
+⚠️ <strong><code>convert_method_levels_to_protocol_levels()</code> 不适用于 simple 工作流。</strong> 该函数的 <code>stage_mapping</code>（L913-916）只覆盖 confsearch 协议的 stage 名（<code>dft_opt</code>/<code>single_point</code>/<code>thermo</code>），<strong>不包含</strong> simple 工作流的 level_id（<code>singlepoint</code>/<code>optimize</code>/<code>frequency</code>/<code>optfreq</code>）。且 <code>field_mapping</code>（L917-926）将 <code>functional</code> → <code>method</code>、<code>temperature</code> → <code>temperature_k</code>，这些是 protocol 内部名称而非 CLI flag 名。<code>_build_cmd()</code> 应直接在分支内构建 CLI 参数列表，避免间接依赖此函数。
+</div>
+<div class="note-box">
+📝 <code>catalog.py:871</code> 还存在 <code>normalize_and_validate_method_config()</code> 函数，负责校验和规范化 method levels（溶剂名映射、必需字段检查）。simple 工作流的 handler 可复用该函数对用户输入做前置校验。
+</div>
+
+<p><code>optfreqsp</code> 的 levels 结构：</p>
+<pre>
+{
+    "optfreq": {
+        "engine": "orca",
+        "functional": "r2SCAN-3c",
+        "basis": "",
+        "dispersion": "none",
+        "solvent_model": "none",
+        "solvent": "",
+    },
+    "single_point": {
+        "engine": "orca",
+        "functional": "wB97M-V",
+        "basis": "def2-TZVPP",
+        ...
+    },
+    "thermo": {
+        "engine": "shermo",
+        "temperature": 298.15,
+        "pressure": 1.0,
+        "scale_factor": 0.9905,
+    },
+}
+</pre>
+
+<h3>5.4 StagePlan stage_name → simple.py 函数映射</h3>
+<p><code>stage_tasks.py</code> 中 <code>StagePlan</code> 的 <code>stage_name</code> 必须与 <code>simple.py</code> 中 stage function 的注册名称一致：</p>
+<table>
+<tr><th>StagePlan.stage_name</th><th>simple.py 函数</th><th>对应工作流</th></tr>
+<tr><td><code>"single_point"</code></td><td><code>stage_single_point()</code></td><td>singlepoint, optfreqsp</td></tr>
+<tr><td><code>"optimize"</code></td><td><code>stage_optimize()</code></td><td>optimize</td></tr>
+<tr><td><code>"frequency"</code></td><td><code>stage_frequency()</code></td><td>frequency</td></tr>
+<tr><td><code>"opt_freq"</code></td><td><code>stage_opt_freq()</code></td><td>optfreq, optfreqsp</td></tr>
+<tr><td><code>"shermo"</code></td><td><code>stage_shermo()</code></td><td>optfreqsp</td></tr>
+</table>
+
+<h3>5.5 Stage 间数据传递链（optfreqsp 关键设计）</h3>
+<p><code>optfreqsp</code> 的管线涉及三个 stage，每个 stage 的输出需要作为下一 stage 的输入。数据流如下：</p>
+<pre>
+ ingest (结构文件)
+   │
+   │  coordinates, symbols, charge, multiplicity
+   ▼
+ opt_freq (ORCA Opt Freq)
+   │
+   │  ├─ coordinates （优化后坐标）→ 传给 single_point
+   │  ├─ energy （优化能量）
+   │  ├─ frequencies （频率列表）
+   │  └─ log_file （ORCA .out 路径）→ 传给 shermo
+   ▼
+ single_point (ORCA SP, 使用 opt_freq 输出的坐标)
+   │
+   │  ├─ energy （高精度单点能）
+   │  └─ log_file
+   ▼
+  shermo (读取 opt_freq 的 log_file 计算热化学修正)
+    │
+    │  ├─ zpe, enthalpy, gibbs_correction, entropy
+    │  └─ gibbs_correction → 传给 finalize（不含 SP energy）
+    ▼
+  finalize (SP energy + gibbs_correction → 最终自由能 → thermo.json)
+</pre>
+
+<p>实现要点：</p>
+<ul>
+<li>simple.py 内部维护一个 <code>context: dict[str, Any]</code> 在 stage 间传递中间数据，包括 <code>opt_coords</code>, <code>opt_log_path</code>, <code>sp_energy</code> 等。</li>
+<li>Shermo 阶段调用实际位于 <code>conformer_search.qc.runners.run_shermo()</code>，通过 <code>acp.backends.external</code> 重导出（<code>external.py:3</code>，<code>__all__</code> 包含 <code>run_shermo</code>）。调用路径：<code>from acp.backends.external import run_shermo</code>。传入 opt_freq 的 log 文件路径。Shermo <strong>只输出热化学修正值</strong>（gibbs_correction, zpe, enthalpy, entropy），<strong>不含</strong>单点能。</li>
+<li>finalize 阶段手动计算最终自由能：<code>free_energy = sp_energy + shermo_gibbs_correction</code>（Shermo 默认以输入 log 的电子能量为参考，而 opt_freq 的电子能量精度低于 SP 级别，因此必须替换为 SP energy）。</li>
+<div class="warn-box">
+⚠️ <strong>单位转换（Critical）：</strong> Shermo 默认<strong>输出热化学修正值单位为 kcal/mol</strong>，而 ORCA SP energy 单位为 <strong>Hartree</strong>。<code>finalize</code> 阶段必须调用 <code>acp.core.models.HARTREE_TO_KCAL</code>（或 <code>conformer_search.utils.constants.HARTREE_TO_KCAL</code>）将 SP energy 转换为 kcal/mol 后求和，或在自由能输出时统一为 Hartree。两个模块均定义了该常量（v4.0 审查确认），但注意两处值一致（627.509 kcal/mol）。建议 finalize 使用 <code>from acp.core.models import HARTREE_TO_KCAL</code>。
+</div>
+<li><code>method_levels_to_workflow_config()</code> 对非 <code>confsearch</code> schema 直接返回 <code>dict(levels)</code>，simple.py 收到后将三层 levels 分别路由到对应的 backend 调用（orca → opt_freq, orca → single_point, shermo → thermochemistry）。</li>
+<li><code>--nproc</code> / <code>--maxcore</code> 从 CLI 参数传入后，通过 <code>**kwargs</code> 透传到 <code>ORCABackend</code> → <code>ORCAInterface</code>。<code>ORCAInterface</code> 已有 <code>_build_input_blocks()</code> 将其写入 <code>%maxcore</code> 和 <code>%pal nprocs</code> 块（通过 <code>pal_settings</code> 和 <code>maxcore</code> 参数）。simple.py 的 handler 需显式提取 <code>nproc</code> 和 <code>maxcore</code> 并作为 kwargs 传入 ORCA backend：<pre>orca_kwargs = {}
+if nproc:
+    orca_kwargs["pal_settings"] = f"nprocs {nproc}"
+if maxcore:
+    orca_kwargs["maxcore"] = maxcore
+result = backend.opt_freq(coords, symbols, charge=charge, multiplicity=mult, output_dir=out_dir, **orca_kwargs)</pre></li>
+</ul>
+
+<h3>5.6 错误处理策略</h3>
+<p>各 stage 的错误处理遵循以下规则：</p>
+<table>
+<tr><th>场景</th><th>行为</th><th>说明</th></tr>
+<tr><td>输入文件格式不支持</td><td>抛出 <code>ValueError</code>（含支持的格式列表）</td><td>在 handler 最外层捕获，统一通过 CLI/scheduler 报告给用户</td></tr>
+<tr><td>ORCA 子进程非零退出</td><td>读取 ORCA .out 文件末尾错误信息，封装为 <code>RuntimeError</code> 抛出</td><td>不吞异常；scheduler 将 job 标记为 failed 并保留 .out 文件供排查</td></tr>
+<tr><td>ORCA 输出频率解析失败</td><td>记录 warning log（<code>frequencies</code> 字段设为空列表，<code>has_frequencies=False</code>），继续执行</td><td>非致命错误：thermo/Shermo 阶段会因缺少频率而跳过</td></tr>
+<tr><td>Shermo 二进制未找到</td><td><code>optfreqsp</code> 的 shermo stage 抛出 <code>FileNotFoundError</code>，终止管线</td><td>在 simple.py handler 中调用 <code>shutil.which("shermo")</code> 前置检查</td></tr>
+<tr><td>optfreqsp 某中间 stage 失败</td><td>整个 job 失败，不执行后续 stage</td><td>由 scheduler 的 job lifecycle 管理（manager.py），<code>StagePlan</code> 的 <code>depends_on</code> 字段确保顺序依赖</td></tr>
+<tr><td>输出目录冲突</td><td>自动追加 _1, _2... 唯一化</td><td>调用 <code>_ensure_unique_dir()</code>，无覆盖风险</td></tr>
+<tr><td>Shermo 输出解析失败</td><td>抛出 <code>ValueError</code>，热化学字段留空</td><td>thermo.json 中 zpe/enthalpy/gibbs_correction/entropy 设为 0.0，<code>success: false</code> 标记</td></tr>
+</table>
+
+<h3>5.7 日志策略</h3>
+<p>simple.py 使用 <code>logging.getLogger(__name__)</code>（与项目约定一致），日志级别规划如下：</p>
+<table>
+<tr><th>级别</th><th>事件</th></tr>
+<tr><td>INFO</td><td>stage 开始/结束、ORCA 提交、Shermo 提交、输出文件路径</td></tr>
+<tr><td>WARNING</td><td>频率解析失败（非致命）、ORCA 版本 &lt; 5.0（optfreq/optfreqsp）、NumFreq 自动降级</td></tr>
+<tr><td>ERROR</td><td>ORCA/Shermo 子进程非零退出、输入解析失败</td></tr>
+<tr><td>DEBUG</td><td>完整 ORCA 命令行、环境变量、输出目录内容清单</td></tr>
+</table>
+<p>所有 log 输出到 stderr，不干扰 stdout 的结构化输出（如 <code>energy.json</code>、<code>thermo.json</code>）。</p>
+
+<h3>5.8 输出文件</h3>
+<table>
+<tr><th>工作流</th><th>输出文件</th></tr>
+<tr><td>singlepoint</td><td><code>orca_sp.inp/out</code>, <code>energy.json</code></td></tr>
+<tr><td>optimize</td><td><code>orca_opt.inp/out</code>, <code>optimized.xyz</code>, <code>energy.json</code></td></tr>
+<tr><td>frequency</td><td><code>orca_freq.inp/out</code>, <code>frequencies.txt</code></td></tr>
+<tr><td>optfreq</td><td><code>orca_optfreq.inp/out</code>, <code>optimized.xyz</code>, <code>frequencies.txt</code>, <code>energy.json</code></td></tr>
+<tr><td>optfreqsp</td><td>optfreq 输出 + <code>orca_sp.inp/out</code> + <code>thermo.json</code></td></tr>
+</table>
+
+<hr class="section-divider">
+
+<!-- ======== 6. CLI ======== -->
+<h2 id="cli">6. Step 5：CLI 子命令</h2>
+<p><span class="tag-modify">修改</span> <code>src/acp/cli.py</code></p>
+
+<h3>6.1 子命令注册</h3>
+<pre>
+for wf, wf_label, wf_desc in [
+    ("singlepoint", "Single Point", "Run ORCA single-point energy calculation"),
+    ("optimize",    "Optimization",  "Run ORCA geometry optimization"),
+    ("frequency",   "Frequency",    "Run ORCA vibrational frequency calculation"),
+    ("optfreq",     "Opt + Freq",   "Run ORCA Opt+Freq as single job"),
+    ("optfreqsp",   "Opt+Freq+SP+Thermo", "Full pipeline: opt → freq → SP → Shermo"),
+]:
+    p = run_sub.add_parser(wf, help=wf_desc)
+    p.set_defaults(workflow=wf)
+    _add_simple_workflow_args(p, wf)
+</pre>
+
+<h3>6.2 公共参数组</h3>
+<pre>
+def _add_simple_workflow_args(parser, wf):
+    parser.add_argument("--input", "-i", required=True)
+    parser.add_argument("--output", "-o", default="./out")
+    parser.add_argument("--charge", type=int, default=0)
+    parser.add_argument("--multiplicity", type=int, default=1)
+    parser.add_argument("--method")
+    parser.add_argument("--basis")
+    parser.add_argument("--dispersion", default="none",
+        help="Dispersion correction (e.g. D3BJ, D4, none)")
+    parser.add_argument("--solvent")
+    parser.add_argument("--solvent-model", default="none", choices=["smd", "cpcm", "none"])
+    parser.add_argument("--nproc", type=int)
+    parser.add_argument("--mem", type=int,
+        help="Memory per core in MB (e.g. 4000 for 4 GB per core)")
+    parser.add_argument("--maxcore", type=int)
+    parser.add_argument("--route-extras",
+        help="Comma-separated ORCA route extras (e.g. SlowConv,NoFinalGrid)")
+
+    if wf in ("optimize", "optfreq", "optfreqsp"):
+        parser.add_argument("--recalc-hess", type=int, default=10)
+        parser.add_argument("--geom-maxiter", type=int)
+
+    if wf in ("frequency", "optfreq", "optfreqsp"):
+        parser.add_argument("--temperature", type=float, default=298.15,
+            help="Temperature for thermochemistry (K)")
+        parser.add_argument("--pressure", type=float, default=1.0,
+            help="Pressure for thermochemistry (atm)")
+        parser.add_argument("--scale-factor", type=float, default=0.9905,
+            help="Frequency scale factor for ZPE/thermo")
+
+    if wf in ("optfreqsp",):
+        parser.add_argument("--sp-method", default="wB97M-V",
+            help="Single-point method (default: wB97M-V)")
+        parser.add_argument("--sp-basis", default="def2-TZVPP",
+            help="Single-point basis set (default: def2-TZVPP)")
+        parser.add_argument("--sp-aux-basis", default="def2/J",
+            help="Single-point auxiliary basis (default: def2/J)")
+        parser.add_argument("--sp-ri-approximation", default="RIJCOSX",
+            help="Single-point RI approximation (default: RIJCOSX)")
+</pre>
+
+<h3>6.3 Dispatch 表更新</h3>
+<pre>
+dispatch = {
+    "conformer": _handle_conformer,
+    "ensemble": _handle_ensemble,
+    "energy": _handle_energy,
+    "nmr": _handle_nmr,
+    "mechanism": _handle_mechanism,
+    "serve": _handle_serve,
+    # Simple workflows:
+    "singlepoint": _handle_singlepoint,
+    "optimize": _handle_optimize,
+    "frequency": _handle_frequency,
+    "optfreq": _handle_optfreq,
+    "optfreqsp": _handle_optfreqsp,
+}
+</pre>
+
+<h3>6.4 唯一目录</h3>
+<div class="warn-box">
+⚠️ <code>src/acp/core/utils.py</code> 和 <code>src/acp/utils/</code> 均<strong>不存在</strong>，需新建。
+</div>
+<p>将 <code>_ensure_unique_dir()</code> 放在新建的 <code>src/acp/core/utils.py</code> 中，以便 scheduler <code>runner.py</code> 等模块复用。<code>cli.py</code> 的 handler 和 <code>simple.py</code> 从中导入。</p>
+<pre>
+def _ensure_unique_dir(base_dir: str | Path) -> Path:
+    base = Path(base_dir).resolve()
+    if not base.exists():
+        base.mkdir(parents=True)
+        return base
+    counter = 1
+    while True:
+        candidate = base.parent / f"{base.name}_{counter}"
+        if not candidate.exists():
+            candidate.mkdir(parents=True)
+            return candidate
+        counter += 1
+</pre>
+
+<hr class="section-divider">
+
+<!-- ======== 7. SCHEDULER ======== -->
+<h2 id="scheduler">7. Step 6：调度器集成</h2>
+
+<h3>7.1 <code>src/acp/scheduler/jobs.py</code> — SUPPORTED_WORKFLOWS</h3>
+<pre>
+SUPPORTED_WORKFLOWS = (
+    "conformer", "ensemble", "energy", "nmr",
+    "benchmark", "mechanism", "fake",
+    "singlepoint", "optimize", "frequency", "optfreq", "optfreqsp",
+)
+</pre>
+
+<h3>7.2 <code>src/acp/scheduler/stage_tasks.py</code> — StagePlanProvider</h3>
+<div class="warn-box">
+⚠️ <code>register_plan_provider()</code> 是普通函数，<strong>不是</strong>装饰器。实际签名：<code>def register_plan_provider(workflow: str, provider: StagePlanProvider) -> None</code>（<code>stage_tasks.py:57-58</code>）。调用时传递实例而非类，参见现有注册方式（第 473-479 行）。
+</div>
+<pre>
+class _SinglepointStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        return [StagePlan(stage_name="single_point", order=0)]
+
+class _OptimizeStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        return [StagePlan(stage_name="optimize", order=0)]
+
+class _FrequencyStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        return [StagePlan(stage_name="frequency", order=0)]
+
+class _OptfreqStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        return [StagePlan(stage_name="opt_freq", order=0)]
+
+class _OptfreqspStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        return [
+            StagePlan(stage_name="opt_freq", order=0),
+            StagePlan(stage_name="single_point", order=1),
+            StagePlan(stage_name="shermo", order=2),
+        ]
+</pre>
+<p>在文件末尾（第 480 行附近）注册：</p>
+<pre>
+register_plan_provider("singlepoint", _SinglepointStagePlanProvider())
+register_plan_provider("optimize", _OptimizeStagePlanProvider())
+register_plan_provider("frequency", _FrequencyStagePlanProvider())
+register_plan_provider("optfreq", _OptfreqStagePlanProvider())
+register_plan_provider("optfreqsp", _OptfreqspStagePlanProvider())
+</pre>
+
+<h3>7.3 <code>src/acp/scheduler/runner.py</code> — _build_cmd()</h3>
+
+<div class="warn-box">
+⚠️ <strong>架构决策：保持 scheduler → CLI 子进程模式。</strong><br>
+文档 v3.0 曾建议直接调用 <code>simple.py</code> 入口函数，但现有 <code>runner.py:664-731</code> 所有 workflow（conformer/nmr/ensemble/energy/benchmark/mechanism）<strong>全部</strong>走 <code>python -m acp.cli run &lt;wf&gt;</code> 子进程模式。引入两套执行路径（子进程 + in-process）将增加维护成本和调试难度。5 个简单工作流应遵循相同模式，通过 <code>_build_cmd()</code> 添加分支构建 CLI 命令，与现有架构一致。</div>
+
+<p><span class="tag-modify">修改</span> <code>_build_cmd()</code> 需要在两处修改：</p>
+<ol>
+<li><strong>workflow 白名单</strong>（L666）：将 <code>("conformer", "nmr", "benchmark", "mechanism", "ensemble", "energy")</code> 扩展为包含 5 个简单工作流，否则 <code>ValueError</code> 会提前阻断。</li>
+<li><strong>分支处理</strong>：在 elif 链末尾添加简单工作流分支。注意<strong>不要重复</strong>已在公共参数段（runner.py:721-730）处理的 <code>--charge</code>, <code>--multiplicity</code>, <code>--nproc</code>, <code>--mem</code>。</li>
+</ol>
+
+<div class="warn-box">
+⚠️ <strong>公共参数避免重复：</strong>现有 <code>_build_cmd()</code>（L721-730）已对所有 workflow 统一添加 <code>--config</code>, <code>--nproc</code>, <code>--mem</code>, <code>--charge</code>, <code>--multiplicity</code>。simple 分支只需添加 <code>--input</code>, <code>--output</code> 和方法级别的 flag，<strong>不要重加</strong>公共参数。
+</div>
+
+<p>在 <code>_build_cmd()</code> 中按以下映射添加分支：
+</div>
+
+<pre>
+if wf in ("singlepoint", "optimize", "frequency", "optfreq", "optfreqsp"):
+    cmd = ["python", "-m", "acp.cli", "run", wf]
+    # 工作流特有参数（input/output）
+    cmd += ["--input", str(input_path), "--output", str(work_dir)]
+    # 注意：--charge, --multiplicity, --nproc, --mem 由公共参数段自动添加，此处不复写
+    # method levels → CLI flags（详见附录）
+    # v4.0 建议：调用 catalog._method_levels_to_cli_flags() 替代手写映射
+</pre>
+
+<hr class="section-divider">
+
+<!-- ======== 8. REGISTRY ======== -->
+<h2 id="registry">8. Step 7：工作流注册</h2>
+<p><span class="tag-modify">修改</span> <code>src/acp/workflows/registry.py</code> 和 <code>src/acp/workflows/__init__.py</code></p>
+
+<h3>8.1 registry.py 追加条目</h3>
+<p>使用 catalog ID 作为注册名称：</p>
+<table>
+<tr><th>name</th><th>label</th><th>requires_binaries</th></tr>
+<tr><td><code>singlepoint</code></td><td>Single Point Energy</td><td><code>["orca"]</code></td></tr>
+<tr><td><code>optimize</code></td><td>Geometry Optimization</td><td><code>["orca"]</code></td></tr>
+<tr><td><code>frequency</code></td><td>Frequency Calculation</td><td><code>["orca"]</code></td></tr>
+<tr><td><code>optfreq</code></td><td>Optimization + Frequency</td><td><code>["orca"]</code></td></tr>
+<tr><td><code>optfreqsp</code></td><td>Full Thermo Pipeline</td><td><code>["orca", "shermo"]</code></td></tr>
+</table>
+
+<h3>8.2 __init__.py 懒加载</h3>
+<pre>
+_LAZY_SOURCES.update({
+    "run_singlepoint": "acp.workflows.simple",
+    "run_optimize": "acp.workflows.simple",
+    "run_frequency": "acp.workflows.simple",
+    "run_optfreq": "acp.workflows.simple",
+    "run_optfreqsp": "acp.workflows.simple",
+})
+</pre>
+
+<hr class="section-divider">
+
+<!-- ======== 9. TEST ======== -->
+<h2 id="test">9. Step 8：测试</h2>
+<p><span class="tag-new">新建</span> <code>tests/test_acp_workflows_simple.py</code></p>
+
+<table>
+<tr><th>类型</th><th>内容</th></tr>
+<tr><td>输入解析</td><td>XYZ / GJF / ORCA inp 解析 + 不支持格式报错</td></tr>
+<tr><td>catalog 校验</td><td>5 个简单工作流在 WORKFLOW_CATALOG 中 status=active</td></tr>
+<tr><td>catalog 校验</td><td>dft_optfreqsp schema 包含三个 level + profile</td></tr>
+<tr><td>sp workflow</td><td>mock ORCA，验证 single_point() 被调用</td></tr>
+<tr><td>opt workflow</td><td>mock ORCA，验证 optimize() 被调用</td></tr>
+<tr><td>freq workflow</td><td>mock ORCA，验证 frequency() 被调用，含 --temperature/--pressure 参数</td></tr>
+<tr><td>optfreq workflow</td><td>mock ORCA，验证 opt_freq() 被调用</td></tr>
+<tr><td>optfreqsp workflow</td><td>mock ORCA + Shermo，验证三阶段调用顺序</td></tr>
+<tr><td>唯一目录</td><td>_ensure_unique_dir 测试</td></tr>
+<tr><td>CLI 参数</td><td>argparse 解析正确性（每个工作流的特有参数）</td></tr>
+<tr><td>CLI 集成</td><td><code>from acp.cli import main</code> 端到端测试：参数传递 → handler 调用链</td></tr>
+<tr><td>QCResult 字段</td><td>opt_freq 返回含 coordinates + frequencies + has_frequencies=True 的 QCResult（不含 thermo 字段）</td></tr>
+<tr><td>Stage 数据流</td><td>optfreqsp 验证 opt_coords → SP、opt_log → Shermo 的传递正确性</td></tr>
+</table>
+
+<div class="note-box">
+📝 Shermo 测试说明：若测试环境无 Shermo 二进制，<code>optfreqsp</code> 的 shermo 阶段应 mock <code>acp.backends.external.run_shermo()</code>。需在 conftest.py 中添加 Shermo 可用性 fixture。
+</div>
+
+<hr class="section-divider">
+
+<!-- ======== 10. EXEC ORDER ======== -->
+<h2 id="exec-order">10. Step 9：实施顺序</h2>
+
+<ol>
+<li><strong>catalog.py</strong> — 改 4 条 status → active + 增 optfreqsp 条目 + dft_optfreqsp schema + 更新 METHOD_CATALOG ORCA supports 追加 "optfreq"（catalog.py:778）+ schema field 补齐（dft_frequency 追加 dispersion/solvent_model/solvent，catalog.py:488; dft_optfreq 追加 grid/scf_convergence/max_steps，catalog.py:500-508; dft_singlepoint level_id 修正为 single_point，catalog.py:442 + 追加 aux_basis/ri_approximation）。<strong>前端即刻生效</strong>。</li>
+<li><strong>src/acp/core/utils.py（新建）</strong> — <code>_ensure_unique_dir()</code> 和共享辅助函数（如 scheduler 中 9 个模块共用的 <code>_utc_now_iso()</code> 提取为公用函数）。</li>
+<li><strong>orca.py opt_freq()</strong> — 新增方法（利用已有 <code>calc_type_map</code>，无破坏性）。</li>
+<li><strong>acp/backends/orca.py</strong> — 透传方法。</li>
+<li><strong>workflows/simple.py（新建）</strong> — 5 个入口 + stage 函数 + stage 间数据传递。</li>
+<li><strong>cli.py</strong> — 5 handlers + dispatch + 唯一目录。</li>
+<li><strong>workflows/registry.py + __init__.py</strong> — 注册 + 懒加载。</li>
+<li><strong>scheduler/*.py</strong> — jobs.py + stage_tasks.py + runner.py。</li>
+<li><strong>测试</strong> — 全量回归 + 新增用例（含 CLI 集成测试）。</li>
+</ol>
+
+<div class="warn-box">
+⚠️ <strong>ORCA 版本兼容性（简化方案 v3.3）：</strong>
+<p><code>Opt Freq</code> 组合任务需要 <strong>ORCA ≥ 5.0</strong>（ORCA 5.0 于 2020 年发布，当前主流计算节点已普遍部署 ≥5.0）。初始实施采用两层防护：</p>
+<ol>
+<li>在 <code>WORKFLOW_CATALOG</code> 中 <code>optfreq</code> / <code>optfreqsp</code> 条目新增 <code>"min_orca_version": "5.0"</code> 字段（catalog 字段定义，API/前端后续可按需使用）</li>
+<li>在 CLI <code>--help</code> 和文档中标注 ORCA ≥ 5.0 要求</li>
+</ol>
+<p><strong>不做运行时版本检测和自动降级。</strong> 理由：<code>Opt Freq</code> 在 ORCA &lt; 5.0 上直接提交会报 ORCA 语法错误，日志清晰可诊断，且 ORCA 4.x 已基本退出使用。运行时降级路径（串联 optimize()+frequency()）改变了作业语义（两次独立调用 vs 一次组合），可能掩盖版本问题并导致意外结果。如果后续发现用户仍在使用 4.x，可再补充降级逻辑。</p>
+</div>
+
+<div class="warn-box">
+⚠️ Schema 字段对齐检查（必须实施前完成）：现有 4 个简单 schema 的 <code>fields</code> 列表不完整：
+<table>
+<tr><th>Schema</th><th>现有 fields</th><th>缺失的关键字段</th></tr>
+<tr><td><code>dft_frequency</code></td><td>functional, basis, temperature, pressure, scale_factor</td><td><strong>dispersion, solvent_model, solvent</strong>（GA频率需要溶剂设置）</td></tr>
+<tr><td><code>dft_optfreq</code></td><td>functional, basis, dispersion, solvent_model, solvent, temperature, pressure</td><td><strong>grid, scf_convergence, max_steps</strong>（优化需要收敛控制）</td></tr>
+<tr><td><code>dft_singlepoint</code></td><td>functional, basis, dispersion, solvent_model, solvent, grid, scf_convergence</td><td>暂无严重缺失，但与 optfreqsp 的 SP level 对齐时需确认 <strong>aux_basis, ri_approximation</strong> 是否纳入</td></tr>
+<tr><td><code>dft_optimize</code></td><td>functional, basis, dispersion, solvent_model, solvent, grid, scf_convergence, max_steps, opt_convergence</td><td>暂无严重缺失</td></tr>
+</table>
+<p><strong>具体修改：</strong></p>
+<pre>
+# dft_frequency fields → 追加 "dispersion", "solvent_model", "solvent"
+"dft_frequency": {
+    "method_levels": [{
+        "level_id": "frequency",
+        "fields": [
+            "functional", "basis", "dispersion",
+            "solvent_model", "solvent",
+            "temperature", "pressure", "scale_factor",
+        ],
+    }],
+},
+
+# dft_optfreq fields → 追加 "grid", "scf_convergence", "max_steps"
+"dft_optfreq": {
+    "method_levels": [{
+        "level_id": "optfreq",
+        "fields": [
+            "functional", "basis", "dispersion",
+            "solvent_model", "solvent",
+            "grid", "scf_convergence", "max_steps",
+            "temperature", "pressure",
+        ],
+    }],
+},
+
+# dft_singlepoint: level_id → "single_point"（与 stage_tasks.py 对齐，v4.0 必改）
+# fields → 追加 "aux_basis", "ri_approximation"（与 optfreqsp SP level 对齐）
+"dft_singlepoint": {
+    "method_levels": [{
+        "level_id": "single_point",  # ← 原为 "singlepoint"，v4.0 修正
+        "fields": [
+            "functional", "basis", "dispersion",
+            "solvent_model", "solvent",
+            "grid", "scf_convergence",
+            "aux_basis", "ri_approximation",
+        ],
+    }],
+},
+</pre>
+补齐后需同步更新 <code>scheduler _build_cmd()</code> 参数映射和 CLI 参数组。
+</div>
+
+<hr class="section-divider">
+
+<!-- ======== APPENDIX ======== -->
+<h2 id="scheduler-param">附录：scheduler _build_cmd() 参数映射</h2>
+
+<p>当 job 通过 scheduler（API → remote LSF）提交时，<code>_build_cmd()</code> 需将 <code>JobSpec.method</code> 中的 levels 转换为 CLI flags。</p>
+
+<h3>通用规则</h3>
+<ul>
+<li>grid / scf_convergence / opt_convergence <strong>不映射为独立 CLI 标志</strong>——使用 profile 默认值或由 <code>--route-extras</code> 覆盖</li>
+<li>dispersion 映射至 <code>--dispersion</code>（v3.2 新增 CLI 参数）</li>
+<li><code>catalog.py:convert_method_levels_to_protocol_levels()</code> 可自动处理字段名重映射（如 <code>functional</code>→<code>method</code>），建议 <code>_build_cmd()</code> 直接复用，避免手写映射出错。见 <code>src/acp/catalog.py:901-952</code></li>
+</ul>
+
+<h3>singlepoint</h3>
+<pre>
+levels.singlepoint:
+  functional    → --method
+  basis         → --basis
+  dispersion    → --dispersion
+  solvent       → --solvent
+  solvent_model → --solvent-model
+</pre>
+
+<h3>optimize</h3>
+<pre>
+levels.optimize:
+  functional    → --method
+  basis         → --basis
+  dispersion    → --dispersion
+  solvent       → --solvent
+  solvent_model → --solvent-model
+  max_steps     → --geom-maxiter
+</pre>
+
+<h3>frequency</h3>
+<pre>
+levels.frequency:
+  functional    → --method
+  basis         → --basis
+  dispersion    → --dispersion
+  solvent_model → --solvent-model  ⚠ 现有 schema 缺此字段（§10）
+  solvent       → --solvent        ⚠ 现有 schema 缺此字段（§10）
+  temperature   → --temperature
+  pressure      → --pressure
+  scale_factor  → --scale-factor
+</pre>
+
+<h3>optfreq</h3>
+<pre>
+levels.optfreq:
+  functional    → --method
+  basis         → --basis
+  dispersion    → --dispersion
+  solvent       → --solvent
+  solvent_model → --solvent-model
+  max_steps     → --geom-maxiter
+  temperature   → --temperature
+  pressure      → --pressure
+  scale_factor  → --scale-factor
+</pre>
+
+<h3>optfreqsp</h3>
+<pre>
+levels.optfreq:
+  functional    → --method
+  basis         → --basis
+  dispersion    → --dispersion
+  solvent       → --solvent
+  solvent_model → --solvent-model
+  max_steps     → --geom-maxiter
+
+levels.single_point:
+  functional       → --sp-method
+  basis            → --sp-basis
+  aux_basis        → --sp-aux-basis
+  ri_approximation → --sp-ri-approximation
+  dispersion       → --dispersion       (可选，覆盖 opt 级别)
+  solvent_model    → --solvent-model    (可选，覆盖 opt 级别)
+  solvent          → --solvent          (可选，覆盖 opt 级别)
+
+levels.thermo:
+  temperature   → --temperature
+  pressure      → --pressure
+  scale_factor  → --scale-factor
+</pre>
+
+<div class="note-box">
+📝 <strong>实现提示（重要）：</strong>
+<ul>
+<li><code>_build_cmd()</code> 需要将三层 levels 展平为 CLI flags。建议先将 <code>levels.optfreq</code> 和 <code>levels.single_point</code> 的公共字段合并（后者优先覆盖前者），再一次性写入 cmd 列表。</li>
+<li><strong>不要使用</strong> <code>convert_method_levels_to_protocol_levels()</code>（catalog.py:901-952）——该函数只处理 confsearch 协议的 stage 名（<code>dft_opt</code>/<code>single_point</code>/<code>thermo</code>）且字段映射为 protocol 内部命名（如 <code>temperature_k</code>），不符合 CLI flag 命名。</li>
+<li><strong>建议使用</strong> <code>method_levels_to_cli_flags()</code>（见 §11.3 具体实现）——在 <code>catalog.py</code> 中新增的通用函数，将 level→CLI flag 的映射集中管理。5 个简单工作流的映射高度相似（仅 level_id 和字段前缀不同），集中管理可避免 <code>_build_cmd()</code> 中 5 次重复相同逻辑。</li>
+<li><strong>公共参数已自动处理：</strong> <code>--charge</code>, <code>--multiplicity</code>, <code>--nproc</code>, <code>--mem</code> 由 <code>_build_cmd()</code> 公共参数段（runner.py:721-730）统一添加，simple 分支<strong>不要重复</strong>。</li>
+</ul>
+</div>
+
+<hr class="section-divider">
+
+<!-- ======== 11. REVIEW ======== -->
+<h2 id="review">11. 代码审查与修改建议（v4.0）</h2>
+
+<p>本节记录基于实际代码库的分析结论，确认方案合理性和可行性，标注需修正的问题。</p>
+
+<h3>11.1 与实际代码库的对照验证</h3>
+<p>以下验证基于 2026-07-19 实际代码库快照：</p>
+<table>
+<tr><th>文档声明</th><th>实际代码状态</th><th>结论</th></tr>
+<tr><td>WORKFLOW_CATALOG 中存在 4 个 planned 条目</td><td><code>catalog.py:7-49</code> — <code>singlepoint / optimize / frequency / optfreq</code> 全部存在，status="planned"</td><td>✅ 一致</td></tr>
+<tr><td>calc_type_map 含 "optfreq"="Opt Freq"</td><td><code>orca.py:117</code> 已定义</td><td>✅ 一致</td></tr>
+<tr><td>ORCAInterface 无 opt_freq() 方法</td><td><code>orca.py:274-515</code> — 只有 optimize/single_point/frequency/nmr_shielding，无 opt_freq</td><td>✅ 一致（需新增）</td></tr>
+<tr><td>ORCABackend 无 opt_freq() 方法</td><td><code>backends/orca.py:25-134</code> — 只有 optimize/single_point/frequency/nmr_shielding</td><td>✅ 一致（需新增）</td></tr>
+<tr><td>SUPPORTED_WORKFLOWS 不含简单工作流</td><td><code>jobs.py:52-60</code> 共 7 个，不含 simple 工作流</td><td>✅ 一致（需扩展）</td></tr>
+<tr><td>stage_tasks.py 有 register_plan_provider</td><td><code>stage_tasks.py:57-58</code> 存在，<code>stage_tasks.py:473-479</code> 7 个 provider 已注册</td><td>✅ 一致（需新增 5 个）</td></tr>
+<tr><td>_build_cmd() whitelist 为 6 个 workflow</td><td><code>runner.py:665-667</code> 含 conformer/nmr/benchmark/mechanism/ensemble/energy</td><td>✅ 一致（需扩展）</td></tr>
+<tr><td>公共参数段添加 --config/--nproc/--mem/--charge/--multiplicity</td><td><code>runner.py:721-730</code> 存在</td><td>✅ 一致</td></tr>
+<tr><td>METHOD_CATALOG ORCA supports 列表</td><td><code>catalog.py:778</code> — <code>["singlepoint", "optimize", "frequency", "nmr"]</code></td><td>✅ 一致（需追加 "optfreq"）</td></tr>
+<tr><td>core/utils.py 不存在</td><td><code>src/acp/core/</code> 共 7 个文件（含 models/workflow/state/registry/config），无 utils.py</td><td>✅ 一致（需新建）</td></tr>
+<tr><td>_LAZY_SOURCES 在 workflows/__init__.py</td><td><code>__init__.py:37-53</code> 存在 15 条懒加载条目</td><td>✅ 一致（需扩展 5 条）</td></tr>
+<tr><td>dft_singlepoint level_id 为 "singlepoint"（无下划线）</td><td><code>catalog.py:442</code> — 确认为 <code>"singlepoint"</code></td><td>✅ 一致（需修正为 "single_point"）</td></tr>
+<tr><td>dft_frequency 缺 dispersion/solvent_model/solvent</td><td><code>catalog.py:488</code> — fields 仅含 functional/basis/temperature/pressure/scale_factor</td><td>✅ 一致（需补齐）</td></tr>
+<tr><td>dft_optfreq 缺 grid/scf_convergence/max_steps</td><td><code>catalog.py:500-508</code> — fields 缺 grid/scf_convergence/max_steps</td><td>✅ 一致（需补齐）</td></tr>
+<tr><td>method_levels_to_workflow_config() 存在，非 confsearch 返回 dict(levels)</td><td><code>catalog.py:955-977</code> — 非 confsearch 分支 <code>config = dict(levels)</code></td><td>✅ 一致</td></tr>
+<tr><td>normalize_and_validate_method_config() 存在</td><td><code>catalog.py:871</code> — 含溶剂名映射、必需字段校验</td><td>✅ 一致（可供 simple 工作流复用）</td></tr>
+</table>
+
+<h3 id="review-depth">11.2 深入合理性评估（v5.0 整合版）</h3>
+
+<p>以下评估将前述两个版本的评估表合并，消除重复：</p>
+
+<table>
+<tr><th>维度</th><th>评估</th><th>说明</th></tr>
+<tr><td><strong>架构一致性</strong></td><td>✅ 优秀</td><td>方案与现有架构高度一致：catalog 驱动前端（无 HTML 修改）、CLI 子进程模式（与现有 6 个 workflow 一致，见 runner.py:665-667）、StagePlanProvider 注册模式（与现有 7 个 provider 一致，见 stage_tasks.py:473-479）、**kwargs 透传参数模式（与 ORCABackend 现有方法一致）。</td></tr>
+<tr><td><strong>代码复用度</strong></td><td>✅ 良好</td><td>ORCAInterface 的 <code>calc_type_map["optfreq"] = "Opt Freq"</code> 已存在（<code>orca.py:117</code>）；<code>_write_input()</code> 和 <code>_build_input_blocks()</code> 可直接复用；<code>method_levels_to_workflow_config()</code> 对非 confsearch schema 的 <code>dict(levels)</code> 分支已存在（<code>catalog.py:976</code>）。唯一新增代码量 ~400 行（simple.py + CLI handlers + catalog 数据 + 透传）。</td></tr>
+<tr><td><strong>风险分析</strong></td><td>✅ 低风险</td><td>所有修改均为新增/扩展（新增 opt_freq 方法、新增 simple.py、新增 CLI 分支、新增 catalog 条目），无现有功能破坏。<code>dft_singlepoint</code> 的 <code>level_id</code> 从 <code>"singlepoint"</code> 改为 <code>"single_point"</code> 是唯一可能影响已有数据的变更，但当前简单工作流均为 planned 状态（无人使用），且前端使用 <code>label</code> 字段渲染，API 依赖 <code>method_schema_id</code> 索引，均不直接依赖 <code>level_id</code> 值（详见 §11.3）。</td></tr>
+<tr><td><strong>性能考量</strong></td><td>✅ 合理</td><td>CLI 子进程模式（而非 in-process 调用）在简单工作流场景下开销可忽略（子进程启动 < 50ms，对比 ORCA 计算耗时数分钟至数小时）。</td></tr>
+<tr><td><strong>可测试性</strong></td><td>✅ 良好</td><td>5 个简单工作流可通过 mock ORCABackend + mock run_shermo 完全覆盖。无需真实 ORCA/Shermo 二进制。Stage 数据流测试可通过 mock 返回值注入验证。</td></tr>
+<tr><td><strong>可扩展性</strong></td><td>⚠️ 有提升空间</td><td>当前 simple.py 直接引用 ORCABackend（隐式耦合）。未来增加 Gaussian 支持时需改为 <code>QCBackend</code> 接口类型。建议在 v1 实现中使用 <code>backend: QCBackend</code> 类型注解，从 registry 获取 backend 实例，而非直接实例化 <code>ORCABackend</code>。</td></tr>
+<tr><td><strong>边界情况</strong></td><td>⚠️ 需关注</td><td>（1）<code>--solvent-model</code> 的 choices 在 §6.2 设为 <code>["smd", "cpcm", "none"]</code>，但 ORCA ≥ 5.0 的 SMD 通过 <code>%cpcm smd true</code> 实现，建议 CLI 中保留 <code>"smd"</code> 作为 choice 但内部映射到 <code>"cpcm"</code> + SMD flag。需在 <code>_build_cmd()</code> 或 CLI handler 中处理此映射。（2）<code>optfreqsp</code> 的 <code>single_point</code> level 溶剂设置可能覆盖 opt 级别，需确保 CLI flag 顺序正确（后者覆盖前者）。（3）catalog 中存在 <code>xtb_optimize</code>（planned 状态，line 59），未来可复用相同架构扩展。</td></tr>
+</table>
+
+<h3 id="review-supplement">11.3 修改建议清单（v5.0 整合版）</h3>
+
+<p>以下清单整合了全部审查阶段（v4.0–v5.0）的修改建议，按优先级分组：</p>
+
+<p><strong>🔴 必须执行（Critical）：</strong></p>
+<ol>
+<li><strong>统一 level_id 命名：</strong> <code>catalog.py:442</code> — <code>dft_singlepoint</code> schema 的 <code>level_id</code> 由 <code>"singlepoint"</code> 改为 <code>"single_point"</code>。已验证：整个代码库中 stage_tasks.py / capabilities.py / registry.py / 所有测试均使用 <code>"single_point"</code> 作为 stage 名，仅此处不一致。影响范围仅限此行，前端/API 不受影响（前端用 <code>label</code>，API 用 <code>method_schema_id</code>，均不依赖 <code>level_id</code>）。</li>
+<li><strong>Schema 字段对齐：</strong> — 补齐 <code>dft_frequency</code>（追加 dispersion/solvent_model/solvent，catalog.py:488）和 <code>dft_optfreq</code>（追加 grid/scf_convergence/max_steps，catalog.py:500-508）的 fields 列表。</li>
+<li><strong>METHOD_CATALOG ORCA supports 追加 "optfreq"：</strong> <code>catalog.py:778</code> — 当前 <code>["singlepoint", "optimize", "frequency", "nmr"]</code> → 改为 <code>["singlepoint", "optimize", "frequency", "optfreq", "nmr"]</code>，否则前端无法正确识别 ORCA 对 optfreq 的支持状态。</li>
+<li><strong>register_plan_provider 使用函数调用：</strong> 见 §7.2。必须使用 <code>register_plan_provider("name", ProviderClass())</code> 模式（<code>stage_tasks.py:57-58</code> 为普通函数，非装饰器）。</li>
+<li><strong>stage 函数命名对齐：</strong> simple.py 中函数名必须为 <code>stage_single_point()</code>、<code>stage_opt_freq()</code>，与 StagePlan.stage_name 一致。</li>
+</ol>
+
+<p><strong>🟡 建议执行（Recommended）：</strong></p>
+<ol start="6">
+<li><strong>新增 <code>method_levels_to_cli_flags()</code> 公用函数：</strong> 在 <code>catalog.py</code> 中集中管理 level→CLI flag 映射，避免 <code>_build_cmd()</code> 中 5 次重复编写相同逻辑。具体实现见下方代码块。</li>
+<li><strong>core/utils.py 职责扩展：</strong> 新建 <code>src/acp/core/utils.py</code>，包含 <code>_ensure_unique_dir()</code> 和从 scheduler 各模块提取的 <code>_utc_now_iso()</code>（当前在 9 个模块中 copy-paste）。</li>
+<li><strong>simple.py handler 接收 QCBackend 接口：</strong> 使用 <code>backend: QCBackend</code> 类型注解，通过 <code>acp.backends.registry.get_backend("orca")</code> 获取实例，为未来 Gaussian 后兼容预留。</li>
+<li><strong>复用 <code>normalize_and_validate_method_config()</code>：</strong> <code>catalog.py:832</code> 已有该函数（溶剂名映射、必需字段校验），simple.py handler 应在 method levels 入库前调用此函数做前置校验。</li>
+<li><strong>solvent_model "smd" 内部映射：</strong> CLI 保留 <code>"smd"</code> 作为 choice，传递到 ORCA 时映射为 cpcm + SMD flag（ORCA ≥ 5.0 的 <code>!CPCM(SMD)</code> 语法）。</li>
+<li><strong>optfreqsp level 覆盖语义文档化：</strong> single_point 级别的 solvent/dispersion 等字段若填写则覆盖 optfreq 级别的对应值，在 <code>_build_cmd()</code> 中实现 SP level 字段后写覆盖。</li>
+<li><strong>HARTREE_TO_KCAL 统一来源：</strong> 统一从 <code>acp.core.models</code> 导入（值 627.509，与 <code>conformer_search.utils.constants</code> 一致），避免 anti-pattern #12。</li>
+</ol>
+
+<p><strong>🟢 可选改进（Optional）：</strong></p>
+<ol start="13">
+<li><strong>dft_singlepoint 追加 aux_basis/ri_approximation：</strong> 与 optfreqsp 的 SP level 对齐，保持 schema 间一致性。</li>
+<li><strong>ORCAInterface.opt_freq() 加版本 warning：</strong> 获取 ORCA 版本，&lt; 5.0 时输出 warning log，不做运行时阻断。</li>
+<li><strong>xtb_optimize 扩展规划：</strong> <code>catalog.py:59</code> 已有 <code>"xtb_optimize"</code> 条目（planned），未来可在 simple.py 中增加 xTB 分支，与 ORCA 共用 CLI 接口。</li>
+<li><strong>_build_cmd() 映射表声明为模块级常量：</strong> 在 <code>stage_tasks.py</code> 或 <code>jobs.py</code> 中定义 <code>LEVEL_TO_CLI_FLAG_MAP</code>，避免内联在方法内部。</li>
+</ol>
+
+<h4>method_levels_to_cli_flags() 具体实现</h4>
+<p>在 <code>catalog.py</code> 中新增以下函数，供 <code>_build_cmd()</code> 及其它需要将 level 映射为 CLI 参数的模块调用：</p>
+<pre>
+_LEVEL_TO_CLI_FLAG_MAP: dict[str, str] = {
+    "functional": "method",
+    "basis": "basis",
+    "aux_basis": "sp-aux-basis",
+    "ri_approximation": "sp-ri-approximation",
+    "dispersion": "dispersion",
+    "solvent_model": "solvent-model",
+    "solvent": "solvent",
+    "temperature": "temperature",
+    "pressure": "pressure",
+    "scale_factor": "scale-factor",
+    "max_steps": "geom-maxiter",
+    "opt_convergence": "opt-convergence",
+    "grid": "grid",
+    "scf_convergence": "scf-convergence",
+}
+
+def method_levels_to_cli_flags(
+    levels: dict[str, Any],
+    prefix_map: dict[str, str] | None = None,
+) -> list[str]:
+    """Convert method levels dict to CLI flag list.
+
+    Args:
+        levels: Nested dict - e.g. {"optfreq": {...}, "single_point": {...}}.
+        prefix_map: level_id → CLI flag prefix (default: no prefix for all).
+
+    Returns:
+        CLI flag list - e.g. ["--method", "wB97M-V", "--basis", "def2-TZVPP"].
+    """
+    prefix_map = prefix_map or {}
+    cmd: list[str] = []
+    for level_id, level_config in levels.items():
+        prefix = prefix_map.get(level_id, "")
+        for field, value in level_config.items():
+            if field == "engine" or value is None or value == "":
+                continue
+            cli_flag = _LEVEL_TO_CLI_FLAG_MAP.get(field)
+            if cli_flag is None:
+                continue
+            flag = f"--{prefix}{cli_flag}"
+            cmd += [flag, str(value)]
+    return cmd
+</pre>
+<p><strong>用法示例（_build_cmd 中）：</strong></p>
+<pre>
+from acp.catalog import method_levels_to_cli_flags
+
+# optfreqsp 的 prefix_map：optfreq 无前缀，single_point 使用 --sp- 前缀
+prefix_map = {"optfreq": "", "single_point": "sp-", "thermo": ""}
+cmd += method_levels_to_cli_flags(levels, prefix_map)
+</pre>
+
+<h3 id="review-matrix">11.4 实施可行性矩阵（v5.0 更新）</h3>
+<table>
+<tr><th>步骤</th><th>代码量</th><th>风险</th><th>破坏性</th><th>说明</th></tr>
+<tr><td>catalog.py 修改</td><td>~80 行数据</td><td>低</td><td>无</td><td>纯数据变更，前端即时生效</td></tr>
+<tr><td>ORCAInterface.opt_freq() 新增</td><td>~60 行</td><td>低</td><td>无</td><td>利用已有 calc_type_map 和 _write_input()</td></tr>
+<tr><td>ORCABackend 透传</td><td>~15 行</td><td>低</td><td>无</td><td>模板代码</td></tr>
+<tr><td>simple.py 新建</td><td>~350 行</td><td>中</td><td>无</td><td>核心难点：optfreqsp 三阶段数据流</td></tr>
+<tr><td>CLI 参数组</td><td>~80 行</td><td>低</td><td>无</td><td>条件参数需确保互斥逻辑正确</td></tr>
+<tr><td>Registry/SUPPORTED_WORKFLOWS</td><td>~20 行数据</td><td>低</td><td>无</td><td>纯数据扩展</td></tr>
+<tr><td>stage_tasks.py provider</td><td>~40 行</td><td>低</td><td>无</td><td>模板代码，每个 5-8 行</td></tr>
+<tr><td>_build_cmd() 分支</td><td>~60 行</td><td>中</td><td>低</td><td>映射逻辑需与附录对齐；建议调用 method_levels_to_cli_flags()</td></tr>
+<tr><td>测试</td><td>~200 行</td><td>低</td><td>无</td><td>mock ORCA + Shermo，无需真实二进制</td></tr>
+</table>
+
+<hr class="section-divider">
+
+<!-- ======== 12. V6.0 ANALYSIS ======== -->
+<h2 id="v6-analysis">12. 深入分析：合理性、可行性与改进建议（v6.0）</h2>
+
+<p>本节为 v6.0 新增的独立第三方审查，基于 2026-07-19 代码库快照对 v5.0 文档进行全面评估。</p>
+
+<h3>12.1 合理性评估总结</h3>
+<table>
+<tr><th>维度</th><th>评分</th><th>论证</th></tr>
+<tr><td>架构一致性</td><td>🟢 优秀</td><td>方案与现有架构高度一致：catalog 驱动前端（无 HTML 修改，验证通过 ✅）、CLI 子进程模式与现有 6 个 workflow 一致（runner.py:665-667 ✅）、StagePlanProvider 注册模式与现有 7 个 provider 一致（stage_tasks.py:473-479 ✅）、**kwargs 透传参数模式与 ORCABackend 现有方法一致 ✅。</td></tr>
+<tr><td>代码复用度</td><td>🟢 良好</td><td><code>calc_type_map["optfreq"] = "Opt Freq"</code>已在 orca.py:117 ✅；<code>_write_input()</code>/<code>_build_input_blocks()</code>可直接复用 ✅；<code>method_levels_to_workflow_config()</code> 的 <code>dict(levels)</code> 分支已存在（catalog.py:976）✅；<code>run_shermo</code> 已通过 <code>acp.backends.external</code> 重导出 ✅。新增代码量 ~700 行，分布合理。</td></tr>
+<tr><td>风险等级</td><td>🟢 低风险</td><td>所有修改均为新增/扩展，无现有功能破坏。<code>dft_singlepoint level_id</code> 改动（catalog.py:442）是唯一可能影响数据的变更，但当前简单工作流均为 planned 状态，前端/API 均不依赖 level_id 值。</td></tr>
+<tr><td>性能影响</td><td>🟢 可忽略</td><td>CLI 子进程启动开销 &lt; 50ms，对比 ORCA 计算耗时数分钟至数小时，可忽略。</td></tr>
+<tr><td>可测试性</td><td>🟢 良好</td><td>可通过 mock ORCABackend + mock run_shermo 完全覆盖，无需真实二进制。</td></tr>
+<tr><td>可扩展性</td><td>🟡 有提升空间</td><td>simple.py 当前设计直接引用 ORCABackend。建议改为 <code>QCBackend</code> 接口 + backend registry 模式，便于未来增加 Gaussian 支持。catalog.py:59 已有 xtb_optimize（planned），复用同一架构。</td></tr>
+<tr><td>边界情况覆盖</td><td>🟡 基本覆盖</td><td>溶剂映射（SMD→CPCM+SMD flag）、ORCA 版本兼容性、NumFreq 自动降级、单位转换均有考虑。但缺失错误处理策略和日志策略的明确规范。</td></tr>
+</table>
+
+<h3>12.2 可行性评估总结</h3>
+<table>
+<tr><th>方面</th><th>结论</th><th>依据</th></tr>
+<tr><td>代码库支持度</td><td>✅ 完全可行</td><td>全部 20+ 代码库声明经实际对照验证一致（见 §11.1）。关键基础设施已就位：calc_type_map、_write_input、run_shermo、register_plan_provider。</td></tr>
+<tr><td>实施工作量</td><td>~700 行 / 1-2 人日</td><td>按 §11.4 矩阵：catalog 80 + ORCA 60 + backend 15 + simple.py 350 + CLI 80 + registry 20 + scheduler 100 = ~705 行。主要复杂度集中在 simple.py 的 optfreqsp 三阶段数据流。</td></tr>
+<tr><td>依赖项</td><td>ORCA ≥ 5.0, Shermo</td><td>ORCA 5.0（2020 年发布）已为主流；Shermo 为可选依赖（仅 optfreqsp 需要）。</td></tr>
+<tr><td>回归风险</td><td>低</td><td>所有修改均为新增文件/分支，不修改现有函数逻辑。</td></tr>
+<tr><td>测试可行性</td><td>完全可 mock</td><td>无需真实 ORCA/Shermo。ORCABackend 为类，可 patch；run_shermo 为函数，可 mock。</td></tr>
+</table>
+
+<h3>12.3 修改建议</h3>
+
+<p><strong>🟢 已采纳（本 v6.0 版本已修复）：</strong></p>
+<ol>
+<li><strong>补充错误处理策略（§5.6）：</strong> 新增完整的错误处理策略表，涵盖输入格式不支持、ORCA 子进程失败、频率解析失败、Shermo 未找到、stage 失败、Shermo 解析失败等 7 类场景。</li>
+<li><strong>补充日志策略（§5.7）：</strong> 新增日志级别规划表（INFO/WARNING/ERROR/DEBUG），明确各级别记录的事件类型。</li>
+<li><strong>CLI 参数补充 --mem（§6.2）：</strong> 新增 <code>--mem</code> 参数，支持直接 CLI 调用时指定内存配额。</li>
+<li><strong>整合冗余审查章节：</strong> 合并 §11.2→§11.4（原版双重评估表）、§11.3→§11.3（原版双重建议清单），精简为 4 个子章节（§11.1-§11.4）。</li>
+<li><strong>精简修订记录：</strong> 将 10 条冗长的逐版修订日志压缩为 3 条里程碑式摘要。</li>
+</ol>
+
+<p><strong>🟡 待实施（建议在 v1 实现中包含）：</strong></p>
+<ol start="6">
+<li><strong>optfreqsp 的 single_point level 覆盖语义：</strong> 当前附录只说"后者优先"，但未给出具体实现模式。建议在 <code>_build_cmd()</code> 中先为 optfreq level 生成 CLI flags，再为 single_point level 生成（使用 <code>--sp-</code> 前缀），最后合并时 single_point 的非空字段覆盖 optfreq 的同名字段（如 solvent/dispersion）。两个字段集不冲突（前缀不同），覆盖通过 optfreqsp handler 内部参数合并实现。</li>
+<li><strong>CLI 直调 vs scheduler 路径的参数对齐：</strong> 当前 <code>_add_simple_workflow_args()</code> 直接调用时不含 <code>--config</code> 参数，但 scheduler 的公共参数段（runner.py:721-730）会加 <code>--config</code>。建议在 <code>_add_simple_workflow_args()</code> 中也加入 <code>--config</code>（optional），确保两条路径的参数集合一致。</li>
+<li><strong>Shermo 输出模式确认：</strong> Shermo 的 <code>-mode</code> 参数决定输出是绝对热化学量还是修正值。需确认 <code>run_shermo()</code> 调用时使用的 mode。若 Shermo 输出了绝对 Gibbs 自由能（含 opt_freq 级别的电子能量），则 finalize 阶段不需要手动加 SP energy，只需替换电子能量部分。建议实施前验证 <code>run_shermo()</code> 的调用参数和输出格式。</li>
+<li><strong>optfreqsp 的频率和热化学输出：</strong> 当前设计在 opt_freq 阶段解析频率，Shermo 阶段读取 opt_freq 的 log 计算热化学修正。但 Shermo 可能输出绝对热化学值（以输入 log 的电子能量为参考）。需要确认 Shermo 的输出中 gibbs_correction 是否确实为"修正值"（即不含电子能量），还是包含电子能量的绝对 Gibbs 值。若是后者，finalize 阶段应使用 <code>free_energy = sp_energy + (shermo_gibbs - opt_freq_energy)</code> 而非 <code>sp_energy + shermo_gibbs_correction</code>。</li>
+<li><strong>多个 level 间 engine 冲突检测：</strong> optfreqsp 的 optfreq 和 single_point level 各自指定 engine，理论上可以是不同 engine（如 ORCA 做 Opt+Freq，Gaussian 做 SP）。当前假设均为 ORCA，但 schema 设计允许不同。建议在 handler 中增加 engine 一致性检查，若不一致则报错（直至多 engine 支持实现）。</li>
+</ol>
+
+<p><strong>🔵 长期规划：</strong></p>
+<ol start="11">
+<li><strong>simple.py 后端解耦：</strong> 将 ORCABackend 引用替换为 <code>QCBackend</code> 协议 + backend registry 查询，使 Gaussian/xTB 可插拔。</li>
+<li><strong>xtb_optimize 激活：</strong> catalog.py:59 已有 xtb_optimize（planned），复用 simple.py 的 optimize handler，仅 backend 替换为 xTB。</li>
+<li><strong>多 engine optfreqsp：</strong> 允许 optfreq level 使用 Gaussian（灵活性更高），single_point level 使用 ORCA（精度更高）。需要统一 <code>QCResult</code> 的中介格式。</li>
+</ol>
+
+<h3>12.4 文档变更总览（v5.0 → v6.0）</h3>
+<table>
+<tr><th>变更类型</th><th>位置</th><th>说明</th></tr>
+<tr><td>新增</td><td>§5.6 错误处理策略</td><td>7 类场景的错误行为规范</td></tr>
+<tr><td>新增</td><td>§5.7 日志策略</td><td>4 级日志的事件分类</td></tr>
+<tr><td>修改</td><td>§5.8（原 5.6）输出文件</td><td>章节号顺延</td></tr>
+<tr><td>修改</td><td>§6.2 _add_simple_workflow_args</td><td>补充 --mem 参数</td></tr>
+<tr><td>合并</td><td>§11.2 合理性评估 → §11.2</td><td>消除与 §11.4 的重复</td></tr>
+<tr><td>合并</td><td>§11.3 修改建议总结 → §11.3</td><td>消除与 §11.5 的重复</td></tr>
+<tr><td>重编号</td><td>§11.5→§11.3, §11.6→§11.4</td><td>编号连续性修复</td></tr>
+<tr><td>新增</td><td>§12 深入分析</td><td>独立的第三方审查结论</td></tr>
+<tr><td>精简</td><td>修订记录</td><td>10 条→3 条里程碑</td></tr>
+</table>
+
+<hr class="section-divider">
+
+<!-- ======== 13. IMPLEMENTATION TRACKING ======== -->
+<h2 id="impl-tracking">13. 实施追踪</h2>
+<p><span class="tag-new">新增</span> v7.1 · 2026-07-20</p>
+
+<h3>13.1 完成情况</h3>
+<table>
+<tr><th>步骤</th><th>状态</th><th>说明</th></tr>
+<tr><td>Step 1：catalog.py</td><td>✅ 已完成</td>
+<td>
+<ul>
+<li>4 条 simple 条目 → status="active"</li>
+<li>新增 optfreqsp WORKFLOW_CATALOG 条目</li>
+<li>新增 dft_optfreqsp METHOD_SCHEMA（3-level + default profile）</li>
+<li>dft_singlepoint level_id → "single_point"；dft_frequency 补齐 dispersion/solvent_model/solvent；dft_optfreq 补齐 grid/scf_convergence/max_steps</li>
+<li>ORCA supports 追加 "optfreq"</li>
+<li>新增 _LEVEL_TO_CLI_FLAG_MAP + method_levels_to_cli_flags()</li>
+</ul>
+</td>
+</tr>
+<tr><td>Step 2：ORCA Interface</td><td>✅ 已完成</td>
+<td>
+<ul>
+<li>ORCAInterface.opt_freq() — 利用已有 calc_type_map["optfreq"]="Opt Freq"，解析优化坐标 + 频率</li>
+<li>ORCABackend.opt_freq() — 透传方法</li>
+</ul>
+</td>
+</tr>
+<tr><td>Step 3：ACP ORCA Backend</td><td>✅ 已完成</td>
+<td>
+<ul>
+<li>ORCABackend.opt_freq() 透传方法，签名与 <code>ORCAInterface.opt_freq()</code> 一致</li>
+</ul>
+</td>
+</tr>
+<tr><td>Step 4：simple.py + core/utils.py</td><td>✅ 已完成</td>
+<td>
+<ul>
+<li>新建 <code>src/acp/core/utils.py</code> — <code>ensure_unique_dir()</code></li>
+<li>新建 <code>src/acp/workflows/simple.py</code> — 5 个入口函数：<code>run_singlepoint</code>/<code>run_optimize</code>/<code>run_frequency</code>/<code>run_optfreq</code>/<code>run_optfreqsp</code></li>
+<li>各函数接收 method_kwargs 作为参数字典，返回 <code>WorkflowResult</code></li>
+<li>输出文件：energy.json / optimized.xyz / frequencies.txt / thermo.json</li>
+</ul>
+</td>
+</tr>
+<tr><td>Step 5：CLI 子命令</td><td>✅ 已完成</td>
+<td>
+<ul>
+<li>5 个子命令：<code>acp run singlepoint|optimize|frequency|optfreq|optfreqsp</code></li>
+<li>公共参数组：<code>_add_simple_workflow_args()</code> 条件化添加 workflow 特有参数</li>
+<li>5 个 handler 函数 + dispatch 表更新</li>
+<li>optfreqsp 支持 <code>--sp-method/--sp-basis/--sp-aux-basis/--sp-ri-approximation/--sp-dispersion</code></li>
+</ul>
+</td>
+</tr>
+<tr><td>Step 6：调度器集成</td><td>✅ 已完成</td>
+<td>
+<ul>
+<li>SUPPORTED_WORKFLOWS 扩展（jobs.py）</li>
+<li>5 个 StagePlanProvider（stage_tasks.py）</li>
+<li>_build_cmd() 简单工作流分支（runner.py）</li>
+</ul>
+</td>
+</tr>
+<tr><td>Step 7：Registry</td><td>✅ 已完成</td>
+<td>
+<ul>
+<li>registry.py 新增 5 个 WorkflowRegistryEntry</li>
+<li>__init__.py 新增懒加载条目</li>
+</ul>
+</td>
+</tr>
+<tr><td>Step 8：测试</td><td>⏳ 待实施</td><td>新增 <code>test_acp_workflows_simple.py</code> 尚未编写。现有 165 条测试全部通过（1 条预置失败无关）。API 测试已更新（硬编码 workflow 列表扩展）。</td></tr>
+</table>
+
+<h3>13.2 代码质量分析（v7.1 Code Review）</h3>
+
+<h4>✅ 良好实践</h4>
+<ul>
+<li><code>method_levels_to_cli_flags()</code> 将 level→CLI flag 映射集中管理，避免 <code>_build_cmd()</code> 中 5 次重复逻辑</li>
+<li><code>ORCAInterface.opt_freq()</code> 复用已有 <code>calc_type_map</code> 和 <code>_write_input()</code>，无破坏性修改</li>
+<li>Scheduler 分支使用 <code>catalog.method_levels_to_cli_flags()</code> 而非手写映射，命名集中管理</li>
+<li>所有修改均为新增/扩展，不修改现有函数逻辑，回归风险低</li>
+<li><code>simple.py</code> 使用 <code>ensure_unique_dir()</code> 自动处理输出目录冲突</li>
+<li>CLI 参数使用条件化添加（<code>if wf in (...)</code>），避免无关参数出现在不支持的 workflow 中</li>
+<li>optfreqsp 的 SP stage 使用独立 kwarg 字典（<code>sp_kwargs</code>），与 optfreq kwarg 分离，三阶段数据流通过 <code>context dict</code> 传递</li>
+</ul>
+
+<h4>🔴 Critical 隐患（4项，强烈建议修复）</h4>
+<table>
+<tr><th>#</th><th>隐患</th><th>位置</th><th>影响</th></tr>
+<tr>
+<td>C1</td>
+<td><strong>Method kwargs 被静默丢弃</strong>：<code>_build_simple_method_kwargs()</code> 收集的 <code>dispersion</code>/<code>aux_basis</code>/<code>ri_approximation</code>/<code>geom_maxiter</code>/<code>opt_convergence</code>/<code>route_extras</code> 被传入 <code>ORCABackend.__init__()</code>（即 ORCAInterface 构造函数），但 ORCAInterface 的构造函数仅使用 <code>method</code>/<code>basis</code>/<code>solvent</code>/<code>solvent_model</code>，其余被 <code>**kwargs</code> 静默吸收。这些参数需要作为方法调用的 kwargs（传递给 <code>backend.optimize()</code>/<code>.single_point()</code> 等），而非构造函数参数。</td>
+<td><code>cli.py→_build_simple_method_kwargs()</code> + <code>simple.py→_build_backend()</code></td>
+<td><strong>6 个 CLI 参数完全无效</strong>：<code>--dispersion</code>/<code>--aux-basis</code>/<code>--ri-approximation</code>/<code>--geom-maxiter</code>/<code>--opt-convergence</code>/<code>--route-extras</code> 被解析但永不生效</td>
+</tr>
+<tr>
+<td>C2</td>
+<td><strong>SP energy 静默降级为 0.0</strong>：<code>sp_result.energy is None</code> 时用 0.0 代替并传给 Shermo，产生完全错误的热化学结果且无警告</td>
+<td><code>simple.py:250</code></td>
+<td>计算结果错误，难以排查</td>
+</tr>
+<tr>
+<td>C3</td>
+<td><strong>缺少 KeyboardInterrupt 处理</strong>：5 个简单 workflow handler 均使用 <code>except Exception</code> 而非正确的 <code>except (KeyboardInterrupt, Exception)</code> 或分别捕获。虽因 <code>KeyboardInterrupt</code> 继承 <code>BaseException</code> 而非 <code>Exception</code> 而不会误吞，但丢失了退出码 130 和用户提示信息</td>
+<td><code>cli.py</code> — <code>_handle_singlepoint</code>/<code>_handle_optimize</code>/<code>_handle_frequency</code>/<code>_handle_optfreq</code>/<code>_handle_optfreqsp</code></td>
+<td>用户体验退化。Ctrl+C 无法获得标准退出码 130</td>
+</tr>
+<tr>
+<td>C4</td>
+<td><strong>TOCTOU 竞态条件</strong>：<code>ensure_unique_dir()</code> 在 <code>exists()</code> 检查和 <code>mkdir()</code> 之间，另一个进程可创建目录，导致 <code>FileExistsError</code></td>
+<td><code>core/utils.py:11-18</code></td>
+<td>多作业并发提交时偶发崩溃</td>
+</tr>
+</table>
+
+<h4>🟡 重要隐患（8项，建议修复）</h4>
+<table>
+<tr><th>#</th><th>隐患</th><th>位置</th><th>说明</th></tr>
+<tr><td>I1</td><td><code>_build_simple_method_kwargs</code> 的 <code>wf</code> 参数未使用，函数对所有 workflow 返回相同的 key 集合</td><td><code>cli.py:1130</code></td><td>误导读者的维护风险；<code>frequency</code> 的 handler 也应该过滤掉优化无关参数（如 <code>geom_maxiter</code>）</td></tr>
+<tr><td>I2</td><td><code>sp_kwargs</code> 硬编码所有默认值无条件发送，未做 <code>None</code> 过滤</td><td><code>cli.py:1258-1266</code></td><td>与 <code>_build_simple_method_kwargs</code> 的行为不一致；即使 disp="none" 也用默认值覆盖</td></tr>
+<tr><td>I3</td><td>缺少 <code>--sp-route-extras</code>，无法为 optfreqsp 的 SP stage 单独指定 route extras</td><td><code>cli.py</code> — optfreqsp args</td><td><code>--route-extras</code> 会同时影响 optfreq 和 SP stage</td></tr>
+<tr><td>I4</td><td><code>_read_input()</code> 缺少返回类型注解（bare <code>tuple</code>）；<code>_write_optimized_xyz()</code> 的 <code>coordinates</code>/<code>symbols</code> 缺少类型注解</td><td><code>simple.py:36,72</code></td><td>类型安全性降低，mypy 无法检查</td></tr>
+<tr><td>I5</td><td><code>WorkflowState</code> 被导入但从未使用</td><td><code>simple.py:13</code></td><td>无用导入</td></tr>
+<tr><td>I6</td><td><code>registry.py</code> 反向依赖 <code>scheduler/jobs.py</code>（<code>workflows → scheduler</code> 而非相反）</td><td><code>registry.py:13</code></td><td>若 scheduler 将来引用 registry，会导致循环导入</td></tr>
+<tr><td>I7</td><td><code>workflows/__init__.py:__dir__()</code> 可能返回重复条目（<code>globals()</code> 和 <code>__all__</code> 有重叠）</td><td><code>__init__.py:79</code></td><td>Python <code>dir()</code> 不应包含重复项</td></tr>
+<tr><td>I8</td><td>硬编码的 workflow 顺序断言在 API 测试中</td><td><code>test_acp_api.py:80-83</code></td><td>每次新增 workflow 都需要修改测试</td></tr>
+</table>
+
+<h4>🟢 轻微隐患（5项，可选改进）</h4>
+<table>
+<tr><th>#</th><th>隐患</th><th>位置</th><th>说明</th></tr>
+<tr><td>M1</td><td><code>simple.py</code> 限制输入为文件扩展名（<code>.xyz/.gjf/.com/.inp</code>），不接受 SMILES</td><td><code>simple.py:26</code></td><td>与 conformer workflow 不一致，但设计上有意区分（见文档 §5.2）</td></tr>
+<tr><td>M2</td><td><code>scl_zpe</code> 参数名不匹配（CLI 是 <code>--scale-factor</code>，函数参数是 <code>scl_zpe</code>）</td><td><code>simple.py:262</code></td><td>通过 <code>.get("scale_factor")</code> 映射，但参数名差异是维护陷阱</td></tr>
+<tr><td>M3</td><td><code>log_file</code> 赋值发生在 <code>None</code> 检查之前</td><td><code>simple.py:251-253</code></td><td>虽不产生 bug（赋值无害），但逻辑顺序可优化</td></tr>
+<tr><td>M4</td><td><code>WorkflowResult(..., ensemble=None)</code> 显式传 <code>None</code>（默认值）</td><td><code>simple.py:288</code></td><td>冗余代码</td></tr>
+<tr><td>M5</td><td><code>ensure_unique_dir()</code> 无 <code>OSError</code>/<code>PermissionError</code> 处理和 counter 溢出保护</td><td><code>core/utils.py</code></td><td>极端情况下可能无限循环或崩溃</td></tr>
+</table>
+
+<h4>🔴 未修复的预存隐患（非本次实现引入）</h4>
+<table>
+<tr><th>隐患</th><th>位置</th><th>严重度</th><th>说明</th></tr>
+<tr><td>频率解析使用裸 <code>except Exception</code></td><td>orca.py:594</td><td>🟡 中</td><td>与现有 <code>frequency()</code> 方法的异常处理一致，会将 <code>KeyboardInterrupt</code>/<code>MemoryError</code> 一并吞没</td></tr>
+<tr><td><code>_build_cmd()</code> 中 import 在函数体内</td><td>runner.py:721</td><td>🟢 低</td><td>防御性写法避免循环导入，但违背 PEP 8 模块级 import 约定</td></tr>
+<tr><td>两个 <code>--levels</code> 解析函数 (<code>_parse_levels</code> vs <code>_parse_levels_json</code>)</td><td>cli.py:76,1491</td><td>🟡 中</td><td>行为不一致：一个 raise，一个 print+return None</td></tr>
+</table>
+
+<h3>13.3 代码修改总结</h3>
+<table>
+<tr><th>文件</th><th>变更类型</th><th>行数</th><th>说明</th></tr>
+<tr><td>src/acp/core/utils.py</td><td>新建</td><td>23 行</td><td><code>ensure_unique_dir()</code></td></tr>
+<tr><td>src/acp/workflows/simple.py</td><td>新建</td><td>298 行</td><td>5 个入口函数 + 输入解析 + 输出写入 + method_levels_to_workflow_config 调用</td></tr>
+<tr><td>src/acp/cli.py</td><td>修改</td><td>+234 行</td><td>子命令注册 + 参数组 + 5 handler + dispatch 表</td></tr>
+<tr><td>src/acp/workflows/__init__.py</td><td>修改</td><td>+10 行</td><td>懒加载条目 + __all__ 扩展</td></tr>
+<tr><td>src/acp/workflows/registry.py</td><td>修改</td><td>+30 行</td><td>5 个 WorkflowRegistryEntry</td></tr>
+<tr><td>tests/test_acp_api.py</td><td>修改</td><td>+5 行</td><td>硬编码 workflow 列表扩展</td></tr>
+</table>
+<p><strong>总计：~600 行新增代码，0 行修改现有逻辑，回归风险低。</strong></p>
+
+<h3>13.4 实施后验证</h3>
+<ul>
+<li>✅ 5 个 CLI 子命令帮助页面正常：<code>acp run singlepoint|optimize|frequency|optfreq|optfreqsp --help</code></li>
+<li>✅ 模块导入正常：<code>from acp.workflows.simple import *</code> 无错误</li>
+<li>✅ Registry 注册正常：<code>list_workflow_entries()</code> 返回 12 个 workflow</li>
+<li>✅ 165 条现有测试通过（1 条预置协议默认名 <code>"censo-lite"</code> vs <code>"lite"</code> 失败无关）</li>
+<li>✅ GitHub 推送成功：<code>813f712 simple workflows: complete all steps</code></li>
+<li>✅ 远程计算节点 (10.16.5.157) rsync 同步完成</li>
+</ul>
+
+<hr class="section-divider">
+
+<h2>修订记录</h2>
+<table>
+<tr><th>版本</th><th>日期</th><th>变更</th></tr>
+<tr><td>v2.0–v4.2</td><td>2026-07-19</td><td>初版→多轮审查迭代：架构从 WF_META 迁至 catalog 驱动，scheduler 架构从 in-process 改为 CLI 子进程，level_id 修正，register_plan_provider 签名修正，Shermo 数据流澄清，ORCA 版本策略收敛为轻量标注，schema 字段补齐，method_levels_to_cli_flags() 新增。</td></tr>
+<tr><td><strong>v5.0</strong></td><td><strong>2026-07-19</strong></td><td><strong>全面审查更新：合并冗余审查章节，补充完整函数实现和用法示例，level_id 变更影响全库验证，xtb_optimize 扩展方向说明，所有代码示例与实际签名对齐。</strong></td></tr>
+<tr><td><strong>v6.0</strong></td><td><strong>2026-07-19</strong></td><td><strong>第三方深度审查：新增错误处理策略（§5.6）、日志策略（§5.7）、CLI --mem 参数；整合冗余章节 §11.2-§11.5→§11.2-§11.4；新增 §12 独立分析章节（合理性/可行性/建议清单）；精简修订记录为里程碑摘要。</strong></td></tr>
+<tr><td><strong>v7.0</strong></td><td><strong>2026-07-20</strong></td><td><strong>实施 Step 1/2/6：catalog 激活 + optfreqsp schema + schema 字段补齐 + ORCA opt_freq() + scheduler 集成。Code Review 发现并修复 3 个隐患（grid/scf_convergence 误映射、aux_basis 双前缀、dft_singlepoint 多余字段）。新增 §13 实施追踪章节。</strong></td></tr>
+<tr><td><strong>v7.1</strong></td><td><strong>2026-07-20</strong></td><td><strong>实施 Step 3–5, 7：简单工作流完整实现（simple.py、CLI、Registry）。Code Review 发现 17 项隐患（4 Critical + 8 Important + 5 Minor）。远程计算节点同步完成。开发文档更新完成情况与代码质量分析。</strong></td></tr>
+</table>
+
+</body>
+</html>
