@@ -1202,7 +1202,13 @@ cmd += method_levels_to_cli_flags(levels, prefix_map)
 </ul>
 </td>
 </tr>
-<tr><td>Step 8：测试</td><td>⏳ 待实施</td><td>新增 <code>test_acp_workflows_simple.py</code> 尚未编写。现有 165 条测试全部通过（1 条预置失败无关）。API 测试已更新（硬编码 workflow 列表扩展）。</td></tr>
+<tr><td>Step 8：测试</td><td>✅ 已完成</td><td>
+<ul>
+<li>新增 <code>tests/test_acp_workflows_simple.py</code>（644 行，47 条测试）</li>
+<li>覆盖：catalog 校验（5 schema + optfreqsp profile）、输入解析（xyz/gjf/inp 接受 + smi/缺失拒绝）、ensure_unique_dir（创建/累加/递增）、mock ORCABackend 工作流测试（singlepoint/optimize/frequency/optfreq/optfreqsp）、CLI help 参数校验（5 子命令）、optfreqsp 数据流（opt_coords→SP、opt_log→Shermo）、QCResult 字段验证</li>
+<li><strong>47/47 全部通过。</strong> 全量回归：677 passed, 7 skipped（4 处预置失败为 protocol default 命名变更，与本次无关）</li>
+</ul>
+</td></tr>
 </table>
 
 <h3>13.2 代码质量分析（v7.1 Code Review）</h3>
@@ -1290,12 +1296,12 @@ cmd += method_levels_to_cli_flags(levels, prefix_map)
 </table>
 <p><strong>总计：~600 行新增代码，0 行修改现有逻辑，回归风险低。</strong></p>
 
-<h3>13.4 实施后验证</h3>
+<h3>13.4 实施后验证（v7.3 更新）</h3>
 <ul>
 <li>✅ 5 个 CLI 子命令帮助页面正常：<code>acp run singlepoint|optimize|frequency|optfreq|optfreqsp --help</code></li>
 <li>✅ 模块导入正常：<code>from acp.workflows.simple import *</code> 无错误</li>
 <li>✅ Registry 注册正常：<code>list_workflow_entries()</code> 返回 12 个 workflow</li>
-<li>✅ 165 条现有测试通过（1 条预置协议默认名 <code>"censo-lite"</code> vs <code>"lite"</code> 失败无关）</li>
+<li>✅ 165 条现有测试通过 → <strong>677 passed, 7 skipped</strong>（v7.3 新增 47 条 simple 工作流测试后全量回归）</li>
 <li>✅ GitHub 推送成功：<code>813f712 simple workflows: complete all steps</code></li>
 <li>✅ 远程计算节点 (10.16.5.157) rsync 同步完成</li>
 </ul>
@@ -1345,6 +1351,7 @@ cmd += method_levels_to_cli_flags(levels, prefix_map)
 <tr><td><strong>v7.0</strong></td><td><strong>2026-07-20</strong></td><td><strong>实施 Step 1/2/6：catalog 激活 + optfreqsp schema + schema 字段补齐 + ORCA opt_freq() + scheduler 集成。Code Review 发现并修复 3 个隐患（grid/scf_convergence 误映射、aux_basis 双前缀、dft_singlepoint 多余字段）。新增 §13 实施追踪章节。</strong></td></tr>
 <tr><td><strong>v7.1</strong></td><td><strong>2026-07-20</strong></td><td><strong>实施 Step 3–5, 7：简单工作流完整实现（simple.py、CLI、Registry）。Code Review 发现 17 项隐患（4 Critical + 8 Important + 5 Minor）。远程计算节点同步完成。开发文档更新完成情况与代码质量分析。</strong></td></tr>
 <tr><td><strong>v7.2</strong></td><td><strong>2026-07-20</strong></td><td><strong>Code Review 修复：4 Critical + 4 Important + 2 Minor 全部修复。C1: 方法调用 kwargs 透传；C2: SP energy None → 错误；C3: KeyboardInterrupt 处理；C4: TOCTOU 竞态修复。I1–I2, I4–I5: 参数清理 + 类型注解 + 死代码移除。M4–M5: 冗余代码清理。165 测试全部通过。</strong></td></tr>
+<tr><td><strong>v7.3</strong></td><td><strong>2026-07-20</strong></td><td><strong>Step 8 完成：新增 tests/test_acp_workflows_simple.py（47 条测试全通过）。全量回归 677 passed / 7 skipped。GitHub 推送 + 计算节点 rsync 同步 + acp 服务重启完成。</strong></td></tr>
 </table>
 
 </body>
