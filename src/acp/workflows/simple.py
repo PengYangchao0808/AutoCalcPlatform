@@ -13,6 +13,7 @@ from numpy.typing import NDArray
 
 from acp.backends.orca import ORCABackend
 from acp.core.models import HARTREE_TO_KCAL
+from acp.core.state import WorkflowState
 from acp.core.utils import ensure_unique_dir
 from acp.core.workflow import WorkflowResult
 from acp.io.structures import StructureReader
@@ -21,6 +22,14 @@ from conformer_search.config import load_config
 logger = logging.getLogger(__name__)
 
 _SUPPORTED_EXTENSIONS = {".xyz", ".gjf", ".com", ".inp"}
+
+_STAGE_NAMES: dict[str, list[str]] = {
+    "singlepoint": ["single_point"],
+    "optimize": ["optimize"],
+    "frequency": ["frequency"],
+    "optfreq": ["opt_freq"],
+    "optfreqsp": ["opt_freq", "single_point", "shermo"],
+}
 
 
 def _check_input(input_source: str) -> Path:
@@ -48,22 +57,21 @@ def _read_input(
     return structure.coordinates, list(structure.symbols), structure.charge, structure.multiplicity
 
 
-def _write_energy_json(output_dir: Path, energy: float, unit: str = "Hartree") -> None:
+def _write_energy_json(output_dir: Path, energy: float | None, unit: str = "Hartree") -> None:
     data = {"energy": energy, "unit": unit}
     (output_dir / "energy.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 def _write_thermo_json(output_dir: Path, thermo: dict[str, float], sp_energy: float) -> None:
     g_sum = thermo.get("g_sum", 0.0)
-    free_energy = g_sum
     data = {
         "sp_energy_hartree": sp_energy,
-        "free_energy_hartree": free_energy,
-        "free_energy_kcal_mol": free_energy * HARTREE_TO_KCAL,
-        "zpe_hartree": thermo.get("u_sum", 0.0) - sp_energy if "u_sum" in thermo else 0.0,
-        "enthalpy_hartree": thermo.get("h_sum", 0.0),
-        "gibbs_hartree": g_sum,
-        "entropy": thermo.get("s_total"),
+        "free_energy_hartree": g_sum,
+        "free_energy_kcal_mol": g_sum * HARTREE_TO_KCAL,
+        "thermal_correction_u_hartree": thermo.get("u_sum", 0.0) - sp_energy if "u_sum" in thermo else 0.0,
+        "total_enthalpy_hartree": thermo.get("h_sum", 0.0),
+        "total_gibbs_hartree": g_sum,
+        "entropy": thermo.get("s_total", 0.0),
         "temperature_k": thermo.get("_temperature", 298.15),
         "pressure_atm": thermo.get("_pressure", 1.0),
         "success": bool(thermo),
@@ -91,8 +99,71 @@ def _find_shermo() -> bool:
     return shutil.which("shermo") is not None or shutil.which("Shermo") is not None
 
 
-def _build_backend(config: dict[str, Any], method_kwargs: dict[str, Any]) -> ORCABackend:
-    return ORCABackend(config=config, **method_kwargs)
+def _resolve_output_dir(output_dir: str | Path) -> Path:
+    """Resolve output directory.
+
+    If the directory already exists but is empty (e.g. pre-created by the
+    scheduler), reuse it without renaming.  Otherwise, ensure a unique path.
+    """
+    base = Path(output_dir).resolve()
+    if base.is_dir() and not any(base.iterdir()):
+        return base
+    return ensure_unique_dir(output_dir)
+
+
+def _build_backend(config: dict[str, Any]) -> ORCABackend:
+    """Create an ORCABackend without passing method_kwargs to constructor.
+
+    Method kwargs (method, basis, dispersion, etc.) flow through the
+    calculation method calls only, not the constructor, to avoid the
+    silent-drop anti-pattern in the legacy QCInterfaceBase chain.
+    """
+    return ORCABackend(config=config)
+
+
+def _init_state(work_dir: Path, workflow_name: str, input_source: str = "") -> WorkflowState:
+    """Initialize scheduler-visible WorkflowState with stage declarations."""
+    stage_names = _STAGE_NAMES.get(workflow_name, [])
+    state = WorkflowState(work_dir=work_dir, job_name=workflow_name)
+    state.initialize(input_source=input_source, stage_names=stage_names)
+    return state
+
+
+def _build_method_kwargs(raw_kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Filter method kwargs: strip empty strings, convert ri_approximation/aux_basis to route_extras."""
+    kwargs: dict[str, Any] = {}
+    ri_approx = raw_kwargs.get("ri_approximation")
+    aux_basis = raw_kwargs.get("aux_basis")
+    route_extras: list[str] = []
+    extras = raw_kwargs.get("route_extras")
+    if isinstance(extras, str) and extras.strip():
+        route_extras = [x.strip() for x in extras.split(",") if x.strip()]
+    elif isinstance(extras, list):
+        route_extras = [str(x) for x in extras]
+    if ri_approx and ri_approx not in ("none", ""):
+        route_extras.append(str(ri_approx))
+    if aux_basis and aux_basis not in ("none", ""):
+        route_extras.append(str(aux_basis))
+    if route_extras:
+        kwargs["route_extras"] = route_extras
+
+    for key, val in raw_kwargs.items():
+        if key in ("route_extras", "ri_approximation", "aux_basis",
+                   "opt_convergence"):
+            continue
+        if key == "geom_maxiter":
+            if val is not None:
+                kwargs[key] = val
+            continue
+        if val is None or val == "" or val == "none":
+            continue
+        kwargs[key] = val
+    return kwargs
+
+
+# ---------------------------------------------------------------------------
+# Workflow entry points
+# ---------------------------------------------------------------------------
 
 
 def run_singlepoint(
@@ -105,18 +176,25 @@ def run_singlepoint(
     method_kwargs: dict[str, Any] | None = None,
 ) -> WorkflowResult:
     cfg = load_config(overrides=config) if config else load_config()
-    out = ensure_unique_dir(output_dir)
+    out = _resolve_output_dir(output_dir)
+    state = _init_state(out, "singlepoint", input_source)
     _check_input(input_source)
     coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
 
-    kwargs = method_kwargs or {}
-    backend = _build_backend(cfg, kwargs)
+    kwargs = _build_method_kwargs(method_kwargs or {})
+    backend = _build_backend(cfg)
+    state.set_stage("single_point")
     result = backend.single_point(coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **kwargs)
-
     if not result.success:
+        state.fail_stage("single_point", result.error_message or "SP calculation failed")
         return WorkflowResult(status="failed", error=result.error_message or "SP calculation failed")
 
+    if result.energy is None:
+        state.fail_stage("single_point", "SP returned no energy")
+        return WorkflowResult(status="failed", error="SP calculation returned no energy")
+    state.complete_stage("single_point")
     _write_energy_json(out, result.energy)
+    state.mark_completed()
     return WorkflowResult(
         status="completed",
         metadata={"output_dir": str(out), "energy": result.energy, "unit": "Hartree"},
@@ -133,20 +211,25 @@ def run_optimize(
     method_kwargs: dict[str, Any] | None = None,
 ) -> WorkflowResult:
     cfg = load_config(overrides=config) if config else load_config()
-    out = ensure_unique_dir(output_dir)
+    out = _resolve_output_dir(output_dir)
+    state = _init_state(out, "optimize", input_source)
     _check_input(input_source)
     coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
 
-    kwargs = method_kwargs or {}
-    backend = _build_backend(cfg, kwargs)
+    kwargs = _build_method_kwargs(method_kwargs or {})
+    backend = _build_backend(cfg)
+    state.set_stage("optimize")
     result = backend.optimize(coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **kwargs)
-
     if not result.success:
+        state.fail_stage("optimize", result.error_message or "Optimization failed")
         return WorkflowResult(status="failed", error=result.error_message or "Optimization failed")
 
+    state.complete_stage("optimize")
     if result.coordinates is not None:
         _write_optimized_xyz(out, result.coordinates, result.symbols or symbols)
-    _write_energy_json(out, result.energy)
+    if result.energy is not None:
+        _write_energy_json(out, result.energy)
+    state.mark_completed()
     return WorkflowResult(
         status="completed",
         metadata={
@@ -167,20 +250,24 @@ def run_frequency(
     method_kwargs: dict[str, Any] | None = None,
 ) -> WorkflowResult:
     cfg = load_config(overrides=config) if config else load_config()
-    out = ensure_unique_dir(output_dir)
+    out = _resolve_output_dir(output_dir)
+    state = _init_state(out, "frequency", input_source)
     _check_input(input_source)
     coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
 
-    kwargs = method_kwargs or {}
-    backend = _build_backend(cfg, kwargs)
+    kwargs = _build_method_kwargs(method_kwargs or {})
+    backend = _build_backend(cfg)
+    state.set_stage("frequency")
     result = backend.frequency(coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **kwargs)
-
     if not result.success:
+        state.fail_stage("frequency", result.error_message or "Frequency calculation failed")
         return WorkflowResult(status="failed", error=result.error_message or "Frequency calculation failed")
 
+    state.complete_stage("frequency")
     freqs = result.frequencies or []
     if freqs:
         _write_frequencies_txt(out, freqs)
+    state.mark_completed()
     return WorkflowResult(
         status="completed",
         metadata={"output_dir": str(out), "n_frequencies": len(freqs), "has_frequencies": result.has_frequencies},
@@ -197,17 +284,20 @@ def run_optfreq(
     method_kwargs: dict[str, Any] | None = None,
 ) -> WorkflowResult:
     cfg = load_config(overrides=config) if config else load_config()
-    out = ensure_unique_dir(output_dir)
+    out = _resolve_output_dir(output_dir)
+    state = _init_state(out, "optfreq", input_source)
     _check_input(input_source)
     coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
 
-    kwargs = method_kwargs or {}
-    backend = _build_backend(cfg, kwargs)
+    kwargs = _build_method_kwargs(method_kwargs or {})
+    backend = _build_backend(cfg)
+    state.set_stage("opt_freq")
     result = backend.opt_freq(coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **kwargs)
-
     if not result.success:
+        state.fail_stage("opt_freq", result.error_message or "Opt+Freq calculation failed")
         return WorkflowResult(status="failed", error=result.error_message or "Opt+Freq calculation failed")
 
+    state.complete_stage("opt_freq")
     if result.coordinates is not None:
         _write_optimized_xyz(out, result.coordinates, result.symbols or symbols)
     freqs = result.frequencies or []
@@ -215,6 +305,7 @@ def run_optfreq(
         _write_frequencies_txt(out, freqs)
     if result.energy is not None:
         _write_energy_json(out, result.energy)
+    state.mark_completed()
     return WorkflowResult(
         status="completed",
         metadata={
@@ -241,14 +332,20 @@ def run_optfreqsp(
         return WorkflowResult(status="failed", error="Shermo binary not found in PATH")
 
     cfg = load_config(overrides=config) if config else load_config()
-    out = ensure_unique_dir(output_dir)
+    out = _resolve_output_dir(output_dir)
+    state = _init_state(out, "optfreqsp", input_source)
     _check_input(input_source)
     coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
 
-    backend = _build_backend(cfg, optfreq_kwargs or {})
-    optfreq_result = backend.opt_freq(coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **(optfreq_kwargs or {}))
+    # --- Stage 1: Opt+Freq ---
+    opt_kwargs = _build_method_kwargs(optfreq_kwargs or {})
+    backend = _build_backend(cfg)
+    state.set_stage("opt_freq")
+    optfreq_result = backend.opt_freq(coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **opt_kwargs)
     if not optfreq_result.success:
+        state.fail_stage("opt_freq", optfreq_result.error_message or "Opt+Freq stage failed")
         return WorkflowResult(status="failed", error=optfreq_result.error_message or "Opt+Freq stage failed")
+    state.complete_stage("opt_freq")
 
     opt_coords = optfreq_result.coordinates if optfreq_result.coordinates is not None else coords
     freqs = optfreq_result.frequencies or []
@@ -257,34 +354,51 @@ def run_optfreqsp(
     if freqs:
         _write_frequencies_txt(out, freqs)
 
-    sp_backend = _build_backend(cfg, sp_kwargs or {})
-    sp_result = sp_backend.single_point(opt_coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **(sp_kwargs or {}))
+    # --- Stage 2: Single Point ---
+    sp_flat = _build_method_kwargs(sp_kwargs or {})
+    sp_backend = _build_backend(cfg)
+    state.set_stage("single_point")
+    sp_result = sp_backend.single_point(opt_coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **sp_flat)
     if not sp_result.success:
+        state.fail_stage("single_point", sp_result.error_message or "SP stage failed")
         return WorkflowResult(status="failed", error=sp_result.error_message or "SP stage failed")
-
     if sp_result.energy is None:
+        state.fail_stage("single_point", "SP stage returned no energy")
         return WorkflowResult(status="failed", error="SP stage returned no energy")
     sp_energy = sp_result.energy
+    state.complete_stage("single_point")
+
     log_file = optfreq_result.log_file
     if log_file is None:
+        state.fail_stage("shermo", "ORCA log file path not available for Shermo")
         return WorkflowResult(status="failed", error="ORCA log file path not available for Shermo")
+    if not log_file.exists():
+        state.fail_stage("shermo", f"ORCA log file not found: {log_file}")
+        return WorkflowResult(status="failed", error=f"ORCA log file not found: {log_file}")
 
+    # --- Stage 3: Shermo ---
+    th = thermo_kwargs or {}
     from acp.backends.external import run_shermo
+    state.set_stage("shermo")
     thermo = run_shermo(
         freq_output=log_file,
         sp_energy=sp_energy,
         output_dir=out,
-        temperature_k=(thermo_kwargs or {}).get("temperature", 298.15),
-        pressure_atm=(thermo_kwargs or {}).get("pressure", 1.0),
-        scl_zpe=(thermo_kwargs or {}).get("scale_factor", 0.9905),
+        temperature_k=th.get("temperature", 298.15),
+        pressure_atm=th.get("pressure", 1.0),
+        scl_zpe=th.get("scale_factor", 0.9905),
     )
 
     if thermo:
-        thermo["_temperature"] = (thermo_kwargs or {}).get("temperature", 298.15)
-        thermo["_pressure"] = (thermo_kwargs or {}).get("pressure", 1.0)
+        thermo["_temperature"] = th.get("temperature", 298.15)
+        thermo["_pressure"] = th.get("pressure", 1.0)
+        state.complete_stage("shermo")
+    else:
+        state.fail_stage("shermo", "Shermo returned no output")
 
     _write_thermo_json(out, thermo or {}, sp_energy)
     _write_energy_json(out, sp_energy)
+    state.mark_completed()
 
     return WorkflowResult(
         status="completed",

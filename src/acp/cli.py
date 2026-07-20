@@ -217,8 +217,8 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
     """Add common arguments for simple workflows."""
     parser.add_argument("--input", "-i", required=True, help="Input structure file (XYZ, GJF, COM, ORCA .inp)")
     parser.add_argument("--output", "-o", default="./out", help="Output directory")
-    parser.add_argument("--charge", type=int, default=0, help="Molecular charge (default: 0)")
-    parser.add_argument("--multiplicity", type=int, default=1, help="Spin multiplicity (default: 1)")
+    parser.add_argument("--charge", type=int, help="Molecular charge (auto-detected if not specified)")
+    parser.add_argument("--multiplicity", type=int, help="Spin multiplicity (auto-detected if not specified)")
     parser.add_argument("--name", type=str, help="Molecule name")
     parser.add_argument("--method", default="r2SCAN-3c", help="DFT functional (default: r2SCAN-3c)")
     parser.add_argument("--basis", default="def2-mTZVPP", help="Basis set (default: def2-mTZVPP)")

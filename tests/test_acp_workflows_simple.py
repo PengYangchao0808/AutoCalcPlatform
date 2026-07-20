@@ -193,6 +193,9 @@ def test_write_thermo_json(tmp_path):
     data = json.loads((tmp_path / "thermo.json").read_text())
     assert data["sp_energy_hartree"] == -76.50
     assert data["free_energy_hartree"] == -76.45
+    assert data["thermal_correction_u_hartree"] == pytest.approx(0.04)
+    assert data["total_enthalpy_hartree"] == -76.44
+    assert data["total_gibbs_hartree"] == -76.45
     assert data["success"] is True
 
 
@@ -354,6 +357,8 @@ def test_run_optfreqsp_mock(tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "optfreqsp_out"
+    log_file = tmp_path / "fake_optfreq.out"
+    log_file.write_text("ORCA log placeholder")
 
     opt_coords = np.array([[0.1, 0.0, 0.0]])
     freqs = [500.0, 1600.0]
@@ -366,11 +371,11 @@ def test_run_optfreqsp_mock(tmp_path):
         mk_shermo.return_value = {"g_sum": -40.5, "h_sum": -40.4, "u_sum": -40.6, "s_total": 0.0001}
 
         optfreq_result = _fake_qc_result(
-            coordinates=opt_coords, symbols=["C"], frequencies=freqs, has_frequencies=True, log_file=Path("/tmp/fake_optfreq.out"),
+            coordinates=opt_coords, symbols=["C"], frequencies=freqs, has_frequencies=True, log_file=log_file,
         )
         sp_result = _fake_qc_result(energy=-40.0)
 
-        def _se_side_effect(cfg, kw):
+        def _se_side_effect(cfg):
             be = MagicMock()
             be.opt_freq.return_value = optfreq_result
             be.single_point.return_value = sp_result
@@ -420,6 +425,10 @@ def test_run_optfreqsp_optfreq_failure(tmp_path):
         assert result.status == "failed"
         assert "Opt+Freq" in (result.error or "")
 
+        assert mk_backend.call_count >= 1
+        call_args = mk_backend.call_args_list[0][0]
+        assert len(call_args) == 1
+
 
 def test_run_optfreqsp_sp_failure(tmp_path):
     inp = tmp_path / "mol.xyz"
@@ -427,15 +436,17 @@ def test_run_optfreqsp_sp_failure(tmp_path):
     out = tmp_path / "sp_fail_out"
 
     opt_coords = np.array([[0.1, 0.0, 0.0]])
+    log_file = tmp_path / "f.out"
+    log_file.write_text("ORCA log")
     with (
         patch("acp.workflows.simple._find_shermo", return_value=True),
         patch("acp.workflows.simple._build_backend") as mk_backend,
     ):
         optfreq_result = _fake_qc_result(
-            coordinates=opt_coords, symbols=["C"], frequencies=[500.0], has_frequencies=True, log_file=Path("/tmp/f.out"),
+            coordinates=opt_coords, symbols=["C"], frequencies=[500.0], has_frequencies=True, log_file=log_file,
         )
 
-        def _se_side_effect(cfg, kw):
+        def _se_side_effect(cfg):
             be = MagicMock()
             be.opt_freq.return_value = optfreq_result
             be.single_point.return_value = _fake_qc_result(success=False, error_message="SP crash")
@@ -463,7 +474,7 @@ def test_run_optfreqsp_no_log_file(tmp_path):
             coordinates=opt_coords, symbols=["C"], frequencies=[500.0], has_frequencies=True, log_file=None,
         )
 
-        def _se_side_effect(cfg, kw):
+        def _se_side_effect(cfg):
             be = MagicMock()
             be.opt_freq.return_value = optfreq_result
             be.single_point.return_value = _fake_qc_result(energy=-40.0)
@@ -483,15 +494,17 @@ def test_run_optfreqsp_sp_energy_none(tmp_path):
     out = tmp_path / "no_sp_en_out"
 
     opt_coords = np.array([[0.1, 0.0, 0.0]])
+    log_file = tmp_path / "spen_f.out"
+    log_file.write_text("ORCA log")
     with (
         patch("acp.workflows.simple._find_shermo", return_value=True),
         patch("acp.workflows.simple._build_backend") as mk_backend,
     ):
         optfreq_result = _fake_qc_result(
-            coordinates=opt_coords, symbols=["C"], frequencies=[500.0], has_frequencies=True, log_file=Path("/tmp/f.out"),
+            coordinates=opt_coords, symbols=["C"], frequencies=[500.0], has_frequencies=True, log_file=log_file,
         )
 
-        def _se_side_effect(cfg, kw):
+        def _se_side_effect(cfg):
             be = MagicMock()
             be.opt_freq.return_value = optfreq_result
             be.single_point.return_value = _fake_qc_result(energy=None)
@@ -582,6 +595,8 @@ def test_optfreqsp_data_flow_passes_opt_coords_to_sp(tmp_path):
 
     opt_coords = np.array([[0.1, 0.2, 0.3]])
     instances: list[MagicMock] = []
+    log_file = tmp_path / "df.out"
+    log_file.write_text("ORCA log")
 
     with (
         patch("acp.workflows.simple._find_shermo", return_value=True),
@@ -590,11 +605,11 @@ def test_optfreqsp_data_flow_passes_opt_coords_to_sp(tmp_path):
     ):
         mk_shermo.return_value = {"g_sum": -40.5}
 
-        def _se_side_effect(cfg, kw):
+        def _se_side_effect(cfg):
             be = MagicMock()
             instances.append(be)
             be.opt_freq.return_value = _fake_qc_result(
-                coordinates=opt_coords, symbols=["C"], frequencies=[500.0], has_frequencies=True, log_file=Path("/tmp/f.out"),
+                coordinates=opt_coords, symbols=["C"], frequencies=[500.0], has_frequencies=True, log_file=log_file,
             )
             be.single_point.return_value = _fake_qc_result(energy=-40.0)
             return be
@@ -615,7 +630,8 @@ def test_optfreqsp_data_flow_passes_log_file_to_shermo(tmp_path):
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "logflow_out"
 
-    fake_log = Path("/tmp/optfreq_test_log.out")
+    fake_log = tmp_path / "optfreq_test_log.out"
+    fake_log.write_text("ORCA log placeholder")
 
     with (
         patch("acp.workflows.simple._find_shermo", return_value=True),
@@ -624,7 +640,7 @@ def test_optfreqsp_data_flow_passes_log_file_to_shermo(tmp_path):
     ):
         mk_shermo.return_value = {"g_sum": -40.5}
 
-        def _se_side_effect(cfg, kw):
+        def _se_side_effect(cfg):
             be = MagicMock()
             be.opt_freq.return_value = _fake_qc_result(
                 coordinates=np.array([[0.0, 0.0, 0.0]]), symbols=["C"],
