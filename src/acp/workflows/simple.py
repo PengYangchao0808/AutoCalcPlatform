@@ -8,9 +8,11 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+import numpy as np
+from numpy.typing import NDArray
+
 from acp.backends.orca import ORCABackend
 from acp.core.models import HARTREE_TO_KCAL
-from acp.core.state import WorkflowState
 from acp.core.utils import ensure_unique_dir
 from acp.core.workflow import WorkflowResult
 from acp.io.structures import StructureReader
@@ -33,7 +35,12 @@ def _check_input(input_source: str) -> Path:
     return path
 
 
-def _read_input(input_source: str, charge: int | None, multiplicity: int | None, name: str | None, output_dir: Path) -> tuple:
+def _read_input(
+    input_source: str,
+    charge: int | None,
+    multiplicity: int | None,
+    name: str | None,
+) -> tuple[NDArray[np.float64], list[str], int, int]:
     reader = StructureReader()
     structure = reader.read(input_source, charge=charge, multiplicity=multiplicity, name=name)
     if structure.coordinates is None or structure.symbols is None:
@@ -69,7 +76,11 @@ def _write_frequencies_txt(output_dir: Path, frequencies: list[float]) -> None:
     (output_dir / "frequencies.txt").write_text("\n".join(lines), encoding="utf-8")
 
 
-def _write_optimized_xyz(output_dir: Path, coordinates, symbols) -> None:
+def _write_optimized_xyz(
+    output_dir: Path,
+    coordinates: NDArray[np.float64],
+    symbols: list[str],
+) -> None:
     lines = [str(len(symbols)), "Optimized geometry"]
     for sym, coord in zip(symbols, coordinates):
         lines.append(f"{sym:2s} {coord[0]:15.10f} {coord[1]:15.10f} {coord[2]:15.10f}")
@@ -96,10 +107,11 @@ def run_singlepoint(
     cfg = load_config(overrides=config) if config else load_config()
     out = ensure_unique_dir(output_dir)
     _check_input(input_source)
-    coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name, out)
+    coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
 
-    backend = _build_backend(cfg, method_kwargs or {})
-    result = backend.single_point(coords, symbols, charge=chg, multiplicity=mult, output_dir=out)
+    kwargs = method_kwargs or {}
+    backend = _build_backend(cfg, kwargs)
+    result = backend.single_point(coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **kwargs)
 
     if not result.success:
         return WorkflowResult(status="failed", error=result.error_message or "SP calculation failed")
@@ -123,10 +135,11 @@ def run_optimize(
     cfg = load_config(overrides=config) if config else load_config()
     out = ensure_unique_dir(output_dir)
     _check_input(input_source)
-    coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name, out)
+    coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
 
-    backend = _build_backend(cfg, method_kwargs or {})
-    result = backend.optimize(coords, symbols, charge=chg, multiplicity=mult, output_dir=out)
+    kwargs = method_kwargs or {}
+    backend = _build_backend(cfg, kwargs)
+    result = backend.optimize(coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **kwargs)
 
     if not result.success:
         return WorkflowResult(status="failed", error=result.error_message or "Optimization failed")
@@ -156,10 +169,11 @@ def run_frequency(
     cfg = load_config(overrides=config) if config else load_config()
     out = ensure_unique_dir(output_dir)
     _check_input(input_source)
-    coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name, out)
+    coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
 
-    backend = _build_backend(cfg, method_kwargs or {})
-    result = backend.frequency(coords, symbols, charge=chg, multiplicity=mult, output_dir=out)
+    kwargs = method_kwargs or {}
+    backend = _build_backend(cfg, kwargs)
+    result = backend.frequency(coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **kwargs)
 
     if not result.success:
         return WorkflowResult(status="failed", error=result.error_message or "Frequency calculation failed")
@@ -185,10 +199,11 @@ def run_optfreq(
     cfg = load_config(overrides=config) if config else load_config()
     out = ensure_unique_dir(output_dir)
     _check_input(input_source)
-    coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name, out)
+    coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
 
-    backend = _build_backend(cfg, method_kwargs or {})
-    result = backend.opt_freq(coords, symbols, charge=chg, multiplicity=mult, output_dir=out)
+    kwargs = method_kwargs or {}
+    backend = _build_backend(cfg, kwargs)
+    result = backend.opt_freq(coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **kwargs)
 
     if not result.success:
         return WorkflowResult(status="failed", error=result.error_message or "Opt+Freq calculation failed")
@@ -228,10 +243,10 @@ def run_optfreqsp(
     cfg = load_config(overrides=config) if config else load_config()
     out = ensure_unique_dir(output_dir)
     _check_input(input_source)
-    coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name, out)
+    coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
 
     backend = _build_backend(cfg, optfreq_kwargs or {})
-    optfreq_result = backend.opt_freq(coords, symbols, charge=chg, multiplicity=mult, output_dir=out)
+    optfreq_result = backend.opt_freq(coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **(optfreq_kwargs or {}))
     if not optfreq_result.success:
         return WorkflowResult(status="failed", error=optfreq_result.error_message or "Opt+Freq stage failed")
 
@@ -243,11 +258,13 @@ def run_optfreqsp(
         _write_frequencies_txt(out, freqs)
 
     sp_backend = _build_backend(cfg, sp_kwargs or {})
-    sp_result = sp_backend.single_point(opt_coords, symbols, charge=chg, multiplicity=mult, output_dir=out)
+    sp_result = sp_backend.single_point(opt_coords, symbols, charge=chg, multiplicity=mult, output_dir=out, **(sp_kwargs or {}))
     if not sp_result.success:
         return WorkflowResult(status="failed", error=sp_result.error_message or "SP stage failed")
 
-    sp_energy = sp_result.energy if sp_result.energy is not None else 0.0
+    if sp_result.energy is None:
+        return WorkflowResult(status="failed", error="SP stage returned no energy")
+    sp_energy = sp_result.energy
     log_file = optfreq_result.log_file
     if log_file is None:
         return WorkflowResult(status="failed", error="ORCA log file path not available for Shermo")
@@ -266,13 +283,6 @@ def run_optfreqsp(
         thermo["_temperature"] = (thermo_kwargs or {}).get("temperature", 298.15)
         thermo["_pressure"] = (thermo_kwargs or {}).get("pressure", 1.0)
 
-    context: dict[str, Any] = {
-        "opt_coords": opt_coords,
-        "opt_log_path": str(log_file) if log_file else None,
-        "sp_energy": sp_energy,
-        "frequencies": freqs,
-        "thermo": thermo or {},
-    }
     _write_thermo_json(out, thermo or {}, sp_energy)
     _write_energy_json(out, sp_energy)
 
@@ -285,7 +295,6 @@ def run_optfreqsp(
             "n_frequencies": len(freqs),
             "free_energy_hartree": (thermo or {}).get("g_sum"),
         },
-        ensemble=None,
     )
 
 

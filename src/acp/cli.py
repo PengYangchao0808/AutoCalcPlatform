@@ -1126,7 +1126,7 @@ def _handle_mechanism(args: argparse.Namespace) -> int:
     return 1
 
 
-def _build_simple_method_kwargs(args: argparse.Namespace, wf: str) -> dict[str, Any]:
+def _build_simple_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
     kwargs: dict[str, Any] = {}
     for key in ("method", "basis", "dispersion", "solvent_model", "solvent",
                 "aux_basis", "ri_approximation", "geom_maxiter", "opt_convergence"):
@@ -1144,7 +1144,7 @@ def _handle_singlepoint(args: argparse.Namespace) -> int:
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
-    method_kwargs = _build_simple_method_kwargs(args, "singlepoint")
+    method_kwargs = _build_simple_method_kwargs(args)
     try:
         result = run_singlepoint(
             input_source=args.input,
@@ -1152,9 +1152,12 @@ def _handle_singlepoint(args: argparse.Namespace) -> int:
             config=cfg,
             charge=args.charge,
             multiplicity=args.multiplicity,
-            name=getattr(args, "name", None),
+            name=args.name,
             method_kwargs=method_kwargs,
         )
+    except KeyboardInterrupt:
+        logger.warning("Singlepoint interrupted by user")
+        return 130
     except Exception as exc:
         logger.exception("Singlepoint failed: %s", exc)
         return 1
@@ -1171,7 +1174,7 @@ def _handle_optimize(args: argparse.Namespace) -> int:
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
-    method_kwargs = _build_simple_method_kwargs(args, "optimize")
+    method_kwargs = _build_simple_method_kwargs(args)
     try:
         result = run_optimize(
             input_source=args.input,
@@ -1179,9 +1182,12 @@ def _handle_optimize(args: argparse.Namespace) -> int:
             config=cfg,
             charge=args.charge,
             multiplicity=args.multiplicity,
-            name=getattr(args, "name", None),
+            name=args.name,
             method_kwargs=method_kwargs,
         )
+    except KeyboardInterrupt:
+        logger.warning("Optimization interrupted by user")
+        return 130
     except Exception as exc:
         logger.exception("Optimization failed: %s", exc)
         return 1
@@ -1198,7 +1204,7 @@ def _handle_frequency(args: argparse.Namespace) -> int:
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
-    method_kwargs = _build_simple_method_kwargs(args, "frequency")
+    method_kwargs = _build_simple_method_kwargs(args)
     try:
         result = run_frequency(
             input_source=args.input,
@@ -1206,9 +1212,12 @@ def _handle_frequency(args: argparse.Namespace) -> int:
             config=cfg,
             charge=args.charge,
             multiplicity=args.multiplicity,
-            name=getattr(args, "name", None),
+            name=args.name,
             method_kwargs=method_kwargs,
         )
+    except KeyboardInterrupt:
+        logger.warning("Frequency calculation interrupted by user")
+        return 130
     except Exception as exc:
         logger.exception("Frequency calculation failed: %s", exc)
         return 1
@@ -1225,7 +1234,7 @@ def _handle_optfreq(args: argparse.Namespace) -> int:
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
-    method_kwargs = _build_simple_method_kwargs(args, "optfreq")
+    method_kwargs = _build_simple_method_kwargs(args)
     try:
         result = run_optfreq(
             input_source=args.input,
@@ -1233,9 +1242,12 @@ def _handle_optfreq(args: argparse.Namespace) -> int:
             config=cfg,
             charge=args.charge,
             multiplicity=args.multiplicity,
-            name=getattr(args, "name", None),
+            name=args.name,
             method_kwargs=method_kwargs,
         )
+    except KeyboardInterrupt:
+        logger.warning("Opt+Freq interrupted by user")
+        return 130
     except Exception as exc:
         logger.exception("Opt+Freq failed: %s", exc)
         return 1
@@ -1254,16 +1266,20 @@ def _handle_optfreqsp(args: argparse.Namespace) -> int:
     cfg = _build_config(args)
     out = Path(args.output)
 
-    optfreq_kwargs = _build_simple_method_kwargs(args, "optfreq")
+    optfreq_kwargs = _build_simple_method_kwargs(args)
     sp_kwargs: dict[str, Any] = {
         "method": args.sp_method,
         "basis": args.sp_basis,
-        "aux_basis": args.sp_aux_basis,
         "ri_approximation": args.sp_ri_approximation,
-        "dispersion": args.sp_dispersion,
-        "solvent_model": args.solvent_model,
-        "solvent": args.solvent,
     }
+    if args.sp_aux_basis:
+        sp_kwargs["aux_basis"] = args.sp_aux_basis
+    if args.sp_dispersion and args.sp_dispersion != "none":
+        sp_kwargs["dispersion"] = args.sp_dispersion
+    if args.solvent_model != "none":
+        sp_kwargs["solvent_model"] = args.solvent_model
+    if args.solvent:
+        sp_kwargs["solvent"] = args.solvent
     thermo_kwargs: dict[str, Any] = {
         "temperature": args.temperature,
         "pressure": args.pressure,
@@ -1276,11 +1292,14 @@ def _handle_optfreqsp(args: argparse.Namespace) -> int:
             config=cfg,
             charge=args.charge,
             multiplicity=args.multiplicity,
-            name=getattr(args, "name", None),
+            name=args.name,
             optfreq_kwargs=optfreq_kwargs,
             sp_kwargs=sp_kwargs,
             thermo_kwargs=thermo_kwargs,
         )
+    except KeyboardInterrupt:
+        logger.warning("Opt+Freq+SP+Thermo interrupted by user")
+        return 130
     except Exception as exc:
         logger.exception("Opt+Freq+SP+Thermo failed: %s", exc)
         return 1
