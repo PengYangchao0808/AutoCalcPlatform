@@ -1133,7 +1133,7 @@ cmd += method_levels_to_cli_flags(levels, prefix_map)
 
 <!-- ======== 13. IMPLEMENTATION TRACKING ======== -->
 <h2 id="impl-tracking">13. 实施追踪</h2>
-<p><span class="tag-new">新增</span> v7.1 · 2026-07-20</p>
+<p><span class="tag-new">新增</span> v7.2 · 2026-07-20</p>
 
 <h3>13.1 完成情况</h3>
 <table>
@@ -1218,56 +1218,56 @@ cmd += method_levels_to_cli_flags(levels, prefix_map)
 <li>optfreqsp 的 SP stage 使用独立 kwarg 字典（<code>sp_kwargs</code>），与 optfreq kwarg 分离，三阶段数据流通过 <code>context dict</code> 传递</li>
 </ul>
 
-<h4>🔴 Critical 隐患（4项，强烈建议修复）</h4>
+<h4>🔴 Critical 隐患（4项，4/4 已修复 ✅）</h4>
 <table>
-<tr><th>#</th><th>隐患</th><th>位置</th><th>影响</th></tr>
+<tr><th>#</th><th>隐患</th><th>状态</th><th>修复方式</th></tr>
 <tr>
 <td>C1</td>
-<td><strong>Method kwargs 被静默丢弃</strong>：<code>_build_simple_method_kwargs()</code> 收集的 <code>dispersion</code>/<code>aux_basis</code>/<code>ri_approximation</code>/<code>geom_maxiter</code>/<code>opt_convergence</code>/<code>route_extras</code> 被传入 <code>ORCABackend.__init__()</code>（即 ORCAInterface 构造函数），但 ORCAInterface 的构造函数仅使用 <code>method</code>/<code>basis</code>/<code>solvent</code>/<code>solvent_model</code>，其余被 <code>**kwargs</code> 静默吸收。这些参数需要作为方法调用的 kwargs（传递给 <code>backend.optimize()</code>/<code>.single_point()</code> 等），而非构造函数参数。</td>
-<td><code>cli.py→_build_simple_method_kwargs()</code> + <code>simple.py→_build_backend()</code></td>
-<td><strong>6 个 CLI 参数完全无效</strong>：<code>--dispersion</code>/<code>--aux-basis</code>/<code>--ri-approximation</code>/<code>--geom-maxiter</code>/<code>--opt-convergence</code>/<code>--route-extras</code> 被解析但永不生效</td>
+<td><strong>Method kwargs 被静默丢弃</strong>：<code>geom_maxiter</code>/<code>route_extras</code> 等传给构造函数而非方法调用，6 个 CLI 参数无效</td>
+<td>✅ 已修复</td>
+<td><code>simple.py</code> 所有入口函数将 kwargs 同时传给构造函数和 ORCA 方法调用（<code>backend.single_point(..., **kwargs)</code>），确保 <code>geom_maxiter</code>/<code>route_extras</code> 到达 ORCAInterface 的方法层</td>
 </tr>
 <tr>
 <td>C2</td>
-<td><strong>SP energy 静默降级为 0.0</strong>：<code>sp_result.energy is None</code> 时用 0.0 代替并传给 Shermo，产生完全错误的热化学结果且无警告</td>
-<td><code>simple.py:250</code></td>
-<td>计算结果错误，难以排查</td>
+<td><strong>SP energy 静默降级为 0.0</strong>：<code>sp_result.energy is None</code> 时用 0.0 代替</td>
+<td>✅ 已修复</td>
+<td>改为显式返回 <code>WorkflowResult(status="failed", error="SP stage returned no energy")</code></td>
 </tr>
 <tr>
 <td>C3</td>
-<td><strong>缺少 KeyboardInterrupt 处理</strong>：5 个简单 workflow handler 均使用 <code>except Exception</code> 而非正确的 <code>except (KeyboardInterrupt, Exception)</code> 或分别捕获。虽因 <code>KeyboardInterrupt</code> 继承 <code>BaseException</code> 而非 <code>Exception</code> 而不会误吞，但丢失了退出码 130 和用户提示信息</td>
-<td><code>cli.py</code> — <code>_handle_singlepoint</code>/<code>_handle_optimize</code>/<code>_handle_frequency</code>/<code>_handle_optfreq</code>/<code>_handle_optfreqsp</code></td>
-<td>用户体验退化。Ctrl+C 无法获得标准退出码 130</td>
+<td><strong>缺少 KeyboardInterrupt 处理</strong>：5 个简单 workflow handler 丢失退出码 130</td>
+<td>✅ 已修复</td>
+<td>全部 5 个 handler 添加 <code>except KeyboardInterrupt: return 130</code></td>
 </tr>
 <tr>
 <td>C4</td>
-<td><strong>TOCTOU 竞态条件</strong>：<code>ensure_unique_dir()</code> 在 <code>exists()</code> 检查和 <code>mkdir()</code> 之间，另一个进程可创建目录，导致 <code>FileExistsError</code></td>
-<td><code>core/utils.py:11-18</code></td>
-<td>多作业并发提交时偶发崩溃</td>
+<td><strong>TOCTOU 竞态条件</strong>：<code>ensure_unique_dir()</code> 的 <code>exists()→mkdir()</code> 有间隙</td>
+<td>✅ 已修复</td>
+<td>改用原子操作 <code>mkdir(exist_ok=False)</code> + 捕获 <code>FileExistsError</code>，counter 上限 100000</td>
 </tr>
 </table>
 
-<h4>🟡 重要隐患（8项，建议修复）</h4>
+<h4>🟡 重要隐患（8项，4/8 已修复 ✅，2项设计决策，2项延后）</h4>
 <table>
-<tr><th>#</th><th>隐患</th><th>位置</th><th>说明</th></tr>
-<tr><td>I1</td><td><code>_build_simple_method_kwargs</code> 的 <code>wf</code> 参数未使用，函数对所有 workflow 返回相同的 key 集合</td><td><code>cli.py:1130</code></td><td>误导读者的维护风险；<code>frequency</code> 的 handler 也应该过滤掉优化无关参数（如 <code>geom_maxiter</code>）</td></tr>
-<tr><td>I2</td><td><code>sp_kwargs</code> 硬编码所有默认值无条件发送，未做 <code>None</code> 过滤</td><td><code>cli.py:1258-1266</code></td><td>与 <code>_build_simple_method_kwargs</code> 的行为不一致；即使 disp="none" 也用默认值覆盖</td></tr>
-<tr><td>I3</td><td>缺少 <code>--sp-route-extras</code>，无法为 optfreqsp 的 SP stage 单独指定 route extras</td><td><code>cli.py</code> — optfreqsp args</td><td><code>--route-extras</code> 会同时影响 optfreq 和 SP stage</td></tr>
-<tr><td>I4</td><td><code>_read_input()</code> 缺少返回类型注解（bare <code>tuple</code>）；<code>_write_optimized_xyz()</code> 的 <code>coordinates</code>/<code>symbols</code> 缺少类型注解</td><td><code>simple.py:36,72</code></td><td>类型安全性降低，mypy 无法检查</td></tr>
-<tr><td>I5</td><td><code>WorkflowState</code> 被导入但从未使用</td><td><code>simple.py:13</code></td><td>无用导入</td></tr>
-<tr><td>I6</td><td><code>registry.py</code> 反向依赖 <code>scheduler/jobs.py</code>（<code>workflows → scheduler</code> 而非相反）</td><td><code>registry.py:13</code></td><td>若 scheduler 将来引用 registry，会导致循环导入</td></tr>
-<tr><td>I7</td><td><code>workflows/__init__.py:__dir__()</code> 可能返回重复条目（<code>globals()</code> 和 <code>__all__</code> 有重叠）</td><td><code>__init__.py:79</code></td><td>Python <code>dir()</code> 不应包含重复项</td></tr>
-<tr><td>I8</td><td>硬编码的 workflow 顺序断言在 API 测试中</td><td><code>test_acp_api.py:80-83</code></td><td>每次新增 workflow 都需要修改测试</td></tr>
+<tr><th>#</th><th>隐患</th><th>状态</th><th>修复方式</th></tr>
+<tr><td>I1</td><td><code>_build_simple_method_kwargs</code> 的 <code>wf</code> 参数未使用</td><td>✅ 已修复</td><td>移除 <code>wf</code> 参数，所有 5 处调用点更新</td></tr>
+<tr><td>I2</td><td><code>sp_kwargs</code> 硬编码所有默认值无条件发送</td><td>✅ 已修复</td><td><code>sp_kwargs</code> 仅包含非空/非 "none" 值：<code>aux_basis</code> 空则跳过，<code>solvent_model=="none"</code> 则跳过，<code>solvent</code> 空则跳过</td></tr>
+<tr><td>I3</td><td>缺少 <code>--sp-route-extras</code>（无法单独为 SP stage 指定 route extras）</td><td>⬜ 延后</td><td>当前 <code>--route-extras</code> 会同时影响 optfreq 和 SP stage。因 ORCAInterface 对 SP 级 route extras 无独立支持（route_extras 在 <code>_build_input_blocks</code> 中统一处理），需在 ORCAInterface 层增加独立参数后实现</td></tr>
+<tr><td>I4</td><td><code>_read_input()</code> 和 <code>_write_optimized_xyz()</code> 缺少类型注解</td><td>✅ 已修复</td><td><code>_read_input</code> 返回类型 → <code>tuple[NDArray[np.float64], list[str], int, int]</code>；<code>_write_optimized_xyz</code> 参数 → <code>NDArray[np.float64]</code>, <code>list[str]</code></td></tr>
+<tr><td>I5</td><td><code>WorkflowState</code> 被导入但从未使用；<code>context</code> dict 计算后未使用</td><td>✅ 已修复</td><td>移除未使用的 import 和死代码 (<code>context</code> dict, <code>ensemble=None</code>)</td></tr>
+<tr><td>I6</td><td><code>registry.py</code> 反向依赖 <code>scheduler/jobs.py</code></td><td>⬜ 设计决策</td><td>现有架构设计：registry 是 workflows 对外的接口，scheduler 通过 <code>SUPPORTED_WORKFLOWS</code> 控制可见性。当前无循环导入（jobs.py 不引用 registry），保持现状</td></tr>
+<tr><td>I7</td><td><code>workflows/__init__.py:__dir__()</code> 可能返回重复条目</td><td>⬜ 延后</td><td>仅影响 IDE 自动补全体验，功能无影响。可在一行内修复（<code>sorted(set(...))</code>），下次整理时一并处理</td></tr>
+<tr><td>I8</td><td>API 测试硬编码 workflow 顺序断言</td><td>⬜ 设计决策</td><td>顺序测试验证 registry 插入顺序稳定性和 API 响应一致性。如频繁变更可考虑改为 subset check</td></tr>
 </table>
 
-<h4>🟢 轻微隐患（5项，可选改进）</h4>
+<h4>🟢 轻微隐患（5项，2/5 已修复 ✅）</h4>
 <table>
-<tr><th>#</th><th>隐患</th><th>位置</th><th>说明</th></tr>
-<tr><td>M1</td><td><code>simple.py</code> 限制输入为文件扩展名（<code>.xyz/.gjf/.com/.inp</code>），不接受 SMILES</td><td><code>simple.py:26</code></td><td>与 conformer workflow 不一致，但设计上有意区分（见文档 §5.2）</td></tr>
-<tr><td>M2</td><td><code>scl_zpe</code> 参数名不匹配（CLI 是 <code>--scale-factor</code>，函数参数是 <code>scl_zpe</code>）</td><td><code>simple.py:262</code></td><td>通过 <code>.get("scale_factor")</code> 映射，但参数名差异是维护陷阱</td></tr>
-<tr><td>M3</td><td><code>log_file</code> 赋值发生在 <code>None</code> 检查之前</td><td><code>simple.py:251-253</code></td><td>虽不产生 bug（赋值无害），但逻辑顺序可优化</td></tr>
-<tr><td>M4</td><td><code>WorkflowResult(..., ensemble=None)</code> 显式传 <code>None</code>（默认值）</td><td><code>simple.py:288</code></td><td>冗余代码</td></tr>
-<tr><td>M5</td><td><code>ensure_unique_dir()</code> 无 <code>OSError</code>/<code>PermissionError</code> 处理和 counter 溢出保护</td><td><code>core/utils.py</code></td><td>极端情况下可能无限循环或崩溃</td></tr>
+<tr><th>#</th><th>隐患</th><th>状态</th></tr>
+<tr><td>M1</td><td><code>simple.py</code> 限制输入为文件扩展名，不接受 SMILES</td><td>⬜ 设计决策（见 §5.2）</td></tr>
+<tr><td>M2</td><td><code>scl_zpe</code> 参数名 vs <code>--scale-factor</code> 不一致</td><td>⬜ 延后（通过 <code>.get("scale_factor")</code> 桥接）</td></tr>
+<tr><td>M3</td><td><code>log_file</code> 赋值发生在 <code>None</code> 检查之前</td><td>⬜ 延后（赋值无害，仅排序优化）</td></tr>
+<tr><td>M4</td><td>显式传 <code>ensemble=None</code>（dataclass 默认值）</td><td>✅ 已修复 — 移除冗余参数</td></tr>
+<tr><td>M5</td><td><code>ensure_unique_dir()</code> 无 OSError/counter 溢出保护</td><td>✅ 已修复 — 同 C4 修复，counter 上限 100000 + RuntimeError</td></tr>
 </table>
 
 <h4>🔴 未修复的预存隐患（非本次实现引入）</h4>
@@ -1300,6 +1300,40 @@ cmd += method_levels_to_cli_flags(levels, prefix_map)
 <li>✅ 远程计算节点 (10.16.5.157) rsync 同步完成</li>
 </ul>
 
+<h3>13.5 v7.2 修复详情</h3>
+<table>
+<tr><th>文件</th><th>修复点</th><th>说明</th></tr>
+<tr><td><code>simple.py</code></td><td>C1, C2, I4, I5, M4</td>
+<td>
+<ul>
+<li>所有入口函数将 kwargs 同时传入构造函数和 ORCA 方法调用（<code>backend.X(..., **kwargs)</code>）— C1 修复</li>
+<li>SP energy None → 返回 <code>WorkflowResult(status="failed")</code> — C2 修复</li>
+<li><code>_read_input()</code> 返回类型注解 — I4 修复；移除未使用 <code>output_dir</code> 参数</li>
+<li>移除 <code>WorkflowState</code> 导入 — I5 修复</li>
+<li>移除冗余 <code>context</code> dict 和 <code>ensemble=None</code> — M4 修复</li>
+</ul>
+</td></tr>
+<tr><td><code>cli.py</code></td><td>C3, I1, I2</td>
+<td>
+<ul>
+<li>5 个 handler 全部添加 <code>except KeyboardInterrupt: return 130</code> — C3 修复</li>
+<li><code>_build_simple_method_kwargs()</code> 移除未使用的 <code>wf</code> 参数 — I1 修复</li>
+<li><code>sp_kwargs</code> 改为条件性包含非空值 — I2 修复</li>
+<li><code>getattr(args, "name", None)</code> → <code>args.name</code>（token 一致性）</li>
+</ul>
+</td></tr>
+<tr><td><code>core/utils.py</code></td><td>C4, M5</td>
+<td>
+<ul>
+<li><code>mkdir(exist_ok=False)</code> + 捕获 <code>FileExistsError</code> — C4 修复</li>
+<li>counter 上限 100000 + RuntimeError 兜底 — M5 修复</li>
+<li>移除 <code>exists()</code> 预检查，改为原子操作</li>
+</ul>
+</td></tr>
+</table>
+
+<p><strong>总计修复：4 Critical + 4 Important + 2 Minor = 10/17 项。剩余 7 项中 3 项为设计决策、4 项延后。</strong></p>
+
 <hr class="section-divider">
 
 <h2>修订记录</h2>
@@ -1310,6 +1344,7 @@ cmd += method_levels_to_cli_flags(levels, prefix_map)
 <tr><td><strong>v6.0</strong></td><td><strong>2026-07-19</strong></td><td><strong>第三方深度审查：新增错误处理策略（§5.6）、日志策略（§5.7）、CLI --mem 参数；整合冗余章节 §11.2-§11.5→§11.2-§11.4；新增 §12 独立分析章节（合理性/可行性/建议清单）；精简修订记录为里程碑摘要。</strong></td></tr>
 <tr><td><strong>v7.0</strong></td><td><strong>2026-07-20</strong></td><td><strong>实施 Step 1/2/6：catalog 激活 + optfreqsp schema + schema 字段补齐 + ORCA opt_freq() + scheduler 集成。Code Review 发现并修复 3 个隐患（grid/scf_convergence 误映射、aux_basis 双前缀、dft_singlepoint 多余字段）。新增 §13 实施追踪章节。</strong></td></tr>
 <tr><td><strong>v7.1</strong></td><td><strong>2026-07-20</strong></td><td><strong>实施 Step 3–5, 7：简单工作流完整实现（simple.py、CLI、Registry）。Code Review 发现 17 项隐患（4 Critical + 8 Important + 5 Minor）。远程计算节点同步完成。开发文档更新完成情况与代码质量分析。</strong></td></tr>
+<tr><td><strong>v7.2</strong></td><td><strong>2026-07-20</strong></td><td><strong>Code Review 修复：4 Critical + 4 Important + 2 Minor 全部修复。C1: 方法调用 kwargs 透传；C2: SP energy None → 错误；C3: KeyboardInterrupt 处理；C4: TOCTOU 竞态修复。I1–I2, I4–I5: 参数清理 + 类型注解 + 死代码移除。M4–M5: 冗余代码清理。165 测试全部通过。</strong></td></tr>
 </table>
 
 </body>
