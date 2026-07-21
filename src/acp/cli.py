@@ -247,7 +247,7 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
 
     parser.add_argument("--route-extras", type=str, help="Comma-separated ORCA route extras (e.g. SlowConv,NoFinalGrid)")
 
-    if wf in ("singlepoint", "optfreq", "optfreqsp"):
+    if wf in ("singlepoint", "optimize", "frequency", "optfreq", "optfreqsp"):
         parser.add_argument("--aux-j-basis", default="AutoAux", metavar="BASIS",
             help="Auxiliary /J basis for RI-J fitting (default: AutoAux). "
                  "Common: AutoAux, def2/J.")

@@ -4237,8 +4237,9 @@ async function openMethodConfig() {
         }
       }
 
-      var curVal = levelState[fieldName] !== undefined
-          ? levelState[fieldName]
+      var rawVal = levelState[fieldName];
+      var curVal = (rawVal !== undefined && rawVal !== "")
+          ? rawVal
           : getFieldDefault(fieldName, engine, fieldName === "functional" ? undefined : functional, basis);
 
       // ── builtin_dispersion lock (DevDoc §6) ──
