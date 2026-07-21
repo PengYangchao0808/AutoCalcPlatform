@@ -199,6 +199,7 @@ def _get_default_config() -> dict[str, Any]:
         'censo': {
             'preset': 'censo-light',
             'solvent': None,
+            'solvent_model': 'none',
             'temperature': 298.15,
             'scale': 1.0,
             'keep_all': False,

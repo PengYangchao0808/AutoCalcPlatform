@@ -250,8 +250,10 @@ def test_rcfile_includes_solvent(tmp_path: Path) -> None:
     assert "solvent = dcm" in content
     assert "gas_phase = False" in content
     # CENSO v3.0.8 defaults sm=COSMORS for screening; we override to avoid
-    # requiring the cosmotherm binary (which is not available).
-    assert "sm = cpcm" in content
+    # requiring the cosmotherm binary (which is not available). When no
+    # solvent_model is explicitly configured, the override falls back to
+    # the default ("none" = gas phase solvation model for individual parts).
+    assert "sm = none" in content
 
 
 def test_rcfile_solvent_model_smd(tmp_path: Path) -> None:

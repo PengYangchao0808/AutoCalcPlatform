@@ -97,7 +97,7 @@ nmr:
 censo:
   preset: censo-light
   solvent: null
-  solvent_model: cpcm
+  solvent_model: none
   temperature: 298.15
   scale: 1.0
   keep_all: false

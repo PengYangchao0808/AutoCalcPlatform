@@ -114,11 +114,11 @@ class TestConfig:
         assert config["resources"]["nproc"] > 0
 
     def test_validate_config_unknown_protocol(self):
-        """_validate_config() defaults unknown protocol to 'ext'."""
+        """_validate_config() defaults unknown protocol to 'censo-lite'."""
         config = copy.deepcopy(_default_config)
         config["protocols"]["default"] = "unknown"
         _validate_config(config)
-        assert config["protocols"]["default"] == "ext"
+        assert config["protocols"]["default"] == "censo-lite"
 
     def test_get_default_config_has_nmr_defaults(self):
         """_get_default_config() includes NMR theory and runtime defaults."""

@@ -255,12 +255,21 @@ def _resolve_solvent_config(
     censo_solvent = (
         user_solvent if user_solvent is not None else cfg.get("censo", {}).get("solvent")
     )
-    solvent_model = (
-        cfg.get("theory", {})
-        .get("preoptimization", {})
-        .get("solvent_model", cfg.get("censo", {}).get("solvent_model", "none"))
-    )
-    return censo_solvent, (solvent_model or "none").lower()
+    preopt_model = (
+        cfg.get("theory", {}).get("preoptimization", {}).get("solvent_model") or ""
+    ).lower()
+    censo_model = (
+        cfg.get("censo", {}).get("solvent_model") or ""
+    ).lower()
+
+    if preopt_model and preopt_model != "none":
+        solvent_model = preopt_model
+    elif censo_model and censo_model != "none":
+        solvent_model = censo_model
+    else:
+        solvent_model = "none"
+
+    return censo_solvent, solvent_model
 
 
 def _resolve_crest_ewin(
@@ -360,12 +369,12 @@ def run_ensemble_generation(
     censo_solvent, solvent_model = _resolve_solvent_config(cfg, solvent)
 
     if censo_solvent and solvent_model == "none":
-        logger.warning(
-            "Solvent '%s' specified but solvent_model is 'none' — "
-            "CREST/xTB will run in gas phase while CENSO may use solvent. "
-            "Check theory.preoptimization.solvent_model or censo.solvent_model.",
+        logger.info(
+            "Solvent '%s' specified without a solvent model — "
+            "defaulting to SMD for CENSO and CREST/xTB.",
             censo_solvent,
         )
+        solvent_model = "smd"
 
     safe_nproc: int | None = None
     if nproc is not None and nproc > 0:

@@ -176,7 +176,7 @@ class CensoBackend(QCBackend, ConformerSearcher):
         self._default_solvent = config.get("censo", {}).get("solvent")
         self._temperature = config.get("censo", {}).get("temperature", 298.15)
         self._keep_all = bool(config.get("censo", {}).get("keep_all", False))
-        self._solvent_model = config.get("censo", {}).get("solvent_model", "cpcm").lower()
+        self._solvent_model = config.get("censo", {}).get("solvent_model", "none").lower()
         self._nproc = config.get("resources", {}).get("nproc", 16)
 
     # ----- QCBackend ABC ---------------------------------------------------
