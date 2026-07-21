@@ -109,6 +109,12 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         description="Full pipeline: ORCA opt+freq -> SP -> Shermo thermo -> free energy.",
         requires_binaries=["orca", "shermo"],
     ),
+    "xtb_optimize": WorkflowRegistryEntry(
+        name="xtb_optimize",
+        label="xTB Optimization",
+        description="Fast semi-empirical geometry optimization with xTB (GFN-xTB).",
+        requires_binaries=["xtb"],
+    ),
 }
 
 

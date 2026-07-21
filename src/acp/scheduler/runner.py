@@ -44,6 +44,11 @@ logger = logging.getLogger(__name__)
 
 _POLL_INTERVAL = 1.0
 
+_GFN_DISPLAY_TO_INT: dict[str, int] = {
+    "GFN0-xTB": 0, "GFN1-xTB": 1, "GFN2-xTB": 2,
+    "0": 0, "1": 1, "2": 2,
+}
+
 
 class JobRunnerRemoteProtocol(Protocol):
     """Structural type shared by :class:`~acp.scheduler.remote.runner.RemoteJobRunner`.
@@ -674,6 +679,7 @@ class JobRunner:
         if wf not in (
             "conformer", "nmr", "benchmark", "mechanism", "ensemble", "energy",
             "singlepoint", "optimize", "frequency", "optfreq", "optfreqsp",
+            "xtb_optimize",
         ):
             raise ValueError(f"No subprocess mapping for workflow: {wf}")
 
@@ -734,6 +740,24 @@ class JobRunner:
                     cmd += method_levels_to_cli_flags(levels, prefix_map)
                 else:
                     cmd += method_levels_to_cli_flags(levels)
+        elif wf == "xtb_optimize":
+            cmd += ["--input", str(source), "--output", str(work_dir)]
+            if spec.name:
+                cmd += ["--name", spec.name]
+            xtb_level = (method.get("levels") or {}).get("xtb_opt", {})
+            gfn_val = xtb_level.get("gfn")
+            if gfn_val is not None:
+                gfn_int = _GFN_DISPLAY_TO_INT.get(str(gfn_val), gfn_val)
+                cmd += ["--gfn", str(gfn_int)]
+            if xtb_level.get("opt_level"):
+                cmd += ["--opt-level", str(xtb_level["opt_level"])]
+            if xtb_level.get("max_steps") is not None:
+                cmd += ["--max-steps", str(xtb_level["max_steps"])]
+            if xtb_level.get("solvent"):
+                cmd += ["--solvent", str(xtb_level["solvent"])]
+            sm = xtb_level.get("solvent_model")
+            if sm and str(sm).lower() not in ("", "none"):
+                cmd += ["--solvent-model", str(sm)]
         else:
             cmd += ["--input", str(source), "--output", str(work_dir)]
             if method.get("benchmark_level"):

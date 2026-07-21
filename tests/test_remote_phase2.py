@@ -356,7 +356,7 @@ def test_generate_lsf_script():
     assert "#BSUB -J acp_test123" in script
     assert "#BSUB -q normal" in script
     assert "#BSUB -n 8" in script
-    assert '#BSUB -R "rusage[mem=2000]"' in script
+    assert f"#BSUB -M {int(2000 * 8 * 1024 * 1.05)}" in script
     assert "#BSUB -W 24:00" in script
     assert "/scratch/u/acp_jobs/test123/stdout.log" in script
     assert "#BSUB -R span[hosts=1]" in script

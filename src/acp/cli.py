@@ -195,7 +195,7 @@ def _handle_protocol(args: argparse.Namespace) -> int:
 
 
 def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
-    """Register 5 simple workflow subcommand parsers."""
+    """Register 5 simple ORCA workflow subcommand parsers + xtb_optimize."""
     for wf, wf_label, wf_desc, wf_epilog in [
         ("singlepoint", "Single Point", "Run ORCA single-point energy calculation",
          "Examples:\n  acp run singlepoint --input mol.xyz --output ./out\n  acp run singlepoint --input mol.inp --method wB97M-V --basis def2-TZVPP"),
@@ -211,6 +211,21 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
         p = run_sub.add_parser(wf, help=wf_desc, formatter_class=argparse.RawDescriptionHelpFormatter, epilog=wf_epilog)
         p.set_defaults(workflow=wf)
         _add_simple_workflow_args(p, wf)
+
+    # xTB optimization (separate parser — different solvent models & params)
+    p = run_sub.add_parser(
+        "xtb_optimize",
+        help="Run xTB (GFN-xTB) semi-empirical geometry optimization",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run xtb_optimize --input mol.xyz --output ./out
+  acp run xtb_optimize --input mol.xyz --gfn 2 --opt-level tight
+  acp run xtb_optimize --input mol.xyz --solvent water --solvent-model gbsa
+        """,
+    )
+    p.set_defaults(workflow="xtb_optimize")
+    _add_xtb_optimize_args(p)
 
 
 def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
@@ -254,6 +269,31 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
         parser.add_argument("--sp-dispersion", default="none", help="SP dispersion correction")
         parser.add_argument("--sp-solvent", default="", help="SP solvent name (e.g. water; defaults to --solvent)")
         parser.add_argument("--sp-solvent-model", default="", help="SP solvent model (defaults to --solvent-model)")
+
+
+def _add_xtb_optimize_args(parser: argparse.ArgumentParser) -> None:
+    """Add arguments for the xTB optimization subcommand."""
+    parser.add_argument("--input", "-i", required=True, help="Input structure file (XYZ, GJF, COM, ORCA .inp)")
+    parser.add_argument("--output", "-o", default="./out", help="Output directory")
+    parser.add_argument("--charge", type=int, help="Molecular charge (auto-detected if not specified)")
+    parser.add_argument("--multiplicity", type=int, help="Spin multiplicity (auto-detected if not specified)")
+    parser.add_argument("--name", type=str, help="Molecule name")
+    parser.add_argument("--gfn", type=int, default=2, choices=[0, 1, 2], help="GFN-xTB Hamiltonian level (default: 2)")
+    parser.add_argument(
+        "--opt-level", default="normal",
+        choices=["crude", "sloppy", "loose", "normal", "tight", "vtight", "extreme"],
+        help="xTB optimization convergence level (default: normal)",
+    )
+    parser.add_argument("--max-steps", type=int, help="Maximum number of optimization cycles (xTB xcontrol maxcycle)")
+    parser.add_argument(
+        "--solvent-model", default="none", type=str.lower, choices=["gbsa", "alpb", "none"],
+        help="xTB solvation model (default: none; GBSA or ALPB)",
+    )
+    parser.add_argument("--solvent", default="", help="Solvent name (e.g. water, methanol)")
+    parser.add_argument("--nproc", type=int, help="Number of CPU cores")
+    parser.add_argument("--mem", type=str, help="Memory limit (accepted for compatibility; xTB manages memory via nproc)")
+    parser.add_argument("--config", type=str, help="Configuration YAML file")
+    parser.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING", "ERROR"], default="INFO", help="Logging level (default: INFO)")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1318,6 +1358,45 @@ def _handle_optfreqsp(args: argparse.Namespace) -> int:
     return 1
 
 
+def _build_xtb_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
+    kwargs: dict[str, Any] = {}
+    for key in ("gfn", "opt_level", "solvent_model", "solvent", "max_steps"):
+        val = getattr(args, key, None)
+        if val is not None:
+            kwargs[key] = val
+    return kwargs
+
+
+def _handle_xtb_optimize(args: argparse.Namespace) -> int:
+    from acp.workflows.simple import run_xtb_optimize
+    setup_logging(args.log_level)
+    cfg = _build_config(args)
+    out = Path(args.output)
+    method_kwargs = _build_xtb_method_kwargs(args)
+    try:
+        result = run_xtb_optimize(
+            input_source=args.input,
+            output_dir=out,
+            config=cfg,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            name=args.name,
+            method_kwargs=method_kwargs,
+        )
+    except KeyboardInterrupt:
+        logger.warning("xTB optimization interrupted by user")
+        return 130
+    except Exception as exc:
+        logger.exception("xTB optimization failed: %s", exc)
+        return 1
+    if result.status == "completed":
+        logger.info("xTB geometry optimization completed")
+        logger.info("  Energy: %s Hartree", result.metadata.get("energy", "N/A"))
+        return 0
+    logger.error("xTB optimization failed: %s", result.error)
+    return 1
+
+
 def _handle_serve(args: argparse.Namespace) -> int:
     """Start the FastAPI web dashboard server."""
     try:
@@ -1741,6 +1820,7 @@ def main(argv: list[str] | None = None) -> int:
         "frequency": _handle_frequency,
         "optfreq": _handle_optfreq,
         "optfreqsp": _handle_optfreqsp,
+        "xtb_optimize": _handle_xtb_optimize,
     }
 
     handler = dispatch.get(args.workflow)

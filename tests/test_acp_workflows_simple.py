@@ -25,17 +25,18 @@ from acp.workflows.simple import (
     _write_frequencies_txt,
     _write_optimized_xyz,
     _write_thermo_json,
-    run_singlepoint,
-    run_optimize,
     run_frequency,
     run_optfreq,
+    run_optimize,
+    run_singlepoint,
+    run_xtb_optimize,
 )
 
 # ---------------------------------------------------------------------------
 # catalog validation
 # ---------------------------------------------------------------------------
 
-_SIMPLE_IDS = {"singlepoint", "optimize", "frequency", "optfreq", "optfreqsp"}
+_SIMPLE_IDS = {"singlepoint", "optimize", "frequency", "optfreq", "optfreqsp", "xtb_optimize"}
 
 
 def test_all_simple_workflows_in_catalog_and_active():
@@ -282,6 +283,58 @@ def test_run_optimize_failure(tmp_path):
         mk_backend.return_value.optimize.return_value = _fake_qc_result(success=False, error_message="No convergence")
         result = run_optimize(str(inp), output_dir=out)
         assert result.status == "failed"
+
+
+# ---------------------------------------------------------------------------
+# xtb_optimize
+# ---------------------------------------------------------------------------
+
+def test_run_xtb_optimize_mock(tmp_path):
+    inp = tmp_path / "mol.xyz"
+    inp.write_text("1\n\nC 0 0 0\n")
+    out = tmp_path / "xtb_out"
+
+    coords = np.array([[0.0, 0.0, 0.0]])
+    with patch("acp.workflows.simple._build_xtb_backend") as mk_backend:
+        mk_backend.return_value.optimize.return_value = _fake_qc_result(
+            coordinates=coords, symbols=["C"], converged=True, energy=-10.5,
+        )
+        result = run_xtb_optimize(
+            str(inp), output_dir=out,
+            method_kwargs={"gfn": "GFN2-xTB", "opt_level": "tight"},
+        )
+        mk_backend.return_value.optimize.assert_called_once()
+        assert result.status == "completed"
+        assert result.metadata.get("converged") is True
+        assert result.metadata.get("energy") == -10.5
+
+
+def test_run_xtb_optimize_gfn_mapping(tmp_path):
+    """Catalog sends display names like 'GFN2-xTB'; workflow maps to int."""
+    from acp.workflows.simple import _normalize_gfn
+    assert _normalize_gfn("GFN2-xTB") == 2
+    assert _normalize_gfn("GFN0-xTB") == 0
+    assert _normalize_gfn("2") == 2
+    assert _normalize_gfn(1) == 1
+    assert _normalize_gfn(None) is None
+
+
+def test_run_xtb_optimize_failure(tmp_path):
+    inp = tmp_path / "mol.xyz"
+    inp.write_text("1\n\nC 0 0 0\n")
+    out = tmp_path / "xtb_out"
+
+    with patch("acp.workflows.simple._build_xtb_backend") as mk_backend:
+        mk_backend.return_value.optimize.return_value = _fake_qc_result(success=False, error_message="xTB crashed")
+        result = run_xtb_optimize(str(inp), output_dir=out)
+        assert result.status == "failed"
+
+
+def test_xtb_optimize_in_catalog_and_registry():
+    from acp.workflows.registry import get_workflow_entry
+    entry = get_workflow_entry("xtb_optimize")
+    assert entry is not None
+    assert "xtb" in entry.requires_binaries
 
 
 # ---------------------------------------------------------------------------
@@ -773,6 +826,7 @@ def test_build_method_kwargs_passes_recalc_hess():
 
 def test_build_simple_method_kwargs_includes_recalc_hess():
     import argparse
+
     from acp.cli import _build_simple_method_kwargs
     args = argparse.Namespace(
         method="r2SCAN-3c", basis="def2-mTZVPP", dispersion="none",

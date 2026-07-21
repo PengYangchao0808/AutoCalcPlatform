@@ -46,6 +46,11 @@ _DEFAULT_QUEUE = "normal"
 _DEFAULT_WALLTIME = "24:00"
 _MIN_MEM_MB_PER_CORE = 256
 
+_GFN_DISPLAY_TO_INT: dict[str, int] = {
+    "GFN0-xTB": 0, "GFN1-xTB": 1, "GFN2-xTB": 2,
+    "0": 0, "1": 1, "2": 2,
+}
+
 
 @dataclass(frozen=True)
 class LSFScriptSpec:
@@ -55,7 +60,11 @@ class LSFScriptSpec:
         job_name: BSUB ``-J`` job name.
         queue: BSUB ``-q`` queue name.
         nproc: BSUB ``-n`` number of CPU cores.
-        mem_mb_per_core: Per-core memory in MB for ``rusage[mem=...]``.
+        mem_mb_per_core: Per-core memory in MB; used to compute the per-process
+            ``-M`` RLIMIT_AS as ``mem_mb_per_core * nproc * 1.05`` (MB→KB
+            included). Chosen over ``rusage[mem=...]`` to avoid OpenLava's
+            double-counting of reserved vs. actually-used memory, which
+            caused jobs to PEND unnecessarily.
         walltime: BSUB ``-W`` wall-clock limit (e.g. ``"24:00"``).
         remote_code_dir: Directory where ACP source is synced; used to
             build ``PYTHONPATH={remote_code_dir}/src``.
@@ -104,6 +113,7 @@ def build_remote_cli_command(
     if wf not in (
         "conformer", "nmr", "benchmark", "mechanism", "ensemble", "energy",
         "singlepoint", "optimize", "frequency", "optfreq", "optfreqsp",
+        "xtb_optimize",
     ):
         raise ValueError(f"No remote subprocess mapping for workflow: {wf}")
 
@@ -164,6 +174,24 @@ def build_remote_cli_command(
                 cmd += method_levels_to_cli_flags(levels, prefix_map)
             else:
                 cmd += method_levels_to_cli_flags(levels)
+    elif wf == "xtb_optimize":
+        cmd += ["--input", str(source), "--output", "."]
+        if spec.name:
+            cmd += ["--name", spec.name]
+        xtb_level = (method.get("levels") or {}).get("xtb_opt", {})
+        gfn_val = xtb_level.get("gfn")
+        if gfn_val is not None:
+            gfn_int = _GFN_DISPLAY_TO_INT.get(str(gfn_val), gfn_val)
+            cmd += ["--gfn", str(gfn_int)]
+        if xtb_level.get("opt_level"):
+            cmd += ["--opt-level", str(xtb_level["opt_level"])]
+        if xtb_level.get("max_steps") is not None:
+            cmd += ["--max-steps", str(xtb_level["max_steps"])]
+        if xtb_level.get("solvent"):
+            cmd += ["--solvent", str(xtb_level["solvent"])]
+        sm = xtb_level.get("solvent_model")
+        if sm and str(sm).lower() not in ("", "none"):
+            cmd += ["--solvent-model", str(sm)]
     else:  # benchmark
         cmd += ["--input", str(source), "--output", "."]
         if method.get("benchmark_level"):
@@ -275,7 +303,7 @@ def generate_lsf_script(s: LSFScriptSpec) -> str:
         f"#BSUB -J {s.job_name}",
         f"#BSUB -q {s.queue}",
         f"#BSUB -n {s.nproc}",
-        f'#BSUB -R "rusage[mem={s.mem_mb_per_core}]"',
+        f"#BSUB -M {int(s.mem_mb_per_core * s.nproc * 1024 * 1.05)}",
         f"#BSUB -W {s.walltime}",
         f"#BSUB -o {s.remote_job_dir}/stdout.log",
         f"#BSUB -e {s.remote_job_dir}/stderr.log",

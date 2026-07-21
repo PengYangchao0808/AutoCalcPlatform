@@ -75,7 +75,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "xtb_optimize",
         "default_backend": "xtb",
         "requires_binaries": ["xtb"],
-        "status": "planned",
+        "status": "active",
         "visible": True,
     },
     {
@@ -455,6 +455,11 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "per_backend": {"xtb": ["GFN0-xTB", "GFN1-xTB", "GFN2-xTB"]},
         "default": {"*": "GFN2-xTB"},
     },
+    "opt_level": {
+        "type": "select",
+        "per_backend": {"xtb": ["crude", "sloppy", "loose", "normal", "tight", "vtight", "extreme"]},
+        "default": {"*": "normal"},
+    },
     "charge": {"type": "int", "advanced": True, "default": {"*": 0}},
     "multiplicity": {"type": "int", "advanced": True, "default": {"*": 1}},
     "aux_basis": {
@@ -809,6 +814,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "fields": [
                     "functional",
                     "basis",
+                    "dispersion",
                     "aux_basis",
                     "ri_approximation",
                     "solvent_model",
@@ -870,7 +876,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "label": "xTB Opt",
                 "required": True,
                 "allowed_engines": ["xtb"],
-                "fields": ["gfn", "solvent_model", "solvent", "max_steps"],
+                "fields": ["gfn", "opt_level", "solvent_model", "solvent", "max_steps"],
             }
         ],
         "profiles": [],

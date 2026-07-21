@@ -1,4 +1,4 @@
-"""Simple ORCA workflows: singlepoint/optimize/frequency/optfreq/optfreqsp."""
+"""Simple workflows: singlepoint/optimize/frequency/optfreq/optfreqsp (ORCA) + xtb_optimize (xTB)."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from acp.backends.orca import ORCABackend
+from acp.backends.xtb import XTBBackend
 from acp.core.models import HARTREE_TO_KCAL
 from acp.core.state import WorkflowState
 from acp.core.utils import ensure_unique_dir
@@ -30,6 +31,7 @@ _STAGE_NAMES: dict[str, list[str]] = {
     "frequency": ["frequency"],
     "optfreq": ["opt_freq"],
     "optfreqsp": ["opt_freq", "single_point", "shermo"],
+    "xtb_optimize": ["xtb_optimize"],
 }
 
 
@@ -216,6 +218,52 @@ def _build_method_kwargs(raw_kwargs: dict[str, Any]) -> dict[str, Any]:
     return kwargs
 
 
+_GFN_DISPLAY_TO_INT: dict[str, int] = {
+    "GFN0-xTB": 0, "GFN1-xTB": 1, "GFN2-xTB": 2,
+    "0": 0, "1": 1, "2": 2,
+}
+
+
+def _normalize_gfn(val: Any) -> int | None:
+    """Map catalog display names (GFN2-xTB) or numeric strings to integer GFN level."""
+    if val is None:
+        return None
+    if isinstance(val, int):
+        return val
+    if isinstance(val, str):
+        return _GFN_DISPLAY_TO_INT.get(val.strip())
+    return None
+
+
+def _build_xtb_backend(config: dict[str, Any], gfn_level: int | None = None) -> XTBBackend:
+    """Create an XTBBackend, optionally overriding the GFN level."""
+    kwargs: dict[str, Any] = {}
+    if gfn_level is not None:
+        kwargs["gfn_level"] = gfn_level
+    return XTBBackend(config=config, **kwargs)
+
+
+def _build_xtb_method_kwargs(raw_kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Filter xTB method kwargs: pass through opt_level, solvent, max_steps.
+
+    Note: gfn is extracted separately and passed to the XTBBackend constructor,
+    not through optimize() kwargs (XTBInterface reads gfn_level from __init__).
+    """
+    kwargs: dict[str, Any] = {}
+    for key in ("opt_level", "solvent", "solvent_model", "max_steps"):
+        val = raw_kwargs.get(key)
+        if val is None or val == "" or val == "none":
+            continue
+        kwargs[key] = val
+
+    raw_sm = raw_kwargs.get("solvent_model")
+    if raw_sm is None or str(raw_sm).strip().lower() in ("", "none"):
+        kwargs.setdefault("solvent_model", "none")
+        kwargs.setdefault("solvent", None)
+
+    return kwargs
+
+
 # ---------------------------------------------------------------------------
 # Workflow entry points
 # ---------------------------------------------------------------------------
@@ -282,6 +330,47 @@ def run_optimize(
         return WorkflowResult(status="failed", error=result.error_message or "Optimization failed")
 
     state.complete_stage("optimize")
+    if result.coordinates is not None:
+        _write_optimized_xyz(calc_dir, result.coordinates, result.symbols or symbols)
+    if result.energy is not None:
+        _write_energy_json(calc_dir, result.energy)
+    state.mark_completed()
+    return WorkflowResult(
+        status="completed",
+        metadata={
+            "output_dir": str(calc_dir),
+            "energy": result.energy,
+            "converged": result.converged,
+        },
+    )
+
+
+def run_xtb_optimize(
+    input_source: str,
+    output_dir: str | Path = "./xtb_optimize_output",
+    config: dict[str, Any] | None = None,
+    charge: int | None = None,
+    multiplicity: int | None = None,
+    name: str | None = None,
+    method_kwargs: dict[str, Any] | None = None,
+) -> WorkflowResult:
+    cfg = load_config(overrides=config) if config else load_config()
+    out = _resolve_output_dir(output_dir)
+    _check_input(input_source)
+    coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
+    calc_dir = _calc_subdir(out, name, input_source, "xtb_optimize")
+    state = _init_state(calc_dir, "xtb_optimize", input_source)
+
+    kwargs = _build_xtb_method_kwargs(method_kwargs or {})
+    gfn_level = _normalize_gfn((method_kwargs or {}).get("gfn"))
+    backend = _build_xtb_backend(cfg, gfn_level=gfn_level)
+    state.set_stage("xtb_optimize")
+    result = backend.optimize(coords, symbols, charge=chg, multiplicity=mult, output_dir=calc_dir, **kwargs)
+    if not result.success:
+        state.fail_stage("xtb_optimize", result.error_message or "xTB optimization failed")
+        return WorkflowResult(status="failed", error=result.error_message or "xTB optimization failed")
+
+    state.complete_stage("xtb_optimize")
     if result.coordinates is not None:
         _write_optimized_xyz(calc_dir, result.coordinates, result.symbols or symbols)
     if result.energy is not None:

@@ -500,7 +500,7 @@ class XTBInterface:
         ensure_dir(output_dir)
 
         input_xyz = output_dir / "xtb_input.xyz"
-        output_file = output_dir / "xtb_output.xyz"
+        output_file = output_dir / "xtbopt.xyz"
         log_file = output_dir / "xtb.log"
 
         write_xyz(input_xyz, coordinates, symbols, title="xTB input")
@@ -517,6 +517,15 @@ class XTBInterface:
         ]
 
         xtb_args.extend(self._solvent_args())
+
+        max_steps = kwargs.get('max_steps')
+        if max_steps is not None:
+            xcontrol_path = output_dir / ".xcontrol"
+            xcontrol_path.write_text(
+                f"$opt\n  maxcycle={int(max_steps)}\n$end\n",
+                encoding="utf-8",
+            )
+            xtb_args.extend(["--input", str(xcontrol_path)])
 
         try:
             result = subprocess.run(
