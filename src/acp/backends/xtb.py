@@ -27,8 +27,8 @@ class XTBBackend(QCBackend):
         theory_preopt = config.get("theory", {}).get("preoptimization", {})
         interface_kwargs = dict(kwargs)
         interface_kwargs.setdefault("gfn_level", theory_preopt.get("gfn_level", 2))
-        interface_kwargs.setdefault("solvent", theory_preopt.get("solvent"))
-        interface_kwargs.setdefault("solvent_model", theory_preopt.get("solvent_model", "none"))
+        interface_kwargs.setdefault("solvent", None)
+        interface_kwargs.setdefault("solvent_model", "none")
 
         self._interface = XTBInterface(config=config, **interface_kwargs)
 

@@ -33,8 +33,8 @@ class ORCABackend(QCBackend):
         interface_kwargs = dict(kwargs)
         interface_kwargs.setdefault("method", defaults.get("method", "M062X"))
         interface_kwargs.setdefault("basis", defaults.get("basis", "def2-TZVPP"))
-        interface_kwargs.setdefault("solvent", defaults.get("solvent"))
-        interface_kwargs.setdefault("solvent_model", defaults.get("solvent_model", "none"))
+        interface_kwargs.setdefault("solvent", None)
+        interface_kwargs.setdefault("solvent_model", "none")
 
         self._interface = ORCAInterface(config=config, **interface_kwargs)
 

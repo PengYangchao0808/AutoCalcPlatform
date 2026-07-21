@@ -26,13 +26,12 @@ class CrestBackend(QCBackend):
     def __init__(self, config: dict[str, Any], **kwargs: Any) -> None:
         super().__init__(config, **kwargs)
 
-        theory_preopt = config.get("theory", {}).get("preoptimization", {})
         crest_config = config.get("executables", {}).get("crest", {})
 
         interface_kwargs = dict(kwargs)
         interface_kwargs.setdefault("gfn_level", crest_config.get("gfn_level", 2))
-        interface_kwargs.setdefault("solvent", theory_preopt.get("solvent"))
-        interface_kwargs.setdefault("solvent_model", theory_preopt.get("solvent_model", "none"))
+        interface_kwargs.setdefault("solvent", None)
+        interface_kwargs.setdefault("solvent_model", "none")
 
         self._interface = CRESTInterface(config=config, **interface_kwargs)
 

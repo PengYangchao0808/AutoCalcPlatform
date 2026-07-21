@@ -202,6 +202,17 @@ def _build_method_kwargs(raw_kwargs: dict[str, Any]) -> dict[str, Any]:
         if val is None or val == "" or val == "none":
             continue
         kwargs[key] = val
+
+    # Gas-phase override: when solvent_model is "none" or absent in the raw
+    # kwargs, the user explicitly chose gas phase. We must pass solvent=None
+    # and solvent_model="none" through to the backend so that ORCABackend's
+    # setdefault() does NOT fall back to theory.optimization.solvent from
+    # the config (e.g. ~/.conformer_search.yaml may set solvent: methanol).
+    raw_sm = raw_kwargs.get("solvent_model")
+    if raw_sm is None or str(raw_sm).strip().lower() in ("", "none"):
+        kwargs.setdefault("solvent_model", "none")
+        kwargs.setdefault("solvent", None)
+
     return kwargs
 
 
