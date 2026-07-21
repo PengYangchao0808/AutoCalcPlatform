@@ -808,6 +808,10 @@ option, optgroup {
 .upload-dropzone:hover, .upload-dropzone.dragover { border-color: var(--accent); color: var(--accent); }
 
 .parse-actions { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.charge-spin-row { display: flex; align-items: center; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--text-secondary); }
+.charge-spin-row label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.charge-spin-row input { width: 64px; padding: 4px 8px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--bg-panel); color: var(--text-primary); font-size: 12px; text-align: center; }
+.charge-spin-row input:focus { outline: none; border-color: var(--accent); }
 .parse-status { font-size: 12px; color: var(--text-secondary); }
 .parse-status.ok { color: var(--green); }
 .parse-status.err { color: var(--red); }
@@ -1250,6 +1254,11 @@ option, optgroup {
           <span class="parse-status" id="parse-status"></span>
         </div>
 
+        <div class="charge-spin-row" id="charge-spin-row" style="display:none;">
+          <label><span data-i18n="modal.col_charge">电荷</span> <input type="number" id="modal-charge" value="0" step="1"></label>
+          <label><span data-i18n="modal.col_spin">自旋多重度</span> <input type="number" id="modal-mult" value="1" step="1" min="1"></label>
+        </div>
+
         <div class="structure-preview-wrap" id="structure-preview" style="display:none;">
           <div class="preview-left">
             <table class="preview-table">
@@ -1686,6 +1695,10 @@ const I18N = {
     "modal.submit": "提交",
     "modal.required_smiles": "请输入 SMILES",
     "modal.submit_failed": "提交失败: {message}",
+    "modal.ri_composite": "复合方法 · 参数已固化",
+    "modal.ri_composite_hint": "3c 复合方法已内置 RI 体系，无需用户配置",
+    "modal.ri_automatic": "RI 自动 · 后 HF 方法内置",
+    "modal.ri_automatic_hint": "DLPNO 等后 HF 方法自带 RI 体系，参数自动处理",
     "nodes.title": "远程节点",
     "nodes.loading": "加载中…",
     "nodes.empty": "未配置远程节点",
@@ -1875,6 +1888,10 @@ const I18N = {
     "modal.submit": "Submit",
     "modal.required_smiles": "Please enter a SMILES string",
     "modal.submit_failed": "Submit failed: {message}",
+    "modal.ri_composite": "Composite method \u00b7 parameters fixed",
+    "modal.ri_composite_hint": "3c composite methods have built-in RI; no user configuration needed",
+    "modal.ri_automatic": "RI automatic \u00b7 post-HF method built-in",
+    "modal.ri_automatic_hint": "Post-HF methods like DLPNO have built-in RI; parameters handled automatically",
     "nodes.title": "Remote Nodes",
     "nodes.loading": "Loading…",
     "nodes.empty": "No remote nodes configured",
@@ -3502,9 +3519,35 @@ var CatalogUtils = (function() {
     return !!(fd && fd.advanced);
   }
 
-  function getFieldOptions(catalog, fieldName, engine) {
+  function getFieldOptions(catalog, fieldName, engine, functional, basis) {
     var fd = ((catalog && catalog.field_definitions) || {})[fieldName];
     if (!fd) return null;
+
+    if ((fieldName === "aux_j_basis" || fieldName === "aux_c_basis") && fd.options_source === "dynamic_aux_basis") {
+      var auxKind = fd.aux_kind;
+      var fallback = (fd.per_backend || {})[engine] || [];
+      if (!Array.isArray(fallback)) fallback = [];
+
+      if (functional) {
+        var funcMeta = lookupCI((catalog.method_meta || {}), functional);
+        if (funcMeta) {
+          var riSupport = funcMeta.ri_support || "user";
+          if (riSupport !== "user") return [];
+          if (fieldName === "aux_c_basis" && !funcMeta.needs_aux_c) return [];
+        }
+      }
+
+      var basisCatalog = (catalog && catalog.basis_catalog_v2) || {};
+      var basisKey = "aux_" + auxKind;
+      if (basis && basisCatalog[basis] && basisCatalog[basis][basisKey]) {
+        var tailored = basisCatalog[basis][basisKey];
+        if (fallback.indexOf(tailored) < 0) {
+          return [tailored].concat(fallback);
+        }
+      }
+      return fallback.slice();
+    }
+
     if (fd.options) return fd.options;
     if (fd.per_backend) return fd.per_backend[engine] || null;
     return null;
@@ -3512,21 +3555,37 @@ var CatalogUtils = (function() {
 
   // Resolution priority:
   //   1. METHOD_META[functional] — functional-level defaults for
-  //      basis / dispersion; RI/aux forced to none/empty when the
-  //      functional declares supports_ri == False.
+  //      basis / dispersion; RI/aux derived from ri_support three-state
+  //      and basis_catalog_v2 metadata.
   //   2. FIELD_DEFINITIONS — engine-specific → wildcard "*" → scalar.
-  function getFieldDefault(catalog, fieldName, engine, functional) {
+  function getFieldDefault(catalog, fieldName, engine, functional, basis) {
     var fieldDefs = (catalog && catalog.field_definitions) || {};
     var methodMeta = (catalog && catalog.method_meta) || {};
+    var basisCatalog = (catalog && catalog.basis_catalog_v2) || {};
 
     // ── Priority 1: functional-level defaults (METHOD_META) ──
     if (functional) {
       var funcMeta = lookupCI(methodMeta, functional);
       if (funcMeta) {
-        if (!funcMeta.supports_ri) {
+        var riSupport = funcMeta.ri_support || "user";
+
+        if (riSupport !== "user") {
           if (fieldName === "ri_approximation") return "none";
-          if (fieldName === "aux_basis") return "";
+          if (fieldName === "aux_j_basis") return "";
+          if (fieldName === "aux_c_basis") return "";
         }
+
+        if (fieldName === "aux_j_basis" && basis && basisCatalog[basis]) {
+          return basisCatalog[basis].aux_j || "AutoAux";
+        }
+
+        if (fieldName === "aux_c_basis") {
+          if (!funcMeta.needs_aux_c) return "";
+          if (basis && basisCatalog[basis]) {
+            return basisCatalog[basis].aux_c || "AutoAux";
+          }
+        }
+
         if (fieldName === "basis" && funcMeta.default_basis !== undefined) return funcMeta.default_basis;
         if (fieldName === "dispersion" && funcMeta.default_dispersion !== undefined) return funcMeta.default_dispersion;
       }
@@ -3575,6 +3634,9 @@ function openModal() {
   document.getElementById("modal-smiles").value = "";
   document.getElementById("modal-paste").value = "";
   document.getElementById("upload-file-input").value = "";
+  document.getElementById("charge-spin-row").style.display = "none";
+  document.getElementById("modal-charge").value = "0";
+  document.getElementById("modal-mult").value = "1";
   wizardUploadFile = null;
   var dzSpan = document.querySelector(".upload-dropzone span");
   if (dzSpan) dzSpan.textContent = t("modal.upload_hint");
@@ -3659,6 +3721,21 @@ function handleParseResult(body) {
     errBox.innerHTML = body.errors.map(function(e) { return "<div>" + escapeHtml(e) + "</div>"; }).join("");
   } else {
     errBox.style.display = "none";
+  }
+
+  var csRow = document.getElementById("charge-spin-row");
+  if (wizardStructures.length > 0) {
+    var allSameCharge = true, allSameMult = true;
+    var refCharge = wizardStructures[0].charge, refMult = wizardStructures[0].multiplicity;
+    for (var i = 1; i < wizardStructures.length; i++) {
+      if (wizardStructures[i].charge !== refCharge) allSameCharge = false;
+      if (wizardStructures[i].multiplicity !== refMult) allSameMult = false;
+    }
+    document.getElementById("modal-charge").value = (allSameCharge && refCharge !== undefined) ? refCharge : 0;
+    document.getElementById("modal-mult").value = (allSameMult && refMult !== undefined) ? refMult : 1;
+    csRow.style.display = "flex";
+  } else {
+    csRow.style.display = "none";
   }
 
   renderStructurePreview(wizardStructures, body.warnings || []);
@@ -3996,12 +4073,12 @@ async function openMethodConfig() {
   // module. The delegates here keep existing call sites unchanged while
   // automatically supplying the current methodCatalogCache state (R26).
 
-  function getFieldOptions(fieldName, engine) {
-    return CatalogUtils.getFieldOptions(methodCatalogCache, fieldName, engine);
+  function getFieldOptions(fieldName, engine, functional, basis) {
+    return CatalogUtils.getFieldOptions(methodCatalogCache, fieldName, engine, functional, basis);
   }
 
-  function getFieldDefault(fieldName, engine, functional) {
-    return CatalogUtils.getFieldDefault(methodCatalogCache, fieldName, engine, functional);
+  function getFieldDefault(fieldName, engine, functional, basis) {
+    return CatalogUtils.getFieldDefault(methodCatalogCache, fieldName, engine, functional, basis);
   }
 
   function isFieldAdvanced(fieldName) {
@@ -4113,6 +4190,19 @@ async function openMethodConfig() {
       else coreFields.push(fn);
     });
 
+    function renderRiImmutableBadge(fDiv, riSupport) {
+      var badge = document.createElement("span");
+      badge.className = "mc-builtin-badge";
+      if (riSupport === "composite") {
+        badge.textContent = (t("modal.ri_composite") || "复合方法 · 参数已固化");
+        badge.title = (t("modal.ri_composite_hint") || "3c 复合方法已内置 RI 体系，无需用户配置");
+      } else if (riSupport === "automatic") {
+        badge.textContent = (t("modal.ri_automatic") || "RI 自动 · 后 HF 方法内置");
+        badge.title = (t("modal.ri_automatic_hint") || "DLPNO 等后 HF 方法自带 RI 体系，参数自动处理");
+      }
+      fDiv.appendChild(badge);
+    }
+
     function buildFieldRow(fieldName, dest) {
       var fDiv = document.createElement("div");
       fDiv.className = "mc-field";
@@ -4121,13 +4211,35 @@ async function openMethodConfig() {
       fDiv.appendChild(lbl);
 
       var levelState = getLevelState(lvDef.level_id);
-      // Resolve functional *first* so we can pass it into getFieldDefault for
-      // functional-level defaults (METHOD_META). The "functional" field itself
-      // does not need the 3rd param (would recurse). See DevDoc §5 / R6.
       var functional = levelState.functional || getFieldDefault("functional", engine) || "";
+      var basis = levelState.basis || getFieldDefault("basis", engine, functional) || "";
+      var funcMeta = lookupCI(methodCatalogCache.method_meta || {}, functional);
+      var riSupport = (funcMeta && funcMeta.ri_support) || "user";
+
+      if (fieldName === "ri_approximation" && riSupport !== "user") {
+        renderRiImmutableBadge(fDiv, riSupport);
+        getLevelState(lvDef.level_id).ri_approximation = "none";
+        dest.appendChild(fDiv);
+        return;
+      }
+      if (fieldName === "aux_j_basis" && riSupport !== "user") {
+        renderRiImmutableBadge(fDiv, riSupport);
+        getLevelState(lvDef.level_id).aux_j_basis = "";
+        dest.appendChild(fDiv);
+        return;
+      }
+      if (fieldName === "aux_c_basis") {
+        if (riSupport !== "user" || !funcMeta || !funcMeta.needs_aux_c) {
+          renderRiImmutableBadge(fDiv, riSupport);
+          getLevelState(lvDef.level_id).aux_c_basis = "";
+          dest.appendChild(fDiv);
+          return;
+        }
+      }
+
       var curVal = levelState[fieldName] !== undefined
           ? levelState[fieldName]
-          : getFieldDefault(fieldName, engine, fieldName === "functional" ? undefined : functional);
+          : getFieldDefault(fieldName, engine, fieldName === "functional" ? undefined : functional, basis);
 
       // ── builtin_dispersion lock (DevDoc §6) ──
       // If the selected functional hardwires its dispersion (e.g. wB97X-D4 → D4,
@@ -4135,11 +4247,9 @@ async function openMethodConfig() {
       // The hidden value is still written into wizardState so /validate-method
       // receives a value consistent with the functional.
       if (fieldName === "dispersion") {
-        var funcMeta = lookupCI(methodCatalogCache.method_meta || {}, functional);
         if (funcMeta && funcMeta.builtin_dispersion) {
           var badgeSpan = document.createElement("span");
           badgeSpan.className = "mc-builtin-badge";
-          // i18n the suffix so EN users see "(built-in)" instead of "(内置)" (audit A8).
           badgeSpan.textContent = funcMeta.builtin_dispersion + " (" + (t("modal.builtin") || "内置") + ")";
           badgeSpan.title = t("modal.builtin_dispersion_hint") || "此泛函已内置色散校正，无需额外指定";
           fDiv.appendChild(badgeSpan);
@@ -4157,13 +4267,14 @@ async function openMethodConfig() {
         opts = funcFilter[fieldName];
       }
       if (!opts) {
-        opts = getFieldOptions(fieldName, engine);
+        opts = getFieldOptions(fieldName, engine, functional, basis);
       }
 
       var isSingleLocked = opts && opts.length === 1;
       var isBasisSingleLocked = isSingleLocked && fieldName === "basis";
-      var basisFd = (methodCatalogCache.field_definitions || {}).basis;
-      var supportsCustom = fieldName === "basis" && !isBasisSingleLocked && basisFd && basisFd.supports_custom;
+      var fieldFd = (methodCatalogCache.field_definitions || {})[fieldName];
+      var supportsCustom = ["basis", "aux_j_basis", "aux_c_basis"].indexOf(fieldName) >= 0
+        && !isBasisSingleLocked && fieldFd && fieldFd.supports_custom;
       var isCustomActive = supportsCustom && curVal && (
         String(curVal) === "__custom__" || (opts && opts.indexOf(String(curVal)) < 0)
       );
@@ -4171,10 +4282,14 @@ async function openMethodConfig() {
       if (opts && opts.length) {
         var sel = document.createElement("select");
         var hasMatch = false;
+        var optionMeta = ((methodCatalogCache.field_definitions || {})[fieldName] || {}).option_meta || {};
         opts.forEach(function(o) {
           var opt = document.createElement("option");
           opt.value = o;
           opt.textContent = o;
+          if (optionMeta[o]) {
+            opt.title = optionMeta[o];
+          }
           if (String(curVal) === String(o)) { opt.selected = true; hasMatch = true; }
           sel.appendChild(opt);
         });
@@ -4233,23 +4348,46 @@ async function openMethodConfig() {
               }
             }
 
-            // 3. RI / aux_basis: if the new functional doesn't support RI, force-clear.
-            //    Otherwise, when the prior state was "none"/empty (e.g. coming from a
-            //    non-RI composite method), reset to the field's global default so users
-            //    don't get stuck on "none" after switching into a RI-capable functional.
-            //    NOTE: `engine` is captured from buildFieldRow's closure. Currently
-            //    RI/aux fields exist only for the orca backend, so a rebuildLevelCard
-            //    always rebinds the listener before this callback can fire on a stale
-            //    engine. If multi-engine RI support lands, re-read currentEngine here (R28).
-            if (liveFuncMeta && !liveFuncMeta.supports_ri) {
+            // 3. RI / aux_j / aux_c: based on ri_support three-state.
+            //    composite/automatic: force-clear all RI/aux fields.
+            //    user: backfill defaults using current basis for aux derivation.
+            var newRiSupport = (liveFuncMeta && liveFuncMeta.ri_support) || "user";
+            if (newRiSupport !== "user") {
               st.ri_approximation = "none";
-              st.aux_basis = "";
+              st.aux_j_basis = "";
+              st.aux_c_basis = "";
             } else {
               if (st.ri_approximation === undefined || st.ri_approximation === "" || st.ri_approximation === "none") {
                 st.ri_approximation = getFieldDefault("ri_approximation", engine, newFunctional);
               }
-              if (st.aux_basis === undefined || st.aux_basis === "") {
-                st.aux_basis = getFieldDefault("aux_basis", engine, newFunctional);
+              if (st.aux_j_basis === undefined || st.aux_j_basis === "") {
+                st.aux_j_basis = getFieldDefault("aux_j_basis", engine, newFunctional, st.basis);
+              }
+              if (liveFuncMeta && liveFuncMeta.needs_aux_c) {
+                if (st.aux_c_basis === undefined || st.aux_c_basis === "") {
+                  st.aux_c_basis = getFieldDefault("aux_c_basis", engine, newFunctional, st.basis);
+                }
+              } else {
+                st.aux_c_basis = "";
+              }
+            }
+
+            rebuildLevelCard(lvDef.level_id);
+            scheduleValidate();
+          });
+        }
+        if (fieldName === "basis") {
+          sel.addEventListener("change", function() {
+            var newBasis = sel.value;
+            var st = getLevelState(lvDef.level_id);
+            st.basis = newBasis;
+
+            var curFuncMeta = lookupCI(methodCatalogCache.method_meta || {}, st.functional);
+            var curRiSupport = (curFuncMeta && curFuncMeta.ri_support) || "user";
+            if (curRiSupport === "user") {
+              st.aux_j_basis = getFieldDefault("aux_j_basis", engine, st.functional, newBasis);
+              if (curFuncMeta && curFuncMeta.needs_aux_c) {
+                st.aux_c_basis = getFieldDefault("aux_c_basis", engine, st.functional, newBasis);
               }
             }
 
@@ -4603,8 +4741,8 @@ async function submitJobModal() {
     } else {
       continue;
     }
-    inputPayload.charge = s.charge;
-    inputPayload.multiplicity = s.multiplicity;
+    inputPayload.charge = parseInt(document.getElementById("modal-charge").value, 10) || 0;
+    inputPayload.multiplicity = parseInt(document.getElementById("modal-mult").value, 10) || 1;
 
     if (isSimpleWorkflowSelected() && inputPayload.source_type === "smiles") {
       window.alert(t("modal.simple_no_smiles") || "Simple workflows do not accept SMILES input");

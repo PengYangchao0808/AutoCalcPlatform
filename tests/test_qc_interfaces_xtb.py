@@ -40,10 +40,9 @@ def test_xtb_optimize_parses_mocked_run_into_qcresult(
     sample_config: dict[str, object], tmp_path: Path
 ) -> None:
     interface = XTBInterface(sample_config)
-    output_file = tmp_path / "xtb_output.xyz"
 
     def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
-        _ = output_file.write_text(XTB_OUTPUT_XYZ, encoding="utf-8")
+        _ = (tmp_path / "xtbopt.xyz").write_text(XTB_OUTPUT_XYZ, encoding="utf-8")
         return subprocess.CompletedProcess(
             args="xtb",
             returncode=0,
@@ -63,7 +62,7 @@ def test_xtb_optimize_parses_mocked_run_into_qcresult(
     assert result.energy == pytest.approx(-7.654321)
     np.testing.assert_allclose(result.coordinates, np.array([[0.0, 0.0, 0.3]]))
     assert result.symbols == SYMBOLS
-    assert result.output_file == output_file
+    assert result.output_file == tmp_path / "xtbopt.xyz"
     assert result.log_file == tmp_path / "xtb.log"
     mock_run.assert_called_once()
 

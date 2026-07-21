@@ -78,8 +78,8 @@ class BenchmarkRunner:
     def run(
         self,
         input_xyz: Path,
-        charge: int = 0,
-        multiplicity: int = 1,
+        charge: int | None = None,
+        multiplicity: int | None = None,
     ) -> dict[str, Any]:
         """Execute the benchmark suite and return the full summary payload."""
         self.output_dir.mkdir(parents=True, exist_ok=True)

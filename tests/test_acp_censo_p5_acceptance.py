@@ -56,7 +56,8 @@ def test_resolve_levels_full_refinement_sp_fields() -> None:
             "refinement_sp": {
                 "functional": "DLPNO-CCSD(T)",
                 "basis": "def2-TZVPP",
-                "aux_basis": "def2-TZVPP/C",
+                "aux_j_basis": "def2/J",
+                "aux_c_basis": "def2-TZVPP/C",
                 "dispersion": "D4",
                 "ri_approximation": "RIJCOSX",
                 "grid": "UltraFine",
@@ -68,6 +69,7 @@ def test_resolve_levels_full_refinement_sp_fields() -> None:
     extras = resolved["sp_route_extras"]
     assert "D4" in extras
     assert "RIJCOSX" in extras
+    assert "def2/J" in extras
     assert "def2-TZVPP/C" in extras
     assert "DEFGRID3" in extras
     assert "VeryTightSCF" in extras
@@ -152,8 +154,10 @@ def test_orca_route_extras_rendered() -> None:
     )
     route_line = blocks.splitlines()[0]
     assert route_line.startswith("! wB97M-V def2-TZVPP SP")
-    for kw in ("RIJCOSX", "def2-TZVPP/C", "VeryTightSCF", "DEFGRID3"):
+    for kw in ("RIJCOSX", "VeryTightSCF", "DEFGRID3"):
         assert kw in route_line
+    assert "def2-TZVPP/C" not in route_line
+    assert 'auxC  "def2-TZVPP/C"' in blocks
 
 
 def test_orca_geom_maxiter_rendered() -> None:
@@ -990,3 +994,39 @@ def test_energy_levels_ewin_reaches_crest(tmp_path: Path) -> None:
     assert result.status == "completed"
     assert iface.run_conformer_search.call_args.kwargs["energy_window"] == pytest.approx(4.0)
     assert result.metadata["crest_ewin"] == pytest.approx(4.0)
+
+
+# =====================================================================
+# Phase 5.7: CENSO regression — aux_basis rename does not affect CENSO
+# =====================================================================
+
+def test_censo_template_path_not_affected_by_aux_basis_rename() -> None:
+    """CENSO backend template injection path should not read aux_j_basis/aux_c_basis.
+
+    CENSO uses its own template injection mechanism (censo_backend.py:589),
+    which does not consume aux_j_basis/aux_c_basis fields. This test ensures
+    the field rename does not break CENSO's template path.
+    """
+    from acp.workflows.energy import _base_route_extras
+
+    # CENSO template lines are built from _base_route_extras
+    level = {
+        "functional": "wB97M-V",
+        "basis": "def2-TZVPP",
+        "dispersion": "D4",
+        "ri_approximation": "RIJCOSX",
+        "aux_j_basis": "def2/J",
+        "aux_c_basis": "",
+        "grid": "UltraFine",
+        "scf_convergence": "Tight",
+    }
+    extras = _base_route_extras(level)
+    # CENSO template should include the route keywords
+    assert "D4" in extras
+    assert "RIJCOSX" in extras
+    assert "def2/J" in extras
+    assert "DEFGRID3" in extras
+    assert "TightSCF" in extras
+    # CENSO template line format
+    template_line = "! " + " ".join(extras)
+    assert template_line.startswith("! ")

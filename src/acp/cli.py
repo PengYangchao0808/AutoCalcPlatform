@@ -248,8 +248,15 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
     parser.add_argument("--route-extras", type=str, help="Comma-separated ORCA route extras (e.g. SlowConv,NoFinalGrid)")
 
     if wf in ("singlepoint", "optfreq", "optfreqsp"):
-        parser.add_argument("--aux-basis", default="", help="Auxiliary basis set")
-        parser.add_argument("--ri-approximation", default="none", choices=["none", "RI", "RIJCOSX", "RIJK"], help="RI approximation (default: none)")
+        parser.add_argument("--aux-j-basis", default="AutoAux", metavar="BASIS",
+            help="Auxiliary /J basis for RI-J fitting (default: AutoAux). "
+                 "Common: AutoAux, def2/J.")
+        parser.add_argument("--aux-c-basis", default="AutoAux", metavar="BASIS",
+            help="Auxiliary /C basis for RI-MP2 correlation (default: AutoAux). "
+                 "Common: AutoAux, def2-TZVPP/C, cc-pVTZ/C. Only used by "
+                  "double-hybrid functionals (PWPB95) and DLPNO.")
+        parser.add_argument("--ri-approximation", default="RIJCOSX", choices=["none", "RI", "RIJCOSX", "RIJK"], help="RI approximation (default: RIJCOSX)")
+        parser.add_argument("--aux-basis", dest="aux_j_basis_legacy", default=None, help=argparse.SUPPRESS)
 
     if wf in ("optimize", "optfreq", "optfreqsp"):
         parser.add_argument("--geom-maxiter", type=int, help="Max geometry iterations (maps to MaxIter in %%geom block)")
@@ -264,7 +271,12 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
     if wf == "optfreqsp":
         parser.add_argument("--sp-method", default="wB97M-V", help="SP functional (default: wB97M-V)")
         parser.add_argument("--sp-basis", default="def2-TZVPP", help="SP basis set (default: def2-TZVPP)")
-        parser.add_argument("--sp-aux-basis", default="def2/J", help="SP auxiliary basis (default: def2/J)")
+        parser.add_argument("--sp-aux-j-basis", default="AutoAux", metavar="BASIS",
+            help="SP auxiliary /J basis for RI-J fitting (default: AutoAux). Common: AutoAux, def2/J.")
+        parser.add_argument("--sp-aux-c-basis", default="AutoAux", metavar="BASIS",
+            help="SP auxiliary /C basis for RI-MP2 correlation (default: AutoAux). "
+                 "Common: AutoAux, def2-TZVPP/C. Only used by double-hybrid functionals (PWPB95) and DLPNO.")
+        parser.add_argument("--sp-aux-basis", default=None, help=argparse.SUPPRESS)
         parser.add_argument("--sp-ri-approximation", default="RIJCOSX", choices=["none", "RI", "RIJCOSX", "RIJK"], help="SP RI approximation (default: RIJCOSX)")
         parser.add_argument("--sp-dispersion", default="none", help="SP dispersion correction")
         parser.add_argument("--sp-solvent", default="", help="SP solvent name (e.g. water; defaults to --solvent)")
@@ -880,14 +892,12 @@ Examples:
     bench.add_argument(
         "--charge",
         type=int,
-        default=0,
-        help="Molecular charge (default: 0)",
+        help="Molecular charge (auto-detected if not specified)",
     )
     bench.add_argument(
         "--multiplicity",
         type=int,
-        default=1,
-        help="Spin multiplicity (default: 1)",
+        help="Spin multiplicity (auto-detected if not specified)",
     )
     bench.add_argument("--nproc", type=int, default=None)
     bench.add_argument("--mem", type=str, default=None)
@@ -1172,11 +1182,14 @@ def _handle_mechanism(args: argparse.Namespace) -> int:
 def _build_simple_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
     kwargs: dict[str, Any] = {}
     for key in ("method", "basis", "dispersion", "solvent_model", "solvent",
-                "aux_basis", "ri_approximation", "geom_maxiter", "opt_convergence",
+                "aux_j_basis", "aux_c_basis", "ri_approximation", "geom_maxiter", "opt_convergence",
                 "recalc_hess"):
         val = getattr(args, key, None)
         if val is not None:
             kwargs[key] = val
+    legacy_aux = getattr(args, "aux_j_basis_legacy", None)
+    if legacy_aux and kwargs.get("aux_j_basis") in (None, "AutoAux"):
+        kwargs["aux_j_basis"] = legacy_aux
     extras = getattr(args, "route_extras", None)
     if extras:
         kwargs["route_extras"] = [x.strip() for x in extras.split(",") if x.strip()]
@@ -1316,8 +1329,15 @@ def _handle_optfreqsp(args: argparse.Namespace) -> int:
         "basis": args.sp_basis,
         "ri_approximation": args.sp_ri_approximation,
     }
-    if args.sp_aux_basis:
-        sp_kwargs["aux_basis"] = args.sp_aux_basis
+    sp_aux_j = getattr(args, "sp_aux_j_basis", None)
+    sp_aux_legacy = getattr(args, "sp_aux_basis", None)
+    if sp_aux_legacy and sp_aux_j in (None, "AutoAux"):
+        sp_aux_j = sp_aux_legacy
+    if sp_aux_j and sp_aux_j != "AutoAux":
+        sp_kwargs["aux_j_basis"] = sp_aux_j
+    sp_aux_c = getattr(args, "sp_aux_c_basis", None)
+    if sp_aux_c and sp_aux_c != "AutoAux":
+        sp_kwargs["aux_c_basis"] = sp_aux_c
     if args.sp_dispersion and args.sp_dispersion != "none":
         sp_kwargs["dispersion"] = args.sp_dispersion
     sp_solvent = args.sp_solvent or args.solvent

@@ -174,10 +174,10 @@ def test_acp_benchmark_cli_prints_summary(tmp_path, monkeypatch, capsys):
             self.protocols = protocols
             self.output_dir = output_dir
 
-        def run(self, input_xyz: Path, charge: int = 0, multiplicity: int = 1):
+        def run(self, input_xyz: Path, charge: int | None = 0, multiplicity: int | None = 1):
             assert input_xyz.exists()
-            assert charge == 0
-            assert multiplicity == 1
+            assert charge == 0 or charge is None
+            assert multiplicity == 1 or multiplicity is None
             return {
                 "input": str(input_xyz),
                 "protocols": {

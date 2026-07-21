@@ -28,7 +28,7 @@ class TestAcpConfigFacade:
         defaults = get_default_config()
 
         assert isinstance(defaults, dict)
-        assert defaults["protocols"]["default"] == "lite"
+        assert defaults["protocols"]["default"] == "censo-lite"
         assert defaults["theory"]["single_point"]["method"] == "wB97M-V"
 
     def test_merge_configs_deep_merges(self):
@@ -60,7 +60,7 @@ class TestAcpConfigFacade:
 
         with open(out_path) as f:
             loaded = yaml.safe_load(f)
-        assert loaded["protocols"]["default"] == "lite"
+        assert loaded["protocols"]["default"] == "censo-lite"
 
     def test_apply_env_overrides_sets_nproc(self, monkeypatch):
         """apply_env_overrides() applies CONFSEARCH_NPROC."""

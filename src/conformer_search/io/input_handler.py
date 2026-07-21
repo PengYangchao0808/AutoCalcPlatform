@@ -275,8 +275,25 @@ class MolecularInputHandler:
         if energy is not None:
             coordinates = coords_with_energy
 
-        charge = charge if charge is not None else 0
-        multiplicity = multiplicity if multiplicity is not None else 1
+        comment_charge: int = 0
+        comment_mult: int = 1
+        if charge is None or multiplicity is None:
+            try:
+                with open(xyz_path, encoding="utf-8") as fh:
+                    lines = fh.readlines()
+                if len(lines) >= 2:
+                    comment = lines[1].strip()
+                    chg_match = re.search(r"charge\s*=\s*(-?\d+)", comment, re.IGNORECASE)
+                    if chg_match:
+                        comment_charge = int(chg_match.group(1))
+                    mult_match = re.search(r"mult(?:i(?:plicity)?)?\s*=\s*(\d+)", comment, re.IGNORECASE)
+                    if mult_match:
+                        comment_mult = int(mult_match.group(1))
+            except (OSError, UnicodeDecodeError):
+                pass
+
+        charge = charge if charge is not None else comment_charge
+        multiplicity = multiplicity if multiplicity is not None else comment_mult
 
         name = name or xyz_path.stem
         

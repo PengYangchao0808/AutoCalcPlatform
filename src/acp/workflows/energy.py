@@ -75,7 +75,7 @@ def _base_route_extras(level: dict[str, Any]) -> list[str]:
     """Build ORCA route keywords from a level's advanced fields.
 
     Whitelisted fields only (§10.1): dispersion, ri_approximation,
-    aux_basis, grid, scf_convergence. Values outside the catalog enums are
+    aux_j_basis, aux_c_basis, grid, scf_convergence. Values outside the catalog enums are
     passed through verbatim in upper case where conventional.
     """
     extras: list[str] = []
@@ -88,9 +88,13 @@ def _base_route_extras(level: dict[str, Any]) -> list[str]:
     if ri and ri.lower() != "none":
         extras.append(ri.upper())
 
-    aux_basis = str(level.get("aux_basis") or "").strip()
-    if aux_basis:
-        extras.append(aux_basis)
+    aux_j_basis = str(level.get("aux_j_basis") or "").strip()
+    if aux_j_basis:
+        extras.append(aux_j_basis)
+
+    aux_c_basis = str(level.get("aux_c_basis") or "").strip()
+    if aux_c_basis:
+        extras.append(aux_c_basis)
 
     grid_kw = _GRID_ROUTE_MAP.get(str(level.get("grid") or "").strip().lower())
     if grid_kw:
@@ -131,7 +135,7 @@ def _resolve_levels(
     Consumes the full §10.1 field sets: ``dft_opt`` (functional, basis,
     dispersion, solvent_model, solvent, grid, scf_convergence,
     opt_convergence, max_steps), ``refinement_sp`` (functional, basis,
-    aux_basis, dispersion, ri_approximation, solvent_model, solvent, grid,
+    aux_j_basis, aux_c_basis, dispersion, ri_approximation, solvent_model, solvent, grid,
     scf_convergence), ``screening_sp`` (same set, applied to the CENSO
     screening part) and ``thermo`` (temperature, pressure, scale_factor).
 

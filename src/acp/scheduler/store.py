@@ -208,6 +208,11 @@ def _record_to_row(record: JobRecord) -> tuple[Any, ...]:
 
 def _row_to_record(row: sqlite3.Row) -> JobRecord:
     spec_raw = json.loads(row["spec_json"])
+
+    if isinstance(spec_raw.get("method"), dict):
+        from acp.catalog import normalize_legacy_method
+        spec_raw["method"] = normalize_legacy_method(spec_raw["method"])
+
     columns = set(row.keys())
     project_id = row["project_id"] if "project_id" in columns else spec_raw.get("project_id")
     input_hash = row["input_hash"] if "input_hash" in columns else spec_raw.get("input_hash")

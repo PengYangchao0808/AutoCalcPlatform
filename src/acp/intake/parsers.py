@@ -237,7 +237,7 @@ def _parse_charge_mult_from_comment(comment: str) -> tuple[int, int]:
     cm = re.search(r"charge\s*=\s*(-?\d+)", comment, re.IGNORECASE)
     if cm:
         charge = int(cm.group(1))
-    mm = re.search(r"multi(?:plicity)?\s*=\s*(\d+)", comment, re.IGNORECASE)
+    mm = re.search(r"mult(?:i(?:plicity)?)?\s*=\s*(\d+)", comment, re.IGNORECASE)
     if mm:
         mult = int(mm.group(1))
     return charge, mult

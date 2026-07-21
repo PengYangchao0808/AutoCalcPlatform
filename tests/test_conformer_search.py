@@ -137,7 +137,7 @@ class TestProtocols:
         assert 'executables' in config
         assert 'resources' in config
         assert 'protocols' in config
-        assert config['protocols']['default'] == 'lite'
+        assert config['protocols']['default'] == 'censo-lite'
 
     def test_protocol_spec_resolve(self):
         """Test protocol specification resolution."""

@@ -633,7 +633,8 @@ def test_cli_optfreqsp_has_sp_args():
     assert result.returncode == 0
     assert "--sp-method" in result.stdout
     assert "--sp-basis" in result.stdout
-    assert "--sp-aux-basis" in result.stdout
+    assert "--sp-aux-j-basis" in result.stdout
+    assert "--sp-aux-c-basis" in result.stdout
     assert "--sp-ri-approximation" in result.stdout
 
 
@@ -830,8 +831,9 @@ def test_build_simple_method_kwargs_includes_recalc_hess():
     from acp.cli import _build_simple_method_kwargs
     args = argparse.Namespace(
         method="r2SCAN-3c", basis="def2-mTZVPP", dispersion="none",
-        solvent_model="none", solvent="", aux_basis="", ri_approximation="none",
+        solvent_model="none", solvent="", aux_j_basis="", aux_c_basis="", ri_approximation="none",
         geom_maxiter=None, opt_convergence="Tight", recalc_hess=8, route_extras=None,
+        aux_j_basis_legacy=None,
     )
     kwargs = _build_simple_method_kwargs(args)
     assert kwargs["recalc_hess"] == 8

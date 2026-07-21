@@ -179,19 +179,51 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
 # JSON encoder serialises tuples and lists identically, so the API surface
 # is unchanged.
 
-_ALL_BASIS_SETS: tuple[str, ...] = (
-    "def2-SV(P)", "def2-SVP", "def2-SVPD",
-    "def2-TZVP", "def2-TZVPP", "def2-TZVPPD",
-    "def2-QZVP", "def2-QZVPP", "def2-QZVPPD",
-    "ma-def2-SVP", "ma-def2-TZVP", "ma-def2-TZVPP", "ma-def2-QZVPP",
-    "cc-pVDZ", "cc-pVTZ", "cc-pVQZ", "cc-pV5Z",
-    "aug-cc-pVDZ", "aug-cc-pVTZ", "aug-cc-pVQZ",
-    "cc-pwCVDZ", "cc-pwCVTZ", "cc-pwCVQZ",
-    "cc-pCVDZ", "cc-pCVTZ",
-)
+BASIS_CATALOG: dict[str, dict[str, str | None]] = {
+    "def2-SV(P)":  {"aux_j": "def2/J", "aux_c": None},
+    "def2-SVP":    {"aux_j": "def2/J", "aux_c": "def2-SVP/C"},
+    "def2-SVPD":   {"aux_j": "def2/J", "aux_c": "def2-SVPD/C"},
+    "def2-TZVP":   {"aux_j": "def2/J", "aux_c": "def2-TZVP/C"},
+    "def2-TZVPP":  {"aux_j": "def2/J", "aux_c": "def2-TZVPP/C"},
+    "def2-TZVPPD": {"aux_j": "def2/J", "aux_c": "def2-TZVPP/C"},
+    "def2-QZVP":   {"aux_j": "def2/J", "aux_c": None},
+    "def2-QZVPP":  {"aux_j": "def2/J", "aux_c": "def2-QZVPP/C"},
+    "def2-QZVPPD": {"aux_j": "def2/J", "aux_c": "def2-QZVPP/C"},
+
+    "ma-def2-SVP":   {"aux_j": "def2/J", "aux_c": None},
+    "ma-def2-TZVP":  {"aux_j": "def2/J", "aux_c": None},
+    "ma-def2-TZVPP": {"aux_j": "def2/J", "aux_c": None},
+    "ma-def2-QZVPP": {"aux_j": "def2/J", "aux_c": None},
+
+    "cc-pVDZ":     {"aux_j": None, "aux_c": "cc-pVDZ/C"},
+    "cc-pVTZ":     {"aux_j": None, "aux_c": "cc-pVTZ/C"},
+    "cc-pVQZ":     {"aux_j": None, "aux_c": "cc-pVQZ/C"},
+    "cc-pV5Z":     {"aux_j": None, "aux_c": "cc-pV5Z/C"},
+    "aug-cc-pVDZ": {"aux_j": None, "aux_c": "aug-cc-pVDZ/C"},
+    "aug-cc-pVTZ": {"aux_j": None, "aux_c": "aug-cc-pVTZ/C"},
+    "aug-cc-pVQZ": {"aux_j": None, "aux_c": "aug-cc-pVQZ/C"},
+
+    "cc-pwCVDZ": {"aux_j": None, "aux_c": None},
+    "cc-pwCVTZ": {"aux_j": None, "aux_c": None},
+    "cc-pwCVQZ": {"aux_j": None, "aux_c": None},
+    "cc-pCVDZ":  {"aux_j": None, "aux_c": None},
+    "cc-pCVTZ":  {"aux_j": None, "aux_c": None},
+
+    "def2-mTZVPP": {"aux_j": None, "aux_c": None},
+    "def2-mSVP":   {"aux_j": None, "aux_c": None},
+    "mTZVP":       {"aux_j": None, "aux_c": None},
+}
+
+_ALL_BASIS_SETS: tuple[str, ...] = tuple(BASIS_CATALOG.keys())
+
+_AUX_J_BASIS_FALLBACK = ["AutoAux", "def2/J"]
+_AUX_C_BASIS_FALLBACK = ["AutoAux"]
+
+# v1.3: 3c composite-only basis sets — not shown in non-composite functional options
+_COMPOSITE_BASIS_SETS: tuple[str, ...] = ("def2-mTZVPP", "def2-mSVP", "mTZVP")
 
 # ── Phase 4.2: basis-catalog deduplication sentinel ────────────────────
-# Instead of storing the full 24-element basis list in every METHOD_META
+# Instead of storing the full 28-element basis list in every METHOD_META
 # entry, we use a module-level sentinel that _derive_functional_options_map
 # and get_method_catalog() understand. The API response puts the tuple
 # once as a top-level ``basis_catalog`` field; metadata entries that
@@ -199,7 +231,7 @@ _ALL_BASIS_SETS: tuple[str, ...] = (
 # duplicated array.
 _BASIS_CATALOG_REF = "<basis-catalog>"
 
-# ── Per-functional metadata (basis_inline, supports_ri, defaults, etc.) ──
+# ── Per-functional metadata (basis_inline, ri_support, defaults, etc.) ──
 # Single source of truth for frontend data-driven UI logic.
 # Key = functional name (standard casing).  Use _case_insensitive_get()
 # for lookups to tolerate user-input case variance.
@@ -209,10 +241,10 @@ _BASIS_CATALOG_REF = "<basis-catalog>"
 # ``functional_options_map`` values are "由 METHOD_META 自动生成".
 
 METHOD_META: dict[str, dict[str, Any]] = {
-    # ── 3c composite methods (built-in basis set, no RI) ──
+    # ── 3c composite methods (built-in basis set, RI fully fixed) ──
     "r2SCAN-3c": {
         "basis_inline": False,
-        "supports_ri": False,
+        "ri_support": "composite",
         "basis": ("def2-mTZVPP",),
         "dispersion": ("D4",),
         "builtin_dispersion": "D4",
@@ -221,7 +253,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
     },
     "PBEh-3c": {
         "basis_inline": False,
-        "supports_ri": False,
+        "ri_support": "composite",
         "basis": ("def2-mSVP",),
         "dispersion": ("D3BJ",),
         "builtin_dispersion": "D3BJ",
@@ -230,7 +262,7 @@ METHOD_META: dict[str, dict[str, Any]] = {
     },
     "B97-3c": {
         "basis_inline": False,
-        "supports_ri": False,
+        "ri_support": "composite",
         "basis": ("mTZVP",),
         "dispersion": ("D3BJ",),
         "builtin_dispersion": "D3BJ",
@@ -238,10 +270,11 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_dispersion": "D3BJ",
     },
 
-    # ── Ordinary hybrid functionals (supports RI) ──
+    # ── Ordinary hybrid functionals (user-selectable RI, no /C needed) ──
     "B3LYP": {
         "basis_inline": True,
-        "supports_ri": True,
+        "ri_support": "user",
+        "needs_aux_c": False,
         "basis": _BASIS_CATALOG_REF,
         "dispersion": ("none", "D3", "D3BJ", "D4"),
         "builtin_dispersion": None,
@@ -250,7 +283,8 @@ METHOD_META: dict[str, dict[str, Any]] = {
     },
     "PBE0": {
         "basis_inline": True,
-        "supports_ri": True,
+        "ri_support": "user",
+        "needs_aux_c": False,
         "basis": _BASIS_CATALOG_REF,
         "dispersion": ("none", "D3", "D3BJ", "D4"),
         "builtin_dispersion": None,
@@ -259,7 +293,8 @@ METHOD_META: dict[str, dict[str, Any]] = {
     },
     "M062X": {
         "basis_inline": True,
-        "supports_ri": True,
+        "ri_support": "user",
+        "needs_aux_c": False,
         "basis": _BASIS_CATALOG_REF,
         "dispersion": ("none", "D3", "D3BJ"),
         "builtin_dispersion": None,
@@ -267,10 +302,11 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_dispersion": "none",
     },
 
-    # ── Range-separated single-hybrid functionals (supports RI) ──
+    # ── Range-separated single-hybrid functionals ──
     "wB97X-D4": {
         "basis_inline": True,
-        "supports_ri": True,
+        "ri_support": "user",
+        "needs_aux_c": False,
         "basis": _BASIS_CATALOG_REF,
         "dispersion": ("D4",),
         "builtin_dispersion": "D4",
@@ -279,7 +315,8 @@ METHOD_META: dict[str, dict[str, Any]] = {
     },
     "wB97M-V": {
         "basis_inline": True,
-        "supports_ri": True,
+        "ri_support": "user",
+        "needs_aux_c": False,
         "basis": _BASIS_CATALOG_REF,
         "dispersion": ("VV10",),
         "builtin_dispersion": "VV10",
@@ -287,40 +324,30 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_dispersion": "VV10",
     },
 
-    # ── Double-hybrid functionals (supports RI, needs RI-MP2 auxiliary basis) ──
+    # ── Double-hybrid functionals (need /J + /C) ──
     "PWPB95": {
         "basis_inline": True,
-        "supports_ri": True,
+        "ri_support": "user",
+        "needs_aux_c": True,
         "basis": _BASIS_CATALOG_REF,
         "dispersion": ("D3BJ", "D4", "D3", "none"),
         "builtin_dispersion": None,
         "default_basis": "def2-TZVPP",
         "default_dispersion": "D3BJ",
     },
-    "wB97M-2": {
-        "basis_inline": True,
-        "supports_ri": True,
-        "basis": _BASIS_CATALOG_REF,
-        "dispersion": ("VV10",),
-        "builtin_dispersion": "VV10",
-        "default_basis": "def2-TZVPP",
-        "default_dispersion": "VV10",
-    },
 
     # ── Post-HF wavefunction methods ──
     "DLPNO-CCSD(T)": {
         "basis_inline": False,
-        "supports_ri": False,
+        "ri_support": "automatic",
+        "needs_aux_c": True,
         "basis": ("def2-TZVPP",),
         "dispersion": ("none",),
         "builtin_dispersion": None,
         "default_basis": "def2-TZVPP",
         "default_dispersion": "none",
-        "basis_block": {
-            "basis": "def2-TZVPP",
-            "auxJ": "def2/J",
-            "auxC": "def2-TZVPP/C",
-        },
+        "default_aux_j": "def2/J",
+        "default_aux_c": "def2-TZVPP/C",
     },
 }
 
@@ -339,6 +366,9 @@ def _derive_functional_options_map() -> dict[str, dict[str, list[str]]]:
         raw_basis = meta.get("basis", ())
         if raw_basis is _BASIS_CATALOG_REF:
             basis_list = list(_ALL_BASIS_SETS)
+            ri_support = meta.get("ri_support", "user")
+            if ri_support != "composite":
+                basis_list = [b for b in basis_list if b not in _COMPOSITE_BASIS_SETS]
         else:
             basis_list = list(raw_basis)
         out[func] = {
@@ -358,7 +388,7 @@ FIELD_DEFINITIONS: dict[str, Any] = {
                 "r2SCAN-3c", "PBEh-3c", "B97-3c",
                 "B3LYP", "PBE0", "M062X",
                 "wB97X-D4", "wB97M-V",
-                "PWPB95", "wB97M-2",
+                "PWPB95",
                 "DLPNO-CCSD(T)",
             ],
             "xtb": ["GFN0-xTB", "GFN1-xTB", "GFN2-xTB"],
@@ -460,14 +490,30 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "per_backend": {"xtb": ["crude", "sloppy", "loose", "normal", "tight", "vtight", "extreme"]},
         "default": {"*": "normal"},
     },
-    "charge": {"type": "int", "advanced": True, "default": {"*": 0}},
-    "multiplicity": {"type": "int", "advanced": True, "default": {"*": 1}},
-    "aux_basis": {
+    "aux_j_basis": {
         "type": "select",
         "advanced": True,
-        "per_backend": {            "orca": ["AutoAux", "def2/J", "def2-TZVPP/C", "cc-pVTZ/C"],
-        },
+        "per_backend": {"orca": _AUX_J_BASIS_FALLBACK},
         "default": {"*": "AutoAux"},
+        "supports_custom": True,
+        "options_source": "dynamic_aux_basis",
+        "aux_kind": "j",
+        "option_meta": {
+            "AutoAux": "ORCA auto-generates /J auxiliary basis (recommended default)",
+            "def2/J":  "Weigend universal /J fitting basis (works with any main basis)",
+        },
+    },
+    "aux_c_basis": {
+        "type": "select",
+        "advanced": True,
+        "per_backend": {"orca": _AUX_C_BASIS_FALLBACK},
+        "default": {"*": "AutoAux"},
+        "supports_custom": True,
+        "options_source": "dynamic_aux_basis",
+        "aux_kind": "c",
+        "option_meta": {
+            "AutoAux": "ORCA auto-generates /C auxiliary basis",
+        },
     },
     "ri_approximation": {
         "type": "select",
@@ -494,7 +540,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "label_zh": "\u6784\u8c61\u641c\u7d22",
                 "required": True,
                 "allowed_engines": ["crest"],
-                "fields": ["gfn", "ewin", "rthr", "solvent_model", "charge", "multiplicity"],
+                "fields": ["gfn", "ewin", "rthr", "solvent_model"],
             },
             {
                 "level_id": "dft_opt",
@@ -506,13 +552,14 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "functional",
                     "basis",
                     "dispersion",
+                    "ri_approximation",
+                    "aux_j_basis",
+                    "aux_c_basis",
                     "solvent_model",
                     "solvent",
                     "grid",
                     "scf_convergence",
                     "max_steps",
-                    "charge",
-                    "multiplicity",
                 ],
             },
             {
@@ -524,15 +571,14 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "fields": [
                     "functional",
                     "basis",
-                    "aux_basis",
+                    "aux_j_basis",
+                    "aux_c_basis",
                     "dispersion",
                     "ri_approximation",
                     "solvent_model",
                     "solvent",
                     "grid",
                     "scf_convergence",
-                    "charge",
-                    "multiplicity",
                 ],
             },
             {
@@ -563,6 +609,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "functional": "r2SCAN-3c",
                         "basis": "",
                         "dispersion": "none",
+                        "ri_approximation": "none",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
                         "grid": "UltraFine",
@@ -572,7 +621,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "engine": "orca",
                         "functional": "wB97M-V",
                         "basis": "def2-TZVPP",
-                        "aux_basis": "",
+                        "ri_approximation": "RIJCOSX",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
                         "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
@@ -603,6 +654,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "functional": "r2SCAN-3c",
                         "basis": "",
                         "dispersion": "none",
+                        "ri_approximation": "none",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
                         "grid": "UltraFine",
@@ -612,7 +666,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "engine": "orca",
                         "functional": "wB97M-V",
                         "basis": "def2-TZVPP",
-                        "aux_basis": "",
+                        "ri_approximation": "RIJCOSX",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
                         "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
@@ -643,6 +699,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "functional": "r2SCAN-3c",
                         "basis": "",
                         "dispersion": "none",
+                        "ri_approximation": "none",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
                         "grid": "UltraFine",
@@ -652,7 +711,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "engine": "orca",
                         "functional": "wB97M-V",
                         "basis": "def2-TZVPP",
-                        "aux_basis": "",
+                        "ri_approximation": "RIJCOSX",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
                         "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
@@ -714,6 +775,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "functional",
                     "basis",
                     "dispersion",
+                    "ri_approximation",
+                    "aux_j_basis",
+                    "aux_c_basis",
                     "solvent_model",
                     "solvent",
                     "grid",
@@ -755,6 +819,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "functional",
                     "basis",
                     "dispersion",
+                    "ri_approximation",
+                    "aux_j_basis",
+                    "aux_c_basis",
                     "solvent_model",
                     "solvent",
                 ],
@@ -773,6 +840,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "functional",
                     "basis",
                     "dispersion",
+                    "ri_approximation",
+                    "aux_j_basis",
+                    "aux_c_basis",
                     "solvent_model",
                     "solvent",
                     "grid",
@@ -796,6 +866,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "functional",
                     "basis",
                     "dispersion",
+                    "ri_approximation",
+                    "aux_j_basis",
+                    "aux_c_basis",
                     "solvent_model",
                     "solvent",
                     "grid",
@@ -814,8 +887,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "fields": [
                     "functional",
                     "basis",
+                    "aux_j_basis",
+                    "aux_c_basis",
                     "dispersion",
-                    "aux_basis",
                     "ri_approximation",
                     "solvent_model",
                     "solvent",
@@ -843,6 +917,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "functional": "r2SCAN-3c",
                         "basis": "",
                         "dispersion": "none",
+                        "ri_approximation": "none",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
                         "grid": "UltraFine",
@@ -852,7 +929,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "engine": "orca",
                         "functional": "wB97M-V",
                         "basis": "def2-TZVPP",
-                        "aux_basis": "",
+                        "ri_approximation": "RIJCOSX",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
                         "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
@@ -901,7 +980,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "label_zh": "CENSO 构象系综",
                 "required": True,
                 "allowed_engines": ["censo"],
-                "fields": ["ewin", "charge", "multiplicity"],
+                "fields": ["ewin"],
             },
             {
                 "level_id": "thermo",
@@ -971,7 +1050,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "label_zh": "CENSO 筛选",
                 "required": True,
                 "allowed_engines": ["censo"],
-                "fields": ["ewin", "charge", "multiplicity"],
+                "fields": ["ewin"],
             },
             {
                 "level_id": "dft_opt",
@@ -989,8 +1068,6 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "scf_convergence",
                     "opt_convergence",
                     "max_steps",
-                    "charge",
-                    "multiplicity",
                 ],
             },
             {
@@ -1002,15 +1079,14 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "fields": [
                     "functional",
                     "basis",
-                    "aux_basis",
+                    "aux_j_basis",
+                    "aux_c_basis",
                     "dispersion",
                     "ri_approximation",
                     "solvent_model",
                     "solvent",
                     "grid",
                     "scf_convergence",
-                    "charge",
-                    "multiplicity",
                 ],
             },
             {
@@ -1037,6 +1113,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "functional": "r2SCAN-3c",
                         "basis": "",
                         "dispersion": "none",
+                        "ri_approximation": "none",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
                         "grid": "UltraFine",
@@ -1048,7 +1127,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "engine": "orca",
                         "functional": "wB97M-V",
                         "basis": "def2-TZVPP",
-                        "aux_basis": "",
+                        "ri_approximation": "RIJCOSX",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
                         "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
@@ -1074,7 +1155,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "engine": "orca",
                         "functional": "wB97M-V",
                         "basis": "def2-TZVPP",
-                        "aux_basis": "",
+                        "ri_approximation": "RIJCOSX",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
                         "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
@@ -1101,6 +1184,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "functional": "r2SCAN-3c",
                         "basis": "",
                         "dispersion": "none",
+                        "ri_approximation": "none",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
                         "solvent_model": "none",
                         "solvent": "",
                         "grid": "UltraFine",
@@ -1112,7 +1198,9 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "engine": "orca",
                         "functional": "wB97M-V",
                         "basis": "def2-TZVPP",
-                        "aux_basis": "",
+                        "ri_approximation": "RIJCOSX",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
                         "dispersion": "none",
                         "solvent_model": "none",
                         "solvent": "",
@@ -1238,12 +1326,16 @@ def _case_insensitive_get(mapping: dict[str, Any], key: str) -> Any | None:
 
 def _resolve_field_options(
     field_name: str, engine: str, functional: str | None = None,
+    basis: str | None = None,
 ) -> list[str] | None:
     """Return allowed options for a field given a specific engine.
 
     For ``basis`` and ``dispersion`` fields, when a functional is provided
     the options are resolved from ``FUNCTIONAL_OPTIONS_MAP`` so that only
     chemically valid combinations are offered.
+
+    For ``aux_j_basis`` / ``aux_c_basis``, dynamic options are generated
+    from ``BASIS_CATALOG`` based on the current *basis*.
     """
     if functional and field_name in ("basis", "dispersion"):
         mapping = FUNCTIONAL_OPTIONS_MAP.get(functional)
@@ -1252,13 +1344,33 @@ def _resolve_field_options(
     fd = FIELD_DEFINITIONS.get(field_name)
     if not fd:
         return None
+
+    if (
+        field_name in ("aux_j_basis", "aux_c_basis")
+        and fd.get("options_source") == "dynamic_aux_basis"
+    ):
+        aux_kind = fd.get("aux_kind")
+        fallback = fd.get("per_backend", {}).get(engine, [])
+        if not isinstance(fallback, list):
+            fallback = []
+
+        if functional:
+            meta = _case_insensitive_get(METHOD_META, functional)
+            if meta and field_name == "aux_c_basis" and not meta.get("needs_aux_c", False):
+                return []
+
+        if basis and basis in BASIS_CATALOG:
+            tailored = BASIS_CATALOG[basis].get(f"aux_{aux_kind}")
+            if tailored and tailored not in fallback:
+                return [tailored] + list(fallback)
+        return list(fallback)
+
     if "options" in fd:
         return fd["options"]
     if "per_backend" in fd:
         opts = fd["per_backend"].get(
             engine, list(fd["per_backend"].values())[0] if fd["per_backend"] else []
         )
-        # Phase 4.2: expand basis-catalog sentinel
         if opts is _BASIS_CATALOG_REF:
             return list(_ALL_BASIS_SETS)
         return opts
@@ -1267,17 +1379,19 @@ def _resolve_field_options(
 
 def _resolve_field_default(
     field_name: str, engine: str, functional: str | None = None,
+    basis: str | None = None,
 ) -> Any:
     """Return the default value for a field, respecting functional context.
 
     Resolution order:
       1. ``METHOD_META[functional]`` (functional-level defaults for
          ``basis`` / ``dispersion``; RI/aux forced to none/empty when the
-         functional declares ``supports_ri == False``).
-      2. ``FUNCTIONAL_OPTIONS_MAP[functional]`` restriction for
+         functional declares ``ri_support != "user"``).
+      2. ``BASIS_CATALOG`` derivation for ``aux_j_basis`` / ``aux_c_basis``.
+      3. ``FUNCTIONAL_OPTIONS_MAP[functional]`` restriction for
          ``basis`` / ``dispersion`` (first allowed option, or the global
          default when it is also allowed).
-      3. ``FIELD_DEFINITIONS`` global default for the field.
+      4. ``FIELD_DEFINITIONS`` global default for the field.
     """
     fd = FIELD_DEFINITIONS.get(field_name)
     global_default: Any = ""
@@ -1295,11 +1409,27 @@ def _resolve_field_default(
                 return meta["default_basis"]
             if field_name == "dispersion" and meta.get("default_dispersion") is not None:
                 return meta["default_dispersion"]
-            if not meta.get("supports_ri", True):
+
+            ri_support = meta.get("ri_support", "user")
+            if ri_support in ("composite", "automatic"):
                 if field_name == "ri_approximation":
                     return "none"
-                if field_name == "aux_basis":
+                if field_name in ("aux_j_basis", "aux_c_basis"):
                     return ""
+
+            if field_name == "aux_j_basis" and basis:
+                basis_meta = BASIS_CATALOG.get(basis)
+                if basis_meta and basis_meta.get("aux_j"):
+                    return basis_meta["aux_j"]
+                return global_default
+            if field_name == "aux_c_basis":
+                if not meta.get("needs_aux_c", False):
+                    return ""
+                if basis:
+                    basis_meta = BASIS_CATALOG.get(basis)
+                    if basis_meta and basis_meta.get("aux_c"):
+                        return basis_meta["aux_c"]
+                    return global_default
 
         if field_name in ("basis", "dispersion"):
             mapping = _case_insensitive_get(FUNCTIONAL_OPTIONS_MAP, functional)
@@ -1313,12 +1443,34 @@ def _resolve_field_default(
     return global_default
 
 
+def _migrate_legacy_aux_basis(level: dict[str, Any], method_key: str) -> None:
+    """Migrate legacy ``aux_basis`` field to ``aux_j_basis`` / ``aux_c_basis``.
+
+    For DLPNO (ri_support="automatic"), aux_basis routes to aux_c_basis.
+    For all others, aux_basis routes to aux_j_basis.
+    """
+    if "aux_basis" not in level:
+        return
+    if "aux_j_basis" in level or "aux_c_basis" in level:
+        return
+    func = level.get(method_key) or level.get("functional")
+    meta = _case_insensitive_get(METHOD_META, func) if func else None
+    ri_support = (meta or {}).get("ri_support", "user")
+    if ri_support == "automatic":
+        level["aux_c_basis"] = level.pop("aux_basis")
+    else:
+        level["aux_j_basis"] = level.pop("aux_basis")
+
+
 def _clamp_to_functional(level: dict[str, Any], method_key: str) -> None:
     """Clamp basis/dispersion to the functional's allowed values.
 
     Safety net: ensures execution-path converters never pass invalid
     basis/dispersion combinations to backends, even if validation was
     bypassed.
+
+    Also migrates legacy ``aux_basis`` to ``aux_j_basis`` / ``aux_c_basis``
+    and enforces ``ri_support`` semantics (composite/automatic → clear RI/aux).
 
     Comparison is case-insensitive (R20): a current value that matches an
     allowed entry case-insensitively is normalised to the canonical casing
@@ -1327,10 +1479,21 @@ def _clamp_to_functional(level: dict[str, Any], method_key: str) -> None:
     downstream CLI emit (``.lower()`` for ``_CASE_INSENSITIVE_FIELDS``)
     consistent with the catalog's canonical casing.
     """
+    _migrate_legacy_aux_basis(level, method_key)
+
     func_name = level.get(method_key)
     if not func_name:
         return
+    meta = _case_insensitive_get(METHOD_META, func_name)
     mapping = _case_insensitive_get(FUNCTIONAL_OPTIONS_MAP, func_name)
+    ri_support = (meta or {}).get("ri_support", "user")
+
+    if ri_support in ("composite", "automatic"):
+        level["ri_approximation"] = "none"
+        level["aux_j_basis"] = ""
+        if ri_support == "composite":
+            level["aux_c_basis"] = ""
+
     if not mapping:
         return
     for key in ("basis", "dispersion"):
@@ -1346,8 +1509,45 @@ def _clamp_to_functional(level: dict[str, Any], method_key: str) -> None:
         except ValueError:
             level[key] = allowed[0]
             continue
-        # Normalise to canonical casing (allowed[idx], not current).
         level[key] = allowed[idx]
+
+    # Only clamp aux fields for "user" ri_support methods. For "composite" and
+    # "automatic", the values are either blanked above or intentionally set by
+    # legacy migration (_migrate_legacy_aux_basis) — do not override.
+    if ri_support != "user":
+        return
+    basis = level.get("basis", "")
+    for aux_field in ("aux_j_basis", "aux_c_basis"):
+        if aux_field in level and level[aux_field]:
+            allowed = _resolve_field_options(aux_field, "orca", func_name, basis) or []
+            if level[aux_field] not in allowed:
+                level[aux_field] = _resolve_field_default(aux_field, "orca", func_name, basis)
+
+
+def normalize_legacy_method(method: dict[str, Any]) -> dict[str, Any]:
+    """Read-time normalization: migrate v1.0 fields to v1.1 structure.
+
+    Operates on JobSpec.method dict's levels sub-dict. Idempotent: already
+    normalized methods pass through unchanged. Called by store._row_to_record
+    to normalize legacy SQLite job configs on read.
+    """
+    if not isinstance(method, dict):
+        return method
+    levels = method.get("levels")
+    if not isinstance(levels, dict):
+        return method
+    for level_id, level in levels.items():
+        if not isinstance(level, dict):
+            continue
+        if "aux_basis" in level and "aux_j_basis" not in level and "aux_c_basis" not in level:
+            func = level.get("functional")
+            meta = _case_insensitive_get(METHOD_META, func) if func else None
+            ri_support = (meta or {}).get("ri_support", "user")
+            if ri_support == "automatic":
+                level["aux_c_basis"] = level.pop("aux_basis")
+            else:
+                level["aux_j_basis"] = level.pop("aux_basis")
+    return method
 
 
 _CASE_INSENSITIVE_FIELDS = frozenset({"solvent_model", "dispersion"})
@@ -1417,6 +1617,7 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
             if user_val is not None and user_val != "":
                 options = _resolve_field_options(
                     field_name, engine, normalized.get("functional"),
+                    basis=normalized.get("basis") or user_lv.get("basis"),
                 )
                 if options is not None:
                     if field_name in _CASE_INSENSITIVE_FIELDS or field_name == "functional":
@@ -1453,7 +1654,10 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                             continue
                 normalized[field_name] = user_val
             else:
-                default_val = _resolve_field_default(field_name, engine, normalized.get("functional"))
+                default_val = _resolve_field_default(
+                    field_name, engine, normalized.get("functional"),
+                    basis=normalized.get("basis"),
+                )
                 normalized[field_name] = default_val
 
         levels[lid] = normalized
@@ -1553,14 +1757,10 @@ def method_levels_to_workflow_config(levels: dict, schema_id: str, workflow: str
             config["crest"] = dict(levels["crest"])
         if "dft_opt" in levels:
             d = dict(levels["dft_opt"])
-            d.pop("charge", None)
-            d.pop("multiplicity", None)
             _clamp_to_functional(d, method_key="functional")
             config["optimize"] = d
         if "single_point" in levels:
             d = dict(levels["single_point"])
-            d.pop("charge", None)
-            d.pop("multiplicity", None)
             _clamp_to_functional(d, method_key="functional")
             config["sp"] = d
         if "thermo" in levels:
@@ -1576,7 +1776,8 @@ def method_levels_to_workflow_config(levels: dict, schema_id: str, workflow: str
 _LEVEL_TO_CLI_FLAG_MAP: dict[str, str] = {
     "functional": "method",
     "basis": "basis",
-    "aux_basis": "aux-basis",
+    "aux_j_basis": "aux-j-basis",
+    "aux_c_basis": "aux-c-basis",
     "ri_approximation": "ri-approximation",
     "dispersion": "dispersion",
     "solvent_model": "solvent-model",
@@ -1631,23 +1832,21 @@ def get_workflow_catalog() -> list[dict[str, Any]]:
 
 
 def get_method_catalog() -> dict[str, Any]:
-    """Return the method catalog with Phase 4.2 basis deduplication applied.
+    """Return the method catalog with basis deduplication applied.
 
     The raw ``METHOD_CATALOG`` stores the ``_BASIS_CATALOG_REF`` sentinel
-    in places that would otherwise duplicate the full 24-element basis
-    list. This function expands the sentinel and adds a top-level
-    ``basis_catalog`` field so the API response carries the array only
-    once. Consumers that reference the full set use ``basis_ref:
-    "basis_catalog"`` instead of an inline array.
+    in places that would otherwise duplicate the full basis list. This
+    function expands the sentinel and adds top-level ``basis_catalog``
+    (v1.0 compat, array) and ``basis_catalog_v2`` (v1.1, object with
+    aux_j/aux_c metadata) fields.
     """
     import copy
     catalog = copy.deepcopy(METHOD_CATALOG)
 
     basis_list = list(_ALL_BASIS_SETS)
     catalog["basis_catalog"] = basis_list
+    catalog["basis_catalog_v2"] = dict(BASIS_CATALOG)
 
-    # Expand sentinels in method_meta: {basis: "<basis-catalog>"} →
-    # {basis_ref: "basis_catalog"}
     meta = catalog.get("method_meta")
     if isinstance(meta, dict):
         for func_meta in meta.values():
@@ -1655,7 +1854,6 @@ def get_method_catalog() -> dict[str, Any]:
                 del func_meta["basis"]
                 func_meta["basis_ref"] = "basis_catalog"
 
-    # Expand sentinels in field_definitions per_backend values
     fd = catalog.get("field_definitions")
     if isinstance(fd, dict):
         for field_name, field_def in fd.items():
@@ -1666,12 +1864,6 @@ def get_method_catalog() -> dict[str, Any]:
                         if val is _BASIS_CATALOG_REF:
                             pb[eng] = basis_list
 
-    # Expand sentinels in _resolve_field_options fallback path (server-side):
-    # the validate endpoint also reads per_backend via _resolve_field_options,
-    # which must see concrete lists, not sentinels.  Since get_method_catalog
-    # returns a deep copy with expanded lists, and the validate endpoint
-    # imports FIELD_DEFINITIONS directly (not through this function), we
-    # update the live data structure here.
     return catalog
 
 
@@ -1692,6 +1884,7 @@ def get_method_profiles(schema_id: str) -> list[dict[str, Any]]:
 
 
 __all__ = [
+    "BASIS_CATALOG",
     "FIELD_DEFINITIONS",
     "FUNCTIONAL_OPTIONS_MAP",
     "METHOD_CATALOG",
@@ -1710,4 +1903,5 @@ __all__ = [
     "method_levels_to_cli_flags",
     "method_levels_to_workflow_config",
     "normalize_and_validate_method_config",
+    "normalize_legacy_method",
 ]

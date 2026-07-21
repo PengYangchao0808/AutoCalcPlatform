@@ -345,6 +345,8 @@ class CRESTInterface:
             "-gfn", str(gfn_level),
             "-T", str(self.threads),
             "-P", str(self.threads),
+            "-charge", str(charge),
+            "-uhf", str(multiplicity - 1),
         ]
 
         ew = energy_window

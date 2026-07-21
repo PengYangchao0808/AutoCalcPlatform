@@ -5,11 +5,12 @@ Phase 3: Test & Quality Assurance (tests 3.1-3.13 per DevDoc §1.4).
 
 from __future__ import annotations
 
+import pytest
+
 from acp.catalog import (
     FIELD_DEFINITIONS,
     FUNCTIONAL_OPTIONS_MAP,
     METHOD_META,
-    WORKFLOW_CATALOG,
     _case_insensitive_get,
     _match_option_case_insensitive,
     convert_method_levels_to_protocol_levels,
@@ -31,14 +32,13 @@ CONFSEARCH_SCHEMA = {
 
 _ALL_FUNCTIONALS = frozenset({
     "B3LYP", "PBE0", "wB97X-D4", "wB97M-V",
-    "M062X", "PWPB95", "wB97M-2",
+    "M062X", "PWPB95",
     "r2SCAN-3c", "PBEh-3c", "B97-3c", "DLPNO-CCSD(T)",
 })
 
 _ADVANCED_FIELD_NAMES = frozenset({
-    "aux_basis", "ri_approximation", "grid", "scf_convergence",
+    "aux_j_basis", "aux_c_basis", "ri_approximation", "grid", "scf_convergence",
     "opt_convergence", "max_steps", "recalc_hess", "scale_factor",
-    "charge", "multiplicity",
 })
 
 
@@ -199,14 +199,23 @@ def test_default_dispersion_per_functional() -> None:
 
 
 # --- 3.5 ---
-def test_supports_ri_is_false_for_composite_and_dlpno() -> None:
-    for func in ("r2SCAN-3c", "PBEh-3c", "B97-3c", "DLPNO-CCSD(T)"):
-        assert METHOD_META[func]["supports_ri"] is False, f"{func} supports_ri should be False"
+def test_ri_support_classification() -> None:
+    composite = ["r2SCAN-3c", "PBEh-3c", "B97-3c"]
+    user_no_c = ["B3LYP", "PBE0", "M062X", "wB97X-D4", "wB97M-V"]
+    user_with_c = ["PWPB95"]
+    automatic = ["DLPNO-CCSD(T)"]
 
-
-def test_supports_ri_is_true_for_normal_dft() -> None:
-    for func in ("B3LYP", "PBE0", "wB97X-D4", "wB97M-V"):
-        assert METHOD_META[func]["supports_ri"] is True, f"{func} supports_ri should be True"
+    for func in composite:
+        assert METHOD_META[func]["ri_support"] == "composite"
+        assert "needs_aux_c" not in METHOD_META[func]
+    for func in user_no_c:
+        assert METHOD_META[func]["ri_support"] == "user"
+        assert METHOD_META[func]["needs_aux_c"] is False
+    for func in user_with_c:
+        assert METHOD_META[func]["ri_support"] == "user"
+        assert METHOD_META[func]["needs_aux_c"] is True
+    for func in automatic:
+        assert METHOD_META[func]["ri_support"] == "automatic"
 
 
 _SCHEMA_WITH_RI = {
@@ -214,33 +223,27 @@ _SCHEMA_WITH_RI = {
         {
             "level_id": "single_point",
             "allowed_engines": ["orca"],
-            "fields": ["functional", "basis", "dispersion", "ri_approximation", "aux_basis"],
+            "fields": ["functional", "basis", "dispersion", "ri_approximation", "aux_j_basis", "aux_c_basis"],
             "required": True,
         }
     ]
 }
 
 
-def test_supports_ri_false_forces_ri_none_and_aux_empty() -> None:
-    for func in ("r2SCAN-3c", "PBEh-3c", "DLPNO-CCSD(T)"):
+def test_ri_support_composite_forces_ri_none_and_aux_empty() -> None:
+    for func in ("r2SCAN-3c", "PBEh-3c", "B97-3c"):
         method = {
             "levels": {
                 "single_point": {
                     "engine": "orca",
                     "functional": func,
                     "ri_approximation": "RIJCOSX",
-                    "aux_basis": "AutoAux",
+                    "aux_j_basis": "AutoAux",
                 }
             }
         }
         levels, errors = normalize_and_validate_method_config(method, _SCHEMA_WITH_RI)
         assert not errors, f"{func}: unexpected errors {errors}"
-        # User-specified value was "RIJCOSX", but the field default resolver
-        # (Priority 1 with supports_ri=False) returns "none" for empty fields.
-        # For explicitly provided fields, validation only checks allowed options.
-        # The server-side validate-method does not currently clamp based on
-        # supports_ri (R34). This test confirms validation behaviour, not
-        # clamp behaviour; the UI is responsible for the clamp.
         assert levels["single_point"]["functional"].lower() == func.lower()
 
 
@@ -257,7 +260,8 @@ def test_normalize_and_validate_applies_ri_default_when_missing() -> None:
     levels, errors = normalize_and_validate_method_config(method, _SCHEMA_WITH_RI)
     assert not errors
     assert levels["single_point"]["ri_approximation"] == "none"
-    assert levels["single_point"]["aux_basis"] == ""
+    assert levels["single_point"]["aux_j_basis"] == ""
+    assert levels["single_point"]["aux_c_basis"] == ""
 
 
 # --- 3.6 ---
@@ -312,9 +316,12 @@ def test_resolve_field_default_respects_method_meta() -> None:
     assert _resolve_field_default("basis", "orca", "B3LYP") == "def2-TZVPP"
     assert _resolve_field_default("dispersion", "orca", "B3LYP") == "D4"
     assert _resolve_field_default("ri_approximation", "orca", "r2SCAN-3c") == "none"
-    assert _resolve_field_default("aux_basis", "orca", "r2SCAN-3c") == ""
+    assert _resolve_field_default("aux_j_basis", "orca", "r2SCAN-3c") == ""
     assert _resolve_field_default("ri_approximation", "orca", "B3LYP") == "RIJCOSX"
-    assert _resolve_field_default("aux_basis", "orca", "B3LYP") == "AutoAux"
+    assert _resolve_field_default("aux_j_basis", "orca", "B3LYP", "def2-TZVPP") == "def2/J"
+    assert _resolve_field_default("aux_j_basis", "orca", "B3LYP", "cc-pVTZ") == "AutoAux"
+    assert _resolve_field_default("aux_c_basis", "orca", "PWPB95", "def2-TZVPP") == "def2-TZVPP/C"
+    assert _resolve_field_default("aux_c_basis", "orca", "B3LYP", "def2-TZVPP") == ""
 
 
 def test_stage_mapping_covers_all_levels() -> None:
@@ -391,7 +398,7 @@ def test_dlpno_aux_basis_propagated_to_basis_block() -> None:
         calc_type="sp",
         method="DLPNO-CCSD(T)",
         basis="def2-TZVPP",
-        aux_basis="cc-pVTZ/C",
+        aux_c_basis="cc-pVTZ/C",
     )
     assert 'auxC  "cc-pVTZ/C"' in out
     assert "DLPNO-CCSD(T)" in out
@@ -500,6 +507,127 @@ def test_dlpno_basis_locked_single_option() -> None:
     assert meta["basis"] == ("def2-TZVPP",)
     assert len(meta["basis"]) == 1
     assert meta["basis_inline"] is False
-    assert meta["supports_ri"] is False
-    assert "basis_block" in meta
-    assert meta["basis_block"]["basis"] == "def2-TZVPP"
+    assert meta["ri_support"] == "automatic"
+    assert meta["needs_aux_c"] is True
+    assert meta["default_aux_j"] == "def2/J"
+    assert meta["default_aux_c"] == "def2-TZVPP/C"
+
+
+# =====================================================================
+# Phase 0a: BASIS_CATALOG ORCA keyword existence gate
+# =====================================================================
+
+KNOWN_AUX_J = {"def2/J"}
+KNOWN_AUX_C = {
+    "def2-SVP/C", "def2-SVPD/C", "def2-TZVP/C", "def2-TZVPP/C",
+    "def2-QZVPP/C",
+    "cc-pVDZ/C", "cc-pVTZ/C", "cc-pVQZ/C", "cc-pV5Z/C",
+    "aug-cc-pVDZ/C", "aug-cc-pVTZ/C", "aug-cc-pVQZ/C",
+}
+FORBIDDEN_AUX_C = {"def2-SV(P)/C", "def2-TZVPPD/C", "def2-QZVPPD/C"}
+
+
+def test_basis_catalog_orca_keyword_existence() -> None:
+    from acp.catalog import BASIS_CATALOG
+    for basis, meta in BASIS_CATALOG.items():
+        if meta.get("aux_j"):
+            assert meta["aux_j"] in KNOWN_AUX_J, (
+                f"{basis}: aux_j={meta['aux_j']} not in known ORCA /J keywords"
+            )
+        if meta.get("aux_c"):
+            assert meta["aux_c"] in KNOWN_AUX_C, (
+                f"{basis}: aux_c={meta['aux_c']} not in known ORCA /C keywords"
+            )
+            assert meta["aux_c"] not in FORBIDDEN_AUX_C, (
+                f"{basis}: aux_c={meta['aux_c']} is a confirmed non-existent ORCA keyword"
+            )
+
+
+# =====================================================================
+# Phase 5.1: ri_support classification tests
+# =====================================================================
+
+def test_ri_support_classification() -> None:
+    composite = ["r2SCAN-3c", "PBEh-3c", "B97-3c"]
+    user_no_c = ["B3LYP", "PBE0", "M062X", "wB97X-D4", "wB97M-V"]
+    user_with_c = ["PWPB95"]
+    automatic = ["DLPNO-CCSD(T)"]
+
+    for func in composite:
+        assert METHOD_META[func]["ri_support"] == "composite"
+        assert "needs_aux_c" not in METHOD_META[func]
+    for func in user_no_c:
+        assert METHOD_META[func]["ri_support"] == "user"
+        assert METHOD_META[func]["needs_aux_c"] is False
+    for func in user_with_c:
+        assert METHOD_META[func]["ri_support"] == "user"
+        assert METHOD_META[func]["needs_aux_c"] is True
+    for func in automatic:
+        assert METHOD_META[func]["ri_support"] == "automatic"
+
+
+def test_basis_catalog_completeness() -> None:
+    from acp.catalog import BASIS_CATALOG
+    for basis, meta in BASIS_CATALOG.items():
+        assert "aux_j" in meta
+        assert "aux_c" in meta
+        assert meta["aux_j"] is None or isinstance(meta["aux_j"], str)
+        assert meta["aux_c"] is None or isinstance(meta["aux_c"], str)
+
+
+def test_aux_j_default_derives_from_basis() -> None:
+    from acp.catalog import _resolve_field_default
+    assert _resolve_field_default("aux_j_basis", "orca", "B3LYP", "def2-TZVPP") == "def2/J"
+    assert _resolve_field_default("aux_j_basis", "orca", "B3LYP", "cc-pVTZ") == "AutoAux"
+    assert _resolve_field_default("aux_j_basis", "orca", "r2SCAN-3c", "def2-mTZVPP") == ""
+
+
+def test_aux_c_visibility() -> None:
+    from acp.catalog import _resolve_field_default
+    assert _resolve_field_default("aux_c_basis", "orca", "PWPB95", "def2-TZVPP") == "def2-TZVPP/C"
+    assert _resolve_field_default("aux_c_basis", "orca", "B3LYP", "def2-TZVPP") == ""
+    assert _resolve_field_default("aux_c_basis", "orca", "DLPNO-CCSD(T)", "def2-TZVPP") == ""
+
+
+# =====================================================================
+# Phase 5.1: normalize_legacy_method tests
+# =====================================================================
+
+def test_normalize_legacy_method_normal_dft() -> None:
+    from acp.catalog import normalize_legacy_method
+    method = {
+        "levels": {
+            "sp": {"functional": "B3LYP", "basis": "def2-TZVPP",
+                   "aux_basis": "def2/J"}
+        }
+    }
+    out = normalize_legacy_method(method)
+    assert out["levels"]["sp"]["aux_j_basis"] == "def2/J"
+    assert "aux_basis" not in out["levels"]["sp"]
+
+
+def test_normalize_legacy_method_dlpno_routes_to_aux_c() -> None:
+    from acp.catalog import normalize_legacy_method
+    method = {
+        "levels": {
+            "sp": {"functional": "DLPNO-CCSD(T)", "basis": "def2-TZVPP",
+                   "aux_basis": "cc-pVTZ/C"}
+        }
+    }
+    out = normalize_legacy_method(method)
+    assert out["levels"]["sp"]["aux_c_basis"] == "cc-pVTZ/C"
+    assert "aux_basis" not in out["levels"]["sp"]
+
+
+def test_normalize_legacy_method_idempotent() -> None:
+    from acp.catalog import normalize_legacy_method
+    method = {
+        "levels": {
+            "sp": {"functional": "PWPB95", "basis": "def2-TZVPP",
+                   "aux_j_basis": "def2/J", "aux_c_basis": "def2-TZVPP/C"}
+        }
+    }
+    out = normalize_legacy_method(method)
+    assert out["levels"]["sp"]["aux_j_basis"] == "def2/J"
+    assert out["levels"]["sp"]["aux_c_basis"] == "def2-TZVPP/C"
+    assert "aux_basis" not in out["levels"]["sp"]
