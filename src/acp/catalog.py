@@ -473,6 +473,15 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "default": {"*": 6.0},
         "unit": "kcal/mol",
     },
+    "refinement_threshold": {
+        "type": "float",
+        "label": "Boltzmann Cutoff",
+        "label_zh": "Boltzmann 截断",
+        "min": 0.01,
+        "max": 1.0,
+        "default": {"*": 0.99},
+        "step": 0.01,
+    },
     "rthr": {
         "type": "float",
         "label": "RMSD Threshold",
@@ -980,7 +989,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "label_zh": "CENSO 构象系综",
                 "required": True,
                 "allowed_engines": ["censo"],
-                "fields": ["ewin"],
+                "fields": ["ewin", "refinement_threshold"],
             },
             {
                 "level_id": "thermo",
@@ -1000,6 +1009,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "censo": {
                         "engine": "censo",
                         "ewin": 6.0,
+                        "refinement_threshold": 0.99,
                     },
                     "thermo": {
                         "engine": "shermo",
@@ -1016,6 +1026,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "censo": {
                         "engine": "censo",
                         "ewin": 6.0,
+                        "refinement_threshold": 0.99,
                     },
                     "thermo": {
                         "engine": "shermo",
@@ -1032,6 +1043,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "censo": {
                         "engine": "censo",
                         "ewin": 6.0,
+                        "refinement_threshold": 0.99,
                     },
                     "thermo": {
                         "engine": "shermo",
@@ -1050,7 +1062,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "label_zh": "CENSO 筛选",
                 "required": True,
                 "allowed_engines": ["censo"],
-                "fields": ["ewin"],
+                "fields": ["ewin", "refinement_threshold"],
             },
             {
                 "level_id": "dft_opt",
@@ -1107,6 +1119,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "censo": {
                         "engine": "censo",
                         "ewin": 6.0,
+                        "refinement_threshold": 0.99,
                     },
                     "dft_opt": {
                         "engine": "orca",
@@ -1150,6 +1163,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "censo": {
                         "engine": "censo",
                         "ewin": 6.0,
+                        "refinement_threshold": 0.99,
                     },
                     "refinement_sp": {
                         "engine": "orca",
@@ -1178,6 +1192,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "censo": {
                         "engine": "censo",
                         "ewin": 6.0,
+                        "refinement_threshold": 0.99,
                     },
                     "dft_opt": {
                         "engine": "orca",

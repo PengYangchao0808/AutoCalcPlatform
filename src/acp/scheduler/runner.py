@@ -712,6 +712,8 @@ class JobRunner:
                 cmd += ["--name", spec.name]
             if wf == "energy" and method.get("no_opt"):
                 cmd += ["--no-opt"]
+            if wf == "energy" and method.get("threshold") is not None:
+                cmd += ["--threshold", str(method["threshold"])]
             if wf == "energy" and method.get("levels"):
                 cmd += ["--levels", json.dumps(method["levels"])]
             if wf == "ensemble" and method.get("keep_all"):

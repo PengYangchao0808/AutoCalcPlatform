@@ -677,6 +677,12 @@ Examples:
         help="Disable high-accuracy rank1 geometry optimization (cheap RSH//xTB path)",
     )
     energy.add_argument(
+        "--threshold",
+        type=float,
+        default=0.99,
+        help="Cumulative Boltzmann population threshold (0<value<=1, default: 0.99)",
+    )
+    energy.add_argument(
         "--levels",
         type=str,
         help=(
@@ -1638,6 +1644,13 @@ def _handle_energy(args: argparse.Namespace) -> int:
     levels = _parse_levels_json(args.levels)
     if args.levels and levels is None:
         return 1
+
+    if levels is None:
+        levels = {}
+    if args.threshold != 0.99:
+        levels["refinement_threshold"] = args.threshold
+    else:
+        levels.setdefault("refinement_threshold", 0.99)
 
     cfg = _build_config(args)
     output_dir = Path(args.output)

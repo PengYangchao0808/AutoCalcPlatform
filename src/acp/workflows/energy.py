@@ -651,7 +651,7 @@ def _censo_record_to_candidate(rec: Any, index: int = 0) -> dict[str, Any]:
         "u_correction": None,
         "s_total": None,
         "g_conc": None,
-        "source": rec.conf_id,
+        "source": f"conf_{index:03d}",
     }
 
 
@@ -672,6 +672,7 @@ def run_conformer_energy(
     nproc: int | None = None,
     no_opt: bool = False,
     levels: dict[str, Any] | None = None,
+    threshold: float | None = None,
     ewin: float | None = None,
 ) -> WorkflowResult:
     """Run the conformer energy workflow (cumulative-Boltzmann ensemble, v15).
@@ -693,6 +694,9 @@ def run_conformer_energy(
         levels: Method level overrides (censo / dft_opt / refinement_sp /
             screening_sp / thermo / refinement_threshold), field names
             identical to the catalog.
+        threshold: Cumulative Boltzmann population threshold
+            (0<value<=1, default 0.99). Overrides levels.refinement_threshold
+            when explicitly set.
         ewin: CREST energy window in kcal/mol. Priority: this argument >
             ``levels.censo.ewin`` > ``censo.ewin`` config > 6.0.
 
@@ -717,6 +721,11 @@ def run_conformer_energy(
         opt_enabled = False
     if preset == "censo-default":
         opt_enabled = True  # Part2 is always on for censo-default
+
+    if levels is None:
+        levels = {}
+    if threshold is not None:
+        levels["refinement_threshold"] = threshold
 
     resolved = _resolve_levels(cfg, levels)
 
@@ -870,7 +879,7 @@ def run_conformer_energy(
                         censo_solvent,
                         _solvent_model,
                         index=i,
-                        source=rec.conf_id,
+                        source=f"conf_{i:03d}",
                     )
                 except RuntimeError as exc:
                     if i == 0:
@@ -1085,7 +1094,7 @@ def run_conformer_energy(
                             censo_solvent,
                             _solvent_model,
                             index=i,
-                            source=rec.conf_id,
+                            source=f"conf_{i:03d}",
                             sp_energy_precomputed=rec.energy,
                             skip_opt_sp=True,
                         )

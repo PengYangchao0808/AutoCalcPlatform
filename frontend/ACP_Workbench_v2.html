@@ -4510,10 +4510,17 @@ async function openMethodConfig() {
           fDiv.appendChild(customWrap);
         }
       } else if ((methodCatalogCache.field_definitions || {})[fieldName] && ((methodCatalogCache.field_definitions || {})[fieldName].type === "float" || (methodCatalogCache.field_definitions || {})[fieldName].type === "int")) {
+        var fdNum = (methodCatalogCache.field_definitions || {})[fieldName];
         var inp = document.createElement("input");
         inp.type = "number";
-        var isIntField = (methodCatalogCache.field_definitions || {})[fieldName].type === "int";
-        inp.step = isIntField ? "1" : "any";
+        var isIntField = fdNum.type === "int";
+        if (fdNum.step) {
+          inp.step = String(fdNum.step);
+        } else {
+          inp.step = isIntField ? "1" : "any";
+        }
+        if (fdNum.min !== undefined) inp.min = String(fdNum.min);
+        if (fdNum.max !== undefined) inp.max = String(fdNum.max);
         inp.value = curVal;
         inp.addEventListener("change", function() {
           if (inp.value === "") {
@@ -4814,6 +4821,9 @@ async function submitJobModal() {
   var workflow = wizardState.workflow.id;
   var nproc = parseInt(document.getElementById("modal-nproc").value, 10) || 4;
   var mem = document.getElementById("modal-mem").value || "8GB";
+  var censoStage = (wizardState.method.stages || {}).censo || {};
+  var threshold = parseFloat(censoStage.refinement_threshold);
+  if (isNaN(threshold) || threshold <= 0 || threshold > 1) threshold = 0.99;
 
   for (var i = 0; i < wizardStructures.length; i++) {
     var s = wizardStructures[i];
@@ -4863,6 +4873,14 @@ async function submitJobModal() {
       if (workflow === "energy" && !cleanedLevels.dft_opt) {
         // dft_opt panel disabled → cheap RSH//xTB path (--no-opt semantics)
         methodPayload.no_opt = true;
+      }
+      if (workflow === "energy") {
+        methodPayload.threshold = threshold;
+      }
+      // strip refinement_threshold from cleanedLevels.censo to avoid
+      // duplication with the --threshold CLI path in the runner
+      if (cleanedLevels.censo) {
+        delete cleanedLevels.censo.refinement_threshold;
       }
       var solvSources = [cleanedLevels.refinement_sp, cleanedLevels.dft_opt];
       for (var svi = 0; svi < solvSources.length; svi++) {
