@@ -16,25 +16,55 @@ _IGNORED_SUFFIXES = {".tmp", ".pyc"}
 _IGNORED_NAMES = {"__pycache__"}
 
 
-def build_manifest(work_dir: Path | str) -> dict[str, Any]:
-    """Walk a job work directory and return a structured file manifest."""
+def build_manifest(
+    work_dir: Path | str, relative_path: str | None = None
+) -> dict[str, Any]:
+    """List immediate children of a directory within a job work directory.
+
+    Args:
+        work_dir: Job work directory root.
+        relative_path: Subdirectory path relative to ``work_dir`` to list.
+            If ``None``, lists top-level contents of ``work_dir``.  Only
+            the **immediate** children (one level deep) are returned;
+            descendant directories are **not** recursed into.
+
+    Returns entries whose ``path`` is always relative to ``work_dir``.
+    """
     root = Path(work_dir)
     if not root.exists():
         return {"work_dir": str(root), "files": [], "truncated": False}
 
+    target = root
+    if relative_path is not None:
+        try:
+            target = (root / relative_path).resolve()
+        except (ValueError, OSError):
+            target = root
+        try:
+            target.relative_to(root)
+        except ValueError:
+            target = root
+        if not target.is_dir():
+            return {"work_dir": str(root), "files": [], "truncated": False}
+
     files: list[dict[str, Any]] = []
-    truncated = False
-    for path in sorted(root.rglob("*")):
+    try:
+        entries = sorted(target.iterdir())
+    except OSError:
+        return {"work_dir": str(root), "files": [], "truncated": False}
+
+    for path in entries:
         if path.name in _IGNORED_NAMES or path.suffix in _IGNORED_SUFFIXES:
             continue
         try:
             stat = path.stat()
         except OSError:
             continue
+        file_path = str(path.relative_to(root))
         if path.is_dir():
             files.append(
                 {
-                    "path": str(path.relative_to(root)),
+                    "path": file_path,
                     "size": 0,
                     "modified": stat.st_mtime,
                     "is_dir": True,
@@ -45,16 +75,13 @@ def build_manifest(work_dir: Path | str) -> dict[str, Any]:
             continue
         files.append(
             {
-                "path": str(path.relative_to(root)),
+                "path": file_path,
                 "size": stat.st_size,
                 "modified": stat.st_mtime,
                 "is_dir": False,
             }
         )
-        if len(files) >= 1000:
-            truncated = True
-            break
-    return {"work_dir": str(root), "files": files, "truncated": truncated}
+    return {"work_dir": str(root), "files": files, "truncated": False}
 
 
 def resolve_safe(work_dir: Path | str, relative: str) -> Path | None:

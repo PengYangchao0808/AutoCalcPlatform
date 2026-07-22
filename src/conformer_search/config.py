@@ -457,6 +457,7 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
     - CONFSEARCH_NPROC
     - CONFSEARCH_MEM
     - CONFSEARCH_ORCA_PATH
+    - CONFSEARCH_ORCA_LD_LIBRARY_PATH
     - CONFSEARCH_XTB_PATH
     - CONFSEARCH_CREST_PATH
     - CONFSEARCH_ISOSTAT_PATH
@@ -472,6 +473,7 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
         'CONFSEARCH_NPROC': ('resources', 'nproc', int),
         'CONFSEARCH_MEM': ('resources', 'mem', str),
         'CONFSEARCH_ORCA_PATH': ('executables', ['orca', 'path'], str),
+        'CONFSEARCH_ORCA_LD_LIBRARY_PATH': ('executables', ['orca', 'ld_library_path'], str),
         'CONFSEARCH_XTB_PATH': ('executables', ['xtb', 'path'], str),
         'CONFSEARCH_CREST_PATH': ('executables', ['crest', 'path'], str),
         'CONFSEARCH_ISOSTAT_PATH': ('executables', ['isostat', 'path'], str),

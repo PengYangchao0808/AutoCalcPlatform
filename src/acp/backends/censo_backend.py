@@ -536,6 +536,10 @@ class CensoBackend(QCBackend, ConformerSearcher):
                 except (ValueError, IndexError):
                     continue
 
+        table_sum = sum(table_weights.values())
+        if table_sum > 0:
+            table_weights = {k: v / table_sum for k, v in table_weights.items()}
+
         for conf_id, comp_w in computed.items():
             table_w = table_weights.get(conf_id)
             if table_w is not None and abs(comp_w - table_w) > tolerance:
@@ -644,9 +648,17 @@ class CensoBackend(QCBackend, ConformerSearcher):
         )
 
         env: dict[str, str] | None = None
-        if effective_templates:
-            home_dir = self._write_part_templates(output_dir, effective_templates)
+
+        orca_cfg = self.config.get("executables", {}).get("orca", {})
+        ld_path = orca_cfg.get("ld_library_path")
+        if ld_path:
             env = dict(os.environ)
+            env["LD_LIBRARY_PATH"] = ld_path
+
+        if effective_templates:
+            if env is None:
+                env = dict(os.environ)
+            home_dir = self._write_part_templates(output_dir, effective_templates)
             env["HOME"] = str(home_dir)
             logger.info("CENSO template injection active (HOME=%s)", home_dir)
 

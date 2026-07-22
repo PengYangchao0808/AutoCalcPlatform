@@ -464,6 +464,24 @@ body.resizing canvas {
 .frame-btn svg { pointer-events: none; }
 
 .folder-toggle.open { color: var(--accent); }
+
+.folder-toggle.loading { color: var(--accent); }
+
+.folder-toggle.loading .spinner {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.loading-badge {
+  font-size: 11px;
+  color: var(--accent);
+  opacity: 0.7;
+}
+
 .file-actions { display: inline-flex; align-items: center; gap: 4px; }
 .folder-icon,
 .file-icon { display: inline-flex; align-items: center; flex-shrink: 0; }
@@ -1496,6 +1514,7 @@ let queueExpanded = false;
 let folderState = {};
 let lastStatus = null;
 let lastFileListing = [];
+let folderCache = {};
 let lastSelectedJob = null;
 let bgIndex = 0;
 let labelMode = "none";
@@ -2479,6 +2498,8 @@ async function submitDeleteJobModal() {
     selectedJobId = "";
     lastSelectedJob = null;
     lastFileListing = [];
+    folderCache = {};
+    folderState = {};
     updateInfoPanel(null);
     renderFileTree([], "");
     renderLogPlaceholder();
@@ -2732,10 +2753,24 @@ function fileIconSvg() {
   return '<svg class="file-icon" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 4h5l3 3v9H6z"/><path d="M11 4v3h3"/></svg>';
 }
 
+function spinnerSvg() {
+  return '<svg class="spinner" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2a8 8 0 0 1 8 8" stroke-linecap="round"/></svg>';
+}
+
+function getAllLoadedFiles() {
+  var all = [];
+  Object.keys(folderCache).forEach(function(key) {
+    all = all.concat(folderCache[key] || []);
+  });
+  return all;
+}
+
 function renderFileTree(files, jobId) {
-  lastFileListing = files || [];
-  renderFileTreeInto(document.getElementById("file-tree-panel"), files || [], jobId);
-  renderFileTreeInto(document.getElementById("mobile-file-tree-panel"), files || [], jobId);
+  var allFiles = getAllLoadedFiles();
+  if (allFiles.length === 0) allFiles = files || [];
+  lastFileListing = allFiles;
+  renderFileTreeInto(document.getElementById("file-tree-panel"), allFiles, jobId);
+  renderFileTreeInto(document.getElementById("mobile-file-tree-panel"), allFiles, jobId);
 }
 
 function renderFileTreeInto(container, files, jobId) {
@@ -2773,6 +2808,42 @@ function renderFileTreeInto(container, files, jobId) {
   container.appendChild(list);
 }
 
+async function fetchAndExpand(jobId, folderPath) {
+  folderCache[folderPath] = null;
+  renderFileTree(lastFileListing, jobId);
+  try {
+    var url;
+    if (selectedJobIsRemote) {
+      url = "/jobs/" + encodeURIComponent(jobId) + "/remote-files?path=" + encodeURIComponent(folderPath);
+    } else {
+      url = "/jobs/" + encodeURIComponent(jobId) + "/files?path=" + encodeURIComponent(folderPath);
+    }
+    var resp = await api(url);
+    var files;
+    if (selectedJobIsRemote) {
+      files = (resp.files || []).map(function(f) {
+        return { path: f.name, size: f.size, modified: f.mtime, is_dir: f.is_dir };
+      });
+    } else {
+      files = resp.files || [];
+    }
+    folderCache[folderPath] = files;
+    folderState[folderPath] = true;
+  } catch (e) {
+    folderCache[folderPath] = [];
+    folderState[folderPath] = true;
+  }
+  renderFileTree(lastFileListing, jobId);
+}
+
+function isFolderLoaded(folderPath) {
+  return folderCache.hasOwnProperty(folderPath) && folderCache[folderPath] !== null;
+}
+
+function isFolderLoading(folderPath) {
+  return folderCache[folderPath] === null;
+}
+
 function renderTreeNode(node, jobId) {
   if (node.type === "folder") {
     const li = document.createElement("li");
@@ -2781,17 +2852,30 @@ function renderTreeNode(node, jobId) {
     row.className = "folder-row";
     const toggle = document.createElement("button");
     const isOpen = folderState[node.path] === true;
-    toggle.className = "folder-toggle" + (isOpen ? " open" : "");
-    toggle.innerHTML = folderToggleSvg(isOpen);
+    const isLoading = isFolderLoading(node.path);
+    toggle.className = "folder-toggle" + (isOpen ? " open" : "") + (isLoading ? " loading" : "");
+    toggle.innerHTML = isLoading ? spinnerSvg() : folderToggleSvg(isOpen);
     const name = document.createElement("span");
     name.className = "folder-name";
     name.innerHTML = folderIconSvg() + escapeHtml(node.name);
     const spacer = document.createElement("span");
     spacer.className = "file-size";
+    if (isLoading) {
+      const badge = document.createElement("span");
+      badge.className = "loading-badge";
+      badge.textContent = "...";
+      spacer.appendChild(badge);
+    }
     row.appendChild(toggle);
     row.appendChild(name);
     row.appendChild(spacer);
     const toggleFolder = function() {
+      var path = node.path;
+      if (isFolderLoading(path)) return;
+      if (!isOpen) {
+        fetchAndExpand(jobId, path);
+        return;
+      }
       folderState[node.path] = !isOpen;
       renderFileTree(lastFileListing, jobId);
     };
@@ -3452,6 +3536,8 @@ function openSSE(jobId) {
 
 async function selectJob(jobId) {
   selectedJobId = jobId;
+  folderCache = {};
+  folderState = {};
   const job = await api("/jobs/" + encodeURIComponent(jobId));
   selectedJobIsRemote = !!(job.result && job.result.node);
   lastRemoteNode = selectedJobIsRemote ? String(job.result.node || "") : "";
@@ -3469,6 +3555,7 @@ async function selectJob(jobId) {
   } else {
     filesResp = await api("/jobs/" + encodeURIComponent(jobId) + "/files");
   }
+  folderCache[""] = filesResp.files || [];
   updateInfoPanel(job);
   renderFileTree(filesResp.files || [], jobId);
   highlightQueueRow(jobId);
@@ -4243,10 +4330,11 @@ async function openMethodConfig() {
           : getFieldDefault(fieldName, engine, fieldName === "functional" ? undefined : functional, basis);
 
       // ── builtin_dispersion lock (DevDoc §6) ──
-      // If the selected functional hardwires its dispersion (e.g. wB97X-D4 → D4,
-      // wB97M-V → VV10), skip the dropdown entirely and render a read-only badge.
-      // The hidden value is still written into wizardState so /validate-method
-      // receives a value consistent with the functional.
+      // Functionals that hardwire dispersion into the method name (wB97X-D4, wB97M-V)
+      // or parametrisation (r2SCAN-3c, PBEh-3c, B97-3c) must never emit an
+      // explicit ORCA route keyword — the functional already handles it.
+      // The badge shows which dispersion is built in; the value sent to the
+      // backend is always "none".
       if (fieldName === "dispersion") {
         if (funcMeta && funcMeta.builtin_dispersion) {
           var badgeSpan = document.createElement("span");
@@ -4254,7 +4342,7 @@ async function openMethodConfig() {
           badgeSpan.textContent = funcMeta.builtin_dispersion + " (" + (t("modal.builtin") || "内置") + ")";
           badgeSpan.title = t("modal.builtin_dispersion_hint") || "此泛函已内置色散校正，无需额外指定";
           fDiv.appendChild(badgeSpan);
-          getLevelState(lvDef.level_id).dispersion = funcMeta.builtin_dispersion;
+          getLevelState(lvDef.level_id).dispersion = "none";
           dest.appendChild(fDiv);
           return;
         }
@@ -4844,6 +4932,8 @@ function setupEventListeners() {
       selectedJobId = "";
       lastSelectedJob = null;
       lastFileListing = [];
+      folderCache = {};
+      folderState = {};
       updateInfoPanel(null);
       renderFileTree([], "");
       renderLogPlaceholder();

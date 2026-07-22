@@ -8,6 +8,7 @@ Author: QCcalc Team (adapted from RPH)
 """
 
 import logging
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -74,6 +75,7 @@ class ORCAInterface(QCInterfaceBase):
 
         orca_config = self.executables.get("orca", {})
         self.exe_path = Path(orca_config.get("path", "orca"))
+        self._orca_ld_library_path = orca_config.get("ld_library_path")
 
         resources = self.resources
         orca_nproc_config = orca_config.get("nproc")
@@ -198,6 +200,13 @@ class ORCAInterface(QCInterfaceBase):
             _aux_j = None
             if ri_support == "composite":
                 _aux_c = None
+
+        builtin = (meta or {}).get("builtin_dispersion")
+        if builtin:
+            _filtered_extras = [
+                x for x in _filtered_extras
+                if str(x).upper() != builtin.upper()
+            ]
 
         extras_str = (" " + " ".join(_filtered_extras)) if _filtered_extras else ""
 
@@ -366,12 +375,17 @@ class ORCAInterface(QCInterfaceBase):
         timeout = to_val.get("default_seconds", 864000) if isinstance(to_val, dict) else 864000
 
         try:
+            env = None
+            if self._orca_ld_library_path:
+                env = dict(os.environ)
+                env["LD_LIBRARY_PATH"] = self._orca_ld_library_path
+
             result = subprocess.run(
                 [str(self.exe_path), str(input_file)],
                 cwd=input_file.parent,
                 capture_output=True,
                 text=True,
-                env=None,
+                env=env,
                 timeout=timeout,
             )
 

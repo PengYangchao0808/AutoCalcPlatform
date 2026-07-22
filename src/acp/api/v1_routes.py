@@ -539,12 +539,14 @@ def get_job_logs(
 
 
 @router.get("/jobs/{job_id}/files", response_model=FileManifestResponse)
-def get_job_files(job_id: str, request: Request) -> FileManifestResponse:
+def get_job_files(
+    job_id: str, request: Request, path: str | None = None
+) -> FileManifestResponse:
     manager = _manager(request)
     work_dir = manager.work_dir_of(job_id)
     if work_dir is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
-    manifest = build_manifest(work_dir)
+    manifest = build_manifest(work_dir, relative_path=path)
     entries = [
         FileEntry(
             path=item["path"],
@@ -710,15 +712,23 @@ def list_remote_files(
     job_id: str,
     request: Request,
     project_id: str | None = Query(default=None, description="Verify job belongs to project"),
+    path: str | None = Query(
+        default=None, description="Subdirectory to list (one level, non-recursive)"
+    ),
 ) -> RemoteFileListResponse:
-    """Recursively list files and directories in a remote job's working directory."""
+    """List files and directories in a remote job's working directory.
+
+    When *path* is ``None``, lists only top-level entries (one level deep).
+    When *path* is provided, lists the immediate children of that subdirectory.
+    """
     fetcher = _remote_fetcher(request)
     record = _get_remote_job_record(job_id, request, project_id=project_id)
     try:
-        files, truncated = fetcher.list_files_recursive(record)
+        files = fetcher.list_files(record, relative_path=path)
+        truncated = False
     except Exception as exc:
         raise _remote_exception_to_http(exc) from exc
-    _log_remote_access(request, job_id, "", "list")
+    _log_remote_access(request, job_id, path or "", "list")
     result = record.result or {}
     return RemoteFileListResponse(
         job_id=job_id,

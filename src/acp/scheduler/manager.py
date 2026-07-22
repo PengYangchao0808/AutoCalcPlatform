@@ -605,22 +605,62 @@ class JobManager:
     # ------------------------------------------------------------------ #
 
     def _execute_submission(self, job_id: str) -> None:
-        """Background thread: submit job then immediately poll once."""
-        try:
-            self._submit_job(job_id)
-        except Exception as exc:
-            logger.exception("Submission failed for job %s", job_id)
-            record = self.store.get(job_id)
-            if record and not record.status.is_terminal:
-                record.status = JobStatus.FAILED
-                record.error = f"Submission error: {exc}"
-                record.completed_at = _utc_now_iso()
-                record.touch()
-                self.store.update(record)
-                self._write_job_json(record)
-                self._event_log(record).append("job.failed", job_id=job_id, error=str(exc))
-                self._stage_task_observer.finalize_job(job_id, "failed")
-            return
+        """Background thread: submit job then immediately poll once.
+
+        When all remote nodes are at capacity the job stays in ``STARTING``
+        state and retries every 60 s until a node becomes available.
+        """
+        from acp.scheduler.remote.runner import RemoteNodeUnavailableError
+
+        RETRY_DELAY = 60
+
+        while True:
+            try:
+                self._submit_job(job_id)
+                break  # success
+            except RemoteNodeUnavailableError:
+                record = self.store.get(job_id)
+                if record is None:
+                    return
+                cancel_event = self._cancel_events.get(job_id)
+                if cancel_event and cancel_event.is_set():
+                    record.status = JobStatus.CANCELLED
+                    record.completed_at = _utc_now_iso()
+                    record.touch()
+                    self.store.update(record)
+                    self._write_job_json(record)
+                    self._event_log(record).append(
+                        "job.cancelled", job_id=job_id,
+                        reason="cancelled while waiting for remote node",
+                    )
+                    self._stage_task_observer.finalize_job(job_id, "cancelled")
+                    return
+                if record.status.is_terminal:
+                    return
+                logger.info(
+                    "No remote node available for job %s, retrying in %ds",
+                    job_id, RETRY_DELAY,
+                )
+                self._event_log(record).append(
+                    "remote.waiting_for_node",
+                    job_id=job_id,
+                    retry_after=RETRY_DELAY,
+                    message="All remote nodes at capacity, waiting for resources",
+                )
+                time.sleep(RETRY_DELAY)
+            except Exception as exc:
+                logger.exception("Submission failed for job %s", job_id)
+                record = self.store.get(job_id)
+                if record and not record.status.is_terminal:
+                    record.status = JobStatus.FAILED
+                    record.error = f"Submission error: {exc}"
+                    record.completed_at = _utc_now_iso()
+                    record.touch()
+                    self.store.update(record)
+                    self._write_job_json(record)
+                    self._event_log(record).append("job.failed", job_id=job_id, error=str(exc))
+                    self._stage_task_observer.finalize_job(job_id, "failed")
+                return
 
         # Only poll if not already terminal (fake workflow finishes in _submit_job)
         record = self.store.get(job_id)

@@ -306,12 +306,14 @@ def get_job_logs(
 
 
 @router.get("/jobs/{job_id}/files", response_model=FileManifestResponse)
-def get_job_files(job_id: str, request: Request) -> FileManifestResponse:
+def get_job_files(
+    job_id: str, request: Request, path: str | None = None
+) -> FileManifestResponse:
     manager = _manager(request)
     work_dir = manager.work_dir_of(job_id)
     if work_dir is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
-    manifest = build_manifest(work_dir)
+    manifest = build_manifest(work_dir, relative_path=path)
     entries = [
         FileEntry(
             path=f["path"],

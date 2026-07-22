@@ -176,9 +176,11 @@ def _init_state(work_dir: Path, workflow_name: str, input_source: str = "") -> W
 
 
 def _build_method_kwargs(raw_kwargs: dict[str, Any]) -> dict[str, Any]:
-    """Filter method kwargs: strip empty strings, convert ri_approximation to route_extras."""
+    """Filter method kwargs: strip empty strings, convert ri_approximation and
+    dispersion to route_extras."""
     kwargs: dict[str, Any] = {}
     ri_approx = raw_kwargs.get("ri_approximation")
+    dispersion = raw_kwargs.get("dispersion")
     route_extras: list[str] = []
     extras = raw_kwargs.get("route_extras")
     if isinstance(extras, str) and extras.strip():
@@ -187,11 +189,13 @@ def _build_method_kwargs(raw_kwargs: dict[str, Any]) -> dict[str, Any]:
         route_extras = [str(x) for x in extras]
     if ri_approx and ri_approx not in ("none", ""):
         route_extras.append(str(ri_approx))
+    if dispersion and str(dispersion).strip().lower() not in ("", "none"):
+        route_extras.append(str(dispersion).strip().upper())
     if route_extras:
         kwargs["route_extras"] = route_extras
 
     for key, val in raw_kwargs.items():
-        if key in ("route_extras", "ri_approximation", "opt_convergence"):
+        if key in ("route_extras", "ri_approximation", "dispersion", "opt_convergence"):
             continue
         if key == "geom_maxiter":
             if val is not None:

@@ -140,10 +140,26 @@ class RemoteResultFetcher:
     # Listing
     # ------------------------------------------------------------------ #
 
-    def list_files(self, record: JobRecord) -> list[RemoteFileInfo]:
-        """List the top-level contents of the remote job directory."""
+    def list_files(
+        self, record: JobRecord, relative_path: str | None = None
+    ) -> list[RemoteFileInfo]:
+        """List the immediate contents of a remote directory under the job's work dir.
+
+        Args:
+            record: Job record with remote execution metadata.
+            relative_path: Subdirectory relative to the remote work directory.
+                When ``None``, lists the top-level contents.
+        """
         node, remote_dir = self.resolve(record)
-        return self._stager.list_remote_dir(node, remote_dir)
+        target_dir = remote_dir
+        if relative_path:
+            target_dir = posixpath.join(remote_dir, relative_path)
+        entries = self._stager.list_remote_dir(node, target_dir)
+        if relative_path:
+            prefix = relative_path.rstrip("/") + "/"
+            for e in entries:
+                e.name = prefix + e.name
+        return entries
 
     def list_files_recursive(
         self,
