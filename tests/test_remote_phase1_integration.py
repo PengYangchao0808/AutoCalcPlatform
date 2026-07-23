@@ -30,7 +30,7 @@ NODE = RemoteNode(
     username="<user>",
     remote_work_dir="/home/<user>/acp_test_jobs",
     remote_code_dir="/home/<user>/acp_test_code",
-    max_concurrent_jobs=3,
+    max_concurrent_jobs=5,
     host_key_policy="auto_add",
 )
 TEST_BASE = "/home/<user>/acp_test_phase1"

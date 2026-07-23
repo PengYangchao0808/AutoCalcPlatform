@@ -528,12 +528,20 @@ class JobManager:
         if ev:
             ev.set()
 
-        if self._is_remote_enabled() and self.remote_runner is not None and record.remote_job_id:
-            ok = self.remote_runner.cancel_remote(job_id)
-            if not ok:
-                self._event_log(record).append(
-                    "remote.cancel_failed", job_id=job_id, reason="bkill did not succeed"
-                )
+        if self._is_remote_enabled() and self.remote_runner is not None:
+            if not record.remote_job_id and record.result and record.result.get("lsf_job_id"):
+                record.remote_job_id = str(record.result["lsf_job_id"])
+                record.touch()
+                self.store.update(record)
+
+            if record.remote_job_id:
+                ok = self.remote_runner.cancel_remote(job_id, record)
+                if not ok:
+                    self._event_log(record).append(
+                        "remote.cancel_failed", job_id=job_id, reason="bkill did not succeed"
+                    )
+            else:
+                self.runner.cancel_local(job_id)
         else:
             self.runner.cancel_local(job_id)
 
@@ -758,7 +766,7 @@ class JobManager:
                 if failures >= self._POLL_MAX_RETRIES:
                     logger.error("Remote poll failed %d times for job %s, marking FAILED", failures, job_id)
                     try:
-                        self.remote_runner.cancel_remote(job_id)
+                        self.remote_runner.cancel_remote(job_id, record)
                         self.remote_runner._cleanup_job_state(job_id)
                     except Exception:
                         pass
@@ -823,7 +831,7 @@ class JobManager:
         )
         while not self._poll_stop.wait(self.poll_interval):
             try:
-                for status_val in (JobStatus.RUNNING.value, JobStatus.PENDING.value):
+                for status_val in (JobStatus.RUNNING.value, JobStatus.PENDING.value, JobStatus.CANCELLING.value):
                     records = self.store.list(status=status_val, limit=10000)
                     for record in records:
                         if self._poll_stop.is_set():

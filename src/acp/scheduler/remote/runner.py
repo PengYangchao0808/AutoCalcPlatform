@@ -354,18 +354,31 @@ class RemoteJobRunner:
 
         return (False, None)
 
-    def cancel_remote(self, job_id: str) -> bool:
+    def cancel_remote(
+        self, job_id: str, record: JobRecord | None = None,
+    ) -> bool:
         """Send ``bkill`` to cancel a remote job (best-effort).
+
+        When ``_job_states`` is empty (e.g. after a server restart) and
+        *record* is provided with persisted ``result.lsf_job_id`` /
+        ``result.node`` / ``result.remote_dir``, the in-memory state is
+        recovered first so the bkill can reach the LSF job.
 
         Returns ``True`` if the cancellation signal was delivered,
         ``False`` if the job state was not found or bkill failed.
         """
         state = self._job_states.get(job_id)
+        if state is None and record is not None:
+            if self.recover_job_state(record):
+                state = self._job_states.get(job_id)
         if state is None:
             return False
         node: RemoteNode = state["node"]  # type: ignore[assignment]
         lsf_job_id: str = state["lsf_job_id"]  # type: ignore[assignment]
-        return self._monitor.cancel_job(node, lsf_job_id)
+        ok = self._monitor.cancel_job(node, lsf_job_id)
+        if ok:
+            state["cancel_sent"] = True
+        return ok
 
     def _cleanup_job_state(self, job_id: str) -> None:
         self._job_states.pop(job_id, None)
@@ -373,13 +386,18 @@ class RemoteJobRunner:
     def recover_job_state(self, record: JobRecord) -> bool:
         """Rebuild in-memory ``_job_states`` after a server restart.
 
-        Uses ``record.remote_job_id``, ``record.result["node"]``, and
+        Uses ``record.remote_job_id`` (or ``record.result["lsf_job_id"]``
+        as fallback), ``record.result["node"]``, and
         ``record.result["remote_dir"]`` to reconstruct the polling state
         so the background poller can reconnect to the remote LSF job.
 
         Returns True on success, False if required metadata is missing.
         """
-        if not record.remote_job_id:
+        lsf_job_id = record.remote_job_id
+        if not lsf_job_id:
+            result = record.result or {}
+            lsf_job_id = result.get("lsf_job_id")
+        if not lsf_job_id:
             return False
         result = record.result or {}
         node_name = result.get("node")
@@ -393,7 +411,7 @@ class RemoteJobRunner:
         self._job_states[record.id] = {
             "node": node,
             "remote_job_dir": str(remote_dir),
-            "lsf_job_id": record.remote_job_id,
+            "lsf_job_id": lsf_job_id,
             "stdout_offset": 0,
             "stderr_offset": 0,
             "cli_cmd": str(cli_cmd_raw).split() if cli_cmd_raw else [],

@@ -54,12 +54,12 @@ def _make_mock_censo_script(tmp_path: Path, exit_code: int = 0) -> Path:
     """Create a mock censo executable that writes predictable output files."""
     xyz_content = "\n".join([
         "3",
-        "Frame 0",
+        "CONF1",
         "C    0.000000    0.000000    0.000000",
         "H    0.000000    0.000000    1.089000",
         "H    1.026719    0.000000   -0.362999",
         "3",
-        "Frame 1",
+        "CONF2",
         "C    0.000000    0.000000    0.000000",
         "H    0.000000    0.000000    1.089000",
         "H   -1.026719    0.000000   -0.362999",
@@ -369,11 +369,11 @@ def test_parse_censo_json(tmp_path: Path) -> None:
     xyz_path = tmp_path / "1_SCREENING.xyz"
 
     xyz_content = (
-        "3\nFrame 0\n"
+        "3\nCONF1\n"
         "C    0.000000    0.000000    0.000000\n"
         "H    0.000000    0.000000    1.089000\n"
         "H    1.026719    0.000000   -0.362999\n"
-        "3\nFrame 1\n"
+        "3\nCONF2\n"
         "C    0.000000    0.000000    0.000000\n"
         "H    0.000000    0.000000    1.089000\n"
         "H   -1.026719    0.000000   -0.362999\n"
@@ -645,3 +645,154 @@ def test_conformer_record_validates_finite_values() -> None:
 def test_capability_matrix_includes_censo() -> None:
     caps = list_capabilities("censo")
     assert caps["conformer_search"] is CAPABILITY_MATRIX["censo"]["conformer_search"]
+
+
+# ---------------------------------------------------------------------------
+# Regression test: non-sequential conformer IDs
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_censo_script_nonsequential(tmp_path: Path) -> Path:
+    """Create a mock CENSO executable with non-sequential conformer IDs.
+
+    Simulates CENSO's real behavior where some conformers are filtered out
+    during prescreening/screening, leaving gaps in the numbering (e.g.,
+    CONF1, CONF3, CONF7 — CONF2, CONF4-6 were discarded).
+    """
+    xyz_content = "\n".join([
+        "3",
+        "CONF1",
+        "C    0.000000    0.000000    0.000000",
+        "H    0.000000    0.000000    1.089000",
+        "H    1.026719    0.000000   -0.362999",
+        "3",
+        "CONF3",
+        "C    0.100000    0.000000    0.000000",
+        "H    0.100000    0.000000    1.089000",
+        "H    1.126719    0.000000   -0.362999",
+        "3",
+        "CONF7",
+        "C    0.200000    0.000000    0.000000",
+        "H    0.200000    0.000000    1.089000",
+        "H    1.226719    0.000000   -0.362999",
+    ])
+
+    json_data = {
+        "part_name": "screening",
+        "settings": {"prog": "orca", "func": "b97-3c", "threshold": 6.0},
+        "data": {
+            "CONF1": {
+                "energy": -154.912345,
+                "gsolv": -0.004521,
+                "grrho": 0.082341,
+                "gtot": -154.834525,
+            },
+            "CONF3": {
+                "energy": -154.911876,
+                "gsolv": -0.004612,
+                "grrho": 0.082455,
+                "gtot": -154.834033,
+            },
+            "CONF7": {
+                "energy": -154.910500,
+                "gsolv": -0.004700,
+                "grrho": 0.082500,
+                "gtot": -154.832700,
+            },
+        },
+    }
+
+    out_content = (
+        "  Conf    E(DFT)        ΔGsolv        GmRRHO        Gtot"
+        "        ΔGtot      Boltzmann weight\n"
+        " CONF1  -154.912345   -0.004521     0.082341    -154.834525"
+        "     0.000000      0.500000\n"
+        " CONF3  -154.911876   -0.004612     0.082455    -154.834033"
+        "     0.000492      0.300000\n"
+        " CONF7  -154.910500   -0.004700     0.082500    -154.832700"
+        "     0.001825      0.200000\n"
+    )
+
+    json_str = json.dumps(json_data, indent=2)
+
+    script = tmp_path / "mock_censo_nonseq.sh"
+    lines = [
+        "#!/bin/bash",
+        'echo "Mock CENSO (non-sequential) called with: $@" >&2',
+        'cat > "1_SCREENING.json" << JSONEOF',
+        json_str,
+        "JSONEOF",
+        'cat > "1_SCREENING.xyz" << XYZEOF',
+        xyz_content,
+        "XYZEOF",
+        'cat > "1_SCREENING.out" << OUTEOF',
+        out_content,
+        "OUTEOF",
+        "exit 0",
+    ]
+    script.write_text("\n".join(lines) + "\n")
+    script.chmod(0o755)
+    return script
+
+
+def test_refine_ensemble_nonsequential_ids(tmp_path: Path) -> None:
+    """Regression test: CENSO output with non-sequential conformer IDs.
+
+    CENSO preserves original conformer numbering from the CREST input ensemble.
+    When some conformers are filtered out during screening, gaps appear in the
+    numbering (e.g., CONF1, CONF3, CONF7 — CONF2/4/5/6 were discarded).
+
+    This test verifies that:
+    1. Validation passes (JSON keys match XYZ frame titles)
+    2. Parsing correctly maps each conf_id to its frame position
+    3. Coordinates are extracted from the correct frames
+    """
+    input_xyz = tmp_path / "crest_conformers.xyz"
+    input_xyz.write_text(
+        "3\nCONF1\nC 0 0 0\nH 0 0 1.089\nH 1.027 0 -0.363\n"
+        "3\nCONF2\nC 0.05 0 0\nH 0.05 0 1.089\nH 1.077 0 -0.363\n"
+        "3\nCONF3\nC 0.1 0 0\nH 0.1 0 1.089\nH 1.127 0 -0.363\n"
+    )
+
+    mock_script = _make_mock_censo_script_nonsequential(tmp_path)
+
+    config = _make_config(**{
+        "executables": {
+            "censo": {"path": str(mock_script)},
+            "orca": {"path": "orca"},
+            "xtb": {"path": "xtb"},
+        },
+        "resources": {"nproc": 4},
+        "censo": {"preset": "censo-light", "temperature": 298.15},
+    })
+    backend = CensoBackend(config)
+
+    with patch("shutil.which", return_value=str(mock_script)):
+        result = backend.refine_ensemble(
+            input_xyz, tmp_path / "censo",
+            preset="censo-light", charge=0, multiplicity=1,
+        )
+
+    assert result.final_part == "screening"
+    assert len(result.records) == 3
+
+    conf_ids = [r.conf_id for r in result.records]
+    assert "CONF1" in conf_ids
+    assert "CONF3" in conf_ids
+    assert "CONF7" in conf_ids
+
+    rec1 = next(r for r in result.records if r.conf_id == "CONF1")
+    rec3 = next(r for r in result.records if r.conf_id == "CONF3")
+    rec7 = next(r for r in result.records if r.conf_id == "CONF7")
+
+    assert rec1.frame_index == 0
+    assert rec3.frame_index == 1
+    assert rec7.frame_index == 2
+
+    assert rec1.coordinates.shape == (3, 3)
+    assert rec3.coordinates.shape == (3, 3)
+    assert rec7.coordinates.shape == (3, 3)
+
+    assert abs(rec1.coordinates[0, 0] - 0.0) < 1e-6
+    assert abs(rec3.coordinates[0, 0] - 0.1) < 1e-6
+    assert abs(rec7.coordinates[0, 0] - 0.2) < 1e-6

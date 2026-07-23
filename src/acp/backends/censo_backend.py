@@ -419,6 +419,7 @@ class CensoBackend(QCBackend, ConformerSearcher):
             raise CensoParseError(f"No atoms found in XYZ: {xyz_path}")
 
         n_frames_xyz = len(all_coords) // n_atoms if n_atoms > 0 else 0
+        title_map = self._read_xyz_frame_titles(xyz_path)
 
         records: list[CensoConformerRecord] = []
         for conf_id, entry in records_data.items():
@@ -448,25 +449,23 @@ class CensoBackend(QCBackend, ConformerSearcher):
                     conf_id, gtot, computed_gtot, abs(computed_gtot - gtot),
                 )
 
-            digits = re.search(r"\d+$", conf_id)
-            frame_index = int(digits.group()) - 1 if digits else 0
-
-            if frame_index < n_frames_xyz:
+            frame_index = title_map.get(conf_id)
+            if frame_index is not None and frame_index < n_frames_xyz:
                 start = frame_index * n_atoms
                 end = start + n_atoms
                 coord = np.array(all_coords[start:end], dtype=float)
                 syms = list(symbols)
             else:
                 logger.warning(
-                    "Frame index %d out of range (XYZ has %d frames) for %s",
-                    frame_index, n_frames_xyz, conf_id,
+                    "Frame for %s not found in XYZ (title_map=%s, n_frames=%d)",
+                    conf_id, title_map, n_frames_xyz,
                 )
                 coord = np.zeros((0, 3), dtype=float)
                 syms = []
 
             record = CensoConformerRecord(
                 conf_id=conf_id,
-                frame_index=frame_index,
+                frame_index=frame_index if frame_index is not None else -1,
                 energy=energy,
                 gsolv=gsolv,
                 grrho=grrho,
@@ -477,6 +476,29 @@ class CensoBackend(QCBackend, ConformerSearcher):
             records.append(record)
 
         return records
+
+    @staticmethod
+    def _read_xyz_frame_titles(xyz_path: Path) -> dict[str, int]:
+        """Parse XYZ frame comment lines to build {conf_id -> frame_index} map."""
+        titles: dict[str, int] = {}
+        with open(xyz_path, encoding="utf-8") as f:
+            lines = f.readlines()
+        i = 0
+        frame_idx = 0
+        while i < len(lines):
+            try:
+                natoms = int(lines[i].strip())
+            except (ValueError, IndexError):
+                i += 1
+                continue
+            if natoms == 0:
+                break
+            if i + 1 < len(lines):
+                title = lines[i + 1].strip()
+                titles[title] = frame_idx
+            i += natoms + 2
+            frame_idx += 1
+        return titles
 
     def _validate_xyz_json_consistency(
         self,
@@ -491,11 +513,7 @@ class CensoBackend(QCBackend, ConformerSearcher):
             data = json.load(f)
         json_keys = set(data.get("data", {}).keys())
 
-        all_coords, symbols = read_xyz_multiframe(xyz_path)
-        n_atoms = len(symbols)
-        n_frames = len(all_coords) // n_atoms if n_atoms > 0 else 0
-
-        xyz_keys = {f"CONF{i + 1}" for i in range(n_frames)}
+        xyz_keys = set(self._read_xyz_frame_titles(xyz_path).keys())
         if not json_keys.issubset(xyz_keys):
             missing = json_keys - xyz_keys
             raise CensoParseError(

@@ -202,7 +202,7 @@ def make_node(name="compute-01", **kw):
         username="testuser",
         remote_work_dir="/scratch/test/acp_jobs",
         remote_code_dir="/home/test/acp_code",
-        max_concurrent_jobs=3,
+        max_concurrent_jobs=5,
         host_key_policy="auto_add",
     )
     defaults.update(kw)

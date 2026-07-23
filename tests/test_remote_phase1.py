@@ -373,7 +373,7 @@ def test_ssh_pool_thread_safety():
         username="u",
         remote_work_dir="/w",
         remote_code_dir="/c",
-        max_concurrent_jobs=3,
+        max_concurrent_jobs=5,
     )
     pool = SSHConnectionPool()
     fake_sftp = FakeSFTP()

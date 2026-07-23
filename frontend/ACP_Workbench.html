@@ -401,7 +401,7 @@ function renderDetail(j) {
     const cls = st === "completed" ? "done" : st === "failed" ? "fail" : st === "running" ? "run" : "";
     return '<div class="step ' + cls + '"><span class="b"></span><span>' + escapeHtml(name) + "</span></div>";
   }).join("");
-  const canCancel = ["queued", "starting", "running", "cancelling"].includes(j.status);
+  const canCancel = ["queued", "starting", "running", "cancelling", "pending"].includes(j.status);
   const D = "-";
   $("detail-area").innerHTML =
     '<div class="detail-card">' +

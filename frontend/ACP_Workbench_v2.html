@@ -2079,7 +2079,7 @@ function getStatusClass(status) {
   if (s === "completed") return "completed";
   if (s === "failed") return "failed";
   if (s === "running") return "running";
-  if (s === "queued" || s === "starting" || s === "cancelling") return s;
+  if (s === "queued" || s === "starting" || s === "cancelling" || s === "pending") return s;
   if (s === "cancelled") return "cancelled";
   return "idle";
 }
@@ -2999,7 +2999,7 @@ function renderInfoInto(container, job) {
 
   const actions = document.createElement("div");
   actions.className = "info-actions";
-  const isActive = job.status === "queued" || job.status === "starting" || job.status === "running" || job.status === "cancelling";
+  const isActive = job.status === "queued" || job.status === "starting" || job.status === "running" || job.status === "cancelling" || job.status === "pending";
   if (isActive) {
     const cancelBtn = document.createElement("button");
     cancelBtn.className = "btn";
@@ -4786,6 +4786,7 @@ async function openMethodConfig() {
       var container2 = document.getElementById("mc-levels-container");
       container2.innerHTML = "";
       (schema.method_levels || []).forEach(function(lvDef) {
+        if (!lvDef.required && !(lvDef.level_id in wizardState.method.stages)) return;
         var stateData = wizardState.method.stages[lvDef.level_id] || {};
         container2.appendChild(buildLevelCard(lvDef, stateData));
       });
@@ -4795,6 +4796,7 @@ async function openMethodConfig() {
 
   // Build level cards
   (schema.method_levels || []).forEach(function(lvDef) {
+    if (!lvDef.required && !(lvDef.level_id in wizardState.method.stages)) return;
     var stateData = wizardState.method.stages[lvDef.level_id] || {};
     if (!stateData.engine) stateData.engine = lvDef.allowed_engines[0];
     container.appendChild(buildLevelCard(lvDef, stateData));
