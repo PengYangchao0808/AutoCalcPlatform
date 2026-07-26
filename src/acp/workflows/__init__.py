@@ -2,11 +2,10 @@
 """Workflow implementations.
 
 Public symbols are exposed lazily via :pep:`562` ``__getattr__`` so that
-importing a single workflow (e.g. ``from acp.workflows.conformer import ...``)
+importing a single workflow (e.g. ``from acp.workflows.energy import ...``)
 does **not** pull in the others.  This keeps each workflow's third-party
-dependencies decoupled — a conformer job no longer requires the NMR report
-dependencies (``openpyxl``) to be importable, which matters on slimmed-down
-remote compute nodes.
+dependencies decoupled and ``import acp.workflows`` cheap and side-effect
+free.
 """
 
 from __future__ import annotations
@@ -14,21 +13,14 @@ from __future__ import annotations
 from typing import Any
 
 __all__ = [
-    "BENCHMARK_LEVELS",
-    "BenchmarkRunner",
     "WorkflowRegistryEntry",
-    "boltzmann_weight_ensemble",
     "get_mechanism_stages",
-    "get_nmr_stages",
-    "get_protocol_stages",
     "get_workflow_entry",
     "list_workflow_entries",
     "register_workflow",
     "run_conformer_energy",
-    "run_conformer_search",
     "run_ensemble_generation",
     "run_mechanism_analysis",
-    "run_nmr_calculation",
     "run_singlepoint",
     "run_optimize",
     "run_frequency",
@@ -40,15 +32,8 @@ __all__ = [
 # imported on first access only, keeping ``import acp.workflows`` cheap and
 # side-effect free.
 _LAZY_SOURCES: dict[str, str] = {
-    "BENCHMARK_LEVELS": "acp.workflows.benchmark",
-    "BenchmarkRunner": "acp.workflows.benchmark",
-    "boltzmann_weight_ensemble": "acp.workflows.conformer",
-    "get_protocol_stages": "acp.workflows.conformer",
-    "run_conformer_search": "acp.workflows.conformer",
     "get_mechanism_stages": "acp.workflows.mechanism",
     "run_mechanism_analysis": "acp.workflows.mechanism",
-    "get_nmr_stages": "acp.workflows.nmr",
-    "run_nmr_calculation": "acp.workflows.nmr",
     "run_singlepoint": "acp.workflows.simple",
     "run_optimize": "acp.workflows.simple",
     "run_frequency": "acp.workflows.simple",

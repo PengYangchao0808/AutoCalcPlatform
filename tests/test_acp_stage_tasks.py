@@ -16,29 +16,6 @@ def test_stage_plan_provider_fake() -> None:
     assert [stage.stage_name for stage in plan] == ["init", "compute", "finalize"]
 
 
-def test_stage_plan_provider_conformer() -> None:
-    plan = get_stage_plan(JobSpec(workflow="conformer"))
-    assert [stage.stage_name for stage in plan] == [
-        "embed_smiles",
-        "crest_search",
-        "isostat_cluster",
-        "dft_optimize",
-        "frequency",
-        "single_point",
-        "shermo_thermo",
-    ]
-
-
-def test_stage_plan_provider_conformer_zero() -> None:
-    plan = get_stage_plan(JobSpec(workflow="conformer", method={"protocol": "zero"}))
-    assert [stage.stage_name for stage in plan] == [
-        "embed_smiles",
-        "crest_search",
-        "isostat_cluster",
-        "single_point",
-    ]
-
-
 def test_stage_plan_unknown_workflow_returns_empty() -> None:
     assert get_stage_plan(JobSpec(workflow="unknown")) == []
 

@@ -13,7 +13,6 @@ from typing import Any, Protocol
 
 from acp.scheduler.jobs import JobSpec, censo_preset_from_method
 from acp.scheduler.migrations import migrate
-from acp.workflows.nmr import get_nmr_stages
 
 _TERMINAL_TASK_STATES = {"completed", "failed", "cancelled", "skipped"}
 _EVENT_PRIORITY = {"started": 0, "completed": 1, "failed": 2}
@@ -68,39 +67,6 @@ def get_stage_plan(spec: JobSpec) -> list[StagePlan]:
 class _FakeStagePlanProvider:
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
         return [StagePlan("init"), StagePlan("compute"), StagePlan("finalize")]
-
-
-class _ConformerStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        protocol = str(spec.method.get("protocol") or "ext").strip().lower()
-        # ``zero`` is a single-point-only pipeline (no opt/freq/thermo).
-        if protocol == "zero":
-            return [
-                StagePlan("embed_smiles"),
-                StagePlan("crest_search"),
-                StagePlan("isostat_cluster"),
-                StagePlan("single_point"),
-            ]
-        # ext / full / lite / benchmark — full DFT handoff pipeline.
-        return [
-            StagePlan("embed_smiles"),
-            StagePlan("crest_search"),
-            StagePlan("isostat_cluster"),
-            StagePlan("dft_optimize"),
-            StagePlan("frequency"),
-            StagePlan("single_point"),
-            StagePlan("shermo_thermo"),
-        ]
-
-
-class _NmrStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        return [StagePlan(stage.name) for stage in get_nmr_stages()]
-
-
-class _BenchmarkStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        return [StagePlan("benchmark_controller")]
 
 
 class _MechanismStagePlanProvider:
@@ -471,9 +437,6 @@ def _task_snapshot(task: StageTask) -> dict[str, Any]:
 
 
 register_plan_provider("fake", _FakeStagePlanProvider())
-register_plan_provider("conformer", _ConformerStagePlanProvider())
-register_plan_provider("nmr", _NmrStagePlanProvider())
-register_plan_provider("benchmark", _BenchmarkStagePlanProvider())
 register_plan_provider("mechanism", _MechanismStagePlanProvider())
 register_plan_provider("ensemble", _EnsembleStagePlanProvider())
 register_plan_provider("energy", _EnergyStagePlanProvider())
