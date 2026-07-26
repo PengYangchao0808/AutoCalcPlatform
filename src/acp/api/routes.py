@@ -205,16 +205,11 @@ def get_workflows() -> WorkflowsResponse:
 
 @router.get("/protocols", response_model=ProtocolsResponse)
 def get_protocols() -> ProtocolsResponse:
-    names: list[str] = []
-    try:
-        from acp.cli import ALL_PROTOCOLS
-
-        names = list(ALL_PROTOCOLS)
-    except Exception:
-        names = []
-    for preset in ("censo-light", "censo-default", "censo-zero"):
-        if preset not in names:
-            names.append(preset)
+    # Phase A: the standalone conformer workflow (and its ALL_PROTOCOLS
+    # introspection constant in acp.cli) has been removed. The only
+    # protocol-like presets that remain relevant are the CENSO presets
+    # used by the ensemble/energy workflows.
+    names = ["censo-light", "censo-default", "censo-zero"]
     return ProtocolsResponse(protocols=[ProtocolInfo(name=p) for p in names])
 
 

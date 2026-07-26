@@ -55,12 +55,6 @@ def _make_config() -> dict[str, Any]:
                 "method": "M062X",
                 "basis": "def2-TZVPP",
             },
-            "nmr": {
-                "method": "B3LYP",
-                "basis": "def2-TZVPP",
-                "solvent": "chloroform",
-                "solvent_model": "smd",
-            },
             "preoptimization": {"gfn_level": 2},
         },
     }
