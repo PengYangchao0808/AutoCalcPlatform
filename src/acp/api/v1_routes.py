@@ -829,10 +829,7 @@ def preview_remote_file(
         if ext in _PREVIEW_STRUCTURE_EXT:
             mode = "structure"
         elif ext in _PREVIEW_TEXT_EXT:
-            if "_nmr_report" in file_path.lower():
-                mode = "report"
-            else:
-                mode = "tail" if ext in (".log", ".out") else "text"
+            mode = "tail" if ext in (".log", ".out") else "text"
         else:
             raise HTTPException(
                 status_code=400,
@@ -897,30 +894,18 @@ def _parse_remote_report(
 ) -> dict[str, Any]:
     """Parse a known report file and return a structured JSON payload.
 
-    Supports NMR JSON reports (``*_nmr_report.json``).  Other files are
-    returned as plain text wrapped in a generic envelope.
+    Generic JSON reports are returned under a ``json_report`` envelope.
+    Other files are returned as plain text wrapped in a generic envelope.
     """
     import json
 
     ext = Path(file_path).suffix.lower()
-    base_name = Path(file_path).stem.lower()
     if ext == ".json":
         data = fetcher.read_file(record, file_path)
         try:
             parsed = json.loads(data.decode("utf-8", errors="replace"))
         except json.JSONDecodeError as exc:
             raise RemoteFileError(f"Invalid JSON report: {exc}") from exc
-        is_nmr_report = (
-            "nmr_report" in base_name
-            or "averaged_shifts" in parsed
-            or "conformer_results" in parsed
-        )
-        if is_nmr_report:
-            return {
-                "type": "nmr_report",
-                "file_path": file_path,
-                "report": parsed,
-            }
         return {
             "type": "json_report",
             "file_path": file_path,

@@ -4096,9 +4096,9 @@ async function loadWorkflowCatalog() {
   try {
     var resp = await fetch(API_BASE + "/workflow-catalog");
     workflowCatalogCache = (await resp.json()).workflows || [];
-    // R21: filter by the catalog's `visible` flag (default true) instead
-    // of hardcoding "conformer"/"benchmark" — single source of truth in
-    // acp.catalog.WORKFLOW_CATALOG.
+    // Filter by the catalog's `visible` flag — single source of truth in
+    // acp.catalog.WORKFLOW_CATALOG. Retired/hidden workflows
+    // (e.g. conformer/nmr/benchmark) are dropped here automatically.
     workflowCatalogCache = workflowCatalogCache.filter(function(w) { return w.visible !== false; });
   } catch(e) { console.error("Failed to load workflow catalog:", e); }
 }
@@ -5205,9 +5205,6 @@ async function submitJobModal() {
       levels: cleanedLevels
     };
     if (wizardState.method.fields) methodPayload.fields = wizardState.method.fields;
-    if (workflow === "conformer" || workflow === "nmr") {
-      methodPayload.protocol = wizardState.method.profile_id;
-    }
     if (workflow === "ensemble" || workflow === "energy") {
       var pid = wizardState.method.profile_id;
       if (pid && pid !== "__custom__") methodPayload.preset = pid;

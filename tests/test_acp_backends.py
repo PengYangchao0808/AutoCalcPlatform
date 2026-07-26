@@ -22,7 +22,6 @@ from acp.backends.base import (
     ClusteringTool,
     FrequencyCalculator,
     GeometryOptimizer,
-    NMRCalculator,
     QCResult,
     SinglePointCalculator,
     ThermoCalculator,
@@ -76,7 +75,6 @@ def test_backend_imports_and_capabilities() -> None:
 
     assert isinstance(orca, GeometryOptimizer)
     assert isinstance(orca, FrequencyCalculator)
-    assert isinstance(orca, NMRCalculator)
     assert isinstance(orca, SinglePointCalculator)
     assert isinstance(xtb, GeometryOptimizer)
     assert isinstance(xtb, SinglePointCalculator)
@@ -90,7 +88,6 @@ def test_registry_exposes_registered_backends() -> None:
     assert get_backend("xtb") is XTBBackend
     assert get_backend("external") is ExternalBackend
     assert issubclass(require_backend("frequency"), FrequencyCalculator)
-    assert issubclass(require_backend("nmr"), NMRCalculator)
     assert issubclass(require_backend("single_point"), SinglePointCalculator)
     assert issubclass(require_backend("clustering"), ClusteringTool)
     assert issubclass(require_backend("thermochemistry"), ThermoCalculator)
@@ -111,18 +108,6 @@ def test_orca_backend_delegates_to_interface(tmp_path: Path) -> None:
 
     assert result is expected
     mock_sp.assert_called_once()
-
-
-def test_orca_backend_nmr_delegates_to_interface(tmp_path: Path) -> None:
-    config = _make_config()
-    backend = ORCABackend(config)
-    expected = QCResult(success=True, energy=-5.0)
-
-    with patch.object(ORCAInterface, "nmr_shielding", return_value=expected) as mock_nmr:
-        result = backend.nmr_shielding(np.zeros((1, 3)), ["H"], output_dir=tmp_path)
-
-    assert result is expected
-    mock_nmr.assert_called_once()
 
 
 def test_xtb_backend_delegates_to_interface(tmp_path: Path) -> None:
@@ -160,7 +145,6 @@ def test_external_runner_exports_match_legacy_exports() -> None:
 
 def test_capability_matrix_supports_declared_statuses() -> None:
     assert supports("orca", "frequency") is True
-    assert supports("orca", "nmr") is True
     assert (
         list_capabilities("crest")["conformer_search"]
         == CAPABILITY_MATRIX["crest"]["conformer_search"]

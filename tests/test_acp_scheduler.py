@@ -119,22 +119,6 @@ def test_event_log_append_read(tmp_path: Path) -> None:
     assert "timestamp" in records[0]
 
 
-def test_benchmark_command_is_top_level(tmp_path: Path) -> None:
-    """P1#2: benchmark must invoke `acp.cli benchmark`, not `acp.cli run benchmark`."""
-    from acp.scheduler.runner import JobRunner
-
-    runner = JobRunner()
-    spec = JobSpec(
-        workflow="benchmark",
-        input={"source": "mol.xyz"},
-        method={"benchmark_level": "quick"},
-    )
-    cmd = runner._build_cmd(spec, tmp_path)
-    assert cmd[3] == "benchmark", f"benchmark must not use 'run' subcommand: {cmd}"
-    assert cmd[3:4] == ["benchmark"]
-    assert "--benchmark-level" in cmd and "quick" in cmd
-
-
 def test_find_state_file_prefers_shallowest(tmp_path: Path) -> None:
     """P1#1: nested workflows (NMR) write multiple state.json; shallowest wins."""
     import json

@@ -37,12 +37,6 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         description="Built-in no-op workflow; no external binaries required.",
         requires_binaries=[],
     ),
-    "conformer": WorkflowRegistryEntry(
-        name="conformer",
-        label="Conformer Search",
-        description="CREST conformer search → DFT refinement → single-point → thermo.",
-        requires_binaries=["crest", "orca"],
-    ),
     "ensemble": WorkflowRegistryEntry(
         name="ensemble",
         label="Ensemble Generation",
@@ -60,18 +54,6 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
             "(opt+freq+SP+Shermo) → free energy."
         ),
         requires_binaries=["crest", "censo", "orca"],
-    ),
-    "nmr": WorkflowRegistryEntry(
-        name="nmr",
-        label="NMR",
-        description="Conformer selection → GIAO shielding → Boltzmann-averaged report.",
-        requires_binaries=["orca"],
-    ),
-    "benchmark": WorkflowRegistryEntry(
-        name="benchmark",
-        label="Benchmark",
-        description="Run multiple conformer protocols and compare their results.",
-        requires_binaries=["crest", "orca"],
     ),
     "mechanism": WorkflowRegistryEntry(
         name="mechanism",

@@ -214,59 +214,6 @@ def make_node(name="compute-01", **kw):
 # ====================================================================== #
 
 
-def test_build_remote_cli_command_conformer():
-    spec = JobSpec(
-        workflow="conformer",
-        name="ethanol",
-        input={"source": "CCO", "source_type": "smiles"},
-        method={"protocol": "ext"},
-        resources={"nproc": 8, "mem": "16GB"},
-    )
-    cmd = build_remote_cli_command(spec)
-    assert cmd[0:4] == ["python", "-m", "acp.cli", "run"]
-    assert cmd[4] == "conformer"
-    assert "--input" in cmd
-    assert "inputs/input.xyz" in cmd
-    assert "--output" in cmd
-    assert "." in cmd
-    assert "--protocol" in cmd
-    assert "ext" in cmd
-    assert "--name" in cmd
-    assert "ethanol" in cmd
-    assert "--nproc" in cmd
-    assert "8" in cmd
-    assert "--mem" in cmd
-    print("  [OK] build_remote_cli_command: conformer workflow")
-
-
-def test_build_remote_cli_command_nmr():
-    spec = JobSpec(
-        workflow="nmr",
-        input={"source": "CCO"},
-        method={"protocol": "giao", "backend": "orca"},
-        resources={"nproc": 4},
-    )
-    cmd = build_remote_cli_command(spec)
-    assert "run" in cmd and "nmr" in cmd
-    assert "--protocol" in cmd and "giao" in cmd
-    assert "--backend" in cmd and "orca" in cmd
-    print("  [OK] build_remote_cli_command: nmr workflow")
-
-
-def test_build_remote_cli_command_benchmark():
-    spec = JobSpec(
-        workflow="benchmark",
-        input={"source": "CCO"},
-        method={"benchmark_level": "fast", "protocols": "ext,censo-full"},
-    )
-    cmd = build_remote_cli_command(spec)
-    assert "benchmark" in cmd
-    assert "run" not in cmd  # benchmark uses `acp.cli benchmark`, not `run`
-    assert "--benchmark-level" in cmd and "fast" in cmd
-    assert "--protocols" in cmd
-    print("  [OK] build_remote_cli_command: benchmark workflow")
-
-
 def test_build_remote_cli_command_mechanism():
     spec = JobSpec(
         workflow="mechanism",
@@ -283,7 +230,7 @@ def test_build_remote_cli_command_mechanism():
 
 def test_build_remote_cli_command_charge_mult():
     spec = JobSpec(
-        workflow="conformer",
+        workflow="ensemble",
         input={"source": "CCO", "charge": 0, "multiplicity": 1},
     )
     cmd = build_remote_cli_command(spec)
@@ -305,7 +252,7 @@ def test_build_remote_cli_command_invalid_workflow():
 def test_build_remote_cli_command_no_config_path():
     """config_path must NOT be passed — it's a local server path, not remote."""
     spec = JobSpec(
-        workflow="conformer",
+        workflow="ensemble",
         input={"source": "CCO"},
         config_path="/local/path/to/config.yaml",
     )
@@ -316,7 +263,7 @@ def test_build_remote_cli_command_no_config_path():
 
 def test_derive_lsf_resources():
     spec = JobSpec(
-        workflow="conformer",
+        workflow="ensemble",
         input={"source": "CCO"},
         resources={"nproc": 16, "mem": "32GB"},
     )
@@ -332,7 +279,7 @@ def test_derive_lsf_resources():
 
 
 def test_derive_lsf_resources_defaults():
-    spec = JobSpec(workflow="conformer", input={"source": "CCO"})
+    spec = JobSpec(workflow="ensemble", input={"source": "CCO"})
     nproc, mem_per_core, _, _, _ = derive_lsf_resources(spec)
     assert nproc == 8
     assert mem_per_core == 2000
@@ -370,10 +317,10 @@ def test_generate_lsf_script():
 def test_build_lsf_script_spec_integration():
     node = make_node()
     spec = JobSpec(
-        workflow="conformer",
+        workflow="ensemble",
         name="water",
         input={"source": "O", "source_type": "smiles"},
-        method={"protocol": "ext"},
+        method={"preset": "censo-light"},
         resources={"nproc": 4, "mem": "8GB"},
     )
     lsf_spec, cli_cmd = build_lsf_script_spec(
@@ -384,7 +331,7 @@ def test_build_lsf_script_spec_integration():
     assert lsf_spec.mem_mb_per_core == 2048  # 8192 / 4
     assert lsf_spec.remote_job_dir == "/scratch/test/acp_jobs/job_001"
     assert lsf_spec.remote_code_dir == "/home/test/acp_code"
-    assert "conformer" in cli_cmd
+    assert "ensemble" in cli_cmd
     script = generate_lsf_script(lsf_spec)
     assert "#BSUB -W 48:00" in script
     print("  [OK] build_lsf_script_spec: integrated CLI + LSF generation")
@@ -592,7 +539,7 @@ def test_runner_select_node_least_loaded():
     )
     # Mock get_running_job_count to return different values per node
     runner._monitor.get_running_job_count = lambda n: 1 if n.name == "node-a" else 3
-    selected = runner.select_node(JobSpec(workflow="conformer", input={"source": "CCO"}))
+    selected = runner.select_node(JobSpec(workflow="ensemble", input={"source": "CCO"}))
     assert selected.name == "node-a"
     pool.close()
     print("  [OK] select_node: least-loaded (node-a=1 < node-b=3)")
@@ -604,7 +551,7 @@ def test_runner_select_node_no_enabled():
     pool = SSHConnectionPool()
     runner = RemoteJobRunner(pool, config, monitor=MagicMock(), code_syncer=MagicMock())
     try:
-        runner.select_node(JobSpec(workflow="conformer", input={"source": "CCO"}))
+        runner.select_node(JobSpec(workflow="ensemble", input={"source": "CCO"}))
         assert False, "should raise"
     except RemoteNodeUnavailableError:
         pass
@@ -619,7 +566,7 @@ def test_runner_select_node_all_at_capacity():
     runner = RemoteJobRunner(pool, config, monitor=MagicMock(), code_syncer=MagicMock())
     runner._monitor.get_running_job_count = lambda n: 2  # at capacity
     try:
-        runner.select_node(JobSpec(workflow="conformer", input={"source": "CCO"}))
+        runner.select_node(JobSpec(workflow="ensemble", input={"source": "CCO"}))
         assert False, "should raise"
     except RemoteNodeUnavailableError:
         pass
@@ -664,7 +611,7 @@ def test_runner_full_flow_success():
         work_dir.mkdir(parents=True)
 
         spec = JobSpec(
-            workflow="conformer",
+            workflow="ensemble",
             input={"source": "CCO", "source_type": "smiles"},
             method={"protocol": "ext"},
             resources={"nproc": 4},
@@ -739,7 +686,7 @@ def test_runner_full_flow_failure():
     with tempfile.TemporaryDirectory() as tmp:
         work_dir = Path(tmp) / "proj" / "failjob"
         work_dir.mkdir(parents=True)
-        spec = JobSpec(workflow="conformer", input={"source": "CCO", "source_type": "smiles"})
+        spec = JobSpec(workflow="ensemble", input={"source": "CCO", "source_type": "smiles"})
         record = JobRecord(id="failjob", spec=spec, work_dir=str(work_dir))
         event_log = JobEventLog(work_dir / "events.jsonl")
         cancel = threading.Event()
@@ -790,7 +737,7 @@ def test_runner_cancel():
     with tempfile.TemporaryDirectory() as tmp:
         work_dir = Path(tmp) / "proj" / "canceljob"
         work_dir.mkdir(parents=True)
-        spec = JobSpec(workflow="conformer", input={"source": "CCO", "source_type": "smiles"})
+        spec = JobSpec(workflow="ensemble", input={"source": "CCO", "source_type": "smiles"})
         record = JobRecord(id="canceljob", spec=spec, work_dir=str(work_dir))
         event_log = JobEventLog(work_dir / "events.jsonl")
         cancel = threading.Event()
@@ -834,7 +781,7 @@ def test_runner_submission_failure():
     with tempfile.TemporaryDirectory() as tmp:
         work_dir = Path(tmp) / "proj" / "subfail"
         work_dir.mkdir(parents=True)
-        spec = JobSpec(workflow="conformer", input={"source": "CCO", "source_type": "smiles"})
+        spec = JobSpec(workflow="ensemble", input={"source": "CCO", "source_type": "smiles"})
         record = JobRecord(id="subfail", spec=spec, work_dir=str(work_dir))
         event_log = JobEventLog(work_dir / "events.jsonl")
         cancel = threading.Event()
@@ -873,7 +820,7 @@ def test_runner_bsub_no_job_id():
     with tempfile.TemporaryDirectory() as tmp:
         work_dir = Path(tmp) / "proj" / "badbsub"
         work_dir.mkdir(parents=True)
-        spec = JobSpec(workflow="conformer", input={"source": "CCO", "source_type": "smiles"})
+        spec = JobSpec(workflow="ensemble", input={"source": "CCO", "source_type": "smiles"})
         record = JobRecord(id="badbsub", spec=spec, work_dir=str(work_dir))
         event_log = JobEventLog(work_dir / "events.jsonl")
         cancel = threading.Event()
@@ -929,7 +876,7 @@ def test_runner_no_download():
     with tempfile.TemporaryDirectory() as tmp:
         work_dir = Path(tmp) / "proj" / "ndjob"
         work_dir.mkdir(parents=True)
-        spec = JobSpec(workflow="conformer", input={"source": "CCO", "source_type": "smiles"})
+        spec = JobSpec(workflow="ensemble", input={"source": "CCO", "source_type": "smiles"})
         record = JobRecord(id="ndjob", spec=spec, work_dir=str(work_dir))
         event_log = JobEventLog(work_dir / "events.jsonl")
         cancel = threading.Event()
@@ -978,7 +925,7 @@ def test_runner_remote_execution_stage_task():
         store = StageTaskStore(db_path)
         observer = StageTaskObserver(store)
 
-        spec = JobSpec(workflow="conformer", input={"source": "CCO", "source_type": "smiles"})
+        spec = JobSpec(workflow="ensemble", input={"source": "CCO", "source_type": "smiles"})
         record = JobRecord(id="stagejob", spec=spec, work_dir=str(work_dir))
         event_log = JobEventLog(work_dir / "events.jsonl")
         cancel = threading.Event()
@@ -1048,7 +995,7 @@ def test_runner_log_tailing():
     with tempfile.TemporaryDirectory() as tmp:
         work_dir = Path(tmp) / "proj" / "logjob"
         work_dir.mkdir(parents=True)
-        spec = JobSpec(workflow="conformer", input={"source": "CCO", "source_type": "smiles"})
+        spec = JobSpec(workflow="ensemble", input={"source": "CCO", "source_type": "smiles"})
         record = JobRecord(id="logjob", spec=spec, work_dir=str(work_dir))
         event_log = JobEventLog(work_dir / "events.jsonl")
         cancel = threading.Event()

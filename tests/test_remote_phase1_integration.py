@@ -143,7 +143,7 @@ def test_codesyncer_real() -> int:
             "import sys\n"
             f'sys.path.insert(0, "{NODE.remote_code_dir}/src")\n'
             "from acp.cli import main\n"
-            "from acp.workflows.conformer import run_conformer_search\n"
+            "from acp.workflows.ensemble import run_ensemble_generation\n"
             "from conformer_search.core.engine import ConformerEngine\n"
             "print('IMPORT_OK')\n"
             "try:\n"

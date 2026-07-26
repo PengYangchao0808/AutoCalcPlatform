@@ -89,9 +89,11 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "confsearch",
         "default_backend": "crest",
         "requires_binaries": ["crest", "orca"],
-        "status": "active",
-        # R21: hidden from the Workbench wizard (legacy entry point),
-        # but still executable via direct scheduler/CLI invocation.
+        # Retired (Phase A): the standalone conformer workflow has been
+        # removed. The entry is kept so historical jobs still resolve a
+        # label/schema; ``status="retired"`` makes ``_derive_supported_workflows``
+        # drop it from the active set (submission auto-rejected).
+        "status": "retired",
         "visible": False,
     },
     {
@@ -103,8 +105,10 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "nmr",
         "default_backend": "orca",
         "requires_binaries": ["orca"],
-        "status": "active",
-        "visible": True,
+        # Retired (Phase A): NMR workflow removed; entry kept for historical
+        # job display only.
+        "status": "retired",
+        "visible": False,
     },
     {
         "id": "benchmark",
@@ -115,8 +119,9 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "benchmark",
         "default_backend": "orca",
         "requires_binaries": ["orca"],
-        "status": "active",
-        # R21: hidden from the Workbench wizard (no first-class UI flow).
+        # Retired (Phase A): benchmark workflow removed; entry kept for
+        # historical job display only.
+        "status": "retired",
         "visible": False,
     },
     {
@@ -980,15 +985,11 @@ METHOD_SCHEMAS: dict[str, Any] = {
         "profiles": [],
     },
     "nmr": {
-        "method_levels": [
-            {
-                "level_id": "shielding",
-                "label": "NMR Shielding",
-                "required": True,
-                "allowed_engines": ["orca"],
-                "fields": ["functional", "basis"],
-            }
-        ],
+        # Retired (Phase A): the NMR workflow was removed. This schema is
+        # kept as a minimal stub so historical job-detail pages can still
+        # resolve the label; the executable method_levels definition is
+        # intentionally omitted.
+        "method_levels": [],
         "profiles": [],
     },
     "censo_ensemble": {
@@ -1258,7 +1259,7 @@ _BACKEND_BINARIES: dict[str, dict[str, Any]] = {
 }
 
 _BACKEND_SUPPORTS: dict[str, list[str]] = {
-    "orca":    ["singlepoint", "optimize", "frequency", "optfreq", "nmr"],
+    "orca":    ["singlepoint", "optimize", "frequency", "optfreq"],
     "xtb":     ["singlepoint", "optimize"],
     "crest":   ["conformer_search"],
     "censo":   ["censo_refinement", "censo_energy"],

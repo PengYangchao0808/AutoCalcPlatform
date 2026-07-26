@@ -329,17 +329,17 @@ def test_walltime_seconds_property():
 
 
 def test_jobspec_target_node_defaults_none():
-    spec = JobSpec(workflow="conformer", input={"source": "CCO"})
+    spec = JobSpec(workflow="ensemble", input={"source": "CCO"})
     assert spec.target_node is None
 
 
 def test_jobspec_target_node_set():
-    spec = JobSpec(workflow="conformer", input={"source": "CCO"}, target_node="compute-02")
+    spec = JobSpec(workflow="ensemble", input={"source": "CCO"}, target_node="compute-02")
     assert spec.target_node == "compute-02"
 
 
 def test_jobspec_to_dict_includes_target_node():
-    spec = JobSpec(workflow="conformer", input={"source": "CCO"}, target_node="node-x")
+    spec = JobSpec(workflow="ensemble", input={"source": "CCO"}, target_node="node-x")
     d = spec.to_dict()
     assert d["target_node"] == "node-x"
 
@@ -351,7 +351,7 @@ def test_jobspec_to_dict_includes_target_node():
 
 def test_should_run_remote_false_without_runner():
     runner = JobRunner()
-    spec = JobSpec(workflow="conformer", input={"source": "CCO"})
+    spec = JobSpec(workflow="ensemble", input={"source": "CCO"})
     assert runner._should_run_remote(spec) is False
 
 
@@ -363,7 +363,7 @@ def test_should_run_remote_false_for_fake():
 
 def test_should_run_remote_true_for_conformer_with_runner():
     runner = JobRunner(remote_runner=MagicMock())
-    spec = JobSpec(workflow="conformer", input={"source": "CCO"})
+    spec = JobSpec(workflow="ensemble", input={"source": "CCO"})
     assert runner._should_run_remote(spec) is True
 
 
@@ -490,7 +490,7 @@ def test_monitor_loop_times_out():
         run_root = Path(tmp)
         work_dir = run_root / "proj" / "timeoutjob"
         work_dir.mkdir(parents=True)
-        spec = JobSpec(workflow="conformer", input={"source": "CCO", "source_type": "smiles"})
+        spec = JobSpec(workflow="ensemble", input={"source": "CCO", "source_type": "smiles"})
         record = JobRecord(id="timeoutjob", spec=spec, work_dir=str(work_dir))
         event_log = JobEventLog(work_dir / "events.jsonl")
         cancel_event = threading.Event()
@@ -553,7 +553,7 @@ def test_cleanup_on_submission_failure():
         run_root = Path(tmp)
         work_dir = run_root / "proj" / "failjob"
         work_dir.mkdir(parents=True)
-        spec = JobSpec(workflow="conformer", input={"source": "CCO", "source_type": "smiles"})
+        spec = JobSpec(workflow="ensemble", input={"source": "CCO", "source_type": "smiles"})
         record = JobRecord(id="failjob", spec=spec, work_dir=str(work_dir))
         event_log = JobEventLog(work_dir / "events.jsonl")
         cancel_event = threading.Event()

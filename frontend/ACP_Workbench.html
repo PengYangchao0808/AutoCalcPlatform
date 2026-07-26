@@ -218,8 +218,6 @@ const WF_META = {
   fake:       { label: "Fake (demo)",       needs: [] },
   ensemble:   { label: "Ensemble Generation", needs: ["crest", "censo", "orca"] },
   energy:     { label: "Conformer Energy",  needs: ["crest", "censo", "orca"] },
-  nmr:        { label: "NMR",               needs: ["orca"] },
-  benchmark:  { label: "Benchmark",         needs: ["crest", "orca"] },
   mechanism:  { label: "Mechanism / TS",    needs: ["orca"] },
 };
 const PROTOCOLS_DEFAULT = ["ext","censo-zero","censo-lite","censo-full","allopt","reference-sp"];
@@ -314,7 +312,6 @@ async function loadWorkflows() {
     const sel = $("wf-type");
     sel.innerHTML = "";
     data.workflows.forEach((w) => {
-      if (w.name === "conformer" || w.name === "benchmark") return;
       const o = document.createElement("option");
       o.value = w.name; o.textContent = w.label;
       sel.appendChild(o);
@@ -324,7 +321,6 @@ async function loadWorkflows() {
     const sel = $("wf-type");
     sel.innerHTML = "";
     Object.keys(WF_META).forEach((k) => {
-      if (k === "benchmark") return;
       const o = document.createElement("option");
       o.value = k; o.textContent = WF_META[k].label; sel.appendChild(o);
     });

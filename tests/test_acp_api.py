@@ -73,14 +73,14 @@ def test_backends_use_real_capability_matrix(client: TestClient) -> None:
 
 def test_workflows_and_protocols(client: TestClient) -> None:
     wf = client.get("/api/workflows").json()
-    assert {"fake", "conformer", "ensemble", "energy", "nmr", "benchmark", "mechanism"} <= {
+    assert {"fake", "ensemble", "energy", "mechanism"} <= {
         w["name"] for w in wf["workflows"]
     }
     names = [w["name"] for w in wf["workflows"]]
-    assert names == [
-        "fake", "conformer", "ensemble", "energy", "nmr", "benchmark", "mechanism",
-        "singlepoint", "optimize", "frequency", "optfreq", "optfreqsp", "xtb_optimize",
-    ]
+    # Retired workflows (conformer/nmr/benchmark) must NOT appear.
+    assert "conformer" not in names
+    assert "nmr" not in names
+    assert "benchmark" not in names
     pr = client.get("/api/protocols").json()
     assert isinstance(pr["protocols"], list)
 
@@ -89,9 +89,6 @@ def test_workflows_are_driven_by_registry(client: TestClient) -> None:
     """Workflow metadata must come from the workflow registry, not a hardcoded list."""
     wf = client.get("/api/workflows").json()
     by_name = {w["name"]: w for w in wf["workflows"]}
-    assert "nmr" in by_name
-    assert by_name["nmr"]["label"] == "NMR"
-    assert set(by_name["nmr"]["requires_binaries"]) == {"orca"}
     assert "mechanism" in by_name
     assert by_name["mechanism"]["label"] == "Mechanism / TS"
 

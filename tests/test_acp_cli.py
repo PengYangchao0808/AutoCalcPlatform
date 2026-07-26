@@ -17,32 +17,6 @@ def test_acp_help_exits_zero():
     assert "Auto-Calc Platform" in result.stdout or "acp" in result.stdout
 
 
-def test_acp_run_conformer_help():
-    """``acp run conformer --help`` shows conformer-specific options."""
-    result = subprocess.run(
-        [sys.executable, "-m", "acp.cli", "run", "conformer", "--help"],
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0
-    assert "--protocol" in result.stdout
-    assert "--input" in result.stdout
-
-
-def test_acp_run_nmr_help():
-    """``acp run nmr --help`` shows real NMR workflow options."""
-    result = subprocess.run(
-        [sys.executable, "-m", "acp.cli", "run", "nmr", "--help"],
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0
-    assert "--input" in result.stdout
-    assert "--protocol" in result.stdout
-    assert "--backend" in result.stdout
-    assert "--reference" in result.stdout
-
-
 def test_acp_run_mechanism_help():
     """``acp run mechanism --help`` shows real mechanism workflow options."""
     result = subprocess.run(
