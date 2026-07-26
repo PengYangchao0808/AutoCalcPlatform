@@ -98,6 +98,33 @@ def _parse_levels(levels_value: str | None) -> dict[str, Any] | None:
     return parsed
 
 
+def _parse_calc_hess_arg(value: str) -> int | str:
+    """argparse ``type=`` callable for ``--calc-hess [N|auto]``.
+
+    Accepts ``auto`` (returns the string ``"auto"``) or an integer in
+    ``1..1000``. ``0``, negatives, floats, and any other string raise
+    :class:`argparse.ArgumentTypeError` — callers wanting "initial
+    Hessian only" must use ``--no-calc-hess`` instead (plan §9.2).
+    """
+    text = str(value).strip().lower()
+    if text == "auto":
+        return "auto"
+    if text.isdigit():
+        n = int(text)
+        if n == 0:
+            raise argparse.ArgumentTypeError(
+                "--calc-hess 0 is not valid; use --no-calc-hess to skip "
+                "exact Hessian computation entirely."
+            )
+        if n > 1000:
+            raise argparse.ArgumentTypeError("--calc-hess interval must be <= 1000")
+        return n
+    raise argparse.ArgumentTypeError(
+        "--calc-hess expects 'auto' or an integer 1-1000 "
+        f"(got {value!r}); use --no-calc-hess to disable exact Hessian computation."
+    )
+
+
 def _parse_nmr_references(values: list[str]) -> dict[str, float] | None:
     """Parse repeated ``--reference NUCLEUS=VALUE`` arguments."""
     if not values:
@@ -261,7 +288,32 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
     if wf in ("optimize", "optfreq", "optfreqsp"):
         parser.add_argument("--geom-maxiter", type=int, help="Max geometry iterations (maps to MaxIter in %%geom block)")
         parser.add_argument("--opt-convergence", default="Tight", choices=["Loose", "Normal", "Tight", "VeryTight"], help="Optimization convergence (default: Tight)")
-        parser.add_argument("--recalc-hess", type=int, default=None, help="Hessian recalculation interval in %%geom block (Recalc_Hess N; default: 10 from config)")
+        # Hessian policy (plan §9): mutually-exclusive group replaces the
+        # legacy --recalc-hess flag. Omit all three to follow config.
+        hess_group = parser.add_mutually_exclusive_group()
+        hess_group.add_argument(
+            "--calc-hess",
+            nargs="?",
+            const="auto",
+            default=None,
+            metavar="N|auto",
+            type=_parse_calc_hess_arg,
+            help=(
+                "Recalculate Hessian every N steps (1-1000), or use 'auto' "
+                "(infer from elements: light=off / others=10) "
+                "when N is omitted. Use --no-calc-hess to skip exact "
+                "Hessian computation entirely. NOTE: --calc-hess 0 is rejected."
+            ),
+        )
+        hess_group.add_argument(
+            "--no-calc-hess",
+            action="store_true",
+            default=False,
+            help=(
+                "Never compute the exact Hessian; ORCA uses an approximate "
+                "initial Hessian with BFGS updates throughout."
+            ),
+        )
 
     if wf == "optfreqsp":
         parser.add_argument("--temperature", type=float, default=298.15, help="Temperature in K (default: 298.15)")
@@ -1187,12 +1239,23 @@ def _handle_mechanism(args: argparse.Namespace) -> int:
 
 def _build_simple_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
     kwargs: dict[str, Any] = {}
-    for key in ("method", "basis", "dispersion", "solvent_model", "solvent",
-                "aux_j_basis", "aux_c_basis", "ri_approximation", "geom_maxiter", "opt_convergence",
-                "recalc_hess"):
+    for key in (
+        "method", "basis", "dispersion", "solvent_model", "solvent",
+        "aux_j_basis", "aux_c_basis", "ri_approximation",
+        "geom_maxiter", "opt_convergence",
+    ):
         val = getattr(args, key, None)
         if val is not None:
             kwargs[key] = val
+    # Hessian policy (plan §9.3): translate the mutually-exclusive CLI
+    # group into the canonical ``recalc_hess`` kwarg consumed by the
+    # ORCA interface / catalog resolver.
+    no_calc_hess = getattr(args, "no_calc_hess", False)
+    calc_hess = getattr(args, "calc_hess", None)
+    if no_calc_hess:
+        kwargs["recalc_hess"] = 0
+    elif calc_hess is not None:
+        kwargs["recalc_hess"] = calc_hess
     legacy_aux = getattr(args, "aux_j_basis_legacy", None)
     if legacy_aux and kwargs.get("aux_j_basis") in (None, "AutoAux"):
         kwargs["aux_j_basis"] = legacy_aux

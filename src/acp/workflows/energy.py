@@ -24,6 +24,7 @@ from typing import Any
 import numpy as np
 
 from acp.backends.censo_backend import CensoBackend, CensoRunResult
+from acp.chem.composition import normalize_recalc_hess
 from acp.core.models import Structure, StructureEnsemble, StructureRecord
 from acp.core.state import WorkflowState
 from acp.core.workflow import WorkflowResult
@@ -157,6 +158,14 @@ def _resolve_levels(
     opt_method = dft_opt.get("functional") or opt_cfg.get("functional", _DEFAULT_OPT_FUNCTIONAL)
     opt_basis = dft_opt.get("basis")
 
+    # Hessian policy for the opt stage (plan §10.2): route through the
+    # shared normaliser so invalid values surface here rather than
+    # silently falling through to ORCA. ``None`` ⇒ follow config.
+    try:
+        opt_recalc_hess = normalize_recalc_hess(dft_opt.get("recalc_hess"))
+    except ValueError as exc:
+        raise ValueError(f"dft_opt.recalc_hess: {exc}") from exc
+
     sp_method = refinement_sp.get("functional") or censo_cfg.get(
         "refinement_func", _DEFAULT_SP_FUNCTIONAL
     )
@@ -233,6 +242,7 @@ def _resolve_levels(
         "opt_route_extras": opt_route_extras,
         "opt_freq_route_extras": opt_base_extras,
         "opt_geom_maxiter": opt_geom_maxiter,
+        "opt_recalc_hess": opt_recalc_hess,
         "opt_solvent": opt_solvent,
         "opt_solvent_model": opt_solvent_model,
         "sp_method": sp_method,
@@ -328,6 +338,7 @@ def _run_rank1_handoff(
             basis=resolved["opt_basis"],
             route_extras=resolved.get("opt_route_extras"),
             geom_maxiter=resolved.get("opt_geom_maxiter"),
+            recalc_hess=resolved.get("opt_recalc_hess"),
         )
         if not opt_result.success:
             raise RuntimeError(f"rank1 geometry optimization failed: {opt_result.error_message}")

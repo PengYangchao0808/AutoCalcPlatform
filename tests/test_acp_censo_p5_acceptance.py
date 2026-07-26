@@ -148,7 +148,7 @@ def test_resolve_levels_solvent_model_none_is_gas() -> None:
 
 def test_orca_route_extras_rendered() -> None:
     orca = ORCAInterface(_make_config(), method="wB97M-V", basis="def2-TZVPP")
-    blocks = orca._build_input_blocks(
+    blocks, _ = orca._build_input_blocks(
         "sp",
         route_extras=["RIJCOSX", "def2-TZVPP/C", "VeryTightSCF", "DEFGRID3"],
     )
@@ -162,13 +162,13 @@ def test_orca_route_extras_rendered() -> None:
 
 def test_orca_geom_maxiter_rendered() -> None:
     orca = ORCAInterface(_make_config(), method="r2SCAN-3c")
-    blocks = orca._build_input_blocks("opt", geom_maxiter=250)
+    blocks, _ = orca._build_input_blocks("opt", geom_maxiter=250, symbols=["C", "H"])
     assert "MaxIter 250" in blocks
 
 
 def test_orca_default_blocks_unchanged() -> None:
     orca = ORCAInterface(_make_config(), method="r2SCAN-3c")
-    blocks = orca._build_input_blocks("opt")
+    blocks, _ = orca._build_input_blocks("opt", symbols=["C", "H"])
     assert "MaxIter" not in blocks
     assert blocks.splitlines()[0] == "! r2SCAN-3c Opt"
 

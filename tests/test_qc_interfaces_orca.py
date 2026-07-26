@@ -138,7 +138,7 @@ def test_orca_build_input_blocks_with_smd(sample_config: dict[str, object]) -> N
     interface = ORCAInterface(
         sample_config, method="wB97X-D4", basis="def2-TZVPP", solvent="toluene", solvent_model="smd"
     )
-    blocks = interface._build_input_blocks("sp")
+    blocks, _ = interface._build_input_blocks("sp")
     assert "%cpcm" in blocks
     assert "smd true" in blocks
     assert 'SMDsolvent "Toluene"' in blocks
@@ -152,7 +152,7 @@ def test_orca_build_input_blocks_with_cpcm(sample_config: dict[str, object]) -> 
         solvent="toluene",
         solvent_model="cpcm",
     )
-    blocks = interface._build_input_blocks("sp")
+    blocks, _ = interface._build_input_blocks("sp")
     assert "%cpcm" in blocks
     assert "smd true" not in blocks
     assert 'SMDsolvent "Toluene"' in blocks
@@ -162,7 +162,7 @@ def test_orca_build_input_blocks_with_no_solvent(sample_config: dict[str, object
     interface = ORCAInterface(
         sample_config, method="wB97X-D4", basis="def2-TZVPP", solvent=None, solvent_model="none"
     )
-    blocks = interface._build_input_blocks("sp")
+    blocks, _ = interface._build_input_blocks("sp")
     assert "%cpcm" not in blocks
     assert "SMDsolvent" not in blocks
 
@@ -171,5 +171,5 @@ def test_orca_build_input_blocks_uppercase_solvent_model(sample_config: dict[str
     interface = ORCAInterface(
         sample_config, method="wB97X-D4", basis="def2-TZVPP", solvent="toluene", solvent_model="SMD"
     )
-    blocks = interface._build_input_blocks("sp")
+    blocks, _ = interface._build_input_blocks("sp")
     assert "smd true" in blocks

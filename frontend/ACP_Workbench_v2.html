@@ -920,6 +920,65 @@ option, optgroup {
    the user cannot change a value that the functional already hardwires. */
 .mc-builtin-badge { display: inline-block; padding: 4px 10px; border: 1px solid var(--border-default); border-radius: 4px; background: var(--bg-elevated); color: var(--text-secondary); font-size: 11px; cursor: default; }
 
+/* Hessian tri-state control (plan §13.2).
+   Visual language follows .input-mode-tab: gap-separated pills with
+   accent-soft active state, matching the rest of the modal. */
+.mc-field-hessian { grid-column: 1 / -1; }
+.mc-field-hessian .mc-hessian-seg { display: flex; gap: 4px; }
+.mc-field-hessian .mc-hessian-seg-btn {
+  flex: 1; appearance: none; -webkit-appearance: none;
+  padding: 7px 6px; border: 1px solid var(--border-default); border-radius: 8px;
+  background: rgba(255,255,255,0.03); color: var(--text-secondary);
+  font-size: 12px; cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+.mc-field-hessian .mc-hessian-seg-btn:hover { color: var(--text-primary); }
+.mc-field-hessian .mc-hessian-seg-btn.active {
+  border-color: var(--accent); color: var(--accent);
+  background: rgba(78,161,255,0.10);
+}
+.mc-field-hessian .mc-hessian-seg-btn:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+.mc-field-hessian .mc-hessian-custom {
+  display: flex; align-items: center; gap: 6px; margin-top: 8px;
+}
+.mc-field-hessian .mc-hessian-custom input {
+  width: 72px; padding: 5px 8px; font-size: 11px; text-align: center;
+}
+.mc-field-hessian .mc-hessian-custom .unit { font-size: 11px; color: var(--text-tertiary); }
+.mc-field-hessian .mc-hessian-hint {
+  margin-top: 6px; font-size: 11px; line-height: 1.5; color: var(--text-tertiary);
+}
+.mc-field-hessian .mc-hessian-preview {
+  margin-top: 8px; border: 1px solid var(--border-default); border-radius: 8px;
+  padding: 8px 10px; font-size: 11px; line-height: 1.6;
+  background: rgba(255,255,255,0.02);
+}
+.mc-field-hessian .mc-hessian-preview-summary {
+  margin-bottom: 4px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border-default);
+  font-weight: 600; color: var(--text-primary);
+}
+.mc-field-hessian .mc-hessian-preview-row {
+  display: flex; align-items: center; gap: 8px; padding: 1px 0;
+  color: var(--text-secondary);
+}
+.mc-field-hessian .mc-hessian-preview-row .dot {
+  flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%;
+}
+.mc-field-hessian .mc-hessian-preview-row .dot.on { background: var(--green); }
+.mc-field-hessian .mc-hessian-preview-row .dot.off { background: var(--text-tertiary); }
+.mc-field-hessian .mc-hessian-preview-row .name {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mc-field-hessian .mc-hessian-preview-row .val {
+  flex: 0 0 auto; font-variant-numeric: tabular-nums; color: var(--text-primary);
+}
+.mc-field-hessian .mc-hessian-preview-row .elems {
+  flex: 0 0 auto; font-size: 10px; color: var(--text-tertiary);
+}
+
 /* Prevent horizontal overflow inside modal frames: grid/flex children
    default to min-width:auto and refuse to shrink below content width. */
 .mc-wrap, .mc-left, .mc-right, .method-fields, .mc-level-advanced-fields,
@@ -1718,6 +1777,20 @@ const I18N = {
     "modal.ri_composite_hint": "3c 复合方法已内置 RI 体系，无需用户配置",
     "modal.ri_automatic": "RI 自动 · 后 HF 方法内置",
     "modal.ri_automatic_hint": "DLPNO 等后 HF 方法自带 RI 体系，参数自动处理",
+    "modal.hessian_label": "Hessian 计算",
+    "modal.hessian_auto": "自动",
+    "modal.hessian_auto_hint": "按元素组成自动决定：轻元素（C/H/O/N/卤素）不计算精确 Hessian；含其它元素每 10 步重算",
+    "modal.hessian_off": "不计算",
+    "modal.hessian_off_hint": "全程不计算精确 Hessian：使用近似初始 Hessian 并结合 BFGS 更新",
+    "modal.hessian_custom": "自定义",
+    "modal.hessian_custom_hint": "每 N 步重新计算一次精确 Hessian（1–1000）",
+    "modal.hessian_every_n": "每 {n} 步",
+    "modal.hessian_steps_unit": "步",
+    "modal.hessian_initial_only": "不计算",
+    "modal.hessian_summary": "{total} 个结构：{enabled} 个将计算精确 Hessian",
+    "modal.hessian_loading": "正在解析…",
+    "modal.hessian_no_structures": "请先添加结构",
+    "modal.hessian_preview_error": "预览失败",
     "nodes.title": "远程节点",
     "nodes.loading": "加载中…",
     "nodes.empty": "未配置远程节点",
@@ -1911,6 +1984,20 @@ const I18N = {
     "modal.ri_composite_hint": "3c composite methods have built-in RI; no user configuration needed",
     "modal.ri_automatic": "RI automatic \u00b7 post-HF method built-in",
     "modal.ri_automatic_hint": "Post-HF methods like DLPNO have built-in RI; parameters handled automatically",
+    "modal.hessian_label": "Hessian",
+    "modal.hessian_auto": "Auto",
+    "modal.hessian_auto_hint": "Infer from elements: light (C/H/O/N/halogen) never compute the exact Hessian; all others recalculate every 10 steps",
+    "modal.hessian_off": "Off",
+    "modal.hessian_off_hint": "Never compute the exact Hessian: approximate initial Hessian with BFGS updates throughout",
+    "modal.hessian_custom": "Custom",
+    "modal.hessian_custom_hint": "Recalculate the exact Hessian every N steps (1–1000)",
+    "modal.hessian_every_n": "every {n} steps",
+    "modal.hessian_steps_unit": "steps",
+    "modal.hessian_initial_only": "off",
+    "modal.hessian_summary": "{total} structures: {enabled} will compute the exact Hessian",
+    "modal.hessian_loading": "Resolving…",
+    "modal.hessian_no_structures": "Add a structure first",
+    "modal.hessian_preview_error": "Preview failed",
     "nodes.title": "Remote Nodes",
     "nodes.loading": "Loading…",
     "nodes.empty": "No remote nodes configured",
@@ -4291,6 +4378,13 @@ async function openMethodConfig() {
     }
 
     function buildFieldRow(fieldName, dest) {
+      // Hessian field is rendered by a dedicated tri-state control that
+      // also drives a backend preview (plan §13). Bypass the generic
+      // select/number renderer entirely.
+      if (fieldName === "recalc_hess") {
+        buildHessianFieldRow(dest);
+        return;
+      }
       var fDiv = document.createElement("div");
       fDiv.className = "mc-field";
       var lbl = document.createElement("label");
@@ -4543,6 +4637,251 @@ async function openMethodConfig() {
         });
         fDiv.appendChild(inp);
       }
+      dest.appendChild(fDiv);
+    }
+
+    // ── Hessian tri-state control (plan §13) ────────────────────────────
+    // Renders an Auto / Initial-only / Custom segmented control plus a
+    // backend-driven preview that classifies each wizard structure.
+    // Preview requests are debounced and only the latest is kept.
+    var hessianPreviewTimer = null;
+    var hessianPreviewToken = 0;
+
+    function buildHessianFieldRow(dest) {
+      var fDiv = document.createElement("div");
+      fDiv.className = "mc-field mc-field-hessian";
+      var lbl = document.createElement("label");
+      lbl.textContent = (t("modal.hessian_label") || "Hessian 重算");
+      fDiv.appendChild(lbl);
+
+      var st = getLevelState(lvDef.level_id);
+      // Normalise persisted value into one of: "auto" / 0 / <int>.
+      // Default mirrors the catalog field default ("auto").
+      var rawVal = st.recalc_hess;
+      var mode = "auto";
+      var customVal = 10;
+      if (rawVal === 0) { mode = "off"; }
+      else if (rawVal !== undefined && rawVal !== "" && rawVal !== null && rawVal !== "auto") {
+        var parsed = parseInt(rawVal, 10);
+        if (!isNaN(parsed) && parsed > 0) { mode = "custom"; customVal = parsed; }
+      }
+      st.recalc_hess = (mode === "auto") ? "auto" : (mode === "off" ? 0 : customVal);
+
+      var segWrap = document.createElement("div");
+      segWrap.className = "mc-hessian-seg";
+      segWrap.setAttribute("role", "group");
+      segWrap.setAttribute("aria-label", lbl.textContent);
+
+      function makeSeg(segMode, label, title) {
+        var btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "mc-hessian-seg-btn";
+        btn.textContent = label;
+        btn.title = title || "";
+        btn.setAttribute("aria-pressed", mode === segMode ? "true" : "false");
+        if (mode === segMode) btn.classList.add("active");
+        btn.addEventListener("click", function() {
+          mode = segMode;
+          segWrap.querySelectorAll(".mc-hessian-seg-btn").forEach(function(b) {
+            b.classList.remove("active");
+            b.setAttribute("aria-pressed", "false");
+          });
+          btn.classList.add("active");
+          btn.setAttribute("aria-pressed", "true");
+          if (mode === "auto") { st.recalc_hess = "auto"; customRow.style.display = "none"; }
+          else if (mode === "off") { st.recalc_hess = 0; customRow.style.display = "none"; }
+          else { st.recalc_hess = customVal; customRow.style.display = ""; }
+          scheduleHessianPreview();
+          scheduleValidate();
+        });
+        return btn;
+      }
+
+      segWrap.appendChild(makeSeg("auto",
+        (t("modal.hessian_auto") || "自动"),
+        (t("modal.hessian_auto_hint") || "")));
+      segWrap.appendChild(makeSeg("off",
+        (t("modal.hessian_off") || "不重算"),
+        (t("modal.hessian_off_hint") || "")));
+      segWrap.appendChild(makeSeg("custom",
+        (t("modal.hessian_custom") || "自定义"),
+        (t("modal.hessian_custom_hint") || "")));
+      fDiv.appendChild(segWrap);
+
+      // Custom numeric input (only visible in Custom mode).
+      var customRow = document.createElement("div");
+      customRow.className = "mc-hessian-custom";
+      customRow.style.display = (mode === "custom") ? "" : "none";
+      var numInp = document.createElement("input");
+      numInp.type = "number";
+      numInp.min = "1";
+      numInp.max = "1000";
+      numInp.step = "1";
+      numInp.value = String(customVal);
+      numInp.setAttribute("aria-label", "Hessian recalculation interval");
+      numInp.addEventListener("change", function() {
+        var v = parseInt(numInp.value, 10);
+        if (isNaN(v) || v < 1) v = 1;
+        if (v > 1000) v = 1000;
+        numInp.value = String(v);
+        customVal = v;
+        if (mode === "custom") { st.recalc_hess = v; scheduleHessianPreview(); scheduleValidate(); }
+      });
+      var unitLbl = document.createElement("span");
+      unitLbl.className = "unit";
+      unitLbl.textContent = (t("modal.hessian_steps_unit") || "步");
+      customRow.appendChild(numInp);
+      customRow.appendChild(unitLbl);
+      fDiv.appendChild(customRow);
+
+      // Preview container — backend resolves the actual interval per
+      // structure. Only refreshed in Auto mode (the other modes are
+      // fully determined by the user's selection).
+      var previewBox = document.createElement("div");
+      previewBox.className = "mc-hessian-preview";
+      previewBox.style.display = "none";
+      fDiv.appendChild(previewBox);
+
+      // Hint: in Auto mode show the graded rule; in Custom mode show
+      // nothing extra (the input is self-explanatory); hidden for Off.
+      var hint = document.createElement("div");
+      hint.className = "mc-hessian-hint";
+      hint.style.display = "none";
+      hint.textContent = (t("modal.hessian_auto_hint") || "");
+      fDiv.appendChild(hint);
+
+      function setPreviewVisible(visible) {
+        previewBox.style.display = visible ? "" : "none";
+        hint.style.display = visible ? "" : "none";
+      }
+
+      function renderPreviewLoading() {
+        setPreviewVisible(mode === "auto");
+        if (mode !== "auto") return;
+        previewBox.innerHTML = "";
+        var row = document.createElement("div");
+        row.className = "mc-hessian-preview-row";
+        row.textContent = (t("modal.hessian_loading") || "正在解析…");
+        previewBox.appendChild(row);
+      }
+
+      function renderPreviewRows(results, summary) {
+        setPreviewVisible(true);
+        previewBox.innerHTML = "";
+
+        // Summary header, e.g. "3 个结构：2 个将重算 Hessian"
+        var sumEl = document.createElement("div");
+        sumEl.className = "mc-hessian-preview-summary";
+        var enabledN = (summary && summary.enabled) || 0;
+        var totalN = (summary && summary.total) || 0;
+        sumEl.textContent = (t("modal.hessian_summary") || "{total} 个结构：{enabled} 个将重算 Hessian")
+          .replace("{enabled}", enabledN)
+          .replace("{total}", totalN);
+        previewBox.appendChild(sumEl);
+
+        // Per-structure rows with color-coded dot.
+        (results || []).forEach(function(r) {
+          var row = document.createElement("div");
+          row.className = "mc-hessian-preview-row";
+
+          var dot = document.createElement("span");
+          dot.className = "dot " + (r.enabled ? "on" : "off");
+          dot.setAttribute("aria-hidden", "true");
+
+          var name = document.createElement("span");
+          name.className = "name";
+          name.textContent = r.name || "?";
+          name.title = r.name || "";
+
+          var val = document.createElement("span");
+          val.className = "val";
+          val.textContent = r.enabled
+            ? (t("modal.hessian_every_n") || "每 {n} 步").replace("{n}", r.interval)
+            : (t("modal.hessian_initial_only") || "不计算");
+
+          row.appendChild(dot);
+          row.appendChild(name);
+          row.appendChild(val);
+
+          if (r.heavy_elements && r.heavy_elements.length) {
+            var elems = document.createElement("span");
+            elems.className = "elems";
+            elems.textContent = "(" + r.heavy_elements.join(", ") + ")";
+            row.appendChild(elems);
+          }
+
+          previewBox.appendChild(row);
+        });
+      }
+
+      function renderPreviewError(msg) {
+        setPreviewVisible(true);
+        previewBox.innerHTML = "";
+        var row = document.createElement("div");
+        row.className = "mc-hessian-preview-row";
+        row.textContent = msg || (t("modal.hessian_preview_error") || "预览失败");
+        previewBox.appendChild(row);
+      }
+
+      function scheduleHessianPreview() {
+        if (hessianPreviewTimer) clearTimeout(hessianPreviewTimer);
+        renderPreviewLoading();
+        if (mode !== "auto") return;
+        hessianPreviewTimer = setTimeout(function() {
+          hessianPreviewTimer = null;
+          fetchHessianPreview();
+        }, 300);
+      }
+
+      function fetchHessianPreview() {
+        if (mode !== "auto") return;
+        var myToken = ++hessianPreviewToken;
+        // Collect symbols (preferred) or formula from each wizard structure.
+        var structures = (wizardStructures || []).map(function(s) {
+          var out = { name: s.name || "" };
+          if (Array.isArray(s.symbols) && s.symbols.length) out.symbols = s.symbols;
+          else if (s.formula) out.formula = s.formula;
+          else if (s.xyz) {
+            // Best-effort: parse element symbols out of an XYZ string.
+            var lines = String(s.xyz).split(/\r?\n/);
+            var syms = [];
+            for (var i = 2; i < lines.length; i++) {
+              var tok = lines[i].trim().split(/\s+/)[0];
+              if (tok && /^[A-Za-z]+$/.test(tok)) syms.push(tok.charAt(0).toUpperCase() + tok.slice(1).toLowerCase());
+            }
+            if (syms.length) out.symbols = syms;
+          }
+          return out;
+        });
+        if (!structures.length) {
+          renderPreviewError(t("modal.hessian_no_structures") || "请先添加结构");
+          return;
+        }
+        var body = {
+          schema_id: wizardState.method.schema_id || "",
+          level_id: lvDef.level_id,
+          recalc_hess: st.recalc_hess,
+          structures: structures,
+        };
+        fetch("/api/v1/hessian-preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }).then(function(r) {
+          if (!r.ok) return r.json().then(function(e) { throw new Error((e.errors || []).map(function(x){return x.message;}).join("; ") || ("HTTP " + r.status)); });
+          return r.json();
+        }).then(function(data) {
+          if (myToken !== hessianPreviewToken) return;  // stale
+          renderPreviewRows(data.results || [], data.summary || {});
+        }).catch(function(err) {
+          if (myToken !== hessianPreviewToken) return;
+          renderPreviewError((t("modal.hessian_preview_error") || "预览失败") + ": " + err.message);
+        });
+      }
+
+      // Initial render: trigger one preview in Auto mode.
+      scheduleHessianPreview();
+
       dest.appendChild(fDiv);
     }
 

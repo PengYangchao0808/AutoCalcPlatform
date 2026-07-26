@@ -80,6 +80,9 @@ class ProtocolSpec:
     sp_engine: str = "orca"
     opt_method: str = "r2SCAN-3c"
     opt_basis: str = ""
+    # Hessian policy for opt stage: "auto" / 0 / N / None (None=follow config).
+    # Mirrors the public recalc_hess semantics (plan §5.1).
+    opt_recalc_hess: object = None
     opt_solvent: str | None = None
     opt_solvent_model: str | None = None
     sp_solvent: str | None = None
@@ -267,6 +270,18 @@ def resolve_protocol_spec(
     if opt_basis is None:
         opt_basis = ""
 
+    # Hessian policy (plan §10.3): read from frontend ``levels`` (already
+    # converted to ``optimization.recalc_hess`` by
+    # ``convert_method_levels_to_protocol_levels``). Normalise through the
+    # shared helper so invalid values raise here rather than silently
+    # reaching ORCA. ``None`` ⇒ follow config (default).
+    opt_recalc_hess_raw = opt_level.get("recalc_hess")
+    opt_recalc_hess: object = None
+    if opt_recalc_hess_raw is not None:
+        from acp.chem.composition import normalize_recalc_hess as _normalize
+
+        opt_recalc_hess = _normalize(opt_recalc_hess_raw)
+
     # Solvents: levels 'solvent' > protocol 'opt_solvent' > theory 'solvent' > None
     opt_solvent = opt_level.get("solvent")
     if opt_solvent is None:
@@ -328,6 +343,7 @@ def resolve_protocol_spec(
         sp_engine=sp_engine,
         opt_method=opt_method,
         opt_basis=opt_basis,
+        opt_recalc_hess=opt_recalc_hess,
         opt_solvent=opt_solvent,
         opt_solvent_model=opt_solvent_model,
         sp_solvent=sp_solvent,

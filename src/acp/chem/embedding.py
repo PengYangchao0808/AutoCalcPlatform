@@ -23,8 +23,7 @@ def _require_rdkit() -> tuple[Any, Any]:
         from rdkit.Chem import AllChem
     except ImportError as exc:
         raise ImportError(
-            "RDKit is required for molecular embedding. "
-            "Install with: pip install rdkit"
+            "RDKit is required for molecular embedding. Install with: pip install rdkit"
         ) from exc
     return Chem, AllChem
 

@@ -63,6 +63,40 @@ def test_get_protocol_stages_default_alias_resolves_to_configured():
 # ---------------------------------------------------------------------------
 
 
+def test_resolve_protocol_spec_propagates_recalc_hess():
+    """AC12: frontend levels recalc_hess reaches ProtocolSpec.opt_recalc_hess
+    via convert_method_levels_to_protocol_levels + resolve_protocol_spec."""
+    from acp.catalog import convert_method_levels_to_protocol_levels
+
+    levels = convert_method_levels_to_protocol_levels(
+        {"dft_opt": {"engine": "orca", "functional": "r2SCAN-3c", "recalc_hess": 5}}
+    )
+    spec = resolve_protocol_spec({}, "ext", levels=levels)
+    assert spec.opt_recalc_hess == 5
+
+    # auto / 0 also pass through.
+    levels = convert_method_levels_to_protocol_levels(
+        {"dft_opt": {"engine": "orca", "functional": "r2SCAN-3c", "recalc_hess": "auto"}}
+    )
+    assert resolve_protocol_spec({}, "ext", levels=levels).opt_recalc_hess == "auto"
+
+    levels = convert_method_levels_to_protocol_levels(
+        {"dft_opt": {"engine": "orca", "functional": "r2SCAN-3c", "recalc_hess": 0}}
+    )
+    assert resolve_protocol_spec({}, "ext", levels=levels).opt_recalc_hess == 0
+
+    # Omitted → None (follow config).
+    assert resolve_protocol_spec({}, "ext").opt_recalc_hess is None
+
+
+def test_resolve_protocol_spec_recalc_hess_invalid_raises():
+    """Invalid recalc_hess in levels must surface as ValueError."""
+    import pytest as _pytest
+
+    with _pytest.raises(ValueError, match="recalc_hess"):
+        resolve_protocol_spec({}, "ext", levels={"optimization": {"recalc_hess": "fast"}})
+
+
 def test_boltzmann_weight_ensemble_uses_lowest_free_energy():
     ensemble = StructureEnsemble(
         records=[

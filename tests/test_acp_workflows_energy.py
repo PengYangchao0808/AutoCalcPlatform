@@ -277,6 +277,29 @@ def test_resolve_levels_config_fallback() -> None:
     assert resolved["temperature_k"] == pytest.approx(300.0)
 
 
+def test_resolve_levels_recalc_hess_passthrough() -> None:
+    """energy._resolve_levels normalises dft_opt.recalc_hess and exposes
+    it as opt_recalc_hess (plan §10.2 / AC11)."""
+    from acp.workflows.energy import _resolve_levels
+
+    # Omitted → follow config (None).
+    assert _resolve_levels({}, None)["opt_recalc_hess"] is None
+    # auto / 0 / N pass through normalised.
+    assert _resolve_levels({}, {"dft_opt": {"recalc_hess": "auto"}})["opt_recalc_hess"] == "auto"
+    assert _resolve_levels({}, {"dft_opt": {"recalc_hess": 0}})["opt_recalc_hess"] == 0
+    assert _resolve_levels({}, {"dft_opt": {"recalc_hess": 15}})["opt_recalc_hess"] == 15
+    # Numeric strings are accepted by the normaliser.
+    assert _resolve_levels({}, {"dft_opt": {"recalc_hess": "5"}})["opt_recalc_hess"] == 5
+
+
+def test_resolve_levels_recalc_hess_invalid_raises() -> None:
+    """Invalid recalc_hess surfaces as a ValueError with context."""
+    from acp.workflows.energy import _resolve_levels
+
+    with pytest.raises(ValueError, match="dft_opt.recalc_hess"):
+        _resolve_levels({}, {"dft_opt": {"recalc_hess": "fast"}})
+
+
 # ---------------------------------------------------------------------------
 # Preset validation
 # ---------------------------------------------------------------------------

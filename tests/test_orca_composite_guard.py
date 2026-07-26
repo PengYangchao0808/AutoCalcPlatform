@@ -22,11 +22,12 @@ def orca_config():
 def test_composite_strips_ri_keywords(orca_config) -> None:
     """3c composite methods should filter RI keywords from route_extras."""
     iface = ORCAInterface(orca_config, method="r2SCAN-3c", basis="def2-mTZVPP")
-    blocks_str = iface._build_input_blocks(
+    blocks_str, _ = iface._build_input_blocks(
         calc_type="opt",
         method="r2SCAN-3c",
         basis="def2-mTZVPP",
         route_extras=["RIJCOSX", "def2/J", "VeryTightSCF"],
+        symbols=["C", "H"],
     )
     assert "RIJCOSX" not in blocks_str
     assert "def2/J" not in blocks_str
@@ -36,7 +37,7 @@ def test_composite_strips_ri_keywords(orca_config) -> None:
 def test_dlpno_strips_ri_but_keeps_auxc(orca_config) -> None:
     """DLPNO should filter RI keywords but preserve auxC override path."""
     iface = ORCAInterface(orca_config, method="DLPNO-CCSD(T)", basis="def2-TZVPP")
-    blocks_str = iface._build_input_blocks(
+    blocks_str, _ = iface._build_input_blocks(
         calc_type="sp",
         method="DLPNO-CCSD(T)",
         basis="def2-TZVPP",
@@ -50,11 +51,12 @@ def test_dlpno_strips_ri_but_keeps_auxc(orca_config) -> None:
 def test_composite_strips_aux_basis_from_route_extras(orca_config) -> None:
     """3c composite methods should filter auxiliary basis from route_extras."""
     iface = ORCAInterface(orca_config, method="r2SCAN-3c", basis="def2-mTZVPP")
-    blocks_str = iface._build_input_blocks(
+    blocks_str, _ = iface._build_input_blocks(
         calc_type="opt",
         method="r2SCAN-3c",
         basis="def2-mTZVPP",
         route_extras=["RIJCOSX", "def2/J", "def2-TZVPP/C"],
+        symbols=["C", "H"],
     )
     assert "def2/J" not in blocks_str
     assert "def2-TZVPP/C" not in blocks_str
@@ -63,11 +65,12 @@ def test_composite_strips_aux_basis_from_route_extras(orca_config) -> None:
 def test_regex_anchor_prevents_false_positives(orca_config) -> None:
     """Regex anchor should prevent false positives like SMD/JK (mid-token)."""
     iface = ORCAInterface(orca_config, method="r2SCAN-3c", basis="def2-mTZVPP")
-    blocks_str = iface._build_input_blocks(
+    blocks_str, _ = iface._build_input_blocks(
         calc_type="opt",
         method="r2SCAN-3c",
         basis="def2-mTZVPP",
         route_extras=["GridX/C", "SMD/JK"],
+        symbols=["C", "H"],
     )
     # SMD/JK should NOT be filtered (/J followed by K, not at end of token)
     assert "SMD/JK" in blocks_str

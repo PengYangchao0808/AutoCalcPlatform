@@ -461,3 +461,98 @@ def test_v1_old_api_still_works(client: TestClient) -> None:
     detail = client.get(f"/api/jobs/{created.json()['job_id']}")
     assert detail.status_code == 200
     assert detail.json()["project_id"] == project["project_id"]
+
+
+# ---------------------------------------------------------------------------
+# Hessian preview (plan §12)
+# ---------------------------------------------------------------------------
+
+
+def test_v1_hessian_preview_batch(client: TestClient) -> None:
+    """AC13: ethanol(0) / dmso(10) / ferrocene(10); summary 2/1 enabled."""
+    r = client.post(
+        "/api/v1/hessian-preview",
+        json={
+            "schema_id": "dft_optimize",
+            "level_id": "optimize",
+            "recalc_hess": "auto",
+            "structures": [
+                {"name": "ethanol", "symbols": ["C", "C", "O", "H", "H", "H", "H", "H", "H"]},
+                {"name": "dmso", "formula": "C2H6OS"},
+                {"name": "ferrocene", "symbols": ["Fe"]},
+            ],
+        },
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["summary"] == {"total": 3, "enabled": 2, "disabled": 1}
+    by_name = {x["name"]: x for x in data["results"]}
+    assert by_name["ethanol"]["interval"] == 0
+    assert by_name["ethanol"]["reason"] == "light_elements"
+    assert by_name["dmso"]["interval"] == 10
+    assert by_name["dmso"]["reason"] == "heteroatom_only"
+    assert by_name["ferrocene"]["interval"] == 10
+    assert by_name["ferrocene"]["reason"] == "heavy_elements"
+    assert by_name["ferrocene"]["triggering_elements"] == ["Fe"]
+
+
+def test_v1_hessian_preview_invalid_recalc_hess_422(client: TestClient) -> None:
+    """AC21: invalid top-level recalc_hess returns 422 with field error."""
+    r = client.post(
+        "/api/v1/hessian-preview",
+        json={"recalc_hess": 20.5, "structures": []},
+    )
+    assert r.status_code == 422
+    body = r.json()
+    assert body["detail"] == "validation error"
+    assert body["errors"][0]["field"] == "recalc_hess"
+
+
+def test_v1_hessian_preview_explicit_zero(client: TestClient) -> None:
+    """AC9: explicit recalc_hess=0 → enabled=False, source=explicit."""
+    r = client.post(
+        "/api/v1/hessian-preview",
+        json={"recalc_hess": 0, "structures": [{"name": "x", "symbols": ["Fe", "Cl"]}]},
+    )
+    assert r.status_code == 200
+    res = r.json()["results"][0]
+    assert res["interval"] == 0
+    assert res["enabled"] is False
+    assert res["source"] == "explicit"
+    assert res["reason"] == "explicit_off"
+
+
+def test_v1_hessian_preview_auto_missing_symbols_422(client: TestClient) -> None:
+    """When auto is selected and a structure lacks symbols+formula, return
+    a per-structure 422 (plan §12.5)."""
+    r = client.post(
+        "/api/v1/hessian-preview",
+        json={"recalc_hess": "auto", "structures": [{"name": "mystery"}]},
+    )
+    assert r.status_code == 422
+    body = r.json()
+    assert "symbols or formula" in body["errors"][0]["message"]
+
+
+def test_v1_hessian_preview_source_mapping(client: TestClient) -> None:
+    """source vocabulary: explicit-Auto → 'auto'; null → 'config'."""
+    # Explicit Auto
+    r = client.post(
+        "/api/v1/hessian-preview",
+        json={"recalc_hess": "auto", "structures": [{"name": "x", "symbols": ["C"]}]},
+    )
+    assert r.json()["results"][0]["source"] == "auto"
+    # Omitted → config (server config defaults to 'auto')
+    r = client.post(
+        "/api/v1/hessian-preview",
+        json={"structures": [{"name": "x", "symbols": ["C"]}]},
+    )
+    assert r.json()["results"][0]["source"] == "config"
+    # Explicit N → explicit
+    r = client.post(
+        "/api/v1/hessian-preview",
+        json={"recalc_hess": 5, "structures": [{"name": "x", "symbols": ["C"]}]},
+    )
+    res = r.json()["results"][0]
+    assert res["source"] == "explicit"
+    assert res["reason"] == "explicit_interval"

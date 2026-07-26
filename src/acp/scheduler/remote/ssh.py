@@ -32,6 +32,10 @@ __all__ = ["SSHConnectionPool", "SSHExecutionError"]
 
 _MAX_RETRIES = 2
 _DEFAULT_TIMEOUT = 30
+# SSH keepalive interval (seconds).  paramiko sends a no-op packet this
+# often so idle pooled connections are not reaped by sshd/firewalls — the
+# root cause of the ~6000 connection churn observed over 12h.
+_KEEPALIVE_INTERVAL = 30
 
 
 class SSHExecutionError(RuntimeError):
@@ -92,6 +96,12 @@ def _create_client(node: RemoteNode, timeout: int = _DEFAULT_TIMEOUT) -> paramik
 
     logger.debug("Connecting SSH to node %s", _redact_node(node))
     client.connect(**connect_kwargs)
+    # Keep the transport warm so idle pooled connections survive sshd /
+    # firewall idle reaping (otherwise the pool churns through thousands
+    # of reconnects under the per-job 15s poll loop).
+    transport = client.get_transport()
+    if transport is not None:
+        transport.set_keepalive(_KEEPALIVE_INTERVAL)
     return client
 
 

@@ -5,6 +5,8 @@ import shutil
 import subprocess
 from typing import Any
 
+from acp.chem.composition import normalize_recalc_hess
+
 WORKFLOW_CATALOG: list[dict[str, Any]] = [
     {
         "id": "singlepoint",
@@ -456,12 +458,19 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     },
     "max_steps": {"type": "int", "advanced": True, "min": 1, "max": 10000, "default": {"*": 100}},
     "recalc_hess": {
-        "type": "int",
+        "type": "hessian_interval",
         "advanced": True,
-        "label": "Hessian Recalc Interval",
-        "min": 1,
-        "max": 1000,
-        "default": {"*": 10},
+        "label": "Hessian Recalculation",
+        "default": {"*": "auto"},
+        "min_interval": 1,
+        "max_interval": 1000,
+        "nullable": True,
+        "widget": "hessian_toggle",
+        "help": (
+            "auto = infer from elements (light=off; others=10); "
+            "0 = never compute exact Hessian (approximate + BFGS); "
+            "1-1000 = recalculation interval"
+        ),
     },
     "temperature": {"type": "float", "min": 0, "max": 10000, "default": {"*": 298.15}, "unit": "K"},
     "pressure": {"type": "float", "min": 0, "max": 100000, "default": {"*": 1.0}, "unit": "atm"},
@@ -569,6 +578,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "grid",
                     "scf_convergence",
                     "max_steps",
+                    "recalc_hess",
                 ],
             },
             {
@@ -1067,7 +1077,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "level_id": "dft_opt",
                 "label": "DFT Optimization",
-                "label_zh": "DFT 结构优化",
+                "label_zh": "DFT \u7ed3\u6784\u4f18\u5316",
                 "required": False,
                 "allowed_engines": ["orca"],
                 "fields": [
@@ -1080,6 +1090,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "scf_convergence",
                     "opt_convergence",
                     "max_steps",
+                    "recalc_hess",
                 ],
             },
             {
@@ -1629,6 +1640,22 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
         for field_name in lv_def.get("fields", []):
             user_val = user_lv.get(field_name)
             fd = FIELD_DEFINITIONS.get(field_name)
+            # hessian_interval is a self-validating scalar: route through the
+            # shared normaliser so CLI/API/catalog/scheduler all agree.
+            if fd and fd.get("type") == "hessian_interval":
+                if user_val is None or user_val == "":
+                    default_val = _resolve_field_default(
+                        field_name, engine, normalized.get("functional")
+                    )
+                    normalized[field_name] = default_val
+                    continue
+                try:
+                    normalized[field_name] = normalize_recalc_hess(user_val)
+                except ValueError as exc:
+                    errors.append(
+                        f"Level '{lid}', field '{field_name}': {exc}"
+                    )
+                continue
             if user_val is not None and user_val != "":
                 options = _resolve_field_options(
                     field_name, engine, normalized.get("functional"),
@@ -1722,6 +1749,7 @@ def convert_method_levels_to_protocol_levels(levels: dict[str, Any]) -> dict[str
         "temperature": "temperature_k",
         "pressure": "pressure_atm",
         "scale_factor": "scl_zpe",
+        "recalc_hess": "recalc_hess",
     }
 
     converted: dict[str, Any] = {}
@@ -1802,7 +1830,9 @@ _LEVEL_TO_CLI_FLAG_MAP: dict[str, str] = {
     "scale_factor": "scale-factor",
     "max_steps": "geom-maxiter",
     "opt_convergence": "opt-convergence",
-    "recalc_hess": "recalc-hess",
+    # NOTE: recalc_hess is handled inline in method_levels_to_cli_flags()
+    # because the new CLI surface is --calc-hess / --no-calc-hess (mutually
+    # exclusive) rather than a single --recalc-hess flag.
 }
 
 
@@ -1825,6 +1855,26 @@ def method_levels_to_cli_flags(
         prefix = prefix_map.get(level_id, "")
         for field, value in level_config.items():
             if field == "engine" or value is None or value == "":
+                continue
+            # recalc_hess maps to the mutually-exclusive --calc-hess /
+            # --no-calc-hess CLI surface. It is only meaningful on the
+            # unprefixed opt level; prefixed levels (e.g. sp-) are skipped
+            # because single-point calculations do not optimise.
+            if field == "recalc_hess":
+                try:
+                    normalized = normalize_recalc_hess(value)
+                except ValueError:
+                    continue
+                if normalized is None:
+                    continue
+                if prefix:
+                    continue
+                if normalized == "auto":
+                    cmd += ["--calc-hess", "auto"]
+                elif normalized == 0:
+                    cmd += ["--no-calc-hess"]
+                else:
+                    cmd += ["--calc-hess", str(normalized)]
                 continue
             cli_flag = _LEVEL_TO_CLI_FLAG_MAP.get(field)
             if cli_flag is None:

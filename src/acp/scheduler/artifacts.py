@@ -147,6 +147,10 @@ def infer_artifact_type(filepath: Path) -> str:
     name = filepath.name.lower()
     stem = filepath.stem.lower()
     suffix = filepath.suffix.lower()
+    # Hessian resolution sidecar (plan §7.5): ``<calc>.hessian.json``
+    # captures the resolved Recalc_Hess policy for replay/audit.
+    if stem.endswith(".hessian") and suffix == ".json":
+        return "hessian_resolution"
     if suffix == ".xyz" and any(token in stem for token in ("ensemble", "optimized", "opt")):
         return "optimized_xyz"
     if suffix == ".xyz" and "crest" in name:

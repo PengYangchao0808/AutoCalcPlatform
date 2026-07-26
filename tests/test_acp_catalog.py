@@ -394,7 +394,7 @@ def test_dlpno_aux_basis_propagated_to_basis_block() -> None:
         "resources": {"nproc": 1, "mem": "1GB"},
     }
     iface = ORCAInterface(config, method="DLPNO-CCSD(T)", basis="def2-TZVPP")
-    out = iface._build_input_blocks(
+    out, _ = iface._build_input_blocks(
         calc_type="sp",
         method="DLPNO-CCSD(T)",
         basis="def2-TZVPP",
@@ -413,7 +413,7 @@ def test_dlpno_aux_basis_default_auxc() -> None:
         "resources": {"nproc": 1, "mem": "1GB"},
     }
     iface = ORCAInterface(config, method="DLPNO-CCSD(T)", basis="def2-TZVPP")
-    out = iface._build_input_blocks(
+    out, _ = iface._build_input_blocks(
         calc_type="sp",
         method="DLPNO-CCSD(T)",
         basis="def2-TZVPP",
@@ -433,7 +433,7 @@ def test_non_dlpno_method_can_use_extra_blocks_basis_block() -> None:
         "resources": {"nproc": 1, "mem": "1GB"},
     }
     iface = ORCAInterface(config, method="B3LYP", basis="def2-TZVPP")
-    out = iface._build_input_blocks(
+    out, _ = iface._build_input_blocks(
         calc_type="sp",
         method="B3LYP",
         basis="def2-TZVPP",
@@ -456,7 +456,7 @@ def test_non_dlpno_method_with_structured_override_is_skipped_safely() -> None:
         "resources": {"nproc": 1, "mem": "1GB"},
     }
     iface = ORCAInterface(config, method="B3LYP", basis="def2-TZVPP")
-    out = iface._build_input_blocks(
+    out, _ = iface._build_input_blocks(
         calc_type="sp",
         method="B3LYP",
         basis="def2-TZVPP",
@@ -631,3 +631,115 @@ def test_normalize_legacy_method_idempotent() -> None:
     assert out["levels"]["sp"]["aux_j_basis"] == "def2/J"
     assert out["levels"]["sp"]["aux_c_basis"] == "def2-TZVPP/C"
     assert "aux_basis" not in out["levels"]["sp"]
+
+
+# ---------------------------------------------------------------------------
+# Hessian interval field (plan §8)
+# ---------------------------------------------------------------------------
+
+def test_recalc_hess_field_is_hessian_interval_type() -> None:
+    fd = FIELD_DEFINITIONS["recalc_hess"]
+    assert fd["type"] == "hessian_interval"
+    assert fd["default"]["*"] == "auto"
+    assert fd["widget"] == "hessian_toggle"
+
+
+@pytest.mark.parametrize(
+    "schema_id,level_id",
+    [
+        ("dft_optimize", "optimize"),
+        ("dft_optfreq", "optfreq"),
+        ("dft_optfreqsp", "optfreq"),
+        ("confsearch", "dft_opt"),
+        ("censo_energy", "dft_opt"),
+    ],
+)
+def test_recalc_hess_in_all_opt_schemas(schema_id: str, level_id: str) -> None:
+    """Every opt-bearing schema must list recalc_hess (plan §8.2)."""
+    from acp.catalog import METHOD_SCHEMAS
+
+    schema = METHOD_SCHEMAS[schema_id]
+    level = next(lv for lv in schema["method_levels"] if lv["level_id"] == level_id)
+    assert "recalc_hess" in level["fields"], f"{schema_id}.{level_id} missing recalc_hess"
+
+
+def test_normalize_validates_recalc_hess() -> None:
+    schema = {
+        "method_levels": [{
+            "level_id": "optimize",
+            "allowed_engines": ["orca"],
+            "fields": ["functional", "recalc_hess"],
+            "required": True,
+        }]
+    }
+    # auto / 0 / N valid
+    for val in ("auto", 0, 5, "5"):
+        levels, errors = normalize_and_validate_method_config(
+            {"levels": {"optimize": {"engine": "orca", "functional": "r2SCAN-3c", "recalc_hess": val}}},
+            schema,
+        )
+        assert not errors, f"val={val} → {errors}"
+        expected = "auto" if val == "auto" else int(val) if isinstance(val, str) else val
+        assert levels["optimize"]["recalc_hess"] == expected
+    # Invalid values surface as errors.
+    for bad in ("fast", -1, 1001, 1.5, True):
+        _, errors = normalize_and_validate_method_config(
+            {"levels": {"optimize": {"engine": "orca", "functional": "r2SCAN-3c", "recalc_hess": bad}}},
+            schema,
+        )
+        assert errors, f"val={bad} should have produced an error"
+        assert "recalc_hess" in errors[0]
+
+
+def test_recalc_hess_default_when_omitted() -> None:
+    """When the user omits recalc_hess, the catalog default ('auto') applies."""
+    schema = {
+        "method_levels": [{
+            "level_id": "optimize",
+            "allowed_engines": ["orca"],
+            "fields": ["functional", "recalc_hess"],
+            "required": True,
+        }]
+    }
+    levels, errors = normalize_and_validate_method_config(
+        {"levels": {"optimize": {"engine": "orca", "functional": "r2SCAN-3c"}}},
+        schema,
+    )
+    assert not errors
+    assert levels["optimize"]["recalc_hess"] == "auto"
+
+
+def test_method_levels_to_cli_flags_recalc_hess() -> None:
+    """recalc_hess maps to --calc-hess / --no-calc-hess, not --recalc-hess."""
+    from acp.catalog import _LEVEL_TO_CLI_FLAG_MAP, method_levels_to_cli_flags
+
+    assert "recalc_hess" not in _LEVEL_TO_CLI_FLAG_MAP
+    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": "auto"}}) == ["--calc-hess", "auto"]
+    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": 0}}) == ["--no-calc-hess"]
+    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": 7}}) == ["--calc-hess", "7"]
+    # Null / empty values are skipped.
+    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": None}}) == []
+    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": ""}}) == []
+
+
+def test_method_levels_to_cli_flags_recalc_hess_skipped_on_prefix() -> None:
+    """recalc_hess on a prefixed (sp-) level is skipped — SP does not optimise."""
+    from acp.catalog import method_levels_to_cli_flags
+
+    flags = method_levels_to_cli_flags(
+        {
+            "optfreq": {"engine": "orca", "recalc_hess": 7},
+            "single_point": {"engine": "orca", "functional": "wB97M-V", "recalc_hess": 5},
+        },
+        {"optfreq": "", "single_point": "sp-", "thermo": ""},
+    )
+    assert flags == ["--calc-hess", "7", "--sp-method", "wB97M-V"]
+
+
+def test_convert_method_levels_passes_recalc_hess() -> None:
+    """convert_method_levels_to_protocol_levels routes recalc_hess into the
+    protocol 'optimization' stage (plan §10.3 / AC12)."""
+    out = convert_method_levels_to_protocol_levels(
+        {"dft_opt": {"engine": "orca", "functional": "r2SCAN-3c", "recalc_hess": 5}}
+    )
+    assert out["optimization"]["recalc_hess"] == 5

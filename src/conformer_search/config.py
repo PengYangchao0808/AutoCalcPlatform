@@ -406,7 +406,11 @@ def _get_default_config() -> dict[str, Any]:
             },
         },
         'optimization_control': {
-            'recalc_hess': 10,  # Hessian recalculation interval for geometry optimization
+            # 'auto' = infer Recalc_Hess interval from molecular elements:
+            # light (CHON+halogens) → initial Hessian only (no recalc);
+            # P/S/Si/B-only → 10 (legacy default); metals/other → 7 (conservative).
+            # Set to an integer (e.g. 10) to pin the legacy behaviour site-wide.
+            'recalc_hess': 'auto',
             'timeout': {
                 'default_seconds': 864000
             }

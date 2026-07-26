@@ -11,6 +11,7 @@ import hashlib
 import json
 import logging
 import posixpath
+import re
 import urllib.parse
 from collections import Counter
 from pathlib import Path
@@ -58,6 +59,10 @@ from acp.api.v1_schemas import (
     ArtifactListResponse,
     ArtifactModel,
     DiskUsageResponse,
+    HessianPreviewRequest,
+    HessianPreviewResponse,
+    HessianPreviewResult,
+    HessianPreviewStructure,
     JobMoveRequest,
     MaintenanceCleanupResponse,
     MoleculeEmbedRequest,
@@ -1192,6 +1197,204 @@ def validate_method(req: ValidateMethodRequest) -> ValidateMethodResponse:
         errors=errors,
         normalized_levels=normalized,
     )
+
+
+# ---------------------------------------------------------------------------
+# Hessian preview (plan §12)
+# ---------------------------------------------------------------------------
+
+# Module-level cache for the lazy resolver. Avoids re-importing
+# ``acp.chem.composition`` on every preview request.
+_HESSIAN_RESOLVER = None
+_FORMULA_TOKEN_RE = re.compile(r"([A-Z][a-z]?)(\d*)")
+
+
+def _get_hessian_resolver():
+    global _HESSIAN_RESOLVER
+    if _HESSIAN_RESOLVER is None:
+        from acp.chem.composition import resolve_recalc_hess as _resolver
+
+        _HESSIAN_RESOLVER = _resolver
+    return _HESSIAN_RESOLVER
+
+
+def _formula_to_symbols(formula: str) -> list[str] | None:
+    """Best-effort Hill formula → list of unique element symbols.
+
+    Used only as a fallback when ``symbols`` is not supplied. Returns
+    ``None`` if the formula cannot be parsed (e.g. empty or contains
+    unrecognized tokens). Counts are ignored — only the set of distinct
+    elements matters for Hessian classification.
+    """
+    if not formula:
+        return None
+    text = formula.strip()
+    if not text:
+        return None
+    symbols: list[str] = []
+    pos = 0
+    for match in _FORMULA_TOKEN_RE.finditer(text):
+        if match.start() != pos:
+            # Unrecognized gap → bail out.
+            return None
+        symbols.append(match.group(1))
+        pos = match.end()
+    if pos != len(text):
+        return None
+    # Deduplicate while preserving discovery order.
+    seen: dict[str, None] = {}
+    for sym in symbols:
+        seen.setdefault(sym, None)
+    return list(seen.keys()) or None
+
+
+def _resolve_configured_recalc_hess() -> object:
+    """Return the server's configured ``optimization_control.recalc_hess``."""
+    try:
+        from conformer_search.config import load_config
+
+        cfg = load_config()
+        to_cfg = cfg.get("optimization_control") or {}
+        return to_cfg.get("recalc_hess", "auto")
+    except Exception:
+        return "auto"
+
+
+def _build_hessian_result(
+    structure: HessianPreviewStructure,
+    recalc_hess: Any,
+    configured: object,
+) -> HessianPreviewResult:
+    resolver = _get_hessian_resolver()
+
+    # Prefer explicit symbols; fall back to formula parsing. Only needed
+    # when the policy resolves to auto — explicit 0/N do not require it.
+    symbols = structure.symbols
+    if not symbols and structure.formula:
+        symbols = _formula_to_symbols(structure.formula)
+
+    try:
+        resolution = resolver(
+            explicit=recalc_hess,
+            configured=configured,
+            symbols=symbols,
+        )
+    except ValueError as exc:
+        return HessianPreviewResult(
+            name=structure.name,
+            error=str(exc),
+        )
+
+    # Translate the internal reason/source into the API-facing vocabulary
+    # documented in plan §12.4. The resolver reports ``source="explicit"``
+    # for any non-null user value (including "auto"); the API contract
+    # distinguishes user-Auto (``source="auto"``) from user-N/0
+    # (``source="explicit"``).
+    if resolution.reason == "auto":
+        if not resolution.heavy_elements:
+            api_reason = "light_elements"
+        elif not resolution.triggering_elements:
+            api_reason = "heteroatom_only"
+        else:
+            api_reason = "heavy_elements"
+        # ``recalc_hess`` is None when caller omitted the field → config.
+        api_source = "config" if recalc_hess is None else "auto"
+    else:
+        api_reason = resolution.reason
+        api_source = "explicit"
+
+    return HessianPreviewResult(
+        name=structure.name,
+        enabled=bool(resolution.enabled),
+        interval=int(resolution.interval),
+        source=api_source,
+        reason=api_reason,
+        heavy_elements=list(resolution.heavy_elements),
+        triggering_elements=list(resolution.triggering_elements),
+    )
+
+
+@router.post("/hessian-preview", response_model=HessianPreviewResponse)
+def hessian_preview(req: HessianPreviewRequest) -> Response:
+    """Resolve the Hessian policy for one or more structures.
+
+    Does not run any ORCA calculation. Returns 422 with a field-level
+    error when ``recalc_hess`` itself is invalid, and per-structure
+    ``error`` entries when a structure lacks the symbols/formula needed
+    for auto inference (plan §12.5).
+    """
+    from acp.chem.composition import normalize_recalc_hess
+
+    # Validate the top-level recalc_hess first. Invalid values here are a
+    # client error — never silently fall back.
+    try:
+        normalized_recalc = normalize_recalc_hess(req.recalc_hess)
+    except ValueError:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": "validation error",
+                "errors": [
+                    {
+                        "field": "recalc_hess",
+                        "message": "must be 'auto', 0, or an integer 1-1000",
+                    }
+                ],
+            },
+        )
+
+    configured = _resolve_configured_recalc_hess()
+    # ``normalized_recalc`` is None when the caller omitted the field —
+    # that means "follow config", so pass None to the resolver.
+    explicit_value: Any = normalized_recalc
+
+    results: list[HessianPreviewResult] = []
+    missing_structures: list[str] = []
+    for idx, structure in enumerate(req.structures):
+        # Auto inference needs symbols or formula. Defer the check until
+        # we know auto is actually in play.
+        symbols = structure.symbols
+        if not symbols and structure.formula:
+            symbols = _formula_to_symbols(structure.formula)
+
+        eff = explicit_value if explicit_value is not None else configured
+        if (
+            normalize_recalc_hess(eff) == "auto"
+            and symbols is None
+        ):
+            label = structure.name or f"structures[{idx}]"
+            missing_structures.append(
+                f"{label}: symbols or formula required for auto inference"
+            )
+            results.append(
+                HessianPreviewResult(
+                    name=structure.name,
+                    error="symbols or formula required for auto inference",
+                )
+            )
+            continue
+
+        results.append(_build_hessian_result(structure, explicit_value, configured))
+
+    if missing_structures:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": "validation error",
+                "errors": [
+                    {"field": "structures", "message": msg}
+                    for msg in missing_structures
+                ],
+                "results": [r.model_dump() for r in results],
+            },
+        )
+
+    enabled = sum(1 for r in results if r.enabled and not r.error)
+    disabled = sum(1 for r in results if not r.enabled and not r.error)
+    summary = {"total": len(results), "enabled": enabled, "disabled": disabled}
+
+    payload = HessianPreviewResponse(results=results, summary=summary)
+    return JSONResponse(status_code=200, content=payload.model_dump())
 
 
 @router.post("/uploads", response_model=UploadResponse)

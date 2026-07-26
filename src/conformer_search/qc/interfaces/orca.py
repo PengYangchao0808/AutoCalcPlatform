@@ -7,10 +7,12 @@ Interface for ORCA quantum chemistry software.
 Author: QCcalc Team (adapted from RPH)
 """
 
+import json
 import logging
 import os
 import re
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -39,6 +41,74 @@ def _resolve_method_meta(method: Optional[str]) -> Optional[dict[str, Any]]:
     except ImportError:
         return None
     return _case_insensitive_get(METHOD_META, method)
+
+
+# --- Hessian resolver (lazy import + module-level cache) -------------------
+# ``conformer_search`` must not import ``acp.chem`` at module load time
+# (reverse-dependency). The resolver is pulled in on first use and cached
+# so conformer-batch invocations do not re-import per frame. Mirrors the
+# existing ``_resolve_method_meta`` pattern.
+_RESOLVER = None
+
+
+def _get_resolver():
+    """Return the cached ``resolve_recalc_hess`` callable."""
+    global _RESOLVER
+    if _RESOLVER is None:
+        from acp.chem.composition import resolve_recalc_hess as _resolver
+
+        _RESOLVER = _resolver
+    return _RESOLVER
+
+
+def _resolve_recalc_hess_lazy(
+    explicit: object,
+    configured: object,
+    symbols: Optional[list[str]],
+):
+    """Thin wrapper around the ACP resolver; preserves lazy semantics."""
+    return _get_resolver()(
+        explicit=explicit,
+        configured=configured,
+        symbols=symbols,
+    )
+
+
+def _record_hessian_resolution(
+    out_dir: Path,
+    inp_file: Path,
+    resolution,
+    input_value: object,
+    config_value: object,
+) -> None:
+    """Write a ``<stem>.hessian.json`` sidecar next to the ORCA input.
+
+    Captures the *resolved* Hessian policy so the actual ORCA ``%geom``
+    block can be reproduced bit-for-bit. ``auto`` resolution depends on
+    the concrete molecule, so recording only the input ``"auto"`` value
+    is insufficient for replay (plan §7.5).
+
+    Failures are logged and swallowed: provenance must never break the
+    actual ORCA run.
+    """
+    try:
+        sidecar = inp_file.with_suffix(".hessian.json")
+        payload = {
+            "interval": int(resolution.interval),
+            "enabled": bool(resolution.enabled),
+            "source": resolution.source,
+            "reason": resolution.reason,
+            "heavy_elements": list(resolution.heavy_elements),
+            "triggering_elements": list(resolution.triggering_elements),
+            "input_value": input_value,
+            "config_value": config_value,
+            "resolved_at": datetime.now(timezone.utc).isoformat(),
+        }
+        ensure_dir(out_dir)
+        with sidecar.open("w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2, sort_keys=True)
+    except Exception as exc:  # pragma: no cover - best-effort provenance
+        logger.warning("Failed to write Hessian resolution sidecar: %s", exc)
 
 
 class ORCAInterface(QCInterfaceBase):
@@ -106,15 +176,15 @@ class ORCAInterface(QCInterfaceBase):
         route_extras: list = None,
         geom_maxiter: int = None,
         extra_blocks: list = None,
-        recalc_hess: int = None,
+        recalc_hess: object = None,
         solvent: str = None,
         solvent_model: str = None,
         aux_basis: str = None,
         aux_j_basis: str = None,
         aux_c_basis: str = None,
-    ) -> str:
-        """
-        Build ORCA input blocks.
+        symbols: Optional[list[str]] = None,
+    ) -> tuple[str, Any]:
+        """Build ORCA input blocks.
 
         Args:
             calc_type: Calculation type
@@ -124,16 +194,24 @@ class ORCAInterface(QCInterfaceBase):
                 (e.g. ``["RIJCOSX", "VeryTightSCF"]``)
             geom_maxiter: Optional MaxIter for the %geom block (opt only)
             extra_blocks: Extra raw input blocks appended after the route
-            recalc_hess: Optional Hessian recalculation interval for the %geom
-                block (opt only); overrides config when given
+            recalc_hess: Hessian policy for the %geom block (opt only);
+                accepts ``"auto"``, ``0``, positive ``N``, or ``None``
+                (follow config). See plan §5.1 for full semantics.
             solvent: Override solvent (uses self.solvent if None)
             solvent_model: Override solvent model (uses self.solvent_model if None)
             aux_basis: Legacy auxiliary basis (backward compat, migrated to aux_c_basis)
             aux_j_basis: Auxiliary /J basis for RI-J fitting
             aux_c_basis: Auxiliary /C basis for RI-MP2 correlation
+            symbols: Atomic symbols of the molecule. Required when
+                ``recalc_hess`` resolves to ``"auto"`` and no explicit
+                numeric value is available; ignored otherwise.
 
         Returns:
-            Input blocks string
+            A 2-tuple ``(input_str, resolution)`` where ``input_str`` is
+            the rendered ORCA input and ``resolution`` is the resolved
+            :class:`HessianResolution` for opt-family calcs (``None`` for
+            non-opt routes). The caller is expected to persist the
+            resolution alongside the input file.
         """
         _method = method if method is not None else self.method
         _basis = basis if basis is not None else self.basis
@@ -249,21 +327,39 @@ class ORCAInterface(QCInterfaceBase):
         blocks.append(f"%maxcore {self.maxcore}")
         blocks.append(f"%pal nprocs {self.nproc} end")
 
-        # Read recalc_hess from config (with fallback default of 10).
+        # Hessian policy resolution (plan §7.2).
+        # ``recalc_hess`` accepts "auto" / 0 / N / None and is resolved
+        # through the shared ACP resolver. ``configured`` defaults to
+        # "auto" so an unset config still triggers element inference.
         to_cfg = self.config.get("optimization_control") or {}
-        if recalc_hess is None:
-            recalc_hess = to_cfg.get("recalc_hess", 10)
+        configured_recalc = to_cfg.get("recalc_hess", "auto")
 
-        # Compute Hessian at step 1 and recalculate every 10 steps for better convergence.
-        # Recalc_Hess N: calculate Hessian at the beginning and recalculate after N, 2N, ... steps.
-        # If SMD solvation is used and this causes issues (ORCA lacks analytical Hessian
-        # with SMD), fall back to Recalc_Hess Num_10 (numerical Hessian) if needed.
-        if route.split()[0] == "Opt":
+        resolution = None
+        is_opt_route = route.split()[0] == "Opt"
+        if is_opt_route:
+            resolution = _resolve_recalc_hess_lazy(
+                explicit=recalc_hess,
+                configured=configured_recalc,
+                symbols=symbols,
+            )
             blocks.append("%geom")
-            blocks.append(f"  Recalc_Hess {recalc_hess}")
+            # Recalc_Hess N: exact Hessian at step 1 and recalculated
+            # after N, 2N, ... steps. interval == 0 suppresses the
+            # directive entirely: ORCA then NEVER computes an exact
+            # Hessian — it uses its default approximate (model) initial
+            # Hessian with BFGS updates throughout.
+            if resolution.interval > 0:
+                blocks.append(f"  Recalc_Hess {resolution.interval}")
             if geom_maxiter is not None and geom_maxiter > 0:
                 blocks.append(f"  MaxIter {int(geom_maxiter)}")
             blocks.append("end")
+
+            if resolution.reason == "auto" and resolution.enabled:
+                logger.info(
+                    "Auto Hessian recalc enabled: interval=%d, non-light elements=%s",
+                    resolution.interval,
+                    ",".join(resolution.heavy_elements) or "(none)",
+                )
 
         if extra_blocks:
             for blk in extra_blocks:
@@ -284,7 +380,7 @@ class ORCAInterface(QCInterfaceBase):
                 blocks.append(f'  SMDsolvent "{orca_smd_solvent(_solvent)}"')
             blocks.append("end")
 
-        return "\n".join(blocks)
+        return "\n".join(blocks), resolution
 
     def _write_input(
         self,
@@ -299,15 +395,14 @@ class ORCAInterface(QCInterfaceBase):
         route_extras: list = None,
         geom_maxiter: int = None,
         extra_blocks: list = None,
-        recalc_hess: int = None,
+        recalc_hess: object = None,
         solvent: str = None,
         solvent_model: str = None,
         aux_basis: str = None,
         aux_j_basis: str = None,
         aux_c_basis: str = None,
     ):
-        """
-        Write ORCA input file.
+        """Write ORCA input file.
 
         Args:
             input_file: Output input file path
@@ -321,7 +416,7 @@ class ORCAInterface(QCInterfaceBase):
             route_extras: Extra route-line keywords (see _build_input_blocks)
             geom_maxiter: Optional MaxIter for the %geom block
             extra_blocks: Extra raw input blocks
-            recalc_hess: Optional Hessian recalc interval for the %geom block
+            recalc_hess: Hessian policy ("auto"/0/N/None) for the %geom block
             solvent: Override solvent (uses self.solvent if None)
             solvent_model: Override solvent model (uses self.solvent_model if None)
             aux_basis: Legacy auxiliary basis (backward compat)
@@ -331,7 +426,7 @@ class ORCAInterface(QCInterfaceBase):
         charge = charge if charge is not None else self.charge
         multiplicity = multiplicity if multiplicity is not None else self.multiplicity
 
-        blocks = self._build_input_blocks(
+        blocks, resolution = self._build_input_blocks(
             calc_type,
             method=method,
             basis=basis,
@@ -344,6 +439,7 @@ class ORCAInterface(QCInterfaceBase):
             aux_basis=aux_basis,
             aux_j_basis=aux_j_basis,
             aux_c_basis=aux_c_basis,
+            symbols=symbols,
         )
 
         ensure_dir(input_file.parent)
@@ -356,6 +452,21 @@ class ORCAInterface(QCInterfaceBase):
                 f.write(f"{symbol:2s} {coord[0]:15.10f} {coord[1]:15.10f} {coord[2]:15.10f}\n")
 
             f.write("*\n")
+
+        # Persist the resolved Hessian policy for reproducibility (plan §7.5).
+        # ``auto`` resolves to a molecule-specific interval; recording only
+        # the input "auto" would make the actual %geom block unreproducible.
+        if resolution is not None:
+            configured_recalc = (self.config.get("optimization_control") or {}).get(
+                "recalc_hess", "auto"
+            )
+            _record_hessian_resolution(
+                input_file.parent,
+                input_file,
+                resolution,
+                input_value=recalc_hess,
+                config_value=configured_recalc,
+            )
 
     def _run_orca(self, input_file: Path, output_file: Path) -> bool:
         """
@@ -685,7 +796,7 @@ class ORCAInterface(QCInterfaceBase):
         route_extras: list = None,
         geom_maxiter: int = None,
         extra_blocks: list = None,
-        recalc_hess: int = None,
+        recalc_hess: object = None,
         aux_basis: str = None,
         aux_j_basis: str = None,
         aux_c_basis: str = None,
@@ -708,7 +819,7 @@ class ORCAInterface(QCInterfaceBase):
             route_extras: Extra route-line keywords
             geom_maxiter: Max geometry iterations
             extra_blocks: Extra raw input blocks
-            recalc_hess: Hessian recalculation interval (Recalc_Hess N)
+            recalc_hess: Hessian policy ("auto"/0/N/None) for Recalc_Hess
             aux_basis: Legacy auxiliary basis (backward compat)
             aux_j_basis: Auxiliary /J basis for RI-J fitting
             aux_c_basis: Auxiliary /C basis for RI-MP2 correlation

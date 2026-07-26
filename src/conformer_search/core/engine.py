@@ -693,6 +693,7 @@ class ConformerEngine:
                     multiplicity=self._current_multiplicity,
                     output_dir=opt_dir,
                     output_name=f"conf_{i:03d}_opt",
+                    recalc_hess=spec.opt_recalc_hess,
                 )
             else:
                 opt_result = QCResult(success=True, coordinates=coords, symbols=symbols, energy=0.0)
@@ -1201,6 +1202,7 @@ class ConformerEngine:
                     multiplicity=self._current_multiplicity,
                     output_dir=opt_dir,
                     output_name=f"conf_{i:03d}_opt",
+                    recalc_hess=spec.opt_recalc_hess,
                 )
                 if opt_result.success and opt_result.energy is not None:
                     opt_xyz = opt_dir / f"conf_{i:03d}_opt.xyz"

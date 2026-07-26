@@ -352,6 +352,11 @@ cluster:
     vacuum_after_db_cleanup: false  # VACUUM after DB pruning (locks DB; off by default)
 
 # ==================== Optimization Control ====================
+# recalc_hess: 'auto' infers the ORCA Recalc_Hess interval from elements:
+#   light (CHON+halogens) → initial Hessian only (no recalc);
+#   P/S/Si/B-only → 10 (legacy default); metals/other → 7 (conservative).
+# Set to an integer (e.g. 10) to pin the legacy behaviour site-wide.
 optimization_control:
+  recalc_hess: "auto"
   timeout:
     default_seconds: 86400  # Default QC job timeout in seconds

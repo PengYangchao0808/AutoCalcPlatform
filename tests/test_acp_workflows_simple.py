@@ -597,7 +597,7 @@ _SIMPLE_WF = [
     ("singlepoint", "--method"),
     ("optimize", "--geom-maxiter"),
     ("frequency", "--solvent-model"),
-    ("optfreq", "--recalc-hess"),
+    ("optfreq", "--calc-hess"),
     ("optfreqsp", "--sp-method"),
 ]
 
@@ -771,52 +771,155 @@ def test_recalc_hess_field_definition_exists():
     from acp.catalog import FIELD_DEFINITIONS
     fd = FIELD_DEFINITIONS.get("recalc_hess")
     assert fd is not None
-    assert fd["type"] == "int"
-    assert fd["default"]["*"] == 10
+    assert fd["type"] == "hessian_interval"
+    assert fd["default"]["*"] == "auto"
 
 
-def test_recalc_hess_in_cli_flag_map():
-    from acp.catalog import _LEVEL_TO_CLI_FLAG_MAP, method_levels_to_cli_flags
-    assert _LEVEL_TO_CLI_FLAG_MAP.get("recalc_hess") == "recalc-hess"
-    flags = method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": 5}})
-    assert flags == ["--recalc-hess", "5"]
+def test_recalc_hess_not_in_generic_cli_flag_map():
+    """recalc_hess is handled inline in method_levels_to_cli_flags(); the
+    generic map no longer contains it (plan §11.1)."""
+    from acp.catalog import _LEVEL_TO_CLI_FLAG_MAP
+    assert "recalc_hess" not in _LEVEL_TO_CLI_FLAG_MAP
 
 
-def test_recalc_hess_not_emitted_for_sp_level():
+def test_recalc_hess_emits_calc_hess_flags():
+    from acp.catalog import method_levels_to_cli_flags
+    # auto / 0 / N
+    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": "auto"}}) == ["--calc-hess", "auto"]
+    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": 0}}) == ["--no-calc-hess"]
+    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": 5}}) == ["--calc-hess", "5"]
+
+
+def test_recalc_hess_skipped_on_prefixed_sp_level():
     from acp.catalog import method_levels_to_cli_flags
     flags = method_levels_to_cli_flags(
         {"optfreq": {"engine": "orca", "recalc_hess": 7}, "single_point": {"engine": "orca", "functional": "wB97M-V"}},
         {"optfreq": "", "single_point": "sp-", "thermo": ""},
     )
-    assert flags == ["--recalc-hess", "7", "--sp-method", "wB97M-V"]
+    assert flags == ["--calc-hess", "7", "--sp-method", "wB97M-V"]
 
 
 @pytest.mark.parametrize("wf_name", ["optimize", "optfreq", "optfreqsp"])
-def test_cli_help_has_recalc_hess(wf_name):
+def test_cli_help_has_calc_hess(wf_name):
     result = subprocess.run(
         [sys.executable, "-m", "acp.cli", "run", wf_name, "--help"],
         capture_output=True, text=True,
     )
     assert result.returncode == 0, f"stderr: {result.stderr}"
-    assert "--recalc-hess" in result.stdout, f"Expected '--recalc-hess' in help for {wf_name}"
+    assert "--calc-hess" in result.stdout, f"Expected '--calc-hess' in help for {wf_name}"
+    assert "--no-calc-hess" in result.stdout, f"Expected '--no-calc-hess' in help for {wf_name}"
+
+
+@pytest.mark.parametrize("wf_name", ["singlepoint", "frequency"])
+def test_cli_sp_freq_no_hess_flags(wf_name):
+    """singlepoint/frequency must not advertise hessian flags (AC15)."""
+    result = subprocess.run(
+        [sys.executable, "-m", "acp.cli", "run", wf_name, "--help"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, f"stderr: {result.stderr}"
+    assert "--calc-hess" not in result.stdout
+    assert "--no-calc-hess" not in result.stdout
+
+
+def test_cli_legacy_recalc_hess_rejected():
+    """--recalc-hess is removed; argparse must reject it (AC14)."""
+    result = subprocess.run(
+        [sys.executable, "-m", "acp.cli", "run", "optimize",
+         "--recalc-hess", "5", "--input", "/dev/null", "--output", "/tmp/out"],
+        capture_output=True, text=True,
+    )
+    assert "unrecognized arguments: --recalc-hess" in result.stderr or \
+           "unrecognized arguments" in result.stderr
+
+
+def test_cli_calc_hess_rejects_zero():
+    """--calc-hess 0 must error; users must use --no-calc-hess (AC16)."""
+    result = subprocess.run(
+        [sys.executable, "-m", "acp.cli", "run", "optimize",
+         "--calc-hess", "0", "--input", "/dev/null", "--output", "/tmp/out"],
+        capture_output=True, text=True,
+    )
+    assert result.returncode != 0
+    assert "--no-calc-hess" in result.stderr or "invalid" in result.stderr.lower()
 
 
 def test_orca_input_blocks_recalc_hess_override():
     from conformer_search.qc.interfaces.orca import ORCAInterface
     iface = ORCAInterface(config={})
-    blocks = iface._build_input_blocks("opt", recalc_hess=5)
+    # Explicit N — emits Recalc_Hess N, no symbols needed.
+    blocks, res = iface._build_input_blocks("opt", recalc_hess=5, symbols=["C", "H"])
     assert "Recalc_Hess 5" in blocks
-    blocks_default = iface._build_input_blocks("opt")
-    assert "Recalc_Hess 10" in blocks_default
-    blocks_cfg = ORCAInterface(config={"optimization_control": {"recalc_hess": 3}})._build_input_blocks("opt")
+    assert res.source == "explicit" and res.interval == 5
+    # Default auto on ethanol (light) — no Recalc_Hess.
+    blocks_default, res = iface._build_input_blocks("opt", symbols=["C", "C", "O", "H"])
+    assert "Recalc_Hess" not in blocks_default
+    assert res.interval == 0 and res.reason == "auto"
+    # Config int 3 → still 3 (legacy integer config preserved).
+    blocks_cfg, _ = ORCAInterface(config={"optimization_control": {"recalc_hess": 3}})._build_input_blocks("opt", symbols=["C"])
     assert "Recalc_Hess 3" in blocks_cfg
 
 
 def test_orca_input_blocks_recalc_hess_optfreq():
     from conformer_search.qc.interfaces.orca import ORCAInterface
     iface = ORCAInterface(config={})
-    blocks = iface._build_input_blocks("optfreq", recalc_hess=20)
+    blocks, _ = iface._build_input_blocks("optfreq", recalc_hess=20, symbols=["C", "H"])
     assert "Recalc_Hess 20" in blocks
+
+
+def test_orca_input_blocks_auto_graded_defaults():
+    """AC1/AC2/AC4/AC4b: two-tier auto defaults — light → off, non-light → 10."""
+    from conformer_search.qc.interfaces.orca import ORCAInterface
+    iface = ORCAInterface(config={})
+    # AC1 ethanol (light) → no Recalc_Hess
+    b, _ = iface._build_input_blocks("opt", symbols=["C", "C", "O", "H", "H", "H", "H", "H", "H"])
+    assert "Recalc_Hess" not in b
+    # AC2 DMSO (S only beyond light) → 10
+    b, _ = iface._build_input_blocks("opt", symbols=["C", "C", "S", "O", "H", "H", "H", "H", "H", "H"])
+    assert "Recalc_Hess 10" in b
+    # AC3 chlorobenzene (Cl is a halogen = light) → no Recalc_Hess
+    b, _ = iface._build_input_blocks("opt", symbols=["C", "C", "C", "C", "C", "C", "Cl", "H", "H", "H", "H", "H"])
+    assert "Recalc_Hess" not in b
+    # AC4 FeCl2 (metal Fe) → 10 (all non-light elements share one tier)
+    b, _ = iface._build_input_blocks("opt", symbols=["Fe", "Cl", "Cl"])
+    assert "Recalc_Hess 10" in b
+    # AC4b TMS (Si only beyond light) → 10
+    b, _ = iface._build_input_blocks("opt", symbols=["Si", "C", "C", "C", "C", "H", "H", "H", "H", "H", "H", "H", "H", "H", "H", "H", "H"])
+    assert "Recalc_Hess 10" in b
+
+
+def test_orca_input_blocks_auto_requires_symbols():
+    """Direct auto call without symbols must raise (plan AC)."""
+    import pytest as _pytest
+    from conformer_search.qc.interfaces.orca import ORCAInterface
+    iface = ORCAInterface(config={})
+    with _pytest.raises(ValueError):
+        iface._build_input_blocks("opt", recalc_hess="auto")
+    # Explicit values do not require symbols.
+    b, _ = iface._build_input_blocks("opt", recalc_hess=5)
+    assert "Recalc_Hess 5" in b
+
+
+def test_orca_input_blocks_sidecar_written(tmp_path):
+    """AC19: *.hessian.json sidecar captures the resolved policy."""
+    import json
+    import numpy as np
+    from conformer_search.qc.interfaces.orca import ORCAInterface
+    iface = ORCAInterface(config={})
+    inp = tmp_path / "conf_000_opt.inp"
+    iface._write_input(
+        inp,
+        np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]),
+        ["Fe", "Cl", "Cl"],
+        "opt", 0, 1,
+    )
+    sidecar = tmp_path / "conf_000_opt.hessian.json"
+    assert sidecar.exists()
+    data = json.loads(sidecar.read_text())
+    assert data["interval"] == 10
+    assert data["heavy_elements"] == ["Fe"]
+    assert data["triggering_elements"] == ["Fe"]
+    assert data["source"] == "config"
 
 
 def test_build_method_kwargs_passes_recalc_hess():
@@ -826,17 +929,45 @@ def test_build_method_kwargs_passes_recalc_hess():
 
 
 def test_build_simple_method_kwargs_includes_recalc_hess():
+    """The new --calc-hess / --no-calc-hess CLI group translates into the
+    canonical ``recalc_hess`` kwarg consumed by ORCAInterface (plan §9.3)."""
+    import argparse
+
+    from acp.cli import _build_simple_method_kwargs
+    base = dict(
+        method="r2SCAN-3c", basis="def2-mTZVPP", dispersion="none",
+        solvent_model="none", solvent="", aux_j_basis="", aux_c_basis="", ri_approximation="none",
+        geom_maxiter=None, opt_convergence="Tight", route_extras=None,
+        aux_j_basis_legacy=None,
+    )
+    # --calc-hess 8
+    args = argparse.Namespace(calc_hess=8, no_calc_hess=False, **base)
+    assert _build_simple_method_kwargs(args)["recalc_hess"] == 8
+    # --calc-hess auto
+    args = argparse.Namespace(calc_hess="auto", no_calc_hess=False, **base)
+    assert _build_simple_method_kwargs(args)["recalc_hess"] == "auto"
+    # --no-calc-hess
+    args = argparse.Namespace(calc_hess=None, no_calc_hess=True, **base)
+    assert _build_simple_method_kwargs(args)["recalc_hess"] == 0
+    # Neither flag → follow config (kwarg absent)
+    args = argparse.Namespace(calc_hess=None, no_calc_hess=False, **base)
+    assert "recalc_hess" not in _build_simple_method_kwargs(args)
+
+
+def test_build_simple_method_kwargs_singlepoint_no_hess():
+    """singlepoint/frequency parsers do not register hessian flags, so the
+    kwargs builder must not raise AttributeError (AC15)."""
     import argparse
 
     from acp.cli import _build_simple_method_kwargs
     args = argparse.Namespace(
         method="r2SCAN-3c", basis="def2-mTZVPP", dispersion="none",
         solvent_model="none", solvent="", aux_j_basis="", aux_c_basis="", ri_approximation="none",
-        geom_maxiter=None, opt_convergence="Tight", recalc_hess=8, route_extras=None,
-        aux_j_basis_legacy=None,
+        route_extras=None, aux_j_basis_legacy=None,
     )
+    # getattr() must tolerate the missing calc_hess / no_calc_hess attrs.
     kwargs = _build_simple_method_kwargs(args)
-    assert kwargs["recalc_hess"] == 8
+    assert "recalc_hess" not in kwargs
 
 
 def test_run_optimize_passes_recalc_hess(tmp_path):

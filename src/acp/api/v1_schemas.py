@@ -226,6 +226,59 @@ class ValidateMethodResponse(BaseModel):
     normalized_levels: dict[str, Any] = Field(default_factory=dict)
 
 
+# ---------------------------------------------------------------------------
+# Hessian preview (plan §12) — returns the resolved Recalc_Hess policy for
+# one or more structures without running any ORCA calculation.
+# ---------------------------------------------------------------------------
+
+
+class HessianPreviewStructure(BaseModel):
+    """A single structure submitted for Hessian-policy preview.
+
+    Either ``symbols`` (preferred) or ``formula`` (fallback) must be
+    provided when the policy resolves to ``auto``; explicit 0/N values
+    do not require either.
+    """
+
+    name: str = ""
+    symbols: list[str] | None = None
+    formula: str | None = None
+
+
+class HessianPreviewRequest(BaseModel):
+    """Request body for ``POST /api/v1/hessian-preview``.
+
+    ``recalc_hess`` mirrors the public field semantics: ``"auto"`` / ``0``
+    / ``N`` / ``None`` (follow config). When omitted, the server's config
+    default applies.
+    """
+
+    schema_id: str = ""
+    level_id: str = ""
+    recalc_hess: Any = None
+    structures: list[HessianPreviewStructure] = Field(default_factory=list)
+
+
+class HessianPreviewResult(BaseModel):
+    """Resolved policy for a single structure."""
+
+    name: str = ""
+    enabled: bool = False
+    interval: int = 0
+    source: str = "config"
+    reason: str = "auto"
+    heavy_elements: list[str] = Field(default_factory=list)
+    triggering_elements: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class HessianPreviewResponse(BaseModel):
+    """Aggregated preview response."""
+
+    results: list[HessianPreviewResult] = Field(default_factory=list)
+    summary: dict[str, int] = Field(default_factory=dict)
+
+
 class RemoteFileEntry(BaseModel):
     """A single file or directory entry inside a remote job directory."""
 
@@ -356,6 +409,10 @@ __all__ = [
     "ArtifactListResponse",
     "ArtifactModel",
     "DiskUsageResponse",
+    "HessianPreviewRequest",
+    "HessianPreviewResponse",
+    "HessianPreviewResult",
+    "HessianPreviewStructure",
     "JobMoveRequest",
     "MaintenanceCleanupResponse",
     "MoleculeEmbedRequest",
