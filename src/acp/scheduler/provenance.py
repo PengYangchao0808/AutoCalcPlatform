@@ -206,7 +206,6 @@ def _default_method(spec: JobSpec) -> str:
         return "demo"
     return (
         _string_or_none(spec.method.get("protocol"))
-        or _string_or_none(spec.method.get("benchmark_level"))
         or _string_or_none(spec.method.get("method"))
         or spec.workflow
     )

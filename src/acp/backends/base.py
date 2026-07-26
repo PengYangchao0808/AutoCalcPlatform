@@ -130,23 +130,6 @@ class FrequencyCalculator(Protocol):
 
 
 @runtime_checkable
-class NMRCalculator(Protocol):
-    """Capability: can compute NMR shielding tensors."""
-
-    def nmr_shielding(
-        self,
-        coordinates: NDArray[np.float64],
-        symbols: list[str],
-        charge: int = 0,
-        multiplicity: int = 1,
-        output_dir: Path | None = None,
-        **kwargs: Any,
-    ) -> QCResult:
-        """Run an NMR shielding calculation."""
-        ...
-
-
-@runtime_checkable
 class ConformerSearcher(Protocol):
     """Capability: can perform conformer searches from an XYZ input."""
 
@@ -235,7 +218,6 @@ __all__ = [
     "GeometryOptimizer",
     "SinglePointCalculator",
     "FrequencyCalculator",
-    "NMRCalculator",
     "ConformerSearcher",
     "ClusteringTool",
     "ThermoCalculator",

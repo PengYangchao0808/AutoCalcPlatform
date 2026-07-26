@@ -677,16 +677,13 @@ class JobRunner:
     def _build_cmd(self, spec: JobSpec, work_dir: Path, input_path: str = "") -> list[str]:
         wf = spec.workflow
         if wf not in (
-            "conformer", "nmr", "benchmark", "mechanism", "ensemble", "energy",
+            "mechanism", "ensemble", "energy",
             "singlepoint", "optimize", "frequency", "optfreq", "optfreqsp",
             "xtb_optimize",
         ):
             raise ValueError(f"No subprocess mapping for workflow: {wf}")
 
-        if wf == "benchmark":
-            cmd: list[str] = [self.python, "-m", "acp.cli", "benchmark"]
-        else:
-            cmd = [self.python, "-m", "acp.cli", "run", wf]
+        cmd: list[str] = [self.python, "-m", "acp.cli", "run", wf]
         inp = spec.input
         method = spec.method
         res = spec.resources
@@ -695,14 +692,10 @@ class JobRunner:
         if not source:
             raise ValueError(f"{wf} job requires a valid input structure")
 
-        if wf in {"conformer", "mechanism"}:
+        if wf == "mechanism":
             cmd += ["--input", str(source), "--output", str(work_dir)]
-            if wf == "conformer" and method.get("protocol"):
-                cmd += ["--protocol", str(method["protocol"])]
             if spec.name:
                 cmd += ["--name", spec.name]
-            if wf == "conformer" and method.get("levels"):
-                cmd += ["--levels", json.dumps(method["levels"])]
         elif wf in {"ensemble", "energy"}:
             cmd += ["--input", str(source), "--output", str(work_dir)]
             preset = censo_preset_from_method(method)
@@ -724,12 +717,6 @@ class JobRunner:
             ewin = censo_ewin_from_method(method)
             if ewin is not None:
                 cmd += ["--ewin", str(ewin)]
-        elif wf == "nmr":
-            cmd += ["--input", str(source), "--output", str(work_dir)]
-            if method.get("protocol"):
-                cmd += ["--protocol", str(method["protocol"])]
-            if method.get("backend"):
-                cmd += ["--backend", str(method["backend"])]
         elif wf in ("singlepoint", "optimize", "frequency", "optfreq", "optfreqsp"):
             cmd += ["--input", str(source), "--output", str(work_dir)]
             if spec.name:
@@ -760,12 +747,6 @@ class JobRunner:
             sm = xtb_level.get("solvent_model")
             if sm and str(sm).lower() not in ("", "none"):
                 cmd += ["--solvent-model", str(sm)]
-        else:
-            cmd += ["--input", str(source), "--output", str(work_dir)]
-            if method.get("benchmark_level"):
-                cmd += ["--benchmark-level", str(method["benchmark_level"])]
-            if method.get("protocols"):
-                cmd += ["--protocols", str(method["protocols"])]
 
         if spec.config_path:
             cmd += ["--config", str(spec.config_path)]
@@ -972,7 +953,7 @@ class JobRunner:
         elif "backend_name" not in result and record.spec.method.get("backend") is not None:
             result["backend_name"] = str(record.spec.method["backend"])
         if "method" not in result:
-            method = record.spec.method.get("protocol") or record.spec.method.get("benchmark_level")
+            method = record.spec.method.get("protocol")
             if method is not None:
                 result["method"] = str(method)
         record.result = result

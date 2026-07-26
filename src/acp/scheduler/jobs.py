@@ -60,13 +60,13 @@ def _derive_supported_workflows() -> tuple[str, ...]:
     equality assertion against the catalog's active set).
 
     Falls back to a static list when ``acp.catalog`` cannot be imported
-    (e.g. during early bootstrap or standalone conformer_search use).
+    (e.g. during early bootstrap or standalone cccp use).
     """
     try:
         from acp.catalog import WORKFLOW_CATALOG
     except ImportError:
         return (
-            "conformer", "ensemble", "energy", "nmr", "benchmark", "mechanism",
+            "ensemble", "energy", "mechanism",
             "singlepoint", "optimize", "frequency", "optfreq", "optfreqsp",
             "fake",
         )

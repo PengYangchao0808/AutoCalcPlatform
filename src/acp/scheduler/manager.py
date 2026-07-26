@@ -23,7 +23,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from acp.catalog import convert_method_levels_to_protocol_levels
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
 from acp.scheduler.projects import ProjectManager
@@ -31,8 +30,6 @@ from acp.scheduler.provenance import compute_input_hash
 from acp.scheduler.runner import JobRunner
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
 from acp.scheduler.store import JobStore
-from conformer_search.config import load_config
-from conformer_search.core.protocols import validate_protocol_methods
 
 logger = logging.getLogger(__name__)
 
@@ -254,16 +251,6 @@ class JobManager:
             raise ValueError(
                 f"Unsupported workflow: {spec.workflow}. Supported: {SUPPORTED_WORKFLOWS}"
             )
-
-        if spec.workflow == "conformer":
-            protocol = spec.method.get("protocol") or "ext"
-            levels = spec.method.get("levels")
-            if levels:
-                levels = convert_method_levels_to_protocol_levels(levels)
-            cfg = load_config(config_path=Path(spec.config_path) if spec.config_path else None)
-            is_valid, errors = validate_protocol_methods(cfg, protocol, levels)
-            if not is_valid:
-                raise ValueError(f"Protocol validation failed for {protocol}: {'; '.join(errors)}")
 
         spec = replace(
             spec,

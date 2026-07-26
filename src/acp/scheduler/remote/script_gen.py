@@ -96,9 +96,7 @@ def build_remote_cli_command(
 
     The mapping rules are identical to :meth:`JobRunner._build_cmd`:
 
-    * conformer / mechanism / ensemble / energy → ``acp.cli run <wf>``
-    * nmr → ``acp.cli run nmr``
-    * benchmark → ``acp.cli benchmark``
+    * mechanism / ensemble / energy / simple workflows → ``acp.cli run <wf>``
 
     The ``--output`` target is ``"."`` (the remote job dir, after ``cd``).
 
@@ -111,16 +109,13 @@ def build_remote_cli_command(
     py = python_executable or "python"
     wf = spec.workflow
     if wf not in (
-        "conformer", "nmr", "benchmark", "mechanism", "ensemble", "energy",
+        "mechanism", "ensemble", "energy",
         "singlepoint", "optimize", "frequency", "optfreq", "optfreqsp",
         "xtb_optimize",
     ):
         raise ValueError(f"No remote subprocess mapping for workflow: {wf}")
 
-    if wf == "benchmark":
-        cmd: list[str] = [py, "-m", "acp.cli", "benchmark"]
-    else:
-        cmd = [py, "-m", "acp.cli", "run", wf]
+    cmd: list[str] = [py, "-m", "acp.cli", "run", wf]
 
     inp = spec.input
     method = spec.method
@@ -130,14 +125,10 @@ def build_remote_cli_command(
     if not source:
         raise ValueError(f"{wf} job requires a valid input structure")
 
-    if wf in {"conformer", "mechanism"}:
+    if wf == "mechanism":
         cmd += ["--input", str(source), "--output", "."]
-        if wf == "conformer" and method.get("protocol"):
-            cmd += ["--protocol", str(method["protocol"])]
         if spec.name:
             cmd += ["--name", spec.name]
-        if wf == "conformer" and method.get("levels"):
-            cmd += ["--levels", json.dumps(method["levels"])]
     elif wf in {"ensemble", "energy"}:
         cmd += ["--input", str(source), "--output", "."]
         preset = censo_preset_from_method(method)
@@ -159,12 +150,6 @@ def build_remote_cli_command(
         ewin = censo_ewin_from_method(method)
         if ewin is not None:
             cmd += ["--ewin", str(ewin)]
-    elif wf == "nmr":
-        cmd += ["--input", str(source), "--output", "."]
-        if method.get("protocol"):
-            cmd += ["--protocol", str(method["protocol"])]
-        if method.get("backend"):
-            cmd += ["--backend", str(method["backend"])]
     elif wf in ("singlepoint", "optimize", "frequency", "optfreq", "optfreqsp"):
         cmd += ["--input", str(source), "--output", "."]
         if spec.name:
@@ -194,12 +179,6 @@ def build_remote_cli_command(
         sm = xtb_level.get("solvent_model")
         if sm and str(sm).lower() not in ("", "none"):
             cmd += ["--solvent-model", str(sm)]
-    else:  # benchmark
-        cmd += ["--input", str(source), "--output", "."]
-        if method.get("benchmark_level"):
-            cmd += ["--benchmark-level", str(method["benchmark_level"])]
-        if method.get("protocols"):
-            cmd += ["--protocols", str(method["protocols"])]
 
     # Resources and input chemistry (applies to all workflows).
     if config_path:

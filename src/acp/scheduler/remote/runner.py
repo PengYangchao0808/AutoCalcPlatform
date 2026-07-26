@@ -1212,7 +1212,7 @@ class RemoteJobRunner:
         if not result.get("backend_name") and spec.method.get("backend"):
             result["backend_name"] = str(spec.method["backend"])
         if not result.get("method"):
-            method = spec.method.get("protocol") or spec.method.get("benchmark_level")
+            method = spec.method.get("protocol")
             if method is not None:
                 result["method"] = str(method)
         record.result = result
