@@ -10,7 +10,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from conformer_search.qc.interfaces.crest import XTBInterface
+from cccp.qc.interfaces.xtb import XTBInterface
 from tests.conftest import requires_xtb
 
 COORDINATES = np.array([[0.0, 0.0, 0.0]])
@@ -51,7 +51,7 @@ def test_xtb_optimize_parses_mocked_run_into_qcresult(
         )
 
     with patch(
-        "conformer_search.qc.interfaces.crest.subprocess.run",
+        "cccp.qc.interfaces.xtb.subprocess.run",
         side_effect=fake_run,
     ) as mock_run:
         result = interface.optimize(COORDINATES, SYMBOLS, output_dir=tmp_path)

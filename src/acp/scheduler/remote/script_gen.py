@@ -241,7 +241,7 @@ def build_lsf_script_spec(
         input_path: Relative path to the uploaded input file (default
             ``inputs/input.xyz``).
         config_path: Optional path to a job-level YAML config on the remote
-            node (e.g. ``conformer_search.yaml`` in the job directory).
+            node (e.g. ``cccp.yaml`` in the job directory).
 
     Returns:
         ``(lsf_spec, cli_command)``.

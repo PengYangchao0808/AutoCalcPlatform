@@ -5,7 +5,7 @@ IO Package
 Input/output utilities for ConformerSearch.
 """
 
-from conformer_search.io.input_handler import (
+from cccp.io.input_handler import (
     InputFormat,
     MolecularInput,
     MolecularInputHandler,

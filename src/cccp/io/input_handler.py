@@ -266,7 +266,7 @@ class MolecularInputHandler:
         Returns:
             MolecularInput instance
         """
-        from conformer_search.utils.file_io import read_xyz, read_xyz_with_energy
+        from cccp.utils.file_io import read_xyz, read_xyz_with_energy
 
         xyz_path = Path(xyz_path)
         coordinates, symbols = read_xyz(xyz_path)
@@ -327,7 +327,7 @@ class MolecularInputHandler:
         Returns:
             MolecularInput instance
         """
-        from conformer_search.utils.file_io import read_gjf
+        from cccp.utils.file_io import read_gjf
 
         gjf_path = Path(gjf_path)
         coordinates, symbols, file_charge, file_multiplicity = read_gjf(gjf_path)
@@ -369,7 +369,7 @@ class MolecularInputHandler:
         Returns:
             MolecularInput instance
         """
-        from conformer_search.utils.geometry_tools import LogParser
+        from cccp.utils.geometry_tools import LogParser
 
         log_path = Path(log_path)
         coords, symbols, error = LogParser.extract_last_converged_coords(log_path)

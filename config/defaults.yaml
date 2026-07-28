@@ -2,7 +2,7 @@
 # ======================================
 #
 # This file matches the Python built-in defaults from
-# src/conformer_search/config.py:_get_default_config().
+# src/cccp/config.py:_get_default_config().
 # It is the SINGLE source of truth for default values when loaded
 # via load_config(); the Python built-in serves as fallback only.
 #
@@ -93,7 +93,7 @@ nmr:
 # ==================== CENSO (ensemble / energy workflows) ====================
 # Mirror of Python built-in defaults (config.py::_get_default_config).
 # This file is NOT synced to compute nodes — nodes use Python built-ins plus
-# their own ~/.conformer_search.yaml.
+# their own ~/.cccp.yaml.
 censo:
   preset: censo-light
   solvent: null

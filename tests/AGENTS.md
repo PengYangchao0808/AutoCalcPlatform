@@ -8,8 +8,8 @@ pytest test suite covering config loading, ACP core/IO/backend/workflow modules,
 tests/
 ├── __init__.py                    # Package marker (empty)
 ├── conftest.py                    # Autouse env cleanup + sample_config fixture
-├── test_config.py                 # Config merge/validate/apply (legacy conformer_search)
-├── test_conformer_search.py       # Original monolithic functional tests
+├── test_config.py                 # Config merge/validate/apply (legacy cccp)
+├── test_cccp.py       # Original monolithic functional tests
 ├── test_engine_routing.py         # Engine routing with mocks
 ├── test_acp_backends.py           # ACP backend capability + delegation tests
 ├── test_acp_cli.py                # ACP CLI smoke tests
@@ -25,7 +25,7 @@ tests/
 | Task | File | Notes |
 |------|------|-------|
 | Config testing | `test_config.py` | `_merge_configs`, `_apply_env_overrides`, `_validate_config` |
-| Functional tests | `test_conformer_search.py` | Original bugfix regression tests |
+| Functional tests | `test_cccp.py` | Original bugfix regression tests |
 | Engine routing | `test_engine_routing.py` | `patch` + `MagicMock` for `GaussianInterface`/`ORCAInterface` |
 | ACP backends | `test_acp_backends.py` | Capability checks, delegation, registry |
 | ACP config | `test_acp_config.py` | Facade imports, env override |
@@ -34,12 +34,12 @@ tests/
 ## CONVENTIONS
 - All tests via `pytest` (no pytest.ini — config in `pyproject.toml`)
 - Standard `assert` (no `self.assert*` — not unittest style)
-- Python path: `from conformer_search.*` imports (package must be installed)
+- Python path: `from cccp.*` imports (package must be installed)
 - `test_engine_routing.py` uses `unittest.mock.patch` and `MagicMock`
 - Tests run: `pytest tests/ -v`
 
 ## ANTI-PATTERNS
 - **No assertions imported** — uses raw `assert` (acceptable, but no `pytest.raises` context manager in places where it belongs)
 - **test_engine_routing.py monolithic** — 806 lines, dense mocking logic in single file
-- **test_conformer_search.py "legacy"** — 319 lines of unstructured assertions, no mocks
+- **test_cccp.py "legacy"** — 319 lines of unstructured assertions, no mocks
 - **No smoke/integration tests** — all tests are unit-level; no full-pipeline end-to-end tests

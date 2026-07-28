@@ -12,8 +12,8 @@ from numpy.typing import NDArray
 
 from acp.backends.base import QCBackend, QCResult, to_qc_result
 from acp.backends.registry import register_backend
-from conformer_search.qc.interfaces.crest import CRESTInterface
-from conformer_search.utils.file_io import read_xyz
+from cccp.qc.interfaces.crest import CRESTInterface
+from cccp.utils.file_io import read_xyz
 
 logger = logging.getLogger(__name__)
 
@@ -100,25 +100,6 @@ class CrestBackend(QCBackend):
             **kwargs,
             )
         )
-
-    def run_two_stage_search(
-        self,
-        coordinates: NDArray[np.float64],
-        symbols: list[str],
-        output_dir: Path | None = None,
-        charge: int = 0,
-        multiplicity: int = 1,
-        **kwargs: Any,
-    ) -> tuple[QCResult, QCResult]:
-        stage1_result, stage2_result = self._interface.run_two_stage_search(
-            coordinates,
-            symbols,
-            output_dir=output_dir or Path.cwd(),
-            charge=charge,
-            multiplicity=multiplicity,
-            **kwargs,
-        )
-        return to_qc_result(stage1_result), to_qc_result(stage2_result)
 
     def search(
         self,

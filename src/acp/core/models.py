@@ -19,7 +19,7 @@ import numpy as np
 HARTREE_TO_KCAL = 627.5094740631
 
 if TYPE_CHECKING:
-    from conformer_search.core.candidates import CandidateSet, ConformerCandidate
+    from cccp.core.candidates import CandidateSet, ConformerCandidate
 
 
 def zip_strict(*iterables):
@@ -141,7 +141,7 @@ class Structure:
         if self.coordinates is None:
             raise ValueError("Cannot convert Structure without coordinates")
 
-        from conformer_search.core.candidates import ConformerCandidate
+        from cccp.core.candidates import ConformerCandidate
 
         candidate_metadata = dict(self.metadata)
         candidate_metadata.setdefault("structure_id", self.id)
@@ -219,7 +219,7 @@ class StructureRecord:
         if self.coordinates is None:
             raise ValueError("Cannot convert StructureRecord without coordinates")
 
-        from conformer_search.core.candidates import ConformerCandidate
+        from cccp.core.candidates import ConformerCandidate
 
         index = _coerce_int(self.properties.get("index", 0))
         candidate_metadata = dict(self.metadata)
@@ -344,7 +344,7 @@ class StructureEnsemble:
 
     def to_candidate_set(self) -> CandidateSet:
         """Create a legacy ``CandidateSet`` from this ensemble."""
-        from conformer_search.core.candidates import CandidateSet
+        from cccp.core.candidates import CandidateSet
 
         candidates = [record.to_conformer_candidate() for record in self.records]
         reference_energy = _coerce_float(self.metadata.get("reference_energy_hartree"))

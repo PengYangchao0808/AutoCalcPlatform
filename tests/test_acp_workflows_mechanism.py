@@ -14,7 +14,7 @@ from acp.scheduler.jobs import JobSpec, SUPPORTED_WORKFLOWS
 from acp.scheduler.runner import JobRunner
 from acp.scheduler.stage_tasks import get_stage_plan
 import acp.workflows.mechanism as mechanism_workflow
-from conformer_search.config import _get_default_config
+from cccp.config import _get_default_config
 
 
 def test_get_mechanism_stages_returns_7_stages() -> None:

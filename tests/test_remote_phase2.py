@@ -1051,9 +1051,6 @@ def test_remote_config_queue_walltime():
 def main():
     tests = [
         # script_gen
-        test_build_remote_cli_command_conformer,
-        test_build_remote_cli_command_nmr,
-        test_build_remote_cli_command_benchmark,
         test_build_remote_cli_command_mechanism,
         test_build_remote_cli_command_charge_mult,
         test_build_remote_cli_command_invalid_workflow,

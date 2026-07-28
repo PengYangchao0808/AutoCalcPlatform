@@ -10,7 +10,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from conformer_search.qc.interfaces.orca import ORCAInterface
+from cccp.qc.interfaces.orca import ORCAInterface
 from tests.conftest import requires_orca
 
 COORDINATES = np.array([[0.0, 0.0, 0.0]])
@@ -65,7 +65,7 @@ def test_orca_optimize_parses_mocked_run_into_qcresult(
     )
 
     with patch(
-        "conformer_search.qc.interfaces.orca.subprocess.run",
+        "cccp.qc.interfaces.orca.subprocess.run",
         return_value=completed,
     ) as mock_run:
         result = interface.optimize(
@@ -110,7 +110,7 @@ def test_orca_nmr_shielding_parses_mocked_run_into_qcresult(
     )
 
     with patch(
-        "conformer_search.qc.interfaces.orca.subprocess.run",
+        "cccp.qc.interfaces.orca.subprocess.run",
         return_value=completed,
     ) as mock_run:
         result = interface.nmr_shielding(

@@ -7,7 +7,7 @@ import yaml
 import copy
 from pathlib import Path
 
-from conformer_search.config import (
+from cccp.config import (
     _merge_configs,
     _apply_env_overrides,
     _validate_config,

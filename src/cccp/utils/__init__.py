@@ -5,7 +5,7 @@ Utility Modules
 Common utilities for ConformerSearch.
 """
 
-from conformer_search.utils.constants import (
+from cccp.utils.constants import (
     HARTREE_TO_KCAL,
     KCAL_TO_HARTREE,
     HARTREE_TO_KJ,
@@ -15,7 +15,7 @@ from conformer_search.utils.constants import (
     ATOMIC_NUMBER,
 )
 
-from conformer_search.utils.file_io import (
+from cccp.utils.file_io import (
     read_xyz,
     write_xyz,
     read_xyz_multiframe,
@@ -28,12 +28,12 @@ from conformer_search.utils.file_io import (
     ensure_dir,
 )
 
-from conformer_search.utils.geometry_tools import (
+from cccp.utils.geometry_tools import (
     GeometryUtils,
     LogParser,
 )
 
-from conformer_search.utils.resource_utils import (
+from cccp.utils.resource_utils import (
     mem_to_mb,
     mb_to_mem_str,
     calc_orca_maxcore,
@@ -42,7 +42,7 @@ from conformer_search.utils.resource_utils import (
     ResourceManager,
 )
 
-from conformer_search.utils.solvent_map import (
+from cccp.utils.solvent_map import (
     orca_smd_solvent,
     xtb_solvent,
     SOLVENT_ALIASES,

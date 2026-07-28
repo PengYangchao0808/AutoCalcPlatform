@@ -3,9 +3,9 @@ requires = ["setuptools>=65.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "conformer-search"
+name = "acp"
 version = "1.0.0"
-description = "Automated conformer search pipeline for organic molecules"
+description = "Auto-Calc Platform: automated computational chemistry workflows (acp CLI) backed by the cccp (Computational Chemistry Connection Package) QC interface library"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -47,12 +47,11 @@ dev = [
 ]
 
 [project.scripts]
-conformer-search = "conformer_search.cli:main"
 acp = "acp.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["conformer_search*", "acp*"]
+include = ["cccp*", "acp*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

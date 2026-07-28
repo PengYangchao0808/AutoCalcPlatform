@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 import numpy as np
 
-from conformer_search.utils.file_io import read_xyz, write_xyz
-from conformer_search.utils import ensure_dir
+from cccp.utils.file_io import read_xyz, write_xyz
+from cccp.utils import ensure_dir
 
 logger = logging.getLogger(__name__)
 

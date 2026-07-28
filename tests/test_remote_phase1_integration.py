@@ -120,7 +120,7 @@ def test_codesyncer_real() -> int:
             ("src/acp/cli.py", True),
             ("src/acp/scheduler/__init__.py", False),
             ("src/acp/api/server.py", False),
-            ("src/conformer_search/cli.py", True),
+            ("src/cccp/__init__.py", True),
             ("scripts/run_g16_worker.sh", False),
             ("config/defaults.yaml", False),
         ]
@@ -144,7 +144,7 @@ def test_codesyncer_real() -> int:
             f'sys.path.insert(0, "{NODE.remote_code_dir}/src")\n'
             "from acp.cli import main\n"
             "from acp.workflows.ensemble import run_ensemble_generation\n"
-            "from conformer_search.core.engine import ConformerEngine\n"
+            "from cccp.core.engine import ConformerEngine\n"
             "print('IMPORT_OK')\n"
             "try:\n"
             "    import acp.scheduler\n"

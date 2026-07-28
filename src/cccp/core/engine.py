@@ -15,9 +15,9 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
 import numpy as np
 
-from conformer_search.utils.constants import HARTREE_TO_KCAL
+from cccp.utils.constants import HARTREE_TO_KCAL
 
-from conformer_search.core.protocols import (
+from cccp.core.protocols import (
     is_ext_protocol,
     is_full_protocol,
     is_lite_protocol,
@@ -26,25 +26,25 @@ from conformer_search.core.protocols import (
     ProtocolSpec,
     resolve_protocol_spec,
 )
-from conformer_search.core.candidates import (
+from cccp.core.candidates import (
     CandidateSet,
     ConformerCandidate,
     candidate_set_from_paths,
     clone_candidate_set,
 )
-from conformer_search.core.state_manager import ConformerStateManager
-from conformer_search.io.input_handler import MolecularInput, InputFormat
-from conformer_search.qc.interfaces import (
+from cccp.core.state_manager import ConformerStateManager
+from cccp.io.input_handler import MolecularInput, InputFormat
+from cccp.qc.interfaces import (
     ORCAInterface,
     CRESTInterface,
     XTBInterface,
     QCResult,
     XTBThermoResult,
 )
-from conformer_search.qc.runners import run_isostat, run_shermo
-from conformer_search.utils.file_io import write_xyz, read_xyz, read_xyz_multiframe
-from conformer_search.utils.geometry_tools import GeometryUtils
-from conformer_search.utils import ensure_dir
+from cccp.qc.runners import run_isostat, run_shermo
+from cccp.utils.file_io import write_xyz, read_xyz, read_xyz_multiframe
+from cccp.utils.geometry_tools import GeometryUtils
+from cccp.utils import ensure_dir
 
 logger = logging.getLogger(__name__)
 
@@ -604,7 +604,7 @@ class ConformerEngine:
         Returns:
             List of candidate XYZ paths
         """
-        from conformer_search.utils.file_io import read_xyz_multiframe
+        from cccp.utils.file_io import read_xyz_multiframe
 
         coords, symbols = read_xyz_multiframe(ensemble_xyz)
 

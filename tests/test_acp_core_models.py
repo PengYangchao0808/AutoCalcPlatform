@@ -10,7 +10,7 @@ import numpy as np
 
 from acp.core.models import Structure, StructureEnsemble, StructureRecord
 from acp.core.state import EventLog, WorkflowState
-from conformer_search.core import CandidateSet, ConformerCandidate
+from cccp.core import CandidateSet, ConformerCandidate
 
 
 def test_structure_converts_to_legacy_candidate():

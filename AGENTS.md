@@ -4,14 +4,13 @@
 **Branch:** N/A (not a git repo)
 
 ## OVERVIEW
-Automated computational chemistry platform. Two-package architecture under `src/`: legacy `conformer_search` (Phase 0) and new `acp` module (Phase 1+) with stage-based workflow pipeline. CREST → CENSO → DFT (ORCA) → Shermo thermo. Python 3.10+, setuptools, YAML config. All 4 phases implemented: conformer search + ensemble ranking + NMR + mechanism.
+Automated computational chemistry platform. Two-package architecture under `src/`: `cccp` (Computational Chemistry Connection Package — the QC interface library, formerly `conformer_search`) and the `acp` module (Phase 1+, stage-based workflow pipeline, unified CLI). CREST → CENSO → DFT (ORCA) → Shermo thermo. Python 3.10+, setuptools, YAML config. Active workflows: ensemble ranking, energy, mechanism, simple (singlepoint/opt/freq/scan/xtb-opt).
 
 ## STRUCTURE
 ```
 ACP_V1_20260519/
-├── src/conformer_search/  # Authoritative conformer-search package (17 .py; reverse-synced 2026-07-13)
-│   ├── cli.py             # argparse CLI entry point (387 lines)
-│   ├── config.py          # 6-source YAML config load/merge (677 lines)
+├── src/cccp/  # Computational Chemistry Connection Package (QC interface library; reverse-synced 2026-07-13)
+│   ├── config.py          # 6-source YAML config load/merge (677 lines; reads ~/.cccp.yaml, falls back to ~/.conformer_search.yaml)
 │   ├── version.py         # __version__
 │   ├── core/              # ConformerEngine (1764 lines), ProtocolSpec, CandidateSet, state_manager
 │   ├── qc/interfaces/     # ORCA/CREST(+XTBInterface co-located)/xtb_thermo subprocess wrappers
@@ -27,7 +26,7 @@ ACP_V1_20260519/
 │   ├── backends/          # QC backends with capability Protocols (ORCA/CREST/xTB/CENSO/Isostat/Molclus)
 │   ├── chem/              # Chemistry: RDKit embedding, XYZ tools
 │   ├── intake/            # Data ingestion: models, parsers (6 formats), storage
-│   ├── io/                # StructureReader / StructureWriter (thin conformer_search wrapper)
+│   ├── io/                # StructureReader / StructureWriter (thin cccp wrapper)
 │   ├── workflows/         # 8 workflows: conformer, ensemble, energy, nmr, mechanism, benchmark, simple, registry
 │   ├── nmr/               # Phase 3 NMR: ORCA/Gaussian GIAO parsing, Boltzmann averaging, calibration
 │   ├── reports/           # NMR report serialization (JSON/XLSX)
@@ -45,10 +44,9 @@ ACP_V1_20260519/
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| ACP CLI (recommended) | `src/acp/cli.py` | `acp run conformer|ensemble|energy|nmr|mechanism|serve|singlepoint|opt|freq|scan|xtb-opt` (1835 lines) |
-| Legacy CLI | `src/conformer_search/cli.py` | `conformer-search` flat argparse (387 lines) |
-| Add new protocol | `src/conformer_search/core/protocols.py` | Update `_get_default_protocol_config()` (610 lines) |
-| Config loading | `src/conformer_search/config.py` | 6-source merge (677 lines) |
+| ACP CLI (unified entry) | `src/acp/cli.py` | `acp run ensemble|energy|mechanism|serve|singlepoint|opt|freq|scan|xtb-opt` (1835 lines) |
+| Add new protocol | `src/cccp/core/protocols.py` | Update `_get_default_protocol_config()` (610 lines) |
+| Config loading | `src/cccp/config.py` | 6-source merge (677 lines) |
 | Config defaults (ACP) | `src/acp/core/config.py` | ACP-specific config loading (145 lines) |
 | ACP backends entry | `src/acp/backends/__init__.py` + `registry.py` | Protocol-based capability system |
 | ORCA backend | `src/acp/backends/orca.py` | ACP adapter wrapping ORCAInterface |
@@ -57,9 +55,9 @@ ACP_V1_20260519/
 | CENSO backend | `src/acp/backends/censo_backend.py` | Subprocess: presets, rcfile gen, JSON/XYZ parsing, template injection (810 lines) |
 | ISOSTAT backend | `src/acp/backends/isostat_backend.py` | Subprocess wrapper for ISOSTAT clustering (178 lines) |
 | Molclus backend | `src/acp/backends/molclus_backend.py` | xTB-MD + Molclus conformer search (478 lines) |
-| Legacy ORCA interface | `src/conformer_search/qc/interfaces/orca.py` | Subprocess via direct ORCA invocation (811 lines) |
-| Legacy CREST / xTB | `src/conformer_search/qc/interfaces/crest.py` | CRESTInterface + XTBInterface co-located (723 lines) |
-| Legacy ISOSTAT/Shermo | `src/conformer_search/qc/runners/__init__.py` | `run_isostat()`, `run_shermo()`, `batch_process_thermo()` (323 lines) |
+| Legacy ORCA interface | `src/cccp/qc/interfaces/orca.py` | Subprocess via direct ORCA invocation (811 lines) |
+| Legacy CREST / xTB | `src/cccp/qc/interfaces/crest.py` | CRESTInterface + XTBInterface co-located (723 lines) |
+| Legacy ISOSTAT/Shermo | `src/cccp/qc/runners/__init__.py` | `run_isostat()`, `run_shermo()`, `batch_process_thermo()` (323 lines) |
 | ACP conformer workflow | `src/acp/workflows/conformer.py` | Thin wrapper → `ConformerEngine.run()`; rebuilds from `all_conformers.xyz` (343 lines) |
 | Ensemble workflow | `src/acp/workflows/ensemble.py` | `acp run ensemble` — CREST → CENSO P+S (508 lines) |
 | Energy workflow | `src/acp/workflows/energy.py` | `acp run energy` — Boltzmann ≥99%, `--levels`, opt/freq same-level (1141 lines) |
@@ -74,10 +72,10 @@ ACP_V1_20260519/
 | Workflow state | `src/acp/core/state.py` | WorkflowState, EventLog (272 lines) |
 | CENSO dev doc | `docs/ACP_CENSO_Integration_DevDoc.html` | Authoritative design + P1–P5 audit history (v14: acceptance passed) |
 | Simple workflows doc | `docs/ACP_Simple_Workflows_DevDoc.html` | 5 ORCA simple workflow design |
-| Input parsing | `src/conformer_search/io/input_handler.py` | SMILES→RDKit embed; XYZ/GJF/LOG/OUT parse (425 lines) |
+| Input parsing | `src/cccp/io/input_handler.py` | SMILES→RDKit embed; XYZ/GJF/LOG/OUT parse (425 lines) |
 | ACP intake parsers | `src/acp/intake/parsers.py` | 6 format parsers: XYZ/SDF/MOL/GJF/INP/SMILES (565 lines) |
 | RDKit embedding | `src/acp/chem/embedding.py` | SMILES→RDKit embed, charge assignment, XYZ tools (381 lines) |
-| Constants / units | `src/conformer_search/utils/constants.py` | HARTREE_TO_KCAL, element masses (37 lines) |
+| Constants / units | `src/cccp/utils/constants.py` | HARTREE_TO_KCAL, element masses (37 lines) |
 | NMR models | `src/acp/nmr/models.py` | NMRAtomShielding, NMRReport, Boltzmann averaging (111 lines) |
 | NMR parsing | `src/acp/nmr/parser.py` | ORCA/Gaussian GIAO log parser (236 lines) |
 | NMR calibration | `src/acp/nmr/calibration.py` | Boltzmann averaging, reference calibration (207 lines) |
@@ -103,11 +101,11 @@ ACP_V1_20260519/
 
 ## CONVENTIONS
 - **Docstrings**: Google-style (`Args:`, `Returns:`, `Attributes:`) throughout
-- **Type annotations**: Universal; legacy `conformer_search/` uses `typing.Optional[X]`, new `acp/` uses `X | None` with `from __future__ import annotations`
-- **Imports**: stdlib → third-party (numpy, rdkit) → local (`from conformer_search...` or `from acp...`)
+- **Type annotations**: Universal; legacy `cccp/` uses `typing.Optional[X]`, new `acp/` uses `X | None` with `from __future__ import annotations`
+- **Imports**: stdlib → third-party (numpy, rdkit) → local (`from cccp...` or `from acp...`)
 - **Logging**: `logger = logging.getLogger(__name__)` in every module
 - **Dataclasses**: `@dataclass(frozen=True)` preferred for specs; mutable for data containers
-- **ABC**: `conformer_search/` uses `ABC` base; `acp/` uses structural `Protocol` (PEP 544)
+- **ABC**: `cccp/` uses `ABC` base; `acp/` uses structural `Protocol` (PEP 544)
 - **Paths**: `pathlib.Path` preferred over `os.path`
 - **Linter/formatter configured**: ruff (E/F/I/N/W/UP), ruff-format, mypy (strict), pre-commit with ruff hooks
 - **`__all__`**: All subpackage `__init__.py` files re-export public symbols
@@ -118,19 +116,19 @@ ACP_V1_20260519/
 3. **NEVER change YAML defaults without updating Python built-in** — `config/defaults.yaml` vs `_get_default_config()` diverged historically
 4. **NEVER add protocol to YAML `protocols` section** — unreachable; edit `_get_default_protocol_config()` in `protocols.py`
 5. **NEVER put implementation in `__init__.py`** — remaining: `qc/cluster/__init__.py` has `create_cluster_adapter()` factory
-6. **`__main__.py` exists for both packages** — both `python -m conformer_search` and `python -m acp` work
-7. **Two annotation styles coexist** — typing import style in conformer_search vs PEP 604 in acp
+6. **`__main__.py` exists for both packages** — both `python -m cccp` and `python -m acp` work
+7. **Two annotation styles coexist** — typing import style in cccp vs PEP 604 in acp
 8. **`CRESTInterface` has no base class** — `class CRESTInterface:` (reverse-sync restored upstream form)
 9. **`# pyright:` suppressions heavy in acp/** — 14 files suppress 6+ rules each; pyright not in toolchain
 10. **`except Exception:` bare catches** — 15 instances across 8 files silently swallow errors
-11. **`HARTREE_TO_KCAL` duplicated** — defined in `acp/core/models.py` AND `conformer_search/utils/constants.py`
-12. **`bin/conformer-search` does not exist on disk** — deprecated; directory removed
+11. **`HARTREE_TO_KCAL` duplicated** — defined in `acp/core/models.py` AND `cccp/utils/constants.py`
+12. **`conformer-search` console_script removed** — the legacy CLI (`cccp/cli.py`, `cccp/__main__.py`) was deleted; use `acp` instead. `bin/conformer-search` never existed on disk either.
 
 ## UNIQUE STYLES
 - Module docstrings: title + `====` underline + `Author: QCcalc Team`
 - ACP backends use capability Protocols (GeometryOptimizer, SinglePointCalculator, etc.) instead of ABC
 - `CRESTInterface` has no base class (`class CRESTInterface:`); `XTBInterface` co-located in `crest.py`
-- Type annotation style split: `conformer_search/` uses `typing.X`, `acp/` uses `X | None`
+- Type annotation style split: `cccp/` uses `typing.X`, `acp/` uses `X | None`
 
 ## COMMANDS
 ```bash
@@ -174,16 +172,10 @@ acp benchmark --input "CCO" --protocols ext censo-lite censo-zero
 # web server
 acp run serve --port 8765
 
-# Run (legacy entry — still works)
-conformer-search --input "CCO" --output ./out
-conformer-search --batch-file molecules.txt --output ./batch_out
-
 # Test
 pytest tests/ -v
-pytest tests/test_acp_workflows_conformer.py -v
 pytest tests/test_acp_workflows_ensemble.py -v
 pytest tests/test_acp_workflows_energy.py -v
-pytest tests/test_acp_workflows_nmr.py -v
 pytest tests/test_acp_workflows_mechanism.py -v
 pytest tests/test_acp_backends.py -v
 pytest tests/test_acp_censo_p5_acceptance.py -v

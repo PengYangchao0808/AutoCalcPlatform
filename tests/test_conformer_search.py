@@ -7,8 +7,8 @@ from pathlib import Path
 import tempfile
 import numpy as np
 
-from conformer_search.io import MolecularInput, MolecularInputHandler, InputFormat, load_batch_inputs
-from conformer_search.utils.file_io import read_xyz, read_xyz_multiframe, write_xyz_multiframe
+from cccp.io import MolecularInput, MolecularInputHandler, InputFormat, load_batch_inputs
+from cccp.utils.file_io import read_xyz, read_xyz_multiframe, write_xyz_multiframe
 
 
 class TestMolecularInputHandler:
@@ -91,7 +91,7 @@ class TestCandidateSet:
 
     def test_boltzmann_weights(self):
         """Test Boltzmann weight calculation."""
-        from conformer_search.core import CandidateSet, ConformerCandidate
+        from cccp.core import CandidateSet, ConformerCandidate
         
         candidates = [
             ConformerCandidate(index=0, coordinates=np.zeros((3, 3)), symbols=['C', 'H', 'H'], energy=0.0),
@@ -109,7 +109,7 @@ class TestCandidateSet:
 
     def test_window_selection(self):
         """Test energy window selection."""
-        from conformer_search.core import CandidateSet, ConformerCandidate
+        from cccp.core import CandidateSet, ConformerCandidate
         
         candidates = [
             ConformerCandidate(index=0, coordinates=np.zeros((3, 3)), symbols=['C', 'H', 'H'], energy=0.0),
@@ -130,7 +130,7 @@ class TestProtocols:
 
     def test_default_config(self):
         """Test default configuration loading."""
-        from conformer_search.config import _get_default_config
+        from cccp.config import _get_default_config
         
         config = _get_default_config()
         
@@ -141,7 +141,7 @@ class TestProtocols:
 
     def test_protocol_spec_resolve(self):
         """Test protocol specification resolution."""
-        from conformer_search.core import resolve_protocol_spec
+        from cccp.core import resolve_protocol_spec
         
         config = {
             'protocols': {

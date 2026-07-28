@@ -8,7 +8,7 @@ import pytest
 
 
 class TestAcpConfigFacade:
-    """ACP config module delegates to conformer_search.config correctly."""
+    """ACP config module delegates to cccp.config correctly."""
 
     def test_load_config_returns_dict(self, tmp_path, monkeypatch):
         """load_config() returns a dict with expected keys."""

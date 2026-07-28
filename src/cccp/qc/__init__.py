@@ -5,7 +5,7 @@ QC Package
 Quantum chemistry interfaces and runners.
 """
 
-from conformer_search.qc.interfaces import (
+from cccp.qc.interfaces import (
     QCInterfaceBase,
     QCResult,
     ORCAInterface,
@@ -13,13 +13,13 @@ from conformer_search.qc.interfaces import (
     XTBInterface,
 )
 
-from conformer_search.qc.runners import (
+from cccp.qc.runners import (
     run_isostat,
     run_shermo,
     batch_process_thermo,
 )
 
-from conformer_search.qc.cluster import (
+from cccp.qc.cluster import (
     ClusterAdapterBase,
     LocalClusterAdapter,
     LSFClusterAdapter,

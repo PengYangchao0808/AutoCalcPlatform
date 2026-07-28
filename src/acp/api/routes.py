@@ -155,7 +155,7 @@ def get_status(request: Request) -> StatusResponse:
 
 def _load_executables() -> dict[str, Any]:
     try:
-        from conformer_search.config import load_config
+        from cccp.config import load_config
 
         return load_config().get("executables", {})
     except Exception:

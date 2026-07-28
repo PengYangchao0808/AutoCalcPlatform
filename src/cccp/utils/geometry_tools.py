@@ -14,8 +14,8 @@ import logging
 from pathlib import Path
 import re
 
-from conformer_search.utils.file_io import read_xyz
-from conformer_search.utils.constants import ELEMENT_MASS, ATOMIC_NUMBER
+from cccp.utils.file_io import read_xyz
+from cccp.utils.constants import ELEMENT_MASS, ATOMIC_NUMBER
 
 logger = logging.getLogger(__name__)
 

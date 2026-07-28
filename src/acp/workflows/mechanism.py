@@ -14,7 +14,7 @@ from acp.core.models import HARTREE_TO_KCAL, Structure, StructureEnsemble, Struc
 from acp.core.state import WorkflowState
 from acp.core.workflow import Stage, WorkflowContext, WorkflowResult, WorkflowRunner, WorkflowSpec
 from acp.io.structures import StructureReader
-from conformer_search.config import load_config
+from cccp.config import load_config
 
 logger = logging.getLogger(__name__)
 

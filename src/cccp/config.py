@@ -18,8 +18,14 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CONFIG_NAME = "conformer_search.yaml"
-USER_CONFIG_NAME = ".conformer_search.yaml"
+DEFAULT_CONFIG_NAME = "cccp.yaml"
+USER_CONFIG_NAME = ".cccp.yaml"
+
+# Legacy filenames from the previous ``conformer_search`` package namespace.
+# Retained as fallback read targets so existing systemd deployments keep working
+# until operators migrate ~/.conformer_search.yaml -> ~/.cccp.yaml.
+_LEGACY_DEFAULT_CONFIG_NAME = "conformer_search.yaml"
+_LEGACY_USER_CONFIG_NAME = ".conformer_search.yaml"
 
 
 def _find_project_root() -> Path | None:
@@ -38,6 +44,42 @@ def _find_project_root() -> Path | None:
     return None
 
 
+def _load_user_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Merge the user-home config (~/.cccp.yaml).
+
+    Backward-compat: when ``~/.cccp.yaml`` is absent, fall back to reading the
+    legacy ``~/.conformer_search.yaml`` so existing systemd deployments keep
+    working until operators migrate the file. If both files exist, the new
+    ``~/.cccp.yaml`` wins and a WARNING is emitted (no automatic merge to avoid
+    ambiguous field conflicts).
+    """
+    user_home = Path.home()
+    new_path = user_home / USER_CONFIG_NAME
+    legacy_path = user_home / _LEGACY_USER_CONFIG_NAME
+
+    if new_path.exists():
+        if legacy_path.exists():
+            logger.warning(
+                "Old config file %s still exists alongside %s. "
+                "Please migrate and delete the old file.",
+                legacy_path, new_path,
+            )
+        with open(new_path, encoding='utf-8') as f:
+            user_config = yaml.safe_load(f) or {}
+        return _merge_configs(config, user_config)
+
+    if legacy_path.exists():
+        logger.warning(
+            "Reading legacy user config %s — please rename to %s.",
+            legacy_path, new_path,
+        )
+        with open(legacy_path, encoding='utf-8') as f:
+            user_config = yaml.safe_load(f) or {}
+        return _merge_configs(config, user_config)
+
+    return config
+
+
 def load_config(
     config_path: Path | None = None,
     overrides: dict[str, Any] | None = None,
@@ -47,8 +89,8 @@ def load_config(
     Load configuration from multiple sources, merged in order (latest wins):
 
     1. Built-in defaults (config/defaults.yaml or _get_default_config())
-    2. User home config (~/.conformer_search.yaml)
-    3. Local directory config (./conformer_search.yaml)
+    2. User home config (~/.cccp.yaml, falls back to ~/.conformer_search.yaml)
+    3. Local directory config (./cccp.yaml, falls back to ./conformer_search.yaml)
     4. Explicit config file (--config)
     5. Environment variable overrides (CONFSEARCH_*)
     6. Command-line parameter overrides
@@ -72,6 +114,7 @@ def load_config(
         possible_defaults.extend([
             Path(__file__).resolve().parent.parent.parent / 'config' / 'defaults.yaml',
             Path.cwd() / 'config' / 'defaults.yaml',
+            Path.home() / '.config' / 'cccp' / 'defaults.yaml',
             Path.home() / '.config' / 'conformer_search' / 'defaults.yaml',
         ])
         for p in possible_defaults:
@@ -87,16 +130,26 @@ def load_config(
         config = _get_default_config()
         logger.debug("Using built-in default configuration")
 
-    user_home = Path.home()
-    user_config_path = user_home / USER_CONFIG_NAME
-    if user_config_path.exists():
-        with open(user_config_path, encoding='utf-8') as f:
-            user_config = yaml.safe_load(f) or {}
-        config = _merge_configs(config, user_config)
+    config = _load_user_config(config)
 
     local_config = Path.cwd() / DEFAULT_CONFIG_NAME
+    legacy_local_config = Path.cwd() / _LEGACY_DEFAULT_CONFIG_NAME
     if local_config.exists():
+        if legacy_local_config.exists():
+            logger.warning(
+                "Old local config %s still exists alongside %s. "
+                "Please migrate and delete the old file.",
+                legacy_local_config, local_config,
+            )
         with open(local_config, encoding='utf-8') as f:
+            local_cfg = yaml.safe_load(f) or {}
+        config = _merge_configs(config, local_cfg)
+    elif legacy_local_config.exists():
+        logger.warning(
+            "Reading legacy local config %s — please rename to %s.",
+            legacy_local_config, local_config,
+        )
+        with open(legacy_local_config, encoding='utf-8') as f:
             local_cfg = yaml.safe_load(f) or {}
         config = _merge_configs(config, local_cfg)
 

@@ -10,7 +10,7 @@ Author: QCcalc Team (adapted from RPH)
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from conformer_search.core.protocols import ProtocolSpec
+from cccp.core.protocols import ProtocolSpec
 
 
 class PipelineExecutor:

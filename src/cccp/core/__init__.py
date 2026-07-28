@@ -5,14 +5,14 @@ Core Package
 Core conformer search modules.
 """
 
-from conformer_search.core.candidates import (
+from cccp.core.candidates import (
     CandidateSet,
     ConformerCandidate,
     candidate_set_from_paths,
     clone_candidate_set,
 )
-from conformer_search.core.engine import ConformerEngine
-from conformer_search.core.protocols import (
+from cccp.core.engine import ConformerEngine
+from cccp.core.protocols import (
     SUPPORTED_PROTOCOLS,
     FunnelPolicy,
     HandoffPolicy,
@@ -25,7 +25,7 @@ from conformer_search.core.protocols import (
     resolve_protocol_spec,
     validate_protocol_methods,
 )
-from conformer_search.core.state_manager import ConformerStateManager
+from cccp.core.state_manager import ConformerStateManager
 
 __all__ = [
     "ProtocolSpec",

@@ -12,15 +12,15 @@ from unittest.mock import patch, MagicMock
 from pathlib import Path
 import numpy as np
 
-from conformer_search.core.engine import ConformerEngine
-from conformer_search.core.protocols import (
+from cccp.core.engine import ConformerEngine
+from cccp.core.protocols import (
     ProtocolSpec,
     resolve_protocol_spec,
     FunnelPolicy,
     HandoffPolicy,
 )
-from conformer_search.qc.interfaces import ORCAInterface
-from conformer_search.qc.interfaces.base import QCResult
+from cccp.qc.interfaces import ORCAInterface
+from cccp.qc.interfaces.base import QCResult
 
 
 # ---------------------------------------------------------------------------
@@ -345,8 +345,8 @@ class TestOptFailureRecovery:
         fake_path = tmp_path / "fake.xyz"
         fake_path.write_text("")
 
-        with patch("conformer_search.core.engine.read_xyz", return_value=(coords, symbols)):
-            with patch("conformer_search.core.engine.ensure_dir"):
+        with patch("cccp.core.engine.read_xyz", return_value=(coords, symbols)):
+            with patch("cccp.core.engine.ensure_dir"):
                 candidate_set = engine._run_shared_dft_handoff([fake_path])
 
         assert len(candidate_set.candidates) == 1
@@ -382,8 +382,8 @@ class TestOptFailureRecovery:
         fake_path = tmp_path / "fake.xyz"
         fake_path.write_text("")
 
-        with patch("conformer_search.core.engine.read_xyz", return_value=(coords, symbols)):
-            with patch("conformer_search.core.engine.ensure_dir"):
+        with patch("cccp.core.engine.read_xyz", return_value=(coords, symbols)):
+            with patch("cccp.core.engine.ensure_dir"):
                 candidate_set = engine._run_shared_dft_handoff([fake_path])
 
         assert len(candidate_set.candidates) == 1
@@ -433,8 +433,8 @@ class TestFreqFailureRecovery:
         fake_path = tmp_path / "fake.xyz"
         fake_path.write_text("")
 
-        with patch("conformer_search.core.engine.read_xyz", return_value=(coords, symbols)):
-            with patch("conformer_search.core.engine.ensure_dir"):
+        with patch("cccp.core.engine.read_xyz", return_value=(coords, symbols)):
+            with patch("cccp.core.engine.ensure_dir"):
                 candidate_set = engine._run_shared_dft_handoff([fake_path])
 
         assert len(candidate_set.candidates) == 1
@@ -481,9 +481,9 @@ class TestFreqFailureRecovery:
         fake_path = tmp_path / "fake.xyz"
         fake_path.write_text("")
 
-        with patch("conformer_search.core.engine.read_xyz", return_value=(coords, symbols)):
-            with patch("conformer_search.core.engine.ensure_dir"):
-                with patch("conformer_search.core.engine.run_shermo") as mock_shermo:
+        with patch("cccp.core.engine.read_xyz", return_value=(coords, symbols)):
+            with patch("cccp.core.engine.ensure_dir"):
+                with patch("cccp.core.engine.run_shermo") as mock_shermo:
                     engine._run_shared_dft_handoff([fake_path])
 
         engine.sp_interface.single_point.assert_called_once()
@@ -547,9 +547,9 @@ class TestFullSuccessPath:
             "s_total": 0.01,
         }
 
-        with patch("conformer_search.core.engine.read_xyz", return_value=(coords, symbols)):
-            with patch("conformer_search.core.engine.ensure_dir"):
-                with patch("conformer_search.core.engine.run_shermo", return_value=shermo_returns):
+        with patch("cccp.core.engine.read_xyz", return_value=(coords, symbols)):
+            with patch("cccp.core.engine.ensure_dir"):
+                with patch("cccp.core.engine.run_shermo", return_value=shermo_returns):
                     candidate_set = engine._run_shared_dft_handoff([fake_path])
 
         assert len(candidate_set.candidates) == 1
@@ -596,9 +596,9 @@ class TestFullSuccessPath:
         fake_path = tmp_path / "fake.xyz"
         fake_path.write_text("")
 
-        with patch("conformer_search.core.engine.read_xyz", return_value=(coords, symbols)):
-            with patch("conformer_search.core.engine.ensure_dir"):
-                with patch("conformer_search.core.engine.run_shermo", return_value=None):
+        with patch("cccp.core.engine.read_xyz", return_value=(coords, symbols)):
+            with patch("cccp.core.engine.ensure_dir"):
+                with patch("cccp.core.engine.run_shermo", return_value=None):
                     candidate_set = engine._run_shared_dft_handoff([fake_path])
 
         assert len(candidate_set.candidates) == 1
@@ -642,8 +642,8 @@ class TestFullSuccessPath:
         fake_path = tmp_path / "fake.xyz"
         fake_path.write_text("")
 
-        with patch("conformer_search.core.engine.read_xyz", return_value=(coords, symbols)):
-            with patch("conformer_search.core.engine.ensure_dir"):
+        with patch("cccp.core.engine.read_xyz", return_value=(coords, symbols)):
+            with patch("cccp.core.engine.ensure_dir"):
                 candidate_set = engine._run_shared_dft_handoff([fake_path])
 
         assert len(candidate_set.candidates) == 1

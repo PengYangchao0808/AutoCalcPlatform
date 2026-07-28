@@ -30,7 +30,7 @@ from acp.backends.external import batch_process_thermo, run_isostat, run_shermo
 from acp.backends.orca import ORCAInterface
 from acp.backends.registry import get_backend, require_backend
 from acp.backends.xtb import XTBInterface
-from conformer_search.qc.interfaces import CRESTInterface
+from cccp.qc.interfaces import CRESTInterface
 from tests.conftest import requires_isostat, requires_shermo
 
 
@@ -116,19 +116,72 @@ def test_xtb_backend_delegates_to_interface(tmp_path: Path) -> None:
     mock_sp.assert_called_once()
 
 
+def test_crest_backend_search_returns_ensemble_path(tmp_path: Path) -> None:
+    config = _make_config()
+    backend = CrestBackend(config)
+
+    initial_xyz = tmp_path / "mol.xyz"
+    initial_xyz.write_text("1\nt\nH 0 0 0\n", encoding="utf-8")
+    ensemble_xyz = tmp_path / "crest_conformers.xyz"
+    expected = QCResult(success=True, output_file=ensemble_xyz)
+
+    with patch.object(CrestBackend, "run_conformer_search", return_value=expected) as mock_run:
+        result = backend.search(
+            initial_xyz,
+            charge=-1,
+            multiplicity=2,
+            output_dir=tmp_path,
+            energy_window=4.5,
+        )
+
+    assert result == ensemble_xyz
+    kwargs = mock_run.call_args.kwargs
+    assert kwargs["output_dir"] == tmp_path
+    assert kwargs["output_name"] == "mol"
+    assert kwargs["charge"] == -1
+    assert kwargs["multiplicity"] == 2
+    assert kwargs["energy_window"] == 4.5
+
+
+def test_crest_backend_search_raises_on_failure(tmp_path: Path) -> None:
+    config = _make_config()
+    backend = CrestBackend(config)
+
+    initial_xyz = tmp_path / "mol.xyz"
+    initial_xyz.write_text("1\nt\nH 0 0 0\n", encoding="utf-8")
+    failed = QCResult(success=False, error_message="CREST exploded")
+
+    with patch.object(CrestBackend, "run_conformer_search", return_value=failed):
+        with pytest.raises(RuntimeError, match="CREST exploded"):
+            backend.search(initial_xyz, output_dir=tmp_path)
+
+
+def test_crest_backend_search_raises_without_output_file(tmp_path: Path) -> None:
+    config = _make_config()
+    backend = CrestBackend(config)
+
+    initial_xyz = tmp_path / "mol.xyz"
+    initial_xyz.write_text("1\nt\nH 0 0 0\n", encoding="utf-8")
+    orphan = QCResult(success=True, output_file=None)
+
+    with patch.object(CrestBackend, "run_conformer_search", return_value=orphan):
+        with pytest.raises(RuntimeError, match="without an ensemble output file"):
+            backend.search(initial_xyz, output_dir=tmp_path)
+
+
 def test_legacy_interface_imports_remain_available() -> None:
     assert ORCAInterface.__name__ == "ORCAInterface"
     assert CRESTInterface.__name__ == "CRESTInterface"
 
 
 def test_external_runner_exports_match_legacy_exports() -> None:
-    from conformer_search.qc.runners import (
+    from cccp.qc.runners import (
         batch_process_thermo as legacy_batch_process_thermo,
     )
-    from conformer_search.qc.runners import (
+    from cccp.qc.runners import (
         run_isostat as legacy_run_isostat,
     )
-    from conformer_search.qc.runners import (
+    from cccp.qc.runners import (
         run_shermo as legacy_run_shermo,
     )
 

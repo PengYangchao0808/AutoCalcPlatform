@@ -259,7 +259,7 @@ def test_constants_match_plan():
 
 def test_lazy_resolver_cache_returns_same_callable():
     """Plan §14.2: lazy cache must not re-import per call."""
-    from conformer_search.qc.interfaces.orca import _get_resolver
+    from cccp.qc.interfaces.orca import _get_resolver
 
     a = _get_resolver()
     b = _get_resolver()

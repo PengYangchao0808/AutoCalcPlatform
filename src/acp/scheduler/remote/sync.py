@@ -7,7 +7,8 @@ The sync set is:
 
 * ``src/acp/`` — **excluding** the ``api/`` and ``scheduler/`` sub-packages
   (not needed on the execution side).
-* ``src/conformer_search/`` — the full legacy package.
+* ``src/cccp/`` — the full QC interface library (Computational Chemistry
+  Connection Package; formerly ``conformer_search``).
 * ``requirements-node.txt`` — the execution-node runtime dependency list,
   consumed by :meth:`NodeManager.bootstrap_node` to install deps on the node
   (see plan "node config portability").  Synced so the dependency set
@@ -96,8 +97,8 @@ def _build_sync_file_list(project_root: Path) -> list[Path]:
     if acp_root.is_dir():
         files.extend(_walk_dir(acp_root, exclude_dirs=_ACP_EXCLUDE_DIRS | _EXCLUDE_DIR_NAMES))
 
-    # 2. src/conformer_search/ — full
-    cs_root = project_root / "src" / "conformer_search"
+    # 2. src/cccp/ — full QC interface library (formerly conformer_search)
+    cs_root = project_root / "src" / "cccp"
     if cs_root.is_dir():
         files.extend(_walk_dir(cs_root, exclude_dirs=_EXCLUDE_DIR_NAMES))
 

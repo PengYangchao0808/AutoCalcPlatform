@@ -48,7 +48,7 @@ def _build_config(args: argparse.Namespace) -> dict[str, Any]:
     config: dict[str, Any] = {}
 
     if args.config:
-        from conformer_search.config import load_config as legacy_load
+        from cccp.config import load_config as legacy_load
 
         config = legacy_load(config_path=Path(args.config))
 
@@ -1004,7 +1004,7 @@ def _handle_ensemble(args: argparse.Namespace) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if args.save_config:
-        from conformer_search.config import save_config as save_cfg
+        from cccp.config import save_config as save_cfg
         save_cfg(cfg, Path(args.save_config))
         logger.info("Configuration saved to: %s", args.save_config)
 
@@ -1053,7 +1053,7 @@ def _handle_ensemble_batch(
 ) -> int:
     """Run ensemble generation for multiple molecules (batch mode)."""
     from acp.workflows.ensemble import run_ensemble_generation
-    from conformer_search.io import load_batch_inputs
+    from cccp.io import load_batch_inputs
 
     logger.info("ACP ensemble workflow — batch mode")
     batch_file = Path(args.batch_file)
@@ -1146,7 +1146,7 @@ def _handle_energy(args: argparse.Namespace) -> int:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if args.save_config:
-        from conformer_search.config import save_config as save_cfg
+        from cccp.config import save_config as save_cfg
         save_cfg(cfg, Path(args.save_config))
         logger.info("Configuration saved to: %s", args.save_config)
 
@@ -1197,7 +1197,7 @@ def _handle_energy_batch(
 ) -> int:
     """Run the conformer energy workflow for multiple molecules (batch mode)."""
     from acp.workflows.energy import run_conformer_energy
-    from conformer_search.io import load_batch_inputs
+    from cccp.io import load_batch_inputs
 
     logger.info("ACP energy workflow — batch mode")
     batch_file = Path(args.batch_file)

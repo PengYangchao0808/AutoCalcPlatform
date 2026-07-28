@@ -18,11 +18,11 @@ from typing import Any, Optional
 
 import numpy as np
 
-from conformer_search.qc.interfaces.base import QCInterfaceBase, QCResult
-from conformer_search.utils import ensure_dir
-from conformer_search.utils.geometry_tools import LogParser
-from conformer_search.utils.resource_utils import calc_orca_maxcore, mem_to_mb
-from conformer_search.utils.solvent_map import orca_smd_solvent
+from cccp.qc.interfaces.base import QCInterfaceBase, QCResult
+from cccp.utils import ensure_dir
+from cccp.utils.geometry_tools import LogParser
+from cccp.utils.resource_utils import calc_orca_maxcore, mem_to_mb
+from cccp.utils.solvent_map import orca_smd_solvent
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ def _resolve_method_meta(method: Optional[str]) -> Optional[dict[str, Any]]:
     """Look up ``METHOD_META`` for *method* (case-insensitive).
 
     Returns ``None`` if ``acp.catalog`` is unavailable or *method* is not
-    declared. Imported lazily so that ``conformer_search`` has no
+    declared. Imported lazily so that ``cccp`` has no
     import-time dependency on the ``acp`` package.
     """
     if not method:
@@ -44,7 +44,7 @@ def _resolve_method_meta(method: Optional[str]) -> Optional[dict[str, Any]]:
 
 
 # --- Hessian resolver (lazy import + module-level cache) -------------------
-# ``conformer_search`` must not import ``acp.chem`` at module load time
+# ``cccp`` must not import ``acp.chem`` at module load time
 # (reverse-dependency). The resolver is pulled in on first use and cached
 # so conformer-batch invocations do not re-import per frame. Mirrors the
 # existing ``_resolve_method_meta`` pattern.

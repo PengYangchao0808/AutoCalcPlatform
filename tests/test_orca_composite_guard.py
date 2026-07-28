@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from conformer_search.qc.interfaces.orca import ORCAInterface
+from cccp.qc.interfaces.orca import ORCAInterface
 
 
 @pytest.fixture

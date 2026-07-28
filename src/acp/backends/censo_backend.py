@@ -18,7 +18,7 @@ import numpy as np
 
 from acp.backends.base import ConformerSearcher, QCBackend
 from acp.backends.registry import register_backend
-from conformer_search.utils.file_io import read_xyz_multiframe
+from cccp.utils.file_io import read_xyz_multiframe
 
 logger = logging.getLogger(__name__)
 

@@ -12,7 +12,7 @@ from numpy.typing import NDArray
 
 from acp.backends.base import QCBackend, QCResult, to_qc_result
 from acp.backends.registry import register_backend
-from conformer_search.qc.interfaces.orca import ORCAInterface
+from cccp.qc.interfaces.orca import ORCAInterface
 
 logger = logging.getLogger(__name__)
 

@@ -1,46 +1,41 @@
 # acp/workflows/ — Workflow Modules
 
 ## OVERVIEW
-Stage-based workflow implementations. 4 workflows: conformer search (7 stage functions, 5 protocol variants), NMR prediction, benchmark, and mechanism (TS + IRC). 5 files, ~1200 lines total.
+Stage-based workflow implementations for the active ACP workflows. 4 user-facing workflows — ensemble, energy, mechanism, simple — plus a registry that maps CLI subcommands to `WorkflowSpec` builders. 7 files, ~2800 lines. The retired conformer/nmr/benchmark workflows were removed in 2026-07-27 (catalog entries kept as `status:"retired"` for historical-job display only).
 
 ## STRUCTURE
 ```
 workflows/
-├── __init__.py      # Re-exports run_conformer_search, run_nmr_calculation, run_benchmark
-├── conformer.py     # 7 stage functions + get_protocol_stages() + run_conformer_search() (465 lines)
-├── nmr.py           # run_nmr_calculation() + stage_nmr_build_report() + ORCA rejection
-├── benchmark.py     # BenchmarkRunner + run_benchmark() (multi-protocol comparison)
-└── mechanism.py     # TS search + IRC validation (now implemented)
+├── __init__.py      # PEP 562 lazy re-exports (import acp.workflows is cheap/side-effect free)
+├── _helpers.py      # Small shared helpers
+├── registry.py      # CLI subcommand → WorkflowSpec builder mapping (SUPPORTED_WORKFLOWS-driven)
+├── ensemble.py      # `acp run ensemble` — CREST → CENSO preset+screening (499 lines)
+├── energy.py        # `acp run energy` — Boltzmann ≥99%, opt/freq same-level handoff (1156 lines)
+├── mechanism.py     # `acp run mechanism` — TS search + IRC validation (394 lines)
+└── simple.py        # `acp run singlepoint|opt|freq|optfreq|optfreqsp|scan|xtb-opt` (571 lines)
 ```
 
 ## WHERE TO LOOK
 | Task | File | Notes |
 |------|------|-------|
-| Conformer entry | `conformer.py` | `run_conformer_search()` — main entry point called by `acp cli` |
-| Protocol resolution | `conformer.py` | `get_protocol_stages()` maps protocol name to stage list |
-| Stage: embed | `conformer.py` | `stage_embed_smiles()` — RDKit embedding or file copy |
-| Stage: CREST | `conformer.py` | `stage_crest_search()` — GFN0→GFN2 two-stage or single |
-| Stage: cluster | `conformer.py` | `stage_isostat_cluster()` — ISOSTAT → split ensemble |
-| Stage: DFT opt | `conformer.py` | `stage_dft_optimize()` — full/shared handoff via legacy engine |
-| Stage: SP | `conformer.py` | `stage_single_point()` — zero-protocol SP pipeline |
-| Stage: frequency | `conformer.py` | `stage_frequency()` — structural no-op (freq inside handoff) |
-| Stage: thermo | `conformer.py` | `stage_shermo_thermo()` — structural no-op (thermo inside handoff) |
-| Boltzmann weighting | `conformer.py` | `boltzmann_weight_ensemble()` — free energy based |
-| Finalization | `conformer.py` | `_finalize_conformer_results()` — delegates to legacy engine |
-| NMR workflow | `nmr.py` | `run_nmr_calculation()` — dispatches to Gaussian; ORCA raises NotImplementedError |
-| Benchmark | `benchmark.py` | `run_benchmark()` — runs multiple protocols for comparison |
-| Mechanism TS | `mechanism.py` | TS search + IRC validation + energy barrier calculation |
+| Ensemble entry | `ensemble.py` | `run_ensemble_generation()` — CREST conformer search → CENSO refine |
+| Energy entry | `energy.py` | `run_conformer_energy()` — CENSO screening → cumulative-Boltzmann selection → DFT handoff (opt/freq same-level) + Shermo |
+| CREST call | `ensemble.py` / `energy.py` | Go through `get_backend("crest")(...).search(...)` (Phase C wiring; do NOT bypass the backend layer with `CRESTInterface` directly) |
+| Rank1 DFT handoff | `energy.py` | `_run_rank1_handoff()` — opt → sp → freq → Shermo on one conformer |
+| Conformer candidate dict | `energy.py` | `_censo_record_to_candidate()` — cheap --no-opt path; `source` preserves the CENSO `conf_id` (e.g. `CONF1`) |
+| Boltzmann selection | `energy.py` | `_select_cumulative_boltzmann()` / `_boltzmann_weights()` |
+| Mechanism TS | `mechanism.py` | `run_mechanism_analysis()` — TS search + IRC validation + energy barrier |
 | Mechanism energy | `mechanism.py` | `_compute_energy_barrier()` — barrier in kcal/mol |
+| Simple workflows | `simple.py` | `run_singlepoint` / `run_optimize` / `run_frequency` / `run_optfreq` / `run_optfreqsp` — single-structure ORCA tasks |
+| CLI → workflow mapping | `registry.py` | `list_workflow_entries()` / `get_workflow_entry()` — driven by `catalog.SUPPORTED_WORKFLOWS`; conformer/nmr/benchmark intentionally absent |
 
 ## CONVENTIONS
-- **Stage function signature**: `(ctx: WorkflowContext, data: StructureEnsemble, **params) -> StructureEnsemble`
-- **Pipeline orchestration**: `WorkflowRunner` executes stages sequentially from `WorkflowSpec`
-- **5 protocols**: `ext` (default), `full`, `lite`, `zero`, `benchmark` — each produces different stage lists
-- **Legacy delegation**: Core computation delegated to `conformer_search.core.engine.ConformerEngine`
-- **Cached engine**: `_ensure_engine()` creates/caches `ConformerEngine` in `ctx.backends` dict
+- **Lazy loading**: `__init__.py` uses PEP 562 `__getattr__` + `_LAZY_SOURCES` so importing one workflow does not pull in the others (keeps third-party deps decoupled).
+- **Backend layer**: QC execution goes through `acp.backends` adapters (`get_backend(...)`), never the raw `cccp.qc.interfaces` classes, from the workflow layer.
+- **Config**: `cccp.config.load_config()` resolves the merged config; workflows receive it as a dict.
+- **Retired workflows**: `conformer` / `nmr` / `benchmark` were removed; their `catalog.WORKFLOW_CATALOG` entries remain with `status:"retired"` + `visible:False` so historical jobs still render. Do not re-add registry entries for them.
 
 ## ANTI-PATTERNS
-- **Structural no-op stages**: `stage_frequency` and `stage_shermo_thermo` are pass-throughs — actual work happens inside the DFT handoff. Added for future decoupling but currently misleading.
-- **Heavy legacy coupling**: ConformerEngine internals accessed via underscore methods (`_step_crest_search`, `_run_shared_dft_handoff`, `_finalize_results`)
-- **Engine caching in backends dict**: `_ensure_engine()` stores engine in `ctx.backends[_ENGINE_KEY]` — semantic misuse of "backends" namespace
-- **Protocol logic split**: Protocol-to-stage mapping in `conformer.py` duplicates logic from `conformer_search.core.protocols.resolve_protocol_spec()`
+- **energy.py size**: 1156 lines — the handoff + boltzmann + writers + entry point all co-located; candidate for future split.
+- **`# pyright:` suppressions**: a few type-checking rules suppressed; pyright is not in the project toolchain.
+- **`CrestBackend.optimize()` / a few Protocol methods raise `NotImplementedError`** but structurally satisfy their capability Protocol (`isinstance(...)` is True) — capability declaration vs actual usability mismatch (pre-existing, not introduced by the workflow retire).

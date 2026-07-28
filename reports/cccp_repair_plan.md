@@ -21,7 +21,7 @@
 | `allopt` 未禁止 funnel 删除 | **P1** | 无协议级断言 |
 | `SearchBackend` 是装饰性标签 | **P1** | `stage_crest_search` 无条件调用 CREST |
 | 无 `molclus_backend.py` / `isostat_backend.py` | **P2** | 文件不存在 |
-| `ExternalBackend.conformer_search` = NOT_IMPL | **P2** | 能力矩阵确认 |
+| `ExternalBackend.cccp` = NOT_IMPL | **P2** | 能力矩阵确认 |
 
 **核心判断**：当前版本是"带 CENSO 路由的旧 CREST-DFT 引擎外壳"，不是最终设计的协议系统。
 
@@ -324,7 +324,7 @@ def stage_search(ctx, data, **params):
 
 新增 `molclus` 行到 `CAPABILITY_MATRIX`：
 
-| Backend | conformer_search | clustering |
+| Backend | cccp | clustering |
 |---------|-----------------|------------|
 | molclus | AVAILABLE | AVAILABLE (via isostat) |
 | isostat | NOT_IMPL | AVAILABLE |
@@ -369,7 +369,7 @@ def test_censo_full_outputs_boltzmann_ensemble():
 def test_reference_sp_requires_existing_ensemble():
     """reference-sp 拒绝 SMILES 输入，要求现有 ensemble。"""
     with pytest.raises(SystemExit, match="requires an existing conformer ensemble"):
-        run_conformer_search(input="CCO", protocol="reference-sp")
+        run_cccp(input="CCO", protocol="reference-sp")
 
 def test_ext_uses_molclus_backend_not_crest():
     """ext 协议调用 MolclusBackend，不调用 CREST。"""

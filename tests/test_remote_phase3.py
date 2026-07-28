@@ -201,7 +201,7 @@ def make_node(name="compute-01", **kw):
 
 def test_builtin_cluster_config_has_remote_fields():
     """The built-in default config must include the new remote-execution keys."""
-    from conformer_search.config import _get_default_config
+    from cccp.config import _get_default_config
 
     cluster = _get_default_config()["cluster"]
     assert cluster["execution_mode"] == "local"
@@ -428,7 +428,7 @@ def test_manager_shutdown_closes_ssh_pool():
 def test_load_remote_config_succeeds():
     """The server's _load_remote_config returns a valid RemoteExecutionConfig.
 
-    The actual execution_mode depends on ~/.conformer_search.yaml; we only
+    The actual execution_mode depends on ~/.cccp.yaml; we only
     verify the function runs without error and returns a usable config.
     """
     try:
@@ -447,7 +447,7 @@ def test_load_remote_config_degrades_on_exception():
         import acp.api.server as srv
     except ImportError:
         pytest.skip("fastapi not installed")
-    with patch("conformer_search.config.load_config", side_effect=RuntimeError("boom")):
+    with patch("cccp.config.load_config", side_effect=RuntimeError("boom")):
         cfg = srv._load_remote_config()
     assert cfg.execution_mode == "local"
 

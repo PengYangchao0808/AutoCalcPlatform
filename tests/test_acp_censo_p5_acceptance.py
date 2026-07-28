@@ -26,7 +26,7 @@ from acp.scheduler.jobs import (
     censo_solvent_from_method,
 )
 from acp.workflows.energy import _resolve_levels
-from conformer_search.qc.interfaces.orca import ORCAInterface
+from cccp.qc.interfaces.orca import ORCAInterface
 
 
 def _make_config(**overrides: Any) -> dict[str, Any]:
@@ -486,7 +486,7 @@ def test_probe_missing_censo_raises_with_config_hint() -> None:
         RemoteJobRunner._probe_required_binaries(stub, _fake_node(), spec, log, "job-x")
     msg = str(exc_info.value)
     assert "censo" in msg.lower()
-    assert "~/.conformer_search.yaml" in msg
+    assert "~/.cccp.yaml" in msg
     assert "executables.censo.path" in msg
     assert any(e[0] == "remote.binary_probe" for e in log.events)
 
@@ -920,15 +920,16 @@ def test_ensemble_ewin_reaches_crest(tmp_path: Path) -> None:
 
     def fake_search(**kwargs: Any):
         out_dir = Path(kwargs["output_dir"])
-        (out_dir / "crest_conformers.xyz").write_text(
+        ensemble = out_dir / "crest_conformers.xyz"
+        ensemble.write_text(
             "1\n-1.00000000\nH 0 0 0\n1\n-1.00010000\nH 0 0 1\n"
         )
-        return MagicMock(success=True, error_message=None)
+        return ensemble
 
-    with patch("acp.workflows.ensemble.CRESTInterface") as crest_cls:
-        iface = MagicMock()
-        iface.run_conformer_search.side_effect = fake_search
-        crest_cls.return_value = iface
+    with patch("acp.workflows.ensemble.get_backend") as mock_get_backend:
+        backend = MagicMock()
+        backend.search.side_effect = fake_search
+        mock_get_backend.return_value = MagicMock(return_value=backend)
 
         result = run_ensemble_generation(
             input_source=str(single_xyz),
@@ -940,7 +941,8 @@ def test_ensemble_ewin_reaches_crest(tmp_path: Path) -> None:
         )
 
     assert result.status == "completed"
-    assert iface.run_conformer_search.call_args.kwargs["energy_window"] == pytest.approx(4.5)
+    mock_get_backend.assert_called_with("crest")
+    assert backend.search.call_args.kwargs["energy_window"] == pytest.approx(4.5)
     assert result.metadata["crest_ewin"] == pytest.approx(4.5)
 
 
@@ -956,8 +958,9 @@ def test_energy_levels_ewin_reaches_crest(tmp_path: Path) -> None:
 
     def fake_search(**kwargs: Any):
         out_dir = Path(kwargs["output_dir"])
-        (out_dir / "crest_conformers.xyz").write_text("1\n-1.00000000\nH 0 0 0\n")
-        return MagicMock(success=True, error_message=None)
+        ensemble = out_dir / "crest_conformers.xyz"
+        ensemble.write_text("1\n-1.00000000\nH 0 0 0\n")
+        return ensemble
 
     orca = MagicMock()
     orca.optimize.return_value = MagicMock(
@@ -974,13 +977,13 @@ def test_energy_levels_ewin_reaches_crest(tmp_path: Path) -> None:
                  "u_sum": -1.01, "s_total": 0.03}
 
     with (
-        patch("acp.workflows.energy.CRESTInterface") as crest_cls,
+        patch("acp.workflows.energy.get_backend") as mock_get_backend,
         patch("acp.workflows.energy.ORCAInterface", return_value=orca),
         patch("acp.workflows.energy.run_shermo", return_value=dict(shermo_ok)),
     ):
-        iface = MagicMock()
-        iface.run_conformer_search.side_effect = fake_search
-        crest_cls.return_value = iface
+        backend = MagicMock()
+        backend.search.side_effect = fake_search
+        mock_get_backend.return_value = MagicMock(return_value=backend)
 
         result = run_conformer_energy(
             input_source=str(single_xyz),
@@ -992,7 +995,8 @@ def test_energy_levels_ewin_reaches_crest(tmp_path: Path) -> None:
         )
 
     assert result.status == "completed"
-    assert iface.run_conformer_search.call_args.kwargs["energy_window"] == pytest.approx(4.0)
+    mock_get_backend.assert_called_with("crest")
+    assert backend.search.call_args.kwargs["energy_window"] == pytest.approx(4.0)
     assert result.metadata["crest_ewin"] == pytest.approx(4.0)
 
 

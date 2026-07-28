@@ -6,7 +6,7 @@ ACP Configuration
 ACP-native configuration facade for the Auto-Calc Platform.
 
 Phase 1 keeps the authoritative configuration implementation in
-``conformer_search.config``. This module provides a stable ACP import path with
+``cccp.config``. This module provides a stable ACP import path with
 typed helper functions that delegate to the legacy configuration layer.
 """
 
@@ -43,11 +43,11 @@ def _normalize_path(path: Path | str | None) -> Path | None:
 def __getattr__(name: str) -> str:
     """Lazily expose selected legacy configuration constants."""
     if name == "DEFAULT_CONFIG_NAME":
-        from conformer_search.config import DEFAULT_CONFIG_NAME as legacy_default_config_name
+        from cccp.config import DEFAULT_CONFIG_NAME as legacy_default_config_name
 
         return legacy_default_config_name
     if name == "USER_CONFIG_NAME":
-        from conformer_search.config import USER_CONFIG_NAME as legacy_user_config_name
+        from cccp.config import USER_CONFIG_NAME as legacy_user_config_name
 
         return legacy_user_config_name
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -68,8 +68,8 @@ def load_config(
     Returns:
         Fully merged and validated configuration dictionary.
     """
-    logger.debug("Loading ACP configuration via conformer_search.config")
-    from conformer_search.config import load_config as legacy_load_config
+    logger.debug("Loading ACP configuration via cccp.config")
+    from cccp.config import load_config as legacy_load_config
 
     return legacy_load_config(
         config_path=_normalize_path(config_path),
@@ -85,8 +85,8 @@ def save_config(config: ConfigDict, output_path: Path | str) -> None:
         config: Configuration dictionary to serialize.
         output_path: Destination YAML file path.
     """
-    logger.debug("Saving ACP configuration via conformer_search.config")
-    from conformer_search.config import save_config as legacy_save_config
+    logger.debug("Saving ACP configuration via cccp.config")
+    from cccp.config import save_config as legacy_save_config
 
     legacy_save_config(config, Path(output_path))
 
@@ -97,7 +97,7 @@ def get_default_config() -> ConfigDict:
     Returns:
         Built-in default configuration dictionary.
     """
-    from conformer_search.config import _get_default_config
+    from cccp.config import _get_default_config
 
     return _get_default_config()
 
@@ -112,7 +112,7 @@ def merge_configs(base: ConfigDict, override: ConfigDict) -> ConfigDict:
     Returns:
         Merged configuration dictionary.
     """
-    from conformer_search.config import _merge_configs
+    from cccp.config import _merge_configs
 
     return _merge_configs(base, override)
 
@@ -126,7 +126,7 @@ def validate_config(config: ConfigDict) -> ConfigDict:
     Returns:
         Validated configuration dictionary.
     """
-    from conformer_search.config import _validate_config
+    from cccp.config import _validate_config
 
     return _validate_config(config)
 
@@ -140,6 +140,6 @@ def apply_env_overrides(config: ConfigDict) -> ConfigDict:
     Returns:
         Configuration dictionary with environment overrides applied.
     """
-    from conformer_search.config import _apply_env_overrides
+    from cccp.config import _apply_env_overrides
 
     return _apply_env_overrides(config)

@@ -951,8 +951,15 @@ class RemoteJobRunner:
         "cfg = {}\n"
         "try:\n"
         "    import yaml\n"
-        "    with open(os.path.expanduser('~/.conformer_search.yaml')) as fh:\n"
-        "        cfg = yaml.safe_load(fh) or {}\n"
+        "    cfg_path = None\n"
+        "    for cand in ('~/.cccp.yaml', '~/.conformer_search.yaml'):\n"
+        "        p = os.path.expanduser(cand)\n"
+        "        if os.path.isfile(p):\n"
+        "            cfg_path = p\n"
+        "            break\n"
+        "    if cfg_path:\n"
+        "        with open(cfg_path) as fh:\n"
+        "            cfg = yaml.safe_load(fh) or {}\n"
         "except Exception:\n"
         "    cfg = {}\n"
         "exes = cfg.get('executables') or {}\n"
@@ -985,8 +992,9 @@ class RemoteJobRunner:
     ) -> None:
         """Probe workflow-required binaries on *node* before submission.
 
-        Resolves each binary via the node-local ``~/.conformer_search.yaml``
-        (``executables.<name>.path``) falling back to a PATH lookup in a
+        Resolves each binary via the node-local ``~/.cccp.yaml``
+        (``executables.<name>.path``; falls back to ``~/.conformer_search.yaml``)
+        falling back to a PATH lookup in a
         login shell. A missing ``censo`` raises
         :class:`RemoteNodeUnavailableError` with configuration guidance
         (acceptance gate 10); other missing binaries only log a warning —
@@ -1051,7 +1059,7 @@ class RemoteJobRunner:
                 f"(configured path: {configured!r}). Install it on the node "
                 f"(Python >= 3.12: `pip install censo`; otherwise create a "
                 f"dedicated venv) and set `executables.censo.path` in the "
-                f"node-side ~/.conformer_search.yaml, e.g.\n"
+                f"node-side ~/.cccp.yaml, e.g.\n"
                 f"  executables:\n"
                 f"    censo:\n"
                 f"      path: /home/<user>/censo-venv/bin/censo"
@@ -1060,7 +1068,7 @@ class RemoteJobRunner:
         for name in missing:
             logger.warning(
                 "Node %s: required binary %r not resolved from login shell "
-                "PATH or ~/.conformer_search.yaml — assuming the LSF job "
+                "PATH or ~/.cccp.yaml — assuming the LSF job "
                 "environment provides it",
                 node.name,
                 name,

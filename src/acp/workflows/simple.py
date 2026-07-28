@@ -19,7 +19,7 @@ from acp.core.utils import ensure_unique_dir
 from acp.core.workflow import WorkflowResult
 from acp.io.structures import StructureReader
 from acp.workflows._helpers import sanitize_job_name
-from conformer_search.config import load_config
+from cccp.config import load_config
 
 logger = logging.getLogger(__name__)
 
@@ -209,7 +209,7 @@ def _build_method_kwargs(raw_kwargs: dict[str, Any]) -> dict[str, Any]:
     # kwargs, the user explicitly chose gas phase. We must pass solvent=None
     # and solvent_model="none" through to the backend so that ORCABackend's
     # setdefault() does NOT fall back to theory.optimization.solvent from
-    # the config (e.g. ~/.conformer_search.yaml may set solvent: methanol).
+    # the config (e.g. ~/.cccp.yaml may set solvent: methanol).
     raw_sm = raw_kwargs.get("solvent_model")
     if raw_sm is None or str(raw_sm).strip().lower() in ("", "none"):
         kwargs.setdefault("solvent_model", "none")

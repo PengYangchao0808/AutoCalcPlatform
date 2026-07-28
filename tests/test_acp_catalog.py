@@ -167,16 +167,21 @@ def test_advanced_fields_count_correct() -> None:
 
 
 # --- 3.3 ---
+# Built-in dispersion methods expose the built-in type PLUS "none" (users may
+# suppress the explicit keyword, e.g. for -3c composites where it is already
+# parameterised). The built-in value must remain the first/primary entry.
 def test_builtin_dispersion_locking_wb97x_d4() -> None:
     meta = METHOD_META["wB97X-D4"]
     assert meta["builtin_dispersion"] == "D4"
-    assert meta["dispersion"] == ("D4",)
+    assert meta["dispersion"] == ("D4", "none")
+    assert meta["dispersion"][0] == meta["builtin_dispersion"]
 
 
 def test_builtin_dispersion_locking_wb97m_v() -> None:
     meta = METHOD_META["wB97M-V"]
     assert meta["builtin_dispersion"] == "VV10"
-    assert meta["dispersion"] == ("VV10",)
+    assert meta["dispersion"] == ("VV10", "none")
+    assert meta["dispersion"][0] == meta["builtin_dispersion"]
 
 
 def test_builtin_dispersion_null_for_configurable_functionals() -> None:
@@ -195,7 +200,9 @@ def test_default_basis_per_functional() -> None:
 def test_default_dispersion_per_functional() -> None:
     assert METHOD_META["B3LYP"]["default_dispersion"] == "D4"
     assert METHOD_META["DLPNO-CCSD(T)"]["default_dispersion"] == "none"
-    assert METHOD_META["r2SCAN-3c"]["default_dispersion"] == "D4"
+    # r2SCAN-3c is a composite with D4 built into the parameterisation; the
+    # explicit dispersion keyword defaults to "none" (do not double-emit).
+    assert METHOD_META["r2SCAN-3c"]["default_dispersion"] == "none"
 
 
 # --- 3.5 ---
@@ -387,7 +394,7 @@ def test_dlpno_case_insensitive_lookup() -> None:
 
 # --- 3.10 ---
 def test_dlpno_aux_basis_propagated_to_basis_block() -> None:
-    from conformer_search.qc.interfaces.orca import ORCAInterface
+    from cccp.qc.interfaces.orca import ORCAInterface
 
     config = {
         "executables": {"orca": {"path": "orca"}},
@@ -406,7 +413,7 @@ def test_dlpno_aux_basis_propagated_to_basis_block() -> None:
 
 
 def test_dlpno_aux_basis_default_auxc() -> None:
-    from conformer_search.qc.interfaces.orca import ORCAInterface
+    from cccp.qc.interfaces.orca import ORCAInterface
 
     config = {
         "executables": {"orca": {"path": "orca"}},
@@ -426,7 +433,7 @@ def test_dlpno_aux_basis_default_auxc() -> None:
 
 def test_non_dlpno_method_can_use_extra_blocks_basis_block() -> None:
     """Non-DLPNO methods can also receive a %basis block via extra_blocks (Phase 4.3)."""
-    from conformer_search.qc.interfaces.orca import ORCAInterface
+    from cccp.qc.interfaces.orca import ORCAInterface
 
     config = {
         "executables": {"orca": {"path": "orca"}},
@@ -449,7 +456,7 @@ def test_non_dlpno_method_can_use_extra_blocks_basis_block() -> None:
 def test_non_dlpno_method_with_structured_override_is_skipped_safely() -> None:
     """Dict entries in extra_blocks are consumed by DLPNO path; for non-DLPNO
     they are safely skipped (Phase 4.3)."""
-    from conformer_search.qc.interfaces.orca import ORCAInterface
+    from cccp.qc.interfaces.orca import ORCAInterface
 
     config = {
         "executables": {"orca": {"path": "orca"}},

@@ -24,6 +24,7 @@ from typing import Any
 import numpy as np
 
 from acp.backends.censo_backend import CensoBackend, CensoRunResult
+from acp.backends.registry import get_backend
 from acp.chem.composition import normalize_recalc_hess
 from acp.core.models import Structure, StructureEnsemble, StructureRecord
 from acp.core.state import WorkflowState
@@ -37,11 +38,10 @@ from acp.workflows.ensemble import (
     _resolve_solvent_config,
     _xtb_passthrough_result,
 )
-from conformer_search.config import load_config
-from conformer_search.qc.interfaces.crest import CRESTInterface
-from conformer_search.qc.interfaces.orca import ORCAInterface
-from conformer_search.qc.runners import run_shermo
-from conformer_search.utils.file_io import write_xyz
+from cccp.config import load_config
+from cccp.qc.interfaces.orca import ORCAInterface
+from cccp.qc.runners import run_shermo
+from cccp.utils.file_io import write_xyz
 
 logger = logging.getLogger(__name__)
 
@@ -662,7 +662,7 @@ def _censo_record_to_candidate(rec: Any, index: int = 0) -> dict[str, Any]:
         "u_correction": None,
         "s_total": None,
         "g_conc": None,
-        "source": f"conf_{index:03d}",
+        "source": rec.conf_id,
     }
 
 
@@ -820,7 +820,7 @@ def run_conformer_energy(
             crest_dir.mkdir(parents=True, exist_ok=True)
 
             crest_cfg = cfg.get("executables", {}).get("crest", {})
-            crest_iface = CRESTInterface(
+            crest_backend = get_backend("crest")(
                 config=cfg,
                 gfn_level=crest_cfg.get("gfn_level", 2),
                 solvent=censo_solvent,
@@ -837,30 +837,21 @@ def run_conformer_energy(
                 ewin if ewin is not None else resolved["crest_ewin_level"],
             )
             logger.info("CREST energy window: %.2f kcal/mol", crest_ewin)
-            crest_result = crest_iface.run_conformer_search(
-                coordinates=coords,
-                symbols=list(structure.symbols),
-                output_dir=crest_dir,
-                output_name=safe_name,
+            crest_input_xyz = crest_dir / f"{safe_name}.xyz"
+            write_xyz(
+                crest_input_xyz,
+                coords,
+                list(structure.symbols),
+                title=f"CREST input for {safe_name}",
+            )
+            crest_ensemble_xyz = crest_backend.search(
+                initial_xyz=crest_input_xyz,
                 charge=structure.charge,
                 multiplicity=structure.multiplicity,
+                output_dir=crest_dir,
                 energy_window=crest_ewin,
             )
-            if not crest_result.success:
-                msg = crest_result.error_message or "CREST search failed with unknown error"
-                raise RuntimeError(f"CREST search failed: {msg}")
-
             state.complete_stage("crest", {"status": "completed"})
-
-            crest_ensemble_xyz = crest_dir / "crest_conformers.xyz"
-            if not crest_ensemble_xyz.exists():
-                alt = list(crest_dir.glob("*conformer*.xyz")) + list(
-                    crest_dir.glob("*ensemble*.xyz")
-                )
-                if alt:
-                    crest_ensemble_xyz = alt[0]
-                else:
-                    raise FileNotFoundError(f"CREST output not found in {crest_dir}")
 
         stages_completed.append("crest")
 
@@ -890,7 +881,7 @@ def run_conformer_energy(
                         censo_solvent,
                         _solvent_model,
                         index=i,
-                        source=f"conf_{i:03d}",
+                        source=rec.conf_id,
                     )
                 except RuntimeError as exc:
                     if i == 0:
@@ -1105,7 +1096,7 @@ def run_conformer_energy(
                             censo_solvent,
                             _solvent_model,
                             index=i,
-                            source=f"conf_{i:03d}",
+                            source=rec.conf_id,
                             sp_energy_precomputed=rec.energy,
                             skip_opt_sp=True,
                         )

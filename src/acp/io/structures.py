@@ -1,6 +1,6 @@
 """Molecular structure readers and writers.
 
-Delegates to conformer_search.io.input_handler for actual parsing.
+Delegates to cccp.io.input_handler for actual parsing.
 This module provides the new public API as a thin wrapper.
 """
 
@@ -30,7 +30,7 @@ class StructureReader:
     """Read molecular structures from SMILES strings or structure files.
 
     Delegates parsing to the existing MolecularInputHandler from
-    conformer_search for format detection and coordinate extraction.
+    cccp for format detection and coordinate extraction.
     """
 
     def read(
@@ -52,7 +52,7 @@ class StructureReader:
         Returns:
             Structure instance with parsed coordinates and metadata.
         """
-        from conformer_search.io.input_handler import MolecularInputHandler
+        from cccp.io.input_handler import MolecularInputHandler
 
         result = MolecularInputHandler.from_source(
             source,
@@ -100,7 +100,7 @@ class StructureReader:
         Returns:
             Detected InputFormat enum value.
         """
-        from conformer_search.io.input_handler import (
+        from cccp.io.input_handler import (
             InputFormat as OldInputFormat,
             MolecularInputHandler,
         )
@@ -135,7 +135,7 @@ class StructureWriter:
         Returns:
             The resolved Path that was written to.
         """
-        from conformer_search.utils.file_io import write_xyz
+        from cccp.utils.file_io import write_xyz
 
         if structure.coordinates is None:
             raise ValueError("Cannot write XYZ without coordinates")

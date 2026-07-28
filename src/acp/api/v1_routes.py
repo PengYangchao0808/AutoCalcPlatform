@@ -1236,7 +1236,7 @@ def _formula_to_symbols(formula: str) -> list[str] | None:
 def _resolve_configured_recalc_hess() -> object:
     """Return the server's configured ``optimization_control.recalc_hess``."""
     try:
-        from conformer_search.config import load_config
+        from cccp.config import load_config
 
         cfg = load_config()
         to_cfg = cfg.get("optimization_control") or {}

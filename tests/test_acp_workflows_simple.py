@@ -845,7 +845,7 @@ def test_cli_calc_hess_rejects_zero():
 
 
 def test_orca_input_blocks_recalc_hess_override():
-    from conformer_search.qc.interfaces.orca import ORCAInterface
+    from cccp.qc.interfaces.orca import ORCAInterface
     iface = ORCAInterface(config={})
     # Explicit N — emits Recalc_Hess N, no symbols needed.
     blocks, res = iface._build_input_blocks("opt", recalc_hess=5, symbols=["C", "H"])
@@ -861,7 +861,7 @@ def test_orca_input_blocks_recalc_hess_override():
 
 
 def test_orca_input_blocks_recalc_hess_optfreq():
-    from conformer_search.qc.interfaces.orca import ORCAInterface
+    from cccp.qc.interfaces.orca import ORCAInterface
     iface = ORCAInterface(config={})
     blocks, _ = iface._build_input_blocks("optfreq", recalc_hess=20, symbols=["C", "H"])
     assert "Recalc_Hess 20" in blocks
@@ -869,7 +869,7 @@ def test_orca_input_blocks_recalc_hess_optfreq():
 
 def test_orca_input_blocks_auto_graded_defaults():
     """AC1/AC2/AC4/AC4b: two-tier auto defaults — light → off, non-light → 10."""
-    from conformer_search.qc.interfaces.orca import ORCAInterface
+    from cccp.qc.interfaces.orca import ORCAInterface
     iface = ORCAInterface(config={})
     # AC1 ethanol (light) → no Recalc_Hess
     b, _ = iface._build_input_blocks("opt", symbols=["C", "C", "O", "H", "H", "H", "H", "H", "H"])
@@ -891,7 +891,7 @@ def test_orca_input_blocks_auto_graded_defaults():
 def test_orca_input_blocks_auto_requires_symbols():
     """Direct auto call without symbols must raise (plan AC)."""
     import pytest as _pytest
-    from conformer_search.qc.interfaces.orca import ORCAInterface
+    from cccp.qc.interfaces.orca import ORCAInterface
     iface = ORCAInterface(config={})
     with _pytest.raises(ValueError):
         iface._build_input_blocks("opt", recalc_hess="auto")
@@ -904,7 +904,7 @@ def test_orca_input_blocks_sidecar_written(tmp_path):
     """AC19: *.hessian.json sidecar captures the resolved policy."""
     import json
     import numpy as np
-    from conformer_search.qc.interfaces.orca import ORCAInterface
+    from cccp.qc.interfaces.orca import ORCAInterface
     iface = ORCAInterface(config={})
     inp = tmp_path / "conf_000_opt.inp"
     iface._write_input(

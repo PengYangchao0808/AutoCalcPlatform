@@ -22,14 +22,14 @@ from acp.backends.censo_backend import (
     CensoConformerRecord,
     CensoRunResult,
 )
+from acp.backends.registry import get_backend
 from acp.core.models import Structure, StructureEnsemble, StructureRecord
 from acp.core.state import WorkflowState
 from acp.core.workflow import WorkflowResult
 from acp.io.structures import InputFormat, StructureReader
 from acp.workflows._helpers import sanitize_job_name
-from conformer_search.config import load_config
-from conformer_search.qc.interfaces.crest import CRESTInterface
-from conformer_search.utils.file_io import read_xyz_multiframe, write_xyz_multiframe
+from cccp.config import load_config
+from cccp.utils.file_io import read_xyz_multiframe, write_xyz, write_xyz_multiframe
 
 logger = logging.getLogger(__name__)
 
@@ -398,7 +398,7 @@ def run_ensemble_generation(
             crest_dir.mkdir(parents=True, exist_ok=True)
 
             crest_cfg = cfg.get("executables", {}).get("crest", {})
-            crest_iface = CRESTInterface(
+            crest_backend = get_backend("crest")(
                 config=cfg,
                 gfn_level=crest_cfg.get("gfn_level", 2),
                 solvent=censo_solvent,
@@ -411,31 +411,22 @@ def run_ensemble_generation(
                 else np.empty((0, 3))
             )
             logger.info("CREST energy window: %.2f kcal/mol", crest_ewin)
-            crest_result = crest_iface.run_conformer_search(
-                coordinates=coords,
-                symbols=list(structure.symbols),
-                output_dir=crest_dir,
-                output_name=safe_name,
+            crest_input_xyz = crest_dir / f"{safe_name}.xyz"
+            write_xyz(
+                crest_input_xyz,
+                coords,
+                list(structure.symbols),
+                title=f"CREST input for {safe_name}",
+            )
+            crest_ensemble_xyz = crest_backend.search(
+                initial_xyz=crest_input_xyz,
                 charge=structure.charge,
                 multiplicity=structure.multiplicity,
+                output_dir=crest_dir,
                 energy_window=crest_ewin,
             )
 
-            if not crest_result.success:
-                msg = crest_result.error_message or "CREST search failed with unknown error"
-                raise RuntimeError(f"CREST search failed: {msg}")
-
             state.complete_stage("crest", {"status": "completed"})
-
-            crest_ensemble_xyz = crest_dir / "crest_conformers.xyz"
-            if not crest_ensemble_xyz.exists():
-                alt = list(crest_dir.glob("*conformer*.xyz")) + list(
-                    crest_dir.glob("*ensemble*.xyz")
-                )
-                if alt:
-                    crest_ensemble_xyz = alt[0]
-                else:
-                    raise FileNotFoundError(f"CREST output not found in {crest_dir}")
 
         stages_completed.append("crest")
 

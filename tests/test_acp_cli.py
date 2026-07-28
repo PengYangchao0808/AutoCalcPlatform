@@ -51,12 +51,3 @@ def test_acp_no_command_shows_help():
     # argparse with required=True subparser returns error code
     assert result.returncode != 0 or "usage" in result.stderr.lower() or "usage" in result.stdout.lower()
 
-
-def test_conformer_search_help_exits_zero():
-    """``conformer-search --help`` exits with code 0 (legacy entry)."""
-    result = subprocess.run(
-        [sys.executable, "-m", "conformer_search.cli", "--help"],
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0

@@ -30,7 +30,7 @@ def _load_remote_config():
     """
     try:
         from acp.scheduler.remote.config import RemoteExecutionConfig
-        from conformer_search.config import load_config
+        from cccp.config import load_config
 
         full_config = load_config()
         cluster_section = full_config.get("cluster", {})
@@ -55,7 +55,7 @@ def _load_local_retention_config():
     """
     try:
         from acp.scheduler.local_cleanup import RetentionPolicy
-        from conformer_search.config import load_config
+        from cccp.config import load_config
 
         full_config = load_config()
     except Exception as exc:  # noqa: BLE001 — graceful degradation
@@ -89,7 +89,7 @@ def _load_local_retention_config():
 def _local_cleanup_interval_hours() -> int:
     """Read ``cluster.local_retention.cleanup_interval_hours`` (default 6)."""
     try:
-        from conformer_search.config import load_config
+        from cccp.config import load_config
 
         local_cfg = load_config().get("cluster", {}).get("local_retention", {})
         return max(1, int(local_cfg.get("cleanup_interval_hours", 6)))

@@ -10,7 +10,8 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from conformer_search.qc.interfaces.crest import CRESTInterface, XTBInterface
+from cccp.qc.interfaces.crest import CRESTInterface
+from cccp.qc.interfaces.xtb import XTBInterface
 from tests.conftest import requires_crest
 
 COORDINATES = np.array([[0.0, 0.0, 0.0]])
@@ -58,7 +59,7 @@ def test_crest_run_uses_alpb_with_solvent_model_alpb(
     )
 
     with patch(
-        "conformer_search.qc.interfaces.crest.subprocess.run",
+        "cccp.qc.interfaces.crest.subprocess.run",
         return_value=completed,
     ) as mock_run:
         interface.run_conformer_search(
@@ -84,7 +85,7 @@ def test_crest_run_uses_gbsa_with_solvent_model_gbsa(
     )
 
     with patch(
-        "conformer_search.qc.interfaces.crest.subprocess.run",
+        "cccp.qc.interfaces.crest.subprocess.run",
         return_value=completed,
     ) as mock_run:
         interface.run_conformer_search(
@@ -110,7 +111,7 @@ def test_crest_run_no_solvent_with_solvent_model_none(
     )
 
     with patch(
-        "conformer_search.qc.interfaces.crest.subprocess.run",
+        "cccp.qc.interfaces.crest.subprocess.run",
         return_value=completed,
     ) as mock_run:
         interface.run_conformer_search(
@@ -135,7 +136,7 @@ def test_xtb_optimize_uses_alpb_with_solvent_model_alpb(
     )
 
     with patch(
-        "conformer_search.qc.interfaces.crest.subprocess.run",
+        "cccp.qc.interfaces.xtb.subprocess.run",
         return_value=completed,
     ) as mock_run:
         interface.optimize(COORDINATES, SYMBOLS, output_dir=tmp_path)
@@ -159,7 +160,7 @@ def test_xtb_optimize_uses_gbsa_with_solvent_model_gbsa(
     )
 
     with patch(
-        "conformer_search.qc.interfaces.crest.subprocess.run",
+        "cccp.qc.interfaces.xtb.subprocess.run",
         return_value=completed,
     ) as mock_run:
         interface.optimize(COORDINATES, SYMBOLS, output_dir=tmp_path)
@@ -183,7 +184,7 @@ def test_xtb_optimize_no_solvent_with_solvent_model_none(
     )
 
     with patch(
-        "conformer_search.qc.interfaces.crest.subprocess.run",
+        "cccp.qc.interfaces.xtb.subprocess.run",
         return_value=completed,
     ) as mock_run:
         interface.optimize(COORDINATES, SYMBOLS, output_dir=tmp_path)

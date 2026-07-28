@@ -273,7 +273,7 @@ def candidate_set_from_paths(
     Returns:
         CandidateSet instance
     """
-    from conformer_search.utils.file_io import read_xyz, read_xyz_with_energy
+    from cccp.utils.file_io import read_xyz, read_xyz_with_energy
     
     candidates = []
     

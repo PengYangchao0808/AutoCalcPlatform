@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from conformer_search.config import _get_default_config
-from conformer_search.core.protocols import (
+from cccp.config import _get_default_config
+from cccp.core.protocols import (
     resolve_protocol_spec,
     validate_protocol_methods,
 )
