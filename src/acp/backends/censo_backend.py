@@ -363,7 +363,7 @@ class CensoBackend(QCBackend, ConformerSearcher):
 
         cmd.extend(["--inprc", str(rcfile)])
         cmd.extend(["--maxcores", str(nproc)])
-        cmd.extend(["--omp-min", "2"])
+        cmd.extend(["--omp-min", "4"])
 
         cmd.extend(["-T", str(temperature)])
 
@@ -689,7 +689,7 @@ class CensoBackend(QCBackend, ConformerSearcher):
         stdout_path = output_dir / "censo_stdout.log"
         stderr_path = output_dir / "censo_stderr.log"
 
-        timeout_seconds = self.config.get("censo", {}).get("timeout_seconds", 86400)
+        timeout_seconds = self.config.get("censo", {}).get("timeout_seconds")
 
         try:
             proc = subprocess.run(

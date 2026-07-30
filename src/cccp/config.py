@@ -440,7 +440,9 @@ def _get_default_config() -> dict[str, Any]:
             'auto_sync': True,
             'type': 'local',
             'queue': 'normal',
-            'walltime': '24:00',
+            # Empty = no #BSUB -W run-time limit by default (jobs run to
+            # completion). Keep in sync with config/defaults.yaml.
+            'walltime': '',
             'extra_flags': '',
             'nodes': [],
             # Local run_root lifecycle management (Phase 5B). MUST stay in

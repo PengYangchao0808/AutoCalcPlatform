@@ -43,7 +43,10 @@ __all__ = [
 _DEFAULT_NPROC = 8
 _DEFAULT_MEM_MB_PER_CORE = 2000
 _DEFAULT_QUEUE = "normal"
-_DEFAULT_WALLTIME = "24:00"
+# No walltime by default — LSF jobs run to completion unless an operator
+# explicitly configures `cluster.walltime`.  An empty value omits the
+# ``#BSUB -W`` directive entirely (task: drop the default 24h timeout).
+_DEFAULT_WALLTIME = ""
 _MIN_MEM_MB_PER_CORE = 256
 
 _GFN_DISPLAY_TO_INT: dict[str, int] = {
@@ -277,6 +280,12 @@ def generate_lsf_script(s: LSFScriptSpec) -> str:
     The script sets ``PYTHONPATH`` to include the synced source tree,
     ``cd``\\ s into the remote job directory, runs the CLI command, and
     writes the exit code to ``.exit_code`` for reliable status detection.
+
+    A termination-signal trap ensures ``.exit_code`` is recorded even when
+    LSF kills the job (e.g. a configured ``-W`` walltime / ``RUNLIMIT``
+    sends ``SIGUSR2`` to the whole process group) \u2014 without it the
+    trailing ``echo $? > .exit_code`` never runs and the scheduler cannot
+    tell a walltime-killed job from one that is still running.
     """
     cli_str = " ".join(shlex.quote(arg) for arg in s.cli_command)
     lines: list[str] = [
@@ -285,7 +294,12 @@ def generate_lsf_script(s: LSFScriptSpec) -> str:
         f"#BSUB -q {s.queue}",
         f"#BSUB -n {s.nproc}",
         f"#BSUB -M {int(s.mem_mb_per_core * s.nproc * 1024 * 1.05)}",
-        f"#BSUB -W {s.walltime}",
+    ]
+    # Only emit a walltime directive when one is explicitly configured;
+    # an empty walltime means "no LSF run-time limit" (default).
+    if s.walltime:
+        lines.append(f"#BSUB -W {s.walltime}")
+    lines += [
         f"#BSUB -o {s.remote_job_dir}/stdout.log",
         f"#BSUB -e {s.remote_job_dir}/stderr.log",
     ]
@@ -293,6 +307,12 @@ def generate_lsf_script(s: LSFScriptSpec) -> str:
         lines.append(f"#BSUB {s.extra_flags}")
     lines += [
         "",
+        "# Record the workflow exit code even if LSF terminates the job by",
+        "# signal (walltime/RUNLIMIT).  Forward such signals to a normal",
+        "# shell exit so the EXIT trap fires and writes .exit_code.",
+        "_acp_record_exit() { [ -f .exit_code ] || echo \"$?\" > .exit_code; }",
+        "trap 'exit $?' USR2 TERM INT HUP",
+        "trap _acp_record_exit EXIT",
         f'export PYTHONPATH="{s.remote_code_dir}/src:$PYTHONPATH"',
         f'cd "{s.remote_job_dir}"',
         cli_str,

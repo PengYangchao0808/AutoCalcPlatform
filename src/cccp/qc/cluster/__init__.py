@@ -277,7 +277,9 @@ class LSFClusterAdapter(ClusterAdapterBase):
         super().__init__(config)
         cluster_config = config.get('cluster', {})
         self.queue = cluster_config.get('queue', 'normal')
-        self.walltime = cluster_config.get('walltime', '24:00')
+        # Empty by default = no #BSUB -W run-time limit (jobs run to
+        # completion).  Set ``cluster.walltime`` to re-enable a hard cutoff.
+        self.walltime = cluster_config.get('walltime', '')
         self.extra_flags = cluster_config.get('extra_flags', '')
 
     def submit_job(
@@ -341,7 +343,11 @@ class LSFClusterAdapter(ClusterAdapterBase):
             f'#BSUB -q {self.queue}',
             f'#BSUB -n {ncores}',
             f'#BSUB -R "rusage[mem={mem_per_core}]"',
-            f'#BSUB -W {self.walltime}',
+        ]
+        # Only emit a walltime directive when one is explicitly configured.
+        if self.walltime:
+            lines.append(f'#BSUB -W {self.walltime}')
+        lines += [
             '#BSUB -o %J.out',
             '#BSUB -e %J.err',
         ]

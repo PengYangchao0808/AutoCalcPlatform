@@ -333,7 +333,7 @@ cluster:
   auto_sync: true      # Auto-sync ACP source to remote nodes before submitting
   type: local          # 'local', 'lsf', 'slurm', 'pbs'
   queue: normal        # Cluster queue name
-  walltime: "24:00"    # Job walltime (HH:MM)
+  walltime: ""         # Job walltime (HH:MM); empty = no #BSUB -W run-time limit
   extra_flags: ""      # Additional LSF/PBS flags
   nodes: []            # Remote compute nodes (see plan §13 for example)
 

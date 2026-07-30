@@ -212,7 +212,8 @@ def test_builtin_cluster_config_has_remote_fields():
     # Legacy keys preserved
     assert cluster["type"] == "local"
     assert cluster["queue"] == "normal"
-    assert cluster["walltime"] == "24:00"
+    # walltime defaults to empty (no #BSUB -W run-time limit)
+    assert cluster["walltime"] == ""
 
 
 def test_defaults_yaml_has_remote_fields():

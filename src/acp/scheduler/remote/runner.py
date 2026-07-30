@@ -43,7 +43,7 @@ from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.provenance import build_provenance_for_job
 from acp.scheduler.remote.cleanup import RemoteCleanup
 from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
-from acp.scheduler.remote.monitor import RemoteJobMonitor
+from acp.scheduler.remote.monitor import STATUS_DONE, RemoteJobMonitor
 from acp.scheduler.remote.script_gen import (
     build_lsf_script_spec,
     generate_lsf_script,
@@ -88,6 +88,21 @@ def _safe_timestamp_dt(value: object) -> float:
         except (ValueError, TypeError):
             return 0.0
     return 0.0
+
+
+def _missing_exit_code_error(lsf_status: str, lsf_job_id: str) -> str:
+    """Error text for when LSF is terminal but no ``.exit_code`` was written.
+
+    This is the hallmark of a job killed by LSF (e.g. the walltime /
+    ``RUNLIMIT`` limit sends a signal to the whole process group) before
+    the trailing ``echo $? > .exit_code`` in the wrapper script can run.
+    """
+    return (
+        f"Remote LSF job {lsf_job_id} reached terminal state '{lsf_status}' "
+        f"without writing .exit_code \u2014 it was most likely killed by LSF "
+        f"(e.g. walltime/RUNLIMIT limit or a process-group signal) before "
+        f"the exit code could be recorded"
+    )
 
 
 class RemoteNodeUnavailableError(RuntimeError):
@@ -249,38 +264,10 @@ class RemoteJobRunner:
 
         exit_code = self._monitor.get_exit_code(node, remote_job_dir)
         if exit_code is not None:
-            self._tail_and_emit(
-                node, remote_job_dir, "stdout.log", stdout_offset, event_log, record.id, "stdout"
+            return self._finalize_remote(
+                record, event_log, state, node, remote_job_dir, lsf_job_id,
+                exit_code, seen_stages,
             )
-            self._tail_and_emit(
-                node, remote_job_dir, "stderr.log", stderr_offset, event_log, record.id, "stderr"
-            )
-            # Final state.json read to capture last stage transitions.
-            try:
-                self._observe_remote_state(record, event_log, node, remote_job_dir, seen_stages)
-            except Exception:
-                logger.debug("Final state.json read failed for %s", record.id, exc_info=True)
-            record.exit_code = exit_code
-            record.progress = 1.0 if exit_code == 0 else record.progress
-            result = dict(record.result or {})
-            result["lsf_job_id"] = lsf_job_id
-            result["node"] = node.name
-            result["host"] = node.host
-            result["remote_dir"] = remote_job_dir
-            result["exit_code"] = exit_code
-            result["command_line"] = " ".join(state["cli_cmd"])  # type: ignore[arg-type]
-            record.result = result
-            self._build_provenance(record, state["cli_cmd"])  # type: ignore[arg-type]
-            final_status = "completed" if exit_code == 0 else "failed"
-            self._set_remote_stage_state(record.id, final_status, exit_code=exit_code)
-            self._finalize_stages(record.id, final_status)
-            event_log.append(
-                "job.completed" if exit_code == 0 else "job.failed",
-                job_id=record.id,
-                exit_code=exit_code,
-            )
-            self._cleanup_job_state(record.id)
-            return (True, exit_code)
 
         # --- Periodic state.json read (every _STATE_READ_INTERVAL cycles) ---
         poll_cycle += 1
@@ -312,36 +299,35 @@ class RemoteJobRunner:
 
             if RemoteJobMonitor.is_terminal(status):
                 exit_code = self._wait_exit_code(node, remote_job_dir, timeout=_EXIT_CODE_GRACE)
-                if exit_code is not None:
-                    try:
-                        self._observe_remote_state(
-                            record, event_log, node, remote_job_dir, seen_stages
+                if exit_code is None:
+                    # LSF reports a terminal state but the wrapper script
+                    # never wrote ``.exit_code`` \u2014 this happens when LSF
+                    # kills the whole process group (e.g. the walltime /
+                    # RUNLIMIT limit) before the trailing
+                    # ``echo $? > .exit_code`` can run.  Synthesise an exit
+                    # code so the job finalises instead of polling forever
+                    # and leaving the record stuck in "running".
+                    exit_code = 0 if status == STATUS_DONE else 1
+                    if exit_code != 0:
+                        record.error = record.error or _missing_exit_code_error(
+                            status, lsf_job_id
                         )
-                    except Exception:
-                        logger.debug(
-                            "Final state.json read failed for %s", record.id, exc_info=True
+                        event_log.append(
+                            "remote.no_exit_code",
+                            job_id=record.id,
+                            lsf_job_id=lsf_job_id,
+                            lsf_status=status,
+                            message=record.error,
                         )
-                    record.exit_code = exit_code
-                    record.progress = 1.0 if exit_code == 0 else record.progress
-                    result = dict(record.result or {})
-                    result["lsf_job_id"] = lsf_job_id
-                    result["node"] = node.name
-                    result["host"] = node.host
-                    result["remote_dir"] = remote_job_dir
-                    result["exit_code"] = exit_code
-                    result["command_line"] = " ".join(state["cli_cmd"])  # type: ignore[arg-type]
-                    record.result = result
-                    self._build_provenance(record, state["cli_cmd"])  # type: ignore[arg-type]
-                    final_status = "completed" if exit_code == 0 else "failed"
-                    self._set_remote_stage_state(record.id, final_status, exit_code=exit_code)
-                    self._finalize_stages(record.id, final_status)
-                    event_log.append(
-                        "job.completed" if exit_code == 0 else "job.failed",
-                        job_id=record.id,
-                        exit_code=exit_code,
-                    )
-                    self._cleanup_job_state(record.id)
-                    return (True, exit_code)
+                        logger.warning(
+                            "Remote job %s: LSF terminal '%s' with no .exit_code; "
+                            "finalising as failed (likely killed by LSF)",
+                            record.id, status,
+                        )
+                return self._finalize_remote(
+                    record, event_log, state, node, remote_job_dir, lsf_job_id,
+                    exit_code, seen_stages,
+                )
 
         stdout_offset = self._tail_and_emit(
             node, remote_job_dir, "stdout.log", stdout_offset, event_log, record.id, "stdout"
@@ -419,6 +405,61 @@ class RemoteJobRunner:
             "seen_stages": set(),
         }
         return True
+
+    def _finalize_remote(
+        self,
+        record: JobRecord,
+        event_log: JobEventLog,
+        state: dict[str, object],
+        node: RemoteNode,
+        remote_job_dir: str,
+        lsf_job_id: str,
+        exit_code: int,
+        seen_stages: set[str],
+    ) -> tuple[bool, int]:
+        """Apply the terminal *exit_code* to *record* and tear down poll state.
+
+        Shared by the ``.exit_code`` and LSF-terminal branches of
+        :meth:`poll_remote` so both follow one finalisation path: flush the
+        remote logs, read the final ``state.json``, persist result metadata +
+        provenance, mark stage tasks, emit a terminal event, and drop the
+        in-memory poll state.  Returns ``(True, exit_code)``.
+        """
+        stdout_offset: int = state["stdout_offset"]  # type: ignore[assignment]
+        stderr_offset: int = state["stderr_offset"]  # type: ignore[assignment]
+        # Final log flush so captured stdout/stderr reflects the exit.
+        state["stdout_offset"] = self._tail_and_emit(
+            node, remote_job_dir, "stdout.log", stdout_offset, event_log, record.id, "stdout"
+        )
+        state["stderr_offset"] = self._tail_and_emit(
+            node, remote_job_dir, "stderr.log", stderr_offset, event_log, record.id, "stderr"
+        )
+        try:
+            self._observe_remote_state(record, event_log, node, remote_job_dir, seen_stages)
+        except Exception:
+            logger.debug("Final state.json read failed for %s", record.id, exc_info=True)
+
+        record.exit_code = exit_code
+        record.progress = 1.0 if exit_code == 0 else record.progress
+        result = dict(record.result or {})
+        result["lsf_job_id"] = lsf_job_id
+        result["node"] = node.name
+        result["host"] = node.host
+        result["remote_dir"] = remote_job_dir
+        result["exit_code"] = exit_code
+        result["command_line"] = " ".join(state["cli_cmd"])  # type: ignore[arg-type]
+        record.result = result
+        self._build_provenance(record, state["cli_cmd"])  # type: ignore[arg-type]
+        final_status = "completed" if exit_code == 0 else "failed"
+        self._set_remote_stage_state(record.id, final_status, exit_code=exit_code)
+        self._finalize_stages(record.id, final_status)
+        event_log.append(
+            "job.completed" if exit_code == 0 else "job.failed",
+            job_id=record.id,
+            exit_code=exit_code,
+        )
+        self._cleanup_job_state(record.id)
+        return (True, exit_code)
 
     # ------------------------------------------------------------------ #
     # Remote state observation (state.json + .stage_* files)
@@ -823,7 +864,14 @@ class RemoteJobRunner:
                     f"Remote job monitor timed out after {max_seconds}s"
                 )
                 return 1
-            record.error = record.error or "Remote job ended without .exit_code"
+            # LSF went terminal without writing .exit_code (e.g. killed by
+            # a walltime/RUNLIMIT process-group signal).  DONE is treated
+            # as success; any other terminal state is a failure.
+            if last_lsf_status == STATUS_DONE:
+                return 0
+            record.error = record.error or _missing_exit_code_error(
+                last_lsf_status or "unknown", lsf_job_id
+            )
             return 1
         return exit_code
 

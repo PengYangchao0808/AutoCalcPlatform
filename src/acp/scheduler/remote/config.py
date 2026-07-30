@@ -147,7 +147,10 @@ class RemoteExecutionConfig:
     retention_days: int = 180
     auto_sync: bool = True
     queue: str = "normal"
-    walltime: str = "24:00"
+    # Empty by default = no ``#BSUB -W`` walltime directive (jobs run to
+    # completion).  Set ``cluster.walltime`` (e.g. "24:00") to re-enable a
+    # hard LSF run-time limit.
+    walltime: str = ""
     extra_flags: str = ""
     nodes: list[RemoteNode] = field(default_factory=list)
     max_concurrent_sessions: int = 20
@@ -201,7 +204,7 @@ class RemoteExecutionConfig:
         retention_days = int(data.get("retention_days", 180))
         auto_sync = bool(data.get("auto_sync", True))
         queue = str(data.get("queue", "normal"))
-        walltime = str(data.get("walltime", "24:00"))
+        walltime = str(data.get("walltime", ""))
         extra_flags = str(data.get("extra_flags", ""))
         max_concurrent_sessions = int(data.get("max_concurrent_sessions", 20))
         connect_timeout = int(data.get("connect_timeout", 10))

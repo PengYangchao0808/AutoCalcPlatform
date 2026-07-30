@@ -337,6 +337,61 @@ def test_build_lsf_script_spec_integration():
     print("  [OK] build_lsf_script_spec: integrated CLI + LSF generation")
 
 
+def test_generate_lsf_script_omits_walltime_when_empty():
+    """Empty walltime = no #BSUB -W directive (default: no run-time limit)."""
+    lsf_spec = LSFScriptSpec(
+        job_name="acp_nowt",
+        queue="normal",
+        nproc=4,
+        mem_mb_per_core=2000,
+        walltime="",
+        remote_code_dir="/home/u/acp_code",
+        remote_job_dir="/scratch/u/acp_jobs/nowt",
+        cli_command=["python", "-m", "acp.cli", "run", "energy"],
+    )
+    script = generate_lsf_script(lsf_spec)
+    assert "#BSUB -W" not in script
+    # Exit-code trap must still be present (defense-in-depth for signal kills).
+    assert "trap _acp_record_exit EXIT" in script
+    assert "trap 'exit $?' USR2 TERM INT HUP" in script
+    assert "echo $? > .exit_code" in script
+    print("  [OK] empty walltime: no #BSUB -W, signal trap present")
+
+
+def test_generate_lsf_script_emits_walltime_when_set():
+    """An explicitly configured walltime is still emitted."""
+    lsf_spec = LSFScriptSpec(
+        job_name="acp_wt",
+        queue="normal",
+        nproc=4,
+        mem_mb_per_core=2000,
+        walltime="12:30",
+        remote_code_dir="/home/u/acp_code",
+        remote_job_dir="/scratch/u/acp_jobs/wt",
+        cli_command=["python", "-m", "acp.cli", "run", "energy"],
+    )
+    script = generate_lsf_script(lsf_spec)
+    assert "#BSUB -W 12:30" in script
+    print("  [OK] configured walltime: #BSUB -W emitted")
+
+
+def test_build_lsf_script_spec_default_has_no_walltime():
+    """Default build (no walltime arg) produces an empty walltime spec."""
+    node = make_node()
+    spec = JobSpec(
+        workflow="ensemble",
+        name="water",
+        input={"source": "O", "source_type": "smiles"},
+        method={"preset": "censo-light"},
+        resources={"nproc": 4, "mem": "8GB"},
+    )
+    lsf_spec, _cli = build_lsf_script_spec(spec, "job_002", node)
+    assert lsf_spec.walltime == ""
+    script = generate_lsf_script(lsf_spec)
+    assert "#BSUB -W" not in script
+    print("  [OK] default spec: empty walltime, no #BSUB -W")
+
+
 # ====================================================================== #
 # RemoteJobMonitor tests
 # ====================================================================== #
@@ -1016,6 +1071,105 @@ def test_runner_log_tailing():
     print(f"  [OK] log tailing: {len(stdout_lines)} stdout lines captured as events")
 
 
+def test_poll_remote_terminal_without_exit_code_finalizes_failed():
+    """Regression: LSF terminal (e.g. walltime/RUNLIMIT-killed) but no
+    ``.exit_code`` must finalise as FAILED, not loop forever and leave the
+    job stuck in 'running'.
+
+    Reproduces the Spirocurcasone-Curcusone-intermediate incident: LSF kills
+    the whole process group at the walltime limit, so the wrapper's trailing
+    ``echo $? > .exit_code`` never runs and ``.exit_code`` is absent.
+    """
+    node = make_node()
+    config = RemoteExecutionConfig(execution_mode="remote", nodes=[node])
+    runner = RemoteJobRunner(MagicMock(), config, monitor=MagicMock(), code_syncer=MagicMock())
+
+    # No .exit_code ever appears (LSF killed the process group); bjobs
+    # reports the job EXITed.
+    runner._monitor.get_exit_code.return_value = None
+    runner._monitor.get_lsf_status.return_value = "failed"
+    runner._monitor.tail_stdout.return_value = ("", 0)
+    runner._monitor.tail_stderr.return_value = ("", 0)
+    runner._monitor.find_remote_state_json.return_value = None
+    # Bypass the 30s grace wait inside _wait_exit_code.
+    runner._wait_exit_code = lambda n, d, timeout=30: None
+
+    with tempfile.TemporaryDirectory() as tmp:
+        work_dir = Path(tmp) / "proj" / "tojob"
+        work_dir.mkdir(parents=True)
+        spec = JobSpec(workflow="energy", input={"source": "CCO", "source_type": "smiles"})
+        record = JobRecord(id="tojob", spec=spec, work_dir=str(work_dir))
+        event_log = JobEventLog(work_dir / "events.jsonl")
+        cancel = threading.Event()
+
+        runner._job_states["tojob"] = {
+            "node": node,
+            "remote_job_dir": "/scratch/test/acp_jobs/tojob",
+            "lsf_job_id": "1098",
+            "stdout_offset": 0,
+            "stderr_offset": 0,
+            "cli_cmd": ["python", "-m", "acp.cli", "run", "energy"],
+            "poll_cycle": 0,
+            "seen_stages": set(),
+        }
+
+        is_terminal, exit_code = runner.poll_remote(record, event_log, cancel)
+
+        assert is_terminal is True
+        assert exit_code != 0
+        assert record.exit_code == exit_code
+        assert record.error is not None and "without writing .exit_code" in record.error
+        events = [e["type"] for e in event_log.read_all()]
+        assert "job.failed" in events
+        assert "remote.no_exit_code" in events
+        # Poll state must be torn down so the manager stops polling.
+        assert "tojob" not in runner._job_states
+
+    print(f"  [OK] terminal-without-exit-code: finalised FAILED (exit={exit_code})")
+
+
+def test_poll_remote_done_without_exit_code_finalizes_completed():
+    """A DONE LSF status with no .exit_code (e.g. purged history) is success."""
+    node = make_node()
+    config = RemoteExecutionConfig(execution_mode="remote", nodes=[node])
+    runner = RemoteJobRunner(MagicMock(), config, monitor=MagicMock(), code_syncer=MagicMock())
+
+    runner._monitor.get_exit_code.return_value = None
+    runner._monitor.get_lsf_status.return_value = "done"
+    runner._monitor.tail_stdout.return_value = ("", 0)
+    runner._monitor.tail_stderr.return_value = ("", 0)
+    runner._monitor.find_remote_state_json.return_value = None
+    runner._wait_exit_code = lambda n, d, timeout=30: None
+
+    with tempfile.TemporaryDirectory() as tmp:
+        work_dir = Path(tmp) / "proj" / "donejob"
+        work_dir.mkdir(parents=True)
+        spec = JobSpec(workflow="energy", input={"source": "CCO", "source_type": "smiles"})
+        record = JobRecord(id="donejob", spec=spec, work_dir=str(work_dir))
+        event_log = JobEventLog(work_dir / "events.jsonl")
+        cancel = threading.Event()
+
+        runner._job_states["donejob"] = {
+            "node": node,
+            "remote_job_dir": "/scratch/test/acp_jobs/donejob",
+            "lsf_job_id": "1099",
+            "stdout_offset": 0,
+            "stderr_offset": 0,
+            "cli_cmd": ["python", "-m", "acp.cli", "run", "energy"],
+            "poll_cycle": 0,
+            "seen_stages": set(),
+        }
+
+        is_terminal, exit_code = runner.poll_remote(record, event_log, cancel)
+
+        assert is_terminal is True
+        assert exit_code == 0
+        assert record.error is None
+        assert "donejob" not in runner._job_states
+
+    print("  [OK] done-without-exit-code: finalised COMPLETED (exit=0)")
+
+
 # ====================================================================== #
 # Config (Phase 2 additions)
 # ====================================================================== #
@@ -1058,7 +1212,10 @@ def main():
         test_derive_lsf_resources,
         test_derive_lsf_resources_defaults,
         test_generate_lsf_script,
+        test_generate_lsf_script_omits_walltime_when_empty,
+        test_generate_lsf_script_emits_walltime_when_set,
         test_build_lsf_script_spec_integration,
+        test_build_lsf_script_spec_default_has_no_walltime,
         # monitor
         test_monitor_lsf_status_mapping,
         test_monitor_lsf_status_not_found,
@@ -1084,6 +1241,8 @@ def main():
         test_runner_no_download,
         test_runner_remote_execution_stage_task,
         test_runner_log_tailing,
+        test_poll_remote_terminal_without_exit_code_finalizes_failed,
+        test_poll_remote_done_without_exit_code_finalizes_completed,
         # config
         test_remote_config_queue_walltime,
     ]
