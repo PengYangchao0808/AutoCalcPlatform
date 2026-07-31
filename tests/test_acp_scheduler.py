@@ -8,7 +8,39 @@ from pathlib import Path
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.manager import JobManager
+from acp.scheduler.runner import materialize_job_input
 from acp.scheduler.store import JobStore
+
+
+def test_materialize_com_and_inp_preserve_suffix(tmp_path: Path) -> None:
+    """M8: .com/.inp inputs must not fall into the SMILES conversion path;
+    their format-significant suffix is preserved for the CLI parser."""
+    run_root = tmp_path / "root"
+    run_root.mkdir()
+    inputs_dir = tmp_path / "inputs"
+    com = run_root / "mol.com"
+    com.write_text("! SP wB97X-D4 def2-TZVPP\n* xyz 0 1\nC 0 0 0\n*\n", encoding="utf-8")
+    inp_file = run_root / "mol.inp"
+    inp_file.write_text("! SP\n* xyz 0 1\nC 0 0 0\n*\n", encoding="utf-8")
+
+    for src, expected in ((com, "input.com"), (inp_file, "input.inp")):
+        dest = materialize_job_input({"source_type": "file", "source": str(src)}, inputs_dir, run_root)
+        assert dest is not None
+        assert dest.name == expected
+        assert dest.read_text(encoding="utf-8") == src.read_text(encoding="utf-8")
+
+
+def test_materialize_structure_asset_preserves_com_suffix(tmp_path: Path) -> None:
+    run_root = tmp_path / "root"
+    run_root.mkdir()
+    asset = run_root / "mol.com"
+    asset.write_text("! SP\n* xyz 0 1\nC 0 0 0\n*\n", encoding="utf-8")
+
+    dest = materialize_job_input(
+        {"source_type": "structure_asset", "source": "mol.com"}, tmp_path / "inputs", run_root
+    )
+    assert dest is not None
+    assert dest.name == "input.com"
 
 
 def test_store_roundtrip(tmp_path: Path) -> None:

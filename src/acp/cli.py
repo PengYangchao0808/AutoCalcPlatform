@@ -841,6 +841,9 @@ def _handle_optfreqsp(args: argparse.Namespace) -> int:
         sp_kwargs["solvent_model"] = sp_solvent_model
     if sp_solvent:
         sp_kwargs["solvent"] = sp_solvent
+    sp_extras = getattr(args, "route_extras", None)
+    if sp_extras:
+        sp_kwargs["route_extras"] = [x.strip() for x in sp_extras.split(",") if x.strip()]
     thermo_kwargs: dict[str, Any] = {
         "temperature": args.temperature,
         "pressure": args.pressure,

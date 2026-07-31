@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 
 _SUPPORTED_EXTENSIONS = {".xyz", ".gjf", ".com", ".inp"}
 
+_DEFAULT_SCALE_FACTOR = 0.9905
+
 _STAGE_NAMES: dict[str, list[str]] = {
     "singlepoint": ["single_point"],
     "optimize": ["optimize"],
@@ -536,7 +538,7 @@ def run_optfreqsp(
         shermo_bin=shermo_bin,
         temperature_k=th.get("temperature", 298.15),
         pressure_atm=th.get("pressure", 1.0),
-        scl_zpe=th.get("scale_factor", 0.9905),
+        scl_zpe=th.get("scale_factor", _DEFAULT_SCALE_FACTOR),
     )
 
     if thermo:
@@ -545,8 +547,14 @@ def run_optfreqsp(
         state.complete_stage("shermo")
     else:
         state.fail_stage("shermo", "Shermo returned no output")
+        _write_thermo_json(calc_dir, {}, sp_energy)
+        return WorkflowResult(
+            status="failed",
+            error="Shermo returned no output",
+            metadata={"output_dir": str(calc_dir), "sp_energy": sp_energy},
+        )
 
-    _write_thermo_json(calc_dir, thermo or {}, sp_energy)
+    _write_thermo_json(calc_dir, thermo, sp_energy)
     _write_energy_json(calc_dir, sp_energy)
     state.mark_completed()
 
@@ -555,9 +563,9 @@ def run_optfreqsp(
         metadata={
             "output_dir": str(calc_dir),
             "sp_energy": sp_energy,
-            "thermo_success": bool(thermo),
+            "thermo_success": True,
             "n_frequencies": len(freqs),
-            "free_energy_hartree": (thermo or {}).get("g_sum"),
+            "free_energy_hartree": thermo.get("g_sum"),
         },
     )
 

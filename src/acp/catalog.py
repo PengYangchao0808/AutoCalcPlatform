@@ -479,7 +479,14 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     },
     "temperature": {"type": "float", "min": 0, "max": 10000, "default": {"*": 298.15}, "unit": "K"},
     "pressure": {"type": "float", "min": 0, "max": 100000, "default": {"*": 1.0}, "unit": "atm"},
-    "scale_factor": {"type": "float", "advanced": True, "min": 0, "max": 1.0, "default": {"*": 1.0}},
+    "scale_factor": {
+        "type": "float",
+        "advanced": True,
+        "min": 0,
+        "max": 1.0,
+        "default": {"*": 0.9905},
+        "help": "Frequency scale factor for ZPE/thermo (default 0.9905)",
+    },
     "ewin": {
         "type": "float",
         "label": "Energy Window",

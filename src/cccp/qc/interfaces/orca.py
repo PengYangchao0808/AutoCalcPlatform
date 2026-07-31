@@ -111,6 +111,39 @@ def _record_hessian_resolution(
         logger.warning("Failed to write Hessian resolution sidecar: %s", exc)
 
 
+_FREQ_SECTION_HEADER = "VIBRATIONAL FREQUENCIES"
+_FREQ_LINE_RE = re.compile(r"^\s*\d+:\s+([-+]?\d+\.\d+)\s+cm\*\*-1", re.MULTILINE)
+
+
+def _parse_frequencies(output_file: Path) -> list[float]:
+    """Parse the final frequency section from an ORCA log.
+
+    ORCA 5.x prints frequency lines as ``   N:     value cm**-1`` (imaginary
+    modes carry a ``***imaginary mode***`` suffix).  ``Opt Freq`` jobs
+    contain one section per Hessian recalculation during optimization; only
+    the last section corresponds to the final geometry.  The six
+    translational/rotational zero modes are excluded.
+
+    Args:
+        output_file: ORCA ``.out`` log path
+
+    Returns:
+        Vibrational frequencies (cm**-1); empty list on parse failure.
+    """
+    try:
+        with open(output_file, encoding="utf-8", errors="replace") as f:
+            content = f.read()
+    except OSError as e:
+        logger.warning("Could not read frequency data from %s: %s", output_file, e)
+        return []
+    sections = content.split(_FREQ_SECTION_HEADER)
+    if len(sections) < 2:
+        logger.warning("No VIBRATIONAL FREQUENCIES section found in %s", output_file)
+        return []
+    frequencies = [float(m.group(1)) for m in _FREQ_LINE_RE.finditer(sections[-1])]
+    return [f for f in frequencies if f != 0.0]
+
+
 class ORCAInterface(QCInterfaceBase):
     """
     Interface for ORCA calculations.
@@ -759,17 +792,7 @@ class ORCAInterface(QCInterfaceBase):
         energy = LogParser.extract_energy(output_file, "orca")
         coords, syms, _ = LogParser.extract_last_converged_coords(output_file, "orca")
 
-        frequencies = []
-        try:
-            with open(output_file, encoding="utf-8", errors="replace") as f:
-                content = f.read()
-
-            freq_pattern = r"Mode\#\s+\d+\s+:\s+([-+]?\d+\.\d+)\s+cm\*\*-1"
-            matches = re.findall(freq_pattern, content)
-            frequencies = [float(m) for m in matches]
-
-        except Exception as e:
-            logger.warning(f"Could not parse frequency data: {e}")
+        frequencies = _parse_frequencies(output_file)
 
         return QCResult(
             success=True,
@@ -870,15 +893,7 @@ class ORCAInterface(QCInterfaceBase):
         coords, syms, error = LogParser.extract_last_converged_coords(output_file, "orca")
         energy = LogParser.extract_energy(output_file, "orca")
 
-        frequencies: list[float] = []
-        try:
-            with open(output_file, encoding="utf-8", errors="replace") as f:
-                content = f.read()
-            freq_pattern = r"Mode\#\s+\d+\s+:\s+([-+]?\d+\.\d+)\s+cm\*\*-1"
-            matches = re.findall(freq_pattern, content)
-            frequencies = [float(m) for m in matches]
-        except Exception as e:
-            logger.warning(f"Could not parse frequency data from optfreq output: {e}")
+        frequencies = _parse_frequencies(output_file)
 
         if coords is None:
             return QCResult(

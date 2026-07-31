@@ -134,6 +134,19 @@ def find_workflow_state(work_dir: Path) -> Path | None:
     return min(candidates, key=_key)
 
 
+def _materialized_input_name(source: str) -> str:
+    """Name for the materialized input file.
+
+    Structure files keep their format-significant suffix (``.com``/``.inp``
+    are parsed by the ORCA input parser); everything else materialises as
+    ``input.xyz``.
+    """
+    suffix = Path(source).suffix.lower()
+    if suffix in (".com", ".inp"):
+        return f"input{suffix}"
+    return "input.xyz"
+
+
 def materialize_job_input(
     inp: dict[str, Any],
     inputs_dir: Path,
@@ -160,8 +173,19 @@ def materialize_job_input(
             raise ValueError(f"Asset path escapes run_root: {source}")
         if not candidate.is_file():
             raise ValueError(f"Asset file not found: {source}")
+        dest = inputs_dir / _materialized_input_name(str(candidate))
         shutil.copy2(candidate, dest)
         return dest
+
+    if (
+        source.endswith(".xyz") or source.endswith(".gjf") or source.endswith(".sdf")
+        or source.endswith(".com") or source.endswith(".inp")
+    ):
+        p = Path(source)
+        if p.is_file():
+            dest = inputs_dir / _materialized_input_name(str(p))
+            shutil.copy2(p, dest)
+            return dest
 
     if source_type == "smiles" or _looks_like_smiles(str(source)):
         from acp.chem.embedding import smiles_to_xyz
@@ -169,12 +193,6 @@ def materialize_job_input(
         xyz = smiles_to_xyz(str(source))
         dest.write_text(xyz, encoding="utf-8")
         return dest
-
-    if source.endswith(".xyz") or source.endswith(".gjf") or source.endswith(".sdf"):
-        p = Path(source)
-        if p.is_file():
-            shutil.copy2(p, dest)
-            return dest
 
     from acp.chem.embedding import smiles_to_xyz
 

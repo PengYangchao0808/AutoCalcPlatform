@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 from acp.backends.base import QCResult
-from acp.catalog import METHOD_SCHEMAS, WORKFLOW_CATALOG
+from acp.catalog import FIELD_DEFINITIONS, METHOD_SCHEMAS, WORKFLOW_CATALOG
 from acp.core.utils import ensure_unique_dir
 from acp.workflows.simple import (
     _check_input,
@@ -27,6 +27,7 @@ from acp.workflows.simple import (
     _write_thermo_json,
     run_frequency,
     run_optfreq,
+    run_optfreqsp,
     run_optimize,
     run_singlepoint,
     run_xtb_optimize,
@@ -460,6 +461,59 @@ def test_run_optfreqsp_no_shermo(tmp_path):
         result = run_optfreqsp(str(inp), output_dir=out)
         assert result.status == "failed"
         assert "Shermo" in (result.error or "")
+
+
+def test_run_optfreqsp_shermo_failure_marks_job_failed(tmp_path):
+    """Shermo producing no output must fail the job (per §5.6), not silently
+    return completed with missing thermochemistry."""
+    inp = tmp_path / "mol.xyz"
+    inp.write_text("1\n\nC 0 0 0\n")
+    out = tmp_path / "shermo_fail_out"
+    log_file = tmp_path / "fake_optfreq.out"
+    log_file.write_text("ORCA log placeholder")
+
+    with (
+        patch("acp.workflows.simple._find_shermo", return_value=True),
+        patch("acp.workflows.simple._build_backend") as mk_backend,
+        patch("acp.backends.external.run_shermo", return_value=None) as mk_shermo,
+    ):
+        optfreq_result = _fake_qc_result(
+            coordinates=np.array([[0.1, 0.0, 0.0]]),
+            symbols=["C"],
+            frequencies=[500.0],
+            has_frequencies=True,
+            log_file=log_file,
+        )
+        sp_result = _fake_qc_result(energy=-40.0)
+
+        def _se_side_effect(cfg):
+            be = MagicMock()
+            be.opt_freq.return_value = optfreq_result
+            be.single_point.return_value = sp_result
+            return be
+
+        mk_backend.side_effect = _se_side_effect
+
+        result = run_optfreqsp(str(inp), output_dir=out)
+
+        assert result.status == "failed"
+        assert "Shermo" in (result.error or "")
+        mk_shermo.assert_called_once()
+
+
+def test_scale_factor_default_consistent_across_sources():
+    """FIELD_DEFINITIONS / optfreqsp profile / simple.py fallback must agree."""
+    from acp.workflows.simple import run_optfreqsp as _run_optfreqsp
+
+    assert FIELD_DEFINITIONS["scale_factor"]["default"]["*"] == 0.9905
+    profile = next(
+        p for p in METHOD_SCHEMAS["dft_optfreqsp"]["profiles"] if p["profile_id"] == "default"
+    )
+    assert profile["levels"]["thermo"]["scale_factor"] == 0.9905
+    assert _run_optfreqsp.__defaults__ is not None  # entry kept importable
+    import acp.workflows.simple as _simple
+
+    assert _simple._DEFAULT_SCALE_FACTOR == 0.9905
 
 
 def test_run_optfreqsp_optfreq_failure(tmp_path):

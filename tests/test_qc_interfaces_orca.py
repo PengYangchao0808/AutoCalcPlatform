@@ -10,11 +10,15 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from cccp.qc.interfaces.orca import ORCAInterface
+from cccp.qc.interfaces.orca import ORCAInterface, _parse_frequencies
 from tests.conftest import requires_orca
 
 COORDINATES = np.array([[0.0, 0.0, 0.0]])
 SYMBOLS = ["H"]
+
+REAL_FREQ_FIXTURE = (
+    Path(__file__).resolve().parent / "fixtures" / "orca_optfreq_real_sections.txt"
+)
 
 ORCA_OPT_OUTPUT = """FINAL SINGLE POINT ENERGY      -200.654321
 CARTESIAN COORDINATES (ANGSTROEM)
@@ -173,3 +177,88 @@ def test_orca_build_input_blocks_uppercase_solvent_model(sample_config: dict[str
     )
     blocks, _ = interface._build_input_blocks("sp")
     assert "smd true" in blocks
+
+
+def test_parse_frequencies_real_orca_format_takes_last_section(
+    tmp_path: Path,
+) -> None:
+    """Real ORCA 5.x format is ``N: value cm**-1`` — the parser must take
+    the last VIBRATIONAL FREQUENCIES section only (intermediate Hessian
+    steps carry imaginary modes) and drop the six zero T/R modes."""
+    freq_file = tmp_path / "orca.out"
+    freq_file.write_text(REAL_FREQ_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+
+    frequencies = _parse_frequencies(freq_file)
+
+    assert frequencies == [1615.84, 3795.36, 3896.58]
+
+
+def test_parse_frequencies_real_section_with_imaginary_modes(
+    tmp_path: Path,
+) -> None:
+    """Imaginary modes carry a ``***imaginary mode***`` suffix; zeros are
+    filtered, negative values are preserved."""
+    freq_file = tmp_path / "orca.out"
+    freq_file.write_text(
+        """VIBRATIONAL FREQUENCIES
+-----------------------
+
+Scaling factor for frequencies =  1.000000000  (already applied!)
+
+   0:         0.00 cm**-1
+   1:         0.00 cm**-1
+   2:         0.00 cm**-1
+   3:         0.00 cm**-1
+   4:         0.00 cm**-1
+   5:         0.00 cm**-1
+   6:      -797.72 cm**-1 ***imaginary mode***
+   7:      -791.36 cm**-1 ***imaginary mode***
+   8:      1411.55 cm**-1
+""",
+        encoding="utf-8",
+    )
+
+    assert _parse_frequencies(freq_file) == [-797.72, -791.36, 1411.55]
+
+
+def test_parse_frequencies_no_section_returns_empty(tmp_path: Path) -> None:
+    freq_file = tmp_path / "orca.out"
+    freq_file.write_text("FINAL SINGLE POINT ENERGY      -200.0\n", encoding="utf-8")
+
+    assert _parse_frequencies(freq_file) == []
+
+
+def test_parse_frequencies_missing_file_returns_empty(tmp_path: Path) -> None:
+    assert _parse_frequencies(tmp_path / "does_not_exist.out") == []
+
+
+def test_opt_freq_parses_real_output_into_qcresult(
+    sample_config: dict[str, object], tmp_path: Path
+) -> None:
+    """End-to-end: mocked ORCA subprocess emitting real-format output must
+    yield a QCResult carrying the final-section frequencies."""
+    interface = ORCAInterface(sample_config)
+    output_name = "orca_optfreq"
+
+    completed = subprocess.CompletedProcess(
+        args=["orca", f"{output_name}.inp"],
+        returncode=0,
+        stdout=ORCA_OPT_OUTPUT + "\n" + REAL_FREQ_FIXTURE.read_text(encoding="utf-8"),
+        stderr="",
+    )
+
+    with patch(
+        "cccp.qc.interfaces.orca.subprocess.run",
+        return_value=completed,
+    ) as mock_run:
+        result = interface.opt_freq(
+            COORDINATES,
+            SYMBOLS,
+            output_dir=tmp_path,
+            output_name=output_name,
+        )
+
+    assert result.success is True
+    assert result.frequencies == [1615.84, 3795.36, 3896.58]
+    assert result.has_frequencies is True
+    mock_run.assert_called_once()

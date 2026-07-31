@@ -678,7 +678,7 @@ class RemoteJobRunner:
         run_root = work_dir.parent.parent
         materialized = materialize_job_input(spec.input, inputs_dir, run_root)
 
-        remote_input_name = "input.xyz"
+        remote_input_name = materialized.name if materialized else "input.xyz"
         if materialized and materialized.is_file():
             remote_inputs_dir = posixpath.join(remote_job_dir, "inputs")
             self._stager.make_remote_dir(node, remote_inputs_dir)
@@ -697,6 +697,7 @@ class RemoteJobRunner:
             queue=self._config.queue,
             walltime=self._config.walltime,
             extra_flags=self._config.extra_flags,
+            input_path=posixpath.join("inputs", remote_input_name),
         )
         script_text = generate_lsf_script(lsf_spec)
         script_remote_path = posixpath.join(remote_job_dir, "submit.lsf")
