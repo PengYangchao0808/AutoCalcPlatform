@@ -380,6 +380,7 @@ Examples:
   acp run energy --input "CCO" --output ./result
   acp run energy --input "CCO" --preset censo-zero
   acp run energy --input "CCO" --no-opt
+  acp run energy --input "CCO" --full-ensemble
   acp run energy --input prev/ensemble/ensemble.xyz
   acp run energy --input "CCO" --preset censo-default
         """,
@@ -417,6 +418,23 @@ Examples:
         "--no-opt",
         action="store_true",
         help="Disable high-accuracy rank1 geometry optimization (cheap RSH//xTB path)",
+    )
+    energy.add_argument(
+        "--rank1-only",
+        action="store_true",
+        help=(
+            "Only refine the CENSO/xTB rank1 conformer and compute the ensemble "
+            "total free energy G_total = G1 + RT*ln(p1) from the screening "
+            "Boltzmann table (default: enabled; use --full-ensemble to disable)"
+        ),
+    )
+    energy.add_argument(
+        "--full-ensemble",
+        action="store_true",
+        help=(
+            "Compute the full cumulative-Boltzmann ensemble (>=99%% population, "
+            "v15 semantics) instead of the default rank1-only fine DFT"
+        ),
     )
     energy.add_argument(
         "--threshold",
@@ -484,6 +502,241 @@ Examples:
         "--save-config",
         type=str,
         help="Save effective configuration to this file",
+    )
+
+    # -- run xtbmd_censo_energy -----------------------------------------
+    # xTB-MD conformer search + CENSO free-energy workflow (DevDoc
+    # ACP_xTBMD_CENSO_Energy_DevDoc.html): GFN-FF MD sampling → GFN1
+    # batch opt → ISOSTAT dedup → GFN1 energy window → CENSO → fine DFT.
+    # NOTE: --ewin here is the GFN1 post-optimization energy window
+    # (kcal/mol), distinct from the CREST sampling window of
+    # `acp run energy` (same name, different object — DevDoc §9).
+    xtbmd = run_sub.add_parser(
+        "xtbmd_censo_energy",
+        help="xTB-MD conformer search + CENSO free energy "
+             "(GFN-FF MD → GFN1 → isostat → CENSO → DFT)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run xtbmd_censo_energy --input "CCO" --output ./result
+  acp run xtbmd_censo_energy --input molecule.xyz --preset censo-default
+  acp run xtbmd_censo_energy --input "CCO" --md-temp 400 --md-time 100 --md-seeds 3
+  acp run xtbmd_censo_energy --input "CCO" --rank1-only --resume
+        """,
+    )
+    xtbmd_input = xtbmd.add_mutually_exclusive_group(required=False)
+    xtbmd_input.add_argument(
+        "--input",
+        type=str,
+        help="SMILES string or input file path (XYZ, SDF, MOL, INP, GJF)",
+    )
+    xtbmd_input.add_argument(
+        "--batch-file",
+        type=str,
+        help="File containing multiple inputs (one per line)",
+    )
+    xtbmd.add_argument(
+        "--output",
+        type=str,
+        default="./xtbmd_censo_energy_output",
+        help="Output directory (default: ./xtbmd_censo_energy_output)",
+    )
+    xtbmd.add_argument(
+        "--config",
+        type=str,
+        help="Configuration YAML file",
+    )
+    xtbmd.add_argument(
+        "--preset",
+        type=str,
+        default="censo-light",
+        choices=["censo-light", "censo-default", "censo-zero"],
+        help="CENSO preset (default: censo-light)",
+    )
+    xtbmd.add_argument(
+        "--no-opt",
+        action="store_true",
+        help="Disable the fine DFT handoff (CENSO/xTB refinement is final)",
+    )
+    xtbmd.add_argument(
+        "--rank1-only",
+        action="store_true",
+        help=(
+            "Only refine the CENSO/xTB rank1 conformer and compute the "
+            "ensemble total free energy G_total = G1 + RT*ln(p1) from the "
+            "screening Boltzmann table (default: full ≥99%% ensemble)"
+        ),
+    )
+    xtbmd.add_argument(
+        "--threshold",
+        type=float,
+        default=0.99,
+        help="Cumulative Boltzmann population threshold (0<value<=1, default: 0.99)",
+    )
+    xtbmd.add_argument(
+        "--levels",
+        type=str,
+        help=(
+            "JSON method-level overrides, e.g. "
+            '\'{"refinement_sp":{"functional":"DLPNO-CCSD(T)","basis":"def2-TZVPP"},'
+            '"thermo":{"scale_factor":0.98},"refinement_threshold":0.99}\''
+        ),
+    )
+    xtbmd.add_argument(
+        "--solvent",
+        type=str,
+        help="Solvent name (e.g. dcm, water); applied consistently to MD, GFN1 batch opt and CENSO",
+    )
+    xtbmd.add_argument(
+        "--ewin",
+        type=float,
+        default=None,
+        help=(
+            "GFN1 energy window in kcal/mol (default: censo.ewin config, 6.0) — "
+            "post-optimization relative-energy cutoff before CENSO. NOTE: unlike "
+            "`acp run energy`, this window acts on the GFN1 batch-opt results, "
+            "not CREST sampling."
+        ),
+    )
+    xtbmd.add_argument(
+        "--nproc",
+        type=int,
+        help="Number of CPU cores (overrides config)",
+    )
+    xtbmd.add_argument(
+        "--mem",
+        type=str,
+        help="Memory limit, e.g. 32GB, 4096MB (overrides config)",
+    )
+    xtbmd.add_argument(
+        "--log-level",
+        type=str,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+    xtbmd.add_argument(
+        "--log-file",
+        type=str,
+        help="Log file path",
+    )
+    xtbmd.add_argument(
+        "--name",
+        type=str,
+        help="Molecule name (auto-generated if not specified)",
+    )
+    xtbmd.add_argument(
+        "--charge",
+        type=int,
+        help="Molecular charge (auto-detected if not specified)",
+    )
+    xtbmd.add_argument(
+        "--multiplicity",
+        type=int,
+        help="Spin multiplicity (auto-detected if not specified)",
+    )
+    xtbmd.add_argument(
+        "--save-config",
+        type=str,
+        help="Save effective configuration to this file",
+    )
+    # -- MD sampling control group --------------------------------------
+    xtbmd.add_argument(
+        "--md-temp", type=float, default=400.0,
+        help="MD target temperature in K (default: 400)",
+    )
+    xtbmd.add_argument(
+        "--md-time", type=float, default=100.0,
+        help="MD length in ps (default: 100)",
+    )
+    xtbmd.add_argument(
+        "--md-dump", type=float, default=100.0,
+        help="MD trajectory dump interval in fs (default: 100)",
+    )
+    xtbmd.add_argument(
+        "--md-step", type=float, default=1.0,
+        help="MD integration time step in fs (default: 1.0)",
+    )
+    xtbmd.add_argument(
+        "--md-hmass", type=float, default=1.0,
+        help="Hydrogen mass scaling (default: 1.0)",
+    )
+    xtbmd.add_argument(
+        "--md-no-shake", action="store_true",
+        help="Disable SHAKE X–H bond constraints (enabled by default)",
+    )
+    xtbmd.add_argument(
+        "--md-nvt", action=argparse.BooleanOptionalAction, default=True,
+        help="Use the NVT ensemble (default: on; pass --no-md-nvt for NPT)",
+    )
+    xtbmd.add_argument(
+        "--md-seed", type=int, default=42,
+        help="Base random seed (default: 42; replica seeds increment)",
+    )
+    xtbmd.add_argument(
+        "--md-seeds", type=int, default=1,
+        help=(
+            "Number of replica MD trajectories (default: 1; each replica "
+            "starts from a distinct RDKit embedding when >1; >=3 recommended "
+            "for flexible molecules)"
+        ),
+    )
+    xtbmd.add_argument(
+        "--md-method", type=str, default="gfnff",
+        choices=["gfnff", "gfn0", "gfn1", "gfn2"],
+        help="MD Hamiltonian (default: gfnff)",
+    )
+    xtbmd.add_argument(
+        "--md-timeout", type=int, default=None,
+        help="Per-MD subprocess timeout in seconds (default: auto-estimated from --md-time)",
+    )
+    # -- batch-opt / convergence / isostat control group ----------------
+    xtbmd.add_argument(
+        "--conv-check", action=argparse.BooleanOptionalAction, default=True,
+        help="Run the sampling-convergence diagnostics "
+             "(default: on; pass --no-conv-check to disable)",
+    )
+    xtbmd.add_argument(
+        "--conv-novelty-max", type=float, default=0.10,
+        help="Population-weighted second-half novelty cap "
+             "(default: 0.10; over-limit is a warning only)",
+    )
+    xtbmd.add_argument(
+        "--conv-rmsd", type=float, default=0.5,
+        help="Conv-check dedup RMSD threshold in Å (default: 0.5; decoupled from --gdis)",
+    )
+    xtbmd.add_argument(
+        "--max-frames", type=int, default=500,
+        help="Batch-opt frame cap (default: 500; 0 = unlimited; uniform subsampling when exceeded)",
+    )
+    xtbmd.add_argument(
+        "--opt-gfn", type=int, default=1, choices=[0, 1, 2],
+        help="GFN level for the per-frame batch optimization (default: 1)",
+    )
+    xtbmd.add_argument(
+        "--opt-level", type=str, default="normal",
+        choices=["crude", "normal", "tight", "verytight"],
+        help="xTB optimization level for the batch optimization (default: normal)",
+    )
+    xtbmd.add_argument(
+        "--opt-timeout", type=int, default=300,
+        help="Per-frame xTB optimization timeout in seconds (default: 300; 0 = unlimited)",
+    )
+    xtbmd.add_argument(
+        "--edis", type=float, default=0.5,
+        help="ISOSTAT energy dedup threshold in kcal/mol (default: 0.5)",
+    )
+    xtbmd.add_argument(
+        "--gdis", type=float, default=0.25,
+        help="ISOSTAT structure RMSD dedup threshold in Å (default: 0.25)",
+    )
+    xtbmd.add_argument(
+        "--keep-frames", action="store_true",
+        help="Keep per-frame optimization working directories (default: cleaned up)",
+    )
+    xtbmd.add_argument(
+        "--resume", action="store_true",
+        help="Resume from stage checkpoints (traj/isomers/cluster; fingerprint-validated)",
     )
 
     # -- simple workflows (singlepoint / optimize / frequency / optfreq / optfreqsp) --
@@ -1170,6 +1423,7 @@ def _handle_energy(args: argparse.Namespace) -> int:
             solvent=args.solvent,
             nproc=args.nproc,
             no_opt=args.no_opt,
+            rank1_only=not args.full_ensemble,
             levels=levels,
             ewin=getattr(args, "ewin", None),
         )
@@ -1186,6 +1440,10 @@ def _handle_energy(args: argparse.Namespace) -> int:
         logger.info("  Conformers         : %s", meta.get("n_conformers", "N/A"))
         logger.info("  Global minimum     : %s", meta.get("global_min_xyz", "N/A"))
         logger.info("  Thermo CSV         : %s", meta.get("thermo_csv", "N/A"))
+        logger.info(
+            "  Total G(ensemble)  : %s kcal/mol",
+            meta.get("total_gibbs_kcal_mol", "N/A"),
+        )
         return 0
 
     logger.error("Conformer energy workflow failed: %s", result.error)
@@ -1225,8 +1483,202 @@ def _handle_energy_batch(
                 solvent=args.solvent,
                 nproc=args.nproc,
                 no_opt=args.no_opt,
+                rank1_only=not args.full_ensemble,
                 levels=levels,
                 ewin=getattr(args, "ewin", None),
+            )
+            if r.status == "completed":
+                results.append({"molecule": mi.name, "status": "completed", "metadata": r.metadata})
+            else:
+                errors.append({"molecule": mi.name, "error": str(r.error)})
+        except Exception as exc:
+            logger.error("  Failed: %s", exc)
+            errors.append({"molecule": mi.name, "error": str(exc)})
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    summary_path = output_dir / f"batch_summary_{timestamp}.json"
+    summary = {
+        "timestamp": timestamp,
+        "total": len(inputs),
+        "successful": len(results),
+        "failed": len(errors),
+        "preset": args.preset,
+        "results": results,
+        "errors": errors,
+    }
+    summary_path.write_text(json.dumps(summary, indent=2))
+    logger.info(
+        "Batch complete: %d/%d successful — summary saved to %s",
+        len(results), len(inputs), summary_path,
+    )
+    return 0 if not errors else 1
+
+
+def _handle_xtbmd_censo_energy(args: argparse.Namespace) -> int:
+    """Execute the xTB-MD conformer-search free-energy workflow."""
+    setup_logging(args.log_level)
+
+    if not args.input and not args.batch_file:
+        print("Error: --input or --batch-file is required", file=sys.stderr)
+        return 1
+
+    levels = _parse_levels_json(args.levels)
+    if args.levels and levels is None:
+        return 1
+    if levels is None:
+        levels = {}
+    if args.threshold != 0.99:
+        levels["refinement_threshold"] = args.threshold
+    else:
+        # Match energy handler semantics: an explicit --levels
+        # refinement_threshold survives; only the default is backfilled.
+        levels.setdefault("refinement_threshold", 0.99)
+
+    cfg = _build_config(args)
+    output_dir = Path(args.output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.save_config:
+        from cccp.config import save_config as save_cfg
+        save_cfg(cfg, Path(args.save_config))
+        logger.info("Configuration saved to: %s", args.save_config)
+
+    if args.batch_file:
+        return _handle_xtbmd_censo_energy_batch(args, cfg, output_dir, levels)
+
+    try:
+        from acp.workflows.xtbmd_censo_energy import run_xtbmd_censo_energy
+
+        result = run_xtbmd_censo_energy(
+            input_source=args.input,
+            output_dir=str(output_dir),
+            preset=args.preset,
+            config=cfg,
+            name=args.name,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            solvent=args.solvent,
+            nproc=args.nproc,
+            no_opt=args.no_opt,
+            levels=levels,
+            threshold=None,  # refinement_threshold already merged into levels
+            ewin=args.ewin,
+            rank1_only=args.rank1_only,
+            resume=args.resume,
+            md_temperature=args.md_temp,
+            md_time_ps=args.md_time,
+            md_dump_fs=args.md_dump,
+            md_step_fs=args.md_step,
+            md_hmass=args.md_hmass,
+            md_shake=not args.md_no_shake,
+            md_nvt=args.md_nvt,
+            md_seed=args.md_seed,
+            md_seeds=args.md_seeds,
+            md_method=args.md_method,
+            md_timeout=getattr(args, "md_timeout", None),
+            conv_check=args.conv_check,
+            conv_novelty_max=args.conv_novelty_max,
+            conv_rmsd=args.conv_rmsd,
+            max_frames=args.max_frames,
+            opt_gfn_level=args.opt_gfn,
+            opt_level=args.opt_level,
+            opt_timeout=args.opt_timeout,
+            keep_frames=args.keep_frames,
+            edis=args.edis,
+            gdis=args.gdis,
+        )
+    except KeyboardInterrupt:
+        logger.warning("Interrupted by user")
+        return 130
+    except Exception as exc:
+        logger.exception("Fatal error: %s", exc)
+        return 1
+
+    if result.status == "completed":
+        meta = result.metadata or {}
+        logger.info("xTB-MD CENSO energy workflow completed successfully")
+        logger.info("  Conformers         : %s", meta.get("n_conformers", "N/A"))
+        logger.info("  Global minimum     : %s", meta.get("global_min_xyz", "N/A"))
+        logger.info("  Thermo CSV         : %s", meta.get("thermo_csv", "N/A"))
+        logger.info(
+            "  Frames (raw/kept)  : %s / %s",
+            meta.get("n_frames_raw", "N/A"),
+            meta.get("n_frames", "N/A"),
+        )
+        logger.info(
+            "  Batch opt ok/fail  : %s / %s",
+            meta.get("n_ok", "N/A"),
+            meta.get("n_failed", "N/A"),
+        )
+        logger.info(
+            "  Total G(ensemble)  : %s kcal/mol",
+            meta.get("total_gibbs_kcal_mol", "N/A"),
+        )
+        return 0
+
+    logger.error("xTB-MD CENSO energy workflow failed: %s", result.error)
+    return 1
+
+
+def _handle_xtbmd_censo_energy_batch(
+    args: argparse.Namespace,
+    cfg: dict[str, Any],
+    output_dir: Path,
+    levels: dict[str, Any] | None,
+) -> int:
+    """Run the xTB-MD CENSO energy workflow for multiple molecules (batch mode)."""
+    from acp.workflows.xtbmd_censo_energy import run_xtbmd_censo_energy
+    from cccp.io import load_batch_inputs
+
+    logger.info("ACP xtbmd_censo_energy workflow — batch mode")
+    batch_file = Path(args.batch_file)
+    inputs = load_batch_inputs(batch_file)
+
+    logger.info("Found %d molecules to process", len(inputs))
+    results: list[dict[str, Any]] = []
+    errors: list[dict[str, Any]] = []
+
+    for i, mi in enumerate(inputs, start=1):
+        source = str(mi.source_path or mi.metadata.get("smiles", ""))
+        logger.info("[%d/%d] Processing %s", i, len(inputs), mi.name)
+        try:
+            r = run_xtbmd_censo_energy(
+                input_source=source,
+                output_dir=str(output_dir),
+                preset=args.preset,
+                config=cfg,
+                name=mi.name,
+                charge=getattr(args, "charge", None),
+                multiplicity=getattr(args, "multiplicity", None),
+                solvent=args.solvent,
+                nproc=args.nproc,
+                no_opt=args.no_opt,
+                levels=levels,
+                threshold=None,  # refinement_threshold already merged into levels
+                ewin=args.ewin,
+                rank1_only=args.rank1_only,
+                resume=args.resume,
+                md_temperature=args.md_temp,
+                md_time_ps=args.md_time,
+                md_dump_fs=args.md_dump,
+                md_step_fs=args.md_step,
+                md_hmass=args.md_hmass,
+                md_shake=not args.md_no_shake,
+                md_nvt=args.md_nvt,
+                md_seed=args.md_seed,
+                md_seeds=args.md_seeds,
+                md_method=args.md_method,
+                md_timeout=getattr(args, "md_timeout", None),
+                conv_check=args.conv_check,
+                conv_novelty_max=args.conv_novelty_max,
+                conv_rmsd=args.conv_rmsd,
+                max_frames=args.max_frames,
+                opt_gfn_level=args.opt_gfn,
+                opt_level=args.opt_level,
+                opt_timeout=args.opt_timeout,
+                keep_frames=args.keep_frames,
+                edis=args.edis,
+                gdis=args.gdis,
             )
             if r.status == "completed":
                 results.append({"molecule": mi.name, "status": "completed", "metadata": r.metadata})
@@ -1280,6 +1732,7 @@ def main(argv: list[str] | None = None) -> int:
     dispatch: dict[str, Callable[[argparse.Namespace], int]] = {
         "ensemble": _handle_ensemble,
         "energy": _handle_energy,
+        "xtbmd_censo_energy": _handle_xtbmd_censo_energy,
         "mechanism": _handle_mechanism,
         "serve": _handle_serve,
         "singlepoint": _handle_singlepoint,

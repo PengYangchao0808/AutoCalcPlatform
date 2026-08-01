@@ -32,6 +32,8 @@
 - 支持 `--no-opt` 快速 RSH//xTB 路径
 - DFT handoff 经 `CrestBackend` / `CensoBackend` 后端层（不再绕过直连 `CRESTInterface`）
 
+> ⚠️ **注意事项（`--rank1-only` 模式）**：`acp run energy --rank1-only` 与未来的 `acp run xtbmd_censo_energy --rank1-only` 中，`G_total = G₁(fine DFT) + k_B·T·ln p₁` 的混合修正项采用 CENSO 权重表（半经验/低精度 DFT 级），而 G₁ 来自高精度 DFT，属于**混级量**：当 CENSO 排序与高精度方法不一致（rank 反转）时误差可达数 kcal/mol 量级。该模式仅适合"只看排名第一构象"的快速筛选场景；正式结果请使用默认全系综模式（完整混合式，DFT 级权重）。两种模式均输出 `total_gibbs_censo_hartree` 参考量用于对照修正。
+
 ### 3. 机理研究 — `acp run mechanism` ✅
 - 反应物/产物/中间体构象搜索
 - TS 初猜构筑（NEB 插值 / 反应坐标扫描）

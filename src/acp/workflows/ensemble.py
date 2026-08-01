@@ -11,7 +11,6 @@ from __future__ import annotations
 import csv
 import json
 import logging
-import re
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +18,6 @@ import numpy as np
 
 from acp.backends.censo_backend import (
     CensoBackend,
-    CensoConformerRecord,
     CensoRunResult,
 )
 from acp.backends.registry import get_backend
@@ -28,12 +26,19 @@ from acp.core.state import WorkflowState
 from acp.core.workflow import WorkflowResult
 from acp.io.structures import InputFormat, StructureReader
 from acp.workflows._helpers import sanitize_job_name
+from acp.workflows.energy_shared import (
+    resolve_crest_ewin as _resolve_crest_ewin,
+)
+from acp.workflows.energy_shared import (
+    resolve_solvent_config as _resolve_solvent_config,
+)
+from acp.workflows.energy_shared import (
+    xtb_passthrough_result as _xtb_passthrough_result,
+)
 from cccp.config import load_config
 from cccp.utils.file_io import read_xyz_multiframe, write_xyz, write_xyz_multiframe
 
 logger = logging.getLogger(__name__)
-
-_FLOAT_RE = re.compile(r"[-+]?\d+\.\d+")
 
 
 def _is_multiframe_xyz(path: Path) -> bool:
@@ -63,73 +68,6 @@ def _is_file_input(input_source: str) -> bool:
         return path.exists() and path.is_file()
     except OSError:
         return False
-
-
-def _xtb_passthrough_result(
-    ensemble_xyz: Path,
-    temperature: float,
-) -> CensoRunResult:
-    """Build a CensoRunResult directly from a CREST ensemble (censo-zero).
-
-    The censo-zero preset for the ensemble workflow does not invoke CENSO
-    (§7): the CREST ensemble is exported as-is, sorted by the xTB energies
-    parsed from the frame title lines. ``gsolv``/``grrho`` are zero — the
-    ``gtot`` equals the xTB electronic energy.
-    """
-    all_coords, symbols = read_xyz_multiframe(ensemble_xyz)
-    n_atoms = len(symbols)
-    if n_atoms == 0:
-        raise ValueError(f"No atoms found in ensemble: {ensemble_xyz}")
-    n_frames = len(all_coords) // n_atoms
-
-    energies: list[float] = []
-    with open(ensemble_xyz, encoding="utf-8", errors="replace") as f:
-        lines = f.readlines()
-    idx = 0
-    while idx < len(lines) and len(energies) < n_frames:
-        try:
-            frame_atoms = int(lines[idx].strip())
-        except ValueError:
-            break
-        title = lines[idx + 1].strip() if idx + 1 < len(lines) else ""
-        match = _FLOAT_RE.search(title)
-        energies.append(float(match.group()) if match else 0.0)
-        idx += frame_atoms + 2
-
-    if len(energies) < n_frames:
-        logger.warning(
-            "Parsed %d/%d title energies from %s — missing values set to 0.0",
-            len(energies),
-            n_frames,
-            ensemble_xyz,
-        )
-        energies.extend([0.0] * (n_frames - len(energies)))
-
-    records = []
-    for i in range(n_frames):
-        start = i * n_atoms
-        records.append(
-            CensoConformerRecord(
-                conf_id=f"CONF{i + 1}",
-                frame_index=i,
-                energy=energies[i],
-                gsolv=0.0,
-                grrho=0.0,
-                gtot=energies[i],
-                coordinates=np.array(all_coords[start : start + n_atoms], dtype=float),
-                symbols=list(symbols),
-            )
-        )
-
-    result = CensoRunResult(
-        preset="censo-zero",
-        records=records,
-        final_part="crest_passthrough",
-        work_dir=ensemble_xyz.parent,
-        temperature=temperature,
-    )
-    result.sort_by_gtot()
-    return result
 
 
 def _build_ensemble_from_censo(
@@ -246,45 +184,6 @@ def _write_ensemble_outputs(
             )
 
     logger.info("Ensemble written to %s.{xyz,json,csv}", base)
-
-
-def _resolve_solvent_config(
-    cfg: dict[str, Any],
-    user_solvent: str | None,
-) -> tuple[str | None, str]:
-    censo_solvent = (
-        user_solvent if user_solvent is not None else cfg.get("censo", {}).get("solvent")
-    )
-    preopt_model = (
-        cfg.get("theory", {}).get("preoptimization", {}).get("solvent_model") or ""
-    ).lower()
-    censo_model = (
-        cfg.get("censo", {}).get("solvent_model") or ""
-    ).lower()
-
-    if preopt_model and preopt_model != "none":
-        solvent_model = preopt_model
-    elif censo_model and censo_model != "none":
-        solvent_model = censo_model
-    else:
-        solvent_model = "none"
-
-    return censo_solvent, solvent_model
-
-
-def _resolve_crest_ewin(
-    cfg: dict[str, Any],
-    ewin: float | None,
-) -> float:
-    """Resolve the CREST energy window: explicit arg > censo.ewin > 6.0."""
-    if ewin is not None and ewin > 0:
-        return float(ewin)
-    raw = cfg.get("censo", {}).get("ewin", 6.0)
-    try:
-        value = float(raw)
-    except (TypeError, ValueError):
-        return 6.0
-    return value if value > 0 else 6.0
 
 
 def run_ensemble_generation(

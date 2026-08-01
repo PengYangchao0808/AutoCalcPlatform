@@ -142,6 +142,104 @@ def censo_ewin_from_method(method: dict[str, Any]) -> float | None:
     return value if value > 0 else None
 
 
+# ── xtbmd_censo_energy flag emission (E7: runner ⇄ script_gen parity) ────
+# Single source of truth for the MD / batch-opt / ISOSTAT / conv-check /
+# resume flag mapping. Both JobRunner._build_cmd and
+# build_remote_cli_command emit through this function so the local and
+# remote paths can never drift (DevDoc §10.2 — the "runner / script_gen
+# 白名单" parity warning). Key set mirrors catalog.FIELD_DEFINITIONS for
+# the xtbmd_censo_energy schema plus the energy-like top-level keys.
+
+_XTBMD_SCALAR_FLAGS: dict[str, str] = {
+    "md_temperature": "--md-temp",
+    "md_time_ps": "--md-time",
+    "md_dump_fs": "--md-dump",
+    "md_step_fs": "--md-step",
+    "md_hmass": "--md-hmass",
+    "md_seed": "--md-seed",
+    "md_seeds": "--md-seeds",
+    "md_method": "--md-method",
+    "md_timeout": "--md-timeout",
+    "conv_novelty_max": "--conv-novelty-max",
+    "conv_rmsd": "--conv-rmsd",
+    "max_frames": "--max-frames",
+    "opt_gfn": "--opt-gfn",
+    "opt_level": "--opt-level",
+    "opt_timeout": "--opt-timeout",
+    "edis": "--edis",
+    "gdis": "--gdis",
+    "threshold": "--threshold",
+}
+
+# Boolean method keys → CLI opt-out flag (emitted when the value is False).
+_XTBMD_BOOL_OPT_OUT_FLAGS: dict[str, str] = {
+    "md_shake": "--md-no-shake",
+    "md_nvt": "--no-md-nvt",
+    "conv_check": "--no-conv-check",
+}
+
+# Boolean method keys → CLI opt-in flag (emitted when the value is True).
+_XTBMD_BOOL_OPT_IN_FLAGS: dict[str, str] = {
+    "keep_frames": "--keep-frames",
+    "resume": "--resume",
+    "rank1_only": "--rank1-only",
+    "no_opt": "--no-opt",
+}
+
+
+def _as_bool(value: Any) -> bool | None:
+    """Coerce a method-dict value to ``True`` / ``False`` (or ``None``).
+
+    The frontend submits real JSON booleans, but API clients may send
+    ``"true"`` / ``"false"`` strings (or ``1`` / ``0``); strict ``is
+    True`` / ``is False`` checks would silently drop those.  Returns
+    ``None`` for unrecognised values so the CLI default applies.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        if value == 1:
+            return True
+        if value == 0:
+            return False
+        return None
+    if isinstance(value, str):
+        norm = value.strip().lower()
+        if norm in ("true", "1", "yes", "on"):
+            return True
+        if norm in ("false", "0", "no", "off"):
+            return False
+    return None
+
+
+def xtbmd_method_flags(method: dict[str, Any]) -> list[str]:
+    """Emit the xtbmd_censo_energy CLI flag group from a job's method dict.
+
+    Scalar fields are forwarded whenever present and non-empty; booleans
+    are emitted as explicit opt-in / opt-out flags so the CLI defaults
+    (rank1_only=False, resume=False, md_nvt=True, conv_check=True, ...)
+    never silently override an explicit user choice.  Boolean values are
+    normalised via :func:`_as_bool` (tolerates ``"true"`` strings).
+
+    ``ewin`` is intentionally not emitted here: it follows the shared
+    :func:`censo_ewin_from_method` priority (``method.ewin`` then
+    ``levels.censo.ewin``) used by the energy workflow.
+    """
+    flags: list[str] = []
+    for key, flag in _XTBMD_SCALAR_FLAGS.items():
+        value = method.get(key)
+        if value is None or value == "":
+            continue
+        flags += [flag, str(value)]
+    for key, flag in _XTBMD_BOOL_OPT_OUT_FLAGS.items():
+        if _as_bool(method.get(key)) is False:
+            flags.append(flag)
+    for key, flag in _XTBMD_BOOL_OPT_IN_FLAGS.items():
+        if _as_bool(method.get(key)) is True:
+            flags.append(flag)
+    return flags
+
+
 @dataclass(frozen=True)
 class JobSpec:
     """Immutable description of what a job should run.
@@ -233,4 +331,5 @@ __all__ = [
     "censo_preset_from_method",
     "censo_solvent_from_method",
     "censo_ewin_from_method",
+    "xtbmd_method_flags",
 ]

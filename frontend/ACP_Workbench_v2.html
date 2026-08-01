@@ -509,6 +509,12 @@ body.resizing canvas {
 .info-item { padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.02); }
 .info-label { display: block; margin-bottom: 6px; font-size: 11px; color: var(--text-tertiary); }
 .info-value { font-size: 13px; color: var(--text-primary); word-break: break-word; }
+.info-total-gibbs { margin-top: 10px; padding: 12px; border: 1px solid rgba(78, 161, 255, 0.25); border-radius: var(--radius-sm); background: rgba(78, 161, 255, 0.06); }
+.info-total-gibbs-label { font-size: 11px; color: var(--text-tertiary); margin-bottom: 6px; }
+.info-total-gibbs-value { font-size: 18px; font-weight: 700; color: var(--accent); font-family: "SFMono-Regular", Consolas, monospace; }
+.info-total-gibbs-unit { font-size: 11px; font-weight: 400; color: var(--text-tertiary); margin-left: 6px; }
+.info-total-gibbs-meta { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--text-tertiary); font-family: "SFMono-Regular", Consolas, monospace; }
+.info-total-gibbs-meta b { color: var(--text-secondary); font-weight: 600; }
 
 .badge {
   display: inline-flex;
@@ -993,6 +999,14 @@ option, optgroup {
 
 .mc-profile-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .mc-profile-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); white-space: nowrap; }
+.mc-rank1-option { border: 1px solid var(--border-subtle); border-radius: 10px; background: rgba(255,255,255,0.02); padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start; cursor: pointer; user-select: none; transition: border-color 0.15s ease, background 0.15s ease; }
+.mc-rank1-option:hover { border-color: var(--accent); }
+.mc-rank1-option.selected { border-color: var(--accent); background: rgba(78,161,255,0.08); }
+.mc-rank1-check { width: 14px; height: 14px; margin-top: 2px; cursor: pointer; accent-color: var(--accent-blue, #4ea1ff); flex-shrink: 0; }
+.mc-rank1-text { flex: 1; }
+.mc-rank1-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.mc-rank1-desc { font-size: 11px; color: var(--text-tertiary); margin-top: 4px; line-height: 1.5; }
+.mc-rank1-desc code { font-family: "SFMono-Regular", Consolas, monospace; font-size: 10px; color: var(--accent); background: rgba(78,161,255,0.08); padding: 1px 4px; border-radius: 4px; }
 .mc-profile-select { appearance: none; -webkit-appearance: none; flex: 1; padding: 8px 32px 8px 10px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--bg-elevated); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%236b7b8a' stroke-width='1.5' d='M3 4.5l3 3 3-3'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; color: var(--text-primary); font-size: 13px; }
 .mc-profile-select optgroup { font-size: 12px; }
 .method-field { display: flex; flex-direction: column; gap: 4px; }
@@ -1661,6 +1675,10 @@ const I18N = {
     "info.protocol": "协议",
     "info.status": "状态",
     "info.energy": "最新能量",
+    "info.total_gibbs": "系综总自由能",
+    "modal.rank1_only_title": "仅计算 rank1 精细 DFT",
+    "modal.rank1_only_desc": "默认开启：只对 CENSO/xTB 排名第一构象做精细 DFT；系综总自由能由筛选玻尔兹曼表给出",
+    "modal.rank1_only_desc_xtbmd": "可选：勾选后仅对 CENSO 排名第一构象做精细 DFT（默认全系综模式）；系综总自由能由筛选玻尔兹曼表给出",
     "info.progress": "进度",
     "info.started_at": "开始时间",
     "info.completed_at": "完成时间",
@@ -1868,6 +1886,10 @@ const I18N = {
     "info.protocol": "Protocol",
     "info.status": "Status",
     "info.energy": "Latest energy",
+    "info.total_gibbs": "Ensemble total G",
+    "modal.rank1_only_title": "Refine rank1 only (fine DFT)",
+    "modal.rank1_only_desc": "Enabled by default: fine DFT runs on the CENSO/xTB rank1 conformer only; the ensemble total free energy comes from the screening Boltzmann table",
+    "modal.rank1_only_desc_xtbmd": "Optional: when enabled, fine DFT runs on the CENSO rank1 conformer only (full-ensemble mode is the default); the ensemble total free energy comes from the screening Boltzmann table",
     "info.progress": "Progress",
     "info.started_at": "Started",
     "info.completed_at": "Completed",
@@ -3052,6 +3074,7 @@ function renderInfoInto(container, job) {
     return;
   }
   const energy = parseEnergyValue(job.result);
+  const thermo = (job.result && job.result.ensemble_thermo) || null;
   const items = [
     [t("info.current_job"), job.spec && job.spec.name ? job.spec.name : String(job.id || "")],
     [t("info.workflow"), job.spec && job.spec.workflow ? job.spec.workflow : t("common.none")],
@@ -3083,6 +3106,43 @@ function renderInfoInto(container, job) {
     grid.appendChild(item);
   });
   container.appendChild(grid);
+
+  // Ensemble total Gibbs — highlighted stat card when the energy workflow
+  // produced finalDFT/ensemble_thermo.json (captured into job.result).
+  if (thermo && typeof thermo.total_gibbs_kcal_mol === "number") {
+    const card = document.createElement("div");
+    card.className = "info-total-gibbs";
+
+    const cardLabel = document.createElement("div");
+    cardLabel.className = "info-total-gibbs-label";
+    cardLabel.textContent = t("info.total_gibbs") || "Ensemble total G";
+
+    const cardValue = document.createElement("div");
+    cardValue.className = "info-total-gibbs-value";
+    cardValue.innerHTML =
+      escapeHtml(String(thermo.total_gibbs_kcal_mol.toFixed(4))) +
+      '<span class="info-total-gibbs-unit">kcal/mol</span>';
+
+    card.appendChild(cardLabel);
+    card.appendChild(cardValue);
+
+    const metaParts = [];
+    if (typeof thermo.total_gibbs_hartree === "number")
+      metaParts.push("G_total <b>" + thermo.total_gibbs_hartree.toFixed(8) + "</b> Ha");
+    if (typeof thermo.rank1_weight === "number")
+      metaParts.push("p\u2081 <b>" + thermo.rank1_weight.toFixed(4) + "</b>");
+    if (typeof thermo.t_s_mix_kcal_per_mol === "number")
+      metaParts.push("T\u00b7S_mix <b>" + thermo.t_s_mix_kcal_per_mol.toFixed(4) + "</b> kcal/mol");
+    if (typeof thermo.population_coverage === "number")
+      metaParts.push("coverage <b>" + (thermo.population_coverage * 100).toFixed(1) + "%</b>");
+    if (metaParts.length) {
+      const meta = document.createElement("div");
+      meta.className = "info-total-gibbs-meta";
+      meta.innerHTML = metaParts.join("");
+      card.appendChild(meta);
+    }
+    container.appendChild(card);
+  }
 
   const actions = document.createElement("div");
   actions.className = "info-actions";
@@ -4218,6 +4278,7 @@ async function openMethodConfig() {
   var title = document.getElementById("mc-modal-title");
   var wfEntry = workflowCatalogCache.find(function(w) { return w.id === wizardState.workflow.id; });
   title.textContent = (t("modal.method_config") || "\u914d\u7f6e\u8ba1\u7b97\u65b9\u6cd5") + " - " + (wfEntry ? (wfEntry.label || wfEntry.id) : "");
+  wizardState.method.rank1_only = (wizardState.workflow.id === "energy");
 
   document.getElementById("method-config-modal").style.display = "flex";
   try { await loadMethodCatalog(); } catch(e) {
@@ -4388,7 +4449,9 @@ async function openMethodConfig() {
       var fDiv = document.createElement("div");
       fDiv.className = "mc-field";
       var lbl = document.createElement("label");
-      lbl.textContent = fieldName.replace(/_/g, " ");
+      var fieldFdLbl = ((methodCatalogCache.field_definitions || {})[fieldName] || {});
+      var lblKey = currentLang === "zh-CN" ? "label_zh" : "label";
+      lbl.textContent = fieldFdLbl[lblKey] || fieldName.replace(/_/g, " ");
       fDiv.appendChild(lbl);
 
       var levelState = getLevelState(lvDef.level_id);
@@ -4627,6 +4690,26 @@ async function openMethodConfig() {
           scheduleValidate();
         });
         fDiv.appendChild(inp);
+        if (fdNum.unit) {
+          var unitSpan = document.createElement("span");
+          unitSpan.className = "unit";
+          unitSpan.textContent = fdNum.unit;
+          fDiv.appendChild(unitSpan);
+        }
+      } else if ((methodCatalogCache.field_definitions || {})[fieldName] && (methodCatalogCache.field_definitions || {})[fieldName].type === "bool") {
+        // Catalog-driven boolean field (e.g. xtbmd_censo_energy
+        // md_shake / md_nvt / conv_check / resume) → checkbox.
+        var boolWrap = document.createElement("div");
+        boolWrap.className = "mc-bool-wrap";
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = !!curVal;
+        cb.addEventListener("change", function() {
+          getLevelState(lvDef.level_id)[fieldName] = cb.checked;
+          scheduleValidate();
+        });
+        boolWrap.appendChild(cb);
+        fDiv.appendChild(boolWrap);
       } else {
         var inp = document.createElement("input");
         inp.type = "text";
@@ -5129,6 +5212,7 @@ async function openMethodConfig() {
         var stateData = wizardState.method.stages[lvDef.level_id] || {};
         container2.appendChild(buildLevelCard(lvDef, stateData));
       });
+      appendRank1OnlyToggle();
       doValidate().then(function() { rebuildSummary(); });
     }
   });
@@ -5140,6 +5224,55 @@ async function openMethodConfig() {
     if (!stateData.engine) stateData.engine = lvDef.allowed_engines[0];
     container.appendChild(buildLevelCard(lvDef, stateData));
   });
+
+  // rank1-only option card (energy / xtbmd_censo_energy workflows): only
+  // the CENSO/xTB rank1 conformer receives the fine DFT treatment; the
+  // ensemble total free energy is then G_total = G1 + RT*ln(p1) from the
+  // screening Boltzmann table.  Inserted AFTER the level cards so
+  // container.innerHtml="" rebuilds do not wipe it; also re-inserted on
+  // profile switch above.
+  function appendRank1OnlyToggle() {
+    if (wizardState.workflow.id !== "energy" && wizardState.workflow.id !== "xtbmd_censo_energy") return;
+    var card = document.createElement("div");
+    card.className = "mc-rank1-option" + (wizardState.method.rank1_only ? " selected" : "");
+
+    var cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.className = "mc-rank1-check";
+    cb.checked = !!wizardState.method.rank1_only;
+
+    var text = document.createElement("div");
+    text.className = "mc-rank1-text";
+    var title = document.createElement("div");
+    title.className = "mc-rank1-title";
+    title.textContent = t("modal.rank1_only_title") || "\u4ec5\u8ba1\u7b97 rank1 \u7cbe\u7ec6 DFT";
+    var desc = document.createElement("div");
+    desc.className = "mc-rank1-desc";
+    var descKey = (wizardState.workflow.id === "energy")
+      ? "modal.rank1_only_desc"
+      : "modal.rank1_only_desc_xtbmd";
+    desc.innerHTML = (t(descKey) || "") +
+      ' <code>G_total = G\u2081 + RT\u00b7ln p\u2081</code>';
+
+    function apply() {
+      wizardState.method.rank1_only = cb.checked;
+      card.classList.toggle("selected", cb.checked);
+      scheduleValidate();
+    }
+    cb.addEventListener("change", function(ev) { ev.stopPropagation(); apply(); });
+    card.addEventListener("click", function(ev) {
+      if (ev.target === cb) return;
+      cb.checked = !cb.checked;
+      apply();
+    });
+
+    text.appendChild(title);
+    text.appendChild(desc);
+    card.appendChild(cb);
+    card.appendChild(text);
+    document.getElementById("mc-levels-container").prepend(card);
+  }
+  appendRank1OnlyToggle();
 
   document.getElementById("method-config-modal").style.display = "flex";
   document.getElementById("mc-summary-body").innerHTML = '<div style="color:var(--text-tertiary);padding:8px 0;">\u52a0\u8f7d\u4e2d...</div>';
@@ -5205,15 +5338,54 @@ async function submitJobModal() {
       levels: cleanedLevels
     };
     if (wizardState.method.fields) methodPayload.fields = wizardState.method.fields;
-    if (workflow === "ensemble" || workflow === "energy") {
+    if (workflow === "ensemble" || workflow === "energy" || workflow === "xtbmd_censo_energy") {
       var pid = wizardState.method.profile_id;
       if (pid && pid !== "__custom__") methodPayload.preset = pid;
-      if (workflow === "energy" && !cleanedLevels.dft_opt) {
-        // dft_opt panel disabled → cheap RSH//xTB path (--no-opt semantics)
+      // energyLike: energy + xtbmd_censo_energy share the preset /
+      // threshold / rank1-only semantics; an absent dft_opt panel maps
+      // to --no-opt (cheap path) in both.
+      var energyLike = (workflow === "energy" || workflow === "xtbmd_censo_energy");
+      if (energyLike && !cleanedLevels.dft_opt) {
+        // dft_opt panel disabled → cheap path (--no-opt semantics)
         methodPayload.no_opt = true;
       }
-      if (workflow === "energy") {
+      if (energyLike) {
         methodPayload.threshold = threshold;
+      }
+      // rank1-only choice: for energy the CLI default is rank1-only and
+      // the explicit choice is always submitted; for xtbmd_censo_energy
+      // the CLI default is the full ensemble, so the checkbox value is
+      // forwarded (runner emits --rank1-only only when true).
+      if (energyLike) {
+        methodPayload.rank1_only = !!wizardState.method.rank1_only;
+      }
+      if (workflow === "xtbmd_censo_energy") {
+        // MD / batch-opt / ISOSTAT control group → method top level
+        // (runner emits them as CLI flags). The field set is derived
+        // from the workflow schema's control levels (xtb_md / xtb_opt /
+        // isostat), i.e. the catalog FIELD_DEFINITIONS-backed fields —
+        // new fields registered in the catalog flow through automatically
+        // (E7: catalog is the single source of truth; advanced only
+        // decides the rendering section, not whether the value is
+        // submitted).
+        var wfSchema = (methodCatalogCache.method_schemas || {})[wizardState.workflow.schema_id] || {};
+        var ctrlLevelIds = ["xtb_md", "xtb_opt", "isostat"];
+        var ctrlKeys = [];
+        (wfSchema.method_levels || []).forEach(function(lvDef) {
+          if (ctrlLevelIds.indexOf(lvDef.level_id) < 0) return;
+          (lvDef.fields || []).forEach(function(fn) {
+            if (ctrlKeys.indexOf(fn) < 0) ctrlKeys.push(fn);
+          });
+        });
+        ctrlKeys.forEach(function(key) {
+          for (var lid in cleanedLevels) {
+            var lv = cleanedLevels[lid];
+            if (lv && lv[key] !== undefined && lv[key] !== "") {
+              methodPayload[key] = lv[key];
+              break;
+            }
+          }
+        });
       }
       // strip refinement_threshold from cleanedLevels.censo to avoid
       // duplication with the --threshold CLI path in the runner

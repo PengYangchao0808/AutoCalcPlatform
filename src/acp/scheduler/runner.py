@@ -36,6 +36,7 @@ from acp.scheduler.jobs import (
     censo_ewin_from_method,
     censo_preset_from_method,
     censo_solvent_from_method,
+    xtbmd_method_flags,
 )
 from acp.scheduler.provenance import Provenance, build_provenance_for_job
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
@@ -533,6 +534,7 @@ class JobRunner:
         exit_code = self._monitor(record, proc, event_log, cancel_event)
         if exit_code == 0:
             self._capture_artifacts(record, work_dir)
+            self._capture_ensemble_thermo(record, work_dir)
             self._store_provenance(record, command_line=" ".join(cmd))
         return exit_code
 
@@ -695,7 +697,7 @@ class JobRunner:
     def _build_cmd(self, spec: JobSpec, work_dir: Path, input_path: str = "") -> list[str]:
         wf = spec.workflow
         if wf not in (
-            "mechanism", "ensemble", "energy",
+            "mechanism", "ensemble", "energy", "xtbmd_censo_energy",
             "singlepoint", "optimize", "frequency", "optfreq", "optfreqsp",
             "xtb_optimize",
         ):
@@ -723,6 +725,12 @@ class JobRunner:
                 cmd += ["--name", spec.name]
             if wf == "energy" and method.get("no_opt"):
                 cmd += ["--no-opt"]
+            if wf == "energy" and method.get("rank1_only"):
+                cmd += ["--rank1-only"]
+            if wf == "energy" and method.get("rank1_only") is False:
+                # CLI defaults to rank1-only; an explicit opt-out must be
+                # forwarded so the full-ensemble path is restored.
+                cmd += ["--full-ensemble"]
             if wf == "energy" and method.get("threshold") is not None:
                 cmd += ["--threshold", str(method["threshold"])]
             if wf == "energy" and method.get("levels"):
@@ -734,6 +742,27 @@ class JobRunner:
                 cmd += ["--solvent", solvent]
             ewin = censo_ewin_from_method(method)
             if ewin is not None:
+                cmd += ["--ewin", str(ewin)]
+        elif wf == "xtbmd_censo_energy":
+            cmd += ["--input", str(source), "--output", str(work_dir)]
+            preset = censo_preset_from_method(method)
+            if preset:
+                cmd += ["--preset", preset]
+            if spec.name:
+                cmd += ["--name", spec.name]
+            if method.get("levels"):
+                cmd += ["--levels", json.dumps(method["levels"])]
+            # MD / batch-opt / ISOSTAT / conv / resume control group —
+            # single shared flag builder keeps this branch in parity with
+            # the remote script_gen path (E7, DevDoc §10.2).
+            cmd += xtbmd_method_flags(method)
+            solvent = censo_solvent_from_method(method)
+            if solvent:
+                cmd += ["--solvent", solvent]
+            ewin = censo_ewin_from_method(method)
+            if ewin is not None:
+                # GFN1 energy window for this workflow (CLI --ewin);
+                # the same flag name, different object vs. energy.
                 cmd += ["--ewin", str(ewin)]
         elif wf in ("singlepoint", "optimize", "frequency", "optfreq", "optfreqsp"):
             cmd += ["--input", str(source), "--output", str(work_dir)]
@@ -957,6 +986,30 @@ class JobRunner:
 
         result = dict(record.result or {})
         result["artifacts"] = [asdict(artifact) for artifact in artifacts]
+        record.result = result
+
+    def _capture_ensemble_thermo(self, record: JobRecord, work_dir: Path) -> None:
+        """Merge the energy workflow's ensemble_thermo.json into the job result.
+
+        Makes ``total_gibbs_kcal_mol`` (and friends) available to the
+        workbench info panel without re-parsing the workflow output files.
+        The shallowest ``finalDFT/ensemble_thermo.json`` wins (single-mol
+        jobs nest one level under ``work_dir``).
+        """
+        candidates = sorted(
+            work_dir.rglob("finalDFT/ensemble_thermo.json"),
+            key=lambda p: len(p.parts),
+        )
+        if not candidates:
+            return
+        try:
+            data = json.loads(candidates[0].read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        if not isinstance(data, dict):
+            return
+        result = dict(record.result or {})
+        result["ensemble_thermo"] = data
         record.result = result
 
     def _store_provenance(self, record: JobRecord, command_line: str = "") -> None:

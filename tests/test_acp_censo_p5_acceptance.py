@@ -691,8 +691,8 @@ def test_energy_zero_opt_on_multi_conformer_ensemble(tmp_path: Path) -> None:
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy.ORCAInterface", return_value=orca),
-        patch("acp.workflows.energy.run_shermo", return_value=dict(shermo_ok)),
+        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.run_shermo", return_value=dict(shermo_ok)),
     ):
         result = run_conformer_energy(
             input_source=str(xyz),
@@ -751,8 +751,8 @@ def test_energy_light_non_rank1_handoff_failure_is_skipped(tmp_path: Path) -> No
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy.ORCAInterface", return_value=orca),
-        patch("acp.workflows.energy.run_shermo", return_value=dict(shermo_ok)),
+        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.run_shermo", return_value=dict(shermo_ok)),
     ):
         backend = MagicMock()
         backend.refine_ensemble.return_value = screening
@@ -978,8 +978,8 @@ def test_energy_levels_ewin_reaches_crest(tmp_path: Path) -> None:
 
     with (
         patch("acp.workflows.energy.get_backend") as mock_get_backend,
-        patch("acp.workflows.energy.ORCAInterface", return_value=orca),
-        patch("acp.workflows.energy.run_shermo", return_value=dict(shermo_ok)),
+        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.run_shermo", return_value=dict(shermo_ok)),
     ):
         backend = MagicMock()
         backend.search.side_effect = fake_search
@@ -1011,7 +1011,7 @@ def test_censo_template_path_not_affected_by_aux_basis_rename() -> None:
     which does not consume aux_j_basis/aux_c_basis fields. This test ensures
     the field rename does not break CENSO's template path.
     """
-    from acp.workflows.energy import _base_route_extras
+    from acp.workflows.energy_shared import _base_route_extras
 
     # CENSO template lines are built from _base_route_extras
     level = {
@@ -1034,3 +1034,88 @@ def test_censo_template_path_not_affected_by_aux_basis_rename() -> None:
     # CENSO template line format
     template_line = "! " + " ".join(extras)
     assert template_line.startswith("! ")
+
+def test_runner_build_cmd_energy_rank1_only() -> None:
+    from dataclasses import replace
+
+    from acp.scheduler.runner import JobRunner
+
+    spec = JobSpec(
+        workflow="energy",
+        name="etoh",
+        input={"source": "CCO"},
+        method={"profile_id": "censo-light", "rank1_only": True},
+        resources={"nproc": 8},
+    )
+    stub = SimpleNamespace(python="python")
+    cmd = JobRunner._build_cmd(stub, spec, Path("/tmp/wd"), input_path="inputs/input.xyz")
+    assert "--rank1-only" in cmd
+    # rank1_only must not leak into other workflows' commands
+    ens_spec = replace(spec, workflow="ensemble")
+    cmd = JobRunner._build_cmd(stub, ens_spec, Path("/tmp/wd"), input_path="inputs/input.xyz")
+    assert "--rank1-only" not in cmd
+
+
+def test_runner_build_cmd_energy_rank1_only_optout() -> None:
+    """CLI defaults to rank1-only; an explicit False must forward --full-ensemble."""
+    from acp.scheduler.runner import JobRunner
+
+    spec = JobSpec(
+        workflow="energy",
+        name="etoh",
+        input={"source": "CCO"},
+        method={"profile_id": "censo-light", "rank1_only": False},
+        resources={"nproc": 8},
+    )
+    stub = SimpleNamespace(python="python")
+    cmd = JobRunner._build_cmd(stub, spec, Path("/tmp/wd"), input_path="inputs/input.xyz")
+    assert "--full-ensemble" in cmd
+    assert "--rank1-only" not in cmd
+    # missing field → no flag → CLI default (rank1-only) applies
+    spec2 = JobSpec(
+        workflow="energy",
+        name="etoh",
+        input={"source": "CCO"},
+        method={"profile_id": "censo-light"},
+        resources={"nproc": 8},
+    )
+    cmd2 = JobRunner._build_cmd(stub, spec2, Path("/tmp/wd"), input_path="inputs/input.xyz")
+    assert "--full-ensemble" not in cmd2
+    assert "--rank1-only" not in cmd2
+
+
+def test_script_gen_rank1_only_parity() -> None:
+    from acp.scheduler.remote.script_gen import build_remote_cli_command
+
+    spec = JobSpec(
+        workflow="energy",
+        name="etoh",
+        input={"source": "CCO"},
+        method={"profile_id": "censo-light", "rank1_only": True},
+        resources={"nproc": 8},
+    )
+    cmd = build_remote_cli_command(
+        spec,
+        "inputs/input.xyz",
+        python_executable="python",
+    )
+    assert "--rank1-only" in cmd
+
+
+def test_script_gen_rank1_only_optout_parity() -> None:
+    from acp.scheduler.remote.script_gen import build_remote_cli_command
+
+    spec = JobSpec(
+        workflow="energy",
+        name="etoh",
+        input={"source": "CCO"},
+        method={"profile_id": "censo-light", "rank1_only": False},
+        resources={"nproc": 8},
+    )
+    cmd = build_remote_cli_command(
+        spec,
+        "inputs/input.xyz",
+        python_executable="python",
+    )
+    assert "--full-ensemble" in cmd
+    assert "--rank1-only" not in cmd

@@ -130,8 +130,8 @@ def _run_energy(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy.ORCAInterface", return_value=orca) as mock_orca_cls,
-        patch("acp.workflows.energy.run_shermo", return_value=shermo_return) as mock_shermo,
+        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca) as mock_orca_cls,
+        patch("acp.workflows.energy_shared.run_shermo", return_value=shermo_return) as mock_shermo,
     ):
         backend = MagicMock()
         if censo_result is not None:
@@ -284,8 +284,8 @@ def test_config_can_disable_opt_stage(tmp_path: Path, multiframe_xyz: Path) -> N
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy.ORCAInterface", return_value=orca) as mock_orca_cls,
-        patch("acp.workflows.energy.run_shermo"),
+        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca) as mock_orca_cls,
+        patch("acp.workflows.energy_shared.run_shermo"),
     ):
         backend = MagicMock()
         backend.refine_ensemble.return_value = refinement

@@ -17,6 +17,7 @@ from acp.chem.composition import (
 )
 from acp.chem.embedding import (
     count_elements_from_xyz,
+    enumerate_embeddings,
     molfile_to_xyz,
     parse_xyz_first_frame,
     smiles_to_xyz,
@@ -35,6 +36,7 @@ __all__ = [
     "classify_symbols",
     "count_elements_from_xyz",
     "default_recalc_hess_for_symbols",
+    "enumerate_embeddings",
     "is_light_element_molecule",
     "molfile_to_xyz",
     "normalize_recalc_hess",

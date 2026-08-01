@@ -149,6 +149,18 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "visible": True,
     },
     {
+        "id": "xtbmd_censo_energy",
+        "label": "xTB-MD CENSO Energy",
+        "label_zh": "xTB 动力学构象自由能",
+        "category": "preset",
+        "description": "GFN-FF MD sampling → GFN1 batch opt → isostat dedup → CENSO → fine DFT",
+        "method_schema_id": "xtbmd_censo_energy",
+        "default_backend": "censo",
+        "requires_binaries": ["xtb", "isostat", "censo", "orca"],
+        "status": "active",
+        "visible": True,
+    },
+    {
         "id": "mechanism",
         "label": "Mechanism / TS",
         "label_zh": "\u673a\u7406\u7814\u7a76 / \u8fc7\u6e21\u6001",
@@ -517,7 +529,10 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     },
     "opt_level": {
         "type": "select",
-        "per_backend": {"xtb": ["crude", "sloppy", "loose", "normal", "tight", "vtight", "extreme"]},
+        "advanced": True,
+        # v1.4: corrected to the xTB legal set (crude/normal/tight/verytight);
+        # "loose" is not a legal xTB value (xtbmd_censo_energy _OPT_LEVELS).
+        "per_backend": {"xtb": ["crude", "normal", "tight", "verytight"]},
         "default": {"*": "normal"},
     },
     "aux_j_basis": {
@@ -550,6 +565,175 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "advanced": True,
         "per_backend": {"orca": ["none", "RI", "RIJCOSX", "RIJK"]},
         "default": {"*": "RIJCOSX"},
+    },
+    # ── xtbmd_censo_energy control group (DevDoc §10.1) ────────────────
+    # All new workflow controls enter the frontend exclusively through
+    # this table (advanced only decides the rendering section: regular
+    # vs. the collapsed "高级" area — md_temperature / md_seeds are the
+    # two high-frequency user controls and stay in the regular section).
+    # CLI flag ↔ runner ↔ script_gen ↔ FIELD_DEFINITIONS ↔ frontend
+    # parity is enforced by tests/test_acp_xtbmd_platform_phase5.py (E7).
+    "md_temperature": {
+        "type": "float",
+        "label": "MD Temperature",
+        "label_zh": "MD 温度",
+        "min": 0,
+        "default": {"*": 400.0},
+        "unit": "K",
+    },
+    "md_time_ps": {
+        "type": "float",
+        "advanced": True,
+        "label": "MD Time",
+        "label_zh": "MD 时长",
+        "min": 0,
+        "default": {"*": 100.0},
+        "unit": "ps",
+    },
+    "md_dump_fs": {
+        "type": "float",
+        "advanced": True,
+        "label": "MD Dump Interval",
+        "label_zh": "MD 帧间隔",
+        "min": 0,
+        "default": {"*": 100.0},
+        "unit": "fs",
+    },
+    "md_step_fs": {
+        "type": "float",
+        "advanced": True,
+        "label": "MD Time Step",
+        "label_zh": "MD 步长",
+        "min": 0,
+        "default": {"*": 1.0},
+        "unit": "fs",
+    },
+    "md_hmass": {
+        "type": "float",
+        "advanced": True,
+        "label": "H Mass Scaling",
+        "label_zh": "氢原子质量",
+        "min": 0,
+        "default": {"*": 1.0},
+    },
+    "md_shake": {
+        "type": "bool",
+        "advanced": True,
+        "label": "SHAKE X–H Bonds",
+        "label_zh": "SHAKE 键约束",
+        "default": {"*": True},
+    },
+    "md_nvt": {
+        "type": "bool",
+        "advanced": True,
+        "label": "NVT Ensemble",
+        "label_zh": "NVT 系综",
+        "default": {"*": True},
+    },
+    "md_seed": {
+        "type": "int",
+        "advanced": True,
+        "label": "MD Seed",
+        "label_zh": "MD 随机种子",
+        "min": 0,
+        "default": {"*": 42},
+    },
+    "md_seeds": {
+        "type": "int",
+        "label": "MD Replicas",
+        "label_zh": "MD 副本数",
+        "min": 1,
+        "default": {"*": 1},
+        "help": (
+            "Replica trajectories (>=3 recommended for flexible molecules; "
+            "each replica starts from a distinct RDKit embedding)"
+        ),
+    },
+    "md_method": {
+        "type": "select",
+        "advanced": True,
+        "label": "MD Hamiltonian",
+        "label_zh": "MD 哈密顿量",
+        "options": ["gfnff", "gfn0", "gfn1", "gfn2"],
+        "default": {"*": "gfnff"},
+    },
+    "conv_check": {
+        "type": "bool",
+        "advanced": True,
+        "label": "Sampling Convergence Check",
+        "label_zh": "采样收敛诊断",
+        "default": {"*": True},
+    },
+    "conv_novelty_max": {
+        "type": "float",
+        "advanced": True,
+        "label": "Novelty Cap",
+        "label_zh": "新增构象占比上限",
+        "min": 0,
+        "max": 1.0,
+        "default": {"*": 0.10},
+        "step": 0.01,
+    },
+    "conv_rmsd": {
+        "type": "float",
+        "advanced": True,
+        "label": "Conv RMSD Threshold",
+        "label_zh": "收敛诊断 RMSD 阈值",
+        "min": 0,
+        "default": {"*": 0.5},
+        "unit": "Å",
+    },
+    "max_frames": {
+        "type": "int",
+        "advanced": True,
+        "label": "Max Frames",
+        "label_zh": "批量优化帧数上限",
+        "min": 0,
+        "default": {"*": 500},
+        "help": "Frame cap for batch optimization (0 = unlimited; uniform subsampling)",
+    },
+    "opt_gfn": {
+        "type": "select",
+        "advanced": True,
+        "label": "Batch Opt GFN",
+        "label_zh": "批量优化 GFN 等级",
+        "options": ["0", "1", "2"],
+        "default": {"*": "1"},
+    },
+    "opt_timeout": {
+        "type": "int",
+        "advanced": True,
+        "label": "Per-Frame Timeout",
+        "label_zh": "单帧优化超时",
+        "min": 0,
+        "default": {"*": 300},
+        "unit": "s",
+        "help": "Per-frame xTB optimization timeout (0 = unlimited)",
+    },
+    "edis": {
+        "type": "float",
+        "advanced": True,
+        "label": "ISOSTAT Energy Threshold",
+        "label_zh": "ISOSTAT 能量阈值",
+        "min": 0,
+        "default": {"*": 0.5},
+        "unit": "kcal/mol",
+    },
+    "gdis": {
+        "type": "float",
+        "advanced": True,
+        "label": "ISOSTAT RMSD Threshold",
+        "label_zh": "ISOSTAT 结构阈值",
+        "min": 0,
+        "default": {"*": 0.25},
+        "unit": "Å",
+    },
+    "resume": {
+        "type": "bool",
+        "advanced": True,
+        "label": "Resume from Checkpoints",
+        "label_zh": "断点续跑",
+        "default": {"*": False},
     },
 }
 
@@ -1249,6 +1433,292 @@ METHOD_SCHEMAS: dict[str, Any] = {
             },
         ],
     },
+    "xtbmd_censo_energy": {
+        # DevDoc §10.1: xTB-MD conformer-search free-energy pipeline.
+        # levels = xtb_md / xtb_opt / isostat / censo / dft_opt (optional,
+        # mirrors censo_energy) / refinement_sp / thermo. The dft_opt level
+        # is required for the frontend no_opt derivation (an absent
+        # dft_opt level maps to --no-opt in the energy-like submit branch).
+        "method_levels": [
+            {
+                "level_id": "xtb_md",
+                "label": "xTB MD Sampling",
+                "label_zh": "xTB 动力学采样",
+                "required": True,
+                "allowed_engines": ["molclus"],
+                "fields": [
+                    "md_temperature", "md_time_ps", "md_dump_fs",
+                    "md_step_fs", "md_hmass", "md_shake", "md_nvt",
+                    "md_seed", "md_seeds", "md_method", "resume",
+                ],
+            },
+            {
+                "level_id": "xtb_opt",
+                "label": "GFN1 Batch Optimization",
+                "label_zh": "GFN1 批量优化",
+                "required": True,
+                "allowed_engines": ["xtb"],
+                "fields": [
+                    "opt_gfn", "opt_level", "opt_timeout", "max_frames",
+                    "conv_check", "conv_novelty_max", "conv_rmsd",
+                ],
+            },
+            {
+                "level_id": "isostat",
+                "label": "ISOSTAT Deduplication",
+                "label_zh": "ISOSTAT 去重",
+                "required": True,
+                "allowed_engines": ["isostat"],
+                "fields": ["edis", "gdis"],
+            },
+            {
+                "level_id": "censo",
+                "label": "CENSO Screening",
+                "label_zh": "CENSO 筛选",
+                "required": True,
+                "allowed_engines": ["censo"],
+                "fields": ["ewin", "refinement_threshold"],
+            },
+            {
+                "level_id": "dft_opt",
+                "label": "DFT Optimization",
+                "label_zh": "DFT \u7ed3\u6784\u4f18\u5316",
+                "required": False,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "functional", "basis", "dispersion", "solvent_model",
+                    "solvent", "grid", "scf_convergence",
+                    "opt_convergence", "max_steps", "recalc_hess",
+                ],
+            },
+            {
+                "level_id": "refinement_sp",
+                "label": "Single Point Energy",
+                "label_zh": "\u5355\u70b9\u80fd",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "functional", "basis", "ri_approximation",
+                    "aux_j_basis", "aux_c_basis", "dispersion",
+                    "solvent_model", "solvent", "grid", "scf_convergence",
+                ],
+            },
+            {
+                "level_id": "thermo",
+                "label": "Thermochemistry",
+                "label_zh": "\u70ed\u529b\u5b66\u4fee\u6b63",
+                "required": False,
+                "allowed_engines": ["shermo"],
+                "fields": ["temperature", "pressure", "scale_factor"],
+            },
+        ],
+        "profiles": [
+            {
+                "profile_id": "censo-light",
+                "label": "CENSO-light",
+                "summary": "xTB-MD → GFN1 → CENSO → 99% ensemble → DFT refinement (recommended)",
+                "levels": {
+                    "xtb_md": {
+                        "engine": "molclus",
+                        "md_temperature": 400.0,
+                        "md_time_ps": 100.0,
+                        "md_dump_fs": 100.0,
+                        "md_step_fs": 1.0,
+                        "md_hmass": 1.0,
+                        "md_shake": True,
+                        "md_nvt": True,
+                        "md_seed": 42,
+                        "md_seeds": 1,
+                        "md_method": "gfnff",
+                        "resume": False,
+                    },
+                    "xtb_opt": {
+                        "engine": "xtb",
+                        "opt_gfn": "1",
+                        "opt_level": "normal",
+                        "opt_timeout": 300,
+                        "max_frames": 500,
+                        "conv_check": True,
+                        "conv_novelty_max": 0.10,
+                        "conv_rmsd": 0.5,
+                    },
+                    "isostat": {
+                        "engine": "isostat",
+                        "edis": 0.5,
+                        "gdis": 0.25,
+                    },
+                    "censo": {
+                        "engine": "censo",
+                        "ewin": 6.0,
+                        "refinement_threshold": 0.99,
+                    },
+                    "dft_opt": {
+                        "engine": "orca",
+                        "functional": "r2SCAN-3c",
+                        "basis": "",
+                        "dispersion": "none",
+                        "ri_approximation": "none",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
+                        "solvent_model": "none",
+                        "solvent": "",
+                        "grid": "UltraFine",
+                        "scf_convergence": "Tight",
+                        "opt_convergence": "Normal",
+                        "max_steps": 200,
+                    },
+                    "refinement_sp": {
+                        "engine": "orca",
+                        "functional": "wB97M-V",
+                        "basis": "def2-TZVPP",
+                        "ri_approximation": "RIJCOSX",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                        "scale_factor": 0.9905,
+                    },
+                },
+            },
+            {
+                "profile_id": "censo-default",
+                "label": "CENSO-default",
+                "summary": "xTB-MD → GFN1 → full CENSO Part0–3 → 99% refinement (~10x light cost)",
+                "levels": {
+                    "xtb_md": {
+                        "engine": "molclus",
+                        "md_temperature": 400.0,
+                        "md_time_ps": 100.0,
+                        "md_dump_fs": 100.0,
+                        "md_step_fs": 1.0,
+                        "md_hmass": 1.0,
+                        "md_shake": True,
+                        "md_nvt": True,
+                        "md_seed": 42,
+                        "md_seeds": 1,
+                        "md_method": "gfnff",
+                        "resume": False,
+                    },
+                    "xtb_opt": {
+                        "engine": "xtb",
+                        "opt_gfn": "1",
+                        "opt_level": "normal",
+                        "opt_timeout": 300,
+                        "max_frames": 500,
+                        "conv_check": True,
+                        "conv_novelty_max": 0.10,
+                        "conv_rmsd": 0.5,
+                    },
+                    "isostat": {
+                        "engine": "isostat",
+                        "edis": 0.5,
+                        "gdis": 0.25,
+                    },
+                    "censo": {
+                        "engine": "censo",
+                        "ewin": 6.0,
+                        "refinement_threshold": 0.99,
+                    },
+                    "refinement_sp": {
+                        "engine": "orca",
+                        "functional": "wB97M-V",
+                        "basis": "def2-TZVPP",
+                        "ri_approximation": "RIJCOSX",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                        "scale_factor": 0.9905,
+                    },
+                },
+            },
+            {
+                "profile_id": "censo-zero",
+                "label": "CENSO-zero",
+                "summary": "xTB-MD → GFN1 → xTB passthrough → DFT refinement (cheapest)",
+                "levels": {
+                    "xtb_md": {
+                        "engine": "molclus",
+                        "md_temperature": 400.0,
+                        "md_time_ps": 100.0,
+                        "md_dump_fs": 100.0,
+                        "md_step_fs": 1.0,
+                        "md_hmass": 1.0,
+                        "md_shake": True,
+                        "md_nvt": True,
+                        "md_seed": 42,
+                        "md_seeds": 1,
+                        "md_method": "gfnff",
+                        "resume": False,
+                    },
+                    "xtb_opt": {
+                        "engine": "xtb",
+                        "opt_gfn": "1",
+                        "opt_level": "normal",
+                        "opt_timeout": 300,
+                        "max_frames": 500,
+                        "conv_check": True,
+                        "conv_novelty_max": 0.10,
+                        "conv_rmsd": 0.5,
+                    },
+                    "isostat": {
+                        "engine": "isostat",
+                        "edis": 0.5,
+                        "gdis": 0.25,
+                    },
+                    "censo": {
+                        "engine": "censo",
+                        "ewin": 6.0,
+                        "refinement_threshold": 0.99,
+                    },
+                    "dft_opt": {
+                        "engine": "orca",
+                        "functional": "r2SCAN-3c",
+                        "basis": "",
+                        "dispersion": "none",
+                        "ri_approximation": "none",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
+                        "solvent_model": "none",
+                        "solvent": "",
+                        "grid": "UltraFine",
+                        "scf_convergence": "Tight",
+                        "opt_convergence": "Normal",
+                        "max_steps": 200,
+                    },
+                    "refinement_sp": {
+                        "engine": "orca",
+                        "functional": "wB97M-V",
+                        "basis": "def2-TZVPP",
+                        "ri_approximation": "RIJCOSX",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                        "scale_factor": 0.9905,
+                    },
+                },
+            },
+        ],
+    },
 }
 
 # ── Backend discovery (R22 / Phase 4.5) ────────────────────────────────
@@ -1693,8 +2163,11 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                             user_val = str(user_val).lower()
                         else:
                             user_val = canonical
-                    elif user_val not in options:
-                        if fd and fd.get("supports_custom") and str(user_val).strip() and len(options) > 1:
+                    elif str(user_val) not in [str(o) for o in options]:
+                        if (
+                            fd and fd.get("supports_custom")
+                            and str(user_val).strip() and len(options) > 1
+                        ):
                             pass
                         else:
                             errors.append(

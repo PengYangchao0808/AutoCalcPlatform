@@ -166,6 +166,37 @@ class _EnergyStagePlanProvider:
         ]
 
 
+class _XtbmdCensoEnergyStagePlanProvider:
+    """Stage plan for the xtbmd_censo_energy workflow (DevDoc §8.2).
+
+    Stage names follow the workflow's ``state.initialize`` stage_names:
+    embed → xtbmd → batch_opt → isostat → energy_filter → censo →
+    dft_handoff → finalize → conformer_energy.  The fine-DFT stages are
+    dropped under ``--no-opt`` (except ``censo-default``: the workflow
+    forces ``opt_enabled=True`` for that preset regardless of no_opt —
+    DevDoc §8.4 / xtbmd_censo_energy.py); the ``censo-zero`` passthrough
+    skips the per-conformer CENSO funnel.
+    """
+
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        preset = censo_preset_from_method(spec.method) or "censo-light"
+        no_opt = spec.method.get("no_opt", False)
+        plan = [
+            StagePlan("embed"),
+            StagePlan("xtbmd"),
+            StagePlan("batch_opt"),
+            StagePlan("isostat"),
+            StagePlan("energy_filter"),
+        ]
+        if preset != "censo-zero":
+            plan.append(StagePlan("censo"))
+        if not no_opt or preset == "censo-default":
+            plan.append(StagePlan("dft_handoff"))
+        plan.append(StagePlan("finalize"))
+        plan.append(StagePlan("conformer_energy"))
+        return plan
+
+
 class StageTaskStore:
     """Thread-safe SQLite persistence for stage-level task rows."""
 
@@ -440,6 +471,7 @@ register_plan_provider("fake", _FakeStagePlanProvider())
 register_plan_provider("mechanism", _MechanismStagePlanProvider())
 register_plan_provider("ensemble", _EnsembleStagePlanProvider())
 register_plan_provider("energy", _EnergyStagePlanProvider())
+register_plan_provider("xtbmd_censo_energy", _XtbmdCensoEnergyStagePlanProvider())
 
 # Simple workflow providers
 class _SinglepointStagePlanProvider:

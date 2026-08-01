@@ -27,6 +27,7 @@ from acp.scheduler.jobs import (
     censo_ewin_from_method,
     censo_preset_from_method,
     censo_solvent_from_method,
+    xtbmd_method_flags,
 )
 from acp.scheduler.remote.config import RemoteNode
 
@@ -112,7 +113,7 @@ def build_remote_cli_command(
     py = python_executable or "python"
     wf = spec.workflow
     if wf not in (
-        "mechanism", "ensemble", "energy",
+        "mechanism", "ensemble", "energy", "xtbmd_censo_energy",
         "singlepoint", "optimize", "frequency", "optfreq", "optfreqsp",
         "xtb_optimize",
     ):
@@ -141,12 +142,36 @@ def build_remote_cli_command(
             cmd += ["--name", spec.name]
         if wf == "energy" and method.get("no_opt"):
             cmd += ["--no-opt"]
+        if wf == "energy" and method.get("rank1_only"):
+            cmd += ["--rank1-only"]
+        if wf == "energy" and method.get("rank1_only") is False:
+            # CLI defaults to rank1-only; an explicit opt-out must be
+            # forwarded so the full-ensemble path is restored.
+            cmd += ["--full-ensemble"]
         if wf == "energy" and method.get("threshold") is not None:
             cmd += ["--threshold", str(method["threshold"])]
         if wf == "energy" and method.get("levels"):
             cmd += ["--levels", json.dumps(method["levels"])]
         if wf == "ensemble" and method.get("keep_all"):
             cmd += ["--keep-all"]
+        solvent = censo_solvent_from_method(method)
+        if solvent:
+            cmd += ["--solvent", solvent]
+        ewin = censo_ewin_from_method(method)
+        if ewin is not None:
+            cmd += ["--ewin", str(ewin)]
+    elif wf == "xtbmd_censo_energy":
+        cmd += ["--input", str(source), "--output", "."]
+        preset = censo_preset_from_method(method)
+        if preset:
+            cmd += ["--preset", preset]
+        if spec.name:
+            cmd += ["--name", spec.name]
+        if method.get("levels"):
+            cmd += ["--levels", json.dumps(method["levels"])]
+        # Shared flag builder (E7): identical to JobRunner._build_cmd so
+        # local and remote execution can never drift (DevDoc §10.2).
+        cmd += xtbmd_method_flags(method)
         solvent = censo_solvent_from_method(method)
         if solvent:
             cmd += ["--solvent", solvent]

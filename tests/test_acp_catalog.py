@@ -39,6 +39,12 @@ _ALL_FUNCTIONALS = frozenset({
 _ADVANCED_FIELD_NAMES = frozenset({
     "aux_j_basis", "aux_c_basis", "ri_approximation", "grid", "scf_convergence",
     "opt_convergence", "max_steps", "recalc_hess", "scale_factor",
+    # xtbmd_censo_energy control group (DevDoc §10.1): 17 advanced fields;
+    # md_temperature / md_seeds are regular (high-frequency user controls).
+    "opt_level", "md_time_ps", "md_dump_fs", "md_step_fs", "md_hmass",
+    "md_shake", "md_nvt", "md_seed", "md_method", "conv_check",
+    "conv_novelty_max", "conv_rmsd", "max_frames", "opt_gfn",
+    "opt_timeout", "edis", "gdis", "resume",
 })
 
 

@@ -12,7 +12,7 @@ installation raises an explicit exception so callers can surface the real error.
 from __future__ import annotations
 
 import random
-import re
+from pathlib import Path
 from typing import Any
 
 
@@ -369,8 +369,145 @@ def split_xyz_frames(xyz: str) -> list[str]:
     return frames
 
 
+def enumerate_embeddings(
+    source: str | Path,
+    *,
+    n: int,
+    seed_base: int = 42,
+    comment: str | None = None,
+) -> list[str]:
+    """Enumerate *n* distinct RDKit-embedded XYZ strings from the input.
+
+    The enumeration derives from the **original** input (SMILES string or
+    structure file), not from an already-embedded result, so each returned
+    conformation is an independent ETKDG sample (seed = ``seed_base + i``).
+    This backs the multi-start xTB-MD replica scheme of the
+    ``xtbmd_censo_energy`` workflow.
+
+    Args:
+        source: SMILES string or a path to an XYZ/molfile/SDF structure.
+        n: Number of distinct embeddings to produce.
+        seed_base: Base seed for the ETKDG embedder; replica *i* uses
+            ``seed_base + i``.
+        comment: Optional comment line for the XYZ frames.
+
+    Returns:
+        List of ``n`` single-frame XYZ strings.
+
+    Raises:
+        ValueError: If the source cannot be parsed or embedded, or ``n`` is
+            not positive.
+        ImportError: If RDKit is not installed.
+    """
+    if n <= 0:
+        raise ValueError(f"n must be positive, got {n}")
+
+    Chem, AllChem = _require_rdkit()
+
+    if isinstance(source, Path):
+        source_text = str(source)
+        mol = _mol_from_file(source, Chem)
+    elif "\n" not in source.strip() and not Path(source).exists():
+        mol = Chem.MolFromSmiles(source)
+        if mol is None:
+            raise ValueError(f"Invalid SMILES: {source}")
+        source_text = source
+        mol = Chem.AddHs(mol)
+    else:
+        mol = _mol_from_file(Path(source), Chem)
+        source_text = str(source)
+
+    embeddings: list[str] = []
+    for i in range(n):
+        # Embed into a fresh copy: re-embedding the shared mol object would
+        # depend on RDKit-version conformer append/replace semantics and
+        # could return the same conformation for every replica.
+        try:
+            block = _embed_mol(Chem.Mol(mol), seed_base + i, Chem, AllChem)
+        except Exception as exc:
+            raise ValueError(f"RDKit failed to embed structure {i}: {exc}") from exc
+        lines = block.strip("\n").splitlines()
+        safe_source = " ".join(source_text.split())[:80]
+        lines[1] = comment or f"source={safe_source} | generated_by=rdkit_etkdg | emb={i}"
+        embeddings.append("\n".join(lines) + "\n")
+    return embeddings
+
+
+def _mol_from_file(path: Path, Chem: Any) -> Any:
+    """Load a molecule from an XYZ/molfile/SDF path, adding hydrogens."""
+    path = Path(path)
+    if not path.exists():
+        raise ValueError(f"Input file not found: {path}")
+    suffix = path.suffix.lower()
+    try:
+        if suffix == ".xyz":
+            mol = Chem.MolFromXYZFile(str(path))
+        elif suffix in {".mol", ".sdf", ".sd"}:
+            mol = Chem.MolFromMolFile(str(path))
+        else:
+            raise ValueError(f"Unsupported structure format for embedding: {suffix}")
+    except Exception as exc:
+        raise ValueError(f"Failed to parse {path}: {exc}") from exc
+    if mol is None:
+        raise ValueError(f"RDKit could not parse {path}")
+    try:
+        # XYZ frames carry no bond information; re-running RemoveHs forces
+        # the implicit-valence bookkeeping so AddHs can compute the full
+        # hydrogen count.
+        mol = Chem.RemoveHs(mol)
+        return Chem.AddHs(mol)
+    except Exception as exc:
+        raise ValueError(f"RDKit could not add hydrogens to {path}: {exc}") from exc
+
+
+def _embed_mol(mol3d: Any, seed: int, Chem: Any, AllChem: Any) -> str:
+    """Embed *mol3d* with ETKDG (``randomSeed=seed``) and return its XYZ block.
+
+    Falls back to random-coordinate embedding when deterministic ETKDG
+    fails, then relaxes with MMFF (UFF fallback) — the same recipe used by
+    :func:`smiles_to_xyz`.
+    """
+    etkdg_v3 = getattr(AllChem, "ETKDGv3", None)
+    etkdg = getattr(AllChem, "ETKDG", None)
+    embed = getattr(AllChem, "EmbedMolecule", None)
+    if embed is None or etkdg is None:
+        raise RuntimeError("RDKit 3D embedding support is unavailable")
+
+    params = etkdg_v3() if etkdg_v3 is not None else etkdg()
+    params.randomSeed = seed
+    code = embed(mol3d, params)
+    if code != 0:
+        params.useRandomCoords = True
+        code = embed(mol3d, params)
+    if code != 0:
+        raise ValueError("RDKit failed to embed input structure")
+
+    mmff_sanitize = getattr(AllChem, "MMFFSanitizeMolecule", None)
+    mmff_optimize = getattr(AllChem, "MMFFOptimizeMolecule", None)
+    uff_optimize = getattr(AllChem, "UFFOptimizeMolecule", None)
+    try:
+        if mmff_sanitize is not None and mmff_optimize is not None:
+            mmff_sanitize(mol3d)
+            mmff_optimize(mol3d)
+        elif uff_optimize is not None:
+            uff_optimize(mol3d, maxIters=200)
+    except Exception:
+        if uff_optimize is not None:
+            try:
+                uff_optimize(mol3d, maxIters=200)
+            except Exception:
+                pass
+
+    xyz = Chem.MolToXYZBlock(mol3d)
+    lines = xyz.strip("\n").splitlines()
+    if len(lines) < 2:
+        raise ValueError("RDKit produced an empty XYZ block")
+    return "\n".join(lines) + "\n"
+
+
 __all__ = [
     "count_elements_from_xyz",
+    "enumerate_embeddings",
     "molfile_to_xyz",
     "parse_xyz_first_frame",
     "smiles_to_xyz",

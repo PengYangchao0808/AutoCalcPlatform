@@ -36,7 +36,7 @@ ACP_V1_20260519/
 ├── frontend/              # ACP Workbench (v1 + v2) single-page dark dashboards
 ├── scripts/               # start_acp.sh, bootstrap_venv.sh, install_systemd.sh
 ├── config/defaults.yaml   # Default YAML config (may diverge from Python built-in)
-├── tests/                 # 46 test files (ACP + legacy + remote), conftest.py, baseline configs
+├── tests/                 # 49 test files (ACP + legacy + remote), conftest.py, baseline configs
 ├── docs/                  # Dev docs: CENSO, MethodMeta, Remote execution, Simple Workflows
 └── pyproject.toml         # NOTE: api/remote optional deps declared (fastapi/uvicorn/paramiko)
 ```
@@ -44,7 +44,7 @@ ACP_V1_20260519/
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| ACP CLI (unified entry) | `src/acp/cli.py` | `acp run ensemble|energy|mechanism|serve|singlepoint|opt|freq|scan|xtb-opt` (1835 lines) |
+| ACP CLI (unified entry) | `src/acp/cli.py` | `acp run ensemble|energy|xtbmd_censo_energy|mechanism|serve|singlepoint|opt|freq|scan|xtb-opt` (~2000 lines) |
 | Add new protocol | `src/cccp/core/protocols.py` | Update `_get_default_protocol_config()` (610 lines) |
 | Config loading | `src/cccp/config.py` | 6-source merge (677 lines) |
 | Config defaults (ACP) | `src/acp/core/config.py` | ACP-specific config loading (145 lines) |
@@ -60,7 +60,9 @@ ACP_V1_20260519/
 | Legacy ISOSTAT/Shermo | `src/cccp/qc/runners/__init__.py` | `run_isostat()`, `run_shermo()`, `batch_process_thermo()` (323 lines) |
 | ACP conformer workflow | `src/acp/workflows/conformer.py` | Thin wrapper → `ConformerEngine.run()`; rebuilds from `all_conformers.xyz` (343 lines) |
 | Ensemble workflow | `src/acp/workflows/ensemble.py` | `acp run ensemble` — CREST → CENSO P+S (508 lines) |
-| Energy workflow | `src/acp/workflows/energy.py` | `acp run energy` — Boltzmann ≥99%, `--levels`, opt/freq same-level (1141 lines) |
+| Energy workflow | `src/acp/workflows/energy.py` | `acp run energy` — rank1-only default (`--full-ensemble` restores Boltzmann ≥99%), `--levels`, opt/freq same-level (~740 lines; heavy helpers in energy_shared.py) |
+| xTB-MD CENSO energy | `src/acp/workflows/xtbmd_censo_energy.py` | `acp run xtbmd_censo_energy` — GFN-FF MD → GFN1 batch opt → isostat → ewin filter → CENSO → fine DFT + G_total (2080 lines); multi-replica sampling in `xtbmd_md.py`; shared helpers in `energy_shared.py` |
+| Shared energy helpers | `src/acp/workflows/energy_shared.py` | `resolve_levels`/`run_rank1_handoff`/`boltzmann_weights`/`select_cumulative_boltzmann`/`build_ensemble_summary`/`write_final_outputs`/`censo_record_to_candidate`/`xtb_passthrough_result`/`resolve_solvent_config`/`resolve_crest_ewin` (E4 extraction) |
 | NMR workflow | `src/acp/workflows/nmr.py` | Conformer search → GIAO → Boltzmann averaging (502 lines) |
 | Mechanism workflow | `src/acp/workflows/mechanism.py` | TS search + IRC validation (394 lines) |
 | Simple workflows | `src/acp/workflows/simple.py` | singlepoint/opt/freq/scan/xtb-opt (546 lines) |
@@ -148,10 +150,22 @@ acp run conformer --batch-file molecules.txt --output ./batch_results
 acp run ensemble --input "CCO" --output ./out
 acp run ensemble --input "CCO" --preset censo-zero --output ./out
 
-# free energy ranking
+# free energy ranking (default: rank1-only fine DFT + ensemble total G;
+# use --full-ensemble for the cumulative-Boltzmann ≥99% set, v15 semantics)
 acp run energy --input "CCO" --output ./out
+acp run energy --input "CCO" --full-ensemble --output ./out
 acp run energy --input "CCO" --no-opt --output ./out
 acp run energy --input "CCO" --levels '{"opt":{"method":"wB97X-D4","basis":"def2-SVP"},"sp":{"method":"wB97X-D4","basis":"def2-TZVPPD"}}'
+
+# xTB-MD conformer-search free energy (GFN-FF MD → GFN1 batch opt → isostat → CENSO → fine DFT;
+# default full-ensemble mode; --ewin is the GFN1 post-optimization window, distinct from energy's
+# CREST window)
+acp run xtbmd_censo_energy --input "CCO" --output ./out
+acp run xtbmd_censo_energy --input "CCO" --md-temp 400 --md-time 100 --md-seeds 3
+acp run xtbmd_censo_energy --input "CCO" --preset censo-default
+acp run xtbmd_censo_energy --input "CCO" --rank1-only --resume
+acp run xtbmd_censo_energy --input "CCO" --edis 0.5 --gdis 0.25 --ewin 6.0
+acp run xtbmd_censo_energy --input "CCO" --no-conv-check --max-frames 300 --opt-timeout 600
 
 # NMR chemical shift prediction
 acp run nmr --input "CCO" --output ./nmr_results
@@ -176,6 +190,7 @@ acp run serve --port 8765
 pytest tests/ -v
 pytest tests/test_acp_workflows_ensemble.py -v
 pytest tests/test_acp_workflows_energy.py -v
+pytest tests/test_acp_workflows_xtbmd_censo_energy.py tests/test_acp_xtbmd_platform_phase5.py -v
 pytest tests/test_acp_workflows_mechanism.py -v
 pytest tests/test_acp_backends.py -v
 pytest tests/test_acp_censo_p5_acceptance.py -v

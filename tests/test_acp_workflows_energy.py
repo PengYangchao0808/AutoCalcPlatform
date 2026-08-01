@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import math
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -10,6 +12,8 @@ import numpy as np
 import pytest
 
 from acp.backends.censo_backend import CensoConformerRecord, CensoRunResult
+from acp.core.models import HARTREE_TO_KCAL
+from acp.workflows.ensemble_thermo import ensemble_total_gibbs as ensemble_total_gibbs_import
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -178,6 +182,40 @@ def test_energy_subparser_registered() -> None:
     assert args.workflow == "energy"
     assert args.preset == "censo-light"
     assert args.no_opt is False
+    assert args.full_ensemble is False
+
+
+def test_energy_cli_rank1_only_default_and_optout(tmp_path: Path) -> None:
+    """CLI 默认开启 rank1-only；--full-ensemble 显式关闭并透传 workflow 层。"""
+    from unittest.mock import MagicMock
+
+    from acp.cli import main
+
+    calls: list[bool] = []
+
+    def fake_run(**kwargs: Any) -> MagicMock:
+        calls.append(kwargs.get("rank1_only"))
+        res = MagicMock()
+        res.status = "completed"
+        res.metadata = {}
+        return res
+
+    with (
+        patch("acp.cli._build_config", return_value={}),
+        patch("acp.workflows.energy.run_conformer_energy", side_effect=fake_run) as m,
+    ):
+        rc = main(["run", "energy", "--input", "CCO", "--output", str(tmp_path / "a")])
+        assert rc == 0
+        rc2 = main(
+            [
+                "run", "energy", "--input", "CCO",
+                "--output", str(tmp_path / "b"),
+                "--full-ensemble",
+            ]
+        )
+        assert rc2 == 0
+    assert m.call_count == 2
+    assert calls == [True, False]
 
 
 def test_energy_help_output() -> None:
@@ -344,8 +382,10 @@ def test_energy_light_opt_on_end_to_end(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy.ORCAInterface", return_value=orca) as mock_orca_cls,
-        patch("acp.workflows.energy.run_shermo", return_value=dict(_SHERMO_OK)) as mock_shermo,
+        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca) as mock_orca_cls,
+        patch(
+            "acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)
+        ) as mock_shermo,
     ):
         backend = MagicMock()
         backend.refine_ensemble.return_value = mock_screening_result
@@ -380,16 +420,29 @@ def test_energy_light_opt_on_end_to_end(
     # Shermo consumed the SP energy
     assert mock_shermo.call_args.kwargs["sp_energy"] == pytest.approx(-155.001234)
 
-    # finalDFT products (2 frames / 2 rows) + global min + screening ranking
+    # finalDFT products (2 frames / 2 rows + TOTAL row) + global min + screening ranking
     mol_dir = tmp_path / "out" / "input"
     assert (mol_dir / "finalDFT" / "all_conformers.xyz").exists()
     thermo_csv = mol_dir / "finalDFT" / "conformer_thermo.csv"
     assert thermo_csv.exists()
     lines = thermo_csv.read_text().strip().splitlines()
     assert lines[0].startswith("index,rank,energy_hartree,gibbs_correction,gibbs_hartree")
-    assert len(lines) == 3  # header + both ensemble members
+    assert len(lines) == 4  # header + both ensemble members + TOTAL row
+    assert lines[-1].startswith("TOTAL,")
     assert (mol_dir / "input_global_min.xyz").exists()
     assert (mol_dir / "ensemble" / "screening_ranking.csv").exists()
+    # ensemble total Gibbs: both mock candidates share the same Shermo Gibbs
+    # → equal weights 0.5/0.5 → G_total = G1 + kT·ln 0.5
+    thermo_json = mol_dir / "finalDFT" / "ensemble_thermo.json"
+    assert thermo_json.exists()
+    summary = json.loads(thermo_json.read_text())
+    assert summary["method"] == "dft_table"
+    assert summary["rank1_weight"] == pytest.approx(0.5)
+    g1 = _SHERMO_OK["g_conc"] if _SHERMO_OK["g_conc"] is not None else _SHERMO_OK["g_sum"]
+    expected_total = (g1 + 3.166811563e-6 * 298.15 * math.log(0.5)) * HARTREE_TO_KCAL
+    assert result.metadata["total_gibbs_kcal_mol"] == pytest.approx(expected_total, abs=1e-6)
+    assert summary["total_gibbs_kcal_mol"] == pytest.approx(expected_total, abs=1e-6)
+    assert summary["population_coverage"] == pytest.approx(1.0)
 
     # ORCAInterface constructed with the default opt functional
     _, orca_kwargs = mock_orca_cls.call_args
@@ -409,8 +462,8 @@ def test_energy_light_opt_on_rank1_is_lowest_gtot(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy.ORCAInterface", return_value=orca),
-        patch("acp.workflows.energy.run_shermo", return_value=dict(_SHERMO_OK)),
+        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)),
     ):
         backend = MagicMock()
         backend.refine_ensemble.return_value = mock_screening_result
@@ -447,8 +500,8 @@ def test_energy_light_no_opt_cheap_path(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy.ORCAInterface", return_value=orca),
-        patch("acp.workflows.energy.run_shermo") as mock_shermo,
+        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.run_shermo") as mock_shermo,
     ):
         backend = MagicMock()
         backend.refine_ensemble.return_value = mock_refinement_result
@@ -502,8 +555,10 @@ def test_energy_zero_opt_on_bypasses_censo(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy.ORCAInterface", return_value=orca),
-        patch("acp.workflows.energy.run_shermo", return_value=dict(_SHERMO_OK)) as mock_shermo,
+        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch(
+            "acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)
+        ) as mock_shermo,
     ):
         backend = MagicMock()
         mock_backend_cls.return_value = backend
@@ -547,8 +602,8 @@ def test_energy_zero_no_opt_censo_nconf1(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy.ORCAInterface", return_value=orca),
-        patch("acp.workflows.energy.run_shermo") as mock_shermo,
+        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.run_shermo") as mock_shermo,
     ):
         backend = MagicMock()
         backend.refine_ensemble.return_value = refinement
@@ -592,8 +647,8 @@ def test_energy_default_full_funnel(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy.ORCAInterface", return_value=orca),
-        patch("acp.workflows.energy.run_shermo", side_effect=shermo_values) as mock_shermo,
+        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.run_shermo", side_effect=shermo_values) as mock_shermo,
     ):
         backend = MagicMock()
         backend.refine_ensemble.return_value = mock_refinement_result
@@ -630,7 +685,7 @@ def test_energy_default_full_funnel(
     # Multi-frame outputs
     mol_dir = tmp_path / "out" / "input"
     lines = (mol_dir / "finalDFT" / "conformer_thermo.csv").read_text().strip().splitlines()
-    assert len(lines) == 3  # header + 2 conformers
+    assert len(lines) == 4  # header + 2 conformers + TOTAL row
     weights = [r.weight for r in result.ensemble.records]
     assert sum(weights) == pytest.approx(1.0, abs=1e-6)
 
@@ -647,8 +702,8 @@ def test_energy_default_shermo_failure_falls_back_to_gtot(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy.ORCAInterface", return_value=orca),
-        patch("acp.workflows.energy.run_shermo", return_value=None),
+        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.run_shermo", return_value=None),
     ):
         backend = MagicMock()
         backend.refine_ensemble.return_value = mock_refinement_result
@@ -705,6 +760,67 @@ def test_final_outputs_format(tmp_path: Path) -> None:
     )
     assert Path(outputs["global_min_xyz"]).name == "mol_global_min.xyz"
 
+    # New ensemble-total outputs (workflow 1, single conformer → p1 = 1.0)
+    assert outputs["total_gibbs_hartree"] == pytest.approx(-154.95)
+    assert outputs["total_gibbs_kcal_mol"] == pytest.approx(-154.95 * 627.5094740631)
+    thermo = json.loads(Path(outputs["ensemble_thermo_json"]).read_text())
+    assert thermo["method"] == "dft_table"
+    assert thermo["rank1_weight"] == pytest.approx(1.0)
+    assert thermo["total_gibbs_hartree"] == pytest.approx(-154.95)
+    assert thermo["population_coverage"] == pytest.approx(1.0)
+    assert thermo["censo_reference_gibbs_hartree"] is None
+    assert "boltzmann_table_json" not in outputs
+
+
+def test_final_outputs_external_table_workflow2(tmp_path: Path) -> None:
+    """Workflow 2: external CENSO table drives p₁/S_mix; G₁ is the fine DFT value."""
+    from acp.workflows.energy import _write_final_outputs
+
+    candidates = [
+        {
+            "index": 0,
+            "coordinates": np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0]]),
+            "symbols": ["C", "H"],
+            "energy": -155.001,
+            "gibbs": -154.95,
+            "gibbs_correction": None,
+            "h_correction": None,
+            "u_correction": None,
+            "s_total": None,
+            "g_conc": None,
+            "source": "CONF1",
+        },
+    ]
+    ext_weights = {"CONF1": 0.8442, "CONF2": 0.1558}
+    ext_total = ensemble_total_gibbs_import(-154.95, 0.8442, 298.15)
+    ext_total_censo = ensemble_total_gibbs_import(-154.83, 0.8442, 298.15)
+    outputs = _write_final_outputs(
+        candidates,
+        tmp_path,
+        "mol",
+        298.15,
+        external_weights=ext_weights,
+        external_total_gibbs=ext_total,
+        external_total_gibbs_censo=ext_total_censo,
+    )
+
+    thermo = json.loads(Path(outputs["ensemble_thermo_json"]).read_text())
+    assert thermo["method"] == "censo_table_rank1"
+    assert thermo["rank1_weight"] == pytest.approx(0.8442)
+    assert thermo["total_gibbs_hartree"] == pytest.approx(ext_total)
+    assert thermo["population_coverage"] == pytest.approx(1.0)
+    assert thermo["censo_reference_gibbs_hartree"] == pytest.approx(ext_total_censo)
+    assert len(thermo["conformers"]) == 2
+    # only rank1 carries a fine DFT Gibbs
+    by_id = {row["conf_id"]: row for row in thermo["conformers"]}
+    assert by_id["CONF1"]["gibbs_hartree"] == pytest.approx(-154.95)
+    assert by_id["CONF2"]["gibbs_hartree"] is None
+
+    bt = json.loads(Path(outputs["boltzmann_table_json"]).read_text())
+    assert bt["source"] == "censo"
+    assert bt["weights"]["CONF1"] == pytest.approx(0.8442)
+    assert bt["weights"]["CONF2"] == pytest.approx(0.1558)
+
 
 def test_screening_ranking_csv(tmp_path: Path, mock_screening_result: CensoRunResult) -> None:
     from acp.workflows.energy import _write_screening_ranking
@@ -714,3 +830,160 @@ def test_screening_ranking_csv(tmp_path: Path, mock_screening_result: CensoRunRe
     assert "conf_id" in content
     assert "CONF1" in content
     assert "CONF2" in content
+
+# ---------------------------------------------------------------------------
+# rank1_only (workflow 2): fine DFT on rank1 only + CENSO-table total G
+# ---------------------------------------------------------------------------
+
+
+def test_energy_rank1_only_light_opt_on(
+    tmp_path: Path,
+    sample_config: dict[str, Any],
+    mock_screening_result: CensoRunResult,
+    multiframe_xyz: Path,
+) -> None:
+    """--rank1-only: single handoff on CENSO rank1; G_total from CENSO table.
+
+    The screening fixture spans ΔG ≈ 0.31 kcal/mol; the fine DFT G₁ (mock
+    Shermo) enters G_total = G₁ + kT·ln p₁.
+    """
+    from acp.workflows.energy import run_conformer_energy
+
+    orca = _mock_orca_instance()
+
+    with (
+        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
+        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch(
+            "acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)
+        ) as mock_shermo,
+    ):
+        backend = MagicMock()
+        backend.refine_ensemble.return_value = mock_screening_result
+        mock_backend_cls.return_value = backend
+
+        result = run_conformer_energy(
+            input_source=str(multiframe_xyz),
+            output_dir=str(tmp_path / "out"),
+            preset="censo-light",
+            config=sample_config,
+            rank1_only=True,
+        )
+
+    assert result.status == "completed"
+    assert result.metadata["rank1_only"] is True
+    assert result.metadata["n_conformers"] == 1
+
+    # only rank1 received the fine DFT treatment
+    assert orca.optimize.call_count == 1
+    assert orca.frequency.call_count == 1
+    assert orca.single_point.call_count == 1
+    assert mock_shermo.call_count == 1
+
+    # G_total = G1(fine) + kT·ln p1(CENSO table)
+    mol_dir = tmp_path / "out" / "input"
+    cen_weights = mock_screening_result.boltzmann_weights()
+    p1 = cen_weights["CONF1"]
+    g1 = _SHERMO_OK["g_conc"] if _SHERMO_OK["g_conc"] is not None else _SHERMO_OK["g_sum"]
+    expected_total = (g1 + 3.166811563e-6 * 298.15 * math.log(p1)) * HARTREE_TO_KCAL
+    assert result.metadata["total_gibbs_kcal_mol"] == pytest.approx(expected_total, abs=1e-6)
+    # CENSO-level reference: gtot1 + kT·ln p1
+    gtot1 = mock_screening_result.records[0].gtot
+    expected_censo = (gtot1 + 3.166811563e-6 * 298.15 * math.log(p1)) * HARTREE_TO_KCAL
+    assert result.metadata["total_gibbs_censo_hartree"] == pytest.approx(
+        expected_censo / HARTREE_TO_KCAL, abs=1e-6
+    )
+
+    # outputs: ensemble_thermo.json (censo_table_rank1) + boltzmann_table.json
+    summary = json.loads((mol_dir / "finalDFT" / "ensemble_thermo.json").read_text())
+    assert summary["method"] == "censo_table_rank1"
+    assert summary["rank1_weight"] == pytest.approx(p1, abs=1e-6)
+    assert summary["total_gibbs_hartree"] == pytest.approx(
+        result.metadata["total_gibbs_hartree"]
+    )
+    assert summary["population_coverage"] == pytest.approx(1.0)
+    assert len(summary["conformers"]) == 2  # full CENSO table preserved
+
+    bt = json.loads((mol_dir / "ensemble" / "boltzmann_table.json").read_text())
+    assert bt["source"] == "censo"
+    assert set(bt["weights"]) == {"CONF1", "CONF2"}
+
+    # single-frame outputs: 1 frame + TOTAL row
+    xyz_lines = (mol_dir / "finalDFT" / "all_conformers.xyz").read_text().strip().splitlines()
+    assert xyz_lines[0] == "3"
+    csv_lines = (mol_dir / "finalDFT" / "conformer_thermo.csv").read_text().strip().splitlines()
+    assert len(csv_lines) == 3  # header + 1 conformer + TOTAL row
+    # single-conformer DFT table → weight 1.0
+    assert result.ensemble.records[0].weight == pytest.approx(1.0)
+
+
+def test_energy_rank1_only_cheap_path(
+    tmp_path: Path,
+    sample_config: dict[str, Any],
+    multiframe_xyz: Path,
+) -> None:
+    """--rank1-only + --no-opt: CENSO refines 1 frame; p table from xTB.
+
+    With a ΔE = 2 kcal/mol two-frame ensemble, CENSO receives -n 1; the
+    Boltzmann weights come from the xTB passthrough of the full ensemble
+    (the 1-record CENSO table would degenerate to p₁ = 1).
+    """
+    from acp.workflows.energy import run_conformer_energy
+
+    # 2 frames, ΔE = 2.0 kcal/mol — non-degenerate xTB table
+    xyz = tmp_path / "close.xyz"
+    e2 = -154.800000 + 2.0 / HARTREE_TO_KCAL
+    xyz.write_text(
+        "3\n-154.80000000\nC 0 0 0\nH 0 0 1.089\nH 1.027 0 -0.363\n"
+        f"3\n{e2:.8f}\nC 0 0 0\nH 0 0 1.089\nH -1.027 0 -0.363\n"
+    )
+
+    refined = CensoRunResult(
+        preset="censo-light",
+        records=[_make_record("CONF1", 0, -154.850111)],
+        final_part="refinement",
+        temperature=298.15,
+    )
+
+    orca = _mock_orca_instance()
+    with (
+        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
+        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.run_shermo") as mock_shermo,
+    ):
+        backend = MagicMock()
+        backend.refine_ensemble.return_value = refined
+        mock_backend_cls.return_value = backend
+
+        result = run_conformer_energy(
+            input_source=str(xyz),
+            output_dir=str(tmp_path / "out"),
+            preset="censo-light",
+            config=sample_config,
+            no_opt=True,
+            rank1_only=True,
+        )
+
+    assert result.status == "completed"
+    assert result.metadata["n_conformers"] == 1
+    orca.optimize.assert_not_called()
+    mock_shermo.assert_not_called()
+
+    # CENSO restricted to the rank1 frame
+    _, kwargs = backend.refine_ensemble.call_args
+    assert kwargs["nconf"] == 1
+    assert kwargs["include_refinement"] is True
+
+    # p₁ from the xTB table: ΔE = 2 kcal/mol → p1 = 1/(1+exp(-2/0.5925))
+    p1 = 1.0 / (1.0 + math.exp(-2.0 / (3.166811563e-6 * 298.15 * HARTREE_TO_KCAL)))
+    gtot1 = refined.records[0].gtot
+    expected_total = (gtot1 + 3.166811563e-6 * 298.15 * math.log(p1)) * HARTREE_TO_KCAL
+    assert result.metadata["total_gibbs_kcal_mol"] == pytest.approx(expected_total, abs=1e-6)
+
+    mol_dir = tmp_path / "out" / "close"
+    summary = json.loads((mol_dir / "finalDFT" / "ensemble_thermo.json").read_text())
+    assert summary["method"] == "xtb_table_rank1"
+    assert summary["rank1_weight"] == pytest.approx(p1, abs=1e-6)
+    bt = json.loads((mol_dir / "ensemble" / "boltzmann_table.json").read_text())
+    assert bt["source"] == "xtb"
+    assert set(bt["weights"]) == {"CONF1", "CONF2"}
