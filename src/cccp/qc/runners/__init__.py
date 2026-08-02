@@ -10,6 +10,7 @@ Author: QCcalc Team (adapted from RPH)
 import re
 import subprocess
 import logging
+import os
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 import numpy as np
@@ -18,6 +19,21 @@ from cccp.utils.file_io import read_xyz, write_xyz
 from cccp.utils import ensure_dir
 
 logger = logging.getLogger(__name__)
+
+
+def _pinned_env(threads: int) -> Dict[str, str]:
+    """Environment with BLAS/OpenMP thread counts pinned to *threads*.
+
+    LSF/OpenLava job environments inject ``OMP_NUM_THREADS`` set to the
+    node's full core count, which oversubscribes the node.  Pinning the env
+    vars keeps every subprocess within its allocated cores.
+    """
+    pinned = max(1, int(threads))
+    env = dict(os.environ)
+    env["OMP_NUM_THREADS"] = str(pinned)
+    env["MKL_NUM_THREADS"] = str(pinned)
+    env["OPENBLAS_NUM_THREADS"] = str(pinned)
+    return env
 
 
 def run_isostat(
@@ -33,6 +49,14 @@ def run_isostat(
     """
     Run ISOSTAT clustering on conformer ensemble.
 
+    .. deprecated::
+        Delegate to :class:`cccp.qc.interfaces.isostat.IsostatInterface`
+        (or the ``acp.backends`` adapters) instead.  This wrapper is
+        retained for the dormant ``ConformerEngine`` call chain and the
+        ``acp.backends.external`` re-export, and now inherits the
+        interface's production fixes (title normalisation — exit 24 fix,
+        error classification, pinned thread env).
+
     Args:
         ensemble_xyz: Path to ensemble XYZ file
         output_dir: Output directory
@@ -43,26 +67,13 @@ def run_isostat(
         threads: Number of threads
 
     Returns:
-        Tuple of (output_xyz_path, list of (coords, symbols, energy))
+        Tuple of (output_xyz_path, list of (coords, symbols, energy)).
+        On failure the original ensemble path and an empty list are
+        returned (legacy silent semantics — production callers should use
+        the QCResult-carrying interface instead).
     """
-    executables = config.get('executables', {})
-    isostat_bin = executables.get('isostat', {}).get('path', 'isostat')
-    
-    output_dir = Path(output_dir)
-    ensure_dir(output_dir)
-    
-    cluster_xyz = output_dir / "cluster.xyz"
-    isostat_log = output_dir / "isostat.log"
-    
-    cmd = [
-        str(isostat_bin),
-        str(ensemble_xyz),
-        "-Gdis", str(gdis),
-        "-Edis", str(edis),
-        "-T", str(temperature),
-        "-nt", str(threads)
-    ]
-    
+    from cccp.qc.interfaces.isostat import IsostatInterface
+
     if energy_window is not None:
         logger.warning(
             "energy_window parameter is deprecated — ISOSTAT v2022.05 does not support "
@@ -70,83 +81,90 @@ def run_isostat(
             "Consider using post-run log parsing instead (like RPH)."
         )
 
-    try:
-        result = subprocess.run(
-            cmd,
-            cwd=output_dir,
-            capture_output=True,
-            text=True,
-            timeout=None
-        )
+    output_dir = Path(output_dir)
+    ensure_dir(output_dir)
 
-        if result.returncode != 0:
-            logger.error(
-                f"ISOSTAT exited with code {result.returncode}: {result.stderr.strip()}"
-            )
-            with open(isostat_log, 'w', encoding='utf-8') as f:
-                f.write(f"Command: {' '.join(cmd)}\n")
-                f.write(f"Return code: {result.returncode}\n")
-                f.write(result.stdout)
-                f.write("\nSTDERR:\n")
-                f.write(result.stderr)
-            return ensemble_xyz, []
-        else:
-            with open(isostat_log, 'w', encoding='utf-8') as f:
-                f.write(result.stdout)
-                if result.stderr:
-                    f.write("\nSTDERR:\n")
-                    f.write(result.stderr)
-        
-        if not cluster_xyz.exists():
-            logger.warning(f"ISOSTAT clustering failed, copying ensemble directly")
-            import shutil
-            shutil.copy(ensemble_xyz, cluster_xyz)
-            return cluster_xyz, []
-        
-        coords_list = []
-        with open(cluster_xyz, 'r', encoding='utf-8') as f:
-            content = f.read()
-        
-        import re
-        atom_count_match = re.match(r'(\d+)', content.strip())
-        if atom_count_match:
-            n_atoms = int(atom_count_match.group(1))
-            
-            molecule_blocks = content.strip().split(str(n_atoms))
-            for i, block in enumerate(molecule_blocks[1:], 1):
-                block = block.strip()
-                if not block:
-                    continue
-                    
-                lines = block.split('\n')
-                if len(lines) < 2:
-                    continue
-                    
-                coords = []
-                symbols = []
-                energy = None
-                
-                title_parts = lines[0].strip().split('|')
-                if len(title_parts) >= 2:
-                    try:
-                        energy = float(title_parts[1].split(':')[1].strip())
-                    except (ValueError, IndexError):
-                        pass
-                
-                for line in lines[1:n_atoms+1]:
-                    parts = line.strip().split()
-                    if len(parts) >= 4:
-                        symbols.append(parts[0])
-                        coords.append([float(parts[1]), float(parts[2]), float(parts[3])])
-                
-                if coords:
-                    coords_list.append((np.array(coords), symbols, energy))
-        
-        return cluster_xyz, coords_list
-        
-    except Exception as e:
-        logger.error(f"ISOSTAT clustering failed: {e}")
+    interface = IsostatInterface(config)
+    result = interface.cluster(
+        ensemble_xyz,
+        output_dir,
+        gdis=gdis,
+        edis=edis,
+        temperature=temperature,
+        nthreads=threads,
+    )
+
+    if not result.success or result.output_file is None:
+        logger.error("ISOSTAT clustering failed: %s", result.error_message)
         return ensemble_xyz, []
+
+    cluster_xyz = result.output_file
+    if not cluster_xyz.exists():
+        logger.warning("ISOSTAT clustering failed, copying ensemble directly")
+        import shutil
+        shutil.copy(ensemble_xyz, cluster_xyz)
+        return cluster_xyz, []
+
+    coords_list = _parse_cluster_xyz(cluster_xyz)
+    return cluster_xyz, coords_list
+
+
+def _parse_cluster_xyz(
+    cluster_xyz: Path,
+) -> List[Tuple[np.ndarray, List[str], float]]:
+    """Parse a clustered multi-frame XYZ into (coords, symbols, energy) tuples.
+
+    Energies are read from ``Title | Energy: X`` comments (legacy format)
+    or from bare Molclus-style numeric titles.
+    """
+    coords_list: List[Tuple[np.ndarray, List[str], float]] = []
+    text = cluster_xyz.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    i = 0
+    n_atoms = 0
+    while i < len(lines):
+        stripped = lines[i].strip()
+        if not stripped:
+            i += 1
+            continue
+        match = re.match(r'(\d+)', stripped)
+        if match is None:
+            i += 1
+            continue
+        n_atoms = int(match.group(1))
+        if n_atoms <= 0:
+            i += 1
+            continue
+        if i + 2 + n_atoms > len(lines):
+            break
+
+        title = lines[i + 1].strip()
+        energy: Optional[float] = None
+        title_parts = title.split('|')
+        if len(title_parts) >= 2:
+            try:
+                energy = float(title_parts[1].split(':')[1].strip())
+            except (ValueError, IndexError):
+                pass
+        if energy is None:
+            try:
+                energy = float(title)
+            except ValueError:
+                pass
+
+        coords = []
+        symbols = []
+        for line in lines[i + 2:i + 2 + n_atoms]:
+            parts = line.strip().split()
+            if len(parts) >= 4:
+                symbols.append(parts[0])
+                coords.append([float(parts[1]), float(parts[2]), float(parts[3])])
+
+        if coords:
+            coords_list.append((np.array(coords), symbols, energy))
+        i += 2 + n_atoms
+
+    return coords_list
 
 
 def run_shermo(
@@ -211,7 +229,8 @@ def run_shermo(
             cwd=output_dir,
             capture_output=True,
             text=True,
-            timeout=None
+            timeout=None,
+            env=_pinned_env(1)
         )
         
         with open(output_file, 'w', encoding='utf-8') as f:

@@ -9,6 +9,7 @@ Author: QCcalc Team
 
 import subprocess
 import logging
+import os
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 import numpy as np
@@ -20,6 +21,22 @@ from cccp.utils import ensure_dir
 from cccp.utils.solvent_map import xtb_solvent
 
 logger = logging.getLogger(__name__)
+
+
+def _thread_env(nproc: int) -> Dict[str, str]:
+    """Return an environment with xTB/BLAS thread counts pinned to *nproc*.
+
+    LSF/OpenLava job environments inject ``OMP_NUM_THREADS`` set to the
+    node's full core count, which overrides xTB's ``-T``/``-P`` flags and
+    oversubscribes the node (a 4-core job then spawns 10 threads per xTB
+    process).  Pinning the env vars keeps every xTB process within its
+    allocated cores.
+    """
+    env = dict(os.environ)
+    env["OMP_NUM_THREADS"] = str(nproc)
+    env["MKL_NUM_THREADS"] = str(nproc)
+    env["OPENBLAS_NUM_THREADS"] = str(nproc)
+    return env
 
 
 class XTBInterface:
@@ -56,7 +73,12 @@ class XTBInterface:
         self.solvent_model = (solvent_model or "none").lower()
 
         resources = config.get('resources', {})
-        self.nproc = kwargs.get('nproc', resources.get('nproc', 16))
+        raw_nproc = kwargs.get('nproc', resources.get('nproc', 16))
+        try:
+            self.nproc = max(1, int(raw_nproc))
+        except (TypeError, ValueError):
+            # Never pass OMP_NUM_THREADS=0/negative/None to the subprocess.
+            self.nproc = 1
 
     def _solvent_args(self, solvent: Optional[str] = None) -> List[str]:
         """Return xTB solvation command-line flags based on solvent_model."""
@@ -129,7 +151,8 @@ class XTBInterface:
                 cwd=output_dir,
                 capture_output=True,
                 text=True,
-                timeout=kwargs.get('timeout', None)
+                timeout=kwargs.get('timeout', None),
+                env=_thread_env(self.nproc),
             )
 
             with open(log_file, 'w', encoding='utf-8') as f:
@@ -218,7 +241,8 @@ class XTBInterface:
                 cwd=output_dir,
                 capture_output=True,
                 text=True,
-                timeout=kwargs.get('timeout', None)
+                timeout=kwargs.get('timeout', None),
+                env=_thread_env(self.nproc),
             )
 
             with open(log_file, 'w', encoding='utf-8') as f:
