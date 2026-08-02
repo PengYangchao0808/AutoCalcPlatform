@@ -12,6 +12,8 @@ from cccp.qc.interfaces import (
     CRESTInterface,
     XTBInterface,
     IsostatInterface,
+    MolclusInterface,
+    CensoInterface,
 )
 
 from cccp.qc.runners import (
@@ -35,6 +37,8 @@ __all__ = [
     "CRESTInterface",
     "XTBInterface",
     "IsostatInterface",
+    "MolclusInterface",
+    "CensoInterface",
     "run_isostat",  # DEPRECATED — IsostatInterface is the single ISOSTAT path
     "run_shermo",
     "batch_process_thermo",

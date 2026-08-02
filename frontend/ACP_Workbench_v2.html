@@ -4278,7 +4278,13 @@ async function openMethodConfig() {
   var title = document.getElementById("mc-modal-title");
   var wfEntry = workflowCatalogCache.find(function(w) { return w.id === wizardState.workflow.id; });
   title.textContent = (t("modal.method_config") || "\u914d\u7f6e\u8ba1\u7b97\u65b9\u6cd5") + " - " + (wfEntry ? (wfEntry.label || wfEntry.id) : "");
-  wizardState.method.rank1_only = (wizardState.workflow.id === "energy");
+  // rank1-only default applies only on first entry per workflow; a user's
+  // explicit choice must survive modal re-open (otherwise it is silently
+  // reset to the energy-workflow default on every open).
+  if (wizardState.method.rank1_wf !== wizardState.workflow.id) {
+    wizardState.method.rank1_only = (wizardState.workflow.id === "energy");
+    wizardState.method.rank1_wf = wizardState.workflow.id;
+  }
 
   document.getElementById("method-config-modal").style.display = "flex";
   try { await loadMethodCatalog(); } catch(e) {

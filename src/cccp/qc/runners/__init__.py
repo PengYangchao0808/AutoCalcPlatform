@@ -7,15 +7,15 @@ Runners for auxiliary QC tasks like clustering and thermodynamics.
 Author: QCcalc Team (adapted from RPH)
 """
 
-import re
-import subprocess
 import logging
 import os
+import re
+import subprocess
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
 
-from cccp.utils.file_io import read_xyz, write_xyz
 from cccp.utils import ensure_dir
 
 logger = logging.getLogger(__name__)
@@ -206,10 +206,10 @@ def run_shermo(
     """
     output_dir = Path(output_dir)
     ensure_dir(output_dir)
-    
+
     if output_file is None:
         output_file = output_dir / "Shermo.sum"
-    
+
     cmd = [
         str(shermo_bin),
         str(freq_output),
@@ -222,7 +222,7 @@ def run_shermo(
     ]
     if conc is not None:
         cmd.extend(["-conc", str(conc)])
-    
+
     try:
         result = subprocess.run(
             cmd,
@@ -232,15 +232,15 @@ def run_shermo(
             timeout=None,
             env=_pinned_env(1)
         )
-        
+
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(result.stdout)
             if result.stderr:
                 f.write("\nSTDERR:\n")
                 f.write(result.stderr)
-        
+
         return _parse_sum_file(output_file)
-        
+
     except Exception as e:
         logger.error(f"Shermo calculation failed: {e}")
         return None
@@ -263,19 +263,19 @@ def _parse_sum_file(sum_file: Path) -> Optional[Dict[str, float]]:
         'g_conc': r"Gibbs free energy at specified concentration:\s+([-+]?\d+\.\d+)",
         's_total': r"Total S:\s+([-+]?\d+\.\d+)",
     }
-    
+
     try:
         with open(sum_file, 'r', encoding='utf-8') as f:
             content = f.read()
-        
+
         thermo_data = {}
         for key, pattern in patterns.items():
             match = re.search(pattern, content)
             if match:
                 thermo_data[key] = float(match.group(1))
-        
+
         return thermo_data if thermo_data else None
-        
+
     except Exception as e:
         logger.error(f"Failed to parse Shermo sum file: {e}")
         return None

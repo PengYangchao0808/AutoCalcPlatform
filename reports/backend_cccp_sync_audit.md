@@ -318,3 +318,34 @@
 
 - **P3 步骤 10/11(2026-08-02 完成)**:全量 pytest 948 passed + 7 skipped;`bkill 1110` 释放 compute-01;冒烟(乙醇,`--max-frames 20`,4 核)全流程完成 exit 0,任意时刻合计 CPU ≤ 400%(MD 单进程 / batch_opt 每帧 nproc=1 / CENSO·DFT 4×~100%);curcusone-test 以 `--resume` 重提(job 1114),xtbmd/batch_opt/isostat 三阶段 checkpoint 指纹匹配直接跳过,运行中(13:45 起,CENSO 阶段)
 - 线程钉住剩余项:`cccp/interfaces/orca.py` 仍为 ⚠️ 部分(靠 `%pal nprocs` 控线程,BLAS/MKL 仍受环境 OMP 影响)—— 未列入 P0/P1 范围,冒烟验证 ORCA 阶段合计 CPU ≤ 400%(4×~94%)
+
+---
+
+## 8. 代码评审记录(2026-08-02 二轮)
+
+### 8.1 评审结论
+
+- **结构达标**:`acp/backends` 无 `subprocess` / 二进制路径 / CLI 参数构造;cccp 新接口零 `acp` 依赖(层完整性保持)
+- **迁移忠实**:molclus/censo/isostat 与旧实现逐行 diff 确认 1:1 迁移,关键行为(exit-24 标题归一化、`--omp-min 4`、`--maxcores`、md.inp 逐字节、轨迹校验、错误分类、模板 HOME 隔离)全部保留
+- **质量亮点**:遗留 `run_isostat` 重写为 `IsostatInterface` 薄包(继承生产修复)而非删除;`XTBInterface.nproc` 与 `CensoInterface._nproc` 均有 `max(1, int())` 防呆;censo env 逐键赋值并注释说明为何不用 `env.update()`(避免覆盖 HOME/LD_LIBRARY_PATH);私有→公开改名 + 遗留别名,acp 不再跨包 import cccp 私有符号
+
+### 8.2 评审发现(本轮已修复)
+
+| # | 问题 | 修复 |
+|---|------|------|
+| 1 | `cccp/qc/runners/__init__.py:18` F401:`read_xyz`/`write_xyz` 未使用导入(run_isostat 重写后遗留) | 已删除导入 |
+| 2 | `cccp/qc/__init__.py` 仅导出 `IsostatInterface`,缺 `MolclusInterface`/`CensoInterface`(`cccp.qc.interfaces` 包已全导) | 已补两接口导入与 `__all__` |
+| 3 | W293×10 空白行 / I001×2 导入排序(ruff) | 已 `ruff --fix --select I001,W293` 清理(仅这两类,未动 cccp typing 风格约定) |
+
+验证:`pytest` 相关子集 206 passed / 2 skipped(xtb/isostat/molclus/xtbmd/censo 全量);非 UP* ruff 错误归零。
+
+### 8.3 评审记录的行为变化(有意为之,留档)
+
+- **`ExternalBackend.cluster()` 失败语义收紧**(f7255ee):旧 = `run_isostat` 失败静默返回原 ensemble(永不 raise);新 = raise RuntimeError。无生产调用方(生产走 `isostat` backend),属安全收紧,但若未来复用 external 路由需知悉。
+- **`CensoInterface.search()` kwargs 白名单外静默丢弃**:与旧 `CensoBackend.search` 行为一致(非回归),可接受。
+
+### 8.4 遗留(不在本次范围)
+
+- `cccp/interfaces/orca.py` 线程钉住仍为 ⚠️ 部分(ORCA 靠 `%pal nprocs`,冒烟实测合计 ≤ 400%,可接受;如需彻底钉住可后续加 `OMP/MKL_NUM_THREADS`)
+- mypy strict 无法在本环境验证(numpy stubs 与 Python 3.13 语法不兼容,环境问题)
+- UP* 风格提示 ×126(cccp typing 风格约定,与 AGENTS.md 一致,非缺陷)

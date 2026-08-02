@@ -36,7 +36,7 @@ ACP_V1_20260519/
 ├── frontend/              # ACP Workbench (v1 + v2) single-page dark dashboards
 ├── scripts/               # start_acp.sh, bootstrap_venv.sh, install_systemd.sh
 ├── config/defaults.yaml   # Default YAML config (may diverge from Python built-in)
-├── tests/                 # 49 test files (ACP + legacy + remote), conftest.py, baseline configs
+├── tests/                 # 48 test files (ACP + legacy + remote), conftest.py, baseline configs
 ├── docs/                  # Dev docs: CENSO, MethodMeta, Remote execution, Simple Workflows
 └── pyproject.toml         # NOTE: api/remote optional deps declared (fastapi/uvicorn/paramiko)
 ```
@@ -56,7 +56,8 @@ ACP_V1_20260519/
 | ISOSTAT backend | `src/acp/backends/isostat_backend.py` | Thin adapter → `cccp.qc.interfaces.isostat.IsostatInterface` (title normalisation, env pinning in cccp) |
 | Molclus backend | `src/acp/backends/molclus_backend.py` | Thin adapter → `cccp.qc.interfaces.molclus.MolclusInterface` (md.inp/settings.ini/trajectory validation in cccp) |
 | Legacy ORCA interface | `src/cccp/qc/interfaces/orca.py` | Subprocess via direct ORCA invocation (811 lines) |
-| Legacy CREST / xTB | `src/cccp/qc/interfaces/crest.py` | CRESTInterface + XTBInterface co-located (723 lines) |
+| Legacy CREST interface | `src/cccp/qc/interfaces/crest.py` | `CRESTInterface` conformer search + batch `-mdopt` (723 lines) |
+| Legacy xTB interface | `src/cccp/qc/interfaces/xtb.py` | `XTBInterface` — optimize / single_point / enso_thermo (338 lines) |
 | ISOSTAT interface | `src/cccp/qc/interfaces/isostat.py` | Single ISOSTAT path (exit-24 title normalisation, error propagation, env pinning) |
 | Molclus interface | `src/cccp/qc/interfaces/molclus.py` | xTB-MD + Molclus full pipeline (md.inp, settings.ini, search()) |
 | CENSO interface | `src/cccp/qc/interfaces/censo.py` | CENSO subprocess: rcfile gen, preset injection, template injection, JSON/XYZ parsing |
