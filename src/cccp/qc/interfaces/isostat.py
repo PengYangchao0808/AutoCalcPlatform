@@ -10,6 +10,7 @@ Author: QCcalc Team
 import logging
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -44,7 +45,7 @@ def _thread_env(nthreads: int) -> Dict[str, str]:
     return env
 
 
-def _normalise_titles_for_isostat(ensemble_xyz: Path) -> Path:
+def normalise_titles_for_isostat(ensemble_xyz: Path) -> Path:
     """Rewrite frame titles as Molclus bare-energy lines for ISOSTAT.
 
     ISOSTAT (a Molclus component) parses the per-frame comment line as
@@ -139,8 +140,6 @@ class IsostatInterface:
 
     def is_available(self) -> bool:
         """Return True when the ISOSTAT binary is on PATH."""
-        import shutil
-
         return shutil.which(self.exe_path) is not None
 
     def cluster(
@@ -183,7 +182,7 @@ class IsostatInterface:
         # ISOSTAT only understands Molclus bare-energy titles; our writers
         # emit "Frame N | Energy: X".  Normalise to a temporary input file
         # so ISOSTAT parses the per-frame energy (fixes exit 24 failures).
-        isostat_input = _normalise_titles_for_isostat(ensemble_xyz)
+        isostat_input = normalise_titles_for_isostat(ensemble_xyz)
 
         command = [
             self.exe_path,
@@ -277,3 +276,7 @@ class IsostatInterface:
             output_file=cluster_xyz,
             log_file=log_file,
         )
+
+
+# Legacy private alias (kept for backward compatibility).
+_normalise_titles_for_isostat = normalise_titles_for_isostat

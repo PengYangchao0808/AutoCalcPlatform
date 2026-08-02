@@ -11,7 +11,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from acp.backends.base import QCBackend, ConformerSearcher
+from acp.backends.base import ConformerSearcher, QCBackend
 from acp.backends.registry import register_backend
 from cccp.qc.interfaces.censo import (
     CensoConformerRecord,
@@ -21,11 +21,6 @@ from cccp.qc.interfaces.censo import (
     CensoNotAvailableError,
     CensoParseError,
     CensoRunResult,
-    _PART_FLAGS,
-    _PART_INDEX_MAP,
-    _PARSE_PRIORITY,
-    _PRESETS,
-    _part_index,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,17 +35,6 @@ class CensoBackend(QCBackend, ConformerSearcher):
         super().__init__(config, **kwargs)
         self._interface = CensoInterface(dict(config), **kwargs)
 
-        # Mirrored attributes for API compatibility (config passthrough).
-        self._censo_path = self._interface._censo_path
-        self._orca_path = self._interface._orca_path
-        self._xtb_path = self._interface._xtb_path
-        self._default_preset = self._interface._default_preset
-        self._default_solvent = self._interface._default_solvent
-        self._temperature = self._interface._temperature
-        self._keep_all = self._interface._keep_all
-        self._solvent_model = self._interface._solvent_model
-        self._nproc = self._interface._nproc
-
     # ----- QCBackend ABC ---------------------------------------------------
 
     def is_available(self) -> bool:
@@ -58,75 +42,6 @@ class CensoBackend(QCBackend, ConformerSearcher):
 
     def get_version(self) -> str | None:
         return self._interface.get_version()
-
-    # ----- Preset helpers --------------------------------------------------
-
-    def _resolve_preset(self, preset: str | None) -> dict[str, Any]:
-        return self._interface._resolve_preset(preset)
-
-    # ----- rcfile generation -----------------------------------------------
-
-    def _generate_rcfile(
-        self,
-        preset_cfg: dict[str, Any],
-        output_dir: Path,
-        charge: int,
-        multiplicity: int,
-        solvent: str | None,
-        templated_parts: set[str] | None = None,
-        solvent_model: str | None = None,
-    ) -> Path:
-        return self._interface._generate_rcfile(
-            preset_cfg,
-            output_dir,
-            charge,
-            multiplicity,
-            solvent,
-            templated_parts=templated_parts,
-            solvent_model=solvent_model,
-        )
-
-    # ----- Advanced-field template injection (per-run HOME isolation) -------
-
-    def _write_part_templates(
-        self,
-        output_dir: Path,
-        part_templates: dict[str, list[str]],
-    ) -> Path:
-        return self._interface._write_part_templates(output_dir, part_templates)
-
-    # ----- CLI construction ------------------------------------------------
-
-    def _build_cli(
-        self,
-        input_xyz: Path,
-        rcfile: Path,
-        preset_cfg: dict[str, Any],
-        nproc: int,
-        temperature: float,
-        solvent: str | None,
-        nconf: int | None = None,
-        keep_all: bool = False,
-    ) -> list[str]:
-        return self._interface._build_cli(
-            input_xyz,
-            rcfile,
-            preset_cfg,
-            nproc,
-            temperature,
-            solvent,
-            nconf=nconf,
-            keep_all=keep_all,
-        )
-
-    # ----- Output parsing --------------------------------------------------
-
-    def _parse_censo_json(
-        self,
-        json_path: Path,
-        xyz_path: Path,
-    ) -> list[CensoConformerRecord]:
-        return self._interface._parse_censo_json(json_path, xyz_path)
 
     # ----- Main refinement entry point -------------------------------------
 
@@ -200,9 +115,4 @@ __all__ = [
     "CensoExecutionError",
     "CensoParseError",
     "CensoNotAvailableError",
-    "_PRESETS",
-    "_PART_FLAGS",
-    "_PARSE_PRIORITY",
-    "_PART_INDEX_MAP",
-    "_part_index",
 ]

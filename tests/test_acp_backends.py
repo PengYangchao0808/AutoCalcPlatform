@@ -271,7 +271,7 @@ def test_isostat_title_normalisation_to_molclus_format(tmp_path: Path) -> None:
     """ISOSTAT rejects "Frame N | Energy: X" titles (exit 24 on this
     Fortran build); the backend must rewrite them as Molclus bare-energy
     lines before invoking ISOSTAT (curcusone-test failure root cause)."""
-    from acp.backends.isostat_backend import IsostatBackend
+    from cccp.qc.interfaces.isostat import normalise_titles_for_isostat
 
     src = tmp_path / "isomers.xyz"
     src.write_text(
@@ -286,7 +286,7 @@ def test_isostat_title_normalisation_to_molclus_format(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    out = IsostatBackend._normalise_titles_for_isostat(src)
+    out = normalise_titles_for_isostat(src)
     try:
         text = out.read_text(encoding="utf-8")
         lines = text.splitlines()
@@ -304,7 +304,7 @@ def test_isostat_title_normalisation_to_molclus_format(tmp_path: Path) -> None:
 def test_isostat_title_normalisation_keeps_coord_lines(tmp_path: Path) -> None:
     """Multi-frame inputs with blank-line separation and no-energy titles
     must survive normalisation (frames without a float keep their title)."""
-    from acp.backends.isostat_backend import IsostatBackend
+    from cccp.qc.interfaces.isostat import normalise_titles_for_isostat
 
     src = tmp_path / "mixed.xyz"
     src.write_text(
@@ -317,7 +317,7 @@ def test_isostat_title_normalisation_keeps_coord_lines(tmp_path: Path) -> None:
         "H  1.0  0.0  0.0\n",
         encoding="utf-8",
     )
-    out = IsostatBackend._normalise_titles_for_isostat(src)
+    out = normalise_titles_for_isostat(src)
     try:
         lines = out.read_text(encoding="utf-8").splitlines()
         assert lines[1] == "        -1.5000000000"

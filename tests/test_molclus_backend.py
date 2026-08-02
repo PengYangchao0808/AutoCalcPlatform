@@ -61,9 +61,9 @@ def test_molclus_backend_instantiation() -> None:
     backend = MolclusBackend(_make_config())
 
     assert backend.name == "molclus"
-    assert backend.molclus_path == "molclus"
-    assert backend.xtb_path == "xtb"
-    assert backend.isostat_path == "isostat"
+    assert backend._interface.molclus_path == "molclus"
+    assert backend._interface.xtb_path == "xtb"
+    assert backend._interface.isostat_path == "isostat"
     assert isinstance(backend, ConformerSearcher)
     assert get_backend("molclus") is MolclusBackend
     assert supports("molclus", "conformer_search") is True
@@ -381,7 +381,7 @@ def test_isostat_backend_instantiation() -> None:
     backend = IsostatBackend(_make_config())
 
     assert backend.name == "isostat"
-    assert backend.isostat_path == "isostat"
+    assert backend._interface.exe_path == "isostat"
     assert isinstance(backend, ClusteringTool)
     assert get_backend("isostat") is IsostatBackend
     assert supports("isostat", "clustering") is True

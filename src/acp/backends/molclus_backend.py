@@ -20,40 +20,10 @@ class MolclusBackend(QCBackend):
     interface — no subprocess logic lives here)."""
 
     name: str = "molclus"
-    molclus_path: str
-    xtb_path: str
-    isostat_path: str
-    temperature: float
-    time_ps: float
-    dump_fs: float
-    gfn_level: int
-    step_fs: float
-    hmass: float
-    shake: bool
-    nvt: bool
-    nproc: int
-    timeout: int
-    isostat_timeout: int
 
     def __init__(self, config: Mapping[str, object], **kwargs: object) -> None:
         super().__init__(dict(config), **kwargs)
         self._interface = MolclusInterface(dict(config), **kwargs)
-
-        # Mirrored attributes for API compatibility (config passthrough).
-        self.molclus_path = self._interface.molclus_path
-        self.xtb_path = self._interface.xtb_path
-        self.isostat_path = self._interface.isostat_path
-        self.temperature = self._interface.temperature
-        self.time_ps = self._interface.time_ps
-        self.dump_fs = self._interface.dump_fs
-        self.gfn_level = self._interface.gfn_level
-        self.step_fs = self._interface.step_fs
-        self.hmass = self._interface.hmass
-        self.shake = self._interface.shake
-        self.nvt = self._interface.nvt
-        self.nproc = self._interface.nproc
-        self.timeout = self._interface.timeout
-        self.isostat_timeout = self._interface.isostat_timeout
 
     def is_available(self) -> bool:
         return self._interface.is_available()

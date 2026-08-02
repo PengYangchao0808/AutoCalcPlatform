@@ -24,6 +24,7 @@ import numpy as np
 import pytest
 
 from acp.backends.censo_backend import CensoBackend, CensoConformerRecord, CensoRunResult
+from cccp.qc.interfaces.censo import CensoInterface
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -363,14 +364,14 @@ def test_opt_failure_fails_workflow(tmp_path: Path, multiframe_xyz: Path) -> Non
 
 
 def test_build_cli_nconf_flag(tmp_path: Path) -> None:
-    backend = CensoBackend(_make_config())
+    interface = CensoInterface(_make_config())
     input_xyz = tmp_path / "input.xyz"
     input_xyz.write_text("1\n\nH 0 0 0\n")
     rcfile = tmp_path / "censo2rc"
     rcfile.write_text("")
 
-    preset = backend._resolve_preset("censo-zero")
-    cmd = backend._build_cli(
+    preset = interface.resolve_preset("censo-zero")
+    cmd = interface.build_cli(
         input_xyz, rcfile, preset,
         nproc=4, temperature=298.15, solvent=None, nconf=1,
     )
@@ -380,14 +381,14 @@ def test_build_cli_nconf_flag(tmp_path: Path) -> None:
 
 
 def test_build_cli_no_nconf_by_default(tmp_path: Path) -> None:
-    backend = CensoBackend(_make_config())
+    interface = CensoInterface(_make_config())
     input_xyz = tmp_path / "input.xyz"
     input_xyz.write_text("1\n\nH 0 0 0\n")
     rcfile = tmp_path / "censo2rc"
     rcfile.write_text("")
 
-    preset = backend._resolve_preset("censo-light")
-    cmd = backend._build_cli(
+    preset = interface.resolve_preset("censo-light")
+    cmd = interface.build_cli(
         input_xyz, rcfile, preset,
         nproc=4, temperature=298.15, solvent=None,
     )
@@ -396,7 +397,7 @@ def test_build_cli_no_nconf_by_default(tmp_path: Path) -> None:
 
 def test_refine_ensemble_include_refinement_appends_part(tmp_path: Path) -> None:
     """include_refinement=True must add --refinement to the CLI call."""
-    backend = CensoBackend(_make_config())
+    interface = CensoInterface(_make_config())
     input_xyz = tmp_path / "input.xyz"
     input_xyz.write_text("1\n\nH 0 0 0\n")
 
@@ -411,7 +412,7 @@ def test_refine_ensemble_include_refinement_appends_part(tmp_path: Path) -> None
         patch("cccp.qc.interfaces.censo.subprocess.run", side_effect=fake_run),
         pytest.raises(Exception),
     ):
-        backend.refine_ensemble(
+        interface.refine_ensemble(
             input_xyz, tmp_path / "censo",
             preset="censo-light",
             include_refinement=True,
@@ -423,7 +424,7 @@ def test_refine_ensemble_include_refinement_appends_part(tmp_path: Path) -> None
 
 
 def test_refine_ensemble_part_overrides_reach_rcfile(tmp_path: Path) -> None:
-    backend = CensoBackend(_make_config())
+    interface = CensoInterface(_make_config())
     input_xyz = tmp_path / "input.xyz"
     input_xyz.write_text("1\n\nH 0 0 0\n")
     censo_dir = tmp_path / "censo"
@@ -436,7 +437,7 @@ def test_refine_ensemble_part_overrides_reach_rcfile(tmp_path: Path) -> None:
         ),
         pytest.raises(Exception),
     ):
-        backend.refine_ensemble(
+        interface.refine_ensemble(
             input_xyz, censo_dir,
             preset="censo-light",
             include_refinement=True,
@@ -449,9 +450,9 @@ def test_refine_ensemble_part_overrides_reach_rcfile(tmp_path: Path) -> None:
 
 def test_part_overrides_do_not_mutate_preset_definitions(tmp_path: Path) -> None:
     """Presets are deep-copied — overrides must not leak into module state."""
-    from acp.backends.censo_backend import _PRESETS
+    from cccp.qc.interfaces.censo import CENSO_PRESETS
 
-    backend = CensoBackend(_make_config())
-    preset = backend._resolve_preset("censo-light")
+    interface = CensoInterface(_make_config())
+    preset = interface.resolve_preset("censo-light")
     preset["screening"]["func"] = "mutated"
-    assert _PRESETS["censo-light"]["screening"]["func"] == "b97-3c"
+    assert CENSO_PRESETS["censo-light"]["screening"]["func"] == "b97-3c"

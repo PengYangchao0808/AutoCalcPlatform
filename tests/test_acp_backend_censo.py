@@ -26,6 +26,7 @@ from acp.backends.censo_backend import (
     CensoRunResult,
 )
 from acp.backends.registry import get_backend, require_backend
+from cccp.qc.interfaces.censo import CensoInterface
 
 
 # ---------------------------------------------------------------------------
@@ -189,8 +190,8 @@ def test_censo_backend_versions_works() -> None:
 
 def test_default_preset_is_censo_light() -> None:
     config = _make_config()
-    backend = CensoBackend(config)
-    preset = backend._resolve_preset(None)
+    interface = CensoInterface(config)
+    preset = interface.resolve_preset(None)
     assert preset["name"] == "censo-light"
     assert "prescreening" in preset["parts"]
     assert "screening" in preset["parts"]
@@ -198,8 +199,8 @@ def test_default_preset_is_censo_light() -> None:
 
 def test_censo_default_preset() -> None:
     config = _make_config()
-    backend = CensoBackend(config)
-    preset = backend._resolve_preset("censo-default")
+    interface = CensoInterface(config)
+    preset = interface.resolve_preset("censo-default")
     assert preset["name"] == "censo-default"
     assert "optimization" in preset["parts"]
     assert "refinement" in preset["parts"]
@@ -207,16 +208,16 @@ def test_censo_default_preset() -> None:
 
 def test_censo_zero_preset() -> None:
     config = _make_config()
-    backend = CensoBackend(config)
-    preset = backend._resolve_preset("censo-zero")
+    interface = CensoInterface(config)
+    preset = interface.resolve_preset("censo-zero")
     assert preset["name"] == "censo-zero"
 
 
 def test_unknown_preset_raises() -> None:
     config = _make_config()
-    backend = CensoBackend(config)
+    interface = CensoInterface(config)
     with pytest.raises(ValueError, match="Unknown CENSO preset"):
-        backend._resolve_preset("nonexistent")
+        interface.resolve_preset("nonexistent")
 
 
 # ---------------------------------------------------------------------------
@@ -226,9 +227,9 @@ def test_unknown_preset_raises() -> None:
 
 def test_rcfile_contains_paths(tmp_path: Path) -> None:
     config = _make_config()
-    backend = CensoBackend(config)
-    preset = backend._resolve_preset("censo-light")
-    rcfile = backend._generate_rcfile(preset, tmp_path, charge=0, multiplicity=1, solvent=None)
+    interface = CensoInterface(config)
+    preset = interface.resolve_preset("censo-light")
+    rcfile = interface.generate_rcfile(preset, tmp_path, charge=0, multiplicity=1, solvent=None)
 
     content = rcfile.read_text(encoding="utf-8")
     assert "[general]" in content
@@ -242,9 +243,9 @@ def test_rcfile_contains_paths(tmp_path: Path) -> None:
 
 def test_rcfile_includes_solvent(tmp_path: Path) -> None:
     config = _make_config()
-    backend = CensoBackend(config)
-    preset = backend._resolve_preset("censo-light")
-    rcfile = backend._generate_rcfile(preset, tmp_path, charge=0, multiplicity=1, solvent="dcm")
+    interface = CensoInterface(config)
+    preset = interface.resolve_preset("censo-light")
+    rcfile = interface.generate_rcfile(preset, tmp_path, charge=0, multiplicity=1, solvent="dcm")
 
     content = rcfile.read_text(encoding="utf-8")
     assert "solvent = dcm" in content
@@ -258,9 +259,9 @@ def test_rcfile_includes_solvent(tmp_path: Path) -> None:
 
 def test_rcfile_solvent_model_smd(tmp_path: Path) -> None:
     config = _make_config()
-    backend = CensoBackend(config)
-    preset = backend._resolve_preset("censo-light")
-    rcfile = backend._generate_rcfile(
+    interface = CensoInterface(config)
+    preset = interface.resolve_preset("censo-light")
+    rcfile = interface.generate_rcfile(
         preset, tmp_path, charge=0, multiplicity=1, solvent="ethanol",
         solvent_model="smd",
     )
@@ -271,9 +272,9 @@ def test_rcfile_solvent_model_smd(tmp_path: Path) -> None:
 
 def test_rcfile_no_sm_when_gas_phase(tmp_path: Path) -> None:
     config = _make_config()
-    backend = CensoBackend(config)
-    preset = backend._resolve_preset("censo-light")
-    rcfile = backend._generate_rcfile(preset, tmp_path, charge=0, multiplicity=1, solvent=None)
+    interface = CensoInterface(config)
+    preset = interface.resolve_preset("censo-light")
+    rcfile = interface.generate_rcfile(preset, tmp_path, charge=0, multiplicity=1, solvent=None)
 
     content = rcfile.read_text(encoding="utf-8")
     assert "gas_phase = True" in content
@@ -283,9 +284,9 @@ def test_rcfile_no_sm_when_gas_phase(tmp_path: Path) -> None:
 
 def test_rcfile_has_preset_sections(tmp_path: Path) -> None:
     config = _make_config()
-    backend = CensoBackend(config)
-    preset = backend._resolve_preset("censo-default")
-    rcfile = backend._generate_rcfile(preset, tmp_path, charge=0, multiplicity=1, solvent=None)
+    interface = CensoInterface(config)
+    preset = interface.resolve_preset("censo-default")
+    rcfile = interface.generate_rcfile(preset, tmp_path, charge=0, multiplicity=1, solvent=None)
 
     content = rcfile.read_text(encoding="utf-8")
     assert "[prescreening]" in content
@@ -296,9 +297,9 @@ def test_rcfile_has_preset_sections(tmp_path: Path) -> None:
 
 def test_rcfile_correct_uhf_from_multiplicity(tmp_path: Path) -> None:
     config = _make_config()
-    backend = CensoBackend(config)
-    preset = backend._resolve_preset("censo-light")
-    rcfile = backend._generate_rcfile(preset, tmp_path, charge=0, multiplicity=3, solvent=None)
+    interface = CensoInterface(config)
+    preset = interface.resolve_preset("censo-light")
+    rcfile = interface.generate_rcfile(preset, tmp_path, charge=0, multiplicity=3, solvent=None)
 
     content = rcfile.read_text(encoding="utf-8")
     assert "uhf = 2" in content
@@ -311,14 +312,14 @@ def test_rcfile_correct_uhf_from_multiplicity(tmp_path: Path) -> None:
 
 def test_build_cli_parts(tmp_path: Path) -> None:
     config = _make_config()
-    backend = CensoBackend(config)
+    interface = CensoInterface(config)
     input_xyz = tmp_path / "input.xyz"
     input_xyz.write_text("1\n\nH  0 0 0\n")
     rcfile = tmp_path / "censo2rc"
     rcfile.write_text("")
 
-    preset = backend._resolve_preset("censo-light")
-    cmd = backend._build_cli(
+    preset = interface.resolve_preset("censo-light")
+    cmd = interface.build_cli(
         input_xyz, rcfile, preset,
         nproc=4, temperature=298.15, solvent=None,
     )
@@ -336,14 +337,14 @@ def test_build_cli_parts(tmp_path: Path) -> None:
 
 def test_build_cli_with_solvent(tmp_path: Path) -> None:
     config = _make_config()
-    backend = CensoBackend(config)
+    interface = CensoInterface(config)
     input_xyz = tmp_path / "input.xyz"
     input_xyz.write_text("1\n\nH  0 0 0\n")
     rcfile = tmp_path / "censo2rc"
     rcfile.write_text("")
 
-    preset = backend._resolve_preset("censo-default")
-    cmd = backend._build_cli(
+    preset = interface.resolve_preset("censo-default")
+    cmd = interface.build_cli(
         input_xyz, rcfile, preset,
         nproc=8, temperature=298.15, solvent="dcm",
     )
@@ -363,7 +364,7 @@ def test_build_cli_with_solvent(tmp_path: Path) -> None:
 
 def test_parse_censo_json(tmp_path: Path) -> None:
     config = _make_config()
-    backend = CensoBackend(config)
+    interface = CensoInterface(config)
 
     json_path = tmp_path / "1_SCREENING.json"
     xyz_path = tmp_path / "1_SCREENING.xyz"
@@ -399,7 +400,7 @@ def test_parse_censo_json(tmp_path: Path) -> None:
     }
     json_path.write_text(json.dumps(json_data, indent=2))
 
-    records = backend._parse_censo_json(json_path, xyz_path)
+    records = interface.parse_censo_json(json_path, xyz_path)
     assert len(records) == 2
 
     r1 = records[0]
@@ -416,7 +417,7 @@ def test_parse_censo_json(tmp_path: Path) -> None:
 
 def test_parse_censo_json_gtot_equality(tmp_path: Path) -> None:
     config = _make_config()
-    backend = CensoBackend(config)
+    interface = CensoInterface(config)
 
     json_path = tmp_path / "1_SCREENING.json"
     xyz_path = tmp_path / "1_SCREENING.xyz"
@@ -435,7 +436,7 @@ def test_parse_censo_json_gtot_equality(tmp_path: Path) -> None:
     }
     json_path.write_text(json.dumps(json_data))
 
-    records = backend._parse_censo_json(json_path, xyz_path)
+    records = interface.parse_censo_json(json_path, xyz_path)
     assert len(records) == 1
     r1 = records[0]
     computed = r1.energy + r1.gsolv + r1.grrho
@@ -444,14 +445,14 @@ def test_parse_censo_json_gtot_equality(tmp_path: Path) -> None:
 
 def test_parse_censo_json_missing_xyz(tmp_path: Path) -> None:
     config = _make_config()
-    backend = CensoBackend(config)
+    interface = CensoInterface(config)
     json_path = tmp_path / "1_SCREENING.json"
     xyz_path = tmp_path / "1_SCREENING.xyz"
 
     json_path.write_text('{"data": {"CONF1": {"energy": 0.0, "gsolv": 0.0, "grrho": 0.0, "gtot": 0.0}}}')
 
     with pytest.raises(CensoParseError, match="XYZ not found"):
-        backend._parse_censo_json(json_path, xyz_path)
+        interface.parse_censo_json(json_path, xyz_path)
 
 
 # ---------------------------------------------------------------------------

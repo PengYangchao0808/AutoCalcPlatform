@@ -12,11 +12,11 @@ src/cccp/   # Authoritative version (reverse-synced 2026-07-13 from compute node
 ├── core/            # ConformerEngine (dormant), protocols, candidates, state_manager
 ├── io/              # MolecularInputHandler — format detection, RDKit embed
 ├── pipeline/        # PipelineExecutor — thin orchestration
-├── qc/              # QC interfaces (ORCA/CREST/XTB/xtb_thermo), runners, cluster adapters
+├── qc/              # QC interfaces (ORCA/CREST/xTB/CENSO/ISOSTAT/Molclus/xtb_thermo), runners, cluster adapters
 └── utils/           # 7 shared utility modules (file I/O, geometry, constants)
 ```
 
-**Note:** ACP-only subpackages from the previous fork (`benchmark/`, `ensemble/`, `recipes/`, `funnel/`, `search/`, `thermo/`) and files (`core/specs.py`, `core/spec_adapter.py`, `core/method_resolution.py`, `qc/interfaces/xtb.py`, `qc/runners/isostat.py`, `qc/runners/shermo.py`) were **removed** during the 2026-07-13 reverse-sync. ACP features they backed (NMR config, nmr_shielding) were re-merged into the authoritative base. `qc/interfaces/xtb.py` was **re-created in Phase C (2026-07-27)** when `XTBInterface` was split out of `crest.py`; `qc/runners/*` and `qc/cluster/*` remain consolidated in their `__init__.py`.
+**Note:** ACP-only subpackages from the previous fork (`benchmark/`, `ensemble/`, `recipes/`, `funnel/`, `search/`, `thermo/`) and files (`core/specs.py`, `core/spec_adapter.py`, `core/method_resolution.py`, `qc/interfaces/xtb.py`, `qc/runners/isostat.py`, `qc/runners/shermo.py`) were **removed** during the 2026-07-13 reverse-sync. ACP features they backed (NMR config, nmr_shielding) were re-merged into the authoritative base. `qc/interfaces/xtb.py` was **re-created in Phase C (2026-07-27)** when `XTBInterface` was split out of `crest.py`; `qc/runners/*` and `qc/cluster/*` remain consolidated in their `__init__.py`. On **2026-08-02** the CENSO/ISOSTAT/Molclus subprocess logic was consolidated **into** `qc/interfaces/censo.py`, `isostat.py`, `molclus.py` (single subprocess layer); `qc/runners/run_isostat` became a DEPRECATED thin wrapper over `IsostatInterface` (dormant `ConformerEngine` only).
 
 ## WHERE TO LOOK
 | Task | Location | Notes |

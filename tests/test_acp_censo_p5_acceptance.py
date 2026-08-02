@@ -188,19 +188,19 @@ def test_orca_default_blocks_unchanged() -> None:
 
 
 def test_build_cli_no_keep_all_by_default(tmp_path: Path) -> None:
-    backend = CensoBackend(_make_config())
+    interface = CensoInterface(_make_config())
     input_xyz = tmp_path / "input.xyz"
     input_xyz.write_text("1\n\nH  0 0 0\n")
     rcfile = tmp_path / "censo2rc"
     rcfile.write_text("")
 
-    preset = backend._resolve_preset("censo-light")
-    cmd = backend._build_cli(
+    preset = interface.resolve_preset("censo-light")
+    cmd = interface.build_cli(
         input_xyz, rcfile, preset, nproc=4, temperature=298.15, solvent=None,
     )
     assert "--keep-all" not in cmd
 
-    cmd_keep = backend._build_cli(
+    cmd_keep = interface.build_cli(
         input_xyz, rcfile, preset, nproc=4, temperature=298.15, solvent=None,
         keep_all=True,
     )
@@ -210,13 +210,13 @@ def test_build_cli_no_keep_all_by_default(tmp_path: Path) -> None:
 def test_keep_all_config_default(tmp_path: Path) -> None:
     cfg = _make_config()
     cfg["censo"]["keep_all"] = True
-    backend = CensoBackend(cfg)
-    assert backend._keep_all is True
+    interface = CensoInterface(cfg)
+    assert interface._keep_all is True
 
 
 def test_write_part_templates(tmp_path: Path) -> None:
-    backend = CensoBackend(_make_config())
-    home_dir = backend._write_part_templates(
+    interface = CensoInterface(_make_config())
+    home_dir = interface.write_part_templates(
         tmp_path,
         {"refinement": ["! RIJCOSX def2-TZVPP/C VeryTightSCF"]},
     )
@@ -230,9 +230,9 @@ def test_write_part_templates(tmp_path: Path) -> None:
 
 
 def test_rcfile_template_flag(tmp_path: Path) -> None:
-    backend = CensoBackend(_make_config())
-    preset = backend._resolve_preset("censo-light")
-    rcfile = backend._generate_rcfile(
+    interface = CensoInterface(_make_config())
+    preset = interface.resolve_preset("censo-light")
+    rcfile = interface.generate_rcfile(
         preset, tmp_path, charge=0, multiplicity=1, solvent=None,
         templated_parts={"screening"},
     )
@@ -247,10 +247,10 @@ def test_rcfile_template_flag(tmp_path: Path) -> None:
 
 
 def test_rcfile_refinement_written_when_active(tmp_path: Path) -> None:
-    backend = CensoBackend(_make_config())
-    preset = backend._resolve_preset("censo-light")
+    interface = CensoInterface(_make_config())
+    preset = interface.resolve_preset("censo-light")
     preset["parts"] = [*preset["parts"], "refinement"]
-    rcfile = backend._generate_rcfile(
+    rcfile = interface.generate_rcfile(
         preset, tmp_path, charge=0, multiplicity=1, solvent=None,
         templated_parts={"refinement"},
     )
@@ -260,7 +260,7 @@ def test_rcfile_refinement_written_when_active(tmp_path: Path) -> None:
 
 
 def test_refine_ensemble_injects_home(tmp_path: Path, monkeypatch: Any) -> None:
-    backend = CensoBackend(_make_config())
+    interface = CensoInterface(_make_config())
     input_xyz = tmp_path / "crest_conformers.xyz"
     input_xyz.write_text("1\n-1.0\nH  0 0 0\n")
 
@@ -285,7 +285,7 @@ def test_refine_ensemble_injects_home(tmp_path: Path, monkeypatch: Any) -> None:
     )
     monkeypatch.setattr(CensoInterface, "is_available", lambda self: True)
 
-    result = backend.refine_ensemble(
+    result = interface.refine_ensemble(
         input_xyz,
         tmp_path / "censo",
         preset="censo-light",
@@ -309,7 +309,7 @@ def test_refine_ensemble_no_templates_pins_threads(tmp_path: Path, monkeypatch: 
     """CENSO subprocess env must pin BLAS/OpenMP threads even without
     template injection or LD_LIBRARY_PATH (P0: node-wide OMP_NUM_THREADS
     oversubscription fix)."""
-    backend = CensoBackend(_make_config())
+    interface = CensoInterface(_make_config())
     input_xyz = tmp_path / "crest_conformers.xyz"
     input_xyz.write_text("1\n-1.0\nH  0 0 0\n")
 
@@ -332,7 +332,7 @@ def test_refine_ensemble_no_templates_pins_threads(tmp_path: Path, monkeypatch: 
     )
     monkeypatch.setattr(CensoInterface, "is_available", lambda self: True)
 
-    backend.refine_ensemble(input_xyz, tmp_path / "censo", preset="censo-light")
+    interface.refine_ensemble(input_xyz, tmp_path / "censo", preset="censo-light")
     env = captured["env"]
     assert env is not None
     assert env["OMP_NUM_THREADS"] == "4"

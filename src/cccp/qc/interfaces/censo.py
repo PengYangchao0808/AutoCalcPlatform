@@ -111,7 +111,7 @@ class CensoNotAvailableError(CensoError):
 # Preset definitions
 # ---------------------------------------------------------------------------
 
-_PRESETS: Dict[str, Dict[str, Any]] = {
+CENSO_PRESETS: Dict[str, Dict[str, Any]] = {
     "censo-light": {
         "parts": ["prescreening", "screening"],
         "prescreening": {"func": "b97-3c", "threshold": 8.0},
@@ -142,14 +142,14 @@ _PRESETS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-_PART_FLAGS = {
+CENSO_PART_FLAGS = {
     "prescreening": "--prescreening",
     "screening": "--screening",
     "optimization": "--optimization",
     "refinement": "--refinement",
 }
 
-_PARSE_PRIORITY = ["refinement", "optimization", "screening", "prescreening"]
+CENSO_PARSE_PRIORITY = ["refinement", "optimization", "screening", "prescreening"]
 
 _GTOT_TOLERANCE = 1e-6
 
@@ -215,7 +215,7 @@ class CensoInterface:
 
     # ----- Preset helpers --------------------------------------------------
 
-    def _resolve_preset(self, preset: Optional[str]) -> Dict[str, Any]:
+    def resolve_preset(self, preset: Optional[str]) -> Dict[str, Any]:
         name = preset or self._default_preset
         if not name:
             name = "censo-light"
@@ -230,7 +230,7 @@ class CensoInterface:
 
     # ----- rcfile generation -----------------------------------------------
 
-    def _generate_rcfile(
+    def generate_rcfile(
         self,
         preset_cfg: Dict[str, Any],
         output_dir: Path,
@@ -319,7 +319,7 @@ class CensoInterface:
 
     # ----- Advanced-field template injection (per-run HOME isolation) -------
 
-    def _write_part_templates(
+    def write_part_templates(
         self,
         output_dir: Path,
         part_templates: Dict[str, List[str]],
@@ -353,7 +353,7 @@ class CensoInterface:
 
     # ----- CLI construction ------------------------------------------------
 
-    def _build_cli(
+    def build_cli(
         self,
         input_xyz: Path,
         rcfile: Path,
@@ -367,7 +367,7 @@ class CensoInterface:
         cmd = [self._censo_path, "-i", str(input_xyz)]
 
         part_list = preset_cfg.get("parts", [])
-        for part in _PART_FLAGS:
+        for part in CENSO_PART_FLAGS:
             if part in part_list:
                 cmd.append(_PART_FLAGS[part])
 
@@ -401,13 +401,13 @@ class CensoInterface:
     # ----- Output parsing --------------------------------------------------
 
     def _resolve_final_part(self, output_dir: Path) -> Optional[str]:
-        for part_name in _PARSE_PRIORITY:
+        for part_name in CENSO_PARSE_PRIORITY:
             json_path = output_dir / f"{_part_index(part_name)}_{part_name.upper()}.json"
             if json_path.exists():
                 return part_name
         return None
 
-    def _parse_censo_json(
+    def parse_censo_json(
         self,
         json_path: Path,
         xyz_path: Path,
@@ -846,12 +846,25 @@ class CensoInterface:
         final_xyz = output_dir / f"{part_idx}_{result.final_part.upper()}.xyz"
         return final_xyz
 
+    # ----- Legacy private aliases (kept for backward compatibility) -----
+
+    _resolve_preset = resolve_preset
+
+    _generate_rcfile = generate_rcfile
+
+    _write_part_templates = write_part_templates
+
+    _build_cli = build_cli
+
+    _parse_censo_json = parse_censo_json
+
+
 
 # ---------------------------------------------------------------------------
 # Utility helpers
 # ---------------------------------------------------------------------------
 
-_PART_INDEX_MAP: Dict[str, str] = {
+CENSO_PART_INDEX_MAP: Dict[str, str] = {
     "prescreening": "0",
     "screening": "1",
     "optimization": "2",
@@ -859,5 +872,13 @@ _PART_INDEX_MAP: Dict[str, str] = {
 }
 
 
-def _part_index(part_name: str) -> str:
-    return _PART_INDEX_MAP.get(part_name, "0")
+def part_index(part_name: str) -> str:
+    return CENSO_PART_INDEX_MAP.get(part_name, "0")
+
+
+# Legacy private aliases (kept for backward compatibility).
+_PRESETS = CENSO_PRESETS
+_PART_FLAGS = CENSO_PART_FLAGS
+_PARSE_PRIORITY = CENSO_PARSE_PRIORITY
+_PART_INDEX_MAP = CENSO_PART_INDEX_MAP
+_part_index = part_index
