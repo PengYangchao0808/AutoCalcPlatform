@@ -250,7 +250,7 @@ def test_run_ensemble_generation_with_multi_frame_xyz(
     )
 
     with (
-        patch("acp.backends.censo_backend.shutil.which", return_value="/usr/bin/censo"),
+        patch("cccp.qc.interfaces.censo.shutil.which", return_value="/usr/bin/censo"),
         patch.object(
             type("MockBackend", (), {"refine_ensemble": lambda *a, **kw: mock_censo_result})(),
             "refine_ensemble",

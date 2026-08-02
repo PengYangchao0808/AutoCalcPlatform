@@ -11,10 +11,11 @@ from cccp.qc.interfaces import (
     ORCAInterface,
     CRESTInterface,
     XTBInterface,
+    IsostatInterface,
 )
 
 from cccp.qc.runners import (
-    run_isostat,
+    run_isostat,  # DEPRECATED — prefer cccp.qc.interfaces.IsostatInterface (via acp.backends)
     run_shermo,
     batch_process_thermo,
 )
@@ -33,7 +34,8 @@ __all__ = [
     "ORCAInterface",
     "CRESTInterface",
     "XTBInterface",
-    "run_isostat",
+    "IsostatInterface",
+    "run_isostat",  # DEPRECATED — IsostatInterface is the single ISOSTAT path
     "run_shermo",
     "batch_process_thermo",
     "ClusterAdapterBase",

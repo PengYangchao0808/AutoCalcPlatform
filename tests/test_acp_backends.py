@@ -257,8 +257,6 @@ def test_external_backend_is_unavailable_when_one_binary_missing() -> None:
         assert backend.is_available() is False
 
     assert mock_which.call_args_list == [call("isostat"), call("Shermo")]
-
-
 @pytest.mark.slow
 @pytest.mark.integration
 @requires_isostat
@@ -267,3 +265,64 @@ def test_external_backend_binary_smoke_check() -> None:
     backend = ExternalBackend(_make_config())
 
     assert backend.is_available() is True
+
+
+def test_isostat_title_normalisation_to_molclus_format(tmp_path: Path) -> None:
+    """ISOSTAT rejects "Frame N | Energy: X" titles (exit 24 on this
+    Fortran build); the backend must rewrite them as Molclus bare-energy
+    lines before invoking ISOSTAT (curcusone-test failure root cause)."""
+    from acp.backends.isostat_backend import IsostatBackend
+
+    src = tmp_path / "isomers.xyz"
+    src.write_text(
+        "2\n"
+        "Frame 0 | Energy: -64.6127037805\n"
+        "O  0.0  0.0  0.0\n"
+        "O  1.0  0.0  0.0\n"
+        "2\n"
+        "Frame 1 | Energy: -64.6126000000\n"
+        "O  0.0  0.0  0.0\n"
+        "O  1.0  0.0  0.0\n",
+        encoding="utf-8",
+    )
+
+    out = IsostatBackend._normalise_titles_for_isostat(src)
+    try:
+        text = out.read_text(encoding="utf-8")
+        lines = text.splitlines()
+        assert lines[1] == "        -64.6127037805"
+        assert lines[5] == "        -64.6126000000"
+        # Coordinates are untouched; no "Frame N | Energy:" remains.
+        assert "Frame" not in text
+        assert "O  0.0  0.0  0.0" in text
+        # The original file is never mutated.
+        assert "Frame 0 | Energy" in src.read_text(encoding="utf-8")
+    finally:
+        out.unlink(missing_ok=True)
+
+
+def test_isostat_title_normalisation_keeps_coord_lines(tmp_path: Path) -> None:
+    """Multi-frame inputs with blank-line separation and no-energy titles
+    must survive normalisation (frames without a float keep their title)."""
+    from acp.backends.isostat_backend import IsostatBackend
+
+    src = tmp_path / "mixed.xyz"
+    src.write_text(
+        "1\n"
+        "bare  -1.5\n"
+        "H  0.0  0.0  0.0\n"
+        "\n"
+        "1\n"
+        "no energy here\n"
+        "H  1.0  0.0  0.0\n",
+        encoding="utf-8",
+    )
+    out = IsostatBackend._normalise_titles_for_isostat(src)
+    try:
+        lines = out.read_text(encoding="utf-8").splitlines()
+        assert lines[1] == "        -1.5000000000"
+        # Frame 2 title has no float → kept verbatim; coordinates intact.
+        assert lines[4] == "no energy here"
+        assert lines[5] == "H  1.0  0.0  0.0"
+    finally:
+        out.unlink(missing_ok=True)

@@ -1,65 +1,26 @@
-"""ISOSTAT backend wrapper."""
+"""ISOSTAT backend wrapper — thin adapter over cccp IsostatInterface."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 import logging
 import shutil
-import subprocess
+from collections.abc import Mapping
 from pathlib import Path
-
-import numpy as np
-from numpy.typing import NDArray
 from typing import final
 
-from acp.backends.base import QCBackend, QCResult
+from acp.backends.base import QCBackend, QCResult, to_qc_result
 from acp.backends.registry import register_backend
-from cccp.utils.file_io import read_xyz_multiframe
+from cccp.qc.interfaces.isostat import (
+    IsostatInterface,
+    _normalise_titles_for_isostat,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def _mapping_value(config: Mapping[str, object], key: str) -> dict[str, object]:
-    value = config.get(key)
-    if isinstance(value, dict):
-        return value
-    if isinstance(value, Mapping):
-        return {str(sub_key): sub_value for sub_key, sub_value in value.items()}
-    return {}
-
-
-def _int_value(value: object | None, default: int) -> int:
-    if isinstance(value, bool):
-        return default
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        return int(value)
-    if isinstance(value, str):
-        try:
-            return int(value)
-        except ValueError:
-            return default
-    return default
-
-
-def _str_value(value: object | None, default: str) -> str:
-    if value is None:
-        return default
-    return str(value)
-
-
-def _stream_text(value: object) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, bytes):
-        return value.decode(errors="replace")
-    return str(value)
-
-
 @final
 class IsostatBackend(QCBackend):
-    """Subprocess wrapper for ISOSTAT clustering."""
+    """Clustering adapter for ISOSTAT (thin wrapper over the cccp interface)."""
 
     name: str = "isostat"
     isostat_path: str
@@ -67,33 +28,21 @@ class IsostatBackend(QCBackend):
 
     def __init__(self, config: Mapping[str, object], **kwargs: object) -> None:
         super().__init__(dict(config), **kwargs)
+        self._interface = IsostatInterface(dict(config), **kwargs)
 
-        executables = _mapping_value(config, "executables")
-        isostat_config = _mapping_value(executables, "isostat")
-        molclus_config = _mapping_value(executables, "molclus")
-        configured_isostat_path = self.options.get("isostat_path")
-
-        self.isostat_path = _str_value(
-            configured_isostat_path
-            if configured_isostat_path is not None
-            else isostat_config.get("path", molclus_config.get("isostat_path", "isostat")),
-            "isostat",
-        )
-        self.timeout = _int_value(self.options.get("timeout"), _int_value(isostat_config.get("timeout"), 300))
+        # Mirrored attributes for API compatibility (config passthrough).
+        self.isostat_path = self._interface.exe_path
+        self.timeout = self._interface.timeout
 
     @staticmethod
-    def _write_process_log(log_file: Path, stdout: str | None, stderr: str | None) -> None:
-        parts: list[str] = []
-        if stdout:
-            parts.append(stdout)
-        if stderr:
-            parts.append(f"STDERR:\n{stderr}")
-        _ = log_file.write_text("\n".join(parts), encoding="utf-8")
+    def _normalise_titles_for_isostat(ensemble_xyz: Path) -> Path:
+        """Rewrite frame titles as Molclus bare-energy lines for ISOSTAT.
 
-    @staticmethod
-    def _read_multiframe_xyz(xyz_file: Path) -> tuple[NDArray[np.float64], list[str]]:
-        coordinates, symbols = read_xyz_multiframe(xyz_file)
-        return np.asarray(coordinates, dtype=np.float64), list(symbols)
+        Delegates to the cccp interface implementation (exit-24 fix); the
+        returned temporary file is owned by the caller and must be cleaned
+        up (the cccp interface does so in its ``finally`` block).
+        """
+        return _normalise_titles_for_isostat(ensemble_xyz)
 
     def is_available(self) -> bool:
         return shutil.which(self.isostat_path) is not None
@@ -109,68 +58,17 @@ class IsostatBackend(QCBackend):
         nthreads: int = 1,
         **kwargs: object,
     ) -> QCResult:
-        target_dir = output_dir or ensemble_xyz.parent
-        target_dir.mkdir(parents=True, exist_ok=True)
-        cluster_xyz = target_dir / "cluster.xyz"
-        log_file = target_dir / "isostat.log"
-
-        command = [
-            self.isostat_path,
-            str(ensemble_xyz),
-            "-Edis",
-            str(edis),
-            "-Gdis",
-            str(gdis),
-            "-T",
-            str(temperature),
-            "-nt",
-            str(nthreads),
-        ]
-        if nout is not None:
-            command.extend(["-Nout", str(nout)])
-
-        try:
-            result = subprocess.run(
-                command,
-                cwd=target_dir,
-                capture_output=True,
-                text=True,
-                timeout=_int_value(kwargs.get("timeout"), self.timeout),
-                check=True,
-            )
-        except subprocess.TimeoutExpired as exc:
-            self._write_process_log(log_file, _stream_text(exc.stdout), _stream_text(exc.stderr))
-            logger.error("ISOSTAT clustering timed out")
-            return QCResult(success=False, error_message="ISOSTAT clustering timed out", log_file=log_file)
-        except subprocess.CalledProcessError as exc:
-            self._write_process_log(log_file, _stream_text(exc.stdout), _stream_text(exc.stderr))
-            logger.error("ISOSTAT clustering failed with exit code %s", exc.returncode)
-            return QCResult(
-                success=False,
-                error_message=f"ISOSTAT clustering failed with exit code {exc.returncode}",
-                log_file=log_file,
-            )
-        except OSError as exc:
-            logger.error("ISOSTAT execution failed: %s", exc)
-            return QCResult(success=False, error_message=f"ISOSTAT execution failed: {exc}")
-
-        self._write_process_log(log_file, result.stdout, result.stderr)
-        if not cluster_xyz.exists():
-            return QCResult(
-                success=False,
-                error_message="ISOSTAT completed without producing cluster.xyz",
-                log_file=log_file,
-            )
-
-        coordinates, symbols = self._read_multiframe_xyz(cluster_xyz)
-        return QCResult(
-            success=True,
-            converged=True,
-            coordinates=coordinates,
-            symbols=symbols,
-            output_file=cluster_xyz,
-            log_file=log_file,
+        result = self._interface.cluster(
+            ensemble_xyz,
+            output_dir,
+            edis=edis,
+            gdis=gdis,
+            temperature=temperature,
+            nout=nout,
+            nthreads=nthreads,
+            timeout=kwargs.get("timeout"),
         )
+        return to_qc_result(result)
 
 
 register_backend(IsostatBackend)

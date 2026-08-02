@@ -7,8 +7,9 @@ from pathlib import Path
 from typing import Any
 
 from acp.backends.base import QCBackend, QCResult
-from acp.backends.external import batch_process_thermo, run_isostat, run_shermo
+from acp.backends.external import batch_process_thermo, run_shermo
 from acp.backends.registry import register_backend
+from cccp.qc.interfaces.isostat import IsostatInterface
 
 
 class ExternalBackend(QCBackend):
@@ -35,15 +36,24 @@ class ExternalBackend(QCBackend):
         output_dir: Path | None = None,
         **kwargs: Any,
     ) -> Path:
-        cluster_xyz, _ = run_isostat(
-            ensemble_xyz=ensemble_xyz,
-            output_dir=output_dir or ensemble_xyz.parent,
-            config=self.config,
+        # Legacy run_isostat used the `threads` kwarg; map it to the
+        # interface's nthreads for callers of the old external route.
+        if "threads" in kwargs and "nthreads" not in kwargs:
+            kwargs["nthreads"] = kwargs.pop("threads")
+        interface = IsostatInterface(
+            self.config,
+            isostat_path=self._executable_path("isostat", "isostat"),
+        )
+        result = interface.cluster(
+            ensemble_xyz,
+            output_dir or ensemble_xyz.parent,
             **kwargs,
         )
-        if cluster_xyz is None:
-            raise RuntimeError("ISOSTAT clustering did not produce an output file")
-        return cluster_xyz
+        if not result.success or result.output_file is None:
+            raise RuntimeError(
+                f"ISOSTAT clustering failed: {result.error_message or 'no cluster.xyz produced'}"
+            )
+        return Path(result.output_file)
 
     def thermochemistry(
         self,

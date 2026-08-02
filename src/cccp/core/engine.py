@@ -534,6 +534,9 @@ class ConformerEngine:
 
         energy_window = self.config.get("resources", {}).get("isostat_energy_window_kcal", 3.0)
 
+        # DEPRECATED: run_isostat is retained for this dormant engine only —
+        # production clustering goes through acp.backends ("isostat") →
+        # cccp.qc.interfaces.IsostatInterface. Remove alongside the engine.
         cluster_xyz, cluster_data = run_isostat(
             ensemble_xyz=ensemble_xyz,
             output_dir=self.cluster_dir,
@@ -580,6 +583,9 @@ class ConformerEngine:
             "isostat_intermediate_energy_window_kcal", 10.0
         )
 
+        # DEPRECATED: run_isostat is retained for this dormant engine only —
+        # production clustering goes through acp.backends ("isostat") →
+        # cccp.qc.interfaces.IsostatInterface. Remove alongside the engine.
         cluster_xyz, cluster_data = run_isostat(
             ensemble_xyz=ensemble_xyz,
             output_dir=output_dir,

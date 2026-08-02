@@ -95,6 +95,7 @@ def test_molclus_run_md_gfnff_command_and_seed(tmp_path: Path) -> None:
         text: bool,
         timeout: int,
         check: bool,
+        env: dict[str, str] | None,
     ) -> subprocess.CompletedProcess[str]:
         assert Path(cmd[0]).name == "xtb"
         assert capture_output is True and text is True and check is True
@@ -105,10 +106,14 @@ def test_molclus_run_md_gfnff_command_and_seed(tmp_path: Path) -> None:
         assert "--chrg" in cmd and "1" in cmd
         assert "--uhf" in cmd and "1" in cmd
         assert "--input" in cmd and "md.inp" in cmd
+        assert env is not None
+        assert env["OMP_NUM_THREADS"] == "2"
+        assert env["MKL_NUM_THREADS"] == "2"
+        assert env["OPENBLAS_NUM_THREADS"] == "2"
         _write_trajectory(cwd / "xtb.trj", 60)
         return subprocess.CompletedProcess(cmd, 0, stdout="md ok", stderr="")
 
-    with patch("acp.backends.molclus_backend.subprocess.run", side_effect=_mock_run) as mock_run:
+    with patch("cccp.qc.interfaces.molclus.subprocess.run", side_effect=_mock_run) as mock_run:
         result = backend.run_md(
             initial_xyz,
             output_dir=output_dir,
@@ -147,6 +152,7 @@ def test_molclus_run_md_gfn1_and_gbsa_solvent(tmp_path: Path) -> None:
         text: bool,
         timeout: int,
         check: bool,
+        env: dict[str, str] | None,
     ) -> subprocess.CompletedProcess[str]:
         assert "--gfn" in cmd and "1" in cmd
         assert "--gfnff" not in cmd
@@ -155,7 +161,7 @@ def test_molclus_run_md_gfn1_and_gbsa_solvent(tmp_path: Path) -> None:
         _write_trajectory(cwd / "xtb.trj", 55)
         return subprocess.CompletedProcess(cmd, 0, stdout="md ok", stderr="")
 
-    with patch("acp.backends.molclus_backend.subprocess.run", side_effect=_mock_run):
+    with patch("cccp.qc.interfaces.molclus.subprocess.run", side_effect=_mock_run):
         result = backend.run_md(
             initial_xyz,
             output_dir=tmp_path / "md_run2",
@@ -181,13 +187,14 @@ def test_molclus_run_md_gfn_level_fallback(tmp_path: Path) -> None:
         text: bool,
         timeout: int,
         check: bool,
+        env: dict[str, str] | None,
     ) -> subprocess.CompletedProcess[str]:
         assert "--gfn" in cmd and "2" in cmd
         assert "--gfnff" not in cmd
         _write_trajectory(cwd / "xtb.trj", 55)
         return subprocess.CompletedProcess(cmd, 0, stdout="md ok", stderr="")
 
-    with patch("acp.backends.molclus_backend.subprocess.run", side_effect=_mock_run):
+    with patch("cccp.qc.interfaces.molclus.subprocess.run", side_effect=_mock_run):
         result = backend.run_md(
             initial_xyz,
             output_dir=tmp_path / "md_run3",
@@ -210,11 +217,12 @@ def test_molclus_run_md_truncated_trajectory_fails_fast(tmp_path: Path) -> None:
         text: bool,
         timeout: int,
         check: bool,
+        env: dict[str, str] | None,
     ) -> subprocess.CompletedProcess[str]:
         _write_trajectory(cwd / "xtb.trj", 40)
         return subprocess.CompletedProcess(cmd, 0, stdout="md ok", stderr="")
 
-    with patch("acp.backends.molclus_backend.subprocess.run", side_effect=_mock_run):
+    with patch("cccp.qc.interfaces.molclus.subprocess.run", side_effect=_mock_run):
         result = backend.run_md(initial_xyz, output_dir=tmp_path / "md_run4")
 
     assert result.success is False
@@ -234,10 +242,11 @@ def test_molclus_run_md_missing_trajectory_fails(tmp_path: Path) -> None:
         text: bool,
         timeout: int,
         check: bool,
+        env: dict[str, str] | None,
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.CompletedProcess(cmd, 0, stdout="md ok", stderr="")
 
-    with patch("acp.backends.molclus_backend.subprocess.run", side_effect=_mock_run):
+    with patch("cccp.qc.interfaces.molclus.subprocess.run", side_effect=_mock_run):
         result = backend.run_md(initial_xyz, output_dir=tmp_path / "md_run5")
 
     assert result.success is False
@@ -274,6 +283,7 @@ def test_molclus_search_passes_seed_and_solvent(tmp_path: Path) -> None:
         text: bool,
         timeout: int,
         check: bool,
+        env: dict[str, str] | None,
     ) -> subprocess.CompletedProcess[str]:
         executable = Path(cmd[0]).name
         if executable == "xtb":
@@ -287,7 +297,7 @@ def test_molclus_search_passes_seed_and_solvent(tmp_path: Path) -> None:
             raise AssertionError(f"Unexpected executable: {cmd[0]}")
         return subprocess.CompletedProcess(cmd, 0, stdout=f"ran {executable}", stderr="")
 
-    with patch("acp.backends.molclus_backend.subprocess.run", side_effect=_mock_run):
+    with patch("cccp.qc.interfaces.molclus.subprocess.run", side_effect=_mock_run):
         result = backend.search(
             initial_xyz,
             output_dir=output_dir,
@@ -311,7 +321,7 @@ def test_molclus_is_available_with_mock() -> None:
     backend = MolclusBackend(_make_config())
 
     with patch(
-        "acp.backends.molclus_backend.shutil.which", return_value="/usr/bin/molclus"
+        "cccp.qc.interfaces.molclus.shutil.which", return_value="/usr/bin/molclus"
     ) as mock_which:
         assert backend.is_available() is True
 
@@ -331,6 +341,7 @@ def test_molclus_search_mocked(tmp_path: Path) -> None:
         text: bool,
         timeout: int,
         check: bool,
+        env: dict[str, str] | None,
     ) -> subprocess.CompletedProcess[str]:
         assert capture_output is True
         assert text is True
@@ -349,7 +360,7 @@ def test_molclus_search_mocked(tmp_path: Path) -> None:
 
         return subprocess.CompletedProcess(cmd, 0, stdout=f"ran {executable}", stderr="")
 
-    with patch("acp.backends.molclus_backend.subprocess.run", side_effect=_mock_run) as mock_run:
+    with patch("cccp.qc.interfaces.molclus.subprocess.run", side_effect=_mock_run) as mock_run:
         result = backend.search(
             initial_xyz, output_dir=output_dir, charge=1, multiplicity=2, nout=1
         )
@@ -389,16 +400,22 @@ def test_isostat_cluster_mocked(tmp_path: Path) -> None:
         text: bool,
         timeout: int,
         check: bool,
+        env: dict[str, str] | None,
     ) -> subprocess.CompletedProcess[str]:
         assert Path(cmd[0]).name == "isostat"
         assert capture_output is True
         assert text is True
         assert timeout > 0
         assert check is True
+        # Thread env pinned to the -nt value (4).
+        assert env is not None
+        assert env["OMP_NUM_THREADS"] == "4"
+        assert env["MKL_NUM_THREADS"] == "4"
+        assert env["OPENBLAS_NUM_THREADS"] == "4"
         _write_xyz(cwd / "cluster.xyz")
         return subprocess.CompletedProcess(cmd, 0, stdout="clustered", stderr="")
 
-    with patch("acp.backends.isostat_backend.subprocess.run", side_effect=_mock_run) as mock_run:
+    with patch("cccp.qc.interfaces.isostat.subprocess.run", side_effect=_mock_run) as mock_run:
         result = backend.cluster(
             ensemble_xyz, output_dir=output_dir, edis=0.6, gdis=0.3, nout=1, nthreads=4
         )
