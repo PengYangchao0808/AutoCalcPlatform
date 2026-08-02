@@ -99,6 +99,13 @@ def _mock_orca_instance() -> MagicMock:
     return orca
 
 
+def _mock_orca_backend_cls(orca: MagicMock) -> MagicMock:
+    """Return a fake ``get_backend("orca")`` class that yields *orca*."""
+    backend_cls = MagicMock()
+    backend_cls.return_value = orca
+    return backend_cls
+
+
 _SHERMO_OK = {
     "g_sum": -154.95,
     "g_conc": None,
@@ -130,7 +137,7 @@ def _run_energy(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca) as mock_orca_cls,
+        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)) as mock_get_backend,
         patch("acp.workflows.energy_shared.run_shermo", return_value=shermo_return) as mock_shermo,
     ):
         backend = MagicMock()
@@ -144,7 +151,7 @@ def _run_energy(
             config=_make_config(),
             **kwargs,
         )
-    return result, backend, mock_orca_cls, mock_shermo
+    return result, backend, mock_get_backend, mock_shermo
 
 
 # ---------------------------------------------------------------------------
@@ -258,12 +265,12 @@ def test_no_opt_skips_orca_entirely(tmp_path: Path, multiframe_xyz: Path) -> Non
         temperature=298.15,
     )
     orca = _mock_orca_instance()
-    result, backend, mock_orca_cls, mock_shermo = _run_energy(
+    result, backend, mock_get_backend, mock_shermo = _run_energy(
         tmp_path, multiframe_xyz, refinement, orca,
         preset="censo-light", no_opt=True,
     )
     assert result.status == "completed"
-    mock_orca_cls.assert_not_called()
+    mock_get_backend.assert_not_called()
     mock_shermo.assert_not_called()
     assert backend.refine_ensemble.call_args.kwargs["include_refinement"] is True
 
@@ -284,7 +291,7 @@ def test_config_can_disable_opt_stage(tmp_path: Path, multiframe_xyz: Path) -> N
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca) as mock_orca_cls,
+        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)) as mock_get_backend,
         patch("acp.workflows.energy_shared.run_shermo"),
     ):
         backend = MagicMock()
@@ -300,7 +307,7 @@ def test_config_can_disable_opt_stage(tmp_path: Path, multiframe_xyz: Path) -> N
 
     assert result.status == "completed"
     assert result.metadata["opt_enabled"] is False
-    mock_orca_cls.assert_not_called()
+    mock_get_backend.assert_not_called()
 
 
 def test_zero_opt_on_does_not_trigger_censo_parts(
@@ -400,8 +407,8 @@ def test_refine_ensemble_include_refinement_appends_part(tmp_path: Path) -> None
         raise FileNotFoundError("stop here")
 
     with (
-        patch("acp.backends.censo_backend.shutil.which", return_value="/usr/bin/censo"),
-        patch("acp.backends.censo_backend.subprocess.run", side_effect=fake_run),
+        patch("cccp.qc.interfaces.censo.shutil.which", return_value="/usr/bin/censo"),
+        patch("cccp.qc.interfaces.censo.subprocess.run", side_effect=fake_run),
         pytest.raises(Exception),
     ):
         backend.refine_ensemble(
@@ -422,9 +429,9 @@ def test_refine_ensemble_part_overrides_reach_rcfile(tmp_path: Path) -> None:
     censo_dir = tmp_path / "censo"
 
     with (
-        patch("acp.backends.censo_backend.shutil.which", return_value="/usr/bin/censo"),
+        patch("cccp.qc.interfaces.censo.shutil.which", return_value="/usr/bin/censo"),
         patch(
-            "acp.backends.censo_backend.subprocess.run",
+            "cccp.qc.interfaces.censo.subprocess.run",
             side_effect=FileNotFoundError("stop here"),
         ),
         pytest.raises(Exception),

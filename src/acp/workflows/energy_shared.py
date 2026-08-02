@@ -24,6 +24,8 @@ from typing import Any
 import numpy as np
 
 from acp.backends.censo_backend import CensoConformerRecord, CensoRunResult
+from acp.backends.external import run_shermo
+from acp.backends.registry import get_backend
 from acp.chem.composition import normalize_recalc_hess
 from acp.core.models import HARTREE_TO_KCAL, Structure, StructureEnsemble, StructureRecord
 from acp.workflows.ensemble_thermo import (
@@ -34,8 +36,6 @@ from acp.workflows.ensemble_thermo import (
     s_mix_kcal_per_mol_kelvin,
     t_s_mix_kcal_per_mol,
 )
-from cccp.qc.interfaces.orca import ORCAInterface
-from cccp.qc.runners import run_shermo
 from cccp.utils.file_io import read_xyz_multiframe, write_xyz
 
 logger = logging.getLogger(__name__)
@@ -305,7 +305,7 @@ def run_rank1_handoff(
         else (solvent_model if solvent else "none")
     ) or "none"
 
-    orca = ORCAInterface(
+    orca = get_backend("orca")(
         cfg,
         method=resolved["opt_method"],
         basis=resolved["opt_basis"] or "def2-TZVPP",
@@ -381,7 +381,7 @@ def run_rank1_handoff(
         ):
             sp_orca = orca
         else:
-            sp_orca = ORCAInterface(
+            sp_orca = get_backend("orca")(
                 cfg,
                 method=resolved["sp_method"],
                 basis=resolved["sp_basis"],

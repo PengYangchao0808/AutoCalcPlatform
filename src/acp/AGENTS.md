@@ -1,7 +1,7 @@
 # acp/ — ACP Unified Module
 
 ## OVERVIEW
-The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. ~40 files, ~8k lines (incl. API + scheduler). Coexists with the underlying `cccp` package (Computational Chemistry Connection Package — the QC interface library). Active workflows: ensemble, energy, mechanism, simple (singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt). The conformer/nmr/benchmark workflows were retired on 2026-07-27.
+The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. ~40 files, ~8k lines (incl. API + scheduler). Coexists with the underlying `cccp` package (Computational Chemistry Connection Package — the QC interface library). Active workflows: ensemble, energy, xtbmd_censo_energy, mechanism, simple (singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt). The conformer/nmr/benchmark workflows were retired on 2026-07-27.
 
 ## STRUCTURE
 ```
@@ -23,7 +23,7 @@ acp/
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| ACP CLI entry | `cli.py` | `acp run {ensemble\|energy\|mechanism\|serve\|singlepoint\|opt\|freq\|...}` dispatch (~1835 lines) |
+| ACP CLI entry | `cli.py` | `acp run {ensemble\|energy\|xtbmd_censo_energy\|mechanism\|serve\|singlepoint\|opt\|freq\|...}` dispatch (~2000 lines) |
 | Config resolution | `cli.py` | `_build_config()` → delegates to `cccp.config.load_config` |
 | Workflow catalog | `catalog.py` | `WORKFLOW_CATALOG` (active + retired), `SUPPORTED_WORKFLOWS`, `METHOD_META`, `METHOD_SCHEMAS` |
 | Method catalog | `catalog.py` | `METHOD_META` dict: wB97X-D4, r2SCAN-3c, DLPNO-CCSD(T) route blocks |
@@ -49,6 +49,7 @@ acp/
 | Intake storage | `intake/storage.py` | Result storage |
 | Ensemble workflow | `workflows/ensemble.py` | CREST → CENSO preset+screening |
 | Energy workflow | `workflows/energy.py` | CENSO screening → cumulative-Boltzmann → DFT handoff |
+| xTB-MD CENSO energy | `workflows/xtbmd_censo_energy.py` | GFN-FF MD → GFN1 batch opt → isostat → ewin filter → CENSO → fine DFT (Phase 1–5 done; multi-replica sampling in `workflows/xtbmd_md.py`, shared helpers in `workflows/energy_shared.py`) |
 | Mechanism workflow | `workflows/mechanism.py` | TS search + IRC validation |
 | Simple workflows | `workflows/simple.py` | singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt |
 | Workflow registry | `workflows/registry.py` | CLI subcommand → WorkflowSpec builder mapping |

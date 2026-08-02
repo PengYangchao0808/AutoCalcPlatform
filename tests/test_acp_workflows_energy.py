@@ -117,8 +117,15 @@ def _mock_orca_instance() -> MagicMock:
     sp_result.log_file = Path("/tmp/sp.out")
     sp_result.error_message = None
     orca.single_point.return_value = sp_result
+
     return orca
 
+
+def _mock_orca_backend_cls(orca: MagicMock) -> MagicMock:
+    """Return a fake ``get_backend("orca")`` class that yields *orca*."""
+    backend_cls = MagicMock()
+    backend_cls.return_value = orca
+    return backend_cls
 
 _SHERMO_OK = {
     "g_sum": -154.950123,
@@ -382,7 +389,7 @@ def test_energy_light_opt_on_end_to_end(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca) as mock_orca_cls,
+        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)) as mock_get_backend,
         patch(
             "acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)
         ) as mock_shermo,
@@ -444,8 +451,8 @@ def test_energy_light_opt_on_end_to_end(
     assert summary["total_gibbs_kcal_mol"] == pytest.approx(expected_total, abs=1e-6)
     assert summary["population_coverage"] == pytest.approx(1.0)
 
-    # ORCAInterface constructed with the default opt functional
-    _, orca_kwargs = mock_orca_cls.call_args
+    # ORCA backend constructed with the default opt functional
+    _, orca_kwargs = mock_get_backend.return_value.call_args
     assert orca_kwargs["method"] == "r2SCAN-3c"
 
 
@@ -462,7 +469,7 @@ def test_energy_light_opt_on_rank1_is_lowest_gtot(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
         patch("acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)),
     ):
         backend = MagicMock()
@@ -500,7 +507,7 @@ def test_energy_light_no_opt_cheap_path(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
         patch("acp.workflows.energy_shared.run_shermo") as mock_shermo,
     ):
         backend = MagicMock()
@@ -555,7 +562,7 @@ def test_energy_zero_opt_on_bypasses_censo(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
         patch(
             "acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)
         ) as mock_shermo,
@@ -602,7 +609,7 @@ def test_energy_zero_no_opt_censo_nconf1(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
         patch("acp.workflows.energy_shared.run_shermo") as mock_shermo,
     ):
         backend = MagicMock()
@@ -647,7 +654,7 @@ def test_energy_default_full_funnel(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
         patch("acp.workflows.energy_shared.run_shermo", side_effect=shermo_values) as mock_shermo,
     ):
         backend = MagicMock()
@@ -702,7 +709,7 @@ def test_energy_default_shermo_failure_falls_back_to_gtot(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
         patch("acp.workflows.energy_shared.run_shermo", return_value=None),
     ):
         backend = MagicMock()
@@ -853,7 +860,7 @@ def test_energy_rank1_only_light_opt_on(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
         patch(
             "acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)
         ) as mock_shermo,
@@ -948,7 +955,7 @@ def test_energy_rank1_only_cheap_path(
     orca = _mock_orca_instance()
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
         patch("acp.workflows.energy_shared.run_shermo") as mock_shermo,
     ):
         backend = MagicMock()

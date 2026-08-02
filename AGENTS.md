@@ -13,7 +13,7 @@ ACP_V1_20260519/
 │   ├── config.py          # 6-source YAML config load/merge (677 lines; reads ~/.cccp.yaml, falls back to ~/.conformer_search.yaml)
 │   ├── version.py         # __version__
 │   ├── core/              # ConformerEngine (1764 lines), ProtocolSpec, CandidateSet, state_manager
-│   ├── qc/interfaces/     # ORCA/CREST(+XTBInterface co-located)/xtb_thermo subprocess wrappers
+│   ├── qc/interfaces/     # subprocess wrappers: ORCA/CREST/XTB/xtb_thermo + CENSO/ISOSTAT/Molclus (2026-08-02 consolidation)
 │   ├── qc/runners/        # run_isostat / run_shermo / batch_process_thermo (all in __init__.py)
 │   ├── qc/cluster/        # Local + LSF adapters + factory (single __init__.py)
 │   ├── io/                # MolecularInputHandler — format detection, RDKit embedding
@@ -23,7 +23,7 @@ ACP_V1_20260519/
 │   ├── cli.py             # argparse subcommand CLI: `acp run conformer|ensemble|energy|nmr|mechanism|serve|singlepoint|...` (1835 lines)
 │   ├── catalog.py         # Method metadata: wB97X-D4, r2SCAN-3c, DLPNO-CCSD(T) route blocks (1712 lines)
 │   ├── core/              # Shared mechanism: Structure, WorkflowRunner, Registry, State, Config
-│   ├── backends/          # QC backends with capability Protocols (ORCA/CREST/xTB/CENSO/Isostat/Molclus)
+│   ├── backends/          # QC backends with capability Protocols — thin adapters only (no subprocess; see 2026-08-02 consolidation)
 │   ├── chem/              # Chemistry: RDKit embedding, XYZ tools
 │   ├── intake/            # Data ingestion: models, parsers (6 formats), storage
 │   ├── io/                # StructureReader / StructureWriter (thin cccp wrapper)
@@ -52,17 +52,20 @@ ACP_V1_20260519/
 | ORCA backend | `src/acp/backends/orca.py` | ACP adapter wrapping ORCAInterface |
 | CREST backend | `src/acp/backends/crest.py` | ACP adapter wrapping CRESTInterface |
 | xTB backend | `src/acp/backends/xtb.py` | ACP adapter wrapping XTBInterface |
-| CENSO backend | `src/acp/backends/censo_backend.py` | Subprocess: presets, rcfile gen, JSON/XYZ parsing, template injection (810 lines) |
-| ISOSTAT backend | `src/acp/backends/isostat_backend.py` | Subprocess wrapper for ISOSTAT clustering (178 lines) |
-| Molclus backend | `src/acp/backends/molclus_backend.py` | xTB-MD + Molclus conformer search (478 lines) |
+| CENSO backend | `src/acp/backends/censo_backend.py` | Thin adapter → `cccp.qc.interfaces.censo.CensoInterface` (rcfile gen, presets, JSON/XYZ parsing live in cccp) |
+| ISOSTAT backend | `src/acp/backends/isostat_backend.py` | Thin adapter → `cccp.qc.interfaces.isostat.IsostatInterface` (title normalisation, env pinning in cccp) |
+| Molclus backend | `src/acp/backends/molclus_backend.py` | Thin adapter → `cccp.qc.interfaces.molclus.MolclusInterface` (md.inp/settings.ini/trajectory validation in cccp) |
 | Legacy ORCA interface | `src/cccp/qc/interfaces/orca.py` | Subprocess via direct ORCA invocation (811 lines) |
 | Legacy CREST / xTB | `src/cccp/qc/interfaces/crest.py` | CRESTInterface + XTBInterface co-located (723 lines) |
-| Legacy ISOSTAT/Shermo | `src/cccp/qc/runners/__init__.py` | `run_isostat()`, `run_shermo()`, `batch_process_thermo()` (323 lines) |
+| ISOSTAT interface | `src/cccp/qc/interfaces/isostat.py` | Single ISOSTAT path (exit-24 title normalisation, error propagation, env pinning) |
+| Molclus interface | `src/cccp/qc/interfaces/molclus.py` | xTB-MD + Molclus full pipeline (md.inp, settings.ini, search()) |
+| CENSO interface | `src/cccp/qc/interfaces/censo.py` | CENSO subprocess: rcfile gen, preset injection, template injection, JSON/XYZ parsing |
+| Legacy ISOSTAT/Shermo | `src/cccp/qc/runners/__init__.py` | `run_isostat()` (DEPRECATED — IsostatInterface is the single path), `run_shermo()`, `batch_process_thermo()` (323 lines) |
 | ACP conformer workflow | `src/acp/workflows/conformer.py` | Thin wrapper → `ConformerEngine.run()`; rebuilds from `all_conformers.xyz` (343 lines) |
 | Ensemble workflow | `src/acp/workflows/ensemble.py` | `acp run ensemble` — CREST → CENSO P+S (508 lines) |
 | Energy workflow | `src/acp/workflows/energy.py` | `acp run energy` — rank1-only default (`--full-ensemble` restores Boltzmann ≥99%), `--levels`, opt/freq same-level (~740 lines; heavy helpers in energy_shared.py) |
 | xTB-MD CENSO energy | `src/acp/workflows/xtbmd_censo_energy.py` | `acp run xtbmd_censo_energy` — GFN-FF MD → GFN1 batch opt → isostat → ewin filter → CENSO → fine DFT + G_total (2080 lines); multi-replica sampling in `xtbmd_md.py`; shared helpers in `energy_shared.py` |
-| Shared energy helpers | `src/acp/workflows/energy_shared.py` | `resolve_levels`/`run_rank1_handoff`/`boltzmann_weights`/`select_cumulative_boltzmann`/`build_ensemble_summary`/`write_final_outputs`/`censo_record_to_candidate`/`xtb_passthrough_result`/`resolve_solvent_config`/`resolve_crest_ewin` (E4 extraction) |
+| Shared energy helpers | `src/acp/workflows/energy_shared.py` | `resolve_levels`/`run_rank1_handoff`/`boltzmann_weights`/`select_cumulative_boltzmann`/`build_ensemble_summary`/`write_final_outputs`/`censo_record_to_candidate`/`xtb_passthrough_result`/`resolve_solvent_config`/`resolve_crest_ewin` (E4 extraction); ORCA handoff via `get_backend("orca")` (2026-08-02) |
 | NMR workflow | `src/acp/workflows/nmr.py` | Conformer search → GIAO → Boltzmann averaging (502 lines) |
 | Mechanism workflow | `src/acp/workflows/mechanism.py` | TS search + IRC validation (394 lines) |
 | Simple workflows | `src/acp/workflows/simple.py` | singlepoint/opt/freq/scan/xtb-opt (546 lines) |

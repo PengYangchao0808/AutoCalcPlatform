@@ -16,6 +16,7 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -26,6 +27,7 @@ from acp.scheduler.jobs import (
     censo_solvent_from_method,
 )
 from acp.workflows.energy import _resolve_levels
+from cccp.qc.interfaces.censo import CensoInterface
 from cccp.qc.interfaces.orca import ORCAInterface
 
 
@@ -42,6 +44,13 @@ def _make_config(**overrides: Any) -> dict[str, Any]:
     }
     config.update(overrides)
     return config
+
+
+def _mock_orca_backend_cls(orca: MagicMock) -> MagicMock:
+    """Return a fake ``get_backend("orca")`` class that yields *orca*."""
+    backend_cls = MagicMock()
+    backend_cls.return_value = orca
+    return backend_cls
 
 
 # ---------------------------------------------------------------------------
@@ -272,9 +281,9 @@ def test_refine_ensemble_injects_home(tmp_path: Path, monkeypatch: Any) -> None:
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(
-        "acp.backends.censo_backend.subprocess.run", fake_run
+        "cccp.qc.interfaces.censo.subprocess.run", fake_run
     )
-    monkeypatch.setattr(CensoBackend, "is_available", lambda self: True)
+    monkeypatch.setattr(CensoInterface, "is_available", lambda self: True)
 
     result = backend.refine_ensemble(
         input_xyz,
@@ -286,13 +295,20 @@ def test_refine_ensemble_injects_home(tmp_path: Path, monkeypatch: Any) -> None:
     env = captured["env"]
     assert env is not None
     assert env["HOME"] == str(tmp_path / "censo" / "home")
+    # Threads pinned to nproc (config resources.nproc=4) so CENSO's xTB/ORCA
+    # children cannot inherit a node-wide OMP_NUM_THREADS.
+    assert env["OMP_NUM_THREADS"] == "4"
+    assert env["MKL_NUM_THREADS"] == "4"
+    assert env["OPENBLAS_NUM_THREADS"] == "4"
     template = (
         tmp_path / "censo" / "home" / ".censo2_assets" / "screening.orca.template"
     )
     assert template.exists()
 
-
-def test_refine_ensemble_no_templates_no_env(tmp_path: Path, monkeypatch: Any) -> None:
+def test_refine_ensemble_no_templates_pins_threads(tmp_path: Path, monkeypatch: Any) -> None:
+    """CENSO subprocess env must pin BLAS/OpenMP threads even without
+    template injection or LD_LIBRARY_PATH (P0: node-wide OMP_NUM_THREADS
+    oversubscription fix)."""
     backend = CensoBackend(_make_config())
     input_xyz = tmp_path / "crest_conformers.xyz"
     input_xyz.write_text("1\n-1.0\nH  0 0 0\n")
@@ -312,12 +328,16 @@ def test_refine_ensemble_no_templates_no_env(tmp_path: Path, monkeypatch: Any) -
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(
-        "acp.backends.censo_backend.subprocess.run", fake_run
+        "cccp.qc.interfaces.censo.subprocess.run", fake_run
     )
-    monkeypatch.setattr(CensoBackend, "is_available", lambda self: True)
+    monkeypatch.setattr(CensoInterface, "is_available", lambda self: True)
 
     backend.refine_ensemble(input_xyz, tmp_path / "censo", preset="censo-light")
-    assert captured["env"] is None
+    env = captured["env"]
+    assert env is not None
+    assert env["OMP_NUM_THREADS"] == "4"
+    assert env["MKL_NUM_THREADS"] == "4"
+    assert env["OPENBLAS_NUM_THREADS"] == "4"
 
 
 # ---------------------------------------------------------------------------
@@ -691,7 +711,7 @@ def test_energy_zero_opt_on_multi_conformer_ensemble(tmp_path: Path) -> None:
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
         patch("acp.workflows.energy_shared.run_shermo", return_value=dict(shermo_ok)),
     ):
         result = run_conformer_energy(
@@ -751,7 +771,7 @@ def test_energy_light_non_rank1_handoff_failure_is_skipped(tmp_path: Path) -> No
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
         patch("acp.workflows.energy_shared.run_shermo", return_value=dict(shermo_ok)),
     ):
         backend = MagicMock()
@@ -978,7 +998,7 @@ def test_energy_levels_ewin_reaches_crest(tmp_path: Path) -> None:
 
     with (
         patch("acp.workflows.energy.get_backend") as mock_get_backend,
-        patch("acp.workflows.energy_shared.ORCAInterface", return_value=orca),
+        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
         patch("acp.workflows.energy_shared.run_shermo", return_value=dict(shermo_ok)),
     ):
         backend = MagicMock()
