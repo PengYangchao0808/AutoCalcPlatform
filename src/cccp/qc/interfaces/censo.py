@@ -153,6 +153,16 @@ CENSO_PARSE_PRIORITY = ["refinement", "optimization", "screening", "prescreening
 
 _GTOT_TOLERANCE = 1e-6
 
+# Minimum OMP threads per CENSO child calculation.  CENSO subdivides the
+# total core budget (--maxcores) across parallel children
+# (n_parallel = maxcores / omp-min), and EACH child inherits the OMP/MKL/
+# OPENBLAS env of the parent CENSO process.  Therefore the env must carry
+# the PER-CHILD thread share (= omp-min), NOT the full nproc — otherwise
+# every parallel child spawns ``nproc`` threads and oversubscribes the node
+# by the parallelism factor (e.g. nproc=16, omp-min=4 → 4 children × 16
+# threads = 64 threads on a 16-core budget).
+_DEFAULT_OMP_MIN_THREADS = 4
+
 
 # ---------------------------------------------------------------------------
 # CensoInterface
@@ -363,8 +373,13 @@ class CensoInterface:
         solvent: Optional[str],
         nconf: Optional[int] = None,
         keep_all: bool = False,
+        charge: int = 0,
+        multiplicity: int = 1,
     ) -> List[str]:
         cmd = [self._censo_path, "-i", str(input_xyz)]
+
+        unpaired = multiplicity - 1 if multiplicity > 0 else 0
+        cmd.extend(["-c", str(charge), "-u", str(unpaired)])
 
         part_list = preset_cfg.get("parts", [])
         for part in CENSO_PART_FLAGS:
@@ -376,7 +391,9 @@ class CensoInterface:
 
         cmd.extend(["--inprc", str(rcfile)])
         cmd.extend(["--maxcores", str(nproc)])
-        cmd.extend(["--omp-min", "4"])
+        # --omp-min must never exceed --maxcores (CENSO rejects omp-min >
+        # maxcores), so cap it at nproc for small jobs (e.g. nproc=2).
+        cmd.extend(["--omp-min", str(min(_DEFAULT_OMP_MIN_THREADS, max(1, nproc)))])
 
         cmd.extend(["-T", str(temperature)])
 
@@ -699,18 +716,40 @@ class CensoInterface:
             env["HOME"] = str(home_dir)
             logger.info("CENSO template injection active (HOME=%s)", home_dir)
 
-        # Pin BLAS/OpenMP threads so the xTB/ORCA children CENSO spawns
-        # cannot inherit the node-wide OMP_NUM_THREADS (LSF/OpenLava job
-        # environments inject it and oversubscribe the node — a 4-core job
-        # then spawns 10 threads per CENSO child process).  Note: assign
-        # keys individually — ``env.update(_thread_env(...))`` would also
-        # copy the process HOME/LD_LIBRARY_PATH back over the custom ones.
+        # Pin BLAS/OpenMP threads for the xTB/ORCA children CENSO spawns.
+        #
+        # Why the value is omp-min and NOT nproc (verified against CENSO
+        # 2.0.1 source, censo/parallel.py + processing/processor.py):
+        #
+        # CENSO parallelises via a Dask LocalCluster with a HARD concurrency
+        # cap of ``threads_per_worker = ncores // omp-min`` (= 4 for our
+        # default omp-min=4).  set_omp() assigns each job a per-job omp
+        # (= omp-min for the bulk of conformers, higher for the few trailing
+        # stragglers), and submits it with ``resources={"CPU": job.omp}`` --
+        # but that is only a Dask SCHEDULING hint.  The actual subprocess
+        # threads come from ``ENVIRON = os.environ.copy()`` (processor.py
+        # ``env=env or ENVIRON``): CENSO does NOT set OMP_NUM_THREADS per
+        # child, and xTB honours the env over its own ``--parallel`` flag.
+        #
+        # So whatever we put here is the de-facto thread count of EVERY
+        # child, and the peak load is ``max_concurrency * env_omp``.  The
+        # largest value that never exceeds ncores is therefore omp-min:
+        #   (ncores // omp-min) * omp-min == ncores   (saturated, never over)
+        # Setting it to nproc makes every parallel child spawn nproc threads
+        # -> oversubscription by the concurrency factor (observed on
+        # compute-01: 4 children x 16 threads = 64 on a 40-core node).  The
+        # only downside of capping at omp-min is that trailing single
+        # stragglers (which CENSO would otherwise give >omp-min cores) run
+        # under-utilised -- unavoidable with a static env snapshot.
+        # Assign keys individually (env.update() would clobber the
+        # HOME/LD_LIBRARY_PATH overrides set above).
         if env is None:
             env = dict(os.environ)
         pinned_nproc = max(1, int(nproc_val))
-        env["OMP_NUM_THREADS"] = str(pinned_nproc)
-        env["MKL_NUM_THREADS"] = str(pinned_nproc)
-        env["OPENBLAS_NUM_THREADS"] = str(pinned_nproc)
+        omp_per_child = min(_DEFAULT_OMP_MIN_THREADS, pinned_nproc)
+        env["OMP_NUM_THREADS"] = str(omp_per_child)
+        env["MKL_NUM_THREADS"] = str(omp_per_child)
+        env["OPENBLAS_NUM_THREADS"] = str(omp_per_child)
 
         cmd = self._build_cli(
             ensemble_xyz,
@@ -721,6 +760,8 @@ class CensoInterface:
             solvent,
             nconf=nconf,
             keep_all=keep_all_val,
+            charge=charge,
+            multiplicity=multiplicity,
         )
 
         logger.info("Running CENSO: %s", " ".join(cmd))

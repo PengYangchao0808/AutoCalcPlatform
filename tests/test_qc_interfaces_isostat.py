@@ -116,6 +116,7 @@ def test_cluster_success(tmp_path: Path) -> None:
         timeout: int,
         check: bool,
         env: dict[str, str] | None,
+        input: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         assert Path(cmd[0]).name == "isostat"
         assert check is True
@@ -124,6 +125,10 @@ def test_cluster_success(tmp_path: Path) -> None:
         assert env["OMP_NUM_THREADS"] == "2"
         assert env["MKL_NUM_THREADS"] == "2"
         assert env["OPENBLAS_NUM_THREADS"] == "2"
+        # ISOSTAT prompts for the cluster-count when there are many clusters;
+        # feeding ENTER (a bare newline) keeps all clusters and avoids an
+        # end-of-file crash in non-interactive (subprocess) mode.
+        assert input == "\n"
         # The input passed to ISOSTAT must be the normalised temp file.
         assert "_isostat_" in cmd[1]
         (cwd / "cluster.xyz").write_text(
@@ -154,6 +159,45 @@ def test_cluster_success(tmp_path: Path) -> None:
     assert (output_dir / "isostat.log").exists()
 
 
+def test_cluster_feeds_stdin_to_satisfy_cluster_count_prompt(
+    tmp_path: Path,
+) -> None:
+    """When ISOSTAT finds many clusters it prompts interactively ("press ENTER
+    to keep all, or input a number").  In non-interactive subprocess mode that
+    read hits EOF and the Fortran runtime aborts with ``severe (24): end-of-file
+    during read`` (exit 24).  The interface must feed a bare newline (ENTER =
+    keep all clusters) on stdin so the prompt is answered and ISOSTAT exits 0.
+    """
+    interface = IsostatInterface(CONFIG)
+    ensemble_xyz = tmp_path / "ensemble.xyz"
+    _write_multiframe_xyz(ensemble_xyz)
+
+    captured: dict[str, object] = {}
+
+    def _mock_run(
+        cmd: list[str],
+        cwd: Path,
+        capture_output: bool,
+        text: bool,
+        timeout: int,
+        check: bool,
+        env: dict[str, str] | None,
+        input: str | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        captured["input"] = input
+        (cwd / "cluster.xyz").write_text(
+            "2\n        -1.0000000000\nH 0.0 0.0 0.0\nH 0.0 0.0 0.74\n",
+            encoding="utf-8",
+        )
+        return subprocess.CompletedProcess(cmd, 0, stdout="clustered", stderr="")
+
+    with patch("cccp.qc.interfaces.isostat.subprocess.run", side_effect=_mock_run):
+        result = interface.cluster(ensemble_xyz, tmp_path)
+
+    assert result.success is True
+    assert captured["input"] == "\n"
+
+
 def test_cluster_exit_24_classified_as_failure(tmp_path: Path) -> None:
     """Non-zero exits (e.g. ISOSTAT exit 24) must surface as classified
     QCResult failures instead of the legacy silent (path, []) return."""
@@ -169,6 +213,7 @@ def test_cluster_exit_24_classified_as_failure(tmp_path: Path) -> None:
         timeout: int,
         check: bool,
         env: dict[str, str] | None,
+        input: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         raise subprocess.CalledProcessError(
             returncode=24, cmd=cmd, output="", stderr="Unable to load energy"
@@ -195,6 +240,7 @@ def test_cluster_timeout_classified_as_failure(tmp_path: Path) -> None:
         timeout: int,
         check: bool,
         env: dict[str, str] | None,
+        input: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         raise subprocess.TimeoutExpired(cmd=cmd, timeout=timeout)
 

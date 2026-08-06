@@ -334,6 +334,12 @@ def test_build_cli_parts(tmp_path: Path) -> None:
     assert "--gas-phase" in cmd
     assert "--evaluate-rrho" in cmd
 
+    # charge/unpaired default to closed-shell singlet (0 unpaired electrons)
+    assert "-c" in cmd
+    assert cmd[cmd.index("-c") + 1] == "0"
+    assert "-u" in cmd
+    assert cmd[cmd.index("-u") + 1] == "0"
+
 
 def test_build_cli_with_solvent(tmp_path: Path) -> None:
     config = _make_config()
@@ -355,6 +361,31 @@ def test_build_cli_with_solvent(tmp_path: Path) -> None:
     solv_idx = cmd.index("--solvent")
     assert cmd[solv_idx + 1] == "dcm"
     assert "--gas-phase" not in cmd
+
+
+def test_build_cli_open_shell_charge_and_multiplicity(tmp_path: Path) -> None:
+    # Regression: CENSO reads charge/unpaired ONLY from -c/-u CLI flags, never
+    # from the rcfile [general] section. Without these flags an open-shell /
+    # charged molecule is silently run as a neutral closed-shell singlet.
+    config = _make_config()
+    interface = CensoInterface(config)
+    input_xyz = tmp_path / "input.xyz"
+    input_xyz.write_text("1\n\nH  0 0 0\n")
+    rcfile = tmp_path / "censo2rc"
+    rcfile.write_text("")
+
+    preset = interface.resolve_preset("censo-light")
+    cmd = interface.build_cli(
+        input_xyz, rcfile, preset,
+        nproc=4, temperature=298.15, solvent=None,
+        charge=2, multiplicity=5,
+    )
+
+    assert "-c" in cmd
+    assert cmd[cmd.index("-c") + 1] == "2"
+    assert "-u" in cmd
+    # multiplicity 5 -> 4 unpaired electrons
+    assert cmd[cmd.index("-u") + 1] == "4"
 
 
 # ---------------------------------------------------------------------------

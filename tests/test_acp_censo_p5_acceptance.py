@@ -340,9 +340,51 @@ def test_refine_ensemble_no_templates_pins_threads(tmp_path: Path, monkeypatch: 
     assert env["OPENBLAS_NUM_THREADS"] == "4"
 
 
-# ---------------------------------------------------------------------------
-# Scheduler method-dict mapping (frontend v2 submission chain)
-# ---------------------------------------------------------------------------
+def test_refine_ensemble_pins_per_child_threads_not_total(tmp_path: Path, monkeypatch: Any) -> None:
+    """CENSO subdivides --maxcores across parallel children, so the env
+    OMP/MKL/OPENBLAS must be the PER-CHILD share (= --omp-min), not the
+    total nproc.  With nproc=16, omp-min=4, CENSO runs ~4 children in
+    parallel; pinning env to 16 would make each child spawn 16 threads
+    (4 x 16 = 64 -> oversubscription).  Regression guard for the
+    compute-01 SmI2 incident (40-core node, 100% CPU on a 16-core job)."""
+    interface = CensoInterface(_make_config(resources={"nproc": 16}))
+    input_xyz = tmp_path / "crest_conformers.xyz"
+    input_xyz.write_text("1\n-1.0\nH  0 0 0\n")
+
+    captured: dict[str, Any] = {}
+
+    def fake_run(cmd, **kwargs):
+        captured["env"] = kwargs.get("env")
+        captured["cmd"] = cmd
+        out_dir = Path(kwargs["cwd"])
+        (out_dir / "1_SCREENING.json").write_text(json.dumps({
+            "part_name": "screening",
+            "data": {"CONF1": {
+                "energy": -1.0, "gsolv": 0.0, "grrho": 0.0, "gtot": -1.0,
+            }},
+        }))
+        (out_dir / "1_SCREENING.xyz").write_text("1\nCONF1\nH  0 0 0\n")
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(
+        "cccp.qc.interfaces.censo.subprocess.run", fake_run
+    )
+    monkeypatch.setattr(CensoInterface, "is_available", lambda self: True)
+
+    interface.refine_ensemble(input_xyz, tmp_path / "censo", preset="censo-light")
+
+    env = captured["env"]
+    cmd = captured["cmd"]
+    # Total budget still passed to CENSO as --maxcores.
+    assert "--maxcores" in cmd
+    assert cmd[cmd.index("--maxcores") + 1] == "16"
+    assert "--omp-min" in cmd
+    assert cmd[cmd.index("--omp-min") + 1] == "4"
+    # Per-child thread share — must NOT equal the total nproc (16).
+    assert env["OMP_NUM_THREADS"] == "4"
+    assert env["MKL_NUM_THREADS"] == "4"
+    assert env["OPENBLAS_NUM_THREADS"] == "4"
+    assert env["OMP_NUM_THREADS"] != "16"
 
 
 def test_censo_preset_from_method() -> None:

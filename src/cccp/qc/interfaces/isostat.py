@@ -224,6 +224,7 @@ class IsostatInterface:
                 timeout=timeout,
                 check=True,
                 env=_thread_env(nthreads),
+                input="\n",
             )
         except subprocess.TimeoutExpired as exc:
             _write_log(
