@@ -1,0 +1,2248 @@
+
+
+ACP Workbench — METHOD_META 前端数据驱动重构
+
+版本: v1.8 | 日期: 2026-07-20 | 状态: Phase 0/1/2 已实施并通过验证（v1.8：Phase 2 前端数据驱动重构 — 完成 7 个 task 2.0-2.6 + 3 项代码质量修复 F7-F9、识别 3 项残余风险 R34-R36；新增 §1.9 Phase 2 Audit + §1.8 Phase 2 完成总结）
+
+目录
+
+  
+概述与动机
+  
+实施计划（分阶段）
+  
+明确不修复项（Non-Goals） v1.6
+  
+决策日志（Decision Log） v1.6
+  
+审计修复记录（Audit Fix Records） v1.7
+  
+阶段完成总结（Phase Completion Summary） v1.7
+  
+Phase 2 代码质量审计（Phase 2 Audit） v1.8
+  
+API 响应结构变更
+  
+前端改动清单
+  
+改动 1: isFieldAdvanced() 数据驱动
+  
+改动 2: getFieldDefault() 泛函级默认
+  
+改动 3: 色散框 builtin 锁定
+  
+改动 4: functional change 联动
+  
+改动 5: 全局常量初始化
+  
+测试验证清单
+  
+附录 A: METHOD_META 完整结构
+  
+附录 B: FIELD_DEFINITIONS 变更
+  
+附录 C: 风险分析与改进建议
+    
+      
+12.1 风险总览
+      
+12.2 P0 阻塞级
+      
+12.3 P1 高风险
+      
+12.4 P2 中风险
+      
+12.4a P0/P1 新增风险（v1.4）
+      
+12.4b P2/P3 新增风险（v1.4）
+      
+12.5 P3 优化与完善
+      
+12.6 v1.7 审计新增风险详情（R29-R33） v1.7
+      
+12.7 v1.8 Phase 2 审计新增风险详情（R34-R36） v1.8
+    
+  
+
+1. 概述与动机
+
+1.1 目标
+
+将前端中所有泛函相关的硬编码逻辑迁移为API 数据驱动。新增泛函时前端零改动。
+
+v1.5 适用范围勘误: "前端零改动"承诺仅对普通 DFT 泛函（B3LYP/PBE0/wB97X-D4/wB97M-V 等）成立。对复合方法（r2SCAN-3c / PBEh-3c / B97-3c）和波函数方法（DLPNO-CCSD(T)），新增仍需同步修改 src/cccp/qc/interfaces/orca.py 的硬编码分支（详见 R17、R19、R27）。直到 Phase 1 任务 1.6-1.8 完成 ORCA 后端参数化（改为读取 basis_inline + basis_block），此限制持续存在。
+
+1.2 当前问题
+
+ | 位置 | 当前做法 | 问题
+
+   | isFieldAdvanced()
+   | 硬编码数组 ["aux_basis","ri_approximation","grid",...]
+   | 新增高级字段需改前端
+
+   | 色散框
+   | 总是渲染为可选下拉
+   | 无法表达"此泛函内置色散不可配置"
+
+   | 默认基组/色散
+   | profiles 中硬写每个泛函的默认值
+   | 新增泛函需同步改所有 profile
+
+   | RI 加速默认值
+   | 硬编码为 "none"
+   | 不支持按泛函区分
+
+1.3 数据流
+
+METHOD_META (catalog.py) ──→ API: GET /api/v1/method-catalog ──→ 前端 methodCatalogCache
+                                                                        │
+                                                              ┌─────────┼─────────┐
+                                                              ▼         ▼         ▼
+                                                        字段过滤  默认值解析  高级字段判断
+
+1.4 实施计划（分阶段）
+
+ | 阶段 | 依赖 | 预计工时 | 涉及风险 | 涉及改动
+
+ | Phase 0 — 后端数据基础设施 | 无 | ~2h | R1, R2, R3, R7, R24（R23 v1.5 已解决；D3 同步任务 0.1a/0.1b） | —
+
+ | Phase 1 — 后端校验集成 | Phase 0 | ~5h | R9, R11, R12, R14, R17, R18, R19, R20, R27（R4 v1.5 已解决；残留 R18 在此处理） | —
+
+ | Phase 2 — 前端数据驱动重构 | Phase 0+1 | ~7h | R5, R6, R8, R15, R16, R21（R28 v1.5 降级 P3，移至 Phase 4） | 改动 1~5
+
+ | Phase 3 — 测试与质量保障 | Phase 2 | ~5h | R10, R25 | —
+
+ | Phase 4 — 长期优化 | Phase 3 | ~4h | R8, R11, R13, R22, R26, R28 | —
+
+总预计工时: ~23h（约 3 个工作日）。Phase 0-2 为核心路径，Phase 0 完成前 不可 启动前端改动。
+
+v1.6 状态同步说明: R4 / R23 已在 v1.4/v1.5 设计层面解决（badge 改为 badge-resolved），不再占用 Phase 工时。R28 v1.5 降级为 P3（当前无触发路径），移至 Phase 4。Risk 总览与 Phase 风险列表现已保持一致。详见 §1.6 Decision Log。
+
+v1.4 工时增量说明: 新增的 R18 (DLPNO case)、R19 (aux_basis 对 DLPNO 失效)、R27 (DLPNO basis 硬编码) 三项涉及 orca.py 的 DLPNO 分支重构，本应单列 ~3h；考虑到可与 R17（basis_inline 参数化）合并实施，净增工时 ~1h。R20/R21 嵌入既有 Phase 1/2 工时内。
+
+Phase 0 — 后端数据基础设施 P0 阻塞级 v1.7 已完成
+
+状态: 已完成 (v1.7) 所有 task 0.1-0.6 已实施并通过 Phase 0 验证清单全部断言。审计偏差: 任务 0.1 的 _ALL_BASIS_SETS 在 v1.7 改为 tuple（原 spec 为 list，由修复 F3 落实）；任务 0.1/0.2 中 FUNCTIONAL_OPTIONS_MAP 不再独立维护，改为 _derive_functional_options_map() 从 METHOD_META 自动派生（原 spec 未明示，由修复 F4 落实）。
+
+目标: 为前端数据驱动重构提供完整的数据源。本阶段完成后，GET /api/v1/method-catalog 应返回包含 method_meta、修正后的 field_definitions 和 functional_options_map 的完整响应。
+
+ | # | 任务 | 文件 | 关键内容
+
+   | 0.1
+   | 新增 METHOD_META 字典
+   | src/acp/catalog.py
+   | 结构参照 §10 附录 A。包含所有已支持的泛函（B3LYP, PBE0, wB97X-D4, wB97M-V, r2SCAN-3c, PBEh-3c, B97-3c, DLPNO-CCSD(T)），每个条目包含 basis_inline、supports_ri、basis、dispersion、builtin_dispersion、default_basis、default_dispersion（DLPNO 附加含 basis/auxJ/auxC 的 basis_block）
+
+   | 0.1a v1.6
+   | FUNCTIONAL_OPTIONS_MAP 同步扩展
+   | src/acp/catalog.py:169-194
+   | D3 修复: METHOD_META 含 8 个泛函，但 FUNCTIONAL_OPTIONS_MAP 当前仅 6 项（缺 PBEh-3c、B97-3c）。需补全条目（参照 §10）：两个 composite 方法的 basis=[""]、dispersion=["none"]
+
+   | 0.1b v1.6
+   | FIELD_DEFINITIONS["functional"] 同步扩展
+   | src/acp/catalog.py:199
+   | D3 修复: per_backend["orca"] 列表加入 "PBEh-3c"、"B97-3c"，使前端下拉项与 METHOD_META / FUNCTIONAL_OPTIONS_MAP 三表一致（R25 测试 3.8 依赖此同步）
+
+   | 0.2
+   | 修正 FUNCTIONAL_OPTIONS_MAP 色散数据
+   | src/acp/catalog.py:178-184
+   | wB97X-D4.dispersion: ["none"] → ["D4"]；wB97M-V.dispersion: ["none"] → ["VV10"]
+
+   | 0.3
+   | 10个字段添加 "advanced": true
+   | src/acp/catalog.py:245-302
+   | aux_basis, ri_approximation, grid, scf_convergence, opt_convergence, max_steps, recalc_hess, scale_factor, charge, multiplicity（参照 §11）
+
+   | 0.4
+   | 更新 aux_basis / ri_approximation 默认值
+   | src/acp/catalog.py:292-302
+   | aux_basis 默认: "" → "AutoAux"；选项新增 "AutoAux", "def2/J"；ri_approximation 默认: "none" → "RIJCOSX"
+
+   | 0.5
+   | 添加 _case_insensitive_get()
+   | src/acp/catalog.py
+   | 遍历 dict 做 k.lower() == key.lower() 匹配，供后续所有泛函名查找统一使用
+
+   | 0.6
+   | 合并 METHOD_META 到 METHOD_CATALOG
+   | src/acp/catalog.py (get_method_catalog)
+   | METHOD_CATALOG["method_meta"] = METHOD_META
+
+Phase 0 验证: v1.7 全部通过
+
+  
+curl localhost:8765/api/v1/method-catalog | python3 -c "import sys,json; d=json.load(sys.stdin); print(list(d.get('method_meta',{}).keys()))" — 输出应包含 B3LYP, PBE0, wB97X-D4, wB97M-V, r2SCAN-3c, PBEh-3c, B97-3c, DLPNO-CCSD(T)
+  
+python3 -c "import json; d=json.load(open('...')); assert d['method_meta']['wB97X-D4']['builtin_dispersion']=='D4'; assert d['field_definitions']['aux_basis']['advanced']==True"
+  
+v1.6: assert d['method_meta']['B3LYP']['basis_inline'] == True（普通 DFT 拼 basis 到 ! 行）
+  
+v1.6: assert d['method_meta']['DLPNO-CCSD(T)']['basis_inline'] == False（DLPNO 走 %basis 块）
+  
+v1.6: assert d['method_meta']['DLPNO-CCSD(T)']['basis_block']['basis'] == 'def2-TZVPP'
+  
+v1.6: 三表 key 一致性: assert set(d['method_meta'].keys()) == set(d['functional_options_map'].keys())（依赖 task 0.1a 完成）
+  
+sudo systemctl restart acp 后验证 API 响应包含所有新字段
+
+Phase 1 — 后端校验与集成完善 P1 高风险 v1.7 已完成
+
+状态: 已完成 (v1.7) 所有 task 1.1-1.10 已实施并通过 Phase 1 验证清单全部 7 个场景。审计偏差:
+
+  
+task 1.2 的 stage_mapping 扩展采用合并语义而非原 spec 的覆盖语义（修复 F1 落实），避免 preopt+dft_opt、censo+refinement_sp 等同目标冲突导致数据丢失
+  
+task 1.3 的 ETag 计算改为预序列化主体后返回 Response（修复 F2 落实），原 spec 让 FastAPI 二次序列化导致 ETag 与实际响应体不匹配
+  
+task 1.4 的 SUPPORTED_WORKFLOWS 派生逻辑在 catalog 活跃项之外显式 + ("fake",)（合成测试 workflow），原 spec 的 or w["id"] == "fake" 路径假设 fake 在 catalog 中（实际不在）
+  
+task 1.7 的 DLPNO 大小写归一扩展到 functional 字段本身的校验路径（normalize_and_validate_method_config），原 spec 仅覆盖 ORCA 后端路径
+
+目标: 后端校验逻辑与前端状态一致，API 性能可接受，workflow 数据源统一。
+
+ | # | 任务 | 文件 | 关键内容
+
+   | 1.1
+   | _resolve_field_default 支持 METHOD_META
+   | src/acp/catalog.py:1002-1029
+   | 在 FUNCTIONAL_OPTIONS_MAP 查选项前，先查 METHOD_META[functional].default_basis / .default_dispersion（使用 _case_insensitive_get）
+
+   | 1.2
+   | 扩展 stage_mapping
+   | src/acp/catalog.py:1151-1155
+   | 新增映射: refinement_sp→single_point, censo→single_point, preopt→optimization, crest→crest, optfreq→optimization；缺失的 level_id 不丢弃
+
+   | 1.3
+   | catalog 端点添加缓存头
+   | src/acp/api/v1_routes.py:1141-1152
+   | 使用 fastapi.Response 添加 ETag + Cache-Control: max-age=300；可选 If-None-Match → 304
+
+   | 1.4
+   | 统一 workflow 列表
+   | src/acp/scheduler/jobs.py:52
+   | SUPPORTED_WORKFLOWS 改为从 WORKFLOW_CATALOG 派生活跃项，消除 4 处不同步
+
+   | 1.5
+   | 审计 basis_block 消费路径
+   | src/cccp/qc/interfaces/orca.py
+    | DLPNO-CCSD(T) 的 auxJ/auxC 硬编码 → 改为从 extra_blocks 或 route_extras 参数化传入；若短期不做则 暂不暴露前端 UI
+
+     | 1.6
+     | ORCA 后端 basis_inline 判断参数化 v1.3
+     | src/cccp/qc/interfaces/orca.py:143
+     | 消除 ("pbeh-3c", "r2scan-3c") 硬编码列表，改为从 METHOD_META 读取 basis_inline + basis_block 属性驱动输入生成（R17）；为 B97-3c 等新复合方法做好准备
+
+    | 1.7
+    | DLPNO-CCSD(T) 分支统一大小写 v1.4
+    | src/cccp/qc/interfaces/orca.py:145
+    | R18: 当前 elif _method == "DLPNO-CCSD(T)" 是大小写敏感匹配，与上方 .lower() 不一致。改为 elif _method.lower() == "dlpno-ccsd(t)"，避免用户输入小写时落入 else 分支拼出错误 ! 行
+
+    | 1.8
+    | DLPNO %basis 块参数化 v1.4
+    | src/cccp/qc/interfaces/orca.py:147-151
+    | R19, R27: 当前 auxJ "def2/J" / auxC "def2-TZVPP/C" 完全硬编码，且忽略用户传入的 aux_basis。改为从 METHOD_META["DLPNO-CCSD(T)"].basis_block（或 route_extras 显式键）读取，并在 basis 字段非默认值时同步更新 basis "..." 行
+
+    | 1.9
+    | _clamp_to_functional 大小写一致性 v1.4
+    | src/acp/catalog.py:1032-1051
+    | R20: dispersion 已在 _CASE_INSENSITIVE_FIELDS（L1054）中，但 clamp 函数做大小写敏感比较。改为 current.lower() not in [a.lower() for a in allowed]，与下游 CLI emit 的 .lower() 行为一致，避免 "d4" → 改写 → "D4" → emit "d4" → ORCA 拒绝的链路
+
+    | 1.10
+    | SUPPORTED_WORKFLOWS 派生 + UI 过滤统一 v1.4
+    | src/acp/scheduler/jobs.py:52-65 + 前端 ACP_Workbench_v2.html:3722
+    | R14, R21: scheduler 端从 WORKFLOW_CATALOG 派生 status == "active" 的集合（保留 fake 测试项）；前端 L3722 的硬过滤改为读 catalog 的 visible 或 status 字段，消除三处漂移
+
+Phase 1 验证: v1.7 全部通过（7/7 场景）
+
+  
+POST /api/v1/validate-method 对 wB97M-V + dispersion=D4 → 报错（D4 不在允许列表 ["VV10"] 中）
+  
+POST /api/v1/validate-method 对 B3LYP + 无 basis → 自动填充 def2-TZVPP
+  
+curl -I localhost:8765/api/v1/method-catalog → 应有 Cache-Control 头
+  
+mechanism 在 catalog 中状态改为 "active"
+  
+v1.4: DLPNO-CCSD(T) 接收 aux_basis="cc-pVTZ/C" 时，ORCA 输入文件中 auxC 行变为 "cc-pVTZ/C"（R19）
+  
+v1.4: 提交 functional="dlpno-ccsd(t)"（小写）→ catalog 校验通过 + ORCA 生成正确 DLPNO 输入（R18）
+  
+v1.4: 提交 dispersion="d4" → 校验通过且规范化为 "D4"（R20）
+
+Phase 2 — 前端数据驱动重构 核心改造 v1.8 已完成
+
+状态: 已完成 (v1.8) 所有 task 2.0-2.6 已实施并通过 API 端到端验证（method_meta/field_definitions/validate-method 三处响应符合预期；JS 语法 node -e 解析通过）。实施后进行端到端代码审计，识别并修复 3 项问题（F7-F9），识别 3 项残余风险（R34-R36，详见 §12.7）。审计偏差:
+
+  
+task 2.1 / 2.2 中 isFieldAdvanced 和 getFieldDefault 直接读 methodCatalogCache.field_definitions 而非闭包变量 fieldDefs，附带消除 R26 闭包陈旧风险（原 spec 未明示，由 v1.8 审计 F-内嵌 落实）
+  
+task 2.3 的 .mc-builtin-badge 文案使用 t("modal.builtin") 走 i18n（中/英双语），原 spec 直接硬编码 "内置"
+  
+task 2.4 的 functional change 回调显式调用 scheduleValidate()，原 spec 漏写（functional 切换不会触发实时摘要刷新）
+  
+task 2.5 的 loadMethodCatalog() 增加 resp.ok + JSON shape 检查（由修复 F7 落实），原 spec 仅 try/catch 网络错误
+
+目标: 前端 5 处代码改动，实现"新增泛函零改前端"。
+
+ | # | 任务 | 对应改动 | 关键检查点
+
+   | 2.0
+   | 添加 lookupCI() 工具函数
+   | 改动 5
+   | 在 <script> 顶部声明 case-insensitive 查找函数（v1.6: 不再添加 methodMetaCache 派生变量，直接读 methodCatalogCache.method_meta）
+
+   | 2.1
+   | isFieldAdvanced() 改为数据驱动
+   | 改动 1
+   | 消除硬编码数组，改为读 methodCatalogCache.field_definitions[fieldName].advanced
+
+   | 2.2
+   | getFieldDefault() 支持泛函级
+   | 改动 2
+   | 新增第3参数 functional，调用方需传递；使用 lookupCI() 查 METHOD_META
+
+   | 2.3
+   | 色散框 builtin_dispersion 锁定
+   | 改动 3
+   | builtin_dispersion 非空时渲染锁定 badge，跳过下拉渲染
+
+   | 2.4
+   | functional change 联动升级
+   | 改动 4
+   | 切泛函时: 自动填 default_basis/default_dispersion；supports_ri=false 时强制清空 RI/aux
+
+   | 2.5
+   | loadMethodCatalog() 失败显式处理
+   | —
+   | 解决 R5/R16：保持调用在 DOMContentLoaded 启动序列（L4771）中；失败时设置 methodCatalogCache._loadFailed = true；updateConfigCards() 检测空缓存显示 loading 而非 "--"
+
+   | 2.6
+   | 审计所有 funcOptsMap[...] 访问改用 lookupCI()
+   | —
+   | L3986, L4037 两处的直接下标访问 → lookupCI(funcOptsMap, functional)
+
+Phase 2 验证: v1.8 已通过（API 端到端 + JS 语法）
+
+  
+node -e 解析整个 <script> 块（~139k 字符）→ OK
+  
+curl /api/v1/method-catalog → method_meta 含 8 泛函；set(method_meta)==set(functional_options_map)；advanced 字段共 10 个
+  
+POST /api/v1/validate-method B3LYP → 自动规范化 basis=def2-TZVPP / dispersion=D4 / ri=RIJCOSX / aux=AutoAux
+  
+POST /api/v1/validate-method wB97M-V（builtin_dispersion）→ dispersion=VV10，valid=true
+  
+POST /api/v1/validate-method r2SCAN-3c（supports_ri=false）→ basis="" / dispersion=none / aux_basis=""，valid=true
+  
+前端 HTML 已包含 lookupCI(7×)、mc-builtin-badge(2×)、catalog_load_failed(4×)、modal.builtin(4×) 等新标记
+
+未覆盖: §9 测试验证清单 14 个 UI 场景需浏览器人工触发（无 headless 测试基础设施），留待 Phase 3 自动化测试。本阶段已通过 API 层等价覆盖核心数据流。
+
+Phase 3 — 测试与质量保障 P2
+
+目标: 为所有新增逻辑建立自动化回归屏障。
+
+ | # | 任务 | 文件 | 内容
+
+   | 3.1
+   | test_method_meta_present_in_catalog
+   | tests/test_acp_catalog.py
+   | 断言 get_method_catalog()["method_meta"] 非空，包含所有 8 个泛函
+
+   | 3.2
+   | test_advanced_fields_marked
+   | 断言 10 个字段的 .advanced == True，其余字段 .advanced 为 undefined/False
+
+   | 3.3
+   | test_builtin_dispersion_locking
+   | wB97M-V builtin_dispersion = "VV10"，dispersion 允许列表仅 ["VV10"]；wB97X-D4 同理 D4
+
+   | 3.4
+   | test_default_basis_per_functional
+   | B3LYP → def2-TZVPP；DLPNO-CCSD(T) → def2-TZVPP（单选项）；r2SCAN-3c → ""
+
+   | 3.5
+   | test_supports_ri_disables_ri_fields
+   | r2SCAN-3c/PBEh-3c/DLPNO-CCSD(T) 的 supports_ri == False，校验接口强制 ri=none, aux=""
+
+   | 3.6
+   | test_validate_rejects_invalid_dispersion
+   | wB97M-V + dispersion=D3BJ → 校验失败；B3LYP + dispersion=D4 → 校验通过
+
+   | 3.7
+   | Phase 1 校验端到端测试
+   | tests/
+   | test_resolve_field_default_respects_method_meta（R9）、test_stage_mapping_covers_all_levels（R12）
+
+   | 3.8
+   | 三表一致性断言 v1.4
+   | tests/test_acp_catalog.py
+   | test_functional_keys_three_table_consistent（R25）— 断言 FIELD_DEFINITIONS["functional"].per_backend["orca"]、FUNCTIONAL_OPTIONS_MAP.keys()、METHOD_META.keys() 三者集合相等（忽略大小写）
+
+   | 3.9
+   | DLPNO 大小写归一
+   | test_dlpno_case_insensitive_match（R18）— 输入 "dlpno-ccsd(t)" 经 normalize_and_validate_method_config 后 functional 仍为 "DLPNO-CCSD(T)"
+
+   | 3.10
+   | DLPNO aux_basis 消费
+   | test_dlpno_aux_basis_propagated_to_basis_block（R19）— 标记 xfail 直到任务 1.8 完成；通过后断言 ORCA 输入包含 auxC "cc-pVTZ/C"
+
+   | 3.11
+   | dispersion 大小写归一
+   | test_dispersion_case_insensitive_clamp（R20）— 提交 dispersion="d4" → clamp 后为 "D4"；提交非法色散如 "xyz" → 报错
+
+   | 3.12
+   | workflow 漂移检测
+   | test_supported_workflows_matches_catalog_active（R14, R21）— 断言 set(SUPPORTED_WORKFLOWS) - {"fake"} 等于 catalog 中 status == "active" 的 ID 集合
+
+   | 3.13
+   | DLPNO basis 单选项锁定
+   | test_dlpno_basis_locked（R27）— DLPNO 的 basis 列表为 ["def2-TZVPP"]，前端不应渲染下拉而应锁定 badge（参考 §6 builtin_dispersion 模式）
+
+Phase 3 验证: pytest tests/test_acp_catalog.py -v 全部通过。测试计数: 现状 6 个 + v1.4 新增 7 个（test 3.7-3.13）+ 后续扩展 ≥6 个 = ≥19 个。
+
+Phase 4 — 长期优化 P3
+
+ | # | 任务 | 说明
+
+   | 4.1
+   | 前端 catalog 逻辑 IIFE 提取
+   | 将 isFieldAdvanced、getFieldDefault、getFieldOptions、lookupCI 提取为独立模块，减少全局变量污染
+
+   | 4.2
+   | API 响应体积优化
+   | _ALL_BASIS_SETS 只传一次（顶层 basis_catalog 字段），METHOD_META 和 functional_options_map 用索引引用去重
+
+   | 4.3
+   | basis_block 后端消费
+   | ORCA 适配器支持从 level 配置中读取 basis_block 并渲染为 %basis 段落（非 DLPNO 方法也可自定义辅助基组）
+
+   | 4.4
+   | 前端 ES module + Vite 迁移
+   | 从单文件 ~5000 行的 HTML 迁移到模块化 JS 构建流程，支持 tree-shaking、单元测试、热更新
+
+   | 4.5
+   | 补全 METHOD_CATALOG["backends"] v1.4
+   | R22: 加入 censo、shermo，并补充 version、path、available 字段，供前端做前置环境检查（如 ensemble/energy/optfreqsp 提交前校验 censo 二进制存在）
+
+   | 4.6
+   | 消除 fieldDefs 闭包陈旧引用 v1.4
+   | R26: 前端 openMethodConfig 中 var fieldDefs = methodCatalogCache.field_definitions || {} 是闭包捕获；若 catalog 重新加载（如长时停留自动刷新），闭包内 fieldDefs 与新缓存不同步。改为内部函数直接读 methodCatalogCache.field_definitions
+
+Phase 4 验证: 不应在 Phase 0-3 完成前启动。不阻塞核心功能上线。
+
+1.5 明确不修复项（Non-Goals） v1.6
+
+本节集中声明本设计方案显式不修复的项目，避免实施者重复评估。已解决的风险（R4/R23）和已合并的风险（R13→R19）亦在此归档说明。
+
+ | 编号 | 项目 | 不修复原因 | 替代方案
+
+   | R4
+   | functional_options_map key 强制全小写
+   | v1.5 改为 case-insensitive lookup，原始问题已消解
+   | —
+
+   | R13
+   | basis_block 字段无后端消费（独立追踪）
+   | v1.6 合并入 R19（同问题升级为 P0）
+   | 见 R19 / Phase 1 task 1.8
+
+   | R23
+   | composite 字段命名歧义
+   | v1.5 重命名为 basis_inline
+   | —
+
+   | R28
+   | functional change 回调闭包捕获旧 engine（短期修复）
+   | v1.5 降级 P3：当前 RI/aux 字段仅 orca 后端支持，切换 engine 会触发 rebuildLevelCard 重建监听器，无实际触发路径
+   | §7 目标代码加防御性注释；若未来多 engine 支持再处理（Phase 4）
+
+1.6 决策日志（Decision Log） v1.6
+
+本节集中记录影响设计方案的重要决策，便于追溯。
+
+ | 日期 | 版本 | 决策 | 依据 | 影响
+
+   | 2026-07-20
+   | v1.3
+   | key 策略从"强制全小写"改为"case-insensitive lookup"
+   | 保留 wB97M-V/DLPNO-CCSD(T) 等化学标准写法
+   | R4 状态→已解决；新增 _case_insensitive_get + lookupCI
+
+   | 2026-07-20
+   | v1.4
+   | R13 合并入 R19（同问题升级）
+   | R13 与 R19 描述同一 DLPNO %basis 块硬编码问题
+   | R13 标 badge-resolved；统一在 R19 修复路径
+
+   | 2026-07-20
+   | v1.5
+   | R23 composite → basis_inline 全局重命名
+   | DLPNO composite=false 但行为类似 composite，命名歧义
+   | R23 状态→已解决；§2.4/§10/Phase 0.1/Phase 1.6 全部同步
+
+   | 2026-07-20
+   | v1.5
+   | R28 P1 → P3 降级
+   | RI/aux 字段当前仅 orca 后端有；切 engine 会触发 rebuildLevelCard
+   | R28 移至 Phase 4；§7 加防御性注释
+
+   | 2026-07-20
+   | v1.6
+   | 删除 methodMetaCache 派生变量
+   | v1.5 声明后所有代码示例从不使用，造成 dead variable
+   | §8.1/§8.2 改为直接访问 methodCatalogCache.method_meta
+
+   | 2026-07-20
+   | v1.6
+   | R4/R23/R13 badge 改用 badge-resolved（绿色）
+   | 避免视觉信号（P1 黄 badge）与文字信号（"已解决"）冲突
+   | 新增 CSS 类；§12.1 总览与 §1.4 Phase 列表保持一致
+
+   | 2026-07-20
+   | v1.6
+   | Phase 0 拆分 task 0.1a/0.1b 同步另两表
+   | METHOD_META 含 8 个泛函，但 FUNCTIONAL_OPTIONS_MAP/FIELD_DEFINITIONS 仅 6 项
+   | 三表一致性测试 3.8 依赖此同步
+
+   | 2026-07-20
+   | v1.7
+   | FUNCTIONAL_OPTIONS_MAP 改为从 METHOD_META 自动派生（F4）
+   | DevDoc §2.1 原本要求"value 由 METHOD_META 自动生成"，v1.6 实施时仍独立维护两表，存在漂移风险
+   | 新增 _derive_functional_options_map()；三表一致性现由结构保证而非测试守护
+
+   | 2026-07-20
+   | v1.7
+   | _ALL_BASIS_SETS 改为 tuple（F3 落实 R24）
+   | 9 处共享同一 list 引用，存在 mutation 风险
+   | tuple 不可变；JSON 序列化对 tuple/list 等价，API 表面不变
+
+   | 2026-07-20
+   | v1.7
+   | stage_mapping 采用合并语义（F1）
+   | 原 spec 的"覆盖"语义导致 preopt+dft_opt 同映射到 optimization 时数据丢失
+   | 改为 converted.setdefault(new_stage, {}) 后逐字段合并，后处理层级（DFT 优于 xTB）天然胜出
+
+   | 2026-07-20
+   | v1.7
+   | catalog 端点 ETag 改为预序列化主体（F2）
+   | 原 spec 让 FastAPI 二次序列化 dict，ETag 哈希与实际响应体不一致；304 路径返回 {} 违反 RFC 7232
+   | 函数返回 Response(content=body, media_type="application/json")；304 返回空主体
+
+   | 2026-07-20
+   | v1.7
+   | SUPPORTED_WORKFLOWS 派生显式 + ("fake",)
+   | 原 spec 的 or w["id"] == "fake" 假设 fake 在 catalog 中，实际不在（合成测试 workflow）
+   | catalog 活跃项 + ("fake",)，使测试 3.12 的 set(SUPPORTED_WORKFLOWS) - {'fake'} 等式仍然成立
+
+1.7 审计修复记录（Audit Fix Records） v1.7
+
+v1.7 对 Phase 0 / Phase 1 已实施的代码进行了端到端审计，识别 6 项必须修复的问题（F1-F6）和 5 项残余风险（R29-R33，详见 §12.6）。修复按优先级分类，全部已完成并通过既有测试套件回归（673 passed, 7 skipped；4 个失败为本审计无关的预先存在的 lite/censo-lite 协议名漂移问题）。
+
+ | 编号 | 优先级 | 位置 | 问题 | 修复 | 状态
+
+   | F1
+   | P0
+   | src/acp/catalog.py
+convert_method_levels_to_protocol_levels
+   | task 1.2 扩展 stage_mapping 后引入同目标冲突：preopt→optimization 与 dft_opt→optimization 在 confsearch schema 中并存；censo→single_point 与 refinement_sp→single_point 在 censo_energy schema 中并存。原"覆盖"语义使后处理层级的数据被先处理层级覆盖（或反之，取决于字典迭代顺序），静默丢失字段
+   | 改为 合并语义：new_level = converted.setdefault(new_stage, {}) 后逐字段写入，后处理层级（DFT 优于 xTB、refinement 优于 CENSO preset）天然胜出
+   | 已完成
+
+   | F2
+   | P0
+   | src/acp/api/v1_routes.py
+get_method_catalog
+   | task 1.3 实现 ETag 用 json.dumps(sort_keys=True) 哈希，但函数返回 dict 让 FastAPI 二次序列化（默认 sort_keys=False），导致 ETag 与实际响应体字节不一致，客户端永远无法匹配 → 缓存形同虚设。同时 304 路径返回 {} 违反 RFC 7232 §4.1（304 响应不得有 body）
+   | 函数返回 Response(content=body, media_type="application/json", headers=...)，body 为预序列化字节；304 路径返回 Response(status_code=304, headers=...) 不带 body。验证：sha256(r.content) == etag
+   | 已完成
+
+   | F3
+   | P1
+   | src/acp/catalog.py
+_ALL_BASIS_SETS
+   | R24（v1.4 已识别但未修复）：9 处（METHOD_META 4 项 DFT + FUNCTIONAL_OPTIONS_MAP 4 项 DFT + FIELD_DEFINITIONS["basis"]）共享同一 list 引用，任何一处 .append()/[i]= 会污染所有 entry
+   | 将 _ALL_BASIS_SETS 改为 tuple[str, ...]（不可变）。R24 改进建议中的"或将其改为 tuple（不可变）"分支。同时把 METHOD_META 中所有 list 字面量改为 tuple，FUNCTIONAL_OPTIONS_MAP 通过 _derive_functional_options_map() 转回 list
+   | 已完成
+
+   | F4
+   | P1
+   | src/acp/catalog.py
+FUNCTIONAL_OPTIONS_MAP
+   | DevDoc §2.1 原本要求 functional_options_map"值由 METHOD_META 自动生成"，v1.6 实施时仍独立维护两表 → 新增泛函时易遗漏同步，R25 测试虽可发现但属事后纠错
+   | 新增 _derive_functional_options_map() 在导入时从 METHOD_META 派生 {func: {basis, dispersion}}，tuple→list 转换以保持 JSON 序列化兼容。两表一致性由结构保证而非测试守护
+   | 已完成
+
+   | F5
+   | P2
+   | src/cccp/qc/interfaces/orca.py
+_build_input_blocks
+   | task 1.8 让 DLPNO 分支消费 extra_blocks 中的 dict（auxJ/auxC 覆盖），但下游的 extra_blocks 字符串化循环 blocks.append(str(blk)) 不区分类型，dict 会被 str() 渲染成 {'auxJ': '...'} 垃圾输入附加到 ORCA 输入末尾
+   | 在字符串化循环中跳过 isinstance(blk, dict) 项；dict 路径已在 DLPNO 分支提前消费
+   | 已完成
+
+   | F6
+   | P2
+   | src/acp/catalog.py
+normalize_and_validate_method_config
+   | task 1.9 + R18 修复让 _CASE_INSENSITIVE_FIELDS 与 functional 字段都做大小写不敏感匹配，但两分支代码块逐字复制（DRY 违反），后续维护时易出现一处改了另一处漏改
+   | 抽取 _match_option_case_insensitive(options, value) -> (idx, canonical) | None 辅助函数，两处统一调用；将 functional 显式纳入同一 if 分支（仅 solvent_model 在写入时小写化，其余字段保留 canonical 大小写）
+   | 已完成
+
+1.8 阶段完成总结（Phase Completion Summary） v1.7 v1.8 增补 Phase 2
+
+Phase 0 — 后端数据基础设施
+
+ | task | 描述 | 状态 | 实施偏差
+
+ | 0.1 | 新增 METHOD_META 字典（8 泛函） | 完成 | —
+
+ | 0.1a | FUNCTIONAL_OPTIONS_MAP 同步扩展（8 泛函） | 完成 (F4 替代) | 改为从 METHOD_META 自动派生，不再独立维护
+
+ | 0.1b | FIELD_DEFINITIONS["functional"] 同步扩展 | 完成 | —
+
+ | 0.2 | 修正 FUNCTIONAL_OPTIONS_MAP 色散数据 | 完成 (F4 替代) | 同上，wB97X-D4=["D4"]/wB97M-V=["VV10"] 现派生自 METHOD_META
+
+ | 0.3 | 10 字段添加 advanced: true | 完成 | —
+
+ | 0.4 | 更新 aux_basis/ri_approximation 默认值 | 完成 | —
+
+ | 0.5 | 添加 _case_insensitive_get() | 完成 | —
+
+ | 0.6 | 合并 METHOD_META 到 METHOD_CATALOG | 完成 | —
+
+Phase 1 — 后端校验与集成完善
+
+ | task | 描述 | 状态 | 实施偏差
+
+ | 1.1 | _resolve_field_default 支持 METHOD_META | 完成 | —
+
+ | 1.2 | 扩展 stage_mapping | 完成 (F1) | 合并语义替代覆盖语义
+
+ | 1.3 | catalog 端点添加缓存头 | 完成 (F2) | 预序列化 Response 替代 FastAPI 二次序列化
+
+ | 1.4 | 统一 SUPPORTED_WORKFLOWS | 完成 | + ("fake",) 显式追加
+
+ | 1.5/1.6/1.7/1.8 | ORCA basis_inline + DLPNO %basis 参数化 + 大小写 | 完成 (F5) | extra_blocks 字典消费路径已修复
+
+ | 1.9 | _clamp_to_functional 大小写一致性 | 完成 (F6) | + functional 字段大小写归一
+
+ | 1.10 | SUPPORTED_WORKFLOWS + UI 过滤统一 | 完成 | visible: True/False 加到所有 catalog 条目
+
+Phase 2 — 前端数据驱动重构 v1.8
+
+ | task | 描述 | 状态 | 实施偏差
+
+ | 2.0 | 添加 lookupCI() 工具函数 | 完成 | —
+
+ | 2.1 | isFieldAdvanced() 改为数据驱动 | 完成 | 附带消除 R26（直接读 methodCatalogCache 而非闭包 fieldDefs）
+
+ | 2.2 | getFieldDefault() 支持泛函级 | 完成 | 同上，附带消除 R26；"functional" 字段自身调用时不传第 3 参（避免递归）
+
+ | 2.3 | 色散框 builtin_dispersion 锁定 | 完成 (F9) | badge 文案走 i18n（中/英双语），原 spec 硬编码"内置"
+
+ | 2.4 | functional change 联动升级 | 完成 (F8) | default_basis/default_dispersion 用 !== undefined 替代 || 防止空字符串误判；回调末尾补 scheduleValidate()
+
+ | 2.5 | loadMethodCatalog() 失败显式处理 | 完成 (F7) | 增加 resp.ok + JSON shape 检查；保留旧缓存避免热刷新失败破坏可用 UI
+
+ | 2.6 | 审计所有 funcOptsMap[...] 访问改用 lookupCI() | 完成 | —
+
+1.9 Phase 2 代码质量审计（Phase 2 Audit） v1.8
+
+v1.8 对 Phase 2 已实施的前端代码（frontend/ACP_Workbench_v2.html 共 ~5016 行）进行了端到端审计，识别 3 项必须修复的问题（F7-F9） 和 3 项残余风险（R34-R36，详见 §12.7）。修复按优先级分类，全部已完成并通过 API 层等价回归（validate-method 3 个场景 + JS 语法解析）。
+
+ | 编号 | 优先级 | 位置 | 问题 | 修复 | 状态
+
+   | F7
+   | P0
+   | frontend/ACP_Workbench_v2.html
+loadMethodCatalog
+   | task 2.5 实现仅 try/catch 包裹 fetch，但 fetch() 只在网络层错误时 reject；HTTP 5xx（如 catalog.py 导入异常）会以"成功响应"返回错误体，resp.json() 可能解析为非目录 dict 或抛错，前者导致 methodCatalogCache 静默被垃圾数据污染，_loadFailed 仍为 false，updateConfigCards 永远停留在"加载中"
+   | 显式 if (!resp.ok) throw ... + JSON shape 守卫（typeof === "object" && !Array.isArray）；catch 分支保留旧缓存而非覆盖，避免热刷新失败破坏可用 UI
+   | 已完成
+
+   | F8
+   | P1
+   | frontend/ACP_Workbench_v2.html
+functional change 回调
+   | task 2.4 目标代码用 liveFuncMeta.default_basis || newFuncFilter.basis[0] 做默认值回退。JS 的 || 对所有 falsy 值（含空字符串）触发回退。当前 r2SCAN-3c/PBEh-3c/B97-3c 的 default_basis="" 且 basis=[""]，碰巧两者一致无 bug；但若未来新增泛函 default_basis="" 而 basis[0]="def2-SVP"，|| 会跳过空字符串默认值错误回退到首个选项。default_dispersion="none"（非空字符串）目前不触发，但同理脆弱
+   | 改为显式 liveFuncMeta.default_basis !== undefined ? ... : ...（与 getFieldDefault Priority 1 的模式一致）；附带在回调末尾补 scheduleValidate()（原 spec 漏写，导致切泛函后实时摘要不刷新）
+   | 已完成
+
+   | F9
+   | P2
+   | frontend/ACP_Workbench_v2.html
+builtin_dispersion badge
+   | task 2.3 实现硬编码 textContent = builtin + " (内置)" 和 title = "此泛函已内置色散校正..."，违反文件其余 UI 文案的 t("modal.xxx") i18n 约定；EN 用户在 lang 切换后仍看到中文
+   | 新增 modal.builtin（中："内置" / 英："built-in"）和 modal.builtin_dispersion_hint（中/英）两条 i18n key；badge 文案与 title 走 t()
+   | 已完成
+
+审计未修复（详见 §12.7）:
+
+  
+R34 (P2) RI/aux 字段在初始渲染时不强制 supports_ri 锁定 — 仅 functional change 回调清空，profile 预载入或手工编辑 stale 数据时 UI 与服务器预期不一致
+  
+R35 (P3) updateConfigCards 重试链接用 inline onclick，违反 CSP；当前无 CSP 部署但前端工程化时应重构
+  
+R36 (P3) Phase 2 改动依赖 §9 测试验证清单 14 个 UI 场景，但无 headless 浏览器测试基础设施；当前仅 API 层等价覆盖，UI 层回归保护留待 Phase 3
+
+2. API 响应结构变更
+
+2.1 新增顶层字段
+
+GET /api/v1/method-catalog 返回的 JSON 新增以下字段:
+
+ | 字段 | 类型 | 说明
+
+   | method_meta NEW
+   | dict
+   | 以泛函名为 key（标准写法，一致于 FIELD_DEFINITIONS 下拉值），值为元数据对象（详见 附录 A）
+
+   | functional_options_map MOD
+   | dict
+   | 结构不变，但值由 METHOD_META 自动生成（key 使用标准写法，一致于 FIELD_DEFINITIONS 下拉值）
+
+2.2 functional_options_map 与 method_meta 的 key 策略
+
+key 保留标准写法，不做大小写变换。泛函名如 wB97M-V、DLPNO-CCSD(T)、r2SCAN-3c 有其化学文献中的标准写法，不可强制改为全小写。
+
+// key 始终使用标准写法
+{ "wB97M-V": {"basis": [...], "dispersion": [...]} }
+{ "DLPNO-CCSD(T)": {"basis": [...], "dispersion": [...]} }
+
+查找时使用 case-insensitive 匹配，而非修改 key 本身。前后端分别封装:
+
+ | 层 | 方案
+
+ | 后端 Python | _case_insensitive_get(mapping, key) — 遍历 dict 做 k.lower() == key.lower() 匹配
+
+ | 前端 JS | lookupCI(obj, key) — 遍历对象做 k.toLowerCase() === key.toLowerCase() 匹配
+
+此方案同时满足:
+  (1) API 返回的 key 保持标准写法，下游可直接阅读;
+  (2) 前端下拉值和用户输入的大小写差异不会导致查找失败。
+
+2.3 field_definitions 新增属性
+
+以下字段新增 "advanced": true:
+
+ | 字段 | 新增属性
+
+ | aux_basis | "advanced": true
+
+ | ri_approximation | "advanced": true
+
+ | grid | "advanced": true
+
+ | scf_convergence | "advanced": true
+
+ | opt_convergence | "advanced": true
+
+ | max_steps | "advanced": true
+
+ | recalc_hess | "advanced": true
+
+ | scale_factor | "advanced": true
+
+ | charge | "advanced": true
+
+ | multiplicity | "advanced": true
+
+默认值也同步更新（详见 附录 B）。
+
+2.4 method_meta 条目结构
+
+{
+  "B3LYP": {
+    "basis_inline": true,         // 基组是否拼在 ! 行（true=拼，false=不拼——复合方法或 %basis 块法）
+    "supports_ri": true,          // 是否支持 RI 加速
+    "default_basis": "def2-TZVPP", // 选择此泛函时默认基组
+    "default_dispersion": "D4",    // 选择此泛函时默认色散
+    "builtin_dispersion": null,    // 内置色散名称；null=可配置, "D4"=锁定
+    "basis": ["def2-SV(P)","def2-SVP",...],   // 允许的基组列表
+    "dispersion": ["none","D3","D3BJ","D4"],  // 允许的色散列表
+  }
+}
+
+完整字段定义见 附录 A。
+
+3. 前端改动清单
+
+ | # | 改动 | 影响行 | 类别 | 详情
+
+   | 1
+   | isFieldAdvanced() 数据驱动
+   | L3864-3867
+   | 重构
+   | §4
+
+   | 2
+   | getFieldDefault() 泛函级默认值
+   | L3853-3862（定义）；调用点 L3982 + L3984
+   | 重构
+   | §5
+
+   | 3
+   | 色散框 builtin_dispersion 锁定
+   | 渲染逻辑（buildFieldRow 内 L3989 分支前）
+   | 新增
+   | §6
+
+   | 4
+   | functional change 联动升级
+   | L4034-4054（buildFieldRow 内）
+   | 重构
+   | §7
+
+   | 5
+   | 全局常量初始化
+   | L3461 附近（声明）；DOMContentLoaded L4752-4806（初始化）
+   | 新增
+   | §8
+
+4. 改动 1: isFieldAdvanced() 数据驱动
+
+当前代码 (L3864-3867)
+
+function isFieldAdvanced(fieldName) {
+    var adv = ["aux_basis", "ri_approximation", "grid", "scf_convergence",
+               "opt_convergence", "max_steps", "recalc_hess", "charge",
+               "multiplicity", "scale_factor"];
+    return adv.indexOf(fieldName) >= 0;
+}
+
+目标代码
+
+function isFieldAdvanced(fieldName) {
+    var fd = (methodCatalogCache.field_definitions || {})[fieldName];
+    return !!(fd && fd.advanced);
+}
+
+说明
+
+  
+完全消除硬编码列表
+  
+哪个字段是"高级"不由前端决定，由 FIELD_DEFINITIONS[field].advanced 决定
+  
+后端加一个新高级字段 → 前端自动生效，无需改前端
+
+返回值类型变更
+
+ | 方面 | 旧代码 | 新代码
+
+ | 返回类型 | number (索引: 0..n，未找到返回 -1) | boolean (true/false)
+
+ | truthiness | 始终 truthy（-1 也是 truthy） | 精确布尔值
+
+ | 调用方兼容性 | if (isFieldAdvanced(fn)) 两种返回值均兼容
+
+现有唯一调用方（L3970 if (isFieldAdvanced(fn))）无需修改，但未来代码不应使用 >= 0 判据。
+
+5. 改动 2: getFieldDefault() 泛函级默认值
+
+当前代码 (L3853-3861)
+
+function getFieldDefault(fieldName, engine) {
+    var fd = fieldDefs[fieldName];
+    if (!fd) return "";
+    var dflt = fd.default || {};
+    if (typeof dflt === "object" && !Array.isArray(dflt)) {
+      if (dflt[engine] !== undefined) return dflt[engine];
+      if (dflt["*"] !== undefined) return dflt["*"];
+    }
+    return typeof dflt === "string" || typeof dflt === "number" ? dflt : "";
+}
+
+目标代码
+
+function getFieldDefault(fieldName, engine, functional) {
+    // ── 第一优先级: 泛函级默认值 (METHOD_META) ──
+    if (functional) {
+        var funcMeta = lookupCI(methodCatalogCache.method_meta || {}, functional);
+        if (funcMeta) {
+            // RI/aux_basis: 泛函不支持则强制返回 无
+            if (!funcMeta.supports_ri) {
+                if (fieldName === "ri_approximation") return "none";
+                if (fieldName === "aux_basis")          return "";
+            }
+            // default_basis / default_dispersion
+            if (fieldName === "basis"       && funcMeta.default_basis       !== undefined) return funcMeta.default_basis;
+            if (fieldName === "dispersion"  && funcMeta.default_dispersion  !== undefined) return funcMeta.default_dispersion;
+        }
+    }
+
+    // ── 第二优先级: 全局默认值 (FIELD_DEFINITIONS) ──
+    var fd = (methodCatalogCache.field_definitions || {})[fieldName];
+    if (!fd) return "";
+    var dflt = fd.default || {};
+    if (typeof dflt === "object" && !Array.isArray(dflt)) {
+        if (dflt[engine] !== undefined) return dflt[engine];
+        if (dflt["*"] !== undefined) return dflt["*"];
+    }
+    return typeof dflt === "string" || typeof dflt === "number" ? dflt : "";
+}
+
+调用方变更
+
+所有调用 getFieldDefault() 的地方需传第三个参数 functional。v1.4 勘误: 当前共有 2 处调用点（v1.3 文档漏列 L3984）:
+
+ | 行号 | 上下文 | 当前签名
+
+ | L3982 | buildFieldRow 内字段值回退 | getFieldDefault(fieldName, engine)
+
+ | L3984 | buildFieldRow 内 functional 字段本身回退 | getFieldDefault("functional", engine)
+
+// 旧
+var curVal = levelState[fieldName] !== undefined
+    ? levelState[fieldName]
+    : getFieldDefault(fieldName, engine);
+
+// 新
+var functional = levelState.functional || getFieldDefault("functional", engine) || "";
+var curVal = levelState[fieldName] !== undefined
+    ? levelState[fieldName]
+    : getFieldDefault(fieldName, engine, functional);
+
+此调用出现在 buildLevelCard() 函数内 buildFieldRow()（约 L3982）和 functional 字段下拉初始值设置处。
+
+v1.4 L3984 特殊处理: 该行调用 getFieldDefault("functional", engine) 是为了取 functional 字段本身的全局默认值，不需要传第三个参数（否则递归）。保持 2 参数签名即可。但需要在新函数中保护 functional 为 undefined 的路径（见 R6 改进建议）。
+
+6. 改动 3: 色散框 builtin_dispersion 锁定
+
+6.1 行为定义
+
+ | builtin_dispersion 值 | 前端渲染
+
+ | null / 不存在 | 普通下拉可选框
+
+ | "D4" | 锁定文本框 "D4 (内置)"，禁止修改
+
+ | "VV10" | 锁定文本框 "VV10 (内置)"，禁止修改
+
+6.2 实现位置
+
+在 buildFieldRow("dispersion", dest) 的渲染分支（约 L4003 附近）之前插入判断:
+
+function buildFieldRow(fieldName, dest) {
+    // ... 现有变量声明 ...
+
+    // ── 新增: builtin_dispersion 锁定 ──
+    if (fieldName === "dispersion") {
+        var funcMeta = lookupCI(methodCatalogCache.method_meta || {}, functional);
+        if (funcMeta && funcMeta.builtin_dispersion) {
+            var fDiv = document.createElement("div");
+            fDiv.className = "mc-field";
+            var lbl = document.createElement("label");
+            lbl.textContent = fieldName.replace(/_/g, " ");
+            fDiv.appendChild(lbl);
+
+            var span = document.createElement("span");
+            span.className = "mc-builtin-badge";
+            span.textContent = funcMeta.builtin_dispersion + " (\u5185\u7f6e)";
+            span.title = "\u6b64\u6cdb\u51fd\u5df2\u5185\u7f6e\u8272\u6563\u6821\u6b63\uff0c\u65e0\u9700\u989d\u5916\u6307\u5b9a";
+            fDiv.appendChild(span);
+
+            // 隐藏字段仍写入 wizardState
+            getLevelState(lvDef.level_id).dispersion = funcMeta.builtin_dispersion;
+
+            dest.appendChild(fDiv);
+            return; // 跳过后续下拉渲染
+        }
+    }
+
+    // ... 现有下拉渲染逻辑 ...
+}
+
+6.3 样式
+
+/* 在 <style> 块中添加 */
+.mc-builtin-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg3);
+    color: var(--fg2);
+    font-size: 13px;
+    cursor: default;
+}
+
+7. 改动 4: functional change 联动升级
+
+7.1 当前逻辑
+
+当用户切换泛函（L4035-4054），前端做两件事:
+
+  
+从 FUNCTIONAL_OPTIONS_MAP 读新的 basis/dispersion 允许选项
+  
+如果当前 basis/dispersion 不在新选项中，重置为第一个选项
+
+v1.4 位置勘误: v1.3 文档称 funcOptsMap 是 buildLevelCard() 内闭包变量，实际它在嵌套的 buildFieldRow() 内 L3985 声明: var funcOptsMap = (methodCatalogCache && methodCatalogCache.functional_options_map) || {};。所有相关行号 L3986 / L4037 都在 buildFieldRow 作用域内（详见 R15）。
+
+7.2 新增逻辑
+
+切换泛函时还需要:
+
+  
+自动填充泛函级默认值（default_basis/default_dispersion）
+  
+如果 supports_ri == false，将 ri_approximation 设为 "none"，aux_basis 清空
+
+目标代码
+
+if (fieldName === "functional") {
+    sel.addEventListener("change", function() {
+        var newFunctional = sel.value;
+        var st = getLevelState(lvDef.level_id);
+        var funcMeta = lookupCI(methodCatalogCache.method_meta || {}, newFunctional);
+        var newFuncFilter = lookupCI(funcOptsMap, newFunctional); // 注意: case-insensitive 匹配
+
+        // 1. 基组合法性检查 + 默认值填充
+        if (newFuncFilter && newFuncFilter.basis) {
+            var curBasis = st.basis;
+            if (!curBasis || curBasis === "__custom__" || newFuncFilter.basis.indexOf(String(curBasis)) < 0) {
+                st.basis = funcMeta ? (funcMeta.default_basis || newFuncFilter.basis[0]) : newFuncFilter.basis[0];
+            }
+        }
+
+        // 2. 色散合法性检查 + 默认值填充
+        if (newFuncFilter && newFuncFilter.dispersion) {
+            var curDisp = st.dispersion;
+            if (!curDisp || newFuncFilter.dispersion.indexOf(String(curDisp)) < 0) {
+                st.dispersion = funcMeta ? (funcMeta.default_dispersion || newFuncFilter.dispersion[0]) : newFuncFilter.dispersion[0];
+            }
+        }
+
+        // 3. RI/aux_basis: 泛函不支持则强制关闭
+        if (funcMeta && !funcMeta.supports_ri) {
+            st.ri_approximation = "none";
+            st.aux_basis = "";
+        } else {
+            // 泛函支持 RI → 回退到字段全局默认值
+            // 注意: 切泛函本质是"重新开始"的语义，因此强制重置所有欠定状态
+            //
+            // engine 变量来自 buildFieldRow 闭包。当前 RI/aux 字段仅 orca 后端
+            // 支持，切换 engine 后 rebuildLevelCard 会重建监听器，无陈旧引用风险。
+            // 若未来多 engine 支持这些字段，改为: 回调内重新读取 currentEngine (R28).
+            if (st.ri_approximation === undefined || st.ri_approximation === "" || st.ri_approximation === "none")
+                st.ri_approximation = getFieldDefault("ri_approximation", engine, newFunctional);
+            if (st.aux_basis === undefined || st.aux_basis === "")
+                st.aux_basis = getFieldDefault("aux_basis", engine, newFunctional);
+        }
+
+        rebuildLevelCard(lvDef.level_id);
+    });
+}
+
+注意: 旧代码中 funcOptsMap[functional] 使用精确 key 匹配。新代码改用 lookupCI() 做 case-insensitive 查找，API 返回的 key 保持标准写法不变（详见 §2.2）。
+
+RI 重置策略说明
+
+第 3 步中 ri_approximation === "none" 纳入重置条件的原因:
+
+ | 路径 | 效果
+
+ | r2SCAN-3c → B3LYP | r2SCAN-3c 强制 ri_approximation="none"；切到 B3LYP 后 "none" 匹配条件 → 重置为 "RIJCOSX"
+
+ | B3LYP 用户主动选 "none" → PBE0 | "none" 匹配条件 → 重置为 "RIJCOSX"（切泛函是重新开始，合理）
+
+ | B3LYP 用户选 "RIJK" → wB97M-V | "RIJK" 不匹配条件 → 保留用户选择
+
+8. 改动 5: 全局常量初始化
+
+8.1 新增变量声明
+
+在 methodCatalogCache 声明后（约 L3461），无需新增派生变量：method_meta 通过 methodCatalogCache.method_meta 直接访问，配合 lookupCI() 即可。
+
+var methodCatalogCache = {};   // 已有，加载后包含 method_meta 字段
+// 不再单独声明 methodMetaCache — v1.6 决策：避免出现"声明但代码示例从不使用"的 dead variable（详见 D2）
+
+8.1.1 新增: case-insensitive 查找辅助函数
+
+在 <script> 块顶部（全局变量声明区之后，首函数之前）插入:
+
+function lookupCI(obj, key) {
+    if (key in obj) return obj[key];          // 快速路径: 精确匹配
+    var kl = String(key).toLowerCase();
+    for (var k in obj) {
+        if (obj.hasOwnProperty(k) && k.toLowerCase() === kl) return obj[k];
+    }
+    return undefined;
+}
+
+本函数在 §§5/6/7 的所有 method_meta 和 functional_options_map 查找中统一使用，替代直接下标访问。无论 API 返回的 key 大小写如何，均能正确匹配。
+
+8.2 加载后初始化
+
+在 loadMethodCatalog() 成功回调（约 L3802 附近，methodCatalogCache = data; 之后）:
+
+methodCatalogCache = data;
+// method_meta 已包含在 methodCatalogCache 中，无需单独提取
+// 后续查找统一通过 lookupCI(methodCatalogCache.method_meta || {}, name)
+
+所有 §§5/6/7 示例中 lookupCI(methodCatalogCache.method_meta || {}, ...) 即规范化访问路径。
+
+v1.4 勘误: v1.3 文档称"在 pageInit()（约 L4771）中即发起 loadMethodCatalog()"。实际 无 pageInit 函数，启动逻辑在 window.addEventListener("DOMContentLoaded", async function() {...}) 内（L4752-4806），其中 L4771 通过 safeLoad("loadMethodCatalog", loadMethodCatalog) 触发首次加载。Phase 2 任务 2.5 中提到的"提前到 pageInit()"应理解为"保持在 DOMContentLoaded 启动序列中，并显式处理加载失败"。
+
+9. 测试验证清单
+
+9.1 功能测试
+
+ | # | 测试场景 | 预期结果
+
+   | 1
+   | 打开方法配置 → 选 ext 协议 → 查看 single_point level
+   | 泛函: wB97M-V；基组: def2-TZVPP；色散: VV10 (内置) 锁定；RI: RIJCOSX 隐藏于高级区；aux: AutoAux 隐藏于高级区
+
+   | 2
+   | 切泛函 wB97M-V → B3LYP
+   | 色散文本框解锁变为下拉 D4；基组保持 def2-TZVPP；RI 保持 RIJCOSX
+
+   | 3
+   | 切泛函 B3LYP → r2SCAN-3c
+   | 基组清空显示"内置"；色散显示 none；RI 变为 none；aux 清空
+
+   | 4
+   | 切泛函 r2SCAN-3c → DLPNO-CCSD(T)
+   | 基组锁定为 def2-TZVPP（单选项）；色散 none；RI none；aux 清空
+
+   | 5
+   | 手动输入自定义基组
+   | 下拉选 "Custom..." → 文本框出现 → 输入 aug-cc-pVTZ → 值保存
+
+   | 6
+   | 展开高级字段
+   | 点击 "+ 高级" → grid/scf_convergence/max_steps/recalc_hess/aux_basis/ri_approximation 出现
+
+   | 7
+   | 提交验证
+   | POST /api/v1/validate-method 返回 valid: true
+
+9.2 回归测试
+
+ | # | 场景 | 确认
+
+ | 1 | profile 切换协议 | 默认值正确填充
+
+ | 2 | 溶剂模型切换 | CPCM/SMD 影响频率计算 NumFreq 提示
+
+ | 3 | thermo 层选项 | temperature/pressure/scale_factor 正常
+
+ | 4 | xTB 后端 | preopt/crest 层的 gfn 选项不受影响
+
+9.3 边界条件
+
+ | 场景 | 预期
+
+ | API 返回中 method_meta 为 null | 所有泛函级默认回退到 FIELD_DEFINITIONS 全局默认
+
+ | 未知泛函（不在 METHOD_META 中） | supports_ri 默认为 true，正常显示 RIJCOSX + AutoAux
+
+ | engine 切换 | field 选项重新查询 per_backend
+
+10. 附录 A: METHOD_META 完整结构
+
+METHOD_META = {
+    # ── 普通 DFT 泛函（支持 RI 加速） ──
+    "B3LYP": {
+        "basis_inline": true,
+        "supports_ri": true,
+        "basis": _ALL_BASIS_SETS,
+        "dispersion": ["none", "D3", "D3BJ", "D4"],
+        "builtin_dispersion": null,
+        "default_basis": "def2-TZVPP",
+        "default_dispersion": "D4",
+    },
+    "PBE0": {
+        "basis_inline": true,
+        "supports_ri": true,
+        "basis": _ALL_BASIS_SETS,
+        "dispersion": ["none", "D3", "D3BJ", "D4"],
+        "builtin_dispersion": null,
+        "default_basis": "def2-TZVPP",
+        "default_dispersion": "D4",
+    },
+    "wB97X-D4": {
+        "basis_inline": true,
+        "supports_ri": true,
+        "basis": _ALL_BASIS_SETS,
+        "dispersion": ["D4"],
+        "builtin_dispersion": "D4",
+        "default_basis": "def2-TZVPP",
+        "default_dispersion": "D4",
+    },
+    "wB97M-V": {
+        "basis_inline": true,
+        "supports_ri": true,
+        "basis": _ALL_BASIS_SETS,
+        "dispersion": ["VV10"],
+        "builtin_dispersion": "VV10",
+        "default_basis": "def2-TZVPP",
+        "default_dispersion": "VV10",
+    },
+
+    # ── 复合方法（自带基组，不支持 RI） ──
+    "r2SCAN-3c": {
+        "basis_inline": false,
+        "supports_ri": false,
+        "basis": [""],
+        "dispersion": ["none"],
+        "builtin_dispersion": null,
+        "default_basis": "",
+        "default_dispersion": "none",
+    },
+    "PBEh-3c": {
+        "basis_inline": false,
+        "supports_ri": false,
+        "basis": [""],
+        "dispersion": ["none"],
+        "builtin_dispersion": null,
+        "default_basis": "",
+        "default_dispersion": "none",
+    },
+    "B97-3c": {
+        "basis_inline": false,
+        "supports_ri": false,
+        "basis": [""],
+        "dispersion": ["none"],
+        "builtin_dispersion": null,
+        "default_basis": "",
+        "default_dispersion": "none",
+    },
+
+    # ── 波函数方法（不依赖 RI 加速，basis 写入 %basis 块） ──
+    "DLPNO-CCSD(T)": {
+        "basis_inline": false,
+        "supports_ri": false,
+        "basis": ["def2-TZVPP"],
+        "dispersion": ["none"],
+        "builtin_dispersion": null,
+        "default_basis": "def2-TZVPP",
+        "default_dispersion": "none",
+        "basis_block": {
+            "basis": "def2-TZVPP",
+            "auxJ": "def2/J",
+            "auxC": "def2-TZVPP/C",
+        },
+    },
+}
+
+字段说明
+
+ | 字段 | 类型 | 必填 | 说明
+
+ | basis_inline | bool | 是 | 基组名是否拼在 ORCA ! 行；true=拼（普通 DFT），false=不拼（复合方法 + DLPNO）
+
+ | supports_ri | bool | 是 | false 时 RI/aux 强制设为 none/空
+
+ | basis | list | 是 | 允许的基组列表；[""] 表示复合方法不需要基组
+
+ | dispersion | list | 是 | 允许的色散校正列表
+
+ | builtin_dispersion | str|null | 是 | 内置色散名称；null 表示可配置
+
+ | default_basis | str | 是 | 选择此泛函时默认填充的基组
+
+ | default_dispersion | str | 是 | 选择此泛函时默认填充的色散
+
+ | basis_block | dict|null | 否 | 自定义 %basis 块内容（仅 DLPNO-CCSD(T) 等）。v1.6 D1 澄清: basis_block.basis 是顶层 default_basis 的只读快照，二者必须保持一致。ORCA 后端生成 %basis 块时应直接读取 default_basis，不应独立修改 basis_block.basis。未来若 DLPNO 支持多 basis 选项，需通过 default_basis 单点修改触发同步
+
+11. 附录 B: FIELD_DEFINITIONS 变更
+
+B.1 aux_basis
+
+// 旧
+"aux_basis": {
+    "type": "select",
+    "per_backend": { "orca": ["", "def2-TZVPP/C", "cc-pVTZ/C"] },
+    "default": { "*": "" },
+},
+
+// 新
+"aux_basis": {
+    "type": "select",
+    "advanced": true,
+    "per_backend": { "orca": ["AutoAux", "def2/J", "def2-TZVPP/C", "cc-pVTZ/C"] },
+    "default": { "*": "AutoAux" },
+},
+
+变更: 默认值 "" → "AutoAux"；选项新增 "AutoAux" 和 "def2/J"；新增 advanced: true。
+
+B.2 ri_approximation
+
+// 旧
+"ri_approximation": {
+    "type": "select",
+    "per_backend": { "orca": ["none", "RI", "RIJCOSX", "RIJK"] },
+    "default": { "*": "none" },
+},
+
+// 新
+"ri_approximation": {
+    "type": "select",
+    "advanced": true,
+    "per_backend": { "orca": ["none", "RI", "RIJCOSX", "RIJK"] },
+    "default": { "*": "RIJCOSX" },
+},
+
+变更: 默认值 "none" → "RIJCOSX"；新增 advanced: true。
+
+B.3 其他高级字段
+
+以下字段仅新增 "advanced": true（默认值不变）:
+
+ | 字段 | 现有默认值
+
+ | grid | "UltraFine"
+
+ | scf_convergence | "Tight"
+
+ | opt_convergence | "Tight"
+
+ | max_steps | 100
+
+ | recalc_hess | 10
+
+ | scale_factor | 1.0
+
+ | charge | 0
+
+ | multiplicity | 1
+
+B.4 dispersion
+
+// 旧
+"dispersion": {
+    "type": "select",
+    "options": ["none", "D3", "D3BJ", "D4"],
+    "default": { "*": "D4" },
+},
+
+// 新 (v1.6: 全局回退列表补充 "VV10"，避免未知泛函时下拉缺选项；实际由 METHOD_META.functional_options_map 覆盖)
+"dispersion": {
+    "type": "select",
+    "options": ["none", "D3", "D3BJ", "D4", "VV10"],
+    "default": { "*": "D4" },
+},
+
+变更 (v1.6): 全局回退列表新增 "VV10"（METHOD_META 中 wB97M-V 使用，全局列表需覆盖）；默认值不变。
+
+12. 风险分析与改进建议
+
+12.1 风险总览
+
+ | 优先级 | 编号 | 风险 | 类型
+
+   | P0
+   | R1
+   | METHOD_META 数据结构在服务端完全缺失
+   | 阻塞
+
+   | P0
+   | R2
+   | 色散锁定值与后端校验接口不一致（wB97X-D4 / wB97M-V）
+   | 数据错误
+
+   | P0
+   | R3
+   | FIELD_DEFINITIONS 所有字段缺少 "advanced": true 属性
+   | 阻塞
+
+   | 已解决
+   | R4
+   | functional_options_map API key 大小写断裂（v1.5 起改为 case-insensitive lookup）
+   | 兼容性
+
+   | P1
+   | R5
+   | 前端缓存 (methodCatalogCache) 未就绪时的静默降级
+   | UI Bug
+
+   | P1
+   | R6
+   | getFieldDefault() 新增第三个参数后调用点未完全审计
+   | 回归风险
+
+   | P1
+   | R7
+   | 当前 FUNCTIONAL_OPTIONS_MAP["wB97X-D4"].dispersion = ["none"] 是数据错误
+   | 数据错误
+
+   | P2
+   | R8
+   | 前端单文件 ~4900 行，无模块化，扩展性差
+   | 维护性
+
+   | P2
+   | R9
+   | _resolve_field_default() 不支持 METHOD_META 的泛函级默认值
+   | 功能不完整
+
+   | P2
+   | R10
+   | 测试覆盖不足：现状 6 个，目标 ≥19 个，缺口 13 个（v1.6 表述统一）
+   | 质量保障
+
+   | P3
+   | R11
+   | /api/v1/method-catalog 响应体积过大（>15KB），无缓存头
+   | 性能
+
+   | P3
+   | R12
+   | convert_method_levels_to_protocol_levels stage 映射不完整
+   | 功能缺口
+
+   | 已被 R19 覆盖
+   | R13
+   | basis_block 字段（DLPNO-CCSD(T)）无后端消费路径（v1.6 合并入 R19）
+   | 功能缺口
+
+   | P3
+   | R14
+   | SUPPORTED_WORKFLOWS 与 WORKFLOW_CATALOG 分离维护，易不同步
+   | 维护性
+
+   | ▼ 以下为代码审计后新增风险 (v1.3)
+
+   | P1
+   | R15
+   | funcOptsMap 是 buildFieldRow() 局部闭包变量（v1.4 勘误: 非文档 v1.3 所称 buildLevelCard()），切泛函联动可能引用旧值
+   | UI Bug
+
+   | P1
+   | R16
+   | loadMethodCatalog() 双调用点 + safeLoad 吞异常，网络失败时用户体验断裂
+   | UX缺陷
+
+   | P2
+   | R17
+   | ORCA 后端 basis_inline 硬编码，新增复合方法需同步改后端
+   | 耦合
+
+   | ▼ 以下为 v1.4 DLPNO 路径 + 大小写策略专项审计新增风险
+
+   | P0
+   | R18
+   | DLPNO-CCSD(T) 分支大小写敏感匹配，与上方 .lower() 不一致
+   | 数据错误
+
+   | P0
+   | R19
+   | DLPNO %basis 块完全硬编码，忽略 aux_basis/basis_block 用户配置
+   | 功能断裂
+
+   | P1
+   | R20
+   | _CASE_INSENSITIVE_FIELDS 含 dispersion，但 _clamp_to_functional 大小写敏感，链路不一致
+   | 逻辑矛盾
+
+   | P1
+   | R21
+   | 前端 L3722 硬过滤 conformer/benchmark，第三处 workflow 漂移源
+   | UI 漂移
+
+   | P2
+   | R22
+   | METHOD_CATALOG["backends"] 仅 3 项（缺 censo/shermo），无法做前置环境检查
+   | 功能缺口
+
+   | 已解决
+   | R23
+   | METHOD_META 中 composite 命名歧义（v1.5 改为 basis_inline）
+   | 语义陷阱
+
+   | P3
+   | R24
+   | _ALL_BASIS_SETS 作为共享 list 被多 entry 直接引用，存在 mutation 风险
+   | 可维护性
+
+   | P2
+   | R25
+   | 无"三表 functional key 一致性"断言（FIELD_DEFINITIONS / FUNCTIONAL_OPTIONS_MAP / METHOD_META）
+   | 质量保障
+
+   | P3
+   | R26
+   | 前端 fieldDefs 是 openMethodConfig 闭包，catalog 热刷新后陈旧
+   | UI Bug
+
+   | P0
+   | R27
+   | DLPNO 的 basis 列表仅 ["def2-TZVPP"]，但 orca.py 硬编码忽略；"前端零改动"承诺对 DLPNO 不成立
+   | 承诺失实
+
+   | P3
+   | R28
+   | functional change 回调闭包捕获旧 engine（v1.5 降级 P3：当前无触发路径；v1.6 移至 Phase 4）
+   | UI Bug
+
+   | ▼ 以下为 v1.7 Phase 0/1 实施审计新增风险（R29-R33） v1.7
+
+   | P1
+   | R29
+   | _resolve_method_meta 在 acp.catalog 不可导入时静默返回 None，使 ORCA 后端回退为"普通 DFT"行为；对 standalone cccp 用户传入 r2SCAN-3c / DLPNO-CCSD(T) 时会拼出错误的 ! 行
+   | 降级风险
+
+   | P2
+   | R30
+   | normalize_and_validate_method_config 的 case-insensitive 匹配目前仅覆盖 _CASE_INSENSITIVE_FIELDS + functional；basis 字段（含 supports_custom=True）和 grid/scf_convergence 等仍大小写敏感，与下游 ORCA 大小写不敏感行为不一致
+   | 不一致
+
+   | P2
+   | R31
+   | ORCA %basis 块的 auxJ 仍无暴露的 UI/API 入口（仅 auxC 通过 aux_basis 参数覆盖），用户无法在不修改 METHOD_META 的情况下切换辅助 J 基组
+   | 功能缺口
+
+   | P3
+   | R32
+   | ORCA ! 行的 TightSCF 仍硬编码在 DLPNO 分支（route_prefix = " TightSCF"），未来其他方法（如 CCSD(T)-F12 等）需要不同 SCF 收敛阈值时无参数化路径
+   | 耦合
+
+   | P3
+   | R33
+   | catalog 端点 ETag 用 SHA-256 截断前 32 字符；理论上存在碰撞风险（虽实际不可达），且 ETag 未加 W/ 前缀做 weak validator，未来若想精细到字段级缓存会受限
+   | 可扩展性
+
+   | ▼ 以下为 v1.8 Phase 2 实施审计新增风险（R34-R36） v1.8
+
+   | P2
+   | R34
+   | Phase 2 task 2.4 仅在 functional change 回调中清空 RI/aux；profile 预载入或手工编辑 stale 数据（r2SCAN-3c + ri_approximation="RIJCOSX"）时 buildFieldRow 渲染下拉仍显示 "RIJCOSX"，与 supports_ri=false 矛盾。服务器端 normalize_and_validate_method_config 也不基于 supports_ri clamp，校验通过但 UI/后端语义不一致
+   | UI/数据不一致
+
+   | P3
+   | R35
+   | updateConfigCards 失败重试链接用 inline onclick="loadMethodCatalog().then(updateConfigCards);return false;"，违反 CSP script-src 策略；当前部署未启用 CSP 故无观察到的 bug，但与文件其余 addEventListener 风格不一致，前端工程化（Phase 4 任务 4.4 Vite 迁移）时应一并重构
+   | 安全/工程化
+
+   | P3
+   | R36
+   | Phase 2 改动覆盖 §9 测试验证清单 14 个 UI 场景，但项目无 headless 浏览器测试基础设施（无 Playwright/Puppeteer/Selenium），当前仅以 API 层 /validate-method 等价覆盖核心数据流。UI 层回归保护（字段联动、badge 渲染、加载失败重试 UI）留待 Phase 3 任务 3.x
+   | 测试覆盖
+
+12.2 P0 — 阻塞级
+
+R1 — METHOD_META 数据结构在服务端完全缺失
+
+ | 位置 | src/acp/catalog.py
+
+ | 现状 | get_method_catalog() 返回的 METHOD_CATALOG 字典仅含 backends、field_definitions、method_schemas、functional_options_map。不存在任何 method_meta 字段。
+
+ | 影响 | 前端所有"数据驱动"逻辑（supports_ri、default_basis、default_dispersion、builtin_dispersion）的数据源为空。整个方案无法运作。
+
+改进建议: 在 catalog.py 中新增 METHOD_META 字典（结构参照 §10 附录 A），合并进 METHOD_CATALOG 返回。实施顺序: 先改 catalog.py，再改 API 端点，最后改前端。
+
+R2 — 色散锁定值与后端校验接口不一致
+
+ | 位置 | src/acp/catalog.py:178-194
+
+ | 现状 | FUNCTIONAL_OPTIONS_MAP 中 wB97X-D4 的 dispersion 为 ["none"]，wB97M-V 的 dispersion 为 ["none"]。但 DevDoc §A 定义 builtin_dispersion 分别为 "D4" 和 "VV10"。
+
+ | 影响 | 前端将 builtin_dispersion 写入 levelState.dispersion 后，/api/v1/validate-method 会调用 _resolve_field_options 校验该值，发现 "D4" 不在允许列表 ["none"] 中 → 校验失败。
+
+改进建议: 修正 FUNCTIONAL_OPTIONS_MAP:
+
+  
+wB97X-D4.dispersion → ["D4"]（泛函名字自带 D4）
+  
+wB97M-V.dispersion → ["VV10"]（V = VV10 色散）
+
+R3 — FIELD_DEFINITIONS 所有字段缺少 advanced 属性
+
+ | 位置 | src/acp/catalog.py:196-303
+
+ | 现状 | 10 个字段（aux_basis、ri_approximation、grid、scf_convergence、opt_convergence、max_steps、recalc_hess、scale_factor、charge、multiplicity）均无 "advanced" 属性。
+
+ | 影响 | isFieldAdvanced() 改为 fd.advanced 后，所有字段均返回 false，高级字段全部暴露在基础区域，UI 布局崩溃。
+
+改进建议: 在 FIELD_DEFINITIONS 中为上述 10 个字段添加 "advanced": true，同时更新 aux_basis 和 ri_approximation 的默认值（"" → "AutoAux"，"none" → "RIJCOSX"），参照 §11 附录 B。
+
+12.3 P1 — 高风险
+
+R4 — 不应强制 key 全小写，应改为 case-insensitive 匹配
+
+ | 位置 | src/acp/catalog.py:169-194; 前端 L3986, L4037; DevDoc §2.2, §5, §6, §7
+
+ | 现状
+   | 
+    v1.4 状态更新: 已解决。 v1.0-v1.2 曾要求 functional_options_map 和 method_meta 的 key 统一改为全小写。v1.3 起改为 case-insensitive lookup 方案:
+    
+      
+API 层: key 保留标准写法（"wB97M-V" 等）
+      
+后端: _case_insensitive_get() 遍历 dict 忽略大小写
+      
+前端: lookupCI() 遍历对象忽略大小写
+    
+    此方案同时满足原始命名规范保留 + 下拉值/用户输入大小写差异容错。实施阶段为 Phase 0 task 0.5 + Phase 2 task 2.0。
+    
+
+    残留风险: 所有通过字符串变量而非 lookupCI 的旧路径（如 orca.py:145 的 == "DLPNO-CCSD(T)"）仍保持大小写敏感，需在 Phase 1 task 1.7 统一修复。详见 R18。
+  
+
+ | 影响
+   | 
+    
+      
+（已解决）API 返回 "wb97m-v" 而非 "wB97M-V" — 不再发生，key 保持标准写法
+      
+（已解决）遗漏 .toLowerCase() 导致查找失败 — 改为 lookupCI 后精确匹配也可命中的快速路径
+      
+（部分残留）orca.py 中 DLPNO-CCSD(T) 硬编码比较不走 _case_insensitive_get → 见 R18
+    
+  
+
+改进建议 — 已采纳:
+
+  
+后端: catalog.py 中所有字典 key 保留标准写法。新增 _case_insensitive_get() 统一查找（Phase 0 task 0.5）
+  
+前端: 封装 lookupCI() 工具函数（Phase 2 task 2.0）
+  
+待完成: orca.py 中 DLPNO-CCSD(T) 硬编码比较同步改为 .lower()（Phase 1 task 1.7，R18）
+
+R5 — 前端缓存未就绪时的静默降级
+
+ | 位置 | 前端 ACP_Workbench_v2.html L3678, L3726, L3826
+
+ | 现状 | loadMethodCatalog() 仅在 openMethodConfig() 时调用（L3826）。updateConfigCards() (L3678) 在方法配置未打开时就已访问 methodCatalogCache.method_schemas，此时可能为空对象 {}→ 静默降级不报错，但摘要显示 "--"。
+
+ | 影响 | 用户切换 workflow 后，配置卡片摘要区域显示空值，无任何提示告知"数据正在加载"。
+
+改进建议:
+
+  
+在 DOMContentLoaded 启动序列中（约 L4771，v1.4 勘误: 文件无 pageInit 函数）显式调用 loadMethodCatalog()，并在失败时设置 methodCatalogCache._loadFailed = true 供后续判断
+  
+在 updateConfigCards() 中判断缓存为空或 _loadFailed 时显示 loading 指示器或重试按钮，而非空 "--"
+
+R6 — getFieldDefault() 调用点未完全审计
+
+ | 位置 | 前端 ACP_Workbench_v2.html L3853（定义）；调用点 L3982 + L3984（v1.4 勘误: 共 2 处）
+
+ | 现状 | DevDoc v1.3 要求 getFieldDefault() 从 2 参数改为 3 参数。当前已确认的调用点为 L3982。v1.4 审计发现 L3984 漏列：var functional = levelState.functional || getFieldDefault("functional", engine) || "";。该行是 functional 字段本身的全局默认值查找，不需要第 3 参数。但文件 4890 行，无法确保无其他动态调用。
+
+ | 影响 | 遗漏调用点中 functional 为 undefined，若函数内直接调用 functional.toLowerCase() 将抛出 TypeError，阻塞 UI 渲染。
+
+改进建议:
+
+  
+全局搜索所有 getFieldDefault( 调用确认影响面
+  
+新函数签名将 functional 设为可选参数，并加 if (functional) { ... } 保护
+
+R7 — FUNCTIONAL_OPTIONS_MAP 数据错误
+
+ | 位置 | src/acp/catalog.py:178-184
+
+ | 现状 | wB97X-D4 是显式带 D4 色散校正的泛函（名字含 D4），但其 dispersion 列表为 ["none"]。wB97M-V 的 V 代表 VV10 色散，同理 ["none"] 不正确。
+
+ | 影响 | 与 §A 中 METHOD_META 定义矛盾。用户在前端选择 wB97X-D4 后色散下拉仅显示 "none"，无法表达"内置 D4"语义。
+
+改进建议: 见 R2。
+
+R15 — funcOptsMap 局部闭包变量，切泛函联动可能引用旧值 v1.3 新增
+
+ | 位置 | 前端 ACP_Workbench_v2.html L3840-3862, L3985-3986, L4037（v1.4 勘误: 实际在 buildFieldRow() 内 L3985，非 buildLevelCard()）
+
+ | 现状 | 
+  funcOptsMap = methodCatalogCache.functional_options_map || {} 是 buildFieldRow() 内部定义的局部变量（L3985）。DevDoc 改动 4 的 functional change 回调使用 funcOptsMap 查找新泛函的过滤选项，但该回调是事件监听器闭包，捕获的是上一次 buildFieldRow() 调用时的 funcOptsMap。
+
+  虽然回调末尾调用了 rebuildLevelCard(lvDef.level_id)，会重新执行 buildLevelCard() → 间接重建 buildFieldRow() 及所有事件监听器，理论上实现了自动刷新。但 UI 刷新期间的中间状态（旧监听器仍在 DOM 上，新卡片尚未挂载）可能导致用户在极短时间内二次触发旧的 change 事件。
+
+ | 影响 | 极低概率的竞态：用户连续快速切换泛函 → 第二次 change 事件可能触发旧闭包中的 funcOptsMap → basis/dispersion 选项列表错误。正常使用下 rebuildLevelCard 机制可保证正确性。
+
+改进建议:
+
+  
+在 functional change 回调中不依赖闭包中的 funcOptsMap，改为每次从 methodCatalogCache.functional_options_map 重新读取
+  
+回调中添加 debounce（~100ms）防止连续快速切换
+  
+长期方案: 将 funcOptsMap 提升为 methodCatalogCache 的派生属性（如 getter），消除闭包依赖
+
+R16 — loadMethodCatalog() 双调用点静默失败导致用户体验断裂 v1.3 新增
+
+ | 位置 | 前端 ACP_Workbench_v2.html L3726-3731 (定义), L3826 (openMethodConfig 内), L4771 (DOMContentLoaded 内，v1.4 勘误: 文件无 pageInit 函数)
+
+ | 现状 | 
+  loadMethodCatalog() 在 两处 被调用:
+
+  
+    
+DOMContentLoaded 启动序列 (L4771): 通过 safeLoad() 包装，失败时 console.error 后静默继续 → methodCatalogCache 保持空对象 {}
+    
+openMethodConfig() (L3826): 用户点击 "New Calculation" → 如果启动阶段加载失败，此处二次尝试。但仍用 try/catch 吞异常
+  
+  L3830 检查 !methodCatalogCache.method_schemas 时，若两次均失败，显示 "目录加载失败" 纯文本，无重试按钮。用户只能刷新页面。
+
+ | 影响 | 
+  
+    
+服务端启动后首次请求若 API 未就绪 → DOMContentLoaded 启动序列静默失败 → 用户点击 New Calculation → 二次失败 → 黑屏提示无操作入口
+    
+用户在网络不稳定环境下可能反复刷新页面才能进入方法配置
+  
+
+改进建议:
+
+  
+openMethodConfig() 中检测 methodCatalogCache.method_schemas 为空时，展示带重试按钮的友好错误界面（参照 L3742 的 workflow 加载重试模式）
+  
+DOMContentLoaded 启动序列中 loadMethodCatalog() 失败时设置 methodCatalogCache._loadFailed = true，供后续判断（v1.4 勘误: 文件无 pageInit 函数）
+  
+添加指数退避重试逻辑（首次失败后 2s、4s、8s 自动重试）
+  
+在 updateConfigCards() 中检测缓存未就绪时显示 loading spinner 而非空 "--"
+
+12.4 P2 — 中风险
+
+R8 — 前端单文件无模块化
+
+ | 位置 | frontend/ACP_Workbench_v2.html (~4890 行)
+
+ | 现状 | 所有 JS/CSS/HTML 在单个文件中。全局变量 (methodCatalogCache、wizardState、workflowCatalogCache) 与 20+ 个函数紧耦合。随着 DevDoc 5 处改动叠加将突破 5000 行。
+
+ | 影响 | 重构高风险（全局变量污染、函数间隐式依赖）、不可单测、无法 tree-shaking、多人协作冲突。
+
+改进建议:
+
+  
+至少将 catalog 相关逻辑（isFieldAdvanced、getFieldDefault、getFieldOptions）提取为独立 IIFE 模块
+  
+中长期: 引入 ES modules + Vite 构建，或改用轻量框架（Alpine.js / Petite-Vue）保持零构建依赖
+
+R9 — _resolve_field_default 不支持 METHOD_META
+
+ | 位置 | src/acp/catalog.py:1002-1029
+
+ | 现状 | 当 FUNCTIONAL_OPTIONS_MAP 有限制时，默认值取 opts[0]（第一个选项），而非 METHOD_META 的 default_basis/default_dispersion。例如切到 B3LYP 时默认基组为 def2-SV(P) 而非 def2-TZVPP。
+
+ | 影响 | 校验接口返回的 normalized_levels 中默认值不正确，与前端 METHOD_META 导向的值不一致。
+
+改进建议: _resolve_field_default 中先查 METHOD_META[functional].default_basis / .default_dispersion，再回退到 FUNCTIONAL_OPTIONS_MAP 首个元素。
+
+R10 — 测试覆盖不足
+
+ | 位置 | tests/test_acp_catalog.py（仅 109 行，约 6 个测试 — v1.4 审计: 实际比文档 v1.3 声称的"2 个测试"多）
+
+ | 现状 | v1.6 表述统一: 现状 6 个测试（仅覆盖 orca/xtb 溶剂模型选项）；目标 ≥19 个（含 v1.4 计划新增 test 3.7-3.13 共 7 个 + 后续扩展 ≥6 个）；缺口 13 个。grep 全 tests/ 目录均无 method_meta / advanced / builtin_dispersion / supports_ri / basis_inline 等关键字的测试。
+
+ | 影响 | 所有新增逻辑（advanced 属性、builtin_dispersion、supports_ri 联动、default_basis 解析、basis_inline 消费）依赖手工验证，回归发现滞后。
+
+改进建议: 在实施前先编写以下测试:
+
+  
+test_method_meta_present_in_catalog — METHOD_META 存在于 API 响应中
+  
+test_advanced_fields_marked — 10 个字段标记 advanced: true
+  
+test_builtin_dispersion_filters_options — wB97M-V 色散锁定为 VV10
+  
+test_default_basis_per_functional — B3LYP 默认 def2-TZVPP
+  
+test_supports_ri_disables_ri_fields — r2SCAN-3c 强制 ri=none
+  
+test_validate_catches_invalid_dispersion — 校验拒绝非法色散组合
+
+R17 — ORCA 后端 basis_inline 判断硬编码，新增复合方法需同步改后端 v1.3 新增
+
+ | 位置 | src/cccp/qc/interfaces/orca.py:143
+
+ | 现状 | 
+  ORCA 输入文件生成逻辑中，复合方法判断使用硬编码列表:
+
+  if _method.lower() in ("pbeh-3c", "r2scan-3c"):
+    blocks.append(f"! {_method} {route}{extras_str}")  # 不拼接 basis 名
+  DevDoc §A 通过 METHOD_META[functional].basis_inline=false 声明了不拼 basis 的属性（r2SCAN-3c、PBEh-3c、B97-3c 均为 false），但后端完全不读取。
+
+  后果: 若仅添加 METHOD_META["B97-3c"] 而不同步修改 orca.py:143，ORCA 会将 "B97-3c" 当作普通泛函拼上基组名 → 输入文件错误 → 计算失败。
+
+ | 影响 | "新增泛函前端零改动"的承诺在 ORCA 后端层面不成立 — 复合方法的新增必须在 3 处 同步（catalog.py METHOD_META + orca.py 硬编码列表 + FUNCTIONAL_OPTIONS_MAP）。
+
+改进建议:
+
+  
+Phase 1 任务 1.6: ORCA 后端从 METHOD_META 读取 basis_inline + basis_block，统一为数据驱动的二分支逻辑（basis_block → 渲染 %basis 块；basis_inline → 决定 ! 行是否拼 basis）
+  
+短期 workaround: 在 DevDoc 中明确注明新增复合方法需同步修改 orca.py:143，直到后端参数化完成
+  
+长期: 后端通过 acp.catalog.METHOD_META 集中读取所有泛函元数据，实现真正的单一数据源
+
+12.4a P0/P1 新增风险详情 v1.4
+
+R18 — DLPNO-CCSD(T) 分支大小写敏感匹配 v1.4
+
+ | 位置 | src/cccp/qc/interfaces/orca.py:143-153
+
+ | 现状 | 
+  ORCA 输入生成中存在不对称的大小写策略:
+if _method.lower() in ("pbeh-3c", "r2scan-3c"):    # 大小写不敏感
+    blocks.append(f"! {_method} {route}{extras_str}")
+elif _method == "DLPNO-CCSD(T)":                   # 大小写敏感！
+    blocks.append(f"! DLPNO-CCSD(T) TightSCF {route}{extras_str}")
+    ...
+else:
+    blocks.append(f"! {_method} {_basis} {route}{extras_str}")
+  用户输入 "dlpno-ccsd(t)" → 上方 .lower() 不匹配 → 中间 == 不匹配 → 落入 else 分支，拼出 ! dlpno-ccsd(t) def2-TZVPP ...，ORCA 报错且无明确提示。
+
+ | 影响 | 用户从外部源（配置文件、命令行）粘贴小写泛函名时静默失败。Catalog 层的 _resolve_field_options 也是大小写敏感，错误会先在此处暴露，但通过 --levels 直接传入 ORCA 的路径完全无保护。
+
+改进建议:
+
+  
+统一为大小写不敏感：elif _method.lower() == "dlpno-ccsd(t)":
+  
+配合 R17 的 basis_inline 参数化，从根本上消除 if/elif 链
+  
+添加回归测试：test_dlpno_case_insensitive_match
+
+R19 — DLPNO %basis 块完全硬编码，忽略用户配置 v1.4
+
+ | 位置 | src/cccp/qc/interfaces/orca.py:147-151
+
+ | 现状 | 
+  DLPNO 分支的 %basis 块完全硬编码:
+blocks.append("%basis")
+blocks.append('  basis "def2-TZVPP"')
+blocks.append('  auxJ  "def2/J"')
+blocks.append('  auxC  "def2-TZVPP/C"')
+blocks.append("end")
+  且不读取 route_extras 中的 aux_basis 值。文档 Phase 0.4 将 aux_basis 默认改为 "AutoAux"，对 DLPNO 用户是误导 — 该值会被 workflow 层（workflows/simple.py:163-181、workflows/energy.py:91-93）追加到 route_extras，但 orca.py 的 DLPNO 分支完全忽略 extras_str 中的相关 token（仅拼到 ! 行，不进入 %basis）。
+
+ | 影响 | 
+  
+    
+用户配置的 aux_basis 对 DLPNO 计算完全失效，结果不可重现地依赖硬编码默认
+    
+与 METHOD_META §A 的 basis_block 字段（auxJ/auxC）设计完全脱节
+    
+用户在前端选择非默认辅助基组后无任何提示告知配置被忽略
+  
+
+改进建议:
+
+  
+Phase 1 任务 1.8: 从 METHOD_META["DLPNO-CCSD(T)"].basis_block 读取 auxJ/auxC，并允许用户通过 route_extras 覆盖
+  
+当前 aux_basis 字段对 DLPNO 应在 UI 上锁定为 "def2-TZVPP/C"（参考 §6 builtin_dispersion 锁定模式），避免误导
+  
+标记 xfail 测试 test_dlpno_aux_basis_propagated_to_basis_block 跟踪此修复
+
+R20 — _CASE_INSENSITIVE_FIELDS 与 clamp 函数逻辑矛盾 v1.4
+
+ | 位置 | src/acp/catalog.py:1032-1051（_clamp_to_functional）vs src/acp/catalog.py:1054（_CASE_INSENSITIVE_FIELDS）
+
+ | 现状 | 
+  _CASE_INSENSITIVE_FIELDS = frozenset({"solvent_model", "dispersion"}) 在 L1054 用于 method_levels_to_cli_flags（L1270）将输出 .lower()。
+
+  但 _clamp_to_functional（L1032-1051）的 clamp 比较是大小写敏感:
+  if current and current not in allowed and current != "__custom__":
+    level[key] = allowed[0]
+  → 用户提交 dispersion="d4":
+  
+    
+clamp 阶段："d4" not in ["D4"] 为 True → 改写为 "D4"（碰巧救活）
+    
+但若 functional=wB97M-V，allow=["VV10"]，"d4" 被改写为 "VV10"，与用户意图不符且无警告
+    
+CLI 输出再 .lower() 成 "vv10"，ORCA 不识别
+  
+
+ | 影响 | dispersion / solvent_model 的大小写策略分散在三个函数中，行为不一致，易产生"用户值 → 中间改写 → CLI 输出"链路上的语义损失。
+
+改进建议:
+
+  
+统一在 _clamp_to_functional 中做大小写不敏感比较：current.lower() not in [a.lower() for a in allowed]
+  
+规范化保留原始大小写（allowed[0] 而非 current）
+  
+添加测试：test_dispersion_case_insensitive_clamp
+
+R21 — 前端硬过滤 workflow 造成第三处漂移 v1.4
+
+ | 位置 | frontend/ACP_Workbench_v2.html:3722
+
+ | 现状 | 
+  loadWorkflowCatalog() 拉取后立即过滤:
+workflowCatalogCache = workflowCatalogCache.filter(
+  w => w.id !== "conformer" && w.id !== "benchmark"
+);
+  这两个 workflow 在 WORKFLOW_CATALOG 中是 active，scheduler 也支持，但 UI 上不可见。这是 R14 之外的第三处漂移源。
+
+ | 影响 | 
+  
+    
+新增 workflow 时实际需同步 四处：catalog / scheduler / 前端过滤 / METHOD_SCHEMAS
+    
+"隐藏但仍可调用"的语义未文档化，新维护者难以发现
+  
+
+改进建议:
+
+  
+catalog 中加 visible 字段（默认 true），conformer / benchmark 显式标 false
+  
+前端 L3722 改为 w => w.visible !== false
+  
+配合 R14 修复，scheduler 与前端都从同一字段派生
+
+12.4b P2/P3 新增风险详情 v1.4
+
+R22 — METHOD_CATALOG["backends"] 不完整 v1.4
+
+ | 位置 | src/acp/catalog.py:956-964
+
+ | 现状 | 
+  METHOD_CATALOG["backends"] 仅含 3 项：orca、xtb、crest。但 WORKFLOW_CATALOG 中 ensemble、energy、optfreqsp 在 requires_binaries 字段引用了 censo、shermo。
+
+ | 影响 | 前端 /api/v1/backends 拿不到 censo/shermo 的存在性/版本信息，无法在用户提交相应 workflow 前做环境前置检查；缺失二进制时直到 job 运行才报错。
+
+改进建议: Phase 4 补全 backends 列表，新增 version、path、available 字段。前端在 workflow 选择后立即查询所需 backend 状态。
+
+R23 — METHOD_META composite 字段命名歧义 — v1.5 已解决 v1.4 发现，v1.5 修复
+
+ | 位置 | DevDoc §10 附录 A
+
+ | 现状
+   | 
+    v1.5 已修复: composite 字段更名为 basis_inline，语义精确表达"基组名是否拼在 ! 行"。DLPNO 表述为 basis_inline=false, supports_ri=false, basis_block={basis:"def2-TZVPP",...}。
+    
+
+    修复前问题: DLPNO 标注 composite=false + supports_ri=false，但与 orca.py:147-151 中 DLPNO 的实际行为矛盾 —— DLPNO 分支不拼接 basis 名到 ! 行，行为类似 composite。字段名 composite 承载两种独立语义（自带基组 vs 不拼 ! 行），新维护者易误判。
+  
+
+ | 影响 (已消除) | 不再存在。新命名下三种方法的语义清晰:
+  
+    
+普通 DFT: basis_inline=true → ! B3LYP def2-TZVPP ...
+    
+复合方法: basis_inline=false → ! r2SCAN-3c ...
+    
+DLPNO: basis_inline=false, basis_block={...} → ! DLPNO-CCSD(T) ... + %basis 块
+  
+
+R24 — _ALL_BASIS_SETS 共享引用可变风险 v1.4
+
+ | 位置 | src/acp/catalog.py:158-167 + 计划中的 METHOD_META 多个 entry
+
+ | 现状 | 
+  计划中 METHOD_META 的每个 DFT 泛函 entry 都直接引用同一个 _ALL_BASIS_SETS 对象（如 "basis": _ALL_BASIS_SETS），而非副本。Python 中 list 是可变对象，任何一处 .append() / [i] = ... 会污染所有 entry。
+
+ | 影响 | 低概率但难诊断的运行时 bug。若未来添加"按用户偏好动态扩展 basis 列表"等特性，会触发此问题。
+
+改进建议:
+
+  
+所有 entry 用 "basis": list(_ALL_BASIS_SETS) 显式拷贝
+  
+或将 _ALL_BASIS_SETS 改为 tuple（不可变）
+  
+添加 lint 规则禁止直接赋值可变默认参数
+
+R25 — 缺少三表一致性断言 v1.4
+
+ | 位置 | tests/test_acp_catalog.py
+
+ | 现状 | 
+  三个数据源各自维护泛函列表，无一致性校验:
+  
+    
+FIELD_DEFINITIONS["functional"].per_backend["orca"] — 6 项（B3LYP, PBE0, wB97X-D4, wB97M-V, r2SCAN-3c, DLPNO-CCSD(T)）
+    
+FUNCTIONAL_OPTIONS_MAP.keys() — 6 项
+    
+计划中的 METHOD_META.keys() — 8 项（多 PBEh-3c, B97-3c）
+  
+  当前三处中两处已同步（6 项匹配），第三处（METHOD_META）引入 2 个新泛函后即不同步。
+
+ | 影响 | 新增泛函时易遗漏一处，表现为: 用户能看到下拉项（FIELD_DEFINITIONS）但配置后无法校验（FUNCTIONAL_OPTIONS_MAP 缺失），或反过来。
+
+改进建议: Phase 3 测试 3.8 添加 test_functional_keys_three_table_consistent：以 FIELD_DEFINITIONS["functional"].per_backend["orca"] 为基准，断言另两表 key 集合相等（忽略大小写）。允许 METHOD_META 是超集（声明未启用泛函），但不可缺失。
+
+R26 — 前端 fieldDefs 闭包陈旧引用 v1.4
+
+ | 位置 | frontend/ACP_Workbench_v2.html:3843
+
+ | 现状 | 
+  openMethodConfig() 中 var fieldDefs = methodCatalogCache.field_definitions || {}; 是闭包捕获。内部函数 getFieldDefault（L3853）、isFieldAdvanced（L3864）、buildFieldRow（L3974）都引用该闭包变量。
+
+  若用户长时间停留导致 catalog 自动刷新（未来若实现），methodCatalogCache 是新对象，但 fieldDefs 仍指向旧引用。
+
+ | 影响 | 低概率 bug。当前 catalog 无自动刷新，但 Phase 4 任务 4.1 引入 IIFE 模块化后，闭包边界扩大，问题会更明显。
+
+改进建议: 内部函数每次直接读 methodCatalogCache.field_definitions，或封装为 function getFieldDefs() { return (methodCatalogCache && methodCatalogCache.field_definitions) || {}; }。
+
+R27 — DLPNO basis 列表单选项 + 后端硬编码，前端零改动承诺失实 v1.4
+
+ | 位置 | DevDoc §10 附录 A + src/cccp/qc/interfaces/orca.py:148
+
+ | 现状 | 
+  附录 A 给 DLPNO 的 basis 列表为 ["def2-TZVPP"]（单选项）。orca.py:148 写死 basis "def2-TZVPP"。即使前端 UI 允许添加更多选项，后端完全忽略 → "前端零改动"承诺对 DLPNO 不成立。
+
+  任何对 DLPNO basis 的修改都需要同时改 catalog（METHOD_META）和 orca.py 硬编码。
+
+ | 影响 | 
+  
+    
+文档 §1.1 "新增泛函时前端零改动" 的核心承诺对复合/波函数方法不成立
+    
+用户配置 DLPNO basis 时无任何反馈告知配置受限
+    
+与 R19 高度耦合：aux_basis 也被忽略，整体配置面板对 DLPNO 是"装饰性"的
+  
+
+改进建议:
+
+  
+短期: 前端对 DLPNO basis 字段渲染锁定 badge（"def2-TZVPP（仅支持）"），跳过下拉；同时锁定 aux_basis 为 "def2-TZVPP/C"
+  
+中期: Phase 1 任务 1.8 让 orca.py 从 METHOD_META 读取 basis_block，从根本上消除硬编码
+  
+文档: §1.1 显著位置加注: "对普通 DFT 泛函成立；对复合方法（r2SCAN-3c / PBEh-3c / B97-3c）和波函数方法（DLPNO-CCSD(T)），新增仍需同步 orca.py"
+
+R28 — functional change 回调闭包捕获旧 engine v1.4 发现，v1.5 降级为 P3
+
+ | 位置 | frontend/ACP_Workbench_v2.html:4035-4054
+
+ | 现状 | 
+  Phase 2 改动 4 的 functional change 回调中调用 getFieldDefault("ri_approximation", engine, newFunctional)。此处 engine 是 buildFieldRow 闭包变量。
+
+  若用户在卡片渲染后切换 engine 选择（orca → xtb），closure 中的 engine 是旧值，联动重置会用错数据源（per_backend 错位）。
+
+ | v1.5 降级分析 | 
+  RI/aux_basis 字段的 per_backend 选项仅在 orca 后端存在。xtb/crest 没有这些字段，切换 engine 后会触发 rebuildLevelCard 重新渲染，旧监听器解绑。当前架构下 无实际触发路径。如果未来 grid、scf_convergence 等字段拓展到多 engine，问题才会暴露。降级为 P3。
+
+处置:
+
+  
+§7 目标代码中添加防御性注释标注闭包限制
+  
+若未来多 engine 支持 RI/aux 字段，回调内改为重新读取: var currentEngine = getLevelState(lvDef.level_id).engine || "orca";
+  
+不增加任何防御性代码，保持改动最小化
+
+12.5 P3 — 优化 & 完善
+
+R11 — /api/v1/method-catalog 响应体积过大
+
+ | 位置 | src/acp/api/v1_routes.py:1148-1152（v1.4 勘误: v1.3 称 1141-1152，实际 handler 在 1148-1152；1141-1145 属于上一个 /workflow-catalog handler）
+
+ | 现状 | FIELD_DEFINITIONS.basis.per_backend.orca 含 22 个基组，FUNCTIONAL_OPTIONS_MAP 每个泛函复制一份完整基组列表，METHOD_META 再增加每个泛函 ~8 个字段。总响应 >15KB，每次打开方法配置都完整传输。无 ETag/Last-Modified 头。
+
+改进建议:
+
+  
+添加 ETag / Cache-Control 头支持 304 Not Modified
+  
+将 _ALL_BASIS_SETS 在 JSON 中只传一次（如 "basis_catalog" 顶层字段），METHOD_META 和 functional_options_map 用索引引用
+
+R12 — stage 映射不完整
+
+ | 位置 | src/acp/catalog.py:1151-1155
+
+ | 现状 | stage_mapping 仅映射 dft_opt/single_point/thermo，缺失 refinement_sp、optfreq、censo、preopt、crest。
+
+ | 影响 | censo_energy schema 的 refinement_sp level 转换后静默丢弃。
+
+改进建议: 扩展 stage_mapping 覆盖所有已知 level_id，或从 METHOD_SCHEMAS 中动态读取映射关系。
+
+R13 — basis_block 字段无后端消费 已被 R19 覆盖
+
+ | 位置 | 后端 ORCA 适配器 src/acp/backends/orca.py
+
+ | 现状 | v1.6 V3 归档: 本风险与 R19 描述同一问题（DLPNO %basis 块硬编码），R19 已扩展覆盖范围并升级为 P0。R13 保留作历史记录，不再单独追踪。修复路径见 R19 改进建议（Phase 1 task 1.8）。
+
+ | 历史描述 | DevDoc §A 定义 DLPNO-CCSD(T).basis_block 含 auxJ/auxC 自定义 %basis 块，但 ORCA 后端 route_extras 生成逻辑中未找到对此字段的消费。前端暴露了 UI（basis_block 渲染），但后端无法处理，用户配置被忽略。
+
+处置: 见 R19 改进建议（Phase 1 task 1.8：从 METHOD_META.basis_block 读取并渲染 %basis 段落）。本条不再独立追踪。
+
+R14 — SUPPORTED_WORKFLOWS 与 WORKFLOW_CATALOG 分离维护
+
+ | 位置 | src/acp/scheduler/jobs.py:52-65（v1.4 勘误: v1.3 称 :10，实际为 :52） vs src/acp/catalog.py:5
+
+ | 现状 | SUPPORTED_WORKFLOWS 定义 12 个 workflow（含 fake），WORKFLOW_CATALOG 定义 13 个（含 3 个 planned: xtb_optimize、mechanism、custom_sequence）。v1.4 审计漂移更严重:
+  
+    
+fake 仅在 scheduler，不在 catalog
+    
+xtb_optimize / custom_sequence 仅在 catalog（planned），不在 scheduler
+    
+R21 衍生: 前端 L3722 还硬过滤掉 conformer / benchmark（虽然 catalog 中是 active）→ 三处分离
+  
+
+ | 影响 | 新增 workflow 时极易遗漏其中一处（实际三处），导致 scheduler 拒绝执行已在前端展示的 workflow，或反之。
+
+改进建议: SUPPORTED_WORKFLOWS 从 WORKFLOW_CATALOG 中自动派生（v1.6 D5 修复：保留 fake 测试项）:
+SUPPORTED_WORKFLOWS = tuple(
+    w["id"] for w in WORKFLOW_CATALOG
+    if w["status"] == "active" or w["id"] == "fake"  # 保留 fake 用于 scheduler 测试
+)
+配合 Phase 1 task 1.10 在 catalog 中加 visible 字段，conformer/benchmark 显式标 visible=false；前端过滤改为 w.visible !== false，与 scheduler 派生逻辑共用同一数据源。
+
+12.6 v1.7 审计新增风险详情（R29-R33） v1.7
+
+本节集中记录 v1.7 在 Phase 0/1 代码审计中识别但未在本次修复的残余风险。F1-F6 已在 §1.7 落实，剩余 R29-R33 留待后续阶段评估。
+
+R29 — _resolve_method_meta 静默降级 v1.7
+
+ | 位置 | src/cccp/qc/interfaces/orca.py:30-43（_resolve_method_meta）
+
+ | 现状 | 函数 try: from acp.catalog import ... except ImportError: return None。当 acp.catalog 不可导入时，所有方法都被当作"普通 DFT"处理（basis_inline=True 默认值），即拼 ! method basis route。对 standalone cccp 用户传入 r2SCAN-3c / DLPNO-CCSD(T) 会拼出错误的 ! 行（ORCA 报错或静默失败）
+
+ | 影响 | 当前 ACP 项目布局下 pip install -e . 会同时安装两个包，acp.catalog 总可用 — 实际触发概率低。但若有人仅安装 cccp 子集（如 PyPI 单包发布场景），DLPNO 会回归 v1.0 的硬编码错误
+
+处置建议: (1) 在 except ImportError 分支回退到 v1.0 的硬编码 ("pbeh-3c", "r2scan-3c", "b97-3c") + DLPNO 大小写不敏感判断，作为安全网；或 (2) 在文档中显式声明 cccp 不再独立支持复合方法/DLPNO（强制依赖 acp.catalog）。当前选 (2) — 见 §1.1 v1.5 适用范围勘误已声明此约束。
+
+R30 — basis / grid / scf_convergence 等字段未做大小写归一 v1.7
+
+ | 位置 | src/acp/catalog.py:normalize_and_validate_method_config
+
+ | 现状 | F6 重构后，case-insensitive 匹配仅对 _CASE_INSENSITIVE_FIELDS（solvent_model, dispersion）+ functional 生效。basis 走 supports_custom 分支（允许任意值），grid/scf_convergence/opt_convergence 等仍是大小写敏感比较。但 ORCA 实际接收这些 token 时是大小写不敏感的，用户输入 "ultrafine" 会被前端校验拒绝
+
+ | 影响 | 用户体验问题：用户输入合法但大小写不同的 ORCA 关键字时被拒。无功能断裂
+
+处置建议: Phase 2/3 评估是否将所有 select-typed 字段统一走 _match_option_case_insensitive。需要考虑 basis.supports_custom=True 的特殊情况（自定义值不应被规范化）。
+
+R31 — auxJ 无 API/UI 覆盖入口 v1.7
+
+ | 位置 | src/cccp/qc/interfaces/orca.py DLPNO 分支
+
+ | 现状 | F5 修复后，DLPNO %basis 块的 auxC 可通过 aux_basis 参数覆盖；但 auxJ 仍只能通过 extra_blocks 中的 dict 覆盖（无前端字段、无 CLI flag）。用户想切换 J 基组（如 def2-universal/J）需手动构造 extra_blocks=[{"auxJ": "def2-universal/J"}]
+
+ | 影响 | 高级用户路径不友好，但默认 def2/J 对绝大多数 DLPNO 计算已足够
+
+处置建议: Phase 4 评估是否在 METHOD_META 的 basis_block schema 中暴露 aux_basis_j 字段，并通过 FIELD_DEFINITIONS 加入 UI。低优先级。
+
+R32 — TightSCF 仍硬编码在 DLPNO 分支 v1.7
+
+ | 位置 | src/cccp/qc/interfaces/orca.py:_build_input_blocks
+
+ | 现状 | F5/1.6 重构保留了 if method_name == "DLPNO-CCSD(T)": route_prefix = " TightSCF"。未来若 METHOD_META 新增 CCSD(T)-F12 等需要不同 SCF 收敛阈值的方法，此分支需要再次扩展
+
+ | 影响 | 当前 DLPNO 是唯一的波函数方法，TightSCF 是其标准要求 — 现状合理。仅在未来扩展时才是问题
+
+处置建议: 在 METHOD_META 条目中新增 "route_keywords": ["TightSCF"] 字段（list 类型），ORCA 后端从 meta.get("route_keywords", []) 拼到 ! 行。Phase 4 处理。
+
+R33 — ETag 无 weak validator 前缀 v1.7
+
+ | 位置 | src/acp/api/v1_routes.py:get_method_catalog
+
+ | 现状 | F2 修复后 ETag 为 "{sha256前32字符}"（strong validator）。SHA-256 截断到 128 位理论上碰撞概率 2^-128（实际不可达）。无 W/ weak validator 前缀，未来若想做字段级缓存（如分离 method_meta/field_definitions 各自 ETag）需要重构响应分组
+
+ | 影响 | 无当前问题。仅在未来功能扩展（如 Delta ETag、字段级 304）时受限
+
+处置建议: Phase 4 评估是否引入 weak validator 或拆分端点。当前 304 命中率已能满足原始 R11 目标。
+
+12.7 v1.8 Phase 2 审计新增风险详情（R34-R36） v1.8
+
+本节集中记录 v1.8 在 Phase 2 代码审计中识别但未在本次修复的残余风险。F7-F9 已在 §1.9 落实，剩余 R34-R36 留待后续阶段评估。
+
+R34 — RI/aux 字段初始渲染不强制 supports_ri 锁定 v1.8
+
+ | 位置 | frontend/ACP_Workbench_v2.html buildFieldRow（ri_approximation / aux_basis 字段渲染分支）
+
+ | 现状 | 
+  Phase 2 task 2.4 的 functional change 回调正确地在切换泛函时根据 supports_ri 清空或填充 RI/aux 字段。但 buildFieldRow 渲染下拉时只读 levelState[fieldName] 或 getFieldDefault(...)，不检查当前 functional 是否支持 RI。若 profile 预载入或用户手工编辑 stale 数据（如 r2SCAN-3c + ri_approximation="RIJCOSX"），下拉会显示 "RIJCOSX"。
+
+  注：F8 修复使 getFieldDefault("ri_approximation", engine, "r2SCAN-3c") 返回 "none"（Priority 1 路径），所以 仅当 levelState 已存在 stale 值时 才暴露。新建状态下不触发。
+
+  服务器端 normalize_and_validate_method_config 也不基于 supports_ri clamp，POST /validate-method 对 r2SCAN-3c + RIJCOSX 返回 valid: true（v1.8 验证步骤已确认）
+
+ | 影响 | 
+  低概率但语义不一致：
+  
+    
+profile 序列化保存了 stale 组合（外部来源），UI 显示与泛函能力矛盾
+    
+用户提交后 ORCA 后端会忽略 RI token（r2SCAN-3c 走 basis_inline=false 分支），实际无功能损失
+    
+用户困惑：UI 显示 RI 可选但实际无效
+  
+
+处置建议: Phase 3 任务 3.x：在 buildFieldRow 渲染 ri_approximation/aux_basis 前，若 lookupCI(method_meta, functional).supports_ri === false，渲染锁定 badge "none (此泛函不支持 RI)" 并强制写入 "none"（参考 task 2.3 builtin_dispersion 模式）。同步在服务器端 normalize_and_validate_method_config 添加 supports_ri clamp，使 UI 与后端语义统一。
+
+R35 — updateConfigCards 重试链接用 inline onclick 违反 CSP v1.8
+
+ | 位置 | frontend/ACP_Workbench_v2.html updateConfigCards（约 L3706-3709）
+
+ | 现状 | 
+  F7 修复后的 catalog 失败重试 UI 使用：
+
+  <a href="#" onclick="loadMethodCatalog().then(updateConfigCards);return false;">
+  重试
+</a>
+  Inline onclick 在启用 CSP script-src 'self' 时被浏览器拒绝执行。当前部署未启用 CSP（FastAPI 直接 serve 单文件 HTML），无观察到的 bug。
+
+  文件其余 UI 全部用 addEventListener（参见 openMethodConfig L3857 的重试按钮模式），本处为图方便破坏一致性。
+
+ | 影响 | 
+  
+    
+未来若启用 CSP（如反 XSS 加固），此重试链接立即失效
+    
+Promise 链无 .catch()，极端情况下（loadMethodCatalog 内部 try/catch 已包）无问题，但模式不健壮
+  
+
+处置建议: Phase 4 任务 4.4（Vite 迁移）时统一改造为 addEventListener。短期可手工 patch：var a = document.createElement("a"); a.addEventListener("click", function(ev){ ev.preventDefault(); loadMethodCatalog().then(updateConfigCards); });
+
+R36 — UI 层无自动化回归保护 v1.8
+
+ | 位置 | 整个 frontend/ACP_Workbench_v2.html（~5016 行单文件，0 个 UI 测试）
+
+ | 现状 | 
+  Phase 2 改动 7 个 task 主要影响 UI 渲染逻辑（badge 渲染、字段联动、加载失败 UI、i18n 切换），这些路径在 tests/ 目录下无任何覆盖。v1.8 验证仅通过 /api/v1/validate-method 间接确认数据流，未触达：
+  
+    
+DOM 渲染：badge 是否正确显示 "VV10 (built-in)"
+    
+事件联动：切泛函后 RI 字段是否真的清空
+    
+加载失败 UI：HTML 注入的重试按钮是否可点击
+    
+i18n：lang 切换后 badge 文案是否同步刷新
+  
+  项目无 Playwright/Puppeteer/Selenium 等 headless 浏览器测试基础设施。
+
+ | 影响 | 
+  UI 回归依赖人工浏览器测试（§9 测试验证清单 14 个场景）。前端代码 ~5000 行已接近单文件可维护上限（R8），后续 Phase 3/4 改动易引入未发现的视觉/交互回归。
+
+处置建议: Phase 3 任务 3.x 引入 Playwright + pytest-playwright，至少覆盖：
+  
+    
+test_method_config_builtin_dispersion_renders_badge — 选 wB97M-V → dispersion 字段渲染 badge 而非下拉
+    
+test_functional_change_resets_ri_when_unsupported — 切到 r2SCAN-3c → ri_approximation 变为 "none"
+    
+test_catalog_load_failure_shows_retry — mock fetch 失败 → 看到"目录加载失败" + 重试按钮可点击
+    
+test_i18n_badge_text — 切换 EN → badge 显示 "(built-in)"
+  
+  与 Phase 4 任务 4.4（Vite 迁移）协同：模块化后单元测试更易实施。
+
+变更历史
+
+ | 日期 | 版本 | 变更
+
+ | 2026-07-20 09:00 | v1.0 | 初始版本
+
+ | 2026-07-20 10:30 | v1.1 | 新增 §12 风险分析与改进建议（14 项风险，含 3 项 P0 阻塞）
+
+ | 2026-07-20 11:45 | v1.2 | 新增 §1.4 分阶段实施计划（5 阶段，~19h 工时）；Phase 0-2 为核心路径，Phase 0 完成前不可启动前端改动；整合 §12 风险到对应 Phase 任务
+
+ | 2026-07-20 14:00 | v1.3 | 代码审计完成：新增 R15（funcOptsMap 闭包竞态）、R16（双调用点静默失败）、R17（ORCA composite 硬编码→3处同步）；Phase 1 新增 task 1.6（ORCA composite 参数化）；总工时 19h → 22h；更新 §12 风险总览+详情
+
+ | 2026-07-20 16:00 | v1.4 | DLPNO 路径 + 大小写策略专项审计：新增 11 项风险 R18-R28（含 3 项 P0：R18 DLPNO 大小写、R19 aux_basis 失效、R27 basis 硬编码；4 项 P1/P2：R20 clamp 矛盾、R21 UI 漂移、R23 composite 命名、R28 engine 闭包；4 项 P2/P3：R22 backends 缺失、R24 共享可变、R25 三表断言、R26 fieldDefs 闭包）；Phase 1 新增 task 1.7-1.10；Phase 3 新增 test 3.8-3.13；Phase 4 新增 task 4.5-4.6；修正 7 处行号/位置引用错误（D1 isFieldAdvanced L3864-3866→L3864-3867、D2 funcOptsMap 在 buildFieldRow 非 buildLevelCard、D3 pageInit 函数不存在、D5 jobs.py:10→:52、D6 v1_routes.py:1141→1148、getFieldDefault L3984 漏列、R10 测试数 2→6）；总工时 22h → 23h
+
+ | 2026-07-20 17:30 | v1.5 | 设计审查: (1) R23 composite→basis_inline 全局重命名，DLPNO basis_block 新增 basis key（§10/§2.4/Phase 0.1/Phase 1.6/R17）；(2) R28 P1→P3 降级（当前无触发路径），§7 目标代码加防御性注释；(3) §2.1 key 描述勘误（"小写名" → "标准写法"）；(4) R4 状态更新为已解决 + 残留风险指向 R18
+
+ | 2026-07-20 19:00 | v1.6 | 内部一致性修复：修复 v1.5 引入的 4 项状态矛盾 — M1 (R23 标"已解决"仍列 Phase 0)、M2 (R4 标"已解决"badge 仍 P1)、M3 (R28 降级 P3 仍列 Phase 2)、M4 (Phase 2 task 2.5 仍引用不存在的 pageInit)；修复 5 项数据/语义遗漏 — D1 (basis_block.basis 与 default_basis 关系澄清)、D2 (methodMetaCache dead variable 删除)、D3 (Phase 0 新增 task 0.1a/0.1b 同步 FUNCTIONAL_OPTIONS_MAP 和 FIELD_DEFINITIONS 加入 PBEh-3c/B97-3c)、D4 (dispersion 全局回退列表补 VV10)、D5 (R14 代码片段补 fake 保留逻辑)；修复 4 项验证问题 — V1 (Phase 0 验证补 basis_inline/basis_block 断言)、V2 (Phase 3 测试计数算式 6+13=19 → 6+7+6=19)、V3 (R13 合并入 R19)、V4 (R10 三处测试计数表述统一)；新增结构 — §1.5 Non-Goals、§1.6 Decision Log、TOC §12 二级目录、CSS .badge-resolved
+
+ | 2026-07-20 21:30 | v1.7 | Phase 0/1 实施完成 + 代码质量审计：实施 Phase 0 全部 6 个 task + Phase 1 全部 10 个 task；通过 Phase 0/1 验证清单全部断言；673 测试通过 / 7 skipped / 4 预先存在的协议名漂移失败（与本审计无关）。审计发现并修复 6 项问题（F1-F6）：F1（P0）stage_mapping 同目标冲突改合并语义；F2（P0）catalog 端点 ETag 改预序列化 Response；F3（P1）_ALL_BASIS_SETS 改 tuple 落实 R24；F4（P1）FUNCTIONAL_OPTIONS_MAP 从 METHOD_META 自动派生；F5（P2）ORCA extra_blocks 跳过 dict 项；F6（P2）抽取 _match_option_case_insensitive 辅助消除重复。新增 5 项残余风险（R29-R33）：R29 _resolve_method_meta 静默降级；R30 basis/grid 等字段大小写未归一；R31 auxJ 无 UI 入口；R32 TightSCF 仍硬编码；R33 ETag 无 weak validator。新增结构 — §1.7 Audit Fix Records、§1.8 Phase Completion Summary、§12.6 R29-R33 详情、TOC 二级目录同步
+
+ | 2026-07-20 23:30 | v1.8 | Phase 2 实施完成 + 代码质量审计：实施 Phase 2 全部 7 个 task（2.0 lookupCI / 2.1 isFieldAdvanced 数据驱动 / 2.2 getFieldDefault 泛函级默认 / 2.3 builtin_dispersion 锁定 + CSS / 2.4 functional change 联动升级 + supports_ri 处理 / 2.5 loadMethodCatalog 失败显式处理 / 2.6 funcOptsMap[...] → lookupCI）；通过 API 端到端验证（method_meta 8 泛函、三表 key 一致、advanced 字段 10 个、validate-method B3LYP/wB97M-V/r2SCAN-3c 三场景）+ JS 语法解析。审计发现并修复 3 项问题（F7-F9）：F7（P0）loadMethodCatalog 加 resp.ok + JSON shape 守卫；F8（P1）functional change 默认值用 !== undefined 替代 || 防 falsy 误判 + 补 scheduleValidate()；F9（P2）badge 文案走 i18n（中/英双语）。新增 3 项残余风险（R34-R36）：R34 RI/aux 初始渲染不锁 supports_ri；R35 inline onclick 违反 CSP；R36 UI 层无自动化回归保护。新增结构 — §1.9 Phase 2 Audit、§1.8 Phase 2 完成总结表、§12.7 R34-R36 详情、TOC 同步；版本号 v1.7 → v1.8
+

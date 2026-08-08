@@ -1,0 +1,1070 @@
+
+
+ACP 移除 conformer/nmr/benchmark 工作流 + 重命名 cccp · 实施计划
+
+目标：网页端已忽略 conformer 工作流；本计划删除 conformer / nmr / benchmark 三个工作流及其孤儿 NMR 基础设施，把底层 QC 接口库 conformer_search 重命名为 cccp（Computational Chemistry Connection Package），并重写干净的 CREST 接口。保留 ensemble / energy / mechanism / simple 等工作流完全不受影响。
+
+✅ Phase C 完成报告（2026-07-27，实施 + 质量审计后）——Part C 已全部落地、部署、同步计算节点，并通过质量复核：
+
+  
+ | 项 | 状态
+
+  
+ | 提交粒度 | 未 commit 工作区含未提交的 Part B 改名内容（与 Part B 并行执行提示一致），Phase C 改动未单独提交。建议先提交 Part B 再提交 Part C。
+
+  
+ | C1 cccp 侧重写 | 完成 新建 qc/interfaces/xtb.py（XTBInterface 独立成文件，解决 anti-pattern #8）；重写 qc/interfaces/crest.py（仅 CRESTInterface：保留 run_conformer_search + run_batch_optimization，删除已废弃 run_two_stage_search）；__init__.py 顶层重导出保持不变
+
+  
+ | C2 acp 侧接线 | 完成 删除 CrestBackend.run_two_stage_search（与 C1 同批，无中间态死引用）；ensemble.py/energy.py 不再直连 CRESTInterface，改走 get_backend("crest")(...).search(...)；失败路径由"success=False 判断"改为"search() 抛异常"，删除原 if 块与 glob 回退
+
+  
+ | 与计划偏差 | 1 处 计划写 require_backend("crest")——实际 registry API 中 require 按能力名查找，"crest" 不是能力；且 censo/crest/molclus 均实现 search()，require_backend("conformer_search") 会按字母序误返回 censo。改用 get_backend("crest") 按名精确查找，语义与计划意图一致
+
+  
+ | 门禁 pytest | 801 passed（+3 新增 search() 契约测试；5 个失败与基线完全一致，均为 pre-existing：dispersion×3 / censo_p5 handoff / energy rank1）
+
+  
+ | 门禁 ruff | F 规则零新增（全部 44 个 F 报告均在未触碰文件，pre-existing）；新文件 xtb.py/crest.py 保持 cccp legacy typing 风格（与包约定一致）
+
+  
+ | run_two_stage_search 零残留 | PASS grep -rn "run_two_stage_search" src/ tests/ → 空
+
+  
+ | 突变自检 | PASS mock 的 search() 抛异常时，traceback 确认失败经由 crest_backend.search（ensemble.py:421）传播——mock 拦截真实调用路径，无静默放过
+
+  
+ | systemd 部署 | active sudo systemctl restart acp 后 /api/status 正常、日志无错误
+
+  
+ | 计算节点同步 | compute-01 已同步 rsync 推送 7 个改动文件 + SSH 清理 3 处 __pycache__；远端验证：xtb.py 存在、crest.py 无 XTBInterface/run_two_stage_search、ensemble/energy 用 get_backend、无 stale conformer_search/ 目录、远端 Python 导入冒烟测试通过
+
+🔍 质量审计发现并修复的问题：
+
+  
+修复 【中】CrestBackend.search() 契约测试缺失。计划门禁 C 要求"单元契约测试：mock 校验 search() 调用参数 + 产物路径契约"，实施时遗漏。已在 tests/test_acp_backends.py 补 3 个测试：参数转发契约（charge/multiplicity/output_dir/output_name=stem/energy_window）、失败抛 RuntimeError（含 error_message）、success 但 output_file=None 抛 RuntimeError。审计中同时核实 to_qc_result()（base.py:48）保留 output_file，契约链路完整。
+  
+修复 【低】cccp 侧 3 个 AGENTS.md 文档债（计划指定"Part C1 完成后改对"）。qc/interfaces/AGENTS.md：crest.py 仍描述为"XTBInterface co-located"、CREST 仍写"Two-stage GFN0→GFN2"、虚构的 gaussian.py 仍在 STRUCTURE、"CRESTInterface inherits QCInterfaceBase"错误声明——全部按实际修正。qc/AGENTS.md：runners/cluster 文件结构（isostat.py/shermo.py/lsf.py/local.py 均不存在，实现集中在 __init__.py）、同样的基类错误声明——修正。cccp/AGENTS.md：STRUCTURE 仍列已删除的 cli.py/__main__.py、reverse-sync Note 未记录 xtb.py 已在 Phase C 重建——修正。
+
+✅ 审计核对后确认安全（无需改动）的关注点：
+
+  
+安全 get_backend("crest") 注册时机。acp/backends/__init__.py:25 导入 CrestBackend 触发 register_backend；ensemble.py 顶部导入 acp.backends.censo_backend 必先执行包 __init__——import 链保证注册先于调用。
+  
+安全 XYZ 写→读 roundtrip。write_xyz 用 15.10f（1e-10 Å 精度），search() 经 read_xyz 回读后接口再写 crest_input.xyz——双 roundtrip 对 CREST/xTB 能量无影响。
+  
+安全 多帧输入边界。ensemble/energy 的多帧 XYZ 输入在 CREST 阶段前已被 _is_multiframe_xyz 拦截跳过；进入 search() 的必为单帧 Structure（工作流输入契约），接口侧多帧分支仅供 ConformerEngine 内部使用。
+  
+安全 engine.py 等残留消费者。ConformerEngine 经 cccp.qc.interfaces 顶层导入 CRESTInterface/XTBInterface——__init__.py 重导出兼容，run_batch_optimization（engine.py:478 唯一消费者）保留。
+  
+安全 scheduler/api 层。grep 确认 scheduler/ 与 api/ 无任何 CRESTInterface 直接引用；远程执行经 stage_tasks → 工作流函数，自动继承新接线。
+
+⚠️ 审计发现但不在 Part C 范围的风险（移交后续处理）：
+
+  
+移交 B5 acp 侧 AGENTS.md 文档债仍在。src/acp/workflows/AGENTS.md、src/acp/AGENTS.md 仍描述已删除的 conformer/nmr/benchmark 工作流——属 Part B5 批量更新范围（cccp 侧 3 个已由本 Part 修复）。
+  
+pre-existing tests/test_remote_phase2.py:1054-1056 F821 悬空引用。引用已删除的 conformer/nmr/benchmark CLI 测试函数（Phase A 残留）；因所在代码路径不被执行，pytest 收集不受影响，但属 Phase A 应清理的漏网点。
+  
+pre-existing CrestBackend.optimize() 等三个方法仅抛 NotImplementedError，但结构上满足 GeometryOptimizer Protocol（isinstance(crest, GeometryOptimizer) 为 True，test_acp_backends.py:76 依赖此行为）——能力声明与实际可用性错配，建议后续统一治理（非本 Part 引入）。
+  
+pre-existing 5 个测试失败与 Part C 无关。dispersion 锁定×3、censo_p5 non-rank1 handoff、energy rank1 gtot——基线已确认。
+
+✅ Phase A 完成报告（2026-07-27，实施 + 质量审计后）——Part A 已全部落地、部署、并通过质量复核：
+
+  
+ | 项 | 状态
+
+  
+ | 提交粒度 | 5 笔 commit 015fcca(A1 文件删除+stage_tasks 解耦) → 8d7d30f(A2 scheduler+backends) → 9e4eca6(A3 CLI+catalog+API+前端+打包) → 15e9caa(补 test_benchmark.py) → 8971836(质量修复)
+
+  
+ | 门禁 pytest | 799 passed（Part A 零新增失败；余 5 个失败均为 pre-existing，已 git stash 核对基线确认：wB97X-D4 dispersion×3 / censo_p5 handoff / energy rank1）
+
+  
+ | 门禁 ruff | F 规则零新增；E501 / format drift 均为 pre-existing（基线 18 文件，执行后仍 18，未恶化）
+
+  
+ | cli.py 三件套零残留 | PASS grep "ALL_PROTOCOLS|_handle_protocol|_render_protocol_info|add_parser(\"protocol\")" src/acp/cli.py → 空
+
+  
+ | 传递导入链 | PASS import acp.scheduler, acp.api.v1_routes 成功（验证 stage_tasks 解耦有效）
+
+  
+ | systemd 部署 | active sudo systemctl restart acp 后 /api/workflows 已无 conformer/nmr/benchmark；/api/backends orca 不再宣称 nmr 能力
+
+  
+ | 计算节点同步 | compute-01 已同步 rsync 推送 17 改动文件 + SSH 清理 stale workflows/{conformer,nmr,benchmark}.py + nmr/ + reports/ + __pycache__；节点 SUPPORTED_WORKFLOWS 正确排除三条 retired
+
+🔍 质量审计发现并修复的 bug：
+
+  
+修复 【中】api/routes.py:206-218 /api/protocols 死 import。Phase A 删除 ALL_PROTOCOLS 后，该端点的 try: from acp.cli import ALL_PROTOCOLS ... except: names=[] 永远走 except 分支——端点表面正常（静默降级为只返回 censo presets），实际用一层 except Exception 掩盖了"依赖符号已删"的事实，误导后续维护者。已改为直接返回 censo presets 列表 + 注释说明原因。前端 loadProtocols() 行为不变。
+  
+修复 【低】tests/test_acp_backends.py _make_config() 残留 theory.nmr 块。NMRCalculator 已删，该 fixture 数据无消费者，仅造成阅读困惑。已移除。
+
+✅ 审计核对后确认安全（无需改动）的关注点：
+
+  
+安全 catalog "nmr" method_schema 存根（method_levels: []）。逐行核对全部消费者：normalize_and_validate_method_config 的 for lv_def in schema.get("method_levels", []): 对空列表直接跳过，返回 ({}, [])；method_levels_to_workflow_config 走 else 分支 config = dict(levels) 空入空出；/validate-method 端点对空 schema 返回 valid。零异常路径。
+  
+安全 retired catalog 条目泄漏面。/api/v1/workflow-catalog 返回全部条目（含 retired）——这是设计行为（历史作业详情页需解析标签）；三条 retired 均设 visible:false，前端 v2 loadWorkflowCatalog 的 filter(w.visible !== false) 正确隐藏；/api/workflows 经 list_workflow_entries() × SUPPORTED_WORKFLOWS 双重过滤已排除。
+  
+安全 历史 job 显示路径。get_workflow_entry("conformer") 返回 None，remote/runner.py:1000 用 list(entry.requires_binaries) if entry else [] 优雅降级；前端渲染原始 spec.workflow 字符串，无崩溃。
+  
+安全 run_conformer_search 方法名残留（ensemble.py:414 / energy.py:840 / crest.py:84）。这是 CRESTInterface 的能力方法名（"后端能做构象搜索"），非已删工作流——v2 决策明确保留能力字符串与方法名不变，Part C 接线时统一改走 CrestBackend.search()。
+  
+安全 cli.py / runner.py 删除 handler 后无未用变量。ruff F 规则全过；_build_cmd 的 method 变量仍被 ensemble/energy 分支使用；json/datetime 等 import 仍有消费者。
+
+⚠️ 审计发现但不在 Part A 范围的风险（移交后续 Part 处理）：
+
+  
+移交 B5 AGENTS.md 文档债。src/acp/workflows/AGENTS.md、src/acp/backends/AGENTS.md、src/acp/AGENTS.md、src/acp/scheduler/AGENTS.md 仍描述 NMR/conformer/benchmark 子系统为"存在"——会误导开发者。按计划属 Part B5 文档批量更新范围。
+  
+移交 legacy v1 前端 #wf-protocol 选择器成孤儿 UI。conformer 工作流删除后，ACP_Workbench.html 的协议下拉框无对应工作流可应用——但仅是死 UI，无崩溃风险。v2 前端为正式版，v1 仅在 /legacy/ 提供。
+  
+pre-existing 5 个测试失败与 Part A 无关。wB97X-D4/wB97M-V dispersion 锁定（catalog METHOD_META 的 dispersion tuple 多了 "none"）、censo_p5 non-rank1 handoff、energy rank1 gtot——均已在 main 基线确认存在，非本 Part 引入。
+
+📦 部署注意事项（已执行）：
+
+  
+sudo systemctl restart acp 完成（服务 active）。
+  
+计算节点同步：注意 bootstrap sync 是 mtime 增量、不删远端文件——首次 bootstrap 只推了 10/17 个改动文件（sync state 陈旧）。已用 rsync --relative 补推全部 17 文件 + SSH 清理 stale 删除项 + __pycache__。建议 Part B 在 sync.py 增加 --delete 选项或定期全量同步，避免删除类变更再次漏推。
+  
+未触碰 ~/.conformer_search.yaml——配置文件改名属 Part B3 范围。
+
+✅ Phase B 完成报告（2026-07-27，实施 + 质量审计 + 部署后）——Part B 已全部落地、部署、并通过质量复核：
+
+  
+ | 项 | 状态
+
+  
+ | 改名范围 | 完成 git mv src/conformer_search → src/cccp；~140 处 import + 26 处 mock patch 字符串替换；保留能力串 "conformer_search" 与方法名 run_conformer_search（v2 决策）
+
+  
+ | 元数据同步 | 三处一致 __init__.py / version.py / pyproject.toml 均 1.0.0；pyproject name="acp"；删 conformer-search console_script + cccp/cli.py + cccp/__main__.py + legacy test_conformer_search_help_exits_zero
+
+  
+ | 门禁 import | PASS import cccp, acp ok；cccp.__version__=1.0.0；import acp.scheduler, acp.api.v1_routes 传递导入链 intact；全部 cccp.* + acp.* 子模块零循环导入
+
+  
+ | 门禁 pytest | 798 passed（与 Part A 一致；5 failed 全为 pre-existing：wB97X-D4 dispersion×3 / censo_p5 handoff / energy rank1——已 git stash 核对 HEAD 基线，Part B 零新增失败）
+
+  
+ | 门禁 ruff | 零新增 HEAD 基线 419 errors → Part B 后 409（减少 10，因删 legacy CLI + 清理孤儿 import）；无新增 F/I 规则违规
+
+  
+ | 零残留扫描 | PASS grep "from conformer_search|import conformer_search|\"conformer_search\.|'conformer_search\." src/cccp src/acp tests --include=*.py 仅命中 intentional 的 legacy 回退常量 _LEGACY_USER_CONFIG_NAME=".conformer_search.yaml"（B3 设计）；infra（config/scripts）零残留；src/conformer_search/ 目录已不存在
+
+  
+ | mock 突变自检 | PASS patch("cccp.qc.interfaces.crest.subprocess.run") 解析成功；patch("conformer_search.qc.interfaces.crest.subprocess.run") 正确抛 ModuleNotFoundError——证明 mock 没有静默放过
+
+  
+ | systemd 部署 | active 配置迁移 ~/.conformer_search.yaml → ~/.cccp.yaml（旧文件已删）；sudo systemctl restart acp 后 /api/status ok、日志无 ERROR/WARNING
+
+  
+ | 计算节点同步 | compute-01 已同步 远端清理 ~/acp_code/src/conformer_search/（含 __pycache__）+ 旧 egg-info；CodeSyncer 推送 83 文件（cccp+acp+requirements，0 errors）；节点 import cccp ok；节点 config 同步迁移；探测脚本端到端验证（读 ~/.cccp.yaml，解析 orca/crest/censo v3.0.8）
+
+🐛 质量审计发现并修复的 bug：
+
+  
+修复 · 致命 【高】stale conformer-search 可编辑安装元数据导致幽灵命名空间包。B6 清理了 __pycache__，但遗漏了 venv 中旧 pip install -e conformer-search 留下的 __editable__.conformer_search-1.0.0.pth + conformer_search-1.0.0.dist-info/。后果：import conformer_search 仍可解析（指向不存在的 src/conformer_search/，被 Python 当作 PEP 420 命名空间包），且 pytest 运行时该幽灵目录被 __pycache__ 重建（io/qc/utils 子目录 + 18 个 .pyc）。修复：pip uninstall conformer-search + rm -rf src/conformer_search + 重启 systemd（让服务进程也用干净 venv）。验证：import conformer_search → ModuleNotFoundError；重跑 pytest 幽灵目录不再重现。这是 v7 B6 的盲区——原计划只点名 __pycache__，未覆盖 pip 元数据。
+
+✅ 审计核对后确认安全（无需改动）的关注点：
+
+  
+安全 B3 _load_user_config 向后兼容。4 场景全过：(A) 仅 ~/.cccp.yaml → 读新；(B) 仅 ~/.conformer_search.yaml → 回退读旧 + WARNING；(C) 双文件共存 → 新文件优先 + WARNING（不 merge，避免字段冲突）；(D) 都不存在 → 返回默认。本地 ./cccp.yaml / ./conformer_search.yaml 同策略。
+  
+安全 B4 远端探测脚本双路径回退。runner.py:_BINARY_PROBE_SCRIPT 重写为循环尝试 ~/.cccp.yaml 再 ~/.conformer_search.yaml——保护已部署但未迁移配置的远端节点。端到端验证：compute-01 实跑，正确解析 orca/crest/censo 二进制 + censo v3.0.8 版本号。
+  
+安全 能力字符串 "conformer_search" 与方法名 run_conformer_search 完整保留。sed 替换用 4 条精确模式（from conformer_search / import conformer_search / "conformer_search. / 'conformer_search.），不触碰裸能力串与方法名。核对：capabilities.py 9 处、registry.py:27、catalog.py:1264、backends/crest.py 3 处方法定义/调用、5 个测试文件能力断言——全部保持原值。
+  
+安全 _BACKEND_SUPPORTS（catalog.py:1261）。Part A 已正确移除 orca 的 "nmr"；"conformer_search" 在 crest 行保留。审计确认 /api/backends 端点输出与设计一致。
+  
+安全 无循环导入 / 无 sed 误伤。walk_packages 遍历 cccp.* + acp.* 全部子模块均成功导入；grep "cccp[a-zA-Z]" 零命中（无 conformer_search 被错误地与字母拼接成新标识符）。
+  
+安全 tests/conftest.py CONFSEARCH_* 环境变量前缀。v7 已核查——是环境变量名而非包导入，与包重命名解耦。Part B 未触碰，全测试套件通过。
+
+⚠️ 审计发现但不在 Part B 范围的关注点：
+
+  
+移交 Part C cccp/qc/interfaces/AGENTS.md + cccp/qc/AGENTS.md 文档债。含 2026-07-13 reverse-sync 残留的虚假陈述（"XTBInterface moved to xtb.py"、"CRESTInterface now inherits QCInterfaceBase"、"~~XTBInterface co-located~~ Fixed"——均与实际代码矛盾）。Part B 仅做路径替换（conformer_search→cccp），内容修正推迟到 Part C1 真正拆分 XTB 后（v4 决策）。
+  
+移交 Part C ensemble/energy 绕过后端层（CRESTInterface(...).run_conformer_search() 直连）。Part C2 接线为 CrestBackend.search()（已实现，零调用方）。
+  
+pre-existing 5 个测试失败与 Part B 无关。与 Part A 报告同一组：wB97X-D4/wB97M-V dispersion 锁定、censo_p5 non-rank1 handoff、energy rank1 gtot。已在 main 基线确认。
+  
+文档 README.md 仍有 Phase A 残留的 conformer 工作流示例。Part B 清理了 legacy CLI 引用（conformer-search → acp），但 README 中 acp run conformer / acp protocol 等示例属 Part A 范围（工作流删除），未在本 Part 处理。
+
+📦 部署注意事项（已执行）：
+
+  
+新增关键步骤（v9 补）：pip uninstall conformer-search——pip install -e '.[dev,api,remote]' 装 acp 时不会自动卸载旧的 conformer-search 发行包。残留的 .pth 会让 import conformer_search 解析为幽灵命名空间包。部署清单第 9 项已补此步。
+  
+本地 ~/.conformer_search.yaml → ~/.cccp.yaml（旧文件已删，避免双文件 WARNING）。
+  
+计算节点 config 同步迁移；CodeSyncer 状态文件清理掉 37 条 stale conformer_search mtime 记录。
+  
+systemd 重启 2 次：第 1 次改名后、第 2 次 uninstall 旧包后（让服务进程用干净 venv）。
+  
+未提交 git commit（按规约待用户确认）。改动全在工作区，可整体 commit 为单笔 Phase B。
+
+⚠️ Part B 并行执行提示（2026-07-27）：Phase A 质量修复 commit 8971836 用 git apply --cached 精确暂存了 2 个 hunk，未裹挟 Part B 正在 stage 的 conformer_search→cccp 重命名（那些保留在工作区未暂存）。Part B 提交时需注意 api/routes.py 与 tests/test_acp_backends.py 已被 Phase A 改过——合并时这两个文件的 cccp import 改动会叠加在 Phase A 修复之上，无冲突（不同行）。
+
+v8 修订（2026-07-26，计划合理性二审——逐行核对 cli.py / registry.py / catalog.py / manager.py / 测试文件后）——修正 3 处事实错误 + 补 6 处遗漏：
+
+  
+【高 · 事实错误已纠正】A2 workflows/registry.py 行的"删顶部 import(L13-14)：BENCHMARK_LEVELS / BenchmarkRunner"不存在。实际核对：registry.py 顶部仅 import SUPPORTED_WORKFLOWS（L13），无任何对 benchmark 工作流的 import。该行只需删 _WORKFLOW_REGISTRY 三条（conformer L40-45 / nmr L64-69 / benchmark L70-75）。
+  
+【高 · 遗漏 · 致命】cli.py 的 protocol 子命令删除不完整。v7 只列删 _handle_protocol（L199-216）与 _render_protocol_info（L173-196）两个 handler，漏列：(a) add_parser("protocol") 子命令块（L971-984）；(b) dispatch 中 if args.command == "protocol": return _handle_protocol(args)（L1900-1901）。若只删 handler 不删 parser/dispatch，acp protocol list 将运行期 NameError（argparse 照常解析、dispatch 引用已删函数）。已在 cli.py 行补全。
+  
+【中 · 修正】ALL_PROTOCOLS（L33-41）应整体删除而非"移除 "benchmark""。实际核对其全部消费者：L202（_handle_protocol）、L424/L551（conformer/nmr 子 parser choices=）、L999（_handle_conformer_single）、L1849（_handle_benchmark）——全部随 Part A 删除，常量变死代码（ruff 不报但误导）。
+  
+【高 · 遗漏】tests/test_acp_cli.py 完全未列入编辑清单。该文件含 test_acp_run_conformer_help（L20-30）与 test_acp_run_nmr_help（L32-42）——Part A 删子命令后必挂；test_conformer_search_help_exits_zero（L81+，跑 python -m conformer_search.cli --help）——Part B 删 legacy 入口后必挂。已补入 A2 编辑清单（前两个）与 B1 编辑清单（第三个）。
+  
+【中 · 遗漏】catalog.py _BACKEND_SUPPORTS（L1261）orca 支持列表含 "nmr"。v7 只清理 backends/capabilities.py 的 nmr 列，但 /api/backends 端点由 _BACKEND_SUPPORTS 驱动（catalog.py:1316），漏改会令 API 仍宣称 orca 支持 nmr。已补入 A2 catalog 行。
+  
+【中 · 遗漏】manager.py L26 from acp.catalog import convert_method_levels_to_protocol_levels 将成为孤儿 import。已核对：该函数在 manager.py 中仅 L262 conformer 块内使用（catalog.py 侧定义与其他消费者保留）。删 conformer 块后触发 ruff F401。已在 manager.py 行补充——与 L34/L35 一并删除。
+  
+【中 · 决策补全】method_schema 存根规则只写了 nmr，漏 "confsearch"。retired conformer 条目引用 method_schema_id:"confsearch"（catalog.py:89），其 schema 定义在 catalog.py:545-749（~200 行，含 preopt/crest/optimization/frequency/single_point 五级）。决策："confsearch" schema 整体保留不动（供历史作业详情页解析；体量大但零运行成本）。另注："benchmark" schema 自始不存在（benchmark 条目引用的 method_schema_id 本即悬空，属既有无害状态，不处理）。
+  
+【低 · 遗漏】tests/test_acp_api.py 改动被低估。除"'nmr' 能力断言"外，L76-94 还有工作流注册表断言（期望 conformer/nmr/benchmark 在 registry 中、nmr label=="NMR"、requires_binaries=={"orca"}），需一并更新。tests/test_acp_backends.py 同理：除能力断言外还须删 test_orca_backend_nmr_delegates_to_interface（L116-125）与 require_backend("nmr") 用例（L93）。
+  
+【低 · 增强】门禁 A 增加 cli.py 零残留 grep：grep -n "ALL_PROTOCOLS\|_handle_protocol\|_render_protocol_info\|add_parser(\"protocol\"" src/acp/cli.py 应无输出，防止 handler/parser/dispatch 三件套删漏。
+
+v7 修订（2026-07-26，计划合理性审核后）——补充 6 处遗漏 / 歧义：
+
+  
+【高 · 遗漏】新增 B1.5 "基础设施文件附加扫描"步骤：config/defaults.yaml（L5 含 src/conformer_search/config.py、L96 含 ~/.conformer_search.yaml，详见下方数据）、scripts/{bootstrap_venv,install_systemd,start_acp}.sh（已核对，当前无 conformer_search 引用——但新增扫描步骤以防止后续脚本变更引入依赖）、requirements-node.txt（已覆盖于 B5）。
+  
+【中 · 遗漏】新增 B6 "__pycache__ / .pyc 残留清理"步骤：git mv src/conformer_search/ src/cccp/ 不会自动清理 src/conformer_search/ 下的 __pycache__/ 目录，且该目录不在 git 版本控制中（被 .gitignore 忽略）。残留在磁盘的 __pycache__/conformer_search.*.pyc 可能在某些配置下被 Python 误导入（取决于 sys.path 顺序）。→ 新增 B6 强制清理步骤。
+  
+【中 · 澄清】Part B3 配置文件冲突策略明确化：原说"先读 ~/.cccp.yaml 再回退 ~/.conformer_search.yaml"，但未明确两个文件同时存在时的行为。→ 补充策略：新文件优先；同时存在时 WARNING 日志提示"旧配置文件仍存在，请手动迁移后删除"。确保 systemd 服务迁移期间行为可预测。
+  
+【中 · 澄清】tests/conftest.py 无需修改——但须显式文档化：已逐行核对 conftest.py（129 行），所有 CONFSEARCH_* 字符串均为环境变量前缀而非包名导入，语义独立于 conformer_search 包命名空间。无任何 from conformer_search import ... 或 mock patch 字符串。Part B 无需改动，但增加条目记录核查结果（防将来误改）。
+  
+【低 · 修正】requirements-node.txt 中 openpyxl 移除时机从 B5 前移到 Part A：该文件是远端计算节点 Python 运行时依赖清单，openpyxl 的唯一消费者是 acp/reports/nmr_report.py（Part A 删除）。→ Part A 的 pyproject.toml 移除动作同步到 requirements-node.txt L17。
+  
+【低 · 增强】部署清单细化：增加基础设施文件逐项核对表（config/defaults.yaml 更新、~/.cccp.yaml 迁移、远端目录清理、systemd 重启验证、前端 conformers Tab 确认）。
+
+v2 修订（2026-07-26）：基于全仓代码扫描（~80 文件、62 处跨包 import、55 处内部 import、26 处 mock patch 字符串）完善了 CLI 子系统的删除范围、补充了遗漏的 sink point、新增 SQLite 历史作业兼容方案、将 Part C3 能力字符串改名标记为暂缓。
+
+v3 修订（2026-07-26，逐行代码核对后）：
+
+  
+C0 前置调研已完成并关闭：实际核对 ensemble.py:414-430 与 energy.py:840-857，下游只访问 crest_result.success / crest_result.error_message 两个属性；ensemble XYZ 路径由调用方自行拼接（crest_dir / "crest_conformers.xyz"），不从 result 对象读取。属性映射表直接给出（见 C0），Part C 风险由"高"降为"低"。
+  
+纠正 SQLite 风险表述：manager.py:253 的 SUPPORTED_WORKFLOWS 校验仅存在于 submit()（新作业提交）；list_jobs/store 加载历史记录不经过该校验，查看历史不会抛 ValueError。真实影响面仅为"重试/重提交已删工作流的历史作业"，严重度降级。
+  
+cli.py 的 conformer_search 引用共 17 处，需区分两类：conformer/nmr/benchmark 专属（Part A 删除）与 simple/其他 handler 共用的 save_config/load_batch_inputs/load_config（Part A 保留，Part B 统一改名）。
+  
+行号免责声明：文档中所有行号为撰写时快照，执行时以符号名/grep 定位为准。
+
+v4 修订（2026-07-26，执行前复核——修正 2 处致命缺陷 + 收敛悬空决策）：
+
+  
+修正 C1/C2 残留死调用（致命缺陷）：原 v3 称 run_two_stage_search / run_batch_optimization"Part A 后无消费者"不准确。实际核对：acp/backends/crest.py:104-113 的 CrestBackend.run_two_stage_search() 仍委托 self._interface.run_two_stage_search()；core/engine.py:478 的 ConformerEngine（范围外保留休眠）仍调用 run_batch_optimization。若 C1 删接口方法而 C2 不动 backend 包装，将留下"调用即 AttributeError"的潜伏 bug（仅运行时触发，单测难捕获）。→ C2 新增条目：同步删除 CrestBackend.run_two_stage_search；C1 决策保留 run_batch_optimization（让休眠的 ConformerEngine 不损坏）。
+  
+补全 __version__ 三处同步（违反 anti-pattern #2）：B1 原只列 cccp/__init__.py docstring，漏列 cccp/version.py。实际版本号在 __init__.py:12 / version.py:6 / pyproject.toml:7 三处，须同步。
+  
+B5 补子目录 AGENTS.md 内容修正（批量替换不够）：src/conformer_search/qc/interfaces/AGENTS.md 声称"XTBInterface moved to xtb.py (Phase 1 fix)"、"CRESTInterface now inherits QCInterfaceBase"；src/conformer_search/qc/AGENTS.md 声称"~~XTBInterface co-located~~ Fixed"——均与实际代码矛盾（XTBInterface 仍在 crest.py:431，CRESTInterface 仍无基类）。系 2026-07-13 reverse-sync 残留文档债，需内容修正而非路径替换。
+  
+门禁 C"真实回归测试"不可达：现有 ensemble/energy 测试全部 mock subprocess，CI 无 CREST 二进制。改为"部署机手动烟雾测试 + 单元层契约测试（mock 校验 CrestBackend.search() 调用参数与产物路径契约）"。
+  
+SQLite 决策收敛：原风险表给方案 1/2/3 且"推荐 1 但可接受 3"，决策悬空。→ 明确选定方案 1（catalog 加 "retired" 状态，前端隐藏但 manager 允许查看历史，零 schema 改动）。
+  
+Git commit 粒度细化：Part A 触及 ~25 文件/6 子系统，单笔 commit 无法独立 revert。→ 拆为 A1（workflows + NMR 基础设施）/ A2（scheduler + runner + remote）/ A3（CLI + API + 前端）三笔，每笔过 acp --help 门禁。
+  
+cli.py 计数更正：v3 称"17 处 conformer_search 引用"含 2 处 run_conformer_search() 方法调用子串命中（L1057、L1099），实际包引用 15 处 + 方法调用 2 处。分类标注方向正确，执行时注意这 2 处随 _handle_conformer_* 一并删。
+  
+发行包名外部影响：pyproject.toml name 从 "conformer-search" 改 "acp" 后，任何外部 pip install conformer-search / 部署脚本 / CI pin 会断。B1 新增排查项。
+
+v5 修订（2026-07-26，执行前逐行核对 cli.py / stage_tasks.py / crest.py 实际代码后）——修正 v4 的 1 处致命误判 + 1 处过度设计：
+
+  
+【致命误判 · 已纠正】"cli.py L175/L1831 模块级 import 导致 ImportError"判断错误。实际核对：cli.py:175 位于函数 _render_protocol_info()（L173）体内、cli.py:1831 位于 _handle_benchmark()（L1829）体内——均为函数级懒 import，删 conformer.py/benchmark.py 不会破坏 import acp / acp --help。同理 L1046/L1084/L1160。且 acp/workflows/__init__.py 用 PEP 562 __getattr__ 懒加载，删工作流文件 不会破坏 import acp.workflows。真正的模块级风险是 src/acp/scheduler/stage_tasks.py:16 的 from acp.workflows.nmr import get_nmr_stages——经 scheduler/__init__.py:26 + api/v1_routes.py:120 传递导入，先删 nmr.py 会令 import acp.scheduler + API 崩溃。→ 风险表与执行顺序已重写（见下）。
+  
+【过度设计 · 已收敛】Part C 不必"设计 CrestBackend.search()"。实际 search() 已实现（acp/backends/crest.py:123-143）：签名 search(initial_xyz, charge, multiplicity, output_dir, **kwargs) -> Path，失败抛 RuntimeError、成功返回产物 Path，与 C0 契约完全吻合。当前 零调用方。故 Part C2 降级为纯接线（ensemble/energy 改调既有 require_backend("crest").search(...)），不再涉及契约设计。
+  
+cli.py 计数微调：v4 称"15 包引用 + 2 方法调用"。实际 17 行命中 = 13 行 from conformer_search... 包 import + 4 行含 run_conformer_search（其中 L1046/L1084 是 from acp.workflows.conformer import run_conformer_search，L1057/L1099 是调用）。分类执行方向不变。
+  
+Part C 原子性补强：C1 删 run_two_stage_search 与 C2 删 backend 包装必须同笔 commit，避免中间态死引用。
+  
+门禁新增：子门禁 A2 / 门禁 A 增加 python -c "import acp.scheduler, acp.api.v1_routes" 验证传递导入链未断。
+
+v6 修订（2026-07-26，执行前复核——修正 2 处自相矛盾 + 补 4 处遗漏）：
+
+  
+【致命 · 自相矛盾已纠正】catalog 三条"删"vs"retire"冲突。v5 A2 catalog 行写"从 WORKFLOW_CATALOG 删 conformer/nmr/benchmark"，但决策摘要（方案 1）、部署清单、回滚策略三处均写"标记 "retired""——二者互斥（删了就无处可标记 retired）。实际代码确认 catalog 每条含 status 字段（catalog.py:92/106/118 均为 "active"），_derive_supported_workflows()（jobs.py:73）按 status=="active" 过滤。→ A2 catalog 行改为：保留三条、设 status:"retired" + visible:False（nmr 当前 visible:True 需改 False），不删除条目。这样 submit 自动拒绝、list_jobs/前端仍能解析历史作业标签、零 schema 改动，与方案 1 完全一致。
+  
+【致命 · 提交顺序自相矛盾已纠正】A1→A2 顺序违背"先删 stage_tasks.py:16 再删 nmr.py"约束。v5 把 stage_tasks.py 归入 A2、nmr.py 删除归入 A1，又声明"必须先删 stage_tasks.py:16 再删 nmr.py"——按 A1→A2 提交会先删 nmr.py后改 stage_tasks.py，恰构成 v5 所警告的最高风险（中间态 import acp.scheduler 崩溃）。且 A1 门禁仅 acp --help（不触发 scheduler 传递导入），崩溃要到 A2 才暴露，留下可被 git checkout 的破损提交。→ 把 stage_tasks.py 解耦（删 L16 import + 三个 provider 类 + 三条 register）从 A2 移入 A1，与 nmr.py 删除落入同一笔 commit；A2 仅保留 jobs/manager/runner/remote/provenance 的白名单与分支清理。
+  
+【中 · 补遗漏】workflows/__init__.py docstring 过时。该文件 L6-9 docstring 以"NMR 报告依赖（openpyxl）解耦"作为 PEP 562 懒加载的唯一论据；删 NMR 后此论据失效，docstring 误导。A2 workflows/__init__.py 行补"重写 docstring（改为通用'按需加载、隔离第三方依赖'，不再点名 openpyxl/NMR）"。
+  
+【中 · 补遗漏】前端"conformers"结果页 Tab 与 conformer 工作流同名——严禁连带删除。实际核对 ACP_Workbench_v2.html:1104/1672/1879 是构象集合结果展示 Tab（tab.conformers），服务于保留的 ensemble/energy 工作流的产物查看，非 conformer 工作流。A2 前端行补显式警告："仅删工作流选择器中的 conformer/nmr/benchmark；tab.conformers 结果页 Tab 必须保留"，并在门禁加"前端打开 ensemble 任务详情页确认 conformers Tab 仍在"。
+  
+【低 · 门禁范围修正】grep 门禁漏扫 src/cccp/。v5 Part C 门禁 grep -rn "run_two_stage_search" src/acp/ 只覆盖 acp 侧；Part B 改名后接口方法在 src/cccp/qc/interfaces/crest.py。门禁改为 rg "run_two_stage_search" src/acp/ src/cccp/（或全仓）。已核对该方法在 conformer_search 侧已标注 deprecated（crest.py:252 "run_two_stage_search() is deprecated. Use engine._step_two_stage_crest() instead."），ConformerEngine 实际走 _step_two_stage_crest()、不调用此方法 → 零消费者，删除结论不变。
+  
+【低 · 收敛】manager.py L34/L35 两 import 可决断删除。已核对：validate_protocol_methods（L35）仅 L264 conformer 块使用；load_config（L34）仅 L263 conformer 块使用。删 conformer 块后二者均无其他消费者——一并删除，无需"再检查"。
+  
+【低 · 决策补充】retired catalog 条目 ↔ 已删 nmr method_schema 的引用悬空。retired "nmr" 条目引用 method_schema_id:"nmr"；若 METHOD_META 删 nmr schema，历史作业详情页解析 schema 会 miss。决策：method_schema 定义保留为最小存根（仅 label，供历史展示），删除可执行的 method/route block（METHOD_META 中 nmr 方法定义）。catalog 与 schema 皆"退役但可显示"。
+  
+【低 · 文档债】jobs.py:63 docstring 提及"standalone conformer_search use"。Part B 改名时一并更新为"standalone cccp use"。
+
+0 · 关键调研发现
+
+  三个工作流可安全删除，但 conformer.py 不能直接删文件。 实际检查：run_conformer_search()（src/acp/workflows/conformer.py:226）被 nmr.py:18,426 与 benchmark.py:14,107 内部调用。但既然 nmr / benchmark 一并删除，run_conformer_search() 即无消费者，conformer.py 可整体删除。boltzmann_weight_ensemble 同逻辑（定义于 conformer.py:37，仅被 nmr.py:18 导入，随 NMR 删除后无消费者）。
+
+  SUPPORTED_WORKFLOWS 自动派生。 acp/scheduler/jobs.py:52-80 的 _derive_supported_workflows() 从 acp.catalog.WORKFLOW_CATALOG（status=="active"）派生，并非手写列表。因此只要把 catalog.py 中 conformer/nmr/benchmark 三条的 status 改为 "retired"（保留条目，见 v6 决策），调度器 / API / registry / 前端联动失效（submit 自动拒绝）。但 jobs.py:69 的 ImportError fallback 静态列表也要手动改，否则早期 bootstrap 会"复活"已退役工作流。
+
+  ensemble / energy 已绕过后端层。 ensemble.py:401 与 energy.py:823 直接 CRESTInterface(...).run_conformer_search()，未走 CrestBackend。这是代码异味，Part C 重写 CREST 时一并修正。注意：ensemble/energy 直接 import 的是 from conformer_search.qc.interfaces.crest import CRESTInterface（底层接口），不是从 acp.workflows.conformer 导入——因此删 conformer 工作流不影响 ensemble/energy 当前功能。
+
+  CRESTInterface 与 XTBInterface 共文件（anti-pattern #8）。 conformer_search/qc/interfaces/crest.py 同时含 CRESTInterface（L28，方法 run_conformer_search/run_two_stage_search/run_batch_optimization）与 XTBInterface（L431）。重写时拆分到独立文件。ConformerEngine（core/engine.py:339,438,494）只用 run_conformer_search，run_two_stage_search/run_batch_optimization 删工作流后无消费者。
+
+  包命名空间 vs 能力字符串 vs 方法名 — 三者独立。 "conformer_search" 在 capabilities.py / registry.py / catalog.py 里是能力标识符（"该后端能做构象搜索"，类似 "energy"）；CRESTInterface.run_conformer_search() 是方法名。重命名包 conformer_search→cccp 时绝不碰后两者。能力字符串改名单独评估、本版暂缓（见 1 决策摘要）。
+
+  【v7 新增 · 关键依赖文件扫描结果】
+  
+    
+config/defaults.yaml（362 行）：含 2 处 conformer_search 引用——L5 src/conformer_search/config.py:_get_default_config()（路径说明）、L96 ~/.conformer_search.yaml（配置文件名）。Part B 须同步更新为 src/cccp/config.py 与 ~/.cccp.yaml。
+    
+scripts/*.sh（3 个）：已核对，当前无 conformer_search 引用。无需修改。
+    
+tests/conftest.py（129 行）：已逐行核对，所有 CONFSEARCH_* 均为环境变量前缀（CONFSEARCH_NPROC、CONFSEARCH_CREST_PATH 等），非包名导入。无任何 from conformer_search import ... 或 mock patch 字符串。Part B 无需修改，但须保持环境变量名不变（改名不在本次范围）。
+    
+.github/、Jenkinsfile、.gitlab-ci.yml、MANIFEST.in、setup.cfg：均不存在，无需处理。
+  
+
+1 · 决策摘要（来自确认）
+
+  
+ | 议题 | 决策
+
+  
+ | 删除工作流范围 | conformer / nmr / benchmark 三个全删（nmr/benchmark 尚未开发、意义不大）
+
+  
+ | 孤儿 NMR 基础设施 | 全部清除：acp/nmr/、acp/reports/、ORCA nmr_shielding、"nmr" 能力字符串、get_nmr_stages、NMRCalculator Protocol
+
+  
+ | 包重命名 | conformer_search → cccp（Computational Chemistry Connection Package），保留为底层 QC 接口库
+
+  
+ | CREST 接口 | 在 cccp 里重写干净版（只留构象生成），XTBInterface 拆到独立文件；ensemble/energy 改走 CrestBackend
+
+  
+ | 能力字符串 | 保留 "conformer_search" 不变（v2 修订：conformer 工作流已删除，若把能力也改名为 "conformer" 将造成概念混淆——能力名与已删工作流同名。ensemble/energy 后端层仍使用该能力，"conformer_search" 准确表达了"后端能做构象搜索"的语义，无歧义。改名推迟到后续重构统一规划）
+
+  
+ | 配置文件路径 | ~/.conformer_search.yaml → ~/.cccp.yaml（加旧路径回退读取保护现有 systemd 部署）
+
+  
+ | 发行包名 | pyproject.toml name → "acp"（pip install acp，同时含 acp 与 cccp 两个 Python 包）
+
+  
+ | 老 CLI 入口 | 删除 cccp/cli.py + cccp/__main__.py，pyproject.toml 移除 conformer-search console_script
+
+  
+ | openpyxl 依赖 | 随 acp/reports/ 删除一并从 pyproject.toml 与 requirements-node.txt 移除——代码库中唯一的消费者是 nmr_report.py:55（v7：requirements-node.txt 移除从 B5 前移到 Part A，与 pyproject.toml 同步）
+
+  
+ | 保留 | acp/core/models.py 的 to_conformer_candidate 等桥接方法（仅做 cccp 改名，不动测试，可选后续清理）
+
+  
+ | 【v4】SQLite 历史作业 | 方案 1（选定）：catalog.py 给 conformer/nmr/benchmark 三条加 "retired" 状态；_derive_supported_workflows() 仍仅取 active，故 submit 自动拒绝；list_jobs/前端正常展示历史、禁止重试。零 schema 改动
+
+  
+ | 【v8】method_schema 存根 | retired 条目的 schema 引用不悬空："nmr" schema 保留最小存根（仅 label），"confsearch" schema（catalog.py:545-749）整体保留不动；"benchmark" schema 自始不存在（既有悬空，无害不处理）
+
+  
+ | 【v4】run_batch_optimization | 保留在新 CREST 接口（不删）：ConformerEngine（engine.py:478，范围外休眠）仍调用，删掉会损坏休眠代码
+
+  
+ | 【v4】run_two_stage_search | 接口侧 + CrestBackend 包装侧一并删除（C2 先删 backend 包装，C1 再删接口方法，顺序锁定）
+
+  
+ | 【v7】配置文件冲突 | ~/.cccp.yaml 优先；若 ~/.conformer_search.yaml 同时存在 — WARNING 日志提示"旧配置文件仍存在，请手动迁移后删除"，不自动 merge
+
+  
+ | 【v7】__pycache__ 清理 | 新增 B6 步骤：git mv 后强制清理 src/conformer_search/ 下所有 __pycache__/ 与 .pyc 文件，防止 Python 从磁盘残留误导入旧包
+
+2 · 执行顺序总览
+
+Part A（删工作流）→ Part B（改名 cccp + 基础设施扫描 + __pycache__ 清理）→ Part C（重写 CREST）
+
+  
+A 先删消费文件（workflows/{conformer,nmr,benchmark}.py），减少 Part B 要改的 import 数量，避免返工
+  
+B 先把包名理顺、基础设施扫描、__pycache__ 清理，Part C 在已改名的 cccp 上写新代码，避免对同一文件二次改动
+  
+每 Part 结束跑 pytest + ruff + acp --help 作为门禁；门禁不过不进入下一 Part
+  
+v2 新增：Part C 增加 C0 前置调研步骤——枚举 ensemble/energy 对 crest_result 的所有属性访问，定义 CrestBackend.search() 返回类型契约。v3：C0 已关闭，映射表见 Part C0 节，Part C 可直接开工
+
+Part A — 删除 conformer / nmr / benchmark 工作流 + 孤儿 NMR 基础设施 ✅ 已完成（2026-07-27）
+
+目的：消除三个用户工作流的全部暴露面（catalog / registry / CLI / scheduler / API / 前端），并清除变为孤儿的 NMR 子系统。核心原则（v5 修正）：删除文件前，必须先用 grep -rn "^from acp.workflows.\(conformer\|nmr\|benchmark\)\|^from acp.nmr\|^from acp.reports" src/ 找出所有模块级 import 并清理。注意：acp/workflows/__init__.py 使用 PEP 562 __getattr__ 懒加载，删除工作流文件不会破坏 import acp.workflows；cli.py 中对 conformer/nmr/benchmark 的 import（L175/L1046/L1084/L1160/L1831）全部位于 handler 函数体内（函数级懒 import），删除文件也不会破坏 import acp / acp --help。真正的模块级风险是 src/acp/scheduler/stage_tasks.py:16 的 from acp.workflows.nmr import get_nmr_stages——它经 acp/scheduler/__init__.py:26 与 acp/api/v1_routes.py:120 传递导入，若先删 nmr.py 再改 stage_tasks.py，import acp.scheduler 与 API 路由将 ImportError。
+
+A1 · 整体删除的文件（12 项）
+
+  
+ | 状态 | 文件 | 说明
+
+  
+ | DEL | src/acp/workflows/conformer.py | 删 nmr/benchmark 后 run_conformer_search() / boltzmann_weight_ensemble / get_protocol_stages 无消费者
+
+  
+ | DEL | src/acp/workflows/nmr.py | NMR 工作流（含 get_nmr_stages）
+
+  
+ | DEL | src/acp/workflows/benchmark.py | Benchmark 工作流（含 BENCHMARK_LEVELS / BenchmarkRunner）
+
+  
+ | DEL | src/acp/nmr/（整目录） | __init__.py / models.py / parser.py / calibration.py / AGENTS.md
+
+  
+ | DEL | src/acp/reports/（整目录） | __init__.py / nmr_report.py / AGENTS.md
+
+  
+ | DEL | tests/test_acp_workflows_conformer.py | 工作流测试
+
+  
+ | DEL | tests/test_acp_workflows_nmr.py / test_acp_workflows_nmr_methane.py | NMR 工作流测试
+
+  
+ | DEL | tests/test_benchmark.py | Benchmark 工作流测试
+
+  
+ | DEL | tests/test_acp_nmr_parser.py / test_acp_nmr_calibration.py / test_acp_reports_nmr.py | NMR 子系统测试
+
+A2 · 编辑清单（精确到行号）
+
+  
+ | 状态 | 文件 | 改动
+
+  
+ | MOD | src/acp/workflows/__init__.py | 
+    删 __all__ 中：BENCHMARK_LEVELS(L17) / BenchmarkRunner(L18) / boltzmann_weight_ensemble(L20) / get_nmr_stages(L22) / get_protocol_stages(L23) / run_conformer_search(L28) / run_nmr_calculation(L31)
+
+    删 _LAZY_SOURCES 中对应 7 条 lazy import 映射（注意：是 L43/44/45/46/47 与 L50/51 这 7 条，勿整段删 L43-51——其中 L48/49 的 mechanism 条目须保留）
+
+    【v6 新增】重写 L2-10 docstring：当前以"NMR 报告依赖（openpyxl）解耦"作为懒加载唯一论据，删 NMR 后失效。改为通用叙述"按需加载、隔离第三方依赖"，不再点名 openpyxl/NMR
+  
+
+  
+ | MOD | src/acp/workflows/registry.py | 
+    【v8 纠正】顶部无 BENCHMARK_LEVELS/BenchmarkRunner import（v7 误列）——该文件顶部仅 import SUPPORTED_WORKFLOWS（L13），无需改动 import 区
+
+    删 _WORKFLOW_REGISTRY 三条：conformer(L40-45) / nmr(L64-69) / benchmark(L70-75)
+  
+
+  
+ | MOD | src/acp/catalog.py | 【v6 纠正：与"方案 1 retired"决策对齐——保留条目、改状态，不删除】
+
+    WORKFLOW_CATALOG 中 conformer(L83-96) / nmr(L97-108) / benchmark(L109-120) 三条：设 "status": "retired"（原 "active"）+ "visible": False（nmr 当前 True 需改 False；conformer/benchmark 已是 False）。保留条目本身——_derive_supported_workflows()（jobs.py:73）按 status=="active" 过滤 → submit 自动拒绝三条；list_jobs/前端仍能据 catalog 解析历史作业标签（与 SQLite 方案 1、部署清单、回滚策略一致，零 schema 改动）。conformer 条的 "R21" 注释同步改写为 retired 语义
+
+    METHOD_SCHEMAS 中 "nmr"（L982-993）：保留 method_schema 最小存根（label 供历史展示），删除可执行的 method_levels 定义（避免历史 retired 条目引用悬空 schema）
+
+    【v8 补全】METHOD_SCHEMAS 中 "confsearch"（L545-749）：整体保留不动——retired conformer 条目仍引用 method_schema_id:"confsearch"，历史作业详情页需解析；体量~200 行但零运行成本。"benchmark" schema 自始不存在（既有悬空引用，无害，不处理）
+
+    【v8 新增】_BACKEND_SUPPORTS（L1261）orca 支持列表删 "nmr"——/api/backends 端点（catalog.py:1316）由此驱动，漏改会令 API 仍宣称 orca 支持 nmr（与 capabilities.py 清理保持一致）
+
+  
+ | MOD | src/acp/cli.py | 【影响最大的文件，需逐段处理】
+
+    v3 补充 / v4 更正计数：cli.py 中 conformer_search 字符串共 17 处命中，其中包引用 15 处 + run_conformer_search() 方法调用子串命中 2 处（L1057、L1099）。分两类——(a) conformer/nmr/benchmark 专属（本 Part 删除，见下；含 2 处方法调用，随 handler 一并删）；(b) simple/其他 handler 共用的 load_config/save_config/load_batch_inputs（如 L62, L176, L207-208, L1005-1006, L1155, L1581, L1630, L1723, L1774），本 Part 保留不动，Part B 统一改名，切勿误删。
+
+    函数级 import 清理（随 handler 一并删除，无 ImportError 风险）：
+
+       L33-41 ALL_PROTOCOLS 【v8 修正：整体删除而非仅移除 "benchmark"——其全部消费者（L202 / L424 / L551 / L999 / L1849）均随 Part A 删除，保留即成死代码】
+
+       L175 from acp.workflows.conformer import get_protocol_stages ——位于 _render_protocol_info() 函数体内（函数级懒 import），随该函数删除即可，不触发 ImportError（v5 修正：原"否则 import acp 时 ImportError"判断有误；同理 L1831 在 _handle_benchmark() 体内）
+
+       新增注意：L128-144 _parse_nmr_references、L147-170 _apply_nmr_config_overrides 两个 NMR 专用顶层函数一并删除
+
+    子命令 parser 块删除：
+
+       L377-481 conformer 子命令（add_parser("conformer")）
+
+       L482-578 nmr 子命令（add_parser("nmr")）
+
+       L923-969 顶层 benchmark 子命令
+
+       【v8 新增 · 勿漏】L971-984 protocol 子命令块（add_parser("protocol") 及其 list/info 子 parser）——protocol 自省功能依附于已删的 conformer 协议体系，须随 handler 一并删除
+
+    handler 函数删除：
+
+       L173-196 _render_protocol_info（依赖 get_protocol_stages）
+
+       L199-216 _handle_protocol（引用 ALL_PROTOCOLS）
+
+       L994-1037 _handle_conformer
+
+       L1040-1075 _handle_conformer_single（含 L1046 from acp.workflows.conformer import run_conformer_search）
+
+       L1078-1140 _handle_conformer_batch
+
+       L1143-1192 _handle_nmr
+
+       L1829-1876 _handle_benchmark（含 L1831 from acp.workflows.benchmark import BENCHMARK_LEVELS, BenchmarkRunner）
+
+    dispatch 字典：
+
+       L1897-1898 if args.command == "benchmark": 条件删除
+
+       【v8 新增 · 勿漏】L1900-1901 if args.command == "protocol": return _handle_protocol(args) 删除——漏删将留下运行期 NameError 的破损命令
+
+       L1908, L1911 dispatch dict 删除 "conformer" / "nmr" 条目
+  
+
+  
+ | MOD | src/acp/scheduler/jobs.py | fallback 静态列表(L68-71)删 "conformer"/"nmr"/"benchmark"【v6】L63 docstring "standalone conformer_search use" 在 Part B 改名时一并更新为 "standalone cccp use"
+
+  
+ | MOD | src/acp/scheduler/manager.py | 
+    【v6 收敛：两 import 可决断删除】删 L34 from conformer_search.config import load_config + L35 from conformer_search.core.protocols import validate_protocol_methods——已核对二者仅被 L258-266 conformer 块使用（L263/L264），删该块后无其他消费者
+
+    【v8 新增】删 L26 from acp.catalog import convert_method_levels_to_protocol_levels——已核对在 manager.py 中仅 L262 conformer 块内使用，删块后成孤儿 import（ruff F401）；catalog.py 侧定义与其他消费者保留
+
+    删 L258-266 整个 if spec.workflow == "conformer": 验证块
+  
+
+  
+ | MOD | src/acp/scheduler/stage_tasks.py | 
+    【v6 · 范围调整：本行从 A2 移入 A1，与 nmr.py 删除同笔 commit】理由：stage_tasks.py:16 的 from acp.workflows.nmr import get_nmr_stages 是模块级 import，先删 nmr.py 而不改此行会令 import acp.scheduler + API 崩溃。把二者放同一笔 commit，消除中间破损态。
+
+    删 L16 from acp.workflows.nmr import get_nmr_stages
+
+    删 L73-93 _ConformerStagePlanProvider 类
+
+    删 L96-98 _NmrStagePlanProvider 类
+
+    删 L101-103 _BenchmarkStagePlanProvider 类
+
+    删 L474-476 三条 register_plan_provider("conformer"|"nmr"|"benchmark", ...)（注意：L473 的 "fake"、L477-510 的 mechanism/ensemble/energy/simple 须保留）
+
+    子门禁（并入 A1）：python -c "import acp.scheduler, acp.api.v1_routes"
+  
+
+  
+ | MOD | src/acp/scheduler/runner.py | 
+    L679-682 白名单删 "conformer"/"nmr"/"benchmark"
+
+    L686-687 删 benchmark 特殊 CLI 分支
+
+    L698 改为 if wf == "mechanism":（原 if wf in {"conformer", "mechanism"}:），删 L700-705 内部 conformer 条件
+
+    L727-732 删整个 elif wf == "nmr": 分支
+
+    L764-768 重构 else: fallthrough（原来是 benchmark catch-all，现在简化）
+
+    L975 删 or record.spec.method.get("benchmark_level")
+  
+
+  
+ | MOD | src/acp/scheduler/remote/script_gen.py | 
+    L113-118 白名单删 "conformer"/"nmr"/"benchmark"
+
+    L120-123 删 benchmark 特殊 CLI 分支
+
+    L133 改为 if wf == "mechanism":，删 L135-140 内部 conformer 条件
+
+    L162-167 删整个 elif wf == "nmr": 分支
+
+    L197-202 重构 else:  # benchmark fallthrough
+  
+
+  
+ | MOD | src/acp/scheduler/remote/runner.py | 
+    L975 or spec.method.get("benchmark_level") → 删除
+
+    L1215 or spec.method.get("benchmark_level") → 删除
+
+    v2 新增：L954, L988, L1063 ~/.conformer_search.yaml → ~/.cccp.yaml（在 Part B4 中与配置文件改名一起做）
+  
+
+  
+ | MOD | src/acp/scheduler/provenance.py | L209 删 or _string_or_none(spec.method.get("benchmark_level"))
+
+  
+ | MOD | src/acp/backends/base.py | 删 L132-144 NMRCalculator Protocol 类 + L238 __all__ 条目
+
+  
+ | MOD | src/acp/backends/registry.py | 删 L12 from acp.backends.base import NMRCalculator + L28 "nmr": NMRCalculator
+
+  
+ | MOD | src/acp/backends/capabilities.py | 
+    删 L42 "nmr": "nmr" 别名
+
+    删全部 7 个后端的 "nmr": BackendCapabilityStatus.xxx 列(L51-115)
+
+    保留 "conformer_search" 列（能力字符串不改）
+  
+
+  
+ | MOD | src/acp/backends/orca.py | 删 L131-152 nmr_shielding 方法
+
+  
+ | MOD | src/acp/backends/__init__.py | 删 L8 NMRCalculator import + L40 __all__ 条目
+
+  
+ | MOD | src/acp/api/v1_routes.py | 删 L832, L900, L913-920 NMR 报告检测逻辑（_nmr_report 关键词 + conformer_results JSON 键 + "type": "nmr_report" 赋值）
+
+  
+ | MOD | pyproject.toml | L27 移除 "openpyxl>=3.1"（唯一消费者 acp/reports/nmr_report.py 已删除）
+
+  
+ | MOD | requirements-node.txt | 【v7 新增 · 与 pyproject.toml 同步】L17 移除 openpyxl>=3.1（唯一消费者 acp/reports/nmr_report.py 已删除）；该文件是远端计算节点 Python 运行时依赖清单，含义为"N 个节点的 requirements"，非 Node.js。
+
+  
+ | MOD | frontend/ACP_Workbench.html | 删 L221 nmr 引用, L222 benchmark 引用, L317/L327 conformer/benchmark 隐藏条目
+
+  
+ | MOD | frontend/ACP_Workbench_v2.html | 删 L4100, L5208 conformer/nmr 工作流引用
+【v6 警告·勿误删】L1104/L1672/L1879 的 tab.conformers 是构象集合结果展示 Tab，服务保留的 ensemble/energy 工作流的产物查看，必须保留——切勿做全仓 conformer 盲删时一并清除
+
+  
+ | MOD | tests/test_acp_catalog.py | 更新 SUPPORTED_WORKFLOWS 断言，不再期望 conformer/nmr/benchmark
+
+  
+ | MOD | tests/test_acp_api.py | 删 "nmr" 能力断言；【v8 补全】L76-94 工作流注册表断言一并更新：L76/L81 的集合包含断言删 conformer/nmr/benchmark，L92-94 的 nmr label/requires_binaries 断言整体删除
+
+  
+ | MOD | tests/test_acp_backends.py | 删 "nmr" 能力断言（含 L59 matrix fixture 与 L93 require_backend("nmr") 用例）；删 test_orca_backend_nmr_delegates_to_interface（L116-125，测 backend.nmr_shielding 委托——被测方法已在 orca.py 删除）；保留 "conformer_search" 能力断言
+
+  
+ | MOD | tests/test_acp_cli.py | 【v8 新增——v7 完全漏列此文件】删 test_acp_run_conformer_help（L20-30）与 test_acp_run_nmr_help（L32-42）——Part A 删子命令后必挂。test_conformer_search_help_exits_zero（L81+，跑 python -m conformer_search.cli --help）属 legacy 入口测试，Part B 删 cccp/cli.py 时一并删除（见 B1）
+
+  
+ | MOD | tests/test_acp_stage_tasks.py | 删 conformer/nmr/benchmark provider 用例
+
+  
+ | MOD | tests/test_remote_phase1_integration.py | 删/改 L146 fixture 字符串 "from acp.workflows.conformer import ..."
+
+✅ 验证门禁 [Part A] —— 全部通过（2026-07-27）：
+pytest tests/ -v          # → 799 passed, 7 skipped（5 失败均 pre-existing，已核对基线）
+ruff check src/acp tests --select F   # → 零新增 F 违规
+acp --help                # → usage: acp [-h] {run} ...（conformer/nmr/benchmark/protocol 全消失）
+python -c "import acp.scheduler, acp.api.v1_routes"  # → PASS（stage_tasks 解耦有效）
+grep -n "ALL_PROTOCOLS\|_handle_protocol\|_render_protocol_info\|add_parser(\"protocol\"" src/acp/cli.py  # → 空（三件套零残留）
+# 部署：sudo systemctl restart acp → active；/api/workflows + /api/backends 验证通过
+# 计算节点 compute-01：rsync 17 文件 + 清理 stale + __pycache__；SUPPORTED_WORKFLOWS 正确
+
+质量审计额外修复 2 处（commit 8971836）：routes.py 死 ALL_PROTOCOLS import + test fixture 残留 theory.nmr。详见文档顶部"Phase A 完成报告"。
+
+Part B — 重命名 conformer_search → cccp
+
+目的：纯机械重命名包命名空间。只改包引用，绝不碰能力字符串 "conformer_search"、方法名 run_conformer_search、散文词组。影响面：~55 处内部 import + ~60 处 acp 侧 import + ~26 处 mock patch 字符串。
+
+B1 · 目录与元数据
+
+  
+ | 状态 | 项 | 改动
+
+  
+ | MOD | 目录 | src/conformer_search/ → src/cccp/
+
+  
+ | MOD | src/cccp/__init__.py | 写全称 Computational Chemistry Connection Package；更新 docstring
+
+  
+ | MOD | src/cccp/version.py | 【v4 新增——补 anti-pattern #2】同步保留 __version__（原 conformer_search/version.py:6）。版本号在 __init__.py:12 / version.py:6 / pyproject.toml:7 三处，三处须保持一致，改名时不得遗漏 version.py。docstring 中包名 conformer_search → cccp
+
+  
+ | MOD | pyproject.toml | 
+    name = "conformer-search" → "acp"
+
+    [project.scripts] 删 conformer-search = "conformer_search.cli:main"（保留 acp）
+
+    description 更新
+
+    packages.find.include "conformer_search*" → "cccp*"（保留 "acp*"）
+
+    【v4 新增】外部消费方排查：发行包名从 conformer-search 改为 acp 后，grep 全仓及部署脚本中的 pip install conformer-search / requirements pin / CI cache key，确认无残留依赖旧包名
+  
+
+  
+ | DEL | src/cccp/cli.py + src/cccp/__main__.py | 老的 conformer-search 命令行入口（语义与删除 conformer 工作流一致）。【v8 新增】同步删 tests/test_acp_cli.py 中 test_conformer_search_help_exits_zero（L81+，跑 python -m conformer_search.cli --help）——入口删除后必挂
+
+B1.5 · 基础设施文件附加扫描 【v7 新增】
+
+  目的：git mv 与全量 import 替换只覆盖 Python 源码，以下非 Python 文件可能含 conformer_search 引用，漏改会导致配置加载/脚本/CI 断裂。逐一核对后仅 config/defaults.yaml 需要修改，其余已确认安全。
+  
+    
+ | 状态 | 文件 | 发现 | 动作
+
+    
+ | MOD | config/defaults.yaml | L5 "src/conformer_search/config.py:_get_default_config()"；L96 "~/.conformer_search.yaml" | 两处均改为 cccp。前置条件：须在 git mv 后执行，否则路径不可解析。此文件被 src/cccp/config.py 的 load_config() 读取，用于生成默认配置。
+
+    
+ | KEEP | scripts/bootstrap_venv.sh | 无 conformer_search 引用 | 无
+
+    
+ | KEEP | scripts/install_systemd.sh | 无 conformer_search 引用 | 无
+
+    
+ | KEEP | scripts/start_acp.sh | 无 conformer_search 引用 | 无
+
+    
+ | KEEP | requirements-node.txt | 已覆盖于 Part A（openpyxl 移除）+ B5（路径/描述更新） | 见各对应部分
+
+    
+ | KEEP | .github/ / Jenkinsfile / .gitlab-ci.yml / MANIFEST.in / setup.cfg | 均不存在，无 CI/CD 管道配置 | 无。门禁 B 增加 rg "conformer[-_]search" config/ scripts/ --include='*.{yaml,yml,sh,txt}' 零残留扫描
+
+  
+  
+附加扫描门禁（并入 B 门禁）：rg "conformer[-_]search" config/ scripts/ --include='*.{yaml,yml,sh,txt}' 确认零残留
+
+B2 · 全量 import 替换（约 140 处）
+
+from conformer_search / import conformer_search → cccp，覆盖：
+
+  
+src/cccp/ 内部（~55 处跨文件自引用）
+  
+src/acp/ 消费者（~60 处分布在 14+ 个文件）：backends/{orca,crest,xtb,external,censo_backend,isostat_backend,molclus_backend}.py、core/{config,models}.py、io/structures.py、workflows/{energy,ensemble,mechanism,simple}.py、scheduler/manager.py、api/{server,routes,v1_routes}.py、cli.py
+  
+tests/（~25 处）：9 个遗留 CS 测试 + 8 个 ACP 测试中的 import 语句
+
+【v7 新增 · 已核查无需修改】tests/conftest.py（129 行）：已逐行核对，所有 CONFSEARCH_* 字符串均为环境变量前缀（CONFSEARCH_NPROC、CONFSEARCH_ORCA_PATH 等），非包名导入。无 from conformer_search import ... 或 mock patch 目标字符串。环境变量改名超出本次范围——不作任何修改。此处记录仅为防止执行时误判。
+
+patch() mock 目标字符串（漏改会静默失效——致命风险，逐一排查）：
+
+  
+tests/test_qc_interfaces_crest.py 6 处 "conformer_search.qc.interfaces.crest.subprocess.run"
+  
+tests/test_qc_interfaces_orca.py 2 处、test_qc_interfaces_xtb.py 1 处
+  
+tests/test_engine_routing.py ~16 处 patch("conformer_search.core.engine.xxx")
+  
+tests/test_remote_phase3.py:450 patch("conformer_search.config.load_config", ...)
+  
+全部 "conformer_search.…" → "cccp.…"
+
+B3 · 配置文件路径改名 + 向后兼容
+
+  
+ | 状态 | 文件 | 改动
+
+  
+ | MOD | src/cccp/config.py | USER_CONFIG_NAME = "conformer_search.yaml" → "cccp.yaml"；DEFAULT_CONFIG_NAME 同步；load_config() 在 ~/.cccp.yaml 缺失时回退读 ~/.conformer_search.yaml 并 WARNING（保护现有 systemd 部署）。
+【v7 明确冲突策略】：若两个文件同时存在——以 ~/.cccp.yaml 为准，并发出 WARNING 日志："Old config file ~/.conformer_search.yaml still exists alongside ~/.cccp.yaml. Please migrate and delete the old file." 不自动 merge（避免字段冲突时行为不确定）。首版部署后手动将旧文件内容迁移到新文件、删除旧文件即可。
+
+  
+ | MOD | src/acp/core/config.py | docstring（L9, L71, L88）conformer_search.config → cccp.config
+
+  
+ | MOD | config/defaults.yaml | 【v7 新增 · B1.5 确认】L5 src/conformer_search/config.py → src/cccp/config.py；L96 ~/.conformer_search.yaml → ~/.cccp.yaml。此文件是 load_config() 的默认配置源，须与 B3 其他改动同步。
+
+B4 · 远程执行相关
+
+  
+ | 状态 | 文件 | 改动
+
+  
+ | MOD | src/acp/scheduler/remote/sync.py | L10, L99-100：同步 src/cccp/ 而非 src/conformer_search/
+
+  
+ | MOD | src/acp/scheduler/remote/runner.py | L954, L988, L1054, L1063 的 ~/.conformer_search.yaml → ~/.cccp.yaml
+
+  
+ | MOD | src/acp/scheduler/remote/script_gen.py | L265 docstring conformer_search.yaml → cccp.yaml
+
+  
+ | MOD | tests/test_remote_phase1.py / test_remote_phase1_integration.py | 同步文件列表 / import 字符串断言改为 cccp
+
+B5 · 文档
+
+  必须更新的文件：
+
+  
+    
+README.md：路径与 import 字样改 cccp，删 conformer/nmr/benchmark 段落；安装命令 pip install acp；顶部明确 cccp 全称 Computational Chemistry Connection Package
+    
+根 AGENTS.md：Where to Look 表格中全部 conformer_search → cccp；删除 conformer/nmr/benchmark 工作流行；更新 STRUCTURE 块
+    
+src/acp/**/AGENTS.md：acp/workflows/AGENTS.md 删三个工作流段落；其他 AGENTS.md 路径替换
+    
+tests/AGENTS.md：删除对应测试文件引用
+    
+reports/conformer_search_repair_plan.md：改名（若存在）
+  
+  
+【v4 新增】子目录 AGENTS.md 内容修正（批量替换不够，存在与代码矛盾的虚假陈述）：
+
+  以下文件含 2026-07-13 reverse-sync 残留的文档债，须内容修正而非仅路径替换：
+  
+    
+src/cccp/qc/interfaces/AGENTS.md：删"XTBInterface moved to xtb.py (Phase 1 fix)"、"CRESTInterface now inherits QCInterfaceBase"——实际 XTBInterface 仍在 crest.py:431、CRESTInterface 仍 class CRESTInterface: 无基类。Part C1 真正完成 XTB 拆分后，再把这两条改对
+    
+src/cccp/qc/AGENTS.md：删"ANTI-PATTERNS (HISTORICAL — Phase 1 resolved): ~~XTBInterface co-located~~ Fixed"——实际未 fix。Part C1 完成后改为真实状态
+    
+src/cccp/AGENTS.md 的"Note"段提及 reverse-sync 删除了 qc/interfaces/xtb.py，与 Part C1 重新创建 xtb.py 的方向一致，需同步更新
+  
+  
+
+  批量替换（不必逐字精修）：
+
+  
+    
+docs/*.html（尤其 remote_execution_plan.html 含 ~76 处 conformer_search）→ 全文批量替换路径
+    
+requirements-node.txt【v7 · 部分已由 Part A 完成】openpyxl 已在 Part A 移除；此处只需更新文件头部 docstring（若提及 conformer_search）。注意：该文件名中的 "node" 意为"计算节点（compute node）"，非 Node.js。已核实该文件是远端 Python 运行时依赖声明，更新时不需改名。
+  
+
+B6 · __pycache__ / .pyc 残留清理 【v7 新增】
+
+  背景：git mv src/conformer_search/ src/cccp/ 只移动被 git 跟踪的文件。以下内容不会被移动也不再需要，但会残留在磁盘：
+  
+    
+src/conformer_search/ 下的所有 __pycache__/ 目录（通常被 .gitignore 忽略，不在版本控制中）
+    
+这些目录中的 *.pyc 字节码文件仍标记为模块 conformer_search.xxx
+    
+若 PYTHONPATH 或 sys.path 仍包含 src/conformer_search/，Python 可能从残留 __pycache__ 加载旧模块，导致 ImportError 或更隐蔽的版本混乱（加载旧包而非新 cccp）
+  
+  
+清理步骤：
+
+  # 1. git mv 完成后立即执行（Part B 的第一步）
+find src/conformer_search -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+find src/conformer_search -name "*.pyc" -type f -delete 2>/dev/null || true
+# 2. 如果 git mv 后 src/conformer_search/ 仍有被 .gitignore 忽略的残留文件和空目录，一并清理
+find src/conformer_search -type d -empty -delete 2>/dev/null || true
+# 3. 确认清理效果
+ls -la src/conformer_search/ 2>/dev/null && echo "WARNING: residue remains" || echo "Clean"
+  
+注意：此步骤必须在 Part B 的 pip install -e . 之前执行，否则旧 __pycache__ 可能被 setuptools 打包进 egg-link。已确认 .gitignore 包含 __pycache__/，故 git 不会跟踪这些目录——残留仅存在于工作树磁盘。
+
+  
+【v7 · 部署侧额外注意】远端节点（通过 sync.py 同步）的 $REMOTE_WORKDIR/src/conformer_search/ 下也可能存在 __pycache__ 残留——部署清单已补远程清理步骤（见部署清单第 5 项）。
+
+验证门禁 [Part B]：
+pip install -e '.[dev,api,remote]' && pytest tests/ -v
+ruff check . && ruff format --check .
+python -c "import cccp, acp; print('ok')"   # 两个包均可导入
+python -c "import cccp; print(cccp.__version__)"  # v4 新增：核对版本号三处一致
+acp --help                                    # 无 conformer/nmr/benchmark 子命令
+rg "conformer_search\." src/cccp/ src/acp/ tests/  # ← v2 新增：零残留扫描
+rg "conformer[-_]search" config/ scripts/ --include='*.{yaml,yml,sh,txt}'  # ← v7 新增：基础设施零残留
+
+Part C — 重写 CREST 接口 + ensemble/energy 接线 ✅ 已完成（2026-07-27）
+
+目的：用干净实现取代遗留 CREST 接口，消除 ensemble/energy 绕过后端的异味。能力字符串保留 "conformer_search" 不变。
+
+C0 · 前置调研（v3 已关闭 —— 结论如下，无需再调研）
+
+  实际逐行核对结果（ensemble.py:414-430 / energy.py:836-857）：下游只消费 2 个属性。
+  
+两个工作流调用 CRESTInterface.run_conformer_search() 后，只读取 crest_result.success 与 crest_result.error_message；ensemble XYZ 路径由调用方自行拼接（crest_dir / "crest_conformers.xyz"，含 glob 回退），不从 result 对象读取任何文件路径或能量数据。计划 v2 假设的 .xyz_file / .energies / .conformer_energies / .output_dir 等属性访问均不存在。
+
+  属性映射表（即为 C2 接线标准）：
+  
+    
+ | 旧用法 | 新接口获取方式（CrestBackend.search 契约）
+
+    
+ | crest_result.success（失败时 raise RuntimeError） | search() 失败时直接抛异常（携带 stderr/错误信息），成功才返回——调用方删掉 if 判断
+
+    
+ | crest_result.error_message | 并入异常 message
+
+    
+ | crest_dir / "crest_conformers.xyz"（调用方自拼 + glob 回退） | 保持调用方自拼逻辑不变；search() 只需接收 output_dir/output_name 并保证产物落盘。可选增强：返回产物 Path 替代 glob 回退
+
+  
+  
+结论：CrestBackend.search() 契约极简——输入 coordinates/symbols/output_dir/output_name/charge/multiplicity/energy_window，失败抛异常，成功返回 None 或产物 Path。v2 标注的"Part C 最大风险"实际为低风险机械改造。
+
+  
+【v5 重要发现】CrestBackend.search() 已经实现（acp/backends/crest.py:123-143）：签名 search(initial_xyz: Path, charge, multiplicity, output_dir, **kwargs) -> Path，失败 raise RuntimeError、成功返回产物 Path——与 C0 契约完全一致。当前零调用方（ensemble/energy 仍绕过 backend 直连 CRESTInterface）。故 Part C2 无需"设计/新增 search()"，仅做接线：让 ensemble.py/energy.py 调用既有 require_backend("crest").search(...)。可选增强：把 ensemble.py:430 的 glob 回退替换为 search() 返回值。
+
+C1 · cccp 侧重写
+
+  
+ | 状态 | 文件 | 改动
+
+  
+ | NEW | src/cccp/qc/interfaces/crest.py | 干净重写：保留构象生成 run_conformer_search。【v4 修正】run_two_stage_search 可删（但前提是 C2 已同步删 CrestBackend.run_two_stage_search 包装）；run_batch_optimization 保留——core/engine.py:478 的 ConformerEngine（范围外休眠）仍调用它，删掉会让休眠代码损坏。ConformerEngine（engine.py:339,438,494）只用 run_conformer_search，重写后接口更简洁
+
+  
+ | NEW | src/cccp/qc/interfaces/xtb.py | 把 XTBInterface（optimize / single_point / enso_thermo）从老 crest.py 拆出独立成文件（解决 anti-pattern #8）
+
+  
+ | MOD | src/cccp/qc/interfaces/__init__.py | 更新重导出：CRESTInterface 从新 crest.py、XTBInterface 从独立 xtb.py。保留 XTBInterface 可从 cccp.qc.interfaces 顶层导入以兼容现有消费者
+
+C2 · acp 侧重新接线（消除绕过后端的异味）
+
+  
+ | 状态 | 文件 | 改动
+
+  
+ | MOD | src/acp/backends/crest.py | CrestBackend 委托新版 cccp.qc.interfaces.crest.CRESTInterface。【v5】search() 已存在（crest.py:123-143，签名/契约与 C0 一致），无需新增——本行仅确认其继续委托新版接口；如有签名微调（如 energy_window 显式参数）在此同步。
+【v4 新增——修正死调用缺陷】同步删除 CrestBackend.run_two_stage_search（L104-145）：该方法委托 self._interface.run_two_stage_search()，Part A 后无消费者（grep 确认零外部调用 .run_two_stage_search(），若保留会引用 C1 删除的接口方法 → 调用即 AttributeError。删前跑 grep -rn "run_two_stage_search" src/acp/ 确认仅自引用
+
+  
+ | MOD | src/acp/workflows/ensemble.py（L401-414） | 改为 require_backend("crest", config=...).search(initial_xyz, ...)，不再直接 CRESTInterface(...)。删除 L31 对 conformer_search.qc.interfaces.crest 的直接 import
+
+  
+ | MOD | src/acp/workflows/energy.py（L823-840） | 同上，改走 CrestBackend。删除 L41 对 conformer_search.qc.interfaces.crest 的直接 import
+
+  结果类型变化（v3 重新定级：低 —— C0 已确认下游仅消费 success/error_message）：
+  
+    
+改走 CrestBackend.search() 后，失败路径由"返回 success=False"变为"抛异常"——注意 ensemble/energy 现有的 if not crest_result.success: raise RuntimeError(...) 块要一并删除，且确认上层没有 catch 该 RuntimeError 做特殊处理
+    
+产物路径逻辑（crest_dir / "crest_conformers.xyz" + glob 回退）建议首期保持不变，改动面最小
+    
+门禁仍须跑 ensemble/energy 全套测试
+    
+【v4 新增】run_batch_optimization 在新 CREST 接口中保留（不删），因 ConformerEngine（engine.py:478）仍引用；run_two_stage_search 删除前必须确认 C2 已清理 CrestBackend.run_two_stage_search
+  
+
+验证门禁 [Part C]：
+pytest tests/ -v && ruff check . && ruff format --check .
+# 额外自检：故意写错一个 patch 路径，确认对应测试会失败（验证 mock 没有静默放过）
+# 单元契约测试：mock 校验 CrestBackend.search() 的调用参数 + 产物路径契约
+rg "run_two_stage_search" src/acp/ src/cccp/   # v6 修正：补 src/cccp/；确认零残留
+【v4 修正——原"真实回归测试"在 CI 不可达】现有 ensemble/energy 测试全部 mock subprocess，CI 无 CREST 二进制。
+端到端烟雾测试改为部署机手动执行：sudo systemctl restart acp 后，网页端跑一个 ensemble 任务确认 cccp 同步生效。
+
+【v5】Part C 原子性：C1（删接口方法 run_two_stage_search）与 C2（删 CrestBackend.run_two_stage_search + ensemble/energy 接线）必须落入同一笔 commit——中间态任一方向都会留下"调用即 AttributeError"的死引用。门禁只在合并后跑，禁止在 C1/C2 分别提交间运行完整测试套件。
+
+风险与对策（v7 扩展）
+
+  
+ | 风险 | 等级 | 对策
+
+  
+ | 【v5 降级 · 原判断有误】cli.py 对 conformer/nmr/benchmark 的 import（L175/L1046/L1084/L1160/L1831）—— 实际全部位于 handler 函数体内（函数级懒 import），不会阻止 import acp / acp --help；且 acp/workflows/__init__.py 用 PEP 562 __getattr__ 懒加载，删工作流文件不会破坏 import acp.workflows | 低（v5 降级） | 随 handler 函数一并删除即可，无删除顺序约束。A 门禁仍跑 acp --help 作回归
+
+  
+ | 【v5 新增 · 真正的高风险】stage_tasks.py:16 模块级 from acp.workflows.nmr import get_nmr_stages —— 经 scheduler/__init__.py:26 与 api/v1_routes.py:120 传递导入；若先删 nmr.py 再改此行，import acp.scheduler + API 路由 ImportError → acp run serve / 调度器全挂 | 高 | 必须在删 nmr.py 之前删除 stage_tasks.py:16（及其注册的三条 plan provider，见 A2 stage_tasks 行）；门禁 A 增加 python -c "import acp.scheduler, acp.api.v1_routes"
+
+  
+ | patch() mock 字符串漏改（Part B）—— mock 打到不存在路径会静默放过，测试看似通过实则没拦 | 高 | Part B 门禁含 rg "conformer_search\." 全仓零残留扫描；Part C 门禁含"故意写错 patch 路径"突变自检
+
+  
+ | ensemble/energy 改走 CrestBackend（Part C2）结果类型变化破坏行为 | 低（v3 降级） | C0 已关闭：下游仅消费 .success/.error_message，按 C0 映射表接线即可；注意删除原有 success 判断块；门禁跑 ensemble/energy 全套测试
+
+  
+ | SUPPORTED_WORKFLOWS fallback 静态列表漏改，ImportError 时复活已删工作流 | 中 | Part A2 已列 jobs.py:68-71 必改；加单测断言 fallback 不含 conformer/nmr/benchmark
+
+  
+ | systemd 服务（用户 <user>）读不到配置 —— ~/.conformer_search.yaml 改名后失效 | 中 | Part B3 加旧路径回退读取逻辑；部署时把 ~/.conformer_search.yaml 改名
+
+  
+ | 远程节点已同步的 src/conformer_search/ 变悬空目录 + 旧 __pycache__ 残留 | 中 | sync.py 改推 src/cccp/；远端手动 rm -rf $REMOTE_WORKDIR/src/conformer_search（v7 补：含 __pycache__）
+
+  
+ | 【v7 新增】config/defaults.yaml L5/L96 含 conformer_search 引用 → Part B 漏改会导致默认配置路径断裂 | 中 | B1.5 已列为必改项；B 门禁新增强制扫描 rg "conformer[-_]search" config/ scripts/ --include='*.{yaml,yml,sh,txt}'
+
+  
+ | 【v7 新增】磁盘残留 __pycache__/ 和 .pyc 文件在 git mv 后未被清理，Python 可能从 src/conformer_search/__pycache__/ 误导入旧包 | 中 | 新增 B6：git mv 后立即执行 find src/conformer_search -name "__pycache__" -type d -exec rm -rf {} +；B 门禁加 ls src/conformer_search/ 2>/dev/null && echo "UNCLEAN" || echo "ok"
+
+  
+ | XTBInterface 拆文件后 from cccp.qc.interfaces.crest import XTBInterface 旧 import 失效 | 中 | Part C1 在 __init__.py 保持 XTBInterface 从顶层导入；扫描所有旧路径 import 改为从 xtb 或顶层导入
+
+  
+ | 【v4 新增】C1 删 run_two_stage_search 而 C2 未同步删 CrestBackend.run_two_stage_search → 调用即 AttributeError（仅运行时触发，单测难捕获） | 高 | C1 删接口方法的前提是 C2 已删 backend 包装；执行顺序锁定 C2 先改 CrestBackend 再改接口；门禁 C 含 grep -rn "run_two_stage_search" src/acp/ 零残留
+
+  
+ | 【v4 新增】cccp/version.py 漏改名/漏同步版本号 → 违反 anti-pattern #2，cccp.__version__ 与 pyproject 不一致 | 中 | B1 已补 version.py 条目；门禁 B 加 python -c "import cccp; print(cccp.__version__)" 核对
+
+  
+ | v3 更正： | SQLite 历史作业（store 中 workflow=="conformer"|"nmr"|"benchmark" 的旧 JobRecord）的真实影响面：manager.py:253 的 SUPPORTED_WORKFLOWS 校验仅在 submit()（新作业提交）执行；list_jobs(manager.py:312) 与 store 加载历史记录不经过该校验，查看/展示历史不会抛 ValueError（v2 表述有误）。真实影响仅为：(a) 重试/重提交已删工作流的历史作业会被拒绝；(b) 前端展示历史作业时工作流名无对应 catalog 条目
+
+  
+ |  | 低（v3 降级） | 【v4 决策收敛——选定方案 1】在 catalog.py 为 conformer/nmr/benchmark 三条加 "retired" 状态（或等价标志），_derive_supported_workflows() 仅取 status=="active" 故自动排除；manager.submit() 拒绝时给出友好提示"该工作流已下线"；list_jobs/前端展示历史作业时 retired 类型正常显示但不允许重试。零 schema 改动，历史数据不丢失。放弃原方案 2（清库）和方案 3（仅提示）
+
+  
+ | openpyxl 依赖残留 | 低 | Part A 一并从 pyproject.toml 和 requirements-node.txt 移除
+
+  
+ | 文档 / AGENTS.md 残留 conformer_search / nmr / benchmark 描述 | 低 | Part B5 集中更新；HTML 历史文档批量替换
+
+  
+ | acp/core/models.py 桥接方法（to_conformer_candidate 等）对 ACP 侧成死代码 | 低 | 本计划保留（仅做 cccp 改名），不动 test_acp_core_models.py；可选后续清理
+
+执行顺序与门禁
+
+  
+Part A1 ✅ commit 015fcca（删 workflows/{conformer,nmr,benchmark}.py + 孤儿 NMR 基础设施 acp/nmr/、acp/reports/ ＋ stage_tasks.py 解耦）→ acp --help 不崩 且 python -c "import acp.scheduler, acp.api.v1_routes" 成功 [子门禁 A1 — PASS]
+
+    【v6 关键】stage_tasks.py:16（删 import + 三个 provider 类 + 三条 register）必须与 nmr.py 删除落入同一笔 commit——二者是模块级 import 依赖，拆开会留下 import acp.scheduler 崩溃的破损中间态。
+  
+Part A2 ✅ commit 8d7d30f（scheduler 其余：jobs/manager/runner + remote/runner/script_gen + provenance + backends NMRCalculator 全清）→ pytest tests/test_acp_scheduler*.py 绿 [子门禁 A2 — PASS]
+
+    【v6】stage_tasks.py 已移入 A1；A2 仅保留白名单与分支清理。
+  
+Part A3 ✅ commit 9e4eca6 + 15e9caa（CLI + API v1_routes + 前端两个 HTML + 测试更新 + catalog 三条 retired + pyproject.toml + requirements-node.txt）→ pytest tests/ -v 全绿 + ruff 通过 + acp --help 无 conformer/nmr/benchmark 子命令 + 前端 ensemble 详情页 conformers Tab 仍在 [门禁 A — PASS]
+    
+【v4】Part A 触及 ~25 文件/6 子系统，拆三笔独立 commit，任一子门禁失败可单独 revert 而不影响已过部分。【v5 修正】cli.py L175/L1831 是函数级懒 import，非删除顺序约束点。【v6 修正】真正的顺序约束 stage_tasks.py:16 已并入 A1（与 nmr.py 同笔），A1→A2 不再有"先删 nmr.py 后改 stage_tasks"的倒序风险。
+
+  
+Part B（改名 cccp + B1.5 基础设施扫描 + B3 配置 + B4 远程 + B5 文档 + B6 __pycache__ 清理）→ pip install -e '.[dev,api,remote]' 后 pytest 全绿 + import cccp, acp 成功 + rg "conformer[-_]search" config/ scripts/ --include='*.{yaml,yml,sh,txt}' 零残留 + rg "conformer_search\." src/cccp/ src/acp/ tests/ 零残留 + ls src/conformer_search/ 2>/dev/null && echo "UNCLEAN" || echo "ok" [门禁 B]
+  
+Part C0（前置调研）→ 输出映射表评审 v3：已完成并关闭，映射表见 Part C0 节，无独立门禁
+  
+Part C ✅ 已完成（2026-07-27，未 commit——工作区含 Part B 未提交内容）（重写 CREST + 拆 XTB + 接线 + 删 CrestBackend.run_two_stage_search）→ pytest 801 passed + patch 突变自检 PASS + rg "run_two_stage_search" src/acp/ src/cccp/ 零残留 [门禁 C — PASS]；偏差 1 处：require_backend("crest") 实为 get_backend("crest")（require 按能力名查找会误返回 censo）。详见文首 Phase C 完成报告。
+【v6】grep 范围补 src/cccp/——Part B 改名后接口方法在 cccp 内；只扫 src/acp/ 会漏。已确认该方法在 cccp 侧标注 deprecated（crest.py:252），ConformerEngine 走 _step_two_stage_crest() 不调用它，零消费者。
+  
+部署 ✅ 已执行（systemd + 计算节点）（详见下方部署清单）：sudo systemctl restart acp（已执行 2 次：改名后 + uninstall 旧包后，active）；~/.conformer_search.yaml 已迁移到 ~/.cccp.yaml 并删除旧文件；config/defaults.yaml 路径已更新（B1.5）；【v9 新增】pip uninstall conformer-search（修复幽灵命名空间包）；前端核对工作流列表 + conformers Tab（/api/workflows 已验证）；远端 compute-01 已清理旧目录 + 迁移节点配置 + CodeSyncer 同步 83 文件（0 errors）。注：bootstrap sync 不删远端文件，已用 rsync 补推 + SSH 清理。
+
+部署清单 【v7 细化 · v9 完成标注】
+
+  逐项核对（请在部署时按顺序勾选）：
+  
+    
+ | # | 项 | 验证方法 | 状态
+
+    
+ | 1 | 迁移配置文件：cp ~/.conformer_search.yaml ~/.cccp.yaml 后 rm ~/.conformer_search.yaml | ls -la ~/.{conformer_search,cccp}.yaml：cccp.yaml 存在、conformer_search.yaml 不存在 | ✅ 已执行
+
+    
+ | 2 | config/defaults.yaml L5 路径 + L96 文件名已改为 cccp（见 B1.5） | rg "conformer_search" config/defaults.yaml 无结果 | ✅ 已执行
+
+    
+ | 3 | 重启 systemd 服务：sudo systemctl restart acp | sudo journalctl -u acp -f --since "1 min ago" 无 ERROR；curl http://localhost:8765/api/status 返回成功 | ✅ 已执行（2 次：改名后 + uninstall 旧包后）
+
+    
+ | 4 | 前端：打开 ensemble 任务详情页，确认 Conformers Tab 存在（勿误删） | 页面打开，Tab 显示正常（ACP_Workbench_v2.html 3 处 tab.conformers intact） | ✅ 已验证
+
+    
+ | 5 | 远端节点清理：rm -rf $REMOTE_WORKDIR/src/conformer_search/（含 __pycache__ 残留）+ 旧 egg-info | ssh $NODE "ls $REMOTE_WORKDIR/src/conformer_search/ 2>/dev/null && echo 'STILL EXISTS' || echo 'CLEAN'" | ✅ 已执行（CLEAN）
+
+    
+ | 6 | 远端烟雾测试：CodeSyncer 同步 + 节点 import cccp / 探测脚本端到端验证 | 83 文件 0 errors；import cccp ok；探测脚本解析 orca/crest/censo v3.0.8 | ✅ 已执行（真实 ensemble 任务烟雾测试留待业务触发）
+
+    
+ | 7 | retired 工作流历史：前端确认旧 conformer/nmr/benchmark 作业可查看详情、不可重试 | 历史作业列表显示，重试按钮灰显或返回"工作流已下线"提示 | 未单独验证（catalog retired 方案 1 已在 Part A 落地）
+
+    
+ | 8 | ~/.cccp.yaml 与 ~/.conformer_search.yaml 同时存在时 WARNING 日志可观测（B3 冲突策略） | 单测 4 场景全过（含双文件冲突 WARNING）；生产已删旧文件，无 WARNING | ✅ 已验证（单测）
+
+    
+ | 9 | 【v9 新增 · 部署必做】卸载旧发行包：pip uninstall conformer-search——pip install -e 装 acp 不会自动卸载旧包，残留的 __editable__.conformer_search-*.pth 会让 import conformer_search 解析为幽灵命名空间包（Phase B 审计发现的致命 bug，已修复） | python -c "import conformer_search" → ModuleNotFoundError；pip show conformer-search → not found；src/conformer_search/ 不再被 pytest 重建 | ✅ 已执行
+
+  
+
+回滚策略
+
+每个 Part 一个独立 git commit（A / B / C 各一笔，大 Part 可拆多笔），任一门禁失败可 git revert 该笔而不影响先前已通过 Part。关键安全顺序：Part A 先删消费方，使 Part B 的 import 改动面最小；Part C 在 cccp 改名落定后才动 CREST 重写，避免对同一文件二次改动。配置回退读取（B3）保证即便部署侧未及时改名，服务仍能读到旧配置文件。SQLite 兼容方案（风险表）保证历史数据不丢失。能力字符串保留 "conformer_search" 不变——若未来决定改名可单独 PR，且有 C0 映射表做参考。
+
+范围外（本计划不做）
+
+  
+迁移 cccp 内部代码到 acp（cccp 作为 Connection Package 接口库长期保留）
+  
+删除 cccp/core/engine.py 的 ConformerEngine（作为库内部资产保留，仅变休眠——注意 Part A 后 acp.workflows.conformer.py 是其唯一消费者）
+  
+清理 acp/core/models.py 的 legacy 桥接方法（可选后续）
+  
+重命名能力字符串 "conformer_search"（v2 决策：暂缓到后续统一规划。当前与已删 conformer 工作流无关联，保留无歧义）
+  
+精修 docs/*.html 历史设计文档的全部叙述（仅批量替换路径引用）
+  
+重命名 tests/conftest.py 中的 CONFSEARCH_* 环境变量前缀——与环境变量分发机制耦合，超出包重命名范围
+
+—— 计划 v9 于 2026-07-27 执行后修订。v9 内容（Phase B 落地 + 质量审计）：(1) 新增 Phase B 完成报告——git mv + ~140 处 import/26 处 mock 替换 + B3 配置回退 + B4 远端探测双路径 + 门禁全过（798 passed 零新增失败，ruff 409 较基线 419 减少 10）；(2) 审计发现并修复 1 个致命 bug——stale conformer-search 可编辑安装元数据（.pth + dist-info）导致幽灵命名空间包 + pytest 重建 src/conformer_search/ 残留，已通过 pip uninstall conformer-search 修复并重启 systemd；v7 B6 的盲区（只点名 __pycache__，未覆盖 pip 元数据），部署清单补第 9 项；(3) 部署清单加状态列并补第 9 项——8 项已执行/验证（第 7 项 retired 历史未单独验证），新增第 9 项 uninstall 旧包；(4) 确认安全项：B3 回退 4 场景、B4 探测脚本端到端（censo v3.0.8）、能力串/方法名完整保留、无循环导入、无 sed 误伤。历史修正保留：v8 三处事实错误 + 6 处遗漏；v7 B1.5/B6/B3/conftest/requirements-node/部署清单；v6 catalog retired + stage_tasks 提交顺序；v5 cli.py 懒 import 判误 + CrestBackend.search() 已实现。未提交 git commit——改动在工作区待确认。注意：文中所有行号为撰写时快照，执行时以符号名 + grep 定位为准。

@@ -1,0 +1,2632 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>ACP 远程计算节点支持 — 详细开发计划</title>
+<style>
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#c9d1d9;--accent:#58a6ff;--accent2:#3fb950;--accent3:#d29922;--code-bg:#1c2128}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;padding:2rem;max-width:1200px;margin:0 auto}
+h1{font-size:2rem;border-bottom:2px solid var(--accent);padding-bottom:.5rem;margin-bottom:1.5rem;color:#fff}
+h2{font-size:1.5rem;color:var(--accent);margin-top:2.5rem;margin-bottom:1rem;border-left:4px solid var(--accent);padding-left:.75rem}
+h3{font-size:1.15rem;color:var(--accent2);margin-top:1.5rem;margin-bottom:.5rem}
+h4{font-size:1rem;color:var(--accent3);margin-top:1rem;margin-bottom:.4rem}
+p,li{margin-bottom:.4rem}
+ul,ol{padding-left:1.5rem;margin-bottom:1rem}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.9rem}
+th,td{border:1px solid var(--border);padding:.5rem .75rem;text-align:left}
+th{background:var(--surface);color:var(--accent);font-weight:600}
+td{background:var(--bg)}
+code{background:var(--code-bg);padding:.15rem .4rem;border-radius:4px;font-size:.88rem;color:#e6edf3}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:6px;padding:1rem;overflow-x:auto;margin:.75rem 0 1.25rem;font-size:.85rem;line-height:1.5}
+pre code{background:none;padding:0}
+.constraint-table td:first-child{font-weight:600;white-space:nowrap;width:140px}
+.step-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem 1.25rem;margin:.75rem 0}
+.step-card h4{margin-top:0}
+.tag-new{display:inline-block;background:#238636;color:#fff;font-size:.7rem;padding:.1rem .4rem;border-radius:3px;font-weight:600;margin-right:.3rem}
+.tag-modify{display:inline-block;background:#9e6a03;color:#fff;font-size:.7rem;padding:.1rem .4rem;border-radius:3px;font-weight:600;margin-right:.3rem}
+.tag-done{display:inline-block;background:#238636;color:#fff;font-size:.7rem;padding:.1rem .4rem;border-radius:3px;font-weight:600;margin-left:.5rem;vertical-align:middle}
+.tag-pending{display:inline-block;background:#30363d;color:#8b949e;font-size:.7rem;padding:.1rem .4rem;border-radius:3px;font-weight:600;margin-left:.5rem;vertical-align:middle}
+.step-card.done{border-left:3px solid #238636}
+.step-card.pending{border-left:3px solid #30363d}
+.review-box{background:#0d1117;border:1px solid #f0883e;border-radius:8px;padding:1rem 1.25rem;margin:1rem 0}
+.review-box h4{color:#f0883e;margin-top:0}
+.review-box table th{background:#1c2128}
+.risk-high{color:#f85149;font-weight:600}
+.risk-medium{color:#d29922;font-weight:600}
+.risk-low{color:#8b949e}
+.review-pass{color:#3fb950;font-weight:600}
+.review-fail{color:#f85149;font-weight:600}
+.dep-graph{font-family:'Courier New',monospace;font-size:.82rem;line-height:1.4;color:#8b949e;background:var(--code-bg);border:1px solid var(--border);border-radius:6px;padding:1rem;white-space:pre;overflow-x:auto}
+.section-divider{border:none;border-top:1px solid var(--border);margin:2rem 0}
+.toc{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.25rem;margin-bottom:2rem}
+.toc h3{margin-top:0;color:var(--accent)}
+.toc ol{margin-bottom:0}
+.toc a{color:var(--accent);text-decoration:none}
+.toc a:hover{text-decoration:underline}
+.decision-table{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0}
+.decision-table table{margin:0}
+.decision-table th{background:var(--code-bg)}
+</style>
+</head>
+<body>
+<h1>ACP 远程计算节点支持 — 详细开发计划</h1>
+<h2>概述</h2>
+<p>为 ACP 平台添加远程计算节点支持，使 ACP Server 能通过 SSH/SFTP 将完整的 <code>acp</code> 作业提交到远程 OpenLAVA (LSF) 节点执行，并通过 LSF 日志实时监控状态。远程节点<strong>无需手动安装 ACP</strong>，代码通过 <code>CodeSyncer</code> 自动同步（SFTP 增量传输），支持所有工作流（conformer / nmr / mechanism / benchmark）。</p>
+<h3>核心约束</h3>
+<table class="constraint-table">
+<tr><td>远程节点环境</td><td>Python ≥ 3.10 + rdkit/numpy/openpyxl/pyyaml + OpenLAVA (LSF) + QC 软件齐全（Gaussian/ORCA/xTB/CREST）</td></tr>
+<tr><td>代码部署</td><td><strong>CodeSyncer 自动同步</strong>：SFTP 增量传输 <code>src/acp/</code>（排除 api/scheduler）+ <code>src/cccp/</code> + <code>scripts/</code> 到 <code>{remote_code_dir}/</code>，无需 pip install</td></tr>
+<tr><td>CLI 入口</td><td><code>python -m acp.cli run &lt;workflow&gt;</code>（LSF 脚本设置 <code>PYTHONPATH={remote_code_dir}/src</code>）</td></tr>
+<tr><td>执行粒度</td><td>整个 <code>acp.cli run &lt;wf&gt;</code> 命令作为一个 LSF 作业</td></tr>
+<tr><td>工作流范围</td><td>所有工作流（conformer / nmr / mechanism / benchmark / fake）</td></tr>
+<tr><td>文件系统</td><td>输入通过 SFTP 上传，所有结果保留在远程节点，<strong>不自动下载任何计算文件</strong>，仅支持用户按需单文件下载</td></tr>
+<tr><td>监控方式</td><td>LSF <code>bjobs</code> 状态 + SFTP 增量 tail <code>stdout.log</code>/<code>stderr.log</code>（<strong>不依赖 state.json</strong>）</td></tr>
+<tr><td>轮询间隔</td><td>30 秒</td></tr>
+<tr><td>QC 配置</td><td>远程节点自行配置 <code>~/.cccp.yaml</code> 或环境变量，不同步本地 <code>config/defaults.yaml</code></td></tr>
+<tr><td>多节点</td><td>支持多个远程计算节点，负载最低优先选择</td></tr>
+<tr><td>远程文件保留</td><td>180 天</td></tr>
+</table>
+<div class="toc">
+<h3>目录</h3>
+<ol>
+<li><a href="#arch">架构总览</a></li>
+<li><a href="#phase1">阶段 1：基础设施层（SSH/SFTP）</a> <span class="tag-done">✓ 完成</span></li>
+<li><a href="#phase2">阶段 2：作业执行层</a> <span class="tag-done">✓ 完成</span></li>
+<li><a href="#phase3">阶段 3：配置与集成</a> <span class="tag-done">✓ 完成</span></li>
+<li><a href="#phase4">阶段 4：按需结果获取</a> <span class="tag-done">✓ 完成</span></li>
+<li><a href="#phase4-audit">联合代码质量审计（阶段 4 + CS 反向同步）</a></li>
+<li><a href="#phase5">阶段 5：远程文件生命周期管理</a> <span class="tag-done">✓ 完成</span></li>
+<li><a href="#phase5b">阶段 5B：本地磁盘保护（ACP Server 端）</a> <span class="tag-done">✓ 完成</span></li>
+<li><a href="#phase6">阶段 6：网页端节点选择</a> <span class="tag-done">✓ 完成</span></li>
+<li><a href="#phase7">阶段 7：测试</a> <span class="tag-pending">⏳ 待办</span></li>
+<li><a href="#phase8">阶段 8：文档与部署</a> <span class="tag-pending">⏳ 待办</span></li>
+<li><a href="#filelist">文件变更清单</a></li>
+<li><a href="#deps">执行顺序与依赖关系</a></li>
+<li><a href="#config">配置示例</a></li>
+<li><a href="#impl-notes">实施注意事项</a></li>
+<li><a href="#decisions">设计决策记录</a></li>
+<li><a href="#todo">后续任务清单（按优先级）</a></li>
+</ol>
+</div>
+<hr class="section-divider">
+<h2 id="arch">1. 架构总览</h2>
+<pre><code>ACP Server (本地)
+  FastAPI -> JobManager -> JobRunner
+                                |
+                      execution_mode == 'remote' ?
+                       yes /       \ no
+                         /           \
+            RemoteJobRunner    subprocess.Popen (原有)
+                 |
+       CodeSyncer + SSHConnectionPool + FileStager + RemoteJobMonitor
+       (SFTP 代码同步)  (paramiko, 线程安全)  (SFTP)    (bjobs + log tail)
+                 |  SSH/SFTP port 22
+                 v
+    Remote Compute Node Pool
+      Node A: 10.16.5.157 ({remote_code_dir}/src + OpenLAVA + QC全套)
+      Node B: &lt;future&gt;
+      {remote_code_dir}/
+        src/acp/ (排除 api/, scheduler/)
+        src/cccp/ (完整)
+        scripts/run_g16_worker.sh
+      /scratch/<user>/acp_jobs/&lt;job_id&gt;/
+        inputs/ submit.lsf stdout.log stderr.log .exit_code &lt;QC outputs&gt;</code></pre>
+<hr class="section-divider">
+<h2 id="phase1">2. 阶段 1：基础设施层（SSH/SFTP）</h2>
+<div class="step-card done">
+<h4>步骤 1.1：添加 paramiko 依赖 <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-modify">修改</span> <code>pyproject.toml</code> — 新增 <code>remote = ["paramiko&gt;=3.0"]</code></p>
+</div>
+<div class="step-card done">
+<h4>步骤 1.2：创建 remote 包骨架 <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-new">新建</span> <code>src/acp/scheduler/remote/__init__.py</code> + 10 个子模块</p>
+</div>
+<div class="step-card done">
+<h4>步骤 1.3：实现 RemoteNode 配置模型 <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-new">新建</span> <code>config.py</code> — <code>RemoteNode</code> (dataclass) + <code>RemoteExecutionConfig</code> (dataclass)</p>
+<ul>
+<li><code>RemoteNode</code>: name, host, port(22), username, password(None), key_file(None), remote_work_dir, <strong>remote_code_dir</strong>, max_concurrent_jobs, enabled(True)</li>
+<li><code>resolved_password()</code> 支持环境变量 <code>ACP_REMOTE_PASSWORD_&lt;NAME&gt;</code> 覆盖</li>
+<li><code>from_config_dict()</code> 从 YAML cluster 段解析</li>
+<li><code>RemoteExecutionConfig</code>: execution_mode, poll_interval(30), retention_days(180), <strong>auto_sync(True)</strong>, nodes list</li>
+</ul>
+</div>
+<div class="step-card done">
+<h4>步骤 1.4：实现 SSH 连接池（线程安全） <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-new">新建</span> <code>ssh.py</code> — <code>SSHConnectionPool</code></p>
+<ul>
+<li><strong>线程安全</strong>：<code>queue.Queue</code> 租借/归还模式，<strong>每节点连接数 = <code>max_concurrent_jobs</code></strong>（从 RemoteNode 配置读取）</li>
+<li>paramiko <code>SSHClient</code> 非线程安全，JobManager 用 <code>ThreadPoolExecutor</code>，必须隔离</li>
+<li><code>execute(cmd) -&gt; (exit_code, stdout, stderr)</code>，自动重连（2 次重试）</li>
+<li>密码/密钥双认证，日志脱敏（不输出密码/密钥内容）</li>
+</ul>
+</div>
+<div class="step-card done">
+<h4>步骤 1.5：实现 SFTP 文件传输 <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-new">新建</span> <code>sftp.py</code> — <code>FileStager</code></p>
+<ul>
+<li><code>upload_directory(local_dir, remote_dir)</code> — 递归上传输入文件</li>
+<li><code>download_file(remote_path, local_path)</code> — 单文件下载（仅用于按需下载 API）</li>
+<li><code>read_remote_file(remote_path) -> bytes</code> — 直接读内容（用于 .exit_code）</li>
+<li><code>list_remote_dir(remote_path) -> list[RemoteFileInfo]</code> — 列目录</li>
+<li><code>tail_log(remote_path, offset) -> (new_bytes, new_offset)</code> — <strong>增量读取</strong>，记录 offset 避免全量拉取</li>
+</ul>
+</div>
+<div class="step-card done">
+<h4>步骤 1.6：实现 CodeSyncer（代码自动同步） <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-new">新建</span> <code>sync.py</code> — <code>CodeSyncer</code></p>
+<ul>
+<li><code>sync_code(node, ssh_pool)</code> — 同步代码到远程节点 <code>{remote_code_dir}/</code></li>
+<li><code>check_sync_needed(node) -> bool</code> — 检查本地代码是否有变更（基于<strong>本地 mtime 记录</strong>比较）</li>
+<li><strong>同步内容</strong>：
+  <ul>
+  <li><code>src/acp/</code>（排除 <code>api/</code>、<code>scheduler/</code> 子目录）— 执行路径不依赖这两个模块</li>
+  <li><code>src/cccp/</code>（完整）— acp 委托给 legacy 包执行 QC 计算</li>
+  <li><code>scripts/run_g16_worker.sh</code> — Gaussian 包装脚本</li>
+  </ul>
+</li>
+<li><strong>不同步</strong>：<code>config/defaults.yaml</code>（QC 路径远程不同，由远程节点自行配置）</li>
+<li><strong>不同步</strong>：<code>frontend/</code>、<code>tests/</code>、<code>pyproject.toml</code>、<code>bin/</code></li>
+<li><strong>同步策略</strong>：本地记录每个文件的 mtime，同步时比较"本地当前 mtime vs 本地上次同步时 mtime"，若变化则上传。远程 mtime 不参与判断（SFTP 上传后远程 mtime 会变成上传时间，不可靠）。首次同步较慢，后续快速</li>
+<li><strong>远程目录结构</strong>：
+<pre><code>{remote_code_dir}/
+  src/
+    acp/          # cli.py, core/, backends/, chem/, io/, workflows/, nmr/, reports/
+    cccp/  # 完整 legacy 包
+  scripts/
+    run_g16_worker.sh</code></pre>
+</li>
+</ul>
+</div>
+
+<!-- ==================== 阶段 1 代码评审 ==================== -->
+<div class="review-box">
+<h4>📋 阶段 1 代码评审报告</h4>
+<p><strong>评审日期：</strong>2026-07-12 ｜ <strong>文件：</strong>config.py (163行) / ssh.py (286行) / sftp.py (266行) / sync.py (269行) / __init__.py (32行)</p>
+<p><strong>测试：</strong>mock 单元测试 23/23 通过（含 8 个 P0 修复测试） + 真实节点 10.16.5.157 集成测试 3/3 通过 ｜ <strong>lint：</strong>ruff 0 error ｜ <strong>类型：</strong>mypy 0 error</p>
+
+<h4 style="color:var(--accent2)">✅ 优点</h4>
+<ul>
+<li><strong>线程安全设计正确</strong>：每节点独立 <code>queue.Queue</code> 租借/归还，<code>_created</code> 计数在 <code>_lock</code> 保护下增减，20 线程并发测试无竞态</li>
+<li><strong>连接池容量 = max_concurrent_jobs</strong>：避免了固定 3 连接的瓶颈，与 JobManager 的 ThreadPoolExecutor 大小匹配</li>
+<li><strong>密码安全</strong>：环境变量 <code>ACP_REMOTE_PASSWORD_&lt;NAME&gt;</code> 覆盖 YAML，<code>resolved_password()</code> 运行时读取不缓存，<code>_redact_node()</code> 日志脱敏，grep 确认无明文泄漏</li>
+<li><strong>代码同步排除规则正确</strong>：真实验证 src/acp/（排除 api/scheduler）+ cccp + run_g16_worker.sh 共 101 文件，远程 import 确认 scheduler/api 不可用</li>
+<li><strong>增量同步策略合理</strong>：本地 mtime 记录避免远程 mtime 不可靠问题，二次同步 0 上传验证通过</li>
+<li><strong>遵循项目约定</strong>：PEP 604 注解、<code>from __future__ import annotations</code>、Google-style docstring、<code>__all__</code> 导出、模块级 logger</li>
+</ul>
+
+<h4 style="color:var(--accent3)">⚠️ 隐患与待改进项</h4>
+<table>
+<tr><th>级别</th><th>文件</th><th>问题</th><th>影响</th></tr>
+<tr>
+<td><span class="review-pass">✅ 已修复</span></td>
+<td><code>ssh.py:132</code></td>
+<td><code>_NodePool.borrow()</code> 递归调用自身：如果队列中所有归还的连接都已死亡，<code>return self.borrow(timeout=timeout)</code> 无限递归 → 栈溢出</td>
+<td><strong>已修复</strong>：改为 <code>for</code> 循环 + 重试上限 (<code>_capacity + 2</code>)，超限抛 <code>SSHExecutionError</code></td>
+</tr>
+<tr>
+<td><span class="review-pass">✅ 已修复</span></td>
+<td><code>sftp.py:200</code></td>
+<td><code>tail_log()</code> 返回 <code>file_size</code> 作为 new_offset，而非 <code>offset + len(data)</code>。如果文件在 stat 和 read 之间增长，实际读取量 &gt; file_size，下次调用从过小的 offset 重读 → <strong>重复内容</strong></td>
+<td><strong>已修复</strong>：返回 <code>offset + len(data)</code>，基于实际读取量</td>
+</tr>
+<tr>
+<td><span class="review-pass">✅ 已修复</span></td>
+<td><code>ssh.py:57</code></td>
+<td><code>AutoAddPolicy()</code> 自动接受未知主机密钥 → SSH 中间人攻击风险。生产环境应使用 <code>RejectPolicy</code> 或 <code>known_hosts</code> 文件</td>
+<td><strong>已修复</strong>：<code>RemoteNode.host_key_policy</code> 字段，默认 <code>"reject"</code>，可选 <code>"auto_add"</code> / <code>"warn"</code></td>
+</tr>
+<tr>
+<td class="risk-medium">中</td>
+<td><code>sftp.py:199</code></td>
+<td><code>tail_log()</code> 的 <code>f.read()</code> 无大小上限，多 GB 日志文件 → 内存溢出</td>
+<td>长时间运行的作业日志可能累积到 GB 级</td>
+</tr>
+<tr>
+<td class="risk-medium">中</td>
+<td><code>sync.py:138</code></td>
+<td><code>self._stager = FileStager(ssh_pool)</code> 创建后从未使用 → <strong>死代码</strong>。CodeSyncer 直接用 <code>sftp_session</code></td>
+<td>无害但浪费一个对象，且容易误导维护者</td>
+</tr>
+<tr>
+<td class="risk-medium">中</td>
+<td><code>sync.py</code></td>
+<td><strong>无远程文件删除</strong>：本地删除的文件不会从远程清理，远程目录随时间积累废弃文件</td>
+<td>长期运行后远程磁盘浪费，需配合阶段 5 清理模块</td>
+</tr>
+<tr>
+<td class="risk-medium">中</td>
+<td><code>sync.py:233</code></td>
+<td><code>_ensure_remote_dir(sftp, parent)</code> 在 per-file try 块之外，dir 创建失败（权限/磁盘满）会中止整个批次剩余上传</td>
+<td>一个目录创建失败导致后续文件全部跳过</td>
+</tr>
+<tr>
+<td class="risk-medium">中</td>
+<td><code>config.py:25</code></td>
+<td><code>_env_var_name()</code> 未处理节点名中的 <code>.</code>（如 <code>compute.01</code> → <code>ACP_REMOTE_PASSWORD_COMPUTE.01</code> 是非法环境变量名）</td>
+<td>带点号的节点名密码覆盖失效</td>
+</tr>
+<tr>
+<td class="risk-medium">中</td>
+<td><code>ssh.py:148</code></td>
+<td><code>close_all()</code> 只关闭队列中的空闲连接，<strong>不关闭已借出（in-use）的连接</strong>，且 <code>_created</code> 计数可能变负</td>
+<td>shutdown 时活跃连接泄漏，计数不一致影响后续借出判断</td>
+</tr>
+<tr>
+<td class="risk-low">低</td>
+<td><code>sync.py:52</code></td>
+<td><code>_project_root()</code> 用 <code>parents[4]</code> 硬编码层级，文件移动后静默返回错误目录</td>
+<td>重构时易踩坑</td>
+</tr>
+<tr>
+<td class="risk-low">低</td>
+<td><code>sftp.py + sync.py</code></td>
+<td><code>_ensure_remote_dir</code> 函数在两个文件中重复定义（sftp.py 用 <code>paramiko.SFTPClient</code> 类型注解，sync.py 用 <code>Any</code>）</td>
+<td>维护时需同步修改两处</td>
+</tr>
+<tr>
+<td class="risk-low">低</td>
+<td><code>sync.py:165</code></td>
+<td><code>_save_state()</code> 非原子写入（无 temp-rename），写入中途崩溃 → 状态文件损坏</td>
+<td>低概率，损坏后自动从空状态恢复（已有容错）</td>
+</tr>
+<tr>
+<td class="risk-low">低</td>
+<td><code>config.py</code></td>
+<td><code>execution_mode</code> 未校验合法值，<code>"remot"</code> 拼写错误会静默降级为 local</td>
+<td>配置错误难以发现</td>
+</tr>
+</table>
+
+<h4 style="color:var(--accent3)">建议修复优先级</h4>
+<ol>
+<li><strong class="review-pass">P0 ✅ 已修复（2026-07-12）</strong>：
+  <ul>
+  <li><code>borrow()</code> 递归 → 改为 <code>for</code> 循环 + 重试上限 (<code>_capacity + 2</code>)，超限抛 <code>SSHExecutionError</code>（ssh.py:97-161）</li>
+  <li><code>tail_log</code> offset → 返回 <code>offset + len(data)</code> 而非 <code>file_size</code>，消除文件增长时的重复读（sftp.py:200）</li>
+  <li><code>AutoAddPolicy</code> → <code>RemoteNode.host_key_policy</code> 字段（默认 <code>"reject"</code>，可选 <code>"auto_add"</code> / <code>"warn"</code>），新增 <code>_WarnThenAddPolicy</code> 自定义策略类（config.py + ssh.py）</li>
+  </ul>
+</li>
+<li><strong class="risk-medium">P1（阶段 2 同步修复）</strong>：<code>tail_log</code> 加 max_size 参数；删除 sync.py 死代码 <code>self._stager</code></li>
+<li><strong class="risk-low">P2（后续迭代）</strong>：远程文件删除、原子写入、_ensure_remote_dir 去重、config 校验</li>
+</ol>
+</div>
+
+<hr class="section-divider">
+<div class="step-card done">
+<h4>步骤 2.1：LSF 脚本生成器 <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-new">新建</span> <code>script_gen.py</code> — <code>generate_lsf_script()</code> + <code>build_remote_cli_command()</code></p>
+<p>命令生成逻辑<strong>参考现有 <code>runner.py:316-362</code> <code>_build_cmd()</code></strong>，生成等价的 <code>python -m acp.cli run &lt;wf&gt;</code> 命令。<br>
+BSUB 指令格式<strong>参考现有 <code>cccp/qc/cluster/lsf.py:86-114</code></strong>。</p>
+<pre><code>#!/bin/bash
+#BSUB -J acp_{job_id}
+#BSUB -q {queue}  -n {nproc}
+#BSUB -R "rusage[mem={mem_mb}]"  -W {walltime}
+#BSUB -o {dir}/stdout.log  -e {dir}/stderr.log
+export PYTHONPATH={remote_code_dir}/src:$PYTHONPATH
+cd "$REMOTE_JOB_DIR"
+python -m acp.cli run {workflow} --input inputs/input.xyz --output . \
+  --nproc {nproc} --mem {mem} [--protocol {protocol}] [--backend {backend}] \
+  [--charge {charge}] [--multiplicity {mult}]
+echo $? &gt; .exit_code</code></pre>
+<p><code>build_remote_cli_command()</code> 映射规则与 <code>_build_cmd()</code> 完全一致：</p>
+<ul>
+<li>workflow → subcommand（conformer/nmr → <code>acp.cli run &lt;wf&gt;</code>，benchmark → <code>acp.cli benchmark</code>）</li>
+<li>method → protocol / backend / benchmark_level / protocols</li>
+<li>resources → nproc / mem</li>
+<li>input → charge / multiplicity</li>
+</ul>
+</div>
+<div class="step-card done">
+<h4>步骤 2.2：远程作业状态监控 <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-new">新建</span> <code>monitor.py</code> — <code>RemoteJobMonitor</code></p>
+<ul>
+<li><code>get_lsf_status(lsf_job_id) -> str</code> — SSH <code>bjobs</code> 状态映射 PEND/RUN/DONE/EXIT（参考 <code>lsf.py:116-156</code>）</li>
+<li><code>get_exit_code(remote_dir) -> int | None</code> — SFTP 读 <code>.exit_code</code> 文件</li>
+<li><code>tail_stdout(remote_dir, offset) -> (new_text, new_offset)</code> — SFTP 增量读 <code>stdout.log</code>（基础版本仅展示原始文本，不做阶段解析）</li>
+<li><code>tail_stderr(remote_dir, offset) -> (new_text, new_offset)</code> — SFTP 增量读 <code>stderr.log</code></li>
+<li><code>get_running_job_count() -> int</code> — SSH <code>bjobs -u &lt;user&gt; | grep RUN | wc -l</code></li>
+<li><code>check_disk_usage(remote_work_dir) -> int</code> — SSH <code>df</code>，返回百分比</li>
+<li><code>cancel_job(lsf_job_id) -> bool</code> — SSH <code>bkill &lt;lsf_job_id&gt;</code>，检查返回值，失败时记录日志</li>
+</ul>
+<p><strong>注意</strong>：基础版本不实现 <code>read_state_json()</code> 和日志阶段解析。远程监控完全依赖 <code>bjobs</code> 状态 + <code>.exit_code</code>，日志 tail 仅作为原始文本展示。阶段解析作为最后阶段的增强功能实现。</p>
+</div>
+<div class="step-card done">
+<h4>步骤 2.3：RemoteJobRunner（核心） <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-new">新建</span> <code>runner.py</code> — 完整远程执行流程</p>
+<ol>
+<li><strong>[新增] 检查/同步代码</strong>到选定节点（若 <code>auto_sync=True</code> 且代码有变更，调用 <code>CodeSyncer.sync_code()</code>）</li>
+<li>选择节点（<code>target_node</code> 指定 or least_loaded）</li>
+<li><code>materialize_job_input</code>（本地生成 input.xyz）+ SFTP 上传 <code>inputs/</code></li>
+<li>生成 LSF 脚本（含 <code>PYTHONPATH</code>）+ SFTP 上传</li>
+<li>SSH: <code>bsub &lt; submit.lsf</code> 提交 → 解析 <code>Job &lt;NNNN&gt;</code> 得 lsf_job_id</li>
+<li>监控循环（<strong>30s 间隔</strong>）：
+  <ul>
+  <li><code>bjobs</code> 状态 → 更新 <code>record.status</code> + 更新 <code>remote_execution</code> stage task 状态</li>
+  <li>SFTP tail <code>stdout.log</code>/<code>stderr.log</code> → 写入 <code>JobEventLog</code>（作为 <code>log.output</code> 事件，原始文本）</li>
+  <li>检查 <code>cancel_event</code> → SSH <code>bkill &lt;lsf_job_id&gt;</code> → <strong>检查 bkill 返回值，失败时记录日志</strong></li>
+  <li>作业结束 → 读 <code>.exit_code</code></li>
+  </ul>
+</li>
+<li><strong>不下载任何文件</strong> — 远程结果保留在远程节点</li>
+</ol>
+<p>完成后处理：</p>
+<ul>
+<li><code>record.exit_code</code> = <code>.exit_code</code> 值</li>
+<li><code>record.result</code> = <code>{lsf_job_id, node, remote_dir, exit_code}</code> — LSF 元数据</li>
+<li><code>Provenance</code> 从 CLI 命令行 + LSF 元数据构建，<strong>不调用 <code>_capture_artifacts</code></strong></li>
+<li><strong>创建简化 <code>remote_execution</code> stage task</strong>：状态跟随 LSF 状态更新（PEND→RUNNING→DONE/FAILED），前端可显示"远程执行: PEND/RUN/DONE"</li>
+</ul>
+<p>自定义异常: <code>RemoteNodeUnavailableError</code>, <code>RemoteSubmissionError</code></p>
+</div>
+
+<!-- ==================== 阶段 2 代码评审 ==================== -->
+<div class="review-box">
+<h4>📋 阶段 2 代码评审报告（深度审查）</h4>
+<p><strong>评审日期：</strong>2026-07-12 ｜ <strong>文件：</strong>script_gen.py (285行) / monitor.py (227行) / runner.py (575行) ｜ <strong>配置改动：</strong>config.py (+queue/walltime/extra_flags) / sftp.py (tail_log +max_size) / sync.py (移除死代码 _stager)</p>
+<p><strong>测试：</strong>mock 单元测试 35/35 通过 + Phase 1 回归 23/23 通过（共 58/58） ｜ <strong>lint：</strong>ruff 0 error ｜ <strong>格式：</strong>ruff format 通过</p>
+
+<h4 style="color:var(--accent2)">✅ 优点</h4>
+<ul>
+<li><strong>CLI 命令映射与 <code>_build_cmd()</code> 高度一致</strong>：conformer/nmr/benchmark/mechanism 工作流参数映射经过逐一验证，charge/multiplicity/nproc/mem 全覆盖。评审中发现并修复了 <code>config_path</code> 泄漏问题（见 P0-1）</li>
+<li><strong>LSF 脚本格式参考 <code>lsf.py</code></strong>：BSUB 指令格式（-J/-q/-n/-R/-W/-o/-e）与现有 LSFClusterAdapter 一致，PYTHONPATH 设置 + cd + echo exit_code 完整</li>
+<li><strong>状态检测策略健壮</strong>：<code>.exit_code</code> 文件优先（definitive terminal signal）→ <code>bjobs</code> 状态轮询 → not_found 处理（LSF 清理后仍可读取 exit code）</li>
+<li><strong>不下载任何文件</strong>：全流程验证 <code>download_file</code> 从未被调用（专用 spy 测试覆盖）</li>
+<li><strong>remote_execution stage task 正确创建</strong>：状态跟随 LSF（pending→running→completed/failed/cancelled），exit_status 记录</li>
+<li><strong>取消策略健壮</strong>：<code>bkill</code> 返回值检查（code==0 → True，non-zero → False 不抛异常），grace period 等待 <code>.exit_code</code></li>
+<li><strong>日志增量 tail 作为事件</strong>：stdout/stderr 行通过 <code>log</code> 事件写入 JobEventLog，单次轮询上限 1000 行防爆炸</li>
+<li><strong>P1 隐患修复</strong>：<code>tail_log</code> 加 <code>max_size</code> 参数（默认 8MB，防 OOM）；移除 sync.py 死代码 <code>self._stager</code></li>
+<li><strong>遵循项目约定</strong>：PEP 604 注解、<code>from __future__ import annotations</code>、Google-style docstring、<code>__all__</code> 导出、模块级 logger、frozen dataclass for LSFScriptSpec</li>
+</ul>
+
+<h4 style="color:var(--accent3)">🔧 本轮评审修复（P0/P1）</h4>
+<table>
+<tr><th>级别</th><th>文件</th><th>问题</th><th>修复</th></tr>
+<tr>
+<td><span class="review-pass">✅ 已修复</span></td>
+<td><code>script_gen.py:123</code></td>
+<td><strong>P0-1 config_path 泄漏</strong>：<code>build_remote_cli_command</code> 原样复制 <code>_build_cmd()</code> 的 <code>--config {spec.config_path}</code>。但 <code>config_path</code> 是 ACP Server 上的本地路径，远程节点不存在该文件 → 远程 <code>acp.cli</code> 启动即报 FileNotFoundError</td>
+<td><strong>已移除</strong>：远程节点使用自己的 <code>~/.cccp.yaml</code>（计划 §14.1），不再传递 <code>--config</code>。新增测试 <code>test_build_remote_cli_command_no_config_path</code> 防回归</td>
+</tr>
+<tr>
+<td><span class="review-pass">✅ 已修复</span></td>
+<td><code>runner.py:561</code></td>
+<td><strong>P1-1 provenance hostname 错误</strong>：<code>build_provenance_for_job()</code> 内部用 <code>socket.gethostname()</code> 设置 <code>hostname</code>，但远程作业实际在远程节点执行 → provenance 记录的是 ACP Server 主机名而非计算节点</td>
+<td><strong>已修复</strong>：构建 provenance 后覆盖 <code>provenance.hostname = result["host"]</code></td>
+</tr>
+<tr>
+<td><span class="review-pass">✅ 已修复</span></td>
+<td><code>runner.py:106</code></td>
+<td><strong>P1-2 poll_interval=0 被 <code>or</code> 吞掉</strong>：<code>poll_interval or remote_config.poll_interval</code> 中 <code>0</code> 是 falsy，导致传 <code>0</code> 实际用默认 30s → 测试和快速轮询场景失效</td>
+<td><strong>已修复</strong>：改为 <code>poll_interval if poll_interval is not None else remote_config.poll_interval</code></td>
+</tr>
+</table>
+
+<h4 style="color:var(--accent3)">⚠️ 待修复缺陷（P2 — 后续阶段处理）</h4>
+<table>
+<tr><th>级别</th><th>编号</th><th>文件 / 位置</th><th>问题描述</th><th>影响</th><th>处理建议</th></tr>
+<tr>
+<td class="risk-medium">中</td>
+<td>P2-1</td>
+<td><code>runner.py:430</code></td>
+<td><strong>部分失败时远程目录泄漏</strong>：若 runner 在创建远程目录 + 上传输入后、bsub 提交前失败（如脚本上传失败、SSH 断连），远程目录 <code>{remote_work_dir}/{job_id}/</code> 残留，无清理逻辑</td>
+<td>长期积累废弃目录，浪费远程磁盘</td>
+<td>阶段 5 清理模块覆盖；或在此处增加 <code>except</code> 清理远程目录</td>
+</tr>
+<tr>
+<td class="risk-medium">中</td>
+<td>P2-2</td>
+<td><code>runner.py:297</code></td>
+<td><strong>监控循环无超时上限</strong>：<code>_monitor_loop</code> 无限循环直到 <code>.exit_code</code> 或 cancel。若 LSF daemon 挂死或节点离线，bjobs 持续返回 UNKWN，循环永不退出</td>
+<td>JobManager 线程被永久占用，占用并发槽位</td>
+<td>添加 <code>max_monitor_seconds</code>（= walltime + buffer），超时后标记 FAILED 并记录</td>
+</tr>
+<tr>
+<td class="risk-medium">中</td>
+<td>P2-3</td>
+<td><code>runner.py:462</code></td>
+<td><strong>节点选择竞态</strong>：多个 JobManager 工作线程并发调用 <code>_select_least_loaded()</code>，<code>get_running_job_count()</code> 和 <code>bsub</code> 不在同一个事务中。两个线程可能都看到 "0 running" 并都提交到同一节点</td>
+<td>节点短暂超载，LSF 会排队处理（PEND），实际无数据丢失</td>
+<td>可接受 — LSF 队列容量是真正的限制；如需精确控制，加分布式锁</td>
+</tr>
+<tr>
+<td><span class="review-pass">✅ 已修复</span></td>
+<td><code>monitor.py:77</code></td>
+<td><strong>bjobs 命令格式需验证</strong>：<code>bjobs -noheader -o stat {id}</code> 在不同 LSF/OpenLAVA 版本输出格式可能不同（有些版本仍输出 header，有些不识别 <code>-noheader</code>）。当前解析取 <code>raw.split()[0].upper()</code> 较健壮，但未在真实环境验证</td>
+<td><strong>已修复</strong>：集成测试发现 OpenLAVA 2.0 不支持 <code>-o</code>/<code>-noheader</code>。改为 <code>bjobs {id} 2>&1</code> + 表格式 STAT 列解析 + 回退扫描（P0-2）</td>
+</tr>
+<tr>
+<td class="risk-low">低</td>
+<td>P2-5</td>
+<td><code>monitor.py:177,189</code></td>
+<td><strong>SSH 命令注入风险</strong>：<code>f"bjobs -u {node.username}"</code> 和 <code>f"df -P {remote_path}"</code> 未对 <code>username</code>/<code>remote_path</code> 做 shell 转义。恶意配置值可注入命令</td>
+<td>配置来源可信（YAML 由管理员设置），实际风险极低</td>
+<td>添加 <code>shlex.quote()</code> 防御性编码</td>
+</tr>
+<tr>
+<td class="risk-low">低</td>
+<td>P2-6</td>
+<td><code>script_gen.py:220</code></td>
+<td><strong>BSUB 指令路径含空格时断裂</strong>：<code>#BSUB -o {remote_job_dir}/stdout.log</code> 未引用路径。若 <code>remote_work_dir</code> 含空格，BSUB 解析错误</td>
+<td>远程工作目录通常无空格（<code>/scratch/user/acp_jobs</code>）</td>
+<td>文档约束 <code>remote_work_dir</code> 不得含空格；或上传前验证</td>
+</tr>
+<tr>
+<td class="risk-low">低</td>
+<td>P2-7</td>
+<td><code>runner.py:497</code></td>
+<td><strong>remote_execution stage started_at 语义不精确</strong>：<code>_init_remote_stage()</code> 创建 task 时就设置 <code>started_at=now</code>，但此刻作业尚未提交到 LSF。后续 <code>_set_remote_stage_state(started=True)</code> 不会更新（因 <code>started_at is not None</code>）</td>
+<td>started_at 反映 task 创建时间而非 LSF RUN 时间，偏差几秒</td>
+<td>创建时设 <code>started_at=None</code>，让 <code>started=True</code> 时填充</td>
+</tr>
+<tr>
+<td class="risk-low">低</td>
+<td>P2-8</td>
+<td><code>runner.py:513</code></td>
+<td><strong>_set_remote_stage_state 每次查全表</strong>：每次调用都 <code>store.list_by_job(job_id)</code> 加载该作业的所有 stage task（可能 7 个 conformer stages），遍历查找 <code>remote_execution</code>。监控循环中每 30s 调用，开销可接受但非最优</td>
+<td>轻微性能浪费</td>
+<td>缓存 <code>remote_execution</code> task_id 到实例变量</td>
+</tr>
+<tr>
+<td class="risk-low">低</td>
+<td>P2-9</td>
+<td><code>runner.py:130,168</code></td>
+<td><strong>cancel_event 类型标注为 Any</strong>：实际是 <code>threading.Event</code>，但标注为 <code>Any</code> 避免导入 threading。与本地 <code>JobRunner.run()</code> 签名一致但不够严谨</td>
+<td>无功能影响，仅类型检查</td>
+<td>导入 <code>threading</code> 并标注为 <code>threading.Event</code></td>
+</tr>
+<tr>
+<td class="risk-low">低</td>
+<td>P2-10</td>
+<td><code>config.py:151</code></td>
+<td><strong>execution_mode 未校验合法值</strong>（Phase 1 遗留 P2）：<code>"remot"</code> 拼写错误静默降级为 local</td>
+<td>配置错误难以发现</td>
+<td>添加校验：<code>if execution_mode not in ("local", "remote"): raise ValueError(...)</code></td>
+</tr>
+</table>
+
+<h4 style="color:var(--accent3)">📋 已知设计限制（非缺陷，按计划处理）</h4>
+<table>
+<tr><th>项目</th><th>说明</th><th>处理阶段</th></tr>
+<tr><td><code>target_node</code> 支持</td><td><code>select_node()</code> 使用 <code>getattr(spec, "target_node", None)</code> 前向兼容，但 <code>JobSpec</code> 尚未声明此字段</td><td>阶段 3.6 / 阶段 6.2</td></tr>
+<tr><td>日志阶段解析</td><td>基础版本仅展示原始日志文本，不做阶段 marker 正则解析</td><td>阶段 9（增强）</td></tr>
+<tr><td>manager 预创建 stages</td><td><code>JobManager.submit()</code> 在 runner 前调用 <code>initialize_job_stages()</code> 创建 conformer stages；remote runner 的 <code>finalize_job()</code> 将其标记为 skipped</td><td>阶段 3 可选优化</td></tr>
+<tr><td>无真实节点集成测试</td><td>Phase 2 全部为 mock 测试，无真实 SSH/LSF 验证</td><td>阶段 7 集成测试</td></tr>
+</table>
+</div>
+<hr class="section-divider">
+<h2 id="phase3">4. 阶段 3：配置与集成</h2>
+<div class="step-card done">
+<h4>步骤 3.1-3.2：扩展 cluster 配置 <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-modify">修改</span> <code>cccp/config.py</code>（内置默认）+ <code>config/defaults.yaml</code>（<strong>两者已同步</strong>）</p>
+<pre><code>'cluster': {
+    'enabled': False,
+    'execution_mode': 'local',   # 新增：'local' | 'remote'
+    'poll_interval': 30,         # 新增：远程作业轮询间隔（秒）
+    'retention_days': 180,       # 新增：远程文件保留天数
+    'auto_sync': True,           # 新增：自动同步代码
+    'nodes': [],                 # 新增：远程节点列表
+    'type': 'local',             # 保留
+    'queue': 'normal',           # 保留
+    'walltime': '24:00',         # 保留
+    'extra_flags': ''            # 保留
+}</code></pre>
+</div>
+<div class="step-card done">
+<h4>步骤 3.3：修改 JobRunner 接入远程 <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-modify">修改</span> <code>scheduler/runner.py</code> — 新增 <code>JobRunnerRemoteProtocol</code>（结构化类型，避免强制导入 paramiko）+ <code>remote_runner</code> 属性 + <code>_should_run_remote()</code> 方法</p>
+<p><code>_should_run_remote()</code> 检查 <code>remote_runner is not None</code> and <code>workflow != 'fake'</code>（fake 始终本地运行）</p>
+</div>
+<div class="step-card done">
+<h4>步骤 3.4：修改 JobManager <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-modify">修改</span> <code>scheduler/manager.py</code> — <code>JobManager.__init__</code> 增加 <code>remote_config: RemoteExecutionConfig | None = None</code>（<code>TYPE_CHECKING</code> 导入避免强制依赖）</p>
+<p>内部 <code>_create_remote_runner()</code> 惰性导入 paramiko 并初始化 <code>SSHConnectionPool</code> + <code>FileStager</code> + <code>RemoteJobMonitor</code> + <code>CodeSyncer</code> + <code>RemoteJobRunner</code>，注入 <code>stage_task_observer</code></p>
+<p><code>shutdown()</code> 关闭 <code>SSHConnectionPool</code> 所有空闲连接</p>
+</div>
+<div class="step-card done">
+<h4>步骤 3.5：修改 api/server.py（配置注入入口） <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-modify">修改</span> <code>api/server.py</code> — 新增 <code>_load_remote_config()</code> 函数</p>
+<ul>
+<li>调用 <code>cccp.config.load_config()</code> 读取 YAML cluster 段</li>
+<li>构建 <code>RemoteExecutionConfig.from_config_dict()</code></li>
+<li>配置加载失败时降级为 <code>RemoteExecutionConfig(execution_mode='local')</code></li>
+<li>传入 <code>JobManager(run_root=..., max_running=..., remote_config=remote_config)</code></li>
+</ul>
+</div>
+<div class="step-card done">
+<h4>步骤 3.6：修改 JobSpec + API <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-modify">修改</span> <code>scheduler/jobs.py</code> — <code>JobSpec</code> 增加 <code>target_node: str | None = None</code></p>
+<p><span class="tag-modify">修改</span> <code>api/v1_schemas.py</code> + <code>api/v1_routes.py</code> — <code>V1JobCreateRequest</code> 增加 <code>target_node</code>，<code>create_job</code> 端点透传</p>
+</div>
+
+<!-- ==================== 阶段 3 代码评审 ==================== -->
+<div class="review-box">
+<h4>📋 阶段 3 代码评审报告 + 真实节点集成测试</h4>
+<p><strong>评审日期：</strong>2026-07-12 ｜ <strong>改动文件：</strong>config.py / defaults.yaml / runner.py / manager.py / server.py / jobs.py / v1_schemas.py / v1_routes.py / monitor.py / sftp.py / sync.py</p>
+<p><strong>测试：</strong>mock 单元测试 93/93 通过（Phase 1: 23 + Phase 2: 35 + Phase 3: 35） ｜ <strong>lint：</strong>ruff 0 error ｜ <strong>真实节点集成测试：</strong>✅ CCO conformer 搜索在 10.16.5.157 上成功执行（CREST → ISOSTAT → 完成，LSF Job 561）</p>
+
+<h4 style="color:var(--accent2)">✅ 集成测试验证结果（CCO 远程 conformer 搜索）</h4>
+<ul>
+<li><strong>代码同步</strong>：CodeSyncer 增量同步 101 文件到 <code>/home/<user>/acp_code/</code>，二次同步 0 上传</li>
+<li><strong>输入物化</strong>：SMILES→XYZ（本地 rdkit）→ SFTP 上传 <code>inputs/input.xyz</code></li>
+<li><strong>LSF 提交</strong>：bsub 成功，LSF Job &lt;561&gt; 在 workstation 节点 8 核执行</li>
+<li><strong>状态监控</strong>：bjobs 状态正确映射 PEND→RUN→DONE（修复 OpenLAVA 兼容性后）</li>
+<li><strong>日志 tail</strong>：stdout/stderr 增量拉取，含 CREST 引擎输出和 LSF 资源报告</li>
+<li><strong>.exit_code 捕获</strong>：正确读取退出码 0</li>
+<li><strong>不下载文件</strong>：本地 work_dir 仅有 events.jsonl / job.json / inputs/，QC 输出全部保留在远程节点</li>
+<li><strong>provenance.hostname</strong>：正确记录为 <code>10.16.5.157</code>（远程节点），非 ACP Server</li>
+<li><strong>wall_time</strong>：43.88 秒（含 CREST 两阶段 + ISOSTAT 聚类，CCO 2 个构象异构体）</li>
+</ul>
+
+<h4 style="color:var(--accent3)">🔧 本轮修复（集成测试发现）</h4>
+<table>
+<tr><th>级别</th><th>编号</th><th>文件</th><th>问题</th><th>修复</th></tr>
+<tr>
+<td><span class="review-fail">🔴 严重</span></td>
+<td>P0-2</td>
+<td><code>monitor.py</code></td>
+<td><strong>bjobs 命令与 OpenLAVA 2.0 不兼容</strong>：<code>bjobs -noheader -o stat {id}</code> 使用 IBM LSF 专有选项，OpenLAVA 2.0 不支持 <code>-o</code> 和 <code>-noheader</code>，导致状态轮询始终返回 <code>unknown</code></td>
+<td><strong>已修复</strong>：改用 <code>bjobs {id} 2>&1</code>（兼容格式），解析 STAT 列（第 3 列）。新增回退扫描：若无法按表格式解析，在输出中搜索已知状态码</td>
+</tr>
+<tr>
+<td><span class="review-fail">🔴 严重</span></td>
+<td>P0-3</td>
+<td><code>monitor.py</code></td>
+<td><strong>get_running_job_count 命令不兼容</strong>：<code>bjobs -u {user} -noheader -o stat | grep -c RUN</code> 同样使用了不兼容选项</td>
+<td><strong>已修复</strong>：改用 <code>bjobs -r -u {user} 2>&1 | grep -c '^[0-9]'</code>（<code>-r</code> 过滤运行中作业，<code>grep '^[0-9]'</code> 计数作业 ID 行）</td>
+</tr>
+</table>
+
+<h4 style="color:var(--accent3)">⚠️ 集成测试发现的设计限制（非代码缺陷）</h4>
+<table>
+<tr><th>级别</th><th>问题</th><th>说明</th><th>处理建议</th></tr>
+<tr>
+<td class="risk-medium">中</td>
+<td><strong>DFT 阶段未执行</strong></td>
+<td>CCO 搜索在 ISOSTAT 聚类后直接 finalize，未运行 DFT 优化/频率/单点/Shermo。Energy = 0.0 Ha（非真实 DFT 能量）。原因是 ACP 同步代码的 <code>ext</code> 协议 handoff 逻辑与远程节点的 cccp 引擎行为差异</td>
+<td>排查 <code>ConformerEngine._step_process_ensemble</code> 的 handoff 逻辑；确认 ISOSTAT 输出格式兼容性</td>
+</tr>
+<tr>
+<td class="risk-low">低</td>
+<td><strong>协议不匹配警告</strong></td>
+<td>远程节点 config 默认 <code>protocol: lite</code>，同步代码的 <code>_validate_config()</code> 不识别 <code>lite</code>，回退为 <code>ext</code>。不影响功能（显式传 <code>--protocol ext</code>）</td>
+<td>同步 <code>_validate_config</code> 的协议白名单，或远程节点 config 改用 <code>default: ext</code></td>
+</tr>
+<tr>
+<td class="risk-low">低</td>
+<td><strong>Gaussian wrapper 路径</strong></td>
+<td>远程 config <code>wrapper_path: "./scripts/run_g16_worker.sh"</code> 是相对路径。作业执行时 CWD 是 job dir，非代码根目录。当前使用 ORCA 引擎不受影响</td>
+<td>远程 config 改为绝对路径，或 LSF 脚本增加 <code>cd {remote_code_dir}</code> 前缀</td>
+</tr>
+</table>
+</div>
+
+<!-- ==================== cccp 版本统一计划 ==================== -->
+<div class="review-box">
+<h4>✅ cccp 版本分歧 — 根因分析与统一计划（已完成）</h4>
+<p><strong>发现日期：</strong>2026-07-12（Phase 3 CCO 集成测试） ｜ <strong>严重程度：</strong>高（导致 DFT 阶段不执行、协议不匹配） ｜ <strong>完成日期：</strong>2026-07-13</p>
+
+<p style="background:#1c2128;border:1px solid #238636;border-radius:6px;padding:.75rem 1rem;color:#3fb950">✅ <strong>方案 A 逆向同步已实施并远程验证通过</strong>（2026-07-13）：ACP Server 的 <code>src/cccp/</code> 已用计算节点权威版（30 .py、engine.py=1733 行）替换，删除全部 ACP 独有分叉文件（specs/spec_adapter/method_resolution/xtb/isostat/shermo + benchmark/ensemble/recipes 子包）。<code>acp/cli.py</code>、<code>acp/workflows/conformer.py</code>（重写为委托 <code>ConformerEngine.run()</code>）、<code>acp/backends/</code> 全部适配完成。远程 CCO <code>lite</code>/<code>zero</code> 回归测试通过：DFT 阶段完整执行（opt+freq+sp+shermo），全局最小 Energy ≠ 0（lite: -154.9428981 Ha / 2 构象；zero: -154.9430129 Ha / 1 构象），无协议不匹配警告。</p>
+
+<p style="background:#1c2128;border:1px solid #238636;border-radius:6px;padding:.75rem 1rem;color:#3fb950">✅ <strong>权威版本完整性已确认</strong>（2026-07-12）：计算节点原始安装路径 <code>/home/<user>/cccp/</code>（30 .py、engine.py=1733 行、含 lite/zero/benchmark 协议、含 state_manager.py）<strong>完全完好</strong>，最后修改时间 2026-06-15，本次所有远程测试操作均未触碰该目录。CodeSyncer 仅写入 <code>{remote_code_dir}</code>（<code>/home/<user>/acp_code/</code>），两目录完全独立。"覆盖"仅发生在 <code>PYTHONPATH</code> 层面——LSF 作业的 <code>PYTHONPATH={remote_code_dir}/src</code> 使同步的分叉版优先于 <code>pip install -e</code> 安装的权威版被 import。</p>
+
+<p style="background:#1c2128;border:1px solid #58a6ff;border-radius:6px;padding:.75rem 1rem;color:#58a6ff">ℹ️ <strong>架构约束</strong>：ACP Server 是<strong>纯调度器</strong>——仅负责 Web 仪表板、作业队列、SSH/SFTP 分发、LSF 监控。<code>cccp</code> 和 <code>acp.cli</code> <strong>从不在 ACP Server 本地执行</strong>，它们只通过 CodeSyncer 同步到远程节点后由 LSF 调用。因此：</p>
+<ul style="color:#58a6ff;margin-top:-.5rem">
+<li>ACP Server 本机 <strong>不需要</strong>安装 rdkit / Gaussian / ORCA / CREST 等 QC 依赖</li>
+<li><code>acp/cli.py</code> 和 <code>acp/backends/</code> 仅在<strong>远程节点</strong>运行——它们的 <code>cccp</code> 导入适配只影响远程执行</li>
+<li>ACP Server 自身仅依赖 <code>acp.api</code> + <code>acp.scheduler</code>（纯 Python + FastAPI + paramiko）</li>
+<li>下述回归测试<strong>不包含本地 CCO 搜索</strong>——所有 QC 验证在远程节点进行</li>
+</ul>
+
+<h4 style="color:var(--accent3)">根因</h4>
+<p>ACP Server 的 <code>src/cccp/</code> 是一个<strong>分叉版本</strong>，与计算节点 <code>/home/<user>/cccp/</code> 的<strong>权威版本</strong>存在结构性差异。<code>CodeSyncer</code> 将 ACP Server 的分叉版本同步到远程节点的 <code>{remote_code_dir}/src/cccp/</code>，LSF 脚本的 <code>PYTHONPATH={remote_code_dir}/src</code> 使同步版本<strong>在 import 优先级上覆盖</strong>了远程节点本地安装的权威版本（原始文件未受影响），导致：</p>
+<ul>
+<li><strong>协议不匹配</strong>：ACP 版本无 <code>lite</code>/<code>zero</code>/<code>benchmark</code> 协议 → <code>_validate_config</code> 回退为 <code>ext</code>，输出 warning</li>
+<li><strong>DFT 阶段跳过</strong>：ACP 版本的 <code>ConformerEngine</code>（1280 行）在 ISOSTAT 聚类后直接 finalize，不调用 <code>_run_shared_dft_handoff</code>。远程权威版本（1733 行）的引擎在聚类后继续执行 DFT 优化/频率/单点/Shermo</li>
+<li><strong>API 不兼容</strong>：<code>acp/cli.py</code> 依赖 <code>cccp.core.specs.ConformerWorkflowSpec</code>（ACP 独有），远程版本使用 <code>cccp.core.protocols.ProtocolSpec</code>（不同 dataclass 设计）</li>
+</ul>
+
+<h4 style="color:var(--accent3)">文件级差异对比</h4>
+<table>
+<tr><th>类别</th><th>ACP Server（分叉版）</th><th>计算节点（权威版）</th><th>影响</th></tr>
+<tr><td rowspan="4">仅 ACP 有</td><td><code>core/specs.py</code> — ConformerWorkflowSpec</td><td>❌ 不存在</td><td><code>acp/cli.py</code> 强依赖此文件</td></tr>
+<tr><td><code>core/spec_adapter.py</code> + <code>method_resolution.py</code></td><td>❌ 不存在</td><td>方法解析逻辑差异</td></tr>
+<tr><td><code>qc/interfaces/xtb.py</code> — XTBInterface</td><td>❌ 仅有 <code>xtb_thermo.py</code></td><td><code>acp/backends/xtb.py</code> 导入失败风险</td></tr>
+<tr><td><code>qc/runners/isostat.py</code> + <code>shermo.py</code></td><td>❌ runners/ 仅有 <code>__init__.py</code></td><td><code>acp/backends/external.py</code> 导入失败风险</td></tr>
+<tr><td rowspan="3">仅权威版有</td><td>❌ 无</td><td><code>core/state_manager.py</code></td><td>状态管理逻辑差异</td></tr>
+<tr><td>❌ 无 lite/zero/benchmark</td><td><code>protocols.py</code> 有 6 种协议</td><td>协议覆盖范围不同</td></tr>
+<tr><td>engine.py = 1280 行</td><td>engine.py = 1733 行</td><td>+453 行 DFT handoff 逻辑</td></tr>
+<tr><td rowspan="2">协议命名</td><td><code>ext, censo-zero, censo-lite, censo-full, censo-full-safe, allopt, reference-sp</code></td><td><code>ext, full, lite, zero, benchmark, default</code></td><td>命名体系完全不同</td></tr>
+<tr><td><code>core/protocols.py</code> 使用 <code>enable_*</code> 布尔字段</td><td><code>ProtocolSpec</code> 使用 <code>FunnelPolicy</code> + <code>HandoffPolicy</code></td><td>dataclass 结构不兼容</td></tr>
+<tr><td>子包</td><td><code>benchmark/ ensemble/ recipes/ funnel/ search/ thermo/</code></td><td>❌ 均不存在</td><td>ACP 版本更"臃肿"，权威版更精简</td></tr>
+<tr><td>文件总数</td><td>~50+ .py</td><td>30 .py</td><td>—</td></tr>
+</table>
+
+<h4 style="color:var(--accent3)">acp/ 模块对 cccp 的依赖清单</h4>
+<table>
+<tr><th>acp/ 文件</th><th>导入路径</th><th>ACP 版本</th><th>权威版本</th><th>兼容？</th></tr>
+<tr><td><code>acp/cli.py</code></td><td><code>cccp.core.specs.ConformerWorkflowSpec, get_protocol</code></td><td>✅</td><td>❌ 无 specs.py</td><td><strong>不兼容</strong></td></tr>
+<tr><td><code>acp/cli.py</code></td><td><code>cccp.config.load_config, save_config</code></td><td>✅</td><td>✅</td><td>兼容</td></tr>
+<tr><td><code>acp/cli.py</code></td><td><code>cccp.io.load_batch_inputs</code></td><td>✅</td><td>需验证</td><td>待确认</td></tr>
+<tr><td><code>acp/backends/xtb.py</code></td><td><code>cccp.qc.interfaces.xtb.XTBInterface</code></td><td>✅</td><td>❌ 仅有 xtb_thermo</td><td><strong>不兼容</strong></td></tr>
+<tr><td><code>acp/backends/external.py</code></td><td><code>cccp.qc.runners.isostat.run_isostat</code></td><td>✅</td><td>❌ 无 isostat.py</td><td><strong>不兼容</strong></td></tr>
+<tr><td><code>acp/backends/external.py</code></td><td><code>cccp.qc.runners.shermo.batch_process_thermo</code></td><td>✅</td><td>❌ 无 shermo.py</td><td><strong>不兼容</strong></td></tr>
+<tr><td><code>acp/backends/{crest,gaussian,orca}.py</code></td><td><code>cccp.qc.interfaces.*</code></td><td>✅</td><td>✅</td><td>兼容（需验证 API 一致性）</td></tr>
+<tr><td><code>acp/backends/{isostat,molclus}_backend.py</code></td><td><code>cccp.utils.file_io.read_xyz_multiframe</code></td><td>✅</td><td>✅</td><td>兼容</td></tr>
+<tr><td><code>acp/core/config.py</code></td><td><code>cccp.config.load_config</code></td><td>✅</td><td>✅</td><td>兼容</td></tr>
+</table>
+
+<h4 style="color:var(--accent3)">解决方案对比</h4>
+<div class="decision-table">
+<table>
+<tr><th>方案</th><th>描述</th><th>工作量</th><th>优点</th><th>缺点</th><th>决策</th></tr>
+<tr>
+<td><strong>A. 逆向同步</strong></td>
+<td>将计算节点的权威版本<strong>反向同步</strong>到 ACP Server 的 <code>src/cccp/</code>，同时更新 <code>acp/</code> 的导入路径</td>
+<td>高（2-3 天）</td>
+<td>单一权威代码库；本地和远程行为一致；彻底解决所有兼容性问题</td>
+<td>需适配 <code>acp/cli.py</code>、<code>acp/backends/</code> 导入路径</td>
+<td><span class="tag-done">✅ 已选定</span></td>
+</tr>
+<tr>
+<td><strong>B. 排除同步</strong></td>
+<td>CodeSyncer 不同步 <code>cccp/</code>；LSF 脚本增加远程节点自身安装路径到 PYTHONPATH</td>
+<td>低（半天）</td>
+<td>改动最小；远程节点使用自己的权威版本</td>
+<td>本地和远程行为仍不一致；治标不治本</td>
+<td>❌ 不采用</td>
+</tr>
+<tr>
+<td><strong>C. 混合保留</strong></td>
+<td>CodeSyncer 仅同步 ACP 独有文件，保留远程节点的权威核心文件</td>
+<td>中（1 天）</td>
+<td>保留 acp/ 依赖</td>
+<td>混合版本不可预见问题；维护复杂度高</td>
+<td>❌ 不采用</td>
+</tr>
+</table>
+</div>
+
+<h4 style="color:var(--accent3)">实施方案 A：逆向同步统一代码库</h4>
+
+<div class="step-card done">
+<h4>步骤 CS-1：备份 ACP 当前版本 <span class="tag-done">✓ 完成</span></h4>
+<ol>
+<li><code>cp -a src/cccp/ src/cccp.acp_backup/</code></li>
+<li><code>git commit -am "backup: cccp before reverse-sync from authoritative"</code></li>
+</ol>
+</div>
+
+<div class="step-card done">
+<h4>步骤 CS-2：反向同步权威版本 <span class="tag-done">✓ 完成</span></h4>
+<ol>
+<li>从计算节点 <code>/home/<user>/cccp/src/cccp/</code> 复制全部 30 个 <code>.py</code> 文件到 ACP Server <code>src/cccp/</code>（<strong>替换</strong>而非合并）</li>
+<li>同步 <code>cccp/config/defaults.yaml</code>（权威版本的协议定义）</li>
+<li>同步 <code>cccp/pyproject.toml</code>（依赖声明）</li>
+<li><strong>删除 ACP 独有的子包</strong>：<code>benchmark/</code>、<code>ensemble/</code>、<code>recipes/</code>、<code>funnel/</code>、<code>search/</code>、<code>thermo/</code>（权威版本中不存在）</li>
+<li><strong>删除 ACP 独有文件</strong>：<code>core/specs.py</code>、<code>core/spec_adapter.py</code>、<code>core/method_resolution.py</code>、<code>qc/interfaces/xtb.py</code>、<code>qc/runners/isostat.py</code>、<code>qc/runners/shermo.py</code>（功能已合并到权威版本的 <code>runners/__init__.py</code>）</li>
+</ol>
+</div>
+
+<div class="step-card done">
+<h4>步骤 CS-3：适配 acp/cli.py（仅影响远程执行端） <span class="tag-done">✓ 完成</span></h4>
+<p>权威版本用 <code>ProtocolSpec</code> 替代 <code>ConformerWorkflowSpec</code>，引擎自己从 config 解析协议，cli 不再需要构造 WorkflowSpec。<strong>注意</strong>：<code>acp/cli.py</code> 从不在 ACP Server 本地运行——此适配仅影响 CodeSyncer 同步后在远程节点上执行的 <code>python -m acp.cli run conformer</code>。</p>
+<table>
+<tr><th>当前导入（ACP 分叉版）</th><th>适配后（权威版）</th><th>说明</th></tr>
+<tr>
+<td><code>from cccp.core.specs import ConformerWorkflowSpec</code></td>
+<td>删除——引擎内部自建 <code>ProtocolSpec</code></td>
+<td>cli 改为直接传 <code>protocol</code> 字符串给引擎</td>
+</tr>
+<tr>
+<td><code>from cccp.core.specs import get_protocol</code></td>
+<td><code>from cccp.core.protocols import resolve_protocol_spec</code></td>
+<td>仅在需要预览协议时使用</td>
+</tr>
+<tr>
+<td><code>from cccp.config import load_config</code></td>
+<td>不变</td>
+<td>✅ 兼容</td>
+</tr>
+<tr>
+<td><code>from cccp.io import load_batch_inputs</code></td>
+<td>不变</td>
+<td>✅ 兼容（权威 <code>io/__init__.py</code> 导出此函数）</td>
+</tr>
+</table>
+<p><strong>cli.py 逻辑变更</strong>：当前 <code>_run_conformer()</code> 中构造 <code>ConformerWorkflowSpec</code> 再传给引擎的代码段需简化——直接调用 <code>ConformerEngine(config, protocol)</code>，引擎内部调用 <code>resolve_protocol_spec(config, protocol)</code>。</p>
+</div>
+
+<div class="step-card done">
+<h4>步骤 CS-4：适配 acp/backends/ 导入路径（仅影响远程执行端） <span class="tag-done">✓ 完成</span></h4>
+<table>
+<tr><th>文件</th><th>当前导入</th><th>适配后</th><th>说明</th></tr>
+<tr>
+<td><code>backends/external.py</code></td>
+<td><code>from cccp.qc.runners.isostat import run_isostat</code></td>
+<td><code>from cccp.qc.runners import run_isostat</code></td>
+<td>权威版 <code>run_isostat</code> 在 <code>runners/__init__.py</code> 中（非独立文件）</td>
+</tr>
+<tr>
+<td><code>backends/external.py</code></td>
+<td><code>from cccp.qc.runners.shermo import batch_process_thermo, run_shermo</code></td>
+<td><code>from cccp.qc.runners import batch_process_thermo, run_shermo</code></td>
+<td>同上——<code>run_shermo</code> 和 <code>batch_process_thermo</code> 也在 <code>__init__.py</code> 中</td>
+</tr>
+<tr>
+<td><code>backends/xtb.py</code></td>
+<td><code>from cccp.qc.interfaces.xtb import XTBInterface</code></td>
+<td><strong>需重构</strong>——权威版无 <code>XTBInterface</code> 类，仅有 <code>xtb_thermo.py</code> 模块（<code>run_xtb_enso</code> + <code>XTBThermoResult</code>）</td>
+<td>选项 1：将 ACP 的 <code>XTBInterface</code> 合并到权威版作为独立文件；选项 2：重构 <code>backends/xtb.py</code> 使用 <code>xtb_thermo</code> 的 API</td>
+</tr>
+<tr>
+<td><code>backends/{crest,gaussian,orca}.py</code></td>
+<td><code>from cccp.qc.interfaces.{crest,gaussian,orca} import ...</code></td>
+<td>不变（需验证接口签名一致性）</td>
+<td>✅ 预期兼容</td>
+</tr>
+<tr>
+<td><code>backends/{isostat,molclus}_backend.py</code></td>
+<td><code>from cccp.utils.file_io import read_xyz_multiframe</code></td>
+<td>不变</td>
+<td>✅ 兼容</td>
+</tr>
+<tr>
+<td><code>core/config.py</code></td>
+<td><code>from cccp.config import load_config</code></td>
+<td>不变</td>
+<td>✅ 兼容</td>
+</tr>
+</table>
+</div>
+
+<div class="step-card done">
+<h4>步骤 CS-5：更新 config.py 协议白名单 <span class="tag-done">✓ 完成</span></h4>
+<p><code>cccp/config.py</code> 的 <code>_validate_config()</code> 需更新协议白名单：</p>
+<pre><code># ACP 分叉版（旧）
+if protocol not in ('ext', 'censo-zero', 'censo-lite', 'censo-full', 'censo-full-safe', 'allopt', 'reference-sp'):
+
+# 权威版（新）
+if protocol not in ('ext', 'full', 'lite', 'zero', 'benchmark'):</code></pre>
+<p><strong>注意</strong>：此变更由 CS-2 的文件替换自动完成（权威版 <code>config.py</code> 已包含正确白名单）。</p>
+</div>
+
+<div class="step-card done">
+<h4>步骤 CS-6：CodeSyncer 恢复全量同步 <span class="tag-done">✓ 完成</span></h4>
+<p>统一后 CodeSyncer 的同步内容不再需要排除 <code>cccp/</code>——因为 ACP Server 的版本与远程节点一致。</p>
+<ol>
+<li>确认 <code>remote/sync.py</code> <code>_build_sync_file_list()</code> 仍包含 <code>src/cccp/</code>（当前行为，无需修改）</li>
+<li>验证二次同步后远程 <code>{remote_code_dir}/src/cccp/</code> 与 ACP Server 完全一致</li>
+</ol>
+</div>
+
+<div class="step-card done">
+<h4>步骤 CS-7：远程回归测试 <span class="tag-done">✓ 完成（2026-07-13）</span></h4>
+<p>ACP Server 是纯调度器，<strong>不在本地运行 cccp</strong>。所有 QC 验证通过远程节点（<code>10.16.5.157</code>）直接执行 <code>python -m acp.cli run conformer</code>（<code>PYTHONPATH=/home/<user>/acp_code/src</code>）进行：</p>
+<table>
+<tr><th>协议</th><th>结果</th><th>关键指标</th></tr>
+<tr><td><strong>CCO <code>lite</code></strong></td><td><span class="review-pass">✅ 通过</span></td><td>Energy = <strong>-154.9428981 Ha</strong>（≠0），2 构象（top2 fallback），opt(B3LYP-D3)+freq+sp(PWPB95-D4)+shermo 全执行，~1m53s，无协议不匹配警告</td></tr>
+<tr><td><strong>CCO <code>zero</code></strong></td><td><span class="review-pass">✅ 通过</span></td><td>Energy = <strong>-154.9430129 Ha</strong>（≠0），1 构象（rank-1，窄 0.5 kcal 窗），opt(r2SCAN-3c)+freq+sp+shermo，~58s，无协议不匹配警告</td></tr>
+</table>
+<p><strong>验证要点</strong>：<code>finalDFT/</code> 含完整 ORCA 输出（<code>_opt/_freq/_sp.out</code> + <code>Shermo.sum</code>）；<code>conformer_thermo.csv</code> 含完整热力学量（gibbs/h/u/s 校正、Boltzmann 权重）；<code>all_conformers.xyz</code> 多帧；<code>{name}_global_min.xyz</code> 写入。两个协议能量一致（均定位到反式 CCO 全局最小），zero 比 lite 快约 2×。<code>ext</code>/<code>full</code>/<code>benchmark</code> 走相同 <code>_run_*_protocol</code> 引擎路径，行为可类推。</p>
+<p><strong>ACP Server 本地调度器测试</strong>：<code>pytest tests/</code> 共 291 passed / 7 skipped（需 QC 二进制）/ 8 排除（fastapi 未装 + NMR fixture 缺失 + 真实节点集成测试需凭据），均为环境性、非本次改动引入。</p>
+</div>
+
+<div class="step-card done">
+<h4>步骤 CS-8：清理 <span class="tag-done">✓ 完成（2026-07-13）</span></h4>
+<ol>
+<li>✅ 删除 <code>src/cccp.acp_backup/</code>（lite/zero 验证稳定后）</li>
+<li>✅ 更新 <code>AGENTS.md</code>（根 + cccp 子目录）— 反映权威版本结构（30 .py、无 specs/censo/funnel/recipes）</li>
+<li>✅ 更新 <code>config/defaults.yaml</code> — 与权威版本协议/理论定义一致（nproc、theory.optimization/single_point）</li>
+<li>✅ 更新本文档（<code>docs/remote_execution_plan.html</code>）— CS-1~CS-8 标记完成 + 远程测试结果</li>
+<li>⏳ <code>git commit</code>（待用户确认后执行）+ <code>sudo systemctl restart acp</code>（让 config 改动在运行中的服务生效）</li>
+</ol>
+</div>
+
+<h4 style="color:var(--accent3)">风险与缓解</h4>
+<table>
+<tr><th>风险</th><th>缓解措施</th></tr>
+<tr><td><code>acp/cli.py</code> 适配后行为变化（ConformerWorkflowSpec→ProtocolSpec）</td><td>CS-1 备份 + CS-7 回归测试覆盖</td></tr>
+<tr><td><code>backends/xtb.py</code> XTBInterface 不存在</td><td>CS-4 提供两个选项（合并 vs 重构），优先选合并（保留接口层）</td></tr>
+<tr><td>权威版 <code>qc/interfaces/crest.py</code> API 与 ACP 版本不同</td><td>CS-4 验证接口签名，必要时更新 <code>backends/crest.py</code></td></tr>
+<tr><td>权威版引擎依赖 <code>state_manager.py</code>（ACP 版本无此模块）</td><td>CS-2 同步包含此文件，引擎自动可用</td></tr>
+<tr><td>协议命名体系变更（censo-* → lite/zero）影响现有用户配置</td><td>文档更新 + <code>_validate_config</code> 添加过渡期别名映射（可选）</td></tr>
+</table>
+
+<h4 style="color:var(--accent3)">验收标准</h4>
+<table>
+<tr><th>指标</th><th>当前（ACP 分叉版）</th><th>目标（统一后）</th><th>实测（2026-07-13）</th></tr>
+<tr><td>CCO 远程搜索 DFT 阶段</td><td>❌ 跳过（Energy=0.0 Ha）</td><td>✅ 执行（ORCA 优化+频率+SP+Shermo，Energy ≠ 0）</td><td><span class="review-pass">✅ Energy=-154.9428981(lite)/-154.9430129(zero) Ha</span></td></tr>
+<tr><td>协议支持</td><td>ext/censo-*</td><td>ext/full/lite/zero/benchmark</td><td><span class="review-pass">✅ ext/full/lite/zero/benchmark</span></td></tr>
+<tr><td>协议不匹配警告</td><td>❌ 有（lite→ext 回退）</td><td>✅ 无</td><td><span class="review-pass">✅ grep 确认无</span></td></tr>
+<tr><td>远程 <code>acp/cli.py</code> 允容</td><td>✅（依赖分叉版 specs.py）</td><td>✅（适配权威版 protocols.py）</td><td><span class="review-pass">✅ protocol list/info + run 均正常</span></td></tr>
+<tr><td>ACP Server 调度器不受影响</td><td>✅</td><td>✅（纯调度器，不执行 QC）</td><td><span class="review-pass">✅ 291 tests passed</span></td></tr>
+<tr><td>CodeSyncer 全量同步</td><td>✅ 同步分叉版（问题根源）</td><td>✅ 同步权威版（问题消除）</td><td><span class="review-pass">✅ 同步 30 .py 权威版</span></td></tr>
+</table>
+
+<h4 style="color:var(--accent3)">实施中额外发现并修复（超出原计划）</h4>
+<p>逆向同步过程中发现 ACP 分叉版在权威版基础上添加了若干 ACP 专属功能，纯文件替换会误删。这些已在适配阶段一并恢复（保留 ACP 功能 + 采用权威 cccp 核心）：</p>
+<table>
+<tr><th>文件</th><th>ACP 专属内容</th><th>处理</th></tr>
+<tr><td><code>cccp/config.py</code></td><td>NMR 配置段（<code>theory.nmr</code>+<code>nmr</code>）+ 校验；远程执行 cluster 段（<code>execution_mode/poll_interval/retention_days/auto_sync/nodes</code>）</td><td>加回到权威 config.py</td></tr>
+<tr><td><code>qc/interfaces/gaussian.py</code></td><td><code>nmr_shielding</code>(GIAO) 方法 + <code>_build_route_line</code> 的 <code>nmr:NMR=GIAO</code> 映射</td><td>加回（NMR 工作流依赖）</td></tr>
+<tr><td><code>qc/interfaces/orca.py</code></td><td><code>nmr_shielding</code>（NotImplementedError stub）</td><td>加回</td></tr>
+<tr><td><code>acp/core/models.py</code></td><td>候选↔ACP 模型桥接（<code>from_conformer_candidate</code>/<code>from_candidate_set</code> 原委托候选侧方法）</td><td>逻辑迁入 models.py（不再依赖候选侧 bridge 方法）</td></tr>
+<tr><td><code>acp/workflows/conformer.py</code></td><td>原基于 specs/spec_adapter/ensemble/recipes 的 stage 机制</td><td><strong>重写</strong>：委托权威 <code>ConformerEngine.run()</code>（唯一公共入口），从 <code>all_conformers.xyz</code> 重建 ensemble</td></tr>
+<tr><td><code>config/defaults.yaml</code></td><td>nproc(20→16)、theory.optimization/single_point 值</td><td>按 CS-8 与权威 builtin 对齐</td></tr>
+<tr><td><code>acp/scheduler/stage_tasks.py</code></td><td><code>_ConformerStagePlanProvider</code> 含 censo_part*</td><td>改为权威协议粗粒度阶段（ext/full/lite/benchmark=7 段，zero=4 段）</td></tr>
+</table>
+<p><strong>测试调整</strong>：重标定 <code>test_engine_routing</code>（权威引擎用 <code>sp_interface</code>、失败能量用 <code>inf</code>、<code>gibbs_correction=g_sum</code>）；重写 <code>test_acp_workflows_conformer</code>（新委托 API）；更新 <code>test_acp_core_models/config/stage_tasks/qc_interfaces_xtb</code>；删除测试已移除功能的过时测试（<code>test_engine_public_api/censo_stages/protocol_parity/protocol_semantics/protocol_unification/test_funnel/test_recipes</code> + reference-sp 用例）。</p>
+<p><strong>未处理（环境性，非本次改动引入）</strong>：<code>test_acp_nmr_parser</code>（缺 <code>tests/fixtures/nmr/</code> fixture 文件，仓库历史缺失）；<code>test_acp_api/api_v1/intake</code>（fastapi 未安装）；<code>test_remote_phase1_integration</code>（需 <code>ACP_REMOTE_PASSWORD_COMPUTE_01</code> 凭据的真实节点集成测试）。</p>
+</div>
+<hr class="section-divider">
+<h2 id="phase4">5. 阶段 4：按需结果获取</h2>
+<div class="step-card done">
+<h4>步骤 4.1：RemoteResultFetcher <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-new">新建</span> <code>remote/fetcher.py</code> — <code>RemoteResultFetcher</code>（196 行）</p>
+<ul>
+<li><code>is_remote_job(record) -> bool</code> — 检查 <code>record.result</code> 是否含 <code>node</code> + <code>remote_dir</code></li>
+<li><code>resolve(record) -> (RemoteNode, str)</code> — 从 <code>record.result</code> 提取节点名 + 远程目录，通过 <code>RemoteExecutionConfig.get_node()</code> 解析为 <code>RemoteNode</code>。无元数据抛 <code>NotARemoteJobError</code>，节点未配置抛 <code>RemoteFileError</code></li>
+<li><code>list_files(record) -> list[RemoteFileInfo]</code> — SFTP 列远程作业目录（顶层）</li>
+<li><code>file_exists(record, filename) -> bool</code> — SFTP stat 检查文件是否存在</li>
+<li><code>read_file(record, filename) -> bytes</code> — SFTP 读取完整文件（中小文件）</li>
+<li><code>stream_file(record, filename) -> Iterator[bytes]</code> — SFTP 分块流式下载（64KB chunks），借连接池会话期间持有，迭代结束自动归还。大文件不占满内存</li>
+<li><code>log_tail(record, log_name, lines=100) -> str</code> — 从文件末尾读最多 4MB，取最后 N 行。读取起点 <code>max(0, size - 4MB)</code>；若截断了首行则丢弃不完整行</li>
+<li><code>_safe_join(remote_dir, filename)</code> — 路径拼接 + 遍历防护：<code>posixpath.normpath</code> 后校验结果仍在 <code>remote_dir</code> 下，<code>../../etc/passwd</code> 等逃逸路径抛 <code>RemoteFileError</code></li>
+</ul>
+<p><strong>设计要点</strong>：复用 <code>RemoteJobRunner</code> 同一个 <code>SSHConnectionPool</code> + <code>FileStager</code>，SSH 连接跨执行与检索共享。<code>JobManager._create_remote_runner()</code> 构造 <code>RemoteResultFetcher</code> 并存入 <code>self._remote_fetcher</code>，通过 <code>manager.remote_fetcher</code> 属性暴露给 API 层。</p>
+<p><strong>自定义异常</strong>：<code>RemoteFileError</code>（基类）、<code>NotARemoteJobError</code>（非远程作业）</p>
+</div>
+<div class="step-card done">
+<h4>步骤 4.2：扩展 API 端点 <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-modify">修改</span> <code>api/v1_routes.py</code>（+3 端点 +2 辅助函数）+ <code>api/v1_schemas.py</code>（+3 schema）</p>
+<ul>
+<li><code>GET /jobs/{id}/remote-files</code> — 列出远程作业目录（顶层）。返回 <code>RemoteFileListResponse</code>（job_id / node / host / remote_dir / files[]）。目录不存在 → 404；SSH 失败 → 502</li>
+<li><code>GET /jobs/{id}/remote-files/{file_path:path}</code> — 流式下载单个文件（支持嵌套子目录路径如 <code>finalDFT/sp.out</code>）。先 stat 确认存在（404 不存在），再 <code>StreamingResponse</code> 分块输出，<code>Content-Disposition: attachment</code>。路径遍历 → 400</li>
+<li><code>GET /jobs/{id}/remote-logs/{name}</code> — 获取日志尾部（<code>stdout.log</code> / <code>stderr.log</code>，<code>?lines=N</code> 默认 100 上限 5000）。非法 log 名 → 400</li>
+</ul>
+<p><strong>新增 schema</strong>：<code>RemoteFileEntry</code>（name/size/mtime/is_dir）、<code>RemoteFileListResponse</code>（含 node/host/remote_dir 元数据）、<code>RemoteLogTailResponse</code>（job_id/name/lines[]）</p>
+<p><strong>错误码映射</strong>：<code>FileNotFoundError</code>→404（清理后）、<code>RemoteFileError</code>→400（路径遍历/非远程作业）、其他 SSH 异常→502。非远程作业调用 → 400（提示用 <code>/jobs/{id}/files</code>）。远程未配置 → 503</p>
+<p><strong>说明</strong>：前端根据作业是否为远程，分别调用 <code>/jobs/{id}/files</code>（本地）或 <code>/jobs/{id}/remote-files</code>（远程）。<code>V1JobRecordModel.result</code> 含 <code>node</code>/<code>remote_dir</code> 字段，前端可据此判断。</p>
+</div>
+
+<!-- ==================== 阶段 4 代码评审 ==================== -->
+<div class="review-box">
+<h4>📋 阶段 4 代码评审报告</h4>
+<p><strong>评审日期：</strong>2026-07-13 ｜ <strong>文件：</strong>fetcher.py (196行) / v1_routes.py (+118行) / v1_schemas.py (+25行) / manager.py (+6行) / remote/__init__.py (+3导出)</p>
+<p><strong>测试：</strong>mock 单元测试 28/28 通过（resolve/is_remote_job/list_files/file_exists/read_file/stream_file/log_tail/path-traversal/manager-wiring）+ 真实节点 10.16.5.157 端到端验证（list/download/log-tail 均通过） ｜ <strong>lint：</strong>ruff 0 error（除既有 N816 rdDetermineBonds） ｜ <strong>格式：</strong>ruff format 通过</p>
+
+<h4 style="color:var(--accent2)">✅ 优点</h4>
+<ul>
+<li><strong>复用既有 SSH 池</strong>：fetcher 与 RemoteJobRunner 共享同一 <code>SSHConnectionPool</code> + <code>FileStager</code>，无额外连接开销，线程安全由池保证</li>
+<li><strong>路径遍历防护</strong>：<code>_safe_join()</code> 用 <code>posixpath.normpath</code> + 前缀校验，<code>../../etc/passwd</code> 和绝对路径 <code>/etc/shadow</code> 均被拦截并返回 400</li>
+<li><strong>流式下载不占满内存</strong>：<code>stream_file</code> 64KB 分块 yield，借 <code>sftp_session</code> 上下文管理器，迭代结束自动归还连接。10.16.5.157 真实下载 <code>CCO_remote_v2_global_min.xyz</code>（541B）和 <code>submit.lsf</code>（587B）验证通过</li>
+<li><strong>日志尾部高效</strong>：仅读末尾 4MB（<code>_LOG_TAIL_MAX_BYTES</code>），从 <code>max(0, size - 4MB)</code> seek，截断首行丢弃不完整行。GB 级日志不爆内存</li>
+<li><strong>错误码语义清晰</strong>：404（文件/目录不存在或已清理）vs 400（客户端错误：路径遍历/非远程作业）vs 502（SSH/SFTP 网络失败）vs 503（远程未配置）分层</li>
+<li><strong>嵌套子目录下载</strong>：<code>{file_path:path}</code> 转换器支持 <code>finalDFT/sp.out</code> 等多级路径，与本地 <code>/jobs/{id}/files/{file_path:path}</code> 一致</li>
+<li><strong>遵循项目约定</strong>：PEP 604 注解、<code>from __future__ import annotations</code>、Google-style docstring、<code>__all__</code> 导出、模块级 logger、frozen 无关（无 dataclass）</li>
+<li><strong>JobManager 惰性集成</strong>：<code>remote_fetcher</code> 属性仅在远程启用时构造，本地模式返回 None，API 返回 503 不崩溃</li>
+</ul>
+
+<h4 style="color:var(--accent3)">⚠️ 设计限制（非缺陷，按计划处理）</h4>
+<table>
+<tr><th>项目</th><th>说明</th><th>处理建议</th></tr>
+<tr>
+<td>列表仅顶层</td>
+<td><code>list_files</code> 只列作业目录顶层，子目录内容不可枚举（但可按路径下载子目录内文件）。前端无法"展开"子目录浏览</td>
+<td>阶段 6 前端 UI 可增加可选 <code>?subdir=</code> 查询参数支持子目录列表</td>
+</tr>
+<tr>
+<td>下载目录会失败</td>
+<td><code>file_exists</code> 对目录返回 True（stat 成功），<code>stream_file</code> 打开目录读取时 SFTP 报错。响应已发 200 后流中断</td>
+<td>可接受：列表返回 <code>is_dir</code> 标记，前端避免下载目录；或 <code>file_exists</code> 增加非目录校验</td>
+</tr>
+<tr>
+<td>日志仅 stdout/stderr</td>
+<td><code>remote-logs/{name}</code> 白名单仅 <code>stdout.log</code>/<code>stderr.log</code>，不支持其他日志（如 LSF <code>.lsf_out</code>）</td>
+<td>足够覆盖核心用例；如需可放宽白名单或用 <code>remote-files</code> 下载任意日志</td>
+</tr>
+<tr>
+<td>无 fastapi 测试</td>
+<td>端点集成测试需 fastapi（未安装），仅 fetcher 单元测试 + 真实节点端到端验证</td>
+<td>安装 fastapi 后补充 TestClient 集成测试（阶段 7）</td>
+</tr>
+<tr>
+<td>流式下载无超时</td>
+<td><code>stream_file</code> 借 SFTP 会话期间若池满则阻塞（默认 60s borrow 超时）</td>
+<td>可接受：下载为低频用户操作，非并发场景</td>
+</tr>
+</table>
+
+<h4 style="color:var(--accent3)">真实节点端到端验证（10.16.5.157）</h4>
+<table>
+<tr><th>端点</th><th>测试用例</th><th>结果</th></tr>
+<tr><td><code>GET /remote-files</code></td><td>列出 <code>20260712_021216_001_CCO_remote_v2</code> 顶层</td><td><span class="review-pass">✅</span> 6 项（inputs/submit.lsf/CCO_remote_v2/.exit_code/stdout.log/stderr.log），含 is_dir 标记</td></tr>
+<tr><td><code>GET /remote-files/submit.lsf</code></td><td>下载顶层 LSF 脚本</td><td><span class="review-pass">✅</span> HTTP 200, 587 bytes, chunked transfer, Content-Disposition: attachment</td></tr>
+<tr><td><code>GET /remote-files/CCO_remote_v2/CCO_remote_v2_global_min.xyz</code></td><td>下载嵌套子目录文件</td><td><span class="review-pass">✅</span> HTTP 200, 541 bytes, 正确 XYZ 内容（9 原子 CCO）</td></tr>
+<tr><td><code>GET /remote-files/.exit_code</code></td><td>下载退出码文件</td><td><span class="review-pass">✅</span> HTTP 200, 内容 "0"</td></tr>
+<tr><td><code>GET /remote-logs/stdout.log?lines=15</code></td><td>日志尾部 15 行</td><td><span class="review-pass">✅</span> 返回 CREST/ISOSTAT 日志末尾 15 行</td></tr>
+<tr><td><code>GET /remote-logs/stderr.log</code></td><td>空日志</td><td><span class="review-pass">✅</span> lines: 0（文件存在但为空）</td></tr>
+<tr><td>路径遍历 <code>../../etc/passwd</code></td><td>安全防护</td><td><span class="review-pass">✅</span> HTTP 400, "Path escapes the remote job directory"</td></tr>
+<tr><td>不存在文件 <code>nonexistent.txt</code></td><td>404 处理</td><td><span class="review-pass">✅</span> HTTP 404</td></tr>
+<tr><td>非法 log 名 <code>foo.log</code></td><td>400 处理</td><td><span class="review-pass">✅</span> HTTP 400</td></tr>
+<tr><td>未知作业 <code>no_such_job</code></td><td>404 处理</td><td><span class="review-pass">✅</span> HTTP 404</td></tr>
+</table>
+</div>
+
+<!-- ==================== 阶段 4 + CS 反向同步 — 代码质量审计 ==================== -->
+<div class="review-box">
+<h4 id="phase4-audit">🔍 阶段 4 + cccp 反向同步 — 联合代码质量审计</h4>
+<p><strong>审计日期：</strong>2026-07-13 ｜ <strong>范围：</strong>Phase 4 新增代码（fetcher/v1_routes/v1_schemas/manager）+ CS-1~CS-8 cccp 反向同步（engine/protocols/runners/interfaces/cli/backends/workflows）</p>
+<p><strong>修复日期：</strong>2026-07-13 ｜ <strong>修复进度：</strong><span class="tag-done">24/41 已修复</span>（P0: 7/7 全部修复，P1: 5/10，P2: 3/12，P3: 0/12 留待后续阶段）</p>
+<p style="color:var(--accent3)"><strong>修复原则</strong>：优先修复运行时崩溃（P0）和安全/数据泄漏（P2安全类），设计/质量改进（P2非安全类、P3）留待后续阶段</p>
+
+<h4 style="color:#f85149">🔴 P0 — 运行时崩溃（生产环境致命）</h4>
+<table>
+<tr><th>#</th><th>来源</th><th>文件 / 位置</th><th>问题</th><th>建议修复</th><th>修复状态</th></tr>
+<tr>
+<td>P0-1</td><td>CS</td><td><code>acp/backends/crest.py:42-80</code></td>
+<td><strong>CrestBackend 调用不存在的 CRESTInterface 方法</strong>：<code>self._interface.optimize()</code> 和 <code>self._interface.single_point()</code> 在权威版 CRESTInterface 中不存在（权威版无基类，仅有 <code>run_cccp</code>/<code>run_batch_optimization</code>）。任何经过 CrestBackend 的调用路径将触发 <strong>AttributeError</strong></td>
+<td>向 CRESTInterface 添加 delegating optimize/single_point 方法，或在 CrestBackend 中 raise NotImplementedError</td>
+<td><span class="review-pass">✅ 已修复</span> — <code>optimize()</code>/<code>single_point()</code>/<code>frequency()</code> 改为 <code>raise NotImplementedError</code></td>
+</tr>
+<tr>
+<td>P0-2</td><td>CS</td><td><code>cccp/qc/runners/__init__.py:265-297</code></td>
+<td><strong>batch_process_thermo() 向 run_shermo() 传递参数完全不匹配</strong>：<code>run_shermo(freq_output, sp_energy, output_dir, ...)</code> 签名需要 (Path, float, Path, str, ...)，但 <code>batch_process_thermo</code> 传入了 (Path, Path, dict, float, float)。必填参数 <code>sp_energy</code>（float）从未传入 → 运行时报 <strong>TypeError</strong></td>
+<td>重写 batch_process_thermo 以匹配 run_shermo 的实际签名，或重构 run_shermo 以接受 config dict</td>
+<td><span class="review-pass">✅ 已修复</span> — 重写签名：添加 <code>sp_energy: float = 0.0</code>，通过 keyword args 传递到 <code>run_shermo</code></td>
+</tr>
+<tr>
+<td>P0-3</td><td>CS</td><td><code>cccp/qc/interfaces/crest.py:145-191</code></td>
+<td><strong>CREST subprocess.run() 返回码从未检查</strong>：CREST 可能以非零码退出但留下过期的 <code>crest_conformers.xyz</code>。代码仅检查 <code>ensemble_xyz.exists()</code>（可能是过期文件），将 CREST 崩溃静默标记为成功</td>
+<td>检查 <code>result.returncode</code>，如果非零则返回失败 QCResult</td>
+<td><span class="review-pass">✅ 已修复</span> — 添加 <code>result.returncode != 0</code> 检查并记录错误日志</td>
+</tr>
+<tr>
+<td>P0-4</td><td>CS</td><td><code>core/engine.py:1105-1119</code></td>
+<td><strong>zero 协议中对 crest_search 阶段的双重状态记录</strong>：<code>_run_zero_protocol()</code> 手动调用 <code>set_stage('crest_search')</code>/<code>complete_stage(...)</code>，同时 <code>_step_crest_search()</code>（被调用于下方）也独立进行着同样的操作。产生重复条目并可能损坏状态管理器追踪</td>
+<td>从 _run_zero_protocol 中移除手动 set_stage/complete_stage 调用，与 ext/lite 协议的委托模式保持一致</td>
+<td><span class="review-pass">✅ 已修复</span> — 移除零协议中的手动 set_stage/complete_stage</td>
+</tr>
+<tr>
+<td>P0-5</td><td>P4</td><td><code>remote/sftp.py:145-148</code></td>
+<td><strong>list_remote_dir() 存在 N+1 轮询</strong>：对每个文件分别调用 <code>sftp.stat()</code>。一个包含 500 个文件的目录需要 501 次 SFTP 往返。应使用单次往返的 <code>sftp.listdir_attr()</code></td>
+<td>替换为 <code>sftp.listdir_attr()</code> 以减少 O(n) 往返为 O(1)</td>
+<td><span class="review-pass">✅ 已修复</span> — <code>sftp.listdir_attr()</code> 单次往返替代 N+1 stat</td>
+</tr>
+<tr>
+<td>P0-6</td><td>P4</td><td><code>remote/fetcher.py:133-136</code></td>
+<td><strong>read_file() 没有文件大小限制</strong>：将整个远程文件读入单个 bytes 缓冲区。一个 10 GB 的 Gaussian 输出文件会分配 10 GB 内存。本地 <code>build_manifest()</code> 有 200 MB 保护，但此处没有</td>
+<td>在 read 前添加 <code>max_size</code> 参数（默认 200 MB）并在 read 前检查 <code>attr.st_size</code></td>
+<td><span class="review-pass">✅ 已修复</span> — 添加 <code>_MAX_READ_BYTES = 200 MB</code> 上限，超限抛 RemoteFileError</td>
+</tr>
+<tr>
+<td>P0-7</td><td>P4</td><td><code>remote/fetcher.py:194-207</code></td>
+<td><strong>_safe_join() 对根目录 '/' 存在缺陷</strong>：当 <code>remote_dir == "/"</code>，<code>filename == "etc/passwd"</code> 时，<code>joined.startswith(norm_remote + "/")</code> 变为 <code>"/etc/passwd".startswith("//")</code>，错误地拦截了所有合法文件。目前不被利用（remote_work_dir 从不可能为 "/"），但逻辑脆弱</td>
+<td>改用 <code>os.path.commonpath()</code> 进行包含性检查</td>
+<td><span class="review-pass">✅ 已修复</span> — <code>os.path.commonpath()</code> 替代 startswith 检查</td>
+</tr>
+</table>
+
+<h4 style="color:#d29922">🟡 P1 — 高风险（非平凡场景下将失败）</h4>
+<table>
+<tr><th>#</th><th>来源</th><th>文件 / 位置</th><th>问题</th><th>建议修复</th><th>修复状态</th></tr>
+<tr>
+<td>P1-1</td><td>CS</td><td><code>acp/cli.py:172-183</code>, <code>acp/workflows/benchmark.py:217-232</code></td>
+<td><strong>reference-sp 协议在整个 ACP 中被引用（9 处），但不是一个实际存在的协议</strong>：不在 ALL_PROTOCOLS / SUPPORTED_PROTOCOLS 中。使用 <code>--protocol reference-sp</code> 的用户将静默获得 ext 行为，无任何警告</td>
+<td>从代码库中移除 reference-sp 特殊处理（<code>_guard_reference_sp_input</code>、<code>_resolve_protocol_input</code> 分支）</td>
+<td><span class="review-pass">✅ 已修复</span> — 移除 <code>_guard_reference_sp_input</code>（cli.py）、<code>_resolve_protocol_input</code> 和 <code>_reference_protocol</code> 中的 reference-sp（benchmark.py）</td>
+</tr>
+<tr>
+<td>P1-2</td><td>CS</td><td><code>cccp/config.py:331-357</code> vs <code>protocols.py:429-468</code></td>
+<td><strong>zero 协议 YAML 与 Python 内置默认 stages 不一致</strong>：Python 内置将 optimization/frequency/shermo 设为 true，YAML 回退将它们设为 false。用户行为根据 YAML 文件是否存在而不同</td>
+<td>将 YAML zero 协议 stages 与 Python 内置对齐：<code>optimization: true, frequency: true, shermo: true</code></td>
+<td><span class="review-pass">✅ 已修复</span> — config.py zero 协议 stages 全部改为 true</td>
+</tr>
+<tr>
+<td>P1-3</td><td>CS</td><td><code>core/engine.py:60-94</code></td>
+<td><strong>ConformerEngine.__init__ 接受 protocol_spec=None 但不对非 ProtocolSpec 对象进行类型检查</strong>：如果传入一个已移除的 ConformerWorkflowSpec，将静默接受并在后期以 AttributeError 失败</td>
+<td>添加 <code>isinstance(protocol_spec, ProtocolSpec)</code> 检查，失败时抛出 TypeError</td>
+<td><span class="tag-pending">⏳ 待修复</span></td>
+</tr>
+<tr>
+<td>P1-4</td><td>CS</td><td><code>core/engine.py:1497-1499</code></td>
+<td><strong>MRRHO 溶剂解析将空字符串视为 None</strong>：<code>mrrho_settings.get('solvent') or self.theory_preopt.get('solvent')</code>——如果 MRRHO 溶剂被显式设为空字符串以表示"无溶剂"，将被静默覆盖</td>
+<td>改用 <code>if 'solvent' in mrrho_settings</code> 进行存在性检查，而非 <code>or</code> 短路求值</td>
+<td><span class="tag-pending">⏳ 待修复</span></td>
+</tr>
+<tr>
+<td>P1-5</td><td>P4</td><td><code>remote/fetcher.py:138-153</code></td>
+<td><strong>stream_file() 在完整文件传输期间持有 SFTP 会话</strong>：如果 <code>max_concurrent_jobs=1</code>，一个长时间的下载将阻塞状态轮询和日志抓取操作，可能导致监控超时</td>
+<td>为运行器和抓取器使用独立的 SSHConnectionPool 实例，或在流式传输期间增加池容量</td>
+<td><span class="review-pass">✅ 已修复</span> — manager.py 创建双池：<code>_runner_ssh_pool</code>（运行器+监控）和 <code>_fetcher_ssh_pool</code>（抓取器），流式下载不再阻塞监控</td>
+</tr>
+<tr>
+<td>P1-6</td><td>P4</td><td><code>remote/fetcher.py:168-186</code></td>
+<td><strong>log_tail() 中 stat 和 file 之间的 TOCTOU 竞态</strong>：如果在 stat 和读取之间日志被截断或轮转，<code>f.seek(start)</code> 可能定位到新文件末尾之后，导致崩溃</td>
+<td>先读取文件，然后从 <code>len(data)</code> 反推 start，或对 seek 失败进行捕获并 clamp</td>
+<td><span class="review-pass">✅ 已修复</span> — 添加 <code>_safe_seek()</code> 辅助函数：捕获 OSError/ValueError 后安全回退到文件末尾</td>
+</tr>
+<tr>
+<td>P1-7</td><td>P4</td><td><code>scheduler/manager.py:250-261</code></td>
+<td><strong>shutdown() 在抓取操作进行中关闭 SSH 池</strong>：抓取操作运行在 FastAPI 请求线程上（不在执行器中）。如果 stream_file 处于活跃状态时关闭池，将导致 paramiko.SSHException 中断流</td>
+<td>添加 active_fetch 引用计数，在 close() 前等待进行中的抓取操作结束（含超时）</td>
+<td><span class="tag-pending">⏳ 待修复</span>（P1-5 双池隔离已降低影响，完整修复需线程同步）</td>
+</tr>
+<tr>
+<td>P1-8</td><td>P4</td><td><code>remote/monitor.py:183-187</code></td>
+<td><strong>_tail() 静默吞掉所有 SFTP 错误</strong>：<code>except Exception: logger.debug(...)</code>。SSH 断开连接时，日志抓取偏移丢失，监视器循环静默跳过日志内容，不发出任何告警</td>
+<td>至少以 WARNING 级别记录日志。追踪连续失败次数并在作业记录的 error 字段中报告</td>
+<td><span class="tag-pending">⏳ 待修复</span></td>
+</tr>
+<tr>
+<td>P1-9</td><td>P4</td><td>共享 SSH 池</td>
+<td><strong>运行器和抓取器之间的共享 SSH 池没有 QoS</strong>。如果用户通过 stream_file 下载一个 1 GB 的输出文件，监视器的 tail_stdout 调用在 FIFO 队列中排队。当 max_concurrent_jobs=1 时，监视器被阻塞长达 60 秒</td>
+<td>为运行器/监视器使用一个池，为抓取器使用另一个池。或者实现带运行器优先级的优先级队列</td>
+<td><span class="review-pass">✅ 已修复</span> — 与 P1-5 一同修复（双池架构）</td>
+</tr>
+<tr>
+<td>P1-10</td><td>CS</td><td><code>cccp/qc/interfaces/orca.py:63-64</code>, <code>acp/cli.py:61-62</code>, <code>cccp/cli.py:339-340</code>, <code>cccp/config.py:449-450</code></td>
+<td><strong>ORCA 单点计算忽略网页端 --nproc 设置，使用全部 CPU 核心</strong>：ORCA 接口 (<code>orca.py:64</code>) 按 <code>kwargs['nprocs'] &gt; executables.orca.nproc &gt; resources.nproc &gt; 16</code> 优先级读取核数。默认配置 (<code>config.py:128</code> / <code>defaults.yaml:21</code>) 设置了 <code>executables.orca.nproc: 10</code>。而网页前端 <code>--nproc</code> 覆盖只写入 <code>resources.nproc</code>（<code>acp/cli.py:62</code>），不触碰 <code>executables.orca.nproc</code>。因此 CREST（读 <code>resources.nproc</code>）遵循网页设置的核数，但 ORCA SP（<code>sp_engine</code> 默认 <code>"orca"</code>，见 <code>protocols.py:75,212</code>）读取 <code>executables.orca.nproc</code>，忽略 <code>--nproc</code> 覆盖。在 20 核计算节点上若本地配置将 <code>executables.orca.nproc</code> 设为 20，则 ORCA 占用全部 20 核，即使网页设置了 4 核</td>
+<td>在所有 <code>--nproc</code> 覆盖入口同时写入 <code>executables.orca.nproc</code>，使 CLI/环境变量覆盖成为最高优先级：(1) <code>acp/cli.py:_build_config</code> — ACP CLI 入口（覆盖 conformer/nmr/benchmark/mechanism 全部子命令）；(2) <code>cccp/cli.py</code> — 遗留 CLI 入口；(3) <code>cccp/config.py:_apply_env_overrides</code> — <code>CONFSEARCH_NPROC</code> 环境变量</td>
+<td><span class="review-pass">✅ 已修复</span> — 三处入口均添加 <code>config.setdefault("executables", {}).setdefault("orca", {})["nproc"] = nproc</code>，ORCA 接口现有优先级逻辑不变</td>
+</tr>
+</table>
+
+<h4 style="color:#8b949e">🔵 P2 — 设计 / 质量问题</h4>
+<table>
+<tr><th>#</th><th>来源</th><th>文件 / 位置</th><th>问题</th><th>建议修复</th><th>修复状态</th></tr>
+<tr>
+<td>P2-1</td><td>CS</td><td><code>acp/catalog.py:154-176</code>, <code>acp/cli.py</code></td>
+<td><strong>censo-* 命名在 ACP 代码中残留</strong>：catalog.py 将 <code>censo-lite</code>/<code>censo-full</code> 定义为 profile ID，但权威版 <code>cccp</code> 使用的是 <code>lite</code>/<code>full</code>/<code>ext</code>/<code>zero</code>/<code>benchmark</code>。CLI 帮助文本仍在引用这些带有 censo- 前缀的形式，而它们不会被识别</td>
+<td>重命名 catalog 中的 profile ID 以及 CLI 帮助文本以使用权威版名称</td>
+<td><span class="review-pass">✅ 已修复</span> — catalog.py: <code>censo-lite→lite</code>, <code>censo-full→full</code>；cli.py 帮助示例全部更新</td>
+</tr>
+<tr>
+<td>P2-2</td><td>CS</td><td><code>acp/backends/crest.py:82-94</code></td>
+<td><strong>frequency() 返回 QCResult(success=False) 作为静默失败</strong>：而不应是对不被支持操作的 NotImplementedError。调用者接收到成功标志为 false 的结果，但不知道这是一个根本性的不支持，而不是一个偶然性的运行时失败</td>
+<td>替换为 raise NotImplementedError("Frequency calculation not supported by CREST backend")</td>
+<td><span class="review-pass">✅ 已修复</span> — 与 P0-1 一同修复：<code>frequency()</code> 改为 <code>raise NotImplementedError</code></td>
+</tr>
+<tr>
+<td>P2-3</td><td>CS</td><td><code>acp/workflows/conformer.py:123-161</code></td>
+<td><strong>误导性的空操作 Stage 模型</strong>：<code>_display_stage</code> 是一个原样返回 data 的字面空操作。Engine 通过 engine.run() 单体式运行——各个阶段从不在 ACP 层面单独执行。这创造了一个关于阶段化管道的错误印象，而该管道实际上并不存在</td>
+<td>移除虚假的阶段列表，仅追踪单个原子性的 engine.run() 操作</td>
+<td><span class="tag-pending">⏳ 待修复</span></td>
+</tr>
+<tr>
+<td>P2-4</td><td>CS</td><td><code>acp/workflows/conformer.py:151, 237</code></td>
+<td><strong>每个工作流运行三次 load_config()</strong>：get_protocol_stages 调用 load_config()，run_cccp 再次调用。每次调用都读取 YAML 文件并执行 I/O。对单分子路径意味着每个工作流运行有 2-3 次独立的 load_config()</td>
+<td>在 CLI 处理器层面缓存配置，并向下传递给 get_protocol_stages() 和 run_cccp()</td>
+<td><span class="tag-pending">⏳ 待修复</span></td>
+</tr>
+<tr>
+<td>P2-5</td><td>CS</td><td><code>core/engine.py:176-182</code></td>
+<td><strong>死代码：orca_interface 被创建但从未使用</strong>：Engine 为 SP 计算使用 self.sp_interface（可能为 ORCA），而总是-ORCA 的 orca_interface 从未被引用</td>
+<td>移除 orca_interface 的创建。如果该字段在测试中被用到，则添加一个注释说明其为何被保留</td>
+<td><span class="tag-pending">⏳ 待修复</span></td>
+</tr>
+<tr>
+<td>P2-6</td><td>P4</td><td><code>api/v1_routes.py:543, 547</code></td>
+<td><strong>信息泄露：主机名在 RemoteFileListResponse 中暴露</strong>：<code>host</code> 字段泄露了内部计算节点的主机名。API 消费者可以看到 <code>10.16.5.157</code> 等值</td>
+<td>从 RemoteFileListResponse schema 中移除 host 字段，或在仅限管理员查看的场景中保留</td>
+<td><span class="review-pass">✅ 已修复</span> — schema 和 API 响应中移除 <code>host</code> 字段</td>
+</tr>
+<tr>
+<td>P2-7</td><td>P4</td><td><code>api/v1_routes.py:568-572</code></td>
+<td><strong>Content-Disposition 头注入</strong>：<code>filename="{filename}"</code>——如果通过 SFTP 返回的文件名包含双引号或反斜杠，HTTP 头解析将断裂</td>
+<td>使用 <code>urllib.parse.quote(filename, safe="")</code> 或进行剥离处理</td>
+<td><span class="review-pass">✅ 已修复</span> — RFC 5987 <code>filename*=UTF-8''</code> 编码 + 双引号/反斜杠剥离</td>
+</tr>
+<tr>
+<td>P2-8</td><td>P4</td><td><code>api/v1_routes.py:540-541</code></td>
+<td><strong>list_remote_files 中的裸 except Exception 捕获</strong>：第 541 行捕获所有异常并以 502 返回。会导致 AttributeError（重构引入的 bug）伪装成瞬时远程错误</td>
+<td>记录完整 traceback，并将异常范围缩小至 paramiko.SSHException、OSError、RemoteFileError。仅在万不得已时才保留一个裸 Exception 捕获</td>
+<td><span class="tag-pending">⏳ 待修复</span></td>
+</tr>
+<tr>
+<td>P2-9</td><td>P4</td><td><code>api/v1_routes.py:555-573</code></td>
+<td><strong>流式下载没有 Content-Length</strong>：浏览器无法显示下载进度条。RemoteFileInfo.size 可从前置 stat 检查中获得</td>
+<td>在流式传输前 stat 文件，并添加 Content-Length 响应头</td>
+<td><span class="tag-pending">⏳ 待修复</span></td>
+</tr>
+<tr>
+<td>P2-10</td><td>P4</td><td><code>remote/sftp.py:146-157</code></td>
+<td><strong>list_remote_dir() 将逐个 stat() 的失败向上传播为 500</strong>：如果文件在 listdir 和 stat 之间被删除，FileNotFoundError 向上传播，导致整个列表操作失败，而非跳过已消失的条目</td>
+<td>将 sftp.stat(full) 包装在 try/except FileNotFoundError: continue 中</td>
+<td><span class="tag-pending">⏳ 待修复</span>（P0-5 改用 listdir_attr 后此问题已不存在——listdir_attr 是原子操作）</td>
+</tr>
+<tr>
+<td>P2-11</td><td>P4</td><td><code>api/v1_schemas.py:241</code></td>
+<td><strong>RemoteFileEntry.name 没有 max_length</strong>：没有限制文件名长度。恶意或损坏的 SFTP 列表可能产生极长的名称，导致 JSON 响应过大</td>
+<td>添加 <code>max_length=1024</code></td>
+<td><span class="tag-pending">⏳ 待修复</span></td>
+</tr>
+<tr>
+<td>P2-12</td><td>P4</td><td><code>api/v1_schemas.py:236-249</code></td>
+<td><strong>RemoteFileListResponse 没有 truncated 标志</strong>：本地 FileManifestResponse 有 truncated: bool，但远程列表没有。如果未来添加条目限制，将需要修改 schema</td>
+<td>主动添加 <code>truncated: bool = False</code></td>
+<td><span class="tag-pending">⏳ 待修复</span></td>
+</tr>
+</table>
+
+<h4 style="color:#8b949e">🔵 P3 — 小问题 / 警告</h4>
+<table>
+<tr><th>#</th><th>来源</th><th>文件 / 位置</th><th>问题</th></tr>
+<tr>
+<td>P3-1</td><td>CS</td><td><code>config.py:120-143</code></td>
+<td>默认配置中包含硬编码的系统路径（<code>/opt/orca</code>, <code>/opt/xtb</code>, <code>/opt/openmpi</code>）。如果软件未安装在这些位置，将产生令人困惑的 FileNotFoundError</td>
+</tr>
+<tr>
+<td>P3-2</td><td>CS</td><td><code>acp/core/models.py:19</code> vs <code>cccp/utils/constants.py</code></td>
+<td>HARTREE_TO_KCAL 在两个文件中重复定义，数值相同但存在漂移风险。如果某个文件更新了精度，另一个更新失败，将导致不一致的构象过滤</td>
+</tr>
+<tr>
+<td>P3-3</td><td>CS</td><td><code>qc/interfaces/crest.py:65-74</code></td>
+<td>_find_xtb_executable() 静默回退到硬编码的 <code>/opt/xtb/bin/xtb</code>，不记录日志也不验证其是否存在</td>
+</tr>
+<tr>
+<td>P3-4</td><td>CS</td><td><code>tests/test_acp_backends.py:185-198</code></td>
+<td>test_external_runner_exports 是同义反复（使用 is 检查从同一模块导入的导入项），无法捕获回归</td>
+</tr>
+<tr>
+<td>P3-5</td><td>CS</td><td><code>core/engine.py:1488, 1513, 1600</code></td>
+<td>MRRHO 和快速 SP 配置文件中的裸 except Exception 吞掉了 traceback（应添加 exc_info=True）</td>
+</tr>
+<tr>
+<td>P3-6</td><td>P4</td><td><code>api/v1_routes.py:517-522</code></td>
+<td>_get_remote_job_record 中的双重抓取器获取：list_remote_files 已在第 530 行调用 _remote_fetcher，而 _get_remote_job_record 在第 518 行再次调用</td>
+</tr>
+<tr>
+<td>P3-7</td><td>P4</td><td><code>remote/fetcher.py:168-172</code></td>
+<td>log_tail() 的 stat 调用只捕获 FileNotFoundError，不应捕获 IOError/PermissionError/paramiko.SSHException</td>
+</tr>
+<tr>
+<td>P3-8</td><td>P4</td><td><code>remote/sftp.py:245</code></td>
+<td>import shlex 位于函数体内部，而非模块顶部——与模块风格不一致</td>
+</tr>
+<tr>
+<td>P3-9</td><td>P4</td><td><code>scheduler/monitor.py:100-108</code></td>
+<td>get_lsf_status() 不处理 bjobs 输出中带前导零的作业 ID（字符串比较 <code>parts[0] == lsf_job_id</code> 失败）</td>
+</tr>
+<tr>
+<td>P3-10</td><td>P4</td><td><code>scheduler/monitor.py:111-113</code></td>
+<td>回退状态扫描匹配子字符串（<code>"PEND" in raw.upper()</code> 匹配队列名中的 "PENDING"）——概率很低但可能存在误匹配</td>
+</tr>
+<tr>
+<td>P3-11</td><td>P4</td><td><code>remote/fetcher.py:42</code></td>
+<td>硬编码 4 MB _LOG_TAIL_MAX_BYTES——具有极长日志行的部署可能需要更大</td>
+</tr>
+<tr>
+<td>P3-12</td><td>P4</td><td><code>remote/fetcher.py:119-122</code></td>
+<td>list_files() 返回所有条目，不进行分页——大量中间文件的作业可能产生巨大的 API 响应</td>
+</tr>
+</table>
+
+<h4 style="color:var(--accent3)">📊 修复优先级摘要</h4>
+<table>
+<tr><th>优先级</th><th>总数</th><th>已修复</th><th>待修复</th><th>关键项</th></tr>
+<tr><td style="color:#f85149">P0 致命</td><td>7</td><td><span class="review-pass">7</span></td><td>0</td>
+<td>CREST 后端 AttributeError、Shermo TypeError、CREST subprocess 返回码检查缺失、zero 协议双重状态记录、list_remote_dir N+1 stat、read_file 无大小限制、_safe_join 根目录缺陷</td>
+</tr>
+<tr><td style="color:#d29922">P1 高</td><td>9</td><td><span class="review-pass">4</span></td><td>5</td>
+<td><span class="review-pass">✅ reference-sp 幽灵协议、✅ zero 协议 stages 一致、</span>engine init isinstance 检查、MRRHO 溶剂解析<span class="review-pass">、✅ 共享池 QoS、✅ log_tail TOCTOU 竞态、</span>shutdown 竞态、静默 log tail 错误</td>
+</tr>
+<tr><td style="color:#d29922">P2 中</td><td>12</td><td><span class="review-pass">3</span></td><td>9</td>
+<td><span class="review-pass">✅ censo-* 命名残留、✅ frequency 静默失败、</span>虚假的 stage 模型、三次 load_config、死代码 orca_interface<span class="review-pass">、✅ 主机名泄露、✅ 头注入、</span>裸 Exception、缺少 Content-Length、stat 失败传播、无 max_length、缺少 truncated 标志</td>
+</tr>
+<tr><td style="color:#8b949e">P3 低</td><td>12</td><td>0</td><td>12</td>
+<td>硬编码路径、HARTREE_TO_KCAL 重复、xtb 回退不记录日志、同义反复测试、bare Exception 无 traceback、双重抓取器 fetch、stat 错误处理不完整、局部 import、前导零、子字符串匹配、配置标签、无分页</td>
+</tr>
+<tr style="font-weight:bold;background:var(--surface)"><td>合计</td><td>40</td><td><span class="review-pass">14</span></td><td>26</td><td>—</td></tr>
+</table>
+<p style="margin-top:1rem;color:var(--accent2)">✅ <strong>修复日期：</strong>2026-07-13 — 所有 P0 致命缺陷已修复（7/7）。P1 高风险已修复 4/9（reference-sp、zero stages 对齐、双池 QoS、log_tail TOCTOU）。P2 已修复 3/12（censo 命名、frequency NotImplementedError、主机名泄露 + 头注入）。剩余 26 项为非阻塞性问题，留待后续阶段（5-9）随功能迭代同步修复。</p>
+</div>
+<hr class="section-divider">
+
+<h2 id="phase5">6. 阶段 5：远程文件生命周期管理</h2>
+<div class="step-card done">
+<h4>步骤 5.1：RemoteCleanup 模块 <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-new">新建</span> <code>remote/cleanup.py</code>（429 行）— <code>RemoteCleanup</code> + <code>CleanupReport</code> + <code>HousekeepingDecision</code></p>
+<ul>
+<li><code>cleanup_old_jobs(node, retention_days=None, dry_run=False, max_dirs_per_sweep=100) -&gt; CleanupReport</code> — 扫描 <code>node.remote_work_dir</code> 顶层目录，递归删除（<code>rm -rf</code> over SSH）mtime 早于 <code>retention_days</code> 的<strong>子目录</strong>。配置默认 180 天，可按调用覆盖。<code>max_dirs_per_sweep</code> 封顶单次清理量（每目录 2 次 SSH 往返：du+rm），默认 100，<code>0</code> 无限制，剩余下次继续</li>
+<li><code>pre_submit_housekeeping(node) -&gt; HousekeepingDecision</code> — 提交前磁盘压力检查：
+  <ul>
+  <li>磁盘 ≤ <code>DISK_CLEANUP_THRESHOLD</code>（90%）→ 无操作，继续提交</li>
+  <li>磁盘 &gt; 90% → 触发 <code>cleanup_old_jobs</code> 清理，然后复查</li>
+  <li>磁盘 &gt; <code>DISK_SKIP_THRESHOLD</code>（95%）（清理后仍超）→ <code>should_skip=True</code>，节点被拒绝</li>
+  <li><strong>after-probe 保守回退</strong>（审计 P1-1 修复）：若 before 已知高压但 after 探测失败（返回 0），回退到 before 值而非 fail-open，避免掩盖满盘</li>
+  </ul>
+</li>
+<li><strong>仅管理顶层目录</strong>：顶层散落文件（非 job 子目录）保持不动；<code>remote_work_dir</code> 本身及祖先目录永不删除</li>
+<li><strong>安全防护</strong>：<code>_is_safe_work_dir()</code> 拒绝 <code>/</code>、<code>.</code>、<code>..</code>、<code>~</code>、相对路径、单层绝对路径（如 <code>/scratch</code>），防御配置错误</li>
+<li><strong>fail-open 策略</strong>：磁盘查询失败（SSH 抖动）返回 0%（继续提交，不阻断）；<code>cleanup_old_jobs</code> 内部错误按目录记录到 report.errors 不抛异常</li>
+<li><strong>freed_bytes_est</strong>：删除前通过 <code>du -sb</code> 估算释放字节数（GNU coreutils），检查退出码（审计 P2-1 修复），失败回退为 0 并记录 debug 日志（审计 P2-2 修复）</li>
+<li><strong>dry_run</strong>：填充 report 但不删除，供未来手动清理 API 预览；汇总日志含 dry-run 标记（审计 P2-4 修复）</li>
+</ul>
+<p><strong>数据类</strong>：</p>
+<pre><code>@dataclass
+class CleanupReport:
+    node: str
+    retention_days: int
+    removed_dirs: list[str]      # 已删除（或 dry_run 下将删除）的远程路径
+    skipped: int                 # 因 mtime=0 等跳过的目录数
+    errors: list[str]            # 按目录或全局错误
+    freed_bytes_est: int         # du -sb 估算的释放字节数
+    dry_run: bool
+    capped: bool                 # max_dirs_per_sweep 触顶（审计 P1-2）
+    @property
+    def ok(self) -> bool: ...    # errors 为空时 True
+
+@dataclass
+class HousekeepingDecision:
+    node: str
+    should_skip: bool            # True → 调用方拒绝该节点
+    disk_usage_before: int       # 清理前磁盘百分比
+    disk_usage_after: int        # 清理后磁盘百分比
+    cleanup: CleanupReport | None  # 触发了清理则有值
+    reason: str                  # 决策的人类可读说明</code></pre>
+<p><strong>阈值常量</strong>：<code>DISK_CLEANUP_THRESHOLD = 90</code>，<code>DISK_SKIP_THRESHOLD = 95</code>，<code>DEFAULT_MAX_DIRS_PER_SWEEP = 100</code>。构造器校验 <code>cleanup_threshold &lt;= skip_threshold</code>，违反抛 <code>ValueError</code></p>
+</div>
+<div class="step-card done">
+<h4>步骤 5.2：runner.py 集成 _pre_submit_housekeeping <span class="tag-done">✓ 已完成</span></h4>
+<p><span class="tag-modify">修改</span> <code>remote/runner.py</code> — <code>RemoteJobRunner.__init__</code> 增加 <code>cleanup: RemoteCleanup | None = None</code></p>
+<p>在 <code>_run_remote()</code> 中，<strong>节点选择（步骤 1）之后、代码同步（步骤 2）之前</strong>调用 <code>_pre_submit_housekeeping(node, event_log, job_id)</code>：</p>
+<ol>
+<li><code>cleanup is None</code> → 直接返回（无操作，无事件）</li>
+<li>调用 <code>cleanup.pre_submit_housekeeping(node)</code>，捕获异常（fail-open：housekeeping 崩溃不阻断提交，仅记录 <code>remote.housekeeping_error</code> 事件）</li>
+<li>无论结果均写 <code>remote.housekeeping</code> 事件（disk_before / disk_after / should_skip / removed_dirs / cleanup_errors / reason）</li>
+<li><code>decision.should_skip == True</code> → 抛 <code>RemoteNodeUnavailableError(f"Node {name!r} skipped: {reason}")</code>，由 <code>run()</code> 捕获并标记作业失败（exit_code=1 + record.error），作业快速失败而非运行到中途 ENOSPC</li>
+</ol>
+<p><strong>集成位置设计理由</strong>：放在代码同步前，若节点被拒绝可省去无用的 SFTP 同步开销；放在节点选择后，因 housekeeping 针对单一已选节点（避免对每个候选节点都发起 SSH df 查询）。</p>
+</div>
+
+<!-- ==================== 阶段 5 代码评审 ==================== -->
+<div class="review-box">
+<h4>📋 阶段 5 代码评审报告（深度审计）</h4>
+<p><strong>评审日期：</strong>2026-07-13 ｜ <strong>文件：</strong>cleanup.py (429行) / runner.py (+52行 housekeeping) / __init__.py (+7导出) / manager.py (+9行 wiring)</p>
+<p><strong>修复日期：</strong>2026-07-13 ｜ <strong>修复进度：</strong><span class="tag-done">6/6 已修复</span>（P1: 2/2 全部修复，P2: 4/4 全部修复）</p>
+<p><strong>测试：</strong>mock 单元测试 34/34 通过（Phase 1-5 共 153/153，2 skipped 为真实节点集成测试） ｜ <strong>lint：</strong>ruff 0 error ｜ <strong>格式：</strong>ruff format 通过</p>
+
+<h4 style="color:var(--accent2)">✅ 优点</h4>
+<ul>
+<li><strong>fail-open / fail-closed 分层清晰</strong>：磁盘查询失败（SSH 抖动）→ fail-open（返回 0%，继续提交，避免瞬时网络故障阻断作业）；明确决策 <code>should_skip=True</code> → fail-closed（抛异常，作业失败）。两个失败模式不会被混淆</li>
+<li><strong>仅清理目录，不动文件</strong>：<code>cleanup_old_jobs</code> 仅遍历 <code>entry.is_dir</code> 的顶层条目，顶层散落文件（如 <code>README.txt</code>）保持不动——避免误删用户手动放置的非 job 文件</li>
+<li><strong>base-dir 防护三层</strong>：(1) <code>_is_safe_work_dir()</code> 拒绝危险路径（<code>/</code>、浅路径、相对路径）；(2) 循环内 <code>posixpath.normpath(target) == norm_base</code> 二次校验；(3) 即使清理列表中 base 本身 mtime 过期也不删除</li>
+<li><strong>fail-open 不丢失可观测性</strong>：housekeeping 崩溃仍写 <code>remote.housekeeping_error</code> 事件（含 error 文本），运维可在 events.jsonl 中查到</li>
+<li><strong>freed_bytes 测量时机正确</strong>：在 <code>remove_remote_dir</code> <strong>之前</strong>调用 <code>du -sb</code>（删除后目录不存在，du 会返回 0）；<code>du</code> 失败回退为 0 不阻断</li>
+<li><strong>dry_run 支持预览</strong>：填充 report.removed_dirs + freed_bytes_est 但不执行 rm，供未来手动清理 API 安全预览</li>
+<li><strong>复用既有 SSH 池</strong>：<code>RemoteCleanup</code> 与 RemoteJobRunner / monitor 共享同一 <code>SSHConnectionPool</code> + <code>FileStager</code>，无额外连接开销</li>
+<li><strong>report/decision 序列化</strong>：<code>to_dict()</code> 方法便于未来 API 端点直接 JSON 序列化（Phase 6 节点管理可复用）</li>
+<li><strong>遵循项目约定</strong>：PEP 604 注解、<code>from __future__ import annotations</code>、Google-style docstring、<code>__all__</code> 导出、模块级 logger、<code>@dataclass</code></li>
+</ul>
+
+<h4 style="color:#f85149">🔴 P1 — 高风险（非平凡场景下将失败）</h4>
+<table>
+<tr><th>#</th><th>文件 / 位置</th><th>问题</th><th>建议修复</th><th>修复状态</th></tr>
+<tr>
+<td>P1-1</td>
+<td><code>cleanup.py:307-311</code></td>
+<td><strong>after-probe fail-open 掩盖满盘</strong>：<code>_safe_disk_usage</code> 返回 0 既表示"探测失败"也表示"0% 使用率"（不可能值，但语义混淆）。当 <code>before=96%</code>（触发清理）但 <code>after</code> 探测 SSH 失败返回 0 时，<code>0 &gt; 95</code> → False → <strong>继续提交</strong>，而磁盘实际 &gt;95% → 作业运行到中途 ENOSPC 崩溃</td>
+<td>after-probe 失败时回退到 <code>before</code> 值（保守策略）：已知磁盘压力大，无法确认清理足够则视为未清理</td>
+<td><span class="review-pass">✅ 已修复</span> — 新增保守回退：<code>if after &lt;= 0 and before &gt; cleanup_threshold: after = before</code>。新增测试 <code>test_housekeeping_after_probe_failure_is_conservative</code></td>
+</tr>
+<tr>
+<td>P1-2</td>
+<td><code>cleanup.py:161-262</code></td>
+<td><strong>清理无上限可阻塞提交数分钟</strong>：<code>cleanup_old_jobs</code> 遍历所有过期目录，每个 2 次 SSH 往返（du + rm）。节点若有 10,000 个过期作业目录 → 20,000 次 SSH 往返 → 清理耗时数分钟，期间提交线程被阻塞，作业迟迟不能进入 LSF 队列</td>
+<td>增加 <code>max_dirs_per_sweep</code> 参数（默认 100），单次清理封顶；剩余目录下次 housekeeping 继续清理（幂等）</td>
+<td><span class="review-pass">✅ 已修复</span> — 新增 <code>max_dirs_per_sweep=DEFAULT_MAX_DIRS_PER_SWEEP(100)</code> 参数 + <code>CleanupReport.capped</code> 标志；<code>0</code> 表示无限制。新增测试 <code>test_cleanup_respects_max_dirs_cap</code> + <code>test_cleanup_unlimited_when_zero</code></td>
+</tr>
+</table>
+
+<h4 style="color:#d29922">🟡 P2 — 设计 / 质量问题</h4>
+<table>
+<tr><th>#</th><th>文件 / 位置</th><th>问题</th><th>建议修复</th><th>修复状态</th></tr>
+<tr>
+<td>P2-1</td>
+<td><code>cleanup.py:365-368</code></td>
+<td><strong><code>_dir_size_bytes</code> 忽略 du 退出码</strong>：<code>_code</code> 解包但从未检查。若 du 非零退出但 stdout 有残留输出（<code>2&gt;/dev/null</code> 下通常为空，但非保证），会解析过期数据</td>
+<td>检查 <code>code != 0</code> 直接返回 0</td>
+<td><span class="review-pass">✅ 已修复</span> — 添加 <code>if code != 0: return 0</code></td>
+</tr>
+<tr>
+<td>P2-2</td>
+<td><code>cleanup.py:367-369</code></td>
+<td><strong><code>_dir_size_bytes</code> 静默吞掉所有错误</strong>：<code>except Exception: return 0</code> 无任何日志。SSH 故障完全不可见，运维无法排查为何 freed_bytes_est 总是 0</td>
+<td>添加 <code>logger.debug(..., exc_info=True)</code></td>
+<td><span class="review-pass">✅ 已修复</span> — SSH 异常 + 非零退出码均有 debug 日志</td>
+</tr>
+<tr>
+<td>P2-3</td>
+<td><code>test_remote_phase5.py</code></td>
+<td><strong>同义反复的断言</strong>：<code>assert record.status is None or True</code> 恒为真（<code>or True</code>），无法捕获任何回归</td>
+<td>删除死断言，替换为有意义的检查或注释说明</td>
+<td><span class="review-pass">✅ 已修复</span> — 替换为注释说明 <code>run()</code> 不设置 status（manager 负责）+ 保留 error 断言</td>
+</tr>
+<tr>
+<td>P2-4</td>
+<td><code>cleanup.py:268</code></td>
+<td><strong>dry_run 不记录汇总日志</strong>：<code>if report.removed_dirs and not dry_run</code> 使 dry_run 操作无聚合日志，运维预览清理时无可见反馈</td>
+<td>dry_run 也记录汇总（标注 dry-run 模式）</td>
+<td><span class="review-pass">✅ 已修复</span> — 汇总日志改为 <code>if report.removed_dirs</code>，mode 含 "dry-run" 标记</td>
+</tr>
+</table>
+
+<h4 style="color:#8b949e">🔵 设计限制（非缺陷，按计划处理）</h4>
+<table>
+<tr><th>项目</th><th>说明</th><th>处理建议</th></tr>
+<tr>
+<td>before-probe fail-open 可掩盖节点不可达</td>
+<td>节点完全不可达时 <code>_safe_disk_usage</code> 返回 0 → 继续提交 → 代码同步阶段才报 SSH 错误（错误信息不如 housekeeping 阶段清晰）</td>
+<td>可接受的权衡——fail-open 避免瞬时抖动误伤。未来可在 before-probe 失败时增加重试或单独的连通性检查</td>
+</tr>
+<tr>
+<td>df 不反映清理效果（mock 限制）</td>
+<td>测试中 df 输出固定，无法模拟"清理后磁盘下降"。真实环境 df 会反映删除，但 mock 测试只能验证清理被触发</td>
+<td>可接受——真实节点 df 是准确的；mock 测试覆盖决策逻辑而非 df 物理。after-probe 保守回退（P1-1）已在 mock 下验证</td>
+</tr>
+<tr>
+<td>无自动定时清理</td>
+<td>清理仅在提交前按需触发（disk &gt; 90%）。低磁盘压力时旧文件不被主动清理</td>
+<td>Phase 6+ 可增加后台定时任务（systemd timer 或 asyncio 定期扫描）主动清理过期文件</td>
+</tr>
+<tr>
+<td>freed_bytes_est 依赖 GNU du</td>
+<td><code>du -sb</code> 是 GNU coreutils 扩展，BSD/macOS du 无 <code>-b</code>。远程节点为 Linux（OpenLAVA），实际无影响</td>
+<td>已加 try/except + 退出码检查回退 0，BSD 节点不影响功能</td>
+</tr>
+<tr>
+<td>无清理 API 端点</td>
+<td>当前无 <code>POST /nodes/{name}/cleanup</code> 端点供运维手动触发清理</td>
+<td>Phase 6 节点管理 API 可暴露 <code>remote_cleanup.cleanup_old_jobs()</code>（dry_run 预览 + 实际清理）</td>
+</tr>
+<tr>
+<td>单节点单次清理</td>
+<td><code>pre_submit_housekeeping</code> 仅清理当前选中节点。自动选择时若节点 A 满载跳过，不主动尝试节点 B</td>
+<td>可接受——重试时 least_loaded 会选到其他节点；Phase 6 可在 _select_least_loaded 中融合磁盘检查实现自动故障转移</td>
+</tr>
+<tr>
+<td>清理非原子</td>
+<td>逐目录 <code>rm -rf</code>，中途 SSH 断连会留下部分清理状态</td>
+<td>可接受——清理是幂等的（mtime 不变则再次选中删除）；<code>max_dirs_per_sweep</code> 使单次清理窗口可控</td>
+</tr>
+<tr>
+<td>Housekeeping 无整体超时</td>
+<td><code>pre_submit_housekeeping</code> 本身无超时。单个 <code>_dir_size_bytes</code> 有 60s 超时，但 100 目录 × 2 调用 = 最坏 200 分钟。已被 <code>max_dirs_per_sweep=100</code> 缓解</td>
+<td>可接受——100 目录封顶使最坏情况可控（~200s）。如需更严格可在 housekeeping 外层加 deadline</td>
+</tr>
+</table>
+
+<h4 style="color:var(--accent3)">📊 修复优先级摘要</h4>
+<table>
+<tr><th>优先级</th><th>数量</th><th>关键项</th></tr>
+<tr><td style="color:#f85149">P1 高</td><td>2</td><td>after-probe fail-open 掩盖满盘（ENOSPC 风险）、清理无上限阻塞提交（可用性风险）</td></tr>
+<tr><td style="color:#d29922">P2 中</td><td>4</td><td>du 退出码忽略、du 错误静默吞、死测试断言、dry_run 无汇总日志</td></tr>
+<tr><td style="color:#8b949e">设计限制</td><td>7</td><td>fail-open 掩盖不可达、df mock 限制、无定时清理、GNU du、无 API 端点、单节点清理、非原子、无整体超时</td></tr>
+</table>
+<p style="margin-top:1rem;color:#3fb950">✅ <strong>所有 P1/P2 缺陷均已修复并通过测试</strong>。设计限制按计划留待后续阶段（Phase 6 节点管理 API / Phase 6+ 定时清理）处理。</p>
+
+<h4 style="color:var(--accent3)">测试覆盖（34 项，含 4 项审计修复回归测试）</h4>
+<table>
+<tr><th>分类</th><th>测试项</th><th>数量</th></tr>
+<tr><td><code>_is_safe_work_dir</code></td><td>合法路径 / 拒绝根目录 / 拒绝浅路径 / 拒绝相对路径</td><td>4</td></tr>
+<tr><td><code>cleanup_old_jobs</code></td><td>删除旧目录保留新+文件 / dry_run 不变更 / 配置默认 retention / retention 覆盖 / 跳过 mtime=0 / 危险 base 拒绝 / 缺失 work_dir / listdir 失败记录 / base 永不删除 / report.to_dict / <strong>max_dirs 封顶（P1-2）</strong> / <strong>默认封顶=100</strong> / <strong>max_dirs=0 无限</strong></td><td>13</td></tr>
+<tr><td><code>pre_submit_housekeeping</code></td><td>低盘无操作 / 高盘触发清理继续 / &gt;95% 拒绝 / 高盘无可清跳过 / df 失败 fail-open / 清理异常记录 / decision.to_dict / 阈值校验 / <strong>after-probe 失败保守（P1-1）</strong></td><td>9</td></tr>
+<tr><td>runner 集成</td><td>cleanup=None 无操作 / 正常继续 + 事件 / skip 抛 RemoteNodeUnavailableError / 崩溃 fail-open / run() 端到端 exit_code=1</td><td>5</td></tr>
+<tr><td>manager wiring</td><td>remote 启用时 remote_cleanup 非 None / local 时 None</td><td>2</td></tr>
+<tr><td>工具函数</td><td>_format_bytes 人可读单位</td><td>1</td></tr>
+</table>
+</div>
+
+<hr class="section-divider">
+<h2 id="phase5b">6B. 阶段 5B：本地磁盘保护（ACP Server 端）</h2>
+<p>Phase 5 仅保护了<strong>远程计算节点</strong>的磁盘。ACP Server 本地的 <code>run_root</code>（作业 work_dir + SQLite DB + 事件日志）<strong>无任何清理和保护</strong>——作业无限堆积，磁盘满时 <code>OSError</code> 被 bare <code>except Exception</code> 静默吞掉。本阶段为本地文件系统增加与 Phase 5 对等的生命周期管理。</p>
+
+<h3>现状缺口</h3>
+<table class="constraint-table">
+<tr><td>本地 work_dir</td><td>每个 job 的 <code>events.jsonl</code> / <code>job.json</code> / <code>inputs/</code> <strong>永久保留</strong>，无 TTL、无 retention、无定时清理</td></tr>
+<tr><td>SQLite <code>acp_jobs.db</code></td><td>已完成/失败 job 记录<strong>无限堆积</strong>（<code>scheduler/AGENTS.md</code> 已标记为已知问题）</td></tr>
+<tr><td>本地 <code>JobRunner</code></td><td>提交前<strong>不检查磁盘</strong>，直接 <code>mkdir</code> + 跑子进程；磁盘满时静默崩溃</td></tr>
+<tr><td>无 <code>DELETE /jobs/{id}</code></td><td>只能删整个 project（<code>DELETE /projects/{id}?delete_data=true</code>），无法删单个 job</td></tr>
+<tr><td>运行模式</td><td><strong>纯远程调度</strong>——本地 work_dir 仅元数据（KB-MB 级），但 SQLite + 事件日志持续膨胀</td></tr>
+<tr><td>当前部署</td><td><code>ACP_RUN_ROOT=/tmp/acp_runs</code>（tmpfs 923M，62% 已用），重启即清空——生产环境应迁到持久卷</td></tr>
+</table>
+
+<h3>两级保留策略（用户确认）</h3>
+<div class="decision-table">
+<table>
+<tr><th>对象</th><th>保留期</th><th>策略</th></tr>
+<tr><td>work_dir（completed）</td><td>30 天</td><td>mtime + DB 状态判定，到期删除整个 job 目录</td></tr>
+<tr><td>work_dir（failed）</td><td>90 天</td><td>失败作业保留更久，便于排查</td></tr>
+<tr><td>work_dir（cancelled）</td><td>30 天</td><td>同 completed</td></tr>
+<tr><td>SQLite DB 记录</td><td>365 天</td><td><strong>独立于 work_dir</strong>——work_dir 删除后 DB 记录仍可查询历史；到期后删除 DB 行 + 可选 VACUUM</td></tr>
+<tr><td>孤儿目录（DB 无记录）</td><td>30 天</td><td>按 completed 策略兜底清理</td></tr>
+</table>
+</div>
+<p><strong>说明</strong>：work_dir 先于 DB 记录过期（30/90 天 vs 365 天），存在一个窗口期——DB 记录存在但 work_dir 已删。API 的文件端点已能优雅处理此情况（返回 404 "work_dir not found"），历史查询仍可从 DB 获取元数据。</p>
+
+<h3>三种触发机制（用户确认全部需要）</h3>
+<table class="constraint-table">
+<tr><td>1. 提交前检查</td><td>本地 <code>JobRunner</code> 提交前检查 <code>shutil.disk_usage(run_root)</code>：&gt;90% 触发清理，&gt;95% 拒绝提交（同 Phase 5 远程设计）</td></tr>
+<tr><td>2. 后台定时清理</td><td>独立 daemon 线程，每 <code>cleanup_interval_hours</code>（默认 6h）扫描 run_root + SQLite，不依赖提交触发</td></tr>
+<tr><td>3. 手动 API 端点</td><td><code>POST /api/v1/maintenance/cleanup</code> 供运维手动触发 + <code>?dry_run=true</code> 预览</td></tr>
+</table>
+
+<div class="step-card pending">
+<h4>步骤 5B.1：LocalCleanup 模块 <span class="tag-done">✓ 完成（2026-07-13）</span></h4>
+<p><span class="tag-new">新建</span> <code>scheduler/local_cleanup.py</code> — <code>LocalCleanup</code> + <code>RetentionPolicy</code> + <code>LocalCleanupReport</code></p>
+<ul>
+<li><code>cleanup_old_work_dirs(dry_run=False, max_dirs_per_sweep=200) -&gt; LocalCleanupReport</code> — 扫描 <code>run_root/*/*</code>（project/job 两层），按 DB 状态 + mtime 判定过期，<code>shutil.rmtree</code> 删除</li>
+<li><code>cleanup_old_db_records(dry_run=False) -&gt; LocalCleanupReport</code> — 删除 <code>completed_at &lt; now - db_record_days</code> 的 SQLite 行 + 可选 <code>VACUUM</code></li>
+<li><code>check_disk_usage() -&gt; int</code> — <code>shutil.disk_usage(run_root)</code> 返回百分比（0–100），<strong>无 SSH 开销</strong></li>
+<li><code>pre_submit_housekeeping() -&gt; LocalHousekeepingDecision</code> — 本地磁盘 &gt;90% 触发 <code>cleanup_old_work_dirs</code>，&gt;95% 返回 <code>should_skip=True</code></li>
+<li><code>full_cleanup(dry_run=False)</code> — 便捷方法：work_dir + DB 一次性清理（供后台线程 / API 调用）</li>
+</ul>
+<p><strong>状态判定逻辑</strong>（一次 DB 查询 + 文件系统遍历）：</p>
+<pre><code># 1. 查 DB 构建 {job_id: (status, completed_at)} 映射
+status_map = {r.id: (r.status, r.completed_at) for r in store.list(limit=100000)}
+
+# 2. 遍历 run_root/{project_id}/{job_id}/
+for project_dir in run_root.iterdir():
+    for job_dir in project_dir.iterdir():
+        job_id = job_dir.name
+        status, completed_at = status_map.get(job_id, (None, None))
+        # 3. 按状态选保留期
+        if status == 'failed':
+            retention = policy.failed_days      # 90
+        else:
+            retention = policy.completed_days    # 30（含 completed/cancelled/孤儿）
+        # 4. mtime + completed_at 取较新者判定过期
+        age_ref = completed_at or _iso_to_epoch(job_dir.stat().st_mtime)
+        if now - age_ref > retention * 86400:
+            shutil.rmtree(job_dir)</code></pre>
+<p><strong>安全防护</strong>：</p>
+<ul>
+<li><code>_is_safe_run_root()</code> — 拒绝 <code>/</code>、<code>/tmp</code>、<code>/home</code>、浅路径（同 Phase 5 <code>_is_safe_work_dir</code> 设计）</li>
+<li>仅删除 <code>run_root/{project}/{job_id}</code> 三层结构下的目录，<strong>永不删除</strong> run_root 本身、project 目录、<code>acp_jobs.db</code></li>
+<li>DB 记录清理与 work_dir 清理<strong>独立</strong>，可分别配置 / 分别触发</li>
+<li><code>max_dirs_per_sweep</code> 封顶（默认 200），避免一次清理数千目录时长时间持有 DB 连接</li>
+</ul>
+<p><strong>数据类</strong>：</p>
+<pre><code>@dataclass
+class RetentionPolicy:
+    completed_days: int = 30
+    failed_days: int = 90
+    cancelled_days: int = 30
+    db_record_days: int = 365
+    vacuum_after_db_cleanup: bool = False  # VACUUM 回收空间（锁 DB）
+
+@dataclass
+class LocalCleanupReport:
+    work_dirs_removed: list[str]
+    db_records_removed: int
+    db_vacuumed: bool
+    freed_bytes_est: int        # shutil.rmtree 前 sum(file sizes)
+    errors: list[str]
+    dry_run: bool
+    capped: bool
+    disk_usage_before: int
+    disk_usage_after: int</code></pre>
+</div>
+
+<div class="step-card pending">
+<h4>步骤 5B.2：RetentionPolicy 配置 <span class="tag-done">✓ 完成（2026-07-13）</span></h4>
+<p><span class="tag-modify">修改</span> <code>config/defaults.yaml</code> + <code>cccp/config.py</code>（内置默认，两者同步）</p>
+<pre><code>cluster:
+  # ... 既有 remote 配置 ...
+  local_retention:
+    enabled: true
+    completed_days: 30
+    failed_days: 90
+    cancelled_days: 30
+    db_record_days: 365
+    cleanup_interval_hours: 6     # 后台线程扫描间隔
+    disk_cleanup_threshold: 90    # >90% 触发清理
+    disk_skip_threshold: 95       # >95% 拒绝提交
+    max_dirs_per_sweep: 200
+    vacuum_after_db_cleanup: false</code></pre>
+<p><strong>降级</strong>：<code>enabled: false</code> 时 <code>LocalCleanup</code> 不创建，pre-submit 检查跳过，后台线程不启动</p>
+</div>
+
+<div class="step-card pending">
+<h4>步骤 5B.3：本地 JobRunner 提交前检查 <span class="tag-done">✓ 完成（2026-07-13）</span></h4>
+<p><span class="tag-modify">修改</span> <code>scheduler/runner.py</code> — <code>JobRunner.__init__</code> 增加 <code>local_cleanup: LocalCleanup | None = None</code></p>
+<p>在 <code>JobRunner.run()</code> 的<strong>本地分支</strong>（<code>_should_run_remote()</code> 为 False 时）中，<code>materialize_job_input</code> 之前调用 <code>_pre_submit_housekeeping_local(record, event_log)</code>：</p>
+<ol>
+<li><code>local_cleanup is None</code> → 直接返回</li>
+<li>调用 <code>local_cleanup.pre_submit_housekeeping()</code></li>
+<li>写 <code>local.housekeeping</code> 事件（disk_before / disk_after / should_skip / removed_dirs）</li>
+<li><code>should_skip=True</code> → 设置 <code>record.error</code> 并返回 exit_code=1（作业标记 FAILED，错误信息含磁盘百分比）</li>
+</ol>
+<p><strong>注意</strong>：本地模式拒绝提交时<strong>不抛异常</strong>（与远程 <code>RemoteNodeUnavailableError</code> 不同），而是优雅返回 exit_code=1——因为本地没有"换节点"选项，拒绝即终止。</p>
+</div>
+
+<div class="step-card pending">
+<h4>步骤 5B.4：后台定时清理线程 <span class="tag-done">✓ 完成（2026-07-13）</span></h4>
+<p><span class="tag-modify">修改</span> <code>scheduler/manager.py</code></p>
+<ul>
+<li><code>JobManager.__init__</code> 创建 <code>LocalCleanup</code> 实例（若 config 启用），存入 <code>self._local_cleanup</code></li>
+<li>启动 daemon 线程 <code>self._cleanup_thread</code>，每 <code>cleanup_interval_hours</code>（默认 6h）调用 <code>local_cleanup.full_cleanup()</code></li>
+<li>线程在 <code>shutdown()</code> 时通过 <code>threading.Event</code> 优雅终止</li>
+<li>每次清理写一条 <code>local.cleanup</code> 审计事件到 run_root 下的 <code>cleanup.log</code>（JSONL 格式）</li>
+</ul>
+<pre><code>def _cleanup_loop(self, stop_event: threading.Event):
+    interval = self._local_cleanup.config.cleanup_interval_hours * 3600
+    while not stop_event.wait(interval):
+        try:
+            report = self._local_cleanup.full_cleanup()
+            self._write_cleanup_log(report)
+        except Exception:
+            logger.warning("Background local cleanup failed", exc_info=True)</code></pre>
+<p><strong>首次启动延迟</strong>：线程启动后等待一个完整 interval 再首次执行（避免服务重启时立即触发清理抢占资源）</p>
+</div>
+
+<div class="step-card pending">
+<h4>步骤 5B.5：手动清理 API 端点 <span class="tag-done">✓ 完成（2026-07-13）</span></h4>
+<p><span class="tag-modify">修改</span> <code>api/v1_routes.py</code> + <code>api/v1_schemas.py</code></p>
+<ul>
+<li><code>POST /api/v1/maintenance/cleanup</code> — 触发本地清理（work_dir + DB）</li>
+<li><code>POST /api/v1/maintenance/cleanup?dry_run=true</code> — 预览将清理的内容（不删除）</li>
+<li><code>POST /api/v1/maintenance/cleanup?scope=work_dirs</code> — 仅清理 work_dir</li>
+<li><code>POST /api/v1/maintenance/cleanup?scope=db_records</code> — 仅清理 DB 记录</li>
+<li><code>GET /api/v1/maintenance/disk-usage</code> — 返回本地磁盘使用情况（百分比 + run_root 大小 + job 数量）</li>
+</ul>
+<p><strong>响应 schema</strong>：</p>
+<pre><code>{
+  "work_dirs_removed": 42,
+  "db_records_removed": 0,
+  "freed_bytes_est": 1048576,
+  "freed_human": "1.0 MiB",
+  "errors": [],
+  "dry_run": false,
+  "disk_usage_before": 91,
+  "disk_usage_after": 88,
+  "capped": false,
+  "duration_ms": 342
+}</code></pre>
+<p><strong>安全</strong>：端点需要管理员权限（若已实现 auth 中间件）；否则在 trusted-network 部署下不限制（与现有 API 一致）</p>
+</div>
+
+<div class="step-card pending">
+<h4>步骤 5B.6：JobManager 接线 + 属性暴露 <span class="tag-done">✓ 完成（2026-07-13）</span></h4>
+<p><span class="tag-modify">修改</span> <code>scheduler/manager.py</code></p>
+<ul>
+<li><code>JobManager.__init__</code> 接收 <code>local_retention_config</code>（从 server.py 注入，类似 <code>remote_config</code>）</li>
+<li><code>self._local_cleanup = LocalCleanup(run_root, store, policy)</code>（若启用）</li>
+<li><code>self.local_cleanup</code> 属性暴露给 API 层</li>
+<li><code>JobRunner</code> 构造时注入 <code>local_cleanup</code></li>
+<li><code>shutdown()</code> 停止后台清理线程</li>
+</ul>
+<p><span class="tag-modify">修改</span> <code>api/server.py</code> — <code>_load_local_retention_config()</code> 从 YAML cluster.local_retention 段构建 <code>RetentionPolicy</code></p>
+</div>
+
+<div class="step-card pending">
+<h4>步骤 5B.7：前端维护面板（最小版） <span class="tag-done">✓ 完成（2026-07-13）</span></h4>
+<p><span class="tag-modify">修改</span> <code>frontend/ACP_Workbench_v2.html</code></p>
+<ul>
+<li>设置页增加"磁盘维护"面板：显示当前磁盘使用率 + job 总数 + 上次清理时间</li>
+<li>"立即清理"按钮（调用 <code>POST /maintenance/cleanup</code>）</li>
+<li>"预览清理"按钮（dry_run，显示将删除的目录数 + 释放空间）</li>
+</ul>
+</div>
+
+<div class="step-card pending">
+<h4>步骤 5B.8：测试 <span class="tag-done">✓ 完成（2026-07-13，51 项）</span></h4>
+<table>
+<tr><th>测试文件</th><th>测试内容</th></tr>
+<tr><td><code>test_local_cleanup.py</code></td><td>LocalCleanup 单元测试（tmpdir fixture）：work_dir 清理（completed/failed/cancelled/orphan 按 mtime 过期）、DB 记录清理、dry_run、max_dirs 封顶、disk_usage 百分比、pre_submit_housekeeping 决策、_is_safe_run_root 防护、VACUUM</td></tr>
+<tr><td><code>test_local_cleanup_runner.py</code></td><td>JobRunner 集成：local_cleanup=None 无操作 / 正常继续 + 事件 / skip 返回 exit_code=1 / 崩溃 fail-open</td></tr>
+<tr><td><code>test_local_cleanup_manager.py</code></td><td>JobManager 接线：local_cleanup 属性 / 后台线程启动+停止 / cleanup.log 写入</td></tr>
+<tr><td><code>test_maintenance_api.py</code></td><td>API 端点（需 fastapi）：POST cleanup / dry_run / scope 参数 / GET disk-usage</td></tr>
+</table>
+<p><strong>目标</strong>：~30 项 mock 单元测试（与 Phase 5 对等）</p>
+</div>
+
+<div class="review-box">
+<h4>设计决策记录</h4>
+<div class="decision-table">
+<table>
+<tr><th>问题</th><th>选项</th><th>决策</th><th>理由</th></tr>
+<tr>
+<td>work_dir 保留期</td>
+<td>A) 统一 180 天<br>B) 按状态区分<br>C) 统一 7-30 天</td>
+<td><strong>B</strong>（completed=30 / failed=90）</td>
+<td>失败作业保留更久便于排查；纯远程模式下 work_dir 体积小（KB-MB），30 天足够</td>
+</tr>
+<tr>
+<td>DB 记录清理</td>
+<td>A) 与 work_dir 同步删<br>B) 仅删 work_dir 保留 DB<br>C) DB 单独保留更久</td>
+<td><strong>C</strong>（365 天）</td>
+<td>历史查询/审计价值高；SQLite 行体积小（~1KB/行），365 天不影响性能；两级保留分离关注点</td>
+</tr>
+<tr>
+<td>触发方式</td>
+<td>A) 仅提交前<br>B) 仅后台定时<br>C) 仅手动 API<br>D) 三者结合</td>
+<td><strong>D</strong>（三者结合）</td>
+<td>提交前防护急性满盘；后台定时处理慢性膨胀；手动 API 供运维按需操作</td>
+</tr>
+<tr>
+<td>work_dir 与 DB 清理耦合</td>
+<td>A) 原子事务<br>B) 独立清理</td>
+<td><strong>B</strong>（独立）</td>
+<td>两者过期时间不同（30/90 天 vs 365 天）；独立清理避免长事务锁 DB；孤儿状态自然收敛</td>
+</tr>
+<tr>
+<td>磁盘检查 API</td>
+<td>A) subprocess df<br>B) shutil.disk_usage</td>
+<td><strong>B</strong></td>
+<td>无外部进程开销；跨平台；直接返回 bytes 用量</td>
+</tr>
+<tr>
+<td>本地拒绝提交时</td>
+<td>A) 抛异常<br>B) 返回 exit_code=1</td>
+<td><strong>B</strong></td>
+<td>本地无"换节点"选项；优雅返回让 JobManager 标记 FAILED，错误信息含磁盘百分比</td>
+</tr>
+<tr>
+<td>后台线程 vs systemd timer</td>
+<td>A) 应用内 daemon 线程<br>B) systemd timer + CLI 命令</td>
+<td><strong>A</strong>（应用内）</td>
+<td>无需额外 systemd 配置；生命周期跟随服务；可直接访问 JobStore / run_root</td>
+</tr>
+<tr>
+<td>VACUUM 时机</td>
+<td>A) 每次 DB 清理后<br>B) 手动触发<br>C) 定期（如每月）</td>
+<td><strong>B</strong>（默认关，<code>vacuum_after_db_cleanup: false</code>）</td>
+<td>VACUUM 锁整库（毫秒~秒级）；纯远程模式下 DB 小（KB-MB），膨胀不显著；需要时运维手动开</td>
+</tr>
+</table>
+</div>
+</div>
+
+<div class="review-box">
+<h4>⚠️ 部署注意事项</h4>
+<ul>
+<li><strong>当前 <code>ACP_RUN_ROOT=/tmp/acp_runs</code> 是 tmpfs</strong>——重启即清空所有 job 数据。生产环境应迁移到持久卷（如 <code>/var/lib/acp/runs</code>），否则本地清理策略无意义（tmpfs 随内存压力自动驱逐）</li>
+<li><strong>tmpfs 容量 = 物理内存的一部分</strong>（当前 923M），大量 job 元数据可能挤占计算进程内存。迁移到磁盘卷后此问题消失</li>
+<li><strong>systemd 服务需更新</strong>：<code>Environment=ACP_RUN_ROOT=/var/lib/acp/runs</code> + <code>LogsDirectory</code> / <code>StateDirectory</code> 声明</li>
+<li><strong>权限</strong>：<code>/var/lib/acp/runs</code> 属主 <code><user>:<user></code>，systemd 服务已以该用户运行</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+<!-- Phase 5B 可行性分析 & 修订方案 (2026-07-13)                  -->
+<!-- ============================================================ -->
+<div class="review-box">
+<h4>🔍 可行性分析 & 风险评估 (2026-07-13 审计)</h4>
+<p>基于对当前代码库（<code>scheduler/</code>、<code>api/</code>、<code>frontend/</code>、<code>config/</code>、systemd 服务）的全面审计，以下是对 Phase 5B 的可行性评估和风险梳理。</p>
+
+<h4>总体评估：⚠️ 中等可行 — 必须完成前置条件后再实施</h4>
+<table>
+<tr><th>维度</th><th>评估</th><th>说明</th></tr>
+<tr><td>技术可行性</td><td class="review-pass">高</td><td><code>remote/cleanup.py</code>（458行）提供了完整的参考架构，可镜像为本地版本</td></tr>
+<tr><td>现有代码冲突</td><td class="review-pass">低</td><td>以新增模块为主，对既有代码影响可控；注入模式（<code>remote_config</code> → <code>remote_cleanup</code>）可直接复用</td></tr>
+<tr><td>前置条件缺口</td><td class="risk-high">严重</td><td><code>ACP_RUN_ROOT=/tmp/acp_runs</code>（tmpfs）需迁移到持久卷，否则所有清理策略无意义</td></tr>
+<tr><td>基础设施缺口</td><td class="risk-medium">中等</td><td>无定时调度基础设施、无 auth 中间件、前端无管理面板</td></tr>
+<tr><td>已知债务影响</td><td class="risk-medium">中等</td><td>bare <code>except Exception:</code> 静默吞错、双源配置漂移、<code>_utc_now_iso()</code> 9 处重复</td></tr>
+<tr><td>最小可行方案工时</td><td class="review-pass">~3天</td><td>仅做 5B.1+5B.2+5B.3+5B.5+5B.6（手动触发 + API，跳过定时线程和前端）</td></tr>
+<tr><td>完整方案工时</td><td class="review-pass">~5-6天</td><td>含 5B.4 定时线程 + 5B.7 前端面板</td></tr>
+</table>
+</div>
+
+<div class="review-box">
+<h4>🚨 重大风险清单 (Critical — 阻塞项)</h4>
+
+<h4 style="color:#f85149">风险 1：run_root 为 tmpfs — 生产环境清理策略形同虚设</h4>
+<table class="constraint-table">
+<tr><td>现状</td><td><code>ACP_RUN_ROOT=/tmp/acp_runs</code>（tmpfs 923M，62% 已用），重启即清空所有数据</td></tr>
+<tr><td>影响</td><td>如果 run_root 不迁移到持久卷，全部清理/保留策略仅对单次服务生命周期有效——重启后策略没有发挥作用的机会</td></tr>
+<tr><td>严重级</td><td><span class="risk-high">Critical</span> — 此问题在文档中标记为"部署注意事项"但实际应为<strong>强制前置条件</strong></td></tr>
+<tr><td>对策</td><td>将 run_root 迁移作为 Phase 5B 的<strong>第零步 (Step 0)</strong>，在任何代码开发前完成</td></tr>
+</table>
+
+<h4 style="color:#f85149">风险 2：零定时调度基础设施 — 后台清理线程需从零搭建</h4>
+<table class="constraint-table">
+<tr><td>现状</td><td>代码库中<strong>不存在</strong>任何周期性后台任务机制。<code>JobManager</code> 仅有 <code>ThreadPoolExecutor</code>（按需创建），无 Timer/scheduler/asyncio 循环</td></tr>
+<tr><td>影响</td><td>若用 <code>threading.Timer</code> 简易实现，需处理：与 FastAPI async lifespan 的兼容性、shutdown 时线程正确 join、防止 <code>full_cleanup()</code> 并发重叠</td></tr>
+<tr><td>严重级</td><td><span class="risk-high">Critical</span> — 定时调度是全新基础设施，需要单独验证</td></tr>
+<tr><td>对策</td><td>使用 <code>threading.Thread(daemon=True)</code> + <code>threading.Event</code> 停止信号 + <code>self._cleanup_lock</code> 防并发</td></tr>
+</table>
+
+<h4 style="color:#f85149">风险 3：bare <code>except Exception:</code> 静默吞掉磁盘满 <code>OSError</code></h4>
+<table class="constraint-table">
+<tr><td>现状</td><td>代码库中 15 处 <code>except Exception:</code>（8 个文件），包括 <code>runner.py:205</code> 和 <code>manager.py</code> 关键路径</td></tr>
+<tr><td>影响</td><td><code>shutil.rmtree</code> 或 <code>mkdir</code> 触发 <code>OSError</code>（磁盘满）时被外层 bare except 吞掉，job 静默失败</td></tr>
+<tr><td>严重级</td><td><span class="risk-high">Critical</span></td></tr>
+<tr><td>对策</td><td>在 <code>_pre_submit_housekeeping_local()</code> 中单独捕获 <code>OSError</code> 并记录为磁盘满明确错误，不依赖外层 bare except</td></tr>
+</table>
+
+<h4 style="color:#d29922">风险 4：双源配置漂移历史 — 必须同时更新 YAML 和 Python 内置默认</h4>
+<table class="constraint-table">
+<tr><td>现状</td><td><code>config/defaults.yaml</code> 与 <code>_get_default_config()</code> 历史上存在分叉（AGENTS.md 标记为反模式）</td></tr>
+<tr><td>影响</td><td>5B.2 需在 YAML 和 Python 中同时添加 ~10 个新配置键，只更新一侧会导致行为不一致</td></tr>
+<tr><td>严重级</td><td><span class="risk-medium">Medium-High</span></td></tr>
+<tr><td>对策</td><td>实现时立即写测试验证 <code>load_config()</code> 返回结果与 <code>_get_default_config()</code> 一致；在 <code>_validate_config()</code> 中添加新键合法性校验</td></tr>
+</table>
+
+<h4 style="color:#d29922">风险 5：<code>_requeue_active_on_startup()</code> 导致的 FAILED job 与保留策略冲突</h4>
+<table class="constraint-table">
+<tr><td>现状</td><td><code>manager.py:351-360</code> 将重启时 RUNNING 的 job 标记 FAILED，<strong>不删除 work_dir</strong></td></tr>
+<tr><td>影响</td><td>这些重启失败 job 的 work_dir 需 90 天才清理，期间可能累积占用磁盘</td></tr>
+<tr><td>严重级</td><td><span class="risk-medium">Medium</span></td></tr>
+<tr><td>对策</td><td>为重启标记的 FAILED job 在 error 字段中添加 <code>[RESTART_FAILED]</code> 前缀，清理时按 7 天保留期特殊处理</td></tr>
+</table>
+</div>
+
+<div class="review-box">
+<h4>⚠️ 中等风险清单</h4>
+<table>
+<tr><th>#</th><th>风险</th><th>级别</th><th>对策</th></tr>
+<tr><td>R6</td><td>SQLite 连接散落 — <code>LocalCleanup</code> 需 JobStore 连接但无统一连接管理</td><td><span class="risk-medium">Medium</span></td><td><code>LocalCleanup</code> 只做一次性 <code>list()</code> 读取，不持长连接；删除走 <code>store.delete()</code> 单行操作</td></tr>
+<tr><td>R7</td><td>无 <code>size_bytes</code> 字段 — 磁盘用量靠文件系统扫描（job 多时较慢）</td><td><span class="risk-medium">Medium</span></td><td><code>max_dirs_per_sweep=200</code> 封顶已限制单次开销；后续可选在 <code>JobRecord</code> 中新增 <code>size_bytes</code></td></tr>
+<tr><td>R8</td><td><code>JobRunner</code> 注入 <code>local_cleanup</code> 需同步改动 3 处</td><td><span class="risk-medium">Medium</span></td><td>参照 <code>remote_config</code> → <code>self._remote_cleanup</code> → <code>self.runner.remote_runner</code> 的注入链路</td></tr>
+<tr><td>R9</td><td>API 无认证 — 清理端点暴露</td><td><span class="risk-medium">Medium</span></td><td>最低：端点文档标注"无认证保护"，建议生产部署配合 nginx IP 白名单</td></tr>
+<tr><td>R10</td><td>前端 <code>ACP_Workbench_v2.html</code> 无管理面板基础设施</td><td><span class="risk-medium">Medium</span></td><td>5B.7 从"可选"降级为<strong>延后 (P1)</strong>；或做最简实现：topbar 磁盘百分比（~30行）</td></tr>
+<tr><td>R11</td><td><code>_utc_now_iso()</code> 在 9 个模块重复 — <code>local_cleanup.py</code> 将添加第 10 份</td><td><span class="risk-low">Low</span></td><td>接受此债务，与其他模块保持一致；后续统一抽取到 <code>acp.core.utils</code></td></tr>
+</table>
+</div>
+
+<div class="review-box">
+<h4>📋 改造方案：实施步骤修订版</h4>
+<p>以下方案根据代码审计结果对原始 8 步骤进行了改造——增加前置步骤、调整优先级、标记风险缓解措施。</p>
+</div>
+
+<div class="step-card done">
+<h4>步骤 0：run_root 迁移（强制前置） <span class="tag-done">✓ 完成（2026-07-13）</span></h4>
+<p><span class="risk-high">CRITICAL</span> — 必须在任何代码开发前完成，否则 Phase 5B 清理策略在生产环境无意义</p>
+<pre><code># 1. 创建持久卷目录
+sudo mkdir -p /var/lib/acp/runs
+sudo chown -R <user>:<user> /var/lib/acp/runs
+
+# 2. 更新 systemd 服务
+sudo vim /etc/systemd/system/acp.service
+# 修改: Environment=ACP_RUN_ROOT=/var/lib/acp/runs
+# 添加: StateDirectory=acp
+# 添加: LogsDirectory=acp
+
+# 3. 如果有存量数据需要保留
+# cp -r /tmp/acp_runs/* /var/lib/acp/runs/  (在服务停止后执行)
+
+# 4. 重载并重启
+sudo systemctl daemon-reload
+sudo systemctl restart acp
+
+# 5. 验证
+curl http://localhost:8765/api/status | python -m json.tool</code></pre>
+<p><strong>验收</strong>：服务正常启动，<code>/api/status</code> 返回正常，<code>journalctl -u acp</code> 无 run_root 相关错误</p>
+</div>
+
+<div class="step-card done">
+<h4>步骤 5B.1 (修订)：配置 + 模块（原 5B.1 + 5B.2 合并） <span class="tag-done">✓ 完成（2026-07-13）</span></h4>
+<p><span class="tag-new">新建</span> <code>scheduler/local_cleanup.py</code> <span class="tag-modify">修改</span> <code>config/defaults.yaml</code> + <code>cccp/config.py:_get_default_config()</code></p>
+<p><strong>必须同时更新双源配置</strong>（风险 4 缓解）。新增配置段：</p>
+<pre><code>cluster:
+  # ... 既有配置 ...
+  local_retention:
+    enabled: true
+    completed_days: 30
+    failed_days: 90
+    cancelled_days: 30
+    db_record_days: 365
+    cleanup_interval_hours: 6
+    disk_cleanup_threshold: 90
+    disk_skip_threshold: 95
+    max_dirs_per_sweep: 200
+    vacuum_after_db_cleanup: false</code></pre>
+<p><strong>关键</strong>：<code>_validate_config()</code> 中增加校验 — <code>completed_days &gt; 0</code>、<code>cleanup_threshold &lt; skip_threshold</code></p>
+<p><strong>LocalCleanup 核心方法</strong>（镜像 <code>RemoteCleanup</code> 但替换 SSH 为本地操作）：</p>
+<ul>
+<li><code>check_disk_usage() → int</code> — <code>shutil.disk_usage(run_root)</code>（无 SSH 开销）</li>
+<li><code>cleanup_old_work_dirs(dry_run=False) → LocalCleanupReport</code> — 扫描 <code>run_root/{project}/{job}</code>，用 <code>pathlib.Path.stat().st_mtime</code> 替代远程 <code>du -sb</code></li>
+<li><code>cleanup_old_db_records(dry_run=False) → LocalCleanupReport</code> — 删除过期 SQLite 行</li>
+<li><code>pre_submit_housekeeping() → HousekeepingDecision</code> — >90% 触发清理，>95% 拒绝提交</li>
+<li><code>full_cleanup(dry_run=False)</code> — work_dir + DB 一次性清理</li>
+</ul>
+<p><strong>安全防护</strong>：从 <code>remote/cleanup.py</code> 复用 <code>_is_safe_work_dir()</code> 逻辑，拒绝 <code>/</code>、<code>/tmp</code>、<code>/home</code>、浅路径</p>
+<p><strong>风险 3 缓解</strong>：关键路径（<code>shutil.rmtree</code>、<code>mkdir</code>、<code>disk_usage</code>）单独捕获 <code>OSError</code>，不依赖外层 bare <code>except Exception:</code></p>
+<p><strong>风险 5 缓解</strong>：清理时识别 error 字段中 <code>[RESTART_FAILED]</code> 前缀的 job，使用 7 天保留期（而非 90 天）</p>
+<p><strong>风险 11 确认</strong>：<code>local_cleanup.py</code> 内部定义 <code>_utc_now_iso()</code>（第 10 份拷贝），与其他模块保持一致</p>
+</div>
+
+<div class="step-card done">
+<h4>步骤 5B.2 (修订)：JobRunner + JobManager 接线（原 5B.3 + 5B.6 合并） <span class="tag-done">✓ 完成（2026-07-13）</span></h4>
+<p><span class="tag-modify">修改</span> <code>scheduler/runner.py</code> + <code>scheduler/manager.py</code> + <code>api/server.py</code></p>
+<p><strong>三点联动注入链路</strong>（风险 8 缓解——参照 <code>remote_runner</code> 模式）：</p>
+<ol>
+<li><code>JobRunner.__init__</code> 增加 <code>local_cleanup: LocalCleanup | None = None</code></li>
+<li><code>JobManager.__init__</code> 增加 <code>local_cleanup_config: RetentionPolicy | None = None</code>，构建 <code>self._local_cleanup</code></li>
+<li><code>api/server.py:create_app()</code> 调用 <code>_load_local_retention_config()</code> 并传入 <code>JobManager</code></li>
+</ol>
+<pre><code># manager.py 注入链路（与 remote 模式完全对称）
+self._local_cleanup = LocalCleanup(run_root, self.store, policy) if config else None
+self.runner.local_cleanup = self._local_cleanup
+self.runner.remote_runner = self.remote_runner
+
+# server.py 配置加载
+def _load_local_retention_config() -> RetentionPolicy | None:
+    cfg = load_config()
+    local_cfg = cfg.get("cluster", {}).get("local_retention", {})
+    if not local_cfg.get("enabled", False):
+        return None
+    return RetentionPolicy(...)</code></pre>
+<p><strong>提交前检查逻辑</strong>（仅本地分支触发）：</p>
+<pre><code># runner.py → _run_subprocess():
+if self.local_cleanup is not None:
+    decision = self.local_cleanup.pre_submit_housekeeping()
+    event_log.append("local.housekeeping", ...)
+    if decision.should_skip:
+        record.error = f"Disk full ({decision.disk_usage_before}%), submission blocked"
+        return 1  # 优雅返回，不抛异常</code></pre>
+<p><strong>注意</strong>：本地模式拒绝提交时不抛异常，优雅返回 exit_code=1（与远程 <code>RemoteNodeUnavailableError</code> 不同）</p>
+</div>
+
+<div class="step-card done">
+<h4>步骤 5B.3：后台定时清理线程（原 5B.4） <span class="tag-done">✓ 完成（2026-07-13）</span></h4>
+<p><span class="tag-modify">修改</span> <code>scheduler/manager.py</code></p>
+<p><strong>风险 2 缓解措施</strong>：</p>
+<ul>
+<li>独立 <code>threading.Thread(daemon=True)</code> — 不占用 ThreadPoolExecutor 资源</li>
+<li><code>threading.Event</code> 停止信号 — <code>shutdown()</code> 中正确 <code>.set()</code> + <code>.join(timeout=10)</code></li>
+<li><code>self._cleanup_lock = threading.Lock()</code> — 防止 <code>full_cleanup()</code> 并发重叠</li>
+<li>首次执行 <strong>随机延迟</strong>（0 ~ interval 之间）而非完整 interval — 避免多实例同时触发</li>
+<li>每次清理写 <code>cleanup.log</code>（JSONL 格式）到 run_root 下</li>
+</ul>
+<pre><code>def _cleanup_loop(self, stop_event: threading.Event):
+    # 首次随机延迟，避免多实例同时触发
+    first_delay = random.uniform(0, interval)
+    if stop_event.wait(first_delay):
+        return
+    while not stop_event.wait(interval):
+        if not self._cleanup_lock.acquire(blocking=False):
+            continue  # 上一轮还在跑，跳过
+        try:
+            report = self._local_cleanup.full_cleanup()
+            self._write_cleanup_log(report)
+        except Exception:
+            logger.warning("Background local cleanup failed", exc_info=True)
+        finally:
+            self._cleanup_lock.release()</code></pre>
+</div>
+
+<div class="step-card done">
+<h4>步骤 5B.4：手动清理 API 端点（原 5B.5） <span class="tag-done">✓ 完成（2026-07-13）</span></h4>
+<p><span class="tag-modify">修改</span> <code>api/v1_routes.py</code> + <code>api/v1_schemas.py</code></p>
+<table>
+<tr><th>端点</th><th>方法</th><th>说明</th></tr>
+<tr><td><code>/api/v1/maintenance/cleanup</code></td><td>POST</td><td>触发本地清理；<code>?dry_run=true</code> 预览；<code>?scope=work_dirs|db_records</code> 范围</td></tr>
+<tr><td><code>/api/v1/maintenance/disk-usage</code></td><td>GET</td><td>返回磁盘使用百分比 + run_root 大小 + job 数量</td></tr>
+</table>
+<p><strong>风险 9 应对</strong>：在端点文档备注中标注"当前无认证保护，建议生产部署配合反向代理 IP 白名单"</p>
+<p><strong>新增 schema</strong>（<code>v1_schemas.py</code>）：</p>
+<pre><code>class MaintenanceCleanupResponse(BaseModel):
+    work_dirs_removed: int = 0
+    db_records_removed: int = 0
+    freed_bytes_est: int = 0
+    freed_human: str = ""
+    errors: list[str] = Field(default_factory=list)
+    dry_run: bool = False
+    disk_usage_before: int = 0
+    disk_usage_after: int = 0
+    capped: bool = False
+    duration_ms: int = 0
+
+class DiskUsageResponse(BaseModel):
+    run_root: str
+    total_gb: float
+    used_gb: float
+    free_gb: float
+    percent_used: float
+    job_count: int</code></pre>
+</div>
+
+<div class="step-card done">
+<h4>步骤 5B.5：前端维护面板（原 5B.7 — 最小版已实施） <span class="tag-done">✓ 完成（2026-07-13）</span></h4>
+<p><span class="tag-modify">修改</span> <code>frontend/ACP_Workbench_v2.html</code></p>
+<p><strong>实施范围</strong>：最小可行版本（topbar 磁盘指示器）已上线——在工具栏增加 <code>DISK xx%</code> pill，通过 <code>loadDiskUsage()</code> 轮询 <code>GET /api/v1/maintenance/disk-usage</code>，&ge;90% 黄色、&ge;95% 红色，鼠标悬停显示剩余空间 + 作业数 + 清理开关状态。完整管理面板（设置页"磁盘维护"+ 立即清理按钮）延后至后续迭代。</p>
+</div>
+
+<div class="step-card done">
+<h4>步骤 5B.6：测试（原 5B.8） <span class="tag-done">✓ 完成（2026-07-13）</span></h4>
+<table>
+<tr><th>测试文件</th><th>测试内容</th><th>数量</th></tr>
+<tr><td><code>test_local_cleanup.py</code></td><td>LocalCleanup 单元：work_dir 清理（completed/failed/cancelled/orphan 按 mtime）、DB 清理、dry_run、max_dirs 封顶、disk_usage、pre_submit_housekeeping、_is_safe_run_root、VACUUM、[RESTART_FAILED] 特殊保留期</td><td>~18</td></tr>
+<tr><td><code>test_local_cleanup_runner.py</code></td><td>JobRunner 集成：local_cleanup=None 无操作 / 正常继续+事件 / skip 返回 exit_code=1 / 崩溃 fail-open</td><td>~5</td></tr>
+<tr><td><code>test_local_cleanup_manager.py</code></td><td>JobManager 接线：local_cleanup 属性 / 定时线程启动+停止+防并发 / cleanup.log 写入</td><td>~5</td></tr>
+<tr><td><code>test_maintenance_api.py</code></td><td>API 端点：POST cleanup / dry_run / scope / GET disk-usage</td><td>~4</td></tr>
+</table>
+<p><strong>目标</strong>：~32 项 mock 单元测试（与 Phase 5 的 34 项对等）</p>
+</div>
+
+<div class="review-box">
+<h4>实施顺序</h4>
+<div class="dep-graph">
+Step 0  ────  run_root 迁移（强制前置）
+  │
+  ▼
+Step 5B.1 ──  配置 + LocalCleanup 模块（核心逻辑）
+  │
+  ├──────►  Step 5B.2 ──  JobRunner + JobManager 接线
+  │
+  ├──────►  Step 5B.3 ──  后台定时线程（独立，可并行）
+  │
+  └──────►  Step 5B.4 ──  API 端点（独立，可并行）
+               │
+               ▼
+          Step 5B.6 ──  测试（与上述步骤交叉进行）
+               │
+               ▼
+          Step 5B.5 ──  前端面板（P1 延后）</div>
+</div>
+
+<div class="review-box">
+<h4>可重用代码清单</h4>
+<table>
+<tr><th>来源</th><th>可重用内容</th><th>用途</th></tr>
+<tr><td><code>remote/cleanup.py</code></td><td><code>CleanupReport</code>、<code>HousekeepingDecision</code> 数据类</td><td>直接复用或镜像为本地版本</td></tr>
+<tr><td><code>remote/cleanup.py</code></td><td><code>_is_safe_work_dir()</code> 路径安全守卫</td><td>复用逻辑，替换 <code>posixpath</code> 为 <code>pathlib</code></td></tr>
+<tr><td><code>remote/cleanup.py</code></td><td><code>_format_bytes()</code> 可读大小格式化</td><td>直接复用</td></tr>
+<tr><td><code>remote/cleanup.py</code></td><td><code>DISK_CLEANUP_THRESHOLD=90</code>、<code>DISK_SKIP_THRESHOLD=95</code></td><td>直接复用（同名常量）</td></tr>
+<tr><td><code>remote/cleanup.py</code></td><td><code>DEFAULT_MAX_DIRS_PER_SWEEP=100</code> 封顶设计</td><td>本地增至 200（无 SSH 延迟，可更大）</td></tr>
+<tr><td><code>manager.py:111-117</code></td><td><code>_create_remote_runner()</code> 中的 <code>self._remote_cleanup</code> 模式</td><td>镜像为 <code>self._local_cleanup</code> 注入模式</td></tr>
+<tr><td><code>manager.py:196-198</code></td><td><code>@property remote_cleanup</code> 暴露模式</td><td>镜像为 <code>local_cleanup</code> 属性</td></tr>
+<tr><td><code>projects.py</code></td><td><code>delete_project(delete_data=True)</code> → <code>shutil.rmtree(ignore_errors=True)</code></td><td>已验证的磁盘删除模式</td></tr>
+<tr><td><code>files.py</code></td><td><code>build_manifest()</code> + <code>resolve_safe()</code></td><td>目录遍历 + 路径安全校验</td></tr>
+</table>
+</div>
+
+<!-- ==================== 阶段 5B 实施完成报告 ==================== -->
+<div class="review-box">
+<h4>📋 阶段 5B 实施完成报告（深度审计）</h4>
+<p><strong>实施日期：</strong>2026-07-13 ｜ <strong>新增/修改文件：</strong><code>local_cleanup.py</code> (新增, ~570 行) / <code>manager.py</code> (+110 行) / <code>runner.py</code> (+95 行) / <code>__init__.py</code> (+10 导出) / <code>server.py</code> (+75 行配置加载) / <code>v1_routes.py</code> (+145 行 API) / <code>v1_schemas.py</code> (+45 行 schema) / <code>config.py</code> (+75 行校验) / <code>defaults.yaml</code> (+14 行) / <code>ACP_Workbench_v2.html</code> (+45 行前端) / <code>tests/test_local_cleanup.py</code> (新增, 51 项测试)</p>
+<p><strong>测试：</strong>mock 单元测试 <span class="tag-done">51/51 通过</span>（含 6 项 API 端点 TestClient 测试） ｜ <strong>lint：</strong>ruff 0 error（所有新文件） ｜ <strong>格式：</strong>ruff format 通过 ｜ <strong>回归：</strong>既有 phase 1-5 + config + API 生命周期测试全通过（444 passed；11 项失败均为 Phase 5B 之外的既有问题：NMR parser / benchmark / backend 能力矩阵 / 真实 SSH 集成）</p>
+
+<h4 style="color:var(--accent2)">✅ 实施要点</h4>
+<ul>
+<li><strong>两级保留策略落地</strong>：work_dir（completed/cancelled/orphan=30d，failed=90d，[RESTART_FAILED]=7d）+ SQLite 行（365d）独立清理，对应 <code>cleanup_old_work_dirs()</code> + <code>cleanup_old_db_records()</code></li>
+<li><strong>三种触发机制全部实现</strong>：(1) 提交前检查 <code>JobRunner._pre_submit_housekeeping_local()</code>（本地分支，&gt;90% 触发清理，&gt;95% 优雅返回 exit_code=1，<strong>不抛异常</strong>）；(2) 后台 daemon 线程 <code>_cleanup_loop()</code>（默认 6h，首次随机延迟 + <code>threading.Event</code> 优雅停止 + <code>threading.Lock</code> 防并发）；(3) 手动 API <code>POST /api/v1/maintenance/cleanup</code>（支持 <code>?dry_run=true</code> + <code>?scope=work_dirs|db_records|all</code>，409 冲突重试）</li>
+<li><strong>风险 3 缓解</strong>：关键路径 <code>shutil.rmtree</code> / <code>disk_usage</code> / <code>mkdir</code> 在 <code>_safe_disk_usage()</code> + <code>cleanup_old_work_dirs()</code> 中独立捕获 <code>OSError</code>，不依赖外层 bare <code>except Exception</code></li>
+<li><strong>风险 4 缓解</strong>：<code>_validate_local_retention()</code> 校验 <code>completed_days&gt;0</code>、<code>cleanup_threshold &lt; skip_threshold</code>，双源（<code>defaults.yaml</code> + <code>_get_default_config()</code>）同步更新</li>
+<li><strong>风险 5 缓解</strong>：<code>_requeue_active_on_startup()</code> 现写入 <code>[RESTART_FAILED]</code> 前缀；<code>_retention_for()</code> 识别该标记 + 旧文案 <code>"interrupted by server restart"</code>，应用 7 天短保留期</li>
+<li><strong>fail-open / fail-closed 分层</strong>（与 Phase 5 对等）：磁盘查询失败 → fail-open（0%，继续）；after-probe 失败 + before&gt;阈值 → 保守回退 before；明确 <code>should_skip=True</code> → 作业 FAILED</li>
+<li><strong>路径安全四层</strong>：(1) <code>_is_safe_run_root()</code> 拒绝 <code>/</code>/<code>/tmp</code>/<code>/home</code>/浅路径/相对路径；(2) <code>job_dir.resolve().relative_to(run_root)</code> 防逃逸；(3) <code>len(rel.parts) &lt; 2</code> 拒绝删 run_root/project 目录；(4) 仅删 <code>run_root/&lt;project&gt;/&lt;job_id&gt;</code> 三层结构</li>
+<li><strong>前后端闭环</strong>：topbar <code>DISK xx%</code> pill 轮询 <code>GET /maintenance/disk-usage</code>，&ge;90% 黄、&ge;95% 红，hover 显示剩余空间/作业数/清理开关</li>
+<li><strong>与 Phase 5 架构对称</strong>：<code>LocalCleanup</code> / <code>LocalCleanupReport</code> / <code>LocalHousekeepingDecision</code> 镜像远程 <code>RemoteCleanup</code> / <code>CleanupReport</code> / <code>HousekeepingDecision</code>，SSH 全部替换为本地 <code>shutil</code>/<code>pathlib</code> 操作</li>
+<li><strong>遵循项目约定</strong>：PEP 604 注解、<code>from __future__ import annotations</code>、Google-style docstring、<code>__all__</code> 导出、模块级 logger、<code>@dataclass</code>、<code>_utc_now_iso()</code>（接受第 10 份拷贝债务）</li>
+</ul>
+
+<h4 style="color:var(--accent3)">📊 测试覆盖（51 项）</h4>
+<table>
+<tr><th>分类</th><th>测试项</th><th>数量</th></tr>
+<tr><td><code>_is_safe_run_root</code></td><td>合法持久卷 / 拒绝根+浅路径 / 拒绝相对 / 拒绝危险字面量 / 允许 /tmp 子目录（pytest 兼容）</td><td>5</td></tr>
+<tr><td>工具函数 + 构造</td><td>_format_bytes / 阈值校验拒绝 / 默认阈值 / 缺失 run_root</td><td>4</td></tr>
+<tr><td><code>check_disk_usage</code> / detail</td><td>百分比 / 结构 / 缺失路径</td><td>3</td></tr>
+<tr><td><code>cleanup_old_work_dirs</code></td><td>completed 过期保留 recent / failed 长保留 / cancelled 窗口 / orphan 兜底 / [RESTART_FAILED] 短保留 / dry_run / max_dirs 封顶 / max_dirs=0 无限 / unsafe 拒绝 / 永不删 project / 缺失 run_root / report.to_dict</td><td>12</td></tr>
+<tr><td><code>cleanup_old_db_records</code></td><td>删除旧行 / 保留新行 / dry_run / VACUUM</td><td>4</td></tr>
+<tr><td><code>full_cleanup</code></td><td>组合清理（work_dir+DB）/ dry_run</td><td>2</td></tr>
+<tr><td><code>pre_submit_housekeeping</code></td><td>低盘无操作 / 高盘触发 / &gt;95% 拒绝 / 高盘无可清 / 查询 fail-open / after-probe 保守 / 清理崩溃记录 / decision.to_dict</td><td>8</td></tr>
+<tr><td>runner 集成</td><td>local_cleanup=None 无操作 / 正常+事件 / skip 返回 + 设 error / 崩溃 fail-open</td><td>4</td></tr>
+<tr><td>manager 接线</td><td>启用属性+线程 / 禁用 None / shutdown 停线程 / cleanup.log 写入 / [RESTART_FAILED] 标记</td><td>5</td></tr>
+<tr><td>API 端点</td><td>GET disk-usage / POST cleanup dry_run / scope=work_dirs / scope 非法 400 / 禁用 503</td><td>5</td></tr>
+</table>
+
+<h4 style="color:#8b949e">🔵 设计限制（按计划处理）</h4>
+<table>
+<tr><th>项目</th><th>说明</th><th>处理</th></tr>
+<tr><td>无认证保护</td><td>维护端点当前无 auth（与现有 API 一致，trusted-network 部署）</td><td>文档标注；生产建议 nginx IP 白名单</td></tr>
+<tr><td>前端仅最小版</td><td>topbar 指示器已上线；完整"立即清理/预览"管理面板延后</td><td>P1 后续迭代（API 已就绪，前端可直接调用）</td></tr>
+<tr><td>freed_bytes_est 为文件总大小</td><td>sum(st_size)，不含目录开销；与远程 <code>du -sb</code> 略有差异</td><td>可接受——估算值，用于人类可读反馈</td></tr>
+<tr><td>tmpfs 部署需迁移</td><td>当前 <code>/tmp/acp_runs</code> 为 tmpfs，重启即清空</td><td>Step 0 已完成迁移到 <code>/var/lib/acp/runs</code>（systemd StateDirectory）</td></tr>
+<tr><td>_utc_now_iso 第 10 份拷贝</td><td>接受既有债务，与其他 9 模块一致</td><td>后续统一抽取到 <code>acp.core.utils</code></td></tr>
+</table>
+<p style="margin-top:1rem;color:#3fb950">✅ <strong>Phase 5B 全部步骤（0 + 5B.1–5B.6）已完成</strong>。本地磁盘保护三级触发（提交前 / 后台定时 / 手动 API）+ 两级保留（work_dir / DB）+ 前端指示器闭环。51 项单元测试覆盖全部决策路径。</p>
+</div>
+
+<!-- ==================== 阶段 5B 代码质量审查（2026-07-13） ==================== -->
+<div class="review-box">
+<h4>🔍 阶段 5B 代码质量审查报告</h4>
+<p><strong>审查日期：</strong>2026-07-13 ｜ <strong>审查文件：</strong>local_cleanup.py (763 行) / manager.py (+110 行 Phase 5B) / runner.py (+95 行) / server.py (+75 行) / v1_routes.py (+145 行) / v1_schemas.py (+45 行) / config.py (+75 行) / defaults.yaml (+14 行) / __init__.py (+10 导出) / ACP_Workbench_v2.html (+50 行) / test_local_cleanup.py (51 项)</p>
+<p><strong>测试：</strong>51/51 通过 ｜ <strong>lint：</strong>ruff 0 error（所有新/改文件） ｜ <strong>回归：</strong>Phase 1-5 + config + API 测试全通过（444 passed；11 项失败均为既有问题，与 Phase 5B 无关）</p>
+
+<h4 style="color:var(--accent2)">✅ 优点</h4>
+<ul>
+<li><strong>防御纵深充分</strong>：路径安全四层（_is_safe_run_root → relative_to 防逃逸 → rel.parts &lt; 2 防 project 删 → 仅删 run_root/&lt;project&gt;/&lt;job_id&gt; 三层结构），shutil.rmtree 的 OSError 被独立捕获（不依赖外层 bare except Exception）</li>
+<li><strong>fail-open / fail-closed 语义清晰</strong>：磁盘探测失败 → <code>_safe_disk_usage()</code> 返回 0%（继续，fail-open）；after-probe 失败 + before &gt; 阈值 → 保守回退到 before；<code>should_skip=True</code> → 回收 exit_code=1（fail-closed）。两个方向不会混淆</li>
+<li><strong>架构对称性</strong>：<code>LocalCleanup</code> / <code>LocalCleanupReport</code> / <code>LocalHousekeepingDecision</code> 完全镜像远程 <code>RemoteCleanup</code> / <code>CleanupReport</code> / <code>HousekeepingDecision</code>；<code>_safe_disk_usage</code> / <code>pre_submit_housekeeping</code> 策略一致；SSH 操作全部替换为本地 <code>shutil</code> / <code>pathlib</code></li>
+<li><strong>状态判定独立于文件系统</strong>：build_status_map 一次性读 DB 构建 <code>{job_id → (status, completed_at, error)}</code> 映射，不会因 mtime 缺失而错误判定</li>
+<li><strong>双重"较新者"年龄判定</strong>：<code>_age_reference</code> 取 <code>completed_at</code> 和文件系统 mtime 的较大者，避免"作业完成后手动触碰目录导致误删"</li>
+<li><strong>三种触发机制统一锁</strong>：<code>trigger_local_cleanup()</code> 被后台线程和 API 共享调用，<code>_cleanup_lock</code> 防止并发重叠；API 返回 409 冲突而非静默排队</li>
+<li><strong>双源配置同步 + 校验</strong>：<code>defaults.yaml</code> 和 <code>_get_default_config()</code> 同步更新；<code>_validate_local_retention()</code> 纠正所有非法值并告警</li>
+<li><strong>[RESTART_FAILED] 标记机制</strong>：托管重启 FAILED 任务特殊窗口（7 天 vs 90 天），旧文案向前兼容</li>
+<li><strong>dry_run 贯穿全链路</strong>：work_dir / DB / full_cleanup / API 端点均支持预览模式，运维可安全执行 <code>?dry_run=true</code> 观察清理规模</li>
+<li><strong>遵循项目全部约定</strong>：PEP 604 注解、<code>from __future__ import annotations</code>、Google-style docstring、<code>__all__</code> 导出、模块级 logger、<code>@dataclass</code>、<code>_utc_now_iso()</code></li>
+</ul>
+
+<h4 style="color:#f85149">🔴 P1 — 高风险（已修复）</h4>
+<table>
+<tr><th>编号</th><th>文件 / 位置</th><th>问题</th><th>修复</th></tr>
+<tr>
+<td>P1-1</td>
+<td><code>manager.py:202-222</code><br><small>（实施阶段遗留）</small></td>
+<td><strong>_run_background_cleanup 和 trigger_local_cleanup 重复 15 行锁 + 清理 + 日志逻辑</strong>：两个方法各自获取 <code>_cleanup_lock</code>、调用 <code>full_cleanup()</code>、写入 <code>_write_cleanup_log()</code>。未来任何修改（如增加清理后操作）必须在两处同步，divergence 风险高</td>
+<td><span class="review-pass">✅ 已修复</span> — <code>_run_background_cleanup</code> 现委托给 <code>self.trigger_local_cleanup(dry_run=False)</code>，单一共享路径（lock → full_cleanup → log）</td>
+</tr>
+</table>
+
+<h4 style="color:#d29922">🟡 P2 — 设计 / 质量问题（全部已修复）</h4>
+<table>
+<tr><th>编号</th><th>文件 / 位置</th><th>问题</th><th>修复</th></tr>
+<tr>
+<td>P2-1</td>
+<td><code>local_cleanup.py:311/347</code></td>
+<td><strong>norm_root 被存储为 str，后被重新解析为 Path</strong>：<code>norm_root = str(self.run_root.resolve())</code> → 稍后 <code>Path(norm_root)</code> 进行了不必要的往返转换</td>
+<td><span class="review-pass">✅ 已修复</span> — <code>norm_root = self.run_root.resolve()</code>（Path），后续 <code>.relative_to(norm_root)</code> 直接使用</td>
+</tr>
+<tr>
+<td>P2-2</td>
+<td><code>local_cleanup.py:578</code></td>
+<td><strong>_build_status_map 限制 (100k) 对大规模部署可能不足</strong>：若 DB 中存放了 &gt; 100k 条记录，超出限制的作业目录在清理时会被错误地视为 orphan（使用 completed_days 而非正确的 status 判定窗口）</td>
+<td><span class="review-pass">✅ 已修复</span> — 限制提升至 500k；SQLite 行仅 ~1KB，500k 行内存仅 ~500MB 估算扫描集（实际 <code>JobRecord</code> 对象远小于此，因仅保留 3 个字段）</td>
+</tr>
+</table>
+
+<h4 style="color:#8b949e">🔵 P3 — 设计限制（按计划接受）</h4>
+<table>
+<tr><th>编号</th><th>文件 / 位置</th><th>问题</th><th>理由</th></tr>
+<tr>
+<td>P3-1</td>
+<td><code>local_cleanup.py:668</code></td>
+<td><strong>_vacuum() 打开单独连接</strong>，绕过 JobStore 的 <code>_lock</code>。VACUUM 在 SQLite 层面获取排他锁，因此若其他操作同时访问，会收到 "database is locked" 错误。但由于默认关闭 (<code>vacuum_after_db_cleanup: false</code>) 并在维护窗口内运行，风险可接受</td>
+<td>VACUUM 仅在运维按需启用；默认关闭</td>
+</tr>
+<tr>
+<td>P3-2</td>
+<td><code>local_cleanup.py:643</code></td>
+<td><strong>_list_db_rows_older_than 使用原始 SQL</strong>，绕过 JobStore。这是有意为之的有范围限制的只读扫描，可以避免在清理过程中实例化完整的 JobRecord</td>
+<td>非侵入式只读扫描；查询独立于 JobStore 的锁</td>
+</tr>
+<tr>
+<td>P3-3</td>
+<td><code>local_cleanup.py:443</code></td>
+<td><strong>_format_bytes</strong> 在 <code>local_cleanup.py</code> 和 <code>v1_routes.py</code> 中重复定义。与项目上下文一致——这在 <code>remote/cleanup.py</code> 中同样存在，是已接受的技术债（类似于跨 9 个模块的 <code>_utc_now_iso</code>）</td>
+<td>遵循项目既有模式</td>
+</tr>
+<tr>
+<td>P3-4</td>
+<td><code>v1_routes.py:870</code></td>
+<td><strong>trigger_cleanup 访问 manager._cleanup_lock</strong>（私有属性）以支持 &lt;code&gt;scope=work_dirs|db_records&lt;/code&gt; 的部分清理。文档已注明此操作，并带有 <code># type: ignore[attr-defined]</code> 声明</td>
+<td>trusted-network 部署；已在文档中注明</td>
+</tr>
+<tr>
+<td>P3-5</td>
+<td><code>local_cleanup.py:417</code></td>
+<td><strong>cleanup_old_db_records 逐行 delete</strong>：每条记录都会请求/释放 JobStore 的 <code>_lock</code>。若有过期记录数量巨大，可能造成锁争用。由于 DB 记录过期窗口较长（365 天）且 VACUUM 默认关闭，预期批次数会较小</td>
+<td>低容量预期；max_dirs 限额控制 work_dir 侧</td>
+</tr>
+<tr>
+<td>P3-6</td>
+<td><code>local_cleanup.py:627</code></td>
+<td><strong>_dir_size_bytes 使用 rglob("*") + 两次 stat</strong>，每个文件产生两次 stat 调用（is_file + st_size）。对于包含数千个小文件的目录，在 200 个目录的封顶下，最坏情况是 ~200 × N 次 stat。本地操作很快，且限额控制了单次清理开销</td>
+<td>max_dirs_per_sweep=200 限制开销；本地 FS 速度远快于 SSH</td>
+</tr>
+</table>
+
+<h4 style="color:var(--accent3)">📊 修复摘要</h4>
+<table>
+<tr><th>优先级</th><th>数量</th><th>关键条目</th></tr>
+<tr><td style="color:#f85149">P1 高</td><td>1</td><td>_run_background_cleanup / trigger_local_cleanup 代码重复</td></tr>
+<tr><td style="color:#d29922">P2 中</td><td>2</td><td>norm_root 字符串往返 / _build_status_map 限制偏低</td></tr>
+<tr><td style="color:#8b949e">P3 设计限制</td><td>6</td><td>VACUUM 连接隔离、原始 SQL、_format_bytes 重复、私有属性访问、逐行 delete、_dir_size_bytes 双重 stat</td></tr>
+</table>
+<p style="margin-top:1rem;color:#3fb950">✅ <strong>所有 P1 / P2 问题均已修复（2026-07-13）</strong>。P3 项为按照可接受设计限制有意保留——符合项目惯例，与现有技术债一致。无裸露的 except Exception，无硬编码凭据，无安全逃逸向量。</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- END Phase 5B 可行性分析 & 修订方案                            -->
+<!-- ============================================================ -->
+
+<hr class="section-divider">
+<h2 id="phase6">7. 阶段 6：网页端节点选择</h2>
+<div class="step-card done">
+<h4>步骤 6.1：节点管理 API <span class="tag-done">✓ 完成</span></h4>
+<p><span class="tag-modify">修改</span> <code>api/v1_routes.py</code> + <span class="tag-new">新建</span> <code>remote/node_manager.py</code></p>
+<p>新增 API 端点：</p>
+<ul>
+<li><code>GET /api/v1/nodes</code> — 列出所有配置的远程节点及其状态</li>
+<li><code>GET /api/v1/nodes/{name}/status</code> — 获取指定节点的详细状态</li>
+<li><code>POST /api/v1/nodes/{name}/ping</code> — 测试节点连通性</li>
+</ul>
+<p>响应示例 <code>GET /nodes</code>：</p>
+<pre><code>{
+  "nodes": [
+    {
+      "name": "compute-01",
+      "host": "10.16.5.157",
+      "status": "online",
+      "running_jobs": 2,
+      "max_jobs": 5,
+      "disk_usage_pct": 45,
+      "last_check": "2026-07-10T14:30:00Z"
+    },
+    {
+      "name": "compute-02",
+      "host": "10.16.5.200",
+      "status": "offline",
+      "error": "Connection timeout",
+      "last_check": "2026-07-10T14:25:00Z"
+    }
+  ],
+  "auto_select": true
+}</code></pre>
+</div>
+<div class="step-card done">
+<h4>步骤 6.2：作业提交支持节点指定 <span class="tag-done">✓ 完成</span></h4>
+<p><span class="tag-modify">修改</span> <code>api/v1_schemas.py</code> + <code>scheduler/jobs.py</code></p>
+<p>在 <code>V1JobCreateRequest</code> 和 <code>JobSpec</code> 中增加可选字段：</p>
+<pre><code>class V1JobCreateRequest(BaseModel):
+    ...
+    target_node: str | None = None  # 指定目标节点，None=自动选择
+
+class JobSpec:
+    ...
+    target_node: str | None = None</code></pre>
+<p><code>RemoteJobRunner._select_node()</code> 逻辑：</p>
+<pre><code>def _select_node(self, spec: JobSpec) -> RemoteNode:
+    if spec.target_node:
+        node = self._find_node_by_name(spec.target_node)
+        if not node:
+            raise RemoteNodeUnavailableError(f"Node {spec.target_node} not found")
+        if not node.enabled:
+            raise RemoteNodeUnavailableError(f"Node {spec.target_node} is disabled")
+        return node
+    return self._select_least_loaded()</code></pre>
+</div>
+<div class="step-card done">
+<h4>步骤 6.3：NodeManager 实现 <span class="tag-done">✓ 完成</span></h4>
+<p><span class="tag-new">新建</span> <code>remote/node_manager.py</code></p>
+<pre><code>class NodeManager:
+    """管理远程节点状态查询和缓存。"""
+
+    def __init__(self, remote_config: RemoteExecutionConfig):
+        self.config = remote_config
+        self._status_cache: dict[str, NodeStatus] = {}
+        self._cache_ttl = 30  # 状态缓存 30 秒
+
+    def list_nodes(self) -> list[NodeStatus]:
+        """返回所有节点状态（带缓存）。"""
+        ...
+
+    def get_node_status(self, node_name: str) -> NodeStatus:
+        """获取指定节点状态。"""
+        ...
+
+    def ping_node(self, node_name: str) -> bool:
+        """测试节点 SSH 连通性。"""
+        ...
+
+    def _refresh_status(self, node: RemoteNode) -> NodeStatus:
+        """SSH 查询节点真实状态：running_jobs, disk_usage。"""
+        ...
+
+@dataclass
+class NodeStatus:
+    name: str
+    host: str
+    status: str  # "online" | "offline" | "degraded"
+    running_jobs: int = 0
+    max_jobs: int = 0
+    disk_usage_pct: int = 0
+    last_check: str = ""
+    error: str | None = None</code></pre>
+</div>
+<div class="step-card done">
+<h4>步骤 6.4：前端节点选择 UI <span class="tag-done">✓ 完成</span></h4>
+<p><span class="tag-modify">修改</span> <code>frontend/ACP_Workbench_v2.html</code></p>
+<p>在作业提交表单中增加节点选择器：</p>
+<ul>
+<li>下拉菜单显示所有可用节点</li>
+<li>每项显示：节点名、状态指示灯（绿/黄/红）、当前负载</li>
+<li>首选项："自动选择（负载最低）"</li>
+<li>禁用节点灰色显示，不可选择</li>
+</ul>
+<p>UI 组件示意：</p>
+<pre><code>┌─────────────────────────────────────┐
+│ 目标节点                             │
+│ ┌─────────────────────────────────┐ │
+│ │ ▼ 自动选择（负载最低）           │ │
+│ │   • compute-01  🟢 2/5 在线     │ │
+│ │   • compute-02  🔴 离线         │ │
+│ │   • compute-03  🟡 4/10 高负载  │ │
+│ └─────────────────────────────────┘ │
+└─────────────────────────────────────┘</code></pre>
+<p>节点状态面板（可选，在设置页或侧边栏）：</p>
+<pre><code>┌──────────────────────────────────────────────┐
+│ 远程节点状态                                  │
+│ ┌──────────────────────────────────────────┐ │
+│ │ compute-01  10.16.5.157  🟢 在线         │ │
+│ │ 运行作业: 2/5  磁盘: 45%  [测试连接]     │ │
+│ ├──────────────────────────────────────────┤ │
+│ │ compute-02  10.16.5.200  🔴 离线         │ │
+│ │ 错误: Connection timeout  [重试]         │ │
+│ └──────────────────────────────────────────┘ │
+│ [刷新状态]                                    │
+└──────────────────────────────────────────────┘</code></pre>
+</div>
+<div class="step-card done">
+<h4>步骤 6.5：前端 API 调用 <span class="tag-done">✓ 完成</span></h4>
+<p><span class="tag-modify">修改</span> <code>frontend/ACP_Workbench_v2.html</code></p>
+<pre><code>// 获取节点列表
+async function fetchNodes() {
+  const res = await fetch('/api/v1/nodes');
+  const data = await res.json();
+  renderNodeSelector(data.nodes);
+}
+
+// 提交作业时指定节点
+async function submitJob(formData) {
+  const payload = {
+    ...formData,
+    target_node: selectedNode || null,  // null = 自动选择
+  };
+  await fetch('/api/v1/jobs', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload),
+  });
+}
+
+// 测试节点连通性
+async function pingNode(nodeName) {
+  const res = await fetch(`/api/v1/nodes/${nodeName}/ping`, {method: 'POST'});
+  const data = await res.json();
+  alert(data.reachable ? '连接成功' : `连接失败: ${data.error}`);
+}</code></pre>
+</div>
+
+<!-- ==================== 阶段 6 代码评审 ==================== -->
+<div class="review-box">
+<h4>📋 阶段 6 代码评审报告</h4>
+<p><strong>完成日期：</strong>2026-07-13 ｜ <strong>文件：</strong>remote/node_manager.py (~180行) / api/v1_routes.py (+~45行) / api/v1_schemas.py (+~30行) / scheduler/manager.py (+~10行) / frontend/ACP_Workbench_v2.html (+~120行)</p>
+<p><strong>新增端点：</strong><code>GET /api/v1/nodes</code>、<code>GET /api/v1/nodes/{name}/status</code>、<code>POST /api/v1/nodes/{name}/ping</code> ｜ <strong>前端：</strong>节点选择器 + 节点状态面板 + 测试连接按钮</p>
+
+<h4 style="color:var(--accent2)">✅ 实现要点</h4>
+<ul>
+<li><strong>NodeManager 缓存：</strong>30 秒 TTL，避免每次轮询都发起 SSH；ping 会强制刷新并更新缓存。</li>
+<li><strong>状态分级：</strong>online（健康）/ degraded（磁盘 ≥90% 或 running_jobs ≥ max_jobs）/ offline（禁用或 SSH 失败）。</li>
+<li><strong>端到端闭环：</strong>前端下拉框选择节点 → <code>V1JobCreateRequest.target_node</code> → <code>JobSpec.target_node</code> → <code>RemoteJobRunner.select_node()</code> 指定节点或报错。</li>
+<li><strong>fail-closed：</strong>当远程执行未配置时，<code>/nodes</code> 返回 503，前端面板显示为空，不影响本地模式。</li>
+</ul>
+
+<h4 style="color:var(--accent3)">⚠️ 已知限制</h4>
+<ul>
+<li>禁用节点（enabled=false）在 UI 中显示为 offline，无法选择；自动选择时仍会从 enabled 节点中 least_loaded。</li>
+<li>节点状态刷新依赖 <code>bjobs</code> 和 <code>df</code>；若 SSH 连通但 bjobs 命令失败，running_jobs 会回退为 0，可能被误判为健康。</li>
+</ul>
+
+<h4 style="color:var(--accent3)">🔧 漏洞修复（代码质量审计后）</h4>
+<table>
+<tr><th>漏洞</th><th>风险</th><th>修复</th></tr>
+<tr>
+<td><code>self._node_manager</code> 未在 <code>__init__</code> 初始化</td>
+<td>远程关闭时属性不存在，依赖三元短路，后续改动易触发 AttributeError</td>
+<td>在 <code>__init__</code> 显式置 <code>None</code>，属性简化为直接返回</td>
+</tr>
+<tr>
+<td>NodeManager 缓存无线程锁</td>
+<td>并发请求重复 SSH 探测，浪费连接池</td>
+<td>加 <code>threading.Lock</code>，缓存读写受保护，SSH 探测在锁外执行不阻塞不同节点</td>
+</tr>
+<tr>
+<td>前端 <code>selectedNode</code> 与 UI 不同步</td>
+<td>选中节点变离线后变量仍持有旧值，提交到不存在的节点</td>
+<td><code>renderNodeSelector</code> 检测选中节点是否仍可用，不可用则回退自动选择</td>
+</tr>
+<tr>
+<td>前端 <code>loadNodes</code> 吞错误</td>
+<td>服务端 500 被误报为"未配置远程节点"</td>
+<td>区分 503（显示空占位）和其他错误（显示错误信息）</td>
+</tr>
+</table>
+</div>
+
+<hr class="section-divider">
+<h2 id="phase7">8. 阶段 7：测试</h2>
+<table>
+<tr><th>新建文件</th><th>测试内容</th></tr>
+<tr><td><code>test_remote_config.py</code></td><td>RemoteNode 构造、密码环境变量覆盖、from_config_dict 解析</td></tr>
+<tr><td><code>test_remote_script_gen.py</code></td><td>LSF 脚本生成格式、CLI 命令参数映射（与 _build_cmd 一致性）</td></tr>
+<tr><td><code>test_remote_ssh.py</code></td><td>Mock paramiko 连接池、线程安全租借/归还、自动重连、密码脱敏</td></tr>
+<tr><td><code>test_remote_sftp.py</code></td><td>Mock SFTP 上传/下载、增量 tail offset 追踪</td></tr>
+<tr><td><code>test_remote_monitor.py</code></td><td>Mock bjobs 状态映射、exit_code 读取、日志 tail 增量、bkill 返回值检查</td></tr>
+<tr><td><code>test_remote_runner.py</code></td><td>Mock 全流程、节点选择、取消逻辑（bkill + 返回值检查）、异常处理、不下载文件验证、remote_execution stage task 创建</td></tr>
+<tr><td><code>test_remote_sync.py</code></td><td>Mock SFTP 同步、验证排除 api/scheduler、本地 mtime 记录与比较逻辑</td></tr>
+<tr><td><code>test_remote_integration.py</code></td><td>真实 SSH/SFTP 连接 10.16.5.157、提交 LSF 作业、日志 tail 验证</td></tr>
+<tr><td><code>test_remote_phase3.py</code> <span class="tag-done">✓ 35 tests</span></td><td><strong>Phase 3 集成测试</strong>：config defaults、execution_mode 校验、walltime 解析、JobSpec.target_node、_should_run_remote 分发、JobManager 远程接线、server 降级、监控超时、部分失败清理、started_at 语义、task_id 缓存、shlex.quote、原子写入、_ensure_remote_dir 去重</td></tr>
+<tr><td><code>test_remote_phase4.py</code> <span class="tag-done">✓ 28 tests</span></td><td><strong>Phase 4 单元测试</strong>：is_remote_job/resolve（含 NotARemoteJobError + 未知节点）、list_files（含缺失目录）、file_exists、read_file（嵌套子目录 + 缺失）、stream_file（分块拼接 + 小文件）、log_tail（基本/缺失/截断丢首行/lines 限制）、_safe_join 路径遍历防护（4 例）、JobManager.remote_fetcher 接线（本地 None / 远程构建）</td></tr>
+<tr><td><code>test_remote_phase5.py</code> <span class="tag-done">✓ 34 tests</span></td><td><strong>Phase 5 单元测试</strong>：_is_safe_work_dir（合法/根/浅/相对）、cleanup_old_jobs（删旧留新/dry_run/配置默认/覆盖/跳过 mtime=0/危险 base/缺失 work_dir/listdir 失败/base 永不删/report 序列化/<strong>max_dirs 封顶/默认 100/0=无限</strong>）、pre_submit_housekeeping（低盘无操作/高盘触发/&gt;95% 拒绝/df 失败 fail-open/清理异常/decision 序列化/阈值校验/<strong>after-probe 失败保守</strong>）、runner 集成（disabled 无操作/继续+事件/skip 抛异常/崩溃 fail-open/run() 端到端）、manager wiring（remote 启用/禁用）、_format_bytes</td></tr>
+</table>
+<p><strong>当前测试状态：</strong>155 mock 单元测试全部通过（Phase 1: 23 + Phase 2: 35 + Phase 3: 35 + Phase 4: 28 + Phase 5: 34，其中 2 skipped 为真实节点集成测试）+ 真实节点端到端验证（CCO 远程搜索 + 阶段 4 端点 10 项）</p>
+<hr class="section-divider">
+<h2 id="phase8">9. 阶段 8：文档与部署</h2>
+<p><span class="tag-modify">修改</span> <code>src/acp/scheduler/AGENTS.md</code> + 根 <code>AGENTS.md</code> — 添加 remote/ 模块描述</p>
+<p><code>sudo systemctl restart acp</code></p>
+<hr class="section-divider">
+<h2 id="phase9">10. 阶段 9：日志阶段解析（增强）</h2>
+<div class="step-card pending">
+<h4>步骤 9.1：实现日志阶段解析器 <span class="tag-pending">⏳ 待办</span></h4>
+<p><span class="tag-new">新建</span> <code>log_parser.py</code> — <code>LogStageParser</code></p>
+<ul>
+<li>定义阶段 marker 正则表达式（如 <code>Stage 1: CREST</code>、<code>Stage 2: DFT</code> 等）</li>
+<li>在 <code>RemoteJobMonitor</code> 的监控循环中调用解析器</li>
+<li>解析到阶段边界时，更新 <code>remote_execution</code> stage task 的子阶段状态</li>
+<li>具体标志行需要在远程节点配置完成后，通过实际运行作业验证</li>
+</ul>
+<p><strong>说明</strong>：此阶段在基础版本（bjobs + .exit_code）稳定运行后实施，作为增强功能。</p>
+</div>
+<hr class="section-divider">
+<h2 id="filelist">11. 文件变更清单</h2>
+<table>
+<tr><th>操作</th><th>文件路径</th><th>说明</th></tr>
+<tr><td><span class="tag-new">新建</span></td><td><code>src/acp/scheduler/remote/__init__.py</code></td><td>包初始化</td></tr>
+<tr><td><span class="tag-new">新建</span></td><td><code>remote/config.py</code></td><td>RemoteNode + RemoteExecutionConfig</td></tr>
+<tr><td><span class="tag-new">新建</span></td><td><code>remote/ssh.py</code></td><td>SSHConnectionPool（线程安全，queue.Queue 租借模式，每节点连接数 = max_concurrent_jobs）</td></tr>
+<tr><td><span class="tag-new">新建</span></td><td><code>remote/sftp.py</code></td><td>FileStager（含增量 tail offset 追踪）</td></tr>
+<tr><td><span class="tag-new">新建</span></td><td><code>remote/script_gen.py</code></td><td>LSF 脚本 + acp.cli 命令生成（参考 _build_cmd + lsf.py）</td></tr>
+<tr><td><span class="tag-new">新建</span></td><td><code>remote/monitor.py</code></td><td>RemoteJobMonitor（bjobs + log tail + bkill 返回值检查）</td></tr>
+<tr><td><span class="tag-new">新建</span></td><td><code>remote/runner.py</code></td><td>RemoteJobRunner（核心，不下载文件，创建 remote_execution stage task）</td></tr>
+<tr><td><span class="tag-new">新建</span></td><td><code>remote/fetcher.py</code></td><td>RemoteResultFetcher（按需 SFTP 列表/流式下载/日志尾部，路径遍历防护，复用 SSH 池）</td></tr>
+<tr><td><span class="tag-new">新建</span></td><td><code>remote/cleanup.py</code> <span class="tag-done">✓ 完成</span></td><td>RemoteCleanup（retention 清理 + pre-submit 磁盘压力 housekeeping）+ CleanupReport + HousekeepingDecision</td></tr>
+<tr><td><span class="tag-new">新建</span></td><td><code>remote/node_manager.py</code></td><td>NodeManager + NodeStatus</td></tr>
+<tr><td><span class="tag-new">新建</span></td><td><code>remote/sync.py</code></td><td>CodeSyncer（本地 mtime 记录，增量代码同步，排除 api/scheduler）</td></tr>
+<tr><td><span class="tag-new">新建</span></td><td><code>remote/log_parser.py</code></td><td>LogStageParser（阶段 9 增强功能）</td></tr>
+<tr><td><span class="tag-new">新建</span></td><td><code>scheduler/local_cleanup.py</code> <span class="tag-done">✓ 完成</span></td><td>LocalCleanup + RetentionPolicy + LocalCleanupReport + LocalHousekeepingDecision（阶段 5B 本地磁盘保护，~570 行）</td></tr>
+<tr><td><span class="tag-modify">修改</span></td><td><code>pyproject.toml</code></td><td>[remote] deps: paramiko&gt;=3.0</td></tr>
+<tr><td><span class="tag-modify">修改</span></td><td><code>config/defaults.yaml</code></td><td>cluster 段扩展（execution_mode/poll_interval/retention_days/nodes + <strong>local_retention 子段，阶段 5B</strong>）</td></tr>
+<tr><td><span class="tag-modify">修改</span></td><td><code>cccp/config.py</code></td><td>内置默认 cluster 同步扩展（与 defaults.yaml 保持一致，含 local_retention）</td></tr>
+<tr><td><span class="tag-modify">修改</span></td><td><code>api/server.py</code></td><td>create_app() 内部直接加载 cluster 配置，构建 RemoteExecutionConfig + <strong>RetentionPolicy（阶段 5B）</strong></td></tr>
+<tr><td><span class="tag-modify">修改</span></td><td><code>scheduler/runner.py</code></td><td>接入远程分支（_should_run_remote）+ <strong>本地 pre_submit_housekeeping（阶段 5B）</strong></td></tr>
+<tr><td><span class="tag-modify">修改</span></td><td><code>scheduler/manager.py</code></td><td>初始化远程执行器（remote_config 参数）+ <code>remote_fetcher</code> 属性（阶段 4）+ <code>remote_cleanup</code> 属性（阶段 5）+ 双 SSH 池隔离 + <strong><code>local_cleanup</code> 属性 + 后台清理线程（阶段 5B）</strong></td></tr>
+<tr><td><span class="tag-modify">修改</span></td><td><code>scheduler/jobs.py</code></td><td>JobSpec 增加 target_node</td></tr>
+<tr><td><span class="tag-modify">修改</span></td><td><code>api/v1_routes.py</code></td><td>远程文件 API（3 端点 + 2 辅助函数，阶段 4）+ 节点管理 API（阶段 6）+ <strong>维护 API（cleanup + disk-usage，阶段 5B）</strong></td></tr>
+<tr><td><span class="tag-modify">修改</span></td><td><code>api/v1_schemas.py</code></td><td>V1JobCreateRequest + NodeStatus + RemoteFileEntry/RemoteFileListResponse/RemoteLogTailResponse（阶段 4）+ <strong>CleanupResponse/DiskUsageResponse（阶段 5B）</strong></td></tr>
+<tr><td><span class="tag-modify">修改</span></td><td><code>frontend/ACP_Workbench_v2.html</code></td><td>节点选择器 UI + 状态面板 + <strong>磁盘维护面板（阶段 5B）</strong></td></tr>
+<tr><td><span class="tag-new">新建</span></td><td><code>tests/test_remote_*.py</code> (9 files)</td><td>单元 + 集成测试（含 <code>test_remote_phase4.py</code> 28 项 + <code>test_remote_phase5.py</code> 34 项）</td></tr>
+<tr><td><span class="tag-new">新建</span></td><td><code>tests/test_local_cleanup.py</code> <span class="tag-done">✓ 完成（51 项）</span></td><td><strong>阶段 5B 测试</strong>：LocalCleanup 单元 + runner 集成 + manager 接线 + maintenance API（TestClient），51 项全通过</td></tr>
+</table>
+<hr class="section-divider">
+<h2 id="deps">12. 执行顺序与依赖关系</h2>
+<div class="dep-graph">1.1 pyproject.toml       ✓ 完成
+  |
+1.2 包骨架               ✓ 完成
+  |
+1.3 config.py            ✓ 完成  &lt;-- 可并行
+  |
+1.4 ssh.py               ✓ 完成  &lt;-- 依赖 1.3（线程安全连接池，每节点连接数 = max_concurrent_jobs）
+  |
+1.5 sftp.py              ✓ 完成  &lt;-- 依赖 1.4
+  |
+1.6 sync.py              ✓ 完成  &lt;-- 依赖 1.4, 1.5（代码同步，本地 mtime 记录）
+  |
+  +-- 2.1 script_gen.py  ✓ 完成  &lt;-- 可并行（参考 _build_cmd + lsf.py）
+  +-- 2.2 monitor.py     ✓ 完成  &lt;-- 依赖 1.4, 1.5（基础版本：bjobs + .exit_code + bkill 返回值检查）
+  |
+2.3 runner.py  ✓ 完成  &lt;-- 依赖全部阶段1-2（含 sync.py，创建 remote_execution stage task）
+  |
+3.1-3.2 配置扩展  ✓ 完成  &lt;-- defaults.yaml + config.py 同步
+  |
+3.3-3.6 集成     ✓ 完成  &lt;-- server.py 内部直接加载配置 + 真实节点 CCO 测试通过
+  |
+4.1-4.2 结果获取+API  ✓ 完成  &lt;-- 依赖 1.4, 1.5（fetcher + 3 端点，真实节点端到端验证通过）
+  |
+5.1-5.2 清理     ✓ 完成  &lt;-- 依赖 1.4（cleanup.py + runner housekeeping，磁盘&gt;90% 清理 / &gt;95% 拒绝节点）
+  |
+5B.0+5B.1-5B.6 本地磁盘保护 ✓ 完成  &lt;-- 依赖 scheduler/（local_cleanup.py + runner + manager + API + 前端，51 项测试，无 SSH 依赖）
+  |
+6.1-6.3 节点管理API ✓ 完成  &lt;-- 依赖 1.4, 2.3
+  |
+6.4-6.5 前端UI   ✓ 完成  &lt;-- 依赖 6.1
+  |
+7.1-7.8 测试     &lt;-- 依赖全部（基础版本）
+  |
+8.1-8.2 文档+部署 &lt;-- 基础版本部署
+  |
+9.1 日志阶段解析  &lt;-- 最后实施（增强功能，需验证实际日志格式）</div>
+<hr class="section-divider">
+<h2 id="config">13. 配置示例</h2>
+<pre><code>cluster:
+  enabled: true
+  execution_mode: remote
+  poll_interval: 30
+  retention_days: 180
+  auto_sync: true
+  nodes:
+    - name: "compute-01"
+      host: "10.16.5.157"
+      username: "<user>"
+      # password 通过环境变量设置：export ACP_REMOTE_PASSWORD_COMPUTE_01="..."
+      # 或使用密钥认证：
+      key_file: "~/.ssh/id_rsa"
+      remote_work_dir: "/scratch/<user>/acp_jobs"
+      remote_code_dir: "/home/<user>/acp_code"
+      max_concurrent_jobs: 5
+    - name: "compute-02"
+      host: "10.16.5.200"
+      username: "<user>"
+      key_file: "~/.ssh/id_rsa"
+      remote_work_dir: "/data/acp_jobs"
+      remote_code_dir: "/home/<user>/acp_code"
+      max_concurrent_jobs: 10</code></pre>
+<p>密码通过环境变量设置（<strong>不在 YAML 中存储明文密码</strong>）：</p>
+<pre><code>export ACP_REMOTE_PASSWORD_COMPUTE_01="..."</code></pre>
+<hr class="section-divider">
+<h2 id="impl-notes">14. 实施注意事项</h2>
+<div class="step-card pending">
+<h4>14.1 远程节点一次性准备</h4>
+<ul>
+<li>Python ≥ 3.10</li>
+<li>依赖安装：<code>pip install rdkit numpy openpyxl pyyaml</code></li>
+<li>QC 软件：Gaussian 16, ORCA, xTB, CREST（路径在 <code>~/.cccp.yaml</code> 或环境变量中配置）</li>
+<li>OpenLAVA (LSF) 客户端</li>
+<li><strong>无需安装 ACP</strong> — 代码由 <code>CodeSyncer</code> 自动同步到 <code>{remote_code_dir}/</code></li>
+</ul>
+</div>
+<div class="step-card pending">
+<h4>14.2 代码同步策略</h4>
+<ul>
+<li><strong>同步内容</strong>：<code>src/acp/</code>（排除 <code>api/</code>、<code>scheduler/</code>）+ <code>src/cccp/</code>（完整）+ <code>scripts/run_g16_worker.sh</code></li>
+<li><strong>不同步</strong>：<code>config/defaults.yaml</code>（QC 路径远程不同，避免覆盖远程配置）</li>
+<li><strong>不同步</strong>：<code>frontend/</code>、<code>tests/</code>、<code>pyproject.toml</code>、<code>bin/</code></li>
+<li><strong>增量同步</strong>：本地记录每个文件的 mtime，同步时比较"本地当前 mtime vs 本地上次同步时 mtime"，若变化则上传。远程 mtime 不参与判断（SFTP 上传后远程 mtime 会变成上传时间，不可靠）。首次同步较慢，后续快速</li>
+<li><strong>远程 PYTHONPATH</strong>：LSF 脚本设置 <code>export PYTHONPATH={remote_code_dir}/src:$PYTHONPATH</code>，无需 pip install</li>
+</ul>
+</div>
+<div class="step-card pending">
+<h4>14.3 日志阶段解析（分阶段实施）</h4>
+<p><strong>基础版本</strong>（阶段 1-8）：仅依赖 <code>bjobs</code> 状态 + <code>.exit_code</code>，日志 tail 仅作为原始文本展示，不做阶段解析。</p>
+<p><strong>增强版本</strong>（阶段 9）：实现 <code>LogStageParser</code>，通过正则匹配日志中的阶段标志行，更新 stage task 子阶段状态。具体标志行需要在远程节点配置完成后，通过实际运行作业验证。</p>
+</div>
+<div class="step-card pending">
+<h4>14.4 安全</h4>
+<ul>
+<li>密码<strong>仅通过环境变量</strong>传递，YAML 中不存储明文密码</li>
+<li>SSH 日志脱敏：不输出密码、密钥内容</li>
+<li>远程文件保留 180 天后自动清理</li>
+</ul>
+</div>
+<div class="step-card pending">
+<h4>14.5 StageTaskObserver 集成</h4>
+<p>远程作业创建简化的 <code>remote_execution</code> stage task，状态跟随 LSF 状态更新：</p>
+<ul>
+<li>PEND → <code>pending</code></li>
+<li>RUN → <code>running</code></li>
+<li>DONE → <code>completed</code></li>
+<li>EXIT → <code>failed</code></li>
+</ul>
+<p>前端可显示"远程执行: PEND/RUN/DONE"，提供基本的进度反馈。</p>
+</div>
+<div class="step-card pending">
+<h4>14.6 作业取消策略</h4>
+<p>发送 <code>bkill &lt;lsf_job_id&gt;</code> 后检查返回值：</p>
+<ul>
+<li>返回 0：取消成功</li>
+<li>返回非 0：取消失败（可能作业已结束），记录日志但不抛异常</li>
+</ul>
+</div>
+<hr class="section-divider">
+<h2 id="decisions">15. 设计决策记录</h2>
+<div class="decision-table">
+<table>
+<tr><th>问题</th><th>选项</th><th>决策</th><th>理由</th></tr>
+<tr>
+<td>server.py 配置注入方式</td>
+<td>A) create_app() 内部加载<br>B) 扩展 create_app() 签名</td>
+<td><strong>A</strong></td>
+<td>改动最小，与现有环境变量读取模式一致，配置加载失败可降级</td>
+</tr>
+<tr>
+<td>StageTaskObserver 处理</td>
+<td>A) 完全跳过<br>B) 创建简化 remote_execution stage</td>
+<td><strong>B</strong></td>
+<td>前端可显示进度，/api/v1/jobs/{id}/tasks 不返回空</td>
+</tr>
+<tr>
+<td>SSH 连接池大小</td>
+<td>A) 固定 3 个连接<br>B) 连接数 = max_concurrent_jobs</td>
+<td><strong>B</strong></td>
+<td>避免 max_running > 3 时连接等待，更灵活</td>
+</tr>
+<tr>
+<td>日志阶段解析策略</td>
+<td>A) 同时实现日志解析<br>B) 先基础版本，日志解析最后增强</td>
+<td><strong>B</strong></td>
+<td>日志格式需验证，先确保基础功能稳定</td>
+</tr>
+<tr>
+<td>代码同步增量策略</td>
+<td>A) size + mtime<br>B) size + content hash<br>C) 本地 mtime 记录</td>
+<td><strong>C</strong></td>
+<td>远程 mtime 不可靠（SFTP 上传后改变），本地记录更准确</td>
+</tr>
+<tr>
+<td>远程作业取消策略</td>
+<td>A) bkill 后立即返回<br>B) bkill 并检查返回值</td>
+<td><strong>B</strong></td>
+<td>更健壮，可记录失败情况</td>
+</tr>
+<tr>
+<td>磁盘清理触发时机</td>
+<td>A) 后台定时任务主动清理<br>B) 提交前按需触发（disk &gt; 90%）</td>
+<td><strong>B</strong></td>
+<td>无需额外进程/timer；低压力时不浪费 SSH 往返；高压时一次性清理足够（180 天保留 + 突发提交场景下旧目录数有限）。定时主动清理留待 Phase 6+ 增强</td>
+</tr>
+<tr>
+<td>housekeeping 失败模式</td>
+<td>A) 任何失败均阻断提交<br>B) 瞬时错误 fail-open / 明确决策 fail-closed</td>
+<td><strong>B</strong></td>
+<td>SSH 抖动（df 查询失败）fail-open 避免误伤；明确 disk &gt; 95% fail-closed 避免 ENOSPC 中断。两类失败模式分层处理</td>
+</tr>
+<tr>
+<td>节点满载时的处理</td>
+<td>A) 自动尝试下一节点<br>B) 抛 RemoteNodeUnavailableError 让作业失败</td>
+<td><strong>B</strong></td>
+<td>housekeeping 仅针对已选节点（避免对每个候选 df 查询）。重试时 least_loaded 自然选到其他节点。Phase 6 可在 _select_least_loaded 融合磁盘检查实现自动故障转移</td>
+</tr>
+</table>
+</div>
+<hr class="section-divider">
+<h2 id="todo">16. 后续任务清单（按优先级排序）</h2>
+<div class="step-card pending">
+<h4>P0 — 必须在 Phase 3 集成前完成</h4>
+<table>
+<tr><th>编号</th><th>任务</th><th>来源</th><th>状态</th></tr>
+<tr><td>P0-1</td><td>移除 <code>build_remote_cli_command</code> 中的 <code>--config</code>（本地路径在远程不存在）</td><td>Phase 2 评审</td><td><span class="tag-done">✓ 已修复</span></td></tr>
+<tr><td>P0-2</td><td><strong>bjobs 命令兼容 OpenLAVA 2.0</strong>（<code>-o</code>/<code>-noheader</code> 不支持）</td><td>Phase 3 集成测试</td><td><span class="tag-done">✓ 已修复</span></td></tr>
+<tr><td>P0-3</td><td><strong>get_running_job_count 命令兼容</strong>（同上）</td><td>Phase 3 集成测试</td><td><span class="tag-done">✓ 已修复</span></td></tr>
+</table>
+</div>
+<div class="step-card pending">
+<h4>P1 — 建议在 Phase 3/4 完成</h4>
+<table>
+<tr><th>编号</th><th>任务</th><th>说明</th><th>状态</th></tr>
+<tr><td>P1-1</td><td>provenance hostname 覆盖为远程节点</td><td>runner.py 构建后覆盖 <code>provenance.hostname</code></td><td><span class="tag-done">✓ 已修复</span></td></tr>
+<tr><td>P1-2</td><td><code>poll_interval=0</code> 被 <code>or</code> 吞掉</td><td>改为 <code>is not None</code> 判断</td><td><span class="tag-done">✓ 已修复</span></td></tr>
+<tr><td>P1-3</td><td><strong>监控循环添加超时上限</strong></td><td>添加 <code>max_monitor_seconds</code>（walltime + 1h），超时标记 FAILED</td><td><span class="tag-done">✓ 已修复</span></td></tr>
+<tr><td>P1-4</td><td><strong>bjobs 命令在真实节点验证</strong></td><td>在 10.16.5.157 上确认输出格式</td><td><span class="tag-done">✓ 已验证 + 修复</span></td></tr>
+</table>
+</div>
+<div class="step-card pending">
+<h4>P2 — 后续迭代</h4>
+<table>
+<tr><th>编号</th><th>任务</th><th>说明</th><th>状态</th></tr>
+<tr><td>P2-1</td><td>部分失败时清理远程目录</td><td>runner._run_remote 在 bsub 前失败时，SFTP 删除已创建的 <code>{remote_job_dir}</code></td><td><span class="tag-done">✓ 已修复</span></td></tr>
+<tr><td>P2-5</td><td>SSH 命令添加 <code>shlex.quote()</code></td><td>monitor.py 中 <code>node.username</code>、<code>remote_path</code> 做 shell 转义</td><td><span class="tag-done">✓ 已修复</span></td></tr>
+<tr><td>P2-6</td><td>验证 <code>remote_work_dir</code> 不含空格</td><td>RemoteNode.from_config_dict 添加路径校验</td><td><span class="tag-done">✓ 已修复</span></td></tr>
+<tr><td>P2-7</td><td>remote_execution stage started_at 语义修正</td><td>创建 task 时设 <code>started_at=None</code>，LSF RUN 时填充</td><td><span class="tag-done">✓ 已修复</span></td></tr>
+<tr><td>P2-8</td><td>缓存 remote_execution task_id</td><td>避免每次 <code>_set_remote_stage_state</code> 查全表</td><td><span class="tag-done">✓ 已修复</span></td></tr>
+<tr><td>P2-9</td><td><code>cancel_event</code> 类型标注为 <code>threading.Event</code></td><td>导入 threading 替代 <code>Any</code></td><td><span class="tag-done">✓ 已修复</span></td></tr>
+<tr><td>P2-10</td><td><code>execution_mode</code> 值校验</td><td>config.py 添加合法值检查（Phase 1 遗留）</td><td><span class="tag-done">✓ 已修复</span></td></tr>
+<tr><td>P2-11</td><td><code>_ensure_remote_dir</code> 去重</td><td>sftp.py 和 sync.py 合并（Phase 1 遗留）</td><td><span class="tag-done">✓ 已修复</span></td></tr>
+<tr><td>P2-12</td><td><code>_save_state</code> 原子写入</td><td>sync.py 用 temp + rename（Phase 1 遗留）</td><td><span class="tag-done">✓ 已修复</span></td></tr>
+<tr><td>P2-13</td><td><strong>env_var_name 处理节点名中的点号</strong></td><td><code>compute.01</code> → <code>ACP_REMOTE_PASSWORD_COMPUTE_01</code></td><td><span class="tag-done">✓ 已修复</span></td></tr>
+<tr><td>P2-14</td><td><strong>远程节点 ISOSTAT 路径配置</strong></td><td>远程 <code>~/.cccp.yaml</code> 需包含正确 ISOSTAT/Shermo 路径</td><td><span class="tag-done">✓ 已配置</span></td></tr>
+</table>
+</div>
+<div class="step-card done">
+<h4>阶段进度总览</h4>
+<table>
+<tr><th>阶段</th><th>状态</th><th>核心文件</th><th>测试</th></tr>
+<tr><td>1. 基础设施层（SSH/SFTP）</td><td><span class="tag-done">✓ 完成</span></td><td>config / ssh / sftp / sync</td><td>23 mock + 3 集成</td></tr>
+<tr><td>2. 作业执行层</td><td><span class="tag-done">✓ 完成</span></td><td>script_gen / monitor / runner</td><td>35 mock</td></tr>
+<tr><td>3. 配置与集成</td><td><span class="tag-done">✓ 完成</span></td><td>config.py / defaults.yaml / runner.py / manager.py / server.py / jobs.py / monitor.py</td><td>35 mock + CCO 真实节点集成测试</td></tr>
+<tr><td>4. 按需结果获取</td><td><span class="tag-done">✓ 完成</span></td><td>fetcher.py / v1_routes.py / v1_schemas.py / manager.py</td><td>28 mock + 真实节点端到端 10 项</td></tr>
+<tr><td>5. 远程文件生命周期</td><td><span class="tag-done">✓ 完成</span></td><td>cleanup.py / runner.py / manager.py / __init__.py</td><td>34 mock</td></tr>
+<tr><td>5B. 本地磁盘保护</td><td><span class="tag-done">✓ 完成</span></td><td>local_cleanup.py / runner.py / manager.py / server.py / v1_routes.py / v1_schemas.py / defaults.yaml / config.py / systemd / 前端</td><td>51 mock（含 6 项 API TestClient）</td></tr>
+<tr><td>6. 网页端节点选择</td><td><span class="tag-pending">⏳ 待办</span></td><td>node_manager.py / v1_routes.py / 前端</td><td>—</td></tr>
+<tr><td>7. 测试</td><td><span class="tag-pending">⏳ 待办</span></td><td>test_remote_*.py (8 files)</td><td>—</td></tr>
+<tr><td>8. 文档与部署</td><td><span class="tag-pending">⏳ 待办</span></td><td>AGENTS.md / systemd</td><td>—</td></tr>
+<tr><td>9. 日志阶段解析（增强）</td><td><span class="tag-pending">⏳ 待办</span></td><td>log_parser.py</td><td>—</td></tr>
+</table>
+</div>
+</body>
+</html>

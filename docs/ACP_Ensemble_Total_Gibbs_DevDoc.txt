@@ -1,0 +1,348 @@
+
+
+ACP 构象搜索总自由能计算 — 开发计划
+
+版本：v1.2 · 2026-07-31
+
+工作流：acp run energy（censo-light / censo-default / censo-zero 三预设）
+
+v1.2 修订（默认值变更）：rank1-only 改为 CLI 默认行为（"默认开启只算 top1"），新增 --full-ensemble 旗标显式关闭并恢复 v15 全系综语义；scheduler/前端同步：method.rank1_only 显式 false 时透传 --full-ensemble，字段缺失时依赖 CLI 默认（rank1-only）；前端选项卡片默认勾选。workflow 层 run_conformer_energy(rank1_only=False) Python 默认值不变（API 向后兼容）。
+
+v1.1 修订（评审修正）：① §1.2 明确"严格等价性"仅指两公式的数学化简，非理论水平一致性（工作流二混用 xTB 级权重表与 DFT 级 G₁ 为近似，误差 ±0.5–1.5 kcal/mol）；② §12 截断偏差方向修正（DFT 表截断后混合熵被低估而非高估，G_total 被高估约 +0.006 kcal/mol）；③ §4.1 p₁≤0 边界改为"告警并返回 G₁"（不再钳制 1e-12，避免 −16 kcal/mol 伪修正）；④ 权重表成分披露（censo-zero 的 gtot 为纯 xTB 电子能；censo-light screening 的 grrho 可能为 0）；⑤ §6.1 cheap 路径改用 xTB passthrough 全系综表（CENSO nconf=1 会退化为单记录表，p₁≡1 丢失混合修正），boltzmann_table.json 的 source 相应可为 "xtb"，method 新增 xtb_table_rank1。
+
+本计划为基于 CENSO 的构象搜索逻辑微调：在获得构象系综之外，新增构象系综总吉布斯自由能（G_total）作为一等输出。数学上总自由能 = 排名第一构象的精细吉布斯自由能 + 玻尔兹曼分布引入的混合熵修正，可严格化简为 G_total = G₁ + RT·ln p₁，仅依赖排名第一构象。引入两套工作流：工作流一（现有玻尔兹曼 cutoff，精细 DFT 完成后用 DFT 玻尔兹曼表计算）；工作流二（新 --rank1-only 模式，仅对 CENSO 排名第一构象做精细 DFT，结合 CENSO 玻尔兹曼表计算）。设计决策已与需求方确认（见 §3）。
+
+目录
+
+1. 需求理解与数学基础
+
+2. 现状分析（关键代码点）
+
+3. 关键决策（已确认）
+
+4. Step 1：新增 ensemble_thermo.py（核心计算模块）
+
+5. Step 2：工作流一增强（默认路径，不改选择逻辑）
+
+6. Step 3：工作流二（--rank1-only 新模式）
+
+7. Step 4：CLI 接线
+
+8. Step 5：平台接入（scheduler / 前端）
+
+9. Step 6：测试
+
+10. 输出文件清单
+
+11. 实施顺序
+
+12. 风险与注意事项
+
+1. 需求理解与数学基础
+
+1.1 目标
+
+构象搜索的核心目的除了获得构象系综外，是获得系综总自由能：
+
+计算方式 = 构象的 ΔG（相对排名第一）加上玻尔兹曼分布引入的熵；
+
+可只用排名第一的构象完成该计算（见 §1.2 推导）；
+
+计算时必须注意单位（全流程统一 Hartree，见 §1.3）。
+
+1.2 数学推导（rank1-only 数学化简）
+
+构象系综（混合体系）的总吉布斯自由能：
+
+p_i     = exp(−ΔG_i / kT) / Σ_j exp(−ΔG_j / kT)，   ΔG_i = G_i − G_min
+G_total = Σ_i p_i·G_i  +  RT·Σ_i p_i·ln p_i              （完整混合式）
+        = G_min + Σ_i p_i·ΔG_i + RT·Σ_i p_i·ln p_i
+
+利用 p_i = exp(−ΔG_i/RT)/Z 且 p_1 = 1/Z（ΔG₁ = 0）：
+
+Σ_i p_i·ΔG_i = −RT·Σ_i p_i·ln p_i + RT·ln p_1
+─────────────────────────────────────────────
+G_total = G_1 + RT·ln p_1      （只依赖排名第一构象的 G 与其玻尔兹曼权重）
+
+混合修正量 RT·ln p_1 = Σ p_i·ΔG_i + RT·Σ p_i·ln p_i 恒为负值（熵稳定化）。两式数学上严格相等（同一 G 表下），工作流一用完整混合式、工作流二用 rank1 式，并在实现中交叉校验（容差 1e-8 Ha）。注意：该等价性仅是数学化简，不保证理论水平一致性——工作流二以 xTB/CENSO 级权重表驱动 p₁、以精细 DFT G₁ 进入总自由能时，结果仍为近似，误差估计 ±0.5–1.5 kcal/mol（见 §3 与 §12）。
+
+1.3 单位约定
+
+ | 量 | 单位 | 常量 / 换算 | 代码位置
+
+ | G（Shermo g_conc / CENSO gtot） | Hartree | — | energy.py:434（gibbs = g_conc）
+
+ | 玻尔兹曼常数 k_B | Ha/K | 3.166811563e-6 | energy.py:48；censo_backend.py:65
+
+ | Hartree → kcal/mol | — | × 627.5094740631 | acp/core/models.py:19（HARTREE_TO_KCAL）
+
+ | 混合熵 S_mix | Ha/K·分子 | −k_B·Σ p ln p；×627.509… → kcal/(mol·K) | 新模块（§4）
+
+⚠️ 新模块统一从 acp.core.models 导入 HARTREE_TO_KCAL，避免在第三个位置重复定义该常量（既有 anti-pattern：models.py 与 cccp/utils/constants.py 双定义）。
+
+1.4 数值验证示例
+
+两构象，ΔG₂ = 1.0 kcal/mol，T = 298.15 K
+kT = 3.166811563e-6 × 298.15 = 9.4418e-4 Ha = 0.5925 kcal/mol
+p₁ = 1 / (1 + exp(−1/0.5925)) = 0.8442
+G_total = G₁ + kT·ln(0.8442) = G₁ − 0.101 kcal/mol
+完整式核对：ΣpΔG + RT·Σp ln p = 0.1558 + 0.5925×(−0.4330) = −0.1007 kcal/mol ✓（±1e-4 舍入差）
+
+2. 现状分析（关键代码点）
+
+                     run_conformer_energy (energy.py:674, 1156 行)
+                      │
+        ┌─────────────┼──────────────────┐
+        ▼             ▼                  ▼
+   CREST search   CENSO refine      ACP DFT handoff
+   (crest.py)     (censo_backend    (_run_rank1_handoff
+                   refine_ensemble  energy.py:275:
+                   censo_backend      opt→freq→SP→Shermo)
+                   .py:571)
+        │             │                  │
+        ▼             ▼                  ▼
+   crest_ensemble.xyz  CensoRunResult   candidates[] dict
+                       records[] sorted by gtot
+                       boltzmann_weights()  ← CENSO 玻尔兹曼表
+                       (censo_backend.py:64)
+                       _write_screening_ranking → screening_ranking.csv
+                       (energy.py:588, 已落盘权重表)
+                                          │
+                                          ▼
+                             _write_final_outputs (energy.py:496)
+                             _boltzmann_weights (energy.py:458)
+                             ← DFT 玻尔兹曼表（函数内部，未对外暴露）
+
+ | 元素 | 位置 | 现状
+
+ | CENSO 玻尔兹曼权重表 | censo_backend.py:64 boltzmann_weights() | 已实现（gtot + k_B·T），可直接复用
+
+ | CENSO 表落盘 | energy.py:588 _write_screening_ranking → ensemble/screening_ranking.csv | 已含 conf_id→weight，作为表来源
+
+ | DFT 玻尔兹曼权重 | energy.py:458 _boltzmann_weights()；在 _write_final_outputs（:496）内计算 | 已实现但未对外暴露（返回值的缺口）
+
+ | 排名第一构象 | refine_ensemble 内 sort_by_gtot() 后 records[0] | 现仅作为选中集合的成员参与 handoff
+
+ | 精细 DFT 吉布斯自由能 | energy.py:275 _run_rank1_handoff → 返回 dict 的 gibbs（= g_conc，Hartree） | 已有，工作流一/二共用
+
+ | 构象选择 | energy.py:470 _select_cumulative_boltzmann（0.99 累计 cutoff） | 工作流一保持不动
+
+ | CLI / 调度透传 | cli.py:374（energy 子命令）、runner.py:706、script_gen.py:142、stage_tasks.py:113 | no_opt 模式可参照
+
+3. 关键决策（已与需求方确认）
+
+ | 决策项 | 选择 | 理由
+
+ | 覆盖范围 | 仅 acp run energy；acp run ensemble 保持现状 | 两套工作流均涉及精细 DFT，纯 CENSO 的 ensemble 不引入 xTB 级总自由能
+
+ | 工作流一权重表 | DFT 截断集合表（≥99% 集合的精细 G 重算权重） | 与现有输出语义一致；JSON 中记录 population_coverage 如实披露截断
+
+ | 新模式形态 | CLI 默认开启 rank1-only；新增 --full-ensemble 旗标显式关闭（v1.2）；与 --no-opt 正交可组合 | "默认开启只算 top1"为需求方要求；显式 opt-out 保证可恢复 v15 全系综语义
+
+ | 平台接入 | 一并接入（catalog 字段 + runner/script_gen/stage_tasks 透传 + 前端开关） | 用户明确要求；no_opt 已有完整链路可仿照
+
+ | 总自由能公式 | G_total = G₁ + RT·ln p₁（rank1 式）；工作流一内部用完整混合式交叉校验 | 两式严格等价（同一表内）；工作流二为近似（水平混用），以 total_gibbs_censo_hartree 对照
+
+ | 单位 | 内部全部 Hartree；对外同时输出 kcal/mol；熵输出 cal/(mol·K) 与 T·S（kcal/mol） | 全项目既有约定（Shermo/CENSO gtot 均 Hartree）
+
+ | 权重表成分披露 | JSON 记录 weight 表来源（censo/xtb）与 method（dft_table/censo_table_rank1/xtb_table_rank1） | censo-zero 的 gtot = 纯 xTB 电子能（gsolv=grrho=0，ensemble.py:117）；censo-light screening 的 grrho 可能为 0（censo_backend.py:751 debug 提示）——此时 p₁ 不含振动熵贡献
+
+ | cheap 路径权重表（实现修正） | censo-light/censo-zero + --no-opt + rank1-only 时，CENSO 以 -n 1 精修 rank1，但 p 表改用 xTB passthrough 全系综表 | CENSO nconf=1 输出单记录表 → p₁≡1、混合修正丢失；xTB 表为全系综、零额外成本
+
+4. Step 1：新增 ensemble_thermo.py（核心计算模块）
+
+新建 src/acp/workflows/ensemble_thermo.py（约 130 行，纯函数 + 汇总 dataclass，无 QC 依赖）
+
+energy.py 已 1156 行（AGENTS.md 标注"candidate for future split"），总自由能计算放入独立模块，便于单测与后续复用。
+
+ | 符号 | 签名 | 说明
+
+ | mixing_entropy | (weights: list[float]) -> float | S_mix = −k_B·Σ p ln p（Hartree/K·分子）；配套 s_mix_kcal_per_mol_kelvin() / t_s_mix_kcal_per_mol() 换算
+
+ | ensemble_total_gibbs | (rank1_gibbs: float, weights: dict[str, float] | list[float], temperature_k: float) -> float | G_total = G₁ + k_B·T·ln p₁（工作流二；p₁ 为排名第一权重）
+
+ | ensemble_total_gibbs_from_values | (gibbs_values: list[float], temperature_k: float) -> float | 完整混合式 Σ p·G + RT·Σ p ln p（工作流一）；内部与 rank1 式断言一致性（容差 1e-8 Ha）
+
+ | EnsembleThermoSummary | 新建 @dataclass | method（dft_table/censo_table_rank1）、T、G_total（Ha + kcal/mol）、G₁、p₁、S_mix、T·S_mix、population_coverage、逐构象表（G_i/ΔG_i/p_i）；to_dict() / write_json(path)
+
+# 模块内单位常量（复用既有定义，不新增）
+from acp.core.models import HARTREE_TO_KCAL        # 627.5094740631
+_K_B_HARTREE_PER_KELVIN = 3.166811563e-6           # 与 energy.py:48 同步
+
+G_total = rank1_gibbs + _K_B_HARTREE_PER_KELVIN * temperature_k * math.log(p_1)
+
+4.1 边界条件
+
+空权重表 / 全零权重：返回 rank1_gibbs（无混合熵修正），不抛异常；
+
+p_1 ≤ 0（或非有限）：告警并返回 rank1_gibbs，不钳制为极小值——钳制 1e-12 会注入约 −16 kcal/mol 的伪修正（kT·ln 1e-12）；p_1 > 1：钳制为 1.0（无修正）；
+
+非归一化权重输入：调用方负责归一化（CENSO boltzmann_weights() 与 _boltzmann_weights 均已归一化）。
+
+5. Step 2：工作流一增强（默认路径，不改选择逻辑）
+
+修改 src/acp/workflows/energy.py
+
+5.1 _write_final_outputs（energy.py:496）
+
+现有 DFT 权重计算（:518 weights = _boltzmann_weights(gibbs_values, temperature_k)）保持不动；
+
+函数末尾新增：用 ensemble_total_gibbs_from_values(gibbs_values, temperature_k) 计算 G_total（权重即 DFT 截断集合表，与现有 weights 一致）；
+
+写新输出 finalDFT/ensemble_thermo.json（method=dft_table，含 population_coverage = Σ 选中权重）；
+
+返回值（:581 的 dict）增加三个 key：total_gibbs_hartree / total_gibbs_kcal_mol / ensemble_thermo_json。
+
+5.2 run_conformer_energy（energy.py:674）
+
+新增形参 rank1_only: bool = False（默认 False，对现有调用零影响）；
+
+:1117 最终化处将 §5.1 的三个 key 并入 WorkflowResult.metadata；
+
+conformer_thermo.csv 末尾附加一行 TOTAL,{...},G_total 汇总（现有列兼容，追加列名 total_gibbs_kcal_mol 放于 source 之后可选，或仅追加行——实现时按"字段兼容优先"原则，仅追加行不改列头）。
+
+ℹ️ 工作流一不改动 _select_cumulative_boltzmann 选择逻辑与各 preset 分支；唯一新增行为是"输出总自由能"。
+
+6. Step 3：工作流二（--rank1-only 新模式）
+
+修改 src/acp/workflows/energy.py 修改 src/acp/backends/censo_backend.py
+
+6.1 控制流（run_conformer_energy(..., rank1_only=True)）
+
+ | preset × opt | 行为
+
+ | censo-light（opt on） | CENSO screening 照常 → 取 censo_result.records[0]（已按 gtot 排序）→ 仅对 rank1 执行 _run_rank1_handoff
+
+ | censo-zero（opt on） | xTB passthrough（_xtb_passthrough_result）→ records[0] → handoff
+
+ | censo-light + --no-opt | refine_ensemble(nconf=1, include_refinement=True) → CENSO 精修 rank1 → _censo_record_to_candidate；p 表改用 xTB passthrough 全系综表（nconf=1 的 CENSO 表退化为单记录，p₁≡1 会丢失混合修正——见 §12 修正）
+
+ | censo-default | 全 Part0–Part3 funnel 后仅对 records[0] 跑 skip_opt_sp=True 的 freq + Shermo（sp_energy_precomputed=rec.energy）
+
+6.2 权重表来源与落盘
+
+权重表 = censo_result.boltzmann_weights()（CENSO gtot 表，censo_backend.py:64）；cheap 路径（nconf=1）改用 _xtb_passthrough_result 的 xTB 全系综表；
+
+新落盘 ensemble/boltzmann_table.json：conf_id → p、T、source（"censo" 或 "xtb"）；
+
+既有 ensemble/screening_ranking.csv（energy.py:588）已含相同权重数据，作为表格的 CSV 形态持续保留。
+
+6.3 总自由能计算与对照
+
+G_total = G₁(fine Shermo g_conc) + k_B·T·ln p₁(CENSO)      # 主结果
+total_gibbs_censo_hartree = gtot₁(CENSO) + k_B·T·ln p₁(CENSO)  # 参考量，量化精细 DFT 修正
+
+6.4 _write_final_outputs 签名扩展（工作流二专用）
+
+新增可选参数 external_weights: dict[str, float] | None = None（工作流二传入 CENSO/xTB 表）、external_total_gibbs: float | None = None、external_total_gibbs_censo: float | None = None、population_weights: dict[str, float] | None = None（工作流一覆盖率披露）、external_table_source: str = "censo"；
+
+工作流二下 ensemble_thermo.json 的 method=censo_table_rank1（cheap 路径 xtb_table_rank1），记录权重表与 G_total 及 CENSO 级对照 total_gibbs_censo_hartree；
+
+单构象 all_conformers.xyz / conformer_thermo.csv 的 weight 保持 1.0（单构象自身的 DFT 表），G_total 不取自该表；
+
+默认参数下行为与现有完全一致（向后兼容）。
+
+7. Step 4：CLI 接线
+
+修改 src/acp/cli.py
+
+energy 子命令（cli.py:374）：--rank1-only 保留（显式声明，help 注明默认开启）+ 新增 --full-ensemble（action="store_true"，显式关闭恢复 v15 全系综）；help 文本含 % 需转义为 %%（argparse 格式化）；
+
+epilog 示例：acp run energy --input "CCO"（默认 rank1-only）、acp run energy --input "CCO" --full-ensemble；
+
+_handle_energy（cli.py:1159）与 _handle_energy_batch（cli.py:1214）透传 rank1_only=not args.full_ensemble（workflow 层 Python 默认值 False 保持不变，向后兼容）；
+
+成功日志（cli.py:1180 段）新增 Total G(ensemble) : X.XXXX kcal/mol。
+
+8. Step 5：平台接入（scheduler / 前端）
+
+ | 文件 | 改动 | 参照
+
+ | src/acp/scheduler/runner.py（:706 附近） | 透传 if wf == "energy" and method.get("rank1_only"): cmd += ["--rank1-only"] | runner.py:706 no_opt 同型代码
+
+ | src/acp/scheduler/remote/script_gen.py（:142 附近） | 同上（LSF 提交脚本透传） | script_gen.py:142
+
+ | src/acp/scheduler/stage_tasks.py _EnergyStagePlanProvider（:113） | 阶段计划维持原样（阶段名 per-molecule 而非 per-conformer，rank1_only 只影响工作量不影响阶段序列）；仅需确认 spec.method 不因新字段报错 | stage_tasks.py:113-166
+
+ | src/acp/catalog.py censo_energy（:1068） | 无需加 level 字段：rank1_only 走 method 顶层字段（与 no_opt 同模式，前端直接塞 methodPayload）；如前端需要提示可加 schema 级元信息 | catalog.py:1068-1077
+
+ | frontend/ACP_Workbench_v2.html | energy 向导新增"仅计算 rank1 精细 DFT"开关；选中时 methodPayload.rank1_only = true（仿 :5211 no_opt 逻辑）；任务详情/摘要渲染 total_gibbs_kcal_mol | :5211-5214 no_opt 同型代码
+
+⚠️ 前端为单页大文件（5706 行），改动需保持现有 JS 风格（var / 无框架），勿引入新依赖。
+
+9. Step 6：测试
+
+9.1 新增 tests/test_acp_ensemble_thermo.py
+
+ | 用例 | 断言
+
+ | 单构象（p₁=1.0） | G_total = G₁（无混合修正）
+
+ | 等权重两构象（p=0.5） | G_total = G₁ + kT·ln 0.5
+
+ | §1.4 数值案例（ΔG₂=1 kcal/mol） | G_total − G₁ = −0.101 kcal/mol（±1e-3）
+
+ | rank1 式 vs 完整混合式 | 两式一致（容差 1e-8 Ha）
+
+ | 单位换算 | kcal/mol = Ha × 627.5094740631；S_mix cal/(mol·K)
+
+ | 空表 / p₁≤0 边界 | 返回 G₁，不抛异常
+
+9.2 扩展 tests/test_acp_workflows_energy.py（716 行）
+
+默认路径（工作流一）：mock 后断言 metadata 含 total_gibbs_kcal_mol 且数值 = 公式值（复用现有 _SHERMO_OK / mock_screening_result fixtures）；
+
+rank1_only（工作流二）：patch CensoBackend.refine_ensemble 返回 2 条记录（ΔG 案例）→ 断言 _run_rank1_handoff 仅调用 1 次、total_gibbs 用 CENSO p₁ 计算正确、boltzmann_table.json 落盘；
+
+回归命令：
+
+pytest tests/test_acp_ensemble_thermo.py tests/test_acp_workflows_energy.py -v
+pytest tests/test_acp_backends.py tests/test_acp_cli.py -v
+pytest tests/ -v
+
+10. 输出文件清单
+
+ | 文件 | 状态 | 内容
+
+ | finalDFT/ensemble_thermo.json | 新增 | 总自由能汇总：method / T / G_total(Ha+kcal/mol) / G₁ / p₁ / S_mix(cal+ kcal/(mol·K)) / T·S_mix / population_coverage / censo 对照(工作流二) / 逐构象表（conf_id、G_i、ΔG_i、p_i）
+
+ | ensemble/boltzmann_table.json | 新增（工作流二） | 权重表：conf_id → p、T、source（"censo"/"xtb"）
+
+ | finalDFT/conformer_thermo.csv | 兼容扩展 | 列头不变，末尾追加 TOTAL 汇总行（G_total 落在 gibbs_hartree 列，source=ensemble_total）
+
+ | ensemble/screening_ranking.csv | 既有 | 不变（已含 CENSO 权重表）
+
+ | WorkflowResult.metadata | 扩展 | +total_gibbs_hartree / total_gibbs_kcal_mol / ensemble_thermo_json / rank1_only；（工作流二）+total_gibbs_censo_hartree / boltzmann_table_json
+
+11. 实施顺序
+
+Step 1：新增 ensemble_thermo.py + 单元测试（纯函数先行，验证公式与单位）→ pytest tests/test_acp_ensemble_thermo.py；
+
+Step 2：工作流一增强（_write_final_outputs + metadata）→ 回归 tests/test_acp_workflows_energy.py；
+
+Step 3：工作流二 rank1_only 各 preset 分支 + _write_final_outputs 扩展参数；
+
+Step 4：CLI 旗标 + 透传 + 日志；
+
+Step 5：平台接入（runner / script_gen / stage_tasks 确认 / 前端开关 + 详情渲染）；
+
+Step 6：全量 pytest tests/ -v → sudo systemctl restart acp（服务不使用 --reload，需手动重启）。
+
+12. 风险与注意事项
+
+ | 风险 | 说明 | 缓解
+
+ | 截断偏差（工作流一） | DFT 表只覆盖 ≥99% 累计集合：截断 + 重归一化使 p₁′ = p₁/P_A 变大、尾部构象熵贡献丢失，两个效应均使混合熵被低估、G_total 被高估约 RT·ln(1/P_A) ≈ +0.006 kcal/mol（P_A=0.99） | ensemble_thermo.json 记录 population_coverage（= 选中集合在全系综表中的累计权重），如实披露
+
+ | CENSO 表与 DFT 表不一致（工作流二） | 精细 G₁ 与 CENSO ΔG 等级不同（xTB/b97-3c vs DFT），G_total 为近似，误差 ±0.5–1.5 kcal/mol（柔性分子可能更大）；另注意 censo-zero 的 gtot 为纯 xTB 电子能、censo-light screening 的 grrho 可能为 0（p₁ 不含振动熵贡献） | 设计上明确以 CENSO 表为准；total_gibbs_censo_hartree 提供对照，量化修正量；JSON 披露权重表 source 与 method
+
+ | cheap 路径权重表退化（实现修正） | censo-light/censo-zero + --no-opt + rank1-only 时 CENSO -n 1 只输出 1 条记录，其玻尔兹曼表退化为 p₁≡1，混合修正静默丢失 | p 表改用 xTB passthrough 全系综表（零额外计算成本）；boltzmann_table.json source="xtb"
+
+ | HARTREE_TO_KCAL 双定义 | models.py 与 constants.py 已各有一份 | 新模块统一从 acp.core.models 导入，不新增第三处
+
+ | _write_final_outputs 签名扩展 | 下游（远程脚本、测试）依赖现有返回结构 | 新增参数带默认值；返回 dict 只增 key，不删不改现有 key
+
+ | 工作流二单帧输出 | all_conformers.xyz 只含 1 帧 | 本次不改动下游（NMR/frontend）；文档标注语义差异
+
+ | 前端大文件改动 | ACP_Workbench_v2.html 5706 行 | 严格仿照 no_opt 既有代码块，最小化 diff
+

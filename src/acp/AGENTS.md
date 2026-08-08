@@ -1,7 +1,7 @@
 # acp/ — ACP Unified Module
 
 ## OVERVIEW
-The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. ~40 files, ~8k lines (incl. API + scheduler). Coexists with the underlying `cccp` package (Computational Chemistry Connection Package — the QC interface library). Active workflows: ensemble, energy, xtbmd_censo_energy, mechanism, simple (singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt). The conformer/nmr/benchmark workflows were retired on 2026-07-27.
+The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. ~40 files, ~8k lines (incl. API + scheduler). Coexists with the underlying `cccp` package (Computational Chemistry Connection Package — the QC interface library). Active workflows: ensemble, energy, xtbmd_censo_energy, mechanism, nmr (GIAO + DP4/DP5, reactivated 2026-08-07), simple (singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt). The conformer/benchmark workflows were retired on 2026-07-27 (nmr was retired then but revived in P1a).
 
 ## STRUCTURE
 ```
@@ -37,10 +37,10 @@ acp/
 | ORCA backend | `backends/orca.py` | Delegates to cccp ORCAInterface |
 | CREST backend | `backends/crest.py` | Delegates to cccp CRESTInterface; `search()` is the conformer-search entry used by ensemble/energy |
 | xTB backend | `backends/xtb.py` | Delegates to cccp XTBInterface |
-| CENSO backend | `backends/censo_backend.py` | CENSO subprocess wrapper (presets, rcfile gen, JSON/XYZ parsing) |
-| Isostat backend | `backends/isostat_backend.py` | Clustering via ISOSTAT |
-| Molclus backend | `backends/molclus_backend.py` | xTB-MD + Molclus conformer search |
-| External tools | `backends/external.py` + `external_backend.py` | run_isostat, run_shermo, batch_process_thermo |
+| CENSO backend | `backends/censo_backend.py` | Thin adapter → `cccp.qc.interfaces.censo.CensoInterface` (presets, rcfile gen, JSON/XYZ parsing live in cccp) |
+| Isostat backend | `backends/isostat_backend.py` | Thin adapter → `cccp.qc.interfaces.isostat.IsostatInterface.cluster()` (title normalisation, env pinning in cccp) |
+| Molclus backend | `backends/molclus_backend.py` | Thin adapter → `cccp.qc.interfaces.molclus.MolclusInterface.run_md()/search()` |
+| External tools | `backends/external.py` + `external_backend.py` | run_shermo/batch_process_thermo re-exports; `cluster()` routes through `IsostatInterface` |
 | IO wrapper | `io/structures.py` | StructureReader.detect_format/read, StructureWriter |
 | RDKit embedding | `chem/embedding.py` | SMILES→3D, charge assignment, enumeration |
 | Composition analysis | `chem/composition.py` | normalize_recalc_hess etc. |
@@ -80,4 +80,4 @@ acp/
 - **`# pyright:` suppressions widespread**: ~14 acp/ files suppress type-checking rules; pyright is not in the project toolchain
 - **bare `except Exception:`**: several instances across api/, chem/, cli.py, scheduler/ silently swallow errors
 - **HARTREE_TO_KCAL duplication**: Defined in both `acp/core/models.py` and `cccp/utils/constants.py`
-- **Retired catalog entries retained**: conformer/nmr/benchmark kept in `WORKFLOW_CATALOG` with `status:"retired"` + `visible:False` for historical-job display; do not re-add registry/CLI entries for them.
+- **Retired catalog entries retained**: conformer/benchmark kept in `WORKFLOW_CATALOG` with `status:"retired"` + `visible:False` for historical-job display; do not re-add registry/CLI entries for them. **NMR was reactivated 2026-08-07 (P1a)** — it is now `status:"active"` with full CLI/registry/scheduler/frontend wiring (see `docs/ACP_NMR_DP4_DevDoc.md` appendix A).

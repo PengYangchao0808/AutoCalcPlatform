@@ -1,0 +1,956 @@
+
+
+ACP xTB-MD 构象搜索自由能计算 — 开发计划
+
+版本：v1.3 · 2026-08-01（评审修订三）
+
+工作流：acp run xtbmd_censo_energy（新工作流，energy 变体；censo-light / censo-default / censo-zero 三预设）
+
+关联文档：ACP 构象搜索总自由能计算开发计划（总自由能数学基础同源，本计划复用其 ensemble_thermo.py 设计）
+
+v1.6 修订摘要（接口归属 consolidation 与线程钉住，2026-08-02）：① 子进程逻辑回灌 cccp（治理原则：acp/backends 不负责任何 QC 子进程）——CENSO（rcfile 生成/preset 注入/模板注入/JSON·XYZ 解析）、ISOSTAT（exit-24 标题归一化/错误分类/env 钉住）与 Molclus（md.inp/settings.ini/轨迹校验）全部迁入 cccp/qc/interfaces/{censo,isostat,molclus}.py；acp/backends/*_backend.py 瘦身为纯能力适配（censo_backend 840→120 行、isostat_backend 261→76、molclus_backend 721→123）；ExternalBackend.cluster() 改走 IsostatInterface；cccp.qc.runners.run_isostat 标记 DEPRECATED（仅休眠 ConformerEngine 引用）；cccp 侧公开 API 正名（CENSO_PRESETS/resolve_preset/build_cli…，旧下划线名保留别名）。② 线程环境钉住：全链路 OMP/MKL/OPENBLAS_NUM_THREADS 显式钉到分配核数（cccp xtb/orca/censo/isostat/molclus + runners），根治 LSF 注入 OMP_NUM_THREADS=10 导致 4 核请求超占节点的生产事故（curcusone-test 任务）。③ energy_shared.py ORCA handoff 合规化：直连 ORCAInterface 改经 get_backend("orca")，run_shermo 经 acp.backends.external。④ 验证：全量 pytest tests/ = 948 passed + 7 skipped；compute-01 冒烟（乙醇, --max-frames 20, 4 核）全流程完成且任意时刻合计 CPU ≤ 400%；curcusone-test 经 bkill 1110 后以 --resume 重提（job 1114），xtbmd/batch_opt/isostat 三阶段 checkpoint 指纹匹配直接跳过。
+
+v1.5 修订摘要（Phase 4 实施与审计，2026-08-01）：Phase 4（工作流主模块）已交付——① E4 共享 helper 提取：workflows/energy_shared.py 公共化 resolve_levels / run_rank1_handoff / boltzmann_weights / select_cumulative_boltzmann / build_ensemble_summary / write_final_outputs / censo_record_to_candidate / build_result_ensemble / xtb_passthrough_result / resolve_solvent_config / resolve_crest_ewin；energy.py（1504→739 行）与 ensemble.py 改为从该模块 import（私有名别名保留，既有测试零改动回归）；② 主模块 run_xtbmd_censo_energy：九 stage 编排（embed→xtbmd→batch_opt→isostat→energy_filter→censo→dft_handoff→finalize）+ 三 preset × 双模式 + GFN1 能量窗过滤（sidecar 主通道 + 几何匹配 + 标题兼容通道）+ 按阶段指纹 resume + 空系综 fail-fast + MD 超时启发式（≈1 min/ps，下限 1h）；③ 测试：tests/test_acp_workflows_xtbmd_censo_energy.py 扩至 52 用例全绿（§12.2 组 + 审阅回归组），全量 pytest tests/ = 915 passed。实现后专项审阅发现的风险与修复状态见 §17（6 项已修复，3 项按设计保留）。
+
+v1.4 修订摘要（Phase 3 实施与审计，2026-08-01）：Phase 3（批量优化与去重）已交付——_batch_opt_frames 及配套 helper 落在 workflows/xtbmd_censo_energy.py（Phase 4 在该模块继续扩展），tests/test_acp_workflows_xtbmd_censo_energy.py 32 用例全绿。审计修复四项：① 逐帧异常隔离：后端构造/调用抛出非 QCResult 异常时按单帧 failed 计入（不炸整个批处理），成功率 fail-fast 兜底；② 预检配对规模上限：几何预检 RMSD 采样每半段 ≤100（_PRECHECK_MAX_SAMPLES），防 1fs dump 长轨迹（10⁵ 帧）O(s²·N) 全对 Kabsch 卡死；③ 入口参数校验：opt_level 限定 xTB 合法集 crude/normal/tight/verytight（更正 §10.1 catalog 候选值 "loose" 为非 xTB 合法值，Phase 5 落地时须同步修正 FIELD_DEFINITIONS），gfn_level ∈ {0,1,2}；④ temperature_k ≤ 0 → 收敛诊断跳过并记 note（防 Boltzmann 权重 NaN）。实施确认的两处偏差：_batch_opt_frames 返回 BatchOptResult dataclass（含 n_frames/n_ok/n_failed/n_timeout/conv_* 统计，供 Phase 4 直接并入 metadata，而非文档 §7 草拟的裸 Path）；收敛诊断仅用优化成功帧（失败帧缺 GFN1 能量，无法参与群体加权）。待计算节点核实项：xtb.trj 帧标题 "(kcal/mol)" 格式（预检/平衡期能量解析的格式假设）与 ISOSTAT 对 Energy: X 标题能量的解析兼容性（isomers.xyz/cluster.xyz 写入格式），两者均有 graceful 回退（fallback 10% 平衡期 / 诊断降级 note），冒烟清单 §12.3 覆盖。
+
+v1.3 修订摘要（评审修订三）：① 多起点采样：--md-seeds > 1 时每副本使用不同 RDKit 嵌入构象作为初始结构（不限于随机速度），突破起始盆地（§4）；② 科学验证锚定扩为多分子：冒烟清单从乙醇单分子扩为 4 分子验证集（刚性/柔性链/环/含分子内氢键），并新增量化重合指标（构象集 Tanimoto 重合度 + population-weighted coverage，§12.3）；③ conv-check 预检升级为几何指标：由 GFN-FF 能量多样性对比改为零成本几何哈希（回转半径/惯性矩直方图 + 稀疏 RMSD 抽样），§7/§8.3；④ novelty 判据按群体加权：后半段新增构象按其在后半段中的群体占比计权，并明确判重分辨率（conv_rmsd 0.5Å）与生产分辨率（gdis 0.25Å）的语义差异；⑤ 平衡期判据改为统计检验：滑动窗口均值差 ±2σ 判定，替代绝对漂移阈值 0.5 kcal/mol；⑥ --ewin 同名旗标语义显式区分（本工作流为 GFN1 窗口，energy 为 CREST 窗口，CLI help/README 注明）；⑦ run_md seed 机制核实：现有 _write_md_inp 无 seed 行（molclus_backend.py:286-300 已核实），需扩展并优先走 xtb 全局 --seed 旗标（$md 块 seed= 关键字依 xtb 版本而定）；⑧ 远程 LSF walltime 估算警示：100ps MD + 500 帧优化在大分子上可达小时级，script_gen 默认墙钟可能不足；⑨ 逐帧优化超时上限与 frame_%04d 产物生命周期（本地/远程清理）明确化；⑩ 冒烟增加 censo-zero 直通真实路径；⑪ md_temperature/md_seeds 由 advanced 提为常规字段（前端高级区外可见）。
+
+v1.2 修订摘要（评审修订二，对应评审意见 S3–S6 / E1–E8）：① ewin 默认值维持 6.0 kcal/mol 且支持配置（S1，--ewin 可调，不采纳放宽）；② 模式二混级注意写入 README（S2，本计划 §2.1 补充交叉校验语义说明）；③ 采样收敛诊断改进（S3）：多副本按每副本时间后半分组统计、判重阈值独立参数 --conv-rmsd（默认 0.5Å）与主流程 gdis 解耦，并新增 MD 轨迹零成本预检（E3）；④ 平衡期丢弃由固定 10% 改为按势能收敛自适应（S4）；⑤ 显式温度约定 T=298.15K（S5）；⑥ resume 指纹改为按阶段细分（E1）：每阶段 checkpoint 记录该阶段输入参数全集 hash；⑦ 新增 --max-frames 帧数上限（E2，默认 500，超限均匀子采样）；⑧ 共享 helper 提级为 workflows/energy_shared.py 公共模块（E4）；⑨ 空系综 fail-fast 保护（E5）与 batch_opt 溶剂一致性显式化（E6）；⑩ 四方 parity 扩为五处（E7：含前端字段派生集合）；⑪ 每帧 xtb 启动开销记为已知事项（E8）。
+
+v1.1 修订摘要（评审后）：① Step 1 已由 energy 计划先行实现（ensemble_thermo.py 现存在，直接复用）；② --resume 增加 checkpoint.json 参数指纹校验，防参数变更后误复用旧产物；③ 批量优化明确并发契约（每帧独立子目录 + 每帧 nproc=1）并新增能量 sidecar；④ 新增多副本采样 --md-seeds 与采样收敛诊断 --conv-check；⑤ ewin 默认值维持 6.0（与 CREST 既有约定一致，评审讨论后不再放宽）；⑥ 全部新参数经 catalog FIELD_DEFINITIONS（advanced）自动进入前端高级区，保证前端可配置性；⑦ 冒烟清单增加 CREST 路径交叉验证与 ewin 敏感性。人为耗时上限/限时设置不采纳（评审结论：无意义）。
+
+本计划实现一个新的构象搜索 + 自由能排序工作流：用 xTB GFN-FF 动力学（400K / 100ps）代替 CREST 生成构象候选，经 GFN1-xTB 逐帧批量优化与 ISOSTAT 去重（加能量窗过滤）后，接入与 energy 完全一致的 CENSO 三预设 + DFT handoff。最终高精度 DFT 提供两种可配置模式（全系综模式 / --rank1-only 模式），输出包含系综总吉布斯自由能 G_total 及其附属文件。前端 Workbench 同步接入（工作流向导 + 总自由能统计卡）。
+
+计划完成状态（2026-08-01）：
+
+✅ Phase 1 共享计算模块 — 已完成：workflows/ensemble_thermo.py（energy 计划先行实现）直接复用，边界语义核对通过（§5）；tests/test_acp_ensemble_thermo.py 13 用例全绿。
+
+✅ Phase 2 MD 采样能力 — 已完成：MolclusBackend.run_md() + GFN-FF 分支 + $md seed 行扩展（backends/molclus_backend.py）；工作流层多副本约定 workflows/xtbmd_md.py（run_md_replicas：seed 递增 / RDKit 多起点 / 轨迹合并）；多起点枚举 chem/embedding.py（enumerate_embeddings）。tests/test_molclus_backend.py + tests/test_xtbmd_md.py 共 22 新增用例全绿，全量 pytest tests/ = 863 passed。
+
+✅ Phase 3 批量优化与去重 — 已完成：_batch_opt_frames 与两级收敛诊断（几何预检 + ISOSTAT 群体加权 novelty）落地 workflows/xtbmd_censo_energy.py，审计修复见 v1.4 摘要（逐帧异常隔离 / 预检配对上限 / opt_level·gfn 校验 / temperature_k 防御）。
+
+✅ Phase 4 工作流主模块 — 已完成（2026-08-01）：workflows/energy_shared.py（E4 公共 helper 提取，energy.py/ensemble.py 改 import 行为不变）+ run_xtbmd_censo_energy（§8 全量：九 stage、三 preset × 双模式、GFN1 能量窗过滤、按阶段指纹 resume、空系综 fail-fast）；§12.2 单测组 + 审阅回归组全绿（tests/test_acp_workflows_xtbmd_censo_energy.py 52 用例），energy/ensemble/censo 既有单测回归通过；全量 pytest tests/ = 915 passed。审计修复见 §17（6 项已修复，3 项按设计保留）。
+
+✅ Phase 5 平台接入 — 已完成（2026-08-01）：Step 5 CLI（acp run xtbmd_censo_energy：energy 全集参数 + 16 个新旗标 + --md-nvt/--conv-check BooleanOptionalAction + 批量 handler + dispatch）；Step 6 平台接入（catalog 三条目 + FIELD_DEFINITIONS 20 字段含 resume，md_temperature/md_seeds 常规区、其余 advanced；v1.4 opt_level 候选值已同步修正为 crude/normal/tight/verytight；runner/script_gen 白名单 + 共享 xtbmd_method_flags() flag builder（jobs.py）保证本地/远程零漂移；stage_tasks _XtbmdCensoEnergyStagePlanProvider）；Step 7 前端四块（energyLike 提交分支 + xtbmd 控制组顶层字段从 schema 派生转发 + rank1 开关/默认值覆盖 xtbmd + bool 字段 checkbox 渲染 + FIELD_DEFINITIONS label_zh 渲染 + i18n rank1_only_desc_xtbmd）；五方 parity 单测（E7） tests/test_acp_xtbmd_platform_phase5.py 16 用例全绿。
+
+⏳ Phase 6 验收与上线 — 部分完成：全量 pytest tests/ = 939 passed + 7 skipped（Phase 5 接入 + 专项审阅修复后回归全绿，含 energy/ensemble/simple/catalog 既有测试）；计算节点冒烟（§12.3）与 systemd 重启待执行。Phase 5 专项审阅修复见 §18.1（7 项已修复含生产事故 ISOSTAT 标题格式 #10，3 项核对通过；2026-08-02 curcusone-test 失败根因排查与修复记录于 #10）。
+
+实现后专项审阅发现的风险与修复状态见 §16（Phase 2，5 项已修复，2 项按设计保留待计算节点核实）、§17（Phase 4，6 项已修复，3 项按设计保留）、§18（Phase 5，落地核对）与 §18.1（Phase 5 专项审阅，6 项已修复，3 项核对通过）。
+
+目录
+
+1. 需求理解与总体逻辑
+
+2. 数学基础与总自由能双模式
+
+3. 现状分析（关键代码点）
+
+4. 关键决策（已确认）
+
+5. Step 1：新增 ensemble_thermo.py（共享计算模块）
+
+6. Step 2：MolclusBackend 扩展（run_md + GFN-FF）
+
+7. Step 3：GFN1 批量优化 helper
+
+8. Step 4：xtbmd_censo_energy.py 工作流模块
+
+9. Step 5：CLI 接线
+
+10. Step 6：平台接入（catalog / scheduler / remote）
+
+11. Step 7：前端设计（ACP_Workbench_v2）
+
+12. Step 8：测试
+
+13. 输出文件清单
+
+14. 实施顺序（Phase 划分）
+
+15. 风险与注意事项
+
+16. 潜在风险与修复状态（实现审阅，2026-08-01）
+
+17. Phase 4 实现后专项审阅（2026-08-01）
+
+18. Phase 5 实现后落地核对（2026-08-01）
+
+18.1 Phase 5 专项审阅修复（2026-08-01）
+
+1. 需求理解与总体逻辑
+
+1.1 目标
+
+为分子提供构象系综 + 自由能排序，核心诉求（与 energy 一致）：
+
+获得系综总自由能 G_total（一等输出，数学见 §2）；
+
+最终高精度 DFT 阶段两种可配置模式：全系综模式（默认）与 --rank1-only 模式；
+
+构象系综来源从 CREST 替换为可控的 xTB 动力学采样（采样温度/时长/力场完全可调）。
+
+1.2 流水线（漏斗式采样 → 筛选 → 精修）
+
+输入 (SMILES / XYZ)
+  │  embed
+  ▼
+MD ──────────── GFN-FF @400K / 100ps × --md-seeds 副本（--md-temp/--md-time/--md-seed 可配，默认 seed=42，副本 seed 递增；
+  │                 多副本时各副本用不同 RDKit 嵌入构象起始（v1.3），突破单一盆地）
+  │                 平衡期帧按势能收敛自适应丢弃（S4，v1.3 改为滑动窗口均值差 ±2σ 统计检验）；多副本轨迹合并
+  ▼
+batch_opt ───── GFN1-xTB 逐帧几何优化（纯 Python 循环，ThreadPool ≤ nproc；隐式溶剂与 MD/CENSO 一致；每帧超时上限 --opt-timeout）
+  │                 --max-frames 超限时均匀子采样（默认 500，0=不限）
+  │                 失败率 <70% → fail-fast；产出 isomers.xyz（标题含 GFN1 能量）
+  ▼
+isostat ─────── 去重（Edis/Gdis 阈值）→ cluster.xyz
+  ▼
+能量窗过滤 ───── 按 GFN1 相对能量保留 ≤ --ewin（默认 6.0 kcal/mol）→ ensemble_xyz
+  ▼
+CENSO ───────── 三预设：censo-light / censo-default / censo-zero（--no-opt 路径同 energy）
+  ▼
+dft_handoff ──── 两模式：全系综（累积 Boltzmann ≥99%）或 --rank1-only（仅 CENSO 排名第一）
+  │                 ORCA opt/freq/SP → Shermo → 精细 G
+  ▼
+finalize ────── finalDFT/all_conformers.xyz + conformer_thermo.csv（含 TOTAL 行）
+  │                 finalDFT/ensemble_thermo.json（G_total）+ ensemble/boltzmann_table.json（rank1-only）
+  ▼
+WorkflowResult.metadata（含 total_gibbs_hartree / total_gibbs_kcal_mol）
+
+（--resume 开启时：traj.xyz / isomers.xyz / cluster.xyz 已存在且对应阶段指纹匹配则跳过；指纹按阶段独立，E1）
+
+1.3 每级设计意图
+
+ | 阶段 | 方法精度 | 结构数 | 作用
+
+ | (1) GFN-FF MD @400K/100ps | 力场级（极快） | ~1000 帧/副本 | 广采样：高温加速构象互转，100ps 覆盖小分子构象空间；GFN-FF 拓扑合理、采样足够；柔性分子建议 --md-seeds ≥3 多副本（单轨迹可能遗漏稀有序构象）；v1.3：多副本各以不同 RDKit 嵌入构象起始，起点多样性进一步降低盆地遗漏风险
+
+ | (2) GFN1-xTB 逐帧优化 | 半经验（快） | ~1000 → | 热扰动快照 → 最近局域极小值；能量可比。注意（S6）：GFN-FF（力场）极小值位置/能量与 GFN1 存在系统偏差，逐帧 GFN1 优化 + ISOSTAT 去重即可吸收；ewin 能量窗一律基于优化后的 GFN1 能量
+
+ | (3) ISOSTAT 去重 | 几何相似度 | → 数百 | 消除多帧收敛到同一构象的冗余
+
+ | (4) 能量窗过滤 | GFN1 能量 | → 数十 | 截断热力学无关高能构象（400K 采样偏向高能区），防 CENSO 计算量爆炸
+
+ | (5) CENSO 三预设 | DFT 级筛选/精修 | → 数十 | 定量 gtot 排序 + Boltzmann 权重表
+
+ | (6) DFT handoff | 高精度 DFT | → 数个（99% 集）或 1（rank1-only） | 最终自由能 G 与系综总自由能 G_total
+
+核心原则：昂贵计算只作用于已被廉价步骤压缩到最小规模的结构（漏斗哲学，与 CREST→CENSO 业界工作流同构）。
+
+采样完备性诊断（--conv-check，默认开，见 §8.3）：两级诊断。① 预检（零成本，MD 轨迹上做，v1.3 起为几何指标：回转半径/惯性矩直方图 + 稀疏 RMSD 抽样对比前/后半段，替代早期 GFN-FF 能量方案——能量相近的帧可能结构迥异，能量对比是弱代理），异常则提前 warning，避免"全量优化后才得知采样不足"；② 正式诊断（batch_opt 后）：按每副本时间后半分组（多副本时逐副本统计后合并），各组经 ISOSTAT 去重，对两组簇代表做逐对 RMSD（≤ --conv-rmsd，默认 0.5Å，与主流程 gdis 解耦）判重；后半段新增构象按其在后半段中的群体占比加权计（v1.3，防止低频出现的偶发新构象虚高），加权占比 ≤ --conv-novelty-max（默认 0.10）视为收敛，超限仅 warning（conv_passed=false 记入 metadata），不阻断。分辨率语义：判重分辨率（conv_rmsd 0.5Å）宽于生产分辨率（gdis 0.25Å），"0.5Å 分辨率下无新构象"不等价于"0.25Å 分辨率下无新构象"，诊断偏乐观，属已知保守边界。
+
+2. 数学基础与总自由能双模式
+
+2.1 G_total 推导（rank1 式严格等价）
+
+构象系综（混合体系）总吉布斯自由能：
+
+p_i     = exp(−ΔG_i / kT) / Σ_j exp(−ΔG_j / kT)，   ΔG_i = G_i − G_min
+G_total = Σ_i p_i·G_i  +  RT·Σ_i p_i·ln p_i              （完整混合式）
+        = G_min + Σ_i p_i·ΔG_i + RT·Σ_i p_i·ln p_i
+        = G_1 + RT·ln p_1                                  （rank1 式，仅依赖排名第一构象）
+
+两式数学严格相等；实现中在模式一（完整混合式）内部用 rank1 式交叉校验（容差 1e-8 Ha）。混合修正 RT·ln p_1 恒为负（熵稳定化）。
+
+温度约定（S5）：全部 Boltzmann 权重 p_i、混合熵 S_mix、G_total 统一使用 T = 298.15 K（与 Shermo / CENSO 默认一致），并在 ensemble_thermo.json 中显式记录 T。
+
+交叉校验语义（S2）：1e-8 Ha 的"rank1 式 vs 完整混合式"一致是代数自洽性校验（两者为同一数学恒等式的两种算法，必然相等），不是科学验证。公式的精确性依赖"系综完整 + 权重正确"；模式二（--rank1-only）中 CENSO（半经验/低精度 DFT）权重 × 精细 DFT G₁ 为混级量，CENSO 排序发生 rank 反转时误差可达数 kcal/mol 量级。科学验证锚定在 §12.3 的 CREST 路径交叉运行；模式二混级注意已写入 README。
+
+2.2 单位约定
+
+ | 量 | 单位 | 常量 / 换算 | 代码位置
+
+ | G（Shermo g_conc / CENSO gtot） | Hartree | — | energy.py:434（gibbs = g_conc）
+
+ | 玻尔兹曼常数 k_B | Ha/K | 3.166811563e-6 | energy.py:48；censo_backend.py:65
+
+ | Hartree → kcal/mol | — | × 627.5094740631 | acp/core/models.py:19（HARTREE_TO_KCAL）
+
+ | 混合熵 S_mix | Ha/K·分子 | −k_B·Σ p ln p；输出 cal/(mol·K) 与 T·S（kcal/mol） | 新模块 ensemble_thermo.py（§5）
+
+⚠️ 新模块统一从 acp.core.models 导入 HARTREE_TO_KCAL，不在第三个位置重复定义该常量。
+
+2.3 两种高精度 DFT 模式（可配置）
+
+ | 维度 | 模式一（默认） | 模式二（--rank1-only）
+
+ | 精细 DFT 范围 | 累积 Boltzmann ≥99%（--threshold，默认 0.99）全部构象 | 仅 CENSO records[0]（gtot 排序第一）
+
+ | 权重表 | DFT 精细表（fine g_conc 重算权重） | CENSO gtot 表（boltzmann_weights()）
+
+ | G_total 公式 | 完整混合式 Σp·G + RT·Σp·ln p（内部与 rank1 式交叉校验） | G_total = G₁(fine) + k_B·T·ln p₁(CENSO)
+
+ | 参考量 | — | total_gibbs_censo_hartree = gtot₁ + k_B·T·ln p₁（量化精细 DFT 修正）
+
+ | JSON method 值 | dft_table | censo_table_rank1
+
+ | 组合性 | 与 --no-opt、三 preset 均正交（仿 ACP_Ensemble_Total_Gibbs_DevDoc §6.1）
+
+2.4 数值验证示例
+
+两构象，ΔG₂ = 1.0 kcal/mol，T = 298.15 K
+kT = 3.166811563e-6 × 298.15 = 9.4418e-4 Ha = 0.5925 kcal/mol
+p₁ = 1 / (1 + exp(−1/0.5925)) = 0.8442
+G_total = G₁ + kT·ln(0.8442) = G₁ − 0.101 kcal/mol
+完整式核对：ΣpΔG + RT·Σp ln p = 0.1558 + 0.5925×(−0.4330) = −0.1007 kcal/mol ✓
+
+3. 现状分析（关键代码点）
+
+   run_conformer_energy (energy.py:674, 1156 行)          ← 本工作流的参照系
+      │
+      ├── 多帧 XYZ 接缝 (energy.py:813-817)：--input 为多帧 XYZ 时跳过 CREST
+      │        （本工作流在内部生成系综，不依赖此接缝，仅语义同源）
+      ├── CREST 经 get_backend("crest")(...).search(...)  (energy.py:822-847)
+      ├── CensoBackend.refine_ensemble (censo_backend.py:571)
+      │        _PRESETS 三预设 (censo_backend.py:112-141)
+      │        输入拷贝为 crest_conformers.xyz (censo_backend.py:625-631)
+      └── 复用候选：_resolve_levels(:130) / _run_rank1_handoff(:275)
+           / _boltzmann_weights(:458) / _select_cumulative_boltzmann(:470)
+           / _write_final_outputs(:496) / _censo_record_to_candidate(:648)
+
+   MolclusBackend (molclus_backend.py)                    ← 前端 (1) 的宿主
+      ├── _write_md_inp (:274-302)  $md 块写入器（temp/time/dump/step/hmass/shake/nvt）
+      ├── MD 命令 (:358-370)  --omd --gfn {int}   ← 无 GFN-FF 分支
+      ├── search() (:321-473) 单体三段式（MD→molclus 批量优化→isostat），无 MD-only 方法
+      └── register_backend (:476)
+
+   IsostatBackend.cluster (isostat_backend.py:101)        ← 完全解耦，可直接复用
+   XTBInterface (cccp/qc/interfaces/xtb.py)               ← 无 MD、无 GFN-FF（--gfn {int}）
+   多帧 XYZ 工具：read_xyz_multiframe / write_xyz_multiframe (cccp/utils/file_io.py:247/332)
+
+   前端 ACP_Workbench_v2.html（5816 行）
+      ├── /workflow-catalog 加载 + visible!==false 过滤 (frontend:4155-4161)
+      ├── 系综总自由能统计卡（读 job.result.ensemble_thermo）(frontend:3075, 3108-3143)  ← 已存在且通用
+      ├── energy 向导 rank1-only 选项卡 (frontend:5212-5230) + 提交分支 (frontend:5313-5341)
+      └── i18n 词条 (frontend:1678-1680, 1888-1890)
+
+ | 元素 | 位置 | 现状
+
+ | CENSO 三预设 + refine_ensemble | censo_backend.py:112-141, 571-588 | 已实现；输入为任意多帧 XYZ（拷贝为 crest_conformers.xyz）；返回 CensoRunResult（records 按 gtot 排序 + boltzmann_weights()）
+
+ | xTB MD 脚手架 | molclus_backend.py:274-302, 358-370 | 已实现（$md + --omd）但 无 GFN-FF 分支（--gfn {int}）；且 search() 单体三段式，无 MD-only 公开方法
+
+ | ISOSTAT 去重 | isostat_backend.py:101-140 | 已实现、完全解耦（接受任意多帧 XYZ → cluster.xyz）
+
+ | GFN1 批量优化 | — | 不存在：仅 molclus 二进制路径（molclus_backend.py:304-316, 402-408，xtb_arg 可指定 --gfn 1）；无 Python 逐帧循环
+
+ | GFN-FF 支持 | 全库 grep | 零匹配（catalog gfn/functional、XTBInterface、MolclusBackend、CLI --gfn choices=[0,1,2] 均无）
+
+ | energy 复用候选 | energy.py:130/275/458/470/496/648 | 全部已实现；_xtb_passthrough_result/_is_multiframe_xyz/_resolve_solvent_config/_resolve_crest_ewin 位于 ensemble.py:39-132, 251-287（非 _helpers.py）
+
+ | 总自由能前端 | frontend:3075, 3108-3143 | 统计卡已存在且通用（读取 job.result.ensemble_thermo 的 total_gibbs_kcal_mol 等字段）——本工作流自动受益
+
+ | 共享总自由能模块 | workflows/ensemble_thermo.py | 已实现（energy 计划先行落地，187 行；energy.py:42 已 import）：mixing_entropy / ensemble_total_gibbs / ensemble_total_gibbs_from_values / EnsembleThermoSummary（method = dft_table / censo_table_rank1 / xtb_table_rank1，含 censo_reference_gibbs_* 对照）。本计划 Step 1 直接复用，无新增工作量
+
+ | energy 向导 rank1_only | frontend:5212-5230, 5325-5327 | 已实现（energy 专用）；新工作流需扩展提交分支
+
+ | 工作流注册 | catalog.py:10-176；jobs.py:52-77 | SUPPORTED_WORKFLOWS 自动派生自 catalog status:"active" → 加 active 条目即自动进入 scheduler/API
+
+4. 关键决策（已与需求方确认）
+
+ | 决策项 | 选择 | 理由
+
+ | 架构 | A 独立模块：新建 workflows/xtbmd_censo_energy.py，energy.py 不改动 | 与 energy 解耦；复用其稳定 helper（import 模式已有先例：energy import ensemble 私有函数）
+
+ | 批量优化引擎 | 纯 Python 循环 get_backend("xtb")(cfg, gfn_level=1).optimize(...) | 不依赖 molclus 二进制（远程 LSF 部署更稳，仅需 xtb + isostat）；并发 ≤ nproc
+
+ | MD 驱动位置 | 扩展 MolclusBackend：新增公开方法 run_md() + --gfnff 分支 | 复用既有 $md 写入器与 --omd 模式，最小新增
+
+ | 名称 | xtbmd_censo_energy（全小写 snake_case） | 遵循 xtb_optimize 引擎前缀约定；catalog/registry/CLI 三处名称严格一致
+
+ | MD 参数面 | 全量可配：--md-temp 400 / --md-time 100 / --md-dump / --md-step / --md-hmass / --md-no-shake / --md-nvt / --md-seed 42 / --md-method gfnff | 需求方明确要求温度可配；一并暴露完整 MD 控制面（含 NVT 开关，run_md 签名已支持 nvt=）
+
+ | isostat 阈值 | 暴露 --edis / --gdis（默认 0.5 / 0.25，即 isostat_backend.py:105 既有默认） | 去重粒度直接决定下游 CENSO 负载与构象保留量，必须用户可调；后端 kwargs 已支持，仅需 CLI/工作流透传
+
+ | 前端配置入口 | 全部参数进 catalog FIELD_DEFINITIONS 且标记 advanced: True，经既有自动渲染机制进入方法配置页"高级"区（frontend:3751 isFieldAdvanced + frontend:4420-4980 mc-level-advanced 构建，grid/scf_convergence 等为既有先例） | 零自定义面板、零新渲染代码；catalog 即前端事实源，杜绝面板与 schema 双份维护漂移
+
+ | 能量窗过滤 | 采纳：isostat 后按 GFN1 相对能量 ≤ --ewin（默认 6.0，可配）再进 CENSO | 400K 采样偏向高能区；CREST 输出天然含此窗口，本管线需显式补齐（零成本，复用 batch_opt 已有能量）。v1.2 评审结论（S1）：默认 6.0 维持（与 CREST 既有约定一致），支持配置；敏感性由冒烟覆盖（§12.3），判据为"窗口内构象集对 CENSO 最终排序前 10 名覆盖不变"
+
+ | MD 随机种子 | 默认固定 seed=42（可覆盖），记录进 metadata | 可复现性，便于审稿与排障
+
+ | 断点续跑 | 加 --resume（默认关）：traj.xyz/isomers.xyz/cluster.xyz 已存在则跳过对应阶段 | 100ps MD + 上千次优化中途失败免全量重跑
+
+ | 批量优化容错 | 失败帧跳过并 log；成功率 <70% fail-fast；metadata 记 n_frames/n_ok/n_failed | 避免静默丢帧导致系综残缺
+
+ | 批量优化并发契约 | 每帧独立工作子目录（frame_%04d/）+ 每帧 nproc=1 + ThreadPool workers=min(nproc, n_frames) | 避免共享输出目录互相覆盖与 CPU 过订阅（评审 P0）
+
+ | GFN1 能量存储 | 主通道写 isomers_energies.json（按输入帧序号）；xyz 标题嵌能量保留为兼容通道，censo-zero 直通优先读 sidecar | 消除标题正则解析脆弱性（评审 P1）
+
+ | resume 参数校验 | 按阶段指纹（E1）：每个可跳过阶段（xtbmd/batch_opt/isostat）各自独立 checkpoint.json，记录该阶段输入参数全集的 hash：xtbmd → md_*（temp/time/dump/step/hmass/shake/nvt/seed/seeds/method/solvent/charge/mult）+ 嵌入参数（v1.3：嵌入 seed/构象枚举数，多起点依赖）；batch_opt → opt_gfn/opt_level/max_frames/opt_timeout/溶剂 + traj hash；isostat → edis/gdis + 输入文件 hash；energy_filter → ewin + 输入 hash。指纹匹配才跳过阶段，不匹配则报错提示重跑 | 防参数变更后被静默复用旧产物；按阶段细分避免"只改 edis/gdis 却复用同一把总钥匙"的误通过（评审 P0）；v1.3 补嵌入参数防多起点变更后复用旧轨迹
+
+ | 多副本采样 | --md-seeds（默认 1）：n 条独立轨迹（seed = md_seed, +1, ...），轨迹合并后进入 batch_opt；v1.3：seed > 1 时每副本以不同 RDKit 嵌入构象起始（chem/embedding.py 枚举嵌入，起算自 --input 原始分子而非同一嵌入结果），起点多样性 + 速度随机双保险 | 单条 400K/100ps 轨迹可能困于局部盆地（同起点副本仅速度不同，大分子难以跨盆地）；RDKit 多嵌入零成本提升探索；柔性分子建议 ≥3（评审 P0）
+
+ | 采样收敛诊断 | --conv-check（默认开）+ --conv-novelty-max（默认 0.10）+ --conv-rmsd（默认 0.5Å）：两级诊断——MD 轨迹零成本预检（v1.3 起为几何哈希：回转半径/惯性矩直方图 + 稀疏 RMSD 抽样，替代早期 GFN-FF 能量对比）+ batch_opt 后正式诊断（按每副本时间后半分组，判重阈值独立于主流程 gdis；novelty 按群体占比加权；判重分辨率 0.5Å vs 生产分辨率 0.25Å 语义差异已文档化），超限仅 warning 记入 metadata | 为"采样是否收敛"提供可配置判据；阈值独立避免 0.25Å 主流程 gdis 过严导致 novelty 虚高；能量对比是弱代理（能量相近帧可结构迥异）故预检改几何指标；群体加权防止低频偶发新构象虚高（评审 P0/P1）
+
+ | 前端可配置性 | 原则：全部控制项（md_*/conv_*/max_frames/ewin/edis/gdis/resume）一律经 catalog FIELD_DEFINITIONS 进入前端（v1.3：md_temperature/md_seeds 为常规字段，其余 advanced: True 进"高级配置区"），禁止硬编码与自定义面板 | catalog 即前端唯一事实源，杜绝面板与 schema 双份维护漂移（评审要求）
+
+ | 最终 DFT 模式 | 双模式：默认全系综 / --rank1-only；G_total 双公式交叉校验 | 与 ACP_Ensemble_Total_Gibbs_DevDoc 一致；rank1-only 满足"只用排名第一构象"诉求
+
+ | 溶剂 | --solvent 同时传入 MD、GFN1 batch_opt（solvent_model）与 CENSO（E6） | 极性分子构象分布依赖隐式溶剂；三阶段溶剂必须一致，否则 GFN1 排序基准混级
+
+ | 平衡期丢弃 | 按势能收敛自适应（S4）：对轨迹帧势能做滑动窗口（窗口 100 帧），v1.3 改为统计检验：相邻窗口均值差 ±2σ 判定平衡（绝对漂移阈值 0.5 kcal/mol 在 400K 热涨落下噪声大），丢弃平衡前帧；兜底区间 5%–20% 帧 | 固定 10% 对柔性分子可能不足、对刚硬分子浪费；自适应零成本（GFN-FF 每帧能量已在轨迹中）；统计检验对热涨落鲁棒；能量平衡（ps 级）远快于结构平衡，实际截断主要由兜底区间决定，判据影响有限
+
+ | 温度约定 | T = 298.15 K 全局统一（S5）：Boltzmann 权重 / S_mix / G_total 均用此值，写进 ensemble_thermo.json | 与 Shermo/CENSO 默认一致，避免前后端起算漂移
+
+ | 批量优化帧数上限 | 新增 --max-frames（默认 500，0=不限）：轨迹帧数超限时按时间间隔均匀子采样后再优化（E2） | 1000+ 帧 GFN1 优化对柔性大分子可达天级；相邻帧（100fs 间隔）高度相关，均匀子采样相关性损失极小
+
+ | 逐帧优化超时 | 新增 --opt-timeout（默认 300s/帧，0=不限）：帧级 xtb 优化超过上限按失败帧处理（计入 n_failed），防单帧悬挂拖死全阶段 | 500–1000 帧循环中单帧卡死（收敛分歧/资源异常）会阻塞整批；帧级超时 + 失败跳过保证批处理推进（评审 P2）
+
+ | MD seed 机制 | run_md 扩展 _write_md_inp 增加 seed 行（现无，molclus_backend.py:286-300 已核实），并以 xtb 全局 --seed 旗标为双保险（$md 块 seed= 关键字是否生效依 xtb 版本而定，Phase 2 计算节点核实） | 可复现性是审稿与排障基线；全局 --seed 对 6.0+ 版本稳定支持（评审 P1）
+
+ | 远程 walltime 估算 | 文档 + 冒烟实测双轨：LSF 提交脚本按原子数给出墙钟预估公式（MD ~ N_atoms×s/ps 量级 × --md-time；batch_opt ~ 帧数×帧耗时/nproc），冒烟记录分项耗时（§12.3.4）校准；远程任务墙钟不足时报错信息提示放宽 | 100ps MD + 500 帧 GFN1 优化在较大分子上可达小时级，script_gen 默认 walltime 可能不足导致远程任务被 LSF 提前杀死（评审 P1）
+
+ | frame_%04d 产物生命周期 | 帧工作子目录默认保留（resume 复用 + 排障）；--keep-frames 开关（默认 False）控制是否保留；远程路径经 result fetch 时只回传汇总产物（isomers.xyz/energies.json），帧目录按 remote cleanup 保留策略回收 | 500 目录 × 小文件总量不大，但远程回传带宽与清理策略需显式约定，避免与 local_cleanup / remote cleanup 冲突（评审 P2）
+
+ | ewin 语义 | 显式区分：本工作流 --ewin 为 GFN1 优化后能量窗（kcal/mol），与 energy 工作流的 CREST ewin（energy.py:908，CREST 采样窗）同名同默认值但对象不同；CLI help、README、前端 help 文案注明差异 | 跨工作流迁移时同名旗标语义混淆会导致用户误解窗口作用对象（评审 P1）
+
+ | 科学验证集 | 冒烟扩为 4 分子验证集 + 量化指标（§12.3）：刚性（环己烷）、柔性链（正丁烷/正己烷）、环+取代基（甲基环己烷）、含分子内氢键（1,3-丙二醇）各 1；指标：两路径（CREST vs xTB-MD）构象集 Tanimoto 重合度 + population-weighted coverage 差 | 单分子（乙醇）无法验证采样完备性这一核心科学主张；量化指标替代"预期差 1–2 kcal/mol"的定性判断（评审 P0）
+
+ | 字段可见性 | md_temperature / md_seeds 标记 advanced: False（常规区），其余 md_*/conv_*/max_frames/edis/gdis/ewin 保持 advanced: True | 采样温度与副本数是用户最高频调参项，折叠进高级区会降低可发现性；catalog 字段级可见性已支持（评审 P3）
+
+ | helper 共享化 | 新增 workflows/energy_shared.py（E4）：将 energy.py 的 _resolve_levels/_run_rank1_handoff/_boltzmann_weights/_select_cumulative_boltzmann/_write_final_outputs/_censo_record_to_candidate 与 ensemble.py 的 _xtb_passthrough_result/_resolve_solvent_config/_resolve_crest_ewin 平移为公共名；energy.py 与新模块均改从该模块 import（行为不变，仅符号去私有化） | 消除私名跨模块 import 耦合；第三个工作流复用时不致耦合爆炸；energy.py 单测回归兜底行为不变
+
+ | 空系综保护 | fail-fast（E5）：isostat / 能量窗过滤后构象数 = 0 → 报错退出，提示调 edis/gdis/ewin | 防止 0 构象系综静默进入 CENSO 产生无意义结果
+
+ | 后端调用 | 新模块全走 get_backend(...)（molclus/isostat/xtb/censo） | 遵守 workflows/AGENTS.md 分层规则（energy.py 直连 CensoBackend 为既有例外）
+
+ | GFN-FF 全库 plumbing | 仅 MD 阶段必需；catalog/CLI/三处 _GFN_DISPLAY_TO_INT 的 GFN-FF 扩展列为可选打磨 | 批量优化用 GFN1（已支持）；最小化基础工作量
+
+ | 测试策略 | 本地 mock 单测 + 计算节点真实烟测 | 本机无任何 QC 二进制（已核实）
+
+5. Step 1：新增 ensemble_thermo.py（共享计算模块）
+
+已完成 src/acp/workflows/ensemble_thermo.py（187 行，纯函数 + 汇总 dataclass，零 QC 依赖）——energy 计划先行实现，本计划直接复用
+
+状态：已完成（energy 计划先行实现，energy.py:42 已 import）。本计划直接 import 复用，无新增工作量。边界语义与已实现版本对齐：空权重表 / p₁≤0 → 返回 rank1_gibbs（丢弃混合修正，不钳制）；p₁>1 钳制 1.0；两式交叉校验容差 1e-8 Ha（实现即 §5.1 边界条件）。
+
+ | 符号 | 签名 | 说明
+
+ | mixing_entropy | (weights: list[float]) -> float | S_mix = −k_B·Σ p ln p（Hartree/K·分子）；配套 kcal/(mol·K) 与 T·S（kcal/mol）换算
+
+ | ensemble_total_gibbs | (rank1_gibbs: float, weights, temperature_k: float) -> float | G_total = G₁ + k_B·T·ln p₁（模式二；p₁ 为排名第一权重）
+
+ | ensemble_total_gibbs_from_values | (gibbs_values: list[float], temperature_k: float) -> float | 完整混合式 Σ p·G + RT·Σ p ln p（模式一）；内部与 rank1 式断言一致性（容差 1e-8 Ha）
+
+ | EnsembleThermoSummary | 新建 @dataclass | method（dft_table/censo_table_rank1）、T、G_total（Ha+kcal/mol）、G₁、p₁、S_mix、T·S_mix、population_coverage、逐构象表；to_dict()/write_json(path)
+
+# 模块内单位常量（复用既有定义，不新增）
+from acp.core.models import HARTREE_TO_KCAL        # 627.5094740631
+_K_B_HARTREE_PER_KELVIN = 3.166811563e-6           # 与 energy.py:48 同步
+
+G_total = rank1_gibbs + _K_B_HARTREE_PER_KELVIN * temperature_k * math.log(p_1)
+
+5.1 边界条件
+
+空权重表 / 全零权重：返回 rank1_gibbs（无混合熵修正），不抛异常；
+
+p_1 ≤ 0：防御性钳制 1e-12 并告警，避免 log(0)；
+
+非归一化权重输入：调用方负责归一化（CENSO 与 DFT 权重函数均已归一化）。
+
+6. Step 2：MolclusBackend 扩展（run_md + GFN-FF）
+
+修改 src/acp/backends/molclus_backend.py
+
+6.1 MD 命令 GFN-FF 分支（:358-370）
+
+现有命令 ["--gfn", str(gfn_level)]（整数）无法表达 GFN-FF（xTB 用独立 --gfnff 标志）。新增 md_method 归一化：
+
+md_method ∈ {"gfnff", "gfn0", "gfn1", "gfn2"}   # gfnff → ["--gfnff"]；其余 → ["--gfn", "0|1|2"]
+# 失败模式：GFN-FF 元素参数缺失 / 开壳层不稳 → xtb 非零退出 → 显式报错（提示改用 --md-method gfn1）
+
+6.2 新增公开方法 run_md()
+
+ | 项 | 值
+
+ | 签名 | run_md(initial_xyz: Path, *, md_method="gfnff", gfn_level=0, temperature=400.0, time_ps=100.0, dump_fs=100.0, step_fs=1.0, hmass=1.0, shake=True, nvt=True, seed=42, solvent=None, solvent_model="none", charge=0, multiplicity=1, output_dir=None) -> QCResult
+
+ | 流程 | 写 $md inp（扩展 _write_md_inp，现有实现无 seed 行（:274-302 已核实），需新增 seed= 行；同时追加 xtb 全局 --seed 旗标为双保险，$md 块 seed 关键字是否生效依 xtb 版本而定，Phase 2 在计算节点核实）→ xtb --omd（含溶剂标志）→ 复制 xtb.trj→traj.xyz
+
+ | 多副本起点 | v1.3：--md-seeds > 1 时各副本初始结构来自不同 RDKit 嵌入构象（chem/embedding.py 枚举嵌入；每个副本独立子目录写入各自 molecule.xyz），seed 仅控制速度随机化；副本起点索引与 seed 映射记入 metadata（start_conf_index）
+
+ | 返回 | QCResult(metadata={"trajectory_file": traj_xyz, "n_frames": N})；帧数 < 50 → fail-fast（轨迹截断）
+
+ | 范围 | 仅 MD 阶段，不触发 molclus 批量优化与 isostat（现有 search() 保持原样）
+
+多副本采样（--md-seeds > 1）在工作流层实现：对 seed = md_seed, md_seed+1, ... 逐个调用 run_md()（各自独立子目录；v1.3：各副本以不同 RDKit 嵌入构象起始），合并全部轨迹帧后进入 batch_opt；run_md() 本身保持单轨迹职责，seed 清单、起点构象索引与逐轨迹帧数记录进 metadata。
+
+⚠️ $md 块中 GFN-FF 与 NVT/SHAKE 的兼容性需在计算节点验证；若 GFN-FF 下 SHAKE 异常，回退 shake=False（参数面已暴露）。
+
+7. Step 3：GFN1 批量优化 helper
+
+新建（位于 workflows/xtbmd_censo_energy.py 内，私有函数）
+
+def _batch_opt_frames(traj_xyz: Path, *, gfn_level=1, opt_level="normal",
+                      charge, multiplicity, nproc, solvent_model,
+                      max_frames=500, opt_timeout=300, work_dir: Path, cfg) -> Path:  # → isomers.xyz（多帧，标题含 GFN1 能量）
+    1. read_xyz_multiframe(traj_xyz)  # cccp/utils/file_io.py:247，按 n_atoms 切片逐帧
+    2. 平衡期丢弃（自适应，S4，v1.3 统计检验）：逐帧 GFN-FF 势能滑动窗口（窗口 100 帧），
+       相邻窗口均值差 ±2σ 判定平衡，丢弃平衡前帧；兜底区间 5%–20% 帧
+    3. --max-frames 帧数上限（E2）：保留帧数 > max_frames 时按时间间隔均匀子采样（n = max_frames）
+    4. 并发契约：每帧独立工作子目录 frame_%04d/ + 每帧 nproc=1
+       ThreadPool(max_workers=min(nproc, n_frames))：
+         get_backend("xtb")(cfg, gfn_level=gfn_level, nproc=1).optimize(coords, syms, ...)
+       每帧超时上限 --opt-timeout（默认 300s，0=不限），超时帧计入 n_failed
+       （solvent_model 与 MD/CENSO 一致，E6）
+    5. 成功帧收集 xtbopt.xyz 坐标 + 解析 TOTAL ENERGY；失败帧 log 并跳过
+    6. write_xyz_multiframe(isomers.xyz, ..., energies=[...])；主通道同时写
+       isomers_energies.json（按输入帧序号：{frame: {"energy": Ha, "status": ok|failed}}），
+       能量窗 / censo-zero 直通优先读 sidecar，标题正则仅作兼容
+    7. 统计：n_frames / n_ok / n_failed；成功率 < 0.70 → 抛错 fail-fast；n_after_filter=0 → fail-fast（E5）
+    8. （--conv-check）正式诊断：按每副本时间后半分组（多副本时逐副本统计后合并）
+       → 各自 isostat.cluster(...) → 簇代表跨组 RMSD(≤ --conv-rmsd) 判重
+       → 后半段新增构象按群体占比加权（v1.3）合计 > --conv-novelty-max → warning
+       （conv_passed=false，不阻断）；判重分辨率（conv_rmsd 0.5Å）宽于生产分辨率（gdis 0.25Å），
+       诊断偏乐观，语义已在 §1.3 文档化
+    9. （--conv-check 预检，E3，v1.3 几何指标）MD 轨迹上零成本预检：回转半径/惯性矩直方图 +
+       每 10 帧稀疏 RMSD 抽样对比前/后半段互异结构多样性，异常提前 warning——
+       避免全量优化后才得知采样不足（GFN-FF 能量对比为弱代理，已弃用）
+
+GFN1（gfn_level=1）在现有 XTBInterface.optimize()（cccp/qc/interfaces/xtb.py:70）已支持，无需底层改动。远程 LSF 下该 Python 循环不依赖 molclus 二进制，部署面更小。
+
+已知事项（E8）：每帧 xtb 子进程启动开销 ~0.1–0.3s，500–1000 帧合计数分钟，可接受；若未来需要加速，可提供 molclus 二进制批量优化作为可选路径（不阻塞主线）。
+
+8. Step 4：xtbmd_censo_energy.py 工作流模块
+
+新建 src/acp/workflows/xtbmd_censo_energy.py
+
+8.1 入口签名
+
+def run_xtbmd_censo_energy(
+    input_source: str,
+    output_dir: str | Path = "./xtbmd_censo_energy_output",
+    preset: str = "censo-light",
+    config: dict[str, Any] | None = None,
+    name: str | None = None, charge: int | None = None, multiplicity: int | None = None,
+    solvent: str | None = None, nproc: int | None = None,
+    no_opt: bool = False, levels: dict[str, Any] | None = None,
+    threshold: float = 0.99, ewin: float = 6.0,
+    rank1_only: bool = False, resume: bool = False,
+    *, md_temperature=400.0, md_time_ps=100.0, md_dump_fs=100.0, md_step_fs=1.0,
+    md_hmass=1.0, md_shake=True, md_seed=42, md_seeds: int = 1,
+    md_method="gfnff", conv_check: bool = True, conv_novelty_max: float = 0.10,
+    conv_rmsd: float = 0.5, max_frames: int = 500,
+    opt_gfn_level=1, opt_level="normal", opt_timeout: int = 300,
+) -> WorkflowResult
+
+8.2 阶段与状态
+
+stage_names = ["embed", "xtbmd", "batch_opt", "isostat", "energy_filter",
+               "censo", "dft_handoff", "finalize", "conformer_energy"]
+
+8.3 前端五阶段编排
+
+ | 阶段 | 实现 | resume 检查
+
+ | embed | StructureReader().read(...)（同 energy.py:750-757） | —
+
+ | xtbmd | get_backend("molclus")(cfg).run_md(...)（溶剂透传，§6.2；--md-seeds > 1 循环调用并合并轨迹；v1.3：多副本以不同 RDKit 嵌入构象起始） | traj.xyz 存在且阶段指纹匹配（md_* + 嵌入参数 hash）→ 跳过；不匹配 → 报错提示（--resume=false 或清理产物）
+
+ | batch_opt | _batch_opt_frames(...)（§7：自适应平衡期（±2σ 统计检验）/ max_frames 子采样 / 并发契约 / 逐帧超时 / sidecar / 两级收敛诊断；solvent_model 与 MD/CENSO 一致） | isomers.xyz + isomers_energies.json 存在且阶段指纹匹配（opt_gfn/opt_level/max_frames/opt_timeout/溶剂 + traj hash）→ 跳过
+
+ | isostat | get_backend("isostat")(cfg).cluster(isomers_xyz, edis=…, gdis=…, …) → cluster.xyz（isostat_backend.py:101；edis/gdis 透传自 --edis / --gdis，优先级同 ewin：显式参数 > levels 字段 > config > 默认 0.5/0.25）；产出 0 簇 → fail-fast（E5），提示调 edis/gdis | cluster.xyz 存在且阶段指纹匹配（edis/gdis + 输入 hash）→ 跳过
+
+ | energy_filter | 读 cluster.xyz + GFN1 能量（优先 sidecar，标题为兼容通道），保留相对能量 ≤ ewin；过滤后 0 构象 → fail-fast（E5），提示调 ewin；重写标题嵌入能量并重建 ensemble_energies.json（按 cluster 顺序，含原帧序号）→ ensemble_xyz | —（无独立产物；指纹并入 isostat 检查）
+
+采样收敛诊断（--conv-check，默认开）：两级。① 预检（MD 轨迹上，零优化成本，E3，v1.3 起为几何指标）：回转半径/惯性矩直方图 + 每 10 帧稀疏 RMSD 抽样对比前/后半段互异结构多样性，异常提前 warning（GFN-FF 能量对比为弱代理，已弃用）；② 正式诊断（batch_opt 后）：按每副本时间后半分组（多副本逐副本统计后合并），各组经 isostat.cluster(...) 去重（edis/gdis 同主流程），对两组簇代表做逐对 RMSD（≤ --conv-rmsd，默认 0.5Å，与主流程 gdis 解耦）判重；后半段新增构象按群体占比加权（v1.3）合计 > --conv-novelty-max（默认 0.10）→ 仅 warning（conv_passed=false 记入 metadata），不阻断；判重分辨率（0.5Å）与生产分辨率（gdis 0.25Å）的语义差异见 §1.3。
+
+8.4 后端三 preset + 双模式分发（与 energy 同源）
+
+import 复用（不复制）：经 新共享模块 workflows/energy_shared.py（E4，§4 决策）统一提供 resolve_levels / run_rank1_handoff / boltzmann_weights / select_cumulative_boltzmann / write_final_outputs / censo_record_to_candidate（自 energy.py 平移）与 xtb_passthrough_result / resolve_solvent_config / resolve_crest_ewin（自 ensemble.py 平移）；energy.py 与本模块均改从该模块 import。
+
+ | preset × 模式 | 行为
+
+ | censo-light（opt on）× 模式一 | CENSO screening（part_overrides/part_templates 仅 forwarding screening）→ 累积 Boltzmann ≥99% 选择 → 逐构象 _run_rank1_handoff
+
+ | censo-light（opt on）× 模式二 | 同上筛选 → 取 records[0] → 仅 1 次 handoff
+
+ | censo-zero（opt on）× 任一 | _xtb_passthrough_result(ensemble_xyz, ...)（优先读 ensemble_energies.json sidecar，标题解析为兼容路径）→ records[0] → handoff
+
+ | censo-light + --no-opt | refine_ensemble(nconf=1, include_refinement=True) → CENSO 精修记录 → _censo_record_to_candidate（模式二天然为 rank1；模式一保持 nconf 选择）
+
+ | censo-default × 任一 | 全 Part0–Part3 漏斗 → 模式一：对选中集跑 handoff；模式二：仅 records[0] 跑 skip_opt_sp=True freq+Shermo（sp_energy_precomputed=rec.energy）
+
+8.5 总自由能输出（模块内独立实现，保持 energy.py 不动）
+
+基础文件：调 import 的 _write_final_outputs（未扩展版，行为不变）；
+
+新增模块内 _write_ensemble_thermo_outputs(candidates, *, weights_source, population_coverage, ...)：
+  
+  
+模式一：ensemble_total_gibbs_from_values(fine_gibbs_list, T) → method=dft_table，population_coverage = Σ 选中权重；
+  
+模式二：ensemble_total_gibbs(G₁, censo_weights, T) → method=censo_table_rank1，另写 ensemble/boltzmann_table.json（conf_id→p, T, source="censo"）与 total_gibbs_censo_hartree 对照；
+  
+写 finalDFT/ensemble_thermo.json；给 conformer_thermo.csv 追加 TOTAL 汇总行（列头不变）；
+  
+
+metadata 并入：total_gibbs_hartree / total_gibbs_kcal_mol / ensemble_thermo_json；模式二另加 total_gibbs_censo_hartree / boltzmann_table_json；附 md_seed / md_seeds / start_conf_index（多起点嵌入起始构象索引，v1.3）/ n_frames_raw（轨迹原始帧数）/ n_frames（平衡期丢弃 + max_frames 子采样后）/ n_ok / n_failed / n_timeout（帧级超时数，v1.3）/ n_after_isostat / n_after_filter / conv_novelty_rate / conv_passed（--conv-check 关闭时为 null）。
+
+⚠️ 新模块禁用裸 except Exception:（项目反模式 #10）：MD/isostat 阶段 fail-fast + 显式 log；批量优化帧级失败跳过须记入 n_failed 统计。
+
+9. Step 5：CLI 接线
+
+修改 src/acp/cli.py
+
+run_sub.add_parser("xtbmd_censo_energy", ...)（epilog 含示例），set_defaults(workflow="xtbmd_censo_energy")；
+
+参数集 = energy 全集（--input/--batch-file/--output/--config/--preset(三选)/--no-opt/--threshold/--levels/--solvent/--ewin/--nproc/--mem/--log-*/--name/--charge/--multiplicity/--save-config）+ 新旗标：
+
+ | 参数 | 默认 | 说明
+
+ | --md-temp / --md-time / --md-dump / --md-step / --md-hmass | 400 / 100 / 100 / 1.0 / 1.0 | MD 温度 K、时长 ps、帧间隔 fs、步长 fs、H 质量
+
+ | --md-no-shake / --md-nvt | False / True | 关闭 SHAKE（默认开）／切换 NVT-NPT 系综
+
+ | --md-seed | 42 | 固定随机种子（可复现；--seed 全局旗标 + $md seed 行双保险，$md seed 依 xtb 版本生效）
+
+ | --md-seeds | 1 | 多副本采样轨迹数（seed 从 --md-seed 递增，各副本以不同 RDKit 嵌入构象起始）；柔性分子建议 ≥3
+
+ | --conv-check / --conv-novelty-max / --conv-rmsd | True / 0.10 / 0.5 | 采样收敛诊断开关 / 后半段新增构象占比上限（超限仅 warning）/ 判重 RMSD 阈值 Å（与主流程 gdis 解耦）
+
+ | --max-frames | 500 | 批量优化帧数上限（0=不限）；超限按时间间隔均匀子采样
+
+ | --ewin | 6.0 | 能量窗 (kcal/mol)，GFN1 优化后相对能量过滤上限。注意：与 energy 工作流同名旗标（CREST 采样窗，energy.py:908）语义对象不同——本工作流窗口作用于 GFN1 批量优化结果；help/README 注明差异
+
+ | --md-method | gfnff | gfnff / gfn0 / gfn1 / gfn2
+
+ | --opt-gfn / --opt-level | 1 / normal | 批量优化 GFN 等级（0/1/2）与收敛级别（crude/normal/tight/verytight，v1.4 更正）
+
+ | --opt-timeout | 300 | 单帧 xtb 优化超时上限（s，0=不限），超时帧计入 n_failed
+
+ | --edis / --gdis | 0.5 / 0.25 | ISOSTAT 去重能量阈值 (kcal/mol) 与结构 RMSD 阈值 (Å)
+
+ | --rank1-only | False | 仅对 CENSO 排名第一构象做精细 DFT（模式二）
+
+ | --resume | False | 断点续跑（traj/isomers/cluster 已存在则跳过）
+
+dispatch dict（cli.py:1277-1295）加 "xtbmd_censo_energy": _handle_xtbmd_censo_energy,（CLI 真正闸门，遗漏则子命令被拒）；
+
+_handle_xtbmd_censo_energy：lazy import + 透传全部参数 + 成功日志 Total G(ensemble): X.XXXX kcal/mol；
+
+--batch-file 批量路径仿 _handle_energy_batch。
+
+10. Step 6：平台接入（catalog / scheduler / remote）
+
+10.1 catalog（自动派生 + 显式 schema）
+
+ | 项 | 改动 | 位置
+
+ | WORKFLOW_CATALOG 条目 | 新增 {id:"xtbmd_censo_energy", label:"xTB-MD CENSO Energy", label_zh:"xTB 动力学构象自由能", category:"preset", description:"GFN-FF MD采样→GFN1批量优化→isostat去重→CENSO→精细DFT", method_schema_id:"xtbmd_censo_energy", default_backend:"censo", requires_binaries:["xtb","isostat","censo","orca"], status:"active", visible:True} | catalog.py:150 后（energy 条目旁）
+
+ | METHOD_SCHEMAS | 新增 "xtbmd_censo_energy"：levels = xtb_md / xtb_opt / isostat / censo / refinement_sp / thermo；profiles = censo-light/default/zero（镜像 censo_energy） | catalog.py:549-1245
+
+ | FIELD_DEFINITIONS | 新增 19 个字段：md_temperature(float,K) / md_time_ps(float) / md_dump_fs(float) / md_step_fs(float) / md_hmass(float) / md_shake(bool) / md_nvt(bool) / md_seed(int) / md_seeds(int) / md_method(select: gfnff/gfn0/gfn1/gfn2) / conv_check(bool) / conv_novelty_max(float) / conv_rmsd(float,Å) / max_frames(int) / opt_gfn(select: 0/1/2) / opt_level(select: crude/normal/tight/verytight) / opt_timeout(int,s) / edis(float,kcal/mol) / gdis(float,Å)。可见性（v1.3）：md_temperature 与 md_seeds 为常规字段（advanced: False，用户高频调参项），其余 17 个标记 advanced: True（自动进入前端"高级"区，frontend:3751）。schema fields 引用必须存在，否则前端渲染破裂；同时是前端"高级配置区"的唯一事实源（无需自定义 MD 面板）。前端可配置性原则：全部新控制项（含 resume/ewin/seed 系）一律经此表进入前端，禁止硬编码或自定义面板 | catalog.py:390-547
+
+ | SUPPORTED_WORKFLOWS | 无需改动（jobs.py:52-77 自动派生自 status:"active"） | scheduler/jobs.py
+
+10.2 scheduler / remote（四处手维护清单）
+
+ | 文件 | 改动 | 参照
+
+ | src/acp/scheduler/runner.py（:679-684 附近） | 白名单 + elif wf == "xtbmd_censo_energy": 分支，emit 全部新 flag（--md-temp/--md-time/--md-seed/--rank1-only/--resume/--ewin 等；method.get("rank1_only") 时加 --rank1-only，仿 no_opt 透传） | runner.py:699-719（energy 分支）
+
+ | src/acp/scheduler/remote/script_gen.py（:114-119） | 同上（LSF 提交脚本透传） | script_gen.py:135-145
+
+ | src/acp/scheduler/stage_tasks.py（:439-473） | 新增 register_plan_provider("xtbmd_censo_energy", _XtbmdCensoEnergyStagePlanProvider())（阶段名 = §8.2） | energy provider 同型
+
+ | api/routes.py / v1_routes.py / manager.py | 无需改动（经 SUPPORTED_WORKFLOWS 自动放行） | —
+
+⚠️ cli.py dispatch dict、runner.py 白名单、script_gen.py 白名单、catalog FIELD_DEFINITIONS、前端 ADVANCED_TOPLEVEL_FIELDS 派生字段集合（E7）是五处最易漂移的手维护/隐式清单，新增工作流/新旗标必须同步，缺一即"CLI 可用但 API/LSF 拒单"或"前端不渲染"。§12.2 五方 parity 单测将其机械化。
+
+10.3 可选打磨（不阻塞主线）
+
+GFN-FF 全库 plumbing：catalog gfn/functional per_backend xtb 加 "GFN-FF"（catalog.py:401, 508）；三处 _GFN_DISPLAY_TO_INT（simple.py:221-235 / runner.py:47-48 / script_gen.py:52-53）加 "GFN-FF": "ff"；CLI --gfn（cli.py:243）放宽 choices。价值：acp run xtb_optimize --gfn ff 可跑通；风险：需同步四处，留待后续。
+
+11. Step 7：前端设计（ACP_Workbench_v2.html）
+
+修改 frontend/ACP_Workbench_v2.html（5816 行单页，var 风格、无框架、最小 diff）
+
+设计原则：能自动的绝不写代码。 已核实：工作流选择模态框从 /workflow-catalog（v1_routes.py:1142 → catalog 派生）加载并按 visible !== false 过滤（frontend:4155-4161）——catalog 加 status:"active", visible:True 条目后，工作流卡片自动出现，前端零代码。
+
+11.1 自动获得（零改动）
+
+工作流选择入口：catalog 条目自动进入"选择工作流"模态框（workflow-categories，frontend:4189+），卡片标题/描述用 label_zh/description；
+
+预设选择：METHOD_SCHEMAS 的 profiles（censo-light/default/zero）→ 预设下拉自动渲染（wizardState.method 加载逻辑，frontend:4255-4270）；
+
+系综总自由能统计卡：已存在且通用（frontend:3075, 3108-3143）——读取 job.result.ensemble_thermo 的 total_gibbs_kcal_mol / total_gibbs_hartree / rank1_weight / t_s_mix_kcal_per_mol / population_coverage，xtbmd_censo_energy 任务详情自动渲染，无需新代码；
+
+i18n 骨架：catalog 提供 label_zh/label；info.total_gibbs 词条已存在（frontend:1678/1888）。
+
+11.2 定向新增（四块）
+
+(a) 提交分支扩展（必需）
+
+提交方法 submitWizardJobs 中 energy 专用分支（frontend:5313-5341：preset / no_opt / threshold / rank1_only / solvent 抽取 / refinement_threshold 清理）需覆盖新工作流。建议将条件扩展为集合判断，避免逐工作流复制：
+
+var energyLike = (workflow === "energy" || workflow === "xtbmd_censo_energy");
+if (energyLike) {
+  if (pid && pid !== "__custom__") methodPayload.preset = pid;
+  if (energyLike && !cleanedLevels.dft_opt) methodPayload.no_opt = true;
+  if (workflow === "xtbmd_censo_energy") {
+    methodPayload.ewin = mdState.ewin;                       // 能量窗
+    methodPayload.rank1_only = !!wizardState.method.rank1_only;
+    if (mdState.resume) methodPayload.resume = true;
+    // MD/opt/isostat 参数组（md_temperature / md_time_ps / md_dump_fs /
+    //   md_step_fs / md_hmass / md_shake / md_nvt / md_seed / md_method /
+    //   opt_gfn / opt_level / opt_timeout / edis / gdis / md_seeds / conv_check /
+    //   conv_novelty_max / conv_rmsd / max_frames）：由 FIELD_DEFINITIONS 派生
+    //   （新增字段自动进入，无需改此分支）；v1.3 起派生集合 = 本工作流全部新字段
+    //   （常规 + advanced），advanced 仅决定渲染区段（常规区/高级区），不决定是否提交
+    FIELD_DEFINITIONS_FOR(workflow).forEach(function(key) {
+      if (mdState[key] !== undefined) methodPayload[key] = mdState[key];
+    });
+  }
+  ...（solvent 抽取、refinement_threshold 清理共用 energy 逻辑）
+}
+
+method 顶层字段（preset/rank1_only/ewin/resume/md_*）与 runner.py 的 elif wf == "xtbmd_censo_energy": 分支一一对应，字段名须与后端 method.get(...) 读取键完全一致。
+
+(b) 高级参数区（零面板代码，经 catalog 自动渲染）
+
+MD/批量优化/ISOSTAT 全部参数不做自定义面板：只需在 FIELD_DEFINITIONS（§10.1）登记字段，既有渲染逻辑（frontend:3751 isFieldAdvanced → frontend:4420-4980 折叠式 mc-level-advanced，样式 wizard-input-section，frontend:853）自动将其放入方法配置页；v1.3：md_temperature/md_seeds 为常规区可见（advanced: False），其余 17 个进"高级配置区"。字段渲染类型由 catalog 驱动：
+
+ | 字段 | catalog 类型 | 默认 | 单位/选项
+
+ | md_temperature 常规 | float | 400 | K
+
+ | md_time_ps | float | 100 | ps
+
+ | md_dump_fs | float | 100 | fs
+
+ | md_step_fs | float | 1.0 | fs
+
+ | md_hmass | float | 1.0 | —
+
+ | md_shake / md_nvt | bool | True / True | —
+
+ | md_seed | int | 42 | —
+
+ | md_seeds 常规 | int | 1 | 多副本轨迹数（≥3 建议；各副本不同 RDKit 嵌入构象起始）
+
+ | conv_check | bool | True | 采样收敛诊断开关
+
+ | conv_novelty_max | float | 0.10 | 后半段新增构象群体加权占比上限
+
+ | conv_rmsd | float | 0.5 | 收敛诊断判重 RMSD 阈值 (Å)，与主流程 gdis 解耦
+
+ | max_frames | int | 500 | 批量优化帧数上限（0=不限，超限均匀子采样）
+
+ | md_method | select | gfnff | gfnff/gfn0/gfn1/gfn2
+
+ | opt_gfn / opt_level | select | 1 / normal | 0/1/2；crude/normal/tight/verytight（v1.4：更正，xTB 合法集；原 "loose" 非法）
+
+ | opt_timeout | int | 300 | 单帧 xtb 优化超时 (s，0=不限)
+
+ | edis / gdis | float | 0.5 / 0.25 | kcal/mol；Å
+
+实现要点：MD 参数为 method 顶层字段（与 no_opt/rank1_only 同模式）；v1.3：md_temperature/md_seeds 落在常规区，其余落"高级"折叠区；rank1-only 复选框沿用既有 mc-rank1-option 卡片样式（frontend:5212-5230）；提交分支将全部新字段并入 methodPayload（前端字段名集合从 FIELD_DEFINITIONS 派生——常规 + advanced 全量，advanced 仅决定渲染区段，避免硬编码）。
+
+(c) i18n 词条新增
+
+ | key | zh | en
+
+ | modal.md_section_title | 动力学采样（MD） | MD Sampling
+
+ | modal.md_temp_label 等（每控件一条） | MD 温度 (K) / … | MD temperature (K) / …
+
+ | modal.rank1_only_desc 扩展 | 可选（能量/xtbmd 共用描述） | —
+
+词条表位置：frontend:1674-1780（zh）与 1884-1986（en），两处同步。
+
+(d) 任务详情补充（低成本可选）
+
+统计卡 meta 行（frontend:3127-3141）已覆盖 G_total/p₁/T·S_mix/coverage；如需展示采样统计（n_frames/n_ok），可在 job 详情元数据区追加两行，读取 job.result.metadata。默认不新增，避免 diff 膨胀。
+
+11.3 前端验收清单
+
+工作流选择模态框出现 xtbmd_censo_energy 卡片（label_zh 正确、可选中）；
+
+预设三选（censo-light/default/zero）随 profiles 自动渲染并落 methodPayload.preset；
+
+方法面板自动出现全部 19 个参数控件（md_temperature/md_seeds 在常规区，md_*/opt_*/edis/gdis/conv_*/max_frames/opt_timeout 在"高级"折叠区，带单位与默认值），无需自定义面板代码；
+
+勾选 rank1-only 后任务结果统计卡出现（数据来自 ensemble_thermo.json）；
+
+高级区各控件值完整落入提交 body，且提交后 job 详情 spec.method 与 runner 实际执行 flag 一致（对照日志）；
+
+前端 var 风格、无新依赖、diff 最小（仅上述四块）。
+
+12. Step 8：测试
+
+12.1 新增 tests/test_acp_ensemble_thermo.py（纯函数）
+
+ | 用例 | 断言
+
+ | 单构象（p₁=1.0） | G_total = G₁（无混合修正）
+
+ | 等权重两构象（p=0.5） | G_total = G₁ + kT·ln 0.5
+
+ | §2.4 数值案例（ΔG₂=1 kcal/mol） | G_total − G₁ = −0.101 kcal/mol（±1e-3）
+
+ | rank1 式 vs 完整混合式 | 两式一致（容差 1e-8 Ha）
+
+ | 单位换算 | kcal/mol = Ha × 627.5094740631；S_mix cal/(mol·K)
+
+ | 空表 / p₁≤0 边界 | 返回 G₁，不抛异常
+
+12.2 新增 tests/test_acp_workflows_xtbmd_censo_energy.py
+
+ | 组 | 用例（mock get_backend 各后端）
+
+ | 前端流水线 | 阶段顺序 embed→xtbmd→batch_opt→isostat→energy_filter→censo→handoff→finalize；run_md 收到 400/100/42 参数；batch_opt 拆帧数正确；能量窗过滤后 CENSO 输入 = 过滤系综
+
+ | 三 preset 分支 | censo-light / censo-default / censo-zero × opt-on/--no-opt 的 CENSO 调用参数（含 include_refinement / nconf）
+
+ | 双模式 DFT | 模式一：metadata.total_gibbs_kcal_mol = 完整混合式值；模式二：handoff 仅调 1 次、G_total = G₁ + k_B·T·ln p₁(CENSO)、boltzmann_table.json 落盘
+
+ | 容错 | batch_opt 失败帧跳过且 n_failed 计入；成功率 <70% → fail-fast；--resume 跳过已存在产物
+
+ | run_md GFN-FF 分支 | mock 断言命令构造：md_method=gfnff → --gfnff；gfn0/1/2 → --gfn {int}；--seed、溶剂标志透传；帧数 <50 fail-fast
+
+ | 多副本与收敛诊断 | md_seeds=3 → run_md 调用 3 次（seed 递增、起点构象索引互异（v1.3：不同 RDKit 嵌入））且轨迹合并帧数正确；conv_check 下每副本时间后半分组统计，后半段新增构象群体加权占比超限 → warning + metadata.conv_passed=false；判重阈值用 --conv-rmsd 而非 gdis；MD 轨迹几何哈希预检（回转半径直方图/稀疏 RMSD）warning 提前触发
+
+ | 逐帧超时与产物生命周期 | mock 断言单帧超时帧计入 n_failed 且不阻塞整批；--keep-frames 关闭时 frame_%04d 目录被清理、开启时保留
+
+ | sidecar 能量 | isomers_energies.json / ensemble_energies.json 与标题能量一致；censo-zero 直通优先读 sidecar
+
+ | resume 指纹 | 按阶段指纹：xtbmd/batch_opt/isostat 各自 checkpoint 独立——参数变更后仅影响对应阶段：改 edis/gdis → 仅 isostat 拒绝复用并报错；改 md_temperature → 仅 xtbmd 拒绝；改 opt_gfn → 仅 batch_opt 拒绝
+
+ | 帧数上限与空系综 | --max_frames 生效：轨迹超限 → 均匀子采样帧数 = max_frames；isostat 0 簇 / energy_filter 0 构象 → fail-fast 且报错信息含调参提示
+
+ | 溶剂一致性 | mock 断言 batch_opt 的 solvent_model、run_md 溶剂标志与 CENSO 溶剂三者一致（--solvent 透传）
+
+ | 并发隔离 | mock 断言每次 optimize 工作子目录唯一、每帧 nproc=1
+
+ | 全参数透传 | CLI 旗标（--md-temp/--md-method/--opt-gfn/--opt-level/--edis/--gdis/--md-nvt/--max-frames/--conv-rmsd 等）→ 工作流入口 → 后端调用参数逐项一致（mock 断言 run_md/cluster 收到自定义值）
+
+ | 五方 parity | 新单测：解析 CLI parser 新增旗标集合（含 --md-seeds / --conv-check / --conv-novelty-max / --conv-rmsd / --max-frames / --ewin），断言 runner.py 命令分支、script_gen.py 白名单、catalog FIELD_DEFINITIONS 键、前端 ADVANCED_TOPLEVEL_FIELDS 派生字段集合（E7）四者均覆盖——把"五处手维护/隐式清单漂移"变成可机械校验（§10.2 警示的 cli/runner/script_gen 三处 + FIELD_DEFINITIONS + 前端派生集合共五处）
+
+ | censo-zero 直通 | _xtb_passthrough_result 能解析标题 GFN1 能量（energy_filter 重写后）
+
+12.3 计算节点冒烟清单（真实二进制，非本机）
+
+乙醇 acp run xtbmd_censo_energy --input "CCO" --preset censo-light 跑通（真实 xtb GFN-FF MD @400K/100ps 正常产出轨迹，帧数 ≈ 1000）；
+
+抽样 50 帧 _batch_opt_frames 成功率 100%，isostat 去重后 <50；
+
+真实 CENSO censo-light 筛选 + 模式一 finalize，ensemble_thermo.json 数值自洽（coverage ≈ 99%）；
+
+各阶段耗时记录：MD / batch_opt / isostat / CENSO 分项——用于校准远程 LSF walltime 估算公式（§4）；
+
+ewin 敏感性：5 / 6 / 8 kcal/mol 三档对比构象保留数、G_total 差（应 < 0.5 kcal/mol 量级）与"窗口内构象集对 CENSO 最终排序前 10 名覆盖不变"（S1 判据，直接检验窗口是否丢失真实低能构象）；
+
+交叉验证（v1.3 扩为 4 分子验证集）：同一分子 acp run energy（CREST 路径）与 xtbmd_censo_energy 对比。验证集：① 乙醇（小分子基线）；② 正己烷（柔性链，构象数多）；③ 甲基环己烷（环 + 取代基轴向/平伏）；④ 1,3-丙二醇（分子内氢键）。量化指标：a) G_total 差（预期 < 1–2 kcal/mol 量级）；b) 构象集 Tanimoto 重合度（两路径经 RMSD 聚类后的构象集合 Jaccard 系数）；c) population-weighted coverage（CREST 系综中与 xTB-MD 系综代表构象匹配（RMSD ≤ 1.0Å）的累计 Boltzmann 权重占比）；b/c 记录于冒烟日志，作为采样完备性证据；
+
+censo-zero 直通真实路径（v1.3 新增）：乙醇 + --preset censo-zero 端到端跑通，验证 sidecar 能量主通道与标题解析兼容路径（该路径是全管线解析器最脆弱点）；
+
+--md-seeds 3 复跑一次（乙醇），确认收敛诊断输出合理（conv_passed 语义正确）且多起点嵌入不报错。
+
+# 回归命令（本机）
+pytest tests/test_acp_ensemble_thermo.py -v
+pytest tests/test_acp_workflows_xtbmd_censo_energy.py -v
+pytest tests/test_acp_workflows_energy.py tests/test_acp_backends.py -v
+pytest tests/ -v
+
+13. 输出文件清单
+
+ | 文件 | 状态 | 内容
+
+ | finalDFT/ensemble_thermo.json | 新增 | method（dft_table / censo_table_rank1）/ T / G_total(Ha+kcal/mol) / G₁ / p₁ / S_mix / T·S_mix / population_coverage / 逐构象表（G_i、ΔG_i、p_i）
+
+ | ensemble/boltzmann_table.json | 新增（模式二） | CENSO 权重表：conf_id → p、T、source="censo"
+
+ | finalDFT/conformer_thermo.csv | 兼容扩展 | 列头不变，末尾追加 TOTAL 汇总行
+
+ | finalDFT/all_conformers.xyz / <name>_global_min.xyz | 既有 | 模式二下 all_conformers 仅 1 帧（语义差异标注）
+
+ | traj.xyz / isomers.xyz / cluster.xyz | 既有（阶段产物） | 中间产物，--resume 的检查点；cluster.xyz 为过滤前系综
+
+ | isomers_energies.json / ensemble_energies.json | 新增 | GFN1 能量 sidecar（按帧索引；能量窗 / censo-zero 直通优先读取，标题为兼容通道）
+
+ | checkpoint.json | 新增 | 按阶段指纹（E1）：xtbmd/batch_opt/isostat 各自独立，记录该阶段输入参数全集 hash（见 §4 resume 参数校验），匹配才跳过阶段
+
+ | ensemble_xyz（过滤后） | 新增 | 能量窗过滤 + 标题重写后的 CENSO 输入系综
+
+ | WorkflowResult.metadata | 扩展 | +total_gibbs_hartree / total_gibbs_kcal_mol / ensemble_thermo_json / md_seed / md_seeds / start_conf_index（多起点嵌入各副本起始构象索引，v1.3）/ n_frames_raw / n_frames / n_ok / n_failed / n_timeout（帧级超时数，v1.3）/ n_after_isostat / n_after_filter / conv_novelty_rate / conv_passed；（模式二）+total_gibbs_censo_hartree / boltzmann_table_json
+
+14. 实施顺序（Phase 划分）
+
+全部 8 个 Step 归并为 6 个 Phase；每 Phase 有独立交付物与验收标准，完成即验收、验收通过再进入下一 Phase。Phase 1–4 为后端逻辑（本机 mock 可测），Phase 5 为集成接线，Phase 6 为验收上线。
+
+ | Phase | 归并 Step | 交付物 | 验收标准
+
+ | Phase 1 共享计算模块 | Step 1 | ✅ 已完成（energy 计划先行实现 ensemble_thermo.py，直接复用） | ✅ pytest tests/test_acp_ensemble_thermo.py 全绿（13 用例，2026-08-01 复核通过）
+
+ | Phase 2 MD 采样能力 | Step 2 | ✅ 已完成（2026-08-01）：MolclusBackend run_md() + GFN-FF 分支 + $md seed 行扩展；工作流层多副本约定 workflows/xtbmd_md.py（§6.2；v1.3：多副本 RDKit 多起点 + $md seed 行扩展）+ 多起点枚举 enumerate_embeddings（chem/embedding.py） | ✅ 全部通过（22 新增用例）：mock 断言命令构造（--gfnff、$md 参数、--seed、溶剂）；帧数 <50 fail-fast；md_seeds>1 时 seed 递增、起点构象索引互异、轨迹合并正确；审阅修复 5 项见 §16
+
+ | Phase 3 批量优化与去重 | Step 3 | 已完成（v1.4 审计修订，2026-08-01）：_batch_opt_frames（拆帧/自适应平衡期（±2σ 统计检验）/max_frames 子采样/并发契约/逐帧超时/拼接/统计/sidecar/两级收敛诊断；返回 BatchOptResult 而非裸 Path） | pytest tests/test_acp_workflows_xtbmd_censo_energy.py 32 用例全绿：拆帧数正确；成功率 <70% fail-fast；失败帧跳过且记 n_failed；后端异常逐帧隔离；并发子目录隔离、每帧 nproc=1；sidecar 与标题能量一致；平衡期统计检验丢弃；max_frames 子采样帧数正确；超时帧计入 n_failed 且不阻塞整批；conv 超限 warning、判重阈值用 conv_rmsd、novelty 群体加权（含按副本分组语义测试）；几何哈希预检 warning + 配对规模上限；参数校验与温度守卫
+
+ | Phase 4 工作流主模块 | Step 4 | ✅ 已完成（2026-08-01）：energy_shared.py 公共 helper 提取（E4）+ xtbmd_censo_energy.py（五阶段 + 三 preset × 双模式 + G_total + 按阶段 resume） | ✅ 全部通过（52 用例）：preset 分支 / 双模式数值 / energy_filter / censo-zero 直通；按阶段指纹 resume 用例（改 edis 仅 isostat 拒绝；改 md_temperature 仅 xtbmd 拒绝；改 opt_gfn 仅 batch_opt 拒绝）；空系综 fail-fast；energy.py 既有单测回归（energy_shared.py 平移后行为不变）；审阅修复 6 项见 §17
+
+ | Phase 5 平台接入 | Step 5 + 6 + 7 | CLI 子命令；catalog 三条目（FIELD_DEFINITIONS 19 字段，md_temperature/md_seeds 为常规字段）；runner / script_gen / stage_tasks 三清单；前端四块 | acp run xtbmd_censo_energy 可用；API 提交放行；前端验收清单（§11.3）；methodPayload ↔ runner flag 一致；五方 parity 单测通过（E7）
+
+ | Phase 6 验收与上线 | Step 8 | 全量测试 + 冒烟记录 + 部署 | pytest tests/ -v 全绿；计算节点冒烟（§12.3）通过；systemd 重启；AGENTS.md 更新
+
+Phase 内步骤明细
+
+Phase 1：✅ 已完成——复用 energy 计划实现的 ensemble_thermo.py，仅核对边界语义（§5）；
+
+Phase 2：✅ 已完成——MolclusBackend run_md() + GFN-FF 分支 + $md seed 行（mock 验证命令构造与参数透传，含 search() 的 md_method/seed/solvent 透传与 --gfnff xtb_arg 兼容）；工作流层多副本约定 workflows/xtbmd_md.py（run_md_replicas）；多起点枚举 chem/embedding.py（enumerate_embeddings，含 XYZ/molfile 输入与逐副本独立嵌入）；审阅修复见 §16；
+
+Phase 3：已完成（v1.4）——_batch_opt_frames（拆帧/自适应平衡期/max_frames 子采样/并发契约/循环/拼接/统计/sidecar/两级收敛诊断）；审计修复：逐帧异常隔离、预检采样上限、opt_level/gfn_level 入口校验（catalog "loose" 候选值待 Phase 5 修正）、temperature_k 守卫；
+
+Phase 4：energy_shared.py 公共 helper 提取（平移 9 个函数为公共名，energy.py 改 import，跑 energy 既有单测回归）→ xtbmd_censo_energy.py 主模块（前端五阶段 + 三 preset + 双模式 + G_total + 按阶段指纹 resume + 空系综 fail-fast）；
+
+Phase 5：
+  
+
+Step 5：CLI（add_parser / handler / dispatch 三处，含 --max-frames / --conv-rmsd / --opt-timeout）；
+
+Step 6：平台接入（catalog 三条目 + FIELD_DEFINITIONS 19 字段 + runner / script_gen / stage_tasks）；
+  
+Step 7：前端（提交分支扩展 + 高级区自动渲染 + i18n，字段集合由 FIELD_DEFINITIONS 派生）；
+  
+五方 parity 单测（E7）：cli / runner / script_gen / FIELD_DEFINITIONS / 前端派生集合。
+  
+
+Phase 6：全量 pytest tests/ -v → 计算节点冒烟 → sudo systemctl restart acp（服务不使用 --reload，需手动重启）。
+
+15. 风险与注意事项
+
+ | 风险 | 说明 | 缓解
+
+ | 单轨迹/同起点采样不完备 | 400K/100ps 单轨迹可能遗漏稀有序构象；同起点副本（仅速度不同）大分子难以跨盆地 | --md-seeds 多副本（默认 1，建议 ≥3）；v1.3：多副本以不同 RDKit 嵌入构象起始，起点多样性 + 速度随机双保险；--conv-check 几何哈希预检 + 群体加权 novelty 正式诊断（默认开，超限 warning 记入 metadata）；4 分子验证集量化交叉验证（§12.3）
+
+ | 单帧优化悬挂 | 500–1000 帧循环中单帧 xtb 卡死（收敛分歧/资源异常）阻塞整批 | --opt-timeout 帧级超时（默认 300s，0=不限），超时帧计入 n_failed（v1.3）
+
+ | 批量优化耗时 | ~1000 帧 × GFN1 opt（更大分子可达小时~天级） | ThreadPool ≤ nproc（每帧 nproc=1）；--max-frames 帧数上限 + 均匀子采样（默认 500）；--md-dump 加大帧间隔 / --md-seeds 控制副本量；ewin 能量窗减小下游负载；帧级失败跳过
+
+ | 400K 采样偏向高能构象 | 轨迹含热力学无关结构 | 能量窗过滤（ewin）+ 298K Boltzmann 重加权兜底
+
+ | 远程 LSF 墙钟不足 | 100ps MD + 500 帧 GFN1 优化在较大分子上可达小时级，默认 walltime 可能提前杀死远程任务 | 冒烟分项耗时校准估算公式（§4）；远程报错信息提示放宽 walltime（v1.3）
+
+ | GFN-FF MD 稳定性 | 个别体系缺参数 / 开壳层不稳；NVT+SHAKE 与 GFN-FF 兼容性未在本机验证；$md 块 seed 关键字依 xtb 版本生效 | --md-method 可回退 gfn0/gfn1；shake 可关；全局 --seed 旗标兜底可复现性；计算节点冒烟覆盖；失败显式报错（v1.3 补充 seed 机制核实）
+
+ | resume 产物误复用 | 参数变更后旧产物被静默复用 → 结果错误 | 按阶段指纹（E1）：每阶段 checkpoint 记录该阶段输入参数全集 hash（md_*/opt_*/edis/gdis/ewin 分别落入对应阶段），指纹不匹配拒绝跳过并提示重跑
+
+ | 能量窗过紧丢真实构象 | GFN1 与高精度方法排序不一致时 ewin=6.0 可能误删 | --ewin 可配（默认 6.0 维持）；冒烟覆盖 5/6/8 敏感性（§12.3），判据含"窗口内构象集对 CENSO 排序前 10 名覆盖不变"；censo-default 完整漏斗作对照；文档标注语义
+
+ | 空系综 | isostat / 能量窗过滤后 0 构象（edis/gdis/ewin 过严或输入异常） | fail-fast（E5）：报错并提示调 edis/gdis/ewin；单测覆盖（§12.2）
+
+ | censo-zero 直通能量缺失 | isostat 重写标题后可能丢失能量 → _xtb_passthrough_result 正则解析失败 | energy_filter 阶段重写标题嵌入 GFN1 能量（§8.3），单测覆盖
+
+ | Option A helper 私名耦合 | import energy.py/ensemble.py 私有函数（_resolve_levels 等），未来重构可能破坏 | v1.2 已消除（E4）：平移为 workflows/energy_shared.py 公共名，energy.py 与新模块统一 import；energy.py 既有单测回归兜底；新模块禁用裸 except
+
+ | 模式二 G_total 混级 | CENSO(半经验)权重 × DFT G₁；rank 反转时误差可达数 kcal/mol | 以 CENSO 表为准；total_gibbs_censo_hartree 对照量化修正；注意事项已写入 README；交叉校验语义标注（§2.1，1e-8 Ha 仅为代数自洽性校验，科学验证锚定 CREST 交叉运行）
+
+ | 五处手维护清单漂移 | cli dispatch / runner 白名单 / script_gen 白名单 / catalog FIELD_DEFINITIONS / 前端派生字段集合（E7；新增旗标共 16 个，含 v1.3 的 --opt-timeout，任一遗漏即"CLI 可用但 API/LSF 拒单"或"前端不渲染"） | Step 6 验收：五处同时含 xtbmd_censo_energy 及全部新旗标才放行；§12.2 五方 parity 单测机械兜底
+
+ | 前端大文件改动 | ACP_Workbench_v2.html 5816 行 | 严格仿 energy 分支与卡片样式；仅四块定向新增；var 风格、零依赖
+
+ | 本机无 QC 二进制 | 无法本地端到端验证 | mock 单测分层 + 计算节点冒烟清单（§12.3）
+
+ | HARTREE_TO_KCAL 多定义 | models.py 与 constants.py 已有两份 | 新模块统一从 acp.core.models 导入，不新增第三处
+
+上表为设计阶段（v1.1–v1.3）风险缓解；Phase 2 实现后专项审阅发现的风险与修复状态见 §16。
+
+16. 潜在风险与修复状态（实现审阅，2026-08-01）
+
+Phase 2 实现完成后，对新增代码（backends/molclus_backend.py / workflows/xtbmd_md.py / chem/embedding.py）做了专项审阅。状态图例：✅ 已修复（含回归测试）/ ⏳ 待计算节点核实（设计内保留的验证项）。
+
+ | # | 风险 | 发现 | 状态与处理
+
+ | 1 | MD 子进程超时不可配（高） | 工作流层构造后端未传 timeout → 默认 300s；100ps MD 在较大分子可达数小时（§15 已警示），会被 subprocess 中途杀死。另注意 subprocess 的 timeout=0 语义是"立即超时"而非"不限" | ✅ 已修复：run_md_replicas 新增 timeout 参数（>0 透传后端构造，0/None 回落后端默认）；run_md docstring 注明超时来源；回归测试 test_run_md_replicas_forwards_timeout_to_backend / ..._zero_timeout_means_backend_default
+
+ | 2 | 轨迹合并静默丢帧（高） | _merge_trajectories 遇坏帧头 / 截断 / 副本间原子数不一致时计数器 break，产出帧数缺失的合并轨迹——正是管线要防的"部分系综"失败模式；且边写边校验，异常时留下部分产物，可能被 --resume 指纹误判为完整 checkpoint | ✅ 已修复：改为 validate-then-write 两遍法——坏帧 / 截断 / 原子数不一致一律 raise，全部校验通过才写输出，失败不留部分产物；回归测试 test_merge_rejects_atom_count_mismatch / ..._malformed_frame / ..._truncated_frame
+
+ | 3 | 多起点枚举共享 RDKit mol（中） | enumerate_embeddings 对同一 mol 对象反复 EmbedMolecule，conformer 追加/替换语义随 RDKit 版本而变，可能使全部副本返回同一构象 | ✅ 已修复：每副本嵌入 Chem.Mol(mol) 独立拷贝（chem/embedding.py），互不影响；test_enumerate_embeddings_* 断言构象互异
+
+ | 4 | .gjf 格式被虚假宣称支持（中） | MolFromXYZFile 按 XYZ 文本解析 .gjf 必然失败，报错信息误导用户 | ✅ 已修复：从支持集合移除 .gjf，显式报 Unsupported structure format；回归测试 test_enumerate_embeddings_rejects_gjf
+
+ | 5 | 参数静默强转（中） | md_seeds=0/-2/2.5/True 被 max(1, int()) 静默吞掉；md_seed 非整数会写出 seed=42.5 非法 $md 行 | ✅ 已修复：显式校验（md_seeds≥1 整数、md_seed≥0 整数）并 raise ValueError；回归测试 test_run_md_replicas_rejects_invalid_seed_count
+
+ | 6 | 轨迹解析失败报错信息误导（低） | 帧计数解析失败一律报"truncated"，无法区分轨迹损坏与帧数不足 | ✅ 已修复：run_md 报错区分 unreadable/corrupt 与帧数不足，附 traj.xyz 与最小帧数提示
+
+ | 7 | $md 块 seed= 关键字依 xtb 版本生效（设计内） | 未知关键字可能被某些 xtb 版本报错；v1.3 决策为 seed= 行 + 全局 --seed 双保险 | ⏳ 待计算节点核实（§12.3.1 冒烟覆盖）；全局 --seed 对 6.0+ 稳定兜底；若某版本拒绝该关键字，移除 _write_md_inp 中一行即可回退
+
+ | 8 | GFN-FF × NVT/SHAKE 兼容性（设计内） | 本机无 QC 二进制，未实测 | ⏳ 待计算节点冒烟（§12.3）；回退路径 shake=False / --md-method gfn1 已暴露（§6.2）
+
+17. Phase 4 实现后专项审阅（2026-08-01）
+
+Phase 4 实现完成后，对新增代码（workflows/energy_shared.py / workflows/xtbmd_censo_energy.py Phase 4 部分 / energy.py·ensemble.py 提取改动）做了专项审阅。状态图例：✅ 已修复（含回归测试）/ ⏳ 按设计保留（边界已文档化，无需改动）。
+
+ | # | 风险 | 发现 | 状态与处理
+
+ | 1 | batch_opt 并发数不回退到配置（中） | nproc=safe_nproc or 1：CLI 未传 --nproc 时批量优化退化为单帧串行（CENSO/xTB 后端均默认读 resources.nproc，行为不一致），500 帧级任务被静默拖慢 | ✅ 已修复：batch_nproc = safe_nproc or config resources.nproc（≥1）；回归测试 test_workflow_batch_nproc_falls_back_to_config
+
+ | 2 | 能量窗几何匹配无快速路径（中） | 每 cluster 帧对全部 isomers 帧做 Kabsch SVD 对齐，500 帧 × 数百簇可达数十万次 SVD（大分子/远程路径数分钟级）。ISOSTAT 代表结构是 isomers 帧的逐字拷贝（原子序一致），普通 RMSD 即可命中 | ✅ 已修复：_match_isomers_frame — 向量化普通 RMSD 预筛（O(N_atoms)/对，无 SVD），Kabsch 仅作对称旋转拷贝的稀有回退；回归测试 test_energy_filter_aligned_fallback_matches_rotated_copy（反转拷贝帧仍正确映射）
+
+ | 3 | batch_opt resume 指纹缺 conv_* 与 temperature_k（中） | §4 约定指纹为"该阶段输入参数全集"，但 conv_check/conv_rmsd/conv_novelty_max/temperature_k 均影响 batch_opt 产物与诊断结论；仅改 conv 参数后 resume 会静默复用旧诊断（metadata.conv_passed 陈旧） | ✅ 已修复：并入 opt_params 指纹；回归测试 test_workflow_resume_conv_params_invalidate_batch_opt（改 conv_rmsd / conv_check 均仅 batch_opt 拒绝）。edis/gdis 按设计不并入——改阈值仅 isostat 拒绝（§12.2 语义），conv 诊断内部使用旧阈值的陈旧属已知保守边界（诊断仅 advisory）
+
+ | 4 | xtbmd 指纹缺嵌入坐标 hash（低） | embed.xyz 每轮重写但指纹只含嵌入参数；RDKit 版本/嵌入随机性变化时旧轨迹被误复用（起点不同 → 采样语义改变） | ✅ 已修复：embed_xyz_sha256 并入 md 指纹（embed.xyz 在指纹计算前写入，顺序安全）
+
+ | 5 | title 回退帧 source_frame 记录错误帧号（低） | 几何匹配超出容差、能量改由标题解析时，source_frame 仍记最近邻帧号（信息字段错误，污染 ensemble_energies.json 溯源） | ✅ 已修复：仅容差内几何匹配记 source_frame，标题回退帧记 null（未知）
+
+ | 6 | sidecar 不可读时静默降级（低） | except → sidecar={} 无日志，标题通道回退不可见，排障时误判"为何能量来自标题" | ✅ 已修复：logger.warning 记录降级原因（含异常详情）
+
+ | 7 | conv 诊断的 edis/gdis 陈旧（设计内） | 改 edis/gdis 后 resume：batch_opt 的 conv-check（内部用旧阈值聚类）保留旧结果，仅 isostat 阶段按新阈值重跑 | ⏳ 按设计保留：conv 诊断仅 advisory（warning 不阻断，conv_passed=false 仅记 metadata），且改阈值已触发 isostat 重跑；与 §12.2"改 edis 仅 isostat 拒绝"语义一致，指纹不合并
+
+ | 8 | censo-zero 直通未写 screening_ranking.csv（设计内） | energy.py 写辅助排序表（_write_screening_ranking），新工作流省略（该表为排障辅助，非 §13 文件清单项） | ⏳ 按设计保留：Phase 5 落地时可选择补写；不影响 G_total 与前端统计卡
+
+ | 9 | 重写标题格式假设（设计内） | energy_filter 重写标题 Frame N E=<Ha> Hartree，依赖 xtb_passthrough_result 的"首浮点"解析（[-+]?\d+\.\d+）——已由单测锁定（sidecar 主通道 + 标题兼容通道两路断言一致）；生产侧 isostat 对 Energy: X 标题的保留行为与 xtb.trj "(kcal/mol)" 格式假设沿用 v1.4 待核实项 | ⏳ 待计算节点冒烟（§12.3.1）；graceful 回退已就位（几何匹配 + 平衡期 fallback 10%）
+
+18. Phase 5 实现后落地核对（2026-08-01）
+
+Phase 5（平台接入）落地后核对。状态图例：✅ 已落地（含单测锁定）/ ⚠️ 注意（与文档文字差异，行为核对通过）。
+
+ | # | 项 | 核对结论
+
+ | 1 | CLI 旗标全集 | ✅ acp run xtbmd_censo_energy --help 暴露 energy 全集 + 16 个新旗标；--md-nvt / --conv-check 用 BooleanOptionalAction（--no-md-nvt / --no-conv-check 反向关闭，文档 §9 "默认 True 可切换"语义）；--md-no-shake 反向语义（传旗标 → md_shake=False）。--md-timeout / --keep-frames 一并暴露（§16#1 / §4 产物生命周期）
+
+ | 2 | dispatch 闸门 | ✅ cli.py dispatch dict 已加 "xtbmd_censo_energy": _handle_xtbmd_censo_energy；批量路径 _handle_xtbmd_censo_energy_batch 仿 energy
+
+ | 3 | catalog 三条目 | ✅ WORKFLOW_CATALOG 条目（active + visible + requires_binaries 含 isostat）；METHOD_SCHEMAS 七 level（xtb_md/xtb_opt/isostat/censo/dft_opt/refinement_sp/thermo）+ 三 profiles 镜像 censo_energy；FIELD_DEFINITIONS 20 字段（19 文档 + resume——resume 按"全部新控制项一律经此表"原则入表，前端从 xtb_md level 派生转发）；md_temperature/md_seeds 常规区、其余 advanced。⚠️ 注意：共享 opt_level 字段 per_backend.xtb 已按 v1.4 修正为 crude/normal/tight/verytight，同时影响 xtb_optimize 前端选项（"loose" 等被移除）——与审计结论一致，CLI choices 未动
+
+ | 4 | runner / script_gen 白名单 + 旗标发射 | ✅ 两处白名单均加 xtbmd_censo_energy；旗标发射收敛到 jobs.py 共享 xtbmd_method_flags()（scalar 转发 + bool opt-in/opt-out），本地/远程命令逐字节一致（parity 单测锁定，仅 --output 目标不同）。ewin 走既有 censo_ewin_from_method（method.ewin → levels.censo.ewin）
+
+ | 5 | stage_tasks | ✅ _XtbmdCensoEnergyStagePlanProvider 注册；censo-zero/no-opt 分支裁剪 dft_handoff/censo 阶段（与 §8.2 stage_names 对齐）
+
+ | 6 | 前端四块 | ✅ 提交分支改 energyLike（energy + xtbmd 共享 preset/threshold/rank1/no_opt 派生）；xtbmd 控制组字段从 schema 控制 level（xtb_md/xtb_opt/isostat）字段表派生转发到 method 顶层（E7：catalog 即事实源，新字段自动流入）；rank1 开关覆盖 xtbmd 且默认值按工作流区分（energy=True / xtbmd=False）；bool 字段 checkbox 渲染 + FIELD_DEFINITIONS label_zh 渲染 + 单位后缀（§11.3"带单位与默认值"）；i18n 增 rank1_only_desc_xtbmd。JS 语法经 node --check 验证
+
+ | 7 | 五方 parity（E7） | ✅ tests/test_acp_xtbmd_platform_phase5.py 16 用例：CLI 旗标集 / FIELD_DEFINITIONS 键集 / runner 发射 / script_gen 发射 / 前端派生集合（经 schema 控制 level 等价断言）五方互锁
+
+ | 8 | API 放行 | ✅ SUPPORTED_WORKFLOWS 从 catalog 自动派生 → /api/v1/jobs 放行；/validate-method 对 xtbmd schema 校验通过（bad opt_level 拒绝）；/workflow-catalog 与 /method-catalog 正确暴露（TestClient 冒烟验证）
+
+ | 9 | 回归 | ✅ 全量 pytest tests/ = 937 passed + 7 skipped（Phase 5 落地 931 → 专项审阅修复后 937，新增 6 审计回归用例；energy/ensemble/simple/catalog/censo 既有测试零破坏；ruff 无新增告警，mypy 受 numpy pyi/py3.13 环境限制基线同数）
+
+ | 10 | 待计算节点核实（沿用） | §12.3 冒烟清单：GFN-FF MD 真实跑通、$md seed 关键字版本兼容、xtb.trj 标题格式假设、ISOSTAT Energy: X 标题保留、censo-zero 直通端到端、--md-seeds 3 多起点、ewin 敏感性 + 4 分子 CREST 交叉验证——本机无 QC 二进制无法执行
+
+18.1 Phase 5 实现后专项审阅修复（2026-08-01）
+
+Phase 5 落地后对平台接线代码（cli.py / catalog.py / scheduler/jobs.py·runner.py·script_gen.py·stage_tasks.py / 前端提交分支）的专项审阅。状态图例：✅ 已修复（含回归测试）/ ⚠️ 核对通过（行为与参考实现一致，无需改动）。本轮含一项生产事故级修复（#10，ISOSTAT 标题格式，curcusone-test 失败根因）。
+
+ | # | 风险 | 发现 | 状态与处理
+
+ | 1 | CLI threshold 恒传覆盖 --levels（中） | xtbmd handler 原样透传 threshold=args.threshold（默认 0.99），用户 --levels '{"refinement_threshold": 0.95}' 会被 CLI 默认值静默覆盖（workflow 内 threshold is not None → levels[...] = threshold），与 energy handler（!= 0.99 才覆盖、否则 setdefault）行为不一致 | ✅ 已修复：handler 仿 energy 合并（if args.threshold != 0.99: levels[...] = ... else: setdefault），workflow 传 threshold=None 避免二次覆盖；单分子 + batch 两处；回归测试 test_cli_threshold_merge_preserves_explicit_levels（显式 --threshold 0.9 仍胜出）
+
+ | 2 | --ewin CLI 默认 6.0 使 config 不可达（中） | CLI 默认 6.0 恒传 → censo.ewin config（S1"支持配置"）永不可达；energy 的 --ewin 默认 None | ✅ 已修复：--ewin 默认改 None（help 注明 "default: censo.ewin config, 6.0"），workflow 回退链（显式 > levels.censo.ewin > config）恢复；回归测试 test_cli_ewin_default_none_preserves_config
+
+ | 3 | bool 方法值字符串被静默丢弃（中） | runner 用严格 is False / is True 判定；API 用户提交 "md_nvt": "false"（JSON 字符串）时旗标丢失 → 默认值静默生效 | ✅ 已修复：jobs.py 新增 _as_bool() 归一化（bool/int/str，含 "true"/"false"/1/0/"on"/"off"），opt-in/opt-out 统一走它；回归测试 test_runner_boolean_string_coercion
+
+ | 4 | md_timeout 无法经 API/runner 透传（低） | --md-timeout（§16#1 审阅项）不在 flag 映射表 → API 用户 method.md_timeout 静默丢失，只能用 CLI 或启发式 | ✅ 已修复：md_timeout: "--md-timeout" 加入 _XTBMD_SCALAR_FLAGS；回归测试 test_runner_forwards_md_timeout
+
+ | 5 | opt_gfn 数值型 API 值被校验拒绝（低） | FIELD_DEFINITIONS 选项为字符串 ["0","1","2"]，API 用户提交 int 1 → normalize_and_validate_method_config 报 "not in allowed options"（前端 select 字符串无此问题） | ✅ 已修复：选项成员判定改 str(user_val) not in [str(o) for o in options]（catalog.py 通用路径，int↔str 宽容）；回归测试 test_validate_method_accepts_numeric_select_values（0/1/2 int+str 通过、9 拒绝）
+
+ | 6 | stage plan 与 censo-default 语义漂移（中） | 前端对 censo-default（无 dft_opt level）推导 no_opt=true，原 provider 据此裁剪 dft_handoff；但 workflow 对 censo-default 强制 opt_enabled=True（§8.4）→ stage plan 显示与真实执行不符 | ✅ 已修复：provider 条件改 if not no_opt or preset == "censo-default"（对齐 workflow 语义）；回归测试 test_stage_plan_censo_default_keeps_handoff_under_no_opt
+
+ | 7 | 前端 no_opt 推导与 censo-default（核对） | 前端 energyLike && !cleanedLevels.dft_opt → no_opt=true 对 censo-default 触发（无 dft_opt level）；workflow 强制 opt → 语义等价于 energy（energy 的 censo-default 同款推导，energy.py 亦强制 opt） | ⚠️ 核对通过：与 energy 参考实现行为同构，无改动
+
+ | 8 | rank1_only 默认跨工作流污染（核对） | loadDefaultMethodProfile 不重置 rank1_only，理论上 energy 勾选后切 xtbmd 残留 | ⚠️ 核对通过：openMethodConfig（方法配置弹窗唯一入口）每次打开按 workflow.id === "energy" 重置，摘要卡不渲染 rank1 状态 → 无污染路径
+
+ | 9 | levels 与 --threshold 双通道一致性（核对） | 前端删 censo 层 refinement_threshold + 顶层 threshold + runner --threshold；API 用户 levels.censo.refinement_threshold + threshold 并存 | ⚠️ 核对通过：workflow 顶层 levels.refinement_threshold 优先，两条路径殊途同归；resolve_levels 三场景（显式 0.9 / levels 0.95 / config 0.99）验证正确
+
+ | 10 | ISOSTAT 拒绝 "Frame N | Energy: X" 标题（高，生产事故） | curcusone-test（2026-08-01 远程 LSF 任务）在 batch_opt 500/500 帧优化成功后于 isostat 阶段失败（exit 24）。真实二进制实测：ISOSTAT 只接受 Molclus 裸能量标题（        -11.39433937），write_xyz_multiframe(energies=...) 生成的 Frame N | Energy: X 标题触发 "Unable to load energy from comment line" + forrtl severe 24。§18 第 5 行"待计算节点核实"的标题格式假设被证伪（v1.4 摘要预测的 graceful 回退不存在——isostat 输入无兼容通道） | ✅ 已修复（isostat_backend.py）：cluster() 新增 _normalise_titles_for_isostat()——调用 ISOSTAT 前把每帧标题重写为 Molclus 裸能量格式（提取首浮点，坐标不动，原文件不突变，tempfile 用完即删）；主流程 isostat + conv_check 诊断两处调用点均受益。回归测试 test_isostat_title_normalisation_to_molclus_format / test_isostat_title_normalisation_keeps_coord_lines；远程节点用真实 500 帧输入端到端验证（2 clusters，exit 0）后同步部署。ISOSTAT 输出 cluster.xyz 的 Energy = X a.u. 标题经 _parse_title_energy_hartree 首浮点解析天然兼容，energy_filter 全链路重放通过（n_total=2 均在 6.0 kcal/mol 窗内）
+

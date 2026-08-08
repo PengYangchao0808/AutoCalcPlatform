@@ -1,0 +1,1341 @@
+
+
+  
+ACP 远程结果预览与下载开发文档
+
+  
+
+    目标：让网页用户在不把远程计算节点数据同步到 web 服务器的情况下，直接预览和下载结果。
+
+    适用前端：ACP Workbench v2 · 状态：开发计划
+  
+
+  
+
+    
+目录
+
+    
+      
+需求确认
+      
+设计原则
+      
+后端设计
+      
+前端设计
+      
+安全与限制
+      
+实施阶段
+      
+测试计划
+      
+风险与对策
+      
+审查意见与改进建议
+      
+修复方案
+    
+  
+
+  
+1. 需求确认
+
+  
+通过五轮问题确认，最终需求如下：
+
+  
+    
+      
+ | 维度 | 选择 | 说明
+
+    
+    
+      
+
+         | 数据位置
+         | 远程计算节点原始文件
+         | log、out、xyz、chk、rwf、cube 等保留在远程节点，不预先拉取到 ACP_runs/。
+      
+
+      
+
+         | 预览范围
+         | 全部
+         | 文本/日志、三维结构、能量图/反应路径、NMR 谱图/报告、波函数/cube。
+      
+
+      
+
+         | 下载策略
+         | 单文件下载 + 打包下载
+         | 每个文件可单独下载；同时支持把整个任务目录打成 ZIP 流式下载。
+      
+
+      
+
+         | 缓存
+         | 完全禁止
+         | 不在服务器磁盘、内存池、SQLite 或数据库中持久化任何结果数据。
+      
+
+      
+
+         | 大文件
+         | tail + range 分页
+         | 大文件不走全量文本预览，而是按行尾或字节范围分段读取。
+      
+
+      
+
+         | 打包格式
+         | ZIP
+         | 最通用，用户双击即可解压。
+      
+
+      
+
+         | cube 预览
+         | 仅下载
+         | 轻量服务器不做等值面/切片渲染；cube 文件通过下载查看。
+      
+
+      
+
+         | 前端版本
+         | ACP Workbench v2
+         | 复用现有 3Dmol 查看器、文件树、节点面板。
+      
+
+    
+  
+
+  
+2. 设计原则
+
+  
+    
+数据零落地：原始文件始终只在远程节点；web 服务器仅做 SFTP 代理。
+    
+请求级流式：每个 HTTP 请求触发一次 SFTP 连接；读取、打包、返回后立刻释放连接。
+    
+无持久化缓存：不写入服务器磁盘，也不在数据库/缓存中保留结果。
+    
+大文件受限：超过阈值的文本文件仅支持 tail/range；打包下载总量受上限约束。
+    
+轻量优先：避免在服务器做重型计算（如 cube 渲染、大文件全量解析）。
+  
+
+  
+3. 后端设计
+
+  
+3.1 现有能力
+
+  
+代码库已具备远程文件按需拉取能力：
+
+  
+    
+src/acp/scheduler/remote/fetcher.py：SFTP 连接池、list_files、read_file、stream_file、log_tail。
+    
+src/acp/api/v1_routes.py：
+      /api/v1/jobs/{id}/remote-files（列表）
+      和
+      /api/v1/jobs/{id}/remote-files/{path}（单文件下载）。
+    
+  
+
+  
+3.2 需要增强的 Fetcher 方法
+
+  
+在 RemoteResultFetcher 中新增以下方法：
+
+  def read_range(record, filename, offset, limit) -> bytes
+    """按字节范围读取远程文件。"""
+
+def read_tail(record, filename, lines) -> str
+    """通用 tail：读取任意日志文件最后 N 行。"""
+
+def file_stat(record, filename) -> dict
+    """返回 size / mtime，用于前端判断预览策略。"""
+
+  
+3.3 API 端点
+
+  
+    
+      
+ | 方法 | 端点 | 状态 | 说明
+
+    
+    
+      
+
+         | GET
+         | /api/v1/jobs/{id}/remote-files
+         | 已存在
+         | 列出远程任务目录顶层文件。
+      
+
+      
+
+         | GET
+         | /api/v1/jobs/{id}/remote-files/{path}
+         | 已存在
+         | 单文件流式下载。需根据扩展名补正确 Content-Type。
+      
+
+      
+
+         | GET
+         | /api/v1/jobs/{id}/remote-files/{path}/preview
+         | 新增
+         | 文件预览，按 mode 参数分发。
+      
+
+      
+
+         | POST
+         | /api/v1/jobs/{id}/remote-files/download
+         | 新增
+         | 把整个任务目录打成 ZIP 流式返回。
+      
+
+    
+  
+
+  
+3.4 预览端点 /preview 参数
+
+  
+    
+      
+ | mode | 参数 | 返回 | 适用文件
+
+    
+    
+      
+
+         | text
+         | 无
+         | UTF-8 文本
+         | .log, .out, .gjf, .com, .txt, .json, .csv
+      
+
+      
+
+         | tail
+         | lines=500
+         | 最后 N 行文本
+         | .log, .out
+      
+
+      
+
+         | range
+         | offset, limit
+         | 字节范围内容
+         | .log, .out, .txt
+      
+
+      
+
+         | structure
+         | 无
+         | xyz / sdf 文本
+         | .xyz, .sdf, .mol
+      
+
+      
+
+         | report
+         | 无
+         | 结构化 JSON
+         | NMR 报告、能量排序文件
+      
+
+    
+  
+
+  
+3.5 打包下载端点
+
+  
+实现要点：
+
+  
+    
+使用 zipfile + io.BytesIO 在内存中分块生成。
+    
+通过 StreamingResponse 返回，不在磁盘生成临时文件。
+    
+遍历远程目录时，用 FileStager.list_remote_dir 递归获取文件列表。
+    
+逐个文件流式写入 ZIP 条目，避免单文件占用大量内存。
+    
+返回头：Content-Disposition: attachment; filename="{job_id}.zip"。
+  
+  POST /api/v1/jobs/{id}/remote-files/download
+
+# 返回
+Content-Type: application/zip
+Content-Disposition: attachment; filename="{job_id}.zip"
+<流式二进制数据>
+
+  
+3.6 解析器层（无缓存）
+
+  
+复用现有解析器，在请求时实时解析：
+
+  
+    
+NMR：acp/nmr/parser.py → acp/nmr/calibration.py → acp/reports/nmr_report.py。
+    
+能量/构象：从 result.state、all_conformers.xyz 或相关能量文件实时解析。
+  
+  
+所有解析器输入为文件内容或流，输出为 JSON；不写入任何缓存。
+
+  
+4. 前端 UI 详细设计
+
+  
+4.1 整体布局
+
+  
+复用 frontend/ACP_Workbench_v2.html 三栏结构，仅在现有组件上增加功能：
+
+  
+    
+      
+ | 区域 | 位置 | 承载功能
+
+    
+    
+      
+ | 左栏 | 侧边栏 | 远程文件树 + 下载操作
+
+      
+ | 中间 | 主画布 | 文本/3D/图表预览区
+
+      
+ | 右栏 | 侧边栏 | 节点状态、任务队列、测量工具
+
+    
+  
+
+  
+4.2 左栏：远程文件树
+
+  
+4.2.1 文件树头部
+
+  ┌─────────────────────────────────────────────┐
+│ 任务文件                                      │
+│ 节点: compute-01        [下载全部]            │
+│ /data/jobs/20260714_001_ethanol              │
+└─────────────────────────────────────────────┘
+  
+    
+节点信息：显示 job.result.node，让用户知道数据物理位置。
+    
+下载全部：一键打包整个远程任务目录，下载期间显示 loading。
+    
+错误提示：若 SFTP 连接失败，头部变红并显示“无法连接远程节点”。
+  
+
+  
+4.2.2 文件/目录行
+
+  📁 stage_crest_opt                    [展开/折叠]
+├── 🧬 crest_conformers.xyz   1.2 MB  [预览] [下载]
+├── 📄 opt.log               45 MB   [预览] [下载]
+├── 📄 output.out             120 MB  [Tail] [下载]
+└── 🔒 molecule.chk           2.1 GB  [仅下载]
+  
+    
+图标：按扩展名区分：
+      
+        
+.xyz/.sdf/.mol → 分子结构
+        
+.log/.out/.txt → 日志
+        
+.json/.csv → 数据表格
+        
+.chk/.rwf/.cube → 二进制/大文件（仅下载）
+      
+    
+    
+大小：人类可读（MB/GB）。
+    
+操作按钮：
+      
+        
+小文件：显示“预览”按钮。
+        
+大文件（> 50MB）：显示“Tail”按钮，点击默认最后 500 行。
+        
+二进制文件：仅显示“下载”按钮。
+      
+    
+  
+
+  
+4.2.3 目录操作
+
+  
+    
+点击目录展开/折叠。
+    
+右键目录或顶部工具栏提供“下载该目录”选项（复用打包下载，仅含该目录下文件）。
+    
+文件树支持搜索过滤（可选）。
+  
+
+  
+4.3 中间：预览区
+
+  
+4.3.1 预览标签
+
+  
+在现有 3D/构象/路径/能量/NMR 标签基础上，增加“文件预览”标签：
+
+  [三维结构] [构象集合] [反应路径] [能量图] [NMR] [文件预览]
+  
+当用户点击文件树中的“预览”或“Tail”时，自动切换到“文件预览”标签。
+
+  
+4.3.2 文本/日志查看器
+
+  ┌─────────────────────────────────────────────┐
+│ output.out                    120 MB         │
+│ [全文] [Tail] [Range]    [行号] [搜索]       │
+│ ─────────────────────────────────────────── │
+│ 1   Initial Parameters                       │
+│ 2   Charge = 0   Multiplicity = 1            │
+│ 3   ...                                      │
+│ 4   SCF Done: E(RB3LYP) = -234.567890        │
+│ 5   ...                                      │
+└─────────────────────────────────────────────┘
+  
+    
+全文：适合 < 50MB 的文本文件。
+    
+Tail：默认最后 500 行，可手动输入行数（1–5000）。
+    
+Range：按字节分页，提供上一页/下一页按钮。
+    
+行号：左侧固定显示。
+    
+搜索：当前文本内搜索（可选）。
+    
+大文件：> 50MB 时默认进入 Tail 模式，顶部提示“已自动切换为 Tail 模式”。
+  
+
+  
+4.3.3 三维结构预览
+
+  
+    
+复用现有 3Dmol  viewer。
+    
+点击 .xyz/.sdf/.mol 时，调用 mode=structure 获取文本并传入 3Dmol。
+    
+顶部显示分子式、原子数、电荷、自旋多重度。
+  
+
+  
+4.3.4 NMR 报告预览
+
+  ┌─────────────────────────────────────────────┐
+│ NMR 计算报告                                   │
+│ 原子  元素  δ_calc  δ_exp  Δ                 │
+│ 1     C     130.2   128.5  1.7               │
+│ 2     H     7.1     7.3    -0.2              │
+│ ...                                          │
+│ [化学位移柱状图] [实验/计算散点图]            │
+└─────────────────────────────────────────────┘
+  
+    
+表格列出化学位移、实验值（如有）、偏差。
+    
+用 SVG 绘制简单柱状图和散点图，不引入外部图表库。
+  
+
+  
+4.3.5 能量图 / 反应路径
+
+  
+    
+构象能量排序：横向柱状图，X 轴为能量，Y 轴为构象编号。
+    
+反应路径：折线图，X 轴为反应坐标，Y 轴为能量。
+    
+数据来自 mode=report 或 result.state。
+  
+
+  
+4.3.6 cube / 二进制文件
+
+  ┌─────────────────────────────────────────────┐
+│ wavefunction.cube                 1.2 GB       │
+│ 该文件为二进制体积数据，不支持在线预览。        │
+│ [下载该文件]  [打包下载全部]                   │
+└─────────────────────────────────────────────┘
+
+  
+4.4 下载 UI
+
+  
+4.4.1 单文件下载
+
+  
+每个文件行右侧提供“下载”按钮，点击后浏览器直接下载，保留原始文件名。
+
+  
+4.4.2 打包下载
+
+  
+文件树顶部“下载全部”按钮，点击后弹出进度提示：
+
+  打包下载中...
+已扫描 24 个文件，共 1.8 GB
+[████████████░░░░░░░░] 65%
+[取消]
+  
+    
+下载完成后浏览器自动保存 {job_id}.zip。
+    
+若目录 > 5GB，提示“目录过大，请分批下载或单文件下载”。
+    
+提供“取消”按钮，中断流式生成（通过断开 HTTP 连接实现）。
+  
+
+  
+4.5 异常状态
+
+  
+    
+      
+ | 状态 | UI 表现
+
+    
+    
+      
+ | 远程节点不可达 | 文件树头部变红，操作按钮禁用，提示“无法连接远程节点”。
+
+      
+ | 文件不存在 | 预览区显示“文件已被清理或尚未生成”。
+
+      
+ | 文件过大 | 文本预览禁用，提示“文件过大，请使用 Tail 或下载”。
+
+      
+ | 打包超时 | 提示“打包耗时过长，请尝试单文件下载”。
+
+      
+ | 权限不足 | 提示“无权访问该任务结果”。
+
+    
+  
+
+  
+4.6 响应式 / 移动端
+
+  
+    
+桌面端：三栏布局。
+    
+平板/手机：隐藏左右栏，通过底部 tab 切换“文件”“预览”“队列”。
+    
+文件树在移动端优先显示，方便用户快速选择。
+  
+
+  
+5. 安全与限制
+
+  
+    
+      
+ | 项 | 策略
+
+    
+    
+      
+
+         | 路径穿越
+         | 复用 fetcher.py 中的 _safe_join，确保文件路径不逃逸远程任务目录。
+      
+
+      
+
+         | 预览文件类型
+         | 白名单：.log, .out, .xyz, .sdf, .mol, .gjf, .com, .json, .csv, .txt。禁止 .chk/.rwf 直接文本预览。
+      
+
+      
+
+         | 文本预览大小
+         | ≤ 50MB；超过返回 413 Payload Too Large 或自动降级为 tail。
+      
+
+      
+
+         | 打包下载大小
+         | ≤ 5GB（可配置）；超过返回 413 并提示分批下载。
+      
+
+      
+
+         | SFTP 超时
+         | 所有远程操作加超时，避免挂死连接。
+      
+
+      
+
+         | 认证
+         | 当前版本为可信内网部署，不新增认证；若未来暴露公网，需前置反向代理 + IP 白名单。
+      
+
+    
+  
+
+  
+6. 实施阶段
+
+  
+    
+Phase 1：Fetcher 增强
+      
+        
+新增 read_range、read_tail、file_stat。
+        
+添加单元测试。
+      
+    
+    
+Phase 2：预览 API
+      
+        
+新增 /remote-files/{path}/preview。
+        
+实现 text / tail / range / structure 模式。
+      
+    
+    
+Phase 3：打包下载 API
+      
+        
+新增 POST /remote-files/download。
+        
+确保流式 ZIP 不落地磁盘。
+      
+    
+    
+Phase 4：前端文件树
+      
+        
+接入远程文件列表。
+        
+添加单文件预览和下载按钮。
+      
+    
+    
+Phase 5：报告解析
+      
+        
+新增 mode=report。
+        
+接入 NMR 和能量解析器，绘制图表。
+      
+    
+    
+Phase 6：测试与优化
+      
+        
+端到端测试（远程任务完成后的文件访问）。
+        
+大文件 tail/range 性能测试。
+        
+打包下载大小边界测试。
+      
+    
+  
+
+  
+7. 测试计划
+
+  
+    
+单元测试：测试 read_range、read_tail、路径安全。
+    
+集成测试：使用 mock SFTP 测试预览和打包下载端点。
+    
+端到端测试：提交真实远程任务，验证完成后文件列表、预览、下载均可用。
+    
+边界测试：空目录、超大文件、不存在的文件、远程节点断开等异常场景。
+  
+
+  
+8. 风险与对策
+
+  
+    
+      
+ | 风险 | 影响 | 对策
+
+    
+    
+      
+
+         | 远程节点不可达
+         | 用户无法预览/下载任何结果
+         | 这是“数据不落地”的固有限制；前端给出清晰错误提示。
+      
+
+      
+
+         | 打包超大目录
+         | 流式 ZIP 生成慢、超时、内存高
+         | 设置 5GB 上限；超限时拒绝并建议分批下载。
+      
+
+      
+
+         | 重复解析
+         | NMR/能量报告每次请求都重新解析远程文件
+         | 在请求级内存中缓存解析结果；请求结束后释放（符合不持久化缓存要求）。
+      
+
+      
+
+         | SFTP 连接池耗尽
+         | 大量并发下载导致连接不足
+         | 复用现有连接池；监控并发数；必要时加队列/限流。
+      
+
+      
+
+         | cube 无法预览
+         | 波函数可视化缺失
+         | 第一阶段仅提供下载；后续若需要可讨论客户端渲染或专用查看工具。
+      
+
+    
+  
+
+  
+9. 审查意见与改进建议
+
+  
+基于对现有代码库（src/acp/scheduler/remote/fetcher.py、src/acp/api/v1_routes.py 等）的核查，本文档存在以下需要修正或补充的问题。
+
+  
+9.1 缓存策略自相矛盾
+
+  
+
+    问题：需求确认中“缓存：完全禁止”，设计原则第 3 条重申“无持久化缓存”，但在第 8 节“风险与对策”中却提出“在请求级内存中缓存解析结果”。这会让实现者困惑：到底能不能缓存？
+  
+
+  
+    
+建议把“缓存”拆成两个概念：持久化缓存（禁止）与请求级临时缓存（允许）。
+    
+为请求级缓存给出明确边界：最大内存占用、TTL、请求结束后必须释放。
+    
+例如：NMR 报告解析结果可在一次 GET 请求内缓存 5 分钟，但禁止写入磁盘、SQLite 或 Redis。
+  
+
+  
+9.2 打包下载端点设计不当
+
+  
+
+    问题：第 3.3 节使用 POST /remote-files/download 下载一个资源，且该路径与 /remote-files/{path} 存在冲突风险。
+  
+
+  
+    
+REST 语义下，获取资源应使用 GET。POST 适用于创建或触发异步任务。
+    
+路径冲突：如果 {path} 使用 path converter，理论上 FastAPI 会优先匹配静态路由，但文档应明确说明路由注册顺序。
+    
+建议改为 GET /api/v1/jobs/{id}/remote-files/archive 或 GET /api/v1/jobs/{id}/remote-files?archive=zip，语义更清晰。
+  
+
+  
+9.3 “流式 ZIP”实现描述不准确
+
+  
+
+    问题：第 3.5 节说“使用 zipfile + io.BytesIO 在内存中分块生成”，但 BytesIO 会把整个 ZIP 缓冲在内存。若按 5GB 上限执行，内存会爆炸。
+  
+
+  
+    
+Python 标准库 zipfile 不支持边写边丢的流式生成。
+    
+若要求真正流式，需要引入第三方库如 zipstream-ng、stream-zip 或自行实现 chunked ZIP 生成。
+    
+如果仍用 BytesIO，必须大幅降低上限（例如 200MB），并在文档中明确说明这是“内存缓冲”而非“流式”。
+    
+建议补充：在打包前先用 file_stat 统计总大小，超过阈值直接拒绝，避免读到一半才 OOM。
+  
+
+  
+9.4 认证与授权缺失
+
+  
+
+    问题：第 5 节“认证”仅写“可信内网部署，不新增认证”。这不足以防止用户 A 访问用户 B 的 job。
+  
+
+  
+    
+即使内网，也应复用现有的 job 归属或 project 权限模型。
+    
+建议 _get_remote_job_record 中增加调用者校验，确保用户只能访问自己/所属项目的 job。
+    
+至少记录访问日志，便于事后审计。
+  
+
+  
+9.5 路由顺序与模式冲突
+
+  
+
+    问题：第 3.3 节的端点列表没有说明 FastAPI 路由注册顺序。
+  
+
+  
+    
+/remote-files/{path:path} 会匹配任何路径，必须在 /remote-files/{path}/preview、/remote-files/download 之后注册，否则静态路由会被“吞掉”。
+    
+建议把 /preview 改为独立前缀如 /remote-files/{path:path}/preview，并确保在 /{path:path} 之前注册。
+  
+
+  
+9.6 预览模式不完整
+
+  
+
+    问题：第 3.4 节的预览模式缺少错误降级和参数约束。
+  
+
+  
+    
+tail 模式应限制最大行数（如 5000），避免拉取全部日志。
+    
+range 模式应说明 offset 是否支持负数、是否支持 HTTP Range 标头。
+    
+report 模式应给出 JSON Schema 示例，便于前端对接。
+    
+建议在文件大小超过阈值时自动降级为 tail，而不是返回 413 让前端重试。
+  
+
+  
+9.7 大文件预览阈值缺乏依据
+
+  
+
+    问题：50MB 文本预览在 SFTP 高延迟网络下仍可能很慢，且阈值未与现有常量对齐。
+  
+
+  
+    
+fetcher.py 已定义 _MAX_READ_BYTES = 200 MB，建议把 50MB 预览上限作为配置项，并说明其小于 200MB 的读取上限。
+    
+建议区分“读取上限”和“在线预览上限”，避免用户误以为 50MB 以上不能下载。
+  
+
+  
+9.8 错误码与状态约定不足
+
+  
+
+    问题：文档只提到 413，缺少统一的错误码表。
+  
+
+  
+    
+ | HTTP 状态码 | 触发场景
+
+    
+      
+ | 400 | 参数错误、文件类型不在白名单
+
+      
+ | 403 | 无权访问该 job
+
+      
+ | 404 | job 或文件不存在
+
+      
+ | 413 | 文件或打包总量超过上限
+
+      
+ | 502 | 远程节点无法连接
+
+      
+ | 504 | SFTP 操作超时
+
+    
+  
+
+  
+9.9 缺少数据完整性校验
+
+  
+
+    问题：打包下载没有说明如何保证 ZIP 不损坏或不被截断。
+  
+
+  
+    
+建议单文件下载时返回 Content-Length 或 SHA-256 校验和。
+    
+打包下载完成后，可在响应尾追加一个 checksum 文件，或提供单独的 /remote-files/{path}/checksum 端点。
+  
+
+  
+9.10 SFTP 连接与并发限制不明确
+
+  
+
+    问题：文档提到“复用现有连接池”，但没有给出具体配置。
+  
+
+  
+    
+建议明确：最大并发 SFTP 会话数、下载队列长度、连接超时时间、读取超时时间。
+    
+对于“下载全部”这类可能长时间占用的操作，应加全局锁或限流，避免拖垮远程节点。
+  
+
+  
+9.11 cube 预览不是“风险”
+
+  
+
+    建议：第 8 节把“cube 无法预览”列为风险，但第 1 节已明确选择“仅下载”。这是设计决策，不是意外风险，应移到第 5 节“限制”或第 2 节“设计原则”中。
+  
+
+  
+9.12 缺少技术依赖说明
+
+  
+
+    建议：若采用真正的流式 ZIP，需要引入新依赖。文档应列出候选库并比较优缺点，例如 zipstream-ng、stream-zip、zipfly。
+  
+
+  
+9.13 实施阶段与前端不同步
+
+  
+
+    建议：Phase 4 前端文件树依赖 Phase 2 API 完成，但 Phase 5 报告解析又依赖 Phase 4 UI。建议把 API 和前端拆成可独立交付的迭代，而不是完全串行。
+  
+
+  
+9.14 测试计划缺少性能基准
+
+  
+
+    建议：补充具体性能指标，例如：
+    
+      
+1GB 日志 tail 100 行应在 3 秒内完成；
+      
+500MB 目录打包应在 2 分钟内完成且内存占用不超过 256MB；
+      
+100 并发文件列表请求不应导致连接池耗尽。
+    
+  
+
+  
+9.15 现有代码接口建议
+
+  
+
+    建议：结合现有 RemoteResultFetcher 实现，新增方法时与现有常量对齐：
+    
+      
+read_tail 与现有 log_tail 统一：建议把 log_tail 泛化为任意文件 tail，或保留 log_tail 并新增 read_tail。
+      
+file_stat 返回结构可直接复用 RemoteFileInfo。
+      
+read_range 应考虑 SFTP 会话内的 seek 性能，必要时改为异步后台任务。
+    
+  
+
+  
+  
+10. 修复方案
+
+  
+针对第 9 节提出的问题，本节给出可直接落地的修复动作。修复后应重新审查本文档并更新相关实现。
+
+  
+10.1 缓存策略：明确区分两类缓存
+
+  
+修复动作：
+
+  
+    
+修改第 2 节设计原则第 3 条为：
+      
+“禁止持久化缓存：原始结果文件不写入服务器磁盘、SQLite、Redis 或任何数据库。请求级临时缓存仅在单次 HTTP 请求生命周期内使用，请求结束后立即释放。”
+
+    
+    
+修改第 8 节“重复解析”对策为：
+      
+“对一次请求内重复访问的远程文件内容，可在函数级使用 functools.lru_cache 或临时字典缓存，但缓存对象必须在 HTTP 响应返回后失效。禁止跨请求共享解析结果。”
+
+    
+    
+增加缓存上限：单个请求缓存不超过 256MB，解析结果缓存不超过 50MB。
+  
+
+  
+10.2 打包下载端点：改为 GET 并避免路径冲突
+
+  
+推荐方案：使用 GET /api/v1/jobs/{job_id}/remote-files/archive。
+
+  @router.get("/jobs/{job_id}/remote-files/archive")
+def download_remote_archive(
+    job_id: str,
+    request: Request,
+    include: str | None = Query(default=None, description="逗号分隔的 glob 模式，如 *.log,*.xyz"),
+    exclude: str | None = Query(default=None, description="逗号分隔的排除模式，如 *.rwf,*.chk"),
+) -> StreamingResponse:
+    ...
+
+  
+    
+在 v1_routes.py 中，/archive 必须在 /{file_path:path} 之前注册。
+    
+保留 POST 仅作为触发异步打包任务的备用方案（如果目录极大，可返回任务 ID 供轮询）。
+  
+
+  
+10.3 流式 ZIP：引入真正的流式库
+
+  
+推荐方案：使用 zipstream-ng 或 stream-zip。
+
+  # pyproject.toml
+[project.optional-dependencies]
+api = [
+    "fastapi",
+    "uvicorn",
+    "zipstream-ng >= 2.0.0",  # 或 stream-zip
+]
+
+# v1_routes.py
+from zipstream import ZipStream
+
+@router.get("/jobs/{job_id}/remote-files/archive")
+def download_remote_archive(...):
+    def files_iter():
+        fetcher = _remote_fetcher(request)
+        for finfo in fetcher.list_files(record):
+            yield finfo.name, fetcher.stream_file(record, finfo.name)
+
+    zs = ZipStream(files_iter())
+    return StreamingResponse(
+        zs,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{job_id}.zip"'},
+    )
+
+  
+    
+在打包前，先递归计算总大小，超过 5GB 直接返回 413。
+    
+如果无法引入新库，改为内存缓冲方案：上限必须降到 200MB（与 _MAX_READ_BYTES 对齐），并明确在文档中说明。
+  
+
+  
+10.4 认证与授权：复用 project/job 权限
+
+  
+修复动作：
+
+  
+    
+在 _get_remote_job_record 中增加调用者校验：
+      def _get_remote_job_record(job_id: str, request: Request, user: User) -> JobRecord:
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(404, ...)
+    if not _can_access_job(user, record):
+        raise HTTPException(403, "Access denied for this job")
+    ...
+
+    
+    
+最小实现：把 job 关联到 project_id，检查用户是否属于该项目。
+    
+增加访问日志：记录 user, job_id, file_path, action, timestamp。
+  
+
+  
+10.5 路由顺序：明确 FastAPI 注册顺序
+
+  
+修复动作：
+
+  router.get("/jobs/{job_id}/remote-files/archive")(...)          # 1
+router.get("/jobs/{job_id}/remote-files/{file_path:path}/preview")(...)  # 2
+router.get("/jobs/{job_id}/remote-files/{file_path:path}")(...)   # 3 最后
+
+  
+    
+在文档中明确说明静态路由在前、通配路由在后。
+    
+避免在 file_path 中使用 download、archive 等保留名。
+  
+
+  
+10.6 预览模式：补全参数约束和降级策略
+
+  
+修复动作：
+
+  
+    
+tail 模式限制最大 5000 行：
+      lines: int = Query(default=500, ge=1, le=5000)
+    
+    
+range 模式支持 HTTP Range header：
+      Range: bytes=0-1048575
+    
+    
+report 模式返回统一 JSON：
+      {
+  "type": "nmr_report",
+  "data": {...},
+  "generated_at": "..."
+}
+
+    
+    
+大文件自动降级：当文件 > 50MB 时，默认返回 mode=tail 并在响应头中提示 X-Preview-Truncated: true。
+  
+
+  
+10.7 大文件阈值：改为配置项
+
+  
+修复动作：
+
+  
+    
+在 RemoteExecutionConfig 或 config/defaults.yaml 中新增：
+      remote_preview:
+  max_text_preview_bytes: 52428800      # 50MB
+  max_stream_read_bytes: 209715200      # 200MB，与 _MAX_READ_BYTES 对齐
+  max_archive_bytes: 5368709120         # 5GB
+
+    
+    
+读取时复用 _MAX_READ_BYTES，预览时复用 max_text_preview_bytes。
+  
+
+  
+10.8 错误码：统一并写入 API 文档
+
+  
+修复动作：
+
+  
+    
+在 v1_routes.py 中统一异常处理：
+      try:
+    ...
+except RemoteFileError as exc:
+    raise HTTPException(400, detail=str(exc))
+except PermissionError as exc:
+    raise HTTPException(403, detail=str(exc))
+except FileNotFoundError as exc:
+    raise HTTPException(404, detail=str(exc))
+except TimeoutError as exc:
+    raise HTTPException(504, detail=str(exc))
+except Exception as exc:
+    raise HTTPException(502, detail=str(exc))
+
+    
+    
+禁止裸 except Exception，只捕获预期异常并返回 502。
+  
+
+  
+10.9 数据完整性：增加校验和端点
+
+  
+修复动作：
+
+  
+    
+新增 GET /api/v1/jobs/{job_id}/remote-files/{path:path}/checksum：
+      @router.get("/jobs/{job_id}/remote-files/{file_path:path}/checksum")
+def remote_file_checksum(job_id: str, file_path: str, request: Request) -> dict:
+    fetcher = _remote_fetcher(request)
+    record = _get_remote_job_record(job_id, request)
+    data = fetcher.read_file(record, file_path)  # 或 stream 后计算
+    return {"sha256": hashlib.sha256(data).hexdigest()}
+
+    
+    
+单文件下载响应头增加 ETag 和 Content-Length（如果可获取）。
+    
+ZIP 打包不提供整体校验，但内部文件提供每个条目的 CRC32（zip 标准自带）。
+  
+
+  
+10.10 SFTP 并发限制：明确连接池和限流
+
+  
+修复动作：
+
+  
+    
+在配置中新增：
+      remote_sftp:
+  max_concurrent_sessions: 20
+  max_download_queue: 100
+  connect_timeout: 10
+  read_timeout: 30
+
+    
+    
+对“下载全部”使用全局信号量或 asyncio Semaphore，限制并发打包数量。
+    
+为长时间打包操作提供进度查询端点（可选）。
+  
+
+  
+10.11 cube 预览：从风险移到限制说明
+
+  
+修复动作：
+
+  
+    
+从第 8 节“风险与对策”中删除“cube 无法预览”行。
+    
+在第 5 节“安全与限制”中新增一行：
+      
+        
+          
+ | cube 文件 | 仅支持下载，不在服务器端做等值面渲染
+
+        
+      
+    
+  
+
+  
+10.12 技术依赖：明确依赖并声明
+
+  
+修复动作：
+
+  
+    
+在 pyproject.toml 的 [project.optional-dependencies] 中新增：
+      api = ["fastapi", "uvicorn", "zipstream-ng >= 2.0.0"]
+    
+    
+若不接受新依赖，则文档第 3.5 节必须改为“内存缓冲”而非“流式”。
+  
+
+  
+10.13 实施阶段：改为并行迭代
+
+  
+修复动作：
+
+  
+    
+将实施阶段重新划分为“API 迭代”和“前端迭代”两条可并行推进的线：
+      迭代 1：Fetcher 增强 + 预览 API（text/tail/range）
+迭代 2：打包下载 API（真正流式）
+迭代 3：前端文件树 + 预览面板
+迭代 4：报告解析 + 图表绘制
+迭代 5：测试与性能优化
+
+    
+    
+每个迭代都有明确的 API 契约和前端 mock，避免串行阻塞。
+  
+
+  
+10.14 测试计划：补充性能基准
+
+  
+修复动作：
+
+  
+    
+新增性能测试指标：
+      | 场景 | 目标 | 上限 |
+| 1GB 日志 tail 100 行 | ≤ 3s | 5s |
+| 500MB 目录打包 | ≤ 2min | 5min |
+| 打包内存占用 | ≤ 256MB | 512MB |
+| 100 并发列表请求 | 不报错 | 连接池不耗尽 |
+| 单文件 5GB 下载 | 流式完成 | 不 OOM |
+
+    
+    
+使用 mock SFTP 做 CI 测试，避免依赖真实远程节点。
+  
+
+  
+10.15 Fetcher 接口：统一与现有代码对齐
+
+  
+修复动作：
+
+  class RemoteResultFetcher:
+    def file_stat(self, record: JobRecord, filename: str) -> RemoteFileInfo:
+        """Return size/mtime for a single remote file."""
+        ...
+
+    def read_range(self, record: JobRecord, filename: str, offset: int, limit: int) -> bytes:
+        """Read a byte range from a remote file (limit capped)."""
+        ...
+
+    def read_tail(self, record: JobRecord, filename: str, lines: int = 500) -> str:
+        """General tail for any text file (not just stdout.log/stderr.log)."""
+        ...
+
+  
+    
+将现有 log_tail 泛化为 read_tail，或保留 log_tail 作为别名。
+    
+file_stat 直接返回 RemoteFileInfo，避免重复定义数据结构。
+    
+所有新方法和现有方法一样使用 _safe_join 做路径安全校验。
+  
+
+  
+
+    修复后必须执行：更新 pyproject.toml 依赖、重新运行相关测试、运行 ruff/mypy 检查，并重启 acp.service 使 API 变更生效。
+  
+
+  
+  
+本文档基于 ACP v1.0.0 代码库现状（2026-07-14）整理。实施前建议根据实际资源再确认打包大小限制和 SFTP 超时参数。
+

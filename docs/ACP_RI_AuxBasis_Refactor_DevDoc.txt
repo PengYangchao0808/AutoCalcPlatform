@@ -1,0 +1,2097 @@
+
+
+ACP RI 加速与辅助基组配置重构 — 开发文档
+
+版本：v1.3 · 2026-07-21
+
+涉及模块：src/acp/catalog.py · src/acp/cli.py · src/acp/workflows/energy.py · src/acp/workflows/simple.py · src/acp/api/v1_routes.py · src/acp/scheduler/store.py · src/cccp/qc/interfaces/orca.py · frontend/ACP_Workbench_v2.html · tests/
+
+本文档定义 ACP 平台 RI 加速配置与辅助基组体系的完整重构方案。核心动机：当前 supports_ri: bool 字段无法区分"复合方法内置 RI"、"普通杂化可选 RI"、"DLPNO 自动 RI"三种语义；aux_basis 单字段无法表达双杂化同时需要的 /J 和 /C 辅助基组；ORCA 输入生成将辅助基组名错误地拼接到 ! 行而非独立的 %basis 块。
+
+⚠️ 本次重构 破坏向后兼容：移除 supports_ri 字段；将 aux_basis 拆分为 aux_j_basis + aux_c_basis；API basis_catalog 字段类型从 array 变为 object。已保存的 job 配置中残留的旧字段由后端兜底迁移逻辑处理（详见 §6.5 + §6.7）。
+
+v1.1 修订摘要（基于可行性评审）：
+
+修正 §3 BASIS_CATALOG 化学事实：移除不存在的 def2-SV(P)/C；ma-def2 /C 改为 None；补全 3c 方法使用的基组
+
+§5 / §9 修复 CLI choices 与 supports_custom 一致性
+
+§6 守护过滤改用 regex 锚定；DLPNO 路径合流到统一 %basis 渲染
+
+§6.7 新增 SQLite 历史 job 读时归一化层
+
+§10 API 契约版本迁移策略（双字段共存）
+
+§12 补 CENSO / NMR / API shape / 前端 smoke 测试
+
+§13 插入 Phase 0a 数据校验关卡；工作量估计更新为 ~750 行
+
+新增 §16 详细开发步骤（按 Phase 的可执行清单）
+
+v1.2 修订摘要（基于可执行性核对，已逐行验证代码引用）：
+
+B1 修复：§6.7 重写 — v1.1 引用的 store.get_job_config / list_jobs / create_job / get_job_history 全部虚构。真实接口是 JobStore.get(job_id) -> JobRecord / list(...)，配置嵌套在 record.spec.method["levels"]。hook 点改为 _row_to_record(row)（store.py:209）
+
+B2 修复：§16.5 验收命令删除不存在的 --dry-run flag（cli.py 无此参数）
+
+M1 修复：§11 补全前端 两个 getFieldDefault 定义（行 3518 全局版 + 行 4003 嵌套版）；明确 options_source/aux_kind 字段在当前前端完全不存在，是新增代码非升级
+
+M2 修复：§6.5 补 opt_freq 第 4 个透传点（行 644，显式参数列表）
+
+M3 删除：NMR workflow 是半成品（ORCAInterface.nmr_shielding 是 NotImplementedError stub），删除 §12 中 NMR 测试项
+
+M4 修复：§16.1 删除虚构的 tests/_fixtures/ 路径，Phase 0a 关卡用模块内常量
+
+m1 修复：归一化函数定义移到 catalog.py（消除 store 反向依赖 catalog 的循环导入味道）
+
+m2 修复：basis_catalog_v2 体积估算从 <2KB 修正为 2-3KB
+
+m3 追加：§6.2 route_extras 自动分离从 substring "/J"/"/C" 升级为 regex 锚定 r"/([JC])(?=$|[^A-Za-z])"（与 §6.3 守卫过滤一致），避免 SMD/JK 等 token 被误捕获
+
+目录
+
+背景与问题
+
+核心设计决策
+
+BASIS_CATALOG 字典化
+
+METHOD_META 字段重构
+
+FIELD_DEFINITIONS 拆分
+
+ORCA 后端 %basis 块生成
+
+catalog.py 解析器升级
+
+METHOD_SCHEMAS + Profile 默认值
+
+CLI 默认值统一
+
+method-catalog API 序列化
+
+前端 UI 逻辑升级
+
+测试计划
+
+实施顺序
+
+风险与回退
+
+附录：术语表
+
+详细开发步骤（v1.1 新增）
+
+1. 背景与问题
+
+1.1 现状概述
+
+ACP 平台当前对 ORCA 的 RI（Resolution of Identity）加速配置散落在多个层次，语义割裂、字段冗余、用户感知混乱。主要问题如下：
+
+ | 问题 | 表现 | 代码位置
+
+ | 字段语义错位 | supports_ri: bool 把 3c 复合方法（r2SCAN-3c 等）与 DLPNO-CCSD(T) 都标记为 False，但二者实际行为截然不同 | catalog.py:211-325 METHOD_META
+
+ | 单字段无法表达双需求 | aux_basis 单字段对双杂化泛函（PWPB95/wB97M-2）无法同时承载 /J 和 /C 两类辅助基组 | catalog.py:465-477 FIELD_DEFINITIONS
+
+ | 字段暴露不足 | RI 字段仅出现在 single_point level，opt/freq 级别（计算量最大、最需 RI）反而无此字段 | catalog.py:500-516 等多个 SCHEMAS
+
+ | 默认值不一致 | 内置 profile 中 aux_basis="" 且 ri_approximation 缺省；CLI --ri-approximation 默认 "none"；catalog 默认 "RIJCOSX" | catalog.py:571-579, cli.py:252, catalog.py:476
+
+ | ORCA 输入错误 | 辅助基组名（如 def2/J）被拼接到 ! 行而非独立的 %basis 块 | orca.py:217-219（extras_str 拼接）
+
+ | def2 /J 命名错误 | 原方案草稿误写 def2-SVP/J、def2-TZVP/J，ORCA 中只存在唯一的 universal def2/J | （已在方案修订中修正）
+
+1.2 后端实际行为（关键洞察）
+
+src/cccp/qc/interfaces/orca.py:161-219 显示，ORCA 后端完全不读 supports_ri 字段。它依据 basis_inline + basis_block 两个字段做分派：
+
+ | 方法类型 | basis_inline | basis_block | ORCA 输入渲染 | RI 关键字行为 | aux_basis 消费
+
+ | 3c 复合方法
+（r2SCAN-3c/PBEh-3c/B97-3c） | False | 无 | ! r2SCAN-3c Opt <extras> | 用户传 RIJCOSX 会被塞进 extras → ORCA 报错或忽略 | 完全不被消费
+
+ | 普通/范围分离杂化
+（B3LYP/PBE0/M062X/wB97X-D4/wB97M-V） | True | — | ! B3LYP def2-TZVPP Opt <extras> | extras 接收 RIJCOSX/RIJK + /J 辅助基组 | 原样追加到 extras
+
+ | 双杂化
+（PWPB95/wB97M-2） | True | — | 同上 | 需要 RIJCOSX + /J + /C（RI-MP2 需要） | 同上（单字段无法表达双需求）
+
+ | 后 HF（DLPNO-CCSD(T)） | False | 有 | ! DLPNO-CCSD(T) TightSCF Opt <extras> + %basis auxJ/auxC | 用户传 RIJCOSX 多余（DLPNO 自带 RI） | 覆盖 %basis auxC（有意义）
+
+1.3 def2 /J 辅助基组的真相
+
+ORCA 中 def2 系列的 /J 辅助基组只有一个：def2/J（Weigend universal fitting basis, Phys. Chem. Chem. Phys. 2006），适用于所有 def2 主基组以及任何其他主基组。不存在 def2-SVP/J、def2-TZVP/J 这样的变体。
+
+相反，/C 辅助基组（用于 RI-MP2/DLPNO 等波函数方法的相关拟合）才有逐级配对：
+
+def2-SVP/C、def2-TZVP/C、def2-TZVPP/C、def2-QZVPP/C（Weigend, Köhn, Hättig, J. Chem. Phys. 2002）
+
+cc-pVDZ/C、cc-pVTZ/C、cc-pVQZ/C、cc-pV5Z/C（Dunning 系列 /C）
+
+aug-cc-pVDZ/C、aug-cc-pVTZ/C、aug-cc-pVQZ/C（扩散aug- Dunning /C）
+
+2. 核心设计决策
+
+2.1 设计哲学
+
+核心原则：基组定义自身携带其辅助基组配对元数据（J/C），让前端从主基组直接派生辅助基组选项。新增基组接入零成本——仅需在 BASIS_CATALOG 中加一条记录。
+
+2.2 五大设计支柱
+
+ | 支柱 | 设计 | 替代的原方案
+
+ | BASIS_CATALOG 字典化 | 每个主基组携带 aux_j + aux_c 量身定制配对信息（或 None） | 原扁平 tuple _ALL_BASIS_SETS
+
+ | METHOD_META 三态化 | supports_ri: bool → ri_support: "composite" | "user" | "automatic" + needs_aux_c: bool | 原二值布尔无法区分复合方法与 DLPNO
+
+ | aux_basis 字段拆分 | 单字段拆为 aux_j_basis + aux_c_basis | 原 aux_basis 对双杂化无法表达 /J + /C 双需求
+
+ | %basis 块统一生成 | 所有方法路径统一通过 %basis auxJ/auxC 块消费辅助基组 | 原普通 DFT 把辅助基组拼到 ! 行（错误）
+
+ | composite 守护层 | ORCAInterface 检测到 composite/automatic 方法时过滤 route_extras 中的 RI 关键字 | 无守护，依赖前端隐藏字段（不可靠）
+
+2.3 决策矩阵（基于多轮讨论）
+
+ | 决策点 | 选择 | 理由
+
+ | 字段暴露范围 | 扩展到所有 ORCA level（opt/freq/SP） | ORCA 习惯：opt/freq 计算量最大，RI 收益最高
+
+ | 3c 方法语义 | 引入 ri_support 三态取代 supports_ri 布尔 | 三态可准确区分复合方法、用户可选、自动 RI
+
+ | aux_basis 设计 | 拆为 aux_j_basis + aux_c_basis | 双杂化同时需要 /J 和 /C，单字段无法表达
+
+ | UI 交互模式 | 保留两个下拉（不引入总开关） | 高级用户保留全部选项的灵活性
+
+ | CLI 默认值统一 | 全部对齐 RIJCOSX | 支持 RI 的泛函默认开启加速
+
+ | 向后兼容策略 | 直接拆掉 supports_ri（不留派生属性） | 一次性迁移，避免长期技术债
+
+ | aux_basis 选项分流 | BASIS_CATALOG 元数据驱动（不硬编码分组列表） | 新基组接入零成本，单一数据真相
+
+ | DLPNO aux_basis 可见性 | 隐藏（auxC 固定由 profile 提供） | 保持当前行为；c_dlpno 分组保留供未来开放
+
+ | composite 守护尺度 | 保守过滤（明确集合 + /J /C 子串启发式） | 保留 VeryTightSCF 等无关 extras
+
+ | Dunning /J 策略 | aux_j=None（无量身定制，用 AutoAux） | Dunning 系列无量身 /J，保持诚实
+
+3. BASIS_CATALOG 字典化
+
+3.1 数据结构
+
+替换 catalog.py:182-191 的扁平 tuple，引入带元数据的字典。
+
+v1.1 化学事实修订（基于可行性评审）：
+
+def2-SV(P)/C 不存在 — Weigend/Köhn/Hättig JCP 2002 系列只发表 SVP/C 及以上；ORCA 中指定会报错。改为 None（→ AutoAux）。
+
+ma-def2-* 的 aux_c 改为 None — ma- 在父级基础上加了 s/p 扩散函数（Zheng JCTC 2011），父级 /C 不含扩散拟合，underfitting；AutoAux 更安全。
+
+PD 变体（TZVPPD/QZVPPD）保留复用父级 /C 的 pragmatic 选择，但 option_meta 中明示精度折衷。
+
+3c 方法使用的基组（def2-mTZVPP / def2-mSVP / mTZVP）补全到 catalog，避免前端 basisCatalog[basis] 查找返回 undefined。
+
+# src/acp/catalog.py（替换 _ALL_BASIS_SETS 定义）
+
+BASIS_CATALOG: dict[str, dict[str, str | None]] = {
+    # ── def2 系列 ── aux_j 全是 def2/J（唯一 universal）；aux_c 逐级配对
+    "def2-SV(P)":  {"aux_j": "def2/J", "aux_c": None},              # v1.1: SV(P)/C 不存在 → AutoAux
+    "def2-SVP":    {"aux_j": "def2/J", "aux_c": "def2-SVP/C"},
+    "def2-SVPD":   {"aux_j": "def2/J", "aux_c": "def2-SVPD/C"},
+    "def2-TZVP":   {"aux_j": "def2/J", "aux_c": "def2-TZVP/C"},
+    "def2-TZVPP":  {"aux_j": "def2/J", "aux_c": "def2-TZVPP/C"},
+    "def2-TZVPPD": {"aux_j": "def2/J", "aux_c": "def2-TZVPP/C"},   # PD 无量身 /C；复用 TZVPP/C（精度折衷）
+    "def2-QZVP":   {"aux_j": "def2/J", "aux_c": None},              # 无量身 /C → AutoAux
+    "def2-QZVPP":  {"aux_j": "def2/J", "aux_c": "def2-QZVPP/C"},
+    "def2-QZVPPD": {"aux_j": "def2/J", "aux_c": "def2-QZVPP/C"},   # PD 无量身 /C；复用 QZVPP/C
+
+    # ── ma-def2 系列 ── v1.1: aux_c 改 None（扩散函数 underfitting → AutoAux）
+    "ma-def2-SVP":   {"aux_j": "def2/J", "aux_c": None},
+    "ma-def2-TZVP":  {"aux_j": "def2/J", "aux_c": None},
+    "ma-def2-TZVPP": {"aux_j": "def2/J", "aux_c": None},
+    "ma-def2-QZVPP": {"aux_j": "def2/J", "aux_c": None},
+
+    # ── Dunning cc-pVnZ 系列 ── 无量身 /J；/C 逐级配对
+    "cc-pVDZ":     {"aux_j": None, "aux_c": "cc-pVDZ/C"},
+    "cc-pVTZ":     {"aux_j": None, "aux_c": "cc-pVTZ/C"},
+    "cc-pVQZ":     {"aux_j": None, "aux_c": "cc-pVQZ/C"},
+    "cc-pV5Z":     {"aux_j": None, "aux_c": "cc-pV5Z/C"},
+    "aug-cc-pVDZ": {"aux_j": None, "aux_c": "aug-cc-pVDZ/C"},
+    "aug-cc-pVTZ": {"aux_j": None, "aux_c": "aug-cc-pVTZ/C"},
+    "aug-cc-pVQZ": {"aux_j": None, "aux_c": "aug-cc-pVQZ/C"},
+
+    # ── 核心-价层基组 ── 无 tailoring（用户已确认 ORCA 中不存在量身 /J /C）
+    "cc-pwCVDZ": {"aux_j": None, "aux_c": None},
+    "cc-pwCVTZ": {"aux_j": None, "aux_c": None},
+    "cc-pwCVQZ": {"aux_j": None, "aux_c": None},
+    "cc-pCVDZ":  {"aux_j": None, "aux_c": None},
+    "cc-pCVTZ":  {"aux_j": None, "aux_c": None},
+
+    # ── v1.1 新增：3c 复合方法绑定的基组 ── 不在前端 basis 下拉展示（composite 隐藏字段），
+    #    但收录到 catalog 避免前端 basisCatalog[basis] 查找返回 undefined。aux_j/aux_c 全 None
+    #    因为 composite 方法不接受用户覆盖。
+    "def2-mTZVPP": {"aux_j": None, "aux_c": None},   # r2SCAN-3c
+    "def2-mSVP":   {"aux_j": None, "aux_c": None},   # PBEh-3c
+    "mTZVP":       {"aux_j": None, "aux_c": None},   # B97-3c
+}
+
+# 向后兼容：保留 _ALL_BASIS_SETS 作为派生扁平 tuple
+_ALL_BASIS_SETS: tuple[str, ...] = tuple(BASIS_CATALOG.keys())
+
+# 通用 fallback 选项（与主基组无关，仅含有效 ORCA 关键字）
+_AUX_J_BASIS_FALLBACK = ["AutoAux", "def2/J"]
+_AUX_C_BASIS_FALLBACK = ["AutoAux"]
+
+3.2 配对逻辑说明
+
+ | 主基组系列 | aux_j | aux_c | 说明
+
+ | def2-SV(P) | def2/J | None | v1.1：SV(P)/C 不存在 → AutoAux
+
+ | def2-SVP ~ def2-QZVPPD | def2/J | 逐级配对 | Weigend universal /J；/C 按 Weigend 2002 配对
+
+ | def2-TZVPPD / def2-QZVPPD | def2/J | 复用父级 /C | PD 变体无量身 /C；精度折衷，option_meta 中标注
+
+ | def2-QZVP | def2/J | None | QZVP（单极化）无量身 /C；用户选 AutoAux
+
+ | ma-def2-* | def2/J | None | v1.1：ma- 含扩散函数，父级 /C underfitting → AutoAux
+
+ | cc-pVnZ / aug-cc-pVnZ | None | 逐级配对 | Dunning 系列 /J 无量身（用 AutoAux）；/C 按 Woon & Dunning 1995
+
+ | cc-pwCVnZ / cc-pCVnZ | None | None | 核心-价层基组在 ORCA 中无量身 /J 和 /C
+
+ | def2-mTZVPP / def2-mSVP / mTZVP | None | None | v1.1 新增：3c 复合方法绑定基组；composite 不接受覆盖
+
+3.3 验证依据
+
+def2/J 唯一性：Weigend PCCP 2006 — "a universal auxiliary basis set for all basis sets of the def2 family"
+
+def2 /C 系列：Weigend, Köhn, Hättig JCP 2002 — 系统发表 SVP/C ~ QZVPP/C（不含 SV(P)/C）
+
+Dunning /C 系列：Woon & Dunning JCP 1995 — cc-pVnZ 系列 /C
+
+cc-pwCVnZ / cc-pCVnZ 无 /C：用户确认（ORCA 中不存在量身定制的 /C 辅助基组）
+
+ma-def2 不复用父级 /C（v1.1 修订）：Zheng et al. JCTC 2011 — ma- 加扩散函数，父级 /C 缺扩散拟合；推荐 AutoAux
+
+PD 变体复用父级 /C：Hättig PCCP 2005 — def2 系列设计允许同 zeta 数 /C 复用（精度损失 <0.1 kcal/mol for typical single-points）
+
+v1.1 自检关卡（Phase 0a 必跑）：BASIS_CATALOG 实施完成后，立即运行 tests/test_acp_catalog.py::test_basis_catalog_orca_keyword_existence（详见 §12.1），对每个非 None 的 aux_j/aux_c 值做 ORCA 关键字存在性断言，避免错误数据向下流污染解析器与 UI。
+
+4. METHOD_META 字段重构
+
+4.1 字段映射
+
+ | 方法 | 原字段 | 新字段
+
+ | 所有 11 个 functional | "supports_ri": <bool> | "ri_support": <enum> + "needs_aux_c": <bool>
+
+4.2 ri_support 三态语义
+
+ | 值 | 含义 | ri_approximation 字段 | aux_j_basis 字段 | aux_c_basis 字段 | UI 徽章
+
+ | "composite" | 复合方法，RI 体系完全固化 | 隐藏 | 隐藏 | 隐藏 | "复合方法 · 参数已固化"
+
+ | "user" | 用户可选 RI（普通杂化/范围分离/双杂化） | 可见 | 可见 | 视 needs_aux_c | 无
+
+ | "automatic" | 后 HF 方法，RI 自动 | 隐藏 | 隐藏 | 隐藏 | "RI 自动 · 后 HF 方法内置"
+
+4.3 needs_aux_c 派生可见性
+
+当 ri_support="user" 时，needs_aux_c 决定 aux_c_basis 字段是否渲染：
+
+ | needs_aux_c | 方法类型 | aux_c_basis 渲染
+
+ | False | 普通杂化 / 范围分离杂化 | 隐藏（无 RI-MP2 部分）
+
+ | True | 双杂化 | 可见（RI-MP2 需要 /C）
+
+4.4 11 个 functional 完整映射
+
+# src/acp/catalog.py:211-325（METHOD_META 全量重写）
+
+METHOD_META: dict[str, dict[str, Any]] = {
+    # ── 3c 复合方法（3 个）— 字段全隐藏 ──
+    "r2SCAN-3c": {
+        "basis_inline": False,
+        "ri_support": "composite",       # 替换 supports_ri: False
+        # 无 needs_aux_c（无意义）
+        "basis": ("def2-mTZVPP",),
+        "dispersion": ("D4",),
+        "builtin_dispersion": "D4",
+        "default_basis": "def2-mTZVPP",
+        "default_dispersion": "D4",
+    },
+    "PBEh-3c":   {..., "ri_support": "composite"},
+    "B97-3c":    {..., "ri_support": "composite"},
+
+    # ── 普通杂化 / 范围分离（5 个）— 仅 aux_j_basis 可见 ──
+    "B3LYP":     {..., "ri_support": "user", "needs_aux_c": False},
+    "PBE0":      {..., "ri_support": "user", "needs_aux_c": False},
+    "M062X":     {..., "ri_support": "user", "needs_aux_c": False},
+    "wB97X-D4":  {..., "ri_support": "user", "needs_aux_c": False},
+    "wB97M-V":   {..., "ri_support": "user", "needs_aux_c": False},
+
+    # ── 双杂化（2 个）— aux_j_basis + aux_c_basis 都可见 ──
+    "PWPB95":    {..., "ri_support": "user", "needs_aux_c": True},
+    "wB97M-2":   {..., "ri_support": "user", "needs_aux_c": True},
+
+    # ── 后 HF（1 个）— 字段全隐藏 ──
+    "DLPNO-CCSD(T)": {
+        "basis_inline": False,
+        "ri_support": "automatic",       # 替换 supports_ri: False
+        "needs_aux_c": True,             # 仅元数据完整性（UI 隐藏）
+        "basis": ("def2-TZVPP",),
+        "dispersion": ("none",),
+        "builtin_dispersion": None,
+        "default_basis": "def2-TZVPP",
+        "default_dispersion": "none",
+        "basis_block": {                 # 保持不变
+            "basis": "def2-TZVPP",
+            "auxJ": "def2/J",
+            "auxC": "def2-TZVPP/C",
+        },
+    },
+}
+
+5. FIELD_DEFINITIONS 拆分
+
+5.1 替换原 aux_basis 字段
+
+catalog.py:465-477 的 aux_basis 单字段替换为两个字段：
+
+# src/acp/catalog.py:465（替换原 aux_basis 定义）
+
+"aux_j_basis": {
+    "type": "select",
+    "advanced": True,
+    "per_backend": {"orca": _AUX_J_BASIS_FALLBACK},   # ["AutoAux", "def2/J"]
+    "default": {"*": "AutoAux"},
+    "supports_custom": True,
+    "options_source": "dynamic_aux_basis",   # 前端按 basis 联动注入量身定制项
+    "aux_kind": "j",
+    "option_meta": {
+        "AutoAux": "ORCA 自动生成 /J 辅助基组（推荐默认）",
+        "def2/J":  "Weigend universal /J 拟合基（适用于任何主基组）",
+    },
+},
+"aux_c_basis": {
+    "type": "select",
+    "advanced": True,
+    "per_backend": {"orca": _AUX_C_BASIS_FALLBACK},   # ["AutoAux"]
+    "default": {"*": "AutoAux"},
+    "supports_custom": True,
+    "options_source": "dynamic_aux_basis",
+    "aux_kind": "c",
+    "option_meta": {
+        "AutoAux": "ORCA 自动生成 /C 辅助基组",
+    },
+},
+# ri_approximation 字段保持不变（none / RI / RIJCOSX / RIJK）
+
+5.2 设计要点
+
+关键约束：Fallback 列表仅含有效 ORCA 关键字。"Auto" 不是 ORCA 关键字，已从 fallback 中移除。前端默认值通过 BASIS_CATALOG 解析得到具体值（如 def2/J）或退回 AutoAux。
+
+v1.1 一致性约束（CLI ↔ FIELD_DEFINITIONS）：FIELD_DEFINITIONS 中 supports_custom: True 的字段，CLI argparse 不得使用 choices=[...] 限定（否则用户无法传 BASIS_CATALOG 派生值如 def2-TZVPP/C）。正确做法：去掉 choices，改用 metavar + help 列示常用值；校验通过 _clamp_to_functional 在 catalog 层完成（详见 §9.2 修订）。
+
+ | 字段 | Fallback 项 | 动态注入项（BASIS_CATALOG 派生）
+
+ | aux_j_basis | AutoAux, def2/J | BASIS_CATALOG[basis].aux_j（如 def2/J，或 None → 退回 fallback）
+
+ | aux_c_basis | AutoAux | BASIS_CATALOG[basis].aux_c（如 def2-TZVPP/C，或 None → 退回 fallback）
+
+6. ORCA 后端 %basis 块生成
+
+6.1 当前问题
+
+src/cccp/qc/interfaces/orca.py:217-219：
+
+# 当前（错误）：辅助基组名混在 ! 行
+blocks.append(f"! {_method} {_basis} {route}{extras_str}")
+# 生成：! B3LYP def2-TZVPP Opt RIJCOSX def2/J   ← def2/J 错误地出现在 route 行
+
+6.2 目标输出
+
+# 目标（正确）：辅助基组在 %basis 块
+! B3LYP def2-TZVPP Opt RIJCOSX
+%basis
+  auxJ  "def2/J"
+end
+
+6.3 实现步骤
+
+Step 6.1 — 扩展 _build_input_blocks 签名
+
+src/cccp/qc/interfaces/orca.py:101-132 新增两个显式参数：
+
+def _build_input_blocks(
+    self, calc_type, charge, multiplicity,
+    method=None, basis=None,
+    route_extras=None,               # 仅含纯 route 关键字
+    aux_j_basis=None,                # 新增：显式 /J 辅助基组
+    aux_c_basis=None,                # 新增：显式 /C 辅助基组
+    geom_maxiter=None,
+    recalc_hess=None,
+    solvent=None, solvent_model=None,
+    aux_basis=None,                  # 保留：DLPNO 兼容路径（迁移期）
+    extra_blocks=None,
+):
+
+Step 6.2 — 实现向后兼容的 route_extras 自动分离
+
+orca.py:134-171 附近插入：
+
+# ── 6.2 自动分离 route_extras 中残留的辅助基组 ──
+# 向后兼容：老 job config 可能把 aux 基组名混在 route_extras 中
+_aux_j = aux_j_basis
+_aux_c = aux_c_basis
+_filtered_extras = []
+
+if not aux_j_basis and not aux_c_basis and not aux_basis:
+    # 旧路径：从 route_extras 启发式分离
+    for x in _route_extras:
+        xs = str(x)
+        if "/J" in xs and not _aux_j:
+            _aux_j = xs
+        elif "/C" in xs and not _aux_c:
+            _aux_c = xs
+        else:
+            _filtered_extras.append(x)
+else:
+    _filtered_extras = list(_route_extras)
+
+# DLPNO 兼容：aux_basis 参数迁移到 _aux_c
+if aux_basis and not _aux_c:
+    _aux_c = aux_basis
+
+Step 6.3 — composite/automatic 方法守护过滤
+
+orca.py:167-171 附近：
+
+import re
+
+meta = _resolve_method_meta(_method)
+ri_support = (meta or {}).get("ri_support", "user")
+
+if ri_support in ("composite", "automatic"):
+    # 这些方法有自己的 RI 体系，过滤掉传入的 RI 关键字和辅助基组
+    _RI_KEYWORDS = {"RI", "RIJCOSX", "RIJK", "NONE"}
+    # v1.1: 用 regex 锚定 /J /C 后缀，避免子串误伤（如 GridX/C, SMD/JK）
+    _AUX_BASIS_PATTERN = re.compile(r"/[JC](?=$|[^A-Za-z])")
+
+    _filtered_extras = [
+        x for x in _filtered_extras
+        if str(x).upper() not in _RI_KEYWORDS
+        and not _AUX_BASIS_PATTERN.search(str(x))
+    ]
+    _aux_j = None    # 复合方法不接受 auxJ 覆盖
+    if ri_support == "composite":
+        _aux_c = None    # 3c 也不接受 auxC（DLPNO 保留 auxC 覆盖路径）
+
+v1.1 修订：保守过滤尺度。原方案 "/J" in x 子串匹配过于宽松（可能误伤未来出现的 GridX/C、SMD/JK 等关键字）。新方案用 regex r"/[JC](?=$|[^A-Za-z])" 锚定 /J 或 /C 必须出现在 token 末尾或后接非字母字符，仍保留 VeryTightSCF 等无关 extras。
+
+Step 6.4 — 统一 %basis 块渲染（含 DLPNO 合流）
+
+v1.1 关键修订：原方案在普通 DFT 路径后追加统一块，但 DLPNO 路径（orca.py:192-216）已有独立的 %basis 渲染逻辑，会造成两条路径长期并存的技术债。本步骤把 DLPNO 也合流到统一渲染。
+
+重构目标：废除 METHOD_META[...]["basis_block"] template snapshot，所有 %basis 块由 _build_input_blocks 统一渲染。
+
+# src/acp/catalog.py（METHOD_META 中 DLPNO 条目删除 basis_block 字段）
+"DLPNO-CCSD(T)": {
+    "basis_inline": False,
+    "ri_support": "automatic",
+    "needs_aux_c": True,
+    "basis": ("def2-TZVPP",),
+    "dispersion": ("none",),
+    "builtin_dispersion": None,
+    "default_basis": "def2-TZVPP",
+    "default_dispersion": "none",
+    "default_aux_j": "def2/J",       # v1.1 新增：移到顶层，供解析器派生
+    "default_aux_c": "def2-TZVPP/C", # v1.1 新增
+    # basis_block 字段移除 —— 由 orca.py 统一渲染
+},
+
+# src/cccp/qc/interfaces/orca.py（_build_input_blocks 重构）
+else:
+    # 普通 DFT：append basis 到 ! 行
+    blocks.append(f"! {_method} {_basis} {route}{extras_str}")
+
+# ── 统一 %basis 块生成（所有路径，只要有 auxJ/auxC 或 basis_block_template）──
+# v1.1: DLPNO 路径不再独立渲染，统一走此分支
+needs_basis_block = _aux_j or _aux_c or (
+    basis_block_template is not None  # 仅 DLPNO（保留 template 字段作 marker）
+)
+if needs_basis_block:
+    blocks.append("%basis")
+    # DLPNO 需要显式 basis 行（basis_inline=False）；普通 DFT 不需要
+    if not basis_inline:
+        effective_basis = _basis or (meta or {}).get("default_basis", "")
+        if effective_basis:
+            blocks.append(f'  basis "{effective_basis}"')
+    # auxJ / auxC 优先级：显式参数 > METHOD_META default_aux_j/default_aux_c
+    final_aux_j = _aux_j or (meta or {}).get("default_aux_j")
+    final_aux_c = _aux_c or (meta or {}).get("default_aux_c")
+    if final_aux_j:
+        blocks.append(f'  auxJ  "{final_aux_j}"')
+    if final_aux_c:
+        blocks.append(f'  auxC  "{final_aux_c}"')
+    blocks.append("end")
+
+注意：DLPNO 仍可通过显式 aux_c_basis 参数覆盖默认 def2-TZVPP/C。原 extra_blocks 中 dict 形式的 {"auxJ": ..., "auxC": ...} 覆盖机制保留，作为高级用法。
+
+Step 6.5 — _write_input 与各 calc_type 方法透传新参数 v1.2 补全
+
+orca.py:261-277（_write_input 签名）和调用它的 calc_type 方法需要传递新参数。v1.2 修订：实际有 4 个透传点（非文档 v1.0 所说的"行 380-506"），其中 opt_freq 用显式参数列表，处理方式不同：
+
+ | 方法 | 行号 | 当前 aux_basis 透传方式 | v1.2 改法
+
+ | optimize | 421 | aux_basis=kwargs.get("aux_basis") | 加 aux_j_basis=kwargs.get("aux_j_basis"), aux_c_basis=kwargs.get("aux_c_basis")
+
+ | single_point | 506 | aux_basis=kwargs.get("aux_basis") | 同上
+
+ | frequency | 590 | aux_basis=kwargs.get("aux_basis") | 同上
+
+ | opt_freq | 644 | 显式参数 aux_basis: str = None（行 644，在 **kwargs 之前） | 需在显式参数列表加 aux_j_basis: str = None, aux_c_basis: str = None，然后在 _write_input 调用处显式传递
+
+# 通用透传（optimize / single_point / frequency 路径）
+self._write_input(
+    ...
+    route_extras=kwargs.get("route_extras"),
+    aux_j_basis=kwargs.get("aux_j_basis"),       # 新增
+    aux_c_basis=kwargs.get("aux_c_basis"),       # 新增
+    aux_basis=kwargs.get("aux_basis"),            # 兼容期保留
+)
+
+# opt_freq 特殊路径（行 644 的显式参数）
+def opt_freq(
+    self,
+    coordinates: np.ndarray,
+    symbols: list[str],
+    charge: int = 0,
+    multiplicity: int = 1,
+    output_dir: Path = None,
+    output_name: str = "orca_optfreq",
+    method: str = None,
+    basis: str = None,
+    route_extras: list = None,
+    geom_maxiter: int = None,
+    extra_blocks: list = None,
+    recalc_hess: int = None,
+    aux_basis: str = None,
+    aux_j_basis: str = None,    # ← v1.2 新增（显式参数，不在 kwargs）
+    aux_c_basis: str = None,    # ← v1.2 新增
+    **kwargs,
+) -> QCResult:
+    ...
+    self._write_input(
+        ...
+        aux_basis=aux_basis,
+        aux_j_basis=aux_j_basis,    # 显式传递
+        aux_c_basis=aux_c_basis,
+    )
+
+Step 6.6 — 老 aux_basis 字段向后兼容
+
+已保存的 job 配置（SQLite store）可能含 aux_basis 字段。在 _clamp_to_functional（catalog.py:1316+）入口加迁移层：
+
+def _clamp_to_functional(level: dict[str, Any], method_key: str) -> None:
+    # ── 兼容迁移：aux_basis → aux_j_basis / aux_c_basis ──
+    if "aux_basis" in level and "aux_j_basis" not in level and "aux_c_basis" not in level:
+        func = level.get(method_key) or level.get("functional")
+        meta = _case_insensitive_get(METHOD_META, func) if func else None
+        ri_support = (meta or {}).get("ri_support", "user")
+        if ri_support == "automatic":
+            level["aux_c_basis"] = level.pop("aux_basis")  # DLPNO 走 auxC
+        else:
+            level["aux_j_basis"] = level.pop("aux_basis")  # 其余走 auxJ
+    # ...其余 clamp 逻辑...
+
+Step 6.7 — SQLite 历史 job 读时归一化 v1.2 重写
+
+v1.2 修订（B1）：v1.1 引用的 store.get_job_config() / list_jobs() / create_job(config=...) / get_job_history() 全部虚构。实际接口：
+
+JobStore.create(record: JobRecord)
+
+JobStore.get(job_id) -> JobRecord | None
+
+JobStore.list(status, limit) -> list[JobRecord]
+
+JobStore.list_by_project(project_id, limit) -> list[JobRecord]
+
+配置不存为顶层 dict，而是嵌套在 record.spec: JobSpec -> spec.method: dict -> method["levels"]: dict（见 jobs.py:168 + store.py:209-225）。真实的 hook 点是 _row_to_record(row)（store.py:209），在 spec_raw = json.loads(row["spec_json"]) 之后立即对 spec_raw["method"]["levels"] 归一化。
+
+v1.2 修订（m1）：归一化函数定义在 acp/catalog.py（紧邻 _clamp_to_functional），消除 store.py 反向依赖 catalog 的循环导入味道。store.py 只调用，不导入其他符号。
+
+步骤 1：在 catalog.py 定义归一化函数
+
+# src/acp/catalog.py（紧邻 _clamp_to_functional 之后，约行 1352）
+
+def normalize_legacy_method(method: dict[str, Any]) -> dict[str, Any]:
+    """读时归一化：把 v1.0 旧字段转换为 v1.1 的字段结构。
+
+    操作 JobSpec.method 字典中的 levels 子字典。幂等：已经是新结构
+    的 method 无副作用返回。供 store._row_to_record 调用，避免反向
+    依赖（catalog 是底层模块，scheduler 依赖它合理，反之不然）。
+    """
+    if not isinstance(method, dict):
+        return method
+    levels = method.get("levels")
+    if not isinstance(levels, dict):
+        return method
+    for level_id, level in levels.items():
+        if not isinstance(level, dict):
+            continue
+        # aux_basis → aux_j_basis / aux_c_basis（逻辑与 _clamp_to_functional 一致）
+        if "aux_basis" in level and "aux_j_basis" not in level and "aux_c_basis" not in level:
+            func = level.get("functional")
+            meta = _case_insensitive_get(METHOD_META, func) if func else None
+            ri_support = (meta or {}).get("ri_support", "user")
+            if ri_support == "automatic":
+                level["aux_c_basis"] = level.pop("aux_basis")
+            else:
+                level["aux_j_basis"] = level.pop("aux_basis")
+    return method
+
+步骤 2：在 store.py 的 _row_to_record 出口调用
+
+# src/cccp/qc/interfaces/orca.py 不变
+# src/acp/scheduler/store.py（_row_to_record，行 209-225）
+
+def _row_to_record(row: sqlite3.Row) -> JobRecord:
+    spec_raw = json.loads(row["spec_json"])
+    columns = set(row.keys())
+    project_id = row["project_id"] if "project_id" in columns else spec_raw.get("project_id")
+    input_hash = row["input_hash"] if "input_hash" in columns else spec_raw.get("input_hash")
+
+    # ── v1.2: 读时归一化 method.levels 中的旧字段 ──
+    if isinstance(spec_raw.get("method"), dict):
+        from acp.catalog import normalize_legacy_method  # 延迟导入避免启动期循环
+        spec_raw["method"] = normalize_legacy_method(spec_raw["method"])
+
+    spec = JobSpec(
+        workflow=spec_raw["workflow"],
+        name=spec_raw.get("name", ""),
+        input=spec_raw.get("input", {}),
+        method=spec_raw.get("method", {}),
+        # ...其他字段保持不变...
+    )
+    # ...其余 _row_to_record 逻辑保持不变...
+
+覆盖范围：_row_to_record 是所有 SQLite 读出路径的唯一出口（get / list / list_by_project 都通过它反序列化）。只 hook 一处即可覆盖所有读路径。不修改磁盘数据，仅在内存层归一化 —— 安全可逆，且对新结构幂等。
+
+步骤 3：__all__ 导出
+
+# src/acp/catalog.py（__all__ 列表）
+__all__ = [
+    "BASIS_CATALOG",
+    "FIELD_DEFINITIONS",
+    # ...
+    "normalize_legacy_method",   # ← v1.2 新增（公开供 store.py 调用）
+]
+
+7. catalog.py 解析器升级
+
+7.1 _resolve_field_default 升级
+
+catalog.py:1268-1313，将 supports_ri 检查改为 ri_support 三态判断：
+
+def _resolve_field_default(
+    field_name: str, engine: str, functional: str | None = None,
+    basis: str | None = None,   # 新增参数：用于 aux_j/aux_c 派生
+) -> Any:
+    fd = FIELD_DEFINITIONS.get(field_name)
+    global_default: Any = ""
+    if fd:
+        dflt = fd.get("default", {})
+        if isinstance(dflt, dict):
+            global_default = dflt.get(engine, dflt.get("*", ""))
+        else:
+            global_default = dflt
+
+    if functional:
+        meta = _case_insensitive_get(METHOD_META, functional)
+        if meta:
+            # ── basis / dispersion 默认值（保持不变）──
+            if field_name == "basis" and meta.get("default_basis") is not None:
+                return meta["default_basis"]
+            if field_name == "dispersion" and meta.get("default_dispersion") is not None:
+                return meta["default_dispersion"]
+
+            # ── ri_support 三态处理（替换原 supports_ri）──
+            ri_support = meta.get("ri_support", "user")
+            if ri_support in ("composite", "automatic"):
+                if field_name == "ri_approximation":
+                    return "none"
+                if field_name in ("aux_j_basis", "aux_c_basis"):
+                    return ""
+
+            # ── aux_j_basis / aux_c_basis 从 BASIS_CATALOG 派生 ──
+            if field_name == "aux_j_basis" and basis:
+                basis_meta = BASIS_CATALOG.get(basis)
+                if basis_meta and basis_meta.get("aux_j"):
+                    return basis_meta["aux_j"]
+                return global_default    # 退回 "AutoAux"
+            if field_name == "aux_c_basis" and basis:
+                # 仅 needs_aux_c=True 时才返回非空默认
+                if not meta.get("needs_aux_c", False):
+                    return ""
+                basis_meta = BASIS_CATALOG.get(basis)
+                if basis_meta and basis_meta.get("aux_c"):
+                    return basis_meta["aux_c"]
+                return global_default    # 退回 "AutoAux"
+
+        # basis / dispersion 的 FUNCTIONAL_OPTIONS_MAP 回退（保持不变）
+        if field_name in ("basis", "dispersion"):
+            mapping = _case_insensitive_get(FUNCTIONAL_OPTIONS_MAP, functional)
+            if mapping and field_name in mapping:
+                opts = mapping[field_name]
+                if opts:
+                    if global_default and global_default in opts:
+                        return global_default
+                    return opts[0]
+
+    return global_default
+
+7.2 _resolve_field_options 升级
+
+catalog.py:1239-1265，新增 aux_j/aux_c 动态选项生成：
+
+def _resolve_field_options(
+    field_name: str, engine: str, functional: str | None = None,
+    basis: str | None = None,   # 新增
+) -> list[str] | None:
+    if functional and field_name in ("basis", "dispersion"):
+        mapping = FUNCTIONAL_OPTIONS_MAP.get(functional)
+        if mapping and field_name in mapping:
+            return mapping[field_name]
+
+    fd = FIELD_DEFINITIONS.get(field_name)
+    if not fd:
+        return None
+
+    # ── 动态 aux_j_basis / aux_c_basis 选项 ──
+    if field_name in ("aux_j_basis", "aux_c_basis") and fd.get("options_source") == "dynamic_aux_basis":
+        aux_kind = fd.get("aux_kind")    # "j" 或 "c"
+        fallback = fd.get("per_backend", {}).get(engine, [])
+        if not isinstance(fallback, list):
+            fallback = []
+
+        # 从 BASIS_CATALOG 注入当前 basis 的量身定制项
+        if basis and basis in BASIS_CATALOG:
+            tailored = BASIS_CATALOG[basis].get(f"aux_{aux_kind}")
+            if tailored and tailored not in fallback:
+                return [tailored] + fallback    # 量身定制项置顶
+        return list(fallback)
+
+    if "options" in fd:
+        return fd["options"]
+    if "per_backend" in fd:
+        opts = fd["per_backend"].get(engine, list(fd["per_backend"].values())[0] if fd["per_backend"] else [])
+        if opts is _BASIS_CATALOG_REF:
+            return list(_ALL_BASIS_SETS)
+        return opts
+    return None
+
+7.3 _clamp_to_functional 升级
+
+catalog.py:1316+，扩展对 aux_j_basis/aux_c_basis 的 clamp：
+
+def _clamp_to_functional(level: dict[str, Any], method_key: str) -> None:
+    # ── 6.5 兼容迁移：aux_basis → aux_j_basis / aux_c_basis（详见 §6.5）──
+    _migrate_legacy_aux_basis(level, method_key)
+
+    func = level.get(method_key) or level.get("functional")
+    if not func:
+        return
+    meta = _case_insensitive_get(METHOD_META, func)
+    if not meta:
+        return
+    ri_support = meta.get("ri_support", "user")
+
+    # ── composite / automatic：强制清空 RI/aux 字段 ──
+    if ri_support in ("composite", "automatic"):
+        level["ri_approximation"] = "none"
+        level["aux_j_basis"] = ""
+        if ri_support == "composite":
+            level["aux_c_basis"] = ""
+        # automatic (DLPNO) 保留 aux_c_basis 路径（虽 UI 隐藏，后端仍可消费）
+
+    # ── aux_j_basis / aux_c_basis clamp 到允许列表 ──
+    basis = level.get("basis", "")
+    for aux_field in ("aux_j_basis", "aux_c_basis"):
+        if aux_field in level and level[aux_field]:
+            allowed = _resolve_field_options(aux_field, "orca", func, basis) or []
+            if level[aux_field] not in allowed:
+                # 不在允许列表 → 回退到默认
+                level[aux_field] = _resolve_field_default(aux_field, "orca", func, basis)
+
+    # ...原有 basis/dispersion clamp 逻辑保持不变...
+
+8. METHOD_SCHEMAS + Profile 默认值
+
+8.1 SCHEMAS 字段扩展
+
+在以下 5 个 level 的 fields 列表中加入 "aux_j_basis" + "aux_c_basis"（替换原 "aux_basis"）：
+
+ | 位置 | level_id | 修改
+
+ | catalog.py:500-516 | confsearch.dft_opt | + aux_j_basis, aux_c_basis, ri_approximation
+
+ | catalog.py:524-536 | confsearch.single_point | 替换 aux_basis → aux_j_basis + aux_c_basis
+
+ | catalog.py:713-724 | dft_optimize.optimize | + aux_j_basis, aux_c_basis, ri_approximation
+
+ | catalog.py:754-760 | dft_frequency.frequency | + aux_j_basis, aux_c_basis, ri_approximation
+
+ | catalog.py:772-782 | dft_optfreq.optfreq | + aux_j_basis, aux_c_basis, ri_approximation
+
+ | catalog.py:795-806 | dft_optfreqsp.optfreq | + aux_j_basis, aux_c_basis, ri_approximation
+
+ | catalog.py:814-824 | dft_optfreqsp.single_point | 替换 aux_basis
+
+8.2 Profile 默认值策略
+
+每个内置 profile 的 ORCA level 显式写出三个字段：
+
+ | level 的 functional 类型 | ri_approximation | aux_j_basis | aux_c_basis
+
+ | 3c 复合方法（r2SCAN-3c 等） | "none" | "" | ""
+
+ | 普通杂化（B3LYP/PBE0/M062X/wB97X-D4/wB97M-V） | "RIJCOSX" | "AutoAux" | ""
+
+ | 双杂化（PWPB95/wB97M-2） | "RIJCOSX" | "AutoAux" | "AutoAux"
+
+ | DLPNO-CCSD(T) | "none" | "" | ""
+
+说明：普通杂化和双杂化的 aux_j_basis="AutoAux" 在 basis 字段确定后由前端联动重算（如 basis=def2-TZVPP → 自动变为 def2/J）。Profile 默认值仅是序列化时的"占位"值。
+
+8.3 修改位置清单
+
+涉及 catalog.py 所有内置 profile（约 7-8 处）：
+
+confsearch 的 ext/lite/full/zero profiles
+
+dft_optfreqsp 的 default profile
+
+其他含 ORCA level 的 profiles
+
+9. CLI 默认值统一
+
+9.1 修改 cli.py:252
+
+# 原：
+parser.add_argument("--ri-approximation", default="none", ...)
+
+# 改为：
+parser.add_argument("--ri-approximation", default="RIJCOSX", ...)
+
+9.2 新增 CLI 参数 v1.1 修订
+
+v1.1 修订：原方案用 choices=["AutoAux", "def2/J"] 限定，与 FIELD_DEFINITIONS 的 supports_custom: True 矛盾，且阻止用户传 BASIS_CATALOG 派生值（如 def2-TZVPP/C）。新方案去掉 choices，改用 metavar + help 提示；校验由 catalog 层的 _clamp_to_functional 完成。
+
+# 替换原 --aux-basis（行 1175 附近），新增：
+parser.add_argument(
+    "--aux-j-basis",
+    default="AutoAux",
+    metavar="BASIS",
+    help="Auxiliary /J basis for RI-J fitting (default: AutoAux). "
+         "Common: AutoAux, def2/J. BASIS_CATALOG-derived values "
+         "(e.g. def2/J) are auto-selected by --basis.",
+)
+parser.add_argument(
+    "--aux-c-basis",
+    default="AutoAux",
+    metavar="BASIS",
+    help="Auxiliary /C basis for RI-MP2 correlation (default: AutoAux). "
+         "Common: AutoAux, def2-TZVPP/C, cc-pVTZ/C. Only used by "
+         "double-hybrid functionals (PWPB95, wB97M-2) and DLPNO.",
+)
+
+# 保留 --aux-basis 作为 --aux-j-basis 的兼容别名（迁移期）
+parser.add_argument(
+    "--aux-basis",
+    dest="aux_j_basis_legacy",
+    default=None,
+    help=argparse.SUPPRESS,  # 隐藏，向后兼容
+)
+
+9.2.1 --aux-basis 别名合并逻辑 v1.1 新增
+
+原方案仅声明 dest="aux_j_basis_legacy" 但未给出何处合并到实际 kwargs。补在 cli.py 的参数消化段（约行 1317 附近，sp_kwargs 构建处）：
+
+# cli.py（sp_kwargs 构建处，约行 1315-1325）
+sp_kwargs = {
+    "functional": args.sp_functional,
+    "basis": args.sp_basis,
+    "ri_approximation": args.sp_ri_approximation,
+    "aux_j_basis": args.aux_j_basis,
+    "aux_c_basis": args.aux_c_basis,
+}
+# ── --aux-basis 兼容别名合并：legacy 优先级低于显式 --aux-j-basis ──
+if args.aux_j_basis_legacy and args.aux_j_basis == "AutoAux":
+    sp_kwargs["aux_j_basis"] = args.aux_j_basis_legacy
+if args.sp_aux_basis and args.aux_j_basis == "AutoAux":
+    # sp_aux_basis 是更细分的别名（cli.py:267）
+    sp_kwargs["aux_j_basis"] = args.sp_aux_basis
+
+9.3 _LEVEL_TO_CLI_FLAG_MAP 更新
+
+catalog.py:1576-1590：
+
+_LEVEL_TO_CLI_FLAG_MAP: dict[str, str] = {
+    "functional": "method",
+    "basis": "basis",
+    "aux_j_basis": "aux-j-basis",     # 替换原 "aux_basis": "aux-basis"
+    "aux_c_basis": "aux-c-basis",     # 新增
+    "ri_approximation": "ri-approximation",
+    # ...其他保持不变...
+}
+
+9.4 字段白名单更新
+
+cli.py:1175：
+
+# 原：
+"aux_basis", "ri_approximation", "geom_maxiter", ...
+
+# 改为：
+"aux_j_basis", "aux_c_basis", "ri_approximation", "geom_maxiter", ...
+
+10. method-catalog API 序列化
+
+10.1 get_method_catalog() 升级
+
+src/acp/api/v1_routes.py:1149-1170 + catalog.py:1633+，将 BASIS_CATALOG 字典（含 aux_j/aux_c 元数据）作为顶层字段序列化：
+
+# catalog.py 中 get_method_catalog() 序列化逻辑（约行 1654）
+
+def get_method_catalog() -> dict[str, Any]:
+    # ...其他字段...
+    payload = {
+        "method_meta": method_meta_serialized,
+        "functional_options_map": FUNCTIONAL_OPTIONS_MAP,
+        "field_definitions": FIELD_DEFINITIONS,
+        "basis_catalog": list(_ALL_BASIS_SETS),                # v1.0 兼容字段（array，保留一个版本）
+        "basis_catalog_v2": dict(BASIS_CATALOG),               # v1.1 新字段（object，含元数据）
+        # ...
+    }
+    return payload
+
+10.2 API 响应结构对比
+
+// v1.0（扁平 list，保留）：
+{
+  "basis_catalog": ["def2-SVP", "def2-TZVP", ...]
+}
+
+// v1.1（带元数据的 dict，新增）：
+{
+  "basis_catalog": ["def2-SVP", "def2-TZVP", ...],     // 保留
+  "basis_catalog_v2": {
+    "def2-SVP":   {"aux_j": "def2/J", "aux_c": "def2-SVP/C"},
+    "def2-TZVPP": {"aux_j": "def2/J", "aux_c": "def2-TZVPP/C"},
+    "cc-pVTZ":    {"aux_j": null,     "aux_c": "cc-pVTZ/C"},
+    ...
+  }
+}
+
+v1.1 修订：双字段共存策略（替代原方案的"clean break"）。原方案把 basis_catalog 从 array 直接改成 object，是确定发生的 API 契约破坏。新方案：
+
+v1.1 ~ v1.2：basis_catalog（array）与 basis_catalog_v2（object）同时存在。前端切换到 v2 字段后，可在任意时间移除 v1。
+
+v1.3：删除 basis_catalog（array），把 basis_catalog_v2 重命名回 basis_catalog。
+
+这样 API 不出现"破坏性变更窗口"，前后端可异步升级。
+
+10.3 __all__ 与符号导出 v1.1 新增
+
+BASIS_CATALOG 是新的公开符号，必须加入 catalog.py:1694+ 的 __all__：
+
+__all__ = [
+    "BASIS_CATALOG",          # ← 新增
+    "FIELD_DEFINITIONS",
+    "FUNCTIONAL_OPTIONS_MAP",
+    "METHOD_CATALOG",
+    "METHOD_META",
+    # ...其他保持不变...
+]
+
+10.4 清理 _BASIS_CATALOG_REF 遗留分支 v1.1 新增
+
+原 catalog.py:1262 用 opts is _BASIS_CATALOG_REF 判定（sentinel 模式）。新 BASIS_CATALOG 是 dict 不再用 sentinel，需清理这条遗留分支。具体位置：
+
+catalog.py:1262（_resolve_field_options 中的 sentinel 判定）
+
+catalog.py:1664-1667（get_method_catalog 中 per_backend 的 sentinel 展开）
+
+catalog.py:1654-1656（method_meta 中的 basis_ref 替换逻辑）
+
+改造策略：FIELD_DEFINITIONS 中 "basis" 字段的 per_backend 直接写 _ALL_BASIS_SETS（已派生自 BASIS_CATALOG keys），不再走 sentinel。method_meta 中 "basis": _BASIS_CATALOG_REF 改为 "basis": list(_ALL_BASIS_SETS)，体积影响 < 1KB 可接受。
+
+11. 前端 UI 逻辑升级
+
+所有修改集中在 frontend/ACP_Workbench_v2.html。
+
+v1.1 前端字段读取约定：所有需要 aux_j/aux_c 元数据的 JS 函数统一读 catalog.basis_catalog_v2（object），不读 catalog.basis_catalog（v1.0 array，仅保留向后兼容）。降级逻辑：var basisCatalog = catalog.basis_catalog_v2 || {};。在 v1.3 删除 array 字段后无需再改。
+
+v1.3 前端架构说明（CatalogUtils IIFE 模块）：
+
+前端采用 CatalogUtils IIFE 模块封装 catalog 访问函数（行 3482-3552），buildFieldRow 内部通过闭包代理调用（行 3999-4004）。修改 getFieldDefault 签名时，需同步更新三处：
+
+CatalogUtils.getFieldDefault（行 3518）— 核心实现
+
+闭包代理 getFieldDefault（行 4003）— 签名同步
+
+所有闭包代理调用点（行 4130、4249 等）— 传递 basis 参数
+
+v1.2 修订（M1）— 前端函数引用清单（基于 ACP_Workbench_v2.html 实际状态）：
+
+前端有两个 getFieldDefault 定义：
+
+  • 行 3518: 全局版 getFieldDefault(catalog, fieldName, engine, functional) — 需加 basis 参数（§11.1）
+
+  • 行 4003: buildFieldRow 内嵌套局部版 getFieldDefault(fieldName, engine, functional) — 隐藏 catalog 参数，内部代理到全局版。需同步加 basis 参数，并在所有调用点（如行 4130）传递当前 st.basis。
+
+类似地有两个 getFieldOptions（行 3505 全局 + 行 3999 嵌套局部）。
+
+前端完全没有 options_source / aux_kind 字段消费逻辑（grep 确认无匹配）。§11.2 的"升级"措辞应理解为全新增分支，不是改造现有代码。
+
+supports_custom 仅在行 4166 用于 fieldName === "basis" 单一字段。扩展到 aux_j/aux_c 需改条件判断为 ["basis","aux_j_basis","aux_c_basis"].includes(fieldName)。
+
+buildFieldRow 内有大量 getFieldDefault/getFieldOptions 调用点（行 4130 等），全部需要检查是否需要传 basis 参数。
+
+11.1 getFieldDefault 升级（行 3518-3544 + 行 4003 嵌套版） v1.2 补全
+
+function getFieldDefault(catalog, fieldName, engine, functional, basis) {
+  var fieldDefs = (catalog && catalog.field_definitions) || {};
+  var methodMeta = (catalog && catalog.method_meta) || {};
+  // v1.1: 优先读 basis_catalog_v2（object），降级到 basis_catalog（v1.0 兼容）
+  var basisCatalog = (catalog && catalog.basis_catalog_v2) || {};
+
+  // ── Priority 1: functional-level defaults ──
+  if (functional) {
+    var funcMeta = lookupCI(methodMeta, functional);
+    if (funcMeta) {
+      var riSupport = funcMeta.ri_support || "user";
+
+      // composite / automatic：ri 和 aux 字段返回 none / ""
+      if (riSupport !== "user") {
+        if (fieldName === "ri_approximation") return "none";
+        if (fieldName === "aux_j_basis") return "";
+        if (fieldName === "aux_c_basis") return "";
+      }
+
+      // aux_j_basis：从 BASIS_CATALOG 派生
+      if (fieldName === "aux_j_basis" && basis && basisCatalog[basis]) {
+        return basisCatalog[basis].aux_j || "AutoAux";
+      }
+
+      // aux_c_basis：仅 needs_aux_c 时返回非空
+      if (fieldName === "aux_c_basis") {
+        if (!funcMeta.needs_aux_c) return "";
+        if (basis && basisCatalog[basis]) {
+          return basisCatalog[basis].aux_c || "AutoAux";
+        }
+      }
+
+      // basis / dispersion 默认（保持不变）
+      if (fieldName === "basis" && funcMeta.default_basis !== undefined) return funcMeta.default_basis;
+      if (fieldName === "dispersion" && funcMeta.default_dispersion !== undefined) return funcMeta.default_dispersion;
+    }
+  }
+
+  // ── Priority 2: FIELD_DEFINITIONS global default ──
+  var fd = fieldDefs[fieldName];
+  if (!fd) return "";
+  var dflt = fd.default || {};
+  if (typeof dflt === "object" && !Array.isArray(dflt)) {
+    if (dflt[engine] !== undefined) return dflt[engine];
+    if (dflt["*"] !== undefined) return dflt["*"];
+  }
+  return typeof dflt === "string" || typeof dflt === "number" ? dflt : "";
+}
+
+11.2 getFieldOptions 升级（行 3505-3511 + 行 3999 嵌套版） v1.2 补全
+
+v1.2 提醒：当前前端没有 options_source === "dynamic_aux_basis" 分支（grep 确认）。下面代码是新增逻辑，加到全局版 getFieldOptions 中；嵌套局部版（行 3999）通过代理自动获益。
+
+function getFieldOptions(catalog, fieldName, engine, functional, basis) {
+  var fd = ((catalog && catalog.field_definitions) || {})[fieldName];
+  if (!fd) return null;
+
+  // ── 动态 aux_j_basis / aux_c_basis 选项 ──
+  if (fieldName === "aux_j_basis" || fieldName === "aux_c_basis") {
+    if (fd.options_source === "dynamic_aux_basis") {
+      var auxKind = fd.aux_kind;   // "j" 或 "c"
+      var fallback = (fd.per_backend || {})[engine] || [];
+
+      // 检查 needs_aux_c：如果 functional 不需要 aux_c，返回空列表
+      if (fieldName === "aux_c_basis" && functional) {
+        var funcMeta = lookupCI((catalog.method_meta || {}), functional);
+        if (funcMeta && !funcMeta.needs_aux_c) return [];
+      }
+
+      // 从 basis_catalog_v2 注入当前 basis 的量身定制项（v1.1: 改读 _v2 字段）
+      var basisCatalog = (catalog && catalog.basis_catalog_v2) || {};
+      var basisKey = "aux_" + auxKind;
+      if (basis && basisCatalog[basis] && basisCatalog[basis][basisKey]) {
+        var tailored = basisCatalog[basis][basisKey];
+        if (fallback.indexOf(tailored) < 0) {
+          return [tailored].concat(fallback);
+        }
+      }
+      return fallback.slice();
+    }
+  }
+
+  // ...其他字段保持原逻辑...
+  if (fd.options) return fd.options;
+  if (fd.per_backend) {
+    var pb = fd.per_backend[engine];
+    if (Array.isArray(pb)) return pb;
+    return null;
+  }
+  return null;
+}
+
+11.3 buildFieldRow 字段隐藏逻辑（行 4116+）
+
+function buildFieldRow(fieldName, dest) {
+  var fDiv = document.createElement("div");
+  fDiv.className = "mc-field";
+  var lbl = document.createElement("label");
+  lbl.textContent = fieldName.replace(/_/g, " ");
+  fDiv.appendChild(lbl);
+
+  var levelState = getLevelState(lvDef.level_id);
+  var functional = levelState.functional || getFieldDefault("functional", engine) || "";
+  var basis = levelState.basis || getFieldDefault("basis", engine, functional) || "";
+
+  var funcMeta = lookupCI(methodCatalogCache.method_meta || {}, functional);
+  var riSupport = (funcMeta && funcMeta.ri_support) || "user";
+
+  // ── 字段隐藏规则 ──
+  if (fieldName === "ri_approximation" && riSupport !== "user") {
+    renderRiImmutableBadge(fDiv, riSupport);
+    getLevelState(lvDef.level_id).ri_approximation = "none";
+    dest.appendChild(fDiv);
+    return;
+  }
+  if (fieldName === "aux_j_basis" && riSupport !== "user") {
+    renderRiImmutableBadge(fDiv, riSupport);
+    getLevelState(lvDef.level_id).aux_j_basis = "";
+    dest.appendChild(fDiv);
+    return;
+  }
+  if (fieldName === "aux_c_basis") {
+    // 仅 needs_aux_c=True 时才渲染字段；否则隐藏
+    if (!funcMeta || !funcMeta.needs_aux_c) {
+      renderRiImmutableBadge(fDiv, riSupport);
+      getLevelState(lvDef.level_id).aux_c_basis = "";
+      dest.appendChild(fDiv);
+      return;
+    }
+  }
+
+  // ...现有渲染逻辑保持...
+}
+
+// ── 辅助函数：渲染不可变徽章 ──
+function renderRiImmutableBadge(fDiv, riSupport) {
+  var badge = document.createElement("span");
+  badge.className = "mc-builtin-badge";
+  if (riSupport === "composite") {
+    badge.textContent = "复合方法 · 参数已固化";
+    badge.title = "3c 复合方法已内置 RI 体系，无需用户配置";
+  } else if (riSupport === "automatic") {
+    badge.textContent = "RI 自动 · 后 HF 方法内置";
+    badge.title = "DLPNO 等后 HF 方法自带 RI 体系，参数自动处理";
+  }
+  fDiv.appendChild(badge);
+}
+
+11.4 functional 切换逻辑升级（行 4236-4254）
+
+if (fieldName === "functional") {
+  sel.addEventListener("change", function() {
+    var newFunctional = sel.value;
+    var st = getLevelState(lvDef.level_id);
+    var liveFuncMeta = lookupCI(methodCatalogCache.method_meta || {}, newFunctional);
+    var riSupport = (liveFuncMeta && liveFuncMeta.ri_support) || "user";
+
+    // 1. Basis 合法性检查（保持不变）
+    // 2. Dispersion 合法性检查（保持不变）
+
+    // 3. RI / aux_j / aux_c 联动
+    if (riSupport !== "user") {
+      // composite / automatic：强制清空
+      st.ri_approximation = "none";
+      st.aux_j_basis = "";
+      st.aux_c_basis = "";
+    } else {
+      // user：回填默认（结合当前 basis）
+      if (!st.ri_approximation || st.ri_approximation === "none") {
+        st.ri_approximation = getFieldDefault("ri_approximation", engine, newFunctional);
+      }
+      if (!st.aux_j_basis) {
+        st.aux_j_basis = getFieldDefault("aux_j_basis", engine, newFunctional, st.basis);
+      }
+      if (liveFuncMeta.needs_aux_c && !st.aux_c_basis) {
+        st.aux_c_basis = getFieldDefault("aux_c_basis", engine, newFunctional, st.basis);
+      } else if (!liveFuncMeta.needs_aux_c) {
+        st.aux_c_basis = "";   // 不需要 aux_c 时清空
+      }
+    }
+
+    rebuildLevelCard(lvDef.level_id);
+    scheduleValidate();
+  });
+}
+
+11.5 basis 切换联动（新增逻辑）
+
+在 basis 字段的 change 监听器中加入 aux_j/aux_c 自动重算：
+
+if (fieldName === "basis") {
+  sel.addEventListener("change", function() {
+    var newBasis = sel.value;
+    var st = getLevelState(lvDef.level_id);
+    st.basis = newBasis;
+
+    // ── aux_j_basis / aux_c_basis 从 BASIS_CATALOG 重新派生 ──
+    var funcMeta = lookupCI(methodCatalogCache.method_meta || {}, st.functional);
+    var riSupport = (funcMeta && funcMeta.ri_support) || "user";
+    if (riSupport === "user") {
+      st.aux_j_basis = getFieldDefault("aux_j_basis", engine, st.functional, newBasis);
+      if (funcMeta.needs_aux_c) {
+        st.aux_c_basis = getFieldDefault("aux_c_basis", engine, st.functional, newBasis);
+      }
+    }
+
+    rebuildLevelCard(lvDef.level_id);
+    scheduleValidate();
+  });
+}
+
+11.6 option tooltip 渲染（行 4150+）
+
+// select 渲染时附加 title 属性
+var optionMeta = ((methodCatalogCache.field_definitions || {})[fieldName] || {}).option_meta || {};
+for (var i = 0; i < opts.length; i++) {
+  var opt = document.createElement("option");
+  opt.value = opts[i];
+  opt.textContent = opts[i];
+  if (optionMeta[opts[i]]) {
+    opt.title = optionMeta[opts[i]];   // tooltip
+  }
+  sel.appendChild(opt);
+}
+
+12. 测试计划
+
+12.1 测试文件改动清单
+
+ | 测试文件 | 改动类型 | 覆盖范围
+
+ | tests/test_acp_catalog.py | 改写 + 新增 | supports_ri → ri_support 三态；BASIS_CATALOG 完整性；aux_j/aux_c 动态选项；_resolve_field_default 派生逻辑；v1.1: ORCA 关键字存在性自检
+
+ | tests/test_acp_workflows_energy.py | 字段名更新 | aux_basis → aux_j_basis + aux_c_basis
+
+ | tests/test_acp_workflows_simple.py | 字段名更新 | 同上
+
+ | tests/test_acp_censo_p5_acceptance.py | 保持 + 兼容回归 | v1.1 新增：断言 CENSO 后端 template 注入路径（censo_backend.py:589）不走 route_extras，不受字段重命名影响
+
+ | tests/test_orca_composite_guard.py | 新增 | composite/automatic 守护过滤；v1.1: regex 锚定边界用例
+
+ | tests/test_aux_basis_compat.py | 新增 | 老 aux_basis 字段向后兼容迁移；v1.1: 覆盖 SQLite 读时归一化（§6.7）
+
+ | tests/test_orca_basis_block.py | 新增 | 普通 DFT 路径 %basis 块生成；v1.1: DLPNO 路径合流到统一渲染（§6.4）
+
+ | tests/test_api_method_catalog_shape.py v1.1 | 新增 | API 序列化 shape：断言同时存在 basis_catalog（array）和 basis_catalog_v2（object）；ETag 命中
+
+ | tests/test_frontend_smoke.py v1.1 | 新增（Playwright，可选） | 前端 smoke：r2SCAN-3c 显示徽章、PWPB95 显示 aux_c_basis、切换 basis 联动 aux_j_basis
+
+v1.1 新增：BASIS_CATALOG ORCA 关键字存在性自检（Phase 0a 关卡）。这是防止错误化学数据向下流污染的关键测试，必须在 Phase 1 实施完成后立即跑：
+# tests/test_acp_catalog.py（Phase 0a 关卡）
+# 这些是 ORCA 真实存在/不存在的辅助基组关键字清单，硬编码断言
+
+KNOWN_AUX_J = {"def2/J"}                          # Weigend universal
+KNOWN_AUX_C = {
+    "def2-SVP/C", "def2-SVPD/C", "def2-TZVP/C", "def2-TZVPP/C",
+    "def2-QZVPP/C",
+    "cc-pVDZ/C", "cc-pVTZ/C", "cc-pVQZ/C", "cc-pV5Z/C",
+    "aug-cc-pVDZ/C", "aug-cc-pVTZ/C", "aug-cc-pVQZ/C",
+}
+FORBIDDEN_AUX_C = {"def2-SV(P)/C", "def2-TZVPPD/C", "def2-QZVPPD/C"}
+
+def test_basis_catalog_orca_keyword_existence() -> None:
+    """v1.1 Phase 0a 关卡：BASIS_CATALOG 中所有非 None 的 aux_j/aux_c
+    必须出现在 ORCA 已知关键字集合中。"""
+    for basis, meta in BASIS_CATALOG.items():
+        if meta.get("aux_j"):
+            assert meta["aux_j"] in KNOWN_AUX_J, (
+                f"{basis}: aux_j={meta['aux_j']} 不在已知 ORCA /J 关键字中"
+            )
+        if meta.get("aux_c"):
+            assert meta["aux_c"] in KNOWN_AUX_C, (
+                f"{basis}: aux_c={meta['aux_c']} 不在已知 ORCA /C 关键字中"
+            )
+            assert meta["aux_c"] not in FORBIDDEN_AUX_C, (
+                f"{basis}: aux_c={meta['aux_c']} 是已确认 ORCA 中不存在的关键字"
+            )
+
+12.2 关键测试用例
+
+12.2.1 test_acp_catalog.py 改写
+
+# 替换原 test_supports_ri_is_false_for_composite_and_dlpno
+def test_ri_support_classification() -> None:
+    composite = ["r2SCAN-3c", "PBEh-3c", "B97-3c"]
+    user_no_c = ["B3LYP", "PBE0", "M062X", "wB97X-D4", "wB97M-V"]
+    user_with_c = ["PWPB95", "wB97M-2"]
+    automatic = ["DLPNO-CCSD(T)"]
+
+    for func in composite:
+        assert METHOD_META[func]["ri_support"] == "composite"
+        assert "needs_aux_c" not in METHOD_META[func]
+    for func in user_no_c:
+        assert METHOD_META[func]["ri_support"] == "user"
+        assert METHOD_META[func]["needs_aux_c"] is False
+    for func in user_with_c:
+        assert METHOD_META[func]["ri_support"] == "user"
+        assert METHOD_META[func]["needs_aux_c"] is True
+    for func in automatic:
+        assert METHOD_META[func]["ri_support"] == "automatic"
+
+# 新增：BASIS_CATALOG 完整性
+def test_basis_catalog_completeness() -> None:
+    for basis, meta in BASIS_CATALOG.items():
+        assert "aux_j" in meta
+        assert "aux_c" in meta
+        assert meta["aux_j"] is None or isinstance(meta["aux_j"], str)
+        assert meta["aux_c"] is None or isinstance(meta["aux_c"], str)
+
+# 新增：aux_j 默认值派生
+def test_aux_j_default_derives_from_basis() -> None:
+    assert _resolve_field_default("aux_j_basis", "orca", "B3LYP", "def2-TZVPP") == "def2/J"
+    assert _resolve_field_default("aux_j_basis", "orca", "B3LYP", "cc-pVTZ") == "AutoAux"  # None → AutoAux
+    assert _resolve_field_default("aux_j_basis", "orca", "r2SCAN-3c", "def2-mTZVPP") == ""  # composite
+
+# 新增：aux_c 仅对 needs_aux_c 方法返回非空
+def test_aux_c_visibility() -> None:
+    assert _resolve_field_default("aux_c_basis", "orca", "PWPB95", "def2-TZVPP") == "def2-TZVPP/C"
+    assert _resolve_field_default("aux_c_basis", "orca", "B3LYP", "def2-TZVPP") == ""   # needs_aux_c=False
+    assert _resolve_field_default("aux_c_basis", "orca", "DLPNO-CCSD(T)", "def2-TZVPP") == ""  # automatic
+
+12.2.2 test_orca_basis_block.py 新增
+
+def test_normal_dft_generates_basis_block() -> None:
+    """普通 DFT 应生成独立 %basis 块，而非拼到 ! 行"""
+    iface = ORCAInterface(method="B3LYP", basis="def2-TZVPP", ...)
+    blocks = iface._build_input_blocks(
+        calc_type="opt", charge=0, multiplicity=1,
+        route_extras=["RIJCOSX"],
+        aux_j_basis="def2/J",
+    )
+    blocks_str = "\n".join(blocks)
+    assert '! B3LYP def2-TZVPP Opt RIJCOSX' in blocks_str
+    assert '%basis' in blocks_str
+    assert 'auxJ  "def2/J"' in blocks_str
+    # 确保 def2/J 不出现在 ! 行
+    assert 'def2/J' not in [l for l in blocks if l.startswith('!')][0]
+
+def test_double_hybrid_generates_auxj_and_auxc() -> None:
+    """双杂化应同时生成 auxJ 和 auxC"""
+    blocks = iface._build_input_blocks(
+        calc_type="sp", charge=0, multiplicity=1,
+        route_extras=["RIJCOSX"],
+        aux_j_basis="def2/J",
+        aux_c_basis="def2-TZVPP/C",
+    )
+    blocks_str = "\n".join(blocks)
+    assert 'auxJ  "def2/J"' in blocks_str
+    assert 'auxC  "def2-TZVPP/C"' in blocks_str
+
+12.2.3 test_orca_composite_guard.py 新增
+
+def test_composite_strips_ri_keywords() -> None:
+    """3c 复合方法应过滤掉 route_extras 中的 RI 关键字"""
+    blocks = iface._build_input_blocks(
+        calc_type="opt", charge=0, multiplicity=1,
+        method="r2SCAN-3c",
+        route_extras=["RIJCOSX", "def2/J", "VeryTightSCF"],
+    )
+    blocks_str = "\n".join(blocks)
+    assert "RIJCOSX" not in blocks_str
+    assert "def2/J" not in blocks_str
+    assert "VeryTightSCF" in blocks_str   # 无关 extras 保留
+
+def test_dlpno_strips_ri_but_keeps_auxc() -> None:
+    """DLPNO 应过滤 RI 关键字但保留 auxC 覆盖路径"""
+    blocks = iface._build_input_blocks(
+        calc_type="sp", charge=0, multiplicity=1,
+        method="DLPNO-CCSD(T)",
+        route_extras=["RIJCOSX"],
+        aux_c_basis="cc-pVTZ/C",
+    )
+    blocks_str = "\n".join(blocks)
+    assert "RIJCOSX" not in blocks_str
+    assert 'auxC  "cc-pVTZ/C"' in blocks_str
+
+12.2.4 test_aux_basis_compat.py 新增
+
+def test_legacy_aux_basis_migrates_to_auxj_for_normal_dft() -> None:
+    """老 job config 中 aux_basis 字段应迁移到 aux_j_basis（普通杂化）"""
+    level = {"functional": "B3LYP", "basis": "def2-TZVPP", "aux_basis": "def2/J"}
+    _clamp_to_functional(level, method_key="functional")
+    assert "aux_basis" not in level
+    assert level["aux_j_basis"] == "def2/J"
+    assert "aux_c_basis" not in level or level["aux_c_basis"] == ""
+
+def test_legacy_aux_basis_migrates_to_auxc_for_dlpno() -> None:
+    """DLPNO 的老 aux_basis 应迁移到 aux_c_basis"""
+    level = {"functional": "DLPNO-CCSD(T)", "basis": "def2-TZVPP", "aux_basis": "cc-pVTZ/C"}
+    _clamp_to_functional(level, method_key="functional")
+    assert level["aux_c_basis"] == "cc-pVTZ/C"
+
+12.2.5 test_api_method_catalog_shape.py 新增 v1.1
+
+def test_method_catalog_has_both_basis_catalog_versions(client) -> None:
+    """v1.1 双字段共存：basis_catalog (array) + basis_catalog_v2 (object)"""
+    resp = client.get("/api/v1/method-catalog")
+    payload = resp.json()
+    # v1.0 字段保留
+    assert isinstance(payload["basis_catalog"], list)
+    assert "def2-TZVPP" in payload["basis_catalog"]
+    # v1.1 新字段
+    assert isinstance(payload["basis_catalog_v2"], dict)
+    v2 = payload["basis_catalog_v2"]
+    assert v2["def2-TZVPP"]["aux_j"] == "def2/J"
+    assert v2["def2-TZVPP"]["aux_c"] == "def2-TZVPP/C"
+    assert v2["cc-pVTZ"]["aux_j"] is None
+    # v1.1 修订：def2-SV(P)/C 不存在
+    assert v2["def2-SV(P)"]["aux_c"] is None
+
+def test_method_catalog_etag_stable(client) -> None:
+    """catalog 内容不变时 ETag 应命中"""
+    r1 = client.get("/api/v1/method-catalog")
+    r2 = client.get("/api/v1/method-catalog",
+                    headers={"If-None-Match": r1.headers["ETag"]})
+    assert r2.status_code == 304
+
+12.2.6 test_aux_basis_compat.py SQLite 读时归一化 v1.2 重写
+
+v1.2 修订：v1.1 测试代码用虚构的 store.create_job(config=...) / store.get_job_config(...)。真实接口是 JobStore.create(record: JobRecord) + JobSpec(method={...}) + store.get(job_id) -> JobRecord，访问 record.spec.method["levels"]。
+
+import json
+from pathlib import Path
+from acp.scheduler.store import JobStore
+from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
+
+def test_row_to_record_normalizes_legacy_aux_basis(tmp_path: Path) -> None:
+    """§6.7：从 SQLite 读出的历史 job spec.method.levels 应自动归一化"""
+    store = JobStore(tmp_path / "test.db")
+    # 写入 v1.0 格式的 spec（模拟历史 job）
+    legacy_spec = JobSpec(
+        workflow="singlepoint",
+        name="legacy",
+        input={"smiles": "CCO"},
+        method={
+            "levels": {
+                "single_point": {
+                    "engine": "orca", "functional": "B3LYP",
+                    "basis": "def2-TZVPP", "aux_basis": "def2/J",
+                }
+            }
+        },
+    )
+    record = JobRecord(
+        id="job-legacy", spec=legacy_spec, status=JobStatus.COMPLETED,
+        work_dir=str(tmp_path),
+    )
+    store.create(record)
+
+    # 读出时 _row_to_record 应已归一化
+    out = store.get("job-legacy")
+    assert out is not None
+    sp = out.spec.method["levels"]["single_point"]
+    assert "aux_basis" not in sp
+    assert sp["aux_j_basis"] == "def2/J"
+
+def test_row_to_record_new_format_is_idempotent(tmp_path: Path) -> None:
+    """新格式 spec 经过 normalize_legacy_method 应无副作用"""
+    store = JobStore(tmp_path / "test.db")
+    new_spec = JobSpec(
+        workflow="singlepoint",
+        name="new",
+        input={"smiles": "CCO"},
+        method={
+            "levels": {
+                "single_point": {
+                    "engine": "orca", "functional": "PWPB95",
+                    "basis": "def2-TZVPP",
+                    "aux_j_basis": "def2/J", "aux_c_basis": "def2-TZVPP/C",
+                }
+            }
+        },
+    )
+    record = JobRecord(
+        id="job-new", spec=new_spec, status=JobStatus.COMPLETED,
+        work_dir=str(tmp_path),
+    )
+    store.create(record)
+    out = store.get("job-new")
+    assert out is not None
+    sp = out.spec.method["levels"]["single_point"]
+    assert sp["aux_j_basis"] == "def2/J"
+    assert sp["aux_c_basis"] == "def2-TZVPP/C"
+    assert "aux_basis" not in sp
+
+def test_normalize_legacy_method_dlpno_routes_to_aux_c() -> None:
+    """DLPNO 的旧 aux_basis 应归一化到 aux_c_basis"""
+    from acp.catalog import normalize_legacy_method
+    method = {
+        "levels": {
+            "sp": {"functional": "DLPNO-CCSD(T)", "basis": "def2-TZVPP",
+                   "aux_basis": "cc-pVTZ/C"}
+        }
+    }
+    out = normalize_legacy_method(method)
+    assert out["levels"]["sp"]["aux_c_basis"] == "cc-pVTZ/C"
+    assert "aux_basis" not in out["levels"]["sp"]
+
+12.2.7 test_orca_basis_block.py DLPNO 合流 v1.1
+
+def test_dlpno_uses_unified_basis_block_after_merge() -> None:
+    """v1.1 §6.4：DLPNO 应走统一 %basis 渲染，不再读 basis_block template"""
+    iface = ORCAInterface(method="DLPNO-CCSD(T)", basis="def2-TZVPP", ...)
+    blocks = iface._build_input_blocks(
+        calc_type="sp", charge=0, multiplicity=1,
+    )
+    blocks_str = "\n".join(blocks)
+    # 默认 auxJ/auxC 来自 METHOD_META default_aux_j/default_aux_c
+    assert 'auxJ  "def2/J"' in blocks_str
+    assert 'auxC  "def2-TZVPP/C"' in blocks_str
+    # 显式覆盖
+    blocks2 = iface._build_input_blocks(
+        calc_type="sp", charge=0, multiplicity=1,
+        aux_c_basis="cc-pVTZ/C",
+    )
+    assert 'auxC  "cc-pVTZ/C"' in "\n".join(blocks2)
+
+13. 实施顺序
+
+13.1 分阶段实施（按依赖顺序，每 Phase 独立 commit）
+
+Phase 0a: 数据校验关卡 v1.1 新增
+   ├─ 0a.1 v1.2: 删除虚构 fixture 路径 在 tests/test_acp_catalog.py 用模块常量 KNOWN_AUX_J / KNOWN_AUX_C / FORBIDDEN_AUX_C
+   ├─ 0a.2 在 tests/test_acp_catalog.py 编写 test_basis_catalog_orca_keyword_existence（先用 @pytest.mark.xfail 标记，因 BASIS_CATALOG 还没改）
+   └─ 0a.3 测试可收集性验证：pytest --collect-only 列出该用例
+          │
+          ▼ (验收：测试文件可收集，xfail 用例明确)
+Phase 1: catalog.py 数据层
+   ├─ 1.1 BASIS_CATALOG 字典化（按 §3.1 v1.1 修订版）
+   ├─ 1.2 METHOD_META supports_ri → ri_support + needs_aux_c；DLPNO 删 basis_block，加 default_aux_j/default_aux_c
+   ├─ 1.3 FIELD_DEFINITIONS aux_basis 拆分；__all__ 加 BASIS_CATALOG
+   ├─ 1.4 METHOD_SCHEMAS fields 扩展（7 个 level，按 §8.1）
+   └─ 1.5 Profile 默认值显式补齐（7-8 个 profile × 多 level × 3 字段）
+          │
+          ▼ (验收：跑 0a.2 测试，去掉 xfail 全过；ruff/mypy 通过)
+Phase 2: catalog.py 解析器层
+   ├─ 2.1 _resolve_field_default 升级（含 basis 参数）
+   ├─ 2.2 _resolve_field_options 升级（动态选项）
+   ├─ 2.3 _clamp_to_functional 升级（含 _migrate_legacy_aux_basis）
+   ├─ 2.4 清理 _BASIS_CATALOG_REF 遗留分支（§10.4）
+   └─ 2.5 get_method_catalog() 双字段共存：basis_catalog + basis_catalog_v2
+          │
+          ▼
+Phase 3: 后端 ORCAInterface + SQLite 读时归一化
+   ├─ 3.1 _build_input_blocks 新增 aux_j_basis/aux_c_basis 参数
+   ├─ 3.2 route_extras 自动分离（向后兼容）
+   ├─ 3.3 composite/automatic 守护过滤（regex 锚定版）
+   ├─ 3.4 DLPNO 路径合流到统一 %basis 渲染（§6.4 v1.1）
+   ├─ 3.5 _write_input 及 calc_type 方法透传（v1.2: 含 opt_freq 显式参数路径）
+   └─ 3.6 v1.2 重写 catalog.py 加 normalize_legacy_method + store.py 的 _row_to_record 出口 hook（单点覆盖所有读路径）
+          │
+          ▼
+Phase 4: workflows + CLI
+   ├─ 4.1 energy.py _base_route_extras 字段名更新
+   ├─ 4.2 simple.py _build_method_kwargs 字段名更新
+   ├─ 4.3 cli.py --ri-approximation 默认值统一为 RIJCOSX
+   ├─ 4.4 cli.py 新增 --aux-j-basis / --aux-c-basis（无 choices，按 §9.2 v1.1）
+   ├─ 4.5 cli.py --aux-basis 别名合并逻辑（§9.2.1）
+   └─ 4.6 _LEVEL_TO_CLI_FLAG_MAP 更新
+          │
+          ▼
+Phase 5: 测试
+   ├─ 5.1 test_acp_catalog.py 改写（含 0a.2 去 xfail + normalize_legacy_method 单测）
+   ├─ 5.2 test_acp_workflows_*.py 字段名更新（v1.2: 不含 NMR workflow 测试）
+   ├─ 5.3 test_orca_basis_block.py 新增（含 DLPNO 合流断言 + opt_freq 透传断言）
+   ├─ 5.4 test_orca_composite_guard.py 新增（含 regex 边界用例）
+   ├─ 5.5 test_aux_basis_compat.py 新增（v1.2: 用真实 JobStore + JobRecord + JobSpec 接口）
+   ├─ 5.6 test_api_method_catalog_shape.py 新增（双字段共存断言）
+   └─ 5.7 test_acp_censo_p5_acceptance.py 加 CENSO 不受影响回归
+          │
+          ▼
+Phase 6: 前端 UI
+   ├─ 6.1 getFieldDefault 升级（含 basis 参数；读 basis_catalog_v2）
+   ├─ 6.2 getFieldOptions 动态选项生成
+   ├─ 6.3 buildFieldRow 字段隐藏 + 徽章
+   ├─ 6.4 functional 切换联动逻辑
+   ├─ 6.5 basis 切换联动（新增）
+   └─ 6.6 option tooltip 渲染
+          │
+          ▼
+Phase 7: 全量验证 + 部署
+   ├─ 7.1 pytest tests/ -v（全部通过）
+   ├─ 7.2 ruff check src/ frontend/
+   ├─ 7.3 mypy src/acp/catalog.py src/acp/scheduler/store.py（strict）
+   ├─ 7.4 手动浏览器测试（按 §14.3 验收清单逐项）
+   ├─ 7.5 systemd 重启：sudo systemctl restart acp
+   └─ 7.6 (可选) Playwright smoke 自动化
+
+13.2 工作量估计 v1.1 修正
+
+v1.1 修正说明：原方案估计 ~540 行明显偏低。实际考虑：7-8 个 profile × 多 level × 3 字段补齐 ≈ 100 行；前端含联调通常 150-200 行；新增 SQLite 归一化 ~50 行；新增 4 个测试文件 ~250 行。实际更接近 ~750 行。
+
+ | 阶段 | 模块 | v1.0 估计 | v1.1 修正
+
+ | Phase 0a | 数据校验关卡 | — | ~30 行
+
+ | Phase 1 | catalog.py 数据层 | ~100 行 | ~150 行（profile 补齐工作量上调）
+
+ | Phase 2 | catalog.py 解析器 | ~80 行 | ~90 行（+ sentinel 清理）
+
+ | Phase 3 | orca.py + store.py | ~80 行 | ~130 行（+ DLPNO 合流 + SQLite 归一化）
+
+ | Phase 4 | workflows + cli | ~30 行 | ~50 行（+ 别名合并逻辑）
+
+ | Phase 5 | tests/ | ~150 行 | ~230 行（+ 4 个新测试文件）
+
+ | Phase 6 | frontend HTML | ~100 行 | ~180 行（联调工作量上调）
+
+ | Phase 7 | 验证 + 部署 | — | ~30 行（playwright 可选）
+
+ | 合计 |  | ~540 行 | ~890 行（含 Phase 0a/7；纯代码 ~750）
+
+14. 风险与回退
+
+14.1 风险矩阵
+
+ | 风险 | 概率 | 影响 | 缓解措施
+
+ | 已保存 job config 含旧 aux_basis 字段（运行中新 job） | 高 | 中 | _clamp_to_functional 入口加 _migrate_legacy_aux_basis 自动迁移
+
+ | v1.1 历史 SQLite job config 含旧 aux_basis（读回路径） | 高 | 中 | store.py 加 _normalize_legacy_levels 读时归一化（§6.7），4-5 处出口套用
+
+ | 已保存 job config 含旧 supports_ri 字段 | 低 | 低 | 字段从未持久化到 job config（仅 catalog 内存）
+
+ | API 契约破坏（basis_catalog 类型变更） | v1.1: 已缓解 | 低 | v1.1 双字段共存：basis_catalog (array) + basis_catalog_v2 (object)（§10）；前端可异步切换
+
+ | composite 守护过滤误伤合法 extras | 低 | 低 | v1.1 regex 锚定 r"/[JC](?=$|[^A-Za-z])"，仅过滤明确的 /J /C token
+
+ | DLPNO auxC 路径因字段重命名失效 | 中 | 中 | 保留 aux_basis 兼容别名 + _migrate_legacy_aux_basis + §6.4 合流到统一渲染
+
+ | v1.1 DLPNO basis_block template 删除后向后兼容 | 中 | 中 | 用 default_aux_j/default_aux_c 顶层字段替代；老代码读 basis_block 返回 None（用 .get()）
+
+ | CENSO 后端 template 注入路径受影响 | 低 | 低 | CENSO 走独立 template 路径（censo_backend.py:589），不经 route_extras；Phase 5.7 加回归断言
+
+ | v1.2 删除 NMR workflow 字段流传染 | — | — | NMR 是半成品（ORCAInterface.nmr_shielding 是 NotImplementedError stub），不消费 aux_basis 字段，无需测试
+
+ | option_meta + basis_catalog_v2 序列化体积增加 API payload | 低 | 低 | v1.2 修正：27 条 basis × ~60 字节 + method_meta 中 default_aux_j/default_aux_c ≈ 2-3KB（原估 <2KB 偏低）；ETag + Cache-Control 已启用，无运行时影响
+
+ | v1.1 BASIS_CATALOG 化学事实错误（如误留 def2-SV(P)/C） | 已消除 | 高 | Phase 0a 关卡：test_basis_catalog_orca_keyword_existence 强制断言
+
+14.2 回退策略
+
+每个 Phase 独立 commit，任一 Phase 失败可 git revert 该笔而不影响先前已通过 Phase。Phase 1（数据层）通过后，Phase 2-6 任一失败都不会让系统进入不可启动状态（catalog 仍可加载，仅解析器/UI 行为可能不完整）。
+
+v1.1 增强：Phase 0a 关卡确保数据正确性，避免错误化学事实流到下游 Phase 才被发现。如果 Phase 0a 关卡失败，应直接修订 Phase 1 数据，禁止用 xfail 绕过。
+
+14.3 验收检查清单
+
+✅ pytest tests/ -v 全部通过（含 Phase 0a 关卡 + Phase 5 新增测试）
+
+✅ ruff check src/ 无新增警告
+
+✅ mypy src/acp/catalog.py src/acp/scheduler/store.py strict 通过
+
+✅ v1.1 test_basis_catalog_orca_keyword_existence 通过（无 ORCA 不存在的 /C /J 关键字）
+
+✅ 前端：r2SCAN-3c 的 opt/SP level 不显示 RI/aux 字段（徽章）
+
+✅ 前端：B3LYP 的 opt/SP level 显示 RI + aux_j_basis，不显示 aux_c_basis
+
+✅ 前端：PWPB95 的 level 显示 RI + aux_j_basis + aux_c_basis
+
+✅ 前端：切换 basis=def2-TZVPP → aux_j_basis 自动变为 def2/J
+
+✅ 前端：DLPNO-CCSD(T) level 不显示 RI/aux 字段（徽章）
+
+✅ 前端：浏览器 console 无 basisCatalog[basis] is undefined 报错（验证 3c 基组条目补全）
+
+✅ 后端：普通 DFT 生成的 ORCA 输入含独立 %basis auxJ 块
+
+✅ 后端：3c 方法的 route_extras 中 RI 关键字被过滤（regex 锚定版）
+
+✅ v1.1 后端：DLPNO 路径生成的 ORCA 输入仍含 auxJ "def2/J" + auxC "def2-TZVPP/C"（合流后默认值）
+
+✅ 后端：老 job config（含 aux_basis）能正确运行（_migrate_legacy_aux_basis）
+
+✅ v1.1 后端：历史 SQLite job 读回时 config 字段已归一化（_normalize_legacy_levels）
+
+✅ v1.1 API：/api/v1/method-catalog 同时返回 basis_catalog (array) 和 basis_catalog_v2 (object)
+
+✅ v1.1 CLI：acp run singlepoint --aux-c-basis def2-TZVPP/C 可正常接收（无 choices 限制）
+
+✅ v1.1 systemd：服务重启后所有 endpoint 正常响应（sudo systemctl restart acp）
+
+15. 附录：术语表
+
+ | 术语 | 含义
+
+ | RI | Resolution of Identity，分辨率恒等式。用于加速双电子积分计算
+
+ | RI-J | 仅对库仑积分使用 RI（用于普通 DFT）
+
+ | RIJCOSX | 对库仑（RI-J）和交换（COSX）积分都使用 RI 近似（ORCA 默认推荐）
+
+ | RIJK | 对库仑和交换积分都使用完整 RI（精度高，速度不如 RIJCOSX）
+
+ | /J 辅助基组 | 用于 RI-J 库仑拟合的辅助基组（def2/J 是 universal）
+
+ | /C 辅助基组 | 用于 RI-MP2/DLPNO 等波函数方法的相关拟合辅助基组
+
+ | def2/J | Weigend universal /J 拟合基，适用于任何主基组（不限于 def2）
+
+ | AutoAux | ORCA 关键字，自动为主基组生成辅助基组
+
+ | 3c 复合方法 | r2SCAN-3c / PBEh-3c / B97-3c — 速度优化的"开箱即用"方法，RI/基组已固化
+
+ | 双杂化泛函 | PWPB95 / wB97M-2 — DFT + RI-MP2 混合方法，需要 /J + /C 两套辅助基组
+
+ | DLPNO-CCSD(T) | 域对自然轨道耦合簇方法，自带 RI 体系（auxJ/auxC）
+
+ | composite | ri_support 三态之一：复合方法，RI 体系完全固化
+
+ | user | ri_support 三态之一：用户可选 RI
+
+ | automatic | ri_support 三态之一：后 HF 方法，RI 自动
+
+ | needs_aux_c | 布尔字段：当 ri_support=user 时，是否需要 /C 辅助基组（双杂化=True）
+
+ | v1.1 default_aux_j / default_aux_c | METHOD_META 顶层字段：替代原 basis_block template，供统一 %basis 渲染派生
+
+ | v1.1 basis_catalog_v2 | API 顶层字段：含 aux_j/aux_c 元数据的 dict，与原 basis_catalog (array) 共存
+
+ | v1.1 _normalize_legacy_levels | store.py 读时归一化层：把 SQLite 历史 job 的 aux_basis 在内存层转为 aux_j_basis / aux_c_basis
+
+ | v1.1 Phase 0a 关卡 | BASIS_CATALOG 化学事实自检（ORCA 关键字存在性断言），数据层改完即跑，防止错误数据下流
+
+16. 详细开发步骤（v1.1 新增）
+
+本节给出每个 Phase 的可执行清单：精确文件路径、关键代码改动点、验证命令。按顺序执行即可。
+
+16.1 Phase 0a — 数据校验关卡（前置准备） v1.2 简化
+
+v1.2 修订（M4）：v1.1 引用的 tests/_fixtures/orca_aux_basis_known.txt 路径虚构（实际只有 tests/fixtures/）。且 §12.1 info-box 的 Phase 0a 关卡代码本身就用模块内常量（KNOWN_AUX_J / KNOWN_AUX_C），与 fixture 文件方案自相矛盾。统一只用模块常量，不引入 fixture 文件。
+
+步骤
+
+在 tests/test_acp_catalog.py 末尾追加 test_basis_catalog_orca_keyword_existence（代码见 §12.1 info-box，含 KNOWN_AUX_J / KNOWN_AUX_C / FORBIDDEN_AUX_C 三个模块常量），用 @pytest.mark.xfail(reason="BASIS_CATALOG 未实施 v1.1") 标记。
+
+验证测试可收集：pytest tests/test_acp_catalog.py::test_basis_catalog_orca_keyword_existence --collect-only 应列出该用例。
+
+验收命令
+
+pytest tests/test_acp_catalog.py -v --collect-only | grep orca_keyword_existence
+# 期望输出：test_basis_catalog_orca_keyword_existence (xfail)
+
+16.2 Phase 1 — catalog.py 数据层
+
+步骤
+
+替换 _ALL_BASIS_SETS（src/acp/catalog.py:182-191）：先定义 BASIS_CATALOG 字典（按 §3.1 v1.1 修订版，注意 def2-SV(P)/C 改 None、ma-def2 /C 改 None、补 3c 基组），再派生 _ALL_BASIS_SETS = tuple(BASIS_CATALOG.keys())。
+
+重写 METHOD_META（catalog.py:211-325）：
+  
+    
+3c 方法：删 supports_ri: False，加 ri_support: "composite"。
+    
+普通/范围分离杂化（5 个）：删 supports_ri: True，加 ri_support: "user", needs_aux_c: False。
+    
+双杂化（2 个）：加 ri_support: "user", needs_aux_c: True。
+    
+DLPNO：删 supports_ri: False 和 basis_block，加 ri_support: "automatic", needs_aux_c: True, default_aux_j: "def2/J", default_aux_c: "def2-TZVPP/C"。
+  
+
+FIELD_DEFINITIONS 拆分（catalog.py:465-477）：删除 aux_basis，按 §5.1 新增 aux_j_basis + aux_c_basis（含 option_meta、options_source: "dynamic_aux_basis"、aux_kind）。
+
+更新 __all__（catalog.py:1694+）：加入 "BASIS_CATALOG"。
+
+METHOD_SCHEMAS 字段扩展（7 个 level，按 §8.1 表格）：把 "aux_basis" 替换为 "aux_j_basis", "aux_c_basis", "ri_approximation"（仅 single_point 原已有 ri_approximation）。
+
+Profile 默认值显式补齐（7-8 个 profile）：每个 ORCA level 显式写 3 个字段（按 §8.2 决策表）。涉及文件位置：
+  
+    
+catalog.py:547-680（confsearch ext/lite/full/zero profiles）
+    
+catalog.py:820-1130（dft_optimize / dft_frequency / dft_optfreq / dft_optfreqsp）
+  
+
+验收命令
+
+# 去掉 Phase 0a 用例的 xfail 标记后，必须通过
+pytest tests/test_acp_catalog.py::test_basis_catalog_orca_keyword_existence -v
+pytest tests/test_acp_catalog.py::test_basis_catalog_completeness -v
+ruff check src/acp/catalog.py
+mypy src/acp/catalog.py
+# v1.2 m3 注：下面这条 assert 是 Phase 1.2 的实施验证，只在 Phase 1 完成后能跑通
+python -c "from acp.catalog import BASIS_CATALOG, METHOD_META; assert METHOD_META['DLPNO-CCSD(T)'].get('default_aux_j') == 'def2/J'"
+
+16.3 Phase 2 — catalog.py 解析器层
+
+步骤
+
+升级 _resolve_field_default（catalog.py:1268-1313）：按 §7.1，加入 basis: str | None = None 参数；用 ri_support 三态替换 supports_ri；为 aux_j/aux_c 加 BASIS_CATALOG 派生逻辑。
+
+升级 _resolve_field_options（catalog.py:1239-1265）：按 §7.2，加入 basis 参数；处理 options_source == "dynamic_aux_basis" 分支。
+
+升级 _clamp_to_functional（catalog.py:1316+）：按 §7.3，入口加 _migrate_legacy_aux_basis；扩展 ri_support 三态处理；为 aux_j/aux_c 加 clamp 到允许列表逻辑。
+
+清理 _BASIS_CATALOG_REF 遗留（按 §10.4）：
+  
+    
+catalog.py:1262：删 opts is _BASIS_CATALOG_REF 分支（basis 字段直接走 per_backend 的 _ALL_BASIS_SETS）。
+    
+catalog.py:1654-1667：get_method_catalog 简化，basis_ref 替换逻辑保留但仅作兼容。
+  
+
+升级 get_method_catalog（catalog.py:1633+）：按 §10.1，加 "basis_catalog_v2": dict(BASIS_CATALOG)，保留 "basis_catalog": list(_ALL_BASIS_SETS)。
+
+验收命令
+
+pytest tests/test_acp_catalog.py -v
+python -c "
+from acp.catalog import _resolve_field_default as r
+assert r('aux_j_basis', 'orca', 'B3LYP', 'def2-TZVPP') == 'def2/J'
+assert r('aux_j_basis', 'orca', 'B3LYP', 'cc-pVTZ') == 'AutoAux'
+assert r('aux_j_basis', 'orca', 'r2SCAN-3c', 'def2-mTZVPP') == ''
+assert r('aux_c_basis', 'orca', 'PWPB95', 'def2-TZVPP') == 'def2-TZVPP/C'
+assert r('aux_c_basis', 'orca', 'B3LYP', 'def2-TZVPP') == ''
+print('OK')
+"
+
+16.4 Phase 3 — ORCA 后端 + SQLite 归一化 已完成
+
+实施内容
+
+扩展 _build_input_blocks 签名（src/cccp/qc/interfaces/orca.py:99-112）：按 §6.1 加 aux_j_basis=None, aux_c_basis=None；保留 aux_basis=None 兼容期。
+
+route_extras 自动分离（orca.py:169-180）：按 §6.2 实现，用 regex 锚定 r"/([JC])(?=$|[^A-Za-z])" 避免误伤 SMD/JK。
+
+composite/automatic 守护过滤：按 §6.3 v1.1，用 regex 锚定。
+
+统一 %basis 渲染 + DLPNO 合流：按 §6.4 v1.1，删除原 DLPNO 路径的 basis_block template 读取，所有路径走统一 %basis 渲染分支。
+
+透传参数：v1.2 补全 在 _write_input（orca.py:275-313）和 4 个 calc_type 方法（optimize / single_point / frequency / opt_freq）加新参数。opt_freq 用显式参数列表。
+
+store.py 读时归一化（src/acp/scheduler/store.py:212-214）：v1.2 重写 按 §6.7，归一化函数 normalize_legacy_method 定义在 catalog.py，在 store._row_to_record(row) 的 spec_raw = json.loads(...) 之后调用。
+
+验收结果
+
+734 tests passed, 5 pre-existing failures 不变
+
+34/34 catalog tests passed（无 xfail）
+
+83/83 CENSO acceptance tests passed
+
+ruff 无 F/N 类新错误
+
+验证命令全部通过（B3LYP %basis 块、DLPNO 合流、composite 守卫、double hybrid auxJ+auxC、SMD/JK 不被过滤）
+
+16.5 Phase 4 — workflows + CLI
+
+步骤
+
+energy.py 字段名更新（src/acp/workflows/energy.py:77-93 等）：把所有 "aux_basis" 改为 "aux_j_basis"；新增 "aux_c_basis" 处理（双杂化 level 时 push 到 extras 或调用 backend 的 aux_c_basis 参数）。
+
+simple.py 字段名更新（src/acp/workflows/simple.py:179-197）：把 _build_method_kwargs 中的 aux_basis 改为 aux_j_basis + aux_c_basis；白名单同步更新。
+
+CLI 默认值统一（src/acp/cli.py:252）：--ri-approximation default="RIJCOSX"。
+
+新增 CLI 参数（cli.py:1175 附近）：按 §9.2 v1.1，去掉 choices，用 metavar + help。
+
+--aux-basis 别名合并逻辑（cli.py:1315-1325）：按 §9.2.1 实现 legacy dest 合并。
+
+_LEVEL_TO_CLI_FLAG_MAP 更新（catalog.py:1576-1590）："aux_j_basis": "aux-j-basis", "aux_c_basis": "aux-c-basis"。
+
+验收命令
+
+pytest tests/test_acp_workflows_energy.py tests/test_acp_workflows_simple.py -v
+acp run singlepoint --help | grep -E "aux-j-basis|aux-c-basis"
+# v1.2 修订：cli.py 无 --dry-run flag；用 --help 验证参数定义，校验留到实际运行
+acp run singlepoint --input "CCO" --method B3LYP --basis def2-TZVPP \
+    --aux-c-basis def2-TZVPP/C --output /tmp/_acp_dryrun 2>&1 | head -5
+# （或直接跑一个小体系验证 aux_c_basis 字段被 ORCA 输入正确消费）
+
+16.6 Phase 5 — 测试
+
+步骤
+
+test_acp_catalog.py 改写：把 test_supports_ri_is_false_for_composite_and_dlpno 改为 test_ri_support_classification（按 §12.2.1）；去掉 Phase 0a 用例的 xfail；新增 test_aux_j_default_derives_from_basis 等；新增 test_normalize_legacy_method 覆盖 catalog 层归一化函数（不依赖 SQLite）。
+
+test_acp_workflows_*.py 字段名更新：把 aux_basis= 全部改为 aux_j_basis= + 必要的 aux_c_basis=。v1.2 删除原计划的 NMR workflow 测试（NMR 是半成品，ORCAInterface.nmr_shielding 是 NotImplementedError stub）。
+
+新增 4 个测试文件（按 §12.2.2 ~ §12.2.7）：
+  
+    
+tests/test_orca_basis_block.py
+    
+tests/test_orca_composite_guard.py（含 regex 边界用例：GridX/C 不被过滤、def2/J 被过滤）
+    
+tests/test_aux_basis_compat.py（v1.2 修订：用真实 JobStore+JobRecord+JobSpec 接口）
+    
+tests/test_api_method_catalog_shape.py（双字段共存 + ETag 命中）
+  
+
+CENSO 回归：在 test_acp_censo_p5_acceptance.py 末尾加 test_censo_template_path_not_affected_by_aux_basis_rename，断言 CENSO 调用不读 aux_j_basis 字段。
+
+验收命令
+
+pytest tests/ -v
+# 关键子集：
+pytest tests/test_acp_catalog.py tests/test_orca_basis_block.py \
+       tests/test_orca_composite_guard.py tests/test_aux_basis_compat.py \
+       tests/test_api_method_catalog_shape.py tests/test_acp_censo_p5_acceptance.py -v
+
+16.7 Phase 6 — 前端 UI 已完成
+
+步骤
+
+getFieldDefault 升级（frontend/ACP_Workbench_v2.html:3518-3544）：按 §11.1，读 catalog.basis_catalog_v2，加 basis 参数派生 aux_j/aux_c。
+
+getFieldOptions 升级（ACP_Workbench_v2.html:3505-3511）：按 §11.2，处理 options_source == "dynamic_aux_basis"。
+
+buildFieldRow 字段隐藏（ACP_Workbench_v2.html:4116+）：按 §11.3，根据 ri_support 渲染徽章或字段。
+
+functional 切换联动（ACP_Workbench_v2.html:4236-4254）：按 §11.4，切 functional 时重算 RI/aux_j/aux_c。
+
+basis 切换联动（新增监听器）：按 §11.5，切 basis 时重算 aux_j/aux_c。
+
+option tooltip 渲染（ACP_Workbench_v2.html:4150+）：按 §11.6，从 option_meta 注入 title 属性。
+
+验收命令
+
+# 手动浏览器测试（按 §14.3 验收清单逐项）：
+# 1. 启动服务：sudo systemctl restart acp
+# 2. 访问 http://localhost:8765
+# 3. 选 r2SCAN-3c：opt/SP level 应显示"复合方法"徽章
+# 4. 选 B3LYP：opt/SP level 应显示 RI + aux_j_basis 下拉，无 aux_c_basis
+# 5. 选 PWPB95：应显示 RI + aux_j_basis + aux_c_basis 三个字段
+# 6. 切 basis=def2-TZVPP：aux_j_basis 下拉自动选中 def2/J
+# 7. 选 DLPNO-CCSD(T)：应显示"RI 自动"徽章
+# 8. F12 console 应无 basisCatalog[basis] is undefined 报错
+
+16.8 Phase 7 — 全量验证 + 部署
+
+步骤
+
+跑全量测试：pytest tests/ -v（必须全过）。
+
+Lint：ruff check src/ frontend/（无新增警告）。
+
+类型：mypy src/acp/catalog.py src/acp/scheduler/store.py（strict 通过）。
+
+手动浏览器测试：按 §14.3 验收清单 8 项逐项确认。
+
+(可选) Playwright smoke 自动化：pytest tests/test_frontend_smoke.py -v。
+
+部署：sudo systemctl restart acp（按 AGENTS.md 提醒，服务不用 --reload，必须手动重启）。
+
+验证：curl http://localhost:8765/api/v1/method-catalog | python -m json.tool | head -30，确认同时含 basis_catalog 和 basis_catalog_v2。
+
+验收命令
+
+pytest tests/ -v
+ruff check src/ frontend/
+mypy src/acp/catalog.py src/acp/scheduler/store.py
+sudo systemctl restart acp
+curl -s http://localhost:8765/api/v1/method-catalog | python -c "
+import json, sys
+d = json.load(sys.stdin)
+assert isinstance(d.get('basis_catalog'), list), 'basis_catalog missing'
+assert isinstance(d.get('basis_catalog_v2'), dict), 'basis_catalog_v2 missing'
+assert d['basis_catalog_v2']['def2-TZVPP']['aux_j'] == 'def2/J'
+assert d['basis_catalog_v2']['def2-SV(P)']['aux_c'] is None  # v1.1 修订
+print('deploy OK')
+"
+sudo journalctl -u acp -n 50 --no-pager  # 检查无启动错误
+
+实施状态
+
+最后更新：2026-07-21 · Phase 0–6 实施完成
+
+已完成
+
+ | Phase | 状态 | 差异说明
+
+ | Phase 0a | ✅ 完成 | test_basis_catalog_orca_keyword_existence 已通过（无 xfail）。模块常量 KNOWN_AUX_J / KNOWN_AUX_C / FORBIDDEN_AUX_C。
+
+ | Phase 1 | ✅ 完成 | BASIS_CATALOG（28 条）、METHOD_META 三态重构、FIELD_DEFINITIONS 拆分、METHOD_SCHEMAS 扩展、Profile 补齐。DLPNO 删除 basis_block，增加 default_aux_j / default_aux_c。
+
+ | Phase 2 | ✅ 完成 | _resolve_field_default / _resolve_field_options / _clamp_to_functional 升级；_migrate_legacy_aux_basis 兼容层；normalize_legacy_method 函数；get_method_catalog 双字段；_LEVEL_TO_CLI_FLAG_MAP 更新。
+
+ | Phase 3 | ✅ 完成 | _build_input_blocks 新增 aux_j_basis/aux_c_basis 参数；route_extras 自分离（regex 锚定版）；composite/automatic 守护过滤；DLPNO 合流到统一 %basis 渲染；_write_input 及 4 个 calc_type 方法透传；store.py _row_to_record hook 读时归一化。
+
+ | Phase 4 | ✅ 完成 | energy.py _base_route_extras aux_basis → aux_j_basis + aux_c_basis；simple.py _build_method_kwargs 字段名 + 白名单更新；cli.py --ri-approximation 默认 RIJCOSX；新增 --aux-j-basis / --aux-c-basis（无 choices）；--aux-basis 别名合并逻辑；_handle_optfreqsp aux_basis → aux_j_basis。
+
+ | Phase 5 | ✅ 完成 | test_acp_catalog.py 新增 ri_support 分类 + aux_j/aux_c 派生 + normalize_legacy_method 测试；test_acp_workflows_simple.py 字段名更新；test_acp_censo_p5_acceptance.py 字段名更新 + CENSO 回归测试；新增 test_orca_basis_block.py（4 用例）、test_orca_composite_guard.py（4 用例，含 regex 边界）、test_aux_basis_compat.py（5 用例，含真实 JobStore 读时归一化）、test_api_method_catalog_shape.py（3 用例，双字段共存 + ETag）。
+
+ | Phase 6 | ✅ 完成 | frontend/ACP_Workbench_v2.html 全量前端 UI 升级：getFieldDefault 加 basis 参数 + 读 basis_catalog_v2；getFieldOptions 新增 dynamic_aux_basis 分支；buildFieldRow ri_support 三态徽章渲染与字段隐藏；functional/basis 切换联动 aux_j/aux_c 重算；option tooltip 渲染；supportsCustom 扩展到 aux_j/aux_c 字段；getFieldOptions 添加 riSupport 守卫防止 composite/automatic 方法暴露 aux 选项。
+
+已知状态
+
+测试：762 passed, 0 failed, 7 skipped
+
+回归：无回归
+
+Lint：ruff 无 F/N 类错误；E501/UP045 均为预存
+
+审计修复：
+  
+    
+删除 test 中未使用的 WORKFLOW_CATALOG import
+    
+更新 catalog.py 注释（24-element → 28-element; supports_ri → ri_support）
+    
+拆分 E501 超长行（_resolve_field_options 动态基组分支）
+    
+修复 _resolve_field_default 中 aux_c_basis 在 basis=None 时对 needs_aux_c=False 返回 ""（非 "AutoAux"）
+    
+orcay.py route_extras 自分离改用 regex 锚定 r"/([JC])(?=$|[^A-Za-z])" 避免误伤 SMD/JK
+    
+_clamp_to_functional aux 字段 clamp 逻辑修复：仅对 ri_support="user" 方法执行 clamp，避免 ri_support="automatic"（DLPNO）在 legacy 迁移后因选项检查覆盖用户指定的 aux_c_basis
+    
+test_regex_anchor_prevents_false_positives 修正：GridX/C 被正确过滤（/C 在 token 末尾，与真实 aux basis 格式相同），SMD/JK 不被过滤（/J 后接字母 K，不在 token 末尾）
+    
+修复 5 个过时测试：test_acp_config ×2（"lite" → "censo-lite"）、test_cccp ×1（同上）、test_benchmark ×1（mock 处理 charge=None）、test_qc_interfaces_xtb ×1（mock 写入 xtbopt.xyz 而非 xtb_output.xyz）
+    
+Phase 6 buildFieldRow aux_c_basis 字段隐藏修复：补充 riSupport !== "user" 条件，确保 DLPNO（automatic）的 aux_c_basis 正确隐藏并显示"RI 自动"徽章（原缺失导致 automatic + needs_aux_c=true 时字段错误地出现在 UI 中）
+    
+Phase 6 getFieldOptions 守卫加固：aux_j_basis 和 aux_c_basis 选项均增加 riSupport !== "user" → return [] 检查，防止 composite/automatic 方法经由非标准路径暴露辅助基组选项
+    
+Phase 6 supportsCustom 扩展：从仅 "basis" 拓展到 ["basis", "aux_j_basis", "aux_c_basis"]，支持用户为辅助基组输入自定义值
+    
+Phase 6 getFieldDefault 删除 supports_ri 和 aux_basis 遗留路径，替换为 ri_support 三态 + basis_catalog_v2 元数据派生
+    
+Phase 6 i18n 修复：在 I18N 字典中添加 modal.ri_composite/modal.ri_automatic 等 4 个翻译键，解决 t() 函数 fallback 返回 key 本身导致徽章显示"modal.ri_composite"而非中文字符的问题
+    
+Phase 6 3c 专用基组过滤：新增 _COMPOSITE_BASIS_SETS = ("def2-mTZVPP", "def2-mSVP", "mTZVP")，在 _derive_functional_options_map 中展开 _BASIS_CATALOG_REF 时对非 composite 泛函排除这些基组，避免 B3LYP 等泛函的基组下拉中出现 def2-mTZVPP 等 3c 方法适配基组
+  
+
+文档结束 · ACP RI 加速与辅助基组配置重构 · v1.3 · 2026-07-21
+
+基于 v1.0 + 可行性评审修订；所有代码示例与 catalog.py / orca.py / ACP_Workbench_v2.html 实际签名对齐；化学事实已按 ORCA basis set repository 核对。
+

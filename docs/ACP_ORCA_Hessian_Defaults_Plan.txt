@@ -1,0 +1,1137 @@
+
+
+ACP ORCA opt 阶段 Hessian 默认行为重构
+
+版本：v1.3 · 2026-07-25 · 状态：评审已整合，待实施
+
+作者：QCcalc Team
+
+影响范围：全部 ORCA geometry optimization 路径（simple / energy / conformer）、CLI、API、scheduler、catalog、前端 wizard、配置文件与测试。NMR 路径暂不纳入（NMR 模块尚未完成开发，后续单独处理）。
+
+一句话目标：ORCA opt 阶段默认不再对 CHON+卤素分子重算 Hessian；含 P/S/Si/B 时默认每 10 步（与旧版一致）；含金属等其他元素时默认每 7 步（较旧值更保守）。用户可在全部 ORCA opt 路径显式指定 auto、关闭或正整数间隔。
+
+已确认的破坏性变更：CLI 完全废弃 --recalc-hess，仅提供 --calc-hess [N|auto] 与 --no-calc-hess。API 字段仍复用 recalc_hess，但语义扩展为 auto | 0 | N | null。
+
+目录
+
+v1.1 修订摘要
+
+背景与现状
+
+目标与非目标
+
+关键设计决策
+
+字段语义与校验
+
+元素分类与解析工具
+
+ORCAInterface 改造
+
+catalog 与 config 更新
+
+CLI 重构
+
+工作流透传
+
+scheduler 透传
+
+Hessian preview API
+
+前端 wizard
+
+测试策略
+
+实施顺序
+
+验收清单
+
+风险与回滚
+
+兼容性
+
+1. 修订摘要
+
+ | 版本 | 评审发现 | 处理
+
+ | v1.3 | "NMR 推迟"与共享 engine/config 改造自相矛盾：nmr.py 经 ConformerEngine 复用 opt，默认行为无法真正推迟 | 重写第 10.4 节：明确仅"NMR 显式字段控制"推迟，默认行为随共享改造对 NMR 内部 opt 同样生效
+
+ | v1.3 | auto 解析结果依赖具体分子元素，但 provenance 只记输入 "auto"，无法精确复现实际下发的 ORCA input | 新增 resolved interval 落 provenance/state（第 7.5、17 节）；AC19 校验持久化记录
+
+ | v1.3 | 默认单一间隔 15 缺乏科学依据，含金属/平坦势能面体系应更保守 | 默认间隔改为按元素分级：轻元素 0；P/S/Si/B 维持 10（与旧版一致，避免回归）；金属/其他 7（较旧值更保守）
+
+ | v1.3 | config 默认 10→auto 是静默的全局行为变更，影响所有未显式配置的历史结果复现 | 新增 R8（高）；第 18.1 节给出正式迁移指引，站点可一行 YAML 锁回旧行为
+
+ | v1.3 | "关闭"措辞误导：不输出 Recalc_Hess 仍会在第 1 步计算初始 Hessian | 术语统一为"仅初始 Hessian（不重算）"；help 与前端标签同步
+
+ | v1.3 | preview API 未定义非法 recalc_hess 响应；lazy import 每帧重复 | preview 非法值返回 422；lazy resolver 加模块级缓存
+
+ | v1.2 | 默认间隔 20 缺乏基准数据支撑，较激进 | 默认间隔改为 15；保留后续根据收敛数据调整的空间
+
+ | v1.2 | NMR 模块尚未完成开发，纳入本次变更风险高 | NMR 路径从本计划移除，后续单独处理；simple / energy / conformer 保持一致
+
+ | v1.1energy 的 censo_energy.dft_opt schema 未包含 recalc_hess | 补入 schema，并修复 energy 工作流透传
+
+ | conformer/NMR 只能获得自动默认，不能显式覆盖 | 按“全部显式支持”方案补齐 schema、catalog converter、ProtocolSpec、ConformerEngine 与 NMR levels 链路
+
+ | None 既表示“未指定”又表示“自动推断”，且与 config 优先级冲突 | 改为显式 "auto"；null/缺失 仅表示“跟随 config”
+
+ | catalog 的 min 不做后端校验，负数/浮点数可绕过 | 新增统一 normalize_recalc_hess()，catalog、CLI、scheduler、workflow、ORCAInterface 共用
+
+ | CLI 新参数会破坏 singlepoint/frequency 的 kwargs 构造 | 使用 getattr()，并用 mutually exclusive group 定义 hessian 参数
+
+ | method_levels_to_cli_flags 可能重复输出 hessian flag | 在循环内优先处理 recalc_hess 并 continue；从通用 flag map 移除
+
+ | 前端 preview 读取不存在的 wizardState.input.formula，且无法感知 config 与批量结构 | 改为后端 /api/v1/hessian-preview；请求携带全部 wizard structures，不再做前端镜像推断
+
+ | [Fe+2] 公式会被前端正则误判为轻元素 | 前端不再解析公式；后端优先使用 symbols，公式只作为 fallback
+
+ | symbols=None 时会被静默视为轻元素 | 仅在需要元素推断且 symbols 缺失时显式报错；显式 0/N 不要求 symbols
+
+ | 计划代码与实际 _build_input_blocks() 签名/返回类型不一致 | 按当前代码修正：无 opt_convergence 参数，返回 str
+
+ | YAML timeout 被误写为 86464 | 本计划不改 timeout；86400/864000 分歧单独处理
+
+ | 验收用例把 simple workflow 的输入写成裸 SMILES | simple CLI 当前只接受结构文件；验收统一使用临时 XYZ，不扩大输入格式范围
+
+2. 背景与现状
+
+2.1 当前实现
+
+Hessian 重算由 legacy ORCA 接口集中生成，当前逻辑位于 src/cccp/qc/interfaces/orca.py:252-266：
+
+to_cfg = self.config.get("optimization_control") or {}
+if recalc_hess is None:
+    recalc_hess = to_cfg.get("recalc_hess", 10)
+
+if route.split()[0] == "Opt":
+    blocks.append("%geom")
+    blocks.append(f"  Recalc_Hess {recalc_hess}")
+    if geom_maxiter is not None and geom_maxiter > 0:
+        blocks.append(f"  MaxIter {int(geom_maxiter)}")
+    blocks.append("end")
+
+2.2 主要问题
+
+ | 问题 | 影响
+
+ | 默认固定 Recalc_Hess 10 | 轻元素有机小分子承担不必要的解析 Hessian 成本
+
+ | 不能显式关闭 | 用户无法选择 ORCA 默认近似 Hessian + BFGS 更新
+
+ | 不区分元素组成 | 轻元素与含金属/P/S/Si 的体系使用同一默认策略
+
+ | energy 不透传 | src/acp/workflows/energy.py:320-331 无法响应 per-job 配置
+
+ | conformer/NMR 不透传 | frontend levels 中的 hessian 设置无法进入 legacy protocol/engine
+
+ | YAML/Python 分歧 | Python 默认 10；YAML 缺少 recalc_hess
+
+ | 缺少统一校验 | catalog 的 min/max 只约束普通前端输入，不能约束 CLI/API/scheduler
+
+3. 目标与非目标
+
+3.1 目标
+
+CHON+卤素分子默认不输出 Recalc_Hess（仅初始 Hessian，BFGS 更新）。
+
+含 P/S/Si/B 时默认输出 Recalc_Hess 10（与旧版一致，避免回归）。
+
+含金属等其他元素时默认输出 Recalc_Hess 7（较旧值更保守，契合困难势能面）。
+
+recalc_hess 支持 "auto"、0、正整数与 null。
+
+CLI 完全重构为 --calc-hess [N|auto] / --no-calc-hess。
+
+simple、energy、conformer 内部 ORCA opt 全部支持显式控制；NMR 内部复用 ConformerEngine 的 opt 随共享改造一并获得新默认行为，NMR 专属 levels 字段推迟（详见 10.4）。
+
+新增统一解析与校验函数，所有入口行为一致。
+
+新增后端 Hessian preview API，前端不再镜像化学规则。
+
+resolved interval（按分子解析后的实际值）落入 provenance/state，保证 ORCA input 可精确复现。
+
+同步 Python 与 YAML 默认值，修复 recalc_hess 配置分歧。
+
+3.2 非目标
+
+不修改 ORCA CalcFC、NumHess、InitHess 或 TS 优化策略。
+
+不修改 CREST/CENSO/xTB 自身 Hessian 行为。
+
+不实现 SMD + 纯 opt 的 Recalc_Hess Num_N fallback，仅补测试并记录风险。
+
+不扩展 simple workflow 的输入格式；裸 SMILES 仍由 scheduler materialization 处理。
+
+不处理 YAML 与 Python 的 timeout 默认值分歧。
+
+不保留 --recalc-hess 兼容 alias；该决策已确认。
+
+不为 NMR 专属 levels/schema 增加 recalc_hess 字段（NMR 模块未完成开发）；但 NMR 内部复用 ConformerEngine 的 opt 会随本次共享改造获得新默认行为，这是预期且合理的（详见 10.4）。
+
+4. 关键设计决策
+
+ | # | 决策点 | 选择 | 理由
+
+ | D1 | 元素分级 | 轻元素 {C,H,O,N,F,Cl,Br,I}；常见杂原子 {P,S,Si,B}；金属/其他 | 轻元素=有机小分子主体；P/S/Si/B 势能面通常良性，维持旧间隔 10 避免回归；金属体系平坦/复杂势能面，取更保守的 7
+
+ | D2 | 字段模型 | 复用 recalc_hess，接受 "auto" | 0 | N | null | 避免新增持久化字段；旧整数 payload 保持兼容
+
+ | D3 | Auto 语义 | 显式 "auto" 表示立即按元素推断，并忽略 config 中的固定间隔 | 前端 Auto 与后端实际行为一致；CLI 也可强制 auto
+
+ | D4 | 缺失语义 | null/缺失 表示"未指定，跟随 config"；config 默认 "auto" | 保留配置文件作为站点级默认值的能力
+
+ | D5 | 覆盖范围 | simple、energy、conformer 的 ORCA opt 全部显式支持；NMR 专属 levels 推迟，但其内部 opt 默认行为随共享改造生效 | 消除同类工作流行为不一致；NMR 显式控制待模块完成开发后补齐
+
+ | D6 | 默认间隔（分级） | 自动启用时：轻元素 0；P/S/Si/B 10；金属/其他 7 | 15 缺乏科学依据；P/S/Si/B 维持旧值避免回归；金属按 ORCA 对困难势能面建议取更保守值。该阈值为待收敛基准校准的初值，后续可调
+
+ | D7 | 工具位置 | acp/chem/composition.py | 按评审结论保留在 ACP chemistry 层；ORCA 中采用 lazy import 降低 import-time 反向依赖
+
+ | D8 | 前端 preview | 后端接口返回真实解析结果 | 同时感知 config、explicit value 与批量结构，避免前后端规则漂移
+
+ | D9 | CLI 兼容 | 完全废弃 --recalc-hess | 用户已确认；文档和迁移说明必须明确
+
+5. 字段语义与校验
+
+5.1 recalc_hess 取值
+
+ | 输入 | 归一化结果 | 含义 | ORCA 输出
+
+ | 缺失 / null / 空字符串 | None | 未指定，读取 config | 由 config 决定
+
+ | "auto"（大小写不敏感） | "auto" | 强制按元素推断，忽略 config 固定值 | 轻元素不输出；P/S/Si/B 输出 Recalc_Hess 10；金属/其他输出 Recalc_Hess 7
+
+ | 0 或 "0" | 0 | 显式"仅初始 Hessian"（不重算） | %geom 中不输出 Recalc_Hess
+
+ | N 或 "N"，1–1000 | N | 显式间隔 | Recalc_Hess N
+
+ | 负数、大于 1000、float、bool、其他字符串 | 报错 | 非法 | 不生成输入文件
+
+兼容性：旧 payload 中的正整数继续有效；旧 payload 未指定字段时继续走 config。旧 payload 不可能合法包含 0，因为旧 catalog 下限为 1，因此 0 可安全作为新“关闭”语义。
+
+5.2 解析优先级
+
+job/API/CLI 显式值
+    │
+    ├─ "auto" → 元素推断（忽略 config）
+    ├─ 0      → 仅初始 Hessian（不重算）
+    └─ N      → 每 N 步
+         │
+         ▼ 仅当显式值为 null/缺失
+config.optimization_control.recalc_hess
+    │
+    ├─ "auto" → 元素推断
+    ├─ 0      → 仅初始 Hessian
+    └─ N      → 每 N 步
+         │
+         ▼ 仅当 config 也为 null/缺失
+元素推断（分级）：
+  轻元素 {C,H,O,N,F,Cl,Br,I} → 0
+  常见杂原子 {P,S,Si,B}      → 10
+  金属/其他                  → 7
+
+5.3 校验规则
+
+统一由 normalize_recalc_hess() 解析，禁止各层重复手写。
+
+整数字符串可接受并归一化为 int；非整数字符串报错。
+
+拒绝 bool，避免 True 被 Python 当作 1。
+
+拒绝所有 float，包括 20.0，避免静默截断。
+
+CLI 的 --calc-hess 只接受 auto 或 1–1000；"仅初始 Hessian（不重算）"必须使用 --no-calc-hess。
+
+6. 元素分类与解析工具
+
+6.1 新模块
+
+新建 src/acp/chem/composition.py。
+
+"""Molecular composition and Hessian default utilities."""
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+
+# --- Element classification (D1) ---
+LIGHT_ELEMENTS: frozenset[str] = frozenset({"C", "H", "O", "N", "F", "Cl", "Br", "I"})
+HETEROATOM_ELEMENTS: frozenset[str] = frozenset({"P", "S", "Si", "B"})
+
+# --- Graded default intervals (D6) ---
+HETEROATOM_DEFAULT_INTERVAL = 10   # matches legacy 10, avoids regression
+HEAVY_ELEM_DEFAULT_INTERVAL = 7     # conservative for metals / flat PES
+MAX_RECALC_HESS_INTERVAL = 1000     # safety cap (~ effectively never)
+AUTO_RECALC_HESS = "auto"
+
+def normalize_recalc_hess(value: object) -> int | str | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError("recalc_hess must be 'auto', 0, or an integer interval")
+    if isinstance(value, int):
+        if value < 0 or value > MAX_RECALC_HESS_INTERVAL:
+            raise ValueError("recalc_hess interval must be between 0 and 1000")
+        return value
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if not text:
+            return None
+        if text == AUTO_RECALC_HESS:
+            return AUTO_RECALC_HESS
+        if re.fullmatch(r"\d+", text):
+            return normalize_recalc_hess(int(text))
+        raise ValueError("recalc_hess must be 'auto', 0, or an integer interval")
+    raise ValueError("recalc_hess must be 'auto', 0, or an integer interval")
+
+def classify_symbols(symbols: list[str] | tuple[str, ...]) -> tuple[set[str], set[str]]:
+    """Return (heavy_elements, triggering_elements) sets for diagnostics.
+
+    ``heavy_elements`` are all non-light elements present;
+    ``triggering_elements`` excludes the benign heteroatom class (P/S/Si/B).
+    """
+    if not symbols:
+        raise ValueError("symbols list is empty")
+    normalized = [str(symbol).strip().capitalize() for symbol in symbols]
+    if any(not symbol for symbol in normalized):
+        raise ValueError("symbols must not contain empty values")
+    heavy = {s for s in normalized if s not in LIGHT_ELEMENTS}
+    triggering = heavy - HETEROATOM_ELEMENTS
+    return heavy, triggering
+
+def is_light_element_molecule(symbols: list[str] | tuple[str, ...]) -> bool:
+    heavy, _ = classify_symbols(symbols)
+    return not heavy
+
+def default_recalc_hess_for_symbols(
+    symbols: list[str] | tuple[str, ...] | None,
+) -> int:
+    if symbols is None:
+        raise ValueError("symbols are required when recalc_hess is 'auto'")
+    heavy, triggering = classify_symbols(symbols)
+    if not heavy:
+        return 0
+    if not triggering:  # only P/S/Si/B beyond light set
+        return HETEROATOM_DEFAULT_INTERVAL
+    return HEAVY_ELEM_DEFAULT_INTERVAL
+
+def resolve_recalc_hess(
+    explicit: object = None,
+    configured: object = None,
+    symbols: list[str] | tuple[str, ...] | None = None,
+) -> HessianResolution:
+    """Resolve recalc_hess to a concrete interval + provenance metadata."""
+    source = "config"
+    for candidate, src in ((explicit, "explicit"), (configured, "config")):
+        normalized = normalize_recalc_hess(candidate)
+        if normalized is None:
+            continue
+        source = src
+        if normalized == AUTO_RECALC_HESS:
+            interval = default_recalc_hess_for_symbols(symbols)
+            reason = "auto"
+            break
+        interval = int(normalized)
+        reason = "explicit_interval" if interval > 0 else "explicit_off"
+        break
+    else:
+        # both explicit and configured are null/missing → element inference
+        interval = default_recalc_hess_for_symbols(symbols)
+        reason = "auto"
+        source = "config"
+
+    heavy, triggering = classify_symbols(symbols) if symbols else (set(), set())
+    return HessianResolution(
+        interval=interval,
+        source=source,
+        reason=reason,
+        heavy_elements=sorted(heavy),
+        triggering_elements=sorted(triggering),
+    )
+
+@dataclass(frozen=True)
+class HessianResolution:
+    """Resolved Hessian policy with full provenance for audit/replay."""
+    interval: int
+    source: str          # "explicit" | "config"
+    reason: str          # "explicit_interval" | "explicit_off" | "auto"
+    heavy_elements: list[str]
+    triggering_elements: list[str]
+
+    @property
+    def enabled(self) -> bool:
+        return self.interval > 0
+
+设计要点（v1.3）：
+
+resolve_recalc_hess() 返回 HessianResolution dataclass，携带 source/reason/heavy_elements/triggering_elements，供 ORCAInterface 直接写入 provenance，保证可复现（见 7.5）。
+
+分级默认集中在 default_recalc_hess_for_symbols()，后续按收敛基准数据校准时只改常量，不触动调用方。
+
+HessianResolution 用 @dataclass(frozen=True)；因 from __future__ import annotations，resolve_recalc_hess 注解中的前向引用在定义期不报错，运行时 dataclass 已在模块作用域就绪。
+
+6.2 导出
+
+src/acp/chem/__init__.py re-export：
+
+LIGHT_ELEMENTS
+
+HETEROATOM_ELEMENTS
+
+HETEROATOM_DEFAULT_INTERVAL
+
+HEAVY_ELEM_DEFAULT_INTERVAL
+
+MAX_RECALC_HESS_INTERVAL
+
+AUTO_RECALC_HESS
+
+HessianResolution
+
+normalize_recalc_hess()
+
+classify_symbols()
+
+is_light_element_molecule()
+
+default_recalc_hess_for_symbols()
+
+resolve_recalc_hess()
+
+7. ORCAInterface 改造
+
+7.1 签名修正
+
+修改 src/cccp/qc/interfaces/orca.py 的 _build_input_blocks()。当前函数返回 str，且没有 opt_convergence 参数；v1.1 按计划外错误修正，不引入不存在参数。
+
+def _build_input_blocks(
+    self,
+    calc_type: str = "opt",
+    method: str = None,
+    basis: str = None,
+    route_extras: list = None,
+    geom_maxiter: int = None,
+    extra_blocks: list = None,
+    recalc_hess: object = None,
+    solvent: str = None,
+    solvent_model: str = None,
+    aux_basis: str = None,
+    aux_j_basis: str = None,
+    aux_c_basis: str = None,
+    symbols: Optional[list[str]] = None,
+) -> str:
+
+7.2 注入逻辑
+
+if route.split()[0] == "Opt":
+    to_cfg = self.config.get("optimization_control") or {}
+    resolution = _resolve_recalc_hess_lazy(
+        explicit=recalc_hess,
+        configured=to_cfg.get("recalc_hess", "auto"),
+        symbols=symbols,
+    )
+
+    blocks.append("%geom")
+    if resolution.interval > 0:
+        blocks.append(f"  Recalc_Hess {resolution.interval}")
+    if geom_maxiter is not None and geom_maxiter > 0:
+        blocks.append(f"  MaxIter {int(geom_maxiter)}")
+    blocks.append("end")
+
+    # Persist resolved policy for reproducibility (see 7.5).
+    _record_hessian_resolution(input_file_parent, resolution)
+
+_build_input_blocks 当前不知道输出目录；为落 provenance，由 _write_input 在拿到 resolution 后调用 _record_hessian_resolution(input_file.parent, resolution)。可选方案：让 _build_input_blocks 返回 (str, HessianResolution | None)，_write_input 解包。本计划采用后者以保持 _build_input_blocks 纯输入生成职责。
+
+7.3 lazy import（带模块级缓存）
+
+为降低 legacy → ACP 的 import-time 反向依赖，在 orca.py 中使用局部 lazy import，并加模块级单例缓存避免 conformer 批量场景下每帧重复 import（模式与现有 _resolve_method_meta() 一致）：
+
+_RESOLVER = None
+
+def _get_resolver():
+    global _RESOLVER
+    if _RESOLVER is None:
+        from acp.chem.composition import resolve_recalc_hess as _r
+        _RESOLVER = _r
+    return _RESOLVER
+
+def _resolve_recalc_hess_lazy(
+    explicit: object,
+    configured: object,
+    symbols: Optional[list[str]],
+):
+    return _get_resolver()(
+        explicit=explicit,
+        configured=configured,
+        symbols=symbols,
+    )
+
+7.4 symbols 透传
+
+_write_input() 已接收 symbols，只需传给 _build_input_blocks()。生产路径中 optimize/optfreq 都会经过 _write_input()，因此 symbols 必然可用。直接调用 _build_input_blocks("opt") 且需要 auto 推断但未传 symbols 时必须报错；显式 0/N 不需要 symbols。
+
+7.5 日志与 provenance
+
+自动启用时记录触发元素列表和最终间隔，不记录完整原子列表，避免大分子日志噪音：
+
+Auto Hessian recalc enabled: interval=7, non-light elements=Fe, Cl
+
+provenance 持久化（v1.3 新增，保证可复现）：auto 的最终 interval 依赖具体分子元素，同一 recalc_hess="auto" 在不同分子上下发不同 ORCA input。因此必须把解析后的实际值落入审计产物。在 _write_input 写完 *.inp 后，同目录写一个 sidecar JSON：
+
+# <calc_dir>/conf_000_opt.inp  →  <calc_dir>/conf_000_opt.hessian.json
+{
+  "interval": 7,
+  "enabled": true,
+  "source": "auto",
+  "reason": "auto",
+  "heavy_elements": ["Cl", "Fe"],
+  "triggering_elements": ["Fe"],
+  "input_value": "auto",
+  "config_value": "auto",
+  "resolved_at": "2026-07-25T12:00:00Z"
+}
+
+实现：_record_hessian_resolution(out_dir, resolution, input_value, config_value)。同时 append 一条 event 到 state.json 的 provenance 流（若 workflow/scheduler 上下文可用）。scheduler 的 artifacts.py 应将该 sidecar JSON 纳入 job artifacts 采集，使其随结果回传。
+
+为何必须持久化：计算化学平台对"输入文件可精确复现"是硬要求。只记输入 "auto" 无法重建实际下发的 %geom 块，含金属体系尤其敏感（interval 7 vs 10 会改变优化轨迹与最终构象能量，进而影响 Boltzmann 权重）。
+
+8. catalog 与 config 更新
+
+8.1 FIELD_DEFINITIONS
+
+src/acp/catalog.py:458-465 改为自定义类型，避免把 "auto" 伪装成 int：
+
+"recalc_hess": {
+    "type": "hessian_interval",
+    "advanced": True,
+    "label": "Hessian Recalculation",
+    "default": {"*": "auto"},
+    "min_interval": 1,
+    "max_interval": 1000,
+    "nullable": True,
+    "widget": "hessian_toggle",
+    "help": "auto = infer from elements (light=0; P/S/Si/B=10; metal=7); 0 = initial Hessian only; 1-1000 = recalculation interval",
+},
+
+8.2 schema 覆盖
+
+ | schema / level | 处理
+
+ | dft_optimize.optimize | 已包含 recalc_hess，保留
+
+ | dft_optfreq.optfreq | 已包含，保留
+
+ | dft_optfreqsp.optfreq | 已包含，保留
+
+ | censo_energy.dft_opt | 补入 recalc_hess
+
+ | confsearch.dft_opt | 补入 recalc_hess
+
+8.3 normalize_and_validate_method_config
+
+对 type == "hessian_interval" 调用 normalize_recalc_hess()。
+
+"auto" 是合法值；0 是合法值；非法值进入 errors，不进入 normalized levels。
+
+当用户未提供字段时，catalog 默认返回 "auto"，使 wizard 的 Auto 成为显式选择。
+
+直接 API job 不经过 validate-method 时，scheduler/workflow 仍必须调用同一 normalize 函数。
+
+8.4 config 默认值
+
+src/cccp/config.py:408-413：
+
+"optimization_control": {
+    "recalc_hess": "auto",
+    "timeout": {
+        "default_seconds": 864000
+    }
+}
+
+config/defaults.yaml:354-357：
+
+optimization_control:
+  recalc_hess: "auto"
+  timeout:
+    default_seconds: 86400
+
+本计划只补 recalc_hess，不修改 timeout.default_seconds。Python 864000 与 YAML 86400 的分歧是独立问题，禁止夹带修改。
+
+9. CLI 重构
+
+9.1 参数定义
+
+仅 optimize、optfreq、optfreqsp 注册 hessian 参数，并使用互斥组：
+
+hess_group = parser.add_mutually_exclusive_group()
+hess_group.add_argument(
+    "--calc-hess",
+    nargs="?",
+    const="auto",
+    default=None,
+    metavar="N|auto",
+    type=_parse_calc_hess_arg,
+    help="Recalculate Hessian every N steps (1-1000), or use 'auto' (infer from elements) when N omitted. NOTE: 0 is rejected here; to keep only the initial Hessian use --no-calc-hess.",
+)
+hess_group.add_argument(
+    "--no-calc-hess",
+    action="store_true",
+    default=False,
+    help="Initial Hessian only; do not emit Recalc_Hess (BFGS updates).",
+)
+
+9.2 argparse 类型
+
+auto：返回字符串 "auto"。
+
+1–1000：返回 int。
+
+0、负数、float、其他字符串：触发 argparse.ArgumentTypeError。注意 --calc-hess 0 会报错，"仅初始 Hessian"必须用 --no-calc-hess（避免与 API 的 0 语义混淆）。
+
+--calc-hess 无值时通过 const="auto" 表示强制元素推断。
+
+9.3 kwargs 构造
+
+calc_hess = getattr(args, "calc_hess", None)
+no_calc_hess = getattr(args, "no_calc_hess", False)
+
+if no_calc_hess:
+    kwargs["recalc_hess"] = 0
+elif calc_hess is not None:
+    kwargs["recalc_hess"] = calc_hess
+
+必须使用 getattr()，因为 _build_simple_method_kwargs() 也被 singlepoint/frequency 调用，而这些 parser 没有 hessian 参数。
+
+9.4 行为示例
+
+ | 意图 | CLI | 结果
+
+ | 跟随 config | 不传 hessian 参数 | 读取 YAML；默认 auto
+
+ | 强制元素推断 | --calc-hess 或 --calc-hess auto | 忽略 config 固定值，按元素分级：轻元素不输出 / P,S,Si,B=10 / 金属=7
+
+ | 显式间隔 | --calc-hess 5 | Recalc_Hess 5
+
+ | 仅初始 Hessian | --no-calc-hess | 不输出 Recalc_Hess（首步仍计算精确 Hessian）
+
+ | 非法写法 | --calc-hess 0 | argparse 报错，退出码 2
+
+ | 旧写法 | --recalc-hess 5 | argparse 报错，退出码 2
+
+10. 工作流透传
+
+10.1 simple
+
+run_optimize()、run_optfreq()、run_optfreqsp() 已经通过 **kwargs 进入 backend，只需保证 CLI/catalog 传入归一化后的 recalc_hess。
+
+10.2 energy
+
+修改 src/acp/workflows/energy.py：
+
+censo_energy.dft_opt.fields 补入 recalc_hess。
+
+_resolve_levels() 提取并调用 normalize_recalc_hess(dft_opt.get("recalc_hess"))。
+
+resolved["opt_recalc_hess"] 保存归一化值。
+
+orca.optimize() 增加 recalc_hess=resolved.get("opt_recalc_hess")。
+
+skip_opt_sp=True 时该值不参与任何计算。
+
+10.3 conformer
+
+补齐完整链路：
+
+confsearch.dft_opt.fields 补入 recalc_hess。
+
+convert_method_levels_to_protocol_levels() 的 field_mapping 增加 "recalc_hess": "recalc_hess"。
+
+ProtocolSpec 增加 opt_recalc_hess: object = None。
+
+resolve_protocol_spec() 从 levels["optimization"]["recalc_hess"] 读取并归一化。
+
+ConformerEngine 的所有 ORCA optimize 调用传入 recalc_hess=spec.opt_recalc_hess。
+
+10.4 NMR
+
+关键澄清（v1.3）："NMR 推迟"仅指 NMR 专属 levels/schema 的 recalc_hess 字段。NMR 内部复用 ConformerEngine 的 opt 会随本次共享改造一并获得新默认行为，这是预期且合理的。
+
+调用链实证：
+
+acp run nmr
+  └─ workflows/nmr.py:426  run_cccp()
+       └─ workflows/conformer.py  ConformerEngine.run()
+            └─ core/engine.py:628  _run_shared_dft_handoff()   # ext/full/lite/zero 共用
+                 └─ core/engine.py:689,1197  self.opt_interface.optimize()
+                      └─ qc/interfaces/orca.py  _build_input_blocks()  ← 本次改造点
+
+默认行为无法推迟：真正改变全局行为的是 config 默认 10 → "auto" 与 orca.py 的 resolve 逻辑。这两处落地后，NMR 内部 conformer opt 在 CHON 分子上将从 Recalc_Hess 10 变为不输出，与 conformer/energy 完全一致。
+
+显式控制推迟：NMR 的 frontend levels（confsearch.dft_opt 等）本次不新增 recalc_hess 字段；待 NMR 模块完成开发后单独补齐 schema、converter、CLI 联动。
+
+不矛盾：engine 改造是共享的，NMR 只是"不暴露字段"，不是"保留旧默认"。文档与 changelog 必须明确这一点，避免评审者误以为 NMR opt 仍走旧逻辑。
+
+风险记录：NMR 的构象 Boltzmann 权重依赖 opt 后能量；默认行为变更会改变 NMR 谱预测结果。含金属体系的 NMR 任务在本次变更后会使用 interval 7（较旧值 10 更保守），需在 release note 提示。
+
+11. scheduler 透传
+
+11.1 simple workflow flag 生成
+
+从 _LEVEL_TO_CLI_FLAG_MAP 移除 recalc_hess，在 method_levels_to_cli_flags() 循环内优先处理：
+
+for field, value in level_config.items():
+    if field == "engine" or value is None or value == "":
+        continue
+    if field == "recalc_hess":
+        normalized = normalize_recalc_hess(value)
+        if normalized is None:
+            continue
+        if prefix:
+            raise ValueError("recalc_hess is only supported on the unprefixed opt level")
+        if normalized == "auto":
+            cmd += ["--calc-hess", "auto"]
+        elif normalized == 0:
+            cmd += ["--no-calc-hess"]
+        else:
+            cmd += ["--calc-hess", str(normalized)]
+        continue
+    ...
+
+11.2 workflow 分支
+
+ | workflow | runner 处理
+
+ | simple | 使用 method_levels_to_cli_flags() 生成新 flags
+
+ | energy | 现有 --levels json 分支不变，由 workflow 解析
+
+ | conformer | 现有 --levels json 分支不变，由 converter/protocol 解析
+
+ | nmr | NMR 专属 levels 字段推迟；其内部 opt 默认行为随共享 engine/config 改造生效（见 10.4），无需 scheduler 特殊处理
+
+12. Hessian preview API
+
+12.1 新 endpoint
+
+新增 POST /api/v1/hessian-preview。该接口不运行 ORCA，只返回字段解析和元素推断结果。
+
+12.2 请求
+
+{
+  "schema_id": "dft_optimize",
+  "level_id": "optimize",
+  "recalc_hess": "auto",
+  "structures": [
+    {"name": "ethanol", "symbols": ["C", "C", "O", "H", "H", "H", "H", "H", "H"]},
+    {"name": "dmso", "formula": "C2H6OS"}
+  ]
+}
+
+symbols 优先；formula 仅作为 fallback。
+
+recalc_hess 可省略；省略时表示跟随服务端 config。
+
+批量结构必须全部发送，不能只用第一个结构。
+
+12.3 响应
+
+{
+  "results": [
+    {
+      "name": "ethanol",
+      "enabled": false,
+      "interval": 0,
+      "source": "auto",
+      "reason": "light_elements",
+      "heavy_elements": []
+    },
+    {
+      "name": "dmso",
+      "enabled": true,
+      "interval": 10,
+      "source": "auto",
+      "reason": "heteroatom_only",
+      "heavy_elements": ["S"],
+      "triggering_elements": []
+    },
+    {
+      "name": "ferrocene",
+      "enabled": true,
+      "interval": 7,
+      "source": "auto",
+      "reason": "heavy_elements",
+      "heavy_elements": ["Fe"],
+      "triggering_elements": ["Fe"]
+    }
+  ],
+  "summary": {"total": 3, "enabled": 2, "disabled": 1}
+}
+
+12.4 source / reason 语义
+
+ | source | 含义
+
+ | explicit | 用户显式选择仅初始 Hessian 或 Custom
+
+ | auto | 用户显式 Auto，按元素推断
+
+ | config | 字段缺失/为 null，采用 config 值
+
+ | reason | 含义
+
+ | light_elements | 仅 CHON+卤素，interval=0
+
+ | heteroatom_only | 非轻元素仅含 P/S/Si/B，interval=10（与旧版一致）
+
+ | heavy_elements | 含金属/其他，interval=7
+
+ | explicit_interval | 用户/显式配置给出正整数 N
+
+ | explicit_off | 用户/显式配置给出 0（仅初始 Hessian）
+
+12.5 错误响应（v1.3 新增）
+
+recalc_hess 非法（负数、float、bool、未知字符串、>1000）→ HTTP 422，body 返回字段级 error，不静默 fallback：
+
+{
+  "detail": "validation error",
+  "errors": [
+    {"field": "recalc_hess", "message": "must be 'auto', 0, or an integer 1-1000"}
+  ]
+}
+
+全部结构 symbols 缺失且需 auto 推断、又无可用 formula → HTTP 422，逐结构指出缺失项。
+
+正常返回 200；不运行任何 ORCA 计算。
+
+12.6 schema
+
+在 v1_schemas.py 增加：
+
+HessianPreviewStructure
+
+HessianPreviewRequest
+
+HessianPreviewResult
+
+HessianPreviewResponse
+
+13. 前端 wizard
+
+13.1 状态模型
+
+ | UI 状态 | st.recalc_hess | 提交 payload
+
+ | Auto | "auto" | "auto"
+
+ | Initial only（仅初始 Hessian） | 0 | 0
+
+ | Custom | 正整数 N | N
+
+13.2 控件行为
+
+三态分段控件：Auto / Initial only / Custom。
+
+Custom 使用 number input，范围 1–1000。
+
+Auto 显示后端 preview；Initial only / Custom 可显示一条明确状态，不需要调用元素推断。
+
+Auto 态下展示分级提示文案："轻元素不重算 / P,S,Si,B 每 10 步 / 含金属每 7 步"，避免用户误以为是单一阈值。
+
+批量结构显示 summary，并可展开查看每个结构的推断结果。
+
+preview 请求做 300ms debounce；结构或模式变化时取消上一次请求。
+
+13.3 实现约束
+
+buildHessianFieldRow() 必须定义在 buildLevelCard() 作用域内，或显式传入 level_id，不能直接引用外层不存在的 lvDef。
+
+卡片选择器必须使用现有的 [data-level-id="..."]。
+
+formula 变化后只更新 preview DOM，不重建整个 level card。
+
+分段控件若使用 role="radio"，必须配 aria-checked 与方向键；否则改用普通 toggle button 语义。
+
+不使用 wizardState.input.formula；wizardState 当前没有 input 属性。
+
+不使用 molDoc.meta.formula 作为 wizard 数据源；它表示主界面 viewer 当前分子，可能与待提交分子无关。
+
+13.4 preview 数据来源
+
+前端从 wizardStructures 提取：
+
+优先：解析结果中的 atom symbols。
+
+其次：structure formula，交给后端解析。
+
+批量：逐个结构生成 preview，再聚合为 “N 个结构：X 个启用，Y 个关闭”。
+
+14. 测试策略
+
+14.1 单元测试
+
+ | 文件 | 覆盖点
+
+ | tests/test_acp_chem_composition.py | 轻元素、卤素、S/P/Si/B、金属、大小写、空白、空 symbols、非法 recalc 值
+
+ | tests/test_acp_workflows_simple.py | ORCA input 默认 auto、显式 0/N/auto、optfreq、singlepoint/frequency kwargs 无 AttributeError
+
+ | tests/test_acp_catalog.py | field definition、schema 覆盖、normalize 校验、CLI flags 无重复输出
+
+ | tests/test_acp_workflows_energy.py | dft_opt.recalc_hess 透传到 ORCA optimize
+
+ | tests/test_acp_workflows_conformer.py | frontend levels → protocol levels → ProtocolSpec → ConformerEngine optimize
+
+ | tests/test_acp_api_v1.py 或现有 API 测试 | hessian-preview 请求/响应、批量结构、非法输入
+
+14.2 必测用例
+
+乙醇 XYZ：默认 auto 不输出 Recalc_Hess（interval=0）。
+
+DMSO XYZ：默认 auto 输出 Recalc_Hess 10（仅杂原子 S，非金属）。
+
+氯苯 XYZ：默认 auto 不输出（卤素属轻元素）。
+
+FeCl2 XYZ：默认 auto 输出 Recalc_Hess 7（含金属 Fe，触发保守阈值）。
+
+三甲基硅烷 (TMS) XYZ：默认 auto 输出 10（仅 Si，非金属）。
+
+--calc-hess 5 输出 5。
+
+--calc-hess auto 覆盖 config 中的固定 7。
+
+--no-calc-hess 覆盖 auto 开启。
+
+--calc-hess 0、负数、float、bool 均报错。
+
+config 为 7 且 CLI 不传 hessian 参数时输出 7。
+
+direct _build_input_blocks("opt") 无 symbols 且需要 auto 时抛 ValueError。
+
+direct _build_input_blocks("opt", recalc_hess=5) 无 symbols 时正常输出 5。
+
+heavy element + SMD opt 不静默改变现有行为，只记录已知风险。
+
+config 迁移（v1.3）：旧 config 含 recalc_hess: 10（int）时，未显式覆盖的 opt 仍输出 10，行为不变。
+
+provenance（v1.3）：auto 解析后，calc_dir 下生成 *.hessian.json，含正确 interval/source/heavy_elements。
+
+兜底（v1.3）：resolve_recalc_hess(explicit=None, configured=None) 在 symbols 给定时按分级返回；symbols 为 None 且需 auto 时抛错。
+
+lazy 缓存（v1.3）：连续多次 _get_resolver() 返回同一可调用对象，不重复 import。
+
+14.3 前端回归
+
+其他 advanced 字段（grid、scf_convergence、max_steps、RI/aux）渲染不受影响。
+
+Auto / Initial only / Custom 切换后 payload 正确。
+
+Auto 态分级提示文案正确显示。
+
+批量结构 preview 汇总正确。
+
+新增/删除 wizard structure 后 preview 刷新。
+
+切换 schema 后旧 level 状态不串扰。
+
+暗色对比度、focus、键盘操作、760px 响应式通过。
+
+14.4 验证命令
+
+pytest tests/test_acp_chem_composition.py -v
+pytest tests/test_acp_workflows_simple.py -v
+pytest tests/test_acp_workflows_energy.py -v
+pytest tests/test_acp_workflows_conformer.py -v
+pytest tests/test_acp_catalog.py -v
+pytest tests/ -v
+ruff check src/acp src/cccp
+mypy src/acp/chem/composition.py
+
+15. 实施顺序
+
+ | Step | 文件 | 动作 | 依赖
+
+ | 1 | src/acp/chem/composition.py | 新增元素分类、normalize、resolve 工具 | —
+
+ | 2 | src/acp/chem/__init__.py | 导出工具 | 1
+
+ | 3 | src/cccp/qc/interfaces/orca.py | 接入 resolver（带缓存），透传 symbols，按 0 抑制 Recalc_Hess，写 *.hessian.json sidecar | 1
+
+ | 4 | src/cccp/config.py、config/defaults.yaml | 默认 "auto"，不动 timeout | —
+
+ | 5 | src/acp/catalog.py | 字段定义、schema 覆盖、validation、flag 生成 | 1
+
+ | 6 | src/acp/cli.py | 新 CLI 参数与 kwargs 构造 | 5
+
+ | 7 | src/acp/workflows/energy.py | energy levels 解析与 optimize 透传 | 3,5
+
+ | 8 | src/cccp/core/protocols.py、engine.py | ProtocolSpec 与 optimize 透传（共享改造，NMR 内部 opt 自动受益） | 3,5
+
+ | 9 | src/acp/api/v1_schemas.py、v1_routes.py、src/acp/scheduler/artifacts.py | hessian-preview endpoint（含 422）；artifacts 采集 *.hessian.json | 1,4
+
+ | 10 | frontend/ACP_Workbench_v2.html | 三态控件、批量 preview、i18n、CSS | 5,9
+
+ | 11 | tests/ | 更新旧测试并新增覆盖 | 1–10
+
+ | 12 | — | ruff、mypy、全量 pytest、手动端到端 | 11
+
+16. 验收清单
+
+ | # | 场景 | 期望
+
+ | AC1 | 乙醇 XYZ + 默认 config auto | ORCA input 不含 Recalc_Hess
+
+ | AC2 | DMSO XYZ + 默认 config auto | 含 Recalc_Hess 10（仅杂原子 S）
+
+ | AC3 | 氯苯 XYZ + 默认 config auto | 不含 Recalc_Hess
+
+ | AC4 | FeCl2 XYZ + 默认 config auto | 含 Recalc_Hess 7（含金属 Fe）
+
+ | AC4b | TMS XYZ + 默认 config auto | 含 Recalc_Hess 10（仅 Si，非金属）
+
+ | AC5 | 乙醇 XYZ + --calc-hess 5 | 含 Recalc_Hess 5
+
+ | AC6 | DMSO XYZ + --no-calc-hess | 不含 Recalc_Hess
+
+ | AC7 | config 配 7，CLI 不传 hessian 参数 | 含 Recalc_Hess 7
+
+ | AC8 | config 配 7，CLI 传 --calc-hess auto | 乙醇不输出；DMSO 输出 10；FeCl2 输出 7
+
+ | AC9 | API payload recalc_hess: 0 | 不含 Recalc_Hess
+
+ | AC10 | API payload recalc_hess: "auto" | 忽略 config 固定值，按元素分级推断
+
+ | AC11 | energy wizard 选择 Custom 15 | energy opt ORCA input 含 Recalc_Hess 15
+
+ | AC12 | conformer levels dft_opt.recalc_hess=5 | ConformerEngine ORCA opt 输出 5
+
+ | AC13 | preview API 批量乙醇 + DMSO + FeCl2 | 返回 ethanol(0)/dmso(10)/FeCl2(7)，summary total=3 enabled=2 disabled=1
+
+ | AC14 | --recalc-hess 5 | argparse 报错，退出码 2
+
+ | AC15 | singlepoint/frequency CLI | 无 hessian 参数且不触发 AttributeError
+
+ | AC16 | 非法值 -1、0（calc-hess）、20.5、true、"fast" | 全部在入口层报清晰错误
+
+ | AC17 | 前端批量结构 | preview 汇总与后端一致，不使用第一个结构代替全部结构
+
+ | AC18 | ruff + mypy + pytest | 全部通过
+
+ | AC19 | DMSO opt + 默认 auto | calc_dir 生成 conf_000_opt.hessian.json，interval=10、heavy_elements=["S"]、source="auto"
+
+ | AC20 | 旧 config（recalc_hess: 10 int）未显式覆盖 | opt 仍输出 Recalc_Hess 10，行为与旧版一致
+
+ | AC21 | preview API 传非法 recalc_hess: 20.5 | HTTP 422 + 字段级 error，不静默 fallback
+
+ | AC22 | NMR workflow（acp run nmr）内部 conformer opt（CHON 分子） | 随共享改造生效：ORCA input 不含 Recalc_Hess（验证 10.4 的"默认行为无法推迟"）
+
+17. 风险与回滚
+
+ | # | 风险 | 等级 | 缓解
+
+ | R1 | 元素启发式不能覆盖所有复杂势能面 | 中 | 文档明确为默认启发式；用户可显式设置间隔；后续根据收敛数据调整
+
+ | R2 | --recalc-hess 破坏旧脚本 | 中 | 已在 changelog/CLI help/迁移表中明确；这是已确认决策
+
+ | R3 | legacy → ACP 反向依赖 | 中 | ORCA 中 lazy import；composition 不反向 import cccp；后续可下沉到公共 utils
+
+ | R4 | 全路径支持扩大修改面 | 中 | 按 simple → energy → conformer 分步提交，每步补测试
+
+ | R5 | SMD + 纯 opt 的解析 Hessian 兼容问题 | 中 | 不掩盖现有风险；增加 heavy+SMD 测试；后续单独实现 Num_N fallback
+
+ | R6 | preview API 与实际提交配置不一致 | 低 | preview 与实际执行共用 resolve_recalc_hess() 和服务端 config
+
+ | R7 | 前端回归 | 中 | 控件隔离为专用 builder；批量 preview 只更新 preview DOM；回归 advanced 字段
+
+ | R8 | config 默认 10→auto 是静默的全局行为变更，影响所有未显式配置的历史结果复现（优化轨迹→构象能量→Boltzmann 权重连锁变化） | 高 | release note 显式声明；提供一行 YAML 迁移锁回旧行为（见 18.1）；建议复现性敏感场景在升级前固化 recalc_hess: 10
+
+ | R9 | NMR 默认行为随共享改造变更，影响谱预测可复现性 | 中 | 已在 10.4 明示；release note 提示含金属 NMR 任务改用 interval 7
+
+17.1 回滚策略
+
+代码回滚：改动集中，可按 workflow 分 commit 回滚。
+
+行为回滚：将 config 中 optimization_control.recalc_hess 设为 10，可恢复旧的"默认每 10 步"计算行为（对所有 workflow 包括 NMR 内部 opt 生效）。
+
+数据兼容：数据库无 schema 变更；历史整数 payload 继续有效。
+
+运行中任务：已生成的 ORCA input 不受影响。
+
+provenance：本次新增的 *.hessian.json sidecar 不影响旧 job（旧 job 无此文件，按"输入即真相"处理）。
+
+18. 兼容性
+
+ | 接口 | 变化 | 兼容性
+
+ | CLI --recalc-hess N | 移除，改用 --calc-hess N | 破坏，已确认
+
+ | API recalc_hess: N | 行为不变 | 兼容
+
+ | API recalc_hess: 0 | 新增关闭语义 | 新能力
+
+ | API recalc_hess: "auto" | 新增强制 auto 语义 | 新能力
+
+ | API 缺失/null | 跟随 config | 兼容
+
+ | config 默认值 | 10 → auto | 行为变化；显式配置不受影响
+
+ | catalog field type | int → hessian_interval | 新前端识别；旧前端退化为文本输入
+
+ | 数据库 | 无 schema 变更 | 兼容
+
+18.1 迁移说明
+
+复现性敏感场景（v1.3 新增）：若你的部署/benchmark 依赖固定的 Recalc_Hess 10 行为，升级前在 config/defaults.yaml 或本地 override 中显式写入以锁定旧行为，避免默认值变更静默改变历史结果：
+optimization_control:
+  recalc_hess: 10   # pin legacy default; remove to opt into auto inference
+此设置对 simple/energy/conformer/NMR 内部 opt 全部生效（NMR 显式字段控制仍待其模块完成）。
+
+ | 旧写法 | 新写法
+
+ | --recalc-hess 5 | --calc-hess 5
+
+ | 无法"仅初始 Hessian" | --no-calc-hess
+
+ | 无法强制元素推断 | --calc-hess auto 或裸 --calc-hess
+
+ | 不传参数 | 不传参数，继续跟随 config
+
+ | 依赖默认 Recalc_Hess 10（未显式配置） | 显式 recalc_hess: 10 锁定；否则升级为分级 auto
+
+附：受影响文件清单
+
+ | # | 文件 | 类型
+
+ | 1 | src/acp/chem/composition.py | 新建
+
+ | 2 | src/acp/chem/__init__.py | 导出
+
+ | 3 | src/cccp/qc/interfaces/orca.py | 核心注入
+
+ | 4 | src/cccp/config.py | 默认值
+
+ | 5 | config/defaults.yaml | 默认值
+
+ | 6 | src/acp/catalog.py | schema/validation/flags
+
+ | 7 | src/acp/cli.py | CLI
+
+ | 8 | src/acp/workflows/energy.py | 透传
+
+ | 9 | src/cccp/core/protocols.py | ProtocolSpec
+
+ | 10 | src/cccp/core/engine.py | optimize 透传
+
+ | 11 | src/acp/api/v1_schemas.py | preview schemas
+
+ | 12 | src/acp/api/v1_routes.py | preview endpoint（含 422）
+
+ | 12b | src/acp/scheduler/artifacts.py | 采集 *.hessian.json sidecar
+
+ | 13 | frontend/ACP_Workbench_v2.html | 三态控件与 preview
+
+ | 14 | tests/ | 测试更新
+
+v1.3 在 v1.2 基础上：(1) 将默认间隔由单一 15 改为按元素分级（轻元素 0 / P,S,Si,B 10 / 金属 7）；(2) 明确 NMR"仅显式字段推迟、默认行为随共享 engine/config 改造生效"（10.4）；(3) 新增 resolved interval 落 provenance 的 *.hessian.json sidecar，保证 ORCA input 可精确复现（7.5）；(4) 新增 R8 默认值全局变更的复现性风险与迁移指引（18.1）；(5) preview API 增 422 错误规范、CLI help 显式提示 --calc-hess 0 无效、术语统一为"仅初始 Hessian"。实施时若需调整分级阈值，应先补充代表性体系的收敛基准数据。
+

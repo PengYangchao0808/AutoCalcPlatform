@@ -72,6 +72,8 @@ pre code{background:none;padding:0}
 <li><a href="#review-supplement">11.3 修改建议清单</a></li>
 <li><a href="#review-matrix">11.4 实施可行性矩阵</a></li>
 <li><a href="#v6-analysis">12. 深入分析：合理性与改进建议</a></li>
+<li><a href="#v8-verification">18. 真机验证：频率解析 bug 确认 + 热化学链路验证</a></li>
+<li><a href="#v8-1-fixes">19. v8.1 修复详情</a></li>
 </ol>
 </div>
 
@@ -113,7 +115,7 @@ pre code{background:none;padding:0}
 <tr><td>optfreq 执行方式</td><td>单次 ORCA <code>Opt Freq</code> 作业（新增 <code>opt_freq()</code> 方法）</td><td>效率更高，ORCA 原生支持，与目录 schema id 对应</td><td>orca.py:114-119</td></tr>
 <tr><td>NumFreq 降级</td><td>不修改 ORCA 接口，保留自动降级</td><td>已有逻辑已正确处理 SMD → NumFreq</td><td>orca.py:83-177</td></tr>
 <tr><td>前端修改</td><td>仅修改 catalog.py</td><td>v2 前端完全 catalog 驱动，无需改 HTML/JS</td><td>catalog.py:5-138</td></tr>
-<tr><td>输入格式</td><td>XYZ / GJF / ORCA .inp</td><td>v2 前端已支持文件上传 + 格式检测</td><td>conformer_search/io/</td></tr>
+<tr><td>输入格式</td><td>XYZ / GJF / ORCA .inp</td><td>v2 前端已支持文件上传 + 格式检测</td><td>cccp/io/</td></tr>
 <tr><td>输出目录冲突</td><td>自动追加 _1, _2... 唯一化</td><td>同 v1 方案</td><td>N/A（需新建）</td></tr>
 <tr><td>管线模式</td><td>Stage/WorkflowRunner</td><td>与现有工作流一致</td><td>core/workflow.py</td></tr>
 <tr><td>task_options 传递</td><td>通过 <code>**kwargs</code> 透传，而非 dict 参数</td><td>ORCABackend 所有方法均使用 <code>**kwargs: Any</code> 接收额外参数，ORCAInterface 从 kwargs 中提取 <code>nprocs</code>/<code>maxcore</code> 等；<code>task_options=dict</code> 方案不兼容</td><td>backends/orca.py:25-39</td></tr>
@@ -294,11 +296,11 @@ pre code{background:none;padding:0}
 
 <!-- ======== 3. ORCA ======== -->
 <h2 id="orca-interface">3. Step 2：ORCA 接口新增 opt_freq()</h2>
-<p><span class="tag-new">新增方法</span> <code>src/conformer_search/qc/interfaces/orca.py</code></p>
-<p><span class="tag-modify">扩展</span> <code>src/conformer_search/qc/interfaces/base.py</code></p>
+<p><span class="tag-new">新增方法</span> <code>src/cccp/qc/interfaces/orca.py</code></p>
+<p><span class="tag-modify">扩展</span> <code>src/cccp/qc/interfaces/base.py</code></p>
 
 <h3>3.1 QCResult 无需修改（字段已存在）；注意频率解析范围</h3>
-<p><code>QCResult</code> 在 <code>conformer_search/qc/interfaces/base.py</code> 和 <code>acp/backends/base.py</code> 中均<strong>已包含</strong> <code>frequencies</code> / <code>has_frequencies</code> / <code>zpe</code> / <code>enthalpy</code> / <code>gibbs</code> / <code>entropy</code> 字段，无需新增。</p>
+<p><code>QCResult</code> 在 <code>cccp/qc/interfaces/base.py</code> 和 <code>acp/backends/base.py</code> 中均<strong>已包含</strong> <code>frequencies</code> / <code>has_frequencies</code> / <code>zpe</code> / <code>enthalpy</code> / <code>gibbs</code> / <code>entropy</code> 字段，无需新增。</p>
 <div class="warn-box">
 ⚠️ 注意：现有 <code>ORCAInterface.frequency()</code> 和 <code>opt_freq()</code> 的输出解析<strong>只填充</strong> <code>frequencies</code> / <code>has_frequencies</code>，<strong>不解析</strong> <code>zpe</code> / <code>enthalpy</code> / <code>gibbs</code> / <code>entropy</code> 字段。这些 thermo 字段由后续 Shermo 阶段负责计算填充。<code>optfreqsp</code> 管线中，频率 QCResult 仅用于传递坐标和频率列表，thermo 值由 Shermo 独立输出。
 </div>
@@ -372,7 +374,7 @@ class ORCABackend(QCBackend):
 </table>
 
 <h3>5.2 输入处理</h3>
-<p>输入解析调用 <code>conformer_search.io.MolecularInputHandler</code>（.xyz/.gjf/.com）+ <code>acp.intake.parsers.parse_orca_inp_text()</code>（.inp，返回 <code>StructureParseResult</code> 含 <code>StructureAsset</code>）。严格检查扩展名，不支持 SMILES。理由：简单工作流面向已优化几何，输入应为结构文件，SMILES → RDKit 嵌入是 confsearch 工作流的职责，不在此处重复实现。</p>
+<p>输入解析调用 <code>cccp.io.MolecularInputHandler</code>（.xyz/.gjf/.com）+ <code>acp.intake.parsers.parse_orca_inp_text()</code>（.inp，返回 <code>StructureParseResult</code> 含 <code>StructureAsset</code>）。严格检查扩展名，不支持 SMILES。理由：简单工作流面向已优化几何，输入应为结构文件，SMILES → RDKit 嵌入是 confsearch 工作流的职责，不在此处重复实现。</p>
 
 <h3>5.3 方法层次 → 工作流配置映射</h3>
 <p>从 scheduler 提交的 method levels 需要转换为工作流内部使用的配置。利用 <code>catalog.py:method_levels_to_workflow_config()</code>（<code>catalog.py:955</code>，已处理非 confsearch schema：<code>else: config = dict(levels)</code>，即简单工作流的 levels 原样返回）。</p>
@@ -451,10 +453,10 @@ class ORCABackend(QCBackend):
 <p>实现要点：</p>
 <ul>
 <li>simple.py 内部维护一个 <code>context: dict[str, Any]</code> 在 stage 间传递中间数据，包括 <code>opt_coords</code>, <code>opt_log_path</code>, <code>sp_energy</code> 等。</li>
-<li>Shermo 阶段调用实际位于 <code>conformer_search.qc.runners.run_shermo()</code>，通过 <code>acp.backends.external</code> 重导出（<code>external.py:3</code>，<code>__all__</code> 包含 <code>run_shermo</code>）。调用路径：<code>from acp.backends.external import run_shermo</code>。传入 opt_freq 的 log 文件路径。Shermo <strong>只输出热化学修正值</strong>（gibbs_correction, zpe, enthalpy, entropy），<strong>不含</strong>单点能。</li>
+<li>Shermo 阶段调用实际位于 <code>cccp.qc.runners.run_shermo()</code>，通过 <code>acp.backends.external</code> 重导出（<code>external.py:3</code>，<code>__all__</code> 包含 <code>run_shermo</code>）。调用路径：<code>from acp.backends.external import run_shermo</code>。传入 opt_freq 的 log 文件路径。Shermo <strong>只输出热化学修正值</strong>（gibbs_correction, zpe, enthalpy, entropy），<strong>不含</strong>单点能。</li>
 <li>finalize 阶段手动计算最终自由能：<code>free_energy = sp_energy + shermo_gibbs_correction</code>（Shermo 默认以输入 log 的电子能量为参考，而 opt_freq 的电子能量精度低于 SP 级别，因此必须替换为 SP energy）。</li>
 <div class="warn-box">
-⚠️ <strong>单位转换（Critical）：</strong> Shermo 默认<strong>输出热化学修正值单位为 kcal/mol</strong>，而 ORCA SP energy 单位为 <strong>Hartree</strong>。<code>finalize</code> 阶段必须调用 <code>acp.core.models.HARTREE_TO_KCAL</code>（或 <code>conformer_search.utils.constants.HARTREE_TO_KCAL</code>）将 SP energy 转换为 kcal/mol 后求和，或在自由能输出时统一为 Hartree。两个模块均定义了该常量（v4.0 审查确认），但注意两处值一致（627.509 kcal/mol）。建议 finalize 使用 <code>from acp.core.models import HARTREE_TO_KCAL</code>。
+⚠️ <strong>单位转换（Critical）：</strong> Shermo 默认<strong>输出热化学修正值单位为 kcal/mol</strong>，而 ORCA SP energy 单位为 <strong>Hartree</strong>。<code>finalize</code> 阶段必须调用 <code>acp.core.models.HARTREE_TO_KCAL</code>（或 <code>cccp.utils.constants.HARTREE_TO_KCAL</code>）将 SP energy 转换为 kcal/mol 后求和，或在自由能输出时统一为 Hartree。两个模块均定义了该常量（v4.0 审查确认），但注意两处值一致（627.509 kcal/mol）。建议 finalize 使用 <code>from acp.core.models import HARTREE_TO_KCAL</code>。
 </div>
 <li><code>method_levels_to_workflow_config()</code> 对非 <code>confsearch</code> schema 直接返回 <code>dict(levels)</code>，simple.py 收到后将三层 levels 分别路由到对应的 backend 调用（orca → opt_freq, orca → single_point, shermo → thermochemistry）。</li>
 <li><code>--nproc</code> / <code>--maxcore</code> 从 CLI 参数传入后，通过 <code>**kwargs</code> 透传到 <code>ORCABackend</code> → <code>ORCAInterface</code>。<code>ORCAInterface</code> 已有 <code>_build_input_blocks()</code> 将其写入 <code>%maxcore</code> 和 <code>%pal nprocs</code> 块（通过 <code>pal_settings</code> 和 <code>maxcore</code> 参数）。simple.py 的 handler 需显式提取 <code>nproc</code> 和 <code>maxcore</code> 并作为 kwargs 传入 ORCA backend：<pre>orca_kwargs = {}
@@ -978,7 +980,7 @@ levels.thermo:
 <li><strong>复用 <code>normalize_and_validate_method_config()</code>：</strong> <code>catalog.py:832</code> 已有该函数（溶剂名映射、必需字段校验），simple.py handler 应在 method levels 入库前调用此函数做前置校验。</li>
 <li><strong>solvent_model "smd" 内部映射：</strong> CLI 保留 <code>"smd"</code> 作为 choice，传递到 ORCA 时映射为 cpcm + SMD flag（ORCA ≥ 5.0 的 <code>!CPCM(SMD)</code> 语法）。</li>
 <li><strong>optfreqsp level 覆盖语义文档化：</strong> single_point 级别的 solvent/dispersion 等字段若填写则覆盖 optfreq 级别的对应值，在 <code>_build_cmd()</code> 中实现 SP level 字段后写覆盖。</li>
-<li><strong>HARTREE_TO_KCAL 统一来源：</strong> 统一从 <code>acp.core.models</code> 导入（值 627.509，与 <code>conformer_search.utils.constants</code> 一致），避免 anti-pattern #12。</li>
+<li><strong>HARTREE_TO_KCAL 统一来源：</strong> 统一从 <code>acp.core.models</code> 导入（值 627.509，与 <code>cccp.utils.constants</code> 一致），避免 anti-pattern #12。</li>
 </ol>
 
 <p><strong>🟢 可选改进（Optional）：</strong></p>
@@ -1540,6 +1542,206 @@ def _build_method_kwargs(raw_kwargs):
 
 <hr class="section-divider">
 
+<!-- ======== 16. V7.6 UI FIXES ======== -->
+<h2 id="v7-6-fixes">16. v7.6 收尾修复（UI 适配 + recalc_hess 可配置）</h2>
+<p><span class="tag-active">已实施</span> v7.6 · 2026-07-20</p>
+<p>用户验收时发现 3 个问题，已全部修复：</p>
+
+<h3>16.1 问题 1：简单工作流下 SMILES 提交界面未隐藏</h3>
+<p><strong>现象：</strong>简单工作流明确拒绝 SMILES（§5.2），但前端选择简单工作流后仍显示 SMILES 输入标签页。</p>
+<p><strong>修复（frontend/ACP_Workbench_v2.html）：</strong></p>
+<ul>
+<li>新增 <code>isSimpleWorkflowSelected()</code>（按 catalog category 判定）与 <code>updateInputModeVisibility()</code>：简单工作流下隐藏 SMILES 标签页、显示"仅接受结构文件"提示条；若当前处于 SMILES 模式则自动切换到上传模式。</li>
+<li><code>updateConfigCards()</code> 统一调用该函数，覆盖打开弹窗、切换工作流、确认方法配置全部入口。</li>
+<li><code>submitJobModal()</code> 增加提交前守卫：简单工作流 + <code>source_type === "smiles"</code> 时弹窗拦截（防止粘贴模式绕过）。</li>
+<li>新增 i18n 键：<code>modal.simple_input_hint</code> / <code>modal.simple_no_smiles</code>（中英双语）。</li>
+</ul>
+
+<h3>16.2 问题 2：切换简单工作流后计算协议框残留 CENSO-light</h3>
+<p><strong>现象：</strong>默认工作流为 energy（profile=CENSO-light）。选择简单工作流（schema 无 profiles）时 <code>loadDefaultMethodProfile()</code> 提前 return，旧的 profile_label/stages 残留。</p>
+<p><strong>修复：</strong></p>
+<ul>
+<li><code>loadDefaultMethodProfile()</code> 不再静默返回：schema 无 profile 时重置 <code>profile_id=""</code>、<code>profile_label=默认方法</code>，并通过新增 <code>buildDefaultLevels()</code> 从 method_levels + field_definitions 构建默认 stages。</li>
+<li><code>updateConfigCards()</code> 的摘要构建改为通用逻辑（遍历任意 level_id，不再硬编码 xtb_preopt/dft_opt/single_point）；title 始终刷新（无 profile 时显示"自定义"）。</li>
+<li>初始加载逻辑同步：schema 无 profiles 时同样调用 <code>buildDefaultLevels()</code>。</li>
+</ul>
+
+<h3>16.3 问题 3：opt 类简单工作流的 recalc_hess 不可配置</h3>
+<p><strong>现象：</strong>§6.2 设计了 <code>--recalc-hess</code>，但实施时遗漏，全链路无此参数。</p>
+<p><strong>修复（全链路）：</strong></p>
+<table>
+<tr><th>层</th><th>文件</th><th>变更</th></tr>
+<tr><td>ORCA 接口</td><td><code>cccp/qc/interfaces/orca.py</code></td><td><code>_build_input_blocks()</code>/<code>_write_input()</code> 新增 <code>recalc_hess</code> 参数（None 时回落 config <code>optimization_control.recalc_hess</code>，默认 10）；<code>optimize()</code>（kwargs.get）与 <code>opt_freq()</code>（显式参数）透传</td></tr>
+<tr><td>catalog</td><td><code>acp/catalog.py</code></td><td><code>FIELD_DEFINITIONS</code> 新增 <code>recalc_hess</code>（int, 1-1000, 默认 10）；<code>dft_optimize</code>/<code>dft_optfreq</code>/<code>dft_optfreqsp</code>(optfreq level) fields 追加；<code>_LEVEL_TO_CLI_FLAG_MAP</code> 追加 <code>"recalc_hess": "recalc-hess"</code></td></tr>
+<tr><td>CLI</td><td><code>acp/cli.py</code></td><td>optimize/optfreq/optfreqsp 新增 <code>--recalc-hess</code>（默认 None → 用 config 值）；<code>_build_simple_method_kwargs()</code> 透传</td></tr>
+<tr><td>scheduler</td><td>无需修改</td><td><code>method_levels_to_cli_flags()</code> 自动携带（映射表已更新）；optfreqsp 的 SP level 无该字段，互不污染</td></tr>
+<tr><td>前端</td><td><code>ACP_Workbench_v2.html</code></td><td><code>recalc_hess</code> 加入高级字段列表（isFieldAdvanced）；field 渲染支持 <code>type: "int"</code>（number input + parseInt，顺带改善 max_steps）</td></tr>
+</table>
+
+<h3>16.4 测试与回归</h3>
+<ul>
+<li>新增 12 条测试（tests/test_acp_workflows_simple.py）：schema 字段校验、field definition、CLI flag 映射、optfreqsp SP level 无污染、3 个子命令 help 含 --recalc-hess、ORCA input block 覆盖/默认/config 三路径、kwargs 透传、run_optimize 端到端 mock。</li>
+<li><strong>59/59 通过</strong>；全量回归 689 passed / 7 skipped / 4 预置失败（protocol default 命名，与本次无关）。</li>
+<li>前端 JS 语法校验通过（node 解析）。</li>
+</ul>
+
+<hr class="section-divider">
+
+<!-- ======== 17. V7.7 CLEANUP ======== -->
+<h2 id="v7-7-cleanup">17. v7.7 协议显示统一（移除无效热化学字段 + 黑塞间隔前置）</h2>
+<p><span class="tag-active">已实施</span> v7.7 · 2026-07-20</p>
+
+<h3>17.1 问题：optfreq/frequency 显示无用的温度选项</h3>
+<p><strong>根因：</strong><code>dft_optfreq</code> 含 temperature/pressure、<code>dft_frequency</code> 含 temperature/pressure/scale_factor，但这两个工作流没有 Shermo 热化学阶段——频率 QCResult 只输出 frequencies.txt，热化学参数全链路无消费（即 §14.4 M7 记载的 CLI handler 忽略问题）。</p>
+<p><strong>修复：</strong></p>
+<ul>
+<li><code>catalog.py</code>：<code>dft_optfreq</code> 移除 temperature/pressure；<code>dft_frequency</code> 移除 temperature/pressure/scale_factor。热化学字段仅保留在 <code>dft_optfreqsp</code> 的独立 <code>thermo</code> level（唯一实际消费方）。</li>
+<li><code>cli.py</code>：<code>--temperature/--pressure/--scale-factor</code> 仅对 optfreqsp 注册（frequency/optfreq 中为死参数，一并移除）；frequency epilog 示例同步更新。</li>
+<li>scheduler 无需改动：<code>method_levels_to_cli_flags()</code> 随 schema 自动不再产生这些 flag。</li>
+</ul>
+
+<h3>17.2 问题：UI 中看不到黑塞（recalc_hess）配置项</h3>
+<p><strong>根因：</strong><code>recalc_hess</code> 位于前端"高级"折叠区（isFieldAdvanced），默认收起不可见；且服务未重启时 method-catalog API 返回旧 schema。</p>
+<p><strong>结论（v7.7.1 修正）：</strong><code>recalc_hess</code> 保留在高级折叠区。不可见的实际原因是服务未重启导致 catalog 未更新，重启 acp 服务后即可在"高级"区找到该字段。</p>
+
+<h3>17.3 问题：协议卡片显示不统一（buildDefaultLevels 矫枉过正）</h3>
+<p><strong>根因：</strong>v7.6 的 <code>buildDefaultLevels()</code> 从 field_definitions 全量构建默认 stages——绕过 method config modal 原有的 <code>getFieldDefault()</code> 逐字段渲染机制，导致 dispersion/grid/recalc_hess 等全部字段被预注入 stages 字典，用户看到的是"已配置"的假象。</p>
+<p><strong>修复（v7.7.1）：</strong></p>
+<ul>
+<li>删除 <code>buildDefaultLevels()</code>。无 profile 的 schema 保持 <code>stages = {}</code> 空字典，method config modal 打开时通过已有的 <code>getFieldDefault()</code> 按需显示默认值，用户编辑后才写入 stages。</li>
+<li><code>loadDefaultMethodProfile()</code> 中 <code>profile_label</code> 设为 schema 第一个 method level 的人可读标签（如"Optimization"/"Single Point"），而非万能"默认方法"。</li>
+<li><code>updateConfigCards()</code> 描述文本：当 stage 为空时显示调暗的 <code>label (default)</code> 而非静默留空；有数据时按 level 标签构建 <code>label: functional/basis</code> 格式，替代原裸露 level_id。</li>
+<li>初始页面加载逻辑同步修正。</li>
+</ul>
+
+<h3>17.4 测试</h3>
+<ul>
+<li>更新 CLI help 参数断言（frequency/optfreq 不再含热化学 flag；optfreq 改验 --recalc-hess）。</li>
+<li>新增 6 条测试：schema 死字段缺失校验（dft_frequency/dft_optfreq 无 thermo 字段、dft_optfreqsp thermo level 保留）、CLI 死 flag 移除校验（4 参数化）、optfreqsp 保留热化学 flag。</li>
+<li><strong>65/65 通过</strong>；全量回归 695 passed / 7 skipped / 4 预置失败（与本次无关）。</li>
+</ul>
+
+<hr class="section-divider">
+
+<!-- ======== 18. V8.0 REAL-MACHINE VERIFICATION ======== -->
+<h2 id="v8-verification">18. 真机验证：频率解析 bug 确认 + 热化学链路验证</h2>
+<p><span class="tag-new">新增</span> v8.0 · 2026-07-31</p>
+<p>基于计算节点（10.16.5.157，用户 <user>）上真实运行的 ORCA/Shermo 产物进行逐行核对，验证样本：<code>20260720_223201_001_optfreqsp</code>（H₂O，optfreqsp 全流程）、<code>20260721_135435_004_2-epi-curcusone-i</code>（大分子 Opt Freq）。这是<strong>首次以真实 ORCA 5.x 输出对照代码解析逻辑</strong>——此前全部测试均基于 mock，无真实 log fixture。</p>
+
+<h3>18.1 结论 1（Critical）：频率解析正则 bug 已证实 —— 真实 ORCA 输出 0 匹配</h3>
+<div class="warn-box">
+⚠️ <strong>影响：</strong>所有简单工作流的 <code>frequencies.txt</code> 均无法生成（生产 job <code>20260720_223201_001_optfreqsp</code> 目录中确认<strong>无此文件</strong>）；<code>n_frequencies=0</code>、<code>has_frequencies=False</code>，仅一条 warning，静默降级。
+</div>
+<p><strong>真实 ORCA 5.x 频率行格式</strong>（<code>orca_optfreq.out</code> 第 5048 行起）：</p>
+<pre>
+VIBRATIONAL FREQUENCIES
+-----------------------
+Scaling factor for frequencies =  1.000000000  (already applied!)
+
+   0:         0.00 cm**-1
+   1:         0.00 cm**-1
+   5:         0.00 cm**-1
+   6:     -1190.82 cm**-1 ***imaginary mode***
+   7:     -1177.02 cm**-1 ***imaginary mode***
+   8:      1411.55 cm**-1
+</pre>
+<ul>
+<li>实际格式为 <code>   N:     value cm**-1</code>（模式号 + 冒号前缀，虚频带 <code>***imaginary mode***</code> 后缀）</li>
+<li>现有正则 <code>Mode\#\s+\d+\s+:\s+([-+]?\d+\.\d+)\s+cm\*\*-1</code>（orca.py:767/877）假设 "Mode #" 前缀——<strong>在真实输出上 findall 返回空列表</strong></li>
+<li>该正则随 v7.x 引入，从未对照真实输出验证；全库无真实 ORCA log fixture</li>
+</ul>
+
+<h3>18.2 结论 2（修复正则后的隐藏坑）：单个 Opt Freq log 含多个频率段</h3>
+<p>真实 <code>orca_optfreq.out</code> 中 <code>VIBRATIONAL FREQUENCIES</code> 段出现多次：H₂O 快速收敛 2 段；curcusone-i 共 <strong>4 段</strong>（行 5049 / 21151 / 37266 / 48183）。原因：<code>Recalc_Hess</code> 在优化过程中每次重算 Hessian 都会打印一组频率。</p>
+<div class="warn-box">
+⚠️ 修复正则时若用 <code>re.findall</code> 全文件匹配，会<strong>把优化中间步骤几何的频率混入</strong>最终输出。正确做法：按 <code>VIBRATIONAL FREQUENCIES</code> 切段取<strong>最后一段</strong>，并过滤每段开头 6 个 0.00 平动/转动模式。
+</div>
+
+<h3>18.3 结论 3：Shermo 热化学链路实测验证通过（§12.3 第 7/8 条关闭）</h3>
+<p>此前 §12.3 第 7/8 条遗留的"Shermo 输出语义未实测"问题，本次真机验证全部关闭：</p>
+<table>
+<tr><th>验证项</th><th>真实数据</th><th>结论</th></tr>
+<tr><td><code>-E</code> 参数生效</td><td>Shermo.sum 首行：<code>Note: The electronic energy specified by "E" parameter will be used</code></td><td>✅ 设计正确：g_sum 直接以 SP 能量为基准，无需手动叠加</td></tr>
+<tr><td>SP 能量传递</td><td>sp.out：<code>FINAL SINGLE POINT ENERGY -76.445496071313</code> = thermo.json <code>sp_energy_hartree</code></td><td>✅ 一致</td></tr>
+<tr><td>自由能数学自洽</td><td>G_corr = 0.003348 a.u.（2.101 kcal/mol）；<code>Sum of electronic+thermal correction to G = -76.4421478</code> = E_sp + G_corr</td><td>✅ 三处（Shermo.sum / thermo.json / sp.out）交叉一致</td></tr>
+<tr><td>熵值合理性</td><td>Total S = 188.754 J/mol/K（H₂O，298.15 K）</td><td>✅ 合理</td></tr>
+</table>
+<p><strong>结论：</strong><code>run_shermo(-E sp_energy)</code> 调用链正确，Shermo 对 ORCA log 的解析能力可靠（独立于代码内频率正则），thermo.json 字段语义与实现一致。此项无需修改。</p>
+
+<h3>18.4 修复建议（频率解析，待实施）</h3>
+<table>
+<tr><th>项</th><th>内容</th></tr>
+<tr><td>正则修正</td><td>改为 <code>^\s*\d+:\s+([-+]?\d+\.\d+)\s+cm\*\*-1</code>（兼容虚频后缀）</td></tr>
+<tr><td>段选择</td><td>按 <code>VIBRATIONAL FREQUENCIES</code> 切段，仅解析<strong>最后一段</strong>（Opt Freq 中 Recalc_Hess 产生中间段）</td></tr>
+<tr><td>零频过滤</td><td>跳过每段前 6 个 0.00 平动/转动模式（或过滤 <code>freq == 0.0</code>）</td></tr>
+<tr><td>回归测试</td><td>将节点真实 <code>orca_optfreq.out</code> 片段固化为 fixture，新增解析测试（含多段 + 虚频 + 零频三种情况），替换纯 mock 断言</td></tr>
+</table>
+
+<h3>18.5 既往审查结论修订</h3>
+<table>
+<tr><th>来源</th><th>原结论</th><th>修订</th></tr>
+<tr><td>§12.3 第 7/8 条</td><td>Shermo 输出语义需实测确认</td><td>✅ 已实测通过（§18.3），关闭</td></tr>
+<tr><td>§14.3 H4</td><td>scheduler 未传 --name（延后）</td><td>✅ 已修复（runner.py:722-723 实际已传），关闭</td></tr>
+<tr><td>§14.4 M9</td><td>scheduler 与 CLI 参数路径不一致</td><td>🟡 降级：API schema 含嵌套 <code>levels</code>（v1_schemas.py:219），/validate-method 走 <code>{"levels": ...}</code>，风险仅为前端提交格式契约</td></tr>
+<tr><td>§14.4 M6</td><td>--route-extras 不达 SP stage</td><td>⬜ 确认仍存在（cli.py:822-843 手动构建 sp_kwargs 不含 route_extras）</td></tr>
+<tr><td>§14.4 M8</td><td>.com/.inp 不经 materialize_job_input</td><td>⬜ 确认仍存在（runner.py:173 仅认 .xyz/.gjf/.sdf）</td></tr>
+</table>
+
+<h3>18.6 遗留事项清单</h3>
+<table>
+<tr><th>优先级</th><th>事项</th><th>状态</th></tr>
+<tr><td><strong>P0</strong></td><td>频率解析正则修复（§18.4）</td><td>⬜ 待实施（生产已受影响）→ ✅ 已修复（v8.1，见 §19）</td></tr>
+<tr><td><strong>P1</strong></td><td>run_optfreqsp 中 Shermo 失败仍返回 completed（simple.py:542-562），违反 §5.6 错误策略，应返回 failed</td><td>⬜ 待实施 → ✅ 已修复（v8.1）</td></tr>
+<tr><td><strong>P1</strong></td><td>scale_factor 双默认不一致（FIELD_DEFINITIONS 1.0 vs profile/CLI 0.9905）且 0.9905 与 r2SCAN-3c 匹配性无出处</td><td>⬜ 待核验 → ✅ 默认已统一为 0.9905（v8.1）；<strong>r2SCAN-3c 匹配性核验仍待文献核对</strong></td></tr>
+<tr><td><strong>P2</strong></td><td>M6 / M8（见 §18.5）</td><td>⬜ 待实施 → ✅ 已修复（v8.1，见 §19）</td></tr>
+</table>
+
+<hr class="section-divider">
+
+<!-- ======== 19. V8.1 FIXES ======== -->
+<h2 id="v8-1-fixes">19. v8.1 修复详情（P0 + P1 + P2 全部实施）</h2>
+<p><span class="tag-active">已实施</span> v8.1 · 2026-07-31</p>
+
+<h3>19.1 修改文件清单</h3>
+<table>
+<tr><th>文件</th><th>变更类型</th><th>说明</th></tr>
+<tr><td><code>src/cccp/qc/interfaces/orca.py</code></td><td>修改</td><td>新增 <code>_parse_frequencies()</code> 模块级函数；<code>frequency()</code>/<code>opt_freq()</code> 统一调用（顺带消除 M13 的部分重复）</td></tr>
+<tr><td><code>tests/fixtures/orca_optfreq_real_sections.txt</code></td><td>新建</td><td>真实 ORCA 5.x 输出片段（H₂O Opt Freq，双段：中间段含虚频 + 终段 3 个实频），取自计算节点生产 job</td></tr>
+<tr><td><code>tests/test_qc_interfaces_orca.py</code></td><td>修改</td><td>+5 条测试：真实格式多段解析、虚频保留/零频过滤、无段/缺文件、opt_freq 端到端 QCResult 断言</td></tr>
+<tr><td><code>src/acp/workflows/simple.py</code></td><td>修改</td><td>Shermo 失败 → <code>status="failed"</code>（不再假成功）；新增 <code>_DEFAULT_SCALE_FACTOR</code> 常量</td></tr>
+<tr><td><code>src/acp/catalog.py</code></td><td>修改</td><td>FIELD_DEFINITIONS <code>scale_factor</code> 默认 1.0 → 0.9905（与 profile/CLI 统一）</td></tr>
+<tr><td><code>src/acp/cli.py</code></td><td>修改</td><td>M6：<code>_handle_optfreqsp</code> 将 <code>--route-extras</code> 同步透传 SP stage</td></tr>
+<tr><td><code>src/acp/scheduler/runner.py</code></td><td>修改</td><td>M8：<code>materialize_job_input</code> 支持 .com/.inp（保留扩展名，<code>_materialized_input_name()</code>）；文件分支提前到 SMILES 猜测之前</td></tr>
+<tr><td><code>src/acp/scheduler/remote/runner.py</code></td><td>修改</td><td>M8 远端：上传名与 <code>input_path</code> 由物化文件名推导（非硬编码 input.xyz）</td></tr>
+<tr><td><code>tests/test_acp_workflows_simple.py</code> / <code>tests/test_acp_scheduler.py</code></td><td>修改</td><td>+4 条测试：Shermo 失败即 failed、scale_factor 三源一致、.com/.inp 物化保留后缀（文件路径 + asset 两条路径）</td></tr>
+</table>
+
+<h3>19.2 频率解析实现（Phase 1）</h3>
+<pre>
+_FREQ_SECTION_HEADER = "VIBRATIONAL FREQUENCIES"
+_FREQ_LINE_RE = re.compile(r"^\s*\d+:\s+([-+]?\d+\.\d+)\s+cm\*\*-1", re.MULTILINE)
+
+def _parse_frequencies(output_file: Path) -> list[float]:
+    # 按 "VIBRATIONAL FREQUENCIES" 切段，仅取最后一段（跳过 Recalc_Hess 中间段）
+    # 匹配 "   N:     value cm**-1"（虚频带 ***imaginary mode*** 后缀）
+    # 过滤 0.00 平动/转动模式（每段前 6 个）
+</pre>
+
+<h3>19.3 测试与回归</h3>
+<ul>
+<li>新增 11 条测试（5 orca 接口 + 2 optfreqsp 行为 + 1 scale_factor 一致性 + 2 物化 + 1 asset）</li>
+<li><strong>全量回归：684 passed / 4 skipped</strong>（此前 682 passed）</li>
+<li>ruff 检查：本次修改未引入新的 lint 错误（既有 E501/UP045 为预存，未处理）</li>
+</ul>
+
+<h3>19.4 待办（非阻塞）</h3>
+<ul>
+<li>scale_factor 0.9905 与 r2SCAN-3c 频率的匹配性：需按文献/NIST 核对后决定是否改为按方法映射（当前三源统一为 0.9905，与 energy 工作流生产值一致）</li>
+<li>本次修复经 rsync 同步计算节点 + 重启 acp 服务后，建议在节点上重跑一次 <code>acp run optfreq</code> 真实验证 frequencies.txt（3N-6 个模式）</li>
+</ul>
+
+<hr class="section-divider">
+
 <h2>修订记录</h2>
 <table>
 <tr><th>版本</th><th>日期</th><th>变更</th></tr>
@@ -1552,6 +1754,10 @@ def _build_method_kwargs(raw_kwargs):
 <tr><td><strong>v7.3</strong></td><td><strong>2026-07-20</strong></td><td><strong>Step 8 完成：新增 tests/test_acp_workflows_simple.py（47 条测试全通过）。全量回归 677 passed / 7 skipped。GitHub 推送 + 计算节点 rsync 同步 + acp 服务重启完成。</strong></td></tr>
 <tr><td><strong>v7.4</strong></td><td><strong>2026-07-20</strong></td><td><strong>全链路代码质量审查：对 4 个关键模块（simple.py/cli.py/scheduler 集成/ORCA opt_freq）深度审查，发现 62 项隐患（2 Critical + 5 High + 16 Medium + 13 Low + 12 Design + 14 Code Smell）。新增 §14 完整分析章节（分类表 + 详细描述 + 修复优先级）。2 Critical 需阻塞性修复（scheduler work_dir 冲突 + stage 监控静默失效）。</strong></td></tr>
 <tr><td><strong>v7.5</strong></td><td><strong>2026-07-20</strong></td><td><strong>P0+P1 全部修复（9 项）：C1 <code>_resolve_output_dir</code> 复用空目录解决 scheduler work_dir 冲突；C2 集成 WorkflowState 生成 state.json + stage 跟踪；H1 thermo.json 字段重命名（thermal_correction_u/total_enthalpy/total_gibbs）；H2 kwargs 从 constructor 分离（消除双重传递）；H3 charge/multiplicity 移除硬编码默认值恢复自动检测；H5 aux_basis/ri_approximation 转换为 route_extras；M1–M3,M5 Medium 修复（None 检查、log_file 存在性、空字符串过滤）。47/47 测试通过，全量回归 677 passed。新增 §15 修复详情 + §14 各条目状态标记。</strong></td></tr>
+<tr><td><strong>v7.6</strong></td><td><strong>2026-07-20</strong></td><td><strong>收尾修复（3 项用户验收问题）：（1）简单工作流下隐藏 SMILES 输入标签页 + 提交守卫（isSimpleWorkflowSelected/updateInputModeVisibility）；（2）修复切换简单工作流后协议框残留 CENSO-light（loadDefaultMethodProfile 不再静默返回 + buildDefaultLevels 构建默认 stages + 通用摘要构建）；（3）recalc_hess 全链路可配置（ORCA 接口参数透传 → catalog field/schema/CLI 映射 → --recalc-hess CLI 参数 → 前端高级字段渲染，int 类型输入支持）。新增 12 条测试，59/59 通过，全量回归 689 passed。新增 §16。</strong></td></tr>
+<tr><td><strong>v7.7</strong></td><td><strong>2026-07-20</strong></td><td><strong>协议显示统一：（1）dft_optfreq 移除无用的 temperature/pressure、dft_frequency 移除 temperature/pressure/scale_factor（无 Shermo 阶段，全链路无消费，即 M7）；CLI 热化学 flag 仅保留 optfreqsp；（2）recalc_hess 保留在前端"高级"折叠区（v7.7.1 用户确认此为预期设计），不可见的根因是服务未重启。新增 6 条测试，65/65 通过，全量回归 695 passed。新增 §17。</strong></td></tr>
+<tr><td><strong>v8.0</strong></td><td><strong>2026-07-31</strong></td><td><strong>真机验证（首次真实 ORCA 5.x 输出对照）：（1）证实频率解析正则 bug——真实格式为 <code>N: value cm**-1</code>，现有 <code>Mode\#...</code> 正则 0 匹配，生产 job 的 frequencies.txt 缺失（Critical）；（2）发现 Opt Freq log 多频率段问题（Recalc_Hess 中间段，curcusone-i 4 段），修复正则必须取最后一段 + 过滤 6 个零频；（3）Shermo 热化学链路实测通过（-E 生效、G 三方交叉一致），§12.3 第 7/8 条关闭；（4）修订既往结论：H4 已修复关闭、M9 降级、M6/M8 确认存在；（5）新增 §18 + 遗留事项清单（P0 频率正则修复待实施）。</strong></td></tr>
+<tr><td><strong>v8.1</strong></td><td><strong>2026-07-31</strong></td><td><strong>遗留事项全部实施：P0 频率解析重写（<code>_parse_frequencies()</code> 按段取最后一段 + 过滤零频，真实 fixture 回归测试）；P1 Shermo 失败返回 failed（不再假成功）；P1 scale_factor 三源统一为 0.9905（FIELD_DEFINITIONS/CLI/simple.py）；P2 M6 route_extras 透传 SP stage；P2 M8 materialize 支持 .com/.inp（本地 + 远端上传命名）。新增 11 条测试，全量回归 684 passed。新增 §19。</strong></td></tr>
 </table>
 
 </body>

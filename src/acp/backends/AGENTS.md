@@ -1,7 +1,7 @@
 # acp/backends/ — QC Backend Adapters
 
 ## OVERVIEW
-Protocol-based quantum chemistry backend layer. All QC execution (subprocess wrappers for external binaries) lives in `cccp.qc.interfaces`; the backends are thin capability-Protocol adapters that pass config through and normalize results via `to_qc_result`. Governance principle: **acp/backends never contains subprocess calls, binary paths, or CLI argument construction.** 12 files, ~1300 lines.
+Protocol-based quantum chemistry backend layer. All QC execution (subprocess wrappers for external binaries) lives in `cccp.qc.interfaces`; the backends are thin capability-Protocol adapters that pass config through and normalize results via `to_qc_result`. Governance principle: **acp/backends never contains subprocess calls, binary paths, or CLI argument construction.** 13 files, ~1525 lines.
 
 ## STRUCTURE
 ```

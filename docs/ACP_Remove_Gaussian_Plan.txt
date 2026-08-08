@@ -1,0 +1,327 @@
+
+
+ACP 移除 Gaussian 支持 · 实施计划
+
+目标：从 cccp 与 acp 全栈移除 Gaussian 16 计算路径，简化基组/方法支持与工作流配置；NMR 切换到 ORCA 端到端；保留只读 GJF/Gaussian-log 解析能力；前端与配置移除 engine 选项统一走 ORCA。
+
+0 · 关键调研发现
+
+  ORCA NMR 已在代码层可用（文档滞后） — 实际检查：ORCAInterface.nmr_shielding()（src/cccp/qc/interfaces/orca.py:471-537）已完整实现，写 ! ... NMR 输入、跑 ORCA、解析能量；parse_orca_nmr_log()（src/acp/nmr/parser.py:150-218）解析 "NMR SHIELDING TENSOR" 段。真正的阻断点只有三处：
+  
+    
+src/acp/cli.py:756-760 — 硬编码拒绝 --backend orca 跑 NMR（错误信息"not implemented yet"已过时）
+    
+src/acp/backends/capabilities.py:67 — orca.nmr=STUBBED
+    
+默认值链路 workflows/nmr.py:33,35 / config.py:181 / defaults.yaml:72 默认 gaussian
+  
+  ⇒ "先实现 ORCA NMR 端到端"实质为「解锁 + 改默认 + 改能力声明 + 跑通验证」，无需新写计算/解析代码。
+
+  Gaussian 实际生效面比想象窄：shipped 默认配置 theory.optimization/frequency/single_point.engine='orca'，仅 NMR 默认 gaussian；opt/freq 走 gaussian 只在用户显式指定或协议回退时发生。删除影响主要落在：默认回退、validation 强制回退到 gaussian、catalog 前端默认、NMR 工作流、GJF/log 解析、scheduler/remote 同步脚本。
+
+1 · 决策摘要（来自确认）
+
+  
+ | 议题 | 决策
+
+  
+ | NMR 后端 | 切换到 ORCA 端到端（解锁现有实现即可）
+
+  
+ | GJF / 历史 .log | 保留只读解析（删 write_gjf，保留 read_gjf/parse_gjf_text/_parse_gaussian_log 用于读入历史文件）
+
+  
+ | 改动范围 | 全栈：cccp + acp + 前端 + 脚本 + 测试
+
+  
+ | 配置兼容 | 前端与配置移除 engine 选项，全部使用 ORCA（硬切换，不再暴露/接受 backend 选择）
+
+2 · 本地与远程节点同步注意事项
+
+  远程节点是关键影响面：删除 scripts/run_g16_worker.sh 后，远程计算节点上已同步的副本会变成悬空文件，且远端无需再探测 g16。
+  
+    
+src/acp/scheduler/remote/sync.py:11,111-114 删除 run_g16_worker.sh 同步条目（Phase D 已含）；后续任务不再向远端推送该脚本
+    
+手动清理远端既有副本：rm $REMOTE_WORKDIR/scripts/run_g16_worker.sh；否则旧脚本残留可能被误用
+    
+远端 g16 可执行若仍存在不影响功能，但建议在远端环境变量 / 模块加载里停用 Gaussian 环境（module unload gaussian 或清理 g16root/GAUSS_EXEDIR）
+    
+requires_binaries 校验逻辑删除 "gaussian" 后，远端二进制探测清单自动不再要求 g16，无需额外改远端探测代码
+    
+执行顺序：先在本地仓库完成 Phase A–D 并重启服务，确认新任务不再引用 Gaussian；再去远端执行 rm 与停用环境，避免正在运行的旧任务因脚本缺失中途崩掉
+    
+核对：完成后再抽一个 conformer + NMR 任务的远端执行做烟雾测试，确认远端清单更新生效
+  
+
+Phase A — 打通 ORCA NMR 端到端（先于删除 Gaussian）
+
+目的：让 NMR 工作流在纯 ORCA 下端到端可用，作为删除 Gaussian 前的安全网。
+
+  
+ | 状态 | 文件 | 改动
+
+  
+ | MOD | src/acp/cli.py:756-760 | 删除拒绝 --backend orca 的硬编码块；NMR 默认与唯一后端 = orca
+
+  
+ | MOD | src/acp/backends/capabilities.py:67 | orca.nmr → AVAILABLE
+
+  
+ | MOD | src/acp/workflows/nmr.py:33,35 | _normalize_backend_name 回退 "gaussian"→"orca"
+
+  
+ | NEW | tests/test_acp_workflows_nmr_methane.py | 新增 ORCA NMR 回归：用 parse_orca_nmr_log 期望的"NMR SHIELDING TENSOR / Nucleus i ..."假日志，跑通 run_nmr_calculation(backend_name="orca")，验证 backend="orca" 与报告产出
+
+  
+ | MOD | tests/conftest.py | sample_config 的 theory.nmr.engine='gaussian' → 'orca'
+
+验证门禁（Phase A 通过判据）：pytest tests/test_acp_workflows_nmr_methane.py tests/test_acp_reports_nmr.py -v 在 ORCA 默认下全绿后，再进入 Phase B。
+
+Phase B — 删除 Gaussian 计算后端（核心删除）
+
+  
+ | 状态 | 文件 | 改动
+
+  
+ | DEL | src/cccp/qc/interfaces/gaussian.py | 删除 GaussianInterface（opt/sp/freq/nmr + run_g16 调度）
+
+  
+ | DEL | src/acp/backends/gaussian.py | 删除 GaussianBackend
+
+  
+ | DEL | scripts/run_g16_worker.sh | 删除 g16 worker 包装脚本
+
+  
+ | DEL | tests/test_qc_interfaces_gaussian.py | 删除 Gaussian 接口测试
+
+  
+ | DEL | src/cccp/utils/keyword_translator.py | 删除（全 Gaussian-specific：to_gaussian_* 仅被 GaussianInterface 调用）
+
+  
+ | DEL | src/cccp/utils/resource_utils.py:215-220 | 删除 ResourceManager.get_gaussian_params()
+
+  
+ | DEL | src/cccp/utils/file_io.py:171-194 | 删除 write_gjf()（仅用于生成 Gaussian 输入；保留 read_gjf 见 Phase E）
+
+  
+ | MOD | src/cccp/qc/interfaces/__init__.py:9,17 | 去掉 GaussianInterface import/导出
+
+  
+ | MOD | src/cccp/qc/__init__.py:11,34 | 去掉 re-export
+
+  
+ | MOD | src/cccp/core/engine.py:38,130-137,155-161 | 删 GaussianInterface import、_create_qc_interface 的 "gaussian" 分支、死代码 self.gaussian_interface
+
+  
+ | MOD | src/acp/backends/__init__.py:26,51 | 去掉 GaussianBackend import/导出
+
+  
+ | MOD | src/acp/backends/capabilities.py:9,27,54-62 | 删 GaussianBackend import 与整条 "gaussian" 能力行
+
+死代码顺手清：engine.py:155-161 self.gaussian_interface 已无任何读取者；同侧 self.orca_interface 同样为死代码，建议一并删除（与本次目标一致）。
+
+Phase C — 默认值 / 配置 / 校验收敛到 ORCA
+
+  
+ | 状态 | 文件 | 改动
+
+  
+ | MOD | src/cccp/core/protocols.py:78-80,228-232,240 | ProtocolSpec 字段默认 opt_engine/freq_engine "gaussian"→None 或 "orca"；硬编码回退 "gaussian"→"orca"；更新 docstring 58-66
+
+  
+ | MOD | src/cccp/config.py:123-127,180-186,455,509-525 | 删 executables.gaussian 块；theory.nmr.engine 默认 orca；删 CONFSEARCH_GAUSSIAN_PATH 映射；_validate_config valid_engines=('orca',) 且不再向 gaussian 强制回退；残留 engine: gaussian 记 WARNING 后置 orca（平滑）
+
+  
+ | MOD | config/defaults.yaml:13-16,69-74 | 删 executables.gaussian；theory.nmr.engine: orca
+
+  
+ | MOD | src/acp/backends/capabilities.py:67 | （Phase A 已改）
+
+  
+ | MOD | src/acp/workflows/nmr.py:33,35 | （Phase A 已改）
+
+配置语义简化（配合"移除 engine 选项"）：config 层把 theory.*.engine 字段标记为 deprecated/忽略，opt/freq/sp 一律 ORCA；保留 method/basis/solvent/solvent_model。_validate_config 遇到残留 engine: gaussian 记 WARNING 后静默置 orca（平滑），但 CLI/前端不再暴露该字段。
+
+Phase D — Catalog / Registry / API / Scheduler 去除高斯 + 远端同步清理
+
+  
+ | 状态 | 文件 | 改动
+
+  
+ | MOD | src/acp/catalog.py | 所有 WORKFLOW_CATALOG 项 default_backend/requires_binaries 去掉 "gaussian"（nmr→["orca"]，conformer/benchmark→["crest","orca"]）；删 FIELD_DEFINITIONS 的 gaussian 后端块；METHOD_SCHEMAS.allowed_engines 去 "gaussian"，ext/full 的 dft_opt/single_point engine→"orca"；删 METHOD_CATALOG.backends 的 gaussian 项；删 r2SCAN-3c vs gaussian 的拒绝分支（移除后无条件允许）
+
+  
+ | MOD | src/acp/workflows/registry.py:44,50,56,62 | requires_binaries 去 "gaussian"
+
+  
+ | MOD | src/acp/api/routes.py:51 | 删 _BACKEND_DEFAULT_BINARIES["gaussian"]=[g16,g09]
+
+  
+ | MOD | src/acp/scheduler/remote/sync.py:11,111-114 | 删 scripts/run_g16_worker.sh 同步条目；改模块 docstring
+
+  
+ | MOD | src/acp/scheduler/artifacts.py:21-22 | 删 .gjf→"gaussian_input"；.log→"gaussian_log" 重命名为中性 "output_log"
+
+  
+ | MOD | src/acp/scheduler/runner.py:133 | 从可复制源扩展名列表去 .gjf（输入格式由 Phase E 决定；若保留只读 GJF 则改为允许复制只读源）
+
+  
+ | MOD | src/acp/backends/crest.py:53,67,81 | 错误提示字符串 "Use Gaussian/ORCA" → "Use ORCA"
+
+  
+ | MOD | src/acp/api/v1_routes.py:678,689 | 保留 .gjf（Phase E 保留只读 GJF）
+
+远端动作（手动，本地仓库改完之后执行）：
+  
+    
+rm $REMOTE_WORKDIR/scripts/run_g16_worker.sh
+    
+停用远端 Gaussian 环境：module unload gaussian 或清理 g16root/GAUSS_EXEDIR
+    
+核对远端任务清单不再触发 g16 探测
+  
+
+Phase E — 保留只读 GJF / Gaussian-log 解析（含接口面）
+
+保留原则：读入历史 Gaussian 输入/日志作为分子来源仍可用；但不再生成任何 Gaussian 文件。InputFormat.GJF、read_gjf、parse_gjf_text、_parse_gaussian_log 保留；write_gjf 与 gaussian_pcm_keyword 删除。
+
+  
+ | 状态 | 文件 | 改动
+
+  
+ | KEEP | src/cccp/utils/file_io.py:90-168 | 保留 read_gjf()（读入遗留 .gjf）
+
+  
+ | MOD | src/cccp/utils/solvent_map.py:30-42 | 删 gaussian_pcm_keyword()；保留 SOLVENT_ALIASES/_normalize/xtb_solvent/orca_smd_solvent；从 utils/__init__.py __all__ 去掉 gaussian_pcm_keyword
+
+  
+ | KEEP | src/cccp/io/input_handler.py:26,108-109,165,302-334 | 保留 InputFormat.GJF + parse_gjf()（读入路径），注释明示"legacy read-only"
+
+  
+ | MOD | src/cccp/utils/geometry_tools.py:268-269,436 | 保留 _parse_gaussian_log + SCF Done regex 用于读历史 log；去掉 .log→gaussian 自动默认改为先用 ORCA 解析，失败再退化 gaussian；明确"遗留读取"
+
+  
+ | KEEP | src/acp/intake/parsers.py:87,297-334 | 保留 parse_gjf_text()（API/v1 结构解析读入路径）
+
+  
+ | KEEP | src/acp/io/structures.py:23,112 | 保留 InputFormat.GJF 枚举值与映射
+
+  
+ | KEEP | src/acp/workflows/conformer.py:95 | 保留 ACPInputFormat.GJF→LegacyInputFormat.GJF 映射
+
+  
+ | KEEP | src/acp/nmr/parser.py:89-147,228-229 | 保留 parse_gaussian_nmr_log 用于读历史 NMR 日志；parse_nmr_output 仍接受 "gaussian|g16" 分发（仅解析，不再驱动计算）
+
+  
+ | MOD | src/cccp/cli.py:87 | 帮助文本保留 GJF/LOG（"可读入遗留格式"）
+
+Phase F — 前端移除 engine 选项，统一 ORCA
+
+  
+ | 状态 | 文件 | 改动
+
+  
+ | MOD | frontend/ACP_Workbench.html:219-221 | WF_META.needs 去掉 "gaussian"；nmr→["orca"]
+
+  
+ | MOD | frontend/ACP_Workbench_v2.html:4029-4030 | getMethodOptionsForKey 由硬编码 functionals.gaussian/basis_sets.gaussian 改为读 orca；与方法目录 schema 一致
+
+  
+ | MOD | frontend/ACP_Workbench_v2.html（任务提交 UI） | 移除 --backend/--engine 选择控件；后端恒为 ORCA；保留 GJF 在粘贴/上传提示（仅输入用途）
+
+  
+ | MOD | src/acp/cli.py:391 | acp run nmr --backend choices 去掉 "gaussian"（仅 orca，或参数整体移除）
+
+API schema 一致性：v1_schemas.py 含 backend 名字段为动态——本身无 gaussian 硬编码，但因已无选项，提交校验对 unknown backend 报错信息应更新为"仅支持 orca"。
+
+Phase G — 测试更新
+
+  
+ | 状态 | 文件 | 改动
+
+  
+ | MOD | tests/test_engine_routing.py | ~40 行默认断言：flip 'gaussian'→'orca'、GaussianInterface→ORCAInterface；TestBackwardCompatibility/TestProtocolResolutionEngine 改为断言 ORCA 默认
+
+  
+ | MOD | tests/test_config.py:72-99,124,149 | 删 CONFSEARCH_GAUSSIAN_PATH 用例；NMR engine 默认断言→orca
+
+  
+ | MOD | tests/test_acp_workflows_nmr_methane.py | _FakeGaussianBackend→_FakeOrcaBackend；假日志改 "NMR SHIELDING TENSOR / Nucleus ..."；backend_name="orca"
+
+  
+ | MOD | tests/test_acp_provenance.py:22,41；tests/test_remote_phase2.py:246,252；tests/test_acp_reports_nmr.py:23,70 | backend:"gaussian"→"orca"
+
+  
+ | MOD | tests/test_remote_phase1.py:547；tests/test_remote_phase1_integration.py:116 | 删 run_g16_worker.sh 同步断言
+
+  
+ | MOD | tests/test_acp_artifacts.py:111-112 | 删 .gjf→"gaussian_input" 断言；.log 改断言中性类型
+
+  
+ | MOD | tests/test_acp_api.py:54,91；tests/test_acp_api_v1.py:106 | 后端集合去 "gaussian"；nmr.requires_binaries→{"orca"}
+
+  
+ | KEEP | tests/test_acp_intake.py:27-40,88-90；tests/test_acp_io.py:16 | 保留 GJF 读入路径测试（Phase E 保留只读解析）
+
+  
+ | MOD | tests/test_protocol_levels.py:118,134,141,150 | fixture engine:"gaussian"→"orca"
+
+  
+ | MOD | tests/conftest.py:13,23,47,54,74,84,89,127 | 删 CONFSEARCH_GAUSSIAN_PATH/HAS_G16/requires_gaussian 标记与 sample_config 的 gaussian 项
+
+  
+ | MOD | tests/baseline/reference/config_*.yaml（4 个） | 删 executables.gaussian 块
+
+Phase H — 文档同步（低优先）
+
+更新 README.md、src/acp/README.md、各 AGENTS.md、tests/AGENTS.md、tests/baseline/VERIFICATION_REPORT.md，移除 Gaussian 引用；docs/ 下规划文档（ACP_Method_Config_Refactoring_Plan.md 等）标注"已移除 Gaussian 相关未来项"。
+
+风险矩阵
+
+  
+ | 风险 | 等级 | 缓解
+
+  
+ | NMR 在 ORCA 实跑未验证（真实轨道/溶剂/收敛） | 高 | Phase A 用一个小分子（如甲烷/水）对 ORCA NMR 实跑端到端，人工核对屏蔽张量，再进 Phase B
+
+  
+ | 历史 / 外部配置仍传 engine:"gaussian" | 中 | config 校验对残留 gaussian engine 记 WARNING 后置 orca（平滑），不硬崩
+
+  
+ | LogParser 双引擎解析被破坏（影响 .log 读入） | 中 | 保留双引擎 parser，仅去掉 .log 默认偏向 gaussian 的自动路由
+
+  
+ | ProtocolSpec 默认值翻转影响多协议 | 低 | defaults 改 None→解析为 orca，避免硬编码 engine 名
+
+  
+ | 文档 / AGENTS.md 残留 Gaussian 描述 | 低 | Phase H 集中更新
+
+  
+ | 远端残留 run_g16_worker.sh 被误用 | 中 | 本地仓库改完并重启服务后再去远端 rm 并停用 Gaussian 环境（见 §2）
+
+执行顺序与门禁
+
+  
+Phase A（打通 ORCA NMR）→ pytest 绿 + 1 个真实 ORCA NMR 跑通 [门禁 A]
+  
+Phase B + C（删后端、改默认）→ pytest tests/test_engine_routing.py tests/test_config.py tests/test_acp_workflows_conformer.py -v 绿 [门禁 BC]
+  
+Phase D + E + F（catalog/前端/只读解析）→ API 烟雾：GET /api/backends 无 gaussian；前端提交任务成功 [门禁 DEF]
+  
+Phase G（全量测试）→ pytest tests/ -v 全绿 + ruff check/ruff format --check/mypy 通过 [门禁 G]
+  
+Phase H 文档；sudo systemctl restart acp 重启服务（用户执行），前端核对
+  
+远端清理（手动）：删 run_g16_worker.sh、停用 Gaussian 环境、远端烟雾测试
+
+回滚策略
+
+每阶段一个 git commit（Phase A/B/C/D/E/F/G 各一笔），任一门禁失败可 git revert 该笔而不影响先前已通过阶段。Phase A 一旦通过，NMR 即不再依赖 Gaussian，删除 Phase B 即不会让 NMR 失能——这是回滚安全的关键顺序。
+
+关于服务密码
+
+本计划不写入任何密码或敏感凭据。sudo systemctl restart acp 由用户本人执行，避免密码进入版本库或会话历史。
+
+—— 计划基于代码现状调研；执行前需在真实 ORCA 环境验证 NMR 端到端（Phase A 门禁）。生成于 2026-07-16。
+
