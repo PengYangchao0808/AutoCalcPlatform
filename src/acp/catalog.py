@@ -98,17 +98,22 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
     },
     {
         "id": "nmr",
-        "label": "NMR Shielding",
-        "label_zh": "NMR \u5c4f\u853d\u8ba1\u7b97",
+        "label": "NMR + DP4/DP5",
+        "label_zh": "NMR + DP4/DP5 \u7acb\u4f53\u5f52\u5c5e",
         "category": "preset",
-        "description": "GIAO NMR shielding + Boltzmann averaging",
+        "description": (
+            "GIAO NMR shieldings + Boltzmann averaging + "
+            "DP4/DP5 stereochemistry assignment"
+        ),
         "method_schema_id": "nmr",
         "default_backend": "orca",
-        "requires_binaries": ["orca"],
-        # Retired (Phase A): NMR workflow removed; entry kept for historical
-        # job display only.
-        "status": "retired",
-        "visible": False,
+        "requires_binaries": ["crest", "censo", "orca"],
+        # Reactivated (P1a, 2026-08-07): NMR + DP4/DP5 workflow revived.
+        # ``status="active"`` makes ``_derive_supported_workflows`` expose
+        # it (DevDoc §11). The placeholder error model ships with P1a;
+        # P1b swaps in the trained Goodman parameters.
+        "status": "active",
+        "visible": True,
     },
     {
         "id": "benchmark",
@@ -320,6 +325,18 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_basis": "def2-TZVPP",
         "default_dispersion": "none",
     },
+    # Goodman GIAO NMR level (DP4/DP5 error model) — Pople-style basis,
+    # no dispersion correction in the original parametrisation.
+    "mPW1PW91": {
+        "basis_inline": True,
+        "ri_support": "user",
+        "needs_aux_c": False,
+        "basis": _BASIS_CATALOG_REF,
+        "dispersion": ("none", "D3", "D3BJ", "D4"),
+        "builtin_dispersion": None,
+        "default_basis": "6-311G(d)",
+        "default_dispersion": "none",
+    },
 
     # ── Range-separated single-hybrid functionals ──
     "wB97X-D4": {
@@ -353,6 +370,16 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "builtin_dispersion": None,
         "default_basis": "def2-TZVPP",
         "default_dispersion": "D3BJ",
+    },
+    "revDSD-PBEP86": {
+        "basis_inline": True,
+        "ri_support": "user",
+        "needs_aux_c": True,
+        "basis": _BASIS_CATALOG_REF,
+        "dispersion": ("D4", "D3BJ", "none"),
+        "builtin_dispersion": None,
+        "default_basis": "def2-TZVPP",
+        "default_dispersion": "D4",
     },
 
     # ── Post-HF wavefunction methods ──
@@ -405,9 +432,9 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "per_backend": {
             "orca": [
                 "r2SCAN-3c", "PBEh-3c", "B97-3c",
-                "B3LYP", "PBE0", "M062X",
+                "B3LYP", "PBE0", "M062X", "mPW1PW91",
                 "wB97X-D4", "wB97M-V",
-                "PWPB95",
+                "PWPB95", "revDSD-PBEP86",
                 "DLPNO-CCSD(T)",
             ],
             "xtb": ["GFN0-xTB", "GFN1-xTB", "GFN2-xTB"],
@@ -734,6 +761,42 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "label": "Resume from Checkpoints",
         "label_zh": "断点续跑",
         "default": {"*": False},
+    },
+    # ── NMR-specific fields (P1a, 2026-08-07) ───────────────────────────
+    "nuclei": {
+        "type": "select",
+        "multi": True,
+        "label": "Target Nuclei",
+        "label_zh": "目标核",
+        "options": ["1H", "13C", "15N", "19F", "31P"],
+        "default": {"*": ["1H", "13C"]},
+        "help": "NMR-active nuclei to compute (also select 1H for proton spectra)",
+    },
+    "boltzmann_temp": {
+        "type": "float",
+        "label": "Boltzmann Temperature",
+        "label_zh": "Boltzmann 温度",
+        "min": 0,
+        "default": {"*": 298.15},
+        "unit": "K",
+    },
+    "tms_shielding_h": {
+        "type": "float",
+        "advanced": True,
+        "label": "TMS ¹H Shielding",
+        "label_zh": "TMS ¹H 屏蔽",
+        "default": {"*": ""},
+        "unit": "ppm",
+        "help": "TMS ¹H reference shielding at the GIAO level (empty = solvent-aware Goodman table lookup)",
+    },
+    "tms_shielding_c": {
+        "type": "float",
+        "advanced": True,
+        "label": "TMS ¹³C Shielding",
+        "label_zh": "TMS ¹³C 屏蔽",
+        "default": {"*": ""},
+        "unit": "ppm",
+        "help": "TMS ¹³C reference shielding at the GIAO level (empty = solvent-aware Goodman table lookup)",
     },
 }
 
@@ -1176,12 +1239,65 @@ METHOD_SCHEMAS: dict[str, Any] = {
         "profiles": [],
     },
     "nmr": {
-        # Retired (Phase A): the NMR workflow was removed. This schema is
-        # kept as a minimal stub so historical job-detail pages can still
-        # resolve the label; the executable method_levels definition is
-        # intentionally omitted.
-        "method_levels": [],
-        "profiles": [],
+        # NMR + DP4/DP5 method schema (P1a, 2026-08-07). Two levels:
+        # - ``conformer`` (CENSO, censo-light preset) — screening-level
+        #   conformer geometry + Boltzmann weights;
+        # - ``giaoa`` (ORCA, mPW1PW91/6-311G(d)) — GIAO absolute shielding.
+        # The GIAO level MUST stay mPW1PW91/6-311G(d) to keep the Goodman
+        # error model valid (DevDoc §8.0/§10.2); switching levels requires
+        # a retrained error model.
+        "method_levels": [
+            {
+                "level_id": "conformer",
+                "label": "Conformer Generation",
+                "label_zh": "\u6784\u8c61\u751f\u6210",
+                "required": True,
+                "allowed_engines": ["censo"],
+                "fields": ["ewin", "refinement_threshold"],
+            },
+            {
+                "level_id": "giaoa",
+                "label": "GIAO NMR",
+                "label_zh": "GIAO NMR \u5c4f\u853d",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "functional", "basis", "solvent_model", "solvent",
+                    "nuclei", "boltzmann_temp",
+                    "tms_shielding_h", "tms_shielding_c",
+                ],
+            },
+        ],
+        "profiles": [
+            {
+                "profile_id": "nmr-goodman",
+                "label": "Goodman (mPW1PW91/6-311G(d))",
+                "summary": (
+                    "CREST+CENSO conformers + mPW1PW91/6-311G(d) GIAO + "
+                    "Goodman DP4/DP5 (recommended)"
+                ),
+                "levels": {
+                    "conformer": {
+                        "engine": "censo",
+                        "ewin": 6.0,
+                        "refinement_threshold": 0.99,
+                    },
+                    "giaoa": {
+                        "engine": "orca",
+                        "functional": "mPW1PW91",
+                        "basis": "6-311G(d)",
+                        "solvent_model": "cpcm",
+                        "solvent": "chloroform",
+                        "nuclei": ["1H", "13C"],
+                        "boltzmann_temp": 298.15,
+                        # TMS references intentionally NOT pinned here: the
+                        # workflow resolves them solvent-aware from the
+                        # Goodman TMSdata table (tms_shielding_h/c remain
+                        # advanced manual overrides).
+                    },
+                },
+            },
+        ],
     },
     "censo_ensemble": {
         "method_levels": [
@@ -2135,6 +2251,30 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                     )
                 continue
             if user_val is not None and user_val != "":
+                # Multi-select fields (e.g. NMR ``nuclei``): accept a scalar
+                # or a list, validate every item against the allowed options,
+                # and normalise to a list so downstream CLI-flag emission
+                # (``--nuclei 1H,13C``) always sees a sequence.
+                if fd and fd.get("multi"):
+                    vals = (
+                        list(user_val)
+                        if isinstance(user_val, (list, tuple))
+                        else [user_val]
+                    )
+                    multi_options = _resolve_field_options(
+                        field_name, engine, normalized.get("functional"),
+                        basis=normalized.get("basis") or user_lv.get("basis"),
+                    )
+                    if multi_options is not None:
+                        opt_strs = [str(o) for o in multi_options]
+                        if any(str(v) not in opt_strs for v in vals):
+                            errors.append(
+                                f"Level '{lid}', field '{field_name}': "
+                                f"value '{user_val}' not in allowed options"
+                            )
+                            continue
+                    normalized[field_name] = vals
+                    continue
                 options = _resolve_field_options(
                     field_name, engine, normalized.get("functional"),
                     basis=normalized.get("basis") or user_lv.get("basis"),

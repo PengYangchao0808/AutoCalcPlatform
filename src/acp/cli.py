@@ -504,6 +504,154 @@ Examples:
         help="Save effective configuration to this file",
     )
 
+    # -- run nmr --------------------------------------------------------
+    # NMR + DP4/DP5 stereochemistry-assignment workflow (DevDoc
+    # ACP_NMR_DP4_DevDoc.md): CREST+CENSO conformers → mPW1PW91/6-311G(d)
+    # GIAO NMR → Boltzmann averaging + DP4/DP5 probability.
+    # Multi-candidate input (--input may repeat): one DP4 comparison set.
+    nmr = run_sub.add_parser(
+        "nmr",
+        help="NMR + DP4/DP5 stereochemistry assignment (GIAO + Bayesian probability)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run nmr --input "CCO" --spectrum experiment.txt --output ./nmr_out
+  acp run nmr --input a.xyz --input b.xyz --spectrum exp.txt
+  acp run nmr --input "CCO" --spectrum exp.txt --solvent chloroform
+  acp run nmr --input "CCO" --spectrum exp.txt --nmr-method mPW1PW91 --nmr-basis "6-311G(d)"
+  acp run nmr --input "CCO" --bruker ./nmr_data --bruker-ref H=7.26
+
+Spectrum file format (DevDoc §6.2):
+  C: 167.33(C1), 59.58(C2)
+  H: 4.81(H4), 7.18(H5), 3.09(H6)
+  EQ: C10,C12
+  OMIT: H19
+        """,
+    )
+    nmr.add_argument(
+        "--input",
+        type=str,
+        action="append",
+        required=True,
+        help="Candidate input (SMILES or XYZ path); repeat once per candidate",
+    )
+    nmr.add_argument(
+        "--spectrum",
+        type=str,
+        help="Path to experimental-spectrum text (DevDoc §6.2) or literal text",
+    )
+    nmr.add_argument(
+        "--bruker",
+        type=str,
+        help=(
+            "Bruker raw-data directory (DevDoc §6.3: Proton/ and/or Carbon/ "
+            "subdirs, or numbered expno dirs) or a .zip of one. Processed "
+            "into an unassigned peak list (stage 0a); mutually exclusive "
+            "with --spectrum. Requires nmrglue (pip install 'acp[nmr]')."
+        ),
+    )
+    nmr.add_argument(
+        "--bruker-ref",
+        type=str,
+        action="append",
+        metavar="NUC=PPM",
+        help=(
+            "Manual ppm reference for Bruker peak calibration, e.g. "
+            "'H=7.26' (CDCl3 residual). Repeatable; the tallest peak "
+            "within the search window is anchored to the given value."
+        ),
+    )
+    nmr.add_argument(
+        "--output",
+        type=str,
+        default="./nmr_output",
+        help="Output directory (default: ./nmr_output)",
+    )
+    nmr.add_argument("--config", type=str, help="Configuration YAML file")
+    nmr.add_argument(
+        "--nuclei",
+        type=str,
+        help="Comma-separated target nuclei (default: 1H,13C)",
+    )
+    nmr.add_argument(
+        "--nmr-method",
+        type=str,
+        help="GIAO DFT method (default mPW1PW91 — must match the error model)",
+    )
+    nmr.add_argument(
+        "--nmr-basis",
+        type=str,
+        help="GIAO basis set (default 6-311G(d) — must match the error model)",
+    )
+    nmr.add_argument(
+        "--solvent",
+        type=str,
+        help="Solvent name (applied to both conformer generation and GIAO NMR)",
+    )
+    nmr.add_argument(
+        "--ewin",
+        type=float,
+        help="CREST energy window in kcal/mol (default: 6.0)",
+    )
+    nmr.add_argument(
+        "--boltzmann-temp",
+        type=float,
+        help="Boltzmann-weight temperature in K (default: 298.15)",
+    )
+    nmr.add_argument(
+        "--tms-1h",
+        type=float,
+        help="Override TMS 1H reference shielding (ppm)",
+    )
+    nmr.add_argument(
+        "--tms-13c",
+        type=float,
+        help="Override TMS 13C reference shielding (ppm)",
+    )
+    nmr.add_argument(
+        "--error-model",
+        type=str,
+        help="Error-model id (default goodman-legacy; placeholder-student-t for P1a)",
+    )
+    nmr.add_argument(
+        "--preset",
+        type=str,
+        default="censo-light",
+        choices=["censo-light", "censo-default", "censo-zero"],
+        help="Conformer-generation CENSO preset (default: censo-light)",
+    )
+    nmr.add_argument(
+        "--enumerate",
+        action="store_true",
+        help=(
+            "Expand a single under-specified candidate into all distinct "
+            "diastereomers (enantiomer pairs collapse — DP4 cannot "
+            "distinguish them). Requires one --input only."
+        ),
+    )
+    nmr.add_argument(
+        "--stereocenters",
+        type=str,
+        help=(
+            "With --enumerate: atom-label whitelist restricting enumeration "
+            "(e.g. 'C5,C8'); centres outside the list keep their input "
+            "configuration."
+        ),
+    )
+    nmr.add_argument("--nproc", type=int, help="Number of CPU cores")
+    nmr.add_argument("--mem", type=str, help="Memory limit (e.g. 32GB)")
+    nmr.add_argument(
+        "--log-level",
+        type=str,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+    nmr.add_argument("--log-file", type=str, help="Log file path")
+    nmr.add_argument("--charge", type=int, help="Molecular charge")
+    nmr.add_argument("--multiplicity", type=int, help="Spin multiplicity")
+    nmr.add_argument("--save-config", type=str, help="Save effective configuration to this file")
+
     # -- run xtbmd_censo_energy -----------------------------------------
     # xTB-MD conformer search + CENSO free-energy workflow (DevDoc
     # ACP_xTBMD_CENSO_Energy_DevDoc.html): GFN-FF MD sampling → GFN1
@@ -1707,6 +1855,112 @@ def _handle_xtbmd_censo_energy_batch(
     return 0 if not errors else 1
 
 
+def _handle_nmr(args: argparse.Namespace) -> int:
+    """Execute the NMR + DP4/DP5 workflow."""
+    setup_logging(args.log_level)
+
+    if not args.input:
+        print("Error: at least one --input candidate is required", file=sys.stderr)
+        return 1
+    if bool(args.spectrum) == bool(args.bruker):
+        print(
+            "Error: exactly one of --spectrum / --bruker is required",
+            file=sys.stderr,
+        )
+        return 1
+
+    bruker_references: dict[str, float] | None = None
+    if args.bruker_ref:
+        bruker_references = {}
+        for token in args.bruker_ref:
+            if "=" not in token:
+                print(
+                    f"Error: --bruker-ref expects NUC=PPM (got {token!r})",
+                    file=sys.stderr,
+                )
+                return 1
+            key, _, value = token.partition("=")
+            try:
+                bruker_references[key.strip()] = float(value)
+            except ValueError:
+                print(
+                    f"Error: --bruker-ref ppm must be numeric (got {token!r})",
+                    file=sys.stderr,
+                )
+                return 1
+
+    nuclei: list[str] | None = None
+    if args.nuclei:
+        nuclei = [n.strip() for n in args.nuclei.split(",") if n.strip()]
+        if not nuclei:
+            nuclei = None
+
+    cfg = _build_config(args)
+    output_dir = Path(args.output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.save_config:
+        from cccp.config import save_config as save_cfg
+        save_cfg(cfg, Path(args.save_config))
+        logger.info("Configuration saved to: %s", args.save_config)
+
+    try:
+        from acp.workflows.nmr import run_nmr_analysis
+
+        result = run_nmr_analysis(
+            input_sources=args.input,
+            spectrum=args.spectrum,
+            output_dir=str(output_dir),
+            config=cfg,
+            nuclei=nuclei,
+            nmr_method=args.nmr_method,
+            nmr_basis=args.nmr_basis,
+            solvent=args.solvent,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            nproc=args.nproc,
+            boltzmann_temp=args.boltzmann_temp,
+            tms_1h=args.tms_1h,
+            tms_13c=args.tms_13c,
+            error_model=args.error_model,
+            conformer_preset=args.preset,
+            ewin=args.ewin,
+            enumerate_stereoisomers=bool(args.enumerate),
+            stereocenters=args.stereocenters,
+            bruker=args.bruker,
+            bruker_references=bruker_references,
+        )
+    except KeyboardInterrupt:
+        logger.warning("Interrupted by user")
+        return 130
+    except Exception as exc:
+        logger.exception("Fatal error: %s", exc)
+        return 1
+
+    if result.status == "completed":
+        meta = result.metadata or {}
+        logger.info("NMR + DP4/DP5 workflow completed successfully")
+        winner = meta.get("winner")
+        if winner:
+            logger.info(
+                "  Winner: candidate %s (%s) — DP4=%.3f, DP5=%.3f",
+                winner.get("index"),
+                winner.get("label"),
+                float(winner.get("dp4", 0.0)),
+                float(winner.get("dp5", 0.0)),
+            )
+        logger.info("  Candidates        : %s", meta.get("n_candidates", "N/A"))
+        logger.info("  Report JSON       : %s", meta.get("report_json", "N/A"))
+        logger.info("  Report XLSX       : %s", meta.get("report_xlsx", "N/A"))
+        logger.info("  Error model       : %s", meta.get("error_model", "N/A"))
+        if meta.get("note"):
+            logger.warning("  NOTE: %s", meta["note"])
+        return 0
+
+    logger.error("NMR workflow failed: %s", result.error)
+    return 1
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -1732,6 +1986,7 @@ def main(argv: list[str] | None = None) -> int:
     dispatch: dict[str, Callable[[argparse.Namespace], int]] = {
         "ensemble": _handle_ensemble,
         "energy": _handle_energy,
+        "nmr": _handle_nmr,
         "xtbmd_censo_energy": _handle_xtbmd_censo_energy,
         "mechanism": _handle_mechanism,
         "serve": _handle_serve,

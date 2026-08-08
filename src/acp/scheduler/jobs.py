@@ -240,6 +240,41 @@ def xtbmd_method_flags(method: dict[str, Any]) -> list[str]:
     return flags
 
 
+# ── nmr flag emission (E7: runner ⇄ script_gen parity) ──────────────────
+# NMR workflow scalar knobs that flow method → CLI. Nuclei is emitted as
+# a comma-joined string. Solvent/ewin go through the shared resolvers
+# (censo_solvent_from_method / censo_ewin_from_method), not here.
+_NMR_SCALAR_FLAGS: dict[str, str] = {
+    "boltzmann_temp": "--boltzmann-temp",
+    "tms_shielding_h": "--tms-1h",
+    "tms_shielding_c": "--tms-13c",
+    "error_model": "--error-model",
+    "nmr_method": "--nmr-method",
+    "nmr_basis": "--nmr-basis",
+}
+
+
+def nmr_method_flags(method: dict[str, Any]) -> list[str]:
+    """Emit the NMR CLI flag group from a job's method dict (E7 parity).
+
+    Nuclei (a list) is emitted as a comma-joined ``--nuclei`` value when
+    present. Solvent and ewin are resolved through the shared
+    :func:`censo_solvent_from_method` / :func:`censo_ewin_from_method`
+    helpers (caller-side), not here, so the NMR and energy/ensemble
+    branches stay consistent.
+    """
+    flags: list[str] = []
+    nuclei = method.get("nuclei")
+    if isinstance(nuclei, (list, tuple)) and nuclei:
+        flags += ["--nuclei", ",".join(str(n) for n in nuclei)]
+    for key, flag in _NMR_SCALAR_FLAGS.items():
+        value = method.get(key)
+        if value is None or value == "":
+            continue
+        flags += [flag, str(value)]
+    return flags
+
+
 @dataclass(frozen=True)
 class JobSpec:
     """Immutable description of what a job should run.
@@ -332,4 +367,5 @@ __all__ = [
     "censo_solvent_from_method",
     "censo_ewin_from_method",
     "xtbmd_method_flags",
+    "nmr_method_flags",
 ]

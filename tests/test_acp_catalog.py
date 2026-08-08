@@ -32,7 +32,7 @@ CONFSEARCH_SCHEMA = {
 
 _ALL_FUNCTIONALS = frozenset({
     "B3LYP", "PBE0", "wB97X-D4", "wB97M-V",
-    "M062X", "PWPB95",
+    "M062X", "mPW1PW91", "PWPB95", "revDSD-PBEP86",
     "r2SCAN-3c", "PBEh-3c", "B97-3c", "DLPNO-CCSD(T)",
 })
 
@@ -45,6 +45,8 @@ _ADVANCED_FIELD_NAMES = frozenset({
     "md_shake", "md_nvt", "md_seed", "md_method", "conv_check",
     "conv_novelty_max", "conv_rmsd", "max_frames", "opt_gfn",
     "opt_timeout", "edis", "gdis", "resume",
+    # NMR TMS reference overrides (P1a, DevDoc §6.4) — advanced.
+    "tms_shielding_h", "tms_shielding_c",
 })
 
 
@@ -214,8 +216,8 @@ def test_default_dispersion_per_functional() -> None:
 # --- 3.5 ---
 def test_ri_support_classification() -> None:
     composite = ["r2SCAN-3c", "PBEh-3c", "B97-3c"]
-    user_no_c = ["B3LYP", "PBE0", "M062X", "wB97X-D4", "wB97M-V"]
-    user_with_c = ["PWPB95"]
+    user_no_c = ["B3LYP", "PBE0", "M062X", "mPW1PW91", "wB97X-D4", "wB97M-V"]
+    user_with_c = ["PWPB95", "revDSD-PBEP86"]
     automatic = ["DLPNO-CCSD(T)"]
 
     for func in composite:
@@ -562,8 +564,8 @@ def test_basis_catalog_orca_keyword_existence() -> None:
 
 def test_ri_support_classification() -> None:
     composite = ["r2SCAN-3c", "PBEh-3c", "B97-3c"]
-    user_no_c = ["B3LYP", "PBE0", "M062X", "wB97X-D4", "wB97M-V"]
-    user_with_c = ["PWPB95"]
+    user_no_c = ["B3LYP", "PBE0", "M062X", "mPW1PW91", "wB97X-D4", "wB97M-V"]
+    user_with_c = ["PWPB95", "revDSD-PBEP86"]
     automatic = ["DLPNO-CCSD(T)"]
 
     for func in composite:

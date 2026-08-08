@@ -211,6 +211,29 @@ class TSMechanismCalculator(Protocol):
         ...
 
 
+@runtime_checkable
+class NmrShieldingCalculator(Protocol):
+    """Capability: can compute NMR shielding constants (GIAO).
+
+    Implementations return a :class:`QCResult` whose ``metadata["shieldings"]``
+    maps a 0-based atom index to a descriptor carrying at minimum
+    ``{"symbol", "isotropic"}`` (the isotropic magnetic shielding in ppm).
+    """
+
+    def nmr_shielding(
+        self,
+        coordinates: NDArray[np.float64],
+        symbols: list[str],
+        charge: int = 0,
+        multiplicity: int = 1,
+        output_dir: Path | None = None,
+        nuclei: list[str] | None = None,
+        **kwargs: Any,
+    ) -> QCResult:
+        """Compute isotropic magnetic shieldings for target nuclei."""
+        ...
+
+
 __all__ = [
     "QCBackend",
     "QCResult",
@@ -222,4 +245,5 @@ __all__ = [
     "ClusteringTool",
     "ThermoCalculator",
     "TSMechanismCalculator",
+    "NmrShieldingCalculator",
 ]

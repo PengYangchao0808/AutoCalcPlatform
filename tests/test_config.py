@@ -125,10 +125,12 @@ class TestConfig:
         config = _get_default_config()
 
         assert config["theory"]["nmr"]["engine"] == "orca"
-        assert config["theory"]["nmr"]["method"] == "B3LYP"
-        assert config["theory"]["nmr"]["basis"] == "def2-TZVPP"
+        # P1b (2026-08-07): default flipped to mPW1PW91/6-311G(d)/CPCM to
+        # match the Goodman DP4/DP5 error model (DevDoc §8.0/§10.2).
+        assert config["theory"]["nmr"]["method"] == "mPW1PW91"
+        assert config["theory"]["nmr"]["basis"] == "6-311G(d)"
         assert config["theory"]["nmr"]["solvent"] is None
-        assert config["theory"]["nmr"]["solvent_model"] == "smd"
+        assert config["theory"]["nmr"]["solvent_model"] == "cpcm"
 
         assert config["theory"]["optimization"]["solvent_model"] == "none"
         assert config["theory"]["single_point"]["solvent_model"] == "none"
@@ -137,8 +139,10 @@ class TestConfig:
         assert config["nmr"]["temperature_k"] == 298.15
         assert config["nmr"]["energy_window_kcal"] == 3.0
         assert config["nmr"]["max_conformers"] == 10
-        assert config["nmr"]["references"]["1H"] == 31.88
-        assert config["nmr"]["references"]["13C"] == 186.10
+        # TMS references default to unset: the NMR workflow resolves them
+        # solvent-aware from the Goodman TMSdata table.
+        assert config["nmr"]["references"]["1H"] is None
+        assert config["nmr"]["references"]["13C"] is None
         assert config["nmr"]["references"]["15N"] is None
 
     def test_validate_config_invalid_nmr_values(self):
@@ -157,7 +161,7 @@ class TestConfig:
         assert config["nmr"]["temperature_k"] == 298.15
         assert config["nmr"]["energy_window_kcal"] == 3.0
         assert config["nmr"]["max_conformers"] == 10
-        assert config["nmr"]["references"]["1H"] == 31.88
+        assert config["nmr"]["references"]["1H"] is None
         assert config["nmr"]["references"]["13C"] == 180.0
 
     def test_yaml_vs_python_builtin_parity(self):

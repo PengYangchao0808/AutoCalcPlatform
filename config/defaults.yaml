@@ -64,10 +64,10 @@ theory:
 
   nmr:
     engine: orca
-    method: B3LYP
-    basis: def2-TZVPP
+    method: mPW1PW91   # P1b (2026-08-07): Goodman DP4/DP5 reference level
+    basis: 6-311G(d)
     solvent: null
-    solvent_model: smd
+    solvent_model: cpcm
 
 # ==================== Thermodynamic Parameters ====================
 thermo:
@@ -84,8 +84,8 @@ nmr:
   energy_window_kcal: 3.0
   max_conformers: 10
   references:
-    "1H": 31.88
-    "13C": 186.10
+    "1H": null
+    "13C": null
     "15N": null
     "19F": null
     "31P": null

@@ -128,6 +128,29 @@ class ORCABackend(QCBackend):
             )
         )
 
+    def nmr_shielding(
+        self,
+        coordinates: NDArray[np.float64],
+        symbols: list[str],
+        charge: int = 0,
+        multiplicity: int = 1,
+        output_dir: Path | None = None,
+        nuclei: list[str] | None = None,
+        **kwargs: Any,
+    ) -> QCResult:
+        target_dir = output_dir or Path.cwd()
+        return to_qc_result(
+            self._interface.nmr_shielding(
+                coordinates,
+                symbols,
+                charge=charge,
+                multiplicity=multiplicity,
+                output_dir=target_dir,
+                nuclei=nuclei,
+                **kwargs,
+            )
+        )
+
 
 register_backend(ORCABackend)
 

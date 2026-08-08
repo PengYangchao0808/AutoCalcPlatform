@@ -36,6 +36,7 @@ from acp.scheduler.jobs import (
     censo_ewin_from_method,
     censo_preset_from_method,
     censo_solvent_from_method,
+    nmr_method_flags,
     xtbmd_method_flags,
 )
 from acp.scheduler.provenance import Provenance, build_provenance_for_job
@@ -46,8 +47,12 @@ logger = logging.getLogger(__name__)
 _POLL_INTERVAL = 1.0
 
 _GFN_DISPLAY_TO_INT: dict[str, int] = {
-    "GFN0-xTB": 0, "GFN1-xTB": 1, "GFN2-xTB": 2,
-    "0": 0, "1": 1, "2": 2,
+    "GFN0-xTB": 0,
+    "GFN1-xTB": 1,
+    "GFN2-xTB": 2,
+    "0": 0,
+    "1": 1,
+    "2": 2,
 }
 
 
@@ -179,8 +184,11 @@ def materialize_job_input(
         return dest
 
     if (
-        source.endswith(".xyz") or source.endswith(".gjf") or source.endswith(".sdf")
-        or source.endswith(".com") or source.endswith(".inp")
+        source.endswith(".xyz")
+        or source.endswith(".gjf")
+        or source.endswith(".sdf")
+        or source.endswith(".com")
+        or source.endswith(".inp")
     ):
         p = Path(source)
         if p.is_file():
@@ -697,8 +705,16 @@ class JobRunner:
     def _build_cmd(self, spec: JobSpec, work_dir: Path, input_path: str = "") -> list[str]:
         wf = spec.workflow
         if wf not in (
-            "mechanism", "ensemble", "energy", "xtbmd_censo_energy",
-            "singlepoint", "optimize", "frequency", "optfreq", "optfreqsp",
+            "mechanism",
+            "ensemble",
+            "energy",
+            "nmr",
+            "xtbmd_censo_energy",
+            "singlepoint",
+            "optimize",
+            "frequency",
+            "optfreq",
+            "optfreqsp",
             "xtb_optimize",
         ):
             raise ValueError(f"No subprocess mapping for workflow: {wf}")
@@ -709,6 +725,11 @@ class JobRunner:
         res = spec.resources
 
         source = input_path or inp.get("source") or inp.get("input") or inp.get("smiles") or ""
+        # NMR carries multiple candidates + an experiment payload; resolve
+        # them before the standard single-source validation below.
+        if wf == "nmr":
+            return self._build_nmr_cmd(spec, work_dir)
+
         if not source:
             raise ValueError(f"{wf} job requires a valid input structure")
 
@@ -771,6 +792,7 @@ class JobRunner:
             levels = method.get("levels", {})
             if levels:
                 from acp.catalog import method_levels_to_cli_flags
+
                 if wf == "optfreqsp":
                     prefix_map = {"optfreq": "", "single_point": "sp-", "thermo": ""}
                     cmd += method_levels_to_cli_flags(levels, prefix_map)
@@ -806,6 +828,171 @@ class JobRunner:
         if inp.get("multiplicity") is not None:
             cmd += ["--multiplicity", str(inp["multiplicity"])]
         return cmd
+
+    def _build_nmr_cmd(self, spec: JobSpec, work_dir: Path) -> list[str]:
+        """Build the ``acp run nmr`` argv (multi-candidate + spectrum).
+
+        Payload convention (DevDoc §11.1):
+        ``spec.input = {"candidates": [{source_type, source, charge, ...}],
+                        "experiment": {"content": "<§6.2 text>"}}``.
+        For backwards compatibility a single-candidate ``spec.input`` is
+        also accepted (treated as a one-element candidate list).
+        """
+        cmd: list[str] = [self.python, "-m", "acp.cli", "run", "nmr"]
+        cmd += ["--output", str(work_dir)]
+
+        inp = spec.input
+        method = spec.method
+        res = spec.resources
+
+        inputs_dir = work_dir / "inputs"
+        inputs_dir.mkdir(parents=True, exist_ok=True)
+
+        candidates = inp.get("candidates") if isinstance(inp.get("candidates"), list) else None
+        if candidates is None:
+            # legacy single-candidate payload
+            candidates = [inp]
+
+        enumerate_mode = bool(inp.get("enumerate"))
+        for idx, cand in enumerate(candidates):
+            if not isinstance(cand, dict):
+                continue
+            cand_source = cand.get("source") or cand.get("smiles") or cand.get("input")
+            if not cand_source:
+                continue
+            if enumerate_mode and _looks_like_smiles(str(cand_source)):
+                # Enumerate needs bond information (stereochemistry is
+                # topological): pass SMILES through verbatim instead of
+                # materializing to XYZ (which has no bond table).
+                cmd += ["--input", str(cand_source)]
+                continue
+            materialized = materialize_job_input(cand, inputs_dir, work_dir)
+            if materialized is not None:
+                cmd += ["--input", str(materialized)]
+            else:
+                # fall back to the raw source (SMILES strings survive)
+                cmd += ["--input", str(cand_source)]
+
+        experiment = inp.get("experiment") or method.get("experiment")
+        exp_mode = (experiment or {}).get("mode", "assigned")
+        if exp_mode == "bruker":
+            # P3: Bruker raw-data zip uploaded via /uploads?parse=false.
+            bruker_dir = self._materialize_bruker_asset(experiment, inputs_dir, work_dir)
+            if bruker_dir is None:
+                raise ValueError(
+                    "nmr bruker job requires experiment.spectrum_asset_id (+ filename)"
+                )
+            cmd += ["--bruker", str(bruker_dir)]
+            refs = experiment.get("references")
+            if isinstance(refs, dict):
+                for key, value in refs.items():
+                    cmd += ["--bruker-ref", f"{key}={value}"]
+        else:
+            spectrum_path = self._materialize_experiment(experiment, inputs_dir)
+            if spectrum_path is None:
+                raise ValueError("nmr job requires an 'experiment' payload (spectrum text)")
+            cmd += ["--spectrum", str(spectrum_path)]
+
+        # P2: diastereomer enumeration (single-candidate payload only).
+        # The backend expands the one candidate into its full diastereomer
+        # set; enantiomer pairs collapse (DP4 cannot distinguish them).
+        if enumerate_mode:
+            cmd += ["--enumerate"]
+            stereocenters = inp.get("stereocenters")
+            if isinstance(stereocenters, str) and stereocenters.strip():
+                cmd += ["--stereocenters", stereocenters.strip()]
+            elif isinstance(stereocenters, list) and stereocenters:
+                cmd += ["--stereocenters", ",".join(str(s) for s in stereocenters)]
+
+        if spec.name:
+            cmd += ["--name", spec.name]
+        preset = censo_preset_from_method(method)
+        if preset:
+            cmd += ["--preset", preset]
+        cmd += nmr_method_flags(method)
+        solvent = censo_solvent_from_method(method)
+        if solvent:
+            cmd += ["--solvent", solvent]
+        ewin = censo_ewin_from_method(method)
+        if ewin is not None:
+            cmd += ["--ewin", str(ewin)]
+
+        if spec.config_path:
+            cmd += ["--config", str(spec.config_path)]
+        if res.get("nproc") is not None:
+            cmd += ["--nproc", str(res["nproc"])]
+        if res.get("mem"):
+            cmd += ["--mem", str(res["mem"])]
+        return cmd
+
+    @staticmethod
+    def _materialize_experiment(
+        experiment: dict[str, Any] | None,
+        inputs_dir: Path,
+    ) -> Path | None:
+        """Write the §6.2 spectrum text to ``inputs/experiment.txt``."""
+        if experiment is None:
+            return None
+        content = experiment.get("content")
+        if not content:
+            return None
+        inputs_dir.mkdir(parents=True, exist_ok=True)
+        out = inputs_dir / "experiment.txt"
+        out.write_text(str(content), encoding="utf-8")
+        return out
+
+    @staticmethod
+    def _materialize_bruker_asset(
+        experiment: dict[str, Any] | None,
+        inputs_dir: Path,
+        work_dir: Path,
+    ) -> Path | None:
+        """Resolve + extract an uploaded Bruker zip into ``inputs/bruker``.
+
+        The frontend uploads the zip via ``/uploads?parse=false`` and
+        submits ``experiment = {mode: "bruker", spectrum_asset_id,
+        filename, project_id}``. The asset lives at
+        ``<run_root>/<project_id>/uploads/<upload_id>/original/<filename>``
+        (``run_root`` derives from the job work dir, mirroring
+        ``_run_subprocess``). Non-zip assets (an already-extracted
+        directory tarball layout) are rejected with a clear error.
+        """
+        if not experiment:
+            return None
+        upload_id = experiment.get("spectrum_asset_id")
+        filename = experiment.get("filename")
+        if not upload_id or not filename:
+            return None
+        if Path(str(filename)).name != str(filename):
+            raise ValueError(f"Unsafe bruker asset filename: {filename!r}")
+        project_id = str(experiment.get("project_id") or "uncategorized")
+        if project_id in ("", ".", "..") or "/" in project_id or "\\" in project_id:
+            raise ValueError(f"Unsafe bruker asset project_id: {project_id!r}")
+
+        run_root = work_dir.parent.parent
+        asset = (
+            run_root / project_id / "uploads" / str(upload_id) / "original" / str(filename)
+        ).resolve()
+        try:
+            asset.relative_to(run_root.resolve())
+        except ValueError:
+            raise ValueError(f"Bruker asset path escapes run_root: {asset}")
+        if not asset.is_file():
+            raise ValueError(f"Bruker asset not found: {asset}")
+        if asset.suffix.lower() != ".zip":
+            raise ValueError(f"Bruker asset must be a .zip archive: {asset.name}")
+
+        import zipfile
+
+        dest = inputs_dir / "bruker"
+        dest.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(asset) as zf:
+            for member in zf.namelist():
+                target = (dest / member).resolve()
+                if not str(target).startswith(str(dest.resolve())):
+                    raise ValueError(f"Unsafe path in bruker zip: {member!r}")
+            zf.extractall(dest)
+        return dest
 
     def _run_fake(
         self,

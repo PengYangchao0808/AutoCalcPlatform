@@ -10,7 +10,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from cccp.qc.interfaces.orca import ORCAInterface, _parse_frequencies
+from cccp.qc.interfaces.orca import NmrShieldingParser, ORCAInterface, _parse_frequencies
 from tests.conftest import requires_orca
 
 COORDINATES = np.array([[0.0, 0.0, 0.0]])
@@ -133,9 +133,129 @@ def test_orca_nmr_shielding_parses_mocked_run_into_qcresult(
     assert result.log_file == tmp_path / f"{output_name}.out"
     mock_run.assert_called_once()
     input_text = result.output_file.read_text(encoding="utf-8")
-    assert "NMR" in input_text
+    # %eprnmr block drives GIAO (not the simple NMR route keyword).
+    assert "%eprnmr" in input_text
     assert "B3LYP" in input_text
     assert "def2-TZVP" in input_text
+    assert "TightSCF" in input_text
+    # Parsed shieldings ride on metadata (0-based atom index → descriptor).
+    shieldings = result.metadata.get("shieldings")
+    assert isinstance(shieldings, dict)
+    assert 0 in shieldings
+    assert shieldings[0]["symbol"] == "H"
+    assert shieldings[0]["isotropic"] == pytest.approx(28.9012)
+    assert shieldings[0]["anisotropy"] == pytest.approx(2.3456)
+    # tensor components parsed from the XX=/YY=/ZZ= lines
+    assert shieldings[0]["tensor_components"]["XX"] == pytest.approx(30.0000)
+    assert shieldings[0]["tensor_components"]["ZZ"] == pytest.approx(29.0000)
+
+
+def test_nmr_shielding_parser_handles_multi_atom_tensor_block(
+    tmp_path: Path,
+) -> None:
+    """Multi-nucleus ORCA NMR output parses to 0-based indices + tensors."""
+    log = tmp_path / "multi.out"
+    log.write_text(
+        """
+Some preamble...
+
+                       NMR SHIELDING TENSOR (PPM)
+
+  Nucleus   1C:     isotropic=   140.5000   anisotropy=    10.0000
+  XX= 145.0000   YX=   0.0000   ZX=   0.0000
+  XY=   0.0000   YY= 138.0000   ZY=   0.0000
+  XZ=   0.0000   YZ=   0.0000   ZZ= 138.5000
+
+  Nucleus   2H:     isotropic=    30.1000   anisotropy=     1.5000
+  XX=  31.0000   YX=   0.0000   ZX=   0.0000
+  XY=   0.0000   YY=  29.5000   ZY=   0.0000
+  XZ=   0.0000   YZ=   0.0000   ZZ=  29.8000
+
+****ORCA-CHEMISTRY JOB DONE****
+""",
+        encoding="utf-8",
+    )
+    parsed = NmrShieldingParser.parse(log, expected_symbols=["C", "H"])
+    assert set(parsed) == {0, 1}
+    assert parsed[0]["symbol"] == "C"
+    assert parsed[0]["isotropic"] == pytest.approx(140.5)
+    assert parsed[1]["symbol"] == "H"
+    assert parsed[1]["isotropic"] == pytest.approx(30.1)
+    assert parsed[1]["tensor_components"]["YY"] == pytest.approx(29.5)
+
+
+def test_nmr_shielding_parser_falls_back_to_summary_table(
+    tmp_path: Path,
+) -> None:
+    """The compact CHEMICAL SHIELDING SUMMARY table is parsed when present.
+
+    ORCA 5.x summary-table Nucleus column is 0-based (starts at 0), unlike
+    the TENSOR block's 1-based ``Nucleus N El:`` labels. Real ORCA example
+    (ORCA manual §9.10):
+        Nucleus   Element   Isotropic(ppm)
+           0         6 C       45.230
+           1         1 H       28.453
+    """
+    log = tmp_path / "summary.out"
+    log.write_text(
+        """
+--------------------
+CHEMICAL SHIELDING SUMMARY (ppm)
+--------------------
+ Nucleus   Element   Isotropic(ppm)
+   0         6 C       140.230
+   1         1 H        30.453
+--------------------
+""",
+        encoding="utf-8",
+    )
+    parsed = NmrShieldingParser.parse(log)
+    assert parsed[0]["symbol"] == "C"
+    assert parsed[0]["isotropic"] == pytest.approx(140.230)
+    assert parsed[1]["symbol"] == "H"
+
+
+def test_nmr_shielding_parser_summary_table_0based_validation(
+    tmp_path: Path,
+) -> None:
+    """0-based summary table parses to contiguous 0..N-1 indices.
+
+    This guards the exact off-by-one regression: an earlier version
+    subtracted 1 (treating the 0-based ORCA summary as 1-based), which
+    would map atom 0 → index -1 and fail _validate_symbols.
+    """
+    log = tmp_path / "summary0.out"
+    log.write_text(
+        """
+CHEMICAL SHIELDING SUMMARY (ppm)
+ Nucleus   Element   Isotropic(ppm)
+   0         6 C       140.230
+   1         1 H        30.453
+""",
+        encoding="utf-8",
+    )
+    parsed = NmrShieldingParser.parse(log, expected_symbols=["C", "H"])
+    assert set(parsed) == {0, 1}
+    assert parsed[0]["symbol"] == "C"
+    assert parsed[0]["isotropic"] == pytest.approx(140.230)
+    assert parsed[1]["symbol"] == "H"
+
+
+def test_resolve_nmr_nuclei_unsupported_falls_back_to_molecule(
+    sample_config: dict[str, object],
+) -> None:
+    """F3 fix: --nuclei with only unsupported elements must not produce a
+    GIAO-less plain SP job. Falls back to the molecule's NMR-active elements
+    with a warning."""
+    interface = ORCAInterface(sample_config)
+    resolved = interface._resolve_nmr_nuclei(["Si"], ["C", "H", "O"])
+    assert resolved == ["C", "H"]
+    # supported elements are preserved as-is (order kept, de-duplicated)
+    assert interface._resolve_nmr_nuclei(["H", "C", "H"], ["C", "H"]) == ["H", "C"]
+    # no explicit nuclei → molecule-derived
+    assert interface._resolve_nmr_nuclei(None, ["H", "C"]) == ["H", "C"]
+    # no active elements in molecule → empty (caller handles)
+    assert interface._resolve_nmr_nuclei(None, ["Si", "Ge"]) == []
 
 
 def test_orca_build_input_blocks_with_smd(sample_config: dict[str, object]) -> None:

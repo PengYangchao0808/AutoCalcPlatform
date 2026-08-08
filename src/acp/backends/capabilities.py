@@ -45,6 +45,8 @@ _CAPABILITY_ALIASES = {
     "cluster": "clustering",
     "thermochemistry": "thermochemistry",
     "thermo": "thermochemistry",
+    "nmr_shielding": "nmr_shielding",
+    "nmr": "nmr_shielding",
 }
 
 CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
@@ -55,6 +57,7 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "conformer_search": BackendCapabilityStatus.AVAILABLE,
         "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "orca": {
         "geometry_optimization": BackendCapabilityStatus.AVAILABLE,
@@ -63,6 +66,7 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "conformer_search": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "nmr_shielding": BackendCapabilityStatus.AVAILABLE,
     },
     "crest": {
         "geometry_optimization": BackendCapabilityStatus.AVAILABLE,
@@ -71,6 +75,7 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "conformer_search": BackendCapabilityStatus.AVAILABLE,
         "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "xtb": {
         "geometry_optimization": BackendCapabilityStatus.AVAILABLE,
@@ -79,6 +84,7 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "conformer_search": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "external": {
         "geometry_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
@@ -87,6 +93,7 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "conformer_search": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "clustering": BackendCapabilityStatus.MISSING_BINARY,
         "thermochemistry": BackendCapabilityStatus.MISSING_BINARY,
+        "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "molclus": {
         "geometry_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
@@ -95,6 +102,7 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "conformer_search": BackendCapabilityStatus.AVAILABLE,
         "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "isostat": {
         "geometry_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
@@ -103,6 +111,7 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "conformer_search": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "clustering": BackendCapabilityStatus.AVAILABLE,
         "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
 }
 

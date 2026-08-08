@@ -166,6 +166,40 @@ class _EnergyStagePlanProvider:
         ]
 
 
+class _NmrStagePlanProvider:
+    """Stage plan for the NMR + DP4/DP5 workflow (DevDoc §5).
+
+    Stages 2–3 (CREST/CENSO + GIAO NMR) run per-candidate on the compute
+    node; stages 4–8 are lightweight local analysis. The plan below
+    mirrors the per-candidate conformer stages (censo-light) followed by
+    the GIAO + analysis tail.
+    """
+
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        preset = censo_preset_from_method(spec.method) or "censo-light"
+        if preset == "censo-zero":
+            return [
+                StagePlan("embed_smiles"),
+                StagePlan("crest_search"),
+                StagePlan("ensemble_export"),
+                StagePlan("giao_nmr"),
+                StagePlan("boltzmann_average"),
+                StagePlan("dp4_dp5_probability"),
+                StagePlan("nmr_report"),
+            ]
+        return [
+            StagePlan("embed_smiles"),
+            StagePlan("crest_search"),
+            StagePlan("censo_prescreening"),
+            StagePlan("censo_screening"),
+            StagePlan("ensemble_export"),
+            StagePlan("giao_nmr"),
+            StagePlan("boltzmann_average"),
+            StagePlan("dp4_dp5_probability"),
+            StagePlan("nmr_report"),
+        ]
+
+
 class _XtbmdCensoEnergyStagePlanProvider:
     """Stage plan for the xtbmd_censo_energy workflow (DevDoc §8.2).
 
@@ -471,6 +505,7 @@ register_plan_provider("fake", _FakeStagePlanProvider())
 register_plan_provider("mechanism", _MechanismStagePlanProvider())
 register_plan_provider("ensemble", _EnsembleStagePlanProvider())
 register_plan_provider("energy", _EnergyStagePlanProvider())
+register_plan_provider("nmr", _NmrStagePlanProvider())
 register_plan_provider("xtbmd_censo_energy", _XtbmdCensoEnergyStagePlanProvider())
 
 # Simple workflow providers

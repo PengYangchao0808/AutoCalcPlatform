@@ -228,10 +228,10 @@ def _get_default_config() -> dict[str, Any]:
             },
             'nmr': {
                 'engine': 'orca',
-                'method': 'B3LYP',
-                'basis': 'def2-TZVPP',
+                'method': 'mPW1PW91',
+                'basis': '6-311G(d)',
                 'solvent': None,
-                'solvent_model': 'smd'
+                'solvent_model': 'cpcm'
             }
         },
         'thermo': {
@@ -278,8 +278,8 @@ def _get_default_config() -> dict[str, Any]:
             'energy_window_kcal': 3.0,
             'max_conformers': 10,
             'references': {
-                '1H': 31.88,
-                '13C': 186.10,
+                '1H': None,
+                '13C': None,
                 '15N': None,
                 '19F': None,
                 '31P': None,
@@ -649,9 +649,13 @@ def _validate_config(config: dict[str, Any]) -> dict[str, Any]:
     nmr['max_conformers'] = max_conformers
 
     references = nmr.setdefault('references', {})
+    # Defaults are None (unset): the NMR workflow resolves TMS references
+    # from the solvent-aware Goodman TMSdata table (acp.nmr.models.
+    # lookup_tms_shieldings) keyed by (method, basis, solvent). Only an
+    # explicit user value here overrides the table.
     default_references = {
-        '1H': 31.88,
-        '13C': 186.10,
+        '1H': None,
+        '13C': None,
         '15N': None,
         '19F': None,
         '31P': None,

@@ -1387,6 +1387,7 @@ async def upload_structure_file(
     request: Request,
     file: UploadFile = File(...),
     project_id: str = Query(default=""),
+    parse: bool = Query(default=True),
 ) -> UploadResponse:
     from acp.intake import detect_format, parse_structure_text
     from acp.intake.storage import UploadStorage
@@ -1409,6 +1410,20 @@ async def upload_structure_file(
         upload_id, saved_path = upload_storage.save_upload(project_id, filename, body)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+    # parse=false: store-only upload (e.g. NMR Bruker raw-data zip) — the
+    # binary payload is not a structure and must not go through the
+    # structure parsers. The job runner resolves the asset by upload_id.
+    if not parse:
+        return UploadResponse(
+            upload_id=upload_id,
+            filename=filename,
+            size=len(body),
+            structures=[],
+            errors=[],
+            warnings=[],
+            ok=True,
+        )
 
     text = body.decode("utf-8", errors="replace")
     fmt = detect_format(filename, text)

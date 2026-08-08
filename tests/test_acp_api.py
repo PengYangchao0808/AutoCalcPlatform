@@ -77,10 +77,11 @@ def test_workflows_and_protocols(client: TestClient) -> None:
         w["name"] for w in wf["workflows"]
     }
     names = [w["name"] for w in wf["workflows"]]
-    # Retired workflows (conformer/nmr/benchmark) must NOT appear.
+    # Retired workflows (conformer/benchmark) must NOT appear.
+    # NMR was reactivated in P1a (2026-08-07).
     assert "conformer" not in names
-    assert "nmr" not in names
     assert "benchmark" not in names
+    assert "nmr" in names
     pr = client.get("/api/protocols").json()
     assert isinstance(pr["protocols"], list)
 

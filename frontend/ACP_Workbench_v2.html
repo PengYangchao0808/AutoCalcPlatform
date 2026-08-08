@@ -860,6 +860,35 @@ option, optgroup {
 .preview-table tbody tr { cursor: pointer; }
 .preview-table tbody tr.selected { background: rgba(78,161,255,0.12); }
 
+/* NMR + DP4/DP5 report viewer (P2) */
+.nmr-empty { color: var(--text-tertiary); font-size: 12px; padding: 8px 2px; }
+.nmr-winner { border: 1px solid rgba(78,161,255,0.4); border-radius: 10px; padding: 10px 12px; background: rgba(78,161,255,0.08); margin-bottom: 12px; }
+.nmr-winner-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-tertiary); margin-bottom: 4px; }
+.nmr-winner-name { font-size: 13px; font-weight: 600; }
+.nmr-winner-probs { font-size: 11px; color: var(--text-soft); margin-top: 4px; }
+.nmr-cand { border: 1px solid var(--border-subtle); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+.nmr-cand.winner { border-color: rgba(78,161,255,0.5); background: rgba(78,161,255,0.05); }
+.nmr-cand-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.nmr-cand-name { font-size: 12px; font-weight: 600; }
+.nmr-cand-meta { font-size: 10px; color: var(--text-tertiary); }
+.nmr-prob-row { margin-top: 6px; }
+.nmr-prob-label { font-size: 10px; color: var(--text-tertiary); width: 36px; display: inline-block; }
+.nmr-prob-bar-wrap { display: inline-block; width: calc(100% - 60px); height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; vertical-align: middle; }
+.nmr-prob-bar { height: 100%; border-radius: 4px; background: var(--accent); }
+.nmr-prob-bar.dp5 { background: var(--green); }
+.nmr-prob-val { font-size: 10px; margin-left: 6px; color: var(--text-soft); }
+.nmr-cand-actions { margin-top: 8px; display: flex; gap: 6px; }
+.nmr-btn { font-size: 11px; padding: 3px 10px; border: 1px solid var(--border-default); border-radius: 6px; background: transparent; color: var(--text-primary); cursor: pointer; }
+.nmr-btn:hover { border-color: var(--accent); }
+.nmr-btn.active { border-color: var(--accent); color: var(--accent); }
+.nmr-table-wrap { margin-top: 8px; overflow: auto; max-height: 260px; border: 1px solid var(--border-subtle); border-radius: 8px; }
+.nmr-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.nmr-table th { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border-default); color: var(--text-tertiary); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; position: sticky; top: 0; background: var(--bg-panel); }
+.nmr-table td { padding: 5px 8px; border-bottom: 1px solid var(--border-subtle); color: var(--text-primary); }
+.nmr-resid { font-variant-numeric: tabular-nums; }
+.nmr-note { font-size: 10px; color: var(--amber); margin-top: 6px; }
+
+
 .config-cards-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .config-card { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border: 1px solid var(--border-subtle); border-radius: 12px; background: rgba(255,255,255,0.02); }
 .config-card-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-tertiary); white-space: nowrap; }
@@ -1100,6 +1129,17 @@ option, optgroup {
           <h2 data-i18n="files.title">任务文件</h2>
         </div>
         <div class="panel-body" id="file-tree-panel"></div>
+      </section>
+
+      <!-- NMR + DP4/DP5 report viewer (DevDoc §7 / §11.1, P2). Rendered only
+           when an nmr job is selected and its nmr_report.json is available:
+           candidate ranking cards (DP4/DP5 bars + winner highlight),
+           per-candidate shift-comparison tables, and conformer details. -->
+      <section class="panel-section" id="nmr-report-panel" style="display:none;">
+        <div class="panel-head">
+          <h2 data-i18n="nmr.title">NMR + DP4/DP5</h2>
+        </div>
+        <div class="panel-body" id="nmr-report-body"></div>
       </section>
 
       <section class="panel-section">
@@ -1372,6 +1412,64 @@ option, optgroup {
         </div>
 
         <div class="parse-errors" id="parse-errors" style="display:none;"></div>
+
+        <!-- NMR experiment panel (DevDoc §11.1). Visible only when the
+             selected workflow is "nmr". Holds the experimental-spectrum
+             text (assigned/unassigned §6.2 format) submitted alongside
+             the candidates as a single job. -->
+        <div id="nmr-experiment-panel" style="display:none; border: 1px solid var(--border-subtle); border-radius: 10px; padding: 12px; margin-top: 4px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <strong data-i18n="modal.nmr_experiment">实验谱</strong>
+            <span style="font-size: 11px; color: var(--text-tertiary);" id="nmr-experiment-status"></span>
+          </div>
+          <div style="display:flex; gap:6px; margin-bottom:8px;">
+            <button type="button" id="nmr-exp-tab-text" class="btn-secondary"
+              style="font-size:12px; padding:3px 10px;"
+              onclick="setNmrExperimentMode('text')"
+              data-i18n="modal.nmr_tab_text">文本</button>
+            <button type="button" id="nmr-exp-tab-bruker" class="btn-secondary"
+              style="font-size:12px; padding:3px 10px; opacity:0.55;"
+              onclick="setNmrExperimentMode('bruker')"
+              data-i18n="modal.nmr_tab_bruker">Bruker (zip)</button>
+          </div>
+          <div id="nmr-exp-pane-text">
+            <textarea id="nmr-experiment-text" class="modal-input" rows="6"
+              placeholder="C: 167.33(C1), 59.58(C2)&#10;H: 4.81(H4), 7.18(H5)&#10;EQ: C10,C12&#10;OMIT: H19"
+              style="width:100%;"></textarea>
+            <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 4px;">
+              <span data-i18n="modal.nmr_format_hint">已归属格式: C: 167.33(C1) / 未归属: H: 2.95(3) 强度</span>
+            </div>
+          </div>
+          <div id="nmr-exp-pane-bruker" style="display:none;">
+            <input type="file" id="nmr-bruker-file" accept=".zip" class="modal-input" style="width:100%;"
+              onchange="uploadNmrBruker(this)">
+            <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 4px;">
+              <span data-i18n="modal.nmr_bruker_hint">上传 Bruker 原始数据 zip（含 Proton/、Carbon/ 或 expno 目录）；自动傅里叶变换 + 峰拾取后走未归属匹配。</span>
+            </div>
+            <div id="nmr-bruker-status" style="font-size: 11px; color: var(--text-tertiary); margin-top: 4px;"></div>
+          </div>
+        </div>
+        <!-- NMR enumerate row (DevDoc §6.1/§11.1, P2). Visible only for nmr.
+             Lets the user expand a single under-specified candidate into its
+             full diastereomer set (enantiomer pairs collapse — DP4 cannot
+             distinguish them). Greyed out when more than one candidate is
+             present (explicit multi-candidate and enumerate are mutually
+             exclusive). -->
+        <div id="nmr-enumerate-row" style="display:none; margin-top: 8px; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: 8px;">
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin:0;">
+            <input type="checkbox" id="nmr-enumerate-toggle" autocomplete="off">
+            <strong data-i18n="modal.nmr_enumerate">枚举非对映体</strong>
+          </label>
+          <div id="nmr-enumerate-extra" style="display:none; margin-top:6px;">
+            <input type="text" id="nmr-enumerate-centers" class="modal-input"
+              placeholder="C5,C8 — 可选立体中心白名单"
+              data-i18n-placeholder="modal.nmr_stereocenter_ph"
+              style="width:100%; font-size:12px;">
+            <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 4px;">
+              <span data-i18n="modal.nmr_enumerate_hint">单分子输入时展开候选集；对映体自动合并（DP4 无法区分）。</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="config-cards-row">
@@ -1663,6 +1761,21 @@ const I18N = {
     "clone.button": "复制到项目",
     "clone.failed": "复制失败: {message}",
     "files.title": "任务文件",
+    "nmr.title": "NMR + DP4/DP5",
+    "nmr.loading": "正在加载 NMR 报告…",
+    "nmr.no_report": "暂无 nmr_report.json（任务未完成或已过期）",
+    "nmr.error": "NMR 报告加载失败",
+    "nmr.winner": "最高概率候选",
+    "nmr.assignment": "位移对照",
+    "nmr.conformers": "构象明细",
+    "nmr.no_data": "无数据",
+    "nmr.col_atom": "原子",
+    "nmr.col_element": "元素",
+    "nmr.col_exp_ppm": "实验 ppm",
+    "nmr.col_calc_ppm": "计算 ppm",
+    "nmr.col_residual": "残差",
+    "nmr.col_id": "编号",
+    "nmr.col_weight": "权重",
     "files.empty": "选择任务以查看文件",
     "files.too_large": "文件过大，无法直接加载",
     "files.download": "下载文件",
@@ -1791,6 +1904,18 @@ const I18N = {
     "modal.submit": "提交",
     "modal.required_smiles": "请输入 SMILES",
     "modal.submit_failed": "提交失败: {message}",
+    "modal.nmr_experiment": "实验谱（NMR）",
+    "modal.nmr_format_hint": "已归属: C: 167.33(C1)  ·  未归属: H: 2.95(3) 强度",
+    "modal.nmr_spectrum_required": "NMR 工作流需要实验谱文本",
+    "modal.nmr_enumerate": "枚举非对映体",
+    "modal.nmr_enumerate_hint": "单分子输入时展开候选集；对映体自动合并（DP4 无法区分）。",
+    "modal.nmr_stereocenter_ph": "C5,C8 — 可选立体中心白名单",
+    "modal.nmr_tab_text": "文本",
+    "modal.nmr_tab_bruker": "Bruker (zip)",
+    "modal.nmr_bruker_hint": "上传 Bruker 原始数据 zip（含 Proton/、Carbon/ 或 expno 目录）；自动傅里叶变换 + 峰拾取后走未归属匹配。",
+    "modal.nmr_bruker_uploading": "上传中…",
+    "modal.nmr_bruker_ready": "已上传: {name}",
+    "modal.nmr_bruker_required": "请先上传 Bruker zip（或切换到文本模式粘贴谱图）",
     "modal.ri_composite": "复合方法 · 参数已固化",
     "modal.ri_composite_hint": "3c 复合方法已内置 RI 体系，无需用户配置",
     "modal.ri_automatic": "RI 自动 · 后 HF 方法内置",
@@ -1874,6 +1999,21 @@ const I18N = {
     "clone.button": "Copy to project",
     "clone.failed": "Duplicate failed: {message}",
     "files.title": "Job Files",
+    "nmr.title": "NMR + DP4/DP5",
+    "nmr.loading": "Loading NMR report…",
+    "nmr.no_report": "No nmr_report.json yet (job incomplete or expired)",
+    "nmr.error": "Failed to load NMR report",
+    "nmr.winner": "Top-ranked candidate",
+    "nmr.assignment": "Assignment",
+    "nmr.conformers": "Conformers",
+    "nmr.no_data": "No data",
+    "nmr.col_atom": "Atom",
+    "nmr.col_element": "Element",
+    "nmr.col_exp_ppm": "Exp (ppm)",
+    "nmr.col_calc_ppm": "Calc (ppm)",
+    "nmr.col_residual": "Residual",
+    "nmr.col_id": "ID",
+    "nmr.col_weight": "Weight",
     "files.empty": "Select a job to inspect files",
     "files.too_large": "File too large to preview",
     "files.download": "Download file",
@@ -2002,6 +2142,18 @@ const I18N = {
     "modal.submit": "Submit",
     "modal.required_smiles": "Please enter a SMILES string",
     "modal.submit_failed": "Submit failed: {message}",
+    "modal.nmr_experiment": "Experimental spectrum (NMR)",
+    "modal.nmr_format_hint": "Assigned: C: 167.33(C1)  ·  Unassigned: H: 2.95(3) multiplicity",
+    "modal.nmr_spectrum_required": "NMR workflow requires spectrum text",
+    "modal.nmr_enumerate": "Enumerate diastereomers",
+    "modal.nmr_enumerate_hint": "Expands a single input into its diastereomer set; enantiomers auto-merge (DP4 cannot distinguish them).",
+    "modal.nmr_stereocenter_ph": "C5,C8 — optional stereocenter whitelist",
+    "modal.nmr_tab_text": "Text",
+    "modal.nmr_tab_bruker": "Bruker (zip)",
+    "modal.nmr_bruker_hint": "Upload a Bruker raw-data zip (Proton/, Carbon/ or expno dirs); automatic FT + peak picking feeds the unassigned matching path.",
+    "modal.nmr_bruker_uploading": "Uploading…",
+    "modal.nmr_bruker_ready": "Uploaded: {name}",
+    "modal.nmr_bruker_required": "Upload a Bruker zip first (or switch to text mode)",
     "modal.ri_composite": "Composite method \u00b7 parameters fixed",
     "modal.ri_composite_hint": "3c composite methods have built-in RI; no user configuration needed",
     "modal.ri_automatic": "RI automatic \u00b7 post-HF method built-in",
@@ -3705,6 +3857,7 @@ async function selectJob(jobId) {
   folderCache[""] = filesResp.files || [];
   updateInfoPanel(job);
   renderFileTree(filesResp.files || [], jobId);
+  refreshNmrReport(job);
   highlightQueueRow(jobId);
   if (activeSSE) {
     activeSSE.close();
@@ -3721,6 +3874,226 @@ let wizardUploadFile = null;
 let workflowCatalogCache = [];
 let methodCatalogCache = {};
 let previewViewer = null;
+
+// ── NMR report viewer (DevDoc §7 / §11.1, P2) ──────────────────────────
+// Renders nmr_report.json for the selected nmr job: winner card, candidate
+// ranking (DP4/DP5 bars), per-candidate assignment tables, and conformer
+// detail rows. Fetches the report via the existing job-files content API so
+// no new backend endpoint is required.
+
+async function refreshNmrReport(job) {
+  var panel = document.getElementById("nmr-report-panel");
+  var body = document.getElementById("nmr-report-body");
+  if (!panel || !body) return;
+  var wf = job && job.spec && job.spec.workflow;
+  if (wf !== "nmr") { panel.style.display = "none"; body.innerHTML = ""; return; }
+  panel.style.display = "block";
+  body.innerHTML = '<span class="nmr-empty">' + escapeHtml(t("nmr.loading") || "Loading…") + '</span>';
+  try {
+    var report = await fetchNmrReportJson(job);
+    if (!report) {
+      body.innerHTML = '<span class="nmr-empty">' + escapeHtml(t("nmr.no_report") || "No nmr_report.json yet") + '</span>';
+      return;
+    }
+    body.innerHTML = "";
+    body.appendChild(renderNmrWinner(report));
+    var candidates = report.candidates || [];
+    candidates.forEach(function(cand) { body.appendChild(renderNmrCandidate(cand, report)); });
+    if (report.note) {
+      var note = document.createElement("div");
+      note.className = "nmr-note";
+      note.textContent = report.note;
+      body.appendChild(note);
+    }
+  } catch (e) {
+    console.error("NMR report render failed:", e);
+    body.innerHTML = '<span class="nmr-empty">' + escapeHtml(t("nmr.error") || "Failed to load report") + '</span>';
+  }
+}
+
+async function fetchNmrReportJson(job) {
+  var jobId = job.id;
+  var path = "nmr_report.json";
+  var url;
+  if (job.result && job.result.node) {
+    url = "/jobs/" + encodeURIComponent(jobId) + "/remote-files/" + encodeURIComponent(path) + "/preview";
+  } else {
+    url = "/jobs/" + encodeURIComponent(jobId) + "/files/" + encodeURIComponent(path);
+  }
+  var resp = await api(url);
+  if (typeof resp === "string") { try { resp = JSON.parse(resp); } catch (e) { return null; } }
+  return resp && typeof resp === "object" ? resp : null;
+}
+
+function renderNmrWinner(report) {
+  var wrap = document.createElement("div");
+  var summary = report.summary || {};
+  var winner = summary.winner;
+  wrap.className = "nmr-winner";
+  var label = document.createElement("div");
+  label.className = "nmr-winner-label";
+  label.textContent = t("nmr.winner") || "Winner";
+  wrap.appendChild(label);
+  var name = document.createElement("div");
+  name.className = "nmr-winner-name";
+  name.textContent = winner ? (winner.label || ("candidate_" + winner.index)) : (t("common.none") || "—");
+  wrap.appendChild(name);
+  if (winner) {
+    var probs = document.createElement("div");
+    probs.className = "nmr-winner-probs";
+    probs.textContent = "DP4 = " + Number(winner.dp4).toFixed(3) + "   ·   DP5 = " + Number(winner.dp5).toFixed(3);
+    wrap.appendChild(probs);
+  }
+  var nuclei = (summary.nuclei || []).join(", ");
+  if (nuclei) {
+    var meta = document.createElement("div");
+    meta.className = "nmr-cand-meta";
+    meta.textContent = "nuclei: " + nuclei + "   ·   candidates: " + (summary.n_candidates != null ? summary.n_candidates : (report.candidates || []).length);
+    wrap.appendChild(meta);
+  }
+  return wrap;
+}
+
+function renderNmrCandidate(cand, report) {
+  var wrap = document.createElement("div");
+  var summary = report.summary || {};
+  var isWinner = summary.winner && String(summary.winner.index) === String(cand.index);
+  wrap.className = "nmr-cand" + (isWinner ? " winner" : "");
+  var head = document.createElement("div");
+  head.className = "nmr-cand-head";
+  var name = document.createElement("span");
+  name.className = "nmr-cand-name";
+  name.textContent = cand.label || ("candidate_" + cand.index);
+  head.appendChild(name);
+  var meta = document.createElement("span");
+  meta.className = "nmr-cand-meta";
+  meta.textContent = "conf=" + (cand.n_conformers != null ? cand.n_conformers : "?");
+  head.appendChild(meta);
+  wrap.appendChild(head);
+
+  // DP4 / DP5 probability bars
+  var dp4 = Number(cand.dp4_probability) || 0;
+  var dp5 = Number(cand.dp5_probability) || 0;
+  [["DP4", dp4, ""], ["DP5", dp5, "dp5"]].forEach(function(pair) {
+    var row = document.createElement("div");
+    row.className = "nmr-prob-row";
+    var lab = document.createElement("span");
+    lab.className = "nmr-prob-label";
+    lab.textContent = pair[0];
+    row.appendChild(lab);
+    var barWrap = document.createElement("span");
+    barWrap.className = "nmr-prob-bar-wrap";
+    var bar = document.createElement("span");
+    bar.className = "nmr-prob-bar" + (pair[2] ? " " + pair[2] : "");
+    bar.style.width = Math.min(100, Math.max(0, pair[1] * 100)) + "%";
+    barWrap.appendChild(bar);
+    row.appendChild(barWrap);
+    var val = document.createElement("span");
+    val.className = "nmr-prob-val";
+    val.textContent = pair[1].toFixed(3);
+    row.appendChild(val);
+    wrap.appendChild(row);
+  });
+
+  // toggle: assignment table vs conformer details
+  var actions = document.createElement("div");
+  actions.className = "nmr-cand-actions";
+  var btnAssign = document.createElement("button");
+  btnAssign.className = "nmr-btn active";
+  btnAssign.textContent = t("nmr.assignment") || "Assignment";
+  var btnConf = document.createElement("button");
+  btnConf.className = "nmr-btn";
+  btnConf.textContent = t("nmr.conformers") || "Conformers";
+  actions.appendChild(btnAssign);
+  actions.appendChild(btnConf);
+  wrap.appendChild(actions);
+
+  var detailWrap = document.createElement("div");
+  detailWrap.className = "nmr-table-wrap";
+  wrap.appendChild(detailWrap);
+  renderNmrAssignTable(detailWrap, cand);
+  btnAssign.addEventListener("click", function() {
+    btnAssign.classList.add("active"); btnConf.classList.remove("active");
+    detailWrap.innerHTML = ""; renderNmrAssignTable(detailWrap, cand);
+  });
+  btnConf.addEventListener("click", function() {
+    btnConf.classList.add("active"); btnAssign.classList.remove("active");
+    detailWrap.innerHTML = ""; renderNmrConformerTable(detailWrap, cand);
+  });
+  return wrap;
+}
+
+function renderNmrAssignTable(container, cand) {
+  var assigns = cand.assignment || [];
+  if (!assigns.length) { container.textContent = t("nmr.no_data") || "No assignment data"; return; }
+  var table = document.createElement("table");
+  table.className = "nmr-table";
+  var thead = document.createElement("thead");
+  var tr = document.createElement("tr");
+  ["atom", "element", "exp_ppm", "calc_ppm", "residual"].forEach(function(h) {
+    var th = document.createElement("th");
+    th.textContent = t("nmr.col_" + h) || h;
+    tr.appendChild(th);
+  });
+  thead.appendChild(tr);
+  table.appendChild(thead);
+  var tbody = document.createElement("tbody");
+  assigns.forEach(function(a) {
+    var row = document.createElement("tr");
+    [a.atom, a.element, a.exp_ppm, a.calc_ppm, a.residual].forEach(function(v) {
+      var td = document.createElement("td");
+      if (typeof v === "number") td.className = "nmr-resid";
+      td.textContent = (typeof v === "number" && isFinite(v)) ? Number(v).toFixed(3) : (v == null ? "—" : String(v));
+      row.appendChild(td);
+    });
+    tbody.appendChild(row);
+  });
+  table.appendChild(tbody);
+  container.appendChild(table);
+  var reg = cand.regression || {};
+  var nuclei = Object.keys(reg);
+  if (nuclei.length) {
+    var regLine = document.createElement("div");
+    regLine.className = "nmr-cand-meta";
+    regLine.style.marginTop = "6px";
+    regLine.textContent = nuclei.map(function(n) {
+      var r = reg[n] || {};
+      return n + ": slope=" + Number(r.slope).toFixed(3) + ", R²=" + Number(r.r_squared).toFixed(3) + ", MAE=" + Number(r.mae).toFixed(3);
+    }).join("   ·   ");
+    container.appendChild(regLine);
+  }
+}
+
+function renderNmrConformerTable(container, cand) {
+  var confs = cand.conformers || [];
+  if (!confs.length) { container.textContent = t("nmr.no_data") || "No conformer data"; return; }
+  var table = document.createElement("table");
+  table.className = "nmr-table";
+  var thead = document.createElement("thead");
+  var tr = document.createElement("tr");
+  ["id", "weight"].forEach(function(h) {
+    var th = document.createElement("th");
+    th.textContent = t("nmr.col_" + h) || h;
+    tr.appendChild(th);
+  });
+  thead.appendChild(tr);
+  table.appendChild(thead);
+  var tbody = document.createElement("tbody");
+  confs.forEach(function(c) {
+    var row = document.createElement("tr");
+    var tdId = document.createElement("td");
+    tdId.textContent = String(c.id != null ? c.id : "?");
+    row.appendChild(tdId);
+    var tdW = document.createElement("td");
+    tdW.className = "nmr-resid";
+    tdW.textContent = Number(c.boltzmann_weight).toFixed(4);
+    row.appendChild(tdW);
+    tbody.appendChild(row);
+  });
+  table.appendChild(tbody);
+  container.appendChild(table);
+}
+
 
 // ── CatalogUtils — IIFE module for catalog-helper functions ──────────
 // Phase 4.1: extracted from openMethodConfig() closure so that the
@@ -3878,6 +4251,21 @@ function openModal() {
   updateConfigCards();
   renderModalProjects();
   setModalProjectDefault();
+  // Reset NMR enumerate toggle on each open (P2) and register its change
+  // listener once (guarded so repeated opens don't stack handlers).
+  var enumToggle = document.getElementById("nmr-enumerate-toggle");
+  if (enumToggle) {
+    enumToggle.checked = false;
+    var centersInp = document.getElementById("nmr-enumerate-centers");
+    if (centersInp) centersInp.value = "";
+    if (!enumToggle._acpWired) {
+      enumToggle._acpWired = true;
+      enumToggle.addEventListener("change", function() {
+        var extra = document.getElementById("nmr-enumerate-extra");
+        if (extra) extra.style.display = enumToggle.checked ? "block" : "none";
+      });
+    }
+  }
   document.getElementById("job-modal").style.display = "flex";
 }
 
@@ -4063,6 +4451,79 @@ function updateInputModeVisibility() {
   var hint = document.getElementById("simple-input-hint");
   if (hint) hint.style.display = simple ? "block" : "none";
   if (simple && wizardInputMode === "smiles") setWizardInputMode("upload");
+  // NMR experiment panel: visible only for the nmr workflow (DevDoc §11.1).
+  var nmrPanel = document.getElementById("nmr-experiment-panel");
+  if (nmrPanel) {
+    var isNmr = wizardState && wizardState.workflow && wizardState.workflow.id === "nmr";
+    nmrPanel.style.display = isNmr ? "block" : "none";
+  }
+  // NMR enumerate row (P2): only for nmr, and only meaningful with a single
+  // candidate. Explicit multi-candidate input and enumeration are mutually
+  // exclusive, so grey it out when >1 structure is staged.
+  var nmrEnumRow = document.getElementById("nmr-enumerate-row");
+  if (nmrEnumRow) {
+    var isNmrWf = wizardState && wizardState.workflow && wizardState.workflow.id === "nmr";
+    var nStaged = (window.wizardStructures || []).length;
+    var singleOk = nStaged <= 1;
+    nmrEnumRow.style.display = isNmrWf ? "block" : "none";
+    nmrEnumRow.style.opacity = singleOk ? "1" : "0.45";
+    var enumToggle = document.getElementById("nmr-enumerate-toggle");
+    if (enumToggle && !singleOk) {
+      enumToggle.checked = false;
+      enumToggle.disabled = true;
+    } else if (enumToggle) {
+      enumToggle.disabled = false;
+    }
+    var enumExtra = document.getElementById("nmr-enumerate-extra");
+    if (enumExtra && enumToggle) enumExtra.style.display = enumToggle.checked ? "block" : "none";
+  }
+}
+
+// --- NMR Bruker raw-data input (P3, DevDoc §5 stage 0a) --------------------
+var nmrExperimentMode = "text"; // "text" | "bruker"
+var nmrBrukerAsset = null;      // {upload_id, filename, project_id}
+
+function setNmrExperimentMode(mode) {
+  nmrExperimentMode = mode === "bruker" ? "bruker" : "text";
+  var textPane = document.getElementById("nmr-exp-pane-text");
+  var brukerPane = document.getElementById("nmr-exp-pane-bruker");
+  if (textPane) textPane.style.display = nmrExperimentMode === "text" ? "block" : "none";
+  if (brukerPane) brukerPane.style.display = nmrExperimentMode === "bruker" ? "block" : "none";
+  var tabText = document.getElementById("nmr-exp-tab-text");
+  var tabBruker = document.getElementById("nmr-exp-tab-bruker");
+  if (tabText) tabText.style.opacity = nmrExperimentMode === "text" ? "1" : "0.55";
+  if (tabBruker) tabBruker.style.opacity = nmrExperimentMode === "bruker" ? "1" : "0.55";
+}
+
+async function uploadNmrBruker(input) {
+  var file = input && input.files && input.files[0];
+  if (!file) return;
+  var status = document.getElementById("nmr-bruker-status");
+  if (status) status.textContent = t("modal.nmr_bruker_uploading") || "上传中…";
+  var projectSelect = document.getElementById("modal-project-select");
+  var projectId = (projectSelect && projectSelect.value) || "uncategorized";
+  var formData = new FormData();
+  formData.append("file", file);
+  try {
+    var resp = await fetch(
+      API_BASE + "/uploads?parse=false&project_id=" + encodeURIComponent(projectId),
+      { method: "POST", body: formData }
+    );
+    var body = await resp.json().catch(function() { return {}; });
+    if (!resp.ok) throw new Error(body.detail || resp.statusText);
+    nmrBrukerAsset = {
+      upload_id: body.upload_id,
+      filename: body.filename || file.name,
+      project_id: projectId,
+    };
+    if (status) {
+      status.textContent = (t("modal.nmr_bruker_ready") || "已上传: {name}")
+        .replace("{name}", nmrBrukerAsset.filename);
+    }
+  } catch (e) {
+    nmrBrukerAsset = null;
+    if (status) status.textContent = "Upload failed: " + e.message;
+  }
 }
 
 function updateConfigCards() {
@@ -4530,6 +4991,31 @@ async function openMethodConfig() {
       var isCustomActive = supportsCustom && curVal && (
         String(curVal) === "__custom__" || (opts && opts.indexOf(String(curVal)) < 0)
       );
+
+      // Multi-select fields (e.g. NMR "nuclei"): value is an array of options.
+      if (fieldFd && fieldFd.multi && opts && opts.length) {
+        var msel = document.createElement("select");
+        msel.multiple = true;
+        var curArr = Array.isArray(curVal) ? curVal.map(String) : (curVal ? [String(curVal)] : []);
+        opts.forEach(function(o) {
+          var mopt = document.createElement("option");
+          mopt.value = o;
+          mopt.textContent = o;
+          if (curArr.indexOf(String(o)) >= 0) mopt.selected = true;
+          msel.appendChild(mopt);
+        });
+        msel.addEventListener("change", function() {
+          var vals = [];
+          for (var mi = 0; mi < msel.options.length; mi++) {
+            if (msel.options[mi].selected) vals.push(msel.options[mi].value);
+          }
+          getLevelState(lvDef.level_id)[fieldName] = vals;
+          scheduleValidate();
+        });
+        fDiv.appendChild(msel);
+        dest.appendChild(fDiv);
+        return;
+      }
 
       if (opts && opts.length) {
         var sel = document.createElement("select");
@@ -5304,6 +5790,118 @@ async function submitJobModal() {
   var censoStage = (wizardState.method.stages || {}).censo || {};
   var threshold = parseFloat(censoStage.refinement_threshold);
   if (isNaN(threshold) || threshold <= 0 || threshold > 1) threshold = 0.99;
+
+  // NMR: single job carrying all candidates + the experimental spectrum.
+  // DevDoc §11.1 — breaks the "one structure = one job" convention.
+  if (workflow === "nmr") {
+    var nmrStatus = document.getElementById("nmr-experiment-status");
+    var nmrExperiment;
+    if (typeof nmrExperimentMode !== "undefined" && nmrExperimentMode === "bruker") {
+      // P3: Bruker raw-data zip uploaded via /uploads?parse=false.
+      if (!nmrBrukerAsset || !nmrBrukerAsset.upload_id) {
+        if (nmrStatus) nmrStatus.textContent = t("modal.nmr_bruker_required") || "需上传 Bruker zip";
+        window.alert(t("modal.nmr_bruker_required") || "请先上传 Bruker zip");
+        return;
+      }
+      nmrExperiment = {
+        mode: "bruker",
+        spectrum_asset_id: nmrBrukerAsset.upload_id,
+        filename: nmrBrukerAsset.filename,
+        project_id: nmrBrukerAsset.project_id,
+      };
+    } else {
+      var expText = (document.getElementById("nmr-experiment-text").value || "").trim();
+      if (!expText) {
+        if (nmrStatus) nmrStatus.textContent = t("modal.nmr_spectrum_required") || "需实验谱";
+        window.alert(t("modal.nmr_spectrum_required") || "NMR 工作流需要实验谱文本");
+        return;
+      }
+      nmrExperiment = { mode: "assigned", content: expText };
+    }
+    var nmrCandidates = [];
+    var chargeVal = parseInt(document.getElementById("modal-charge").value, 10) || 0;
+    var multVal = parseInt(document.getElementById("modal-mult").value, 10) || 1;
+    for (var ni = 0; ni < wizardStructures.length; ni++) {
+      var ns = wizardStructures[ni];
+      var np;
+      if (ns.source_type === "smiles" && ns.smiles) {
+        np = { source_type: "smiles", source: ns.smiles };
+      } else if (ns.normalized_path) {
+        np = { source_type: "structure_asset", asset_id: ns.asset_id, source: ns.normalized_path };
+      } else if (ns.smiles) {
+        np = { source_type: "smiles", source: ns.smiles };
+      } else if (ns.xyz) {
+        np = { source_type: "xyz_text", source: ns.xyz };
+      } else {
+        continue;
+      }
+      np.charge = chargeVal;
+      np.multiplicity = multVal;
+      nmrCandidates.push(np);
+    }
+    if (!nmrCandidates.length) {
+      window.alert(t("modal.parse_first") || "请先解析结构");
+      return;
+    }
+    var nmrCleanedLevels = {};
+    var nmrWizStages = wizardState.method.stages || {};
+    Object.keys(nmrWizStages).forEach(function(lid) {
+      var st = nmrWizStages[lid];
+      if (!st || !st.engine || st._disabled === true) return;
+      nmrCleanedLevels[lid] = JSON.parse(JSON.stringify(st));
+    });
+    var nmrMethod = {
+      schema_id: wizardState.workflow.schema_id || "nmr",
+      profile_id: wizardState.method.profile_id,
+      levels: nmrCleanedLevels,
+    };
+    var nmrPid = wizardState.method.profile_id;
+    if (nmrPid && nmrPid !== "__custom__") nmrMethod.preset = nmrPid;
+    // hoist nuclei + TMS + boltzmann_temp from the GIAO level for the runner
+    var giaoaLevel = nmrCleanedLevels.giaoa || {};
+    ["nuclei", "boltzmann_temp", "tms_shielding_h", "tms_shielding_c", "functional", "basis"].forEach(function(k) {
+      if (giaoaLevel[k] !== undefined && giaoaLevel[k] !== "") nmrMethod[k] = giaoaLevel[k];
+    });
+    if (giaoaLevel.solvent && String(giaoaLevel.solvent_model || "cpcm").toLowerCase() !== "none") {
+      nmrMethod.solvent = giaoaLevel.solvent;
+    }
+    var nmrBody = {
+      workflow: "nmr",
+      name: jobName || "nmr_job",
+      input: {
+        source_type: "candidates",
+        candidates: nmrCandidates,
+        experiment: nmrExperiment,
+      },
+      method: nmrMethod,
+      resources: { nproc: nproc, mem: mem },
+      target_node: selectedNode || null,
+    };
+    // P2: diastereomer enumeration (single candidate only). When the user
+    // enables --enumerate, the backend expands the one candidate into its
+    // full diastereomer set before the per-candidate pipeline runs.
+    var enumToggle = document.getElementById("nmr-enumerate-toggle");
+    if (enumToggle && enumToggle.checked && nmrCandidates.length === 1) {
+      nmrBody.input.enumerate = true;
+      var centersVal = (document.getElementById("nmr-enumerate-centers").value || "").trim();
+      if (centersVal) nmrBody.input.stereocenters = centersVal;
+    }
+    var nmrProjectId = document.getElementById("modal-project-select").value;
+    if (nmrProjectId) nmrBody.project_id = nmrProjectId;
+    try {
+      var nmrResult = await api("/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nmrBody),
+      });
+      closeModal();
+      await refreshJobs();
+      await selectJob(nmrResult.job_id);
+    } catch (err) {
+      window.alert((t("modal.submit_failed") || "提交失败") + ": " + err);
+    }
+    return;
+  }
 
   for (var i = 0; i < wizardStructures.length; i++) {
     var s = wizardStructures[i];

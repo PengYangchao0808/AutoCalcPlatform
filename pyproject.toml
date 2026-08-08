@@ -25,6 +25,8 @@ dependencies = [
     "numpy>=2.1.0",
     "rdkit>=2022.09.1",
     "pyyaml>=6.0",
+    "scipy>=1.10",
+    "matplotlib>=3.7",
 ]
 
 [project.optional-dependencies]
@@ -36,6 +38,15 @@ api = [
 ]
 remote = [
     "paramiko>=3.0",
+]
+nmr = [
+    "nmrglue>=0.10",
+    "openbabel>=3.1",
+    # FCHL-weighted DP5 (P4, DevDoc appendix D). NOTE: qml currently only
+    # builds against numpy<2 (removed numpy.distutils; needs a Fortran
+    # compiler). The DP5 path degrades gracefully to the unweighted KDE
+    # fallback when qml is unavailable — see acp.nmr.error_model.
+    "qml>=0.4",
 ]
 dev = [
     "pytest>=7.4.0",

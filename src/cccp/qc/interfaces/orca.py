@@ -111,6 +111,187 @@ def _record_hessian_resolution(
         logger.warning("Failed to write Hessian resolution sidecar: %s", exc)
 
 
+_NMR_NUCLEUS_TENSOR_RE = re.compile(
+    r"^\s*Nucleus\s+(\d+)\s*([A-Za-z]{1,2})\s*:\s*isotropic\s*=\s*"
+    r"([-+]?\d+\.\d+)\s*anisotropy\s*=\s*([-+]?\d+\.\d+)"
+)
+_NMR_TENSOR_COMP_RE = re.compile(r"([XYZ]{2})\s*=\s*([-+]?\d+\.\d+)")
+# ORCA 5.x summary table fallback:
+#   Nucleus   Element   Isotropic(ppm)
+#      0         6 C       45.230
+_NMR_SUMMARY_ROW_RE = re.compile(
+    r"^\s*(\d+)\s+(\d+)\s*([A-Za-z]{1,2})\s+([-+]?\d+\.\d+)\s*$"
+)
+_NMR_TENSOR_HEADER = "NMR SHIELDING TENSOR"
+_NMR_SUMMARY_HEADER = "CHEMICAL SHIELDING SUMMARY"
+_NMR_SHIELDING_HEADERS = (_NMR_TENSOR_HEADER, _NMR_SUMMARY_HEADER)
+
+
+class NmrShieldingParser:
+    """Parse ORCA GIAO NMR shielding output.
+
+    Handles both formats emitted by ORCA 5.x:
+
+    * the full ``NMR SHIELDING TENSOR (PPM)`` block (per-nucleus tensor
+      components, written by ``%eprnmr`` or the simple ``NMR`` keyword);
+    * the compact ``CHEMICAL SHIELDING SUMMARY (ppm)`` table.
+
+    Returns a mapping of 0-based atom index → shielding descriptor. The
+    ORCA ``Nucleus NH:`` line numbers atoms from 1; the parser converts
+    to 0-based to match :class:`Structure` indexing.
+    """
+
+    @staticmethod
+    def parse(
+        log_file: Path,
+        expected_symbols: list[str] | tuple[str, ...] | None = None,
+    ) -> dict[int, dict[str, Any]]:
+        """Parse the last NMR shielding section from an ORCA log.
+
+        Args:
+            log_file: ORCA ``.out`` log path.
+            expected_symbols: When provided, validate that the parsed
+                element sequence matches (raises ``ValueError`` on mismatch).
+
+        Returns:
+            Dict ``{atom_index(0-based): {"symbol", "isotropic",
+            "anisotropy", "tensor_components"}}``.
+        """
+        try:
+            text = Path(log_file).read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            logger.warning("Could not read NMR shielding from %s: %s", log_file, exc)
+            return {}
+
+        lines = text.splitlines()
+        shieldings = NmrShieldingParser._parse_tensor_block(lines)
+        if not shieldings:
+            shieldings = NmrShieldingParser._parse_summary_block(lines)
+
+        if not shieldings:
+            logger.warning("No NMR shielding section found in %s", log_file)
+            return {}
+
+        if expected_symbols is not None:
+            NmrShieldingParser._validate_symbols(shieldings, expected_symbols)
+        return shieldings
+
+    @staticmethod
+    def _parse_tensor_block(lines: list[str]) -> dict[int, dict[str, Any]]:
+        """Parse the ``NMR SHIELDING TENSOR (PPM)`` block."""
+        # find the last occurrence of the tensor header
+        start = None
+        for idx in range(len(lines) - 1, -1, -1):
+            if _NMR_TENSOR_HEADER in lines[idx]:
+                start = idx + 1
+                break
+        if start is None:
+            return {}
+
+        result: dict[int, dict[str, Any]] = {}
+        current: dict[str, Any] | None = None
+        for line in lines[start:]:
+            if not line.strip():
+                if current is not None:
+                    result[int(current["atom_index"])] = current
+                    current = None
+                # blank lines inside a tensor block are normal; only stop
+                # when we hit a completely new section / end of relevant data
+                continue
+            m = _NMR_NUCLEUS_TENSOR_RE.match(line)
+            if m:
+                if current is not None:
+                    result[int(current["atom_index"])] = current
+                current = {
+                    "atom_index": int(m.group(1)) - 1,  # → 0-based
+                    "symbol": _normalize_nmr_symbol(m.group(2)),
+                    "isotropic": float(m.group(3)),
+                    "anisotropy": float(m.group(4)),
+                    "tensor_components": {},
+                }
+                continue
+            if current is not None:
+                for comp in _NMR_TENSOR_COMP_RE.finditer(line):
+                    current["tensor_components"][comp.group(1)] = float(comp.group(2))
+                # stop scanning once we clearly leave the tensor block
+                if "JOB DONE" in line or line.startswith("----"):
+                    if current is not None:
+                        result[int(current["atom_index"])] = current
+                        current = None
+                    break
+        if current is not None:
+            result[int(current["atom_index"])] = current
+        return result
+
+    @staticmethod
+    def _parse_summary_block(lines: list[str]) -> dict[int, dict[str, Any]]:
+        """Parse the ``CHEMICAL SHIELDING SUMMARY (ppm)`` table fallback."""
+        start = None
+        for idx in range(len(lines) - 1, -1, -1):
+            if _NMR_SUMMARY_HEADER in lines[idx]:
+                start = idx + 1
+                break
+        if start is None:
+            return {}
+
+        result: dict[int, dict[str, Any]] = {}
+        for line in lines[start:]:
+            m = _NMR_SUMMARY_ROW_RE.match(line)
+            if not m:
+                stripped = line.strip()
+                if not stripped or stripped.startswith("-"):
+                    continue
+                # skip the column-header row ("Nucleus Element Isotropic(ppm)")
+                lowered = stripped.lower()
+                if lowered.startswith("nucleus") and "isotropic" in lowered:
+                    continue
+                if result:
+                    break  # already collected rows → left the table
+                continue  # haven't seen data yet → keep scanning
+            # group layout: <nucleus#> <element_num> <element_sym> <iso>
+            # ORCA 5.x summary table Nucleus column is 0-based (starts at 0),
+            # unlike the TENSOR block's "Nucleus N El:" which is 1-based.
+            # Real ORCA 5.x output example (confirmed by ORCA manual §9.10):
+            #   Nucleus   Element   Isotropic(ppm)
+            #      0         6 C       45.230
+            atom_idx = int(m.group(1))  # 0-based, no -1
+            result[atom_idx] = {
+                "atom_index": atom_idx,
+                "symbol": _normalize_nmr_symbol(m.group(3)),
+                "isotropic": float(m.group(4)),
+                "anisotropy": None,
+                "tensor_components": {},
+            }
+        return result
+
+    @staticmethod
+    def _validate_symbols(
+        shieldings: dict[int, dict[str, Any]],
+        expected_symbols: list[str] | tuple[str, ...],
+    ) -> None:
+        expected = [_normalize_nmr_symbol(s) for s in expected_symbols]
+        indices = sorted(shieldings)
+        if indices != list(range(len(expected))):
+            raise ValueError(
+                "Parsed shielding atom indices do not form a contiguous "
+                f"0..N-1 sequence: {indices}"
+            )
+        parsed = [shieldings[i]["symbol"] for i in indices]
+        if parsed != expected:
+            raise ValueError(
+                f"Parsed shielding symbols {parsed} do not match "
+                f"expected {expected}"
+            )
+
+
+def _normalize_nmr_symbol(symbol: str) -> str:
+    """Return a normalized element symbol (Title-case, stripped)."""
+    s = symbol.strip()
+    if not s:
+        return s
+    return s[:1].upper() + s[1:].lower()
+
+
 _FREQ_SECTION_HEADER = "VIBRATIONAL FREQUENCIES"
 _FREQ_LINE_RE = re.compile(r"^\s*\d+:\s+([-+]?\d+\.\d+)\s+cm\*\*-1", re.MULTILINE)
 
@@ -925,24 +1106,36 @@ class ORCAInterface(QCInterfaceBase):
         output_name: str = "nmr",
         method: str = None,
         basis: str = None,
+        nuclei: list[str] | None = None,
         **kwargs,
     ) -> QCResult:
-        """
-        Perform NMR shielding calculation using ORCA's NMR keyword.
+        """Perform a GIAO NMR shielding calculation via ORCA ``%eprnmr``.
+
+        Uses a dedicated input writer (``_write_nmr_input``) that emits the
+        ``%eprnmr`` block for explicit nucleus selection rather than the
+        simple ``NMR`` route keyword, giving finer control over which nuclei
+        are computed. The default method/basis is ``mPW1PW91/6-311G(d)`` to
+        match the Goodman DP4/DP5 error model (DevDoc §8.0); callers that
+        override the level must keep the error model consistent.
 
         Args:
-            coordinates: Molecular coordinates (N, 3)
-            symbols: Element symbols
-            charge: Molecular charge
-            multiplicity: Spin multiplicity
-            output_dir: Output directory
-            output_name: Base name for output files
-            method: Override DFT method (uses self.method if None)
-            basis: Override basis set (uses self.basis if None)
-            **kwargs: Additional parameters (ignored for compatibility)
+            coordinates: Molecular coordinates (N, 3).
+            symbols: Element symbols.
+            charge: Molecular charge.
+            multiplicity: Spin multiplicity.
+            output_dir: Output directory.
+            output_name: Base name for output files.
+            method: DFT method override (default mPW1PW91 if neither this
+                nor ``self.method`` is set).
+            basis: Basis set override (default 6-311G(d)).
+            nuclei: Target nuclei as element symbols (e.g. ``["C", "H"]``).
+                When ``None``, defaults to all distinct elements present in
+                the molecule that are NMR-active (1H, 13C, 19F, 31P, 15N).
+            **kwargs: ``solvent`` / ``solvent_model`` and other overrides.
 
         Returns:
-            QCResult with NMR shielding calculation results
+            :class:`QCResult` with ``metadata["shieldings"]`` holding the
+            parsed shielding dict (0-based atom index → descriptor).
         """
         output_dir = Path(output_dir) if output_dir else Path.cwd()
         ensure_dir(output_dir)
@@ -950,20 +1143,20 @@ class ORCAInterface(QCInterfaceBase):
         input_file = output_dir / f"{output_name}.inp"
         output_file = output_dir / f"{output_name}.out"
 
-        _solvent = kwargs.pop("solvent", None)
-        _solvent_model = kwargs.pop("solvent_model", None)
+        solvent = kwargs.pop("solvent", None)
+        solvent_model = kwargs.pop("solvent_model", None)
 
-        self._write_input(
+        self._write_nmr_input(
             input_file,
             coordinates,
             symbols,
-            "nmr",
-            charge,
-            multiplicity,
+            charge=charge,
+            multiplicity=multiplicity,
             method=method,
             basis=basis,
-            solvent=_solvent,
-            solvent_model=_solvent_model,
+            solvent=solvent,
+            solvent_model=solvent_model,
+            nuclei=nuclei,
         )
 
         success = self._run_orca(input_file, output_file)
@@ -977,6 +1170,7 @@ class ORCAInterface(QCInterfaceBase):
             )
 
         energy = LogParser.extract_energy(output_file, "orca")
+        shieldings = NmrShieldingParser.parse(output_file, expected_symbols=symbols)
 
         return QCResult(
             success=True,
@@ -986,4 +1180,111 @@ class ORCAInterface(QCInterfaceBase):
             converged=True,
             output_file=input_file,
             log_file=output_file,
+            metadata={"shieldings": shieldings},
         )
+
+    def _write_nmr_input(
+        self,
+        input_file: Path,
+        coordinates: np.ndarray,
+        symbols: list[str],
+        charge: int = 0,
+        multiplicity: int = 1,
+        method: str = None,
+        basis: str = None,
+        solvent: str = None,
+        solvent_model: str = None,
+        nuclei: list[str] | None = None,
+    ) -> None:
+        """Write an ORCA GIAO NMR input with a ``%eprnmr`` block.
+
+        Defaults to ``mPW1PW91/6-311G(d)`` (Goodman DP4/DP5 reference level)
+        when neither the override nor the instance default is set to an NMR
+        level. Solvent is emitted as the standalone ``CPCM(<name>)`` /
+        ``SMD(<name>)`` route keyword per the DevDoc §9.2 convention.
+        """
+        _method = method if method is not None else self.method
+        if not _method:
+            _method = "mPW1PW91"
+        _basis = basis if basis is not None else self.basis
+        if not _basis:
+            _basis = "6-311G(d)"
+        _solvent = solvent if solvent is not None else self.solvent
+        _solvent_model = (
+            solvent_model if solvent_model is not None else self.solvent_model
+        ) or "cpcm"
+
+        target_elements = self._resolve_nmr_nuclei(nuclei, symbols)
+
+        lines: list[str] = [f"! {_method} {_basis} TightSCF"]
+        if _solvent and _solvent_model.lower() != "none":
+            solv_name = orca_smd_solvent(_solvent)
+            model = _solvent_model.lower()
+            if model == "smd":
+                lines.append(f"! SMD({solv_name})")
+            else:  # cpcm (default for NMR)
+                lines.append(f"! CPCM({solv_name})")
+
+        if target_elements:
+            lines.append("%eprnmr")
+            for element in target_elements:
+                lines.append(f"  nuclei = all {element} {{shift}}")
+            lines.append("end")
+
+        lines.append(f"%maxcore {self.maxcore}")
+        lines.append(f"%pal nprocs {self.nproc} end")
+
+        body = "\n".join(lines) + "\n"
+        body += f"\n* xyz {charge} {multiplicity}\n"
+        for symbol, coord in zip(symbols, coordinates):
+            body += f"{symbol:2s} {coord[0]:15.10f} {coord[1]:15.10f} {coord[2]:15.10f}\n"
+        body += "*\n"
+
+        ensure_dir(input_file.parent)
+        input_file.write_text(body, encoding="utf-8")
+
+    @staticmethod
+    def _resolve_nmr_nuclei(
+        nuclei: list[str] | None,
+        symbols: list[str],
+    ) -> list[str]:
+        """Resolve the target NMR-active elements.
+
+        Args:
+            nuclei: Explicit element list (e.g. ``["C", "H"]``); when given,
+                used as-is (order preserved, de-duplicated).
+            symbols: Molecular element symbols (fallback to derive from).
+
+        Returns:
+            Distinct NMR-active elements present in the molecule, preserving
+            user-given order. Falls back to the molecule's NMR-active
+            elements (with a warning) when *nuclei* names elements outside
+            the supported set — so ``--nuclei Si`` does not silently produce
+            a plain single-point run with no shielding output.
+        """
+        active = {"H", "C", "N", "F", "P"}
+        if nuclei:
+            seen: set[str] = set()
+            out: list[str] = []
+            for n in nuclei:
+                sym = _normalize_nmr_symbol(str(n))
+                if sym in active and sym not in seen:
+                    seen.add(sym)
+                    out.append(sym)
+            if not out:
+                # All requested nuclei are outside the supported set —
+                # fall back to the molecule's NMR-active elements rather
+                # than emitting a GIAO-less plain SP job (silent data loss).
+                logger.warning(
+                    "Requested nuclei %s contain no supported NMR-active "
+                    "element (H/C/N/F/P); falling back to molecule elements",
+                    nuclei,
+                )
+                return ORCAInterface._resolve_nmr_nuclei(None, symbols)
+            return out
+        present = []
+        for sym in symbols:
+            norm = _normalize_nmr_symbol(sym)
+            if norm in active and norm not in present:
+                present.append(norm)
+        return present

@@ -27,16 +27,29 @@ from acp.scheduler.jobs import (
     censo_ewin_from_method,
     censo_preset_from_method,
     censo_solvent_from_method,
+    nmr_method_flags,
     xtbmd_method_flags,
 )
 from acp.scheduler.remote.config import RemoteNode
 
 logger = logging.getLogger(__name__)
 
+
+def _looks_like_smiles(s: str) -> bool:
+    """Heuristic: is *s* a SMILES token rather than a file path?"""
+    stripped = s.strip()
+    if not stripped or "\n" in stripped or len(stripped) > 200:
+        return False
+    if stripped[0].isdigit():
+        return False
+    return True
+
+
 __all__ = [
     "LSFScriptSpec",
     "build_lsf_script_spec",
     "build_remote_cli_command",
+    "build_remote_nmr_cmd_tail",
     "derive_lsf_resources",
     "generate_lsf_script",
 ]
@@ -51,8 +64,12 @@ _DEFAULT_WALLTIME = ""
 _MIN_MEM_MB_PER_CORE = 256
 
 _GFN_DISPLAY_TO_INT: dict[str, int] = {
-    "GFN0-xTB": 0, "GFN1-xTB": 1, "GFN2-xTB": 2,
-    "0": 0, "1": 1, "2": 2,
+    "GFN0-xTB": 0,
+    "GFN1-xTB": 1,
+    "GFN2-xTB": 2,
+    "0": 0,
+    "1": 1,
+    "2": 2,
 }
 
 
@@ -113,8 +130,16 @@ def build_remote_cli_command(
     py = python_executable or "python"
     wf = spec.workflow
     if wf not in (
-        "mechanism", "ensemble", "energy", "xtbmd_censo_energy",
-        "singlepoint", "optimize", "frequency", "optfreq", "optfreqsp",
+        "mechanism",
+        "ensemble",
+        "energy",
+        "nmr",
+        "xtbmd_censo_energy",
+        "singlepoint",
+        "optimize",
+        "frequency",
+        "optfreq",
+        "optfreqsp",
         "xtb_optimize",
     ):
         raise ValueError(f"No remote subprocess mapping for workflow: {wf}")
@@ -124,6 +149,11 @@ def build_remote_cli_command(
     inp = spec.input
     method = spec.method
     res = spec.resources
+
+    # NMR has a distinct multi-candidate + spectrum payload shape.
+    if wf == "nmr":
+        cmd += build_remote_nmr_cmd_tail(spec, input_path)
+        return cmd
 
     source = input_path or inp.get("source") or inp.get("input") or inp.get("smiles") or ""
     if not source:
@@ -220,6 +250,87 @@ def build_remote_cli_command(
     if inp.get("multiplicity") is not None:
         cmd += ["--multiplicity", str(inp["multiplicity"])]
 
+    return cmd
+
+
+def build_remote_nmr_cmd_tail(
+    spec: JobSpec,
+    input_path: str = "inputs/input.xyz",
+) -> list[str]:
+    """E7 parity helper: append the NMR-specific argv for remote execution.
+
+    Mirrors :meth:`JobRunner._build_nmr_cmd`. The remote ``inputs/``
+    directory is expected to contain one ``input_<i>.xyz`` per candidate
+    (synced by the remote code-sync layer) plus ``experiment.txt``.
+
+    Single-candidate fallback: when ``spec.input`` has no ``candidates``
+    list, the synced ``input_path`` is reused as the lone candidate.
+    """
+    cmd: list[str] = ["--output", "."]
+    inp = spec.input
+    method = spec.method
+    enumerate_mode = bool(inp.get("enumerate"))
+
+    candidates = inp.get("candidates") if isinstance(inp.get("candidates"), list) else None
+    if candidates:
+        for idx, cand in enumerate(candidates):
+            cand_source = (
+                (cand.get("source") or cand.get("smiles") or cand.get("input"))
+                if isinstance(cand, dict)
+                else None
+            )
+            if enumerate_mode and cand_source and _looks_like_smiles(str(cand_source)):
+                # Enumerate needs bond information (stereochemistry is
+                # topological): pass the SMILES verbatim. The synced
+                # input_<i>.xyz has no bond table and cannot be enumerated.
+                cmd += ["--input", str(cand_source)]
+                continue
+            cmd += ["--input", f"inputs/input_{idx}.xyz"]
+    else:
+        cmd += ["--input", str(input_path)]
+
+    experiment = inp.get("experiment") or method.get("experiment")
+    if isinstance(experiment, dict):
+        exp_mode = (experiment or {}).get("mode", "assigned")
+    else:
+        exp_mode = "assigned"
+    if exp_mode == "bruker":
+        # P3: the extracted Bruker tree is expected at inputs/bruker
+        # (mirrors JobRunner._materialize_bruker_asset; the remote input
+        # staging layer must sync it alongside the candidate inputs).
+        cmd += ["--bruker", "inputs/bruker"]
+        refs = experiment.get("references") if isinstance(experiment, dict) else None
+        if isinstance(refs, dict):
+            for key, value in refs.items():
+                cmd += ["--bruker-ref", f"{key}={value}"]
+    else:
+        exp_content = (experiment or {}).get("content") if isinstance(experiment, dict) else None
+        if not exp_content:
+            raise ValueError("nmr remote job requires experiment.content (spectrum text)")
+        cmd += ["--spectrum", "inputs/experiment.txt"]
+
+    # P2: diastereomer enumeration (single-candidate payload only). Mirrors
+    # JobRunner._build_nmr_cmd — the backend expands the one candidate.
+    if inp.get("enumerate"):
+        cmd += ["--enumerate"]
+        stereocenters = inp.get("stereocenters")
+        if isinstance(stereocenters, str) and stereocenters.strip():
+            cmd += ["--stereocenters", stereocenters.strip()]
+        elif isinstance(stereocenters, list) and stereocenters:
+            cmd += ["--stereocenters", ",".join(str(s) for s in stereocenters)]
+
+    if spec.name:
+        cmd += ["--name", spec.name]
+    preset = censo_preset_from_method(method)
+    if preset:
+        cmd += ["--preset", preset]
+    cmd += nmr_method_flags(method)
+    solvent = censo_solvent_from_method(method)
+    if solvent:
+        cmd += ["--solvent", solvent]
+    ewin = censo_ewin_from_method(method)
+    if ewin is not None:
+        cmd += ["--ewin", str(ewin)]
     return cmd
 
 
@@ -335,7 +446,7 @@ def generate_lsf_script(s: LSFScriptSpec) -> str:
         "# Record the workflow exit code even if LSF terminates the job by",
         "# signal (walltime/RUNLIMIT).  Forward such signals to a normal",
         "# shell exit so the EXIT trap fires and writes .exit_code.",
-        "_acp_record_exit() { [ -f .exit_code ] || echo \"$?\" > .exit_code; }",
+        '_acp_record_exit() { [ -f .exit_code ] || echo "$?" > .exit_code; }',
         "trap 'exit $?' USR2 TERM INT HUP",
         "trap _acp_record_exit EXIT",
         f'export PYTHONPATH="{s.remote_code_dir}/src:$PYTHONPATH"',

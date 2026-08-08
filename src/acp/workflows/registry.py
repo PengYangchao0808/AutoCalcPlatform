@@ -55,6 +55,15 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         ),
         requires_binaries=["crest", "censo", "orca"],
     ),
+    "nmr": WorkflowRegistryEntry(
+        name="nmr",
+        label="NMR + DP4/DP5",
+        description=(
+            "CREST+CENSO conformers → mPW1PW91/6-311G(d) GIAO NMR → "
+            "Boltzmann averaging + DP4/DP5 stereochemistry assignment."
+        ),
+        requires_binaries=["crest", "censo", "orca"],
+    ),
     "mechanism": WorkflowRegistryEntry(
         name="mechanism",
         label="Mechanism / TS",
