@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -33,8 +32,7 @@ class XTBBackend(QCBackend):
         self._interface = XTBInterface(config=config, **interface_kwargs)
 
     def is_available(self) -> bool:
-        executable = str(self._interface.exe_path)
-        return shutil.which(executable) is not None
+        return self._interface.is_available()
 
     def optimize(
         self,

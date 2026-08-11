@@ -10,12 +10,12 @@ Author: QCcalc Team (adapted from RPH)
 import os
 import subprocess
 import logging
-import shutil
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 import numpy as np
 
 from cccp.qc.interfaces.base import QCResult
+from cccp.software import SoftwareNotFoundError, resolve_executable
 from cccp.utils.file_io import write_xyz, read_xyz_multiframe, write_xyz_multiframe
 from cccp.utils import ensure_dir
 from cccp.utils.solvent_map import xtb_solvent
@@ -51,6 +51,7 @@ class CRESTInterface:
 
         crest_config = executables.get('crest', {})
         self.exe_path = Path(crest_config.get('path', 'crest'))
+        self.executable = resolve_executable('crest', configured_path=crest_config.get('path', 'crest'))
 
         xtb_config = executables.get('xtb', {})
         self.xtb_path = Path(xtb_config.get('path', 'xtb'))
@@ -63,6 +64,17 @@ class CRESTInterface:
         self.threads = kwargs.get('threads', resources.get('nproc', 16))
         self.energy_window = kwargs.get('energy_window', 6.0)
 
+    def _require_executable(self) -> str:
+        if self.executable is None:
+            raise SoftwareNotFoundError(
+                "CREST executable not found. Add 'crest' to PATH or configure executables.crest.path."
+            )
+        return str(self.executable)
+
+    def is_available(self) -> bool:
+        """Return True when the CREST binary resolved successfully."""
+        return self.executable is not None
+
     def _solvent_args(self, solvent: Optional[str] = None) -> List[str]:
         """Return CREST solvation command-line flags based on solvent_model."""
         sol = solvent if solvent is not None else self.solvent
@@ -71,17 +83,6 @@ class CRESTInterface:
         if self.solvent_model == "gbsa":
             return ["--gbsa", xtb_solvent(sol)]
         return ["--alpb", xtb_solvent(sol)]
-
-    def _find_xtb_executable(self) -> Path:
-        """Find xTB executable for CREST to use."""
-        if self.xtb_path and self.xtb_path.exists():
-            return self.xtb_path
-
-        xtb_path = shutil.which('xtb')
-        if xtb_path:
-            return Path(xtb_path)
-
-        return Path('/opt/xtb/bin/xtb')
 
     def run_conformer_search(
         self,
@@ -124,9 +125,10 @@ class CRESTInterface:
 
         gfn_level = kwargs.get('gfn_level', self.gfn_level)
         ew = energy_window  # None = no -ewin flag (callers specify explicitly)
+        executable = self._require_executable()
 
         crest_args = [
-            str(self.exe_path),
+            executable,
             str(input_xyz),
             "-T", str(self.threads),
             "-P", str(self.threads),
@@ -268,8 +270,10 @@ class CRESTInterface:
         else:
             write_xyz(input_xyz, coordinates, symbols, title="CREST mdopt input")
 
+        executable = self._require_executable()
+
         crest_args = [
-            str(self.exe_path),
+            executable,
             "-mdopt",
             "crest_ensemble.xyz",
             "-gfn", str(gfn_level),

@@ -1966,6 +1966,34 @@ def _handle_nmr(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _preflight_workflow(workflow: str) -> None:
+    """Warn about unresolvable binaries a workflow normally requires.
+
+    Runs the centralized resolver once per required binary so the user
+    learns about missing QC software before the workflow starts. Warning-only:
+    partial workflows (e.g. ``energy --no-opt``) may legitimately skip some
+    binaries; the interfaces raise a friendly error at the exact stage that
+    actually needs one.
+    """
+    from acp.workflows.registry import get_workflow_entry
+    from cccp.software import ENV_VARS, resolve_executable
+
+    entry = get_workflow_entry(workflow)
+    if entry is None or not entry.requires_binaries:
+        return
+    for name in entry.requires_binaries:
+        if resolve_executable(name) is None:
+            env_var = ENV_VARS.get(name, f"CONFSEARCH_{name.upper()}_PATH")
+            logger.warning(
+                "Preflight: executable '%s' (required by '%s') was not found. "
+                "Add it to PATH, set %s, or configure executables.%s.path.",
+                name,
+                workflow,
+                env_var,
+                name,
+            )
+
+
 def main(argv: list[str] | None = None) -> int:
     """
     ACP CLI entry point.
@@ -2003,6 +2031,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 1
 
+    _preflight_workflow(args.workflow)
     return handler(args)
 
 

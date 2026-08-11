@@ -19,6 +19,7 @@ from typing import Any, Optional
 import numpy as np
 
 from cccp.qc.interfaces.base import QCInterfaceBase, QCResult
+from cccp.software import SoftwareNotFoundError, resolve_executable
 from cccp.utils import ensure_dir
 from cccp.utils.geometry_tools import LogParser
 from cccp.utils.resource_utils import calc_orca_maxcore, mem_to_mb
@@ -359,6 +360,7 @@ class ORCAInterface(QCInterfaceBase):
 
         orca_config = self.executables.get("orca", {})
         self.exe_path = Path(orca_config.get("path", "orca"))
+        self.executable = resolve_executable("orca", configured_path=orca_config.get("path", "orca"))
         self._orca_ld_library_path = orca_config.get("ld_library_path")
 
         resources = self.resources
@@ -381,6 +383,16 @@ class ORCAInterface(QCInterfaceBase):
 
         self.charge = kwargs.get("charge", 0)
         self.multiplicity = kwargs.get("multiplicity", 1)
+
+    def _require_executable(self) -> str:
+        if self.executable is None:
+            raise SoftwareNotFoundError(
+                "ORCA executable not found. Add 'orca' to PATH or configure executables.orca.path."
+            )
+        return str(self.executable)
+
+    def is_available(self) -> bool:
+        return self.executable is not None
 
     def _build_input_blocks(
         self,
@@ -698,6 +710,7 @@ class ORCAInterface(QCInterfaceBase):
         to_cfg = self.config.get("optimization_control") or {}
         to_val = to_cfg.get("timeout") or {}
         timeout = to_val.get("default_seconds", 864000) if isinstance(to_val, dict) else 864000
+        executable = self._require_executable()
 
         try:
             env = None
@@ -706,7 +719,7 @@ class ORCAInterface(QCInterfaceBase):
                 env["LD_LIBRARY_PATH"] = self._orca_ld_library_path
 
             result = subprocess.run(
-                [str(self.exe_path), str(input_file)],
+                [executable, str(input_file)],
                 cwd=input_file.parent,
                 capture_output=True,
                 text=True,

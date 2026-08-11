@@ -11,14 +11,13 @@
 # ==================== Executable Paths ====================
 executables:
   orca:
-    path: "/opt/software/orca/orca"  # ORCA executable
-    ld_library_path: "/opt/software/openmpi/lib:/opt/software/orca"
+    path: "orca"  # ORCA executable (resolved via PATH by cccp.software.resolve_executable)
     nproc: 10               # ORCA-specific core count (overrides resources.nproc if set)
     maxcore:            # ORCA-specific maxcore in MB (auto-calculated if not set)
 
   xtb:
     path: "xtb"  # xTB executable
-    fallback_paths:  # available via resolve_executable_config() in resource_utils.py
+    fallback_paths:  # legacy locations consulted by cccp.software.resolve_executable
       - "/opt/xtb/bin/xtb"
       - "/usr/local/bin/xtb"
 
@@ -26,11 +25,17 @@ executables:
     path: "crest"  # CREST executable
     gfn_level: 2
 
+  censo:
+    path: "censo"  # CENSO executable
+
   isostat:
     path: "isostat"  # ISOSTAT executable
 
   shermo:
     path: "Shermo"  # Shermo executable
+
+  molclus:
+    path: "molclus"  # Molclus executable
 
 # ==================== Computational Resources ====================
 resources:

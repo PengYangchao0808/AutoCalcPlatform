@@ -160,27 +160,30 @@ def test_censo_capability_matrix() -> None:
 
 def test_censo_backend_is_available_checks_binary() -> None:
     config = _make_config()
-    backend = CensoBackend(config)
 
-    with patch("shutil.which", return_value="/usr/bin/censo"):
+    with patch("cccp.qc.interfaces.censo.resolve_executable", return_value=Path("/usr/bin/censo")):
+        backend = CensoBackend(config)
         assert backend.is_available() is True
 
-    with patch("shutil.which", return_value=None):
+    with patch("cccp.qc.interfaces.censo.resolve_executable", return_value=None):
+        backend = CensoBackend(config)
         assert backend.is_available() is False
 
 
 def test_censo_backend_versions_works() -> None:
     config = _make_config()
-    backend = CensoBackend(config)
 
-    with patch("subprocess.run") as mock_run:
-        mock_proc = MagicMock()
-        mock_proc.returncode = 0
-        mock_proc.stdout = "3.0.8"
-        mock_run.return_value = mock_proc
+    with patch("cccp.qc.interfaces.censo.resolve_executable", return_value=Path("/usr/bin/censo")):
+        backend = CensoBackend(config)
 
-        version = backend.get_version()
-        assert version == "3.0.8"
+        with patch("subprocess.run") as mock_run:
+            mock_proc = MagicMock()
+            mock_proc.returncode = 0
+            mock_proc.stdout = "3.0.8"
+            mock_run.return_value = mock_proc
+
+            version = backend.get_version()
+            assert version == "3.0.8"
 
 
 # ---------------------------------------------------------------------------
@@ -318,11 +321,13 @@ def test_build_cli_parts(tmp_path: Path) -> None:
     rcfile = tmp_path / "censo2rc"
     rcfile.write_text("")
 
-    preset = interface.resolve_preset("censo-light")
-    cmd = interface.build_cli(
-        input_xyz, rcfile, preset,
-        nproc=4, temperature=298.15, solvent=None,
-    )
+    with patch("cccp.qc.interfaces.censo.resolve_executable", return_value=Path("/usr/bin/censo")):
+        interface = CensoInterface(config)
+        preset = interface.resolve_preset("censo-light")
+        cmd = interface.build_cli(
+            input_xyz, rcfile, preset,
+            nproc=4, temperature=298.15, solvent=None,
+        )
 
     assert "censo" in cmd[0]
     assert "--prescreening" in cmd
@@ -343,17 +348,18 @@ def test_build_cli_parts(tmp_path: Path) -> None:
 
 def test_build_cli_with_solvent(tmp_path: Path) -> None:
     config = _make_config()
-    interface = CensoInterface(config)
     input_xyz = tmp_path / "input.xyz"
     input_xyz.write_text("1\n\nH  0 0 0\n")
     rcfile = tmp_path / "censo2rc"
     rcfile.write_text("")
 
-    preset = interface.resolve_preset("censo-default")
-    cmd = interface.build_cli(
-        input_xyz, rcfile, preset,
-        nproc=8, temperature=298.15, solvent="dcm",
-    )
+    with patch("cccp.qc.interfaces.censo.resolve_executable", return_value=Path("/usr/bin/censo")):
+        interface = CensoInterface(config)
+        preset = interface.resolve_preset("censo-default")
+        cmd = interface.build_cli(
+            input_xyz, rcfile, preset,
+            nproc=8, temperature=298.15, solvent="dcm",
+        )
 
     assert "--optimization" in cmd
     assert "--refinement" in cmd
@@ -368,18 +374,19 @@ def test_build_cli_open_shell_charge_and_multiplicity(tmp_path: Path) -> None:
     # from the rcfile [general] section. Without these flags an open-shell /
     # charged molecule is silently run as a neutral closed-shell singlet.
     config = _make_config()
-    interface = CensoInterface(config)
     input_xyz = tmp_path / "input.xyz"
     input_xyz.write_text("1\n\nH  0 0 0\n")
     rcfile = tmp_path / "censo2rc"
     rcfile.write_text("")
 
-    preset = interface.resolve_preset("censo-light")
-    cmd = interface.build_cli(
-        input_xyz, rcfile, preset,
-        nproc=4, temperature=298.15, solvent=None,
-        charge=2, multiplicity=5,
-    )
+    with patch("cccp.qc.interfaces.censo.resolve_executable", return_value=Path("/usr/bin/censo")):
+        interface = CensoInterface(config)
+        preset = interface.resolve_preset("censo-light")
+        cmd = interface.build_cli(
+            input_xyz, rcfile, preset,
+            nproc=4, temperature=298.15, solvent=None,
+            charge=2, multiplicity=5,
+        )
 
     assert "-c" in cmd
     assert cmd[cmd.index("-c") + 1] == "2"

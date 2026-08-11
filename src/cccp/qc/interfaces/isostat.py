@@ -10,7 +10,6 @@ Author: QCcalc Team
 import logging
 import os
 import re
-import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -19,6 +18,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 
 from cccp.qc.interfaces.base import QCResult
+from cccp.software import SoftwareNotFoundError, resolve_executable
 from cccp.utils.file_io import read_xyz_multiframe
 
 logger = logging.getLogger(__name__)
@@ -132,6 +132,9 @@ class IsostatInterface:
         self.exe_path = str(
             isostat_path or isostat_cfg.get("path") or molclus_cfg.get("isostat_path") or "isostat"
         )
+        self.executable: Optional[Path] = resolve_executable(
+            "isostat", configured_path=self.exe_path
+        )
 
         try:
             self.timeout = int(timeout) if timeout else int(isostat_cfg.get("timeout", 300))
@@ -140,7 +143,15 @@ class IsostatInterface:
 
     def is_available(self) -> bool:
         """Return True when the ISOSTAT binary is on PATH."""
-        return shutil.which(self.exe_path) is not None
+        return self.executable is not None
+
+    def _require_executable(self) -> str:
+        if self.executable is None:
+            raise SoftwareNotFoundError(
+                "Executable 'isostat' was not found. Add 'isostat' to PATH, set CONFSEARCH_ISOSTAT_PATH, "
+                "or configure executables.isostat.path."
+            )
+        return str(self.executable)
 
     def cluster(
         self,
@@ -178,6 +189,7 @@ class IsostatInterface:
         target_dir.mkdir(parents=True, exist_ok=True)
         cluster_xyz = target_dir / "cluster.xyz"
         log_file = target_dir / "isostat.log"
+        executable = self._require_executable()
 
         # ISOSTAT only understands Molclus bare-energy titles; our writers
         # emit "Frame N | Energy: X".  Normalise to a temporary input file
@@ -185,7 +197,7 @@ class IsostatInterface:
         isostat_input = normalise_titles_for_isostat(ensemble_xyz)
 
         command = [
-            self.exe_path,
+            executable,
             str(isostat_input),
             "-Edis",
             str(edis),

@@ -6,9 +6,27 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from acp.backends import IsostatBackend, MolclusBackend, supports
 from acp.backends.base import ClusteringTool, ConformerSearcher
 from acp.backends.registry import get_backend
+
+
+@pytest.fixture(autouse=True)
+def _stub_resolvers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stub the centralized resolver for molclus/xtb/isostat.
+
+    Both backends wrap cccp interfaces that resolve binaries at construction;
+    tests mock ``subprocess.run`` and assert the executable basename, so fake
+    absolute paths (``/usr/bin/<name>``) keep the resolution contract intact.
+    """
+
+    def _resolve(name: str, configured_path: str | Path | None = None) -> Path | None:
+        return Path("/usr/bin") / name
+
+    monkeypatch.setattr("cccp.qc.interfaces.molclus.resolve_executable", _resolve)
+    monkeypatch.setattr("cccp.qc.interfaces.isostat.resolve_executable", _resolve)
 
 
 def _make_config() -> dict[str, object]:
@@ -317,15 +335,16 @@ def test_molclus_search_passes_seed_and_solvent(tmp_path: Path) -> None:
     assert "xtb_arg=--gfnff" in settings_ini
 
 
-def test_molclus_is_available_with_mock() -> None:
+def test_molclus_is_available_with_mock(monkeypatch: pytest.MonkeyPatch) -> None:
     backend = MolclusBackend(_make_config())
+    assert backend.is_available() is True
 
-    with patch(
-        "cccp.qc.interfaces.molclus.shutil.which", return_value="/usr/bin/molclus"
-    ) as mock_which:
-        assert backend.is_available() is True
-
-    mock_which.assert_called_once_with("molclus")
+    monkeypatch.setattr(
+        "cccp.qc.interfaces.molclus.resolve_executable",
+        lambda name, configured_path=None: None,
+    )
+    missing = MolclusBackend(_make_config())
+    assert missing.is_available() is False
 
 
 def test_molclus_search_mocked(tmp_path: Path) -> None:
@@ -401,6 +420,7 @@ def test_isostat_cluster_mocked(tmp_path: Path) -> None:
         timeout: int,
         check: bool,
         env: dict[str, str] | None,
+        input: str | None = None,
     ) -> subprocess.CompletedProcess[str]:
         assert Path(cmd[0]).name == "isostat"
         assert capture_output is True

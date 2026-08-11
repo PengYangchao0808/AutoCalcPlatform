@@ -19,6 +19,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from cccp.qc.interfaces.base import QCResult
+from cccp.software import SoftwareNotFoundError, resolve_executable
 from cccp.utils.file_io import read_xyz_multiframe
 from cccp.utils.solvent_map import xtb_solvent
 
@@ -176,6 +177,15 @@ class MolclusInterface:
             self._first_value(molclus_config.get("isostat_path"), isostat_config.get("path")),
             "isostat",
         )
+        self.executable: Optional[Path] = resolve_executable(
+            "molclus", configured_path=self.molclus_path
+        )
+        self.xtb_executable: Optional[Path] = resolve_executable(
+            "xtb", configured_path=self.xtb_path
+        )
+        self.isostat_executable: Optional[Path] = resolve_executable(
+            "isostat", configured_path=self.isostat_path
+        )
 
         self.temperature = _float_value(
             self._first_value(
@@ -293,7 +303,16 @@ class MolclusInterface:
 
     def is_available(self) -> bool:
         """Return True when the Molclus binary is on PATH."""
-        return shutil.which(self.molclus_path) is not None
+        return self.executable is not None
+
+    def _require(self, executable: Optional[Path], name: str) -> str:
+        if executable is None:
+            env_var = f"CONFSEARCH_{name.upper()}_PATH"
+            raise SoftwareNotFoundError(
+                f"Executable '{name}' was not found. Add '{name}' to PATH, set {env_var}, "
+                f"or configure executables.{name}.path."
+            )
+        return str(executable)
 
     def _run_command(
         self,
@@ -435,7 +454,7 @@ class MolclusInterface:
             xtb_timeout = _int_value(kwargs.get("xtb_timeout"), self.timeout)
 
             xtb_cmd = [
-                self.xtb_path,
+                self._require(self.xtb_executable, "xtb"),
                 molecule_xyz.name,
                 "--input",
                 md_input.name,
@@ -487,7 +506,7 @@ class MolclusInterface:
             molclus_timeout = _int_value(kwargs.get("molclus_timeout"), self.timeout)
 
             error = self._run_command(
-                [self.molclus_path],
+                [self._require(self.executable, "molclus")],
                 cwd=target_dir,
                 log_file=target_dir / "molclus.log",
                 timeout=molclus_timeout,
@@ -513,7 +532,7 @@ class MolclusInterface:
                 self._first_value(kwargs.get("nthreads"), kwargs.get("nproc")), self.nproc
             )
             cluster_cmd = [
-                self.isostat_path,
+                self._require(self.isostat_executable, "isostat"),
                 isomers_xyz.name,
                 "-Edis",
                 str(edis),
@@ -563,6 +582,8 @@ class MolclusInterface:
                     "ensemble_file": isomers_xyz,
                 },
             )
+        except SoftwareNotFoundError:
+            raise
         except Exception as exc:
             logger.exception("Molclus conformer search failed")
             return QCResult(success=False, error_message=str(exc))
@@ -645,7 +666,7 @@ class MolclusInterface:
             )
 
             xtb_cmd = [
-                self.xtb_path,
+                self._require(self.xtb_executable, "xtb"),
                 molecule_xyz.name,
                 "--input",
                 md_input.name,
@@ -709,6 +730,8 @@ class MolclusInterface:
                     "n_frames": n_frames,
                 },
             )
+        except SoftwareNotFoundError:
+            raise
         except Exception as exc:
             logger.exception("xTB-MD run failed")
             return QCResult(success=False, error_message=str(exc))

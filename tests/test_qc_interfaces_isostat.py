@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from cccp.qc.interfaces.isostat import (
     IsostatInterface,
     _normalise_titles_for_isostat,
@@ -15,6 +17,23 @@ CONFIG = {
     "executables": {"isostat": {"path": "isostat"}},
     "resources": {"nproc": 1},
 }
+
+
+@pytest.fixture(autouse=True)
+def _stub_isostat_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stub the centralized resolver so interface tests run without ISOSTAT.
+
+    The interface resolves binaries through ``cccp.software.resolve_executable``
+    at construction; tests mock ``subprocess.run`` and assert the executable
+    basename, so a fake absolute path keeps the resolution contract intact.
+    """
+
+    def _resolve(name: str, configured_path: str | Path | None = None) -> Path | None:
+        return Path("/usr/bin/isostat")
+
+    monkeypatch.setattr(
+        "cccp.qc.interfaces.isostat.resolve_executable", _resolve
+    )
 
 
 def _write_multiframe_xyz(path: Path) -> None:

@@ -17,6 +17,7 @@ import numpy as np
 
 from cccp.qc.interfaces.base import QCResult
 from cccp.qc.interfaces.xtb_thermo import XTBThermoResult, _xyz_to_coord, run_xtb_enso
+from cccp.software import SoftwareNotFoundError, resolve_executable
 from cccp.utils import ensure_dir
 from cccp.utils.file_io import read_xyz, write_xyz
 from cccp.utils.solvent_map import xtb_solvent
@@ -68,6 +69,7 @@ class XTBInterface:
 
         xtb_config = executables.get('xtb', {})
         self.exe_path = Path(xtb_config.get('path', 'xtb'))
+        self.executable = resolve_executable('xtb', configured_path=xtb_config.get('path', 'xtb'))
 
         self.gfn_level = gfn_level
         self.solvent = solvent
@@ -80,6 +82,16 @@ class XTBInterface:
         except (TypeError, ValueError):
             # Never pass OMP_NUM_THREADS=0/negative/None to the subprocess.
             self.nproc = 1
+
+    def _require_executable(self) -> str:
+        if self.executable is None:
+            raise SoftwareNotFoundError(
+                "xTB executable not found. Add 'xtb' to PATH or configure executables.xtb.path."
+            )
+        return str(self.executable)
+
+    def is_available(self) -> bool:
+        return self.executable is not None
 
     def _solvent_args(self, solvent: Optional[str] = None) -> List[str]:
         """Return xTB solvation command-line flags based on solvent_model."""
@@ -123,9 +135,10 @@ class XTBInterface:
         log_file = output_dir / "xtb.log"
 
         write_xyz(input_xyz, coordinates, symbols, title="xTB input")
+        executable = self._require_executable()
 
         xtb_args = [
-            str(self.exe_path),
+            executable,
             str(input_xyz),
             "--opt", opt_level,
             "--gfn", str(self.gfn_level),
@@ -223,9 +236,10 @@ class XTBInterface:
         log_file = output_dir / "xtb_sp.log"
 
         write_xyz(input_xyz, coordinates, symbols, title="xTB SP input")
+        executable = self._require_executable()
 
         xtb_args = [
-            str(self.exe_path),
+            executable,
             str(input_xyz),
             "--sp",
             "--gfn", str(self.gfn_level),
@@ -329,7 +343,7 @@ class XTBInterface:
         # Step 3: Run xTB SPH + MRRHO
         unpaired = multiplicity - 1  # Convert multiplicity to unpaired electrons
         return run_xtb_enso(
-            xtb_bin=self.exe_path,
+            xtb_bin=Path(self._require_executable()),
             coord_file=coord_file,
             output_dir=xtb_enso_dir,
             nproc=self.nproc,

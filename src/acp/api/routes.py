@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import shutil
 import sys
 import time
 from typing import Any, cast
@@ -47,16 +46,6 @@ router = APIRouter()
 
 _START_TIME = time.time()
 
-_BACKEND_DEFAULT_BINARIES: dict[str, list[str]] = {
-    "xtb": ["xtb"],
-    "crest": ["crest"],
-    "orca": ["orca"],
-    "isostat": ["isostat"],
-    "shermo": ["shermo"],
-    "molclus": ["molclus", "Molclus"],
-}
-
-
 def _build_workflow_info() -> list[WorkflowInfo]:
     """Return workflow metadata from the ACP workflow registry.
 
@@ -75,14 +64,6 @@ def _is_wsl() -> bool:
         return "microsoft" in content or "wsl" in content
     except OSError:
         return False
-
-
-def _find_binary(names: list[str]) -> str:
-    for name in names:
-        path = shutil.which(name)
-        if path:
-            return path
-    return ""
 
 
 def _manager(request: Request):
@@ -163,15 +144,14 @@ def _load_executables() -> dict[str, Any]:
 
 
 def _resolve_backend_path(name: str, executables: dict[str, Any]) -> str:
-    cfg_entry = executables.get(name)
-    if isinstance(cfg_entry, dict):
-        configured = cfg_entry.get("path")
-        if configured:
-            found = shutil.which(str(configured))
-            if found:
-                return found
-            return str(configured)
-    return _find_binary(_BACKEND_DEFAULT_BINARIES.get(name, [name]))
+    configured = None
+    entry = executables.get(name)
+    if isinstance(entry, dict):
+        configured = entry.get("path")
+    from cccp.software import resolve_executable
+
+    path = resolve_executable(name, configured_path=configured)
+    return str(path) if path else ""
 
 
 @router.get("/backends", response_model=BackendsResponse)

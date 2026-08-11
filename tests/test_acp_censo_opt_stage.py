@@ -31,6 +31,16 @@ from cccp.qc.interfaces.censo import CensoInterface
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture(autouse=True)
+def _stub_censo_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stub the centralized resolver so CENSO tests run without the binary."""
+
+    def _resolve(name: str, configured_path: str | Path | None = None) -> Path | None:
+        return Path("/usr/bin/censo") if name == "censo" else None
+
+    monkeypatch.setattr("cccp.qc.interfaces.censo.resolve_executable", _resolve)
+
+
 def _make_config(**overrides: Any) -> dict[str, Any]:
     config: dict[str, Any] = {
         "executables": {

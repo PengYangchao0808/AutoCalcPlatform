@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional, Set
 
 import numpy as np
 
+from cccp.software import SoftwareNotFoundError, detect_version, resolve_executable
 from cccp.utils.file_io import read_xyz_multiframe
 
 logger = logging.getLogger(__name__)
@@ -189,6 +190,9 @@ class CensoInterface:
 
         censo_cfg = config.get("executables", {}).get("censo", {})
         self._censo_path = censo_cfg.get("path", "censo")
+        self.executable: Optional[Path] = resolve_executable(
+            "censo", configured_path=self._censo_path
+        )
         self._orca_path = config.get("executables", {}).get("orca", {}).get("path", "orca")
         self._xtb_path = config.get("executables", {}).get("xtb", {}).get("path", "xtb")
         self._default_preset = config.get("censo", {}).get("preset", "censo-light")
@@ -206,22 +210,19 @@ class CensoInterface:
 
     def is_available(self) -> bool:
         """Return True when the CENSO binary is on PATH."""
-        return shutil.which(self._censo_path) is not None
+        return self.executable is not None
 
     def get_version(self) -> Optional[str]:
         """Return the CENSO version string when available."""
-        try:
-            result = subprocess.run(
-                [self._censo_path, "-v"],
-                capture_output=True,
-                text=True,
-                timeout=10,
+        return detect_version("censo", self.executable)
+
+    def _require_executable(self) -> str:
+        if self.executable is None:
+            raise SoftwareNotFoundError(
+                "Executable 'censo' was not found. Add 'censo' to PATH, set CONFSEARCH_CENSO_PATH, "
+                "or configure executables.censo.path."
             )
-            if result.returncode == 0:
-                return result.stdout.strip()
-        except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
-            return None
-        return None
+        return str(self.executable)
 
     # ----- Preset helpers --------------------------------------------------
 
@@ -376,7 +377,7 @@ class CensoInterface:
         charge: int = 0,
         multiplicity: int = 1,
     ) -> List[str]:
-        cmd = [self._censo_path, "-i", str(input_xyz)]
+        cmd = [self._require_executable(), "-i", str(input_xyz)]
 
         unpaired = multiplicity - 1 if multiplicity > 0 else 0
         cmd.extend(["-c", str(charge), "-u", str(unpaired)])

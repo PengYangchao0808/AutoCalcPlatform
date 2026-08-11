@@ -174,8 +174,7 @@ def _get_default_config() -> dict[str, Any]:
     return {
         'executables': {
             'orca': {
-                'path': '/opt/orca/orca',
-                'ld_library_path': '/opt/openmpi/lib:/opt/orca',
+                'path': 'orca',
                 'nproc': 10,
                 'maxcore': None
             },
@@ -187,11 +186,17 @@ def _get_default_config() -> dict[str, Any]:
                 'path': 'crest',
                 'gfn_level': 2
             },
+            'censo': {
+                'path': 'censo'
+            },
             'isostat': {
                 'path': 'isostat'
             },
             'shermo': {
                 'path': 'Shermo'
+            },
+            'molclus': {
+                'path': 'molclus'
             }
         },
         'resources': {
@@ -519,8 +524,10 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
     - CONFSEARCH_ORCA_LD_LIBRARY_PATH
     - CONFSEARCH_XTB_PATH
     - CONFSEARCH_CREST_PATH
+    - CONFSEARCH_CENSO_PATH
     - CONFSEARCH_ISOSTAT_PATH
     - CONFSEARCH_SHERMO_PATH
+    - CONFSEARCH_MOLCLUS_PATH
 
     Args:
         config: Configuration dictionary
@@ -535,8 +542,10 @@ def _apply_env_overrides(config: dict[str, Any]) -> dict[str, Any]:
         'CONFSEARCH_ORCA_LD_LIBRARY_PATH': ('executables', ['orca', 'ld_library_path'], str),
         'CONFSEARCH_XTB_PATH': ('executables', ['xtb', 'path'], str),
         'CONFSEARCH_CREST_PATH': ('executables', ['crest', 'path'], str),
+        'CONFSEARCH_CENSO_PATH': ('executables', ['censo', 'path'], str),
         'CONFSEARCH_ISOSTAT_PATH': ('executables', ['isostat', 'path'], str),
         'CONFSEARCH_SHERMO_PATH': ('executables', ['shermo', 'path'], str),
+        'CONFSEARCH_MOLCLUS_PATH': ('executables', ['molclus', 'path'], str),
         'CONFSEARCH_PROTOCOL': ('protocols', 'default', str),
         'CONFSEARCH_MRRHO_STHR': ('mrrho_settings', 'sthr', float),
         'CONFSEARCH_MRRHO_IMAGTHR': ('mrrho_settings', 'imagthr', float),

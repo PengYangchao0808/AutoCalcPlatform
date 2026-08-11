@@ -7,6 +7,7 @@ Top-level package files: config loading, version management, package init. Hub c
 ```
 src/cccp/   # Authoritative version (reverse-synced 2026-07-13 from compute node)
 ├── config.py        # 6-source YAML config load/merge (+ remote-cluster sections)
+├── software.py      # Centralized QC executable resolution (resolve_executable / detect_version / discover_all)
 ├── __init__.py      # Package init; __version__ = "1.0.0"
 ├── version.py       # __version__ = "1.0.0"
 ├── core/            # ConformerEngine (dormant), protocols, candidates, state_manager
@@ -22,6 +23,7 @@ src/cccp/   # Authoritative version (reverse-synced 2026-07-13 from compute node
 | Task | Location | Notes |
 |------|----------|-------|
 | Config loading | `config.py` | 6-source merge see root AGENTS.md for order |
+| **Executable resolution** | **`software.py`** | **THE single resolver — `resolve_executable(name, configured_path)`; all backends/interfaces/API/catalog route through it. `resource_utils.find_executable` is superseded (unwired legacy)** |
 | Version | `__init__.py` + `version.py` | **DUPLICATED** — bump BOTH |
 | Subpackage docs | `core/AGENTS.md`, `utils/AGENTS.md`, etc. |
 

@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import os
-import shutil
-import subprocess
 from typing import Any
 
 from acp.chem.composition import normalize_recalc_hess
@@ -1862,57 +1859,53 @@ _BACKEND_SUPPORTS: dict[str, list[str]] = {
 
 
 def _resolve_backend_path(bid: str) -> str:
-    """Resolve binary path for backend *bid* using an env-var override or shutil.which."""
-    info = _BACKEND_BINARIES.get(bid, {})
-    env_path = os.environ.get(info.get("env_var", ""), "")
-    if env_path:
-        return env_path
-    default = info.get("default", bid)
-    return shutil.which(default) or default
+    """Resolve the backend binary path for *bid* via the centralized resolver."""
+    from cccp.software import resolve_executable
+
+    path = resolve_executable(bid)
+    return str(path) if path else bid
 
 
 def _detect_backend_version(bid: str, binary_path: str) -> str | None:
-    """Try to detect the version of backend *bid* by running it with a known flag."""
-    version_flags: dict[str, str] = {
-        "orca":     "",
-        "xtb":      "--version",
-        "crest":    "--version",
-        "censo":    "--version",
-        "shermo":   "",
-        "isostat":  "",
-    }
-    flag = version_flags.get(bid)
-    if flag is None:
-        return None
-    try:
-        result = subprocess.run(
-            [binary_path, flag], capture_output=True, text=True,
-            timeout=10, env={**os.environ, "OMP_NUM_THREADS": "1"},
-        )
-        first_line = (result.stdout or result.stderr).split("\n")[0].strip()
-        if first_line and len(first_line) < 128:
-            return first_line
-    except Exception:
-        pass
-    return None
+    """Try to detect the version of backend *bid* via the centralized helper."""
+    from pathlib import Path
+
+    from cccp.software import detect_version
+
+    return detect_version(bid, Path(binary_path) if binary_path else None)
 
 
 def _discover_backends() -> list[dict[str, Any]]:
-    """Build the backends list with dynamic availability and version metadata."""
+    """Build the backends list with dynamic availability metadata.
+
+    Version probing is deliberately deferred to :func:`refresh_backend_versions`
+    so importing this module never spawns subprocesses (version probes are
+    only needed when the API or ``acp doctor`` asks for them).
+    """
     backends: list[dict[str, Any]] = []
     for bid, binfo in _BACKEND_BINARIES.items():
         path = _resolve_backend_path(bid)
-        available = shutil.which(path) is not None if path else False
-        version = _detect_backend_version(bid, path) if available else None
+        available = path != bid
         backends.append({
             "id": bid,
             "label": binfo["label"],
             "supports": _BACKEND_SUPPORTS.get(bid, []),
             "path": path,
             "available": available,
-            "version": version,
+            "version": None,
         })
     return backends
+
+
+def refresh_backend_versions() -> None:
+    """Probe versions of all resolvable backends, in place.
+
+    Updates ``METHOD_CATALOG["backends"]`` entries in place. Called lazily by
+    the API layer; never at import time.
+    """
+    for entry in METHOD_CATALOG["backends"]:
+        if entry["available"]:
+            entry["version"] = _detect_backend_version(entry["id"], entry["path"])
 
 
 METHOD_CATALOG: dict[str, Any] = {
@@ -2527,6 +2520,7 @@ def get_method_catalog() -> dict[str, Any]:
     aux_j/aux_c metadata) fields.
     """
     import copy
+    refresh_backend_versions()
     catalog = copy.deepcopy(METHOD_CATALOG)
 
     basis_list = list(_ALL_BASIS_SETS)
@@ -2576,6 +2570,7 @@ __all__ = [
     "METHOD_CATALOG",
     "METHOD_META",
     "METHOD_SCHEMAS",
+    "refresh_backend_versions",
     "WORKFLOW_CATALOG",
     "_case_insensitive_get",
     "_derive_functional_options_map",

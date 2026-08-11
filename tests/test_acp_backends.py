@@ -215,12 +215,13 @@ def test_external_backend_implements_clustering_and_thermo_protocols() -> None:
 )
 def test_backend_is_available_when_binary_on_path(backend_cls: type, exe_name: str) -> None:
     config = _make_config()
-    backend = backend_cls(config)
 
-    with patch("shutil.which", return_value=f"/usr/bin/{exe_name}") as mock_which:
+    with patch(
+        f"cccp.qc.interfaces.{exe_name}.resolve_executable",
+        return_value=Path(f"/usr/bin/{exe_name}"),
+    ):
+        backend = backend_cls(config)
         assert backend.is_available() is True
-
-    mock_which.assert_called_once_with(exe_name)
 
 
 @pytest.mark.parametrize(
@@ -229,34 +230,33 @@ def test_backend_is_available_when_binary_on_path(backend_cls: type, exe_name: s
 )
 def test_backend_is_unavailable_when_binary_missing(backend_cls: type) -> None:
     config = _make_config()
-    backend = backend_cls(config)
+    exe_name = backend_cls.name
 
-    with patch("shutil.which", return_value=None):
+    with patch(
+        f"cccp.qc.interfaces.{exe_name}.resolve_executable", return_value=None
+    ):
+        backend = backend_cls(config)
         assert backend.is_available() is False
 
 
 def test_external_backend_is_available_when_binaries_on_path() -> None:
     backend = ExternalBackend(_make_config())
 
-    with patch(
-        "shutil.which",
-        side_effect=["/usr/bin/isostat", "/usr/bin/Shermo"],
-    ) as mock_which:
-        assert backend.is_available() is True
+    def _resolve(name: str, configured_path: str | Path | None = None) -> Path | None:
+        return Path(f"/usr/bin/{name}")
 
-    assert mock_which.call_args_list == [call("isostat"), call("Shermo")]
+    with patch("acp.backends.external_backend.resolve_executable", side_effect=_resolve):
+        assert backend.is_available() is True
 
 
 def test_external_backend_is_unavailable_when_one_binary_missing() -> None:
     backend = ExternalBackend(_make_config())
 
-    with patch(
-        "shutil.which",
-        side_effect=["/usr/bin/isostat", None],
-    ) as mock_which:
-        assert backend.is_available() is False
+    def _resolve(name: str, configured_path: str | Path | None = None) -> Path | None:
+        return None if name == "shermo" else Path(f"/usr/bin/{name}")
 
-    assert mock_which.call_args_list == [call("isostat"), call("Shermo")]
+    with patch("acp.backends.external_backend.resolve_executable", side_effect=_resolve):
+        assert backend.is_available() is False
 @pytest.mark.slow
 @pytest.mark.integration
 @requires_isostat

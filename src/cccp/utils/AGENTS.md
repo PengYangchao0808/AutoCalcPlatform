@@ -20,7 +20,7 @@ utils/
 |------|------|-------|
 | XYZ/GJF I/O | `file_io.py` | `read_xyz`, `write_xyz`, `read_gjf` |
 | Geometry ops | `geometry_tools.py` | RMSD, rotation, translation, log parsing |
-| Executable resolution | `resource_utils.py` | `find_executable`, `ResourceManager` |
+| Executable resolution | `resource_utils.py` | `find_executable`, `ResourceManager` — **NOTE: `find_executable`/`resolve_executable_config` are legacy/unwired; use `cccp.software.resolve_executable` instead** |
 | Unit constants | `constants.py` | `HARTREE_TO_KCAL`, `BOHR_TO_ANGSTROM`, etc. |
 | Gaussian keywords | `keyword_translator.py` | Gaussian-specific but lives in utils/ |
 | Solvent mapping | `solvent_map.py` | `orca_smd_solvent`, `xtb_solvent` |

@@ -11,6 +11,7 @@ Automated computational chemistry platform. Two-package architecture under `src/
 ACP_V1_20260519/
 ├── src/cccp/  # Computational Chemistry Connection Package (QC interface library; reverse-synced 2026-07-13)
 │   ├── config.py          # 6-source YAML config load/merge (677 lines; reads ~/.cccp.yaml, falls back to ~/.conformer_search.yaml)
+│   ├── software.py        # Centralized QC executable resolution — resolve_executable()/require_executable()/detect_version()/discover_all() (config → CONFSEARCH_*_PATH env → PATH+Python env → legacy fallback)
 │   ├── version.py         # __version__
 │   ├── core/              # ConformerEngine (1764 lines), ProtocolSpec, CandidateSet, state_manager
 │   ├── qc/interfaces/     # subprocess wrappers: ORCA/CREST/XTB/xtb_thermo + CENSO/ISOSTAT/Molclus (2026-08-02 consolidation)

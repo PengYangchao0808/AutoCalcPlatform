@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +9,7 @@ from acp.backends.base import QCBackend, QCResult
 from acp.backends.external import batch_process_thermo, run_shermo
 from acp.backends.registry import register_backend
 from cccp.qc.interfaces.isostat import IsostatInterface
+from cccp.software import resolve_executable
 
 
 class ExternalBackend(QCBackend):
@@ -17,15 +17,24 @@ class ExternalBackend(QCBackend):
 
     name = "external"
 
-    def _executable_path(self, key: str, default: str) -> str:
+    def _configured_executable_path(self, key: str, default: str) -> str:
         executables = self.config.get("executables", {})
         return str(executables.get(key, {}).get("path", default))
 
+    def _executable_path(self, key: str, default: str) -> str:
+        configured_path = self._configured_executable_path(key, default)
+        path = resolve_executable(key, configured_path=configured_path)
+        if path is not None:
+            return str(path)
+        return str(Path(configured_path).expanduser().resolve())
+
     def is_isostat_available(self) -> bool:
-        return shutil.which(self._executable_path("isostat", "isostat")) is not None
+        configured_path = self._configured_executable_path("isostat", "isostat")
+        return resolve_executable("isostat", configured_path=configured_path) is not None
 
     def is_shermo_available(self) -> bool:
-        return shutil.which(self._executable_path("shermo", "Shermo")) is not None
+        configured_path = self._configured_executable_path("shermo", "Shermo")
+        return resolve_executable("shermo", configured_path=configured_path) is not None
 
     def is_available(self) -> bool:
         return self.is_isostat_available() and self.is_shermo_available()
@@ -104,10 +113,16 @@ class ExternalBackend(QCBackend):
         **kwargs: Any,
     ) -> list[QCResult]:
         target_dir = output_dir or Path.cwd()
+        executables = dict(self.config.get("executables", {}))
+        shermo_config = dict(executables.get("shermo", {}))
+        shermo_config["path"] = self._executable_path("shermo", "Shermo")
+        executables["shermo"] = shermo_config
+        config = dict(self.config)
+        config["executables"] = executables
         thermo_results = batch_process_thermo(
             log_files=log_files,
             output_dir=target_dir,
-            config=self.config,
+            config=config,
             **kwargs,
         )
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -103,18 +102,17 @@ def _write_optimized_xyz(
 def _find_shermo(cfg: dict[str, Any] | None = None) -> str | None:
     """Return the path to the Shermo binary, or None if not found.
 
-    Checks the configured executable path from the config first (matching
-    ``energy.py``), then falls back to ``shutil.which`` for PATH lookup.
-    Returns the resolved path as a string if found, or None.
+    Checks the configured executable path from the config first, then
+    resolves through the centralized executable resolver.
     """
+    from cccp.software import resolve_executable
+
+    configured = None
     if cfg:
-        configured = cfg.get("executables", {}).get("shermo", {}).get("path", "")
-        if configured and Path(configured).is_file():
-            return configured
-    if shutil.which("shermo"):
-        return "shermo"
-    if shutil.which("Shermo"):
-        return "Shermo"
+        configured = (cfg.get("executables", {}) or {}).get("shermo", {}).get("path")
+    path = resolve_executable("shermo", configured_path=configured)
+    if path:
+        return str(path)
     return None
 
 
