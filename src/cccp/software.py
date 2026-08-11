@@ -71,16 +71,17 @@ FALLBACKS: dict[str, list[str]] = {
     "molclus": [],
 }
 
-#: Version-probe flags per software.  Empty string runs the binary bare;
-#: ``None`` means "no version probe available".
-_VERSION_FLAGS: dict[str, str | None] = {
-    "orca": "",
-    "xtb": "--version",
-    "crest": "--version",
-    "censo": "-v",
-    "shermo": "",
-    "isostat": "",
-    "molclus": "",
+#: Version-probe flags per software, tried in order.  Empty tuple = no probe
+#: (the binary has no reliable version flag).  CENSO tries ``-v`` first
+#: (modern C++ builds) then ``-version`` (CENSO-QM 1.x Python wrapper).
+_VERSION_FLAGS: dict[str, tuple[str, ...]] = {
+    "orca": (),
+    "xtb": ("--version",),
+    "crest": ("--version",),
+    "censo": ("-v", "-version"),
+    "shermo": (),
+    "isostat": (),
+    "molclus": (),
 }
 
 
@@ -194,28 +195,30 @@ def discover_all(config: dict[str, Any] | None = None) -> dict[str, Path | None]
 def detect_version(name: str, executable: Path | None) -> str | None:
     """Best-effort version probe, decoupled from resolution.
 
-    Runs the binary with :data:`_VERSION_FLAGS` and returns the first
-    output line (truncated).  ``None`` when probing is unavailable, the
-    binary is missing, or the probe fails.
+    Tries each :data:`_VERSION_FLAGS` probe in order and returns the first
+    output line of the first probe that exits 0 (a failing flag, e.g. an
+    unsupported option, falls through to the next).  ``None`` when probing
+    is unavailable, the binary is missing, or every probe fails.
     """
     if executable is None:
         return None
-    flag = _VERSION_FLAGS.get(name)
-    if flag is None:
-        return None
-    try:
-        result = subprocess.run(
-            [str(executable), flag],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            env={**os.environ, "OMP_NUM_THREADS": "1"},
-        )
+    for flag in _VERSION_FLAGS.get(name, ()):
+        try:
+            result = subprocess.run(
+                [str(executable), flag],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env={**os.environ, "OMP_NUM_THREADS": "1"},
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            logger.debug("Version probe failed for %s (%r)", name, flag)
+            continue
+        if result.returncode != 0:
+            continue
         first_line = (result.stdout or result.stderr).split("\n")[0].strip()
         if first_line and len(first_line) < 128:
             return first_line
-    except (OSError, subprocess.TimeoutExpired):
-        logger.debug("Version probe failed for %s", name)
     return None
 
 
