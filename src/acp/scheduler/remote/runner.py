@@ -40,6 +40,7 @@ from pathlib import Path
 
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
+from acp.scheduler.nodes import ExecutionTargetError
 from acp.scheduler.provenance import build_provenance_for_job
 from acp.scheduler.remote.cleanup import RemoteCleanup
 from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
@@ -157,12 +158,17 @@ class RemoteJobRunner:
         self,
         record: JobRecord,
         event_log: JobEventLog,
+        target_node: str | None = None,
     ) -> str:
         """Prepare and submit the LSF job, return the LSF job ID immediately.
 
         Executes steps 1-5 (node selection, housekeeping, binary probe,
         code sync, upload, LSF script, ``bsub``).  Does **not** enter
         the monitor loop — that is driven by :meth:`poll_remote`.
+
+        ``target_node`` is the already-resolved execution target from
+        ``NodeRegistry`` (single-point selection, M4).  When omitted the
+        legacy ``select_node(spec)`` path runs for backward compatibility.
         """
         spec = record.spec
         work_dir = Path(record.work_dir)
@@ -170,7 +176,14 @@ class RemoteJobRunner:
 
         event_log.append("job.started", job_id=record.id, workflow=spec.workflow, mode="remote")
 
-        node = self.select_node(spec)
+        if target_node is not None:
+            node = self._find_node_by_name(target_node)
+            if node is None or not node.enabled:
+                raise ExecutionTargetError(
+                    f"target_node '{target_node}' not found or disabled"
+                )
+        else:
+            node = self.select_node(spec)
         event_log.append("remote.node_selected", job_id=record.id, node=node.name, host=node.host)
 
         self._pre_submit_housekeeping(node, event_log, record.id)

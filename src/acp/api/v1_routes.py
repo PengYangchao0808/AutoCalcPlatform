@@ -107,6 +107,7 @@ from acp.scheduler.files import build_manifest, resolve_safe
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec
 from acp.scheduler.logs import read_log_tail
 from acp.scheduler.manager import JobManager
+from acp.scheduler.nodes import ExecutionTargetError, validate_execution_request
 from acp.scheduler.remote.fetcher import (
     _MAX_READ_BYTES,
     _MAX_TAIL_LINES,
@@ -160,6 +161,7 @@ def _record_to_v1_model(record: JobRecord) -> V1JobRecordModel:
             config_path=spec.config_path,
             tags=spec.tags,
             project_id=spec.project_id,
+            execution_mode=spec.execution_mode,
             target_node=spec.target_node,
         ),
         status=record.status.value,
@@ -423,8 +425,13 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         config_path=req.config_path,
         tags=req.tags,
         project_id=req.project_id,
+        execution_mode=req.execution_mode,
         target_node=req.target_node,
     )
+    try:
+        validate_execution_request(spec)
+    except ExecutionTargetError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     try:
         record = manager.submit(spec)
     except ValueError as exc:

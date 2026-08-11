@@ -97,6 +97,37 @@ def _local_cleanup_interval_hours() -> int:
         return 6
 
 
+def _load_local_max_jobs() -> int:
+    """Read ``cluster.local.max_jobs`` — the local admission-gate ceiling.
+
+    User-controlled only; never derived from ``os.cpu_count()``.
+    """
+    try:
+        from cccp.config import load_config
+
+        local_cfg = load_config().get("cluster", {}).get("local", {})
+        return max(1, int(local_cfg.get("max_jobs", 4)))
+    except Exception:
+        return 4
+
+
+def _apply_execution_mode_override(remote_config) -> None:
+    """Apply the ``ACP_EXECUTION_MODE`` env override (set by ``acp run serve
+    --execution-mode``) on top of the YAML ``cluster.execution_mode``."""
+    import logging
+
+    env_mode = os.environ.get("ACP_EXECUTION_MODE", "").strip().lower()
+    if not env_mode:
+        return
+    if env_mode not in ("local", "remote"):
+        logging.getLogger(__name__).warning(
+            "Invalid ACP_EXECUTION_MODE=%r, ignoring (must be 'local' or 'remote')",
+            env_mode,
+        )
+        return
+    remote_config.execution_mode = env_mode
+
+
 def create_app(
     run_root: Path | str | None = None,
     host: str | None = None,
@@ -122,6 +153,7 @@ def create_app(
     run_root_path.mkdir(parents=True, exist_ok=True)
 
     remote_config = _load_remote_config()
+    _apply_execution_mode_override(remote_config)
     local_retention = _load_local_retention_config()
     local_interval = _local_cleanup_interval_hours()
 
@@ -132,6 +164,7 @@ def create_app(
         remote_config=remote_config,
         local_retention_config=local_retention,
         local_cleanup_interval_hours=local_interval,
+        local_max_jobs=_load_local_max_jobs(),
     )
 
     @asynccontextmanager

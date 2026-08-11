@@ -25,6 +25,13 @@ from typing import TYPE_CHECKING, Any
 
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
+from acp.scheduler.nodes import (
+    ExecutionCapacityUnavailable,
+    ExecutionTargetError,
+    NodeRegistry,
+    NodeSpec,
+    validate_execution_request,
+)
 from acp.scheduler.projects import ProjectManager
 from acp.scheduler.provenance import compute_input_hash
 from acp.scheduler.runner import JobRunner
@@ -60,6 +67,7 @@ class JobManager:
         remote_config: RemoteExecutionConfig | None = None,
         local_retention_config: RetentionPolicy | None = None,
         local_cleanup_interval_hours: int = 6,
+        local_max_jobs: int = 4,
     ):
         self.run_root = Path(run_root)
         self.run_root.mkdir(parents=True, exist_ok=True)
@@ -70,14 +78,23 @@ class JobManager:
         self._stage_task_store = StageTaskStore(self.store.db_path)
         self._stage_task_observer = StageTaskObserver(self._stage_task_store)
 
-        # Remote execution plumbing (created lazily only when configured).
+        # Remote execution plumbing.  ``remote_runner`` is created whenever
+        # remote *capability* exists (nodes configured) — independent of the
+        # default execution mode (M1).  The default mode only influences
+        # target resolution for jobs that don't pin one themselves.
         self._remote_config = remote_config
         self._runner_ssh_pool: SSHConnectionPool | None = None
         self._fetcher_ssh_pool: SSHConnectionPool | None = None
         self._remote_fetcher: RemoteResultFetcher | None = None
         self._remote_cleanup: RemoteCleanup | None = None
         self._node_manager: NodeManager | None = None
-        self.remote_runner = self._create_remote_runner() if self._is_remote_enabled() else None
+        self.registry = NodeRegistry(
+            local_max_jobs=local_max_jobs,
+            remote_nodes=list(self._remote_config.nodes) if self._remote_config else [],
+        )
+        self.remote_runner = self._create_remote_runner() if self._remote_available() else None
+        if self._node_manager is not None:
+            self.registry.status_provider = self._node_manager.get_node_status
 
         # Local disk protection (Phase 5B).
         self._local_cleanup = self._create_local_cleanup(local_retention_config)
@@ -114,6 +131,30 @@ class JobManager:
 
     def _is_remote_enabled(self) -> bool:
         return self._remote_config is not None and self._remote_config.is_remote
+
+    def _remote_available(self) -> bool:
+        """Remote *capability*: nodes are configured, regardless of default mode."""
+        return self._remote_config is not None and bool(self._remote_config.enabled_nodes)
+
+    @property
+    def default_execution_mode(self) -> str:
+        """Server default execution mode — only consulted during target resolution."""
+        if self._remote_config is not None:
+            return self._remote_config.execution_mode
+        return "local"
+
+    @staticmethod
+    def _is_remote_job(record: JobRecord) -> bool:
+        """Route lifecycle decisions from the job's own execution provenance.
+
+        Covers all three provenance sources: ``remote_job_id``,
+        ``result.lsf_job_id``, and ``result.execution_kind == "remote"``.
+        The server default mode is never consulted for dispatched jobs.
+        """
+        if record.remote_job_id:
+            return True
+        result = record.result or {}
+        return bool(result.get("lsf_job_id") or result.get("execution_kind") == "remote")
 
     def _create_remote_runner(self):
         """Instantiate the SSH pool + helpers + :class:`RemoteJobRunner`.
@@ -515,7 +556,7 @@ class JobManager:
         if ev:
             ev.set()
 
-        if self._is_remote_enabled() and self.remote_runner is not None:
+        if self._is_remote_job(record) and self.remote_runner is not None:
             if not record.remote_job_id and record.result and record.result.get("lsf_job_id"):
                 record.remote_job_id = str(record.result["lsf_job_id"])
                 record.touch()
@@ -602,10 +643,22 @@ class JobManager:
     def _execute_submission(self, job_id: str) -> None:
         """Background thread: submit job then immediately poll once.
 
-        When all remote nodes are at capacity the job stays in ``STARTING``
-        state and retries every 60 s until a node becomes available.
+        Temporary capacity shortfalls (local slots full, all remote nodes
+        busy/unreachable) keep the job in ``STARTING`` and retry every
+        60 s.  Permanent selection errors (:class:`ExecutionTargetError`)
+        fall through to the generic branch and fail immediately.
         """
-        from acp.scheduler.remote.runner import RemoteNodeUnavailableError
+        try:
+            from acp.scheduler.remote.runner import RemoteNodeUnavailableError
+
+            retryable: tuple[type[Exception], ...] = (
+                ExecutionCapacityUnavailable,
+                RemoteNodeUnavailableError,
+            )
+        except ImportError:
+            # paramiko not installed — the remote runner can never raise its
+            # legacy error here; local execution must still work (P3).
+            retryable = (ExecutionCapacityUnavailable,)
 
         RETRY_DELAY = 60
 
@@ -613,7 +666,7 @@ class JobManager:
             try:
                 self._submit_job(job_id)
                 break  # success
-            except RemoteNodeUnavailableError:
+            except retryable as exc:
                 record = self.store.get(job_id)
                 if record is None:
                     return
@@ -625,22 +678,25 @@ class JobManager:
                     self.store.update(record)
                     self._write_job_json(record)
                     self._event_log(record).append(
-                        "job.cancelled", job_id=job_id,
-                        reason="cancelled while waiting for remote node",
+                        "job.cancelled",
+                        job_id=job_id,
+                        reason="cancelled while waiting for execution capacity",
                     )
                     self._stage_task_observer.finalize_job(job_id, "cancelled")
                     return
                 if record.status.is_terminal:
                     return
                 logger.info(
-                    "No remote node available for job %s, retrying in %ds",
-                    job_id, RETRY_DELAY,
+                    "No execution capacity for job %s (%s), retrying in %ds",
+                    job_id,
+                    exc,
+                    RETRY_DELAY,
                 )
                 self._event_log(record).append(
-                    "remote.waiting_for_node",
+                    "execution.waiting_for_capacity",
                     job_id=job_id,
                     retry_after=RETRY_DELAY,
-                    message="All remote nodes at capacity, waiting for resources",
+                    message=str(exc),
                 )
                 time.sleep(RETRY_DELAY)
             except Exception as exc:
@@ -705,7 +761,7 @@ class JobManager:
             return
 
         # ------------------------------------------------------------------
-        # Real workflows: STARTING → submit (fire-and-forget).
+        # Real workflows: STARTING → resolve target → submit (fire-and-forget).
         # Remote jobs go to PENDING (waiting for cluster resources);
         # local jobs go to RUNNING (start immediately).
         # ------------------------------------------------------------------
@@ -715,19 +771,106 @@ class JobManager:
         self.store.update(record)
         self._write_job_json(record)
 
-        if self._is_remote_enabled() and self.remote_runner is not None:
-            lsf_job_id = self.remote_runner.submit_remote(record, event_log)
-            record.remote_job_id = lsf_job_id
-            record.status = JobStatus.PENDING
-        else:
-            self.runner.submit(record, event_log, cancel_event)
-            record.status = JobStatus.RUNNING
+        target = self._resolve_execution_target(record)
+        self._record_execution_target(record, target)
+
+        if target.kind == "local":
+            # Admission gate + dispatch under the lock so concurrent
+            # submission threads cannot oversubscribe local slots (M5).
+            with self._lock:
+                self._admit_local(record)
+                self.runner.submit(record, event_log, cancel_event)
+                record.status = JobStatus.RUNNING
+                record.touch()
+                self.store.update(record)
+                self._write_job_json(record)
+            return
+
+        if self.remote_runner is None:
+            raise ExecutionTargetError(
+                "Remote execution target resolved but no remote runner is "
+                "available (no enabled remote nodes configured)"
+            )
+        self._ensure_remote_capacity(target)
+        lsf_job_id = self.remote_runner.submit_remote(record, event_log, target_node=target.name)
+        record.remote_job_id = lsf_job_id
+        record.status = JobStatus.PENDING
 
         record.touch()
         self.store.update(record)
         self._write_job_json(record)
 
-    _POLL_MAX_RETRIES = 3
+    # ------------------------------------------------------------------ #
+    # Execution target resolution (single decision point — P4)
+    # ------------------------------------------------------------------ #
+
+    def _resolve_execution_target(self, record: JobRecord) -> NodeSpec:
+        """Resolve the execution target: target_node > execution_mode > default.
+
+        This is the only place the server default mode is consulted.
+        """
+        spec = record.spec
+        validate_execution_request(spec)
+        if spec.target_node:
+            return self.registry.require(spec.target_node)
+        mode = spec.execution_mode or self.default_execution_mode
+        if mode == "local":
+            return self.registry.local
+        return self.registry.select_remote()
+
+    def _record_execution_target(self, record: JobRecord, target: NodeSpec) -> None:
+        """Persist execution provenance so poll/cancel/recovery never need
+        the server default mode again for this job."""
+        result = dict(record.result or {})
+        result["execution_target"] = target.name
+        result["execution_kind"] = target.kind
+        record.result = result
+        record.touch()
+        self.store.update(record)
+        self._event_log(record).append(
+            "execution.target_resolved",
+            job_id=record.id,
+            target=target.name,
+            kind=target.kind,
+        )
+
+    def count_local_running_jobs(self, exclude_id: str | None = None) -> int:
+        """Local jobs holding a slot (STARTING or RUNNING, not remote)."""
+        count = 0
+        for status in (JobStatus.STARTING.value, JobStatus.RUNNING.value):
+            for rec in self.store.list(status=status, limit=10000):
+                if exclude_id is not None and rec.id == exclude_id:
+                    continue
+                if not self._is_remote_job(rec):
+                    count += 1
+        return count
+
+    def _admit_local(self, record: JobRecord) -> None:
+        """Local admission gate — raises when all local slots are taken."""
+        limit = self.registry.local.max_jobs
+        running = self.count_local_running_jobs(exclude_id=record.id)
+        if running >= limit:
+            raise ExecutionCapacityUnavailable(
+                f"Local execution at capacity ({running}/{limit}); waiting for a slot"
+            )
+
+    def _ensure_remote_capacity(self, target: NodeSpec) -> None:
+        """Capacity check for an explicitly pinned remote node.
+
+        Auto-selected nodes are already capacity-filtered by
+        ``NodeRegistry.select_remote``; this covers the explicit
+        ``target_node`` path.  Offline/full targets are temporary
+        conditions — the caller retries rather than failing the job.
+        """
+        running = self.registry.remote_running_jobs(target.name)
+        if running is None:
+            raise ExecutionCapacityUnavailable(
+                f"target node '{target.name}' is offline or unreachable"
+            )
+        if running >= target.max_jobs:
+            raise ExecutionCapacityUnavailable(
+                f"target node '{target.name}' is at capacity ({running}/{target.max_jobs})"
+            )
 
     def _poll_job(self, job_id: str) -> None:
         """Single non-blocking check of one job's status."""
@@ -737,35 +880,32 @@ class JobManager:
 
         cancel_event = self._cancel_events.get(job_id, threading.Event())
         event_log = self._event_log(record)
-        is_remote = self._is_remote_enabled() and bool(record.remote_job_id) and self.remote_runner is not None
+        is_remote = self._is_remote_job(record) and self.remote_runner is not None
 
         if is_remote:
             try:
-                is_terminal, exit_code = self.remote_runner.poll_remote(record, event_log, cancel_event)
+                is_terminal, exit_code = self.remote_runner.poll_remote(
+                    record, event_log, cancel_event
+                )
                 self._poll_failures.pop(job_id, None)
             except Exception as exc:
+                # Transport-layer failure (SSH/bjobs unreachable).  This is
+                # NOT a job failure: keep the status, do not cancel, do not
+                # resubmit — only the LSF scheduler may judge the job (M3).
                 failures = self._poll_failures.get(job_id, 0) + 1
                 self._poll_failures[job_id] = failures
                 logger.warning(
-                    "Remote poll failed for job %s (attempt %d/%d): %s",
-                    job_id, failures, self._POLL_MAX_RETRIES, exc,
+                    "Remote poll unreachable for job %s (failure %d): %s",
+                    job_id,
+                    failures,
+                    exc,
                 )
-                if failures >= self._POLL_MAX_RETRIES:
-                    logger.error("Remote poll failed %d times for job %s, marking FAILED", failures, job_id)
-                    try:
-                        self.remote_runner.cancel_remote(job_id, record)
-                        self.remote_runner._cleanup_job_state(job_id)
-                    except Exception:
-                        pass
-                    record.status = JobStatus.FAILED
-                    record.error = f"Remote poll failed after {failures} attempts: {exc}"
-                    record.completed_at = _utc_now_iso()
-                    record.touch()
-                    self.store.update(record)
-                    self._write_job_json(record)
-                    event_log.append("job.failed", job_id=job_id, error=str(exc))
-                    self._stage_task_observer.finalize_job(job_id, "failed")
-                    self._poll_failures.pop(job_id, None)
+                event_log.append(
+                    "remote.poll_unreachable",
+                    job_id=job_id,
+                    failures=failures,
+                    error=str(exc),
+                )
                 return
         else:
             try:
@@ -885,7 +1025,7 @@ class JobManager:
         Returns True if recovery succeeds (job left in RUNNING for the
         background poller to pick up), False otherwise.
         """
-        if not self._is_remote_enabled() or self.remote_runner is None:
+        if not self._is_remote_job(record) or self.remote_runner is None:
             return False
         if not record.remote_job_id:
             return False

@@ -450,6 +450,11 @@ def _get_default_config() -> dict[str, Any]:
             'walltime': '',
             'extra_flags': '',
             'nodes': [],
+            # Local execution-target admission ceiling. MUST stay in sync
+            # with config/defaults.yaml cluster.local.
+            'local': {
+                'max_jobs': 4,
+            },
             # Local run_root lifecycle management (Phase 5B). MUST stay in
             # sync with config/defaults.yaml cluster.local_retention.
             'local_retention': {

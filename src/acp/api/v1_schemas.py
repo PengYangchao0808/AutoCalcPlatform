@@ -7,7 +7,7 @@ Pydantic models for the ACP Workbench v2 ``/api/v1`` surface.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -88,6 +88,7 @@ class V1JobSpecModel(BaseModel):
     config_path: str | None = None
     tags: list[str] = Field(default_factory=list)
     project_id: str | None = None
+    execution_mode: Literal["local", "remote"] | None = None
     target_node: str | None = None
 
 
@@ -120,6 +121,7 @@ class V1JobCreateRequest(BaseModel):
     config_path: str | None = None
     tags: list[str] = Field(default_factory=list)
     project_id: str | None = None
+    execution_mode: Literal["local", "remote"] | None = None
     target_node: str | None = None
 
 

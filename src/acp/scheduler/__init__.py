@@ -20,6 +20,15 @@ from acp.scheduler.local_cleanup import (
     RetentionPolicy,
 )
 from acp.scheduler.manager import JobManager
+from acp.scheduler.nodes import (
+    ExecutionCapacityUnavailable,
+    ExecutionMode,
+    ExecutionTargetError,
+    NodeRegistry,
+    NodeSpec,
+    NodeState,
+    validate_execution_request,
+)
 from acp.scheduler.projects import ProjectManager
 from acp.scheduler.provenance import ParserRegistry, Provenance, ResultSchema, compute_input_hash
 from acp.scheduler.runner import JobRunner
@@ -39,9 +48,15 @@ __all__ = [
     "DEFAULT_MAX_DIRS_PER_SWEEP",
     "DISK_CLEANUP_THRESHOLD",
     "DISK_SKIP_THRESHOLD",
+    "ExecutionCapacityUnavailable",
+    "ExecutionMode",
+    "ExecutionTargetError",
     "LocalCleanup",
     "LocalCleanupReport",
     "LocalHousekeepingDecision",
+    "NodeRegistry",
+    "NodeSpec",
+    "NodeState",
     "ParserRegistry",
     "ParserStatus",
     "ProjectManager",
@@ -55,4 +70,5 @@ __all__ = [
     "StageTaskStore",
     "capture_stage_artifacts",
     "compute_input_hash",
+    "validate_execution_request",
 ]

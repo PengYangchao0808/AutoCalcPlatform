@@ -227,6 +227,8 @@ def _row_to_record(row: sqlite3.Row) -> JobRecord:
         tags=spec_raw.get("tags", []),
         project_id=spec_raw.get("project_id", project_id),
         input_hash=spec_raw.get("input_hash", input_hash),
+        execution_mode=spec_raw.get("execution_mode"),
+        target_node=spec_raw.get("target_node"),
     )
     result = json.loads(row["result_json"]) if row["result_json"] else None
     return JobRecord(

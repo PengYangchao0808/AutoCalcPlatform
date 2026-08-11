@@ -342,6 +342,13 @@ cluster:
   extra_flags: ""      # Additional LSF/PBS flags
   nodes: []            # Remote compute nodes (see plan §13 for example)
 
+  # Local execution target (first-class). max_jobs caps concurrent local
+  # jobs; submissions beyond the ceiling stay STARTING until a slot frees.
+  # User-controlled only — never auto-derived from os.cpu_count().
+  # Keep in sync with cccp.config._get_default_config() cluster.local.
+  local:
+    max_jobs: 4
+
   # Local run_root lifecycle management (Phase 5B — local disk protection).
   # Protects the ACP Server's own run_root from unbounded growth.
   local_retention:

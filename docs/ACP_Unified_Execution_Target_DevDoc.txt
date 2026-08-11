@@ -1,0 +1,612 @@
+========================================================
+ACP Unified Execution Target — 设计方案 v2.1 (DevDoc)
+========================================================
+Author: QCcalc Team
+Date: 2026-08-11
+Status: Design accepted — implementation spec (Phase 1 = current scope)
+Applies to: ACP_V1_20260811 (scheduler/ + api/), remote layer reused as-is
+
+本文件是 "本地/远程统一执行目标" 的权威实现规范,供编码与验收对照。
+所有代码位置引用均已对当前工作区源码逐条核实 (2026-08-11)。
+
+--------------------------------------------------------
+0. 文档导航
+--------------------------------------------------------
+  1. 背景与现状(已核实事实)
+  2. 设计原则(不可妥协)
+  3. 两条不可跨越的分界线
+  4. 核心架构(最终形态)
+  5. 五个执行语义修正(P0, 逐条含代码证据)
+  6. 异常二分法
+  7. 数据结构(NodeSpec / NodeState / NodeRegistry)
+  8. 执行目标解析 + 冲突校验
+  9. Job 执行 provenance
+  10. 配置与 API 面
+  11. 能力感知调度(Phase 2)
+  12. 可观测性(Phase 3)
+  13. 分阶段路线与文件改动清单
+  14. 验收清单(逐条对照代码)
+  15. 明确不做的事(YAGNI)
+  16. 测试计划
+
+--------------------------------------------------------
+1. 背景与现状(已核实事实)
+--------------------------------------------------------
+
+目标:ACP 从"全局 local/remote 开关"演进为"统一执行目标选择"——
+local 是一等 execution target,远程服务器是配置节点;统一的是
+"节点描述与选择",执行机制仍各归其位 (JobRunner / RemoteJobRunner)。
+
+现状事实(全部经代码核实):
+
+  F1. 全局开关已存在:
+      config `cluster.execution_mode` ('local' 默认 / 'remote')
+      -> RemoteExecutionConfig.is_remote  (src/acp/scheduler/remote/config.py:160-163)
+      -> JobManager._is_remote_enabled()  (src/acp/scheduler/manager.py:115-116)
+
+  F2. 远程执行基础设施完整可复用:
+      RemoteJobRunner / SSHConnectionPool / FileStager / CodeSyncer /
+      RemoteCleanup / RemoteResultFetcher / NodeManager / script_gen
+      (src/acp/scheduler/remote/, 11 文件)
+
+  F3. 分发漏斗单点:
+      _submit_job()  (src/acp/scheduler/manager.py:718-724)
+        if self._is_remote_enabled() and self.remote_runner is not None:
+            -> remote_runner.submit_remote(record, event_log)   # PENDING
+        else:
+            -> self.runner.submit(record, ...)                  # RUNNING
+
+  F4. 每作业字段现状:
+      JobSpec.target_node (src/acp/scheduler/jobs.py:308) —— 仅远程选节点,
+      全局 mode=local 时被忽略。无 per-job remote 字段。
+      JobRecord.remote_job_id (jobs.py:333) —— 远程作业跟踪锚点。
+
+  F5. 两个执行路径:
+      路径 A: CLI 直跑 `acp run <wf>` -> 进程内同步执行,永远本地
+              (cli.py main() dispatch, 不经 JobManager)
+      路径 B: `acp run serve` -> create_app() -> JobManager -> 调度器
+              (唯一漏斗;本地子进程 / 远程 LSF 均回入 CLI 子进程)
+
+  F6. /api/v1/nodes 已存在 (src/acp/api/v1_routes.py:1619-1657):
+      GET /nodes, GET /nodes/{name}/status, POST /nodes/{name}/ping,
+      POST /nodes/{name}/bootstrap —— Phase 3 为"升级"而非"新增"。
+
+  F7. NodeManager.list_nodes() 有全局 mode gate (node_manager.py:112-113):
+      `if not self.config.is_remote: return []`;
+      但 get_node_status(name) 无 gate,可逐节点调用绕过。
+
+  F8. 远程探针已实现并复用 requires_binaries:
+      RemoteJobRunner._probe_required_binaries() (remote/runner.py:1039+)
+      从 workflow registry 取 entry.requires_binaries (runner.py:1057),
+      SSH 到节点读 ~/.cccp.yaml + shutil.which + 版本探测。
+
+  F9. 本地无并发限制:
+      manager.py:67 `self.max_running = max_running  # retained for API compat (unused)`
+      —— local max_jobs 必须真正接线,不能只做状态展示。
+
+  F10. JobStatus (jobs.py:27-49):
+      QUEUED/STARTING/PENDING/RUNNING/CANCELLING/CANCELLED/COMPLETED/FAILED
+      第一版不新增 UNKNOWN/LOST。
+
+--------------------------------------------------------
+2. 设计原则(不可妥协)
+--------------------------------------------------------
+
+  P1. local 是一等 execution target,不是 remote 的反面。
+  P2. 统一节点描述与选择,不统一执行器(不重造 Parsl/QCFractal)。
+  P3. config-first,本地兜底:'local' 永远可用,远程是显式"升级"的能力。
+  P4. 单点决策:_resolve_execution_target() 是全系统唯一选点。
+  P5. fail-fast 而非静默回退:显式 target 不可用 -> 立即报错,绝不偷偷换节点。
+  P6. 显式指定 vs 自动选择的失败语义严格区分。
+  P7. 节点状态是动态的,节点配置是静态的,两者分离 (NodeState vs NodeSpec)。
+  P8. 能力匹配优先于负载均衡;第一版不做 CPU/RAM/load 智能预测。
+  P9. capability 三态(available/missing/unknown),unknown 不直接淘汰
+      (module load 环境可能只在 LSF job env 提供二进制)。
+  P10. 默认模式只影响未 dispatch 的作业;已 dispatch 作业生命周期
+       完全由自身 execution provenance 决定。
+
+--------------------------------------------------------
+3. 两条不可跨越的分界线
+--------------------------------------------------------
+
+  分界线 1:  default_execution_mode 只作用于 resolve_execution_target()
+             ─────────────────────────────────────────────
+             作业一旦 dispatch:
+               poll / cancel / recovery 只读 job 自身 provenance
+               (remote_job_id / result.execution_kind / result.execution_target)
+               绝不再看服务默认模式。
+
+  分界线 2:  transport health ≠ job lifecycle
+             ─────────────────────────────────────────────
+             SSH 断开 / 节点 offline 只表示:
+               - 停止向该节点派新任务
+               - 暂停对该节点的观测(不判失败、不 cancel、不 resubmit)
+             只有 scheduler (bjobs) 明确判失败才更新 Job 状态。
+             JobStatus=RUNNING 与 NodeState=OFFLINE 可同时存在。
+
+--------------------------------------------------------
+4. 核心架构(最终形态)
+--------------------------------------------------------
+
+                        JobSpec
+              execution_mode / target_node
+                        │
+                        ▼
+          validate_execution_request()      ← 冲突校验 (HTTP 400)
+                        │
+                        ▼
+          resolve_execution_target()        ← 唯一选点 (单点决策)
+                        │
+           ┌────────────┴────────────┐
+           ▼                         ▼
+        local                   compute-01
+           │                         │
+   admission: running<max     capable + slot
+           │                         │
+           ▼                         ▼
+      JobRunner              RemoteJobRunner
+                                      │
+                              existing SSH/LSF (不改)
+
+  关键:default_execution_mode 只出现在 resolve_execution_target() 内。
+
+--------------------------------------------------------
+5. 五个执行语义修正(P0,逐条含代码证据)
+--------------------------------------------------------
+
+  M1. "默认 remote" 与 "具备 remote 能力" 拆开
+  ─────────────────────────────────────────────────────
+  问题:manager.py:80,115 用 _is_remote_enabled() 当能力开关,而
+        is_remote 要求 execution_mode == "remote" (config.py:160-163)。
+        结果:mode=local + 配置了 nodes -> remote_runner=None,
+        即使 job 显式 execution_mode=remote 也无法远程。
+  修改:
+        def _remote_available(self) -> bool:
+            return (self._remote_config is not None
+                    and bool(self._remote_config.enabled_nodes))
+
+        # __init__:
+        self.remote_runner = (
+            self._create_remote_runner() if self._remote_available() else None
+        )
+  注意:RemoteExecutionConfig 本身不改,只在 manager 层拆概念。
+
+  M2. poll / cancel / recovery 全部改读 job provenance
+  ─────────────────────────────────────────────────────
+  问题(三处都查全局 mode):
+    - _poll_job    manager.py:740  is_remote = _is_remote_enabled() and ...
+    - cancel       manager.py:519  if self._is_remote_enabled() ...
+    - recovery     manager.py:888  if not self._is_remote_enabled(): return False
+  致命场景:server 默认 local,作业 A 指定 remote 且 remote_job_id=123456,
+        poller 会把它当本地 subprocess 轮询。
+  修改 —— 建一个小单点判断:
+        def _is_remote_job(self, record: JobRecord) -> bool:
+            if record.remote_job_id:
+                return True
+            result = record.result or {}
+            return bool(result.get("lsf_job_id")
+                        or result.get("execution_kind") == "remote")
+
+        _poll_job   -> if self._is_remote_job(record): poll_remote ...
+        cancel      -> if self._is_remote_job(record): cancel_remote ...
+        recovery    -> if self._is_remote_job(record) and self.remote_runner: ...
+  规则:default mode 只影响未 dispatch 的作业;已 dispatch 作业
+        生命周期完全由 execution provenance 决定。
+
+  M3. poll 传输异常 ≠ FAILED
+  ─────────────────────────────────────────────────────
+  问题:manager.py:746-764 —— 远程 poll 连续 _POLL_MAX_RETRIES(3)次异常
+        直接 FAILED 并 cancel_remote。18h 的 ORCA 会因 45s 网络抖动被误杀。
+  修改(仅 remote 传输层;local poll 异常保持 FAILED —— 本机子进程丢失即真故障):
+        except Exception as exc:                 # SSH/bjobs 传输层异常
+            failures = self._poll_failures.get(job_id, 0) + 1
+            self._poll_failures[job_id] = failures
+            event_log.append(
+                "remote.poll_unreachable",
+                job_id=job_id, failures=failures, error=str(exc),
+            )
+            return                              # 不改 JobStatus,不 cancel,不 resubmit
+        # 连接恢复路径: poll_remote 成功后 _poll_failures.pop(job_id, None)
+  第一版不需要 UNKNOWN/LOST 状态;可后续加 monitoring_warning/last_successful_poll。
+
+  M4. 节点只选一次 —— submit_remote 接受已解析 target
+  ─────────────────────────────────────────────────────
+  问题:remote/runner.py:168-171 —— submit_remote() 内部 select_node(spec)
+        (target_node or _select_least_loaded),与"NodeRegistry 唯一选点"冲突。
+  修改:放弃"remote/ 目录绝对零修改"约束,仅加一个向后兼容参数:
+        def submit_remote(self, record, event_log,
+                          target_node: str | None = None) -> str:
+            if target_node is not None:
+                node = self._find_node_by_name(target_node)
+                if node is None or not node.enabled:
+                    raise ExecutionTargetError(
+                        f"target_node '{target_node}' not found or disabled")
+            else:
+                node = self.select_node(record.spec)   # 旧调用向后兼容
+        # 禁止用 replace(spec, target_node=...) 之类的绕过。
+  原则:Remote execution internals 不重构;仅 RemoteJobRunner 提交边界
+        接受已解析的 target。
+
+  M5. local max_jobs 真正接线为 admission gate
+  ─────────────────────────────────────────────────────
+  问题:manager.py:67 max_running "retained for API compatibility (unused)",
+        加 NodeState.status="busy" 不会阻止第 5 个本地作业启动。
+  修改:复用 _execute_submission (manager.py:602-658) 的
+        STARTING -> 等待 -> 重试 模式,泛化异常:
+        - local 满 4/4                     -> ExecutionCapacityUnavailable -> 等
+        - remote 所有 capable 节点满        -> ExecutionCapacityUnavailable -> 等
+        - target_node=abc 不存在/禁用       -> ExecutionTargetError -> fail fast
+        (见第 6 节异常二分法;注意当前 RemoteNodeUnavailableError 被
+         _execute_submission 一律无限重试 —— 永久错误不能走重试路径)
+
+--------------------------------------------------------
+6. 异常二分法
+--------------------------------------------------------
+
+  class ExecutionTargetError(RuntimeError):
+      """永久:选择/配置错误,重试不会变好 -> fail fast."""
+
+  class ExecutionCapacityUnavailable(RuntimeError):
+      """暂时:目标有效但当前无法接新作业 -> 保持 STARTING 稍后重试."""
+
+  决策表(逐行编码):
+  ┌──────────────────────────────────────┬───────────────────────────────┬────────────┐
+  │ 情况                                 │ 异常                          │ 处理       │
+  ├──────────────────────────────────────┼───────────────────────────────┼────────────┤
+  │ target_node=abc 不存在 / 禁用         │ ExecutionTargetError          │ fail fast  │
+  │ target 处于 draining                 │ ExecutionTargetError          │ fail fast  │
+  │ target 缺所需 capability (Phase 2)   │ ExecutionTargetError          │ fail fast  │
+  │ target_node=compute-01 但满了         │ ExecutionCapacityUnavailable  │ 等 60s 重试│
+  │ remote-auto 所有节点满               │ ExecutionCapacityUnavailable  │ 等 60s 重试│
+  │ remote-auto 无任何 capable 节点       │ ExecutionTargetError          │ fail fast  │
+  │ local 已 4/4                        │ ExecutionCapacityUnavailable  │ 等 60s 重试│
+  └──────────────────────────────────────┴───────────────────────────────┴────────────┘
+
+  _execute_submission 改造:
+        except ExecutionCapacityUnavailable:
+            # 保持 STARTING,event_log "waiting_for_capacity",sleep 60,retry
+            # (复用现有 RemoteNodeUnavailableError 重试分支结构)
+        except ExecutionTargetError:
+            # 走现有 except Exception -> FAILED 分支(立即,带清晰 error)
+        # RemoteNodeUnavailableError 保留向后兼容(等价 CapacityUnavailable)
+
+--------------------------------------------------------
+7. 数据结构(NodeSpec / NodeState / NodeRegistry)
+--------------------------------------------------------
+
+  新文件:src/acp/scheduler/nodes.py (估算 <150 行)
+
+  ExecutionMode = Literal["local", "remote"]   # 类型化,禁止裸 str
+
+  @dataclass(frozen=True)
+  class NodeSpec:
+      name: str                                # "local" | "compute-01" ...
+      kind: Literal["local", "remote"]
+      enabled: bool = True
+      host: str | None = None                  # 仅 remote
+      max_jobs: int = 1                        # 必填 > 0;删除 None=不限(避免 ratio 特判)
+
+  @dataclass
+  class NodeState:
+      status: Literal["ready", "busy", "offline", "draining"]
+      running_jobs: int = 0
+      last_checked: datetime | None = None
+      message: str | None = None
+
+  class NodeRegistry:
+      def __init__(self, local_max_jobs: int, remote_nodes: list[RemoteNode]):
+          self._local = NodeSpec(name="local", kind="local", max_jobs=local_max_jobs)
+          self._remotes = [ _to_node_spec(n) for n in remote_nodes ]   # 映射,不新建配置
+      @property
+      def local(self) -> NodeSpec: ...
+      @property
+      def nodes(self) -> list[NodeSpec]: ...            # [local, *remotes],顺序=确定性 tie-break
+      def require(self, name: str) -> NodeSpec: ...     # 显式查找;不存在/禁用 -> ExecutionTargetError
+      def select_remote(self, required: frozenset[str] | None = None) -> NodeSpec: ...
+          # Phase 2 前: 启用节点中 running/max 最小(用 NodeManager 计数)
+          # Phase 2 后: capability 过滤 + load ratio(见第 11 节)
+
+  字段减法(无数据来源,已从草案删除):
+    - NodeSpec.priority / tags   (RemoteNode 无此字段;确定性 tie-break 用 YAML 顺序)
+    - NodeSpec.max_jobs=None     (必填 > 0)
+    - NodeState.queued_jobs      (NodeStatus 无数据来源)
+    - LOCAL_NODE 常量            (改为 NodeRegistry.__init__ 内构造,local 仍完全自动)
+
+  NodeState 来源:
+    - local : 由 JobManager 推导(running_jobs = manager.count_local_running_jobs();
+              running < max_jobs -> ready,否则 busy)。无心跳、无 SSH、无健康线程。
+    - remote: 现有 NodeManager.get_node_status(name) 映射
+              (node_manager.py:35-47 NodeStatus: online/offline/degraded,
+               running_jobs, max_jobs, disk_usage_pct, last_check, error)
+              online 且 running<max -> ready;online 且 running>=max -> busy;
+              offline -> offline;degraded -> draining(或 offline,实施时定)
+    - list_nodes() 的 is_remote gate (node_manager.py:112) 不动;
+      NodeRegistry 逐节点调 get_node_status(name)(无 gate)绕过。
+
+--------------------------------------------------------
+8. 执行目标解析 + 冲突校验
+--------------------------------------------------------
+
+  冲突校验(不是静默 target 优先;掩盖前端 bug 会违反 fail-fast):
+  ┌──────────────────────────────┬──────────────────────┬────────┐
+  │ execution_mode               │ target_node          │ 结果   │
+  ├──────────────────────────────┼──────────────────────┼────────┤
+  │ remote                       │ local                │ 400    │
+  │ local                        │ compute-01           │ 400    │
+  │ (无)                         │ compute-01           │ 允许   │
+  │ remote                       │ compute-01           │ 允许   │
+  │ local                        │ local / (无)         │ 允许   │
+  │ (无)                         │ local                │ 允许   │
+  └──────────────────────────────┴──────────────────────┴────────┘
+
+  def validate_execution_request(spec: JobSpec) -> None:
+      mode, node = spec.execution_mode, spec.target_node
+      if mode == "remote" and node == "local":
+          raise ExecutionTargetError("execution_mode=remote conflicts with target_node=local")
+      if mode == "local" and node not in (None, "local"):
+          raise ExecutionTargetError("execution_mode=local conflicts with target_node=<remote>")
+
+  def resolve_execution_target(self, record: JobRecord) -> NodeSpec:
+      spec = record.spec
+      validate_execution_request(spec)
+      if spec.target_node:                        # ① 实例指定(含 "local")
+          return self.registry.require(spec.target_node)   # 不存在/禁用 -> TargetError
+      mode = spec.execution_mode or self.default_execution_mode   # ② 偏好 -> ③ 服务默认
+      if mode == "local":
+          return self.registry.local
+      return self.registry.select_remote()        # Phase 2 起带 required=
+
+  优先级固定:target_node > execution_mode > server default。
+  语义:
+    execution_mode = remote  -> "资源类型偏好"(auto 挑一台合适的)
+    target_node = compute-02 -> "资源实例指定"(必须这台,含 "local")
+  两者保留,不合并。
+
+  _submit_job() 最终形态:
+      def _submit_job(self, record):
+          target = self._resolve_execution_target(record)
+          self._record_execution_target(record, target)      # 见第 9 节
+          if target.kind == "local":
+              self._admit_local(record)                      # M5: running < max 否则 CapacityUnavailable
+              return self.runner.submit(record, ...)
+          return self.remote_runner.submit_remote(
+              record, event_log, target_node=target.name)    # M4: 已解析 target
+
+--------------------------------------------------------
+9. Job 执行 provenance(新增,很小但关键)
+--------------------------------------------------------
+
+  resolve_execution_target() 返回后立即记录:
+      result = dict(record.result or {})
+      result["execution_target"] = target.name
+      result["execution_kind"]   = target.kind
+      record.result = result
+      event_log.append(
+          "execution.target_resolved",
+          job_id=record.id, target=target.name, kind=target.kind,
+      )
+
+  作用:UI / poll / cancel / debug / restart / provenance 全部知道
+  该作业当初被 dispatch 到哪里;即使之后 server default 从 local
+  切到 remote,已提交作业也不受影响。
+  配合 _is_remote_job() (M2):remote_job_id 为空但
+  result.execution_kind == "remote" 时,recovery 仍能识别远程作业。
+
+--------------------------------------------------------
+10. 配置与 API 面
+--------------------------------------------------------
+
+  配置(config/defaults.yaml + cccp/config.py 内置默认同步):
+  ─────────────────────────────────────────────────────
+  cluster:
+    execution_mode: local      # 服务默认:local | remote
+    local:
+      max_jobs: 4              # 本地并发上限(新增;用户控制,绝不 os.cpu_count())
+    nodes:                     # 现有 RemoteNode 配置原样保留
+      - name: compute-01
+        host: 192.168.1.101
+        enabled: true
+        max_jobs: 20           # 映射到 NodeSpec.max_jobs(现有 max_concurrent_jobs)
+      - name: compute-02
+        host: 192.168.1.102
+        enabled: true
+        max_jobs: 16
+  # local 不需要写成 SSH node;LocalNode 由 NodeRegistry 自动构造。
+  ─────────────────────────────────────────────────────
+
+  切换源优先级(服务级):
+      CLI 标志 > 环境变量 > YAML 配置 > 默认 local
+      acp run serve --execution-mode remote
+      ACP_EXECUTION_MODE=remote acp run serve
+      cluster.execution_mode: remote
+
+  API(v1_schemas.py V1JobCreateRequest 增加):
+      execution_mode: Literal["local", "remote"] | None = None   # None = 跟随服务默认
+      target_node: str | None = None                             # 已有;现接受 "local"
+  提交示例:
+      {"workflow": "energy", "execution_mode": "remote"}                 # auto 选节点
+      {"workflow": "energy", "target_node": "compute-02"}                # 显式实例
+      {"workflow": "energy", "execution_mode": "remote", "target_node": "compute-01"}
+      {"workflow": "singlepoint", "target_node": "local"}                # 显式本地
+  校验失败 -> HTTP 400 (validate_execution_request)。
+
+  CLI 直跑 (`acp run <wf>`) 保持本地(设计决策):
+    进程内同步执行,无 JobManager/SSH 上下文;远程计算统一走
+    `acp run serve` + API。
+
+--------------------------------------------------------
+11. 能力感知调度(Phase 2)
+--------------------------------------------------------
+
+  任务需求来源 —— 直接复用现成资产,不自己推导:
+      from acp.workflows.registry import get_workflow_entry
+      required = set(get_workflow_entry(spec.workflow).requires_binaries or [])
+      # 已由 remote/runner.py:1057 使用;禁止手写
+      #   if workflow == "crest": return {"crest", "xtb"}
+
+  节点能力:
+    - local : 启动时 resolve_executable()(cccp.software,上轮交付)
+              成功 -> {name: version};未检测到 -> 不写入(视为 unknown)
+    - remote: 复用现有 _BINARY_PROBE_SCRIPT + _probe_required_binaries
+              (remote/runner.py:997-1037, 1039+);positive detection 缓存入 NodeState
+
+  三态能力:available / missing / unknown
+    - SSH login shell which orca = None 不直接判缺失
+      (LSF job env 可能 module load orca/6.1 提供)
+    - 只缓存 positive detection;未检测到默认 unknown,不直接淘汰
+
+  两级检查(不破坏 module 环境兼容):
+    NodeRegistry 能力缓存          -> pre-filter / ranking
+    RemoteJobRunner 探针(权威)     -> pre-submit 最终校验(现状保持)
+
+  选择算法(第一版止步于此):
+    1. enabled
+    2. status == ready
+    3. required ⊆ node.capabilities(unknown 视为通过 pre-filter)
+    4. running_jobs < max_jobs
+    5. min(running_jobs / max_jobs)
+    6. YAML 配置顺序作确定性 tie-break
+    不做:CPU load / memory / queue prediction / historical runtime / dynamic weights。
+
+--------------------------------------------------------
+12. 可观测性(Phase 3)
+--------------------------------------------------------
+
+  升级现有 GET /api/v1/nodes (v1_routes.py:1619),从 remote-only 扩展:
+  {
+    "default_execution_mode": "local",
+    "nodes": [
+      {"name": "local",      "kind": "local",  "status": "ready",    "running_jobs": 2, "max_jobs": 4},
+      {"name": "compute-01", "kind": "remote", "status": "ready",    "running_jobs": 6, "max_jobs": 20},
+      {"name": "compute-02", "kind": "remote", "status": "draining", "running_jobs": 8, "max_jobs": 8}
+    ]
+  }
+  新增 drain/resume 操作(POST /nodes/{name}/drain | /resume):
+    只改变 NodeState.status,不再接新任务,已提交任务继续跑。
+  远程健康检查:启动检查一次 + 复用现有 bjobs poll(约 60s),
+    不建高频 monitor daemon。
+
+--------------------------------------------------------
+13. 分阶段路线与文件改动清单
+--------------------------------------------------------
+
+  Phase 1 — Unified Execution Target(当前实施,最小闭环)
+    一次完成:M1-M5 + execution_mode/target_node 字段 +
+    NodeSpec/NodeState/NodeRegistry + validate/resolve_execution_target() +
+    provenance 记录 + local admission。
+    文件(约 9 个):
+      src/acp/scheduler/nodes.py          # 新增:ExecutionMode/NodeSpec/NodeState/
+                                          #   NodeRegistry/ExecutionTargetError/
+                                          #   ExecutionCapacityUnavailable
+      src/acp/scheduler/jobs.py           # JobSpec.execution_mode (typed Literal)
+      src/acp/scheduler/manager.py        # M1 初始化拆分;M2 _is_remote_job;
+                                          #   M3 poll 传输容忍;M5 admission +
+                                          #   resolve_execution_target + provenance
+      src/acp/scheduler/remote/runner.py  # 仅 submit_remote 加 target_node=None 参数
+      src/acp/cli.py                      # serve: --execution-mode
+      src/acp/api/server.py               # 读 ACP_EXECUTION_MODE 覆盖 YAML
+      src/acp/api/v1_schemas.py           # V1JobCreateRequest.execution_mode
+      src/acp/api/v1_routes.py            # 透传 + validate 400
+      config/defaults.yaml                # cluster.local.max_jobs + 注释
+
+  Phase 2 — Capability-aware selection
+    requires_binaries 复用 + 三态能力缓存 + capability 过滤 + load ratio。
+    文件:nodes.py(NodeState.capabilities, select_remote)、
+      manager.py(启动时 resolve_executable 填 local 能力)、
+      remote/runner.py(探针结果回填 NodeRegistry 缓存)。
+
+  Phase 3 — Observability
+    升级 /api/v1/nodes + Workbench Nodes 面板 + drain/resume。
+    文件:v1_routes.py、v1_schemas.py、frontend/ACP_Workbench_v2.html。
+
+--------------------------------------------------------
+14. 验收清单(编码后逐条对照)
+--------------------------------------------------------
+
+  A. 概念拆分
+    [ ] A1  cluster.execution_mode=local 且配置了 nodes:
+            remote_runner 非 None(_remote_available,不再依赖 is_remote)
+    [ ] A2  default_execution_mode 只出现在 resolve_execution_target() 内
+    [ ] A3  JobSpec.execution_mode 类型为 ExecutionMode(Literal),非裸 str
+
+  B. 生命周期路由
+    [ ] B1  server 默认 local + job execution_mode=remote:
+            _submit_job 走 remote_runner.submit_remote
+    [ ] B2  该 job 的 _poll_job / cancel / recovery 均按 _is_remote_job 走远程
+    [ ] B3  _is_remote_job 覆盖三种来源:remote_job_id / result.lsf_job_id /
+            result.execution_kind == "remote"
+    [ ] B4  server 默认 local + job 显式 remote:已提交后把服务端改成 remote,
+            不影响该 job 生命周期;反之亦然
+
+  C. 传输健康 ≠ 作业失败
+    [ ] C1  remote poll 连续 3 次 SSH/bjobs 异常:JobStatus 保持 RUNNING,
+            不 cancel,不 resubmit
+    [ ] C2  恢复后 _poll_failures 清零并继续正常查询
+    [ ] C3  节点 offline 时已提交作业不被判失败;仅 bjobs 判失败才更新
+
+  D. 选点唯一
+    [ ] D1  resolve_execution_target() 是唯一选点;submit_remote 收到
+            已解析 target_node,不再内部 select_node
+    [ ] D2  旧调用(submit_remote 不带 target_node)仍可用(向后兼容)
+    [ ] D3  显式 target_node 不存在/禁用 -> ExecutionTargetError 立即失败,
+            绝不 fallback 到其他节点
+
+  E. 本地并发
+    [ ] E1  local max_jobs=4 时第 5 个本地作业保持 STARTING 并 60s 重试
+    [ ] E2  本地 running < max -> ready;>= max -> busy(NodeState 推导)
+    [ ] E3  max_jobs 从 cluster.local.max_jobs 读取,绝不自动用 os.cpu_count()
+
+  F. 异常语义
+    [ ] F1  永久错误(TargetError)走 FAILED 立即;暂时错误(CapacityUnavailable)
+            保持 STARTING 重试
+    [ ] F2  冲突校验:remote+target=local / local+target=remote 均 400
+
+  G. 数据与配置
+    [ ] G1  NodeSpec 无 priority/tags/max_jobs=None;NodeState 无 queued_jobs
+    [ ] G2  local 节点由 NodeRegistry 自动构造,用户无需配置 local node
+    [ ] G3  provenance:record.result 含 execution_target + execution_kind;
+            event_log 有 execution.target_resolved
+    [ ] G4  remote 状态来自现有 NodeManager,list_nodes 的 is_remote gate 未改
+
+--------------------------------------------------------
+15. 明确不做的事(YAGNI)
+--------------------------------------------------------
+
+  - 不建 LocalNodeManager / RemoteNodeManager / Provider / Adapter / MachineProfile
+  - 不做目录递归扫描 / candidate ranking / discovery cache(上轮已定)
+  - 不做 CPU load / memory / temperature / GPU / latency / disk 智能调度
+  - 不做 heartbeat daemon / 高频健康线程
+  - 不自动 resubmit(SSH 断开绝不换机重跑,防重复计算)
+  - 不新增 UNKNOWN/LOST JobStatus(第一版)
+  - 不新增 /api/execution-mode 端点(用 /api/v1/nodes 统一承载)
+  - CLI 直跑不接入远程(保持本地,设计决策)
+  - 不重造 Parsl/QCFractal 的通用 HPC 调度
+
+--------------------------------------------------------
+16. 测试计划
+--------------------------------------------------------
+
+  Phase 1 单测(建议新增 tests/test_acp_execution_target.py):
+    [ ] NodeSpec/NodeState/NodeRegistry 构造与映射(local 自动,remote 映射)
+    [ ] validate_execution_request 四种冲突 400
+    [ ] resolve_execution_target:target_node > execution_mode > default 优先级
+    [ ] _is_remote_job 三种来源识别
+    [ ] M3:poll 传输异常 N 次后 JobStatus 不变;恢复后清零
+    [ ] M5:local admission 满时第 N+1 作业 STARTING + 重试
+    [ ] 异常映射:TargetError -> FAILED;CapacityUnavailable -> 重试
+
+  回归:
+    [ ] tests/test_remote_phase*.py(paramiko 安装后)、
+        test_acp_backends.py、test_acp_workflows_*.py、test_config.py 全绿
+    [ ] 既有 /api/v1/nodes 端点行为不回归(remote-only 列表语义在
+        NodeRegistry 层扩展,不改 NodeManager)
+
+  集成(手动):
+    [ ] 默认 local + 配置 nodes:提交 execution_mode=remote 作业,验证
+        submit/poll/cancel/recovery 全链路远程;服务重启后恢复
+    [ ] 本地 4/4 满时提交,验证排队与自动放行
+    [ ] 拔网线模拟:作业保持 RUNNING;恢复后继续正常完成
+
+========================================================
+(End of document)
+========================================================

@@ -1010,6 +1010,14 @@ Examples:
         default="INFO",
         help="Server log level (default: INFO)",
     )
+    serve_parser.add_argument(
+        "--execution-mode",
+        type=str,
+        choices=["local", "remote"],
+        default=None,
+        help="Server default execution target for jobs that don't specify one "
+        "(overrides cluster.execution_mode; per-job execution_mode/target_node win)",
+    )
 
     return parser
 
@@ -1344,6 +1352,9 @@ def _handle_serve(args: argparse.Namespace) -> int:
     os.environ["ACP_PORT"] = str(port)
     os.environ["ACP_MAX_RUNNING"] = str(max_running)
     os.environ["ACP_POLL_INTERVAL"] = str(poll_interval)
+    execution_mode = getattr(args, "execution_mode", None)
+    if execution_mode:
+        os.environ["ACP_EXECUTION_MODE"] = execution_mode
 
     url = f"http://{host}:{port}"
     print(f"ACP Workbench starting at {url}")

@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 
+from acp.scheduler.nodes import ExecutionMode
+
 
 def _utc_now() -> datetime:
     return datetime.now(timezone.utc)
@@ -290,9 +292,13 @@ class JobSpec:
         output_dir: Explicit output directory override (else derived from run root).
         config_path: Optional path to a YAML config file.
         tags: Free-form tags for filtering.
-        target_node: Name of a specific remote node to run on (``None`` = auto
-            select the least-loaded node).  Only meaningful when the manager
-            is configured for remote execution.
+        execution_mode: Resource-type preference (``"local"`` | ``"remote"``).
+            ``None`` = follow the server default.  ``"remote"`` means
+            "pick a suitable remote node"; use ``target_node`` to pin a
+            specific instance (including ``"local"``).
+        target_node: Name of a specific execution target to run on
+            (``"local"`` or a configured remote node name).  Takes priority
+            over ``execution_mode`` and the server default.
     """
 
     workflow: str
@@ -305,6 +311,7 @@ class JobSpec:
     tags: list[str] = field(default_factory=list)
     project_id: str | None = None
     input_hash: str | None = None
+    execution_mode: ExecutionMode | None = None
     target_node: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
