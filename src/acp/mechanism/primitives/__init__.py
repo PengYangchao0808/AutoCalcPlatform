@@ -39,16 +39,26 @@ from .scan_rescue import (
     SurfaceScanSpec,
 )
 from .scan_trajectory import CompositeProfileBuilder, ScanAttempt, attempt_manifest
+from .torsion_dedup import (
+    DedupRecord,
+    TorsionAwareDeduplicator,
+    TorsionSignature,
+    build_signature,
+    signatures_equivalent,
+)
 
 __all__ = [
     "B97CRelaxedScanRescuer",
     "CompositeProfileBuilder",
+    "DedupRecord",
     "HARTREE_TO_KCAL",
     "PathFrame",
     "PathFrameEvidence",
     "PathProfile",
     "RiskyContactResult",
     "ScanAttempt",
+    "TorsionAwareDeduplicator",
+    "TorsionSignature",
     "ScanEnergyRefiner",
     "SeedSelection",
     "SelectionPolicy",
@@ -59,6 +69,8 @@ __all__ = [
     "TopologyGuardResult",
     "assess_path_topology",
     "attempt_manifest",
+    "build_signature",
+    "signatures_equivalent",
     "build_orca_scan_profile",
     "build_xtb_path_profile",
     "check_scan_trajectory",

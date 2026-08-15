@@ -85,6 +85,7 @@ def _build_fidelity_profiles() -> dict[Fidelity, FidelityProfile]:
             irc_points = int(irc.get("irc_points")) if irc.get("irc_points") is not None else None
         except (TypeError, ValueError):
             pass
+        refinement_budget = _REFINEMENT_BUDGETS.get(cast(Fidelity, fidelity), {})
         built[cast(Fidelity, fidelity)] = FidelityProfile(
             name=cast(Fidelity, fidelity),
             scan_points=scan_points if scan_points is not None else 21,
@@ -102,8 +103,27 @@ def _build_fidelity_profiles() -> dict[Fidelity, FidelityProfile]:
             solvent_model=_optional_str(sp.get("solvent_model")) or "none",
             ts_initial_hessian=_optional_str(ts_opt.get("ts_initial_hessian")) or "calculate",
             irc_points=irc_points if irc_points is not None else 30,
+            **refinement_budget,
         )
     return built
+
+
+_REFINEMENT_BUDGETS: dict[str, dict[str, object]] = {
+    "s3": {
+        "warmup_max_cycles_intermediate": 40,
+        "warmup_max_cycles_ts": 50,
+        "max_cycles_minimum": 60,
+        "max_cycles_intermediate": 60,
+        "max_cycles_ts": 60,
+    },
+    "s4": {
+        "warmup_max_cycles_intermediate": 4,
+        "warmup_max_cycles_ts": 6,
+        "max_cycles_minimum": 200,
+        "max_cycles_intermediate": 200,
+        "max_cycles_ts": 200,
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -122,6 +142,15 @@ class FidelityProfile:
         ts_recalc_hess: Recalculate Hessian interval.
         ts_trust_radius: Initial TrustRadius.
         irc_points: Default IRC MaxIter.
+        warmup_max_cycles_intermediate / warmup_max_cycles_ts: Role-based
+            constrained warmup budgets (RPH semantics: s3 40/50, s4 4/6).
+        initial_hessian_precursor / _product / _intermediate / _ts:
+            Role-based initial Hessian policy (RPH: model/model/calculate/
+            calculate).
+        frequency_independent: Always run frequency as an independent job
+            (never reuse the optimization Hessian).
+        max_cycles_minimum / _intermediate / _ts: Role-based optimization
+            cycle budgets (RPH: s3 60, s4 200; ``None`` = interface default).
     """
 
     name: str
@@ -142,6 +171,49 @@ class FidelityProfile:
     ts_recalc_hess: int = 5
     ts_trust_radius: float = 0.15
     irc_points: int = 30
+    warmup_max_cycles_intermediate: int | None = None
+    warmup_max_cycles_ts: int | None = None
+    initial_hessian_precursor: str = "model"
+    initial_hessian_product: str = "model"
+    initial_hessian_intermediate: str = "calculate"
+    initial_hessian_ts: str = "calculate"
+    frequency_independent: bool = True
+    max_cycles_minimum: int | None = None
+    max_cycles_intermediate: int | None = None
+    max_cycles_ts: int | None = None
+
+    def warmup_max_cycles(self, role: str) -> int | None:
+        """Role-based warmup budget (intermediate/ts only; else ``None``)."""
+        if role == "intermediate":
+            return self.warmup_max_cycles_intermediate
+        if role in {"ts", "transition_state"}:
+            return self.warmup_max_cycles_ts
+        return None
+
+    def initial_hessian_for(self, role: str) -> str:
+        """Role-based initial Hessian policy."""
+        mapping = {
+            "precursor": self.initial_hessian_precursor,
+            "reactant": self.initial_hessian_precursor,
+            "product": self.initial_hessian_product,
+            "intermediate": self.initial_hessian_intermediate,
+            "ts": self.initial_hessian_ts,
+            "transition_state": self.initial_hessian_ts,
+        }
+        return mapping.get(role, "model")
+
+    def max_cycles_for(self, role: str) -> int | None:
+        """Role-based optimization cycle budget (``None`` = default)."""
+        mapping = {
+            "precursor": self.max_cycles_minimum,
+            "reactant": self.max_cycles_minimum,
+            "product": self.max_cycles_minimum,
+            "minimum": self.max_cycles_minimum,
+            "intermediate": self.max_cycles_intermediate,
+            "ts": self.max_cycles_ts,
+            "transition_state": self.max_cycles_ts,
+        }
+        return mapping.get(role)
 
     def ts_kwargs(self) -> dict[str, object]:
         """Keyword dict for the ORCA backend transition-state call."""
