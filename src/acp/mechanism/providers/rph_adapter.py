@@ -1,5 +1,13 @@
 # pyright: reportMissingImports=false, reportAny=false, reportExplicitAny=false, reportUnknownArgumentType=false, reportUnknownLambdaType=false, reportUnknownMemberType=false, reportUnknownParameterType=false, reportUnknownVariableType=false, reportUnannotatedClassAttribute=false, reportImplicitOverride=false, reportUnusedCallResult=false, reportUnnecessaryCast=false
-"""ReactionProfileHunter provider adapters for the mechanism study layer."""
+"""ReactionProfileHunter provider adapters for the mechanism study layer.
+
+DEPRECATED as the production path since the native engine internalization:
+``NativeCensoLiteProvider`` / ``NativeReversePebStrategy`` /
+``NativeRefinementProvider`` are the default study engines. These adapters
+remain available behind ``config['mechanism']['provider_backend'] = 'rph'``
+solely for scientific parity comparison runs against the external
+ReactionProfileHunter checkout.
+"""
 
 from __future__ import annotations
 

@@ -43,6 +43,9 @@ from acp.mechanism.presets import (
     resolve_strategy,
 )
 from acp.mechanism.providers.guided_scan import GuidedScanPathStrategy
+from acp.mechanism.providers.native_censo_lite import NativeCensoLiteProvider
+from acp.mechanism.providers.native_peb import NativeReversePebStrategy
+from acp.mechanism.providers.native_refinement import NativeRefinementProvider
 from acp.mechanism.providers.rph_adapter import (
     RPHEnsembleProvider,
     RPHPathSearchStrategy,
@@ -108,6 +111,23 @@ class DirectTsStrategy:
         )
 
 
+def _provider_backend(config: dict[str, Any]) -> str:
+    """Resolve the study engine backend: ``native`` (default) or ``rph``.
+
+    ``rph`` keeps the external ReactionProfileHunter adapters available for
+    parity comparison runs; the native engines are the production path.
+    """
+    value = (
+        config.get("mechanism", {}).get("provider_backend")
+        if isinstance(config.get("mechanism"), dict)
+        else None
+    )
+    normalized = str(value or "native").strip().lower()
+    if normalized not in {"native", "rph", "auto"}:
+        raise ValueError(f"Unsupported mechanism provider backend: {value!r}")
+    return "native" if normalized == "auto" else normalized
+
+
 def build_study_providers(
     conformer_mode: str,
     strategy: str,
@@ -119,17 +139,24 @@ def build_study_providers(
     resolved_strategy = resolve_strategy(strategy)
     resolved_fidelity = resolve_fidelity(fidelity)
     fidelity_profile = FIDELITY_PROFILES[resolved_fidelity]
-    rph_available = _rph_is_available(config)
-    resolved_conformer_mode = _resolve_conformer_mode(conformer_mode, rph_available)
+    backend = _provider_backend(config)
+    rph_available = _rph_is_available(config) if backend == "rph" else False
+    if backend == "rph" and not rph_available:
+        raise RuntimeError(
+            "Mechanism study provider_backend='rph' requires a working "
+            "ReactionProfileHunter checkout (set ACP_RPH_PATH or config['rph']['path'])."
+        )
+    resolved_conformer_mode = _resolve_conformer_mode(
+        conformer_mode, rph_available if backend == "rph" else True
+    )
 
     if resolved_conformer_mode == "censo-lite":
-        if not rph_available:
-            raise RuntimeError(
-                "Mechanism study conformer_mode='censo-lite' requires a working "
-                "ReactionProfileHunter checkout (set ACP_RPH_PATH or config['rph']['path'])."
-            )
-        ensemble_provider: Any = RPHEnsembleProvider(config=config)
-        ensemble_profile: Any = RPH_CENSO_LITE_MODE
+        if backend == "rph":
+            ensemble_provider: Any = RPHEnsembleProvider(config=config)
+            ensemble_profile: Any = RPH_CENSO_LITE_MODE
+        else:
+            ensemble_provider = NativeCensoLiteProvider(config=config)
+            ensemble_profile = RPH_CENSO_LITE_MODE
     else:
         ensemble_provider = XtbFastEnsembleProvider(config=config)
         ensemble_profile = XTB_FAST_MODE
@@ -137,29 +164,25 @@ def build_study_providers(
     if resolved_strategy == "guided-scan":
         path_strategy: Any = GuidedScanPathStrategy(config=config)
     elif resolved_strategy == "rph-reverse":
-        if not rph_available:
-            raise RuntimeError(
-                "Mechanism study strategy='rph-reverse' requires ReactionProfileHunter; "
-                "configure ACP_RPH_PATH or config['rph']['path']."
-            )
-        path_strategy = RPHPathSearchStrategy(config=config)
+        if backend == "rph":
+            path_strategy = RPHPathSearchStrategy(config=config)
+        else:
+            path_strategy = NativeReversePebStrategy(config=config)
     elif resolved_strategy == "direct-ts":
         path_strategy = DirectTsStrategy()
     else:
         raise ValueError(f"Unsupported mechanism study strategy: {strategy!r}")
 
-    if not rph_available:
-        raise RuntimeError(
-            "Mechanism study refinement for fidelity "
-            f"{resolved_fidelity!r} requires ReactionProfileHunter. "
-            "No null/fake refinement path was requested, so the study cannot proceed."
-        )
-    refinement_provider = RPHRefinementProvider(config=config)
+    if backend == "rph":
+        refinement_provider: Any = RPHRefinementProvider(config=config)
+    else:
+        refinement_provider = NativeRefinementProvider(config=config)
 
     return {
         "ensemble_provider": ensemble_provider,
         "path_strategy": path_strategy,
         "refinement_provider": refinement_provider,
+        "provider_backend": backend,
         "resolved_conformer_mode": resolved_conformer_mode,
         "ensemble_profile": ensemble_profile,
         "low_fidelity_profile": fidelity_profile,

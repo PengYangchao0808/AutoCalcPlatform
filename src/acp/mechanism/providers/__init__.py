@@ -23,6 +23,7 @@ from .fake import (
     FakeRefinementProvider,
 )
 from .native_censo_lite import NativeCensoLiteProvider
+from .native_peb import NativeReversePebStrategy
 from .native_refinement import NativeRefinementProvider
 
 __all__ = [
@@ -37,6 +38,7 @@ __all__ = [
     "IrcResult",
     "NativeCensoLiteProvider",
     "NativeRefinementProvider",
+    "NativeReversePebStrategy",
     "PathSearchStrategy",
     "RefinementAttempt",
     "RefinementManifest",
