@@ -1,3 +1,4 @@
+# pyright: reportAny=false, reportUnusedCallResult=false
 """SQLite schema migrations for the ACP scheduler."""
 
 from __future__ import annotations
@@ -89,6 +90,29 @@ CREATE INDEX IF NOT EXISTS idx_artifacts_task_id ON artifacts(task_id);
         "id": "005",
         "description": "add remote_job_id to jobs",
         "sql": "-- handled in Python for SQLite ALTER TABLE compatibility",
+    },
+    {
+        "id": "006",
+        "description": "create mechanism study review tables",
+        "sql": """
+CREATE TABLE IF NOT EXISTS mechanism_studies (
+    id TEXT PRIMARY KEY,
+    job_id TEXT,
+    study_json TEXT,
+    status TEXT,
+    created_at TEXT,
+    updated_at TEXT
+);
+CREATE TABLE IF NOT EXISTS decision_points (
+    id TEXT PRIMARY KEY,
+    study_id TEXT,
+    status TEXT,
+    payload TEXT,
+    resolution TEXT,
+    created_at TEXT,
+    resolved_at TEXT
+);
+""",
     },
 ]
 

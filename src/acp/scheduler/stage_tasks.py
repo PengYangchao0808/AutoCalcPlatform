@@ -71,13 +71,18 @@ class _FakeStagePlanProvider:
 
 class _MechanismStagePlanProvider:
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        # Matches acp.workflows.mechanism.get_mechanism_stages() (9 stages).
+        # Legacy stage names (ts_guess / irc_forward / irc_reverse) map onto
+        # path_search / irc_validate respectively for historical job display.
         return [
+            StagePlan("prepare_reaction"),
             StagePlan("reactant_optimize"),
             StagePlan("product_optimize"),
-            StagePlan("ts_guess"),
+            StagePlan("path_search"),
+            StagePlan("candidate_refine"),
             StagePlan("ts_optimize"),
-            StagePlan("irc_forward"),
-            StagePlan("irc_reverse"),
+            StagePlan("ts_validate"),
+            StagePlan("irc_validate"),
             StagePlan("energy_analysis"),
         ]
 

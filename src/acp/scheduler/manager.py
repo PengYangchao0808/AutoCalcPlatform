@@ -1,3 +1,4 @@
+# pyright: reportMissingImports=false, reportAny=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownParameterType=false, reportUnknownVariableType=false, reportUnannotatedClassAttribute=false, reportExplicitAny=false, reportAttributeAccessIssue=false, reportOptionalMemberAccess=false, reportRedeclaration=false, reportUnusedCallResult=false, reportUnnecessaryComparison=false, reportPrivateUsage=false, reportImplicitStringConcatenation=false
 """
 Scheduler Manager
 =================
@@ -13,7 +14,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import random
 import shutil
 import threading
@@ -24,7 +24,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from acp.scheduler.events import JobEventLog
-from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
+from acp.scheduler.jobs import (
+    EXIT_WAITING_REVIEW,
+    SUPPORTED_WORKFLOWS,
+    JobRecord,
+    JobSpec,
+    JobStatus,
+)
 from acp.scheduler.nodes import (
     ExecutionCapacityUnavailable,
     ExecutionTargetError,
@@ -52,6 +58,17 @@ if TYPE_CHECKING:
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _load_review_payload(work_dir: Path) -> dict[str, Any] | None:
+    payload_path = work_dir / "review_payload.json"
+    if not payload_path.exists():
+        return None
+    try:
+        payload = json.loads(payload_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 class JobManager:
@@ -87,7 +104,7 @@ class JobManager:
         self._fetcher_ssh_pool: SSHConnectionPool | None = None
         self._remote_fetcher: RemoteResultFetcher | None = None
         self._remote_cleanup: RemoteCleanup | None = None
-        self._node_manager: NodeManager | None = None
+        self._node_manager = None
         self.registry = NodeRegistry(
             local_max_jobs=local_max_jobs,
             remote_nodes=list(self._remote_config.nodes) if self._remote_config else [],
@@ -102,7 +119,7 @@ class JobManager:
         self.runner = runner or JobRunner(stage_task_observer=self._stage_task_observer)
         self.runner.stage_task_observer = self._stage_task_observer
         if self.remote_runner is not None:
-            self.runner.remote_runner = self.remote_runner
+            self.runner.remote_runner = self.remote_runner  # type: ignore[assignment]
         if self._local_cleanup is not None:
             self.runner.local_cleanup = self._local_cleanup
         self._projects = ProjectManager(self.store, self.run_root)
@@ -576,6 +593,82 @@ class JobManager:
         self._event_log(record).append("job.cancelling", job_id=job_id)
         return record
 
+    def pause_for_review(self, job_id: str, payload: dict[str, Any]) -> JobRecord:
+        """Pause a running job at a manual review gate.
+
+        Args:
+            job_id: Job identifier.
+            payload: Review payload persisted into ``record.result``.
+
+        Returns:
+            Updated job record.
+
+        Raises:
+            KeyError: If the job does not exist.
+            ValueError: If the current status is not ``RUNNING``.
+        """
+        record = self.store.get(job_id)
+        if record is None:
+            raise KeyError(f"Unknown job {job_id!r}")
+        if record.status != JobStatus.RUNNING:
+            raise ValueError(f"pause_for_review requires RUNNING status; got {record.status.value}")
+        result = dict(record.result or {})
+        result["review_payload"] = dict(payload)
+        record.result = result
+        record.status = JobStatus.WAITING_REVIEW
+        record.touch()
+        self.store.update(record)
+        self._write_job_json(record)
+        self._event_log(record).append(
+            "job.waiting_review",
+            job_id=job_id,
+            payload=payload,
+        )
+        return record
+
+    def resume(self, job_id: str, resolution: dict[str, Any] | None = None) -> JobRecord:
+        """Resume a job previously paused for manual review.
+
+        Args:
+            job_id: Job identifier.
+            resolution: Optional review resolution payload.
+
+        Returns:
+            Updated job record.
+
+        Raises:
+            KeyError: If the job does not exist.
+            ValueError: If the current status is not ``WAITING_REVIEW``.
+        """
+        record = self.store.get(job_id)
+        if record is None:
+            raise KeyError(f"Unknown job {job_id!r}")
+        if record.status != JobStatus.WAITING_REVIEW:
+            raise ValueError(f"resume requires WAITING_REVIEW status; got {record.status.value}")
+        result = dict(record.result or {})
+        if resolution is not None:
+            result["review_resolution"] = dict(resolution)
+        record.result = result
+        rerun_submission = bool(resolution and resolution.get("requeue"))
+        record.status = JobStatus.STARTING if rerun_submission else JobStatus.RUNNING
+        record.touch()
+        self.store.update(record)
+        self._write_job_json(record)
+        self._event_log(record).append(
+            "job.review_resumed",
+            job_id=job_id,
+            resolution=resolution,
+            requeue=rerun_submission,
+        )
+        if rerun_submission:
+            threading.Thread(
+                target=self._execute_submission,
+                args=(job_id,),
+                daemon=True,
+                name=f"acp-resume-{job_id}",
+            ).start()
+        return record
+
     def event_log(self, job_id: str) -> JobEventLog | None:
         record = self.store.get(job_id)
         return self._event_log(record) if record else None
@@ -660,7 +753,7 @@ class JobManager:
             # legacy error here; local execution must still work (P3).
             retryable = (ExecutionCapacityUnavailable,)
 
-        RETRY_DELAY = 60
+        retry_delay = 60
 
         while True:
             try:
@@ -690,15 +783,15 @@ class JobManager:
                     "No execution capacity for job %s (%s), retrying in %ds",
                     job_id,
                     exc,
-                    RETRY_DELAY,
+                    retry_delay,
                 )
                 self._event_log(record).append(
                     "execution.waiting_for_capacity",
                     job_id=job_id,
-                    retry_after=RETRY_DELAY,
+                    retry_after=retry_delay,
                     message=str(exc),
                 )
-                time.sleep(RETRY_DELAY)
+                time.sleep(retry_delay)
             except Exception as exc:
                 logger.exception("Submission failed for job %s", job_id)
                 record = self.store.get(job_id)
@@ -735,7 +828,8 @@ class JobManager:
         ):
             logger.info(
                 "Job %s already terminal (%s), skipping submission",
-                job_id, record.status.value,
+                job_id,
+                record.status.value,
             )
             return
 
@@ -884,7 +978,7 @@ class JobManager:
 
         if is_remote:
             try:
-                is_terminal, exit_code = self.remote_runner.poll_remote(
+                is_terminal, exit_code = self.remote_runner.poll_remote(  # type: ignore[union-attr]
                     record, event_log, cancel_event
                 )
                 self._poll_failures.pop(job_id, None)
@@ -927,6 +1021,28 @@ class JobManager:
             self.store.update(record)
             return
 
+        # A mechanism study paused at a review gate: translate the dedicated
+        # exit code into WAITING_REVIEW instead of COMPLETED/FAILED.
+        if exit_code == EXIT_WAITING_REVIEW:
+            record.exit_code = exit_code
+            record.status = JobStatus.WAITING_REVIEW
+            payload = _load_review_payload(Path(record.work_dir))
+            result = dict(record.result or {})
+            if payload is not None:
+                result["review_payload"] = payload
+            record.result = result
+            record.touch()
+            self.store.update(record)
+            self._write_job_json(record)
+            event_log.append(
+                "job.waiting_review",
+                job_id=job_id,
+                payload=payload,
+            )
+            with self._lock:
+                self._cancel_events.pop(job_id, None)
+            return
+
         record.exit_code = exit_code
         record.completed_at = _utc_now_iso()
 
@@ -938,7 +1054,10 @@ class JobManager:
             record.result = self._collect_result(record)
             if not is_remote:
                 self.runner._capture_artifacts(record, Path(record.work_dir))
-                self.runner._store_provenance(record, command_line=record.result.get("command_line", ""))
+                self.runner._store_provenance(
+                    record,
+                    command_line=record.result.get("command_line", ""),
+                )
         else:
             record.status = JobStatus.FAILED
             record.error = record.error or f"workflow exited with code {exit_code}"
@@ -958,7 +1077,13 @@ class JobManager:
         )
         while not self._poll_stop.wait(self.poll_interval):
             try:
-                for status_val in (JobStatus.RUNNING.value, JobStatus.PENDING.value, JobStatus.CANCELLING.value):
+                # WAITING_REVIEW jobs are intentionally excluded here: they are
+                # paused for manual review and must not be advanced by polling.
+                for status_val in (
+                    JobStatus.RUNNING.value,
+                    JobStatus.PENDING.value,
+                    JobStatus.CANCELLING.value,
+                ):
                     records = self.store.list(status=status_val, limit=10000)
                     for record in records:
                         if self._poll_stop.is_set():
@@ -989,8 +1114,8 @@ class JobManager:
         # apply a shorter retention window (risk 5 mitigation, Phase 5B)
         # since these dirs hold no useful partial results.
         #
-        # Remote jobs with a valid remote_job_id can be recovered — the
-        # background poller will re-check bjobs + .exit_code.
+        # Remote jobs with a valid remote_job_id can be recovered — the background
+        # poller will re-check bjobs + .exit_code.
         restart_marker = "[RESTART_FAILED] interrupted by server restart"
         # CANCELLING jobs that were interrupted mid-cancellation should stay
         # CANCELLED — the user's cancel intent must survive a restart.
@@ -1003,12 +1128,15 @@ class JobManager:
             self._stage_task_observer.finalize_job(record.id, JobStatus.CANCELLED.value)
             logger.info("Marked CANCELLING job %s as CANCELLED after restart", record.id)
 
+        # WAITING_REVIEW jobs are intentionally excluded here: a server restart
+        # must preserve their paused review state rather than marking them failed.
         for status in (JobStatus.RUNNING, JobStatus.STARTING, JobStatus.PENDING):
             for record in self.store.list(status=status.value):
                 if self._try_recover_remote_job(record):
                     logger.info(
                         "Recovered remote job %s (lsf=%s) on restart, poller will resume",
-                        record.id, record.remote_job_id,
+                        record.id,
+                        record.remote_job_id,
                     )
                     continue
                 record.status = JobStatus.FAILED

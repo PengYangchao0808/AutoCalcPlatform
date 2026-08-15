@@ -27,6 +27,7 @@ from acp.scheduler.jobs import (
     censo_ewin_from_method,
     censo_preset_from_method,
     censo_solvent_from_method,
+    mechanism_method_flags,
     nmr_method_flags,
     xtbmd_method_flags,
 )
@@ -163,6 +164,16 @@ def build_remote_cli_command(
         cmd += ["--input", str(source), "--output", "."]
         if spec.name:
             cmd += ["--name", spec.name]
+        product = inp.get("product") or inp.get("product_source")
+        if product:
+            cmd += ["--product", str(product)]
+        ts_guess = inp.get("ts_guess") or inp.get("ts_guess_source")
+        if ts_guess:
+            cmd += ["--ts-guess", str(ts_guess)]
+        routes = inp.get("routes")
+        if routes:
+            cmd += ["--routes", json.dumps(routes)]
+        cmd += mechanism_method_flags(method)
     elif wf in {"ensemble", "energy"}:
         cmd += ["--input", str(source), "--output", "."]
         preset = censo_preset_from_method(method)

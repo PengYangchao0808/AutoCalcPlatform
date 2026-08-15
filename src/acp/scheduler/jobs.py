@@ -1,3 +1,4 @@
+# pyright: reportAny=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownParameterType=false, reportUnknownVariableType=false, reportExplicitAny=false
 """
 Scheduler Job Models
 ====================
@@ -34,6 +35,7 @@ class JobStatus(str, Enum):
     PENDING = "pending"
     RUNNING = "running"
     CANCELLING = "cancelling"
+    WAITING_REVIEW = "waiting_review"
     CANCELLED = "cancelled"
     COMPLETED = "completed"
     FAILED = "failed"
@@ -45,10 +47,22 @@ class JobStatus(str, Enum):
     @property
     def is_active(self) -> bool:
         active = (
-            JobStatus.QUEUED, JobStatus.STARTING, JobStatus.PENDING,
-            JobStatus.RUNNING, JobStatus.CANCELLING,
+            JobStatus.QUEUED,
+            JobStatus.STARTING,
+            JobStatus.PENDING,
+            JobStatus.RUNNING,
+            JobStatus.CANCELLING,
+            JobStatus.WAITING_REVIEW,
         )
         return self in active
+
+
+#: Exit code a mechanism-study subprocess returns when it pauses at a manual
+#: review gate (a StudyOrchestrator decision point). The poller translates
+#: this into :attr:`JobStatus.WAITING_REVIEW` instead of marking the job
+#: FAILED. Chosen outside the 0-2 conventional range and distinct from 130
+#: (KeyboardInterrupt) and 1 (generic failure).
+EXIT_WAITING_REVIEW = 77
 
 
 def _derive_supported_workflows() -> tuple[str, ...]:
@@ -68,8 +82,14 @@ def _derive_supported_workflows() -> tuple[str, ...]:
         from acp.catalog import WORKFLOW_CATALOG
     except ImportError:
         return (
-            "ensemble", "energy", "mechanism",
-            "singlepoint", "optimize", "frequency", "optfreq", "optfreqsp",
+            "ensemble",
+            "energy",
+            "mechanism",
+            "singlepoint",
+            "optimize",
+            "frequency",
+            "optfreq",
+            "optfreqsp",
             "fake",
         )
     active = tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
@@ -277,6 +297,82 @@ def nmr_method_flags(method: dict[str, Any]) -> list[str]:
     return flags
 
 
+# ── mechanism flag emission (E7: runner ⇄ script_gen parity) ─────────────
+# Mechanism method knobs that flow method → CLI. Strategy/fidelity are the
+# two orthogonal preset axes; scan/IRC counts and Hessian policy are the
+# per-stage scalars. Routes / reactant / product live in JobSpec.input, NOT
+# in the method dict (coordinate plans are the study, not the method).
+_MECHANISM_SCALAR_FLAGS: dict[str, str] = {
+    "strategy": "--strategy",
+    "fidelity": "--fidelity",
+    "scan_points": "--scan-points",
+    "irc_points": "--irc-points",
+    "conformer_mode": "--conformer-mode",
+    "max_elementary_steps": "--max-elementary-steps",
+    "promotion_policy": "--promotion-policy",
+    "study_id": "--study-id",
+}
+
+_MECHANISM_BOOL_OPT_IN_FLAGS: dict[str, str] = {
+    "int_extension": "--int-extension",
+    "auto_converge": "--auto-converge",
+}
+
+
+def _mechanism_preset_ids() -> frozenset[str]:
+    """Derive the mechanism preset profile ids from the catalog (single source)."""
+    try:
+        from acp.catalog import METHOD_SCHEMAS
+    except ImportError:
+        return frozenset({"rph-s3", "rph-s4"})
+    profiles = METHOD_SCHEMAS.get("mechanism", {}).get("profiles")
+    return frozenset(
+        str(profile.get("profile_id"))
+        for profile in profiles
+        if isinstance(profile, dict) and profile.get("profile_id")
+    )
+
+
+def mechanism_preset_from_method(method: dict[str, Any]) -> str | None:
+    """Resolve the mechanism fidelity preset from a job's method dict.
+
+    Priority: ``preset`` > ``profile_id``. Only catalog profile ids are
+    accepted; any other value resolves to ``None`` so the CLI default applies.
+    """
+    raw = method.get("preset") or method.get("profile_id")
+    if not raw:
+        return None
+    value = str(raw).strip().lower()
+    return value if value in _mechanism_preset_ids() else None
+
+
+def mechanism_method_flags(method: dict[str, Any]) -> list[str]:
+    """Emit the mechanism CLI flag group from a job's method dict (E7 parity).
+
+    Scalar fields are forwarded whenever present and non-empty. The preset
+    (rph-s3 / rph-s4) is emitted via ``--preset`` when set; otherwise the
+    per-axis ``--strategy`` / ``--fidelity`` flags are emitted from their
+    method keys.
+    """
+    flags: list[str] = []
+    preset = mechanism_preset_from_method(method)
+    if preset:
+        flags += ["--preset", preset]
+    for key, flag in _MECHANISM_SCALAR_FLAGS.items():
+        value = method.get(key)
+        if value is None or value == "":
+            continue
+        if key == "strategy" and preset:
+            continue
+        if key == "fidelity" and preset:
+            continue
+        flags += [flag, str(value)]
+    for key, flag in _MECHANISM_BOOL_OPT_IN_FLAGS.items():
+        if _as_bool(method.get(key)) is True:
+            flags.append(flag)
+    return flags
+
+
 @dataclass(frozen=True)
 class JobSpec:
     """Immutable description of what a job should run.
@@ -375,4 +471,6 @@ __all__ = [
     "censo_ewin_from_method",
     "xtbmd_method_flags",
     "nmr_method_flags",
+    "mechanism_method_flags",
+    "mechanism_preset_from_method",
 ]

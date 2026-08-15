@@ -31,11 +31,13 @@ from acp.chem.embedding import smiles_to_xyz, xyz_to_multiframe_demo
 from acp.scheduler.artifacts import ArtifactRegistry, capture_stage_artifacts
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
+    EXIT_WAITING_REVIEW,
     JobRecord,
     JobSpec,
     censo_ewin_from_method,
     censo_preset_from_method,
     censo_solvent_from_method,
+    mechanism_method_flags,
     nmr_method_flags,
     xtbmd_method_flags,
 )
@@ -385,6 +387,10 @@ class JobRunner:
             elif ret == 0:
                 event_log.append(
                     "job.completed", job_id=record.id, exit_code=ret
+                ) if event_log else None
+            elif ret == EXIT_WAITING_REVIEW:
+                event_log.append(
+                    "job.waiting_review", job_id=record.id, exit_code=ret
                 ) if event_log else None
             else:
                 event_log.append(
@@ -737,6 +743,16 @@ class JobRunner:
             cmd += ["--input", str(source), "--output", str(work_dir)]
             if spec.name:
                 cmd += ["--name", spec.name]
+            product = inp.get("product") or inp.get("product_source")
+            if product:
+                cmd += ["--product", str(product)]
+            ts_guess = inp.get("ts_guess") or inp.get("ts_guess_source")
+            if ts_guess:
+                cmd += ["--ts-guess", str(ts_guess)]
+            routes = inp.get("routes")
+            if routes:
+                cmd += ["--routes", json.dumps(routes)]
+            cmd += mechanism_method_flags(method)
         elif wf in {"ensemble", "energy"}:
             cmd += ["--input", str(source), "--output", str(work_dir)]
             preset = censo_preset_from_method(method)

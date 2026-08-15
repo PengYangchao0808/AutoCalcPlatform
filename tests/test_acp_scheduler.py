@@ -1,13 +1,20 @@
 """Tests for the scheduler core (store, manager, runner) without external binaries."""
 
+# pyright: reportMissingImports=false, reportPrivateUsage=false, reportPossiblyUnboundVariable=false, reportOptionalMemberAccess=false, reportUnusedCallResult=false, reportAny=false
+
 from __future__ import annotations
 
+import json
+import sqlite3
 import time
 from pathlib import Path
 
+import pytest
+
 from acp.scheduler.events import JobEventLog
-from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
+from acp.scheduler.jobs import EXIT_WAITING_REVIEW, JobRecord, JobSpec, JobStatus
 from acp.scheduler.manager import JobManager
+from acp.scheduler.migrations import migrate
 from acp.scheduler.runner import materialize_job_input
 from acp.scheduler.store import JobStore
 
@@ -24,7 +31,11 @@ def test_materialize_com_and_inp_preserve_suffix(tmp_path: Path) -> None:
     inp_file.write_text("! SP\n* xyz 0 1\nC 0 0 0\n*\n", encoding="utf-8")
 
     for src, expected in ((com, "input.com"), (inp_file, "input.inp")):
-        dest = materialize_job_input({"source_type": "file", "source": str(src)}, inputs_dir, run_root)
+        dest = materialize_job_input(
+            {"source_type": "file", "source": str(src)},
+            inputs_dir,
+            run_root,
+        )
         assert dest is not None
         assert dest.name == expected
         assert dest.read_text(encoding="utf-8") == src.read_text(encoding="utf-8")
@@ -64,12 +75,14 @@ def test_store_roundtrip(tmp_path: Path) -> None:
     store.update(fetched)
     assert store.get("job-1").pid == 4242
 
-    store.create(JobRecord(
-        id="job-2",
-        spec=JobSpec(workflow="fake"),
-        status=JobStatus.COMPLETED,
-        work_dir=str(tmp_path / "job-2"),
-    ))
+    store.create(
+        JobRecord(
+            id="job-2",
+            spec=JobSpec(workflow="fake"),
+            status=JobStatus.COMPLETED,
+            work_dir=str(tmp_path / "job-2"),
+        )
+    )
     counts = store.counts()
     assert counts["running"] == 1
     assert counts["completed"] == 1
@@ -78,12 +91,14 @@ def test_store_roundtrip(tmp_path: Path) -> None:
 
 def test_store_reload_preserves_history(tmp_path: Path) -> None:
     db = tmp_path / "jobs.db"
-    JobStore(db).create(JobRecord(
-        id="persisted",
-        spec=JobSpec(workflow="fake", name="p"),
-        status=JobStatus.COMPLETED,
-        work_dir=str(tmp_path / "p"),
-    ))
+    JobStore(db).create(
+        JobRecord(
+            id="persisted",
+            spec=JobSpec(workflow="fake", name="p"),
+            status=JobStatus.COMPLETED,
+            work_dir=str(tmp_path / "p"),
+        )
+    )
     reopened = JobStore(db)
     assert reopened.get("persisted") is not None
     assert reopened.counts()["completed"] == 1
@@ -127,12 +142,14 @@ def test_manager_marks_interrupted_jobs_on_startup(tmp_path: Path) -> None:
     store = JobStore(db)
     from acp.scheduler.jobs import JobRecord
 
-    store.create(JobRecord(
-        id="was-running",
-        spec=JobSpec(workflow="fake"),
-        status=JobStatus.RUNNING,
-        work_dir=str(tmp_path / "r"),
-    ))
+    store.create(
+        JobRecord(
+            id="was-running",
+            spec=JobSpec(workflow="fake"),
+            status=JobStatus.RUNNING,
+            work_dir=str(tmp_path / "r"),
+        )
+    )
     mgr = JobManager(run_root=tmp_path, store=store, max_running=1)
     interrupted = mgr.get("was-running")
     assert interrupted.status == JobStatus.FAILED
@@ -241,3 +258,194 @@ def test_output_dir_outside_run_root_is_clamped(tmp_path: Path) -> None:
         assert "evil_elsewhere" not in record.work_dir
     finally:
         mgr.shutdown()
+
+
+def test_waiting_review_status_flags() -> None:
+    assert JobStatus.WAITING_REVIEW.is_active is True
+    assert JobStatus.WAITING_REVIEW.is_terminal is False
+
+
+def test_pause_for_review_and_resume_roundtrip(tmp_path: Path) -> None:
+    mgr = JobManager(run_root=tmp_path, poll_interval=30)
+    try:
+        work_dir = tmp_path / "job-running"
+        work_dir.mkdir()
+        record = JobRecord(
+            id="job-running",
+            spec=JobSpec(workflow="fake", name="review"),
+            status=JobStatus.RUNNING,
+            work_dir=str(work_dir),
+        )
+        mgr.store.create(record)
+
+        paused = mgr.pause_for_review(record.id, {"decision_id": "dec-1"})
+        assert paused.status == JobStatus.WAITING_REVIEW
+        assert paused.result is not None
+        assert paused.result["review_payload"]["decision_id"] == "dec-1"
+        assert mgr.event_log(record.id).read_all()[-1]["type"] == "job.waiting_review"
+
+        resumed = mgr.resume(record.id, {"approved": True})
+        assert resumed.status == JobStatus.RUNNING
+        assert resumed.result is not None
+        assert resumed.result["review_resolution"]["approved"] is True
+        assert mgr.event_log(record.id).read_all()[-1]["type"] == "job.review_resumed"
+    finally:
+        mgr.shutdown()
+
+
+def test_poll_loop_skips_waiting_review_jobs(tmp_path: Path) -> None:
+    mgr = JobManager(run_root=tmp_path, poll_interval=30)
+    try:
+        work_dir = tmp_path / "job-waiting"
+        work_dir.mkdir()
+        record = JobRecord(
+            id="job-waiting",
+            spec=JobSpec(workflow="fake", name="waiting"),
+            status=JobStatus.WAITING_REVIEW,
+            work_dir=str(work_dir),
+        )
+        mgr.store.create(record)
+
+        seen: list[str] = []
+
+        def fake_poll(job_id: str) -> None:
+            seen.append(job_id)
+
+        mgr._poll_job = fake_poll  # type: ignore[method-assign]
+        mgr._poll_stop.set()
+        mgr._poll_loop()
+
+        assert record.id not in seen
+    finally:
+        mgr.shutdown()
+
+
+def test_move_delete_block_waiting_review_jobs(tmp_path: Path) -> None:
+    mgr = JobManager(run_root=tmp_path, poll_interval=30)
+    try:
+        project = mgr.projects.create_project("Target")
+        work_dir = tmp_path / "job-review-blocked"
+        work_dir.mkdir()
+        record = JobRecord(
+            id="job-review-blocked",
+            spec=JobSpec(workflow="fake", name="blocked", project_id=mgr.default_project_id),
+            status=JobStatus.WAITING_REVIEW,
+            work_dir=str(work_dir),
+            project_id=mgr.default_project_id,
+        )
+        mgr.store.create(record)
+
+        with pytest.raises(ValueError, match="active job"):
+            mgr.move_job(record.id, str(project["project_id"]))
+        with pytest.raises(ValueError, match="active"):
+            mgr.delete_job(record.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_requeue_active_on_startup_preserves_waiting_review(tmp_path: Path) -> None:
+    db = tmp_path / "jobs.db"
+    store = JobStore(db)
+    waiting_dir = tmp_path / "waiting"
+    waiting_dir.mkdir()
+    store.create(
+        JobRecord(
+            id="waiting-review",
+            spec=JobSpec(workflow="fake", name="review"),
+            status=JobStatus.WAITING_REVIEW,
+            work_dir=str(waiting_dir),
+        )
+    )
+
+    mgr = JobManager(run_root=tmp_path, store=store, poll_interval=30)
+    try:
+        waiting = mgr.get("waiting-review")
+        assert waiting is not None
+        assert waiting.status == JobStatus.WAITING_REVIEW
+    finally:
+        mgr.shutdown()
+
+
+def test_poll_job_translates_waiting_review_exit_code(tmp_path: Path) -> None:
+    mgr = JobManager(run_root=tmp_path, poll_interval=30)
+    try:
+        work_dir = tmp_path / "job-review-gate"
+        work_dir.mkdir()
+        (work_dir / "review_payload.json").write_text(
+            json.dumps(
+                {
+                    "study_id": "study-1",
+                    "status": "waiting",
+                    "pending_decisions": ["decision-1"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        record = JobRecord(
+            id="job-review-gate",
+            spec=JobSpec(workflow="mechanism", name="review-gate"),
+            status=JobStatus.RUNNING,
+            work_dir=str(work_dir),
+        )
+        mgr.store.create(record)
+        mgr.runner.poll = lambda _record: (True, EXIT_WAITING_REVIEW)  # type: ignore[method-assign]
+
+        mgr._poll_job(record.id)
+
+        updated = mgr.get(record.id)
+        assert updated is not None
+        assert updated.status == JobStatus.WAITING_REVIEW
+        assert updated.exit_code == EXIT_WAITING_REVIEW
+        assert updated.completed_at is None
+        assert updated.result is not None
+        assert updated.result["review_payload"]["study_id"] == "study-1"
+        assert updated.result["review_payload"]["pending_decisions"] == ["decision-1"]
+        assert mgr.event_log(record.id).read_all()[-1]["type"] == "job.waiting_review"
+    finally:
+        mgr.shutdown()
+
+
+def test_migration_006_and_mechanism_store_helpers(tmp_path: Path) -> None:
+    db_path = tmp_path / "db" / "scheduler.db"
+    applied_first = migrate(db_path)
+    applied_second = migrate(db_path)
+
+    assert applied_first == 4
+    assert applied_second == 0
+
+    with sqlite3.connect(db_path) as conn:
+        tables = {
+            row[0]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        }
+    assert "mechanism_studies" in tables
+    assert "decision_points" in tables
+
+    store = JobStore(db_path)
+    store.upsert_mechanism_study(
+        "study-1",
+        job_id="job-1",
+        study_json='{"study_id": "study-1"}',
+        status="waiting",
+        created_at="2026-08-12T00:00:00+00:00",
+        updated_at="2026-08-12T01:00:00+00:00",
+    )
+    store.upsert_decision_point(
+        "decision-1",
+        study_id="study-1",
+        status="waiting",
+        payload='{"decision": 1}',
+        resolution=None,
+        created_at="2026-08-12T00:10:00+00:00",
+        resolved_at=None,
+    )
+
+    study = store.get_mechanism_study("study-1")
+    assert study is not None
+    assert study["status"] == "waiting"
+    assert store.list_mechanism_studies(limit=10)[0]["id"] == "study-1"
+
+    decision = store.get_decision_point("decision-1")
+    assert decision is not None
+    assert decision["status"] == "waiting"
+    assert store.list_decision_points("study-1", limit=10)[0]["id"] == "decision-1"

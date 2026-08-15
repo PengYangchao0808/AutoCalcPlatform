@@ -1,3 +1,4 @@
+# pyright: reportAny=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownParameterType=false, reportUnknownVariableType=false, reportUnannotatedClassAttribute=false, reportExplicitAny=false, reportUnusedCallResult=false
 """
 Scheduler Job Store
 ===================
@@ -85,7 +86,8 @@ class JobStore:
         with self._lock, self._connect() as conn:
             conn.execute(
                 """UPDATE jobs SET status=?, current_stage=?, progress=?, error=?,
-                       pid=?, exit_code=?, remote_job_id=?, started_at=?, completed_at=?, updated_at=?,
+                       pid=?, exit_code=?, remote_job_id=?, started_at=?,
+                       completed_at=?, updated_at=?,
                        result_json=?, spec_json=?, project_id=?, input_hash=? WHERE id=?""",
                 (
                     record.status.value,
@@ -136,9 +138,7 @@ class JobStore:
     def counts(self) -> dict[str, int]:
         out: dict[str, int] = {s.value: 0 for s in JobStatus}
         with self._lock, self._connect() as conn:
-            rows = conn.execute(
-                "SELECT status, COUNT(*) AS n FROM jobs GROUP BY status"
-            ).fetchall()
+            rows = conn.execute("SELECT status, COUNT(*) AS n FROM jobs GROUP BY status").fetchall()
         for r in rows:
             out[r["status"]] = r["n"]
         return out
@@ -163,9 +163,7 @@ class JobStore:
             )
             conn.commit()
 
-    def update_project_id_and_work_dir(
-        self, job_id: str, project_id: str, work_dir: str
-    ) -> None:
+    def update_project_id_and_work_dir(self, job_id: str, project_id: str, work_dir: str) -> None:
         with self._lock, self._connect() as conn:
             row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
             if row is None:
@@ -180,6 +178,151 @@ class JobStore:
                 (project_id, work_dir, _spec_to_json(record.spec), record.updated_at, job_id),
             )
             conn.commit()
+
+    def upsert_mechanism_study(
+        self,
+        study_id: str,
+        *,
+        job_id: str | None,
+        study_json: str,
+        status: str,
+        created_at: str,
+        updated_at: str,
+    ) -> None:
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO mechanism_studies (
+                    id, job_id, study_json, status, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    job_id=excluded.job_id,
+                    study_json=excluded.study_json,
+                    status=excluded.status,
+                    created_at=excluded.created_at,
+                    updated_at=excluded.updated_at
+                """,
+                (study_id, job_id, study_json, status, created_at, updated_at),
+            )
+            conn.commit()
+
+    def get_mechanism_study(self, study_id: str) -> dict[str, Any] | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM mechanism_studies WHERE id=?",
+                (study_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "id": row["id"],
+            "job_id": row["job_id"],
+            "study_json": row["study_json"],
+            "status": row["status"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+
+    def list_mechanism_studies(
+        self, limit: int = 200, job_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        if job_id is None:
+            query = (
+                "SELECT * FROM mechanism_studies "
+                "ORDER BY updated_at DESC, created_at DESC LIMIT ?"
+            )
+            params: tuple[Any, ...] = (limit,)
+        else:
+            query = (
+                "SELECT * FROM mechanism_studies WHERE job_id=? "
+                "ORDER BY updated_at DESC, created_at DESC LIMIT ?"
+            )
+            params = (job_id, limit)
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [
+            {
+                "id": row["id"],
+                "job_id": row["job_id"],
+                "study_json": row["study_json"],
+                "status": row["status"],
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+            }
+            for row in rows
+        ]
+
+    def upsert_decision_point(
+        self,
+        decision_id: str,
+        *,
+        study_id: str,
+        status: str,
+        payload: str,
+        resolution: str | None,
+        created_at: str,
+        resolved_at: str | None,
+    ) -> None:
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO decision_points (
+                    id, study_id, status, payload, resolution, created_at, resolved_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    study_id=excluded.study_id,
+                    status=excluded.status,
+                    payload=excluded.payload,
+                    resolution=excluded.resolution,
+                    created_at=excluded.created_at,
+                    resolved_at=excluded.resolved_at
+                """,
+                (decision_id, study_id, status, payload, resolution, created_at, resolved_at),
+            )
+            conn.commit()
+
+    def get_decision_point(self, decision_id: str) -> dict[str, Any] | None:
+        with self._lock, self._connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM decision_points WHERE id=?",
+                (decision_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "id": row["id"],
+            "study_id": row["study_id"],
+            "status": row["status"],
+            "payload": row["payload"],
+            "resolution": row["resolution"],
+            "created_at": row["created_at"],
+            "resolved_at": row["resolved_at"],
+        }
+
+    def list_decision_points(self, study_id: str, limit: int = 200) -> list[dict[str, Any]]:
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM decision_points
+                WHERE study_id=?
+                ORDER BY created_at DESC, rowid DESC
+                LIMIT ?
+                """,
+                (study_id, limit),
+            ).fetchall()
+        return [
+            {
+                "id": row["id"],
+                "study_id": row["study_id"],
+                "status": row["status"],
+                "payload": row["payload"],
+                "resolution": row["resolution"],
+                "created_at": row["created_at"],
+                "resolved_at": row["resolved_at"],
+            }
+            for row in rows
+        ]
 
 
 def _record_to_row(record: JobRecord) -> tuple[Any, ...]:
@@ -211,6 +354,7 @@ def _row_to_record(row: sqlite3.Row) -> JobRecord:
 
     if isinstance(spec_raw.get("method"), dict):
         from acp.catalog import normalize_legacy_method
+
         spec_raw["method"] = normalize_legacy_method(spec_raw["method"])
 
     columns = set(row.keys())

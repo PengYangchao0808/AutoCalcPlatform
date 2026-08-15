@@ -631,7 +631,9 @@ class LocalCleanup:
         try:
             for entry in path.rglob("*"):
                 try:
-                    if entry.is_file(follow_symlinks=False):
+                    # is_file(follow_symlinks=...) needs Python 3.13+;
+                    # equivalent: exclude symlinks, then test regular file.
+                    if not entry.is_symlink() and entry.is_file():
                         total += entry.stat(follow_symlinks=False).st_size
                 except OSError:
                     continue
