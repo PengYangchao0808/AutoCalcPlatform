@@ -1,6 +1,6 @@
 """Regression tests for ORCA TS/IRC helper extensions."""
 
-# pyright: reportAny=false, reportExplicitAny=false, reportUnknownMemberType=false, reportUnusedCallResult=false
+# pyright: reportAny=false, reportExplicitAny=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnusedCallResult=false
 
 from __future__ import annotations
 
@@ -10,6 +10,13 @@ import numpy as np
 import pytest
 from numpy.typing import NDArray
 
+from cccp.qc.interfaces.constraints import (
+    AngleConstraint,
+    CoordinateSpec,
+    DihedralConstraint,
+    DistanceConstraint,
+    orca_constraint_block,
+)
 from cccp.qc.interfaces.orca import ORCAInterface
 from cccp.qc.interfaces.orca_ts import irc_block, ts_geom_block, ts_opt_route
 
@@ -96,6 +103,48 @@ IRC reverse direction
 ****ORCA-CHEMISTRY JOB DONE****
 """
 
+SCAN_OUTPUT = """RELAXED SURFACE SCAN STEP 1
+CARTESIAN COORDINATES (ANGSTROEM)
+-------------------
+H      0.0000000000    0.0000000000    0.0000000000
+C      1.5000000000    0.0000000000    0.0000000000
+H      0.0000000000    1.0000000000    0.0000000000
+-------------------
+
+RELAXED SURFACE SCAN STEP 2
+CARTESIAN COORDINATES (ANGSTROEM)
+-------------------
+H      0.0000000000    0.0000000000    0.0000000000
+C      2.4500000000    0.0000000000    0.0000000000
+H      0.0000000000    1.0000000000    0.0000000000
+-------------------
+
+RELAXED SURFACE SCAN STEP 3
+CARTESIAN COORDINATES (ANGSTROEM)
+-------------------
+H      0.0000000000    0.0000000000    0.0000000000
+C      3.4000000000    0.0000000000    0.0000000000
+H      0.0000000000    1.0000000000    0.0000000000
+-------------------
+
+The Calculated Surface using the RELAXED SURFACE SCAN
+-----------------------------------------------------
+  1    1.50000000   -100.00000000
+  2    2.45000000    -99.95000000
+  3    3.40000000    -99.90000000
+
+****ORCA-CHEMISTRY JOB DONE****
+"""
+
+CONSTRAINED_OPT_OUTPUT = """FINAL SINGLE POINT ENERGY      -175.432100
+CARTESIAN COORDINATES (ANGSTROEM)
+-------------------
+H      0.0000000000    0.0000000000    0.0000000000
+C      1.5000000000    0.0000000000    0.0000000000
+H      0.0000000000    1.0000000000    0.0000000000
+-------------------
+"""
+
 
 def _extract_orca_input_coordinates(input_file: Path) -> NDArray[np.float64]:
     lines = input_file.read_text(encoding="utf-8").splitlines()
@@ -132,6 +181,135 @@ def test_irc_block_is_conditional_for_hessian_and_midpoint_restart() -> None:
     assert "InitHess Read" in with_hessian
     assert "Direction Down" in midpoint
     assert "InitHess Read" not in midpoint
+
+
+def test_orca_constraint_block_renders_one_based_constraints() -> None:
+    block = orca_constraint_block(
+        [
+            DistanceConstraint(atoms=(0, 1), target=1.5),
+            AngleConstraint(atoms=(0, 1, 2), target=120.0),
+            DihedralConstraint(atoms=(0, 1, 2, 3), target=-60.0),
+        ]
+    )
+
+    assert block == (
+        "Constraints\n"
+        "  { B 1 2 C 1.50000000 }\n"
+        "  { A 1 2 3 C 120.00000000 }\n"
+        "  { D 1 2 3 4 C -60.00000000 }\n"
+        "end"
+    )
+
+
+def test_relaxed_scan_writes_scants_input_and_parses_output(
+    sample_config: dict[str, object],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    interface = ORCAInterface(sample_config)
+
+    def _fake_run(_input_file: Path, output_file: Path) -> bool:
+        _ = output_file.write_text(SCAN_OUTPUT, encoding="utf-8")
+        return True
+
+    monkeypatch.setattr(interface, "_run_orca", _fake_run)
+
+    result = interface.relaxed_scan(
+        TS_COORDINATES,
+        TS_SYMBOLS,
+        scan_coordinate=CoordinateSpec(
+            id="rc1",
+            kind="distance",
+            atoms=(0, 1),
+            start=1.5,
+            end=3.4,
+        ),
+        points=3,
+        output_dir=tmp_path,
+        output_name="scan_case",
+        solvent="acetone",
+        solvent_model="ALPB",
+    )
+
+    input_text = (tmp_path / "scan_case.inp").read_text(encoding="utf-8")
+
+    best_point = result.best_point()
+
+    assert result.success is True
+    assert len(result.points) == 3
+    assert result.energies() == pytest.approx([-100.0, -99.95, -99.9])
+    assert best_point is not None
+    assert best_point.frame_index == 0
+    assert result.points[2].coordinate_values["rc1"] == pytest.approx(3.4)
+    assert result.points[1].coordinates is not None
+    np.testing.assert_allclose(
+        result.points[1].coordinates,
+        np.array([[0.0, 0.0, 0.0], [2.45, 0.0, 0.0], [0.0, 1.0, 0.0]]),
+    )
+    assert "ScanTS" in input_text
+    assert "ALPB(Acetone)" in input_text
+    assert "%cpcm" not in input_text
+    assert "B 0 1 = 1.50000000, 3.40000000, 3" in input_text
+
+
+def test_constrained_optimize_writes_constraint_block_and_parses_output(
+    sample_config: dict[str, object],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    interface = ORCAInterface(sample_config)
+
+    def _fake_run(_input_file: Path, output_file: Path) -> bool:
+        _ = output_file.write_text(CONSTRAINED_OPT_OUTPUT, encoding="utf-8")
+        return True
+
+    monkeypatch.setattr(interface, "_run_orca", _fake_run)
+
+    result = interface.constrained_optimize(
+        TS_COORDINATES,
+        TS_SYMBOLS,
+        constraints=[DistanceConstraint(atoms=(0, 1), target=1.5)],
+        output_dir=tmp_path,
+        output_name="warmup_case",
+        method="B97-3c",
+    )
+
+    input_text = (tmp_path / "warmup_case.inp").read_text(encoding="utf-8")
+
+    assert result.success is True
+    assert result.energy == pytest.approx(-175.4321)
+    assert result.coordinates is not None
+    np.testing.assert_allclose(
+        result.coordinates,
+        np.array([[0.0, 0.0, 0.0], [1.5, 0.0, 0.0], [0.0, 1.0, 0.0]]),
+    )
+    assert "Constraints" in input_text
+    assert "{ B 1 2 C 1.50000000 }" in input_text
+
+
+def test_relaxed_scan_reports_missing_orca_binary(
+    sample_config: dict[str, object],
+    tmp_path: Path,
+) -> None:
+    interface = ORCAInterface(sample_config)
+    interface.executable = None
+
+    result = interface.relaxed_scan(
+        TS_COORDINATES,
+        TS_SYMBOLS,
+        scan_coordinate=CoordinateSpec(
+            id="rc1",
+            kind="distance",
+            atoms=(0, 1),
+            start=1.5,
+            end=3.4,
+        ),
+        points=3,
+        output_dir=tmp_path,
+    )
+
+    assert result.success is False
+    assert "ORCA executable not found" in result.message
 
 
 def test_transition_state_opt_writes_rescue_kwargs_and_extracts_mode_vector(

@@ -8,6 +8,7 @@ Author: QCcalc Team (adapted from RPH)
 """
 
 # pyright: reportArgumentType=false, reportAny=false, reportConstantRedefinition=false, reportDeprecated=false, reportExplicitAny=false, reportImplicitOverride=false, reportImplicitStringConcatenation=false, reportMissingParameterType=false, reportMissingTypeArgument=false, reportPrivateUsage=false, reportUnannotatedClassAttribute=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownParameterType=false, reportUnknownVariableType=false, reportUnnecessaryComparison=false, reportUnusedCallResult=false, reportUnusedImport=false, reportUnusedParameter=false
+# mypy: ignore-errors
 
 import json
 import logging
@@ -15,6 +16,7 @@ import os
 import re
 import shutil
 import subprocess
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,6 +25,11 @@ import numpy as np
 from numpy.typing import NDArray
 
 from cccp.qc.interfaces.base import QCInterfaceBase, QCResult
+from cccp.qc.interfaces.constraints import (
+    CoordinateConstraint,
+    CoordinateSpec,
+    orca_constraint_block,
+)
 from cccp.qc.interfaces.orca_ts import (
     IrcResult,
     TsOptResult,
@@ -35,9 +42,10 @@ from cccp.qc.interfaces.orca_ts import (
     ts_geom_block,
     ts_opt_route,
 )
+from cccp.qc.interfaces.xtb_scan import RelaxedScanPoint, RelaxedScanResult
 from cccp.software import SoftwareNotFoundError, resolve_executable
 from cccp.utils import ensure_dir
-from cccp.utils.file_io import read_xyz
+from cccp.utils.file_io import read_xyz, write_xyz
 from cccp.utils.geometry_tools import LogParser
 from cccp.utils.resource_utils import calc_orca_maxcore, mem_to_mb
 from cccp.utils.solvent_map import orca_smd_solvent
@@ -306,6 +314,15 @@ def _normalize_nmr_symbol(symbol: str) -> str:
 
 _FREQ_SECTION_HEADER = "VIBRATIONAL FREQUENCIES"
 _FREQ_LINE_RE = re.compile(r"^\s*\d+:\s+([-+]?\d+\.\d+)\s+cm\*\*-1", re.MULTILINE)
+_CARTESIAN_COORD_HEADER = "CARTESIAN COORDINATES (ANGSTROEM)"
+_SCAN_STEP_RE = re.compile(r"^\s*RELAXED\s+SURFACE\s+SCAN\s+STEP\s+\d+.*$", re.MULTILINE)
+_COORD_LINE_RE = re.compile(
+    r"^\s*([A-Z][a-z]?)\s+"
+    r"([-+]?\d+(?:\.\d+)?(?:[EeDd][+-]?\d+)?)\s+"
+    r"([-+]?\d+(?:\.\d+)?(?:[EeDd][+-]?\d+)?)\s+"
+    r"([-+]?\d+(?:\.\d+)?(?:[EeDd][+-]?\d+)?)\s*$"
+)
+_NUMERIC_TOKEN_RE = re.compile(r"[-+]?\d+(?:\.\d+)?(?:[EeDd][+-]?\d+)?")
 
 
 def _parse_frequencies(output_file: Path) -> list[float]:
@@ -335,6 +352,179 @@ def _parse_frequencies(output_file: Path) -> list[float]:
         return []
     frequencies = [float(m.group(1)) for m in _FREQ_LINE_RE.finditer(sections[-1])]
     return [f for f in frequencies if f != 0.0]
+
+
+def _is_orca_gfn_xtb_method(method: str | None) -> bool:
+    if not method:
+        return False
+    normalized = method.strip().upper().replace(" ", "")
+    return normalized.startswith("GFN") and normalized.endswith("-XTB")
+
+
+def _orca_scan_line(scan_coordinate: CoordinateSpec, points: int) -> str:
+    """Render one ORCA relaxed-scan line from a :class:`CoordinateSpec`."""
+    if scan_coordinate.role == "monitor":
+        raise ValueError("ORCA relaxed_scan does not accept monitor-only coordinates")
+    if scan_coordinate.start is None or scan_coordinate.end is None:
+        raise ValueError("ORCA relaxed_scan requires scan_coordinate.start and .end")
+    kind_map = {"distance": "B", "angle": "A", "dihedral": "D"}
+    kind = kind_map[scan_coordinate.kind]
+    atoms = " ".join(str(int(atom)) for atom in scan_coordinate.atoms)
+    return (
+        f"    {kind} {atoms} = {float(scan_coordinate.start):.8f}, "
+        f"{float(scan_coordinate.end):.8f}, {int(points)}"
+    )
+
+
+def _orca_scan_route_settings(
+    method: str,
+    solvent: str | None,
+    solvent_model: str | None,
+    use_scants: bool,
+    route_extras: Sequence[object] | str | None,
+) -> tuple[list[str], str | None, str | None]:
+    if route_extras is None:
+        extras: list[str] = []
+    elif isinstance(route_extras, str):
+        extras = [token for token in route_extras.split() if token]
+    else:
+        extras = [str(item) for item in route_extras if item]
+    if use_scants:
+        extras.append("ScanTS")
+    if _is_orca_gfn_xtb_method(method) and solvent:
+        normalized_model = str(solvent_model or "ALPB").strip().upper() or "ALPB"
+        if normalized_model not in {"ALPB", "GBSA"}:
+            normalized_model = "ALPB"
+        extras.append(f"{normalized_model}({orca_smd_solvent(solvent)})")
+        return extras, None, "none"
+    return extras, solvent, solvent_model
+
+
+def _parse_cartesian_block(
+    lines: list[str],
+    start_index: int,
+) -> tuple[NDArray[np.float64] | None, list[str] | None, int]:
+    cursor = start_index + 1
+    while cursor < len(lines):
+        stripped = lines[cursor].strip()
+        if not stripped or set(stripped) <= {"-"}:
+            cursor += 1
+            continue
+        break
+
+    symbols: list[str] = []
+    coords: list[list[float]] = []
+    while cursor < len(lines):
+        stripped = lines[cursor].strip()
+        if not stripped or set(stripped) <= {"-"}:
+            break
+        match = _COORD_LINE_RE.match(lines[cursor])
+        if match is None:
+            break
+        symbols.append(match.group(1))
+        coords.append(
+            [
+                float(match.group(2).replace("D", "E").replace("d", "e")),
+                float(match.group(3).replace("D", "E").replace("d", "e")),
+                float(match.group(4).replace("D", "E").replace("d", "e")),
+            ]
+        )
+        cursor += 1
+    if not coords:
+        return None, None, start_index + 1
+    return np.asarray(coords, dtype=np.float64), symbols, cursor
+
+
+def _parse_all_cartesian_blocks(log_text: str) -> list[tuple[NDArray[np.float64], list[str]]]:
+    lines = log_text.splitlines()
+    blocks: list[tuple[NDArray[np.float64], list[str]]] = []
+    cursor = 0
+    while cursor < len(lines):
+        if _CARTESIAN_COORD_HEADER not in lines[cursor]:
+            cursor += 1
+            continue
+        coords, symbols, next_cursor = _parse_cartesian_block(lines, cursor)
+        if coords is not None and symbols is not None:
+            blocks.append((coords, symbols))
+        cursor = max(next_cursor, cursor + 1)
+    return blocks
+
+
+def _parse_relaxed_scan_cartesian_blocks(
+    log_text: str,
+) -> list[tuple[NDArray[np.float64], list[str]]]:
+    step_matches = list(_SCAN_STEP_RE.finditer(log_text))
+    if not step_matches:
+        return _parse_all_cartesian_blocks(log_text)
+    blocks: list[tuple[NDArray[np.float64], list[str]]] = []
+    for index, match in enumerate(step_matches):
+        section_end = (
+            step_matches[index + 1].start() if index + 1 < len(step_matches) else len(log_text)
+        )
+        section_blocks = _parse_all_cartesian_blocks(log_text[match.end() : section_end])
+        if section_blocks:
+            blocks.append(section_blocks[0])
+    return blocks
+
+
+def _parse_relaxed_scan_energy_table(log_text: str, coordinate_count: int = 1) -> list[float]:
+    """Parse the relaxed-scan summary table from an ORCA output."""
+    lines = log_text.splitlines()
+    start = None
+    for index in range(len(lines) - 1, -1, -1):
+        lowered = lines[index].strip().lower()
+        if (
+            "calculated surface" in lowered
+            or ("relaxed surface scan" in lowered and "step" not in lowered)
+        ):
+            start = index + 1
+            break
+    if start is None:
+        return []
+
+    energies: list[float] = []
+    saw_data = False
+    for line in lines[start:]:
+        stripped = line.strip()
+        if not stripped:
+            if saw_data:
+                break
+            continue
+        if set(stripped) <= {"-"}:
+            continue
+        if stripped[0].isalpha():
+            if saw_data:
+                break
+            continue
+        tokens = _NUMERIC_TOKEN_RE.findall(stripped.replace("D", "E").replace("d", "e"))
+        if len(tokens) < coordinate_count + 1:
+            if saw_data:
+                break
+            continue
+        try:
+            numeric_values = [float(token) for token in tokens]
+        except ValueError:
+            continue
+        energies.append(numeric_values[-1])
+        saw_data = True
+    return energies
+
+
+def _parse_relaxed_scan_energy_ledger(path: Path, coordinate_count: int = 1) -> list[float]:
+    """Parse ORCA's ``*.relaxscanact.dat`` energy ledger when present."""
+    energies: list[float] = []
+    try:
+        for raw_line in Path(path).read_text(encoding="utf-8", errors="ignore").splitlines():
+            values = raw_line.split()
+            if len(values) < coordinate_count + 1:
+                continue
+            try:
+                energies.append(float(values[coordinate_count]))
+            except ValueError:
+                continue
+    except OSError:
+        return []
+    return energies
 
 
 def _apply_mode_displacement(
@@ -524,6 +714,7 @@ class ORCAInterface(QCInterfaceBase):
         aux_j_basis: str = None,
         aux_c_basis: str = None,
         symbols: list[str] | None = None,
+        geom_extra_lines: list[str] | None = None,
     ) -> tuple[str, Any]:
         """Build ORCA input blocks.
 
@@ -546,6 +737,8 @@ class ORCAInterface(QCInterfaceBase):
             symbols: Atomic symbols of the molecule. Required when
                 ``recalc_hess`` resolves to ``"auto"`` and no explicit
                 numeric value is available; ignored otherwise.
+            geom_extra_lines: Extra lines appended inside the generated
+                ``%geom`` block (after Recalc_Hess / MaxIter, before ``end``).
 
         Returns:
             A 2-tuple ``(input_str, resolution)`` where ``input_str`` is
@@ -697,6 +890,8 @@ class ORCAInterface(QCInterfaceBase):
                 blocks.append(f"  Recalc_Hess {resolution.interval}")
             if geom_maxiter is not None and geom_maxiter > 0:
                 blocks.append(f"  MaxIter {int(geom_maxiter)}")
+            if geom_extra_lines:
+                blocks.extend(str(line) for line in geom_extra_lines if line)
             blocks.append("end")
 
             if resolution.reason == "auto" and resolution.enabled:
@@ -746,6 +941,7 @@ class ORCAInterface(QCInterfaceBase):
         aux_basis: str = None,
         aux_j_basis: str = None,
         aux_c_basis: str = None,
+        geom_extra_lines: list[str] | None = None,
     ):
         """Write ORCA input file.
 
@@ -767,6 +963,8 @@ class ORCAInterface(QCInterfaceBase):
             aux_basis: Legacy auxiliary basis (backward compat)
             aux_j_basis: Auxiliary /J basis for RI-J fitting
             aux_c_basis: Auxiliary /C basis for RI-MP2 correlation
+            geom_extra_lines: Extra lines appended inside the generated
+                ``%geom`` block.
         """
         charge = charge if charge is not None else self.charge
         multiplicity = multiplicity if multiplicity is not None else self.multiplicity
@@ -785,6 +983,7 @@ class ORCAInterface(QCInterfaceBase):
             aux_j_basis=aux_j_basis,
             aux_c_basis=aux_c_basis,
             symbols=symbols,
+            geom_extra_lines=geom_extra_lines,
         )
 
         ensure_dir(input_file.parent)
@@ -948,6 +1147,258 @@ class ORCAInterface(QCInterfaceBase):
             converged=True,
             output_file=input_file,
             log_file=output_file,
+        )
+
+    def constrained_optimize(
+        self,
+        coordinates: np.ndarray,
+        symbols: list[str],
+        constraints: Sequence[CoordinateConstraint],
+        charge: int = 0,
+        multiplicity: int = 1,
+        output_dir: Path = None,
+        output_name: str = "constrained_optimize",
+        method: str = None,
+        basis: str = None,
+        **kwargs,
+    ) -> QCResult:
+        """Perform an ORCA optimization with a ``%geom Constraints`` block."""
+        output_dir = Path(output_dir) if output_dir else Path.cwd()
+        ensure_dir(output_dir)
+
+        input_file = output_dir / f"{output_name}.inp"
+        output_file = output_dir / f"{output_name}.out"
+
+        _solvent = kwargs.pop("solvent", None)
+        _solvent_model = kwargs.pop("solvent_model", None)
+        geom_extra_lines = [
+            f"  {line}" for line in orca_constraint_block(constraints).splitlines()
+        ]
+
+        self._write_input(
+            input_file,
+            coordinates,
+            symbols,
+            "opt",
+            charge,
+            multiplicity,
+            method=method,
+            basis=basis,
+            route_extras=kwargs.get("route_extras"),
+            geom_maxiter=kwargs.get("geom_maxiter"),
+            extra_blocks=kwargs.get("extra_blocks"),
+            recalc_hess=kwargs.get("recalc_hess"),
+            solvent=_solvent,
+            solvent_model=_solvent_model,
+            aux_basis=kwargs.get("aux_basis"),
+            aux_j_basis=kwargs.get("aux_j_basis"),
+            aux_c_basis=kwargs.get("aux_c_basis"),
+            geom_extra_lines=geom_extra_lines,
+        )
+
+        try:
+            success = self._run_orca(input_file, output_file)
+        except SoftwareNotFoundError as exc:
+            return QCResult(
+                success=False,
+                error_message=str(exc),
+                output_file=input_file,
+                log_file=output_file,
+            )
+
+        if not success:
+            return QCResult(
+                success=False,
+                error_message="ORCA constrained optimization failed",
+                output_file=input_file,
+                log_file=output_file,
+            )
+
+        coords, syms, error = LogParser.extract_last_converged_coords(output_file, "orca")
+        energy = LogParser.extract_energy(output_file, "orca")
+
+        if coords is None:
+            return QCResult(
+                success=False,
+                error_message=error or "Could not extract coordinates",
+                output_file=input_file,
+                log_file=output_file,
+            )
+
+        return QCResult(
+            success=True,
+            energy=energy,
+            coordinates=coords,
+            symbols=syms or symbols,
+            converged=True,
+            output_file=input_file,
+            log_file=output_file,
+        )
+
+    def relaxed_scan(
+        self,
+        coordinates: NDArray[np.float64],
+        symbols: list[str],
+        scan_coordinate: CoordinateSpec,
+        points: int,
+        charge: int = 0,
+        multiplicity: int = 1,
+        output_dir: Path = None,
+        output_name: str = "orca_relaxed_scan",
+        method: str = "GFN2-xTB",
+        basis: str | None = None,
+        solvent: str | None = None,
+        solvent_model: str | None = None,
+        use_scants: bool = True,
+        full_scan: bool = True,
+        **kwargs,
+    ) -> RelaxedScanResult:
+        """Run an ORCA relaxed scan over one local coordinate.
+
+        ``scan_coordinate`` reuses the generic 0-based :class:`CoordinateSpec`
+        primitive; ORCA input text follows the relaxed-scan rendering used by
+        the RPH reference implementation.
+        """
+        if points < 2:
+            raise ValueError("ORCA relaxed_scan requires points >= 2")
+        if scan_coordinate.role == "monitor":
+            raise ValueError("ORCA relaxed_scan requires a drive/freeze coordinate")
+
+        output_dir = Path(output_dir) if output_dir else Path.cwd()
+        ensure_dir(output_dir)
+
+        input_xyz = output_dir / f"{output_name}_start.xyz"
+        input_file = output_dir / f"{output_name}.inp"
+        output_file = output_dir / f"{output_name}.out"
+        write_xyz(
+            input_xyz,
+            np.asarray(coordinates, dtype=float),
+            symbols,
+            title="ORCA relaxed scan start",
+        )
+
+        eff_method = method or self.method or "GFN2-xTB"
+        eff_basis = (
+            basis
+            if basis is not None
+            else ("" if _is_orca_gfn_xtb_method(eff_method) else self.basis)
+        )
+        eff_solvent = solvent if solvent is not None else self.solvent
+        eff_solvent_model = (
+            solvent_model
+            if solvent_model is not None
+            else ("ALPB" if _is_orca_gfn_xtb_method(eff_method) else self.solvent_model)
+        )
+        recalc_hess = kwargs.pop("recalc_hess", 0)
+        geom_maxiter = kwargs.pop("geom_maxiter", kwargs.pop("max_cycles", None))
+        route_extras, input_solvent, input_solvent_model = _orca_scan_route_settings(
+            eff_method,
+            eff_solvent,
+            eff_solvent_model,
+            use_scants,
+            kwargs.pop("route_extras", None),
+        )
+        if kwargs:
+            logger.warning(
+                "Unused ORCA relaxed_scan kwargs for %s: %s",
+                output_name,
+                sorted(kwargs),
+            )
+
+        geom_extra_lines = ["  Scan", _orca_scan_line(scan_coordinate, points), "  end"]
+        if use_scants and full_scan:
+            geom_extra_lines.append("  FullScan true")
+
+        self._write_input(
+            input_file,
+            np.asarray(coordinates, dtype=float),
+            symbols,
+            "opt",
+            charge,
+            multiplicity,
+            method=eff_method,
+            basis=eff_basis,
+            route_extras=route_extras,
+            geom_maxiter=geom_maxiter,
+            recalc_hess=recalc_hess,
+            solvent=input_solvent,
+            solvent_model=input_solvent_model,
+            geom_extra_lines=geom_extra_lines,
+        )
+
+        try:
+            success = self._run_orca(input_file, output_file)
+        except SoftwareNotFoundError as exc:
+            return RelaxedScanResult(
+                points=[],
+                input_xyz=input_xyz,
+                scan_dir=output_dir,
+                success=False,
+                message=str(exc),
+            )
+        if not success:
+            return RelaxedScanResult(
+                points=[],
+                input_xyz=input_xyz,
+                scan_dir=output_dir,
+                success=False,
+                message="ORCA relaxed scan failed",
+            )
+
+        output_text = output_file.read_text(encoding="utf-8", errors="replace")
+        frame_blocks = _parse_relaxed_scan_cartesian_blocks(output_text)
+        if len(frame_blocks) > points:
+            frame_blocks = frame_blocks[-points:]
+
+        energies = _parse_relaxed_scan_energy_table(output_text, coordinate_count=1)
+        if len(energies) < len(frame_blocks):
+            ledger_matches = sorted(output_dir.glob(f"{output_name}*.relaxscanact.dat"))
+            for ledger_path in ledger_matches:
+                ledger_energies = _parse_relaxed_scan_energy_ledger(ledger_path, coordinate_count=1)
+                if len(ledger_energies) >= len(frame_blocks):
+                    energies = ledger_energies
+        if len(energies) > len(frame_blocks):
+            energies = energies[-len(frame_blocks) :]
+
+        frame_dir = output_dir / "scan_frames"
+        ensure_dir(frame_dir)
+        result_points: list[RelaxedScanPoint] = []
+        start_value = scan_coordinate.start
+        end_value = scan_coordinate.end
+        assert start_value is not None and end_value is not None
+        denominator = max(points - 1, 1)
+        for index, (frame_coords, frame_symbols) in enumerate(frame_blocks):
+            frame_path = frame_dir / f"frame_{index:03d}.xyz"
+            write_xyz(frame_path, frame_coords, frame_symbols, title=f"scan frame {index}")
+            progress = index / denominator
+            target = float(start_value + progress * (end_value - start_value))
+            result_points.append(
+                RelaxedScanPoint(
+                    frame_index=index,
+                    progress=progress,
+                    coordinates=frame_coords,
+                    symbols=frame_symbols,
+                    energy_hartree=energies[index] if index < len(energies) else None,
+                    success=True,
+                    coordinate_values={scan_coordinate.id: target},
+                )
+            )
+
+        message = ""
+        scan_success = bool(result_points)
+        if len(result_points) != points:
+            scan_success = False
+            message = (
+                f"ORCA relaxed scan returned {len(result_points)} frame(s); "
+                f"expected {points}"
+            )
+
+        return RelaxedScanResult(
+            points=result_points,
+            input_xyz=input_xyz,
+            scan_dir=output_dir,
+            success=scan_success,
+            message=message,
         )
 
     def single_point(

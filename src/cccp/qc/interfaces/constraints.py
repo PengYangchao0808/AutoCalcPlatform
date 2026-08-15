@@ -17,8 +17,9 @@ Author: QCcalc Team
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal, Union
+from typing import Literal, TypeAlias, cast
 
 ConstraintKind = Literal["distance", "angle", "dihedral"]
 ConstraintRole = Literal["drive", "freeze", "monitor"]
@@ -53,7 +54,7 @@ class DihedralConstraint:
     force_constant: float | None = None
 
 
-CoordinateConstraint = Union[DistanceConstraint, AngleConstraint, DihedralConstraint]
+CoordinateConstraint: TypeAlias = DistanceConstraint | AngleConstraint | DihedralConstraint
 
 
 @dataclass(frozen=True)
@@ -83,13 +84,12 @@ class CoordinateSpec:
         expected = _ATOM_COUNTS[self.kind]
         if len(self.atoms) != expected:
             raise ValueError(
-                f"CoordinateSpec {self.id!r}: kind={self.kind!r} requires "
-                f"{expected} atoms, got {len(self.atoms)}"
+                f"CoordinateSpec {self.id!r}: kind={self.kind!r} requires {expected} atoms, "
+                + f"got {len(self.atoms)}"
             )
         if self.role == "drive" and (self.start is None or self.end is None):
             raise ValueError(
-                f"CoordinateSpec {self.id!r}: drive coordinates require "
-                "both start and end values"
+                f"CoordinateSpec {self.id!r}: drive coordinates require both start and end values"
             )
         if self.role == "freeze" and self.start is None:
             raise ValueError(
@@ -139,18 +139,21 @@ class CoordinateSpec:
     def from_dict(cls, data: dict[str, object]) -> CoordinateSpec:
         """Build from a plain JSON-style dict (frontend round-trip)."""
         atoms = data.get("atoms")
-        if not isinstance(atoms, (list, tuple)) or not all(
-            isinstance(a, int) for a in atoms
-        ):
+        raw_atoms = cast(list[object] | tuple[object, ...] | None, atoms)
+        if raw_atoms is None or not all(isinstance(atom, int) for atom in raw_atoms):
             raise ValueError(f"CoordinateSpec: invalid atoms {atoms!r}")
+        typed_atoms = cast(list[int] | tuple[int, ...], raw_atoms)
         kind = data.get("kind")
         if kind not in _ATOM_COUNTS:
             raise ValueError(f"CoordinateSpec: invalid kind {kind!r}")
+        role = data.get("role") or "drive"
+        if role not in {"drive", "freeze", "monitor"}:
+            raise ValueError(f"CoordinateSpec: invalid role {role!r}")
         return cls(
             id=str(data.get("id") or "rc"),
-            kind=kind,  # type: ignore[arg-type]
-            atoms=tuple(int(a) for a in atoms),
-            role=str(data.get("role") or "drive"),  # type: ignore[arg-type]
+            kind=cast(ConstraintKind, kind),
+            atoms=tuple(int(atom) for atom in typed_atoms),
+            role=cast(ConstraintRole, role),
             start=_opt_float(data.get("start")),
             end=_opt_float(data.get("end")),
             force_constant=_opt_float(data.get("force_constant")),
@@ -220,23 +223,69 @@ class ReactionCoordinatePlan:
     def from_dict(cls, data: dict[str, object]) -> ReactionCoordinatePlan:
         """Build from a plain JSON-style dict (frontend round-trip)."""
         coords = data.get("coordinates")
-        if not isinstance(coords, list):
+        raw_coords = cast(list[object] | None, coords)
+        if raw_coords is None:
             raise ValueError("ReactionCoordinatePlan: 'coordinates' must be a list")
+        if not all(isinstance(coord, dict) for coord in raw_coords):
+            raise ValueError("ReactionCoordinatePlan: 'coordinates' entries must be dicts")
+        typed_coords = cast(list[dict[str, object]], raw_coords)
+        coupling = data.get("coupling") or "synchronous"
+        if coupling != "synchronous":
+            raise ValueError(f"ReactionCoordinatePlan: unsupported coupling {coupling!r}")
+        start_from = data.get("start_from") or "reactant"
+        if start_from not in {"reactant", "product", "custom"}:
+            raise ValueError(f"ReactionCoordinatePlan: invalid start_from {start_from!r}")
         return cls(
-            coordinates=tuple(CoordinateSpec.from_dict(c) for c in coords),
-            points=int(data.get("points") or 21),
-            coupling=str(data.get("coupling") or "synchronous"),  # type: ignore[arg-type]
-            start_from=str(data.get("start_from") or "reactant"),  # type: ignore[arg-type]
+            coordinates=tuple(CoordinateSpec.from_dict(coord) for coord in typed_coords),
+            points=_opt_int(data.get("points"), default=21),
+            coupling=cast(Literal["synchronous"], coupling),
+            start_from=cast(Literal["reactant", "product", "custom"], start_from),
         )
 
 
 def _opt_float(value: object) -> float | None:
     if value is None:
         return None
+    if not isinstance(value, (int, float, str)):
+        return None
     try:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _opt_int(value: object, *, default: int) -> int:
+    if value is None:
+        return default
+    if not isinstance(value, (int, float, str)):
+        return default
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def orca_constraint_block(constraints: Sequence[CoordinateConstraint]) -> str:
+    """Render an ORCA ``Constraints`` sub-block for *constraints*.
+
+    ORCA constraint lines use 1-based atom indices and the per-line syntax
+    ``{ B i j C value }`` / ``{ A i j k C value }`` /
+    ``{ D i j k l C value }``.
+    """
+    if not constraints:
+        return ""
+    lines = ["Constraints"]
+    for constraint in constraints:
+        if isinstance(constraint, DistanceConstraint):
+            kind = "B"
+        elif isinstance(constraint, AngleConstraint):
+            kind = "A"
+        else:
+            kind = "D"
+        atoms = " ".join(str(atom + 1) for atom in constraint.atoms)
+        lines.append(f"  {{ {kind} {atoms} C {constraint.target:.8f} }}")
+    lines.append("end")
+    return "\n".join(lines)
 
 
 __all__ = [
@@ -247,5 +296,6 @@ __all__ = [
     "CoordinateSpec",
     "DihedralConstraint",
     "DistanceConstraint",
+    "orca_constraint_block",
     "ReactionCoordinatePlan",
 ]
