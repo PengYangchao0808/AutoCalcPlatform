@@ -6,6 +6,8 @@ are backend-driven functions, not classes — the workflow selects one via
 ``resolve_path_strategy`` and calls it with the same signature.
 """
 
+# pyright: reportAny=false, reportExplicitAny=false, reportUnusedFunction=false, reportUnusedParameter=false
+
 from __future__ import annotations
 
 import logging
@@ -17,8 +19,16 @@ import numpy as np
 from numpy.typing import NDArray
 
 from acp.mechanism.candidates import select_candidates, select_primary_int, select_primary_ts
-from acp.mechanism.models import MechanismRoute, PathCandidate, PathPoint, PathResult
+from acp.mechanism.models import (
+    ArtifactRef,
+    MechanismRoute,
+    PathCandidate,
+    PathPoint,
+    PathResult,
+    StableState,
+)
 from acp.mechanism.presets import PATH_STRATEGIES, FidelityProfile, resolve_strategy
+from acp.mechanism.providers.native_peb import NativeReversePebStrategy
 from cccp.qc.interfaces.xtb_scan import RelaxedScanResult
 
 logger = logging.getLogger(__name__)
@@ -109,54 +119,43 @@ def run_rph_reverse(
     fidelity: FidelityProfile,
     energy_key: str = "gfn2-xtb",
 ) -> PathResult:
-    """Product-driven reverse scan (RPH PEB semantics).
-
-    The scan runs with ``start_from="product"`` (progress reversed), then the
-    selected TS seed is mapped back onto the reactant-oriented path. Requires
-    a product structure; raises when ``route.product_id`` is unset.
-
-    Note: the first release reuses the guided-scan engine with the reversed
-    plan; the coarse-xTB → anchor → meta-dynamics PATH → B97-3c SP refinement
-    chain (full RPH S2) is a declared follow-up.
-    """
+    """Run the native reverse-PEB engine and return the workflow PathResult."""
     if not route.product_id:
         raise ValueError("rph-reverse requires a product structure (route.product_id)")
 
-    plan = route.coordinate_plan
-    reversed_coordinates = tuple(
-        spec if spec.role != "drive" else _reversed_spec(spec) for spec in plan.coordinates
-    )
-    reversed_plan = type(plan)(
-        coordinates=reversed_coordinates,
-        points=plan.points,
-        coupling=plan.coupling,
-        start_from="product",
-    )
-    reversed_route = MechanismRoute(
-        route_id=route.route_id,
-        coordinate_plan=reversed_plan,
-        path_strategy="rph-reverse",
-        fidelity=route.fidelity,
-        reactant_id=route.reactant_id,
-        product_id=route.product_id,
-        ts_guess_id=route.ts_guess_id,
-        label=route.label,
-    )
-
-    result = run_guided_scan(
-        reversed_route,
-        coordinates=coordinates,
-        symbols=symbols,
+    config = getattr(backend, "config", None)
+    strategy = NativeReversePebStrategy(config=config, work_root=scan_dir)
+    source_state = StableState(
+        state_id=route.reactant_id or f"{route.route_id}__reactant",
+        role="reactant",
+        canonical_geometry=ArtifactRef(
+            path=f"memory://{route.route_id}/reactant",
+            sha256=f"sha256:{route.reactant_id or route.route_id}:reactant",
+            kind="stable_state_geometry",
+        ),
         charge=charge,
         multiplicity=multiplicity,
-        scan_dir=scan_dir,
-        backend=backend,
-        fidelity=fidelity,
-        energy_key=energy_key,
+        identity_fingerprint=f"sha256:{route.reactant_id or route.route_id}:reactant",
+        metadata={"route_id": route.route_id},
     )
-    result.strategy = "rph-reverse"
-    result.metadata["reversed"] = True
-    return result
+    target_state = StableState(
+        state_id=route.product_id,
+        role="product",
+        canonical_geometry=ArtifactRef(
+            path=f"memory://{route.route_id}/product",
+            sha256=f"sha256:{route.product_id}:product",
+            kind="stable_state_geometry",
+        ),
+        charge=charge,
+        multiplicity=multiplicity,
+        identity_fingerprint=f"sha256:{route.product_id}:product",
+        metadata={
+            "route_id": route.route_id,
+            "coordinates": np.asarray(coordinates, dtype=float).tolist(),
+            "symbols": list(symbols),
+        },
+    )
+    return strategy.search(source_state, target_state, route.coordinate_plan, fidelity)
 
 
 def _reversed_spec(spec: Any) -> Any:
