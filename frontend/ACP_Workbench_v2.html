@@ -199,6 +199,7 @@ a { color: var(--accent); }
 
 .info-actions { display: flex; gap: 8px; margin-top: 14px; }
 .info-actions .btn { flex: 1; margin: 0; padding: 6px 10px; font-size: 11px; }
+.info-actions .btn.review-action { flex: 0 0 auto; }
 
 .topbar-actions {
   display: flex;
@@ -530,6 +531,7 @@ body.resizing canvas {
 .badge.starting,
 .badge.cancelling { color: var(--amber); border-color: rgba(242, 184, 75, 0.28); background: rgba(242, 184, 75, 0.10); }
 .badge.running { color: var(--accent); border-color: rgba(78, 161, 255, 0.35); background: rgba(78, 161, 255, 0.12); }
+.badge.waiting_review { color: #d7b8ff; border-color: rgba(186, 122, 255, 0.34); background: rgba(186, 122, 255, 0.14); }
 .badge.completed { color: var(--green); border-color: rgba(56, 193, 114, 0.32); background: rgba(56, 193, 114, 0.10); }
 .badge.failed { color: var(--red); border-color: rgba(229, 83, 83, 0.28); background: rgba(229, 83, 83, 0.10); }
 .badge.cancelled,
@@ -614,6 +616,7 @@ body.resizing canvas {
 }
 
 #viewer-3d,
+.viewer-mechanism,
 .viewer-coming-soon,
 .viewer-empty {
   position: absolute;
@@ -621,6 +624,117 @@ body.resizing canvas {
 }
 
 #viewer-3d { z-index: 1; }
+
+.viewer-mechanism {
+  z-index: 2;
+  display: none;
+  padding: 18px;
+  background:
+    linear-gradient(180deg, rgba(10, 14, 20, 0.72), rgba(10, 14, 20, 0.84)),
+    radial-gradient(circle at top left, rgba(78, 161, 255, 0.10), transparent 26%);
+}
+
+.viewer-mechanism-panel {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
+.viewer-mechanism-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.viewer-mechanism-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.viewer-mechanism-meta { font-size: 11px; color: var(--text-tertiary); }
+.viewer-mechanism-canvas {
+  min-height: 0;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  background: rgba(12, 18, 27, 0.78);
+  overflow: auto;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.viewer-mechanism-svg {
+  width: 100%;
+  min-width: 720px;
+  min-height: 100%;
+  display: block;
+}
+
+.viewer-mechanism-detail {
+  min-height: 38px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.viewer-mechanism-empty {
+  display: grid;
+  place-items: center;
+  min-height: 280px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.mech-review-msg {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 12px;
+}
+
+.mech-review-msg.error {
+  color: #ffc5c5;
+  border-color: rgba(229, 83, 83, 0.28);
+  background: rgba(229, 83, 83, 0.09);
+}
+
+.mech-review-msg.success {
+  color: #b8f0c8;
+  border-color: rgba(56, 193, 114, 0.26);
+  background: rgba(56, 193, 114, 0.08);
+}
+
+.review-list { display: grid; gap: 12px; }
+.review-card {
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.025);
+  display: grid;
+  gap: 10px;
+}
+
+.review-card-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
+.review-card-title { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.review-card-meta { font-size: 11px; color: var(--text-tertiary); }
+.review-card-pre {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(8, 12, 18, 0.74);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: "SFMono-Regular", Consolas, monospace;
+}
+
+.review-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.review-actions .btn { flex: 0 0 auto; }
+.review-inline-status { font-size: 11px; color: var(--text-tertiary); }
 
 .viewer-empty,
 .viewer-coming-soon {
@@ -1240,6 +1354,7 @@ option, optgroup {
 
         <div class="viewer-container">
           <div id="viewer-3d"></div>
+          <div class="viewer-mechanism" id="viewer-mechanism" style="display:none;"></div>
           <div class="viewer-empty" id="viewer-empty">
             <div class="viewer-empty-inner">
               <strong data-i18n="viewer.empty_title">等待结构加载</strong>
@@ -1388,6 +1503,31 @@ option, optgroup {
         <div class="charge-spin-row" id="charge-spin-row" style="display:none;">
           <label><span data-i18n="modal.col_charge">电荷</span> <input type="number" id="modal-charge" value="0" step="1"></label>
           <label><span data-i18n="modal.col_spin">自旋多重度</span> <input type="number" id="modal-mult" value="1" step="1" min="1"></label>
+        </div>
+
+        <div class="modal-section" id="mech-builder-panel" style="display:none;">
+          <div class="modal-section-title">机制研究 — 反应坐标构建 (Mechanism Builder)</div>
+          <div class="mech-hint dim" style="font-size:11px;margin-bottom:8px;">
+            反应物为解析的第 1 个结构；产物/TS 初猜为可选的第 2/3 个结构（解析多个结构时按序取用）。
+            在 3D 模型中测量坐标后点击"添加为反应坐标"构建 drive/freeze/monitor 计划。
+          </div>
+          <div class="mech-controls" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+            <button type="button" class="btn ghost" id="mech-add-coord">+ 添加为反应坐标</button>
+            <label style="font-size:12px;">策略
+              <select id="mech-strategy" class="modal-select" style="width:auto;">
+                <option value="guided-scan">guided-scan (推荐)</option>
+                <option value="rph-reverse">rph-reverse (需产物)</option>
+                <option value="direct-ts">direct-ts (需TS初猜)</option>
+              </select>
+            </label>
+            <label style="font-size:12px;">精度
+              <select id="mech-fidelity" class="modal-select" style="width:auto;">
+                <option value="s3">s3 (B97-3c → r2SCAN-3c)</option>
+                <option value="s4">s4 (M062X → wB97M-V)</option>
+              </select>
+            </label>
+          </div>
+          <div id="mech-plan-panel" class="measure-list" style="max-height:160px;overflow-y:auto;border:1px solid var(--border,#333);border-radius:6px;padding:6px;"></div>
         </div>
 
         <div class="structure-preview-wrap" id="structure-preview" style="display:none;">
@@ -1665,6 +1805,31 @@ option, optgroup {
   </div>
 </div>
 
+<div class="modal-overlay" id="mechanism-review-modal" style="display:none;">
+  <div class="modal-dialog modal-dialog-wide">
+    <div class="modal-header">
+      <h2 data-i18n="review.title">审核机制决策点</h2>
+      <button class="modal-close" id="mechanism-review-close">X</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-section">
+        <div class="viewer-mechanism-head">
+          <div>
+            <div class="viewer-mechanism-title" data-i18n="review.pending_title">待处理 DecisionPoints</div>
+            <div class="viewer-mechanism-meta" id="mechanism-review-summary"></div>
+          </div>
+          <span class="badge waiting_review" id="mechanism-review-badge">waiting_review</span>
+        </div>
+      </div>
+      <div id="mechanism-review-message" class="mech-review-msg" style="display:none;"></div>
+      <div id="mechanism-review-list" class="review-list"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn ghost" id="mechanism-review-cancel" data-i18n="modal.cancel">取消</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const API_BASE = "/api/v1";
 let currentLang = localStorage.getItem("acp-lang") || "zh-CN";
@@ -1687,6 +1852,21 @@ let lastStatus = null;
 let lastFileListing = [];
 let folderCache = {};
 let lastSelectedJob = null;
+let activeViewerTab = "3d";
+let mechanismStudiesByJob = {};
+let mechanismStudyDetailsById = {};
+let mechanismStudyReportsById = {};
+let mechanismViewerState = {
+  jobId: "",
+  studyId: "",
+  pathDetail: "",
+  energyDetail: "",
+};
+let mechanismReviewState = {
+  jobId: "",
+  studyId: "",
+  pending: [],
+};
 let bgIndex = 0;
 let labelMode = "none";
 let measureBuffer = [];
@@ -1728,6 +1908,7 @@ const I18N = {
     "status.degraded": "繁忙",
     "status.offline": "离线",
     "status.unknown": "未知",
+    "status.waiting_review": "等待审核",
     "server.summary": "服务器: {host}:{port} | 队列 {queued} | 运行 {running}",
     "server.summary_short": "服务器状态加载中",
     "project.all": "项目: 全部",
@@ -1804,6 +1985,39 @@ const I18N = {
     "tab.path": "反应路径",
     "tab.energy": "能量图",
     "tab.wavefunction": "波函数",
+    "job.review": "审核",
+    "review.title": "审核机制决策点",
+    "review.pending_title": "待处理 DecisionPoints",
+    "review.empty": "当前没有待审核的决策点",
+    "review.summary": "研究 {studyId} · 待处理 {count} 项",
+    "review.refresh_failed": "加载审核数据失败",
+    "review.conflict": "该决策已被其他会话处理",
+    "review.submit_failed": "提交审核失败",
+    "review.submit_ok": "决策已更新",
+    "review.option.continue": "继续",
+    "review.option.promote_to_s4": "升级到 S4",
+    "review.option.stop_branch": "停止分支",
+    "review.option.edit_route": "编辑路线",
+    "review.detail_hint": "点击路径元素查看细节：保真度 / 策略 / 状态",
+    "review.decision_type": "决策类型",
+    "review.decision_status": "状态",
+    "review.decision_created": "创建时间",
+    "review.evidence": "证据摘要",
+    "review.payload": "附加数据",
+    "mech.role.reactant": "反应物",
+    "mech.role.product": "产物",
+    "mech.role.intermediate": "中间体",
+    "mech.role.transition_state": "过渡态",
+    "mech.role.unknown": "状态",
+    "mech.network.title": "反应网络",
+    "mech.network.meta": "{states} 个状态 · {edges} 条基元步骤",
+    "mech.network.empty": "暂无反应网络数据",
+    "mech.network.edge_detail": "{stepId} · fidelity {fidelity} · strategy {strategy} · status {status}",
+    "mech.energy.title": "能量剖面",
+    "mech.energy.meta": "{routes} 条路线 · 相对能量 / kcal·mol⁻¹",
+    "mech.energy.empty": "暂无能量剖面数据",
+    "mech.energy.axis_x": "反应进程",
+    "mech.energy.axis_y": "相对能量 (kcal/mol)",
     "viewer.empty_title": "等待结构加载",
     "viewer.empty": "点击左侧文件树中的 .xyz 文件以加载结构",
     "viewer.coming_title": "功能开发中",
@@ -1966,6 +2180,7 @@ const I18N = {
     "status.degraded": "BUSY",
     "status.offline": "OFFLINE",
     "status.unknown": "UNKNOWN",
+    "status.waiting_review": "Waiting Review",
     "server.summary": "Server: {host}:{port} | Queued {queued} | Running {running}",
     "server.summary_short": "Loading server status",
     "project.all": "Project: All",
@@ -2042,6 +2257,39 @@ const I18N = {
     "tab.path": "Reaction Path",
     "tab.energy": "Energy Plot",
     "tab.wavefunction": "Wavefunction",
+    "job.review": "Review",
+    "review.title": "Review mechanism decision points",
+    "review.pending_title": "Pending DecisionPoints",
+    "review.empty": "No pending decision points",
+    "review.summary": "Study {studyId} · {count} pending",
+    "review.refresh_failed": "Failed to load review data",
+    "review.conflict": "This decision has already been resolved elsewhere",
+    "review.submit_failed": "Failed to submit review",
+    "review.submit_ok": "Decision updated",
+    "review.option.continue": "Continue",
+    "review.option.promote_to_s4": "Promote to S4",
+    "review.option.stop_branch": "Stop branch",
+    "review.option.edit_route": "Edit route",
+    "review.detail_hint": "Click a path element for fidelity / strategy / status details",
+    "review.decision_type": "Decision type",
+    "review.decision_status": "Status",
+    "review.decision_created": "Created",
+    "review.evidence": "Evidence summary",
+    "review.payload": "Additional payload",
+    "mech.role.reactant": "Reactant",
+    "mech.role.product": "Product",
+    "mech.role.intermediate": "Intermediate",
+    "mech.role.transition_state": "Transition state",
+    "mech.role.unknown": "State",
+    "mech.network.title": "Reaction network",
+    "mech.network.meta": "{states} states · {edges} elementary steps",
+    "mech.network.empty": "No reaction-network data available",
+    "mech.network.edge_detail": "{stepId} · fidelity {fidelity} · strategy {strategy} · status {status}",
+    "mech.energy.title": "Energy profile",
+    "mech.energy.meta": "{routes} routes · relative energy / kcal·mol⁻¹",
+    "mech.energy.empty": "No energy-profile data available",
+    "mech.energy.axis_x": "Reaction progress",
+    "mech.energy.axis_y": "Relative energy (kcal/mol)",
     "viewer.empty_title": "Waiting for structure",
     "viewer.empty": "Click a .xyz file in the file tree to load a structure",
     "viewer.coming_title": "In development",
@@ -2292,6 +2540,13 @@ function t(key, vars) {
   return value;
 }
 
+function translateStatus(status) {
+  const raw = String(status || "").trim();
+  const key = "status." + raw.toLowerCase();
+  const translated = t(key);
+  return translated === key ? (raw || t("common.unknown")) : translated;
+}
+
 function applyI18n() {
   document.documentElement.lang = currentLang;
   document.querySelectorAll("[data-i18n]").forEach(function(el) {
@@ -2310,6 +2565,8 @@ function applyI18n() {
   updateInfoPanel(lastSelectedJob);
   renderMeasurementList();
   updateFrameController();
+  if (activeViewerTab === "path" || activeViewerTab === "energy") renderMechanismTabFromCache(activeViewerTab);
+  if (document.getElementById("mechanism-review-modal").style.display === "flex") renderMechanismReviewList();
   if (!selectedJobId) renderLogPlaceholder();
 }
 
@@ -2340,6 +2597,7 @@ function getStatusClass(status) {
   if (s === "completed") return "completed";
   if (s === "failed") return "failed";
   if (s === "running") return "running";
+  if (s === "waiting_review") return "waiting_review";
   if (s === "queued" || s === "starting" || s === "cancelling" || s === "pending") return s;
   if (s === "cancelled") return "cancelled";
   return "idle";
@@ -2348,13 +2606,565 @@ function getStatusClass(status) {
 function createStatusBadge(status) {
   const badge = document.createElement("span");
   badge.className = "badge " + getStatusClass(status);
-  badge.textContent = String(status || t("common.unknown"));
+  badge.textContent = translateStatus(status);
   return badge;
 }
 
 function normalizedProgress(job) {
   const raw = job && typeof job.progress === "number" ? job.progress : 0;
   return Math.max(0, Math.min(100, Math.round(raw * 100)));
+}
+
+function isActiveJobStatus(status) {
+  const s = String(status || "").toLowerCase();
+  return s === "queued" || s === "starting" || s === "running" || s === "cancelling" || s === "pending" || s === "waiting_review";
+}
+
+function mechanismRoleLabel(role) {
+  const key = "mech.role." + String(role || "unknown").toLowerCase();
+  const translated = t(key);
+  return translated === key ? (role || t("mech.role.unknown")) : translated;
+}
+
+function formatMechanismNumber(value, digits) {
+  if (typeof value !== "number" || !isFinite(value)) return t("common.none");
+  return value.toFixed(digits == null ? 2 : digits);
+}
+
+function stringifyMechanismPayload(value) {
+  if (value == null) return t("common.none");
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch (e) {
+    return String(value);
+  }
+}
+
+function summarizeDecisionEvidence(decision) {
+  let payload = decision && decision.payload ? decision.payload : {};
+  if (typeof payload === "string") {
+    try { payload = JSON.parse(payload); } catch (e) { return payload; }
+  }
+  const lines = [];
+  if (payload.evidence_summary) lines.push(String(payload.evidence_summary));
+  if (Array.isArray(payload.quality_gates) && payload.quality_gates.length) {
+    lines.push(payload.quality_gates.map(function(gate) {
+      return [gate.gate_id || "gate", gate.status || "unknown", gate.suggested_action || ""].filter(Boolean).join(" · ");
+    }).join("\n"));
+  }
+  if (payload.energy_profile_snippet) lines.push(stringifyMechanismPayload(payload.energy_profile_snippet));
+  if (payload.evidence) lines.push(stringifyMechanismPayload(payload.evidence));
+  if (!lines.length) lines.push(stringifyMechanismPayload(payload));
+  return lines.join("\n\n");
+}
+
+function getMechanismViewerContainer() {
+  return document.getElementById("viewer-mechanism");
+}
+
+function getPrimaryMechanismStudy(jobId) {
+  const studies = mechanismStudiesByJob[String(jobId || "")] || [];
+  if (!studies.length) return null;
+  return studies.slice().sort(function(a, b) {
+    const ap = a && a.n_decisions_pending ? 0 : 1;
+    const bp = b && b.n_decisions_pending ? 0 : 1;
+    if (ap !== bp) return ap - bp;
+    const ad = new Date(a && (a.updated_at || a.created_at) || 0).getTime();
+    const bd = new Date(b && (b.updated_at || b.created_at) || 0).getTime();
+    return bd - ad;
+  })[0];
+}
+
+async function fetchMechanismStudiesForJob(jobId) {
+  if (!jobId) return [];
+  try {
+    const body = await api("/mechanism-studies?job_id=" + encodeURIComponent(jobId));
+    const studies = Array.isArray(body) ? body : (body && Array.isArray(body.studies) ? body.studies : []);
+    mechanismStudiesByJob[String(jobId)] = studies;
+    return studies;
+  } catch (e) {
+    mechanismStudiesByJob[String(jobId)] = [];
+    return [];
+  }
+}
+
+async function fetchMechanismStudyDetail(studyId) {
+  if (!studyId) return null;
+  if (mechanismStudyDetailsById[String(studyId)]) return mechanismStudyDetailsById[String(studyId)];
+  try {
+    const body = await api("/mechanism-studies/" + encodeURIComponent(studyId));
+    mechanismStudyDetailsById[String(studyId)] = body || null;
+    return body || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function fetchMechanismStudyReport(studyId) {
+  if (!studyId) return null;
+  if (Object.prototype.hasOwnProperty.call(mechanismStudyReportsById, String(studyId))) {
+    return mechanismStudyReportsById[String(studyId)];
+  }
+  try {
+    const body = await api("/mechanism-studies/" + encodeURIComponent(studyId) + "/report");
+    mechanismStudyReportsById[String(studyId)] = body || null;
+    return body || null;
+  } catch (e) {
+    mechanismStudyReportsById[String(studyId)] = null;
+    return null;
+  }
+}
+
+function resetMechanismCachesForJob(jobId) {
+  if (!jobId) return;
+  delete mechanismStudiesByJob[String(jobId)];
+  Object.keys(mechanismStudyDetailsById).forEach(function(key) {
+    const detail = mechanismStudyDetailsById[key];
+    if (detail && String(detail.job_id || "") === String(jobId)) delete mechanismStudyDetailsById[key];
+  });
+  Object.keys(mechanismStudyReportsById).forEach(function(key) {
+    const detail = mechanismStudyDetailsById[key];
+    if (!detail || String(detail.job_id || "") === String(jobId)) delete mechanismStudyReportsById[key];
+  });
+}
+
+function jobIdOf(job) {
+  return job ? String(job.id || job.job_id || "") : "";
+}
+
+function buildReactionNetworkSvg(report) {
+  const network = report && report.reaction_network ? report.reaction_network : null;
+  if (!network || !Array.isArray(network.nodes) || !network.nodes.length || !Array.isArray(network.edges) || !network.edges.length) return "";
+  const nodes = network.nodes.slice();
+  const edges = network.edges.slice();
+  const nodeMap = {};
+  nodes.forEach(function(node) { nodeMap[String(node.state_id)] = node; });
+  const indegree = {};
+  const outgoing = {};
+  nodes.forEach(function(node) {
+    indegree[String(node.state_id)] = 0;
+    outgoing[String(node.state_id)] = [];
+  });
+  edges.forEach(function(edge) {
+    const sourceId = String(edge.source_state_id || "");
+    const sinkId = String(edge.sink_state_id || "");
+    outgoing[sourceId] = outgoing[sourceId] || [];
+    outgoing[sourceId].push(edge);
+    indegree[sinkId] = (indegree[sinkId] || 0) + 1;
+  });
+  const depth = {};
+  const queue = [];
+  nodes.forEach(function(node) {
+    const id = String(node.state_id);
+    if (!indegree[id]) {
+      depth[id] = 0;
+      queue.push(id);
+    }
+  });
+  if (!queue.length && nodes.length) {
+    depth[String(nodes[0].state_id)] = 0;
+    queue.push(String(nodes[0].state_id));
+  }
+  while (queue.length) {
+    const id = queue.shift();
+    const nextEdges = outgoing[id] || [];
+    nextEdges.forEach(function(edge) {
+      const sinkId = String(edge.sink_state_id || "");
+      const nextDepth = (depth[id] || 0) + 1;
+      if (depth[sinkId] == null || nextDepth > depth[sinkId]) depth[sinkId] = nextDepth;
+      indegree[sinkId] = (indegree[sinkId] || 0) - 1;
+      if (indegree[sinkId] <= 0) queue.push(sinkId);
+    });
+  }
+  nodes.forEach(function(node) {
+    const id = String(node.state_id);
+    if (depth[id] == null) depth[id] = 0;
+  });
+  const byDepth = {};
+  nodes.forEach(function(node) {
+    const level = depth[String(node.state_id)] || 0;
+    if (!byDepth[level]) byDepth[level] = [];
+    byDepth[level].push(node);
+  });
+  Object.keys(byDepth).forEach(function(level) {
+    byDepth[level].sort(function(a, b) { return String(a.state_id).localeCompare(String(b.state_id)); });
+  });
+  const pairCount = {};
+  edges.forEach(function(edge) {
+    const key = String(edge.source_state_id) + "->" + String(edge.sink_state_id);
+    pairCount[key] = (pairCount[key] || 0) + 1;
+  });
+  const pairIndex = {};
+  const nodePos = {};
+  const slotUsage = {};
+  nodes.forEach(function(node) { slotUsage[String(node.state_id)] = 0; });
+  const colWidth = 240;
+  const rowHeight = 120;
+  const nodeWidth = 132;
+  const nodeHeight = 54;
+  Object.keys(byDepth).sort(function(a, b) { return Number(a) - Number(b); }).forEach(function(levelKey) {
+    const list = byDepth[levelKey];
+    list.forEach(function(node) {
+      const id = String(node.state_id);
+      const y = 76 + slotUsage[id] * rowHeight;
+      slotUsage[id] += 1;
+      nodePos[id] = { x: 80 + Number(levelKey) * colWidth, y: y };
+    });
+  });
+  edges.forEach(function(edge) {
+    const key = String(edge.source_state_id) + "->" + String(edge.sink_state_id);
+    const index = pairIndex[key] || 0;
+    pairIndex[key] = index + 1;
+    const sourceId = String(edge.source_state_id || "");
+    const sinkId = String(edge.sink_state_id || "");
+    const source = nodePos[sourceId];
+    const sink = nodePos[sinkId];
+    if (!source || !sink) return;
+    const total = pairCount[key] || 1;
+    const offset = (index - (total - 1) / 2) * 48;
+    slotUsage[sourceId] = Math.max(slotUsage[sourceId], 1);
+    slotUsage[sinkId] = Math.max(slotUsage[sinkId], 1);
+    const y = ((source.y + sink.y) / 2) + offset;
+    edge.__layout = {
+      sx: source.x + nodeWidth,
+      sy: source.y + nodeHeight / 2,
+      tx: sink.x,
+      ty: sink.y + nodeHeight / 2,
+      mx: (source.x + nodeWidth + sink.x) / 2,
+      my: y,
+    };
+  });
+  const maxDepth = Math.max.apply(null, Object.keys(byDepth).map(function(k) { return Number(k); }));
+  const maxY = Math.max.apply(null, nodes.map(function(node) { return (nodePos[String(node.state_id)] || { y: 0 }).y; }).concat(edges.map(function(edge) { return edge.__layout ? edge.__layout.my : 0; })));
+  const width = Math.max(860, 220 + (maxDepth + 1) * colWidth);
+  const height = Math.max(360, maxY + 150);
+  const roleFill = {
+    reactant: "rgba(78, 161, 255, 0.18)",
+    product: "rgba(56, 193, 114, 0.18)",
+    intermediate: "rgba(242, 184, 75, 0.16)",
+  };
+  let svg = '<svg class="viewer-mechanism-svg" viewBox="0 0 ' + width + ' ' + height + '" xmlns="http://www.w3.org/2000/svg">';
+  svg += '<defs><linearGradient id="mech-edge-glow" x1="0" x2="1"><stop offset="0%" stop-color="#4ea1ff" stop-opacity="0.25"/><stop offset="100%" stop-color="#d7b8ff" stop-opacity="0.18"/></linearGradient></defs>';
+  svg += '<rect width="100%" height="100%" fill="transparent"/>';
+  edges.forEach(function(edge, index) {
+    if (!edge.__layout) return;
+    const l = edge.__layout;
+    const barrier = edge.barrier_forward_kcal != null ? formatMechanismNumber(edge.barrier_forward_kcal, 1) + ' kcal/mol' : '';
+    svg += '<g class="mech-edge" data-edge-index="' + index + '" style="cursor:pointer">';
+    svg += '<path d="M ' + l.sx + ' ' + l.sy + ' L ' + l.mx + ' ' + l.my + ' L ' + l.tx + ' ' + l.ty + '" stroke="url(#mech-edge-glow)" stroke-width="2.2" fill="none"/>';
+    svg += '<path d="M ' + (l.mx - 12) + ' ' + l.my + ' L ' + l.mx + ' ' + (l.my - 15) + ' L ' + (l.mx + 12) + ' ' + l.my + ' L ' + l.mx + ' ' + (l.my + 15) + ' Z" fill="#d7b8ff" fill-opacity="0.18" stroke="#d7b8ff" stroke-width="1.4"/>';
+    if (barrier) svg += '<text x="' + l.mx + '" y="' + (l.my - 22) + '" text-anchor="middle" fill="#e5edf5" font-size="11">' + escapeHtml(barrier) + '</text>';
+    if (edge.ts_id) svg += '<text x="' + l.mx + '" y="' + (l.my + 31) + '" text-anchor="middle" fill="#8fa1b5" font-size="10">' + escapeHtml(String(edge.ts_id)) + '</text>';
+    svg += '</g>';
+  });
+  nodes.forEach(function(node) {
+    const id = String(node.state_id);
+    const p = nodePos[id];
+    if (!p) return;
+    const role = String(node.role || "unknown").toLowerCase();
+    const fill = roleFill[role] || 'rgba(255,255,255,0.05)';
+    const energy = node.energy_hartree == null ? t("common.none") : formatMechanismNumber(node.energy_hartree, 6) + ' Ha';
+    svg += '<g>';
+    svg += '<rect x="' + p.x + '" y="' + p.y + '" rx="14" ry="14" width="' + nodeWidth + '" height="' + nodeHeight + '" fill="' + fill + '" stroke="rgba(255,255,255,0.14)"/>';
+    svg += '<text x="' + (p.x + 14) + '" y="' + (p.y + 20) + '" fill="#e5edf5" font-size="12" font-weight="700">' + escapeHtml(mechanismRoleLabel(role)) + '</text>';
+    svg += '<text x="' + (p.x + 14) + '" y="' + (p.y + 36) + '" fill="#b0bec8" font-size="11">' + escapeHtml(id) + '</text>';
+    svg += '<text x="' + (p.x + 14) + '" y="' + (p.y + 50) + '" fill="#6b7b8a" font-size="10">' + escapeHtml(energy) + '</text>';
+    svg += '</g>';
+  });
+  svg += '</svg>';
+  return svg;
+}
+
+function buildEnergyProfileSvg(report) {
+  const profile = report && report.mechanism_profile ? report.mechanism_profile : null;
+  if (!profile || !Array.isArray(profile.routes) || !profile.routes.length) return "";
+  const routes = profile.routes.filter(function(route) { return route && Array.isArray(route.points) && route.points.length; });
+  if (!routes.length) return "";
+  const width = 920;
+  const height = 420;
+  const pad = { left: 74, right: 28, top: 30, bottom: 54 };
+  const allEnergies = [];
+  routes.forEach(function(route) {
+    route.points.forEach(function(point) {
+      if (typeof point.energy_kcal === "number" && isFinite(point.energy_kcal)) allEnergies.push(point.energy_kcal);
+    });
+  });
+  if (!allEnergies.length) return "";
+  const minEnergy = Math.min.apply(null, allEnergies.concat([0]));
+  const maxEnergy = Math.max.apply(null, allEnergies.concat([0]));
+  const spread = Math.max(10, maxEnergy - minEnergy || 10);
+  const yMin = minEnergy - spread * 0.12;
+  const yMax = maxEnergy + spread * 0.12;
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const routeColors = ["#4ea1ff", "#38c172", "#f2b84b", "#d7b8ff", "#ff8f66"];
+  function xFor(v) {
+    const raw = typeof v === "number" && isFinite(v) ? v : 0;
+    return pad.left + Math.max(0, Math.min(1, raw)) * plotW;
+  }
+  function yFor(v) {
+    return pad.top + (1 - ((v - yMin) / (yMax - yMin || 1))) * plotH;
+  }
+  let svg = '<svg class="viewer-mechanism-svg" viewBox="0 0 ' + width + ' ' + height + '" xmlns="http://www.w3.org/2000/svg">';
+  svg += '<rect width="100%" height="100%" fill="transparent"/>';
+  for (let i = 0; i <= 4; i += 1) {
+    const energy = yMin + ((yMax - yMin) * i / 4);
+    const y = yFor(energy);
+    svg += '<line x1="' + pad.left + '" y1="' + y + '" x2="' + (width - pad.right) + '" y2="' + y + '" stroke="rgba(255,255,255,0.08)" stroke-dasharray="4 6"/>';
+    svg += '<text x="' + (pad.left - 12) + '" y="' + (y + 4) + '" text-anchor="end" fill="#8fa1b5" font-size="10">' + escapeHtml(formatMechanismNumber(energy, 1)) + '</text>';
+  }
+  const zeroY = yFor(0);
+  svg += '<line x1="' + pad.left + '" y1="' + zeroY + '" x2="' + (width - pad.right) + '" y2="' + zeroY + '" stroke="rgba(78,161,255,0.32)" stroke-width="1.2"/>';
+  svg += '<line x1="' + pad.left + '" y1="' + pad.top + '" x2="' + pad.left + '" y2="' + (height - pad.bottom) + '" stroke="rgba(255,255,255,0.18)"/>';
+  svg += '<line x1="' + pad.left + '" y1="' + (height - pad.bottom) + '" x2="' + (width - pad.right) + '" y2="' + (height - pad.bottom) + '" stroke="rgba(255,255,255,0.18)"/>';
+  routes.forEach(function(route, routeIndex) {
+    const color = routeColors[routeIndex % routeColors.length];
+    const path = [];
+    route.points.forEach(function(point) {
+      if (typeof point.energy_kcal !== "number" || !isFinite(point.energy_kcal)) return;
+      path.push((path.length ? 'L' : 'M') + xFor(point.progress) + ' ' + yFor(point.energy_kcal));
+    });
+    if (!path.length) return;
+    svg += '<path d="' + path.join(' ') + '" fill="none" stroke="' + color + '" stroke-width="2.4"/>';
+    route.points.forEach(function(point, pointIndex) {
+      if (typeof point.energy_kcal !== "number" || !isFinite(point.energy_kcal)) return;
+      const x = xFor(point.progress);
+      const y = yFor(point.energy_kcal);
+      const isTs = pointIndex % 2 === 1;
+      if (isTs) {
+        svg += '<line x1="' + x + '" y1="' + (height - pad.bottom) + '" x2="' + x + '" y2="' + y + '" stroke="' + color + '" stroke-opacity="0.34" stroke-dasharray="5 5"/>';
+      }
+      svg += '<circle cx="' + x + '" cy="' + y + '" r="' + (isTs ? 4.5 : 3.6) + '" fill="' + color + '" fill-opacity="' + (isTs ? '0.82' : '1') + '" stroke="#0b0f14" stroke-width="1.2"/>';
+      svg += '<text x="' + x + '" y="' + (y - 10) + '" text-anchor="middle" fill="#d6deea" font-size="10">' + escapeHtml(formatMechanismNumber(point.energy_kcal, 1)) + '</text>';
+    });
+    svg += '<text x="' + (width - pad.right - 8) + '" y="' + (pad.top + 16 + routeIndex * 16) + '" text-anchor="end" fill="' + color + '" font-size="11">' + escapeHtml(String(route.route_id || ('route-' + (routeIndex + 1)))) + '</text>';
+  });
+  svg += '<text x="' + (width / 2) + '" y="' + (height - 16) + '" text-anchor="middle" fill="#8fa1b5" font-size="11">' + escapeHtml(t("mech.energy.axis_x")) + '</text>';
+  svg += '<text x="18" y="' + (height / 2) + '" text-anchor="middle" fill="#8fa1b5" font-size="11" transform="rotate(-90 18 ' + (height / 2) + ')">' + escapeHtml(t("mech.energy.axis_y")) + '</text>';
+  svg += '</svg>';
+  return svg;
+}
+
+function buildMechanismPanelMarkup(kind, title, meta, svg, detail, emptyText) {
+  if (!svg) return "";
+  return '<div class="viewer-mechanism-panel" data-kind="' + escapeHtml(kind) + '">' +
+    '<div class="viewer-mechanism-head"><div><div class="viewer-mechanism-title">' + escapeHtml(title) + '</div><div class="viewer-mechanism-meta">' + escapeHtml(meta) + '</div></div></div>' +
+    '<div class="viewer-mechanism-canvas">' + svg + '</div>' +
+    '<div class="viewer-mechanism-detail">' + escapeHtml(detail || emptyText || '') + '</div>' +
+    '</div>';
+}
+
+function renderMechanismPlaceholder() {
+  const mech = getMechanismViewerContainer();
+  if (!mech) return;
+  mech.innerHTML = "";
+  mech.style.display = "none";
+}
+
+function bindMechanismViewerInteractions() {
+  const mech = getMechanismViewerContainer();
+  if (!mech) return;
+  mech.querySelectorAll("[data-edge-index]").forEach(function(el) {
+    el.addEventListener("click", function() {
+      const index = parseInt(el.getAttribute("data-edge-index"), 10);
+      const report = mechanismStudyReportsById[mechanismViewerState.studyId] || null;
+      const network = report && report.reaction_network ? report.reaction_network : null;
+      const edge = network && Array.isArray(network.edges) ? network.edges[index] : null;
+      if (!edge) return;
+      mechanismViewerState.pathDetail = t("mech.network.edge_detail", {
+        stepId: edge.step_id || "step",
+        fidelity: edge.fidelity || t("common.none"),
+        strategy: edge.path_strategy || t("common.none"),
+        status: translateStatus(edge.status || t("common.unknown")),
+      });
+      const detail = mech.querySelector(".viewer-mechanism-detail");
+      if (detail) detail.textContent = mechanismViewerState.pathDetail;
+    });
+  });
+}
+
+function renderMechanismTabFromCache(tab) {
+  const mech = getMechanismViewerContainer();
+  if (!mech) return false;
+  const jobId = mechanismViewerState.jobId;
+  const studyId = mechanismViewerState.studyId;
+  const studies = mechanismStudiesByJob[String(jobId || "")] || [];
+  const report = mechanismStudyReportsById[String(studyId || "")];
+  if (!jobId || !studies.length || !report) return false;
+  if (tab === "path") {
+    const svg = buildReactionNetworkSvg(report);
+    if (!svg) return false;
+    mech.innerHTML = buildMechanismPanelMarkup("path", t("mech.network.title"), t("mech.network.meta", {
+      states: report.reaction_network && report.reaction_network.nodes ? report.reaction_network.nodes.length : 0,
+      edges: report.reaction_network && report.reaction_network.edges ? report.reaction_network.edges.length : 0,
+    }), svg, mechanismViewerState.pathDetail || t("review.detail_hint"), t("mech.network.empty"));
+    mech.style.display = "block";
+    bindMechanismViewerInteractions();
+    return true;
+  }
+  if (tab === "energy") {
+    const svg = buildEnergyProfileSvg(report);
+    if (!svg) return false;
+    const routeCount = report.mechanism_profile && report.mechanism_profile.routes ? report.mechanism_profile.routes.length : 0;
+    mech.innerHTML = buildMechanismPanelMarkup("energy", t("mech.energy.title"), t("mech.energy.meta", { routes: routeCount }), svg, mechanismViewerState.energyDetail || t("mech.energy.axis_y"), t("mech.energy.empty"));
+    mech.style.display = "block";
+    return true;
+  }
+  return false;
+}
+
+async function ensureMechanismViewerData(job) {
+  if (!job || (job.spec && job.spec.workflow) !== "mechanism") return false;
+  const jobId = jobIdOf(job);
+  if (!jobId) return false;
+  const studies = await fetchMechanismStudiesForJob(jobId);
+  if (!studies.length) return false;
+  const primary = getPrimaryMechanismStudy(jobId);
+  if (!primary || !primary.id) return false;
+  mechanismViewerState.jobId = jobId;
+  mechanismViewerState.studyId = String(primary.id);
+  await fetchMechanismStudyDetail(primary.id);
+  await fetchMechanismStudyReport(primary.id);
+  return true;
+}
+
+async function renderMechanismTab(job, tab) {
+  if (!job || (job.spec && job.spec.workflow) !== "mechanism") return false;
+  const ready = await ensureMechanismViewerData(job);
+  if (!ready) return false;
+  return renderMechanismTabFromCache(tab);
+}
+
+function setMechanismReviewMessage(message, kind) {
+  const box = document.getElementById("mechanism-review-message");
+  if (!box) return;
+  if (!message) {
+    box.style.display = "none";
+    box.textContent = "";
+    box.className = "mech-review-msg";
+    return;
+  }
+  box.style.display = "block";
+  box.className = "mech-review-msg" + (kind ? " " + kind : "");
+  box.textContent = message;
+}
+
+function renderMechanismReviewList() {
+  const list = document.getElementById("mechanism-review-list");
+  const summary = document.getElementById("mechanism-review-summary");
+  const badge = document.getElementById("mechanism-review-badge");
+  if (!list || !summary || !badge) return;
+  const pending = mechanismReviewState.pending || [];
+  summary.textContent = t("review.summary", { studyId: mechanismReviewState.studyId || t("common.none"), count: pending.length });
+  badge.textContent = translateStatus("waiting_review");
+  if (!pending.length) {
+    list.innerHTML = '<div class="viewer-mechanism-empty">' + escapeHtml(t("review.empty")) + '</div>';
+    return;
+  }
+  list.innerHTML = pending.map(function(decision) {
+    const payloadText = summarizeDecisionEvidence(decision);
+    const extraPayload = decision && decision.payload && (decision.payload.route || decision.payload.stationary_points || decision.payload.quality_gates)
+      ? stringifyMechanismPayload({
+          route: decision.payload.route,
+          stationary_points: decision.payload.stationary_points,
+          quality_gates: decision.payload.quality_gates,
+        }) : "";
+    return '<div class="review-card" data-decision-id="' + escapeHtml(String(decision.id || "")) + '">' +
+      '<div class="review-card-head"><div><div class="review-card-title">' + escapeHtml(String(decision.id || "decision")) + '</div><div class="review-card-meta">' +
+      escapeHtml(t("review.decision_type")) + ': ' + escapeHtml(String(decision.type || t("common.unknown"))) + ' · ' +
+      escapeHtml(t("review.decision_status")) + ': ' + escapeHtml(translateStatus(decision.status)) + ' · ' +
+      escapeHtml(t("review.decision_created")) + ': ' + escapeHtml(formatDateTime(decision.created_at)) +
+      '</div></div>' + createStatusBadge(decision.status).outerHTML + '</div>' +
+      '<div><div class="review-card-meta">' + escapeHtml(t("review.evidence")) + '</div><pre class="review-card-pre">' + escapeHtml(payloadText) + '</pre></div>' +
+      (extraPayload ? '<div><div class="review-card-meta">' + escapeHtml(t("review.payload")) + '</div><pre class="review-card-pre">' + escapeHtml(extraPayload) + '</pre></div>' : '') +
+      '<div class="review-actions">' +
+      '<button class="btn primary" data-resolution="continue">' + escapeHtml(t("review.option.continue")) + '</button>' +
+      '<button class="btn" data-resolution="promote_to_s4">' + escapeHtml(t("review.option.promote_to_s4")) + '</button>' +
+      '<button class="btn" data-resolution="edit_route">' + escapeHtml(t("review.option.edit_route")) + '</button>' +
+      '<button class="btn danger" data-resolution="stop_branch">' + escapeHtml(t("review.option.stop_branch")) + '</button>' +
+      '<span class="review-inline-status"></span>' +
+      '</div></div>';
+  }).join("");
+  list.querySelectorAll("[data-resolution]").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      const card = btn.closest(".review-card");
+      if (!card) return;
+      submitMechanismDecision(card.getAttribute("data-decision-id"), btn.getAttribute("data-resolution"), card);
+    });
+  });
+}
+
+function openMechanismReviewModal() {
+  document.getElementById("mechanism-review-modal").style.display = "flex";
+}
+
+function closeMechanismReviewModal() {
+  document.getElementById("mechanism-review-modal").style.display = "none";
+  setMechanismReviewMessage("", "");
+}
+
+async function loadMechanismReview(job) {
+  if (!job) return;
+  const ready = await ensureMechanismViewerData(job);
+  if (!ready || !mechanismViewerState.studyId) {
+    setMechanismReviewMessage(t("review.refresh_failed"), "error");
+    mechanismReviewState.pending = [];
+    renderMechanismReviewList();
+    openMechanismReviewModal();
+    return;
+  }
+  const detail = await fetchMechanismStudyDetail(mechanismViewerState.studyId);
+  mechanismReviewState.jobId = jobIdOf(job);
+  mechanismReviewState.studyId = mechanismViewerState.studyId;
+  // API returns {..., study_json, decisions}; tolerate alternate shapes.
+  const studyBody = detail && (detail.study || detail.study_json);
+  let decisionPoints = detail && Array.isArray(detail.decisions) ? detail.decisions : null;
+  if (!decisionPoints && studyBody && Array.isArray(studyBody.decision_points)) {
+    decisionPoints = studyBody.decision_points;
+  }
+  mechanismReviewState.pending = Array.isArray(decisionPoints)
+    ? decisionPoints.filter(function(point) { return String(point && point.status || "").toLowerCase() === "waiting"; }) : [];
+  setMechanismReviewMessage("", "");
+  renderMechanismReviewList();
+  openMechanismReviewModal();
+}
+
+function extractHttpStatus(message) {
+  const match = String(message || "").match(/HTTP\s+(\d+)/i);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+async function submitMechanismDecision(decisionId, resolution, card) {
+  if (!mechanismReviewState.studyId || !decisionId || !resolution) return;
+  const inline = card ? card.querySelector(".review-inline-status") : null;
+  const buttons = card ? card.querySelectorAll("[data-resolution]") : [];
+  buttons.forEach(function(btn) { btn.disabled = true; });
+  if (inline) inline.textContent = t("common.loading");
+  try {
+    const updatedDecision = await api("/mechanism-studies/" + encodeURIComponent(mechanismReviewState.studyId) + "/decisions/" + encodeURIComponent(decisionId), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resolution: resolution }),
+    });
+    setMechanismReviewMessage(t("review.submit_ok"), "success");
+    resetMechanismCachesForJob(mechanismReviewState.jobId);
+    await refreshJobs();
+    const refreshed = await api("/jobs/" + encodeURIComponent(mechanismReviewState.jobId));
+    updateInfoPanel(refreshed);
+    if (String(selectedJobId) === String(mechanismReviewState.jobId)) lastSelectedJob = refreshed;
+    await ensureMechanismViewerData(refreshed);
+    renderMechanismTabFromCache(activeViewerTab);
+    await loadMechanismReview(refreshed);
+    if (inline) inline.textContent = translateStatus(updatedDecision && updatedDecision.status ? updatedDecision.status : "completed");
+  } catch (e) {
+    const statusCode = extractHttpStatus(e && e.message);
+    const conflict = statusCode === 409 || String(e.message || "").indexOf("409") >= 0 || String(e.message || "").toLowerCase().indexOf("already") >= 0;
+    const message = conflict ? t("review.conflict") : t("review.submit_failed");
+    if (inline) inline.textContent = message;
+    setMechanismReviewMessage(message, "error");
+    buttons.forEach(function(btn) { btn.disabled = false; });
+  }
 }
 
 function initViewer() {
@@ -2503,27 +3313,41 @@ function clearViewer() {
     viewer.setBackgroundColor(molDoc.bgColor);
     viewer.render();
   }
+  renderMechanismPlaceholder();
   showEmpty();
   renderMeasurementList();
   updateFrameController();
 }
 
-function setViewerTab(tab) {
+async function setViewerTab(tab) {
+  activeViewerTab = tab;
   document.querySelectorAll(".canvas-tab").forEach(function(btn) {
     btn.classList.toggle("active", btn.getAttribute("data-tab") === tab);
   });
   const comingSoon = document.getElementById("viewer-coming-soon");
   const empty = document.getElementById("viewer-empty");
   const frameController = document.getElementById("frame-controller");
+  const mechanism = getMechanismViewerContainer();
   if (tab === "3d") {
+    if (mechanism) mechanism.style.display = "none";
     comingSoon.style.display = "none";
     empty.style.display = viewerModelLoaded ? "none" : "grid";
     frameController.style.display = molDoc.frames.length > 1 ? "flex" : "none";
     return;
   }
-  comingSoon.style.display = "grid";
   empty.style.display = "none";
   frameController.style.display = "none";
+  if (tab === "path" || tab === "energy") {
+    comingSoon.style.display = "none";
+    if (mechanism) mechanism.style.display = "none";
+    const rendered = await renderMechanismTab(lastSelectedJob, tab);
+    if (rendered) {
+      comingSoon.style.display = "none";
+      return;
+    }
+  }
+  renderMechanismPlaceholder();
+  comingSoon.style.display = "grid";
 }
 
 function statusPillMode(body) {
@@ -2755,6 +3579,7 @@ async function submitDeleteJobModal() {
     await api("/jobs/" + encodeURIComponent(deleteJobId) + "?delete_data=" + (deleteData ? "true" : "false"), {
       method: "DELETE"
     });
+    resetMechanismCachesForJob(deleteJobId);
     closeDeleteJobModal();
     selectedJobId = "";
     lastSelectedJob = null;
@@ -2780,6 +3605,7 @@ async function cancelJob(jobId) {
   if (!jobId) return;
   try {
     await api("/jobs/" + encodeURIComponent(jobId) + "/cancel", { method: "POST" });
+    resetMechanismCachesForJob(jobId);
     await refreshJobs();
   } catch (e) {
     window.alert((t("job.cancel_failed") || "取消失败") + ": " + e.message);
@@ -3298,13 +4124,20 @@ function renderInfoInto(container, job) {
 
   const actions = document.createElement("div");
   actions.className = "info-actions";
-  const isActive = job.status === "queued" || job.status === "starting" || job.status === "running" || job.status === "cancelling" || job.status === "pending";
+  const isActive = isActiveJobStatus(job.status);
   if (isActive) {
     const cancelBtn = document.createElement("button");
     cancelBtn.className = "btn";
     cancelBtn.textContent = t("job.cancel") || "取消任务";
     cancelBtn.addEventListener("click", function() { cancelJob(job.id || job.job_id); });
     actions.appendChild(cancelBtn);
+  }
+  if (String(job.status || "").toLowerCase() === "waiting_review") {
+    const reviewBtn = document.createElement("button");
+    reviewBtn.className = "btn primary review-action";
+    reviewBtn.textContent = t("job.review") || "审核";
+    reviewBtn.addEventListener("click", function() { loadMechanismReview(job); });
+    actions.appendChild(reviewBtn);
   }
   const moveBtn = document.createElement("button");
   moveBtn.className = "btn";
@@ -3547,6 +4380,155 @@ function handleMeasureClick(atom) {
     renderMolDoc();
     updateInfoPanel(lastSelectedJob);
   }
+}
+
+// ── Mechanism Builder: reaction-coordinate plan assembly ────────────────
+// Reuses the existing measurement machinery (2/3/4-atom click selection):
+// each measurement row becomes a CoordinateSpec; the user picks start/end
+// targets and a role (drive / freeze / monitor) before submit.
+
+function currentMechanismAtoms() {
+  // Reactant geometry is the reference frame for coordinate plans.
+  if (wizardStructures.length && wizardStructures[0].xyz) {
+    return parseXyzAtoms(wizardStructures[0].xyz);
+  }
+  return currentAtoms();
+}
+
+function addCoordinateFromMeasurement(m) {
+  var kind = m.type === "distance" ? "distance" : m.type === "angle" ? "angle" : "dihedral";
+  var startVal = m.value !== undefined && m.value !== null ? m.value : 0;
+  var spec = {
+    id: "rc" + (mechCoordinatePlans.length + 1),
+    kind: kind,
+    atoms: m.atoms.slice(),
+    role: "drive",
+    start: Math.round(startVal * 100) / 100,
+    end: Math.round(startVal * 100) / 100,
+  };
+  mechCoordinatePlans.push(spec);
+  return spec;
+}
+
+function removeCoordinatePlan(index) {
+  if (index >= 0 && index < mechCoordinatePlans.length) mechCoordinatePlans.splice(index, 1);
+  renderMechanismPlanPanel();
+}
+
+function updateCoordinatePlan(index, field, value) {
+  if (index < 0 || index >= mechCoordinatePlans.length) return;
+  var spec = mechCoordinatePlans[index];
+  if (field === "role") spec.role = value;
+  else if (field === "start") spec.start = parseFloat(value);
+  else if (field === "end") spec.end = parseFloat(value);
+  renderMechanismPlanPanel();
+}
+
+function buildMechanismRoutes() {
+  // Compile the current plan list into route dicts for JobSpec.input.routes.
+  var plan = {
+    coordinates: mechCoordinatePlans.slice(),
+    points: 21,
+    coupling: "synchronous",
+    start_from: mechProductStructure ? "reactant" : "reactant",
+  };
+  var routes = [{
+    route_id: "route-1",
+    coordinate_plan: plan,
+    path_strategy: mechStrategy || "guided-scan",
+    fidelity: mechFidelity || "s3",
+  }];
+  return routes;
+}
+
+function renderMechanismPlanPanel() {
+  var panel = document.getElementById("mech-plan-panel");
+  if (!panel) return;
+  if (!mechCoordinatePlans.length) {
+    panel.innerHTML = '<div class="muted">' +
+      (t("mech.no_coords") || "使用下方的测量工具点击原子构建反应坐标（距离 2 / 角度 3 / 二面角 4 个原子）") +
+      "</div>";
+    return;
+  }
+  var html = "";
+  mechCoordinatePlans.forEach(function(spec, i) {
+    var typeLabel = spec.kind === "distance" ? "距离" : spec.kind === "angle" ? "角度" : "二面角";
+    var roleOpts = '<select data-idx="' + i + '" data-field="role">' +
+      '<option value="drive"' + (spec.role === "drive" ? " selected" : "") + ">Drive</option>" +
+      '<option value="freeze"' + (spec.role === "freeze" ? " selected" : "") + ">Freeze</option>" +
+      '<option value="monitor"' + (spec.role === "monitor" ? " selected" : "") + ">Monitor</option>" +
+      "</select>";
+    html += '<div class="measure-row">';
+    html += '<span class="measure-type">' + spec.id + " " + typeLabel + " (" + spec.atoms.map(function(a){return a+1;}).join(",") + ")</span>";
+    html += '<span>start <input type="number" step="0.01" data-idx="' + i + '" data-field="start" value="' + spec.start + '" style="width:70px"></span>';
+    html += '<span>end <input type="number" step="0.01" data-idx="' + i + '" data-field="end" value="' + spec.end + '" style="width:70px"></span>';
+    html += roleOpts;
+    html += '<button class="measure-del" data-idx="' + i + '">x</button>';
+    html += "</div>";
+  });
+  panel.innerHTML = html;
+  panel.querySelectorAll("input,select").forEach(function(el) {
+    el.addEventListener("change", function() {
+      updateCoordinatePlan(parseInt(this.getAttribute("data-idx"), 10), this.getAttribute("data-field"), this.value);
+    });
+  });
+  panel.querySelectorAll(".measure-del").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      removeCoordinatePlan(parseInt(this.getAttribute("data-idx"), 10));
+    });
+  });
+}
+
+function hookMechanismBuilder() {
+  // Called when the mechanism workflow modal opens: reset builder state and
+  // register the measurement-to-coordinate bridge.
+  mechProductStructure = null;
+  mechTsGuessStructure = null;
+  mechCoordinatePlans = [];
+  mechStrategy = "guided-scan";
+  mechFidelity = "s3";
+  var addBtn = document.getElementById("mech-add-coord");
+  if (addBtn && !addBtn.dataset.hooked) {
+    addBtn.dataset.hooked = "1";
+    addBtn.addEventListener("click", function() {
+      if (!molDoc.measures.length) {
+        window.alert(t("mech.measure_first") || "请先在 3D 模型中测量一段距离/角度/二面角");
+        return;
+      }
+      // bridge the most recent measurement into a coordinate plan
+      var last = molDoc.measures[molDoc.measures.length - 1];
+      addCoordinateFromMeasurement(last);
+      renderMechanismPlanPanel();
+    });
+  }
+  var strategySel = document.getElementById("mech-strategy");
+  if (strategySel && !strategySel.dataset.hooked) {
+    strategySel.dataset.hooked = "1";
+    strategySel.addEventListener("change", function() {
+      mechStrategy = this.value;
+      if (this.value === "rph-reverse") {
+        if (!mechProductStructure) window.alert(t("mech.product_required") || "rph-reverse 需要提供产物结构");
+      }
+    });
+  }
+  var fidelitySel = document.getElementById("mech-fidelity");
+  if (fidelitySel && !fidelitySel.dataset.hooked) {
+    fidelitySel.dataset.hooked = "1";
+    fidelitySel.addEventListener("change", function() { mechFidelity = this.value; });
+  }
+  renderMechanismPlanPanel();
+}
+
+function parseXyzAtoms(xyzText) {
+  var lines = xyzText.split("\n");
+  var atoms = [];
+  for (var i = 2; i < lines.length; i++) {
+    var parts = lines[i].trim().split(/\s+/);
+    if (parts.length >= 4) {
+      atoms.push({ elem: parts[0], x: parseFloat(parts[1]), y: parseFloat(parts[2]), z: parseFloat(parts[3]), id: i - 2 });
+    }
+  }
+  return atoms;
 }
 
 function renderMeasurementList() {
@@ -3837,6 +4819,11 @@ async function selectJob(jobId) {
   selectedJobId = jobId;
   folderCache = {};
   folderState = {};
+  mechanismViewerState.jobId = String(jobId || "");
+  mechanismViewerState.studyId = "";
+  mechanismViewerState.pathDetail = "";
+  mechanismViewerState.energyDetail = "";
+  renderMechanismPlaceholder();
   const job = await api("/jobs/" + encodeURIComponent(jobId));
   selectedJobIsRemote = !!(job.result && job.result.node);
   lastRemoteNode = selectedJobIsRemote ? String(job.result.node || "") : "";
@@ -3858,6 +4845,9 @@ async function selectJob(jobId) {
   updateInfoPanel(job);
   renderFileTree(filesResp.files || [], jobId);
   refreshNmrReport(job);
+  if (activeViewerTab === "path" || activeViewerTab === "energy") {
+    await setViewerTab(activeViewerTab);
+  }
   highlightQueueRow(jobId);
   if (activeSSE) {
     activeSSE.close();
@@ -3874,6 +4864,16 @@ let wizardUploadFile = null;
 let workflowCatalogCache = [];
 let methodCatalogCache = {};
 let previewViewer = null;
+
+// ── Mechanism Builder state (reaction-coordinate plans + roles) ─────────
+// Reactant lives in wizardStructures[0] (the parsed input); product / TS
+// guess are optional second/third structures. mechCoordinatePlans holds the
+// user-built coordinate plans ({coordinates, points, start_from}).
+let mechProductStructure = null;
+let mechTsGuessStructure = null;
+let mechCoordinatePlans = [];
+let mechStrategy = "guided-scan";
+let mechFidelity = "s3";
 
 // ── NMR report viewer (DevDoc §7 / §11.1, P2) ──────────────────────────
 // Renders nmr_report.json for the selected nmr job: winner card, candidate
@@ -4251,6 +5251,16 @@ function openModal() {
   updateConfigCards();
   renderModalProjects();
   setModalProjectDefault();
+  // Mechanism builder reset: cleared per open so stale plans/routes never leak.
+  mechProductStructure = null;
+  mechTsGuessStructure = null;
+  mechCoordinatePlans = [];
+  mechStrategy = "guided-scan";
+  mechFidelity = "s3";
+  var mechPanel = document.getElementById("mech-builder-panel");
+  if (mechPanel) mechPanel.style.display = "none";
+  var mechPlan = document.getElementById("mech-plan-panel");
+  if (mechPlan) mechPlan.innerHTML = "";
   // Reset NMR enumerate toggle on each open (P2) and register its change
   // listener once (guarded so repeated opens don't stack handlers).
   var enumToggle = document.getElementById("nmr-enumerate-toggle");
@@ -4365,6 +5375,15 @@ function handleParseResult(body) {
     body.ok ? wizardStructures.length + " " + (t("modal.structures_parsed") || "\u4e2a\u7ed3\u6784") : (t("modal.parse_failed") || "\u89e3\u6790\u5931\u8d25"),
     !body.ok
   );
+
+  // Mechanism role assignment: reactant = [0], product = [1], ts_guess = [2].
+  if (wizardState.workflow && wizardState.workflow.id === "mechanism") {
+    mechProductStructure = wizardStructures.length > 1 ? wizardStructures[1] : null;
+    mechTsGuessStructure = wizardStructures.length > 2 ? wizardStructures[2] : null;
+    var mechPanel = document.getElementById("mech-builder-panel");
+    if (mechPanel) mechPanel.style.display = "block";
+    hookMechanismBuilder();
+  }
 }
 
 function showParseStatus(msg, isError) {
@@ -4703,6 +5722,12 @@ async function openWorkflowConfig() {
           container.querySelectorAll(".workflow-option").forEach(function(o) { o.classList.remove("selected"); });
           opt.classList.add("selected");
           loadDefaultMethodProfile(wf.method_schema_id);
+          // Mechanism Builder: show the coordinate-plan panel, hide for others.
+          var mechPanel = document.getElementById("mech-builder-panel");
+          if (mechPanel) {
+            mechPanel.style.display = wf.id === "mechanism" ? "block" : "none";
+            if (wf.id === "mechanism") hookMechanismBuilder();
+          }
         });
       }
       grid.appendChild(opt);
@@ -5903,6 +6928,104 @@ async function submitJobModal() {
     return;
   }
 
+  // Mechanism: single job carrying reactant + optional product / TS guess +
+  // route coordinate plans. Breaks the "one structure = one job" convention
+  // like NMR — reactant/product/ts_guess belong to ONE study, not N jobs.
+  if (workflow === "mechanism") {
+    var chargeVal = parseInt(document.getElementById("modal-charge").value, 10) || 0;
+    var multVal = parseInt(document.getElementById("modal-mult").value, 10) || 1;
+
+    var mechRolePayload = function(role, ns) {
+      if (!ns) return null;
+      var p;
+      if (ns.source_type === "smiles" && ns.smiles) {
+        p = { source_type: "smiles", source: ns.smiles };
+      } else if (ns.normalized_path) {
+        p = { source_type: "structure_asset", asset_id: ns.asset_id, source: ns.normalized_path };
+      } else if (ns.smiles) {
+        p = { source_type: "smiles", source: ns.smiles };
+      } else if (ns.xyz) {
+        p = { source_type: "xyz_text", source: ns.xyz };
+      } else {
+        return null;
+      }
+      p.charge = ns.charge !== undefined && ns.charge !== null ? ns.charge : chargeVal;
+      p.multiplicity = ns.multiplicity !== undefined && ns.multiplicity !== null ? ns.multiplicity : multVal;
+      return p;
+    };
+
+    var mechReactant = mechRolePayload("reactant", wizardStructures[0]);
+    if (!mechReactant) {
+      window.alert(t("modal.parse_first") || "请先解析反应物结构");
+      return;
+    }
+    var mechProduct = (typeof mechProductStructure !== "undefined" && mechProductStructure)
+      ? mechRolePayload("product", mechProductStructure) : null;
+    var mechTsGuess = (typeof mechTsGuessStructure !== "undefined" && mechTsGuessStructure)
+      ? mechRolePayload("ts_guess", mechTsGuessStructure) : null;
+
+    var mechRoutes = (typeof mechCoordinatePlans !== "undefined" && mechCoordinatePlans.length)
+      ? mechCoordinatePlans : [];
+
+    var mechCleanedLevels = {};
+    var mechWizStages = wizardState.method.stages || {};
+    Object.keys(mechWizStages).forEach(function(lid) {
+      var st = mechWizStages[lid];
+      if (!st || !st.engine || st._disabled === true) return;
+      var copy = JSON.parse(JSON.stringify(st));
+      delete copy._disabled;
+      mechCleanedLevels[lid] = copy;
+    });
+
+    var mechMethod = {
+      schema_id: wizardState.workflow.schema_id || "mechanism",
+      profile_id: wizardState.method.profile_id,
+      levels: mechCleanedLevels,
+    };
+    var mechPid = wizardState.method.profile_id;
+    if (mechPid && mechPid !== "__custom__") {
+      mechMethod.preset = mechPid;
+    } else {
+      if (typeof mechStrategy !== "undefined" && mechStrategy) mechMethod.strategy = mechStrategy;
+      if (typeof mechFidelity !== "undefined" && mechFidelity) mechMethod.fidelity = mechFidelity;
+      // hoist per-level scalars the runner forwards as CLI flags
+      var mechScanLv = mechCleanedLevels.scan || {};
+      var mechIrcLv = mechCleanedLevels.irc || {};
+      if (mechScanLv.scan_points) mechMethod.scan_points = mechScanLv.scan_points;
+      if (mechIrcLv.irc_points) mechMethod.irc_points = mechIrcLv.irc_points;
+    }
+
+    var mechBody = {
+      workflow: "mechanism",
+      name: jobName || "mechanism_job",
+      input: {
+        source_type: "mechanism",
+        reactant: mechReactant,
+        product: mechProduct,
+        ts_guess: mechTsGuess,
+        routes: mechRoutes,
+      },
+      method: mechMethod,
+      resources: { nproc: nproc, mem: mem },
+      target_node: selectedNode || null,
+    };
+    var mechProjectId = document.getElementById("modal-project-select").value;
+    if (mechProjectId) mechBody.project_id = mechProjectId;
+    try {
+      var mechResult = await api("/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(mechBody),
+      });
+      closeModal();
+      await refreshJobs();
+      await selectJob(mechResult.job_id);
+    } catch (err) {
+      window.alert((t("modal.submit_failed") || "提交失败") + ": " + err);
+    }
+    return;
+  }
+
   for (var i = 0; i < wizardStructures.length; i++) {
     var s = wizardStructures[i];
 
@@ -6133,6 +7256,12 @@ function setupEventListeners() {
   document.getElementById("delete-job-modal-submit").addEventListener("click", submitDeleteJobModal);
   document.getElementById("delete-job-modal").addEventListener("mousedown", function(event) {
     if (event.target.id === "delete-job-modal") closeDeleteJobModal();
+  });
+
+  document.getElementById("mechanism-review-close").addEventListener("click", closeMechanismReviewModal);
+  document.getElementById("mechanism-review-cancel").addEventListener("click", closeMechanismReviewModal);
+  document.getElementById("mechanism-review-modal").addEventListener("mousedown", function(event) {
+    if (event.target.id === "mechanism-review-modal") closeMechanismReviewModal();
   });
 
   document.getElementById("target-project-modal-close").addEventListener("click", closeTargetProjectModal);
