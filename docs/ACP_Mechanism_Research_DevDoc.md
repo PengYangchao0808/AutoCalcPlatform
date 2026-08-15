@@ -693,3 +693,32 @@ acp run mechanism --input R --product P --preset rph-s4 \
 | 18 | G1–G5 散在 stage | 统一 QualityGateResult 六门 G0–G5 | 建议 27 |
 | 19 | —(v1.0 未覆盖) | AtomIdentityMap(G0 gate)+ coordinate atom_refs uid 编译 | 建议 8 |
 | 20 | —(v1.0 未覆盖) | RPH Adapter 依赖 rph_core/api/(不存在)→ 首版直连具体类,标记 RPH 侧待补薄 API 层 | 附录 A |
+
+---
+
+## 附录 C:内化完成记录(v3.0,2026-08-15)
+
+**状态**:RPH 科学引擎已全部内化为 ACP 原生实现;`rph_adapter.py` 降级为 parity 对照工具(`config['mechanism']['provider_backend'] = 'rph'` 显式启用)。
+
+### C.1 原生引擎与外部对应物
+
+| 阶段 | 原生引擎 | 替代的 rph_core | 关键复用(CCCP/ACP) |
+|---|---|---|---|
+| S1 | `NativeCensoLiteProvider` | `CensoLiteEngine`(1621 行+4 依赖) | CrestBackend.search / XTBBackend.single_point+enso_thermo / batch_single_point / torsion_dedup / boltzmann |
+| S2 | `NativeReversePebStrategy` | `PEBScanEngine`(4341 行) | ORCAInterface.relaxed_scan / XTBPathInterface.path_search(xtb --path) / primitives 六模块 |
+| S3/S4 | `NativeRefinementProvider` | `RefinementEngine`(4389 行) | ORCABackend 全方法 / constrained_optimize / rescue 8-cell / refinement_manifest_v1 |
+
+### C.2 新增基元任务词汇(8 类)
+
+上浮:`constrained_optimize`(XTB)、`enso_thermo`(mRRHO);新增:`xtb --path`(XTBPathInterface)、ORCA relaxed_scan、ORCA constrained_optimize、`batch_single_point`(并行+SHA256 缓存);纯算法:`torsion_dedup`、path_selector/path_profile 族(`acp/mechanism/primitives/`)。
+
+### C.3 行为变化
+
+- `conformer_mode=auto` 现默认 **censo-lite(native)**(原:RPH 可用时才 censo-lite,否则 xtb-fast);
+- study 模式不再要求 ReactionProfileHunter checkout;`provider_backend='rph'` 仅用于同输入 parity 对照;
+- rescue 矩阵达 RPH 8-cell 完整对齐(F1×INT/MIN 补齐,F3 顺序修正,MethodParams 粒度);
+- FidelityProfile 新增 role-based warmup/Hessian/cycle 预算字段(s3 40/50/60,s4 4/6/200)。
+
+### C.4 Parity 入口
+
+同输入对照:`acp run mechanism ... ` 分别以默认(native)与 `--config`(含 `mechanism.provider_backend: rph`)运行,比较 `refinements/*/refinement_manifest.json` 与 `states/*/ensemble_manifest.json`。判定:canonical 几何 RMSD<0.05 Å、ΔE<1e-4 Ha、排序 Spearman>0.95。

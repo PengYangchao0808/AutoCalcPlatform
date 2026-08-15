@@ -67,7 +67,9 @@ ACP_V1_20260811/
 | xTB-MD CENSO energy | `src/acp/workflows/xtbmd_censo_energy.py` | `acp run xtbmd_censo_energy` — GFN-FF MD → GFN1 batch opt → isostat → ewin filter → CENSO → fine DFT + G_total (2080 lines); multi-replica sampling in `xtbmd_md.py`; shared helpers in `energy_shared.py` |
 | Shared energy helpers | `src/acp/workflows/energy_shared.py` | `resolve_levels`/`run_rank1_handoff`/`boltzmann_weights`/`select_cumulative_boltzmann`/`build_ensemble_summary`/`write_final_outputs`/`censo_record_to_candidate`/`xtb_passthrough_result`/`resolve_solvent_config`/`resolve_crest_ewin` (E4 extraction); ORCA handoff via `get_backend("orca")` (2026-08-02) |
 | NMR workflow | `src/acp/workflows/nmr.py` | Conformer search → GIAO → Boltzmann averaging (502 lines) |
-| Mechanism workflow | `src/acp/workflows/mechanism.py` | TS search + IRC validation (394 lines) |
+| Mechanism workflow | `src/acp/workflows/mechanism.py` | TS search + IRC validation; study mode via `src/acp/mechanism/` |
+| Mechanism study engines | `src/acp/mechanism/providers/` | NATIVE default: `native_censo_lite.py` (S1) / `native_peb.py` (S2) / `native_refinement.py` (S3/S4); `rph_adapter.py` = parity-only (`config['mechanism']['provider_backend']='rph'`) |
+| Mechanism primitives | `src/acp/mechanism/primitives/` | Pure-algorithm S2 ports (path_selector/path_profile/geometry_guard/scan_trajectory/energy_refinement/scan_rescue) + torsion_dedup |
 | Simple workflows | `src/acp/workflows/simple.py` | singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt (546 lines) |
 | Workflow registry | `src/acp/workflows/registry.py` | Maps CLI subcommands → WorkflowSpec builders (162 lines) |
 | Method catalog | `src/acp/catalog.py` | METHOD_META dict: methods, bases, route blocks (2588 lines) |
