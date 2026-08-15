@@ -141,6 +141,64 @@ class V1JobListResponse(BaseModel):
     counts: dict[str, int] = Field(default_factory=dict)
 
 
+class DecisionPointModel(BaseModel):
+    id: str
+    study_id: str
+    status: Literal["waiting", "resolved", "superseded"]
+    payload: dict[str, Any] = Field(default_factory=dict)
+    resolution: str | None = None
+    created_at: str = ""
+    resolved_at: str | None = None
+
+
+class MechanismStudySummary(BaseModel):
+    id: str
+    job_id: str | None = None
+    status: str
+    created_at: str = ""
+    updated_at: str = ""
+    n_states: int = 0
+    n_edges: int = 0
+    n_decisions_pending: int = 0
+
+
+class MechanismStudyDetail(BaseModel):
+    id: str
+    job_id: str | None = None
+    status: str
+    created_at: str = ""
+    updated_at: str = ""
+    study_json: dict[str, Any] = Field(default_factory=dict)
+    decisions: list[DecisionPointModel] = Field(default_factory=list)
+
+
+class MechanismStudyCreateRequest(BaseModel):
+    job_id: str
+    study_id: str
+    status: str = "pending"
+    study_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class MechanismStudyReportResponse(BaseModel):
+    study_id: str
+    job_id: str | None = None
+    reaction_network: Any | None = None
+    mechanism_profile: Any | None = None
+    stationary_points: Any | None = None
+    quality_gates: Any | None = None
+    provenance: Any | None = None
+
+
+class DecisionResolveRequest(BaseModel):
+    resolution: str
+
+
+class DecisionResolveResponse(BaseModel):
+    decision: DecisionPointModel
+    job_id: str | None = None
+    job_status: str = ""
+
+
 class MoleculeResolveRequest(BaseModel):
     smiles: str | None = None
     inchi: str | None = None
@@ -410,6 +468,9 @@ class NodeBootstrapResponse(BaseModel):
 __all__ = [
     "ArtifactListResponse",
     "ArtifactModel",
+    "DecisionPointModel",
+    "DecisionResolveRequest",
+    "DecisionResolveResponse",
     "DiskUsageResponse",
     "HessianPreviewRequest",
     "HessianPreviewResponse",
@@ -417,6 +478,10 @@ __all__ = [
     "HessianPreviewStructure",
     "JobMoveRequest",
     "MaintenanceCleanupResponse",
+    "MechanismStudyCreateRequest",
+    "MechanismStudyDetail",
+    "MechanismStudyReportResponse",
+    "MechanismStudySummary",
     "MoleculeEmbedRequest",
     "MoleculeEmbedResponse",
     "MoleculeResolveRequest",

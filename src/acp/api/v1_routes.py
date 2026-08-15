@@ -8,12 +8,14 @@ FastAPI router for ACP Workbench v2 resources under ``/api/v1``.
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import logging
 import posixpath
 import re
 import urllib.parse
 from collections import Counter
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +60,9 @@ from acp.api.schemas import (
 from acp.api.v1_schemas import (
     ArtifactListResponse,
     ArtifactModel,
+    DecisionPointModel,
+    DecisionResolveRequest,
+    DecisionResolveResponse,
     DiskUsageResponse,
     HessianPreviewRequest,
     HessianPreviewResponse,
@@ -65,6 +70,10 @@ from acp.api.v1_schemas import (
     HessianPreviewStructure,
     JobMoveRequest,
     MaintenanceCleanupResponse,
+    MechanismStudyCreateRequest,
+    MechanismStudyDetail,
+    MechanismStudyReportResponse,
+    MechanismStudySummary,
     MoleculeEmbedRequest,
     MoleculeEmbedResponse,
     MoleculeResolveRequest,
@@ -119,6 +128,7 @@ from acp.scheduler.remote.fetcher import (
 )
 from acp.scheduler.remote.node_manager import NodeManager
 from acp.scheduler.stage_tasks import StageTask, StageTaskStore
+from acp.scheduler.store import JobStore
 
 logger = logging.getLogger(__name__)
 
@@ -145,6 +155,10 @@ def _stage_task_store(request: Request) -> StageTaskStore:
 
 def _artifact_registry(request: Request) -> ArtifactRegistry:
     return ArtifactRegistry(_db_path(request))
+
+
+def _job_store(request: Request) -> JobStore:
+    return JobStore(_db_path(request))
 
 
 def _record_to_v1_model(record: JobRecord) -> V1JobRecordModel:
@@ -235,6 +249,148 @@ def _model_payload(model: Any) -> dict[str, Any]:
 
 def _counts_for_records(records: list[JobRecord]) -> dict[str, int]:
     return dict(Counter(record.status.value for record in records))
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _json_file_or_none(path: Path) -> Any | None:
+    if not path.exists() or not path.is_file():
+        return None
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _study_summary_model(row: dict[str, Any]) -> MechanismStudySummary:
+    study_json_raw = row.get("study_json")
+    study_json = (
+        json.loads(study_json_raw) if isinstance(study_json_raw, str) and study_json_raw else {}
+    )
+    network = study_json.get("network") if isinstance(study_json, dict) else None
+    decision_points = study_json.get("decision_points") if isinstance(study_json, dict) else None
+    n_states = 0
+    n_edges = 0
+    if isinstance(network, dict):
+        nodes = network.get("nodes")
+        edges = network.get("edges")
+        if isinstance(nodes, list):
+            n_states = len(nodes)
+        if isinstance(edges, list):
+            n_edges = len(edges)
+    n_decisions_pending = 0
+    if isinstance(decision_points, list):
+        n_decisions_pending = sum(
+            1
+            for item in decision_points
+            if isinstance(item, dict) and str(item.get("status") or "") == "waiting"
+        )
+    return MechanismStudySummary(
+        id=str(row.get("id") or ""),
+        job_id=str(row["job_id"]) if row.get("job_id") is not None else None,
+        status=str(row.get("status") or "pending"),
+        created_at=str(row.get("created_at") or ""),
+        updated_at=str(row.get("updated_at") or ""),
+        n_states=n_states,
+        n_edges=n_edges,
+        n_decisions_pending=n_decisions_pending,
+    )
+
+
+def _decision_point_model(row: dict[str, Any]) -> DecisionPointModel:
+    payload_raw = row.get("payload")
+    payload = json.loads(payload_raw) if isinstance(payload_raw, str) and payload_raw else {}
+    return DecisionPointModel(
+        id=str(row.get("id") or ""),
+        study_id=str(row.get("study_id") or ""),
+        status=(
+            "resolved"
+            if str(row.get("status") or "waiting") == "resolved"
+            else "superseded"
+            if str(row.get("status") or "waiting") == "superseded"
+            else "waiting"
+        ),
+        payload=payload if isinstance(payload, dict) else {},
+        resolution=str(row["resolution"]) if row.get("resolution") is not None else None,
+        created_at=str(row.get("created_at") or ""),
+        resolved_at=str(row["resolved_at"]) if row.get("resolved_at") is not None else None,
+    )
+
+
+def _study_detail_model(store: JobStore, row: dict[str, Any]) -> MechanismStudyDetail:
+    study_json_raw = row.get("study_json")
+    study_json = (
+        json.loads(study_json_raw) if isinstance(study_json_raw, str) and study_json_raw else {}
+    )
+    decisions = [
+        _decision_point_model(item) for item in store.list_decision_points(str(row.get("id") or ""))
+    ]
+    return MechanismStudyDetail(
+        id=str(row.get("id") or ""),
+        job_id=str(row["job_id"]) if row.get("job_id") is not None else None,
+        status=str(row.get("status") or "pending"),
+        created_at=str(row.get("created_at") or ""),
+        updated_at=str(row.get("updated_at") or ""),
+        study_json=study_json if isinstance(study_json, dict) else {},
+        decisions=decisions,
+    )
+
+
+def _study_report_dir(study_row: dict[str, Any], record: JobRecord | None) -> Path | None:
+    study_json_raw = study_row.get("study_json")
+    study_json = (
+        json.loads(study_json_raw) if isinstance(study_json_raw, str) and study_json_raw else {}
+    )
+    if isinstance(study_json, dict):
+        study_dir = study_json.get("study_dir")
+        if isinstance(study_dir, str) and study_dir:
+            return Path(study_dir)
+    if record is None or not record.work_dir:
+        return None
+    return Path(record.work_dir) / "mechanism_study" / str(study_row.get("id") or "")
+
+
+def _build_mechanism_report(
+    study_id: str,
+    job_id: str | None,
+    study_dir: Path | None,
+) -> MechanismStudyReportResponse:
+    reaction_network = None
+    mechanism_profile = None
+    stationary_points = None
+    quality_gates = None
+    provenance = None
+    if study_dir is not None:
+        write_study_reports = None
+        try:
+            reports_module = importlib.import_module("acp.mechanism.reports")
+            write_study_reports = getattr(reports_module, "write_study_reports", None)
+        except ImportError:
+            write_study_reports = None
+        if write_study_reports is not None:
+            try:
+                write_study_reports(study_dir)
+            except (OSError, ValueError, TypeError, RuntimeError) as exc:
+                logger.warning(
+                    "Failed to refresh mechanism study reports for %s: %s",
+                    study_id,
+                    exc,
+                )
+        reaction_network = _json_file_or_none(study_dir / "network.json")
+        mechanism_profile = _json_file_or_none(study_dir / "mechanism_profile.json")
+        stationary_points = _json_file_or_none(study_dir / "stationary_points.json")
+        quality_gates = _json_file_or_none(study_dir / "quality_gates.json")
+        provenance = _json_file_or_none(study_dir / "provenance.json")
+        if reaction_network is None:
+            reaction_network = _json_file_or_none(study_dir / "reaction_network.json")
+    return MechanismStudyReportResponse(
+        study_id=study_id,
+        job_id=job_id,
+        reaction_network=reaction_network,
+        mechanism_profile=mechanism_profile,
+        stationary_points=stationary_points,
+        quality_gates=quality_gates,
+        provenance=provenance,
+    )
 
 
 def _canonical_smiles(mol: Chem.Mol) -> str | None:
@@ -464,6 +620,130 @@ def list_jobs(
     )
 
 
+@router.get("/mechanism-studies", response_model=list[MechanismStudySummary])
+def list_mechanism_studies(
+    request: Request,
+    limit: int = Query(default=200, ge=1, le=1000),
+    job_id: str | None = Query(default=None),
+) -> list[MechanismStudySummary]:
+    store = _job_store(request)
+    return [
+        _study_summary_model(row)
+        for row in store.list_mechanism_studies(limit=limit, job_id=job_id)
+    ]
+
+
+@router.post("/mechanism-studies", response_model=MechanismStudyDetail, status_code=201)
+def create_mechanism_study(
+    req: MechanismStudyCreateRequest,
+    request: Request,
+) -> MechanismStudyDetail:
+    manager = _manager(request)
+    job = manager.get(req.job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {req.job_id}")
+    now = _utc_now_iso()
+    store = _job_store(request)
+    store.upsert_mechanism_study(
+        req.study_id,
+        job_id=req.job_id,
+        study_json=json.dumps(req.study_json),
+        status=req.status,
+        created_at=now,
+        updated_at=now,
+    )
+    row = store.get_mechanism_study(req.study_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Mechanism study not found: {req.study_id}")
+    return _study_detail_model(store, row)
+
+
+@router.get("/mechanism-studies/{study_id}", response_model=MechanismStudyDetail)
+def get_mechanism_study(study_id: str, request: Request) -> MechanismStudyDetail:
+    store = _job_store(request)
+    row = store.get_mechanism_study(study_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Mechanism study not found: {study_id}")
+    return _study_detail_model(store, row)
+
+
+@router.get(
+    "/mechanism-studies/{study_id}/report",
+    response_model=MechanismStudyReportResponse,
+)
+def get_mechanism_study_report(
+    study_id: str,
+    request: Request,
+) -> MechanismStudyReportResponse:
+    manager = _manager(request)
+    store = _job_store(request)
+    row = store.get_mechanism_study(study_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Mechanism study not found: {study_id}")
+    job_id = str(row["job_id"]) if row.get("job_id") is not None else None
+    record = manager.get(job_id) if job_id is not None else None
+    study_dir = _study_report_dir(row, record)
+    return _build_mechanism_report(study_id, job_id, study_dir)
+
+
+@router.post(
+    "/mechanism-studies/{study_id}/decisions/{decision_id}",
+    response_model=DecisionResolveResponse,
+)
+def resolve_mechanism_decision(
+    study_id: str,
+    decision_id: str,
+    req: DecisionResolveRequest,
+    request: Request,
+) -> DecisionResolveResponse:
+    manager = _manager(request)
+    store = _job_store(request)
+    study_row = store.get_mechanism_study(study_id)
+    if study_row is None:
+        raise HTTPException(status_code=404, detail=f"Mechanism study not found: {study_id}")
+    decision_row = store.get_decision_point(decision_id)
+    if decision_row is None or str(decision_row.get("study_id") or "") != study_id:
+        raise HTTPException(status_code=404, detail=f"Decision point not found: {decision_id}")
+    if str(decision_row.get("status") or "") != "waiting":
+        raise HTTPException(status_code=409, detail=f"Decision point is not waiting: {decision_id}")
+    now = _utc_now_iso()
+    store.upsert_decision_point(
+        decision_id,
+        study_id=study_id,
+        status="resolved",
+        payload=str(decision_row.get("payload") or "{}"),
+        resolution=req.resolution,
+        created_at=str(decision_row.get("created_at") or now),
+        resolved_at=now,
+    )
+    job_id = str(study_row["job_id"]) if study_row.get("job_id") is not None else None
+    if job_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Mechanism study has no linked job: {study_id}",
+        )
+    try:
+        record = manager.resume(
+            job_id,
+            resolution={
+                "requeue": True,
+                "decisions": {decision_id: req.resolution},
+            },
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    updated = store.get_decision_point(decision_id)
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Decision point not found: {decision_id}")
+    return DecisionResolveResponse(
+        decision=_decision_point_model(updated),
+        job_id=job_id,
+        job_status=record.status.value,
+    )
+
+
 @router.get("/jobs/{job_id}", response_model=V1JobRecordModel)
 def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     manager = _manager(request)
@@ -551,9 +831,7 @@ def get_job_logs(
 
 
 @router.get("/jobs/{job_id}/files", response_model=FileManifestResponse)
-def get_job_files(
-    job_id: str, request: Request, path: str | None = None
-) -> FileManifestResponse:
+def get_job_files(job_id: str, request: Request, path: str | None = None) -> FileManifestResponse:
     manager = _manager(request)
     work_dir = manager.work_dir_of(job_id)
     if work_dir is None:
@@ -1350,14 +1628,9 @@ def hessian_preview(req: HessianPreviewRequest) -> Response:
             symbols = _formula_to_symbols(structure.formula)
 
         eff = explicit_value if explicit_value is not None else configured
-        if (
-            normalize_recalc_hess(eff) == "auto"
-            and symbols is None
-        ):
+        if normalize_recalc_hess(eff) == "auto" and symbols is None:
             label = structure.name or f"structures[{idx}]"
-            missing_structures.append(
-                f"{label}: symbols or formula required for auto inference"
-            )
+            missing_structures.append(f"{label}: symbols or formula required for auto inference")
             results.append(
                 HessianPreviewResult(
                     name=structure.name,
@@ -1373,10 +1646,7 @@ def hessian_preview(req: HessianPreviewRequest) -> Response:
             status_code=422,
             content={
                 "detail": "validation error",
-                "errors": [
-                    {"field": "structures", "message": msg}
-                    for msg in missing_structures
-                ],
+                "errors": [{"field": "structures", "message": msg} for msg in missing_structures],
                 "results": [r.model_dump() for r in results],
             },
         )
