@@ -1,4 +1,4 @@
-# pyright: reportAny=false, reportPrivateUsage=false, reportPrivateImportUsage=false, reportUnknownParameterType=false, reportMissingParameterType=false, reportUnknownMemberType=false, reportUnknownLambdaType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false, reportUnusedVariable=false
+# pyright: reportAny=false, reportPrivateUsage=false, reportPrivateImportUsage=false, reportPrivateLocalImportUsage=false, reportUnknownParameterType=false, reportMissingParameterType=false, reportUnknownMemberType=false, reportUnknownLambdaType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false, reportUnusedVariable=false
 """Tests for the ACP mechanism workflow (reaction-path pipeline)."""
 
 from __future__ import annotations
@@ -349,15 +349,94 @@ def test_mechanism_mode_match_score() -> None:
 
 
 def test_mechanism_rescue_matrix() -> None:
-    plan = build_rescue_plan("geometry_not_converged", "ts")
-    assert [a.strategy for a in plan.actions] == [
-        "fresh_hessian_restart",
-        "ts_mode_directed",
-        "calcall_opt",
-    ]
-    assert not plan.terminal
-    terminal = build_rescue_plan("scf_failure", "ts")
-    assert terminal.terminal
+    from acp.mechanism.rescue import (
+        FailureType,
+        StructureKind,
+        apply_rescue_kwargs,
+        method_params,
+    )
+
+    # RPH parity is intentionally the 8 populated cells below, not the full
+    # F1-F7 × kind cartesian product.
+    expected: dict[tuple[FailureType, StructureKind], list[str]] = {
+        ("geometry_not_converged", "ts"): [
+            "fresh_hessian_restart",
+            "ts_mode_directed",
+            "calcall_opt",
+        ],
+        ("geometry_not_converged", "intermediate"): [
+            "fresh_hessian_restart",
+            "calcall_opt",
+        ],
+        ("geometry_not_converged", "minimum"): [
+            "fresh_hessian_restart",
+            "calcall_opt",
+        ],
+        ("higher_order_saddle", "ts"): [
+            "saddle_break",
+            "ts_mode_directed",
+            "calcall_opt",
+        ],
+        ("ts_no_imaginary", "ts"): [
+            "fresh_hessian_mode_monitor",
+            "ts_mode_directed",
+            "calcall_opt",
+        ],
+        ("minimum_with_imaginary", "intermediate"): ["mode_displacement"],
+        ("minimum_with_imaginary", "minimum"): ["mode_displacement"],
+        ("collapsed_to_product", "intermediate"): ["irc_midpoint_recovery"],
+    }
+
+    assert len(expected) == 8
+    for (failure_type, structure_kind), strategies in expected.items():
+        plan = build_rescue_plan(failure_type, structure_kind)
+        assert [action.strategy for action in plan.actions] == strategies
+        assert [
+            action.params.method if action.params is not None else None
+            for action in plan.actions
+        ] == strategies
+        assert not plan.terminal
+
+    for failure_type in ("scf_failure", "crash_timeout"):
+        for structure_kind in ("ts", "intermediate", "minimum", "precursor", "product"):
+            terminal = build_rescue_plan(failure_type, structure_kind)
+            assert terminal.terminal
+            assert terminal.actions == []
+
+    override_plan = build_rescue_plan(
+        "geometry_not_converged",
+        "ts",
+        overrides={
+            "refinement": {
+                "common": {
+                    "rescue": {
+                        "methods": {
+                            "fresh_hessian_restart": {"recalc_hessian": 7},
+                            "ts_mode_directed": {"trust": 0.20},
+                        }
+                    }
+                }
+            }
+        },
+    )
+    assert override_plan.actions[0].params is not None
+    assert override_plan.actions[0].params.recalc_hess == 7
+    assert override_plan.actions[1].params is not None
+    assert override_plan.actions[1].params.trust == 0.20
+
+    kwargs = apply_rescue_kwargs(
+        build_rescue_plan("collapsed_to_product", "intermediate").actions[0],
+        {},
+        include_metadata=True,
+    )
+    assert "irc_midpoint_reseed" not in kwargs
+    metadata = kwargs["rescue_metadata"]
+    assert isinstance(metadata, dict)
+    unsupported = metadata["unsupported_kwargs"]
+    assert isinstance(unsupported, dict)
+    assert unsupported["irc_midpoint_reseed"] is True
+    assert unsupported["irc_max_iter"] == 5
+    assert method_params("tight_opt_calchess").calc_hess is True
 
 
 def _mock_backends(
