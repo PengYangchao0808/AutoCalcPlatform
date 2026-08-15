@@ -1,5 +1,7 @@
 """Quantum chemistry backend abstraction layer."""
 
+# pyright: reportMissingImports=false, reportUnknownVariableType=false
+
 from acp.backends.base import (
     ClusteringTool,
     ConformerSearcher,
@@ -29,10 +31,14 @@ from acp.backends.orca import ORCABackend
 from acp.backends.registry import BackendRegistry, get_backend, register_backend, require_backend
 from acp.backends.xtb import XTBBackend
 
+from .batch import BatchSpFrameResult, BatchSpResult, batch_single_point
+
 __all__ = [
     "BackendRegistry",
     "QCBackend",
     "QCResult",
+    "BatchSpFrameResult",
+    "BatchSpResult",
     "GeometryOptimizer",
     "SinglePointCalculator",
     "FrequencyCalculator",
@@ -56,6 +62,7 @@ __all__ = [
     "run_isostat",
     "run_shermo",
     "batch_process_thermo",
+    "batch_single_point",
     "register_backend",
     "get_backend",
     "require_backend",

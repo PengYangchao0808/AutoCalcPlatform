@@ -96,6 +96,25 @@ class GeometryOptimizer(Protocol):
 
 
 @runtime_checkable
+class ConstrainedOptimizer(Protocol):
+    """Capability: can optimize geometries under coordinate constraints."""
+
+    def constrained_optimize(
+        self,
+        coordinates: NDArray[np.float64],
+        symbols: list[str],
+        charge: int = 0,
+        multiplicity: int = 1,
+        output_dir: Path | None = None,
+        output_name: str = "xtb_constrained_opt",
+        constraints: object | None = None,
+        **kwargs: Any,
+    ) -> QCResult:
+        """Optimize a molecular geometry with explicit coordinate constraints."""
+        ...
+
+
+@runtime_checkable
 class SinglePointCalculator(Protocol):
     """Capability: can compute single-point energies."""
 
@@ -183,6 +202,23 @@ class ThermoCalculator(Protocol):
 
 
 @runtime_checkable
+class MrrhoThermoCalculator(Protocol):
+    """Capability: can run xTB SPH + mRRHO thermochemistry."""
+
+    def enso_thermo(
+        self,
+        coordinates: NDArray[np.float64],
+        symbols: list[str],
+        charge: int = 0,
+        multiplicity: int = 1,
+        output_dir: Path | None = None,
+        **kwargs: Any,
+    ) -> QCResult:
+        """Run xTB SPH + mRRHO thermochemistry."""
+        ...
+
+
+@runtime_checkable
 class TSMechanismCalculator(Protocol):
     """Capability: can perform transition-state and IRC calculations."""
 
@@ -262,11 +298,13 @@ __all__ = [
     "QCResult",
     "to_qc_result",
     "GeometryOptimizer",
+    "ConstrainedOptimizer",
     "SinglePointCalculator",
     "FrequencyCalculator",
     "ConformerSearcher",
     "ClusteringTool",
     "ThermoCalculator",
+    "MrrhoThermoCalculator",
     "TSMechanismCalculator",
     "RelaxedScanCalculator",
     "NmrShieldingCalculator",

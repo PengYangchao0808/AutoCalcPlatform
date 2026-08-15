@@ -20,8 +20,10 @@ from acp.backends import (
 )
 from acp.backends.base import (
     ClusteringTool,
+    ConstrainedOptimizer,
     FrequencyCalculator,
     GeometryOptimizer,
+    MrrhoThermoCalculator,
     QCResult,
     SinglePointCalculator,
     ThermoCalculator,
@@ -32,6 +34,8 @@ from acp.backends.orca import ORCAInterface
 from acp.backends.registry import get_backend, require_backend
 from acp.backends.xtb import XTBInterface
 from cccp.qc.interfaces import CRESTInterface
+from cccp.qc.interfaces.constraints import DistanceConstraint
+from cccp.qc.interfaces.xtb_thermo import XTBThermoResult
 from tests.conftest import requires_isostat, requires_shermo
 
 
@@ -72,6 +76,8 @@ def test_backend_imports_and_capabilities() -> None:
     assert isinstance(orca, FrequencyCalculator)
     assert isinstance(orca, SinglePointCalculator)
     assert isinstance(xtb, GeometryOptimizer)
+    assert isinstance(xtb, ConstrainedOptimizer)
+    assert isinstance(xtb, MrrhoThermoCalculator)
     assert isinstance(xtb, SinglePointCalculator)
     assert not isinstance(xtb, FrequencyCalculator)
     assert isinstance(crest, GeometryOptimizer)
@@ -116,6 +122,72 @@ def test_xtb_backend_delegates_to_interface(tmp_path: Path) -> None:
 
     assert result is expected
     mock_sp.assert_called_once()
+
+
+def test_xtb_backend_constrained_optimize_delegates_to_interface(tmp_path: Path) -> None:
+    config = _make_config()
+    backend = XTBBackend(config)
+    constraints = [DistanceConstraint(atoms=(0, 1), target=1.1)]
+    expected = QCResult(success=True, energy=-3.5)
+
+    with patch.object(XTBInterface, "constrained_optimize", return_value=expected) as mock_opt:
+        result = backend.constrained_optimize(
+            np.zeros((2, 3)),
+            ["H", "H"],
+            charge=-1,
+            multiplicity=2,
+            output_dir=tmp_path,
+            output_name="warmup",
+            constraints=constraints,
+            opt_level="tight",
+        )
+
+    assert result is expected
+    kwargs = mock_opt.call_args.kwargs
+    assert kwargs["output_dir"] == tmp_path
+    assert kwargs["output_name"] == "warmup"
+    assert kwargs["constraints"] == constraints
+    assert kwargs["charge"] == -1
+    assert kwargs["multiplicity"] == 2
+    assert kwargs["opt_level"] == "tight"
+
+
+def test_xtb_backend_enso_thermo_translates_interface_result(tmp_path: Path) -> None:
+    config = _make_config()
+    backend = XTBBackend(config)
+    expected = XTBThermoResult(
+        g_total=-3.25,
+        zpve=0.11,
+        h_total=-3.1,
+        success=True,
+        error=None,
+    )
+
+    with patch.object(XTBInterface, "enso_thermo", return_value=expected) as mock_thermo:
+        result = backend.enso_thermo(
+            np.zeros((1, 3)),
+            ["H"],
+            charge=-1,
+            multiplicity=2,
+            output_dir=tmp_path,
+            temperature_k=310.0,
+            sthr=25.0,
+        )
+
+    assert result.success is True
+    assert result.converged is True
+    assert result.gibbs == -3.25
+    assert result.zpe == 0.11
+    assert result.enthalpy == -3.1
+    assert result.error_message is None
+    assert result.output_file == tmp_path / "xtb_enso" / "xtb_enso.json"
+    assert result.metadata == {"thermo": {"g_total": -3.25, "zpve": 0.11, "h_total": -3.1}}
+    kwargs = mock_thermo.call_args.kwargs
+    assert kwargs["output_dir"] == tmp_path
+    assert kwargs["charge"] == -1
+    assert kwargs["multiplicity"] == 2
+    assert kwargs["temperature_k"] == 310.0
+    assert kwargs["sthr"] == 25.0
 
 
 def test_crest_backend_search_returns_ensemble_path(tmp_path: Path) -> None:
@@ -195,6 +267,10 @@ def test_external_runner_exports_match_legacy_exports() -> None:
 def test_capability_matrix_supports_declared_statuses() -> None:
     assert supports("orca", "frequency") is True
     assert supports("orca", "irc") is True
+    assert supports("xtb", "constrained_optimization") is True
+    assert supports("xtb", "constrained_optimize") is True
+    assert supports("xtb", "mrrho_thermochemistry") is True
+    assert supports("xtb", "enso_thermo") is True
     assert supports("xtb", "irc") is False
     assert (
         list_capabilities("crest")["conformer_search"]
@@ -206,6 +282,16 @@ def test_irc_capability_matrix_entries() -> None:
     assert CAPABILITY_MATRIX["orca"]["irc"].value == "available"
     for backend_name in ("censo", "crest", "xtb", "external", "molclus", "isostat"):
         assert CAPABILITY_MATRIX[backend_name]["irc"].value == "not_implemented"
+
+
+def test_xtb_capability_matrix_entries() -> None:
+    assert CAPABILITY_MATRIX["xtb"]["constrained_optimization"].value == "available"
+    assert CAPABILITY_MATRIX["xtb"]["mrrho_thermochemistry"].value == "available"
+    for backend_name in ("censo", "orca", "crest", "external", "molclus", "isostat"):
+        assert (
+            CAPABILITY_MATRIX[backend_name]["constrained_optimization"].value == "not_implemented"
+        )
+        assert CAPABILITY_MATRIX[backend_name]["mrrho_thermochemistry"].value == "not_implemented"
 
 
 def test_orca_backend_get_version_uses_detect_version() -> None:
