@@ -1,32 +1,28 @@
 # qc/cluster/ — Cluster Adapters
 
 ## OVERVIEW
-Job execution environment adapters. Factory pattern: abstract base + concrete implementations (local, LSF). 4 files, ~530 lines.
+Job execution environment adapters. Factory pattern: abstract base + concrete implementations (local, LSF). **Consolidated into a single `__init__.py`** (12990 B) — the last remaining implementation-in-`__init__` module in cccp (root ANTI-PATTERN #5).
 
 ## STRUCTURE
 ```
-__init__.py   (51  lines)  — Re-exports + create_cluster_adapter() factory.
-                            Sole remaining __init__.py with implementation
-                            after Phase 1 cleanup.
-base.py       (103 lines)  — ClusterAdapterBase ABC, JobStatus dataclass.
-                            Contract: submit_job, get_status, cancel_job,
-                            wait_for_completion.
-local.py      (169 lines)  — LocalClusterAdapter. Direct subprocess execution.
-                            Default adapter. Tracks processes via Popen dict.
-lsf.py        (207 lines)  — LSFClusterAdapter. bsub/bjobs/bkill wrappers.
-                            Generates #BSUB preamble scripts. Placeholder.
+__init__.py   (12990 B) — create_cluster_adapter() factory + ClusterAdapterBase ABC + JobStatus dataclass + LocalClusterAdapter + LSFClusterAdapter — ALL in one file
 ```
+**Removed**: `base.py` / `local.py` / `lsf.py` were consolidated into `__init__.py` (post-Phase-1 cleanup, confirmed on-disk 2026-08-12). Earlier docs listing 4 files are stale.
 
 ## WHERE TO LOOK
 | Task | File | Notes |
 |------|------|-------|
-| Add SLURM/PBS adapter | Create + register in `__init__.py` | Follow `ClusterAdapterBase` contract |
-| Debug local exec | `local.py` | Shell=True, scripts in /tmp |
-| LSF integration | `lsf.py` | Stub — needs production hardening |
+| Add SLURM/PBS adapter | `__init__.py` | Follow `ClusterAdapterBase` contract (submit_job/get_status/cancel_job/wait_for_completion) |
+| Factory | `__init__.py` | `create_cluster_adapter()` — returns Local or LSF adapter |
+| Local execution | `__init__.py` | `LocalClusterAdapter` — direct subprocess, default adapter |
+| LSF integration | `__init__.py` | `LSFClusterAdapter` — bsub/bjobs/bkill wrappers, `#BSUB` preamble scripts |
+
+## CONVENTIONS
+- Contract: `submit_job`, `get_status`, `cancel_job`, `wait_for_completion` on `ClusterAdapterBase`
+- Remote LSF for the scheduler does NOT go through this layer — it uses `acp/scheduler/remote/` (SSH/SFTP + bsub) directly
 
 ## ANTI-PATTERNS
-- **`__init__.py` has factory code** — `create_cluster_adapter()` is the last implementation in any `__init__.py` post-Phase 1. Belongs in a separate module.
-- **LSF adapter is placeholder** — Hardcoded /tmp paths, no retry logic, no error recovery, shell=True with bsub redirect.
-- **SLURM/PBS missing** — Only 2 of 4 expected adapters exist. Codebase references SLURM/PBS config keys that have no implementation.
-- **local.py writes to /tmp with predictable names** — Race condition under concurrent usage.
-- **No connection pooling or reuse** — Every submission creates a fresh subprocess.
+- **`__init__.py` has factory + all implementations** — single-file module violates the "no implementation in `__init__.py`" rule (root ANTI-PATTERN #5)
+- **LSF adapter is placeholder** — hardcoded /tmp paths, no retry logic, no error recovery
+- **SLURM/PBS missing** — codebase references SLURM/PBS config keys with no adapter implementation
+- **local.py historical issues** (shell=True, /tmp predictable names) — resolved by consolidation; single __init__.py now the only surface

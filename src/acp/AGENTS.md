@@ -1,23 +1,24 @@
 # acp/ — ACP Unified Module
 
 ## OVERVIEW
-The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. ~40 files, ~8k lines (incl. API + scheduler). Coexists with the underlying `cccp` package (Computational Chemistry Connection Package — the QC interface library). Active workflows: ensemble, energy, xtbmd_censo_energy, mechanism, nmr (GIAO + DP4/DP5, reactivated 2026-08-07), simple (singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt). The conformer/benchmark workflows were retired on 2026-07-27 (nmr was retired then but revived in P1a).
+The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. ~52 files, ~13k lines (incl. API + scheduler + nmr). Coexists with the underlying `cccp` package (Computational Chemistry Connection Package — the QC interface library). Active workflows: ensemble, energy, xtbmd_censo_energy, mechanism, nmr (GIAO + DP4/DP5, reactivated 2026-08-07), simple (singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt). The conformer/benchmark workflows were retired on 2026-07-27 (nmr was retired then but revived in P1a).
 
 ## STRUCTURE
 ```
 acp/
-├── cli.py              # `acp run {ensemble|energy|mechanism|serve|simple workflows}` (~1835 lines)
+├── cli.py              # `acp run {ensemble|energy|xtbmd_censo_energy|nmr|mechanism|serve|simple workflows}` (~2050 lines)
 ├── __init__.py          # Package docstring only
 ├── __main__.py          # `python -m acp` works
-├── catalog.py           # WORKFLOW_CATALOG + METHOD_META + METHOD_SCHEMAS (retired entries kept as status:"retired")
+├── catalog.py           # WORKFLOW_CATALOG + METHOD_META + METHOD_SCHEMAS (2588 lines — retired entries kept as status:"retired")
 ├── core/                # Generic mechanism: Structure, WorkflowRunner, Registry, State, Config
 ├── backends/            # Capability-Protocol QC adapters (ORCA/CREST/xTB/CENSO/Isostat/Molclus/external)
 ├── chem/                # Chemistry: RDKit embedding, composition analysis
 ├── intake/              # Data ingestion: models, parsers, storage
 ├── io/                  # StructureReader / StructureWriter (thin cccp wrapper)
-├── workflows/           # ensemble, energy, mechanism, simple + registry (see workflows/AGENTS.md)
+├── workflows/           # ensemble, energy, xtbmd_censo_energy, mechanism, nmr, simple + registry (see workflows/AGENTS.md)
+├── nmr/                 # Phase 3 NMR + DP4/DP5 (13 modules + models/ data dir; see nmr/AGENTS.md)
 ├── api/                 # FastAPI — server, routes, v1_routes, schemas (~1600 lines)
-└── scheduler/           # Task scheduler — jobs, manager, runner, store, provenance, stage_tasks, ... + remote/ (~24 files)
+└── scheduler/           # Task scheduler — jobs, manager, runner, store, provenance, stage_tasks, ... + remote/ (15 + 11 files, ~9500 lines; see scheduler/AGENTS.md)
 ```
 
 ## WHERE TO LOOK
@@ -57,13 +58,14 @@ acp/
 | API routes | `api/routes.py` | `/api/status`, `/api/backends`, `/api/workflows` |
 | API v1 routes | `api/v1_routes.py` | Job submission, molecule upload, task mgmt (~1488 lines) |
 | API schemas | `api/schemas.py` / `v1_schemas.py` | Pydantic models for status, backends, jobs |
-| Scheduler jobs | `scheduler/jobs.py` | Job data models; `_derive_supported_workflows()` from active catalog |
+| Scheduler jobs | `scheduler/jobs.py` | Job data models; `_derive_supported_workflows()` from active catalog; E7 CLI-flag helpers (censo_preset_from_method/xtbmd_method_flags) |
 | Job manager | `scheduler/manager.py` | Lifecycle management, polling, cancellation |
-| Job runner | `scheduler/runner.py` | Background process execution |
+| Job runner | `scheduler/runner.py` | Background process execution (`python -m acp.cli run <workflow>`) |
 | Task store | `scheduler/store.py` | Persistent (SQLite) job storage |
 | Provenance | `scheduler/provenance.py` | Event sourcing, audit logging |
 | Stage tasks | `scheduler/stage_tasks.py` | Plan providers mapping workflow → stage list |
-| Remote execution | `scheduler/remote/` | LSF bsub/bjobs, SSH/SFTP pool, code sync, result fetch, cleanup |
+| Remote execution | `scheduler/remote/` | LSF bsub/bjobs, SSH/SFTP pool, code sync, result fetch, cleanup (see remote/AGENTS.md) |
+| NMR package | `nmr/` | DP4/DP5, averaging, scaling, FCHL, spectra, report (see nmr/AGENTS.md) |
 
 ## CONVENTIONS
 - **Type annotations**: PEP 604 (`X | None`) with `from __future__ import annotations` throughout
