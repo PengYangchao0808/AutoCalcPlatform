@@ -1,4 +1,5 @@
-# pyright: reportMissingTypeStubs=false, reportExplicitAny=false, reportAny=false, reportUnusedCallResult=false, reportUnknownVariableType=false, reportUnknownLambdaType=false, reportImplicitStringConcatenation=false
+# ruff: noqa: E501
+# pyright: reportMissingTypeStubs=false, reportExplicitAny=false, reportAny=false, reportUnusedCallResult=false, reportUnknownVariableType=false, reportUnknownLambdaType=false, reportImplicitStringConcatenation=false, reportUnusedFunction=false, reportImplicitOverride=false, reportUnknownParameterType=false, reportMissingTypeArgument=false, reportPrivateUsage=false, reportUnusedVariable=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportMissingImports=false
 """ACP CLI — Unified command-line interface for Auto-Calc Platform.
 
 Subcommands:
@@ -114,6 +115,38 @@ def _parse_calc_hess_arg(value: str) -> int | str:
     )
 
 
+class _StoreWithExplicitFlag(argparse.Action):
+    """argparse action that records whether a flag was explicitly provided."""
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: object,
+        option_string: str | None = None,
+    ) -> None:
+        setattr(namespace, self.dest, values)
+        setattr(namespace, f"{self.dest}_explicit", True)
+
+
+class _StoreTrueWithExplicitFlag(argparse.Action):
+    """store_true variant that records explicit user intent."""
+
+    def __init__(self, option_strings: list[str], dest: str, **kwargs: Any) -> None:
+        super().__init__(option_strings, dest, nargs=0, **kwargs)
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: object,
+        option_string: str | None = None,
+    ) -> None:
+        del parser, values, option_string
+        setattr(namespace, self.dest, True)
+        setattr(namespace, f"{self.dest}_explicit", True)
+
+
 # ---------------------------------------------------------------------------
 # Parser construction
 # ---------------------------------------------------------------------------
@@ -122,18 +155,40 @@ def _parse_calc_hess_arg(value: str) -> int | str:
 def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
     """Register 5 simple ORCA workflow subcommand parsers + xtb_optimize."""
     for wf, wf_label, wf_desc, wf_epilog in [
-        ("singlepoint", "Single Point", "Run ORCA single-point energy calculation",
-         "Examples:\n  acp run singlepoint --input mol.xyz --output ./out\n  acp run singlepoint --input mol.inp --method wB97M-V --basis def2-TZVPP"),
-        ("optimize", "Optimization", "Run ORCA geometry optimization",
-         "Examples:\n  acp run optimize --input mol.xyz --output ./out\n  acp run optimize --input mol.gjf --method r2SCAN-3c --geom-maxiter 200"),
-        ("frequency", "Frequency", "Run ORCA vibrational frequency calculation",
-         "Examples:\n  acp run frequency --input mol.xyz --output ./out\n  acp run frequency --input mol.inp --method wB97M-V --basis def2-TZVPP"),
-        ("optfreq", "Opt + Freq", "Run ORCA Opt+Freq as single job",
-         "Examples:\n  acp run optfreq --input mol.xyz --output ./out\n  acp run optfreq --input mol.gjf --method r2SCAN-3c"),
-        ("optfreqsp", "Opt+Freq+SP+Thermo", "Full pipeline: opt -> freq -> SP -> Shermo",
-         "Examples:\n  acp run optfreqsp --input mol.xyz --output ./out\n  acp run optfreqsp --input mol.xyz --method r2SCAN-3c --sp-method wB97M-V"),
+        (
+            "singlepoint",
+            "Single Point",
+            "Run ORCA single-point energy calculation",
+            "Examples:\n  acp run singlepoint --input mol.xyz --output ./out\n  acp run singlepoint --input mol.inp --method wB97M-V --basis def2-TZVPP",
+        ),
+        (
+            "optimize",
+            "Optimization",
+            "Run ORCA geometry optimization",
+            "Examples:\n  acp run optimize --input mol.xyz --output ./out\n  acp run optimize --input mol.gjf --method r2SCAN-3c --geom-maxiter 200",
+        ),
+        (
+            "frequency",
+            "Frequency",
+            "Run ORCA vibrational frequency calculation",
+            "Examples:\n  acp run frequency --input mol.xyz --output ./out\n  acp run frequency --input mol.inp --method wB97M-V --basis def2-TZVPP",
+        ),
+        (
+            "optfreq",
+            "Opt + Freq",
+            "Run ORCA Opt+Freq as single job",
+            "Examples:\n  acp run optfreq --input mol.xyz --output ./out\n  acp run optfreq --input mol.gjf --method r2SCAN-3c",
+        ),
+        (
+            "optfreqsp",
+            "Opt+Freq+SP+Thermo",
+            "Full pipeline: opt -> freq -> SP -> Shermo",
+            "Examples:\n  acp run optfreqsp --input mol.xyz --output ./out\n  acp run optfreqsp --input mol.xyz --method r2SCAN-3c --sp-method wB97M-V",
+        ),
     ]:
-        p = run_sub.add_parser(wf, help=wf_desc, formatter_class=argparse.RawDescriptionHelpFormatter, epilog=wf_epilog)
+        p = run_sub.add_parser(
+            wf, help=wf_desc, formatter_class=argparse.RawDescriptionHelpFormatter, epilog=wf_epilog
+        )
         p.set_defaults(workflow=wf)
         _add_simple_workflow_args(p, wf)
 
@@ -155,37 +210,83 @@ Examples:
 
 def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
     """Add common arguments for simple workflows."""
-    parser.add_argument("--input", "-i", required=True, help="Input structure file (XYZ, GJF, COM, ORCA .inp)")
+    parser.add_argument(
+        "--input", "-i", required=True, help="Input structure file (XYZ, GJF, COM, ORCA .inp)"
+    )
     parser.add_argument("--output", "-o", default="./out", help="Output directory")
-    parser.add_argument("--charge", type=int, help="Molecular charge (auto-detected if not specified)")
-    parser.add_argument("--multiplicity", type=int, help="Spin multiplicity (auto-detected if not specified)")
+    parser.add_argument(
+        "--charge", type=int, help="Molecular charge (auto-detected if not specified)"
+    )
+    parser.add_argument(
+        "--multiplicity", type=int, help="Spin multiplicity (auto-detected if not specified)"
+    )
     parser.add_argument("--name", type=str, help="Molecule name")
     parser.add_argument("--method", default="r2SCAN-3c", help="DFT functional (default: r2SCAN-3c)")
     parser.add_argument("--basis", default="", help="Basis set (default: empty, composite method)")
-    parser.add_argument("--dispersion", default="none", help="Dispersion correction (e.g. D3BJ, D4, none)")
-    parser.add_argument("--solvent-model", default="none", type=str.lower, choices=["smd", "cpcm", "none"], help="Solvent model (default: none)")
+    parser.add_argument(
+        "--dispersion", default="none", help="Dispersion correction (e.g. D3BJ, D4, none)"
+    )
+    parser.add_argument(
+        "--solvent-model",
+        default="none",
+        type=str.lower,
+        choices=["smd", "cpcm", "none"],
+        help="Solvent model (default: none)",
+    )
     parser.add_argument("--solvent", default="", help="Solvent name (e.g. water, methanol)")
     parser.add_argument("--nproc", type=int, help="Number of CPU cores")
     parser.add_argument("--mem", type=str, help="Memory limit (e.g. 32GB, 4096MB)")
     parser.add_argument("--config", type=str, help="Configuration YAML file")
-    parser.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING", "ERROR"], default="INFO", help="Logging level (default: INFO)")
+    parser.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
 
-    parser.add_argument("--route-extras", type=str, help="Comma-separated ORCA route extras (e.g. SlowConv,NoFinalGrid)")
+    parser.add_argument(
+        "--route-extras",
+        type=str,
+        help="Comma-separated ORCA route extras (e.g. SlowConv,NoFinalGrid)",
+    )
 
     if wf in ("singlepoint", "optimize", "frequency", "optfreq", "optfreqsp"):
-        parser.add_argument("--aux-j-basis", default="AutoAux", metavar="BASIS",
-            help="Auxiliary /J basis for RI-J fitting (default: AutoAux). "
-                 "Common: AutoAux, def2/J.")
-        parser.add_argument("--aux-c-basis", default="AutoAux", metavar="BASIS",
+        parser.add_argument(
+            "--aux-j-basis",
+            default="AutoAux",
+            metavar="BASIS",
+            help="Auxiliary /J basis for RI-J fitting (default: AutoAux). Common: AutoAux, def2/J.",
+        )
+        parser.add_argument(
+            "--aux-c-basis",
+            default="AutoAux",
+            metavar="BASIS",
             help="Auxiliary /C basis for RI-MP2 correlation (default: AutoAux). "
-                 "Common: AutoAux, def2-TZVPP/C, cc-pVTZ/C. Only used by "
-                  "double-hybrid functionals (PWPB95) and DLPNO.")
-        parser.add_argument("--ri-approximation", default="RIJCOSX", choices=["none", "RI", "RIJCOSX", "RIJK"], help="RI approximation (default: RIJCOSX)")
-        parser.add_argument("--aux-basis", dest="aux_j_basis_legacy", default=None, help=argparse.SUPPRESS)
+            "Common: AutoAux, def2-TZVPP/C, cc-pVTZ/C. Only used by "
+            "double-hybrid functionals (PWPB95) and DLPNO.",
+        )
+        parser.add_argument(
+            "--ri-approximation",
+            default="RIJCOSX",
+            choices=["none", "RI", "RIJCOSX", "RIJK"],
+            help="RI approximation (default: RIJCOSX)",
+        )
+        parser.add_argument(
+            "--aux-basis", dest="aux_j_basis_legacy", default=None, help=argparse.SUPPRESS
+        )
 
     if wf in ("optimize", "optfreq", "optfreqsp"):
-        parser.add_argument("--geom-maxiter", type=int, help="Max geometry iterations (maps to MaxIter in %%geom block)")
-        parser.add_argument("--opt-convergence", default="Tight", choices=["Loose", "Normal", "Tight", "VeryTight"], help="Optimization convergence (default: Tight)")
+        parser.add_argument(
+            "--geom-maxiter",
+            type=int,
+            help="Max geometry iterations (maps to MaxIter in %%geom block)",
+        )
+        parser.add_argument(
+            "--opt-convergence",
+            default="Tight",
+            choices=["Loose", "Normal", "Tight", "VeryTight"],
+            help="Optimization convergence (default: Tight)",
+        )
         # Hessian policy (plan §9): mutually-exclusive group replaces the
         # legacy --recalc-hess flag. Omit all three to follow config.
         hess_group = parser.add_mutually_exclusive_group()
@@ -214,48 +315,107 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
         )
 
     if wf == "optfreqsp":
-        parser.add_argument("--temperature", type=float, default=298.15, help="Temperature in K (default: 298.15)")
-        parser.add_argument("--pressure", type=float, default=1.0, help="Pressure in atm (default: 1.0)")
-        parser.add_argument("--scale-factor", type=float, default=0.9905, help="Frequency scale factor for ZPE/thermo (default: 0.9905)")
+        parser.add_argument(
+            "--temperature", type=float, default=298.15, help="Temperature in K (default: 298.15)"
+        )
+        parser.add_argument(
+            "--pressure", type=float, default=1.0, help="Pressure in atm (default: 1.0)"
+        )
+        parser.add_argument(
+            "--scale-factor",
+            type=float,
+            default=0.9905,
+            help="Frequency scale factor for ZPE/thermo (default: 0.9905)",
+        )
 
     if wf == "optfreqsp":
-        parser.add_argument("--sp-method", default="wB97M-V", help="SP functional (default: wB97M-V)")
-        parser.add_argument("--sp-basis", default="def2-TZVPP", help="SP basis set (default: def2-TZVPP)")
-        parser.add_argument("--sp-aux-j-basis", default="AutoAux", metavar="BASIS",
-            help="SP auxiliary /J basis for RI-J fitting (default: AutoAux). Common: AutoAux, def2/J.")
-        parser.add_argument("--sp-aux-c-basis", default="AutoAux", metavar="BASIS",
+        parser.add_argument(
+            "--sp-method", default="wB97M-V", help="SP functional (default: wB97M-V)"
+        )
+        parser.add_argument(
+            "--sp-basis", default="def2-TZVPP", help="SP basis set (default: def2-TZVPP)"
+        )
+        parser.add_argument(
+            "--sp-aux-j-basis",
+            default="AutoAux",
+            metavar="BASIS",
+            help="SP auxiliary /J basis for RI-J fitting (default: AutoAux). Common: AutoAux, def2/J.",
+        )
+        parser.add_argument(
+            "--sp-aux-c-basis",
+            default="AutoAux",
+            metavar="BASIS",
             help="SP auxiliary /C basis for RI-MP2 correlation (default: AutoAux). "
-                 "Common: AutoAux, def2-TZVPP/C. Only used by double-hybrid functionals (PWPB95) and DLPNO.")
+            "Common: AutoAux, def2-TZVPP/C. Only used by double-hybrid functionals (PWPB95) and DLPNO.",
+        )
         parser.add_argument("--sp-aux-basis", default=None, help=argparse.SUPPRESS)
-        parser.add_argument("--sp-ri-approximation", default="RIJCOSX", choices=["none", "RI", "RIJCOSX", "RIJK"], help="SP RI approximation (default: RIJCOSX)")
+        parser.add_argument(
+            "--sp-ri-approximation",
+            default="RIJCOSX",
+            choices=["none", "RI", "RIJCOSX", "RIJK"],
+            help="SP RI approximation (default: RIJCOSX)",
+        )
         parser.add_argument("--sp-dispersion", default="none", help="SP dispersion correction")
-        parser.add_argument("--sp-solvent", default="", help="SP solvent name (e.g. water; defaults to --solvent)")
-        parser.add_argument("--sp-solvent-model", default="", help="SP solvent model (defaults to --solvent-model)")
+        parser.add_argument(
+            "--sp-solvent", default="", help="SP solvent name (e.g. water; defaults to --solvent)"
+        )
+        parser.add_argument(
+            "--sp-solvent-model", default="", help="SP solvent model (defaults to --solvent-model)"
+        )
 
 
 def _add_xtb_optimize_args(parser: argparse.ArgumentParser) -> None:
     """Add arguments for the xTB optimization subcommand."""
-    parser.add_argument("--input", "-i", required=True, help="Input structure file (XYZ, GJF, COM, ORCA .inp)")
-    parser.add_argument("--output", "-o", default="./out", help="Output directory")
-    parser.add_argument("--charge", type=int, help="Molecular charge (auto-detected if not specified)")
-    parser.add_argument("--multiplicity", type=int, help="Spin multiplicity (auto-detected if not specified)")
-    parser.add_argument("--name", type=str, help="Molecule name")
-    parser.add_argument("--gfn", type=int, default=2, choices=[0, 1, 2], help="GFN-xTB Hamiltonian level (default: 2)")
     parser.add_argument(
-        "--opt-level", default="normal",
+        "--input", "-i", required=True, help="Input structure file (XYZ, GJF, COM, ORCA .inp)"
+    )
+    parser.add_argument("--output", "-o", default="./out", help="Output directory")
+    parser.add_argument(
+        "--charge", type=int, help="Molecular charge (auto-detected if not specified)"
+    )
+    parser.add_argument(
+        "--multiplicity", type=int, help="Spin multiplicity (auto-detected if not specified)"
+    )
+    parser.add_argument("--name", type=str, help="Molecule name")
+    parser.add_argument(
+        "--gfn",
+        type=int,
+        default=2,
+        choices=[0, 1, 2],
+        help="GFN-xTB Hamiltonian level (default: 2)",
+    )
+    parser.add_argument(
+        "--opt-level",
+        default="normal",
         choices=["crude", "sloppy", "loose", "normal", "tight", "vtight", "extreme"],
         help="xTB optimization convergence level (default: normal)",
     )
-    parser.add_argument("--max-steps", type=int, help="Maximum number of optimization cycles (xTB xcontrol maxcycle)")
     parser.add_argument(
-        "--solvent-model", default="none", type=str.lower, choices=["gbsa", "alpb", "none"],
+        "--max-steps",
+        type=int,
+        help="Maximum number of optimization cycles (xTB xcontrol maxcycle)",
+    )
+    parser.add_argument(
+        "--solvent-model",
+        default="none",
+        type=str.lower,
+        choices=["gbsa", "alpb", "none"],
         help="xTB solvation model (default: none; GBSA or ALPB)",
     )
     parser.add_argument("--solvent", default="", help="Solvent name (e.g. water, methanol)")
     parser.add_argument("--nproc", type=int, help="Number of CPU cores")
-    parser.add_argument("--mem", type=str, help="Memory limit (accepted for compatibility; xTB manages memory via nproc)")
+    parser.add_argument(
+        "--mem",
+        type=str,
+        help="Memory limit (accepted for compatibility; xTB manages memory via nproc)",
+    )
     parser.add_argument("--config", type=str, help="Configuration YAML file")
-    parser.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING", "ERROR"], default="INFO", help="Logging level (default: INFO)")
+    parser.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -270,6 +430,44 @@ def build_parser() -> argparse.ArgumentParser:
     # -- run -----------------------------------------------------------------
     run_parser = subparsers.add_parser("run", help="Run a computational workflow")
     run_sub = run_parser.add_subparsers(dest="workflow", required=True)
+
+    mechanism_tools = subparsers.add_parser("mechanism", help="Mechanism-study utilities")
+    mechanism_tools_sub = mechanism_tools.add_subparsers(dest="mechanism_command", required=True)
+    mechanism_resume = mechanism_tools_sub.add_parser(
+        "resume",
+        help="Resume a persisted mechanism study",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp mechanism resume --study study_001
+  acp mechanism resume --study study_001 --study-root ./mechanism_output
+  acp mechanism resume --study study_001 --decision decision_001=continue
+        """,
+    )
+    mechanism_resume.add_argument(
+        "--study",
+        required=True,
+        help="Study identifier under <study-root>/mechanism_study/<study>",
+    )
+    mechanism_resume.add_argument(
+        "--study-root",
+        default="./mechanism_output",
+        help="Mechanism-study root directory (default: ./mechanism_output)",
+    )
+    mechanism_resume.add_argument(
+        "--decision",
+        action="append",
+        default=[],
+        metavar="ID=RESOLUTION",
+        help="Decision resolution (repeatable; resolution may be plain text or JSON)",
+    )
+    mechanism_resume.add_argument(
+        "--log-level",
+        type=str,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
 
     # -- run ensemble -------------------------------------------------------
     ens = run_sub.add_parser(
@@ -662,7 +860,7 @@ Spectrum file format (DevDoc §6.2):
     xtbmd = run_sub.add_parser(
         "xtbmd_censo_energy",
         help="xTB-MD conformer search + CENSO free energy "
-             "(GFN-FF MD → GFN1 → isostat → CENSO → DFT)",
+        "(GFN-FF MD → GFN1 → isostat → CENSO → DFT)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
@@ -790,39 +988,56 @@ Examples:
     )
     # -- MD sampling control group --------------------------------------
     xtbmd.add_argument(
-        "--md-temp", type=float, default=400.0,
+        "--md-temp",
+        type=float,
+        default=400.0,
         help="MD target temperature in K (default: 400)",
     )
     xtbmd.add_argument(
-        "--md-time", type=float, default=100.0,
+        "--md-time",
+        type=float,
+        default=100.0,
         help="MD length in ps (default: 100)",
     )
     xtbmd.add_argument(
-        "--md-dump", type=float, default=100.0,
+        "--md-dump",
+        type=float,
+        default=100.0,
         help="MD trajectory dump interval in fs (default: 100)",
     )
     xtbmd.add_argument(
-        "--md-step", type=float, default=1.0,
+        "--md-step",
+        type=float,
+        default=1.0,
         help="MD integration time step in fs (default: 1.0)",
     )
     xtbmd.add_argument(
-        "--md-hmass", type=float, default=1.0,
+        "--md-hmass",
+        type=float,
+        default=1.0,
         help="Hydrogen mass scaling (default: 1.0)",
     )
     xtbmd.add_argument(
-        "--md-no-shake", action="store_true",
+        "--md-no-shake",
+        action="store_true",
         help="Disable SHAKE X–H bond constraints (enabled by default)",
     )
     xtbmd.add_argument(
-        "--md-nvt", action=argparse.BooleanOptionalAction, default=True,
+        "--md-nvt",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="Use the NVT ensemble (default: on; pass --no-md-nvt for NPT)",
     )
     xtbmd.add_argument(
-        "--md-seed", type=int, default=42,
+        "--md-seed",
+        type=int,
+        default=42,
         help="Base random seed (default: 42; replica seeds increment)",
     )
     xtbmd.add_argument(
-        "--md-seeds", type=int, default=1,
+        "--md-seeds",
+        type=int,
+        default=1,
         help=(
             "Number of replica MD trajectories (default: 1; each replica "
             "starts from a distinct RDKit embedding when >1; >=3 recommended "
@@ -830,60 +1045,85 @@ Examples:
         ),
     )
     xtbmd.add_argument(
-        "--md-method", type=str, default="gfnff",
+        "--md-method",
+        type=str,
+        default="gfnff",
         choices=["gfnff", "gfn0", "gfn1", "gfn2"],
         help="MD Hamiltonian (default: gfnff)",
     )
     xtbmd.add_argument(
-        "--md-timeout", type=int, default=None,
+        "--md-timeout",
+        type=int,
+        default=None,
         help="Per-MD subprocess timeout in seconds (default: auto-estimated from --md-time)",
     )
     # -- batch-opt / convergence / isostat control group ----------------
     xtbmd.add_argument(
-        "--conv-check", action=argparse.BooleanOptionalAction, default=True,
+        "--conv-check",
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="Run the sampling-convergence diagnostics "
-             "(default: on; pass --no-conv-check to disable)",
+        "(default: on; pass --no-conv-check to disable)",
     )
     xtbmd.add_argument(
-        "--conv-novelty-max", type=float, default=0.10,
+        "--conv-novelty-max",
+        type=float,
+        default=0.10,
         help="Population-weighted second-half novelty cap "
-             "(default: 0.10; over-limit is a warning only)",
+        "(default: 0.10; over-limit is a warning only)",
     )
     xtbmd.add_argument(
-        "--conv-rmsd", type=float, default=0.5,
+        "--conv-rmsd",
+        type=float,
+        default=0.5,
         help="Conv-check dedup RMSD threshold in Å (default: 0.5; decoupled from --gdis)",
     )
     xtbmd.add_argument(
-        "--max-frames", type=int, default=500,
+        "--max-frames",
+        type=int,
+        default=500,
         help="Batch-opt frame cap (default: 500; 0 = unlimited; uniform subsampling when exceeded)",
     )
     xtbmd.add_argument(
-        "--opt-gfn", type=int, default=1, choices=[0, 1, 2],
+        "--opt-gfn",
+        type=int,
+        default=1,
+        choices=[0, 1, 2],
         help="GFN level for the per-frame batch optimization (default: 1)",
     )
     xtbmd.add_argument(
-        "--opt-level", type=str, default="normal",
+        "--opt-level",
+        type=str,
+        default="normal",
         choices=["crude", "normal", "tight", "verytight"],
         help="xTB optimization level for the batch optimization (default: normal)",
     )
     xtbmd.add_argument(
-        "--opt-timeout", type=int, default=300,
+        "--opt-timeout",
+        type=int,
+        default=300,
         help="Per-frame xTB optimization timeout in seconds (default: 300; 0 = unlimited)",
     )
     xtbmd.add_argument(
-        "--edis", type=float, default=0.5,
+        "--edis",
+        type=float,
+        default=0.5,
         help="ISOSTAT energy dedup threshold in kcal/mol (default: 0.5)",
     )
     xtbmd.add_argument(
-        "--gdis", type=float, default=0.25,
+        "--gdis",
+        type=float,
+        default=0.25,
         help="ISOSTAT structure RMSD dedup threshold in Å (default: 0.25)",
     )
     xtbmd.add_argument(
-        "--keep-frames", action="store_true",
+        "--keep-frames",
+        action="store_true",
         help="Keep per-frame optimization working directories (default: cleaned up)",
     )
     xtbmd.add_argument(
-        "--resume", action="store_true",
+        "--resume",
+        action="store_true",
         help="Resume from stage checkpoints (traj/isomers/cluster; fingerprint-validated)",
     )
 
@@ -893,19 +1133,111 @@ Examples:
     # -- run mechanism -------------------------------------------------------
     mechanism = run_sub.add_parser(
         "mechanism",
-        help="Mechanism analysis (reactant/product → TS → IRC → energy profile)",
+        help="Mechanism analysis (reactant → path search → TS → IRC → energy profile)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
   acp run mechanism --input "CCO" --output ./mechanism_results
   acp run mechanism --input reaction.xyz --name substrate
+  acp run mechanism --input "C=C" --product "CC" --preset rph-s3 --output ./mech_out
+  acp run mechanism --input "C=C" --strategy guided-scan --fidelity s3 \\
+      --routes '[{"route_id":"r1","coordinate_plan":{"coordinates":[{"id":"rc1","kind":"distance","atoms":[0,1],"start":3.2,"end":1.55}],"points":21},"path_strategy":"guided-scan","fidelity":"s3"}]'
         """,
+    )
+    mechanism.set_defaults(
+        conformer_mode_explicit=False,
+        max_elementary_steps_explicit=False,
+        promotion_policy_explicit=False,
+        int_extension_explicit=False,
+        auto_converge_explicit=False,
     )
     mechanism.add_argument(
         "--input",
         type=str,
         required=True,
-        help="SMILES string or input file path (XYZ, GJF, LOG, OUT)",
+        help="Reactant SMILES string or input file path (XYZ, GJF, LOG, OUT)",
+    )
+    mechanism.add_argument(
+        "--product",
+        type=str,
+        help="Product SMILES string or file path (optional for guided-scan)",
+    )
+    mechanism.add_argument(
+        "--ts-guess",
+        type=str,
+        help="TS-guess SMILES string or file path (used by direct-ts strategy)",
+    )
+    mechanism.add_argument(
+        "--preset",
+        type=str,
+        choices=_mechanism_preset_ids(),
+        help="RPH fidelity preset from the mechanism catalog (rph-s3 = B97-3c → "
+        "r2SCAN-3c, rph-s4 = M062X → wB97M-V)",
+    )
+    mechanism.add_argument(
+        "--strategy",
+        type=str,
+        choices=["guided-scan", "rph-reverse", "direct-ts"],
+        help="Path-search strategy (default: guided-scan)",
+    )
+    mechanism.add_argument(
+        "--fidelity",
+        type=str,
+        choices=["s3", "s4"],
+        help="Refinement fidelity (default: s3; rph-s3/rph-s4 presets set this)",
+    )
+    mechanism.add_argument(
+        "--routes",
+        type=str,
+        help="JSON string: list of route dicts (coordinate plans + strategy + fidelity)",
+    )
+    mechanism.add_argument(
+        "--scan-points",
+        type=int,
+        help="Override relaxed-scan frame count (range: 5-100; default profile value: 21)",
+    )
+    mechanism.add_argument(
+        "--irc-points",
+        type=int,
+        help="Override IRC MaxIter point count (range: 5-200; default profile value: 30)",
+    )
+    mechanism.add_argument(
+        "--study-id",
+        type=str,
+        help="Mechanism-study identifier (enables StudyOrchestrator mode)",
+    )
+    mechanism.add_argument(
+        "--conformer-mode",
+        action=_StoreWithExplicitFlag,
+        default="auto",
+        choices=["auto", "censo-lite", "xtb-fast"],
+        help="Stable-state ensemble mode for study orchestration (default: auto)",
+    )
+    mechanism.add_argument(
+        "--max-elementary-steps",
+        action=_StoreWithExplicitFlag,
+        type=int,
+        default=3,
+        help="Maximum elementary steps to confirm in study mode (default: 3)",
+    )
+    mechanism.add_argument(
+        "--int-extension",
+        action=_StoreTrueWithExplicitFlag,
+        default=False,
+        help="Allow recursive intermediate extension in study mode",
+    )
+    mechanism.add_argument(
+        "--promotion-policy",
+        action=_StoreWithExplicitFlag,
+        default="all_confirmed",
+        choices=["all_confirmed", "rate_relevant", "user_selected"],
+        help="Study promotion policy for downstream confirmation (default: all_confirmed)",
+    )
+    mechanism.add_argument(
+        "--auto-converge",
+        action=_StoreTrueWithExplicitFlag,
+        default=False,
+        help="Automatically resolve waiting review decisions with the default policy",
     )
     mechanism.add_argument(
         "--output",
@@ -1027,6 +1359,12 @@ Examples:
 # ---------------------------------------------------------------------------
 
 
+def _mechanism_preset_ids() -> list[str]:
+    from acp.mechanism.presets import mechanism_profile_ids
+
+    return list(mechanism_profile_ids())
+
+
 def _handle_mechanism(args: argparse.Namespace) -> int:
     """Execute the mechanism workflow."""
     setup_logging(args.log_level)
@@ -1037,6 +1375,87 @@ def _handle_mechanism(args: argparse.Namespace) -> int:
         cfg = _build_config(args)
         from acp.workflows.mechanism import run_mechanism_analysis
 
+        routes: list[dict[str, object]] | None = None
+        if getattr(args, "routes", None):
+            try:
+                parsed_routes = json.loads(args.routes)
+                if isinstance(parsed_routes, list):
+                    routes = [dict(r) for r in parsed_routes]
+            except (TypeError, ValueError) as exc:
+                logger.error("Invalid --routes JSON: %s", exc)
+                return 1
+
+        preset = getattr(args, "preset", None)
+        strategy = getattr(args, "strategy", None)
+        fidelity = getattr(args, "fidelity", None)
+        if preset:
+            from acp.mechanism.presets import resolve_preset
+
+            preset_strategy, preset_fidelity = resolve_preset(preset)
+            strategy = strategy or preset_strategy
+            fidelity = fidelity or preset_fidelity
+
+        if _mechanism_study_requested(args):
+            from acp.mechanism.study_runner import (
+                read_review_handoff,
+                resume_mechanism_study,
+                run_mechanism_study,
+                waiting_study_exists,
+                write_review_payload,
+            )
+            from acp.scheduler.jobs import EXIT_WAITING_REVIEW
+
+            # Scheduler restart handoff: the JobManager mirrors job state to
+            # <output>/job.json. When a study paused at a review gate, reuse
+            # the persisted study id + review resolutions instead of starting
+            # a fresh study (the derived id is timestamped and not stable).
+            study_id = getattr(args, "study_id", None)
+            handed_off_study_id, review_decisions = read_review_handoff(output_dir)
+            if not study_id and handed_off_study_id:
+                study_id = handed_off_study_id
+
+            if study_id and waiting_study_exists(output_dir, study_id):
+                summary = resume_mechanism_study(
+                    study_id=study_id,
+                    study_root=output_dir,
+                    decision_resolutions=review_decisions,
+                )
+            else:
+                summary = run_mechanism_study(
+                    input_source=args.input,
+                    output_dir=output_dir,
+                    config=cfg,
+                    name=args.name,
+                    charge=args.charge,
+                    multiplicity=args.multiplicity,
+                    product_source=getattr(args, "product", None),
+                    ts_guess_source=getattr(args, "ts_guess", None),
+                    routes=routes,
+                    strategy=strategy,
+                    fidelity=fidelity,
+                    scan_points=getattr(args, "scan_points", None),
+                    irc_points=getattr(args, "irc_points", None),
+                    study_id=study_id,
+                    conformer_mode=getattr(args, "conformer_mode", "auto"),
+                    max_elementary_steps=int(getattr(args, "max_elementary_steps", 3)),
+                    int_extension=bool(getattr(args, "int_extension", False)),
+                    promotion_policy=str(getattr(args, "promotion_policy", "all_confirmed")),
+                    auto_converge=bool(getattr(args, "auto_converge", False)),
+                )
+            status = str(summary.get("status") or "unknown")
+            logger.info("Mechanism study %s", status)
+            logger.info("  Study ID            : %s", summary.get("study_id", "N/A"))
+            logger.info("  Study dir           : %s", summary.get("study_dir", "N/A"))
+            logger.info("  Network size        : %s", summary.get("network_size", {}))
+            logger.info("  Gates               : %s", summary.get("gates_summary", {}))
+            pending = summary.get("pending_decisions", [])
+            if pending:
+                logger.info("  Pending decisions   : %s", pending)
+            if status == "waiting":
+                write_review_payload(output_dir, summary)
+                return EXIT_WAITING_REVIEW
+            return 0 if status in {"completed", "waiting", "running"} else 1
+
         result = run_mechanism_analysis(
             input_source=args.input,
             output_dir=output_dir,
@@ -1044,6 +1463,13 @@ def _handle_mechanism(args: argparse.Namespace) -> int:
             name=args.name,
             charge=args.charge,
             multiplicity=args.multiplicity,
+            product_source=getattr(args, "product", None),
+            ts_guess_source=getattr(args, "ts_guess", None),
+            routes=routes,
+            strategy=strategy,
+            fidelity=fidelity,
+            scan_points=getattr(args, "scan_points", None),
+            irc_points=getattr(args, "irc_points", None),
         )
     except KeyboardInterrupt:
         logger.warning("Interrupted by user")
@@ -1072,12 +1498,84 @@ def _handle_mechanism(args: argparse.Namespace) -> int:
     return 1
 
 
+def _mechanism_study_requested(args: argparse.Namespace) -> bool:
+    return any(
+        [
+            getattr(args, "study_id", None) is not None,
+            bool(getattr(args, "conformer_mode_explicit", False)),
+            bool(getattr(args, "max_elementary_steps_explicit", False)),
+            bool(getattr(args, "promotion_policy_explicit", False)),
+            bool(getattr(args, "int_extension_explicit", False)),
+            bool(getattr(args, "auto_converge_explicit", False)),
+        ]
+    )
+
+
+def _parse_decision_resolutions(values: list[str]) -> dict[str, Any]:
+    resolutions: dict[str, Any] = {}
+    for raw in values:
+        decision_id, separator, payload = raw.partition("=")
+        decision_key = decision_id.strip()
+        if not separator or not decision_key:
+            raise ValueError(f"Invalid --decision value: {raw!r}; expected ID=RESOLUTION")
+        payload_text = payload.strip()
+        try:
+            resolutions[decision_key] = json.loads(payload_text)
+        except json.JSONDecodeError:
+            resolutions[decision_key] = payload_text
+    return resolutions
+
+
+def _handle_mechanism_resume(args: argparse.Namespace) -> int:
+    """Resume a persisted mechanism study."""
+    setup_logging(args.log_level)
+    try:
+        from acp.mechanism.study_runner import resume_mechanism_study
+
+        resolutions = _parse_decision_resolutions(list(getattr(args, "decision", []) or []))
+        summary = resume_mechanism_study(
+            study_id=args.study,
+            study_root=args.study_root,
+            decision_resolutions=resolutions,
+        )
+    except KeyboardInterrupt:
+        logger.warning("Interrupted by user")
+        return 130
+    except Exception as exc:
+        logger.exception("Fatal error: %s", exc)
+        return 1
+
+    status = str(summary.get("status") or "unknown")
+    logger.info("Mechanism study %s", status)
+    logger.info("  Study ID            : %s", summary.get("study_id", "N/A"))
+    logger.info("  Study dir           : %s", summary.get("study_dir", "N/A"))
+    logger.info("  Network size        : %s", summary.get("network_size", {}))
+    logger.info("  Gates               : %s", summary.get("gates_summary", {}))
+    pending = summary.get("pending_decisions", [])
+    if pending:
+        logger.info("  Pending decisions   : %s", pending)
+    if status == "waiting":
+        from acp.mechanism.study_runner import write_review_payload
+        from acp.scheduler.jobs import EXIT_WAITING_REVIEW
+
+        write_review_payload(Path(args.study_root), summary)
+        return EXIT_WAITING_REVIEW
+    return 0 if status in {"completed", "waiting", "running"} else 1
+
+
 def _build_simple_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
     kwargs: dict[str, Any] = {}
     for key in (
-        "method", "basis", "dispersion", "solvent_model", "solvent",
-        "aux_j_basis", "aux_c_basis", "ri_approximation",
-        "geom_maxiter", "opt_convergence",
+        "method",
+        "basis",
+        "dispersion",
+        "solvent_model",
+        "solvent",
+        "aux_j_basis",
+        "aux_c_basis",
+        "ri_approximation",
+        "geom_maxiter",
+        "opt_convergence",
     ):
         val = getattr(args, key, None)
         if val is not None:
@@ -1102,6 +1600,7 @@ def _build_simple_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
 
 def _handle_singlepoint(args: argparse.Namespace) -> int:
     from acp.workflows.simple import run_singlepoint
+
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
@@ -1132,6 +1631,7 @@ def _handle_singlepoint(args: argparse.Namespace) -> int:
 
 def _handle_optimize(args: argparse.Namespace) -> int:
     from acp.workflows.simple import run_optimize
+
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
@@ -1162,6 +1662,7 @@ def _handle_optimize(args: argparse.Namespace) -> int:
 
 def _handle_frequency(args: argparse.Namespace) -> int:
     from acp.workflows.simple import run_frequency
+
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
@@ -1192,6 +1693,7 @@ def _handle_frequency(args: argparse.Namespace) -> int:
 
 def _handle_optfreq(args: argparse.Namespace) -> int:
     from acp.workflows.simple import run_optfreq
+
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
@@ -1223,6 +1725,7 @@ def _handle_optfreq(args: argparse.Namespace) -> int:
 
 def _handle_optfreqsp(args: argparse.Namespace) -> int:
     from acp.workflows.simple import run_optfreqsp
+
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
@@ -1296,6 +1799,7 @@ def _build_xtb_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
 
 def _handle_xtb_optimize(args: argparse.Namespace) -> int:
     from acp.workflows.simple import run_xtb_optimize
+
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
@@ -1420,6 +1924,7 @@ def _handle_ensemble(args: argparse.Namespace) -> int:
 
     if args.save_config:
         from cccp.config import save_config as save_cfg
+
         save_cfg(cfg, Path(args.save_config))
         logger.info("Configuration saved to: %s", args.save_config)
 
@@ -1517,7 +2022,9 @@ def _handle_ensemble_batch(
     summary_path.write_text(json.dumps(summary, indent=2))
     logger.info(
         "Batch complete: %d/%d successful — summary saved to %s",
-        len(results), len(inputs), summary_path,
+        len(results),
+        len(inputs),
+        summary_path,
     )
     return 0 if not errors else 1
 
@@ -1562,6 +2069,7 @@ def _handle_energy(args: argparse.Namespace) -> int:
 
     if args.save_config:
         from cccp.config import save_config as save_cfg
+
         save_cfg(cfg, Path(args.save_config))
         logger.info("Configuration saved to: %s", args.save_config)
 
@@ -1668,7 +2176,9 @@ def _handle_energy_batch(
     summary_path.write_text(json.dumps(summary, indent=2))
     logger.info(
         "Batch complete: %d/%d successful — summary saved to %s",
-        len(results), len(inputs), summary_path,
+        len(results),
+        len(inputs),
+        summary_path,
     )
     return 0 if not errors else 1
 
@@ -1699,6 +2209,7 @@ def _handle_xtbmd_censo_energy(args: argparse.Namespace) -> int:
 
     if args.save_config:
         from cccp.config import save_config as save_cfg
+
         save_cfg(cfg, Path(args.save_config))
         logger.info("Configuration saved to: %s", args.save_config)
 
@@ -1861,7 +2372,9 @@ def _handle_xtbmd_censo_energy_batch(
     summary_path.write_text(json.dumps(summary, indent=2))
     logger.info(
         "Batch complete: %d/%d successful — summary saved to %s",
-        len(results), len(inputs), summary_path,
+        len(results),
+        len(inputs),
+        summary_path,
     )
     return 0 if not errors else 1
 
@@ -1912,6 +2425,7 @@ def _handle_nmr(args: argparse.Namespace) -> int:
 
     if args.save_config:
         from cccp.config import save_config as save_cfg
+
         save_cfg(cfg, Path(args.save_config))
         logger.info("Configuration saved to: %s", args.save_config)
 
@@ -2018,32 +2532,40 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
+    if args.command == "run":
+        dispatch: dict[str, Callable[[argparse.Namespace], int]] = {
+            "ensemble": _handle_ensemble,
+            "energy": _handle_energy,
+            "nmr": _handle_nmr,
+            "xtbmd_censo_energy": _handle_xtbmd_censo_energy,
+            "mechanism": _handle_mechanism,
+            "serve": _handle_serve,
+            "singlepoint": _handle_singlepoint,
+            "optimize": _handle_optimize,
+            "frequency": _handle_frequency,
+            "optfreq": _handle_optfreq,
+            "optfreqsp": _handle_optfreqsp,
+            "xtb_optimize": _handle_xtb_optimize,
+        }
+        handler = dispatch.get(args.workflow)
+        if handler is None:
+            parser.print_help()
+            return 1
+        _preflight_workflow(args.workflow)
+        return handler(args)
+
+    if args.command == "mechanism":
+        dispatch = {"resume": _handle_mechanism_resume}
+        handler = dispatch.get(args.mechanism_command)
+        if handler is None:
+            parser.print_help()
+            return 1
+        return handler(args)
+
     if args.command != "run":
         parser.print_help()
         return 1
-
-    dispatch: dict[str, Callable[[argparse.Namespace], int]] = {
-        "ensemble": _handle_ensemble,
-        "energy": _handle_energy,
-        "nmr": _handle_nmr,
-        "xtbmd_censo_energy": _handle_xtbmd_censo_energy,
-        "mechanism": _handle_mechanism,
-        "serve": _handle_serve,
-        "singlepoint": _handle_singlepoint,
-        "optimize": _handle_optimize,
-        "frequency": _handle_frequency,
-        "optfreq": _handle_optfreq,
-        "optfreqsp": _handle_optfreqsp,
-        "xtb_optimize": _handle_xtb_optimize,
-    }
-
-    handler = dispatch.get(args.workflow)
-    if handler is None:
-        parser.print_help()
-        return 1
-
-    _preflight_workflow(args.workflow)
-    return handler(args)
+    return 1
 
 
 if __name__ == "__main__":

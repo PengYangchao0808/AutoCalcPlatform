@@ -1,3 +1,6 @@
+# ruff: noqa: E501
+# pyright: reportAny=false, reportExplicitAny=false, reportUnknownParameterType=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownVariableType=false, reportMissingTypeArgument=false, reportPrivateUsage=false, reportUnusedVariable=false, reportRedeclaration=false, reportUnnecessaryIsInstance=false, reportUnreachable=false, reportUnusedParameter=false, reportImplicitStringConcatenation=false, reportPrivateImportUsage=false, reportArgumentType=false
+
 from __future__ import annotations
 
 from typing import Any
@@ -99,8 +102,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "label_zh": "NMR + DP4/DP5 \u7acb\u4f53\u5f52\u5c5e",
         "category": "preset",
         "description": (
-            "GIAO NMR shieldings + Boltzmann averaging + "
-            "DP4/DP5 stereochemistry assignment"
+            "GIAO NMR shieldings + Boltzmann averaging + DP4/DP5 stereochemistry assignment"
         ),
         "method_schema_id": "nmr",
         "default_backend": "orca",
@@ -201,38 +203,34 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
 # is unchanged.
 
 BASIS_CATALOG: dict[str, dict[str, str | None]] = {
-    "def2-SV(P)":  {"aux_j": "def2/J", "aux_c": None},
-    "def2-SVP":    {"aux_j": "def2/J", "aux_c": "def2-SVP/C"},
-    "def2-SVPD":   {"aux_j": "def2/J", "aux_c": "def2-SVPD/C"},
-    "def2-TZVP":   {"aux_j": "def2/J", "aux_c": "def2-TZVP/C"},
-    "def2-TZVPP":  {"aux_j": "def2/J", "aux_c": "def2-TZVPP/C"},
+    "def2-SV(P)": {"aux_j": "def2/J", "aux_c": None},
+    "def2-SVP": {"aux_j": "def2/J", "aux_c": "def2-SVP/C"},
+    "def2-SVPD": {"aux_j": "def2/J", "aux_c": "def2-SVPD/C"},
+    "def2-TZVP": {"aux_j": "def2/J", "aux_c": "def2-TZVP/C"},
+    "def2-TZVPP": {"aux_j": "def2/J", "aux_c": "def2-TZVPP/C"},
     "def2-TZVPPD": {"aux_j": "def2/J", "aux_c": "def2-TZVPP/C"},
-    "def2-QZVP":   {"aux_j": "def2/J", "aux_c": None},
-    "def2-QZVPP":  {"aux_j": "def2/J", "aux_c": "def2-QZVPP/C"},
+    "def2-QZVP": {"aux_j": "def2/J", "aux_c": None},
+    "def2-QZVPP": {"aux_j": "def2/J", "aux_c": "def2-QZVPP/C"},
     "def2-QZVPPD": {"aux_j": "def2/J", "aux_c": "def2-QZVPP/C"},
-
-    "ma-def2-SVP":   {"aux_j": "def2/J", "aux_c": None},
-    "ma-def2-TZVP":  {"aux_j": "def2/J", "aux_c": None},
+    "ma-def2-SVP": {"aux_j": "def2/J", "aux_c": None},
+    "ma-def2-TZVP": {"aux_j": "def2/J", "aux_c": None},
     "ma-def2-TZVPP": {"aux_j": "def2/J", "aux_c": None},
     "ma-def2-QZVPP": {"aux_j": "def2/J", "aux_c": None},
-
-    "cc-pVDZ":     {"aux_j": None, "aux_c": "cc-pVDZ/C"},
-    "cc-pVTZ":     {"aux_j": None, "aux_c": "cc-pVTZ/C"},
-    "cc-pVQZ":     {"aux_j": None, "aux_c": "cc-pVQZ/C"},
-    "cc-pV5Z":     {"aux_j": None, "aux_c": "cc-pV5Z/C"},
+    "cc-pVDZ": {"aux_j": None, "aux_c": "cc-pVDZ/C"},
+    "cc-pVTZ": {"aux_j": None, "aux_c": "cc-pVTZ/C"},
+    "cc-pVQZ": {"aux_j": None, "aux_c": "cc-pVQZ/C"},
+    "cc-pV5Z": {"aux_j": None, "aux_c": "cc-pV5Z/C"},
     "aug-cc-pVDZ": {"aux_j": None, "aux_c": "aug-cc-pVDZ/C"},
     "aug-cc-pVTZ": {"aux_j": None, "aux_c": "aug-cc-pVTZ/C"},
     "aug-cc-pVQZ": {"aux_j": None, "aux_c": "aug-cc-pVQZ/C"},
-
     "cc-pwCVDZ": {"aux_j": None, "aux_c": None},
     "cc-pwCVTZ": {"aux_j": None, "aux_c": None},
     "cc-pwCVQZ": {"aux_j": None, "aux_c": None},
-    "cc-pCVDZ":  {"aux_j": None, "aux_c": None},
-    "cc-pCVTZ":  {"aux_j": None, "aux_c": None},
-
+    "cc-pCVDZ": {"aux_j": None, "aux_c": None},
+    "cc-pCVTZ": {"aux_j": None, "aux_c": None},
     "def2-mTZVPP": {"aux_j": None, "aux_c": None},
-    "def2-mSVP":   {"aux_j": None, "aux_c": None},
-    "mTZVP":       {"aux_j": None, "aux_c": None},
+    "def2-mSVP": {"aux_j": None, "aux_c": None},
+    "mTZVP": {"aux_j": None, "aux_c": None},
 }
 
 _ALL_BASIS_SETS: tuple[str, ...] = tuple(BASIS_CATALOG.keys())
@@ -290,7 +288,6 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_basis": "mTZVP",
         "default_dispersion": "none",
     },
-
     # ── Ordinary hybrid functionals (user-selectable RI, no /C needed) ──
     "B3LYP": {
         "basis_inline": True,
@@ -334,7 +331,6 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_basis": "6-311G(d)",
         "default_dispersion": "none",
     },
-
     # ── Range-separated single-hybrid functionals ──
     "wB97X-D4": {
         "basis_inline": True,
@@ -356,7 +352,6 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_basis": "def2-TZVPP",
         "default_dispersion": "none",
     },
-
     # ── Double-hybrid functionals (need /J + /C) ──
     "PWPB95": {
         "basis_inline": True,
@@ -378,7 +373,6 @@ METHOD_META: dict[str, dict[str, Any]] = {
         "default_basis": "def2-TZVPP",
         "default_dispersion": "D4",
     },
-
     # ── Post-HF wavefunction methods ──
     "DLPNO-CCSD(T)": {
         "basis_inline": False,
@@ -428,10 +422,17 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "type": "select",
         "per_backend": {
             "orca": [
-                "r2SCAN-3c", "PBEh-3c", "B97-3c",
-                "B3LYP", "PBE0", "M062X", "mPW1PW91",
-                "wB97X-D4", "wB97M-V",
-                "PWPB95", "revDSD-PBEP86",
+                "r2SCAN-3c",
+                "PBEh-3c",
+                "B97-3c",
+                "B3LYP",
+                "PBE0",
+                "M062X",
+                "mPW1PW91",
+                "wB97X-D4",
+                "wB97M-V",
+                "PWPB95",
+                "revDSD-PBEP86",
                 "DLPNO-CCSD(T)",
             ],
             "xtb": ["GFN0-xTB", "GFN1-xTB", "GFN2-xTB"],
@@ -569,7 +570,7 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "aux_kind": "j",
         "option_meta": {
             "AutoAux": "ORCA auto-generates /J auxiliary basis (recommended default)",
-            "def2/J":  "Weigend universal /J fitting basis (works with any main basis)",
+            "def2/J": "Weigend universal /J fitting basis (works with any main basis)",
         },
     },
     "aux_c_basis": {
@@ -758,6 +759,85 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "label": "Resume from Checkpoints",
         "label_zh": "断点续跑",
         "default": {"*": False},
+    },
+    "path_strategy": {
+        "type": "select",
+        "options": ["guided-scan", "rph-reverse", "direct-ts"],
+        "default": {"*": "guided-scan"},
+        "label": "Path Search Strategy",
+        "label_zh": "路径搜索策略",
+    },
+    "fidelity": {
+        "type": "select",
+        "options": ["s3", "s4"],
+        "default": {"*": "s3"},
+        "label": "Refinement Fidelity",
+        "label_zh": "精化精度",
+    },
+    "irc_points": {
+        "type": "int",
+        "min": 5,
+        "max": 200,
+        "default": {"*": 30},
+        "advanced": True,
+        "label": "IRC Points",
+        "label_zh": "IRC 点数",
+    },
+    "scan_points": {
+        "type": "int",
+        "min": 5,
+        "max": 100,
+        "default": {"*": 21},
+        "advanced": True,
+        "label": "Scan Points",
+        "label_zh": "扫描点数",
+    },
+    "ts_initial_hessian": {
+        "type": "select",
+        "options": ["calculate", "model", "read"],
+        "default": {"*": "calculate"},
+        "advanced": True,
+        "label": "TS Initial Hessian",
+        "label_zh": "TS 初猜 Hessian",
+    },
+    "conformer_mode": {
+        "type": "select",
+        "options": ["auto", "censo-lite", "xtb-fast"],
+        "default": {"*": "auto"},
+        "advanced": True,
+        "label": "Conformer Mode",
+        "label_zh": "构象模式",
+    },
+    "max_elementary_steps": {
+        "type": "int",
+        "min": 1,
+        "max": 20,
+        "default": {"*": 3},
+        "advanced": True,
+        "label": "Max Elementary Steps",
+        "label_zh": "最大基元步骤数",
+    },
+    "int_extension": {
+        "type": "bool",
+        "advanced": True,
+        "default": {"*": False},
+        "label": "Intermediate Extension",
+        "label_zh": "中间体扩展",
+    },
+    "promotion_policy": {
+        "type": "select",
+        "options": ["all_confirmed", "rate_relevant", "user_selected"],
+        "default": {"*": "all_confirmed"},
+        "advanced": True,
+        "label": "Promotion Policy",
+        "label_zh": "升级策略",
+    },
+    "auto_converge": {
+        "type": "bool",
+        "advanced": True,
+        "default": {"*": False},
+        "label": "Auto Converge",
+        "label_zh": "自动收敛",
     },
     # ── NMR-specific fields (P1a, 2026-08-07) ───────────────────────────
     "nuclei": {
@@ -1259,9 +1339,14 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "required": True,
                 "allowed_engines": ["orca"],
                 "fields": [
-                    "functional", "basis", "solvent_model", "solvent",
-                    "nuclei", "boltzmann_temp",
-                    "tms_shielding_h", "tms_shielding_c",
+                    "functional",
+                    "basis",
+                    "solvent_model",
+                    "solvent",
+                    "nuclei",
+                    "boltzmann_temp",
+                    "tms_shielding_h",
+                    "tms_shielding_c",
                 ],
             },
         ],
@@ -1560,9 +1645,17 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "required": True,
                 "allowed_engines": ["molclus"],
                 "fields": [
-                    "md_temperature", "md_time_ps", "md_dump_fs",
-                    "md_step_fs", "md_hmass", "md_shake", "md_nvt",
-                    "md_seed", "md_seeds", "md_method", "resume",
+                    "md_temperature",
+                    "md_time_ps",
+                    "md_dump_fs",
+                    "md_step_fs",
+                    "md_hmass",
+                    "md_shake",
+                    "md_nvt",
+                    "md_seed",
+                    "md_seeds",
+                    "md_method",
+                    "resume",
                 ],
             },
             {
@@ -1572,8 +1665,13 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "required": True,
                 "allowed_engines": ["xtb"],
                 "fields": [
-                    "opt_gfn", "opt_level", "opt_timeout", "max_frames",
-                    "conv_check", "conv_novelty_max", "conv_rmsd",
+                    "opt_gfn",
+                    "opt_level",
+                    "opt_timeout",
+                    "max_frames",
+                    "conv_check",
+                    "conv_novelty_max",
+                    "conv_rmsd",
                 ],
             },
             {
@@ -1599,9 +1697,16 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "required": False,
                 "allowed_engines": ["orca"],
                 "fields": [
-                    "functional", "basis", "dispersion", "solvent_model",
-                    "solvent", "grid", "scf_convergence",
-                    "opt_convergence", "max_steps", "recalc_hess",
+                    "functional",
+                    "basis",
+                    "dispersion",
+                    "solvent_model",
+                    "solvent",
+                    "grid",
+                    "scf_convergence",
+                    "opt_convergence",
+                    "max_steps",
+                    "recalc_hess",
                 ],
             },
             {
@@ -1611,9 +1716,16 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "required": True,
                 "allowed_engines": ["orca"],
                 "fields": [
-                    "functional", "basis", "ri_approximation",
-                    "aux_j_basis", "aux_c_basis", "dispersion",
-                    "solvent_model", "solvent", "grid", "scf_convergence",
+                    "functional",
+                    "basis",
+                    "ri_approximation",
+                    "aux_j_basis",
+                    "aux_c_basis",
+                    "dispersion",
+                    "solvent_model",
+                    "solvent",
+                    "grid",
+                    "scf_convergence",
                 ],
             },
             {
@@ -1832,6 +1944,211 @@ METHOD_SCHEMAS: dict[str, Any] = {
             },
         ],
     },
+    "mechanism": {
+        "method_levels": [
+            {
+                "level_id": "scan",
+                "label": "Path Scan",
+                "label_zh": "路径扫描",
+                "required": True,
+                "allowed_engines": ["xtb"],
+                "fields": [
+                    "scan_points",
+                    "path_strategy",
+                    "fidelity",
+                    "conformer_mode",
+                    "max_elementary_steps",
+                    "int_extension",
+                    "promotion_policy",
+                    "auto_converge",
+                ],
+            },
+            {
+                "level_id": "ts_opt",
+                "label": "TS Optimization",
+                "label_zh": "过渡态优化",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "dispersion",
+                    "grid",
+                    "scf_convergence",
+                    "max_steps",
+                    "solvent_model",
+                    "solvent",
+                    "ts_initial_hessian",
+                ],
+            },
+            {
+                "level_id": "freq",
+                "label": "Frequency",
+                "label_zh": "频率",
+                "required": False,
+                "allowed_engines": ["orca"],
+                "fields": ["functional", "basis", "solvent_model", "solvent"],
+            },
+            {
+                "level_id": "sp",
+                "label": "Single Point Energy",
+                "label_zh": "单点能",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "ri_approximation",
+                    "aux_j_basis",
+                    "dispersion",
+                    "solvent_model",
+                    "solvent",
+                    "grid",
+                    "scf_convergence",
+                ],
+            },
+            {
+                "level_id": "irc",
+                "label": "IRC Validation",
+                "label_zh": "IRC 验证",
+                "required": False,
+                "allowed_engines": ["orca"],
+                "fields": ["irc_points", "functional", "basis"],
+            },
+        ],
+        "profiles": [
+            {
+                "profile_id": "rph-s3",
+                "label": "RPH Low-Fidelity (B97-3c → r2SCAN-3c)",
+                "summary": "Guided relaxed scan (xTB) + B97-3c OptTS/Freq + r2SCAN-3c SP (RPH S3 contract)",
+                "levels": {
+                    "scan": {
+                        "engine": "xtb",
+                        "path_strategy": "guided-scan",
+                        "fidelity": "s3",
+                        "scan_points": 21,
+                        "conformer_mode": "censo-lite",
+                        "max_elementary_steps": 3,
+                        "int_extension": False,
+                        "promotion_policy": "all_confirmed",
+                        "auto_converge": False,
+                    },
+                    "ts_opt": {
+                        "engine": "orca",
+                        "functional": "B97-3c",
+                        "basis": "",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                        "ts_initial_hessian": "calculate",
+                    },
+                    "freq": {"engine": "orca", "functional": "B97-3c", "basis": ""},
+                    "sp": {
+                        "engine": "orca",
+                        "functional": "r2SCAN-3c",
+                        "basis": "",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                    },
+                    "irc": {
+                        "engine": "orca",
+                        "functional": "B97-3c",
+                        "basis": "",
+                        "irc_points": 30,
+                    },
+                },
+            },
+            {
+                "profile_id": "rph-s4",
+                "label": "RPH High-Fidelity (M062X → wB97M-V)",
+                "summary": "Guided relaxed scan (xTB) + M062X/def2-SVP OptTS/Freq + wB97M-V/def2-TZVPP SP (RPH S4 contract)",
+                "levels": {
+                    "scan": {
+                        "engine": "xtb",
+                        "path_strategy": "guided-scan",
+                        "fidelity": "s4",
+                        "scan_points": 25,
+                        "conformer_mode": "censo-lite",
+                        "max_elementary_steps": 3,
+                        "int_extension": False,
+                        "promotion_policy": "all_confirmed",
+                        "auto_converge": False,
+                    },
+                    "ts_opt": {
+                        "engine": "orca",
+                        "functional": "M062X",
+                        "basis": "def2-SVP",
+                        "dispersion": "none",
+                        "grid": "DefGrid3",
+                        "scf_convergence": "Tight",
+                        "solvent_model": "none",
+                        "solvent": "",
+                        "ts_initial_hessian": "calculate",
+                    },
+                    "freq": {"engine": "orca", "functional": "M062X", "basis": "def2-SVP"},
+                    "sp": {
+                        "engine": "orca",
+                        "functional": "wB97M-V",
+                        "basis": "def2-TZVPP",
+                        "ri_approximation": "RIJCOSX",
+                        "aux_j_basis": "def2/J",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                    },
+                    "irc": {
+                        "engine": "orca",
+                        "functional": "M062X",
+                        "basis": "def2-SVP",
+                        "irc_points": 40,
+                    },
+                },
+            },
+            {
+                "profile_id": "guided-scan-fast",
+                "label": "Guided Scan Fast (xTB-fast → S3)",
+                "summary": "xTB-fast conformer intake + guided relaxed scan + B97-3c OptTS/Freq + r2SCAN-3c SP",
+                "levels": {
+                    "scan": {
+                        "engine": "xtb",
+                        "path_strategy": "guided-scan",
+                        "fidelity": "s3",
+                        "scan_points": 21,
+                        "conformer_mode": "xtb-fast",
+                        "max_elementary_steps": 3,
+                        "int_extension": False,
+                        "promotion_policy": "all_confirmed",
+                        "auto_converge": False,
+                    },
+                    "ts_opt": {
+                        "engine": "orca",
+                        "functional": "B97-3c",
+                        "basis": "",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                        "ts_initial_hessian": "calculate",
+                    },
+                    "freq": {"engine": "orca", "functional": "B97-3c", "basis": ""},
+                    "sp": {
+                        "engine": "orca",
+                        "functional": "r2SCAN-3c",
+                        "basis": "",
+                        "dispersion": "none",
+                        "solvent_model": "none",
+                        "solvent": "",
+                    },
+                    "irc": {
+                        "engine": "orca",
+                        "functional": "B97-3c",
+                        "basis": "",
+                        "irc_points": 30,
+                    },
+                },
+            },
+        ],
+    },
 }
 
 # ── Backend discovery (R22 / Phase 4.5) ────────────────────────────────
@@ -1840,20 +2157,20 @@ METHOD_SCHEMAS: dict[str, Any] = {
 # environment checks before submitting a workflow.
 
 _BACKEND_BINARIES: dict[str, dict[str, Any]] = {
-    "orca":     {"label": "ORCA",           "env_var": "CONFSEARCH_ORCA_PATH",    "default": "orca"},
-    "xtb":      {"label": "xTB (GFN2)",      "env_var": "CONFSEARCH_XTB_PATH",     "default": "xtb"},
-    "crest":    {"label": "CREST",           "env_var": "CONFSEARCH_CREST_PATH",   "default": "crest"},
-    "censo":    {"label": "CENSO",           "env_var": "CONFSEARCH_CENSO_PATH",   "default": "censo"},
-    "shermo":   {"label": "Shermo",          "env_var": "CONFSEARCH_SHERMO_PATH",  "default": "Shermo"},
-    "isostat":  {"label": "ISOSTAT",         "env_var": "CONFSEARCH_ISOSTAT_PATH", "default": "isostat"},
+    "orca": {"label": "ORCA", "env_var": "CONFSEARCH_ORCA_PATH", "default": "orca"},
+    "xtb": {"label": "xTB (GFN2)", "env_var": "CONFSEARCH_XTB_PATH", "default": "xtb"},
+    "crest": {"label": "CREST", "env_var": "CONFSEARCH_CREST_PATH", "default": "crest"},
+    "censo": {"label": "CENSO", "env_var": "CONFSEARCH_CENSO_PATH", "default": "censo"},
+    "shermo": {"label": "Shermo", "env_var": "CONFSEARCH_SHERMO_PATH", "default": "Shermo"},
+    "isostat": {"label": "ISOSTAT", "env_var": "CONFSEARCH_ISOSTAT_PATH", "default": "isostat"},
 }
 
 _BACKEND_SUPPORTS: dict[str, list[str]] = {
-    "orca":    ["singlepoint", "optimize", "frequency", "optfreq"],
-    "xtb":     ["singlepoint", "optimize"],
-    "crest":   ["conformer_search"],
-    "censo":   ["censo_refinement", "censo_energy"],
-    "shermo":  ["thermo"],
+    "orca": ["singlepoint", "optimize", "frequency", "optfreq"],
+    "xtb": ["singlepoint", "optimize"],
+    "crest": ["conformer_search"],
+    "censo": ["censo_refinement", "censo_energy"],
+    "shermo": ["thermo"],
     "isostat": ["clustering"],
 }
 
@@ -1886,14 +2203,16 @@ def _discover_backends() -> list[dict[str, Any]]:
     for bid, binfo in _BACKEND_BINARIES.items():
         path = _resolve_backend_path(bid)
         available = path != bid
-        backends.append({
-            "id": bid,
-            "label": binfo["label"],
-            "supports": _BACKEND_SUPPORTS.get(bid, []),
-            "path": path,
-            "available": available,
-            "version": None,
-        })
+        backends.append(
+            {
+                "id": bid,
+                "label": binfo["label"],
+                "supports": _BACKEND_SUPPORTS.get(bid, []),
+                "path": path,
+                "available": available,
+                "version": None,
+            }
+        )
     return backends
 
 
@@ -1938,7 +2257,9 @@ def _case_insensitive_get(mapping: dict[str, Any], key: str) -> Any | None:
 
 
 def _resolve_field_options(
-    field_name: str, engine: str, functional: str | None = None,
+    field_name: str,
+    engine: str,
+    functional: str | None = None,
     basis: str | None = None,
 ) -> list[str] | None:
     """Return allowed options for a field given a specific engine.
@@ -1991,7 +2312,9 @@ def _resolve_field_options(
 
 
 def _resolve_field_default(
-    field_name: str, engine: str, functional: str | None = None,
+    field_name: str,
+    engine: str,
+    functional: str | None = None,
     basis: str | None = None,
 ) -> Any:
     """Return the default value for a field, respecting functional context.
@@ -2184,7 +2507,8 @@ def _normalize_solvent(levels: dict, schema: dict) -> dict:
 
 
 def _match_option_case_insensitive(
-    options: list[str], value: Any,
+    options: list[str],
+    value: Any,
 ) -> tuple[int, str] | None:
     """Case-insensitively match *value* against *options*.
 
@@ -2239,9 +2563,7 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                 try:
                     normalized[field_name] = normalize_recalc_hess(user_val)
                 except ValueError as exc:
-                    errors.append(
-                        f"Level '{lid}', field '{field_name}': {exc}"
-                    )
+                    errors.append(f"Level '{lid}', field '{field_name}': {exc}")
                 continue
             if user_val is not None and user_val != "":
                 # Multi-select fields (e.g. NMR ``nuclei``): accept a scalar
@@ -2249,13 +2571,11 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                 # and normalise to a list so downstream CLI-flag emission
                 # (``--nuclei 1H,13C``) always sees a sequence.
                 if fd and fd.get("multi"):
-                    vals = (
-                        list(user_val)
-                        if isinstance(user_val, (list, tuple))
-                        else [user_val]
-                    )
+                    vals = list(user_val) if isinstance(user_val, (list, tuple)) else [user_val]
                     multi_options = _resolve_field_options(
-                        field_name, engine, normalized.get("functional"),
+                        field_name,
+                        engine,
+                        normalized.get("functional"),
                         basis=normalized.get("basis") or user_lv.get("basis"),
                     )
                     if multi_options is not None:
@@ -2269,7 +2589,9 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                     normalized[field_name] = vals
                     continue
                 options = _resolve_field_options(
-                    field_name, engine, normalized.get("functional"),
+                    field_name,
+                    engine,
+                    normalized.get("functional"),
                     basis=normalized.get("basis") or user_lv.get("basis"),
                 )
                 if options is not None:
@@ -2298,8 +2620,10 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                             user_val = canonical
                     elif str(user_val) not in [str(o) for o in options]:
                         if (
-                            fd and fd.get("supports_custom")
-                            and str(user_val).strip() and len(options) > 1
+                            fd
+                            and fd.get("supports_custom")
+                            and str(user_val).strip()
+                            and len(options) > 1
                         ):
                             pass
                         else:
@@ -2311,7 +2635,9 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                 normalized[field_name] = user_val
             else:
                 default_val = _resolve_field_default(
-                    field_name, engine, normalized.get("functional"),
+                    field_name,
+                    engine,
+                    normalized.get("functional"),
                     basis=normalized.get("basis"),
                 )
                 normalized[field_name] = default_val
@@ -2520,6 +2846,7 @@ def get_method_catalog() -> dict[str, Any]:
     aux_j/aux_c metadata) fields.
     """
     import copy
+
     refresh_backend_versions()
     catalog = copy.deepcopy(METHOD_CATALOG)
 

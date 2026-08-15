@@ -1,9 +1,13 @@
+# ruff: noqa: E501, F811
+# pyright: reportAny=false, reportPrivateUsage=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnusedVariable=false, reportRedeclaration=false
 """Tests for acp.catalog method configuration.
 
 Phase 3: Test & Quality Assurance (tests 3.1-3.13 per DevDoc §1.4).
 """
 
 from __future__ import annotations
+
+from typing import cast
 
 import pytest
 
@@ -30,24 +34,69 @@ CONFSEARCH_SCHEMA = {
     ]
 }
 
-_ALL_FUNCTIONALS = frozenset({
-    "B3LYP", "PBE0", "wB97X-D4", "wB97M-V",
-    "M062X", "mPW1PW91", "PWPB95", "revDSD-PBEP86",
-    "r2SCAN-3c", "PBEh-3c", "B97-3c", "DLPNO-CCSD(T)",
-})
+_ALL_FUNCTIONALS = frozenset(
+    {
+        "B3LYP",
+        "PBE0",
+        "wB97X-D4",
+        "wB97M-V",
+        "M062X",
+        "mPW1PW91",
+        "PWPB95",
+        "revDSD-PBEP86",
+        "r2SCAN-3c",
+        "PBEh-3c",
+        "B97-3c",
+        "DLPNO-CCSD(T)",
+    }
+)
 
-_ADVANCED_FIELD_NAMES = frozenset({
-    "aux_j_basis", "aux_c_basis", "ri_approximation", "grid", "scf_convergence",
-    "opt_convergence", "max_steps", "recalc_hess", "scale_factor",
-    # xtbmd_censo_energy control group (DevDoc §10.1): 17 advanced fields;
-    # md_temperature / md_seeds are regular (high-frequency user controls).
-    "opt_level", "md_time_ps", "md_dump_fs", "md_step_fs", "md_hmass",
-    "md_shake", "md_nvt", "md_seed", "md_method", "conv_check",
-    "conv_novelty_max", "conv_rmsd", "max_frames", "opt_gfn",
-    "opt_timeout", "edis", "gdis", "resume",
-    # NMR TMS reference overrides (P1a, DevDoc §6.4) — advanced.
-    "tms_shielding_h", "tms_shielding_c",
-})
+_ADVANCED_FIELD_NAMES = frozenset(
+    {
+        "aux_j_basis",
+        "aux_c_basis",
+        "ri_approximation",
+        "grid",
+        "scf_convergence",
+        "opt_convergence",
+        "max_steps",
+        "recalc_hess",
+        "scale_factor",
+        # xtbmd_censo_energy control group (DevDoc §10.1): 17 advanced fields;
+        # md_temperature / md_seeds are regular (high-frequency user controls).
+        "opt_level",
+        "md_time_ps",
+        "md_dump_fs",
+        "md_step_fs",
+        "md_hmass",
+        "md_shake",
+        "md_nvt",
+        "md_seed",
+        "md_method",
+        "conv_check",
+        "conv_novelty_max",
+        "conv_rmsd",
+        "max_frames",
+        "opt_gfn",
+        "opt_timeout",
+        "edis",
+        "gdis",
+        "resume",
+        # NMR TMS reference overrides (P1a, DevDoc §6.4) — advanced.
+        "tms_shielding_h",
+        "tms_shielding_c",
+        # Mechanism scan/TS controls — advanced.
+        "scan_points",
+        "irc_points",
+        "ts_initial_hessian",
+        # Mechanism-study orchestration controls.
+        "conformer_mode",
+        "max_elementary_steps",
+        "int_extension",
+        "promotion_policy",
+        "auto_converge",
+    }
+)
 
 
 def test_method_catalog_orca_solvent_model_options() -> None:
@@ -148,7 +197,7 @@ def test_normalize_none_clears_solvent() -> None:
 def test_method_meta_present_in_catalog() -> None:
     """METHOD_META exists in API response and contains all 8 functionals."""
     catalog = get_method_catalog()
-    meta = catalog["method_meta"]
+    meta = cast(dict[str, object], catalog["method_meta"])
     assert meta is not None
     assert isinstance(meta, dict)
     assert set(meta.keys()) == _ALL_FUNCTIONALS
@@ -171,7 +220,9 @@ def test_advanced_fields_count_correct() -> None:
     catalog = get_method_catalog()
     field_defs = catalog["field_definitions"]
     advanced = {fn for fn, fd in field_defs.items() if fd.get("advanced")}
-    assert advanced == _ADVANCED_FIELD_NAMES, f"expected {len(_ADVANCED_FIELD_NAMES)} advanced fields, got {advanced}"
+    assert advanced == _ADVANCED_FIELD_NAMES, (
+        f"expected {len(_ADVANCED_FIELD_NAMES)} advanced fields, got {advanced}"
+    )
 
 
 # --- 3.3 ---
@@ -194,7 +245,9 @@ def test_builtin_dispersion_locking_wb97m_v() -> None:
 
 def test_builtin_dispersion_null_for_configurable_functionals() -> None:
     for func in ("B3LYP", "PBE0"):
-        assert METHOD_META[func]["builtin_dispersion"] is None, f"{func} builtin_dispersion should be None"
+        assert METHOD_META[func]["builtin_dispersion"] is None, (
+            f"{func} builtin_dispersion should be None"
+        )
 
 
 # --- 3.4 ---
@@ -238,7 +291,14 @@ _SCHEMA_WITH_RI = {
         {
             "level_id": "single_point",
             "allowed_engines": ["orca"],
-            "fields": ["functional", "basis", "dispersion", "ri_approximation", "aux_j_basis", "aux_c_basis"],
+            "fields": [
+                "functional",
+                "basis",
+                "dispersion",
+                "ri_approximation",
+                "aux_j_basis",
+                "aux_c_basis",
+            ],
             "required": True,
         }
     ]
@@ -303,7 +363,9 @@ def test_validate_rejects_invalid_dispersion() -> None:
             }
         }
     }
-    levels, errors = normalize_and_validate_method_config(method, _CONFSEARCH_SCHEMA_WITH_DISPERSION)
+    levels, errors = normalize_and_validate_method_config(
+        method, _CONFSEARCH_SCHEMA_WITH_DISPERSION
+    )
     assert errors
     assert any("D3BJ" in e or "dispersion" in e.lower() for e in errors)
 
@@ -319,7 +381,9 @@ def test_validate_accepts_valid_dispersion() -> None:
             }
         }
     }
-    levels, errors = normalize_and_validate_method_config(method, _CONFSEARCH_SCHEMA_WITH_DISPERSION)
+    levels, errors = normalize_and_validate_method_config(
+        method, _CONFSEARCH_SCHEMA_WITH_DISPERSION
+    )
     assert not errors
     assert levels["single_point"]["dispersion"] == "D4"
 
@@ -344,6 +408,7 @@ def test_stage_mapping_covers_all_levels() -> None:
     all_level_ids: set[str] = set()
     for sid in schemas_to_check:
         from acp.catalog import get_method_schema
+
         schema = get_method_schema(sid)
         if schema is None:
             continue
@@ -365,7 +430,9 @@ def test_stage_mapping_covers_all_levels() -> None:
     }
     for lid in all_level_ids:
         expected = known_mapping.get(lid, lid)
-        assert expected in converted, f"level_id {lid!r} (→ {expected!r}) was dropped by stage_mapping"
+        assert expected in converted, (
+            f"level_id {lid!r} (→ {expected!r}) was dropped by stage_mapping"
+        )
 
 
 # --- 3.8 ---
@@ -374,8 +441,12 @@ def test_functional_keys_three_table_consistent() -> None:
     field_def_keys = set(FIELD_DEFINITIONS["functional"]["per_backend"]["orca"])
     fom_keys = set(FUNCTIONAL_OPTIONS_MAP.keys())
     meta_keys = set(METHOD_META.keys())
-    assert field_def_keys == meta_keys, f"FIELD_DEFINITIONS vs METHOD_META diff: {field_def_keys ^ meta_keys}"
-    assert fom_keys == meta_keys, f"FUNCTIONAL_OPTIONS_MAP vs METHOD_META diff: {fom_keys ^ meta_keys}"
+    assert field_def_keys == meta_keys, (
+        f"FIELD_DEFINITIONS vs METHOD_META diff: {field_def_keys ^ meta_keys}"
+    )
+    assert fom_keys == meta_keys, (
+        f"FUNCTIONAL_OPTIONS_MAP vs METHOD_META diff: {fom_keys ^ meta_keys}"
+    )
 
 
 # --- 3.9 ---
@@ -439,6 +510,7 @@ def test_dlpno_aux_basis_default_auxc() -> None:
 
 # --- Phase 4.3: basis_block + extra_blocks for non-DLPNO methods ----------
 
+
 def test_non_dlpno_method_can_use_extra_blocks_basis_block() -> None:
     """Non-DLPNO methods can also receive a %basis block via extra_blocks (Phase 4.3)."""
     from cccp.qc.interfaces.orca import ORCAInterface
@@ -455,7 +527,7 @@ def test_non_dlpno_method_can_use_extra_blocks_basis_block() -> None:
         extra_blocks=["%basis", '  auxJ  "def2/J"', "end"],
     )
     assert "%basis" in out
-    assert 'auxJ' in out
+    assert "auxJ" in out
     assert '"def2/J"' in out
     assert "B3LYP" in out
     assert "def2-TZVPP" in out  # basis still on the ! line
@@ -534,16 +606,25 @@ def test_dlpno_basis_locked_single_option() -> None:
 
 KNOWN_AUX_J = {"def2/J"}
 KNOWN_AUX_C = {
-    "def2-SVP/C", "def2-SVPD/C", "def2-TZVP/C", "def2-TZVPP/C",
+    "def2-SVP/C",
+    "def2-SVPD/C",
+    "def2-TZVP/C",
+    "def2-TZVPP/C",
     "def2-QZVPP/C",
-    "cc-pVDZ/C", "cc-pVTZ/C", "cc-pVQZ/C", "cc-pV5Z/C",
-    "aug-cc-pVDZ/C", "aug-cc-pVTZ/C", "aug-cc-pVQZ/C",
+    "cc-pVDZ/C",
+    "cc-pVTZ/C",
+    "cc-pVQZ/C",
+    "cc-pV5Z/C",
+    "aug-cc-pVDZ/C",
+    "aug-cc-pVTZ/C",
+    "aug-cc-pVQZ/C",
 }
 FORBIDDEN_AUX_C = {"def2-SV(P)/C", "def2-TZVPPD/C", "def2-QZVPPD/C"}
 
 
 def test_basis_catalog_orca_keyword_existence() -> None:
     from acp.catalog import BASIS_CATALOG
+
     for basis, meta in BASIS_CATALOG.items():
         if meta.get("aux_j"):
             assert meta["aux_j"] in KNOWN_AUX_J, (
@@ -561,6 +642,7 @@ def test_basis_catalog_orca_keyword_existence() -> None:
 # =====================================================================
 # Phase 5.1: ri_support classification tests
 # =====================================================================
+
 
 def test_ri_support_classification() -> None:
     composite = ["r2SCAN-3c", "PBEh-3c", "B97-3c"]
@@ -583,6 +665,7 @@ def test_ri_support_classification() -> None:
 
 def test_basis_catalog_completeness() -> None:
     from acp.catalog import BASIS_CATALOG
+
     for basis, meta in BASIS_CATALOG.items():
         assert "aux_j" in meta
         assert "aux_c" in meta
@@ -592,6 +675,7 @@ def test_basis_catalog_completeness() -> None:
 
 def test_aux_j_default_derives_from_basis() -> None:
     from acp.catalog import _resolve_field_default
+
     assert _resolve_field_default("aux_j_basis", "orca", "B3LYP", "def2-TZVPP") == "def2/J"
     assert _resolve_field_default("aux_j_basis", "orca", "B3LYP", "cc-pVTZ") == "AutoAux"
     assert _resolve_field_default("aux_j_basis", "orca", "r2SCAN-3c", "def2-mTZVPP") == ""
@@ -599,6 +683,7 @@ def test_aux_j_default_derives_from_basis() -> None:
 
 def test_aux_c_visibility() -> None:
     from acp.catalog import _resolve_field_default
+
     assert _resolve_field_default("aux_c_basis", "orca", "PWPB95", "def2-TZVPP") == "def2-TZVPP/C"
     assert _resolve_field_default("aux_c_basis", "orca", "B3LYP", "def2-TZVPP") == ""
     assert _resolve_field_default("aux_c_basis", "orca", "DLPNO-CCSD(T)", "def2-TZVPP") == ""
@@ -608,13 +693,12 @@ def test_aux_c_visibility() -> None:
 # Phase 5.1: normalize_legacy_method tests
 # =====================================================================
 
+
 def test_normalize_legacy_method_normal_dft() -> None:
     from acp.catalog import normalize_legacy_method
+
     method = {
-        "levels": {
-            "sp": {"functional": "B3LYP", "basis": "def2-TZVPP",
-                   "aux_basis": "def2/J"}
-        }
+        "levels": {"sp": {"functional": "B3LYP", "basis": "def2-TZVPP", "aux_basis": "def2/J"}}
     }
     out = normalize_legacy_method(method)
     assert out["levels"]["sp"]["aux_j_basis"] == "def2/J"
@@ -623,10 +707,10 @@ def test_normalize_legacy_method_normal_dft() -> None:
 
 def test_normalize_legacy_method_dlpno_routes_to_aux_c() -> None:
     from acp.catalog import normalize_legacy_method
+
     method = {
         "levels": {
-            "sp": {"functional": "DLPNO-CCSD(T)", "basis": "def2-TZVPP",
-                   "aux_basis": "cc-pVTZ/C"}
+            "sp": {"functional": "DLPNO-CCSD(T)", "basis": "def2-TZVPP", "aux_basis": "cc-pVTZ/C"}
         }
     }
     out = normalize_legacy_method(method)
@@ -636,10 +720,15 @@ def test_normalize_legacy_method_dlpno_routes_to_aux_c() -> None:
 
 def test_normalize_legacy_method_idempotent() -> None:
     from acp.catalog import normalize_legacy_method
+
     method = {
         "levels": {
-            "sp": {"functional": "PWPB95", "basis": "def2-TZVPP",
-                   "aux_j_basis": "def2/J", "aux_c_basis": "def2-TZVPP/C"}
+            "sp": {
+                "functional": "PWPB95",
+                "basis": "def2-TZVPP",
+                "aux_j_basis": "def2/J",
+                "aux_c_basis": "def2-TZVPP/C",
+            }
         }
     }
     out = normalize_legacy_method(method)
@@ -651,6 +740,7 @@ def test_normalize_legacy_method_idempotent() -> None:
 # ---------------------------------------------------------------------------
 # Hessian interval field (plan §8)
 # ---------------------------------------------------------------------------
+
 
 def test_recalc_hess_field_is_hessian_interval_type() -> None:
     fd = FIELD_DEFINITIONS["recalc_hess"]
@@ -680,17 +770,23 @@ def test_recalc_hess_in_all_opt_schemas(schema_id: str, level_id: str) -> None:
 
 def test_normalize_validates_recalc_hess() -> None:
     schema = {
-        "method_levels": [{
-            "level_id": "optimize",
-            "allowed_engines": ["orca"],
-            "fields": ["functional", "recalc_hess"],
-            "required": True,
-        }]
+        "method_levels": [
+            {
+                "level_id": "optimize",
+                "allowed_engines": ["orca"],
+                "fields": ["functional", "recalc_hess"],
+                "required": True,
+            }
+        ]
     }
     # auto / 0 / N valid
     for val in ("auto", 0, 5, "5"):
         levels, errors = normalize_and_validate_method_config(
-            {"levels": {"optimize": {"engine": "orca", "functional": "r2SCAN-3c", "recalc_hess": val}}},
+            {
+                "levels": {
+                    "optimize": {"engine": "orca", "functional": "r2SCAN-3c", "recalc_hess": val}
+                }
+            },
             schema,
         )
         assert not errors, f"val={val} → {errors}"
@@ -699,7 +795,11 @@ def test_normalize_validates_recalc_hess() -> None:
     # Invalid values surface as errors.
     for bad in ("fast", -1, 1001, 1.5, True):
         _, errors = normalize_and_validate_method_config(
-            {"levels": {"optimize": {"engine": "orca", "functional": "r2SCAN-3c", "recalc_hess": bad}}},
+            {
+                "levels": {
+                    "optimize": {"engine": "orca", "functional": "r2SCAN-3c", "recalc_hess": bad}
+                }
+            },
             schema,
         )
         assert errors, f"val={bad} should have produced an error"
@@ -709,12 +809,14 @@ def test_normalize_validates_recalc_hess() -> None:
 def test_recalc_hess_default_when_omitted() -> None:
     """When the user omits recalc_hess, the catalog default ('auto') applies."""
     schema = {
-        "method_levels": [{
-            "level_id": "optimize",
-            "allowed_engines": ["orca"],
-            "fields": ["functional", "recalc_hess"],
-            "required": True,
-        }]
+        "method_levels": [
+            {
+                "level_id": "optimize",
+                "allowed_engines": ["orca"],
+                "fields": ["functional", "recalc_hess"],
+                "required": True,
+            }
+        ]
     }
     levels, errors = normalize_and_validate_method_config(
         {"levels": {"optimize": {"engine": "orca", "functional": "r2SCAN-3c"}}},
@@ -729,9 +831,17 @@ def test_method_levels_to_cli_flags_recalc_hess() -> None:
     from acp.catalog import _LEVEL_TO_CLI_FLAG_MAP, method_levels_to_cli_flags
 
     assert "recalc_hess" not in _LEVEL_TO_CLI_FLAG_MAP
-    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": "auto"}}) == ["--calc-hess", "auto"]
-    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": 0}}) == ["--no-calc-hess"]
-    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": 7}}) == ["--calc-hess", "7"]
+    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": "auto"}}) == [
+        "--calc-hess",
+        "auto",
+    ]
+    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": 0}}) == [
+        "--no-calc-hess"
+    ]
+    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": 7}}) == [
+        "--calc-hess",
+        "7",
+    ]
     # Null / empty values are skipped.
     assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": None}}) == []
     assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": ""}}) == []
