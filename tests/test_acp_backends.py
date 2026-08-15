@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
-from unittest.mock import call, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -25,6 +25,7 @@ from acp.backends.base import (
     QCResult,
     SinglePointCalculator,
     ThermoCalculator,
+    TSMechanismCalculator,
 )
 from acp.backends.external import batch_process_thermo, run_isostat, run_shermo
 from acp.backends.orca import ORCAInterface
@@ -85,6 +86,7 @@ def test_registry_exposes_registered_backends() -> None:
     assert issubclass(require_backend("single_point"), SinglePointCalculator)
     assert issubclass(require_backend("clustering"), ClusteringTool)
     assert issubclass(require_backend("thermochemistry"), ThermoCalculator)
+    assert issubclass(require_backend("irc"), TSMechanismCalculator)
 
 
 def test_require_backend_rejects_unknown_capability() -> None:
@@ -192,10 +194,41 @@ def test_external_runner_exports_match_legacy_exports() -> None:
 
 def test_capability_matrix_supports_declared_statuses() -> None:
     assert supports("orca", "frequency") is True
+    assert supports("orca", "irc") is True
+    assert supports("xtb", "irc") is False
     assert (
         list_capabilities("crest")["conformer_search"]
         == CAPABILITY_MATRIX["crest"]["conformer_search"]
     )
+
+
+def test_irc_capability_matrix_entries() -> None:
+    assert CAPABILITY_MATRIX["orca"]["irc"].value == "available"
+    for backend_name in ("censo", "crest", "xtb", "external", "molclus", "isostat"):
+        assert CAPABILITY_MATRIX[backend_name]["irc"].value == "not_implemented"
+
+
+def test_orca_backend_get_version_uses_detect_version() -> None:
+    config = _make_config()
+    backend = ORCABackend(config)
+    backend._interface.executable = Path("/usr/bin/orca")
+
+    with patch("acp.backends.orca.detect_version", return_value="ORCA 6.1.1") as mock_detect:
+        assert backend.get_version() == "ORCA 6.1.1"
+        assert backend.get_version() == "ORCA 6.1.1"
+
+    mock_detect.assert_called_once_with("orca", Path("/usr/bin/orca"))
+
+
+def test_orca_backend_get_version_returns_none_when_missing() -> None:
+    config = _make_config()
+    backend = ORCABackend(config)
+    backend._interface.executable = None
+
+    with patch("acp.backends.orca.detect_version", return_value=None) as mock_detect:
+        assert backend.get_version() is None
+
+    mock_detect.assert_called_once_with("orca", None)
 
 
 def test_external_backend_implements_clustering_and_thermo_protocols() -> None:
@@ -232,9 +265,7 @@ def test_backend_is_unavailable_when_binary_missing(backend_cls: type) -> None:
     config = _make_config()
     exe_name = backend_cls.name
 
-    with patch(
-        f"cccp.qc.interfaces.{exe_name}.resolve_executable", return_value=None
-    ):
+    with patch(f"cccp.qc.interfaces.{exe_name}.resolve_executable", return_value=None):
         backend = backend_cls(config)
         assert backend.is_available() is False
 
@@ -257,6 +288,8 @@ def test_external_backend_is_unavailable_when_one_binary_missing() -> None:
 
     with patch("acp.backends.external_backend.resolve_executable", side_effect=_resolve):
         assert backend.is_available() is False
+
+
 @pytest.mark.slow
 @pytest.mark.integration
 @requires_isostat
@@ -308,13 +341,7 @@ def test_isostat_title_normalisation_keeps_coord_lines(tmp_path: Path) -> None:
 
     src = tmp_path / "mixed.xyz"
     src.write_text(
-        "1\n"
-        "bare  -1.5\n"
-        "H  0.0  0.0  0.0\n"
-        "\n"
-        "1\n"
-        "no energy here\n"
-        "H  1.0  0.0  0.0\n",
+        "1\nbare  -1.5\nH  0.0  0.0  0.0\n\n1\nno energy here\nH  1.0  0.0  0.0\n",
         encoding="utf-8",
     )
     out = normalise_titles_for_isostat(src)

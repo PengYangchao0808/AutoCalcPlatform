@@ -74,6 +74,32 @@ class XTBBackend(QCBackend):
             )
         )
 
+    def relaxed_scan(
+        self,
+        coordinates: np.ndarray,
+        symbols: list[str],
+        output_dir: Path,
+        plan: object,
+        charge: int = 0,
+        multiplicity: int = 1,
+        **kwargs: Any,
+    ) -> object:
+        """Delegate a reaction-coordinate relaxed scan to ``XTBInterface``.
+
+        *plan* is a :class:`ReactionCoordinatePlan` (or a JSON-style dict the
+        interface can compile). Returns the interface's
+        :class:`RelaxedScanResult`.
+        """
+        return self._interface.relaxed_scan(
+            coordinates,
+            symbols,
+            output_dir=output_dir or Path.cwd(),
+            plan=plan,
+            charge=charge,
+            multiplicity=multiplicity,
+            **kwargs,
+        )
+
 
 register_backend(XTBBackend)
 

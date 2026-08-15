@@ -234,6 +234,29 @@ class NmrShieldingCalculator(Protocol):
         ...
 
 
+@runtime_checkable
+class RelaxedScanCalculator(Protocol):
+    """Capability: can drive internal coordinates along a reaction path.
+
+    Implementations perform a sequential multi-frame constrained optimization
+    (each frame fixing the drive coordinates to their synchronous target and
+    seeding from the previous frame) and return the per-frame trajectory.
+    """
+
+    def relaxed_scan(
+        self,
+        coordinates: NDArray[np.float64],
+        symbols: list[str],
+        output_dir: Path,
+        plan: object,
+        charge: int = 0,
+        multiplicity: int = 1,
+        **kwargs: Any,
+    ) -> object:
+        """Run a relaxed scan along *plan*; return the trajectory result."""
+        ...
+
+
 __all__ = [
     "QCBackend",
     "QCResult",
@@ -245,5 +268,6 @@ __all__ = [
     "ClusteringTool",
     "ThermoCalculator",
     "TSMechanismCalculator",
+    "RelaxedScanCalculator",
     "NmrShieldingCalculator",
 ]

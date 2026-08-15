@@ -47,6 +47,12 @@ _CAPABILITY_ALIASES = {
     "thermo": "thermochemistry",
     "nmr_shielding": "nmr_shielding",
     "nmr": "nmr_shielding",
+    "relaxed_scan": "relaxed_scan",
+    "path_search": "relaxed_scan",
+    "scan": "relaxed_scan",
+    "transition_state": "transition_state",
+    "ts": "transition_state",
+    "irc": "irc",
 }
 
 CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
@@ -58,6 +64,9 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "orca": {
         "geometry_optimization": BackendCapabilityStatus.AVAILABLE,
@@ -67,6 +76,9 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "nmr_shielding": BackendCapabilityStatus.AVAILABLE,
+        "relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "transition_state": BackendCapabilityStatus.AVAILABLE,
+        "irc": BackendCapabilityStatus.AVAILABLE,
     },
     "crest": {
         "geometry_optimization": BackendCapabilityStatus.AVAILABLE,
@@ -76,6 +88,9 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "xtb": {
         "geometry_optimization": BackendCapabilityStatus.AVAILABLE,
@@ -85,6 +100,9 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "relaxed_scan": BackendCapabilityStatus.AVAILABLE,
+        "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "external": {
         "geometry_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
@@ -94,6 +112,9 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "clustering": BackendCapabilityStatus.MISSING_BINARY,
         "thermochemistry": BackendCapabilityStatus.MISSING_BINARY,
         "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "molclus": {
         "geometry_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
@@ -103,6 +124,9 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "clustering": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
     "isostat": {
         "geometry_optimization": BackendCapabilityStatus.NOT_IMPLEMENTED,
@@ -112,6 +136,9 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "clustering": BackendCapabilityStatus.AVAILABLE,
         "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "nmr_shielding": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "transition_state": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "irc": BackendCapabilityStatus.NOT_IMPLEMENTED,
     },
 }
 
@@ -135,7 +162,9 @@ def _normalize_backend_name(backend_name: str) -> str:
         known = ", ".join(sorted(CAPABILITY_MATRIX))
         raise KeyError(f"Unknown backend: {backend_name}. Known: {known}") from exc
 
-    canonical_name = getattr(backend_cls, "name", "") or backend_cls.__name__.removesuffix("Backend")
+    canonical_name = getattr(backend_cls, "name", "") or backend_cls.__name__.removesuffix(
+        "Backend"
+    )
     canonical_name = canonical_name.lower()
     if canonical_name not in CAPABILITY_MATRIX:
         known = ", ".join(sorted(CAPABILITY_MATRIX))
@@ -148,7 +177,10 @@ def supports(backend_name: str, capability: str) -> bool:
 
     canonical_backend = _normalize_backend_name(backend_name)
     canonical_capability = _normalize_capability_name(capability)
-    return CAPABILITY_MATRIX[canonical_backend][canonical_capability] is BackendCapabilityStatus.AVAILABLE
+    return (
+        CAPABILITY_MATRIX[canonical_backend][canonical_capability]
+        is BackendCapabilityStatus.AVAILABLE
+    )
 
 
 def list_capabilities(backend_name: str) -> dict[str, BackendCapabilityStatus]:
@@ -168,7 +200,10 @@ def list_backends(capability: str | None = None) -> list[str]:
     return [
         backend_name
         for backend_name in sorted(CAPABILITY_MATRIX)
-        if CAPABILITY_MATRIX[backend_name][canonical_capability] is BackendCapabilityStatus.AVAILABLE
+        if (
+            CAPABILITY_MATRIX[backend_name][canonical_capability]
+            is BackendCapabilityStatus.AVAILABLE
+        )
     ]
 
 

@@ -12,6 +12,7 @@ from numpy.typing import NDArray
 from acp.backends.base import QCBackend, QCResult, to_qc_result
 from acp.backends.registry import register_backend
 from cccp.qc.interfaces.orca import ORCAInterface
+from cccp.software import detect_version
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +37,19 @@ class ORCABackend(QCBackend):
         interface_kwargs.setdefault("solvent_model", "none")
 
         self._interface = ORCAInterface(config=config, **interface_kwargs)
+        self._version: str | None = None
+        self._version_checked = False
 
     def is_available(self) -> bool:
         return self._interface.is_available()
+
+    def get_version(self) -> str | None:
+        if self._version_checked:
+            return self._version
+
+        self._version = detect_version("orca", self._interface.executable)
+        self._version_checked = True
+        return self._version
 
     def optimize(
         self,
@@ -52,12 +63,12 @@ class ORCABackend(QCBackend):
         target_dir = output_dir or Path.cwd()
         return to_qc_result(
             self._interface.optimize(
-            coordinates,
-            symbols,
-            charge=charge,
-            multiplicity=multiplicity,
-            output_dir=target_dir,
-            **kwargs,
+                coordinates,
+                symbols,
+                charge=charge,
+                multiplicity=multiplicity,
+                output_dir=target_dir,
+                **kwargs,
             )
         )
 
@@ -73,12 +84,12 @@ class ORCABackend(QCBackend):
         target_dir = output_dir or Path.cwd()
         return to_qc_result(
             self._interface.single_point(
-            coordinates,
-            symbols,
-            charge=charge,
-            multiplicity=multiplicity,
-            output_dir=target_dir,
-            **kwargs,
+                coordinates,
+                symbols,
+                charge=charge,
+                multiplicity=multiplicity,
+                output_dir=target_dir,
+                **kwargs,
             )
         )
 
@@ -94,12 +105,12 @@ class ORCABackend(QCBackend):
         target_dir = output_dir or Path.cwd()
         return to_qc_result(
             self._interface.frequency(
-            coordinates,
-            symbols,
-            charge=charge,
-            multiplicity=multiplicity,
-            output_dir=target_dir,
-            **kwargs,
+                coordinates,
+                symbols,
+                charge=charge,
+                multiplicity=multiplicity,
+                output_dir=target_dir,
+                **kwargs,
             )
         )
 
@@ -147,6 +158,53 @@ class ORCABackend(QCBackend):
                 nuclei=nuclei,
                 **kwargs,
             )
+        )
+
+    def transition_state_opt(
+        self,
+        coordinates: NDArray[np.float64],
+        symbols: list[str],
+        charge: int = 0,
+        multiplicity: int = 1,
+        output_dir: Path | None = None,
+        **kwargs: Any,
+    ) -> object:
+        """Delegate an OptTS + frequency run to ``ORCAInterface``.
+
+        Returns the interface's :class:`TsOptResult` (energies, imaginary
+        frequencies and converged geometry).
+        """
+        target_dir = output_dir or Path.cwd()
+        return self._interface.transition_state_opt(
+            coordinates,
+            symbols,
+            charge=charge,
+            multiplicity=multiplicity,
+            output_dir=target_dir,
+            **kwargs,
+        )
+
+    def irc(
+        self,
+        coordinates: NDArray[np.float64],
+        symbols: list[str],
+        charge: int = 0,
+        multiplicity: int = 1,
+        output_dir: Path | None = None,
+        **kwargs: Any,
+    ) -> object:
+        """Delegate an IRC run to ``ORCAInterface``.
+
+        Returns the interface's :class:`IrcResult` (endpoints + step counts).
+        """
+        target_dir = output_dir or Path.cwd()
+        return self._interface.irc(
+            coordinates,
+            symbols,
+            charge=charge,
+            multiplicity=multiplicity,
+            output_dir=target_dir,
+            **kwargs,
         )
 
 

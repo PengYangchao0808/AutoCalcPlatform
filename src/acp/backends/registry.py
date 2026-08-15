@@ -10,6 +10,7 @@ from acp.backends.base import (
     FrequencyCalculator,
     GeometryOptimizer,
     QCBackend,
+    RelaxedScanCalculator,
     SinglePointCalculator,
     ThermoCalculator,
     TSMechanismCalculator,
@@ -32,6 +33,10 @@ _CAPABILITY_PROTOCOLS: dict[str, type[Any]] = {
     "thermo": ThermoCalculator,
     "ts": TSMechanismCalculator,
     "transition_state": TSMechanismCalculator,
+    "irc": TSMechanismCalculator,
+    "relaxed_scan": RelaxedScanCalculator,
+    "path_search": RelaxedScanCalculator,
+    "scan": RelaxedScanCalculator,
 }
 
 
