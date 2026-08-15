@@ -1,15 +1,22 @@
 """Tests for the centralized QC executable resolver (cccp.software)."""
 
+# pyright: reportAny=false, reportExplicitAny=false, reportUnknownMemberType=false
+
 from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 from cccp.software import detect_version
 
 
-def _completed(retcode: int, stdout: str = "", stderr: str = "") -> subprocess.CompletedProcess[str]:
+def _completed(
+    retcode: int,
+    stdout: str = "",
+    stderr: str = "",
+) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess([], retcode, stdout=stdout, stderr=stderr)
 
 
@@ -19,14 +26,23 @@ def test_detect_version_returns_none_without_executable() -> None:
 
 def test_detect_version_no_probe_for_unsupported_software() -> None:
     with patch("subprocess.run") as mock_run:
-        assert detect_version("orca", Path("/usr/bin/orca")) is None
-        mock_run.assert_not_called()
+        mock_run.return_value = _completed(0, stdout="Program Version 6.1.1\n")
+
+        assert detect_version("orca", Path("/usr/bin/orca")) == "Program Version 6.1.1"
+        mock_run.assert_called_once_with(
+            ["/usr/bin/orca", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env=mock_run.call_args.kwargs["env"],
+        )
 
 
 def test_censo_falls_back_from_invalid_to_valid_flag() -> None:
     calls = []
 
-    def _fake_run(cmd, **kwargs):
+    def _fake_run(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        _ = kwargs
         calls.append(cmd)
         if cmd[1] == "-v":
             return _completed(2, stderr="censo: error: ambiguous option: -v")

@@ -75,7 +75,7 @@ FALLBACKS: dict[str, list[str]] = {
 #: (the binary has no reliable version flag).  CENSO tries ``-v`` first
 #: (modern C++ builds) then ``-version`` (CENSO-QM 1.x Python wrapper).
 _VERSION_FLAGS: dict[str, tuple[str, ...]] = {
-    "orca": (),
+    "orca": ("--version",),
     "xtb": ("--version",),
     "crest": ("--version",),
     "censo": ("-v", "-version"),

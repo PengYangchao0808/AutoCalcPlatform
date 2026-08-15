@@ -11,11 +11,18 @@ import logging
 import os
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 
 from cccp.qc.interfaces.base import QCResult
+from cccp.qc.interfaces.constraints import CoordinateConstraint, CoordinateSpec, ReactionCoordinatePlan
+from cccp.qc.interfaces.xtb_scan import (
+    RelaxedScanPoint,
+    RelaxedScanResult,
+    plan_from_dict,
+    xcontrol_constraint_block,
+)
 from cccp.qc.interfaces.xtb_thermo import XTBThermoResult, _xyz_to_coord, run_xtb_enso
 from cccp.software import SoftwareNotFoundError, resolve_executable
 from cccp.utils import ensure_dir
@@ -205,6 +212,224 @@ class XTBInterface:
                 error_message=str(e),
                 output_file=input_xyz
             )
+
+    def constrained_optimize(
+        self,
+        coordinates: np.ndarray,
+        symbols: List[str],
+        output_dir: Path,
+        constraints: Sequence[CoordinateConstraint],
+        charge: int = 0,
+        multiplicity: int = 1,
+        opt_level: str = "normal",
+        max_steps: Optional[int] = None,
+        timeout: Optional[int] = None,
+        **kwargs
+    ) -> QCResult:
+        """Optimize *coordinates* under internal-coordinate *constraints*.
+
+        Writes the input XYZ plus an xcontrol ``$constrain`` block (1-based
+        atom indices, xTB convention) and runs a constrained xTB
+        optimization. The optimized geometry is returned as ``xtbopt.xyz``.
+
+        Args:
+            coordinates: Input coordinates.
+            symbols: Element symbols.
+            output_dir: Output directory.
+            constraints: Internal-coordinate constraints (drive targets).
+            charge: Molecular charge.
+            multiplicity: Spin multiplicity.
+            opt_level: Optimization level (crude, normal, tight, verytight).
+            max_steps: Optional ``$opt maxcycle`` override.
+            timeout: Subprocess timeout in seconds.
+            **kwargs: Additional parameters.
+
+        Returns:
+            QCResult with the constrained-optimized geometry.
+        """
+        output_dir = Path(output_dir)
+        ensure_dir(output_dir)
+
+        input_xyz = output_dir / "xtb_input.xyz"
+        output_file = output_dir / "xtbopt.xyz"
+        log_file = output_dir / "xtb.log"
+        xcontrol_path = output_dir / ".xcontrol"
+
+        write_xyz(input_xyz, coordinates, symbols, title="xTB constrained input")
+        executable = self._require_executable()
+
+        constraint_text = xcontrol_constraint_block(list(constraints))
+        opt_block = f"  maxcycle={int(max_steps)}\n" if max_steps is not None else ""
+        xcontrol_path.write_text(
+            f"{constraint_text}\n$opt\n{opt_block}$end\n",
+            encoding="utf-8",
+        )
+
+        xtb_args = [
+            executable,
+            str(input_xyz),
+            "--opt", opt_level,
+            "--gfn", str(self.gfn_level),
+            "--charge", str(charge),
+            "--uhf", str(multiplicity - 1),
+            "-T", str(self.nproc),
+            "-P", str(self.nproc),
+            "--input", str(xcontrol_path),
+        ]
+        xtb_args.extend(self._solvent_args())
+
+        try:
+            result = subprocess.run(
+                xtb_args,
+                cwd=output_dir,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=_thread_env(self.nproc),
+            )
+
+            with open(log_file, 'w', encoding='utf-8') as f:
+                f.write(result.stdout)
+                if result.stderr:
+                    f.write("\nSTDERR:\n")
+                    f.write(result.stderr)
+
+            coords, syms = None, None
+            energy = None
+
+            if output_file.exists():
+                coords, syms = read_xyz(output_file)
+
+            for line in result.stdout.split('\n'):
+                if 'TOTAL ENERGY' in line:
+                    parts = line.split()
+                    try:
+                        energy = float(parts[3])
+                    except (ValueError, IndexError):
+                        pass
+
+            return QCResult(
+                success=coords is not None,
+                coordinates=coords,
+                symbols=syms or symbols,
+                energy=energy,
+                output_file=output_file,
+                log_file=log_file,
+            )
+
+        except Exception as e:
+            logger.error(f"xTB constrained optimization failed: {e}")
+            return QCResult(
+                success=False,
+                error_message=str(e),
+                output_file=input_xyz,
+            )
+
+    def relaxed_scan(
+        self,
+        coordinates: np.ndarray,
+        symbols: List[str],
+        output_dir: Path,
+        plan: Optional[ReactionCoordinatePlan] = None,
+        charge: int = 0,
+        multiplicity: int = 1,
+        opt_level: str = "normal",
+        fail_fast: bool = True,
+        max_steps: Optional[int] = None,
+        timeout: Optional[int] = None,
+        scan_plan: Optional[dict] = None,
+        **kwargs
+    ) -> RelaxedScanResult:
+        """Run a sequential multi-frame relaxed scan along *plan*.
+
+        Each frame constrains the drive coordinates to their synchronous
+        target at that frame (``q_i(λ) = q_i,start + λ·(q_i,end − q_i,start)``)
+        and optimizes, seeding each frame with the previous frame's optimized
+        geometry. Freeze coordinates are pinned at their start value for every
+        frame; monitor coordinates are never constrained.
+
+        Args:
+            coordinates: Starting geometry (frame 0 input).
+            symbols: Element symbols.
+            output_dir: Scan directory (per-frame subdirs ``frame_<i>``).
+            plan: ReactionCoordinatePlan; when None, *scan_plan* (a JSON-style
+                dict) is compiled via :func:`plan_from_dict`.
+            charge: Molecular charge.
+            multiplicity: Spin multiplicity.
+            opt_level: Optimization level for each frame.
+            fail_fast: Abort the scan on the first failed frame (default True).
+            max_steps: Optional per-frame ``$opt maxcycle``.
+            timeout: Per-frame subprocess timeout in seconds.
+            scan_plan: JSON-style plan dict (fallback when *plan* is None).
+            **kwargs: Additional parameters.
+
+        Returns:
+            RelaxedScanResult with per-frame points.
+        """
+        output_dir = Path(output_dir)
+        ensure_dir(output_dir)
+        if plan is None:
+            if scan_plan is None:
+                raise ValueError("relaxed_scan requires a ReactionCoordinatePlan or scan_plan dict")
+            plan = plan_from_dict(scan_plan)
+
+        input_xyz = output_dir / "input.xyz"
+        write_xyz(input_xyz, coordinates, symbols, title="xTB relaxed scan start")
+
+        points: List[RelaxedScanPoint] = []
+        prev_coordinates: Optional[np.ndarray] = coordinates
+        all_success = True
+
+        for index in range(plan.points):
+            progress = index / (plan.points - 1)
+            constraints = plan.frame_constraints(index)
+            coordinate_values = plan.coordinate_targets(index)
+
+            frame_dir = output_dir / f"frame_{index:03d}"
+            frame_result = self.constrained_optimize(
+                prev_coordinates,
+                symbols,
+                frame_dir,
+                constraints,
+                charge=charge,
+                multiplicity=multiplicity,
+                opt_level=opt_level,
+                max_steps=max_steps,
+                timeout=timeout,
+                **kwargs,
+            )
+
+            points.append(
+                RelaxedScanPoint(
+                    frame_index=index,
+                    progress=progress,
+                    coordinates=frame_result.coordinates,
+                    symbols=frame_result.symbols,
+                    energy_hartree=frame_result.energy,
+                    success=frame_result.success,
+                    coordinate_values=coordinate_values,
+                )
+            )
+
+            if frame_result.success and frame_result.coordinates is not None:
+                prev_coordinates = frame_result.coordinates
+            else:
+                all_success = False
+                if fail_fast:
+                    return RelaxedScanResult(
+                        points=points,
+                        input_xyz=input_xyz,
+                        scan_dir=output_dir,
+                        success=False,
+                        message=f"frame {index} failed: {frame_result.error_message or 'no geometry'}",
+                    )
+
+        return RelaxedScanResult(
+            points=points,
+            input_xyz=input_xyz,
+            scan_dir=output_dir,
+            success=all_success,
+        )
 
     def single_point(
         self,

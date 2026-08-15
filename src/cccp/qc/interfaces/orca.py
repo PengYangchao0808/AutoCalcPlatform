@@ -7,20 +7,37 @@ Interface for ORCA quantum chemistry software.
 Author: QCcalc Team (adapted from RPH)
 """
 
+# pyright: reportArgumentType=false, reportAny=false, reportConstantRedefinition=false, reportDeprecated=false, reportExplicitAny=false, reportImplicitOverride=false, reportImplicitStringConcatenation=false, reportMissingParameterType=false, reportMissingTypeArgument=false, reportPrivateUsage=false, reportUnannotatedClassAttribute=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownParameterType=false, reportUnknownVariableType=false, reportUnnecessaryComparison=false, reportUnusedCallResult=false, reportUnusedImport=false, reportUnusedParameter=false
+
 import json
 import logging
 import os
 import re
+import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
+from numpy.typing import NDArray
 
 from cccp.qc.interfaces.base import QCInterfaceBase, QCResult
+from cccp.qc.interfaces.orca_ts import (
+    IrcResult,
+    TsOptResult,
+    freq_block_for_ts,
+    irc_block,
+    irc_route,
+    parse_irc_endpoints,
+    parse_ts_frequency_map,
+    parse_ts_mode_vectors,
+    ts_geom_block,
+    ts_opt_route,
+)
 from cccp.software import SoftwareNotFoundError, resolve_executable
 from cccp.utils import ensure_dir
+from cccp.utils.file_io import read_xyz
 from cccp.utils.geometry_tools import LogParser
 from cccp.utils.resource_utils import calc_orca_maxcore, mem_to_mb
 from cccp.utils.solvent_map import orca_smd_solvent
@@ -28,7 +45,7 @@ from cccp.utils.solvent_map import orca_smd_solvent
 logger = logging.getLogger(__name__)
 
 
-def _resolve_method_meta(method: Optional[str]) -> Optional[dict[str, Any]]:
+def _resolve_method_meta(method: str | None) -> dict[str, Any] | None:
     """Look up ``METHOD_META`` for *method* (case-insensitive).
 
     Returns ``None`` if ``acp.catalog`` is unavailable or *method* is not
@@ -65,7 +82,7 @@ def _get_resolver():
 def _resolve_recalc_hess_lazy(
     explicit: object,
     configured: object,
-    symbols: Optional[list[str]],
+    symbols: list[str] | None,
 ):
     """Thin wrapper around the ACP resolver; preserves lazy semantics."""
     return _get_resolver()(
@@ -120,9 +137,7 @@ _NMR_TENSOR_COMP_RE = re.compile(r"([XYZ]{2})\s*=\s*([-+]?\d+\.\d+)")
 # ORCA 5.x summary table fallback:
 #   Nucleus   Element   Isotropic(ppm)
 #      0         6 C       45.230
-_NMR_SUMMARY_ROW_RE = re.compile(
-    r"^\s*(\d+)\s+(\d+)\s*([A-Za-z]{1,2})\s+([-+]?\d+\.\d+)\s*$"
-)
+_NMR_SUMMARY_ROW_RE = re.compile(r"^\s*(\d+)\s+(\d+)\s*([A-Za-z]{1,2})\s+([-+]?\d+\.\d+)\s*$")
 _NMR_TENSOR_HEADER = "NMR SHIELDING TENSOR"
 _NMR_SUMMARY_HEADER = "CHEMICAL SHIELDING SUMMARY"
 _NMR_SHIELDING_HEADERS = (_NMR_TENSOR_HEADER, _NMR_SUMMARY_HEADER)
@@ -274,15 +289,11 @@ class NmrShieldingParser:
         indices = sorted(shieldings)
         if indices != list(range(len(expected))):
             raise ValueError(
-                "Parsed shielding atom indices do not form a contiguous "
-                f"0..N-1 sequence: {indices}"
+                f"Parsed shielding atom indices do not form a contiguous 0..N-1 sequence: {indices}"
             )
         parsed = [shieldings[i]["symbol"] for i in indices]
         if parsed != expected:
-            raise ValueError(
-                f"Parsed shielding symbols {parsed} do not match "
-                f"expected {expected}"
-            )
+            raise ValueError(f"Parsed shielding symbols {parsed} do not match expected {expected}")
 
 
 def _normalize_nmr_symbol(symbol: str) -> str:
@@ -326,6 +337,107 @@ def _parse_frequencies(output_file: Path) -> list[float]:
     return [f for f in frequencies if f != 0.0]
 
 
+def _apply_mode_displacement(
+    coordinates: np.ndarray,
+    mode_vector: np.ndarray,
+    step_size: float,
+    sign: str = "plus",
+) -> np.ndarray:
+    """Displace coordinates along a normalized normal-mode vector.
+
+    Args:
+        coordinates: Cartesian coordinates (N, 3).
+        mode_vector: Cartesian displacement vector (N, 3).
+        step_size: Displacement amplitude in Å.
+        sign: ``"plus"`` or ``"minus"``.
+
+    Returns:
+        Displaced coordinates.
+    """
+    coords = np.asarray(coordinates, dtype=float).reshape((-1, 3))
+    vector = np.asarray(mode_vector, dtype=float).reshape((-1, 3))
+    if coords.shape != vector.shape:
+        raise ValueError(
+            f"mode_vector shape must match coordinates shape: {vector.shape} vs {coords.shape}"
+        )
+    norm = float(np.linalg.norm(vector))
+    if norm <= 0.0:
+        raise ValueError("mode_vector must be non-zero to apply a mode displacement")
+    sign_key = str(sign).strip().lower()
+    if sign_key not in {"plus", "minus"}:
+        raise ValueError(f"mode_displacement_sign must be 'plus' or 'minus', got {sign!r}")
+    direction = 1.0 if sign_key == "plus" else -1.0
+    return coords + direction * float(step_size) * (vector / norm)
+
+
+def _copy_irc_hessian(
+    hessian_source: Path,
+    target_dir: Path,
+    input_stem: str,
+) -> Path:
+    """Stage a Hessian file under the ORCA basename expected by IRC."""
+    source = Path(hessian_source)
+    if not source.exists():
+        raise FileNotFoundError(f"IRC Hessian file not found: {source}")
+    staged = target_dir / f"{input_stem}.hess"
+    if source.resolve() != staged.resolve():
+        shutil.copy2(source, staged)
+    return staged
+
+
+def _discover_sibling_hessian(source_path: Path | None) -> Path | None:
+    """Look for a sibling ``.hess`` file next to a geometry source path."""
+    if source_path is None:
+        return None
+    source = Path(source_path)
+    parent = source.parent
+    exact = parent / f"{source.stem}.hess"
+    if exact.exists():
+        return exact
+    matches = sorted(parent.glob("*.hess"))
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        logger.warning(
+            "Multiple sibling Hessian files found next to %s; "
+            "skipping automatic IRC Hessian handoff",
+            source,
+        )
+    return None
+
+
+def _read_endpoint_geometry(
+    endpoint_file: Path,
+    expected_symbols: list[str],
+) -> NDArray[np.float64] | None:
+    """Read an IRC endpoint XYZ and validate its atom ordering."""
+    try:
+        coordinates, parsed_symbols = read_xyz(endpoint_file)
+    except OSError as e:
+        logger.warning("Failed to read IRC endpoint %s: %s", endpoint_file, e)
+        return None
+
+    if len(parsed_symbols) != len(expected_symbols):
+        logger.warning(
+            "IRC endpoint %s atom count mismatch: %d vs expected %d",
+            endpoint_file,
+            len(parsed_symbols),
+            len(expected_symbols),
+        )
+        return None
+    normalized_expected = [_normalize_nmr_symbol(symbol) for symbol in expected_symbols]
+    normalized_parsed = [_normalize_nmr_symbol(symbol) for symbol in parsed_symbols]
+    if normalized_parsed != normalized_expected:
+        logger.warning(
+            "IRC endpoint %s symbols %s do not match expected ordering %s",
+            endpoint_file,
+            normalized_parsed,
+            normalized_expected,
+        )
+        return None
+    return np.asarray(coordinates, dtype=float).reshape((-1, 3))
+
+
 class ORCAInterface(QCInterfaceBase):
     """
     Interface for ORCA calculations.
@@ -360,7 +472,10 @@ class ORCAInterface(QCInterfaceBase):
 
         orca_config = self.executables.get("orca", {})
         self.exe_path = Path(orca_config.get("path", "orca"))
-        self.executable = resolve_executable("orca", configured_path=orca_config.get("path", "orca"))
+        self.executable = resolve_executable(
+            "orca",
+            configured_path=orca_config.get("path", "orca"),
+        )
         self._orca_ld_library_path = orca_config.get("ld_library_path")
 
         resources = self.resources
@@ -408,7 +523,7 @@ class ORCAInterface(QCInterfaceBase):
         aux_basis: str = None,
         aux_j_basis: str = None,
         aux_c_basis: str = None,
-        symbols: Optional[list[str]] = None,
+        symbols: list[str] | None = None,
     ) -> tuple[str, Any]:
         """Build ORCA input blocks.
 
@@ -443,7 +558,9 @@ class ORCAInterface(QCInterfaceBase):
         _basis = basis if basis is not None else self.basis
         _route_extras = [str(x) for x in route_extras if x] if route_extras else []
         _solvent = solvent if solvent is not None else self.solvent
-        _solvent_model = (solvent_model if solvent_model is not None else self.solvent_model) or "none"
+        _solvent_model = (
+            solvent_model if solvent_model is not None else self.solvent_model
+        ) or "none"
 
         blocks = []
 
@@ -497,9 +614,9 @@ class ORCAInterface(QCInterfaceBase):
         if ri_support in ("composite", "automatic"):
             _ri_keywords = {"RI", "RIJCOSX", "RIJK", "NONE"}
             _filtered_extras = [
-                x for x in _filtered_extras
-                if str(x).upper() not in _ri_keywords
-                and not _aux_basis_pattern.search(str(x))
+                x
+                for x in _filtered_extras
+                if str(x).upper() not in _ri_keywords and not _aux_basis_pattern.search(str(x))
             ]
             _aux_j = None
             if ri_support == "composite":
@@ -507,10 +624,7 @@ class ORCAInterface(QCInterfaceBase):
 
         builtin = (meta or {}).get("builtin_dispersion")
         if builtin:
-            _filtered_extras = [
-                x for x in _filtered_extras
-                if str(x).upper() != builtin.upper()
-            ]
+            _filtered_extras = [x for x in _filtered_extras if str(x).upper() != builtin.upper()]
 
         extras_str = (" " + " ".join(_filtered_extras)) if _filtered_extras else ""
 
@@ -526,9 +640,14 @@ class ORCAInterface(QCInterfaceBase):
         else:
             blocks.append(f"! {_method} {_basis} {route}{extras_str}")
 
-        needs_basis_block = _aux_j or _aux_c or (
-            not basis_inline and meta is not None
-            and (meta.get("default_aux_j") or meta.get("default_aux_c"))
+        needs_basis_block = (
+            _aux_j
+            or _aux_c
+            or (
+                not basis_inline
+                and meta is not None
+                and (meta.get("default_aux_j") or meta.get("default_aux_c"))
+            )
         )
         if needs_basis_block:
             blocks.append("%basis")
@@ -538,7 +657,7 @@ class ORCAInterface(QCInterfaceBase):
                     blocks.append(f'  basis "{effective_basis}"')
             final_aux_j = _aux_j or (meta or {}).get("default_aux_j")
             final_aux_c = _aux_c or (meta or {}).get("default_aux_c")
-            for blk in (extra_blocks or []):
+            for blk in extra_blocks or []:
                 if isinstance(blk, dict):
                     if "auxJ" in blk:
                         final_aux_j = blk["auxJ"]
@@ -614,8 +733,8 @@ class ORCAInterface(QCInterfaceBase):
         coordinates: np.ndarray,
         symbols: list[str],
         calc_type: str = "opt",
-        charge: Optional[int] = None,
-        multiplicity: Optional[int] = None,
+        charge: int | None = None,
+        multiplicity: int | None = None,
         method: str = None,
         basis: str = None,
         route_extras: list = None,
@@ -1194,6 +1313,280 @@ class ORCAInterface(QCInterfaceBase):
             output_file=input_file,
             log_file=output_file,
             metadata={"shieldings": shieldings},
+        )
+
+    def transition_state_opt(
+        self,
+        coordinates: NDArray[np.float64],
+        symbols: list[str],
+        charge: int = 0,
+        multiplicity: int = 1,
+        output_dir: Path = None,
+        output_name: str = "ts_opt",
+        method: str = None,
+        basis: str = None,
+        initial_hessian: str = "calculate",
+        recalc_hess: int = 5,
+        trust_radius: float = 0.15,
+        **kwargs,
+    ) -> TsOptResult:
+        """Run an ORCA OptTS + independent-frequency transition-state search.
+
+        The input carries an ``! OptTS`` route (built via
+        :func:`cccp.qc.interfaces.orca_ts.ts_opt_route`), a ``%geom`` block
+        requesting a calculated Hessian / RecalcHess / TrustRadius, and a
+        ``%freq`` block for the independent frequency analysis used to verify
+        the transition state (exactly one imaginary mode).
+
+        Args:
+            coordinates: Initial TS-guess coordinates (N, 3).
+            symbols: Element symbols.
+            charge: Molecular charge.
+            multiplicity: Spin multiplicity.
+            output_dir: Output directory.
+            output_name: Base name for output files.
+            method: Override method (uses ``self.method`` if None).
+            basis: Override basis (uses ``self.basis`` if None).
+            initial_hessian: ``"calculate"`` (default) / ``"model"`` / ``"read"``.
+            recalc_hess: Recalculate Hessian every N steps (0 disables).
+            trust_radius: Initial TrustRadius for the TS optimizer.
+            **kwargs: ``solvent`` / ``solvent_model`` / ``grid`` / ``scf`` /
+                ``nproc`` / ``ts_mode`` / ``opt_level`` /
+                ``mode_displacement`` / ``mode_vector`` /
+                ``mode_displacement_sign`` overrides.
+
+        Returns:
+            :class:`TsOptResult` with the converged TS geometry, energies and
+            imaginary frequencies.
+        """
+        output_dir = Path(output_dir) if output_dir else Path.cwd()
+        ensure_dir(output_dir)
+
+        input_file = output_dir / f"{output_name}.inp"
+        output_file = output_dir / f"{output_name}.out"
+
+        _solvent = kwargs.pop("solvent", None)
+        _solvent_model = kwargs.pop("solvent_model", None)
+        _grid = kwargs.pop("grid", None)
+        _scf = kwargs.pop("scf", None)
+        _nproc = kwargs.pop("nproc", None)
+        _ts_mode = kwargs.pop("ts_mode", False)
+        _opt_level = kwargs.pop("opt_level", None)
+        _mode_displacement = kwargs.pop("mode_displacement", None)
+        _mode_vector = kwargs.pop("mode_vector", None)
+        _mode_displacement_sign = kwargs.pop("mode_displacement_sign", "plus")
+        if kwargs:
+            logger.warning(
+                "Unused ORCA transition_state_opt kwargs for %s: %s",
+                output_name,
+                sorted(kwargs),
+            )
+
+        eff_method = method or self.method
+        eff_basis = basis or self.basis
+
+        input_coordinates = np.asarray(coordinates, dtype=float).reshape((-1, 3))
+        if _mode_displacement is not None:
+            if _mode_vector is None:
+                raise ValueError(
+                    "mode_displacement requires a mode_vector kwarg containing "
+                    "an (N, 3) normal-mode array"
+                )
+            input_coordinates = _apply_mode_displacement(
+                input_coordinates,
+                np.asarray(_mode_vector, dtype=float),
+                float(_mode_displacement),
+                str(_mode_displacement_sign),
+            )
+
+        route = ts_opt_route(
+            eff_method,
+            eff_basis or "",
+            grid=_grid,
+            scf=_scf,
+            solvent=_solvent,
+            solvent_model=_solvent_model,
+            nproc=_nproc or self.nproc,
+            opt_level=_opt_level,
+        )
+        blocks = (
+            route
+            + "\n"
+            + ts_geom_block(
+                initial_hessian,
+                recalc_hess,
+                trust_radius,
+                ts_mode=_ts_mode,
+            )
+            + "\n"
+            + freq_block_for_ts()
+        )
+
+        with open(input_file, "w", encoding="utf-8") as f:
+            f.write(blocks + "\n")
+            f.write(f"\n* xyz {charge} {multiplicity}\n")
+            for symbol, coord in zip(symbols, input_coordinates):
+                f.write(f"{symbol:2s} {coord[0]:15.10f} {coord[1]:15.10f} {coord[2]:15.10f}\n")
+            f.write("*\n")
+
+        success = self._run_orca(input_file, output_file)
+
+        if not success:
+            return TsOptResult(
+                success=False,
+                error_message="ORCA transition-state optimization failed",
+                output_file=input_file,
+                log_file=output_file,
+            )
+
+        output_text = output_file.read_text(encoding="utf-8", errors="replace")
+        coords, syms, _ = LogParser.extract_last_converged_coords(output_file, "orca")
+        energy = LogParser.extract_energy(output_file, "orca")
+        frequency_map = parse_ts_frequency_map(output_text)
+        frequencies = list(frequency_map.values())
+        imaginary = [f for f in frequencies if f < 0.0]
+        mode_vectors = parse_ts_mode_vectors(output_text)
+        most_negative_mode_index = None
+        mode_vector = None
+        negative_pairs = [
+            (mode_index, freq) for mode_index, freq in frequency_map.items() if freq < 0.0
+        ]
+        if negative_pairs:
+            most_negative_mode_index, _ = min(negative_pairs, key=lambda item: item[1])
+            mode_vector = mode_vectors.get(most_negative_mode_index)
+
+        return TsOptResult(
+            success=coords is not None,
+            energy_hartree=energy,
+            coordinates=coords,
+            symbols=syms or symbols,
+            converged=coords is not None,
+            imaginary_frequencies=imaginary,
+            all_frequencies=frequencies,
+            output_file=input_file,
+            log_file=output_file,
+            mode_vector=mode_vector,
+        )
+
+    def irc(
+        self,
+        coordinates: NDArray[np.float64],
+        symbols: list[str],
+        charge: int = 0,
+        multiplicity: int = 1,
+        output_dir: Path = None,
+        output_name: str = "irc",
+        method: str = None,
+        basis: str = None,
+        direction: str = "both",
+        max_iter: int = 100,
+        hess_file: Path | None = None,
+        **kwargs,
+    ) -> IrcResult:
+        """Run an ORCA IRC from a converged transition state.
+
+        Args:
+            coordinates: Converged TS coordinates (N, 3).
+            symbols: Element symbols.
+            charge: Molecular charge.
+            multiplicity: Spin multiplicity.
+            output_dir: Output directory.
+            output_name: Base name for output files.
+            method: Override method (uses ``self.method`` if None).
+            basis: Override basis (uses ``self.basis`` if None).
+            direction: ``"forward"`` / ``"reverse"`` / ``"both"`` (default).
+            max_iter: Maximum IRC steps.
+            hess_file: Optional Hessian file to stage as ``<output_name>.hess``.
+            **kwargs: ``solvent`` / ``solvent_model`` /
+                ``irc_midpoint_reseed`` / ``geometry_source`` overrides.
+
+        Returns:
+            :class:`IrcResult` with endpoint paths and step counts.
+        """
+        output_dir = Path(output_dir) if output_dir else Path.cwd()
+        ensure_dir(output_dir)
+
+        input_file = output_dir / f"{output_name}.inp"
+        output_file = output_dir / f"{output_name}.out"
+
+        _solvent = kwargs.pop("solvent", None)
+        _solvent_model = kwargs.pop("solvent_model", None)
+        _irc_midpoint_reseed = bool(kwargs.pop("irc_midpoint_reseed", False))
+        _geometry_source = kwargs.pop("geometry_source", None)
+        if kwargs:
+            logger.warning("Unused ORCA irc kwargs for %s: %s", output_name, sorted(kwargs))
+
+        eff_method = method or self.method
+        eff_basis = basis or self.basis
+
+        staged_hessian = None
+        if hess_file is not None:
+            staged_hessian = _copy_irc_hessian(Path(hess_file), output_dir, output_name)
+        elif not _irc_midpoint_reseed:
+            sibling_hessian = _discover_sibling_hessian(
+                Path(_geometry_source) if _geometry_source else None
+            )
+            if sibling_hessian is not None:
+                staged_hessian = _copy_irc_hessian(sibling_hessian, output_dir, output_name)
+            else:
+                logger.warning(
+                    "No IRC Hessian supplied for %s; omitting InitHess Read "
+                    "from the ORCA %%irc block",
+                    output_name,
+                )
+
+        route = irc_route(
+            eff_method,
+            eff_basis or "",
+            solvent=_solvent,
+            solvent_model=_solvent_model,
+        )
+        blocks = (
+            route
+            + "\n"
+            + irc_block(
+                direction,
+                max_iter,
+                hess_file_name=staged_hessian.name if staged_hessian is not None else None,
+                irc_midpoint_reseed=_irc_midpoint_reseed,
+            )
+        )
+
+        with open(input_file, "w", encoding="utf-8") as f:
+            f.write(blocks + "\n")
+            f.write(f"\n* xyz {charge} {multiplicity}\n")
+            for symbol, coord in zip(symbols, coordinates):
+                f.write(f"{symbol:2s} {coord[0]:15.10f} {coord[1]:15.10f} {coord[2]:15.10f}\n")
+            f.write("*\n")
+
+        success = self._run_orca(input_file, output_file)
+
+        if not success:
+            return IrcResult(
+                success=False,
+                error_message="ORCA IRC calculation failed",
+                output_file=input_file,
+                log_file=output_file,
+            )
+
+        output_text = output_file.read_text(encoding="utf-8", errors="replace")
+        endpoints = parse_irc_endpoints(output_text, output_dir)
+        forward_points = output_text.count("IRC forward direction")
+        reverse_points = output_text.count("IRC reverse direction")
+        final_geometries: dict[str, np.ndarray] = {}
+        for endpoint_direction, endpoint_file in endpoints.items():
+            endpoint_coords = _read_endpoint_geometry(endpoint_file, symbols)
+            if endpoint_coords is not None:
+                final_geometries[endpoint_direction] = endpoint_coords
+
+        return IrcResult(
+            success=True,
+            endpoints=endpoints or None,
+            forward_points=forward_points,
+            reverse_points=reverse_points,
+            output_file=input_file,
+            log_file=output_file,
+            final_geometries=final_geometries,
         )
 
     def _write_nmr_input(
