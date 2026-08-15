@@ -22,6 +22,8 @@ from .fake import (
     FakePathSearchStrategy,
     FakeRefinementProvider,
 )
+from .native_censo_lite import NativeCensoLiteProvider
+from .native_refinement import NativeRefinementProvider
 
 __all__ = [
     "EndpointMatchResult",
@@ -33,6 +35,8 @@ __all__ = [
     "FakePathSearchStrategy",
     "FakeRefinementProvider",
     "IrcResult",
+    "NativeCensoLiteProvider",
+    "NativeRefinementProvider",
     "PathSearchStrategy",
     "RefinementAttempt",
     "RefinementManifest",
