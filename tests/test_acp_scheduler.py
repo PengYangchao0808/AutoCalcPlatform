@@ -12,11 +12,50 @@ from pathlib import Path
 import pytest
 
 from acp.scheduler.events import JobEventLog
-from acp.scheduler.jobs import EXIT_WAITING_REVIEW, JobRecord, JobSpec, JobStatus
+from acp.scheduler.jobs import (
+    EXIT_WAITING_REVIEW,
+    MECHANISM_CONFIG_FILENAME,
+    JobRecord,
+    JobSpec,
+    JobStatus,
+    mechanism_method_flags,
+    write_mechanism_job_config,
+)
 from acp.scheduler.manager import JobManager
 from acp.scheduler.migrations import migrate
-from acp.scheduler.runner import materialize_job_input
+from acp.scheduler.runner import JobRunner, _write_mechanism_config_if_needed, materialize_job_input
 from acp.scheduler.store import JobStore
+
+
+def _write_mechanism_study_json(
+    work_dir: Path,
+    *,
+    study_id: str,
+    quality: str | None,
+    fidelity_profile_name: str,
+    provider_backend: str = "native",
+    include_high_fidelity: bool = False,
+) -> Path:
+    study_dir = work_dir / "mechanism_study" / study_id
+    study_dir.mkdir(parents=True, exist_ok=True)
+    payload: dict[str, object] = {
+        "study_id": study_id,
+        "status": "waiting" if quality == "medium" else "completed",
+        "quality": quality,
+        "routes": [],
+        "metadata": {
+            "study_runner": {
+                "provider_backend": provider_backend,
+                "fidelity_profile_name": fidelity_profile_name,
+                "high_fidelity_profile_name": "s4",
+                "config": {"mechanism": {"provider_backend": provider_backend}},
+            },
+            "high_fidelity": {"profile": "s4"} if include_high_fidelity else None,
+        },
+    }
+    path = study_dir / "study.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
 
 
 def test_materialize_com_and_inp_preserve_suffix(tmp_path: Path) -> None:
@@ -52,6 +91,247 @@ def test_materialize_structure_asset_preserves_com_suffix(tmp_path: Path) -> Non
     )
     assert dest is not None
     assert dest.name == "input.com"
+
+
+def test_mechanism_frontend_payload_materializes_and_builds_cmd(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_smiles_to_xyz(smiles: str, *, seed: int = 42, comment: str | None = None) -> str:
+        del seed, comment
+        return (
+            "3\n"
+            f"source={smiles}\n"
+            "C 0.000000 0.000000 0.000000\n"
+            "H 0.000000 0.000000 1.089000\n"
+            "H 1.026719 0.000000 -0.363000\n"
+        )
+
+    monkeypatch.setattr("acp.scheduler.runner.smiles_to_xyz", fake_smiles_to_xyz)
+
+    payload = {
+        "source_type": "mechanism",
+        "reactant": {
+            "source_type": "smiles",
+            "source": "CCO",
+            "asset_id": None,
+            "charge": 0,
+            "multiplicity": 1,
+        },
+        "product": {
+            "source_type": "smiles",
+            "source": "CC=O",
+            "asset_id": None,
+            "charge": 0,
+            "multiplicity": 1,
+        },
+        "ts_guess": None,
+        "routes": [
+            {"reactant_id": "reactant", "product_id": "product", "label": "frontend-shape"}
+        ],
+    }
+    inputs_dir = tmp_path / "job" / "inputs"
+    work_dir = tmp_path / "job"
+    role_paths: dict[str, Path] = {}
+
+    reactant_path = materialize_job_input(payload, inputs_dir, tmp_path, role_paths)
+
+    assert reactant_path == inputs_dir / "reactant.xyz"
+    assert reactant_path is not None and reactant_path.is_file()
+    assert role_paths["product"] == inputs_dir / "product.xyz"
+    assert role_paths["product"].is_file()
+    assert "C 0.000000 0.000000 0.000000" in reactant_path.read_text(encoding="utf-8")
+    reactant_payload = payload["reactant"]
+    assert isinstance(reactant_payload, dict)
+    assert reactant_payload["source"] == "CCO"
+
+    method = {
+        "preset": "rph-s3",
+        "fidelity": "s4",
+        "study_id": "study_001",
+        "conformer_mode": "xtb-fast",
+        "levels": {"sp": {"functional": "wB97M-V", "basis": "def2-TZVPP"}},
+    }
+    resources = {"nproc": 8, "mem": "16GB"}
+    config_path = write_mechanism_job_config(work_dir, payload, method, resources, role_paths)
+    config_payload = json.loads(config_path.read_text(encoding="utf-8"))
+
+    assert config_path == work_dir / MECHANISM_CONFIG_FILENAME
+    assert config_payload["resolved"]["preset"] == "rph-s3"
+    assert config_payload["resolved"]["fidelity"] == "s4"
+    assert config_payload["resolved"]["conformer_mode"] == "xtb-fast"
+    assert config_payload["resolved"]["study_id"] == "study_001"
+    assert config_payload["roles"]["reactant"]["path"] == str(reactant_path)
+    assert config_payload["roles"]["product"]["path"] == str(role_paths["product"])
+    assert config_payload["resources"] == resources
+
+    runner = JobRunner(python_executable="python")
+    spec = JobSpec(
+        workflow="mechanism",
+        name="frontend-mechanism",
+        input=payload,
+        method=method,
+        resources=resources,
+    )
+    cmd = runner._build_cmd(
+        spec,
+        work_dir,
+        str(reactant_path),
+        role_paths,
+        mechanism_config_path=str(config_path),
+    )
+
+    assert cmd[:5] == ["python", "-m", "acp.cli", "run", "mechanism"]
+    assert cmd[cmd.index("--input") + 1] == str(reactant_path)
+    assert cmd[cmd.index("--mechanism-config") + 1] == str(config_path)
+    assert cmd[cmd.index("--product") + 1] == str(role_paths["product"])
+    assert Path(cmd[cmd.index("--input") + 1]).is_file()
+    assert Path(cmd[cmd.index("--product") + 1]).is_file()
+    assert json.loads(cmd[cmd.index("--routes") + 1]) == payload["routes"]
+    assert cmd[cmd.index("--charge") + 1] == "0"
+    assert cmd[cmd.index("--multiplicity") + 1] == "1"
+    assert "--fidelity" not in cmd
+    assert "--conformer-mode" not in cmd
+    assert "--study-id" not in cmd
+
+
+def test_mechanism_method_flags_emit_study_controls() -> None:
+    assert mechanism_method_flags(
+        {
+            "conformer_mode": "xtb-fast",
+            "max_elementary_steps": 4,
+            "promotion_policy": "rate_relevant",
+            "study_id": "study_001",
+            "int_extension": True,
+            "auto_converge": True,
+        }
+    ) == [
+        "--conformer-mode",
+        "xtb-fast",
+        "--max-elementary-steps",
+        "4",
+        "--promotion-policy",
+        "rate_relevant",
+        "--study-id",
+        "study_001",
+        "--int-extension",
+        "--auto-converge",
+    ]
+
+
+def test_mechanism_runner_cmd_uses_config_channel(tmp_path: Path) -> None:
+    runner = JobRunner(python_executable="python")
+    spec = JobSpec(
+        workflow="mechanism",
+        name="rxn",
+        input={"source": "C=C", "product": "CC"},
+        method={
+            "study_id": "study_001",
+            "conformer_mode": "xtb-fast",
+            "max_elementary_steps": 4,
+            "promotion_policy": "rate_relevant",
+            "int_extension": True,
+            "auto_converge": True,
+        },
+        resources={"nproc": 8, "mem": "16GB"},
+    )
+
+    mechanism_config_path = tmp_path / MECHANISM_CONFIG_FILENAME
+    cmd = runner._build_cmd(spec, tmp_path, mechanism_config_path=str(mechanism_config_path))
+
+    assert "--mechanism-config" in cmd and str(mechanism_config_path) in cmd
+    assert "--study-id" not in cmd
+    assert "--conformer-mode" not in cmd
+    assert "--max-elementary-steps" not in cmd
+    assert "--promotion-policy" not in cmd
+    assert "--int-extension" not in cmd
+    assert "--auto-converge" not in cmd
+
+
+def test_mechanism_reaction_json_materializes_and_sets_schema_version(tmp_path: Path) -> None:
+    mgr = JobManager(run_root=tmp_path, max_running=1)
+    try:
+        work_dir = tmp_path / mgr.default_project_id / "job-mech"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        record = JobRecord(
+            id="job-mech",
+            spec=JobSpec(
+                workflow="mechanism",
+                name="rxn",
+                input={
+                    "source_type": "mechanism",
+                    "reactant": {"source_type": "smiles", "source": "C1CC1"},
+                    "product": {"source_type": "smiles", "source": "C1CC1"},
+                    "routes": [],
+                },
+                method={"study_id": "study-lock"},
+                resources={"nproc": 2, "mem": "2GB"},
+                project_id=mgr.default_project_id,
+            ),
+            work_dir=str(work_dir),
+            project_id=mgr.default_project_id,
+        )
+        reaction_payload = {
+            "schema_version": 2,
+            "study_id": "study-lock",
+            "reactant": {
+                "path": None,
+                "smiles": "C1CC1",
+                "asset_id": None,
+                "charge": 0,
+                "multiplicity": 1,
+            },
+            "product": {
+                "path": None,
+                "smiles": "C1CC1",
+                "asset_id": None,
+                "charge": 0,
+                "multiplicity": 1,
+            },
+            "ts_guess": None,
+            "atom_mapping": [{"reactant_index": 0, "product_index": 0}],
+            "bond_changes": [],
+            "index_base": 0,
+            "content_hash": "sha256:test",
+            "locked_at": "2026-08-16T00:00:00Z",
+            "confirmed_by": "user",
+        }
+        mgr.store.upsert_mechanism_study(
+            "study-lock",
+            job_id=None,
+            study_json=json.dumps({"study_id": "study-lock"}),
+            status="reaction_confirmed",
+            created_at="2026-08-16T00:00:00Z",
+            updated_at="2026-08-16T00:00:00Z",
+            reaction_json=json.dumps(reaction_payload),
+            config_hash="sha256:test",
+        )
+
+        mgr._materialize_mechanism_reaction_if_present(record)
+        reaction_path = work_dir / "mechanism_study" / "study-lock" / "reaction.json"
+        assert reaction_path.is_file()
+        assert json.loads(reaction_path.read_text(encoding="utf-8"))["schema_version"] == 2
+
+        config_path = _write_mechanism_config_if_needed(record.spec, work_dir, None, {})
+        assert config_path is not None
+        config_payload = json.loads(config_path.read_text(encoding="utf-8"))
+        assert config_payload["mechanism_schema_version"] == 2
+    finally:
+        mgr.shutdown()
+
+
+def test_mechanism_materialize_requires_valid_reactant(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="reactant"):
+        materialize_job_input(
+            {
+                "source_type": "mechanism",
+                "reactant": None,
+                "product": None,
+                "ts_guess": None,
+                "routes": [],
+            },
+            tmp_path / "inputs",
+            tmp_path,
+        )
 
 
 def test_store_roundtrip(tmp_path: Path) -> None:
@@ -388,7 +668,7 @@ def test_poll_job_translates_waiting_review_exit_code(tmp_path: Path) -> None:
             work_dir=str(work_dir),
         )
         mgr.store.create(record)
-        mgr.runner.poll = lambda _record: (True, EXIT_WAITING_REVIEW)  # type: ignore[method-assign]
+        mgr.runner.poll = lambda record: (True, EXIT_WAITING_REVIEW)  # type: ignore[method-assign]
 
         mgr._poll_job(record.id)
 
@@ -405,12 +685,119 @@ def test_poll_job_translates_waiting_review_exit_code(tmp_path: Path) -> None:
         mgr.shutdown()
 
 
+def test_collect_result_extracts_mechanism_study_metadata_for_completed_job(tmp_path: Path) -> None:
+    mgr = JobManager(run_root=tmp_path, poll_interval=30)
+    try:
+        work_dir = tmp_path / "job-mech-complete"
+        work_dir.mkdir()
+        _write_mechanism_study_json(
+            work_dir,
+            study_id="study-1",
+            quality="high",
+            fidelity_profile_name="s3",
+            include_high_fidelity=True,
+        )
+        record = JobRecord(
+            id="job-mech-complete",
+            spec=JobSpec(
+                workflow="mechanism",
+                name="completed-study",
+                method={"study_id": "study-1"},
+            ),
+            status=JobStatus.RUNNING,
+            work_dir=str(work_dir),
+        )
+
+        result = mgr._collect_result(record)
+
+        assert result["provider"] == "native"
+        assert result["fidelity"] == "s4"
+        assert result["quality"] == "high"
+    finally:
+        mgr.shutdown()
+
+
+def test_poll_job_waiting_review_extracts_mechanism_study_metadata(tmp_path: Path) -> None:
+    mgr = JobManager(run_root=tmp_path, poll_interval=30)
+    try:
+        work_dir = tmp_path / "job-mech-review"
+        work_dir.mkdir()
+        _write_mechanism_study_json(
+            work_dir,
+            study_id="study-1",
+            quality="medium",
+            fidelity_profile_name="s3",
+        )
+        (work_dir / "review_payload.json").write_text(
+            json.dumps(
+                {
+                    "study_id": "study-1",
+                    "status": "waiting",
+                    "pending_decisions": ["decision-1"],
+                    "effective_fidelity": "s3",
+                }
+            ),
+            encoding="utf-8",
+        )
+        record = JobRecord(
+            id="job-mech-review",
+            spec=JobSpec(
+                workflow="mechanism",
+                name="review-study",
+                method={"study_id": "study-1"},
+            ),
+            status=JobStatus.RUNNING,
+            work_dir=str(work_dir),
+        )
+        mgr.store.create(record)
+        mgr.runner.poll = lambda record: (True, EXIT_WAITING_REVIEW)  # type: ignore[method-assign]
+
+        mgr._poll_job(record.id)
+
+        updated = mgr.get(record.id)
+        assert updated is not None
+        assert updated.result is not None
+        assert updated.result["provider"] == "native"
+        assert updated.result["fidelity"] == "s3"
+        assert updated.result["quality"] == "medium"
+        assert updated.result["review_payload"]["study_id"] == "study-1"
+    finally:
+        mgr.shutdown()
+
+
+def test_collect_result_skips_mechanism_metadata_when_study_dir_missing(tmp_path: Path) -> None:
+    mgr = JobManager(run_root=tmp_path, poll_interval=30)
+    try:
+        work_dir = tmp_path / "job-mech-missing"
+        work_dir.mkdir()
+        record = JobRecord(
+            id="job-mech-missing",
+            spec=JobSpec(
+                workflow="mechanism",
+                name="missing-study",
+                method={"study_id": "missing-study"},
+            ),
+            status=JobStatus.RUNNING,
+            work_dir=str(work_dir),
+        )
+
+        result = mgr._collect_result(record)
+
+        assert "provider" not in result
+        assert "fidelity" not in result
+        assert "quality" not in result
+    finally:
+        mgr.shutdown()
+
+
 def test_migration_006_and_mechanism_store_helpers(tmp_path: Path) -> None:
     db_path = tmp_path / "db" / "scheduler.db"
     applied_first = migrate(db_path)
     applied_second = migrate(db_path)
 
-    assert applied_first == 4
+    # 001-007 apply directly (008 checks the jobs table, which only
+    # JobStore._init_schema creates, so it lands on the JobStore init below).
+    assert applied_first == 6
     assert applied_second == 0
 
     with sqlite3.connect(db_path) as conn:
@@ -418,10 +805,25 @@ def test_migration_006_and_mechanism_store_helpers(tmp_path: Path) -> None:
             row[0]
             for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
+        study_columns = {
+            row[1] for row in conn.execute("PRAGMA table_info(mechanism_studies)").fetchall()
+        }
+        task_columns = {row[1] for row in conn.execute("PRAGMA table_info(stage_tasks)").fetchall()}
     assert "mechanism_studies" in tables
     assert "decision_points" in tables
+    assert {
+        "reaction_json",
+        "mechanism_plan_json",
+        "config_hash",
+        "cycle_index",
+        "consumed_cycle",
+    } <= study_columns
+    assert "status_detail" in task_columns
 
     store = JobStore(db_path)
+    with sqlite3.connect(db_path) as conn:
+        job_columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+    assert "group_id" in job_columns
     store.upsert_mechanism_study(
         "study-1",
         job_id="job-1",

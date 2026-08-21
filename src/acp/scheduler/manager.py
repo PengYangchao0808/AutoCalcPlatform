@@ -19,7 +19,7 @@ import shutil
 import threading
 import time
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -30,7 +30,9 @@ from acp.scheduler.jobs import (
     JobRecord,
     JobSpec,
     JobStatus,
+    write_mechanism_reaction_json,
 )
+from acp.scheduler.metrics import MetricsExtractor
 from acp.scheduler.nodes import (
     ExecutionCapacityUnavailable,
     ExecutionTargetError,
@@ -40,7 +42,11 @@ from acp.scheduler.nodes import (
 )
 from acp.scheduler.projects import ProjectManager
 from acp.scheduler.provenance import compute_input_hash
-from acp.scheduler.runner import JobRunner
+from acp.scheduler.runner import (
+    JobRunner,
+    find_workflow_state,
+    populate_mechanism_study_result_metadata,
+)
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
 from acp.scheduler.store import JobStore
 
@@ -52,6 +58,7 @@ if TYPE_CHECKING:
     from acp.scheduler.remote.cleanup import RemoteCleanup
     from acp.scheduler.remote.config import RemoteExecutionConfig
     from acp.scheduler.remote.fetcher import RemoteResultFetcher
+    from acp.scheduler.remote.monitor import RemoteJobMonitor
     from acp.scheduler.remote.node_manager import NodeManager
     from acp.scheduler.remote.ssh import SSHConnectionPool
 
@@ -104,6 +111,7 @@ class JobManager:
         self._fetcher_ssh_pool: SSHConnectionPool | None = None
         self._remote_fetcher: RemoteResultFetcher | None = None
         self._remote_cleanup: RemoteCleanup | None = None
+        self._remote_monitor: RemoteJobMonitor | None = None
         self._node_manager = None
         self.registry = NodeRegistry(
             local_max_jobs=local_max_jobs,
@@ -131,6 +139,7 @@ class JobManager:
         self._poll_failures: dict[str, int] = {}
         self._lock = threading.RLock()
         self._counter = 0
+        self._metrics_extractor = MetricsExtractor()
 
         # Background poller thread.
         self._poll_stop = threading.Event()
@@ -195,6 +204,7 @@ class JobManager:
         self._runner_ssh_pool = SSHConnectionPool()
         runner_stager = FileStager(self._runner_ssh_pool)
         monitor = RemoteJobMonitor(self._runner_ssh_pool, runner_stager)
+        self._remote_monitor = monitor
         syncer = CodeSyncer(self._runner_ssh_pool)
         cleanup = RemoteCleanup(
             ssh_pool=self._runner_ssh_pool,
@@ -298,12 +308,18 @@ class JobManager:
         except OSError:
             logger.debug("Failed to append cleanup.log", exc_info=True)
 
-    def submit(self, spec: JobSpec) -> JobRecord:
+    def submit(self, spec: JobSpec, group_id: str | None = None) -> JobRecord:
         """Validate, persist, and enqueue a new job. Returns immediately.
 
         Job submission (including SSH sync, upload, bsub for remote mode)
         runs on a background daemon thread; an immediate first poll follows
         submission, then the periodic poller takes over.
+
+        Args:
+            spec: The job specification to submit.
+            group_id: Queue-grouping key. Defaults to the new job's own id
+                (self-rooted); pass an ancestor's id to link a clone (e.g.
+                a ``rerun_job``) into the same group.
         """
         if spec.workflow not in SUPPORTED_WORKFLOWS:
             raise ValueError(
@@ -338,6 +354,7 @@ class JobManager:
             work_dir=str(work_dir),
             project_id=spec.project_id,
             input_hash=spec.input_hash,
+            group_id=group_id or job_id,
         )
         self.store.create(record)
         self._stage_task_observer.initialize_job_stages(job_id, spec)
@@ -406,12 +423,53 @@ class JobManager:
         )
         return self.submit(new_spec)
 
+    def rerun_job(self, job_id: str, project_id: str | None = None) -> JobRecord | None:
+        """Enhanced clone for a fresh full re-run of the same spec.
+
+        Unlike :meth:`clone_job` the name is stable across generations
+        (any ``_copy`` suffix is stripped before appending ``__rerun``),
+        the project defaults to the source job's own project, and
+        ``output_dir`` is cleared so the run lands in a fresh work_dir
+        (avoids the ``simple`` workflow's ``_1`` sibling redirect).
+
+        Args:
+            job_id: Source job identifier.
+            project_id: Optional target project; defaults to the source
+                job's project.
+
+        Returns:
+            The newly submitted job record, or ``None`` if the source job
+            does not exist.
+
+        Raises:
+            ValueError: If the target project does not exist.
+        """
+        record = self.store.get(job_id)
+        if record is None:
+            return None
+        target_project = project_id or record.project_id or record.spec.project_id
+        if target_project is None or self._projects.get_project(target_project) is None:
+            raise ValueError(f"Project not found: {target_project}")
+
+        base_name = record.spec.name or record.spec.workflow
+        if base_name.endswith("_copy"):
+            base_name = base_name[: -len("_copy")]
+        new_spec = replace(
+            record.spec,
+            project_id=target_project,
+            name=base_name + "__rerun",
+            output_dir=None,
+        )
+        return self.submit(new_spec, group_id=record.group_id or record.id)
+
     def delete_job(self, job_id: str, delete_data: bool = False) -> bool:
         """Delete a job record and optionally its local and remote data.
 
         Active jobs must be cancelled before deletion. When ``delete_data`` is
         True the local work directory and remote directories (on all configured
-        nodes) are removed before the database record is deleted.
+        nodes) are removed before the database record is deleted. The DB delete
+        cascades to stage_tasks / artifacts / mechanism_studies /
+        decision_points via :meth:`JobStore.purge_cascade`.
         """
         record = self.store.get(job_id)
         if record is None:
@@ -419,21 +477,150 @@ class JobManager:
         if record.status.is_active:
             raise ValueError(f"Job {job_id} is active; cancel it before deletion")
 
+        self._emit_purged_event(record, delete_data=delete_data)
         if delete_data:
-            if self._is_remote_enabled() and self._remote_cleanup is not None:
-                try:
-                    self._remote_cleanup.delete_job_dirs(job_id)
-                except Exception:
-                    logger.warning("Remote cleanup failed for job %s", job_id, exc_info=True)
-            try:
-                work_dir = Path(record.work_dir)
-                if work_dir.exists():
-                    shutil.rmtree(work_dir)
-            except Exception:
-                logger.warning("Failed to remove work_dir for job %s", job_id, exc_info=True)
-
-        self.store.delete(job_id)
+            self._delete_job_disk(record)
+        self._purge_job_records(job_id)
         return True
+
+    def purge_jobs(
+        self,
+        job_ids: list[str] | None = None,
+        status: str | None = None,
+        project_id: str | None = None,
+        older_than_days: float | None = None,
+        delete_data: bool = False,
+        force_cancel: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Batch-purge jobs with a per-job report (plan §4.1/§4.3).
+
+        The target set is either explicit ``job_ids`` or a filter query
+        (``status`` / ``project_id`` / ``older_than_days`` on
+        ``completed_at``). Active jobs are skipped unless ``force_cancel``
+        cancels them first (then waits up to 30 s for a terminal state).
+
+        Returns:
+            One dict per job: ``{job_id, ok, action, error}`` where
+            *action* is ``"purged"`` | ``"skipped_active"`` |
+            ``"cancel_failed"`` | ``"error"``.
+        """
+        if job_ids:
+            targets = list(dict.fromkeys(job_ids))
+        else:
+            cutoff = None
+            if older_than_days is not None:
+                cutoff = (datetime.now(timezone.utc) - timedelta(days=older_than_days)).isoformat()
+            targets = [
+                record.id
+                for record in self.store.list(
+                    status=status,
+                    project_id=project_id,
+                    completed_before=cutoff,
+                    limit=100000,
+                )
+            ]
+
+        report: list[dict[str, Any]] = []
+        for job_id in targets:
+            record = self.store.get(job_id)
+            if record is None:
+                report.append(
+                    {"job_id": job_id, "ok": False, "action": "error", "error": "job not found"}
+                )
+                continue
+            if record.status.is_active:
+                if not force_cancel:
+                    report.append(
+                        {
+                            "job_id": job_id,
+                            "ok": False,
+                            "action": "skipped_active",
+                            "error": f"job is active (status={record.status.value}); "
+                            "use force_cancel to cancel it first",
+                        }
+                    )
+                    continue
+                try:
+                    self.cancel(job_id)
+                except Exception as exc:
+                    report.append(
+                        {
+                            "job_id": job_id,
+                            "ok": False,
+                            "action": "cancel_failed",
+                            "error": f"cancel raised: {exc}",
+                        }
+                    )
+                    continue
+                if not self._await_terminal(job_id, timeout=30.0):
+                    report.append(
+                        {
+                            "job_id": job_id,
+                            "ok": False,
+                            "action": "cancel_failed",
+                            "error": "still active 30s after cancel",
+                        }
+                    )
+                    continue
+                record = self.store.get(job_id)
+                if record is None:
+                    report.append({"job_id": job_id, "ok": True, "action": "purged", "error": None})
+                    continue
+            try:
+                self._emit_purged_event(record, delete_data=delete_data)
+                if delete_data:
+                    self._delete_job_disk(record)
+                self._purge_job_records(job_id)
+                report.append({"job_id": job_id, "ok": True, "action": "purged", "error": None})
+            except Exception as exc:
+                logger.warning("Purge failed for job %s", job_id, exc_info=True)
+                report.append({"job_id": job_id, "ok": False, "action": "error", "error": str(exc)})
+        return report
+
+    def _await_terminal(self, job_id: str, timeout: float = 30.0) -> bool:
+        """Poll the store until *job_id* reaches a terminal state or timeout."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            record = self.store.get(job_id)
+            if record is None or record.status.is_terminal:
+                return True
+            time.sleep(1.0)
+        record = self.store.get(job_id)
+        return record is None or record.status.is_terminal
+
+    def _purge_job_records(self, job_id: str) -> None:
+        """Cascade-delete every DB row owned by *job_id* (jobs + children)."""
+        self.store.purge_cascade(job_id)
+
+    def _delete_job_disk(self, record: JobRecord) -> None:
+        """Remove a job's remote directories and local work directory."""
+        job_id = record.id
+        if self._is_remote_enabled() and self._remote_cleanup is not None:
+            try:
+                self._remote_cleanup.delete_job_dirs(job_id)
+            except Exception:
+                logger.warning("Remote cleanup failed for job %s", job_id, exc_info=True)
+        try:
+            work_dir = Path(record.work_dir)
+            if work_dir.exists():
+                shutil.rmtree(work_dir)
+        except Exception:
+            logger.warning("Failed to remove work_dir for job %s", job_id, exc_info=True)
+
+    def _emit_purged_event(self, record: JobRecord, delete_data: bool) -> None:
+        """Append ``job.purged`` to the job's event log, when it still exists.
+
+        The existence guard keeps :class:`JobEventLog` (whose constructor
+        re-creates the parent directory) from resurrecting a work_dir that
+        was already removed from disk.
+        """
+        events_path = Path(record.work_dir) / "events.jsonl"
+        if not events_path.exists():
+            return
+        try:
+            JobEventLog(events_path).append("job.purged", job_id=record.id, delete_data=delete_data)
+        except OSError:
+            logger.debug("Failed to append job.purged for %s", record.id, exc_info=True)
 
     @property
     def projects(self) -> ProjectManager:
@@ -448,6 +635,11 @@ class JobManager:
     def remote_cleanup(self) -> RemoteCleanup | None:
         """Remote file-lifecycle manager (``None`` when remote is off)."""
         return self._remote_cleanup
+
+    @property
+    def remote_monitor(self) -> RemoteJobMonitor | None:
+        """Remote LSF job monitor (``None`` when remote is off)."""
+        return self._remote_monitor
 
     @property
     def node_manager(self) -> NodeManager | None:
@@ -643,17 +835,20 @@ class JobManager:
         record = self.store.get(job_id)
         if record is None:
             raise KeyError(f"Unknown job {job_id!r}")
-        if record.status != JobStatus.WAITING_REVIEW:
-            raise ValueError(f"resume requires WAITING_REVIEW status; got {record.status.value}")
-        result = dict(record.result or {})
-        if resolution is not None:
-            result["review_resolution"] = dict(resolution)
-        record.result = result
-        rerun_submission = bool(resolution and resolution.get("requeue"))
-        record.status = JobStatus.STARTING if rerun_submission else JobStatus.RUNNING
-        record.touch()
-        self.store.update(record)
-        self._write_job_json(record)
+        with self._lock:
+            if record.status != JobStatus.WAITING_REVIEW:
+                raise ValueError(
+                    f"resume requires WAITING_REVIEW status; got {record.status.value}"
+                )
+            result = dict(record.result or {})
+            if resolution is not None:
+                result["review_resolution"] = dict(resolution)
+            record.result = result
+            rerun_submission = bool(resolution and resolution.get("requeue"))
+            record.status = JobStatus.STARTING if rerun_submission else JobStatus.RUNNING
+            record.touch()
+            self.store.update(record)
+            self._write_job_json(record)
         self._event_log(record).append(
             "job.review_resumed",
             job_id=job_id,
@@ -668,6 +863,192 @@ class JobManager:
                 name=f"acp-resume-{job_id}",
             ).start()
         return record
+
+    def pause_job(self, job_id: str) -> JobRecord:
+        """Pause a running job: SIGSTOP the local process group, ``bstop`` remotely.
+
+        The local subprocess stays alive (frozen, still tracked by the
+        runner) so :meth:`unpause_job` can revive it in place; remote jobs
+        rely on the LSF bstop/bresume pair instead.
+
+        Args:
+            job_id: Job identifier.
+
+        Returns:
+            Updated job record.
+
+        Raises:
+            KeyError: If the job does not exist.
+            ValueError: If the current status is not ``RUNNING``.
+            RuntimeError: If the remote pause capability is missing or failed.
+        """
+        record = self.store.get(job_id)
+        if record is None:
+            raise KeyError(f"Unknown job {job_id!r}")
+        if record.status != JobStatus.RUNNING:
+            raise ValueError(f"pause_job requires RUNNING status; got {record.status.value}")
+
+        if self._is_remote_job(record):
+            if self.remote_runner is None:
+                raise RuntimeError("remote pause unsupported: remote runner is disabled")
+            self._remote_bstop_bresume(record, "bstop_job", "pause")
+            mode = "bstop"
+        elif self.runner.pause_local(job_id):
+            mode = "sigstop"
+        else:
+            # Process already gone (finished between check and signal) —
+            # leave the record alone so the poller finalizes it normally.
+            raise ValueError(
+                f"job {job_id} has no live local process to pause (it may have just finished)"
+            )
+
+        record.status = JobStatus.PAUSED
+        record.touch()
+        self.store.update(record)
+        self._write_job_json(record)
+        self._event_log(record).append("job.paused", job_id=job_id, mode=mode)
+        return record
+
+    def unpause_job(self, job_id: str) -> JobRecord:
+        """Resume a paused job: SIGCONT locally, ``bresume`` remotely.
+
+        Args:
+            job_id: Job identifier.
+
+        Returns:
+            Updated job record.
+
+        Raises:
+            KeyError: If the job does not exist.
+            ValueError: If the current status is not ``PAUSED``.
+            RuntimeError: If the remote unpause capability is missing or failed.
+        """
+        record = self.store.get(job_id)
+        if record is None:
+            raise KeyError(f"Unknown job {job_id!r}")
+        if record.status != JobStatus.PAUSED:
+            raise ValueError(f"unpause_job requires PAUSED status; got {record.status.value}")
+
+        if self._is_remote_job(record):
+            if self.remote_runner is None:
+                raise RuntimeError("remote unpause unsupported: remote runner is disabled")
+            self._remote_bstop_bresume(record, "bresume_job", "unpause")
+            mode = "bresume"
+        elif self.runner.resume_local(job_id):
+            mode = "sigcont"
+        else:
+            # No tracked process (e.g. record survived a restart) — keep
+            # PAUSED rather than flipping to RUNNING with nothing to poll.
+            raise RuntimeError(f"cannot unpause local job {job_id}: process is no longer tracked")
+
+        record.status = JobStatus.RUNNING
+        record.touch()
+        self.store.update(record)
+        self._write_job_json(record)
+        self._event_log(record).append("job.resumed", job_id=job_id, mode=mode)
+        return record
+
+    def continue_job(self, job_id: str) -> JobRecord:
+        """Re-enter a FAILED/CANCELLED job from its checkpoint (plan §4.4).
+
+        Workflow matrix: ``mechanism`` re-enters the same work_dir (the
+        CLI auto-resumes from ``study.json`` phase fingerprints via the
+        stable study_id in ``mechanism_config.json``); ``xtbmd_censo_energy``
+        first persists ``method.resume=true`` into the spec so the rebuilt
+        CLI command carries ``--resume``; every other workflow has no
+        checkpoints and is rejected (the API maps the ``ValueError`` to 409
+        with a rerun hint).
+
+        Args:
+            job_id: Job identifier.
+
+        Returns:
+            Updated job record (status ``QUEUED``, re-dispatch started).
+
+        Raises:
+            KeyError: If the job does not exist.
+            ValueError: If the status is not ``FAILED``/``CANCELLED``, a
+                live process is still tracked, or the workflow cannot resume.
+        """
+        record = self.store.get(job_id)
+        if record is None:
+            raise KeyError(f"Unknown job {job_id!r}")
+        if record.status not in (JobStatus.FAILED, JobStatus.CANCELLED):
+            raise ValueError(
+                f"continue_job requires FAILED or CANCELLED status; got {record.status.value}"
+            )
+        if self._has_live_process(job_id):
+            raise ValueError(
+                f"job {job_id} still has a live process tracked by the runner; "
+                "refusing to re-enter (possible zombie)"
+            )
+
+        workflow = record.spec.workflow
+        if workflow == "mechanism":
+            pass
+        elif workflow == "xtbmd_censo_energy":
+            record.spec = replace(record.spec, method={**record.spec.method, "resume": True})
+        else:
+            raise ValueError("该工作流不支持断点续算，请使用重算 (rerun)")
+
+        old_status = record.status.value
+        result = dict(record.result or {})
+        result["attempts"] = int(result.get("attempts") or 1) + 1
+        result["continued_from"] = old_status
+        record.result = result
+        record.status = JobStatus.QUEUED
+        record.error = None
+        record.exit_code = None
+        record.completed_at = None
+        record.touch()
+        self.store.update(record)
+
+        with self._lock:
+            self._cancel_events[job_id] = threading.Event()
+        self._write_job_json(record)
+        self._event_log(record).append(
+            "job.continued",
+            job_id=job_id,
+            continued_from=old_status,
+            attempts=result["attempts"],
+            workflow=workflow,
+        )
+        threading.Thread(
+            target=self._execute_submission,
+            args=(job_id,),
+            daemon=True,
+            name=f"acp-continue-{job_id}",
+        ).start()
+        return record
+
+    def _has_live_process(self, job_id: str) -> bool:
+        """True when the runner still tracks a live (un-exited) subprocess."""
+        proc = self.runner._processes.get(job_id)
+        return proc is not None and proc.poll() is None
+
+    def _remote_bstop_bresume(self, record: JobRecord, method_name: str, action: str) -> None:
+        """Invoke the remote monitor's bstop/bresume contract for *record*.
+
+        Follows the ``cancel_job(node, lsf_job_id)`` calling convention,
+        resolving the node from execution provenance (``result["node"]``);
+        single-argument monitor methods are also accepted.  Raises
+        ``RuntimeError`` when the capability is missing (monitor method
+        absent, no LSF job id) or the LSF command reports failure — the
+        job status is left untouched in every failure mode.
+        """
+        method = getattr(self._remote_monitor, method_name, None)
+        if not callable(method):
+            raise RuntimeError(f"remote {action} unsupported: monitor has no {method_name}")
+        lsf_id = record.remote_job_id or str((record.result or {}).get("lsf_job_id") or "")
+        if not lsf_id:
+            raise RuntimeError(f"remote {action} unsupported: no LSF job id")
+        node = None
+        node_name = (record.result or {}).get("node")
+        if self._remote_config is not None and node_name:
+            node = self._remote_config.get_node(str(node_name))
+        ok = method(node, lsf_id) if node is not None else method(lsf_id)
+        if not ok:
+            raise RuntimeError(f"remote {action} failed: LSF command did not succeed")
 
     def event_log(self, job_id: str) -> JobEventLog | None:
         record = self.store.get(job_id)
@@ -835,6 +1216,7 @@ class JobManager:
 
         cancel_event = self._cancel_events.get(job_id, threading.Event())
         event_log = self._event_log(record)
+        self._materialize_mechanism_reaction_if_present(record)
 
         # ------------------------------------------------------------------
         # Fake workflow: run in-process to completion, mark COMPLETED now.
@@ -893,6 +1275,23 @@ class JobManager:
         record.touch()
         self.store.update(record)
         self._write_job_json(record)
+
+    def _materialize_mechanism_reaction_if_present(self, record: JobRecord) -> None:
+        if record.spec.workflow != "mechanism":
+            return
+        study_id = record.spec.method.get("study_id")
+        if not study_id:
+            return
+        study_row = self.store.get_mechanism_study(str(study_id))
+        if study_row is None:
+            return
+        reaction_json_raw = study_row.get("reaction_json")
+        if not isinstance(reaction_json_raw, str) or not reaction_json_raw.strip():
+            return
+        reaction_payload = json.loads(reaction_json_raw)
+        if not isinstance(reaction_payload, dict):
+            return
+        write_mechanism_reaction_json(Path(record.work_dir), str(study_id), reaction_payload)
 
     # ------------------------------------------------------------------ #
     # Execution target resolution (single decision point — P4)
@@ -1015,6 +1414,7 @@ class JobManager:
                 event_log.append("job.failed", job_id=job_id, error=str(exc))
                 self._stage_task_observer.finalize_job(job_id, "failed")
                 return
+            self._metrics_extractor.extract(record.id, Path(record.work_dir))
 
         if not is_terminal:
             record.touch()
@@ -1030,7 +1430,7 @@ class JobManager:
             result = dict(record.result or {})
             if payload is not None:
                 result["review_payload"] = payload
-            record.result = result
+            record.result = populate_mechanism_study_result_metadata(record, result)
             record.touch()
             self.store.update(record)
             self._write_job_json(record)
@@ -1077,8 +1477,12 @@ class JobManager:
         )
         while not self._poll_stop.wait(self.poll_interval):
             try:
-                # WAITING_REVIEW jobs are intentionally excluded here: they are
-                # paused for manual review and must not be advanced by polling.
+                # WAITING_REVIEW and PAUSED jobs are intentionally excluded
+                # here: WAITING_REVIEW is held for manual review, and a
+                # PAUSED job is frozen (SIGSTOP / bstop) with nothing for
+                # polling to observe — unpause flips it back to RUNNING and
+                # polling resumes (the retained _processes entry means no
+                # bounce).
                 for status_val in (
                     JobStatus.RUNNING.value,
                     JobStatus.PENDING.value,
@@ -1097,8 +1501,6 @@ class JobManager:
         logger.info("Poll loop stopped")
 
     def _collect_result(self, record: JobRecord) -> dict[str, Any]:
-        from acp.scheduler.runner import find_workflow_state
-
         state_path = find_workflow_state(Path(record.work_dir))
         result: dict[str, Any] = dict(record.result or {})
         if state_path is not None and state_path.exists():
@@ -1106,7 +1508,7 @@ class JobManager:
                 result["state"] = json.loads(state_path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 pass
-        return result
+        return populate_mechanism_study_result_metadata(record, result)
 
     def _requeue_active_on_startup(self) -> None:
         # Mark interrupted jobs FAILED so their work_dir is retained for
@@ -1117,6 +1519,7 @@ class JobManager:
         # Remote jobs with a valid remote_job_id can be recovered — the background
         # poller will re-check bjobs + .exit_code.
         restart_marker = "[RESTART_FAILED] interrupted by server restart"
+        resume_hint = " — 可尝试续算 (try continue)"
         # CANCELLING jobs that were interrupted mid-cancellation should stay
         # CANCELLED — the user's cancel intent must survive a restart.
         for record in self.store.list(status=JobStatus.CANCELLING.value):
@@ -1127,6 +1530,30 @@ class JobManager:
             self.store.update(record)
             self._stage_task_observer.finalize_job(record.id, JobStatus.CANCELLED.value)
             logger.info("Marked CANCELLING job %s as CANCELLED after restart", record.id)
+
+        # PAUSED jobs: local ones died with the server (their frozen process
+        # groups live in the service's cgroup — nothing to kill), so fail
+        # them with the resumable hint.  Remote ones keep their bstop state
+        # on the LSF side: recover the polling state and KEEP them PAUSED
+        # until an explicit unpause (bresume) flips them back to RUNNING.
+        paused_marker = (
+            "[RESTART_FAILED] paused job frozen at restart — 可续算 (resumable via continue)"
+        )
+        for record in self.store.list(status=JobStatus.PAUSED.value):
+            if self._try_recover_remote_job(record):
+                logger.info(
+                    "Recovered remote paused job %s (lsf=%s), kept PAUSED",
+                    record.id,
+                    record.remote_job_id,
+                )
+                continue
+            record.status = JobStatus.FAILED
+            record.error = paused_marker
+            record.completed_at = _utc_now_iso()
+            record.touch()
+            self.store.update(record)
+            self._stage_task_observer.finalize_job(record.id, JobStatus.FAILED.value)
+            logger.info("Marked paused job %s as FAILED after restart", record.id)
 
         # WAITING_REVIEW jobs are intentionally excluded here: a server restart
         # must preserve their paused review state rather than marking them failed.
@@ -1139,13 +1566,59 @@ class JobManager:
                         record.remote_job_id,
                     )
                     continue
+                # Restart race guard: the workflow may have finished exactly
+                # as the server went down — probe disk before failing (Q12).
+                if self._disk_shows_completed(Path(record.work_dir)):
+                    record.status = JobStatus.COMPLETED
+                    record.exit_code = 0
+                    record.progress = 1.0
+                    record.completed_at = _utc_now_iso()
+                    record.result = self._collect_result(record)
+                    record.touch()
+                    self.store.update(record)
+                    self._write_job_json(record)
+                    self._stage_task_observer.finalize_job(record.id, JobStatus.COMPLETED.value)
+                    logger.info("Marked interrupted job %s as COMPLETED (disk probe)", record.id)
+                    continue
                 record.status = JobStatus.FAILED
-                record.error = restart_marker
+                record.error = restart_marker + resume_hint
                 record.completed_at = _utc_now_iso()
                 record.touch()
                 self.store.update(record)
                 self._stage_task_observer.finalize_job(record.id, JobStatus.FAILED.value)
                 logger.info("Marked interrupted job %s as FAILED", record.id)
+
+    def _disk_shows_completed(self, work_dir: Path) -> bool:
+        """Probe disk for a job that finished exactly as the server died.
+
+        True when the workflow ``state.json`` parses and shows every stage
+        completed or skipped, and the ``.exit_code`` marker file holds
+        ``0`` (the wrapper-script completion sentinel).
+        """
+        exit_code_path = work_dir / ".exit_code"
+        try:
+            if not exit_code_path.is_file():
+                return False
+            if exit_code_path.read_text(encoding="utf-8").strip() != "0":
+                return False
+        except OSError:
+            return False
+        state_path = find_workflow_state(work_dir)
+        if state_path is None:
+            return False
+        try:
+            data = json.loads(state_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        if not isinstance(data, dict):
+            return False
+        stages = data.get("stages")
+        if not isinstance(stages, dict) or not stages:
+            return False
+        return all(
+            isinstance(info, dict) and info.get("status") in ("completed", "skipped")
+            for info in stages.values()
+        )
 
     def _try_recover_remote_job(self, record: JobRecord) -> bool:
         """Attempt to rebuild in-memory state for a remote job after restart.

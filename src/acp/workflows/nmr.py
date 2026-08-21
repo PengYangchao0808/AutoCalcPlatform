@@ -63,7 +63,7 @@ from acp.nmr.probability import (
 )
 from acp.nmr.report import write_all_reports
 from acp.nmr.scaling import build_assignments, fit_scaling_goodman
-from acp.workflows._helpers import sanitize_job_name
+from acp.workflows._helpers import sanitize_job_name, write_result_summary
 from cccp.config import load_config
 
 logger = logging.getLogger(__name__)
@@ -995,6 +995,34 @@ def run_nmr_analysis(
     (output_root / "nmr_summary.json").write_text(
         json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8"
     )
+
+    products: list[dict[str, Any]] = [
+        {
+            "label": "NMR report (JSON)",
+            "path": str(paths["json"].relative_to(output_root)),
+            "kind": "report",
+        }
+    ]
+    if paths["xlsx"]:
+        products.append(
+            {
+                "label": "NMR assignment (XLSX)",
+                "path": str(paths["xlsx"].relative_to(output_root)),
+                "kind": "table",
+            }
+        )
+    for i, plot in enumerate(paths["plots"], start=1):
+        try:
+            products.append(
+                {
+                    "label": f"Plot {i}",
+                    "path": str(plot.relative_to(output_root)),
+                    "kind": "plot",
+                }
+            )
+        except ValueError:
+            continue
+    write_result_summary(output_root, workflow="nmr", products=products)
 
     return WorkflowResult(
         status="completed",

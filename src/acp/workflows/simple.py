@@ -17,7 +17,7 @@ from acp.core.state import WorkflowState
 from acp.core.utils import ensure_unique_dir
 from acp.core.workflow import WorkflowResult
 from acp.io.structures import StructureReader
-from acp.workflows._helpers import sanitize_job_name
+from acp.workflows._helpers import sanitize_job_name, write_result_summary
 from cccp.config import load_config
 
 logger = logging.getLogger(__name__)
@@ -116,16 +116,30 @@ def _find_shermo(cfg: dict[str, Any] | None = None) -> str | None:
     return None
 
 
-_SCHEDULER_MARKERS: set[str] = {"inputs", "submit.lsf", ".exit_code", "work", "results"}
+_SCHEDULER_MARKERS: set[str] = {
+    "inputs",
+    "submit.lsf",
+    ".exit_code",
+    "work",
+    "results",
+    "events.jsonl",
+    "job.json",
+    "stdout.log",
+    "stderr.log",
+    "mechanism_config.json",
+    "metrics.json",
+}
 
 
 def _resolve_output_dir(output_dir: str | Path) -> Path:
     """Resolve output directory.
 
     If the directory already exists and contains only scheduler/pre-runner
-    artifacts (e.g. ``inputs/``, ``submit.lsf``, ``work/``, ``results/``)
-    or is empty, reuse it directly.  Otherwise, ensure a unique path so that
-    repeated CLI invocations never overwrite previous results.
+    artifacts (e.g. ``inputs/``, ``submit.lsf``, ``work/``, ``results/``,
+    ``events.jsonl``, ``job.json``, ``stdout.log``, ``stderr.log``,
+    ``mechanism_config.json``) or is empty, reuse it directly.  Otherwise,
+    ensure a unique path so that repeated CLI invocations never overwrite
+    previous results.
     """
     base = Path(output_dir).resolve()
     if base.is_dir():
@@ -298,6 +312,11 @@ def run_singlepoint(
         return WorkflowResult(status="failed", error="SP calculation returned no energy")
     state.complete_stage("single_point")
     _write_energy_json(calc_dir, result.energy)
+    write_result_summary(
+        calc_dir,
+        workflow="singlepoint",
+        products=[{"label": "Energy (Hartree)", "path": "energy.json", "kind": "report"}],
+    )
     state.mark_completed()
     return WorkflowResult(
         status="completed",
@@ -334,6 +353,14 @@ def run_optimize(
         _write_optimized_xyz(calc_dir, result.coordinates, result.symbols or symbols)
     if result.energy is not None:
         _write_energy_json(calc_dir, result.energy)
+    write_result_summary(
+        calc_dir,
+        workflow="optimize",
+        products=[
+            {"label": "Optimized structure", "path": "optimized.xyz", "kind": "xyz"},
+            {"label": "Energy (Hartree)", "path": "energy.json", "kind": "report"},
+        ],
+    )
     state.mark_completed()
     return WorkflowResult(
         status="completed",
@@ -375,6 +402,14 @@ def run_xtb_optimize(
         _write_optimized_xyz(calc_dir, result.coordinates, result.symbols or symbols)
     if result.energy is not None:
         _write_energy_json(calc_dir, result.energy)
+    write_result_summary(
+        calc_dir,
+        workflow="xtb_optimize",
+        products=[
+            {"label": "Optimized structure", "path": "optimized.xyz", "kind": "xyz"},
+            {"label": "Energy (Hartree)", "path": "energy.json", "kind": "report"},
+        ],
+    )
     state.mark_completed()
     return WorkflowResult(
         status="completed",
@@ -414,6 +449,11 @@ def run_frequency(
     freqs = result.frequencies or []
     if freqs:
         _write_frequencies_txt(calc_dir, freqs)
+    write_result_summary(
+        calc_dir,
+        workflow="frequency",
+        products=[{"label": "Frequencies", "path": "frequencies.txt", "kind": "table"}],
+    )
     state.mark_completed()
     return WorkflowResult(
         status="completed",
@@ -453,6 +493,15 @@ def run_optfreq(
         _write_frequencies_txt(calc_dir, freqs)
     if result.energy is not None:
         _write_energy_json(calc_dir, result.energy)
+    write_result_summary(
+        calc_dir,
+        workflow="optfreq",
+        products=[
+            {"label": "Optimized structure", "path": "optimized.xyz", "kind": "xyz"},
+            {"label": "Frequencies", "path": "frequencies.txt", "kind": "table"},
+            {"label": "Energy (Hartree)", "path": "energy.json", "kind": "report"},
+        ],
+    )
     state.mark_completed()
     return WorkflowResult(
         status="completed",
@@ -554,6 +603,15 @@ def run_optfreqsp(
 
     _write_thermo_json(calc_dir, thermo, sp_energy)
     _write_energy_json(calc_dir, sp_energy)
+    write_result_summary(
+        calc_dir,
+        workflow="optfreqsp",
+        products=[
+            {"label": "Optimized structure", "path": "optimized.xyz", "kind": "xyz"},
+            {"label": "Thermodynamics", "path": "thermo.json", "kind": "report"},
+            {"label": "Energy (Hartree)", "path": "energy.json", "kind": "report"},
+        ],
+    )
     state.mark_completed()
 
     return WorkflowResult(

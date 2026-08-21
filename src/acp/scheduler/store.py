@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     pid INTEGER,
     exit_code INTEGER,
     remote_job_id TEXT,
+    group_id TEXT,
     result_json TEXT
 )
 """
@@ -75,8 +76,8 @@ class JobStore:
                 """INSERT INTO jobs (id, workflow, name, status, work_dir, spec_json,
                        created_at, updated_at, started_at, completed_at, project_id,
                        input_hash, current_stage, progress, error, pid, exit_code,
-                       remote_job_id, result_json)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       remote_job_id, group_id, result_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 _record_to_row(record),
             )
             conn.commit()
@@ -88,7 +89,8 @@ class JobStore:
                 """UPDATE jobs SET status=?, current_stage=?, progress=?, error=?,
                        pid=?, exit_code=?, remote_job_id=?, started_at=?,
                        completed_at=?, updated_at=?,
-                       result_json=?, spec_json=?, project_id=?, input_hash=? WHERE id=?""",
+                       result_json=?, spec_json=?, project_id=?, input_hash=?, group_id=?
+                       WHERE id=?""",
                 (
                     record.status.value,
                     record.current_stage,
@@ -104,6 +106,7 @@ class JobStore:
                     _spec_to_json(record.spec),
                     record.project_id or record.spec.project_id,
                     record.input_hash or record.spec.input_hash,
+                    record.group_id,
                     record.id,
                 ),
             )
@@ -114,17 +117,39 @@ class JobStore:
             row = conn.execute("SELECT * FROM jobs WHERE id=?", (job_id,)).fetchone()
         return _row_to_record(row) if row else None
 
-    def list(self, status: str | None = None, limit: int = 200) -> list[JobRecord]:
+    def list(
+        self,
+        status: str | None = None,
+        limit: int = 200,
+        *,
+        project_id: str | None = None,
+        completed_before: str | None = None,
+    ) -> list[JobRecord]:
+        """List jobs, newest first, with optional filters combined via AND.
+
+        Args:
+            status: Exact status value (``JobStatus.value``).
+            limit: Maximum rows returned.
+            project_id: Restrict to one project.
+            completed_before: ISO cutoff — only rows with a non-empty
+                ``completed_at`` strictly older than this timestamp.
+        """
+        clauses: list[str] = []
+        params: list[Any] = []
+        if status:
+            clauses.append("status=?")
+            params.append(status)
+        if project_id is not None:
+            clauses.append("project_id=?")
+            params.append(project_id)
+        if completed_before is not None:
+            clauses.append("completed_at IS NOT NULL AND completed_at != '' AND completed_at<?")
+            params.append(completed_before)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        query = f"SELECT * FROM jobs{where} ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
         with self._lock, self._connect() as conn:
-            if status:
-                rows = conn.execute(
-                    "SELECT * FROM jobs WHERE status=? ORDER BY created_at DESC LIMIT ?",
-                    (status, limit),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)
-                ).fetchall()
+            rows = conn.execute(query, params).fetchall()
         return [_row_to_record(r) for r in rows]
 
     def list_by_project(self, project_id: str, limit: int = 200) -> list[JobRecord]:
@@ -134,6 +159,57 @@ class JobStore:
                 (project_id, limit),
             ).fetchall()
         return [_row_to_record(r) for r in rows]
+
+    def list_enriched(
+        self,
+        status: str | None = None,
+        limit: int = 200,
+        *,
+        project_id: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List jobs newest-first with owner projection (project name + study linkage).
+
+        Each returned dict carries the plain :class:`JobRecord` under ``"record"``
+        plus ``project_name``, ``study_id`` and ``study_status`` from a LEFT JOIN
+        against ``projects`` and ``mechanism_studies``. Used by the v1 job-list
+        endpoint so the UI can group by project/group without extra round-trips.
+        """
+        clauses: list[str] = []
+        params: list[Any] = []
+        if status:
+            clauses.append("j.status=?")
+            params.append(status)
+        if project_id is not None:
+            clauses.append("j.project_id=?")
+            params.append(project_id)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        query = f"""
+            SELECT j.*, p.name AS project_name, ms.id AS study_id, ms.status AS study_status
+            FROM jobs j
+            LEFT JOIN projects p ON p.project_id = j.project_id
+            LEFT JOIN mechanism_studies ms ON ms.job_id = j.id
+            {where}
+            ORDER BY j.created_at DESC LIMIT ?
+        """
+        params.append(limit)
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            columns = set(r.keys())
+            record = _row_to_record(r)
+            out.append(
+                {
+                    "record": record,
+                    "project_name": r["project_name"] if "project_name" in columns else None,
+                    "study_id": r["study_id"] if "study_id" in columns else None,
+                    "study_status": (r["study_status"] if "study_status" in columns else None),
+                    "group_id": (
+                        r["group_id"] if "group_id" in columns else record.group_id or record.id
+                    ),
+                }
+            )
+        return out
 
     def counts(self) -> dict[str, int]:
         out: dict[str, int] = {s.value: 0 for s in JobStatus}
@@ -145,6 +221,27 @@ class JobStore:
 
     def delete(self, job_id: str) -> None:
         with self._lock, self._connect() as conn:
+            conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
+            conn.commit()
+
+    def purge_cascade(self, job_id: str) -> None:
+        """Delete a job row plus every dependent row, in one connection.
+
+        No FK cascades exist in the schema, so children are removed
+        explicitly in dependency order: ``stage_tasks`` and ``artifacts``
+        by ``job_id``; ``decision_points`` via ``mechanism_studies``
+        subselect (it has no ``job_id`` column); then ``mechanism_studies``
+        and finally the ``jobs`` row itself.
+        """
+        with self._lock, self._connect() as conn:
+            conn.execute("DELETE FROM stage_tasks WHERE job_id=?", (job_id,))
+            conn.execute("DELETE FROM artifacts WHERE job_id=?", (job_id,))
+            conn.execute(
+                "DELETE FROM decision_points WHERE study_id IN "
+                "(SELECT id FROM mechanism_studies WHERE job_id=?)",
+                (job_id,),
+            )
+            conn.execute("DELETE FROM mechanism_studies WHERE job_id=?", (job_id,))
             conn.execute("DELETE FROM jobs WHERE id=?", (job_id,))
             conn.commit()
 
@@ -188,22 +285,90 @@ class JobStore:
         status: str,
         created_at: str,
         updated_at: str,
+        reaction_json: str | None = None,
+        mechanism_plan_json: str | None = None,
+        config_hash: str | None = None,
+        cycle_index: int | None = None,
+        consumed_cycle: int | None = None,
     ) -> None:
         with self._lock, self._connect() as conn:
             conn.execute(
                 """
                 INSERT INTO mechanism_studies (
-                    id, job_id, study_json, status, created_at, updated_at
+                    id, job_id, study_json, status, created_at, updated_at,
+                    reaction_json, mechanism_plan_json, config_hash, cycle_index, consumed_cycle
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
-                    job_id=excluded.job_id,
+                    job_id=COALESCE(excluded.job_id, mechanism_studies.job_id),
                     study_json=excluded.study_json,
                     status=excluded.status,
-                    created_at=excluded.created_at,
-                    updated_at=excluded.updated_at
+                    created_at=mechanism_studies.created_at,
+                    updated_at=excluded.updated_at,
+                    reaction_json=COALESCE(excluded.reaction_json, mechanism_studies.reaction_json),
+                    mechanism_plan_json=COALESCE(
+                        excluded.mechanism_plan_json,
+                        mechanism_studies.mechanism_plan_json
+                    ),
+                    config_hash=COALESCE(excluded.config_hash, mechanism_studies.config_hash),
+                    cycle_index=COALESCE(excluded.cycle_index, mechanism_studies.cycle_index),
+                    consumed_cycle=COALESCE(
+                        excluded.consumed_cycle,
+                        mechanism_studies.consumed_cycle
+                    )
                 """,
-                (study_id, job_id, study_json, status, created_at, updated_at),
+                (
+                    study_id,
+                    job_id,
+                    study_json,
+                    status,
+                    created_at,
+                    updated_at,
+                    reaction_json,
+                    mechanism_plan_json,
+                    config_hash,
+                    cycle_index,
+                    consumed_cycle,
+                ),
+            )
+            conn.commit()
+
+    def update_mechanism_study_reaction(
+        self,
+        study_id: str,
+        *,
+        reaction_json: str,
+        config_hash: str,
+        status: str,
+        updated_at: str,
+    ) -> None:
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE mechanism_studies
+                SET reaction_json=?, config_hash=?, status=?, updated_at=?
+                WHERE id=?
+                """,
+                (reaction_json, config_hash, status, updated_at, study_id),
+            )
+            conn.commit()
+
+    def update_mechanism_study_plan(
+        self,
+        study_id: str,
+        *,
+        plan_json: str,
+        status: str,
+        updated_at: str,
+    ) -> None:
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                """
+                UPDATE mechanism_studies
+                SET mechanism_plan_json=?, status=?, updated_at=?
+                WHERE id=?
+                """,
+                (plan_json, status, updated_at, study_id),
             )
             conn.commit()
 
@@ -215,22 +380,14 @@ class JobStore:
             ).fetchone()
         if row is None:
             return None
-        return {
-            "id": row["id"],
-            "job_id": row["job_id"],
-            "study_json": row["study_json"],
-            "status": row["status"],
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
-        }
+        return _mechanism_study_row(row)
 
     def list_mechanism_studies(
         self, limit: int = 200, job_id: str | None = None
     ) -> list[dict[str, Any]]:
         if job_id is None:
             query = (
-                "SELECT * FROM mechanism_studies "
-                "ORDER BY updated_at DESC, created_at DESC LIMIT ?"
+                "SELECT * FROM mechanism_studies ORDER BY updated_at DESC, created_at DESC LIMIT ?"
             )
             params: tuple[Any, ...] = (limit,)
         else:
@@ -241,17 +398,7 @@ class JobStore:
             params = (job_id, limit)
         with self._lock, self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
-        return [
-            {
-                "id": row["id"],
-                "job_id": row["job_id"],
-                "study_json": row["study_json"],
-                "status": row["status"],
-                "created_at": row["created_at"],
-                "updated_at": row["updated_at"],
-            }
-            for row in rows
-        ]
+        return [_mechanism_study_row(row) for row in rows]
 
     def upsert_decision_point(
         self,
@@ -345,8 +492,27 @@ def _record_to_row(record: JobRecord) -> tuple[Any, ...]:
         record.pid,
         record.exit_code,
         record.remote_job_id,
+        record.group_id,
         json.dumps(record.result) if record.result is not None else None,
     )
+
+
+def _mechanism_study_row(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": row["id"],
+        "job_id": row["job_id"],
+        "study_json": row["study_json"],
+        "status": row["status"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+        "reaction_json": row["reaction_json"] if "reaction_json" in row.keys() else None,
+        "mechanism_plan_json": (
+            row["mechanism_plan_json"] if "mechanism_plan_json" in row.keys() else None
+        ),
+        "config_hash": row["config_hash"] if "config_hash" in row.keys() else None,
+        "cycle_index": row["cycle_index"] if "cycle_index" in row.keys() else 0,
+        "consumed_cycle": row["consumed_cycle"] if "consumed_cycle" in row.keys() else None,
+    }
 
 
 def _row_to_record(row: sqlite3.Row) -> JobRecord:
@@ -392,6 +558,7 @@ def _row_to_record(row: sqlite3.Row) -> JobRecord:
         pid=row["pid"],
         exit_code=row["exit_code"],
         remote_job_id=row["remote_job_id"] if "remote_job_id" in columns else None,
+        group_id=row["group_id"] if "group_id" in columns else None,
         result=result,
     )
 

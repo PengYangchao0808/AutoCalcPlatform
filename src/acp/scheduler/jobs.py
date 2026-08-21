@@ -11,9 +11,13 @@ metadata.
 
 from __future__ import annotations
 
+import json
+import os
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path
 from typing import Any
 
 from acp.scheduler.nodes import ExecutionMode
@@ -34,6 +38,7 @@ class JobStatus(str, Enum):
     STARTING = "starting"
     PENDING = "pending"
     RUNNING = "running"
+    PAUSED = "paused"
     CANCELLING = "cancelling"
     WAITING_REVIEW = "waiting_review"
     CANCELLED = "cancelled"
@@ -51,6 +56,7 @@ class JobStatus(str, Enum):
             JobStatus.STARTING,
             JobStatus.PENDING,
             JobStatus.RUNNING,
+            JobStatus.PAUSED,
             JobStatus.CANCELLING,
             JobStatus.WAITING_REVIEW,
         )
@@ -102,6 +108,7 @@ def _derive_supported_workflows() -> tuple[str, ...]:
 SUPPORTED_WORKFLOWS: tuple[str, ...] = _derive_supported_workflows()
 
 _CENSO_PRESETS: tuple[str, ...] = ("censo-light", "censo-default", "censo-zero")
+MECHANISM_CONFIG_FILENAME = "mechanism_config.json"
 
 
 def censo_preset_from_method(method: dict[str, Any]) -> str | None:
@@ -162,6 +169,27 @@ def censo_ewin_from_method(method: dict[str, Any]) -> float | None:
     except (TypeError, ValueError):
         return None
     return value if value > 0 else None
+
+
+def input_chemistry_flags(inp: dict[str, Any]) -> list[str]:
+    """Emit ``--charge`` / ``--multiplicity`` from the job input payload.
+
+    Mechanism jobs carry those fields on the nested ``reactant`` role,
+    whereas the other workflows keep them at the top level. This helper keeps
+    the runner and remote script generator in parity.
+    """
+    chemistry = inp
+    if inp.get("source_type") == "mechanism":
+        reactant = inp.get("reactant")
+        if isinstance(reactant, dict):
+            chemistry = reactant
+
+    flags: list[str] = []
+    if chemistry.get("charge") is not None:
+        flags += ["--charge", str(chemistry["charge"])]
+    if chemistry.get("multiplicity") is not None:
+        flags += ["--multiplicity", str(chemistry["multiplicity"])]
+    return flags
 
 
 # ── xtbmd_censo_energy flag emission (E7: runner ⇄ script_gen parity) ────
@@ -373,6 +401,166 @@ def mechanism_method_flags(method: dict[str, Any]) -> list[str]:
     return flags
 
 
+def _mechanism_raw_scalar(method: Mapping[str, Any], key: str) -> Any:
+    value = method.get(key)
+    if key in {"int_extension", "auto_converge"}:
+        return _as_bool(value)
+    if value is None:
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    return value
+
+
+def mechanism_resolved_settings(method: Mapping[str, Any]) -> dict[str, Any]:
+    """Resolve the scheduler-side mechanism config summary from ``method``.
+
+    Priority mirrors the CLI file channel: explicit top-level method values win;
+    only ``strategy`` / ``fidelity`` inherit from the catalog preset when the
+    method omits them; everything else stays ``None`` so workflow defaults can
+    still be applied downstream.
+    """
+
+    preset = mechanism_preset_from_method(dict(method))
+    preset_strategy: str | None = None
+    preset_fidelity: str | None = None
+    if preset:
+        from acp.mechanism.presets import resolve_preset
+
+        preset_strategy, preset_fidelity = resolve_preset(preset)
+
+    return {
+        "preset": preset,
+        "strategy": _mechanism_raw_scalar(method, "strategy") or preset_strategy,
+        "fidelity": _mechanism_raw_scalar(method, "fidelity") or preset_fidelity,
+        "scan_points": _mechanism_raw_scalar(method, "scan_points"),
+        "irc_points": _mechanism_raw_scalar(method, "irc_points"),
+        "conformer_mode": _mechanism_raw_scalar(method, "conformer_mode"),
+        "max_elementary_steps": _mechanism_raw_scalar(method, "max_elementary_steps"),
+        "promotion_policy": _mechanism_raw_scalar(method, "promotion_policy"),
+        "int_extension": _mechanism_raw_scalar(method, "int_extension"),
+        "auto_converge": _mechanism_raw_scalar(method, "auto_converge"),
+        "require_sr_review": _mechanism_raw_scalar(method, "require_sr_review"),
+        "study_id": _mechanism_raw_scalar(method, "study_id"),
+    }
+
+
+def _mechanism_role_payload(inp: Mapping[str, Any], role: str) -> Any:
+    if inp.get("source_type") == "mechanism":
+        return inp.get(role)
+    if role == "reactant":
+        return inp
+    return inp.get(role)
+
+
+def _mechanism_role_source_from_payload(payload: Any) -> str | None:
+    if isinstance(payload, Mapping):
+        source = payload.get("source") or payload.get("input") or payload.get("smiles")
+        if source is None:
+            return None
+        return str(source)
+    if payload in (None, ""):
+        return None
+    return str(payload)
+
+
+def _mechanism_role_entry(
+    inp: Mapping[str, Any],
+    role: str,
+    role_paths: Mapping[str, str | Path],
+) -> dict[str, Any] | None:
+    payload = _mechanism_role_payload(inp, role)
+    path_value = role_paths.get(role)
+    if path_value is None:
+        path_value = _mechanism_role_source_from_payload(payload)
+        if path_value is None and role == "reactant":
+            path_value = _mechanism_role_source_from_payload(inp)
+
+    if path_value is None and role != "reactant":
+        return None
+
+    chemistry = payload if isinstance(payload, Mapping) else (inp if role == "reactant" else {})
+    charge = chemistry.get("charge") if isinstance(chemistry, Mapping) else None
+    multiplicity = chemistry.get("multiplicity") if isinstance(chemistry, Mapping) else None
+    return {
+        "path": str(path_value) if path_value is not None else None,
+        "charge": charge,
+        "multiplicity": multiplicity,
+    }
+
+
+def build_mechanism_job_config_payload(
+    inp: Mapping[str, Any],
+    method: Mapping[str, Any],
+    resources: Mapping[str, Any],
+    role_paths: Mapping[str, str | Path],
+    reaction_definition: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the scheduler/CLI handoff payload for mechanism jobs."""
+
+    payload = {
+        "version": 1,
+        "method": dict(method),
+        "resolved": mechanism_resolved_settings(method),
+        "roles": {
+            "reactant": _mechanism_role_entry(inp, "reactant", role_paths),
+            "product": _mechanism_role_entry(inp, "product", role_paths),
+            "ts_guess": _mechanism_role_entry(inp, "ts_guess", role_paths),
+        },
+        "resources": {
+            "nproc": resources.get("nproc"),
+            "mem": resources.get("mem"),
+        },
+    }
+    if reaction_definition is not None:
+        payload["mechanism_schema_version"] = int(reaction_definition.get("schema_version") or 0)
+    return payload
+
+
+def write_mechanism_job_config(
+    work_dir: Path,
+    inp: Mapping[str, Any],
+    method: Mapping[str, Any],
+    resources: Mapping[str, Any],
+    role_paths: Mapping[str, str | Path],
+    reaction_definition: Mapping[str, Any] | None = None,
+) -> Path:
+    """Write ``mechanism_config.json`` into *work_dir*."""
+
+    config_path = work_dir / MECHANISM_CONFIG_FILENAME
+    payload = build_mechanism_job_config_payload(
+        inp,
+        method,
+        resources,
+        role_paths,
+        reaction_definition=reaction_definition,
+    )
+    config_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True, default=str),
+        encoding="utf-8",
+    )
+    return config_path
+
+
+def write_mechanism_reaction_json(
+    work_dir: Path,
+    study_id: str,
+    reaction_definition: Mapping[str, Any],
+) -> Path:
+    """Materialize ``reaction.json`` inside the study directory atomically."""
+
+    study_dir = work_dir / "mechanism_study" / study_id
+    study_dir.mkdir(parents=True, exist_ok=True)
+    path = study_dir / "reaction.json"
+    temp_path = path.with_suffix(".json.tmp")
+    temp_path.write_text(
+        json.dumps(dict(reaction_definition), indent=2, sort_keys=True, default=str),
+        encoding="utf-8",
+    )
+    os.replace(temp_path, path)
+    return path
+
+
 @dataclass(frozen=True)
 class JobSpec:
     """Immutable description of what a job should run.
@@ -434,6 +622,7 @@ class JobRecord:
     pid: int | None = None
     exit_code: int | None = None
     remote_job_id: str | None = None
+    group_id: str | None = None
     result: dict[str, Any] | None = None
 
     def touch(self) -> None:
@@ -457,6 +646,7 @@ class JobRecord:
             "pid": self.pid,
             "exit_code": self.exit_code,
             "remote_job_id": self.remote_job_id,
+            "group_id": self.group_id,
             "result": self.result,
         }
 
@@ -469,8 +659,14 @@ __all__ = [
     "censo_preset_from_method",
     "censo_solvent_from_method",
     "censo_ewin_from_method",
+    "input_chemistry_flags",
     "xtbmd_method_flags",
     "nmr_method_flags",
     "mechanism_method_flags",
     "mechanism_preset_from_method",
+    "mechanism_resolved_settings",
+    "build_mechanism_job_config_payload",
+    "write_mechanism_reaction_json",
+    "write_mechanism_job_config",
+    "MECHANISM_CONFIG_FILENAME",
 ]

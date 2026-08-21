@@ -37,14 +37,21 @@ import uuid
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import NotRequired, TypedDict, cast
 
 from acp.scheduler.events import JobEventLog
-from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
+from acp.scheduler.jobs import (
+    MECHANISM_CONFIG_FILENAME,
+    JobRecord,
+    JobSpec,
+    JobStatus,
+    write_mechanism_job_config,
+)
 from acp.scheduler.nodes import ExecutionTargetError
 from acp.scheduler.provenance import build_provenance_for_job
 from acp.scheduler.remote.cleanup import RemoteCleanup
 from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
-from acp.scheduler.remote.monitor import STATUS_DONE, RemoteJobMonitor
+from acp.scheduler.remote.monitor import STATUS_DONE, STATUS_PAUSED, RemoteJobMonitor
 from acp.scheduler.remote.script_gen import (
     build_lsf_script_spec,
     generate_lsf_script,
@@ -76,6 +83,18 @@ _MONITOR_TIMEOUT_BUFFER = 3600
 _MONITOR_TIMEOUT_FALLBACK = 10 * 24 * 3600
 # Read state.json on every poll cycle for real-time remote progress.
 _STATE_READ_INTERVAL = 1
+
+
+class _RemoteJobState(TypedDict):
+    node: RemoteNode
+    remote_job_dir: str
+    lsf_job_id: str
+    stdout_offset: int
+    stderr_offset: int
+    cli_cmd: list[str]
+    poll_cycle: NotRequired[int]
+    seen_stages: NotRequired[set[str]]
+    cancel_sent: NotRequired[bool]
 
 
 def _utc_now_iso() -> str:
@@ -148,7 +167,7 @@ class RemoteJobRunner:
         # a full ``list_by_job`` scan on every 15 s poll cycle (plan P2-8).
         self._remote_stage_task_ids: dict[str, str] = {}
         # Per-job state for poller-driven (non-blocking) execution.
-        self._job_states: dict[str, dict[str, object]] = {}
+        self._job_states: dict[str, _RemoteJobState] = {}
 
     # ------------------------------------------------------------------ #
     # Non-blocking poller-driven API
@@ -253,13 +272,13 @@ class RemoteJobRunner:
         if state is None:
             return (True, record.exit_code if record.exit_code is not None else 1)
 
-        node: RemoteNode = state["node"]  # type: ignore[assignment]
-        remote_job_dir: str = state["remote_job_dir"]  # type: ignore[assignment]
-        lsf_job_id: str = state["lsf_job_id"]  # type: ignore[assignment]
-        stdout_offset: int = state["stdout_offset"]  # type: ignore[assignment]
-        stderr_offset: int = state["stderr_offset"]  # type: ignore[assignment]
-        poll_cycle: int = state.get("poll_cycle", 0)  # type: ignore[assignment]
-        seen_stages: set[str] = state.get("seen_stages", set())  # type: ignore[assignment]
+        node = state["node"]
+        remote_job_dir = state["remote_job_dir"]
+        lsf_job_id = state["lsf_job_id"]
+        stdout_offset = state["stdout_offset"]
+        stderr_offset = state["stderr_offset"]
+        poll_cycle = state.get("poll_cycle", 0)
+        seen_stages = state.get("seen_stages", set())
 
         if cancel_event.is_set():
             if not state.get("cancel_sent"):
@@ -307,8 +326,18 @@ class RemoteJobRunner:
             )
             self._mirror_lsf_stage(record.id, status)
 
-            if status == "running" and record.status == JobStatus.PENDING:
+            if status == "running" and record.status in (
+                JobStatus.PENDING,
+                JobStatus.PAUSED,
+            ):
                 record.status = JobStatus.RUNNING
+
+            if status == STATUS_PAUSED and record.status in (
+                JobStatus.PENDING,
+                JobStatus.RUNNING,
+                JobStatus.PAUSED,
+            ):
+                record.status = JobStatus.PAUSED
 
             if RemoteJobMonitor.is_terminal(status):
                 exit_code = self._wait_exit_code(node, remote_job_dir, timeout=_EXIT_CODE_GRACE)
@@ -372,8 +401,8 @@ class RemoteJobRunner:
                 state = self._job_states.get(job_id)
         if state is None:
             return False
-        node: RemoteNode = state["node"]  # type: ignore[assignment]
-        lsf_job_id: str = state["lsf_job_id"]  # type: ignore[assignment]
+        node = state["node"]
+        lsf_job_id = state["lsf_job_id"]
         ok = self._monitor.cancel_job(node, lsf_job_id)
         if ok:
             state["cancel_sent"] = True
@@ -423,7 +452,7 @@ class RemoteJobRunner:
         self,
         record: JobRecord,
         event_log: JobEventLog,
-        state: dict[str, object],
+        state: _RemoteJobState,
         node: RemoteNode,
         remote_job_dir: str,
         lsf_job_id: str,
@@ -438,8 +467,8 @@ class RemoteJobRunner:
         provenance, mark stage tasks, emit a terminal event, and drop the
         in-memory poll state.  Returns ``(True, exit_code)``.
         """
-        stdout_offset: int = state["stdout_offset"]  # type: ignore[assignment]
-        stderr_offset: int = state["stderr_offset"]  # type: ignore[assignment]
+        stdout_offset = state["stdout_offset"]
+        stderr_offset = state["stderr_offset"]
         # Final log flush so captured stdout/stderr reflects the exit.
         state["stdout_offset"] = self._tail_and_emit(
             node, remote_job_dir, "stdout.log", stdout_offset, event_log, record.id, "stdout"
@@ -460,9 +489,10 @@ class RemoteJobRunner:
         result["host"] = node.host
         result["remote_dir"] = remote_job_dir
         result["exit_code"] = exit_code
-        result["command_line"] = " ".join(state["cli_cmd"])  # type: ignore[arg-type]
+        cli_cmd = state["cli_cmd"]
+        result["command_line"] = " ".join(cli_cmd)
         record.result = result
-        self._build_provenance(record, state["cli_cmd"])  # type: ignore[arg-type]
+        self._build_provenance(record, cli_cmd)
         final_status = "completed" if exit_code == 0 else "failed"
         self._set_remote_stage_state(record.id, final_status, exit_code=exit_code)
         self._finalize_stages(record.id, final_status)
@@ -491,15 +521,20 @@ class RemoteJobRunner:
         Mirrors the logic in :meth:`JobRunner._observe_state` but reads
         the state file over SFTP instead of the local filesystem.
         """
-        data = self._monitor.find_remote_state_json(node, remote_job_dir)
+        data = cast(
+            dict[str, object] | None,
+            self._monitor.find_remote_state_json(node, remote_job_dir),
+        )
         if data is None:
             return
 
         if data.get("status") == "failed":
             return
 
-        record.current_stage = data.get("current_stage")
-        stages = data.get("stages") if isinstance(data.get("stages"), dict) else {}
+        current_stage = data.get("current_stage")
+        record.current_stage = str(current_stage) if isinstance(current_stage, str) else None
+        raw_stages = data.get("stages")
+        stages = cast(dict[str, object], raw_stages) if isinstance(raw_stages, dict) else {}
         total = max(len(stages), 1)
         done = sum(
             1
@@ -689,18 +724,78 @@ class RemoteJobRunner:
         inputs_dir = work_dir / "inputs"
         inputs_dir.mkdir(parents=True, exist_ok=True)
         run_root = work_dir.parent.parent
-        materialized = materialize_job_input(spec.input, inputs_dir, run_root)
+        materialized_roles: dict[str, Path] = {}
+        materialized = materialize_job_input(spec.input, inputs_dir, run_root, materialized_roles)
 
         remote_input_name = materialized.name if materialized else "input.xyz"
         if materialized and materialized.is_file():
             remote_inputs_dir = posixpath.join(remote_job_dir, "inputs")
             self._stager.make_remote_dir(node, remote_inputs_dir)
-            self._stager.upload_file(
-                node, materialized, posixpath.join(remote_inputs_dir, remote_input_name)
-            )
-            event_log.append("remote.input_uploaded", job_id=record.id, node=node.name)
+
+            remote_role_paths: dict[str, str] = {}
+            upload_paths = materialized_roles or {"reactant": materialized}
+            for role, local_path in upload_paths.items():
+                remote_path = posixpath.join(remote_inputs_dir, local_path.name)
+                self._stager.upload_file(node, local_path, remote_path)
+                remote_role_paths[role] = posixpath.join("inputs", local_path.name)
+                event_log.append(
+                    "remote.input_uploaded",
+                    job_id=record.id,
+                    node=node.name,
+                    role=role,
+                )
         else:
             raise RemoteSubmissionError(f"Failed to materialise input for job {record.id}")
+
+        if spec.workflow == "mechanism":
+            reaction_definition = _load_local_reaction_definition(work_dir, spec)
+            mechanism_config_path = write_mechanism_job_config(
+                work_dir,
+                spec.input,
+                spec.method,
+                spec.resources,
+                remote_role_paths,
+                reaction_definition=reaction_definition,
+            )
+            remote_mechanism_config_path = posixpath.join(
+                remote_job_dir,
+                MECHANISM_CONFIG_FILENAME,
+            )
+            self._stager.upload_file(
+                node,
+                mechanism_config_path,
+                remote_mechanism_config_path,
+            )
+            event_log.append(
+                "remote.input_uploaded",
+                job_id=record.id,
+                node=node.name,
+                role="mechanism_config",
+            )
+            if reaction_definition is not None:
+                local_reaction_path = (
+                    work_dir
+                    / "mechanism_study"
+                    / str(spec.method.get("study_id"))
+                    / "reaction.json"
+                )
+                remote_study_dir = posixpath.join(
+                    remote_job_dir,
+                    "mechanism_study",
+                    str(spec.method.get("study_id")),
+                )
+                self._stager.make_remote_dir(node, remote_study_dir)
+                self._stager.upload_file(
+                    node,
+                    local_reaction_path,
+                    posixpath.join(remote_study_dir, "reaction.json"),
+                )
+                event_log.append(
+                    "remote.input_uploaded",
+                    job_id=record.id,
+                    node=node.name,
+                    role="reaction_json",
+                )
 
         # 4. Generate + upload LSF script
         lsf_spec, cli_cmd = build_lsf_script_spec(
@@ -711,6 +806,7 @@ class RemoteJobRunner:
             walltime=self._config.walltime,
             extra_flags=self._config.extra_flags,
             input_path=posixpath.join("inputs", remote_input_name),
+            materialized_role_paths=remote_role_paths,
         )
         script_text = generate_lsf_script(lsf_spec)
         script_remote_path = posixpath.join(remote_job_dir, "submit.lsf")
@@ -1260,7 +1356,13 @@ class RemoteJobRunner:
         self._observer.store.update(task)
 
     def _mirror_lsf_stage(self, job_id: str, lsf_status: str) -> None:
-        """Map the current LSF status to the remote_execution stage state."""
+        """Map the current LSF status to the remote_execution stage state.
+
+        ``paused`` is deliberately not mirrored: the stage-state
+        vocabulary has no paused member, and regressing a started stage
+        to ``pending`` would misrepresent it.  The last mirrored state
+        stands until the LSF job resumes (``running``) or finalises.
+        """
         if lsf_status == "running":
             self._set_remote_stage_state(job_id, "running", started=True)
         elif lsf_status == "pending":
@@ -1304,3 +1406,18 @@ class RemoteJobRunner:
             record.result["provenance"] = asdict(provenance)
         except Exception:
             logger.debug("Provenance build failed for %s", record.id, exc_info=True)
+
+
+def _load_local_reaction_definition(work_dir: Path, spec: JobSpec) -> dict[str, object] | None:
+    if spec.workflow != "mechanism":
+        return None
+    study_id = spec.method.get("study_id")
+    if not study_id:
+        return None
+    path = work_dir / "mechanism_study" / str(study_id) / "reaction.json"
+    if not path.is_file():
+        return None
+    import json
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return payload if isinstance(payload, dict) else None

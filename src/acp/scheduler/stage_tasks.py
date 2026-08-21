@@ -33,6 +33,7 @@ class StageTask:
     retry_count: int = 0
     pid: int | None = None
     stderr_summary: str | None = None
+    status_detail: str | None = None
     started_at: str | None = None
     completed_at: str | None = None
     updated_at: str = field(default_factory=_utc_now_iso)
@@ -71,19 +72,17 @@ class _FakeStagePlanProvider:
 
 class _MechanismStagePlanProvider:
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        # Matches acp.workflows.mechanism.get_mechanism_stages() (9 stages).
-        # Legacy stage names (ts_guess / irc_forward / irc_reverse) map onto
-        # path_search / irc_validate respectively for historical job display.
+        # Study-mode vocabulary mirrors StudyOrchestrator phases: S0/S1/S2/S3/SR/S4.
+        # The observer still watches stage-task marker files; mechanism-study
+        # progress is primarily event-file based (events.jsonl), so these names
+        # are an initial UI plan rather than file-emitted phase markers.
         return [
-            StagePlan("prepare_reaction"),
-            StagePlan("reactant_optimize"),
-            StagePlan("product_optimize"),
-            StagePlan("path_search"),
-            StagePlan("candidate_refine"),
-            StagePlan("ts_optimize"),
-            StagePlan("ts_validate"),
-            StagePlan("irc_validate"),
-            StagePlan("energy_analysis"),
+            StagePlan("S0"),
+            StagePlan("S1"),
+            StagePlan("S2"),
+            StagePlan("S3"),
+            StagePlan("SR"),
+            StagePlan("S4"),
         ]
 
 
@@ -256,9 +255,9 @@ class StageTaskStore:
                 """
                 INSERT INTO stage_tasks (
                     task_id, job_id, stage_name, task_type, state, exit_status, retry_count,
-                    pid, stderr_summary, started_at, completed_at, updated_at, result_json,
-                    provenance_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    pid, stderr_summary, status_detail, started_at, completed_at, updated_at,
+                    result_json, provenance_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 _task_to_row(task),
             )
@@ -287,8 +286,8 @@ class StageTaskStore:
                 """
                 UPDATE stage_tasks
                 SET job_id=?, stage_name=?, task_type=?, state=?, exit_status=?, retry_count=?,
-                    pid=?, stderr_summary=?, started_at=?, completed_at=?, updated_at=?,
-                    result_json=?, provenance_json=?
+                    pid=?, stderr_summary=?, status_detail=?, started_at=?, completed_at=?,
+                    updated_at=?, result_json=?, provenance_json=?
                 WHERE task_id=?
                 """,
                 (
@@ -300,6 +299,7 @@ class StageTaskStore:
                     task.retry_count,
                     task.pid,
                     task.stderr_summary,
+                    task.status_detail,
                     task.started_at,
                     task.completed_at,
                     task.updated_at,
@@ -413,6 +413,8 @@ class StageTaskObserver:
             task.retry_count = payload["retry_count"]
         if isinstance(payload.get("stderr_summary"), str):
             task.stderr_summary = payload["stderr_summary"]
+        if isinstance(payload.get("status_detail"), str) and payload["status_detail"]:
+            task.status_detail = payload["status_detail"]
         if isinstance(payload.get("result"), dict):
             task.result = dict(payload["result"])
         if isinstance(payload.get("provenance"), dict):
@@ -457,6 +459,7 @@ def _task_to_row(task: StageTask) -> tuple[Any, ...]:
         task.retry_count,
         task.pid,
         task.stderr_summary,
+        task.status_detail,
         task.started_at,
         task.completed_at,
         task.updated_at,
@@ -476,6 +479,7 @@ def _row_to_task(row: sqlite3.Row) -> StageTask:
         retry_count=row["retry_count"],
         pid=row["pid"],
         stderr_summary=row["stderr_summary"],
+        status_detail=row["status_detail"] if "status_detail" in row.keys() else None,
         started_at=row["started_at"],
         completed_at=row["completed_at"],
         updated_at=row["updated_at"],
@@ -498,6 +502,7 @@ def _task_snapshot(task: StageTask) -> dict[str, Any]:
         "retry_count": task.retry_count,
         "pid": task.pid,
         "stderr_summary": task.stderr_summary,
+        "status_detail": task.status_detail,
         "started_at": task.started_at,
         "completed_at": task.completed_at,
         "updated_at": task.updated_at,
@@ -513,22 +518,27 @@ register_plan_provider("energy", _EnergyStagePlanProvider())
 register_plan_provider("nmr", _NmrStagePlanProvider())
 register_plan_provider("xtbmd_censo_energy", _XtbmdCensoEnergyStagePlanProvider())
 
+
 # Simple workflow providers
 class _SinglepointStagePlanProvider:
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
         return [StagePlan(stage_name="single_point")]
 
+
 class _OptimizeStagePlanProvider:
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
         return [StagePlan(stage_name="optimize")]
+
 
 class _FrequencyStagePlanProvider:
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
         return [StagePlan(stage_name="frequency")]
 
+
 class _OptfreqStagePlanProvider:
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
         return [StagePlan(stage_name="opt_freq")]
+
 
 class _OptfreqspStagePlanProvider:
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
@@ -537,6 +547,7 @@ class _OptfreqspStagePlanProvider:
             StagePlan(stage_name="single_point"),
             StagePlan(stage_name="shermo"),
         ]
+
 
 register_plan_provider("singlepoint", _SinglepointStagePlanProvider())
 register_plan_provider("optimize", _OptimizeStagePlanProvider())

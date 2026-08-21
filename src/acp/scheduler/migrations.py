@@ -111,8 +111,23 @@ CREATE TABLE IF NOT EXISTS decision_points (
     resolution TEXT,
     created_at TEXT,
     resolved_at TEXT
-);
-""",
+ );
+ """,
+    },
+    {
+        "id": "007",
+        "description": "add reaction/plan columns to mechanism_studies",
+        "sql": "-- handled in Python for SQLite ALTER TABLE compatibility",
+    },
+    {
+        "id": "008",
+        "description": "add group_id to jobs (queue grouping / rerun lineage)",
+        "sql": "-- handled in Python for SQLite ALTER TABLE compatibility",
+    },
+    {
+        "id": "009",
+        "description": "add status_detail to stage_tasks (phase sub-step progress)",
+        "sql": "-- handled in Python for SQLite ALTER TABLE compatibility",
     },
 ]
 
@@ -164,12 +179,60 @@ def _apply_remote_job_id_column(conn: sqlite3.Connection) -> bool:
     return True
 
 
+def _apply_mechanism_studies_columns(conn: sqlite3.Connection) -> bool:
+    if not _table_exists(conn, "mechanism_studies"):
+        return False
+    if not _column_exists(conn, "mechanism_studies", "reaction_json"):
+        conn.execute("ALTER TABLE mechanism_studies ADD COLUMN reaction_json TEXT")
+    if not _column_exists(conn, "mechanism_studies", "mechanism_plan_json"):
+        conn.execute("ALTER TABLE mechanism_studies ADD COLUMN mechanism_plan_json TEXT")
+    if not _column_exists(conn, "mechanism_studies", "config_hash"):
+        conn.execute("ALTER TABLE mechanism_studies ADD COLUMN config_hash TEXT")
+    if not _column_exists(conn, "mechanism_studies", "cycle_index"):
+        conn.execute("ALTER TABLE mechanism_studies ADD COLUMN cycle_index INTEGER DEFAULT 0")
+    if not _column_exists(conn, "mechanism_studies", "consumed_cycle"):
+        conn.execute("ALTER TABLE mechanism_studies ADD COLUMN consumed_cycle INTEGER")
+    return True
+
+
+def _apply_jobs_group_id_column(conn: sqlite3.Connection) -> bool:
+    """Add ``group_id`` to jobs (self-rooted by default) plus an index.
+
+    ``group_id`` is the queue-grouping / rerun-lineage key. Every job is
+    its own group root unless it was cloned by ``rerun_job`` (which
+    inherits the original's group id), so historical rows backfill to
+    ``group_id = id``.
+    """
+    if not _table_exists(conn, "jobs"):
+        return False
+    if not _column_exists(conn, "jobs", "group_id"):
+        conn.execute("ALTER TABLE jobs ADD COLUMN group_id TEXT")
+    conn.execute("UPDATE jobs SET group_id = id WHERE group_id IS NULL")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_group_id ON jobs(group_id)")
+    return True
+
+
+def _apply_stage_tasks_status_detail_column(conn: sqlite3.Connection) -> bool:
+    """Add ``status_detail`` to stage_tasks (human phase sub-step, e.g. ``scan 7/24``)."""
+    if not _table_exists(conn, "stage_tasks"):
+        return False
+    if not _column_exists(conn, "stage_tasks", "status_detail"):
+        conn.execute("ALTER TABLE stage_tasks ADD COLUMN status_detail TEXT")
+    return True
+
+
 def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> bool:
     migration_id = migration["id"]
     if migration_id == "002":
         return _apply_jobs_column_migration(conn)
     if migration_id == "005":
         return _apply_remote_job_id_column(conn)
+    if migration_id == "007":
+        return _apply_mechanism_studies_columns(conn)
+    if migration_id == "008":
+        return _apply_jobs_group_id_column(conn)
+    if migration_id == "009":
+        return _apply_stage_tasks_status_detail_column(conn)
     sql = migration["sql"].strip()
     if sql:
         conn.executescript(sql)

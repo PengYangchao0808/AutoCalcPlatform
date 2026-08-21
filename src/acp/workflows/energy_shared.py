@@ -29,6 +29,7 @@ from acp.backends.external import run_shermo
 from acp.backends.registry import get_backend
 from acp.chem.composition import normalize_recalc_hess
 from acp.core.models import HARTREE_TO_KCAL, Structure, StructureEnsemble, StructureRecord
+from acp.workflows._helpers import write_result_summary
 from acp.workflows.ensemble_thermo import (
     EnsembleThermoSummary,
     ensemble_total_gibbs,
@@ -780,6 +781,33 @@ def write_final_outputs(
         outputs["total_gibbs_censo_hartree"] = summary.censo_reference_gibbs_hartree
     if boltzmann_table_json is not None:
         outputs["boltzmann_table_json"] = boltzmann_table_json
+
+    write_result_summary(
+        mol_dir,
+        workflow="energy",
+        products=[
+            {
+                "label": "Ranked conformers (XYZ)",
+                "path": str(ensemble_xyz.relative_to(mol_dir)),
+                "kind": "xyz",
+            },
+            {
+                "label": "Ensemble thermo (G_total)",
+                "path": str(thermo_json.relative_to(mol_dir)),
+                "kind": "report",
+            },
+            {
+                "label": "Conformer thermo table (CSV)",
+                "path": str(thermo_csv.relative_to(mol_dir)),
+                "kind": "table",
+            },
+            {
+                "label": "Global minimum structure",
+                "path": str(global_min_xyz.relative_to(mol_dir)),
+                "kind": "xyz",
+            },
+        ],
+    )
     return outputs
 
 

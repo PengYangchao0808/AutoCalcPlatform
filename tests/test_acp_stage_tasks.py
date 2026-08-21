@@ -20,6 +20,11 @@ def test_stage_plan_unknown_workflow_returns_empty() -> None:
     assert get_stage_plan(JobSpec(workflow="unknown")) == []
 
 
+def test_mechanism_stage_plan_uses_study_phases() -> None:
+    plan = get_stage_plan(JobSpec(workflow="mechanism"))
+    assert [stage.stage_name for stage in plan] == ["S0", "S1", "S2", "S3", "SR", "S4"]
+
+
 def test_observer_initializes_pending_tasks(tmp_path: Path) -> None:
     store = StageTaskStore(tmp_path / "jobs.db")
     observer = StageTaskObserver(store)
@@ -113,3 +118,74 @@ def test_fake_job_creates_stage_tasks(tmp_path: Path) -> None:
             assert (stage_dir / f"{task.task_id}.completed.json").exists()
     finally:
         mgr.shutdown()
+
+
+def test_observer_mirrors_status_detail(tmp_path: Path) -> None:
+    store = StageTaskStore(tmp_path / "jobs.db")
+    observer = StageTaskObserver(store)
+    task = observer.initialize_job_stages("job-1", JobSpec(workflow="fake"))[0]
+    work_dir = tmp_path / "work"
+    stage_dir = work_dir / "stage_tasks" / task.stage_name
+    stage_dir.mkdir(parents=True)
+
+    started_path = stage_dir / f"{task.task_id}.started.json"
+    started_path.write_text(
+        json.dumps(
+            {
+                "task_id": task.task_id,
+                "stage": task.stage_name,
+                "status": "running",
+                "status_detail": "cycle 3/10",
+                "pid": 123,
+                "started_at": "2026-01-01T00:00:00+00:00",
+            }
+        ),
+        encoding="utf-8",
+    )
+    observer.poll_and_mirror("job-1", work_dir)
+    running = store.get(task.task_id)
+    assert running is not None
+    assert running.status_detail == "cycle 3/10"
+
+
+def test_observe_state_syncs_current_stage_to_status_detail(tmp_path: Path) -> None:
+    """``JobRunner._observe_state`` mirrors the running stage onto stage_tasks."""
+    from acp.scheduler.events import JobEventLog
+    from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
+    from acp.scheduler.runner import JobRunner
+
+    store = StageTaskStore(tmp_path / "jobs.db")
+    observer = StageTaskObserver(store)
+    runner = JobRunner(stage_task_observer=observer)
+
+    work_dir = tmp_path / "work"
+    work_dir.mkdir()
+    (work_dir / "state.json").write_text(
+        json.dumps(
+            {
+                "status": "running",
+                "current_stage": "compute",
+                "stages": {
+                    "init": {"status": "completed"},
+                    "compute": {"status": "running"},
+                    "finalize": {"status": "pending"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    spec = JobSpec(workflow="fake", name="sync", input={"source": "CCO"})
+    observer.initialize_job_stages("job-1", spec)
+    record = JobRecord(
+        id="job-1",
+        spec=spec,
+        status=JobStatus.RUNNING,
+        work_dir=str(work_dir),
+    )
+    event_log = JobEventLog(work_dir / "events.jsonl")
+    runner._observe_state(record, event_log, work_dir / "state.json", set())
+
+    tasks = {task.stage_name: task for task in store.list_by_job("job-1")}
+    assert tasks["compute"].status_detail == "compute"
+    assert tasks["init"].status_detail is None
+    assert record.current_stage == "compute"

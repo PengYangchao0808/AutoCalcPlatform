@@ -22,6 +22,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections.abc import Mapping
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,13 +33,15 @@ from acp.scheduler.artifacts import ArtifactRegistry, capture_stage_artifacts
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
     EXIT_WAITING_REVIEW,
+    MECHANISM_CONFIG_FILENAME,
     JobRecord,
     JobSpec,
     censo_ewin_from_method,
     censo_preset_from_method,
     censo_solvent_from_method,
-    mechanism_method_flags,
+    input_chemistry_flags,
     nmr_method_flags,
+    write_mechanism_job_config,
     xtbmd_method_flags,
 )
 from acp.scheduler.provenance import Provenance, build_provenance_for_job
@@ -142,48 +145,189 @@ def find_workflow_state(work_dir: Path) -> Path | None:
     return min(candidates, key=_key)
 
 
-def _materialized_input_name(source: str) -> str:
-    """Name for the materialized input file.
+def _opt_text(value: object) -> str | None:
+    if isinstance(value, str):
+        text = value.strip()
+        if text:
+            return text
+    return None
 
-    Structure files keep their format-significant suffix (``.com``/``.inp``
-    are parsed by the ORCA input parser); everything else materialises as
-    ``input.xyz``.
-    """
+
+def _read_json_object(path: Path) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        logger.debug("Failed to read JSON object from %s", path, exc_info=True)
+        return None
+    if not isinstance(payload, dict):
+        logger.debug("Ignoring non-object JSON payload at %s", path)
+        return None
+    return payload
+
+
+def _find_mechanism_study_json(record: JobRecord) -> Path | None:
+    study_root = Path(record.work_dir) / "mechanism_study"
+    if not study_root.is_dir():
+        logger.debug("No mechanism_study directory for job %s", record.id)
+        return None
+
+    study_id = _opt_text(record.spec.method.get("study_id"))
+    if study_id is not None:
+        study_path = study_root / study_id / "study.json"
+        if study_path.is_file():
+            return study_path
+        logger.debug("Mechanism study.json missing for job %s at %s", record.id, study_path)
+        return None
+
+    candidates = sorted(study_root.glob("*/study.json"))
+    if len(candidates) == 1:
+        return candidates[0]
+    if len(candidates) > 1:
+        logger.debug(
+            "Ambiguous mechanism study discovery for job %s: %s candidates",
+            record.id,
+            len(candidates),
+        )
+    else:
+        logger.debug("No mechanism study.json found for job %s", record.id)
+    return None
+
+
+def _extract_effective_fidelity(
+    study_data: Mapping[str, Any],
+    result: Mapping[str, Any],
+) -> str | None:
+    review_payload = result.get("review_payload")
+    if isinstance(review_payload, Mapping):
+        fidelity = _opt_text(review_payload.get("effective_fidelity"))
+        if fidelity is not None:
+            return fidelity
+
+    quality = _opt_text(study_data.get("quality"))
+    metadata = study_data.get("metadata")
+    metadata_dict = metadata if isinstance(metadata, Mapping) else {}
+    runner_meta = metadata_dict.get("study_runner")
+    runner_meta_dict = runner_meta if isinstance(runner_meta, Mapping) else {}
+    high_fidelity = metadata_dict.get("high_fidelity")
+    high_fidelity_dict = high_fidelity if isinstance(high_fidelity, Mapping) else {}
+
+    if quality == "high":
+        fidelity = _opt_text(high_fidelity_dict.get("profile"))
+        if fidelity is not None:
+            return fidelity
+        fidelity = _opt_text(runner_meta_dict.get("high_fidelity_profile_name"))
+        if fidelity is not None:
+            return fidelity
+
+    fidelity = _opt_text(runner_meta_dict.get("fidelity_profile_name"))
+    if fidelity is not None:
+        return fidelity
+    fidelity = _opt_text(runner_meta_dict.get("fidelity"))
+    if fidelity is not None:
+        return fidelity
+    fidelity = _opt_text(high_fidelity_dict.get("profile"))
+    if fidelity is not None:
+        return fidelity
+
+    routes = study_data.get("routes")
+    if isinstance(routes, list):
+        for route in routes:
+            if isinstance(route, Mapping):
+                fidelity = _opt_text(route.get("fidelity"))
+                if fidelity is not None:
+                    return fidelity
+    return None
+
+
+def populate_mechanism_study_result_metadata(
+    record: JobRecord,
+    result: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    enriched = dict(result or {})
+    if record.spec.workflow != "mechanism":
+        return enriched
+
+    study_path = _find_mechanism_study_json(record)
+    if study_path is None:
+        return enriched
+
+    study_data = _read_json_object(study_path)
+    if study_data is None:
+        return enriched
+
+    metadata = study_data.get("metadata")
+    metadata_dict = metadata if isinstance(metadata, Mapping) else {}
+    runner_meta = metadata_dict.get("study_runner")
+    runner_meta_dict = runner_meta if isinstance(runner_meta, Mapping) else {}
+    config_payload = runner_meta_dict.get("config")
+    config_dict = config_payload if isinstance(config_payload, Mapping) else {}
+    mechanism_config = config_dict.get("mechanism")
+    mechanism_config_dict = mechanism_config if isinstance(mechanism_config, Mapping) else {}
+
+    provider = (
+        _opt_text(runner_meta_dict.get("provider_backend"))
+        or _opt_text(mechanism_config_dict.get("provider_backend"))
+        or "native"
+    )
+    quality = _opt_text(study_data.get("quality"))
+    fidelity = _extract_effective_fidelity(study_data, enriched)
+
+    enriched["provider"] = provider
+    if fidelity is not None:
+        enriched["fidelity"] = fidelity
+    if quality is not None:
+        enriched["quality"] = quality
+    return enriched
+
+
+def _materialized_input_name(source: str, stem: str = "input") -> str:
+    """Name for a materialized input file."""
     suffix = Path(source).suffix.lower()
     if suffix in (".com", ".inp"):
-        return f"input{suffix}"
-    return "input.xyz"
+        return f"{stem}{suffix}"
+    return f"{stem}.xyz"
 
 
-def materialize_job_input(
+def _extract_input_source(inp: dict[str, Any]) -> str:
+    source = inp.get("source") or inp.get("input") or inp.get("smiles") or ""
+    return str(source)
+
+
+def _copy_structure_asset(source: str, inputs_dir: Path, run_root: Path, stem: str) -> Path:
+    candidate = (run_root / source).resolve()
+    try:
+        candidate.relative_to(run_root.resolve())
+    except ValueError as exc:
+        raise ValueError(f"Asset path escapes run_root: {source}") from exc
+    if not candidate.is_file():
+        raise ValueError(f"Asset file not found: {source}")
+    dest = inputs_dir / _materialized_input_name(str(candidate), stem)
+    shutil.copy2(candidate, dest)
+    return dest
+
+
+def _materialize_single_input(
     inp: dict[str, Any],
     inputs_dir: Path,
     run_root: Path,
+    *,
+    stem: str = "input",
 ) -> Path | None:
-    source_type = inp.get("source_type", "")
-    source = inp.get("source") or inp.get("input") or inp.get("smiles") or ""
+    source_type = str(inp.get("source_type", ""))
+    source = _extract_input_source(inp)
 
     if not source:
         return None
 
     inputs_dir.mkdir(parents=True, exist_ok=True)
-    dest = inputs_dir / "input.xyz"
+    dest = inputs_dir / f"{stem}.xyz"
 
     if source_type == "xyz_text":
-        dest.write_text(str(source), encoding="utf-8")
+        dest.write_text(source, encoding="utf-8")
         return dest
 
     if source_type == "structure_asset":
-        candidate = (run_root / str(source)).resolve()
-        try:
-            candidate.relative_to(run_root.resolve())
-        except ValueError:
-            raise ValueError(f"Asset path escapes run_root: {source}")
-        if not candidate.is_file():
-            raise ValueError(f"Asset file not found: {source}")
-        dest = inputs_dir / _materialized_input_name(str(candidate))
-        shutil.copy2(candidate, dest)
-        return dest
+        return _copy_structure_asset(source, inputs_dir, run_root, stem)
 
     if (
         source.endswith(".xyz")
@@ -192,27 +336,131 @@ def materialize_job_input(
         or source.endswith(".com")
         or source.endswith(".inp")
     ):
-        p = Path(source)
-        if p.is_file():
-            dest = inputs_dir / _materialized_input_name(str(p))
-            shutil.copy2(p, dest)
+        candidate = Path(source)
+        if candidate.is_file():
+            dest = inputs_dir / _materialized_input_name(str(candidate), stem)
+            shutil.copy2(candidate, dest)
             return dest
 
-    if source_type == "smiles" or _looks_like_smiles(str(source)):
-        from acp.chem.embedding import smiles_to_xyz
-
-        xyz = smiles_to_xyz(str(source))
+    if source_type == "smiles" or _looks_like_smiles(source):
+        xyz = smiles_to_xyz(source)
         dest.write_text(xyz, encoding="utf-8")
         return dest
-
-    from acp.chem.embedding import smiles_to_xyz
 
     try:
-        xyz = smiles_to_xyz(str(source))
+        xyz = smiles_to_xyz(source)
         dest.write_text(xyz, encoding="utf-8")
         return dest
-    except Exception:
+    except (ImportError, RuntimeError, ValueError):
         return None
+
+
+def _materialize_mechanism_role(
+    role: str,
+    payload: Any,
+    inputs_dir: Path,
+    run_root: Path,
+) -> Path:
+    if not isinstance(payload, dict):
+        raise ValueError(f"mechanism job requires a valid {role} input structure")
+    materialized = _materialize_single_input(payload, inputs_dir, run_root, stem=role)
+    if materialized is None:
+        raise ValueError(f"mechanism job requires a valid {role} input structure")
+    return materialized
+
+
+def materialize_job_input(
+    inp: dict[str, Any],
+    inputs_dir: Path,
+    run_root: Path,
+    materialized_roles: dict[str, Path] | None = None,
+) -> Path | None:
+    if inp.get("source_type") == "mechanism":
+        reactant = _materialize_mechanism_role(
+            "reactant",
+            inp.get("reactant"),
+            inputs_dir,
+            run_root,
+        )
+        if materialized_roles is not None:
+            materialized_roles["reactant"] = reactant
+        for role in ("product", "ts_guess"):
+            payload = inp.get(role)
+            if payload is None:
+                continue
+            materialized = _materialize_mechanism_role(role, payload, inputs_dir, run_root)
+            if materialized_roles is not None:
+                materialized_roles[role] = materialized
+        return reactant
+
+    return _materialize_single_input(inp, inputs_dir, run_root)
+
+
+def _mechanism_role_source(
+    inp: dict[str, Any],
+    role: str,
+    materialized_roles: Mapping[str, Path | str] | None = None,
+) -> str | None:
+    if materialized_roles and role in materialized_roles:
+        return str(materialized_roles[role])
+
+    legacy = inp.get(f"{role}_source")
+    if legacy:
+        return str(legacy)
+
+    role_value = inp.get(role)
+    if isinstance(role_value, dict):
+        nested_source = (
+            role_value.get("source")
+            or role_value.get("input")
+            or role_value.get("smiles")
+        )
+        if nested_source and role_value.get("source_type") != "xyz_text":
+            return str(nested_source)
+        return None
+
+    if role_value:
+        return str(role_value)
+    return None
+
+
+def _write_mechanism_config_if_needed(
+    spec: JobSpec,
+    work_dir: Path,
+    materialized: Path | None,
+    materialized_roles: Mapping[str, Path | str],
+) -> Path | None:
+    if spec.workflow != "mechanism":
+        return None
+
+    role_paths: dict[str, Path | str] = dict(materialized_roles)
+    if not role_paths and materialized is not None:
+        role_paths["reactant"] = materialized
+    reaction_definition = _load_mechanism_reaction_definition(work_dir, spec)
+    return write_mechanism_job_config(
+        work_dir,
+        spec.input,
+        spec.method,
+        spec.resources,
+        role_paths,
+        reaction_definition=reaction_definition,
+    )
+
+
+def _load_mechanism_reaction_definition(
+    work_dir: Path,
+    spec: JobSpec,
+) -> dict[str, Any] | None:
+    if spec.workflow != "mechanism":
+        return None
+    study_id = spec.method.get("study_id")
+    if not study_id:
+        return None
+    path = work_dir / "mechanism_study" / str(study_id) / "reaction.json"
+    if not path.is_file():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return payload if isinstance(payload, dict) else None
 
 
 def _looks_like_smiles(s: str) -> bool:
@@ -292,16 +540,32 @@ class JobRunner:
         if skip:
             raise RuntimeError(f"Local disk full, submission blocked for job {record.id}")
 
+        materialized_roles: dict[str, Path] = {}
         materialized = materialize_job_input(
-            record.spec.input, work_dir / "inputs", work_dir.parent.parent
+            record.spec.input,
+            work_dir / "inputs",
+            work_dir.parent.parent,
+            materialized_roles,
         )
 
         effective_input_path = (
             str(materialized)
             if materialized
-            else (record.spec.input.get("source") or record.spec.input.get("input") or "")
+            else _extract_input_source(record.spec.input)
         )
-        cmd = self._build_cmd(record.spec, work_dir, effective_input_path)
+        mechanism_config_path = _write_mechanism_config_if_needed(
+            record.spec,
+            work_dir,
+            materialized,
+            materialized_roles,
+        )
+        cmd = self._build_cmd(
+            record.spec,
+            work_dir,
+            effective_input_path,
+            materialized_roles,
+            mechanism_config_path=str(mechanism_config_path) if mechanism_config_path else None,
+        )
         stdout_path = work_dir / "stdout.log"
         stderr_path = work_dir / "stderr.log"
 
@@ -423,6 +687,57 @@ class JobRunner:
         if proc and proc.poll() is None:
             self._terminate(proc)
 
+    def pause_local(self, job_id: str) -> bool:
+        """Freeze a locally-running job's whole process group (SIGSTOP).
+
+        The ``_processes`` entry is **retained** so the poller re-adopts the
+        job once :meth:`resume_local` revives it — no state is popped and
+        ``record.exit_code`` stays untouched while paused.
+
+        Returns:
+            ``True`` when the stop signal was delivered; ``False`` when the
+            job is not tracked or its process already exited (let the poller
+            finalize it instead of wedging it in PAUSED).
+        """
+        with self._proc_lock:
+            proc = self._processes.get(job_id)
+        if proc is None or proc.poll() is not None:
+            return False
+        try:
+            pgid = os.getpgid(proc.pid)
+            os.killpg(pgid, signal.SIGSTOP)
+        except ProcessLookupError:
+            return False
+        except OSError:
+            logger.warning("Failed to SIGSTOP process group for job %s", job_id, exc_info=True)
+            return False
+        return True
+
+    def resume_local(self, job_id: str) -> bool:
+        """Revive a paused local job's process group (SIGCONT).
+
+        Returns:
+            ``True`` when the job is still tracked — either revived, or it
+            exited while paused (nothing to signal; the poller finalizes it
+            as soon as the record is RUNNING again).  ``False`` means the
+            job is not tracked locally at all (e.g. after a server restart).
+        """
+        with self._proc_lock:
+            proc = self._processes.get(job_id)
+        if proc is None:
+            return False
+        if proc.poll() is not None:
+            return True
+        try:
+            pgid = os.getpgid(proc.pid)
+            os.killpg(pgid, signal.SIGCONT)
+        except ProcessLookupError:
+            return True
+        except OSError:
+            logger.warning("Failed to SIGCONT process group for job %s", job_id, exc_info=True)
+            return False
+        return True
+
     # ------------------------------------------------------------------ #
     # Legacy blocking API (kept for backward compat)
     # ------------------------------------------------------------------ #
@@ -511,8 +826,14 @@ class JobRunner:
             return 1
 
         materialized = None
+        materialized_roles: dict[str, Path] = {}
         try:
-            materialized = materialize_job_input(record.spec.input, inputs_dir, run_root)
+            materialized = materialize_job_input(
+                record.spec.input,
+                inputs_dir,
+                run_root,
+                materialized_roles,
+            )
         except Exception as exc:
             event_log.append("job.failed", job_id=record.id, error=str(exc))
             return 1
@@ -520,9 +841,21 @@ class JobRunner:
         effective_input_path = (
             str(materialized)
             if materialized
-            else (record.spec.input.get("source") or record.spec.input.get("input") or "")
+            else _extract_input_source(record.spec.input)
         )
-        cmd = self._build_cmd(record.spec, work_dir, effective_input_path)
+        mechanism_config_path = _write_mechanism_config_if_needed(
+            record.spec,
+            work_dir,
+            materialized,
+            materialized_roles,
+        )
+        cmd = self._build_cmd(
+            record.spec,
+            work_dir,
+            effective_input_path,
+            materialized_roles,
+            mechanism_config_path=str(mechanism_config_path) if mechanism_config_path else None,
+        )
         stdout_path = work_dir / "stdout.log"
         stderr_path = work_dir / "stderr.log"
 
@@ -609,6 +942,21 @@ class JobRunner:
         )
         record.progress = round(done / total, 3)
 
+        # Mirror the running stage onto its stage_tasks row so the job-detail
+        # stepper can show live phase detail ("status_detail").
+        if record.current_stage:
+            try:
+                observer = self._observer_for_record(record)
+                for task in observer.store.list_by_job(record.id):
+                    if (
+                        task.stage_name == record.current_stage
+                        and task.status_detail != record.current_stage
+                    ):
+                        task.status_detail = record.current_stage
+                        observer.store.update(task)
+            except Exception:
+                logger.debug("status_detail mirror failed for job %s", record.id, exc_info=True)
+
         pending_events: list[tuple[float, str, str, dict[str, object]]] = []
         for name, info in stages.items():
             if not isinstance(info, dict):
@@ -640,6 +988,13 @@ class JobRunner:
         except ProcessLookupError:
             return
         try:
+            # Defensive SIGCONT: a SIGSTOP-frozen group cannot act on
+            # SIGTERM (handlers never run while stopped) — revive it first
+            # so the terminate handshake and SIGKILL escalation both work.
+            try:
+                os.killpg(pgid, signal.SIGCONT)
+            except ProcessLookupError:
+                pass
             os.killpg(pgid, signal.SIGTERM)
             try:
                 proc.wait(timeout=5)
@@ -708,7 +1063,14 @@ class JobRunner:
 
         return False
 
-    def _build_cmd(self, spec: JobSpec, work_dir: Path, input_path: str = "") -> list[str]:
+    def _build_cmd(
+        self,
+        spec: JobSpec,
+        work_dir: Path,
+        input_path: str = "",
+        materialized_roles: Mapping[str, Path | str] | None = None,
+        mechanism_config_path: str | None = None,
+    ) -> list[str]:
         wf = spec.workflow
         if wf not in (
             "mechanism",
@@ -730,7 +1092,7 @@ class JobRunner:
         method = spec.method
         res = spec.resources
 
-        source = input_path or inp.get("source") or inp.get("input") or inp.get("smiles") or ""
+        source = input_path or _extract_input_source(inp)
         # NMR carries multiple candidates + an experiment payload; resolve
         # them before the standard single-source validation below.
         if wf == "nmr":
@@ -741,18 +1103,21 @@ class JobRunner:
 
         if wf == "mechanism":
             cmd += ["--input", str(source), "--output", str(work_dir)]
+            cmd += [
+                "--mechanism-config",
+                mechanism_config_path or str(work_dir / MECHANISM_CONFIG_FILENAME),
+            ]
             if spec.name:
                 cmd += ["--name", spec.name]
-            product = inp.get("product") or inp.get("product_source")
+            product = _mechanism_role_source(inp, "product", materialized_roles)
             if product:
                 cmd += ["--product", str(product)]
-            ts_guess = inp.get("ts_guess") or inp.get("ts_guess_source")
+            ts_guess = _mechanism_role_source(inp, "ts_guess", materialized_roles)
             if ts_guess:
                 cmd += ["--ts-guess", str(ts_guess)]
             routes = inp.get("routes")
             if routes:
                 cmd += ["--routes", json.dumps(routes)]
-            cmd += mechanism_method_flags(method)
         elif wf in {"ensemble", "energy"}:
             cmd += ["--input", str(source), "--output", str(work_dir)]
             preset = censo_preset_from_method(method)
@@ -839,10 +1204,7 @@ class JobRunner:
             cmd += ["--nproc", str(res["nproc"])]
         if res.get("mem"):
             cmd += ["--mem", str(res["mem"])]
-        if inp.get("charge") is not None:
-            cmd += ["--charge", str(inp["charge"])]
-        if inp.get("multiplicity") is not None:
-            cmd += ["--multiplicity", str(inp["multiplicity"])]
+        cmd += input_chemistry_flags(inp)
         return cmd
 
     def _build_nmr_cmd(self, spec: JobSpec, work_dir: Path) -> list[str]:
@@ -899,7 +1261,7 @@ class JobRunner:
                     "nmr bruker job requires experiment.spectrum_asset_id (+ filename)"
                 )
             cmd += ["--bruker", str(bruker_dir)]
-            refs = experiment.get("references")
+            refs = experiment.get("references") if isinstance(experiment, dict) else None
             if isinstance(refs, dict):
                 for key, value in refs.items():
                     cmd += ["--bruker-ref", f"{key}={value}"]
@@ -1264,4 +1626,10 @@ class JobRunner:
         path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
-__all__ = ["JobRunner", "JobRunnerRemoteProtocol", "find_workflow_state", "materialize_job_input"]
+__all__ = [
+    "JobRunner",
+    "JobRunnerRemoteProtocol",
+    "find_workflow_state",
+    "materialize_job_input",
+    "populate_mechanism_study_result_metadata",
+]

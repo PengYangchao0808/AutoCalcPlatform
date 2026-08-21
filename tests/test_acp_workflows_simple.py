@@ -21,6 +21,7 @@ from acp.core.utils import ensure_unique_dir
 from acp.workflows.simple import (
     _check_input,
     _read_input,
+    _resolve_output_dir,
     _write_energy_json,
     _write_frequencies_txt,
     _write_optimized_xyz,
@@ -114,6 +115,43 @@ def test_ensure_unique_dir_increments_counter(tmp_path):
     (tmp_path / "base_1").mkdir()
     result = ensure_unique_dir(base)
     assert result.name == "base_2"
+
+
+# ---------------------------------------------------------------------------
+# _resolve_output_dir
+# ---------------------------------------------------------------------------
+
+_SCHEDULER_PRE_CREATED = ["inputs", "work", "results"]
+_SCHEDULER_JOB_FILES = ["events.jsonl", "job.json", "stdout.log", "stderr.log"]
+
+
+def _make_scheduler_dir(root: Path, name: str) -> Path:
+    """Create a directory pre-populated with scheduler artifacts (dirs + job
+    metadata files), mirroring what the runner/manager create before the
+    workflow subprocess starts."""
+    d = root / name
+    d.mkdir()
+    for sub in _SCHEDULER_PRE_CREATED:
+        (d / sub).mkdir()
+    for fname in _SCHEDULER_JOB_FILES:
+        (d / fname).write_text("placeholder")
+    return d
+
+
+def test_resolve_output_dir_reuses_scheduler_marker_dir(tmp_path):
+    d = _make_scheduler_dir(tmp_path, "job_out")
+    assert _resolve_output_dir(d) == d.resolve()
+    # Reuse must not create a _1 sibling.
+    assert not (tmp_path / "job_out_1").exists()
+
+
+def test_resolve_output_dir_redirects_when_extra_file_present(tmp_path):
+    d = _make_scheduler_dir(tmp_path, "job_out")
+    (d / "prev_result.xyz").write_text("1\n\nC 0 0 0\n")
+    result = _resolve_output_dir(d)
+    assert result != d.resolve()
+    assert result.name == "job_out_1"
+    assert result.exists()
 
 
 # ---------------------------------------------------------------------------

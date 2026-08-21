@@ -23,11 +23,12 @@ from typing import Any
 
 from acp.catalog import method_levels_to_cli_flags
 from acp.scheduler.jobs import (
+    MECHANISM_CONFIG_FILENAME,
     JobSpec,
     censo_ewin_from_method,
     censo_preset_from_method,
     censo_solvent_from_method,
-    mechanism_method_flags,
+    input_chemistry_flags,
     nmr_method_flags,
     xtbmd_method_flags,
 )
@@ -44,6 +45,34 @@ def _looks_like_smiles(s: str) -> bool:
     if stripped[0].isdigit():
         return False
     return True
+
+
+def _mechanism_role_source(
+    inp: dict[str, Any],
+    role: str,
+    materialized_role_paths: dict[str, str] | None = None,
+) -> str | None:
+    if materialized_role_paths and role in materialized_role_paths:
+        return materialized_role_paths[role]
+
+    legacy = inp.get(f"{role}_source")
+    if legacy:
+        return str(legacy)
+
+    role_value = inp.get(role)
+    if isinstance(role_value, dict):
+        nested_source = (
+            role_value.get("source")
+            or role_value.get("input")
+            or role_value.get("smiles")
+        )
+        if nested_source and role_value.get("source_type") != "xyz_text":
+            return str(nested_source)
+        return None
+
+    if role_value:
+        return str(role_value)
+    return None
 
 
 __all__ = [
@@ -113,6 +142,8 @@ def build_remote_cli_command(
     input_path: str = "inputs/input.xyz",
     python_executable: str = "python",
     config_path: str | None = None,
+    materialized_role_paths: dict[str, str] | None = None,
+    mechanism_config_path: str | None = None,
 ) -> list[str]:
     """Build the ``python -m acp.cli ...`` argv for remote execution.
 
@@ -162,18 +193,18 @@ def build_remote_cli_command(
 
     if wf == "mechanism":
         cmd += ["--input", str(source), "--output", "."]
+        cmd += ["--mechanism-config", mechanism_config_path or MECHANISM_CONFIG_FILENAME]
         if spec.name:
             cmd += ["--name", spec.name]
-        product = inp.get("product") or inp.get("product_source")
+        product = _mechanism_role_source(inp, "product", materialized_role_paths)
         if product:
             cmd += ["--product", str(product)]
-        ts_guess = inp.get("ts_guess") or inp.get("ts_guess_source")
+        ts_guess = _mechanism_role_source(inp, "ts_guess", materialized_role_paths)
         if ts_guess:
             cmd += ["--ts-guess", str(ts_guess)]
         routes = inp.get("routes")
         if routes:
             cmd += ["--routes", json.dumps(routes)]
-        cmd += mechanism_method_flags(method)
     elif wf in {"ensemble", "energy"}:
         cmd += ["--input", str(source), "--output", "."]
         preset = censo_preset_from_method(method)
@@ -256,10 +287,7 @@ def build_remote_cli_command(
         cmd += ["--nproc", str(res["nproc"])]
     if res.get("mem"):
         cmd += ["--mem", str(res["mem"])]
-    if inp.get("charge") is not None:
-        cmd += ["--charge", str(inp["charge"])]
-    if inp.get("multiplicity") is not None:
-        cmd += ["--multiplicity", str(inp["multiplicity"])]
+    cmd += input_chemistry_flags(inp)
 
     return cmd
 
@@ -377,6 +405,7 @@ def build_lsf_script_spec(
     extra_flags: str = "",
     input_path: str = "inputs/input.xyz",
     config_path: str | None = None,
+    materialized_role_paths: dict[str, str] | None = None,
 ) -> tuple[LSFScriptSpec, list[str]]:
     """Build both the CLI command and :class:`LSFScriptSpec` for a job.
 
@@ -396,16 +425,22 @@ def build_lsf_script_spec(
     Returns:
         ``(lsf_spec, cli_command)``.
     """
+    remote_job_dir = posixpath.join(node.remote_work_dir, job_id)
     cli_command = build_remote_cli_command(
         spec,
         input_path=input_path,
         python_executable=node.python_executable,
         config_path=config_path,
+        materialized_role_paths=materialized_role_paths,
+        mechanism_config_path=(
+            posixpath.join(remote_job_dir, MECHANISM_CONFIG_FILENAME)
+            if spec.workflow == "mechanism"
+            else None
+        ),
     )
     nproc, mem_mb_per_core, queue, walltime, extra_flags = derive_lsf_resources(
         spec, queue=queue, walltime=walltime, extra_flags=extra_flags
     )
-    remote_job_dir = posixpath.join(node.remote_work_dir, job_id)
 
     lsf_spec = LSFScriptSpec(
         job_name=f"acp_{job_id}",

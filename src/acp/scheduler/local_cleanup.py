@@ -406,6 +406,10 @@ class LocalCleanup:
     def cleanup_old_db_records(self, dry_run: bool = False) -> LocalCleanupReport:
         """Delete SQLite job rows older than :attr:`RetentionPolicy.db_record_days`.
 
+        Deletion cascades to the job's dependent rows (stage_tasks,
+        artifacts, mechanism_studies, decision_points) via
+        :meth:`JobStore.purge_cascade`.
+
         Independent of :meth:`cleanup_old_work_dirs` — DB rows persist
         longer so historical queries remain available after a job's
         work_dir is deleted.
@@ -431,7 +435,7 @@ class LocalCleanup:
         deleted = 0
         for job_id in rows:
             try:
-                self.store.delete(job_id)
+                self.store.purge_cascade(job_id)
                 deleted += 1
             except Exception as exc:
                 report.errors.append(f"db:{job_id}: {exc}")

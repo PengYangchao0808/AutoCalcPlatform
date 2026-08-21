@@ -9,7 +9,8 @@ sentinel file written by the LSF script, and the workflow ``state.json``.
 
 LSF state mapping follows :class:`LSFClusterAdapter.get_status`:
 
-    PEND → pending, RUN → running, DONE → done, EXIT → failed,
+    PEND → pending, RUN → running, PSUSP/SSUSP/USUSP → paused,
+    DONE → done, EXIT → failed,
     UNKWN → unknown, (empty / not found) → not_found
 
 Author: QCcalc Team
@@ -34,15 +35,21 @@ __all__ = ["RemoteJobMonitor"]
 # Normalised status strings (lowercase, workflow-agnostic).
 STATUS_PENDING: Final[str] = "pending"
 STATUS_RUNNING: Final[str] = "running"
+STATUS_PAUSED: Final[str] = "paused"
 STATUS_DONE: Final[str] = "done"
 STATUS_FAILED: Final[str] = "failed"
 STATUS_UNKNOWN: Final[str] = "unknown"
 STATUS_NOT_FOUND: Final[str] = "not_found"
 
-# Map raw LSF stat codes to our normalised strings.
+# Map raw LSF stat codes to our normalised strings.  PSUSP (suspended
+# while pending), SSUSP (suspended while running) and USUSP (suspended
+# by the user / ``bstop``) all map to the non-terminal paused status.
 _LSF_STATE_MAP: dict[str, str] = {
     "PEND": STATUS_PENDING,
     "RUN": STATUS_RUNNING,
+    "PSUSP": STATUS_PAUSED,
+    "SSUSP": STATUS_PAUSED,
+    "USUSP": STATUS_PAUSED,
     "DONE": STATUS_DONE,
     "EXIT": STATUS_FAILED,
     "UNKWN": STATUS_UNKNOWN,
@@ -72,9 +79,10 @@ class RemoteJobMonitor:
         """Query ``bjobs`` and return a normalised status string.
 
         Returns one of :data:`STATUS_PENDING`, :data:`STATUS_RUNNING`,
-        :data:`STATUS_DONE`, :data:`STATUS_FAILED`, :data:`STATUS_UNKNOWN`,
-        or :data:`STATUS_NOT_FOUND` (when the job has been purged from the
-        LSF queue, typically after completion).
+        :data:`STATUS_PAUSED` (suspended via ``bstop`` / LSF scheduler),
+        :data:`STATUS_DONE`, :data:`STATUS_FAILED`,
+        :data:`STATUS_UNKNOWN`, or :data:`STATUS_NOT_FOUND` (when the job
+        has been purged from the LSF queue, typically after completion).
 
         Uses plain ``bjobs <id>`` for compatibility with both IBM LSF and
         OpenLAVA 2.0 (which does not support ``-o`` / ``-noheader``).
@@ -338,4 +346,59 @@ class RemoteJobMonitor:
                            code, lsf_job_id, node.name, out2.strip())
         except SSHExecutionError as exc:
             logger.warning("pkill fallback SSH error on %s: %s", node.name, exc)
+        return False
+
+    # ------------------------------------------------------------------ #
+    # Suspension (pause / resume)
+    # ------------------------------------------------------------------ #
+
+    def bstop_job(self, node: RemoteNode, lsf_job_id: str) -> bool:
+        """Send ``bstop`` to suspend a remote LSF job.
+
+        Returns ``True`` if the suspension signal was delivered
+        successfully, ``False`` otherwise.  Failures are logged but
+        never raise — suspension is best-effort, like cancellation.
+        """
+        cmd = f"bstop {lsf_job_id} 2>&1"
+        try:
+            code, out, _err = self._ssh.execute(node, cmd, timeout=30)
+        except SSHExecutionError as exc:
+            logger.warning("bstop %s failed on %s: %s (SSH error)", lsf_job_id, node.name, exc)
+            return False
+        if code == 0:
+            logger.info("Suspended LSF job %s on %s", lsf_job_id, node.name)
+            return True
+
+        logger.warning(
+            "bstop %s returned non-zero (code=%d) on %s: %s",
+            lsf_job_id,
+            code,
+            node.name,
+            out.strip(),
+        )
+        return False
+
+    def bresume_job(self, node: RemoteNode, lsf_job_id: str) -> bool:
+        """Send ``bresume`` to resume a suspended remote LSF job.
+
+        Returns ``True`` if the resume signal was delivered successfully,
+        ``False`` otherwise.  Failures are logged but never raise.
+        """
+        cmd = f"bresume {lsf_job_id} 2>&1"
+        try:
+            code, out, _err = self._ssh.execute(node, cmd, timeout=30)
+        except SSHExecutionError as exc:
+            logger.warning("bresume %s failed on %s: %s (SSH error)", lsf_job_id, node.name, exc)
+            return False
+        if code == 0:
+            logger.info("Resumed LSF job %s on %s", lsf_job_id, node.name)
+            return True
+
+        logger.warning(
+            "bresume %s returned non-zero (code=%d) on %s: %s",
+            lsf_job_id,
+            code,
+            node.name,
+            out.strip(),
+        )
         return False

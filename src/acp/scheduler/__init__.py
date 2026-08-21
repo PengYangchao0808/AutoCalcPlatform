@@ -20,6 +20,7 @@ from acp.scheduler.local_cleanup import (
     RetentionPolicy,
 )
 from acp.scheduler.manager import JobManager
+from acp.scheduler.metrics import MetricsExtractor
 from acp.scheduler.nodes import (
     ExecutionCapacityUnavailable,
     ExecutionMode,
@@ -43,6 +44,7 @@ __all__ = [
     "JobSpec",
     "JobStatus",
     "JobStore",
+    "MetricsExtractor",
     "Artifact",
     "ArtifactRegistry",
     "DEFAULT_MAX_DIRS_PER_SWEEP",
