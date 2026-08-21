@@ -8,7 +8,7 @@ ConformerEngine. Consumed by the ``acp`` workflow layer; both packages ship
 together as the ``acp`` distribution.
 
 Author: QCcalc Team
-Version: 1.0.0
+Version: 1.1.0
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
