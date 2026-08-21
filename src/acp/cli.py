@@ -5,7 +5,7 @@
 Subcommands:
     run ensemble    Ensemble generation (CREST → CENSO)
     run energy      Conformer energy ranking
-    run mechanism   Mechanism analysis workflow
+    run mechanism   Mechanism study workflow
     run serve       Start the ACP web dashboard (FastAPI + uvicorn)
 
 Usage:
@@ -25,7 +25,7 @@ import sys
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -45,13 +45,15 @@ def setup_logging(level: str = "INFO") -> None:
 
 
 def _build_config(args: argparse.Namespace) -> dict[str, Any]:
-    """Merge optional --config file and --nproc/--mem overrides."""
-    config: dict[str, Any] = {}
+    """Merge optional --config file and --nproc/--mem overrides.
 
-    if args.config:
-        from cccp.config import load_config as legacy_load
+    Always starts from the full 6-source merge so user pins
+    (``executables.orca.path``/``ld_library_path`` from ``~/.cccp.yaml``)
+    survive scheduler submissions that omit ``--config``.
+    """
+    from cccp.config import load_config as legacy_load
 
-        config = legacy_load(config_path=Path(args.config))
+    config = legacy_load(config_path=Path(args.config) if args.config else None)
 
     if getattr(args, "nproc", None) is not None:
         config.setdefault("resources", {})["nproc"] = args.nproc
@@ -113,38 +115,6 @@ def _parse_calc_hess_arg(value: str) -> int | str:
         "--calc-hess expects 'auto' or an integer 1-1000 "
         f"(got {value!r}); use --no-calc-hess to disable exact Hessian computation."
     )
-
-
-class _StoreWithExplicitFlag(argparse.Action):
-    """argparse action that records whether a flag was explicitly provided."""
-
-    def __call__(
-        self,
-        parser: argparse.ArgumentParser,
-        namespace: argparse.Namespace,
-        values: object,
-        option_string: str | None = None,
-    ) -> None:
-        setattr(namespace, self.dest, values)
-        setattr(namespace, f"{self.dest}_explicit", True)
-
-
-class _StoreTrueWithExplicitFlag(argparse.Action):
-    """store_true variant that records explicit user intent."""
-
-    def __init__(self, option_strings: list[str], dest: str, **kwargs: Any) -> None:
-        super().__init__(option_strings, dest, nargs=0, **kwargs)
-
-    def __call__(
-        self,
-        parser: argparse.ArgumentParser,
-        namespace: argparse.Namespace,
-        values: object,
-        option_string: str | None = None,
-    ) -> None:
-        del parser, values, option_string
-        setattr(namespace, self.dest, True)
-        setattr(namespace, f"{self.dest}_explicit", True)
 
 
 # ---------------------------------------------------------------------------
@@ -1133,7 +1103,7 @@ Examples:
     # -- run mechanism -------------------------------------------------------
     mechanism = run_sub.add_parser(
         "mechanism",
-        help="Mechanism analysis (reactant → path search → TS → IRC → energy profile)",
+        help="Mechanism study (S0→S4 reaction-network exploration)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
@@ -1144,18 +1114,18 @@ Examples:
       --routes '[{"route_id":"r1","coordinate_plan":{"coordinates":[{"id":"rc1","kind":"distance","atoms":[0,1],"start":3.2,"end":1.55}],"points":21},"path_strategy":"guided-scan","fidelity":"s3"}]'
         """,
     )
-    mechanism.set_defaults(
-        conformer_mode_explicit=False,
-        max_elementary_steps_explicit=False,
-        promotion_policy_explicit=False,
-        int_extension_explicit=False,
-        auto_converge_explicit=False,
-    )
     mechanism.add_argument(
         "--input",
         type=str,
-        required=True,
-        help="Reactant SMILES string or input file path (XYZ, GJF, LOG, OUT)",
+        help=(
+            "Reactant SMILES string or input file path (XYZ, GJF, LOG, OUT); "
+            "optional when --mechanism-config provides roles.reactant.path"
+        ),
+    )
+    mechanism.add_argument(
+        "--mechanism-config",
+        type=str,
+        help="Path to a scheduler-generated mechanism_config.json handoff file",
     )
     mechanism.add_argument(
         "--product",
@@ -1204,38 +1174,37 @@ Examples:
     mechanism.add_argument(
         "--study-id",
         type=str,
-        help="Mechanism-study identifier (enables StudyOrchestrator mode)",
+        help="Mechanism-study identifier (checkpoint/resume id; auto-generated when omitted)",
     )
     mechanism.add_argument(
         "--conformer-mode",
-        action=_StoreWithExplicitFlag,
-        default="auto",
+        type=str,
+        default=None,
         choices=["auto", "censo-lite", "xtb-fast"],
         help="Stable-state ensemble mode for study orchestration (default: auto)",
     )
     mechanism.add_argument(
         "--max-elementary-steps",
-        action=_StoreWithExplicitFlag,
         type=int,
-        default=3,
+        default=None,
         help="Maximum elementary steps to confirm in study mode (default: 3)",
     )
     mechanism.add_argument(
         "--int-extension",
-        action=_StoreTrueWithExplicitFlag,
+        action="store_true",
         default=False,
         help="Allow recursive intermediate extension in study mode",
     )
     mechanism.add_argument(
         "--promotion-policy",
-        action=_StoreWithExplicitFlag,
-        default="all_confirmed",
+        type=str,
+        default=None,
         choices=["all_confirmed", "rate_relevant", "user_selected"],
         help="Study promotion policy for downstream confirmation (default: all_confirmed)",
     )
     mechanism.add_argument(
         "--auto-converge",
-        action=_StoreTrueWithExplicitFlag,
+        action="store_true",
         default=False,
         help="Automatically resolve waiting review decisions with the default policy",
     )
@@ -1365,15 +1334,112 @@ def _mechanism_preset_ids() -> list[str]:
     return list(mechanism_profile_ids())
 
 
+def _load_mechanism_config(path_value: str | None) -> tuple[dict[str, Any] | None, Path | None]:
+    if not path_value:
+        return None, None
+
+    config_path = Path(path_value)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Mechanism config file not found: {config_path}")
+
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise ValueError(f"Failed to read mechanism config file: {exc}") from exc
+    except ValueError as exc:
+        raise ValueError(f"Mechanism config file is not valid JSON: {exc}") from exc
+
+    if not isinstance(payload, dict):
+        raise ValueError("Mechanism config file must be a JSON object")
+    return payload, config_path
+
+
+def _mechanism_config_dict(payload: dict[str, Any] | None, key: str) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        return {}
+    value = payload.get(key)
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _mechanism_config_levels(payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    method = _mechanism_config_dict(payload, "method")
+    levels = method.get("levels")
+    return dict(levels) if isinstance(levels, dict) else None
+
+
+def _mechanism_role_config(payload: dict[str, Any] | None, role: str) -> dict[str, Any]:
+    roles = _mechanism_config_dict(payload, "roles")
+    role_value = roles.get(role)
+    return dict(role_value) if isinstance(role_value, dict) else {}
+
+
+def _mechanism_config_scalar(section: dict[str, Any], key: str) -> Any:
+    value = section.get(key)
+    if isinstance(value, str) and not value.strip():
+        return None
+    return value
+
+
+def _mechanism_config_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _mechanism_role_path(role_cfg: dict[str, Any], config_path: Path | None) -> str | None:
+    raw_path = _mechanism_config_scalar(role_cfg, "path")
+    if raw_path is None:
+        return None
+    path = Path(str(raw_path))
+    if not path.is_absolute() and config_path is not None:
+        path = config_path.parent / path
+    return str(path)
+
+
 def _handle_mechanism(args: argparse.Namespace) -> int:
-    """Execute the mechanism workflow."""
+    """Execute the mechanism-study workflow."""
     setup_logging(args.log_level)
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
+        try:
+            mechanism_config, mechanism_config_path = _load_mechanism_config(
+                getattr(args, "mechanism_config", None)
+            )
+        except (FileNotFoundError, ValueError) as exc:
+            logger.error("%s", exc)
+            return 1
+
         cfg = _build_config(args)
-        from acp.workflows.mechanism import run_mechanism_analysis
+        from acp.mechanism.study_runner import (
+            read_review_handoff,
+            resume_mechanism_study,
+            run_mechanism_study,
+            waiting_study_exists,
+            write_review_payload,
+        )
+        from acp.scheduler.jobs import EXIT_WAITING_REVIEW
+
+        config_resolved = _mechanism_config_dict(mechanism_config, "resolved")
+        config_levels = _mechanism_config_levels(mechanism_config)
+        reactant_cfg = _mechanism_role_config(mechanism_config, "reactant")
+        product_cfg = _mechanism_role_config(mechanism_config, "product")
+        ts_guess_cfg = _mechanism_role_config(mechanism_config, "ts_guess")
+        config_resources = _mechanism_config_dict(mechanism_config, "resources")
+
+        if getattr(args, "nproc", None) is None:
+            config_nproc = _mechanism_config_int(config_resources.get("nproc"))
+            if config_nproc is not None:
+                cfg.setdefault("resources", {})["nproc"] = config_nproc
+                cfg.setdefault("executables", {}).setdefault("orca", {})["nproc"] = config_nproc
+        if getattr(args, "mem", None) is None:
+            config_mem = _mechanism_config_scalar(config_resources, "mem")
+            if config_mem is not None:
+                cfg.setdefault("resources", {})["mem"] = str(config_mem)
 
         routes: list[dict[str, object]] | None = None
         if getattr(args, "routes", None):
@@ -1385,130 +1451,100 @@ def _handle_mechanism(args: argparse.Namespace) -> int:
                 logger.error("Invalid --routes JSON: %s", exc)
                 return 1
 
-        preset = getattr(args, "preset", None)
+        preset = getattr(args, "preset", None) or _mechanism_config_scalar(config_resolved, "preset")
         strategy = getattr(args, "strategy", None)
         fidelity = getattr(args, "fidelity", None)
-        if preset:
-            from acp.mechanism.presets import resolve_preset
-
-            preset_strategy, preset_fidelity = resolve_preset(preset)
-            strategy = strategy or preset_strategy
-            fidelity = fidelity or preset_fidelity
-
-        if _mechanism_study_requested(args):
-            from acp.mechanism.study_runner import (
-                read_review_handoff,
-                resume_mechanism_study,
-                run_mechanism_study,
-                waiting_study_exists,
-                write_review_payload,
-            )
-            from acp.scheduler.jobs import EXIT_WAITING_REVIEW
-
-            # Scheduler restart handoff: the JobManager mirrors job state to
-            # <output>/job.json. When a study paused at a review gate, reuse
-            # the persisted study id + review resolutions instead of starting
-            # a fresh study (the derived id is timestamped and not stable).
-            study_id = getattr(args, "study_id", None)
-            handed_off_study_id, review_decisions = read_review_handoff(output_dir)
-            if not study_id and handed_off_study_id:
-                study_id = handed_off_study_id
-
-            if study_id and waiting_study_exists(output_dir, study_id):
-                summary = resume_mechanism_study(
-                    study_id=study_id,
-                    study_root=output_dir,
-                    decision_resolutions=review_decisions,
-                )
-            else:
-                summary = run_mechanism_study(
-                    input_source=args.input,
-                    output_dir=output_dir,
-                    config=cfg,
-                    name=args.name,
-                    charge=args.charge,
-                    multiplicity=args.multiplicity,
-                    product_source=getattr(args, "product", None),
-                    ts_guess_source=getattr(args, "ts_guess", None),
-                    routes=routes,
-                    strategy=strategy,
-                    fidelity=fidelity,
-                    scan_points=getattr(args, "scan_points", None),
-                    irc_points=getattr(args, "irc_points", None),
-                    study_id=study_id,
-                    conformer_mode=getattr(args, "conformer_mode", "auto"),
-                    max_elementary_steps=int(getattr(args, "max_elementary_steps", 3)),
-                    int_extension=bool(getattr(args, "int_extension", False)),
-                    promotion_policy=str(getattr(args, "promotion_policy", "all_confirmed")),
-                    auto_converge=bool(getattr(args, "auto_converge", False)),
-                )
-            status = str(summary.get("status") or "unknown")
-            logger.info("Mechanism study %s", status)
-            logger.info("  Study ID            : %s", summary.get("study_id", "N/A"))
-            logger.info("  Study dir           : %s", summary.get("study_dir", "N/A"))
-            logger.info("  Network size        : %s", summary.get("network_size", {}))
-            logger.info("  Gates               : %s", summary.get("gates_summary", {}))
-            pending = summary.get("pending_decisions", [])
-            if pending:
-                logger.info("  Pending decisions   : %s", pending)
-            if status == "waiting":
-                write_review_payload(output_dir, summary)
-                return EXIT_WAITING_REVIEW
-            return 0 if status in {"completed", "waiting", "running"} else 1
-
-        result = run_mechanism_analysis(
-            input_source=args.input,
-            output_dir=output_dir,
-            config=cfg,
-            name=args.name,
-            charge=args.charge,
-            multiplicity=args.multiplicity,
-            product_source=getattr(args, "product", None),
-            ts_guess_source=getattr(args, "ts_guess", None),
-            routes=routes,
-            strategy=strategy,
-            fidelity=fidelity,
-            scan_points=getattr(args, "scan_points", None),
-            irc_points=getattr(args, "irc_points", None),
+        input_source = getattr(args, "input", None) or _mechanism_role_path(
+            reactant_cfg,
+            mechanism_config_path,
         )
+        if not input_source:
+            logger.error(
+                "Mechanism study requires --input or a mechanism config with roles.reactant.path"
+            )
+            return 1
+        product_source = getattr(args, "product", None) or _mechanism_role_path(
+            product_cfg,
+            mechanism_config_path,
+        )
+        ts_guess_source = getattr(args, "ts_guess", None) or _mechanism_role_path(
+            ts_guess_cfg,
+            mechanism_config_path,
+        )
+        charge = (
+            getattr(args, "charge", None)
+            if getattr(args, "charge", None) is not None
+            else _mechanism_config_int(reactant_cfg.get("charge"))
+        )
+        multiplicity = (
+            getattr(args, "multiplicity", None)
+            if getattr(args, "multiplicity", None) is not None
+            else _mechanism_config_int(reactant_cfg.get("multiplicity"))
+        )
+
+        # Scheduler restart handoff: the JobManager mirrors job state to
+        # <output>/job.json. When a study paused at a review gate, reuse
+        # the persisted study id + review resolutions instead of starting
+        # a fresh study (the derived id is timestamped and not stable).
+        study_id = getattr(args, "study_id", None) or _mechanism_config_scalar(
+            config_resolved,
+            "study_id",
+        )
+        handed_off_study_id, review_decisions = read_review_handoff(output_dir)
+        if not study_id and handed_off_study_id:
+            study_id = handed_off_study_id
+
+        if study_id and waiting_study_exists(output_dir, study_id):
+            summary = resume_mechanism_study(
+                study_id=study_id,
+                study_root=output_dir,
+                decision_resolutions=review_decisions,
+            )
+        else:
+            summary = run_mechanism_study(
+                input_source=input_source,
+                output_dir=output_dir,
+                config=cfg,
+                name=args.name,
+                charge=charge,
+                multiplicity=multiplicity,
+                product_source=product_source,
+                ts_guess_source=ts_guess_source,
+                routes=routes,
+                preset=preset,
+                strategy=strategy,
+                fidelity=fidelity,
+                scan_points=getattr(args, "scan_points", None),
+                irc_points=getattr(args, "irc_points", None),
+                study_id=study_id,
+                conformer_mode=getattr(args, "conformer_mode", None),
+                max_elementary_steps=getattr(args, "max_elementary_steps", None),
+                int_extension=bool(getattr(args, "int_extension", False)),
+                promotion_policy=getattr(args, "promotion_policy", None),
+                auto_converge=bool(getattr(args, "auto_converge", False)),
+                config_resolved=config_resolved,
+                method_levels=config_levels,
+                mechanism_config_path=mechanism_config_path,
+            )
+        status = str(summary.get("status") or "unknown")
+        logger.info("Mechanism study %s", status)
+        logger.info("  Study ID            : %s", summary.get("study_id", "N/A"))
+        logger.info("  Study dir           : %s", summary.get("study_dir", "N/A"))
+        logger.info("  Network size        : %s", summary.get("network_size", {}))
+        logger.info("  Gates               : %s", summary.get("gates_summary", {}))
+        pending = summary.get("pending_decisions", [])
+        if pending:
+            logger.info("  Pending decisions   : %s", pending)
+        if status == "waiting":
+            write_review_payload(output_dir, summary)
+            return EXIT_WAITING_REVIEW
+        return 0 if status in {"completed", "waiting", "running"} else 1
     except KeyboardInterrupt:
         logger.warning("Interrupted by user")
         return 130
     except Exception as exc:
         logger.exception("Fatal error: %s", exc)
         return 1
-
-    if result.status == "completed":
-        raw_energy_profile = result.metadata.get("energy_profile", {})
-        energy_profile = cast(
-            dict[str, object],
-            raw_energy_profile if isinstance(raw_energy_profile, dict) else {},
-        )
-        logger.info("Mechanism workflow completed successfully")
-        logger.info("  Structures          : %s", result.metadata.get("n_structures", "N/A"))
-        logger.info(
-            "  Forward barrier     : %s", energy_profile.get("forward_barrier_kcal_mol", "N/A")
-        )
-        logger.info(
-            "  Reaction energy     : %s", energy_profile.get("reaction_energy_kcal_mol", "N/A")
-        )
-        return 0
-
-    logger.error("Mechanism workflow failed: %s", result.error)
-    return 1
-
-
-def _mechanism_study_requested(args: argparse.Namespace) -> bool:
-    return any(
-        [
-            getattr(args, "study_id", None) is not None,
-            bool(getattr(args, "conformer_mode_explicit", False)),
-            bool(getattr(args, "max_elementary_steps_explicit", False)),
-            bool(getattr(args, "promotion_policy_explicit", False)),
-            bool(getattr(args, "int_extension_explicit", False)),
-            bool(getattr(args, "auto_converge_explicit", False)),
-        ]
-    )
 
 
 def _parse_decision_resolutions(values: list[str]) -> dict[str, Any]:

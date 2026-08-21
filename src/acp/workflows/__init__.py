@@ -14,13 +14,11 @@ from typing import Any
 
 __all__ = [
     "WorkflowRegistryEntry",
-    "get_mechanism_stages",
     "get_workflow_entry",
     "list_workflow_entries",
     "register_workflow",
     "run_conformer_energy",
     "run_ensemble_generation",
-    "run_mechanism_analysis",
     "run_md_replicas",
     "run_nmr_analysis",
     "run_xtbmd_censo_energy",
@@ -35,8 +33,6 @@ __all__ = [
 # imported on first access only, keeping ``import acp.workflows`` cheap and
 # side-effect free.
 _LAZY_SOURCES: dict[str, str] = {
-    "get_mechanism_stages": "acp.workflows.mechanism",
-    "run_mechanism_analysis": "acp.workflows.mechanism",
     "run_md_replicas": "acp.workflows.xtbmd_md",
     "run_singlepoint": "acp.workflows.simple",
     "run_optimize": "acp.workflows.simple",

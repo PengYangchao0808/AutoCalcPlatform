@@ -15,6 +15,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
+from acp import __version__
 from acp.api.routes import router as api_router
 from acp.api.v1_routes import router as v1_router
 
@@ -181,7 +182,7 @@ def create_app(
 
     app = FastAPI(
         title="ACP — Auto-Calc Platform",
-        version="1.0.0",
+        version=__version__,
         docs_url="/docs",
         redoc_url="/redoc",
         lifespan=lifespan,

@@ -146,26 +146,36 @@ def test_write_study_reports_emits_all_five_jsons(tmp_path: Path) -> None:
 
     reaction_network = json.loads(outputs["reaction_network"].read_text(encoding="utf-8"))
     assert reaction_network["study_id"] == "study_reports"
+    assert reaction_network["quality"] == "high"
+    assert reaction_network["effective_fidelity"] == "s4"
     assert len(reaction_network["nodes"]) == 3
     assert reaction_network["nodes"][0]["state_id"].startswith("state_")
     assert len(reaction_network["edges"]) >= 2
     assert reaction_network["edges"][0]["path_strategy"] == "guided-scan"
 
     mechanism_profile = json.loads(outputs["mechanism_profile"].read_text(encoding="utf-8"))
+    assert mechanism_profile["quality"] == "high"
+    assert mechanism_profile["effective_fidelity"] == "s4"
     assert mechanism_profile["routes"]
     first_route = mechanism_profile["routes"][0]
     assert first_route["methods"]["fake"]
     assert first_route["refined_stationary_points"]
 
     stationary_points = json.loads(outputs["stationary_points"].read_text(encoding="utf-8"))
+    assert stationary_points["quality"] == "high"
+    assert stationary_points["effective_fidelity"] == "s4"
     assert stationary_points["stationary_points"]
     assert any(point["canonical"] for point in stationary_points["stationary_points"])
     assert stationary_points["stationary_points"][0]["geometry_artifact"]["kind"]
 
     quality_gates = json.loads(outputs["quality_gates"].read_text(encoding="utf-8"))
+    assert quality_gates["quality"] == "high"
+    assert quality_gates["effective_fidelity"] == "s4"
     assert quality_gates["quality_gates"][0]["gate_id"] == "G0"
 
     provenance = json.loads(outputs["provenance"].read_text(encoding="utf-8"))
+    assert provenance["quality"] == "high"
+    assert provenance["effective_fidelity"] == "s4"
     assert provenance["count"] > 0
     assert {
         "provider",

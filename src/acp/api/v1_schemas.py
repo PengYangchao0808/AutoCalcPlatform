@@ -7,9 +7,9 @@ Pydantic models for the ACP Workbench v2 ``/api/v1`` surface.
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ProjectModel(BaseModel):
@@ -98,6 +98,7 @@ class V1JobRecordModel(BaseModel):
     status: str
     work_dir: str = ""
     project_id: str | None = None
+    project_name: str | None = None
     input_hash: str | None = None
     created_at: str = ""
     updated_at: str = ""
@@ -108,6 +109,10 @@ class V1JobRecordModel(BaseModel):
     error: str | None = None
     pid: int | None = None
     exit_code: int | None = None
+    remote_job_id: str | None = None
+    group_id: str | None = None
+    study_id: str | None = None
+    study_status: str | None = None
     result: dict[str, Any] | None = None
 
 
@@ -125,6 +130,176 @@ class V1JobCreateRequest(BaseModel):
     target_node: str | None = None
 
 
+class MechanismRolePayload(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+
+    source_type: Literal["smiles", "xyz_text", "structure_asset"]
+    source: str = Field(min_length=1)
+    asset_id: str | None = None
+    charge: int | None = None
+    multiplicity: int | None = None
+
+    @model_validator(mode="after")
+    def _require_asset_id_for_structure_asset(self) -> MechanismRolePayload:
+        if self.source_type == "structure_asset" and not self.asset_id:
+            raise ValueError("asset_id is required when source_type='structure_asset'")
+        return self
+
+
+class MechanismCoordinateSpec(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+
+    id: str
+    kind: Literal["distance", "angle", "dihedral"]
+    atoms: list[int]
+    role: Literal["drive", "freeze", "monitor"]
+    start: float | None = None
+    end: float | None = None
+
+    @model_validator(mode="after")
+    def _validate_backend_coordinate_contract(self) -> MechanismCoordinateSpec:
+        expected_atoms = {"distance": 2, "angle": 3, "dihedral": 4}[self.kind]
+        if len(self.atoms) != expected_atoms:
+            raise ValueError(f"kind='{self.kind}' requires {expected_atoms} atoms")
+        if self.role == "drive" and (self.start is None or self.end is None):
+            raise ValueError("drive coordinates require both start and end values")
+        if self.role == "freeze" and self.start is None:
+            raise ValueError("freeze coordinates require a start value")
+        return self
+
+
+class MechanismCoordinatePlan(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+
+    coordinates: list[MechanismCoordinateSpec]
+    points: int = Field(ge=2)
+    coupling: Literal["synchronous"]
+    start_from: Literal["reactant", "product", "custom"]
+
+    @model_validator(mode="after")
+    def _require_drive_coordinate(self) -> MechanismCoordinatePlan:
+        if not any(coordinate.role == "drive" for coordinate in self.coordinates):
+            raise ValueError("coordinate_plan requires at least one drive coordinate")
+        return self
+
+
+class MechanismRouteIn(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+
+    route_id: str
+    coordinate_plan: MechanismCoordinatePlan | None = None
+    path_strategy: Literal["guided-scan", "rph-reverse", "direct-ts"]
+    fidelity: Literal["s3", "s4"] | None = None
+    ts_guess_id: str | None = None
+
+    @model_validator(mode="after")
+    def _validate_route_requirements(self) -> MechanismRouteIn:
+        if self.path_strategy == "direct-ts":
+            if not self.ts_guess_id:
+                raise ValueError("direct-ts routes require ts_guess_id")
+            return self
+        if self.coordinate_plan is None:
+            raise ValueError("coordinate_plan is required unless path_strategy='direct-ts'")
+        return self
+
+
+class MechanismJobInput(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+
+    source_type: Literal["mechanism"]
+    reactant: MechanismRolePayload
+    product: MechanismRolePayload | None = None
+    ts_guess: MechanismRolePayload | None = None
+    routes: list[MechanismRouteIn] = Field(default_factory=list)
+
+
+class MechanismJobMethod(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+
+    schema_id: str | None = None
+    profile_id: str | None = None
+    preset: str | None = None
+    strategy: Literal["guided-scan", "rph-reverse", "direct-ts"] | None = None
+    fidelity: Literal["s3", "s4"] | None = None
+    scan_points: int | None = Field(default=None, ge=2)
+    irc_points: int | None = Field(default=None, ge=1)
+    conformer_mode: Literal["auto", "censo-lite", "xtb-fast"] | None = None
+    max_elementary_steps: int | None = Field(default=None, ge=1)
+    promotion_policy: Literal["all_confirmed", "rate_relevant", "user_selected"] | None = None
+    int_extension: bool | None = None
+    auto_converge: bool | None = None
+    require_sr_review: bool | None = None
+    study_id: str | None = None
+    levels: dict[str, Any] | None = None
+
+
+class ReactionPreviewRequest(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+
+    reactant: MechanismRolePayload
+    product: MechanismRolePayload
+    ts_guess: MechanismRolePayload | None = None
+    charge: int = 0
+    multiplicity: int = 1
+    selected_candidate: int | None = None
+    manual_bond_editing: bool | None = None
+
+
+class ReactionConfirmRequest(ReactionPreviewRequest):
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+
+    user_note: str = ""
+    manual_bond_changes: list[dict[str, Any]] | None = None
+    allow_zero_changes: bool = False
+
+
+class ReactionPreviewResponse(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+
+    status: Literal["ok", "confirmation_required"]
+    mapping_status: str
+    candidates: list[dict[str, Any]] = Field(default_factory=list)
+    selected_candidate: int | None = None
+    unmatched_reactant_atoms: list[int] = Field(default_factory=list)
+    unmatched_product_atoms: list[int] = Field(default_factory=list)
+    bond_changes: list[dict[str, Any]] = Field(default_factory=list)
+    suggested_plan: dict[str, Any] | None = None
+    warnings: list[str] = Field(default_factory=list)
+    preview_hash: str
+    manual_mode: bool = False
+
+
+class ReactionConfirmResponse(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+
+    status: Literal["locked"]
+    reaction: dict[str, Any]
+    config_hash: str
+    suggested_plan: dict[str, Any] | None = None
+
+
+class MechanismPlanRequest(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+
+    plan: dict[str, Any]
+    strategy: str
+    fidelity: str
+
+
+class ReactionGetResponse(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+
+    reaction: dict[str, Any] | None = None
+    status: str = ""
+
+
+class MechanismPlanResponse(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+
+    status: str
+    plan_hash: str
+
+
 class V1JobCreatedResponse(BaseModel):
     job_id: str
     status: str
@@ -136,9 +311,117 @@ class JobMoveRequest(BaseModel):
     project_id: str
 
 
+class V1JobRerunRequest(BaseModel):
+    """Optional body for POST /jobs/{id}/rerun."""
+
+    project_id: str | None = None
+
+
+class V1JobPurgeRequest(BaseModel):
+    """Body for POST /jobs/purge (plan §4.6)."""
+
+    job_ids: list[str] | None = None
+    status: str | None = None
+    project_id: str | None = None
+    older_than_days: float | None = None
+    delete_data: bool = False
+    force_cancel: bool = False
+
+
+class V1JobPurgeResult(BaseModel):
+    """Per-job purge report entry (``JobManager.purge_jobs`` contract)."""
+
+    job_id: str
+    ok: bool
+    action: str
+    error: str | None = None
+
+
+class V1JobPurgeResponse(BaseModel):
+    results: list[V1JobPurgeResult] = Field(default_factory=list)
+
+
 class V1JobListResponse(BaseModel):
     jobs: list[V1JobRecordModel] = Field(default_factory=list)
     counts: dict[str, int] = Field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Rich job detail (plan §4.5) — GET /api/v1/jobs/{id}/detail.
+# Field names are the frozen frontend contract; do not rename.
+# ---------------------------------------------------------------------------
+
+
+class JobStageEntry(BaseModel):
+    """Stage projection (stage_tasks ``state`` → ``status``)."""
+
+    stage_name: str
+    status: str = "pending"
+    started_at: str | None = None
+    completed_at: str | None = None
+    error: str | None = None
+    retry_count: int = 0
+    status_detail: str | None = None
+
+
+class JobMetrics(BaseModel):
+    """Display-only QC runtime metrics from the ``metrics.json`` sidecar."""
+
+    engine: str | None = None
+    last_energy_hartree: float | None = None
+    opt_converged: bool | None = None
+    updated_at: str | None = None
+
+
+class JobArtifactSummaryEntry(BaseModel):
+    """Artifact projection; ``size`` is null when not locally stat-able."""
+
+    type: str
+    path: str
+    size: int | None = None
+
+
+class JobErrorDetail(BaseModel):
+    """Failure detail block; null when the job never failed."""
+
+    error: str | None = None
+    stderr_tail: str = ""
+    failed_stage: str | None = None
+
+
+class JobDiskState(BaseModel):
+    """Work-dir probe results."""
+
+    work_dir_exists: bool = False
+    has_state_json: bool = False
+    has_study_checkpoint: bool = False
+    has_review_payload: bool = False
+    size_bytes: int = 0
+
+
+class JobRecovery(BaseModel):
+    """Server-computed recovery matrix (§4.4)."""
+
+    can_pause: bool = False
+    can_unpause: bool = False
+    can_continue: bool = False
+    continue_mode: str = ""
+    continue_notes: str = ""
+    can_rerun: bool = False
+    can_purge: bool = True
+    can_cancel: bool = False
+
+
+class V1JobDetailResponse(BaseModel):
+    """Rich job detail: DB + disk aggregation + recovery matrix."""
+
+    job: V1JobRecordModel
+    stages: list[JobStageEntry] = Field(default_factory=list)
+    artifacts_summary: list[JobArtifactSummaryEntry] = Field(default_factory=list)
+    error_detail: JobErrorDetail | None = None
+    disk_state: JobDiskState = Field(default_factory=JobDiskState)
+    recovery: JobRecovery = Field(default_factory=JobRecovery)
+    metrics: JobMetrics | None = None
 
 
 class DecisionPointModel(BaseModel):
@@ -160,6 +443,7 @@ class MechanismStudySummary(BaseModel):
     n_states: int = 0
     n_edges: int = 0
     n_decisions_pending: int = 0
+    unified_status: str = ""
 
 
 class MechanismStudyDetail(BaseModel):
@@ -170,12 +454,15 @@ class MechanismStudyDetail(BaseModel):
     updated_at: str = ""
     study_json: dict[str, Any] = Field(default_factory=dict)
     decisions: list[DecisionPointModel] = Field(default_factory=list)
+    unified_status: str = ""
 
 
 class MechanismStudyCreateRequest(BaseModel):
-    job_id: str
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+
+    job_id: str | None = None
     study_id: str
-    status: str = "pending"
+    status: str = "draft"
     study_json: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -191,6 +478,50 @@ class MechanismStudyReportResponse(BaseModel):
 
 class DecisionResolveRequest(BaseModel):
     resolution: str
+
+
+class SRSelectedBond(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+
+    atoms: list[int]
+    action: Literal["stretch", "form", "keep"]
+    start: float | None = None
+    target: float | None = None
+
+
+class SRDecisionRequest(BaseModel):
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="allow")
+
+    decision: Literal["continue", "reject_path", "accept_network"]
+    selected_bonds: list[SRSelectedBond] = Field(default_factory=list)
+    parent_state: str | None = None
+    comment: str = ""
+    config_hash: str | None = None
+
+
+class SRDecisionResponse(BaseModel):
+    status: str
+    revision_id: str
+    cycle: int
+    job_id: str | None = None
+    job_status: str = ""
+
+
+class SRReviewListResponse(BaseModel):
+    reviews: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class StudyResumeResponse(BaseModel):
+    status: str
+    job_id: str
+    job_status: str = ""
+
+
+class StudyPromoteResponse(BaseModel):
+    status: str
+    revision_id: str
+    job_id: str | None = None
+    job_status: str = ""
 
 
 class DecisionResolveResponse(BaseModel):
@@ -444,6 +775,36 @@ class NodePingResponse(BaseModel):
     error: str | None = None
 
 
+class V1SoftwareCandidate(BaseModel):
+    """One discovered install of a QC executable."""
+
+    path: str
+    version: str = ""
+    source: str | None = None
+
+
+class V1SoftwareEntry(BaseModel):
+    """Discovery summary for one software package.
+
+    ``resolved``/``source`` describe the path ``resolve_executable``
+    actually picks (explicit pin wins; discovery never re-orders
+    resolution). ``multiple`` flags multi-install machines.
+    """
+
+    name: str
+    resolved: str | None = None
+    version: str = ""
+    source: str | None = None
+    multiple: bool = False
+    candidates: list[V1SoftwareCandidate] = Field(default_factory=list)
+
+
+class V1SoftwareDiscoveryResponse(BaseModel):
+    """Response for ``GET /api/v1/software/discovery``."""
+
+    software: list[V1SoftwareEntry] = Field(default_factory=list)
+
+
 class NodeBootstrapResponse(BaseModel):
     """Response for ``POST /api/v1/nodes/{name}/bootstrap``.
 
@@ -476,7 +837,12 @@ __all__ = [
     "HessianPreviewResponse",
     "HessianPreviewResult",
     "HessianPreviewStructure",
+    "JobArtifactSummaryEntry",
+    "JobDiskState",
+    "JobErrorDetail",
     "JobMoveRequest",
+    "JobRecovery",
+    "JobStageEntry",
     "MaintenanceCleanupResponse",
     "MechanismStudyCreateRequest",
     "MechanismStudyDetail",
@@ -507,9 +873,17 @@ __all__ = [
     "UploadResponse",
     "ValidateMethodRequest",
     "ValidateMethodResponse",
-    "V1JobCreateRequest",
     "V1JobCreatedResponse",
+    "V1JobCreateRequest",
+    "V1JobDetailResponse",
     "V1JobListResponse",
+    "V1JobPurgeRequest",
+    "V1JobPurgeResponse",
+    "V1JobPurgeResult",
     "V1JobRecordModel",
+    "V1JobRerunRequest",
     "V1JobSpecModel",
+    "V1SoftwareCandidate",
+    "V1SoftwareDiscoveryResponse",
+    "V1SoftwareEntry",
 ]

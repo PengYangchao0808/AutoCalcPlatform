@@ -7,8 +7,7 @@ import hashlib
 import importlib
 import json
 import logging
-from collections import Counter
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,6 +18,12 @@ from acp.core.models import Structure
 from acp.io.structures import StructureReader
 from acp.mechanism._helpers import distance as _distance
 from acp.mechanism._helpers import mapping_pairs_from_occurrence as _mapping_pairs_from_occurrence
+from acp.mechanism.atom_mapping import (
+    AtomMapCandidate,
+    map_reactant_to_product,
+    to_atom_identity_map,
+)
+from acp.mechanism.bond_changes import compute_bond_changes, suggest_mechanism_plan
 from acp.mechanism.endpoint import (
     EndpointMatchThresholds,
     connectivity_fingerprint,
@@ -39,7 +44,11 @@ from acp.mechanism.presets import (
     FIDELITY_PROFILES,
     RPH_CENSO_LITE_MODE,
     XTB_FAST_MODE,
+    FidelityProfile,
+    apply_levels_overrides,
     resolve_fidelity,
+    resolve_fidelity_profile,
+    resolve_preset,
     resolve_strategy,
 )
 from acp.mechanism.providers.guided_scan import GuidedScanPathStrategy
@@ -53,10 +62,14 @@ from acp.mechanism.providers.rph_adapter import (
     RPHUnavailableError,
     rph_version,
 )
+from acp.mechanism.providers.thermo import get_thermochemistry_provider
 from acp.mechanism.providers.xtb_ensemble import XtbFastEnsembleProvider
+from acp.mechanism.reaction_definition import MECHANISM_SCHEMA_VERSION, read_reaction_json
 from cccp.qc.interfaces.constraints import CoordinateSpec, ReactionCoordinatePlan
 
 logger = logging.getLogger(__name__)
+
+_AMBIGUOUS_MAPPING_CONFIDENCE = 0.75
 
 
 class DirectTsStrategy:
@@ -133,12 +146,15 @@ def build_study_providers(
     strategy: str,
     fidelity: str,
     config: dict,
+    low_fidelity_profile: FidelityProfile | None = None,
+    *,
+    work_root: Path,
 ) -> dict[str, Any]:
     """Build the provider bundle required by :class:`StudyOrchestrator`."""
 
     resolved_strategy = resolve_strategy(strategy)
     resolved_fidelity = resolve_fidelity(fidelity)
-    fidelity_profile = FIDELITY_PROFILES[resolved_fidelity]
+    fidelity_profile = low_fidelity_profile or FIDELITY_PROFILES[resolved_fidelity]
     backend = _provider_backend(config)
     rph_available = _rph_is_available(config) if backend == "rph" else False
     if backend == "rph" and not rph_available:
@@ -155,19 +171,21 @@ def build_study_providers(
             ensemble_provider: Any = RPHEnsembleProvider(config=config)
             ensemble_profile: Any = RPH_CENSO_LITE_MODE
         else:
-            ensemble_provider = NativeCensoLiteProvider(config=config)
+            ensemble_provider = NativeCensoLiteProvider(config=config, work_root=work_root / "s1")
             ensemble_profile = RPH_CENSO_LITE_MODE
     else:
-        ensemble_provider = XtbFastEnsembleProvider(config=config)
+        ensemble_provider = XtbFastEnsembleProvider(
+            config=config, work_root=work_root / "s1_xtbfast"
+        )
         ensemble_profile = XTB_FAST_MODE
 
     if resolved_strategy == "guided-scan":
-        path_strategy: Any = GuidedScanPathStrategy(config=config)
+        path_strategy: Any = GuidedScanPathStrategy(config=config, work_root=work_root / "s2")
     elif resolved_strategy == "rph-reverse":
         if backend == "rph":
             path_strategy = RPHPathSearchStrategy(config=config)
         else:
-            path_strategy = NativeReversePebStrategy(config=config)
+            path_strategy = NativeReversePebStrategy(config=config, work_root=work_root / "s2_peb")
     elif resolved_strategy == "direct-ts":
         path_strategy = DirectTsStrategy()
     else:
@@ -176,7 +194,7 @@ def build_study_providers(
     if backend == "rph":
         refinement_provider: Any = RPHRefinementProvider(config=config)
     else:
-        refinement_provider = NativeRefinementProvider(config=config)
+        refinement_provider = NativeRefinementProvider(config=config, work_root=work_root / "s3s4")
 
     return {
         "ensemble_provider": ensemble_provider,
@@ -190,6 +208,198 @@ def build_study_providers(
     }
 
 
+def _level_dict(levels: dict[str, Any] | None, level_id: str) -> dict[str, Any]:
+    if not isinstance(levels, dict):
+        return {}
+    level = levels.get(level_id)
+    return dict(level) if isinstance(level, dict) else {}
+
+
+def _optional_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _coerce_int(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _coerce_bool(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        if value == 1:
+            return True
+        if value == 0:
+            return False
+        return None
+    if isinstance(value, str):
+        norm = value.strip().lower()
+        if norm in {"true", "1", "yes", "on"}:
+            return True
+        if norm in {"false", "0", "no", "off"}:
+            return False
+    return None
+
+
+def _choose_int(explicit: Any, level: Any, top_level: Any, default: int) -> int:
+    resolved = _coerce_int(explicit)
+    if resolved is not None:
+        return resolved
+    resolved = _coerce_int(level)
+    if resolved is not None:
+        return resolved
+    resolved = _coerce_int(top_level)
+    if resolved is not None:
+        return resolved
+    return default
+
+
+def _choose_text(explicit: Any, level: Any, top_level: Any, default: str) -> str:
+    return _optional_text(explicit) or _optional_text(level) or _optional_text(top_level) or default
+
+
+def _resolve_mechanism_execution(
+    *,
+    preset: str | None,
+    strategy: str | None,
+    fidelity: str | None,
+    scan_points: int | None,
+    irc_points: int | None,
+    study_id: str | None,
+    conformer_mode: str | None,
+    max_elementary_steps: int | None,
+    int_extension: bool,
+    promotion_policy: str | None,
+    auto_converge: bool,
+    method_levels: dict[str, Any] | None,
+    config_resolved: dict[str, Any] | None,
+) -> tuple[dict[str, Any], FidelityProfile]:
+    scan_level = _level_dict(method_levels, "scan")
+    irc_level = _level_dict(method_levels, "irc")
+    resolved_config = dict(config_resolved or {})
+
+    preset_strategy, preset_fidelity = resolve_preset(preset)
+    resolved_strategy = resolve_strategy(
+        _optional_text(strategy)
+        or _optional_text(scan_level.get("path_strategy"))
+        or _optional_text(resolved_config.get("strategy"))
+        or preset_strategy
+    )
+    resolved_fidelity = resolve_fidelity(
+        _optional_text(fidelity)
+        or _optional_text(scan_level.get("fidelity"))
+        or _optional_text(resolved_config.get("fidelity"))
+        or preset_fidelity
+    )
+
+    low_fidelity_profile = resolve_fidelity_profile(resolved_strategy, resolved_fidelity)
+    if method_levels:
+        low_fidelity_profile = apply_levels_overrides(low_fidelity_profile, method_levels)
+
+    effective_scan_points = _choose_int(
+        scan_points,
+        scan_level.get("scan_points"),
+        resolved_config.get("scan_points"),
+        int(low_fidelity_profile.scan_points),
+    )
+    effective_irc_points = _choose_int(
+        irc_points,
+        irc_level.get("irc_points"),
+        resolved_config.get("irc_points"),
+        int(low_fidelity_profile.irc_points),
+    )
+    low_fidelity_profile = replace(
+        low_fidelity_profile,
+        scan_points=effective_scan_points,
+        irc_points=effective_irc_points,
+    )
+
+    resolved = {
+        "preset": _optional_text(preset),
+        "strategy": resolved_strategy,
+        "fidelity": resolved_fidelity,
+        "scan_points": effective_scan_points,
+        "irc_points": effective_irc_points,
+        "conformer_mode": _choose_text(
+            conformer_mode,
+            scan_level.get("conformer_mode"),
+            resolved_config.get("conformer_mode"),
+            "auto",
+        ),
+        "max_elementary_steps": _choose_int(
+            max_elementary_steps,
+            scan_level.get("max_elementary_steps"),
+            resolved_config.get("max_elementary_steps"),
+            3,
+        ),
+        "promotion_policy": _choose_text(
+            promotion_policy,
+            scan_level.get("promotion_policy"),
+            resolved_config.get("promotion_policy"),
+            "all_confirmed",
+        ),
+        "int_extension": bool(
+            int_extension
+            or _coerce_bool(scan_level.get("int_extension"))
+            or _coerce_bool(resolved_config.get("int_extension"))
+        ),
+        "auto_converge": bool(
+            auto_converge
+            or _coerce_bool(scan_level.get("auto_converge"))
+            or _coerce_bool(resolved_config.get("auto_converge"))
+        ),
+        "require_sr_review": bool(
+            _coerce_bool(scan_level.get("require_sr_review"))
+            or _coerce_bool(resolved_config.get("require_sr_review"))
+        ),
+        "study_id": _optional_text(study_id) or _optional_text(resolved_config.get("study_id")),
+        "fidelity_profile": asdict(low_fidelity_profile),
+    }
+    return resolved, low_fidelity_profile
+
+
+def _write_mechanism_config_resolution(
+    mechanism_config_path: str | Path | None,
+    resolved: dict[str, Any],
+) -> None:
+    if mechanism_config_path is None:
+        return
+
+    config_path = Path(mechanism_config_path)
+    if not config_path.exists():
+        return
+
+    try:
+        payload = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        logger.warning("Failed to update mechanism config %s: %s", config_path, exc)
+        return
+    if not isinstance(payload, dict):
+        logger.warning(
+            "Failed to update mechanism config %s: payload is not a JSON object",
+            config_path,
+        )
+        return
+
+    resolved_payload = payload.get("resolved")
+    payload["resolved"] = {
+        **(dict(resolved_payload) if isinstance(resolved_payload, dict) else {}),
+        **resolved,
+    }
+    config_path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True, default=str),
+        encoding="utf-8",
+    )
+
+
 def run_mechanism_study(
     input_source: str,
     output_dir: str | Path,
@@ -201,25 +411,65 @@ def run_mechanism_study(
     product_source: str | None = None,
     ts_guess_source: str | None = None,
     routes: list[dict[str, Any]] | None = None,
+    preset: str | None = None,
     strategy: str | None = None,
     fidelity: str | None = None,
     scan_points: int | None = None,
     irc_points: int | None = None,
     study_id: str | None = None,
-    conformer_mode: str = "auto",
-    max_elementary_steps: int = 3,
+    conformer_mode: str | None = None,
+    max_elementary_steps: int | None = None,
     int_extension: bool = False,
-    promotion_policy: str = "all_confirmed",
+    promotion_policy: str | None = None,
     auto_converge: bool = False,
+    config_resolved: dict[str, Any] | None = None,
+    method_levels: dict[str, Any] | None = None,
+    mechanism_config_path: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Build and run a mechanism study through :class:`StudyOrchestrator`."""
+    """Build and run a mechanism study through :class:`StudyOrchestrator`.
+
+    Precedence for study controls is: explicit CLI > config levels > config
+    top-level > default.
+    """
 
     cfg = dict(config or {})
-    resolved_strategy = resolve_strategy(strategy)
-    resolved_fidelity = resolve_fidelity(fidelity)
-    study_name = study_id or _default_study_id(input_source, product_source)
+    resolved_settings, low_fidelity_profile = _resolve_mechanism_execution(
+        preset=preset,
+        strategy=strategy,
+        fidelity=fidelity,
+        scan_points=scan_points,
+        irc_points=irc_points,
+        study_id=study_id,
+        conformer_mode=conformer_mode,
+        max_elementary_steps=max_elementary_steps,
+        int_extension=int_extension,
+        promotion_policy=promotion_policy,
+        auto_converge=auto_converge,
+        method_levels=method_levels,
+        config_resolved=config_resolved,
+    )
+    resolved_strategy = str(resolved_settings["strategy"])
+    resolved_fidelity = resolve_fidelity(str(resolved_settings["fidelity"]))
+    effective_scan_points = int(resolved_settings["scan_points"])
+    effective_irc_points = int(resolved_settings["irc_points"])
+    effective_conformer_mode = str(resolved_settings["conformer_mode"])
+    effective_max_elementary_steps = int(resolved_settings["max_elementary_steps"])
+    effective_int_extension = bool(resolved_settings["int_extension"])
+    effective_promotion_policy = str(resolved_settings["promotion_policy"])
+    effective_auto_converge = bool(resolved_settings["auto_converge"])
+    effective_require_sr_review = bool(resolved_settings.get("require_sr_review"))
+    if effective_auto_converge and effective_require_sr_review:
+        logger.warning("auto_converge overrides require_sr_review; SR cycle gate disabled")
+        effective_require_sr_review = False
+    study_name = _optional_text(resolved_settings.get("study_id")) or _default_study_id(
+        input_source,
+        product_source,
+    )
     study_root = Path(output_dir)
     study_dir = _resolve_study_dir(study_root, study_name)
+    # TODO(phase-b): schema-v2 studies must require a locked reaction.json before
+    # S0 proceeds. Phase A only validates the file when present.
+    locked_reaction = read_reaction_json(study_dir)
 
     reactant = _read_structure(input_source, charge=charge, multiplicity=multiplicity, name=name)
     product = (
@@ -249,7 +499,7 @@ def run_mechanism_study(
         product=product,
         strategy=resolved_strategy,
         fidelity=resolved_fidelity,
-        scan_points=scan_points,
+        scan_points=effective_scan_points,
         ts_guess_present=ts_guess is not None,
     )
 
@@ -271,6 +521,15 @@ def run_mechanism_study(
         )
         route_models[index - 1] = normalized_route
 
+    providers = build_study_providers(
+        effective_conformer_mode,
+        resolved_strategy,
+        resolved_fidelity,
+        cfg,
+        low_fidelity_profile=low_fidelity_profile,
+        work_root=study_dir / "calc",
+    )
+
     study = MechanismStudy(
         study_id=study_name,
         reactant_id=reactant_state.state_id,
@@ -280,25 +539,33 @@ def run_mechanism_study(
         stable_states=stable_states,
         routes=route_models,
     )
-    study.frontier.max_depth = max_elementary_steps if int_extension else 0
+    study.frontier.max_depth = effective_max_elementary_steps if effective_int_extension else 0
     study.metadata["study_runner"] = {
-        "conformer_mode": conformer_mode,
+        "preset": _optional_text(preset),
+        "conformer_mode": effective_conformer_mode,
         "strategy": resolved_strategy,
         "fidelity": resolved_fidelity,
-        "scan_points": scan_points,
-        "irc_points": irc_points,
+        "scan_points": effective_scan_points,
+        "irc_points": effective_irc_points,
         "study_id": study_name,
-        "max_elementary_steps": max_elementary_steps,
-        "int_extension": int_extension,
-        "promotion_policy": promotion_policy,
-        "auto_converge": auto_converge,
+        "max_elementary_steps": effective_max_elementary_steps,
+        "int_extension": effective_int_extension,
+        "promotion_policy": effective_promotion_policy,
+        "auto_converge": effective_auto_converge,
+        "require_sr_review": effective_require_sr_review,
+        "fidelity_profile_name": low_fidelity_profile.name,
+        "fidelity_profile": asdict(low_fidelity_profile),
+        "high_fidelity_profile_name": providers["high_fidelity_profile"].name,
+        "high_fidelity_profile": asdict(providers["high_fidelity_profile"]),
+        "method_levels": dict(method_levels or {}),
+        "config_resolved": dict(config_resolved or {}),
+        "mechanism_config_path": str(mechanism_config_path) if mechanism_config_path else None,
         "config": cfg,
     }
-
-    providers = build_study_providers(conformer_mode, resolved_strategy, resolved_fidelity, cfg)
-    low_fidelity_profile = providers["low_fidelity_profile"]
-    if irc_points is not None:
-        low_fidelity_profile = replace(low_fidelity_profile, irc_points=int(irc_points))
+    study.metadata["mechanism_schema_version"] = MECHANISM_SCHEMA_VERSION
+    study.metadata["locked_reaction_hash"] = (
+        locked_reaction.content_hash if locked_reaction is not None else None
+    )
     endpoint_provider = _build_endpoint_provider(study_dir, cfg)
 
     orchestrator = StudyOrchestrator(
@@ -308,14 +575,25 @@ def run_mechanism_study(
         path_strategy=providers["path_strategy"],
         refinement_provider=providers["refinement_provider"],
         endpoint_provider=endpoint_provider,
+        thermochemistry_provider=_build_thermochemistry_provider(cfg),
         ensemble_profile=providers["ensemble_profile"],
         low_fidelity_profile=low_fidelity_profile,
         high_fidelity_profile=providers["high_fidelity_profile"],
-        max_elementary_steps=max_elementary_steps,
+        max_elementary_steps=effective_max_elementary_steps,
+        require_sr_review=effective_require_sr_review,
     )
     result = orchestrator.run()
-    if auto_converge and result.status == "waiting":
+    if effective_auto_converge and result.status == "waiting":
         result = _auto_resume(orchestrator)
+    _write_mechanism_config_resolution(
+        mechanism_config_path,
+        {
+            **resolved_settings,
+            "study_id": study_name,
+            "fidelity": str(resolved_fidelity),
+            "fidelity_profile": asdict(low_fidelity_profile),
+        },
+    )
     return _study_summary(result)
 
 
@@ -345,11 +623,23 @@ def resume_mechanism_study(
     resolved_strategy = resolve_strategy(str(runner_meta.get("strategy") or "guided-scan"))
     resolved_fidelity = resolve_fidelity(str(runner_meta.get("fidelity") or "s3"))
     conformer_mode = str(runner_meta.get("conformer_mode") or "auto")
-    providers = build_study_providers(conformer_mode, resolved_strategy, resolved_fidelity, cfg)
-    low_fidelity_profile = providers["low_fidelity_profile"]
-    irc_points = runner_meta.get("irc_points")
-    if isinstance(irc_points, int):
-        low_fidelity_profile = replace(low_fidelity_profile, irc_points=irc_points)
+    fidelity_profile_payload = runner_meta.get("fidelity_profile")
+    if isinstance(fidelity_profile_payload, dict):
+        try:
+            low_fidelity_profile = FidelityProfile(**fidelity_profile_payload)
+        except TypeError:
+            logger.warning("Invalid persisted fidelity_profile payload; falling back to defaults")
+            low_fidelity_profile = resolve_fidelity_profile(resolved_strategy, resolved_fidelity)
+    else:
+        low_fidelity_profile = resolve_fidelity_profile(resolved_strategy, resolved_fidelity)
+    providers = build_study_providers(
+        conformer_mode,
+        resolved_strategy,
+        resolved_fidelity,
+        cfg,
+        low_fidelity_profile=low_fidelity_profile,
+        work_root=study_dir / "calc",
+    )
 
     orchestrator = StudyOrchestrator(
         study,
@@ -358,10 +648,12 @@ def resume_mechanism_study(
         path_strategy=providers["path_strategy"],
         refinement_provider=providers["refinement_provider"],
         endpoint_provider=_build_endpoint_provider(study_dir, cfg),
+        thermochemistry_provider=_build_thermochemistry_provider(cfg),
         ensemble_profile=providers["ensemble_profile"],
-        low_fidelity_profile=low_fidelity_profile,
+        low_fidelity_profile=providers["low_fidelity_profile"],
         high_fidelity_profile=providers["high_fidelity_profile"],
         max_elementary_steps=int(runner_meta.get("max_elementary_steps") or 3),
+        require_sr_review=_as_bool(runner_meta.get("require_sr_review")),
     )
     result = orchestrator.resume(dict(decision_resolutions or {}))
     if _as_bool(runner_meta.get("auto_converge")) and result.status == "waiting":
@@ -373,7 +665,9 @@ def _auto_resume(orchestrator: StudyOrchestrator) -> MechanismStudy:
     result = orchestrator.study
     for _ in range(max(1, int(orchestrator.max_elementary_steps) * 2)):
         waiting = [
-            decision.id for decision in result.decision_points if decision.status == "waiting"
+            decision.id
+            for decision in result.decision_points
+            if decision.status == "waiting" and decision.type != "sr_cycle_review"
         ]
         if not waiting or result.status != "waiting":
             return result
@@ -394,6 +688,14 @@ def _build_endpoint_provider(study_dir: Path, config: dict[str, Any]) -> Any:
         backend=_build_orca_backend(config),
         work_root=study_dir / "sr",
     )
+
+
+def _build_thermochemistry_provider(config: dict[str, Any]) -> Any | None:
+    try:
+        return get_thermochemistry_provider(config)
+    except ValueError as exc:
+        logger.warning("Mechanism S4 thermochemistry enrichment disabled: %s", exc)
+        return None
 
 
 def _build_orca_backend(config: dict[str, Any]) -> Any | None:
@@ -435,6 +737,9 @@ def _build_initial_states(
     ts_guess: Structure | None,
 ) -> tuple[list[StableState], AtomIdentityMap | None]:
     atom_identity_map = _build_atom_identity_map(reactant, product)
+    reactant_atom_mapping = (
+        atom_identity_map.mapping.get("state_reactant") if atom_identity_map is not None else None
+    ) or _state_atom_mapping(reactant)
     stable_states = [
         _build_stable_state(
             role="reactant",
@@ -443,11 +748,16 @@ def _build_initial_states(
             source_input=reactant_source,
             study_dir=study_dir,
             thresholds=thresholds,
-            atom_mapping=_state_atom_mapping(reactant),
+            atom_mapping=reactant_atom_mapping,
             ts_guess=ts_guess,
         )
     ]
     if product is not None:
+        product_atom_mapping = (
+            atom_identity_map.mapping.get("state_product")
+            if atom_identity_map is not None
+            else None
+        ) or _state_atom_mapping(product)
         stable_states.append(
             _build_stable_state(
                 role="product",
@@ -456,7 +766,7 @@ def _build_initial_states(
                 source_input=product_source or "",
                 study_dir=study_dir,
                 thresholds=thresholds,
-                atom_mapping=_state_atom_mapping(product),
+                atom_mapping=product_atom_mapping,
                 ts_guess=None,
             )
         )
@@ -488,6 +798,8 @@ def _build_stable_state(
         "validated_minimum": role in {"reactant", "product"},
         "state_role": role,
     }
+    if _structure_smiles(structure) is not None:
+        metadata["smiles"] = _structure_smiles(structure)
     if ts_guess is not None:
         metadata["ts_guess_symbols"] = list(ts_guess.symbols)
         metadata["ts_guess_coordinates"] = _require_coordinates(ts_guess).tolist()
@@ -502,6 +814,23 @@ def _build_stable_state(
     )
 
 
+def _require_resolvable_mapping(mapping_result: Any, context: str) -> None:
+    """Fail fast when an interactive-only mapping ambiguity reaches the CLI."""
+
+    if mapping_result.status != "candidates" or not mapping_result.candidates:
+        return
+    top_confidence = float(mapping_result.candidates[0].confidence)
+    if top_confidence >= _AMBIGUOUS_MAPPING_CONFIDENCE:
+        return
+    raise ValueError(
+        f"{context}: atom mapping is ambiguous (status=candidates, top confidence "
+        f"{top_confidence:.3f} < {_AMBIGUOUS_MAPPING_CONFIDENCE}). Non-interactive runs "
+        "must not silently pick a candidate. Supply atom-map-numbered SMILES "
+        "([C:1]... on both endpoints), confirm the mapping via the API reaction "
+        "preview/confirm endpoints, or pass explicit --routes."
+    )
+
+
 def _build_atom_identity_map(
     reactant: Structure,
     product: Structure | None,
@@ -509,12 +838,63 @@ def _build_atom_identity_map(
     reactant_mapping = _state_atom_mapping(reactant)
     if reactant_mapping is None:
         return None
-    mapping: dict[str, dict[str, int]] = {"state_reactant": dict(reactant_mapping)}
-    if product is not None:
-        product_mapping = _state_atom_mapping(product)
-        if product_mapping is not None:
-            mapping["state_product"] = dict(product_mapping)
-    return AtomIdentityMap(uid_to_structure_index=dict(reactant_mapping), mapping=mapping)
+    if product is None or product.coordinates is None:
+        return AtomIdentityMap(
+            uid_to_structure_index=dict(reactant_mapping),
+            mapping={"state_reactant": dict(reactant_mapping)},
+        )
+
+    mapping_result = map_reactant_to_product(
+        reactant.symbols,
+        _require_coordinates(reactant),
+        product.symbols,
+        _require_coordinates(product),
+        charge=int(reactant.charge),
+        reactant_smiles=_structure_smiles(reactant),
+        product_smiles=_structure_smiles(product),
+    )
+    if mapping_result.status == "failed":
+        legacy_pairs = _mapping_pairs_from_occurrence(product.symbols, reactant.symbols)
+        if legacy_pairs is not None:
+            logger.warning(
+                "RDKit atom mapping failed during S0; falling back to symbol-occurrence mapping"
+            )
+            legacy_candidate = AtomMapCandidate(
+                mapping=[
+                    (int(reactant_index), int(product_index))
+                    for product_index, reactant_index in legacy_pairs
+                ],
+                confidence=0.25,
+                method="symbol_occurrence_fallback_v1",
+                notes=[mapping_result.message] if mapping_result.message else [],
+            )
+            return to_atom_identity_map(
+                legacy_candidate,
+                "state_reactant",
+                "state_product",
+                len(reactant.symbols),
+            )
+        return AtomIdentityMap(
+            uid_to_structure_index=dict(reactant_mapping),
+            mapping={
+                "state_reactant": dict(reactant_mapping),
+                "state_product": dict(_state_atom_mapping(product) or {}),
+            },
+        )
+
+    if mapping_result.status in {"candidates", "count_mismatch"}:
+        _require_resolvable_mapping(mapping_result, "S0 atom mapping for state_product")
+        logger.warning(
+            "Atom mapping for state_product is %s; using top candidate until explicit "
+            "confirmation is wired",
+            mapping_result.status,
+        )
+    return to_atom_identity_map(
+        mapping_result.candidates[0],
+        "state_reactant",
+        "state_product",
+        len(reactant.symbols),
+    )
 
 
 def _state_atom_mapping(structure: Structure) -> dict[str, int] | None:
@@ -522,6 +902,14 @@ def _state_atom_mapping(structure: Structure) -> dict[str, int] | None:
     if coordinates is None:
         return None
     return {f"a{index + 1}": index for index in range(len(coordinates))}
+
+
+def _structure_smiles(structure: Structure) -> str | None:
+    value = structure.metadata.get("smiles")
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def _build_routes(
@@ -602,15 +990,57 @@ def _infer_coordinate_plan(
 ) -> ReactionCoordinatePlan:
     reactant_coords = _require_coordinates(reactant)
     product_coords = _require_coordinates(product)
-    if len(reactant.symbols) != len(product.symbols):
-        raise ValueError(
-            "Automatic mechanism-study route inference requires reactant/product atom "
-            "counts to match"
+    mapping_result = map_reactant_to_product(
+        reactant.symbols,
+        reactant_coords,
+        product.symbols,
+        product_coords,
+        charge=int(reactant.charge),
+        reactant_smiles=_structure_smiles(reactant),
+        product_smiles=_structure_smiles(product),
+    )
+    if mapping_result.status != "failed" and mapping_result.candidates:
+        if mapping_result.status in {"candidates", "count_mismatch"}:
+            _require_resolvable_mapping(mapping_result, "Automatic route inference atom mapping")
+            logger.warning(
+                "Automatic route inference got atom-mapping status=%s; using the top "
+                "candidate until interactive confirmation lands",
+                mapping_result.status,
+            )
+        candidate = mapping_result.candidates[0]
+        bond_changes = compute_bond_changes(
+            reactant.symbols,
+            reactant_coords,
+            product.symbols,
+            product_coords,
+            candidate,
+            reactant_smiles=_structure_smiles(reactant),
+            product_smiles=_structure_smiles(product),
+            charge=int(reactant.charge),
         )
-    if Counter(reactant.symbols) != Counter(product.symbols):
-        raise ValueError(
-            "Automatic mechanism-study route inference requires identical "
-            "reactant/product compositions"
+        if bond_changes:
+            return suggest_mechanism_plan(bond_changes, points=int(points), strategy="guided-scan")
+
+        pair = _largest_distance_change_pair_mapped(reactant_coords, product_coords, candidate)
+        product_lookup = {
+            reactant_index: product_index for reactant_index, product_index in candidate.mapping
+        }
+        product_pair = (product_lookup[pair[0]], product_lookup[pair[1]])
+        start = _distance(reactant_coords, pair[0], pair[1])
+        end = _distance(product_coords, product_pair[0], product_pair[1])
+        if abs(start - end) < 1.0e-4:
+            end = end + 0.1
+        return ReactionCoordinatePlan(
+            coordinates=(
+                CoordinateSpec(
+                    id="rc1",
+                    kind="distance",
+                    atoms=pair,
+                    start=start,
+                    end=end,
+                ),
+            ),
+            points=int(points),
         )
 
     thresholds = EndpointMatchThresholds()
@@ -686,6 +1116,33 @@ def _largest_distance_change_pair(
     return best_pair
 
 
+def _largest_distance_change_pair_mapped(
+    reactant_coordinates: np.ndarray,
+    product_coordinates: np.ndarray,
+    candidate: AtomMapCandidate,
+) -> tuple[int, int]:
+    product_lookup = {
+        reactant_index: product_index for reactant_index, product_index in candidate.mapping
+    }
+    eligible = sorted(product_lookup)
+    if len(eligible) < 2:
+        return _largest_distance_change_pair(reactant_coordinates, product_coordinates)
+    best_pair = (eligible[0], eligible[1])
+    best_delta = -1.0
+    for offset, left in enumerate(eligible):
+        for right in eligible[offset + 1 :]:
+            product_left = product_lookup[left]
+            product_right = product_lookup[right]
+            delta = abs(
+                _distance(reactant_coordinates, left, right)
+                - _distance(product_coordinates, product_left, product_right)
+            )
+            if delta > best_delta:
+                best_delta = delta
+                best_pair = (left, right)
+    return best_pair
+
+
 def _path_geometry(state: StableState) -> tuple[np.ndarray, list[str]]:
     ts_guess_coordinates = state.metadata.get("ts_guess_coordinates")
     ts_guess_symbols = state.metadata.get("ts_guess_symbols")
@@ -711,6 +1168,8 @@ def _study_summary(study: MechanismStudy) -> dict[str, Any]:
         "study_id": study.study_id,
         "study_dir": study.study_dir,
         "status": study.status,
+        "quality": study.quality,
+        "effective_fidelity": study.effective_fidelity(),
         "network_size": {
             "states": len(study.network.nodes),
             "elementary_steps": len(study.elementary_steps),

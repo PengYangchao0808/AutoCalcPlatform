@@ -78,7 +78,7 @@ def write_study_reports(study_dir: Path) -> dict[str, Path]:
     )
     _write_json_atomic(
         outputs["quality_gates"],
-        _normalize_quality_gates_payload(quality_payload, quality_notes),
+        _normalize_quality_gates_payload(study, quality_payload, quality_notes),
     )
     _write_json_atomic(
         outputs["provenance"],
@@ -332,7 +332,7 @@ def _build_reaction_network_report(
             }
         )
     return {
-        "study_id": study.study_id,
+        **_study_context(study),
         "nodes": nodes,
         "edges": edges,
         "notes": notes,
@@ -429,7 +429,7 @@ def _build_mechanism_profile_report(
             }
         )
     return {
-        "study_id": study.study_id,
+        **_study_context(study),
         "routes": routes,
         "notes": notes,
     }
@@ -487,13 +487,17 @@ def _build_stationary_points_report(
     if not stationary_points:
         notes = list(notes) + ["No stationary points available"]
     return {
-        "study_id": study.study_id,
+        **_study_context(study),
         "stationary_points": stationary_points,
         "notes": notes,
     }
 
 
-def _normalize_quality_gates_payload(payload: dict[str, Any], notes: list[str]) -> dict[str, Any]:
+def _normalize_quality_gates_payload(
+    study: MechanismStudy,
+    payload: dict[str, Any],
+    notes: list[str],
+) -> dict[str, Any]:
     normalized: list[dict[str, Any]] = []
     for gate in payload.get("quality_gates") or []:
         if not isinstance(gate, dict):
@@ -511,6 +515,7 @@ def _normalize_quality_gates_payload(payload: dict[str, Any], notes: list[str]) 
             }
         )
     return {
+        **_study_context(study),
         "quality_gates": normalized,
         "notes": notes,
     }
@@ -534,11 +539,20 @@ def _build_provenance_report(
         seen.add(signature)
         records.append(normalized)
     return {
-        "study_id": study.study_id,
+        **_study_context(study),
         "study_input_signature": study.metadata.get("input_signature"),
         "records": records,
         "count": len(records),
         "notes": notes,
+    }
+
+
+def _study_context(study: MechanismStudy) -> dict[str, Any]:
+    return {
+        "study_id": study.study_id,
+        "quality": study.quality,
+        "effective_fidelity": study.effective_fidelity(),
+        "high_fidelity": study.metadata.get("high_fidelity"),
     }
 
 

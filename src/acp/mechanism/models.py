@@ -1,8 +1,8 @@
-"""Mechanism workflow and study-layer data models.
+"""Mechanism study-layer data models.
 
-This module preserves the original workflow-facing path/TS data structures used
-by :mod:`acp.workflows.mechanism` while additively extending them for the new
-contract-first study layer (M0): study/network/frontier/provenance/gates.
+This module preserves the legacy path/TS data structures while extending them
+for the contract-first study pipeline (M0): study/network/frontier/
+provenance/gates.
 """
 
 from __future__ import annotations
@@ -1050,7 +1050,7 @@ class DecisionPoint:
     """Persisted manual review gate for frontier expansion."""
 
     id: str
-    type: Literal["mechanism_frontier_review"]
+    type: Literal["mechanism_frontier_review", "sr_cycle_review"]
     status: Literal["waiting", "resolved", "superseded"]
     options: list[str]
     payload: dict[str, Any]
@@ -1123,6 +1123,117 @@ class QualityGateResult:
         )
 
 
+@dataclass(frozen=True)
+class SelectedBond:
+    """User- or strategy-selected bond intervention for a study revision."""
+
+    atoms: tuple[int, int]
+    action: Literal["stretch", "form", "keep"]
+    start: float | None = None
+    target: float | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "atoms": list(self.atoms),
+            "action": self.action,
+            "start": self.start,
+            "target": self.target,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SelectedBond:
+        atoms = tuple(int(atom) for atom in data.get("atoms") or [])
+        if len(atoms) != 2:
+            raise ValueError("SelectedBond.atoms requires exactly two indices")
+        return cls(
+            atoms=(int(atoms[0]), int(atoms[1])),
+            action=cast(
+                Literal["stretch", "form", "keep"],
+                data.get("action") or "keep",
+            ),
+            start=_opt_float(data.get("start")),
+            target=_opt_float(data.get("target")),
+        )
+
+
+@dataclass(frozen=True)
+class MechanismRevision:
+    """Persisted route-edit / continuation decision for one study cycle."""
+
+    revision_id: str
+    study_id: str
+    cycle: int
+    parent_state: str
+    selected_bonds: list[SelectedBond] = field(default_factory=list)
+    decision: Literal["continue", "accept_network", "reject_path"] = "continue"
+    comment: str = ""
+    config_hash: str = ""
+    created_at: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "revision_id": self.revision_id,
+            "study_id": self.study_id,
+            "cycle": self.cycle,
+            "parent_state": self.parent_state,
+            "selected_bonds": [bond.to_dict() for bond in self.selected_bonds],
+            "decision": self.decision,
+            "comment": self.comment,
+            "config_hash": self.config_hash,
+            "created_at": self.created_at,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> MechanismRevision:
+        return cls(
+            revision_id=str(data.get("revision_id") or ""),
+            study_id=str(data.get("study_id") or ""),
+            cycle=int(data.get("cycle") or 0),
+            parent_state=str(data.get("parent_state") or ""),
+            selected_bonds=[
+                SelectedBond.from_dict(dict(item))
+                for item in cast(list[dict[str, Any]], data.get("selected_bonds") or [])
+            ],
+            decision=cast(
+                Literal["continue", "accept_network", "reject_path"],
+                data.get("decision") or "continue",
+            ),
+            comment=str(data.get("comment") or ""),
+            config_hash=str(data.get("config_hash") or ""),
+            created_at=str(data.get("created_at") or ""),
+        )
+
+
+@dataclass
+class StudyCycle:
+    """One non-recursive frontier cycle in the study loop."""
+
+    cycle_index: int
+    revision_id: str | None = None
+    seeded_from_state: str = ""
+    route_ids: list[str] = field(default_factory=list)
+    status: str = "pending"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "cycle_index": self.cycle_index,
+            "revision_id": self.revision_id,
+            "seeded_from_state": self.seeded_from_state,
+            "route_ids": list(self.route_ids),
+            "status": self.status,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> StudyCycle:
+        return cls(
+            cycle_index=int(data.get("cycle_index") or 0),
+            revision_id=_opt_str(data.get("revision_id")),
+            seeded_from_state=str(data.get("seeded_from_state") or ""),
+            route_ids=[str(route_id) for route_id in data.get("route_ids") or []],
+            status=str(data.get("status") or "pending"),
+        )
+
+
 @dataclass
 class MechanismStudy:
     """A complete mechanism study: workflow + study-layer state."""
@@ -1138,8 +1249,12 @@ class MechanismStudy:
     elementary_steps: list[ElementaryStepEdge] = field(default_factory=list)
     network: ReactionNetwork = field(default_factory=ReactionNetwork)
     frontier: ExplorationFrontier = field(default_factory=ExplorationFrontier)
+    cycle_index: int = 0
+    cycles: list[StudyCycle] = field(default_factory=list)
+    revisions: list[MechanismRevision] = field(default_factory=list)
     decision_points: list[DecisionPoint] = field(default_factory=list)
     quality_gates: list[QualityGateResult] = field(default_factory=list)
+    quality: str | None = None
     status: str = "pending"
     study_dir: str | None = None
     phase_fingerprints: dict[str, str] = field(default_factory=dict)
@@ -1152,6 +1267,36 @@ class MechanismStudy:
         for state in self.stable_states:
             if state.state_id == state_id:
                 return state
+        return None
+
+    def effective_fidelity(self) -> str | None:
+        high_fidelity = self.metadata.get("high_fidelity")
+        if isinstance(high_fidelity, dict) and self.quality == "high":
+            profile = _opt_str(high_fidelity.get("profile"))
+            if profile is not None:
+                return profile
+
+        runner_meta = self.metadata.get("study_runner")
+        if isinstance(runner_meta, dict):
+            if self.quality == "high":
+                profile = _opt_str(runner_meta.get("high_fidelity_profile_name"))
+                if profile is not None:
+                    return profile
+            profile = _opt_str(runner_meta.get("fidelity_profile_name"))
+            if profile is not None:
+                return profile
+            profile = _opt_str(runner_meta.get("fidelity"))
+            if profile is not None:
+                return profile
+
+        if isinstance(high_fidelity, dict):
+            profile = _opt_str(high_fidelity.get("profile"))
+            if profile is not None:
+                return profile
+
+        for route in self.routes:
+            if route.fidelity:
+                return route.fidelity
         return None
 
     def to_dict(self) -> dict[str, Any]:
@@ -1169,8 +1314,12 @@ class MechanismStudy:
             "elementary_steps": [edge.to_dict() for edge in self.elementary_steps],
             "network": self.network.to_dict(),
             "frontier": self.frontier.to_dict(),
+            "cycle_index": self.cycle_index,
+            "cycles": [cycle.to_dict() for cycle in self.cycles],
+            "revisions": [revision.to_dict() for revision in self.revisions],
             "decision_points": [decision.to_dict() for decision in self.decision_points],
             "quality_gates": [gate.to_dict() for gate in self.quality_gates],
+            "quality": self.quality,
             "status": self.status,
             "study_dir": self.study_dir,
             "phase_fingerprints": dict(self.phase_fingerprints),
@@ -1218,6 +1367,15 @@ class MechanismStudy:
                 if isinstance(frontier_data, dict)
                 else ExplorationFrontier()
             ),
+            cycle_index=int(data.get("cycle_index") or 0),
+            cycles=[
+                StudyCycle.from_dict(dict(cycle_data))
+                for cycle_data in cast(list[dict[str, Any]], data.get("cycles") or [])
+            ],
+            revisions=[
+                MechanismRevision.from_dict(dict(revision_data))
+                for revision_data in cast(list[dict[str, Any]], data.get("revisions") or [])
+            ],
             decision_points=[
                 DecisionPoint.from_dict(dict(decision_data))
                 for decision_data in cast(list[dict[str, Any]], data.get("decision_points") or [])
@@ -1226,6 +1384,7 @@ class MechanismStudy:
                 QualityGateResult.from_dict(dict(gate_data))
                 for gate_data in cast(list[dict[str, Any]], data.get("quality_gates") or [])
             ],
+            quality=_opt_str(data.get("quality")),
             status=str(data.get("status") or "pending"),
             study_dir=_opt_str(data.get("study_dir")),
             phase_fingerprints={
@@ -1293,6 +1452,7 @@ __all__ = [
     "ExplorationFrontier",
     "Fidelity",
     "MechanismInput",
+    "MechanismRevision",
     "MechanismRoute",
     "MechanismStudy",
     "PathCandidate",
@@ -1303,11 +1463,13 @@ __all__ = [
     "QualityGateResult",
     "ReactionCoordinatePlan",
     "ReactionNetwork",
+    "SelectedBond",
     "SeedCandidate",
     "StableState",
     "StableStateNode",
     "StationaryPoint",
     "StationaryPointRequest",
+    "StudyCycle",
     "ThermoCorrection",
     "TsIdentity",
     "TsValidation",

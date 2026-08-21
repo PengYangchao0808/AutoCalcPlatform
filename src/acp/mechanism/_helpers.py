@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import tempfile
 from collections import Counter
 from collections.abc import Sequence
@@ -53,6 +54,22 @@ def opt_float(value: object) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def next_sequence(root: Path, pattern: str) -> int:
+    """Next zero-based index after the max trailing integer in ``root.glob(pattern)`` dirs."""
+    highest = -1
+    try:
+        candidates = list(root.glob(pattern))
+    except OSError:
+        return 0
+    for candidate in candidates:
+        if not candidate.is_dir():
+            continue
+        match = re.search(r"(\d+)$", candidate.name)
+        if match is not None:
+            highest = max(highest, int(match.group(1)))
+    return highest + 1
 
 
 def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
@@ -141,6 +158,7 @@ __all__ = [
     "backend_name",
     "distance",
     "mapping_pairs_from_occurrence",
+    "next_sequence",
     "opt_float",
     "opt_int",
     "opt_str",

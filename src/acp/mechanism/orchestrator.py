@@ -7,14 +7,15 @@ import hashlib
 import json
 import logging
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import asdict, is_dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
 from acp.core.state import EventLog
+from cccp.qc.interfaces.constraints import CoordinateSpec, ReactionCoordinatePlan
 
 from ._helpers import write_json_atomic as _write_json_atomic
 from .endpoint import DefaultEndpointProvider, EndpointMatchThresholds
@@ -23,6 +24,8 @@ from .models import (
     ArtifactRef,
     DecisionPoint,
     ElementaryStepEdge,
+    ExplorationFrontier,
+    MechanismRevision,
     MechanismRoute,
     MechanismStudy,
     PathPoint,
@@ -30,9 +33,11 @@ from .models import (
     Provenance,
     ReactionNetwork,
     SeedCandidate,
+    SelectedBond,
     StableState,
     StationaryPoint,
     StationaryPointRequest,
+    StudyCycle,
 )
 from .providers.contracts import (
     EndpointMatchResult,
@@ -44,6 +49,8 @@ from .providers.contracts import (
     RefinementProvider,
     ThermochemistryProvider,
 )
+from .providers.thermo import resolve_standard_state
+from .reports import PromotionPolicy, select_s4_candidates
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +99,7 @@ class StudyOrchestrator:
         high_fidelity_profile: Any = "s4",
         max_elementary_steps: int = 5,
         require_review: ReviewPolicy | None = None,
+        require_sr_review: bool = False,
         endpoint_match_thresholds: EndpointMatchThresholds | None = None,
         validate_endpoint_minimum: bool = True,
     ) -> None:
@@ -113,6 +121,7 @@ class StudyOrchestrator:
         self.high_fidelity_profile = high_fidelity_profile
         self.max_elementary_steps = max_elementary_steps
         self.require_review = require_review
+        self.require_sr_review = require_sr_review
         self.event_log = EventLog(self.study_dir / "events.jsonl")
         self.study: MechanismStudy = self._load_or_initialize_study()
 
@@ -151,6 +160,11 @@ class StudyOrchestrator:
         if not pending:
             return self.study
 
+        waiting_ids = {d.id for d in self.study.decision_points if d.status == "waiting"}
+        stale_ids = sorted(set(decision_resolutions) - waiting_ids)
+        if stale_ids:
+            logger.warning("Ignoring resolutions for non-waiting decisions: %s", stale_ids)
+
         for decision in self.study.decision_points:
             if decision.status != "waiting":
                 continue
@@ -160,6 +174,9 @@ class StudyOrchestrator:
             action, resolution_payload = self._parse_resolution(resolution)
             context = pending.get(decision.id)
             if not isinstance(context, dict):
+                continue
+            if action == "sr_revision":
+                self._apply_sr_revision(decision, context, pending, resolution_payload)
                 continue
             if action == "stop_branch":
                 decision.status = "resolved"
@@ -358,22 +375,435 @@ class StudyOrchestrator:
         self._emit_event("S1", "phase_completed", n_states=len(self.study.stable_states))
 
     def _run_phase_s4(self) -> None:
+        """Run promoted S4 high-fidelity confirmation for selected TS candidates.
+
+        The phase always attempts high-fidelity refinement to recover electronic
+        single-point energies for promoted TS candidates. When
+        ``thermochemistry_provider`` is available and a frequency artifact can be
+        located, the refined points are additionally enriched with a
+        thermochemistry payload; otherwise S4 still completes as SP-only.
+        """
+
+        promotion_policy = self._promotion_policy()
+        candidate_ids = select_s4_candidates(self.study, promotion_policy)
+        signature_candidate_ids = sorted(candidate_ids)
         signature = self._phase_signature(
             "S4",
-            {"high_fidelity_profile": str(self.high_fidelity_profile)},
+            {
+                "promotion_policy": promotion_policy,
+                "candidate_ids": signature_candidate_ids,
+                "high_fidelity_profile": self._profile_payload(self.high_fidelity_profile),
+            },
         )
         if self.study.phase_fingerprints.get("S4") == signature:
+            if self.study.metadata.get("high_fidelity") is None:
+                self.study.metadata.setdefault("high_fidelity", None)
+                self.study.quality = "medium"
             return
-        self._emit_event("S4", "phase_started")
-        if self.thermochemistry_provider is not None:
-            self.study.metadata["high_fidelity"] = {
-                "profile": str(self.high_fidelity_profile),
-                "thermochemistry_provider": type(self.thermochemistry_provider).__name__,
-            }
-        else:
-            self.study.metadata.setdefault("high_fidelity", None)
+        self._emit_event(
+            "S4",
+            "phase_started",
+            n_candidates=len(candidate_ids),
+            promotion_policy=promotion_policy,
+        )
+        if not candidate_ids:
+            self.study.metadata["high_fidelity"] = None
+            self.study.quality = "medium"
+            self.study.phase_fingerprints["S4"] = signature
+            self._persist_study_bundle()
+            return
+
+        requests, request_failures = self._build_s4_refinement_requests(candidate_ids)
+        manifest_ids: list[str] = []
+        succeeded_candidates: set[str] = set()
+        failed_candidates = {failure["candidate_id"] for failure in request_failures}
+        failures = list(request_failures)
+        thermochemistry_failures: list[dict[str, Any]] = []
+        batch_errors: list[str] = []
+
+        if requests:
+            manifests, batch_errors = self._run_high_fidelity_refinements(requests)
+            for manifest in manifests:
+                manifest_ids.append(manifest.manifest_id)
+                self.study.metadata.setdefault("refinement_manifests", {})[manifest.manifest_id] = (
+                    manifest.to_dict()
+                )
+                self._persist_refinement_manifest(manifest)
+                (
+                    manifest_successes,
+                    manifest_failures,
+                    thermo_errors,
+                ) = self._apply_s4_manifest(manifest)
+                succeeded_candidates.update(manifest_successes)
+                failed_candidates.update(failure["candidate_id"] for failure in manifest_failures)
+                failures.extend(manifest_failures)
+                thermochemistry_failures.extend(thermo_errors)
+
+        unresolved_candidates = set(candidate_ids) - succeeded_candidates - failed_candidates
+        for candidate_id in sorted(unresolved_candidates):
+            failures.append(
+                {
+                    "candidate_id": candidate_id,
+                    "error": "No successful high-fidelity refinement result was produced",
+                }
+            )
+        failed_candidates.update(unresolved_candidates)
+        self.study.quality = "high" if succeeded_candidates == set(candidate_ids) else "medium"
+        self.study.metadata["high_fidelity"] = {
+            "profile": self._profile_name(self.high_fidelity_profile),
+            "promotion_policy": promotion_policy,
+            "candidate_ids": candidate_ids,
+            "manifest_ids": manifest_ids,
+            "successful_candidate_ids": sorted(succeeded_candidates),
+            "failed_candidate_ids": sorted(failed_candidates),
+            "failures": failures,
+            "batch_errors": batch_errors,
+            "thermochemistry_provider": (
+                type(self.thermochemistry_provider).__name__
+                if self.thermochemistry_provider is not None
+                else None
+            ),
+            "thermochemistry_failures": thermochemistry_failures,
+        }
         self.study.phase_fingerprints["S4"] = signature
+        self._sync_network(self.study)
         self._persist_study_bundle()
+
+    def _promotion_policy(self) -> PromotionPolicy:
+        runner_meta = self.study.metadata.get("study_runner")
+        if isinstance(runner_meta, dict):
+            policy = runner_meta.get("promotion_policy")
+            if isinstance(policy, str):
+                normalized = policy.strip()
+                if normalized in {"all_confirmed", "rate_relevant", "user_selected"}:
+                    return cast(PromotionPolicy, normalized)
+        return "all_confirmed"
+
+    def _profile_name(self, profile: Any) -> str:
+        profile_name = getattr(profile, "name", None)
+        if isinstance(profile_name, str) and profile_name:
+            return profile_name
+        return str(profile)
+
+    def _profile_payload(self, profile: Any) -> Any:
+        if is_dataclass(profile) and not isinstance(profile, type):
+            return asdict(cast(Any, profile))
+        if isinstance(profile, dict):
+            return dict(profile)
+        if hasattr(profile, "to_dict"):
+            to_dict = getattr(profile, "to_dict")
+            if callable(to_dict):
+                return to_dict()
+        return str(profile)
+
+    def _build_s4_refinement_requests(
+        self,
+        candidate_ids: list[str],
+    ) -> tuple[list[StationaryPointRequest], list[dict[str, str]]]:
+        requests: list[StationaryPointRequest] = []
+        failures: list[dict[str, str]] = []
+        candidate_map = {point.point_id: point for point in self.study.stationary_points}
+        for candidate_id in candidate_ids:
+            point = candidate_map.get(candidate_id)
+            if point is None:
+                failures.append(
+                    {"candidate_id": candidate_id, "error": "Selected S4 candidate is missing"}
+                )
+                continue
+            primary_edge = next(
+                (edge for edge in self.study.elementary_steps if edge.ts_id == candidate_id),
+                None,
+            )
+            coordinate_plan = None
+            if point.route_id is not None:
+                route = self._find_route(point.route_id)
+                if route is not None:
+                    coordinate_plan = route.coordinate_plan
+            if coordinate_plan is None and primary_edge is not None:
+                coordinate_plan = primary_edge.coordinate_plan
+            parent_state_id = point.state_id or (
+                primary_edge.source_state_id if primary_edge is not None else None
+            )
+            parent_state = (
+                self.study.get_state(parent_state_id) if parent_state_id is not None else None
+            )
+            requests.append(
+                StationaryPointRequest(
+                    id=candidate_id,
+                    role=point.role,
+                    kind=point.kind,
+                    input_geometry=point.geometry,
+                    coordinate_plan=coordinate_plan,
+                    fallback_geometries=list(point.artifacts),
+                    source_stage="S4",
+                    charge=(
+                        point.charge
+                        if point.charge is not None
+                        else (parent_state.charge if parent_state else 0)
+                    ),
+                    multiplicity=(
+                        point.multiplicity
+                        if point.multiplicity is not None
+                        else (parent_state.multiplicity if parent_state else 1)
+                    ),
+                    atom_mapping=self.study.atom_identity_map,
+                    parent_state_id=parent_state_id,
+                    route_id=point.route_id,
+                    ensemble_correction=None,
+                    provenance=self._s4_request_provenance(point, parent_state_id),
+                )
+            )
+        return requests, failures
+
+    def _s4_request_provenance(
+        self,
+        point: StationaryPoint,
+        parent_state_id: str | None,
+    ) -> Provenance:
+        base = point.provenance
+        return Provenance(
+            provider="study-orchestrator",
+            provider_version="1.0",
+            provider_commit="m0",
+            strategy=(base.strategy if base is not None else "s4-promotion"),
+            strategy_version=(base.strategy_version if base is not None else "1.0"),
+            profile_id=self._profile_name(self.high_fidelity_profile),
+            schema_version=(base.schema_version if base is not None else "m0"),
+            input_signature=_fingerprint(
+                {
+                    "study_id": self.study.study_id,
+                    "candidate_id": point.point_id,
+                    "parent_state_id": parent_state_id,
+                    "route_id": point.route_id,
+                    "profile": self._profile_payload(self.high_fidelity_profile),
+                }
+            ),
+        )
+
+    def _run_high_fidelity_refinements(
+        self,
+        requests: list[StationaryPointRequest],
+    ) -> tuple[list[RefinementManifest], list[str]]:
+        try:
+            return [self.refinement_provider.refine(requests, self.high_fidelity_profile)], []
+        except Exception as exc:
+            logger.warning(
+                "S4 batch refinement failed; falling back to per-candidate runs: %s",
+                exc,
+            )
+            manifests: list[RefinementManifest] = []
+            failures = [str(exc)]
+            for request in requests:
+                try:
+                    manifests.append(
+                        self.refinement_provider.refine([request], self.high_fidelity_profile)
+                    )
+                except Exception as request_exc:
+                    logger.warning("S4 refinement failed for %s: %s", request.id, request_exc)
+                    failures.append(f"{request.id}: {request_exc}")
+            return manifests, failures
+
+    def _apply_s4_manifest(
+        self,
+        manifest: RefinementManifest,
+    ) -> tuple[set[str], list[dict[str, str]], list[dict[str, str]]]:
+        successes: set[str] = set()
+        failures: list[dict[str, str]] = []
+        thermochemistry_failures: list[dict[str, str]] = []
+        for attempt in manifest.attempts:
+            candidate_id = attempt.request_id
+            if attempt.status != "success" or attempt.stationary_point is None:
+                failures.append(
+                    {
+                        "candidate_id": candidate_id,
+                        "error": str(attempt.evidence.get("error") or "refinement_failed"),
+                    }
+                )
+                continue
+            self._merge_high_fidelity_point(
+                candidate_id,
+                attempt.stationary_point,
+                manifest.manifest_id,
+            )
+            thermo_failure = self._enrich_high_fidelity_thermochemistry(candidate_id)
+            if thermo_failure is not None:
+                thermochemistry_failures.append(thermo_failure)
+            successes.add(candidate_id)
+        if not manifest.attempts and manifest.canonical_winner is not None:
+            candidate_id = manifest.canonical_winner.point_id
+            self._merge_high_fidelity_point(
+                candidate_id,
+                manifest.canonical_winner,
+                manifest.manifest_id,
+            )
+            thermo_failure = self._enrich_high_fidelity_thermochemistry(candidate_id)
+            if thermo_failure is not None:
+                thermochemistry_failures.append(thermo_failure)
+            successes.add(candidate_id)
+        return successes, failures, thermochemistry_failures
+
+    def _merge_high_fidelity_point(
+        self,
+        candidate_id: str,
+        refined_point: StationaryPoint,
+        manifest_id: str,
+    ) -> None:
+        existing = next(
+            (point for point in self.study.stationary_points if point.point_id == candidate_id),
+            None,
+        )
+        low_fidelity = self._profile_name(self.low_fidelity_profile)
+        high_fidelity = self._profile_name(self.high_fidelity_profile)
+        metadata = dict(existing.metadata) if existing is not None else {}
+        metadata.update(refined_point.metadata)
+        energies = dict(metadata.get("energies_hartree") or {})
+        if existing is not None and existing.energy_hartree is not None:
+            existing_fidelity = str(existing.metadata.get("fidelity") or low_fidelity)
+            energies.setdefault(existing_fidelity, existing.energy_hartree)
+        if refined_point.energy_hartree is not None:
+            energies[high_fidelity] = refined_point.energy_hartree
+        if energies:
+            metadata["energies_hartree"] = energies
+        thermo_history = dict(metadata.get("thermochemistry_by_fidelity") or {})
+        if existing is not None and "thermochemistry" in existing.metadata:
+            existing_fidelity = str(existing.metadata.get("fidelity") or low_fidelity)
+            thermo_history.setdefault(existing_fidelity, existing.metadata.get("thermochemistry"))
+        if "thermochemistry" in refined_point.metadata:
+            thermo_history[high_fidelity] = refined_point.metadata.get("thermochemistry")
+        if thermo_history:
+            metadata["thermochemistry_by_fidelity"] = thermo_history
+        metadata["fidelity"] = high_fidelity
+        metadata["confirmed"] = True
+        metadata["canonical"] = True
+        metadata["s4_manifest_id"] = manifest_id
+        if refined_point.point_id != candidate_id:
+            metadata["s4_refined_point_id"] = refined_point.point_id
+        merged = replace(
+            refined_point,
+            point_id=candidate_id,
+            role=(existing.role if existing is not None else refined_point.role),
+            kind=(existing.kind if existing is not None else refined_point.kind),
+            state_id=(
+                existing.state_id
+                if existing is not None and existing.state_id
+                else refined_point.state_id
+            ),
+            route_id=(
+                existing.route_id
+                if existing is not None and existing.route_id
+                else refined_point.route_id
+            ),
+            artifacts=self._merge_artifacts(existing, refined_point),
+            metadata=metadata,
+        )
+        self._upsert_stationary_point(merged)
+        self._refresh_high_fidelity_barriers(candidate_id, high_fidelity)
+
+    def _merge_artifacts(
+        self,
+        existing: StationaryPoint | None,
+        refined_point: StationaryPoint,
+    ) -> list[ArtifactRef]:
+        merged: list[ArtifactRef] = []
+        artifacts = (existing.artifacts if existing is not None else []) + list(
+            refined_point.artifacts
+        )
+        for artifact in artifacts:
+            signature = (artifact.path, artifact.sha256, artifact.kind)
+            if any((item.path, item.sha256, item.kind) == signature for item in merged):
+                continue
+            merged.append(artifact)
+        return merged
+
+    def _refresh_high_fidelity_barriers(self, candidate_id: str, fidelity: str) -> None:
+        point = next(
+            (
+                current
+                for current in self.study.stationary_points
+                if current.point_id == candidate_id
+            ),
+            None,
+        )
+        if point is None:
+            return
+        for edge in self.study.elementary_steps:
+            if edge.ts_id != candidate_id:
+                continue
+            source_state = self.study.get_state(edge.source_state_id)
+            sink_state = self.study.get_state(edge.sink_state_id)
+            source_energy = (
+                self._state_reference_energy(source_state) if source_state is not None else None
+            )
+            sink_energy = (
+                self._state_reference_energy(sink_state) if sink_state is not None else None
+            )
+            edge.barrier_forward = (
+                point.energy_hartree - source_energy
+                if point.energy_hartree is not None and source_energy is not None
+                else None
+            )
+            edge.barrier_reverse = (
+                point.energy_hartree - sink_energy
+                if point.energy_hartree is not None and sink_energy is not None
+                else None
+            )
+            edge.fidelity = fidelity
+
+    def _enrich_high_fidelity_thermochemistry(
+        self,
+        candidate_id: str,
+    ) -> dict[str, str] | None:
+        if self.thermochemistry_provider is None:
+            return None
+        point = next(
+            (
+                current
+                for current in self.study.stationary_points
+                if current.point_id == candidate_id
+            ),
+            None,
+        )
+        if point is None or point.energy_hartree is None:
+            return None
+        freq_log = next(
+            (
+                Path(artifact.path)
+                for artifact in point.artifacts
+                if artifact.kind == "refinement_freq_output"
+            ),
+            None,
+        )
+        if freq_log is None:
+            return {
+                "candidate_id": candidate_id,
+                "error": "Frequency artifact unavailable for thermochemistry enrichment",
+            }
+        runner_meta = self.study.metadata.get("study_runner")
+        config = dict(runner_meta.get("config") or {}) if isinstance(runner_meta, dict) else {}
+        parent_state = self.study.get_state(point.state_id) if point.state_id is not None else None
+        try:
+            result = self.thermochemistry_provider.compute(
+                sp_energy=point.energy_hartree,
+                freq_log=freq_log,
+                ensemble=(parent_state.ensemble if parent_state is not None else None),
+                temperature=298.15,
+                standard_state=resolve_standard_state(config),
+            )
+        except Exception as exc:
+            logger.warning("S4 thermochemistry enrichment failed for %s: %s", candidate_id, exc)
+            return {"candidate_id": candidate_id, "error": str(exc)}
+        high_fidelity = self._profile_name(self.high_fidelity_profile)
+        for index, current in enumerate(self.study.stationary_points):
+            if current.point_id != candidate_id:
+                continue
+            metadata = dict(current.metadata)
+            metadata["thermochemistry"] = result.to_dict()
+            thermo_history = dict(metadata.get("thermochemistry_by_fidelity") or {})
+            thermo_history[high_fidelity] = result.to_dict()
+            metadata["thermochemistry_by_fidelity"] = thermo_history
+            self.study.stationary_points[index] = replace(current, metadata=metadata)
+            break
+        return None
 
     def _run_frontier_loop(self) -> None:
         self._emit_event(
@@ -505,6 +935,13 @@ class StudyOrchestrator:
                 route_id=route_id,
                 depth=depth,
             ):
+                # Backward-compat contract: only AMBIGUOUS verdicts use the legacy
+                # frontier-review type; policy-driven pauses become SR cycle reviews.
+                decision_type = (
+                    "mechanism_frontier_review"
+                    if endpoint_match.verdict == "AMBIGUOUS"
+                    else "sr_cycle_review"
+                )
                 self._create_decision(
                     source_state=source_state,
                     route=route,
@@ -514,6 +951,7 @@ class StudyOrchestrator:
                     refinement_manifest=manifest,
                     irc_result=irc_result,
                     endpoint_match=endpoint_match,
+                    decision_type=decision_type,
                 )
                 self.study.status = "waiting"
                 self._persist_study_bundle()
@@ -832,20 +1270,27 @@ class StudyOrchestrator:
         refinement_manifest: RefinementManifest,
         irc_result: IrcResult,
         endpoint_match: EndpointMatchResult,
+        decision_type: str = "mechanism_frontier_review",
     ) -> DecisionPoint:
         decision_id = f"decision_{len(self.study.decision_points) + 1:03d}"
         payload = {
             "source_state_id": source_state.state_id,
             "route_id": route.route_id,
             "depth": depth,
+            "cycle": self.study.cycle_index,
             "endpoint_match": endpoint_match.to_dict(),
             "irc_result": irc_result.to_dict(),
         }
+        if decision_type == "sr_cycle_review":
+            options = ["continue", "reject_path", "accept_network"]
+        else:
+            options = ["continue", "promote_to_s4", "stop_branch", "edit_route"]
+        legacy_type = "mechanism_frontier_review"
         decision = DecisionPoint(
             id=decision_id,
-            type="mechanism_frontier_review",
+            type="sr_cycle_review" if decision_type == "sr_cycle_review" else legacy_type,
             status="waiting",
-            options=["continue", "promote_to_s4", "stop_branch", "edit_route"],
+            options=options,
             payload=payload,
             created_at=_utc_now(),
         )
@@ -854,12 +1299,22 @@ class StudyOrchestrator:
             "source_state_id": source_state.state_id,
             "route_id": route.route_id,
             "depth": depth,
+            "cycle": self.study.cycle_index,
             "route_fingerprint": route_fingerprint,
             "exploration_key": self._exploration_key(source_state.state_id, route.route_id),
             "path_result": path_result.to_dict(),
             "refinement_manifest": refinement_manifest.to_dict(),
             "irc_result": irc_result.to_dict(),
             "endpoint_match": endpoint_match.to_dict(),
+            "review": self._build_cycle_review_summary(
+                source_state=source_state,
+                route=route,
+                depth=depth,
+                path_result=path_result,
+                refinement_manifest=refinement_manifest,
+                irc_result=irc_result,
+                endpoint_match=endpoint_match,
+            ),
         }
         self._persist_decision(decision)
         self._emit_event(
@@ -882,9 +1337,403 @@ class StudyOrchestrator:
     def _needs_review(self, endpoint_match: EndpointMatchResult, **context: Any) -> bool:
         if endpoint_match.verdict == "AMBIGUOUS":
             return True
+        if self.require_sr_review:
+            return True
         if self.require_review is None:
             return False
         return bool(self.require_review(endpoint_match, self.study, context))
+
+    def _build_cycle_review_summary(
+        self,
+        *,
+        source_state: StableState,
+        route: MechanismRoute,
+        depth: int,
+        path_result: PathResult,
+        refinement_manifest: RefinementManifest,
+        irc_result: IrcResult,
+        endpoint_match: EndpointMatchResult,
+    ) -> dict[str, Any]:
+        canonical_ts = refinement_manifest.canonical_winner
+        return {
+            "cycle": self.study.cycle_index,
+            "source_state_id": source_state.state_id,
+            "route_id": route.route_id,
+            "path_strategy": route.path_strategy,
+            "fidelity": route.fidelity,
+            "depth": depth,
+            "n_path_points": len(path_result.points),
+            "candidates": [
+                {
+                    "candidate_id": candidate.candidate_id,
+                    "kind": candidate.kind,
+                    "point_id": candidate.point_id,
+                    "score": candidate.score,
+                    "progress": candidate.progress,
+                }
+                for candidate in path_result.candidates
+            ],
+            "canonical_ts_id": canonical_ts.point_id if canonical_ts is not None else None,
+            "canonical_ts_energy_hartree": (
+                canonical_ts.energy_hartree if canonical_ts is not None else None
+            ),
+            "endpoint_verdict": endpoint_match.verdict,
+            "endpoint_state_id": endpoint_match.state_id,
+            "irc_success": irc_result.success,
+            "irc_complete": irc_result.complete,
+            "locked_reaction_hash": self.study.metadata.get("locked_reaction_hash"),
+        }
+
+    def _apply_sr_revision(
+        self,
+        decision: DecisionPoint,
+        context: dict[str, Any],
+        pending: dict[str, Any],
+        resolution_payload: dict[str, Any],
+    ) -> None:
+        revision_data = resolution_payload.get("revision")
+        if not isinstance(revision_data, dict):
+            raise ValueError(
+                f"sr_revision resolution for {decision.id} is missing the revision payload"
+            )
+        cycle_id = resolution_payload.get("cycle_id")
+        if cycle_id is not None and int(cycle_id) != self.study.cycle_index:
+            logger.warning(
+                "Skipping stale SR revision for %s: resolution cycle %s != study cycle %s",
+                decision.id,
+                cycle_id,
+                self.study.cycle_index,
+            )
+            return
+        decision_kind = str(revision_data.get("decision") or "continue")
+        parent_state_id = str(
+            revision_data.get("parent_state") or context.get("source_state_id") or ""
+        )
+        parent_state = self._require_state(parent_state_id)
+        selected_bonds = self._parse_selected_bonds(revision_data.get("selected_bonds"))
+        audit_notes = self._revision_off_definition_notes(selected_bonds)
+
+        if decision_kind == "continue":
+            new_cycle = self.study.cycle_index + 1
+            route = self._revision_route_from_bonds(parent_state, selected_bonds, new_cycle)
+            if route is None:
+                return
+            revision = self._build_revision_record(
+                decision, revision_data, parent_state_id, selected_bonds, new_cycle
+            )
+            self._archive_cycle_frontier(revision.revision_id, context)
+            self.study.cycle_index = new_cycle
+            self.study.cycles.append(
+                StudyCycle(
+                    cycle_index=new_cycle,
+                    revision_id=revision.revision_id,
+                    seeded_from_state=parent_state_id,
+                    route_ids=[route.route_id],
+                    status="running",
+                )
+            )
+            self.study.revisions.append(revision)
+            self.study.routes.append(route)
+            self.study.frontier = ExplorationFrontier(
+                max_depth=self.study.frontier.max_depth
+            )
+            self.study.frontier.push(parent_state_id, route.route_id, depth=0)
+            self._persist_cycle_revision(new_cycle, revision)
+            self._emit_event(
+                "SR",
+                "cycle_started",
+                cycle=new_cycle,
+                revision_id=revision.revision_id,
+                parent_state_id=parent_state_id,
+                route_id=route.route_id,
+            )
+        elif decision_kind == "reject_path":
+            revision = self._build_revision_record(
+                decision,
+                revision_data,
+                parent_state_id,
+                selected_bonds,
+                self.study.cycle_index,
+            )
+            self.study.revisions.append(revision)
+            self._mark_route_status(
+                str(context.get("exploration_key") or ""),
+                str(context.get("route_fingerprint") or ""),
+                status="stopped",
+            )
+            self._persist_cycle_revision(self.study.cycle_index, revision)
+            self._emit_event(
+                "SR",
+                "path_rejected",
+                revision_id=revision.revision_id,
+                route_id=context.get("route_id"),
+            )
+        elif decision_kind == "accept_network":
+            revision = self._build_revision_record(
+                decision,
+                revision_data,
+                parent_state_id,
+                selected_bonds,
+                self.study.cycle_index,
+            )
+            self.study.revisions.append(revision)
+            self.study.frontier.queue.clear()
+            self._persist_cycle_revision(self.study.cycle_index, revision)
+            self._emit_event("SR", "network_accepted", revision_id=revision.revision_id)
+        else:
+            raise ValueError(f"Unsupported SR revision decision: {decision_kind!r}")
+
+        if audit_notes:
+            audit = self.study.metadata.setdefault("revision_audit", {})
+            audit[revision.revision_id] = audit_notes
+        decision.status = "resolved"
+        decision.resolution = f"sr_revision:{decision_kind}"
+        decision.resolved_at = _utc_now()
+        pending.pop(decision.id, None)
+        self._persist_decision(decision)
+        if decision_kind == "reject_path" and self.study.frontier.empty():
+            self._create_reseed_decision(parent_state, pending)
+
+    def _parse_selected_bonds(self, payload: Any) -> list[SelectedBond]:
+        bonds: list[SelectedBond] = []
+        for entry in payload or []:
+            if not isinstance(entry, dict):
+                continue
+            atoms = entry.get("atoms") or []
+            if len(atoms) != 2:
+                continue
+            action = str(entry.get("action") or "stretch")
+            if action not in {"stretch", "form", "keep"}:
+                action = "stretch"
+            start = entry.get("start")
+            target = entry.get("target")
+            bonds.append(
+                SelectedBond(
+                    atoms=(int(atoms[0]), int(atoms[1])),
+                    action=cast("Any", action),
+                    start=float(start) if start is not None else None,
+                    target=float(target) if target is not None else None,
+                )
+            )
+        return bonds
+
+    def _build_revision_record(
+        self,
+        decision: DecisionPoint,
+        revision_data: dict[str, Any],
+        parent_state_id: str,
+        selected_bonds: list[SelectedBond],
+        cycle: int,
+    ) -> MechanismRevision:
+        return MechanismRevision(
+            revision_id=str(
+                revision_data.get("revision_id") or f"rev_{cycle:02d}_{decision.id}"
+            ),
+            study_id=self.study.study_id,
+            cycle=cycle,
+            parent_state=parent_state_id,
+            selected_bonds=selected_bonds,
+            decision=cast("Any", str(revision_data.get("decision") or "continue")),
+            comment=str(revision_data.get("comment") or ""),
+            config_hash=str(revision_data.get("config_hash") or ""),
+            created_at=_utc_now(),
+        )
+
+    def _revision_off_definition_notes(
+        self, selected_bonds: list[SelectedBond]
+    ) -> list[str]:
+        if not self.study.metadata.get("locked_reaction_hash"):
+            return []
+        try:
+            from .reaction_definition import read_reaction_json
+
+            definition = read_reaction_json(self.study_dir)
+        except (OSError, ValueError) as exc:
+            logger.warning("Revision audit could not load reaction.json: %s", exc)
+            return []
+        if definition is None:
+            return []
+        defined_pairs = {
+            tuple(sorted(pair))
+            for change in definition.bond_changes
+            for pair in (change.reactant_atoms, change.product_atoms)
+            if pair is not None
+        }
+        notes = [
+            f"bond {bond.atoms[0]}-{bond.atoms[1]} ({bond.action}) "
+            "is outside the locked reaction definition"
+            for bond in selected_bonds
+            if bond.action != "keep" and tuple(sorted(bond.atoms)) not in defined_pairs
+        ]
+        if notes:
+            logger.warning("SR revision deviates from locked reaction definition: %s", notes)
+        return notes
+
+    def _revision_route_from_bonds(
+        self,
+        parent_state: StableState,
+        selected_bonds: list[SelectedBond],
+        new_cycle: int,
+    ) -> MechanismRoute | None:
+        geometry = self._state_geometry(parent_state)
+        if geometry is None:
+            logger.warning(
+                "Revision route aborted: no geometry for state %s", parent_state.state_id
+            )
+            return None
+        symbols, coords = geometry
+        n_atoms = len(symbols)
+        specs: list[CoordinateSpec] = []
+        for index, bond in enumerate(selected_bonds, start=1):
+            i, j = bond.atoms
+            if not (0 <= i < n_atoms and 0 <= j < n_atoms):
+                logger.warning(
+                    "Revision bond %s out of range for state %s (%d atoms)",
+                    bond.atoms,
+                    parent_state.state_id,
+                    n_atoms,
+                )
+                return None
+            current = float(np.linalg.norm(coords[i] - coords[j]))
+            if bond.action in {"stretch", "form"}:
+                if bond.target is None or bond.target <= 0:
+                    logger.warning(
+                        "Revision bond %s action %s requires a positive target distance",
+                        bond.atoms,
+                        bond.action,
+                    )
+                    return None
+                specs.append(
+                    CoordinateSpec(
+                        id=f"rb{index}",
+                        kind="distance",
+                        atoms=(i, j),
+                        role="drive",
+                        start=current,
+                        end=float(bond.target),
+                    )
+                )
+            else:
+                specs.append(
+                    CoordinateSpec(
+                        id=f"rb{index}",
+                        kind="distance",
+                        atoms=(i, j),
+                        role="freeze",
+                        start=current,
+                    )
+                )
+        if not any(spec.role == "drive" for spec in specs):
+            logger.warning(
+                "Revision for state %s produced no drive coordinate", parent_state.state_id
+            )
+            return None
+        runner_meta = self.study.metadata.get("study_runner") or {}
+        points = int(runner_meta.get("scan_points") or 21)
+        route_id = f"cycle{new_cycle}_route_1"
+        suffix = 1
+        while self._find_route(route_id) is not None:
+            suffix += 1
+            route_id = f"cycle{new_cycle}_route_{suffix}"
+        plan = ReactionCoordinatePlan(
+            coordinates=tuple(specs),
+            points=points,
+            coupling="synchronous",
+            start_from="reactant",
+        )
+        return MechanismRoute(
+            route_id=route_id,
+            coordinate_plan=plan,
+            path_strategy=str(runner_meta.get("strategy") or "guided-scan"),
+            fidelity=str(runner_meta.get("fidelity") or "s3"),
+            reactant_id=parent_state.state_id,
+            product_id=self.study.product_id,
+            label=f"SR revision cycle {new_cycle}",
+        )
+
+    def _state_geometry(self, state: StableState) -> tuple[list[str], Any] | None:
+        path = Path(state.canonical_geometry.path)
+        if not path.is_absolute():
+            path = self.study_dir / path
+        if path.exists():
+            try:
+                lines = path.read_text(encoding="utf-8").splitlines()
+                count = int(lines[0].strip())
+                symbols: list[str] = []
+                coords = []
+                for line in lines[2 : 2 + count]:
+                    parts = line.split()
+                    symbols.append(parts[0])
+                    coords.append([float(parts[1]), float(parts[2]), float(parts[3])])
+                return symbols, np.array(coords, dtype=float)
+            except (OSError, ValueError, IndexError) as exc:
+                logger.warning(
+                    "Failed to read geometry for state %s: %s", state.state_id, exc
+                )
+        symbols_meta = state.metadata.get("symbols")
+        coords_meta = state.metadata.get("coordinates")
+        if (
+            isinstance(symbols_meta, list)
+            and isinstance(coords_meta, list)
+            and symbols_meta
+            and len(symbols_meta) == len(coords_meta)
+        ):
+            return [str(symbol) for symbol in symbols_meta], np.array(
+                coords_meta, dtype=float
+            )
+        return None
+
+    def _archive_cycle_frontier(
+        self, revision_id: str, context: dict[str, Any]
+    ) -> None:
+        archive = self.study.metadata.setdefault("cycle_archive", {})
+        archive[str(self.study.cycle_index)] = {
+            "frontier": self.study.frontier.to_dict(),
+            "paused_route_id": context.get("route_id"),
+            "revision_id": revision_id,
+            "archived_at": _utc_now(),
+        }
+
+    def _persist_cycle_revision(self, cycle: int, revision: MechanismRevision) -> None:
+        cycle_dir = self.study_dir / "cycles" / f"cycle_{cycle:02d}"
+        cycle_dir.mkdir(parents=True, exist_ok=True)
+        _write_json_atomic(cycle_dir / "revision.json", revision.to_dict())
+
+    def _create_reseed_decision(
+        self, parent_state: StableState, pending: dict[str, Any]
+    ) -> DecisionPoint:
+        decision_id = f"decision_{len(self.study.decision_points) + 1:03d}"
+        decision = DecisionPoint(
+            id=decision_id,
+            type="sr_cycle_review",
+            status="waiting",
+            options=["continue", "accept_network"],
+            payload={
+                "source_state_id": parent_state.state_id,
+                "cycle": self.study.cycle_index,
+                "reseed": True,
+            },
+            created_at=_utc_now(),
+        )
+        self.study.decision_points.append(decision)
+        pending[decision.id] = {
+            "source_state_id": parent_state.state_id,
+            "cycle": self.study.cycle_index,
+            "reseed": True,
+            "review": {
+                "cycle": self.study.cycle_index,
+                "source_state_id": parent_state.state_id,
+                "reseed": True,
+            },
+        }
+        self._persist_decision(decision)
+        self._emit_event(
+            "SR",
+            "reseed_requested",
+            decision_id=decision.id,
+            source_state_id=parent_state.state_id,
+        )
+        return decision
 
     def _derive_route(self, route: MechanismRoute, source_state: StableState) -> MechanismRoute:
         target_id = route.product_id or self.study.product_id

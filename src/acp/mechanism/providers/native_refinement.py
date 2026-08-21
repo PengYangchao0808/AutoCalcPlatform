@@ -8,7 +8,6 @@ import copy
 import hashlib
 import json
 import logging
-import tempfile
 import uuid
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -82,7 +81,7 @@ class NativeRefinementProvider:
         self.work_root: Path = (
             Path(work_root)
             if work_root is not None
-            else Path(tempfile.gettempdir()) / "acp_native_s3s4"
+            else Path.cwd() / "acp_calc"
         )
 
     def refine(

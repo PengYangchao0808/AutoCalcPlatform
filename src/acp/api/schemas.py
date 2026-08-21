@@ -12,6 +12,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from acp import __version__
+
 
 class ServiceStatus(str, Enum):
     OK = "ok"
@@ -23,6 +25,7 @@ class QueueCounts(BaseModel):
     queued: int = 0
     pending: int = 0
     running: int = 0
+    paused: int = 0
     completed: int = 0
     failed: int = 0
     cancelled: int = 0
@@ -30,7 +33,7 @@ class QueueCounts(BaseModel):
 
 class StatusResponse(BaseModel):
     service: str = "ACP Workbench"
-    version: str = "1.0.0"
+    version: str = __version__
     status: ServiceStatus = ServiceStatus.OK
     host: str = ""
     port: int = 0
@@ -140,10 +143,17 @@ class FileEntry(BaseModel):
     is_dir: bool = False
 
 
+class PinnedProduct(BaseModel):
+    label: str
+    path: str
+    kind: str = "file"
+
+
 class FileManifestResponse(BaseModel):
     work_dir: str
     files: list[FileEntry]
     truncated: bool = False
+    pinned: list[PinnedProduct] = Field(default_factory=list)
 
 
 class ErrorResponse(BaseModel):
@@ -162,6 +172,7 @@ __all__ = [
     "JobListResponse",
     "JobRecordModel",
     "JobSpecModel",
+    "PinnedProduct",
     "ProtocolInfo",
     "ProtocolsResponse",
     "QueueCounts",

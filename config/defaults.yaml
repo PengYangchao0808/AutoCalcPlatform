@@ -363,6 +363,17 @@ cluster:
     max_dirs_per_sweep: 200   # Cap on dirs removed per sweep
     vacuum_after_db_cleanup: false  # VACUUM after DB pruning (locks DB; off by default)
 
+# ==================== Mechanism Study ====================
+# Manual-only bond editing for the Workbench reaction builder: automatic
+# atom mapping and bond-change determination are DISABLED; bond changes
+# must come from user-provided manual_bond_changes (explicit
+# manual_bond_editing: false in the API request restores the legacy auto
+# path for tests/CLI parity).
+# Keep in sync with MECHANISM_MANUAL_BOND_EDITING_DEFAULT in
+# src/acp/core/config.py (authoritative built-in).
+mechanism:
+  manual_bond_editing: true
+
 # ==================== Optimization Control ====================
 # recalc_hess: 'auto' infers the ORCA Recalc_Hess interval from elements:
 #   light (CHON+halogens) → initial Hessian only (no recalc);

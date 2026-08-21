@@ -6,7 +6,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +14,7 @@ from numpy.typing import NDArray
 
 from acp.backends.base import to_qc_result
 from acp.mechanism._helpers import backend_name as _backend_name
+from acp.mechanism._helpers import next_sequence as _next_sequence
 from acp.mechanism._helpers import resolve_backend as _resolve_backend
 from acp.mechanism._helpers import state_geometry as _state_geometry
 from acp.mechanism.candidates import select_candidates, select_primary_int, select_primary_ts
@@ -58,17 +58,13 @@ class GuidedScanPathStrategy:
         self._scan_backend_spec = scan_backend
         self._sp_backend_spec = sp_backend
         self.config = dict(config) if config is not None else load_config()
-        self.work_root = (
-            Path(work_root)
-            if work_root is not None
-            else Path(tempfile.gettempdir()) / "acp_mechanism_guided_scan"
-        )
+        self.work_root = Path(work_root) if work_root is not None else Path.cwd() / "acp_calc"
         self.sp_refinement = sp_refinement
         self.energy_key = energy_key
         self.sp_energy_key = sp_energy_key
         self.ts_cap = ts_cap
         self.int_cap = int_cap
-        self.calls = 0
+        self.calls = _next_sequence(self.work_root, "*__scan_*")
         self._scan_backend_instance: Any | None = None
         self._sp_backend_instance: Any | None = None
 

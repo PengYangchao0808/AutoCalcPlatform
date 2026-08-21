@@ -236,3 +236,227 @@ def test_mechanism_decision_resolve_404_and_409_paths(tmp_path: Path) -> None:
             json={"resolution": "reject"},
         )
         assert conflict.status_code == 409
+
+
+def _write_sr_checkpoint(study_dir: Path, *, cycle_index: int = 0) -> None:
+    study_dir.mkdir(parents=True, exist_ok=True)
+    (study_dir / "study.json").write_text(
+        json.dumps(
+            {
+                "study_id": "study-sr",
+                "cycle_index": cycle_index,
+                "decision_points": [
+                    {
+                        "id": "decision-1",
+                        "type": "sr_cycle_review",
+                        "status": "waiting",
+                        "options": ["continue", "reject_path", "accept_network"],
+                        "payload": {
+                            "cycle": cycle_index,
+                            "source_state_id": "state_reactant",
+                            "route_id": "route_main",
+                        },
+                        "created_at": "2026-08-16T00:00:00Z",
+                    },
+                    {
+                        "id": "decision-0",
+                        "type": "sr_cycle_review",
+                        "status": "resolved",
+                        "options": ["continue"],
+                        "payload": {"cycle": 0},
+                        "created_at": "2026-08-15T00:00:00Z",
+                    },
+                ],
+                "metadata": {
+                    "pending_decisions": {
+                        "decision-1": {
+                            "source_state_id": "state_reactant",
+                            "cycle": cycle_index,
+                            "review": {
+                                "cycle": cycle_index,
+                                "source_state_id": "state_reactant",
+                                "candidates": [{"candidate_id": "cand-1", "kind": "ts_seed"}],
+                                "endpoint_verdict": "NEW_STATE",
+                            },
+                        }
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _create_sr_study(client: TestClient, study_dir: Path, job_id: str) -> None:
+    created = client.post(
+        "/api/v1/mechanism-studies",
+        json={
+            "job_id": job_id,
+            "study_id": "study-sr",
+            "status": "waiting",
+            "study_json": {"study_id": "study-sr", "study_dir": str(study_dir)},
+        },
+    )
+    assert created.status_code == 201, created.text
+
+
+def test_mechanism_reviews_list_reads_checkpoint(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client:
+        job_id = _submit_fake_job(client)
+        study_dir = tmp_path / "work" / "mechanism_study" / "study-sr"
+        _write_sr_checkpoint(study_dir)
+        _create_sr_study(client, study_dir, job_id)
+
+        response = client.get("/api/v1/mechanism-studies/study-sr/reviews")
+        assert response.status_code == 200, response.text
+        reviews = response.json()["reviews"]
+        assert len(reviews) == 1
+        review = reviews[0]
+        assert review["review_id"] == "decision-1"
+        assert review["type"] == "sr_cycle_review"
+        assert review["cycle"] == 0
+        assert review["source_state_id"] == "state_reactant"
+        assert review["summary"]["candidates"][0]["candidate_id"] == "cand-1"
+
+
+def test_mechanism_reviews_list_empty_without_checkpoint(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client:
+        job_id = _submit_fake_job(client)
+        created = client.post(
+            "/api/v1/mechanism-studies",
+            json={
+                "job_id": job_id,
+                "study_id": "study-nodir",
+                "status": "waiting",
+                "study_json": {"study_id": "study-nodir"},
+            },
+        )
+        assert created.status_code == 201
+        response = client.get("/api/v1/mechanism-studies/study-nodir/reviews")
+        assert response.status_code == 200
+        assert response.json()["reviews"] == []
+
+
+def test_mechanism_review_decision_validation_errors(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client:
+        job_id = _submit_fake_job(client)
+        manager = cast(JobManager, cast(Starlette, client.app).state.job_manager)
+        record = manager.store.get(job_id)
+        assert record is not None
+        record.status = JobStatus.WAITING_REVIEW
+        manager.store.update(record)
+        study_dir = tmp_path / "work" / "mechanism_study" / "study-sr"
+        _write_sr_checkpoint(study_dir)
+        _create_sr_study(client, study_dir, job_id)
+
+        missing = client.post(
+            "/api/v1/mechanism-studies/study-sr/reviews/decision-9/decision",
+            json={"decision": "accept_network"},
+        )
+        assert missing.status_code == 404
+
+        resolved = client.post(
+            "/api/v1/mechanism-studies/study-sr/reviews/decision-0/decision",
+            json={"decision": "accept_network"},
+        )
+        assert resolved.status_code == 409
+
+        no_bonds = client.post(
+            "/api/v1/mechanism-studies/study-sr/reviews/decision-1/decision",
+            json={"decision": "continue"},
+        )
+        assert no_bonds.status_code == 422
+
+        bad_atoms = client.post(
+            "/api/v1/mechanism-studies/study-sr/reviews/decision-1/decision",
+            json={
+                "decision": "continue",
+                "selected_bonds": [{"atoms": [0, 1, 2], "action": "stretch", "target": 2.5}],
+            },
+        )
+        assert bad_atoms.status_code == 422
+
+        missing_target = client.post(
+            "/api/v1/mechanism-studies/study-sr/reviews/decision-1/decision",
+            json={
+                "decision": "continue",
+                "selected_bonds": [{"atoms": [0, 1], "action": "stretch"}],
+            },
+        )
+        assert missing_target.status_code == 422
+
+
+def test_mechanism_review_decision_accept_then_double_submit_409(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client:
+        job_id = _submit_fake_job(client)
+        manager = cast(JobManager, cast(Starlette, client.app).state.job_manager)
+        record = manager.store.get(job_id)
+        assert record is not None
+        record.status = JobStatus.WAITING_REVIEW
+        manager.store.update(record)
+        study_dir = tmp_path / "work" / "mechanism_study" / "study-sr"
+        _write_sr_checkpoint(study_dir)
+        _create_sr_study(client, study_dir, job_id)
+
+        payload = {
+            "decision": "continue",
+            "selected_bonds": [{"atoms": [0, 1], "action": "stretch", "target": 3.2}],
+            "comment": "stretch next",
+        }
+        accepted = client.post(
+            "/api/v1/mechanism-studies/study-sr/reviews/decision-1/decision",
+            json=payload,
+        )
+        assert accepted.status_code == 200, accepted.text
+        body = accepted.json()
+        assert body["status"] == "accepted"
+        assert body["revision_id"] == "rev_01_decision-1"
+        assert body["cycle"] == 1
+        assert body["job_id"] == job_id
+
+        # The job left WAITING_REVIEW after the first submission; a duplicate
+        # decision POST must be rejected instead of double-submitting.
+        duplicate = client.post(
+            "/api/v1/mechanism-studies/study-sr/reviews/decision-1/decision",
+            json=payload,
+        )
+        assert duplicate.status_code == 409
+
+        record_after = manager.store.get(job_id)
+        assert record_after is not None
+        resolution = (record_after.result or {}).get("review_resolution") or {}
+        decisions = resolution.get("decisions") or {}
+        handed_off = decisions.get("decision-1") or {}
+        assert handed_off.get("resolution") == "sr_revision"
+        assert handed_off.get("cycle_id") == 0
+        assert handed_off["revision"]["selected_bonds"][0]["atoms"] == [0, 1]
+
+
+def test_mechanism_study_resume_endpoint_gating(tmp_path: Path) -> None:
+    with make_client(tmp_path) as client:
+        job_id = _submit_fake_job(client)
+        manager = cast(JobManager, cast(Starlette, client.app).state.job_manager)
+        created = client.post(
+            "/api/v1/mechanism-studies",
+            json={
+                "job_id": job_id,
+                "study_id": "study-resume",
+                "status": "running",
+                "study_json": {"study_id": "study-resume"},
+            },
+        )
+        assert created.status_code == 201
+
+        not_waiting = client.post("/api/v1/mechanism-studies/study-resume/resume")
+        assert not_waiting.status_code == 409
+
+        record = manager.store.get(job_id)
+        assert record is not None
+        record.status = JobStatus.WAITING_REVIEW
+        manager.store.update(record)
+
+        resumed = client.post("/api/v1/mechanism-studies/study-resume/resume")
+        assert resumed.status_code == 200, resumed.text
+        body = resumed.json()
+        assert body["status"] == "resumed"
+        assert body["job_id"] == job_id

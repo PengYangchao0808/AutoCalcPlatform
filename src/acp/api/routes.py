@@ -18,6 +18,7 @@ from typing import Any, cast
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
+from acp import __version__
 from acp.api.schemas import (
     BackendInfo,
     BackendsResponse,
@@ -45,6 +46,7 @@ from acp.workflows.registry import list_workflow_entries, workflow_to_dict
 router = APIRouter()
 
 _START_TIME = time.time()
+
 
 def _build_workflow_info() -> list[WorkflowInfo]:
     """Return workflow metadata from the ACP workflow registry.
@@ -113,6 +115,7 @@ def get_status(request: Request) -> StatusResponse:
         queued=counts.get("queued", 0),
         pending=counts.get("pending", 0),
         running=counts.get("running", 0) + counts.get("starting", 0),
+        paused=counts.get("paused", 0),
         completed=counts.get("completed", 0),
         failed=counts.get("failed", 0),
         cancelled=counts.get("cancelled", 0),
@@ -122,7 +125,7 @@ def get_status(request: Request) -> StatusResponse:
     run_root = getattr(request.app.state, "run_root", "") or ""
     return StatusResponse(
         service="ACP Workbench",
-        version="1.0.0",
+        version=__version__,
         status=ServiceStatus.OK,
         host=host,
         port=port,
@@ -154,6 +157,17 @@ def _resolve_backend_path(name: str, executables: dict[str, Any]) -> str:
     return str(path) if path else ""
 
 
+def _backend_version(name: str, path: str) -> str:
+    """TTL-cached normalized version for a resolved backend path."""
+    if not path:
+        return ""
+    from pathlib import Path
+
+    from cccp.software import version_cached
+
+    return version_cached(name, Path(path))
+
+
 @router.get("/backends", response_model=BackendsResponse)
 def get_backends() -> BackendsResponse:
     from acp.backends import BackendCapabilityStatus, backend_status, list_backends
@@ -167,11 +181,13 @@ def get_backends() -> BackendsResponse:
             CapabilityInfo(name=cap, available=(st is BackendCapabilityStatus.AVAILABLE))
             for cap, st in capabilities.items()
         ]
+        path = _resolve_backend_path(name, executables)
         backends.append(
             BackendInfo(
                 name=str(status["name"]),
                 available=bool(status["is_available"]),
-                path=_resolve_backend_path(name, executables),
+                path=path,
+                version=_backend_version(name, path),
                 capabilities=caps,
             )
         )
@@ -281,9 +297,7 @@ def get_job_logs(
 
 
 @router.get("/jobs/{job_id}/files", response_model=FileManifestResponse)
-def get_job_files(
-    job_id: str, request: Request, path: str | None = None
-) -> FileManifestResponse:
+def get_job_files(job_id: str, request: Request, path: str | None = None) -> FileManifestResponse:
     manager = _manager(request)
     work_dir = manager.work_dir_of(job_id)
     if work_dir is None:

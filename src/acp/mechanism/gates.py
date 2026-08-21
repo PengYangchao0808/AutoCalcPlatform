@@ -308,26 +308,32 @@ def check_g5(context: GateContext) -> QualityGateResult:
     policy = dict(context.policies.get("G5") or {})
     policy.setdefault("require_high_fidelity", False)
     high_fidelity = context.study.metadata.get("high_fidelity")
-    if high_fidelity:
+    quality = context.study.quality
+    if quality == "high" or (quality is None and high_fidelity):
         status: GateStatus = "pass"
         missing: list[str] = []
+        suggested_action = None
     elif bool(policy["require_high_fidelity"]):
         status = "fail"
         missing = ["high_fidelity_confirmation"]
+        suggested_action = (
+            "Study retained at medium quality without complete S4 confirmation; rerun the "
+            "S4 high-fidelity loop to satisfy require_high_fidelity."
+        )
     else:
         status = "warn"
         missing = ["high_fidelity_confirmation"]
+        suggested_action = (
+            "Study retained at medium quality without complete S4 confirmation; rerun the "
+            "S4 high-fidelity loop when high-fidelity confirmation is required."
+        )
     return QualityGateResult(
         gate_id="G5",
         status=status,
-        evidence={"high_fidelity": high_fidelity},
+        evidence={"quality": quality, "high_fidelity": high_fidelity},
         thresholds=policy,
         missing_evidence=missing,
-        suggested_action=(
-            None
-            if status == "pass"
-            else "Run S4 high-fidelity confirmation when the provider becomes available."
-        ),
+        suggested_action=suggested_action,
     )
 
 

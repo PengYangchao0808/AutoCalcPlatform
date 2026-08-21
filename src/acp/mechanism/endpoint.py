@@ -27,6 +27,7 @@ from acp.backends.base import FrequencyCalculator, GeometryOptimizer
 from acp.core.models import Structure, StructureRecord
 from acp.mechanism._helpers import mapping_pairs_from_occurrence as _mapping_pairs_from_occurrence
 from acp.mechanism._helpers import opt_float as _opt_float
+from acp.mechanism.atom_mapping import map_reactant_to_product
 from acp.mechanism.models import ArtifactRef, StableState, StationaryPoint
 from acp.mechanism.providers.contracts import EndpointMatchResult, IrcResult
 
@@ -252,8 +253,40 @@ def _mapping_pairs_from_metadata(
 def _mapping_evidence(
     candidate: EndpointCandidate,
     reference_symbols: list[str],
+    reference_coordinates: NDArray[np.float64],
     reference_metadata: dict[str, Any],
 ) -> tuple[list[tuple[int, int]] | None, dict[str, Any]]:
+    mapping_result = map_reactant_to_product(
+        reference_symbols,
+        reference_coordinates,
+        candidate.symbols,
+        candidate.coordinates,
+        charge=int(candidate.charge),
+        reactant_smiles=(
+            str(reference_metadata.get("smiles")) if reference_metadata.get("smiles") else None
+        ),
+        product_smiles=(
+            str(candidate.metadata.get("smiles")) if candidate.metadata.get("smiles") else None
+        ),
+    )
+    if mapping_result.status != "failed" and mapping_result.candidates:
+        if mapping_result.status in {"candidates", "count_mismatch"}:
+            logger.warning(
+                "Endpoint mapping is %s; using the top RDKit candidate until confirmation is wired",
+                mapping_result.status,
+            )
+        top_candidate = mapping_result.candidates[0]
+        pairs = [
+            (product_index, reactant_index)
+            for reactant_index, product_index in top_candidate.mapping
+        ]
+        return pairs, {
+            "atom_mapping_compatible": True,
+            "atom_mapping_source": top_candidate.method,
+            "atom_mapping_status": mapping_result.status,
+            "mapped_atom_count": len(pairs),
+        }
+
     reference_mapping = _coerce_atom_mapping(reference_metadata.get("atom_mapping"))
     pairs = _mapping_pairs_from_metadata(candidate, reference_mapping)
     if pairs is not None:
@@ -266,6 +299,7 @@ def _mapping_evidence(
     return pairs, {
         "atom_mapping_compatible": pairs is not None,
         "atom_mapping_source": "symbol_occurrence",
+        "atom_mapping_status": "failed",
         "mapped_atom_count": len(pairs or []),
     }
 
@@ -528,6 +562,7 @@ class EndpointMatcher:
             mapping_pairs, mapping_info = _mapping_evidence(
                 candidate,
                 reference_symbols,
+                reference_coordinates,
                 record.metadata,
             )
             if mapping_pairs is None:

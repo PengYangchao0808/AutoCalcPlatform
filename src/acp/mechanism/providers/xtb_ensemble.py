@@ -7,7 +7,6 @@ import hashlib
 import json
 import logging
 import re
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +15,7 @@ from numpy.typing import NDArray
 
 from acp.core.models import HARTREE_TO_KCAL, Structure, StructureEnsemble, StructureRecord
 from acp.mechanism._helpers import backend_name as _backend_name
+from acp.mechanism._helpers import next_sequence as _next_sequence
 from acp.mechanism._helpers import resolve_backend as _resolve_backend
 from acp.mechanism._helpers import state_geometry as _state_geometry
 from acp.mechanism.models import Provenance, StableState
@@ -47,17 +47,13 @@ class XtbFastEnsembleProvider:
     ) -> None:
         self._crest_backend_spec = crest_backend
         self.config = dict(config) if config is not None else load_config()
-        self.work_root = (
-            Path(work_root)
-            if work_root is not None
-            else Path(tempfile.gettempdir()) / "acp_mechanism_xtb_fast"
-        )
+        self.work_root = Path(work_root) if work_root is not None else Path.cwd() / "acp_calc"
         self.crest_energy_window_kcal = crest_energy_window_kcal
         self.energy_window_kcal = energy_window_kcal
         self.rmsd_threshold = rmsd_threshold
         self.temperature = temperature
         self.crest_search_kwargs = dict(crest_search_kwargs or {})
-        self.calls = 0
+        self.calls = _next_sequence(self.work_root, "*/ensemble_*")
         self._crest_backend_instance: Any | None = None
 
     def generate(self, stable_state: StableState, profile: Any) -> StructureEnsemble:

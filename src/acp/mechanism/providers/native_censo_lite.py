@@ -6,7 +6,6 @@ from __future__ import annotations
 import logging
 import math
 import shutil
-import tempfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
@@ -24,7 +23,7 @@ from acp.core.models import (
     StructureEnsemble,
     StructureRecord,
 )
-from acp.mechanism._helpers import write_json_atomic
+from acp.mechanism._helpers import next_sequence, write_json_atomic
 from acp.mechanism.models import StableState
 from acp.mechanism.primitives import DedupRecord, TorsionAwareDeduplicator
 from acp.workflows.energy_shared import boltzmann_weights
@@ -54,13 +53,9 @@ class NativeCensoLiteProvider:
         work_root: Path | str | None = None,
     ) -> None:
         self.config: dict[str, Any] = dict(config) if config is not None else load_config()
-        self.work_root: Path = (
-            Path(work_root)
-            if work_root is not None
-            else Path(tempfile.gettempdir()) / "acp_native_s1"
-        )
+        self.work_root: Path = Path(work_root) if work_root is not None else Path.cwd() / "acp_calc"
         self.work_root.mkdir(parents=True, exist_ok=True)
-        self.calls: int = 0
+        self.calls: int = next_sequence(self.work_root, "*/ensemble_*")
 
     def generate(self, stable_state: StableState, profile: Any) -> StructureEnsemble:
         """Generate a ranked CENSO-lite style ensemble for one stable state."""

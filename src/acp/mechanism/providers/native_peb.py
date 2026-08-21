@@ -9,7 +9,6 @@ import hashlib
 import json
 import logging
 import math
-import tempfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any, cast
@@ -69,11 +68,7 @@ class NativeReversePebStrategy(PathSearchStrategy):
         work_root: Path | str | None = None,
     ) -> None:
         self.config = dict(config) if config is not None else load_config()
-        self.work_root = (
-            Path(work_root)
-            if work_root is not None
-            else Path(tempfile.gettempdir()) / "acp_mechanism_native_peb"
-        )
+        self.work_root = Path(work_root) if work_root is not None else Path.cwd() / "acp_calc"
 
     def search(
         self,

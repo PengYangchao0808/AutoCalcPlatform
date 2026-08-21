@@ -12,10 +12,13 @@ into concrete per-stage parameters.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, replace
 from typing import Any, cast
 
 from acp.mechanism.models import Fidelity, PathStrategy
+
+logger = logging.getLogger(__name__)
 
 RPH_CENSO_LITE_MODE = "rph-censo-lite"
 XTB_FAST_MODE = "xtb-fast"
@@ -79,10 +82,10 @@ def _build_fidelity_profiles() -> dict[Fidelity, FidelityProfile]:
         irc = _profile_level(levels, "irc")
         scan_points = irc_points = None
         try:
-            scan_points = (
-                int(scan.get("scan_points")) if scan.get("scan_points") is not None else None
-            )
-            irc_points = int(irc.get("irc_points")) if irc.get("irc_points") is not None else None
+            raw_scan_points = scan.get("scan_points")
+            raw_irc_points = irc.get("irc_points")
+            scan_points = int(raw_scan_points) if raw_scan_points is not None else None
+            irc_points = int(raw_irc_points) if raw_irc_points is not None else None
         except (TypeError, ValueError):
             pass
         refinement_budget = _REFINEMENT_BUDGETS.get(cast(Fidelity, fidelity), {})
@@ -103,12 +106,18 @@ def _build_fidelity_profiles() -> dict[Fidelity, FidelityProfile]:
             solvent_model=_optional_str(sp.get("solvent_model")) or "none",
             ts_initial_hessian=_optional_str(ts_opt.get("ts_initial_hessian")) or "calculate",
             irc_points=irc_points if irc_points is not None else 30,
-            **refinement_budget,
+            warmup_max_cycles_intermediate=refinement_budget.get(
+                "warmup_max_cycles_intermediate"
+            ),
+            warmup_max_cycles_ts=refinement_budget.get("warmup_max_cycles_ts"),
+            max_cycles_minimum=refinement_budget.get("max_cycles_minimum"),
+            max_cycles_intermediate=refinement_budget.get("max_cycles_intermediate"),
+            max_cycles_ts=refinement_budget.get("max_cycles_ts"),
         )
     return built
 
 
-_REFINEMENT_BUDGETS: dict[str, dict[str, object]] = {
+_REFINEMENT_BUDGETS: dict[str, dict[str, int]] = {
     "s3": {
         "warmup_max_cycles_intermediate": 40,
         "warmup_max_cycles_ts": 50,
@@ -140,7 +149,7 @@ class FidelityProfile:
         solvent / solvent_model: Workflow-global solvation.
         ts_initial_hessian: ``"calculate"`` / ``"model"`` / ``"read"``.
         ts_recalc_hess: Recalculate Hessian interval.
-        ts_trust_radius: Initial TrustRadius.
+        ts_trust_radius: Initial Trust (trust radius) keyword value.
         irc_points: Default IRC MaxIter.
         warmup_max_cycles_intermediate / warmup_max_cycles_ts: Role-based
             constrained warmup budgets (RPH semantics: s3 40/50, s4 4/6).
@@ -356,6 +365,129 @@ def resolve_fidelity_profile(_strategy: str, fidelity: Fidelity) -> FidelityProf
     return FIDELITY_PROFILES[fidelity]
 
 
+def apply_levels_overrides(
+    profile: FidelityProfile,
+    levels: dict[str, Any],
+) -> FidelityProfile:
+    """Apply mechanism ``levels`` overrides onto a resolved fidelity profile."""
+
+    if not isinstance(levels, dict):
+        return profile
+
+    updated = profile
+    for level_id, level in levels.items():
+        if not isinstance(level, dict):
+            logger.debug("Skipping non-dict mechanism level override %s=%r", level_id, level)
+            continue
+
+        handled_keys: set[str] = {"engine"}
+        if level_id == "scan":
+            handled_keys.update(
+                {
+                    "scan_points",
+                    "path_strategy",
+                    "fidelity",
+                    "conformer_mode",
+                    "max_elementary_steps",
+                    "int_extension",
+                    "promotion_policy",
+                    "auto_converge",
+                }
+            )
+            scan_points = level.get("scan_points")
+            if scan_points is not None:
+                try:
+                    updated = replace(updated, scan_points=int(scan_points))
+                except (TypeError, ValueError):
+                    logger.debug(
+                        "Ignoring invalid mechanism scan.scan_points override: %r",
+                        scan_points,
+                    )
+        elif level_id == "ts_opt":
+            handled_keys.update(
+                {
+                    "functional",
+                    "basis",
+                    "grid",
+                    "scf_convergence",
+                    "solvent",
+                    "solvent_model",
+                    "ts_initial_hessian",
+                }
+            )
+            updates: dict[str, Any] = {}
+            if _optional_str(level.get("functional")) is not None:
+                updates["ts_method"] = str(level["functional"])
+            if _optional_str(level.get("basis")) is not None:
+                updates["ts_basis"] = str(level["basis"])
+            if _optional_str(level.get("grid")) is not None:
+                updates["ts_grid"] = str(level["grid"])
+            if level.get("scf_convergence") is not None:
+                updates["ts_scf"] = _scf_keyword(level.get("scf_convergence"))
+            if _optional_str(level.get("solvent")) is not None:
+                updates["solvent"] = str(level["solvent"])
+            if _optional_str(level.get("solvent_model")) is not None:
+                updates["solvent_model"] = str(level["solvent_model"])
+            if _optional_str(level.get("ts_initial_hessian")) is not None:
+                updates["ts_initial_hessian"] = str(level["ts_initial_hessian"])
+            if updates:
+                updated = replace(updated, **updates)
+        elif level_id == "freq":
+            handled_keys.update({"functional", "basis", "solvent", "solvent_model"})
+            updates = {}
+            if _optional_str(level.get("functional")) is not None:
+                updates["freq_method"] = str(level["functional"])
+            if _optional_str(level.get("basis")) is not None:
+                updates["freq_basis"] = str(level["basis"])
+            if _optional_str(level.get("solvent")) is not None:
+                updates["solvent"] = str(level["solvent"])
+            if _optional_str(level.get("solvent_model")) is not None:
+                updates["solvent_model"] = str(level["solvent_model"])
+            if updates:
+                updated = replace(updated, **updates)
+        elif level_id == "sp":
+            handled_keys.update(
+                {
+                    "functional",
+                    "basis",
+                    "ri_approximation",
+                    "aux_j_basis",
+                    "solvent",
+                    "solvent_model",
+                }
+            )
+            updates = {}
+            if _optional_str(level.get("functional")) is not None:
+                updates["sp_method"] = str(level["functional"])
+            if _optional_str(level.get("basis")) is not None:
+                updates["sp_basis"] = str(level["basis"])
+            if _optional_str(level.get("ri_approximation")) is not None:
+                updates["sp_ri_approximation"] = str(level["ri_approximation"])
+            if _optional_str(level.get("aux_j_basis")) is not None:
+                updates["sp_aux_j"] = str(level["aux_j_basis"])
+            if _optional_str(level.get("solvent")) is not None:
+                updates["solvent"] = str(level["solvent"])
+            if _optional_str(level.get("solvent_model")) is not None:
+                updates["solvent_model"] = str(level["solvent_model"])
+            if updates:
+                updated = replace(updated, **updates)
+        elif level_id == "irc":
+            handled_keys.update({"irc_points", "functional", "basis"})
+            irc_points = level.get("irc_points")
+            if irc_points is not None:
+                try:
+                    updated = replace(updated, irc_points=int(irc_points))
+                except (TypeError, ValueError):
+                    logger.debug(
+                        "Ignoring invalid mechanism irc.irc_points override: %r",
+                        irc_points,
+                    )
+
+        for key in level.keys() - handled_keys:
+            logger.debug("Ignoring unmapped mechanism level override %s.%s", level_id, key)
+    return updated
+
+
 def mechanism_profile_ids() -> tuple[str, ...]:
     """Return the catalog's mechanism preset profile ids (rph-s3 / rph-s4 / ...)."""
     from acp.catalog import METHOD_SCHEMAS
@@ -405,6 +537,7 @@ __all__ = [
     "RPH_CENSO_LITE_MODE",
     "RPH_PROFILE_IDS",
     "XTB_FAST_MODE",
+    "apply_levels_overrides",
     "mechanism_profile_ids",
     "resolve_fidelity",
     "resolve_fidelity_profile",
