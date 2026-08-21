@@ -8,8 +8,8 @@ Top-level package files: config loading, version management, package init. Hub c
 src/cccp/   # Authoritative version (reverse-synced 2026-07-13 from compute node)
 ├── config.py        # 6-source YAML config load/merge (+ remote-cluster sections)
 ├── software.py      # Centralized QC executable resolution (resolve_executable / detect_version / discover_all)
-├── __init__.py      # Package init; __version__ = "1.0.0"
-├── version.py       # __version__ = "1.0.0"
+├── __init__.py      # Package init; __version__ = "1.1.0"
+├── version.py       # __version__ = "1.1.0"
 ├── core/            # ConformerEngine (dormant), protocols, candidates, state_manager
 ├── io/              # MolecularInputHandler — format detection, RDKit embed
 ├── pipeline/        # PipelineExecutor — thin orchestration

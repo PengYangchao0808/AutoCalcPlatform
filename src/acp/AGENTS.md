@@ -1,7 +1,7 @@
 # acp/ — ACP Unified Module
 
 ## OVERVIEW
-The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. ~52 files, ~13k lines (incl. API + scheduler + nmr). Coexists with the underlying `cccp` package (Computational Chemistry Connection Package — the QC interface library). Active workflows: ensemble, energy, xtbmd_censo_energy, mechanism, nmr (GIAO + DP4/DP5, reactivated 2026-08-07), simple (singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt). The conformer/benchmark workflows were retired on 2026-07-27 (nmr was retired then but revived in P1a).
+The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. ~52 files, ~13k lines (incl. API + scheduler + nmr). Coexists with the underlying `cccp` package (Computational Chemistry Connection Package — the QC interface library). Active workflows: ensemble, energy, xtbmd_censo_energy, mechanism (study-only, S0→S4), nmr (GIAO + DP4/DP5, reactivated 2026-08-07), simple (singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt). The conformer/benchmark workflows were retired on 2026-07-27 (nmr was retired then but revived in P1a).
 
 ## STRUCTURE
 ```
@@ -15,7 +15,7 @@ acp/
 ├── chem/                # Chemistry: RDKit embedding, composition analysis
 ├── intake/              # Data ingestion: models, parsers, storage
 ├── io/                  # StructureReader / StructureWriter (thin cccp wrapper)
-├── workflows/           # ensemble, energy, xtbmd_censo_energy, mechanism, nmr, simple + registry (see workflows/AGENTS.md)
+├── workflows/           # ensemble, energy, xtbmd_censo_energy, nmr, simple + registry (see workflows/AGENTS.md; mechanism study lives in mechanism/)
 ├── nmr/                 # Phase 3 NMR + DP4/DP5 (13 modules + models/ data dir; see nmr/AGENTS.md)
 ├── api/                 # FastAPI — server, routes, v1_routes, schemas (~1600 lines)
 └── scheduler/           # Task scheduler — jobs, manager, runner, store, provenance, stage_tasks, ... + remote/ (15 + 11 files, ~9500 lines; see scheduler/AGENTS.md)
@@ -51,7 +51,7 @@ acp/
 | Ensemble workflow | `workflows/ensemble.py` | CREST → CENSO preset+screening |
 | Energy workflow | `workflows/energy.py` | CENSO screening → cumulative-Boltzmann → DFT handoff |
 | xTB-MD CENSO energy | `workflows/xtbmd_censo_energy.py` | GFN-FF MD → GFN1 batch opt → isostat → ewin filter → CENSO → fine DFT (Phase 1–5 done; multi-replica sampling in `workflows/xtbmd_md.py`, shared helpers in `workflows/energy_shared.py`) |
-| Mechanism workflow | `workflows/mechanism.py` | TS search + IRC validation |
+| Mechanism study | `mechanism/study_runner.py` + `mechanism/orchestrator.py` | `run_mechanism_study` / `resume_mechanism_study` → StudyOrchestrator phases S0→S1→S2→S3→SR→S4; strategies guided-scan / rph-reverse (native PEB) / direct-ts; ts_guess route `ts_guess_01`; SR cycles: `sr_cycle_review` decisions + `MechanismRevision` resume (per-cycle persistence under `cycles/cycle_NN/revision.json`), execution modes `require_sr_review` / `auto_converge` mutually exclusive (study lives here; the legacy single-reaction workflow under `workflows/` was removed 2026-08-15) |
 | Simple workflows | `workflows/simple.py` | singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt |
 | Workflow registry | `workflows/registry.py` | CLI subcommand → WorkflowSpec builder mapping |
 | API server | `api/server.py` | FastAPI app factory + static frontend hosting at `/` |

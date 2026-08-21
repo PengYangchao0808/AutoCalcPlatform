@@ -1,10 +1,10 @@
 # Auto-Calc Platform (ACP) — Project Knowledge Base
 
-**Generated:** 2026-08-12
-**Branch:** N/A (not a git repo)
+**Generated:** 2026-08-21
+**Branch:** main (git repo — uncommitted working tree carries the 2026-08-15/17 mechanism + PAUSED waves)
 
 ## OVERVIEW
-Automated computational chemistry platform. Two-package architecture under `src/`: `cccp` (Computational Chemistry Connection Package — the QC interface library, formerly `conformer_search`) and the `acp` module (Phase 1+, stage-based workflow pipeline, unified CLI). CREST → CENSO → DFT (ORCA) → Shermo thermo. Python 3.10+, setuptools, YAML config. Active workflows: ensemble, energy, xtbmd_censo_energy, mechanism, nmr (DP4/DP5, reactivated 2026-08-07), simple (singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt). conformer/benchmark retired 2026-07-27.
+Automated computational chemistry platform. Two-package architecture under `src/`: `cccp` (Computational Chemistry Connection Package — the QC interface library, formerly `conformer_search`) and the `acp` module (Phase 1+, stage-based workflow pipeline, unified CLI). CREST → CENSO → DFT (ORCA) → Shermo thermo. Python 3.10+, setuptools, YAML config. Active workflows: ensemble, energy, xtbmd_censo_energy, mechanism (study-only, S0→S4), nmr (DP4/DP5, reactivated 2026-08-07), simple (singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt). conformer/benchmark retired 2026-07-27. Scheduler job lifecycle includes PAUSED (local SIGSTOP/SIGCONT, remote bstop/bresume) plus checkpoint continue for mechanism/xtbmd, rerun, and cascade purge (2026-08-17 wave).
 
 ## STRUCTURE
 ```
@@ -13,41 +13,42 @@ ACP_V1_20260811/
 │   ├── config.py          # 6-source YAML config load/merge (756 lines; reads ~/.cccp.yaml, falls back to ~/.conformer_search.yaml)
 │   ├── software.py        # Centralized QC executable resolution — resolve_executable()/require_executable()/detect_version()/discover_all() (config → CONFSEARCH_*_PATH env → PATH+Python env → legacy fallback)
 │   ├── version.py         # __version__ (dup w/ __init__.py — bump BOTH)
-│   ├── core/              # ConformerEngine (dormant, ~1900 lines), ProtocolSpec, CandidateSet, state_manager
-│   ├── qc/interfaces/     # subprocess wrappers: ORCA/CREST/XTB/xtb_thermo + CENSO/ISOSTAT/Molclus (2026-08-02 consolidation — single subprocess layer)
+│   ├── core/              # ConformerEngine (dormant, ~1770 lines), ProtocolSpec, CandidateSet, state_manager
+│   ├── qc/interfaces/     # subprocess wrappers: ORCA/CREST/XTB/xtb_thermo + CENSO/ISOSTAT/Molclus (2026-08-02 consolidation — single subprocess layer); 2026-08 TS/IRC/scan wave added base.py (QCInterfaceBase) + constraints.py / orca_ts.py / xtb_path.py / xtb_scan.py (ORCAInterface/XTBInterface subclass QCInterfaceBase)
 │   ├── qc/runners/        # run_isostat (DEPRECATED) / run_shermo / batch_process_thermo (all in __init__.py)
 │   ├── qc/cluster/        # Local + LSF adapters + factory (single __init__.py)
-│   ├── io/                # MolecularInputHandler — format detection, RDKit embedding (425 lines)
-│   ├── pipeline/          # PipelineExecutor (thin, 78 lines)
+│   ├── io/                # MolecularInputHandler — format detection, RDKit embedding (442 lines)
+│   ├── pipeline/          # PipelineExecutor (thin, 12 lines)
 │   └── utils/             # File I/O, geometry, constants, solvent maps
-├── src/acp/               # Unified module (~52 .py, ~13k lines incl. API/scheduler/nmr)
-│   ├── cli.py             # argparse subcommand CLI: `acp run ensemble|energy|xtbmd_censo_energy|nmr|mechanism|serve|simple|...` (2050 lines)
-│   ├── catalog.py         # WORKFLOW_CATALOG + METHOD_META + METHOD_SCHEMAS (2588 lines — largest file in project)
+├── src/acp/               # Unified module (~125 .py, ~61k lines incl. API/scheduler/nmr/mechanism)
+│   ├── cli.py             # argparse subcommand CLI: `acp run ensemble|energy|xtbmd_censo_energy|nmr|mechanism|serve|simple|...` (2608 lines)
+│   ├── catalog.py         # WORKFLOW_CATALOG + METHOD_META + METHOD_SCHEMAS (2915 lines — largest file in project)
 │   ├── core/              # Shared mechanism: Structure, WorkflowRunner, Registry, State, Config
 │   ├── backends/          # QC backends with capability Protocols — thin adapters only (no subprocess; see 2026-08-02 consolidation)
 │   ├── chem/              # Chemistry: RDKit embedding, XYZ tools
 │   ├── intake/            # Data ingestion: models, parsers (6 formats), storage
 │   ├── io/                # StructureReader / StructureWriter (thin cccp wrapper)
-│   ├── workflows/         # ensemble, energy, xtbmd_censo_energy, mechanism, nmr, simple + registry (conformer/benchmark removed)
-│   ├── nmr/               # Phase 3 NMR + DP4/DP5: models, averaging, probability, error_model, FCHL, spectra, report (13 modules + models/ data dir; see nmr/AGENTS.md)
-│   ├── api/               # Phase 2 FastAPI — server, routes, v1_routes, schemas (~1600 lines)
-│   └── scheduler/         # Phase 2 task scheduler — jobs, manager, runner, store, provenance, stage_tasks, ... + remote/ subpkg (15 files, ~5600 lines)
-│       └── remote/        # Remote LSF execution: SSH/SFTP pool, code sync, bsub/bjobs, result fetch, cleanup, script_gen, node_manager (11 files, ~3900 lines; see remote/AGENTS.md)
+│   ├── workflows/         # ensemble, energy, xtbmd_censo_energy, nmr, simple + registry (conformer/benchmark removed; mechanism study lives in mechanism/)
+│   ├── nmr/               # Phase 3 NMR + DP4/DP5: models, averaging, probability, error_model, FCHL, spectra, report (12 modules + models/ data dir; see nmr/AGENTS.md)
+│   ├── api/               # Phase 2 FastAPI — server, routes, v1_routes, schemas (~4800 lines)
+│   └── scheduler/         # Phase 2 task scheduler — jobs, manager, runner, store, provenance, artifacts, migrations, events, files, logs, projects, stage_tasks, local_cleanup, nodes, metrics + remote/ subpkg (15 files, ~7500 lines)
+│       └── remote/        # Remote LSF execution: SSH pool, SFTP ops, code sync, bsub/bjobs, bstop/bresume, result fetch, cleanup, script_gen, node_manager, config (11 files, ~4900 lines; see remote/AGENTS.md)
 ├── frontend/              # ACP Workbench (v1 + v2) single-page dark dashboards
 ├── scripts/               # start_acp.sh, bootstrap_venv.sh, install_systemd.sh
 ├── config/defaults.yaml   # Default YAML config (may diverge from Python built-in — built-in is authoritative)
-├── tests/                 # 60 test files (1047 tests), conftest.py, fixtures/, baseline/ (audit artifact)
-├── docs/                  # Dev docs: CENSO, NMR_DP4, xTBMD_CENSO, Remote execution, Simple Workflows
+├── tests/                 # 82 test files (~1315 tests), conftest.py, fixtures/, baseline/ (audit artifact)
+├── docs/                  # Dev docs: CENSO, NMR_DP4, xTBMD_CENSO, Mechanism Research, Job File Layout, Remote execution, Simple Workflows
+├── requirements-node.txt  # Remote compute-node runtime deps (numpy/rdkit/pyyaml only — NOT pyproject); installed by NodeManager.bootstrap_node() and auto-synced by CodeSyncer. Add any new `acp run` runtime import HERE + pyproject.toml
 └── pyproject.toml         # api/remote/nmr/dev optional deps; console script `acp = acp.cli:main`
 ```
 
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| ACP CLI (unified entry) | `src/acp/cli.py` | `acp run ensemble|energy|xtbmd_censo_energy|mechanism|serve|singlepoint|opt|freq|scan|xtb-opt` (~2000 lines) |
-| Add new protocol | `src/cccp/core/protocols.py` | Update `_get_default_protocol_config()` (610 lines) |
-| Config loading | `src/cccp/config.py` | 6-source merge (677 lines) |
-| Config defaults (ACP) | `src/acp/core/config.py` | ACP-specific config loading (145 lines) |
+| ACP CLI (unified entry) | `src/acp/cli.py` | `acp run ensemble|energy|xtbmd_censo_energy|mechanism|serve|singlepoint|opt|freq|scan|xtb-opt` (2608 lines) |
+| Add new protocol | `src/cccp/core/protocols.py` | Update `_get_default_protocol_config()` (626 lines) |
+| Config loading | `src/cccp/config.py` | 6-source merge (756 lines) |
+| Config defaults (ACP) | `src/acp/core/config.py` | ACP-specific config loading (169 lines) |
 | ACP backends entry | `src/acp/backends/__init__.py` + `registry.py` | Protocol-based capability system |
 | ORCA backend | `src/acp/backends/orca.py` | ACP adapter wrapping ORCAInterface |
 | CREST backend | `src/acp/backends/crest.py` | ACP adapter wrapping CRESTInterface |
@@ -55,33 +56,41 @@ ACP_V1_20260811/
 | CENSO backend | `src/acp/backends/censo_backend.py` | Thin adapter → `cccp.qc.interfaces.censo.CensoInterface` (rcfile gen, presets, JSON/XYZ parsing live in cccp) |
 | ISOSTAT backend | `src/acp/backends/isostat_backend.py` | Thin adapter → `cccp.qc.interfaces.isostat.IsostatInterface` (title normalisation, env pinning in cccp) |
 | Molclus backend | `src/acp/backends/molclus_backend.py` | Thin adapter → `cccp.qc.interfaces.molclus.MolclusInterface` (md.inp/settings.ini/trajectory validation in cccp) |
-| Legacy ORCA interface | `src/cccp/qc/interfaces/orca.py` | Subprocess via direct ORCA invocation (811 lines) |
-| Legacy CREST interface | `src/cccp/qc/interfaces/crest.py` | `CRESTInterface` conformer search + batch `-mdopt` (723 lines) |
-| Legacy xTB interface | `src/cccp/qc/interfaces/xtb.py` | `XTBInterface` — optimize / single_point / enso_thermo (338 lines) |
+| Legacy ORCA interface | `src/cccp/qc/interfaces/orca.py` | ORCA subprocess + TS opt / IRC / relaxed scan / constrained opt / NMR shielding (2153 lines; `NmrShieldingParser` + all TS/IRC/scan logic — the 2026-08 primitives split lives in `orca_ts.py`/`constraints.py`/`xtb_scan.py`/`xtb_path.py`) |
+| Legacy CREST interface | `src/cccp/qc/interfaces/crest.py` | `CRESTInterface` conformer search only (362 lines; batch `-mdopt` moved to `XTBInterface.enso_thermo`) |
+| Legacy xTB interface | `src/cccp/qc/interfaces/xtb.py` | `XTBInterface` — optimize / constrained_optimize / relaxed_scan / single_point / enso_thermo (583 lines) |
 | ISOSTAT interface | `src/cccp/qc/interfaces/isostat.py` | Single ISOSTAT path (exit-24 title normalisation, error propagation, env pinning) |
 | Molclus interface | `src/cccp/qc/interfaces/molclus.py` | xTB-MD + Molclus full pipeline (md.inp, settings.ini, search()) |
 | CENSO interface | `src/cccp/qc/interfaces/censo.py` | CENSO subprocess: rcfile gen, preset injection, template injection, JSON/XYZ parsing |
-| Legacy ISOSTAT/Shermo | `src/cccp/qc/runners/__init__.py` | `run_isostat()` (DEPRECATED — IsostatInterface is the single path), `run_shermo()`, `batch_process_thermo()` (323 lines) |
-| Ensemble workflow | `src/acp/workflows/ensemble.py` | `acp run ensemble` — CREST → CENSO P+S (508 lines) |
-| Energy workflow | `src/acp/workflows/energy.py` | `acp run energy` — rank1-only default (`--full-ensemble` restores Boltzmann ≥99%), `--levels`, opt/freq same-level (~740 lines; heavy helpers in energy_shared.py) |
+| Legacy ISOSTAT/Shermo | `src/cccp/qc/runners/__init__.py` | `run_isostat()` (DEPRECATED — IsostatInterface is the single path), `run_shermo()`, `batch_process_thermo()` (342 lines) |
+| Ensemble workflow | `src/acp/workflows/ensemble.py` | `acp run ensemble` — CREST → CENSO P+S (398 lines) |
+| Energy workflow | `src/acp/workflows/energy.py` | `acp run energy` — rank1-only default (`--full-ensemble` restores Boltzmann ≥99%), `--levels`, opt/freq same-level (753 lines; heavy helpers in energy_shared.py) |
 | xTB-MD CENSO energy | `src/acp/workflows/xtbmd_censo_energy.py` | `acp run xtbmd_censo_energy` — GFN-FF MD → GFN1 batch opt → isostat → ewin filter → CENSO → fine DFT + G_total (2080 lines); multi-replica sampling in `xtbmd_md.py`; shared helpers in `energy_shared.py` |
 | Shared energy helpers | `src/acp/workflows/energy_shared.py` | `resolve_levels`/`run_rank1_handoff`/`boltzmann_weights`/`select_cumulative_boltzmann`/`build_ensemble_summary`/`write_final_outputs`/`censo_record_to_candidate`/`xtb_passthrough_result`/`resolve_solvent_config`/`resolve_crest_ewin` (E4 extraction); ORCA handoff via `get_backend("orca")` (2026-08-02) |
-| NMR workflow | `src/acp/workflows/nmr.py` | Conformer search → GIAO → Boltzmann averaging (502 lines) |
-| Mechanism workflow | `src/acp/workflows/mechanism.py` | TS search + IRC validation; study mode via `src/acp/mechanism/` |
+| NMR workflow | `src/acp/workflows/nmr.py` | Conformer search → GIAO → Boltzmann averaging (1056 lines) |
+| Mechanism study entry | `src/acp/mechanism/study_runner.py` | `acp run mechanism` → `run_mechanism_study` / `resume_mechanism_study` → `StudyOrchestrator` phases S0→S1→S2→S3→SR→S4 (the legacy single-reaction workflow under `workflows/` was removed 2026-08-15); SR execution modes: `require_sr_review` vs `auto_converge` (mutually exclusive, API rejects both) |
+| Mechanism orchestrator | `src/acp/mechanism/orchestrator.py` | `StudyOrchestrator` — phase execution, review gates, strategies (guided-scan / rph-reverse / direct-ts), ts_guess route `ts_guess_01`; SR cycles: `sr_cycle_review` decisions, `MechanismRevision` resume payloads, per-cycle persistence under `cycles/cycle_NN/revision.json` |
+| Mechanism atom mapping | `src/acp/mechanism/atom_mapping.py` | Cross-state reactant↔product atom mapping (0-based indices) for reaction confirmation |
+| Mechanism bond changes | `src/acp/mechanism/bond_changes.py` | Bond-change classification + suggested drive-coordinate plan generation |
+| Mechanism reaction definition | `src/acp/mechanism/reaction_definition.py` | Locked reaction-definition models + reaction.json persistence with content hash |
 | Mechanism study engines | `src/acp/mechanism/providers/` | NATIVE default: `native_censo_lite.py` (S1) / `native_peb.py` (S2) / `native_refinement.py` (S3/S4); `rph_adapter.py` = parity-only (`config['mechanism']['provider_backend']='rph'`) |
 | Mechanism primitives | `src/acp/mechanism/primitives/` | Pure-algorithm S2 ports (path_selector/path_profile/geometry_guard/scan_trajectory/energy_refinement/scan_rescue) + torsion_dedup |
-| Simple workflows | `src/acp/workflows/simple.py` | singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt (546 lines) |
-| Workflow registry | `src/acp/workflows/registry.py` | Maps CLI subcommands → WorkflowSpec builders (162 lines) |
-| Method catalog | `src/acp/catalog.py` | METHOD_META dict: methods, bases, route blocks (2588 lines) |
+| Mechanism support modules | `src/acp/mechanism/` | `rescue.py` (8-cell rescue matrix), `refinement_manifest.py` (S3/S4 manifest io), `identity.py` (study identity/fingerprints), `endpoint.py`/`gates.py`/`models.py`/`presets.py`/`reports.py`/`strategies.py`/`candidates.py`/`_helpers.py` (numbered-run resume via `next_sequence` disk scan); providers also include `guided_scan.py`/`xtb_ensemble.py`/`thermo.py`/`contracts.py`/`fake.py` |
+| Mechanism study API | `src/acp/api/v1_routes.py` | Study CRUD + two-layer surface: reaction preview/confirm/get, stationary preflight/status/confirm, mechanism/plan, SR cycle endpoints (GET `/{id}/reviews`, POST `/{id}/reviews/{rid}/decision`, POST `/{id}/promote`, POST `/{id}/resume`), `unified_status` projection on summary/detail |
+| Simple workflows | `src/acp/workflows/simple.py` | singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt (635 lines) |
+| Workflow registry | `src/acp/workflows/registry.py` | Maps CLI subcommands → WorkflowSpec builders (153 lines) |
+| Method catalog | `src/acp/catalog.py` | METHOD_META dict: methods, bases, route blocks (2915 lines) |
 | Core data models | `src/acp/core/models.py` | Structure, StructureRecord, StructureEnsemble (389 lines) |
 | Workflow engine | `src/acp/core/workflow.py` | WorkflowRunner, WorkflowSpec, Stage (105 lines) |
 | Workflow state | `src/acp/core/state.py` | WorkflowState, EventLog (272 lines) |
 | CENSO dev doc | `docs/ACP_CENSO_Integration_DevDoc.html` | Authoritative design + P1–P5 audit history (v14: acceptance passed) |
 | Simple workflows doc | `docs/ACP_Simple_Workflows_DevDoc.html` | 5 ORCA simple workflow design |
-| Input parsing | `src/cccp/io/input_handler.py` | SMILES→RDKit embed; XYZ/GJF/LOG/OUT parse (425 lines) |
+| Job file layout spec | `docs/ACP_Job_File_Layout_Spec.md` | Authoritative job/work_dir file-layout contract (scheduler + frontend file tree) |
+| Mechanism research doc | `docs/ACP_Mechanism_Research_DevDoc.md` | Mechanism study S0→S4 design (native-first, RPH parity) |
+| Input parsing | `src/cccp/io/input_handler.py` | SMILES→RDKit embed; XYZ/GJF/LOG/OUT parse (442 lines) |
 | ACP intake parsers | `src/acp/intake/parsers.py` | 6 format parsers: XYZ/SDF/MOL/GJF/INP/SMILES (565 lines) |
-| RDKit embedding | `src/acp/chem/embedding.py` | SMILES→RDKit embed, charge assignment, XYZ tools (381 lines) |
-| Constants / units | `src/cccp/utils/constants.py` | HARTREE_TO_KCAL, element masses (37 lines) |
+| RDKit embedding | `src/acp/chem/embedding.py` | SMILES→RDKit embed, charge assignment, XYZ tools (517 lines) |
+| Constants / units | `src/cccp/utils/constants.py` | HARTREE_TO_KCAL, element masses (38 lines) |
 | NMR models | `src/acp/nmr/models.py` | NmrConfig, ExperimentalNmr/Peak, ConformerShielding, NmrReport (385 lines) |
 | NMR parsing | `src/acp/nmr/io.py` | `parse_experimental_nmr` — experimental shift file parser (140 lines) |
 | NMR averaging | `src/acp/nmr/averaging.py` + `equivalence.py` | Boltzmann averaging, symmetry equivalence detection |
@@ -90,24 +99,28 @@ ACP_V1_20260811/
 | NMR FCHL kernels | `src/acp/nmr/fchl.py` | P4: FCHL atomic representations (qml extra, optional) |
 | NMR spectra | `src/acp/nmr/spectra.py` | P3: Bruker experiment processing |
 | NMR reports | `src/acp/nmr/report.py` | JSON + XLSX + plot serialization (nmr_report.json, nmr_assignment.xlsx) |
-| NMR workflow | `src/acp/workflows/nmr.py` | Conformer search → GIAO → Boltzmann averaging → DP4/DP5 (502 lines) |
+| NMR workflow | `src/acp/workflows/nmr.py` | Conformer search → GIAO → Boltzmann averaging → DP4/DP5 (1056 lines) |
 | ACP API server | `src/acp/api/server.py` | FastAPI app factory + static frontend hosting at `/` (183 lines) |
 | API routes | `src/acp/api/routes.py` | `/api/status`, `/api/backends` (379 lines) |
-| API v1 routes | `src/acp/api/v1_routes.py` | Job submission, molecule upload, task management (1488 lines) |
-| API schemas | `src/acp/api/schemas.py` / `v1_schemas.py` | Pydantic models for status, backends, jobs |
-| ACP Workbench frontend | `frontend/ACP_Workbench.html` + `ACP_Workbench_v2.html` | Dark dashboard; polling /api/status, /api/backends |
-| Task scheduler | `src/acp/scheduler/` | 15 files: jobs, manager, runner, store, provenance, artifacts, migrations, events, files, logs, projects, stage_tasks, local_cleanup, nodes + remote/ |
-| Job manager | `src/acp/scheduler/manager.py` | Job lifecycle management, polling, cancellation (1035 lines) |
-| Job runner | `src/acp/scheduler/runner.py` | Background process execution (1251 lines) |
+| API v1 routes | `src/acp/api/v1_routes.py` | Job submission, molecule upload, task management, job detail projection (3280 lines) |
+| Job detail endpoint | `src/acp/api/v1_routes.py` | `GET /api/v1/jobs/{id}/detail` — rich projection: job + stages (StageTaskStore, disk fallback) + artifacts_summary + error_detail/stderr_tail + disk_state + server-computed `recovery` matrix (pause/unpause/continue/rerun/purge buttons + notes); disk backfill of result when null (R1); POST `/jobs/{id}/pause` `/unpause` `/continue` `/rerun` + POST `/jobs/purge` |
+| API schemas | `src/acp/api/schemas.py` / `v1_schemas.py` | Pydantic models for status, backends, jobs; incl. `V1JobDetailResponse`, `V1JobPurgeRequest/Response` (889 lines in v1_schemas.py) |
+| ACP Workbench frontend | `frontend/ACP_Workbench.html` + `ACP_Workbench_v2.html` | Dark dashboard; polling /api/status, /api/backends; job detail view (stages stepper, error card, stderr tail, recovery action bar) + batch purge UI + paused badge |
+| Task scheduler | `src/acp/scheduler/` | 15 files: jobs, manager, runner, store, provenance, artifacts, migrations, events, files, logs, projects, stage_tasks, local_cleanup, nodes, metrics + remote/ |
+| Job manager | `src/acp/scheduler/manager.py` | Job lifecycle management, polling, cancellation, pause/unpause/continue/rerun/purge (1636 lines) |
+| Job queue ops (methods) | `src/acp/scheduler/manager.py` | `pause_job` (RUNNING→PAUSED; local killpg SIGSTOP, remote `bstop`) / `unpause_job` (PAUSED→RUNNING; local SIGCONT, remote `bresume`) / `continue_job` (FAILED/CANCELLED→QUEUED; mechanism phase-level + xtbmd stage-level checkpoint, `attempts`+1, `continued_from`; others raise ValueError) / `rerun_job` (enhanced clone → `{name}__rerun`, new job) / `purge_jobs` (batch cascade; active jobs require force_cancel) / `resume` (WAITING_REVIEW-review-only, DO NOT reuse) |
+| Job runner | `src/acp/scheduler/runner.py` | Background process execution; `pause_local`/`resume_local` via killpg SIGSTOP/SIGCONT (1635 lines) |
 | Provenance tracking | `src/acp/scheduler/provenance.py` | Event sourcing, audit logging |
 | Data store | `src/acp/scheduler/store.py` | SQLite persistence |
-| Remote LSF runner | `src/acp/scheduler/remote/runner.py` | bsub/bjobs/bkill, state.json observation (1213 lines) |
-| Remote SSH pool | `src/acp/scheduler/remote/ssh.py` | Thread-safe paramiko connection pool (323 lines) |
-| Remote code sync | `src/acp/scheduler/remote/sync.py` | Incremental mtime-based sync to remote nodes (261 lines) |
-| Remote monitor | `src/acp/scheduler/remote/monitor.py` | LSF job monitor, disk check (341 lines) |
-| Remote result fetch | `src/acp/scheduler/remote/fetcher.py` | On-demand SFTP file retrieval (464 lines) |
+| Remote LSF runner | `src/acp/scheduler/remote/runner.py` | bsub/bjobs/bkill, bstop/bresume mapping to PAUSED, state.json observation (1423 lines) |
+| Remote SSH pool | `src/acp/scheduler/remote/ssh.py` | Thread-safe paramiko connection pool (333 lines) |
+| Remote SFTP ops | `src/acp/scheduler/remote/sftp.py` | SFTP file transfer helpers (302 lines) |
+| Remote exec config | `src/acp/scheduler/remote/config.py` | Remote-node config (253 lines) |
+| Remote code sync | `src/acp/scheduler/remote/sync.py` | Incremental mtime-based sync to remote nodes (262 lines) |
+| Remote monitor | `src/acp/scheduler/remote/monitor.py` | LSF job monitor, `bstop_job`/`bresume_job`, PSUSP/SSUSP/USUSP→paused map, disk check (404 lines) |
+| Remote result fetch | `src/acp/scheduler/remote/fetcher.py` | On-demand SFTP file retrieval (480 lines) |
 | Remote cleanup | `src/acp/scheduler/remote/cleanup.py` | Retention-based disk cleanup (514 lines) |
-| Remote script gen | `src/acp/scheduler/remote/script_gen.py` | LSF submission script builder (360 lines) |
+| Remote script gen | `src/acp/scheduler/remote/script_gen.py` | LSF submission script builder (554 lines) |
 | Remote node mgr | `src/acp/scheduler/remote/node_manager.py` | Node status with 30s TTL cache (315 lines) |
 
 ## CONVENTIONS
@@ -120,6 +133,7 @@ ACP_V1_20260811/
 - **Paths**: `pathlib.Path` preferred over `os.path`
 - **Linter/formatter configured**: ruff (E/F/I/N/W/UP), ruff-format, mypy (strict), pre-commit with ruff hooks
 - **`__all__`**: All subpackage `__init__.py` files re-export public symbols
+- **Job state machine** (2026-08-17 wave): statuses include `PAUSED`. `RUNNING ↔ PAUSED` via `pause_job`/`unpause_job` — local uses `os.killpg(pgid, SIGSTOP/SIGCONT)` (process stays in `_processes`; pause does NOT free memory/disk), remote uses LSF `bstop`/`bresume`. `PAUSED` is active (counted in queue, guarded against delete) but not terminal; the poller skips PAUSED like WAITING_REVIEW. Restart behavior: local PAUSED → killpg cleanup + FAILED with `[RESTART_FAILED] paused job frozen at restart — 可续算 (resumable via continue)`; remote PAUSED → re-adopted via `_try_recover_remote_job` (stays PAUSED). Cancel on PAUSED first SIGCONTs then SIGTERM→SIGKILL (frozen processes ignore SIGTERM).
 
 ## ANTI-PATTERNS (THIS PROJECT)
 1. **NEVER import `pymatgen`** — removed from pyproject.toml (verified: 0 references in src/)
@@ -130,20 +144,26 @@ ACP_V1_20260811/
 6. **`__main__.py` exists for acp ONLY** — `python -m acp` and `python -m acp.cli` work; `python -m cccp` does NOT (no cccp/__main__.py — deleted in the rename)
 7. **Two annotation styles coexist** — `typing.Optional[X]` in legacy cccp interface layer vs PEP 604 (`X | None`) in acp/ and newer cccp modules (config.py, software.py, protocols.py)
 8. **`CRESTInterface` has no base class** — `class CRESTInterface:` (reverse-sync restored upstream form)
-9. **`# pyright:` suppressions heavy in acp/** — 18 files; 14 suppress 6+ rules each (nmr/ is the densest); pyright not in toolchain
-10. **`except Exception:` bare catches** — 31 silent-swallow sites across 15 files (161 total real catches); worst: `chem/embedding.py` (6), `nmr/enumerate.py` (6), `api/v1_routes.py` (6)
+9. **`# pyright:` suppressions heavy in acp/** — 42 files (nmr/ is the densest); pyright not in toolchain
+10. **`except Exception:` bare catches** — 80 sites across 25 files (worst: `api/v1_routes.py` (20), `chem/embedding.py` (10), `nmr/enumerate.py` (7))
 11. **`HARTREE_TO_KCAL` duplicated** — `acp/core/models.py` AND `cccp/utils/constants.py` (identical value 627.5094740631)
 12. **Gas-constant R duplicated 3×** — `cccp/core/candidates.py:130` (0.001987204), `cccp/core/engine.py:1726` (0.0019872041), `acp/workflows/nmr.py:379` (0.001987204259) — different precision!
 13. **`conformer-search` console_script removed** — the legacy CLI (`cccp/cli.py`, `cccp/__main__.py`) was deleted; use `acp` instead. `bin/conformer-search` never existed on disk either.
 14. **`XTBInterface` now standalone** — was co-located in `crest.py`, split to `qc/interfaces/xtb.py` in Phase C (2026-07-27)
 15. **CI is disabled** — `.github/workflows/ci.yml` only triggers on `workflow_dispatch`; push/pull_request commented out. systemd unit `/etc/systemd/system/acp.service` is generated (not version-controlled) — edit `scripts/install_systemd.sh`, not the unit
+16. **NEVER default mechanism provider `work_root` to `tempfile`** — S1/S2/S3/S4 QC artifacts must land under `study_dir/calc/` (s1/s1_xtbfast/s2/s2_peb/s3s4 subdirs, threaded via `build_study_providers(work_root=...)`); the `/tmp` defaults caused invisible frontend trees + unrecoverable remote-node leakage (fixed 2026-08-17; fallback is now `Path.cwd()/"acp_calc"`). Numbered run dirs (`ensemble_NNN`, `*__scan_NNN`) resume via `_helpers.next_sequence` disk scan
+17. **ORCA `%geom` keyword is `Trust`, NOT `TrustRadius`** — `TrustRadius` is rejected at input parse (ORCA 5.x/6.x) killing every TS opt attempt; fixed 2026-08-17 in `orca_ts.ts_geom_block` (also emits `MaxIter` from `max_cycles`/`geom_maxiter`)
+18. **`simple.py::_SCHEDULER_MARKERS` must list every scheduler pre-created file** (`events.jsonl`/`job.json`/`stdout.log`/`stderr.log`/`mechanism_config.json` + dirs) — otherwise `_resolve_output_dir` redirects scheduler jobs to a `<work_dir>_1/` sibling invisible to the file tree (fixed 2026-08-17)
+19. **NEVER add a job status without updating the full surface** — `jobs.py::JobStatus` `is_active`/`is_terminal`, `store.counts()` consumers (`schemas.py::QueueCounts` + `routes.py`), and frontend `getStatusClass`/`getQueueCounts`/`isActiveJobStatus`/i18n (zh + en) must ALL recognize the new status (PAUSED 2026-08-17 touched every one of these)
+20. **NEVER delete a job via bare `DELETE FROM jobs`** — use `store.purge_cascade` (`manager._purge_job_records`); `decision_points` links via `study_id` (no `job_id` column, subselect through `mechanism_studies`), and no FK cascades exist in the schema
+21. **`resume(job_id, resolution)` is WAITING_REVIEW-review-only** — pause/unpause/continue are separate methods (`pause_job`/`unpause_job`/`continue_job`); non-requeue `resume()` has the RUNNING-bounce footgun (sets RUNNING with no thread → `exit_code 77` persists → bounces back to WAITING_REVIEW on next poll)
 
 ## UNIQUE STYLES
-- Module docstrings: title + `====` underline + `Author: QCcalc Team` (34 files, mostly cccp/)
+- Module docstrings: title + `====` underline + `Author: QCcalc Team` (38 files, mostly cccp/)
 - ACP backends use capability Protocols (GeometryOptimizer, SinglePointCalculator, etc.) instead of ABC — EXCEPT `QCBackend(ABC)` (backends/base.py) and `ErrorModel(ABC)` (nmr/error_model.py)
 - `CRESTInterface` has no base class (`class CRESTInterface:`); `XTBInterface` standalone in `xtb.py`
-- Type annotation style split: legacy cccp uses `typing.X`; acp + newer cccp use `X | None` with `from __future__ import annotations` (87/87 files)
-- `logger = logging.getLogger(__name__)` in every module (62 files); pathlib.Path only — zero `os.path.*` usage; `os.replace` for atomic writes
+- Type annotation style split: legacy cccp uses `typing.X`; acp + newer cccp use `X | None` with `from __future__ import annotations` (133 of 160 .py files use the future import)
+- `logger = logging.getLogger(__name__)` in every module (86 files); pathlib.Path only — zero `os.path.*` usage; `os.replace` for atomic writes
 - Scheduler launches jobs as `python -m acp.cli run <workflow>` subprocesses (undeclared but production-critical entry form)
 
 ## COMMANDS
@@ -180,8 +200,9 @@ acp run xtbmd_censo_energy --input "CCO" --no-conv-check --max-frames 300 --opt-
 acp run nmr --input "CCO" --output ./nmr_results
 acp run nmr --input "CCO" --backend orca --reference "13C=185.0" "1H=31.5"
 
-# mechanism (TS + IRC)
-acp run mechanism --reactant "C=O" --product "C[O-]" --output ./mech_out
+# mechanism study (S0→S4 reaction-network exploration; the legacy 9-stage
+# single-reaction workflow was removed 2026-08-15)
+acp run mechanism --input "C=O" --product "C[O-]" --conformer-mode censo-lite --max-elementary-steps 3 --output ./mech_out
 
 # simple ORCA workflows
 acp run singlepoint --input "CCO" --method "wB97X-D4" --basis "def2-TZVPPD"
@@ -197,7 +218,7 @@ pytest tests/ --run-slow -v
 pytest -m "not slow" -v
 pytest tests/test_acp_workflows_energy.py -v
 pytest tests/test_acp_workflows_xtbmd_censo_energy.py -v
-pytest tests/test_acp_workflows_mechanism.py -v
+pytest tests/test_acp_mechanism_study.py -v
 pytest tests/test_acp_workflows_nmr.py -v
 pytest tests/test_acp_nmr_probability.py -v
 pytest tests/test_acp_backends.py -v

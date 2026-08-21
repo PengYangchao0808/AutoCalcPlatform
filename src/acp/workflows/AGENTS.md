@@ -1,7 +1,7 @@
 # acp/workflows/ — Workflow Modules
 
 ## OVERVIEW
-Stage-based workflow implementations for the active ACP workflows. 5 user-facing workflows — ensemble, energy, mechanism, nmr (GIAO + DP4/DP5, reactivated 2026-08-07), simple — plus a registry that maps CLI subcommands to `WorkflowSpec` builders, and the xtbmd_censo_energy pipeline stages (Phases 2–4 of docs/ACP_xTBMD_CENSO_Energy_DevDoc.html). 13 files, ~6500 lines. The retired conformer/benchmark workflows were removed in 2026-07-27 (nmr was removed then but revived in P1a; catalog entries for conformer/benchmark kept as `status:"retired"` for historical-job display only).
+Stage-based workflow implementations for the active ACP workflows. 5 user-facing workflows — ensemble, energy, mechanism, nmr (GIAO + DP4/DP5, reactivated 2026-08-07), simple — plus a registry that maps CLI subcommands to `WorkflowSpec` builders, and the xtbmd_censo_energy pipeline stages (Phases 2–4 of docs/ACP_xTBMD_CENSO_Energy_DevDoc.html). The `acp run mechanism` entry now delegates directly into `acp/mechanism/study_runner.py` (study-only path), so there is no local `workflows/mechanism.py`. The retired conformer/benchmark workflows were removed in 2026-07-27 (nmr was removed then but revived in P1a; catalog entries for conformer/benchmark kept as `status:"retired"` for historical-job display only).
 
 ## STRUCTURE
 ```
@@ -13,7 +13,7 @@ workflows/
 ├── ensemble_thermo.py       # Ensemble total-Gibbs helpers (mixing_entropy / ensemble_total_gibbs[_from_values] / EnsembleThermoSummary)
 ├── energy.py                # `acp run energy` — Boltzmann ≥99%, opt/freq same-level handoff (739 lines; heavy helpers live in energy_shared.py)
 ├── energy_shared.py         # Shared energy helpers (E4 extraction: resolve_levels / run_rank1_handoff / boltzmann_weights / select_cumulative_boltzmann / build_ensemble_summary / write_final_outputs / censo_record_to_candidate / build_result_ensemble / xtb_passthrough_result / resolve_solvent_config / resolve_crest_ewin)
-├── mechanism.py             # `acp run mechanism` — TS search + IRC validation (394 lines)
+├── nmr.py                   # `acp run nmr` — conformer search → GIAO → Boltzmann averaging → DP4/DP5
 ├── simple.py                # `acp run singlepoint|opt|freq|optfreq|optfreqsp|scan|xtb-opt` (579 lines)
 ├── xtbmd_md.py              # Multi-replica xTB-MD sampling convention (run_md_replicas, Phase 2)
 └── xtbmd_censo_energy.py    # xtbmd_censo_energy pipeline (2080 lines): `_batch_opt_frames` GFN1 batch optimization (Phase 3) + `run_xtbmd_censo_energy` orchestration (Phase 4)
@@ -29,8 +29,7 @@ workflows/
 | Shermo thermo | `energy_shared.py` | `run_shermo` imported from `acp.backends.external` (re-export of `cccp.qc.runners.run_shermo`), same as `simple.py` |
 | Shared energy helpers | `energy_shared.py` | Public extraction (E4) — `resolve_levels` / `run_rank1_handoff` (opt→freq→SP→Shermo) / `boltzmann_weights` / `select_cumulative_boltzmann` / `build_ensemble_summary` / `write_final_outputs` (finalDFT products + ensemble_thermo.json + TOTAL row + boltzmann_table.json) / `censo_record_to_candidate` (cheap --no-opt path; `source` preserves the CENSO `conf_id`) / `build_result_ensemble` / `xtb_passthrough_result` / `resolve_solvent_config` / `resolve_crest_ewin`. Shared by `energy.py` / `ensemble.py` (private-name aliases) and `xtbmd_censo_energy.py` (public names). Import from here, never from `energy.py`/`ensemble.py` private names |
 | xTB-MD CENSO energy entry | `xtbmd_censo_energy.py` | `run_xtbmd_censo_energy()` — Phase 4 orchestration: embed → run_md_replicas → `_batch_opt_frames` → ISOSTAT → `_filter_energy_window` (GFN1 ewin, sidecar primary) → CENSO 3 presets × dual modes → `write_final_outputs`; per-stage checkpoint fingerprints for `--resume`; empty-ensemble fail-fast |
-| Mechanism TS | `mechanism.py` | `run_mechanism_analysis()` — TS search + IRC validation + energy barrier |
-| Mechanism energy | `mechanism.py` | `_compute_energy_barrier()` — barrier in kcal/mol |
+| Mechanism study entry | `../mechanism/study_runner.py` | `run_mechanism_study()` / `resume_mechanism_study()` — S0→S4 network study |
 | Simple workflows | `simple.py` | `run_singlepoint` / `run_optimize` / `run_frequency` / `run_optfreq` / `run_optfreqsp` — single-structure ORCA tasks |
 | CLI → workflow mapping | `registry.py` | `list_workflow_entries()` / `get_workflow_entry()` — driven by `catalog.SUPPORTED_WORKFLOWS`; conformer/nmr/benchmark intentionally absent |
 | Multi-replica MD sampling | `xtbmd_md.py` | `run_md_replicas()` — seed increments + distinct RDKit multi-start conformations (md_seeds > 1) + trajectory merge; single-trajectory responsibility lives in `MolclusBackend.run_md` |

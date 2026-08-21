@@ -11,7 +11,7 @@
 | **Phase 0** | ✅ 完成 | 底层 `cccp`（Computational Chemistry Connection Package）QC 接口库 |
 | **Phase 1** | ✅ 完成 | 模块化重构 + `acp` 统一模块 + ensemble/energy/mechanism/simple 工作流 + CENSO 集成 |
 | **Phase 2** | ✅ 完成 | FastAPI Web 后端 + 任务调度器 + 远程 LSF 执行 |
-| **Phase 4** | ✅ 完成 | 机理研究模块（TS 搜索 + IRC 验证） |
+| **Phase 4** | ✅ 完成 | 机理研究（S0→S4 研究型流水线：构象 → 路径搜索 → 精修 → IRC/端点匹配 → 高精度确认） |
 
 > 注：conformer / nmr / benchmark 三个工作流已于 2026-07-27 移除（catalog 中保留为 `status:"retired"` 仅用于历史作业展示）。构象搜索能力由 `ensemble` / `energy` 工作流经 `CrestBackend.search()` 提供。
 
@@ -34,11 +34,19 @@
 
 > ⚠️ **注意事项（`--rank1-only` 模式）**：`acp run energy --rank1-only` 与未来的 `acp run xtbmd_censo_energy --rank1-only` 中，`G_total = G₁(fine DFT) + k_B·T·ln p₁` 的混合修正项采用 CENSO 权重表（半经验/低精度 DFT 级），而 G₁ 来自高精度 DFT，属于**混级量**：当 CENSO 排序与高精度方法不一致（rank 反转）时误差可达数 kcal/mol 量级。该模式仅适合"只看排名第一构象"的快速筛选场景；正式结果请使用默认全系综模式（完整混合式，DFT 级权重）。两种模式均输出 `total_gibbs_censo_hartree` 参考量用于对照修正。
 
-### 3. 机理研究 — `acp run mechanism` ✅
-- 反应物/产物/中间体构象搜索
-- TS 初猜构筑（NEB 插值 / 反应坐标扫描）
-- TS 优化（Opt=TS, CalcFC）
-- IRC 验证 + 能垒分析
+### 3. 机理研究 — `acp run mechanism` ✅（研究型流水线，study-only，2026-08-15 起）
+- **S0** 反应物/产物端点感知 + 稳定态构象搜索（`--conformer-mode`：censo-lite / xtb-fast / auto）
+- **S1** 稳定态构象系综（native-censo-lite provider）
+- **S2** 反应路径搜索（策略：`guided-scan` / `rph-reverse`（native PEB）/ `direct-ts`）
+- **S3** 路径精修（TS 优化 + 频率，fidelity `s3`）
+- **SR** IRC 扫描 + 端点匹配（connectivity fingerprint）；**SR 审核闭环**：S3 完成后进入 SR 人工审核（`sr_cycle_review` 决策点）——`continue`（修订坐标继续下一周期）/ `accept_network`（接受网络，经 promote 直接进入 S4）/ `auto_converge`（自动收敛，跳过人工审核）
+- **S4** 高精度确认（`select_s4_candidates` + refinement provider，fidelity `s4`）
+- 质量分级：`MechanismStudy.quality` ∈ {`high`, `medium`, `null`} —— `high` = 所有选中的 S4 候选均精修成功；`medium` = 保留但未获完整 S4 确认（不算失败）
+- 研究参数：`--study-id --conformer-mode --max-elementary-steps --promotion-policy --int-extension --auto-converge`；调度器写入 `<work_dir>/mechanism_config.json`，经 `--mechanism-config` 传入 CLI
+- Web 前端机理面板：反应定义 / 反应变化 / 驻点确认 / 机理解析 / SR 审核（`unified_status` 状态徽标 + promote 按钮，走 `/api/v1/mechanism-studies/{id}/reviews|promote|resume`）
+- 原生 provider 为锁定生产路径（native_censo_lite / native_peb / native_refinement）；`rph_adapter.py` 仅为 parity 保留（`config['mechanism']['provider_backend']='rph'`，无 CLI 标志）
+- 计算产物目录：S1–S4 全部 QC 文件落于 `mechanism_study/<study_id>/calc/`（`s1`/`s1_xtbfast`/`s2`/`s2_peb`/`s3s4` 子目录），前端文件树运行中自动刷新可见（本地 15s / 远程 30s）
+- ⚠️ 旧版 9 阶段单反应工作流已于 2026-08-15 移除
 
 ### 4. 简单 ORCA 工作流 — `acp run singlepoint|opt|freq|...` ✅
 - 单点能计算（singlepoint）
@@ -58,6 +66,15 @@
 - LSF 脚本生成 + bsub 提交 + bjobs 监控
 - 增量代码同步 + 结果拉取
 - 磁盘压力 + 保留期清理
+
+### 7. 任务队列操作 ✅（2026-08-17 起）
+- **暂停 / 恢复**：运行中任务可暂停（`PAUSED`），本地 SIGSTOP/SIGCONT 进程组冻结/复活、远程 LSF `bstop`/`bresume`；**暂停不释放内存/磁盘配额**，适合临时让出算力
+- **断点续算**：失败/取消任务按检查点继续 —— mechanism（相位级 S0–S4 指纹）、xtbmd（阶段级指纹）；其余工作流引导「重算」
+- **重新运行**：一键以同 spec 另起新任务（`{name}__rerun`）
+- **清除**：单任务级联删除（jobs + stage_tasks + artifacts + mechanism_studies + decision_points），支持按状态/项目/时间批量清除
+- **任务详情**：阶段 stepper、错误详情（error + stderr 尾部）、产物摘要、恢复操作建议（服务端计算 recovery 矩阵）
+
+队列操作端点：`GET /api/v1/jobs/{id}/detail` · `POST /api/v1/jobs/{id}/pause|unpause|continue|rerun` · `POST /api/v1/jobs/purge`
 
 ---
 
@@ -90,10 +107,11 @@ src/
 │   │   ├── external.py           # 外部工具 re-export
 │   │   └── external_backend.py   # ExternalBackend (ISOSTAT + Shermo)
 │   │
-│   ├── workflows/                # 工作流模块（4 个活跃 + registry）
+│   ├── workflows/                # 工作流模块（5 个活跃 + registry；机理研究在 src/acp/mechanism/）
 │   │   ├── ensemble.py           # CREST→CENSO ensemble 工作流
 │   │   ├── energy.py             # 自由能排名工作流（Boltzmann + DFT handoff）
-│   │   ├── mechanism.py          # 机理研究工作流
+│   │   ├── xtbmd_censo_energy.py # xTB-MD → CENSO 自由能
+│   │   ├── nmr.py                # NMR 化学位移预测（GIAO + DP4/DP5）
 │   │   ├── simple.py             # 简单 ORCA 工作流 (sp/opt/freq/optfreq/optfreqsp/scan/xtb-opt)
 │   │   ├── registry.py           # 工作流注册表（CLI 子命令 → WorkflowSpec）
 │   │   └── __init__.py           # PEP 562 懒加载 re-export
@@ -220,9 +238,10 @@ acp run energy --input "CCO" --output ./out
 acp run energy --input "CCO" --no-opt --output ./out
 acp run energy --input "CCO" --levels '{"opt":{"method":"wB97X-D4","basis":"def2-SVP"},"sp":{"method":"wB97X-D4","basis":"def2-TZVPPD"}}'
 
-# === 机理研究 ===
-acp run mechanism --reactant "C=O" --product "C[O-]" --output ./mech_out
-acp run mechanism --input reaction.xyz --n-irc-points 30
+# === 机理研究（研究型流水线 S0→S4）===
+acp run mechanism --input "C=O" --product "C[O-]" --output ./mech_out
+acp run mechanism --input "C=C" --product "CC" --conformer-mode censo-lite --max-elementary-steps 3 --output ./mech_out
+acp run mechanism --input "C=C" --strategy guided-scan --fidelity s3 --output ./mech_out
 
 # === 简单 ORCA 工作流 ===
 acp run singlepoint --input "CCO" --method "wB97X-D4" --basis "def2-TZVPPD"
@@ -259,9 +278,16 @@ acp run energy --input <SMILES或文件路径>
                [--no-opt] [--levels <JSON>]
                --nproc --mem --config ...
 
-acp run mechanism --reactant <SMILES> --product <SMILES>
+acp run mechanism --input <反应物 SMILES 或文件> [--product <产物>] [--ts-guess <TS 初猜>]
                   --output <输出目录>
-                  [--n-irc-points <N>] [--method <method>]
+                  [--strategy <guided-scan|rph-reverse|direct-ts>]
+                  [--fidelity <s3|s4>] [--preset <rph-s3|rph-s4|...>]
+                  [--routes <JSON>] [--scan-points <N>] [--irc-points <N>]
+                  [--study-id <id>] [--conformer-mode <auto|censo-lite|xtb-fast>]
+                  [--max-elementary-steps <N>] [--promotion-policy <all_confirmed|rate_relevant|user_selected>]
+                  [--int-extension] [--auto-converge]
+                  [--mechanism-config <path>]
+                  --nproc --mem --config ...
 
 acp run singlepoint|opt|freq|optfreq|optfreqsp|scan|xtb-opt --input <SMILES或文件路径>
                   --output <输出目录>
@@ -312,7 +338,7 @@ pytest tests/ -v
 # 运行特定模块测试
 pytest tests/test_acp_backends.py -v
 pytest tests/test_acp_workflows_ensemble.py -v
-pytest tests/test_acp_workflows_mechanism.py -v
+pytest tests/test_acp_mechanism_study.py -v
 pytest tests/test_acp_workflows_energy.py -v
 
 # 运行 CENSO 集成测试
@@ -368,7 +394,7 @@ pytest -m "not slow" -v
           ▼           ▼           ▼           ▼
     ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
     │ Ensemble │ │ 自由能排名│ │ 机理研究  │ │ Simple   │
-    │ (Phase1) │ │ (Phase1) │ │ (Phase4) │ │ (Phase1) │
+    │ (Phase1) │ │ (Phase1) │ │ (S0→S4)  │ │ (Phase1) │
     └──────────┘ └──────────┘ └──────────┘ └──────────┘
           │           │           │           │
           └───────────┼───────────┼───────────┘
