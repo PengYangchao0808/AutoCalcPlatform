@@ -1,12 +1,18 @@
 name: CI
 
-# CI temporarily disabled — re-enable by uncommenting push/pull_request below
+# CI enabled 2026-08-21 — functional gates only (compile + test).
+# Lint/format gates are DEFERRED: the repo carries pre-existing ruff debt
+# (~678 `ruff check` errors, mostly legacy cccp/ reverse-sync code; 63 files
+# not `ruff format`-clean). Re-enable once a dedicated hygiene wave lands:
+#   - ruff check --fix src tests   (501 safe auto-fixes)
+#   - ruff format src tests        (one-time formatting pass)
+#   - then restore the lint/format steps below.
 on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+    branches: [main]
   workflow_dispatch: {}
-  # push:
-  #   branches: [main, master]
-  # pull_request:
-  #   branches: [main, master]
 
 jobs:
   test:
@@ -23,19 +29,23 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install package and dev dependencies
+      - name: Install package and dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e '.[dev]'
+          # remote extra required: scheduler/remote + test_remote_phase* import
+          # paramiko at module level; [dev] alone fails collection.
+          pip install -e '.[dev,remote]'
 
       - name: Compile all Python source
         run: python -m compileall src tests
 
       - name: Run tests
-        run: pytest tests/ -v
+        # Real-binary tests are collection-skipped; slow/integration suites
+        # require --run-slow and external QC binaries (ORCA/CREST/xTB/...).
+        run: pytest tests/ -m "not slow" -q
 
-      - name: Lint with ruff
-        run: ruff check src tests
-
-      - name: Check formatting with ruff
-        run: ruff format --check src tests
+      # --- deferred lint/format gates (see header note) ---
+      # - name: Lint with ruff
+      #   run: ruff check src tests
+      # - name: Check formatting with ruff
+      #   run: ruff format --check src tests
