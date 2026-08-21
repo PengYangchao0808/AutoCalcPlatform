@@ -12,22 +12,28 @@ Grimme CENSO / MolSSI QCEngine / autodE model:
         -> tiny legacy fallback list
         -> None
 
-There is deliberately *no* directory scanning, provider framework,
-candidate ranking or discovery cache: the OS PATH *is* the discovery
-protocol for the QC software ecosystem.  Every consumer (backends, API,
-catalog, preflight, workflows) must resolve binaries through
-:func:`resolve_executable` — the one place discovery happens.
+Resolution is deliberately first-hit-wins with a fixed priority order
+(explicit pin wins; no auto-prefer-newest).  *Discovery*, however, is
+informational: :func:`discover_candidates` / :func:`discover_all_detailed`
+enumerate *all* installs visible from each source (including a small
+glob-based filesystem scan of conventional install dirs) so the API can
+surface multi-install situations.  Discovery never feeds back into
+resolution order.
 
 Author: QCcalc Team
 """
 
 from __future__ import annotations
 
+import glob
 import logging
 import os
+import re
 import shutil
 import subprocess
 import sys
+import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -84,9 +90,65 @@ _VERSION_FLAGS: dict[str, tuple[str, ...]] = {
     "molclus": (),
 }
 
+#: Glob patterns for the informational filesystem scan (discovery only —
+#: never consulted by :func:`resolve_executable`).  Only patterns that are
+#: trivially safe (conventional, non-recursive install layouts) belong here;
+#: software without such a layout simply has no entry.  Missing or
+#: unreadable directories are skipped silently.
+SCAN_PATTERNS: dict[str, tuple[str, ...]] = {
+    "orca": (
+        "/opt/orca*/orca",
+        "/opt/software/orca*/orca",
+        "/usr/local/orca*/orca",
+        "~/orca*/orca",
+    ),
+}
+
+#: TTL (seconds) for the module-level version-probe cache.
+VERSION_CACHE_TTL = 300.0
+
+#: Semver-like token extracted from raw version output.
+_SEMVER_RE = re.compile(r"\d+(?:\.\d+)+")
+
+#: (monotonic timestamp, normalized version) keyed by resolved absolute path.
+_VERSION_CACHE: dict[str, tuple[float, str]] = {}
+
 
 class SoftwareNotFoundError(RuntimeError):
     """Raised when a required QC binary cannot be resolved."""
+
+
+@dataclass(frozen=True)
+class SoftwareCandidate:
+    """One discovered install of a QC executable.
+
+    Attributes:
+        path: Resolved absolute path of the executable.
+        source: Where the candidate was found — one of ``"config"``,
+            ``"env"``, ``"path"``, ``"fallback"`` or ``"scan"``.
+    """
+
+    path: Path
+    source: str
+
+
+@dataclass(frozen=True)
+class SoftwareDiscovery:
+    """Full discovery picture for one software package.
+
+    Attributes:
+        name: Software key from :data:`EXECUTABLES`.
+        resolved: The path :func:`resolve_executable` would use, or ``None``.
+        source: Source label of the resolved path, or ``None``.
+        candidates: Every discovered install, de-duplicated by resolved
+            path and ordered by resolution priority (config, env, PATH
+            order, fallback, scan last).
+    """
+
+    name: str
+    resolved: Path | None
+    source: str | None
+    candidates: tuple[SoftwareCandidate, ...] = field(default_factory=tuple)
 
 
 def _valid_executable(path: str | Path | None) -> Path | None:
@@ -97,6 +159,43 @@ def _valid_executable(path: str | Path | None) -> Path | None:
     if candidate.is_file() and os.access(candidate, os.X_OK):
         return candidate.resolve()
     return None
+
+
+def _search_path() -> str:
+    """PATH plus the current Python environment directory."""
+    return os.pathsep.join(
+        filter(None, [str(Path(sys.executable).parent), os.environ.get("PATH", "")])
+    )
+
+
+def _resolve(name: str, configured_path: str | Path | None) -> tuple[Path | None, str | None]:
+    """Resolution core — returns (path, source); first hit wins."""
+    # 1. Explicit configuration (absolute file path)
+    path = _valid_executable(configured_path)
+    if path:
+        return path, "config"
+
+    # 2. Environment override
+    env_var = ENV_VARS.get(name)
+    if env_var:
+        path = _valid_executable(os.environ.get(env_var))
+        if path:
+            return path, "env"
+
+    # 3. PATH + current Python environment directory
+    search_path = _search_path()
+    for binary in EXECUTABLES.get(name, [name]):
+        found = shutil.which(binary, path=search_path)
+        if found:
+            return Path(found).resolve(), "path"
+
+    # 4. Legacy fallbacks
+    for candidate in FALLBACKS.get(name, []):
+        path = _valid_executable(candidate)
+        if path:
+            return path, "fallback"
+
+    return None, None
 
 
 def resolve_executable(
@@ -120,34 +219,22 @@ def resolve_executable(
     whose driver locates its own parallel modules relative to the invoked
     executable.
     """
-    # 1. Explicit configuration (absolute file path)
-    path = _valid_executable(configured_path)
-    if path:
-        return path
+    return _resolve(name, configured_path)[0]
 
-    # 2. Environment override
-    env_var = ENV_VARS.get(name)
-    if env_var:
-        path = _valid_executable(os.environ.get(env_var))
-        if path:
-            return path
 
-    # 3. PATH + current Python environment directory
-    search_path = os.pathsep.join(
-        filter(None, [str(Path(sys.executable).parent), os.environ.get("PATH", "")])
-    )
-    for binary in EXECUTABLES.get(name, [name]):
-        found = shutil.which(binary, path=search_path)
-        if found:
-            return Path(found).resolve()
+def resolve_executable_with_source(
+    name: str,
+    configured_path: str | Path | None = None,
+) -> tuple[Path | None, str | None]:
+    """Like :func:`resolve_executable` but also reports the winning source.
 
-    # 4. Legacy fallbacks
-    for candidate in FALLBACKS.get(name, []):
-        path = _valid_executable(candidate)
-        if path:
-            return path
-
-    return None
+    Returns:
+        ``(path, source)`` where *source* is one of ``"config"``,
+        ``"env"``, ``"path"``, ``"fallback"`` — both ``None`` when the
+        executable cannot be resolved.  Same priority order and semantics
+        as :func:`resolve_executable`.
+    """
+    return _resolve(name, configured_path)
 
 
 def require_executable(
@@ -192,6 +279,96 @@ def discover_all(config: dict[str, Any] | None = None) -> dict[str, Path | None]
     }
 
 
+def _which_all(binary: str, search_path: str) -> list[Path]:
+    """Every executable hit for *binary* along *search_path*, in order."""
+    seen: set[Path] = set()
+    hits: list[Path] = []
+    for directory in search_path.split(os.pathsep):
+        if not directory:
+            continue
+        path = _valid_executable(Path(directory) / binary)
+        if path is not None and path not in seen:
+            seen.add(path)
+            hits.append(path)
+    return hits
+
+
+def _scan_candidates(name: str) -> list[Path]:
+    """Glob-based scan of conventional install dirs (informational only)."""
+    hits: list[Path] = []
+    for pattern in SCAN_PATTERNS.get(name, ()):
+        for match in sorted(glob.glob(os.path.expanduser(pattern))):
+            path = _valid_executable(match)
+            if path is not None:
+                hits.append(path)
+    return hits
+
+
+def discover_candidates(
+    name: str,
+    configured_path: str | Path | None = None,
+) -> list[SoftwareCandidate]:
+    """Enumerate *all* discoverable installs of *name* (informational).
+
+    Candidates are de-duplicated by resolved absolute path and ordered by
+    resolution priority: ``config`` (valid absolute *configured_path*),
+    ``env`` (``CONFSEARCH_<NAME>_PATH``), ``path`` (every hit along the
+    ``sys.executable``-dir + PATH search path, in PATH order),
+    ``fallback`` (:data:`FALLBACKS` hits), then ``scan`` (:data:`SCAN_PATTERNS`
+    glob hits, only for software with declared patterns).  This never
+    affects :func:`resolve_executable` — the first-hit-wins resolution
+    semantics are unchanged.
+    """
+    candidates: list[SoftwareCandidate] = []
+    seen: set[Path] = set()
+
+    def _add(path: Path | None, source: str) -> None:
+        if path is not None and path not in seen:
+            seen.add(path)
+            candidates.append(SoftwareCandidate(path=path, source=source))
+
+    _add(_valid_executable(configured_path), "config")
+
+    env_var = ENV_VARS.get(name)
+    if env_var:
+        _add(_valid_executable(os.environ.get(env_var)), "env")
+
+    search_path = _search_path()
+    for binary in EXECUTABLES.get(name, [name]):
+        for hit in _which_all(binary, search_path):
+            _add(hit, "path")
+
+    for fallback in FALLBACKS.get(name, []):
+        _add(_valid_executable(fallback), "fallback")
+
+    if name in EXECUTABLES:
+        for hit in _scan_candidates(name):
+            _add(hit, "scan")
+
+    return candidates
+
+
+def discover_all_detailed(config: dict[str, Any] | None = None) -> dict[str, SoftwareDiscovery]:
+    """Resolved path + source + full candidate list for every known software.
+
+    Combines :func:`resolve_executable_with_source` (the same path and
+    priority order as :func:`resolve_executable`) with
+    :func:`discover_candidates` for each name in :data:`EXECUTABLES`.
+    Used by the ``/api/v1/software/discovery`` endpoint.
+    """
+    detailed: dict[str, SoftwareDiscovery] = {}
+    for name in EXECUTABLES:
+        configured = get_configured_path(config, name)
+        resolved, source = _resolve(name, configured)
+        detailed[name] = SoftwareDiscovery(
+            name=name,
+            resolved=resolved,
+            source=source,
+            candidates=tuple(discover_candidates(name, configured_path=configured)),
+        )
+    return detailed
+
+
 def detect_version(name: str, executable: Path | None) -> str | None:
     """Best-effort version probe, decoupled from resolution.
 
@@ -216,20 +393,72 @@ def detect_version(name: str, executable: Path | None) -> str | None:
             continue
         if result.returncode != 0:
             continue
-        first_line = (result.stdout or result.stderr).split("\n")[0].strip()
+        output = result.stdout or result.stderr
+        first_line = output.split("\n")[0].strip()
         if first_line and len(first_line) < 128:
             return first_line
+        # The first line is blank or decorative (e.g. CENSO 3.x prints an
+        # ASCII banner with ``v 3.0.8`` on a later line) — fall back to the
+        # first semver-like token anywhere in the output.
+        match = _SEMVER_RE.search(output)
+        if match:
+            return match.group(0)
     return None
+
+
+def normalize_version(raw: str | None) -> str:
+    """Normalize raw version-probe output to a display version.
+
+    Extracts the first semver-like token (``\\d+(\\.\\d+)+``) when present;
+    otherwise returns the raw string truncated to 64 characters.  ``""``
+    when *raw* is empty or ``None``.
+    """
+    if not raw:
+        return ""
+    match = _SEMVER_RE.search(raw)
+    if match:
+        return match.group(0)
+    return raw[:64]
+
+
+def version_cached(name: str, executable: Path | None) -> str:
+    """TTL-cached, normalized version probe for *executable*.
+
+    Wraps :func:`detect_version` + :func:`normalize_version` in a
+    module-level cache (:data:`VERSION_CACHE_TTL` seconds) keyed by the
+    resolved absolute path, so frequently-polled callers (the backends
+    API) spawn at most one probe per TTL per binary.  Failed probes are
+    cached as ``""`` (negative caching, same TTL).
+    """
+    if executable is None:
+        return ""
+    key = str(executable)
+    now = time.monotonic()
+    entry = _VERSION_CACHE.get(key)
+    if entry is not None and now - entry[0] < VERSION_CACHE_TTL:
+        return entry[1]
+    version = normalize_version(detect_version(name, executable))
+    _VERSION_CACHE[key] = (now, version)
+    return version
 
 
 __all__ = [
     "ENV_VARS",
     "EXECUTABLES",
     "FALLBACKS",
+    "SCAN_PATTERNS",
+    "VERSION_CACHE_TTL",
+    "SoftwareCandidate",
+    "SoftwareDiscovery",
     "SoftwareNotFoundError",
     "detect_version",
     "discover_all",
+    "discover_all_detailed",
+    "discover_candidates",
     "get_configured_path",
+    "normalize_version",
     "require_executable",
     "resolve_executable",
+    "resolve_executable_with_source",
+    "version_cached",
 ]

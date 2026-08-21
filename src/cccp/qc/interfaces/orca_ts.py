@@ -113,7 +113,9 @@ def ts_opt_route(
 
     Composite 3c methods (``*3c`` suffixes) carry no basis keyword; ordinary
     methods take ``<method> <basis>``. Grid/SCF/solvent keywords are appended
-    when provided. ``OptTS`` is always emitted. ``opt_level`` accepts
+    when provided. ``OptTS`` is always emitted, and ``NumFreq`` is appended
+    last so every TS run ends with the independent numerical frequency
+    verification. ``opt_level`` accepts
     ``loose`` / ``normal`` / ``tight`` / ``verytight``; ``normal`` leaves the
     route at plain ``OptTS`` because ORCA already uses the default optimization
     thresholds there and emitting a second ``Opt`` run-type keyword would be
@@ -142,6 +144,7 @@ def ts_opt_route(
         opt_keyword = _OPT_LEVEL_KEYWORDS[level_key]
         if opt_keyword:
             tokens.append(opt_keyword)
+    tokens.append("NumFreq")
     route = "! " + " ".join(tokens)
     if aux_j and ri_approximation:
         route += f" {ri_approximation} aux {aux_j}"
@@ -156,13 +159,17 @@ def ts_geom_block(
     trust_radius: float = 0.15,
     *,
     ts_mode: bool | int = False,
+    max_iter: int | None = None,
 ) -> str:
     """Render the ``%geom`` block for a TS optimization.
 
     ``Calc_Hess true`` is emitted only when *initial_hessian* is
-    ``"calculate"`` (model/read Hessians omit it). ``ts_mode`` emits ORCA's
-    ``TS_Mode {M n} end`` selector, where *n* is the 0-based normal-mode index
-    from the frequency run. ``True`` maps to mode ``0``.
+    ``"calculate"`` (model/read Hessians omit it). ``trust_radius`` maps to the
+    ORCA ``Trust`` keyword (positive value = initial trust radius with
+    trust-radius update; negative = fixed). ``max_iter`` emits ORCA's ``MaxIter``
+    keyword; ``None`` leaves it out so ORCA's default applies. ``ts_mode`` emits
+    ORCA's ``TS_Mode {M n} end`` selector, where *n* is the 0-based normal-mode
+    index from the frequency run. ``True`` maps to mode ``0``.
     """
     lines = ["%geom"]
     if initial_hessian == "calculate":
@@ -170,7 +177,9 @@ def ts_geom_block(
     if recalc_hess:
         lines.append(f"  Recalc_Hess {int(recalc_hess)}")
     if trust_radius:
-        lines.append(f"  TrustRadius {float(trust_radius):g}")
+        lines.append(f"  Trust {float(trust_radius):g}")
+    if max_iter is not None:
+        lines.append(f"  MaxIter {int(max_iter)}")
     emit_ts_mode = False
     mode_index = 0
     if isinstance(ts_mode, bool):
@@ -187,8 +196,8 @@ def ts_geom_block(
 
 
 def freq_block_for_ts() -> str:
-    """Render the ``%freq`` block requesting an independent Hessian."""
-    return "%freq\n  Calc_Hess true\nend"
+    """Extra ``%freq`` settings for a TS run (none — NumFreq rides in the route)."""
+    return ""
 
 
 def irc_route(

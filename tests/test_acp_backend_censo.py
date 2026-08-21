@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
@@ -19,15 +19,13 @@ from acp.backends import (
 from acp.backends.base import ConformerSearcher
 from acp.backends.censo_backend import (
     CensoConformerRecord,
-    CensoError,
     CensoExecutionError,
     CensoNotAvailableError,
     CensoParseError,
     CensoRunResult,
 )
-from acp.backends.registry import get_backend, require_backend
+from acp.backends.registry import get_backend
 from cccp.qc.interfaces.censo import CensoInterface
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -487,7 +485,9 @@ def test_parse_censo_json_missing_xyz(tmp_path: Path) -> None:
     json_path = tmp_path / "1_SCREENING.json"
     xyz_path = tmp_path / "1_SCREENING.xyz"
 
-    json_path.write_text('{"data": {"CONF1": {"energy": 0.0, "gsolv": 0.0, "grrho": 0.0, "gtot": 0.0}}}')
+    json_path.write_text(
+        '{"data": {"CONF1": {"energy": 0.0, "gsolv": 0.0, "grrho": 0.0, "gtot": 0.0}}}'
+    )
 
     with pytest.raises(CensoParseError, match="XYZ not found"):
         interface.parse_censo_json(json_path, xyz_path)
@@ -591,11 +591,13 @@ def test_refine_ensemble_success(tmp_path: Path) -> None:
 
 def test_refine_ensemble_censo_not_available(tmp_path: Path) -> None:
     config = _make_config()
-    backend = CensoBackend(config)
     input_xyz = tmp_path / "input.xyz"
     input_xyz.write_text("1\n\nH 0 0 0\n")
 
-    with patch("shutil.which", return_value=None):
+    # The executable must be unresolved at construction time — patching
+    # ``shutil.which`` later has no effect once a real CENSO is installed.
+    with patch("cccp.qc.interfaces.censo.resolve_executable", return_value=None):
+        backend = CensoBackend(config)
         with pytest.raises(CensoNotAvailableError):
             backend.refine_ensemble(input_xyz, tmp_path)
 

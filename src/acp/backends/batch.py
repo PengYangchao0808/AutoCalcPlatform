@@ -249,6 +249,56 @@ def _write_cache(cache_path: Path, payload: Mapping[str, object]) -> None:
         raise
 
 
+_STALE_FRAME_FILE_SUFFIXES: frozenset[str] = frozenset(
+    {
+        # ORCA guess files: a stale same-named copy makes SCF abort with
+        # "Input geometry does not match current geometry" under MPI when the
+        # geometry changed between batch runs.
+        ".ges",
+        ".gbw",
+        # Residual scratch/temp artifacts that ORCA would otherwise try to
+        # reuse or that shadow the regenerated run.
+        ".tmp",
+        ".mdci",
+        ".densities",
+        ".hess",
+        ".property.txt",
+        ".int",
+        ".sharkinp",
+    }
+)
+
+
+def _clear_stale_guess_files(frame_dir: Path, output_name: str) -> None:
+    """Remove stale ORCA guess/output files from a reused frame directory.
+
+    Frame directories under ``output_dir`` are stable across batch runs, so a
+    previous run can leave an ``<output_name>.ges`` (or ``.gbw``) behind. ORCA
+    detects the same-named guess file and tries to reuse it; when the geometry
+    changed between runs this fails with ``Input geometry does not match current
+    geometry`` (scfguess.cpp) under MPI, aborting the frame. Deleting these
+    files before each run keeps every frame independent of prior executions.
+    """
+    if not frame_dir.is_dir():
+        return
+    # ORCA emits both dotted (``sp_0000.out``) and underscored
+    # (``sp_0000_property.txt``) artifact names; accept either separator.
+    prefixes = (f"{output_name}.", f"{output_name}_")
+    for path in frame_dir.iterdir():
+        if not path.is_file() or not path.name.startswith(prefixes):
+            continue
+        lower_name = path.name.lower()
+        if any(
+            lower_name.endswith(f"{separator}{suffix.lstrip('.')}")
+            for separator in (".", "_")
+            for suffix in _STALE_FRAME_FILE_SUFFIXES
+        ):
+            try:
+                path.unlink()
+            except OSError:
+                logger.warning("Failed to remove stale frame file %s", path)
+
+
 def batch_single_point(
     backend: SinglePointCalculator,
     geometries: Sequence[GeometryLike],
@@ -319,6 +369,7 @@ def batch_single_point(
         structure_ref = geometry_list[index]
         frame_dir = output_root / f"{output_prefix}_{index:04d}"
         frame_dir.mkdir(parents=True, exist_ok=True)
+        _clear_stale_guess_files(frame_dir, f"{output_prefix}_{index:04d}")
 
         try:
             coordinates = _normalize_coordinates(structure_ref, len(symbol_list))

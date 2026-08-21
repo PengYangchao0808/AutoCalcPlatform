@@ -165,6 +165,19 @@ def test_ts_block_builders_render_rescue_keywords() -> None:
     assert "TS_Mode {M 3} end" in geom
 
 
+def test_ts_geom_block_renders_trust_keyword_and_optional_maxiter() -> None:
+    default_geom = ts_geom_block()
+    maxiter_geom = ts_geom_block(max_iter=60)
+    model_hess_geom = ts_geom_block(initial_hessian="model")
+
+    assert "Trust 0.15" in default_geom
+    assert "TrustRadius" not in default_geom
+    assert "MaxIter" not in default_geom
+    assert "MaxIter 60" in maxiter_geom
+    assert "Calc_Hess true" in default_geom
+    assert "Calc_Hess" not in model_hess_geom
+
+
 def test_ts_opt_route_normal_level_does_not_duplicate_opt_keyword() -> None:
     route = ts_opt_route("B3LYP", "def2-SVP", opt_level="normal")
 

@@ -1783,11 +1783,12 @@ class ORCAInterface(QCInterfaceBase):
     ) -> TsOptResult:
         """Run an ORCA OptTS + independent-frequency transition-state search.
 
-        The input carries an ``! OptTS`` route (built via
+        The input carries an ``! OptTS NumFreq`` route (built via
         :func:`cccp.qc.interfaces.orca_ts.ts_opt_route`), a ``%geom`` block
-        requesting a calculated Hessian / RecalcHess / TrustRadius, and a
-        ``%freq`` block for the independent frequency analysis used to verify
-        the transition state (exactly one imaginary mode).
+        requesting a calculated Hessian / RecalcHess / Trust (initial trust
+        radius); the ``NumFreq`` keyword requests the independent numerical
+        frequency analysis used to verify the transition state (exactly one
+        imaginary mode).
 
         Args:
             coordinates: Initial TS-guess coordinates (N, 3).
@@ -1800,9 +1801,10 @@ class ORCAInterface(QCInterfaceBase):
             basis: Override basis (uses ``self.basis`` if None).
             initial_hessian: ``"calculate"`` (default) / ``"model"`` / ``"read"``.
             recalc_hess: Recalculate Hessian every N steps (0 disables).
-            trust_radius: Initial TrustRadius for the TS optimizer.
+            trust_radius: Initial Trust (trust radius) for the TS optimizer.
             **kwargs: ``solvent`` / ``solvent_model`` / ``grid`` / ``scf`` /
                 ``nproc`` / ``ts_mode`` / ``opt_level`` /
+                ``geom_maxiter`` / ``max_cycles`` /
                 ``mode_displacement`` / ``mode_vector`` /
                 ``mode_displacement_sign`` overrides.
 
@@ -1826,6 +1828,7 @@ class ORCAInterface(QCInterfaceBase):
         _mode_displacement = kwargs.pop("mode_displacement", None)
         _mode_vector = kwargs.pop("mode_vector", None)
         _mode_displacement_sign = kwargs.pop("mode_displacement_sign", "plus")
+        geom_maxiter = kwargs.pop("geom_maxiter", kwargs.pop("max_cycles", None))
         if kwargs:
             logger.warning(
                 "Unused ORCA transition_state_opt kwargs for %s: %s",
@@ -1860,17 +1863,20 @@ class ORCAInterface(QCInterfaceBase):
             nproc=_nproc or self.nproc,
             opt_level=_opt_level,
         )
-        blocks = (
-            route
-            + "\n"
-            + ts_geom_block(
-                initial_hessian,
-                recalc_hess,
-                trust_radius,
-                ts_mode=_ts_mode,
+        blocks = "\n".join(
+            part
+            for part in (
+                route,
+                ts_geom_block(
+                    initial_hessian,
+                    recalc_hess,
+                    trust_radius,
+                    ts_mode=_ts_mode,
+                    max_iter=geom_maxiter,
+                ),
+                freq_block_for_ts(),
             )
-            + "\n"
-            + freq_block_for_ts()
+            if part
         )
 
         with open(input_file, "w", encoding="utf-8") as f:
