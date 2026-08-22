@@ -19,6 +19,13 @@ from cccp.qc.interfaces.constraints import CoordinateSpec, ReactionCoordinatePla
 
 from ._helpers import write_json_atomic as _write_json_atomic
 from .endpoint import DefaultEndpointProvider, EndpointMatchThresholds
+from .engines.elementary_step import (
+    ElementaryStepEngine,
+    exploration_key,
+    mark_route_status,
+    persist_refinement_manifest,
+    persist_route_manifest,
+)
 from .gates import run_gates
 from .models import (
     ArtifactRef,
@@ -28,11 +35,9 @@ from .models import (
     MechanismRevision,
     MechanismRoute,
     MechanismStudy,
-    PathPoint,
     PathResult,
     Provenance,
     ReactionNetwork,
-    SeedCandidate,
     SelectedBond,
     StableState,
     StationaryPoint,
@@ -182,7 +187,7 @@ class StudyOrchestrator:
                 decision.status = "resolved"
                 decision.resolution = "stop_branch"
                 decision.resolved_at = _utc_now()
-                self._mark_route_status(
+                mark_route_status(self.study,
                     str(context.get("exploration_key") or ""),
                     str(context.get("route_fingerprint") or ""),
                     status="stopped",
@@ -428,7 +433,7 @@ class StudyOrchestrator:
                 self.study.metadata.setdefault("refinement_manifests", {})[manifest.manifest_id] = (
                     manifest.to_dict()
                 )
-                self._persist_refinement_manifest(manifest)
+                persist_refinement_manifest(self.study_dir, manifest)
                 (
                     manifest_successes,
                     manifest_failures,
@@ -811,6 +816,7 @@ class StudyOrchestrator:
             "frontier_loop_started",
             frontier_size=len(self.study.frontier.queue),
         )
+        engine = self._new_step_engine()
         while (
             not self.study.frontier.empty()
             and len(self.study.elementary_steps) < self.max_elementary_steps
@@ -829,129 +835,27 @@ class StudyOrchestrator:
             source_state = self._require_state(source_state_id)
             source_state.metadata.setdefault("route_id", route_id)
             route = self._require_route(route_id)
-            target_state = self.study.get_state(route.product_id) if route.product_id else None
-            route_fingerprint = self._route_fingerprint(source_state, route, target_state, depth)
-            exploration_key = self._exploration_key(source_state_id, route_id)
-            if self._route_status_matches(
-                exploration_key,
-                route_fingerprint,
-                {"completed", "stopped"},
-            ):
+            ctx = engine.prepare(source_state, route, depth)
+            if engine.already_done(ctx):
                 continue
 
-            self._emit_event(
-                "S2",
-                "path_search_started",
-                source_state_id=source_state_id,
-                route_id=route_id,
-                depth=depth,
-            )
-            path_result = self.path_strategy.search(
-                source_state,
-                target_state,
-                route.coordinate_plan,
-                self.ensemble_profile,
-            )
-            self.study.metadata.setdefault("path_results", {})[exploration_key] = (
-                path_result.to_dict()
-            )
-            self._merge_gate_policies(path_result)
-            self._persist_route_manifest(
-                source_state_id=source_state_id,
-                route=route,
-                route_fingerprint=route_fingerprint,
-                status="searched",
-                path_result=path_result,
-                depth=depth,
-            )
-            self._emit_event(
-                "S2",
-                "path_search_completed",
-                source_state_id=source_state_id,
-                route_id=route_id,
-                n_points=len(path_result.points),
-            )
-
-            refinement_requests = self._build_refinement_requests(source_state, route, path_result)
-            self._emit_event(
-                "S3",
-                "refinement_started",
-                source_state_id=source_state_id,
-                route_id=route_id,
-                n_requests=len(refinement_requests),
-            )
-            manifest = self.refinement_provider.refine(
-                refinement_requests,
-                self.low_fidelity_profile,
-            )
-            self.study.metadata.setdefault("refinement_manifests", {})[manifest.manifest_id] = (
-                manifest.to_dict()
-            )
-            self._persist_refinement_manifest(manifest)
-            canonical_ts = manifest.canonical_winner
-            if canonical_ts is None:
-                self._mark_route_status(exploration_key, route_fingerprint, status="failed")
-                self._persist_route_manifest(
-                    source_state_id=source_state_id,
-                    route=route,
-                    route_fingerprint=route_fingerprint,
-                    status="failed",
-                    path_result=path_result,
-                    refinement_manifest=manifest,
-                    depth=depth,
-                )
+            outcome = engine.run(ctx)
+            if outcome.canonical_ts is None:
                 continue
-            self._upsert_stationary_point(canonical_ts)
-            self._emit_event(
-                "S3",
-                "refinement_completed",
-                manifest_id=manifest.manifest_id,
-                ts_id=canonical_ts.point_id,
-            )
-            self._enrich_ts_for_irc(canonical_ts, source_state, path_result)
 
-            self._emit_event(
-                "SR",
-                "irc_started",
-                source_state_id=source_state_id,
-                route_id=route_id,
-                ts_id=canonical_ts.point_id,
-            )
-            irc_result = self.endpoint_provider.run_irc(canonical_ts, self.low_fidelity_profile)
-            endpoint_match = self.endpoint_provider.classify_endpoints(
-                irc_result,
-                self.study.stable_states,
-            )
-            self.study.metadata.setdefault("irc_results", {})[irc_result.irc_id] = (
-                irc_result.to_dict()
-            )
-            self.study.metadata.setdefault("endpoint_matches", {})[exploration_key] = (
-                endpoint_match.to_dict()
-            )
-
-            if self._needs_review(
-                endpoint_match,
-                source_state_id=source_state_id,
-                route_id=route_id,
-                depth=depth,
-            ):
+            if outcome.needs_review:
                 # Backward-compat contract: only AMBIGUOUS verdicts use the legacy
                 # frontier-review type; policy-driven pauses become SR cycle reviews.
-                decision_type = (
-                    "mechanism_frontier_review"
-                    if endpoint_match.verdict == "AMBIGUOUS"
-                    else "sr_cycle_review"
-                )
                 self._create_decision(
                     source_state=source_state,
                     route=route,
                     depth=depth,
-                    route_fingerprint=route_fingerprint,
-                    path_result=path_result,
-                    refinement_manifest=manifest,
-                    irc_result=irc_result,
-                    endpoint_match=endpoint_match,
-                    decision_type=decision_type,
+                    route_fingerprint=ctx.route_fingerprint,
+                    path_result=outcome.path_result,
+                    refinement_manifest=outcome.refinement_manifest,
+                    irc_result=outcome.irc_result,
+                    endpoint_match=outcome.endpoint_match,
+                    decision_type=outcome.decision_type,
                 )
                 self.study.status = "waiting"
                 self._persist_study_bundle()
@@ -963,20 +867,21 @@ class StudyOrchestrator:
                 source_state=source_state,
                 route=route,
                 depth=depth,
-                route_fingerprint=route_fingerprint,
-                canonical_ts=canonical_ts,
-                irc_result=irc_result,
-                endpoint_match=endpoint_match,
+                route_fingerprint=ctx.route_fingerprint,
+                canonical_ts=outcome.canonical_ts,
+                irc_result=outcome.irc_result,
+                endpoint_match=outcome.endpoint_match,
             )
-            self._persist_route_manifest(
+            persist_route_manifest(
+                self.study_dir,
                 source_state_id=source_state_id,
                 route=route,
-                route_fingerprint=route_fingerprint,
+                route_fingerprint=ctx.route_fingerprint,
                 status="completed",
-                path_result=path_result,
-                refinement_manifest=manifest,
-                irc_result=irc_result,
-                endpoint_match=endpoint_match,
+                path_result=outcome.path_result,
+                refinement_manifest=outcome.refinement_manifest,
+                irc_result=outcome.irc_result,
+                endpoint_match=outcome.endpoint_match,
                 depth=depth,
             )
             self._emit_event(
@@ -984,7 +889,7 @@ class StudyOrchestrator:
                 "irc_completed",
                 source_state_id=source_state_id,
                 route_id=route_id,
-                verdict=endpoint_match.verdict,
+                verdict=outcome.endpoint_match.verdict,
             )
             self._persist_study_bundle()
 
@@ -995,6 +900,21 @@ class StudyOrchestrator:
                 "max_elementary_steps_reached",
                 max_steps=self.max_elementary_steps,
             )
+
+    def _new_step_engine(self) -> ElementaryStepEngine:
+        """Build the ElementaryStepEngine bound to the current study."""
+        return ElementaryStepEngine(
+            self.study,
+            self.study_dir,
+            path_strategy=self.path_strategy,
+            refinement_provider=self.refinement_provider,
+            endpoint_provider=self.endpoint_provider,
+            ensemble_profile=self.ensemble_profile,
+            low_fidelity_profile=self.low_fidelity_profile,
+            require_review=self.require_review,
+            require_sr_review=self.require_sr_review,
+            event_log=self.event_log,
+        )
 
     def _normalize_state_ensemble(
         self,
@@ -1031,109 +951,8 @@ class StudyOrchestrator:
                         break
         return state
 
-    def _build_refinement_requests(
-        self,
-        source_state: StableState,
-        route: MechanismRoute,
-        path_result: PathResult,
-    ) -> list[StationaryPointRequest]:
-        requests: list[StationaryPointRequest] = []
-        ts_seeds = [seed for seed in path_result.seed_candidates if seed.kind == "ts_seed"]
-        if not ts_seeds:
-            for candidate in path_result.candidates:
-                if candidate.kind != "ts_seed":
-                    continue
-                point = path_result.point_by_id(candidate.point_id)
-                if point is None:
-                    continue
-                artifact = self._materialize_point_artifact(
-                    source_state.state_id,
-                    route.route_id,
-                    point,
-                )
-                ts_seeds.append(
-                    replace_seed_candidate(
-                        candidate_id=candidate.candidate_id,
-                        artifact=artifact,
-                        point=point,
-                    )
-                )
-        if not ts_seeds:
-            raise ValueError("PathResult produced no TS seed candidates")
 
-        provenance = self._request_provenance(path_result, source_state, route)
-        for seed in ts_seeds:
-            input_geometry = seed.geometry
-            point_id = str(seed.evidence.get("point_id") or "")
-            if not Path(seed.geometry.path).exists() and point_id:
-                point = path_result.point_by_id(point_id)
-                if point is not None:
-                    input_geometry = self._materialize_point_artifact(
-                        source_state.state_id,
-                        route.route_id,
-                        point,
-                    )
-            requests.append(
-                StationaryPointRequest(
-                    id=seed.id,
-                    role="transition_state",
-                    kind="ts",
-                    input_geometry=input_geometry,
-                    coordinate_plan=route.coordinate_plan,
-                    fallback_geometries=[],
-                    source_stage="S2",
-                    charge=source_state.charge,
-                    multiplicity=source_state.multiplicity,
-                    atom_mapping=self.study.atom_identity_map,
-                    parent_state_id=source_state.state_id,
-                    route_id=route.route_id,
-                    ensemble_correction=None,
-                    provenance=provenance,
-                )
-            )
-        return requests
 
-    def _materialize_point_artifact(
-        self,
-        state_id: str,
-        route_id: str,
-        point: PathPoint,
-    ) -> ArtifactRef:
-        seed_path = (
-            self.study_dir
-            / "routes"
-            / f"{state_id}__{route_id}"
-            / "seeds"
-            / f"{point.point_id}.json"
-        )
-        payload = point.to_dict()
-        _write_json_atomic(seed_path, payload)
-        return ArtifactRef(path=str(seed_path), sha256=_fingerprint(payload), kind="path_point")
-
-    def _request_provenance(
-        self,
-        path_result: PathResult,
-        source_state: StableState,
-        route: MechanismRoute,
-    ) -> Provenance:
-        if path_result.points and path_result.points[0].provenance is not None:
-            return path_result.points[0].provenance
-        return Provenance(
-            provider="study-orchestrator",
-            provider_version="1.0",
-            provider_commit="m0",
-            strategy=path_result.strategy_id or path_result.strategy,
-            strategy_version=path_result.strategy_version or "1.0",
-            profile_id=str(self.low_fidelity_profile),
-            schema_version="m0",
-            input_signature=_fingerprint(
-                {
-                    "source_state_id": source_state.state_id,
-                    "route": route.to_dict(),
-                    "path_strategy": path_result.strategy,
-                }
-            ),
-        )
 
     def _apply_endpoint_match(
         self,
@@ -1147,8 +966,8 @@ class StudyOrchestrator:
         endpoint_match: EndpointMatchResult,
     ) -> None:
         if endpoint_match.verdict == "FAILED":
-            self._mark_route_status(
-                self._exploration_key(source_state.state_id, route.route_id),
+            mark_route_status(self.study,
+                exploration_key(source_state.state_id, route.route_id),
                 route_fingerprint,
                 status="failed",
             )
@@ -1170,8 +989,8 @@ class StudyOrchestrator:
             canonical_ts=canonical_ts,
             irc_result=irc_result,
         )
-        self._mark_route_status(
-            self._exploration_key(source_state.state_id, route.route_id),
+        mark_route_status(self.study,
+            exploration_key(source_state.state_id, route.route_id),
             route_fingerprint,
             status="completed",
         )
@@ -1301,7 +1120,7 @@ class StudyOrchestrator:
             "depth": depth,
             "cycle": self.study.cycle_index,
             "route_fingerprint": route_fingerprint,
-            "exploration_key": self._exploration_key(source_state.state_id, route.route_id),
+            "exploration_key": exploration_key(source_state.state_id, route.route_id),
             "path_result": path_result.to_dict(),
             "refinement_manifest": refinement_manifest.to_dict(),
             "irc_result": irc_result.to_dict(),
@@ -1334,14 +1153,6 @@ class StudyOrchestrator:
             return action, dict(resolution)
         return "continue", {}
 
-    def _needs_review(self, endpoint_match: EndpointMatchResult, **context: Any) -> bool:
-        if endpoint_match.verdict == "AMBIGUOUS":
-            return True
-        if self.require_sr_review:
-            return True
-        if self.require_review is None:
-            return False
-        return bool(self.require_review(endpoint_match, self.study, context))
 
     def _build_cycle_review_summary(
         self,
@@ -1456,7 +1267,7 @@ class StudyOrchestrator:
                 self.study.cycle_index,
             )
             self.study.revisions.append(revision)
-            self._mark_route_status(
+            mark_route_status(self.study,
                 str(context.get("exploration_key") or ""),
                 str(context.get("route_fingerprint") or ""),
                 status="stopped",
@@ -1750,22 +1561,6 @@ class StudyOrchestrator:
             label=route.label or f"{source_state.state_id} → {target_id or 'unknown'}",
         )
 
-    def _route_fingerprint(
-        self,
-        source_state: StableState,
-        route: MechanismRoute,
-        target_state: StableState | None,
-        depth: int,
-    ) -> str:
-        return _fingerprint(
-            {
-                "source_state_id": source_state.state_id,
-                "target_state_id": target_state.state_id if target_state is not None else None,
-                "route": route.to_dict(),
-                "depth": depth,
-                "input_signature": self.study.metadata.get("input_signature"),
-            }
-        )
 
     def _state_fingerprint(self, state: StableState) -> str:
         return _fingerprint(
@@ -1780,41 +1575,7 @@ class StudyOrchestrator:
             }
         )
 
-    def _persist_route_manifest(
-        self,
-        *,
-        source_state_id: str,
-        route: MechanismRoute,
-        route_fingerprint: str,
-        status: str,
-        path_result: PathResult | None = None,
-        refinement_manifest: RefinementManifest | None = None,
-        irc_result: IrcResult | None = None,
-        endpoint_match: EndpointMatchResult | None = None,
-        depth: int | None = None,
-    ) -> None:
-        route_dir = self.study_dir / "routes" / f"{source_state_id}__{route.route_id}"
-        payload: dict[str, Any] = {
-            "source_state_id": source_state_id,
-            "route_id": route.route_id,
-            "route": route.to_dict(),
-            "fingerprint": route_fingerprint,
-            "status": status,
-            "depth": depth,
-        }
-        if path_result is not None:
-            payload["path_result"] = path_result.to_dict()
-        if refinement_manifest is not None:
-            payload["refinement_manifest"] = refinement_manifest.to_dict()
-        if irc_result is not None:
-            payload["irc_result"] = irc_result.to_dict()
-        if endpoint_match is not None:
-            payload["endpoint_match"] = endpoint_match.to_dict()
-        _write_json_atomic(route_dir / "path_manifest.json", payload)
 
-    def _persist_refinement_manifest(self, manifest: RefinementManifest) -> None:
-        ref_dir = self.study_dir / "refinements" / manifest.manifest_id
-        _write_json_atomic(ref_dir / "refinement_manifest.json", manifest.to_dict())
 
     def _persist_decision(self, decision: DecisionPoint) -> None:
         decision_path = self.study_dir / "decisions" / f"{decision.id}.json"
@@ -1853,38 +1614,8 @@ class StudyOrchestrator:
             if route.product_id is None:
                 route.product_id = self.study.product_id
 
-    def _exploration_key(self, source_state_id: str, route_id: str) -> str:
-        return f"{source_state_id}::{route_id}"
 
-    def _route_status_matches(
-        self,
-        exploration_key: str,
-        route_fingerprint: str,
-        statuses: set[str],
-    ) -> bool:
-        route_statuses = dict(self.study.metadata.get("route_statuses") or {})
-        record = route_statuses.get(exploration_key)
-        if not isinstance(record, dict):
-            return False
-        return (
-            str(record.get("fingerprint") or "") == route_fingerprint
-            and str(record.get("status") or "") in statuses
-        )
 
-    def _mark_route_status(
-        self,
-        exploration_key: str,
-        route_fingerprint: str,
-        *,
-        status: str,
-    ) -> None:
-        route_statuses = dict(self.study.metadata.get("route_statuses") or {})
-        route_statuses[exploration_key] = {
-            "fingerprint": route_fingerprint,
-            "status": status,
-            "updated_at": _utc_now(),
-        }
-        self.study.metadata["route_statuses"] = route_statuses
 
     def _require_state(self, state_id: str) -> StableState:
         state = self.study.get_state(state_id)
@@ -1933,15 +1664,6 @@ class StudyOrchestrator:
             route_dict["coordinate_plan"] = resolution_payload["coordinate_plan"]
         return MechanismRoute.from_dict(route_dict)
 
-    def _merge_gate_policies(self, path_result: PathResult) -> None:
-        policies = dict(self.study.metadata.get("gate_policies") or {})
-        for gate_id, policy in dict(path_result.metadata.get("gate_policies") or {}).items():
-            if not isinstance(policy, dict):
-                continue
-            merged = dict(policies.get(gate_id) or {})
-            merged.update(policy)
-            policies[gate_id] = merged
-        self.study.metadata["gate_policies"] = policies
 
     def _upsert_stationary_point(self, point: StationaryPoint) -> None:
         for index, current in enumerate(self.study.stationary_points):
@@ -1963,49 +1685,6 @@ class StudyOrchestrator:
             point.state_id = state_id
         self._upsert_stationary_point(point)
 
-    def _enrich_ts_for_irc(
-        self,
-        point: StationaryPoint,
-        source_state: StableState,
-        path_result: PathResult,
-    ) -> None:
-        symbols = point.metadata.get("symbols")
-        if symbols is None:
-            symbols = source_state.metadata.get("symbols")
-        if symbols is not None:
-            point.metadata.setdefault("symbols", list(symbols))
-        if point.metadata.get("coordinates") is None:
-            seed_id = point.point_id.rsplit("_", 1)[0]
-            point_id = str(point.metadata.get("point_id") or "")
-            if not point_id:
-                for candidate in path_result.seed_candidates:
-                    if candidate.id == seed_id:
-                        point_id = str(candidate.evidence.get("point_id") or "")
-                        break
-            if point_id:
-                path_point = path_result.point_by_id(point_id)
-                if path_point is not None and path_point.geometry is not None:
-                    point.metadata["coordinates"] = np.asarray(
-                        path_point.geometry,
-                        dtype=float,
-                    ).tolist()
-
-
-def replace_seed_candidate(
-    candidate_id: str,
-    artifact: ArtifactRef,
-    point: PathPoint,
-) -> SeedCandidate:
-    """Build a minimal SeedCandidate-like object without importing helpers."""
-    return SeedCandidate(
-        id=candidate_id,
-        kind="ts_seed",
-        geometry=artifact,
-        rank=1,
-        selection_mode="path_candidate_fallback",
-        confidence="medium",
-        evidence={"point_id": point.point_id, "progress": point.progress},
-    )
 
 
 __all__ = ["StudyOrchestrator"]

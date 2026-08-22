@@ -94,6 +94,21 @@ def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
         raise
 
 
+def fingerprint(payload: dict[str, Any]) -> str:
+    """Stable sha256 fingerprint of a JSON-serializable payload."""
+    import hashlib
+
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode("utf-8"))
+    return f"sha256:{digest.hexdigest()}"
+
+
+def utc_now() -> str:
+    """Return a timezone-aware UTC timestamp (ISO 8601)."""
+    from datetime import datetime, timezone
+
+    return datetime.now(timezone.utc).isoformat()
+
+
 def resolve_backend(backend_spec: str | Any, config: dict[str, Any]) -> Any:
     if not isinstance(backend_spec, str):
         return backend_spec
