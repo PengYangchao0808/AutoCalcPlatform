@@ -180,13 +180,61 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
     {
         "id": "custom_sequence",
         "label": "Custom Task Sequence",
-        "label_zh": "\u81ea\u5b9a\u4e49\u4efb\u52a1\u5e8f\u5217",
+        "label_zh": "自定义任务序列",
         "category": "custom",
         "description": "Build a linear pipeline of calculation blocks",
         "method_schema_id": "custom",
         "default_backend": "",
         "requires_binaries": [],
         "status": "planned",
+        "visible": True,
+    },
+    {
+        "id": "mech-conf",
+        "label": "Mechanism Conformer / Stable State",
+        "label_zh": "机理构象 / 稳定态",
+        "category": "mechanism",
+        "description": "Standalone conformer search for one mechanism stable state",
+        "method_schema_id": "mech_conf",
+        "default_backend": "orca",
+        "requires_binaries": ["crest", "orca"],
+        "status": "active",
+        "visible": True,
+    },
+    {
+        "id": "mech-step",
+        "label": "Mechanism Elementary Step",
+        "label_zh": "机理基元步骤",
+        "category": "mechanism",
+        "description": "Elementary step: PEB path -> coarse refine -> IRC -> endpoints",
+        "method_schema_id": "mech_step",
+        "default_backend": "orca",
+        "requires_binaries": ["orca", "xtb"],
+        "status": "active",
+        "visible": True,
+    },
+    {
+        "id": "mech-confirm",
+        "label": "Mechanism High-Fidelity Confirmation",
+        "label_zh": "机理高精度确认",
+        "category": "mechanism",
+        "description": "High-fidelity confirmation of one elementary-step artifact",
+        "method_schema_id": "mech_confirm",
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
+        "status": "active",
+        "visible": True,
+    },
+    {
+        "id": "mech-chain",
+        "label": "Mechanism Chain",
+        "label_zh": "机理模块链",
+        "category": "mechanism",
+        "description": "Declarative composition of standalone mechanism modules",
+        "method_schema_id": "mech_chain",
+        "default_backend": "",
+        "requires_binaries": [],
+        "status": "active",
         "visible": True,
     },
 ]
@@ -1314,6 +1362,82 @@ METHOD_SCHEMAS: dict[str, Any] = {
             }
         ],
         "profiles": [],
+    },
+    "mech_conf": {
+        "method_levels": [
+            {
+                "level_id": "module",
+                "label": "Module",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [],
+            }
+        ],
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default",
+                "summary": "CENSO-lite conformer search for one stable state",
+                "levels": {},
+            }
+        ],
+    },
+    "mech_step": {
+        "method_levels": [
+            {
+                "level_id": "module",
+                "label": "Module",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [],
+            }
+        ],
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default",
+                "summary": "Elementary step: PEB path -> coarse refine -> IRC -> endpoints",
+                "levels": {},
+            }
+        ],
+    },
+    "mech_confirm": {
+        "method_levels": [
+            {
+                "level_id": "module",
+                "label": "Module",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [],
+            }
+        ],
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default",
+                "summary": "High-fidelity (S4) confirmation of one step artifact",
+                "levels": {},
+            }
+        ],
+    },
+    "mech_chain": {
+        "method_levels": [
+            {
+                "level_id": "module",
+                "label": "Module",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [],
+            }
+        ],
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default",
+                "summary": "Declarative composition of standalone mechanism modules",
+                "levels": {},
+            }
+        ],
     },
     "nmr": {
         # NMR + DP4/DP5 method schema (P1a, 2026-08-07). Two levels:

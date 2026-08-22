@@ -388,6 +388,156 @@ def _add_xtb_optimize_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_mechanism_module_parsers(run_sub: argparse._SubParsersAction) -> None:
+    """Register standalone mechanism module subcommands (M1-M4)."""
+    conf = run_sub.add_parser(
+        "mech-conf",
+        help="Mechanism conformer search for one stable state (module M1)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run mech-conf --input "CCO" --output ./conf_out
+  acp run mech-conf --input mol.xyz --mode xtb-fast --output ./conf_out
+        """,
+    )
+    conf.set_defaults(workflow="mech-conf")
+    conf.add_argument("--input", "-i", required=True, help="SMILES string or XYZ file path")
+    conf.add_argument("--output", "-o", default="./mech_conf_out", help="Output directory")
+    conf.add_argument(
+        "--mode",
+        default="censo-lite",
+        choices=["censo-lite", "xtb-fast"],
+        help="Ensemble provider mode (default: censo-lite)",
+    )
+    conf.add_argument("--charge", type=int, help="Molecular charge (default: 0)")
+    conf.add_argument("--multiplicity", type=int, help="Spin multiplicity (default: 1)")
+    conf.add_argument("--name", type=str, help="Molecule name")
+    conf.add_argument("--label", type=str, help="Module label recorded in the manifest")
+    conf.add_argument("--config", type=str, help="Configuration YAML file")
+    conf.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
+    step = run_sub.add_parser(
+        "mech-step",
+        aliases=["mech-sr"],
+        help="Mechanism elementary step: path -> refine -> IRC -> endpoints (module M2)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run mech-step --source reactant.xyz --target product.xyz \\
+      --plan '{"coordinates":[{"id":"rc1","kind":"distance","atoms":[0,1],"start":3.0,"end":1.5}],"points":21}' \\
+      --strategy rph-reverse --fidelity s3 --output ./step_out
+  acp run mech-sr --source reactant.xyz --plan plan.json --strategy guided-scan
+        """,
+    )
+    step.set_defaults(workflow="mech-step")
+    step.add_argument("--source", required=True, help="Source-state XYZ file")
+    step.add_argument("--target", help="Target-state XYZ file (required by rph-reverse)")
+    step.add_argument(
+        "--plan",
+        required=True,
+        help="Coordinate plan as a JSON string or path to a JSON file",
+    )
+    step.add_argument(
+        "--strategy",
+        default="rph-reverse",
+        choices=["guided-scan", "rph-reverse"],
+        help="Path-search strategy (default: rph-reverse)",
+    )
+    step.add_argument(
+        "--fidelity",
+        default="s3",
+        choices=["s3", "s4"],
+        help="Refinement fidelity (default: s3)",
+    )
+    step.add_argument(
+        "--endpoint-method",
+        default="irc",
+        choices=["irc"],
+        help="Endpoint resolution method (default: irc)",
+    )
+    step.add_argument("--output", "-o", default="./mech_step_out", help="Output directory")
+    step.add_argument("--charge", type=int, default=0, help="Molecular charge (default: 0)")
+    step.add_argument(
+        "--multiplicity", type=int, default=1, help="Spin multiplicity (default: 1)"
+    )
+    step.add_argument("--label", type=str, help="Module label recorded in the manifest")
+    step.add_argument("--config", type=str, help="Configuration YAML file")
+    step.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
+    confirm = run_sub.add_parser(
+        "mech-confirm",
+        help="High-fidelity confirmation of one mech-step artifact (module M3)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run mech-confirm --from ./step_out/elementary_step_manifest.json --select ts:canonical
+  acp run mech-confirm --from ./step_out/elementary_step_manifest.json --select endpoint:sink
+        """,
+    )
+    confirm.set_defaults(workflow="mech-confirm")
+    confirm.add_argument(
+        "--from",
+        dest="step_manifest",
+        required=True,
+        help="Path to an elementary_step_manifest.json produced by mech-step",
+    )
+    confirm.add_argument(
+        "--select",
+        default="ts:canonical",
+        choices=["ts:canonical", "endpoint:sink"],
+        help="Which artifact to confirm (default: ts:canonical)",
+    )
+    confirm.add_argument(
+        "--fidelity",
+        default="s4",
+        choices=["s3", "s4"],
+        help="Confirmation fidelity (default: s4)",
+    )
+    confirm.add_argument("--output", "-o", default="./mech_confirm_out", help="Output directory")
+    confirm.add_argument("--label", type=str, help="Module label recorded in the manifest")
+    confirm.add_argument("--config", type=str, help="Configuration YAML file")
+    confirm.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
+    chain = run_sub.add_parser(
+        "mech-chain",
+        help="Run a declarative chain of mechanism modules (module M4)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run mech-chain --config chain.yaml
+        """,
+    )
+    chain.set_defaults(workflow="mech-chain")
+    chain.add_argument("--config", required=True, help="Chain definition YAML file")
+    chain.add_argument(
+        "--output",
+        "-o",
+        default="./mech_chain_out",
+        help="Base output directory for steps that omit output_dir",
+    )
+    chain.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level ACP argument parser."""
     parser = argparse.ArgumentParser(
@@ -1252,6 +1402,8 @@ Examples:
         help="Spin multiplicity (auto-detected if not specified)",
     )
 
+    _add_mechanism_module_parsers(run_sub)
+
     # -- run serve (FastAPI server) -----------------------------------------
     serve_parser = run_sub.add_parser(
         "serve",
@@ -1597,6 +1749,128 @@ def _handle_mechanism_resume(args: argparse.Namespace) -> int:
         write_review_payload(Path(args.study_root), summary)
         return EXIT_WAITING_REVIEW
     return 0 if status in {"completed", "waiting", "running"} else 1
+
+
+def _module_exit_code(status: str) -> int:
+    if status in {"validated", "partial"}:
+        if status == "partial":
+            logger.warning("Module finished with status=partial (recoverable evidence kept)")
+        return 0
+    return 1
+
+
+def _handle_mech_conf(args: argparse.Namespace) -> int:
+    from acp.mechanism.modules.module_conformer import run_conformer_module
+
+    setup_logging(args.log_level)
+    cfg = _build_config(args)
+    try:
+        manifest = run_conformer_module(
+            args.input,
+            output_dir=Path(args.output),
+            mode=args.mode,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            name=args.name,
+            config=cfg,
+            label=args.label,
+        )
+    except KeyboardInterrupt:
+        logger.warning("mech-conf interrupted by user")
+        return 130
+    except Exception as exc:
+        logger.exception("mech-conf failed: %s", exc)
+        return 1
+    logger.info("mech-conf status=%s output=%s", manifest.status, args.output)
+    return _module_exit_code(manifest.status)
+
+
+def _handle_mech_step(args: argparse.Namespace) -> int:
+    from acp.mechanism.modules.module_step import run_step_module
+
+    setup_logging(args.log_level)
+    cfg = _build_config(args)
+    try:
+        plan = _parse_levels(args.plan)
+        if plan is None:
+            logger.error("mech-step requires a coordinate plan via --plan")
+            return 1
+        manifest = run_step_module(
+            args.source,
+            plan,
+            target_xyz=getattr(args, "target", None),
+            strategy=args.strategy,
+            fidelity=args.fidelity,
+            endpoint_method=args.endpoint_method,
+            output_dir=Path(args.output),
+            config=cfg,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            label=args.label,
+        )
+    except KeyboardInterrupt:
+        logger.warning("mech-step interrupted by user")
+        return 130
+    except Exception as exc:
+        logger.exception("mech-step failed: %s", exc)
+        return 1
+    logger.info("mech-step status=%s gates=%s", manifest.status, manifest.gates)
+    return _module_exit_code(manifest.status)
+
+
+def _handle_mech_confirm(args: argparse.Namespace) -> int:
+    from acp.mechanism.modules.module_confirm import run_confirm_module
+
+    setup_logging(args.log_level)
+    cfg = _build_config(args)
+    try:
+        manifest = run_confirm_module(
+            args.step_manifest,
+            select=args.select,
+            fidelity=args.fidelity,
+            output_dir=Path(args.output),
+            config=cfg,
+            label=args.label,
+        )
+    except KeyboardInterrupt:
+        logger.warning("mech-confirm interrupted by user")
+        return 130
+    except Exception as exc:
+        logger.exception("mech-confirm failed: %s", exc)
+        return 1
+    logger.info("mech-confirm status=%s output=%s", manifest.status, args.output)
+    return _module_exit_code(manifest.status)
+
+
+def _handle_mech_chain(args: argparse.Namespace) -> int:
+    from acp.mechanism.chain import run_chain
+
+    setup_logging(args.log_level)
+    try:
+        chain_config_path = Path(args.config)
+        import yaml
+
+        raw = yaml.safe_load(chain_config_path.read_text(encoding="utf-8"))
+        if not isinstance(raw, dict):
+            logger.error("Chain config must be a mapping: %s", chain_config_path)
+            return 1
+        base_output = Path(args.output)
+        for step in raw.get("steps") or []:
+            step_args = step.get("args") if isinstance(step, dict) else None
+            if isinstance(step_args, dict) and "output_dir" not in step_args:
+                module = str(step.get("module") or "step")
+                step_args["output_dir"] = str(base_output / module)
+        records = run_chain(raw)
+    except KeyboardInterrupt:
+        logger.warning("mech-chain interrupted by user")
+        return 130
+    except Exception as exc:
+        logger.exception("mech-chain failed: %s", exc)
+        return 1
+    for record in records:
+        logger.info("  %s -> %s (%s)", record["module"], record["status"], record["manifest_path"])
+    failed = [r for r in records if r["status"] not in {"validated", "partial"}]
+    return 1 if failed else 0
 
 
 def _build_simple_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
@@ -2575,6 +2849,10 @@ def main(argv: list[str] | None = None) -> int:
             "nmr": _handle_nmr,
             "xtbmd_censo_energy": _handle_xtbmd_censo_energy,
             "mechanism": _handle_mechanism,
+            "mech-conf": _handle_mech_conf,
+            "mech-step": _handle_mech_step,
+            "mech-confirm": _handle_mech_confirm,
+            "mech-chain": _handle_mech_chain,
             "serve": _handle_serve,
             "singlepoint": _handle_singlepoint,
             "optimize": _handle_optimize,

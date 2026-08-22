@@ -163,6 +163,10 @@ def build_remote_cli_command(
     wf = spec.workflow
     if wf not in (
         "mechanism",
+        "mech-conf",
+        "mech-step",
+        "mech-confirm",
+        "mech-chain",
         "ensemble",
         "energy",
         "nmr",
@@ -205,6 +209,34 @@ def build_remote_cli_command(
         routes = inp.get("routes")
         if routes:
             cmd += ["--routes", json.dumps(routes)]
+    elif wf == "mech-conf":
+        cmd += ["--input", str(source), "--output", "."]
+        if method.get("mode"):
+            cmd += ["--mode", str(method["mode"])]
+        if spec.name:
+            cmd += ["--name", spec.name]
+    elif wf == "mech-step":
+        cmd += ["--source", str(source), "--output", "."]
+        target = inp.get("target") or method.get("target")
+        if target:
+            cmd += ["--target", str(target)]
+        plan = inp.get("coordinate_plan") or method.get("coordinate_plan")
+        if plan is not None:
+            cmd += ["--plan", json.dumps(plan)]
+        if method.get("strategy"):
+            cmd += ["--strategy", str(method["strategy"])]
+        if method.get("fidelity"):
+            cmd += ["--fidelity", str(method["fidelity"])]
+    elif wf == "mech-confirm":
+        step_manifest = inp.get("from") or inp.get("step_manifest") or source
+        cmd += ["--from", str(step_manifest), "--output", "."]
+        if method.get("select"):
+            cmd += ["--select", str(method["select"])]
+        if method.get("fidelity"):
+            cmd += ["--fidelity", str(method["fidelity"])]
+    elif wf == "mech-chain":
+        chain_config = inp.get("config") or inp.get("chain_config") or source
+        cmd += ["--config", str(chain_config), "--output", "."]
     elif wf in {"ensemble", "energy"}:
         cmd += ["--input", str(source), "--output", "."]
         preset = censo_preset_from_method(method)
@@ -281,7 +313,7 @@ def build_remote_cli_command(
             cmd += ["--solvent-model", str(sm)]
 
     # Resources and input chemistry (applies to all workflows).
-    if config_path:
+    if config_path and wf != "mech-chain":
         cmd += ["--config", config_path]
     if res.get("nproc") is not None:
         cmd += ["--nproc", str(res["nproc"])]

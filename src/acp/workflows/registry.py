@@ -106,6 +106,30 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         description="Fast semi-empirical geometry optimization with xTB (GFN-xTB).",
         requires_binaries=["xtb"],
     ),
+    "mech-conf": WorkflowRegistryEntry(
+        name="mech-conf",
+        label="Mechanism Conformer / Stable State",
+        description="Standalone conformer search for one mechanism stable state.",
+        requires_binaries=["crest", "orca"],
+    ),
+    "mech-step": WorkflowRegistryEntry(
+        name="mech-step",
+        label="Mechanism Elementary Step",
+        description="Elementary step: PEB path -> coarse refine -> IRC -> endpoints.",
+        requires_binaries=["orca", "xtb"],
+    ),
+    "mech-confirm": WorkflowRegistryEntry(
+        name="mech-confirm",
+        label="Mechanism High-Fidelity Confirmation",
+        description="High-fidelity (S4) confirmation of one mech-step artifact.",
+        requires_binaries=["orca"],
+    ),
+    "mech-chain": WorkflowRegistryEntry(
+        name="mech-chain",
+        label="Mechanism Chain",
+        description="Declarative composition of standalone mechanism modules.",
+        requires_binaries=[],
+    ),
 }
 
 
