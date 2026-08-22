@@ -6,6 +6,9 @@ persists a ModuleManifest consumed by the next module or ``mech-chain``.
 Author: QCcalc Team
 """
 
+from .module_confirm import run_confirm_module
+from .module_conformer import run_conformer_module
+from .module_step import run_step_module
 from .schema import (
     ELEMENTARY_STEP_FILENAME,
     MANIFEST_FILENAME,
@@ -43,6 +46,9 @@ __all__ = [
     "STEP_STATUS_FLOW",
     "read_elementary_step_manifest",
     "read_module_manifest",
+    "run_confirm_module",
+    "run_conformer_module",
+    "run_step_module",
     "step_top_status",
     "write_elementary_step_manifest",
     "write_module_manifest",
