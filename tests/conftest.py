@@ -60,6 +60,10 @@ def _clean_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     """Delete all CONFSEARCH_* env vars before every test for isolation."""
     for var in _ALL_CONFSEARCH_ENV_VARS:
         monkeypatch.delenv(var, raising=False)
+    # ACP_RUN_ROOT is set by several API/scheduler tests via bare os.environ
+    # (leaked into later tests, breaking handoff jobs_root() resolution).
+    # Test-local overrides re-set it inside the test body.
+    monkeypatch.delenv("ACP_RUN_ROOT", raising=False)
 
 
 @pytest.fixture()
