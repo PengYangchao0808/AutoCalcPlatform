@@ -340,7 +340,8 @@ def _mechanism_submit_payload() -> dict[str, object]:
     }
 
 
-def test_mechanism_submit_both_sr_flags_returns_422(tmp_path: Path) -> None:
+def test_mechanism_submit_both_sr_flags_rejected_as_retired(tmp_path: Path) -> None:
+    """The SR-flag exclusivity check is unreachable: retirement wins first."""
     with make_client(tmp_path) as client:
         payload = _mechanism_submit_payload()
         method = cast(dict[str, object], payload["method"])
@@ -348,22 +349,18 @@ def test_mechanism_submit_both_sr_flags_returns_422(tmp_path: Path) -> None:
         method["require_sr_review"] = True
 
         response = client.post("/api/v1/jobs", json=payload)
-        assert response.status_code == 422
-        assert "mutually exclusive" in response.json()["detail"]
+        assert response.status_code == 400
+        assert "Unsupported workflow 'mechanism'" in response.json()["detail"]
 
 
-def test_mechanism_submit_single_sr_flag_still_accepted(tmp_path: Path) -> None:
+def test_mechanism_submit_single_sr_flag_rejected_as_retired(tmp_path: Path) -> None:
     with make_client(tmp_path) as client:
         payload = _mechanism_submit_payload()
         method = cast(dict[str, object], payload["method"])
         method["auto_converge"] = True
-
-        response = client.post("/api/v1/jobs", json=payload)
-        assert response.status_code == 201, response.text
+        assert client.post("/api/v1/jobs", json=payload).status_code == 400
 
         payload_only_review = _mechanism_submit_payload()
         method_review = cast(dict[str, object], payload_only_review["method"])
         method_review["require_sr_review"] = True
-
-        response_review = client.post("/api/v1/jobs", json=payload_only_review)
-        assert response_review.status_code == 201, response_review.text
+        assert client.post("/api/v1/jobs", json=payload_only_review).status_code == 400

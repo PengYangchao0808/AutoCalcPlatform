@@ -14,6 +14,7 @@ from acp.core.models import HARTREE_TO_KCAL
 
 from ._helpers import opt_float as _opt_float
 from ._helpers import write_json_atomic as _write_json_atomic
+from .layout import resolve_study_layout
 from .models import MechanismStudy, PathResult, ReactionNetwork, StableState, StationaryPoint
 
 logger = logging.getLogger(__name__)
@@ -39,10 +40,17 @@ def write_study_reports(study_dir: Path) -> dict[str, Path]:
     """Write the five publication-grade JSON reports for a mechanism study."""
 
     root = Path(study_dir)
+    if root.parent.name == "mechanism_study":
+        routes_dir = root / "routes"
+        refinements_dir = root / "refinements"
+    else:
+        layout = resolve_study_layout(root.parent.parent, "")
+        routes_dir = layout.routes_root
+        refinements_dir = layout.refinements_root
     study, study_notes = _load_study(root)
     network, network_notes = _load_network(root, study)
-    route_payloads, route_notes = _collect_route_payloads(root, study)
-    refinement_manifests, refinement_notes = _collect_refinement_manifests(root, study)
+    route_payloads, route_notes = _collect_route_payloads(routes_dir, study)
+    refinement_manifests, refinement_notes = _collect_refinement_manifests(refinements_dir, study)
     canonical_point_ids = _canonical_point_ids(refinement_manifests)
     quality_payload, quality_notes = _load_quality_gates(root, study)
 
@@ -186,7 +194,8 @@ def _load_study(root: Path) -> tuple[MechanismStudy, list[str]]:
     path = root / "study.json"
     payload = _read_json_object(path)
     if payload is None:
-        return MechanismStudy(study_id=root.name, study_dir=str(root)), [
+        fallback_id = root.parent.name if root.parent.name == "mechanism_study" else ""
+        return MechanismStudy(study_id=fallback_id, study_dir=str(root)), [
             "study.json missing; using empty study"
         ]
     study = MechanismStudy.from_dict(payload)
@@ -203,12 +212,11 @@ def _load_network(root: Path, study: MechanismStudy) -> tuple[ReactionNetwork, l
 
 
 def _collect_route_payloads(
-    root: Path,
+    routes_dir: Path,
     study: MechanismStudy,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     notes: list[str] = []
     route_payloads: dict[str, dict[str, Any]] = {}
-    routes_dir = root / "routes"
     if routes_dir.exists():
         for manifest_path in sorted(routes_dir.glob("*/path_manifest.json")):
             manifest_payload = _read_json_object(manifest_path)
@@ -252,13 +260,12 @@ def _collect_route_payloads(
 
 
 def _collect_refinement_manifests(
-    root: Path,
+    refinements_dir: Path,
     study: MechanismStudy,
 ) -> tuple[list[Any], list[str]]:
     notes: list[str] = []
     manifests: dict[str, Any] = {}
     manifest_cls = import_module("acp.mechanism.providers.contracts").RefinementManifest
-    refinements_dir = root / "refinements"
     if refinements_dir.exists():
         for manifest_path in sorted(refinements_dir.glob("*/refinement_manifest.json")):
             payload = _read_json_object(manifest_path)

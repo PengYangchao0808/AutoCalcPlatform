@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from collections import Counter
 from typing import Any
 
 from acp.intake.models import StructureAsset, StructureParseResult
@@ -47,37 +46,157 @@ def _xyz_from_symbols_coords(
     return "\n".join(lines) + "\n"
 
 
+_EXT_FORMAT_MAP = {
+    "xyz": "xyz",
+    "sdf": "sdf",
+    "sd": "sdf",
+    "mol": "mol",
+    "gjf": "gjf",
+    "com": "gjf",
+    "inp": "inp",
+}
+
+# Content-detection priority (§4.1): sdf -> mol -> xyz -> gjf -> inp -> smiles
+_DETECT_ORDER = ("sdf", "mol", "xyz", "gjf", "inp", "smiles")
+
+_ORCA_BLOCK_RE = re.compile(r"^\*\s*(xyz|int|gzmt|internal)\b", re.IGNORECASE | re.MULTILINE)
+
+
+def _has_route_line(content: str) -> bool:
+    """True if any line starts with ``#`` (Gaussian route-section marker)."""
+    return any(line.lstrip().startswith("#") for line in content.splitlines())
+
+
+def _has_orca_block_marker(content: str) -> bool:
+    """True if an ORCA coordinate block (``* xyz`` / ``* int`` ...) is present."""
+    return bool(_ORCA_BLOCK_RE.search(content))
+
+
+def _looks_like_gjf(content: str) -> bool:
+    """Gaussian GJF heuristic: ``#`` route line plus parseable section layout.
+
+    A GJF requires a ``#`` route line AND at least 2 blank-line separators
+    (the hard requirement of :func:`parse_gjf_text`). A Link0 header
+    (``%chk=``/``%mem=``/``%nprocshared=``) followed by a route line also
+    counts, so ``%chk``-headed GJFs are not misread as ORCA INP.
+    """
+    if not _has_route_line(content):
+        return False
+    lines = content.splitlines()
+    if sum(1 for line in lines if not line.strip()) >= 2:
+        return True
+    head = [line.strip().lower() for line in lines if line.strip()][:4]
+    return any(h.startswith(("%chk=", "%mem=", "%nprocshared=")) for h in head)
+
+
+def _looks_like_orca_inp(content: str) -> bool:
+    """ORCA INP heuristic: ``%``/``!`` header, ``* xyz``/``* int`` block, no route line."""
+    stripped = content.strip()
+    if not (stripped.startswith("%") or "!" in stripped[:200]):
+        return False
+    if not _has_orca_block_marker(content):
+        return False
+    return not _has_route_line(content)
+
+
+def _first_line_is_atom_count(stripped: str) -> bool:
+    first = stripped.splitlines()[0].strip() if stripped else ""
+    return first.isdigit()
+
+
+def _candidate_formats(content: str) -> list[str]:
+    """Strictly content-detected candidate formats, in priority order."""
+    stripped = content.strip()
+    if not stripped:
+        return []
+    found: set[str] = set()
+    if stripped.startswith("$SDG") or ("M  END" in stripped and "$$$$" in stripped):
+        found.add("sdf")
+    if "M  END" in stripped:
+        found.add("mol")
+    if _first_line_is_atom_count(stripped) or _looks_like_atom_coordinates(stripped):
+        found.add("xyz")
+    if _looks_like_gjf(content):
+        found.add("gjf")
+    if _looks_like_orca_inp(content):
+        found.add("inp")
+    if len(stripped) < 80 and "\n" not in stripped:
+        found.add("smiles")
+    return [fmt for fmt in _DETECT_ORDER if fmt in found]
+
+
+def _verify_candidates(content: str) -> list[str]:
+    """Candidate formats for the detect-and-verify fallback chain.
+
+    Broader than :func:`_candidate_formats`: the strict ORCA check excludes
+    content with a ``#`` route line, but that ambiguity is exactly what the
+    verify step resolves — so ORCA-ish content with a block marker keeps
+    ``inp`` as a fallback, and ``%``/``!``-headed content matching neither
+    strict rule tries ``gjf`` then ``inp``.
+    """
+    found = set(_candidate_formats(content))
+    stripped = content.strip()
+    if stripped:
+        orcaish = stripped.startswith("%") or "!" in stripped[:200]
+        if orcaish and _has_orca_block_marker(content):
+            found.add("inp")
+        elif orcaish and not ({"gjf", "inp"} & found):
+            found.add("gjf")
+            found.add("inp")
+    return [fmt for fmt in _DETECT_ORDER if fmt in found]
+
+
 def detect_format(filename: str, content: str) -> str:
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-    ext_map = {
-        "xyz": "xyz",
-        "sdf": "sdf",
-        "sd": "sdf",
-        "mol": "mol",
-        "gjf": "gjf",
-        "com": "gjf",
-        "inp": "inp",
-        "txt": "smiles",
-    }
-    if ext in ext_map:
-        return ext_map[ext]
+    if ext in _EXT_FORMAT_MAP:
+        return _EXT_FORMAT_MAP[ext]
+
+    candidates = _candidate_formats(content)
+    if candidates:
+        return candidates[0]
 
     stripped = content.strip()
-    if stripped.startswith("$SDG") or "M  END" in stripped and "$$$$" in stripped:
-        return "sdf"
-    if "M  END" in stripped:
-        return "mol"
     if stripped.startswith("%") or "!" in stripped[:200]:
+        # ORCA-ish header without a coordinate block marker — keep the
+        # historical behaviour of calling this "inp".
         return "inp"
-    if stripped.startswith("#"):
-        return "gjf"
-    if stripped[0:1].isdigit():
-        return "xyz"
-    if _looks_like_atom_coordinates(stripped):
-        return "xyz"
-    if len(stripped) < 80 and "\n" not in stripped:
-        return "smiles"
     return "smiles"
+
+
+def detect_and_parse(content: str, filename: str = "") -> tuple[str, StructureParseResult]:
+    """Detect the format and parse, verifying candidates in priority order.
+
+    Tries the extension fast-path format (if any) first, then the
+    content-detected candidates in the order sdf -> mol -> xyz -> gjf ->
+    inp, with smiles as the last resort. If a candidate parse fails and a
+    next candidate exists, falls back.
+
+    Returns:
+        A ``(final_format, parse_result)`` tuple where ``final_format`` is
+        the format actually used for the returned result.
+    """
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    candidates: list[str] = []
+    ext_fmt = _EXT_FORMAT_MAP.get(ext)
+    if ext_fmt is not None:
+        candidates.append(ext_fmt)
+    for fmt in _verify_candidates(content):
+        if fmt not in candidates:
+            candidates.append(fmt)
+    if "smiles" not in candidates:
+        candidates.append("smiles")
+
+    final_fmt = candidates[-1]
+    final_result = StructureParseResult(errors=["Unable to detect structure format"])
+    for fmt in candidates:
+        final_fmt = fmt
+        try:
+            final_result = parse_structure_text(content, fmt, filename)
+        except (ValueError, IndexError) as exc:
+            final_result = StructureParseResult(errors=[f"{fmt} parse failed: {exc}"])
+        if final_result.ok:
+            break
+    return final_fmt, final_result
 
 
 def _looks_like_atom_line(line: str) -> bool:
@@ -554,6 +673,7 @@ def parse_smiles_list(content: str) -> StructureParseResult:
 
 
 __all__ = [
+    "detect_and_parse",
     "detect_format",
     "parse_gjf_text",
     "parse_mol_text",

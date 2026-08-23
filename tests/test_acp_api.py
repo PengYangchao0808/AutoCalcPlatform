@@ -73,14 +73,18 @@ def test_backends_use_real_capability_matrix(client: TestClient) -> None:
 
 def test_workflows_and_protocols(client: TestClient) -> None:
     wf = client.get("/api/workflows").json()
-    assert {"fake", "ensemble", "energy", "mechanism"} <= {
+    assert {"fake", "Confsearch", "PESsearch", "Lowconfirm", "Highconfirm"} <= {
         w["name"] for w in wf["workflows"]
     }
     names = [w["name"] for w in wf["workflows"]]
-    # Retired workflows (conformer/benchmark) must NOT appear.
-    # NMR was reactivated in P1a (2026-08-07).
+    # Retired workflows (conformer/benchmark + the Confsearch-v1.0
+    # retirements) must NOT appear; NMR stays active (P1a).
     assert "conformer" not in names
     assert "benchmark" not in names
+    assert "ensemble" not in names
+    assert "energy" not in names
+    assert "xtbmd_censo_energy" not in names
+    assert "mechanism" not in names
     assert "nmr" in names
     pr = client.get("/api/protocols").json()
     assert isinstance(pr["protocols"], list)
@@ -90,8 +94,9 @@ def test_workflows_are_driven_by_registry(client: TestClient) -> None:
     """Workflow metadata must come from the workflow registry, not a hardcoded list."""
     wf = client.get("/api/workflows").json()
     by_name = {w["name"]: w for w in wf["workflows"]}
-    assert "mechanism" in by_name
-    assert by_name["mechanism"]["label"] == "Mechanism / TS"
+    assert "Confsearch" in by_name
+    assert by_name["Confsearch"]["label"] == "Conformer Search"
+    assert "Highconfirm" in by_name
 
 
 def test_frontend_index_served(client: TestClient) -> None:
@@ -148,7 +153,9 @@ def test_fake_job_full_lifecycle(client: TestClient) -> None:
     files = client.get(f"/api/jobs/{job_id}/files").json()["files"]
     paths = {f["path"] for f in files}
     assert "state.json" in paths
-    assert "events.jsonl" in paths
+    assert "WORK" in paths
+    runtime = client.get(f"/api/jobs/{job_id}/files?path=WORK/00_RUNTIME").json()["files"]
+    assert "WORK/00_RUNTIME/events.jsonl" in {f["path"] for f in runtime}
 
     logs = client.get(f"/api/jobs/{job_id}/logs").json()
     assert "stdout" in logs and "stderr" in logs

@@ -18,6 +18,7 @@ from fastapi.responses import HTMLResponse
 from acp import __version__
 from acp.api.routes import router as api_router
 from acp.api.v1_routes import router as v1_router
+from acp.api.v2_routes import router as v2_router
 
 _FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent.parent / "frontend"
 
@@ -189,6 +190,7 @@ def create_app(
     )
 
     app.include_router(v1_router, prefix="/api/v1")
+    app.include_router(v2_router, prefix="/api/v2")
     app.include_router(api_router, prefix="/api")
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)

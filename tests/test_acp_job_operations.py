@@ -49,6 +49,7 @@ from acp.scheduler.store import JobStore
 
 PAUSED_RESTART_MARKER = "[RESTART_FAILED] paused job frozen at restart"
 RESTART_HINT = "可尝试续算 (try continue)"
+STAGE_WORKFLOWS = ("Confsearch", "PESsearch", "Lowconfirm", "Highconfirm")
 
 
 def _make_manager(tmp_path: Path, **kw) -> JobManager:
@@ -775,6 +776,32 @@ def test_continue_simple_workflow_rejected_with_guidance(tmp_path: Path) -> None
         mgr.shutdown()
 
 
+@pytest.mark.parametrize("workflow", STAGE_WORKFLOWS)
+def test_continue_stage_workflow_rejected_with_rerun_guidance(
+    tmp_path: Path, workflow: str
+) -> None:
+    mgr = _make_manager(tmp_path)
+    try:
+        source = _seed_job(
+            mgr.store,
+            tmp_path / "runs" / f"{workflow.lower()}-failed",
+            f"{workflow.lower()}-failed",
+            workflow=workflow,
+            status=JobStatus.FAILED,
+            project_id=mgr.default_project_id,
+        )
+
+        with pytest.raises(ValueError, match="不支持断点续算.*rerun"):
+            mgr.continue_job(source.id)
+
+        unchanged = mgr.get(source.id)
+        assert unchanged is not None
+        assert unchanged.status == JobStatus.FAILED
+        assert unchanged.spec.workflow == workflow
+    finally:
+        mgr.shutdown()
+
+
 def test_continue_requires_terminal_status(tmp_path: Path) -> None:
     mgr = _make_manager(tmp_path)
     try:
@@ -816,7 +843,7 @@ def test_continue_rejects_live_zombie_process(tmp_path: Path) -> None:
 # ====================================================================== #
 
 
-def test_rerun_strips_copy_suffix_and_clears_output_dir(tmp_path: Path) -> None:
+def test_rerun_preserves_canonical_name_and_clears_output_dir(tmp_path: Path) -> None:
     mgr = _make_manager(tmp_path)
     try:
         _seed_job(
@@ -834,7 +861,7 @@ def test_rerun_strips_copy_suffix_and_clears_output_dir(tmp_path: Path) -> None:
         new = mgr.rerun_job("source")
         assert new is not None
         assert new.id != "source"
-        assert new.spec.name == "foo__rerun"
+        assert new.spec.name == "foo_copy_fake"
         assert new.spec.output_dir is None
         assert new.project_id == mgr.default_project_id
         _wait_submission(calls, new.id)
@@ -868,7 +895,7 @@ def test_rerun_target_project_and_defaulting(tmp_path: Path) -> None:
         new2 = mgr.rerun_job("plain")
         assert new2 is not None
         assert new2.project_id == mgr.default_project_id
-        assert new2.spec.name == "foo__rerun"
+        assert new2.spec.name == "foo_fake"
 
         # Unknown project → ValueError.
         with pytest.raises(ValueError, match="Project not found"):
@@ -882,6 +909,72 @@ def test_rerun_unknown_job_returns_none(tmp_path: Path) -> None:
     try:
         assert mgr.rerun_job("missing-job") is None
     finally:
+        mgr.shutdown()
+
+
+@pytest.mark.parametrize("workflow", STAGE_WORKFLOWS)
+def test_rerun_stage_workflow_creates_fresh_clone(
+    tmp_path: Path, workflow: str
+) -> None:
+    mgr = _make_manager(tmp_path)
+    try:
+        source = _seed_job(
+            mgr.store,
+            tmp_path / "runs" / f"{workflow.lower()}-source",
+            f"{workflow.lower()}-task",
+            workflow=workflow,
+            status=JobStatus.FAILED,
+            project_id=mgr.default_project_id,
+        )
+        calls: list[str] = []
+        mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
+
+        clone = mgr.rerun_job(source.id)
+
+        assert clone is not None
+        assert clone.id != source.id
+        assert clone.group_id == source.id
+        assert clone.spec.workflow == workflow
+        assert clone.spec.output_dir is None
+        assert clone.spec.name == f"{source.spec.name}_{workflow}"
+        assert Path(clone.work_dir).name == clone.spec.name
+        _wait_submission(calls, clone.id)
+    finally:
+        mgr.shutdown()
+
+
+@pytest.mark.parametrize("workflow", STAGE_WORKFLOWS)
+def test_pause_unpause_stage_workflow_lifecycle(tmp_path: Path, workflow: str) -> None:
+    mgr = _make_manager(tmp_path)
+    proc = _spawn_local_worker()
+    job_id = f"{workflow.lower()}-running"
+    try:
+        _seed_job(
+            mgr.store,
+            tmp_path / "runs" / job_id,
+            job_id,
+            workflow=workflow,
+            status=JobStatus.RUNNING,
+        )
+        mgr.runner._processes[job_id] = proc
+
+        paused = mgr.pause_job(job_id)
+        assert paused.status == JobStatus.PAUSED
+
+        resumed = mgr.unpause_job(job_id)
+        assert resumed.status == JobStatus.RUNNING
+        assert proc.poll() is None
+
+        events = mgr.event_log(job_id)
+        assert events is not None
+        assert [event["type"] for event in events.read_all()][-2:] == [
+            "job.paused",
+            "job.resumed",
+        ]
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            proc.wait(timeout=10)
         mgr.shutdown()
 
 

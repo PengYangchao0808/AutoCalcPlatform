@@ -1,4 +1,4 @@
-"""Simple workflows: singlepoint/optimize/frequency/optfreq/optfreqsp (ORCA) + xtb_optimize (xTB)."""
+"""Simple workflows: singlepoint/optimize/frequency/optfreq/optfreqsp (ORCA) + xtb_optimize."""
 
 from __future__ import annotations
 
@@ -17,7 +17,13 @@ from acp.core.state import WorkflowState
 from acp.core.utils import ensure_unique_dir
 from acp.core.workflow import WorkflowResult
 from acp.io.structures import StructureReader
-from acp.workflows._helpers import sanitize_job_name, write_result_summary
+from acp.storage.layout import TaskStorage
+from acp.storage.manifest import ResultManifest
+from acp.workflows._helpers import (
+    resolve_task_output_root,
+    sanitize_job_name,
+    write_result_summary,
+)
 from cccp.config import load_config
 
 logger = logging.getLogger(__name__)
@@ -72,7 +78,9 @@ def _write_thermo_json(output_dir: Path, thermo: dict[str, float], sp_energy: fl
         "sp_energy_hartree": sp_energy,
         "free_energy_hartree": g_sum,
         "free_energy_kcal_mol": g_sum * HARTREE_TO_KCAL,
-        "thermal_correction_u_hartree": thermo.get("u_sum", 0.0) - sp_energy if "u_sum" in thermo else 0.0,
+        "thermal_correction_u_hartree": thermo.get("u_sum", 0.0) - sp_energy
+        if "u_sum" in thermo
+        else 0.0,
         "total_enthalpy_hartree": thermo.get("h_sum", 0.0),
         "total_gibbs_hartree": g_sum,
         "entropy": thermo.get("s_total", 0.0),
@@ -83,9 +91,73 @@ def _write_thermo_json(output_dir: Path, thermo: dict[str, float], sp_energy: fl
     (output_dir / "thermo.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def _write_orca_viewer_products(
+    qc_result: Any,
+    storage: TaskStorage,
+    kinds: list[str],
+) -> None:
+    """Parse the ORCA .out and project §11 viewer payloads into RESULT/.
+
+    Best-effort: a missing/short log or parser failure silently skips the
+    enrichment (the core products are already written by the callers).
+    """
+    log_file = getattr(qc_result, "log_file", None)
+    if not log_file or not Path(log_file).is_file():
+        return
+    try:
+        from acp.results.frequencies import build_frequency_report
+        from acp.results.optimization import build_optimization_trajectory
+        from acp.results.orca_parser import OrcaOutputParser
+
+        calc = OrcaOutputParser().parse(Path(log_file))
+        if "optimization" in kinds:
+            traj_dir = storage.result_category_dir("trajectories")
+            payload = build_optimization_trajectory(calc)
+            (traj_dir / "optimization.json").write_text(
+                json.dumps(payload, indent=2), encoding="utf-8"
+            )
+            scf_dir = storage.result_category_dir("energies")
+            (scf_dir / "scf_history.json").write_text(
+                json.dumps(
+                    {"scf_energies": payload["scf_energies"], "converged": payload["converged"]},
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+        if "frequency" in kinds:
+            freq_dir = storage.result_category_dir("frequencies")
+            report = build_frequency_report(calc)
+            (freq_dir / "frequency_report.json").write_text(
+                json.dumps(report, indent=2), encoding="utf-8"
+            )
+    except Exception:
+        logger.debug("ORCA viewer-product projection skipped for %s", log_file, exc_info=True)
+
+
 def _write_frequencies_txt(output_dir: Path, frequencies: list[float]) -> None:
-    lines = [f"{i+1:6d}  {freq:12.4f}" for i, freq in enumerate(frequencies)]
+    lines = [f"{i + 1:6d}  {freq:12.4f}" for i, freq in enumerate(frequencies)]
     (output_dir / "frequencies.txt").write_text("\n".join(lines), encoding="utf-8")
+
+
+def _write_frequencies_json(output_dir: Path, frequencies: list[float]) -> None:
+    """Structured §7.2 frequency products: frequencies.json + imaginary_modes.json."""
+    imaginary = [f for f in frequencies if f < 0.0]
+    (output_dir / "frequencies.json").write_text(
+        json.dumps(
+            {
+                "unit": "cm-1",
+                "n_modes": len(frequencies),
+                "frequencies": frequencies,
+                "has_imaginary": bool(imaginary),
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (output_dir / "imaginary_modes.json").write_text(
+        json.dumps({"unit": "cm-1", "imaginary_modes": imaginary}, indent=2),
+        encoding="utf-8",
+    )
 
 
 def _write_optimized_xyz(
@@ -117,17 +189,19 @@ def _find_shermo(cfg: dict[str, Any] | None = None) -> str | None:
 
 
 _SCHEDULER_MARKERS: set[str] = {
-    "inputs",
     "submit.lsf",
     ".exit_code",
-    "work",
-    "results",
     "events.jsonl",
     "job.json",
     "stdout.log",
     "stderr.log",
     "mechanism_config.json",
     "metrics.json",
+    "WORK",
+    "RESULT",
+    "input.xyz",
+    "task.json",
+    "input_source.json",
 }
 
 
@@ -135,11 +209,10 @@ def _resolve_output_dir(output_dir: str | Path) -> Path:
     """Resolve output directory.
 
     If the directory already exists and contains only scheduler/pre-runner
-    artifacts (e.g. ``inputs/``, ``submit.lsf``, ``work/``, ``results/``,
-    ``events.jsonl``, ``job.json``, ``stdout.log``, ``stderr.log``,
-    ``mechanism_config.json``) or is empty, reuse it directly.  Otherwise,
-    ensure a unique path so that repeated CLI invocations never overwrite
-    previous results.
+    artifacts (e.g. ``submit.lsf``, ``events.jsonl``, ``job.json``,
+    ``task.json``, ``stdout.log``, ``stderr.log``, ``mechanism_config.json``)
+    or is empty, reuse it directly.  Otherwise, ensure a unique path so that
+    repeated CLI invocations never overwrite previous results.
     """
     base = Path(output_dir).resolve()
     if base.is_dir():
@@ -150,13 +223,16 @@ def _resolve_output_dir(output_dir: str | Path) -> Path:
     return ensure_unique_dir(output_dir)
 
 
-def _calc_subdir(output_root: Path, name: str | None, input_source: str, workflow_name: str) -> Path:
-    """Create the per-molecule calculation subdirectory under *output_root*.
+def _calc_subdir(
+    output_root: Path, name: str | None, input_source: str, workflow_name: str
+) -> Path:
+    """Create the per-molecule calculation directory under *output_root*.
 
-    Mirrors the ``output_root / safe_name`` pattern used by the
-    ``energy`` and ``conformer`` workflows.  Falls back to *workflow_name*
-    only when the input file stem is generic (e.g. scheduler materialised
-    ``inputs/input.xyz``) and no explicit name was provided.
+    Returns *output_root* itself when it is a scheduler task dir
+    (``job.json`` + ``task.json`` present) so scheduler jobs write flat at
+    the task root; otherwise nests ``output_root / safe_name``.  Falls back
+    to *workflow_name* only when the input file stem is generic (e.g.
+    scheduler materialised ``input.xyz``) and no explicit name was provided.
     """
     if name:
         safe_name = sanitize_job_name(name)
@@ -166,7 +242,7 @@ def _calc_subdir(output_root: Path, name: str | None, input_source: str, workflo
             safe_name = sanitize_job_name(workflow_name)
         else:
             safe_name = sanitize_job_name(stem)
-    calc_dir = output_root / safe_name
+    calc_dir = resolve_task_output_root(output_root, safe_name)
     calc_dir.mkdir(parents=True, exist_ok=True)
     return calc_dir
 
@@ -187,6 +263,37 @@ def _init_state(work_dir: Path, workflow_name: str, input_source: str = "") -> W
     state = WorkflowState(work_dir=work_dir, job_name=workflow_name)
     state.initialize(input_source=input_source, stage_names=stage_names)
     return state
+
+
+def _v2_storage(
+    calc_dir: Path,
+    stages: list[str] | None = None,
+    categories: list[str] | None = None,
+) -> TaskStorage:
+    """Create the v2 ``WORK``/``RESULT`` scaffold for a task and return the resolver."""
+    storage = TaskStorage(calc_dir)
+    storage.ensure_layout(stages=stages, categories=categories)
+    return storage
+
+
+def _v2_manifest(
+    storage: TaskStorage,
+    workflow: str,
+    products: list[dict[str, Any]],
+) -> None:
+    """Write ``RESULT/result_manifest.json`` (v2 §8) with RESULT-relative product paths."""
+    manifest = ResultManifest(task_id="", workflow=workflow, status="completed")
+    for item in products:
+        if not isinstance(item, dict) or not item.get("path"):
+            continue
+        kind = str(item.get("kind") or "file")
+        manifest.add_product(
+            id=str(item.get("id") or item["path"]),
+            label=str(item.get("label") or item["path"]),
+            path=str(item["path"]),
+            kind=kind,
+        )
+    manifest.write(storage.result_dir())
 
 
 def _build_method_kwargs(raw_kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -233,8 +340,12 @@ def _build_method_kwargs(raw_kwargs: dict[str, Any]) -> dict[str, Any]:
 
 
 _GFN_DISPLAY_TO_INT: dict[str, int] = {
-    "GFN0-xTB": 0, "GFN1-xTB": 1, "GFN2-xTB": 2,
-    "0": 0, "1": 1, "2": 2,
+    "GFN0-xTB": 0,
+    "GFN1-xTB": 1,
+    "GFN2-xTB": 2,
+    "0": 0,
+    "1": 1,
+    "2": 2,
 }
 
 
@@ -298,24 +409,48 @@ def run_singlepoint(
     coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
     calc_dir = _calc_subdir(out, name, input_source, "singlepoint")
     state = _init_state(calc_dir, "singlepoint", input_source)
+    storage = _v2_storage(calc_dir, stages=["05_SP"], categories=["energies"])
 
     kwargs = _build_method_kwargs(method_kwargs or {})
     backend = _build_backend(cfg)
     state.set_stage("single_point")
-    result = backend.single_point(coords, symbols, charge=chg, multiplicity=mult, output_dir=calc_dir, **kwargs)
+    result = backend.single_point(
+        coords,
+        symbols,
+        charge=chg,
+        multiplicity=mult,
+        output_dir=str(storage.stage_dir("05_SP", "ORCA")),
+        **kwargs,
+    )
     if not result.success:
         state.fail_stage("single_point", result.error_message or "SP calculation failed")
-        return WorkflowResult(status="failed", error=result.error_message or "SP calculation failed")
+        return WorkflowResult(
+            status="failed", error=result.error_message or "SP calculation failed"
+        )
 
     if result.energy is None:
         state.fail_stage("single_point", "SP returned no energy")
         return WorkflowResult(status="failed", error="SP calculation returned no energy")
     state.complete_stage("single_point")
-    _write_energy_json(calc_dir, result.energy)
+    _write_energy_json(storage.result_category_dir("energies"), result.energy)
     write_result_summary(
         calc_dir,
         workflow="singlepoint",
-        products=[{"label": "Energy (Hartree)", "path": "energy.json", "kind": "report"}],
+        products=[
+            {"label": "Energy (Hartree)", "path": "RESULT/energies/energy.json", "kind": "report"}
+        ],
+    )
+    _v2_manifest(
+        storage,
+        "singlepoint",
+        [
+            {
+                "id": "energy",
+                "label": "Energy (Hartree)",
+                "path": "energies/energy.json",
+                "kind": "energy_report",
+            },
+        ],
     )
     state.mark_completed()
     return WorkflowResult(
@@ -339,26 +474,60 @@ def run_optimize(
     coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
     calc_dir = _calc_subdir(out, name, input_source, "optimize")
     state = _init_state(calc_dir, "optimize", input_source)
+    storage = _v2_storage(calc_dir, stages=["03_OPT"], categories=["structures", "energies"])
 
     kwargs = _build_method_kwargs(method_kwargs or {})
     backend = _build_backend(cfg)
     state.set_stage("optimize")
-    result = backend.optimize(coords, symbols, charge=chg, multiplicity=mult, output_dir=calc_dir, **kwargs)
+    result = backend.optimize(
+        coords,
+        symbols,
+        charge=chg,
+        multiplicity=mult,
+        output_dir=str(storage.stage_dir("03_OPT", "ORCA")),
+        **kwargs,
+    )
     if not result.success:
         state.fail_stage("optimize", result.error_message or "Optimization failed")
         return WorkflowResult(status="failed", error=result.error_message or "Optimization failed")
 
     state.complete_stage("optimize")
     if result.coordinates is not None:
-        _write_optimized_xyz(calc_dir, result.coordinates, result.symbols or symbols)
+        _write_optimized_xyz(
+            storage.result_category_dir("structures"), result.coordinates, result.symbols or symbols
+        )
     if result.energy is not None:
-        _write_energy_json(calc_dir, result.energy)
+        _write_energy_json(storage.result_category_dir("energies"), result.energy)
+    _write_orca_viewer_products(result, storage, kinds=["optimization"])
     write_result_summary(
         calc_dir,
         workflow="optimize",
         products=[
-            {"label": "Optimized structure", "path": "optimized.xyz", "kind": "xyz"},
-            {"label": "Energy (Hartree)", "path": "energy.json", "kind": "report"},
+            {
+                "label": "Optimized structure",
+                "path": "RESULT/structures/optimized.xyz",
+                "kind": "xyz",
+                "role": "final_stable_structure",
+            },
+            {"label": "Energy (Hartree)", "path": "RESULT/energies/energy.json", "kind": "report"},
+        ],
+    )
+    _v2_manifest(
+        storage,
+        "optimize",
+        [
+            {
+                "id": "optimized_structure",
+                "label": "Optimized structure",
+                "path": "structures/optimized.xyz",
+                "kind": "structure",
+            },
+            {
+                "id": "energy",
+                "label": "Energy (Hartree)",
+                "path": "energies/energy.json",
+                "kind": "energy_report",
+            },
         ],
     )
     state.mark_completed()
@@ -387,27 +556,62 @@ def run_xtb_optimize(
     coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
     calc_dir = _calc_subdir(out, name, input_source, "xtb_optimize")
     state = _init_state(calc_dir, "xtb_optimize", input_source)
+    storage = _v2_storage(calc_dir, stages=["03_OPT"], categories=["structures", "energies"])
 
     kwargs = _build_xtb_method_kwargs(method_kwargs or {})
     gfn_level = _normalize_gfn((method_kwargs or {}).get("gfn"))
     backend = _build_xtb_backend(cfg, gfn_level=gfn_level)
     state.set_stage("xtb_optimize")
-    result = backend.optimize(coords, symbols, charge=chg, multiplicity=mult, output_dir=calc_dir, **kwargs)
+    result = backend.optimize(
+        coords,
+        symbols,
+        charge=chg,
+        multiplicity=mult,
+        output_dir=str(storage.stage_dir("03_OPT", "xTB")),
+        **kwargs,
+    )
     if not result.success:
         state.fail_stage("xtb_optimize", result.error_message or "xTB optimization failed")
-        return WorkflowResult(status="failed", error=result.error_message or "xTB optimization failed")
+        return WorkflowResult(
+            status="failed", error=result.error_message or "xTB optimization failed"
+        )
 
     state.complete_stage("xtb_optimize")
     if result.coordinates is not None:
-        _write_optimized_xyz(calc_dir, result.coordinates, result.symbols or symbols)
+        _write_optimized_xyz(
+            storage.result_category_dir("structures"), result.coordinates, result.symbols or symbols
+        )
     if result.energy is not None:
-        _write_energy_json(calc_dir, result.energy)
+        _write_energy_json(storage.result_category_dir("energies"), result.energy)
     write_result_summary(
         calc_dir,
         workflow="xtb_optimize",
         products=[
-            {"label": "Optimized structure", "path": "optimized.xyz", "kind": "xyz"},
-            {"label": "Energy (Hartree)", "path": "energy.json", "kind": "report"},
+            {
+                "label": "Optimized structure",
+                "path": "RESULT/structures/optimized.xyz",
+                "kind": "xyz",
+                "role": "final_stable_structure",
+            },
+            {"label": "Energy (Hartree)", "path": "RESULT/energies/energy.json", "kind": "report"},
+        ],
+    )
+    _v2_manifest(
+        storage,
+        "xtb_optimize",
+        [
+            {
+                "id": "optimized_structure",
+                "label": "Optimized structure",
+                "path": "structures/optimized.xyz",
+                "kind": "structure",
+            },
+            {
+                "id": "energy",
+                "label": "Energy (Hartree)",
+                "path": "energies/energy.json",
+                "kind": "energy_report",
+            },
         ],
     )
     state.mark_completed()
@@ -436,28 +640,59 @@ def run_frequency(
     coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
     calc_dir = _calc_subdir(out, name, input_source, "frequency")
     state = _init_state(calc_dir, "frequency", input_source)
+    storage = _v2_storage(calc_dir, stages=["04_FREQ"], categories=["frequencies"])
 
     kwargs = _build_method_kwargs(method_kwargs or {})
     backend = _build_backend(cfg)
     state.set_stage("frequency")
-    result = backend.frequency(coords, symbols, charge=chg, multiplicity=mult, output_dir=calc_dir, **kwargs)
+    result = backend.frequency(
+        coords,
+        symbols,
+        charge=chg,
+        multiplicity=mult,
+        output_dir=str(storage.stage_dir("04_FREQ", "ORCA")),
+        **kwargs,
+    )
     if not result.success:
         state.fail_stage("frequency", result.error_message or "Frequency calculation failed")
-        return WorkflowResult(status="failed", error=result.error_message or "Frequency calculation failed")
+        return WorkflowResult(
+            status="failed", error=result.error_message or "Frequency calculation failed"
+        )
 
     state.complete_stage("frequency")
     freqs = result.frequencies or []
     if freqs:
-        _write_frequencies_txt(calc_dir, freqs)
+        freq_dir = storage.result_category_dir("frequencies")
+        _write_frequencies_txt(freq_dir, freqs)
+        _write_frequencies_json(freq_dir, freqs)
+    _write_orca_viewer_products(result, storage, kinds=["frequency"])
     write_result_summary(
         calc_dir,
         workflow="frequency",
-        products=[{"label": "Frequencies", "path": "frequencies.txt", "kind": "table"}],
+        products=[
+            {"label": "Frequencies", "path": "RESULT/frequencies/frequencies.txt", "kind": "table"}
+        ],
+    )
+    _v2_manifest(
+        storage,
+        "frequency",
+        [
+            {
+                "id": "frequencies",
+                "label": "Frequencies",
+                "path": "frequencies/frequencies.json",
+                "kind": "frequency_modes",
+            },
+        ],
     )
     state.mark_completed()
     return WorkflowResult(
         status="completed",
-        metadata={"output_dir": str(calc_dir), "n_frequencies": len(freqs), "has_frequencies": result.has_frequencies},
+        metadata={
+            "output_dir": str(calc_dir),
+            "n_frequencies": len(freqs),
+            "has_frequencies": result.has_frequencies,
+        },
     )
 
 
@@ -476,30 +711,78 @@ def run_optfreq(
     coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
     calc_dir = _calc_subdir(out, name, input_source, "optfreq")
     state = _init_state(calc_dir, "optfreq", input_source)
+    storage = _v2_storage(
+        calc_dir,
+        stages=["03_OPT", "04_FREQ"],
+        categories=["structures", "frequencies", "energies"],
+    )
 
     kwargs = _build_method_kwargs(method_kwargs or {})
     backend = _build_backend(cfg)
     state.set_stage("opt_freq")
-    result = backend.opt_freq(coords, symbols, charge=chg, multiplicity=mult, output_dir=calc_dir, **kwargs)
+    result = backend.opt_freq(
+        coords,
+        symbols,
+        charge=chg,
+        multiplicity=mult,
+        output_dir=str(storage.stage_dir("03_OPT", "ORCA")),
+        **kwargs,
+    )
     if not result.success:
         state.fail_stage("opt_freq", result.error_message or "Opt+Freq calculation failed")
-        return WorkflowResult(status="failed", error=result.error_message or "Opt+Freq calculation failed")
+        return WorkflowResult(
+            status="failed", error=result.error_message or "Opt+Freq calculation failed"
+        )
 
     state.complete_stage("opt_freq")
     if result.coordinates is not None:
-        _write_optimized_xyz(calc_dir, result.coordinates, result.symbols or symbols)
+        _write_optimized_xyz(
+            storage.result_category_dir("structures"), result.coordinates, result.symbols or symbols
+        )
     freqs = result.frequencies or []
     if freqs:
-        _write_frequencies_txt(calc_dir, freqs)
+        freq_dir = storage.result_category_dir("frequencies")
+        _write_frequencies_txt(freq_dir, freqs)
+        _write_frequencies_json(freq_dir, freqs)
     if result.energy is not None:
-        _write_energy_json(calc_dir, result.energy)
+        _write_energy_json(storage.result_category_dir("energies"), result.energy)
+    _write_orca_viewer_products(result, storage, kinds=["optimization", "frequency"])
     write_result_summary(
         calc_dir,
         workflow="optfreq",
         products=[
-            {"label": "Optimized structure", "path": "optimized.xyz", "kind": "xyz"},
-            {"label": "Frequencies", "path": "frequencies.txt", "kind": "table"},
-            {"label": "Energy (Hartree)", "path": "energy.json", "kind": "report"},
+            {
+                "label": "Optimized structure",
+                "path": "RESULT/structures/optimized.xyz",
+                "kind": "xyz",
+                "role": "final_stable_structure",
+            },
+            {"label": "Frequencies", "path": "RESULT/frequencies/frequencies.txt", "kind": "table"},
+            {"label": "Energy (Hartree)", "path": "RESULT/energies/energy.json", "kind": "report"},
+        ],
+    )
+    _v2_manifest(
+        storage,
+        "optfreq",
+        [
+            {
+                "id": "optimized_structure",
+                "label": "Optimized structure",
+                "path": "structures/optimized.xyz",
+                "kind": "structure",
+            },
+            {
+                "id": "frequencies",
+                "label": "Frequencies",
+                "path": "frequencies/frequencies.json",
+                "kind": "frequency_modes",
+            },
+            {
+                "id": "energy",
+                "label": "Energy (Hartree)",
+                "path": "energies/energy.json",
+                "kind": "energy_report",
+            },
         ],
     )
     state.mark_completed()
@@ -534,29 +817,50 @@ def run_optfreqsp(
     coords, symbols, chg, mult = _read_input(input_source, charge, multiplicity, name)
     calc_dir = _calc_subdir(out, name, input_source, "optfreqsp")
     state = _init_state(calc_dir, "optfreqsp", input_source)
+    storage = _v2_storage(
+        calc_dir,
+        stages=["03_OPT", "04_FREQ", "05_SP", "06_THERMO"],
+        categories=["structures", "frequencies", "energies", "reports"],
+    )
+    opt_dir = storage.stage_dir("03_OPT", "ORCA")
+    sp_dir = storage.stage_dir("05_SP", "ORCA")
+    thermo_dir = storage.stage_dir("06_THERMO", "Shermo")
 
     # --- Stage 1: Opt+Freq ---
     opt_kwargs = _build_method_kwargs(optfreq_kwargs or {})
     backend = _build_backend(cfg)
     state.set_stage("opt_freq")
-    optfreq_result = backend.opt_freq(coords, symbols, charge=chg, multiplicity=mult, output_dir=calc_dir, **opt_kwargs)
+    optfreq_result = backend.opt_freq(
+        coords, symbols, charge=chg, multiplicity=mult, output_dir=str(opt_dir), **opt_kwargs
+    )
     if not optfreq_result.success:
         state.fail_stage("opt_freq", optfreq_result.error_message or "Opt+Freq stage failed")
-        return WorkflowResult(status="failed", error=optfreq_result.error_message or "Opt+Freq stage failed")
+        return WorkflowResult(
+            status="failed", error=optfreq_result.error_message or "Opt+Freq stage failed"
+        )
     state.complete_stage("opt_freq")
 
     opt_coords = optfreq_result.coordinates if optfreq_result.coordinates is not None else coords
     freqs = optfreq_result.frequencies or []
     if optfreq_result.coordinates is not None:
-        _write_optimized_xyz(calc_dir, optfreq_result.coordinates, optfreq_result.symbols or symbols)
+        _write_optimized_xyz(
+            storage.result_category_dir("structures"),
+            optfreq_result.coordinates,
+            optfreq_result.symbols or symbols,
+        )
     if freqs:
-        _write_frequencies_txt(calc_dir, freqs)
+        freq_dir = storage.result_category_dir("frequencies")
+        _write_frequencies_txt(freq_dir, freqs)
+        _write_frequencies_json(freq_dir, freqs)
+    _write_orca_viewer_products(optfreq_result, storage, kinds=["optimization", "frequency"])
 
     # --- Stage 2: Single Point ---
     sp_flat = _build_method_kwargs(sp_kwargs or {})
     sp_backend = _build_backend(cfg)
     state.set_stage("single_point")
-    sp_result = sp_backend.single_point(opt_coords, symbols, charge=chg, multiplicity=mult, output_dir=calc_dir, **sp_flat)
+    sp_result = sp_backend.single_point(
+        opt_coords, symbols, charge=chg, multiplicity=mult, output_dir=str(sp_dir), **sp_flat
+    )
     if not sp_result.success:
         state.fail_stage("single_point", sp_result.error_message or "SP stage failed")
         return WorkflowResult(status="failed", error=sp_result.error_message or "SP stage failed")
@@ -577,11 +881,12 @@ def run_optfreqsp(
     # --- Stage 3: Shermo ---
     th = thermo_kwargs or {}
     from acp.backends.external import run_shermo
+
     state.set_stage("shermo")
     thermo = run_shermo(
         freq_output=log_file,
         sp_energy=sp_energy,
-        output_dir=calc_dir,
+        output_dir=str(thermo_dir),
         shermo_bin=shermo_bin,
         temperature_k=th.get("temperature", 298.15),
         pressure_atm=th.get("pressure", 1.0),
@@ -594,22 +899,57 @@ def run_optfreqsp(
         state.complete_stage("shermo")
     else:
         state.fail_stage("shermo", "Shermo returned no output")
-        _write_thermo_json(calc_dir, {}, sp_energy)
+        _write_thermo_json(storage.result_category_dir("energies"), {}, sp_energy)
         return WorkflowResult(
             status="failed",
             error="Shermo returned no output",
             metadata={"output_dir": str(calc_dir), "sp_energy": sp_energy},
         )
 
-    _write_thermo_json(calc_dir, thermo, sp_energy)
-    _write_energy_json(calc_dir, sp_energy)
+    _write_thermo_json(storage.result_category_dir("energies"), thermo, sp_energy)
+    _write_energy_json(storage.result_category_dir("energies"), sp_energy)
     write_result_summary(
         calc_dir,
         workflow="optfreqsp",
         products=[
-            {"label": "Optimized structure", "path": "optimized.xyz", "kind": "xyz"},
-            {"label": "Thermodynamics", "path": "thermo.json", "kind": "report"},
-            {"label": "Energy (Hartree)", "path": "energy.json", "kind": "report"},
+            {
+                "label": "Optimized structure",
+                "path": "RESULT/structures/optimized.xyz",
+                "kind": "xyz",
+                "role": "final_stable_structure",
+            },
+            {"label": "Thermodynamics", "path": "RESULT/energies/thermo.json", "kind": "report"},
+            {"label": "Energy (Hartree)", "path": "RESULT/energies/energy.json", "kind": "report"},
+        ],
+    )
+    _v2_manifest(
+        storage,
+        "optfreqsp",
+        [
+            {
+                "id": "optimized_structure",
+                "label": "Optimized structure",
+                "path": "structures/optimized.xyz",
+                "kind": "structure",
+            },
+            {
+                "id": "frequencies",
+                "label": "Frequencies",
+                "path": "frequencies/frequencies.json",
+                "kind": "frequency_modes",
+            },
+            {
+                "id": "thermo",
+                "label": "Thermodynamics",
+                "path": "energies/thermo.json",
+                "kind": "report",
+            },
+            {
+                "id": "energy",
+                "label": "Energy (Hartree)",
+                "path": "energies/energy.json",
+                "kind": "energy_report",
+            },
         ],
     )
     state.mark_completed()

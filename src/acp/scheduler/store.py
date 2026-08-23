@@ -152,6 +152,41 @@ class JobStore:
             rows = conn.execute(query, params).fetchall()
         return [_row_to_record(r) for r in rows]
 
+    def list_recent_completed(
+        self,
+        limit: int = 20,
+        *,
+        project_id: str | None = None,
+        workflow: str | None = None,
+        completed_after: str | None = None,
+    ) -> list[JobRecord]:
+        """List COMPLETED jobs, most recently completed first.
+
+        Args:
+            limit: Maximum rows returned.
+            project_id: Restrict to one project.
+            workflow: Restrict to one workflow id.
+            completed_after: ISO cutoff — only rows with ``completed_at``
+                at or after this timestamp.
+        """
+        clauses: list[str] = ["status=?"]
+        params: list[Any] = [JobStatus.COMPLETED.value]
+        if project_id is not None:
+            clauses.append("project_id=?")
+            params.append(project_id)
+        if workflow is not None:
+            clauses.append("workflow=?")
+            params.append(workflow)
+        if completed_after is not None:
+            clauses.append("completed_at IS NOT NULL AND completed_at != '' AND completed_at>=?")
+            params.append(completed_after)
+        where = " AND ".join(clauses)
+        query = f"SELECT * FROM jobs WHERE {where} ORDER BY completed_at DESC LIMIT ?"
+        params.append(limit)
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [_row_to_record(r) for r in rows]
+
     def list_by_project(self, project_id: str, limit: int = 200) -> list[JobRecord]:
         with self._lock, self._connect() as conn:
             rows = conn.execute(
@@ -536,9 +571,13 @@ def _row_to_record(row: sqlite3.Row) -> JobRecord:
         config_path=spec_raw.get("config_path"),
         tags=spec_raw.get("tags", []),
         project_id=spec_raw.get("project_id", project_id),
+        mechanism_project_id=spec_raw.get("mechanism_project_id"),
         input_hash=spec_raw.get("input_hash", input_hash),
         execution_mode=spec_raw.get("execution_mode"),
         target_node=spec_raw.get("target_node"),
+        molecule_name=spec_raw.get("molecule_name", ""),
+        task_name=spec_raw.get("task_name", ""),
+        remark=spec_raw.get("remark", ""),
     )
     result = json.loads(row["result_json"]) if row["result_json"] else None
     return JobRecord(

@@ -25,12 +25,15 @@ from acp.core.models import Structure, StructureEnsemble, StructureRecord
 from acp.core.state import WorkflowState
 from acp.core.workflow import WorkflowResult
 from acp.io.structures import InputFormat, StructureReader
-from acp.workflows._helpers import sanitize_job_name
+from acp.workflows._helpers import resolve_task_output_root, sanitize_job_name
 from acp.workflows.energy_shared import (
     resolve_crest_ewin as _resolve_crest_ewin,
 )
 from acp.workflows.energy_shared import (
     resolve_solvent_config as _resolve_solvent_config,
+)
+from acp.workflows.energy_shared import (
+    v2_stage_dir as _v2_stage_dir,
 )
 from acp.workflows.energy_shared import (
     xtb_passthrough_result as _xtb_passthrough_result,
@@ -109,8 +112,9 @@ def _write_ensemble_outputs(
     output_dir: Path,
     raw_result: CensoRunResult,
 ) -> None:
-    (output_dir / "ensemble").mkdir(parents=True, exist_ok=True)
-    base = output_dir / "ensemble" / "ensemble"
+    ensembles_dir = output_dir / "RESULT" / "ensembles"
+    ensembles_dir.mkdir(parents=True, exist_ok=True)
+    base = ensembles_dir / "ensemble"
 
     symbols: list[str] = []
     all_coords_list: list[np.ndarray] = []
@@ -257,13 +261,12 @@ def run_ensemble_generation(
         metadata=structure.metadata,
     )
 
-    state = WorkflowState(output_root / safe_name, safe_name)
+    mol_dir = resolve_task_output_root(output_root, safe_name)
+    state = WorkflowState(mol_dir, safe_name)
     state.initialize(
         input_source=input_source,
         stage_names=["crest", "censo", "ensemble_generation"],
     )
-
-    mol_dir = output_root / safe_name
 
     censo_solvent, solvent_model = _resolve_solvent_config(cfg, solvent)
 
@@ -293,7 +296,7 @@ def run_ensemble_generation(
             state.complete_stage("crest", {"status": "skipped", "reason": "multi-frame XYZ input"})
             crest_skipped = True
         else:
-            crest_dir = mol_dir / "crest"
+            crest_dir = _v2_stage_dir(mol_dir, "02_SEARCH", "CREST")
             crest_dir.mkdir(parents=True, exist_ok=True)
 
             crest_cfg = cfg.get("executables", {}).get("crest", {})
@@ -345,7 +348,7 @@ def run_ensemble_generation(
                 },
             )
         else:
-            censo_dir = mol_dir / "censo"
+            censo_dir = _v2_stage_dir(mol_dir, "02_SEARCH", "CENSO")
             censo_dir.mkdir(parents=True, exist_ok=True)
 
             backend = CensoBackend(cfg)

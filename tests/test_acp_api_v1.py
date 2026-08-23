@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import time
 from collections import Counter
 from collections.abc import Generator
@@ -34,16 +33,18 @@ def _parse_xyz_frames(xyz_text: str) -> list[str]:
     return frames
 
 
-def make_client(tmp_path: Path, max_running: int = 2) -> TestClient:
-    os.environ["ACP_RUN_ROOT"] = str(tmp_path)
+def make_client(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, max_running: int = 2
+) -> TestClient:
+    monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path))
     from acp.api.server import create_app
 
     return TestClient(create_app(run_root=tmp_path, max_running=max_running))
 
 
 @pytest.fixture()
-def client(tmp_path: Path) -> Generator[TestClient, None, None]:
-    with make_client(tmp_path, max_running=2) as test_client:
+def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
+    with make_client(tmp_path, monkeypatch, max_running=2) as test_client:
         yield test_client
 
 
@@ -309,8 +310,8 @@ def test_v1_job_detail(client: TestClient) -> None:
     assert body["input_hash"].startswith("sha256:")
 
 
-def test_v1_job_cancel(tmp_path: Path) -> None:
-    with make_client(tmp_path, max_running=1) as client:
+def test_v1_job_cancel(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    with make_client(tmp_path, monkeypatch, max_running=1) as client:
         blocker = _submit_fake_job(client, source="X", name="blocker")
         second = _submit_fake_job(client, source="Y", name="second")
         time.sleep(0.5)
@@ -348,7 +349,7 @@ def test_v1_job_artifacts(client: TestClient) -> None:
     assert artifacts.status_code == 200
     items = artifacts.json()["artifacts"]
     assert items
-    assert any(item["file_path"] == "results/input_preview.xyz" for item in items)
+    assert any(item["file_path"] == "RESULT/input_preview.xyz" for item in items)
 
     detail = client.get(f"/api/v1/artifacts/{items[0]['artifact_id']}")
     assert detail.status_code == 200
@@ -361,7 +362,7 @@ def test_v1_artifact_download(client: TestClient) -> None:
     assert record["status"] == "completed"
 
     artifacts = client.get(f"/api/v1/jobs/{created['job_id']}/artifacts").json()["artifacts"]
-    preview = next(item for item in artifacts if item["file_path"] == "results/input_preview.xyz")
+    preview = next(item for item in artifacts if item["file_path"] == "RESULT/input_preview.xyz")
     response = client.get(f"/api/v1/artifacts/{preview['artifact_id']}/download")
     assert response.status_code == 200
     counts = _parse_xyz_element_counts(response.text)
@@ -381,9 +382,9 @@ def test_v1_fake_job_demo_frames(client: TestClient) -> None:
     assert record["status"] == "completed"
 
     artifacts = client.get(f"/api/v1/jobs/{created['job_id']}/artifacts").json()["artifacts"]
-    assert any(item["file_path"] == "results/demo_frames.xyz" for item in artifacts)
+    assert any(item["file_path"] == "RESULT/demo_frames.xyz" for item in artifacts)
 
-    demo = next(item for item in artifacts if item["file_path"] == "results/demo_frames.xyz")
+    demo = next(item for item in artifacts if item["file_path"] == "RESULT/demo_frames.xyz")
     response = client.get(f"/api/v1/artifacts/{demo['artifact_id']}/download")
     assert response.status_code == 200
     frames = _parse_xyz_frames(response.text)
@@ -556,3 +557,42 @@ def test_v1_hessian_preview_source_mapping(client: TestClient) -> None:
     res = r.json()["results"][0]
     assert res["source"] == "explicit"
     assert res["reason"] == "explicit_interval"
+
+
+def test_v1_create_job_with_v2_naming(client: TestClient) -> None:
+    """molecule_name/task_name/remark drive the v2 task-dir name (design §4)."""
+    response = client.post(
+        "/api/v1/jobs",
+        json={
+            "workflow": "fake",
+            "name": "demo",
+            "input": {"source": "CCO"},
+            "method": {"protocol": "ext"},
+            "molecule_name": "ethanol",
+            "task_name": "opt",
+            "remark": "final",
+        },
+    )
+    assert response.status_code == 201
+    job_id = response.json()["job_id"]
+
+    detail = client.get(f"/api/v1/jobs/{job_id}/detail").json()
+    work_dir = detail["job"]["work_dir"]
+    assert Path(work_dir).name == "ethanol_opt_final"
+    spec = detail["job"]["spec"]
+    assert spec["name"] == Path(work_dir).name
+    assert spec["molecule_name"] == "ethanol"
+    assert spec["task_name"] == "opt"
+    assert spec["remark"] == "final"
+
+
+def test_v1_create_job_without_v2_fields_defaults_naming(client: TestClient) -> None:
+    """Without the v2 fields the task dir defaults to ``<input stem>_<workflow>``."""
+    created = _submit_fake_job(client, name="legacyjob")
+    detail = client.get(f"/api/v1/jobs/{created['job_id']}/detail").json()
+    leaf = Path(detail["job"]["work_dir"]).name
+    assert leaf == "CCO_fake"
+    assert detail["job"]["spec"]["name"] == leaf
+    # job_id stays the timestamped DB identity — it never appears in the path.
+    assert created["job_id"].startswith("20")
+    assert "legacyjob" in created["job_id"]

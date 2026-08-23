@@ -473,6 +473,49 @@ body.resizing-v canvas {
   color: var(--text-tertiary);
 }
 
+.panel-title-group {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-tree-task-name {
+  min-width: 0;
+  max-width: min(100%, 260px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  padding: 4px 9px;
+  border: 1px solid rgba(78, 161, 255, 0.24);
+  border-radius: 7px;
+  background: linear-gradient(90deg, rgba(78, 161, 255, 0.14), rgba(78, 161, 255, 0.05));
+  color: #dcecff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+}
+
+.file-tree-task-name:not(.empty)::before {
+  content: "";
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin: 0 6px 1px 0;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(78, 161, 255, 0.1);
+}
+
+.file-tree-task-name.empty {
+  color: var(--text-tertiary);
+  font-weight: 400;
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+}
+
 .panel-body { min-height: 0; overflow: auto; padding: 0 16px 16px; }
 
 .placeholder {
@@ -1302,13 +1345,44 @@ option, optgroup {
 .preview-3d-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-tertiary); font-size: 12px; pointer-events: none; }
 .preview-table tbody tr { cursor: pointer; }
 .preview-table tbody tr.selected { background: rgba(78,161,255,0.12); }
-.preview-table td.role-cell { min-width: 140px; }
-.preview-role-select { width: 100%; min-width: 128px; padding: 5px 28px 5px 8px; font-size: 12px; }
+
+.chip-format {
+  display: inline-flex; align-items: center; border-radius: 999px;
+  border: 1px solid rgba(78, 161, 255, 0.35); background: rgba(78, 161, 255, 0.12);
+  color: var(--accent); padding: 2px 9px; font-size: 11px; font-weight: 600;
+}
+.preview-name-input {
+  width: 100%; min-width: 90px; box-sizing: border-box; padding: 5px 7px;
+  border: 1px solid transparent; border-radius: 6px; background: transparent;
+  color: var(--text-primary); font: inherit;
+}
+.preview-name-input:hover { border-color: var(--border-subtle); background: rgba(255,255,255,0.025); }
+.preview-name-input:focus { outline: none; border-color: var(--accent); background: var(--surface-2); }
+.batch-remark { min-height: 68px; resize: vertical; }
+.resource-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.resource-field { display: flex; flex-direction: column; gap: 6px; }
+.resource-field label { font-size: 12px; color: var(--text-secondary); }
+@media (max-width: 680px) { .resource-grid { grid-template-columns: 1fr; } }
+.preview-waiting-cell { text-align: center; padding: 22px 10px; color: var(--text-tertiary); }
+
+.results-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.results-toolbar .modal-select { width: auto; padding: 5px 24px 5px 8px; font-size: 12px; }
+.results-toolbar .modal-input { flex: 1; min-width: 0; padding: 5px 10px; font-size: 12px; }
+.results-toolbar .btn { padding: 5px 12px; font-size: 12px; }
+.results-list { display: flex; flex-direction: column; gap: 8px; max-height: 280px; overflow-y: auto; }
+.results-list-note { padding: 14px 10px; text-align: center; color: var(--text-tertiary); font-size: 12px; }
+.results-list-note.err { color: var(--red); }
+.result-source-row { border: 1px solid var(--border-subtle); border-radius: 10px; padding: 8px 12px; background: rgba(255,255,255,0.02); display: flex; flex-direction: column; gap: 4px; }
+.result-source-row.needs-fetch { opacity: 0.55; }
+.result-source-main { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12px; color: var(--text-primary); }
+.result-source-main .badge { font-size: 10px; padding: 1px 7px; }
+.result-source-meta { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--text-tertiary); }
+.result-source-actions { display: flex; align-items: center; gap: 8px; }
+.result-source-actions .result-load-btn { margin-left: auto; padding: 3px 12px; font-size: 11px; }
+.result-row-error { font-size: 11px; color: var(--red); }
 
 .mech-panel-block { border: 1px solid var(--border-subtle); border-radius: 10px; padding: 10px 12px; background: rgba(255,255,255,0.02); margin-bottom: 10px; }
 .mech-panel-block h4 { margin: 0 0 8px; font-size: 12px; color: var(--text-primary); }
-.mech-role-status { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
-.mech-role-validation { margin-top: 8px; padding: 8px 10px; border: 1px solid rgba(229,83,83,0.28); border-radius: 8px; background: rgba(229,83,83,0.06); color: var(--red); font-size: 12px; display: none; }
 .mech-inline-note { font-size: 11px; color: var(--text-tertiary); }
 .mech-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
 .mech-reaction-empty { font-size: 12px; color: var(--text-tertiary); }
@@ -1705,6 +1779,15 @@ option, optgroup {
 
 .mech-section-title { margin: 0; font-size: 16px; letter-spacing: 0.02em; }
 .mech-section-sub { margin: 4px 0 0; font-size: 12px; color: var(--text-tertiary); }
+.mech-management-note {
+  margin-bottom: 10px;
+  padding: 9px 11px;
+  border: 1px solid rgba(78, 161, 255, 0.24);
+  border-radius: 8px;
+  background: rgba(78, 161, 255, 0.06);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
 
 .mech-section-block {
   border: 1px solid var(--border-subtle);
@@ -1739,6 +1822,34 @@ option, optgroup {
 
 #mech-section-detail .viewer-mechanism-panel { margin-bottom: 14px; }
 #mech-section-detail .viewer-mechanism-summary { margin-bottom: 14px; }
+
+/* ── Four-phase mechanism project panel ── */
+.mech-project-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  background: rgba(255,255,255,0.02);
+  transition: border-color 0.15s;
+}
+.mech-project-card:hover { border-color: rgba(78,161,255,0.3); }
+.mech-project-card.active { border-color: rgba(78,161,255,0.5); background: rgba(78,161,255,0.05); }
+.mech-project-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mech-project-name { font-size: 14px; font-weight: 600; }
+.mech-project-meta { font-size: 11px; color: var(--text-tertiary); margin-top: 4px; }
+.mech-project-stages { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.mech-stage-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 6px; font-size: 12px;
+  border: 1px solid var(--border-subtle); background: rgba(255,255,255,0.03);
+}
+.mech-stage-chip.completed { border-color: rgba(76,175,80,0.4); background: rgba(76,175,80,0.08); color: #81c784; }
+.mech-stage-chip.pending { color: var(--text-tertiary); }
+.mech-project-actions { display: flex; gap: 6px; margin-top: 10px; }
+.mech-project-empty { text-align: center; padding: 30px; color: var(--text-tertiary); font-size: 13px; }
+.mech-create-form { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--border-subtle); border-radius: 10px; }
+.mech-create-form .form-row { display: flex; gap: 10px; }
+.mech-create-form .form-row > * { flex: 1; }
 
 @media (max-width: 1023px) {
   body { overflow: auto; }
@@ -1783,10 +1894,6 @@ option, optgroup {
     <div class="topbar-actions">
       <div class="server-summary" id="server-summary">--</div>
       <div class="topbar-tools">
-        <div class="section-switch" id="mech-section-switch" role="tablist" aria-label="Section Switcher">
-          <button class="section-switch-btn active" data-section="workbench" data-i18n="section.workbench">工作台</button>
-          <button class="section-switch-btn" data-section="mechanism" data-i18n="section.mechanism">机理研究</button>
-        </div>
         <button class="sidebar-toggle" id="btn-toggle-left" data-i18n-title="layout.toggle_left" title="收起/展开左侧栏">◀</button>
         <button class="sidebar-toggle" id="btn-toggle-right" data-i18n-title="layout.toggle_right" title="收起/展开右侧栏">▶</button>
         <button class="lang-toggle" id="lang-toggle" data-i18n="lang.toggle">中文 | EN</button>
@@ -1800,7 +1907,10 @@ option, optgroup {
     <aside class="left-col" id="left-col-zone">
       <section class="panel-section" data-panel-key="file_tree">
         <div class="panel-head">
-          <h2 data-i18n="files.title">任务文件</h2>
+          <div class="panel-title-group">
+            <h2 data-i18n="files.title">任务文件</h2>
+            <span class="file-tree-task-name empty" id="file-tree-task-name" data-i18n="files.no_task">未选择任务</span>
+          </div>
           <button class="panel-collapse-btn" data-panel-key="file_tree" data-i18n-title="layout.collapse_panel" title="折叠/展开">−</button>
         </div>
         <div class="panel-body" id="file-tree-panel"></div>
@@ -2035,7 +2145,12 @@ option, optgroup {
       </div>
       <div class="mobile-panel-body active" data-mobile-body="files">
         <div class="mobile-card">
-          <div class="panel-head"><h2 data-i18n="files.title">任务文件</h2></div>
+          <div class="panel-head">
+            <div class="panel-title-group">
+              <h2 data-i18n="files.title">任务文件</h2>
+              <span class="file-tree-task-name empty" id="mobile-file-tree-task-name" data-i18n="files.no_task">未选择任务</span>
+            </div>
+          </div>
           <div class="panel-body" id="mobile-file-tree-panel"></div>
           <div class="logs-header" style="margin:0 16px 10px;"><h3 class="logs-title" data-i18n="logs.title">实时日志</h3></div>
           <div class="logs-content" id="mobile-log-panel" style="min-height:180px;margin:0 16px 16px;"></div>
@@ -2064,200 +2179,46 @@ option, optgroup {
     <div class="mech-section-inner">
       <div class="mech-section-head">
         <div>
-          <h2 class="mech-section-title" data-i18n="mechsec.title">机理研究</h2>
-          <p class="mech-section-sub" data-i18n="mechsec.subtitle">独立模块启动（mech-conf / mech-step / mech-confirm / mech-chain）与机理研究管理</p>
+          <h2 class="mech-section-title">四阶段机理研究项目</h2>
+          <p class="mech-section-sub">管理机理研究项目：S1 Confsearch → S2 PESsearch → S3 Lowconfirm → S4 Highconfirm</p>
         </div>
-        <button class="btn ghost" id="mech-section-refresh" data-i18n="mechsec.refresh">刷新</button>
+        <button class="btn ghost" id="mech-project-refresh">刷新</button>
       </div>
 
       <section class="panel-section mech-section-block">
         <div class="panel-head">
-          <h2 data-i18n="mechsec.launchers">模块启动器</h2>
+          <h2>项目列表</h2>
         </div>
         <div class="panel-body">
-          <div class="mech-section-grid">
-            <div class="modal-section mech-section-card" id="mech-section-card-conf">
-              <h3 class="mech-section-card-title" data-i18n="mechsec.module.conf.title">构象模块 · mech-conf</h3>
-              <p class="mech-section-card-desc" data-i18n="mechsec.module.conf.desc">单分子稳定态构象搜索（censo-lite / xtb-fast），输出构象系综供后续路径搜索使用。</p>
-              <label for="mech-section-conf-input" data-i18n="mechsec.field.input">输入（SMILES 或文件路径）</label>
-              <input class="field-input" id="mech-section-conf-input" data-i18n-ph="mechsec.field.input_ph" placeholder="CCO 或 /path/to/structure.xyz">
-              <div class="modal-row">
-                <div>
-                  <label for="mech-section-conf-mode" data-i18n="mechsec.field.mode">构象模式</label>
-                  <select class="field-select" id="mech-section-conf-mode">
-                    <option value="censo-lite">censo-lite</option>
-                    <option value="xtb-fast">xtb-fast</option>
-                  </select>
-                </div>
-                <div>
-                  <label for="mech-section-conf-output" data-i18n="mechsec.field.output">输出目录（可选）</label>
-                  <input class="field-input" id="mech-section-conf-output" data-i18n-ph="mechsec.field.output_ph" placeholder="留空则由调度器分配">
-                </div>
-              </div>
-              <div class="modal-row">
-                <div>
-                  <label for="mech-section-conf-charge" data-i18n="mechsec.field.charge">电荷</label>
-                  <input class="field-input" id="mech-section-conf-charge" type="number" value="0">
-                </div>
-                <div>
-                  <label for="mech-section-conf-mult" data-i18n="mechsec.field.multiplicity">多重度</label>
-                  <input class="field-input" id="mech-section-conf-mult" type="number" value="1" min="1">
-                </div>
-              </div>
-              <div class="modal-row">
-                <div>
-                  <label for="mech-section-conf-nproc" data-i18n="mechsec.field.nproc">核数</label>
-                  <input class="field-input" id="mech-section-conf-nproc" type="number" value="4" min="1">
-                </div>
-                <div>
-                  <label for="mech-section-conf-mem" data-i18n="mechsec.field.mem">内存</label>
-                  <input class="field-input" id="mech-section-conf-mem" value="8GB">
-                </div>
-              </div>
-              <div class="mech-actions">
-                <button class="btn primary" id="mech-section-submit-conf" data-i18n="mechsec.submit">提交任务</button>
-                <span class="review-inline-status" id="mech-section-status-conf"></span>
-              </div>
-            </div>
-
-            <div class="modal-section mech-section-card" id="mech-section-card-step">
-              <h3 class="mech-section-card-title" data-i18n="mechsec.module.step.title">路径步进 · mech-step</h3>
-              <p class="mech-section-card-desc" data-i18n="mechsec.module.step.desc">从源结构出发执行一步反应路径搜索（guided-scan / rph-reverse / direct-ts）。</p>
-              <label for="mech-section-step-source" data-i18n="mechsec.field.source">源文件</label>
-              <input class="field-input" id="mech-section-step-source" data-i18n-ph="mechsec.field.source_ph" placeholder="/path/to/source.xyz">
-              <label for="mech-section-step-target" data-i18n="mechsec.field.target">目标文件（可选）</label>
-              <input class="field-input" id="mech-section-step-target" data-i18n-ph="mechsec.field.target_ph" placeholder="/path/to/target.xyz">
-              <label for="mech-section-step-plan" data-i18n="mechsec.field.plan">Plan JSON（可选）</label>
-              <textarea class="field-textarea" id="mech-section-step-plan" rows="3" data-i18n-ph="mechsec.field.plan_ph" placeholder="{&quot;coordinates&quot;: [...]}"></textarea>
-              <div class="modal-row">
-                <div>
-                  <label for="mech-section-step-strategy" data-i18n="mechsec.field.strategy">策略</label>
-                  <select class="field-select" id="mech-section-step-strategy">
-                    <option value="guided-scan">guided-scan</option>
-                    <option value="rph-reverse">rph-reverse</option>
-                    <option value="direct-ts">direct-ts</option>
-                  </select>
-                </div>
-                <div>
-                  <label for="mech-section-step-fidelity" data-i18n="mechsec.field.fidelity">保真度</label>
-                  <select class="field-select" id="mech-section-step-fidelity">
-                    <option value="s3">s3</option>
-                    <option value="s4">s4</option>
-                  </select>
-                </div>
-              </div>
-              <div class="modal-row">
-                <div>
-                  <label for="mech-section-step-output" data-i18n="mechsec.field.output">输出目录（可选）</label>
-                  <input class="field-input" id="mech-section-step-output" data-i18n-ph="mechsec.field.output_ph" placeholder="留空则由调度器分配">
-                </div>
-                <div>
-                  <label for="mech-section-step-nproc" data-i18n="mechsec.field.nproc">核数</label>
-                  <input class="field-input" id="mech-section-step-nproc" type="number" value="4" min="1">
-                </div>
-              </div>
-              <div class="modal-row">
-                <div>
-                  <label for="mech-section-step-mem" data-i18n="mechsec.field.mem">内存</label>
-                  <input class="field-input" id="mech-section-step-mem" value="8GB">
-                </div>
-              </div>
-              <div class="mech-actions">
-                <button class="btn primary" id="mech-section-submit-step" data-i18n="mechsec.submit">提交任务</button>
-                <span class="review-inline-status" id="mech-section-status-step"></span>
-              </div>
-            </div>
-
-            <div class="modal-section mech-section-card" id="mech-section-card-confirm">
-              <h3 class="mech-section-card-title" data-i18n="mechsec.module.confirm.title">候选确认 · mech-confirm</h3>
-              <p class="mech-section-card-desc" data-i18n="mechsec.module.confirm.desc">从精修 manifest 选择候选（ts:canonical / endpoint:sink）执行 S3/S4 高精度确认。</p>
-              <label for="mech-section-confirm-manifest" data-i18n="mechsec.field.manifest">Manifest 路径</label>
-              <input class="field-input" id="mech-section-confirm-manifest" data-i18n-ph="mechsec.field.manifest_ph" placeholder="/path/to/refinement_manifest.json">
-              <div class="modal-row">
-                <div>
-                  <label for="mech-section-confirm-select" data-i18n="mechsec.field.select">候选选择</label>
-                  <select class="field-select" id="mech-section-confirm-select">
-                    <option value="ts:canonical">ts:canonical</option>
-                    <option value="endpoint:sink">endpoint:sink</option>
-                  </select>
-                </div>
-                <div>
-                  <label for="mech-section-confirm-fidelity" data-i18n="mechsec.field.fidelity">保真度</label>
-                  <select class="field-select" id="mech-section-confirm-fidelity">
-                    <option value="s4">s4</option>
-                    <option value="s3">s3</option>
-                  </select>
-                </div>
-              </div>
-              <div class="modal-row">
-                <div>
-                  <label for="mech-section-confirm-output" data-i18n="mechsec.field.output">输出目录（可选）</label>
-                  <input class="field-input" id="mech-section-confirm-output" data-i18n-ph="mechsec.field.output_ph" placeholder="留空则由调度器分配">
-                </div>
-                <div>
-                  <label for="mech-section-confirm-nproc" data-i18n="mechsec.field.nproc">核数</label>
-                  <input class="field-input" id="mech-section-confirm-nproc" type="number" value="4" min="1">
-                </div>
-              </div>
-              <div class="modal-row">
-                <div>
-                  <label for="mech-section-confirm-mem" data-i18n="mechsec.field.mem">内存</label>
-                  <input class="field-input" id="mech-section-confirm-mem" value="8GB">
-                </div>
-              </div>
-              <div class="mech-actions">
-                <button class="btn primary" id="mech-section-submit-confirm" data-i18n="mechsec.submit">提交任务</button>
-                <span class="review-inline-status" id="mech-section-status-confirm"></span>
-              </div>
-            </div>
-
-            <div class="modal-section mech-section-card" id="mech-section-card-chain">
-              <h3 class="mech-section-card-title" data-i18n="mechsec.module.chain.title">链式执行 · mech-chain</h3>
-              <p class="mech-section-card-desc" data-i18n="mechsec.module.chain.desc">按 YAML 配置串联执行多个机理模块。</p>
-              <label for="mech-section-chain-configyaml" data-i18n="mechsec.field.config_yaml">配置 YAML</label>
-              <textarea class="field-textarea" id="mech-section-chain-configyaml" rows="5" data-i18n-ph="mechsec.field.config_yaml_ph" placeholder="粘贴链式配置 YAML 文本…"></textarea>
-              <label for="mech-section-chain-configfile" data-i18n="mechsec.field.config_file">配置文件路径（可选，优先于 YAML 文本）</label>
-              <input class="field-input" id="mech-section-chain-configfile" data-i18n-ph="mechsec.field.config_file_ph" placeholder="/path/to/chain_config.yaml">
-              <div class="modal-row">
-                <div>
-                  <label for="mech-section-chain-output" data-i18n="mechsec.field.output">输出目录（可选）</label>
-                  <input class="field-input" id="mech-section-chain-output" data-i18n-ph="mechsec.field.output_ph" placeholder="留空则由调度器分配">
-                </div>
-                <div>
-                  <label for="mech-section-chain-nproc" data-i18n="mechsec.field.nproc">核数</label>
-                  <input class="field-input" id="mech-section-chain-nproc" type="number" value="4" min="1">
-                </div>
-              </div>
-              <div class="modal-row">
-                <div>
-                  <label for="mech-section-chain-mem" data-i18n="mechsec.field.mem">内存</label>
-                  <input class="field-input" id="mech-section-chain-mem" value="8GB">
-                </div>
-              </div>
-              <div class="mech-actions">
-                <button class="btn primary" id="mech-section-submit-chain" data-i18n="mechsec.submit">提交任务</button>
-                <span class="review-inline-status" id="mech-section-status-chain"></span>
-              </div>
-            </div>
-          </div>
+          <div id="mech-project-list" class="mech-project-empty">加载中…</div>
         </div>
       </section>
 
       <section class="panel-section mech-section-block">
         <div class="panel-head">
-          <h2 data-i18n="mechsec.studies">机理研究列表</h2>
+          <h2>新建项目</h2>
         </div>
         <div class="panel-body">
-          <div class="review-list" id="mech-section-study-list"></div>
-        </div>
-      </section>
-
-      <section class="panel-section mech-section-block" id="mech-section-detail-block" style="display:none;">
-        <div class="panel-head">
-          <h2 data-i18n="mechsec.detail">研究结果</h2>
-        </div>
-        <div class="panel-body">
-          <div id="mech-section-detail"></div>
+          <div class="mech-create-form" id="mech-project-create-form">
+            <div>
+              <label>项目名称</label>
+              <input class="field-input" id="mech-project-name" placeholder="例如：Diels-Alder 反应研究">
+            </div>
+            <div class="form-row">
+              <div>
+                <label>电荷</label>
+                <input class="field-input" id="mech-project-charge" type="number" value="0">
+              </div>
+              <div>
+                <label>多重度</label>
+                <input class="field-input" id="mech-project-mult" type="number" value="1" min="1">
+              </div>
+            </div>
+            <div class="mech-actions">
+              <button class="btn primary" id="mech-project-create-btn">创建项目</button>
+              <span class="review-inline-status" id="mech-project-create-status"></span>
+            </div>
+          </div>
         </div>
       </section>
     </div>
@@ -2273,20 +2234,27 @@ option, optgroup {
     <div class="modal-body">
       <div class="wizard-input-section">
         <div class="input-mode-tabs">
-          <button class="input-mode-tab active" data-input-mode="smiles" data-i18n="modal.mode_smiles">SMILES</button>
-          <button class="input-mode-tab" data-input-mode="paste" data-i18n="modal.mode_paste">粘贴</button>
+          <button class="input-mode-tab active" data-input-mode="structure" data-i18n="modal.mode_structure">结构输入（自动识别）</button>
+          <button class="input-mode-tab" data-input-mode="results" data-i18n="modal.mode_results">任务结果</button>
           <button class="input-mode-tab" data-input-mode="upload" data-i18n="modal.mode_upload">上传</button>
         </div>
-        <div class="muted" id="simple-input-hint" style="display:none;font-size:11px;margin-top:6px;" data-i18n="modal.simple_input_hint">简单工作流仅接受结构文件（XYZ / GJF / COM / INP），不支持 SMILES</div>
 
-        <div class="input-panel" id="input-panel-smiles">
-          <label data-i18n="modal.smiles">SMILES（每行一个分子）</label>
-          <textarea id="modal-smiles" class="modal-input" rows="3" placeholder="CCO&#10;c1ccccc1" data-i18n-ph="modal.smiles_ph"></textarea>
+        <div class="input-panel" id="input-panel-structure">
+          <label data-i18n="modal.structure_label">SMILES / XYZ / MOL / SDF / GJF / COM / ORCA INP（自动识别）</label>
+          <textarea id="modal-structure-input" class="modal-input" rows="6" placeholder="CCO" data-i18n-ph="modal.structure_placeholder"></textarea>
         </div>
 
-        <div class="input-panel" id="input-panel-paste" style="display:none;">
-          <label data-i18n="modal.paste_hint">粘贴 XYZ / MOL / SDF / GJF 文本</label>
-          <textarea id="modal-paste" class="modal-input" rows="6" placeholder="3&#10;water&#10;O 0.0 0.0 0.0&#10;H 0.7586 0.5043 0.0&#10;H -0.7586 0.5043 0.0"></textarea>
+        <div class="input-panel" id="input-panel-results" style="display:none;">
+          <div class="muted" style="margin-bottom:6px;" data-i18n="results.title">任务结果</div>
+          <div class="results-toolbar">
+            <select id="results-project" class="modal-select">
+              <option value="current" data-i18n="results.project_current">当前项目</option>
+              <option value="all" data-i18n="results.project_all">全部项目</option>
+            </select>
+            <input type="text" id="results-search" class="modal-input" placeholder="搜索任务名称…" data-i18n-ph="results.search_placeholder">
+            <button type="button" class="btn ghost" id="results-reload" data-i18n="results.reload">刷新</button>
+          </div>
+          <div class="results-list" id="results-list"></div>
         </div>
 
         <div class="input-panel" id="input-panel-upload" style="display:none;">
@@ -2300,7 +2268,7 @@ option, optgroup {
         </div>
 
         <div class="parse-actions">
-          <button class="btn ghost" id="btn-parse-preview" data-i18n="modal.validate">解析预览</button>
+          <span class="chip-format" id="detected-format-chip" style="display:none;"></span>
           <span class="parse-status" id="parse-status"></span>
         </div>
 
@@ -2311,19 +2279,10 @@ option, optgroup {
 
         <div class="modal-section" id="mech-builder-panel" style="display:none;">
           <div class="modal-section-title">机制研究 — 反应坐标构建 (Mechanism Builder)</div>
-          <div class="mech-panel-block" id="mech-definition-panel">
-            <h4 data-i18n="mech.definition.title">反应定义</h4>
-            <div class="mech-role-status" id="mech-role-status"></div>
-            <div class="mech-inline-note" id="mech-role-hint" data-i18n="mech.definition.hint">为每个已解析结构指定角色；必须且只能指定 1 个反应物和 1 个产物，可选 1 个 TS 初猜。</div>
-            <div class="mech-role-validation" id="mech-role-validation"></div>
-            <div class="mech-actions">
-              <button type="button" class="btn ghost" id="mech-preview-definition" data-i18n="mech.definition.preview">确认反应定义</button>
-              <button type="button" class="btn ghost" id="mech-unlock-definition" style="display:none;" data-i18n="mech.definition.unlock">解锁重新指定</button>
-            </div>
-          </div>
+          <div class="mech-inline-note">机理任务的反应输入将在机理计算模块中定义。</div>
           <div class="mech-panel-block" id="mech-reaction-panel">
             <h4 data-i18n="mech.changes.title">反应变化</h4>
-            <div class="mech-reaction-empty" id="mech-reaction-empty" data-i18n="mech.changes.empty">确认反应定义后将在此显示后端计算的成键/断键与建议计划。</div>
+            <div class="mech-reaction-empty" id="mech-reaction-empty" data-i18n="mech.changes.empty">完成机理反应输入后将在此显示后端计算的成键/断键与建议计划。</div>
             <div class="mech-reaction-3d-wrap" id="mech-reaction-3d-wrap" style="display:none;">
               <div class="mech-3d-toolbar">
                 <div class="mech-view-toggle-group" role="group" aria-label="structure side">
@@ -2386,15 +2345,57 @@ option, optgroup {
                 <option value="user_selected">user_selected</option>
               </select>
             </label>
-            <label style="font-size:12px;display:flex;align-items:center;gap:6px;">
-              <input type="checkbox" id="mech-auto-converge" autocomplete="off">
-              <span>自动收敛 (Auto converge)</span>
-            </label>
+
           </div>
           <div id="mech-plan-panel" class="measure-list" style="max-height:160px;overflow-y:auto;border:1px solid var(--border,#333);border-radius:6px;padding:6px;"></div>
         </div>
 
-        <div class="structure-preview-wrap" id="structure-preview" style="display:none;">
+        <!-- Stage handoff panel (Confsearch plan §6/§11): shown for
+             PESsearch / Lowconfirm / Highconfirm. Carries the §8 artifact
+             reference (source job + relative artifact path) plus candidate
+             selection. -->
+        <div class="modal-section" id="stage-source-panel" style="display:none;">
+          <div class="modal-section-title" data-i18n="modal.stage_source_title">阶段任务 — 上游产物引用 (Stage Source)</div>
+          <div class="mech-inline-note" data-i18n="modal.stage_source_hint">填写上游任务的 Job ID（可在任务列表中复制）；产物路径按阶段自动填充，也可手动修改。</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+            <label style="font-size:12px;flex:1;min-width:220px;">
+              <span data-i18n="modal.stage_source_job">源任务 Job ID</span>
+              <input type="text" id="stage-source-job" class="modal-input" placeholder="20260823_001_Confsearch">
+            </label>
+            <label style="font-size:12px;flex:1;min-width:260px;">
+              <span data-i18n="modal.stage_artifact">产物路径 (relative)</span>
+              <input type="text" id="stage-artifact" class="modal-input" value="RESULT/confsearch/confsearch_manifest.json">
+            </label>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;" id="stage-select-row">
+            <label style="font-size:12px;flex:1;min-width:220px;">
+              <span data-i18n="modal.stage_select">候选选择 (comma)</span>
+              <input type="text" id="stage-select" class="modal-input" placeholder="ts_guess_001,ts_guess_004">
+            </label>
+            <label style="font-size:12px;display:flex;align-items:center;gap:6px;" id="stage-irc-row">
+              <input type="checkbox" id="stage-irc-toggle" autocomplete="off">
+              <span data-i18n="modal.stage_irc">运行 IRC 验证</span>
+            </label>
+          </div>
+          <div id="stage-pes-row" style="display:none;flex-direction:column;gap:8px;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <label style="font-size:12px;flex:1;min-width:220px;">
+                <span data-i18n="modal.stage_product">产物结构 XYZ 路径 / 源 Job 产物清单 (可选)</span>
+                <input type="text" id="stage-product" class="modal-input" placeholder="/path/to/product.xyz">
+              </label>
+              <label style="font-size:12px;flex:1;min-width:220px;">
+                <span data-i18n="modal.stage_ts_guess">TS 初猜 XYZ (direct-ts)</span>
+                <input type="text" id="stage-ts-guess" class="modal-input" placeholder="/path/to/ts_guess.xyz">
+              </label>
+            </div>
+            <label style="font-size:12px;">
+              <span data-i18n="modal.stage_plan">反应坐标计划 JSON (guided-scan / reverse-peb)</span>
+              <textarea id="stage-plan" class="modal-input" rows="3" placeholder='{"coordinates":[{"id":"rc1","kind":"distance","atoms":[0,1],"start":3.0,"end":1.5}],"points":21}'></textarea>
+            </label>
+          </div>
+        </div>
+
+        <div class="structure-preview-wrap" id="structure-preview">
           <div class="preview-left">
             <table class="preview-table">
               <thead>
@@ -2403,7 +2404,6 @@ option, optgroup {
                   <th data-i18n="modal.col_name">名称</th>
                   <th data-i18n="modal.col_formula">分子式</th>
                   <th data-i18n="modal.col_atoms">原子</th>
-                  <th data-i18n="mech.definition.role_col">反应角色</th>
                   <th data-i18n="modal.col_ok">状态</th>
                 </tr>
               </thead>
@@ -2502,24 +2502,35 @@ option, optgroup {
         <div class="project-hint dim" id="modal-project-hint" style="font-size:11px;margin-top:6px;display:none;"></div>
       </div>
 
-      <div class="modal-row">
-        <div class="modal-section">
-          <label for="modal-name" data-i18n="modal.job_name">任务名称</label>
-          <input id="modal-name" class="modal-input" type="text" placeholder="ethanol_test">
-        </div>
-        <div class="modal-section">
-          <label for="modal-nproc" data-i18n="modal.nproc">核数</label>
-          <input id="modal-nproc" class="modal-input" type="number" min="1" value="4">
-          <label for="modal-mem" data-i18n="modal.memory">内存</label>
-          <input id="modal-mem" class="modal-input" type="text" value="8GB">
-        </div>
+      <div class="modal-section">
+        <label for="modal-remark" data-i18n="modal.remark">备注（可选）</label>
+        <textarea id="modal-remark" class="modal-input batch-remark" rows="3" data-i18n-ph="modal.remark_ph"></textarea>
       </div>
 
-      <div class="modal-section" style="margin-top:4px;">
-        <label for="modal-node-select" data-i18n="modal.target_node">目标节点</label>
-        <select id="modal-node-select" class="node-select">
-          <option value="" data-i18n="nodes.auto">自动选择（负载最低）</option>
-        </select>
+      <!-- Task name (v2 dir layout): scheduler task dirs are named
+           <molecule>_<task_name>_<remark>; when omitted the backend
+           defaults task_name := workflow id (e.g. energy). -->
+      <div class="modal-section">
+        <label for="modal-task-name" data-i18n="modal.task_name">任务名（可选）</label>
+        <input type="text" id="modal-task-name" class="modal-input" autocomplete="off" data-i18n-ph="modal.task_name_ph">
+      </div>
+
+      <div class="modal-section">
+        <label data-i18n="modal.resources">资源设置</label>
+        <div class="resource-grid">
+          <div class="resource-field">
+            <label for="modal-nproc" data-i18n="modal.nproc">核数</label>
+            <input id="modal-nproc" class="modal-input" type="number" min="1" value="4">
+          </div>
+          <div class="resource-field">
+            <label for="modal-mem" data-i18n="modal.memory">内存</label>
+            <input id="modal-mem" class="modal-input" type="text" value="8GB">
+          </div>
+          <div class="resource-field">
+            <label for="modal-parallelism" data-i18n="modal.parallelism">并行数量</label>
+            <input id="modal-parallelism" class="modal-input" type="number" min="1" value="1">
+          </div>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -2692,31 +2703,6 @@ option, optgroup {
     <div class="modal-footer">
       <button class="btn ghost" id="purge-modal-cancel" data-i18n="modal.cancel">取消</button>
       <button class="btn danger" id="purge-modal-submit" data-i18n="purge.confirm">清除</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal-overlay" id="mechanism-review-modal" style="display:none;">
-  <div class="modal-dialog modal-dialog-wide">
-    <div class="modal-header">
-      <h2 data-i18n="review.title">审核机制决策点</h2>
-      <button class="modal-close" id="mechanism-review-close">X</button>
-    </div>
-    <div class="modal-body">
-      <div class="modal-section">
-        <div class="viewer-mechanism-head">
-          <div>
-            <div class="viewer-mechanism-title" data-i18n="review.pending_title">待处理 DecisionPoints</div>
-            <div class="viewer-mechanism-meta" id="mechanism-review-summary"></div>
-          </div>
-          <span class="badge waiting_review" id="mechanism-review-badge">waiting_review</span>
-        </div>
-      </div>
-      <div id="mechanism-review-message" class="mech-review-msg" style="display:none;"></div>
-      <div id="mechanism-review-list" class="review-list"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn ghost" id="mechanism-review-cancel" data-i18n="modal.cancel">取消</button>
     </div>
   </div>
 </div>
@@ -2972,31 +2958,11 @@ let mechanismViewerState = {
   pathDetail: "",
   energyDetail: "",
 };
-let mechanismReviewState = {
-  jobId: "",
-  studyId: "",
-  pending: [],
-};
-// Phase D — SR cycle-review state (new /reviews endpoint; legacy decision cards
-// above remain untouched and keep working alongside these).
-let mechanismSrState = {
-  jobId: "",
-  studyId: "",
-  jobStatus: "",
-  loaded: false,        // /reviews fetched successfully at least once
-  reviews: [],          // waiting reviews from GET /reviews
-  activeReviewId: "",   // SR card currently driving the "sr" pick mode
-  pairBuffer: [],       // up to 2 accumulated acpIds (mirrors measureBuffer)
-  pairs: {},            // reviewId -> [{atoms:[a,b], current, action, target}]
-  decision: {},         // reviewId -> continue | reject_path | accept_network
-};
-const mechanismSrReactionById = {};
 let bgIndex = 0;
 let labelMode = "none";
 let measureBuffer = [];
 let framePlayTimer = null;
 let initialView = null;
-let selectedNode = "";
 let targetProjectAction = "move";
 let targetProjectJobId = "";
 let deleteJobId = "";
@@ -3115,6 +3081,7 @@ const I18N = {
     "clone.button": "复制到项目",
     "clone.failed": "复制失败: {message}",
     "files.title": "任务文件",
+    "files.no_task": "未选择任务",
     "nmr.title": "NMR + DP4/DP5",
     "nmr.loading": "正在加载 NMR 报告…",
     "nmr.no_report": "暂无 nmr_report.json（任务未完成或已过期）",
@@ -3169,7 +3136,6 @@ const I18N = {
     "review.submit_failed": "提交审核失败",
     "review.submit_ok": "决策已更新",
     "review.option.continue": "继续",
-    "review.option.promote_to_s4": "升级到 S4",
     "review.option.stop_branch": "停止分支",
     "review.option.edit_route": "编辑路线",
     "review.detail_hint": "点击路径元素查看细节：保真度 / 策略 / 状态",
@@ -3178,24 +3144,18 @@ const I18N = {
     "review.decision_created": "创建时间",
     "review.evidence": "证据摘要",
     "review.payload": "附加数据",
-    "mech.definition.title": "反应定义",
-    "mech.definition.hint": "为每个已解析结构指定角色；必须且只能指定 1 个反应物和 1 个产物，可选 1 个 TS 初猜。",
-    "mech.definition.role_col": "反应角色",
-    "mech.definition.role_none": "不参与",
-    "mech.definition.role_ts_guess": "TS 初猜",
     "mech.definition.preview": "确认反应定义",
     "mech.definition.unlock": "解锁重新指定",
     "mech.definition.locked": "已锁定",
     "mech.definition.unlocked": "未锁定",
     "mech.definition.preview_ready": "预览已更新",
     "mech.definition.lock_required": "机理任务提交前必须先确认并锁定反应定义",
-    "mech.definition.role_invalid": "必须且只能选择 1 个反应物和 1 个产物。",
     "mech.definition.preview_failed": "反应定义预览失败",
     "mech.definition.confirm_failed": "反应定义锁定失败",
     "mech.definition.previewing": "正在生成反应预览…",
     "mech.definition.stale_plan": "当前计划含自动生成坐标；解锁后请重新确认反应定义。",
     "mech.changes.title": "反应变化",
-    "mech.changes.empty": "确认反应定义后将在此显示后端计算的成键/断键与建议计划。",
+    "mech.changes.empty": "完成机理反应输入后将在此显示后端计算的成键/断键与建议计划。",
     "mech.changes.mapping_status": "映射状态：{status}",
     "mech.changes.mapping.unique": "唯一",
     "mech.changes.mapping.candidates": "存在候选",
@@ -3245,59 +3205,6 @@ const I18N = {
     "mech.bc.form": "成键",
     "mech.bc.order_up": "键级升高",
     "mech.bc.order_down": "键级降低",
-    "mech.sr.title": "SR 周期审核",
-    "mech.sr.cycle_label": "轮次",
-    "mech.sr.cycle_badge": "第 {n} 轮",
-    "mech.sr.source_state": "源状态",
-    "mech.sr.route": "路线",
-    "mech.sr.strategy": "策略",
-    "mech.sr.fidelity": "保真度",
-    "mech.sr.depth": "深度",
-    "mech.sr.path_points": "路径点",
-    "mech.sr.candidates": "TS 候选",
-    "mech.sr.col_candidate": "候选",
-    "mech.sr.col_kind": "类型",
-    "mech.sr.col_score": "分数",
-    "mech.sr.col_progress": "进度",
-    "mech.sr.no_candidates": "无 TS 候选",
-    "mech.sr.canonical_ts": "规范 TS",
-    "mech.sr.canonical_ts_none": "无规范 TS",
-    "mech.sr.endpoint": "端点判定",
-    "mech.sr.endpoint_state": "端点状态 {id}",
-    "mech.sr.irc_ok": "IRC ✓",
-    "mech.sr.irc_fail": "IRC ✗",
-    "mech.sr.irc_complete": "IRC 已完成",
-    "mech.sr.irc_incomplete": "IRC 未完成",
-    "mech.sr.locked_chip": "已锁定反应定义",
-    "mech.sr.pick_mode": "选择键 / 原子对",
-    "mech.sr.pick_hint": "原子对选择已启用：在 3D 视图中依次点击 2 个原子",
-    "mech.sr.pair_hint": "原子编号基于父状态原子顺序（0 基）。3D 视图当前加载的结构可能与父状态不同，编号仅作参考。",
-    "mech.sr.pairs_title": "键编辑（下一轮种子）",
-    "mech.sr.no_pairs": "尚未选择键；点击“选择键 / 原子对”后在 3D 视图中点选两个原子。",
-    "mech.sr.current_distance": "当前 {value} Å",
-    "mech.sr.target": "目标 (Å)",
-    "mech.sr.action.stretch": "拉伸",
-    "mech.sr.action.form": "成键",
-    "mech.sr.action.keep": "保持",
-    "mech.sr.remove": "移除",
-    "mech.sr.off_definition": "定义外",
-    "mech.sr.decision": "审核决定",
-    "mech.sr.decision.continue": "继续下一轮",
-    "mech.sr.decision.reject_path": "驳回该路径",
-    "mech.sr.decision.accept_network": "接受当前网络进入 S4",
-    "mech.sr.comment": "备注",
-    "mech.sr.comment_ph": "审核备注（可选）",
-    "mech.sr.submit": "提交审核",
-    "mech.sr.submit_ok": "审核已提交",
-    "mech.sr.submit_failed": "提交审核失败",
-    "mech.sr.already_handled": "该审核已被处理",
-    "mech.sr.need_bond": "继续下一轮需要至少 1 个键",
-    "mech.sr.invalid_target": "拉伸/成键需要正的目标距离",
-    "mech.sr.resume": "恢复研究",
-    "mech.sr.resume_ok": "研究已恢复",
-    "mech.sr.resume_failed": "恢复研究失败",
-    "mech.sr.resume_conflict": "作业当前不可恢复（状态已变化）",
-    "mech.sr.no_reviews": "该研究当前没有待处理的周期审核",
     "study.status.DRAFT": "草稿",
     "study.status.RESUMABLE": "可恢复",
     "study.status.S1_RUNNING": "S1 运行中",
@@ -3307,18 +3214,10 @@ const I18N = {
     "study.status.S4_RUNNING": "S4 运行中",
     "study.status.COMPLETED": "已完成",
     "study.status.FAILED": "已失败",
-    "mech.promote.button": "进入 S4",
-    "mech.promote.ok": "已晋升至 S4",
-    "mech.promote.conflict": "当前无可晋升的 SR 审核或作业状态已变化",
-    "mech.promote.no_job": "该研究未关联可晋升的作业",
-    "mech.promote.missing": "研究不存在",
-    "mech.promote.failed": "晋升 S4 失败",
     "mech.hash.config": "配置哈希",
     "mech.plan.add_manual": "+ 添加补充机理变量",
     "mech.plan.auto": "自动",
     "mech.plan.manual": "手动",
-    "mech.role.reactant": "反应物",
-    "mech.role.product": "产物",
     "mech.role.intermediate": "中间体",
     "mech.role.transition_state": "过渡态",
     "mech.role.unknown": "状态",
@@ -3384,29 +3283,56 @@ const I18N = {
     "modal.title": "新建计算任务",
     "modal.mode_smiles": "SMILES",
     "modal.mode_paste": "粘贴",
+    "modal.mode_structure": "结构输入（自动识别）",
+    "modal.mode_results": "任务结果",
     "modal.mode_upload": "上传",
     "modal.smiles": "SMILES（每行一个分子）",
     "modal.smiles_ph": "例如: CCO",
+    "modal.structure_label": "SMILES / XYZ / MOL / SDF / GJF / COM / ORCA INP（自动识别）",
+    "modal.structure_placeholder": "输入 SMILES / XYZ / MOL / SDF / GJF / COM / ORCA INP 文本…",
+    "parse.waiting": "等待输入",
+    "parse.parsing": "正在解析…",
+    "parse.success": "解析成功（{count} 个结构）",
+    "parse.failed": "解析失败",
+    "parse.detected": "识别为 {format}",
+    "results.title": "任务结果",
+    "results.project_current": "当前项目",
+    "results.project_all": "全部项目",
+    "results.search_placeholder": "搜索任务名称…",
+    "results.empty": "暂无可复用的结构",
+    "results.loading": "加载中…",
+    "results.error": "加载失败",
+    "results.load": "载入",
+    "results.loading_structure": "载入中…",
+    "results.reload": "刷新",
+    "results.local": "本地",
+    "results.remote": "远程",
     "modal.paste_hint": "粘贴 XYZ / MOL / SDF / GJF 文本",
     "modal.upload_hint": "拖拽文件到此处，或点击选择",
     "modal.validate": "解析预览",
-    "modal.col_name": "名称",
+    "modal.col_name": "分子名称",
     "modal.col_formula": "分子式",
     "modal.col_atoms": "原子数",
     "modal.col_charge": "电荷",
     "modal.col_spin": "自旋",
     "modal.col_3d": "3D",
     "modal.col_ok": "状态",
-    "modal.job_name": "任务名称",
+    "modal.molecule_name": "分子名称",
+    "modal.remark": "备注（可选）",
+    "modal.remark_ph": "记录本批次任务说明…",
+    "modal.task_name": "任务名（可选）",
+    "modal.task_name_ph": "留空则使用工作流名（如 energy）",
+    "modal.task_name_ph_mech": "留空则使用工作流名（如 mechanism）",
+    "modal.resources": "资源设置",
     "modal.configure": "配置",
     "modal.workflow_config": "选择工作流",
     "modal.method_config": "配置计算方法",
     "modal.cat_simple": "简单计算",
     "modal.cat_preset": "预设工作流",
     "modal.cat_custom": "自定义",
+    "modal.cat_mechanism": "机理工作流",
+    "modal.cat_stages": "阶段工作流",
     "modal.planned": "计划中",
-    "modal.simple_input_hint": "简单工作流仅接受结构文件（XYZ / GJF / COM / INP），不支持 SMILES",
-    "modal.simple_no_smiles": "简单工作流不支持 SMILES 输入，请改用结构文件（XYZ / GJF / COM / INP）",
     "modal.default_method": "默认方法",
     "modal.advanced": "高级",
     "modal.summary": "实时摘要",
@@ -3429,17 +3355,19 @@ const I18N = {
     "modal.step2": "2. 选择工作流",
     "modal.step3": "3. 计算协议",
     "modal.step4": "4. 资源设置",
-    "modal.target_node": "目标节点",
     "modal.project": "项目",
     "modal.project_default": "(默认)",
     "modal.project_current": "将提交到项目",
     "modal.nproc": "核数",
     "modal.memory": "内存",
+    "modal.parallelism": "并行数量",
     "modal.cancel": "取消",
     "modal.submit": "提交",
     "modal.required_smiles": "请输入 SMILES",
     "modal.submit_failed": "提交失败: {message}",
     "modal.nmr_experiment": "实验谱（NMR）",
+    "modal.stage_need_source": "需要源任务 Job ID",
+    "modal.stage_bad_plan": "反应坐标计划不是合法 JSON",
     "modal.nmr_format_hint": "已归属: C: 167.33(C1)  ·  未归属: H: 2.95(3) 强度",
     "modal.nmr_spectrum_required": "NMR 工作流需要实验谱文本",
     "modal.nmr_enumerate": "枚举非对映体",
@@ -3501,9 +3429,10 @@ const I18N = {
     "log.event": "[{type}] {message}",
     "log.terminal": "任务状态已终止: {status}",
     "section.workbench": "工作台",
-    "section.mechanism": "机理研究",
-    "mechsec.title": "机理研究",
-    "mechsec.subtitle": "独立模块启动（mech-conf / mech-step / mech-confirm / mech-chain）与机理研究管理",
+    "section.mechanism": "机理管理",
+    "mechsec.title": "机理管理",
+    "mechsec.subtitle": "查看已提交的机理任务、反应网络和审核状态；新建机理任务请从“选择工作流”进入。",
+    "mechsec.entry_note": "新建机理任务请打开“新建任务”，在“选择工作流”中选择“机理研究 / 过渡态”。",
     "mechsec.launchers": "模块启动器",
     "mechsec.studies": "机理研究列表",
     "mechsec.detail": "研究结果",
@@ -3658,6 +3587,7 @@ const I18N = {
     "nmr.col_id": "ID",
     "nmr.col_weight": "Weight",
     "files.empty": "Select a job to inspect files",
+    "files.no_task": "No task selected",
     "files.too_large": "File too large to preview",
     "files.download": "Download file",
     "files.download_all": "Download all",
@@ -3696,7 +3626,6 @@ const I18N = {
     "review.submit_failed": "Failed to submit review",
     "review.submit_ok": "Decision updated",
     "review.option.continue": "Continue",
-    "review.option.promote_to_s4": "Promote to S4",
     "review.option.stop_branch": "Stop branch",
     "review.option.edit_route": "Edit route",
     "review.detail_hint": "Click a path element for fidelity / strategy / status details",
@@ -3705,24 +3634,18 @@ const I18N = {
     "review.decision_created": "Created",
     "review.evidence": "Evidence summary",
     "review.payload": "Additional payload",
-    "mech.definition.title": "Reaction definition",
-    "mech.definition.hint": "Assign a role to each parsed structure. Exactly one reactant and one product are required; one TS guess is optional.",
-    "mech.definition.role_col": "Reaction role",
-    "mech.definition.role_none": "Not used",
-    "mech.definition.role_ts_guess": "TS guess",
     "mech.definition.preview": "Confirm reaction definition",
     "mech.definition.unlock": "Unlock and reassign",
     "mech.definition.locked": "Locked",
     "mech.definition.unlocked": "Unlocked",
     "mech.definition.preview_ready": "Preview updated",
     "mech.definition.lock_required": "Mechanism submission requires a confirmed, locked reaction definition",
-    "mech.definition.role_invalid": "Select exactly one reactant and exactly one product.",
     "mech.definition.preview_failed": "Reaction-definition preview failed",
     "mech.definition.confirm_failed": "Failed to lock the reaction definition",
     "mech.definition.previewing": "Generating reaction preview…",
     "mech.definition.stale_plan": "This plan contains auto-generated coordinates; unlocking requires re-confirmation.",
     "mech.changes.title": "Reaction changes",
-    "mech.changes.empty": "Backend-computed bond changes and suggested plan will appear here after confirmation.",
+    "mech.changes.empty": "Backend-computed bond changes and suggested plan will appear here after the mechanism reaction input is complete.",
     "mech.changes.mapping_status": "Mapping status: {status}",
     "mech.changes.mapping.unique": "unique",
     "mech.changes.mapping.candidates": "candidates",
@@ -3772,59 +3695,6 @@ const I18N = {
     "mech.bc.form": "Form",
     "mech.bc.order_up": "Order up",
     "mech.bc.order_down": "Order down",
-    "mech.sr.title": "SR cycle review",
-    "mech.sr.cycle_label": "Cycle",
-    "mech.sr.cycle_badge": "Cycle {n}",
-    "mech.sr.source_state": "Source state",
-    "mech.sr.route": "Route",
-    "mech.sr.strategy": "Strategy",
-    "mech.sr.fidelity": "Fidelity",
-    "mech.sr.depth": "Depth",
-    "mech.sr.path_points": "Path points",
-    "mech.sr.candidates": "TS candidates",
-    "mech.sr.col_candidate": "Candidate",
-    "mech.sr.col_kind": "Kind",
-    "mech.sr.col_score": "Score",
-    "mech.sr.col_progress": "Progress",
-    "mech.sr.no_candidates": "No TS candidates",
-    "mech.sr.canonical_ts": "Canonical TS",
-    "mech.sr.canonical_ts_none": "No canonical TS",
-    "mech.sr.endpoint": "Endpoint verdict",
-    "mech.sr.endpoint_state": "Endpoint state {id}",
-    "mech.sr.irc_ok": "IRC ✓",
-    "mech.sr.irc_fail": "IRC ✗",
-    "mech.sr.irc_complete": "IRC complete",
-    "mech.sr.irc_incomplete": "IRC incomplete",
-    "mech.sr.locked_chip": "Locked reaction definition",
-    "mech.sr.pick_mode": "Pick atoms / bond",
-    "mech.sr.pick_hint": "Pair picking active: click 2 atoms in the 3D view",
-    "mech.sr.pair_hint": "Atom indices follow the parent-state atom order (0-based). The structure currently loaded in the 3D view may differ from the parent state; indices are advisory.",
-    "mech.sr.pairs_title": "Bond edits (next-cycle seed)",
-    "mech.sr.no_pairs": "No bonds composed yet; click \"Pick atoms / bond\", then click two atoms in the 3D view.",
-    "mech.sr.current_distance": "Current {value} Å",
-    "mech.sr.target": "Target (Å)",
-    "mech.sr.action.stretch": "Stretch",
-    "mech.sr.action.form": "Form",
-    "mech.sr.action.keep": "Keep",
-    "mech.sr.remove": "Remove",
-    "mech.sr.off_definition": "Off-definition",
-    "mech.sr.decision": "Decision",
-    "mech.sr.decision.continue": "Continue next cycle",
-    "mech.sr.decision.reject_path": "Reject this path",
-    "mech.sr.decision.accept_network": "Accept network → S4",
-    "mech.sr.comment": "Comment",
-    "mech.sr.comment_ph": "Review comment (optional)",
-    "mech.sr.submit": "Submit review",
-    "mech.sr.submit_ok": "Review submitted",
-    "mech.sr.submit_failed": "Failed to submit review",
-    "mech.sr.already_handled": "This review has already been handled",
-    "mech.sr.need_bond": "Continue requires at least one composed bond",
-    "mech.sr.invalid_target": "Stretch/form requires a positive target distance",
-    "mech.sr.resume": "Resume study",
-    "mech.sr.resume_ok": "Study resumed",
-    "mech.sr.resume_failed": "Failed to resume study",
-    "mech.sr.resume_conflict": "Job is not resumable in its current state",
-    "mech.sr.no_reviews": "No pending cycle reviews for this study",
     "study.status.DRAFT": "Draft",
     "study.status.RESUMABLE": "Resumable",
     "study.status.S1_RUNNING": "S1 running",
@@ -3834,18 +3704,10 @@ const I18N = {
     "study.status.S4_RUNNING": "S4 running",
     "study.status.COMPLETED": "Completed",
     "study.status.FAILED": "Failed",
-    "mech.promote.button": "Promote to S4",
-    "mech.promote.ok": "Promoted to S4",
-    "mech.promote.conflict": "No waiting SR review to promote, or job state has changed",
-    "mech.promote.no_job": "This study has no linked job to promote",
-    "mech.promote.missing": "Study not found",
-    "mech.promote.failed": "Failed to promote to S4",
     "mech.hash.config": "Config hash",
     "mech.plan.add_manual": "+ Add supplementary mechanism variable",
     "mech.plan.auto": "Auto",
     "mech.plan.manual": "Manual",
-    "mech.role.reactant": "Reactant",
-    "mech.role.product": "Product",
     "mech.role.intermediate": "Intermediate",
     "mech.role.transition_state": "Transition state",
     "mech.role.unknown": "State",
@@ -3911,29 +3773,56 @@ const I18N = {
     "modal.title": "New Calculation",
     "modal.mode_smiles": "SMILES",
     "modal.mode_paste": "Paste",
+    "modal.mode_structure": "Structure Input (auto-detect)",
+    "modal.mode_results": "Job Results",
     "modal.mode_upload": "Upload",
     "modal.smiles": "SMILES (one per line)",
     "modal.smiles_ph": "Example: CCO",
+    "modal.structure_label": "SMILES / XYZ / MOL / SDF / GJF / COM / ORCA INP (auto-detect)",
+    "modal.structure_placeholder": "Paste SMILES / XYZ / MOL / SDF / GJF / COM / ORCA INP text…",
+    "parse.waiting": "Waiting for input",
+    "parse.parsing": "Parsing…",
+    "parse.success": "Parsed successfully ({count} structures)",
+    "parse.failed": "Parse failed",
+    "parse.detected": "Detected as {format}",
+    "results.title": "Job Results",
+    "results.project_current": "Current Project",
+    "results.project_all": "All Projects",
+    "results.search_placeholder": "Search job name…",
+    "results.empty": "No reusable structures yet",
+    "results.loading": "Loading…",
+    "results.error": "Failed to load",
+    "results.load": "Load",
+    "results.loading_structure": "Loading…",
+    "results.reload": "Reload",
+    "results.local": "Local",
+    "results.remote": "Remote",
     "modal.paste_hint": "Paste XYZ / MOL / SDF / GJF text",
     "modal.upload_hint": "Drag files here, or click to select",
     "modal.validate": "Parse & Preview",
-    "modal.col_name": "Name",
+    "modal.col_name": "Molecule Name",
     "modal.col_formula": "Formula",
     "modal.col_atoms": "Atoms",
     "modal.col_charge": "Charge",
     "modal.col_spin": "Spin",
     "modal.col_3d": "3D",
     "modal.col_ok": "Status",
-    "modal.job_name": "Job Name",
+    "modal.molecule_name": "Molecule Name",
+    "modal.remark": "Remark (optional)",
+    "modal.remark_ph": "Add a note for this batch…",
+    "modal.task_name": "Task name (optional)",
+    "modal.task_name_ph": "Defaults to workflow name (e.g. energy)",
+    "modal.task_name_ph_mech": "Defaults to workflow name (e.g. mechanism)",
+    "modal.resources": "Resources",
     "modal.configure": "Configure",
     "modal.workflow_config": "Select Workflow",
     "modal.method_config": "Configure Method",
     "modal.cat_simple": "Simple Calculations",
     "modal.cat_preset": "Preset Workflows",
     "modal.cat_custom": "Custom",
+    "modal.cat_mechanism": "Mechanism Workflows",
+    "modal.cat_stages": "Stage Workflows",
     "modal.planned": "Planned",
-    "modal.simple_input_hint": "Simple workflows accept structure files only (XYZ / GJF / COM / INP); SMILES is not supported",
-    "modal.simple_no_smiles": "Simple workflows do not accept SMILES input; please use a structure file (XYZ / GJF / COM / INP)",
     "modal.default_method": "Default Method",
     "modal.advanced": "Advanced",
     "modal.summary": "Summary",
@@ -3956,17 +3845,19 @@ const I18N = {
     "modal.step2": "2. Select Workflow",
     "modal.step3": "3. Calculation Protocol",
     "modal.step4": "4. Resource Settings",
-    "modal.target_node": "Target Node",
     "modal.project": "Project",
     "modal.project_default": "(default)",
     "modal.project_current": "Will submit to project",
     "modal.nproc": "Cores",
     "modal.memory": "Memory",
+    "modal.parallelism": "Parallel jobs",
     "modal.cancel": "Cancel",
     "modal.submit": "Submit",
     "modal.required_smiles": "Please enter a SMILES string",
     "modal.submit_failed": "Submit failed: {message}",
     "modal.nmr_experiment": "Experimental spectrum (NMR)",
+    "modal.stage_need_source": "A source job ID is required",
+    "modal.stage_bad_plan": "Reaction coordinate plan is not valid JSON",
     "modal.nmr_format_hint": "Assigned: C: 167.33(C1)  ·  Unassigned: H: 2.95(3) multiplicity",
     "modal.nmr_spectrum_required": "NMR workflow requires spectrum text",
     "modal.nmr_enumerate": "Enumerate diastereomers",
@@ -4028,9 +3919,10 @@ const I18N = {
     "log.event": "[{type}] {message}",
     "log.terminal": "Terminal job status: {status}",
     "section.workbench": "Workbench",
-    "section.mechanism": "Mechanism",
-    "mechsec.title": "Mechanism Research",
-    "mechsec.subtitle": "Standalone module launchers (mech-conf / mech-step / mech-confirm / mech-chain) and mechanism-study management",
+    "section.mechanism": "Mechanism Management",
+    "mechsec.title": "Mechanism Management",
+    "mechsec.subtitle": "Review submitted mechanism jobs, reaction networks, and review states; create new mechanism jobs from the workflow picker.",
+    "mechsec.entry_note": "To create a mechanism job, open “New Calculation” and choose “Mechanism / TS” in the workflow picker.",
     "mechsec.launchers": "Module Launchers",
     "mechsec.studies": "Mechanism Studies",
     "mechsec.detail": "Study Results",
@@ -4254,6 +4146,7 @@ function applyI18n() {
   document.querySelectorAll("[data-i18n-ph]").forEach(function(el) {
     el.setAttribute("placeholder", t(el.getAttribute("data-i18n-ph")));
   });
+  updateTaskNamePlaceholder();
   document.querySelectorAll("[data-i18n-title]").forEach(function(el) {
     el.setAttribute("title", t(el.getAttribute("data-i18n-title")));
   });
@@ -4271,7 +4164,6 @@ function applyI18n() {
   }
   updateFrameController();
   if (activeViewerTab === "path" || activeViewerTab === "energy") renderMechanismTabFromCache(activeViewerTab);
-  if (document.getElementById("mechanism-review-modal").style.display === "flex") renderMechanismReviewList();
   if (!selectedJobId) renderLogPlaceholder();
 }
 
@@ -4437,15 +4329,6 @@ function resetMechanismCachesForJob(jobId) {
     const detail = mechanismStudyDetailsById[key];
     if (!detail || String(detail.job_id || "") === String(jobId)) delete mechanismStudyReportsById[key];
   });
-  // Phase D: SR review/reaction caches are re-fetched by loadMechanismReview.
-  Object.keys(mechanismSrReactionById).forEach(function(key) { delete mechanismSrReactionById[key]; });
-  if (String(mechanismSrState.jobId || "") === String(jobId)) {
-    mechanismSrState.loaded = false;
-    mechanismSrState.reviews = [];
-    mechanismSrState.pairBuffer = [];
-    mechanismSrState.pairs = {};
-    mechanismSrState.activeReviewId = "";
-  }
 }
 
 function jobIdOf(job) {
@@ -4734,11 +4617,6 @@ function buildMechanismSummaryMarkup(report, detail, studyId) {
   if (summary.quality) {
     chips.push('<span class="badge ' + escapeHtml(summary.quality) + '">' + escapeHtml(summary.quality.toUpperCase()) + '</span>');
   }
-  // Phase D: best-effort SR cycle chip next to the quality badge.
-  const srCycle = getMaxSrCycleForStudy(studyId);
-  if (srCycle !== null) {
-    chips.push('<span class="viewer-mechanism-chip"><span>' + escapeHtml(t("mech.sr.cycle_label")) + '</span><strong>' + escapeHtml(String(srCycle)) + '</strong></span>');
-  }
   if (summary.effectiveFidelity) {
     chips.push('<span class="viewer-mechanism-chip"><span>' + escapeHtml(t("mech.summary.fidelity")) + '</span><strong>' + escapeHtml(summary.effectiveFidelity) + '</strong></span>');
   }
@@ -4747,19 +4625,8 @@ function buildMechanismSummaryMarkup(report, detail, studyId) {
     chips.push('<span class="viewer-mechanism-chip"><span>' + escapeHtml(t("mech.summary.s4")) + '</span>' +
       '<span class="badge s4_' + escapeHtml(s4Status) + '">' + escapeHtml(t("mech.summary.s4_" + s4Status)) + '</span></span>');
   }
-  // Phase E: locked reaction content hash chip (SR composer reaction cache only).
-  const reactionHash = getSrReactionContentHash(studyId);
-  if (reactionHash) {
-    chips.push('<span class="viewer-mechanism-chip" title="' + escapeHtml(reactionHash) + '">🔒 ' +
-      escapeHtml(truncateConfigHash(reactionHash)) + '</span>');
-  }
-  // Phase E: one-click promote-to-S4 (only with loaded waiting SR review + waiting job).
-  const promoteHtml = canPromoteStudy(studyId)
-    ? '<button type="button" class="btn primary" id="mechanism-promote-s4">' + escapeHtml(t("mech.promote.button")) + '</button>' +
-      '<span class="review-inline-status" id="mechanism-promote-status"></span>'
-    : "";
-  if (!chips.length && !promoteHtml) return "";
-  return '<div class="viewer-mechanism-summary">' + chips.join("") + promoteHtml + '</div>';
+  if (!chips.length) return "";
+  return '<div class="viewer-mechanism-summary">' + chips.join("") + '</div>';
 }
 
 function buildMechanismPanelMarkup(kind, title, meta, svg, detail, emptyText, summaryHtml) {
@@ -4856,771 +4723,12 @@ async function renderMechanismTab(job, tab) {
   return renderMechanismTabFromCache(tab);
 }
 
-function setMechanismReviewMessage(message, kind) {
-  const box = document.getElementById("mechanism-review-message");
-  if (!box) return;
-  if (!message) {
-    box.style.display = "none";
-    box.textContent = "";
-    box.className = "mech-review-msg";
-    return;
-  }
-  box.style.display = "block";
-  box.className = "mech-review-msg" + (kind ? " " + kind : "");
-  box.textContent = message;
-}
+// SR review/promote functions removed — legacy mechanism study UI retired.
+// Retained as no-ops for callers that still reference them.
+function loadMechanismReview() { /* retired */ }
+function bindMechanismPromoteButton() { /* retired */ }
+function updateSrPickButtons() { /* retired */ }
 
-function getWaitingSrReviews() {
-  if (!mechanismSrState.loaded) return [];
-  return (mechanismSrState.reviews || []).filter(function(review) {
-    return review && String(review.type || "") === "sr_cycle_review" && String(review.status || "waiting") === "waiting";
-  });
-}
-
-function renderMechanismReviewList() {
-  const list = document.getElementById("mechanism-review-list");
-  const summary = document.getElementById("mechanism-review-summary");
-  const badge = document.getElementById("mechanism-review-badge");
-  if (!list || !summary || !badge) return;
-  // Phase D partition: waiting sr_cycle_review entries from GET /reviews render
-  // as SR composer cards; everything else keeps the legacy decision-card UI.
-  const srReviews = getWaitingSrReviews();
-  const srIds = {};
-  srReviews.forEach(function(review) {
-    if (review.review_id !== undefined && review.review_id !== null) srIds[String(review.review_id)] = true;
-  });
-  const pending = (mechanismReviewState.pending || []).filter(function(decision) {
-    if (mechanismSrState.loaded && srIds[String(decision && decision.id || "")]) return false;
-    return true;
-  });
-  summary.textContent = t("review.summary", { studyId: mechanismReviewState.studyId || t("common.none"), count: pending.length + srReviews.length });
-  badge.textContent = translateStatus("waiting_review");
-  if (!pending.length && !srReviews.length) {
-    let html = '<div class="viewer-mechanism-empty">' + escapeHtml(t("review.empty")) + '</div>';
-    // Phase D resume: waiting job with no waiting reviews → allow explicit resume.
-    if (String(mechanismSrState.jobStatus || "").toLowerCase() === "waiting_review") {
-      html += '<div class="sr-resume-note">' + escapeHtml(t("mech.sr.no_reviews")) + '</div>' +
-        '<div class="sr-resume-row"><button type="button" class="btn primary" id="mechanism-sr-resume">' + escapeHtml(t("mech.sr.resume")) + '</button>' +
-        '<span class="review-inline-status" id="mechanism-sr-resume-status"></span></div>';
-    }
-    list.innerHTML = html;
-    const resumeBtn = document.getElementById("mechanism-sr-resume");
-    if (resumeBtn) resumeBtn.addEventListener("click", resumeMechanismStudy);
-    return;
-  }
-  list.innerHTML = srReviews.map(function(review) { return buildSrReviewCardHtml(review); }).join("") +
-    pending.map(function(decision) {
-    const payloadText = summarizeDecisionEvidence(decision);
-    const extraPayload = decision && decision.payload && (decision.payload.route || decision.payload.stationary_points || decision.payload.quality_gates)
-      ? stringifyMechanismPayload({
-          route: decision.payload.route,
-          stationary_points: decision.payload.stationary_points,
-          quality_gates: decision.payload.quality_gates,
-        }) : "";
-    return '<div class="review-card" data-decision-id="' + escapeHtml(String(decision.id || "")) + '">' +
-      '<div class="review-card-head"><div><div class="review-card-title">' + escapeHtml(String(decision.id || "decision")) + '</div><div class="review-card-meta">' +
-      escapeHtml(t("review.decision_type")) + ': ' + escapeHtml(String(decision.type || t("common.unknown"))) + ' · ' +
-      escapeHtml(t("review.decision_status")) + ': ' + escapeHtml(translateStatus(decision.status)) + ' · ' +
-      escapeHtml(t("review.decision_created")) + ': ' + escapeHtml(formatDateTime(decision.created_at)) +
-      '</div></div>' + createStatusBadge(decision.status).outerHTML + '</div>' +
-      '<div><div class="review-card-meta">' + escapeHtml(t("review.evidence")) + '</div><pre class="review-card-pre">' + escapeHtml(payloadText) + '</pre></div>' +
-      (extraPayload ? '<div><div class="review-card-meta">' + escapeHtml(t("review.payload")) + '</div><pre class="review-card-pre">' + escapeHtml(extraPayload) + '</pre></div>' : '') +
-      '<div class="review-actions">' +
-      '<button class="btn primary" data-resolution="continue">' + escapeHtml(t("review.option.continue")) + '</button>' +
-      '<button class="btn" data-resolution="promote_to_s4">' + escapeHtml(t("review.option.promote_to_s4")) + '</button>' +
-      '<button class="btn" data-resolution="edit_route">' + escapeHtml(t("review.option.edit_route")) + '</button>' +
-      '<button class="btn danger" data-resolution="stop_branch">' + escapeHtml(t("review.option.stop_branch")) + '</button>' +
-      '<span class="review-inline-status"></span>' +
-      '</div></div>';
-  }).join("");
-  list.querySelectorAll(".review-card[data-sr-review-id]").forEach(function(card) {
-    bindSrCardEvents(card);
-  });
-  srReviews.forEach(function(review) {
-    renderSrPairList(String(review.review_id || ""));
-  });
-  updateSrPickButtons();
-  list.querySelectorAll("[data-resolution]").forEach(function(btn) {
-    btn.addEventListener("click", function() {
-      const card = btn.closest(".review-card");
-      if (!card) return;
-      submitMechanismDecision(card.getAttribute("data-decision-id"), btn.getAttribute("data-resolution"), card);
-    });
-  });
-}
-
-function openMechanismReviewModal() {
-  document.getElementById("mechanism-review-modal").style.display = "flex";
-}
-
-function closeMechanismReviewModal() {
-  document.getElementById("mechanism-review-modal").style.display = "none";
-  setMechanismReviewMessage("", "");
-  // Leaving the review modal always exits SR pick mode (mirrors measure mode
-  // buffer clearing on mode change; cannot interfere with select/measure).
-  if (molDoc.mode === "sr") setMode("view");
-}
-
-async function loadMechanismReview(job) {
-  if (!job) return;
-  const ready = await ensureMechanismViewerData(job);
-  if (!ready || !mechanismViewerState.studyId) {
-    setMechanismReviewMessage(t("review.refresh_failed"), "error");
-    mechanismReviewState.pending = [];
-    mechanismSrState.loaded = false;
-    mechanismSrState.reviews = [];
-    renderMechanismReviewList();
-    openMechanismReviewModal();
-    return;
-  }
-  const detail = await fetchMechanismStudyDetail(mechanismViewerState.studyId);
-  mechanismReviewState.jobId = jobIdOf(job);
-  mechanismReviewState.studyId = mechanismViewerState.studyId;
-  // API returns {..., study_json, decisions}; tolerate alternate shapes.
-  const studyBody = detail && (detail.study || detail.study_json);
-  let decisionPoints = detail && Array.isArray(detail.decisions) ? detail.decisions : null;
-  if (!decisionPoints && studyBody && Array.isArray(studyBody.decision_points)) {
-    decisionPoints = studyBody.decision_points;
-  }
-  mechanismReviewState.pending = Array.isArray(decisionPoints)
-    ? decisionPoints.filter(function(point) { return String(point && point.status || "").toLowerCase() === "waiting"; }) : [];
-  // Phase D: also load the NEW review listing (sr_cycle_review composer cards).
-  mechanismSrState.jobId = mechanismReviewState.jobId;
-  mechanismSrState.studyId = mechanismViewerState.studyId;
-  mechanismSrState.jobStatus = String(job.status || "").toLowerCase();
-  mechanismSrState.loaded = false;
-  mechanismSrState.reviews = [];
-  const srList = await fetchSrReviews(mechanismSrState.studyId);
-  if (srList.ok && srList.body && Array.isArray(srList.body.reviews)) {
-    mechanismSrState.reviews = srList.body.reviews.filter(function(review) {
-      return review && typeof review === "object";
-    });
-    mechanismSrState.loaded = true;
-  }
-  // On 404/5xx: legacy-only rendering (loaded stays false; srIds filter inert).
-  if (!mechanismSrState.activeReviewId && getWaitingSrReviews().length === 1) {
-    mechanismSrState.activeReviewId = String(getWaitingSrReviews()[0].review_id || "");
-  }
-  await ensureSrReaction(mechanismSrState.studyId);
-  setMechanismReviewMessage("", "");
-  renderMechanismReviewList();
-  openMechanismReviewModal();
-}
-
-function extractHttpStatus(message) {
-  const match = String(message || "").match(/HTTP\s+(\d+)/i);
-  return match ? parseInt(match[1], 10) : null;
-}
-
-async function submitMechanismDecision(decisionId, resolution, card) {
-  if (!mechanismReviewState.studyId || !decisionId || !resolution) return;
-  const inline = card ? card.querySelector(".review-inline-status") : null;
-  const buttons = card ? card.querySelectorAll("[data-resolution]") : [];
-  buttons.forEach(function(btn) { btn.disabled = true; });
-  if (inline) inline.textContent = t("common.loading");
-  try {
-    const updatedDecision = await api("/mechanism-studies/" + encodeURIComponent(mechanismReviewState.studyId) + "/decisions/" + encodeURIComponent(decisionId), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ resolution: resolution }),
-    });
-    setMechanismReviewMessage(t("review.submit_ok"), "success");
-    resetMechanismCachesForJob(mechanismReviewState.jobId);
-    await refreshJobs();
-    const refreshed = await api("/jobs/" + encodeURIComponent(mechanismReviewState.jobId));
-    updateInfoPanel(refreshed);
-    if (String(selectedJobId) === String(mechanismReviewState.jobId)) lastSelectedJob = refreshed;
-    await ensureMechanismViewerData(refreshed);
-    renderMechanismTabFromCache(activeViewerTab);
-    await loadMechanismReview(refreshed);
-    if (inline) inline.textContent = translateStatus(updatedDecision && updatedDecision.status ? updatedDecision.status : "completed");
-  } catch (e) {
-    const statusCode = extractHttpStatus(e && e.message);
-    const conflict = statusCode === 409 || String(e.message || "").indexOf("409") >= 0 || String(e.message || "").toLowerCase().indexOf("already") >= 0;
-    const message = conflict ? t("review.conflict") : t("review.submit_failed");
-    if (inline) inline.textContent = message;
-    setMechanismReviewMessage(message, "error");
-    buttons.forEach(function(btn) { btn.disabled = false; });
-  }
-}
-
-// ── Phase D: SR (human-review) cycle panel ──────────────────────────────
-// New /reviews endpoint + revision composer. The legacy decision-card path
-// above (mechanism_frontier_review / AMBIGUOUS decisions → /decisions/{id})
-// is intentionally untouched and keeps working alongside these.
-
-async function apiWithStatus(path, opts) {
-  try {
-    const response = await fetch(API_BASE + path, opts || {});
-    let body = null;
-    const contentType = response.headers.get("content-type") || "";
-    if (contentType.includes("application/json")) body = await response.json();
-    return { ok: response.ok, status: response.status, body: body, error: null };
-  } catch (e) {
-    return { ok: false, status: null, body: null, error: e };
-  }
-}
-
-async function fetchSrReviews(studyId) {
-  if (!studyId) return { ok: false, status: null, body: null, error: null };
-  return apiWithStatus("/mechanism-studies/" + encodeURIComponent(studyId) + "/reviews");
-}
-
-async function ensureSrReaction(studyId) {
-  if (!studyId) return null;
-  const key = String(studyId);
-  if (Object.prototype.hasOwnProperty.call(mechanismSrReactionById, key)) {
-    return mechanismSrReactionById[key];
-  }
-  const result = await apiWithStatus("/mechanism-studies/" + encodeURIComponent(key) + "/reaction");
-  let reaction = null;
-  if (result.ok && result.body && isPlainObject(result.body.reaction)) reaction = result.body.reaction;
-  mechanismSrReactionById[key] = reaction;
-  return reaction;
-}
-
-function getMaxSrCycleForStudy(studyId) {
-  if (!studyId || !mechanismSrState.loaded || String(mechanismSrState.studyId) !== String(studyId)) return null;
-  const reviews = mechanismSrState.reviews || [];
-  if (!reviews.length) return null;
-  let max = null;
-  reviews.forEach(function(review) {
-    const cycle = Number(review && review.cycle);
-    if (Number.isFinite(cycle) && (max === null || cycle > max)) max = cycle;
-  });
-  return max;
-}
-
-function srChipHtml(labelKey, value) {
-  return '<span class="viewer-mechanism-chip"><span>' + escapeHtml(t(labelKey)) + '</span><strong>' + escapeHtml(String(value)) + '</strong></span>';
-}
-
-function srChangeBadgeClass(changeType) {
-  if (changeType === "form" || changeType === "order_up") return "completed";
-  if (changeType === "break") return "failed";
-  return "queued";
-}
-
-function srBondChangeForPair(pair) {
-  const reaction = mechanismSrReactionById[String(mechanismSrState.studyId || "")];
-  const changes = reaction && Array.isArray(reaction.bond_changes) ? reaction.bond_changes : [];
-  const key = [Number(pair.atoms[0]), Number(pair.atoms[1])].sort(function(a, b) { return a - b; }).join("-");
-  let matched = null;
-  changes.forEach(function(change) {
-    if (matched || !Array.isArray(change.reactant_atoms)) return;
-    const changeKey = change.reactant_atoms.map(Number).sort(function(a, b) { return a - b; }).join("-");
-    if (changeKey === key) matched = change;
-  });
-  return matched;
-}
-
-function srAtomLabel(acpId) {
-  const atom = currentAtomById(acpId);
-  return acpId + ":" + (atom && atom.elem ? atom.elem : "?");
-}
-
-function srPairLabel(pair) {
-  return srAtomLabel(pair.atoms[0]) + " – " + srAtomLabel(pair.atoms[1]);
-}
-
-function ensureSrPairs(reviewId) {
-  const key = String(reviewId);
-  if (!Array.isArray(mechanismSrState.pairs[key])) mechanismSrState.pairs[key] = [];
-  return mechanismSrState.pairs[key];
-}
-
-function srDefaultTargetFor(action, current) {
-  if (action === "form") return 1.55;
-  if (action === "stretch") return Math.round(Number(current || 0) * 1.6 * 100) / 100;
-  return null;
-}
-
-function addSrPair(reviewId, atoms, current) {
-  const pairs = ensureSrPairs(reviewId);
-  const duplicate = pairs.some(function(pair) {
-    return (Number(pair.atoms[0]) === Number(atoms[0]) && Number(pair.atoms[1]) === Number(atoms[1])) ||
-      (Number(pair.atoms[0]) === Number(atoms[1]) && Number(pair.atoms[1]) === Number(atoms[0]));
-  });
-  if (duplicate) return null;
-  const action = "stretch";
-  const pair = { atoms: [Number(atoms[0]), Number(atoms[1])], current: Number(current), action: action, target: srDefaultTargetFor(action, current) };
-  pairs.push(pair);
-  return pair;
-}
-
-function removeSrPair(reviewId, index) {
-  const pairs = ensureSrPairs(reviewId);
-  if (index >= 0 && index < pairs.length) pairs.splice(index, 1);
-}
-
-function srPairSetAction(reviewId, index, action) {
-  const pairs = ensureSrPairs(reviewId);
-  const pair = pairs[index];
-  if (!pair) return;
-  if (["stretch", "form", "keep"].indexOf(action) < 0) return;
-  pair.action = action;
-  pair.target = srDefaultTargetFor(action, pair.current);
-  renderSrPairList(reviewId);
-}
-
-function srPairSetTarget(reviewId, index, value) {
-  const pairs = ensureSrPairs(reviewId);
-  const pair = pairs[index];
-  if (!pair) return;
-  const parsed = parseFloat(value);
-  pair.target = Number.isFinite(parsed) ? parsed : null;
-  updateSrSubmitState(reviewId);
-}
-
-function findSrCard(reviewId) {
-  let found = null;
-  document.querySelectorAll(".review-card[data-sr-review-id]").forEach(function(card) {
-    if (card.getAttribute("data-sr-review-id") === String(reviewId)) found = card;
-  });
-  return found;
-}
-
-function renderSrPairList(reviewId) {
-  const card = findSrCard(reviewId);
-  const box = card ? card.querySelector("[data-sr-pair-list]") : null;
-  if (!box) return;
-  const pairs = ensureSrPairs(reviewId);
-  if (!pairs.length) {
-    box.innerHTML = '<div class="review-card-meta">' + escapeHtml(t("mech.sr.no_pairs")) + '</div>';
-    updateSrSubmitState(reviewId);
-    return;
-  }
-  box.innerHTML = pairs.map(function(pair, index) {
-    const change = srBondChangeForPair(pair);
-    const chip = change
-      ? '<span class="badge ' + srChangeBadgeClass(change.change_type) + '">' + escapeHtml(t("mech.bc." + String(change.change_type))) + '</span>'
-      : '<span class="badge failed">' + escapeHtml(t("mech.sr.off_definition")) + '</span>';
-    const targetControl = pair.action === "keep" ? "" :
-      '<label class="review-card-meta">' + escapeHtml(t("mech.sr.target")) + '</label>' +
-      '<input type="number" min="0.1" step="0.05" data-sr-target="' + index + '" value="' + (pair.target !== null && pair.target !== undefined ? escapeHtml(String(pair.target)) : "") + '">';
-    return '<div class="sr-pair-row">' +
-      '<span class="sr-pair-atoms">' + escapeHtml(srPairLabel(pair)) + '</span>' +
-      '<span class="review-card-meta">' + escapeHtml(t("mech.sr.current_distance", { value: Number(pair.current).toFixed(2) })) + '</span>' +
-      chip +
-      '<select data-sr-action="' + index + '">' +
-        '<option value="stretch"' + (pair.action === "stretch" ? " selected" : "") + '>' + escapeHtml(t("mech.sr.action.stretch")) + '</option>' +
-        '<option value="form"' + (pair.action === "form" ? " selected" : "") + '>' + escapeHtml(t("mech.sr.action.form")) + '</option>' +
-        '<option value="keep"' + (pair.action === "keep" ? " selected" : "") + '>' + escapeHtml(t("mech.sr.action.keep")) + '</option>' +
-      '</select>' +
-      targetControl +
-      '<button type="button" class="btn ghost" data-sr-remove="' + index + '" title="' + escapeHtml(t("mech.sr.remove")) + '">✕</button>' +
-      '</div>';
-  }).join("");
-  box.querySelectorAll("[data-sr-action]").forEach(function(select) {
-    select.addEventListener("change", function() {
-      srPairSetAction(reviewId, parseInt(select.getAttribute("data-sr-action"), 10), select.value);
-    });
-  });
-  box.querySelectorAll("[data-sr-target]").forEach(function(input) {
-    input.addEventListener("change", function() {
-      srPairSetTarget(reviewId, parseInt(input.getAttribute("data-sr-target"), 10), input.value);
-    });
-  });
-  box.querySelectorAll("[data-sr-remove]").forEach(function(btn) {
-    btn.addEventListener("click", function() {
-      removeSrPair(reviewId, parseInt(btn.getAttribute("data-sr-remove"), 10));
-      renderSrPairList(reviewId);
-      if (molDoc.mode === "sr") renderMolDoc();
-    });
-  });
-  updateSrSubmitState(reviewId);
-}
-
-function updateSrSubmitState(reviewId) {
-  const card = findSrCard(reviewId);
-  if (!card) return;
-  const decision = mechanismSrState.decision[String(reviewId)] || "continue";
-  const pairs = ensureSrPairs(reviewId);
-  const needBond = decision === "continue" && !pairs.length;
-  const invalidTarget = pairs.some(function(pair) {
-    return pair.action !== "keep" && !(Number(pair.target) > 0);
-  });
-  const submitBtn = card.querySelector("[data-sr-submit]");
-  const hint = card.querySelector("[data-sr-need-bond]");
-  if (submitBtn) submitBtn.disabled = needBond || invalidTarget;
-  if (hint) {
-    hint.textContent = needBond ? t("mech.sr.need_bond") : (invalidTarget ? t("mech.sr.invalid_target") : "");
-    hint.style.display = needBond || invalidTarget ? "inline" : "none";
-  }
-}
-
-function srSetDecision(reviewId, decision) {
-  mechanismSrState.decision[String(reviewId)] = decision;
-  const card = findSrCard(reviewId);
-  if (!card) return;
-  card.querySelectorAll("[data-sr-decision]").forEach(function(btn) {
-    btn.classList.toggle("active", btn.getAttribute("data-sr-decision") === decision);
-  });
-  updateSrSubmitState(reviewId);
-}
-
-function bindSrCardEvents(card) {
-  const reviewId = card.getAttribute("data-sr-review-id");
-  const pickBtn = card.querySelector("[data-sr-pick]");
-  if (pickBtn) pickBtn.addEventListener("click", function() { handleSrPickToggle(reviewId); });
-  card.querySelectorAll("[data-sr-decision]").forEach(function(btn) {
-    btn.addEventListener("click", function() {
-      srSetDecision(reviewId, btn.getAttribute("data-sr-decision"));
-    });
-  });
-  const submitBtn = card.querySelector("[data-sr-submit]");
-  if (submitBtn) submitBtn.addEventListener("click", function() { submitSrReviewDecision(reviewId); });
-  srSetDecision(reviewId, mechanismSrState.decision[String(reviewId)] || "continue");
-}
-
-function srFormatValue(value, digits) {
-  if (typeof value === "number" && Number.isFinite(value)) return value.toFixed(digits);
-  if (value === null || value === undefined || value === "") return "—";
-  return String(value);
-}
-
-function buildSrReviewCardHtml(review) {
-  const reviewId = String(review.review_id || "");
-  const s = isPlainObject(review.summary) ? review.summary : {};
-  const rawCycle = Number.isFinite(Number(review.cycle)) ? Number(review.cycle) : Number(s.cycle);
-  const cycle = Number.isFinite(rawCycle) ? rawCycle : 0;
-  const sourceState = review.source_state_id || s.source_state_id || "";
-  const routeId = review.route_id || s.route_id || "";
-  const metaBits = [];
-  if (sourceState) metaBits.push(escapeHtml(t("mech.sr.source_state")) + ": " + escapeHtml(String(sourceState)));
-  if (routeId) metaBits.push(escapeHtml(t("mech.sr.route")) + ": " + escapeHtml(String(routeId)));
-  metaBits.push(escapeHtml(t("review.decision_created")) + ": " + escapeHtml(formatDateTime(review.created_at)));
-  const chips = [];
-  if (s.path_strategy) chips.push(srChipHtml("mech.sr.strategy", s.path_strategy));
-  if (s.fidelity) chips.push(srChipHtml("mech.sr.fidelity", s.fidelity));
-  if (Number.isFinite(Number(s.depth))) chips.push(srChipHtml("mech.sr.depth", s.depth));
-  if (Number.isFinite(Number(s.n_path_points))) chips.push(srChipHtml("mech.sr.path_points", s.n_path_points));
-  const candidates = Array.isArray(s.candidates) ? s.candidates : [];
-  let candidatesHtml = '<div class="sr-section-title">' + escapeHtml(t("mech.sr.candidates")) + '</div>';
-  if (candidates.length) {
-    candidatesHtml += '<table class="sr-cand-table"><thead><tr>' +
-      '<th>' + escapeHtml(t("mech.sr.col_candidate")) + '</th>' +
-      '<th>' + escapeHtml(t("mech.sr.col_kind")) + '</th>' +
-      '<th>' + escapeHtml(t("mech.sr.col_score")) + '</th>' +
-      '<th>' + escapeHtml(t("mech.sr.col_progress")) + '</th>' +
-      '</tr></thead><tbody>' + candidates.map(function(candidate) {
-        return '<tr>' +
-          '<td>' + escapeHtml(srFormatValue(candidate && candidate.candidate_id, 0)) + '</td>' +
-          '<td>' + escapeHtml(srFormatValue(candidate && candidate.kind, 0)) + '</td>' +
-          '<td>' + escapeHtml(srFormatValue(candidate && candidate.score, 3)) + '</td>' +
-          '<td>' + escapeHtml(srFormatValue(candidate && candidate.progress, 0)) + '</td>' +
-          '</tr>';
-      }).join("") + '</tbody></table>';
-  } else {
-    candidatesHtml += '<div class="review-card-meta">' + escapeHtml(t("mech.sr.no_candidates")) + '</div>';
-  }
-  const facts = [];
-  if (s.canonical_ts_id || Number.isFinite(Number(s.canonical_ts_energy_hartree))) {
-    const tsBits = [];
-    if (s.canonical_ts_id) tsBits.push(String(s.canonical_ts_id));
-    if (Number.isFinite(Number(s.canonical_ts_energy_hartree))) tsBits.push(Number(s.canonical_ts_energy_hartree).toFixed(4) + " Ha");
-    facts.push(srChipHtml("mech.sr.canonical_ts", tsBits.join(" · ")));
-  } else {
-    facts.push('<span class="badge idle">' + escapeHtml(t("mech.sr.canonical_ts_none")) + '</span>');
-  }
-  if (s.endpoint_verdict) {
-    let endpointText = String(s.endpoint_verdict);
-    if (s.endpoint_state_id) endpointText += " · " + t("mech.sr.endpoint_state", { id: s.endpoint_state_id });
-    facts.push(srChipHtml("mech.sr.endpoint", endpointText));
-  }
-  if (s.irc_success !== undefined || s.irc_complete !== undefined) {
-    const ircOk = s.irc_success === true;
-    facts.push('<span class="badge ' + (ircOk ? "completed" : "failed") + '" title="' +
-      escapeHtml(s.irc_complete === false ? t("mech.sr.irc_incomplete") : t("mech.sr.irc_complete")) + '">' +
-      escapeHtml(ircOk ? t("mech.sr.irc_ok") : t("mech.sr.irc_fail")) + '</span>');
-  }
-  if (s.locked_reaction_hash) {
-    facts.push('<span class="badge completed" title="' + escapeHtml(String(s.locked_reaction_hash)) + '">🔒 ' +
-      escapeHtml(t("mech.sr.locked_chip")) + '</span>');
-  }
-  const composer =
-    '<div class="sr-section-title" style="margin-top:6px;">' + escapeHtml(t("mech.sr.pairs_title")) + '</div>' +
-    '<div class="review-actions">' +
-      '<button type="button" class="btn ghost sr-pair-toggle" data-sr-pick="1">' + escapeHtml(t("mech.sr.pick_mode")) + '</button>' +
-      '<span class="sr-pick-hint" data-sr-pick-hint></span>' +
-    '</div>' +
-    '<div class="sr-pair-hint" style="margin-top:6px;">' + escapeHtml(t("mech.sr.pair_hint")) + '</div>' +
-    '<div class="sr-pair-list" data-sr-pair-list style="margin-top:8px;"></div>' +
-    '<div class="sr-section-title" style="margin-top:10px;">' + escapeHtml(t("mech.sr.decision")) + '</div>' +
-    '<div class="review-actions">' +
-      '<button type="button" class="btn sr-decision-btn" data-sr-decision="continue">' + escapeHtml(t("mech.sr.decision.continue")) + '</button>' +
-      '<button type="button" class="btn sr-decision-btn" data-sr-decision="reject_path">' + escapeHtml(t("mech.sr.decision.reject_path")) + '</button>' +
-      '<button type="button" class="btn sr-decision-btn" data-sr-decision="accept_network">' + escapeHtml(t("mech.sr.decision.accept_network")) + '</button>' +
-    '</div>' +
-    '<div class="review-card-meta" style="margin-top:8px;">' + escapeHtml(t("mech.sr.comment")) + '</div>' +
-    '<textarea data-sr-comment placeholder="' + escapeHtml(t("mech.sr.comment_ph")) + '"></textarea>' +
-    '<div class="review-actions" style="margin-top:8px;">' +
-      '<button type="button" class="btn primary" data-sr-submit>' + escapeHtml(t("mech.sr.submit")) + '</button>' +
-      '<span class="sr-need-bond" data-sr-need-bond style="display:none;"></span>' +
-      '<span class="review-inline-status" data-sr-inline></span>' +
-    '</div>';
-  return '<div class="review-card sr-review-card" data-sr-review-id="' + escapeHtml(reviewId) + '">' +
-    '<div class="review-card-head"><div><div class="review-card-title">' + escapeHtml(t("mech.sr.title")) + ' · ' + escapeHtml(reviewId) +
-    ' <span class="badge waiting_review">' + escapeHtml(t("mech.sr.cycle_badge", { n: cycle })) + '</span></div>' +
-    '<div class="review-card-meta">' + metaBits.join(" · ") + '</div></div>' +
-    createStatusBadge(review.status || "waiting").outerHTML + '</div>' +
-    (chips.length ? '<div class="sr-facts">' + chips.join("") + '</div>' : '') +
-    candidatesHtml +
-    (facts.length ? '<div class="sr-facts" style="margin-top:8px;">' + facts.join("") + '</div>' : '') +
-    composer +
-    '</div>';
-}
-
-function handleSrPickToggle(reviewId) {
-  if (molDoc.mode === "sr" && mechanismSrState.activeReviewId === String(reviewId)) {
-    setMode("view");
-    return;
-  }
-  mechanismSrState.activeReviewId = String(reviewId);
-  setMode("sr");
-}
-
-function handleSrPairClick(atom) {
-  if (typeof atom.acpId !== "number") return;
-  const reviewId = mechanismSrState.activeReviewId;
-  if (!reviewId || !findSrCard(reviewId)) return;
-  if (mechanismSrState.pairBuffer.indexOf(atom.acpId) >= 0) return;
-  mechanismSrState.pairBuffer.push(atom.acpId);
-  molDoc.selection.add(atom.acpId);
-  renderMolDoc();
-  if (mechanismSrState.pairBuffer.length < 2) return;
-  const idA = mechanismSrState.pairBuffer[0];
-  const idB = mechanismSrState.pairBuffer[1];
-  const distance = measurementValue("distance", [idA, idB]);
-  mechanismSrState.pairBuffer = [];
-  molDoc.selection.clear();
-  if (distance !== null) addSrPair(reviewId, [idA, idB], distance);
-  renderMolDoc();
-  renderSrPairList(reviewId);
-  updateInfoPanel(lastSelectedJob);
-}
-
-function renderSrPairOverlays() {
-  if (molDoc.mode !== "sr" || !viewer) return;
-  const reviewId = mechanismSrState.activeReviewId;
-  if (!reviewId) return;
-  const pairs = mechanismSrState.pairs[String(reviewId)];
-  if (!Array.isArray(pairs) || !pairs.length) return;
-  pairs.forEach(function(pair) {
-    const atoms = pair.atoms.map(function(acpId) { return currentAtomById(acpId); });
-    if (atoms.some(function(atom) { return !atom; })) return;
-    viewer.addCylinder({ dashed: true, start: { x: atoms[0].x, y: atoms[0].y, z: atoms[0].z }, end: { x: atoms[1].x, y: atoms[1].y, z: atoms[1].z }, radius: 0.05, color: "lime", fromCap: 1, toCap: 1 });
-    viewer.addLabel(Number(pair.current).toFixed(2) + " A", { position: { x: (atoms[0].x + atoms[1].x) / 2, y: (atoms[0].y + atoms[1].y) / 2, z: (atoms[0].z + atoms[1].z) / 2 }, fontSize: 12, fontColor: "lime", backgroundColor: "rgba(0,0,0,0.7)" });
-  });
-}
-
-function updateSrPickButtons() {
-  document.querySelectorAll(".review-card[data-sr-review-id]").forEach(function(card) {
-    const reviewId = card.getAttribute("data-sr-review-id");
-    const btn = card.querySelector("[data-sr-pick]");
-    const hint = card.querySelector("[data-sr-pick-hint]");
-    const active = molDoc.mode === "sr" && mechanismSrState.activeReviewId === String(reviewId);
-    if (btn) btn.classList.toggle("active", active);
-    if (hint) hint.textContent = active ? t("mech.sr.pick_hint") : "";
-  });
-}
-
-async function refreshAfterSrAction() {
-  resetMechanismCachesForJob(mechanismSrState.jobId);
-  await refreshJobs();
-  const refreshed = await api("/jobs/" + encodeURIComponent(mechanismSrState.jobId));
-  updateInfoPanel(refreshed);
-  if (String(selectedJobId) === String(mechanismSrState.jobId)) lastSelectedJob = refreshed;
-  await ensureMechanismViewerData(refreshed);
-  renderMechanismTabFromCache(activeViewerTab);
-  await loadMechanismReview(refreshed);
-}
-
-async function submitSrReviewDecision(reviewId) {
-  const studyId = mechanismSrState.studyId;
-  if (!studyId || !reviewId) return;
-  const card = findSrCard(reviewId);
-  const review = (mechanismSrState.reviews || []).filter(function(entry) {
-    return entry && String(entry.review_id) === String(reviewId);
-  })[0] || null;
-  const decision = mechanismSrState.decision[String(reviewId)] || "continue";
-  const pairs = ensureSrPairs(reviewId);
-  const inline = card ? card.querySelector("[data-sr-inline]") : null;
-  const submitBtn = card ? card.querySelector("[data-sr-submit]") : null;
-  if (decision === "continue" && !pairs.length) {
-    if (inline) inline.textContent = t("mech.sr.need_bond");
-    updateSrSubmitState(reviewId);
-    return;
-  }
-  const bonds = pairs.map(function(pair) {
-    return {
-      atoms: [Number(pair.atoms[0]), Number(pair.atoms[1])],
-      action: pair.action,
-      start: Number(pair.current),
-      target: pair.action === "keep" ? null : Number(pair.target),
-    };
-  });
-  const invalidTarget = bonds.some(function(bond) {
-    return bond.action !== "keep" && !(bond.target > 0);
-  });
-  if (invalidTarget) {
-    if (inline) inline.textContent = t("mech.sr.invalid_target");
-    updateSrSubmitState(reviewId);
-    return;
-  }
-  const commentEl = card ? card.querySelector("[data-sr-comment]") : null;
-  const summary = review && isPlainObject(review.summary) ? review.summary : {};
-  const payload = {
-    decision: decision,
-    selected_bonds: bonds,
-    parent_state: review && review.source_state_id ? review.source_state_id : (summary.source_state_id || null),
-    comment: commentEl ? String(commentEl.value || "") : "",
-    config_hash: null,
-  };
-  if (submitBtn) submitBtn.disabled = true;
-  if (inline) inline.textContent = t("common.loading");
-  const result = await apiWithStatus("/mechanism-studies/" + encodeURIComponent(studyId) + "/reviews/" + encodeURIComponent(reviewId) + "/decision", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (result.ok) {
-    delete mechanismSrState.pairs[String(reviewId)];
-    if (molDoc.mode === "sr") setMode("view");
-    setMechanismReviewMessage(t("mech.sr.submit_ok"), "success");
-    await refreshAfterSrAction();
-    return;
-  }
-  if (submitBtn) submitBtn.disabled = false;
-  const detail = result.body && result.body.detail ? String(result.body.detail) : (result.error ? String(result.error.message || "") : "");
-  if (result.status === 409) {
-    if (inline) inline.textContent = t("mech.sr.already_handled");
-    setMechanismReviewMessage(t("mech.sr.already_handled"), "error");
-    try {
-      const refreshed = await api("/jobs/" + encodeURIComponent(mechanismSrState.jobId));
-      await loadMechanismReview(refreshed);
-    } catch (e) {}
-    return;
-  }
-  const message = result.status === 422 && detail ? detail : (t("mech.sr.submit_failed") + (detail ? ": " + detail : ""));
-  if (inline) inline.textContent = message;
-  setMechanismReviewMessage(message, "error");
-}
-
-async function resumeMechanismStudy() {
-  const studyId = mechanismSrState.studyId;
-  if (!studyId || !mechanismSrState.jobId) return;
-  const resumeBtn = document.getElementById("mechanism-sr-resume");
-  const statusEl = document.getElementById("mechanism-sr-resume-status");
-  if (resumeBtn) resumeBtn.disabled = true;
-  if (statusEl) statusEl.textContent = t("common.loading");
-  const result = await apiWithStatus("/mechanism-studies/" + encodeURIComponent(studyId) + "/resume", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  });
-  if (result.ok) {
-    setMechanismReviewMessage(t("mech.sr.resume_ok"), "success");
-    await refreshAfterSrAction();
-    return;
-  }
-  if (resumeBtn) resumeBtn.disabled = false;
-  const detail = result.body && result.body.detail ? String(result.body.detail) : (result.error ? String(result.error.message || "") : "");
-  const message = result.status === 409 ? t("mech.sr.resume_conflict") : (t("mech.sr.resume_failed") + (detail ? ": " + detail : ""));
-  if (statusEl) statusEl.textContent = message;
-  setMechanismReviewMessage(message, "error");
-}
-
-// ── Phase E: unified status + one-click promote-to-S4 + reaction hash ─────
-// unified_status / content_hash are display-only; transitions stay backend-
-// authoritative. Promote = accept_network on the latest waiting SR review.
-
-function buildJobListStudyChip(jobId) {
-  const studies = mechanismStudiesByJob[String(jobId || "")] || [];
-  if (!studies.length) return null;
-  const study = getPrimaryMechanismStudy(jobId) || studies[0];
-  const unifiedStatus = study && typeof study.unified_status === "string" ? study.unified_status : "";
-  if (!unifiedStatus) return null;
-  const chip = document.createElement("span");
-  chip.className = "badge " + getStudyStatusClass(unifiedStatus);
-  chip.textContent = translateStudyStatus(unifiedStatus);
-  chip.title = String(unifiedStatus);
-  return chip;
-}
-
-function getSrReactionContentHash(studyId) {
-  const reaction = mechanismSrReactionById[String(studyId || "")];
-  if (!isPlainObject(reaction)) return "";
-  const hash = reaction.content_hash || reaction.config_hash || "";
-  return typeof hash === "string" ? hash.trim() : "";
-}
-
-function getLockedReactionHash(state) {
-  const lock = state && state.lockData ? state.lockData : null;
-  const candidates = [
-    state ? state.configHash : "",
-    lock ? lock.config_hash : "",
-    lock ? lock.content_hash : "",
-    lock && isPlainObject(lock.reaction) ? (lock.reaction.content_hash || lock.reaction.config_hash) : "",
-  ];
-  for (let i = 0; i < candidates.length; i++) {
-    const value = candidates[i];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  return "";
-}
-
-function canPromoteStudy(studyId) {
-  if (!studyId || !mechanismSrState.loaded) return false;
-  if (String(mechanismSrState.studyId) !== String(studyId)) return false;
-  if (String(mechanismSrState.jobStatus || "").toLowerCase() !== "waiting_review") return false;
-  return getWaitingSrReviews().length >= 1;
-}
-
-function bindMechanismPromoteButton(container) {
-  const btn = container ? container.querySelector("#mechanism-promote-s4") : null;
-  if (btn) btn.addEventListener("click", promoteMechanismStudyS4);
-}
-
-// 409 recovery: refresh only the SR review list (no modal popup, no job churn).
-async function refreshSrReviewsOnly(studyId) {
-  const srList = await fetchSrReviews(studyId);
-  if (srList.ok && srList.body && Array.isArray(srList.body.reviews)) {
-    mechanismSrState.reviews = srList.body.reviews.filter(function(review) {
-      return review && typeof review === "object";
-    });
-    mechanismSrState.loaded = true;
-    renderMechanismTabFromCache(activeViewerTab);
-    if (document.getElementById("mechanism-review-modal").style.display === "flex") renderMechanismReviewList();
-  }
-}
-
-async function promoteMechanismStudyS4() {
-  const studyId = mechanismSrState.studyId;
-  if (!studyId || !mechanismSrState.jobId) return;
-  const btn = document.getElementById("mechanism-promote-s4");
-  const statusEl = document.getElementById("mechanism-promote-status");
-  if (btn) btn.disabled = true;
-  if (statusEl) statusEl.textContent = t("common.loading");
-  const result = await apiWithStatus("/mechanism-studies/" + encodeURIComponent(studyId) + "/promote", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  });
-  if (result.ok) {
-    if (statusEl) statusEl.textContent = t("mech.promote.ok");
-    setMechanismReviewMessage(t("mech.promote.ok"), "success");
-    await refreshAfterSrAction();
-    return;
-  }
-  if (btn) btn.disabled = false;
-  const detail = result.body && result.body.detail ? String(result.body.detail) : (result.error ? String(result.error.message || "") : "");
-  const message = result.status === 409 ? (t("mech.promote.conflict") + (detail ? ": " + detail : ""))
-    : result.status === 400 ? t("mech.promote.no_job")
-    : result.status === 404 ? t("mech.promote.missing")
-    : (t("mech.promote.failed") + (detail ? ": " + detail : ""));
-  if (statusEl) statusEl.textContent = message;
-  setMechanismReviewMessage(message, "error");
-  if (result.status === 409) await refreshSrReviewsOnly(studyId);
-}
 
 function initViewer() {
   const container = document.getElementById("viewer-3d");
@@ -5691,7 +4799,6 @@ function renderMeasurements() {
     viewer.addLabel(formatMeasurementDisplay(m.type, m.value), { position: { x: (atoms[1].x + atoms[2].x) / 2, y: (atoms[1].y + atoms[2].y) / 2, z: (atoms[1].z + atoms[2].z) / 2 }, fontSize: 12, fontColor: "orange", backgroundColor: "rgba(0,0,0,0.7)" });
   });
   // Phase D: dashed overlays for composed SR atom pairs (active card only).
-  renderSrPairOverlays();
   if (labelMode !== "none") {
     currentAtoms().forEach(function(a) {
       const text = labelMode === "elem" ? a.elem : String(a.id);
@@ -5707,7 +4814,6 @@ function setupClickableForCurrentModel() {
     if (molDoc.mode === "view") return;
     if (molDoc.mode === "select") handleSelectClick(atom, event);
     if (molDoc.mode === "measure") handleMeasureClick(atom);
-    if (molDoc.mode === "sr") handleSrPairClick(atom);
   });
 }
 
@@ -6011,7 +5117,7 @@ async function submitDeleteProjectModal() {
 function openDeleteJobModal(job) {
   deleteJobId = job ? (job.id || job.job_id || "") : "";
   if (!deleteJobId) return;
-  const jobName = job.spec && job.spec.name ? job.spec.name : deleteJobId;
+  const jobName = canonicalTaskName(job) || deleteJobId;
   const promptEl = document.getElementById("delete-job-prompt");
   if (promptEl) {
     promptEl.textContent = (t("job.delete_prompt") || "确定要删除任务") + " \"" + jobName + "\" 吗？";
@@ -6020,6 +5126,37 @@ function openDeleteJobModal(job) {
   const err = document.getElementById("delete-job-err");
   if (err) err.style.display = "none";
   document.getElementById("delete-job-modal").style.display = "flex";
+}
+
+// The task directory is the canonical user-facing task name.  The fallback
+// chain keeps historical v1 records readable while their old spec.name value
+// still contains the pre-v2 batch/random suffix.
+function canonicalTaskName(job) {
+  if (!job) return "";
+  if (job.task_dir_name) return String(job.task_dir_name);
+  if (job.work_dir) {
+    const parts = String(job.work_dir).replace(/\\/g, "/").split("/");
+    if (parts.length && parts[parts.length - 1]) return parts[parts.length - 1];
+  }
+  if (job.spec && job.spec.task_dir_name) return String(job.spec.task_dir_name);
+  if (job.spec && job.spec.name) return String(job.spec.name);
+  return job.id || job.job_id || "";
+}
+
+function updateFileTreeTaskName(jobId) {
+  const key = String(jobId || "");
+  let job = key ? lastSelectedJob : null;
+  if (!job || String(job.id || job.job_id || "") !== key) {
+    job = jobsCache.find(function(entry) {
+      return String(entry.id || entry.job_id || "") === key;
+    }) || null;
+  }
+  const name = canonicalTaskName(job);
+  document.querySelectorAll(".file-tree-task-name").forEach(function(el) {
+    el.textContent = name || t("files.no_task");
+    el.title = name || "";
+    el.classList.toggle("empty", !name);
+  });
 }
 
 function closeDeleteJobModal() {
@@ -6430,9 +5567,7 @@ function buildQueueGroup(group) {
   const wrap = document.createElement("div");
   wrap.className = "queue-group";
   const root = group.jobs[0];
-  const rootName = root && root.spec && root.spec.name
-    ? String(root.spec.name).replace(/__rerun$/, "")
-    : String(group.id);
+  const rootName = canonicalTaskName(root) || String(group.id);
 
   const head = document.createElement("div");
   head.className = "queue-group-head";
@@ -6494,7 +5629,7 @@ function buildQueueRow(job) {
   const name = document.createElement("div");
   name.className = "queue-name";
   const strong = document.createElement("strong");
-  strong.textContent = job.spec && job.spec.name ? job.spec.name : String(job.id);
+  strong.textContent = canonicalTaskName(job) || String(job.id);
   const span = document.createElement("span");
   span.textContent = (job.spec && job.spec.workflow ? job.spec.workflow : t("common.na")) + " | " + (job.current_stage || t("queue.stage"));
   name.appendChild(strong);
@@ -6657,6 +5792,7 @@ function getAllLoadedFiles() {
 }
 
 function renderFileTree(files, jobId) {
+  updateFileTreeTaskName(jobId);
   var allFiles = getAllLoadedFiles();
   if (allFiles.length === 0) allFiles = files || [];
   lastFileListing = allFiles;
@@ -6864,7 +6000,16 @@ const FOLDER_DISPLAY_NAMES = {
   "s1": "S1 · Conformers", "s1_xtbfast": "S1 · xTB-Fast", "s2": "S2 · Path Search",
   "s2_peb": "S2 · PEB", "s3s4": "S3/S4 · Refinement",
   "cycles": "SR Cycles", "routes": "Routes", "refinements": "Refinements",
-  "inputs": "Inputs", "work": "Work", "results": "Results"
+  "inputs": "Inputs", "work": "Work", "results": "Results",
+  "WORK": "Work", "RESULT": "Results",
+  "00_RUNTIME": "00 · Runtime", "01_PREPARE": "01 · Preparation",
+  "02_SEARCH": "02 · Conformer Search", "03_OPT": "03 · Optimization",
+  "04_FREQ": "04 · Frequencies", "05_SP": "05 · Single Point",
+  "06_THERMO": "06 · Thermochemistry", "07_PATH": "07 · Reaction Path",
+  "08_ANALYSIS": "08 · Analysis",
+  "structures": "Structures", "energies": "Energies", "frequencies": "Frequencies",
+  "trajectories": "Trajectories", "ensembles": "Ensembles",
+  "mechanism": "Mechanism", "reports": "Reports"
 };
 
 function renderTreeNode(node, jobId) {
@@ -7185,7 +6330,7 @@ function renderInfoInto(container, job) {
   const detail = getJobDetail(jobId);
   const recovery = resolveJobRecovery(job);
   const items = [
-    [t("info.current_job"), job.spec && job.spec.name ? job.spec.name : String(job.id || "")],
+    [t("info.current_job"), canonicalTaskName(job) || String(job.id || "")],
     [t("info.workflow"), job.spec && job.spec.workflow ? job.spec.workflow : t("common.none")],
     [t("info.protocol"), job.spec && job.spec.method && job.spec.method.protocol ? job.spec.method.protocol : t("common.none")],
     [t("info.status"), job.status || t("common.unknown")],
@@ -7260,7 +6405,7 @@ function renderInfoInto(container, job) {
   }
 
   // Ensemble total Gibbs — highlighted stat card when the energy workflow
-  // produced finalDFT/ensemble_thermo.json (captured into job.result).
+  // produced RESULT/energies/ensemble_thermo.json (captured into job.result).
   if (thermo && typeof thermo.total_gibbs_kcal_mol === "number") {
     const card = document.createElement("div");
     card.className = "info-total-gibbs";
@@ -7753,8 +6898,9 @@ function handleMeasureClick(atom) {
 // targets and a role (drive / freeze / monitor) before submit.
 
 function currentMechanismAtoms() {
-  // Reactant geometry is the reference frame for coordinate plans.
-  var reactant = reactionDefinition && reactionDefinition.reactant ? reactionDefinition.reactant : (wizardStructures[0] || null);
+  // The mechanism module owns reaction-input binding. Do not infer a role
+  // from the generic structure preview or from insertion order here.
+  var reactant = reactionDefinition && reactionDefinition.reactant ? reactionDefinition.reactant : null;
   if (reactant && reactant.xyz) {
     return parseXyzAtoms(reactant.xyz);
   }
@@ -7770,7 +6916,6 @@ function createReactionDefinitionState() {
     lockData: null,
     previewData: null,
     configHash: "",
-    roles: [],
     draftCreated: false,
     selectedCandidate: null,
     previewHash: "",
@@ -7784,67 +6929,7 @@ function createReactionDefinitionState() {
 
 function ensureReactionDefinitionState() {
   if (!reactionDefinition) reactionDefinition = createReactionDefinitionState();
-  if (!Array.isArray(reactionDefinition.roles)) reactionDefinition.roles = [];
   return reactionDefinition;
-}
-
-function defaultReactionRoleForIndex(index) {
-  if (index === 0) return "reactant";
-  if (index === 1) return "product";
-  if (index === 2) return "ts_guess";
-  return "none";
-}
-
-function syncReactionDefinitionStructuresFromRoles() {
-  var state = ensureReactionDefinitionState();
-  state.reactant = null;
-  state.product = null;
-  state.tsGuess = null;
-  wizardStructures.forEach(function(structure, idx) {
-    var role = state.roles[idx] || defaultReactionRoleForIndex(idx);
-    if (role === "reactant") state.reactant = structure;
-    else if (role === "product") state.product = structure;
-    else if (role === "ts_guess") state.tsGuess = structure;
-  });
-  mechProductStructure = state.product || null;
-  mechTsGuessStructure = state.tsGuess || null;
-}
-
-function initializeReactionDefinitionRoles() {
-  var state = ensureReactionDefinitionState();
-  state.roles = wizardStructures.map(function(_, idx) { return defaultReactionRoleForIndex(idx); });
-  state.locked = false;
-  state.lockData = null;
-  state.previewData = null;
-  state.configHash = "";
-  state.selectedCandidate = null;
-  state.previewHash = "";
-  state.showCandidatePicker = false;
-  state.lockedPayload = null;
-  state.editMode = false;
-  state.manualEdits = [];
-  reactionManualPick = null;
-  syncReactionDefinitionStructuresFromRoles();
-}
-
-function getReactionRoleCounts() {
-  var state = ensureReactionDefinitionState();
-  var counts = { reactant: 0, product: 0, ts_guess: 0 };
-  state.roles.forEach(function(role) {
-    if (counts[role] !== undefined) counts[role] += 1;
-  });
-  return counts;
-}
-
-function getReactionRoleValidationError() {
-  var counts = getReactionRoleCounts();
-  if (counts.reactant !== 1 || counts.product !== 1) {
-    return t("mech.definition.role_invalid");
-  }
-  if (counts.ts_guess > 1) {
-    return t("mech.definition.role_invalid");
-  }
-  return "";
 }
 
 function getStructureAtomLabels(structure) {
@@ -8189,7 +7274,7 @@ function updateReactionEditControls() {
   }
 }
 
-function getMechanismRolePayload(ns, chargeVal, multVal) {
+function getMechanismStructurePayload(ns, chargeVal, multVal) {
   if (!ns) return null;
   var p;
   // P1 index-alignment fix: prefer xyz_text over smiles so backend
@@ -8213,13 +7298,12 @@ function getMechanismRolePayload(ns, chargeVal, multVal) {
 
 function buildReactionPreviewPayload(selectedCandidateOverride) {
   var state = ensureReactionDefinitionState();
-  syncReactionDefinitionStructuresFromRoles();
   var chargeVal = parseInt(document.getElementById("modal-charge").value, 10) || 0;
   var multVal = parseInt(document.getElementById("modal-mult").value, 10) || 1;
   var payload = {
-    reactant: getMechanismRolePayload(state.reactant, chargeVal, multVal),
-    product: getMechanismRolePayload(state.product, chargeVal, multVal),
-    ts_guess: state.tsGuess ? getMechanismRolePayload(state.tsGuess, chargeVal, multVal) : null,
+    reactant: getMechanismStructurePayload(state.reactant, chargeVal, multVal),
+    product: getMechanismStructurePayload(state.product, chargeVal, multVal),
+    ts_guess: state.tsGuess ? getMechanismStructurePayload(state.tsGuess, chargeVal, multVal) : null,
     charge: chargeVal,
     multiplicity: multVal,
     selected_candidate: selectedCandidateOverride !== undefined ? selectedCandidateOverride : state.selectedCandidate,
@@ -8245,38 +7329,6 @@ async function ensureMechanismDraftStudy() {
   });
   state.draftCreated = true;
   return mechStudyId;
-}
-
-function renderReactionDefinitionStatus() {
-  var statusEl = document.getElementById("mech-role-status");
-  var errEl = document.getElementById("mech-role-validation");
-  var previewBtn = document.getElementById("mech-preview-definition");
-  var unlockBtn = document.getElementById("mech-unlock-definition");
-  if (!statusEl || !errEl || !previewBtn || !unlockBtn) return;
-  var state = ensureReactionDefinitionState();
-  var error = getReactionRoleValidationError();
-  var bits = [];
-  bits.push('<span class="badge ' + (state.locked ? 'completed' : 'idle') + '">' + escapeHtml(t(state.locked ? 'mech.definition.locked' : 'mech.definition.unlocked')) + '</span>');
-  // Phase E: after lock, surface the reaction content/config hash (truncated,
-  // full value in the title tooltip).
-  if (state.locked) {
-    var lockHash = getLockedReactionHash(state);
-    if (lockHash) {
-      bits.push('<span class="mech-inline-note" title="' + escapeHtml(lockHash) + '">🔒 ' +
-        escapeHtml(t('mech.hash.config')) + ' ' + escapeHtml(truncateConfigHash(lockHash)) + '</span>');
-    }
-  }
-  if (state.previewData && !state.locked) {
-    bits.push('<span class="badge running">' + escapeHtml(t('mech.definition.preview_ready')) + '</span>');
-  }
-  if (!state.locked && mechCoordinatePlans.some(function(spec) { return spec && spec.source === 'auto'; })) {
-    bits.push('<span class="mech-inline-note">' + escapeHtml(t('mech.definition.stale_plan')) + '</span>');
-  }
-  statusEl.innerHTML = bits.join("");
-  errEl.style.display = error ? "block" : "none";
-  errEl.textContent = error;
-  previewBtn.disabled = !!error || wizardStructures.length === 0 || state.locked;
-  unlockBtn.style.display = state.locked ? "inline-flex" : "none";
 }
 
 function renderReactionChangesPanel() {
@@ -8769,17 +7821,12 @@ function renderReactionChanges3D() {
 }
 
 function renderReactionDefinitionPanel() {
-  renderReactionDefinitionStatus();
   renderReactionChangesPanel();
 }
 
 async function previewReactionDefinition(selectedCandidateOverride) {
   var state = ensureReactionDefinitionState();
-  var error = getReactionRoleValidationError();
-  if (error) {
-    renderReactionDefinitionStatus();
-    return;
-  }
+  if (!wizardStructures.length) return;
   try {
     await ensureMechanismDraftStudy();
     var previewBtn = document.getElementById('mech-preview-definition');
@@ -9163,7 +8210,6 @@ function hookMechanismBuilder() {
   mechConformerMode = "censo-lite";
   mechMaxSteps = 3;
   mechPromotionPolicy = "all_confirmed";
-  mechAutoConverge = false;
   mechScanPoints = 21;
   mechIrcPoints = 30;
   mechScanPointsDirty = false;
@@ -9174,7 +8220,6 @@ function hookMechanismBuilder() {
   reactionHoverShape = null;
   reactionPreserveViewNext = false;
   reactionManualCycleAt = 0;
-  if (wizardStructures.length) initializeReactionDefinitionRoles();
   var addBtn = document.getElementById("mech-add-coord");
   if (addBtn && !addBtn.dataset.hooked) {
     addBtn.dataset.hooked = "1";
@@ -9195,8 +8240,7 @@ function hookMechanismBuilder() {
     strategySel.addEventListener("change", function() {
       mechStrategy = this.value;
       if (this.value === "rph-reverse") {
-        syncReactionDefinitionStructuresFromRoles();
-        if (!mechProductStructure) window.alert(t("mech.product_required") || "rph-reverse 需要提供产物结构");
+        if (!mechProductStructure) window.alert(t("mech.product_required") || "请在机理计算模块中提供产物结构");
       }
     });
   }
@@ -9264,12 +8308,6 @@ function hookMechanismBuilder() {
     promotionSel.addEventListener("change", function() { mechPromotionPolicy = this.value; });
   }
   if (promotionSel) promotionSel.value = mechPromotionPolicy;
-  var autoConvergeToggle = document.getElementById("mech-auto-converge");
-  if (autoConvergeToggle && !autoConvergeToggle.dataset.hooked) {
-    autoConvergeToggle.dataset.hooked = "1";
-    autoConvergeToggle.addEventListener("change", function() { mechAutoConverge = !!this.checked; });
-  }
-  if (autoConvergeToggle) autoConvergeToggle.checked = !!mechAutoConverge;
   var mechProfile = wizardState.method && wizardState.method.profile_id && wizardState.method.profile_id !== "__custom__"
     ? getMethodProfileById(wizardState.method.profile_id)
     : null;
@@ -9278,16 +8316,6 @@ function hookMechanismBuilder() {
   } else {
     applyMechanismDefaultsForFidelity(mechFidelity);
     syncMechanismPanelFromProfile(null);
-  }
-  var previewBtn = document.getElementById("mech-preview-definition");
-  if (previewBtn && !previewBtn.dataset.hooked) {
-    previewBtn.dataset.hooked = "1";
-    previewBtn.addEventListener("click", function() { previewReactionDefinition(); });
-  }
-  var unlockBtn = document.getElementById("mech-unlock-definition");
-  if (unlockBtn && !unlockBtn.dataset.hooked) {
-    unlockBtn.dataset.hooked = "1";
-    unlockBtn.addEventListener("click", unlockReactionDefinition);
   }
   // Reaction-changes 3D viewer toggle (P1): [reactant]/[product] view switch.
   document.querySelectorAll(".mech-view-toggle[data-view-mode]").forEach(function(btn) {
@@ -9363,7 +8391,6 @@ async function loadNodes() {
     const data = await api("/nodes");
     nodesCache = data.nodes || [];
     renderNodePanel();
-    renderNodeSelector();
   } catch (e) {
     // 503 = remote execution not configured (expected, show empty placeholder).
     // Other errors = real failure, show the error message so it's not masked.
@@ -9375,7 +8402,6 @@ async function loadNodes() {
         list.innerHTML = '<div class="node-error">' + escapeHtml(t("nodes.load_error") + ": " + e.message) + '</div>';
       }
     }
-    renderNodeSelector();
   }
 }
 
@@ -9423,24 +8449,6 @@ function renderNodePanel() {
     row.appendChild(actions);
     list.appendChild(row);
   });
-}
-
-function renderNodeSelector() {
-  const select = document.getElementById("modal-node-select");
-  if (!select) return;
-  select.innerHTML = '<option value="" data-i18n="nodes.auto">' + escapeHtml(t("nodes.auto")) + '</option>';
-  nodesCache.forEach(function(node) {
-    const option = document.createElement("option");
-    option.value = node.name;
-    const label = node.name + " " + (node.status === "online" ? "🟢" : node.status === "degraded" ? "🟡" : "🔴") + " " + (node.running_jobs || 0) + "/" + (node.max_jobs || 0);
-    option.textContent = label;
-    option.disabled = node.status === "offline";
-    select.appendChild(option);
-  });
-  // If the previously selected node is now offline/missing, fall back to auto.
-  const exists = nodesCache.some(function(n) { return n.name === selectedNode && n.status !== "offline"; });
-  if (!exists) selectedNode = "";
-  select.value = selectedNode;
 }
 
 async function pingNode(name) {
@@ -9581,8 +8589,6 @@ function setMode(mode) {
   const previousMode = molDoc.mode;
   molDoc.mode = mode;
   if (mode !== "measure") measureBuffer = [];
-  // Leaving SR pick mode clears its pair buffer (mirrors measure-mode semantics).
-  if (mode !== "sr") mechanismSrState.pairBuffer = [];
   document.querySelectorAll(".tool-icon").forEach(function(btn) { btn.classList.remove("active"); });
   if (mode === "select") document.getElementById("btn-mode-select").classList.add("active");
   if (mode === "measure") {
@@ -9799,10 +8805,12 @@ async function selectJob(jobId) {
   // Q3-P0: render the real stdout tail first; SSE status lines append on top.
   pollLogTail(jobId);
   await refreshJobs();
-  // T7: mechanism jobs auto-expand to mechanism_study/<study_id>/calc so the
-  // S1/S2/S3/S4 computation directories are visible without manual clicks.
-  // expandPath stops silently when calc/ does not exist (historical jobs).
+  // T7: mechanism jobs auto-expand to the v2 WORK stage tree so the
+  // search/path/opt computation directories are visible without manual
+  // clicks. expandPath stops silently when WORK/ does not exist
+  // (historical jobs keep their legacy nested layout).
   if (job.spec && job.spec.workflow === "mechanism") {
+    expandPath(jobId, "WORK");
     fetchMechanismStudiesForJob(jobId).then(function(studies) {
       if (studies && studies.length) {
         var studyId = String(studies[0].id || studies[0].study_id || "");
@@ -9810,11 +8818,20 @@ async function selectJob(jobId) {
       }
     });
   }
+  // v2 layout (design doc §10): RESULT/ is expanded by default, WORK/ stays
+  // collapsed. Only fires when the root listing actually contains a RESULT
+  // dir, so legacy (v1) jobs render exactly as before.
+  var rootHasResult = (filesResp.files || []).some(function(f) {
+    return f.is_dir && (f.name === "RESULT" || f.path === "RESULT");
+  });
+  if (rootHasResult && folderCache["RESULT"] === undefined) {
+    expandPath(jobId, "RESULT");
+  }
 }
 
 let wizardStructures = [];
 let wizardParseWarnings = [];
-let wizardInputMode = "smiles";
+let wizardInputMode = "structure";
 let wizardSelectedStructureIndex = 0;
 let wizardUploadFile = null;
 let workflowCatalogCache = [];
@@ -9832,10 +8849,11 @@ let reactionHoverShape = null;
 let reactionPreserveViewNext = false;
 let reactionManualCycleAt = 0;
 
-// ── Mechanism Builder state (reaction-coordinate plans + roles) ─────────
-// Reactant lives in wizardStructures[0] (the parsed input); product / TS
-// guess are optional second/third structures. mechCoordinatePlans holds the
-// user-built coordinate plans ({coordinates, points, start_from}).
+// ── Mechanism Builder state (reaction-coordinate plans) ─────────────────
+// Reaction-input binding belongs to the mechanism module. The generic parse
+// preview must not assign reactant/product/TS semantics by position.
+// mechCoordinatePlans holds the user-built coordinate plans
+// ({coordinates, points, start_from}).
 let mechProductStructure = null;
 let mechTsGuessStructure = null;
 let mechCoordinatePlans = [];
@@ -9845,7 +8863,6 @@ let mechFidelity = "s3";
 let mechConformerMode = "censo-lite";
 let mechMaxSteps = 3;
 let mechPromotionPolicy = "all_confirmed";
-let mechAutoConverge = false;
 let mechScanPoints = 21;
 let mechIrcPoints = 30;
 let mechScanPointsDirty = false;
@@ -10212,20 +9229,23 @@ function openModal() {
   wizardStructures = [];
   wizardParseWarnings = [];
   wizardSelectedStructureIndex = 0;
-  selectedNode = "";
-  document.getElementById("structure-preview").style.display = "none";
   document.getElementById("parse-errors").style.display = "none";
   document.getElementById("parse-status").textContent = "";
-  document.getElementById("modal-smiles").value = "";
-  document.getElementById("modal-paste").value = "";
+  document.getElementById("modal-structure-input").value = "";
+  setDetectedFormatChip(null);
+  renderPreviewWaiting();
   document.getElementById("upload-file-input").value = "";
   document.getElementById("charge-spin-row").style.display = "none";
   document.getElementById("modal-charge").value = "0";
   document.getElementById("modal-mult").value = "1";
+  document.getElementById("modal-remark").value = "";
+  document.getElementById("modal-task-name").value = "";
+  document.getElementById("modal-parallelism").value = "1";
   wizardUploadFile = null;
   var dzSpan = document.querySelector(".upload-dropzone span");
   if (dzSpan) dzSpan.textContent = t("modal.upload_hint");
-  setWizardInputMode("smiles");
+  setWizardInputMode("structure");
+  resetResultsPanel();
   updateConfigCards();
   renderModalProjects();
   setModalProjectDefault();
@@ -10239,7 +9259,6 @@ function openModal() {
   mechConformerMode = "censo-lite";
   mechMaxSteps = 3;
   mechPromotionPolicy = "all_confirmed";
-  mechAutoConverge = false;
   mechScanPoints = 21;
   mechIrcPoints = 30;
   mechScanPointsDirty = false;
@@ -10300,9 +9319,52 @@ function setWizardInputMode(mode) {
   document.querySelectorAll(".input-mode-tab").forEach(function(tab) {
     tab.classList.toggle("active", tab.getAttribute("data-input-mode") === mode);
   });
-  document.getElementById("input-panel-smiles").style.display = mode === "smiles" ? "block" : "none";
-  document.getElementById("input-panel-paste").style.display = mode === "paste" ? "block" : "none";
+  document.getElementById("input-panel-structure").style.display = mode === "structure" ? "block" : "none";
+  document.getElementById("input-panel-results").style.display = mode === "results" ? "block" : "none";
   document.getElementById("input-panel-upload").style.display = mode === "upload" ? "block" : "none";
+  // Invalidate any in-flight parse from the previous tab (slow-response race).
+  parseSeqToken++;
+  if (parseDebounceTimer) { clearTimeout(parseDebounceTimer); parseDebounceTimer = null; }
+  if (mode === "results") loadStructureSources(false);
+}
+
+var parseSeqToken = 0;
+var parseDebounceTimer = null;
+
+function scheduleParseStructures() {
+  if (parseDebounceTimer) clearTimeout(parseDebounceTimer);
+  parseDebounceTimer = setTimeout(function() {
+    parseDebounceTimer = null;
+    parseStructuresPreview();
+  }, 350);
+}
+
+function setDetectedFormatChip(fmt) {
+  var chip = document.getElementById("detected-format-chip");
+  if (!chip) return;
+  if (!fmt) {
+    chip.style.display = "none";
+    return;
+  }
+  chip.textContent = t("parse.detected", { format: String(fmt).toUpperCase() });
+  chip.style.display = "inline-flex";
+}
+
+function renderPreviewWaiting() {
+  var container = document.getElementById("structure-preview");
+  var tbody = document.getElementById("preview-tbody");
+  if (tbody) {
+    tbody.innerHTML = '<tr><td colspan="5" class="preview-waiting-cell">' + escapeHtml(t("parse.waiting")) + "</td></tr>";
+  }
+  var emptyEl = document.getElementById("preview-3d-empty");
+  if (emptyEl) emptyEl.style.display = "grid";
+  if (container) container.style.display = "grid";
+  if (previewViewer) {
+    try {
+      previewViewer.removeAllModels();
+      previewViewer.render();
+    } catch (e) {}
+  }
 }
 
 async function parseStructuresPreview() {
@@ -10310,39 +9372,46 @@ async function parseStructuresPreview() {
   var fmt = "auto";
   var filename = "";
 
-  if (wizardInputMode === "smiles") {
-    content = document.getElementById("modal-smiles").value;
-    fmt = "smiles";
-  } else if (wizardInputMode === "paste") {
-    content = document.getElementById("modal-paste").value;
-    fmt = "auto";
+  if (wizardInputMode === "structure") {
+    content = document.getElementById("modal-structure-input").value;
   } else if (wizardInputMode === "upload") {
     if (!wizardUploadFile) {
-      showParseStatus(t("modal.select_file_first") || "\u8bf7\u5148\u9009\u62e9\u6587\u4ef6", true);
+      showParseStatus(t("modal.select_file_first") || "请先选择文件", true);
       return;
     }
     filename = wizardUploadFile.name;
-    content = await wizardUploadFile.text();
-    fmt = "auto";
+  } else {
+    // "results" mode: nothing to parse from text input.
+    return;
   }
 
-  if (!content.trim()) {
-    showParseStatus(t("modal.empty_input") || "\u8f93\u5165\u4e3a\u7a7a", true);
+  var myToken = ++parseSeqToken;
+
+  if (wizardInputMode === "structure" && !content.trim()) {
+    wizardStructures = [];
+    wizardParseWarnings = [];
+    setDetectedFormatChip(null);
+    showParseStatus(t("parse.waiting"), false);
+    renderPreviewWaiting();
     return;
   }
 
   try {
+    showParseStatus(t("parse.parsing"), false);
     if (wizardInputMode === "upload" && wizardUploadFile) {
       var formData = new FormData();
       formData.append("file", wizardUploadFile);
       var uploadResp = await fetch(API_BASE + "/uploads", { method: "POST", body: formData });
       if (!uploadResp.ok) {
+        if (myToken !== parseSeqToken) return;
         var errBody = await uploadResp.json().catch(function() { return { detail: uploadResp.statusText }; });
         showParseStatus(errBody.detail || "Upload failed", true);
         return;
       }
       var uploadBody = await uploadResp.json();
+      if (myToken !== parseSeqToken) return;
       wizardStructures = uploadBody.structures || [];
+      setDetectedFormatChip(uploadBody.detected_format);
       handleParseResult(uploadBody);
       return;
     }
@@ -10353,9 +9422,12 @@ async function parseStructuresPreview() {
       body: JSON.stringify({ content: content, format: fmt, filename: filename })
     });
     var body = await resp.json();
+    if (myToken !== parseSeqToken) return;
     wizardStructures = body.structures || [];
+    setDetectedFormatChip(body.detected_format);
     handleParseResult(body);
   } catch (e) {
+    if (myToken !== parseSeqToken) return;
     showParseStatus(e.message, true);
   }
 }
@@ -10387,12 +9459,11 @@ function handleParseResult(body) {
 
   renderStructurePreview(wizardStructures, wizardParseWarnings);
   showParseStatus(
-    body.ok ? wizardStructures.length + " " + (t("modal.structures_parsed") || "\u4e2a\u7ed3\u6784") : (t("modal.parse_failed") || "\u89e3\u6790\u5931\u8d25"),
+    body.ok ? t("parse.success", { count: wizardStructures.length }) : t("parse.failed"),
     !body.ok
   );
 
   if (wizardState.workflow && wizardState.workflow.id === "mechanism") {
-    initializeReactionDefinitionRoles();
     var mechPanel = document.getElementById("mech-builder-panel");
     if (mechPanel) mechPanel.style.display = "block";
     hookMechanismBuilder();
@@ -10408,29 +9479,24 @@ function showParseStatus(msg, isError) {
 function renderStructurePreview(structures, warnings) {
   var container = document.getElementById("structure-preview");
   var tbody = document.getElementById("preview-tbody");
-  var state = ensureReactionDefinitionState();
   tbody.innerHTML = "";
 
   if (!structures.length) {
-    container.style.display = "none";
+    renderPreviewWaiting();
     return;
   }
 
   structures.forEach(function(s, i) {
     var tr = document.createElement("tr");
     if (i === wizardSelectedStructureIndex) tr.className = "selected";
-    var role = state.roles[i] || defaultReactionRoleForIndex(i);
+    var moleculeName = String(s.name || ("mol_" + (i + 1))).trim();
+    if (!moleculeName) moleculeName = "mol_" + (i + 1);
+    s.name = moleculeName;
     tr.innerHTML =
       "<td>" + (i + 1) + "</td>" +
-      "<td>" + escapeHtml(s.name || "--") + "</td>" +
+      '<td><input class="preview-name-input" type="text" value="' + escapeHtml(moleculeName) + '" data-structure-index="' + i + '" aria-label="' + escapeHtml(t("modal.molecule_name")) + '"></td>' +
       "<td>" + escapeHtml(s.formula || "--") + "</td>" +
       "<td>" + s.atom_count + "</td>" +
-      '<td class="role-cell"><select class="modal-select preview-role-select" id="mech-role-select-' + i + '" data-structure-idx="' + i + '"' + (state.locked ? ' disabled' : '') + '>' +
-        '<option value="reactant"' + (role === 'reactant' ? ' selected' : '') + '>' + escapeHtml(t('mech.role.reactant')) + '</option>' +
-        '<option value="product"' + (role === 'product' ? ' selected' : '') + '>' + escapeHtml(t('mech.role.product')) + '</option>' +
-        '<option value="ts_guess"' + (role === 'ts_guess' ? ' selected' : '') + '>' + escapeHtml(t('mech.definition.role_ts_guess')) + '</option>' +
-        '<option value="none"' + (role === 'none' ? ' selected' : '') + '>' + escapeHtml(t('mech.definition.role_none')) + '</option>' +
-      '</select></td>' +
       "<td class='" + (s.errors.length ? "preview-warn" : "preview-ok") + "'>" +
         (s.errors.length ? "\u2717" : (s.warnings.length ? "\u26a0" : "OK")) +
       "</td>";
@@ -10443,25 +9509,18 @@ function renderStructurePreview(structures, warnings) {
     });
     tbody.appendChild(tr);
   });
-  tbody.querySelectorAll('.preview-role-select').forEach(function(sel) {
-    sel.addEventListener('change', function(e) {
-      e.stopPropagation();
-      if (state.locked) return;
-      var idx = parseInt(this.getAttribute('data-structure-idx'), 10);
-      state.roles[idx] = this.value;
-      state.previewData = null;
-      state.lockData = null;
-      state.configHash = '';
-      state.selectedCandidate = null;
-      state.previewHash = '';
-      state.showCandidatePicker = false;
-      // Manual bond edits reference reactant atom indices — any role change
-      // invalidates them together with the preview.
-      state.editMode = false;
-      state.manualEdits = [];
-      reactionManualPick = null;
-      syncReactionDefinitionStructuresFromRoles();
-      renderReactionDefinitionPanel();
+  tbody.querySelectorAll(".preview-name-input").forEach(function(input) {
+    input.addEventListener("click", function(event) { event.stopPropagation(); });
+    input.addEventListener("input", function() {
+      var idx = parseInt(this.getAttribute("data-structure-index"), 10);
+      if (structures[idx]) structures[idx].name = this.value;
+    });
+    input.addEventListener("blur", function() {
+      var idx = parseInt(this.getAttribute("data-structure-index"), 10);
+      var value = String(this.value || "").trim();
+      if (!value) value = "mol_" + (idx + 1);
+      this.value = value;
+      if (structures[idx]) structures[idx].name = value;
     });
   });
 
@@ -10503,18 +9562,168 @@ function renderPreviewStructure3D(structure) {
   }
 }
 
-function isSimpleWorkflowSelected() {
-  var wfEntry = workflowCatalogCache.find(function(w) { return w.id === wizardState.workflow.id; });
-  return !!(wfEntry && wfEntry.category === "simple");
+// --- Structure sources ("任务结果" tab, Structure Sources DevDoc Part B) ----
+var resultsSources = [];        // cached list for the current modal open
+var resultsLoaded = false;      // per-modal-open fetch guard
+var resultsSearchTimer = null;
+
+function resetResultsPanel() {
+  resultsSources = [];
+  resultsLoaded = false;
+  var searchEl = document.getElementById("results-search");
+  if (searchEl) searchEl.value = "";
+  var projEl = document.getElementById("results-project");
+  if (projEl) projEl.value = "current";
+  var list = document.getElementById("results-list");
+  if (list) list.innerHTML = "";
+}
+
+async function loadStructureSources(force) {
+  if (resultsLoaded && !force) return;
+  var list = document.getElementById("results-list");
+  if (!list) return;
+  list.innerHTML = '<div class="results-list-note">' + escapeHtml(t("results.loading")) + "</div>";
+  var url = "/structure-sources/recent?limit=50";
+  var projEl = document.getElementById("results-project");
+  if (projEl && projEl.value === "all") {
+    url += "&all_projects=true";
+  } else {
+    var projSel = document.getElementById("modal-project-select");
+    var pid = projSel ? projSel.value : "";
+    if (pid) url += "&project_id=" + encodeURIComponent(pid);
+  }
+  try {
+    var body = await api(url);
+    resultsSources = (body && body.sources) || [];
+    resultsLoaded = true;
+    renderResultsList();
+  } catch (e) {
+    list.innerHTML = '<div class="results-list-note err">' + escapeHtml(t("results.error")) + ": " + escapeHtml(e.message || String(e)) + "</div>";
+  }
+}
+
+function scheduleResultsSearch() {
+  if (resultsSearchTimer) clearTimeout(resultsSearchTimer);
+  resultsSearchTimer = setTimeout(function() {
+    resultsSearchTimer = null;
+    renderResultsList();
+  }, 300);
+}
+
+function renderResultsList() {
+  var list = document.getElementById("results-list");
+  if (!list) return;
+  var searchEl = document.getElementById("results-search");
+  var q = (searchEl && searchEl.value || "").trim().toLowerCase();
+  var items = resultsSources.filter(function(src) {
+    if (!q) return true;
+    var hay = (src.job_name || "") + " " + (src.label || "") + " " + (src.formula || "") + " " + (src.workflow || "");
+    return hay.toLowerCase().indexOf(q) >= 0;
+  });
+  if (!items.length) {
+    list.innerHTML = '<div class="results-list-note">' + escapeHtml(t("results.empty")) + "</div>";
+    return;
+  }
+  list.innerHTML = items.map(function(src) {
+    var when = src.completed_at ? formatDateTime(src.completed_at) : "--";
+    var locBadge = src.remote
+      ? '<span class="badge waiting_review">' + escapeHtml(t("results.remote")) + "</span>"
+      : '<span class="badge completed">' + escapeHtml(t("results.local")) + "</span>";
+    return '<div class="result-source-row' + (src.needs_fetch ? " needs-fetch" : "") + '" data-source-id="' + escapeHtml(src.source_id) + '">' +
+      '<div class="result-source-main">' +
+        "<strong>" + escapeHtml(src.job_name || src.job_id || "--") + "</strong>" +
+        '<span class="badge">' + escapeHtml(src.workflow || "--") + "</span>" +
+        locBadge +
+        '<span class="muted">' + escapeHtml(when) + "</span>" +
+      "</div>" +
+      '<div class="result-source-meta">' +
+        "<span>" + escapeHtml(src.label || "--") + "</span>" +
+        "<span>" + escapeHtml(src.formula || "--") + " · " + (src.atom_count || 0) + " atoms</span>" +
+        "<span>q=" + (src.charge !== undefined ? src.charge : 0) + " / mult=" + (src.multiplicity || 1) + "</span>" +
+        "<span>" + escapeHtml(src.project_id || "") + "</span>" +
+      "</div>" +
+      '<div class="result-source-actions">' +
+        '<span class="result-row-error" style="display:none;"></span>' +
+        '<button type="button" class="btn ghost result-load-btn"' + (src.needs_fetch ? " disabled" : "") + '>' + escapeHtml(t("results.load")) + "</button>" +
+      "</div>" +
+    "</div>";
+  }).join("");
+  list.querySelectorAll(".result-load-btn").forEach(function(btn) {
+    btn.addEventListener("click", function() {
+      var row = btn.closest(".result-source-row");
+      var sid = row ? row.getAttribute("data-source-id") : "";
+      if (sid) loadStructureSource(sid, row);
+    });
+  });
+}
+
+async function loadStructureSource(sourceId, rowEl) {
+  var errEl = rowEl ? rowEl.querySelector(".result-row-error") : null;
+  var btn = rowEl ? rowEl.querySelector(".result-load-btn") : null;
+  if (errEl) { errEl.style.display = "none"; errEl.textContent = ""; }
+  if (btn) { btn.disabled = true; btn.textContent = t("results.loading_structure"); }
+  showParseStatus(t("results.loading_structure"), false);
+  try {
+    var body = await api("/structure-sources/" + encodeURIComponent(sourceId));
+    var a = body.structure || {};
+    var jobId = "";
+    var relPath = "";
+    var sep = String(sourceId).indexOf(":");
+    if (sep > 0) {
+      jobId = String(sourceId).slice(0, sep).replace(/^job_/, "");
+      relPath = String(sourceId).slice(sep + 1);
+    }
+    var struct = {
+      asset_id: a.asset_id || "",
+      name: a.name || (body.source_id || sourceId),
+      source_type: "xyz_text",
+      original_format: a.original_format || "xyz",
+      xyz: a.xyz || "",
+      molfile: a.molfile || "",
+      has_3d: a.has_3d !== false,
+      charge: a.charge !== undefined ? a.charge : 0,
+      multiplicity: a.multiplicity || 1,
+      atom_count: a.atom_count || 0,
+      formula: a.formula || "",
+      smiles: a.smiles || "",
+      warnings: a.warnings || [],
+      errors: a.errors || [],
+      source_ref: {
+        origin: "job_artifact",
+        job_id: jobId,
+        path: relPath,
+        checksum: body.checksum || ""
+      }
+    };
+    wizardStructures = [struct];
+    wizardParseWarnings = struct.warnings;
+    wizardSelectedStructureIndex = 0;
+    setDetectedFormatChip(null);
+    if (a.charge !== undefined) document.getElementById("modal-charge").value = a.charge;
+    if (a.multiplicity) document.getElementById("modal-mult").value = a.multiplicity;
+    var csRow = document.getElementById("charge-spin-row");
+    if (csRow) csRow.style.display = "flex";
+    var errBox = document.getElementById("parse-errors");
+    if (errBox) errBox.style.display = "none";
+    renderStructurePreview(wizardStructures, wizardParseWarnings);
+    showParseStatus(t("parse.success", { count: 1 }), false);
+    if (wizardState.workflow && wizardState.workflow.id === "mechanism") {
+      var mechPanel = document.getElementById("mech-builder-panel");
+      if (mechPanel) mechPanel.style.display = "block";
+      hookMechanismBuilder();
+    }
+  } catch (e) {
+    if (errEl) {
+      errEl.textContent = t("results.error") + ": " + (e.message || String(e));
+      errEl.style.display = "inline";
+    }
+    showParseStatus(t("results.error") + ": " + (e.message || String(e)), true);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = t("results.load"); }
+  }
 }
 
 function updateInputModeVisibility() {
-  var simple = isSimpleWorkflowSelected();
-  var smilesTab = document.querySelector('.input-mode-tab[data-input-mode="smiles"]');
-  if (smilesTab) smilesTab.style.display = simple ? "none" : "";
-  var hint = document.getElementById("simple-input-hint");
-  if (hint) hint.style.display = simple ? "block" : "none";
-  if (simple && wizardInputMode === "smiles") setWizardInputMode("upload");
   // NMR experiment panel: visible only for the nmr workflow (DevDoc §11.1).
   var nmrPanel = document.getElementById("nmr-experiment-panel");
   if (nmrPanel) {
@@ -10541,6 +9750,19 @@ function updateInputModeVisibility() {
     var enumExtra = document.getElementById("nmr-enumerate-extra");
     if (enumExtra && enumToggle) enumExtra.style.display = enumToggle.checked ? "block" : "none";
   }
+  updateTaskNamePlaceholder();
+}
+
+// Task-name placeholder mirrors the backend default: omitted task_name
+// falls back to the workflow id, so the placeholder example follows the
+// selected workflow (mechanism suggests "mechanism" rather than "energy").
+function updateTaskNamePlaceholder() {
+  var taskNameInput = document.getElementById("modal-task-name");
+  if (!taskNameInput) return;
+  var isMech = wizardState && wizardState.workflow && wizardState.workflow.id === "mechanism";
+  var phKey = isMech ? "modal.task_name_ph_mech" : "modal.task_name_ph";
+  var ph = t(phKey) || t("modal.task_name_ph");
+  if (ph) taskNameInput.setAttribute("placeholder", ph);
 }
 
 // --- NMR Bruker raw-data input (P3, DevDoc §5 stage 0a) --------------------
@@ -10712,6 +9934,113 @@ async function loadMethodCatalog() {
   }
 }
 
+const STAGE_WORKFLOW_IDS = ["PESsearch", "Lowconfirm", "Highconfirm"];
+const STAGE_DEFAULT_ARTIFACTS = {
+  PESsearch: "RESULT/confsearch/confsearch_manifest.json",
+  Lowconfirm: "RESULT/mechanism/s2_path_manifest.json",
+  Highconfirm: "RESULT/mechanism/s3_lowconfirm_manifest.json"
+};
+
+function configureStageSourcePanel(workflowId) {
+  var panel = document.getElementById("stage-source-panel");
+  if (!panel) return;
+  var isStage = STAGE_WORKFLOW_IDS.indexOf(workflowId) >= 0;
+  panel.style.display = isStage ? "block" : "none";
+  if (!isStage) return;
+  var artifactInput = document.getElementById("stage-artifact");
+  artifactInput.value = STAGE_DEFAULT_ARTIFACTS[workflowId] || "";
+  var pesRow = document.getElementById("stage-pes-row");
+  pesRow.style.display = workflowId === "PESsearch" ? "flex" : "none";
+  var ircRow = document.getElementById("stage-irc-row");
+  ircRow.style.display = workflowId === "Lowconfirm" ? "flex" : "none";
+  var ircToggle = document.getElementById("stage-irc-toggle");
+  if (workflowId === "Highconfirm") {
+    ircRow.style.display = "flex";
+    ircToggle.checked = false;
+  } else if (workflowId === "Lowconfirm") {
+    ircToggle.checked = true;
+  }
+}
+
+function collectStageJobPayload(workflow, methodBase) {
+  var sourceJob = String(document.getElementById("stage-source-job").value || "").trim();
+  var artifact = String(document.getElementById("stage-artifact").value || "").trim();
+  if (!sourceJob) {
+    throw new Error(t("modal.stage_need_source") || "需要源任务 Job ID");
+  }
+  var inputPayload = {
+    source_type: "stage_artifact",
+    source_job_id: sourceJob,
+    from_artifact: artifact || STAGE_DEFAULT_ARTIFACTS[workflow]
+  };
+  var method = methodBase || {};
+  var select = String(document.getElementById("stage-select").value || "").trim();
+  if (select) method.select = select.split(",").map(function(s) { return s.trim(); }).filter(Boolean);
+  var ircToggle = document.getElementById("stage-irc-toggle");
+  if (workflow === "Lowconfirm") {
+    method.no_irc = ircToggle && !ircToggle.checked;
+  } else if (workflow === "Highconfirm") {
+    method.irc = !!(ircToggle && ircToggle.checked);
+  }
+  if (workflow === "PESsearch") {
+    var product = String(document.getElementById("stage-product").value || "").trim();
+    if (product) inputPayload.product = product;
+    var tsGuess = String(document.getElementById("stage-ts-guess").value || "").trim();
+    if (tsGuess) inputPayload.ts_guess = tsGuess;
+    var planText = String(document.getElementById("stage-plan").value || "").trim();
+    if (planText) {
+      try {
+        inputPayload.coordinate_plan = JSON.parse(planText);
+      } catch (e) {
+        throw new Error(t("modal.stage_bad_plan") || "反应坐标计划不是合法 JSON");
+      }
+    }
+  }
+  return { input: inputPayload, method: method };
+}
+
+async function submitStageWorkflowJob(workflow) {
+  var nproc = parseInt(document.getElementById("modal-nproc").value, 10) || 4;
+  var mem = document.getElementById("modal-mem").value || "8GB";
+  var remark = String(document.getElementById("modal-remark").value || "").trim();
+  var taskName = String(document.getElementById("modal-task-name").value || "").trim();
+  var methodBase = {
+    schema_id: wizardState.workflow.schema_id || "",
+    profile_id: wizardState.method.profile_id
+  };
+  var payload;
+  try {
+    payload = collectStageJobPayload(workflow, methodBase);
+  } catch (err) {
+    window.alert(String(err.message || err));
+    return;
+  }
+  var body = {
+    workflow: workflow,
+    remark: remark,
+    input: payload.input,
+    method: payload.method,
+    resources: { nproc: nproc, mem: mem }
+  };
+  var sourceJobId = String(payload.input.source_job_id || "");
+  body.molecule_name = sourceJobId ? sourceJobId.slice(-24) : "stage";
+  if (taskName) body.task_name = taskName;
+  var modalProjectId = document.getElementById("modal-project-select").value;
+  if (modalProjectId) body.project_id = modalProjectId;
+  closeModal();
+  try {
+    var created = await api("/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    await refreshJobs();
+    if (created && created.job_id) await selectJob(created.job_id);
+  } catch (err) {
+    window.alert((t("modal.submit_failed") || "提交失败") + ": " + (err.message || err));
+  }
+}
+
 async function openWorkflowConfig() {
   var container = document.getElementById("workflow-categories");
   document.getElementById("workflow-config-modal").style.display = "flex";
@@ -10738,7 +10067,13 @@ async function openWorkflowConfig() {
     categories[wf.category].push(wf);
   });
 
-  var catLabels = { simple: t("modal.cat_simple") || "\u7b80\u5355\u8ba1\u7b97", preset: t("modal.cat_preset") || "\u9884\u8bbe\u5de5\u4f5c\u6d41", custom: t("modal.cat_custom") || "\u81ea\u5b9a\u4e49" };
+  var catLabels = {
+    simple: t("modal.cat_simple") || "\u7b80\u5355\u8ba1\u7b97",
+    preset: t("modal.cat_preset") || "\u9884\u8bbe\u5de5\u4f5c\u6d41",
+    custom: t("modal.cat_custom") || "\u81ea\u5b9a\u4e49",
+    mechanism: t("modal.cat_mechanism") || "\u673a\u7406\u5de5\u4f5c\u6d41",
+    stages: t("modal.cat_stages") || "\u9636\u6bb5\u5de5\u4f5c\u6d41"
+  };
 
   Object.keys(categories).forEach(function(cat) {
     var catDiv = document.createElement("div");
@@ -10773,6 +10108,7 @@ async function openWorkflowConfig() {
             mechPanel.style.display = wf.id === "mechanism" ? "block" : "none";
             if (wf.id === "mechanism") hookMechanismBuilder();
           }
+          configureStageSourcePanel(wf.id);
         });
       }
       grid.appendChild(opt);
@@ -11059,6 +10395,8 @@ async function openMethodConfig() {
       var isSingleLocked = opts && opts.length === 1;
       var isBasisSingleLocked = isSingleLocked && fieldName === "basis";
       var fieldFd = (methodCatalogCache.field_definitions || {})[fieldName];
+      var optLabelsZh = fieldFd && fieldFd.option_labels_zh ? fieldFd.option_labels_zh : {};
+      var useOptZh = currentLang === "zh-CN" && Object.keys(optLabelsZh).length > 0;
       var supportsCustom = ["basis", "aux_j_basis", "aux_c_basis"].indexOf(fieldName) >= 0
         && !isBasisSingleLocked && fieldFd && fieldFd.supports_custom;
       var isCustomActive = supportsCustom && curVal && (
@@ -11073,7 +10411,7 @@ async function openMethodConfig() {
         opts.forEach(function(o) {
           var mopt = document.createElement("option");
           mopt.value = o;
-          mopt.textContent = o;
+          mopt.textContent = useOptZh && optLabelsZh[o] ? optLabelsZh[o] : o;
           if (curArr.indexOf(String(o)) >= 0) mopt.selected = true;
           msel.appendChild(mopt);
         });
@@ -11097,7 +10435,7 @@ async function openMethodConfig() {
         opts.forEach(function(o) {
           var opt = document.createElement("option");
           opt.value = o;
-          opt.textContent = o;
+          opt.textContent = useOptZh && optLabelsZh[o] ? optLabelsZh[o] : o;
           if (optionMeta[o]) {
             opt.title = optionMeta[o];
           }
@@ -11853,7 +11191,28 @@ async function openMethodConfig() {
   doValidate().then(function() { rebuildSummary(); });
 }
 
+async function submitJobBatch(bodies) {
+  // The scheduler owns execution concurrency.  Submit every molecule now so
+  // all JobRecords are durable before the first workflow finishes; the
+  // server-side batch gate keeps excess jobs in `queued` state.
+  await Promise.all(bodies.map(function(body) {
+    return api("/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }));
+}
+
 async function submitJobModal() {
+  var stageWf = wizardState.workflow && wizardState.workflow.id;
+  // Stage workflows (PESsearch/Lowconfirm/Highconfirm) submit ONE job from
+  // the §8 artifact reference — no structure parsing happens for them.
+  if (STAGE_WORKFLOW_IDS.indexOf(stageWf) >= 0) {
+    await submitStageWorkflowJob(stageWf);
+    return;
+  }
+
   if (!wizardStructures.length) {
     window.alert(t("modal.parse_first") || "\u8bf7\u5148\u89e3\u6790\u7ed3\u6784");
     return;
@@ -11865,10 +11224,21 @@ async function submitJobModal() {
     return;
   }
 
-  var jobName = document.getElementById("modal-name").value.trim();
   var workflow = wizardState.workflow.id;
   var nproc = parseInt(document.getElementById("modal-nproc").value, 10) || 4;
   var mem = document.getElementById("modal-mem").value || "8GB";
+  var remark = String(document.getElementById("modal-remark").value || "").trim();
+  // Task name = middle segment of the <molecule>_<task>_<remark> dir layout.
+  // Client-side mirror of the server's _sanitize_component: drop path-hostile
+  // chars, collapse whitespace runs to "_". Empty → field omitted from every
+  // payload so the backend default (task_name := workflow id) applies.
+  var taskName = String(document.getElementById("modal-task-name").value || "").trim()
+    .replace(/[/\\:*?"<>|]/g, "")
+    .replace(/\s+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  var parallelism = Math.max(1, parseInt(document.getElementById("modal-parallelism").value, 10) || 1);
+  var batchId = "batch_" + Date.now().toString(36);
+  var firstMoleculeName = String((wizardStructures[0] && wizardStructures[0].name) || "mol_1").trim() || "mol_1";
   var censoStage = (wizardState.method.stages || {}).censo || {};
   var threshold = parseFloat(censoStage.refinement_threshold);
   if (isNaN(threshold) || threshold <= 0 || threshold > 1) threshold = 0.99;
@@ -11949,15 +11319,15 @@ async function submitJobModal() {
     }
     var nmrBody = {
       workflow: "nmr",
-      name: jobName || "nmr_job",
+      molecule_name: firstMoleculeName,
+      remark: remark,
       input: {
         source_type: "candidates",
         candidates: nmrCandidates,
         experiment: nmrExperiment,
       },
       method: nmrMethod,
-      resources: { nproc: nproc, mem: mem },
-      target_node: selectedNode || null,
+      resources: { nproc: nproc, mem: mem, parallelism: parallelism },
     };
     // P2: diastereomer enumeration (single candidate only). When the user
     // enables --enumerate, the backend expands the one candidate into its
@@ -11970,6 +11340,7 @@ async function submitJobModal() {
     }
     var nmrProjectId = document.getElementById("modal-project-select").value;
     if (nmrProjectId) nmrBody.project_id = nmrProjectId;
+    if (taskName) nmrBody.task_name = taskName;
     try {
       var nmrResult = await api("/jobs", {
         method: "POST",
@@ -11997,8 +11368,7 @@ async function submitJobModal() {
       window.alert(t("mech.definition.lock_required") || "机理任务提交前必须先确认并锁定反应定义");
       return;
     }
-    syncReactionDefinitionStructuresFromRoles();
-    var mechReactant = reactionState.lockedPayload.reactant || getMechanismRolePayload(reactionState.reactant, chargeVal, multVal);
+    var mechReactant = reactionState.lockedPayload.reactant || getMechanismStructurePayload(reactionState.reactant, chargeVal, multVal);
     if (!mechReactant) {
       window.alert(t("modal.parse_first") || "请先解析反应物结构");
       return;
@@ -12068,7 +11438,6 @@ async function submitJobModal() {
       irc_points: mechIrcPoints >= 4 ? mechIrcPoints : 30,
       levels: mechCleanedLevels,
     };
-    if (mechAutoConverge === true) mechMethod.auto_converge = true;
     if (mechPid && mechPid !== "__custom__") {
       mechMethod.preset = mechPid;
     } else {
@@ -12078,7 +11447,8 @@ async function submitJobModal() {
 
     var mechBody = {
       workflow: "mechanism",
-      name: jobName || "mechanism_job",
+      molecule_name: firstMoleculeName,
+      remark: remark,
       input: {
         source_type: "mechanism",
         reactant: mechReactant,
@@ -12087,11 +11457,11 @@ async function submitJobModal() {
         routes: mechRoutes,
       },
       method: mechMethod,
-      resources: { nproc: nproc, mem: mem },
-      target_node: selectedNode || null,
+      resources: { nproc: nproc, mem: mem, parallelism: parallelism },
     };
     var mechProjectId = document.getElementById("modal-project-select").value;
     if (mechProjectId) mechBody.project_id = mechProjectId;
+    if (taskName) mechBody.task_name = taskName;
     try {
       var mechResult = await api("/jobs", {
         method: "POST",
@@ -12119,8 +11489,10 @@ async function submitJobModal() {
     return;
   }
 
+  var batchBodies = [];
   for (var i = 0; i < wizardStructures.length; i++) {
     var s = wizardStructures[i];
+    var moleculeName = String(s.name || ("mol_" + (i + 1))).trim() || ("mol_" + (i + 1));
 
     var inputPayload;
     if (s.source_type === "smiles" && s.smiles) {
@@ -12136,11 +11508,7 @@ async function submitJobModal() {
     }
     inputPayload.charge = parseInt(document.getElementById("modal-charge").value, 10) || 0;
     inputPayload.multiplicity = parseInt(document.getElementById("modal-mult").value, 10) || 1;
-
-    if (isSimpleWorkflowSelected() && inputPayload.source_type === "smiles") {
-      window.alert(t("modal.simple_no_smiles") || "Simple workflows do not accept SMILES input");
-      return;
-    }
+    if (s.source_ref) inputPayload.source_ref = s.source_ref;
 
     var cleanedLevels = {};
     var wizStages = wizardState.method.stages || {};
@@ -12158,6 +11526,32 @@ async function submitJobModal() {
       levels: cleanedLevels
     };
     if (wizardState.method.fields) methodPayload.fields = wizardState.method.fields;
+    if (workflow === "Confsearch") {
+      // Confsearch: hoist the protocol axis fields from the wizard's
+      // confsearch level into the method top level (runner emits them as
+      // CLI flags via confsearch_method_flags). profile_id doubles as the
+      // protocol default when it names a protocol.
+      var csStage = cleanedLevels.confsearch || {};
+      if (csStage.protocol) methodPayload.protocol = csStage.protocol;
+      if (csStage.confsearch_profile) methodPayload.confsearch_profile = csStage.confsearch_profile;
+      if (csStage.refinement_policy) methodPayload.refinement_policy = csStage.refinement_policy;
+      if (!methodPayload.protocol && wizardState.method.profile_id &&
+          wizardState.method.profile_id !== "__custom__") {
+        methodPayload.protocol = wizardState.method.profile_id;
+      }
+      if (cleanedLevels.censo && cleanedLevels.censo.refinement_threshold) {
+        methodPayload.levels = methodPayload.levels || {};
+        methodPayload.levels.refinement_threshold = cleanedLevels.censo.refinement_threshold;
+      }
+      var csSolvSources = [cleanedLevels.refinement_sp, cleanedLevels.dft_opt];
+      for (var csvi = 0; csvi < csSolvSources.length; csvi++) {
+        var csLv = csSolvSources[csvi];
+        if (csLv && csLv.solvent && String(csLv.solvent_model || "none").toLowerCase() !== "none") {
+          methodPayload.solvent = csLv.solvent;
+          break;
+        }
+      }
+    }
     if (workflow === "ensemble" || workflow === "energy" || workflow === "xtbmd_censo_energy") {
       var pid = wizardState.method.profile_id;
       if (pid && pid !== "__custom__") methodPayload.preset = pid;
@@ -12224,31 +11618,32 @@ async function submitJobModal() {
 
     var body = {
       workflow: workflow,
-      name: wizardStructures.length > 1 ? (jobName || s.name) + "_" + (i + 1) : jobName,
+      molecule_name: moleculeName,
+      remark: remark,
       input: inputPayload,
       method: methodPayload,
-      resources: { nproc: nproc, mem: mem },
-      target_node: selectedNode || null
+      resources: {
+        nproc: nproc,
+        mem: mem,
+        parallelism: parallelism,
+        batch_id: batchId,
+        batch_index: i,
+        batch_total: wizardStructures.length,
+      }
     };
     var modalProjectId = document.getElementById("modal-project-select").value;
     if (modalProjectId) body.project_id = modalProjectId;
+    if (taskName) body.task_name = taskName;
 
-    try {
-      var result = await api("/jobs", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
-      if (i === wizardStructures.length - 1) {
-        closeModal();
-        await refreshJobs();
-        await selectJob(result.job_id);
-      }
-    } catch (e) {
-      window.alert(t("modal.submit_failed", { message: e.message }));
-      return;
-    }
+    batchBodies.push(body);
   }
+  closeModal();
+  try {
+    await submitJobBatch(batchBodies);
+  } catch (error) {
+    window.alert(t("modal.submit_failed", { message: error.message || String(error) }));
+  }
+  await refreshJobs();
 }
 
 // ── Mechanism-research section (topbar switcher + mech-* module launchers +
@@ -12262,10 +11657,11 @@ const MECH_MODULE_IDS = ["conf", "step", "confirm", "chain"];
 const MECH_MODULE_WORKFLOWS = { conf: "mech-conf", step: "mech-step", confirm: "mech-confirm", chain: "mech-chain" };
 
 function loadAppSection() {
-  try {
-    const v = localStorage.getItem(APP_SECTION_KEY);
-    return v === "mechanism" ? "mechanism" : "workbench";
-  } catch (e) { return "workbench"; }
+  // The standalone mechanism-management surface is retired from the UI.
+  // Keep the legacy storage key harmless so an older browser session cannot
+  // reopen the removed page after an upgrade.
+  try { localStorage.removeItem(APP_SECTION_KEY); } catch (e) { /* ignore */ }
+  return "workbench";
 }
 
 function saveAppSectionNow() {
@@ -12273,28 +11669,27 @@ function saveAppSectionNow() {
 }
 
 function applyAppSection(section) {
-  appSection = section === "mechanism" ? "mechanism" : "workbench";
+  appSection = section || "workbench";
   const wb = document.querySelector(".workbench");
   const mechSec = document.getElementById("mechanism-section");
-  if (wb) wb.style.display = appSection === "mechanism" ? "none" : "";
-  if (mechSec) mechSec.style.display = appSection === "mechanism" ? "" : "none";
+  if (wb) wb.style.display = appSection === "workbench" ? "" : "none";
+  if (mechSec) {
+    mechSec.style.display = appSection === "mechanism" ? "" : "none";
+    if (appSection === "mechanism") fetchMechProjects();
+  }
   document.querySelectorAll(".section-switch-btn").forEach(function(btn) {
     btn.classList.toggle("active", btn.getAttribute("data-section") === appSection);
   });
-  if (appSection === "mechanism") {
-    refreshMechSectionStudies(true);
-  } else if (viewer && typeof viewer.resize === "function") {
+  if (viewer && typeof viewer.resize === "function") {
     viewer.resize();
     viewer.render();
   }
 }
 
 function setAppSection(section) {
-  const next = section === "mechanism" ? "mechanism" : "workbench";
-  if (appSection === next) return;
-  appSection = next;
-  saveAppSectionNow();
-  applyAppSection(next);
+  if (section && section !== appSection) {
+    applyAppSection(section);
+  }
 }
 
 function mechSectionVal(id) {
@@ -12357,7 +11752,6 @@ function buildMechModuleJobBody(moduleId) {
     input: input,
     method: method,
     resources: { nproc: nproc, mem: mem },
-    target_node: selectedNode || null,
   };
   if (selectedProjectId) body.project_id = selectedProjectId;
   return body;
@@ -12530,16 +11924,147 @@ function renderMechSectionStudyDetail() {
   bindMechanismPromoteButton(box);
 }
 
+// ── Four-phase mechanism project panel ──────────────────────────────
+const MECH_PROJECT_STAGES = [
+  { key: "s1", label: "S1 Confsearch", workflow: "Confsearch" },
+  { key: "s2", label: "S2 PESsearch", workflow: "PESsearch" },
+  { key: "s3", label: "S3 Lowconfirm", workflow: "Lowconfirm" },
+  { key: "s4", label: "S4 Highconfirm", workflow: "Highconfirm" },
+];
+
+function getProjectStatusClass(status) {
+  var s = String(status || "").toLowerCase();
+  if (s === "completed") return "completed";
+  if (s.indexOf("ready") >= 0) return "waiting_review";
+  if (s === "blocked") return "failed";
+  return "idle";
+}
+
+function getProjectStatusLabel(status) {
+  var s = String(status || "").toLowerCase();
+  var map = { created: "已创建", s1_ready: "S1 就绪", s2_ready: "S2 就绪", s3_ready: "S3 就绪", s4_ready: "S4 就绪", completed: "已完成", blocked: "已阻塞" };
+  return map[s] || status || "未知";
+}
+
+function renderMechProjectCard(project) {
+  var id = String(project.project_id || project.id || "");
+  var name = escapeHtml(project.name || id);
+  var status = String(project.status || "created");
+  var charge = project.charge != null ? project.charge : 0;
+  var mult = project.multiplicity != null ? project.multiplicity : 1;
+  var created = project.created_at ? formatDateTime(project.created_at) : "";
+  var stageJobs = project.stage_jobs || {};
+
+  var stagesHtml = MECH_PROJECT_STAGES.map(function(stg) {
+    var job = stageJobs[stg.key];
+    var completed = job && (job.job_status === "completed" || job.status === "completed");
+    var cls = completed ? "completed" : "pending";
+    var icon = completed ? "✓" : " ";
+    return '<span class="mech-stage-chip ' + cls + '">[' + icon + '] ' + escapeHtml(stg.label) + '</span>';
+  }).join("");
+
+  // Find next stage
+  var nextStage = null;
+  for (var i = 0; i < MECH_PROJECT_STAGES.length; i++) {
+    var sj = stageJobs[MECH_PROJECT_STAGES[i].key];
+    if (!sj || (sj.job_status !== "completed" && sj.status !== "completed")) {
+      nextStage = MECH_PROJECT_STAGES[i];
+      break;
+    }
+  }
+  var actionsHtml = "";
+  if (nextStage) {
+    actionsHtml = '<div class="mech-project-actions">' +
+      '<button class="btn primary" data-project-submit="' + escapeHtml(id) + '" data-workflow="' + escapeHtml(nextStage.workflow) + '">' +
+      '提交 ' + escapeHtml(nextStage.label) + '</button></div>';
+  }
+
+  return '<div class="mech-project-card" data-project-id="' + escapeHtml(id) + '">' +
+    '<div class="mech-project-head">' +
+    '<div><div class="mech-project-name">' + name + '</div>' +
+    '<div class="mech-project-meta">' + escapeHtml(id) + ' · 电荷 ' + charge + ' · 多重度 ' + mult + (created ? ' · ' + created : '') + '</div></div>' +
+    '<span class="badge ' + getProjectStatusClass(status) + '">' + escapeHtml(getProjectStatusLabel(status)) + '</span>' +
+    '</div>' +
+    '<div class="mech-project-stages">' + stagesHtml + '</div>' +
+    actionsHtml +
+    '</div>';
+}
+
+async function fetchMechProjects(force) {
+  var box = document.getElementById("mech-project-list");
+  if (!box) return;
+  try {
+    var resp = await api("/mechanism-projects");
+    var projects = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.projects) ? resp.projects : []);
+    if (!projects.length) {
+      box.innerHTML = '<div class="mech-project-empty">暂无项目</div>';
+      return;
+    }
+    box.innerHTML = projects.map(renderMechProjectCard).join("");
+    // Bind submit buttons
+    box.querySelectorAll("[data-project-submit]").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        var projectId = btn.getAttribute("data-project-submit");
+        var workflow = btn.getAttribute("data-workflow");
+        submitNextMechStage(projectId, workflow);
+      });
+    });
+  } catch (e) {
+    box.innerHTML = '<div class="mech-project-empty">暂无项目（API 未就绪）</div>';
+  }
+}
+
+async function createMechProject() {
+  var nameEl = document.getElementById("mech-project-name");
+  var chargeEl = document.getElementById("mech-project-charge");
+  var multEl = document.getElementById("mech-project-mult");
+  var statusEl = document.getElementById("mech-project-create-status");
+  var btnEl = document.getElementById("mech-project-create-btn");
+  var name = nameEl ? nameEl.value.trim() : "";
+  if (!name) { if (statusEl) statusEl.textContent = "请输入项目名称"; return; }
+  if (btnEl) btnEl.disabled = true;
+  if (statusEl) statusEl.textContent = "创建中…";
+  try {
+    var body = { name: name };
+    if (chargeEl && chargeEl.value !== "") body.charge = parseInt(chargeEl.value, 10) || 0;
+    if (multEl && multEl.value !== "") body.multiplicity = parseInt(multEl.value, 10) || 1;
+    await api("/mechanism-projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (statusEl) statusEl.textContent = "创建成功";
+    if (nameEl) nameEl.value = "";
+    await fetchMechProjects(true);
+  } catch (e) {
+    if (statusEl) statusEl.textContent = "创建失败: " + (e && e.message ? e.message : e);
+  } finally {
+    if (btnEl) btnEl.disabled = false;
+  }
+}
+
+function submitNextMechStage(projectId, workflow) {
+  // Open the job modal and pre-fill the workflow selection with project_id
+  var modal = document.getElementById("job-modal");
+  if (modal) {
+    modal.style.display = "flex";
+    // Store project_id for job submission
+    window._mechProjectId = projectId;
+    // Try to select the workflow in the picker
+    var workflowBtns = document.querySelectorAll("[data-workflow-id]");
+    workflowBtns.forEach(function(btn) {
+      if (btn.getAttribute("data-workflow-id") === workflow || btn.textContent.indexOf(workflow) >= 0) {
+        btn.click();
+      }
+    });
+  }
+}
+
 function setupMechanismSectionListeners() {
-  document.querySelectorAll(".section-switch-btn").forEach(function(btn) {
-    btn.addEventListener("click", function() { setAppSection(btn.getAttribute("data-section")); });
-  });
-  const refreshBtn = document.getElementById("mech-section-refresh");
-  if (refreshBtn) refreshBtn.addEventListener("click", function() { refreshMechSectionStudies(true); });
-  MECH_MODULE_IDS.forEach(function(moduleId) {
-    const btn = document.getElementById("mech-section-submit-" + moduleId);
-    if (btn) btn.addEventListener("click", function() { submitMechModule(moduleId); });
-  });
+  var refreshBtn = document.getElementById("mech-project-refresh");
+  if (refreshBtn) refreshBtn.addEventListener("click", function() { fetchMechProjects(true); });
+  var createBtn = document.getElementById("mech-project-create-btn");
+  if (createBtn) createBtn.addEventListener("click", createMechProject);
 }
 
 function setupEventListeners() {
@@ -12588,9 +12113,6 @@ function setupEventListeners() {
   document.getElementById("modal-close").addEventListener("click", closeModal);
   document.getElementById("modal-cancel").addEventListener("click", closeModal);
   document.getElementById("modal-submit").addEventListener("click", submitJobModal);
-  document.getElementById("modal-node-select").addEventListener("change", function(event) {
-    selectedNode = event.target.value;
-  });
   document.getElementById("btn-refresh-nodes").addEventListener("click", loadNodes);
 document.getElementById("btn-refresh-backends").addEventListener("click", loadBackends);
   document.getElementById("job-modal").addEventListener("mousedown", function(event) {
@@ -12647,12 +12169,6 @@ document.getElementById("btn-refresh-backends").addEventListener("click", loadBa
   document.getElementById("queue-batch-purge").addEventListener("click", openPurgeModal);
   document.getElementById("mobile-queue-batch-purge").addEventListener("click", openPurgeModal);
 
-  document.getElementById("mechanism-review-close").addEventListener("click", closeMechanismReviewModal);
-  document.getElementById("mechanism-review-cancel").addEventListener("click", closeMechanismReviewModal);
-  document.getElementById("mechanism-review-modal").addEventListener("mousedown", function(event) {
-    if (event.target.id === "mechanism-review-modal") closeMechanismReviewModal();
-  });
-
   document.getElementById("target-project-modal-close").addEventListener("click", closeTargetProjectModal);
   document.getElementById("target-project-modal-cancel").addEventListener("click", closeTargetProjectModal);
   document.getElementById("target-project-modal-submit").addEventListener("click", submitTargetProjectModal);
@@ -12666,7 +12182,14 @@ document.getElementById("btn-refresh-backends").addEventListener("click", loadBa
     });
   });
 
-  document.getElementById("btn-parse-preview").addEventListener("click", parseStructuresPreview);
+  document.getElementById("modal-structure-input").addEventListener("input", scheduleParseStructures);
+  document.getElementById("results-reload").addEventListener("click", function() {
+    loadStructureSources(true);
+  });
+  document.getElementById("results-project").addEventListener("change", function() {
+    loadStructureSources(true);
+  });
+  document.getElementById("results-search").addEventListener("input", scheduleResultsSearch);
 
   var dropzone = document.getElementById("upload-dropzone");
   var fileInput = document.getElementById("upload-file-input");
@@ -12676,6 +12199,7 @@ document.getElementById("btn-refresh-backends").addEventListener("click", loadBa
       wizardUploadFile = fileInput.files[0];
       var status = document.querySelector(".upload-dropzone span");
       if (status) status.textContent = wizardUploadFile.name;
+      parseStructuresPreview();
     }
   });
   dropzone.addEventListener("dragover", function(e) {
@@ -12690,6 +12214,7 @@ document.getElementById("btn-refresh-backends").addEventListener("click", loadBa
       wizardUploadFile = e.dataTransfer.files[0];
       var status = document.querySelector(".upload-dropzone span");
       if (status) status.textContent = wizardUploadFile.name;
+      parseStructuresPreview();
     }
   });
 
@@ -12786,7 +12311,6 @@ document.getElementById("btn-refresh-backends").addEventListener("click", loadBa
       case "Escape":
         molDoc.selection.clear();
         measureBuffer = [];
-        mechanismSrState.pairBuffer = [];
         renderMolDoc();
         renderMeasurementList();
         updateInfoPanel(lastSelectedJob);
@@ -12979,6 +12503,10 @@ window.addEventListener("DOMContentLoaded", async function() {
     applyLayout();
   })();
 });
+</script>
+</body>
+</html>
+;
 </script>
 </body>
 </html>

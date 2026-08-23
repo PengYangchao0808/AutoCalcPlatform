@@ -37,23 +37,41 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         description="Built-in no-op workflow; no external binaries required.",
         requires_binaries=[],
     ),
-    "ensemble": WorkflowRegistryEntry(
-        name="ensemble",
-        label="Ensemble Generation",
+    "Confsearch": WorkflowRegistryEntry(
+        name="Confsearch",
+        label="Conformer Search",
         description=(
-            "CREST conformer search → CENSO prescreening/screening → "
-            "Boltzmann-weighted ensemble."
+            "Unified conformer search + energies via protocol "
+            "(xtb-crest / xtb-md / censo-crest / xtbmd-censo)."
         ),
         requires_binaries=["crest", "censo", "orca"],
     ),
-    "energy": WorkflowRegistryEntry(
-        name="energy",
-        label="Conformer Energy",
+    "PESsearch": WorkflowRegistryEntry(
+        name="PESsearch",
+        label="PES Search",
         description=(
-            "CREST → CENSO screening → rank1 DFT refinement "
-            "(opt+freq+SP+Shermo) → free energy."
+            "Reaction path search + TS/intermediate guesses from a Confsearch "
+            "manifest (mechanism stage S2)."
         ),
-        requires_binaries=["crest", "censo", "orca"],
+        requires_binaries=["orca", "xtb"],
+    ),
+    "Lowconfirm": WorkflowRegistryEntry(
+        name="Lowconfirm",
+        label="Low Confirmation",
+        description=(
+            "Coarse Opt/TS + independent frequency + preliminary IRC of "
+            "PESsearch candidates (mechanism stage S3)."
+        ),
+        requires_binaries=["orca"],
+    ),
+    "Highconfirm": WorkflowRegistryEntry(
+        name="Highconfirm",
+        label="High Confirmation",
+        description=(
+            "High-fidelity Opt/TS + frequency + single point + thermochemistry "
+            "(mechanism stage S4)."
+        ),
+        requires_binaries=["orca"],
     ),
     "nmr": WorkflowRegistryEntry(
         name="nmr",
@@ -63,12 +81,6 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
             "Boltzmann averaging + DP4/DP5 stereochemistry assignment."
         ),
         requires_binaries=["crest", "censo", "orca"],
-    ),
-    "mechanism": WorkflowRegistryEntry(
-        name="mechanism",
-        label="Mechanism / TS",
-        description="TS search + optimization + IRC validation + energy barrier analysis.",
-        requires_binaries=["orca"],
     ),
     "singlepoint": WorkflowRegistryEntry(
         name="singlepoint",
@@ -105,30 +117,6 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         label="xTB Optimization",
         description="Fast semi-empirical geometry optimization with xTB (GFN-xTB).",
         requires_binaries=["xtb"],
-    ),
-    "mech-conf": WorkflowRegistryEntry(
-        name="mech-conf",
-        label="Mechanism Conformer / Stable State",
-        description="Standalone conformer search for one mechanism stable state.",
-        requires_binaries=["crest", "orca"],
-    ),
-    "mech-step": WorkflowRegistryEntry(
-        name="mech-step",
-        label="Mechanism Elementary Step",
-        description="Elementary step: PEB path -> coarse refine -> IRC -> endpoints.",
-        requires_binaries=["orca", "xtb"],
-    ),
-    "mech-confirm": WorkflowRegistryEntry(
-        name="mech-confirm",
-        label="Mechanism High-Fidelity Confirmation",
-        description="High-fidelity (S4) confirmation of one mech-step artifact.",
-        requires_binaries=["orca"],
-    ),
-    "mech-chain": WorkflowRegistryEntry(
-        name="mech-chain",
-        label="Mechanism Chain",
-        description="Declarative composition of standalone mechanism modules.",
-        requires_binaries=[],
     ),
 }
 

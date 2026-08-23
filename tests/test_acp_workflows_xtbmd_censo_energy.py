@@ -727,7 +727,7 @@ class _WorkflowHarness:
     def fake_md_replicas(self, input_source: str, primary_xyz: Path, **kwargs: Any) -> QCResult:
         self.calls["md"] += 1
         self.md_kwargs = kwargs
-        out = Path(kwargs["output_dir"]) / "xtbmd"
+        out = Path(kwargs["output_dir"])
         out.mkdir(parents=True, exist_ok=True)
         traj = out / "traj.xyz"
         blocks = [_frame_block(0.74, e, float(i)) for i, e in enumerate(self.energies)]
@@ -1005,8 +1005,8 @@ def test_workflow_stage_order_and_md_params(
     assert harness.censo_kwargs["ensemble_xyz"] == Path(result.metadata["ensemble_xyz"])
 
     # finalDFT products + metadata
-    mol_dir = Path(result.metadata["ensemble_thermo_json"]).parent
-    assert (mol_dir / "all_conformers.xyz").exists()
+    mol_dir = Path(result.metadata["ensemble_thermo_json"]).parent.parent.parent
+    assert (mol_dir / "RESULT" / "structures" / "all_conformers.xyz").exists()
     assert result.metadata["n_after_isostat"] == 20
     assert result.metadata["n_after_filter"] == 20
     assert result.metadata["n_ok"] == 20

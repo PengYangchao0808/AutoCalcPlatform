@@ -59,6 +59,6 @@ coord.original
 *.out
 *.chk
 scratch/
-results/
+/results/
 output/
 uploads/

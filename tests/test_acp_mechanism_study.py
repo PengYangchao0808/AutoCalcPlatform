@@ -211,11 +211,12 @@ def test_fake_provider_end_to_end_builds_two_step_network(tmp_path: Path) -> Non
     g5 = next(gate for gate in result.quality_gates if gate.gate_id == "G5")
     assert g5.status == "pass"
 
-    study_dir = tmp_path / "mechanism_study" / result.study_id
-    assert (study_dir / "events.jsonl").exists()
-    assert (study_dir / "study.json").exists()
-    assert (study_dir / "network.json").exists()
-    assert (study_dir / "quality_gates.json").exists()
+    analysis = tmp_path / "WORK" / "08_ANALYSIS"
+    assert (analysis / "events.jsonl").exists()
+    assert (analysis / "study.json").exists()
+    assert (analysis / "network.json").exists()
+    assert (analysis / "quality_gates.json").exists()
+    assert not (tmp_path / "mechanism_study").exists()
 
 
 def test_s4_no_candidates_retains_medium_quality_and_warns_g5(tmp_path: Path) -> None:
@@ -262,7 +263,7 @@ def test_s4_resume_idempotency_preserves_quality(tmp_path: Path) -> None:
 
     first = orchestrator.run()
     assert first.quality == "high"
-    study_dir = tmp_path / "mechanism_study" / first.study_id
+    study_dir = tmp_path / "WORK" / "08_ANALYSIS"
     payload = json.loads((study_dir / "study.json").read_text(encoding="utf-8"))
     payload["status"] = "running"
     (study_dir / "study.json").write_text(json.dumps(payload), encoding="utf-8")
@@ -637,14 +638,14 @@ def test_run_mechanism_study_applies_levels_and_updates_mechanism_config(
         config: dict[str, object],
         low_fidelity_profile: FidelityProfile | None = None,
         *,
-        work_root: Path | None = None,
+        layout: object | None = None,
     ) -> dict[str, object]:
         captures["conformer_mode"] = conformer_mode
         captures["strategy"] = strategy
         captures["fidelity"] = fidelity
         captures["profile"] = low_fidelity_profile
         captures["config"] = config
-        captures["work_root"] = work_root
+        captures["layout"] = layout
         return {
             "ensemble_provider": FakeEnsembleProvider(),
             "path_strategy": FakePathSearchStrategy(),
@@ -672,7 +673,7 @@ def test_run_mechanism_study_applies_levels_and_updates_mechanism_config(
 
         def run(self) -> MechanismStudy:
             self.study.status = "completed"
-            self.study.study_dir = str(tmp_path / "mechanism_study" / self.study.study_id)
+            self.study.study_dir = str(tmp_path / "WORK" / "08_ANALYSIS")
             return self.study
 
     monkeypatch.setattr("acp.mechanism.study_runner.StudyOrchestrator", FakeOrchestrator)
@@ -785,8 +786,12 @@ def _sr_orchestrator(tmp_path: Path) -> StudyOrchestrator:
     )
 
 
-def _sr_resolution(decision_id: str, revision: dict, cycle_id: int | None = None) -> dict:
-    payload: dict = {"resolution": "sr_revision", "revision": revision}
+def _sr_resolution(
+    decision_id: str,
+    revision: dict[str, object],
+    cycle_id: int | None = None,
+) -> dict[str, dict[str, object]]:
+    payload: dict[str, object] = {"resolution": "sr_revision", "revision": revision}
     if cycle_id is not None:
         payload["cycle_id"] = cycle_id
     return {decision_id: payload}
@@ -847,7 +852,7 @@ def test_sr_revision_continue_restarts_cycle_with_fresh_frontier(tmp_path: Path)
     assert follow_up.id != decision.id
     assert follow_up.payload["cycle"] == 1
 
-    study_dir = tmp_path / "mechanism_study" / result.study_id
+    study_dir = tmp_path / "WORK" / "08_ANALYSIS"
     assert (study_dir / "cycles" / "cycle_01" / "revision.json").exists()
 
 
@@ -954,18 +959,19 @@ def test_next_sequence_scans_trailing_integer_dirs(tmp_path: Path) -> None:
 
 
 def test_build_study_providers_threads_work_root(tmp_path: Path) -> None:
+    from acp.mechanism.layout import resolve_study_layout
     from acp.mechanism.study_runner import build_study_providers
 
-    work_root = tmp_path / "calc"
-    providers = build_study_providers("censo-lite", "guided-scan", "s3", {}, work_root=work_root)
+    layout = resolve_study_layout(tmp_path, "study_x")
+    providers = build_study_providers("censo-lite", "guided-scan", "s3", {}, layout=layout)
 
-    assert providers["ensemble_provider"].work_root == work_root / "s1"
-    assert providers["path_strategy"].work_root == work_root / "s2"
-    assert providers["refinement_provider"].work_root == work_root / "s3s4"
+    assert providers["ensemble_provider"].work_root == layout.s1_root
+    assert providers["path_strategy"].work_root == layout.s2_root
+    assert providers["refinement_provider"].work_root == layout.ts_root
 
-    peb_providers = build_study_providers("xtb-fast", "rph-reverse", "s3", {}, work_root=work_root)
-    assert peb_providers["ensemble_provider"].work_root == work_root / "s1_xtbfast"
-    assert peb_providers["path_strategy"].work_root == work_root / "s2_peb"
+    peb_providers = build_study_providers("xtb-fast", "rph-reverse", "s3", {}, layout=layout)
+    assert peb_providers["ensemble_provider"].work_root == layout.s1_xtbfast_root
+    assert peb_providers["path_strategy"].work_root == layout.s2_peb_root
 
 
 def test_providers_fall_back_to_cwd_acp_calc(
@@ -992,3 +998,69 @@ def test_guided_scan_provider_resumes_scan_numbering(tmp_path: Path) -> None:
     strategy = GuidedScanPathStrategy(config={}, work_root=tmp_path)
 
     assert strategy.calls == 5
+
+
+def test_find_study_layout_new_then_legacy(tmp_path: Path) -> None:
+    from acp.mechanism.layout import (
+        find_reaction_json,
+        find_study_layout,
+        resolve_study_layout,
+    )
+
+    assert find_study_layout(tmp_path) is None
+
+    layout = resolve_study_layout(tmp_path, "study_new")
+    layout.analysis_root.mkdir(parents=True)
+    (layout.study_json).write_text('{"study_id": "study_new"}', encoding="utf-8")
+    found = find_study_layout(tmp_path)
+    assert found is not None
+    assert found.study_json.parent == layout.analysis_root
+    assert not found.legacy
+    assert found.s1_root == tmp_path / "WORK" / "02_SEARCH" / "s1"
+    assert found.routes_root == tmp_path / "WORK" / "07_PATH" / "routes"
+    assert found.ts_root == tmp_path / "WORK" / "03_OPT" / "TS"
+
+    legacy_dir = tmp_path / "mechanism_study" / "study_old"
+    legacy_dir.mkdir(parents=True)
+    (legacy_dir / "study.json").write_text('{"study_id": "study_old"}', encoding="utf-8")
+    (legacy_dir / "reaction.json").write_text(
+        '{"study_id": "study_old", "reactant": "CCO"}', encoding="utf-8"
+    )
+    (layout.study_json).unlink()
+    legacy = find_study_layout(tmp_path, "study_old")
+    assert legacy is not None
+    assert legacy.legacy
+    assert legacy.analysis_root == legacy_dir
+    assert legacy.reaction_json == legacy_dir / "reaction.json"
+    assert find_reaction_json(tmp_path, "study_old") == legacy_dir / "reaction.json"
+    assert legacy.s1_root == legacy_dir / "calc" / "s1"
+    assert legacy.routes_root == legacy_dir / "routes"
+
+
+def test_find_reaction_json_probes_both_layouts(tmp_path: Path) -> None:
+    from acp.mechanism.layout import find_reaction_json
+
+    assert find_reaction_json(tmp_path, "s1") is None
+
+    legacy = tmp_path / "mechanism_study" / "s1"
+    legacy.mkdir(parents=True)
+    (legacy / "reaction.json").write_text("{}", encoding="utf-8")
+    assert find_reaction_json(tmp_path, "s1") == legacy / "reaction.json"
+
+    new = tmp_path / "WORK" / "08_ANALYSIS" / "reaction.json"
+    new.parent.mkdir(parents=True)
+    new.write_text("{}", encoding="utf-8")
+    assert find_reaction_json(tmp_path, "s1") == new
+
+
+def test_legacy_layout_fallback_can_be_disabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import acp.mechanism.layout as layout_module
+
+    legacy_dir = tmp_path / "mechanism_study" / "study_old"
+    legacy_dir.mkdir(parents=True)
+    (legacy_dir / "study.json").write_text('{"study_id": "study_old"}', encoding="utf-8")
+    (legacy_dir / "reaction.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(layout_module, "LEGACY_FALLBACK_ENABLED", False)
+
+    assert layout_module.find_study_layout(tmp_path, "study_old") is None
+    assert layout_module.find_reaction_json(tmp_path, "study_old") is None

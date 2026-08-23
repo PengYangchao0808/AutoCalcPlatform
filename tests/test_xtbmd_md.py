@@ -170,7 +170,7 @@ def test_multi_replica_seeds_increment_and_starts_differ(tmp_path: Path) -> None
     assert len({str(path) for path in start_files}) == 3, "replica start files must be distinct"
     for start_file in start_files:
         assert Path(start_file).exists()
-        assert start_file.parent.parent.name == "xtbmd"
+        assert Path(start_file).parent.name.startswith("replica_")
 
     # v1.3: replicas start from distinct RDKit embeddings of the original
     # molecule — the embedded XYZ blocks differ.

@@ -90,6 +90,9 @@ class V1JobSpecModel(BaseModel):
     project_id: str | None = None
     execution_mode: Literal["local", "remote"] | None = None
     target_node: str | None = None
+    molecule_name: str = ""
+    task_name: str = ""
+    remark: str = ""
 
 
 class V1JobRecordModel(BaseModel):
@@ -126,8 +129,12 @@ class V1JobCreateRequest(BaseModel):
     config_path: str | None = None
     tags: list[str] = Field(default_factory=list)
     project_id: str | None = None
+    mechanism_project_id: str | None = None
     execution_mode: Literal["local", "remote"] | None = None
     target_node: str | None = None
+    molecule_name: str = ""
+    task_name: str = ""
+    remark: str = ""
 
 
 class MechanismRolePayload(BaseModel):
@@ -305,6 +312,7 @@ class V1JobCreatedResponse(BaseModel):
     status: str
     workflow: str
     project_id: str | None = None
+    mechanism_project_id: str | None = None
 
 
 class JobMoveRequest(BaseModel):
@@ -593,6 +601,7 @@ class StructureParseResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     ok: bool = False
+    detected_format: str | None = None
 
 
 class UploadResponse(BaseModel):
@@ -603,6 +612,35 @@ class UploadResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     ok: bool = False
+    detected_format: str | None = None
+
+
+class StructureSourceSummary(BaseModel):
+    source_id: str
+    job_id: str
+    job_name: str
+    workflow: str
+    project_id: str | None = None
+    completed_at: str = ""
+    label: str = ""
+    path: str = ""
+    formula: str = ""
+    atom_count: int = 0
+    charge: int = 0
+    multiplicity: int = 1
+    has_3d: bool = True
+    remote: bool = False
+    needs_fetch: bool = False
+
+
+class StructureSourceListResponse(BaseModel):
+    sources: list[StructureSourceSummary] = Field(default_factory=list)
+
+
+class StructureSourceDetailResponse(BaseModel):
+    source_id: str
+    checksum: str | None = None
+    structure: StructureAssetModel
 
 
 class ValidateMethodRequest(BaseModel):
@@ -826,6 +864,61 @@ class NodeBootstrapResponse(BaseModel):
     error: str | None = None
 
 
+# ---------------------------------------------------------------------------
+# Mechanism project (design §9) — links four stage jobs.
+# ---------------------------------------------------------------------------
+
+
+class MechanismProjectCreateRequest(BaseModel):
+    name: str
+    reaction_definition_hash: str = ""
+    charge: int = 0
+    multiplicity: int = 1
+
+
+class MechanismProjectModel(BaseModel):
+    project_id: str
+    name: str
+    reaction_definition_hash: str = ""
+    charge: int = 0
+    multiplicity: int = 1
+    status: str = "created"
+    s1_job_id: str | None = None
+    s2_job_id: str | None = None
+    s3_job_id: str | None = None
+    s4_job_id: str | None = None
+    created_at: str = ""
+    updated_at: str = ""
+
+
+class MechanismProjectTimelineEntry(BaseModel):
+    stage: str
+    workflow: str
+    job_id: str | None = None
+    job_status: str | None = None
+    artifact: str = ""
+
+
+class MechanismProjectDetail(BaseModel):
+    project_id: str
+    name: str
+    reaction_definition_hash: str = ""
+    charge: int = 0
+    multiplicity: int = 1
+    status: str = "created"
+    s1_job_id: str | None = None
+    s2_job_id: str | None = None
+    s3_job_id: str | None = None
+    s4_job_id: str | None = None
+    created_at: str = ""
+    updated_at: str = ""
+    timeline: list[MechanismProjectTimelineEntry] = Field(default_factory=list)
+
+
+class MechanismProjectListResponse(BaseModel):
+    projects: list[MechanismProjectModel] = Field(default_factory=list)
+
+
 __all__ = [
     "ArtifactListResponse",
     "ArtifactModel",
@@ -844,6 +937,11 @@ __all__ = [
     "JobRecovery",
     "JobStageEntry",
     "MaintenanceCleanupResponse",
+    "MechanismProjectCreateRequest",
+    "MechanismProjectDetail",
+    "MechanismProjectListResponse",
+    "MechanismProjectModel",
+    "MechanismProjectTimelineEntry",
     "MechanismStudyCreateRequest",
     "MechanismStudyDetail",
     "MechanismStudyReportResponse",

@@ -19,6 +19,18 @@ def sanitize_job_name(name: str) -> str:
     return cleaned.strip("._") or "job"
 
 
+def is_scheduler_task_dir(path: Path) -> bool:
+    """Return True when *path* is a scheduler task dir (``job.json`` + ``task.json`` present)."""
+    return (path / "job.json").is_file() and (path / "task.json").is_file()
+
+
+def resolve_task_output_root(output_root: Path, safe_name: str) -> Path:
+    """Return *output_root* in a scheduler task dir, else ``output_root / safe_name``."""
+    if is_scheduler_task_dir(output_root):
+        return output_root
+    return output_root / safe_name
+
+
 def write_result_summary(
     product_root: Path,
     workflow: str,
@@ -36,7 +48,8 @@ def write_result_summary(
             referenced by paths relative to it).
         workflow: Workflow identifier (e.g. ``"energy"``).
         products: List of ``{"label", "path", "kind"}`` entries; ``path`` is
-            relative to ``product_root``.
+            relative to ``product_root``. An optional non-empty ``"role"``
+            value is passed through verbatim (additive, ``version`` stays 1).
 
     Returns:
         The written file path, or ``None`` when no products were given.
@@ -52,6 +65,7 @@ def write_result_summary(
                 "label": str(item.get("label") or item.get("path") or ""),
                 "path": str(item["path"]),
                 "kind": str(item.get("kind") or "file"),
+                **({"role": str(item["role"])} if item.get("role") else {}),
             }
             for item in products
             if isinstance(item, dict) and item.get("path")
@@ -68,4 +82,9 @@ def write_result_summary(
         return None
 
 
-__all__ = ["sanitize_job_name", "write_result_summary"]
+__all__ = [
+    "is_scheduler_task_dir",
+    "resolve_task_output_root",
+    "sanitize_job_name",
+    "write_result_summary",
+]

@@ -125,8 +125,8 @@ def _run_fake_study(tmp_path: Path) -> Path:
         endpoint_provider=FakeEndpointProvider(),
         max_elementary_steps=3,
     )
-    study = orchestrator.run()
-    return tmp_path / "mechanism_study" / study.study_id
+    orchestrator.run()
+    return tmp_path / "WORK" / "08_ANALYSIS"
 
 
 def test_write_study_reports_emits_all_five_jsons(tmp_path: Path) -> None:
@@ -191,8 +191,12 @@ def test_write_study_reports_emits_all_five_jsons(tmp_path: Path) -> None:
 
 def test_write_study_reports_tolerates_missing_optional_dirs(tmp_path: Path) -> None:
     study_dir = _run_fake_study(tmp_path)
-    for relative in [Path("routes"), Path("refinements")]:
-        target = study_dir / relative
+    task_root = study_dir.parent.parent
+    for relative in [
+        Path("WORK/07_PATH/routes"),
+        Path("WORK/03_OPT/refinements"),
+    ]:
+        target = task_root / relative
         if target.exists():
             for child in sorted(target.rglob("*"), reverse=True):
                 if child.is_file():

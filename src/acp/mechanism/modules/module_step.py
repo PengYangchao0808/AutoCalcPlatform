@@ -226,7 +226,7 @@ def run_step_module(
     bundle = providers or _default_providers(strategy, config, calc_dir)
     engine = ElementaryStepEngine(
         study=study,
-        study_dir=out,
+        layout=out,
         path_strategy=bundle["path_strategy"],
         refinement_provider=bundle["refinement_provider"],
         endpoint_provider=bundle["endpoint_provider"],

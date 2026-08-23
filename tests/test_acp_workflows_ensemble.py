@@ -40,14 +40,22 @@ def sample_config() -> dict[str, Any]:
 def mock_censo_result() -> CensoRunResult:
     """Build a CensoRunResult that mimics CENSO screening output."""
     rec1 = CensoConformerRecord(
-        conf_id="CONF1", frame_index=0,
-        energy=-154.912345, gsolv=-0.004521, grrho=0.082341, gtot=-154.834525,
+        conf_id="CONF1",
+        frame_index=0,
+        energy=-154.912345,
+        gsolv=-0.004521,
+        grrho=0.082341,
+        gtot=-154.834525,
         coordinates=np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 1.089], [1.027, 0.0, -0.363]]),
         symbols=["C", "H", "H"],
     )
     rec2 = CensoConformerRecord(
-        conf_id="CONF2", frame_index=1,
-        energy=-154.911876, gsolv=-0.004612, grrho=0.082455, gtot=-154.834033,
+        conf_id="CONF2",
+        frame_index=1,
+        energy=-154.911876,
+        gsolv=-0.004612,
+        grrho=0.082455,
+        gtot=-154.834033,
         coordinates=np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 1.089], [-1.027, 0.0, -0.363]]),
         symbols=["C", "H", "H"],
     )
@@ -68,12 +76,14 @@ def mock_censo_result() -> CensoRunResult:
 
 def test_ensemble_workflow_registered_in_lazy_sources() -> None:
     from acp.workflows import _LAZY_SOURCES
+
     assert "run_ensemble_generation" in _LAZY_SOURCES
     assert _LAZY_SOURCES["run_ensemble_generation"] == "acp.workflows.ensemble"
 
 
 def test_ensemble_module_importable() -> None:
     from acp.workflows.ensemble import run_ensemble_generation
+
     assert callable(run_ensemble_generation)
 
 
@@ -121,7 +131,9 @@ def test_write_ensemble_outputs(tmp_path: Path, mock_censo_result: CensoRunResul
     from acp.workflows.ensemble import _build_ensemble_from_censo, _write_ensemble_outputs
 
     structure = Structure(
-        id="test", charge=0, multiplicity=1,
+        id="test",
+        charge=0,
+        multiplicity=1,
         symbols=["C", "H", "H"],
         coordinates=[[0.0, 0.0, 0.0], [0.0, 0.0, 1.089], [1.027, 0.0, -0.363]],
     )
@@ -129,14 +141,14 @@ def test_write_ensemble_outputs(tmp_path: Path, mock_censo_result: CensoRunResul
     _write_ensemble_outputs(ensemble, tmp_path, mock_censo_result)
 
     # Check XYZ file exists and is valid
-    xyz_path = tmp_path / "ensemble" / "ensemble.xyz"
+    xyz_path = tmp_path / "RESULT" / "ensembles" / "ensemble.xyz"
     assert xyz_path.exists()
     content = xyz_path.read_text()
     assert "conf000" in content
     assert "conf001" in content
 
     # Check JSON file
-    json_path = tmp_path / "ensemble" / "ensemble.json"
+    json_path = tmp_path / "RESULT" / "ensembles" / "ensemble.json"
     assert json_path.exists()
     data = json.loads(json_path.read_text())
     assert data["n_conformers"] == 2
@@ -145,7 +157,7 @@ def test_write_ensemble_outputs(tmp_path: Path, mock_censo_result: CensoRunResul
     assert data["conformers"][0]["conf_id"] == "CONF1"
 
     # Check CSV file
-    csv_path = tmp_path / "ensemble" / "ensemble.csv"
+    csv_path = tmp_path / "RESULT" / "ensembles" / "ensemble.csv"
     assert csv_path.exists()
     csv_content = csv_path.read_text()
     assert "conf_id" in csv_content
@@ -162,7 +174,9 @@ def test_is_multiframe_xyz_true(tmp_path: Path) -> None:
     from acp.workflows.ensemble import _is_multiframe_xyz
 
     xyz = tmp_path / "multi.xyz"
-    xyz.write_text("3\nFrame 0\nC 0 0 0\nH 0 0 1\nH 1 0 0\n3\nFrame 1\nC 0 0 0\nH 0 0 1\nH -1 0 0\n")
+    xyz.write_text(
+        "3\nFrame 0\nC 0 0 0\nH 0 0 1\nH 1 0 0\n3\nFrame 1\nC 0 0 0\nH 0 0 1\nH -1 0 0\n"
+    )
     assert _is_multiframe_xyz(xyz) is True
 
 
@@ -184,6 +198,7 @@ def test_is_multiframe_xyz_not_xyz(tmp_path: Path) -> None:
 
 def test_is_multiframe_xyz_nonexistent(tmp_path: Path) -> None:
     from acp.workflows.ensemble import _is_multiframe_xyz
+
     assert _is_multiframe_xyz(tmp_path / "missing.xyz") is False
 
 
@@ -216,18 +231,21 @@ def test_ensemble_help_output() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_ensemble_in_workflow_registry() -> None:
+def test_ensemble_retired_replaced_by_confsearch_registry_entry() -> None:
     from acp.workflows.registry import get_workflow_entry
 
-    entry = get_workflow_entry("ensemble")
-    assert entry is not None
-    assert entry.name == "ensemble"
-    assert "censo" in entry.requires_binaries
+    assert get_workflow_entry("ensemble") is None
+    confsearch = get_workflow_entry("Confsearch")
+    assert confsearch is not None
+    assert confsearch.name == "Confsearch"
+    assert "censo" in confsearch.requires_binaries
 
 
-def test_ensemble_in_supported_workflows() -> None:
+def test_ensemble_retired_from_supported_workflows() -> None:
     from acp.scheduler.jobs import SUPPORTED_WORKFLOWS
-    assert "ensemble" in SUPPORTED_WORKFLOWS
+
+    assert "ensemble" not in SUPPORTED_WORKFLOWS
+    assert "Confsearch" in SUPPORTED_WORKFLOWS
 
 
 # ---------------------------------------------------------------------------
@@ -276,9 +294,9 @@ def test_run_ensemble_generation_with_multi_frame_xyz(
 
     # Check that ensemble outputs exist
     out_root = tmp_path / "out" / "input"
-    assert (out_root / "ensemble" / "ensemble.xyz").exists()
-    assert (out_root / "ensemble" / "ensemble.json").exists()
-    assert (out_root / "ensemble" / "ensemble.csv").exists()
+    assert (out_root / "RESULT" / "ensembles" / "ensemble.xyz").exists()
+    assert (out_root / "RESULT" / "ensembles" / "ensemble.json").exists()
+    assert (out_root / "RESULT" / "ensembles" / "ensemble.csv").exists()
 
 
 # ---------------------------------------------------------------------------

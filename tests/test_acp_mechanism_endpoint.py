@@ -396,6 +396,6 @@ def test_default_endpoint_provider_drives_real_two_step_network(tmp_path: Path) 
     assert len(minimum_points) >= 1
     assert minimum_points[0].metadata["validated"] is True
     study_json = json.loads(
-        (tmp_path / "mechanism_study" / result.study_id / "study.json").read_text()
+        (tmp_path / "WORK" / "08_ANALYSIS" / "study.json").read_text()
     )
     assert study_json["status"] == "completed"

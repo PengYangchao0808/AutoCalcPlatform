@@ -55,69 +55,38 @@ def _input_payload(payload: dict[str, object]) -> dict[str, object]:
     return cast(dict[str, object], payload["input"])
 
 
-def test_mechanism_submit_valid_payload_is_accepted(tmp_path: Path) -> None:
+def test_mechanism_submit_valid_payload_is_rejected_as_retired(tmp_path: Path) -> None:
+    """Confsearch v1.0: mechanism submissions are rejected for new runs."""
     with make_client(tmp_path) as client:
         response = client.post("/api/v1/jobs", json=_mechanism_payload())
-        assert response.status_code == 201, response.text
-        body = response.json()
-        assert body["workflow"] == "mechanism"
-        assert body["status"]
+        assert response.status_code == 400
+        assert "Unsupported workflow 'mechanism'" in response.json()["detail"]
 
 
-def test_mechanism_submit_missing_reactant_returns_422(tmp_path: Path) -> None:
-    payload = _mechanism_payload()
-    del _input_payload(payload)["reactant"]
-
+def test_mechanism_submit_payload_shape_errors_unreachable_after_retirement(
+    tmp_path: Path,
+) -> None:
+    """The 422 payload-shape checks no longer trigger: retirement wins first."""
     with make_client(tmp_path) as client:
-        response = client.post("/api/v1/jobs", json=payload)
-        assert response.status_code == 422
-        assert any(error["loc"] == ["reactant"] for error in response.json()["detail"])
+        missing_reactant = _mechanism_payload()
+        del _input_payload(missing_reactant)["reactant"]
+        assert client.post("/api/v1/jobs", json=missing_reactant).status_code == 400
 
+        bad_role = _mechanism_payload()
+        reactant = cast(dict[str, object], _input_payload(bad_role)["reactant"])
+        reactant["source_type"] = "garbage"
+        assert client.post("/api/v1/jobs", json=bad_role).status_code == 400
 
-def test_mechanism_submit_bad_role_source_type_returns_422(tmp_path: Path) -> None:
-    payload = _mechanism_payload()
-    reactant = cast(dict[str, object], _input_payload(payload)["reactant"])
-    reactant["source_type"] = "garbage"
+        no_plan = _mechanism_payload()
+        routes = cast(list[dict[str, object]], _input_payload(no_plan)["routes"])
+        del routes[0]["coordinate_plan"]
+        assert client.post("/api/v1/jobs", json=no_plan).status_code == 400
 
-    with make_client(tmp_path) as client:
-        response = client.post("/api/v1/jobs", json=payload)
-        assert response.status_code == 422
-        assert any(
-            error["loc"] == ["reactant", "source_type"]
-            for error in response.json()["detail"]
-        )
-
-
-def test_mechanism_submit_guided_scan_without_coordinate_plan_returns_422(tmp_path: Path) -> None:
-    payload = _mechanism_payload()
-    routes = cast(list[dict[str, object]], _input_payload(payload)["routes"])
-    del routes[0]["coordinate_plan"]
-
-    with make_client(tmp_path) as client:
-        response = client.post("/api/v1/jobs", json=payload)
-        assert response.status_code == 422
-        assert any(
-            "coordinate_plan is required" in error["msg"]
-            for error in response.json()["detail"]
-        )
-
-
-def test_mechanism_submit_direct_ts_without_ts_guess_id_returns_422(tmp_path: Path) -> None:
-    payload = _mechanism_payload()
-    _input_payload(payload)["routes"] = [
-        {
-            "route_id": "route-1",
-            "path_strategy": "direct-ts",
-        }
-    ]
-
-    with make_client(tmp_path) as client:
-        response = client.post("/api/v1/jobs", json=payload)
-        assert response.status_code == 422
-        assert any(
-            "direct-ts routes require ts_guess_id" in error["msg"]
-            for error in response.json()["detail"]
-        )
+        direct_ts = _mechanism_payload()
+        _input_payload(direct_ts)["routes"] = [
+            {"route_id": "route-1", "path_strategy": "direct-ts"}
+        ]
+        assert client.post("/api/v1/jobs", json=direct_ts).status_code == 400
 
 
 def test_non_mechanism_submit_keeps_free_form_dict_behavior(tmp_path: Path) -> None:

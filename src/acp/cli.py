@@ -23,7 +23,6 @@ import logging
 import os
 import sys
 from collections.abc import Callable
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -538,6 +537,446 @@ Examples:
     )
 
 
+def _add_stage_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
+    """Register the Confsearch/PESsearch/Lowconfirm/Highconfirm subcommands."""
+    conf = run_sub.add_parser(
+        "Confsearch",
+        help="Unified conformer search + energies (S1)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run Confsearch --input "CCO" --protocol xtb-crest --refinement-policy screen --output ./out
+  acp run Confsearch --input "CCO" --protocol xtbmd-censo --profile light \\
+      --refinement-policy rank1 --output ./out
+        """,
+    )
+    conf.set_defaults(workflow="Confsearch")
+    conf_input = conf.add_mutually_exclusive_group(required=True)
+    conf_input.add_argument("--input", "-i", type=str, help="SMILES string or input file path")
+    conf_input.add_argument("--batch-file", type=str, help="Batch input file (one molecule per line)")
+    conf.add_argument("--output", "-o", default="./confsearch_out", help="Output directory")
+    conf.add_argument(
+        "--protocol",
+        default="censo-crest",
+        choices=["xtb-crest", "xtb-md", "censo-crest", "xtbmd-censo"],
+        help="Sampling/energy protocol (default: censo-crest)",
+    )
+    conf.add_argument(
+        "--profile",
+        default="default",
+        choices=["light", "default", "high"],
+        help="Quality profile inside the protocol (default: default)",
+    )
+    conf.add_argument(
+        "--refinement-policy",
+        default="screen",
+        choices=["screen", "rank1", "cumulative-99", "all"],
+        help="Fine-refinement scope (default: screen)",
+    )
+    conf.add_argument(
+        "--backend",
+        default="native",
+        choices=["native", "rph-parity"],
+        help="Execution backend (default: native; rph-parity is an explicit parity check)",
+    )
+    conf.add_argument(
+        "--preset",
+        choices=["censo-light", "censo-default", "censo-zero"],
+        help="CENSO preset override (censo-crest / xtbmd-censo only)",
+    )
+    conf.add_argument("--levels", type=str, help="Method level overrides as JSON")
+    conf.add_argument("--solvent", type=str, help="Solvent (gas phase if omitted)")
+    conf.add_argument("--ewin", type=float, help="Energy window in kcal/mol")
+    conf.add_argument("--temperature", type=float, help="Temperature in K (Boltzmann/MD)")
+    conf.add_argument("--md-temp", type=float, help="MD temperature in K (xtb-md / xtbmd-censo)")
+    conf.add_argument("--md-time", type=float, help="MD length in ps")
+    conf.add_argument("--md-seeds", type=int, help="MD replica count")
+    conf.add_argument("--max-frames", type=int, help="Batch-opt frame cap")
+    conf.add_argument("--charge", type=int, help="Molecular charge (default: 0)")
+    conf.add_argument("--multiplicity", type=int, help="Spin multiplicity (default: 1)")
+    conf.add_argument("--name", type=str, help="Molecule name")
+    conf.add_argument("--nproc", type=int, help="Number of processors")
+    conf.add_argument("--mem", type=str, help="Memory limit")
+    conf.add_argument("--config", type=str, help="Configuration YAML file")
+    conf.add_argument("--save-config", type=str, help="Save the merged configuration to YAML")
+    conf.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
+    pes = run_sub.add_parser(
+        "PESsearch",
+        help="Reaction path search + candidate guesses (S2)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run PESsearch --from-job 20260823_001_Confsearch \\
+      --from-artifact RESULT/confsearch/confsearch_manifest.json \\
+      --strategy guided-scan --plan plan.json --output ./pes_out
+        """,
+    )
+    pes.set_defaults(workflow="PESsearch")
+    pes.add_argument(
+        "--from",
+        dest="from_manifest",
+        help="Direct path to a confsearch_manifest.json",
+    )
+    pes.add_argument("--from-job", help="Source Confsearch job id (resolved via the jobs root)")
+    pes.add_argument(
+        "--from-artifact",
+        default="RESULT/confsearch/confsearch_manifest.json",
+        help="Artifact path relative to the source job directory",
+    )
+    pes.add_argument(
+        "--strategy",
+        default="guided-scan",
+        choices=["guided-scan", "reverse-peb", "direct-ts"],
+        help="Path-search strategy (default: guided-scan)",
+    )
+    pes.add_argument(
+        "--plan",
+        help="Reaction coordinate plan as a JSON string or path to a JSON file",
+    )
+    pes.add_argument("--product", help="Product XYZ file path")
+    pes.add_argument("--product-manifest", help="Product-side confsearch_manifest.json path")
+    pes.add_argument("--reactant-conf", help="Reactant conformer id (default: rank 1)")
+    pes.add_argument("--product-conf", help="Product conformer id (default: rank 1)")
+    pes.add_argument("--ts-guess", help="TS guess XYZ (required by direct-ts)")
+    pes.add_argument("--output", "-o", default="./pes_search_out", help="Output directory")
+    pes.add_argument("--charge", type=int, help="Molecular charge override")
+    pes.add_argument("--multiplicity", type=int, help="Spin multiplicity override")
+    pes.add_argument("--config", type=str, help="Configuration YAML file")
+    pes.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
+    low = run_sub.add_parser(
+        "Lowconfirm",
+        help="Coarse Opt/TS + frequency + preliminary IRC (S3)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run Lowconfirm --from-job 20260823_002_PESsearch \\
+      --from-artifact RESULT/mechanism/s2_path_manifest.json \\
+      --select ts_guess_001,ts_guess_004 --output ./low_out
+        """,
+    )
+    low.set_defaults(workflow="Lowconfirm")
+    low.add_argument("--from", dest="from_manifest", help="Direct path to an s2_path_manifest.json")
+    low.add_argument("--from-job", help="Source PESsearch job id")
+    low.add_argument(
+        "--from-artifact",
+        default="RESULT/mechanism/s2_path_manifest.json",
+        help="Artifact path relative to the source job directory",
+    )
+    low.add_argument(
+        "--select",
+        help="Comma-separated candidate ids (default: all TS guesses)",
+    )
+    low.add_argument(
+        "--no-irc",
+        action="store_true",
+        help="Skip the preliminary IRC validation",
+    )
+    low.add_argument("--output", "-o", default="./lowconfirm_out", help="Output directory")
+    low.add_argument("--charge", type=int, help="Molecular charge override")
+    low.add_argument("--multiplicity", type=int, help="Spin multiplicity override")
+    low.add_argument("--config", type=str, help="Configuration YAML file")
+    low.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
+    high = run_sub.add_parser(
+        "Highconfirm",
+        help="High-fidelity Opt/TS + freq + SP + thermochemistry (S4)",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run Highconfirm --from-job 20260823_003_Lowconfirm \\
+      --from-artifact RESULT/mechanism/s3_lowconfirm_manifest.json \\
+      --select ts_guess_001 --output ./high_out
+        """,
+    )
+    high.set_defaults(workflow="Highconfirm")
+    high.add_argument(
+        "--from",
+        dest="from_manifest",
+        help="Direct path to an s3_lowconfirm_manifest.json",
+    )
+    high.add_argument("--from-job", help="Source Lowconfirm job id")
+    high.add_argument(
+        "--from-artifact",
+        default="RESULT/mechanism/s3_lowconfirm_manifest.json",
+        help="Artifact path relative to the source job directory",
+    )
+    high.add_argument("--select", help="Comma-separated candidate ids (default: confirmed TS set)")
+    high.add_argument("--irc", action="store_true", help="Run the final IRC validation")
+    high.add_argument("--output", "-o", default="./highconfirm_out", help="Output directory")
+    high.add_argument("--charge", type=int, help="Molecular charge override")
+    high.add_argument("--multiplicity", type=int, help="Spin multiplicity override")
+    high.add_argument("--config", type=str, help="Configuration YAML file")
+    high.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
+
+def _resolve_stage_source(
+    from_manifest: str | None,
+    from_job: str | None,
+    from_artifact: str,
+    stage: str,
+) -> Path:
+    """Resolve a stage workflow's source manifest (§8 artifact reference)."""
+    from acp.mechanism.stages.handoff import (
+        expected_source_kind,
+        resolve_source_job_work_dir,
+    )
+
+    if from_manifest:
+        return Path(from_manifest).expanduser().resolve()
+    if not from_job:
+        raise ValueError(f"Stage workflow requires --from or --from-job (stage {stage})")
+    work_dir = resolve_source_job_work_dir(from_job)
+    relative = from_artifact or ""
+    kind = expected_source_kind(stage)
+    artifact = work_dir / relative
+    if not artifact.is_file():
+        raise FileNotFoundError(f"Source artifact not found: {artifact}")
+    _ = kind
+    return artifact.resolve()
+
+
+def _load_plan_argument(plan_arg: str | None) -> dict[str, Any] | None:
+    """Parse --plan as a JSON string or a path to a JSON file."""
+    if not plan_arg:
+        return None
+    text = plan_arg
+    plan_path = Path(plan_arg)
+    if plan_path.is_file():
+        text = plan_path.read_text(encoding="utf-8")
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid --plan JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("--plan must be a JSON object")
+    return parsed
+
+
+def _parse_select(select_arg: str | None) -> list[str] | None:
+    if not select_arg:
+        return None
+    return [part.strip() for part in select_arg.split(",") if part.strip()]
+
+
+def _handle_confsearch(args: argparse.Namespace) -> int:
+    """Execute the unified Confsearch workflow."""
+    setup_logging(args.log_level)
+
+    levels = _parse_levels_json(args.levels)
+    if args.levels and levels is None:
+        return 1
+
+    cfg = _build_config(args)
+    output_dir = Path(args.output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.save_config:
+        from cccp.config import save_config as save_cfg
+
+        save_cfg(cfg, Path(args.save_config))
+        logger.info("Configuration saved to: %s", args.save_config)
+
+    md_params: dict[str, Any] = {}
+    for cli_key, param_key in (
+        ("md_temp", "md_temperature"),
+        ("md_time", "md_time_ps"),
+        ("md_seeds", "md_seeds"),
+        ("max_frames", "max_frames"),
+    ):
+        value = getattr(args, cli_key, None)
+        if value is not None:
+            md_params[param_key] = value
+
+    from acp.confsearch import ConfsearchEngine, ConfsearchRequest
+
+    def _run_one(source: str, name: str | None) -> int:
+        request = ConfsearchRequest(
+            input_source=source,
+            output_dir=output_dir,
+            protocol=args.protocol,
+            profile=args.profile,
+            refinement_policy=args.refinement_policy,
+            backend=args.backend,
+            name=name,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            solvent=args.solvent,
+            nproc=args.nproc,
+            preset=args.preset,
+            levels=levels,
+            temperature=args.temperature,
+            energy_window=args.ewin,
+            md_params=md_params,
+            config=cfg,
+        )
+        try:
+            result = ConfsearchEngine().run(request)
+        except KeyboardInterrupt:
+            logger.warning("Interrupted by user")
+            return 130
+        except ValueError as exc:
+            logger.error("%s", exc)
+            return 1
+        if result.status != "completed":
+            logger.error("Confsearch failed: %s", result.error)
+            return 1
+        logger.info("Confsearch completed (%s + %s)", result.protocol, result.refinement_policy)
+        logger.info("  Conformers  : %d", len(result.conformers))
+        logger.info("  Manifest    : %s", result.manifest_path)
+        logger.info("  G1 gate     : %s", result.quality_gates.get("G1"))
+        return 0
+
+    if args.batch_file:
+        from cccp.io import load_batch_inputs
+
+        inputs = load_batch_inputs(Path(args.batch_file))
+        failures = 0
+        for index, molecule in enumerate(inputs, start=1):
+            source = str(molecule.source_path or molecule.metadata.get("smiles", ""))
+            logger.info("[%d/%d] Confsearch %s", index, len(inputs), molecule.name)
+            if _run_one(source, molecule.name) != 0:
+                failures += 1
+        return 1 if failures else 0
+    return _run_one(args.input, args.name)
+
+
+def _handle_pessearch(args: argparse.Namespace) -> int:
+    """Execute the PESsearch (S2) workflow."""
+    setup_logging(args.log_level)
+    cfg = _build_config(args)
+    try:
+        manifest = _resolve_stage_source(
+            getattr(args, "from_manifest", None),
+            getattr(args, "from_job", None),
+            getattr(args, "from_artifact", "") or "",
+            "S2",
+        )
+        plan = _load_plan_argument(getattr(args, "plan", None))
+        if args.strategy != "direct-ts" and plan is None:
+            raise ValueError("--plan is required for guided-scan and reverse-peb")
+        from acp.mechanism.stages import run_pes_search
+
+        payload = run_pes_search(
+            from_manifest=manifest,
+            output_dir=Path(args.output),
+            strategy=args.strategy,
+            coordinate_plan=plan,
+            product_source=args.product,
+            product_manifest=args.product_manifest,
+            product_conf=args.product_conf,
+            reactant_conf=args.reactant_conf,
+            ts_guess=args.ts_guess,
+            source_job_id=getattr(args, "from_job", None),
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            config=cfg,
+        )
+    except KeyboardInterrupt:
+        logger.warning("Interrupted by user")
+        return 130
+    except Exception as exc:
+        logger.exception("PESsearch failed: %s", exc)
+        return 1
+    gates = payload.get("gates") or {}
+    logger.info("PESsearch completed: %d candidates (G2=%s)", len(payload.get("candidates") or []), gates.get("G2"))
+    logger.info("  Manifest    : %s", Path(args.output) / "RESULT" / "mechanism" / "s2_path_manifest.json")
+    return 0 if gates.get("G2") == "PASS" else 1
+
+
+def _handle_lowconfirm(args: argparse.Namespace) -> int:
+    """Execute the Lowconfirm (S3) workflow."""
+    setup_logging(args.log_level)
+    cfg = _build_config(args)
+    try:
+        manifest = _resolve_stage_source(
+            getattr(args, "from_manifest", None),
+            getattr(args, "from_job", None),
+            getattr(args, "from_artifact", "") or "",
+            "S3",
+        )
+        from acp.mechanism.stages import run_low_confirm
+
+        payload = run_low_confirm(
+            from_manifest=manifest,
+            output_dir=Path(args.output),
+            select=_parse_select(getattr(args, "select", None)),
+            run_irc=not getattr(args, "no_irc", False),
+            source_job_id=getattr(args, "from_job", None),
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            config=cfg,
+        )
+    except KeyboardInterrupt:
+        logger.warning("Interrupted by user")
+        return 130
+    except Exception as exc:
+        logger.exception("Lowconfirm failed: %s", exc)
+        return 1
+    gates = payload.get("gates") or {}
+    confirmed = sum(1 for row in payload.get("candidates") or [] if row.get("status") == "confirmed")
+    logger.info("Lowconfirm completed: %d confirmed (G3=%s)", confirmed, gates.get("G3"))
+    logger.info("  Manifest    : %s", Path(args.output) / "RESULT" / "mechanism" / "s3_lowconfirm_manifest.json")
+    return 0 if confirmed else 1
+
+
+def _handle_highconfirm(args: argparse.Namespace) -> int:
+    """Execute the Highconfirm (S4) workflow."""
+    setup_logging(args.log_level)
+    cfg = _build_config(args)
+    try:
+        manifest = _resolve_stage_source(
+            getattr(args, "from_manifest", None),
+            getattr(args, "from_job", None),
+            getattr(args, "from_artifact", "") or "",
+            "S4",
+        )
+        from acp.mechanism.stages import run_high_confirm
+
+        payload = run_high_confirm(
+            from_manifest=manifest,
+            output_dir=Path(args.output),
+            select=_parse_select(getattr(args, "select", None)),
+            run_irc=bool(getattr(args, "irc", False)),
+            source_job_id=getattr(args, "from_job", None),
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            config=cfg,
+        )
+    except KeyboardInterrupt:
+        logger.warning("Interrupted by user")
+        return 130
+    except Exception as exc:
+        logger.exception("Highconfirm failed: %s", exc)
+        return 1
+    gates = payload.get("gates") or {}
+    confirmed = sum(1 for row in payload.get("candidates") or [] if row.get("status") == "confirmed")
+    logger.info("Highconfirm completed: %d confirmed (G4=%s G5=%s)", confirmed, gates.get("G4"), gates.get("G5"))
+    logger.info("  Manifest    : %s", Path(args.output) / "RESULT" / "mechanism" / "s4_highconfirm_manifest.json")
+    return 0 if confirmed else 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level ACP argument parser."""
     parser = argparse.ArgumentParser(
@@ -567,7 +1006,7 @@ Examples:
     mechanism_resume.add_argument(
         "--study",
         required=True,
-        help="Study identifier under <study-root>/mechanism_study/<study>",
+        help="Study identifier (checkpoint identity; artifacts live under WORK/)",
     )
     mechanism_resume.add_argument(
         "--study-root",
@@ -1403,6 +1842,7 @@ Examples:
     )
 
     _add_mechanism_module_parsers(run_sub)
+    _add_stage_workflow_parsers(run_sub)
 
     # -- run serve (FastAPI server) -----------------------------------------
     serve_parser = run_sub.add_parser(
@@ -1552,151 +1992,7 @@ def _mechanism_role_path(role_cfg: dict[str, Any], config_path: Path | None) -> 
 
 
 def _handle_mechanism(args: argparse.Namespace) -> int:
-    """Execute the mechanism-study workflow."""
-    setup_logging(args.log_level)
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    try:
-        try:
-            mechanism_config, mechanism_config_path = _load_mechanism_config(
-                getattr(args, "mechanism_config", None)
-            )
-        except (FileNotFoundError, ValueError) as exc:
-            logger.error("%s", exc)
-            return 1
-
-        cfg = _build_config(args)
-        from acp.mechanism.study_runner import (
-            read_review_handoff,
-            resume_mechanism_study,
-            run_mechanism_study,
-            waiting_study_exists,
-            write_review_payload,
-        )
-        from acp.scheduler.jobs import EXIT_WAITING_REVIEW
-
-        config_resolved = _mechanism_config_dict(mechanism_config, "resolved")
-        config_levels = _mechanism_config_levels(mechanism_config)
-        reactant_cfg = _mechanism_role_config(mechanism_config, "reactant")
-        product_cfg = _mechanism_role_config(mechanism_config, "product")
-        ts_guess_cfg = _mechanism_role_config(mechanism_config, "ts_guess")
-        config_resources = _mechanism_config_dict(mechanism_config, "resources")
-
-        if getattr(args, "nproc", None) is None:
-            config_nproc = _mechanism_config_int(config_resources.get("nproc"))
-            if config_nproc is not None:
-                cfg.setdefault("resources", {})["nproc"] = config_nproc
-                cfg.setdefault("executables", {}).setdefault("orca", {})["nproc"] = config_nproc
-        if getattr(args, "mem", None) is None:
-            config_mem = _mechanism_config_scalar(config_resources, "mem")
-            if config_mem is not None:
-                cfg.setdefault("resources", {})["mem"] = str(config_mem)
-
-        routes: list[dict[str, object]] | None = None
-        if getattr(args, "routes", None):
-            try:
-                parsed_routes = json.loads(args.routes)
-                if isinstance(parsed_routes, list):
-                    routes = [dict(r) for r in parsed_routes]
-            except (TypeError, ValueError) as exc:
-                logger.error("Invalid --routes JSON: %s", exc)
-                return 1
-
-        preset = getattr(args, "preset", None) or _mechanism_config_scalar(config_resolved, "preset")
-        strategy = getattr(args, "strategy", None)
-        fidelity = getattr(args, "fidelity", None)
-        input_source = getattr(args, "input", None) or _mechanism_role_path(
-            reactant_cfg,
-            mechanism_config_path,
-        )
-        if not input_source:
-            logger.error(
-                "Mechanism study requires --input or a mechanism config with roles.reactant.path"
-            )
-            return 1
-        product_source = getattr(args, "product", None) or _mechanism_role_path(
-            product_cfg,
-            mechanism_config_path,
-        )
-        ts_guess_source = getattr(args, "ts_guess", None) or _mechanism_role_path(
-            ts_guess_cfg,
-            mechanism_config_path,
-        )
-        charge = (
-            getattr(args, "charge", None)
-            if getattr(args, "charge", None) is not None
-            else _mechanism_config_int(reactant_cfg.get("charge"))
-        )
-        multiplicity = (
-            getattr(args, "multiplicity", None)
-            if getattr(args, "multiplicity", None) is not None
-            else _mechanism_config_int(reactant_cfg.get("multiplicity"))
-        )
-
-        # Scheduler restart handoff: the JobManager mirrors job state to
-        # <output>/job.json. When a study paused at a review gate, reuse
-        # the persisted study id + review resolutions instead of starting
-        # a fresh study (the derived id is timestamped and not stable).
-        study_id = getattr(args, "study_id", None) or _mechanism_config_scalar(
-            config_resolved,
-            "study_id",
-        )
-        handed_off_study_id, review_decisions = read_review_handoff(output_dir)
-        if not study_id and handed_off_study_id:
-            study_id = handed_off_study_id
-
-        if study_id and waiting_study_exists(output_dir, study_id):
-            summary = resume_mechanism_study(
-                study_id=study_id,
-                study_root=output_dir,
-                decision_resolutions=review_decisions,
-            )
-        else:
-            summary = run_mechanism_study(
-                input_source=input_source,
-                output_dir=output_dir,
-                config=cfg,
-                name=args.name,
-                charge=charge,
-                multiplicity=multiplicity,
-                product_source=product_source,
-                ts_guess_source=ts_guess_source,
-                routes=routes,
-                preset=preset,
-                strategy=strategy,
-                fidelity=fidelity,
-                scan_points=getattr(args, "scan_points", None),
-                irc_points=getattr(args, "irc_points", None),
-                study_id=study_id,
-                conformer_mode=getattr(args, "conformer_mode", None),
-                max_elementary_steps=getattr(args, "max_elementary_steps", None),
-                int_extension=bool(getattr(args, "int_extension", False)),
-                promotion_policy=getattr(args, "promotion_policy", None),
-                auto_converge=bool(getattr(args, "auto_converge", False)),
-                config_resolved=config_resolved,
-                method_levels=config_levels,
-                mechanism_config_path=mechanism_config_path,
-            )
-        status = str(summary.get("status") or "unknown")
-        logger.info("Mechanism study %s", status)
-        logger.info("  Study ID            : %s", summary.get("study_id", "N/A"))
-        logger.info("  Study dir           : %s", summary.get("study_dir", "N/A"))
-        logger.info("  Network size        : %s", summary.get("network_size", {}))
-        logger.info("  Gates               : %s", summary.get("gates_summary", {}))
-        pending = summary.get("pending_decisions", [])
-        if pending:
-            logger.info("  Pending decisions   : %s", pending)
-        if status == "waiting":
-            write_review_payload(output_dir, summary)
-            return EXIT_WAITING_REVIEW
-        return 0 if status in {"completed", "waiting", "running"} else 1
-    except KeyboardInterrupt:
-        logger.warning("Interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("Fatal error: %s", exc)
-        return 1
+    return _reject_retired_workflow("mechanism")
 
 
 def _parse_decision_resolutions(values: list[str]) -> dict[str, Any]:
@@ -1760,117 +2056,19 @@ def _module_exit_code(status: str) -> int:
 
 
 def _handle_mech_conf(args: argparse.Namespace) -> int:
-    from acp.mechanism.modules.module_conformer import run_conformer_module
-
-    setup_logging(args.log_level)
-    cfg = _build_config(args)
-    try:
-        manifest = run_conformer_module(
-            args.input,
-            output_dir=Path(args.output),
-            mode=args.mode,
-            charge=args.charge,
-            multiplicity=args.multiplicity,
-            name=args.name,
-            config=cfg,
-            label=args.label,
-        )
-    except KeyboardInterrupt:
-        logger.warning("mech-conf interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("mech-conf failed: %s", exc)
-        return 1
-    logger.info("mech-conf status=%s output=%s", manifest.status, args.output)
-    return _module_exit_code(manifest.status)
+    return _reject_retired_workflow("mech-conf")
 
 
 def _handle_mech_step(args: argparse.Namespace) -> int:
-    from acp.mechanism.modules.module_step import run_step_module
-
-    setup_logging(args.log_level)
-    cfg = _build_config(args)
-    try:
-        plan = _parse_levels(args.plan)
-        if plan is None:
-            logger.error("mech-step requires a coordinate plan via --plan")
-            return 1
-        manifest = run_step_module(
-            args.source,
-            plan,
-            target_xyz=getattr(args, "target", None),
-            strategy=args.strategy,
-            fidelity=args.fidelity,
-            endpoint_method=args.endpoint_method,
-            output_dir=Path(args.output),
-            config=cfg,
-            charge=args.charge,
-            multiplicity=args.multiplicity,
-            label=args.label,
-        )
-    except KeyboardInterrupt:
-        logger.warning("mech-step interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("mech-step failed: %s", exc)
-        return 1
-    logger.info("mech-step status=%s gates=%s", manifest.status, manifest.gates)
-    return _module_exit_code(manifest.status)
+    return _reject_retired_workflow("mech-step")
 
 
 def _handle_mech_confirm(args: argparse.Namespace) -> int:
-    from acp.mechanism.modules.module_confirm import run_confirm_module
-
-    setup_logging(args.log_level)
-    cfg = _build_config(args)
-    try:
-        manifest = run_confirm_module(
-            args.step_manifest,
-            select=args.select,
-            fidelity=args.fidelity,
-            output_dir=Path(args.output),
-            config=cfg,
-            label=args.label,
-        )
-    except KeyboardInterrupt:
-        logger.warning("mech-confirm interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("mech-confirm failed: %s", exc)
-        return 1
-    logger.info("mech-confirm status=%s output=%s", manifest.status, args.output)
-    return _module_exit_code(manifest.status)
+    return _reject_retired_workflow("mech-confirm")
 
 
 def _handle_mech_chain(args: argparse.Namespace) -> int:
-    from acp.mechanism.chain import run_chain
-
-    setup_logging(args.log_level)
-    try:
-        chain_config_path = Path(args.config)
-        import yaml
-
-        raw = yaml.safe_load(chain_config_path.read_text(encoding="utf-8"))
-        if not isinstance(raw, dict):
-            logger.error("Chain config must be a mapping: %s", chain_config_path)
-            return 1
-        base_output = Path(args.output)
-        for step in raw.get("steps") or []:
-            step_args = step.get("args") if isinstance(step, dict) else None
-            if isinstance(step_args, dict) and "output_dir" not in step_args:
-                module = str(step.get("module") or "step")
-                step_args["output_dir"] = str(base_output / module)
-        records = run_chain(raw)
-    except KeyboardInterrupt:
-        logger.warning("mech-chain interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("mech-chain failed: %s", exc)
-        return 1
-    for record in records:
-        logger.info("  %s -> %s (%s)", record["module"], record["status"], record["manifest_path"])
-    failed = [r for r in records if r["status"] not in {"validated", "partial"}]
-    return 1 if failed else 0
+    return _reject_retired_workflow("mech-chain")
 
 
 def _build_simple_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
@@ -2220,123 +2418,25 @@ def _try_open_browser(url: str) -> None:
                 continue
 
 
+_RETIRED_WORKFLOW_MESSAGE = (
+    "The workflow has been retired.\n"
+    "Use Confsearch, PESsearch, Lowconfirm or Highconfirm.\n"
+    "Mapping: ensemble -> Confsearch + censo-crest + screen; "
+    "energy -> Confsearch + censo-crest + rank1/cumulative-99; "
+    "xtbmd_censo_energy -> Confsearch + xtbmd-censo; "
+    "mechanism/mech-* -> the four stage workflows."
+)
+
+
+def _reject_retired_workflow(workflow: str) -> int:
+    setup_logging("INFO")
+    print(f"Error: '{workflow}' is no longer available for new runs.", file=sys.stderr)
+    print(_RETIRED_WORKFLOW_MESSAGE, file=sys.stderr)
+    return 2
+
+
 def _handle_ensemble(args: argparse.Namespace) -> int:
-    """Execute the ensemble generation workflow."""
-    setup_logging(args.log_level)
-
-    if not args.input and not args.batch_file:
-        print("Error: --input or --batch-file is required", file=sys.stderr)
-        return 1
-
-    cfg = _build_config(args)
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    if args.save_config:
-        from cccp.config import save_config as save_cfg
-
-        save_cfg(cfg, Path(args.save_config))
-        logger.info("Configuration saved to: %s", args.save_config)
-
-    if args.batch_file:
-        return _handle_ensemble_batch(args, cfg, output_dir)
-
-    try:
-        from acp.workflows.ensemble import run_ensemble_generation
-
-        result = run_ensemble_generation(
-            input_source=args.input,
-            output_dir=str(output_dir),
-            preset=args.preset,
-            config=cfg,
-            name=args.name,
-            charge=args.charge,
-            multiplicity=args.multiplicity,
-            solvent=args.solvent,
-            nproc=args.nproc,
-            keep_all=True if getattr(args, "keep_all", False) else None,
-            ewin=getattr(args, "ewin", None),
-        )
-    except KeyboardInterrupt:
-        logger.warning("Interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("Fatal error: %s", exc)
-        return 1
-
-    if result.status == "completed":
-        meta = result.metadata or {}
-        logger.info("Ensemble generation completed successfully")
-        logger.info("  Conformers         : %s", meta.get("n_conformers", "N/A"))
-        logger.info("  Ensemble XYZ       : %s", meta.get("ensemble_xyz", "N/A"))
-        logger.info("  Ensemble JSON      : %s", meta.get("ensemble_json", "N/A"))
-        return 0
-
-    logger.error("Ensemble generation failed: %s", result.error)
-    return 1
-
-
-def _handle_ensemble_batch(
-    args: argparse.Namespace,
-    cfg: dict[str, Any],
-    output_dir: Path,
-) -> int:
-    """Run ensemble generation for multiple molecules (batch mode)."""
-    from acp.workflows.ensemble import run_ensemble_generation
-    from cccp.io import load_batch_inputs
-
-    logger.info("ACP ensemble workflow — batch mode")
-    batch_file = Path(args.batch_file)
-    inputs = load_batch_inputs(batch_file)
-
-    logger.info("Found %d molecules to process", len(inputs))
-    results: list[dict[str, Any]] = []
-    errors: list[dict[str, Any]] = []
-
-    for i, mi in enumerate(inputs, start=1):
-        source = str(mi.source_path or mi.metadata.get("smiles", ""))
-        logger.info("[%d/%d] Processing %s", i, len(inputs), mi.name)
-        try:
-            r = run_ensemble_generation(
-                input_source=source,
-                output_dir=str(output_dir),
-                preset=args.preset,
-                config=cfg,
-                name=mi.name,
-                charge=getattr(args, "charge", None),
-                multiplicity=getattr(args, "multiplicity", None),
-                solvent=args.solvent,
-                nproc=args.nproc,
-                keep_all=True if getattr(args, "keep_all", False) else None,
-                ewin=getattr(args, "ewin", None),
-            )
-            if r.status == "completed":
-                results.append({"molecule": mi.name, "status": "completed", "metadata": r.metadata})
-            else:
-                errors.append({"molecule": mi.name, "error": str(r.error)})
-        except Exception as exc:
-            logger.error("  Failed: %s", exc)
-            errors.append({"molecule": mi.name, "error": str(exc)})
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    summary_path = output_dir / f"batch_summary_{timestamp}.json"
-    summary = {
-        "timestamp": timestamp,
-        "total": len(inputs),
-        "successful": len(results),
-        "failed": len(errors),
-        "preset": args.preset,
-        "results": results,
-        "errors": errors,
-    }
-    summary_path.write_text(json.dumps(summary, indent=2))
-    logger.info(
-        "Batch complete: %d/%d successful — summary saved to %s",
-        len(results),
-        len(inputs),
-        summary_path,
-    )
-    return 0 if not errors else 1
+    return _reject_retired_workflow("ensemble")
 
 
 def _parse_levels_json(levels_str: str | None) -> dict[str, Any] | None:
@@ -2355,338 +2455,11 @@ def _parse_levels_json(levels_str: str | None) -> dict[str, Any] | None:
 
 
 def _handle_energy(args: argparse.Namespace) -> int:
-    """Execute the conformer energy workflow."""
-    setup_logging(args.log_level)
-
-    if not args.input and not args.batch_file:
-        print("Error: --input or --batch-file is required", file=sys.stderr)
-        return 1
-
-    levels = _parse_levels_json(args.levels)
-    if args.levels and levels is None:
-        return 1
-
-    if levels is None:
-        levels = {}
-    if args.threshold != 0.99:
-        levels["refinement_threshold"] = args.threshold
-    else:
-        levels.setdefault("refinement_threshold", 0.99)
-
-    cfg = _build_config(args)
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    if args.save_config:
-        from cccp.config import save_config as save_cfg
-
-        save_cfg(cfg, Path(args.save_config))
-        logger.info("Configuration saved to: %s", args.save_config)
-
-    if args.batch_file:
-        return _handle_energy_batch(args, cfg, output_dir, levels)
-
-    try:
-        from acp.workflows.energy import run_conformer_energy
-
-        result = run_conformer_energy(
-            input_source=args.input,
-            output_dir=str(output_dir),
-            preset=args.preset,
-            config=cfg,
-            name=args.name,
-            charge=args.charge,
-            multiplicity=args.multiplicity,
-            solvent=args.solvent,
-            nproc=args.nproc,
-            no_opt=args.no_opt,
-            rank1_only=not args.full_ensemble,
-            levels=levels,
-            ewin=getattr(args, "ewin", None),
-        )
-    except KeyboardInterrupt:
-        logger.warning("Interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("Fatal error: %s", exc)
-        return 1
-
-    if result.status == "completed":
-        meta = result.metadata or {}
-        logger.info("Conformer energy workflow completed successfully")
-        logger.info("  Conformers         : %s", meta.get("n_conformers", "N/A"))
-        logger.info("  Global minimum     : %s", meta.get("global_min_xyz", "N/A"))
-        logger.info("  Thermo CSV         : %s", meta.get("thermo_csv", "N/A"))
-        logger.info(
-            "  Total G(ensemble)  : %s kcal/mol",
-            meta.get("total_gibbs_kcal_mol", "N/A"),
-        )
-        return 0
-
-    logger.error("Conformer energy workflow failed: %s", result.error)
-    return 1
-
-
-def _handle_energy_batch(
-    args: argparse.Namespace,
-    cfg: dict[str, Any],
-    output_dir: Path,
-    levels: dict[str, Any] | None,
-) -> int:
-    """Run the conformer energy workflow for multiple molecules (batch mode)."""
-    from acp.workflows.energy import run_conformer_energy
-    from cccp.io import load_batch_inputs
-
-    logger.info("ACP energy workflow — batch mode")
-    batch_file = Path(args.batch_file)
-    inputs = load_batch_inputs(batch_file)
-
-    logger.info("Found %d molecules to process", len(inputs))
-    results: list[dict[str, Any]] = []
-    errors: list[dict[str, Any]] = []
-
-    for i, mi in enumerate(inputs, start=1):
-        source = str(mi.source_path or mi.metadata.get("smiles", ""))
-        logger.info("[%d/%d] Processing %s", i, len(inputs), mi.name)
-        try:
-            r = run_conformer_energy(
-                input_source=source,
-                output_dir=str(output_dir),
-                preset=args.preset,
-                config=cfg,
-                name=mi.name,
-                charge=getattr(args, "charge", None),
-                multiplicity=getattr(args, "multiplicity", None),
-                solvent=args.solvent,
-                nproc=args.nproc,
-                no_opt=args.no_opt,
-                rank1_only=not args.full_ensemble,
-                levels=levels,
-                ewin=getattr(args, "ewin", None),
-            )
-            if r.status == "completed":
-                results.append({"molecule": mi.name, "status": "completed", "metadata": r.metadata})
-            else:
-                errors.append({"molecule": mi.name, "error": str(r.error)})
-        except Exception as exc:
-            logger.error("  Failed: %s", exc)
-            errors.append({"molecule": mi.name, "error": str(exc)})
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    summary_path = output_dir / f"batch_summary_{timestamp}.json"
-    summary = {
-        "timestamp": timestamp,
-        "total": len(inputs),
-        "successful": len(results),
-        "failed": len(errors),
-        "preset": args.preset,
-        "results": results,
-        "errors": errors,
-    }
-    summary_path.write_text(json.dumps(summary, indent=2))
-    logger.info(
-        "Batch complete: %d/%d successful — summary saved to %s",
-        len(results),
-        len(inputs),
-        summary_path,
-    )
-    return 0 if not errors else 1
+    return _reject_retired_workflow("energy")
 
 
 def _handle_xtbmd_censo_energy(args: argparse.Namespace) -> int:
-    """Execute the xTB-MD conformer-search free-energy workflow."""
-    setup_logging(args.log_level)
-
-    if not args.input and not args.batch_file:
-        print("Error: --input or --batch-file is required", file=sys.stderr)
-        return 1
-
-    levels = _parse_levels_json(args.levels)
-    if args.levels and levels is None:
-        return 1
-    if levels is None:
-        levels = {}
-    if args.threshold != 0.99:
-        levels["refinement_threshold"] = args.threshold
-    else:
-        # Match energy handler semantics: an explicit --levels
-        # refinement_threshold survives; only the default is backfilled.
-        levels.setdefault("refinement_threshold", 0.99)
-
-    cfg = _build_config(args)
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    if args.save_config:
-        from cccp.config import save_config as save_cfg
-
-        save_cfg(cfg, Path(args.save_config))
-        logger.info("Configuration saved to: %s", args.save_config)
-
-    if args.batch_file:
-        return _handle_xtbmd_censo_energy_batch(args, cfg, output_dir, levels)
-
-    try:
-        from acp.workflows.xtbmd_censo_energy import run_xtbmd_censo_energy
-
-        result = run_xtbmd_censo_energy(
-            input_source=args.input,
-            output_dir=str(output_dir),
-            preset=args.preset,
-            config=cfg,
-            name=args.name,
-            charge=args.charge,
-            multiplicity=args.multiplicity,
-            solvent=args.solvent,
-            nproc=args.nproc,
-            no_opt=args.no_opt,
-            levels=levels,
-            threshold=None,  # refinement_threshold already merged into levels
-            ewin=args.ewin,
-            rank1_only=args.rank1_only,
-            resume=args.resume,
-            md_temperature=args.md_temp,
-            md_time_ps=args.md_time,
-            md_dump_fs=args.md_dump,
-            md_step_fs=args.md_step,
-            md_hmass=args.md_hmass,
-            md_shake=not args.md_no_shake,
-            md_nvt=args.md_nvt,
-            md_seed=args.md_seed,
-            md_seeds=args.md_seeds,
-            md_method=args.md_method,
-            md_timeout=getattr(args, "md_timeout", None),
-            conv_check=args.conv_check,
-            conv_novelty_max=args.conv_novelty_max,
-            conv_rmsd=args.conv_rmsd,
-            max_frames=args.max_frames,
-            opt_gfn_level=args.opt_gfn,
-            opt_level=args.opt_level,
-            opt_timeout=args.opt_timeout,
-            keep_frames=args.keep_frames,
-            edis=args.edis,
-            gdis=args.gdis,
-        )
-    except KeyboardInterrupt:
-        logger.warning("Interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("Fatal error: %s", exc)
-        return 1
-
-    if result.status == "completed":
-        meta = result.metadata or {}
-        logger.info("xTB-MD CENSO energy workflow completed successfully")
-        logger.info("  Conformers         : %s", meta.get("n_conformers", "N/A"))
-        logger.info("  Global minimum     : %s", meta.get("global_min_xyz", "N/A"))
-        logger.info("  Thermo CSV         : %s", meta.get("thermo_csv", "N/A"))
-        logger.info(
-            "  Frames (raw/kept)  : %s / %s",
-            meta.get("n_frames_raw", "N/A"),
-            meta.get("n_frames", "N/A"),
-        )
-        logger.info(
-            "  Batch opt ok/fail  : %s / %s",
-            meta.get("n_ok", "N/A"),
-            meta.get("n_failed", "N/A"),
-        )
-        logger.info(
-            "  Total G(ensemble)  : %s kcal/mol",
-            meta.get("total_gibbs_kcal_mol", "N/A"),
-        )
-        return 0
-
-    logger.error("xTB-MD CENSO energy workflow failed: %s", result.error)
-    return 1
-
-
-def _handle_xtbmd_censo_energy_batch(
-    args: argparse.Namespace,
-    cfg: dict[str, Any],
-    output_dir: Path,
-    levels: dict[str, Any] | None,
-) -> int:
-    """Run the xTB-MD CENSO energy workflow for multiple molecules (batch mode)."""
-    from acp.workflows.xtbmd_censo_energy import run_xtbmd_censo_energy
-    from cccp.io import load_batch_inputs
-
-    logger.info("ACP xtbmd_censo_energy workflow — batch mode")
-    batch_file = Path(args.batch_file)
-    inputs = load_batch_inputs(batch_file)
-
-    logger.info("Found %d molecules to process", len(inputs))
-    results: list[dict[str, Any]] = []
-    errors: list[dict[str, Any]] = []
-
-    for i, mi in enumerate(inputs, start=1):
-        source = str(mi.source_path or mi.metadata.get("smiles", ""))
-        logger.info("[%d/%d] Processing %s", i, len(inputs), mi.name)
-        try:
-            r = run_xtbmd_censo_energy(
-                input_source=source,
-                output_dir=str(output_dir),
-                preset=args.preset,
-                config=cfg,
-                name=mi.name,
-                charge=getattr(args, "charge", None),
-                multiplicity=getattr(args, "multiplicity", None),
-                solvent=args.solvent,
-                nproc=args.nproc,
-                no_opt=args.no_opt,
-                levels=levels,
-                threshold=None,  # refinement_threshold already merged into levels
-                ewin=args.ewin,
-                rank1_only=args.rank1_only,
-                resume=args.resume,
-                md_temperature=args.md_temp,
-                md_time_ps=args.md_time,
-                md_dump_fs=args.md_dump,
-                md_step_fs=args.md_step,
-                md_hmass=args.md_hmass,
-                md_shake=not args.md_no_shake,
-                md_nvt=args.md_nvt,
-                md_seed=args.md_seed,
-                md_seeds=args.md_seeds,
-                md_method=args.md_method,
-                md_timeout=getattr(args, "md_timeout", None),
-                conv_check=args.conv_check,
-                conv_novelty_max=args.conv_novelty_max,
-                conv_rmsd=args.conv_rmsd,
-                max_frames=args.max_frames,
-                opt_gfn_level=args.opt_gfn,
-                opt_level=args.opt_level,
-                opt_timeout=args.opt_timeout,
-                keep_frames=args.keep_frames,
-                edis=args.edis,
-                gdis=args.gdis,
-            )
-            if r.status == "completed":
-                results.append({"molecule": mi.name, "status": "completed", "metadata": r.metadata})
-            else:
-                errors.append({"molecule": mi.name, "error": str(r.error)})
-        except Exception as exc:
-            logger.error("  Failed: %s", exc)
-            errors.append({"molecule": mi.name, "error": str(exc)})
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    summary_path = output_dir / f"batch_summary_{timestamp}.json"
-    summary = {
-        "timestamp": timestamp,
-        "total": len(inputs),
-        "successful": len(results),
-        "failed": len(errors),
-        "preset": args.preset,
-        "results": results,
-        "errors": errors,
-    }
-    summary_path.write_text(json.dumps(summary, indent=2))
-    logger.info(
-        "Batch complete: %d/%d successful — summary saved to %s",
-        len(results),
-        len(inputs),
-        summary_path,
-    )
-    return 0 if not errors else 1
+    return _reject_retired_workflow("xtbmd_censo_energy")
 
 
 def _handle_nmr(args: argparse.Namespace) -> int:
@@ -2844,6 +2617,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "run":
         dispatch: dict[str, Callable[[argparse.Namespace], int]] = {
+            "Confsearch": _handle_confsearch,
+            "PESsearch": _handle_pessearch,
+            "Lowconfirm": _handle_lowconfirm,
+            "Highconfirm": _handle_highconfirm,
             "ensemble": _handle_ensemble,
             "energy": _handle_energy,
             "nmr": _handle_nmr,

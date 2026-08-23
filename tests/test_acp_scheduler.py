@@ -5,9 +5,12 @@
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
+import threading
 import time
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -125,9 +128,7 @@ def test_mechanism_frontend_payload_materializes_and_builds_cmd(
             "multiplicity": 1,
         },
         "ts_guess": None,
-        "routes": [
-            {"reactant_id": "reactant", "product_id": "product", "label": "frontend-shape"}
-        ],
+        "routes": [{"reactant_id": "reactant", "product_id": "product", "label": "frontend-shape"}],
     }
     inputs_dir = tmp_path / "job" / "inputs"
     work_dir = tmp_path / "job"
@@ -307,7 +308,7 @@ def test_mechanism_reaction_json_materializes_and_sets_schema_version(tmp_path: 
         )
 
         mgr._materialize_mechanism_reaction_if_present(record)
-        reaction_path = work_dir / "mechanism_study" / "study-lock" / "reaction.json"
+        reaction_path = work_dir / "WORK" / "08_ANALYSIS" / "reaction.json"
         assert reaction_path.is_file()
         assert json.loads(reaction_path.read_text(encoding="utf-8"))["schema_version"] == 2
 
@@ -404,6 +405,57 @@ def test_manager_runs_fake_job_to_completion(tmp_path: Path) -> None:
     assert "stage.started" in types
     assert "job.completed" in types
     mgr.shutdown()
+
+
+def test_batch_parallelism_one_persists_all_jobs_and_dispatches_fifo(tmp_path: Path) -> None:
+    """A two-molecule batch creates two durable jobs before execution is gated."""
+    runner = MagicMock()
+    runner.poll.return_value = (False, None)
+    mgr = JobManager(run_root=tmp_path, runner=runner, poll_interval=30, local_max_jobs=4)
+    try:
+        resources = {"batch_id": "batch-1", "batch_index": 0, "batch_total": 2, "parallelism": 1}
+        first = mgr.submit(
+            JobSpec(workflow="Confsearch", name="mol-1", resources={**resources, "batch_index": 0})
+        )
+        second = mgr.submit(
+            JobSpec(workflow="Confsearch", name="mol-2", resources={**resources, "batch_index": 1})
+        )
+
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            first_now = mgr.get(first.id)
+            second_now = mgr.get(second.id)
+            if (
+                first_now is not None
+                and second_now is not None
+                and first_now.status == JobStatus.RUNNING
+                and second_now.status == JobStatus.QUEUED
+            ):
+                break
+            time.sleep(0.05)
+
+        assert mgr.store.counts()["running"] == 1
+        assert mgr.store.counts()["queued"] == 1
+        assert runner.submit.call_count == 1
+
+        first_now = mgr.get(first.id)
+        assert first_now is not None
+        first_now.status = JobStatus.COMPLETED
+        first_now.completed_at = "2026-08-23T00:00:00+00:00"
+        mgr.store.update(first_now)
+        mgr._dispatch_queued_jobs()
+
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            second_now = mgr.get(second.id)
+            if second_now is not None and second_now.status == JobStatus.RUNNING:
+                break
+            time.sleep(0.05)
+
+        assert mgr.get(second.id).status == JobStatus.RUNNING  # type: ignore[union-attr]
+        assert runner.submit.call_count == 2
+    finally:
+        mgr.shutdown()
 
 
 def test_manager_rejects_unknown_workflow(tmp_path: Path) -> None:
@@ -536,6 +588,30 @@ def test_output_dir_outside_run_root_is_clamped(tmp_path: Path) -> None:
             f"work_dir {work_dir} escaped run_root {run_root}"
         )
         assert "evil_elsewhere" not in record.work_dir
+    finally:
+        mgr.shutdown()
+
+
+def test_output_dir_is_parent_override_with_canonical_task_leaf(tmp_path: Path) -> None:
+    """An in-root output override cannot replace the canonical task leaf."""
+    mgr = _quiet_manager(tmp_path)
+    try:
+        parent = tmp_path / "custom-parent"
+        record = mgr.submit(
+            JobSpec(
+                workflow="Confsearch",
+                name="legacy-random-label",
+                input={"source": "CCO"},
+                molecule_name="ethanol",
+                task_name="opt",
+                remark="final",
+                output_dir=str(parent),
+            )
+        )
+        work_dir = Path(record.work_dir)
+        assert work_dir.parent == parent.resolve()
+        assert work_dir.name == "ethanol_opt_final"
+        assert record.spec.name == work_dir.name
     finally:
         mgr.shutdown()
 
@@ -795,9 +871,10 @@ def test_migration_006_and_mechanism_store_helpers(tmp_path: Path) -> None:
     applied_first = migrate(db_path)
     applied_second = migrate(db_path)
 
-    # 001-007 apply directly (008 checks the jobs table, which only
-    # JobStore._init_schema creates, so it lands on the JobStore init below).
-    assert applied_first == 6
+    # 001-012 apply directly except the jobs-gated ones (002/005/008 check
+    # the jobs table, which only JobStore._init_schema creates, so they land
+    # on the JobStore init below).
+    assert applied_first == 9
     assert applied_second == 0
 
     with sqlite3.connect(db_path) as conn:
@@ -851,3 +928,101 @@ def test_migration_006_and_mechanism_store_helpers(tmp_path: Path) -> None:
     assert decision is not None
     assert decision["status"] == "waiting"
     assert store.list_decision_points("study-1", limit=10)[0]["id"] == "decision-1"
+
+
+# ---------------------------------------------------------------------------
+# v2 naming/flattening (Unit A): task dirs are "<molecule>_<task>_<remark>",
+# job_id stays the timestamped DB identity and moves into the log content.
+# ---------------------------------------------------------------------------
+
+
+def _quiet_manager(tmp_path: Path) -> JobManager:
+    runner = MagicMock()
+    runner.poll.return_value = (False, None)
+    return JobManager(run_root=tmp_path, runner=runner, poll_interval=30)
+
+
+def test_submit_v2_named_task_dir_and_timestamped_job_id(tmp_path: Path) -> None:
+    mgr = _quiet_manager(tmp_path)
+    try:
+        record = mgr.submit(
+            JobSpec(
+                workflow="Confsearch",
+                name="demo",
+                input={"source": "CCO"},
+                molecule_name="ethanol",
+                task_name="opt",
+                remark="final",
+            )
+        )
+        work_dir = Path(record.work_dir)
+        assert work_dir.name == "ethanol_opt_final"
+        assert record.spec.name == work_dir.name
+        assert work_dir.parent.name == mgr.default_project_id
+        assert work_dir.parent.parent == tmp_path.resolve()
+        # job_id keeps the {ts}_{seq:03d}_{safe_name} format as DB identity.
+        assert re.fullmatch(r"\d{8}_\d{6}_\d{3}_demo", record.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_submit_without_task_name_uses_workflow_component(tmp_path: Path) -> None:
+    mgr = _quiet_manager(tmp_path)
+    try:
+        record = mgr.submit(JobSpec(workflow="fake", name="legacyjob", input={"source": "Y"}))
+        assert Path(record.work_dir).name == "legacyjob_fake"
+    finally:
+        mgr.shutdown()
+
+
+def test_submit_dedupes_colliding_task_dirs(tmp_path: Path) -> None:
+    mgr = _quiet_manager(tmp_path)
+    try:
+        spec = JobSpec(workflow="fake", name="dup", input={"source": "Y"})
+        first = mgr.submit(spec)
+        second = mgr.submit(spec)
+        assert Path(first.work_dir).name == "dup_fake"
+        assert Path(second.work_dir).name == "dup_fake__02"
+        assert first.spec.name == Path(first.work_dir).name
+        assert second.spec.name == Path(second.work_dir).name
+    finally:
+        mgr.shutdown()
+
+
+def _launch_with_mocked_popen(tmp_path: Path) -> JobRecord:
+    """Drive JobRunner.submit with Popen mocked so only pre-launch io runs."""
+    work_dir = tmp_path / "proj" / "ethanol_energy"
+    work_dir.mkdir(parents=True)
+    spec = JobSpec(
+        workflow="energy",
+        name="demo",
+        input={"source": "CCO", "source_type": "smiles"},
+        molecule_name="ethanol",
+    )
+    record = JobRecord(id="20260823_120000_001_demo", spec=spec, work_dir=str(work_dir))
+    event_log = JobEventLog(work_dir / "events.jsonl")
+    runner = JobRunner()
+    with patch("acp.scheduler.runner.subprocess.Popen") as popen:
+        popen.return_value = MagicMock(pid=12345)
+        runner.submit(record, event_log, threading.Event())
+    return record
+
+
+def test_stdout_log_header_carries_job_id(tmp_path: Path) -> None:
+    record = _launch_with_mocked_popen(tmp_path)
+    work_dir = Path(record.work_dir)
+    stdout = (work_dir / "WORK" / "00_RUNTIME" / "stdout.log").read_text(encoding="utf-8")
+    stderr = (work_dir / "WORK" / "00_RUNTIME" / "stderr.log").read_text(encoding="utf-8")
+    for text in (stdout, stderr):
+        assert f"# job_id: {record.id}" in text
+        assert "# workflow: energy" in text
+        assert f"# task_dir_name: {work_dir.name}" in text
+        assert "# command: " in text
+
+
+def test_task_json_carries_job_id_and_task_dir_name(tmp_path: Path) -> None:
+    record = _launch_with_mocked_popen(tmp_path)
+    payload = json.loads((Path(record.work_dir) / "task.json").read_text(encoding="utf-8"))
+    assert payload["task_id"] == record.id
+    assert payload["task_dir_name"] == "ethanol_energy"
+    assert payload["workflow"] == "energy"

@@ -388,6 +388,16 @@ function selectJob(jobId) {
 }
 
 // --- detail -------------------------------------------------------------
+function canonicalTaskName(j) {
+  if (!j) return "";
+  if (j.task_dir_name) return String(j.task_dir_name);
+  if (j.work_dir) {
+    const parts = String(j.work_dir).replace(/\\/g, "/").split("/");
+    if (parts.length && parts[parts.length - 1]) return parts[parts.length - 1];
+  }
+  return j.spec && j.spec.name ? String(j.spec.name) : "";
+}
+
 function renderDetail(j) {
   if (!j) { $("detail-area").innerHTML = ""; return; }
   const pct = Math.round((j.progress || 0) * 100);
@@ -408,7 +418,7 @@ function renderDetail(j) {
       "</div>" +
       '<div class="kv">' +
         "<div class='k'>Workflow</div><div>" + escapeHtml(j.spec.workflow) + "</div>" +
-        "<div class='k'>Name</div><div>" + escapeHtml(j.spec.name || D) + "</div>" +
+        "<div class='k'>Name</div><div>" + escapeHtml(canonicalTaskName(j) || D) + "</div>" +
         "<div class='k'>Current stage</div><div>" + escapeHtml(j.current_stage || D) + "</div>" +
         "<div class='k'>PID</div><div>" + (j.pid != null ? escapeHtml(j.pid) : D) + "</div>" +
         "<div class='k'>Created</div><div>" + escapeHtml(fmt(j.created_at)) + "</div>" +
@@ -472,12 +482,12 @@ function handleEvent(jobId, type, rawData) {
     case "stage.failed":   logLine('<span class="stage fail">X stage <b>' + escapeHtml(d.stage) + "</b> failed: " + escapeHtml(d.error || "") + "</span>", "stage fail"); break;
     case "log":            logLine('<span class="msg">' + escapeHtml(d.line || "") + "</span>"); break;
     case "job.created":    logLine('<span class="sys">* job created (' + escapeHtml(d.workflow || "") + ")</span>", "sys"); break;
-    case "job.started":    logLine('<span class="sys">&gt;&gt; job started</span>", "sys"); break;
+    case "job.started":    logLine('<span class="sys">&gt;&gt; job started</span>', "sys"); break;
     case "process.starting":logLine('<span class="sys">* process: ' + escapeHtml(d.cmd || "") + "</span>", "sys"); break;
-    case "job.cancelling": logLine('<span class="sys">~ cancelling...</span>", "sys"); break;
+    case "job.cancelling": logLine('<span class="sys">~ cancelling...</span>', "sys"); break;
     case "job.completed":  logLine('<span class="stage done">## job COMPLETED (exit ' + escapeHtml(d.exit_code != null ? d.exit_code : "0") + ")</span>", "stage done"); break;
     case "job.failed":     logLine('<span class="err">## job FAILED' + (d.exit_code != null ? " (exit " + escapeHtml(d.exit_code) + ")" : "") + "</span>", "err"); break;
-    case "job.cancelled":  logLine('<span class="sys">## job CANCELLED</span>", "sys"); break;
+    case "job.cancelled":  logLine('<span class="sys">## job CANCELLED</span>', "sys"); break;
     case "done":
       logLine('<span class="sys">## terminal state: ' + escapeHtml(d.status || "") + "</span>", "sys");
       closeEventStream();

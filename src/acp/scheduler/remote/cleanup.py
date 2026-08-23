@@ -379,9 +379,16 @@ class RemoteCleanup:
             reason="ok (no cleanup needed)",
         )
 
-    def delete_job_dirs(self, job_id: str) -> dict[str, Any]:
-        """Remove the remote working directory for a single job from every node."""
-        return self.delete_project_dirs(project_id="job", job_ids=[job_id])
+    def delete_job_dirs(self, job_id: str, dir_names: list[str] | None = None) -> dict[str, Any]:
+        """Remove the remote working directory for a single job from every node.
+
+        *dir_names* lists the remote directory leaves to remove (v2
+        ``task_dir_name`` for new jobs, plus the legacy ``job_id`` leaf for
+        pre-migration jobs); when omitted only the legacy ``job_id`` leaf
+        is removed.
+        """
+        leaves = [job_id] + (dir_names or [])
+        return self.delete_project_dirs(project_id="job", job_ids=leaves)
 
     def delete_project_dirs(
         self,

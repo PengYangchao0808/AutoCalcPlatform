@@ -85,203 +85,80 @@ def test_mechanism_parser_accepts_config_only_invocation() -> None:
     assert args.mechanism_config == "./mechanism_config.json"
 
 
-def test_mechanism_study_routing_when_study_flag_present(
+def test_mechanism_cli_retired_rejects_study_flag_invocation(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
-    captured: dict[str, object] = {}
+    """Confsearch v1.0: the one-shot study CLI rejects new runs (rc=2)."""
+    called = {"n": 0}
 
     def fake_run_mechanism_study(**kwargs: object) -> dict[str, object]:
-        captured.update(kwargs)
-        return {
-            "study_id": "study_001",
-            "study_dir": str(tmp_path / "mechanism_study" / "study_001"),
-            "status": "completed",
-            "network_size": {"states": 2, "elementary_steps": 1},
-            "gates_summary": {"G0": "pass"},
-            "pending_decisions": [],
-        }
+        called["n"] += 1
+        return {"status": "completed"}
 
     monkeypatch.setattr("acp.mechanism.study_runner.run_mechanism_study", fake_run_mechanism_study)
 
-    exit_code = _handle_mechanism(
-        _mechanism_args(output=str(tmp_path), study_id="study_001", conformer_mode="xtb-fast")
-    )
-
-    assert exit_code == 0
-    assert captured["study_id"] == "study_001"
-    assert captured["conformer_mode"] == "xtb-fast"
-    assert captured["max_elementary_steps"] is None
-
-
-def test_mechanism_defaults_to_study_routing_without_study_flags(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> None:
-    captured: dict[str, object] = {}
-
-    def fake_run_mechanism_study(**kwargs: object) -> dict[str, object]:
-        captured.update(kwargs)
-        return {
-            "study_id": "study_default",
-            "study_dir": str(tmp_path / "mechanism_study" / "study_default"),
-            "status": "completed",
-            "network_size": {"states": 2, "elementary_steps": 1},
-            "gates_summary": {"G0": "pass"},
-            "pending_decisions": [],
-        }
-
-    monkeypatch.setattr("acp.mechanism.study_runner.run_mechanism_study", fake_run_mechanism_study)
-
-    exit_code = _handle_mechanism(_mechanism_args(output=str(tmp_path)))
-
-    assert exit_code == 0
-    assert captured["input_source"] == "C=C"
-    assert captured["product_source"] == "CC"
-    assert captured["study_id"] is None
-    assert captured["conformer_mode"] is None
-    assert captured["max_elementary_steps"] is None
-    assert captured["promotion_policy"] is None
-
-
-def test_mechanism_config_only_run_loads_paths_and_resources(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> None:
-    captured: dict[str, object] = {}
-    reactant = tmp_path / "reactant.xyz"
-    product = tmp_path / "product.xyz"
-    reactant.write_text("1\nR\nH 0 0 0\n", encoding="utf-8")
-    product.write_text("1\nP\nH 0 0 0\n", encoding="utf-8")
-    mechanism_config = tmp_path / "mechanism_config.json"
-    mechanism_config.write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "method": {
-                    "levels": {
-                        "scan": {"scan_points": 25, "conformer_mode": "xtb-fast"},
-                        "sp": {"functional": "wB97M-V", "basis": "def2-TZVPP"},
-                    }
-                },
-                "resolved": {
-                    "preset": "rph-s3",
-                    "strategy": "guided-scan",
-                    "fidelity": "s3",
-                    "scan_points": 21,
-                    "irc_points": 30,
-                    "study_id": "study_cfg",
-                },
-                "roles": {
-                    "reactant": {
-                        "path": "reactant.xyz",
-                        "charge": 0,
-                        "multiplicity": 1,
-                    },
-                    "product": {"path": "product.xyz", "charge": 0, "multiplicity": 1},
-                    "ts_guess": None,
-                },
-                "resources": {"nproc": 8, "mem": "16GB"},
-            }
-        ),
-        encoding="utf-8",
-    )
-
-    def fake_run_mechanism_study(**kwargs: object) -> dict[str, object]:
-        captured.update(kwargs)
-        return {
-            "study_id": "study_cfg",
-            "study_dir": str(tmp_path / "mechanism_study" / "study_cfg"),
-            "status": "completed",
-            "network_size": {"states": 2, "elementary_steps": 1},
-            "gates_summary": {"G0": "pass"},
-            "pending_decisions": [],
-        }
-
-    monkeypatch.setattr("acp.mechanism.study_runner.run_mechanism_study", fake_run_mechanism_study)
-
-    exit_code = _handle_mechanism(
-        _mechanism_args(
-            input=None,
-            product=None,
-            output=str(tmp_path),
-            mechanism_config=str(mechanism_config),
+    assert (
+        _handle_mechanism(
+            _mechanism_args(output=str(tmp_path), study_id="study_001", conformer_mode="xtb-fast")
         )
+        == 2
     )
-
-    assert exit_code == 0
-    assert captured["input_source"] == str(reactant)
-    assert captured["product_source"] == str(product)
-    assert captured["charge"] == 0
-    assert captured["multiplicity"] == 1
-    assert captured["preset"] == "rph-s3"
-    assert captured["study_id"] == "study_cfg"
-    assert captured["mechanism_config_path"] == mechanism_config
-    config = captured["config"]
-    assert isinstance(config, dict)
-    assert config["resources"]["nproc"] == 8
-    assert config["resources"]["mem"] == "16GB"
+    assert called["n"] == 0
 
 
-def test_mechanism_config_cli_fidelity_overrides_file(
+def test_mechanism_cli_retired_rejects_default_invocation(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
-    captured: dict[str, object] = {}
-    reactant = tmp_path / "reactant.xyz"
-    reactant.write_text("1\nR\nH 0 0 0\n", encoding="utf-8")
-    mechanism_config = tmp_path / "mechanism_config.json"
-    mechanism_config.write_text(
+    called = {"n": 0}
+
+    def fake_run_mechanism_study(**kwargs: object) -> dict[str, object]:
+        called["n"] += 1
+        return {"status": "completed"}
+
+    monkeypatch.setattr("acp.mechanism.study_runner.run_mechanism_study", fake_run_mechanism_study)
+
+    assert _handle_mechanism(_mechanism_args(output=str(tmp_path))) == 2
+    assert called["n"] == 0
+
+
+def test_mechanism_cli_retired_rejects_config_only_invocation(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    config_path = tmp_path / "mechanism_config.json"
+    config_path.write_text(
         json.dumps(
             {
                 "version": 1,
                 "method": {},
-                "resolved": {"fidelity": "s3"},
+                "resolved": {},
                 "roles": {
-                    "reactant": {"path": str(reactant), "charge": 0, "multiplicity": 1},
-                    "product": None,
+                    "reactant": {"path": str(tmp_path / "reactant.xyz")},
+                    "product": {"path": str(tmp_path / "product.xyz")},
                     "ts_guess": None,
                 },
-                "resources": {},
+                "resources": {"nproc": 12, "mem": "32GB"},
             }
         ),
         encoding="utf-8",
     )
-
-    def fake_run_mechanism_study(**kwargs: object) -> dict[str, object]:
-        captured.update(kwargs)
-        return {
-            "study_id": "study_override",
-            "study_dir": str(tmp_path / "mechanism_study" / "study_override"),
-            "status": "completed",
-            "network_size": {"states": 1, "elementary_steps": 0},
-            "gates_summary": {},
-            "pending_decisions": [],
-        }
-
-    monkeypatch.setattr("acp.mechanism.study_runner.run_mechanism_study", fake_run_mechanism_study)
-
-    exit_code = _handle_mechanism(
-        _mechanism_args(
-            input=None,
-            product=None,
-            fidelity="s4",
-            output=str(tmp_path),
-            mechanism_config=str(mechanism_config),
-        )
+    assert (
+        _handle_mechanism(_mechanism_args(output=str(tmp_path), mechanism_config=str(config_path)))
+        == 2
     )
 
-    assert exit_code == 0
-    assert captured["fidelity"] == "s4"
 
-
-def test_mechanism_config_missing_file_returns_error(tmp_path: Path) -> None:
-    exit_code = _handle_mechanism(
-        _mechanism_args(
-            input=None,
-            product=None,
-            output=str(tmp_path),
-            mechanism_config=str(tmp_path / "missing.json"),
+def test_mechanism_cli_retired_rejects_fidelity_overrides(monkeypatch: MonkeyPatch) -> None:
+    assert (
+        _handle_mechanism(
+            _mechanism_args(output="./out", strategy="rph-reverse", fidelity="s4")
         )
+        == 2
     )
 
-    assert exit_code == 1
+
+def test_mechanism_cli_retired_rejects_missing_config_file(tmp_path: Path) -> None:
+    missing = tmp_path / "does_not_exist.json"
+    assert _handle_mechanism(_mechanism_args(output=str(tmp_path), mechanism_config=str(missing))) == 2
 
 
 def test_mechanism_resume_parser_and_dispatch(monkeypatch: MonkeyPatch) -> None:
@@ -353,76 +230,27 @@ def test_catalog_mechanism_profile_and_new_fields_validate() -> None:
     assert levels["scan"]["auto_converge"] is True
 
 
-def test_mechanism_study_waiting_exits_with_review_code(
+def test_mechanism_cli_retired_waiting_flow_rejected(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
-    from acp.scheduler.jobs import EXIT_WAITING_REVIEW
-
-    waiting_summary = {
-        "study_id": "study_gate",
-        "study_dir": str(tmp_path / "mechanism_study" / "study_gate"),
-        "status": "waiting",
-        "network_size": {"states": 2, "elementary_steps": 0},
-        "gates_summary": {"G3": "review"},
-        "pending_decisions": ["decision_1"],
-    }
+    """The retired CLI rejects runs that would previously enter review wait."""
     monkeypatch.setattr(
-        "acp.mechanism.study_runner.run_mechanism_study",
-        lambda **_kwargs: waiting_summary,
+        "acp.mechanism.study_runner.waiting_study_exists", lambda root, sid: False
     )
-
-    exit_code = _handle_mechanism(
-        _mechanism_args(output=str(tmp_path), study_id="study_gate")
-    )
-
-    assert exit_code == EXIT_WAITING_REVIEW
-    payload_path = tmp_path / "review_payload.json"
-    assert payload_path.exists()
-    payload = json.loads(payload_path.read_text(encoding="utf-8"))
-    assert payload["study_id"] == "study_gate"
-    assert payload["status"] == "waiting"
-    assert payload["pending_decisions"] == ["decision_1"]
+    assert _handle_mechanism(_mechanism_args(output=str(tmp_path))) == 2
 
 
-def test_mechanism_study_restart_resumes_waiting_checkpoint(
+def test_mechanism_cli_retired_restart_rejected(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
-    study_dir = tmp_path / "mechanism_study" / "study_gate"
-    study_dir.mkdir(parents=True)
-    (study_dir / "study.json").write_text(
-        json.dumps({"study_id": "study_gate", "status": "waiting", "metadata": {}}),
-        encoding="utf-8",
+    """A waiting checkpoint no longer re-enters the (retired) CLI study flow."""
+    monkeypatch.setattr(
+        "acp.mechanism.study_runner.waiting_study_exists", lambda root, sid: True
     )
-    (tmp_path / "job.json").write_text(
-        json.dumps(
-            {
-                "id": "job-x",
-                "result": {
-                    "review_payload": {"study_id": "study_gate", "status": "waiting"},
-                    "review_resolution": {"requeue": True, "decisions": {"decision_1": "approve"}},
-                },
-            }
-        ),
-        encoding="utf-8",
+    monkeypatch.setattr(
+        "acp.mechanism.study_runner.read_review_handoff",
+        lambda root: ("study_restart", []),
     )
-    captured: dict[str, object] = {}
+    assert _handle_mechanism(_mechanism_args(output=str(tmp_path))) == 2
 
-    def fake_resume(**kwargs: object) -> dict[str, object]:
-        captured.update(kwargs)
-        return {
-            "study_id": "study_gate",
-            "study_dir": str(study_dir),
-            "status": "running",
-            "network_size": {"states": 2, "elementary_steps": 1},
-            "gates_summary": {"G0": "pass"},
-            "pending_decisions": [],
-        }
 
-    monkeypatch.setattr("acp.mechanism.study_runner.resume_mechanism_study", fake_resume)
-
-    exit_code = _handle_mechanism(_mechanism_args(output=str(tmp_path)))
-
-    assert exit_code == 0
-    assert captured["study_id"] == "study_gate"
-    assert Path(str(captured["study_root"])) == tmp_path
-    assert captured["decision_resolutions"] == {"decision_1": "approve"}

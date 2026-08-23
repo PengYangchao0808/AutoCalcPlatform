@@ -83,6 +83,11 @@ from acp.api.v1_schemas import (
     MechanismJobMethod,
     MechanismPlanRequest,
     MechanismPlanResponse,
+    MechanismProjectCreateRequest,
+    MechanismProjectDetail,
+    MechanismProjectListResponse,
+    MechanismProjectModel,
+    MechanismProjectTimelineEntry,
     MechanismRolePayload,
     MechanismStudyCreateRequest,
     MechanismStudyDetail,
@@ -118,6 +123,9 @@ from acp.api.v1_schemas import (
     StructureAssetModel,
     StructureParseRequest,
     StructureParseResponse,
+    StructureSourceDetailResponse,
+    StructureSourceListResponse,
+    StructureSourceSummary,
     StudyPromoteResponse,
     StudyResumeResponse,
     UploadResponse,
@@ -174,6 +182,8 @@ from acp.scheduler.remote.node_manager import NodeManager
 from acp.scheduler.runner import find_workflow_state, populate_mechanism_study_result_metadata
 from acp.scheduler.stage_tasks import StageTask, StageTaskStore
 from acp.scheduler.store import JobStore
+from acp.scheduler.structure_sources import StructureSourceService
+from acp.storage.layout import runtime_file
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +251,9 @@ def _record_to_v1_model(
             project_id=spec.project_id,
             execution_mode=spec.execution_mode,
             target_node=spec.target_node,
+            molecule_name=spec.molecule_name,
+            task_name=spec.task_name,
+            remark=spec.remark,
         ),
         status=record.status.value,
         work_dir=record.work_dir,
@@ -490,7 +503,10 @@ def _study_report_dir(study_row: dict[str, Any], record: JobRecord | None) -> Pa
             return Path(study_dir)
     if record is None or not record.work_dir:
         return None
-    return Path(record.work_dir) / "mechanism_study" / str(study_row.get("id") or "")
+    from acp.mechanism.layout import find_study_layout
+
+    layout = find_study_layout(Path(record.work_dir), str(study_row.get("id") or "") or None)
+    return layout.analysis_root if layout is not None else None
 
 
 def _mechanism_study_or_404(store: JobStore, study_id: str) -> dict[str, Any]:
@@ -957,12 +973,15 @@ def list_projects(request: Request) -> ProjectListResponse:
 @router.post("/projects", response_model=ProjectModel, status_code=201)
 def create_project(req: ProjectCreateRequest, request: Request) -> ProjectModel:
     manager = _manager(request)
-    project = manager.projects.create_project(
-        req.name,
-        description=req.description,
-        tags=req.tags,
-        settings=req.settings,
-    )
+    try:
+        project = manager.projects.create_project(
+            req.name,
+            description=req.description,
+            tags=req.tags,
+            settings=req.settings,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _project_to_model(project)
 
 
@@ -982,7 +1001,10 @@ def update_project(
     request: Request,
 ) -> ProjectModel:
     manager = _manager(request)
-    project = manager.projects.update_project(project_id, **_model_payload(req))
+    try:
+        project = manager.projects.update_project(project_id, **_model_payload(req))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if project is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return _project_to_model(project)
@@ -1024,6 +1046,89 @@ def list_project_jobs(
     )
 
 
+_INPUT_FILE_SUFFIXES = {".xyz", ".gjf", ".sdf", ".mol", ".com", ".inp", ".log", ".out"}
+
+
+def _job_input_source_stem(inp: dict[str, Any]) -> str:
+    """Derive a molecule-name component from the job input source.
+
+    File-like sources (path separators or a known molecular suffix) yield
+    their path stem; anything else (SMILES, raw text) is returned verbatim.
+    """
+    source = str(inp.get("source") or inp.get("input") or inp.get("smiles") or "")
+    if not source:
+        return ""
+    if any(sep in source for sep in ("/", "\\")) or Path(source).suffix.lower() in (
+        _INPUT_FILE_SUFFIXES
+    ):
+        return Path(source).stem
+    return source
+
+
+_STAGE_WORKFLOW_SOURCE: dict[str, str] = {
+    "PESsearch": "S2",
+    "Lowconfirm": "S3",
+    "Highconfirm": "S4",
+}
+
+
+def _resolve_stage_artifact_ref(
+    workflow: str,
+    inp: dict[str, Any],
+    manager: Any,
+) -> dict[str, Any]:
+    """Validate a stage workflow's artifact reference (plan §8) and pin it.
+
+    The server resolves the source job, verifies existence + sha256 + kind +
+    stage relation, and stores the absolute manifest path in ``input["from"]``
+    so the scheduler runner never re-resolves (or re-trusts) the reference.
+    """
+    from acp.mechanism.stages.handoff import ArtifactRefError, validate_stage_artifact
+
+    stage = _STAGE_WORKFLOW_SOURCE[workflow]
+    source_job_id = str(inp.get("source_job_id") or "").strip()
+    relative_path = str(
+        inp.get("from_artifact") or inp.get("relative_path") or ""
+    ).strip()
+    if not source_job_id or not relative_path:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"{workflow} requires input.source_job_id + input.from_artifact "
+                "(or a pre-resolved input.from path)"
+            ),
+        )
+    source_job = manager.get(source_job_id)
+    source_work_dir = Path(source_job.work_dir) if source_job and source_job.work_dir else None
+    if source_work_dir is None or not source_work_dir.is_dir():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Source job not found or has no work dir: {source_job_id}",
+        )
+    default_kind = {
+        "S2": "confsearch_manifest",
+        "S3": "s2_path_manifest",
+        "S4": "s3_lowconfirm_manifest",
+    }[stage]
+    kind = str(inp.get("kind") or default_kind)
+    try:
+        manifest_path = validate_stage_artifact(
+            source_job_id=source_job_id,
+            relative_path=relative_path,
+            sha256=inp.get("sha256"),
+            kind=kind,
+            stage=stage,
+            work_dir=source_work_dir,
+        )
+    except ArtifactRefError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    resolved = dict(inp)
+    resolved["from"] = str(manifest_path)
+    resolved["source_job_work_dir"] = str(source_work_dir)
+    return resolved
+
+
 @router.post("/jobs", response_model=V1JobCreatedResponse, status_code=201)
 def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedResponse:
     manager = _manager(request)
@@ -1032,6 +1137,13 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
             status_code=400,
             detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}",
         )
+    if req.mechanism_project_id is not None:
+        mech_proj = manager._mechanism_projects.get(req.mechanism_project_id)
+        if mech_proj is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Mechanism project not found: {req.mechanism_project_id}",
+            )
     if req.workflow == "mechanism":
         try:
             _ = MechanismJobInput.model_validate(req.input)
@@ -1049,6 +1161,10 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
                     "SR execution modes; enable at most one"
                 ),
             )
+    if req.workflow in ("PESsearch", "Lowconfirm", "Highconfirm"):
+        req.input = _resolve_stage_artifact_ref(req.workflow, req.input, manager)
+    task_name = req.task_name or req.workflow
+    molecule_name = req.molecule_name or _job_input_source_stem(req.input) or "mol"
     spec = JobSpec(
         workflow=req.workflow,
         name=req.name,
@@ -1059,8 +1175,12 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         config_path=req.config_path,
         tags=req.tags,
         project_id=req.project_id,
+        mechanism_project_id=req.mechanism_project_id,
         execution_mode=req.execution_mode,
         target_node=req.target_node,
+        molecule_name=molecule_name,
+        task_name=task_name,
+        remark=req.remark,
     )
     try:
         validate_execution_request(spec)
@@ -1070,11 +1190,19 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         record = manager.submit(spec)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if req.mechanism_project_id is not None:
+        stage_map = {"Confsearch": "s1", "PESsearch": "s2", "Lowconfirm": "s3", "Highconfirm": "s4"}
+        stage = stage_map.get(req.workflow)
+        if stage:
+            manager._mechanism_projects.set_stage_job(req.mechanism_project_id, stage, record.id)
+            if record.status.is_terminal:
+                manager._advance_mechanism_project_for_job(record)
     return V1JobCreatedResponse(
         job_id=record.id,
         status=record.status.value,
         workflow=record.spec.workflow,
         project_id=record.project_id,
+        mechanism_project_id=req.mechanism_project_id,
     )
 
 
@@ -1679,6 +1807,130 @@ def promote_mechanism_study(study_id: str, request: Request) -> StudyPromoteResp
     )
 
 
+# ---------------------------------------------------------------------- #
+# Mechanism projects (design §9) — links four stage jobs.
+# ---------------------------------------------------------------------- #
+
+_ARTIFACT_MAP: dict[str, str] = {
+    "s1": "RESULT/confsearch/confsearch_manifest.json",
+    "s2": "RESULT/mechanism/s2_path_manifest.json",
+    "s3": "RESULT/mechanism/s3_lowconfirm_manifest.json",
+    "s4": "RESULT/mechanism/s4_highconfirm_manifest.json",
+}
+
+_STAGE_WORKFLOW: dict[str, str] = {
+    "s1": "Confsearch",
+    "s2": "PESsearch",
+    "s3": "Lowconfirm",
+    "s4": "Highconfirm",
+}
+
+
+def _mechanism_project_or_404(store: Any, project_id: str) -> Any:
+    project = store._mechanism_projects.get(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"Mechanism project not found: {project_id}")
+    return project
+
+
+def _project_timeline(
+    project: Any,
+    job_store: Any,
+) -> list[MechanismProjectTimelineEntry]:
+    entries: list[MechanismProjectTimelineEntry] = []
+    for stage in ("s1", "s2", "s3", "s4"):
+        job_id = project.stage_jobs.get(stage)
+        job_status: str | None = None
+        if job_id:
+            record = job_store.get(job_id)
+            job_status = record.status.value if record else None
+        entries.append(
+            MechanismProjectTimelineEntry(
+                stage=stage.upper(),
+                workflow=_STAGE_WORKFLOW[stage],
+                job_id=job_id,
+                job_status=job_status,
+                artifact=_ARTIFACT_MAP[stage],
+            )
+        )
+    return entries
+
+
+@router.post("/mechanism-projects", response_model=MechanismProjectModel, status_code=201)
+def create_mechanism_project(
+    req: MechanismProjectCreateRequest,
+    request: Request,
+) -> MechanismProjectModel:
+    manager = _manager(request)
+    project = manager._mechanism_projects.create(
+        name=req.name,
+        reaction_definition_hash=req.reaction_definition_hash,
+        charge=req.charge,
+        multiplicity=req.multiplicity,
+    )
+    return MechanismProjectModel(
+        project_id=project.project_id,
+        name=project.name,
+        reaction_definition_hash=project.reaction_definition_hash,
+        charge=project.charge,
+        multiplicity=project.multiplicity,
+        status=project.status.value,
+        s1_job_id=project.stage_jobs.get("s1"),
+        s2_job_id=project.stage_jobs.get("s2"),
+        s3_job_id=project.stage_jobs.get("s3"),
+        s4_job_id=project.stage_jobs.get("s4"),
+        created_at=project.created_at,
+        updated_at=project.updated_at,
+    )
+
+
+@router.get("/mechanism-projects", response_model=MechanismProjectListResponse)
+def list_mechanism_projects(request: Request) -> MechanismProjectListResponse:
+    manager = _manager(request)
+    projects = manager._mechanism_projects.list_all()
+    return MechanismProjectListResponse(
+        projects=[
+            MechanismProjectModel(
+                project_id=p.project_id,
+                name=p.name,
+                reaction_definition_hash=p.reaction_definition_hash,
+                charge=p.charge,
+                multiplicity=p.multiplicity,
+                status=p.status.value,
+                s1_job_id=p.stage_jobs.get("s1"),
+                s2_job_id=p.stage_jobs.get("s2"),
+                s3_job_id=p.stage_jobs.get("s3"),
+                s4_job_id=p.stage_jobs.get("s4"),
+                created_at=p.created_at,
+                updated_at=p.updated_at,
+            )
+            for p in projects
+        ]
+    )
+
+
+@router.get("/mechanism-projects/{project_id}", response_model=MechanismProjectDetail)
+def get_mechanism_project(project_id: str, request: Request) -> MechanismProjectDetail:
+    manager = _manager(request)
+    project = _mechanism_project_or_404(manager, project_id)
+    store = _job_store(request)
+    return MechanismProjectDetail(
+        project_id=project.project_id,
+        name=project.name,
+        reaction_definition_hash=project.reaction_definition_hash,
+        charge=project.charge,
+        multiplicity=project.multiplicity,
+        status=project.status.value,
+        s1_job_id=project.stage_jobs.get("s1"),
+        s2_job_id=project.stage_jobs.get("s2"),
+        s3_job_id=project.stage_jobs.get("s3"),
+        s4_job_id=project.stage_jobs.get("s4"),
+        created_at=project.created_at,
+        updated_at=project.updated_at,
+        timeline=_project_timeline(project, store),
+    )
+
+
 @router.get("/jobs/{job_id}", response_model=V1JobRecordModel)
 def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     manager = _manager(request)
@@ -1728,9 +1980,14 @@ def _mechanism_stage_fallback(record: JobRecord) -> list[JobStageEntry]:
     if not record.work_dir:
         return []
     try:
-        candidates = sorted((Path(record.work_dir) / "mechanism_study").glob("*/study.json"))
+        from acp.mechanism.layout import find_study_layout
+
+        layout = find_study_layout(Path(record.work_dir))
+        candidates = (
+            [layout.study_json] if layout is not None and layout.study_json.is_file() else []
+        )
     except OSError:
-        return []
+        candidates = []
     checkpoint: dict[str, Any] | None = None
     for path in candidates:
         checkpoint = _load_study_checkpoint(path.parent)
@@ -1830,7 +2087,7 @@ def _detail_error_detail(record: JobRecord, stages: list[JobStageEntry]) -> JobE
     stderr_lines: list[str] = []
     if record.work_dir:
         stderr_lines = read_log_tail(
-            Path(record.work_dir) / "stderr.log", lines=_DETAIL_STDERR_TAIL_LINES
+            runtime_file(record.work_dir, "stderr.log"), lines=_DETAIL_STDERR_TAIL_LINES
         )
     failed_stage = next(
         (entry.stage_name for entry in stages if entry.status == "failed"),
@@ -1878,7 +2135,10 @@ def _probe_disk_state(record: JobRecord) -> JobDiskState:
         state.has_state_json = False
     if record.spec.workflow == "mechanism":
         try:
-            state.has_study_checkpoint = any((work_dir / "mechanism_study").glob("*/study.json"))
+            from acp.mechanism.layout import find_study_layout
+
+            layout = find_study_layout(work_dir)
+            state.has_study_checkpoint = layout is not None and layout.study_json.is_file()
         except OSError:
             state.has_study_checkpoint = False
     has_payload = isinstance((record.result or {}).get("review_payload"), dict)
@@ -2117,8 +2377,8 @@ def get_job_logs(
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     return JSONResponse(
         {
-            "stdout": read_log_tail(work_dir / "stdout.log", lines=lines),
-            "stderr": read_log_tail(work_dir / "stderr.log", lines=lines),
+            "stdout": read_log_tail(runtime_file(work_dir, "stdout.log"), lines=lines),
+            "stderr": read_log_tail(runtime_file(work_dir, "stderr.log"), lines=lines),
         }
     )
 
@@ -2242,7 +2502,7 @@ def _log_remote_access(
     if work_dir is None:
         return
     try:
-        JobEventLog(work_dir / "events.jsonl").append(
+        JobEventLog(runtime_file(work_dir, "events.jsonl")).append(
             "remote_file_access",
             user=_user_from_request(request),
             job_id=job_id,
@@ -2711,18 +2971,82 @@ def _asset_to_model(asset) -> StructureAssetModel:
 
 @router.post("/structures/parse", response_model=StructureParseResponse)
 def parse_structures(req: StructureParseRequest) -> StructureParseResponse:
-    from acp.intake import detect_format, parse_structure_text
+    from acp.intake import detect_and_parse, parse_structure_text
 
     fmt = req.format
     if fmt == "auto" or not fmt:
-        fmt = detect_format(req.filename or "", req.content)
-
-    result = parse_structure_text(req.content, fmt, req.filename)
+        fmt, result = detect_and_parse(req.content, req.filename or "")
+    else:
+        result = parse_structure_text(req.content, fmt, req.filename)
     return StructureParseResponse(
         structures=[_asset_to_model(s) for s in result.structures],
         errors=result.errors,
         warnings=result.warnings,
         ok=result.ok,
+        detected_format=fmt,
+    )
+
+
+# ---------------------------------------------------------------------- #
+# Structure sources (reusable final structures from completed jobs)
+# ---------------------------------------------------------------------- #
+
+
+def _structure_source_service(request: Request) -> StructureSourceService:
+    """Build a StructureSourceService from app state (503 when uninitialized)."""
+    manager = _manager(request)
+    run_root = getattr(request.app.state, "run_root", None) or manager.run_root
+    return StructureSourceService(
+        manager.store,
+        Path(run_root),
+        fetcher=manager.remote_fetcher,
+    )
+
+
+@router.get("/structure-sources/recent", response_model=StructureSourceListResponse)
+def list_structure_sources(
+    request: Request,
+    project_id: str | None = None,
+    all_projects: bool = False,
+    workflow: str | None = None,
+    limit: int = Query(20, ge=1, le=50),
+    include_remote: bool = True,
+) -> StructureSourceListResponse:
+    """List reusable final structures from recent COMPLETED jobs."""
+    service = _structure_source_service(request)
+    if project_id:
+        effective_project = project_id
+    elif all_projects:
+        effective_project = None
+    else:
+        effective_project = "uncategorized"
+    entries = service.list_recent(
+        limit=limit,
+        project_id=effective_project,
+        workflow=workflow,
+        include_remote=include_remote,
+    )
+    return StructureSourceListResponse(
+        sources=[StructureSourceSummary(**entry) for entry in entries]
+    )
+
+
+@router.get("/structure-sources/{source_id:path}", response_model=StructureSourceDetailResponse)
+def get_structure_source(request: Request, source_id: str) -> StructureSourceDetailResponse:
+    """Load one structure source (local disk or on-demand remote fetch)."""
+    service = _structure_source_service(request)
+    try:
+        StructureSourceService.parse_source_id(source_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"Invalid source_id: {source_id}")
+    try:
+        asset, checksum = service.get(source_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return StructureSourceDetailResponse(
+        source_id=source_id,
+        checksum=checksum,
+        structure=StructureAssetModel(**asset),
     )
 
 
@@ -3024,6 +3348,7 @@ async def upload_structure_file(
         errors=result.errors,
         warnings=result.warnings,
         ok=result.ok,
+        detected_format=fmt,
     )
 
 

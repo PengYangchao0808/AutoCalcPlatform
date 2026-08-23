@@ -669,7 +669,7 @@ def test_runner_full_flow_success():
             if state["polls"] <= 2:
                 return (0, "RUN\n", "")
             # After 2 RUN polls, simulate completion: write .exit_code
-            sftp.files[posixpath.join(node.remote_work_dir, "testjob", ".exit_code")] = b"0"
+            sftp.files[posixpath.join(node.remote_work_dir, "mol_ensemble", ".exit_code")] = b"0"
             return (0, "DONE\n", "")
         if "grep -c RUN" in cmd:
             return (0, "0\n", "")
@@ -710,7 +710,7 @@ def test_runner_full_flow_success():
         assert record.exit_code == 0
         assert record.result["lsf_job_id"] == "54321"
         assert record.result["node"] == "compute-01"
-        assert record.result["remote_dir"] == posixpath.join(node.remote_work_dir, "testjob")
+        assert record.result["remote_dir"] == posixpath.join(node.remote_work_dir, "mol_ensemble")
         assert "command_line" in record.result
 
         # Verify events were written
@@ -750,7 +750,7 @@ def test_runner_full_flow_mechanism_uploads_mechanism_config():
             polls["n"] += 1
             if polls["n"] == 1:
                 return (0, "RUN\n", "")
-            sftp.files[posixpath.join(node.remote_work_dir, "mechjob", ".exit_code")] = b"0"
+            sftp.files[posixpath.join(node.remote_work_dir, "mol_mechanism", ".exit_code")] = b"0"
             return (0, "DONE\n", "")
         if "grep -c RUN" in cmd:
             return (0, "0\n", "")
@@ -797,7 +797,9 @@ def test_runner_full_flow_mechanism_uploads_mechanism_config():
             exit_code = runner.run(record, event_log, cancel)
 
     assert exit_code == 0
-    remote_config_path = posixpath.join(node.remote_work_dir, "mechjob", MECHANISM_CONFIG_FILENAME)
+    remote_config_path = posixpath.join(
+        node.remote_work_dir, "mol_mechanism", MECHANISM_CONFIG_FILENAME
+    )
     assert remote_config_path in sftp.files
     remote_config = json.loads(sftp.files[remote_config_path].decode("utf-8"))
     assert remote_config["roles"]["reactant"]["path"] == "inputs/reactant.xyz"
@@ -822,7 +824,7 @@ def test_runner_full_flow_failure():
             polls["n"] += 1
             if polls["n"] <= 1:
                 return (0, "RUN\n", "")
-            sftp.files[posixpath.join(node.remote_work_dir, "failjob", ".exit_code")] = b"99"
+            sftp.files[posixpath.join(node.remote_work_dir, "mol_ensemble", ".exit_code")] = b"99"
             return (0, "EXIT\n", "")
         if "grep -c RUN" in cmd:
             return (0, "0\n", "")
@@ -873,7 +875,7 @@ def test_runner_cancel():
         if "bkill" in cmd:
             bkill_called["yes"] = True
             # Simulate the LSF script writing .exit_code after bkill terminates the job
-            sftp.files[posixpath.join(node.remote_work_dir, "canceljob", ".exit_code")] = b"130"
+            sftp.files[posixpath.join(node.remote_work_dir, "mol_ensemble", ".exit_code")] = b"130"
             return (0, "Job <777> is being terminated\n", "")
         if "grep -c RUN" in cmd:
             return (0, "0\n", "")
@@ -1000,7 +1002,9 @@ def test_runner_no_download():
         if "bjobs" in cmd and "grep" not in cmd:
             polls["n"] += 1
             if polls["n"] > 1:
-                sftp.files[posixpath.join(node.remote_work_dir, "ndjob", ".exit_code")] = b"0"
+                sftp.files[posixpath.join(node.remote_work_dir, "mol_ensemble", ".exit_code")] = (
+                    b"0"
+                )
                 return (0, "DONE\n", "")
             return (0, "RUN\n", "")
         if "grep -c RUN" in cmd:
@@ -1056,7 +1060,9 @@ def test_runner_remote_execution_stage_task():
         if "bjobs" in cmd and "grep" not in cmd:
             polls["n"] += 1
             if polls["n"] > 2:
-                sftp.files[posixpath.join(node.remote_work_dir, "stagejob", ".exit_code")] = b"0"
+                sftp.files[posixpath.join(node.remote_work_dir, "mol_ensemble", ".exit_code")] = (
+                    b"0"
+                )
                 return (0, "DONE\n", "")
             return (0, "RUN\n", "")
         if "grep -c RUN" in cmd:
@@ -1109,7 +1115,7 @@ def test_runner_log_tailing():
     config = RemoteExecutionConfig(execution_mode="remote", auto_sync=False, nodes=[node])
     pool = SSHConnectionPool()
     sftp = FakeSFTP()
-    remote_dir = posixpath.join(node.remote_work_dir, "logjob")
+    remote_dir = posixpath.join(node.remote_work_dir, "mol_ensemble")
     polls = {"n": 0}
 
     def cmd_handler(cmd):

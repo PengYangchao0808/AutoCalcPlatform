@@ -10,6 +10,7 @@ Author: QCcalc Team (adapted from RPH)
 import logging
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -167,6 +168,46 @@ def _parse_cluster_xyz(
     return coords_list
 
 
+# Shermo (Fortran binary) truncates input file paths at 200 characters and
+# then fails with "Error: Unable to find <truncated path>" even though the
+# file exists (verified against Shermo 2.6 x86-64: 200 chars pass, 201 fail).
+_SHERMO_INPUT_PATH_LIMIT = 200
+
+
+def _shermo_input_path(freq_output: Path, output_dir: Path) -> str:
+    """Return a Shermo-safe input path argument.
+
+    Prefers a path relative to *output_dir* (the subprocess cwd), which is
+    always short when the frequency file lives under the output directory.
+    When the candidate still exceeds Shermo's path buffer (file outside the
+    output dir on a deeply nested run root), the file is copied to a short
+    name inside *output_dir* and that basename is returned instead.
+
+    Args:
+        freq_output: Path to the frequency output file.
+        output_dir: Directory the Shermo subprocess runs in.
+
+    Returns:
+        Path string safe to pass as the Shermo input file argument.
+    """
+    freq_path = Path(freq_output)
+    try:
+        candidate = str(freq_path.resolve().relative_to(Path(output_dir).resolve()))
+    except ValueError:
+        candidate = str(freq_path)
+    if len(candidate) > _SHERMO_INPUT_PATH_LIMIT:
+        short_copy = Path(output_dir) / freq_path.name
+        if short_copy.resolve() != freq_path.resolve():
+            shutil.copy2(freq_path, short_copy)
+            logger.debug(
+                "Shermo input path exceeds %d chars; copied to %s",
+                _SHERMO_INPUT_PATH_LIMIT,
+                short_copy,
+            )
+        candidate = freq_path.name
+    return candidate
+
+
 def run_shermo(
     freq_output: Path,
     sp_energy: float,
@@ -212,7 +253,7 @@ def run_shermo(
 
     cmd = [
         str(shermo_bin),
-        str(freq_output),
+        _shermo_input_path(freq_output, output_dir),
         "-E", f"{sp_energy:.12f}",
         "-T", str(temperature_k),
         "-P", str(pressure_atm),

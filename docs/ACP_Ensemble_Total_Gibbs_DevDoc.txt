@@ -189,7 +189,7 @@ p_1 ≤ 0（或非有限）：告警并返回 rank1_gibbs，不钳制为极小�
 
 函数末尾新增：用 ensemble_total_gibbs_from_values(gibbs_values, temperature_k) 计算 G_total（权重即 DFT 截断集合表，与现有 weights 一致）；
 
-写新输出 finalDFT/ensemble_thermo.json（method=dft_table，含 population_coverage = Σ 选中权重）；
+写新输出 RESULT/energies/ensemble_thermo.json（method=dft_table，含 population_coverage = Σ 选中权重）；
 
 返回值（:581 的 dict）增加三个 key：total_gibbs_hartree / total_gibbs_kcal_mol / ensemble_thermo_json。
 
@@ -304,11 +304,11 @@ pytest tests/ -v
 
  | 文件 | 状态 | 内容
 
- | finalDFT/ensemble_thermo.json | 新增 | 总自由能汇总：method / T / G_total(Ha+kcal/mol) / G₁ / p₁ / S_mix(cal+ kcal/(mol·K)) / T·S_mix / population_coverage / censo 对照(工作流二) / 逐构象表（conf_id、G_i、ΔG_i、p_i）
+ | RESULT/energies/ensemble_thermo.json | 新增 | 总自由能汇总：method / T / G_total(Ha+kcal/mol) / G₁ / p₁ / S_mix(cal+ kcal/(mol·K)) / T·S_mix / population_coverage / censo 对照(工作流二) / 逐构象表（conf_id、G_i、ΔG_i、p_i）
 
  | ensemble/boltzmann_table.json | 新增（工作流二） | 权重表：conf_id → p、T、source（"censo"/"xtb"）
 
- | finalDFT/conformer_thermo.csv | 兼容扩展 | 列头不变，末尾追加 TOTAL 汇总行（G_total 落在 gibbs_hartree 列，source=ensemble_total）
+ | RESULT/energies/conformer_thermo.csv | 兼容扩展 | 列头不变，末尾追加 TOTAL 汇总行（G_total 落在 gibbs_hartree 列，source=ensemble_total）
 
  | ensemble/screening_ranking.csv | 既有 | 不变（已含 CENSO 权重表）
 
@@ -345,4 +345,3 @@ Step 6：全量 pytest tests/ -v → sudo systemctl restart acp（服务不使�
  | 工作流二单帧输出 | all_conformers.xyz 只含 1 帧 | 本次不改动下游（NMR/frontend）；文档标注语义差异
 
  | 前端大文件改动 | ACP_Workbench_v2.html 5706 行 | 严格仿照 no_opt 既有代码块，最小化 diff
-

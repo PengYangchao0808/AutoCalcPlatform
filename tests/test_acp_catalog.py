@@ -15,6 +15,7 @@ from acp.catalog import (
     FIELD_DEFINITIONS,
     FUNCTIONAL_OPTIONS_MAP,
     METHOD_META,
+    WORKFLOW_CATALOG,
     _case_insensitive_get,
     _match_option_case_insensitive,
     convert_method_levels_to_protocol_levels,
@@ -586,6 +587,45 @@ def test_supported_workflows_matches_catalog_active() -> None:
     active_ids = {w["id"] for w in wf_catalog if w.get("status") == "active"}
     derived = set(SUPPORTED_WORKFLOWS) - {"fake"}
     assert derived == active_ids, f"SUPPORTED_WORKFLOWS mismatch: {derived ^ active_ids}"
+
+
+def test_mechanism_entries_retired_and_stage_workflows_active() -> None:
+    """Confsearch v1.0: the one-shot mechanism chain is retired; the four
+    stage workflows (Confsearch/PESsearch/Lowconfirm/Highconfirm) are the
+    only active mechanism-family entries."""
+    entry = next(w for w in WORKFLOW_CATALOG if w["id"] == "mechanism")
+    assert entry["status"] == "retired"
+    assert entry["visible"] is False
+
+    retired_ids = {
+        "mech-conf",
+        "mech-step",
+        "mech-confirm",
+        "mech-chain",
+        "ensemble",
+        "energy",
+        "xtbmd_censo_energy",
+    }
+    for module_id in retired_ids:
+        module = next(w for w in WORKFLOW_CATALOG if w["id"] == module_id)
+        assert module["status"] == "retired", module_id
+        assert module["visible"] is False, module_id
+
+    stage_ids = ["Confsearch", "PESsearch", "Lowconfirm", "Highconfirm"]
+    visible_stage = set()
+    for stage_id in stage_ids:
+        stage = next(w for w in WORKFLOW_CATALOG if w["id"] == stage_id)
+        assert stage["status"] == "active", stage_id
+        assert stage["category"] == "stages", stage_id
+        assert stage["visible"] is True, stage_id
+        assert stage_id in SUPPORTED_WORKFLOWS
+        visible_stage.add(stage_id)
+    assert visible_stage == {
+        w["id"] for w in WORKFLOW_CATALOG if w.get("category") == "stages" and w.get("visible")
+    }
+
+    custom = next(w for w in WORKFLOW_CATALOG if w["id"] == "custom_sequence")
+    assert custom["visible"] is False
 
 
 # --- 3.13 ---

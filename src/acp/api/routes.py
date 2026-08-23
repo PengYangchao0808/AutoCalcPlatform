@@ -41,6 +41,7 @@ from acp.api.schemas import (
 from acp.scheduler.files import build_manifest, resolve_safe
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS
 from acp.scheduler.logs import read_log_tail
+from acp.storage.layout import runtime_file
 from acp.workflows.registry import list_workflow_entries, workflow_to_dict
 
 router = APIRouter()
@@ -290,8 +291,8 @@ def get_job_logs(
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     return JSONResponse(
         {
-            "stdout": read_log_tail(work_dir / "stdout.log", lines=lines),
-            "stderr": read_log_tail(work_dir / "stderr.log", lines=lines),
+            "stdout": read_log_tail(runtime_file(work_dir, "stdout.log"), lines=lines),
+            "stderr": read_log_tail(runtime_file(work_dir, "stderr.log"), lines=lines),
         }
     )
 

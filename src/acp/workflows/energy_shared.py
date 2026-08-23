@@ -29,6 +29,8 @@ from acp.backends.external import run_shermo
 from acp.backends.registry import get_backend
 from acp.chem.composition import normalize_recalc_hess
 from acp.core.models import HARTREE_TO_KCAL, Structure, StructureEnsemble, StructureRecord
+from acp.storage.layout import TaskStorage
+from acp.storage.manifest import ResultManifest
 from acp.workflows._helpers import write_result_summary
 from acp.workflows.ensemble_thermo import (
     EnsembleThermoSummary,
@@ -47,6 +49,59 @@ _K_B_HARTREE_PER_KELVIN = 3.166811563e-6
 _DEFAULT_OPT_FUNCTIONAL = "r2SCAN-3c"
 _DEFAULT_SP_FUNCTIONAL = "wB97M-V"
 _DEFAULT_SP_BASIS = "def2-TZVPP"
+
+
+def _handoff_stage_dir(conf_dir: Path, stage: str, engine: str) -> Path:
+    """Sibling stage dir for the same conformer (design §6: 04_FREQ/05_SP/06_THERMO).
+
+    *conf_dir* is ``<mol>/WORK/03_OPT/<engine>/conf_NNN``; the sibling keeps
+    the conf index but moves to its own stage root. Falls back to *conf_dir*
+    itself when the shape does not match, so non-scheduler callers keep a
+    working (if undivided) layout.
+    """
+    parts = conf_dir.parts
+    if len(parts) >= 4 and parts[-4] == "WORK":
+        work_root = conf_dir.parents[2]
+        target = work_root / stage / engine / conf_dir.name
+        target.mkdir(parents=True, exist_ok=True)
+        return target
+    return conf_dir
+
+
+def v2_stage_dir(mol_dir: Path, stage: str, engine: str | None = None) -> Path:
+    """Resolve (and create) ``WORK/<stage>/<engine>`` under *mol_dir* (v2 layout)."""
+    storage = TaskStorage(mol_dir)
+    path = storage.stage_dir(stage, engine)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def v2_result_category(mol_dir: Path, category: str) -> Path:
+    """Resolve (and create) ``RESULT/<category>`` under *mol_dir* (v2 layout)."""
+    storage = TaskStorage(mol_dir)
+    path = storage.result_category_dir(category)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def write_v2_manifest(
+    mol_dir: Path,
+    workflow: str,
+    products: list[dict[str, Any]],
+) -> None:
+    """Write ``RESULT/result_manifest.json`` (v2 §8) with RESULT-relative paths."""
+    manifest = ResultManifest(task_id="", workflow=workflow, status="completed")
+    for item in products:
+        if not isinstance(item, dict) or not item.get("path"):
+            continue
+        manifest.add_product(
+            id=str(item.get("id") or item["path"]),
+            label=str(item.get("label") or item["path"]),
+            path=str(item["path"]),
+            kind=str(item.get("kind") or "file"),
+        )
+    manifest.write(TaskStorage(mol_dir).result_dir())
+
 
 # Route-keyword maps for advanced level fields (catalog enum → ORCA keyword).
 # "Fine" maps to ORCA's default DEFGRID2 and "Normal" to the default SCF
@@ -351,12 +406,13 @@ def run_rank1_handoff(
         "  [freq] frequency calculation (%s, same level as opt)",
         resolved["opt_method"],
     )
+    freq_dir = _handoff_stage_dir(work_dir, "04_FREQ", "ORCA")
     freq_result = orca.frequency(
         opt_coords,
         opt_symbols,
         charge=charge,
         multiplicity=multiplicity,
-        output_dir=work_dir,
+        output_dir=freq_dir,
         output_name=f"conf_{index:03d}_freq",
         method=resolved["opt_method"],
         basis=resolved["opt_basis"],
@@ -390,12 +446,13 @@ def run_rank1_handoff(
                 solvent=sp_solvent,
                 solvent_model=sp_solvent_model if sp_solvent else "none",
             )
+        sp_dir = _handoff_stage_dir(work_dir, "05_SP", "ORCA")
         sp_result = sp_orca.single_point(
             opt_coords,
             opt_symbols,
             charge=charge,
             multiplicity=multiplicity,
-            output_dir=work_dir,
+            output_dir=sp_dir,
             output_name=f"conf_{index:03d}_sp",
             method=resolved["sp_method"],
             basis=resolved["sp_basis"],
@@ -409,6 +466,7 @@ def run_rank1_handoff(
     if sp_energy is None:
         raise RuntimeError("No electronic energy available for Shermo handoff")
 
+    thermo_dir = _handoff_stage_dir(work_dir, "06_THERMO", "Shermo")
     logger.info("  [thermo] thermodynamic correction")
     thermo_module = import_module("acp.mechanism.providers.thermo")
     thermo_provider: Any = thermo_module.get_thermochemistry_provider(cfg, runner=run_shermo)
@@ -421,8 +479,8 @@ def run_rank1_handoff(
             ensemble=None,
             temperature=resolved["temperature_k"],
             standard_state=standard_state,
-            output_dir=work_dir,
-            output_file=work_dir / f"conf_{index:03d}_Shermo.sum",
+            output_dir=thermo_dir,
+            output_file=thermo_dir / f"conf_{index:03d}_Shermo.sum",
             pressure_atm=resolved["pressure_atm"],
             scl_zpe=resolved["scl_zpe"],
             ilowfreq=resolved["ilowfreq"],
@@ -623,14 +681,16 @@ def write_final_outputs(
     population_weights: dict[str, float] | None = None,
     external_table_source: str = "censo",
 ) -> dict[str, Any]:
-    """Write finalDFT/all_conformers.xyz + conformer_thermo.csv + global_min.xyz.
+    """Write categorized final results under ``RESULT/``.
 
     File formats match the legacy engine's ``_finalize_results`` products
     field-for-field so downstream consumers (NMR, benchmark, frontend) work
-    without modification.  Additionally writes ``finalDFT/ensemble_thermo.json``
-    (ensemble total Gibbs, both workflows) and, when *external_weights* is
-    given (workflow 2), ``ensemble/boltzmann_table.json``; appends a TOTAL
-    summary row to the thermo CSV (headers unchanged).
+    without modification.  New scheduler tasks store the products in
+    ``RESULT/structures`` / ``RESULT/energies`` / ``RESULT/ensembles``.  The
+    legacy ``finalDFT/`` directory is read-only compatibility for historical
+    tasks and is no longer created here.  When *external_weights* is given
+    (workflow 2), the Boltzmann table is written to ``RESULT/ensembles``;
+    the thermo CSV keeps its legacy header and receives a TOTAL row.
 
     Args:
         external_weights: Full-ensemble weight table (conf_id → p) driving
@@ -643,8 +703,9 @@ def write_final_outputs(
         external_table_source: ``"censo"`` (default) or ``"xtb"`` for the
             workflow-2 weight-table provenance.
     """
-    final_dft_dir = mol_dir / "finalDFT"
-    final_dft_dir.mkdir(parents=True, exist_ok=True)
+    result_structures = v2_result_category(mol_dir, "structures")
+    result_energies = v2_result_category(mol_dir, "energies")
+    result_ensembles = v2_result_category(mol_dir, "ensembles")
 
     candidates = sorted(
         candidates,
@@ -669,10 +730,10 @@ def write_final_outputs(
         population_weights=population_weights,
         external_table_source=external_table_source,
     )
-    thermo_json = final_dft_dir / "ensemble_thermo.json"
+    thermo_json = result_energies / "ensemble_thermo.json"
     summary.write_json(thermo_json)
 
-    ensemble_xyz = final_dft_dir / "all_conformers.xyz"
+    ensemble_xyz = result_structures / "all_conformers.xyz"
     with open(ensemble_xyz, "w") as f:
         for c in candidates:
             e_fmt = f"{c['energy']:.6f}" if c.get("energy") is not None else "N/A"
@@ -683,7 +744,7 @@ def write_final_outputs(
             for sym, coord in zip(c["symbols"], c["coordinates"]):
                 f.write(f"{sym:2s} {coord[0]:15.10f} {coord[1]:15.10f} {coord[2]:15.10f}\n")
 
-    thermo_csv = final_dft_dir / "conformer_thermo.csv"
+    thermo_csv = result_energies / "conformer_thermo.csv"
     with open(thermo_csv, "w") as f:
         f.write(
             "index,rank,energy_hartree,gibbs_correction,gibbs_hartree,"
@@ -732,9 +793,7 @@ def write_final_outputs(
 
     boltzmann_table_json: str | None = None
     if external_weights is not None:
-        ensemble_dir = mol_dir / "ensemble"
-        ensemble_dir.mkdir(parents=True, exist_ok=True)
-        bt_path = ensemble_dir / "boltzmann_table.json"
+        bt_path = result_ensembles / "boltzmann_table.json"
         bt_path.write_text(
             json.dumps(
                 {
@@ -750,7 +809,7 @@ def write_final_outputs(
         boltzmann_table_json = str(bt_path)
 
     global_min = candidates[0]
-    global_min_xyz = mol_dir / f"{mol_name}_global_min.xyz"
+    global_min_xyz = result_structures / f"{mol_name}_global_min.xyz"
     gm_energy = (
         global_min.get("g_conc")
         if global_min.get("g_conc") is not None
@@ -782,29 +841,57 @@ def write_final_outputs(
     if boltzmann_table_json is not None:
         outputs["boltzmann_table_json"] = boltzmann_table_json
 
-    write_result_summary(
+    result_summary_products = [
+        {
+            "label": "Ranked conformers (XYZ)",
+            "path": "RESULT/structures/all_conformers.xyz",
+            "kind": "xyz",
+        },
+        {
+            "label": "Ensemble thermo (G_total)",
+            "path": "RESULT/energies/ensemble_thermo.json",
+            "kind": "report",
+        },
+        {
+            "label": "Conformer thermo table (CSV)",
+            "path": "RESULT/energies/conformer_thermo.csv",
+            "kind": "table",
+        },
+        {
+            "label": "Global minimum structure",
+            "path": f"RESULT/structures/{mol_name}_global_min.xyz",
+            "kind": "xyz",
+            "role": "final_stable_structure",
+        },
+    ]
+    write_result_summary(mol_dir, workflow="energy", products=result_summary_products)
+    write_v2_manifest(
         mol_dir,
-        workflow="energy",
-        products=[
+        "energy",
+        [
             {
+                "id": "all_conformers",
                 "label": "Ranked conformers (XYZ)",
-                "path": str(ensemble_xyz.relative_to(mol_dir)),
-                "kind": "xyz",
+                "path": "structures/all_conformers.xyz",
+                "kind": "structure",
             },
             {
+                "id": "ensemble_thermo",
                 "label": "Ensemble thermo (G_total)",
-                "path": str(thermo_json.relative_to(mol_dir)),
-                "kind": "report",
+                "path": "energies/ensemble_thermo.json",
+                "kind": "energy_report",
             },
             {
+                "id": "conformer_thermo_csv",
                 "label": "Conformer thermo table (CSV)",
-                "path": str(thermo_csv.relative_to(mol_dir)),
-                "kind": "table",
+                "path": "energies/conformer_thermo.csv",
+                "kind": "file",
             },
             {
+                "id": "global_min",
                 "label": "Global minimum structure",
-                "path": str(global_min_xyz.relative_to(mol_dir)),
-                "kind": "xyz",
+                "path": f"structures/{mol_name}_global_min.xyz",
+                "kind": "structure",
             },
         ],
     )

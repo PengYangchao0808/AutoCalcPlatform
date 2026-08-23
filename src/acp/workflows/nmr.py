@@ -63,6 +63,8 @@ from acp.nmr.probability import (
 )
 from acp.nmr.report import write_all_reports
 from acp.nmr.scaling import build_assignments, fit_scaling_goodman
+from acp.storage.layout import TaskStorage
+from acp.storage.manifest import ResultManifest
 from acp.workflows._helpers import sanitize_job_name, write_result_summary
 from cccp.config import load_config
 
@@ -391,11 +393,16 @@ def _select_conformers(
 def _run_giao_for_conformers(
     conformers: list[tuple[Structure, float, float]],
     nmr_config: NmrConfig,
-    work_dir: Path,
+    giao_dir: Path,
     cfg: dict[str, Any],
     solvent: str | None,
 ) -> list[ConformerShielding]:
-    """Run ORCA GIAO NMR for each conformer and parse shieldings."""
+    """Run ORCA GIAO NMR for each conformer and parse shieldings.
+
+    *giao_dir* is the final per-candidate GIAO root (v2 layout:
+    ``WORK/05_SP/ORCA/<candidate_id>``); per-conformer outputs land in
+    ``conf_<idx>`` subdirectories beneath it.
+    """
     orca_backend_cls = get_backend("orca")
     orca = orca_backend_cls(
         cfg,
@@ -413,7 +420,6 @@ def _run_giao_for_conformers(
             seen.add(n)
             target_elements.append(n)
 
-    giao_dir = work_dir / "giao"
     giao_dir.mkdir(parents=True, exist_ok=True)
 
     results: list[ConformerShielding] = []
@@ -794,6 +800,10 @@ def run_nmr_analysis(
     output_root = Path(output_dir).resolve()
     output_root.mkdir(parents=True, exist_ok=True)
 
+    # v2 task-storage layout (design doc §5/§13): WORK/ for engine work, RESULT/ for products.
+    storage = TaskStorage(output_root)
+    storage.ensure_layout(stages=["02_SEARCH", "05_SP"], categories=["reports", "structures"])
+
     stages_completed: list[str] = []
 
     # Stage 0: input parsing (stage 0a = Bruker raw processing, P3)
@@ -873,14 +883,13 @@ def run_nmr_analysis(
         )
 
     for idx, structure in enumerate(candidates):
-        cand_dir = output_root / structure.id
-        cand_dir.mkdir(parents=True, exist_ok=True)
+        giao_dir = storage.stage_dir("05_SP", "ORCA") / structure.id
 
         if ensembles[idx] is not None and not skip_conformers:
             conformer_shieldings = _run_giao_for_conformers(
                 _select_conformers(ensembles[idx], nmr_config),  # type: ignore[arg-type]
                 nmr_config,
-                cand_dir,
+                giao_dir,
                 cfg,
                 solvent,
             )
@@ -889,7 +898,7 @@ def run_nmr_analysis(
             conformer_shieldings = getattr(ensembles[idx], "data", []) or []  # type: ignore[union-attr]
         else:
             ensemble = _run_conformer_generation(
-                structure, output_root, nmr_config, cfg, solvent, nproc, ewin
+                structure, storage.stage_dir("02_SEARCH"), nmr_config, cfg, solvent, nproc, ewin
             )
             if ensemble is None:
                 return WorkflowResult(
@@ -900,7 +909,7 @@ def run_nmr_analysis(
             conformer_shieldings = _run_giao_for_conformers(
                 _select_conformers(ensemble, nmr_config),
                 nmr_config,
-                cand_dir,
+                giao_dir,
                 cfg,
                 solvent,
             )
@@ -965,7 +974,8 @@ def run_nmr_analysis(
         dp5_mode=dp5_mode,
         metadata={"n_candidates": len(candidate_results), "fchl_kernel": fchl_kernel},
     )
-    paths = write_all_reports(report, output_root)
+    reports_dir = storage.result_category_dir("reports")
+    paths = write_all_reports(report, reports_dir)
     stages_completed.append("report")
 
     # write a small machine-readable summary next to the report
@@ -992,14 +1002,14 @@ def run_nmr_analysis(
             "plots": [str(p) for p in paths["plots"]],
         },
     }
-    (output_root / "nmr_summary.json").write_text(
+    (reports_dir / "nmr_summary.json").write_text(
         json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
     products: list[dict[str, Any]] = [
         {
             "label": "NMR report (JSON)",
-            "path": str(paths["json"].relative_to(output_root)),
+            "path": f"RESULT/reports/{paths['json'].name}",
             "kind": "report",
         }
     ]
@@ -1007,7 +1017,7 @@ def run_nmr_analysis(
         products.append(
             {
                 "label": "NMR assignment (XLSX)",
-                "path": str(paths["xlsx"].relative_to(output_root)),
+                "path": f"RESULT/reports/{paths['xlsx'].name}",
                 "kind": "table",
             }
         )
@@ -1016,13 +1026,28 @@ def run_nmr_analysis(
             products.append(
                 {
                     "label": f"Plot {i}",
-                    "path": str(plot.relative_to(output_root)),
+                    "path": f"RESULT/reports/{plot.name}",
                     "kind": "plot",
                 }
             )
         except ValueError:
             continue
     write_result_summary(output_root, workflow="nmr", products=products)
+
+    manifest = ResultManifest(task_id="", workflow="nmr", status="completed")
+    manifest.add_product(
+        "nmr_report", "NMR report (JSON)", f"reports/{paths['json'].name}", "report"
+    )
+    if paths["xlsx"]:
+        manifest.add_product(
+            "nmr_xlsx",
+            "NMR assignment (XLSX)",
+            f"reports/{paths['xlsx'].name}",
+            "report",
+        )
+    for i, plot in enumerate(paths["plots"], start=1):
+        manifest.add_product(f"plot_{i}", f"Plot {i}", f"reports/{plot.name}", "report")
+    manifest.write(storage.result_dir())
 
     return WorkflowResult(
         status="completed",

@@ -137,8 +137,10 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "censo_ensemble",
         "default_backend": "censo",
         "requires_binaries": ["crest", "censo", "orca"],
-        "status": "active",
-        "visible": True,
+        # Retired (Confsearch v1.0, 2026-08-23): unified into
+        # Confsearch + protocol=censo-crest + refinement_policy=screen.
+        "status": "retired",
+        "visible": False,
     },
     {
         "id": "energy",
@@ -149,8 +151,10 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "censo_energy",
         "default_backend": "censo",
         "requires_binaries": ["crest", "censo", "orca"],
-        "status": "active",
-        "visible": True,
+        # Retired (Confsearch v1.0, 2026-08-23): rank1-only maps to
+        # Confsearch + censo-crest + rank1; full-ensemble to cumulative-99.
+        "status": "retired",
+        "visible": False,
     },
     {
         "id": "xtbmd_censo_energy",
@@ -161,8 +165,10 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "xtbmd_censo_energy",
         "default_backend": "censo",
         "requires_binaries": ["xtb", "isostat", "censo", "orca"],
-        "status": "active",
-        "visible": True,
+        # Retired (Confsearch v1.0, 2026-08-23): the full chain is now the
+        # single protocol Confsearch + protocol=xtbmd-censo.
+        "status": "retired",
+        "visible": False,
     },
     {
         "id": "mechanism",
@@ -173,9 +179,12 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "mechanism",
         "default_backend": "orca",
         "requires_binaries": ["orca"],
-        # Phase 1 verification step 4: mechanism is now implemented and active.
-        "status": "active",
-        "visible": True,
+        # Retired for new runs (Confsearch v1.0, 2026-08-23): the one-shot
+        # S0→S4 study is replaced by the four independent stage workflows
+        # Confsearch / PESsearch / Lowconfirm / Highconfirm. Historical
+        # studies remain viewable read-only.
+        "status": "retired",
+        "visible": False,
     },
     {
         "id": "custom_sequence",
@@ -187,7 +196,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "default_backend": "",
         "requires_binaries": [],
         "status": "planned",
-        "visible": True,
+        "visible": False,
     },
     {
         "id": "mech-conf",
@@ -198,8 +207,9 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "mech_conf",
         "default_backend": "orca",
         "requires_binaries": ["crest", "orca"],
-        "status": "active",
-        "visible": True,
+        # Retired (Confsearch v1.0, 2026-08-23): superseded by Confsearch.
+        "status": "retired",
+        "visible": False,
     },
     {
         "id": "mech-step",
@@ -210,8 +220,10 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "mech_step",
         "default_backend": "orca",
         "requires_binaries": ["orca", "xtb"],
-        "status": "active",
-        "visible": True,
+        # Retired (Confsearch v1.0, 2026-08-23): split into PESsearch (S2)
+        # + Lowconfirm (S3).
+        "status": "retired",
+        "visible": False,
     },
     {
         "id": "mech-confirm",
@@ -222,8 +234,9 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "mech_confirm",
         "default_backend": "orca",
         "requires_binaries": ["orca"],
-        "status": "active",
-        "visible": True,
+        # Retired (Confsearch v1.0, 2026-08-23): superseded by Highconfirm (S4).
+        "status": "retired",
+        "visible": False,
     },
     {
         "id": "mech-chain",
@@ -234,6 +247,62 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "mech_chain",
         "default_backend": "",
         "requires_binaries": [],
+        # Retired (Confsearch v1.0, 2026-08-23): the four-stage manual flow
+        # (Confsearch → PESsearch → Lowconfirm → Highconfirm) replaces
+        # module chaining.
+        "status": "retired",
+        "visible": False,
+    },
+    {
+        "id": "Confsearch",
+        "label": "Conformer Search",
+        "label_zh": "构象搜索",
+        "category": "stages",
+        "description": (
+            "Unified conformer search + energies: protocols xtb-crest / "
+            "xtb-md / censo-crest / xtbmd-censo"
+        ),
+        "method_schema_id": "confsearch_unified",
+        "default_backend": "censo",
+        "requires_binaries": ["crest", "xtb", "isostat", "censo", "orca"],
+        "status": "active",
+        "visible": True,
+    },
+    {
+        "id": "PESsearch",
+        "label": "PES Search",
+        "label_zh": "势能面搜索",
+        "category": "stages",
+        "description": (
+            "Reaction path search + TS/intermediate guesses from a Confsearch manifest (S2)"
+        ),
+        "method_schema_id": "pes_search",
+        "default_backend": "orca",
+        "requires_binaries": ["orca", "xtb"],
+        "status": "active",
+        "visible": True,
+    },
+    {
+        "id": "Lowconfirm",
+        "label": "Low Confirmation",
+        "label_zh": "粗优化",
+        "category": "stages",
+        "description": "Coarse Opt/TS + frequency + preliminary IRC of PESsearch candidates (S3)",
+        "method_schema_id": "low_confirm",
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
+        "status": "active",
+        "visible": True,
+    },
+    {
+        "id": "Highconfirm",
+        "label": "High Confirmation",
+        "label_zh": "精细优化",
+        "category": "stages",
+        "description": "High-fidelity Opt/TS + frequency + SP + thermochemistry (S4)",
+        "method_schema_id": "high_confirm",
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
         "status": "active",
         "visible": True,
     },
@@ -810,10 +879,43 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     },
     "path_strategy": {
         "type": "select",
-        "options": ["guided-scan", "rph-reverse", "direct-ts"],
+        "options": ["guided-scan", "reverse-peb", "rph-reverse", "direct-ts"],
         "default": {"*": "guided-scan"},
         "label": "Path Search Strategy",
         "label_zh": "路径搜索策略",
+    },
+    "protocol": {
+        "type": "select",
+        "options": ["xtb-crest", "xtb-md", "censo-crest", "xtbmd-censo"],
+        "option_labels_zh": {
+            "xtb-crest": "xTB + CREST",
+            "xtb-md": "xTB-MD",
+            "censo-crest": "CREST + CENSO",
+            "xtbmd-censo": "xTB-MD + CENSO + DFT",
+        },
+        "default": {"*": "censo-crest"},
+        "label": "Confsearch Protocol",
+        "label_zh": "计算协议",
+    },
+    "confsearch_profile": {
+        "type": "select",
+        "options": ["light", "default", "high"],
+        "default": {"*": "default"},
+        "label": "Quality Profile",
+        "label_zh": "精度档位",
+    },
+    "refinement_policy": {
+        "type": "select",
+        "options": ["screen", "rank1", "cumulative-99", "all"],
+        "option_labels_zh": {
+            "screen": "仅筛选",
+            "rank1": "Rank 1",
+            "cumulative-99": "累计 Boltzmann 99%",
+            "all": "全部构象",
+        },
+        "default": {"*": "screen"},
+        "label": "Refinement Policy",
+        "label_zh": "精修策略",
     },
     "fidelity": {
         "type": "select",
@@ -1437,6 +1539,236 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "summary": "Declarative composition of standalone mechanism modules",
                 "levels": {},
             }
+        ],
+    },
+    "confsearch_unified": {
+        "method_levels": [
+            {
+                "level_id": "confsearch",
+                "label": "Conformer Search Protocol",
+                "label_zh": "构象搜索协议",
+                "required": True,
+                "allowed_engines": ["crest", "xtb", "censo"],
+                "fields": [
+                    "protocol",
+                    "confsearch_profile",
+                    "refinement_policy",
+                    "ewin",
+                    "refinement_threshold",
+                ],
+            },
+            {
+                "level_id": "dft_opt",
+                "label": "DFT Optimization",
+                "label_zh": "DFT 结构优化",
+                "required": False,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "dispersion",
+                    "solvent_model",
+                    "solvent",
+                    "grid",
+                    "scf_convergence",
+                    "opt_convergence",
+                    "max_steps",
+                ],
+            },
+            {
+                "level_id": "refinement_sp",
+                "label": "Single Point Energy",
+                "label_zh": "单点能",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "ri_approximation",
+                    "aux_j_basis",
+                    "dispersion",
+                    "solvent_model",
+                    "solvent",
+                    "grid",
+                    "scf_convergence",
+                ],
+            },
+            {
+                "level_id": "thermo",
+                "label": "Thermochemistry",
+                "label_zh": "热力学修正",
+                "required": False,
+                "allowed_engines": ["shermo"],
+                "fields": ["temperature", "pressure", "scale_factor"],
+            },
+        ],
+        "profiles": [
+            {
+                "profile_id": "xtb-crest",
+                "label": "xTB + CREST",
+                "summary": "CREST → xTB energies → Boltzmann (pure xTB, fastest)",
+                "levels": {
+                    "confsearch": {
+                        "engine": "crest",
+                        "protocol": "xtb-crest",
+                        "confsearch_profile": "default",
+                        "refinement_policy": "screen",
+                        "ewin": 6.0,
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                    },
+                },
+            },
+            {
+                "profile_id": "xtb-md",
+                "label": "xTB-MD",
+                "summary": "GFN-FF MD → GFN1 opt → ISOSTAT dedup → Boltzmann (pure xTB)",
+                "levels": {
+                    "confsearch": {
+                        "engine": "xtb",
+                        "protocol": "xtb-md",
+                        "confsearch_profile": "default",
+                        "refinement_policy": "screen",
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                    },
+                },
+            },
+            {
+                "profile_id": "censo-crest",
+                "label": "CREST + CENSO",
+                "summary": "CREST → CENSO free energies → rank1 DFT refinement (recommended)",
+                "levels": {
+                    "confsearch": {
+                        "engine": "censo",
+                        "protocol": "censo-crest",
+                        "confsearch_profile": "default",
+                        "refinement_policy": "rank1",
+                        "ewin": 6.0,
+                        "refinement_threshold": 0.99,
+                    },
+                    "refinement_sp": {
+                        "engine": "orca",
+                        "functional": "wB97M-V",
+                        "basis": "def2-TZVPP",
+                        "ri_approximation": "RIJCOSX",
+                        "solvent_model": "none",
+                        "solvent": "",
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                        "scale_factor": 0.9905,
+                    },
+                },
+            },
+            {
+                "profile_id": "xtbmd-censo",
+                "label": "xTB-MD + CENSO + DFT",
+                "summary": "GFN-FF MD → GFN1 opt → ISOSTAT → CENSO → fine DFT (full chain)",
+                "levels": {
+                    "confsearch": {
+                        "engine": "censo",
+                        "protocol": "xtbmd-censo",
+                        "confsearch_profile": "default",
+                        "refinement_policy": "cumulative-99",
+                        "refinement_threshold": 0.99,
+                    },
+                    "refinement_sp": {
+                        "engine": "orca",
+                        "functional": "wB97M-V",
+                        "basis": "def2-TZVPP",
+                        "ri_approximation": "RIJCOSX",
+                        "solvent_model": "none",
+                        "solvent": "",
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                        "scale_factor": 0.9905,
+                    },
+                },
+            },
+        ],
+    },
+    "pes_search": {
+        "method_levels": [
+            {
+                "level_id": "pes",
+                "label": "Path Search",
+                "label_zh": "路径搜索",
+                "required": True,
+                "allowed_engines": ["xtb", "orca"],
+                "fields": ["path_strategy", "scan_points"],
+            },
+        ],
+        "profiles": [
+            {
+                "profile_id": "guided-scan",
+                "label": "Guided Scan",
+                "summary": "Synchronous xTB relaxed scan along user coordinates (most general)",
+                "levels": {"pes": {"engine": "xtb", "path_strategy": "guided-scan"}},
+            },
+            {
+                "profile_id": "reverse-peb",
+                "label": "Reverse PEB",
+                "summary": "Product-driven reverse scan + xTB PATH (requires product)",
+                "levels": {"pes": {"engine": "xtb", "path_strategy": "reverse-peb"}},
+            },
+            {
+                "profile_id": "direct-ts",
+                "label": "Direct TS",
+                "summary": "User-supplied TS guess, no path search",
+                "levels": {"pes": {"engine": "orca", "path_strategy": "direct-ts"}},
+            },
+        ],
+    },
+    "low_confirm": {
+        "method_levels": [
+            {
+                "level_id": "confirm",
+                "label": "Low Confirmation",
+                "label_zh": "粗优化确认",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": ["scan_points"],
+            },
+        ],
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "B97-3c + r2SCAN-3c SP",
+                "summary": "B97-3c Opt/TS + freq + preliminary IRC + r2SCAN-3c SP",
+                "levels": {},
+            },
+        ],
+    },
+    "high_confirm": {
+        "method_levels": [
+            {
+                "level_id": "confirm",
+                "label": "High Confirmation",
+                "label_zh": "高精度确认",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": ["scan_points"],
+            },
+        ],
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "M062X + wB97M-V SP",
+                "summary": "M062X/def2-SVP Opt/TS + freq + wB97M-V/def2-TZVPP SP + thermo",
+                "levels": {},
+            },
         ],
     },
     "nmr": {

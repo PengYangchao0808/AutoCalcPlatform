@@ -401,7 +401,7 @@ def test_local_admission_ignores_remote_starting_jobs(tmp_path: Path) -> None:
 def test_invalid_target_node_fails_fast_no_retry(tmp_path: Path) -> None:
     mgr = JobManager(run_root=tmp_path)
     try:
-        record = mgr.submit(JobSpec(workflow="energy", target_node="ghost"))
+        record = mgr.submit(JobSpec(workflow="Confsearch", target_node="ghost"))
         deadline = time.time() + 15
         cur = None
         while time.time() < deadline:

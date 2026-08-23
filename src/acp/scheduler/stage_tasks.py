@@ -235,6 +235,64 @@ class _XtbmdCensoEnergyStagePlanProvider:
         return plan
 
 
+class _ConfsearchStagePlanProvider:
+    """Confsearch stage plan (plan §12.3): prepare → sampling → energy →
+    dedup → refinement → finalize. The refinement stage is policy-dependent
+    (``screen`` protocols stop after dedup)."""
+
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        policy = str(spec.method.get("refinement_policy") or "screen")
+        protocol = str(spec.method.get("protocol") or "censo-crest")
+        plan = [
+            StagePlan("prepare"),
+            StagePlan("sampling"),
+            StagePlan("energy"),
+            StagePlan("dedup"),
+        ]
+        if policy != "screen" and protocol not in ("xtb-crest", "xtb-md"):
+            plan.append(StagePlan("refinement"))
+        plan.append(StagePlan("finalize"))
+        return plan
+
+
+class _PesSearchStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        return [
+            StagePlan("prepare"),
+            StagePlan("path_search"),
+            StagePlan("candidate_extract"),
+            StagePlan("finalize"),
+        ]
+
+
+class _LowConfirmStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        plan = [
+            StagePlan("prepare"),
+            StagePlan("optimize"),
+            StagePlan("frequency"),
+        ]
+        if not spec.method.get("no_irc"):
+            plan.append(StagePlan("irc"))
+        plan.append(StagePlan("finalize"))
+        return plan
+
+
+class _HighConfirmStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        plan = [
+            StagePlan("prepare"),
+            StagePlan("optimize"),
+            StagePlan("frequency"),
+            StagePlan("single_point"),
+            StagePlan("thermo"),
+        ]
+        if spec.method.get("irc"):
+            plan.append(StagePlan("irc"))
+        plan.append(StagePlan("finalize"))
+        return plan
+
+
 class StageTaskStore:
     """Thread-safe SQLite persistence for stage-level task rows."""
 
@@ -512,6 +570,10 @@ def _task_snapshot(task: StageTask) -> dict[str, Any]:
 
 
 register_plan_provider("fake", _FakeStagePlanProvider())
+register_plan_provider("confsearch", _ConfsearchStagePlanProvider())
+register_plan_provider("pessearch", _PesSearchStagePlanProvider())
+register_plan_provider("lowconfirm", _LowConfirmStagePlanProvider())
+register_plan_provider("highconfirm", _HighConfirmStagePlanProvider())
 register_plan_provider("mechanism", _MechanismStagePlanProvider())
 register_plan_provider("ensemble", _EnsembleStagePlanProvider())
 register_plan_provider("energy", _EnergyStagePlanProvider())

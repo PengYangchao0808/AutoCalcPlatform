@@ -25,6 +25,7 @@ from acp.core.state import EventLog
 
 from .._helpers import fingerprint
 from .._helpers import write_json_atomic as _write_json_atomic
+from ..layout import MechanismStudyLayout, standalone_layout
 from ..models import (
     ArtifactRef,
     MechanismRoute,
@@ -112,7 +113,7 @@ def mark_route_status(
 
 
 def persist_route_manifest(
-    study_dir: Path,
+    layout: MechanismStudyLayout,
     *,
     source_state_id: str,
     route: MechanismRoute,
@@ -124,7 +125,7 @@ def persist_route_manifest(
     endpoint_match: EndpointMatchResult | None = None,
     depth: int | None = None,
 ) -> None:
-    route_dir = study_dir / "routes" / f"{source_state_id}__{route.route_id}"
+    route_dir = layout.routes_root / f"{source_state_id}__{route.route_id}"
     payload: dict[str, Any] = {
         "source_state_id": source_state_id,
         "route_id": route.route_id,
@@ -144,8 +145,8 @@ def persist_route_manifest(
     _write_json_atomic(route_dir / "path_manifest.json", payload)
 
 
-def persist_refinement_manifest(study_dir: Path, manifest: RefinementManifest) -> None:
-    ref_dir = study_dir / "refinements" / manifest.manifest_id
+def persist_refinement_manifest(layout: MechanismStudyLayout, manifest: RefinementManifest) -> None:
+    ref_dir = layout.refinements_root / manifest.manifest_id
     _write_json_atomic(ref_dir / "refinement_manifest.json", manifest.to_dict())
 
 
@@ -259,7 +260,7 @@ class ElementaryStepEngine:
     def __init__(
         self,
         study: MechanismStudy,
-        study_dir: Path,
+        layout: MechanismStudyLayout | Path,
         *,
         path_strategy: PathSearchStrategy,
         refinement_provider: RefinementProvider,
@@ -271,7 +272,12 @@ class ElementaryStepEngine:
         event_log: EventLog | None = None,
     ) -> None:
         self.study = study
-        self.study_dir = Path(study_dir)
+        self.layout = (
+            layout
+            if isinstance(layout, MechanismStudyLayout)
+            else standalone_layout(layout, study.study_id)
+        )
+        self.study_dir = self.layout.analysis_root
         self.path_strategy = path_strategy
         self.refinement_provider = refinement_provider
         self.endpoint_provider = endpoint_provider
@@ -279,7 +285,7 @@ class ElementaryStepEngine:
         self.low_fidelity_profile = low_fidelity_profile
         self.require_review = require_review
         self.require_sr_review = require_sr_review
-        self.event_log = event_log or EventLog(self.study_dir / "events.jsonl")
+        self.event_log = event_log or EventLog(self.layout.study_events)
 
     # -- preparation ---------------------------------------------------------
 
@@ -334,7 +340,7 @@ class ElementaryStepEngine:
         )
         self._merge_gate_policies(path_result)
         persist_route_manifest(
-            self.study_dir,
+            self.layout,
             source_state_id=source_state.state_id,
             route=route,
             route_fingerprint=ctx.route_fingerprint,
@@ -362,14 +368,14 @@ class ElementaryStepEngine:
         self.study.metadata.setdefault("refinement_manifests", {})[manifest.manifest_id] = (
             manifest.to_dict()
         )
-        persist_refinement_manifest(self.study_dir, manifest)
+        persist_refinement_manifest(self.layout, manifest)
         canonical_ts = manifest.canonical_winner
         if canonical_ts is None:
             mark_route_status(
                 self.study, ctx.exploration_key, ctx.route_fingerprint, status="failed"
             )
             persist_route_manifest(
-                self.study_dir,
+                self.layout,
                 source_state_id=source_state.state_id,
                 route=route,
                 route_fingerprint=ctx.route_fingerprint,
@@ -505,11 +511,7 @@ class ElementaryStepEngine:
         point: PathPoint,
     ) -> ArtifactRef:
         seed_path = (
-            self.study_dir
-            / "routes"
-            / f"{state_id}__{route_id}"
-            / "seeds"
-            / f"{point.point_id}.json"
+            self.layout.routes_root / f"{state_id}__{route_id}" / "seeds" / f"{point.point_id}.json"
         )
         payload = point.to_dict()
         _write_json_atomic(seed_path, payload)

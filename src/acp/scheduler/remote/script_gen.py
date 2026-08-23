@@ -19,6 +19,7 @@ import logging
 import posixpath
 import shlex
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import Any
 
 from acp.catalog import method_levels_to_cli_flags
@@ -28,8 +29,12 @@ from acp.scheduler.jobs import (
     censo_ewin_from_method,
     censo_preset_from_method,
     censo_solvent_from_method,
+    confsearch_method_flags,
+    highconfirm_method_flags,
     input_chemistry_flags,
+    lowconfirm_method_flags,
     nmr_method_flags,
+    pessearch_method_flags,
     xtbmd_method_flags,
 )
 from acp.scheduler.remote.config import RemoteNode
@@ -167,6 +172,10 @@ def build_remote_cli_command(
         "mech-step",
         "mech-confirm",
         "mech-chain",
+        "Confsearch",
+        "PESsearch",
+        "Lowconfirm",
+        "Highconfirm",
         "ensemble",
         "energy",
         "nmr",
@@ -186,6 +195,15 @@ def build_remote_cli_command(
     method = spec.method
     res = spec.resources
 
+    # Stage workflows consume a validated artifact reference, not a
+    # structure source (plan §8) — the handoff payload is expected to be
+    # staged into the remote job dir as WORK/01_PREPARE/handoff/ by the
+    # submit path (remote stage jobs assume the source artifact ships with
+    # the job).
+    if wf in ("PESsearch", "Lowconfirm", "Highconfirm"):
+        cmd += build_remote_stage_cmd_tail(spec)
+        return cmd
+
     # NMR has a distinct multi-candidate + spectrum payload shape.
     if wf == "nmr":
         cmd += build_remote_nmr_cmd_tail(spec, input_path)
@@ -195,7 +213,18 @@ def build_remote_cli_command(
     if not source:
         raise ValueError(f"{wf} job requires a valid input structure")
 
-    if wf == "mechanism":
+    if wf == "Confsearch":
+        cmd += ["--input", str(source), "--output", "."]
+        if spec.name:
+            cmd += ["--name", spec.name]
+        cmd += confsearch_method_flags(method)
+        solvent = censo_solvent_from_method(method)
+        if solvent:
+            cmd += ["--solvent", solvent]
+        ewin = censo_ewin_from_method(method)
+        if ewin is not None:
+            cmd += ["--ewin", str(ewin)]
+    elif wf == "mechanism":
         cmd += ["--input", str(source), "--output", "."]
         cmd += ["--mechanism-config", mechanism_config_path or MECHANISM_CONFIG_FILENAME]
         if spec.name:
@@ -324,6 +353,53 @@ def build_remote_cli_command(
     return cmd
 
 
+def build_remote_stage_cmd_tail(spec: JobSpec) -> list[str]:
+    """E7 parity helper: append the stage-workflow argv for remote execution.
+
+    Mirrors :meth:`JobRunner._build_stage_cmd`. The handoff payload
+    (manifest + referenced geometry dirs) must already be staged under
+    ``WORK/01_PREPARE/handoff/`` in the remote job dir; the flag points the
+    CLI at the staged manifest.
+    """
+    wf = spec.workflow
+    inp = spec.input
+    method = spec.method
+    flags: list[str] = ["--output", "."]
+    from_manifest = inp.get("from")
+    if from_manifest:
+        flags += ["--from", str(from_manifest)]
+    else:
+        flags += [
+            "--from",
+            str(PurePosixPath("WORK") / "01_PREPARE" / "handoff" / _stage_manifest_name(wf)),
+        ]
+    if wf == "PESsearch":
+        flags += pessearch_method_flags(method)
+        plan = inp.get("coordinate_plan") or method.get("coordinate_plan")
+        if plan is not None:
+            flags += ["--plan", json.dumps(plan)]
+        product = inp.get("product")
+        if product:
+            flags += ["--product", str(product)]
+        ts_guess = inp.get("ts_guess")
+        if ts_guess:
+            flags += ["--ts-guess", str(ts_guess)]
+    elif wf == "Lowconfirm":
+        flags += lowconfirm_method_flags(method)
+    elif wf == "Highconfirm":
+        flags += highconfirm_method_flags(method)
+    flags += input_chemistry_flags(inp)
+    return flags
+
+
+def _stage_manifest_name(workflow: str) -> str:
+    if workflow == "PESsearch":
+        return "confsearch_manifest.json"
+    if workflow == "Lowconfirm":
+        return "s2_path_manifest.json"
+    return "s3_lowconfirm_manifest.json"
+
+
 def build_remote_nmr_cmd_tail(
     spec: JobSpec,
     input_path: str = "inputs/input.xyz",
@@ -438,13 +514,13 @@ def build_lsf_script_spec(
     input_path: str = "inputs/input.xyz",
     config_path: str | None = None,
     materialized_role_paths: dict[str, str] | None = None,
+    remote_dir_name: str | None = None,
 ) -> tuple[LSFScriptSpec, list[str]]:
     """Build both the CLI command and :class:`LSFScriptSpec` for a job.
 
     Args:
         spec: The scheduler job specification.
-        job_id: The ACP job identifier (used for the BSUB job name and the
-            remote working directory).
+        job_id: The ACP job identifier (used for the BSUB job name).
         node: The target remote compute node.
         queue: LSF queue name.
         walltime: LSF wall-clock limit.
@@ -453,11 +529,14 @@ def build_lsf_script_spec(
             ``inputs/input.xyz``).
         config_path: Optional path to a job-level YAML config on the remote
             node (e.g. ``cccp.yaml`` in the job directory).
+        remote_dir_name: v2 task directory name for the remote working
+            directory leaf (defaults to *job_id* for backward compatibility).
 
     Returns:
         ``(lsf_spec, cli_command)``.
     """
-    remote_job_dir = posixpath.join(node.remote_work_dir, job_id)
+    dir_leaf = remote_dir_name or job_id
+    remote_job_dir = posixpath.join(node.remote_work_dir, dir_leaf)
     cli_command = build_remote_cli_command(
         spec,
         input_path=input_path,

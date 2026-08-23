@@ -132,10 +132,10 @@ def test_fake_job_produces_artifacts(tmp_path: Path) -> None:
         registry = ArtifactRegistry(mgr.store.db_path)
         artifacts = registry.list_by_job(record.id)
         assert artifacts
-        assert any(artifact.file_path == "results/input_preview.xyz" for artifact in artifacts)
+        assert any(artifact.file_path == "RESULT/input_preview.xyz" for artifact in artifacts)
         assert all(artifact.parser_status == ParserStatus.PENDING.value for artifact in artifacts)
 
-        preview_path = Path(record.work_dir) / "results" / "input_preview.xyz"
+        preview_path = Path(record.work_dir) / "RESULT" / "input_preview.xyz"
         preview_text = preview_path.read_text(encoding="utf-8")
         lines = preview_text.strip().splitlines()
         assert int(lines[0].strip()) == 9

@@ -29,6 +29,7 @@ from acp.mechanism.endpoint import (
     connectivity_fingerprint,
     perceive_connectivity,
 )
+from acp.mechanism.layout import MechanismStudyLayout, find_study_layout, resolve_study_layout
 from acp.mechanism.models import (
     ArtifactRef,
     AtomIdentityMap,
@@ -148,7 +149,7 @@ def build_study_providers(
     config: dict,
     low_fidelity_profile: FidelityProfile | None = None,
     *,
-    work_root: Path,
+    layout: MechanismStudyLayout,
 ) -> dict[str, Any]:
     """Build the provider bundle required by :class:`StudyOrchestrator`."""
 
@@ -171,21 +172,19 @@ def build_study_providers(
             ensemble_provider: Any = RPHEnsembleProvider(config=config)
             ensemble_profile: Any = RPH_CENSO_LITE_MODE
         else:
-            ensemble_provider = NativeCensoLiteProvider(config=config, work_root=work_root / "s1")
+            ensemble_provider = NativeCensoLiteProvider(config=config, work_root=layout.s1_root)
             ensemble_profile = RPH_CENSO_LITE_MODE
     else:
-        ensemble_provider = XtbFastEnsembleProvider(
-            config=config, work_root=work_root / "s1_xtbfast"
-        )
+        ensemble_provider = XtbFastEnsembleProvider(config=config, work_root=layout.s1_xtbfast_root)
         ensemble_profile = XTB_FAST_MODE
 
     if resolved_strategy == "guided-scan":
-        path_strategy: Any = GuidedScanPathStrategy(config=config, work_root=work_root / "s2")
+        path_strategy: Any = GuidedScanPathStrategy(config=config, work_root=layout.s2_root)
     elif resolved_strategy == "rph-reverse":
         if backend == "rph":
             path_strategy = RPHPathSearchStrategy(config=config)
         else:
-            path_strategy = NativeReversePebStrategy(config=config, work_root=work_root / "s2_peb")
+            path_strategy = NativeReversePebStrategy(config=config, work_root=layout.s2_peb_root)
     elif resolved_strategy == "direct-ts":
         path_strategy = DirectTsStrategy()
     else:
@@ -194,7 +193,7 @@ def build_study_providers(
     if backend == "rph":
         refinement_provider: Any = RPHRefinementProvider(config=config)
     else:
-        refinement_provider = NativeRefinementProvider(config=config, work_root=work_root / "s3s4")
+        refinement_provider = NativeRefinementProvider(config=config, work_root=layout.ts_root)
 
     return {
         "ensemble_provider": ensemble_provider,
@@ -466,7 +465,8 @@ def run_mechanism_study(
         product_source,
     )
     study_root = Path(output_dir)
-    study_dir = _resolve_study_dir(study_root, study_name)
+    layout = resolve_study_layout(study_root, study_name)
+    study_dir = layout.analysis_root
     # TODO(phase-b): schema-v2 studies must require a locked reaction.json before
     # S0 proceeds. Phase A only validates the file when present.
     locked_reaction = read_reaction_json(study_dir)
@@ -485,7 +485,7 @@ def run_mechanism_study(
 
     thresholds = EndpointMatchThresholds()
     stable_states, atom_identity_map = _build_initial_states(
-        study_dir=study_dir,
+        layout=layout,
         reactant=reactant,
         reactant_source=input_source,
         product=product,
@@ -527,7 +527,7 @@ def run_mechanism_study(
         resolved_fidelity,
         cfg,
         low_fidelity_profile=low_fidelity_profile,
-        work_root=study_dir / "calc",
+        layout=layout,
     )
 
     study = MechanismStudy(
@@ -566,7 +566,7 @@ def run_mechanism_study(
     study.metadata["locked_reaction_hash"] = (
         locked_reaction.content_hash if locked_reaction is not None else None
     )
-    endpoint_provider = _build_endpoint_provider(study_dir, cfg)
+    endpoint_provider = _build_endpoint_provider(layout, cfg)
 
     orchestrator = StudyOrchestrator(
         study,
@@ -606,8 +606,10 @@ def resume_mechanism_study(
     """Resume a persisted mechanism study from its checkpoint bundle."""
 
     root = Path(study_root)
-    study_dir = _resolve_study_dir(root, study_id)
-    study_path = study_dir / "study.json"
+    layout = find_study_layout(root, study_id)
+    if layout is None:
+        raise FileNotFoundError(f"Mechanism study checkpoint not found: {root} / {study_id}")
+    study_path = layout.study_json
     if not study_path.exists():
         raise FileNotFoundError(f"Mechanism study checkpoint not found: {study_path}")
 
@@ -638,7 +640,7 @@ def resume_mechanism_study(
         resolved_fidelity,
         cfg,
         low_fidelity_profile=low_fidelity_profile,
-        work_root=study_dir / "calc",
+        layout=layout,
     )
 
     orchestrator = StudyOrchestrator(
@@ -647,7 +649,7 @@ def resume_mechanism_study(
         ensemble_provider=providers["ensemble_provider"],
         path_strategy=providers["path_strategy"],
         refinement_provider=providers["refinement_provider"],
-        endpoint_provider=_build_endpoint_provider(study_dir, cfg),
+        endpoint_provider=_build_endpoint_provider(layout, cfg),
         thermochemistry_provider=_build_thermochemistry_provider(cfg),
         ensemble_profile=providers["ensemble_profile"],
         low_fidelity_profile=providers["low_fidelity_profile"],
@@ -681,12 +683,12 @@ def _auto_resume(orchestrator: StudyOrchestrator) -> MechanismStudy:
     return result
 
 
-def _build_endpoint_provider(study_dir: Path, config: dict[str, Any]) -> Any:
+def _build_endpoint_provider(layout: MechanismStudyLayout, config: dict[str, Any]) -> Any:
     from acp.mechanism.endpoint import DefaultEndpointProvider
 
     return DefaultEndpointProvider(
         backend=_build_orca_backend(config),
-        work_root=study_dir / "sr",
+        work_root=layout.endpoint_root,
     )
 
 
@@ -728,7 +730,7 @@ def _resolve_conformer_mode(mode: str, rph_available: bool) -> str:
 
 def _build_initial_states(
     *,
-    study_dir: Path,
+    layout: MechanismStudyLayout,
     reactant: Structure,
     reactant_source: str,
     product: Structure | None,
@@ -746,7 +748,7 @@ def _build_initial_states(
             state_id="state_reactant",
             structure=reactant,
             source_input=reactant_source,
-            study_dir=study_dir,
+            layout=layout,
             thresholds=thresholds,
             atom_mapping=reactant_atom_mapping,
             ts_guess=ts_guess,
@@ -764,7 +766,7 @@ def _build_initial_states(
                 state_id="state_product",
                 structure=product,
                 source_input=product_source or "",
-                study_dir=study_dir,
+                layout=layout,
                 thresholds=thresholds,
                 atom_mapping=product_atom_mapping,
                 ts_guess=None,
@@ -779,13 +781,13 @@ def _build_stable_state(
     state_id: str,
     structure: Structure,
     source_input: str,
-    study_dir: Path,
+    layout: MechanismStudyLayout,
     thresholds: EndpointMatchThresholds,
     atom_mapping: dict[str, int] | None,
     ts_guess: Structure | None,
 ) -> StableState:
     coordinates = _require_coordinates(structure)
-    geometry_path = study_dir / "inputs" / f"{state_id}.xyz"
+    geometry_path = layout.inputs_root / f"{state_id}.xyz"
     _write_xyz(geometry_path, structure, title=f"{role} input")
     fingerprint = _identity_fingerprint(structure, thresholds)
     metadata: dict[str, Any] = {
@@ -1242,7 +1244,10 @@ def read_review_handoff(
 
 def waiting_study_exists(study_root: str | Path, study_id: str) -> bool:
     """True when the persisted study checkpoint is paused at a review gate."""
-    study_path = _resolve_study_dir(Path(study_root), study_id) / "study.json"
+    layout = find_study_layout(Path(study_root), study_id)
+    if layout is None:
+        return False
+    study_path = layout.study_json
     if not study_path.exists():
         return False
     try:
@@ -1306,12 +1311,6 @@ def _default_study_id(input_source: str, product_source: str | None) -> str:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     digest = hashlib.sha256(f"{input_source}|{product_source or ''}".encode()).hexdigest()[:8]
     return f"study_{stamp}_{digest}"
-
-
-def _resolve_study_dir(root: Path, study_id: str) -> Path:
-    if root.name == study_id and root.parent.name == "mechanism_study":
-        return root
-    return root / "mechanism_study" / study_id
 
 
 def _require_coordinates(structure: Structure) -> np.ndarray:

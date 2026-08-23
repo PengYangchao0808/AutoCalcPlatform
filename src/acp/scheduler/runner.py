@@ -39,13 +39,19 @@ from acp.scheduler.jobs import (
     censo_ewin_from_method,
     censo_preset_from_method,
     censo_solvent_from_method,
+    confsearch_method_flags,
+    highconfirm_method_flags,
     input_chemistry_flags,
+    lowconfirm_method_flags,
     nmr_method_flags,
+    pessearch_method_flags,
     write_mechanism_job_config,
     xtbmd_method_flags,
 )
 from acp.scheduler.provenance import Provenance, build_provenance_for_job
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
+from acp.storage.layout import TaskStorage, runtime_file
+from acp.storage.record import TaskRecord
 
 logger = logging.getLogger(__name__)
 
@@ -166,31 +172,17 @@ def _read_json_object(path: Path) -> dict[str, Any] | None:
 
 
 def _find_mechanism_study_json(record: JobRecord) -> Path | None:
-    study_root = Path(record.work_dir) / "mechanism_study"
-    if not study_root.is_dir():
-        logger.debug("No mechanism_study directory for job %s", record.id)
-        return None
+    from acp.mechanism.layout import find_study_layout
 
     study_id = _opt_text(record.spec.method.get("study_id"))
-    if study_id is not None:
-        study_path = study_root / study_id / "study.json"
-        if study_path.is_file():
-            return study_path
-        logger.debug("Mechanism study.json missing for job %s at %s", record.id, study_path)
-        return None
-
-    candidates = sorted(study_root.glob("*/study.json"))
-    if len(candidates) == 1:
-        return candidates[0]
-    if len(candidates) > 1:
-        logger.debug(
-            "Ambiguous mechanism study discovery for job %s: %s candidates",
-            record.id,
-            len(candidates),
-        )
-    else:
+    layout = find_study_layout(Path(record.work_dir), study_id)
+    if layout is None:
         logger.debug("No mechanism study.json found for job %s", record.id)
-    return None
+        return None
+    if not layout.study_json.is_file():
+        logger.debug("Mechanism study.json missing for job %s at %s", record.id, layout.study_json)
+        return None
+    return layout.study_json
 
 
 def _extract_effective_fidelity(
@@ -291,6 +283,35 @@ def _materialized_input_name(source: str, stem: str = "input") -> str:
 def _extract_input_source(inp: dict[str, Any]) -> str:
     source = inp.get("source") or inp.get("input") or inp.get("smiles") or ""
     return str(source)
+
+
+def _write_log_header(
+    record: JobRecord,
+    work_dir: Path,
+    cmd: list[str],
+    out: Any,
+    err: Any,
+) -> None:
+    """Write the v2 provenance header to ``stdout.log`` and ``stderr.log``.
+
+    The timestamped job id no longer appears in any path (v2 task dirs are
+    named ``<molecule>_<task>_<remark>``); instead it is embedded into the
+    log content itself, ahead of any subprocess output.
+    """
+    header_lines = [
+        f"# job_id: {record.id}",
+        f"# workflow: {record.spec.workflow}",
+        f"# task_dir_name: {work_dir.name}",
+        f"# work_dir: {work_dir}",
+        f"# launched_at: {datetime.now(timezone.utc).isoformat()}",
+        f"# command: {' '.join(cmd)}",
+        "",
+    ]
+    header = "\n".join(header_lines)
+    out.write(header)
+    out.flush()
+    err.write(header)
+    err.flush()
 
 
 def _copy_structure_asset(source: str, inputs_dir: Path, run_root: Path, stem: str) -> Path:
@@ -411,9 +432,7 @@ def _mechanism_role_source(
     role_value = inp.get(role)
     if isinstance(role_value, dict):
         nested_source = (
-            role_value.get("source")
-            or role_value.get("input")
-            or role_value.get("smiles")
+            role_value.get("source") or role_value.get("input") or role_value.get("smiles")
         )
         if nested_source and role_value.get("source_type") != "xyz_text":
             return str(nested_source)
@@ -456,8 +475,10 @@ def _load_mechanism_reaction_definition(
     study_id = spec.method.get("study_id")
     if not study_id:
         return None
-    path = work_dir / "mechanism_study" / str(study_id) / "reaction.json"
-    if not path.is_file():
+    from acp.mechanism.layout import find_reaction_json
+
+    path = find_reaction_json(work_dir, str(study_id))
+    if path is None:
         return None
     payload = json.loads(path.read_text(encoding="utf-8"))
     return payload if isinstance(payload, dict) else None
@@ -522,15 +543,18 @@ class JobRunner:
             self._event_logs[record.id] = event_log
 
         if record.spec.workflow == "fake":
-            (work_dir / "results").mkdir(exist_ok=True)
+            TaskStorage(work_dir).result_dir().mkdir(parents=True, exist_ok=True)
             self._run_fake(record, event_log, cancel_event)
             record.exit_code = 0
             record.completed_at = datetime.now(timezone.utc).isoformat()
             return
 
-        (work_dir / "inputs").mkdir(exist_ok=True)
-        (work_dir / "work").mkdir(exist_ok=True)
-        (work_dir / "results").mkdir(exist_ok=True)
+        # v2 task-storage layout (§3/§5): WORK/00_RUNTIME + RESULT/ scaffold,
+        # input.xyz + task.json at the task root.  Scheduler zone-A files
+        # (stdout/stderr/events/job.json) intentionally stay at the root for
+        # backward compatibility with logs.py / events.py / v1_routes readers.
+        storage = TaskStorage(work_dir)
+        storage.ensure_layout()
 
         observer = self._observer_for_record(record)
         observer.initialize_job_stages(record.id, record.spec)
@@ -541,17 +565,43 @@ class JobRunner:
             raise RuntimeError(f"Local disk full, submission blocked for job {record.id}")
 
         materialized_roles: dict[str, Path] = {}
+        if record.spec.workflow == "mechanism":
+            inputs_dir = work_dir / "inputs"
+            inputs_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            inputs_dir = work_dir
         materialized = materialize_job_input(
             record.spec.input,
-            work_dir / "inputs",
+            inputs_dir,
             work_dir.parent.parent,
             materialized_roles,
         )
+        if materialized is not None and materialized != work_dir / "input.xyz":
+            try:
+                storage.write_input_xyz(materialized.read_text(encoding="utf-8"))
+            except OSError:
+                logger.warning("Could not copy primary input.xyz for job %s", record.id)
+        storage.write_task_json(
+            TaskRecord(
+                task_id=record.id,
+                project_id=record.project_id or "",
+                molecule_name=record.spec.molecule_name,
+                task_name=record.spec.task_name,
+                remark=record.spec.remark,
+                display_name=record.spec.name,
+                workflow=record.spec.workflow,
+                task_dir_name=work_dir.name,
+                status=record.status.value,
+                node_path=record.work_dir,
+                input_hash=record.input_hash,
+                current_stage=record.current_stage,
+                created_at=record.created_at,
+                updated_at=record.updated_at,
+            )
+        )
 
         effective_input_path = (
-            str(materialized)
-            if materialized
-            else _extract_input_source(record.spec.input)
+            str(materialized) if materialized else _extract_input_source(record.spec.input)
         )
         mechanism_config_path = _write_mechanism_config_if_needed(
             record.spec,
@@ -566,8 +616,8 @@ class JobRunner:
             materialized_roles,
             mechanism_config_path=str(mechanism_config_path) if mechanism_config_path else None,
         )
-        stdout_path = work_dir / "stdout.log"
-        stderr_path = work_dir / "stderr.log"
+        stdout_path = runtime_file(work_dir, "stdout.log")
+        stderr_path = runtime_file(work_dir, "stderr.log")
 
         event_log.append("process.starting", job_id=record.id, cmd=" ".join(cmd))
 
@@ -575,6 +625,7 @@ class JobRunner:
             stdout_path.open("w", encoding="utf-8") as out,
             stderr_path.open("w", encoding="utf-8") as err,
         ):
+            _write_log_header(record, work_dir, cmd, out, err)
             env = dict(os.environ)
             env["PYTHONUNBUFFERED"] = "1"
             proc = subprocess.Popen(
@@ -770,10 +821,6 @@ class JobRunner:
             assert self.remote_runner is not None
             return self.remote_runner.run(record, event_log, cancel_event)
 
-        (work_dir / "inputs").mkdir(exist_ok=True)
-        (work_dir / "work").mkdir(exist_ok=True)
-        (work_dir / "results").mkdir(exist_ok=True)
-
         observer = self._observer_for_record(record)
         observer.initialize_job_stages(record.id, record.spec)
         event_log.append("job.started", job_id=record.id, workflow=record.spec.workflow)
@@ -839,9 +886,7 @@ class JobRunner:
             return 1
 
         effective_input_path = (
-            str(materialized)
-            if materialized
-            else _extract_input_source(record.spec.input)
+            str(materialized) if materialized else _extract_input_source(record.spec.input)
         )
         mechanism_config_path = _write_mechanism_config_if_needed(
             record.spec,
@@ -856,8 +901,8 @@ class JobRunner:
             materialized_roles,
             mechanism_config_path=str(mechanism_config_path) if mechanism_config_path else None,
         )
-        stdout_path = work_dir / "stdout.log"
-        stderr_path = work_dir / "stderr.log"
+        stdout_path = runtime_file(work_dir, "stdout.log")
+        stderr_path = runtime_file(work_dir, "stderr.log")
 
         event_log.append("process.starting", job_id=record.id, cmd=" ".join(cmd))
 
@@ -865,6 +910,7 @@ class JobRunner:
             stdout_path.open("w", encoding="utf-8") as out,
             stderr_path.open("w", encoding="utf-8") as err,
         ):
+            _write_log_header(record, work_dir, cmd, out, err)
             env = dict(os.environ)
             env["PYTHONUNBUFFERED"] = "1"
             proc = subprocess.Popen(
@@ -1078,6 +1124,10 @@ class JobRunner:
             "mech-step",
             "mech-confirm",
             "mech-chain",
+            "Confsearch",
+            "PESsearch",
+            "Lowconfirm",
+            "Highconfirm",
             "ensemble",
             "energy",
             "nmr",
@@ -1097,6 +1147,11 @@ class JobRunner:
         res = spec.resources
 
         source = input_path or _extract_input_source(inp)
+        # Stage workflows receive their input via a validated artifact
+        # reference (plan §8), not a structure source — resolve before the
+        # single-source validation below.
+        if wf in ("PESsearch", "Lowconfirm", "Highconfirm"):
+            return self._build_stage_cmd(spec, work_dir)
         # NMR carries multiple candidates + an experiment payload; resolve
         # them before the standard single-source validation below.
         if wf == "nmr":
@@ -1105,7 +1160,18 @@ class JobRunner:
         if not source:
             raise ValueError(f"{wf} job requires a valid input structure")
 
-        if wf == "mechanism":
+        if wf == "Confsearch":
+            cmd += ["--input", str(source), "--output", str(work_dir)]
+            if spec.name:
+                cmd += ["--name", spec.name]
+            cmd += confsearch_method_flags(method)
+            solvent = censo_solvent_from_method(method)
+            if solvent:
+                cmd += ["--solvent", solvent]
+            ewin = censo_ewin_from_method(method)
+            if ewin is not None:
+                cmd += ["--ewin", str(ewin)]
+        elif wf == "mechanism":
             cmd += ["--input", str(source), "--output", str(work_dir)]
             cmd += [
                 "--mechanism-config",
@@ -1335,6 +1401,69 @@ class JobRunner:
             cmd += ["--mem", str(res["mem"])]
         return cmd
 
+    def _build_stage_cmd(self, spec: JobSpec, work_dir: Path) -> list[str]:
+        """Build the PESsearch / Lowconfirm / Highconfirm argv (plan §8, §11).
+
+        The source artifact was validated at submission time (API) and its
+        absolute path stored in ``input["from"]``. The runner materializes a
+        handoff copy (manifest + referenced payload dirs) under
+        ``WORK/01_PREPARE/handoff/`` so the job is self-contained on disk.
+        """
+        from acp.mechanism.stages.handoff import (
+            copy_handoff_payload,
+            resolve_source_job_work_dir,
+        )
+
+        wf = spec.workflow
+        inp = spec.input
+        method = spec.method
+        res = spec.resources
+
+        from_manifest = inp.get("from")
+        if not from_manifest:
+            source_job_id = inp.get("source_job_id")
+            from_artifact = inp.get("from_artifact")
+            if not source_job_id or not from_artifact:
+                raise ValueError(
+                    f"{wf} job requires input.from (resolved artifact path) or "
+                    "input.source_job_id + input.from_artifact"
+                )
+            source_dir = resolve_source_job_work_dir(str(source_job_id))
+            from_manifest = source_dir / str(from_artifact)
+        manifest_path = Path(str(from_manifest))
+        if not manifest_path.is_file():
+            raise ValueError(f"{wf} source artifact not found: {manifest_path}")
+
+        handoff_dir = work_dir / "WORK" / "01_PREPARE" / "handoff"
+        local_manifest = copy_handoff_payload(manifest_path, handoff_dir)
+
+        cmd: list[str] = [self.python, "-m", "acp.cli", "run", wf]
+        cmd += ["--from", str(local_manifest), "--output", str(work_dir)]
+        if wf == "PESsearch":
+            cmd += pessearch_method_flags(method)
+            plan = inp.get("coordinate_plan") or method.get("coordinate_plan")
+            if plan is not None:
+                cmd += ["--plan", json.dumps(plan)]
+            product = inp.get("product")
+            if product:
+                cmd += ["--product", str(product)]
+            ts_guess = inp.get("ts_guess")
+            if ts_guess:
+                cmd += ["--ts-guess", str(ts_guess)]
+        elif wf == "Lowconfirm":
+            cmd += lowconfirm_method_flags(method)
+        elif wf == "Highconfirm":
+            cmd += highconfirm_method_flags(method)
+
+        if spec.config_path:
+            cmd += ["--config", str(spec.config_path)]
+        if res.get("nproc") is not None:
+            cmd += ["--nproc", str(res["nproc"])]
+        if res.get("mem"):
+            cmd += ["--mem", str(res["mem"])]
+        cmd += input_chemistry_flags(inp)
+        return cmd
+
     @staticmethod
     def _materialize_experiment(
         experiment: dict[str, Any] | None,
@@ -1501,7 +1630,7 @@ class JobRunner:
             else:
                 xyz = smiles_to_xyz(str(source))
 
-            (work_dir / "results" / "input_preview.xyz").write_text(
+            (TaskStorage(work_dir).result_dir() / "input_preview.xyz").write_text(
                 xyz,
                 encoding="utf-8",
             )
@@ -1509,7 +1638,7 @@ class JobRunner:
             demo_frames = bool(record.spec.input.get("demo_frames"))
             if demo_frames:
                 demo_xyz = xyz_to_multiframe_demo(xyz, frames=3)
-                (work_dir / "results" / "demo_frames.xyz").write_text(
+                (TaskStorage(work_dir).result_dir() / "demo_frames.xyz").write_text(
                     demo_xyz,
                     encoding="utf-8",
                 )
@@ -1522,7 +1651,7 @@ class JobRunner:
                 wf_config = method_levels_to_workflow_config(
                     method_levels, schema_id, record.spec.workflow
                 )
-                (work_dir / "results" / "method_config.json").write_text(
+                (TaskStorage(work_dir).result_dir() / "method_config.json").write_text(
                     json.dumps(wf_config, indent=2),
                     encoding="utf-8",
                 )
@@ -1566,7 +1695,7 @@ class JobRunner:
         observer = self.stage_task_observer
         store = getattr(observer, "store", None) if observer is not None else None
         db_path = getattr(store, "db_path", None)
-        results_dir = work_dir / "results"
+        results_dir = TaskStorage(work_dir).result_dir()
         if db_path is None or not results_dir.exists():
             return
 
@@ -1590,13 +1719,19 @@ class JobRunner:
 
         Makes ``total_gibbs_kcal_mol`` (and friends) available to the
         workbench info panel without re-parsing the workflow output files.
-        The shallowest ``finalDFT/ensemble_thermo.json`` wins (single-mol
-        jobs nest one level under ``work_dir``).
+        The canonical ``RESULT/energies/ensemble_thermo.json`` is preferred;
+        historical ``finalDFT/ensemble_thermo.json`` is accepted as a
+        read-only fallback (single-mol jobs nest one level under ``work_dir``).
         """
-        candidates = sorted(
+        canonical = sorted(
+            work_dir.rglob("RESULT/energies/ensemble_thermo.json"),
+            key=lambda p: len(p.parts),
+        )
+        legacy = sorted(
             work_dir.rglob("finalDFT/ensemble_thermo.json"),
             key=lambda p: len(p.parts),
         )
+        candidates = canonical or legacy
         if not candidates:
             return
         try:

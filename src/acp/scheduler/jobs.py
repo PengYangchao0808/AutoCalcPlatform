@@ -20,6 +20,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+from acp.mechanism.layout import resolve_study_layout
 from acp.scheduler.nodes import ExecutionMode
 
 
@@ -325,6 +326,91 @@ def nmr_method_flags(method: dict[str, Any]) -> list[str]:
     return flags
 
 
+# ── Confsearch / stage-workflow flag emission (E7: runner ⇄ script_gen) ───
+# Confsearch method knobs that flow method → CLI. Protocol / profile /
+# refinement_policy are the three orthogonal axes (plan §3); MD scalars apply
+# to the xtb-md / xtbmd-censo sampling layer. Solvent/ewin go through the
+# shared resolvers (censo_solvent_from_method / censo_ewin_from_method).
+_CONFSEARCH_SCALAR_FLAGS: dict[str, str] = {
+    "md_temperature": "--md-temp",
+    "md_time_ps": "--md-time",
+    "md_seeds": "--md-seeds",
+    "max_frames": "--max-frames",
+    "temperature": "--temperature",
+    "energy_window": "--ewin",
+    "max_conformers": "--max-conformers",
+}
+
+
+def confsearch_method_flags(method: dict[str, Any]) -> list[str]:
+    """Emit the Confsearch CLI flag group from a job's method dict (E7 parity).
+
+    The wizard's ``profile_id`` doubles as the protocol selector when it
+    matches a known Confsearch protocol id (catalog profiles are named after
+    the protocols); an explicit ``method.protocol`` wins.
+    """
+    from acp.confsearch.contracts import PROTOCOLS, REFINEMENT_POLICIES
+
+    flags: list[str] = []
+    protocol = str(method.get("protocol") or "").strip()
+    if not protocol and str(method.get("profile_id") or "") in PROTOCOLS:
+        protocol = str(method["profile_id"])
+    if protocol:
+        flags += ["--protocol", protocol]
+    if method.get("profile"):
+        flags += ["--profile", str(method["profile"])]
+    policy = method.get("refinement_policy")
+    if policy and str(policy) in REFINEMENT_POLICIES:
+        flags += ["--refinement-policy", str(policy)]
+    if method.get("backend"):
+        flags += ["--backend", str(method["backend"])]
+    preset = method.get("preset")
+    if preset and str(preset) in _CENSO_PRESETS:
+        flags += ["--preset", str(preset)]
+    for key, flag in _CONFSEARCH_SCALAR_FLAGS.items():
+        value = method.get(key)
+        if value is None or value == "":
+            continue
+        flags += [flag, str(value)]
+    if method.get("levels") and isinstance(method["levels"], dict):
+        flags += ["--levels", json.dumps(method["levels"])]
+    return flags
+
+
+def _select_flag(method: dict[str, Any]) -> list[str]:
+    select = method.get("select")
+    if isinstance(select, (list, tuple)) and select:
+        return ["--select", ",".join(str(item) for item in select)]
+    if isinstance(select, str) and select.strip():
+        return ["--select", select.strip()]
+    return []
+
+
+def pessearch_method_flags(method: dict[str, Any]) -> list[str]:
+    """Emit the PESsearch CLI flag group (strategy select; plan via input)."""
+    flags: list[str] = []
+    if method.get("strategy"):
+        flags += ["--strategy", str(method["strategy"])]
+    flags += _select_flag(method)
+    return flags
+
+
+def lowconfirm_method_flags(method: dict[str, Any]) -> list[str]:
+    """Emit the Lowconfirm CLI flag group."""
+    flags = _select_flag(method)
+    if _as_bool(method.get("no_irc")) is True:
+        flags.append("--no-irc")
+    return flags
+
+
+def highconfirm_method_flags(method: dict[str, Any]) -> list[str]:
+    """Emit the Highconfirm CLI flag group."""
+    flags = _select_flag(method)
+    if _as_bool(method.get("irc")) is True:
+        flags.append("--irc")
+    return flags
+
+
 # ── mechanism flag emission (E7: runner ⇄ script_gen parity) ─────────────
 # Mechanism method knobs that flow method → CLI. Strategy/fidelity are the
 # two orthogonal preset axes; scan/IRC counts and Hessian policy are the
@@ -549,9 +635,8 @@ def write_mechanism_reaction_json(
 ) -> Path:
     """Materialize ``reaction.json`` inside the study directory atomically."""
 
-    study_dir = work_dir / "mechanism_study" / study_id
-    study_dir.mkdir(parents=True, exist_ok=True)
-    path = study_dir / "reaction.json"
+    path = resolve_study_layout(work_dir, study_id).reaction_json
+    path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = path.with_suffix(".json.tmp")
     temp_path.write_text(
         json.dumps(dict(reaction_definition), indent=2, sort_keys=True, default=str),
@@ -567,7 +652,8 @@ class JobSpec:
 
     Attributes:
         workflow: One of :data:`SUPPORTED_WORKFLOWS`.
-        name: Human-readable job label.
+        name: Canonical user-facing task label; for persisted jobs this equals
+            the final physical task-directory leaf.
         input: Input payload (SMILES string, file path, or structured dict).
         method: Method/protocol settings. For conformer workflows this may
             contain ``protocol``, ``profile_id``, and an optional ``levels``
@@ -594,12 +680,44 @@ class JobSpec:
     config_path: str | None = None
     tags: list[str] = field(default_factory=list)
     project_id: str | None = None
+    mechanism_project_id: str | None = None
     input_hash: str | None = None
     execution_mode: ExecutionMode | None = None
     target_node: str | None = None
+    # v2 task-storage naming (docs/ACP_Project_Task_Storage_Design_v2.md §4):
+    # physical task dir name is "<molecule>_<task>_<remark>".  The fields are
+    # optional — :meth:`task_dir_name` applies a defaulting chain so every
+    # caller (old API clients, CLI invocations) still gets a valid v2 name.
+    molecule_name: str = ""
+    task_name: str = ""
+    remark: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    def task_dir_name(self) -> str:
+        """Return the v2 task directory name ``<molecule>_<task>_<remark>``.
+
+        Defaulting chain (design doc §4.3): the effective task component is
+        ``task_name or workflow``; the effective molecule component is
+        ``molecule_name or sanitized(name) or "mol"``.  The chain guarantees
+        a well-formed name for any spec, so this never raises for callers
+        that omit the optional v2 fields.
+        """
+        from acp.storage.layout import sanitize_task_dir_name
+
+        task = self.task_name or self.workflow
+        if self.molecule_name:
+            molecule = self.molecule_name
+        else:
+            safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in self.name)
+            molecule = safe.strip("._") or "mol"
+        return sanitize_task_dir_name(molecule, task, self.remark)
+
+    @property
+    def uses_v2_naming(self) -> bool:
+        """Deprecated shim: naming is always v2 — kept for the remote runner."""
+        return True
 
 
 @dataclass

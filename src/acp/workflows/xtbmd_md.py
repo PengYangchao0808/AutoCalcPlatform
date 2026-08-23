@@ -81,7 +81,9 @@ def run_md_replicas(
         multiplicity: Spin multiplicity.
         output_dir: Output directory (merged trajectory lands in
             ``output_dir/traj.xyz``; per-replica working directories in
-            ``output_dir/xtbmd/replica_%02d/``).
+            ``output_dir/replica_%02d/``).  Callers pass the v2 WORK stage
+            dir (``WORK/02_SEARCH/xTB``) so MD outputs stay in the task
+            workspace.
         config: Backend config dict passed to ``get_backend("molclus")``.
         timeout: Per-trajectory subprocess timeout in seconds.  ``None`` or
             ``0`` falls back to the backend default (300 s) — too short for
@@ -95,7 +97,7 @@ def run_md_replicas(
     """
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
-    md_dir = out / "xtbmd"
+    md_dir = out
     md_dir.mkdir(parents=True, exist_ok=True)
 
     if not isinstance(md_seeds, int) or isinstance(md_seeds, bool) or md_seeds < 1:

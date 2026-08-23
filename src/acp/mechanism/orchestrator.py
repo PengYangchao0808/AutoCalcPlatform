@@ -27,6 +27,7 @@ from .engines.elementary_step import (
     persist_route_manifest,
 )
 from .gates import run_gates
+from .layout import resolve_study_layout
 from .models import (
     ArtifactRef,
     DecisionPoint,
@@ -110,7 +111,8 @@ class StudyOrchestrator:
     ) -> None:
         self.study_template = MechanismStudy.from_dict(study.to_dict())
         self.study_root = Path(study_root)
-        self.study_dir = self._resolve_study_dir(self.study_root, study.study_id)
+        self.layout = resolve_study_layout(self.study_root, study.study_id)
+        self.study_dir = self.layout.analysis_root
         self.ensemble_provider = ensemble_provider
         self.path_strategy = path_strategy
         self.refinement_provider = refinement_provider
@@ -118,7 +120,7 @@ class StudyOrchestrator:
             backend=endpoint_backend,
             thresholds=endpoint_match_thresholds,
             validate_minimum=validate_endpoint_minimum,
-            work_root=self.study_dir / "sr",
+            work_root=self.layout.endpoint_root,
         )
         self.thermochemistry_provider = thermochemistry_provider
         self.ensemble_profile = ensemble_profile
@@ -127,7 +129,7 @@ class StudyOrchestrator:
         self.max_elementary_steps = max_elementary_steps
         self.require_review = require_review
         self.require_sr_review = require_sr_review
-        self.event_log = EventLog(self.study_dir / "events.jsonl")
+        self.event_log = EventLog(self.layout.study_events)
         self.study: MechanismStudy = self._load_or_initialize_study()
 
     def run(self) -> MechanismStudy:
@@ -156,6 +158,7 @@ class StudyOrchestrator:
         self._persist_study_bundle()
         run_gates(self.study)
         self._persist_study_bundle()
+        self._write_v2_result_layer()
         return self.study
 
     def resume(self, decision_resolutions: dict[str, Any]) -> MechanismStudy:
@@ -187,7 +190,8 @@ class StudyOrchestrator:
                 decision.status = "resolved"
                 decision.resolution = "stop_branch"
                 decision.resolved_at = _utc_now()
-                mark_route_status(self.study,
+                mark_route_status(
+                    self.study,
                     str(context.get("exploration_key") or ""),
                     str(context.get("route_fingerprint") or ""),
                     status="stopped",
@@ -262,12 +266,8 @@ class StudyOrchestrator:
         self._persist_study_bundle()
         run_gates(self.study)
         self._persist_study_bundle()
+        self._write_v2_result_layer()
         return self.study
-
-    def _resolve_study_dir(self, root: Path, study_id: str) -> Path:
-        if root.name == study_id and root.parent.name == "mechanism_study":
-            return root
-        return root / "mechanism_study" / study_id
 
     def _load_or_initialize_study(self) -> MechanismStudy:
         study_path = self.study_dir / "study.json"
@@ -293,6 +293,17 @@ class StudyOrchestrator:
         self._sync_network(self.study)
         _write_json_atomic(self.study_dir / "study.json", self.study.to_dict())
         _write_json_atomic(self.study_dir / "network.json", self.study.network.to_dict())
+
+    def _write_v2_result_layer(self) -> None:
+        """Project a v2 ``RESULT/`` layer from the study tree (non-fatal)."""
+        if self.study.status != "completed":
+            return
+        try:
+            from acp.mechanism.results_v2 import write_v2_result_layer
+
+            write_v2_result_layer(self.study_root)
+        except Exception:
+            logger.exception("v2 RESULT layer projection failed (non-fatal)")
 
     def _emit_event(self, phase: str, action: str, **payload: Any) -> None:
         event = {"phase": phase, "action": action, **payload}
@@ -433,7 +444,7 @@ class StudyOrchestrator:
                 self.study.metadata.setdefault("refinement_manifests", {})[manifest.manifest_id] = (
                     manifest.to_dict()
                 )
-                persist_refinement_manifest(self.study_dir, manifest)
+                persist_refinement_manifest(self.layout, manifest)
                 (
                     manifest_successes,
                     manifest_failures,
@@ -873,7 +884,7 @@ class StudyOrchestrator:
                 endpoint_match=outcome.endpoint_match,
             )
             persist_route_manifest(
-                self.study_dir,
+                self.layout,
                 source_state_id=source_state_id,
                 route=route,
                 route_fingerprint=ctx.route_fingerprint,
@@ -905,7 +916,7 @@ class StudyOrchestrator:
         """Build the ElementaryStepEngine bound to the current study."""
         return ElementaryStepEngine(
             self.study,
-            self.study_dir,
+            self.layout,
             path_strategy=self.path_strategy,
             refinement_provider=self.refinement_provider,
             endpoint_provider=self.endpoint_provider,
@@ -922,7 +933,7 @@ class StudyOrchestrator:
         *,
         state_index: int | None = None,
     ) -> StableState:
-        state_dir = self.study_dir / "states" / state.state_id
+        state_dir = self.layout.states_root / state.state_id
         manifest_path = state_dir / "ensemble_manifest.json"
         state_fingerprint = self._state_fingerprint(state)
         if state.ensemble is not None and manifest_path.exists():
@@ -951,9 +962,6 @@ class StudyOrchestrator:
                         break
         return state
 
-
-
-
     def _apply_endpoint_match(
         self,
         *,
@@ -966,7 +974,8 @@ class StudyOrchestrator:
         endpoint_match: EndpointMatchResult,
     ) -> None:
         if endpoint_match.verdict == "FAILED":
-            mark_route_status(self.study,
+            mark_route_status(
+                self.study,
                 exploration_key(source_state.state_id, route.route_id),
                 route_fingerprint,
                 status="failed",
@@ -989,7 +998,8 @@ class StudyOrchestrator:
             canonical_ts=canonical_ts,
             irc_result=irc_result,
         )
-        mark_route_status(self.study,
+        mark_route_status(
+            self.study,
             exploration_key(source_state.state_id, route.route_id),
             route_fingerprint,
             status="completed",
@@ -1153,7 +1163,6 @@ class StudyOrchestrator:
             return action, dict(resolution)
         return "continue", {}
 
-
     def _build_cycle_review_summary(
         self,
         *,
@@ -1245,9 +1254,7 @@ class StudyOrchestrator:
             )
             self.study.revisions.append(revision)
             self.study.routes.append(route)
-            self.study.frontier = ExplorationFrontier(
-                max_depth=self.study.frontier.max_depth
-            )
+            self.study.frontier = ExplorationFrontier(max_depth=self.study.frontier.max_depth)
             self.study.frontier.push(parent_state_id, route.route_id, depth=0)
             self._persist_cycle_revision(new_cycle, revision)
             self._emit_event(
@@ -1267,7 +1274,8 @@ class StudyOrchestrator:
                 self.study.cycle_index,
             )
             self.study.revisions.append(revision)
-            mark_route_status(self.study,
+            mark_route_status(
+                self.study,
                 str(context.get("exploration_key") or ""),
                 str(context.get("route_fingerprint") or ""),
                 status="stopped",
@@ -1337,9 +1345,7 @@ class StudyOrchestrator:
         cycle: int,
     ) -> MechanismRevision:
         return MechanismRevision(
-            revision_id=str(
-                revision_data.get("revision_id") or f"rev_{cycle:02d}_{decision.id}"
-            ),
+            revision_id=str(revision_data.get("revision_id") or f"rev_{cycle:02d}_{decision.id}"),
             study_id=self.study.study_id,
             cycle=cycle,
             parent_state=parent_state_id,
@@ -1350,9 +1356,7 @@ class StudyOrchestrator:
             created_at=_utc_now(),
         )
 
-    def _revision_off_definition_notes(
-        self, selected_bonds: list[SelectedBond]
-    ) -> list[str]:
+    def _revision_off_definition_notes(self, selected_bonds: list[SelectedBond]) -> list[str]:
         if not self.study.metadata.get("locked_reaction_hash"):
             return []
         try:
@@ -1478,9 +1482,7 @@ class StudyOrchestrator:
                     coords.append([float(parts[1]), float(parts[2]), float(parts[3])])
                 return symbols, np.array(coords, dtype=float)
             except (OSError, ValueError, IndexError) as exc:
-                logger.warning(
-                    "Failed to read geometry for state %s: %s", state.state_id, exc
-                )
+                logger.warning("Failed to read geometry for state %s: %s", state.state_id, exc)
         symbols_meta = state.metadata.get("symbols")
         coords_meta = state.metadata.get("coordinates")
         if (
@@ -1489,14 +1491,10 @@ class StudyOrchestrator:
             and symbols_meta
             and len(symbols_meta) == len(coords_meta)
         ):
-            return [str(symbol) for symbol in symbols_meta], np.array(
-                coords_meta, dtype=float
-            )
+            return [str(symbol) for symbol in symbols_meta], np.array(coords_meta, dtype=float)
         return None
 
-    def _archive_cycle_frontier(
-        self, revision_id: str, context: dict[str, Any]
-    ) -> None:
+    def _archive_cycle_frontier(self, revision_id: str, context: dict[str, Any]) -> None:
         archive = self.study.metadata.setdefault("cycle_archive", {})
         archive[str(self.study.cycle_index)] = {
             "frontier": self.study.frontier.to_dict(),
@@ -1561,7 +1559,6 @@ class StudyOrchestrator:
             label=route.label or f"{source_state.state_id} → {target_id or 'unknown'}",
         )
 
-
     def _state_fingerprint(self, state: StableState) -> str:
         return _fingerprint(
             {
@@ -1574,8 +1571,6 @@ class StudyOrchestrator:
                 "metadata": state.metadata,
             }
         )
-
-
 
     def _persist_decision(self, decision: DecisionPoint) -> None:
         decision_path = self.study_dir / "decisions" / f"{decision.id}.json"
@@ -1613,9 +1608,6 @@ class StudyOrchestrator:
                 route.reactant_id = self.study.reactant_id
             if route.product_id is None:
                 route.product_id = self.study.product_id
-
-
-
 
     def _require_state(self, state_id: str) -> StableState:
         state = self.study.get_state(state_id)
@@ -1664,7 +1656,6 @@ class StudyOrchestrator:
             route_dict["coordinate_plan"] = resolution_payload["coordinate_plan"]
         return MechanismRoute.from_dict(route_dict)
 
-
     def _upsert_stationary_point(self, point: StationaryPoint) -> None:
         for index, current in enumerate(self.study.stationary_points):
             if current.point_id == point.point_id:
@@ -1684,7 +1675,6 @@ class StudyOrchestrator:
         if point.state_id != state_id:
             point.state_id = state_id
         self._upsert_stationary_point(point)
-
 
 
 __all__ = ["StudyOrchestrator"]

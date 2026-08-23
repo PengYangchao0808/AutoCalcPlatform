@@ -93,9 +93,7 @@ def test_resolve_levels_full_refinement_sp_fields() -> None:
     assert "DEFGRID3" in extras
     assert "VeryTightSCF" in extras
     # CENSO-side template line mirrors the same whitelist
-    assert resolved["refinement_template_lines"] == [
-        "! " + " ".join(extras)
-    ]
+    assert resolved["refinement_template_lines"] == ["! " + " ".join(extras)]
 
 
 def test_resolve_levels_full_dft_opt_fields() -> None:
@@ -206,12 +204,22 @@ def test_build_cli_no_keep_all_by_default(tmp_path: Path) -> None:
 
     preset = interface.resolve_preset("censo-light")
     cmd = interface.build_cli(
-        input_xyz, rcfile, preset, nproc=4, temperature=298.15, solvent=None,
+        input_xyz,
+        rcfile,
+        preset,
+        nproc=4,
+        temperature=298.15,
+        solvent=None,
     )
     assert "--keep-all" not in cmd
 
     cmd_keep = interface.build_cli(
-        input_xyz, rcfile, preset, nproc=4, temperature=298.15, solvent=None,
+        input_xyz,
+        rcfile,
+        preset,
+        nproc=4,
+        temperature=298.15,
+        solvent=None,
         keep_all=True,
     )
     assert "--keep-all" in cmd_keep
@@ -243,7 +251,11 @@ def test_rcfile_template_flag(tmp_path: Path) -> None:
     interface = CensoInterface(_make_config())
     preset = interface.resolve_preset("censo-light")
     rcfile = interface.generate_rcfile(
-        preset, tmp_path, charge=0, multiplicity=1, solvent=None,
+        preset,
+        tmp_path,
+        charge=0,
+        multiplicity=1,
+        solvent=None,
         templated_parts={"screening"},
     )
     content = rcfile.read_text()
@@ -261,7 +273,11 @@ def test_rcfile_refinement_written_when_active(tmp_path: Path) -> None:
     preset = interface.resolve_preset("censo-light")
     preset["parts"] = [*preset["parts"], "refinement"]
     rcfile = interface.generate_rcfile(
-        preset, tmp_path, charge=0, multiplicity=1, solvent=None,
+        preset,
+        tmp_path,
+        charge=0,
+        multiplicity=1,
+        solvent=None,
         templated_parts={"refinement"},
     )
     content = rcfile.read_text()
@@ -281,18 +297,25 @@ def test_refine_ensemble_injects_home(tmp_path: Path, monkeypatch: Any) -> None:
         captured["cmd"] = cmd
         # Fabricate minimal CENSO outputs so parsing succeeds
         out_dir = Path(kwargs["cwd"])
-        (out_dir / "1_SCREENING.json").write_text(json.dumps({
-            "part_name": "screening",
-            "data": {"CONF1": {
-                "energy": -1.0, "gsolv": 0.0, "grrho": 0.0, "gtot": -1.0,
-            }},
-        }))
+        (out_dir / "1_SCREENING.json").write_text(
+            json.dumps(
+                {
+                    "part_name": "screening",
+                    "data": {
+                        "CONF1": {
+                            "energy": -1.0,
+                            "gsolv": 0.0,
+                            "grrho": 0.0,
+                            "gtot": -1.0,
+                        }
+                    },
+                }
+            )
+        )
         (out_dir / "1_SCREENING.xyz").write_text("1\nCONF1\nH  0 0 0\n")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-    monkeypatch.setattr(
-        "cccp.qc.interfaces.censo.subprocess.run", fake_run
-    )
+    monkeypatch.setattr("cccp.qc.interfaces.censo.subprocess.run", fake_run)
     monkeypatch.setattr(CensoInterface, "is_available", lambda self: True)
 
     result = interface.refine_ensemble(
@@ -310,10 +333,9 @@ def test_refine_ensemble_injects_home(tmp_path: Path, monkeypatch: Any) -> None:
     assert env["OMP_NUM_THREADS"] == "4"
     assert env["MKL_NUM_THREADS"] == "4"
     assert env["OPENBLAS_NUM_THREADS"] == "4"
-    template = (
-        tmp_path / "censo" / "home" / ".censo2_assets" / "screening.orca.template"
-    )
+    template = tmp_path / "censo" / "home" / ".censo2_assets" / "screening.orca.template"
     assert template.exists()
+
 
 def test_refine_ensemble_no_templates_pins_threads(tmp_path: Path, monkeypatch: Any) -> None:
     """CENSO subprocess env must pin BLAS/OpenMP threads even without
@@ -328,18 +350,25 @@ def test_refine_ensemble_no_templates_pins_threads(tmp_path: Path, monkeypatch: 
     def fake_run(cmd, **kwargs):
         captured["env"] = kwargs.get("env")
         out_dir = Path(kwargs["cwd"])
-        (out_dir / "1_SCREENING.json").write_text(json.dumps({
-            "part_name": "screening",
-            "data": {"CONF1": {
-                "energy": -1.0, "gsolv": 0.0, "grrho": 0.0, "gtot": -1.0,
-            }},
-        }))
+        (out_dir / "1_SCREENING.json").write_text(
+            json.dumps(
+                {
+                    "part_name": "screening",
+                    "data": {
+                        "CONF1": {
+                            "energy": -1.0,
+                            "gsolv": 0.0,
+                            "grrho": 0.0,
+                            "gtot": -1.0,
+                        }
+                    },
+                }
+            )
+        )
         (out_dir / "1_SCREENING.xyz").write_text("1\nCONF1\nH  0 0 0\n")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-    monkeypatch.setattr(
-        "cccp.qc.interfaces.censo.subprocess.run", fake_run
-    )
+    monkeypatch.setattr("cccp.qc.interfaces.censo.subprocess.run", fake_run)
     monkeypatch.setattr(CensoInterface, "is_available", lambda self: True)
 
     interface.refine_ensemble(input_xyz, tmp_path / "censo", preset="censo-light")
@@ -367,18 +396,25 @@ def test_refine_ensemble_pins_per_child_threads_not_total(tmp_path: Path, monkey
         captured["env"] = kwargs.get("env")
         captured["cmd"] = cmd
         out_dir = Path(kwargs["cwd"])
-        (out_dir / "1_SCREENING.json").write_text(json.dumps({
-            "part_name": "screening",
-            "data": {"CONF1": {
-                "energy": -1.0, "gsolv": 0.0, "grrho": 0.0, "gtot": -1.0,
-            }},
-        }))
+        (out_dir / "1_SCREENING.json").write_text(
+            json.dumps(
+                {
+                    "part_name": "screening",
+                    "data": {
+                        "CONF1": {
+                            "energy": -1.0,
+                            "gsolv": 0.0,
+                            "grrho": 0.0,
+                            "gtot": -1.0,
+                        }
+                    },
+                }
+            )
+        )
         (out_dir / "1_SCREENING.xyz").write_text("1\nCONF1\nH  0 0 0\n")
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
-    monkeypatch.setattr(
-        "cccp.qc.interfaces.censo.subprocess.run", fake_run
-    )
+    monkeypatch.setattr("cccp.qc.interfaces.censo.subprocess.run", fake_run)
     monkeypatch.setattr(CensoInterface, "is_available", lambda self: True)
 
     interface.refine_ensemble(input_xyz, tmp_path / "censo", preset="censo-light")
@@ -412,15 +448,30 @@ def test_censo_preset_from_method() -> None:
 
 def test_censo_solvent_from_method() -> None:
     assert censo_solvent_from_method({"solvent": "dcm"}) == "dcm"
-    assert censo_solvent_from_method({
-        "levels": {"refinement_sp": {"solvent_model": "SMD", "solvent": "water"}},
-    }) == "water"
-    assert censo_solvent_from_method({
-        "levels": {"refinement_sp": {"solvent_model": "none", "solvent": "water"}},
-    }) is None
-    assert censo_solvent_from_method({
-        "levels": {"dft_opt": {"solvent_model": "CPCM", "solvent": "thf"}},
-    }) == "thf"
+    assert (
+        censo_solvent_from_method(
+            {
+                "levels": {"refinement_sp": {"solvent_model": "SMD", "solvent": "water"}},
+            }
+        )
+        == "water"
+    )
+    assert (
+        censo_solvent_from_method(
+            {
+                "levels": {"refinement_sp": {"solvent_model": "none", "solvent": "water"}},
+            }
+        )
+        is None
+    )
+    assert (
+        censo_solvent_from_method(
+            {
+                "levels": {"dft_opt": {"solvent_model": "CPCM", "solvent": "thf"}},
+            }
+        )
+        == "thf"
+    )
     assert censo_solvent_from_method({}) is None
 
 
@@ -546,12 +597,14 @@ def test_probe_missing_censo_raises_with_config_hint() -> None:
         RemoteNodeUnavailableError,
     )
 
-    stub = _probe_stub({
-        "crest": {"configured": "crest", "resolved": "/usr/bin/crest", "version": None},
-        "censo": {"configured": "/opt/censo", "resolved": None, "version": None},
-        "orca": {"configured": "orca", "resolved": "/usr/bin/orca", "version": None},
-    })
-    spec = JobSpec(workflow="energy", input={"source": "CCO"})
+    stub = _probe_stub(
+        {
+            "crest": {"configured": "crest", "resolved": "/usr/bin/crest", "version": None},
+            "censo": {"configured": "/opt/censo", "resolved": None, "version": None},
+            "orca": {"configured": "orca", "resolved": "/usr/bin/orca", "version": None},
+        }
+    )
+    spec = JobSpec(workflow="Confsearch", input={"source": "CCO"})
     log = _FakeEventLog()
 
     with pytest.raises(RemoteNodeUnavailableError) as exc_info:
@@ -566,12 +619,14 @@ def test_probe_missing_censo_raises_with_config_hint() -> None:
 def test_probe_all_present_passes() -> None:
     from acp.scheduler.remote.runner import RemoteJobRunner
 
-    stub = _probe_stub({
-        "crest": {"configured": "crest", "resolved": "/usr/bin/crest", "version": None},
-        "censo": {"configured": "censo", "resolved": "/usr/bin/censo", "version": "3.0.8"},
-        "orca": {"configured": "orca", "resolved": "/usr/bin/orca", "version": None},
-    })
-    spec = JobSpec(workflow="ensemble", input={"source": "CCO"})
+    stub = _probe_stub(
+        {
+            "crest": {"configured": "crest", "resolved": "/usr/bin/crest", "version": None},
+            "censo": {"configured": "censo", "resolved": "/usr/bin/censo", "version": "3.0.8"},
+            "orca": {"configured": "orca", "resolved": "/usr/bin/orca", "version": None},
+        }
+    )
+    spec = JobSpec(workflow="Confsearch", input={"source": "CCO"})
     log = _FakeEventLog()
     RemoteJobRunner._probe_required_binaries(stub, _fake_node(), spec, log, "job-x")
     probe_events = [e for e in log.events if e[0] == "remote.binary_probe"]
@@ -582,7 +637,7 @@ def test_probe_ssh_failure_is_fail_open() -> None:
     from acp.scheduler.remote.runner import RemoteJobRunner
 
     stub = _probe_stub(RuntimeError("ssh boom"))
-    spec = JobSpec(workflow="energy", input={"source": "CCO"})
+    spec = JobSpec(workflow="Confsearch", input={"source": "CCO"})
     log = _FakeEventLog()
     # must NOT raise
     RemoteJobRunner._probe_required_binaries(stub, _fake_node(), spec, log, "job-x")
@@ -613,14 +668,7 @@ def test_xtb_passthrough_sorts_by_title_energy(tmp_path: Path) -> None:
     from acp.workflows.ensemble import _xtb_passthrough_result
 
     xyz = tmp_path / "crest_conformers.xyz"
-    xyz.write_text(
-        "1\n"
-        "-1.00000000\n"
-        "H  0.0 0.0 0.0\n"
-        "1\n"
-        "-1.50000000\n"
-        "H  0.0 0.0 1.0\n"
-    )
+    xyz.write_text("1\n-1.00000000\nH  0.0 0.0 0.0\n1\n-1.50000000\nH  0.0 0.0 1.0\n")
     result = _xtb_passthrough_result(xyz, 298.15)
     assert result.preset == "censo-zero"
     assert result.final_part == "crest_passthrough"
@@ -639,10 +687,7 @@ def test_ensemble_zero_does_not_invoke_censo(tmp_path: Path, monkeypatch: Any) -
     from acp.workflows.ensemble import run_ensemble_generation
 
     xyz = tmp_path / "ext_ensemble.xyz"
-    xyz.write_text(
-        "1\n-1.0\nH  0.0 0.0 0.0\n"
-        "1\n-1.5\nH  0.0 0.0 1.0\n"
-    )
+    xyz.write_text("1\n-1.0\nH  0.0 0.0 0.0\n1\n-1.5\nH  0.0 0.0 1.0\n")
 
     with patch("acp.workflows.ensemble.CensoBackend") as mock_backend_cls:
         mock_backend_cls.return_value = MagicMock()
@@ -656,7 +701,7 @@ def test_ensemble_zero_does_not_invoke_censo(tmp_path: Path, monkeypatch: Any) -
 
     assert result.status == "completed"
     mock_backend_cls.assert_not_called()
-    ensemble_xyz = tmp_path / "out" / "passthrough" / "ensemble" / "ensemble.xyz"
+    ensemble_xyz = tmp_path / "out" / "passthrough" / "RESULT" / "ensembles" / "ensemble.xyz"
     assert ensemble_xyz.exists()
 
 
@@ -752,14 +797,23 @@ def test_energy_zero_opt_on_multi_conformer_ensemble(tmp_path: Path) -> None:
     )
     orca.optimize.return_value = opt_result
     orca.frequency.return_value = MagicMock(
-        success=True, log_file=Path("/tmp/freq.out"), error_message=None,
-    )
-    orca.single_point.return_value = MagicMock(
-        success=True, energy=-155.0, log_file=Path("/tmp/sp.out"),
+        success=True,
+        log_file=Path("/tmp/freq.out"),
         error_message=None,
     )
-    shermo_ok = {"g_sum": -154.95, "g_conc": None, "h_sum": -154.9,
-                 "u_sum": -154.91, "s_total": 0.03}
+    orca.single_point.return_value = MagicMock(
+        success=True,
+        energy=-155.0,
+        log_file=Path("/tmp/sp.out"),
+        error_message=None,
+    )
+    shermo_ok = {
+        "g_sum": -154.95,
+        "g_conc": None,
+        "h_sum": -154.9,
+        "u_sum": -154.91,
+        "s_total": 0.03,
+    }
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
@@ -779,7 +833,7 @@ def test_energy_zero_opt_on_multi_conformer_ensemble(tmp_path: Path) -> None:
     assert result.metadata["n_conformers"] == 2
     assert orca.optimize.call_count == 2
     # auxiliary xTB ranking table written for the passthrough path
-    assert (tmp_path / "out" / "close" / "ensemble" / "screening_ranking.csv").exists()
+    assert (tmp_path / "out" / "close" / "RESULT" / "reports" / "screening_ranking.csv").exists()
 
 
 def test_energy_light_non_rank1_handoff_failure_is_skipped(tmp_path: Path) -> None:
@@ -806,20 +860,33 @@ def test_energy_light_non_rank1_handoff_failure_is_skipped(tmp_path: Path) -> No
 
     orca = MagicMock()
     ok_opt = MagicMock(
-        success=True, coordinates=np.zeros((1, 3)), symbols=["H"],
-        energy=-154.9, log_file=Path("/tmp/opt.out"), error_message=None,
+        success=True,
+        coordinates=np.zeros((1, 3)),
+        symbols=["H"],
+        energy=-154.9,
+        log_file=Path("/tmp/opt.out"),
+        error_message=None,
     )
     bad_opt = MagicMock(success=False, error_message="SCF blew up")
     orca.optimize.side_effect = [ok_opt, bad_opt]
     orca.frequency.return_value = MagicMock(
-        success=True, log_file=Path("/tmp/freq.out"), error_message=None,
-    )
-    orca.single_point.return_value = MagicMock(
-        success=True, energy=-155.0, log_file=Path("/tmp/sp.out"),
+        success=True,
+        log_file=Path("/tmp/freq.out"),
         error_message=None,
     )
-    shermo_ok = {"g_sum": -154.95, "g_conc": None, "h_sum": -154.9,
-                 "u_sum": -154.91, "s_total": 0.03}
+    orca.single_point.return_value = MagicMock(
+        success=True,
+        energy=-155.0,
+        log_file=Path("/tmp/sp.out"),
+        error_message=None,
+    )
+    shermo_ok = {
+        "g_sum": -154.95,
+        "g_conc": None,
+        "h_sum": -154.9,
+        "u_sum": -154.91,
+        "s_total": 0.03,
+    }
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
@@ -929,13 +996,18 @@ def test_resolve_levels_crest_ewin_level() -> None:
     from acp.workflows.energy import _resolve_levels
 
     resolved = _resolve_levels(
-        _make_config(), {"censo": {"engine": "censo", "ewin": 4.0}},
+        _make_config(),
+        {"censo": {"engine": "censo", "ewin": 4.0}},
     )
     assert resolved["crest_ewin_level"] == pytest.approx(4.0)
     assert _resolve_levels(_make_config(), None)["crest_ewin_level"] is None
-    assert _resolve_levels(
-        _make_config(), {"censo": {"ewin": "bad"}},
-    )["crest_ewin_level"] is None
+    assert (
+        _resolve_levels(
+            _make_config(),
+            {"censo": {"ewin": "bad"}},
+        )["crest_ewin_level"]
+        is None
+    )
 
 
 def test_runner_build_cmd_ewin_from_ui_levels() -> None:
@@ -993,9 +1065,7 @@ def test_ensemble_ewin_reaches_crest(tmp_path: Path) -> None:
     def fake_search(**kwargs: Any):
         out_dir = Path(kwargs["output_dir"])
         ensemble = out_dir / "crest_conformers.xyz"
-        ensemble.write_text(
-            "1\n-1.00000000\nH 0 0 0\n1\n-1.00010000\nH 0 0 1\n"
-        )
+        ensemble.write_text("1\n-1.00000000\nH 0 0 0\n1\n-1.00010000\nH 0 0 1\n")
         return ensemble
 
     with patch("acp.workflows.ensemble.get_backend") as mock_get_backend:
@@ -1036,17 +1106,25 @@ def test_energy_levels_ewin_reaches_crest(tmp_path: Path) -> None:
 
     orca = MagicMock()
     orca.optimize.return_value = MagicMock(
-        success=True, coordinates=np.zeros((1, 3)), symbols=["H"],
-        energy=-1.0, log_file=Path("/tmp/opt.out"), error_message=None,
+        success=True,
+        coordinates=np.zeros((1, 3)),
+        symbols=["H"],
+        energy=-1.0,
+        log_file=Path("/tmp/opt.out"),
+        error_message=None,
     )
     orca.frequency.return_value = MagicMock(
-        success=True, log_file=Path("/tmp/freq.out"), error_message=None,
+        success=True,
+        log_file=Path("/tmp/freq.out"),
+        error_message=None,
     )
     orca.single_point.return_value = MagicMock(
-        success=True, energy=-1.1, log_file=Path("/tmp/sp.out"), error_message=None,
+        success=True,
+        energy=-1.1,
+        log_file=Path("/tmp/sp.out"),
+        error_message=None,
     )
-    shermo_ok = {"g_sum": -1.05, "g_conc": None, "h_sum": -1.0,
-                 "u_sum": -1.01, "s_total": 0.03}
+    shermo_ok = {"g_sum": -1.05, "g_conc": None, "h_sum": -1.0, "u_sum": -1.01, "s_total": 0.03}
 
     with (
         patch("acp.workflows.energy.get_backend") as mock_get_backend,
@@ -1075,6 +1153,7 @@ def test_energy_levels_ewin_reaches_crest(tmp_path: Path) -> None:
 # =====================================================================
 # Phase 5.7: CENSO regression — aux_basis rename does not affect CENSO
 # =====================================================================
+
 
 def test_censo_template_path_not_affected_by_aux_basis_rename() -> None:
     """CENSO backend template injection path should not read aux_j_basis/aux_c_basis.
@@ -1106,6 +1185,7 @@ def test_censo_template_path_not_affected_by_aux_basis_rename() -> None:
     # CENSO template line format
     template_line = "! " + " ".join(extras)
     assert template_line.startswith("! ")
+
 
 def test_runner_build_cmd_energy_rank1_only() -> None:
     from dataclasses import replace
