@@ -14,18 +14,22 @@ from .contracts import (
     TaskManifest,
     validate_plan,
 )
+from .executor import CalculationPlanExecutor, ExecutionResult, StepState
 
 __all__ = [
     "ArtifactRef",
     "CalculationPlan",
+    "CalculationPlanExecutor",
     "CalculationRequest",
     "CalculationResult",
     "CalculationStep",
     "Checkpoint",
+    "ExecutionResult",
     "OptimizationMode",
     "OptimizationSpec",
     "Provenance",
     "StepKind",
+    "StepState",
     "StructureArtifact",
     "StructureRole",
     "TaskManifest",
