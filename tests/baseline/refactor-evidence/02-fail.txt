@@ -1,0 +1,25 @@
+COMMAND (mutation drill on /tmp copy only):
+sha256sum tests/baseline/refactor-evidence/baseline-summary.txt > /tmp/orig.sha
+cp tests/baseline/refactor-evidence/baseline-summary.txt /tmp/bs.txt
+python -c "
+import re
+s=open('/tmp/bs.txt').read()
+open('/tmp/bs.txt','w').write(re.sub(r'(\d+) passed', r'5 failed \1 passed', s, count=1))
+s=open('/tmp/bs.txt').read()
+m=re.search(r'(\d+) failed',s)
+v=int(m.group(1)) if m else 0
+assert v==5, f'expected 5 got {v}'
+print('DRILL_OK: extracted', v)
+"
+sha256sum -c /tmp/orig.sha
+
+KEY OUTPUT:
+DRILL_OK: extracted 5
+tests/baseline/refactor-evidence/baseline-summary.txt: OK
+
+JUDGMENT:
+- Mutation inserted "5 failed" into /tmp/bs.txt copy → extractor found v=5 ✅
+- Assert v==5 passed (exit 0) ✅
+- Original baseline-summary.txt SHA256 verified: OK (untouched by drill) ✅
+
+EXIT CODE: 0

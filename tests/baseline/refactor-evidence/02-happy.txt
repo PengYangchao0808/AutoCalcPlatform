@@ -1,0 +1,14 @@
+COMMAND:
+cat tests/baseline/refactor-evidence/baseline-failures.txt && grep -c "passed" tests/baseline/refactor-evidence/baseline-summary.txt
+
+KEY OUTPUT:
+0
+1
+
+JUDGMENT:
+- baseline-failures.txt is a single non-negative integer: 0 ✅
+- baseline-summary.txt contains "passed": 1 match ✅
+- All 5 baseline files exist: pytest-baseline-full.txt, baseline-summary.txt, baseline-failures.txt, catalog-retired-ids.txt, ruff-baseline.txt ✅
+- baseline-summary: "1791 passed, 7 skipped, 47 warnings in 265.33s (0:04:25)"
+
+EXIT CODE: 0
