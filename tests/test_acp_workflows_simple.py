@@ -11,10 +11,13 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import TypedDict
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+from numpy.typing import NDArray
+from typing_extensions import Unpack
 
 from acp.backends.base import QCResult
 from acp.catalog import FIELD_DEFINITIONS, METHOD_SCHEMAS, WORKFLOW_CATALOG
@@ -322,8 +325,26 @@ def test_write_result_summary_role_passthrough(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def _fake_qc_result(**overrides):
-    defaults = {
+class _QCResultFields(TypedDict, total=False):
+    success: bool
+    energy: float | None
+    coordinates: NDArray[np.float64] | None
+    symbols: list[str] | None
+    converged: bool
+    output_file: Path | None
+    log_file: Path | None
+    freq_log_file: Path | None
+    error_message: str | None
+    frequencies: list[float] | None
+    has_frequencies: bool
+    zpe: float | None
+    enthalpy: float | None
+    gibbs: float | None
+    entropy: float | None
+
+
+def _fake_qc_result(**overrides: Unpack[_QCResultFields]) -> QCResult:
+    defaults: _QCResultFields = {
         "success": True,
         "energy": -76.42,
         "coordinates": None,
@@ -587,7 +608,7 @@ def test_run_optfreqsp_mock(tmp_path):
     with (
         patch("acp.workflows.simple._find_shermo", return_value=True),
         patch("acp.workflows.simple._build_backend") as mk_backend,
-        patch("acp.backends.external.run_shermo") as mk_shermo,
+        patch("acp.workflows.simple.run_shermo") as mk_shermo,
     ):
         mk_shermo.return_value = {"g_sum": -40.5, "h_sum": -40.4, "u_sum": -40.6, "s_total": 0.0001}
 
@@ -653,7 +674,7 @@ def test_run_optfreqsp_shermo_failure_marks_job_failed(tmp_path):
     with (
         patch("acp.workflows.simple._find_shermo", return_value=True),
         patch("acp.workflows.simple._build_backend") as mk_backend,
-        patch("acp.backends.external.run_shermo", return_value=None) as mk_shermo,
+        patch("acp.workflows.simple.run_shermo", return_value=None) as mk_shermo,
     ):
         optfreq_result = _fake_qc_result(
             coordinates=np.array([[0.1, 0.0, 0.0]]),
@@ -910,7 +931,7 @@ def test_optfreqsp_data_flow_passes_opt_coords_to_sp(tmp_path):
     with (
         patch("acp.workflows.simple._find_shermo", return_value=True),
         patch("acp.workflows.simple._build_backend") as mk_backend,
-        patch("acp.backends.external.run_shermo") as mk_shermo,
+        patch("acp.workflows.simple.run_shermo") as mk_shermo,
     ):
         mk_shermo.return_value = {"g_sum": -40.5}
 
@@ -950,7 +971,7 @@ def test_optfreqsp_data_flow_passes_log_file_to_shermo(tmp_path):
     with (
         patch("acp.workflows.simple._find_shermo", return_value=True),
         patch("acp.workflows.simple._build_backend") as mk_backend,
-        patch("acp.backends.external.run_shermo") as mk_shermo,
+        patch("acp.workflows.simple.run_shermo") as mk_shermo,
     ):
         mk_shermo.return_value = {"g_sum": -40.5}
 

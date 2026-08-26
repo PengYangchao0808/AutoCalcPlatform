@@ -25,7 +25,6 @@ from typing import Any
 import numpy as np
 
 from acp.backends.censo_backend import CensoConformerRecord, CensoRunResult
-from acp.backends.external import run_shermo
 from acp.backends.registry import get_backend
 from acp.chem.composition import normalize_recalc_hess
 from acp.core.models import HARTREE_TO_KCAL, Structure, StructureEnsemble, StructureRecord
@@ -40,6 +39,7 @@ from acp.workflows.ensemble_thermo import (
     s_mix_kcal_per_mol_kelvin,
     t_s_mix_kcal_per_mol,
 )
+from cccp.qc.runners import run_shermo
 from cccp.utils.file_io import read_xyz_multiframe, write_xyz
 
 logger = logging.getLogger(__name__)
