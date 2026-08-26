@@ -257,6 +257,9 @@ class TestResultManifest:
             "trajectory",
             "report",
             "file",
+            "pes_profile",
+            "irc_endpoint",
+            "thermo_report",
         }
 
     def test_unknown_kind_falls_back_to_file(self) -> None:

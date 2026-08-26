@@ -27,6 +27,9 @@ class ProductKind(str, Enum):
     TRAJECTORY = "trajectory"
     REPORT = "report"
     FILE = "file"
+    PES_PROFILE = "pes_profile"
+    IRC_ENDPOINT = "irc_endpoint"
+    THERMO_REPORT = "thermo_report"
 
 
 @dataclass
