@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "workflow": "PESsearch",
+  "products": [
+    {
+      "label": "ts_guess_001 (TS)",
+      "path": "mechanism/ts_guess_001.xyz",
+      "kind": "xyz",
+      "role": "final_stable_structure"
+    }
+  ]
+}

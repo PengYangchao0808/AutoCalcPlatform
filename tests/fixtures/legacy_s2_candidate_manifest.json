@@ -1,0 +1,18 @@
+{
+  "schema_version": "s2_candidate_v1",
+  "source_manifest": "RESULT/mechanism/s2_path_manifest.json",
+  "created_at": "2026-08-27T00:00:00+00:00",
+  "updated_at": "2026-08-27T00:00:00+00:00",
+  "selected": ["ts_guess_001"],
+  "candidates": [
+    {
+      "candidate_id": "ts_guess_001",
+      "frame_index": 4,
+      "role": "ts",
+      "geometry": "structures/s2_candidates/ts_guess_001.xyz",
+      "recommended_role": "ts",
+      "selection_source": "algorithm",
+      "active": true
+    }
+  ]
+}

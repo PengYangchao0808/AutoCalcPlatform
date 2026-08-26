@@ -1,0 +1,27 @@
+{
+  "schema_version": 2,
+  "study_id": "legacy-reaction-001",
+  "reactants": [
+    {
+      "smiles": "CC",
+      "charge": 0,
+      "multiplicity": 1
+    }
+  ],
+  "products": [
+    {
+      "smiles": "C=C",
+      "charge": 0,
+      "multiplicity": 1
+    }
+  ],
+  "mapping": [
+    {
+      "reactant_index": 0,
+      "product_index": 0
+    }
+  ],
+  "config_hash": "sha256:2321da94bdccf43666be8b7dfa9f60a7de3f410cb16115e34d37ccadf37a2c3b",
+  "index_base": 0,
+  "confirmed_by": "user"
+}

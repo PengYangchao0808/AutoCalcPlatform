@@ -1,0 +1,23 @@
+=== 09-happy.txt: Wave 1 Todo 9 — Legacy read-only manifest readers ===
+Date: 2026-08-27
+Branch: refactor/calc-cleanup
+
+=== COMMAND ===
+python -m pytest tests/test_legacy_read_only.py -q
+
+=== KEY OUTPUT ===
+..........                                                               [100%]
+10 passed in 0.69s
+
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+python scripts/check_grep_gates.py --gate compat_no_writers src/acp/compat
+
+=== KEY OUTPUT ===
+ALLOWED:
+BLOCKING:
+
+=== EXIT CODE ===
+0

@@ -1,0 +1,25 @@
+=== 09-fail.txt: Wave 1 Todo 9 — Hash validation and writer gate ===
+Date: 2026-08-27
+Branch: refactor/calc-cleanup
+
+=== COMMAND ===
+python -m pytest tests/test_legacy_read_only.py::test_reaction_definition_bad_hash_raises -q
+
+=== KEY OUTPUT ===
+.                                                                        [100%]
+1 passed in 0.64s
+The tampered config_hash is rejected with a hash validation error.
+
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+python scripts/check_grep_gates.py --gate compat_no_writers src/acp/compat
+
+=== KEY OUTPUT ===
+ALLOWED:
+BLOCKING:
+No `def write_` symbols found under src/acp/compat.
+
+=== EXIT CODE ===
+0

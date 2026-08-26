@@ -1,0 +1,50 @@
+{
+  "schema": "s2_path_v2",
+  "schema_version": "s2_path_v2",
+  "workflow": "PESsearch",
+  "stage": "S2",
+  "mode": "bond_length_scan",
+  "status": "ready_for_review",
+  "stationary_point_claimed": false,
+  "input": {
+    "source": {
+      "kind": "structure_asset",
+      "path": "reactant.xyz"
+    },
+    "charge": 0,
+    "multiplicity": 1
+  },
+  "protocol": {
+    "name": "orca_relaxed_scan_xtb_gfn2_sp_b973c_v1"
+  },
+  "scan": {
+    "scan_dir": "WORK/02_SEARCH/s2_bond_scan_001",
+    "frames": [],
+    "frame_count": 0,
+    "quality": {
+      "status": "ready_for_review"
+    }
+  },
+  "energy_profile": {},
+  "recommendations": {
+    "ts": [
+      {
+        "candidate_id": "ts_guess_001",
+        "frame_index": 4,
+        "confidence": 0.91,
+        "reason": "barrier peak"
+      }
+    ],
+    "intermediates": [],
+    "needs_review": false
+  },
+  "review": {
+    "required": true,
+    "status": "pending",
+    "selected_ts": [],
+    "selected_intermediates": []
+  },
+  "provenance": {
+    "engine": "acp-pessearch"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "schema_version": "s3_lowconfirm_v1",
+  "workflow": "Lowconfirm",
+  "stage": "S3",
+  "created_at": "2026-08-27T00:00:00+00:00",
+  "source": {
+    "kind": "s2_path_manifest",
+    "stage": "S2",
+    "path": "s2_path_manifest.json"
+  },
+  "profile": {
+    "level": "low",
+    "opt_method": "r2SCAN-3c",
+    "freq_method": "r2SCAN-3c",
+    "sp_method": "r2SCAN-3c",
+    "max_cycles": 150,
+    "irc": true
+  },
+  "charge": 0,
+  "multiplicity": 1,
+  "candidates": [
+    {
+      "id": "ts_guess_001",
+      "kind": "ts",
+      "status": "confirmed",
+      "opt_converged": true,
+      "optimized_xyz": "optimized/ts_guess_001.xyz",
+      "frequency": {
+        "status": "complete",
+        "n_imaginary": 1
+      }
+    }
+  ],
+  "batch_manifest": "batch_calculation_manifest.json",
+  "irc": null,
+  "gates": {
+    "G3": "PASS"
+  },
+  "errors": [],
+  "provenance": {
+    "engine": "acp-lowconfirm"
+  }
+}
