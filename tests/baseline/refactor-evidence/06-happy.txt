@@ -1,0 +1,9 @@
+COMMAND:
+  python -m pytest tests/test_calculations_checkpoint.py::test_roundtrip -q
+
+KEY OUTPUT:
+  .                                                                        [100%]
+  1 passed in 0.54s
+  write_checkpoint → load_checkpoint preserved the complete Checkpoint value.
+
+EXIT CODE: 0
