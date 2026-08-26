@@ -50,9 +50,6 @@ tmp_bench_top/
 # --- Archives ---
 *.zip
 
-# --- Refactor evidence (ephemeral QA artifacts) ---
-tests/baseline/refactor-evidence/
-
 # --- CREST output leaked to root ---
 crest_*.xyz
 crest_*.xyz.*
