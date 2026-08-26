@@ -5,6 +5,7 @@ API v1 Routes
 FastAPI router for ACP Workbench v2 resources under ``/api/v1``.
 """
 
+# pyright: reportAny=false, reportExplicitAny=false, reportUnknownArgumentType=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownParameterType=false, reportMissingTypeArgument=false, reportUnusedCallResult=false, reportImplicitStringConcatenation=false, reportMissingTypeStubs=false, reportPrivateUsage=false, reportCallInDefaultInitializer=false, reportUnnecessaryComparison=false, reportOptionalMemberAccess=false, reportArgumentType=false, reportIndexIssue=false, reportFunctionMemberAccess=false, reportAttributeAccessIssue=false, reportUnknownLambdaType=false, reportUnusedVariable=false, reportMissingParameterType=false
 from __future__ import annotations
 
 import hashlib
@@ -63,10 +64,12 @@ from acp.api.schemas import (
 from acp.api.v1_schemas import (
     ArtifactListResponse,
     ArtifactModel,
+    BondLengthScanJobInput,
     DecisionPointModel,
     DecisionResolveRequest,
     DecisionResolveResponse,
     DiskUsageResponse,
+    EnergyGraphResponse,
     HessianPreviewRequest,
     HessianPreviewResponse,
     HessianPreviewResult,
@@ -115,12 +118,24 @@ from acp.api.v1_schemas import (
     RemoteFileListResponse,
     RemoteFilePreviewResponse,
     RemoteLogTailResponse,
+    S2CandidatesResponse,
+    S2FrameModel,
+    S2FrameResponse,
+    S2JobReviewResponse,
+    S2ProfileResponse,
+    S2ReviewCandidateItem,
+    S2ReviewRequest,
+    S2ReviewResponse,
+    S2StructurePreviewRequest,
+    S2StructurePreviewResponse,
     SRDecisionRequest,
     SRDecisionResponse,
     SRReviewListResponse,
     StageTaskListResponse,
     StageTaskModel,
+    StructureAssetCreateRequest,
     StructureAssetModel,
+    StructureAssetResponse,
     StructureParseRequest,
     StructureParseResponse,
     StructureSourceDetailResponse,
@@ -163,11 +178,21 @@ from acp.mechanism import (
     map_reactant_to_product,
     suggest_mechanism_plan,
 )
+from acp.mechanism.s2_confirm_service import (
+    S2CandidateMark,
+    S2JobConflictError,
+    S2JobNotFoundError,
+    S2ManifestNotFoundError,
+    S2ReviewValidationError,
+    resolve_s2_manifest_for_job,
+    save_s2_review_for_job,
+)
 from acp.scheduler.artifacts import Artifact, ArtifactRegistry
 from acp.scheduler.files import build_manifest, resolve_safe
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
 from acp.scheduler.logs import read_log_tail
 from acp.scheduler.manager import JobManager
+from acp.scheduler.naming import canonical_molecule_name, molecule_name_from_input
 from acp.scheduler.nodes import ExecutionTargetError, validate_execution_request
 from acp.scheduler.remote.fetcher import (
     _MAX_READ_BYTES,
@@ -1046,23 +1071,58 @@ def list_project_jobs(
     )
 
 
-_INPUT_FILE_SUFFIXES = {".xyz", ".gjf", ".sdf", ".mol", ".com", ".inp", ".log", ".out"}
-
-
 def _job_input_source_stem(inp: dict[str, Any]) -> str:
     """Derive a molecule-name component from the job input source.
 
-    File-like sources (path separators or a known molecular suffix) yield
-    their path stem; anything else (SMILES, raw text) is returned verbatim.
+    Structured sources are inspected field-by-field.  They must never be
+    converted with ``str(dict)`` because that would put source metadata and
+    Job IDs into the physical task name.
     """
-    source = str(inp.get("source") or inp.get("input") or inp.get("smiles") or "")
-    if not source:
+    return molecule_name_from_input(inp)
+
+
+def _source_job_molecule_name(inp: dict[str, Any], manager: Any) -> str:
+    """Read only the canonical molecule name from an explicitly referenced job."""
+    source = inp.get("source")
+    source_job_id = inp.get("source_job_id")
+    if isinstance(source, dict):
+        source_job_id = source_job_id or source.get("source_job_id")
+    source_job_id = str(source_job_id or "").strip()
+    if not source_job_id:
         return ""
-    if any(sep in source for sep in ("/", "\\")) or Path(source).suffix.lower() in (
-        _INPUT_FILE_SUFFIXES
-    ):
-        return Path(source).stem
-    return source
+    source_record = manager.get(source_job_id)
+    if source_record is None:
+        return ""
+    name = canonical_molecule_name(getattr(source_record.spec, "molecule_name", ""))
+    if name:
+        return name
+    # Legacy source jobs may not have the v2 field yet.  Use only their input
+    # source as a fallback; never use spec.name or the Job ID.
+    return _job_input_source_stem(getattr(source_record.spec, "input", {}))
+
+
+def _resolve_job_molecule_name(
+    requested: str,
+    inp: dict[str, Any],
+    manager: Any,
+) -> str:
+    """Resolve the one molecule identity allowed to cross a task boundary."""
+    source_name = _source_job_molecule_name(inp, manager)
+    source = inp.get("source")
+    has_source_job = bool(str(inp.get("source_job_id") or "").strip()) or (
+        isinstance(source, dict) and bool(str(source.get("source_job_id") or "").strip())
+    )
+    if source_name and has_source_job:
+        # A task-artifact import inherits exactly one field: molecule_name.
+        # Task name, remark, Job ID, work_dir and old input metadata stay out.
+        return source_name
+    name = canonical_molecule_name(requested)
+    if name:
+        return name
+    name = _job_input_source_stem(inp)
+    if name:
+        return name
+    return "mol"
 
 
 _STAGE_WORKFLOW_SOURCE: dict[str, str] = {
@@ -1087,9 +1147,7 @@ def _resolve_stage_artifact_ref(
 
     stage = _STAGE_WORKFLOW_SOURCE[workflow]
     source_job_id = str(inp.get("source_job_id") or "").strip()
-    relative_path = str(
-        inp.get("from_artifact") or inp.get("relative_path") or ""
-    ).strip()
+    relative_path = str(inp.get("from_artifact") or inp.get("relative_path") or "").strip()
     if not source_job_id or not relative_path:
         raise HTTPException(
             status_code=422,
@@ -1129,6 +1187,225 @@ def _resolve_stage_artifact_ref(
     return resolved
 
 
+def _prepare_bond_scan_input(
+    inp: dict[str, Any],
+    manager: Any,
+) -> dict[str, Any]:
+    """Validate + pin a PESsearch ``mode=bond_length_scan`` job input (§7/§11).
+
+    Stores the full scan request under ``input["scan_request"]`` so the
+    scheduler runner can forward it verbatim; resolves/pins a task-artifact
+    source manifest into ``input["from"]`` (and the source's artifact_path)
+    so handoff copying works for both local and remote execution.
+    """
+    from acp.mechanism.scan_models import BondLengthScanRequest, validate_scan_protocol
+
+    try:
+        _validated = BondLengthScanJobInput.model_validate(inp)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=exc.errors(include_context=False, include_url=False),
+        ) from exc
+
+    src = dict(inp.get("source") or {})
+    if src.get("source_type") == "task_artifact":
+        if not str(src.get("source_job_id") or "").strip():
+            raise HTTPException(
+                status_code=422,
+                detail="task_artifact source requires source.source_job_id",
+            )
+        artifact_path = str(src.get("artifact_path") or "").strip()
+        if not artifact_path:
+            raise HTTPException(
+                status_code=422,
+                detail="task_artifact source requires source.artifact_path "
+                "(or use source_job_id + from_artifact)",
+            )
+        resolved = _resolve_stage_artifact_ref(
+            "PESsearch",
+            {
+                "source_job_id": src.get("source_job_id"),
+                "from_artifact": artifact_path,
+            },
+            manager,
+        )
+        pinned = str(resolved.get("from"))
+        src["artifact_path"] = pinned
+        inp["from"] = pinned
+    elif src.get("source_type") == "structure_asset":
+        asset_path = str(src.get("asset_path") or "").strip()
+        if not asset_path:
+            raise HTTPException(
+                status_code=422,
+                detail="structure_asset source requires source.asset_path",
+            )
+        run_root = manager.run_root
+        try:
+            resolved_asset = _resolve_structure_asset_path(run_root, asset_path)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        src["asset_path"] = str(resolved_asset)
+    elif src.get("source_type") == "xyz_text" and not str(src.get("xyz_text") or "").strip():
+        raise HTTPException(status_code=422, detail="xyz_text source requires source.xyz_text")
+
+    try:
+        request = BondLengthScanRequest.from_dict(
+            {
+                "mode": "bond_length_scan",
+                "source": src,
+                "coordinate": inp.get("coordinate"),
+                "protocol": inp.get("protocol"),
+            }
+        )
+    except (TypeError, ValueError) as exc:
+        # Malformed scan coordinates/protocols are client input errors.  Keep
+        # the API contract at 4xx so the UI can show the actionable message;
+        # never leak a parser ValueError as an opaque HTTP 500.
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    try:
+        validate_scan_protocol(request.coordinate, request.protocol)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    prepared = dict(inp)
+    prepared["source"] = src
+    prepared["scan_request"] = {
+        "mode": "bond_length_scan",
+        "source": src,
+        "coordinate": request.coordinate.to_dict(),
+        "protocol": request.protocol.to_dict(),
+    }
+    return prepared
+
+
+def _prepare_stage_batch_input(
+    workflow: str,
+    inp: dict[str, Any],
+    request: Request,
+    manager: Any,
+) -> dict[str, Any]:
+    """Validate + expand a Lowconfirm/Highconfirm ``batch_structures`` input.
+
+    Accepted item forms (batch plan §3): inline structures (``xyz`` text),
+    task-result references (``source_id`` — resolved through the
+    StructureSourceService, remote fetch included) and S2 candidate
+    manifests (``source_job_id`` + ``from_artifact``, pinned locally and
+    handoff-copied by the runner).  The normalized result lands in
+    ``input["batch_request"]`` for the scheduler runner to stage as
+    ``batch_config.json``.
+    """
+    entries = inp.get("items")
+    if not isinstance(entries, list) or not entries:
+        raise HTTPException(
+            status_code=422,
+            detail=f"{workflow} batch_structures input requires a non-empty input.items list",
+        )
+    service = _structure_source_service(request)
+    resolved_items: list[dict[str, Any]] = []
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            raise HTTPException(status_code=422, detail=f"input.items[{index}] must be an object")
+        if entry.get("include") is False:
+            continue
+        source_type = str(entry.get("source_type") or "")
+        if entry.get("xyz"):
+            resolved_items.append(
+                {
+                    "name": str(entry.get("name") or f"mol_{index + 1}"),
+                    "tag": str(entry.get("tag") or ""),
+                    "xyz": str(entry["xyz"]),
+                    "charge": entry.get("charge"),
+                    "multiplicity": entry.get("multiplicity"),
+                    "include": bool(entry.get("include", True)),
+                    "source_type": "upload",
+                    "source_ref": str(entry.get("source_ref") or entry.get("name") or ""),
+                }
+            )
+        elif entry.get("source_id"):
+            try:
+                asset, _checksum = service.get(str(entry["source_id"]))
+            except ValueError as exc:
+                raise HTTPException(
+                    status_code=422, detail=f"input.items[{index}].source_id: {exc}"
+                ) from exc
+            resolved_items.append(
+                {
+                    "name": str(
+                        entry.get("name") or asset.get("molecule_name") or asset.get("name") or ""
+                    ),
+                    "tag": str(entry.get("tag") or asset.get("tag") or ""),
+                    "xyz": str(asset.get("xyz") or ""),
+                    "charge": entry.get("charge", asset.get("charge")),
+                    "multiplicity": entry.get("multiplicity", asset.get("multiplicity")),
+                    "include": bool(entry.get("include", True)),
+                    "source_type": "job_artifact",
+                    "source_ref": str(entry["source_id"]),
+                }
+            )
+        elif source_type == "s2_candidates" or entry.get("source_job_id"):
+            source_job_id = str(entry.get("source_job_id") or "").strip()
+            from_artifact = str(
+                entry.get("from_artifact") or "RESULT/mechanism/s2_path_manifest.json"
+            )
+            if not source_job_id:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"input.items[{index}]: s2_candidates requires source_job_id",
+                )
+            source_job = manager.get(source_job_id)
+            source_work_dir = (
+                Path(source_job.work_dir) if source_job and source_job.work_dir else None
+            )
+            if source_work_dir is None or not source_work_dir.is_dir():
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Source job not found or has no work dir: {source_job_id}",
+                )
+            if from_artifact.endswith("s2_candidate_manifest.json"):
+                pinned = (source_work_dir / from_artifact).resolve()
+                try:
+                    pinned.relative_to(source_work_dir.resolve())
+                except ValueError as exc:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=(f"Artifact path escapes the source job: {from_artifact}"),
+                    ) from exc
+                if not pinned.is_file():
+                    raise HTTPException(
+                        status_code=422, detail=f"Source artifact not found: {pinned}"
+                    )
+            else:
+                pinned_str = _resolve_stage_artifact_ref(
+                    workflow,
+                    {"source_job_id": source_job_id, "from_artifact": from_artifact},
+                    manager,
+                )["from"]
+                pinned = Path(str(pinned_str))
+            resolved_items.append(
+                {
+                    "source_type": "s2_candidates",
+                    "manifest": str(pinned),
+                    "candidate_ids": entry.get("candidate_ids") or entry.get("select") or [],
+                }
+            )
+        else:
+            raise HTTPException(
+                status_code=422,
+                detail=f"input.items[{index}] needs one of xyz / source_id / source_job_id",
+            )
+
+    prepared = dict(inp)
+    prepared["batch_request"] = {
+        "schema_version": "batch_structures_v1",
+        "workflow_hint": workflow,
+        "charge": inp.get("charge"),
+        "multiplicity": inp.get("multiplicity"),
+        "items": resolved_items,
+    }
+    return prepared
+
+
 @router.post("/jobs", response_model=V1JobCreatedResponse, status_code=201)
 def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedResponse:
     manager = _manager(request)
@@ -1161,10 +1438,20 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
                     "SR execution modes; enable at most one"
                 ),
             )
-    if req.workflow in ("PESsearch", "Lowconfirm", "Highconfirm"):
+    if req.workflow == "PESsearch" and str(req.method.get("mode") or "") == "bond_length_scan":
+        # PESsearch is a normal task when submitted from the common task form.
+        # A mechanism project is optional bookkeeping for the later review/S3
+        # handoff, not a prerequisite for running the scan itself.
+        req.input = _prepare_bond_scan_input(req.input, manager)
+    elif (
+        req.workflow in ("Lowconfirm", "Highconfirm")
+        and str(req.input.get("source_type") or "") == "batch_structures"
+    ):
+        req.input = _prepare_stage_batch_input(req.workflow, req.input, request, manager)
+    elif req.workflow in ("PESsearch", "Lowconfirm", "Highconfirm"):
         req.input = _resolve_stage_artifact_ref(req.workflow, req.input, manager)
     task_name = req.task_name or req.workflow
-    molecule_name = req.molecule_name or _job_input_source_stem(req.input) or "mol"
+    molecule_name = _resolve_job_molecule_name(req.molecule_name, req.input, manager)
     spec = JobSpec(
         workflow=req.workflow,
         name=req.name,
@@ -1931,6 +2218,412 @@ def get_mechanism_project(project_id: str, request: Request) -> MechanismProject
     )
 
 
+# ---------------------------------------------------------------------------
+# S2 bond-length scan (§11): structure assets, profile, candidates, frames,
+# review persistence and candidate-result handoff.
+# ---------------------------------------------------------------------------
+
+
+def _s2_manifest_for_job(manager: Any, job_id: str) -> tuple[Path, dict[str, Any]]:
+    """Locate + read the s2_path_v2 manifest for a PESsearch job."""
+    try:
+        _, manifest_path, payload = resolve_s2_manifest_for_job(
+            manager,
+            job_id,
+            reject_remote=False,
+        )
+    except S2JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except S2ManifestNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except S2JobConflictError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except S2ReviewValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return manifest_path, payload
+
+
+@router.get("/jobs/{job_id}/energy-graph", response_model=EnergyGraphResponse)
+def get_energy_graph(
+    job_id: str,
+    request: Request,
+    view_type: str = Query(default="auto"),
+) -> EnergyGraphResponse:
+    """Return the normalized energy-workspace projection for a job.
+
+    The endpoint intentionally keeps workflow-specific manifest parsing on the
+    server.  The frontend receives only axes, series, nodes, annotations, and
+    geometry references, so S2 review data and future optimization/MD data can
+    use the same energy workspace.
+    """
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+    from acp.results.energy_graph import build_energy_graph_from_job
+
+    workflow = str(record.spec.workflow or "")
+    method = dict(record.spec.method or {})
+    work_dir = Path(record.work_dir) if record.work_dir else Path(".")
+    s2_payload: dict[str, Any] | None = None
+    mechanism_report: dict[str, Any] | None = None
+    s2_candidates: list[dict[str, Any]] | None = None
+    s2_review_state: dict[str, Any] | None = None
+
+    if workflow == "PESsearch" and str(method.get("mode") or "") == "bond_length_scan":
+        from acp.mechanism.scan_manifest import read_s2_candidate_manifest, read_s2_review
+
+        _manifest_path, s2_payload = _s2_manifest_for_job(manager, job_id)
+        if s2_payload is not None:
+            saved_review = read_s2_review(_manifest_path)
+            candidate_manifest = read_s2_candidate_manifest(_manifest_path)
+            s2_candidates = (
+                candidate_manifest.get("candidates")
+                if isinstance(candidate_manifest, dict)
+                else None
+            )
+            s2_review_state = saved_review.to_dict() if saved_review is not None else None
+    elif workflow == "mechanism":
+        store = _job_store(request)
+        rows = store.list_mechanism_studies(limit=1, job_id=job_id)
+        if rows:
+            row = rows[0]
+            study_id = str(row.get("id") or row.get("study_id") or "")
+            study_dir = _study_report_dir(row, record)
+            report = _build_mechanism_report(study_id, job_id, study_dir)
+            mechanism_report = report.model_dump()
+
+    graph = build_energy_graph_from_job(
+        job_id,
+        workflow=workflow,
+        method=method,
+        work_dir=work_dir,
+        s2_payload=s2_payload,
+        mechanism_report=mechanism_report,
+        s2_candidates=s2_candidates,
+        s2_review_state=s2_review_state,
+    )
+    if view_type not in {"", "auto", str(graph.get("view_type") or "")}:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Energy graph view is not available: {view_type}",
+        )
+    return EnergyGraphResponse.model_validate(graph)
+
+
+@router.post("/structure-assets", response_model=StructureAssetResponse, status_code=201)
+def create_structure_asset(
+    req: StructureAssetCreateRequest,
+    request: Request,
+) -> StructureAssetResponse:
+    """Register a pasted XYZ structure as a reusable ACP structure asset."""
+    from acp.intake.parsers import parse_xyz_text
+
+    manager = _manager(request)
+    parsed = parse_xyz_text(req.xyz_text)
+    if not parsed.structures and parsed.errors:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Could not parse XYZ: {'; '.join(parsed.errors[:3])}",
+        )
+    if not parsed.structures:
+        raise HTTPException(status_code=422, detail="XYZ text contains no structures")
+    asset = parsed.structures[0]
+    project_id = req.project_id or "default"
+    uploads = manager.run_root / project_id / "_uploads"
+    uploads.mkdir(parents=True, exist_ok=True)
+    from acp.intake.storage import UploadStorage
+
+    storage = UploadStorage(manager.run_root)
+    _asset_id, _ = storage.save_upload(
+        project_id, f"{req.name or 'paste'}.xyz", req.xyz_text.encode()
+    )
+    normalized = storage.save_normalized(
+        project_id,
+        _asset_id,
+        f"{req.name or 'paste'}",
+        str(asset.xyz),
+    )
+    rel_path = normalized.relative_to(manager.run_root).as_posix()
+    charge = req.charge if req.charge != 0 else int(asset.charge or 0)
+    multiplicity = req.multiplicity if req.multiplicity != 1 else int(asset.multiplicity or 1)
+    return StructureAssetResponse(
+        asset_id=_asset_id,
+        name=req.name or "paste",
+        atom_count=int(asset.atom_count or 0),
+        formula=str(asset.formula or ""),
+        charge=charge,
+        multiplicity=multiplicity,
+        xyz=str(asset.xyz),
+        asset_path=rel_path,
+        ok=True,
+    )
+
+
+@router.post("/s2/structure-preview", response_model=S2StructurePreviewResponse)
+def preview_s2_structure(
+    req: S2StructurePreviewRequest,
+    request: Request,
+) -> S2StructurePreviewResponse:
+    """Resolve one S2 source and return normalized XYZ for the atom picker.
+
+    This is deliberately read-only.  It uses the same source validation as
+    S2 submission so the structure shown in the UI is the structure that can
+    actually be submitted to the scheduler.
+    """
+    from acp.confsearch.manifest import read_manifest, representative_conformer
+    from acp.intake.parsers import parse_xyz_text
+
+    manager = _manager(request)
+    source = req.source
+    source_payload = source.model_dump(exclude_none=True)
+    selector = dict(source.structure_selector or {})
+    source_id = ""
+    checksum: str | None = None
+
+    if source.source_type == "task_artifact":
+        source_job_id = str(source.source_job_id or "").strip()
+        artifact_path = str(source.artifact_path or "").strip()
+        if not source_job_id or not artifact_path:
+            raise HTTPException(
+                status_code=422,
+                detail="task_artifact preview requires source_job_id and artifact_path",
+            )
+        try:
+            resolved = _resolve_stage_artifact_ref(
+                "PESsearch",
+                {"source_job_id": source_job_id, "from_artifact": artifact_path},
+                manager,
+            )
+        except HTTPException:
+            raise
+        artifact = Path(str(resolved["from"]))
+        source_id = f"job_{source_job_id}:{artifact_path}"
+        if artifact.suffix.lower() == ".xyz":
+            try:
+                xyz_text = artifact.read_text(encoding="utf-8")
+            except (OSError, UnicodeError) as exc:
+                raise HTTPException(
+                    status_code=422, detail=f"Cannot read XYZ artifact: {exc}"
+                ) from exc
+        else:
+            try:
+                manifest = read_manifest(artifact)
+                frame_index = (
+                    selector.get("frame_index") if selector.get("kind") == "frame_index" else None
+                )
+                conf_id = None
+                if frame_index is not None:
+                    conformers = manifest.get("conformers") or []
+                    index = int(frame_index)
+                    if index < 0 or index >= len(conformers):
+                        raise ValueError(f"frame_index {index} is out of range")
+                    conf_id = str(conformers[index].get("conf_id") or "")
+                _selected_id, geometry = representative_conformer(artifact, conf_id)
+                xyz_text = Path(geometry).read_text(encoding="utf-8")
+            except (OSError, UnicodeError, ValueError, KeyError) as exc:
+                raise HTTPException(
+                    status_code=422, detail=f"Cannot resolve structure artifact: {exc}"
+                ) from exc
+        source_payload["artifact_path"] = artifact_path
+    elif source.source_type == "structure_asset":
+        asset_path = str(source.asset_path or "").strip()
+        if not asset_path:
+            raise HTTPException(
+                status_code=422, detail="structure_asset preview requires asset_path"
+            )
+        try:
+            resolved_asset = _resolve_structure_asset_path(manager.run_root, asset_path)
+            xyz_text = resolved_asset.read_text(encoding="utf-8")
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise HTTPException(
+                status_code=422, detail=f"Cannot read structure asset: {exc}"
+            ) from exc
+        source_id = str(source.asset_id or asset_path)
+        source_payload["asset_path"] = asset_path
+    else:
+        xyz_text = str(source.xyz_text or "").strip()
+        if not xyz_text:
+            raise HTTPException(
+                status_code=422,
+                detail="xyz_text preview requires non-empty xyz_text",
+            )
+
+    parsed = parse_xyz_text(xyz_text)
+    if not parsed.structures:
+        detail = "; ".join(parsed.errors[:3]) if parsed.errors else "XYZ contains no structure"
+        raise HTTPException(status_code=422, detail=f"Could not parse structure: {detail}")
+    asset = parsed.structures[0]
+    normalized_xyz = str(asset.xyz or xyz_text)
+    charge = int(source.charge if source.charge is not None else (asset.charge or 0))
+    multiplicity = int(
+        source.multiplicity if source.multiplicity is not None else (asset.multiplicity or 1)
+    )
+    checksum = "sha256:" + hashlib.sha256(normalized_xyz.encode("utf-8")).hexdigest()
+    return S2StructurePreviewResponse(
+        source=source_payload,
+        xyz=normalized_xyz,
+        formula=str(asset.formula or ""),
+        atom_count=int(asset.atom_count or 0),
+        charge=charge,
+        multiplicity=multiplicity,
+        source_id=source_id,
+        checksum=checksum,
+        selector=selector,
+    )
+
+
+@router.get("/jobs/{job_id}/s2/profile", response_model=S2ProfileResponse)
+def get_s2_profile(job_id: str, request: Request) -> S2ProfileResponse:
+    manager = _manager(request)
+    _manifest_path, payload = _s2_manifest_for_job(manager, job_id)
+    scan = payload.get("scan") or {}
+    frames = [S2FrameModel(**frame) for frame in scan.get("frames") or []]
+    return S2ProfileResponse(
+        job_id=job_id,
+        mode=str(payload.get("mode") or ""),
+        status=str(payload.get("status") or ""),
+        stationary_point_claimed=bool(payload.get("stationary_point_claimed")),
+        scan={key: value for key, value in scan.items() if key != "frames"},
+        energy_profile=dict(payload.get("energy_profile") or {}),
+        frames=frames,
+    )
+
+
+@router.get("/jobs/{job_id}/s2/candidates", response_model=S2CandidatesResponse)
+def get_s2_candidates(job_id: str, request: Request) -> S2CandidatesResponse:
+    manager = _manager(request)
+    _manifest_path, payload = _s2_manifest_for_job(manager, job_id)
+    return S2CandidatesResponse(
+        job_id=job_id,
+        mode=str(payload.get("mode") or ""),
+        status=str(payload.get("status") or ""),
+        stationary_point_claimed=bool(payload.get("stationary_point_claimed")),
+        recommendations=dict(payload.get("recommendations") or {}),
+        review=dict(payload.get("review") or {}),
+    )
+
+
+@router.get("/jobs/{job_id}/s2/frame/{frame_index}", response_model=S2FrameResponse)
+def get_s2_frame(job_id: str, frame_index: int, request: Request) -> S2FrameResponse:
+    manager = _manager(request)
+    manifest_path, payload = _s2_manifest_for_job(manager, job_id)
+    frames = (payload.get("scan") or {}).get("frames") or []
+    frame = next((f for f in frames if int(f.get("index") or -1) == frame_index), None)
+    if frame is None:
+        raise HTTPException(
+            status_code=404, detail=f"Frame {frame_index} not found in job {job_id}"
+        )
+    work_dir = Path(str(manifest_path))
+    work_dir = work_dir.parent.parent.parent
+    scan_dir = str((payload.get("scan") or {}).get("scan_dir") or "")
+    xyz_path = work_dir / scan_dir / str(frame.get("geometry_path") or "")
+    xyz = ""
+    if xyz_path.is_file():
+        xyz = xyz_path.read_text(encoding="utf-8")
+    return S2FrameResponse(
+        job_id=job_id,
+        frame_index=frame_index,
+        target_coordinate=float(frame.get("target_coordinate") or 0.0),
+        actual_coordinate=float(frame.get("actual_coordinate") or 0.0),
+        xyz=xyz,
+        scan_energy_hartree=frame.get("scan_energy_hartree"),
+        single_point_energy_hartree=frame.get("single_point_energy_hartree"),
+        optimization_converged=bool(frame.get("optimization_converged")),
+        single_point_status=str(frame.get("single_point_status") or ""),
+    )
+
+
+def _s2_candidate_marks(items: list[S2ReviewCandidateItem]) -> list[S2CandidateMark]:
+    return [
+        S2CandidateMark(
+            candidate_id=str(item.candidate_id or ""),
+            frame_index=item.frame_index,
+            role=item.role,
+            name=item.name,
+        )
+        for item in items
+    ]
+
+
+def _save_s2_service_or_http(
+    manager: JobManager,
+    job_id: str,
+    req: S2ReviewRequest,
+    *,
+    conflict_status: int,
+    mechanism_project_id: str | None = None,
+) -> S2JobReviewResponse:
+    try:
+        summary = save_s2_review_for_job(
+            manager,
+            job_id,
+            _s2_candidate_marks(req.candidates),
+            req.note,
+            selected_ts=req.selected_ts,
+            selected_intermediates=req.selected_intermediates,
+            mechanism_project_id=mechanism_project_id,
+        )
+    except S2JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except S2ReviewValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except S2JobConflictError as exc:
+        raise HTTPException(status_code=conflict_status, detail=str(exc)) from exc
+    return S2JobReviewResponse(**summary)
+
+
+@router.post(
+    "/mechanism-projects/{project_id}/s2/review",
+    response_model=S2ReviewResponse,
+)
+def save_s2_review(
+    project_id: str,
+    req: S2ReviewRequest,
+    request: Request,
+) -> S2ReviewResponse:
+    """Persist the user's TS/INT candidate marking and confirm S2 (§8.2)."""
+    manager = _manager(request)
+    project = _mechanism_project_or_404(manager, project_id)
+    s2_job_id = project.stage_jobs.get("s2")
+    if not s2_job_id:
+        raise HTTPException(status_code=409, detail="Project has no S2 job yet")
+    summary = _save_s2_service_or_http(
+        manager,
+        s2_job_id,
+        req,
+        conflict_status=400,
+        mechanism_project_id=project_id,
+    )
+    project_after = manager._mechanism_projects.get(project_id)
+    return S2ReviewResponse(
+        project_id=project_id,
+        job_id=s2_job_id,
+        review=summary.review,
+        project_status=(
+            project_after.status.value if project_after is not None else project.status.value
+        ),
+        candidates=summary.candidates,
+        candidate_manifest=summary.candidate_manifest,
+        structures_dir=summary.structures_dir,
+        result_manifest=summary.result_manifest,
+    )
+
+
+@router.post(
+    "/jobs/{job_id}/s2/review",
+    response_model=S2JobReviewResponse,
+)
+def save_job_s2_review(
+    job_id: str,
+    req: S2ReviewRequest,
+    request: Request,
+) -> S2JobReviewResponse:
+    """Save editable S2 candidate markings for a standalone or project job."""
+    return _save_s2_service_or_http(_manager(request), job_id, req, conflict_status=409)
+
+
 @router.get("/jobs/{job_id}", response_model=V1JobRecordModel)
 def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     manager = _manager(request)
@@ -2312,26 +3005,28 @@ def continue_job(job_id: str, request: Request) -> V1JobRecordModel:
     return _run_job_state_action(_manager(request).continue_job, job_id)
 
 
-@router.post("/jobs/{job_id}/rerun", response_model=V1JobCreatedResponse, status_code=201)
+@router.post("/jobs/{job_id}/rerun", response_model=V1JobRecordModel)
 def rerun_job(
     job_id: str,
     request: Request,
     body: V1JobRerunRequest | None = None,
-) -> V1JobCreatedResponse:
-    """Submit a fresh job with the same spec (enhanced clone, plan §4.6)."""
+) -> V1JobRecordModel:
+    """Re-queue the existing task for a full in-place rerun.
+
+    Unlike ``/clone``, this endpoint never creates a new job row or task
+    directory.  The optional legacy ``project_id`` body is accepted only
+    when it matches the current project.
+    """
     manager = _manager(request)
     try:
         record = manager.rerun_job(job_id, project_id=body.project_id if body else None)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
-    return V1JobCreatedResponse(
-        job_id=record.id,
-        status=record.status.value,
-        workflow=record.spec.workflow,
-        project_id=record.project_id,
-    )
+    return _record_to_v1_model(record)
 
 
 @router.post("/jobs/purge", response_model=V1JobPurgeResponse)
@@ -2953,6 +3648,9 @@ def _asset_to_model(asset) -> StructureAssetModel:
     return StructureAssetModel(
         asset_id=asset.asset_id,
         name=asset.name,
+        molecule_name=getattr(asset, "molecule_name", ""),
+        tag=getattr(asset, "tag", ""),
+        candidate_id=getattr(asset, "candidate_id", ""),
         source_type=asset.source_type,
         original_format=asset.original_format,
         xyz=asset.xyz,

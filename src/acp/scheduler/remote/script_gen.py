@@ -24,7 +24,9 @@ from typing import Any
 
 from acp.catalog import method_levels_to_cli_flags
 from acp.scheduler.jobs import (
+    BATCH_CONFIG_FILENAME,
     MECHANISM_CONFIG_FILENAME,
+    SCAN_CONFIG_FILENAME,
     JobSpec,
     censo_ewin_from_method,
     censo_preset_from_method,
@@ -35,6 +37,7 @@ from acp.scheduler.jobs import (
     lowconfirm_method_flags,
     nmr_method_flags,
     pessearch_method_flags,
+    stage_batch_request,
     xtbmd_method_flags,
 )
 from acp.scheduler.remote.config import RemoteNode
@@ -67,9 +70,7 @@ def _mechanism_role_source(
     role_value = inp.get(role)
     if isinstance(role_value, dict):
         nested_source = (
-            role_value.get("source")
-            or role_value.get("input")
-            or role_value.get("smiles")
+            role_value.get("source") or role_value.get("input") or role_value.get("smiles")
         )
         if nested_source and role_value.get("source_type") != "xyz_text":
             return str(nested_source)
@@ -85,6 +86,8 @@ __all__ = [
     "build_lsf_script_spec",
     "build_remote_cli_command",
     "build_remote_nmr_cmd_tail",
+    "build_remote_scan_config_payload",
+    "build_remote_stage_cmd_tail",
     "derive_lsf_resources",
     "generate_lsf_script",
 ]
@@ -353,18 +356,52 @@ def build_remote_cli_command(
     return cmd
 
 
+def build_remote_scan_config_payload(spec: JobSpec) -> dict[str, Any] | None:
+    """Bond-scan scan_request payload staged as ``scan_config.json``.
+
+    Returns ``None`` for non-bond-scan jobs.  For ``task_artifact`` sources
+    the artifact path is rewritten to the staged handoff manifest location
+    (``WORK/01_PREPARE/handoff/``) inside the remote job dir.
+    """
+    wf = spec.workflow
+    if not (wf == "PESsearch" and str(spec.method.get("mode") or "") == "bond_length_scan"):
+        return None
+    scan_request = dict(spec.input.get("scan_request") or spec.method.get("scan_request") or {})
+    src = dict(scan_request.get("source") or {})
+    if src.get("source_type") == "task_artifact":
+        src["artifact_path"] = str(
+            PurePosixPath("WORK") / "01_PREPARE" / "handoff" / _stage_manifest_name(wf)
+        )
+        scan_request["source"] = src
+    return scan_request
+
+
 def build_remote_stage_cmd_tail(spec: JobSpec) -> list[str]:
     """E7 parity helper: append the stage-workflow argv for remote execution.
 
     Mirrors :meth:`JobRunner._build_stage_cmd`. The handoff payload
     (manifest + referenced geometry dirs) must already be staged under
     ``WORK/01_PREPARE/handoff/`` in the remote job dir; the flag points the
-    CLI at the staged manifest.
+    CLI at the staged manifest.  Bond-scan jobs read ``scan_config.json``
+    from the remote job dir root (staged by the submit path).
     """
     wf = spec.workflow
     inp = spec.input
     method = spec.method
     flags: list[str] = ["--output", "."]
+    bond_scan_mode = wf == "PESsearch" and str(method.get("mode") or "") == "bond_length_scan"
+    batch_mode = wf in ("Lowconfirm", "Highconfirm") and stage_batch_request(spec) is not None
+    if bond_scan_mode:
+        flags += ["--mode", "bond_length_scan"]
+        flags += ["--scan-config", SCAN_CONFIG_FILENAME]
+        return flags + input_chemistry_flags(inp)
+    if batch_mode:
+        flags += ["--batch-config", BATCH_CONFIG_FILENAME]
+        if wf == "Lowconfirm":
+            flags += lowconfirm_method_flags(method)
+        else:
+            flags += highconfirm_method_flags(method)
+        return flags + input_chemistry_flags(inp)
     from_manifest = inp.get("from")
     if from_manifest:
         flags += ["--from", str(from_manifest)]

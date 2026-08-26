@@ -1,16 +1,16 @@
 """Highconfirm (S4) — high-fidelity optimization + frequency + SP + thermo.
 
 Reads ``s3_lowconfirm_manifest.json``, re-confirms the selected candidates
-at the s4 fidelity through the same :class:`ConfirmEngine` as Lowconfirm
-(plan §7), and writes ``s4_highconfirm_manifest.json`` plus
-``mechanism_profile.json`` (barriers, TS data, S3/S4 consistency).
+at the s4 fidelity through the same batch engine as Lowconfirm
+(:class:`BatchConfirmEngine`, profile ``s4``) and writes
+``s4_highconfirm_manifest.json`` plus ``mechanism_profile.json``
+(barriers, TS data, S3/S4 consistency).
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -18,8 +18,9 @@ from acp.confsearch.shared.artifacts import write_json_atomic
 from acp.confsearch.shared.provenance import source_artifact_ref, utc_now_iso
 
 from .._helpers import fingerprint
-from ..models import ArtifactRef, Provenance, StationaryPointRequest
-from .confirm import ConfirmEngine, HighConfirmProfile
+from ..batch_models import BatchStructureItem, load_batch_request
+from .confirm import HighConfirmProfile
+from .low_confirm import _carried_row, _result_row
 
 logger = logging.getLogger(__name__)
 
@@ -40,73 +41,6 @@ def read_s3_manifest(path: Path) -> dict[str, Any]:
     ):
         raise ValueError(f"Not a Lowconfirm s3_lowconfirm manifest: {path}")
     return payload
-
-
-def _select_rows(payload: dict[str, Any], select: list[str]) -> list[dict[str, Any]]:
-    rows = [row for row in payload.get("candidates") or [] if row.get("status") == "confirmed"]
-    if not rows:
-        raise ValueError("S3 manifest has no confirmed candidates to promote")
-    if not select:
-        return [row for row in rows if row.get("kind") == "ts"] or rows
-    by_id = {str(row.get("id")): row for row in payload.get("candidates") or []}
-    missing = [cid for cid in select if cid not in by_id]
-    if missing:
-        raise ValueError(f"Unknown candidate ids in S3 manifest: {', '.join(missing)}")
-    chosen = [by_id[cid] for cid in select]
-    unconfirmed = [row["id"] for row in chosen if row.get("status") != "confirmed"]
-    if unconfirmed:
-        raise ValueError(
-            f"S3 candidates not confirmed, refuse S4 promotion: {', '.join(unconfirmed)}"
-        )
-    return chosen
-
-
-def _build_requests(
-    rows: list[dict[str, Any]],
-    manifest_path: Path,
-    charge: int,
-    multiplicity: int,
-) -> list[StationaryPointRequest]:
-    requests: list[StationaryPointRequest] = []
-    for row in rows:
-        xyz_ref = str(row.get("optimized_xyz") or "")
-        xyz_path = (manifest_path.parent / xyz_ref).resolve() if xyz_ref else None
-        if xyz_path is None or not xyz_path.is_file():
-            raise FileNotFoundError(
-                f"S3 optimized geometry missing for {row.get('id')}: {xyz_path}"
-            )
-        kind = "ts" if row.get("kind") == "ts" else "minimum"
-        role = "transition_state" if kind == "ts" else "intermediate"
-        requests.append(
-            StationaryPointRequest(
-                id=str(row["id"]),
-                role=role,  # type: ignore[arg-type]
-                kind=kind,  # type: ignore[arg-type]
-                input_geometry=ArtifactRef(
-                    path=str(xyz_path), sha256="", kind="s3_confirmed_geometry"
-                ),
-                coordinate_plan=None,
-                fallback_geometries=[],
-                source_stage="S4",
-                charge=charge,
-                multiplicity=multiplicity,
-                atom_mapping=None,
-                parent_state_id=None,
-                route_id="route_001",
-                ensemble_correction=None,
-                provenance=Provenance(
-                    provider="acp-highconfirm",
-                    provider_version="1.0",
-                    provider_commit="s4",
-                    strategy="high-confirmation",
-                    strategy_version="1.0",
-                    profile_id="s4",
-                    schema_version="m0",
-                    input_signature=str(row.get("id")),
-                ),
-            )
-        )
-    return requests
 
 
 def _s3_s4_consistency(s3_row: dict[str, Any], s4_row: dict[str, Any]) -> list[str]:
@@ -166,7 +100,7 @@ def _barrier_blocks(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def run_high_confirm(
     *,
-    from_manifest: Path | str,
+    from_manifest: Path | str | None = None,
     output_dir: Path | str,
     select: list[str] | None = None,
     run_irc: bool = False,
@@ -177,37 +111,96 @@ def run_high_confirm(
     config: dict[str, Any] | None = None,
     refinement_provider: Any | None = None,
     endpoint_provider: Any | None = None,
+    structures: list[BatchStructureItem] | None = None,
+    batch_request: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Run the S4 fine confirmation; write the S4 manifest + mechanism profile."""
-    manifest_path = Path(from_manifest).resolve()
-    payload_in = read_s3_manifest(manifest_path)
-    resolved_charge = charge if charge is not None else int(payload_in.get("charge") or 0)
-    resolved_multiplicity = (
-        multiplicity if multiplicity is not None else int(payload_in.get("multiplicity") or 1)
-    )
+    """Run the S4 fine confirmation; write the S4 manifest + mechanism profile.
 
-    rows = _select_rows(payload_in, [str(s) for s in select or []])
+    Structures enter either through a Lowconfirm manifest (*from_manifest*)
+    or directly as batch structures (*structures* / *batch_request*).
+    """
+    from ..batch_models import load_items_from_s3_manifest
+
     out_root = Path(output_dir).resolve()
     result_dir = out_root / "RESULT" / "mechanism"
     result_dir.mkdir(parents=True, exist_ok=True)
 
-    requests = _build_requests(rows, manifest_path, resolved_charge, resolved_multiplicity)
+    source_block: dict[str, Any]
+    if structures is None and batch_request is None:
+        if from_manifest is None:
+            raise ValueError("Highconfirm requires from_manifest, structures or batch_request")
+        manifest_path = Path(from_manifest).resolve()
+        payload_in = read_s3_manifest(manifest_path)
+        resolved_charge = charge if charge is not None else int(payload_in.get("charge") or 0)
+        resolved_multiplicity = (
+            multiplicity
+            if multiplicity is not None
+            else int(payload_in.get("multiplicity") or 1)
+        )
+        items, _payload = load_items_from_s3_manifest(manifest_path, [str(s) for s in select or []])
+        s3_by_id = {str(row.get("id")): row for row in payload_in.get("candidates") or []}
+        source_block = source_artifact_ref(
+            source_job_id,
+            source_relative_path,
+            manifest_path,
+            kind="s3_lowconfirm_manifest",
+            stage="S3",
+        )
+    else:
+        if structures is None:
+            structures = load_batch_request(batch_request)
+        resolved_charge = charge if charge is not None else 0
+        resolved_multiplicity = multiplicity if multiplicity is not None else 1
+        if select:
+            wanted = {str(s) for s in select}
+            structures = [
+                item for item in structures if item.item_id in wanted or item.candidate_id in wanted
+            ]
+            if not structures:
+                raise ValueError(f"No batch structures match select={sorted(wanted)}")
+        s3_by_id: dict[str, Any] = {}
+        source_block = {
+            "kind": "batch_structures",
+            "stage": "BATCH",
+            "source_job_id": source_job_id or "",
+            "relative_path": "",
+            "path": "",
+            "count": len(structures),
+        }
+
     profile = HighConfirmProfile(run_irc=run_irc)
-    engine = ConfirmEngine(
+    from ..batch_confirm import BatchConfirmEngine
+
+    if structures is None:
+        structures = items
+    engine = BatchConfirmEngine(
         config=config,
         work_root=out_root / "WORK" / "03_OPT",
         profile=profile,
         refinement_provider=refinement_provider,
         endpoint_provider=endpoint_provider,
     )
-    outcome = engine.confirm(requests)
+    outcome = engine.run(
+        structures or [],
+        charge=resolved_charge,
+        multiplicity=resolved_multiplicity,
+        workflow="Highconfirm",
+    )
 
-    s3_by_id = {str(row.get("id")): row for row in payload_in.get("candidates") or []}
     candidates_out: list[dict[str, Any]] = []
     consistency: list[str] = []
-    for candidate in outcome.candidates:
-        row = _result_row(result_dir, candidate)
-        s3_row = s3_by_id.get(candidate.candidate_id)
+    if outcome.confirm is not None:
+        for candidate in outcome.confirm.candidates:
+            row = _result_row(result_dir, candidate, copy_sp=True)
+            s3_row = s3_by_id.get(candidate.candidate_id)
+            if s3_row is not None and row["status"] == "confirmed":
+                consistency.extend(_s3_s4_consistency(s3_row, row))
+            candidates_out.append(row)
+    for record in outcome.manifest.items:
+        if record.status != "skipped":
+            continue
+        row = _carried_row(out_root, record)
+        s3_row = s3_by_id.get(record.candidate_id)
         if s3_row is not None and row["status"] == "confirmed":
             consistency.extend(_s3_s4_consistency(s3_row, row))
         candidates_out.append(row)
@@ -237,13 +230,7 @@ def run_high_confirm(
         "workflow": "Highconfirm",
         "stage": "S4",
         "created_at": utc_now_iso(),
-        "source": source_artifact_ref(
-            source_job_id,
-            source_relative_path,
-            manifest_path,
-            kind="s3_lowconfirm_manifest",
-            stage="S3",
-        ),
+        "source": source_block,
         "profile": {
             "level": "high",
             "opt_method": profile.opt_method,
@@ -258,7 +245,8 @@ def run_high_confirm(
         "charge": resolved_charge,
         "multiplicity": resolved_multiplicity,
         "candidates": candidates_out,
-        "irc": outcome.irc,
+        "batch_manifest": "batch_calculation_manifest.json",
+        "irc": outcome.confirm.irc if outcome.confirm is not None else None,
         "s3_s4_consistency": consistency,
         "gates": gates,
         "errors": list(outcome.errors),
@@ -266,8 +254,8 @@ def run_high_confirm(
             "engine": "acp-highconfirm",
             "fingerprint": fingerprint(
                 {
-                    "source_manifest": str(manifest_path),
-                    "select": [r["id"] for r in rows],
+                    "source_manifest": str(from_manifest) if from_manifest else "",
+                    "select": [item.candidate_id or item.item_id for item in (structures or [])],
                     "run_irc": run_irc,
                 }
             ),
@@ -318,31 +306,6 @@ def run_high_confirm(
         len(candidates_out),
     )
     return payload
-
-
-def _result_row(result_dir: Path, candidate: Any) -> dict[str, Any]:
-    row = candidate.to_dict()
-    optimized = Path(row.get("optimized_xyz") or "")
-    if optimized.is_file():
-        target_dir = result_dir / "optimized"
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target = target_dir / f"{candidate.candidate_id}.xyz"
-        shutil.copy2(optimized, target)
-        row["optimized_xyz"] = f"optimized/{candidate.candidate_id}.xyz"
-    evidence = row.get("evidence") or {}
-    for key, folder in (
-        ("canonical_frequency_output", "frequencies"),
-        ("sp_output", "single_points"),
-    ):
-        source = evidence.get(key)
-        if source and Path(str(source)).is_file():
-            target_dir = result_dir / folder
-            target_dir.mkdir(parents=True, exist_ok=True)
-            target = target_dir / f"{candidate.candidate_id}{Path(str(source)).suffix}"
-            shutil.copy2(source, target)
-            row.setdefault("outputs", {})[key.replace("_output", "")] = f"{folder}/{target.name}"
-    row.pop("evidence", None)
-    return row
 
 
 __all__ = [

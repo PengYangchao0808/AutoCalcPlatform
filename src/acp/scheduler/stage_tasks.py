@@ -257,6 +257,10 @@ class _ConfsearchStagePlanProvider:
 
 class _PesSearchStagePlanProvider:
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        if str(spec.method.get("mode") or "") == "bond_length_scan":
+            from acp.mechanism.bond_scan import BOND_SCAN_STAGES
+
+            return [StagePlan(name) for name in BOND_SCAN_STAGES]
         return [
             StagePlan("prepare"),
             StagePlan("path_search"),
@@ -403,6 +407,29 @@ class StageTaskObserver:
             self.store.create(task)
             existing[stage.stage_name] = task
         return self.store.list_by_job(job_id)
+
+    def reset_job(self, job_id: str) -> None:
+        """Reset mirrored stage rows for a full in-place rerun.
+
+        The job identity and stage task IDs remain stable, while execution
+        state from the previous attempt is cleared so the UI does not show a
+        finished stage from an earlier full rerun as the current result.
+        Checkpoint continuation intentionally does not call this method.
+        """
+        now = _utc_now_iso()
+        for task in self.store.list_by_job(job_id):
+            task.state = "pending"
+            task.exit_status = None
+            task.retry_count = 0
+            task.pid = None
+            task.stderr_summary = None
+            task.status_detail = None
+            task.started_at = None
+            task.completed_at = None
+            task.updated_at = now
+            task.result = None
+            task.provenance = None
+            self.store.update(task)
 
     def poll_and_mirror(self, job_id: str, work_dir: Path) -> list[StageTask]:
         stage_root = work_dir / "stage_tasks"

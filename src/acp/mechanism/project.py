@@ -28,6 +28,7 @@ class MechanismProjectStatus(str, Enum):
     CREATED = "created"
     S1_READY = "s1_ready"
     S2_READY = "s2_ready"
+    S2_CONFIRMED = "s2_confirmed"
     S3_READY = "s3_ready"
     COMPLETED = "completed"
     BLOCKED = "blocked"
@@ -181,6 +182,33 @@ class MechanismProjectStore:
 
     # ── State machine ───────────────────────────────────────────────────
 
+    def confirm_s2_candidates(self, project_id: str) -> MechanismProject | None:
+        """Transition a project from ``s2_ready`` to ``s2_confirmed``.
+
+        Called when the user confirms the S2 TS/INT selection (plan §8.2);
+        an S3 job may only be created after this transition.
+        """
+        project = self.get(project_id)
+        if project is None:
+            return None
+        if project.status != MechanismProjectStatus.S2_READY:
+            logger.debug(
+                "Project %s is %s — only s2_ready projects accept S2 confirmation",
+                project_id,
+                project.status.value,
+            )
+            return None
+        now = _utc_now_iso()
+        with self._lock, self._connect() as conn:
+            conn.execute(
+                "UPDATE mechanism_projects SET status=?, updated_at=? WHERE project_id=?",
+                (MechanismProjectStatus.S2_CONFIRMED.value, now, project_id),
+            )
+            conn.commit()
+        project.status = MechanismProjectStatus.S2_CONFIRMED
+        project.updated_at = now
+        return project
+
     def advance_for_job(
         self,
         project_id: str,
@@ -223,9 +251,7 @@ class MechanismProjectStore:
             return self._advance_blocked(project)
         return None
 
-    def _advance_completed(
-        self, project: MechanismProject, stage: str
-    ) -> MechanismProject:
+    def _advance_completed(self, project: MechanismProject, stage: str) -> MechanismProject:
         """Transition project after a stage completes successfully."""
         if project.status.is_terminal:
             return project
@@ -233,9 +259,7 @@ class MechanismProjectStore:
         if stage == "s4":
             new_status = MechanismProjectStatus.COMPLETED
         else:
-            new_status = _STAGE_NEXT_STATUS.get(
-                stage, MechanismProjectStatus.CREATED
-            )
+            new_status = _STAGE_NEXT_STATUS.get(stage, MechanismProjectStatus.CREATED)
 
         now = _utc_now_iso()
         with self._lock, self._connect() as conn:

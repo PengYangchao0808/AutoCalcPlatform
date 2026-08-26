@@ -34,6 +34,7 @@ from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
     EXIT_WAITING_REVIEW,
     MECHANISM_CONFIG_FILENAME,
+    SCAN_CONFIG_FILENAME,
     JobRecord,
     JobSpec,
     censo_ewin_from_method,
@@ -45,6 +46,8 @@ from acp.scheduler.jobs import (
     lowconfirm_method_flags,
     nmr_method_flags,
     pessearch_method_flags,
+    prepare_stage_batch_config,
+    stage_batch_request,
     write_mechanism_job_config,
     xtbmd_method_flags,
 )
@@ -396,6 +399,10 @@ def materialize_job_input(
     run_root: Path,
     materialized_roles: dict[str, Path] | None = None,
 ) -> Path | None:
+    if isinstance(inp.get("scan_request"), dict):
+        # S2 bond-length scan: the structure source is materialised inside
+        # the workflow (bond_scan.materialize_input), not by the scheduler.
+        return None
     if inp.get("source_type") == "mechanism":
         reactant = _materialize_mechanism_role(
             "reactant",
@@ -1418,42 +1425,92 @@ class JobRunner:
         inp = spec.input
         method = spec.method
         res = spec.resources
-
-        from_manifest = inp.get("from")
-        if not from_manifest:
-            source_job_id = inp.get("source_job_id")
-            from_artifact = inp.get("from_artifact")
-            if not source_job_id or not from_artifact:
-                raise ValueError(
-                    f"{wf} job requires input.from (resolved artifact path) or "
-                    "input.source_job_id + input.from_artifact"
-                )
-            source_dir = resolve_source_job_work_dir(str(source_job_id))
-            from_manifest = source_dir / str(from_artifact)
-        manifest_path = Path(str(from_manifest))
-        if not manifest_path.is_file():
-            raise ValueError(f"{wf} source artifact not found: {manifest_path}")
-
-        handoff_dir = work_dir / "WORK" / "01_PREPARE" / "handoff"
-        local_manifest = copy_handoff_payload(manifest_path, handoff_dir)
+        bond_scan_mode = wf == "PESsearch" and str(method.get("mode") or "") == "bond_length_scan"
+        batch_mode = stage_batch_request(spec) is not None
 
         cmd: list[str] = [self.python, "-m", "acp.cli", "run", wf]
-        cmd += ["--from", str(local_manifest), "--output", str(work_dir)]
-        if wf == "PESsearch":
-            cmd += pessearch_method_flags(method)
-            plan = inp.get("coordinate_plan") or method.get("coordinate_plan")
-            if plan is not None:
-                cmd += ["--plan", json.dumps(plan)]
-            product = inp.get("product")
-            if product:
-                cmd += ["--product", str(product)]
-            ts_guess = inp.get("ts_guess")
-            if ts_guess:
-                cmd += ["--ts-guess", str(ts_guess)]
-        elif wf == "Lowconfirm":
-            cmd += lowconfirm_method_flags(method)
-        elif wf == "Highconfirm":
-            cmd += highconfirm_method_flags(method)
+        if batch_mode:
+            batch_config = prepare_stage_batch_config(spec, work_dir)
+            if batch_config is None:
+                raise ValueError(f"{wf} batch_structures staging failed")
+            cmd += [
+                "--batch-config",
+                str(batch_config),
+                "--output",
+                str(work_dir),
+            ]
+            if wf == "Lowconfirm":
+                cmd += lowconfirm_method_flags(method)
+            else:
+                cmd += highconfirm_method_flags(method)
+        elif bond_scan_mode:
+            cmd += ["--mode", "bond_length_scan"]
+            scan_request = dict(inp.get("scan_request") or method.get("scan_request") or {})
+            src = dict(scan_request.get("source") or {})
+            if src.get("source_type") == "task_artifact":
+                from_manifest = inp.get("from")
+                if not from_manifest:
+                    source_job_id = inp.get("source_job_id") or src.get("source_job_id")
+                    from_artifact = inp.get("from_artifact")
+                    if not source_job_id or not from_artifact:
+                        raise ValueError(
+                            "bond_length_scan with task_artifact source requires "
+                            "input.from or input.source_job_id + input.from_artifact"
+                        )
+                    source_dir = resolve_source_job_work_dir(str(source_job_id))
+                    from_manifest = source_dir / str(from_artifact)
+                manifest_path = Path(str(from_manifest))
+                if not manifest_path.is_file():
+                    raise ValueError(f"{wf} source artifact not found: {manifest_path}")
+                handoff_dir = work_dir / "WORK" / "01_PREPARE" / "handoff"
+                local_manifest = copy_handoff_payload(manifest_path, handoff_dir)
+                src["artifact_path"] = str(local_manifest)
+                scan_request["source"] = src
+            work_dir.mkdir(parents=True, exist_ok=True)
+            scan_config_path = work_dir / SCAN_CONFIG_FILENAME
+            scan_config_path.write_text(
+                json.dumps(scan_request, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            cmd += ["--scan-config", str(scan_config_path), "--output", str(work_dir)]
+        else:
+            from_manifest = inp.get("from")
+            if not from_manifest:
+                source_job_id = inp.get("source_job_id")
+                from_artifact = inp.get("from_artifact")
+                if not source_job_id or not from_artifact:
+                    raise ValueError(
+                        f"{wf} job requires input.from (resolved artifact path) or "
+                        "input.source_job_id + input.from_artifact"
+                    )
+                source_dir = resolve_source_job_work_dir(str(source_job_id))
+                from_manifest = source_dir / str(from_artifact)
+            manifest_path = Path(str(from_manifest))
+            if not manifest_path.is_file():
+                raise ValueError(f"{wf} source artifact not found: {manifest_path}")
+
+            handoff_dir = work_dir / "WORK" / "01_PREPARE" / "handoff"
+            snapshot_candidates = bool(inp.get("snapshot_candidates"))
+            local_manifest = copy_handoff_payload(manifest_path, handoff_dir)
+
+            cmd += ["--from", str(local_manifest), "--output", str(work_dir)]
+            if wf == "PESsearch":
+                cmd += pessearch_method_flags(method)
+                plan = inp.get("coordinate_plan") or method.get("coordinate_plan")
+                if plan is not None:
+                    cmd += ["--plan", json.dumps(plan)]
+                product = inp.get("product")
+                if product:
+                    cmd += ["--product", str(product)]
+                ts_guess = inp.get("ts_guess")
+                if ts_guess:
+                    cmd += ["--ts-guess", str(ts_guess)]
+            elif wf == "Lowconfirm":
+                cmd += lowconfirm_method_flags(method)
+                if snapshot_candidates:
+                    cmd += ["--snapshot-candidates"]
+            elif wf == "Highconfirm":
+                cmd += highconfirm_method_flags(method)
 
         if spec.config_path:
             cmd += ["--config", str(spec.config_path)]

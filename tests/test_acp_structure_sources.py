@@ -54,6 +54,7 @@ def _make_record(
     input: dict[str, Any] | None = None,
     remote_job_id: str | None = None,
     result: dict[str, Any] | None = None,
+    molecule_name: str = "",
 ) -> JobRecord:
     return JobRecord(
         id=job_id,
@@ -62,6 +63,7 @@ def _make_record(
             name=name,
             input=input or {},
             project_id=project_id,
+            molecule_name=molecule_name,
         ),
         status=status,
         work_dir=str(work_dir),
@@ -261,7 +263,7 @@ def test_legacy_filename_fallback(service: StructureSourceService, store, tmp_pa
     assert entries[0]["path"] == "ethanol/ethanol_global_min.xyz"
 
 
-def test_legacy_fallback_optimized_xyz_and_all_conformers(
+def test_legacy_conformer_fallback_returns_one_minimum(
     service: StructureSourceService, store, tmp_path
 ):
     _energy_job_with_products(
@@ -280,10 +282,7 @@ def test_legacy_fallback_optimized_xyz_and_all_conformers(
     )
     entries = service.list_recent()
     paths = {e["path"] for e in entries}
-    assert paths == {"ethanol/optimized.xyz", "ethanol/finalDFT/all_conformers.xyz"}
-    # multi-frame file yields the first frame (charge=1 mult=2 comment)
-    conf = next(e for e in entries if "all_conformers" in e["path"])
-    assert (conf["charge"], conf["multiplicity"], conf["atom_count"]) == (1, 2, 2)
+    assert paths == {"ethanol/optimized.xyz"}
 
 
 def test_singlepoint_and_frequency_never_yield_sources(
@@ -613,3 +612,281 @@ def test_remote_traversal_rejected(store: JobStore, tmp_path: Path) -> None:
     service = StructureSourceService(store, tmp_path, fetcher=FakeFetcher(_remote_files()))
     with pytest.raises(ValueError, match="Invalid remote path"):
         service.get("job_rjob1:../../etc/passwd")
+
+
+# ---------------------------------------------------------------------------
+# Unified result_manifest.json discovery (batch plan §6)
+# ---------------------------------------------------------------------------
+
+
+def test_confsearch_manifest_returns_only_rank_one_geometry(service, store, tmp_path) -> None:
+    work_dir = tmp_path / "uncategorized" / "confsearch_job"
+    conf_dir = work_dir / "RESULT" / "confsearch"
+    _write(
+        conf_dir / "confsearch_manifest.json",
+        json.dumps(
+            {
+                "schema_version": "confsearch_v1",
+                "workflow": "Confsearch",
+                "conformers": [
+                    {
+                        "conf_id": "conf_0001",
+                        "geometry": "conformers/conf_0001.xyz",
+                        "energy_hartree": -10.0,
+                        "rank": 1,
+                    },
+                    {
+                        "conf_id": "conf_0002",
+                        "geometry": "conformers/conf_0002.xyz",
+                        "energy_hartree": -9.0,
+                        "rank": 2,
+                    },
+                ],
+            }
+        ),
+    )
+    _write(conf_dir / "conformers" / "conf_0001.xyz", _XYZ_PLAIN)
+    _write(conf_dir / "conformers" / "conf_0002.xyz", _XYZ_ETHANOL)
+    store.create(
+        _make_record(
+            "confsearch_job",
+            workflow="Confsearch",
+            work_dir=work_dir,
+            molecule_name="INT_S",
+        )
+    )
+
+    entries = service.list_recent()
+    assert len(entries) == 1
+    assert entries[0]["path"] == "RESULT/confsearch/conformers/conf_0001.xyz"
+    assert entries[0]["label"] == "Lowest-energy conformer (conf_0001)"
+    assert entries[0]["candidate_id"] == ""
+
+_XYZ_TAG_TS = """\
+2
+TAG: TS | candidate_id=ts_guess_001 | source=PESsearch | frame=006
+C 0.000000 0.000000 0.000000
+O 1.200000 0.000000 0.000000
+"""
+
+_XYZ_TAG_INT = """\
+2
+TAG: INT | candidate_id=int_guess_002 | source=PESsearch | frame=009
+C 0.000000 0.000000 0.000000
+O 1.200000 0.000000 0.000000
+"""
+
+
+def _write_result_manifest(
+    result_dir: Path,
+    products: list[dict[str, Any]],
+    *,
+    workflow: str = "PESsearch",
+) -> None:
+    _write(
+        result_dir / "result_manifest.json",
+        json.dumps(
+            {
+                "version": 2,
+                "workflow": workflow,
+                "status": "completed",
+                "products": products,
+            }
+        ),
+    )
+
+
+def test_discover_result_manifest_structure_products(service, store, tmp_path) -> None:
+    work_dir = tmp_path / "uncategorized" / "20260823_001_PESsearch"
+    result_dir = work_dir / "RESULT"
+    _write_result_manifest(
+        result_dir,
+        [
+            {
+                "id": "s2_candidate_ts_guess_001",
+                "label": "S2 candidate ts_guess_001 (TS)",
+                "path": "mechanism/ts_guesses/ts_guess_001.xyz",
+                "kind": "structure",
+            },
+            {
+                "id": "s2_candidate_int_guess_002",
+                "label": "S2 candidate int_guess_002 (INT)",
+                "path": "mechanism/intermediate_guesses/int_guess_002.xyz",
+                "kind": "structure",
+            },
+            {
+                "id": "s2_path_manifest",
+                "label": "S2 path manifest",
+                "path": "mechanism/s2_path_manifest.json",
+                "kind": "file",
+            },
+        ],
+    )
+    _write(work_dir / "RESULT" / "mechanism" / "ts_guesses" / "ts_guess_001.xyz", _XYZ_TAG_TS)
+    _write(
+        work_dir / "RESULT" / "mechanism" / "intermediate_guesses" / "int_guess_002.xyz",
+        _XYZ_TAG_INT,
+    )
+    _write(work_dir / "RESULT" / "mechanism" / "s2_path_manifest.json", "{}")
+    store.create(
+        _make_record(
+            "20260823_001_PESsearch",
+            workflow="PESsearch",
+            work_dir=work_dir,
+            molecule_name="INT_P_energy_mt5g72",
+        )
+    )
+
+    entries = service.list_recent()
+    assert len(entries) == 2, "kind=file products must be excluded; both structures listed"
+    by_label = {entry["label"]: entry for entry in entries}
+    ts_entry = by_label["S2 candidate ts_guess_001 (TS)"]
+    assert ts_entry["tag"] == "TS"
+    assert ts_entry["candidate_id"] == "ts_guess_001"
+    assert ts_entry["workflow"] == "PESsearch"
+    assert ts_entry["source_id"] == (
+        "job_20260823_001_PESsearch:RESULT/mechanism/ts_guesses/ts_guess_001.xyz"
+    )
+    int_entry = by_label["S2 candidate int_guess_002 (INT)"]
+    assert int_entry["tag"] == "", "INT is the default and needs no explicit tag"
+    assert ts_entry["molecule_name"] == "INT_P_energy_mt5g72__ts_guess_001"
+    assert int_entry["molecule_name"] == "INT_P_energy_mt5g72__int_guess_002"
+
+
+def test_energy_manifest_prefers_global_minimum_over_conformer_ensemble(
+    service, store, tmp_path
+) -> None:
+    """An energy job contributes one reusable stationary structure, not two cards."""
+    work_dir = tmp_path / "uncategorized" / "energy_duplicate"
+    result_dir = work_dir / "RESULT"
+    _write_result_manifest(
+        result_dir,
+        [
+            {
+                "id": "all_conformers",
+                "label": "Ranked conformers (XYZ)",
+                "path": "structures/all_conformers.xyz",
+                "kind": "structure",
+            },
+            {
+                "id": "global_min",
+                "label": "Global minimum structure",
+                "path": "structures/INT_S_energy_mt5g72_global_min.xyz",
+                "kind": "structure",
+            },
+        ],
+        workflow="energy",
+    )
+    _write(result_dir / "structures" / "all_conformers.xyz", _XYZ_ETHANOL)
+    _write(result_dir / "structures" / "INT_S_energy_mt5g72_global_min.xyz", _XYZ_PLAIN)
+    store.create(
+        _make_record(
+            "energy_duplicate",
+            workflow="energy",
+            work_dir=work_dir,
+            molecule_name="INT_S_energy_mt5g72",
+        )
+    )
+
+    entries = service.list_recent()
+    assert len(entries) == 1
+    assert entries[0]["path"] == "RESULT/structures/INT_S_energy_mt5g72_global_min.xyz"
+
+
+def test_result_manifest_wins_over_legacy_summary(service, store, tmp_path) -> None:
+    work_dir = tmp_path / "uncategorized" / "job_mixed"
+    result_dir = work_dir / "RESULT"
+    _write_result_manifest(
+        result_dir,
+        [
+            {
+                "id": "batch_item_001",
+                "label": "opt_1 (TS, s3)",
+                "path": "structures/item_001__TAG_TS__optimized.xyz",
+                "kind": "structure",
+            }
+        ],
+        workflow="Lowconfirm",
+    )
+    # Same physical file also referenced by a legacy summary with a role —
+    # the result_manifest entry must win and dedupe.
+    _write_summary(
+        result_dir,
+        [
+            {
+                "label": "legacy label",
+                "path": "structures/item_001__TAG_TS__optimized.xyz",
+                "kind": "xyz",
+                "role": "final_stable_structure",
+            }
+        ],
+        workflow="Lowconfirm",
+    )
+    _write(work_dir / "RESULT" / "structures" / "item_001__TAG_TS__optimized.xyz", _XYZ_TAG_TS)
+    store.create(
+        _make_record("job_mixed", workflow="Lowconfirm", work_dir=work_dir)
+    )
+
+    entries = service.list_recent()
+    assert len(entries) == 1, "identical product referenced twice must dedupe"
+    assert entries[0]["label"] == "opt_1 (TS, s3)"
+
+
+def test_duplicate_candidate_id_is_listed_once(service, store, tmp_path) -> None:
+    """Repeated manifest pointers must not create duplicate candidate rows."""
+    work_dir = tmp_path / "uncategorized" / "job_duplicate_candidate"
+    result_dir = work_dir / "RESULT"
+    _write_result_manifest(
+        result_dir,
+        [
+            {
+                "id": "s2_candidate_int_guess_002_a",
+                "label": "candidate A",
+                "path": "structures/a.xyz",
+                "kind": "structure",
+            },
+            {
+                "id": "s2_candidate_int_guess_002_b",
+                "label": "candidate B",
+                "path": "structures/b.xyz",
+                "kind": "structure",
+            },
+        ],
+    )
+    _write(result_dir / "structures" / "a.xyz", _XYZ_TAG_INT)
+    _write(result_dir / "structures" / "b.xyz", _XYZ_TAG_INT)
+    store.create(
+        _make_record(
+            "job_duplicate_candidate", workflow="PESsearch", work_dir=work_dir
+        )
+    )
+
+    entries = service.list_recent()
+    assert len(entries) == 1
+    assert entries[0]["candidate_id"] == "int_guess_002"
+
+
+def test_remote_probe_reads_result_manifest(store, tmp_path) -> None:
+    _remote_record(store, tmp_path)
+    files = dict(_remote_files())
+    files["RESULT/result_manifest.json"] = json.dumps(
+        {
+            "version": 2,
+            "workflow": "PESsearch",
+            "status": "completed",
+            "products": [
+                {
+                    "id": "s2_candidate_ts_001",
+                    "label": "S2 candidate ts_001 (TS)",
+                    "path": "mechanism/ts_guesses/ts_guess_001.xyz",
+                    "kind": "structure",
+                }
+            ],
+        }
+    ).encode()
+    files["RESULT/mechanism/ts_guesses/ts_guess_001.xyz"] = _XYZ_TAG_TS.encode()
+    service = StructureSourceService(
+        store, tmp_path, fetcher=FakeFetcher(files)
+    )
+    entries = service.list_recent()
+    assert any(entry["remote"] and entry["tag"] == "TS" for entry in entries)

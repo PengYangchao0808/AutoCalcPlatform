@@ -40,6 +40,9 @@ _MANIFEST_SIGNATURES: dict[str, tuple[str, str]] = {
     S3_MANIFEST_KIND: ("s3_lowconfirm_v1", "Lowconfirm"),
 }
 
+# v2 manifests (bond_length_scan mode) are valid S2 handoff inputs (§12.3).
+_S2_ACCEPTED_SCHEMAS: frozenset[str] = frozenset({"s2_path_v1", "s2_path_v2"})
+
 HANDOFF_PAYLOAD_DIRS: tuple[str, ...] = (
     "conformers",
     "refinement",
@@ -52,6 +55,12 @@ HANDOFF_PAYLOAD_DIRS: tuple[str, ...] = (
     "single_points",
     "thermo",
 )
+
+# Editable-candidate artifacts (s2_candidate_v1): the sibling candidate
+# manifest lives in RESULT/mechanism/, the materialized XYZ one level up in
+# RESULT/structures/s2_candidates/ (geometry refs are RESULT-relative).
+S2_CANDIDATE_MANIFEST_NAME = "s2_candidate_manifest.json"
+S2_CANDIDATE_GEOMETRY_DIR = ("structures", "s2_candidates")
 
 JOBS_DB_FILENAME = "acp_jobs.db"
 
@@ -168,7 +177,8 @@ def validate_stage_artifact(
         raise ArtifactRefError(f"Source artifact is not readable JSON: {candidate}") from exc
     if not isinstance(payload, dict):
         raise ArtifactRefError(f"Source artifact is not a JSON object: {candidate}")
-    schema_ok = str(payload.get("schema_version") or "") == signature[0]
+    accepted_schemas = _S2_ACCEPTED_SCHEMAS if kind == S2_MANIFEST_KIND else {signature[0]}
+    schema_ok = str(payload.get("schema_version") or "") in accepted_schemas
     workflow_ok = str(payload.get("workflow") or "") == signature[1]
     if not (schema_ok and workflow_ok):
         raise ArtifactRefError(
@@ -185,6 +195,11 @@ def copy_handoff_payload(manifest_path: Path, target_dir: Path) -> Path:
     Geometry references inside stage manifests are relative to the
     manifest's directory (§8); copying the known payload dirs preserves
     that structure so the downstream runner resolves them unchanged.
+    S2 handoffs additionally ship the sibling ``s2_candidate_manifest.json``
+    and the materialized candidate structures
+    (``RESULT/structures/s2_candidates/`` → ``target/structures/``) so the
+    batch intake can load the user-confirmed candidates self-contained
+    (batch plan §5).
     Returns the copied manifest path.
     """
     source_dir = manifest_path.parent
@@ -195,6 +210,9 @@ def copy_handoff_payload(manifest_path: Path, target_dir: Path) -> Path:
     for extra in ("ensemble.xyz", "ensemble.csv", "path_profile.json"):
         if (source_dir / extra).is_file():
             names.append(extra)
+    candidate_manifest = source_dir / "s2_candidate_manifest.json"
+    if candidate_manifest.is_file():
+        names.append(candidate_manifest.name)
     copy_tree_items(source_dir, target_dir, names=names)
     copied = target_dir / manifest_path.name
     if not copied.is_file():
@@ -202,13 +220,80 @@ def copy_handoff_payload(manifest_path: Path, target_dir: Path) -> Path:
         # against a partial tree copy.
         copied.parent.mkdir(parents=True, exist_ok=True)
         copied.write_bytes(manifest_path.read_bytes())
+    _copy_s2_candidate_structures(source_dir, target_dir)
+    _copy_v2_scan_frames(manifest_path, source_dir, target_dir)
     return copied
+
+
+def _copy_s2_candidate_structures(source_dir: Path, target_dir: Path) -> None:
+    """Stage ``RESULT/structures/s2_candidates`` next to a copied manifest.
+
+    The candidate manifest references geometries as
+    ``structures/s2_candidates/<id>.xyz`` relative to the RESULT root; the
+    manifest itself is copied into ``<target>/`` so the structures land at
+    ``<target>/structures/s2_candidates/`` and the
+    ``manifest.parent / ref`` probe resolves unchanged.
+    """
+    structures_root = (source_dir / ".." / "structures").resolve()
+    candidates_dir = structures_root / "s2_candidates"
+    if not candidates_dir.is_dir():
+        return
+    names = sorted(item.name for item in candidates_dir.iterdir() if item.is_file())
+    copy_tree_items(candidates_dir, target_dir / "structures" / "s2_candidates", names=names)
+
+
+def _copy_s2_candidates(source_dir: Path, target_dir: Path) -> None:
+    """Stage the editable-candidate artifacts next to the copied manifest.
+
+    ``s2_candidate_manifest.json`` sits beside the S2 manifest; the
+    materialized candidate XYZ sit under ``RESULT/structures/s2_candidates``
+    and are copied into the same RESULT-relative position inside the
+    handoff target so downstream geometry refs resolve unchanged.
+    """
+    sibling = source_dir / S2_CANDIDATE_MANIFEST_NAME
+    if sibling.is_file():
+        target_dir.mkdir(parents=True, exist_ok=True)
+        (target_dir / S2_CANDIDATE_MANIFEST_NAME).write_bytes(sibling.read_bytes())
+    geometry_source = source_dir.parent.joinpath(*S2_CANDIDATE_GEOMETRY_DIR)
+    if geometry_source.is_dir():
+        geometry_names = sorted(item.name for item in geometry_source.iterdir() if item.is_file())
+        copy_tree_items(
+            geometry_source,
+            target_dir.joinpath(*S2_CANDIDATE_GEOMETRY_DIR),
+            names=geometry_names,
+        )
+
+
+def _copy_v2_scan_frames(manifest_path: Path, source_dir: Path, target_dir: Path) -> None:
+    """Flatten a v2 manifest's ``scan_frames`` dir next to the copied manifest.
+
+    v2 geometry refs (``scan_frames/frame_NNN.xyz``) are relative to the
+    scan dir (``WORK/02_SEARCH/s2_bond_scan_001``), which lives outside
+    ``RESULT/mechanism/``. Copying the frames into the handoff target makes
+    the refs resolve identically for downstream S3 stages (§12.3).
+    """
+    try:
+        payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return
+    if not isinstance(payload, dict) or payload.get("schema_version") != "s2_path_v2":
+        return
+    scan_dir_rel = str((payload.get("scan") or {}).get("scan_dir") or "")
+    if not scan_dir_rel:
+        return
+    job_root = source_dir.parent.parent
+    frames_source = (job_root / scan_dir_rel / "scan_frames").resolve()
+    if not frames_source.is_dir():
+        return
+    names = sorted(item.name for item in frames_source.iterdir() if item.is_file())
+    copy_tree_items(frames_source, target_dir / "scan_frames", names=names)
 
 
 __all__ = [
     "HANDOFF_PAYLOAD_DIRS",
     "ArtifactRefError",
     "S1_MANIFEST_KIND",
+    "S2_CANDIDATE_MANIFEST_NAME",
     "S2_MANIFEST_KIND",
     "S3_MANIFEST_KIND",
     "STAGE_SOURCE_KINDS",

@@ -1,14 +1,19 @@
 """Tests for the ACP API v1 surface."""
 
+# pyright: reportMissingTypeArgument=false, reportAny=false, reportUnknownArgumentType=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownParameterType=false, reportUnusedCallResult=false, reportFunctionMemberAccess=false, reportAttributeAccessIssue=false, reportArgumentType=false, reportUnusedParameter=false, reportImplicitStringConcatenation=false, reportIndexIssue=false, reportOperatorIssue=false
 from __future__ import annotations
 
+import json
 import time
 from collections import Counter
 from collections.abc import Generator
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+
+from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 
 
 def _parse_xyz_element_counts(xyz_text: str) -> dict[str, int]:
@@ -249,6 +254,106 @@ def test_v1_job_clone_to_project(client: TestClient) -> None:
 
     cloned_record = _wait_for_terminal_job(client, new_job_id)
     assert cloned_record["status"] == "completed"
+
+
+def test_v1_job_rerun_requeues_original_task(client: TestClient) -> None:
+    created = _submit_fake_job(client, name="in-place-rerun")
+    job_id = str(created["job_id"])
+    first = _wait_for_terminal_job(client, job_id)
+    work_dir = str(first["work_dir"])
+
+    rerun = client.post(f"/api/v1/jobs/{job_id}/rerun")
+    assert rerun.status_code == 200
+    body = rerun.json()
+    assert body["id"] == job_id
+    assert body["work_dir"] == work_dir
+    assert body["status"] in {"queued", "starting", "completed"}
+
+    second = _wait_for_terminal_job(client, job_id)
+    assert second["id"] == job_id
+    assert second["work_dir"] == work_dir
+    assert second["result"]["attempts"] == 2
+
+    jobs = client.get("/api/v1/jobs?limit=100")
+    assert jobs.status_code == 200
+    assert [job["id"] for job in jobs.json()["jobs"]].count(job_id) == 1
+
+
+def test_v1_energy_graph_reads_legacy_result_files(client: TestClient) -> None:
+    created = _submit_fake_job(client, name="legacy-energy-graph")
+    job_id = str(created["job_id"])
+    record_data = _wait_for_terminal_job(client, job_id)
+    manager = client.app.state.job_manager
+    record = manager.get(job_id)
+    assert record is not None
+    record.spec = replace(record.spec, workflow="energy")
+    manager.store.update(record)
+
+    energy_dir = Path(record_data["work_dir"]) / "RESULT" / "energies"
+    energy_dir.mkdir(parents=True)
+    (energy_dir / "ensemble_thermo.json").write_text(
+        json.dumps(
+            {
+                "conformers": [
+                    {
+                        "conf_id": "CONF1",
+                        "gibbs_hartree": -10.0,
+                        "delta_gibbs_kcal_mol": 0.0,
+                        "weight": 1.0,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    (energy_dir / "conformer_thermo.csv").write_text(
+        "index,rank,energy_hartree,gibbs_correction,gibbs_hartree,h_correction,u_correction,"
+        "s_total,g_conc,weight,source\n"
+        "0,1,-10.1,0,-10.0,0,0,0,0,1.0,CONF1\n"
+        "TOTAL,,,,,,,,,,ensemble_total\n",
+        encoding="utf-8",
+    )
+
+    response = client.get(f"/api/v1/jobs/{job_id}/energy-graph")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["view_type"] == "conformer"
+    assert body["nodes"]
+
+
+def test_v1_energy_graph_unsupported_workflow_is_explicit(client: TestClient) -> None:
+    created = _submit_fake_job(client, name="unsupported-energy-graph")
+
+    response = client.get(f"/api/v1/jobs/{created['job_id']}/energy-graph")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["view_type"] == "unsupported"
+    assert body["status"] == "unavailable"
+    assert body["metadata"]["reason"] == "workflow_has_no_energy_graph"
+
+
+def test_v1_job_rerun_running_job_returns_conflict(client: TestClient) -> None:
+    manager = client.app.state.job_manager
+    work_dir = manager.run_root / "running-rerun"
+    work_dir.mkdir(parents=True)
+    record = JobRecord(
+        id="running-rerun",
+        spec=JobSpec(
+            workflow="fake",
+            name="running-rerun",
+            project_id=manager.default_project_id,
+        ),
+        status=JobStatus.RUNNING,
+        work_dir=str(work_dir),
+        project_id=manager.default_project_id,
+    )
+    manager.store.create(record)
+
+    response = client.post("/api/v1/jobs/running-rerun/rerun")
+
+    assert response.status_code == 409
 
 
 def test_v1_job_delete_with_data(client: TestClient) -> None:
@@ -596,3 +701,158 @@ def test_v1_create_job_without_v2_fields_defaults_naming(client: TestClient) -> 
     # job_id stays the timestamped DB identity — it never appears in the path.
     assert created["job_id"].startswith("20")
     assert "legacyjob" in created["job_id"]
+
+
+# ---------------------------------------------------------------------------
+# Batch structure submission for stage workflows (batch plan §3)
+# ---------------------------------------------------------------------------
+
+
+def _submit_lowconfirm_batch(
+    client: TestClient, items: list[dict[str, object]]
+) -> dict[str, object]:
+    response = client.post(
+        "/api/v1/jobs",
+        json={
+            "workflow": "Lowconfirm",
+            "name": "low_batch",
+            "input": {
+                "source_type": "batch_structures",
+                "charge": 0,
+                "multiplicity": 1,
+                "items": items,
+            },
+            "method": {"no_irc": True},
+            "resources": {"nproc": 2, "mem": "4GB"},
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
+def test_v1_batch_structures_inline_xyz_submission(client: TestClient) -> None:
+    job = _submit_lowconfirm_batch(
+        client,
+        [
+            {
+                "name": "ts_1",
+                "tag": "TS",
+                "xyz": "3\nTAG: TS | candidate_id=ts_1 | source=test\n"
+                "O 0 0 0\nH 0.9 0 0\nH -0.3 0.9 0\n",
+                "charge": 0,
+                "multiplicity": 1,
+                "include": True,
+            },
+            {
+                "name": "int_1",
+                "tag": "INT",
+                "xyz": "3\nTAG: INT\nO 0 0 0\nH 0.9 0 0\nH -0.3 0.9 0\n",
+                "include": True,
+            },
+            {
+                "name": "dropped",
+                "xyz": "3\nplain\nO 0 0 0\nH 0.9 0 0\nH -0.3 0.9 0\n",
+                "include": False,
+            },
+        ],
+    )
+    assert job["status"] == "queued" or job["status"] == "pending"
+
+    record = client.app.state.job_manager.get(job["job_id"])
+    assert record is not None
+    batch_request = record.spec.input.get("batch_request")
+    assert batch_request is not None
+    assert batch_request["schema_version"] == "batch_structures_v1"
+    items = batch_request["items"]
+    assert len(items) == 2, "include=false item must be dropped"
+    assert items[0]["tag"] == "TS"
+    assert items[1]["tag"] == "INT"
+    assert items[0]["xyz"]
+    assert record.spec.method.get("no_irc") is True
+
+
+def test_v1_batch_structures_source_id_resolution(
+    client: TestClient, tmp_path: Path
+) -> None:
+    # Complete an upstream PESsearch job whose result list exposes a candidate.
+    source_dir = tmp_path / "uncategorized" / "20260823_001_PESsearch"
+    result_dir = source_dir / "RESULT"
+    (result_dir / "mechanism" / "ts_guesses").mkdir(parents=True, exist_ok=True)
+    xyz = (
+        "3\nTAG: TS | candidate_id=ts_guess_001 | source=PESsearch\n"
+        "O 0 0 0\nH 0.9 0 0\nH -0.3 0.9 0\n"
+    )
+    (result_dir / "mechanism" / "ts_guesses" / "ts_guess_001.xyz").write_text(xyz, encoding="utf-8")
+    (result_dir / "result_manifest.json").write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "workflow": "PESsearch",
+                "status": "completed",
+                "products": [
+                    {
+                        "id": "s2_candidate_ts_guess_001",
+                        "label": "S2 candidate ts_guess_001 (TS)",
+                        "path": "mechanism/ts_guesses/ts_guess_001.xyz",
+                        "kind": "structure",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    source_record = JobRecord(
+        id="20260823_001_PESsearch",
+        spec=JobSpec(workflow="PESsearch", name="pes", input={"source_type": "stage_artifact"}),
+        status=JobStatus.COMPLETED,
+        work_dir=str(source_dir),
+        project_id="uncategorized",
+    )
+    client.app.state.job_manager.store.create(source_record)
+
+    job = _submit_lowconfirm_batch(
+        client,
+        [
+            {
+                "name": "ts_1",
+                "source_id": (
+                    "job_20260823_001_PESsearch:"
+                    "RESULT/mechanism/ts_guesses/ts_guess_001.xyz"
+                ),
+                "tag": "TS",
+            }
+        ],
+    )
+    record = client.app.state.job_manager.get(job["job_id"])
+    assert record is not None
+    items = record.spec.input["batch_request"]["items"]
+    assert len(items) == 1
+    assert items[0]["source_type"] == "job_artifact"
+    assert items[0]["source_ref"] == (
+        "job_20260823_001_PESsearch:RESULT/mechanism/ts_guesses/ts_guess_001.xyz"
+    )
+    assert items[0]["xyz"], "source_id must be resolved to inline xyz server-side"
+
+
+def test_v1_batch_structures_requires_nonempty_items(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/jobs",
+        json={
+            "workflow": "Highconfirm",
+            "input": {"source_type": "batch_structures", "items": []},
+            "method": {},
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_v1_batch_structures_rejects_bad_item(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/jobs",
+        json={
+            "workflow": "Lowconfirm",
+            "input": {"source_type": "batch_structures", "items": [{"name": "x"}]},
+            "method": {},
+        },
+    )
+    assert response.status_code == 422

@@ -59,9 +59,11 @@ acp/
 | Confsearch manifest | `confsearch/manifest.py` | `confsearch_manifest.json` handoff artifact (S1) |
 | Confsearch protocols | `confsearch/protocols/` | xtb-crest / xtb-md / censo-crest / xtbmd-censo protocol implementations |
 | PESsearch (S2) | `mechanism/stages/pes_search.py` | Reaction path search + TS/intermediate guesses; output `s2_path_manifest.json` |
-| Lowconfirm (S3) | `mechanism/stages/low_confirm.py` | Coarse Opt/TS + frequency + preliminary IRC; output `s3_lowconfirm_manifest.json` |
-| Highconfirm (S4) | `mechanism/stages/high_confirm.py` | High-fidelity Opt/TS + freq + SP + thermochemistry; output `s4_highconfirm_manifest.json` |
-| Stage handoff | `mechanism/stages/handoff.py` | Artifact transfer between stages |
+| Lowconfirm (S3) | `mechanism/stages/low_confirm.py` | Coarse Opt/TS + frequency + preliminary IRC; output `s3_lowconfirm_manifest.json` — routed through BatchConfirmEngine |
+| Highconfirm (S4) | `mechanism/stages/high_confirm.py` | High-fidelity Opt/TS + freq + SP + thermochemistry; output `s4_highconfirm_manifest.json` — routed through BatchConfirmEngine |
+| Batch S3/S4 engine | `mechanism/batch_confirm.py` | `BatchConfirmEngine` — one engine, two profiles (s3/s4); per-item dirs `WORK/03_OPT/batch/<item_id>/`, resume/skip-completed via cache key, `batch_calculation_manifest.json`, structures → `RESULT/structures/<item_id>__TAG_<TS|INT>__optimized.xyz`, result_manifest/result_summary registration |
+| Batch input models | `mechanism/batch_models.py` | TAG parsing (`TAG: TS|INT | candidate_id=...`), `BatchStructureItem`/`BatchCalculationItem`/`BatchCalculationManifest`, loaders (s2 candidate manifest / multi-frame XYZ / batch_structures_v1 request), user-override priority. **NOTE: `batch_confirm` imports `stages.confirm`, so it must NOT be re-exported from `stages/__init__.py`** (circular import) |
+| Stage handoff | `mechanism/stages/handoff.py` | Artifact transfer between stages; also stages `s2_candidate_manifest.json` + `RESULT/structures/s2_candidates/` |
 | Mechanism layout | `mechanism/layout.py` | `resolve_study_layout` / `find_study_layout` / `find_reaction_json` (path normalization) |
 | Result manifest (read) | `results/manifest.py` | Unified `result_manifest.json` reader |
 | Result manifest (write) | `storage/manifest.py` | Unified v2 `result_manifest.json` writer (design doc §8) |

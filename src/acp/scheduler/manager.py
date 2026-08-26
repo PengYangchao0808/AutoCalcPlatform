@@ -450,39 +450,128 @@ class JobManager:
         return self.submit(new_spec)
 
     def rerun_job(self, job_id: str, project_id: str | None = None) -> JobRecord | None:
-        """Enhanced clone for a fresh full re-run of the same spec.
+        """Re-run a terminal job in place.
 
-        The canonical task name is stable across generations; the fresh
-        directory receives the normal ``__02``/``__03`` collision suffix.
-        The project defaults to the source job's own project, and
-        ``output_dir`` is cleared so the run lands in a fresh work_dir
-        (avoids the ``simple`` workflow's ``_1`` sibling redirect).
+        Rerun is deliberately different from :meth:`clone_job`: it keeps the
+        original database row, task directory, and task identity, then
+        queues a new execution attempt against that same task.  A failed or
+        cancelled subprocess cannot retain its OS PID, so the scheduler may
+        start a new child process, but it must never allocate a new
+        ``job_id``/``work_dir`` pair.
 
-        Args:
-            job_id: Source job identifier.
-            project_id: Optional target project; defaults to the source
-                job's project.
-
-        Returns:
-            The newly submitted job record, or ``None`` if the source job
-            does not exist.
-
-        Raises:
-            ValueError: If the target project does not exist.
+        ``project_id`` is retained as a backwards-compatible request
+        parameter.  It may only repeat the task's current project; moving or
+        copying a task remains the responsibility of ``move``/``clone``.
         """
         record = self.store.get(job_id)
         if record is None:
             return None
-        target_project = project_id or record.project_id or record.spec.project_id
-        if target_project is None or self._projects.get_project(target_project) is None:
-            raise ValueError(f"Project not found: {target_project}")
 
-        new_spec = replace(
-            record.spec,
-            project_id=target_project,
-            output_dir=None,
+        with self._lock:
+            # Re-read under the manager lock so two rapid clicks cannot both
+            # act on the same stale terminal snapshot.
+            record = self.store.get(job_id)
+            if record is None:
+                return None
+            current_project = record.project_id or record.spec.project_id
+            if project_id is not None and project_id != current_project:
+                raise ValueError("原地重跑不能切换项目，请使用复制到项目")
+            if not record.status.is_terminal:
+                raise ValueError(
+                    f"rerun requires a terminal status; got {record.status.value}"
+                )
+            if self._has_live_process(job_id):
+                raise ValueError(
+                    f"job {job_id} still has a live process tracked by the runner"
+                )
+            if job_id in self._submission_jobs:
+                raise ValueError(f"job {job_id} is already being submitted")
+
+            attempts = int((record.result or {}).get("attempts") or 1) + 1
+            old_status = record.status.value
+            self._archive_attempt(record, attempts)
+
+            result = dict(record.result or {})
+            history = result.get("attempt_history")
+            if not isinstance(history, list):
+                history = []
+            history.append(
+                {
+                    "attempt": attempts - 1,
+                    "mode": "rerun",
+                    "status": old_status,
+                    "completed_at": record.completed_at,
+                    "exit_code": record.exit_code,
+                    "error": record.error,
+                }
+            )
+            # Do not carry a previous workflow state, remote submission, or
+            # result payload into a full rerun.  Keep only scheduler history.
+            record.result = {
+                "attempts": attempts,
+                "attempt_history": history,
+            }
+            record.status = JobStatus.QUEUED
+            record.started_at = None
+            record.completed_at = None
+            record.current_stage = None
+            record.progress = None
+            record.error = None
+            record.pid = None
+            record.exit_code = None
+            record.remote_job_id = None
+            record.touch()
+            self._cancel_events[job_id] = threading.Event()
+            self.store.update(record)
+
+        self._stage_task_observer.reset_job(job_id)
+        self._sync_task_status(record)
+        self._write_job_json(record)
+        self._event_log(record).append(
+            "job.rerun",
+            job_id=job_id,
+            rerun_from=old_status,
+            attempts=attempts,
+            work_dir=record.work_dir,
         )
-        return self.submit(new_spec, group_id=record.group_id or record.id)
+        self._start_submission_thread(job_id, f"acp-rerun-{job_id}")
+        return record
+
+    def _archive_attempt(self, record: JobRecord, attempt: int) -> None:
+        """Move prior run material into a recoverable per-attempt archive.
+
+        The task identity files and event log stay at the task root.  All
+        workflow-generated content is moved as a unit so a full rerun starts
+        with a clean ``WORK``/``RESULT`` tree without deleting diagnostic
+        data.  The archive is intentionally inside the task directory and
+        therefore remains available to the existing file browser.
+        """
+        work_dir = Path(record.work_dir)
+        if not work_dir.is_dir():
+            return
+        archive_root = work_dir / "_attempts" / f"attempt_{attempt - 1:03d}"
+        archive_root.mkdir(parents=True, exist_ok=True)
+        stable = {
+            "input.xyz",
+            "input_source.json",
+            "task.json",
+            "job.json",
+            "events.jsonl",
+            "_attempts",
+        }
+        for child in list(work_dir.iterdir()):
+            if child.name in stable:
+                continue
+            destination = archive_root / child.name
+            try:
+                shutil.move(str(child), str(destination))
+            except OSError:
+                logger.warning(
+                    "Could not archive %s before rerun of %s",
+                    child,
+                    record.id,
+                    exc_info=True,
+                )
 
     def delete_job(self, job_id: str, delete_data: bool = False) -> bool:
         """Delete a job record and optionally its local and remote data.
@@ -992,40 +1081,50 @@ class JobManager:
             ValueError: If the status is not ``FAILED``/``CANCELLED``, a
                 live process is still tracked, or the workflow cannot resume.
         """
-        record = self.store.get(job_id)
-        if record is None:
-            raise KeyError(f"Unknown job {job_id!r}")
-        if record.status not in (JobStatus.FAILED, JobStatus.CANCELLED):
-            raise ValueError(
-                f"continue_job requires FAILED or CANCELLED status; got {record.status.value}"
-            )
-        if self._has_live_process(job_id):
-            raise ValueError(
-                f"job {job_id} still has a live process tracked by the runner; "
-                "refusing to re-enter (possible zombie)"
-            )
-
-        workflow = record.spec.workflow
-        if workflow == "mechanism":
-            pass
-        elif workflow == "xtbmd_censo_energy":
-            record.spec = replace(record.spec, method={**record.spec.method, "resume": True})
-        else:
-            raise ValueError("该工作流不支持断点续算，请使用重算 (rerun)")
-
-        old_status = record.status.value
-        result = dict(record.result or {})
-        result["attempts"] = int(result.get("attempts") or 1) + 1
-        result["continued_from"] = old_status
-        record.result = result
-        record.status = JobStatus.QUEUED
-        record.error = None
-        record.exit_code = None
-        record.completed_at = None
-        record.touch()
-        self.store.update(record)
-
         with self._lock:
+            # Re-read under the manager lock for the same double-submit guard
+            # used by in-place rerun.
+            record = self.store.get(job_id)
+            if record is None:
+                raise KeyError(f"Unknown job {job_id!r}")
+            if record.status not in (JobStatus.FAILED, JobStatus.CANCELLED):
+                raise ValueError(
+                    "continue_job requires FAILED or CANCELLED status; "
+                    f"got {record.status.value}"
+                )
+            if self._has_live_process(job_id):
+                raise ValueError(
+                    f"job {job_id} still has a live process tracked by the runner; "
+                    "refusing to re-enter (possible zombie)"
+                )
+            if job_id in self._submission_jobs:
+                raise ValueError(f"job {job_id} is already being submitted")
+            workflow = record.spec.workflow
+            if workflow == "mechanism":
+                pass
+            elif workflow == "xtbmd_censo_energy":
+                record.spec = replace(
+                    record.spec, method={**record.spec.method, "resume": True}
+                )
+            else:
+                raise ValueError("该工作流不支持断点续算，请使用重算 (rerun)")
+
+            old_status = record.status.value
+            result = dict(record.result or {})
+            result["attempts"] = int(result.get("attempts") or 1) + 1
+            result["continued_from"] = old_status
+            record.result = result
+            record.status = JobStatus.QUEUED
+            record.error = None
+            record.started_at = None
+            record.exit_code = None
+            record.pid = None
+            record.remote_job_id = None
+            record.completed_at = None
+            for key in ("lsf_job_id", "node", "remote_dir", "command_line"):
+                result.pop(key, None)
+            record.touch()
+            self.store.update(record)
             self._cancel_events[job_id] = threading.Event()
         self._write_job_json(record)
         self._event_log(record).append(

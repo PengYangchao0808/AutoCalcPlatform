@@ -469,3 +469,140 @@ def test_irc_midpoint_reseed_changes_direction_and_skips_missing_hessian(
     assert "Direction Down" in input_text
     assert "InitHess Read" not in input_text
     assert "Unused ORCA irc kwargs" in caplog.text
+
+
+# ── relaxed scan output parsing (banner/geometry regression) ────────────
+
+
+def _scan_coord_block(c_x: float) -> str:
+    return (
+        "CARTESIAN COORDINATES (ANGSTROEM)\n"
+        "---------------------------------\n"
+        "H      0.0000000000    0.0000000000    0.0000000000\n"
+        f"C      {c_x:.7f}    0.0000000000    0.0000000000\n"
+        "H      0.0000000000    1.0000000000    0.0000000000\n"
+        "---------------------------------\n"
+    )
+
+
+def _decorated_scan_output() -> str:
+    targets = [1.5, 2.45, 3.4]
+    energies = [-100.0, -99.95, -99.9]
+    parts: list[str] = []
+    for step, (target, _energy) in enumerate(zip(targets, energies), start=1):
+        parts.append(
+            f"         *               RELAXED SURFACE SCAN STEP {step:>3}               *"
+        )
+        parts.append(_scan_coord_block(target - 0.35))
+        parts.append(_scan_coord_block(target))
+    parts.append("The Calculated Surface using the 'Actual Energy'")
+    parts.append("-----------------------------------------------------")
+    for index, (target, energy) in enumerate(zip(targets, energies), start=1):
+        parts.append(f"  {index}  {target:.8f}  {energy:.8f}")
+    parts.append("")
+    parts.append("The Calculated Surface using the SCF energy")
+    for index, target in enumerate(targets, start=1):
+        parts.append(f"  {index}  {target:.8f}  0.00000000")
+    parts.append(_scan_coord_block(9.99))
+    parts.append("ORCA TERMINATED NORMALLY")
+    return "\n".join(parts) + "\n"
+
+
+def test_relaxed_scan_parses_decorated_banners_and_converged_cycles(
+    sample_config: dict[str, object],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    interface = ORCAInterface(sample_config)
+
+    def _fake_run(_input_file: Path, output_file: Path) -> bool:
+        _ = output_file.write_text(_decorated_scan_output(), encoding="utf-8")
+        return True
+
+    monkeypatch.setattr(interface, "_run_orca", _fake_run)
+
+    result = interface.relaxed_scan(
+        TS_COORDINATES,
+        TS_SYMBOLS,
+        scan_coordinate=CoordinateSpec(id="rc1", kind="distance", atoms=(0, 1), start=1.5, end=3.4),
+        points=3,
+        output_dir=tmp_path,
+        output_name="scan_case",
+    )
+
+    assert result.success is True
+    assert len(result.points) == 3
+    assert result.energies() == pytest.approx([-100.0, -99.95, -99.9])
+    for point, expected_x in zip(result.points, [1.5, 2.45, 3.4]):
+        assert point.coordinates is not None
+        assert point.coordinates[1][0] == pytest.approx(expected_x)
+    assert result.points[2].coordinates is not None
+    assert result.points[2].coordinates[1][0] != pytest.approx(9.99)
+    regenerated = (tmp_path / "scan_frames" / "frame_002.xyz").read_text(encoding="utf-8")
+    assert "9.99" not in regenerated
+
+
+def test_relaxed_scan_prefers_allxyz_trajectory(
+    sample_config: dict[str, object],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    interface = ORCAInterface(sample_config)
+
+    allxyz_targets = [1.55, 2.50, 3.45]
+    allxyz_frames = []
+    for target, energy in zip(allxyz_targets, [-100.0, -99.95, -99.9]):
+        allxyz_frames.append(
+            "3\n"
+            f"Coordinates from ORCA-job scan Relaxed Surface Scan Step E {energy:.6f}\n"
+            "H      0.000000      0.000000      0.000000\n"
+            f"C      {target:.6f}      0.000000      0.000000\n"
+            "H      0.000000      1.000000      0.000000\n"
+        )
+
+    def _fake_run(_input_file: Path, output_file: Path) -> bool:
+        _ = output_file.write_text(_decorated_scan_output(), encoding="utf-8")
+        (tmp_path / "scan_case.allxyz").write_text("".join(allxyz_frames), encoding="utf-8")
+        return True
+
+    monkeypatch.setattr(interface, "_run_orca", _fake_run)
+
+    result = interface.relaxed_scan(
+        TS_COORDINATES,
+        TS_SYMBOLS,
+        scan_coordinate=CoordinateSpec(id="rc1", kind="distance", atoms=(0, 1), start=1.5, end=3.4),
+        points=3,
+        output_dir=tmp_path,
+        output_name="scan_case",
+    )
+
+    assert result.success is True
+    for point, expected_x in zip(result.points, allxyz_targets):
+        assert point.coordinates is not None
+        assert point.coordinates[1][0] == pytest.approx(expected_x)
+
+
+def test_parse_relaxed_scan_output_reparses_existing_log(
+    sample_config: dict[str, object],
+    tmp_path: Path,
+) -> None:
+    interface = ORCAInterface(sample_config)
+    output_file = tmp_path / "scan_case.out"
+    _ = output_file.write_text(_decorated_scan_output(), encoding="utf-8")
+
+    result = interface.parse_relaxed_scan_output(
+        output_file,
+        scan_coordinate=CoordinateSpec(id="rc1", kind="distance", atoms=(0, 1), start=1.5, end=3.4),
+        points=3,
+        output_dir=tmp_path,
+        output_name="scan_case",
+    )
+
+    assert result.success is True
+    assert result.message == ""
+    assert result.energies() == pytest.approx([-100.0, -99.95, -99.9])
+    frame_001 = tmp_path / "scan_frames" / "frame_001.xyz"
+    assert frame_001.is_file()
+    frame_lines = frame_001.read_text(encoding="utf-8").splitlines()
+    assert frame_lines[3].startswith("C")
+    assert float(frame_lines[3].split()[1]) == pytest.approx(2.45)

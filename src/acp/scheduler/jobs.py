@@ -17,7 +17,7 @@ from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from acp.mechanism.layout import resolve_study_layout
@@ -110,6 +110,67 @@ SUPPORTED_WORKFLOWS: tuple[str, ...] = _derive_supported_workflows()
 
 _CENSO_PRESETS: tuple[str, ...] = ("censo-light", "censo-default", "censo-zero")
 MECHANISM_CONFIG_FILENAME = "mechanism_config.json"
+SCAN_CONFIG_FILENAME = "scan_config.json"
+BATCH_CONFIG_FILENAME = "batch_config.json"
+
+
+def stage_batch_request(spec: JobSpec) -> dict[str, Any] | None:
+    """Return a Lowconfirm/Highconfirm job's batch-structure request (or None).
+
+    The API stores the normalized batch input under
+    ``input["batch_request"]`` (batch plan §3); the runner stages it as
+    ``batch_config.json`` next to the job root, mirroring the bond-scan
+    ``scan_config.json`` contract.
+    """
+    if spec.workflow not in ("Lowconfirm", "Highconfirm"):
+        return None
+    batch_request = spec.input.get("batch_request") or spec.method.get("batch_request")
+    return batch_request if isinstance(batch_request, dict) and batch_request else None
+
+
+def prepare_stage_batch_config(
+    spec: JobSpec,
+    work_dir: Path,
+    *,
+    remote: bool = False,
+) -> Path | None:
+    """Stage a batch-structure job's ``batch_config.json`` (E7 parity helper).
+
+    S2-candidate manifest entries are handoff-copied under
+    ``WORK/01_PREPARE/handoff/`` (manifest + candidate structures +
+    referenced payload dirs) so the job is self-contained; their paths are
+    rewritten to the staged copies — absolute for local execution, remote
+    job-dir-relative POSIX paths for remote execution.
+    """
+    batch_request = stage_batch_request(spec)
+    if batch_request is None:
+        return None
+    from acp.mechanism.stages.handoff import copy_handoff_payload
+
+    payload = dict(batch_request)
+    staged_items: list[dict[str, Any]] = []
+    handoff_dir = work_dir / "WORK" / "01_PREPARE" / "handoff"
+    for entry in payload.get("items") or []:
+        if not isinstance(entry, dict):
+            continue
+        manifest_ref = str(entry.get("manifest") or "").strip()
+        if manifest_ref and Path(manifest_ref).is_file():
+            staged_manifest = copy_handoff_payload(Path(manifest_ref), handoff_dir)
+            entry = dict(entry)
+            entry["manifest"] = (
+                PurePosixPath("WORK") / "01_PREPARE" / "handoff" / staged_manifest.name
+                if remote
+                else str(staged_manifest)
+            )
+        staged_items.append(entry)
+    payload["items"] = staged_items
+    work_dir.mkdir(parents=True, exist_ok=True)
+    config_path = work_dir / BATCH_CONFIG_FILENAME
+    config_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return config_path
 
 
 def censo_preset_from_method(method: dict[str, Any]) -> str | None:
@@ -387,8 +448,12 @@ def _select_flag(method: dict[str, Any]) -> list[str]:
 
 
 def pessearch_method_flags(method: dict[str, Any]) -> list[str]:
-    """Emit the PESsearch CLI flag group (strategy select; plan via input)."""
+    """Emit the PESsearch CLI flag group (mode/strategy select; plan via input)."""
     flags: list[str] = []
+    if str(method.get("mode") or "") == "bond_length_scan":
+        flags += ["--mode", "bond_length_scan"]
+        flags += _select_flag(method)
+        return flags
     if method.get("strategy"):
         flags += ["--strategy", str(method["strategy"])]
     flags += _select_flag(method)
@@ -787,4 +852,11 @@ __all__ = [
     "write_mechanism_reaction_json",
     "write_mechanism_job_config",
     "MECHANISM_CONFIG_FILENAME",
+    "SCAN_CONFIG_FILENAME",
+    "BATCH_CONFIG_FILENAME",
+    "lowconfirm_method_flags",
+    "highconfirm_method_flags",
+    "pessearch_method_flags",
+    "prepare_stage_batch_config",
+    "stage_batch_request",
 ]

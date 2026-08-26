@@ -839,14 +839,14 @@ def test_continue_rejects_live_zombie_process(tmp_path: Path) -> None:
 
 
 # ====================================================================== #
-# (d) rerun_job — enhanced clone.
+# (d) rerun_job — in-place full rerun.
 # ====================================================================== #
 
 
-def test_rerun_preserves_canonical_name_and_clears_output_dir(tmp_path: Path) -> None:
+def test_rerun_preserves_job_identity_and_archives_prior_attempt(tmp_path: Path) -> None:
     mgr = _make_manager(tmp_path)
     try:
-        _seed_job(
+        source = _seed_job(
             mgr.store,
             tmp_path / "runs/j1",
             "source",
@@ -855,25 +855,38 @@ def test_rerun_preserves_canonical_name_and_clears_output_dir(tmp_path: Path) ->
             output_dir=str(tmp_path / "runs/explicit_out"),
             project_id=mgr.default_project_id,
         )
+        work_dir = Path(source.work_dir)
+        (work_dir / "WORK" / "02_SEARCH").mkdir(parents=True)
+        (work_dir / "WORK" / "02_SEARCH" / "failed.out").write_text("failed")
+        (work_dir / "RESULT").mkdir(parents=True)
+        (work_dir / "RESULT" / "result.json").write_text("{}")
         calls: list[str] = []
         mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
 
-        new = mgr.rerun_job("source")
-        assert new is not None
-        assert new.id != "source"
-        assert new.spec.name == "foo_copy_fake"
-        assert new.spec.output_dir is None
-        assert new.project_id == mgr.default_project_id
-        _wait_submission(calls, new.id)
+        rerun = mgr.rerun_job("source")
+        assert rerun is not None
+        assert rerun.id == source.id == "source"
+        assert rerun.work_dir == source.work_dir
+        assert rerun.spec.name == source.spec.name
+        assert rerun.spec.output_dir == source.spec.output_dir
+        assert rerun.group_id == source.group_id
+        assert rerun.status == JobStatus.QUEUED
+        assert rerun.result is not None
+        assert rerun.result["attempts"] == 2
+        assert Path(rerun.work_dir) == work_dir
+        assert (work_dir / "_attempts" / "attempt_001" / "WORK").is_dir()
+        assert (work_dir / "_attempts" / "attempt_001" / "RESULT").is_dir()
+        assert len(mgr.store.list(limit=20)) == 1
+        _wait_submission(calls, source.id)
     finally:
         mgr.shutdown()
 
 
-def test_rerun_target_project_and_defaulting(tmp_path: Path) -> None:
+def test_rerun_cannot_change_project(tmp_path: Path) -> None:
     mgr = _make_manager(tmp_path)
     try:
         project = mgr.projects.create_project("RerunTarget")
-        _seed_job(
+        source = _seed_job(
             mgr.store,
             tmp_path / "runs/j1",
             "plain",
@@ -884,22 +897,11 @@ def test_rerun_target_project_and_defaulting(tmp_path: Path) -> None:
         calls: list[str] = []
         mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
 
-        # Explicit target project.
-        new = mgr.rerun_job("plain", project_id=str(project["project_id"]))
-        assert new is not None
-        assert new.project_id == str(project["project_id"])
-        assert new.spec.project_id == str(project["project_id"])
-        _wait_submission(calls, new.id)
-
-        # Default: source job's own project.
-        new2 = mgr.rerun_job("plain")
-        assert new2 is not None
-        assert new2.project_id == mgr.default_project_id
-        assert new2.spec.name == "foo_fake"
-
-        # Unknown project → ValueError.
-        with pytest.raises(ValueError, match="Project not found"):
+        with pytest.raises(ValueError, match="不能切换项目"):
             mgr.rerun_job("plain", project_id="no-such-project")
+        assert mgr.get(source.id).status == JobStatus.COMPLETED  # type: ignore[union-attr]
+        assert calls == []
+        assert project["project_id"] != source.project_id
     finally:
         mgr.shutdown()
 
@@ -913,7 +915,7 @@ def test_rerun_unknown_job_returns_none(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("workflow", STAGE_WORKFLOWS)
-def test_rerun_stage_workflow_creates_fresh_clone(
+def test_rerun_stage_workflow_reuses_original_task(
     tmp_path: Path, workflow: str
 ) -> None:
     mgr = _make_manager(tmp_path)
@@ -929,16 +931,15 @@ def test_rerun_stage_workflow_creates_fresh_clone(
         calls: list[str] = []
         mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
 
-        clone = mgr.rerun_job(source.id)
+        rerun = mgr.rerun_job(source.id)
 
-        assert clone is not None
-        assert clone.id != source.id
-        assert clone.group_id == source.id
-        assert clone.spec.workflow == workflow
-        assert clone.spec.output_dir is None
-        assert clone.spec.name == f"{source.spec.name}_{workflow}"
-        assert Path(clone.work_dir).name == clone.spec.name
-        _wait_submission(calls, clone.id)
+        assert rerun is not None
+        assert rerun.id == source.id
+        assert rerun.work_dir == source.work_dir
+        assert rerun.group_id == source.group_id
+        assert rerun.spec.workflow == workflow
+        assert rerun.spec.name == source.spec.name
+        _wait_submission(calls, source.id)
     finally:
         mgr.shutdown()
 

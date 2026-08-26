@@ -12,6 +12,11 @@ stages are independent jobs that hand over through standard manifests
 
 from __future__ import annotations
 
+# NOTE: ``acp.mechanism.batch_confirm`` (the S3/S4 batch engine) imports
+# ``stages.confirm`` and therefore must NOT be re-exported here — the
+# circular import would break package init. Import it from
+# ``acp.mechanism.batch_confirm`` directly.
+from ..bond_scan import run_bond_length_scan
 from .confirm import ConfirmEngine, ConfirmProfile, HighConfirmProfile, LowConfirmProfile
 from .handoff import (
     HANDOFF_PAYLOAD_DIRS,
@@ -35,6 +40,7 @@ __all__ = [
     "copy_handoff_payload",
     "expected_source_kind",
     "resolve_source_job_work_dir",
+    "run_bond_length_scan",
     "run_high_confirm",
     "run_low_confirm",
     "run_pes_search",

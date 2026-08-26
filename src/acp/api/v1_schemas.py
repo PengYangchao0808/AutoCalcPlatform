@@ -320,7 +320,11 @@ class JobMoveRequest(BaseModel):
 
 
 class V1JobRerunRequest(BaseModel):
-    """Optional body for POST /jobs/{id}/rerun."""
+    """Legacy-compatible body for in-place POST /jobs/{id}/rerun.
+
+    ``project_id`` may only repeat the job's current project.  Cross-project
+    duplication uses POST /jobs/{id}/clone instead.
+    """
 
     project_id: str | None = None
 
@@ -575,6 +579,14 @@ class MoleculeEmbedResponse(BaseModel):
 class StructureAssetModel(BaseModel):
     asset_id: str
     name: str
+    # ``name`` is the source asset/file label; this is the identity inherited
+    # by a newly submitted task.
+    molecule_name: str = ""
+    # Optional stationary-point metadata.  These fields are intentionally
+    # present on the detail response as well as the recent-source summary so
+    # loading an S2 candidate cannot lose its TS/INT role or candidate id.
+    tag: str = ""
+    candidate_id: str = ""
     source_type: str = ""
     original_format: str = ""
     xyz: str | None = None
@@ -619,6 +631,7 @@ class StructureSourceSummary(BaseModel):
     source_id: str
     job_id: str
     job_name: str
+    molecule_name: str = ""
     workflow: str
     project_id: str | None = None
     completed_at: str = ""
@@ -629,6 +642,8 @@ class StructureSourceSummary(BaseModel):
     charge: int = 0
     multiplicity: int = 1
     has_3d: bool = True
+    tag: str = ""
+    candidate_id: str = ""
     remote: bool = False
     needs_fetch: bool = False
 
@@ -919,9 +934,222 @@ class MechanismProjectListResponse(BaseModel):
     projects: list[MechanismProjectModel] = Field(default_factory=list)
 
 
+# ---------------------------------------------------------------------------
+# S2 bond-length scan (docs/ACP_S2_Bond_Length_Scan_MD_Plan.md §7, §11).
+# ---------------------------------------------------------------------------
+
+
+class StructureAssetCreateRequest(BaseModel):
+    name: str = ""
+    xyz_text: str
+    charge: int = 0
+    multiplicity: int = 1
+    project_id: str | None = None
+
+
+class StructureAssetResponse(BaseModel):
+    asset_id: str
+    name: str
+    atom_count: int = 0
+    formula: str = ""
+    charge: int = 0
+    multiplicity: int = 1
+    xyz: str = ""
+    asset_path: str = ""
+    ok: bool = True
+    errors: list[str] = Field(default_factory=list)
+
+
+class BondLengthScanSource(BaseModel):
+    source_type: Literal["task_artifact", "structure_asset", "xyz_text"] = "xyz_text"
+    source_job_id: str | None = None
+    artifact_path: str | None = None
+    structure_selector: dict[str, Any] = Field(default_factory=dict)
+    asset_id: str | None = None
+    asset_path: str | None = None
+    xyz_text: str | None = None
+    charge: int | None = None
+    multiplicity: int | None = None
+
+
+class S2StructurePreviewRequest(BaseModel):
+    source: BondLengthScanSource
+
+
+class S2StructurePreviewResponse(BaseModel):
+    source: dict[str, Any] = Field(default_factory=dict)
+    xyz: str = ""
+    formula: str = ""
+    atom_count: int = 0
+    charge: int = 0
+    multiplicity: int = 1
+    source_id: str = ""
+    checksum: str | None = None
+    selector: dict[str, Any] = Field(default_factory=dict)
+
+
+class BondLengthScanJobInput(BaseModel):
+    source: BondLengthScanSource
+    coordinate: dict[str, Any]
+    protocol: dict[str, Any] = Field(default_factory=dict)
+    source_job_id: str | None = None
+    from_artifact: str | None = None
+
+
+class S2FrameModel(BaseModel):
+    index: int
+    target_coordinate: float
+    actual_coordinate: float
+    coordinate_unit: str = "angstrom"
+    geometry_path: str = ""
+    scan_energy_hartree: float | None = None
+    single_point_energy_hartree: float | None = None
+    optimization_converged: bool = True
+    single_point_status: str = "skipped"
+    source_log: str = ""
+
+
+class S2ProfileResponse(BaseModel):
+    job_id: str
+    mode: str
+    status: str
+    stationary_point_claimed: bool
+    scan: dict[str, Any] = Field(default_factory=dict)
+    energy_profile: dict[str, Any] = Field(default_factory=dict)
+    frames: list[S2FrameModel] = Field(default_factory=list)
+
+
+class S2CandidatesResponse(BaseModel):
+    job_id: str
+    mode: str
+    status: str
+    stationary_point_claimed: bool
+    recommendations: dict[str, Any] = Field(default_factory=dict)
+    review: dict[str, Any] = Field(default_factory=dict)
+
+
+class S2FrameResponse(BaseModel):
+    job_id: str
+    frame_index: int
+    target_coordinate: float
+    actual_coordinate: float
+    xyz: str = ""
+    scan_energy_hartree: float | None = None
+    single_point_energy_hartree: float | None = None
+    optimization_converged: bool = True
+    single_point_status: str = ""
+
+
+class S2ReviewCandidateItem(BaseModel):
+    candidate_id: str | None = None
+    frame_index: int
+    role: Literal["ts", "intermediate"]
+    name: str | None = None
+
+
+class S2ReviewRequest(BaseModel):
+    """Editable-candidate review payload.
+
+    ``candidates`` is the v2 contract (frame-indexed markings); the legacy
+    ``selected_ts`` / ``selected_intermediates`` id lists remain accepted
+    for older clients and are converted server-side.
+    """
+
+    candidates: list[S2ReviewCandidateItem] = Field(default_factory=list)
+    selected_ts: list[str] = Field(default_factory=list)
+    selected_intermediates: list[str] = Field(default_factory=list)
+    note: str | None = None
+
+
+class S2ReviewResponse(BaseModel):
+    project_id: str
+    job_id: str
+    review: dict[str, Any] = Field(default_factory=dict)
+    project_status: str
+    candidates: list[dict[str, Any]] = Field(default_factory=list)
+    candidate_manifest: str = ""
+    structures_dir: str = ""
+    result_manifest: str = ""
+
+
+class S2JobReviewResponse(BaseModel):
+    job_id: str
+    project_id: str | None = None
+    review: dict[str, Any] = Field(default_factory=dict)
+    candidates: list[dict[str, Any]] = Field(default_factory=list)
+    active_count: int = 0
+    candidate_manifest: str = ""
+    structures_dir: str = ""
+    result_manifest: str = ""
+
+
+class EnergyGraphSeriesModel(BaseModel):
+    id: str
+    label: str
+    unit: str = ""
+    axis: str = "left"
+    values: list[float | None] = Field(default_factory=list)
+    x_values: list[float | None] = Field(default_factory=list)
+    source: str = ""
+
+
+class EnergyGraphNodeModel(BaseModel):
+    id: str
+    label: str = ""
+    type: str = ""
+    frame_index: int | None = None
+    x: float | None = None
+    energy: float | None = None
+    status: str = ""
+    geometry_ref: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class EnergyGraphAnnotationModel(BaseModel):
+    id: str
+    candidate_id: str | None = None
+    type: str
+    label: str = ""
+    frame_index: int | None = None
+    x: float | None = None
+    y: float | None = None
+    status: str = ""
+    geometry_ref: str = ""
+    selected: bool = False
+    active: bool | None = None
+    saved: bool | None = None
+    recommended_type: str | None = None
+    selection_source: str | None = None
+    confidence: str | None = None
+    reason: str | None = None
+
+
+class EnergyGraphResponse(BaseModel):
+    job_id: str
+    view_type: str
+    title: str = ""
+    status: str = ""
+    complete: bool = False
+    revision: str = ""
+    default_series: str = ""
+    available_views: list[str] = Field(default_factory=list)
+    x_axis: dict[str, Any] = Field(default_factory=dict)
+    series: list[EnergyGraphSeriesModel] = Field(default_factory=list)
+    nodes: list[EnergyGraphNodeModel] = Field(default_factory=list)
+    edges: list[dict[str, Any]] = Field(default_factory=list)
+    annotations: list[EnergyGraphAnnotationModel] = Field(default_factory=list)
+    source: str = ""
+    provenance: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 __all__ = [
     "ArtifactListResponse",
     "ArtifactModel",
+    "BondLengthScanJobInput",
+    "BondLengthScanSource",
+    "S2StructurePreviewRequest",
+    "S2StructurePreviewResponse",
     "DecisionPointModel",
     "DecisionResolveRequest",
     "DecisionResolveResponse",
@@ -963,9 +1191,23 @@ __all__ = [
     "RemoteFilePreviewResponse",
     "RemoteFileChecksumResponse",
     "RemoteLogTailResponse",
+    "S2CandidatesResponse",
+    "S2FrameModel",
+    "S2FrameResponse",
+    "S2ProfileResponse",
+    "S2ReviewCandidateItem",
+    "S2ReviewRequest",
+    "S2ReviewResponse",
+    "S2JobReviewResponse",
+    "EnergyGraphAnnotationModel",
+    "EnergyGraphNodeModel",
+    "EnergyGraphResponse",
+    "EnergyGraphSeriesModel",
     "StageTaskListResponse",
     "StageTaskModel",
+    "StructureAssetCreateRequest",
     "StructureAssetModel",
+    "StructureAssetResponse",
     "StructureParseRequest",
     "StructureParseResponse",
     "UploadResponse",

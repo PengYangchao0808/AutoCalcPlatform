@@ -82,9 +82,11 @@ ACP_V1_20260811/
 | Confsearch selection | `src/acp/confsearch/selection.py` | Candidate selection and ranking logic |
 | Confsearch protocols | `src/acp/confsearch/protocols/` | xtb-crest / xtb-md / censo-crest / xtbmd-censo protocol implementations |
 | PESsearch (S2) | `src/acp/mechanism/stages/pes_search.py` | Reaction path search + TS/intermediate guesses; output `s2_path_manifest.json` |
-| Lowconfirm (S3) | `src/acp/mechanism/stages/low_confirm.py` | Coarse Opt/TS + frequency + preliminary IRC; output `s3_lowconfirm_manifest.json` |
-| Highconfirm (S4) | `src/acp/mechanism/stages/high_confirm.py` | High-fidelity Opt/TS + freq + SP + thermochemistry; output `s4_highconfirm_manifest.json` |
-| Stage handoff | `src/acp/mechanism/stages/handoff.py` | Artifact transfer between stages |
+| Lowconfirm (S3) | `src/acp/mechanism/stages/low_confirm.py` | Coarse Opt/TS + frequency + preliminary IRC; output `s3_lowconfirm_manifest.json` — routed through BatchConfirmEngine |
+| Highconfirm (S4) | `src/acp/mechanism/stages/high_confirm.py` | High-fidelity Opt/TS + freq + SP + thermochemistry; output `s4_highconfirm_manifest.json` — routed through BatchConfirmEngine |
+| Batch S3/S4 engine | `src/acp/mechanism/batch_confirm.py` | `BatchConfirmEngine` — one engine, two profiles (s3/s4); per-item dirs `WORK/03_OPT/batch/<item_id>/`, resume/skip-completed via cache key, `batch_calculation_manifest.json`, structures → `RESULT/structures/<item_id>__TAG_<TS|INT>__optimized.xyz`, result_manifest/result_summary registration |
+| Batch input models | `src/acp/mechanism/batch_models.py` | TAG parsing (`TAG: TS|INT | candidate_id=...`), `BatchStructureItem`/`BatchCalculationItem`/`BatchCalculationManifest`, loaders (s2 candidate manifest / multi-frame XYZ / batch_structures_v1 request), user-override priority |
+| Stage handoff | `src/acp/mechanism/stages/handoff.py` | Artifact transfer between stages; also stages `s2_candidate_manifest.json` + `RESULT/structures/s2_candidates/` |
 | Mechanism layout | `src/acp/mechanism/layout.py` | `resolve_study_layout` / `find_study_layout` / `find_reaction_json` (path normalization) |
 | Result manifest (read) | `src/acp/results/manifest.py` | Unified `result_manifest.json` reader |
 | Result manifest (write) | `src/acp/storage/manifest.py` | Unified v2 `result_manifest.json` writer (design doc §8) |
@@ -125,9 +127,10 @@ ACP_V1_20260811/
 | ACP API server | `src/acp/api/server.py` | FastAPI app factory + static frontend hosting at `/` (183 lines) |
 | API routes | `src/acp/api/routes.py` | `/api/status`, `/api/backends` (379 lines) |
 | API v1 routes | `src/acp/api/v1_routes.py` | Job submission, molecule upload, task management, job detail projection (3280 lines) |
+| Structure sources | `src/acp/scheduler/structure_sources.py` | Reusable final structures from COMPLETED jobs (task-results tab). Discovery order: `RESULT/result_manifest.json` products (`kind: structure`/`xyz` — S2 candidates, batch S3/S4 outputs) → legacy `result_summary.json` → dedupe; entries carry `tag` (`TS`/`INT`) + `candidate_id` parsed from the XYZ TAG comment |
 | Job detail endpoint | `src/acp/api/v1_routes.py` | `GET /api/v1/jobs/{id}/detail` — rich projection: job + stages (StageTaskStore, disk fallback) + artifacts_summary + error_detail/stderr_tail + disk_state + server-computed `recovery` matrix (pause/unpause/continue/rerun/purge buttons + notes); disk backfill of result when null (R1); POST `/jobs/{id}/pause` `/unpause` `/continue` `/rerun` + POST `/jobs/purge` |
 | API schemas | `src/acp/api/schemas.py` / `v1_schemas.py` | Pydantic models for status, backends, jobs; incl. `V1JobDetailResponse`, `V1JobPurgeRequest/Response` (889 lines in v1_schemas.py) |
-| ACP Workbench frontend | `frontend/ACP_Workbench.html` + `ACP_Workbench_v2.html` | Dark dashboard; polling /api/status, /api/backends; job detail view (stages stepper, error card, stderr tail, recovery action bar) + batch purge UI + paused badge |
+| ACP Workbench frontend | `frontend/ACP_Workbench.html` + `ACP_Workbench_v2.html` | Dark dashboard; polling /api/status, /api/backends; job detail view (stages stepper, error card, stderr tail, recovery action bar) + batch purge UI + paused badge + batch structure-source panel (`stage-batch-*`, Lowconfirm/Highconfirm) + results-list TAG badges + 载入全部候选 |
 | Task scheduler | `src/acp/scheduler/` | 15 files: jobs, manager, runner, store, provenance, artifacts, migrations, events, files, logs, projects, stage_tasks, local_cleanup, nodes, metrics + remote/ |
 | Job manager | `src/acp/scheduler/manager.py` | Job lifecycle management, polling, cancellation, pause/unpause/continue/rerun/purge (1636 lines) |
 | Job queue ops (methods) | `src/acp/scheduler/manager.py` | `pause_job` (RUNNING→PAUSED; local killpg SIGSTOP, remote `bstop`) / `unpause_job` (PAUSED→RUNNING; local SIGCONT, remote `bresume`) / `continue_job` (FAILED/CANCELLED→QUEUED; mechanism phase-level + xtbmd stage-level checkpoint, `attempts`+1, `continued_from`; others raise ValueError) / `rerun_job` (enhanced clone → `{name}__rerun`, new job) / `purge_jobs` (batch cascade; active jobs require force_cancel) / `resume` (WAITING_REVIEW-review-only, DO NOT reuse) |

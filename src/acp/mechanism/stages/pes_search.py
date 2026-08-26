@@ -22,6 +22,7 @@ from cccp.qc.interfaces.constraints import ReactionCoordinatePlan
 from cccp.utils.file_io import read_xyz, write_xyz
 
 from .._helpers import fingerprint
+from ..batch_models import build_tag_title
 from ..models import ArtifactRef, StableState
 from ..presets import PATH_STRATEGIES
 
@@ -184,16 +185,23 @@ def _export_candidates(
             continue
         directory.mkdir(parents=True, exist_ok=True)
         xyz_path = directory / f"{candidate_id}.xyz"
+        tag = "TS" if kind == "ts_seed" else "INT"
         write_xyz(
             xyz_path,
             np.asarray(geometry, dtype=float),
             [str(symbol) for symbol in symbols],
-            title=f"{candidate_id} source={seed.id}",
+            title=build_tag_title(
+                tag,
+                candidate_id=candidate_id,
+                source="PESsearch",
+                extra=f"seed={seed.id}",
+            ),
         )
         exported.append(
             {
                 "id": candidate_id,
                 "kind": kind,
+                "tag": tag,
                 "xyz": f"{rel_dir}/{candidate_id}.xyz",
                 "rank": counters[kind],
                 "confidence": str(seed.confidence),
@@ -397,8 +405,63 @@ def run_pes_search(
     if not ts_candidates:
         payload["warning"] = "No TS seed candidate was extracted from the path"
     manifest_out = write_json_atomic(result_dir / S2_MANIFEST_NAME, payload)
+    _register_s2_result_products(out_root, payload, candidates)
     logger.info("PESsearch manifest written: %s (%d candidates)", manifest_out, len(candidates))
     return payload
+
+
+def _register_s2_result_products(
+    out_root: Path,
+    payload: dict[str, Any],
+    candidates: list[dict[str, Any]],
+) -> None:
+    """Register S2 candidate structures as standard result products.
+
+    Every exported TS/INT guess becomes a ``kind: "structure"`` product in
+    ``RESULT/result_manifest.json`` (plus a legacy ``result_summary.json``
+    pointer) so the task-result list can offer PESsearch candidates for
+    downstream batch confirmation (batch plan §5/§6).
+    """
+    from acp.storage.manifest import ResultManifest
+    from acp.workflows._helpers import write_result_summary
+
+    if not candidates:
+        return
+    result_root = out_root / "RESULT"
+    result_manifest = ResultManifest(
+        task_id=str(payload.get("provenance", {}).get("job_id") or ""),
+        workflow="PESsearch",
+        status="completed",
+    )
+    summary_products: list[dict[str, Any]] = []
+    for row in candidates:
+        rel = str(row.get("xyz") or "")
+        if not rel:
+            continue
+        candidate_id = str(row.get("id") or Path(rel).stem)
+        tag = "TS" if str(row.get("kind")) == "ts_seed" else "INT"
+        result_manifest.add_product(
+            f"s2_candidate_{candidate_id}",
+            f"S2 candidate {candidate_id} ({tag})",
+            f"mechanism/{rel}",
+            "structure",
+        )
+        summary_products.append(
+            {
+                "label": f"{candidate_id} ({tag})",
+                "path": f"mechanism/{rel}",
+                "kind": "xyz",
+                "role": "final_stable_structure",
+            }
+        )
+    result_manifest.add_product(
+        "s2_path_manifest",
+        "S2 path manifest",
+        "mechanism/s2_path_manifest.json",
+        "file",
+    )
+    result_manifest.write(result_root)
+    write_result_summary(result_root, "PESsearch", summary_products)
 
 
 def _serialize_plan(plan: ReactionCoordinatePlan) -> dict[str, Any]:

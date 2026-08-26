@@ -461,9 +461,7 @@ Examples:
     )
     step.add_argument("--output", "-o", default="./mech_step_out", help="Output directory")
     step.add_argument("--charge", type=int, default=0, help="Molecular charge (default: 0)")
-    step.add_argument(
-        "--multiplicity", type=int, default=1, help="Spin multiplicity (default: 1)"
-    )
+    step.add_argument("--multiplicity", type=int, default=1, help="Spin multiplicity (default: 1)")
     step.add_argument("--label", type=str, help="Module label recorded in the manifest")
     step.add_argument("--config", type=str, help="Configuration YAML file")
     step.add_argument(
@@ -553,7 +551,9 @@ Examples:
     conf.set_defaults(workflow="Confsearch")
     conf_input = conf.add_mutually_exclusive_group(required=True)
     conf_input.add_argument("--input", "-i", type=str, help="SMILES string or input file path")
-    conf_input.add_argument("--batch-file", type=str, help="Batch input file (one molecule per line)")
+    conf_input.add_argument(
+        "--batch-file", type=str, help="Batch input file (one molecule per line)"
+    )
     conf.add_argument("--output", "-o", default="./confsearch_out", help="Output directory")
     conf.add_argument(
         "--protocol",
@@ -608,20 +608,28 @@ Examples:
 
     pes = run_sub.add_parser(
         "PESsearch",
-        help="Reaction path search + candidate guesses (S2)",
+        help="XYZ-based one-dimensional PES scan + candidate guesses (S2)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
-  acp run PESsearch --from-job 20260823_001_Confsearch \\
-      --from-artifact RESULT/confsearch/confsearch_manifest.json \\
-      --strategy guided-scan --plan plan.json --output ./pes_out
+  acp run PESsearch --xyz-text @molecule.xyz --scan-atoms 0,1 \\
+      --scan-start 1.0 --scan-end 3.0 --scan-points 21 --output ./pes_out
         """,
     )
     pes.set_defaults(workflow="PESsearch")
     pes.add_argument(
+        "--mode",
+        choices=["path", "bond_length_scan"],
+        default="bond_length_scan",
+        help=(
+            "Search mode (default: bond_length_scan). 'path' is retained only "
+            "for legacy manifest-based mechanism studies."
+        ),
+    )
+    pes.add_argument(
         "--from",
         dest="from_manifest",
-        help="Direct path to a confsearch_manifest.json",
+        help="Direct path to a confsearch_manifest.json (path mode) or a structure/xyz source",
     )
     pes.add_argument("--from-job", help="Source Confsearch job id (resolved via the jobs root)")
     pes.add_argument(
@@ -644,9 +652,62 @@ Examples:
     pes.add_argument("--reactant-conf", help="Reactant conformer id (default: rank 1)")
     pes.add_argument("--product-conf", help="Product conformer id (default: rank 1)")
     pes.add_argument("--ts-guess", help="TS guess XYZ (required by direct-ts)")
+    # ---------------------------------------------------------------------------
+    # bond_length_scan mode (S2 v2)
+    # ---------------------------------------------------------------------------
+    pes.add_argument(
+        "--source-type",
+        choices=["task_artifact", "structure_asset", "xyz_text"],
+        help="Structure source for bond_length_scan (default: xyz_text)",
+    )
+    pes.add_argument(
+        "--xyz-text",
+        help="Pasted XYZ text (or @file path) for source_type=xyz_text",
+    )
+    pes.add_argument(
+        "--asset-path",
+        help="Resolved structure-asset file path for source_type=structure_asset",
+    )
+    pes.add_argument(
+        "--from-frame",
+        type=int,
+        help="frame_index selector into a task_artifact structure list (0-based)",
+    )
+    pes.add_argument(
+        "--scan-config",
+        help="Bond-length-scan request as a JSON string or path to a JSON file",
+    )
+    pes.add_argument(
+        "--scan-kind",
+        choices=["distance", "angle", "dihedral"],
+        help="Scanned coordinate kind (default: distance)",
+    )
+    pes.add_argument(
+        "--scan-bond-type",
+        choices=["auto", "single", "double", "multiple", "aromatic"],
+        help="Bond type metadata for distance scans (default: auto)",
+    )
+    pes.add_argument(
+        "--scan-atoms",
+        help="Comma-separated 0-based atom pair for the scan, e.g. '0,1'",
+    )
+    pes.add_argument("--scan-start", type=float, help="Scan start distance (Angstrom)")
+    pes.add_argument("--scan-end", type=float, help="Scan end distance (Angstrom)")
+    pes.add_argument("--scan-points", type=int, help="Scan point count (3–101)")
+    pes.add_argument("--scan-method", help="Scan optimisation method (default: GFN2-xTB)")
+    pes.add_argument("--sp-method", help="Single-point method (default: B97-3c)")
+    pes.add_argument("--sp-basis", help="Single-point basis (composite methods: none)")
+    pes.add_argument("--no-sp", action="store_true", help="Disable the single-point refinement")
+    pes.add_argument("--max-iterations", type=int, help="Max optimisation iterations per point")
     pes.add_argument("--output", "-o", default="./pes_search_out", help="Output directory")
     pes.add_argument("--charge", type=int, help="Molecular charge override")
     pes.add_argument("--multiplicity", type=int, help="Spin multiplicity override")
+    pes.add_argument("--nproc", type=int, help="Number of CPU cores (overrides config)")
+    pes.add_argument(
+        "--mem",
+        type=str,
+        help="Memory limit, e.g. 32GB, 4096MB (overrides config)",
+    )
     pes.add_argument("--config", type=str, help="Configuration YAML file")
     pes.add_argument(
         "--log-level",
@@ -679,13 +740,39 @@ Examples:
         help="Comma-separated candidate ids (default: all TS guesses)",
     )
     low.add_argument(
+        "--structures",
+        help=(
+            "Comma-separated XYZ files (multi-frame supported) as batch input; "
+            "TAG: TS/INT comment lines set each structure's role (default INT)"
+        ),
+    )
+    low.add_argument(
+        "--batch-config",
+        dest="batch_config",
+        help=(
+            "Path to a batch_structures_v1 JSON config (S2 candidates / inline "
+            "structures / file list) — alternative to --from/--from-job"
+        ),
+    )
+    low.add_argument(
         "--no-irc",
         action="store_true",
         help="Skip the preliminary IRC validation",
     )
+    low.add_argument(
+        "--snapshot-candidates",
+        action="store_true",
+        help="Copy the S2 candidate package into this job before loading it",
+    )
     low.add_argument("--output", "-o", default="./lowconfirm_out", help="Output directory")
     low.add_argument("--charge", type=int, help="Molecular charge override")
     low.add_argument("--multiplicity", type=int, help="Spin multiplicity override")
+    low.add_argument("--nproc", type=int, help="Number of CPU cores (overrides config)")
+    low.add_argument(
+        "--mem",
+        type=str,
+        help="Memory limit, e.g. 32GB, 4096MB (overrides config)",
+    )
     low.add_argument("--config", type=str, help="Configuration YAML file")
     low.add_argument(
         "--log-level",
@@ -718,10 +805,31 @@ Examples:
         help="Artifact path relative to the source job directory",
     )
     high.add_argument("--select", help="Comma-separated candidate ids (default: confirmed TS set)")
+    high.add_argument(
+        "--structures",
+        help=(
+            "Comma-separated XYZ files (multi-frame supported) as batch input; "
+            "TAG: TS/INT comment lines set each structure's role (default INT)"
+        ),
+    )
+    high.add_argument(
+        "--batch-config",
+        dest="batch_config",
+        help=(
+            "Path to a batch_structures_v1 JSON config (S2 candidates / inline "
+            "structures / file list) — alternative to --from/--from-job"
+        ),
+    )
     high.add_argument("--irc", action="store_true", help="Run the final IRC validation")
     high.add_argument("--output", "-o", default="./highconfirm_out", help="Output directory")
     high.add_argument("--charge", type=int, help="Molecular charge override")
     high.add_argument("--multiplicity", type=int, help="Spin multiplicity override")
+    high.add_argument("--nproc", type=int, help="Number of CPU cores (overrides config)")
+    high.add_argument(
+        "--mem",
+        type=str,
+        help="Memory limit, e.g. 32GB, 4096MB (overrides config)",
+    )
     high.add_argument("--config", type=str, help="Configuration YAML file")
     high.add_argument(
         "--log-level",
@@ -762,9 +870,15 @@ def _load_plan_argument(plan_arg: str | None) -> dict[str, Any] | None:
     if not plan_arg:
         return None
     text = plan_arg
-    plan_path = Path(plan_arg)
-    if plan_path.is_file():
-        text = plan_path.read_text(encoding="utf-8")
+    # Guard: stat'ing inline JSON longer than NAME_MAX raises OSError(ENAMETOOLONG);
+    # only probe the filesystem for non-JSON values, path errors fall through to json.loads.
+    if not plan_arg.lstrip().startswith("{"):
+        try:
+            plan_path = Path(plan_arg)
+            if plan_path.is_file():
+                text = plan_path.read_text(encoding="utf-8")
+        except (OSError, ValueError):
+            pass
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError as exc:
@@ -867,42 +981,201 @@ def _handle_pessearch(args: argparse.Namespace) -> int:
     setup_logging(args.log_level)
     cfg = _build_config(args)
     try:
-        manifest = _resolve_stage_source(
-            getattr(args, "from_manifest", None),
-            getattr(args, "from_job", None),
-            getattr(args, "from_artifact", "") or "",
-            "S2",
-        )
-        plan = _load_plan_argument(getattr(args, "plan", None))
-        if args.strategy != "direct-ts" and plan is None:
-            raise ValueError("--plan is required for guided-scan and reverse-peb")
-        from acp.mechanism.stages import run_pes_search
+        if getattr(args, "mode", "path") == "bond_length_scan":
+            request = _build_bond_scan_request(args)
+            from acp.mechanism.stages import run_bond_length_scan
 
-        payload = run_pes_search(
-            from_manifest=manifest,
-            output_dir=Path(args.output),
-            strategy=args.strategy,
-            coordinate_plan=plan,
-            product_source=args.product,
-            product_manifest=args.product_manifest,
-            product_conf=args.product_conf,
-            reactant_conf=args.reactant_conf,
-            ts_guess=args.ts_guess,
-            source_job_id=getattr(args, "from_job", None),
-            charge=args.charge,
-            multiplicity=args.multiplicity,
-            config=cfg,
-        )
+            payload = run_bond_length_scan(
+                request=request,
+                output_dir=Path(args.output),
+                config=cfg,
+                source_job_id=getattr(args, "from_job", None),
+            )
+        else:
+            manifest = _resolve_stage_source(
+                getattr(args, "from_manifest", None),
+                getattr(args, "from_job", None),
+                getattr(args, "from_artifact", "") or "",
+                "S2",
+            )
+            plan = _load_plan_argument(getattr(args, "plan", None))
+            if args.strategy != "direct-ts" and plan is None:
+                raise ValueError("--plan is required for guided-scan and reverse-peb")
+            from acp.mechanism.stages import run_pes_search
+
+            payload = run_pes_search(
+                from_manifest=manifest,
+                output_dir=Path(args.output),
+                strategy=args.strategy,
+                coordinate_plan=plan,
+                product_source=args.product,
+                product_manifest=args.product_manifest,
+                product_conf=args.product_conf,
+                reactant_conf=args.reactant_conf,
+                ts_guess=args.ts_guess,
+                source_job_id=getattr(args, "from_job", None),
+                charge=args.charge,
+                multiplicity=args.multiplicity,
+                config=cfg,
+            )
     except KeyboardInterrupt:
         logger.warning("Interrupted by user")
         return 130
     except Exception as exc:
         logger.exception("PESsearch failed: %s", exc)
         return 1
+    if payload.get("mode") == "bond_length_scan":
+        status = payload.get("status")
+        logger.info(
+            "PESsearch (bond_length_scan) completed: status=%s frames=%d ts=%d int=%d",
+            status,
+            len((payload.get("scan") or {}).get("frames") or []),
+            len((payload.get("recommendations") or {}).get("ts") or []),
+            len((payload.get("recommendations") or {}).get("intermediates") or []),
+        )
+        logger.info(
+            "  Manifest    : %s",
+            Path(args.output) / "RESULT" / "mechanism" / "s2_path_manifest.json",
+        )
+        return 0 if status in ("ready_for_review", "needs_review", "partial") else 1
     gates = payload.get("gates") or {}
-    logger.info("PESsearch completed: %d candidates (G2=%s)", len(payload.get("candidates") or []), gates.get("G2"))
-    logger.info("  Manifest    : %s", Path(args.output) / "RESULT" / "mechanism" / "s2_path_manifest.json")
+    logger.info(
+        "PESsearch completed: %d candidates (G2=%s)",
+        len(payload.get("candidates") or []),
+        gates.get("G2"),
+    )
+    logger.info(
+        "  Manifest    : %s", Path(args.output) / "RESULT" / "mechanism" / "s2_path_manifest.json"
+    )
     return 0 if gates.get("G2") == "PASS" else 1
+
+
+def _build_bond_scan_request(args: argparse.Namespace) -> dict[str, Any]:
+    """Assemble the bond-length-scan request dict from CLI args (S2 v2)."""
+    scan_config = _load_plan_argument(getattr(args, "scan_config", None)) or {}
+
+    explicit_source = any(
+        [
+            getattr(args, "source_type", None),
+            getattr(args, "xyz_text", None),
+            getattr(args, "asset_path", None),
+            getattr(args, "from_manifest", None),
+            getattr(args, "from_job", None),
+        ]
+    )
+    config_source = scan_config.get("source")
+
+    if not explicit_source and isinstance(config_source, dict) and config_source.get("source_type"):
+        # Scheduler path: the full scan_request (source included) ships in scan_config.
+        source = dict(config_source)
+    else:
+        source_type = getattr(args, "source_type", None) or (
+            "task_artifact"
+            if (getattr(args, "from_manifest", None) or getattr(args, "from_job", None))
+            else "xyz_text"
+        )
+
+        from_frame = getattr(args, "from_frame", None)
+        if source_type == "task_artifact":
+            source = {
+                "source_type": "task_artifact",
+                "source_job_id": getattr(args, "from_job", None),
+                "artifact_path": getattr(args, "from_manifest", None),
+                "structure_selector": {
+                    "kind": "frame_index" if from_frame is not None else "final_structure",
+                    "frame_index": from_frame,
+                },
+            }
+        elif source_type == "structure_asset":
+            source = {
+                "source_type": "structure_asset",
+                "asset_path": getattr(args, "asset_path", None),
+                "asset_id": getattr(args, "from_job", None),
+            }
+        else:
+            xyz_text = getattr(args, "xyz_text", None)
+            if xyz_text and xyz_text.startswith("@"):
+                xyz_path = Path(xyz_text[1:])
+                if not xyz_path.is_file():
+                    raise ValueError(f"--xyz-text file not found: {xyz_path}")
+                xyz_text = xyz_path.read_text(encoding="utf-8")
+            source = {"source_type": "xyz_text", "xyz_text": xyz_text}
+    if getattr(args, "charge", None) is not None:
+        source["charge"] = args.charge
+    if getattr(args, "multiplicity", None) is not None:
+        source["multiplicity"] = args.multiplicity
+
+    coordinate = dict(scan_config.get("coordinate") or {})
+    protocol = dict(scan_config.get("protocol") or {})
+
+    if getattr(args, "scan_kind", None):
+        coordinate["kind"] = args.scan_kind
+    if getattr(args, "scan_bond_type", None):
+        coordinate["bond_type"] = args.scan_bond_type
+
+    atoms = getattr(args, "scan_atoms", None)
+    if atoms:
+        parts = [int(part) for part in str(atoms).split(",") if part.strip()]
+        expected_atoms = {"distance": 2, "angle": 3, "dihedral": 4}.get(
+            str(coordinate.get("kind") or "distance"),
+            2,
+        )
+        if len(parts) != expected_atoms:
+            raise ValueError(
+                f"--scan-atoms must contain {expected_atoms} indices for "
+                f"{coordinate.get('kind') or 'distance'} scan"
+            )
+        coordinate["atoms"] = parts
+    if getattr(args, "scan_start", None) is not None:
+        coordinate["start"] = args.scan_start
+    if getattr(args, "scan_end", None) is not None:
+        coordinate["end"] = args.scan_end
+    if getattr(args, "scan_points", None) is not None:
+        coordinate["n_points"] = args.scan_points
+    if getattr(args, "scan_method", None):
+        protocol.setdefault("scan_optimizer", {})["method"] = args.scan_method
+    if getattr(args, "sp_method", None):
+        protocol.setdefault("single_point", {})["method"] = args.sp_method
+    if getattr(args, "sp_basis", None):
+        protocol.setdefault("single_point", {})["basis"] = args.sp_basis
+    if getattr(args, "no_sp", False):
+        protocol.setdefault("single_point", {})["enabled"] = False
+    if getattr(args, "max_iterations", None) is not None:
+        protocol.setdefault("scan_driver", {})["max_iterations"] = args.max_iterations
+        protocol.setdefault("scan_optimizer", {})["max_iterations"] = args.max_iterations
+
+    return {
+        "mode": "bond_length_scan",
+        "source": source,
+        "coordinate": coordinate,
+        "protocol": protocol,
+    }
+
+
+def _resolve_batch_structures(
+    args: argparse.Namespace,
+) -> tuple[list[Any] | None, dict[str, Any] | None]:
+    """Resolve --batch-config / --structures into batch inputs (or None)."""
+    batch_config = getattr(args, "batch_config", None)
+    structures_arg = getattr(args, "structures", None)
+    if batch_config:
+        payload = json.loads(Path(batch_config).read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError(f"Batch config is not a JSON object: {batch_config}")
+        return None, payload
+    if structures_arg:
+        from acp.mechanism.batch_models import load_items_from_xyz_file
+
+        items: list[Any] = []
+        for chunk in str(structures_arg).split(","):
+            path_text = chunk.strip()
+            if not path_text:
+                continue
+            items.extend(load_items_from_xyz_file(Path(path_text).expanduser()))
+        if not items:
+            raise ValueError(f"No structures parsed from --structures {structures_arg!r}")
+        return items, None
+    return None, None
 
 
 def _handle_lowconfirm(args: argparse.Namespace) -> int:
@@ -910,12 +1183,15 @@ def _handle_lowconfirm(args: argparse.Namespace) -> int:
     setup_logging(args.log_level)
     cfg = _build_config(args)
     try:
-        manifest = _resolve_stage_source(
-            getattr(args, "from_manifest", None),
-            getattr(args, "from_job", None),
-            getattr(args, "from_artifact", "") or "",
-            "S3",
-        )
+        structures, batch_request = _resolve_batch_structures(args)
+        manifest = None
+        if structures is None and batch_request is None:
+            manifest = _resolve_stage_source(
+                getattr(args, "from_manifest", None),
+                getattr(args, "from_job", None),
+                getattr(args, "from_artifact", "") or "",
+                "S3",
+            )
         from acp.mechanism.stages import run_low_confirm
 
         payload = run_low_confirm(
@@ -927,6 +1203,9 @@ def _handle_lowconfirm(args: argparse.Namespace) -> int:
             charge=args.charge,
             multiplicity=args.multiplicity,
             config=cfg,
+            structures=structures,
+            batch_request=batch_request,
+            snapshot_candidates=bool(getattr(args, "snapshot_candidates", False)),
         )
     except KeyboardInterrupt:
         logger.warning("Interrupted by user")
@@ -935,9 +1214,14 @@ def _handle_lowconfirm(args: argparse.Namespace) -> int:
         logger.exception("Lowconfirm failed: %s", exc)
         return 1
     gates = payload.get("gates") or {}
-    confirmed = sum(1 for row in payload.get("candidates") or [] if row.get("status") == "confirmed")
+    confirmed = sum(
+        1 for row in payload.get("candidates") or [] if row.get("status") == "confirmed"
+    )
     logger.info("Lowconfirm completed: %d confirmed (G3=%s)", confirmed, gates.get("G3"))
-    logger.info("  Manifest    : %s", Path(args.output) / "RESULT" / "mechanism" / "s3_lowconfirm_manifest.json")
+    logger.info(
+        "  Manifest    : %s",
+        Path(args.output) / "RESULT" / "mechanism" / "s3_lowconfirm_manifest.json",
+    )
     return 0 if confirmed else 1
 
 
@@ -946,12 +1230,15 @@ def _handle_highconfirm(args: argparse.Namespace) -> int:
     setup_logging(args.log_level)
     cfg = _build_config(args)
     try:
-        manifest = _resolve_stage_source(
-            getattr(args, "from_manifest", None),
-            getattr(args, "from_job", None),
-            getattr(args, "from_artifact", "") or "",
-            "S4",
-        )
+        structures, batch_request = _resolve_batch_structures(args)
+        manifest = None
+        if structures is None and batch_request is None:
+            manifest = _resolve_stage_source(
+                getattr(args, "from_manifest", None),
+                getattr(args, "from_job", None),
+                getattr(args, "from_artifact", "") or "",
+                "S4",
+            )
         from acp.mechanism.stages import run_high_confirm
 
         payload = run_high_confirm(
@@ -963,6 +1250,8 @@ def _handle_highconfirm(args: argparse.Namespace) -> int:
             charge=args.charge,
             multiplicity=args.multiplicity,
             config=cfg,
+            structures=structures,
+            batch_request=batch_request,
         )
     except KeyboardInterrupt:
         logger.warning("Interrupted by user")
@@ -971,9 +1260,19 @@ def _handle_highconfirm(args: argparse.Namespace) -> int:
         logger.exception("Highconfirm failed: %s", exc)
         return 1
     gates = payload.get("gates") or {}
-    confirmed = sum(1 for row in payload.get("candidates") or [] if row.get("status") == "confirmed")
-    logger.info("Highconfirm completed: %d confirmed (G4=%s G5=%s)", confirmed, gates.get("G4"), gates.get("G5"))
-    logger.info("  Manifest    : %s", Path(args.output) / "RESULT" / "mechanism" / "s4_highconfirm_manifest.json")
+    confirmed = sum(
+        1 for row in payload.get("candidates") or [] if row.get("status") == "confirmed"
+    )
+    logger.info(
+        "Highconfirm completed: %d confirmed (G4=%s G5=%s)",
+        confirmed,
+        gates.get("G4"),
+        gates.get("G5"),
+    )
+    logger.info(
+        "  Manifest    : %s",
+        Path(args.output) / "RESULT" / "mechanism" / "s4_highconfirm_manifest.json",
+    )
     return 0 if confirmed else 1
 
 

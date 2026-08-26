@@ -28,6 +28,7 @@ Author: QCcalc Team
 
 from __future__ import annotations
 
+import json
 import logging
 import posixpath
 import re
@@ -41,10 +42,14 @@ from typing import NotRequired, TypedDict, cast
 
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
+    BATCH_CONFIG_FILENAME,
     MECHANISM_CONFIG_FILENAME,
+    SCAN_CONFIG_FILENAME,
     JobRecord,
     JobSpec,
     JobStatus,
+    prepare_stage_batch_config,
+    stage_batch_request,
     write_mechanism_job_config,
 )
 from acp.scheduler.nodes import ExecutionTargetError
@@ -54,6 +59,7 @@ from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
 from acp.scheduler.remote.monitor import STATUS_DONE, STATUS_PAUSED, RemoteJobMonitor
 from acp.scheduler.remote.script_gen import (
     build_lsf_script_spec,
+    build_remote_scan_config_payload,
     generate_lsf_script,
 )
 from acp.scheduler.remote.sftp import FileStager
@@ -748,9 +754,64 @@ class RemoteJobRunner:
         materialized_roles: dict[str, Path] = {}
         materialized = materialize_job_input(spec.input, inputs_dir, run_root, materialized_roles)
 
+        bond_scan_mode = spec.workflow == "PESsearch" and (
+            str(spec.method.get("mode") or "") == "bond_length_scan"
+        )
+        batch_mode = spec.workflow in ("Lowconfirm", "Highconfirm") and (
+            stage_batch_request(spec) is not None
+        )
         remote_input_name = materialized.name if materialized else "input.xyz"
-        if materialized and materialized.is_file():
-            remote_role_paths: dict[str, str] = {}
+        remote_role_paths: dict[str, str] = {}
+        if bond_scan_mode:
+            # S2 bond-length scan: the structure source is materialised inside
+            # the workflow; the scheduler only ships scan_config.json.
+            scan_payload = build_remote_scan_config_payload(spec) or {}
+            scan_config_local = work_dir / SCAN_CONFIG_FILENAME
+            scan_config_local.write_text(
+                json.dumps(scan_payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            self._stager.upload_file(
+                node,
+                scan_config_local,
+                posixpath.join(remote_job_dir, SCAN_CONFIG_FILENAME),
+            )
+            remote_input_name = SCAN_CONFIG_FILENAME
+            event_log.append(
+                "remote.input_uploaded",
+                job_id=record.id,
+                node=node.name,
+                role="scan_config",
+            )
+        elif batch_mode:
+            # S3/S4 batch structures: the staged batch_config.json plus the
+            # handoff-copied S2 candidate manifests/structures under
+            # WORK/01_PREPARE/handoff/ make the job self-contained.
+            batch_config_local = prepare_stage_batch_config(spec, work_dir, remote=True)
+            if batch_config_local is None:
+                raise RemoteSubmissionError(
+                    f"Failed to stage batch_config.json for job {record.id}"
+                )
+            self._stager.upload_file(
+                node,
+                batch_config_local,
+                posixpath.join(remote_job_dir, BATCH_CONFIG_FILENAME),
+            )
+            handoff_dir = work_dir / "WORK" / "01_PREPARE" / "handoff"
+            if handoff_dir.is_dir():
+                self._stager.upload_directory(
+                    node,
+                    handoff_dir,
+                    posixpath.join(remote_job_dir, "WORK", "01_PREPARE", "handoff"),
+                )
+            remote_input_name = BATCH_CONFIG_FILENAME
+            event_log.append(
+                "remote.input_uploaded",
+                job_id=record.id,
+                node=node.name,
+                role="batch_config",
+            )
+        elif materialized and materialized.is_file():
             if is_mechanism:
                 remote_inputs_dir = posixpath.join(remote_job_dir, "inputs")
                 self._stager.make_remote_dir(node, remote_inputs_dir)

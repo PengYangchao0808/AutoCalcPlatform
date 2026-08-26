@@ -45,7 +45,7 @@ from cccp.qc.interfaces.orca_ts import (
 from cccp.qc.interfaces.xtb_scan import RelaxedScanPoint, RelaxedScanResult
 from cccp.software import SoftwareNotFoundError, resolve_executable
 from cccp.utils import ensure_dir
-from cccp.utils.file_io import read_xyz, write_xyz
+from cccp.utils.file_io import read_xyz, read_xyz_multiframe, write_xyz
 from cccp.utils.geometry_tools import LogParser
 from cccp.utils.resource_utils import calc_orca_maxcore, mem_to_mb
 from cccp.utils.solvent_map import orca_smd_solvent
@@ -315,7 +315,13 @@ def _normalize_nmr_symbol(symbol: str) -> str:
 _FREQ_SECTION_HEADER = "VIBRATIONAL FREQUENCIES"
 _FREQ_LINE_RE = re.compile(r"^\s*\d+:\s+([-+]?\d+\.\d+)\s+cm\*\*-1", re.MULTILINE)
 _CARTESIAN_COORD_HEADER = "CARTESIAN COORDINATES (ANGSTROEM)"
-_SCAN_STEP_RE = re.compile(r"^\s*RELAXED\s+SURFACE\s+SCAN\s+STEP\s+\d+.*$", re.MULTILINE)
+# ORCA prints the banner as ``*               RELAXED SURFACE SCAN STEP   1   *``:
+# allow an optional leading ``*``; use ``[ \t]`` (not ``\s``) so the match cannot
+# start on an earlier banner-decoration line.
+_SCAN_STEP_RE = re.compile(
+    r"^[ \t]*\*?[ \t]*RELAXED[ \t]+SURFACE[ \t]+SCAN[ \t]+STEP[ \t]+\d+.*$", re.MULTILINE
+)
+_SCAN_SUMMARY_MARKER = "calculated surface"
 _COORD_LINE_RE = re.compile(
     r"^\s*([A-Z][a-z]?)\s+"
     r"([-+]?\d+(?:\.\d+)?(?:[EeDd][+-]?\d+)?)\s+"
@@ -453,35 +459,77 @@ def _parse_all_cartesian_blocks(log_text: str) -> list[tuple[NDArray[np.float64]
 def _parse_relaxed_scan_cartesian_blocks(
     log_text: str,
 ) -> list[tuple[NDArray[np.float64], list[str]]]:
+    """Extract the converged geometry of every relaxed-scan step.
+
+    Each step section holds one ``CARTESIAN COORDINATES`` block per geometry
+    optimization cycle; the converged geometry is the LAST block before the
+    next step banner (or the summary table / end of file for the final step).
+    """
     step_matches = list(_SCAN_STEP_RE.finditer(log_text))
     if not step_matches:
         return _parse_all_cartesian_blocks(log_text)
+    summary_offset = log_text.lower().find(_SCAN_SUMMARY_MARKER)
     blocks: list[tuple[NDArray[np.float64], list[str]]] = []
     for index, match in enumerate(step_matches):
-        section_end = (
-            step_matches[index + 1].start() if index + 1 < len(step_matches) else len(log_text)
-        )
+        if index + 1 < len(step_matches):
+            section_end = step_matches[index + 1].start()
+        elif summary_offset >= 0:
+            section_end = summary_offset
+        else:
+            section_end = len(log_text)
         section_blocks = _parse_all_cartesian_blocks(log_text[match.end() : section_end])
         if section_blocks:
-            blocks.append(section_blocks[0])
+            blocks.append(section_blocks[-1])
     return blocks
 
 
-def _parse_relaxed_scan_energy_table(log_text: str, coordinate_count: int = 1) -> list[float]:
-    """Parse the relaxed-scan summary table from an ORCA output."""
-    lines = log_text.splitlines()
-    start = None
-    for index in range(len(lines) - 1, -1, -1):
-        lowered = lines[index].strip().lower()
-        if (
-            "calculated surface" in lowered
-            or ("relaxed surface scan" in lowered and "step" not in lowered)
-        ):
-            start = index + 1
-            break
-    if start is None:
+def _parse_relaxed_scan_allxyz_frames(
+    allxyz_path: Path,
+) -> list[tuple[NDArray[np.float64], list[str]]]:
+    """Read converged per-step geometries from ORCA's ``*.allxyz`` trajectory."""
+    try:
+        stacked, symbols = read_xyz_multiframe(allxyz_path)
+    except (OSError, ValueError) as exc:
+        logger.debug("Could not read %s: %s", allxyz_path, exc)
         return []
+    if not symbols or stacked.size == 0:
+        return []
+    n_atoms = len(symbols)
+    n_frames = int(stacked.shape[0] // n_atoms)
+    return [
+        (np.asarray(stacked[i * n_atoms : (i + 1) * n_atoms], dtype=np.float64), symbols)
+        for i in range(n_frames)
+    ]
 
+
+def _parse_relaxed_scan_energy_table(log_text: str, coordinate_count: int = 1) -> list[float]:
+    """Parse the relaxed-scan summary table from an ORCA output.
+
+    ORCA emits two sub-tables — ``'Actual Energy'`` followed by ``SCF energy``;
+    the SCF variant is all zeros for GFN-xTB methods (no SCF section), so
+    degenerate all-zero tables are skipped in favour of the last usable one.
+    """
+    lines = log_text.splitlines()
+    header_indices = [
+        index
+        for index, line in enumerate(lines)
+        if "calculated surface" in line.strip().lower()
+        or ("relaxed surface scan" in line.strip().lower() and "step" not in line.strip().lower())
+    ]
+    if not header_indices:
+        return []
+    for start in reversed(header_indices):
+        energies = _parse_relaxed_scan_energy_rows(lines, start + 1, coordinate_count)
+        if energies and any(value != 0.0 for value in energies):
+            return energies
+    return _parse_relaxed_scan_energy_rows(lines, header_indices[-1] + 1, coordinate_count)
+
+
+def _parse_relaxed_scan_energy_rows(
+    lines: list[str],
+    start: int,
+    coordinate_count: int,
+) -> list[float]:
     energies: list[float] = []
     saw_data = False
     for line in lines[start:]:
@@ -1171,9 +1219,7 @@ class ORCAInterface(QCInterfaceBase):
 
         _solvent = kwargs.pop("solvent", None)
         _solvent_model = kwargs.pop("solvent_model", None)
-        geom_extra_lines = [
-            f"  {line}" for line in orca_constraint_block(constraints).splitlines()
-        ]
+        geom_extra_lines = [f"  {line}" for line in orca_constraint_block(constraints).splitlines()]
 
         self._write_input(
             input_file,
@@ -1346,9 +1392,82 @@ class ORCAInterface(QCInterfaceBase):
             )
 
         output_text = output_file.read_text(encoding="utf-8", errors="replace")
-        frame_blocks = _parse_relaxed_scan_cartesian_blocks(output_text)
-        if len(frame_blocks) > points:
-            frame_blocks = frame_blocks[-points:]
+        result_points = self._collect_relaxed_scan_points(
+            output_text, output_dir, output_name, scan_coordinate, points
+        )
+
+        message = ""
+        scan_success = bool(result_points)
+        if len(result_points) != points:
+            scan_success = False
+            message = f"ORCA relaxed scan returned {len(result_points)} frame(s); expected {points}"
+
+        return RelaxedScanResult(
+            points=result_points,
+            input_xyz=input_xyz,
+            scan_dir=output_dir,
+            success=scan_success,
+            message=message,
+        )
+
+    def parse_relaxed_scan_output(
+        self,
+        output_file: Path,
+        scan_coordinate: CoordinateSpec,
+        points: int,
+        output_dir: Path = None,
+        output_name: str = None,
+    ) -> RelaxedScanResult:
+        """Re-parse a completed ORCA relaxed-scan run without re-executing it.
+
+        Args:
+            output_file: Existing ORCA ``.out`` log from a finished relaxed scan.
+            scan_coordinate: The drive coordinate the scan was run with.
+            points: Expected number of scan points.
+            output_dir: Scan directory (defaults to ``output_file.parent``).
+            output_name: Scan basename (defaults to ``output_file.stem``).
+
+        Returns:
+            :class:`RelaxedScanResult` rebuilt from the existing artifacts
+            (``*.allxyz`` preferred, ``.out`` fallback), including regenerated
+            ``scan_frames/frame_NNN.xyz`` files.
+        """
+        output_file = Path(output_file)
+        output_dir = Path(output_dir) if output_dir else output_file.parent
+        output_name = output_name if output_name is not None else output_file.stem
+        output_text = output_file.read_text(encoding="utf-8", errors="replace")
+        result_points = self._collect_relaxed_scan_points(
+            output_text, output_dir, output_name, scan_coordinate, points
+        )
+        message = ""
+        scan_success = bool(result_points)
+        if len(result_points) != points:
+            scan_success = False
+            message = (
+                f"ORCA relaxed scan output {output_file.name} yielded "
+                f"{len(result_points)} frame(s); expected {points}"
+            )
+        return RelaxedScanResult(
+            points=result_points,
+            input_xyz=output_dir / f"{output_name}_start.xyz",
+            scan_dir=output_dir,
+            success=scan_success,
+            message=message,
+        )
+
+    def _collect_relaxed_scan_points(
+        self,
+        output_text: str,
+        output_dir: Path,
+        output_name: str,
+        scan_coordinate: CoordinateSpec,
+        points: int,
+    ) -> list[RelaxedScanPoint]:
+        frame_blocks = _parse_relaxed_scan_allxyz_frames(output_dir / f"{output_name}.allxyz")
+        if len(frame_blocks) != points:
+            frame_blocks = _parse_relaxed_scan_cartesian_blocks(output_text)
+            if len(frame_blocks) > points:
+                frame_blocks = frame_blocks[-points:]
 
         energies = _parse_relaxed_scan_energy_table(output_text, coordinate_count=1)
         if len(energies) < len(frame_blocks):
@@ -1383,23 +1502,7 @@ class ORCAInterface(QCInterfaceBase):
                     coordinate_values={scan_coordinate.id: target},
                 )
             )
-
-        message = ""
-        scan_success = bool(result_points)
-        if len(result_points) != points:
-            scan_success = False
-            message = (
-                f"ORCA relaxed scan returned {len(result_points)} frame(s); "
-                f"expected {points}"
-            )
-
-        return RelaxedScanResult(
-            points=result_points,
-            input_xyz=input_xyz,
-            scan_dir=output_dir,
-            success=scan_success,
-            message=message,
-        )
+        return result_points
 
     def single_point(
         self,

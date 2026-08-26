@@ -115,6 +115,67 @@ def test_method_catalog_xtb_solvent_model_options() -> None:
     assert xtb_options == ["none", "ALPB", "GBSA"]
 
 
+def test_pes_scan_catalog_exposes_complete_protocol_levels() -> None:
+    catalog = get_method_catalog()
+    workflow = next(item for item in WORKFLOW_CATALOG if item["id"] == "PESsearch")
+    assert workflow["method_schema_id"] == "pes_scan"
+    assert "XYZ" in workflow["description_zh"]
+
+    schema = catalog["method_schemas"]["pes_scan"]
+    assert [level["level_id"] for level in schema["method_levels"]] == [
+        "scan_coordinate",
+        "scan_driver",
+        "scan_optimizer",
+        "single_point",
+    ]
+    fields = {
+        field_name
+        for level in schema["method_levels"]
+        for field_name in level["fields"]
+    }
+    assert {
+        "scan_coordinate_kind",
+        "scan_bond_type",
+        "scan_coordinate_start",
+        "scan_coordinate_end",
+        "scan_coordinate_points",
+        "scan_mode",
+        "scan_reuse_previous_geometry",
+        "scan_full_scan",
+        "scan_failure_policy",
+        "scan_retry_count",
+        "scan_use_scants",
+        "scan_optimizer_method",
+        "scan_optimizer_max_iterations",
+        "scan_optimizer_convergence",
+        "scan_optimizer_retries",
+        "scan_optimizer_retry_strategy",
+        "functional",
+        "basis",
+        "dispersion",
+        "ri_approximation",
+        "aux_j_basis",
+        "aux_c_basis",
+        "solvent_model",
+        "solvent",
+        "grid",
+        "scf_convergence",
+        "single_point_resume",
+    }.issubset(fields)
+    # The point-optimization iteration limit has one owner. The historical
+    # driver-level alias remains backend-compatible but is not rendered as a
+    # second, duplicate UI control.
+    assert "scan_max_iterations" not in fields
+    assert "path_strategy" not in fields
+    assert catalog["method_schemas"]["pes_bond_scan"] is schema
+
+    field_defs = catalog["field_definitions"]
+    for field_name in schema["method_levels"][1]["fields"]:
+        assert field_defs[field_name]["label_zh"]
+        assert field_defs[field_name]["help_zh"]
+    assert field_defs["scan_mode"]["option_labels_zh"]["relaxed_scan"] == "松弛扫描"
+
+
 def test_normalize_and_validate_accepts_uppercase_solvent_model() -> None:
     method = {
         "levels": {

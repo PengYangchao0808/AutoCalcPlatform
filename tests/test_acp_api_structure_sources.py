@@ -69,6 +69,7 @@ def _seed_job(
     files: dict[str, str] | None = None,
     result: dict[str, Any] | None = None,
     remote_job_id: str | None = None,
+    molecule_name: str = "",
 ) -> Path:
     """Insert a job record directly into the store and write its work dir."""
     work_dir = tmp_path / (project_id or "uncategorized") / job_id
@@ -88,7 +89,12 @@ def _seed_job(
     manager.store.create(
         JobRecord(
             id=job_id,
-            spec=JobSpec(workflow=workflow, name=f"name-{job_id}", project_id=project_id),
+            spec=JobSpec(
+                workflow=workflow,
+                name=f"name-{job_id}",
+                project_id=project_id,
+                molecule_name=molecule_name,
+            ),
             status=status,
             work_dir=str(work_dir),
             created_at="2026-08-22T09:00:00+00:00",
@@ -235,6 +241,76 @@ def test_get_source_ok(client: TestClient, tmp_path: Path) -> None:
     assert structure["original_format"] == "xyz"
     assert structure["source_type"] == "job_artifact"
     assert structure["xyz"].splitlines()[0] == "2"
+
+
+def test_source_exposes_only_canonical_molecule_name_for_import(
+    client: TestClient, tmp_path: Path
+) -> None:
+    _seed_job(
+        client,
+        tmp_path,
+        "job1",
+        molecule_name="INT_P_energy_mt5g72i5",
+        products=_global_min_product(),
+        files={"mol/mol_global_min.xyz": _XYZ},
+    )
+
+    listing = client.get("/api/v1/structure-sources/recent").json()["sources"]
+    assert listing[0]["molecule_name"] == "INT_P_energy_mt5g72i5"
+    # The artifact/file label remains separate from the inherited identity.
+    detail = client.get("/api/v1/structure-sources/job_job1:mol/mol_global_min.xyz")
+    assert detail.json()["structure"]["name"] == "mol_global_min.xyz"
+    assert detail.json()["structure"]["molecule_name"] == "INT_P_energy_mt5g72i5"
+
+
+def test_candidate_detail_preserves_role_id_and_unique_inherited_name(
+    client: TestClient, tmp_path: Path
+) -> None:
+    ts_xyz = """\
+2
+TAG: TS | candidate_id=ts_guess_017 | source=PESsearch
+C 0.000000 0.000000 0.000000
+O 1.200000 0.000000 0.000000
+"""
+    work_dir = _seed_job(
+        client,
+        tmp_path,
+        "pes1",
+        workflow="PESsearch",
+        molecule_name="INT_P_energy_mt5g72",
+        products=None,
+        files={"RESULT/structures/ts_guess_017.xyz": ts_xyz},
+    )
+    (work_dir / "RESULT" / "result_manifest.json").write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "workflow": "PESsearch",
+                "status": "completed",
+                "products": [
+                    {
+                        "id": "s2_candidate_ts_guess_017",
+                        "label": "S2 candidate ts_guess_017 (TS)",
+                        "path": "structures/ts_guess_017.xyz",
+                        "kind": "structure",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    listing = client.get("/api/v1/structure-sources/recent").json()["sources"]
+    assert listing[0]["tag"] == "TS"
+    assert listing[0]["candidate_id"] == "ts_guess_017"
+    assert listing[0]["molecule_name"] == "INT_P_energy_mt5g72__ts_guess_017"
+
+    detail = client.get(
+        "/api/v1/structure-sources/job_pes1:RESULT/structures/ts_guess_017.xyz"
+    ).json()["structure"]
+    assert detail["tag"] == "TS"
+    assert detail["candidate_id"] == "ts_guess_017"
+    assert detail["molecule_name"] == "INT_P_energy_mt5g72__ts_guess_017"
 
 
 def test_get_source_404_branches(client: TestClient, tmp_path: Path) -> None:
