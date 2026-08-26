@@ -254,6 +254,60 @@ def input_chemistry_flags(inp: dict[str, Any]) -> list[str]:
     return flags
 
 
+def scan_method_flags(
+    method: Mapping[str, Any],
+    inp: Mapping[str, Any] | None = None,
+) -> list[str]:
+    """Emit relaxed-scan coordinate and point flags for local and remote jobs."""
+    payload = inp or {}
+    raw_coordinates: Any = None
+    for source in (payload, method):
+        for key in ("scan_coordinates", "coordinate"):
+            candidate = source.get(key)
+            if candidate is not None:
+                raw_coordinates = candidate
+                break
+        if raw_coordinates is not None:
+            break
+
+    if raw_coordinates is None:
+        raise ValueError("scan job requires at least one coordinate")
+    if isinstance(raw_coordinates, (str, Mapping)):
+        coordinates = [raw_coordinates]
+    elif isinstance(raw_coordinates, (list, tuple)):
+        coordinates = list(raw_coordinates)
+    else:
+        raise ValueError("scan coordinates must be a string or a sequence")
+
+    flags: list[str] = []
+    for coordinate in coordinates:
+        if isinstance(coordinate, Mapping):
+            atoms = coordinate.get("atoms")
+            start = coordinate.get("start")
+            end = coordinate.get("end")
+            if not isinstance(atoms, (list, tuple)) or len(atoms) != 2:
+                raise ValueError("scan coordinate objects require exactly two atoms")
+            if start is None or end is None:
+                raise ValueError("scan coordinate objects require start and end")
+            coordinate = f"{atoms[0]},{atoms[1]},{start},{end}"
+        flags += ["--coordinate", str(coordinate)]
+
+    levels = method.get("levels")
+    scan_level: Mapping[str, Any] = {}
+    if isinstance(levels, Mapping):
+        candidate_level = levels.get("scan") or levels.get("scan_coordinate")
+        if isinstance(candidate_level, Mapping):
+            scan_level = candidate_level
+    points = method.get("scan_points")
+    if points is None:
+        points = scan_level.get("scan_coordinate_points")
+    if points is None:
+        points = scan_level.get("scan_points")
+    if points is not None:
+        flags += ["--scan-points", str(points)]
+    return flags
+
+
 # ── xtbmd_censo_energy flag emission (E7: runner ⇄ script_gen parity) ────
 # Single source of truth for the MD / batch-opt / ISOSTAT / conv-check /
 # resume flag mapping. Both JobRunner._build_cmd and
@@ -843,6 +897,7 @@ __all__ = [
     "censo_solvent_from_method",
     "censo_ewin_from_method",
     "input_chemistry_flags",
+    "scan_method_flags",
     "xtbmd_method_flags",
     "nmr_method_flags",
     "mechanism_method_flags",

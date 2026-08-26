@@ -45,6 +45,18 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "visible": True,
     },
     {
+        "id": "scan",
+        "label": "Relaxed Scan",
+        "label_zh": "松弛扫描",
+        "category": "simple",
+        "description": "Scan an internal coordinate while relaxing the remaining geometry",
+        "method_schema_id": "dft_scan",
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
+        "status": "active",
+        "visible": True,
+    },
+    {
         "id": "optfreq",
         "label": "Optimization + Frequency",
         "label_zh": "优化+频率",
@@ -1574,6 +1586,80 @@ METHOD_SCHEMAS: dict[str, Any] = {
         ],
         "profiles": [],
     },
+    "dft_scan": {
+        "method_levels": [
+            {
+                "level_id": "scan",
+                "label": "Relaxed Scan",
+                "label_zh": "松弛扫描",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "dispersion",
+                    "ri_approximation",
+                    "aux_j_basis",
+                    "aux_c_basis",
+                    "solvent_model",
+                    "solvent",
+                    "scan_coordinate_kind",
+                    "scan_coordinate_start",
+                    "scan_coordinate_end",
+                    "scan_coordinate_points",
+                    "scan_mode",
+                    "scan_reuse_previous_geometry",
+                    "scan_full_scan",
+                    "scan_failure_policy",
+                    "scan_retry_count",
+                    "scan_use_scants",
+                    "scan_max_iterations",
+                    "scan_optimizer_method",
+                    "scan_optimizer_max_iterations",
+                    "scan_optimizer_convergence",
+                    "scan_optimizer_retries",
+                    "scan_optimizer_retry_strategy",
+                ],
+            }
+        ],
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default Relaxed Scan",
+                "label_zh": "标准松弛扫描",
+                "summary": "r2SCAN-3c/ORCA relaxed scan over a distance coordinate",
+                "levels": {
+                    "scan": {
+                        "engine": "orca",
+                        "functional": "r2SCAN-3c",
+                        "basis": "",
+                        "dispersion": "none",
+                        "ri_approximation": "none",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
+                        "solvent_model": "none",
+                        "solvent": "",
+                        "scan_coordinate_kind": "distance",
+                        "scan_coordinate_start": 1.0,
+                        "scan_coordinate_end": 3.0,
+                        "scan_coordinate_points": 21,
+                        "scan_mode": "relaxed_scan",
+                        "scan_reuse_previous_geometry": True,
+                        "scan_full_scan": True,
+                        "scan_failure_policy": "retry_previous",
+                        "scan_retry_count": 2,
+                        "scan_use_scants": False,
+                        "scan_max_iterations": 250,
+                        "scan_optimizer_method": "GFN2-xTB",
+                        "scan_optimizer_max_iterations": 250,
+                        "scan_optimizer_convergence": "normal",
+                        "scan_optimizer_retries": 2,
+                        "scan_optimizer_retry_strategy": "previous_geometry",
+                    }
+                },
+            }
+        ],
+    },
     "dft_optfreq": {
         "method_levels": [
             {
@@ -2953,7 +3039,7 @@ _BACKEND_BINARIES: dict[str, dict[str, Any]] = {
 }
 
 _BACKEND_SUPPORTS: dict[str, list[str]] = {
-    "orca": ["singlepoint", "optimize", "frequency", "optfreq"],
+    "orca": ["singlepoint", "optimize", "frequency", "optfreq", "scan"],
     "xtb": ["singlepoint", "optimize"],
     "crest": ["conformer_search"],
     "censo": ["censo_refinement", "censo_energy"],

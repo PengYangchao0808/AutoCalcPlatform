@@ -1,0 +1,9 @@
+Command:
+printf '2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.9\n' > /tmp/drill.xyz && python -c "import subprocess,sys; r=subprocess.run(['python','-m','acp.cli','run','scan','--input','/tmp/drill.xyz','--coordinate','1,9,0.9,1.5'],capture_output=True,text=True); ok = r.returncode==2 and ('原子' in (r.stderr+r.stdout) or 'atom' in (r.stderr+r.stdout).lower()); print('returncode=', r.returncode); print((r.stderr+r.stdout).strip().splitlines()[-1] if (r.stderr+r.stdout).strip() else 'no diagnostic'); sys.exit(0 if ok else 1)"
+
+Key output:
+returncode= 2
+2026-08-27 05:44:15,065 [ERROR] __main__: Scan coordinate validation failed: atom index 1 is out of range for 1 atoms; 原子索引 1 超出输入分子原子数 1
+
+Exit code: 0
+Result: PASS — the wrapper assertion confirmed CLI exit code 2 and an atom-index diagnostic.

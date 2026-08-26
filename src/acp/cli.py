@@ -122,7 +122,7 @@ def _parse_calc_hess_arg(value: str) -> int | str:
 
 
 def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
-    """Register 5 simple ORCA workflow subcommand parsers + xtb_optimize."""
+    """Register simple ORCA workflow subcommand parsers + xtb_optimize."""
     for wf, wf_label, wf_desc, wf_epilog in [
         (
             "singlepoint",
@@ -141,6 +141,12 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
             "Frequency",
             "Run ORCA vibrational frequency calculation",
             "Examples:\n  acp run frequency --input mol.xyz --output ./out\n  acp run frequency --input mol.inp --method wB97M-V --basis def2-TZVPP",
+        ),
+        (
+            "scan",
+            "Relaxed Scan",
+            "Run an ORCA relaxed internal-coordinate scan",
+            "Examples:\n  acp run scan --input mol.xyz --coordinate 0,1,1.0,2.0 --output ./out",
         ),
         (
             "optfreq",
@@ -219,7 +225,7 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
         help="Comma-separated ORCA route extras (e.g. SlowConv,NoFinalGrid)",
     )
 
-    if wf in ("singlepoint", "optimize", "frequency", "optfreq", "optfreqsp"):
+    if wf in ("singlepoint", "optimize", "frequency", "scan", "optfreq", "optfreqsp"):
         parser.add_argument(
             "--aux-j-basis",
             default="AutoAux",
@@ -330,6 +336,21 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
         )
         parser.add_argument(
             "--sp-solvent-model", default="", help="SP solvent model (defaults to --solvent-model)"
+        )
+
+    if wf == "scan":
+        parser.add_argument(
+            "--coordinate",
+            action="append",
+            required=True,
+            metavar="ATOM1,ATOM2,START,END",
+            help="Zero-based distance coordinate; repeat for coupled coordinates",
+        )
+        parser.add_argument(
+            "--scan-points",
+            type=int,
+            default=21,
+            help="Number of scan frames including both endpoints (default: 21)",
         )
 
 
@@ -2498,6 +2519,71 @@ def _handle_frequency(args: argparse.Namespace) -> int:
     return 1
 
 
+def _handle_scan(args: argparse.Namespace) -> int:
+    """Execute a relaxed internal-coordinate scan."""
+    from acp.calculations.contracts import CalculationRequest, StructureArtifact
+    from acp.calculations.primitives.scan import ScanCoordinateError, run_scan
+    from acp.storage.layout import TaskStorage
+    from acp.workflows.simple import _calc_subdir, _check_input, _resolve_output_dir
+
+    setup_logging(args.log_level)
+    try:
+        _check_input(args.input)
+        cfg = _build_config(args)
+        output_root = _resolve_output_dir(Path(args.output))
+        calc_dir = _calc_subdir(output_root, args.name, args.input, "scan")
+        storage = TaskStorage(calc_dir)
+        storage.ensure_layout(stages=["07_PATH"], categories=["structures", "trajectories"])
+
+        method_kwargs = _build_simple_method_kwargs(args)
+        method_kwargs.pop("method", None)
+        resources: dict[str, Any] = dict(method_kwargs)
+        resources.update(
+            {
+                "backend": "orca",
+                "config": cfg,
+                "output_dir": str(storage.stage_dir("07_PATH", "ORCA")),
+                "result_dir": str(storage.result_dir()),
+                "scan_coordinates": list(args.coordinate),
+                "scan_points": args.scan_points,
+            }
+        )
+        if args.charge is not None:
+            resources["charge"] = args.charge
+        if args.multiplicity is not None:
+            resources["multiplicity"] = args.multiplicity
+
+        result = run_scan(
+            CalculationRequest(
+                input_artifact=StructureArtifact(
+                    path=Path(args.input),
+                    source="cli",
+                ),
+                method=args.method,
+                resources=resources,
+                workflow="scan",
+                profile="default",
+            )
+        )
+    except ScanCoordinateError as exc:
+        logger.error("Scan coordinate validation failed: %s", exc)
+        return 2
+    except KeyboardInterrupt:
+        logger.warning("Relaxed scan interrupted by user")
+        return 130
+    except Exception as exc:
+        logger.exception("Relaxed scan failed: %s", exc)
+        return 1
+
+    if result.status == "completed":
+        logger.info("Relaxed scan completed")
+        logger.info("  Frames: %s", result.metadata.get("frame_count", "N/A"))
+        logger.info("  Output: %s", result.metadata.get("output_dir", args.output))
+        return 0
+    logger.error("Relaxed scan failed: %s", "; ".join(result.errors))
+    return 1
+
+
 def _handle_optfreq(args: argparse.Namespace) -> int:
     from acp.workflows.simple import run_optfreq
 
@@ -2933,6 +3019,7 @@ def main(argv: list[str] | None = None) -> int:
             "singlepoint": _handle_singlepoint,
             "optimize": _handle_optimize,
             "frequency": _handle_frequency,
+            "scan": _handle_scan,
             "optfreq": _handle_optfreq,
             "optfreqsp": _handle_optfreqsp,
             "xtb_optimize": _handle_xtb_optimize,

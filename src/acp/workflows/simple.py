@@ -12,6 +12,7 @@ from numpy.typing import NDArray
 
 from acp.backends.orca import ORCABackend
 from acp.backends.xtb import XTBBackend
+from acp.calculations.primitives.scan import run_scan
 from acp.core.models import HARTREE_TO_KCAL
 from acp.core.state import WorkflowState
 from acp.core.utils import ensure_unique_dir
@@ -25,6 +26,7 @@ from acp.workflows._helpers import (
     write_result_summary,
 )
 from cccp.config import load_config
+from cccp.qc.runners import run_shermo
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,7 @@ _STAGE_NAMES: dict[str, list[str]] = {
     "singlepoint": ["single_point"],
     "optimize": ["optimize"],
     "frequency": ["frequency"],
+    "scan": ["scan"],
     "optfreq": ["opt_freq"],
     "optfreqsp": ["opt_freq", "single_point", "shermo"],
     "xtb_optimize": ["xtb_optimize"],
@@ -64,7 +67,8 @@ def _read_input(
     structure = reader.read(input_source, charge=charge, multiplicity=multiplicity, name=name)
     if structure.coordinates is None or structure.symbols is None:
         raise ValueError("Failed to extract coordinates/symbols from input")
-    return structure.coordinates, list(structure.symbols), structure.charge, structure.multiplicity
+    coordinates: NDArray[np.float64] = np.asarray(structure.coordinates, dtype=np.float64)
+    return coordinates, list(structure.symbols), structure.charge, structure.multiplicity
 
 
 def _write_energy_json(output_dir: Path, energy: float | None, unit: str = "Hartree") -> None:
@@ -419,7 +423,7 @@ def run_singlepoint(
         symbols,
         charge=chg,
         multiplicity=mult,
-        output_dir=str(storage.stage_dir("05_SP", "ORCA")),
+        output_dir=Path(storage.stage_dir("05_SP", "ORCA")),
         **kwargs,
     )
     if not result.success:
@@ -484,7 +488,7 @@ def run_optimize(
         symbols,
         charge=chg,
         multiplicity=mult,
-        output_dir=str(storage.stage_dir("03_OPT", "ORCA")),
+        output_dir=Path(storage.stage_dir("03_OPT", "ORCA")),
         **kwargs,
     )
     if not result.success:
@@ -567,7 +571,7 @@ def run_xtb_optimize(
         symbols,
         charge=chg,
         multiplicity=mult,
-        output_dir=str(storage.stage_dir("03_OPT", "xTB")),
+        output_dir=Path(storage.stage_dir("03_OPT", "xTB")),
         **kwargs,
     )
     if not result.success:
@@ -650,7 +654,7 @@ def run_frequency(
         symbols,
         charge=chg,
         multiplicity=mult,
-        output_dir=str(storage.stage_dir("04_FREQ", "ORCA")),
+        output_dir=Path(storage.stage_dir("04_FREQ", "ORCA")),
         **kwargs,
     )
     if not result.success:
@@ -725,7 +729,7 @@ def run_optfreq(
         symbols,
         charge=chg,
         multiplicity=mult,
-        output_dir=str(storage.stage_dir("03_OPT", "ORCA")),
+        output_dir=Path(storage.stage_dir("03_OPT", "ORCA")),
         **kwargs,
     )
     if not result.success:
@@ -822,16 +826,16 @@ def run_optfreqsp(
         stages=["03_OPT", "04_FREQ", "05_SP", "06_THERMO"],
         categories=["structures", "frequencies", "energies", "reports"],
     )
-    opt_dir = storage.stage_dir("03_OPT", "ORCA")
-    sp_dir = storage.stage_dir("05_SP", "ORCA")
-    thermo_dir = storage.stage_dir("06_THERMO", "Shermo")
+    opt_dir = Path(storage.stage_dir("03_OPT", "ORCA"))
+    sp_dir = Path(storage.stage_dir("05_SP", "ORCA"))
+    thermo_dir = Path(storage.stage_dir("06_THERMO", "Shermo"))
 
     # --- Stage 1: Opt+Freq ---
     opt_kwargs = _build_method_kwargs(optfreq_kwargs or {})
     backend = _build_backend(cfg)
     state.set_stage("opt_freq")
     optfreq_result = backend.opt_freq(
-        coords, symbols, charge=chg, multiplicity=mult, output_dir=str(opt_dir), **opt_kwargs
+        coords, symbols, charge=chg, multiplicity=mult, output_dir=opt_dir, **opt_kwargs
     )
     if not optfreq_result.success:
         state.fail_stage("opt_freq", optfreq_result.error_message or "Opt+Freq stage failed")
@@ -859,7 +863,7 @@ def run_optfreqsp(
     sp_backend = _build_backend(cfg)
     state.set_stage("single_point")
     sp_result = sp_backend.single_point(
-        opt_coords, symbols, charge=chg, multiplicity=mult, output_dir=str(sp_dir), **sp_flat
+        opt_coords, symbols, charge=chg, multiplicity=mult, output_dir=sp_dir, **sp_flat
     )
     if not sp_result.success:
         state.fail_stage("single_point", sp_result.error_message or "SP stage failed")
@@ -880,13 +884,12 @@ def run_optfreqsp(
 
     # --- Stage 3: Shermo ---
     th = thermo_kwargs or {}
-    from acp.backends.external import run_shermo
 
     state.set_stage("shermo")
     thermo = run_shermo(
         freq_output=log_file,
         sp_energy=sp_energy,
-        output_dir=str(thermo_dir),
+        output_dir=thermo_dir,
         shermo_bin=shermo_bin,
         temperature_k=th.get("temperature", 298.15),
         pressure_atm=th.get("pressure", 1.0),
@@ -970,6 +973,7 @@ __all__ = [
     "run_singlepoint",
     "run_optimize",
     "run_frequency",
+    "run_scan",
     "run_optfreq",
     "run_optfreqsp",
 ]

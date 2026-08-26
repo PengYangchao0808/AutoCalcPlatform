@@ -47,6 +47,7 @@ from acp.scheduler.jobs import (
     nmr_method_flags,
     pessearch_method_flags,
     prepare_stage_batch_config,
+    scan_method_flags,
     stage_batch_request,
     write_mechanism_job_config,
     xtbmd_method_flags,
@@ -1144,6 +1145,7 @@ class JobRunner:
             "frequency",
             "optfreq",
             "optfreqsp",
+            "scan",
             "xtb_optimize",
         ):
             raise ValueError(f"No subprocess mapping for workflow: {wf}")
@@ -1271,7 +1273,7 @@ class JobRunner:
                 # GFN1 energy window for this workflow (CLI --ewin);
                 # the same flag name, different object vs. energy.
                 cmd += ["--ewin", str(ewin)]
-        elif wf in ("singlepoint", "optimize", "frequency", "optfreq", "optfreqsp"):
+        elif wf in ("singlepoint", "optimize", "frequency", "scan", "optfreq", "optfreqsp"):
             cmd += ["--input", str(source), "--output", str(work_dir)]
             if spec.name:
                 cmd += ["--name", spec.name]
@@ -1284,6 +1286,8 @@ class JobRunner:
                     cmd += method_levels_to_cli_flags(levels, prefix_map)
                 else:
                     cmd += method_levels_to_cli_flags(levels)
+            if wf == "scan":
+                cmd += scan_method_flags(method, inp)
         elif wf == "xtb_optimize":
             cmd += ["--input", str(source), "--output", str(work_dir)]
             if spec.name:

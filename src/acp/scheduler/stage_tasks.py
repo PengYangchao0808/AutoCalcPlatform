@@ -624,6 +624,11 @@ class _FrequencyStagePlanProvider:
         return [StagePlan(stage_name="frequency")]
 
 
+class _ScanStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        return [StagePlan(stage_name="scan")]
+
+
 class _OptfreqStagePlanProvider:
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
         return [StagePlan(stage_name="opt_freq")]
@@ -641,6 +646,7 @@ class _OptfreqspStagePlanProvider:
 register_plan_provider("singlepoint", _SinglepointStagePlanProvider())
 register_plan_provider("optimize", _OptimizeStagePlanProvider())
 register_plan_provider("frequency", _FrequencyStagePlanProvider())
+register_plan_provider("scan", _ScanStagePlanProvider())
 register_plan_provider("optfreq", _OptfreqStagePlanProvider())
 register_plan_provider("optfreqsp", _OptfreqspStagePlanProvider())
 

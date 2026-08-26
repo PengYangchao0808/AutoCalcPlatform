@@ -100,6 +100,12 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         description="ORCA vibrational frequency calculation.",
         requires_binaries=["orca"],
     ),
+    "scan": WorkflowRegistryEntry(
+        name="scan",
+        label="Relaxed Scan",
+        description="Relax an internal coordinate at each scan point with ORCA.",
+        requires_binaries=["orca"],
+    ),
     "optfreq": WorkflowRegistryEntry(
         name="optfreq",
         label="Optimization + Frequency",

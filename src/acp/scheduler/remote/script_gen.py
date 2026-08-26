@@ -37,6 +37,7 @@ from acp.scheduler.jobs import (
     lowconfirm_method_flags,
     nmr_method_flags,
     pessearch_method_flags,
+    scan_method_flags,
     stage_batch_request,
     xtbmd_method_flags,
 )
@@ -188,6 +189,7 @@ def build_remote_cli_command(
         "frequency",
         "optfreq",
         "optfreqsp",
+        "scan",
         "xtb_optimize",
     ):
         raise ValueError(f"No remote subprocess mapping for workflow: {wf}")
@@ -314,7 +316,7 @@ def build_remote_cli_command(
         ewin = censo_ewin_from_method(method)
         if ewin is not None:
             cmd += ["--ewin", str(ewin)]
-    elif wf in ("singlepoint", "optimize", "frequency", "optfreq", "optfreqsp"):
+    elif wf in ("singlepoint", "optimize", "frequency", "scan", "optfreq", "optfreqsp"):
         cmd += ["--input", str(source), "--output", "."]
         if spec.name:
             cmd += ["--name", spec.name]
@@ -325,6 +327,8 @@ def build_remote_cli_command(
                 cmd += method_levels_to_cli_flags(levels, prefix_map)
             else:
                 cmd += method_levels_to_cli_flags(levels)
+        if wf == "scan":
+            cmd += scan_method_flags(method, inp)
     elif wf == "xtb_optimize":
         cmd += ["--input", str(source), "--output", "."]
         if spec.name:

@@ -11,7 +11,9 @@ from numpy.typing import NDArray
 
 from acp.backends.base import QCBackend, QCResult, to_qc_result
 from acp.backends.registry import register_backend
+from cccp.qc.interfaces.constraints import ReactionCoordinatePlan
 from cccp.qc.interfaces.orca import ORCAInterface
+from cccp.qc.interfaces.xtb_scan import RelaxedScanResult
 from cccp.software import detect_version
 
 logger = logging.getLogger(__name__)
@@ -204,6 +206,31 @@ class ORCABackend(QCBackend):
             charge=charge,
             multiplicity=multiplicity,
             output_dir=target_dir,
+            **kwargs,
+        )
+
+    def relaxed_scan(
+        self,
+        coordinates: NDArray[np.float64],
+        symbols: list[str],
+        output_dir: Path,
+        plan: ReactionCoordinatePlan,
+        charge: int = 0,
+        multiplicity: int = 1,
+        **kwargs: Any,
+    ) -> RelaxedScanResult:
+        """Delegate a single-coordinate relaxed scan to ``ORCAInterface``."""
+        drive_coordinates = plan.drive_coordinates()
+        if len(drive_coordinates) != 1:
+            raise ValueError("ORCA relaxed_scan requires exactly one drive coordinate")
+        return self._interface.relaxed_scan(
+            coordinates,
+            symbols,
+            scan_coordinate=drive_coordinates[0],
+            points=plan.points,
+            charge=charge,
+            multiplicity=multiplicity,
+            output_dir=output_dir,
             **kwargs,
         )
 

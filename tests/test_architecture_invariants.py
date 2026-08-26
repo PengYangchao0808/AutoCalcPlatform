@@ -13,6 +13,7 @@ CURRENT_ACTIVE_IDS = (
     "singlepoint",
     "optimize",
     "frequency",
+    "scan",
     "optfreq",
     "optfreqsp",
     "xtb_optimize",
@@ -78,11 +79,12 @@ def test_current_active_workflow_ids_are_exact_and_ordered() -> None:
     active_ids = tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
 
     assert active_ids == CURRENT_ACTIVE_IDS
-    assert len(active_ids) == 11
+    assert len(active_ids) == 12
     assert set(active_ids) == {
         "singlepoint",
         "optimize",
         "frequency",
+        "scan",
         "optfreq",
         "optfreqsp",
         "xtb_optimize",
