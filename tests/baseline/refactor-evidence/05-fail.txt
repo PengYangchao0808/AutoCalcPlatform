@@ -1,0 +1,38 @@
+=== STEP 1: confirm IRC rejection ===
+COMMAND:
+  python -m pytest tests/test_calculations_contracts.py::test_plan_rejects_irc_step -q
+KEY OUTPUT:
+  .                                                                        [100%]
+  1 passed in 0.61s
+  validate_plan returned a non-empty error list for the raw IRC step.
+EXIT CODE: 0
+
+=== STEP 2: back up the test before mutation ===
+COMMAND:
+  cp tests/test_calculations_contracts.py /tmp/test_calculations_contracts.py.bak
+KEY OUTPUT:
+  Backup completed with no output.
+  The original assertion was preserved in /tmp/test_calculations_contracts.py.bak.
+  The repository test file remained available for restoration.
+EXIT CODE: 0
+
+=== STEP 3: mutate the IRC expectation ===
+COMMAND:
+  Temporarily replace the IRC-rejection assertion with the opposite expectation.
+  python -m pytest tests/test_calculations_contracts.py::test_plan_rejects_irc_step -q
+KEY OUTPUT:
+  F                                                                        [100%]
+  FAILED test_plan_rejects_irc_step
+  assert not ["steps[0]: unsupported kind 'irc'; IRC requests must be submitted independently"]
+  1 failed in 0.62s
+EXIT CODE: 1 (expected mutation failure)
+
+=== STEP 4: restore and re-run ===
+COMMAND:
+  cp /tmp/test_calculations_contracts.py.bak tests/test_calculations_contracts.py
+  python -m pytest tests/test_calculations_contracts.py::test_plan_rejects_irc_step -q
+KEY OUTPUT:
+  .                                                                        [100%]
+  1 passed in 0.55s
+  Restored assertion again proves the raw IRC step is rejected.
+EXIT CODE: 0

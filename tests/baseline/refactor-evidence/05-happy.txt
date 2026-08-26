@@ -1,0 +1,9 @@
+COMMAND:
+  python -m pytest tests/test_calculations_contracts.py::test_valid_plan_passes -q
+
+KEY OUTPUT:
+  .                                                                        [100%]
+  1 passed in 0.60s
+  validate_plan returned no errors for the legal BatchOptimize plan.
+
+EXIT CODE: 0
