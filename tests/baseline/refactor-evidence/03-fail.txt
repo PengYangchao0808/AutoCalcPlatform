@@ -1,0 +1,68 @@
+=== 03-fail.txt: Wave 0 Todo 3 — Inventory Document QA Failure Drill ===
+Date: 2026-08-27
+Branch: refactor/calc-cleanup
+
+=== Phase 1: Backup ===
+COMMAND: cp docs/ACP_Refactor_Wave0_Inventory.md /tmp/inv.bak
+EXIT: 0
+
+=== Phase 2: Inject corruption to break regex matches ===
+COMMAND: python3 -c "
+s = open('docs/ACP_Refactor_Wave0_Inventory.md').read()
+s2 = s.replace('mechanism/identity.py', 'mechanism/\u200bidentity.py', 1)
+s2 = s2.replace('mechanism/reaction_definition.py', 'mechanism/\u200breaction_definition.py', 1)
+open('docs/ACP_Refactor_Wave0_Inventory.md', 'w').write(s2)
+"
+EXIT: 0
+NOTE: Inserted ZERO WIDTH SPACE (U+200B) into mechanism/identity.py and mechanism/reaction_definition.py
+      to break the regex match pattern ^\| .*mechanism/<name>
+
+=== Phase 3: Run checker (expect FAILURE) ===
+COMMAND: python3 - <<'EOF'
+import re, sys
+rows = open('docs/ACP_Refactor_Wave0_Inventory.md').read()
+S111 = ["orchestrator.py","study_runner.py","project.py","chain.py","engines/","modules/","stages/confirm.py","stages/low_confirm.py","stages/high_confirm.py","stages/handoff.py","results_v2.py","__init__.py"]
+S112 = ["batch_confirm.py","batch_models.py","providers/native_refinement.py","providers/thermo.py","bond_scan.py","scan_models.py","scan_manifest.py","primitives/path_selector.py","primitives/path_profile.py","primitives/scan_trajectory.py","primitives/scan_rescue.py","primitives/geometry_guard.py","identity.py","layout.py","_helpers.py"]
+c1 = sum(1 for s in S111 if re.search(r'^\| .*mechanism/' + re.escape(s), rows, re.M))
+c2 = sum(1 for s in S112 if re.search(r'^\| .*mechanism/' + re.escape(s), rows, re.M))
+c3 = len(re.findall(r's2_confirm_service\.py|s2_confirm_support\.py', rows))
+c4 = len(set(re.findall(r'test_acp_[a-z0-9_]+\.py|test_acp_s2_[a-z_]+\.py', rows)))
+S113 = ["reaction_definition.py","endpoint.py","atom_mapping.py","bond_changes.py","scan_manifest.py","scan_models.py","bond_scan.py","batch_confirm.py","batch_models.py","providers/native_refinement.py","providers/thermo.py","presets.py","reports.py","rescue.py","refinement_manifest.py","candidates.py","strategies.py"]
+c5 = sum(1 for s in S113 if re.search(r'^\| .*mechanism/' + re.escape(s), rows, re.M))
+assert (c1, c2, c3, c4, c5) == (12, 14, 2, 22, 17), f'MISMATCH: {(c1,c2,c3,c4,c5)} != (12,14,2,22,17)'
+print('INVENTORY_ROWS_OK 12/14/2/22/17')
+EOF
+OUTPUT: MISMATCH: (12, 13, 2, 22, 16) != (12,14,2,22,17)
+EXIT: 1
+NOTE: c2 dropped 14→13 (identity.py corrupted), c5 dropped 17→16 (reaction_definition.py corrupted)
+      Checker has牙: corruption detected, assertion fails
+
+=== Phase 4: Restore from backup ===
+COMMAND: cp /tmp/inv.bak docs/ACP_Refactor_Wave0_Inventory.md
+EXIT: 0
+
+=== Phase 5: Re-run checker (expect PASS) ===
+COMMAND: python3 - <<'EOF'
+import re, sys
+rows = open('docs/ACP_Refactor_Wave0_Inventory.md').read()
+S111 = ["orchestrator.py","study_runner.py","project.py","chain.py","engines/","modules/","stages/confirm.py","stages/low_confirm.py","stages/high_confirm.py","stages/handoff.py","results_v2.py","__init__.py"]
+S112 = ["batch_confirm.py","batch_models.py","providers/native_refinement.py","providers/thermo.py","bond_scan.py","scan_models.py","scan_manifest.py","primitives/path_selector.py","primitives/path_profile.py","primitives/scan_trajectory.py","primitives/scan_rescue.py","primitives/geometry_guard.py","identity.py","layout.py","_helpers.py"]
+c1 = sum(1 for s in S111 if re.search(r'^\| .*mechanism/' + re.escape(s), rows, re.M))
+c2 = sum(1 for s in S112 if re.search(r'^\| .*mechanism/' + re.escape(s), rows, re.M))
+c3 = len(re.findall(r's2_confirm_service\.py|s2_confirm_support\.py', rows))
+c4 = len(set(re.findall(r'test_acp_[a-z0-9_]+\.py|test_acp_s2_[a-z_]+\.py', rows)))
+S113 = ["reaction_definition.py","endpoint.py","atom_mapping.py","bond_changes.py","scan_manifest.py","scan_models.py","bond_scan.py","batch_confirm.py","batch_models.py","providers/native_refinement.py","providers/thermo.py","presets.py","reports.py","rescue.py","refinement_manifest.py","candidates.py","strategies.py"]
+c5 = sum(1 for s in S113 if re.search(r'^\| .*mechanism/' + re.escape(s), rows, re.M))
+assert (c1, c2, c3, c4, c5) == (12, 14, 2, 22, 17), f'MISMATCH: {(c1,c2,c3,c4,c5)} != (12,14,2,22,17)'
+print('INVENTORY_ROWS_OK 12/14/2/22/17')
+EOF
+OUTPUT: INVENTORY_ROWS_OK 12/14/2/22/17
+EXIT: 0
+NOTE: File restored, all counts match, checker passes
+
+=== DRILL SUMMARY ===
+Phase 1 (backup):        PASS
+Phase 2 (corrupt):       PASS (ZWSP injection into 2 rows)
+Phase 3 (checker fail):  PASS (exit 1, MISMATCH: (12, 13, 2, 22, 16))
+Phase 4 (restore):       PASS
+Phase 5 (checker pass):  PASS (exit 0, INVENTORY_ROWS_OK 12/14/2/22/17)
