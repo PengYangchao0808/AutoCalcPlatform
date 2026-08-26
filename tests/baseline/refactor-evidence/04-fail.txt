@@ -1,0 +1,39 @@
+=== 04-fail.txt: Wave 0 Todo 4 — Grep Gate QA Failure Drill ===
+Date: 2026-08-27
+Branch: refactor/calc-cleanup
+
+=== STEP 1: inject an active Lowconfirm call ===
+COMMAND: printf '\nfoo = Lowconfirm()\n' >> src/acp/cli.py; python scripts/check_grep_gates.py --gate wave6 src/acp/cli.py
+KEY OUTPUT:
+src/acp/cli.py:2964: foo = Lowconfirm()
+WAVE6_INJECTED_EXIT_CODE=1
+EXIT CODE: 1 (expected BLOCKING)
+
+=== STEP 2: prove retired text does not exempt an active optfreq call ===
+COMMAND: printf 'run_optfreq  # retired\n' > /tmp/acp-wave0-04-active.py; python scripts/check_grep_gates.py --gate final_optfreq_terms /tmp/acp-wave0-04-active.py
+KEY OUTPUT:
+BLOCKING:
+/tmp/acp-wave0-04-active.py:1: run_optfreq  # retired
+FINAL_OPTFREQ_INJECTED_EXIT_CODE=1
+EXIT CODE: 1 (expected BLOCKING)
+
+=== STEP 3: restore the source file ===
+COMMAND: GIT_MASTER=1 git checkout -- src/acp/cli.py
+KEY OUTPUT: RESTORE_EXIT_CODE=0
+EXIT CODE: 0
+
+=== STEP 4: rerun wave6 against a clean fixture ===
+COMMAND: printf 'pass\n' > /tmp/acp-wave0-04-clean.py; python scripts/check_grep_gates.py --gate wave6 /tmp/acp-wave0-04-clean.py
+KEY OUTPUT:
+ALLOWED:
+BLOCKING:
+WAVE6_CLEAN_EXIT_CODE=0
+EXIT CODE: 0
+
+=== STEP 5: rerun final_optfreq_terms against the clean fixture ===
+COMMAND: python scripts/check_grep_gates.py --gate final_optfreq_terms /tmp/acp-wave0-04-clean.py
+KEY OUTPUT:
+ALLOWED:
+BLOCKING:
+FINAL_OPTFREQ_CLEAN_EXIT_CODE=0
+EXIT CODE: 0
