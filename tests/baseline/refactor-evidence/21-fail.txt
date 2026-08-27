@@ -1,0 +1,12 @@
+COMMAND
+python -c "import subprocess,sys; r=subprocess.run(['python','-m','acp.cli','run','BatchOptimize','--from-artifact','tests/fixtures/batch_structures_v1.json','--select','no_such_id'],capture_output=True,text=True); ok = r.returncode==2 and ('no_such_id' in (r.stderr+r.stdout) or 'select' in (r.stderr+r.stdout).lower()); sys.exit(0 if ok else 1)"
+
+KEY OUTPUT
+CLI returncode: 2
+2026-08-27 12:19:06,127 [INFO] cccp.config: Loaded defaults from: /mnt/e/Calculations/Common_Script/Auto_Calc_Platform/ACP_V1_20260811/config/defaults.yaml
+2026-08-27 12:19:06,140 [ERROR] __main__: BatchOptimize input error: BatchOptimize selection contains unknown item id(s): no_such_id
+diagnostic contains no_such_id: True
+The rejection predicate evaluated true; the outer drill emitted no output because it captures the child streams.
+
+EXIT CODE
+0

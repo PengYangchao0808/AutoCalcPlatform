@@ -37,6 +37,7 @@ from acp.scheduler.jobs import (
     SCAN_CONFIG_FILENAME,
     JobRecord,
     JobSpec,
+    batchoptimize_method_flags,
     censo_ewin_from_method,
     censo_preset_from_method,
     censo_solvent_from_method,
@@ -1136,6 +1137,7 @@ class JobRunner:
             "PESsearch",
             "Lowconfirm",
             "Highconfirm",
+            "BatchOptimize",
             "ensemble",
             "energy",
             "nmr",
@@ -1165,6 +1167,27 @@ class JobRunner:
         # them before the standard single-source validation below.
         if wf == "nmr":
             return self._build_nmr_cmd(spec, work_dir)
+
+        if wf == "BatchOptimize":
+            artifact = inp.get("from_artifact") or inp.get("source")
+            items_file = inp.get("items_file")
+            if artifact:
+                cmd += ["--from-artifact", str(artifact), "--output", str(work_dir)]
+            elif items_file:
+                cmd += ["--items-file", str(items_file), "--output", str(work_dir)]
+            else:
+                raise ValueError(
+                    "BatchOptimize job requires input.from_artifact or input.items_file"
+                )
+            cmd += batchoptimize_method_flags(method, inp)
+            if spec.config_path:
+                cmd += ["--config", str(spec.config_path)]
+            if res.get("nproc") is not None:
+                cmd += ["--nproc", str(res["nproc"])]
+            if res.get("mem"):
+                cmd += ["--mem", str(res["mem"])]
+            cmd += input_chemistry_flags(inp)
+            return cmd
 
         if not source:
             raise ValueError(f"{wf} job requires a valid input structure")

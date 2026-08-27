@@ -860,6 +860,58 @@ Examples:
     )
 
 
+def _add_batch_optimize_parser(run_sub: argparse._SubParsersAction) -> None:
+    batch = run_sub.add_parser(
+        "BatchOptimize",
+        help="Batch optimization with optional frequency, single-point, and thermochemistry steps",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run BatchOptimize --from-artifact ./pes_job --profile opt_freq
+  acp run BatchOptimize --items-file structures.xyz --profile opt_freq_sp --select ts_001
+        """,
+    )
+    batch.set_defaults(workflow="BatchOptimize")
+    source = batch.add_mutually_exclusive_group(required=True)
+    source.add_argument(
+        "--from-artifact",
+        help="Task directory or result_manifest.json containing structure products",
+    )
+    source.add_argument(
+        "--items-file",
+        help="Batch request JSON or multi-frame XYZ file",
+    )
+    batch.add_argument(
+        "--profile",
+        default="opt_freq",
+        choices=["opt_only", "opt_freq", "opt_freq_sp", "opt_freq_sp_thermo"],
+        help="Batch calculation profile (default: opt_freq)",
+    )
+    batch.add_argument("--select", help="Comma-separated item or candidate ids")
+    batch.add_argument("--minimum-method", help="ORCA method override for minimum structures")
+    batch.add_argument("--minimum-basis", help="ORCA basis override for minimum structures")
+    batch.add_argument(
+        "--transition-state-method",
+        help="ORCA method override for transition-state structures",
+    )
+    batch.add_argument(
+        "--transition-state-basis",
+        help="ORCA basis override for transition-state structures",
+    )
+    batch.add_argument("--output", "-o", default="./batch_optimize_out", help="Output directory")
+    batch.add_argument("--charge", type=int, default=0, help="Default molecular charge")
+    batch.add_argument("--multiplicity", type=int, default=1, help="Default spin multiplicity")
+    batch.add_argument("--nproc", type=int, help="Number of CPU cores (overrides config)")
+    batch.add_argument("--mem", type=str, help="Memory limit (overrides config)")
+    batch.add_argument("--config", type=str, help="Configuration YAML file")
+    batch.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
+
 def _resolve_stage_source(
     from_manifest: str | None,
     from_job: str | None,
@@ -1295,6 +1347,46 @@ def _handle_highconfirm(args: argparse.Namespace) -> int:
         Path(args.output) / "RESULT" / "mechanism" / "s4_highconfirm_manifest.json",
     )
     return 0 if confirmed else 1
+
+
+def _handle_batch_optimize(args: argparse.Namespace) -> int:
+    from acp.calculations.batch.options import BatchMethodOptions
+    from acp.workflows.batch_optimize import BatchOptimizeInputError, run_batch_optimize
+
+    setup_logging(args.log_level)
+    source = args.items_file or args.from_artifact
+    try:
+        result = run_batch_optimize(
+            source,
+            profile=args.profile,
+            output_dir=Path(args.output),
+            config=_build_config(args),
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            select=_parse_select(args.select),
+            methods=BatchMethodOptions(
+                minimum_method=args.minimum_method or "",
+                minimum_basis=args.minimum_basis or "",
+                transition_state_method=args.transition_state_method or "",
+                transition_state_basis=args.transition_state_basis or "",
+            ),
+        )
+    except BatchOptimizeInputError as exc:
+        logger.error("BatchOptimize input error: %s", exc)
+        return 2
+    except ValueError as exc:
+        logger.error("BatchOptimize input error: %s", exc)
+        return 2
+    except KeyboardInterrupt:
+        logger.warning("BatchOptimize interrupted by user")
+        return 130
+
+    if result.status != "completed":
+        logger.error("BatchOptimize failed: %s", result.error)
+        return 1
+    logger.info("BatchOptimize completed: profile=%s", args.profile)
+    logger.info("  Manifest: %s", result.metadata.get("manifest_path"))
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -2163,6 +2255,7 @@ Examples:
 
     _add_mechanism_module_parsers(run_sub)
     _add_stage_workflow_parsers(run_sub)
+    _add_batch_optimize_parser(run_sub)
 
     # -- run serve (FastAPI server) -----------------------------------------
     serve_parser = run_sub.add_parser(
@@ -2311,7 +2404,7 @@ def _mechanism_role_path(role_cfg: dict[str, Any], config_path: Path | None) -> 
     return str(path)
 
 
-def _handle_mechanism(args: argparse.Namespace) -> int:
+def _handle_mechanism(_args: argparse.Namespace) -> int:
     return _reject_retired_workflow("mechanism")
 
 
@@ -2375,19 +2468,19 @@ def _module_exit_code(status: str) -> int:
     return 1
 
 
-def _handle_mech_conf(args: argparse.Namespace) -> int:
+def _handle_mech_conf(_args: argparse.Namespace) -> int:
     return _reject_retired_workflow("mech-conf")
 
 
-def _handle_mech_step(args: argparse.Namespace) -> int:
+def _handle_mech_step(_args: argparse.Namespace) -> int:
     return _reject_retired_workflow("mech-step")
 
 
-def _handle_mech_confirm(args: argparse.Namespace) -> int:
+def _handle_mech_confirm(_args: argparse.Namespace) -> int:
     return _reject_retired_workflow("mech-confirm")
 
 
-def _handle_mech_chain(args: argparse.Namespace) -> int:
+def _handle_mech_chain(_args: argparse.Namespace) -> int:
     return _reject_retired_workflow("mech-chain")
 
 
@@ -2820,7 +2913,7 @@ def _reject_retired_workflow(workflow: str) -> int:
     return 2
 
 
-def _handle_ensemble(args: argparse.Namespace) -> int:
+def _handle_ensemble(_args: argparse.Namespace) -> int:
     return _reject_retired_workflow("ensemble")
 
 
@@ -2839,11 +2932,11 @@ def _parse_levels_json(levels_str: str | None) -> dict[str, Any] | None:
     return parsed
 
 
-def _handle_energy(args: argparse.Namespace) -> int:
+def _handle_energy(_args: argparse.Namespace) -> int:
     return _reject_retired_workflow("energy")
 
 
-def _handle_xtbmd_censo_energy(args: argparse.Namespace) -> int:
+def _handle_xtbmd_censo_energy(_args: argparse.Namespace) -> int:
     return _reject_retired_workflow("xtbmd_censo_energy")
 
 
@@ -3006,6 +3099,7 @@ def main(argv: list[str] | None = None) -> int:
             "PESsearch": _handle_pessearch,
             "Lowconfirm": _handle_lowconfirm,
             "Highconfirm": _handle_highconfirm,
+            "BatchOptimize": _handle_batch_optimize,
             "ensemble": _handle_ensemble,
             "energy": _handle_energy,
             "nmr": _handle_nmr,

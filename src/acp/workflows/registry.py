@@ -55,6 +55,15 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         ),
         requires_binaries=["orca", "xtb"],
     ),
+    "BatchOptimize": WorkflowRegistryEntry(
+        name="BatchOptimize",
+        label="Batch Optimization",
+        description=(
+            "Batch structure optimization with optional frequency, single-point, "
+            "and thermochemistry steps."
+        ),
+        requires_binaries=["orca", "shermo"],
+    ),
     "Lowconfirm": WorkflowRegistryEntry(
         name="Lowconfirm",
         label="Low Confirmation",

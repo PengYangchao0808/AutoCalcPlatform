@@ -143,6 +143,46 @@ def test_simple_workflow_resume_skips_done(
         manager.shutdown()
 
 
+def test_batchoptimize_continue_requeues_from_generic_checkpoint(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    manager = _make_manager(tmp_path)
+    work_dir = tmp_path / "runs" / "batch-optimize-task"
+    record = _seed_job(
+        manager,
+        work_dir,
+        "batch-optimize-interrupted",
+        workflow="BatchOptimize",
+    )
+    write_checkpoint(
+        work_dir / "WORK" / "00_RUNTIME",
+        Checkpoint(
+            task_id="batch",
+            workflow="BatchOptimize",
+            plan_fingerprint="batch-fingerprint",
+            step_states=[],
+            items_state={"candidate_001": {"status": "completed"}},
+            attempts=0,
+        ),
+    )
+    submissions: list[str] = []
+    monkeypatch.setattr(
+        manager,
+        "_start_submission_thread",
+        lambda job_id, thread_name: submissions.append(job_id) or True,
+    )
+
+    try:
+        continued = manager.continue_job(record.id)
+
+        assert continued.status == JobStatus.QUEUED
+        assert continued.result is not None
+        assert continued.result["continued_from"] == "failed"
+        assert submissions == [record.id]
+    finally:
+        manager.shutdown()
+
+
 def test_missing_checkpoint_rejected(tmp_path: Path) -> None:
     """A generic failed workflow without a checkpoint keeps the old error."""
     manager = _make_manager(tmp_path)

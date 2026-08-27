@@ -28,6 +28,7 @@ from acp.scheduler.jobs import (
     MECHANISM_CONFIG_FILENAME,
     SCAN_CONFIG_FILENAME,
     JobSpec,
+    batchoptimize_method_flags,
     censo_ewin_from_method,
     censo_preset_from_method,
     censo_solvent_from_method,
@@ -180,6 +181,7 @@ def build_remote_cli_command(
         "PESsearch",
         "Lowconfirm",
         "Highconfirm",
+        "BatchOptimize",
         "ensemble",
         "energy",
         "nmr",
@@ -214,7 +216,24 @@ def build_remote_cli_command(
         cmd += build_remote_nmr_cmd_tail(spec, input_path)
         return cmd
 
-    source = input_path or inp.get("source") or inp.get("input") or inp.get("smiles") or ""
+    source = ""
+    if wf == "BatchOptimize":
+        artifact = inp.get("from_artifact") or inp.get("source")
+        items_file = inp.get("items_file")
+        if artifact:
+            source = str(artifact)
+            cmd += ["--from-artifact", str(artifact), "--output", "."]
+        elif items_file:
+            source = str(items_file)
+            cmd += ["--items-file", str(items_file), "--output", "."]
+        else:
+            raise ValueError(
+                "BatchOptimize job requires input.from_artifact or input.items_file"
+            )
+        cmd += batchoptimize_method_flags(method, inp)
+    else:
+        source = input_path or inp.get("source") or inp.get("input") or inp.get("smiles") or ""
+
     if not source:
         raise ValueError(f"{wf} job requires a valid input structure")
 

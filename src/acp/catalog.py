@@ -294,6 +294,19 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "visible": True,
     },
     {
+        "id": "BatchOptimize",
+        "label": "Batch Optimization",
+        "label_zh": "批量优化",
+        "category": "preset",
+        "description": "Batch optimization and optional frequency, single-point, and thermochemistry steps",
+        "description_zh": "批量执行结构优化，并可选执行频率、单点能和热化学步骤",
+        "method_schema_id": "batch_optimize",
+        "default_backend": "orca",
+        "requires_binaries": ["orca", "shermo"],
+        "status": "active",
+        "visible": True,
+    },
+    {
         "id": "Lowconfirm",
         "label": "Low Confirmation",
         "label_zh": "粗优化",
@@ -1277,6 +1290,51 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "unit": "ppm",
         "help": "TMS ¹³C reference shielding at the GIAO level (empty = solvent-aware Goodman table lookup)",
     },
+    "profile": {
+        "type": "select",
+        "label": "Batch Profile",
+        "label_zh": "批量配置档位",
+        "options": ["opt_only", "opt_freq", "opt_freq_sp", "opt_freq_sp_thermo"],
+        "default": {"*": "opt_freq"},
+    },
+    "items": {
+        "type": "json",
+        "label": "Structure Items",
+        "label_zh": "结构项目",
+        "default": {"*": []},
+        "help": "Structure artifact items consumed by BatchOptimize.",
+        "help_zh": "BatchOptimize 消费的结构 Artifact 项目。",
+    },
+    "minimum_method": {
+        "type": "select",
+        "label": "Minimum Method Override",
+        "label_zh": "最低点方法覆盖",
+        "per_backend": {"orca": ["r2SCAN-3c", "B3LYP", "PBE0", "M062X", "wB97X-D4", "wB97M-V"]},
+        "default": {"*": ""},
+    },
+    "minimum_basis": {
+        "type": "select",
+        "label": "Minimum Basis Override",
+        "label_zh": "最低点基组覆盖",
+        "per_backend": {"orca": _BASIS_CATALOG_REF},
+        "default": {"*": ""},
+        "supports_custom": True,
+    },
+    "transition_state_method": {
+        "type": "select",
+        "label": "Transition-State Method Override",
+        "label_zh": "过渡态方法覆盖",
+        "per_backend": {"orca": ["r2SCAN-3c", "B3LYP", "PBE0", "M062X", "wB97X-D4", "wB97M-V"]},
+        "default": {"*": ""},
+    },
+    "transition_state_basis": {
+        "type": "select",
+        "label": "Transition-State Basis Override",
+        "label_zh": "过渡态基组覆盖",
+        "per_backend": {"orca": _BASIS_CATALOG_REF},
+        "default": {"*": ""},
+        "supports_custom": True,
+    },
 }
 
 METHOD_SCHEMAS: dict[str, Any] = {
@@ -2245,6 +2303,59 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         # Goodman TMSdata table (tms_shielding_h/c remain
                         # advanced manual overrides).
                     },
+                },
+            },
+        ],
+    },
+    "batch_optimize": {
+        "method_levels": [
+            {
+                "level_id": "batch",
+                "label": "Batch Optimization",
+                "label_zh": "批量优化",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "profile",
+                    "items",
+                    "minimum_method",
+                    "minimum_basis",
+                    "transition_state_method",
+                    "transition_state_basis",
+                ],
+            },
+        ],
+        "profiles": [
+            {
+                "profile_id": "opt_only",
+                "label": "Optimization Only",
+                "label_zh": "仅优化",
+                "summary": "Optimize every selected structure.",
+                "levels": {"batch": {"steps": ["optimize"]}},
+            },
+            {
+                "profile_id": "opt_freq",
+                "label": "Optimization + Frequency",
+                "label_zh": "优化 + 频率",
+                "summary": "Optimize and calculate frequencies.",
+                "levels": {"batch": {"steps": ["optimize", "frequency"]}},
+            },
+            {
+                "profile_id": "opt_freq_sp",
+                "label": "Optimization + Frequency + SP",
+                "label_zh": "优化 + 频率 + 单点能",
+                "summary": "Optimize, calculate frequencies, and run single points.",
+                "levels": {"batch": {"steps": ["optimize", "frequency", "singlepoint"]}},
+            },
+            {
+                "profile_id": "opt_freq_sp_thermo",
+                "label": "Optimization + Frequency + SP + Thermochemistry",
+                "label_zh": "优化 + 频率 + 单点能 + 热化学",
+                "summary": "Run the complete optimization, frequency, single-point, and thermochemistry chain.",
+                "levels": {
+                    "batch": {
+                        "steps": ["optimize", "frequency", "singlepoint", "thermochemistry"]
+                    }
                 },
             },
         ],

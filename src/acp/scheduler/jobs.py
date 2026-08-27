@@ -530,6 +530,43 @@ def highconfirm_method_flags(method: dict[str, Any]) -> list[str]:
     return flags
 
 
+# ── BatchOptimize flag emission (E7: runner ⇄ script_gen parity) ──────────
+_BATCHOPTIMIZE_SCALAR_FLAGS: dict[str, str] = {
+    "minimum_method": "--minimum-method",
+    "minimum_basis": "--minimum-basis",
+    "transition_state_method": "--transition-state-method",
+    "transition_state_basis": "--transition-state-basis",
+}
+_BATCHOPTIMIZE_PROFILES: frozenset[str] = frozenset(
+    {"opt_only", "opt_freq", "opt_freq_sp", "opt_freq_sp_thermo"}
+)
+
+
+def batchoptimize_method_flags(
+    method: Mapping[str, Any],
+    inp: Mapping[str, Any] | None = None,
+) -> list[str]:
+    """Emit BatchOptimize profile, selection, and role-level CLI flags."""
+    flags: list[str] = []
+    profile = method.get("profile") or method.get("profile_id")
+    if profile is not None and str(profile) in _BATCHOPTIMIZE_PROFILES:
+        flags += ["--profile", str(profile)]
+
+    selection = method.get("select")
+    if selection is None and inp is not None:
+        selection = inp.get("select") or inp.get("selected_ids")
+    if isinstance(selection, (list, tuple)) and selection:
+        flags += ["--select", ",".join(str(value) for value in selection)]
+    elif isinstance(selection, str) and selection.strip():
+        flags += ["--select", selection.strip()]
+
+    for key, flag in _BATCHOPTIMIZE_SCALAR_FLAGS.items():
+        value = method.get(key)
+        if value is not None and value != "":
+            flags += [flag, str(value)]
+    return flags
+
+
 # ── mechanism flag emission (E7: runner ⇄ script_gen parity) ─────────────
 # Mechanism method knobs that flow method → CLI. Strategy/fidelity are the
 # two orthogonal preset axes; scan/IRC counts and Hessian policy are the
@@ -911,6 +948,7 @@ __all__ = [
     "BATCH_CONFIG_FILENAME",
     "lowconfirm_method_flags",
     "highconfirm_method_flags",
+    "batchoptimize_method_flags",
     "pessearch_method_flags",
     "prepare_stage_batch_config",
     "stage_batch_request",

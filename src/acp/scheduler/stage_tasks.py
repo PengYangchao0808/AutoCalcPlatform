@@ -297,6 +297,31 @@ class _HighConfirmStagePlanProvider:
         return plan
 
 
+_BATCHOPTIMIZE_STAGES: dict[str, tuple[str, ...]] = {
+    "opt_only": ("prepare", "optimize", "finalize"),
+    "opt_freq": ("prepare", "optimize", "frequency", "finalize"),
+    "opt_freq_sp": ("prepare", "optimize", "frequency", "single_point", "finalize"),
+    "opt_freq_sp_thermo": (
+        "prepare",
+        "optimize",
+        "frequency",
+        "single_point",
+        "thermochemistry",
+        "finalize",
+    ),
+}
+
+
+class _BatchOptimizeStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        profile = str(spec.method.get("profile") or spec.method.get("profile_id") or "opt_freq")
+        try:
+            stages = _BATCHOPTIMIZE_STAGES[profile.strip().lower()]
+        except KeyError as exc:
+            raise ValueError(f"unknown BatchOptimize profile: {profile!r}") from exc
+        return [StagePlan(stage_name) for stage_name in stages]
+
+
 class StageTaskStore:
     """Thread-safe SQLite persistence for stage-level task rows."""
 
@@ -606,6 +631,7 @@ register_plan_provider("ensemble", _EnsembleStagePlanProvider())
 register_plan_provider("energy", _EnergyStagePlanProvider())
 register_plan_provider("nmr", _NmrStagePlanProvider())
 register_plan_provider("xtbmd_censo_energy", _XtbmdCensoEnergyStagePlanProvider())
+register_plan_provider("batchoptimize", _BatchOptimizeStagePlanProvider())
 
 
 # Simple workflow providers
