@@ -15,6 +15,9 @@ import pytest
 from acp.catalog import WORKFLOW_CATALOG
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobSpec, confsearch_method_flags
 
+# The tests intentionally exercise JobRunner's command-building seam.
+# pyright: reportPrivateUsage=false
+
 RETIRED_ENTRIES = (
     "ensemble",
     "energy",
@@ -24,8 +27,12 @@ RETIRED_ENTRIES = (
     "mech-step",
     "mech-confirm",
     "mech-chain",
+    "optfreq",
+    "optfreqsp",
+    "Lowconfirm",
+    "Highconfirm",
 )
-STAGE_ENTRIES = ("Confsearch", "PESsearch", "Lowconfirm", "Highconfirm")
+STAGE_ENTRIES = ("Confsearch", "PESsearch")
 
 
 def test_all_legacy_entries_retired_and_kept_for_history() -> None:
@@ -46,9 +53,9 @@ def test_manager_rejects_retired_workflow(tmp_path: Path) -> None:
 
     mgr = JobManager(run_root=tmp_path)
     try:
-        for legacy in ("ensemble", "energy", "mechanism"):
+        for legacy in ("ensemble", "energy", "mechanism", "Lowconfirm", "Highconfirm"):
             with pytest.raises(ValueError, match="Unsupported workflow"):
-                mgr.submit(JobSpec(workflow=legacy, name="legacy"))
+                _ = mgr.submit(JobSpec(workflow=legacy, name="legacy"))
     finally:
         mgr.shutdown()
 
@@ -91,18 +98,16 @@ def _write_confsearch_source_job(root: Path) -> Path:
     job_dir = root / "mol_Confsearch_test"
     manifest_dir = job_dir / "RESULT" / "confsearch" / "conformers"
     manifest_dir.mkdir(parents=True)
-    (manifest_dir / "conf_0001.xyz").write_text(
+    _ = (manifest_dir / "conf_0001.xyz").write_text(
         "3\nwater\nO 0.0 0.0 0.0\nH 0.9 0.0 0.0\nH -0.3 0.9 0.0\n",
         encoding="utf-8",
     )
     manifest = {
         "schema_version": "confsearch_v1",
         "workflow": "Confsearch",
-        "conformers": [
-            {"conf_id": "conf_0001", "geometry": "conformers/conf_0001.xyz", "rank": 1}
-        ],
+        "conformers": [{"conf_id": "conf_0001", "geometry": "conformers/conf_0001.xyz", "rank": 1}],
     }
-    (job_dir / "RESULT" / "confsearch" / "confsearch_manifest.json").write_text(
+    _ = (job_dir / "RESULT" / "confsearch" / "confsearch_manifest.json").write_text(
         json.dumps(manifest), encoding="utf-8"
     )
     return job_dir
@@ -130,7 +135,7 @@ def test_runner_builds_confsearch_cmd(tmp_path: Path) -> None:
     assert "--ewin 8.0" in joined
 
 
-def test_runner_builds_stage_cmd_with_handoff_copy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_runner_builds_stage_cmd_with_handoff_copy(tmp_path: Path) -> None:
     from acp.scheduler.runner import JobRunner
 
     source_job = _write_confsearch_source_job(tmp_path)
@@ -161,7 +166,7 @@ def test_runner_builds_stage_cmd_with_handoff_copy(tmp_path: Path, monkeypatch: 
     assert f"--from {handoff / 'confsearch_manifest.json'}" in joined
 
 
-def test_remote_script_gen_stage_and_confsearch(tmp_path: Path) -> None:
+def test_remote_script_gen_stage_and_confsearch() -> None:
     from acp.scheduler.remote.script_gen import build_remote_cli_command
 
     confsearch_cmd = build_remote_cli_command(

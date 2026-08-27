@@ -4,6 +4,9 @@ Uses FastAPI's TestClient with the lifespan-driven JobManager. The ``fake``
 workflow runs in-process, so these tests need no external QC binaries.
 """
 
+# FastAPI's TestClient stubs expose untyped JSON payloads in these integration tests.
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnusedParameter=false
+
 from __future__ import annotations
 
 import os
@@ -88,6 +91,17 @@ def test_workflows_and_protocols(client: TestClient) -> None:
     assert "nmr" in names
     pr = client.get("/api/protocols").json()
     assert isinstance(pr["protocols"], list)
+
+
+def test_workflow_catalog_excludes_retired(client: TestClient) -> None:
+    response = client.get("/api/v1/workflow-catalog")
+
+    assert response.status_code == 200
+    workflows = response.json()["workflows"]
+    retired_ids = {"optfreq", "optfreqsp", "Lowconfirm", "Highconfirm"}
+    visible_ids = {workflow["id"] for workflow in workflows if workflow.get("visible")}
+
+    assert retired_ids.isdisjoint(visible_ids)
 
 
 def test_workflows_are_driven_by_registry(client: TestClient) -> None:

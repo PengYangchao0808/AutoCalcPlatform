@@ -1,0 +1,35 @@
+=== 36-happy.txt: Wave 6 Catalog Retirement ===
+Date: 2026-08-27 | Branch: refactor/calc-cleanup
+
+=== COMMAND ===
+python -m pytest tests/test_acp_catalog.py tests/test_architecture_invariants.py -q
+=== KEY OUTPUT ===
+63 passed in 6.64s
+Target-state invariant passed with the exact ten active catalog IDs.
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+python -m pytest tests/test_acp_api.py::test_workflow_catalog_excludes_retired -q
+=== KEY OUTPUT ===
+1 passed, 1 warning in 2.50s
+GET /api/v1/workflow-catalog visible entries exclude optfreq, optfreqsp, Lowconfirm, and Highconfirm.
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+python -c "from acp.scheduler.jobs import SUPPORTED_WORKFLOWS; print(SUPPORTED_WORKFLOWS)"
+=== KEY OUTPUT ===
+('singlepoint', 'optimize', 'frequency', 'scan', 'irc', 'xtb_optimize', 'nmr', 'Confsearch', 'PESsearch', 'BatchOptimize', 'fake')
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+python -c "from acp.catalog import METHOD_SCHEMAS, WORKFLOW_CATALOG; ids = {w['id'] for w in WORKFLOW_CATALOG if w['status'] == 'retired'}; assert {'dft_optfreq', 'dft_optfreqsp', 'low_confirm', 'high_confirm'} <= METHOD_SCHEMAS.keys(); assert {'optfreq', 'optfreqsp', 'Lowconfirm', 'Highconfirm'} <= ids; print('historical schema blocks retained; four retired ids present')"
+=== KEY OUTPUT ===
+historical schema blocks retained; four retired ids present
+=== EXIT CODE ===
+0
+
+=== SNAPSHOT ===
+tests/baseline/refactor-evidence/catalog-retired-ids-final.txt contains 14 sorted retired catalog IDs, including all four Wave 6 IDs.

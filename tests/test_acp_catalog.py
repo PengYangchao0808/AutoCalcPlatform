@@ -664,9 +664,6 @@ def test_supported_workflows_matches_catalog_active() -> None:
 
 
 def test_mechanism_entries_retired_and_stage_workflows_active() -> None:
-    """Confsearch v1.0: the one-shot mechanism chain is retired; the four
-    stage workflows (Confsearch/PESsearch/Lowconfirm/Highconfirm) are the
-    only active mechanism-family entries."""
     entry = next(w for w in WORKFLOW_CATALOG if w["id"] == "mechanism")
     assert entry["status"] == "retired"
     assert entry["visible"] is False
@@ -679,13 +676,17 @@ def test_mechanism_entries_retired_and_stage_workflows_active() -> None:
         "ensemble",
         "energy",
         "xtbmd_censo_energy",
+        "optfreq",
+        "optfreqsp",
+        "Lowconfirm",
+        "Highconfirm",
     }
     for module_id in retired_ids:
         module = next(w for w in WORKFLOW_CATALOG if w["id"] == module_id)
         assert module["status"] == "retired", module_id
         assert module["visible"] is False, module_id
 
-    stage_ids = ["Confsearch", "PESsearch", "Lowconfirm", "Highconfirm"]
+    stage_ids = ["Confsearch", "PESsearch"]
     visible_stage = set()
     for stage_id in stage_ids:
         stage = next(w for w in WORKFLOW_CATALOG if w["id"] == stage_id)

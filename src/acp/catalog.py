@@ -73,24 +73,36 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "label": "Optimization + Frequency",
         "label_zh": "优化+频率",
         "category": "simple",
-        "description": "Optimize then compute frequencies",
+        "description": (
+            "Retired in the 2026-08 refactor; use optimize + frequency or "
+            "BatchOptimize; historical jobs are read-only"
+        ),
+        "description_zh": "已由 BatchOptimize 取代，历史任务只读",
         "method_schema_id": "dft_optfreq",
         "default_backend": "orca",
         "requires_binaries": ["orca"],
-        "status": "active",
-        "visible": True,
+        "reason": "2026-08 refactor",
+        "replacements": ["optimize + frequency", "BatchOptimize"],
+        "status": "retired",
+        "visible": False,
     },
     {
         "id": "optfreqsp",
         "label": "Opt+Freq+SP+Thermo",
         "label_zh": "优化+频率+单点+热化学",
         "category": "simple",
-        "description": "ORCA opt → freq → SP → Shermo free energy",
+        "description": (
+            "Retired in the 2026-08 refactor; use BatchOptimize for optimization, "
+            "frequency, single-point, and thermochemistry; historical jobs are read-only"
+        ),
+        "description_zh": "已由 BatchOptimize 取代，历史任务只读",
         "method_schema_id": "dft_optfreqsp",
         "default_backend": "orca",
         "requires_binaries": ["orca", "shermo"],
-        "status": "active",
-        "visible": True,
+        "reason": "2026-08 refactor",
+        "replacements": ["BatchOptimize"],
+        "status": "retired",
+        "visible": False,
     },
     {
         "id": "xtb_optimize",
@@ -323,24 +335,36 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "label": "Low Confirmation",
         "label_zh": "粗优化",
         "category": "stages",
-        "description": "Coarse Opt/TS + frequency + preliminary IRC of PESsearch candidates (S3)",
+        "description": (
+            "Retired in the 2026-08 refactor; use BatchOptimize and the standalone "
+            "IRC workflow when needed; historical jobs are read-only"
+        ),
+        "description_zh": "已由 BatchOptimize 取代，历史任务只读",
         "method_schema_id": "low_confirm",
         "default_backend": "orca",
         "requires_binaries": ["orca"],
-        "status": "active",
-        "visible": True,
+        "reason": "2026-08 refactor",
+        "replacements": ["BatchOptimize", "irc"],
+        "status": "retired",
+        "visible": False,
     },
     {
         "id": "Highconfirm",
         "label": "High Confirmation",
         "label_zh": "精细优化",
         "category": "stages",
-        "description": "High-fidelity Opt/TS + frequency + SP + thermochemistry (S4)",
+        "description": (
+            "Retired in the 2026-08 refactor; use BatchOptimize and the standalone "
+            "IRC workflow when needed; historical jobs are read-only"
+        ),
+        "description_zh": "已由 BatchOptimize 取代，历史任务只读",
         "method_schema_id": "high_confirm",
         "default_backend": "orca",
         "requires_binaries": ["orca"],
-        "status": "active",
-        "visible": True,
+        "reason": "2026-08 refactor",
+        "replacements": ["BatchOptimize", "irc"],
+        "status": "retired",
+        "visible": False,
     },
 ]
 
@@ -2427,9 +2451,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "label_zh": "优化 + 频率 + 单点能 + 热化学",
                 "summary": "Run the complete optimization, frequency, single-point, and thermochemistry chain.",
                 "levels": {
-                    "batch": {
-                        "steps": ["optimize", "frequency", "singlepoint", "thermochemistry"]
-                    }
+                    "batch": {"steps": ["optimize", "frequency", "singlepoint", "thermochemistry"]}
                 },
             },
         ],

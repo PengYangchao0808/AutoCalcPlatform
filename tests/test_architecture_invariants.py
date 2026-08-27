@@ -19,15 +19,11 @@ CURRENT_ACTIVE_IDS = (
     "frequency",
     "scan",
     "irc",
-    "optfreq",
-    "optfreqsp",
     "xtb_optimize",
     "nmr",
     "Confsearch",
     "PESsearch",
     "BatchOptimize",
-    "Lowconfirm",
-    "Highconfirm",
 )
 TARGET_ACTIVE_IDS = (
     "singlepoint",
@@ -42,7 +38,7 @@ TARGET_ACTIVE_IDS = (
     "nmr",
 )
 
-TARGET_STATE_ENABLED = False
+TARGET_STATE_ENABLED = True
 
 
 def _cli_dispatch_ids() -> set[str]:
@@ -85,22 +81,18 @@ def test_current_active_workflow_ids_are_exact_and_ordered() -> None:
     active_ids = tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
 
     assert active_ids == CURRENT_ACTIVE_IDS
-    assert len(active_ids) == 14
+    assert len(active_ids) == 10
     assert set(active_ids) == {
         "singlepoint",
         "optimize",
         "frequency",
         "scan",
         "irc",
-        "optfreq",
-        "optfreqsp",
         "xtb_optimize",
         "nmr",
         "Confsearch",
         "PESsearch",
         "BatchOptimize",
-        "Lowconfirm",
-        "Highconfirm",
     }
 
 
