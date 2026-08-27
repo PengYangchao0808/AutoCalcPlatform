@@ -197,6 +197,35 @@ def test_final_forbidden_symbols_ignore_only_comments_not_retired_text() -> None
     ) == (True,)
 
 
+@pytest.mark.parametrize(
+    ("gate_name", "relative_path", "text", "expected"),
+    (
+        # wave3_batch_no_stages: legacy plumbing names are ALLOWED
+        ("wave3_batch_no_stages", "src/acp/calculations/batch/loaders.py",
+         "    items.extend(load_items_from_s3_manifest((base_dir / artifact).resolve())[0])", (True,)),
+        # wave3_batch_no_stages: genuine stage semantics still BLOCK
+        ("wave3_batch_no_stages", "src/acp/calculations/batch/engine.py",
+         "profile_s3 = True", (False,)),
+        ("wave3_batch_no_stages", "src/acp/calculations/batch/engine.py",
+         "stage_s4 = 'high'", (False,)),
+        # wave4_batch_no_irc: schema-rejection guard is ALLOWED
+        ("wave4_batch_no_irc", "src/acp/calculations/batch/loaders.py",
+         '    if "irc" in raw:', (True,)),
+        # wave4_batch_no_irc: genuine irc execution still BLOCK
+        ("wave4_batch_no_irc", "src/acp/calculations/batch/engine.py",
+         "backend.irc(coords, symbols)", (False,)),
+        ("wave4_batch_no_irc", "src/acp/calculations/batch/engine.py",
+         "result.irc_products = []", (False,)),
+        ("wave4_batch_no_irc", "src/acp/calculations/batch/engine.py",
+         "run_irc(request)", (False,)),
+    ),
+)
+def test_wave3_wave4_batch_gate_exemptions_have_teeth(
+    gate_name: str, relative_path: str, text: str, expected: tuple[bool, ...]
+) -> None:
+    assert _statuses(gate_name, relative_path, text) == expected
+
+
 def test_cli_prints_both_sections_and_blocks_a_zero_gate(tmp_path: Path) -> None:
     fixture = tmp_path / "fixture.py"
     _ = fixture.write_text("run_shermo()\n", encoding="utf-8")

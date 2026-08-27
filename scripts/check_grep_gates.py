@@ -161,10 +161,12 @@ GATE_REGISTRY: Final[tuple[GateSpec, ...]] = (
         r"s3_lowconfirm_manifest|s4_highconfirm_manifest|s2_path_manifest",
         SCOPE_CALCULATIONS + SCOPE_WORKFLOWS,
     ),
-    GateSpec("wave3_batch_no_stages", r"s3|s4|S3|S4", SCOPE_BATCH),
+    GateSpec("wave3_batch_no_stages", r"s3|s4|S3|S4", SCOPE_BATCH,
+             allow_line_pattern=r"load_items_from_s[234]_manifest|read_s[234]_|s[234]_manifest"),
     GateSpec("wave4_endpointprovider", r"EndpointProvider", SCOPE_BATCH),
     GateSpec("wave4_confirm_no_irc", r"_run_irc_for_canonical|run_irc", SCOPE_CONFIRM),
-    GateSpec("wave4_batch_no_irc", r"irc", SCOPE_BATCH),
+    GateSpec("wave4_batch_no_irc", r"irc", SCOPE_BATCH,
+             allow_line_pattern=r'"irc" in raw|reject.*irc|irc.*reject'),
     GateSpec(
         "wave5_s2manifest",
         r"s2_path_manifest|s2_candidate_manifest",
@@ -277,6 +279,13 @@ def _resolve_input_path(raw_path: str) -> Path:
     return path.resolve()
 
 
+def _is_scanable_source(path: Path) -> bool:
+    """True for text source files; excludes binary bytecode caches."""
+    if "__pycache__" in path.parts:
+        return False
+    return path.suffix in {".py", ".pyi", ".json", ".md", ".html", ".js", ".ts", ".yaml", ".yml", ".toml", ".txt", ".cfg", ".ini", ".sh", ".lsf", ".inp", ".xyz"}
+
+
 def _input_files(raw_paths: Sequence[str]) -> tuple[Path, ...]:
     files: set[Path] = set()
     for raw_path in raw_paths:
@@ -284,7 +293,11 @@ def _input_files(raw_paths: Sequence[str]) -> tuple[Path, ...]:
         if path.is_file():
             files.add(path)
         elif path.is_dir():
-            files.update(child.resolve() for child in path.rglob("*") if child.is_file())
+            files.update(
+                child.resolve()
+                for child in path.rglob("*")
+                if child.is_file() and _is_scanable_source(child)
+            )
         else:
             raise FileNotFoundError(path)
     return tuple(sorted(files, key=lambda path: path.as_posix()))

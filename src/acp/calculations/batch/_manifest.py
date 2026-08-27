@@ -46,7 +46,7 @@ class BatchCalculationManifest:
     def to_dict(self) -> JsonObject:
         """Serialize this compatibility aggregate."""
         return {
-            "kind": "batch_calculation_manifest",
+            "kind": "batch_items_manifest",
             "schema_version": self.schema_version,
             "workflow": self.workflow,
             "profile": self.profile,

@@ -1,5 +1,10 @@
-"""Batch calculation input models and artifact loaders."""
+"""Batch calculation input models, artifact loaders, and engine."""
 
+from .engine import (
+    BATCH_STRUCTURES_SUBDIR,
+    BatchOptimizeEngine,
+    BatchRunOutcome,
+)
 from .models import (
     BATCH_CALCULATION_SCHEMA_VERSION,
     BATCH_REQUEST_SCHEMA_VERSION,
@@ -28,6 +33,9 @@ from .models import (
 __all__ = [
     "BATCH_CALCULATION_SCHEMA_VERSION",
     "BATCH_REQUEST_SCHEMA_VERSION",
+    "BATCH_STRUCTURES_SUBDIR",
+    "BatchOptimizeEngine",
+    "BatchRunOutcome",
     "TERMINAL_ITEM_STATUSES",
     "BatchCalculationItem",
     "BatchCalculationManifest",

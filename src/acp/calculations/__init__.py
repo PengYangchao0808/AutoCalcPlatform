@@ -1,3 +1,4 @@
+from .batch import BatchOptimizeEngine, BatchRunOutcome
 from .contracts import (
     ArtifactRef,
     CalculationPlan,
@@ -18,6 +19,8 @@ from .executor import CalculationPlanExecutor, ExecutionResult, StepState
 
 __all__ = [
     "ArtifactRef",
+    "BatchOptimizeEngine",
+    "BatchRunOutcome",
     "CalculationPlan",
     "CalculationPlanExecutor",
     "CalculationRequest",
