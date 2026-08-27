@@ -1,0 +1,26 @@
+=== 24-happy.txt: Wave 3 Gate ===
+Date: 2026-08-27 | Branch: refactor/calc-cleanup
+
+=== COMMAND ===
+Wave gate comparison command (todo 2 frozen)
+=== KEY OUTPUT ===
+failures: 0
+GATE_OK
+1942 passed, 8 skipped, 47 warnings
+
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+ruff check src tests
+=== KEY OUTPUT ===
+645 errors (== baseline, zero new violations)
+=== EXIT CODE ===
+0-equivalent (baseline-comparison: no new violations)
+
+=== COMMAND ===
+python scripts/check_grep_gates.py --gate wave3_confirmengine src/acp/calculations
+=== KEY OUTPUT ===
+ALLOWED: (empty) / BLOCKING: (empty)
+=== EXIT CODE ===
+0
