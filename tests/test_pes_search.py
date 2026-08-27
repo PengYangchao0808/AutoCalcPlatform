@@ -390,3 +390,185 @@ def test_invalid_coordinate_kind() -> None:
     coord = ScanCoordinate(kind="stretch", atoms=(0, 1), start=1.0, end=2.0, n_points=5)
     with pytest.raises(ValueError, match="must be 'distance'"):
         validate_scan_coordinate(coord)
+
+
+def test_from_confsearch_manifest(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    """Fixture manifest → candidates TS/INT + profile."""
+    from acp.calculations.pes.engine import PesSearchEngine
+
+    conformer_dir = tmp_path / "conformers"
+    conformer_dir.mkdir(parents=True, exist_ok=True)
+    xyz_path = conformer_dir / "conf_0001.xyz"
+    xyz_path.write_text(_ETHYLENE_XYZ, encoding="utf-8")
+
+    manifest = {
+        "schema_version": "confsearch_v1",
+        "workflow": "Confsearch",
+        "protocol": "censo-crest",
+        "profile": "default",
+        "refinement_policy": "screen",
+        "backend": "native",
+        "conformers": [
+            {
+                "conf_id": "conf_0001",
+                "geometry": "conformers/conf_0001.xyz",
+                "energy_hartree": -78.5,
+                "free_energy_hartree": -78.4,
+                "relative_energy_kcal": 0.0,
+                "boltzmann_weight": 1.0,
+                "rank": 1,
+            }
+        ],
+        "selected_conformers": ["conf_0001"],
+    }
+    manifest_path = tmp_path / "confsearch_manifest.json"
+    manifest_path.write_text(
+        __import__("json").dumps(manifest), encoding="utf-8"
+    )
+
+    coords = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.34, 0.0, 0.0],
+            [-0.51, 0.93, 0.0],
+            [-0.51, -0.93, 0.0],
+            [1.85, 0.93, 0.0],
+            [1.85, -0.93, 0.0],
+        ]
+    )
+    symbols = ["C", "C", "H", "H", "H", "H"]
+    n_points = 5
+    energies = [-1.0, -0.8, -0.5, -0.8, -1.0]
+    scan_result = _pes_scan_result(
+        n_points, coords, symbols, energies=energies, output_dir=tmp_path
+    )
+    fake_backend.set_result("relaxed_scan", scan_result)
+    sp_energies = [-1.01, -0.81, -0.51, -0.81, -1.01]
+    fake_backend.set_results(
+        "single_point",
+        [QCResult(success=True, energy=e) for e in sp_energies],
+    )
+
+    engine = PesSearchEngine(config={"resources": {"nproc": 1}}, output_dir=tmp_path)
+    result = engine.run(
+        confsearch_manifest=manifest_path,
+        coordinate=ScanCoordinate(
+            kind="distance", atoms=(0, 1), start=1.2, end=2.5, n_points=n_points,
+        ),
+        charge=0,
+        multiplicity=1,
+    )
+
+    assert result.status == "complete"
+    assert result.profile.get("energy_source") == "single_point"
+    assert len(result.ts_candidates) >= 1
+    assert result.pes_profile_path is not None
+    assert result.pes_profile_path.exists()
+
+    for cand in result.ts_candidates:
+        if cand.candidate_id in result.candidate_structures:
+            assert result.candidate_structures[cand.candidate_id].exists()
+
+
+def test_bad_manifest_structured_error(
+    tmp_path: Path,
+) -> None:
+    """Missing conformers → PES_E_MANIFEST structured error."""
+    from acp.calculations.pes.engine import (
+        PES_E_MANIFEST,
+        PesSearchError,
+        load_confsearch_manifest,
+    )
+
+    missing_path = tmp_path / "nonexistent.json"
+    with pytest.raises(PesSearchError, match=PES_E_MANIFEST):
+        load_confsearch_manifest(missing_path)
+
+    empty_manifest = {
+        "schema_version": "confsearch_v1",
+        "workflow": "Confsearch",
+        "conformers": [],
+    }
+    empty_path = tmp_path / "empty_manifest.json"
+    empty_path.write_text(
+        __import__("json").dumps(empty_manifest), encoding="utf-8"
+    )
+    with pytest.raises(PesSearchError, match=PES_E_MANIFEST):
+        load_confsearch_manifest(empty_path)
+
+    bad_json_path = tmp_path / "bad.json"
+    bad_json_path.write_text("not json {{{", encoding="utf-8")
+    with pytest.raises(PesSearchError, match=PES_E_MANIFEST):
+        load_confsearch_manifest(bad_json_path)
+
+
+def test_path_selection_smoke() -> None:
+    from acp.calculations.pes.path_selection import (
+        SelectionPolicy,
+        policy_from_config,
+    )
+
+    policy = SelectionPolicy()
+    assert policy.ts_min_prominence_kcal_mol > 0
+
+    config_policy = policy_from_config({"ts_min_prominence_kcal_mol": 1.5})
+    assert config_policy.ts_min_prominence_kcal_mol == 1.5
+
+
+def test_validation_smoke() -> None:
+    from acp.calculations.pes.validation import compare_graph_topology
+
+    coords = np.array([[0.0, 0.0, 0.0], [1.5, 0.0, 0.0]])
+    result = compare_graph_topology(
+        product_coords=coords,
+        candidate_coords=coords,
+        symbols=["C", "C"],
+        forming_bonds=[(0, 1)],
+    )
+    assert result.is_valid
+
+
+def test_candidates_smoke() -> None:
+    from acp.calculations.pes.candidates import PathPoint, select_candidates
+
+    points = [
+        PathPoint(
+            point_id=f"p{i:03d}",
+            progress=i / 4.0,
+            energies_hartree={"scan": e},
+        )
+        for i, e in enumerate([-1.0, -0.8, -0.5, -0.8, -1.0])
+    ]
+    candidates = select_candidates(points, energy_key="scan")
+    assert len(candidates) >= 1
+    assert any(c.kind == "ts_seed" for c in candidates)
+
+
+def test_bond_changes_smoke() -> None:
+    from acp.calculations.pes.bond_changes import BondChange, compute_bond_changes
+
+    assert BondChange is not None
+
+
+def test_atom_mapping_smoke() -> None:
+    from acp.calculations.pes.atom_mapping import map_reactant_to_product
+
+    assert map_reactant_to_product is not None
+
+
+def test_pes_engine_no_mechanism_imports() -> None:
+    import acp.calculations.pes.engine as engine_module
+
+    source = Path(engine_module.__file__).read_text(encoding="utf-8")
+    import_lines = [
+        line
+        for line in source.splitlines()
+        if line.strip().startswith(("import ", "from "))
+    ]
+    mechanism_imports = [
+        line for line in import_lines if "acp.mechanism" in line
+    ]
+    assert mechanism_imports == [], f"Found mechanism imports: {mechanism_imports}"

@@ -23,12 +23,21 @@ from .contracts import (
 )
 from .executor import CalculationPlanExecutor, ExecutionResult, StepState
 from .pes import (
+    PES_E_MANIFEST,
+    SCAN_DIR_NAME,
+    PathCandidate,
+    PathPoint,
+    PesSearchEngine,
+    PesSearchError,
+    PesSearchResult,
     PesScanRequest,
     ScanCoordinate,
     ScanFrame,
     ScanProtocol,
+    SearchResult,
     build_coordinate_plan,
     run_pes_scan,
+    select_candidates,
 )
 
 __all__ = [
@@ -47,11 +56,19 @@ __all__ = [
     "ExecutionResult",
     "OptimizationMode",
     "OptimizationSpec",
+    "PES_E_MANIFEST",
+    "PathCandidate",
+    "PathPoint",
     "PesScanRequest",
+    "PesSearchEngine",
+    "PesSearchError",
+    "PesSearchResult",
     "Provenance",
+    "SCAN_DIR_NAME",
     "ScanCoordinate",
     "ScanFrame",
     "ScanProtocol",
+    "SearchResult",
     "StepKind",
     "StepState",
     "StructureArtifact",
@@ -59,5 +76,6 @@ __all__ = [
     "TaskManifest",
     "build_coordinate_plan",
     "run_pes_scan",
+    "select_candidates",
     "validate_plan",
 ]
