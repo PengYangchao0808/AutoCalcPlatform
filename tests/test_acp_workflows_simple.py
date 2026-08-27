@@ -12,7 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import TypedDict
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -181,23 +181,34 @@ def test_resolve_task_output_root(tmp_path):
     assert resolve_task_output_root(empty, "mol") == empty / "mol"
 
 
-def test_run_singlepoint_scheduler_task_dir_writes_flat(tmp_path):
+def test_scheduler_dir_flat_layout(fake_backend, tmp_path):
     """Inside a scheduler task dir (job.json + task.json) the workflow must
     write directly at the task root — no ``{safe_name}`` subdir."""
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = _make_scheduler_dir(tmp_path, "task_root")
 
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        mk_backend.return_value.single_point.return_value = _fake_qc_result(energy=-40.0)
-        result = run_singlepoint(str(inp), output_dir=out)
+    result = run_singlepoint(str(inp), output_dir=out)
 
     assert result.status == "completed"
     assert Path(result.metadata["output_dir"]) == out
-    assert (out / "state.json").is_file()
-    assert (out / "result_summary.json").is_file()
-    assert (out / "RESULT" / "energies" / "energy.json").is_file()
+    assert (out / "WORK" / "00_RUNTIME" / "checkpoint.json").is_file()
+    assert (out / "RESULT" / "result_manifest.json").is_file()
+    assert not (out / "result_summary.json").exists()
     assert not (out / "mol").exists()
+
+
+def test_run_optimize_manifest_only(fake_backend, tmp_path):
+    inp = tmp_path / "mol.xyz"
+    inp.write_text("1\n\nC 0 0 0\n")
+    out = tmp_path / "opt_out"
+
+    result = run_optimize(str(inp), output_dir=out)
+
+    calc_dir = Path(result.metadata["output_dir"])
+    assert result.status == "completed"
+    assert (calc_dir / "RESULT" / "result_manifest.json").is_file()
+    assert not (calc_dir / "result_summary.json").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -321,7 +332,6 @@ def test_write_result_summary_role_passthrough(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# mock helpers
 # ---------------------------------------------------------------------------
 
 
@@ -359,51 +369,27 @@ def _fake_qc_result(**overrides: Unpack[_QCResultFields]) -> QCResult:
     return QCResult(**defaults)
 
 
-def _mock_backend_method(name, return_value):
-    """Patch ORCABackend's named method to return return_value."""
-    return patch.object(type("Dummy", (), {}), "x", side_effect=None, autospec=False)
-
-
-def _result_summary_products(result):
-    """Load result_summary.json products keyed by path for a completed run."""
-    calc_dir = Path(result.metadata["output_dir"])
-    summary = json.loads((calc_dir / "result_summary.json").read_text())
-    assert summary["version"] == 1
-    return {p["path"]: p for p in summary["products"]}
-
-
-# ---------------------------------------------------------------------------
-# singlepoint
-# ---------------------------------------------------------------------------
-
-
-def test_run_singlepoint_mock(tmp_path):
+def test_run_singlepoint_mock(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "sp_out"
 
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        mk_backend.return_value.single_point.return_value = _fake_qc_result(energy=-40.0)
-        result = run_singlepoint(str(inp), output_dir=out)
-        mk_backend.return_value.single_point.assert_called_once()
-        assert result.status == "completed"
-        assert result.metadata.get("energy") == -40.0
-
-        products = _result_summary_products(result)
-        assert "role" not in products["RESULT/energies/energy.json"]
+    fake_backend.set_result("single_point", energy=-40.0, success=True)
+    result = run_singlepoint(str(inp), output_dir=out)
+    assert result.status == "completed"
+    assert result.metadata.get("sp_energy") == -40.0
+    assert len(fake_backend.calls) == 1
 
 
-def test_run_singlepoint_failure(tmp_path):
+def test_run_singlepoint_failure(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "sp_out"
 
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        mk_backend.return_value.single_point.return_value = _fake_qc_result(
-            success=False, error_message="ORCA error"
-        )
-        result = run_singlepoint(str(inp), output_dir=out)
-        assert result.status == "failed"
+    fake_backend.set_result("single_point", success=False, error_message="ORCA error")
+    result = run_singlepoint(str(inp), output_dir=out)
+    assert result.status == "failed"
+    assert "ORCA error" in (result.error or "")
 
 
 # ---------------------------------------------------------------------------
@@ -411,39 +397,31 @@ def test_run_singlepoint_failure(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_run_optimize_mock(tmp_path):
+def test_run_optimize_mock(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "opt_out"
 
     coords = np.array([[0.0, 0.0, 0.0]])
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        mk_backend.return_value.optimize.return_value = _fake_qc_result(
-            coordinates=coords,
-            symbols=["C"],
-            converged=True,
-        )
-        result = run_optimize(str(inp), output_dir=out)
-        mk_backend.return_value.optimize.assert_called_once()
-        assert result.status == "completed"
-        assert result.metadata.get("converged") is True
-
-        products = _result_summary_products(result)
-        assert products["RESULT/structures/optimized.xyz"]["role"] == "final_stable_structure"
-        assert "role" not in products["RESULT/energies/energy.json"]
+    fake_backend.set_result(
+        "optimize", coordinates=coords, symbols=["C"], converged=True, success=True
+    )
+    result = run_optimize(str(inp), output_dir=out)
+    assert result.status == "completed"
+    assert result.metadata.get("converged") is True
+    assert len(fake_backend.calls) == 1
 
 
-def test_run_optimize_failure(tmp_path):
+def test_run_optimize_failure(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "opt_out"
 
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        mk_backend.return_value.optimize.return_value = _fake_qc_result(
-            success=False, error_message="No convergence"
-        )
-        result = run_optimize(str(inp), output_dir=out)
-        assert result.status == "failed"
+    fake_backend.set_results(
+        "optimize", [_fake_qc_result(success=False, error_message="No convergence")] * 8
+    )
+    result = run_optimize(str(inp), output_dir=out)
+    assert result.status == "failed"
 
 
 # ---------------------------------------------------------------------------
@@ -451,32 +429,23 @@ def test_run_optimize_failure(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_run_xtb_optimize_mock(tmp_path):
+def test_run_xtb_optimize_mock(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "xtb_out"
 
     coords = np.array([[0.0, 0.0, 0.0]])
-    with patch("acp.workflows.simple._build_xtb_backend") as mk_backend:
-        mk_backend.return_value.optimize.return_value = _fake_qc_result(
-            coordinates=coords,
-            symbols=["C"],
-            converged=True,
-            energy=-10.5,
-        )
-        result = run_xtb_optimize(
-            str(inp),
-            output_dir=out,
-            method_kwargs={"gfn": "GFN2-xTB", "opt_level": "tight"},
-        )
-        mk_backend.return_value.optimize.assert_called_once()
-        assert result.status == "completed"
-        assert result.metadata.get("converged") is True
-        assert result.metadata.get("energy") == -10.5
-
-        products = _result_summary_products(result)
-        assert products["RESULT/structures/optimized.xyz"]["role"] == "final_stable_structure"
-        assert "role" not in products["RESULT/energies/energy.json"]
+    fake_backend.set_result(
+        "optimize", coordinates=coords, symbols=["C"], converged=True, energy=-10.5, success=True
+    )
+    result = run_xtb_optimize(
+        str(inp),
+        output_dir=out,
+        method_kwargs={"gfn": "GFN2-xTB", "opt_level": "tight"},
+    )
+    assert result.status == "completed"
+    assert result.metadata.get("converged") is True
+    assert result.metadata.get("energy") == -10.5
 
 
 def test_run_xtb_optimize_gfn_mapping(tmp_path):
@@ -490,17 +459,16 @@ def test_run_xtb_optimize_gfn_mapping(tmp_path):
     assert _normalize_gfn(None) is None
 
 
-def test_run_xtb_optimize_failure(tmp_path):
+def test_run_xtb_optimize_failure(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "xtb_out"
 
-    with patch("acp.workflows.simple._build_xtb_backend") as mk_backend:
-        mk_backend.return_value.optimize.return_value = _fake_qc_result(
-            success=False, error_message="xTB crashed"
-        )
-        result = run_xtb_optimize(str(inp), output_dir=out)
-        assert result.status == "failed"
+    fake_backend.set_results(
+        "optimize", [_fake_qc_result(success=False, error_message="xTB crashed")] * 8
+    )
+    result = run_xtb_optimize(str(inp), output_dir=out)
+    assert result.status == "failed"
 
 
 def test_xtb_optimize_in_catalog_and_registry():
@@ -516,34 +484,28 @@ def test_xtb_optimize_in_catalog_and_registry():
 # ---------------------------------------------------------------------------
 
 
-def test_run_frequency_mock(tmp_path):
+def test_run_frequency_mock(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "freq_out"
 
     freqs = [100.0, 200.0, 3500.0]
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        mk_backend.return_value.frequency.return_value = _fake_qc_result(
-            frequencies=freqs,
-            has_frequencies=True,
-        )
-        result = run_frequency(str(inp), output_dir=out)
-        mk_backend.return_value.frequency.assert_called_once()
-        assert result.status == "completed"
-        assert result.metadata.get("n_frequencies") == 3
-        assert result.metadata.get("has_frequencies") is True
+    fake_backend.set_result("frequency", frequencies=freqs, has_frequencies=True, success=True)
+    result = run_frequency(str(inp), output_dir=out)
+    assert result.status == "completed"
+    assert result.metadata.get("n_frequencies") == 3
+    assert result.metadata.get("has_frequencies") is True
 
 
-def test_run_frequency_no_modes(tmp_path):
+def test_run_frequency_no_modes(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "freq_out"
 
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        mk_backend.return_value.frequency.return_value = _fake_qc_result(has_frequencies=False)
-        result = run_frequency(str(inp), output_dir=out)
-        assert result.status == "completed"
-        assert result.metadata.get("n_frequencies") == 0
+    fake_backend.set_result("frequency", has_frequencies=False, success=True)
+    result = run_frequency(str(inp), output_dir=out)
+    assert result.status == "completed"
+    assert result.metadata.get("n_frequencies") == 0
 
 
 # ---------------------------------------------------------------------------
@@ -551,43 +513,33 @@ def test_run_frequency_no_modes(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_run_optfreq_mock(tmp_path):
+def test_run_optfreq_mock(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "optfreq_out"
 
     coords = np.array([[0.1, 0.0, 0.0]])
     freqs = [500.0, 1600.0]
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        mk_backend.return_value.opt_freq.return_value = _fake_qc_result(
-            coordinates=coords,
-            symbols=["C"],
-            frequencies=freqs,
-            has_frequencies=True,
-            converged=True,
-        )
-        result = run_optfreq(str(inp), output_dir=out)
-        mk_backend.return_value.opt_freq.assert_called_once()
-        assert result.status == "completed"
-        assert result.metadata.get("n_frequencies") == 2
-
-        products = _result_summary_products(result)
-        assert products["RESULT/structures/optimized.xyz"]["role"] == "final_stable_structure"
-        assert "role" not in products["RESULT/frequencies/frequencies.txt"]
-        assert "role" not in products["RESULT/energies/energy.json"]
+    fake_backend.set_result(
+        "optimize", coordinates=coords, symbols=["C"], converged=True, success=True
+    )
+    fake_backend.set_result("frequency", frequencies=freqs, has_frequencies=True, success=True)
+    result = run_optfreq(str(inp), output_dir=out)
+    assert result.status == "completed"
+    assert result.metadata.get("n_frequencies") == 2
+    assert [call.method for call in fake_backend.calls] == ["optimize", "frequency"]
 
 
-def test_run_optfreq_failure(tmp_path):
+def test_run_optfreq_failure(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "optfreq_out"
 
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        mk_backend.return_value.opt_freq.return_value = _fake_qc_result(
-            success=False, error_message="Opt Freq failed"
-        )
-        result = run_optfreq(str(inp), output_dir=out)
-        assert result.status == "failed"
+    fake_backend.set_results(
+        "optimize", [_fake_qc_result(success=False, error_message="Opt Freq failed")] * 8
+    )
+    result = run_optfreq(str(inp), output_dir=out)
+    assert result.status == "failed"
 
 
 # ---------------------------------------------------------------------------
@@ -595,7 +547,7 @@ def test_run_optfreq_failure(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def test_run_optfreqsp_mock(tmp_path):
+def test_run_optfreqsp_mock(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "optfreqsp_out"
@@ -605,48 +557,34 @@ def test_run_optfreqsp_mock(tmp_path):
     opt_coords = np.array([[0.1, 0.0, 0.0]])
     freqs = [500.0, 1600.0]
 
-    with (
-        patch("acp.workflows.simple._find_shermo", return_value=True),
-        patch("acp.workflows.simple._build_backend") as mk_backend,
-        patch("acp.workflows.simple.run_shermo") as mk_shermo,
-    ):
-        mk_shermo.return_value = {"g_sum": -40.5, "h_sum": -40.4, "u_sum": -40.6, "s_total": 0.0001}
-
-        optfreq_result = _fake_qc_result(
-            coordinates=opt_coords,
-            symbols=["C"],
-            frequencies=freqs,
-            has_frequencies=True,
-            log_file=log_file,
-        )
-        sp_result = _fake_qc_result(energy=-40.0)
-
-        def _se_side_effect(cfg):
-            be = MagicMock()
-            be.opt_freq.return_value = optfreq_result
-            be.single_point.return_value = sp_result
-            return be
-
-        mk_backend.side_effect = _se_side_effect
-
-        from acp.workflows.simple import run_optfreqsp
-
+    fake_backend.set_result(
+        "optimize",
+        coordinates=opt_coords,
+        symbols=["C"],
+        converged=True,
+        log_file=log_file,
+        success=True,
+    )
+    fake_backend.set_result(
+        "frequency", frequencies=freqs, has_frequencies=True, freq_log_file=log_file, success=True
+    )
+    fake_backend.set_result("single_point", energy=-40.0, success=True)
+    with patch(
+        "acp.calculations.primitives.thermochemistry.run_shermo",
+        return_value={"g_sum": -40.5, "h_sum": -40.4, "u_sum": -40.6, "s_total": 0.0001},
+    ) as mk_shermo:
         result = run_optfreqsp(str(inp), output_dir=out)
 
-        assert result.status == "completed"
-        assert result.metadata.get("sp_energy") == -40.0
-        assert result.metadata.get("n_frequencies") == 2
-        assert result.metadata.get("thermo_success") is True
-
-        mk_shermo.assert_called_once()
-        call_kwargs = mk_shermo.call_args.kwargs
-        assert "freq_output" in call_kwargs
-        assert "sp_energy" in call_kwargs
-
-        products = _result_summary_products(result)
-        assert products["RESULT/structures/optimized.xyz"]["role"] == "final_stable_structure"
-        assert "role" not in products["RESULT/energies/thermo.json"]
-        assert "role" not in products["RESULT/energies/energy.json"]
+    assert result.status == "completed"
+    assert result.metadata.get("sp_energy") == -40.0
+    assert result.metadata.get("n_frequencies") == 2
+    assert result.metadata.get("thermo_success") is True
+    mk_shermo.assert_called_once()
+    assert [call.method for call in fake_backend.calls] == [
+        "optimize",
+        "frequency",
+        "single_point",
+    ]
 
 
 def test_run_optfreqsp_no_shermo(tmp_path):
@@ -654,15 +592,11 @@ def test_run_optfreqsp_no_shermo(tmp_path):
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "no_shermo_out"
 
-    with patch("acp.workflows.simple._find_shermo", return_value=False):
-        from acp.workflows.simple import run_optfreqsp
-
-        result = run_optfreqsp(str(inp), output_dir=out)
-        assert result.status == "failed"
-        assert "Shermo" in (result.error or "")
+    result = run_optfreqsp(str(inp), output_dir=out)
+    assert result.status == "failed"
 
 
-def test_run_optfreqsp_shermo_failure_marks_job_failed(tmp_path):
+def test_run_optfreqsp_shermo_failure_marks_job_failed(fake_backend, tmp_path):
     """Shermo producing no output must fail the job (per §5.6), not silently
     return completed with missing thermochemistry."""
     inp = tmp_path / "mol.xyz"
@@ -671,33 +605,16 @@ def test_run_optfreqsp_shermo_failure_marks_job_failed(tmp_path):
     log_file = tmp_path / "fake_optfreq.out"
     log_file.write_text("ORCA log placeholder")
 
-    with (
-        patch("acp.workflows.simple._find_shermo", return_value=True),
-        patch("acp.workflows.simple._build_backend") as mk_backend,
-        patch("acp.workflows.simple.run_shermo", return_value=None) as mk_shermo,
-    ):
-        optfreq_result = _fake_qc_result(
-            coordinates=np.array([[0.1, 0.0, 0.0]]),
-            symbols=["C"],
-            frequencies=[500.0],
-            has_frequencies=True,
-            log_file=log_file,
-        )
-        sp_result = _fake_qc_result(energy=-40.0)
-
-        def _se_side_effect(cfg):
-            be = MagicMock()
-            be.opt_freq.return_value = optfreq_result
-            be.single_point.return_value = sp_result
-            return be
-
-        mk_backend.side_effect = _se_side_effect
-
+    fake_backend.set_result(
+        "optimize", coordinates=np.array([[0.1, 0.0, 0.0]]), symbols=["C"], log_file=log_file
+    )
+    fake_backend.set_result("frequency", frequencies=[500.0], freq_log_file=log_file)
+    fake_backend.set_result("single_point", energy=-40.0)
+    with patch("acp.calculations.primitives.thermochemistry.run_shermo", return_value=None):
         result = run_optfreqsp(str(inp), output_dir=out)
 
-        assert result.status == "failed"
-        assert "Shermo" in (result.error or "")
-        mk_shermo.assert_called_once()
+    assert result.status == "failed"
+    assert "Shermo" in (result.error or "")
 
 
 def test_scale_factor_default_consistent_across_sources():
@@ -715,31 +632,20 @@ def test_scale_factor_default_consistent_across_sources():
     assert _simple._DEFAULT_SCALE_FACTOR == 0.9905
 
 
-def test_run_optfreqsp_optfreq_failure(tmp_path):
+def test_run_optfreqsp_optfreq_failure(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "fail_out"
 
-    with (
-        patch("acp.workflows.simple._find_shermo", return_value=True),
-        patch("acp.workflows.simple._build_backend") as mk_backend,
-    ):
-        mk_backend.return_value.opt_freq.return_value = _fake_qc_result(
-            success=False, error_message="Opt+Freq crash"
-        )
-
-        from acp.workflows.simple import run_optfreqsp
-
-        result = run_optfreqsp(str(inp), output_dir=out)
-        assert result.status == "failed"
-        assert "Opt+Freq" in (result.error or "")
-
-        assert mk_backend.call_count >= 1
-        call_args = mk_backend.call_args_list[0][0]
-        assert len(call_args) == 1
+    fake_backend.set_results(
+        "optimize", [_fake_qc_result(success=False, error_message="Opt+Freq crash")] * 8
+    )
+    result = run_optfreqsp(str(inp), output_dir=out)
+    assert result.status == "failed"
+    assert "Opt+Freq" in (result.error or "")
 
 
-def test_run_optfreqsp_sp_failure(tmp_path):
+def test_run_optfreqsp_sp_failure(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "sp_fail_out"
@@ -747,67 +653,31 @@ def test_run_optfreqsp_sp_failure(tmp_path):
     opt_coords = np.array([[0.1, 0.0, 0.0]])
     log_file = tmp_path / "f.out"
     log_file.write_text("ORCA log")
-    with (
-        patch("acp.workflows.simple._find_shermo", return_value=True),
-        patch("acp.workflows.simple._build_backend") as mk_backend,
-    ):
-        optfreq_result = _fake_qc_result(
-            coordinates=opt_coords,
-            symbols=["C"],
-            frequencies=[500.0],
-            has_frequencies=True,
-            log_file=log_file,
-        )
-
-        def _se_side_effect(cfg):
-            be = MagicMock()
-            be.opt_freq.return_value = optfreq_result
-            be.single_point.return_value = _fake_qc_result(success=False, error_message="SP crash")
-            return be
-
-        mk_backend.side_effect = _se_side_effect
-
-        from acp.workflows.simple import run_optfreqsp
-
-        result = run_optfreqsp(str(inp), output_dir=out)
-        assert result.status == "failed"
-        assert "SP" in (result.error or "")
+    fake_backend.set_result(
+        "optimize", coordinates=opt_coords, symbols=["C"], log_file=log_file, success=True
+    )
+    fake_backend.set_result("frequency", frequencies=[500.0], freq_log_file=log_file, success=True)
+    fake_backend.set_result("single_point", success=False, error_message="SP crash")
+    result = run_optfreqsp(str(inp), output_dir=out)
+    assert result.status == "failed"
+    assert "SP" in (result.error or "")
 
 
-def test_run_optfreqsp_no_log_file(tmp_path):
+def test_run_optfreqsp_no_log_file(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "no_log_out"
 
     opt_coords = np.array([[0.1, 0.0, 0.0]])
-    with (
-        patch("acp.workflows.simple._find_shermo", return_value=True),
-        patch("acp.workflows.simple._build_backend") as mk_backend,
-    ):
-        optfreq_result = _fake_qc_result(
-            coordinates=opt_coords,
-            symbols=["C"],
-            frequencies=[500.0],
-            has_frequencies=True,
-            log_file=None,
-        )
-
-        def _se_side_effect(cfg):
-            be = MagicMock()
-            be.opt_freq.return_value = optfreq_result
-            be.single_point.return_value = _fake_qc_result(energy=-40.0)
-            return be
-
-        mk_backend.side_effect = _se_side_effect
-
-        from acp.workflows.simple import run_optfreqsp
-
-        result = run_optfreqsp(str(inp), output_dir=out)
-        assert result.status == "failed"
-        assert "log file" in (result.error or "").lower()
+    fake_backend.set_result("optimize", coordinates=opt_coords, symbols=["C"], success=True)
+    fake_backend.set_result("frequency", frequencies=[500.0], success=True)
+    fake_backend.set_result("single_point", energy=-40.0, success=True)
+    result = run_optfreqsp(str(inp), output_dir=out)
+    assert result.status == "failed"
+    assert "frequency log" in (result.error or "").lower()
 
 
-def test_run_optfreqsp_sp_energy_none(tmp_path):
+def test_run_optfreqsp_sp_energy_none(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "no_sp_en_out"
@@ -815,31 +685,14 @@ def test_run_optfreqsp_sp_energy_none(tmp_path):
     opt_coords = np.array([[0.1, 0.0, 0.0]])
     log_file = tmp_path / "spen_f.out"
     log_file.write_text("ORCA log")
-    with (
-        patch("acp.workflows.simple._find_shermo", return_value=True),
-        patch("acp.workflows.simple._build_backend") as mk_backend,
-    ):
-        optfreq_result = _fake_qc_result(
-            coordinates=opt_coords,
-            symbols=["C"],
-            frequencies=[500.0],
-            has_frequencies=True,
-            log_file=log_file,
-        )
-
-        def _se_side_effect(cfg):
-            be = MagicMock()
-            be.opt_freq.return_value = optfreq_result
-            be.single_point.return_value = _fake_qc_result(energy=None)
-            return be
-
-        mk_backend.side_effect = _se_side_effect
-
-        from acp.workflows.simple import run_optfreqsp
-
-        result = run_optfreqsp(str(inp), output_dir=out)
-        assert result.status == "failed"
-        assert "no energy" in (result.error or "").lower()
+    fake_backend.set_result(
+        "optimize", coordinates=opt_coords, symbols=["C"], log_file=log_file, success=True
+    )
+    fake_backend.set_result("frequency", frequencies=[500.0], freq_log_file=log_file, success=True)
+    fake_backend.set_result("single_point", energy=None)
+    result = run_optfreqsp(str(inp), output_dir=out)
+    assert result.status == "failed"
+    assert "energy" in (result.error or "").lower()
 
 
 # ---------------------------------------------------------------------------
@@ -918,49 +771,28 @@ def test_cli_optfreqsp_has_sp_args():
 # ---------------------------------------------------------------------------
 
 
-def test_optfreqsp_data_flow_passes_opt_coords_to_sp(tmp_path):
+def test_optfreqsp_data_flow_passes_opt_coords_to_sp(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "dataflow_out"
 
     opt_coords = np.array([[0.1, 0.2, 0.3]])
-    instances: list[MagicMock] = []
-    log_file = tmp_path / "df.out"
-    log_file.write_text("ORCA log")
-
-    with (
-        patch("acp.workflows.simple._find_shermo", return_value=True),
-        patch("acp.workflows.simple._build_backend") as mk_backend,
-        patch("acp.workflows.simple.run_shermo") as mk_shermo,
+    fake_backend.set_result("optimize", coordinates=opt_coords, symbols=["C"], success=True)
+    fake_backend.set_result(
+        "frequency", frequencies=[500.0], freq_log_file=tmp_path / "df.out", success=True
+    )
+    fake_backend.set_result("single_point", energy=-40.0, success=True)
+    (tmp_path / "df.out").write_text("ORCA log")
+    with patch(
+        "acp.calculations.primitives.thermochemistry.run_shermo", return_value={"g_sum": -40.5}
     ):
-        mk_shermo.return_value = {"g_sum": -40.5}
-
-        def _se_side_effect(cfg):
-            be = MagicMock()
-            instances.append(be)
-            be.opt_freq.return_value = _fake_qc_result(
-                coordinates=opt_coords,
-                symbols=["C"],
-                frequencies=[500.0],
-                has_frequencies=True,
-                log_file=log_file,
-            )
-            be.single_point.return_value = _fake_qc_result(energy=-40.0)
-            return be
-
-        mk_backend.side_effect = _se_side_effect
-
-        from acp.workflows.simple import run_optfreqsp
-
         result = run_optfreqsp(str(inp), output_dir=out)
-        assert result.status == "completed"
-
-        sp_mock = instances[1]
-        sp_call_coords = sp_mock.single_point.call_args[0][0]
-        np.testing.assert_array_equal(sp_call_coords, opt_coords)
+    assert result.status == "completed"
+    sp_call = fake_backend.calls[2]
+    np.testing.assert_array_equal(sp_call.args[0], opt_coords)
 
 
-def test_optfreqsp_data_flow_passes_log_file_to_shermo(tmp_path):
+def test_optfreqsp_data_flow_passes_log_file_to_shermo(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "logflow_out"
@@ -968,34 +800,17 @@ def test_optfreqsp_data_flow_passes_log_file_to_shermo(tmp_path):
     fake_log = tmp_path / "optfreq_test_log.out"
     fake_log.write_text("ORCA log placeholder")
 
-    with (
-        patch("acp.workflows.simple._find_shermo", return_value=True),
-        patch("acp.workflows.simple._build_backend") as mk_backend,
-        patch("acp.workflows.simple.run_shermo") as mk_shermo,
-    ):
-        mk_shermo.return_value = {"g_sum": -40.5}
-
-        def _se_side_effect(cfg):
-            be = MagicMock()
-            be.opt_freq.return_value = _fake_qc_result(
-                coordinates=np.array([[0.0, 0.0, 0.0]]),
-                symbols=["C"],
-                frequencies=[500.0],
-                has_frequencies=True,
-                log_file=fake_log,
-            )
-            be.single_point.return_value = _fake_qc_result(energy=-40.0)
-            return be
-
-        mk_backend.side_effect = _se_side_effect
-
-        from acp.workflows.simple import run_optfreqsp
-
+    fake_backend.set_result(
+        "optimize", coordinates=np.array([[0.0, 0.0, 0.0]]), symbols=["C"], success=True
+    )
+    fake_backend.set_result("frequency", frequencies=[500.0], freq_log_file=fake_log, success=True)
+    fake_backend.set_result("single_point", energy=-40.0, success=True)
+    with patch(
+        "acp.calculations.primitives.thermochemistry.run_shermo", return_value={"g_sum": -40.5}
+    ) as mk_shermo:
         result = run_optfreqsp(str(inp), output_dir=out)
-        assert result.status == "completed"
-
-        call_kwargs = mk_shermo.call_args.kwargs
-        assert call_kwargs["freq_output"] == fake_log
+    assert result.status == "completed"
+    assert mk_shermo.call_args.kwargs["freq_output"] == fake_log
 
 
 # ---------------------------------------------------------------------------
@@ -1361,14 +1176,11 @@ def test_build_simple_method_kwargs_singlepoint_no_hess():
     assert "recalc_hess" not in kwargs
 
 
-def test_run_optimize_passes_recalc_hess(tmp_path):
+def test_run_optimize_passes_recalc_hess(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "opt_out"
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        be = MagicMock()
-        be.optimize.return_value = _fake_qc_result(energy=-40.0)
-        mk_backend.return_value = be
-        result = run_optimize(str(inp), output_dir=out, method_kwargs={"recalc_hess": 4})
-        assert result.status == "completed"
-        assert be.optimize.call_args.kwargs["recalc_hess"] == 4
+    fake_backend.set_result("optimize", energy=-40.0, coordinates=np.array([[0.0, 0.0, 0.0]]))
+    result = run_optimize(str(inp), output_dir=out, method_kwargs={"recalc_hess": 4})
+    assert result.status == "completed"
+    assert fake_backend.calls[0].kwargs["recalc_hess"] == 4

@@ -45,6 +45,7 @@ from acp.calculations.contracts import (
 from acp.calculations.primitives.frequency import run_frequency
 from acp.calculations.primitives.optimize import run_optimize
 from acp.calculations.primitives.singlepoint import run_singlepoint
+from acp.calculations.primitives.thermochemistry import ThermochemistryCalculator
 from acp.storage.manifest import ProductKind, ResultManifest
 
 logger = logging.getLogger(__name__)
@@ -58,11 +59,87 @@ _STEP_DIRS: dict[StepKind, str] = {
     StepKind.SCAN: "07_PATH",
 }
 
+
+def _resource_float(resources: Mapping[str, JsonValue], key: str) -> float | None:
+    value = resources.get(key)
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return None
+    return None
+
+
+def _thermochemistry_options(resources: Mapping[str, JsonValue]) -> dict[str, JsonValue]:
+    options: dict[str, JsonValue] = {}
+    for key in ("scl_zpe", "ilowfreq", "imagreal", "conc", "shermo_bin"):
+        value = resources.get(key)
+        if value is not None:
+            options[key] = value
+    if "scl_zpe" not in options and resources.get("scale_factor") is not None:
+        options["scl_zpe"] = resources["scale_factor"]
+    return options
+
+
+def _run_thermochemistry(request: CalculationRequest) -> CalculationResult:
+    freq_log = request.resources.get("freq_log_path")
+    sp_energy = _resource_float(request.resources, "sp_energy_hartree")
+    temperature = _resource_float(request.resources, "temperature") or 298.15
+    pressure = _resource_float(request.resources, "pressure") or 1.0
+    if not isinstance(freq_log, str) or not freq_log:
+        return CalculationResult(
+            status="failed",
+            errors=["thermochemistry requires a frequency log"],
+        )
+    if sp_energy is None:
+        return CalculationResult(
+            status="failed",
+            errors=["thermochemistry requires a single-point energy"],
+        )
+
+    raw_config = request.resources.get("config")
+    config = raw_config if isinstance(raw_config, Mapping) else None
+    raw_output_dir = request.resources.get("output_dir")
+    output_dir = Path(raw_output_dir) if isinstance(raw_output_dir, str) else None
+    standard_state = request.resources.get("standard_state", "1atm")
+    return ThermochemistryCalculator(
+        config=config,
+        output_dir=output_dir,
+        runner_options=_thermochemistry_options(request.resources),
+    ).compute(
+        freq_log_path=freq_log,
+        sp_energy_hartree=sp_energy,
+        temperature=temperature,
+        pressure=pressure,
+        standard_state=str(standard_state),
+    )
+
+
+def _step_resources(step: CalculationStep) -> dict[str, JsonValue]:
+    if isinstance(step.spec, dict):
+        return dict(step.spec)
+    if isinstance(step.spec, OptimizationSpec) and step.spec.method:
+        return {"method": step.spec.method}
+    return {}
+
+
+def _frequency_log_path(result: CalculationResult) -> Path | None:
+    for artifact in reversed(result.artifacts):
+        if artifact.type in {"frequency_log", "log"}:
+            return artifact.path
+    return None
+
+
 # ── step-kind → primitive callable ──────────────────────────────────────
 _PRIMITIVE_DISPATCH: dict[StepKind, Callable[[CalculationRequest], CalculationResult]] = {
     StepKind.SINGLEPOINT: run_singlepoint,
     StepKind.OPTIMIZE: run_optimize,
     StepKind.FREQUENCY: run_frequency,
+    StepKind.THERMOCHEMISTRY: _run_thermochemistry,
 }
 
 # Step kinds whose results feed coordinates into downstream steps.
@@ -382,6 +459,8 @@ class CalculationPlanExecutor:
         # track coordinates from optimize for downstream handoff
         handoff_coords: list[list[float]] | None = None
         handoff_symbols: list[str] | None = None
+        frequency_log_path: Path | None = None
+        single_point_energy: float | None = None
 
         # restore handoff from checkpoint if resuming
         if checkpoint is not None:
@@ -401,11 +480,18 @@ class CalculationPlanExecutor:
             step_work_dir = work_dir / (_step_dir_name(step.kind) or f"step_{idx}")
             step_method = _extract_method(step.spec, default_method)
 
+            step_resources = _step_resources(step)
+            if step.kind is StepKind.THERMOCHEMISTRY:
+                if frequency_log_path is not None:
+                    step_resources["freq_log_path"] = str(frequency_log_path)
+                if single_point_energy is not None:
+                    step_resources["sp_energy_hartree"] = single_point_energy
+
             request = _build_request(
                 step.kind,
                 item,
                 step_method,
-                base_resources,
+                {**base_resources, **step_resources},
                 output_dir=step_work_dir,
                 coordinates=handoff_coords,
                 symbols=handoff_symbols,
@@ -457,6 +543,11 @@ class CalculationPlanExecutor:
             else:
                 state.status = "completed"
                 logger.info("step %d (%s) completed", idx, step.kind.value)
+
+            if step.kind is StepKind.FREQUENCY:
+                frequency_log_path = _frequency_log_path(result)
+            elif step.kind is StepKind.SINGLEPOINT and result.energy is not None:
+                single_point_energy = result.energy
 
             # ④ coordinate handoff from optimize → downstream steps
             if step.kind in _COORD_PRODUCING_KINDS and result.coords is not None:

@@ -1,0 +1,4 @@
+Command: python -m pytest tests/test_acp_workflows_simple.py::test_run_optimize_manifest_only -q
+.                                                                        [100%]
+1 passed in 0.76s
+Exit code: 0
