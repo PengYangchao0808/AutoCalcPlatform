@@ -49,8 +49,6 @@ def test_crest_binary_smoke_check(sample_config: dict[str, object]) -> None:
 def test_crest_run_uses_alpb_with_solvent_model_alpb(
     sample_config: dict[str, object], tmp_path: Path
 ) -> None:
-    interface = CRESTInterface(sample_config, solvent="toluene", solvent_model="alpb")
-
     completed = subprocess.CompletedProcess(
         args=["crest", str(tmp_path / "crest_input.xyz")],
         returncode=0,
@@ -58,10 +56,17 @@ def test_crest_run_uses_alpb_with_solvent_model_alpb(
         stderr="",
     )
 
-    with patch(
-        "cccp.qc.interfaces.crest.subprocess.run",
-        return_value=completed,
-    ) as mock_run:
+    with (
+        patch(
+            "cccp.qc.interfaces.crest.subprocess.run",
+            return_value=completed,
+        ) as mock_run,
+        patch(
+            "cccp.qc.interfaces.crest.resolve_executable",
+            return_value=Path("/fake/crest"),
+        ),
+    ):
+        interface = CRESTInterface(sample_config, solvent="toluene", solvent_model="alpb")
         interface.run_conformer_search(
             COORDINATES, SYMBOLS, output_dir=tmp_path, output_name="crest_ensemble"
         )
@@ -75,8 +80,6 @@ def test_crest_run_uses_alpb_with_solvent_model_alpb(
 def test_crest_run_uses_gbsa_with_solvent_model_gbsa(
     sample_config: dict[str, object], tmp_path: Path
 ) -> None:
-    interface = CRESTInterface(sample_config, solvent="toluene", solvent_model="gbsa")
-
     completed = subprocess.CompletedProcess(
         args=["crest", str(tmp_path / "crest_input.xyz")],
         returncode=0,
@@ -84,10 +87,17 @@ def test_crest_run_uses_gbsa_with_solvent_model_gbsa(
         stderr="",
     )
 
-    with patch(
-        "cccp.qc.interfaces.crest.subprocess.run",
-        return_value=completed,
-    ) as mock_run:
+    with (
+        patch(
+            "cccp.qc.interfaces.crest.subprocess.run",
+            return_value=completed,
+        ) as mock_run,
+        patch(
+            "cccp.qc.interfaces.crest.resolve_executable",
+            return_value=Path("/fake/crest"),
+        ),
+    ):
+        interface = CRESTInterface(sample_config, solvent="toluene", solvent_model="gbsa")
         interface.run_conformer_search(
             COORDINATES, SYMBOLS, output_dir=tmp_path, output_name="crest_ensemble"
         )
@@ -101,8 +111,6 @@ def test_crest_run_uses_gbsa_with_solvent_model_gbsa(
 def test_crest_run_no_solvent_with_solvent_model_none(
     sample_config: dict[str, object], tmp_path: Path
 ) -> None:
-    interface = CRESTInterface(sample_config, solvent="toluene", solvent_model="none")
-
     completed = subprocess.CompletedProcess(
         args=["crest", str(tmp_path / "crest_input.xyz")],
         returncode=0,
@@ -110,10 +118,17 @@ def test_crest_run_no_solvent_with_solvent_model_none(
         stderr="",
     )
 
-    with patch(
-        "cccp.qc.interfaces.crest.subprocess.run",
-        return_value=completed,
-    ) as mock_run:
+    with (
+        patch(
+            "cccp.qc.interfaces.crest.subprocess.run",
+            return_value=completed,
+        ) as mock_run,
+        patch(
+            "cccp.qc.interfaces.crest.resolve_executable",
+            return_value=Path("/fake/crest"),
+        ),
+    ):
+        interface = CRESTInterface(sample_config, solvent="toluene", solvent_model="none")
         interface.run_conformer_search(
             COORDINATES, SYMBOLS, output_dir=tmp_path, output_name="crest_ensemble"
         )
@@ -126,8 +141,6 @@ def test_crest_run_no_solvent_with_solvent_model_none(
 def test_xtb_optimize_uses_alpb_with_solvent_model_alpb(
     sample_config: dict[str, object], tmp_path: Path
 ) -> None:
-    interface = XTBInterface(sample_config, solvent="toluene", solvent_model="alpb")
-
     completed = subprocess.CompletedProcess(
         args=["xtb", str(tmp_path / "xtb_input.xyz")],
         returncode=0,
@@ -135,10 +148,17 @@ def test_xtb_optimize_uses_alpb_with_solvent_model_alpb(
         stderr="",
     )
 
-    with patch(
-        "cccp.qc.interfaces.xtb.subprocess.run",
-        return_value=completed,
-    ) as mock_run:
+    with (
+        patch(
+            "cccp.qc.interfaces.crest.subprocess.run",
+            return_value=completed,
+        ) as mock_run,
+        patch(
+            "cccp.qc.interfaces.xtb.resolve_executable",
+            return_value=Path("/fake/xtb"),
+        ),
+    ):
+        interface = XTBInterface(sample_config, solvent="toluene", solvent_model="alpb")
         interface.optimize(COORDINATES, SYMBOLS, output_dir=tmp_path)
 
     args = mock_run.call_args[0][0]
@@ -150,8 +170,6 @@ def test_xtb_optimize_uses_alpb_with_solvent_model_alpb(
 def test_xtb_optimize_uses_gbsa_with_solvent_model_gbsa(
     sample_config: dict[str, object], tmp_path: Path
 ) -> None:
-    interface = XTBInterface(sample_config, solvent="toluene", solvent_model="gbsa")
-
     completed = subprocess.CompletedProcess(
         args=["xtb", str(tmp_path / "xtb_input.xyz")],
         returncode=0,
@@ -159,10 +177,17 @@ def test_xtb_optimize_uses_gbsa_with_solvent_model_gbsa(
         stderr="",
     )
 
-    with patch(
-        "cccp.qc.interfaces.xtb.subprocess.run",
-        return_value=completed,
-    ) as mock_run:
+    with (
+        patch(
+            "cccp.qc.interfaces.crest.subprocess.run",
+            return_value=completed,
+        ) as mock_run,
+        patch(
+            "cccp.qc.interfaces.xtb.resolve_executable",
+            return_value=Path("/fake/xtb"),
+        ),
+    ):
+        interface = XTBInterface(sample_config, solvent="toluene", solvent_model="gbsa")
         interface.optimize(COORDINATES, SYMBOLS, output_dir=tmp_path)
 
     args = mock_run.call_args[0][0]
@@ -174,8 +199,6 @@ def test_xtb_optimize_uses_gbsa_with_solvent_model_gbsa(
 def test_xtb_optimize_no_solvent_with_solvent_model_none(
     sample_config: dict[str, object], tmp_path: Path
 ) -> None:
-    interface = XTBInterface(sample_config, solvent="toluene", solvent_model="none")
-
     completed = subprocess.CompletedProcess(
         args=["xtb", str(tmp_path / "xtb_input.xyz")],
         returncode=0,
@@ -183,10 +206,17 @@ def test_xtb_optimize_no_solvent_with_solvent_model_none(
         stderr="",
     )
 
-    with patch(
-        "cccp.qc.interfaces.xtb.subprocess.run",
-        return_value=completed,
-    ) as mock_run:
+    with (
+        patch(
+            "cccp.qc.interfaces.xtb.subprocess.run",
+            return_value=completed,
+        ) as mock_run,
+        patch(
+            "cccp.qc.interfaces.xtb.resolve_executable",
+            return_value=Path("/fake/xtb"),
+        ),
+    ):
+        interface = XTBInterface(sample_config, solvent="toluene", solvent_model="none")
         interface.optimize(COORDINATES, SYMBOLS, output_dir=tmp_path)
 
     args = mock_run.call_args[0][0]
