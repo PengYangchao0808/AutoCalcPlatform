@@ -1,0 +1,17 @@
+COMMAND: pytest tests/test_architecture_invariants.py::test_batch_schema_rejects_irc tests/test_architecture_invariants.py::test_batch_manifest_no_irc_product -q
+KEY OUTPUT:
+..                                                                       [100%]
+2 passed in 1.07s
+EXIT CODE: 0
+
+COMMAND: pytest tests/test_architecture_invariants.py -q
+KEY OUTPUT:
+.......s                                                                 [100%]
+8 passed, 1 skipped in 1.37s
+EXIT CODE: 0
+
+COMMAND: python scripts/check_grep_gates.py --gate wave3_batch_no_stages src/acp/calculations/batch
+KEY OUTPUT:
+ALLOWED: legacy S3 loader compatibility references
+BLOCKING:
+EXIT CODE: 0
