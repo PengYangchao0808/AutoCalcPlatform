@@ -29,6 +29,26 @@ def test_acp_run_mechanism_help():
     assert "--output" in result.stdout
 
 
+def test_acp_run_removed_workflows_reject_with_retired_message():
+    for workflow in ("optfreq", "optfreqsp", "Lowconfirm", "Highconfirm"):
+        result = subprocess.run(
+            [sys.executable, "-m", "acp.cli", "run", workflow],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 2
+        assert "已退役" in result.stdout + result.stderr
+
+
+def test_acp_run_lowconfirm_help_is_retired():
+    result = subprocess.run(
+        [sys.executable, "-m", "acp.cli", "run", "Lowconfirm", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+
+
 def test_acp_run_serve_help():
     """``acp run serve --help`` shows real server workflow options."""
     result = subprocess.run(
@@ -49,7 +69,11 @@ def test_acp_no_command_shows_help():
         text=True,
     )
     # argparse with required=True subparser returns error code
-    assert result.returncode != 0 or "usage" in result.stderr.lower() or "usage" in result.stdout.lower()
+    assert (
+        result.returncode != 0
+        or "usage" in result.stderr.lower()
+        or "usage" in result.stdout.lower()
+    )
 
 
 def test_acp_run_nmr_help_shows_bruker():
@@ -78,4 +102,3 @@ def test_acp_run_nmr_spectrum_bruker_mutual_exclusion():
     )
     assert result.returncode == 1
     assert "exactly one" in result.stderr.lower()
-

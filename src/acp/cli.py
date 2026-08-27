@@ -24,7 +24,7 @@ import os
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 logger = logging.getLogger(__name__)
 
@@ -148,18 +148,6 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
             "Run an ORCA relaxed internal-coordinate scan",
             "Examples:\n  acp run scan --input mol.xyz --coordinate 0,1,1.0,2.0 --output ./out",
         ),
-        (
-            "optfreq",
-            "Opt + Freq",
-            "Run ORCA Opt+Freq as single job",
-            "Examples:\n  acp run optfreq --input mol.xyz --output ./out\n  acp run optfreq --input mol.gjf --method r2SCAN-3c",
-        ),
-        (
-            "optfreqsp",
-            "Opt+Freq+SP+Thermo",
-            "Full pipeline: opt -> freq -> SP -> Shermo",
-            "Examples:\n  acp run optfreqsp --input mol.xyz --output ./out\n  acp run optfreqsp --input mol.xyz --method r2SCAN-3c --sp-method wB97M-V",
-        ),
     ]:
         p = run_sub.add_parser(
             wf, help=wf_desc, formatter_class=argparse.RawDescriptionHelpFormatter, epilog=wf_epilog
@@ -262,7 +250,7 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
         help="Comma-separated ORCA route extras (e.g. SlowConv,NoFinalGrid)",
     )
 
-    if wf in ("singlepoint", "optimize", "frequency", "scan", "optfreq", "optfreqsp"):
+    if wf in ("singlepoint", "optimize", "frequency", "scan"):
         parser.add_argument(
             "--aux-j-basis",
             default="AutoAux",
@@ -287,7 +275,7 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
             "--aux-basis", dest="aux_j_basis_legacy", default=None, help=argparse.SUPPRESS
         )
 
-    if wf in ("optimize", "optfreq", "optfreqsp"):
+    if wf == "optimize":
         parser.add_argument(
             "--geom-maxiter",
             type=int,
@@ -324,55 +312,6 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
                 "Never compute the exact Hessian; ORCA uses an approximate "
                 "initial Hessian with BFGS updates throughout."
             ),
-        )
-
-    if wf == "optfreqsp":
-        parser.add_argument(
-            "--temperature", type=float, default=298.15, help="Temperature in K (default: 298.15)"
-        )
-        parser.add_argument(
-            "--pressure", type=float, default=1.0, help="Pressure in atm (default: 1.0)"
-        )
-        parser.add_argument(
-            "--scale-factor",
-            type=float,
-            default=0.9905,
-            help="Frequency scale factor for ZPE/thermo (default: 0.9905)",
-        )
-
-    if wf == "optfreqsp":
-        parser.add_argument(
-            "--sp-method", default="wB97M-V", help="SP functional (default: wB97M-V)"
-        )
-        parser.add_argument(
-            "--sp-basis", default="def2-TZVPP", help="SP basis set (default: def2-TZVPP)"
-        )
-        parser.add_argument(
-            "--sp-aux-j-basis",
-            default="AutoAux",
-            metavar="BASIS",
-            help="SP auxiliary /J basis for RI-J fitting (default: AutoAux). Common: AutoAux, def2/J.",
-        )
-        parser.add_argument(
-            "--sp-aux-c-basis",
-            default="AutoAux",
-            metavar="BASIS",
-            help="SP auxiliary /C basis for RI-MP2 correlation (default: AutoAux). "
-            "Common: AutoAux, def2-TZVPP/C. Only used by double-hybrid functionals (PWPB95) and DLPNO.",
-        )
-        parser.add_argument("--sp-aux-basis", default=None, help=argparse.SUPPRESS)
-        parser.add_argument(
-            "--sp-ri-approximation",
-            default="RIJCOSX",
-            choices=["none", "RI", "RIJCOSX", "RIJK"],
-            help="SP RI approximation (default: RIJCOSX)",
-        )
-        parser.add_argument("--sp-dispersion", default="none", help="SP dispersion correction")
-        parser.add_argument(
-            "--sp-solvent", default="", help="SP solvent name (e.g. water; defaults to --solvent)"
-        )
-        parser.add_argument(
-            "--sp-solvent-model", default="", help="SP solvent model (defaults to --solvent-model)"
         )
 
     if wf == "scan":
@@ -594,7 +533,7 @@ Examples:
 
 
 def _add_stage_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
-    """Register the Confsearch/PESsearch/Lowconfirm/Highconfirm subcommands."""
+    """Register the active staged workflow subcommands."""
     conf = run_sub.add_parser(
         "Confsearch",
         help="Unified conformer search + energies (S1)",
@@ -789,127 +728,6 @@ Examples:
         help="Logging level (default: INFO)",
     )
 
-    low = run_sub.add_parser(
-        "Lowconfirm",
-        help="Coarse Opt/TS + frequency + preliminary IRC (S3)",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\
-Examples:
-  acp run Lowconfirm --from-job 20260823_002_PESsearch \\
-      --from-artifact RESULT/mechanism/s2_path_manifest.json \\
-      --select ts_guess_001,ts_guess_004 --output ./low_out
-        """,
-    )
-    low.set_defaults(workflow="Lowconfirm")
-    low.add_argument("--from", dest="from_manifest", help="Direct path to an s2_path_manifest.json")
-    low.add_argument("--from-job", help="Source PESsearch job id")
-    low.add_argument(
-        "--from-artifact",
-        default="RESULT/mechanism/s2_path_manifest.json",
-        help="Artifact path relative to the source job directory",
-    )
-    low.add_argument(
-        "--select",
-        help="Comma-separated candidate ids (default: all TS guesses)",
-    )
-    low.add_argument(
-        "--structures",
-        help=(
-            "Comma-separated XYZ files (multi-frame supported) as batch input; "
-            "TAG: TS/INT comment lines set each structure's role (default INT)"
-        ),
-    )
-    low.add_argument(
-        "--batch-config",
-        dest="batch_config",
-        help=(
-            "Path to a batch_structures_v1 JSON config (S2 candidates / inline "
-            "structures / file list) — alternative to --from/--from-job"
-        ),
-    )
-    low.add_argument(
-        "--no-irc",
-        action="store_true",
-        help="Skip the preliminary IRC validation",
-    )
-    low.add_argument(
-        "--snapshot-candidates",
-        action="store_true",
-        help="Copy the S2 candidate package into this job before loading it",
-    )
-    low.add_argument("--output", "-o", default="./lowconfirm_out", help="Output directory")
-    low.add_argument("--charge", type=int, help="Molecular charge override")
-    low.add_argument("--multiplicity", type=int, help="Spin multiplicity override")
-    low.add_argument("--nproc", type=int, help="Number of CPU cores (overrides config)")
-    low.add_argument(
-        "--mem",
-        type=str,
-        help="Memory limit, e.g. 32GB, 4096MB (overrides config)",
-    )
-    low.add_argument("--config", type=str, help="Configuration YAML file")
-    low.add_argument(
-        "--log-level",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
-        help="Logging level (default: INFO)",
-    )
-
-    high = run_sub.add_parser(
-        "Highconfirm",
-        help="High-fidelity Opt/TS + freq + SP + thermochemistry (S4)",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\
-Examples:
-  acp run Highconfirm --from-job 20260823_003_Lowconfirm \\
-      --from-artifact RESULT/mechanism/s3_lowconfirm_manifest.json \\
-      --select ts_guess_001 --output ./high_out
-        """,
-    )
-    high.set_defaults(workflow="Highconfirm")
-    high.add_argument(
-        "--from",
-        dest="from_manifest",
-        help="Direct path to an s3_lowconfirm_manifest.json",
-    )
-    high.add_argument("--from-job", help="Source Lowconfirm job id")
-    high.add_argument(
-        "--from-artifact",
-        default="RESULT/mechanism/s3_lowconfirm_manifest.json",
-        help="Artifact path relative to the source job directory",
-    )
-    high.add_argument("--select", help="Comma-separated candidate ids (default: confirmed TS set)")
-    high.add_argument(
-        "--structures",
-        help=(
-            "Comma-separated XYZ files (multi-frame supported) as batch input; "
-            "TAG: TS/INT comment lines set each structure's role (default INT)"
-        ),
-    )
-    high.add_argument(
-        "--batch-config",
-        dest="batch_config",
-        help=(
-            "Path to a batch_structures_v1 JSON config (S2 candidates / inline "
-            "structures / file list) — alternative to --from/--from-job"
-        ),
-    )
-    high.add_argument("--output", "-o", default="./highconfirm_out", help="Output directory")
-    high.add_argument("--charge", type=int, help="Molecular charge override")
-    high.add_argument("--multiplicity", type=int, help="Spin multiplicity override")
-    high.add_argument("--nproc", type=int, help="Number of CPU cores (overrides config)")
-    high.add_argument(
-        "--mem",
-        type=str,
-        help="Memory limit, e.g. 32GB, 4096MB (overrides config)",
-    )
-    high.add_argument("--config", type=str, help="Configuration YAML file")
-    high.add_argument(
-        "--log-level",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
-        help="Logging level (default: INFO)",
-    )
-
 
 def _add_batch_optimize_parser(run_sub: argparse._SubParsersAction) -> None:
     batch = run_sub.add_parser(
@@ -961,32 +779,6 @@ Examples:
         default="INFO",
         help="Logging level (default: INFO)",
     )
-
-
-def _resolve_stage_source(
-    from_manifest: str | None,
-    from_job: str | None,
-    from_artifact: str,
-    stage: str,
-) -> Path:
-    """Resolve a stage workflow's source manifest (§8 artifact reference)."""
-    from acp.mechanism.stages.handoff import (
-        expected_source_kind,
-        resolve_source_job_work_dir,
-    )
-
-    if from_manifest:
-        return Path(from_manifest).expanduser().resolve()
-    if not from_job:
-        raise ValueError(f"Stage workflow requires --from or --from-job (stage {stage})")
-    work_dir = resolve_source_job_work_dir(from_job)
-    relative = from_artifact or ""
-    kind = expected_source_kind(stage)
-    artifact = work_dir / relative
-    if not artifact.is_file():
-        raise FileNotFoundError(f"Source artifact not found: {artifact}")
-    _ = kind
-    return artifact.resolve()
 
 
 def _load_plan_argument(plan_arg: str | None) -> dict[str, Any] | None:
@@ -1209,7 +1001,8 @@ def _resolve_pes_manifest_from_job(
     """Resolve a confsearch manifest path from a job ID."""
     from acp.scheduler.store import JobStore
 
-    store = JobStore()
+    run_root = Path(os.environ.get("ACP_RUN_ROOT", "./ACP_runs"))
+    store = JobStore(run_root / "acp_jobs.db")
     record = store.get(job_id)
     if record is None:
         raise FileNotFoundError(f"Job not found: {job_id}")
@@ -1370,129 +1163,6 @@ def _build_bond_scan_request(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def _resolve_batch_structures(
-    args: argparse.Namespace,
-) -> tuple[list[Any] | None, dict[str, Any] | None]:
-    """Resolve --batch-config / --structures into batch inputs (or None)."""
-    batch_config = getattr(args, "batch_config", None)
-    structures_arg = getattr(args, "structures", None)
-    if batch_config:
-        payload = json.loads(Path(batch_config).read_text(encoding="utf-8"))
-        if not isinstance(payload, dict):
-            raise ValueError(f"Batch config is not a JSON object: {batch_config}")
-        return None, payload
-    if structures_arg:
-        from acp.mechanism.batch_models import load_items_from_xyz_file
-
-        items: list[Any] = []
-        for chunk in str(structures_arg).split(","):
-            path_text = chunk.strip()
-            if not path_text:
-                continue
-            items.extend(load_items_from_xyz_file(Path(path_text).expanduser()))
-        if not items:
-            raise ValueError(f"No structures parsed from --structures {structures_arg!r}")
-        return items, None
-    return None, None
-
-
-def _handle_lowconfirm(args: argparse.Namespace) -> int:
-    """Execute the Lowconfirm (S3) workflow."""
-    setup_logging(args.log_level)
-    cfg = _build_config(args)
-    try:
-        structures, batch_request = _resolve_batch_structures(args)
-        manifest = None
-        if structures is None and batch_request is None:
-            manifest = _resolve_stage_source(
-                getattr(args, "from_manifest", None),
-                getattr(args, "from_job", None),
-                getattr(args, "from_artifact", "") or "",
-                "S3",
-            )
-        from acp.mechanism.stages import run_low_confirm
-
-        payload = run_low_confirm(
-            from_manifest=manifest,
-            output_dir=Path(args.output),
-            select=_parse_select(getattr(args, "select", None)),
-            run_irc=not getattr(args, "no_irc", False),
-            source_job_id=getattr(args, "from_job", None),
-            charge=args.charge,
-            multiplicity=args.multiplicity,
-            config=cfg,
-            structures=structures,
-            batch_request=batch_request,
-            snapshot_candidates=bool(getattr(args, "snapshot_candidates", False)),
-        )
-    except KeyboardInterrupt:
-        logger.warning("Interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("Lowconfirm failed: %s", exc)
-        return 1
-    gates = payload.get("gates") or {}
-    confirmed = sum(
-        1 for row in payload.get("candidates") or [] if row.get("status") == "confirmed"
-    )
-    logger.info("Lowconfirm completed: %d confirmed (G3=%s)", confirmed, gates.get("G3"))
-    logger.info(
-        "  Manifest    : %s",
-        Path(args.output) / "RESULT" / "mechanism" / "s3_lowconfirm_manifest.json",
-    )
-    return 0 if confirmed else 1
-
-
-def _handle_highconfirm(args: argparse.Namespace) -> int:
-    """Execute the Highconfirm (S4) workflow."""
-    setup_logging(args.log_level)
-    cfg = _build_config(args)
-    try:
-        structures, batch_request = _resolve_batch_structures(args)
-        manifest = None
-        if structures is None and batch_request is None:
-            manifest = _resolve_stage_source(
-                getattr(args, "from_manifest", None),
-                getattr(args, "from_job", None),
-                getattr(args, "from_artifact", "") or "",
-                "S4",
-            )
-        from acp.mechanism.stages import run_high_confirm
-
-        payload = run_high_confirm(
-            from_manifest=manifest,
-            output_dir=Path(args.output),
-            select=_parse_select(getattr(args, "select", None)),
-            source_job_id=getattr(args, "from_job", None),
-            charge=args.charge,
-            multiplicity=args.multiplicity,
-            config=cfg,
-            structures=structures,
-            batch_request=batch_request,
-        )
-    except KeyboardInterrupt:
-        logger.warning("Interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("Highconfirm failed: %s", exc)
-        return 1
-    gates = payload.get("gates") or {}
-    confirmed = sum(
-        1 for row in payload.get("candidates") or [] if row.get("status") == "confirmed"
-    )
-    logger.info(
-        "Highconfirm completed: %d confirmed (G4=%s G5=%s)",
-        confirmed,
-        gates.get("G4"),
-        gates.get("G5"),
-    )
-    logger.info(
-        "  Manifest    : %s",
-        Path(args.output) / "RESULT" / "mechanism" / "s4_highconfirm_manifest.json",
-    )
-    return 0 if confirmed else 1
-
-
 def _handle_batch_optimize(args: argparse.Namespace) -> int:
     from acp.calculations.batch.options import BatchMethodOptions
     from acp.workflows.batch_optimize import BatchOptimizeInputError, run_batch_optimize
@@ -1545,44 +1215,6 @@ def build_parser() -> argparse.ArgumentParser:
     # -- run -----------------------------------------------------------------
     run_parser = subparsers.add_parser("run", help="Run a computational workflow")
     run_sub = run_parser.add_subparsers(dest="workflow", required=True)
-
-    mechanism_tools = subparsers.add_parser("mechanism", help="Mechanism-study utilities")
-    mechanism_tools_sub = mechanism_tools.add_subparsers(dest="mechanism_command", required=True)
-    mechanism_resume = mechanism_tools_sub.add_parser(
-        "resume",
-        help="Resume a persisted mechanism study",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\
-Examples:
-  acp mechanism resume --study study_001
-  acp mechanism resume --study study_001 --study-root ./mechanism_output
-  acp mechanism resume --study study_001 --decision decision_001=continue
-        """,
-    )
-    mechanism_resume.add_argument(
-        "--study",
-        required=True,
-        help="Study identifier (checkpoint identity; artifacts live under WORK/)",
-    )
-    mechanism_resume.add_argument(
-        "--study-root",
-        default="./mechanism_output",
-        help="Mechanism-study root directory (default: ./mechanism_output)",
-    )
-    mechanism_resume.add_argument(
-        "--decision",
-        action="append",
-        default=[],
-        metavar="ID=RESOLUTION",
-        help="Decision resolution (repeatable; resolution may be plain text or JSON)",
-    )
-    mechanism_resume.add_argument(
-        "--log-level",
-        type=str,
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
-        help="Logging level (default: INFO)",
-    )
 
     # -- run ensemble -------------------------------------------------------
     ens = run_sub.add_parser(
@@ -2242,13 +1874,13 @@ Examples:
         help="Resume from stage checkpoints (traj/isomers/cluster; fingerprint-validated)",
     )
 
-    # -- simple workflows (singlepoint / optimize / frequency / optfreq / optfreqsp) --
+    # -- simple workflows (singlepoint / optimize / frequency / scan / irc) --
     _add_simple_workflow_parsers(run_sub)
 
     # -- run mechanism -------------------------------------------------------
     mechanism = run_sub.add_parser(
         "mechanism",
-        help="Mechanism study (S0→S4 reaction-network exploration)",
+        help="Retired mechanism workflow (historical runs are read-only)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
@@ -2552,58 +2184,6 @@ def _handle_mechanism(_args: argparse.Namespace) -> int:
     return _reject_retired_workflow("mechanism")
 
 
-def _parse_decision_resolutions(values: list[str]) -> dict[str, Any]:
-    resolutions: dict[str, Any] = {}
-    for raw in values:
-        decision_id, separator, payload = raw.partition("=")
-        decision_key = decision_id.strip()
-        if not separator or not decision_key:
-            raise ValueError(f"Invalid --decision value: {raw!r}; expected ID=RESOLUTION")
-        payload_text = payload.strip()
-        try:
-            resolutions[decision_key] = json.loads(payload_text)
-        except json.JSONDecodeError:
-            resolutions[decision_key] = payload_text
-    return resolutions
-
-
-def _handle_mechanism_resume(args: argparse.Namespace) -> int:
-    """Resume a persisted mechanism study."""
-    setup_logging(args.log_level)
-    try:
-        from acp.mechanism.study_runner import resume_mechanism_study
-
-        resolutions = _parse_decision_resolutions(list(getattr(args, "decision", []) or []))
-        summary = resume_mechanism_study(
-            study_id=args.study,
-            study_root=args.study_root,
-            decision_resolutions=resolutions,
-        )
-    except KeyboardInterrupt:
-        logger.warning("Interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("Fatal error: %s", exc)
-        return 1
-
-    status = str(summary.get("status") or "unknown")
-    logger.info("Mechanism study %s", status)
-    logger.info("  Study ID            : %s", summary.get("study_id", "N/A"))
-    logger.info("  Study dir           : %s", summary.get("study_dir", "N/A"))
-    logger.info("  Network size        : %s", summary.get("network_size", {}))
-    logger.info("  Gates               : %s", summary.get("gates_summary", {}))
-    pending = summary.get("pending_decisions", [])
-    if pending:
-        logger.info("  Pending decisions   : %s", pending)
-    if status == "waiting":
-        from acp.mechanism.study_runner import write_review_payload
-        from acp.scheduler.jobs import EXIT_WAITING_REVIEW
-
-        write_review_payload(Path(args.study_root), summary)
-        return EXIT_WAITING_REVIEW
-    return 0 if status in {"completed", "waiting", "running"} else 1
-
-
 def _module_exit_code(status: str) -> int:
     if status in {"validated", "partial"}:
         if status == "partial":
@@ -2860,103 +2440,6 @@ def _handle_irc(args: argparse.Namespace) -> int:
     return 1
 
 
-def _handle_optfreq(args: argparse.Namespace) -> int:
-    from acp.workflows.simple import run_optfreq
-
-    setup_logging(args.log_level)
-    cfg = _build_config(args)
-    out = Path(args.output)
-    method_kwargs = _build_simple_method_kwargs(args)
-    try:
-        result = run_optfreq(
-            input_source=args.input,
-            output_dir=out,
-            config=cfg,
-            charge=args.charge,
-            multiplicity=args.multiplicity,
-            name=args.name,
-            method_kwargs=method_kwargs,
-        )
-    except KeyboardInterrupt:
-        logger.warning("Opt+Freq interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("Opt+Freq failed: %s", exc)
-        return 1
-    if result.status == "completed":
-        logger.info("Opt+Freq calculation completed")
-        logger.info("  Energy: %s Hartree", result.metadata.get("energy", "N/A"))
-        logger.info("  Modes: %s", result.metadata.get("n_frequencies", "N/A"))
-        return 0
-    logger.error("Opt+Freq failed: %s", result.error)
-    return 1
-
-
-def _handle_optfreqsp(args: argparse.Namespace) -> int:
-    from acp.workflows.simple import run_optfreqsp
-
-    setup_logging(args.log_level)
-    cfg = _build_config(args)
-    out = Path(args.output)
-
-    optfreq_kwargs = _build_simple_method_kwargs(args)
-    sp_kwargs: dict[str, Any] = {
-        "method": args.sp_method,
-        "basis": args.sp_basis,
-        "ri_approximation": args.sp_ri_approximation,
-    }
-    sp_aux_j = getattr(args, "sp_aux_j_basis", None)
-    sp_aux_legacy = getattr(args, "sp_aux_basis", None)
-    if sp_aux_legacy and sp_aux_j in (None, "AutoAux"):
-        sp_aux_j = sp_aux_legacy
-    if sp_aux_j and sp_aux_j != "AutoAux":
-        sp_kwargs["aux_j_basis"] = sp_aux_j
-    sp_aux_c = getattr(args, "sp_aux_c_basis", None)
-    if sp_aux_c and sp_aux_c != "AutoAux":
-        sp_kwargs["aux_c_basis"] = sp_aux_c
-    if args.sp_dispersion and args.sp_dispersion != "none":
-        sp_kwargs["dispersion"] = args.sp_dispersion
-    sp_solvent = args.sp_solvent or args.solvent
-    sp_solvent_model = args.sp_solvent_model or args.solvent_model
-    if sp_solvent_model and sp_solvent_model != "none":
-        sp_kwargs["solvent_model"] = sp_solvent_model
-    if sp_solvent:
-        sp_kwargs["solvent"] = sp_solvent
-    sp_extras = getattr(args, "route_extras", None)
-    if sp_extras:
-        sp_kwargs["route_extras"] = [x.strip() for x in sp_extras.split(",") if x.strip()]
-    thermo_kwargs: dict[str, Any] = {
-        "temperature": args.temperature,
-        "pressure": args.pressure,
-        "scale_factor": args.scale_factor,
-    }
-    try:
-        result = run_optfreqsp(
-            input_source=args.input,
-            output_dir=out,
-            config=cfg,
-            charge=args.charge,
-            multiplicity=args.multiplicity,
-            name=args.name,
-            optfreq_kwargs=optfreq_kwargs,
-            sp_kwargs=sp_kwargs,
-            thermo_kwargs=thermo_kwargs,
-        )
-    except KeyboardInterrupt:
-        logger.warning("Opt+Freq+SP+Thermo interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("Opt+Freq+SP+Thermo failed: %s", exc)
-        return 1
-    if result.status == "completed":
-        logger.info("Opt+Freq+SP+Thermo completed")
-        logger.info("  SP energy: %s Hartree", result.metadata.get("sp_energy", "N/A"))
-        logger.info("  Free energy: %s Hartree", result.metadata.get("free_energy_hartree", "N/A"))
-        return 0
-    logger.error("Opt+Freq+SP+Thermo failed: %s", result.error)
-    return 1
-
-
 def _build_xtb_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
     kwargs: dict[str, Any] = {}
     for key in ("gfn", "opt_level", "solvent_model", "solvent", "max_steps"):
@@ -3081,11 +2564,16 @@ def _try_open_browser(url: str) -> None:
 
 _RETIRED_WORKFLOW_MESSAGE = (
     "The workflow has been retired.\n"
-    "Use Confsearch, PESsearch, Lowconfirm or Highconfirm.\n"
+    "该工作流已退役，不能用于新任务。\n"
+    "Use Confsearch, PESsearch, Lowconfirm or Highconfirm.\n"  # status=retired
     "Mapping: ensemble -> Confsearch + censo-crest + screen; "
     "energy -> Confsearch + censo-crest + rank1/cumulative-99; "
     "xtbmd_censo_energy -> Confsearch + xtbmd-censo; "
     "mechanism/mech-* -> the four stage workflows."
+)
+
+_CLI_REMOVED_WORKFLOWS: Final[frozenset[str]] = frozenset(
+    {"optfreq", "optfreqsp", "Lowconfirm", "Highconfirm"}  # status=retired
 )
 
 
@@ -3273,15 +2761,19 @@ def main(argv: list[str] | None = None) -> int:
     Returns:
         Exit code.
     """
+    argv_values = list(sys.argv[1:] if argv is None else argv)
+    if len(argv_values) > 1 and argv_values[0] == "run" and argv_values[1] in _CLI_REMOVED_WORKFLOWS:
+        return _reject_retired_workflow(argv_values[1])
+    if argv_values[:2] == ["mechanism", "resume"]:
+        return _reject_retired_workflow("mechanism resume")
+
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(argv_values)
 
     if args.command == "run":
         dispatch: dict[str, Callable[[argparse.Namespace], int]] = {
             "Confsearch": _handle_confsearch,
             "PESsearch": _handle_pessearch,
-            "Lowconfirm": _handle_lowconfirm,
-            "Highconfirm": _handle_highconfirm,
             "BatchOptimize": _handle_batch_optimize,
             "ensemble": _handle_ensemble,
             "energy": _handle_energy,
@@ -3298,8 +2790,6 @@ def main(argv: list[str] | None = None) -> int:
             "frequency": _handle_frequency,
             "scan": _handle_scan,
             "irc": _handle_irc,
-            "optfreq": _handle_optfreq,
-            "optfreqsp": _handle_optfreqsp,
             "xtb_optimize": _handle_xtb_optimize,
         }
         handler = dispatch.get(args.workflow)
@@ -3307,14 +2797,6 @@ def main(argv: list[str] | None = None) -> int:
             parser.print_help()
             return 1
         _preflight_workflow(args.workflow)
-        return handler(args)
-
-    if args.command == "mechanism":
-        dispatch = {"resume": _handle_mechanism_resume}
-        handler = dispatch.get(args.mechanism_command)
-        if handler is None:
-            parser.print_help()
-            return 1
         return handler(args)
 
     if args.command != "run":

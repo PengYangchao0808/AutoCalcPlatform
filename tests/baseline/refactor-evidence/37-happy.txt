@@ -1,0 +1,38 @@
+=== 37-happy.txt: Wave 6 CLI Retired-Entry Cleanup ===
+Date: 2026-08-27 | Branch: refactor/calc-cleanup
+
+=== COMMAND ===
+python -c "import subprocess,sys; r=subprocess.run(['python','-m','acp.cli','run','Lowconfirm'],capture_output=True,text=True); sys.exit(0 if r.returncode==2 and '已退役' in (r.stderr+r.stdout) else 1)"
+=== KEY OUTPUT ===
+Subprocess assertion passed: the retired workflow returned 2 and emitted 已退役.
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+python -m acp.cli run Lowconfirm --help; test $? -eq 2
+=== KEY OUTPUT ===
+The retired rejection returned exit code 2; output included 已退役.
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+python scripts/check_grep_gates.py --gate wave6 src/acp/cli.py
+=== KEY OUTPUT ===
+ALLOWED: retired rejection literals for the four removed workflow names
+BLOCKING: empty
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+python -m acp.cli run singlepoint --help && python -m acp.cli run scan --help && python -m acp.cli run irc --help
+=== KEY OUTPUT ===
+All three active workflow help commands printed usage and completed successfully.
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+pytest tests/test_acp_cli.py tests/test_acp_mechanism_cli_study.py -q
+=== KEY OUTPUT ===
+19 passed in 15.12s
+=== EXIT CODE ===
+0

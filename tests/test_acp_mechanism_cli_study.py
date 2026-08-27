@@ -7,6 +7,7 @@ import json
 from argparse import Namespace
 from pathlib import Path
 
+import pytest
 from _pytest.monkeypatch import MonkeyPatch
 
 from acp.catalog import METHOD_SCHEMAS, normalize_and_validate_method_config
@@ -91,7 +92,7 @@ def test_mechanism_cli_retired_rejects_study_flag_invocation(
     """Confsearch v1.0: the one-shot study CLI rejects new runs (rc=2)."""
     called = {"n": 0}
 
-    def fake_run_mechanism_study(**kwargs: object) -> dict[str, object]:
+    def fake_run_mechanism_study(**_kwargs: object) -> dict[str, object]:
         called["n"] += 1
         return {"status": "completed"}
 
@@ -111,7 +112,7 @@ def test_mechanism_cli_retired_rejects_default_invocation(
 ) -> None:
     called = {"n": 0}
 
-    def fake_run_mechanism_study(**kwargs: object) -> dict[str, object]:
+    def fake_run_mechanism_study(**_kwargs: object) -> dict[str, object]:
         called["n"] += 1
         return {"status": "completed"}
 
@@ -121,11 +122,9 @@ def test_mechanism_cli_retired_rejects_default_invocation(
     assert called["n"] == 0
 
 
-def test_mechanism_cli_retired_rejects_config_only_invocation(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> None:
+def test_mechanism_cli_retired_rejects_config_only_invocation(tmp_path: Path) -> None:
     config_path = tmp_path / "mechanism_config.json"
-    config_path.write_text(
+    _ = config_path.write_text(
         json.dumps(
             {
                 "version": 1,
@@ -147,7 +146,7 @@ def test_mechanism_cli_retired_rejects_config_only_invocation(
     )
 
 
-def test_mechanism_cli_retired_rejects_fidelity_overrides(monkeypatch: MonkeyPatch) -> None:
+def test_mechanism_cli_retired_rejects_fidelity_overrides() -> None:
     assert (
         _handle_mechanism(
             _mechanism_args(output="./out", strategy="rph-reverse", fidelity="s4")
@@ -158,20 +157,12 @@ def test_mechanism_cli_retired_rejects_fidelity_overrides(monkeypatch: MonkeyPat
 
 def test_mechanism_cli_retired_rejects_missing_config_file(tmp_path: Path) -> None:
     missing = tmp_path / "does_not_exist.json"
-    assert _handle_mechanism(_mechanism_args(output=str(tmp_path), mechanism_config=str(missing))) == 2
+    assert (
+        _handle_mechanism(_mechanism_args(output=str(tmp_path), mechanism_config=str(missing))) == 2
+    )
 
 
-def test_mechanism_resume_parser_and_dispatch(monkeypatch: MonkeyPatch) -> None:
-    captured: dict[str, object] = {}
-
-    def fake_handle(args: Namespace) -> int:
-        captured["study"] = args.study
-        captured["study_root"] = args.study_root
-        captured["decision"] = args.decision
-        return 0
-
-    monkeypatch.setattr("acp.cli._handle_mechanism_resume", fake_handle)
-
+def test_mechanism_resume_is_retired(capsys: pytest.CaptureFixture[str]) -> None:
     exit_code = main(
         [
             "mechanism",
@@ -185,12 +176,9 @@ def test_mechanism_resume_parser_and_dispatch(monkeypatch: MonkeyPatch) -> None:
         ]
     )
 
-    assert exit_code == 0
-    assert captured == {
-        "study": "study_001",
-        "study_root": "./mechanism_output",
-        "decision": ["decision_001=continue"],
-    }
+    captured = capsys.readouterr()
+    assert exit_code == 2
+    assert "retired" in captured.out.lower() + captured.err.lower()
 
 
 def test_catalog_mechanism_profile_and_new_fields_validate() -> None:
@@ -234,23 +222,33 @@ def test_mechanism_cli_retired_waiting_flow_rejected(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
     """The retired CLI rejects runs that would previously enter review wait."""
+
+    def no_waiting_study(_root: Path, _study_id: str) -> bool:
+        return False
+
     monkeypatch.setattr(
-        "acp.mechanism.study_runner.waiting_study_exists", lambda root, sid: False
+        "acp.mechanism.study_runner.waiting_study_exists", no_waiting_study
     )
-    assert _handle_mechanism(_mechanism_args(output=str(tmp_path))) == 2
+    exit_code = _handle_mechanism(_mechanism_args(output=str(tmp_path)))
+    assert exit_code == 2
 
 
 def test_mechanism_cli_retired_restart_rejected(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
     """A waiting checkpoint no longer re-enters the (retired) CLI study flow."""
+
+    def waiting_study(_root: Path, _study_id: str) -> bool:
+        return True
+
+    def review_handoff(_root: Path) -> tuple[str, list[str]]:
+        return "study_restart", []
+
     monkeypatch.setattr(
-        "acp.mechanism.study_runner.waiting_study_exists", lambda root, sid: True
+        "acp.mechanism.study_runner.waiting_study_exists", waiting_study
     )
     monkeypatch.setattr(
         "acp.mechanism.study_runner.read_review_handoff",
-        lambda root: ("study_restart", []),
+        review_handoff,
     )
     assert _handle_mechanism(_mechanism_args(output=str(tmp_path))) == 2
-
-

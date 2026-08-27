@@ -1,0 +1,9 @@
+=== 37-fail.txt: Wave 6 Removed Mechanism Resume ===
+Date: 2026-08-27 | Branch: refactor/calc-cleanup
+
+=== COMMAND ===
+python -c "import subprocess,sys; r=subprocess.run(['python','-m','acp.cli','mechanism','resume','--study','x'],capture_output=True,text=True); ok = r.returncode==2 and ('已退役' in (r.stderr+r.stdout) or 'retired' in (r.stderr+r.stdout).lower()); sys.exit(0 if ok else 1)"
+=== KEY OUTPUT ===
+Subprocess assertion passed: removed mechanism resume returned 2 and emitted retired rejection text.
+=== EXIT CODE ===
+0
