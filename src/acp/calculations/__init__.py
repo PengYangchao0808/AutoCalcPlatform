@@ -1,4 +1,10 @@
-from .batch import BatchOptimizeEngine, BatchRunOutcome
+from .batch import (
+    BatchOptimizeEngine,
+    BatchRunOutcome,
+    BatchSinglePointExecutor,
+    BatchSinglePointFrameResult,
+    BatchSinglePointResult,
+)
 from .contracts import (
     ArtifactRef,
     CalculationPlan,
@@ -16,11 +22,22 @@ from .contracts import (
     validate_plan,
 )
 from .executor import CalculationPlanExecutor, ExecutionResult, StepState
+from .pes import (
+    PesScanRequest,
+    ScanCoordinate,
+    ScanFrame,
+    ScanProtocol,
+    build_coordinate_plan,
+    run_pes_scan,
+)
 
 __all__ = [
     "ArtifactRef",
     "BatchOptimizeEngine",
     "BatchRunOutcome",
+    "BatchSinglePointExecutor",
+    "BatchSinglePointFrameResult",
+    "BatchSinglePointResult",
     "CalculationPlan",
     "CalculationPlanExecutor",
     "CalculationRequest",
@@ -30,11 +47,17 @@ __all__ = [
     "ExecutionResult",
     "OptimizationMode",
     "OptimizationSpec",
+    "PesScanRequest",
     "Provenance",
+    "ScanCoordinate",
+    "ScanFrame",
+    "ScanProtocol",
     "StepKind",
     "StepState",
     "StructureArtifact",
     "StructureRole",
     "TaskManifest",
+    "build_coordinate_plan",
+    "run_pes_scan",
     "validate_plan",
 ]
