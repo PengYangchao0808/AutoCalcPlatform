@@ -230,6 +230,28 @@ def test_wave3_wave4_batch_gate_exemptions_have_teeth(
     assert _statuses(gate_name, relative_path, text) == expected
 
 
+@pytest.mark.parametrize(
+    ("gate_name", "relative_path", "text", "expected"),
+    (
+        # wave5_s2manifest: mechanism/ is ALLOWED (D9 legacy, Wave-8 deletion)
+        ("wave5_s2manifest", "src/acp/mechanism/stages/pes_search.py",
+         '    payload["s2_path_manifest"] = manifest_path', (True,)),
+        ("wave5_s2manifest", "src/acp/mechanism/bond_scan.py",
+         "    s2_candidate_manifest = {}", (True,)),
+        # wave5_s2manifest: api/ is STILL BLOCKING (Wave-7 cleanup)
+        ("wave5_s2manifest", "src/acp/api/v1_routes.py",
+         '    manifest = read_s2_path_manifest(path)', (False,)),
+        # wave5_s2manifest: calculations/ is STILL BLOCKING (new code)
+        ("wave5_s2manifest", "src/acp/calculations/pes/engine.py",
+         '    s2_path_manifest = {}', (False,)),
+    ),
+)
+def test_wave5_s2manifest_mechanism_allowed_api_still_blocking(
+    gate_name: str, relative_path: str, text: str, expected: tuple[bool, ...]
+) -> None:
+    assert _statuses(gate_name, relative_path, text) == expected
+
+
 def test_cli_prints_both_sections_and_blocks_a_zero_gate(tmp_path: Path) -> None:
     fixture = tmp_path / "fixture.py"
     _ = fixture.write_text("run_shermo()\n", encoding="utf-8")

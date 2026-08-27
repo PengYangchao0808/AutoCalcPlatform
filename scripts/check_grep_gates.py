@@ -85,7 +85,10 @@ WAVE2_OPTFREQ_ALLOWED_PATHS: Final[tuple[str, ...]] = (
     "src/cccp/",
     "src/acp/workflows/simple.py",
 )
-WAVE5_S2MANIFEST_ALLOWED_PATHS: Final[tuple[str, ...]] = ("src/acp/compat/legacy/",)
+WAVE5_S2MANIFEST_ALLOWED_PATHS: Final[tuple[str, ...]] = (
+    "src/acp/compat/legacy/",
+    "src/acp/mechanism/",
+)
 WAVE6_SCHEDULER_ALLOWED_PATHS: Final[tuple[str, ...]] = ("src/acp/scheduler/store.py",)
 WAVE7_SCOPE_PATHS: Final[tuple[str, ...]] = ("src/acp/api", "src/acp/scheduler")
 FINAL_FORBIDDEN_ALLOWED_PATHS: Final[tuple[str, ...]] = ("src/acp/compat/legacy/",)
