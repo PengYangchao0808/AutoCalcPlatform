@@ -167,6 +167,43 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
         p.set_defaults(workflow=wf)
         _add_simple_workflow_args(p, wf)
 
+    p = run_sub.add_parser(
+        "irc",
+        help="Run an independent IRC from a transition-state structure",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  acp run irc --input ts.xyz --input-role transition_state\n"
+            "  acp run irc --input ts.xyz --direction forward --output ./out"
+        ),
+    )
+    p.set_defaults(workflow="irc")
+    p.add_argument("--input", "-i", required=True, help="Transition-state XYZ input")
+    p.add_argument("--input-role", choices=["transition_state"], help="Explicit input role")
+    p.add_argument(
+        "--direction",
+        choices=["both", "forward", "reverse"],
+        default="both",
+        help="IRC direction (default: both)",
+    )
+    p.add_argument("--output", "-o", default="./irc_output", help="Output directory")
+    p.add_argument("--method", default="r2SCAN-3c", help="IRC method (default: r2SCAN-3c)")
+    p.add_argument("--basis", default="", help="Basis set (default: empty)")
+    p.add_argument("--maxpoints", "--max-points", dest="maxpoints", type=int, default=100)
+    p.add_argument("--step", type=float, default=0.1, help="IRC step size (default: 0.1)")
+    p.add_argument("--charge", type=int, default=0)
+    p.add_argument("--multiplicity", type=int, default=1)
+    p.add_argument("--name", type=str, help="Task name")
+    p.add_argument("--nproc", type=int, help="Number of CPU cores")
+    p.add_argument("--mem", type=str, help="Memory limit")
+    p.add_argument("--config", type=str, help="Configuration YAML file")
+    p.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
     # xTB optimization (separate parser — different solvent models & params)
     p = run_sub.add_parser(
         "xtb_optimize",
@@ -841,7 +878,6 @@ Examples:
             "structures / file list) — alternative to --from/--from-job"
         ),
     )
-    high.add_argument("--irc", action="store_true", help="Run the final IRC validation")
     high.add_argument("--output", "-o", default="./highconfirm_out", help="Output directory")
     high.add_argument("--charge", type=int, help="Molecular charge override")
     high.add_argument("--multiplicity", type=int, help="Spin multiplicity override")
@@ -1318,7 +1354,6 @@ def _handle_highconfirm(args: argparse.Namespace) -> int:
             from_manifest=manifest,
             output_dir=Path(args.output),
             select=_parse_select(getattr(args, "select", None)),
-            run_irc=bool(getattr(args, "irc", False)),
             source_job_id=getattr(args, "from_job", None),
             charge=args.charge,
             multiplicity=args.multiplicity,
@@ -2677,6 +2712,45 @@ def _handle_scan(args: argparse.Namespace) -> int:
     return 1
 
 
+def _handle_irc(args: argparse.Namespace) -> int:
+    """Execute an independent IRC request from one transition-state artifact."""
+    from acp.calculations.contracts import StructureArtifact
+    from acp.workflows.irc import run_irc_workflow
+
+    setup_logging(args.log_level)
+    directions = ("forward", "reverse") if args.direction == "both" else (args.direction,)
+    try:
+        result = run_irc_workflow(
+            input_artifact=StructureArtifact(path=Path(args.input), source="cli"),
+            directions=directions,
+            output_dir=Path(args.output),
+            config=_build_config(args),
+            method=args.method,
+            basis=args.basis,
+            maxpoints=args.maxpoints,
+            step=args.step,
+            input_role=args.input_role,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+        )
+    except ValueError as exc:
+        logger.error("IRC input error: %s", exc)
+        return 2
+    except KeyboardInterrupt:
+        logger.warning("IRC interrupted by user")
+        return 130
+    except (OSError, RuntimeError, TypeError) as exc:
+        logger.exception("IRC failed: %s", exc)
+        return 1
+
+    if result.status == "completed":
+        logger.info("IRC completed")
+        logger.info("  Report: %s", result.metadata.get("report_path", "N/A"))
+        return 0
+    logger.error("IRC failed: %s", result.error)
+    return 1
+
+
 def _handle_optfreq(args: argparse.Namespace) -> int:
     from acp.workflows.simple import run_optfreq
 
@@ -3114,6 +3188,7 @@ def main(argv: list[str] | None = None) -> int:
             "optimize": _handle_optimize,
             "frequency": _handle_frequency,
             "scan": _handle_scan,
+            "irc": _handle_irc,
             "optfreq": _handle_optfreq,
             "optfreqsp": _handle_optfreqsp,
             "xtb_optimize": _handle_xtb_optimize,

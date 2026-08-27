@@ -57,6 +57,18 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "visible": True,
     },
     {
+        "id": "irc",
+        "label": "Intrinsic Reaction Coordinate",
+        "label_zh": "内禀反应坐标",
+        "category": "simple",
+        "description": "Follow both directions of a transition-state IRC",
+        "method_schema_id": "irc",
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
+        "status": "active",
+        "visible": True,
+    },
+    {
         "id": "optfreq",
         "label": "Optimization + Frequency",
         "label_zh": "优化+频率",
@@ -688,6 +700,28 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "default": {"*": "Tight"},
     },
     "max_steps": {"type": "int", "advanced": True, "min": 1, "max": 10000, "default": {"*": 100}},
+    "method": {
+        "type": "select",
+        "label": "IRC Method",
+        "label_zh": "IRC 方法",
+        "per_backend": {"orca": list(METHOD_META)},
+        "default": {"*": "r2SCAN-3c"},
+    },
+    "maxpoints": {
+        "type": "int",
+        "label": "IRC Maximum Points",
+        "label_zh": "IRC 最大步数",
+        "min": 1,
+        "max": 10000,
+        "default": {"*": 100},
+    },
+    "step": {
+        "type": "float",
+        "label": "IRC Step",
+        "label_zh": "IRC 步长",
+        "min": 0,
+        "default": {"*": 0.1},
+    },
     "recalc_hess": {
         "type": "hessian_interval",
         "advanced": True,
@@ -1713,6 +1747,35 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "scan_optimizer_convergence": "normal",
                         "scan_optimizer_retries": 2,
                         "scan_optimizer_retry_strategy": "previous_geometry",
+                    }
+                },
+            }
+        ],
+    },
+    "irc": {
+        "method_levels": [
+            {
+                "level_id": "irc",
+                "label": "Intrinsic Reaction Coordinate",
+                "label_zh": "内禀反应坐标",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": ["method", "basis", "maxpoints", "step"],
+            }
+        ],
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default IRC",
+                "label_zh": "标准 IRC",
+                "summary": "r2SCAN-3c IRC in both directions",
+                "levels": {
+                    "irc": {
+                        "engine": "orca",
+                        "method": "r2SCAN-3c",
+                        "basis": "",
+                        "maxpoints": 100,
+                        "step": 0.1,
                     }
                 },
             }

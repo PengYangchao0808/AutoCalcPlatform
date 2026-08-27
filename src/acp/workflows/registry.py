@@ -115,6 +115,12 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         description="Relax an internal coordinate at each scan point with ORCA.",
         requires_binaries=["orca"],
     ),
+    "irc": WorkflowRegistryEntry(
+        name="irc",
+        label="Intrinsic Reaction Coordinate",
+        description="Run an independent IRC from a transition-state structure.",
+        requires_binaries=["orca"],
+    ),
     "optfreq": WorkflowRegistryEntry(
         name="optfreq",
         label="Optimization + Frequency",

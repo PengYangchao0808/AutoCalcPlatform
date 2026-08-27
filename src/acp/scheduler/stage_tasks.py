@@ -635,6 +635,11 @@ register_plan_provider("batchoptimize", _BatchOptimizeStagePlanProvider())
 
 
 # Simple workflow providers
+class _IrcStagePlanProvider:
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        return [StagePlan(stage_name="irc")]
+
+
 class _SinglepointStagePlanProvider:
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
         return [StagePlan(stage_name="single_point")]
@@ -673,6 +678,7 @@ register_plan_provider("singlepoint", _SinglepointStagePlanProvider())
 register_plan_provider("optimize", _OptimizeStagePlanProvider())
 register_plan_provider("frequency", _FrequencyStagePlanProvider())
 register_plan_provider("scan", _ScanStagePlanProvider())
+register_plan_provider("irc", _IrcStagePlanProvider())
 register_plan_provider("optfreq", _OptfreqStagePlanProvider())
 register_plan_provider("optfreqsp", _OptfreqspStagePlanProvider())
 

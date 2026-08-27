@@ -1,0 +1,30 @@
+=== Todo 26 — Standalone IRC Workflow Integration — FAIL ===
+
+COMMAND: pytest tests/test_irc.py::test_irc_cli_without_role_returns_usage_error -q
+
+OUTPUT:
+.                                                                        [100%]
+1 passed in 3.41s
+
+KEY OUTPUT:
+- Plain XYZ input without a role declaration is rejected at the CLI boundary.
+- Exit status is 2.
+- Error guidance includes: --input-role transition_state
+- Non-TS workflow artifacts are rejected before backend dispatch.
+- Backend failures return a failed CalculationResult while preserving the checkpoint.
+
+EXIT CODE: 0
+
+=== RECOVERY CHECK ===
+
+COMMAND: pytest tests/test_checkpoint_continue.py::test_irc_interruption_leaves_checkpoint_for_continue tests/test_checkpoint_continue.py::test_irc_continue_requeues_from_generic_checkpoint -q
+
+OUTPUT:
+..                                                                       [100%]
+2 passed
+
+KEY OUTPUT:
+- An interrupted IRC leaves WORK/00_RUNTIME/checkpoint.json with workflow=irc and status=running.
+- A failed IRC with a valid generic checkpoint is requeued by continue_job.
+
+EXIT CODE: 0

@@ -4,15 +4,21 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+import time
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 from acp.calculations import Checkpoint
 from acp.calculations.checkpoint import write_checkpoint
-from acp.calculations.contracts import JsonValue
+from acp.calculations.contracts import JsonValue, StructureArtifact, StructureRole
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.manager import JobManager
+from acp.workflows.irc import run_irc_workflow
 from tests.conftest import FakeBackend
 
 
@@ -26,6 +32,7 @@ def _seed_job(
     job_id: str,
     *,
     workflow: str = "singlepoint",
+    status: JobStatus = JobStatus.FAILED,
     result: dict[str, JsonValue] | None = None,
     remote_job_id: str | None = None,
 ) -> JobRecord:
@@ -33,7 +40,7 @@ def _seed_job(
     record = JobRecord(
         id=job_id,
         spec=JobSpec(workflow=workflow, name=job_id),
-        status=JobStatus.FAILED,
+        status=status,
         work_dir=str(work_dir),
         error="interrupted",
         exit_code=1,
@@ -139,6 +146,100 @@ def test_simple_workflow_resume_skips_done(
         assert submissions == [record.id]
         assert resumed.status == "completed"
         assert len(fake_backend.calls) == calls_before_continue
+    finally:
+        manager.shutdown()
+
+
+def test_irc_pause_and_unpause_local_job(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        start_new_session=True,
+    )
+    try:
+        _seed_job(
+            manager,
+            tmp_path / "runs" / "irc-task",
+            "irc-paused",
+            status=JobStatus.RUNNING,
+            workflow="irc",
+        )
+        manager.runner._processes["irc-paused"] = process
+
+        paused = manager.pause_job("irc-paused")
+        assert paused.status == JobStatus.PAUSED
+        time.sleep(0.05)
+        assert process.poll() is None
+
+        resumed = manager.unpause_job("irc-paused")
+        assert resumed.status == JobStatus.RUNNING
+        assert process.poll() is None
+    finally:
+        if process.poll() is None:
+            os.killpg(os.getpgid(process.pid), 15)
+            process.wait(timeout=10)
+        manager.shutdown()
+
+
+def test_irc_interruption_leaves_checkpoint_for_continue(
+    tmp_path: Path,
+) -> None:
+    input_path = tmp_path / "ts.xyz"
+    input_path.write_text("2\nTS\nH 0 0 0\nH 0 0 0.7\n", encoding="utf-8")
+    output_root = tmp_path / "irc-task"
+    artifact = StructureArtifact(
+        path=input_path,
+        role=StructureRole.TRANSITION_STATE,
+    )
+
+    with patch("acp.workflows.irc.run_irc", side_effect=KeyboardInterrupt):
+        with pytest.raises(KeyboardInterrupt):
+            run_irc_workflow(artifact, output_dir=output_root)
+
+    checkpoint = output_root / "WORK" / "00_RUNTIME" / "checkpoint.json"
+    payload = checkpoint.read_text(encoding="utf-8")
+    assert '"workflow": "irc"' in payload
+    assert '"status": "running"' in payload
+
+
+def test_irc_continue_requeues_from_generic_checkpoint(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    manager = _make_manager(tmp_path)
+    work_dir = tmp_path / "runs" / "irc-task"
+    record = _seed_job(manager, work_dir, "irc-interrupted", workflow="irc")
+    write_checkpoint(
+        work_dir / "WORK" / "00_RUNTIME",
+        Checkpoint(
+            task_id="irc",
+            workflow="irc",
+            plan_fingerprint="irc-fingerprint",
+            step_states=[
+                {
+                    "index": 0,
+                    "kind": "irc",
+                    "status": "running",
+                    "error": None,
+                }
+            ],
+            items_state={},
+            attempts=0,
+        ),
+    )
+    submissions: list[str] = []
+    monkeypatch.setattr(
+        manager,
+        "_start_submission_thread",
+        lambda job_id, thread_name: submissions.append(job_id) or True,
+    )
+
+    try:
+        continued = manager.continue_job(record.id)
+
+        assert continued.status == JobStatus.QUEUED
+        assert continued.result is not None
+        assert continued.result["continued_from"] == "failed"
+        assert submissions == [record.id]
     finally:
         manager.shutdown()
 

@@ -239,7 +239,11 @@ def _discover_endpoints(
                 if path.exists():
                     coords, symbols = _read_xyz(path)
                     if coords is not None:
-                        endpoints[direction] = {"path": path, "coordinates": coords, "symbols": symbols}
+                        endpoints[direction] = {
+                            "path": path,
+                            "coordinates": coords,
+                            "symbols": symbols,
+                        }
 
     # 2. Try final_geometries from the result
     final_geometries = getattr(raw_result, "final_geometries", None)

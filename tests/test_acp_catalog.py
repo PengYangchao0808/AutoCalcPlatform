@@ -128,11 +128,7 @@ def test_pes_scan_catalog_exposes_complete_protocol_levels() -> None:
         "scan_optimizer",
         "single_point",
     ]
-    fields = {
-        field_name
-        for level in schema["method_levels"]
-        for field_name in level["fields"]
-    }
+    fields = {field_name for level in schema["method_levels"] for field_name in level["fields"]}
     assert {
         "scan_coordinate_kind",
         "scan_bond_type",
@@ -174,6 +170,23 @@ def test_pes_scan_catalog_exposes_complete_protocol_levels() -> None:
         assert field_defs[field_name]["label_zh"]
         assert field_defs[field_name]["help_zh"]
     assert field_defs["scan_mode"]["option_labels_zh"]["relaxed_scan"] == "松弛扫描"
+
+
+def test_irc_catalog_is_active_simple_workflow() -> None:
+    # Given: the public workflow and method catalogs.
+    catalog = get_method_catalog()
+
+    # When: the standalone IRC workflow entry is selected.
+    workflow = next(item for item in WORKFLOW_CATALOG if item["id"] == "irc")
+    schema = catalog["method_schemas"][workflow["method_schema_id"]]
+
+    # Then: it exposes the independent IRC controls and ORCA requirement.
+    assert workflow["category"] == "simple"
+    assert workflow["status"] == "active"
+    assert workflow["default_backend"] == "orca"
+    fields = {field_name for level in schema["method_levels"] for field_name in level["fields"]}
+    assert {"method", "basis", "maxpoints", "step"}.issubset(fields)
+    assert schema["method_levels"][0]["allowed_engines"] == ["orca"]
 
 
 def test_normalize_and_validate_accepts_uppercase_solvent_model() -> None:

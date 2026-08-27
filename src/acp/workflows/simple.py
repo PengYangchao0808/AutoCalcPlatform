@@ -22,6 +22,7 @@ from acp.calculations import (
     StructureArtifact,
 )
 from acp.calculations.plans import build_simple_plan
+from acp.calculations.primitives.irc import run_irc
 from acp.calculations.primitives.scan import run_scan
 from acp.core.models import HARTREE_TO_KCAL
 from acp.core.utils import ensure_unique_dir
@@ -505,6 +506,7 @@ __all__ = [
     "run_optimize",
     "run_frequency",
     "run_scan",
+    "run_irc",
     "run_xtb_optimize",
     "run_optfreq",
     "run_optfreqsp",

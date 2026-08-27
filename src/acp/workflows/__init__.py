@@ -27,6 +27,7 @@ __all__ = [
     "run_optimize",
     "run_frequency",
     "run_scan",
+    "run_irc",
     "run_optfreq",
     "run_optfreqsp",
 ]
@@ -40,6 +41,7 @@ _LAZY_SOURCES: dict[str, str] = {
     "run_optimize": "acp.workflows.simple",
     "run_frequency": "acp.workflows.simple",
     "run_scan": "acp.workflows.simple",
+    "run_irc": "acp.workflows.simple",
     "run_optfreq": "acp.workflows.simple",
     "run_optfreqsp": "acp.workflows.simple",
     "run_ensemble_generation": "acp.workflows.ensemble",

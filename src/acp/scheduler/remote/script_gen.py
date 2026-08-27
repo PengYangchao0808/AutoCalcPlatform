@@ -18,6 +18,7 @@ import json
 import logging
 import posixpath
 import shlex
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Any
@@ -192,6 +193,7 @@ def build_remote_cli_command(
         "optfreq",
         "optfreqsp",
         "scan",
+        "irc",
         "xtb_optimize",
     ):
         raise ValueError(f"No remote subprocess mapping for workflow: {wf}")
@@ -227,12 +229,17 @@ def build_remote_cli_command(
             source = str(items_file)
             cmd += ["--items-file", str(items_file), "--output", "."]
         else:
-            raise ValueError(
-                "BatchOptimize job requires input.from_artifact or input.items_file"
-            )
+            raise ValueError("BatchOptimize job requires input.from_artifact or input.items_file")
         cmd += batchoptimize_method_flags(method, inp)
     else:
-        source = input_path or inp.get("source") or inp.get("input") or inp.get("smiles") or ""
+        source = (
+            input_path
+            or inp.get("input_artifact")
+            or inp.get("source")
+            or inp.get("input")
+            or inp.get("smiles")
+            or ""
+        )
 
     if not source:
         raise ValueError(f"{wf} job requires a valid input structure")
@@ -335,6 +342,37 @@ def build_remote_cli_command(
         ewin = censo_ewin_from_method(method)
         if ewin is not None:
             cmd += ["--ewin", str(ewin)]
+    elif wf == "irc":
+        cmd += ["--input", str(source), "--output", "."]
+        input_role = inp.get("input_role")
+        if input_role:
+            cmd += ["--input-role", str(input_role)]
+        directions = inp.get("directions") or ["both"]
+        direction_names = {str(direction).strip().lower() for direction in directions}
+        if direction_names == {"forward"}:
+            cmd += ["--direction", "forward"]
+        elif direction_names == {"reverse"}:
+            cmd += ["--direction", "reverse"]
+        elif direction_names in ({"forward", "reverse"}, {"both"}):
+            cmd += ["--direction", "both"]
+        elif direction_names:
+            raise ValueError("irc directions must be forward, reverse, or both")
+        levels = method.get("levels")
+        irc_level = levels.get("irc", {}) if isinstance(levels, Mapping) else {}
+        if not isinstance(irc_level, Mapping):
+            irc_level = {}
+        irc_method = method.get("method") or method.get("functional") or irc_level.get("method")
+        if irc_method:
+            cmd += ["--method", str(irc_method)]
+        irc_basis = method.get("basis") or irc_level.get("basis")
+        if irc_basis:
+            cmd += ["--basis", str(irc_basis)]
+        maxpoints = method.get("maxpoints") or irc_level.get("maxpoints")
+        if maxpoints is not None:
+            cmd += ["--maxpoints", str(maxpoints)]
+        irc_step = method.get("step") or irc_level.get("step")
+        if irc_step is not None:
+            cmd += ["--step", str(irc_step)]
     elif wf in ("singlepoint", "optimize", "frequency", "scan", "optfreq", "optfreqsp"):
         cmd += ["--input", str(source), "--output", "."]
         if spec.name:
