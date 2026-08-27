@@ -1,0 +1,25 @@
+Q3 INJECTION
+Temporarily changed `_NO_CHECKPOINT_MESSAGE` in `src/acp/scheduler/manager.py` to a drill value.
+
+COMMAND (interception)
+python -m pytest tests/test_checkpoint_continue.py::test_missing_checkpoint_rejected tests/test_checkpoint_continue.py::test_remote_checkpoint_three_states -q
+
+KEY OUTPUT (interception)
+FF                                                                       [100%]
+2 failed in 3.25s
+
+EXIT CODE (interception)
+1
+
+RESTORATION
+Restored `_NO_CHECKPOINT_MESSAGE` to `该工作流不支持断点续算，请使用重算 (rerun)`.
+
+COMMAND (restored verification)
+python -m pytest tests/test_checkpoint_continue.py::test_missing_checkpoint_rejected tests/test_checkpoint_continue.py::test_remote_checkpoint_three_states -q
+
+KEY OUTPUT (restored verification)
+..                                                                       [100%]
+2 passed in 2.12s
+
+EXIT CODE (restored verification)
+0

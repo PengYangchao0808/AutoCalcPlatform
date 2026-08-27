@@ -1,4 +1,4 @@
-# pyright: reportMissingImports=false, reportAny=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownParameterType=false, reportUnknownVariableType=false, reportUnannotatedClassAttribute=false, reportExplicitAny=false, reportAttributeAccessIssue=false, reportOptionalMemberAccess=false, reportRedeclaration=false, reportUnusedCallResult=false, reportUnnecessaryComparison=false, reportPrivateUsage=false, reportImplicitStringConcatenation=false
+# pyright: reportMissingImports=false, reportAny=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownParameterType=false, reportUnknownVariableType=false, reportUnannotatedClassAttribute=false, reportExplicitAny=false, reportAttributeAccessIssue=false, reportOptionalMemberAccess=false, reportRedeclaration=false, reportUnusedCallResult=false, reportUnnecessaryComparison=false, reportPrivateUsage=false, reportImplicitStringConcatenation=false, reportUnnecessaryIsInstance=false, reportUnreachable=false, reportUnusedParameter=false
 """
 Scheduler Manager
 =================
@@ -21,8 +21,9 @@ import time
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Final
 
+from acp.calculations.contracts import JsonValue
 from acp.mechanism.project import MechanismProjectStore
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
@@ -55,6 +56,9 @@ from acp.storage.layout import TaskStorage, runtime_file
 
 logger = logging.getLogger(__name__)
 
+_CALCULATION_CHECKPOINT_PATH: Final = "WORK/00_RUNTIME/checkpoint.json"
+_NO_CHECKPOINT_MESSAGE: Final = "该工作流不支持断点续算，请使用重算 (rerun)"
+
 # Type-only import to avoid requiring paramiko when remote execution is off.
 if TYPE_CHECKING:
     from acp.scheduler.local_cleanup import LocalCleanup, LocalCleanupReport, RetentionPolicy
@@ -79,6 +83,47 @@ def _load_review_payload(work_dir: Path) -> dict[str, Any] | None:
     except (OSError, ValueError):
         return None
     return payload if isinstance(payload, dict) else None
+
+
+def _checkpoint_identity(payload_bytes: bytes) -> tuple[str, str] | None:
+    """Return ``(workflow, plan_fingerprint)`` for a valid checkpoint payload."""
+    try:
+        payload = json.loads(payload_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+
+    task_id = payload.get("task_id")
+    workflow = payload.get("workflow")
+    fingerprint = payload.get("plan_fingerprint")
+    step_states = payload.get("step_states")
+    items_state = payload.get("items_state")
+    attempts = payload.get("attempts")
+    if not isinstance(task_id, str) or not isinstance(workflow, str):
+        return None
+    if not isinstance(fingerprint, str) or not fingerprint:
+        return None
+    if not isinstance(step_states, list) or not isinstance(items_state, dict):
+        return None
+    if not isinstance(attempts, int) or isinstance(attempts, bool):
+        return None
+    return workflow, fingerprint
+
+
+def _fingerprint_hint(payload: JsonValue) -> str | None:
+    """Read an optional expected plan fingerprint from persisted metadata."""
+    if not isinstance(payload, dict):
+        return None
+    for key in ("plan_fingerprint", "checkpoint_fingerprint"):
+        value = payload.get(key)
+        if isinstance(value, str) and value:
+            return value
+    for key in ("result", "metadata", "checkpoint"):
+        nested = _fingerprint_hint(payload.get(key))
+        if nested is not None:
+            return nested
+    return None
 
 
 class JobManager:
@@ -477,13 +522,9 @@ class JobManager:
             if project_id is not None and project_id != current_project:
                 raise ValueError("原地重跑不能切换项目，请使用复制到项目")
             if not record.status.is_terminal:
-                raise ValueError(
-                    f"rerun requires a terminal status; got {record.status.value}"
-                )
+                raise ValueError(f"rerun requires a terminal status; got {record.status.value}")
             if self._has_live_process(job_id):
-                raise ValueError(
-                    f"job {job_id} still has a live process tracked by the runner"
-                )
+                raise ValueError(f"job {job_id} still has a live process tracked by the runner")
             if job_id in self._submission_jobs:
                 raise ValueError(f"job {job_id} is already being submitted")
 
@@ -1066,9 +1107,10 @@ class JobManager:
         CLI auto-resumes from ``study.json`` phase fingerprints via the
         stable study_id in ``mechanism_config.json``); ``xtbmd_censo_energy``
         first persists ``method.resume=true`` into the spec so the rebuilt
-        CLI command carries ``--resume``; every other workflow has no
-        checkpoints and is rejected (the API maps the ``ValueError`` to 409
-        with a rerun hint).
+        CLI command carries ``--resume``; calculation-plan workflows resume
+        when their generic checkpoint is present. Other workflows without a
+        checkpoint are rejected (the API maps the ``ValueError`` to 409 with
+        a rerun hint).
 
         Args:
             job_id: Job identifier.
@@ -1088,10 +1130,9 @@ class JobManager:
             if record is None:
                 raise KeyError(f"Unknown job {job_id!r}")
             if record.status not in (JobStatus.FAILED, JobStatus.CANCELLED):
-                raise ValueError(
-                    "continue_job requires FAILED or CANCELLED status; "
-                    f"got {record.status.value}"
-                )
+                message = "continue_job requires FAILED or CANCELLED status; got "
+                message += record.status.value
+                raise ValueError(message)
             if self._has_live_process(job_id):
                 raise ValueError(
                     f"job {job_id} still has a live process tracked by the runner; "
@@ -1103,11 +1144,9 @@ class JobManager:
             if workflow == "mechanism":
                 pass
             elif workflow == "xtbmd_censo_energy":
-                record.spec = replace(
-                    record.spec, method={**record.spec.method, "resume": True}
-                )
+                record.spec = replace(record.spec, method={**record.spec.method, "resume": True})
             else:
-                raise ValueError("该工作流不支持断点续算，请使用重算 (rerun)")
+                self._require_generic_checkpoint(record)
 
             old_status = record.status.value
             result = dict(record.result or {})
@@ -1136,6 +1175,63 @@ class JobManager:
         )
         self._start_submission_thread(job_id, f"acp-continue-{job_id}")
         return record
+
+    def _require_generic_checkpoint(self, record: JobRecord) -> None:
+        """Require a valid generic calculation checkpoint for *record*."""
+        checkpoint = self._read_generic_checkpoint(record)
+        if checkpoint is None:
+            raise ValueError(_NO_CHECKPOINT_MESSAGE)
+
+        checkpoint_workflow, actual_fingerprint = checkpoint
+        if checkpoint_workflow != record.spec.workflow:
+            raise ValueError(
+                f"checkpoint workflow mismatch for job {record.id}: "
+                f"expected {record.spec.workflow!r}, got {checkpoint_workflow!r}"
+            )
+
+        expected_fingerprint = self._expected_checkpoint_fingerprint(record)
+        if expected_fingerprint is not None and actual_fingerprint != expected_fingerprint:
+            raise ValueError(
+                f"checkpoint fingerprint mismatch for job {record.id}: "
+                f"expected {expected_fingerprint!r}, got {actual_fingerprint!r}"
+            )
+
+    def _read_generic_checkpoint(self, record: JobRecord) -> tuple[str, str] | None:
+        """Read a local checkpoint or fetch a missing remote checkpoint on demand."""
+        local_path = Path(record.work_dir) / _CALCULATION_CHECKPOINT_PATH
+        payload: bytes | None = None
+        if local_path.is_file():
+            try:
+                payload = local_path.read_bytes()
+            except OSError:
+                return None
+        elif self._is_remote_job(record) and self._remote_fetcher is not None:
+            try:
+                payload = self._remote_fetcher.read_file(record, _CALCULATION_CHECKPOINT_PATH)
+            except OSError:
+                return None
+
+        if payload is None:
+            return None
+        return _checkpoint_identity(payload)
+
+    def _expected_checkpoint_fingerprint(self, record: JobRecord) -> str | None:
+        """Find an optional expected fingerprint persisted with a scheduler job."""
+        for payload in (record.result, record.spec.method):
+            fingerprint = _fingerprint_hint(payload)
+            if fingerprint is not None:
+                return fingerprint
+
+        work_dir = Path(record.work_dir)
+        for metadata_name in ("job.json", "task.json"):
+            try:
+                payload = json.loads((work_dir / metadata_name).read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, json.JSONDecodeError):
+                continue
+            fingerprint = _fingerprint_hint(payload)
+            if fingerprint is not None:
+                return fingerprint
+        return None
 
     def _has_live_process(self, job_id: str) -> bool:
         """True when the runner still tracks a live (un-exited) subprocess."""
