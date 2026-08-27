@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+from .legacy.layouts import (
+    LEGACY_FALLBACK_ENABLED,
+    MechanismStudyLayout,
+    find_reaction_json,
+    find_study_layout,
+)
 from .legacy.manifests import (
     read_batch_calculation_manifest,
     read_reaction_definition,
@@ -24,4 +30,8 @@ __all__ = [
     "read_reaction_definition",
     "read_s2_review",
     "read_s2_candidate_manifest",
+    "LEGACY_FALLBACK_ENABLED",
+    "MechanismStudyLayout",
+    "find_reaction_json",
+    "find_study_layout",
 ]

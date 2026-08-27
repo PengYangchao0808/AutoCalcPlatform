@@ -864,13 +864,25 @@ class RemoteJobRunner:
                 role="mechanism_config",
             )
             if reaction_definition is not None:
-                from acp.mechanism.layout import resolve_study_layout
+                from acp.compat.legacy.layouts import find_reaction_json
 
-                layout = resolve_study_layout(work_dir, str(spec.method.get("study_id")))
-                local_reaction_path = layout.reaction_json
+                local_reaction_path = find_reaction_json(
+                    work_dir,
+                    str(spec.method.get("study_id")),
+                )
+                if local_reaction_path is None:
+                    raise RemoteSubmissionError(
+                        f"reaction.json disappeared before remote upload for job {record.id}"
+                    )
+                try:
+                    relative_reaction_path = local_reaction_path.relative_to(work_dir)
+                except ValueError as exc:
+                    raise RemoteSubmissionError(
+                        f"reaction.json is outside task root for job {record.id}"
+                    ) from exc
                 remote_reaction_path = posixpath.join(
                     remote_job_dir,
-                    layout.rel(layout.reaction_json),
+                    relative_reaction_path.as_posix(),
                 )
                 self._stager.make_remote_dir(node, posixpath.dirname(remote_reaction_path))
                 self._stager.upload_file(
@@ -1505,7 +1517,7 @@ def _load_local_reaction_definition(work_dir: Path, spec: JobSpec) -> dict[str, 
     study_id = spec.method.get("study_id")
     if not study_id:
         return None
-    from acp.mechanism.layout import find_reaction_json
+    from acp.compat.legacy.layouts import find_reaction_json
 
     path = find_reaction_json(work_dir, str(study_id))
     if path is None:

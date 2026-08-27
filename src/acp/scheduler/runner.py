@@ -177,7 +177,7 @@ def _read_json_object(path: Path) -> dict[str, Any] | None:
 
 
 def _find_mechanism_study_json(record: JobRecord) -> Path | None:
-    from acp.mechanism.layout import find_study_layout
+    from acp.compat.legacy.layouts import find_study_layout
 
     study_id = _opt_text(record.spec.method.get("study_id"))
     layout = find_study_layout(Path(record.work_dir), study_id)
@@ -490,7 +490,7 @@ def _load_mechanism_reaction_definition(
     study_id = spec.method.get("study_id")
     if not study_id:
         return None
-    from acp.mechanism.layout import find_reaction_json
+    from acp.compat.legacy.layouts import find_reaction_json
 
     path = find_reaction_json(work_dir, str(study_id))
     if path is None:

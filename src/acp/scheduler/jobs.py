@@ -20,8 +20,8 @@ from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from acp.mechanism.layout import resolve_study_layout
 from acp.scheduler.nodes import ExecutionMode
+from acp.storage.layout import TaskLayout
 
 
 def _utc_now() -> datetime:
@@ -789,9 +789,10 @@ def write_mechanism_reaction_json(
     study_id: str,
     reaction_definition: Mapping[str, Any],
 ) -> Path:
-    """Materialize ``reaction.json`` inside the study directory atomically."""
+    """Materialize v2 ``reaction.json`` atomically; retain ``study_id`` for API compatibility."""
 
-    path = resolve_study_layout(work_dir, study_id).reaction_json
+    _ = study_id
+    path = work_dir / TaskLayout.WORK_DIR_NAME / TaskLayout().stage_analysis / "reaction.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = path.with_suffix(".json.tmp")
     temp_path.write_text(

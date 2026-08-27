@@ -530,7 +530,7 @@ def _study_report_dir(study_row: dict[str, Any], record: JobRecord | None) -> Pa
             return Path(study_dir)
     if record is None or not record.work_dir:
         return None
-    from acp.mechanism.layout import find_study_layout
+    from acp.compat.legacy.layouts import find_study_layout
 
     layout = find_study_layout(Path(record.work_dir), str(study_row.get("id") or "") or None)
     return layout.analysis_root if layout is not None else None
@@ -2675,7 +2675,7 @@ def _mechanism_stage_fallback(record: JobRecord) -> list[JobStageEntry]:
     if not record.work_dir:
         return []
     try:
-        from acp.mechanism.layout import find_study_layout
+        from acp.compat.legacy.layouts import find_study_layout
 
         layout = find_study_layout(Path(record.work_dir))
         candidates = (
@@ -2830,7 +2830,7 @@ def _probe_disk_state(record: JobRecord) -> JobDiskState:
         state.has_state_json = False
     if record.spec.workflow == "mechanism":
         try:
-            from acp.mechanism.layout import find_study_layout
+            from acp.compat.legacy.layouts import find_study_layout
 
             layout = find_study_layout(work_dir)
             state.has_study_checkpoint = layout is not None and layout.study_json.is_file()
