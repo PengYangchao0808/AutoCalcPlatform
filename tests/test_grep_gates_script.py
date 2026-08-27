@@ -201,8 +201,12 @@ def test_final_forbidden_symbols_ignore_only_comments_not_retired_text() -> None
     ("gate_name", "relative_path", "text", "expected"),
     (
         # wave3_batch_no_stages: legacy plumbing names are ALLOWED
-        ("wave3_batch_no_stages", "src/acp/calculations/batch/loaders.py",
-         "    items.extend(load_items_from_s3_manifest((base_dir / artifact).resolve())[0])", (True,)),
+        (
+            "wave3_batch_no_stages",
+            "src/acp/calculations/batch/loaders.py",
+            "    items.extend(load_items_from_s3_manifest((base_dir / artifact).resolve())[0])",
+            (True,),
+        ),
         # wave3_batch_no_stages: genuine stage semantics still BLOCK
         ("wave3_batch_no_stages", "src/acp/calculations/batch/engine.py",
          "profile_s3 = True", (False,)),

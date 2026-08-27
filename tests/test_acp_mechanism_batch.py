@@ -222,7 +222,7 @@ def test_batch_engine_runs_mixed_ts_int_batch(tmp_path: Path) -> None:
     provider = _FakeRefinementProvider()
     engine = BatchConfirmEngine(
         work_root=tmp_path / "WORK" / "03_OPT",
-        profile=LowConfirmProfile(run_irc=False),
+        profile=LowConfirmProfile(),
         refinement_provider=provider,
     )
     items = [_item("item_001", "TS", "ts_guess_001"), _item("item_002", "INT", "int_guess_001")]
@@ -259,7 +259,7 @@ def test_batch_engine_single_failure_does_not_kill_batch(tmp_path: Path) -> None
     provider = _FakeRefinementProvider(fail_ids={"bad_one"})
     engine = BatchConfirmEngine(
         work_root=tmp_path / "WORK" / "03_OPT",
-        profile=LowConfirmProfile(run_irc=False),
+        profile=LowConfirmProfile(),
         refinement_provider=provider,
     )
     items = [_item("item_001", "TS", "bad_one"), _item("item_002", "INT", "good_one")]
@@ -274,7 +274,7 @@ def test_batch_engine_resume_skips_completed_items(tmp_path: Path) -> None:
     provider = _FakeRefinementProvider()
     engine = BatchConfirmEngine(
         work_root=tmp_path / "WORK" / "03_OPT",
-        profile=LowConfirmProfile(run_irc=False),
+        profile=LowConfirmProfile(),
         refinement_provider=provider,
     )
     items = [_item("item_001", "TS", "ts_1"), _item("item_002", "INT", "int_1")]
@@ -284,7 +284,7 @@ def test_batch_engine_resume_skips_completed_items(tmp_path: Path) -> None:
     provider2 = _FakeRefinementProvider()
     engine2 = BatchConfirmEngine(
         work_root=tmp_path / "WORK" / "03_OPT",
-        profile=LowConfirmProfile(run_irc=False),
+        profile=LowConfirmProfile(),
         refinement_provider=provider2,
     )
     second = (
@@ -302,7 +302,7 @@ def test_batch_engine_resume_retries_only_failed_items(tmp_path: Path) -> None:
     provider = _FakeRefinementProvider(fail_ids={"flaky"})
     engine = BatchConfirmEngine(
         work_root=tmp_path / "WORK" / "03_OPT",
-        profile=LowConfirmProfile(run_irc=False),
+        profile=LowConfirmProfile(),
         refinement_provider=provider,
     )
     items = [_item("item_001", "TS", "flaky"), _item("item_002", "INT", "solid")]
@@ -311,7 +311,7 @@ def test_batch_engine_resume_retries_only_failed_items(tmp_path: Path) -> None:
     provider2 = _FakeRefinementProvider()
     engine2 = BatchConfirmEngine(
         work_root=tmp_path / "WORK" / "03_OPT",
-        profile=LowConfirmProfile(run_irc=False),
+        profile=LowConfirmProfile(),
         refinement_provider=provider2,
     )
     second = engine2.run(items, charge=0, multiplicity=1)
@@ -327,12 +327,12 @@ def test_s3_s4_same_logic_different_profile(tmp_path: Path) -> None:
     items = [_item("item_001", "TS", "ts_1")]
     BatchConfirmEngine(
         work_root=tmp_path / "s3" / "WORK" / "03_OPT",
-        profile=LowConfirmProfile(run_irc=False),
+        profile=LowConfirmProfile(),
         refinement_provider=provider_s3,
     ).run(items, charge=0, multiplicity=1, workflow="Lowconfirm")
     BatchConfirmEngine(
         work_root=tmp_path / "s4" / "WORK" / "03_OPT",
-        profile=HighConfirmProfile(run_irc=False),
+        profile=HighConfirmProfile(),
         refinement_provider=provider_s4,
     ).run(items, charge=0, multiplicity=1, workflow="Highconfirm")
 
@@ -351,7 +351,7 @@ def test_s3_s4_same_logic_different_profile(tmp_path: Path) -> None:
 def test_batch_engine_per_item_directories(tmp_path: Path) -> None:
     engine = BatchConfirmEngine(
         work_root=tmp_path / "WORK" / "03_OPT",
-        profile=LowConfirmProfile(run_irc=False),
+        profile=LowConfirmProfile(),
         refinement_provider=_FakeRefinementProvider(),
     )
     items = [_item("item_001", "TS", "a"), _item("item_002", "INT", "b")]

@@ -24,12 +24,18 @@ from numpy.typing import NDArray
 
 from acp.backends import require_backend
 from acp.backends.base import FrequencyCalculator, GeometryOptimizer
+from acp.calculations.irc.contracts import (
+    EndpointMatchResult,
+    FidelityLike,
+    IrcResult,
+    StableStateLike,
+    TransitionStateLike,
+)
 from acp.core.models import Structure, StructureRecord
 from acp.mechanism._helpers import mapping_pairs_from_occurrence as _mapping_pairs_from_occurrence
 from acp.mechanism._helpers import opt_float as _opt_float
 from acp.mechanism.atom_mapping import map_reactant_to_product
 from acp.mechanism.models import ArtifactRef, StableState, StationaryPoint
-from acp.mechanism.providers.contracts import EndpointMatchResult, IrcResult
 
 logger = logging.getLogger(__name__)
 
@@ -800,7 +806,7 @@ class DefaultEndpointProvider:
         self.validate_minimum = validate_minimum
         self.work_root = Path(work_root) if work_root is not None else Path.cwd()
 
-    def run_irc(self, ts: StationaryPoint, fidelity: Any) -> IrcResult:
+    def run_irc(self, ts: TransitionStateLike, fidelity: FidelityLike | str) -> IrcResult:
         """Run IRC with the injected backend and persist endpoint geometry evidence.
 
         Args:
@@ -869,7 +875,7 @@ class DefaultEndpointProvider:
     def classify_endpoints(
         self,
         irc_result: IrcResult,
-        known_states: list[StableState],
+        known_states: Sequence[StableStateLike],
     ) -> EndpointMatchResult:
         """Classify the sink IRC endpoint against known stable states.
 
@@ -926,8 +932,11 @@ class DefaultEndpointProvider:
                     validated_candidate,
                     self.thresholds,
                 )
-        match.evidence = evidence
-        return match
+        return EndpointMatchResult(
+            verdict=match.verdict,
+            state_id=match.state_id,
+            evidence=evidence,
+        )
 
     def _resolve_backend(
         self,
@@ -1020,7 +1029,10 @@ class DefaultEndpointProvider:
         charge = int(evidence.get("charge") or 0)
         multiplicity = int(evidence.get("multiplicity") or 1)
         candidates: dict[str, EndpointCandidate] = {}
-        geometries = dict(evidence.get("final_geometries") or {})
+        raw_geometries = evidence.get("final_geometries")
+        if not isinstance(raw_geometries, dict):
+            return {}
+        geometries = raw_geometries
         for direction, raw_geometry in geometries.items():
             coords = _normalize_coordinates(raw_geometry)
             metadata = {

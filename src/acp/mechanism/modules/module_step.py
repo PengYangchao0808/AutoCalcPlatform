@@ -8,6 +8,7 @@ from typing import Any, Literal, cast
 
 import numpy as np
 
+from acp.calculations.irc.contracts import EndpointMatchResult, IrcResult
 from cccp.qc.interfaces.constraints import ReactionCoordinatePlan
 from cccp.utils.file_io import read_xyz, write_xyz
 
@@ -22,7 +23,6 @@ from ..models import (
     StableState,
 )
 from ..presets import FIDELITY_PROFILES, resolve_fidelity
-from ..providers.contracts import EndpointMatchResult, IrcResult
 from .schema import (
     ElementaryStepManifest,
     EndpointDirection,
@@ -81,7 +81,7 @@ def _default_providers(
     from acp.backends import get_backend
 
     endpoint_provider = DefaultEndpointProvider(
-        backend=get_backend("orca")(config),
+        backend=get_backend("orca")(config or {}),
         thresholds=EndpointMatchThresholds(),
         work_root=calc_dir / "sr",
     )
@@ -120,13 +120,18 @@ def _resolve_step_endpoints(
     ):
         if artifact is None:
             continue
+        raw_geometry = ArtifactRef(
+            path=artifact.path,
+            sha256=artifact.sha256,
+            kind=artifact.kind,
+        )
         endpoint_direction = cast(EndpointDirection, direction)
         if direction == source_direction:
             resolved[direction] = ResolvedEndpoint(
                 endpoint_id=f"{irc_result.irc_id}_{direction}",
                 direction=endpoint_direction,
                 role="source",
-                raw_geometry=artifact,
+                raw_geometry=raw_geometry,
                 minimum_validated=False,
                 match_verdict="MATCH_EXISTING",
                 matched_state_id=source_state.state_id,
@@ -137,7 +142,7 @@ def _resolve_step_endpoints(
                 endpoint_id=f"{irc_result.irc_id}_{direction}",
                 direction=endpoint_direction,
                 role="sink",
-                raw_geometry=artifact,
+                raw_geometry=raw_geometry,
                 minimum_validated=minimum_validated,
                 match_verdict=verdict,
                 matched_state_id=matched_state_id,

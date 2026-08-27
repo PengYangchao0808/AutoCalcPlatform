@@ -3,11 +3,20 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 
+from acp.calculations.contracts import JsonValue
+from acp.calculations.irc.contracts import (
+    EndpointMatchResult,
+    FidelityLike,
+    IrcResult,
+    StableStateLike,
+    TransitionStateLike,
+)
 from acp.core.models import Structure, StructureEnsemble, StructureRecord
 
 from ..models import (
@@ -23,8 +32,6 @@ from ..models import (
     TsIdentity,
 )
 from .contracts import (
-    EndpointMatchResult,
-    IrcResult,
     RefinementAttempt,
     RefinementManifest,
 )
@@ -288,7 +295,7 @@ class FakeEndpointProvider:
     irc_calls: int = 0
     classify_calls: int = 0
 
-    def run_irc(self, ts: StationaryPoint, fidelity: Any) -> IrcResult:
+    def run_irc(self, ts: TransitionStateLike, fidelity: FidelityLike | str) -> IrcResult:
         self.irc_calls += 1
         label = f"irc_{self.irc_calls:03d}_{ts.point_id}"
         return IrcResult(
@@ -304,18 +311,20 @@ class FakeEndpointProvider:
     def classify_endpoints(
         self,
         irc_result: IrcResult,
-        known_states: list[StableState],
+        known_states: Sequence[StableStateLike],
     ) -> EndpointMatchResult:
         self.classify_calls += 1
         product = next((state for state in known_states if state.role == "product"), None)
         if self.classify_calls == 1:
-            state_payload = {
+            geometry = _artifact("state_int_geometry", "stable_state_geometry")
+            state_payload: dict[str, JsonValue] = {
                 "state_id": "state_int",
                 "role": "intermediate",
-                "canonical_geometry": _artifact(
-                    "state_int_geometry",
-                    "stable_state_geometry",
-                ).to_dict(),
+                "canonical_geometry": {
+                    "path": geometry.path,
+                    "sha256": geometry.sha256,
+                    "kind": geometry.kind,
+                },
                 "charge": 0,
                 "multiplicity": 1,
                 "identity_fingerprint": _sha("state_int"),

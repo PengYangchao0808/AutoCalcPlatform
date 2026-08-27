@@ -14,6 +14,7 @@ from typing import Any, cast
 
 import numpy as np
 
+from acp.calculations.irc.contracts import EndpointMatchResult, EndpointProvider, IrcResult
 from acp.core.state import EventLog
 from cccp.qc.interfaces.constraints import CoordinateSpec, ReactionCoordinatePlan
 
@@ -46,10 +47,7 @@ from .models import (
     StudyCycle,
 )
 from .providers.contracts import (
-    EndpointMatchResult,
-    EndpointProvider,
     EnsembleProvider,
-    IrcResult,
     PathSearchStrategy,
     RefinementManifest,
     RefinementProvider,
@@ -216,7 +214,12 @@ class StudyOrchestrator:
                     match_dict["verdict"] = "NEW_STATE"
                 candidate_override = resolution_payload.get("candidate_state")
                 if candidate_override is not None:
-                    evidence = dict(match_dict.get("evidence") or {})
+                    raw_evidence = match_dict.get("evidence")
+                    evidence = (
+                        {str(key): value for key, value in raw_evidence.items()}
+                        if isinstance(raw_evidence, dict)
+                        else {}
+                    )
                     evidence["candidate_state"] = candidate_override
                     match_dict["evidence"] = evidence
                 match = EndpointMatchResult.from_dict(match_dict)
@@ -855,6 +858,11 @@ class StudyOrchestrator:
                 continue
 
             if outcome.needs_review:
+                irc_result = outcome.irc_result
+                endpoint_match = outcome.endpoint_match
+                decision_type = outcome.decision_type
+                if irc_result is None or endpoint_match is None or decision_type is None:
+                    raise RuntimeError("Reviewable step is missing IRC endpoint evidence")
                 # Backward-compat contract: only AMBIGUOUS verdicts use the legacy
                 # frontier-review type; policy-driven pauses become SR cycle reviews.
                 self._create_decision(
@@ -864,9 +872,9 @@ class StudyOrchestrator:
                     route_fingerprint=ctx.route_fingerprint,
                     path_result=outcome.path_result,
                     refinement_manifest=outcome.refinement_manifest,
-                    irc_result=outcome.irc_result,
-                    endpoint_match=outcome.endpoint_match,
-                    decision_type=outcome.decision_type,
+                    irc_result=irc_result,
+                    endpoint_match=endpoint_match,
+                    decision_type=decision_type,
                 )
                 self.study.status = "waiting"
                 self._persist_study_bundle()
@@ -874,14 +882,18 @@ class StudyOrchestrator:
                 self._persist_study_bundle()
                 return
 
+            irc_result = outcome.irc_result
+            endpoint_match = outcome.endpoint_match
+            if irc_result is None or endpoint_match is None:
+                raise RuntimeError("Completed step is missing IRC endpoint evidence")
             self._apply_endpoint_match(
                 source_state=source_state,
                 route=route,
                 depth=depth,
                 route_fingerprint=ctx.route_fingerprint,
                 canonical_ts=outcome.canonical_ts,
-                irc_result=outcome.irc_result,
-                endpoint_match=outcome.endpoint_match,
+                irc_result=irc_result,
+                endpoint_match=endpoint_match,
             )
             persist_route_manifest(
                 self.layout,
@@ -891,8 +903,8 @@ class StudyOrchestrator:
                 status="completed",
                 path_result=outcome.path_result,
                 refinement_manifest=outcome.refinement_manifest,
-                irc_result=outcome.irc_result,
-                endpoint_match=outcome.endpoint_match,
+                irc_result=irc_result,
+                endpoint_match=endpoint_match,
                 depth=depth,
             )
             self._emit_event(
@@ -900,7 +912,7 @@ class StudyOrchestrator:
                 "irc_completed",
                 source_state_id=source_state_id,
                 route_id=route_id,
-                verdict=outcome.endpoint_match.verdict,
+                verdict=endpoint_match.verdict,
             )
             self._persist_study_bundle()
 

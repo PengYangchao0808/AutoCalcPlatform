@@ -16,6 +16,12 @@ The generic internal-coordinate primitives live in
 
 from __future__ import annotations
 
+from acp.calculations.irc.contracts import (
+    EndpointMatchResult,
+    EndpointProvider,
+    IrcResult,
+)
+
 from .atom_mapping import (
     AtomMapCandidate,
     MappingResult,
@@ -76,14 +82,11 @@ from .presets import (
     resolve_strategy,
 )
 from .providers import (
-    EndpointMatchResult,
-    EndpointProvider,
     EnsembleProvider,
     FakeEndpointProvider,
     FakeEnsembleProvider,
     FakePathSearchStrategy,
     FakeRefinementProvider,
-    IrcResult,
     PathSearchStrategy,
     RefinementAttempt,
     RefinementManifest,

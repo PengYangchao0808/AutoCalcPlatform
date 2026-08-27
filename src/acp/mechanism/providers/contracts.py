@@ -9,12 +9,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
 
+from acp.calculations.irc.contracts import (
+    EndpointMatchResult,
+    EndpointProvider,
+    EndpointVerdict,
+    IrcResult,
+)
 from acp.core.models import StructureEnsemble
 from cccp.qc.interfaces.constraints import ReactionCoordinatePlan
 
 from .._helpers import opt_float as _opt_float
 from ..models import (
-    ArtifactRef,
     PathResult,
     StableState,
     StationaryPoint,
@@ -116,83 +121,6 @@ class RefinementManifest:
 
 
 @dataclass
-class IrcResult:
-    """Connectivity IRC result used by the study orchestrator."""
-
-    irc_id: str
-    ts_id: str
-    success: bool
-    complete: bool = True
-    forward_endpoint: ArtifactRef | None = None
-    reverse_endpoint: ArtifactRef | None = None
-    evidence: dict[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "irc_id": self.irc_id,
-            "ts_id": self.ts_id,
-            "success": self.success,
-            "complete": self.complete,
-            "forward_endpoint": (
-                self.forward_endpoint.to_dict() if self.forward_endpoint is not None else None
-            ),
-            "reverse_endpoint": (
-                self.reverse_endpoint.to_dict() if self.reverse_endpoint is not None else None
-            ),
-            "evidence": dict(self.evidence),
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> IrcResult:
-        forward_data = data.get("forward_endpoint")
-        reverse_data = data.get("reverse_endpoint")
-        return cls(
-            irc_id=str(data.get("irc_id") or ""),
-            ts_id=str(data.get("ts_id") or ""),
-            success=bool(data.get("success", False)),
-            complete=bool(data.get("complete", False)),
-            forward_endpoint=(
-                ArtifactRef.from_dict(dict(forward_data))
-                if isinstance(forward_data, dict)
-                else None
-            ),
-            reverse_endpoint=(
-                ArtifactRef.from_dict(dict(reverse_data))
-                if isinstance(reverse_data, dict)
-                else None
-            ),
-            evidence=dict(data.get("evidence") or {}),
-        )
-
-
-EndpointVerdict = Literal["MATCH_EXISTING", "NEW_STATE", "AMBIGUOUS", "FAILED"]
-
-
-@dataclass
-class EndpointMatchResult:
-    """Endpoint classification verdict for a refined TS IRC."""
-
-    verdict: EndpointVerdict
-    state_id: str | None = None
-    evidence: dict[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "verdict": self.verdict,
-            "state_id": self.state_id,
-            "evidence": dict(self.evidence),
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> EndpointMatchResult:
-        return cls(
-            verdict=cast_endpoint_verdict(data.get("verdict")),
-            state_id=str(data.get("state_id")) if data.get("state_id") is not None else None,
-            evidence=dict(data.get("evidence") or {}),
-        )
-
-
-@dataclass
 class ThermochemistryResult:
     """Thermochemistry output for one stationary point or ensemble."""
 
@@ -263,23 +191,6 @@ class RefinementProvider(Protocol):
 
 
 @runtime_checkable
-class EndpointProvider(Protocol):
-    """Run IRC and classify its endpoints (SR)."""
-
-    def run_irc(self, ts: StationaryPoint, fidelity: FidelityProfile | str) -> IrcResult:
-        """Run IRC/MEP for a refined transition state."""
-        ...
-
-    def classify_endpoints(
-        self,
-        irc_result: IrcResult,
-        known_states: list[StableState],
-    ) -> EndpointMatchResult:
-        """Classify IRC endpoints against currently known stable states."""
-        ...
-
-
-@runtime_checkable
 class ThermochemistryProvider(Protocol):
     """Compute thermochemistry from SP/frequency/ensemble data."""
 
@@ -297,17 +208,6 @@ class ThermochemistryProvider(Protocol):
 
 def cast_attempt_status(value: object) -> Literal["success", "failed"]:
     return "success" if str(value) == "success" else "failed"
-
-
-def cast_endpoint_verdict(value: object) -> EndpointVerdict:
-    verdict = str(value or "FAILED").upper()
-    if verdict == "MATCH_EXISTING":
-        return "MATCH_EXISTING"
-    if verdict == "NEW_STATE":
-        return "NEW_STATE"
-    if verdict == "AMBIGUOUS":
-        return "AMBIGUOUS"
-    return "FAILED"
 
 
 __all__ = [

@@ -1,10 +1,9 @@
 """Shared confirmation engine for Lowconfirm (S3) and Highconfirm (S4).
 
 One engine, two profiles (plan §7) — ``LowConfirmProfile`` and
-``HighConfirmProfile`` differ only in fidelity level and whether the
-preliminary IRC validation runs. The scientific implementation (ORCA input
-generation, rescue matrix, optimization parsing, independent frequency,
-canonical candidate selection) lives in
+``HighConfirmProfile`` differ only in fidelity level. The scientific
+implementation (ORCA input generation, rescue matrix, optimization parsing,
+independent frequency, canonical candidate selection) lives in
 :class:`acp.mechanism.providers.native_refinement.NativeRefinementProvider`
 and is never duplicated.
 """
@@ -20,12 +19,7 @@ from acp.confsearch.shared.artifacts import write_json_atomic
 
 from ..models import StationaryPoint, StationaryPointRequest
 from ..presets import FIDELITY_PROFILES, FidelityProfile, resolve_fidelity
-from ..providers.contracts import (
-    EndpointProvider,
-    IrcResult,
-    RefinementManifest,
-    RefinementProvider,
-)
+from ..providers.contracts import RefinementManifest, RefinementProvider
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +35,6 @@ class LowConfirmProfile:
     sp_method: str = "r2SCAN-3c"
     sp_basis: str = ""
     max_cycles: int = 60
-    run_irc: bool = True
 
     @property
     def level(self) -> str:
@@ -62,7 +55,6 @@ class HighConfirmProfile:
     sp_method: str = "wB97M-V"
     sp_basis: str = "def2-TZVPP"
     max_cycles: int = 200
-    run_irc: bool = False
 
     @property
     def level(self) -> str:
@@ -114,7 +106,6 @@ class ConfirmRunOutcome:
     profile_level: str
     candidates: list[ConfirmCandidate] = field(default_factory=list)
     refinement_manifest: RefinementManifest | None = None
-    irc: dict[str, Any] | None = None
     errors: list[str] = field(default_factory=list)
 
     @property
@@ -131,7 +122,6 @@ class ConfirmEngine:
         work_root: Path | None = None,
         profile: ConfirmProfile | None = None,
         refinement_provider: RefinementProvider | None = None,
-        endpoint_provider: EndpointProvider | None = None,
     ) -> None:
         self.config = config
         self.profile = profile or LowConfirmProfile()
@@ -144,10 +134,9 @@ class ConfirmEngine:
             self._refinement_provider = NativeRefinementProvider(
                 config=config, work_root=self.work_root / self.profile.level
             )
-        self._endpoint_provider = endpoint_provider
 
     def confirm(self, requests: list[StationaryPointRequest]) -> ConfirmRunOutcome:
-        """Refine all requests at the profile's fidelity; optionally IRC the TS."""
+        """Refine all requests at the profile's fidelity."""
         outcome = ConfirmRunOutcome(profile_level=self.profile.level)
         if not requests:
             outcome.errors.append("No candidates selected for confirmation")
@@ -180,8 +169,6 @@ class ConfirmEngine:
                 outcome.errors.append(f"Candidate {request.id} failed refinement")
 
         outcome.candidates.sort(key=lambda c: (c.status != "confirmed", c.candidate_id))
-        if self.profile.run_irc:
-            outcome.irc = self._run_irc_for_canonical(manifest, fidelity)
         return outcome
 
     def _candidate_from_point(
@@ -217,31 +204,6 @@ class ConfirmEngine:
             evidence=dict(evidence),
         )
 
-    def _run_irc_for_canonical(
-        self,
-        manifest: RefinementManifest,
-        fidelity: FidelityProfile,
-    ) -> dict[str, Any] | None:
-        winner = manifest.canonical_winner
-        if winner is None or winner.kind != "ts":
-            return None
-        if self._endpoint_provider is None:
-            from acp.backends import get_backend
-
-            from ..endpoint import DefaultEndpointProvider, EndpointMatchThresholds
-
-            self._endpoint_provider = DefaultEndpointProvider(
-                backend=get_backend("orca")(self.config or {}),
-                thresholds=EndpointMatchThresholds(),
-                work_root=self.work_root / "irc",
-            )
-        try:
-            irc_result = self._endpoint_provider.run_irc(winner, fidelity)
-        except Exception as exc:  # noqa: BLE001 - IRC is advisory at S3
-            logger.warning("IRC validation failed for %s: %s", winner.point_id, exc)
-            return {"enabled": True, "complete": False, "error": str(exc)}
-        return _irc_block(irc_result)
-
 
 def _manifest_points(manifest: RefinementManifest) -> list[StationaryPoint]:
     points: list[StationaryPoint] = []
@@ -263,27 +225,6 @@ def _point_canonical_xyz(point: StationaryPoint) -> str:
             return artifact.path
     metadata_xyz = point.metadata.get("canonical_xyz")
     return str(metadata_xyz) if metadata_xyz else point.geometry.path
-
-
-def _irc_block(irc_result: IrcResult) -> dict[str, Any]:
-    block: dict[str, Any] = {
-        "irc_id": irc_result.irc_id,
-        "ts_id": irc_result.ts_id,
-        "complete": bool(irc_result.complete),
-        "endpoints": {},
-    }
-    for direction, artifact in (
-        ("forward", irc_result.forward_endpoint),
-        ("reverse", irc_result.reverse_endpoint),
-    ):
-        if artifact is None:
-            continue
-        block["endpoints"][direction] = {
-            "xyz": artifact.path,
-            "sha256": artifact.sha256,
-            "kind": artifact.kind,
-        }
-    return block
 
 
 def write_stage_manifest(path: Path, payload: dict[str, Any]) -> Path:

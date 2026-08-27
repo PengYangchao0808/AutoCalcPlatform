@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from .contracts import (
+from acp.calculations.irc.contracts import (
     EndpointMatchResult,
     EndpointProvider,
     EndpointVerdict,
-    EnsembleProvider,
     IrcResult,
+)
+
+from .contracts import (
+    EnsembleProvider,
     PathSearchStrategy,
     RefinementAttempt,
     RefinementManifest,

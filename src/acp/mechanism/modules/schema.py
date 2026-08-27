@@ -28,20 +28,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from acp.calculations.irc.contracts import EndpointVerdict
+
 from ..models import (
     ArtifactRef,
     ReactionCoordinatePlan,
     StableState,
     StationaryPoint,
 )
-from ..providers.contracts import EndpointVerdict
 
 
 def _serialize_coordinate_plan(plan: ReactionCoordinatePlan) -> dict[str, Any]:
     return {
-        "coordinates": [
-            _serialize_coordinate_spec(spec) for spec in plan.coordinates
-        ],
+        "coordinates": [_serialize_coordinate_spec(spec) for spec in plan.coordinates],
         "points": plan.points,
         "coupling": plan.coupling,
         "start_from": plan.start_from,
@@ -57,6 +56,7 @@ def _serialize_coordinate_spec(spec: Any) -> dict[str, Any]:
         "start": spec.start,
         "end": spec.end,
     }
+
 
 # ---------------------------------------------------------------------------
 # Module-level status model
@@ -378,9 +378,12 @@ class ModuleManifest:
             "output": self.output,
             "provenance": self.provenance,
         }
-        return "sha256:" + hashlib.sha256(
-            json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
-        ).hexdigest()
+        return (
+            "sha256:"
+            + hashlib.sha256(
+                json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+            ).hexdigest()
+        )
 
     def to_dict(self) -> dict[str, Any]:
         return {

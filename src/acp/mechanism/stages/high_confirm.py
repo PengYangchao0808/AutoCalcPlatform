@@ -32,7 +32,6 @@ from .low_confirm import (
     _failed_record,
     _legacy_profile_payload,
     _result_row,
-    _run_irc_bridge,
     _write_legacy_batch_manifest,
 )
 
@@ -109,14 +108,12 @@ def run_high_confirm(
     from_manifest: Path | str | None = None,
     output_dir: Path | str,
     select: list[str] | None = None,
-    run_irc: bool = False,
     source_job_id: str | None = None,
     source_relative_path: str = "RESULT/mechanism/s3_lowconfirm_manifest.json",
     charge: int | None = None,
     multiplicity: int | None = None,
     config: dict[str, Any] | None = None,
     refinement_provider: Any | None = None,
-    endpoint_provider: Any | None = None,
     structures: list[BatchStructureItem] | None = None,
     batch_request: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -221,9 +218,7 @@ def run_high_confirm(
             selected_ids=[item.candidate_id or item.item_id for item in structures_for_engine],
             charge=resolved_charge,
             multiplicity=resolved_multiplicity,
-            run_irc=run_irc,
             candidates=[_result_row(result_dir, record, copy_sp=True) for record in failed_records],
-            irc_block=None,
             consistency=[],
             errors=[error],
             status="failed",
@@ -247,15 +242,6 @@ def run_high_confirm(
     _write_legacy_batch_manifest(outcome.manifest, result_dir)
 
     confirmed = [row for row in candidates_out if row["status"] == "confirmed"]
-    irc_block = _run_irc_bridge(
-        out_root,
-        result_dir,
-        [row for row in confirmed if row["kind"] == "ts"],
-        fidelity_profile,
-        endpoint_provider,
-        config,
-        run_irc,
-    )
     gates: dict[str, Any] = {
         "optimization_converged": bool(confirmed)
         and all(row["opt_converged"] for row in confirmed),
@@ -280,9 +266,7 @@ def run_high_confirm(
         selected_ids=[item.candidate_id or item.item_id for item in structures_for_engine],
         charge=resolved_charge,
         multiplicity=resolved_multiplicity,
-        run_irc=run_irc,
         candidates=candidates_out,
-        irc_block=irc_block,
         consistency=consistency,
         errors=list(outcome.errors),
         gates=gates,
@@ -341,9 +325,7 @@ def _build_s4_payload(
     selected_ids: list[str],
     charge: int,
     multiplicity: int,
-    run_irc: bool,
     candidates: list[dict[str, Any]],
-    irc_block: dict[str, Any] | None,
     consistency: list[str],
     errors: list[str],
     status: str,
@@ -365,12 +347,11 @@ def _build_s4_payload(
         "status": status,
         "created_at": utc_now_iso(),
         "source": source_block,
-        "profile": _legacy_profile_payload("s4", "high", run_irc),
+        "profile": _legacy_profile_payload("s4", "high"),
         "charge": charge,
         "multiplicity": multiplicity,
         "candidates": candidates,
         "batch_manifest": "batch_calculation_manifest.json",
-        "irc": irc_block,
         "s3_s4_consistency": list(consistency),
         "gates": effective_gates,
         "errors": list(errors),

@@ -391,23 +391,6 @@ class _FakeRefinementProvider:
         )
 
 
-class _FakeEndpointProvider:
-    def run_irc(self, ts, fidelity) -> SimpleNamespace:
-        return SimpleNamespace(
-            irc_id="irc_test",
-            ts_id=ts.point_id,
-            success=True,
-            complete=True,
-            forward_endpoint=SimpleNamespace(
-                path=str(Path(ts.geometry.path).parent / "fwd.xyz"), sha256="", kind="irc"
-            ),
-            reverse_endpoint=SimpleNamespace(
-                path=str(Path(ts.geometry.path).parent / "rev.xyz"), sha256="", kind="irc"
-            ),
-            evidence={},
-        )
-
-
 def _s2_manifest_with_ts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     from acp.mechanism.stages import pes_search as ps
 
@@ -533,24 +516,76 @@ def test_lowconfirm_engine_error_propagates(
     assert payload["gates"]["G3"] == "FAIL"
 
 
-def test_run_low_confirm_with_irc_block(
+def test_lowconfirm_irc_via_independent_bridge(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     fake_backend: FakeBackend,
 ) -> None:
+    from acp.calculations.contracts import ArtifactRef as CalculationArtifactRef
+    from acp.calculations.contracts import CalculationResult, StructureRole
     from acp.mechanism.stages import low_confirm as lc
 
     s2_manifest = _s2_manifest_with_ts(tmp_path, monkeypatch)
     fake_backend.set_result("frequency", _frequency_result(log_path=tmp_path / "freq.log"))
+    forward = tmp_path / "irc_forward.xyz"
+    reverse = tmp_path / "irc_reverse.xyz"
+    observed: dict[str, str] = {}
+
+    def independent_irc(
+        artifact,
+        *,
+        directions,
+        method,
+        resources,
+        workflow,
+        profile,
+    ) -> CalculationResult:
+        observed.update(
+            {
+                "role": artifact.role.value,
+                "directions": ",".join(directions),
+                "method": method,
+                "workflow": workflow,
+                "profile": profile or "",
+                "output_dir": str(resources["output_dir"]),
+            }
+        )
+        return CalculationResult(
+            status="completed",
+            artifacts=[
+                CalculationArtifactRef(
+                    path=forward,
+                    type="structure",
+                    checksum="sha256:forward",
+                    source="fake",
+                ),
+                CalculationArtifactRef(
+                    path=reverse,
+                    type="structure",
+                    checksum="sha256:reverse",
+                    source="fake",
+                ),
+            ],
+            metadata={
+                "forward_endpoint": str(forward),
+                "reverse_endpoint": str(reverse),
+            },
+        )
+
+    monkeypatch.setattr(lc, "run_independent_irc", independent_irc)
     payload = lc.run_low_confirm(
         from_manifest=s2_manifest,
         output_dir=tmp_path / "low",
         select=["ts_guess_001"],
         run_irc=True,
-        endpoint_provider=_FakeEndpointProvider(),
     )
+
+    assert observed["role"] == StructureRole.TRANSITION_STATE.value
+    assert observed["directions"] == "forward,reverse"
+    assert observed["workflow"] == "Lowconfirm"
     assert payload["irc"]["complete"] is True
-    assert set(payload["irc"]["endpoints"]) == {"forward", "reverse"}
+    assert payload["irc"]["endpoints"]["forward"]["xyz"] == str(forward)
+    assert payload["irc"]["endpoints"]["reverse"]["xyz"] == str(reverse)
 
 
 def test_run_high_confirm_writes_s4_and_mechanism_profile(
@@ -588,15 +623,13 @@ def test_run_high_confirm_writes_s4_and_mechanism_profile(
         from_manifest=s3_manifest,
         output_dir=tmp_path / "high",
         select=["ts_guess_001", "int_guess_001"],
-        run_irc=True,
-        endpoint_provider=_FakeEndpointProvider(),
     )
 
     result_dir = tmp_path / "high" / "RESULT" / "mechanism"
     assert payload["schema_version"] == "s4_highconfirm_v1"
     assert payload["workflow"] == "Highconfirm"
     assert payload["s3_s4_consistency"] == []
-    assert payload["irc"]["complete"] is True
+    assert "irc" not in payload
     profile = json.loads((result_dir / "mechanism_profile.json").read_text(encoding="utf-8"))
     assert profile["transition_states"][0]["id"] == "ts_guess_001"
     assert profile["transition_states"][0]["imaginary_frequency_cm1"] == -1000.0

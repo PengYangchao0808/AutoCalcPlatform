@@ -331,7 +331,9 @@ def classify_endpoint_geometry(
     if thresholds is None:
         thresholds = EndpointMatchThresholds()
 
-    cand_fingerprint = connectivity_fingerprint(candidate_symbols, candidate_coordinates, thresholds)
+    cand_fingerprint = connectivity_fingerprint(
+        candidate_symbols, candidate_coordinates, thresholds
+    )
     ref_fingerprint = connectivity_fingerprint(reference_symbols, reference_coordinates, thresholds)
 
     # Determine mapping pairs

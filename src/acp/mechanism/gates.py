@@ -8,17 +8,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
 
+from acp.calculations.irc.contracts import EndpointMatchResult, IrcResult
+
 from ._helpers import write_json_atomic as _write_json_atomic
 from .models import (
     MechanismStudy,
     PathResult,
     QualityGateResult,
 )
-from .providers.contracts import (
-    EndpointMatchResult,
-    IrcResult,
-    RefinementManifest,
-)
+from .providers.contracts import RefinementManifest
 
 logger = logging.getLogger(__name__)
 

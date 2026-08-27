@@ -17,10 +17,17 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 
+from acp.calculations.irc.contracts import (
+    EndpointMatchResult,
+    EndpointProvider,
+    IrcResult,
+    StableStateLike,
+    TransitionStateLike,
+)
 from acp.core.state import EventLog
 
 from .._helpers import fingerprint
@@ -39,9 +46,6 @@ from ..models import (
     StationaryPointRequest,
 )
 from ..providers.contracts import (
-    EndpointMatchResult,
-    EndpointProvider,
-    IrcResult,
     PathSearchStrategy,
     RefinementManifest,
     RefinementProvider,
@@ -409,10 +413,12 @@ class ElementaryStepEngine:
             route_id=route.route_id,
             ts_id=canonical_ts.point_id,
         )
-        irc_result = self.endpoint_provider.run_irc(canonical_ts, self.low_fidelity_profile)
+        irc_result = self.endpoint_provider.run_irc(
+            cast(TransitionStateLike, canonical_ts), self.low_fidelity_profile
+        )
         endpoint_match = self.endpoint_provider.classify_endpoints(
             irc_result,
-            self.study.stable_states,
+            cast(list[StableStateLike], self.study.stable_states),
         )
         self.study.metadata.setdefault("irc_results", {})[irc_result.irc_id] = irc_result.to_dict()
         self.study.metadata.setdefault("endpoint_matches", {})[ctx.exploration_key] = (

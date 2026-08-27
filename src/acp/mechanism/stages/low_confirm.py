@@ -4,7 +4,7 @@ Reads ``s2_path_manifest.json`` (or the user-confirmed sibling
 ``s2_candidate_manifest.json``), refines the selected candidates through the
 mechanism-free :class:`BatchOptimizeEngine` ``opt_freq`` profile, and writes
 the historical ``s3_lowconfirm_manifest.json`` adapter output. IRC runs by
-default on the canonical TS through the temporary endpoint-provider bridge.
+default on the canonical TS through the standalone IRC calculation bridge.
 """
 
 from __future__ import annotations
@@ -22,11 +22,12 @@ from acp.calculations.batch import (
     load_batch_request,
 )
 from acp.calculations.batch.options import BatchMethodOptions
+from acp.calculations.contracts import CalculationResult, StructureArtifact, StructureRole
+from acp.calculations.primitives.irc import run_irc as run_independent_irc
 from acp.compat.legacy.batch_loaders import load_items_from_s2_path_manifest
 from acp.compat.legacy.manifests import read_s2_path_manifest
 from acp.confsearch.shared.artifacts import write_json_atomic
 from acp.confsearch.shared.provenance import source_artifact_ref, utc_now_iso
-from acp.mechanism.models import ArtifactRef, StationaryPoint, TsIdentity
 from acp.mechanism.presets import FIDELITY_PROFILES, FidelityProfile, resolve_fidelity
 
 from .._helpers import fingerprint
@@ -123,7 +124,6 @@ def run_low_confirm(
     multiplicity: int | None = None,
     config: dict[str, Any] | None = None,
     refinement_provider: Any | None = None,
-    endpoint_provider: Any | None = None,
     structures: list[BatchStructureItem] | None = None,
     batch_request: dict[str, Any] | None = None,
     snapshot_candidates: bool = False,
@@ -245,7 +245,6 @@ def run_low_confirm(
         result_dir,
         ts_rows,
         fidelity_profile,
-        endpoint_provider,
         config,
         run_irc,
     )
@@ -387,7 +386,7 @@ def _failed_record(
 def _legacy_profile_payload(
     fidelity_name: str,
     level: str,
-    run_irc: bool,
+    run_irc: bool | None = None,
 ) -> dict[str, Any]:
     fidelity = resolve_fidelity(fidelity_name)
     profile = FIDELITY_PROFILES[fidelity]
@@ -400,8 +399,9 @@ def _legacy_profile_payload(
         "freq_method": profile.freq_method,
         "sp_method": profile.sp_method,
         "max_cycles": max_cycles,
-        "irc": run_irc,
     }
+    if run_irc is not None:
+        payload["irc"] = run_irc
     if level == "high":
         payload.update(
             {
@@ -471,7 +471,6 @@ def _run_irc_bridge(
     result_dir: Path,
     ts_rows: list[dict[str, Any]],
     fidelity: Any,
-    endpoint_provider: Any | None,
     config: dict[str, Any] | None,
     run_irc: bool,
 ) -> dict[str, Any] | None:
@@ -480,68 +479,76 @@ def _run_irc_bridge(
     row = ts_rows[0]
     geometry = Path(str(row.get("optimized_xyz") or row.get("input_xyz") or ""))
     if not geometry.is_absolute():
-        geometry = result_dir / geometry
-    ts = StationaryPoint(
-        point_id=str(row["id"]),
-        role="transition_state",
-        kind="ts",
-        geometry=ArtifactRef(path=str(geometry), sha256="", kind="geometry"),
-        charge=int(row.get("charge") or 0),
-        multiplicity=int(row.get("multiplicity") or 1),
-        energy_hartree=row.get("sp_energy_hartree"),
-        identity=_ts_identity(row.get("frequency")),
-    )
-    provider = endpoint_provider
-    if provider is None:
-        # TEMPORARY Wave 3 bridge; Wave 4 replaces this with standalone IRC.
-        from acp.backends import get_backend
-
-        from ..endpoint import DefaultEndpointProvider, EndpointMatchThresholds
-
-        backend_ref = get_backend("orca")
-        backend = backend_ref(config or {}) if isinstance(backend_ref, type) else backend_ref
-        provider = DefaultEndpointProvider(
-            backend=backend,
-            thresholds=EndpointMatchThresholds(),
-            work_root=out_root / "WORK" / "03_OPT",
+        candidates = (out_root / geometry, result_dir / geometry)
+        geometry = next(
+            (candidate for candidate in candidates if candidate.is_file()), candidates[0]
         )
     try:
-        return _irc_block(provider.run_irc(ts, fidelity))
+        independent_result = run_independent_irc(
+            StructureArtifact(
+                path=geometry,
+                role=StructureRole.TRANSITION_STATE,
+                source="Lowconfirm",
+                candidate_id=str(row["id"]),
+            ),
+            directions=("forward", "reverse"),
+            method=str(getattr(fidelity, "ts_method", "")),
+            resources={
+                "config": config or {},
+                "output_dir": str(out_root / "WORK" / "03_OPT" / "irc" / str(row["id"])),
+                "result_dir": str(out_root / "RESULT"),
+                "charge": int(row.get("charge") or 0),
+                "multiplicity": int(row.get("multiplicity") or 1),
+                "basis": str(getattr(fidelity, "ts_basis", "")),
+                "max_iter": int(getattr(fidelity, "irc_points", 30)),
+                "solvent": getattr(fidelity, "solvent", None),
+                "solvent_model": getattr(fidelity, "solvent_model", None),
+            },
+            workflow="Lowconfirm",
+            profile=str(getattr(fidelity, "name", "s3")),
+        )
+        return _calculation_irc_block(independent_result, str(row["id"]))
     except Exception as exc:  # noqa: BLE001 - IRC remains advisory at S3
         logger.warning("IRC validation failed for %s: %s", row["id"], exc)
         return {"enabled": True, "complete": False, "error": str(exc)}
 
 
-def _ts_identity(frequency: Any) -> TsIdentity | None:
-    if not isinstance(frequency, dict) or frequency.get("n_imaginary") is None:
-        return None
-    return TsIdentity(
-        imaginary_count=int(frequency["n_imaginary"]),
-        imaginary_frequency_cm1=(
-            float(frequency["imaginary_frequency_cm1"])
-            if frequency.get("imaginary_frequency_cm1") is not None
-            else None
-        ),
-        valid=bool(frequency.get("valid_ts_identity")),
-    )
-
-
-def _irc_block(irc_result: Any) -> dict[str, Any]:
-    block: dict[str, Any] = {
-        "irc_id": getattr(irc_result, "irc_id", ""),
-        "ts_id": getattr(irc_result, "ts_id", ""),
-        "complete": bool(getattr(irc_result, "complete", False)),
-        "endpoints": {},
-    }
+def _calculation_irc_block(result: CalculationResult, ts_id: str) -> dict[str, Any]:
+    endpoints: dict[str, dict[str, str]] = {}
     for direction in ("forward", "reverse"):
-        endpoint = getattr(irc_result, f"{direction}_endpoint", None)
-        if endpoint is None:
-            continue
-        block["endpoints"][direction] = {
-            "xyz": getattr(endpoint, "path", ""),
-            "sha256": getattr(endpoint, "sha256", ""),
-            "kind": getattr(endpoint, "kind", "irc"),
-        }
+        raw_path = result.metadata.get(f"{direction}_endpoint")
+        artifact = next(
+            (candidate for candidate in result.artifacts if str(candidate.path) == str(raw_path)),
+            None,
+        )
+        if isinstance(raw_path, str) and raw_path:
+            endpoints[direction] = {
+                "xyz": raw_path,
+                "sha256": artifact.checksum if artifact is not None else "",
+                "kind": "irc_endpoint",
+            }
+
+    for artifact in result.artifacts:
+        path = str(artifact.path)
+        for direction in ("forward", "reverse"):
+            if direction in endpoints or direction not in path:
+                continue
+            endpoints[direction] = {
+                "xyz": path,
+                "sha256": artifact.checksum,
+                "kind": "irc_endpoint",
+            }
+
+    raw_irc_id = result.metadata.get("irc_id")
+    irc_id = str(raw_irc_id) if isinstance(raw_irc_id, str) and raw_irc_id else f"irc_{ts_id}"
+    block: dict[str, Any] = {
+        "irc_id": irc_id,
+        "ts_id": ts_id,
+        "complete": result.status == "completed",
+        "endpoints": endpoints,
+    }
+    if result.errors:
+        block["error"] = "; ".join(result.errors)
     return block
 
 

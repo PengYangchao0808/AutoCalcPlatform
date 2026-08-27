@@ -92,7 +92,6 @@ class BatchConfirmEngine:
         work_root: Path | None = None,
         profile: ConfirmProfile | None = None,
         refinement_provider: Any | None = None,
-        endpoint_provider: Any | None = None,
         result_root: Path | None = None,
         resume: bool = True,
     ) -> None:
@@ -110,7 +109,6 @@ class BatchConfirmEngine:
             work_root=self.work_root,
             profile=self.profile,
             refinement_provider=refinement_provider,
-            endpoint_provider=endpoint_provider,
         )
 
     # ------------------------------------------------------------------ #
