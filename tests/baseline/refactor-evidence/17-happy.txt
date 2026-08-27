@@ -1,0 +1,30 @@
+=== 17-happy.txt: Wave 2 Gate ===
+Date: 2026-08-27 | Branch: refactor/calc-cleanup
+
+=== COMMAND ===
+Wave gate comparison command (todo 2 frozen)
+=== KEY OUTPUT ===
+current failures: 0
+GATE_OK
+1900 passed, 8 skipped, 47 warnings
+
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+ruff check src tests && ruff format --check (new files)
+=== KEY OUTPUT ===
+645 errors (== baseline, zero new violations); new files "All checks passed!"
+
+=== EXIT CODE ===
+0 (new files); whole-tree ruff exit 1 = pre-existing baseline state
+
+=== COMMAND ===
+python scripts/check_grep_gates.py --gate wave2_optfreq src/acp
+=== KEY OUTPUT ===
+ALLOWED: (empty) / BLOCKING: (empty)
+=== EXIT CODE ===
+0
+
+=== NOTE ===
+ORCABackend.opt_freq removed (dead code, zero callers after todo 14) to satisfy wave2_optfreq gate per plan D6 "Wave 2 停 ACP 新调用"; cccp-level opt_freq stays until Wave 8 (todo 49).
