@@ -1,0 +1,26 @@
+=== 29-happy.txt: Wave 4 Gate ===
+Date: 2026-08-27 | Branch: refactor/calc-cleanup
+
+=== COMMAND ===
+Wave gate comparison command (todo 2 frozen)
+=== KEY OUTPUT ===
+failures: 0
+GATE_OK
+1975 passed, 8 skipped, 47 warnings
+
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+ruff check src tests
+=== KEY OUTPUT ===
+644 errors (< baseline 645, zero new violations)
+=== EXIT CODE ===
+0-equivalent (baseline-comparison)
+
+=== COMMAND ===
+python scripts/check_grep_gates.py --gate wave4_endpointprovider src/acp/calculations/batch
+=== KEY OUTPUT ===
+ALLOWED: (empty) / BLOCKING: (empty)
+=== EXIT CODE ===
+0
