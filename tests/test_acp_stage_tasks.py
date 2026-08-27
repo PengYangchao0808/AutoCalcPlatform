@@ -25,6 +25,21 @@ def test_mechanism_stage_plan_uses_study_phases() -> None:
     assert [stage.stage_name for stage in plan] == ["S0", "S1", "S2", "S3", "SR", "S4"]
 
 
+def test_pessearch_bond_scan_stage_plan() -> None:
+    plan = get_stage_plan(JobSpec(workflow="PESsearch", method={"mode": "bond_length_scan"}))
+    names = [s.stage_name for s in plan]
+    assert names[0] == "prepare"
+    assert names[-1] == "finalize"
+    assert "run_relaxed_scan" in names
+    assert len(names) == 9
+
+
+def test_pessearch_path_stage_plan() -> None:
+    plan = get_stage_plan(JobSpec(workflow="PESsearch", method={"mode": "path"}))
+    names = [s.stage_name for s in plan]
+    assert names == ["prepare", "path_search", "candidate_extract", "finalize"]
+
+
 def test_observer_initializes_pending_tasks(tmp_path: Path) -> None:
     store = StageTaskStore(tmp_path / "jobs.db")
     observer = StageTaskObserver(store)

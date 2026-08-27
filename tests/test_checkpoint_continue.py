@@ -375,3 +375,80 @@ def test_remote_checkpoint_three_states(monkeypatch: pytest.MonkeyPatch, tmp_pat
         assert unchanged.status == JobStatus.FAILED
     finally:
         stale_manager.shutdown()
+
+
+# ── §19.6 PESsearch matrix ─────────────────────────────────────────────
+
+
+def test_pessearch_pause_and_unpause_local_job(tmp_path: Path) -> None:
+    manager = _make_manager(tmp_path)
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"],
+        start_new_session=True,
+    )
+    try:
+        _seed_job(
+            manager,
+            tmp_path / "runs" / "pes-task",
+            "pes-paused",
+            status=JobStatus.RUNNING,
+            workflow="PESsearch",
+        )
+        manager.runner._processes["pes-paused"] = process
+
+        paused = manager.pause_job("pes-paused")
+        assert paused.status == JobStatus.PAUSED
+        time.sleep(0.05)
+        assert process.poll() is None
+
+        resumed = manager.unpause_job("pes-paused")
+        assert resumed.status == JobStatus.RUNNING
+        assert process.poll() is None
+    finally:
+        if process.poll() is None:
+            os.killpg(os.getpgid(process.pid), 15)
+            process.wait(timeout=10)
+        manager.shutdown()
+
+
+def test_pessearch_continue_requeues_from_generic_checkpoint(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    manager = _make_manager(tmp_path)
+    work_dir = tmp_path / "runs" / "pes-task"
+    record = _seed_job(manager, work_dir, "pes-interrupted", workflow="PESsearch")
+    write_checkpoint(
+        work_dir / "WORK" / "00_RUNTIME",
+        Checkpoint(
+            task_id="pes",
+            workflow="PESsearch",
+            plan_fingerprint="pes-fingerprint",
+            step_states=[
+                {
+                    "index": 0,
+                    "kind": "scan",
+                    "status": "completed",
+                    "error": None,
+                    "energy": -1.0,
+                }
+            ],
+            items_state={},
+            attempts=0,
+        ),
+    )
+    submissions: list[str] = []
+    monkeypatch.setattr(
+        manager,
+        "_start_submission_thread",
+        lambda job_id, thread_name: submissions.append(job_id) or True,
+    )
+
+    try:
+        continued = manager.continue_job(record.id)
+
+        assert continued.status == JobStatus.QUEUED
+        assert continued.result is not None
+        assert continued.result["continued_from"] == "failed"
+        assert submissions == [record.id]
+    finally:
+        manager.shutdown()

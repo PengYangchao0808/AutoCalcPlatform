@@ -572,3 +572,239 @@ def test_pes_engine_no_mechanism_imports() -> None:
         line for line in import_lines if "acp.mechanism" in line
     ]
     assert mechanism_imports == [], f"Found mechanism imports: {mechanism_imports}"
+
+
+# ── PESsearch entry tests (todo 33) ────────────────────────────────────
+
+
+def _make_confsearch_manifest(tmp_path: Path) -> Path:
+    conformer_dir = tmp_path / "conformers"
+    conformer_dir.mkdir(parents=True, exist_ok=True)
+    xyz_path = conformer_dir / "conf_0001.xyz"
+    xyz_path.write_text(_ETHYLENE_XYZ, encoding="utf-8")
+    manifest = {
+        "schema_version": "confsearch_v1",
+        "workflow": "Confsearch",
+        "protocol": "censo-crest",
+        "profile": "default",
+        "refinement_policy": "screen",
+        "backend": "native",
+        "conformers": [
+            {
+                "conf_id": "conf_0001",
+                "geometry": "conformers/conf_0001.xyz",
+                "energy_hartree": -78.5,
+                "free_energy_hartree": -78.4,
+                "relative_energy_kcal": 0.0,
+                "boltzmann_weight": 1.0,
+                "rank": 1,
+            }
+        ],
+        "selected_conformers": ["conf_0001"],
+    }
+    manifest_path = tmp_path / "confsearch_manifest.json"
+    manifest_path.write_text(
+        __import__("json").dumps(manifest), encoding="utf-8"
+    )
+    return manifest_path
+
+
+def _setup_pes_fake_backend(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    coords = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.34, 0.0, 0.0],
+            [-0.51, 0.93, 0.0],
+            [-0.51, -0.93, 0.0],
+            [1.85, 0.93, 0.0],
+            [1.85, -0.93, 0.0],
+        ]
+    )
+    symbols = ["C", "C", "H", "H", "H", "H"]
+    n_points = 5
+    energies = [-1.0, -0.8, -0.5, -0.8, -1.0]
+    scan_result = _pes_scan_result(
+        n_points, coords, symbols, energies=energies, output_dir=tmp_path
+    )
+    fake_backend.set_result("relaxed_scan", scan_result)
+    sp_energies = [-1.01, -0.81, -0.51, -0.81, -1.01]
+    fake_backend.set_results(
+        "single_point",
+        [QCResult(success=True, energy=e) for e in sp_energies],
+    )
+
+
+def test_entry_from_artifact(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    from acp.workflows.pes_search import run_pes_search
+
+    manifest_path = _make_confsearch_manifest(tmp_path)
+    _setup_pes_fake_backend(fake_backend, tmp_path)
+
+    result = run_pes_search(
+        confsearch_manifest=manifest_path,
+        coordinate=ScanCoordinate(
+            kind="distance", atoms=(0, 1), start=1.2, end=2.5, n_points=5,
+        ),
+        output_dir=tmp_path,
+        config={"resources": {"nproc": 1}},
+    )
+
+    assert result.status == "completed"
+    assert result.metadata["ts_candidates"] >= 1
+    pes_profile = tmp_path / "RESULT" / "pes_search" / "pes_profile.json"
+    assert pes_profile.exists()
+
+
+def test_entry_from_direct_input(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    from acp.workflows.pes_search import run_pes_search
+
+    xyz_path = tmp_path / "ethylene.xyz"
+    xyz_path.write_text(_ETHYLENE_XYZ, encoding="utf-8")
+    _setup_pes_fake_backend(fake_backend, tmp_path)
+
+    result = run_pes_search(
+        input_xyz=xyz_path,
+        coordinate=ScanCoordinate(
+            kind="distance", atoms=(0, 1), start=1.2, end=2.5, n_points=5,
+        ),
+        output_dir=tmp_path,
+        config={"resources": {"nproc": 1}},
+    )
+
+    assert result.status == "completed"
+    assert result.metadata["ts_candidates"] >= 1
+
+
+def test_entry_from_job_missing(tmp_path: Path) -> None:
+    from acp.workflows.pes_search import PesSearchInputError, run_pes_search
+
+    with pytest.raises(PesSearchInputError, match="requires either"):
+        run_pes_search(
+            confsearch_manifest=None,
+            input_xyz=None,
+            output_dir=tmp_path,
+        )
+
+
+def test_entry_with_reaction(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    from acp.workflows.pes_search import run_pes_search
+
+    manifest_path = _make_confsearch_manifest(tmp_path)
+    _setup_pes_fake_backend(fake_backend, tmp_path)
+
+    reaction = {
+        "schema_version": 2,
+        "index_base": 0,
+        "reactant": {"smiles": "C=C"},
+        "product": {"smiles": "C-C"},
+        "atom_mapping": [[0, 0], [1, 1]],
+        "content_hash": "abc123",
+    }
+    result = run_pes_search(
+        confsearch_manifest=manifest_path,
+        coordinate=ScanCoordinate(
+            kind="distance", atoms=(0, 1), start=1.2, end=2.5, n_points=5,
+        ),
+        reaction=reaction,
+        output_dir=tmp_path,
+        config={"resources": {"nproc": 1}},
+    )
+
+    assert result.status == "completed"
+    assert result.metadata["reaction"] is not None
+
+
+def test_entry_with_reaction_invalid(tmp_path: Path) -> None:
+    from acp.compat.legacy.manifests import read_reaction_definition
+    from acp.workflows.pes_search import PesSearchInputError
+
+    bad_reaction_path = tmp_path / "bad_reaction.json"
+    bad_reaction_path.write_text('{"schema_version": 1}', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="config_hash"):
+        read_reaction_definition(bad_reaction_path)
+
+
+def test_pes_e_manifest_structured_error(tmp_path: Path) -> None:
+    from acp.calculations.pes.engine import PES_E_MANIFEST, PesSearchError, load_confsearch_manifest
+
+    missing_path = tmp_path / "nonexistent.json"
+    with pytest.raises(PesSearchError) as exc_info:
+        load_confsearch_manifest(missing_path)
+    assert exc_info.value.code == PES_E_MANIFEST
+
+
+def test_pes_e_coord_out_of_range(tmp_path: Path) -> None:
+    from acp.calculations.pes.contracts import ScanCoordinate
+    from acp.workflows.pes_search import PES_E_COORD, PesSearchInputError, _validate_coordinate_atoms
+
+    coord = ScanCoordinate(kind="distance", atoms=(0, 99), start=1.0, end=2.0, n_points=5)
+    with pytest.raises(PesSearchInputError, match=PES_E_COORD):
+        _validate_coordinate_atoms(coord, n_atoms=6)
+
+
+def test_pes_e_strategy_unknown(tmp_path: Path) -> None:
+    from acp.workflows.pes_search import PES_E_STRATEGY, PesSearchInputError, _validate_strategy
+
+    with pytest.raises(PesSearchInputError, match=PES_E_STRATEGY):
+        _validate_strategy("unknown_strategy")
+
+
+def test_pes_workflow_no_mechanism_imports() -> None:
+    import acp.workflows.pes_search as pes_module
+
+    source = Path(pes_module.__file__).read_text(encoding="utf-8")
+    import_lines = [
+        line for line in source.splitlines()
+        if line.strip().startswith(("import ", "from "))
+    ]
+    mechanism_imports = [line for line in import_lines if "acp.mechanism" in line]
+    assert mechanism_imports == [], f"Found mechanism imports: {mechanism_imports}"
+
+
+def test_pes_search_stages_exported() -> None:
+    from acp.calculations.pes.engine import PES_SEARCH_STAGES
+
+    assert len(PES_SEARCH_STAGES) == 9
+    assert PES_SEARCH_STAGES[0] == "prepare"
+    assert PES_SEARCH_STAGES[-1] == "finalize"
+
+
+def test_pes_search_stage_tasks_provider() -> None:
+    from acp.scheduler.jobs import JobSpec
+    from acp.scheduler.stage_tasks import get_stage_plan
+
+    plan = get_stage_plan(JobSpec(workflow="PESsearch", method={"mode": "bond_length_scan"}))
+    names = [s.stage_name for s in plan]
+    assert names[0] == "prepare"
+    assert names[-1] == "finalize"
+    assert len(names) == 9
+
+    plan_path = get_stage_plan(JobSpec(workflow="PESsearch", method={"mode": "path"}))
+    names_path = [s.stage_name for s in plan_path]
+    assert names_path == ["prepare", "path_search", "candidate_extract", "finalize"]
+
+
+def test_cli_pessearch_help() -> None:
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-m", "acp.cli", "run", "PESsearch", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "PESsearch" in result.stdout or "coordinate" in result.stdout

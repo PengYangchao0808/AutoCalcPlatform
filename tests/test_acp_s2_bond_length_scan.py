@@ -584,6 +584,7 @@ class TestSchedulerIntegration:
             assert args.mem == "8GB"
 
     def test_stage_plan_provider_bond_mode(self) -> None:
+        from acp.calculations.pes.engine import PES_SEARCH_STAGES
         from acp.scheduler.stage_tasks import get_stage_plan
 
         spec = JobSpec(
@@ -591,9 +592,9 @@ class TestSchedulerIntegration:
         )
         plan = get_stage_plan(spec)
         stages = [stage.stage_name for stage in plan]
-        assert stages == list(bond_scan_module.BOND_SCAN_STAGES)
+        assert stages == list(PES_SEARCH_STAGES)
         assert "run_relaxed_scan" in stages
-        assert "recommend_candidates" in stages
+        assert "select_candidates" in stages
 
         legacy = JobSpec(workflow="PESsearch", name="x", input={}, method={})
         legacy_stages = [stage.stage_name for stage in get_stage_plan(legacy)]

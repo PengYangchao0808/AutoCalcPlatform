@@ -258,9 +258,9 @@ class _ConfsearchStagePlanProvider:
 class _PesSearchStagePlanProvider:
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
         if str(spec.method.get("mode") or "") == "bond_length_scan":
-            from acp.mechanism.bond_scan import BOND_SCAN_STAGES
+            from acp.calculations.pes.engine import PES_SEARCH_STAGES
 
-            return [StagePlan(name) for name in BOND_SCAN_STAGES]
+            return [StagePlan(name) for name in PES_SEARCH_STAGES]
         return [
             StagePlan("prepare"),
             StagePlan("path_search"),

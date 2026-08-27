@@ -44,6 +44,20 @@ logger = logging.getLogger(__name__)
 PES_E_MANIFEST = "PES_E_MANIFEST"
 """Confsearch manifest is missing, malformed, or has no conformers."""
 
+# ── frozen stage names (generic, used by scheduler stage_tasks) ─────────
+
+PES_SEARCH_STAGES: tuple[str, ...] = (
+    "prepare",
+    "materialize_input",
+    "validate_coordinate",
+    "run_relaxed_scan",
+    "extract_frames",
+    "run_single_points",
+    "build_profile",
+    "select_candidates",
+    "finalize",
+)
+
 
 # ── structured error ────────────────────────────────────────────────────
 
@@ -450,6 +464,7 @@ def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
 __all__ = [
     "ConfsearchManifestInput",
     "PES_E_MANIFEST",
+    "PES_SEARCH_STAGES",
     "PesSearchEngine",
     "PesSearchError",
     "PesSearchResult",
