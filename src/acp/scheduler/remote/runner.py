@@ -52,6 +52,7 @@ from acp.scheduler.provenance import build_provenance_for_job
 from acp.scheduler.remote.cleanup import RemoteCleanup
 from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
 from acp.scheduler.remote.monitor import STATUS_DONE, STATUS_PAUSED, RemoteJobMonitor
+from acp.scheduler.remote.node_manager import detect_node_python
 from acp.scheduler.remote.script_gen import (
     build_lsf_script_spec,
     generate_lsf_script,
@@ -168,6 +169,10 @@ class RemoteJobRunner:
         self._remote_stage_task_ids: dict[str, str] = {}
         # Per-job state for poller-driven (non-blocking) execution.
         self._job_states: dict[str, _RemoteJobState] = {}
+        # Per-node cache of the probe-resolved (Python 3.10+) interpreter.
+        # Keyed by node name; TTL 300 s so repeated submissions on the same
+        # node don't re-probe every time.
+        self._python_probe_cache: dict[str, tuple[float, str]] = {}
 
     # ------------------------------------------------------------------ #
     # Non-blocking poller-driven API
@@ -798,6 +803,7 @@ class RemoteJobRunner:
                 )
 
         # 4. Generate + upload LSF script
+        py = self._resolve_node_python(node, job_id=record.id)
         lsf_spec, cli_cmd = build_lsf_script_spec(
             spec,
             record.id,
@@ -807,6 +813,7 @@ class RemoteJobRunner:
             extra_flags=self._config.extra_flags,
             input_path=posixpath.join("inputs", remote_input_name),
             materialized_role_paths=remote_role_paths,
+            python_executable=py,
         )
         script_text = generate_lsf_script(lsf_spec)
         script_remote_path = posixpath.join(remote_job_dir, "submit.lsf")
@@ -1150,6 +1157,46 @@ class RemoteJobRunner:
         "print(json.dumps(report))\n"
     )
 
+    def _resolve_node_python(self, node: RemoteNode, job_id: str | None = None) -> str:
+        """Return a Python 3.10+ interpreter usable on *node*.
+
+        ``node.python_executable`` is honoured when it satisfies the floor;
+        otherwise the default candidates (named interpreters then common
+        conda installs) are probed over SSH.  The result is cached per node
+        for 300 s so repeated submissions don't re-probe every time.
+
+        Raises:
+            RemoteSubmissionError: When no interpreter on the node meets
+                the floor — the job fails fast here with configuration
+                guidance instead of being submitted only to crash the LSF
+                script with an ``ImportError`` seconds later.
+        """
+        cached = self._python_probe_cache.get(node.name)
+        if cached is not None and (time.monotonic() - cached[0]) < 300:
+            return cached[1]
+
+        probe = detect_node_python(self._ssh, node)
+        if probe is None:
+            configured = node.python_executable
+            hint = (
+                f"configured python_executable {configured!r} is not a runnable "
+                "Python 3.10+ interpreter"
+                if configured
+                else "no Python 3.10+ interpreter found — configure "
+                "cluster.nodes[].python_executable (e.g. an anaconda/miniconda "
+                "python) or install Python 3.10+ on the node"
+            )
+            logger.error("Python probe on %s failed: %s", node.name, hint)
+            raise RemoteSubmissionError(f"Node {node.name!r}: {hint}")
+        logger.info(
+            "Resolved node python for %s: %s (version %s)",
+            node.name,
+            probe.python_executable,
+            probe.version,
+        )
+        self._python_probe_cache[node.name] = (time.monotonic(), probe.python_executable)
+        return probe.python_executable
+
     def _probe_required_binaries(
         self, node: RemoteNode, spec: JobSpec, event_log: JobEventLog, job_id: str
     ) -> None:
@@ -1177,7 +1224,7 @@ class RemoteJobRunner:
         import json as _json
         import shlex as _shlex
 
-        py = node.python_executable or "python3"
+        py = self._resolve_node_python(node, job_id=job_id)
         script_arg = _shlex.quote(self._BINARY_PROBE_SCRIPT)
         args = " ".join(_shlex.quote(b) for b in binaries)
         command = "bash -lc " + _shlex.quote(f"{py} -c {script_arg} {args}")

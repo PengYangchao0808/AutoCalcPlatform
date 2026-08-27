@@ -166,7 +166,11 @@ class FakeSSHClient:
         return self._transport
 
     def exec_command(self, command, timeout=None):
-        if self.cmd_handler is not None:
+        if "sys.version_info" in command:
+            # Python interpreter probe (detect_node_python) — report a
+            # usable 3.12 runtime so submissions don't fail the probe.
+            result = (0, "3.12.4\n", "")
+        elif self.cmd_handler is not None:
             result = self.cmd_handler(command)
         else:
             result = self.cmd_results.get(command, (0, "", ""))

@@ -514,9 +514,13 @@ def _probe_stub(report: dict[str, Any] | Exception) -> SimpleNamespace:
                 raise report
             return 0, json.dumps(report), ""
 
+    def _resolve_python(node, job_id=None):
+        return "python3.12"
+
     return SimpleNamespace(
         _ssh=_FakeSSH(),
         _BINARY_PROBE_SCRIPT=RemoteJobRunner._BINARY_PROBE_SCRIPT,
+        _resolve_node_python=_resolve_python,
     )
 
 

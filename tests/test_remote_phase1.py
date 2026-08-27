@@ -164,7 +164,12 @@ class FakeSSHClient:
 
     def exec_command(self, command, timeout=None):
         self.exec_calls.append(command)
-        result = self.cmd_results.get(command, (0, "", ""))
+        if "sys.version_info" in command:
+            # Python interpreter probe (detect_node_python) — report a
+            # usable 3.12 runtime so submissions don't fail the probe.
+            result = (0, "3.12.4\n", "")
+        else:
+            result = self.cmd_results.get(command, (0, "", ""))
         stdin = MagicMock()
         stdout = MagicMock()
         stderr = MagicMock()

@@ -406,6 +406,7 @@ def build_lsf_script_spec(
     input_path: str = "inputs/input.xyz",
     config_path: str | None = None,
     materialized_role_paths: dict[str, str] | None = None,
+    python_executable: str | None = None,
 ) -> tuple[LSFScriptSpec, list[str]]:
     """Build both the CLI command and :class:`LSFScriptSpec` for a job.
 
@@ -421,6 +422,10 @@ def build_lsf_script_spec(
             ``inputs/input.xyz``).
         config_path: Optional path to a job-level YAML config on the remote
             node (e.g. ``cccp.yaml`` in the job directory).
+        python_executable: Interpreter to use on the node.  When given it
+            overrides ``node.python_executable`` — callers pass a
+            probe-resolved (Python 3.10+) interpreter here so LSF scripts
+            never fall back to a too-old default ``python``.
 
     Returns:
         ``(lsf_spec, cli_command)``.
@@ -429,7 +434,7 @@ def build_lsf_script_spec(
     cli_command = build_remote_cli_command(
         spec,
         input_path=input_path,
-        python_executable=node.python_executable,
+        python_executable=python_executable or node.python_executable,
         config_path=config_path,
         materialized_role_paths=materialized_role_paths,
         mechanism_config_path=(

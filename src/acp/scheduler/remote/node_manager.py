@@ -13,6 +13,7 @@ import posixpath
 import shlex
 import threading
 import time
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -22,7 +23,136 @@ from acp.scheduler.remote.ssh import SSHConnectionPool, SSHExecutionError
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["BootstrapResult", "NodeManager", "NodeStatus"]
+__all__ = ["BootstrapResult", "InterpreterProbe", "NodeManager", "NodeStatus", "detect_node_python"]
+
+# ACP requires Python 3.10+ (``typing.TypeAlias``, PEP 604 unions, ...).
+MIN_PYTHON_VERSION = (3, 10)
+
+# Candidates probed in order when ``RemoteNode.python_executable`` is not
+# configured.  Named interpreters first, then common conda installs
+# (``$HOME`` is expanded by the remote shell, never by this code).
+DEFAULT_PYTHON_CANDIDATES: tuple[str, ...] = (
+    "python3.13",
+    "python3.12",
+    "python3.11",
+    "python3.10",
+    "python3",
+    "python",
+    "$HOME/anaconda3/bin/python",
+    "$HOME/miniconda3/bin/python",
+    "/opt/anaconda3/bin/python",
+    "/opt/miniconda3/bin/python",
+    "/usr/local/bin/python3",
+)
+
+_VERSION_PROBE_SCRIPT = (
+    "import sys; "
+    "print('%d.%d.%d' % sys.version_info[:3]); "
+    f"sys.exit(0 if sys.version_info >= {MIN_PYTHON_VERSION} else 1)"
+)
+
+
+@dataclass(frozen=True)
+class InterpreterProbe:
+    """A usable (Python 3.10+) interpreter found on a remote node.
+
+    Attributes:
+        python_executable: Resolved interpreter path/name on the node.
+        version: ``"major.minor.patch"`` reported by the interpreter.
+        candidates_tried: Ordered list of candidates that were probed.
+    """
+
+    python_executable: str
+    version: str
+    candidates_tried: tuple[str, ...]
+
+
+def _quote_probe_target(py: str) -> str:
+    """Quote a probe target for the remote shell.
+
+    ``$HOME/...`` style candidates must stay unquoted so the remote shell
+    expands them; everything else (plain names, absolute paths) is quoted.
+    """
+    if py.startswith("$"):
+        return py
+    return shlex.quote(py)
+
+
+def detect_node_python(
+    pool: SSHConnectionPool,
+    node: RemoteNode,
+    candidates: Sequence[str] | None = None,
+    timeout: int = 15,
+) -> InterpreterProbe | None:
+    """Find the first Python 3.10+ interpreter available on *node*.
+
+    When :attr:`RemoteNode.python_executable` is configured it is probed
+    first (and, if usable, returned without touching the default list);
+    otherwise :data:`DEFAULT_PYTHON_CANDIDATES` is walked in order.  Each
+    candidate runs a tiny version probe over SSH; the first one that exits
+    0 with a ``major.minor.patch`` banner wins.
+
+    Args:
+        pool: SSH connection pool used for the remote probes.
+        node: The remote node to probe.
+        candidates: Optional override of the ordered candidate list (after
+            ``node.python_executable``).
+        timeout: Per-candidate SSH timeout in seconds.
+
+    Returns:
+        An :class:`InterpreterProbe` for the first usable interpreter, or
+        ``None`` when no candidate satisfies the version floor.
+    """
+    ordered: list[str] = []
+    if node.python_executable and node.python_executable != "python":
+        # ``python`` is the dataclass default (== "not configured") — only a
+        # *distinct* value counts as an explicit pin.
+        ordered.append(node.python_executable)
+    if candidates is not None:
+        ordered.extend(c for c in candidates if c not in ordered)
+    else:
+        ordered.extend(c for c in DEFAULT_PYTHON_CANDIDATES if c not in ordered)
+
+    last_ssh_error: SSHExecutionError | None = None
+    executed_ok = False
+
+    for py in ordered:
+        command = f"{_quote_probe_target(py)} -c {shlex.quote(_VERSION_PROBE_SCRIPT)}"
+        try:
+            code, out, err = pool.execute(node, command, timeout=timeout)
+        except SSHExecutionError as exc:
+            logger.debug("Python probe %r on %s failed: %s", py, node.name, exc)
+            last_ssh_error = exc
+            continue
+        executed_ok = True
+        if code != 0:
+            logger.debug(
+                "Python probe %r on %s: exit=%s (below %s.%s or not runnable)",
+                py,
+                node.name,
+                code,
+                *MIN_PYTHON_VERSION,
+            )
+            continue
+        version = (out or "").strip().splitlines()[-1] if (out or "").strip() else ""
+        if version:
+            logger.info(
+                "Resolved node python for %s: %s (version %s)",
+                node.name,
+                py,
+                version,
+            )
+            return InterpreterProbe(
+                python_executable=py,
+                version=version,
+                candidates_tried=tuple(ordered[: ordered.index(py) + 1]),
+            )
+    # Every candidate either failed transport or was too old.  If the node
+    # itself was unreachable (no candidate ever executed), surface the SSH
+    # failure instead of reporting a misleading "no usable interpreter".
+    if not executed_ok and last_ssh_error is not None:
+        raise last_ssh_error
+    return None
 
 
 def _utc_now() -> str:
@@ -58,6 +188,8 @@ class BootstrapResult:
         exit_code: pip process exit code (``None`` when the command could not
             be launched, e.g. SSH failure).
         python_executable: Interpreter used to drive ``pip``.
+        python_version: ``"major.minor.patch"`` of the interpreter that ran
+            pip (empty when probing failed).
         requirements_path: Remote path of the requirements file installed.
         stdout: Full pip stdout (may be long; callers typically tail it).
         stderr: Full pip stderr.
@@ -71,6 +203,7 @@ class BootstrapResult:
     reachable: bool
     exit_code: int | None = None
     python_executable: str = "python"
+    python_version: str = ""
     requirements_path: str = ""
     stdout: str = ""
     stderr: str = ""
@@ -174,6 +307,13 @@ class NodeManager:
         travels to every node, so adding or rebuilding a node is a one-call
         operation.
 
+        Before installing, the node's Python interpreter is resolved via
+        :func:`detect_node_python` — ``node.python_executable`` is honoured
+        when it satisfies the Python 3.10 floor, otherwise the default
+        candidates (named interpreters then conda installs) are probed.  A
+        node whose only interpreters are older than 3.10 is reported with a
+        clear error instead of installing into a broken runtime.
+
         Args:
             node_name: Node to bootstrap (must be configured and enabled).
             timeout: SSH command timeout in seconds (pip may take a while on
@@ -209,7 +349,47 @@ class NodeManager:
                 logger.warning("Bootstrap pre-sync for %s failed: %s", node.name, exc)
                 sync_errors.append(f"sync failed: {exc}")
 
-        py = node.python_executable or "python"
+        # Resolve a Python 3.10+ interpreter on the node before pip.
+        try:
+            probe = detect_node_python(self._pool, node)
+        except SSHExecutionError as exc:
+            logger.error("Bootstrap SSH failure on %s: %s", node.name, exc)
+            return BootstrapResult(
+                node=node.name,
+                reachable=False,
+                python_executable=node.python_executable or "python",
+                requirements_path=requirements_remote,
+                sync_uploaded=sync_uploaded,
+                sync_errors=sync_errors,
+                error=str(exc),
+            )
+        if probe is None:
+            configured = node.python_executable
+            hint = (
+                f"configured python_executable {configured!r} is not a runnable "
+                "Python 3.10+ interpreter"
+                if configured
+                else "no Python 3.10+ interpreter found — configure "
+                "cluster.nodes[].python_executable (e.g. an anaconda/miniconda "
+                "python) or install Python 3.10+ on the node"
+            )
+            logger.error(
+                "Bootstrap %s aborted: %s (probed %s)",
+                node.name,
+                hint,
+                ", ".join(DEFAULT_PYTHON_CANDIDATES),
+            )
+            return BootstrapResult(
+                node=node.name,
+                reachable=True,
+                python_executable=node.python_executable or "python",
+                requirements_path=requirements_remote,
+                sync_uploaded=sync_uploaded,
+                sync_errors=sync_errors,
+                error=f"no usable Python interpreter: {hint}",
+            )
+
+        py = probe.python_executable
         # Quote paths/interpreter for the remote shell and chain pip so a
         # missing pip module surfaces a clear exit code rather than a hang.
         cmd = " && ".join(
@@ -227,6 +407,7 @@ class NodeManager:
                 node=node.name,
                 reachable=False,
                 python_executable=py,
+                python_version=probe.version,
                 requirements_path=requirements_remote,
                 sync_uploaded=sync_uploaded,
                 sync_errors=sync_errors,
@@ -235,10 +416,11 @@ class NodeManager:
 
         ok = exit_code == 0
         logger.info(
-            "Bootstrap %s on %s: pip exit=%s (%s)",
+            "Bootstrap %s on %s: pip exit=%s (python %s, %s)",
             "succeeded" if ok else "failed",
             node.name,
             exit_code,
+            probe.version,
             f"{sync_uploaded} files synced" if sync else "sync skipped",
         )
         return BootstrapResult(
@@ -246,6 +428,7 @@ class NodeManager:
             reachable=True,
             exit_code=exit_code,
             python_executable=py,
+            python_version=probe.version,
             requirements_path=requirements_remote,
             stdout=out,
             stderr=err,

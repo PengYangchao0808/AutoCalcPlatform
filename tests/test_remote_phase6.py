@@ -4,6 +4,9 @@ Phase 6 tests — NodeManager (remote node status + ping + cache).
 Verifies status aggregation, caching, ping, and degraded/offline classification
 without a real SSH connection, using mock monitor / ssh_pool.
 
+Also covers the Python-3.10+ interpreter probe (``detect_node_python``) and
+its integration into :meth:`NodeManager.bootstrap_node`.
+
 Run with: PYTHONPATH=src python3 tests/test_remote_phase6.py
 """
 
@@ -14,7 +17,12 @@ from unittest.mock import MagicMock
 import pytest
 
 from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
-from acp.scheduler.remote.node_manager import NodeManager
+from acp.scheduler.remote.node_manager import (
+    DEFAULT_PYTHON_CANDIDATES,
+    InterpreterProbe,
+    NodeManager,
+    detect_node_python,
+)
 from acp.scheduler.remote.ssh import SSHExecutionError
 
 
@@ -133,3 +141,164 @@ def test_list_nodes_returns_all_configured() -> None:
     statuses = nm.list_nodes()
     assert [s.name for s in statuses] == ["compute-01", "compute-02"]
     assert statuses[1].status == "offline"
+
+
+# --------------------------------------------------------------------------- #
+# detect_node_python — interpreter probe
+# --------------------------------------------------------------------------- #
+
+
+def _pool_with_version(version: str, exit_code: int = 0) -> MagicMock:
+    pool = MagicMock()
+    pool.execute.return_value = (exit_code, f"{version}\n", "")
+    return pool
+
+
+def test_detect_python_uses_configured_executable() -> None:
+    node = _node()
+    node.python_executable = "/opt/venv/bin/python"
+    pool = _pool_with_version("3.12.4")
+    probe = detect_node_python(pool, node)
+    assert probe is not None
+    assert probe.python_executable == "/opt/venv/bin/python"
+    assert probe.version == "3.12.4"
+    assert probe.candidates_tried == ("/opt/venv/bin/python",)
+
+
+def test_detect_python_falls_back_when_configured_too_old() -> None:
+    node = _node()
+    node.python_executable = "python3.9"
+    pool = MagicMock()
+    probed: list[str] = []
+
+    def fake_execute(_node, command, timeout=15):
+        probed.append(command)
+        if "python3.9" in command:
+            return (1, "", "Python 3.9 is too old")
+        if "python3.12" in command:
+            return (0, "3.12.5\n", "")
+        if "python3.13" in command:
+            return (1, "", "not found")
+        return (1, "", "not found")
+
+    pool.execute.side_effect = fake_execute
+    probe = detect_node_python(pool, node)
+    assert probe is not None
+    assert probe.python_executable == "python3.12"
+    assert probe.version == "3.12.5"
+    # The configured (too-old) interpreter is probed first, then the
+    # default candidates walk in order.
+    assert "python3.9" in probed[0]
+
+
+def test_detect_python_walks_default_candidates() -> None:
+    node = _node()
+    pool = MagicMock()
+
+    def fake_execute(_node, command, timeout=15):
+        if "python3.13" in command:
+            return (0, "3.13.1\n", "")
+        raise AssertionError(f"unexpected probe command: {command}")
+
+    pool.execute.side_effect = fake_execute
+    probe = detect_node_python(pool, node)
+    assert probe is not None
+    assert probe.python_executable == "python3.13"
+    assert probe.candidates_tried == ("python3.13",)
+
+
+def test_detect_python_returns_none_when_all_too_old() -> None:
+    node = _node()
+    pool = MagicMock()
+    pool.execute.return_value = (1, "", "old")
+    assert detect_node_python(pool, node) is None
+    assert pool.execute.call_count >= 1
+
+
+def test_detect_python_surfaces_ssh_failure_when_nothing_executed() -> None:
+    node = _node()
+    pool = MagicMock()
+    pool.execute.side_effect = SSHExecutionError("connection refused")
+    with pytest.raises(SSHExecutionError, match="connection refused"):
+        detect_node_python(pool, node)
+
+
+def test_detect_python_skips_unrunnable_then_finds_conda() -> None:
+    node = _node()
+    pool = MagicMock()
+
+    def fake_execute(_node, command, timeout=15):
+        if "$HOME" in command:
+            return (0, "3.11.9\n", "")
+        return (127, "", "command not found")
+
+    pool.execute.side_effect = fake_execute
+    probe = detect_node_python(pool, node)
+    assert probe is not None
+    assert "$HOME" in probe.python_executable
+
+
+# --------------------------------------------------------------------------- #
+# bootstrap_node — interpreter resolution integration
+# --------------------------------------------------------------------------- #
+
+
+def test_bootstrap_aborts_with_clear_error_when_no_python() -> None:
+    node = _node()
+    nm = NodeManager(_config([node]), MagicMock(), monitor=MagicMock())
+    pool = nm._pool
+    pool.execute.return_value = (1, "", "not found")
+    result = nm.bootstrap_node("compute-01", sync=False)
+    assert result.reachable is True
+    assert result.exit_code is None
+    assert result.ok is False
+    assert result.error is not None
+    assert "Python" in result.error
+    assert "python_executable" in result.error
+
+
+def test_bootstrap_uses_probe_resolved_python() -> None:
+    node = _node()
+    nm = NodeManager(_config([node]), MagicMock(), monitor=MagicMock())
+    pool = nm._pool
+
+    calls: list[str] = []
+
+    def fake_execute(_node, command, timeout=600):
+        calls.append(command)
+        if "sys.version_info" in command:
+            return (0, "3.12.4\n", "")
+        if "pip install" in command:
+            return (0, "installed", "")
+        raise AssertionError(f"unexpected command: {command}")
+
+    pool.execute.side_effect = fake_execute
+    result = nm.bootstrap_node("compute-01", sync=False)
+    assert result.ok is True
+    assert result.python_executable == "python3.13"
+    assert result.python_version == "3.12.4"
+    assert any("pip install" in c for c in calls)
+
+
+def test_bootstrap_ssh_failure_reported_unreachable() -> None:
+    node = _node()
+    nm = NodeManager(_config([node]), MagicMock(), monitor=MagicMock())
+    pool = nm._pool
+    pool.execute.side_effect = SSHExecutionError("network down")
+    result = nm.bootstrap_node("compute-01", sync=False)
+    assert result.reachable is False
+    assert "network down" in (result.error or "")
+
+
+def test_default_python_candidates_start_with_named_interpreters() -> None:
+    assert DEFAULT_PYTHON_CANDIDATES[:4] == ("python3.13", "python3.12", "python3.11", "python3.10")
+    assert any("anaconda3" in c for c in DEFAULT_PYTHON_CANDIDATES)
+
+
+def test_interpreter_probe_is_frozen_dataclass() -> None:
+    probe = InterpreterProbe(
+        python_executable="python3.12", version="3.12.4", candidates_tried=("python3.12",)
+    )
+    assert probe.python_executable == "python3.12"
+    with pytest.raises(Exception):
+        probe.version = "3.13.0"  # frozen

@@ -40,7 +40,12 @@ from acp.scheduler.remote.fetcher import (
     RemoteResultFetcher,
 )
 from acp.scheduler.remote.monitor import RemoteJobMonitor
-from acp.scheduler.remote.node_manager import NodeManager, NodeStatus
+from acp.scheduler.remote.node_manager import (
+    InterpreterProbe,
+    NodeManager,
+    NodeStatus,
+    detect_node_python,
+)
 from acp.scheduler.remote.runner import (
     RemoteJobRunner,
     RemoteNodeUnavailableError,
@@ -65,6 +70,7 @@ __all__ = [
     "DISK_SKIP_THRESHOLD",
     "FileStager",
     "HousekeepingDecision",
+    "InterpreterProbe",
     "LSFScriptSpec",
     "NodeManager",
     "NodeStatus",
@@ -85,5 +91,6 @@ __all__ = [
     "build_lsf_script_spec",
     "build_remote_cli_command",
     "derive_lsf_resources",
+    "detect_node_python",
     "generate_lsf_script",
 ]
