@@ -1118,7 +1118,7 @@ def _handle_pessearch(args: argparse.Namespace) -> int:
         from_artifact = getattr(args, "from_artifact", None)
         from_job = getattr(args, "from_job", None)
         from_manifest = getattr(args, "from_manifest", None)
-        mode = getattr(args, "mode", "bond_length_scan")
+        _mode = getattr(args, "mode", "bond_length_scan")
 
         if input_xyz_str:
             # Form ③: direct XYZ + coordinate

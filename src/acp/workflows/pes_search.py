@@ -11,12 +11,11 @@ Outputs land in ``RESULT/pes_search/``.
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
 
-from acp.calculations.pes.contracts import ScanCoordinate, validate_scan_coordinate
+from acp.calculations.pes.contracts import ScanCoordinate
 from acp.calculations.pes.engine import (
     PES_E_MANIFEST,
     PesSearchEngine,

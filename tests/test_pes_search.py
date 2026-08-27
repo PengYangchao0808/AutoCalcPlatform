@@ -548,7 +548,7 @@ def test_candidates_smoke() -> None:
 
 
 def test_bond_changes_smoke() -> None:
-    from acp.calculations.pes.bond_changes import BondChange, compute_bond_changes
+    from acp.calculations.pes.bond_changes import BondChange
 
     assert BondChange is not None
 
@@ -728,7 +728,6 @@ def test_entry_with_reaction(
 
 def test_entry_with_reaction_invalid(tmp_path: Path) -> None:
     from acp.compat.legacy.manifests import read_reaction_definition
-    from acp.workflows.pes_search import PesSearchInputError
 
     bad_reaction_path = tmp_path / "bad_reaction.json"
     bad_reaction_path.write_text('{"schema_version": 1}', encoding="utf-8")
@@ -748,7 +747,11 @@ def test_pes_e_manifest_structured_error(tmp_path: Path) -> None:
 
 def test_pes_e_coord_out_of_range(tmp_path: Path) -> None:
     from acp.calculations.pes.contracts import ScanCoordinate
-    from acp.workflows.pes_search import PES_E_COORD, PesSearchInputError, _validate_coordinate_atoms
+    from acp.workflows.pes_search import (
+        PES_E_COORD,
+        PesSearchInputError,
+        _validate_coordinate_atoms,
+    )
 
     coord = ScanCoordinate(kind="distance", atoms=(0, 99), start=1.0, end=2.0, n_points=5)
     with pytest.raises(PesSearchInputError, match=PES_E_COORD):
