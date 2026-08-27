@@ -1,26 +1,40 @@
 """Highconfirm (S4) — high-fidelity optimization + frequency + SP + thermo.
 
 Reads ``s3_lowconfirm_manifest.json``, re-confirms the selected candidates
-at the s4 fidelity through the same batch engine as Lowconfirm
-(:class:`BatchConfirmEngine`, profile ``s4``) and writes
-``s4_highconfirm_manifest.json`` plus ``mechanism_profile.json``
+at the s4 fidelity through the mechanism-free :class:`BatchOptimizeEngine`
+``opt_freq_sp_thermo`` profile and writes ``s4_highconfirm_manifest.json``
+plus ``mechanism_profile.json``
 (barriers, TS data, S3/S4 consistency).
 """
 
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
+from acp.calculations.batch import (
+    BatchOptimizeEngine,
+    BatchStructureItem,
+    JsonObject,
+    load_batch_request,
+)
+from acp.compat.legacy.batch_loaders import load_items_from_s3_manifest
+from acp.compat.legacy.manifests import read_s3_lowconfirm_manifest
 from acp.confsearch.shared.artifacts import write_json_atomic
 from acp.confsearch.shared.provenance import source_artifact_ref, utc_now_iso
+from acp.mechanism.presets import FIDELITY_PROFILES, resolve_fidelity
 
 from .._helpers import fingerprint
-from ..batch_models import BatchStructureItem, load_batch_request
-from .confirm import HighConfirmProfile
-from .low_confirm import _carried_row, _result_row
+from .low_confirm import (
+    _batch_method_options,
+    _carried_row,
+    _failed_record,
+    _legacy_profile_payload,
+    _result_row,
+    _run_irc_bridge,
+    _write_legacy_batch_manifest,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,15 +46,7 @@ HARTREE_TO_KCAL = 627.5094740631
 
 
 def read_s3_manifest(path: Path) -> dict[str, Any]:
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"S3 manifest is not a JSON object: {path}")
-    if (
-        payload.get("schema_version") != "s3_lowconfirm_v1"
-        or payload.get("workflow") != "Lowconfirm"
-    ):
-        raise ValueError(f"Not a Lowconfirm s3_lowconfirm manifest: {path}")
-    return payload
+    return dict(read_s3_lowconfirm_manifest(path))
 
 
 def _s3_s4_consistency(s3_row: dict[str, Any], s4_row: dict[str, Any]) -> list[str]:
@@ -119,12 +125,11 @@ def run_high_confirm(
     Structures enter either through a Lowconfirm manifest (*from_manifest*)
     or directly as batch structures (*structures* / *batch_request*).
     """
-    from ..batch_models import load_items_from_s3_manifest
-
     out_root = Path(output_dir).resolve()
     result_dir = out_root / "RESULT" / "mechanism"
     result_dir.mkdir(parents=True, exist_ok=True)
 
+    items: list[BatchStructureItem] = []
     source_block: dict[str, Any]
     if structures is None and batch_request is None:
         if from_manifest is None:
@@ -133,10 +138,27 @@ def run_high_confirm(
         payload_in = read_s3_manifest(manifest_path)
         resolved_charge = charge if charge is not None else int(payload_in.get("charge") or 0)
         resolved_multiplicity = (
-            multiplicity
-            if multiplicity is not None
-            else int(payload_in.get("multiplicity") or 1)
+            multiplicity if multiplicity is not None else int(payload_in.get("multiplicity") or 1)
         )
+        rows = [
+            row for row in payload_in.get("candidates") or [] if row.get("status") == "confirmed"
+        ]
+        if not rows:
+            raise ValueError("S3 manifest has no confirmed candidates to promote")
+        if select:
+            by_id = {str(row.get("id")): row for row in payload_in.get("candidates") or []}
+            missing = [candidate_id for candidate_id in select if str(candidate_id) not in by_id]
+            if missing:
+                raise ValueError(f"Unknown candidate ids in S3 manifest: {', '.join(missing)}")
+            unconfirmed = [
+                str(candidate_id)
+                for candidate_id in select
+                if by_id[str(candidate_id)].get("status") != "confirmed"
+            ]
+            if unconfirmed:
+                raise ValueError(
+                    "S3 candidates not confirmed, refuse S4 promotion: " + ", ".join(unconfirmed)
+                )
         items, _payload = load_items_from_s3_manifest(manifest_path, [str(s) for s in select or []])
         s3_by_id = {str(row.get("id")): row for row in payload_in.get("candidates") or []}
         source_block = source_artifact_ref(
@@ -148,7 +170,10 @@ def run_high_confirm(
         )
     else:
         if structures is None:
-            structures = load_batch_request(batch_request)
+            request_payload = batch_request
+            if request_payload is None:
+                raise ValueError("Highconfirm requires from_manifest, structures or batch_request")
+            structures = load_batch_request(cast(JsonObject, request_payload))
         resolved_charge = charge if charge is not None else 0
         resolved_multiplicity = multiplicity if multiplicity is not None else 1
         if select:
@@ -168,44 +193,69 @@ def run_high_confirm(
             "count": len(structures),
         }
 
-    profile = HighConfirmProfile(run_irc=run_irc)
-    from ..batch_confirm import BatchConfirmEngine
-
-    if structures is None:
-        structures = items
-    engine = BatchConfirmEngine(
+    structures_for_engine = structures if structures is not None else items
+    fidelity_profile = FIDELITY_PROFILES[resolve_fidelity("s4")]
+    engine = BatchOptimizeEngine(
         config=config,
-        work_root=out_root / "WORK" / "03_OPT",
-        profile=profile,
-        refinement_provider=refinement_provider,
-        endpoint_provider=endpoint_provider,
+        work_root=out_root / "WORK",
+        result_root=out_root / "RESULT",
+        methods=_batch_method_options(fidelity_profile),
     )
-    outcome = engine.run(
-        structures or [],
-        charge=resolved_charge,
-        multiplicity=resolved_multiplicity,
-        workflow="Highconfirm",
-    )
+    structures_for_engine = structures_for_engine or []
+    try:
+        outcome = engine.run(
+            structures_for_engine,
+            profile="opt_freq_sp_thermo",
+            charge=resolved_charge,
+            multiplicity=resolved_multiplicity,
+            workflow="Highconfirm",
+        )
+    except Exception as exc:  # noqa: BLE001 - persist then re-raise engine failures
+        error = str(exc) or type(exc).__name__
+        failed_records = [
+            _failed_record(item, resolved_charge, resolved_multiplicity, error)
+            for item in structures_for_engine
+        ]
+        payload = _build_s4_payload(
+            source_block=source_block,
+            selected_ids=[item.candidate_id or item.item_id for item in structures_for_engine],
+            charge=resolved_charge,
+            multiplicity=resolved_multiplicity,
+            run_irc=run_irc,
+            candidates=[_result_row(result_dir, record, copy_sp=True) for record in failed_records],
+            irc_block=None,
+            consistency=[],
+            errors=[error],
+            status="failed",
+        )
+        write_json_atomic(result_dir / S4_MANIFEST_NAME, payload)
+        raise
 
     candidates_out: list[dict[str, Any]] = []
     consistency: list[str] = []
-    if outcome.confirm is not None:
-        for candidate in outcome.confirm.candidates:
-            row = _result_row(result_dir, candidate, copy_sp=True)
-            s3_row = s3_by_id.get(candidate.candidate_id)
-            if s3_row is not None and row["status"] == "confirmed":
-                consistency.extend(_s3_s4_consistency(s3_row, row))
-            candidates_out.append(row)
     for record in outcome.manifest.items:
-        if record.status != "skipped":
-            continue
-        row = _carried_row(out_root, record)
+        row = (
+            _carried_row(out_root, record)
+            if record.status == "skipped"
+            else _result_row(result_dir, record, copy_sp=True)
+        )
         s3_row = s3_by_id.get(record.candidate_id)
         if s3_row is not None and row["status"] == "confirmed":
             consistency.extend(_s3_s4_consistency(s3_row, row))
         candidates_out.append(row)
 
+    _write_legacy_batch_manifest(outcome.manifest, result_dir)
+
     confirmed = [row for row in candidates_out if row["status"] == "confirmed"]
+    irc_block = _run_irc_bridge(
+        out_root,
+        result_dir,
+        [row for row in confirmed if row["kind"] == "ts"],
+        fidelity_profile,
+        endpoint_provider,
+        config,
+        run_irc,
+    )
     gates: dict[str, Any] = {
         "optimization_converged": bool(confirmed)
         and all(row["opt_converged"] for row in confirmed),
@@ -225,42 +275,19 @@ def run_high_confirm(
         "PASS" if gates["s3_s4_consistent"] and gates["single_point_successful"] else "FAIL"
     )
 
-    payload = {
-        "schema_version": S4_SCHEMA_VERSION,
-        "workflow": "Highconfirm",
-        "stage": "S4",
-        "created_at": utc_now_iso(),
-        "source": source_block,
-        "profile": {
-            "level": "high",
-            "opt_method": profile.opt_method,
-            "opt_basis": profile.opt_basis,
-            "freq_method": profile.freq_method,
-            "freq_basis": profile.freq_basis,
-            "sp_method": profile.sp_method,
-            "sp_basis": profile.sp_basis,
-            "max_cycles": profile.max_cycles,
-            "irc": run_irc,
-        },
-        "charge": resolved_charge,
-        "multiplicity": resolved_multiplicity,
-        "candidates": candidates_out,
-        "batch_manifest": "batch_calculation_manifest.json",
-        "irc": outcome.confirm.irc if outcome.confirm is not None else None,
-        "s3_s4_consistency": consistency,
-        "gates": gates,
-        "errors": list(outcome.errors),
-        "provenance": {
-            "engine": "acp-highconfirm",
-            "fingerprint": fingerprint(
-                {
-                    "source_manifest": str(from_manifest) if from_manifest else "",
-                    "select": [item.candidate_id or item.item_id for item in (structures or [])],
-                    "run_irc": run_irc,
-                }
-            ),
-        },
-    }
+    payload = _build_s4_payload(
+        source_block=source_block,
+        selected_ids=[item.candidate_id or item.item_id for item in structures_for_engine],
+        charge=resolved_charge,
+        multiplicity=resolved_multiplicity,
+        run_irc=run_irc,
+        candidates=candidates_out,
+        irc_block=irc_block,
+        consistency=consistency,
+        errors=list(outcome.errors),
+        gates=gates,
+        status="completed",
+    )
     manifest_out = write_json_atomic(result_dir / S4_MANIFEST_NAME, payload)
 
     mechanism_profile = {
@@ -306,6 +333,54 @@ def run_high_confirm(
         len(candidates_out),
     )
     return payload
+
+
+def _build_s4_payload(
+    *,
+    source_block: dict[str, Any],
+    selected_ids: list[str],
+    charge: int,
+    multiplicity: int,
+    run_irc: bool,
+    candidates: list[dict[str, Any]],
+    irc_block: dict[str, Any] | None,
+    consistency: list[str],
+    errors: list[str],
+    status: str,
+    gates: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    effective_gates = gates or {
+        "optimization_converged": False,
+        "frequency_successful": False,
+        "single_point_successful": False,
+        "thermo_successful": False,
+        "s3_s4_consistent": not consistency,
+        "G4": "FAIL",
+        "G5": "FAIL",
+    }
+    return {
+        "schema_version": S4_SCHEMA_VERSION,
+        "workflow": "Highconfirm",
+        "stage": "S4",
+        "status": status,
+        "created_at": utc_now_iso(),
+        "source": source_block,
+        "profile": _legacy_profile_payload("s4", "high", run_irc),
+        "charge": charge,
+        "multiplicity": multiplicity,
+        "candidates": candidates,
+        "batch_manifest": "batch_calculation_manifest.json",
+        "irc": irc_block,
+        "s3_s4_consistency": list(consistency),
+        "gates": effective_gates,
+        "errors": list(errors),
+        "provenance": {
+            "engine": "acp-highconfirm",
+            "fingerprint": fingerprint(
+                {"source_manifest": str(source_block.get("path") or ""), "select": selected_ids}
+            ),
+        },
+    }
 
 
 __all__ = [

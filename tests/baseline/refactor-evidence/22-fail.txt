@@ -1,0 +1,12 @@
+Wave 3 Todo 22/D4 failure-isolation evidence
+
+Command:
+python -m pytest tests/test_batch_optimize.py::test_item_failure_isolated -q
+
+Result:
+.                                                                        [100%]
+1 passed in 0.44s
+
+Coverage:
+One item raised during optimization while the other item completed; the failed
+item was recorded with structured error state and did not abort the batch.

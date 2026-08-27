@@ -11,11 +11,6 @@ from acp.calculations.contracts import StructureRole
 from acp.results.manifest import find_products, load_result_manifest
 
 from ._items import BatchStructureItem, JsonObject, JsonValue, apply_user_overrides
-from ._manifest_loaders import (
-    load_items_from_s2_candidate_manifest,
-    load_items_from_s2_path_manifest,
-    load_items_from_s3_manifest,
-)
 from ._tag import build_tag_title, normalize_tag, parse_tag_comment
 from ._xyz import (
     _assign_ids,
@@ -190,10 +185,11 @@ def load_batch_request(payload: JsonObject | Path | str) -> list[BatchStructureI
                     _task_dir_for_artifact((base_dir / artifact).resolve())
                 )
             )
-        elif isinstance(artifact, str) and source_type in {"lowconfirm", "confirmed"}:
-            items.extend(load_items_from_s3_manifest((base_dir / artifact).resolve())[0])
         elif isinstance(artifact, str):
-            items.extend(load_items_from_s2_path_manifest((base_dir / artifact).resolve())[0])
+            raise ValueError(
+                "BatchOptimize requests accept result_manifest artifacts; "
+                "stage manifests require the compatibility boundary"
+            )
         elif entry.get("geometry") or entry.get("path"):
             items.extend(_request_geometry(entry, base_dir))
         elif entry.get("xyz"):
@@ -229,9 +225,6 @@ __all__ = [
     "BATCH_REQUEST_SCHEMA_VERSION",
     "load_batch_request",
     "load_items_from_result_manifest",
-    "load_items_from_s2_candidate_manifest",
-    "load_items_from_s2_path_manifest",
-    "load_items_from_s3_manifest",
     "load_items_from_xyz_file",
     "load_items_from_xyz_text",
 ]

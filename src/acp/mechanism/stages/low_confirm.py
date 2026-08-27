@@ -1,28 +1,35 @@
 """Lowconfirm (S3) — coarse optimization + frequency + preliminary IRC.
 
 Reads ``s2_path_manifest.json`` (or the user-confirmed sibling
-``s2_candidate_manifest.json``), refines the selected candidates at the s3
-fidelity through the shared batch engine (:class:`BatchConfirmEngine`,
-profile ``s3``), and writes ``s3_lowconfirm_manifest.json`` plus the
-unified ``batch_calculation_manifest.json``. IRC runs by default on the
-canonical TS (plan §6.3 — PESsearch discovers, Lowconfirm confirms coarsely,
-Highconfirm confirms finally).
+``s2_candidate_manifest.json``), refines the selected candidates through the
+mechanism-free :class:`BatchOptimizeEngine` ``opt_freq`` profile, and writes
+the historical ``s3_lowconfirm_manifest.json`` adapter output. IRC runs by
+default on the canonical TS through the temporary endpoint-provider bridge.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import shutil
 from pathlib import Path
 from typing import Any
 
+from acp.calculations.batch import (
+    BatchCalculationItem,
+    BatchCalculationManifest,
+    BatchOptimizeEngine,
+    BatchStructureItem,
+    load_batch_request,
+)
+from acp.calculations.batch.options import BatchMethodOptions
+from acp.compat.legacy.batch_loaders import load_items_from_s2_path_manifest
+from acp.compat.legacy.manifests import read_s2_path_manifest
 from acp.confsearch.shared.artifacts import write_json_atomic
 from acp.confsearch.shared.provenance import source_artifact_ref, utc_now_iso
+from acp.mechanism.models import ArtifactRef, StationaryPoint, TsIdentity
+from acp.mechanism.presets import FIDELITY_PROFILES, FidelityProfile, resolve_fidelity
 
 from .._helpers import fingerprint
-from ..batch_models import BatchCalculationItem, BatchStructureItem, load_batch_request
-from .confirm import LowConfirmProfile
 
 logger = logging.getLogger(__name__)
 
@@ -83,15 +90,13 @@ def _snapshot_s2_candidate_package(source_manifest: Path, output_root: Path) -> 
 
 
 def read_s2_manifest(path: Path) -> dict[str, Any]:
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise ValueError(f"S2 manifest is not a JSON object: {path}")
+    payload = read_s2_path_manifest(path)
     if (
         payload.get("schema_version") not in _S2_ACCEPTED_SCHEMAS
         or payload.get("workflow") != "PESsearch"
     ):
         raise ValueError(f"Not a PESsearch s2_path manifest: {path}")
-    return payload
+    return dict(payload)
 
 
 def _require_confirmed_review(payload: dict[str, Any]) -> None:
@@ -129,16 +134,11 @@ def run_low_confirm(
     or directly as batch structures (*structures* / *batch_request*, batch
     plan §3 — upload/paste XYZ or arbitrary task-result structures).
     """
-    from cccp.qc.interfaces.constraints import ReactionCoordinatePlan
-
-    from ..batch_models import load_items_from_s2_path_manifest
-
     out_root = Path(output_dir).resolve()
     result_dir = out_root / "RESULT" / "mechanism"
     result_dir.mkdir(parents=True, exist_ok=True)
 
     items: list[BatchStructureItem] = []
-    plan: ReactionCoordinatePlan | None = None
     source_block: dict[str, Any]
     if structures is None and batch_request is None:
         if from_manifest is None:
@@ -158,8 +158,6 @@ def run_low_confirm(
         items, _payload = load_items_from_s2_path_manifest(
             manifest_path, [str(s) for s in select or []]
         )
-        plan_payload = (payload_in.get("route") or {}).get("coordinate_plan") or {}
-        plan = ReactionCoordinatePlan.from_dict(plan_payload) if plan_payload else None
         source_block = source_artifact_ref(
             source_job_id,
             source_relative_path,
@@ -193,38 +191,64 @@ def run_low_confirm(
         }
         selected_ids = [item.candidate_id or item.item_id for item in structures]
 
-    profile = LowConfirmProfile(run_irc=run_irc)
-    from ..batch_confirm import BatchConfirmEngine
-
-    engine = BatchConfirmEngine(
-        config=config,
-        work_root=out_root / "WORK" / "03_OPT",
-        profile=profile,
-        refinement_provider=refinement_provider,
-        endpoint_provider=endpoint_provider,
-    )
     structures_for_engine = structures if structures is not None else items
-    outcome = engine.run(
-        structures_for_engine,
-        charge=resolved_charge,
-        multiplicity=resolved_multiplicity,
-        coordinate_plan=plan,
-        workflow="Lowconfirm",
+    fidelity_name = resolve_fidelity("s3")
+    fidelity_profile = FIDELITY_PROFILES[fidelity_name]
+    engine = BatchOptimizeEngine(
+        config=config,
+        work_root=out_root / "WORK",
+        result_root=out_root / "RESULT",
+        methods=_batch_method_options(fidelity_profile),
     )
+    try:
+        outcome = engine.run(
+            structures_for_engine,
+            profile="opt_freq",
+            charge=resolved_charge,
+            multiplicity=resolved_multiplicity,
+            workflow="Lowconfirm",
+        )
+    except Exception as exc:  # noqa: BLE001 - persist then re-raise engine failures
+        error = str(exc) or type(exc).__name__
+        failed_records = [
+            _failed_record(item, resolved_charge, resolved_multiplicity, error)
+            for item in structures_for_engine
+        ]
+        payload = _build_s3_payload(
+            source_block=source_block,
+            selected_ids=selected_ids,
+            charge=resolved_charge,
+            multiplicity=resolved_multiplicity,
+            run_irc=run_irc,
+            fidelity_profile=fidelity_profile,
+            candidates=[_result_row(result_dir, record) for record in failed_records],
+            irc_block=None,
+            errors=[error],
+            status="failed",
+        )
+        write_json_atomic(result_dir / S3_MANIFEST_NAME, payload)
+        raise
 
+    _write_legacy_batch_manifest(outcome.manifest, result_dir)
     candidates_out: list[dict[str, Any]] = []
-    if outcome.confirm is not None:
-        for candidate in outcome.confirm.candidates:
-            row = _result_row(result_dir, candidate)
-            candidates_out.append(row)
     for record in outcome.manifest.items:
-        if record.status != "skipped":
-            continue
-        candidates_out.append(_carried_row(out_root, record))
+        candidates_out.append(
+            _carried_row(out_root, record)
+            if record.status == "skipped"
+            else _result_row(result_dir, record)
+        )
 
     confirmed = [row for row in candidates_out if row["status"] == "confirmed"]
     ts_rows = [row for row in confirmed if row["kind"] == "ts"]
-    irc_block = outcome.confirm.irc if outcome.confirm is not None else None
+    irc_block = _run_irc_bridge(
+        out_root,
+        result_dir,
+        ts_rows,
+        fidelity_profile,
+        endpoint_provider,
+        config,
+        run_irc,
+    )
     gates: dict[str, Any] = {
         "optimization_converged": bool(confirmed)
         and all(row["opt_converged"] for row in confirmed),
@@ -242,38 +266,19 @@ def run_low_confirm(
     }
     gates["G3"] = "PASS" if gates["optimization_converged"] and gates["frequency_valid"] else "FAIL"
 
-    payload = {
-        "schema_version": S3_SCHEMA_VERSION,
-        "workflow": "Lowconfirm",
-        "stage": "S3",
-        "created_at": utc_now_iso(),
-        "source": source_block,
-        "profile": {
-            "level": "low",
-            "opt_method": profile.opt_method,
-            "freq_method": profile.freq_method,
-            "sp_method": profile.sp_method,
-            "max_cycles": profile.max_cycles,
-            "irc": run_irc,
-        },
-        "charge": resolved_charge,
-        "multiplicity": resolved_multiplicity,
-        "candidates": candidates_out,
-        "batch_manifest": "batch_calculation_manifest.json",
-        "irc": irc_block,
-        "gates": gates,
-        "errors": list(outcome.errors),
-        "provenance": {
-            "engine": "acp-lowconfirm",
-            "fingerprint": fingerprint(
-                {
-                    "source_manifest": str(from_manifest) if from_manifest else "",
-                    "select": selected_ids,
-                    "run_irc": run_irc,
-                }
-            ),
-        },
-    }
+    payload = _build_s3_payload(
+        source_block=source_block,
+        selected_ids=selected_ids,
+        charge=resolved_charge,
+        multiplicity=resolved_multiplicity,
+        run_irc=run_irc,
+        fidelity_profile=fidelity_profile,
+        candidates=candidates_out,
+        irc_block=irc_block,
+        errors=list(outcome.errors),
+        gates=gates,
+        status="completed",
+    )
     manifest_out = write_json_atomic(result_dir / S3_MANIFEST_NAME, payload)
     logger.info(
         "Lowconfirm manifest written: %s (%d/%d confirmed)",
@@ -286,77 +291,258 @@ def run_low_confirm(
 
 def _result_row(
     result_dir: Path,
-    candidate: Any,
+    record: BatchCalculationItem,
     manifest_path: Path | None = None,
     *,
     copy_sp: bool = False,
 ) -> dict[str, Any]:
-    row = candidate.to_dict()
-    optimized = Path(row.get("optimized_xyz") or "")
-    if optimized.is_file():
-        target_dir = result_dir / "optimized"
-        target_dir.mkdir(parents=True, exist_ok=True)
-        target = target_dir / f"{candidate.candidate_id}.xyz"
-        shutil.copy2(optimized, target)
-        row["optimized_xyz"] = f"optimized/{candidate.candidate_id}.xyz"
-    evidence = row.get("evidence") or {}
-    freq_output = evidence.get("canonical_frequency_output")
-    if freq_output and Path(str(freq_output)).is_file():
-        freq_dir = result_dir / "frequencies"
-        freq_dir.mkdir(parents=True, exist_ok=True)
-        target = freq_dir / f"{candidate.candidate_id}{Path(str(freq_output)).suffix}"
-        shutil.copy2(freq_output, target)
-        row["frequency"]["output"] = f"frequencies/{target.name}"
-    if copy_sp:
-        sp_output = evidence.get("sp_output")
-        if sp_output and Path(str(sp_output)).is_file():
-            sp_dir = result_dir / "single_points"
-            sp_dir.mkdir(parents=True, exist_ok=True)
-            target = sp_dir / f"{candidate.candidate_id}{Path(str(sp_output)).suffix}"
-            shutil.copy2(sp_output, target)
-            row.setdefault("outputs", {})["sp"] = f"single_points/{target.name}"
-    if row["status"] == "failed" and not row.get("input_xyz"):
-        row["input_xyz"] = ""
-    row.pop("evidence", None)
-    row["source_manifest"] = str(manifest_path) if manifest_path is not None else ""
-    return row
-
-
-def _carried_row(out_root: Path, record: BatchCalculationItem) -> dict[str, Any]:
-    """Rebuild a stage candidate row from a carried (skipped) batch record.
-
-    ``optimized_xyz`` is stored RESULT-relative in the batch manifest; the
-    stage manifest keeps paths relative to ``RESULT/mechanism`` (like every
-    other row), so a ``../structures/...`` pointer is emitted.
-    """
-    input_abs = (out_root / record.input_xyz).resolve() if record.input_xyz else Path("")
-    optimized_rel = ""
-    if record.optimized_xyz:
-        optimized_abs = out_root / "RESULT" / record.optimized_xyz
-        try:
-            optimized_rel = (
-                optimized_abs.resolve()
-                .relative_to((out_root / "RESULT" / "mechanism").resolve())
-                .as_posix()
-            )
-        except ValueError:
-            optimized_rel = f"../{record.optimized_xyz}"
-    sp_energy = record.single_point.get("energy_hartree")
-    gibbs = record.thermochemistry.get("gibbs_hartree")
-    return {
+    """Project a generic batch record into the historical S3 row shape."""
+    result_root = result_dir.parent
+    task_root = result_root.parent
+    status = "confirmed" if record.status in {"completed", "skipped"} else record.status
+    input_path = Path(record.input_xyz) if record.input_xyz else None
+    if input_path is not None and not input_path.is_absolute():
+        input_path = task_root / input_path
+    optimized = Path(record.optimized_xyz) if record.optimized_xyz else None
+    if optimized is not None and not optimized.is_absolute():
+        optimized = result_root / optimized
+    row: dict[str, Any] = {
         "id": record.candidate_id,
         "kind": record.kind,
         "role": "transition_state" if record.kind == "ts" else "intermediate",
-        "status": "confirmed" if record.status in {"completed", "skipped"} else record.status,
-        "input_xyz": str(input_abs) if str(input_abs) else "",
-        "optimized_xyz": optimized_rel,
+        "status": status,
+        "input_xyz": str(input_path) if input_path is not None else "",
+        "optimized_xyz": record.optimized_xyz,
         "opt_converged": record.status in {"completed", "skipped"},
-        "frequency": dict(record.frequency),
-        "sp_energy_hartree": sp_energy,
-        "gibbs_hartree": gibbs,
-        "source_manifest": "",
-        "resumed_from_previous_run": True,
+        "frequency": _frequency_row(record),
+        "sp_energy_hartree": record.single_point.get("energy_hartree"),
+        "gibbs_hartree": record.thermochemistry.get("gibbs_hartree"),
+        "source_manifest": str(manifest_path) if manifest_path is not None else "",
     }
+    if optimized is not None and optimized.is_file():
+        target_dir = result_dir / "optimized"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / f"{record.candidate_id}.xyz"
+        shutil.copy2(optimized, target)
+        row["optimized_xyz"] = f"optimized/{record.candidate_id}.xyz"
+    if record.error:
+        row["error"] = record.error
+    return row
+
+
+def _batch_method_options(profile: FidelityProfile) -> BatchMethodOptions:
+    return BatchMethodOptions(
+        minimum_method=profile.ts_method,
+        minimum_basis=profile.ts_basis,
+        transition_state_method=profile.ts_method,
+        transition_state_basis=profile.ts_basis,
+        frequency_method=profile.freq_method,
+        frequency_basis=profile.freq_basis,
+        single_point_method=profile.sp_method,
+        single_point_basis=profile.sp_basis,
+    )
+
+
+def _carried_row(out_root: Path, record: BatchCalculationItem) -> dict[str, Any]:
+    """Project a cache-carried batch record and mark it as resumed."""
+    row = _result_row(out_root / "RESULT" / "mechanism", record)
+    row["resumed_from_previous_run"] = True
+    return row
+
+
+def _frequency_row(record: BatchCalculationItem) -> dict[str, Any]:
+    frequency = dict(record.frequency)
+    raw_frequencies = frequency.get("frequencies")
+    frequencies = (
+        [float(value) for value in raw_frequencies if isinstance(value, (int, float))]
+        if isinstance(raw_frequencies, list)
+        else []
+    )
+    if frequency.get("status") == "completed":
+        frequency["status"] = "complete"
+    if record.kind == "ts" and frequencies:
+        imaginary = [value for value in frequencies if value <= -50.0]
+        frequency.update(
+            {
+                "n_imaginary": len(imaginary),
+                "imaginary_frequency_cm1": min(imaginary) if imaginary else None,
+                "valid_ts_identity": len(imaginary) == 1,
+            }
+        )
+    return frequency
+
+
+def _failed_record(
+    item: BatchStructureItem,
+    charge: int,
+    multiplicity: int,
+    error: str,
+) -> BatchCalculationItem:
+    record = BatchCalculationItem.from_item(item, charge, multiplicity)
+    record.status = "failed"
+    record.error = error
+    return record
+
+
+def _legacy_profile_payload(
+    fidelity_name: str,
+    level: str,
+    run_irc: bool,
+) -> dict[str, Any]:
+    fidelity = resolve_fidelity(fidelity_name)
+    profile = FIDELITY_PROFILES[fidelity]
+    max_cycles = profile.max_cycles_ts or profile.max_cycles_minimum
+    if max_cycles is None:
+        max_cycles = {"s3": 60, "s4": 200}[fidelity]
+    payload: dict[str, Any] = {
+        "level": level,
+        "opt_method": profile.ts_method,
+        "freq_method": profile.freq_method,
+        "sp_method": profile.sp_method,
+        "max_cycles": max_cycles,
+        "irc": run_irc,
+    }
+    if level == "high":
+        payload.update(
+            {
+                "opt_basis": profile.ts_basis,
+                "freq_basis": profile.freq_basis,
+                "sp_basis": profile.sp_basis,
+            }
+        )
+    return payload
+
+
+def _build_s3_payload(
+    *,
+    source_block: dict[str, Any],
+    selected_ids: list[str],
+    charge: int,
+    multiplicity: int,
+    run_irc: bool,
+    fidelity_profile: Any,
+    candidates: list[dict[str, Any]],
+    irc_block: dict[str, Any] | None,
+    errors: list[str],
+    status: str,
+    gates: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    del fidelity_profile
+    effective_gates = gates or {
+        "optimization_converged": False,
+        "frequency_valid": False,
+        "ts_first_order_saddle": None,
+        "irc_completed": bool(irc_block and irc_block.get("complete")) if run_irc else None,
+        "G3": "FAIL",
+    }
+    return {
+        "schema_version": S3_SCHEMA_VERSION,
+        "workflow": "Lowconfirm",
+        "stage": "S3",
+        "status": status,
+        "created_at": utc_now_iso(),
+        "source": source_block,
+        "profile": _legacy_profile_payload("s3", "low", run_irc),
+        "charge": charge,
+        "multiplicity": multiplicity,
+        "candidates": candidates,
+        "batch_manifest": "batch_calculation_manifest.json",
+        "irc": irc_block,
+        "gates": effective_gates,
+        "errors": list(errors),
+        "provenance": {
+            "engine": "acp-lowconfirm",
+            "fingerprint": fingerprint(
+                {"source_manifest": str(source_block.get("path") or ""), "select": selected_ids}
+            ),
+        },
+    }
+
+
+def _write_legacy_batch_manifest(
+    manifest: BatchCalculationManifest,
+    result_dir: Path,
+) -> None:
+    manifest.write(result_dir / "batch_calculation_manifest.json")
+
+
+def _run_irc_bridge(
+    out_root: Path,
+    result_dir: Path,
+    ts_rows: list[dict[str, Any]],
+    fidelity: Any,
+    endpoint_provider: Any | None,
+    config: dict[str, Any] | None,
+    run_irc: bool,
+) -> dict[str, Any] | None:
+    if not run_irc or not ts_rows:
+        return None
+    row = ts_rows[0]
+    geometry = Path(str(row.get("optimized_xyz") or row.get("input_xyz") or ""))
+    if not geometry.is_absolute():
+        geometry = result_dir / geometry
+    ts = StationaryPoint(
+        point_id=str(row["id"]),
+        role="transition_state",
+        kind="ts",
+        geometry=ArtifactRef(path=str(geometry), sha256="", kind="geometry"),
+        charge=int(row.get("charge") or 0),
+        multiplicity=int(row.get("multiplicity") or 1),
+        energy_hartree=row.get("sp_energy_hartree"),
+        identity=_ts_identity(row.get("frequency")),
+    )
+    provider = endpoint_provider
+    if provider is None:
+        # TEMPORARY Wave 3 bridge; Wave 4 replaces this with standalone IRC.
+        from acp.backends import get_backend
+
+        from ..endpoint import DefaultEndpointProvider, EndpointMatchThresholds
+
+        backend_ref = get_backend("orca")
+        backend = backend_ref(config or {}) if isinstance(backend_ref, type) else backend_ref
+        provider = DefaultEndpointProvider(
+            backend=backend,
+            thresholds=EndpointMatchThresholds(),
+            work_root=out_root / "WORK" / "03_OPT",
+        )
+    try:
+        return _irc_block(provider.run_irc(ts, fidelity))
+    except Exception as exc:  # noqa: BLE001 - IRC remains advisory at S3
+        logger.warning("IRC validation failed for %s: %s", row["id"], exc)
+        return {"enabled": True, "complete": False, "error": str(exc)}
+
+
+def _ts_identity(frequency: Any) -> TsIdentity | None:
+    if not isinstance(frequency, dict) or frequency.get("n_imaginary") is None:
+        return None
+    return TsIdentity(
+        imaginary_count=int(frequency["n_imaginary"]),
+        imaginary_frequency_cm1=(
+            float(frequency["imaginary_frequency_cm1"])
+            if frequency.get("imaginary_frequency_cm1") is not None
+            else None
+        ),
+        valid=bool(frequency.get("valid_ts_identity")),
+    )
+
+
+def _irc_block(irc_result: Any) -> dict[str, Any]:
+    block: dict[str, Any] = {
+        "irc_id": getattr(irc_result, "irc_id", ""),
+        "ts_id": getattr(irc_result, "ts_id", ""),
+        "complete": bool(getattr(irc_result, "complete", False)),
+        "endpoints": {},
+    }
+    for direction in ("forward", "reverse"):
+        endpoint = getattr(irc_result, f"{direction}_endpoint", None)
+        if endpoint is None:
+            continue
+        block["endpoints"][direction] = {
+            "xyz": getattr(endpoint, "path", ""),
+            "sha256": getattr(endpoint, "sha256", ""),
+            "kind": getattr(endpoint, "kind", "irc"),
+        }
+    return block
 
 
 __all__ = [

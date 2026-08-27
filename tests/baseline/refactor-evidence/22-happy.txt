@@ -1,0 +1,17 @@
+Wave 3 Todo 22/D4 happy-path evidence
+
+Command:
+python -m pytest tests/test_batch_optimize.py::test_mixed_ts_int_opt_freq_sp_thermo -q
+
+Result:
+.                                                                        [100%]
+1 passed in 0.44s
+
+Coverage:
+Mixed TS + INT batch execution completed through opt/frequency/single-point/
+thermochemistry, with optimized structures and result-manifest products written.
+
+Gate:
+python scripts/check_grep_gates.py --gate wave3_no_legacy_manifests src/acp/calculations src/acp/workflows
+ALLOWED:
+BLOCKING:

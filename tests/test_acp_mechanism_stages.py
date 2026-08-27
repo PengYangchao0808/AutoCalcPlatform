@@ -9,6 +9,16 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
+from acp.backends.base import QCResult
+from acp.calculations.batch import (
+    BatchCalculationItem,
+    BatchCalculationManifest,
+    BatchOptimizeEngine,
+    BatchRunOutcome,
+    BatchStructureItem,
+)
+from acp.calculations.batch.options import BatchMethodOptions
+from acp.mechanism.providers.contracts import RefinementManifest
 from acp.mechanism.stages import pes_search as pes_search_module
 from acp.mechanism.stages.handoff import (
     ArtifactRefError,
@@ -18,6 +28,7 @@ from acp.mechanism.stages.handoff import (
     validate_stage_artifact,
 )
 from acp.mechanism.stages.pes_search import S2_MANIFEST_NAME, normalize_strategy
+from tests.conftest import FakeBackend
 
 
 def _water_xyz(path: Path) -> Path:
@@ -27,6 +38,22 @@ def _water_xyz(path: Path) -> Path:
         encoding="utf-8",
     )
     return path
+
+
+def _frequency_result(*, imaginary: bool = True, log_path: Path | None = None) -> QCResult:
+    frequencies = [-1000.0, 100.0, 200.0] if imaginary else [100.0, 200.0, 300.0]
+    if log_path is not None:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text("fake frequency output\n", encoding="utf-8")
+    return QCResult(
+        success=True,
+        energy=-76.5,
+        coordinates=np.array([[0.0, 0.0, 0.0], [0.9, 0.0, 0.0], [-0.3, 0.9, 0.0]]),
+        symbols=["O", "H", "H"],
+        frequencies=frequencies,
+        has_frequencies=True,
+        freq_log_file=log_path,
+    )
 
 
 def _confsearch_manifest(job_dir: Path) -> Path:
@@ -125,7 +152,9 @@ def test_validate_stage_artifact_rejects_bad_sha(tmp_path: Path) -> None:
         )
 
 
-def test_resolve_source_job_via_job_json_scan(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_resolve_source_job_via_job_json_scan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     job_dir = tmp_path / "runs" / "ethanol_Confsearch_final"
     job_dir.mkdir(parents=True)
     (job_dir / "job.json").write_text(json.dumps({"id": "20260823_001_Confsearch"}))
@@ -208,9 +237,11 @@ def test_run_pes_search_writes_s2_manifest(tmp_path: Path, monkeypatch: pytest.M
 
     source_job = tmp_path / "source_job"
     manifest = _confsearch_manifest(source_job)
-    monkeypatch.setattr(ps, "_build_path_strategy", lambda *a, **k: SimpleNamespace(
-        search=lambda *a, **k: _fake_path_result()
-    ))
+    monkeypatch.setattr(
+        ps,
+        "_build_path_strategy",
+        lambda *a, **k: SimpleNamespace(search=lambda *a, **k: _fake_path_result()),
+    )
 
     payload = ps.run_pes_search(
         from_manifest=manifest,
@@ -241,9 +272,7 @@ def test_run_pes_search_writes_s2_manifest(tmp_path: Path, monkeypatch: pytest.M
     assert payload["source"]["stage"] == "S1"
 
 
-def test_run_pes_search_direct_ts_strategy(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_run_pes_search_direct_ts_strategy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """direct-ts strategy: no ImportError, produces ts_candidate_01."""
     from acp.mechanism.stages import pes_search as ps
 
@@ -259,9 +288,7 @@ def test_run_pes_search_direct_ts_strategy(
     # DirectTsStrategy doesn't populate symbols on PathResult;
     # _symbols_for falls back to point.symbols (also absent) → [].
     # Monkeypatch so _export_candidates can resolve symbols from the reactant.
-    monkeypatch.setattr(
-        ps, "_symbols_for", lambda pr, pt: ["O", "H", "H"]
-    )
+    monkeypatch.setattr(ps, "_symbols_for", lambda pr, pt: ["O", "H", "H"])
 
     payload = ps.run_pes_search(
         from_manifest=manifest,
@@ -304,9 +331,9 @@ class _FakeRefinementProvider:
         self.energy = energy
         self.imaginary = imaginary
 
-    def refine(self, requests, fidelity) -> SimpleNamespace:
-        from acp.mechanism.models import StationaryPoint, TsIdentity
-        from acp.mechanism.providers.contracts import RefinementAttempt, RefinementManifest
+    def refine(self, requests, fidelity) -> object:
+        from acp.mechanism.models import ArtifactRef, StationaryPoint, TsIdentity
+        from acp.mechanism.providers.contracts import RefinementAttempt
 
         attempts = []
         points = []
@@ -327,7 +354,7 @@ class _FakeRefinementProvider:
                 point_id=request.id,
                 role=request.role,
                 kind=request.kind,
-                geometry=SimpleNamespace(path=str(canonical_copy), sha256="", kind="geometry"),
+                geometry=ArtifactRef(path=str(canonical_copy), sha256="", kind="geometry"),
                 charge=request.charge,
                 multiplicity=request.multiplicity,
                 energy_hartree=self.energy,
@@ -406,17 +433,19 @@ def _s2_manifest_with_ts(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Pat
 
 
 def test_run_low_confirm_writes_s3_manifest(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_backend: FakeBackend,
 ) -> None:
     from acp.mechanism.stages import low_confirm as lc
 
     s2_manifest = _s2_manifest_with_ts(tmp_path, monkeypatch)
+    fake_backend.set_result("frequency", _frequency_result(log_path=tmp_path / "freq.log"))
     payload = lc.run_low_confirm(
         from_manifest=s2_manifest,
         output_dir=tmp_path / "low",
         select=["ts_guess_001"],
         run_irc=False,
-        refinement_provider=_FakeRefinementProvider(),
     )
 
     assert payload["schema_version"] == "s3_lowconfirm_v1"
@@ -431,18 +460,93 @@ def test_run_low_confirm_writes_s3_manifest(
     assert (tmp_path / "low" / "RESULT" / "mechanism" / "optimized" / "ts_guess_001.xyz").is_file()
 
 
+def test_lowconfirm_via_batchengine(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_backend: FakeBackend,
+) -> None:
+    s2_manifest = _s2_manifest_with_ts(tmp_path, monkeypatch)
+    fake_backend.set_result("frequency", _frequency_result(log_path=tmp_path / "freq.log"))
+
+    from acp.mechanism.stages import low_confirm as lc
+
+    payload = lc.run_low_confirm(
+        from_manifest=s2_manifest,
+        output_dir=tmp_path / "low",
+        select=["ts_guess_001"],
+        run_irc=False,
+    )
+
+    batch_manifest = json.loads(
+        (tmp_path / "low" / "RESULT" / "mechanism" / "batch_calculation_manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert batch_manifest["profile"] == "opt_freq"
+    row = payload["candidates"][0]
+    assert row["status"] == "confirmed"
+    assert row["frequency"]["n_imaginary"] == 1
+    assert row["frequency"]["imaginary_frequency_cm1"] == -1000.0
+    assert payload["gates"]["G3"] == "PASS"
+
+
+def test_lowconfirm_engine_error_propagates(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from acp.calculations.batch import BatchOptimizeEngine
+    from acp.mechanism.stages import low_confirm as lc
+
+    s2_manifest = _s2_manifest_with_ts(tmp_path, monkeypatch)
+
+    class _RaisingBatchEngine(BatchOptimizeEngine):
+        def run(
+            self,
+            items: list[BatchStructureItem],
+            *,
+            profile: str,
+            charge: int = 0,
+            multiplicity: int = 1,
+            workflow: str = "BatchOptimize",
+            methods: BatchMethodOptions | None = None,
+        ) -> BatchRunOutcome:
+            del items, profile, charge, multiplicity, workflow, methods
+            raise RuntimeError("batch engine exploded")
+
+    monkeypatch.setattr(lc, "BatchOptimizeEngine", _RaisingBatchEngine)
+    with pytest.raises(RuntimeError, match="batch engine exploded"):
+        lc.run_low_confirm(
+            from_manifest=s2_manifest,
+            output_dir=tmp_path / "low",
+            select=["ts_guess_001"],
+            run_irc=False,
+        )
+
+    payload = json.loads(
+        (tmp_path / "low" / "RESULT" / "mechanism" / "s3_lowconfirm_manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert payload["status"] == "failed"
+    assert payload["errors"] == ["batch engine exploded"]
+    assert payload["candidates"][0]["status"] == "failed"
+    assert payload["gates"]["G3"] == "FAIL"
+
+
 def test_run_low_confirm_with_irc_block(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_backend: FakeBackend,
 ) -> None:
     from acp.mechanism.stages import low_confirm as lc
 
     s2_manifest = _s2_manifest_with_ts(tmp_path, monkeypatch)
+    fake_backend.set_result("frequency", _frequency_result(log_path=tmp_path / "freq.log"))
     payload = lc.run_low_confirm(
         from_manifest=s2_manifest,
         output_dir=tmp_path / "low",
         select=["ts_guess_001"],
         run_irc=True,
-        refinement_provider=_FakeRefinementProvider(),
         endpoint_provider=_FakeEndpointProvider(),
     )
     assert payload["irc"]["complete"] is True
@@ -450,18 +554,32 @@ def test_run_low_confirm_with_irc_block(
 
 
 def test_run_high_confirm_writes_s4_and_mechanism_profile(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_backend: FakeBackend,
 ) -> None:
     from acp.mechanism.stages import high_confirm as hc
     from acp.mechanism.stages import low_confirm as lc
 
     s2_manifest = _s2_manifest_with_ts(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        "acp.calculations.primitives.thermochemistry.run_shermo",
+        lambda **_kwargs: {"g_sum": -76.51},
+    )
+    fake_backend.set_results(
+        "frequency",
+        [
+            _frequency_result(log_path=tmp_path / "low_ts_freq.log"),
+            _frequency_result(imaginary=False, log_path=tmp_path / "low_int_freq.log"),
+            _frequency_result(log_path=tmp_path / "high_ts_freq.log"),
+            _frequency_result(imaginary=False, log_path=tmp_path / "high_int_freq.log"),
+        ],
+    )
     low_payload = lc.run_low_confirm(
         from_manifest=s2_manifest,
         output_dir=tmp_path / "low",
         select=["ts_guess_001", "int_guess_001"],
         run_irc=False,
-        refinement_provider=_FakeRefinementProvider(),
     )
     s3_manifest = tmp_path / "low" / "RESULT" / "mechanism" / "s3_lowconfirm_manifest.json"
     assert low_payload["gates"]["G3"] == "PASS"
@@ -470,13 +588,15 @@ def test_run_high_confirm_writes_s4_and_mechanism_profile(
         from_manifest=s3_manifest,
         output_dir=tmp_path / "high",
         select=["ts_guess_001", "int_guess_001"],
-        refinement_provider=_FakeRefinementProvider(energy=-76.8),
+        run_irc=True,
+        endpoint_provider=_FakeEndpointProvider(),
     )
 
     result_dir = tmp_path / "high" / "RESULT" / "mechanism"
     assert payload["schema_version"] == "s4_highconfirm_v1"
     assert payload["workflow"] == "Highconfirm"
     assert payload["s3_s4_consistency"] == []
+    assert payload["irc"]["complete"] is True
     profile = json.loads((result_dir / "mechanism_profile.json").read_text(encoding="utf-8"))
     assert profile["transition_states"][0]["id"] == "ts_guess_001"
     assert profile["transition_states"][0]["imaginary_frequency_cm1"] == -1000.0
@@ -485,18 +605,20 @@ def test_run_high_confirm_writes_s4_and_mechanism_profile(
 
 
 def test_high_confirm_refuses_unconfirmed_s3_candidate(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_backend: FakeBackend,
 ) -> None:
     from acp.mechanism.stages import high_confirm as hc
     from acp.mechanism.stages import low_confirm as lc
 
     s2_manifest = _s2_manifest_with_ts(tmp_path, monkeypatch)
+    fake_backend.set_result("frequency", _frequency_result(log_path=tmp_path / "freq.log"))
     lc.run_low_confirm(
         from_manifest=s2_manifest,
         output_dir=tmp_path / "low",
         select=["ts_guess_001"],
         run_irc=False,
-        refinement_provider=_FakeRefinementProvider(),
     )
     s3_path = tmp_path / "low" / "RESULT" / "mechanism" / "s3_lowconfirm_manifest.json"
     s3_payload = json.loads(s3_path.read_text(encoding="utf-8"))
@@ -508,31 +630,59 @@ def test_high_confirm_refuses_unconfirmed_s3_candidate(
             from_manifest=s3_path,
             output_dir=tmp_path / "high",
             select=["ts_guess_001"],
-            refinement_provider=_FakeRefinementProvider(),
         )
 
 
 def test_high_confirm_rejects_s3_s4_hessian_identity_mismatch(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_backend: FakeBackend,
 ) -> None:
     from acp.mechanism.stages import high_confirm as hc
     from acp.mechanism.stages import low_confirm as lc
 
     s2_manifest = _s2_manifest_with_ts(tmp_path, monkeypatch)
+    fake_backend.set_result("frequency", _frequency_result(log_path=tmp_path / "s3_freq.log"))
     lc.run_low_confirm(
         from_manifest=s2_manifest,
         output_dir=tmp_path / "low",
         select=["ts_guess_001"],
         run_irc=False,
-        refinement_provider=_FakeRefinementProvider(imaginary=True),
     )
     s3_path = tmp_path / "low" / "RESULT" / "mechanism" / "s3_lowconfirm_manifest.json"
 
+    class _MismatchBatchEngine(BatchOptimizeEngine):
+        def run(
+            self,
+            items: list[BatchStructureItem],
+            *,
+            profile: str,
+            charge: int = 0,
+            multiplicity: int = 1,
+            workflow: str = "BatchOptimize",
+            methods: BatchMethodOptions | None = None,
+        ) -> BatchRunOutcome:
+            del methods
+            records: list[BatchCalculationItem] = []
+            for item in items:
+                record = BatchCalculationItem.from_item(item, charge, multiplicity)
+                record.status = "completed"
+                record.frequency = {"status": "completed", "frequencies": [100.0, 200.0]}
+                record.single_point = {"status": "completed", "energy_hartree": -76.8}
+                record.thermochemistry = {"gibbs_hartree": -76.81}
+                records.append(record)
+            manifest = BatchCalculationManifest(
+                profile=profile,
+                items=records,
+                workflow=workflow,
+            )
+            return BatchRunOutcome(profile=profile, manifest=manifest)
+
+    monkeypatch.setattr(hc, "BatchOptimizeEngine", _MismatchBatchEngine)
     payload = hc.run_high_confirm(
         from_manifest=s3_path,
         output_dir=tmp_path / "high",
         select=["ts_guess_001"],
-        refinement_provider=_FakeRefinementProvider(imaginary=False),
     )
 
     assert payload["s3_s4_consistency"] == [

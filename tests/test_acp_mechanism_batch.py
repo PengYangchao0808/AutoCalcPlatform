@@ -13,8 +13,11 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import numpy as np
 import pytest
 
+from acp.backends.base import QCResult
+from acp.calculations.batch import BatchStructureItem as CalculationBatchStructureItem
 from acp.mechanism.batch_confirm import BATCH_MANIFEST_NAME, BatchConfirmEngine
 from acp.mechanism.batch_models import (
     BatchCalculationManifest,
@@ -31,8 +34,24 @@ from acp.mechanism.batch_models import (
 )
 from acp.mechanism.providers.contracts import RefinementAttempt, RefinementManifest
 from acp.mechanism.stages.confirm import HighConfirmProfile, LowConfirmProfile
+from tests.conftest import FakeBackend
 
 WATER_XYZ = "3\nwater\nO 0.0 0.0 0.0\nH 0.9 0.0 0.0\nH -0.3 0.9 0.0\n"
+
+
+def _frequency_result(*, log_path: Path | None = None) -> QCResult:
+    if log_path is not None:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text("fake frequency output\n", encoding="utf-8")
+    return QCResult(
+        success=True,
+        energy=-76.5,
+        coordinates=np.array([[0.0, 0.0, 0.0], [0.9, 0.0, 0.0], [-0.3, 0.9, 0.0]]),
+        symbols=["O", "H", "H"],
+        frequencies=[-1000.0, 100.0, 200.0],
+        has_frequencies=True,
+        freq_log_file=log_path,
+    )
 
 
 def _tagged_xyz(tag: str, candidate: str = "") -> str:
@@ -50,7 +69,7 @@ class _FakeRefinementProvider:
         self.seen_requests: list[list[str]] = []
 
     def refine(self, requests, fidelity) -> RefinementManifest:
-        from acp.mechanism.models import StationaryPoint, TsIdentity
+        from acp.mechanism.models import ArtifactRef, StationaryPoint, TsIdentity
 
         self.seen_requests.append([request.id for request in requests])
         attempts = []
@@ -81,7 +100,7 @@ class _FakeRefinementProvider:
                 point_id=request.id,
                 role=request.role,
                 kind=request.kind,
-                geometry=SimpleNamespace(path=str(canonical_copy), sha256="", kind="geometry"),
+                geometry=ArtifactRef(path=str(canonical_copy), sha256="", kind="geometry"),
                 charge=request.charge,
                 multiplicity=request.multiplicity,
                 energy_hartree=self.energy,
@@ -126,6 +145,12 @@ def _item(
         source_type="upload",
         source_ref="test",
     )
+
+
+def _calculation_item(
+    item_id: str, tag: str, candidate: str = "", xyz: str | None = None
+) -> CalculationBatchStructureItem:
+    return CalculationBatchStructureItem.from_dict(_item(item_id, tag, candidate, xyz).to_dict())
 
 
 # --- TAG parsing (§4) -------------------------------------------------------
@@ -225,9 +250,7 @@ def test_batch_engine_runs_mixed_ts_int_batch(tmp_path: Path) -> None:
     assert products["batch_item_001"]["kind"] == "structure"
     assert products["batch_item_002"]["kind"] == "structure"
 
-    summary = json.loads(
-        (tmp_path / "RESULT" / "result_summary.json").read_text(encoding="utf-8")
-    )
+    summary = json.loads((tmp_path / "RESULT" / "result_summary.json").read_text(encoding="utf-8"))
     assert len(summary["products"]) == 2
     assert all(product["role"] == "final_stable_structure" for product in summary["products"])
 
@@ -264,8 +287,10 @@ def test_batch_engine_resume_skips_completed_items(tmp_path: Path) -> None:
         profile=LowConfirmProfile(run_irc=False),
         refinement_provider=provider2,
     )
-    second = engine.run(items, charge=0, multiplicity=1) if False else engine2.run(
-        items, charge=0, multiplicity=1
+    second = (
+        engine.run(items, charge=0, multiplicity=1)
+        if False
+        else engine2.run(items, charge=0, multiplicity=1)
     )
     assert provider2.seen_requests == []  # everything carried, nothing re-executed
     assert second.manifest.counts["skipped"] == 2
@@ -363,9 +388,7 @@ def _write_s2_job(tmp_path: Path, confirmed: bool = True) -> Path:
     frames_dir.mkdir(parents=True, exist_ok=True)
     (frames_dir / "frame_001.xyz").write_text(WATER_XYZ, encoding="utf-8")
     (frames_dir / "frame_002.xyz").write_text(WATER_XYZ, encoding="utf-8")
-    (mechanism_dir / "s2_path_manifest.json").write_text(
-        json.dumps(s2_payload), encoding="utf-8"
-    )
+    (mechanism_dir / "s2_path_manifest.json").write_text(json.dumps(s2_payload), encoding="utf-8")
     structures_dir = tmp_path / "RESULT" / "structures" / "s2_candidates"
     structures_dir.mkdir(parents=True, exist_ok=True)
     (structures_dir / "user_ts.xyz").write_text(_tagged_xyz("TS", "user_ts"), encoding="utf-8")
@@ -481,14 +504,17 @@ def test_load_batch_request_rejects_empty(tmp_path: Path) -> None:
 # --- stage integration (§13) ------------------------------------------------
 
 
-def test_run_low_confirm_direct_structures(tmp_path: Path) -> None:
+def test_run_low_confirm_direct_structures(tmp_path: Path, fake_backend: FakeBackend) -> None:
     from acp.mechanism.stages import run_low_confirm
 
+    fake_backend.set_result("frequency", _frequency_result())
     payload = run_low_confirm(
         output_dir=tmp_path / "low",
-        structures=[_item("item_001", "TS", "up_ts"), _item("item_002", "INT", "up_int")],
+        structures=[
+            _calculation_item("item_001", "TS", "up_ts"),
+            _calculation_item("item_002", "INT", "up_int"),
+        ],
         run_irc=False,
-        refinement_provider=_FakeRefinementProvider(),
     )
     assert payload["schema_version"] == "s3_lowconfirm_v1"
     assert payload["source"]["kind"] == "batch_structures"
@@ -499,21 +525,34 @@ def test_run_low_confirm_direct_structures(tmp_path: Path) -> None:
     assert ts_row["id"] == "up_ts"
 
 
-def test_run_high_confirm_from_s3_manifest_unchanged_contract(tmp_path: Path) -> None:
+def test_run_high_confirm_from_s3_manifest_unchanged_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    fake_backend: FakeBackend,
+) -> None:
     from acp.mechanism.stages import run_high_confirm, run_low_confirm
 
+    monkeypatch.setattr(
+        "acp.calculations.primitives.thermochemistry.run_shermo",
+        lambda **_kwargs: {"g_sum": -76.51},
+    )
+    fake_backend.set_results(
+        "frequency",
+        [
+            _frequency_result(log_path=tmp_path / "low_freq.log"),
+            _frequency_result(log_path=tmp_path / "high_freq.log"),
+        ],
+    )
     low = run_low_confirm(
         output_dir=tmp_path / "low",
-        structures=[_item("item_001", "TS", "ts_1")],
+        structures=[_calculation_item("item_001", "TS", "ts_1")],
         run_irc=False,
-        refinement_provider=_FakeRefinementProvider(),
     )
     assert low["gates"]["G3"] == "PASS"
     s3_manifest = tmp_path / "low" / "RESULT" / "mechanism" / "s3_lowconfirm_manifest.json"
     high = run_high_confirm(
         from_manifest=s3_manifest,
         output_dir=tmp_path / "high",
-        refinement_provider=_FakeRefinementProvider(energy=-76.8),
     )
     assert high["schema_version"] == "s4_highconfirm_v1"
     assert high["gates"]["G5"] == "PASS"
@@ -527,15 +566,17 @@ def test_run_high_confirm_from_s3_manifest_unchanged_contract(tmp_path: Path) ->
     assert profile["transition_states"][0]["id"] == "ts_1"
 
 
-def test_run_low_confirm_uses_confirmed_s2_candidates_only(tmp_path: Path) -> None:
+def test_run_low_confirm_uses_confirmed_s2_candidates_only(
+    tmp_path: Path, fake_backend: FakeBackend
+) -> None:
     from acp.mechanism.stages import run_low_confirm
 
     manifest = _write_s2_job(tmp_path)
+    fake_backend.set_result("frequency", _frequency_result())
     payload = run_low_confirm(
         from_manifest=manifest,
         output_dir=tmp_path / "low",
         run_irc=False,
-        refinement_provider=_FakeRefinementProvider(),
     )
     ids = [row["id"] for row in payload["candidates"]]
     assert ids == ["user_ts"]  # unselected recommendations never enter the batch
@@ -549,7 +590,6 @@ def test_run_low_confirm_pending_review_still_gated(tmp_path: Path) -> None:
         run_low_confirm(
             from_manifest=manifest,
             output_dir=tmp_path / "low",
-            refinement_provider=_FakeRefinementProvider(),
         )
 
 
@@ -584,9 +624,7 @@ def test_pes_search_registers_structure_products(tmp_path: Path) -> None:
         (tmp_path / "pes" / "RESULT" / "result_manifest.json").read_text(encoding="utf-8")
     )
     structure_products = [
-        product
-        for product in result_manifest["products"]
-        if product["kind"] == "structure"
+        product for product in result_manifest["products"] if product["kind"] == "structure"
     ]
     assert structure_products, "PESsearch candidates must register as structure products"
     assert all(product["id"].startswith("s2_candidate_") for product in structure_products)

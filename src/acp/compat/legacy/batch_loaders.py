@@ -5,22 +5,21 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from acp.calculations.contracts import StructureRole
-from acp.compat.legacy.manifests import (
-    read_s2_candidate_manifest,
-    read_s2_path_manifest,
-    read_s3_lowconfirm_manifest,
-)
-
-from ._items import BatchStructureItem, JsonObject
-from ._tag import build_tag_title, normalize_tag
-from ._xyz import (
+from acp.calculations.batch._items import BatchStructureItem, JsonObject
+from acp.calculations.batch._tag import build_tag_title, normalize_tag
+from acp.calculations.batch._xyz import (
     _assign_ids,
     _items_from_text,
     _mapping,
     _rewrite_comment,
     _rows,
     _text,
+)
+from acp.calculations.contracts import StructureRole
+from acp.compat.legacy.manifests import (
+    read_s2_candidate_manifest,
+    read_s2_path_manifest,
+    read_s3_lowconfirm_manifest,
 )
 
 
