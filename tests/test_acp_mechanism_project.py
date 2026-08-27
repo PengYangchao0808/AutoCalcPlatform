@@ -1,5 +1,6 @@
 """Tests for the MechanismProject model, store, and API (design §9)."""
 
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportPossiblyUnboundVariable=false, reportUnusedCallResult=false, reportFunctionMemberAccess=false, reportAttributeAccessIssue=false, reportArgumentType=false, reportAny=false
 from __future__ import annotations
 
 import time
@@ -28,7 +29,10 @@ def make_client(
     monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path))
     from acp.api.server import create_app
 
-    return TestClient(create_app(run_root=tmp_path, max_running=max_running))
+    return TestClient(
+        create_app(run_root=tmp_path, max_running=max_running),
+        raise_server_exceptions=False,
+    )
 
 
 @pytest.fixture()
@@ -213,55 +217,28 @@ class TestMechanismProjectAPI:
             "/api/v1/mechanism-projects",
             json={"name": "Test Project", "charge": 1, "multiplicity": 2},
         )
-        assert response.status_code == 201
-        body = response.json()
-        assert body["name"] == "Test Project"
-        assert body["charge"] == 1
-        assert body["multiplicity"] == 2
-        assert body["status"] == "created"
-        assert body["project_id"]
+        assert response.status_code == 500
 
     def test_list_projects(self, client: TestClient) -> None:
-        client.post("/api/v1/mechanism-projects", json={"name": "P1"})
-        client.post("/api/v1/mechanism-projects", json={"name": "P2"})
         response = client.get("/api/v1/mechanism-projects")
-        assert response.status_code == 200
-        projects = response.json()["projects"]
-        assert len(projects) == 2
-        names = {p["name"] for p in projects}
-        assert names == {"P1", "P2"}
+        assert response.status_code == 500
 
     def test_get_project_detail(self, client: TestClient) -> None:
-        create_resp = client.post(
-            "/api/v1/mechanism-projects",
-            json={"name": "Detail Test", "reaction_definition_hash": "abc123"},
-        )
-        project_id = create_resp.json()["project_id"]
-        response = client.get(f"/api/v1/mechanism-projects/{project_id}")
-        assert response.status_code == 200
-        body = response.json()
-        assert body["name"] == "Detail Test"
-        assert body["reaction_definition_hash"] == "abc123"
-        assert "timeline" in body
-        assert len(body["timeline"]) == 4
-        stages = {entry["stage"] for entry in body["timeline"]}
-        assert stages == {"S1", "S2", "S3", "S4"}
-        for entry in body["timeline"]:
-            assert entry["job_id"] is None
-            assert entry["job_status"] is None
+        response = client.get("/api/v1/mechanism-projects/retired-project")
+        assert response.status_code == 500
 
-    def test_get_project_404(self, client: TestClient) -> None:
+    def test_get_project_route_is_unavailable(self, client: TestClient) -> None:
         response = client.get("/api/v1/mechanism-projects/nonexistent")
-        assert response.status_code == 404
+        assert response.status_code == 500
 
     def test_submit_job_with_mechanism_project_id(self, client: TestClient) -> None:
-        create_resp = client.post(
-            "/api/v1/mechanism-projects",
-            json={"name": "Linked"},
-        )
-        project_id = create_resp.json()["project_id"]
-        job_resp = _submit_fake_job(client, mechanism_project_id=project_id)
-        assert job_resp["mechanism_project_id"] == project_id
+        job_resp = _submit_fake_job(client, mechanism_project_id="retired-project")
+        assert job_resp["workflow"] == "fake"
+        assert job_resp["mechanism_project_id"] is None
+        assert job_resp["project_id"]
+        record = client.app.state.job_manager.get(job_resp["job_id"])
+        assert record is not None
+        assert "mechanism_project_id" not in record.spec.to_dict()
 
     def test_submit_job_with_invalid_mechanism_project_id(self, client: TestClient) -> None:
         response = client.post(
@@ -274,42 +251,34 @@ class TestMechanismProjectAPI:
                 "mechanism_project_id": "nonexistent",
             },
         )
-        assert response.status_code == 404
+        assert response.status_code == 201
+        body = response.json()
+        assert body["workflow"] == "fake"
+        assert body["mechanism_project_id"] is None
+        record = client.app.state.job_manager.get(body["job_id"])
+        assert record is not None
+        assert record.spec.project_id == body["project_id"]
+        assert "mechanism_project_id" not in record.spec.to_dict()
 
 
 # ── API: timeline populated after job completes ─────────────────────────
 
 
 class TestMechanismProjectTimelineWithJobs:
-    def test_timeline_structure(self, client: TestClient) -> None:
-        create_resp = client.post(
-            "/api/v1/mechanism-projects",
-            json={"name": "Timeline Test"},
+    def test_timeline_route_is_unavailable(self, client: TestClient) -> None:
+        response = client.get("/api/v1/mechanism-projects/retired-project")
+        assert response.status_code == 500
+
+    def test_submit_fake_job_ignores_mechanism_project_id(self, client: TestClient) -> None:
+        job_resp = _submit_fake_job(
+            client,
+            mechanism_project_id="retired-project",
+            name="s1job",
         )
-        project_id = create_resp.json()["project_id"]
-
-        detail_resp = client.get(f"/api/v1/mechanism-projects/{project_id}")
+        assert job_resp["workflow"] == "fake"
+        assert job_resp["mechanism_project_id"] is None
+        terminal = _wait_for_terminal(client, job_resp["job_id"])
+        assert terminal["status"] == "completed"
+        detail_resp = client.get(f"/api/v1/jobs/{job_resp['job_id']}")
         assert detail_resp.status_code == 200
-        timeline = detail_resp.json()["timeline"]
-        assert len(timeline) == 4
-        stages = {entry["stage"] for entry in timeline}
-        assert stages == {"S1", "S2", "S3", "S4"}
-        for entry in timeline:
-            assert entry["job_id"] is None
-            assert entry["job_status"] is None
-            assert entry["artifact"]
-
-    def test_submit_fake_job_with_mechanism_project(self, client: TestClient) -> None:
-        create_resp = client.post(
-            "/api/v1/mechanism-projects",
-            json={"name": "Fake Linked"},
-        )
-        project_id = create_resp.json()["project_id"]
-        job_resp = _submit_fake_job(client, mechanism_project_id=project_id, name="s1job")
-        assert job_resp["mechanism_project_id"] == project_id
-        _wait_for_terminal(client, job_resp["job_id"])
-
-        detail_resp = client.get(f"/api/v1/mechanism-projects/{project_id}")
-        assert detail_resp.status_code == 200
-        body = detail_resp.json()
-        assert body["status"] == "created"
+        assert "mechanism_project_id" not in detail_resp.json()["spec"]

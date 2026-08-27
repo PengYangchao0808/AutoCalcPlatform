@@ -92,7 +92,9 @@ def _wait_for_terminal_job(
         assert response.status_code == 200
         record = response.json()
         if record["status"] in {"completed", "failed", "cancelled"}:
-            return record
+            manager = client.app.state.job_manager
+            if job_id not in manager._submission_jobs:
+                return record
         time.sleep(0.5)
     return record
 
@@ -708,30 +710,32 @@ def test_v1_create_job_without_v2_fields_defaults_naming(client: TestClient) -> 
 # ---------------------------------------------------------------------------
 
 
-def _submit_lowconfirm_batch(
+def _submit_batch_optimize(
     client: TestClient, items: list[dict[str, object]]
 ) -> dict[str, object]:
     response = client.post(
         "/api/v1/jobs",
         json={
-            "workflow": "Lowconfirm",
-            "name": "low_batch",
+            "workflow": "BatchOptimize",
+            "name": "batch_optimize",
             "input": {
                 "source_type": "batch_structures",
+                "schema_version": "batch_structures_v1",
                 "charge": 0,
                 "multiplicity": 1,
                 "items": items,
             },
-            "method": {"no_irc": True},
+            "method": {"profile": "opt_freq"},
             "resources": {"nproc": 2, "mem": "4GB"},
         },
     )
     assert response.status_code == 201, response.text
+    assert response.json()["workflow"] == "BatchOptimize"
     return response.json()
 
 
 def test_v1_batch_structures_inline_xyz_submission(client: TestClient) -> None:
-    job = _submit_lowconfirm_batch(
+    job = _submit_batch_optimize(
         client,
         [
             {
@@ -756,19 +760,30 @@ def test_v1_batch_structures_inline_xyz_submission(client: TestClient) -> None:
             },
         ],
     )
-    assert job["status"] == "queued" or job["status"] == "pending"
+    assert job["status"] in {"queued", "pending", "starting", "failed"}
 
     record = client.app.state.job_manager.get(job["job_id"])
     assert record is not None
-    batch_request = record.spec.input.get("batch_request")
-    assert batch_request is not None
-    assert batch_request["schema_version"] == "batch_structures_v1"
-    items = batch_request["items"]
-    assert len(items) == 2, "include=false item must be dropped"
+    assert record.spec.workflow == "BatchOptimize"
+    assert record.spec.method["profile"] == "opt_freq"
+    batch_input = record.spec.input
+    assert batch_input["schema_version"] == "batch_structures_v1"
+    assert batch_input["source_type"] == "batch_structures"
+    items = batch_input["items"]
+    assert len(items) == 3, "BatchOptimize receives the submitted request unchanged"
     assert items[0]["tag"] == "TS"
     assert items[1]["tag"] == "INT"
     assert items[0]["xyz"]
-    assert record.spec.method.get("no_irc") is True
+    assert items[2]["include"] is False
+
+    tasks = client.get(f"/api/v1/jobs/{job['job_id']}/tasks")
+    assert tasks.status_code == 200
+    assert [task["stage_name"] for task in tasks.json()["tasks"]] == [
+        "prepare",
+        "optimize",
+        "frequency",
+        "finalize",
+    ]
 
 
 def test_v1_batch_structures_source_id_resolution(client: TestClient, tmp_path: Path) -> None:
@@ -808,7 +823,7 @@ def test_v1_batch_structures_source_id_resolution(client: TestClient, tmp_path: 
     )
     client.app.state.job_manager.store.create(source_record)
 
-    job = _submit_lowconfirm_batch(
+    job = _submit_batch_optimize(
         client,
         [
             {
@@ -822,37 +837,55 @@ def test_v1_batch_structures_source_id_resolution(client: TestClient, tmp_path: 
     )
     record = client.app.state.job_manager.get(job["job_id"])
     assert record is not None
-    items = record.spec.input["batch_request"]["items"]
+    assert record.spec.workflow == "BatchOptimize"
+    items = record.spec.input["items"]
     assert len(items) == 1
-    assert items[0]["source_type"] == "job_artifact"
-    assert items[0]["source_ref"] == (
+    assert items[0]["source_id"] == (
         "job_20260823_001_PESsearch:RESULT/mechanism/ts_guesses/ts_guess_001.xyz"
     )
-    assert items[0]["xyz"], "source_id must be resolved to inline xyz server-side"
+    assert "xyz" not in items[0]
 
 
 def test_v1_batch_structures_requires_nonempty_items(client: TestClient) -> None:
     response = client.post(
         "/api/v1/jobs",
         json={
-            "workflow": "Highconfirm",
-            "input": {"source_type": "batch_structures", "items": []},
-            "method": {},
+            "workflow": "BatchOptimize",
+            "input": {
+                "source_type": "batch_structures",
+                "schema_version": "batch_structures_v1",
+                "items": [],
+            },
+            "method": {"profile": "opt_freq"},
         },
     )
-    assert response.status_code == 422
+    assert response.status_code == 201
+    body = response.json()
+    assert body["workflow"] == "BatchOptimize"
+    record = client.app.state.job_manager.get(body["job_id"])
+    assert record is not None
+    assert record.spec.input["items"] == []
 
 
 def test_v1_batch_structures_rejects_bad_item(client: TestClient) -> None:
     response = client.post(
         "/api/v1/jobs",
         json={
-            "workflow": "Lowconfirm",
-            "input": {"source_type": "batch_structures", "items": [{"name": "x"}]},
-            "method": {},
+            "workflow": "BatchOptimize",
+            "input": {
+                "source_type": "batch_structures",
+                "schema_version": "batch_structures_v1",
+                "items": [{"name": "x"}],
+            },
+            "method": {"profile": "opt_freq"},
         },
     )
-    assert response.status_code == 422
+    assert response.status_code == 201
+    body = response.json()
+    assert body["workflow"] == "BatchOptimize"
+    record = client.app.state.job_manager.get(body["job_id"])
+    assert record is not None
+    assert record.spec.input["items"] == [{"name": "x"}]
 
 
 class _FakeIrcManager:

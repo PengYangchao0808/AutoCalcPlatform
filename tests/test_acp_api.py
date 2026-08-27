@@ -76,19 +76,20 @@ def test_backends_use_real_capability_matrix(client: TestClient) -> None:
 
 def test_workflows_and_protocols(client: TestClient) -> None:
     wf = client.get("/api/workflows").json()
-    assert {"fake", "Confsearch", "PESsearch", "Lowconfirm", "Highconfirm"} <= {
-        w["name"] for w in wf["workflows"]
+    names = {w["name"] for w in wf["workflows"]}
+    active = {
+        "singlepoint",
+        "optimize",
+        "frequency",
+        "scan",
+        "irc",
+        "xtb_optimize",
+        "nmr",
+        "Confsearch",
+        "PESsearch",
+        "BatchOptimize",
     }
-    names = [w["name"] for w in wf["workflows"]]
-    # Retired workflows (conformer/benchmark + the Confsearch-v1.0
-    # retirements) must NOT appear; NMR stays active (P1a).
-    assert "conformer" not in names
-    assert "benchmark" not in names
-    assert "ensemble" not in names
-    assert "energy" not in names
-    assert "xtbmd_censo_energy" not in names
-    assert "mechanism" not in names
-    assert "nmr" in names
+    assert names == active | {"fake"}
     pr = client.get("/api/protocols").json()
     assert isinstance(pr["protocols"], list)
 
@@ -110,7 +111,8 @@ def test_workflows_are_driven_by_registry(client: TestClient) -> None:
     by_name = {w["name"]: w for w in wf["workflows"]}
     assert "Confsearch" in by_name
     assert by_name["Confsearch"]["label"] == "Conformer Search"
-    assert "Highconfirm" in by_name
+    assert "BatchOptimize" in by_name
+    assert by_name["BatchOptimize"]["label"] == "Batch Optimization"
 
 
 def test_frontend_index_served(client: TestClient) -> None:
