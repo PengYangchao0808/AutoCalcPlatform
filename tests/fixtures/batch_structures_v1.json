@@ -1,0 +1,15 @@
+{
+  "items": [
+    {
+      "id": "candidate_001",
+      "role": "transition_state",
+      "geometry": "input/ts_001.xyz"
+    },
+    {
+      "id": "int_001",
+      "role": "minimum",
+      "geometry": "input/int_001.xyz"
+    }
+  ],
+  "profile": "opt_freq"
+}

@@ -1,0 +1,7 @@
+COMMAND: python -m pytest tests/test_batch_optimize.py tests/test_acp_mechanism_batch.py -q
+KEY OUTPUT: ..........................                                               [100%]
+            26 passed in 2.23s
+            ruff check: All checks passed!
+            ruff format --check: 9 files already formatted
+            compat_no_writers: ALLOWED: / BLOCKING:
+EXIT CODE: 0

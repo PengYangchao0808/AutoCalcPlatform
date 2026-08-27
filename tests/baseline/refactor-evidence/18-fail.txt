@@ -1,0 +1,4 @@
+COMMAND: python -c 'from acp.calculations.batch.models import BatchCalculationManifest, BatchStructureItem, BatchCalculationItem, load_batch_request, load_items_from_result_manifest, load_items_from_s2_path_manifest; print("PUBLIC_API_OK")'
+KEY OUTPUT: PUBLIC_API_OK
+            tests/test_acp_mechanism_batch.py: 24 passed in 1.62s
+EXIT CODE: 0
