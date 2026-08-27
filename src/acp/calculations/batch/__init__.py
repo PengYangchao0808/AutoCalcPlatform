@@ -31,6 +31,11 @@ from .models import (
     tag_for_kind,
 )
 from .options import BatchMethodOptions
+from .singlepoint import (
+    BatchSinglePointExecutor,
+    BatchSinglePointFrameResult,
+    BatchSinglePointResult,
+)
 
 _COMPAT_LOADER_NAMES = (
     "load_items_from_s2_" + "candidate_manifest",
@@ -56,6 +61,9 @@ __all__ = [
     "BATCH_STRUCTURES_SUBDIR",
     "BatchOptimizeEngine",
     "BatchRunOutcome",
+    "BatchSinglePointExecutor",
+    "BatchSinglePointFrameResult",
+    "BatchSinglePointResult",
     "BatchMethodOptions",
     "TERMINAL_ITEM_STATUSES",
     "BatchCalculationItem",
