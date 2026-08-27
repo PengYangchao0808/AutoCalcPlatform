@@ -1,0 +1,9 @@
+COMMAND: Q3 drill — cp tests/test_batch_optimize.py /tmp/acp-wave20-test.bak; change the expected mismatch exception; run the target; mv the backup back; rerun the target.
+KEY OUTPUT:
+Q3 INJECT: changed expected mismatch exception to ValueError
+1 failed (CheckpointMismatchError reached the mutated ValueError expectation)
+Q3 RESTORE: restored test source
+.                                                                        [100%]
+1 passed in 0.44s
+Q3 STATUS: injected=1 restored=0
+EXIT CODE: 0

@@ -26,36 +26,43 @@ parsed by ``structure_sources.py``.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import shutil
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Final
 
-from acp.backends.base import QCResult
 from acp.calculations.batch._items import (
     BatchCalculationItem,
     BatchStructureItem,
     item_cache_key,
 )
+from acp.calculations.batch._items import (
+    JsonValue as BatchJsonValue,
+)
 from acp.calculations.batch._manifest import BatchCalculationManifest
 from acp.calculations.batch._tag import build_tag_title, parse_tag_comment
+from acp.calculations.checkpoint import load_checkpoint, write_checkpoint
 from acp.calculations.contracts import (
     CalculationRequest,
     CalculationResult,
+    Checkpoint,
     JsonValue,
-    OptimizationMode,
-    OptimizationSpec,
+    StepKind,
     StructureArtifact,
     StructureRole,
-    StepKind,
 )
 from acp.calculations.primitives.frequency import run_frequency
-from acp.calculations.primitives.optimize import FAILURE_EXIT, run_optimize
+from acp.calculations.primitives.optimize import run_optimize
 from acp.calculations.primitives.singlepoint import run_singlepoint
 from acp.calculations.primitives.thermochemistry import ThermochemistryCalculator
 from acp.storage.manifest import ProductKind, ResultManifest
+
+from .options import BatchMethodOptions
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +75,7 @@ __all__ = [
 
 BATCH_STRUCTURES_SUBDIR = "structures"
 TERMINAL_ITEM_STATUSES = frozenset({"completed", "failed", "skipped"})
+_BATCH_CHECKPOINT_METADATA_KEY: Final = "__batch__"
 
 # ── profile → ordered step kinds ─────────────────────────────────────────
 _PROFILE_STEPS: dict[str, tuple[StepKind, ...]] = {
@@ -107,6 +115,65 @@ def _rewrite_xyz_comment(xyz: str, comment: str) -> str:
     if len(lines) < count + 1:
         return xyz
     return "\n".join([lines[0], comment, *lines[2 : count + 2]]) + "\n"
+
+
+def _batch_plan_fingerprint(
+    items: list[BatchStructureItem],
+    profile: str,
+    methods: BatchMethodOptions | None = None,
+) -> str:
+    """Return a stable fingerprint for the batch profile and ordered inputs."""
+    resolved_methods = methods or BatchMethodOptions()
+    item_signature = [
+        {
+            "item_id": item.item_id,
+            "cache_key": item_cache_key(item, profile, resolved_methods.cache_key),
+        }
+        for item in items
+    ]
+    payload = json.dumps(
+        {"profile": profile, "methods": resolved_methods.cache_key, "items": item_signature},
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def _to_checkpoint_json(value: BatchJsonValue) -> JsonValue:
+    """Convert the batch model's recursive JSON alias to the checkpoint alias."""
+    if isinstance(value, Mapping):
+        return {key: _to_checkpoint_json(nested) for key, nested in value.items()}
+    if isinstance(value, list):
+        return [_to_checkpoint_json(nested) for nested in value]
+    return value
+
+
+def _to_batch_json(value: JsonValue) -> BatchJsonValue:
+    """Convert checkpoint JSON back to the batch model's recursive alias."""
+    if isinstance(value, dict):
+        return {key: _to_batch_json(nested) for key, nested in value.items()}
+    if isinstance(value, list):
+        return [_to_batch_json(nested) for nested in value]
+    return value
+
+
+def _json_coordinates(coords: Sequence[Sequence[float]] | None) -> list[JsonValue]:
+    """Build a checkpoint-compatible JSON value for coordinate rows."""
+    coordinates: list[JsonValue] = []
+    for row in coords or ():
+        values: list[JsonValue] = []
+        for value in row:
+            values.append(float(value))
+        coordinates.append(values)
+    return coordinates
+
+
+def _json_text_list(values: Sequence[str]) -> list[JsonValue]:
+    """Build a checkpoint-compatible JSON value for element symbols."""
+    result: list[JsonValue] = []
+    for value in values:
+        result.append(value)
+    return result
 
 
 # ── outcome ──────────────────────────────────────────────────────────────
@@ -178,17 +245,21 @@ class BatchOptimizeEngine:
     def __init__(
         self,
         *,
-        config: dict[str, Any] | None = None,
+        config: Mapping[str, JsonValue] | None = None,
         backend_factory: Callable[..., object] | None = None,
         work_root: Path | None = None,
         result_root: Path | None = None,
+        methods: BatchMethodOptions | None = None,
     ) -> None:
-        self._config = config
-        self._backend_factory = backend_factory
-        self._work_root = Path(work_root) if work_root is not None else Path.cwd() / "acp_calc"
-        self._result_root = (
+        self._config: Mapping[str, JsonValue] | None = config
+        self._backend_factory: Callable[..., object] | None = backend_factory
+        self._work_root: Path = (
+            Path(work_root) if work_root is not None else Path.cwd() / "acp_calc"
+        )
+        self._result_root: Path = (
             Path(result_root) if result_root is not None else self._work_root / "RESULT"
         )
+        self._active_methods: BatchMethodOptions = methods or BatchMethodOptions()
 
     @property
     def batch_root(self) -> Path:
@@ -210,6 +281,7 @@ class BatchOptimizeEngine:
         charge: int = 0,
         multiplicity: int = 1,
         workflow: str = "BatchOptimize",
+        methods: BatchMethodOptions | None = None,
     ) -> BatchRunOutcome:
         """Execute (or resume) the batch for *items*.
 
@@ -219,7 +291,8 @@ class BatchOptimizeEngine:
                 ``opt_freq_sp_thermo``.
             charge: Job-level charge default (item-level values win).
             multiplicity: Job-level multiplicity default.
-            workflow: Workflow label persisted in the batch manifest.
+            workflow: Workflow label persisted in the checkpoint and result manifest.
+            methods: Optional role-specific method and basis overrides.
 
         Returns:
             The aggregated outcome.
@@ -229,17 +302,25 @@ class BatchOptimizeEngine:
         if profile not in _PROFILE_STEPS:
             raise ValueError(f"unknown batch profile: {profile!r}")
         steps = _PROFILE_STEPS[profile]
+        resolved_methods = methods or self._active_methods
+        self._active_methods = resolved_methods
 
-        previous = self._load_previous_manifest(profile)
-        prev_by_key = previous.by_cache_key() if previous is not None else {}
+        fingerprint = _batch_plan_fingerprint(items, profile, resolved_methods)
+        runtime_dir = self._work_root / "00_RUNTIME"
+        checkpoint = load_checkpoint(runtime_dir, fingerprint)
+        previous_by_id = self._checkpoint_items(checkpoint)
+        checkpoint_items_state: dict[str, JsonValue] = (
+            dict(checkpoint.items_state) if checkpoint is not None else {}
+        )
+        attempts = checkpoint.attempts + 1 if checkpoint is not None else 0
 
         records: list[BatchCalculationItem] = []
-        to_run: list[tuple[BatchStructureItem, BatchCalculationItem]] = []
         carried: list[BatchCalculationItem] = []
+        executed_count = 0
 
-        for item in items:
+        for index, item in enumerate(items):
             record = BatchCalculationItem.from_item(item, charge, multiplicity)
-            record.cache_key = item_cache_key(item, profile)
+            record.cache_key = item_cache_key(item, profile, resolved_methods.cache_key)
 
             item_dir = self.batch_root / item.item_id
             item_dir.mkdir(parents=True, exist_ok=True)
@@ -247,10 +328,11 @@ class BatchOptimizeEngine:
             record.input_xyz = _rel_to(self.task_root, input_path)
             record.work_dir = _rel_to(self.task_root, item_dir)
 
-            prev_record = prev_by_key.get(record.cache_key)
+            prev_record = previous_by_id.get(item.item_id)
             if (
                 prev_record is not None
-                and prev_record.status == "completed"
+                and prev_record.cache_key == record.cache_key
+                and prev_record.status in {"completed", "skipped"}
                 and prev_record.optimized_xyz
             ):
                 record.status = "skipped"
@@ -261,36 +343,49 @@ class BatchOptimizeEngine:
                 carried.append(record)
                 logger.info("Batch item %s skipped (cache hit)", item.item_id)
             else:
-                to_run.append((item, record))
-            records.append(record)
+                executed_count += 1
+                try:
+                    self._process_item(item, record, steps, charge, multiplicity)
+                except Exception as exc:
+                    record.status = "failed"
+                    record.error = str(exc) or type(exc).__name__
+                    logger.warning("Batch item %s failed: %s", item.item_id, exc)
 
-        for item, record in to_run:
-            try:
-                self._process_item(item, record, steps, charge, multiplicity)
-            except Exception as exc:
-                record.status = "failed"
-                record.error = str(exc) or type(exc).__name__
-                logger.warning("Batch item %s failed: %s", item.item_id, exc)
+            records.append(record)
+            checkpoint_items_state[item.item_id] = _to_checkpoint_json(record.to_dict())
+            next_index = index + 1
+            checkpoint_items_state[_BATCH_CHECKPOINT_METADATA_KEY] = {
+                "profile": profile,
+                "next_item_index": next_index,
+                "next_item_id": items[next_index].item_id if next_index < len(items) else "",
+                "last_item_id": item.item_id,
+            }
+            write_checkpoint(
+                runtime_dir,
+                Checkpoint(
+                    task_id="batch",
+                    workflow=workflow,
+                    plan_fingerprint=fingerprint,
+                    step_states=[],
+                    items_state=checkpoint_items_state,
+                    attempts=attempts,
+                ),
+            )
 
         manifest = BatchCalculationManifest(
             profile=profile,
             items=records,
             workflow=workflow,
-            created_at=(
-                previous.created_at
-                if previous is not None and previous.created_at
-                else _utc_now_iso()
-            ),
+            created_at=_utc_now_iso(),
             updated_at=_utc_now_iso(),
         )
         self._materialize_result_products(manifest)
-        self._write_batch_manifest(manifest)
 
         logger.info(
             "Batch %s: %d items (%d executed, %d carried, %d failed)",
             profile,
             len(records),
-            len(to_run),
+            executed_count,
             len(carried),
             sum(1 for r in records if r.status == "failed"),
         )
@@ -305,8 +400,10 @@ class BatchOptimizeEngine:
         steps: tuple[StepKind, ...],
         charge: int,
         multiplicity: int,
+        methods: BatchMethodOptions | None = None,
     ) -> None:
         """Run all profile steps for one item.  Raises on failure."""
+        resolved_methods = methods or self._active_methods
         item_dir = self.batch_root / item.item_id
         input_path = item_dir / "input.xyz"
         is_ts = item.tag == "TS"
@@ -326,7 +423,13 @@ class BatchOptimizeEngine:
 
             if step_kind is StepKind.OPTIMIZE:
                 req = self._build_opt_request(
-                    input_path, is_ts, item_charge, item_multiplicity, step_dir, opt_kwargs,
+                    input_path,
+                    is_ts,
+                    item_charge,
+                    item_multiplicity,
+                    step_dir,
+                    opt_kwargs,
+                    resolved_methods,
                 )
                 current_result = run_optimize(req)
                 if current_result.status == "failed":
@@ -335,7 +438,9 @@ class BatchOptimizeEngine:
                         + "; ".join(current_result.errors)
                     )
                 if not current_symbols and current_result.coords is not None:
-                    current_symbols = self._read_symbols_from_xyz(input_path, len(current_result.coords))
+                    current_symbols = self._read_symbols_from_xyz(
+                        input_path, len(current_result.coords)
+                    )
                 if current_result.coords is not None:
                     optimized_coords = [[float(v) for v in row] for row in current_result.coords]
 
@@ -343,29 +448,44 @@ class BatchOptimizeEngine:
                 if current_result is None or current_result.coords is None:
                     raise RuntimeError(f"no optimized geometry for frequency: {item.item_id}")
                 req = self._build_freq_request(
-                    current_result, item, item_charge, item_multiplicity, step_dir, current_symbols,
+                    current_result,
+                    item,
+                    item_charge,
+                    item_multiplicity,
+                    step_dir,
+                    current_symbols,
+                    resolved_methods,
                 )
                 current_result = run_frequency(req)
                 if current_result.status == "failed":
                     raise RuntimeError(
-                        f"frequency failed for {item.item_id}: "
-                        + "; ".join(current_result.errors)
+                        f"frequency failed for {item.item_id}: " + "; ".join(current_result.errors)
                     )
                 frequency_log_path = self._extract_freq_log(current_result)
-                record.frequency = {
-                    "frequencies": current_result.frequencies,
-                    "status": "completed",
-                }
+                frequency_values: list[BatchJsonValue] = []
+                for frequency in current_result.frequencies:
+                    frequency_values.append(float(frequency))
+                record.frequency.clear()
+                record.frequency["frequencies"] = frequency_values
+                record.frequency["status"] = "completed"
                 if is_ts:
                     valid, msg = _ts_frequency_judgment(current_result.frequencies)
                     if not valid:
-                        raise RuntimeError(f"TS frequency judgment failed for {item.item_id}: {msg}")
+                        raise RuntimeError(
+                            f"TS frequency judgment failed for {item.item_id}: {msg}"
+                        )
 
             elif step_kind is StepKind.SINGLEPOINT:
                 if current_result is None or current_result.coords is None:
                     raise RuntimeError(f"no geometry for single-point: {item.item_id}")
                 req = self._build_sp_request(
-                    current_result, item, item_charge, item_multiplicity, step_dir, current_symbols,
+                    current_result,
+                    item,
+                    item_charge,
+                    item_multiplicity,
+                    step_dir,
+                    current_symbols,
+                    resolved_methods,
                 )
                 current_result = run_singlepoint(req)
                 if current_result.status == "failed":
@@ -381,9 +501,7 @@ class BatchOptimizeEngine:
 
             elif step_kind is StepKind.THERMOCHEMISTRY:
                 if frequency_log_path is None or sp_energy is None:
-                    raise RuntimeError(
-                        f"thermochemistry requires freq + sp for {item.item_id}"
-                    )
+                    raise RuntimeError(f"thermochemistry requires freq + sp for {item.item_id}")
                 current_result = ThermochemistryCalculator(
                     config=self._config,
                     output_dir=step_dir,
@@ -394,10 +512,13 @@ class BatchOptimizeEngine:
                     pressure=1.0,
                     standard_state="1atm",
                 )
-                record.thermochemistry = {
+                thermochemistry: dict[str, BatchJsonValue] = {
                     "status": current_result.status,
-                    **(current_result.metadata if current_result.metadata else {}),
                 }
+                for key, value in current_result.metadata.items():
+                    thermochemistry[key] = _to_batch_json(value)
+                record.thermochemistry.clear()
+                record.thermochemistry.update(thermochemistry)
 
         if optimized_coords is not None:
             optimized_path = item_dir / "optimized.xyz"
@@ -436,17 +557,21 @@ class BatchOptimizeEngine:
         multiplicity: int,
         output_dir: Path,
         opt_kwargs: dict[str, JsonValue],
+        methods: BatchMethodOptions,
     ) -> CalculationRequest:
         role = StructureRole.TRANSITION_STATE if is_ts else StructureRole.MINIMUM
+        method, basis = methods.for_step(StepKind.OPTIMIZE, is_ts)
         resources: dict[str, JsonValue] = {
             "output_dir": str(output_dir),
             "charge": charge,
             "multiplicity": multiplicity,
             **opt_kwargs,
         }
+        if basis:
+            resources["basis"] = basis
         return CalculationRequest(
             input_artifact=StructureArtifact(path=input_path, role=role),
-            method="",
+            method=method,
             resources=resources,
             workflow="BatchOptimize",
         )
@@ -459,20 +584,27 @@ class BatchOptimizeEngine:
         multiplicity: int,
         output_dir: Path,
         symbols: list[str],
+        methods: BatchMethodOptions,
     ) -> CalculationRequest:
+        coordinates = _json_coordinates(opt_result.coords)
+        symbols_json = _json_text_list(symbols)
+        method, basis = methods.for_step(StepKind.FREQUENCY, item.tag == "TS")
+        resources: dict[str, JsonValue] = {
+            "output_dir": str(output_dir),
+            "charge": charge,
+            "multiplicity": multiplicity,
+            "coordinates": coordinates,
+            "symbols": symbols_json,
+        }
+        if basis:
+            resources["basis"] = basis
         return CalculationRequest(
             input_artifact=StructureArtifact(
                 path=self.batch_root / item.item_id / "input.xyz",
                 role=StructureRole.TRANSITION_STATE if item.tag == "TS" else StructureRole.MINIMUM,
             ),
-            method="",
-            resources={
-                "output_dir": str(output_dir),
-                "charge": charge,
-                "multiplicity": multiplicity,
-                "coordinates": [[float(v) for v in row] for row in (opt_result.coords or [])],
-                "symbols": symbols,
-            },
+            method=method,
+            resources=resources,
             workflow="BatchOptimize",
         )
 
@@ -484,20 +616,27 @@ class BatchOptimizeEngine:
         multiplicity: int,
         output_dir: Path,
         symbols: list[str],
+        methods: BatchMethodOptions,
     ) -> CalculationRequest:
+        coordinates = _json_coordinates(result.coords)
+        symbols_json = _json_text_list(symbols)
+        method, basis = methods.for_step(StepKind.SINGLEPOINT, item.tag == "TS")
+        resources: dict[str, JsonValue] = {
+            "output_dir": str(output_dir),
+            "charge": charge,
+            "multiplicity": multiplicity,
+            "coordinates": coordinates,
+            "symbols": symbols_json,
+        }
+        if basis:
+            resources["basis"] = basis
         return CalculationRequest(
             input_artifact=StructureArtifact(
                 path=self.batch_root / item.item_id / "input.xyz",
                 role=StructureRole.TRANSITION_STATE if item.tag == "TS" else StructureRole.MINIMUM,
             ),
-            method="",
-            resources={
-                "output_dir": str(output_dir),
-                "charge": charge,
-                "multiplicity": multiplicity,
-                "coordinates": [[float(v) for v in row] for row in (result.coords or [])],
-                "symbols": symbols,
-            },
+            method=method,
+            resources=resources,
             workflow="BatchOptimize",
         )
 
@@ -513,10 +652,12 @@ class BatchOptimizeEngine:
             xyz = _rewrite_xyz_comment(
                 xyz,
                 build_tag_title(
-                    item.tag, candidate_id=item.candidate_id, source=item.source_type,
+                    item.tag,
+                    candidate_id=item.candidate_id,
+                    source=item.source_type,
                 ),
             )
-        input_path.write_text(xyz if xyz.endswith("\n") else xyz + "\n", encoding="utf-8")
+        _ = input_path.write_text(xyz if xyz.endswith("\n") else xyz + "\n", encoding="utf-8")
         return input_path
 
     # ── result products ──────────────────────────────────────────────────
@@ -541,24 +682,24 @@ class BatchOptimizeEngine:
                 continue
             target = structures_dir / f"{item.item_id}__TAG_{item.tag}__optimized.xyz"
             if source.resolve() != target.resolve():
-                shutil.copy2(source, target)
+                _ = shutil.copy2(source, target)
             title = build_tag_title(
                 item.tag,
                 candidate_id=item.candidate_id,
                 source=f"batch-{manifest.profile}",
             )
-            target.write_text(
+            _ = target.write_text(
                 _rewrite_xyz_comment(target.read_text(encoding="utf-8"), title),
                 encoding="utf-8",
             )
             item.optimized_xyz = target.relative_to(self._result_root).as_posix()
-            result_manifest.add_product(
+            _ = result_manifest.add_product(
                 f"batch_{item.item_id}",
                 f"{item.name} ({item.tag}, {manifest.profile})",
                 item.optimized_xyz,
                 ProductKind.STRUCTURE,
             )
-        result_manifest.write(self._result_root)
+        _ = result_manifest.write(self._result_root)
 
     def _resolve_output_geometry(self, item: BatchCalculationItem) -> Path | None:
         """Resolve an item's optimized geometry."""
@@ -583,30 +724,27 @@ class BatchOptimizeEngine:
 
     # ── checkpoint / cache ───────────────────────────────────────────────
 
-    @property
-    def batch_manifest_path(self) -> Path:
-        """Path to the batch items manifest used for resume."""
-        return self._result_root / "batch_items.json"
+    @staticmethod
+    def _checkpoint_items(
+        checkpoint: Checkpoint | None,
+    ) -> dict[str, BatchCalculationItem]:
+        """Extract item records from the batch checkpoint state."""
+        if checkpoint is None:
+            return {}
 
-    def _write_batch_manifest(self, manifest: BatchCalculationManifest) -> None:
-        """Persist the batch manifest for resume/cache."""
-        manifest.write(self.batch_manifest_path)
-
-    def _load_previous_manifest(self, profile: str) -> BatchCalculationManifest | None:
-        """Load the prior batch manifest when it matches *profile*."""
-        manifest_path = self.batch_manifest_path
-        if not manifest_path.is_file():
-            return None
-        previous = BatchCalculationManifest.read(manifest_path)
-        if previous is None:
-            return None
-        if previous.profile and previous.profile != profile:
-            logger.info(
-                "Previous batch manifest is %s — not reusable for %s; full re-run",
-                previous.profile,
-                profile,
-            )
-            return None
+        previous: dict[str, BatchCalculationItem] = {}
+        for item_id, state in checkpoint.items_state.items():
+            if item_id == _BATCH_CHECKPOINT_METADATA_KEY or not isinstance(state, dict):
+                continue
+            try:
+                record = BatchCalculationItem.from_dict(
+                    {key: _to_batch_json(value) for key, value in state.items()}
+                )
+            except (TypeError, ValueError) as exc:
+                logger.warning("Ignoring malformed batch checkpoint item %s: %s", item_id, exc)
+                continue
+            if record.item_id == item_id:
+                previous[item_id] = record
         return previous
 
     # ── helpers ──────────────────────────────────────────────────────────
@@ -618,7 +756,7 @@ class BatchOptimizeEngine:
             lines = path.read_text(encoding="utf-8").strip().splitlines()
             if len(lines) < 2:
                 return ["X"] * expected_count
-            symbols = []
+            symbols: list[str] = []
             for line in lines[2 : 2 + expected_count]:
                 parts = line.split()
                 symbols.append(parts[0] if parts else "X")
@@ -642,7 +780,7 @@ class BatchOptimizeEngine:
         for i, row in enumerate(coords):
             s = sym[i] if i < len(sym) else "X"
             lines.append(f"{s}  {row[0]:.10f}  {row[1]:.10f}  {row[2]:.10f}")
-        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        _ = path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
     @staticmethod
     def _extract_freq_log(result: CalculationResult) -> Path | None:

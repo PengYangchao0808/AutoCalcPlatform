@@ -205,10 +205,15 @@ class BatchCalculationItem:
         )
 
 
-def item_cache_key(item: BatchStructureItem, profile_key: str) -> str:
-    """Return a stable cache key for profile, identity, TAG, and geometry."""
+def item_cache_key(
+    item: BatchStructureItem,
+    profile_key: str,
+    method_signature: str = "",
+) -> str:
+    """Return a stable cache key for profile, methods, identity, TAG, and geometry."""
     values = (
         str(profile_key),
+        method_signature,
         item.candidate_id,
         item.tag,
         str(item.resolved_charge(0)),
