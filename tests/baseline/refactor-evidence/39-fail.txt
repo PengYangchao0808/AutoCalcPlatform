@@ -1,0 +1,22 @@
+=== 39-fail.txt: Wave 6 Workflows Cleanup Failure Drill ===
+Date: 2026-08-27 | Branch: refactor/calc-cleanup
+
+=== COMMAND ===
+Temporarily inject `def run_optfreq(*a, **k): ...` into `src/acp/workflows/simple.py`, then run:
+python scripts/check_grep_gates.py --gate wave6_zero src/acp/workflows
+=== KEY OUTPUT ===
+BLOCKING:
+src/acp/workflows/simple.py:441: def run_optfreq(*a, **k): ...
+GATE_EXIT=1
+=== EXIT CODE ===
+1 (expected blocking result)
+
+=== COMMAND ===
+Remove the temporary injection, then run:
+python scripts/check_grep_gates.py --gate wave6_zero src/acp/workflows
+=== KEY OUTPUT ===
+ALLOWED:
+BLOCKING:
+RESTORED_GATE_EXIT=0
+=== EXIT CODE ===
+0

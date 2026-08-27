@@ -10,8 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from acp.scheduler.jobs import SUPPORTED_WORKFLOWS
-
 
 @dataclass(frozen=True)
 class WorkflowRegistryEntry:
@@ -64,24 +62,6 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         ),
         requires_binaries=["orca", "shermo"],
     ),
-    "Lowconfirm": WorkflowRegistryEntry(
-        name="Lowconfirm",
-        label="Low Confirmation",
-        description=(
-            "Coarse Opt/TS + independent frequency + preliminary IRC of "
-            "PESsearch candidates (mechanism stage S3)."
-        ),
-        requires_binaries=["orca"],
-    ),
-    "Highconfirm": WorkflowRegistryEntry(
-        name="Highconfirm",
-        label="High Confirmation",
-        description=(
-            "High-fidelity Opt/TS + frequency + single point + thermochemistry "
-            "(mechanism stage S4)."
-        ),
-        requires_binaries=["orca"],
-    ),
     "nmr": WorkflowRegistryEntry(
         name="nmr",
         label="NMR + DP4/DP5",
@@ -121,18 +101,6 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         description="Run an independent IRC from a transition-state structure.",
         requires_binaries=["orca"],
     ),
-    "optfreq": WorkflowRegistryEntry(
-        name="optfreq",
-        label="Optimization + Frequency",
-        description="ORCA combined Opt+Freq as a single job.",
-        requires_binaries=["orca"],
-    ),
-    "optfreqsp": WorkflowRegistryEntry(
-        name="optfreqsp",
-        label="Opt+Freq+SP+Thermo",
-        description="Full pipeline: ORCA opt+freq -> SP -> Shermo thermo -> free energy.",
-        requires_binaries=["orca", "shermo"],
-    ),
     "xtb_optimize": WorkflowRegistryEntry(
         name="xtb_optimize",
         label="xTB Optimization",
@@ -150,6 +118,8 @@ def list_workflow_entries() -> list[WorkflowRegistryEntry]:
     are included, so newly added workflows appear automatically once they are
     registered and supported.
     """
+    from acp.scheduler.jobs import SUPPORTED_WORKFLOWS
+
     return [_WORKFLOW_REGISTRY[name] for name in _WORKFLOW_REGISTRY if name in SUPPORTED_WORKFLOWS]
 
 

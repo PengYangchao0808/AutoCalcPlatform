@@ -1,7 +1,7 @@
-"""Tests for simple ORCA workflows (singlepoint/optimize/frequency/optfreq/optfreqsp).
+"""Tests for simple ORCA workflows (singlepoint/optimize/frequency/xtb_optimize).
 
 Covers: catalog validation, input parsing, ensure_unique_dir, mocked workflow
-execution for all 5 entry points, CLI help smoke tests, and optfreqsp data flow.
+execution for supported entry points, and CLI help smoke tests.
 """
 
 # pyright: reportUnknownVariableType=false,reportUnknownMemberType=false
@@ -12,7 +12,6 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import TypedDict
-from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -20,7 +19,7 @@ from numpy.typing import NDArray
 from typing_extensions import Unpack
 
 from acp.backends.base import QCResult
-from acp.catalog import FIELD_DEFINITIONS, METHOD_SCHEMAS, WORKFLOW_CATALOG
+from acp.catalog import METHOD_SCHEMAS, WORKFLOW_CATALOG
 from acp.core.utils import ensure_unique_dir
 from acp.workflows.simple import (
     _check_input,
@@ -31,8 +30,6 @@ from acp.workflows.simple import (
     _write_optimized_xyz,
     _write_thermo_json,
     run_frequency,
-    run_optfreq,
-    run_optfreqsp,
     run_optimize,
     run_singlepoint,
     run_xtb_optimize,
@@ -42,7 +39,7 @@ from acp.workflows.simple import (
 # catalog validation
 # ---------------------------------------------------------------------------
 
-_SIMPLE_IDS = {"singlepoint", "optimize", "frequency", "optfreq", "optfreqsp", "xtb_optimize"}
+_SIMPLE_IDS = {"singlepoint", "optimize", "frequency", "xtb_optimize"}
 
 
 def test_all_simple_workflows_in_catalog_and_active():
@@ -53,18 +50,6 @@ def test_all_simple_workflows_in_catalog_and_active():
     for wid in _SIMPLE_IDS:
         assert wid in found, f"Missing catalog entry for {wid}"
         assert found[wid] == "active", f"{wid} status={found[wid]}, expected active"
-
-
-def test_dft_optfreqsp_schema_has_three_levels():
-    schema = METHOD_SCHEMAS["dft_optfreqsp"]
-    level_ids = {lv["level_id"] for lv in schema["method_levels"]}
-    assert level_ids == {"optfreq", "single_point", "thermo"}
-
-
-def test_dft_optfreqsp_schema_has_default_profile():
-    schema = METHOD_SCHEMAS["dft_optfreqsp"]
-    profiles = schema["profiles"]
-    assert any(p["profile_id"] == "default" for p in profiles)
 
 
 def test_schema_level_id_naming_consistent():
@@ -79,8 +64,6 @@ _SIMPLE_SCHEMAS = [
     "dft_singlepoint",
     "dft_optimize",
     "dft_frequency",
-    "dft_optfreq",
-    "dft_optfreqsp",
 ]
 
 
@@ -509,212 +492,6 @@ def test_run_frequency_no_modes(fake_backend, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# optfreq
-# ---------------------------------------------------------------------------
-
-
-def test_run_optfreq_mock(fake_backend, tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "optfreq_out"
-
-    coords = np.array([[0.1, 0.0, 0.0]])
-    freqs = [500.0, 1600.0]
-    fake_backend.set_result(
-        "optimize", coordinates=coords, symbols=["C"], converged=True, success=True
-    )
-    fake_backend.set_result("frequency", frequencies=freqs, has_frequencies=True, success=True)
-    result = run_optfreq(str(inp), output_dir=out)
-    assert result.status == "completed"
-    assert result.metadata.get("n_frequencies") == 2
-    assert [call.method for call in fake_backend.calls] == ["optimize", "frequency"]
-
-
-def test_run_optfreq_failure(fake_backend, tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "optfreq_out"
-
-    fake_backend.set_results(
-        "optimize", [_fake_qc_result(success=False, error_message="Opt Freq failed")] * 8
-    )
-    result = run_optfreq(str(inp), output_dir=out)
-    assert result.status == "failed"
-
-
-# ---------------------------------------------------------------------------
-# optfreqsp
-# ---------------------------------------------------------------------------
-
-
-def test_run_optfreqsp_mock(fake_backend, tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "optfreqsp_out"
-    log_file = tmp_path / "fake_optfreq.out"
-    log_file.write_text("ORCA log placeholder")
-
-    opt_coords = np.array([[0.1, 0.0, 0.0]])
-    freqs = [500.0, 1600.0]
-
-    fake_backend.set_result(
-        "optimize",
-        coordinates=opt_coords,
-        symbols=["C"],
-        converged=True,
-        log_file=log_file,
-        success=True,
-    )
-    fake_backend.set_result(
-        "frequency", frequencies=freqs, has_frequencies=True, freq_log_file=log_file, success=True
-    )
-    fake_backend.set_result("single_point", energy=-40.0, success=True)
-    with patch(
-        "acp.calculations.primitives.thermochemistry.run_shermo",
-        return_value={"g_sum": -40.5, "h_sum": -40.4, "u_sum": -40.6, "s_total": 0.0001},
-    ) as mk_shermo:
-        result = run_optfreqsp(str(inp), output_dir=out)
-
-    assert result.status == "completed"
-    assert result.metadata.get("sp_energy") == -40.0
-    assert result.metadata.get("n_frequencies") == 2
-    assert result.metadata.get("thermo_success") is True
-    mk_shermo.assert_called_once()
-    assert [call.method for call in fake_backend.calls] == [
-        "optimize",
-        "frequency",
-        "single_point",
-    ]
-
-
-def test_run_optfreqsp_no_shermo(tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "no_shermo_out"
-
-    result = run_optfreqsp(str(inp), output_dir=out)
-    assert result.status == "failed"
-
-
-def test_run_optfreqsp_shermo_failure_marks_job_failed(fake_backend, tmp_path):
-    """Shermo producing no output must fail the job (per §5.6), not silently
-    return completed with missing thermochemistry."""
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "shermo_fail_out"
-    log_file = tmp_path / "fake_optfreq.out"
-    log_file.write_text("ORCA log placeholder")
-
-    fake_backend.set_result(
-        "optimize", coordinates=np.array([[0.1, 0.0, 0.0]]), symbols=["C"], log_file=log_file
-    )
-    fake_backend.set_result("frequency", frequencies=[500.0], freq_log_file=log_file)
-    fake_backend.set_result("single_point", energy=-40.0)
-    with patch("acp.calculations.primitives.thermochemistry.run_shermo", return_value=None):
-        result = run_optfreqsp(str(inp), output_dir=out)
-
-    assert result.status == "failed"
-    assert "Shermo" in (result.error or "")
-
-
-def test_scale_factor_default_consistent_across_sources():
-    """FIELD_DEFINITIONS / optfreqsp profile / simple.py fallback must agree."""
-    from acp.workflows.simple import run_optfreqsp as _run_optfreqsp
-
-    assert FIELD_DEFINITIONS["scale_factor"]["default"]["*"] == 0.9905
-    profile = next(
-        p for p in METHOD_SCHEMAS["dft_optfreqsp"]["profiles"] if p["profile_id"] == "default"
-    )
-    assert profile["levels"]["thermo"]["scale_factor"] == 0.9905
-    assert _run_optfreqsp.__defaults__ is not None  # entry kept importable
-    import acp.workflows.simple as _simple
-
-    assert _simple._DEFAULT_SCALE_FACTOR == 0.9905
-
-
-def test_run_optfreqsp_optfreq_failure(fake_backend, tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "fail_out"
-
-    fake_backend.set_results(
-        "optimize", [_fake_qc_result(success=False, error_message="Opt+Freq crash")] * 8
-    )
-    result = run_optfreqsp(str(inp), output_dir=out)
-    assert result.status == "failed"
-    assert "Opt+Freq" in (result.error or "")
-
-
-def test_run_optfreqsp_sp_failure(fake_backend, tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "sp_fail_out"
-
-    opt_coords = np.array([[0.1, 0.0, 0.0]])
-    log_file = tmp_path / "f.out"
-    log_file.write_text("ORCA log")
-    fake_backend.set_result(
-        "optimize", coordinates=opt_coords, symbols=["C"], log_file=log_file, success=True
-    )
-    fake_backend.set_result("frequency", frequencies=[500.0], freq_log_file=log_file, success=True)
-    fake_backend.set_result("single_point", success=False, error_message="SP crash")
-    result = run_optfreqsp(str(inp), output_dir=out)
-    assert result.status == "failed"
-    assert "SP" in (result.error or "")
-
-
-def test_run_optfreqsp_no_log_file(fake_backend, tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "no_log_out"
-
-    opt_coords = np.array([[0.1, 0.0, 0.0]])
-    fake_backend.set_result("optimize", coordinates=opt_coords, symbols=["C"], success=True)
-    fake_backend.set_result("frequency", frequencies=[500.0], success=True)
-    fake_backend.set_result("single_point", energy=-40.0, success=True)
-    result = run_optfreqsp(str(inp), output_dir=out)
-    assert result.status == "failed"
-    assert "frequency log" in (result.error or "").lower()
-
-
-def test_run_optfreqsp_sp_energy_none(fake_backend, tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "no_sp_en_out"
-
-    opt_coords = np.array([[0.1, 0.0, 0.0]])
-    log_file = tmp_path / "spen_f.out"
-    log_file.write_text("ORCA log")
-    fake_backend.set_result(
-        "optimize", coordinates=opt_coords, symbols=["C"], log_file=log_file, success=True
-    )
-    fake_backend.set_result("frequency", frequencies=[500.0], freq_log_file=log_file, success=True)
-    fake_backend.set_result("single_point", energy=None)
-    result = run_optfreqsp(str(inp), output_dir=out)
-    assert result.status == "failed"
-    assert "energy" in (result.error or "").lower()
-
-
-# ---------------------------------------------------------------------------
-# QCResult field verification
-# ---------------------------------------------------------------------------
-
-
-def test_optfreq_qcresult_fields_from_mock():
-    """Verify opt_freq returns QCResult with coordinates+frequencies+has_frequencies=True."""
-    fake = _fake_qc_result(
-        coordinates=np.array([[0.0, 0.0, 0.0]]),
-        symbols=["C"],
-        frequencies=[500.0],
-        has_frequencies=True,
-    )
-    assert fake.has_frequencies is True
-    assert fake.frequencies == [500.0]
-    assert fake.coordinates is not None
-    assert fake.coordinates.shape == (1, 3)
-
-
-# ---------------------------------------------------------------------------
 # CLI help smoke tests
 # ---------------------------------------------------------------------------
 
@@ -722,8 +499,6 @@ _SIMPLE_WF = [
     ("singlepoint", "--method"),
     ("optimize", "--geom-maxiter"),
     ("frequency", "--solvent-model"),
-    ("optfreq", "--calc-hess"),
-    ("optfreqsp", "--sp-method"),
 ]
 
 
@@ -752,79 +527,13 @@ def test_cli_singlepoint_help_common_args():
     assert "--mem" in result.stdout
 
 
-def test_cli_optfreqsp_has_sp_args():
-    result = subprocess.run(
-        [sys.executable, "-m", "acp.cli", "run", "optfreqsp", "--help"],
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0
-    assert "--sp-method" in result.stdout
-    assert "--sp-basis" in result.stdout
-    assert "--sp-aux-j-basis" in result.stdout
-    assert "--sp-aux-c-basis" in result.stdout
-    assert "--sp-ri-approximation" in result.stdout
-
-
-# ---------------------------------------------------------------------------
-# optfreqsp data flow: opt_coords → SP, opt_log → Shermo
-# ---------------------------------------------------------------------------
-
-
-def test_optfreqsp_data_flow_passes_opt_coords_to_sp(fake_backend, tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "dataflow_out"
-
-    opt_coords = np.array([[0.1, 0.2, 0.3]])
-    fake_backend.set_result("optimize", coordinates=opt_coords, symbols=["C"], success=True)
-    fake_backend.set_result(
-        "frequency", frequencies=[500.0], freq_log_file=tmp_path / "df.out", success=True
-    )
-    fake_backend.set_result("single_point", energy=-40.0, success=True)
-    (tmp_path / "df.out").write_text("ORCA log")
-    with patch(
-        "acp.calculations.primitives.thermochemistry.run_shermo", return_value={"g_sum": -40.5}
-    ):
-        result = run_optfreqsp(str(inp), output_dir=out)
-    assert result.status == "completed"
-    sp_call = fake_backend.calls[2]
-    np.testing.assert_array_equal(sp_call.args[0], opt_coords)
-
-
-def test_optfreqsp_data_flow_passes_log_file_to_shermo(fake_backend, tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "logflow_out"
-
-    fake_log = tmp_path / "optfreq_test_log.out"
-    fake_log.write_text("ORCA log placeholder")
-
-    fake_backend.set_result(
-        "optimize", coordinates=np.array([[0.0, 0.0, 0.0]]), symbols=["C"], success=True
-    )
-    fake_backend.set_result("frequency", frequencies=[500.0], freq_log_file=fake_log, success=True)
-    fake_backend.set_result("single_point", energy=-40.0, success=True)
-    with patch(
-        "acp.calculations.primitives.thermochemistry.run_shermo", return_value={"g_sum": -40.5}
-    ) as mk_shermo:
-        result = run_optfreqsp(str(inp), output_dir=out)
-    assert result.status == "completed"
-    assert mk_shermo.call_args.kwargs["freq_output"] == fake_log
-
-
 # ---------------------------------------------------------------------------
 # recalc_hess configurability
 # ---------------------------------------------------------------------------
 
 
 def test_recalc_hess_field_in_opt_schemas():
-    """recalc_hess must be configurable for all opt-bearing simple schemas."""
-    for schema_id, level_id in [
-        ("dft_optimize", "optimize"),
-        ("dft_optfreq", "optfreq"),
-        ("dft_optfreqsp", "optfreq"),
-    ]:
+    for schema_id, level_id in [("dft_optimize", "optimize")]:
         schema = METHOD_SCHEMAS[schema_id]
         level = next(lv for lv in schema["method_levels"] if lv["level_id"] == level_id)
         assert "recalc_hess" in level["fields"], f"{schema_id} missing recalc_hess field"
@@ -832,16 +541,11 @@ def test_recalc_hess_field_in_opt_schemas():
 
 def test_thermo_fields_absent_from_plain_freq_schemas():
     """temperature/pressure/scale_factor are useless without a Shermo stage."""
-    for schema_id, level_id in [("dft_frequency", "frequency"), ("dft_optfreq", "optfreq")]:
+    for schema_id, level_id in [("dft_frequency", "frequency")]:
         schema = METHOD_SCHEMAS[schema_id]
         level = next(lv for lv in schema["method_levels"] if lv["level_id"] == level_id)
         for dead in ("temperature", "pressure", "scale_factor"):
             assert dead not in level["fields"], f"{schema_id} still has dead field {dead}"
-    thermo = next(
-        lv for lv in METHOD_SCHEMAS["dft_optfreqsp"]["method_levels"] if lv["level_id"] == "thermo"
-    )
-    assert "temperature" in thermo["fields"]
-    assert "scale_factor" in thermo["fields"]
 
 
 @pytest.mark.parametrize(
@@ -849,8 +553,6 @@ def test_thermo_fields_absent_from_plain_freq_schemas():
     [
         ("frequency", "--temperature"),
         ("frequency", "--scale-factor"),
-        ("optfreq", "--temperature"),
-        ("optfreq", "--scale-factor"),
     ],
 )
 def test_cli_dead_thermo_flags_removed(wf_name, dead_flag):
@@ -861,18 +563,6 @@ def test_cli_dead_thermo_flags_removed(wf_name, dead_flag):
     )
     assert result.returncode == 0, f"stderr: {result.stderr}"
     assert dead_flag not in result.stdout, f"'{dead_flag}' should not exist for {wf_name}"
-
-
-def test_cli_optfreqsp_keeps_thermo_flags():
-    result = subprocess.run(
-        [sys.executable, "-m", "acp.cli", "run", "optfreqsp", "--help"],
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0
-    assert "--temperature" in result.stdout
-    assert "--pressure" in result.stdout
-    assert "--scale-factor" in result.stdout
 
 
 def test_recalc_hess_field_definition_exists():
@@ -909,20 +599,7 @@ def test_recalc_hess_emits_calc_hess_flags():
     ]
 
 
-def test_recalc_hess_skipped_on_prefixed_sp_level():
-    from acp.catalog import method_levels_to_cli_flags
-
-    flags = method_levels_to_cli_flags(
-        {
-            "optfreq": {"engine": "orca", "recalc_hess": 7},
-            "single_point": {"engine": "orca", "functional": "wB97M-V"},
-        },
-        {"optfreq": "", "single_point": "sp-", "thermo": ""},
-    )
-    assert flags == ["--calc-hess", "7", "--sp-method", "wB97M-V"]
-
-
-@pytest.mark.parametrize("wf_name", ["optimize", "optfreq", "optfreqsp"])
+@pytest.mark.parametrize("wf_name", ["optimize"])
 def test_cli_help_has_calc_hess(wf_name):
     result = subprocess.run(
         [sys.executable, "-m", "acp.cli", "run", wf_name, "--help"],
@@ -1012,14 +689,6 @@ def test_orca_input_blocks_recalc_hess_override():
         config={"optimization_control": {"recalc_hess": 3}}
     )._build_input_blocks("opt", symbols=["C"])
     assert "Recalc_Hess 3" in blocks_cfg
-
-
-def test_orca_input_blocks_recalc_hess_optfreq():
-    from cccp.qc.interfaces.orca import ORCAInterface
-
-    iface = ORCAInterface(config={})
-    blocks, _ = iface._build_input_blocks("optfreq", recalc_hess=20, symbols=["C", "H"])
-    assert "Recalc_Hess 20" in blocks
 
 
 def test_orca_input_blocks_auto_graded_defaults():

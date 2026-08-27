@@ -34,7 +34,6 @@ from cccp.config import load_config
 logger = logging.getLogger(__name__)
 
 _SUPPORTED_EXTENSIONS = {".xyz", ".gjf", ".com", ".inp"}
-_DEFAULT_SCALE_FACTOR = 0.9905
 
 
 def _check_input(input_source: str) -> Path:
@@ -438,69 +437,6 @@ def run_frequency(
     return _execute(_build_plan(StepKind.FREQUENCY, [request], [StepKind.FREQUENCY]), calc_dir)
 
 
-def run_optfreq(
-    input_source: str,
-    output_dir: str | Path = "./optfreq_output",
-    config: dict[str, Any] | None = None,
-    charge: int | None = None,
-    multiplicity: int | None = None,
-    name: str | None = None,
-    method_kwargs: dict[str, Any] | None = None,
-) -> WorkflowResult:
-    context = _context(input_source, config, charge, multiplicity, name)
-    calc_dir = _calc_subdir(_resolve_output_dir(output_dir), name, input_source, "optfreq")
-    request = _build_request(context, _RequestDefinition("optfreq", "orca", method_kwargs or {}))
-    plan = _build_plan(
-        StepKind.OPTIMIZE,
-        [request, request],
-        [StepKind.OPTIMIZE, StepKind.FREQUENCY],
-    )
-    return _execute(plan, calc_dir)
-
-
-def run_optfreqsp(
-    input_source: str,
-    output_dir: str | Path = "./optfreqsp_output",
-    config: dict[str, Any] | None = None,
-    charge: int | None = None,
-    multiplicity: int | None = None,
-    name: str | None = None,
-    optfreq_kwargs: dict[str, Any] | None = None,
-    sp_kwargs: dict[str, Any] | None = None,
-    thermo_kwargs: dict[str, Any] | None = None,
-) -> WorkflowResult:
-    context = _context(input_source, config, charge, multiplicity, name)
-    calc_dir = _calc_subdir(_resolve_output_dir(output_dir), name, input_source, "optfreqsp")
-    opt_request = _build_request(
-        context,
-        _RequestDefinition("optfreqsp", "orca", optfreq_kwargs or {}),
-    )
-    sp_request = _build_request(
-        context,
-        _RequestDefinition("optfreqsp", "orca", sp_kwargs or {}),
-    )
-    thermo_options = dict(thermo_kwargs or {})
-    thermo_options.setdefault("temperature", 298.15)
-    thermo_options.setdefault("pressure", 1.0)
-    thermo_options.setdefault("scale_factor", _DEFAULT_SCALE_FACTOR)
-    thermo_options.setdefault("standard_state", "1atm")
-    thermo_request = _build_request(
-        context,
-        _RequestDefinition("optfreqsp", "orca", thermo_options),
-    )
-    plan = _build_plan(
-        StepKind.OPTIMIZE,
-        [opt_request, opt_request, sp_request, thermo_request],
-        [
-            StepKind.OPTIMIZE,
-            StepKind.FREQUENCY,
-            StepKind.SINGLEPOINT,
-            StepKind.THERMOCHEMISTRY,
-        ],
-    )
-    return _execute(plan, calc_dir)
-
-
 __all__ = [
     "run_singlepoint",
     "run_optimize",
@@ -508,6 +444,4 @@ __all__ = [
     "run_scan",
     "run_irc",
     "run_xtb_optimize",
-    "run_optfreq",
-    "run_optfreqsp",
 ]
