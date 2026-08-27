@@ -771,9 +771,7 @@ def test_v1_batch_structures_inline_xyz_submission(client: TestClient) -> None:
     assert record.spec.method.get("no_irc") is True
 
 
-def test_v1_batch_structures_source_id_resolution(
-    client: TestClient, tmp_path: Path
-) -> None:
+def test_v1_batch_structures_source_id_resolution(client: TestClient, tmp_path: Path) -> None:
     # Complete an upstream PESsearch job whose result list exposes a candidate.
     source_dir = tmp_path / "uncategorized" / "20260823_001_PESsearch"
     result_dir = source_dir / "RESULT"
@@ -816,8 +814,7 @@ def test_v1_batch_structures_source_id_resolution(
             {
                 "name": "ts_1",
                 "source_id": (
-                    "job_20260823_001_PESsearch:"
-                    "RESULT/mechanism/ts_guesses/ts_guess_001.xyz"
+                    "job_20260823_001_PESsearch:RESULT/mechanism/ts_guesses/ts_guess_001.xyz"
                 ),
                 "tag": "TS",
             }
@@ -856,3 +853,205 @@ def test_v1_batch_structures_rejects_bad_item(client: TestClient) -> None:
         },
     )
     assert response.status_code == 422
+
+
+class _FakeIrcManager:
+    records: dict[str, JobRecord]
+    submitted: JobSpec | None
+
+    def __init__(self, records: dict[str, JobRecord]) -> None:
+        self.records = records
+        self.submitted = None
+
+    def get(self, job_id: str) -> JobRecord | None:
+        return self.records.get(job_id)
+
+    def submit(self, spec: JobSpec, group_id: str | None = None) -> JobRecord:
+        self.submitted = spec
+        return JobRecord(
+            id="irc-job-001",
+            spec=spec,
+            status=JobStatus.QUEUED,
+            project_id=spec.project_id,
+        )
+
+
+def _write_irc_manifest(
+    task_dir: Path,
+    products: list[dict[str, str]],
+    comment: str,
+) -> None:
+    result_dir = task_dir / "RESULT"
+    result_dir.mkdir(parents=True, exist_ok=True)
+    for product in products:
+        structure_path = result_dir / product["path"]
+        structure_path.parent.mkdir(parents=True, exist_ok=True)
+        structure_path.write_text(
+            f"2\n{comment}\nH 0.0 0.0 0.0\nH 0.0 0.0 0.7\n",
+            encoding="utf-8",
+        )
+    (result_dir / "result_manifest.json").write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "workflow": "PESsearch",
+                "status": "completed",
+                "products": products,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _irc_source_record(job_id: str, task_dir: Path) -> JobRecord:
+    return JobRecord(
+        id=job_id,
+        spec=JobSpec(
+            workflow="PESsearch",
+            name="source-pes",
+            input={"source": "CCO"},
+            method={"functional": "r2SCAN-3c"},
+            resources={"nproc": 2},
+            project_id="uncategorized",
+            molecule_name="CCO",
+        ),
+        status=JobStatus.COMPLETED,
+        work_dir=str(task_dir),
+        project_id="uncategorized",
+    )
+
+
+def test_run_irc_endpoint(client: TestClient, tmp_path: Path) -> None:
+    source_dir = tmp_path / "irc-source"
+    _write_irc_manifest(
+        source_dir,
+        [
+            {
+                "id": "ts_artifact",
+                "label": "TS candidate",
+                "path": "structures/ts.xyz",
+                "kind": "structure",
+                "role": "transition_state",
+            }
+        ],
+        "TAG: TS | candidate_id=ts_001 | source=PESsearch",
+    )
+    manager = _FakeIrcManager({"source-job": _irc_source_record("source-job", source_dir)})
+    client.app.state.job_manager = manager
+
+    response = client.post("/api/v1/jobs/source-job/artifacts/ts_artifact/run-irc")
+
+    assert response.status_code == 202
+    assert response.json() == {
+        "job_id": "irc-job-001",
+        "status": "queued",
+        "workflow": "irc",
+        "project_id": "uncategorized",
+        "mechanism_project_id": None,
+    }
+    assert manager.submitted is not None
+    assert manager.submitted.workflow == "irc"
+    assert manager.submitted.input == {
+        "input_artifact": str(source_dir / "RESULT" / "structures" / "ts.xyz"),
+        "input_role": "transition_state",
+        "directions": ["forward", "reverse"],
+    }
+    assert manager.submitted.method == {"functional": "r2SCAN-3c"}
+    assert manager.submitted.resources == {"nproc": 2}
+
+
+@pytest.mark.parametrize(
+    ("state", "expected_status"),
+    (
+        ("missing", 404),
+        ("non_ts", 422),
+        ("cross_job", 404),
+        ("corrupt", 422),
+    ),
+)
+def test_run_irc_endpoint_rejections(
+    client: TestClient,
+    tmp_path: Path,
+    state: str,
+    expected_status: int,
+) -> None:
+    source_dir = tmp_path / "irc-source"
+    source_job = _irc_source_record("source-job", source_dir)
+    artifact_id = "ts_artifact"
+    other_job = source_job
+
+    if state == "missing":
+        _write_irc_manifest(
+            source_dir,
+            [
+                {
+                    "id": artifact_id,
+                    "label": "TS candidate",
+                    "path": "structures/ts.xyz",
+                    "kind": "structure",
+                    "role": "transition_state",
+                }
+            ],
+            "TAG: TS | candidate_id=ts_001",
+        )
+        artifact_id = "missing-artifact"
+    elif state == "non_ts":
+        _write_irc_manifest(
+            source_dir,
+            [
+                {
+                    "id": artifact_id,
+                    "label": "Minimum",
+                    "path": "structures/minimum.xyz",
+                    "kind": "structure",
+                }
+            ],
+            "optimized geometry",
+        )
+    elif state == "cross_job":
+        _write_irc_manifest(
+            source_dir,
+            [
+                {
+                    "id": "source-ts",
+                    "label": "Source TS",
+                    "path": "structures/source-ts.xyz",
+                    "kind": "structure",
+                    "role": "transition_state",
+                }
+            ],
+            "TAG: TS | candidate_id=source_ts",
+        )
+        other_dir = tmp_path / "other-source"
+        _write_irc_manifest(
+            other_dir,
+            [
+                {
+                    "id": artifact_id,
+                    "label": "Other TS",
+                    "path": "structures/other-ts.xyz",
+                    "kind": "structure",
+                    "role": "transition_state",
+                }
+            ],
+            "TAG: TS | candidate_id=other_ts",
+        )
+        other_job = _irc_source_record("other-job", other_dir)
+    elif state == "corrupt":
+        result_dir = source_dir / "RESULT"
+        result_dir.mkdir(parents=True, exist_ok=True)
+        (result_dir / "result_manifest.json").write_text("{not-json", encoding="utf-8")
+    else:
+        pytest.fail(f"unknown rejection state: {state}")
+
+    records = {"source-job": source_job}
+    if state == "cross_job":
+        records["other-job"] = other_job
+    manager = _FakeIrcManager(records)
+    client.app.state.job_manager = manager
+
+    response = client.post(f"/api/v1/jobs/source-job/artifacts/{artifact_id}/run-irc")
+
+    assert response.status_code == expected_status
+    assert response.status_code != 500
+    assert manager.submitted is None

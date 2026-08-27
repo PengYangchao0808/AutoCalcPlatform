@@ -160,6 +160,7 @@ from acp.api.v1_schemas import (
     ValidateMethodRequest,
     ValidateMethodResponse,
 )
+from acp.calculations.batch import normalize_tag, parse_tag_comment
 from acp.chem.embedding import (
     molfile_to_xyz,
     parse_xyz_first_frame,
@@ -187,6 +188,7 @@ from acp.mechanism.s2_confirm_service import (
     resolve_s2_manifest_for_job,
     save_s2_review_for_job,
 )
+from acp.results.manifest import MANIFEST_FILENAME, load_result_manifest
 from acp.scheduler.artifacts import Artifact, ArtifactRegistry
 from acp.scheduler.files import build_manifest, resolve_safe
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
@@ -3561,6 +3563,152 @@ def get_stage_task(task_id: str, request: Request) -> StageTaskModel:
     if task is None:
         raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
     return _stage_task_to_model(task)
+
+
+@router.post(
+    "/jobs/{job_id}/artifacts/{artifact_id}/run-irc",
+    response_model=V1JobCreatedResponse,
+    status_code=202,
+)
+def run_irc_from_artifact(
+    job_id: str,
+    artifact_id: str,
+    request: Request,
+) -> V1JobCreatedResponse:
+    """Submit an independent IRC job from a TS product in this job's manifest."""
+    manager = _manager(request)
+    source_record = manager.get(job_id)
+    if source_record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if not source_record.work_dir:
+        raise HTTPException(status_code=404, detail=f"Artifact not found: {artifact_id}")
+
+    source_dir = Path(source_record.work_dir)
+    result_dir = source_dir / "RESULT"
+    manifest_path = result_dir / MANIFEST_FILENAME
+    if not source_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"Artifact not found: {artifact_id}")
+    try:
+        manifest = load_result_manifest(source_dir)
+    except (
+        OSError,
+        UnicodeError,
+        ValueError,
+        TypeError,
+        KeyError,
+        AttributeError,
+        IndexError,
+    ) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid result manifest for job {job_id}: {exc}",
+        ) from exc
+    if manifest is None:
+        if manifest_path.is_file():
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid result manifest for job {job_id}",
+            )
+        raise HTTPException(status_code=404, detail=f"Artifact not found: {artifact_id}")
+
+    product = next((item for item in manifest.products if item.id == artifact_id), None)
+    if product is None:
+        raise HTTPException(status_code=404, detail=f"Artifact not found: {artifact_id}")
+    if product.kind.value != "structure":
+        raise HTTPException(
+            status_code=422,
+            detail=f"Artifact {artifact_id} is not a structure product",
+        )
+
+    structure_path = resolve_safe(result_dir, product.path)
+    if structure_path is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Artifact {artifact_id} has an invalid manifest path",
+        )
+
+    try:
+        raw_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(raw_manifest, dict):
+            raise HTTPException(status_code=422, detail="Result manifest root must be an object")
+        raw_products = raw_manifest.get("products")
+        if not isinstance(raw_products, list):
+            raise HTTPException(status_code=422, detail="Result manifest products must be a list")
+        raw_product = next(
+            (
+                item
+                for item in raw_products
+                if isinstance(item, dict) and str(item.get("id", "")) == artifact_id
+            ),
+            {},
+        )
+    except (
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+        ValueError,
+        TypeError,
+        AttributeError,
+    ) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid result manifest for job {job_id}: {exc}",
+        ) from exc
+
+    metadata_tag: str | None = None
+    for key in ("role", "tag"):
+        raw_tag = raw_product.get(key)
+        if isinstance(raw_tag, str):
+            metadata_tag = normalize_tag(raw_tag)
+            if metadata_tag is not None:
+                break
+    try:
+        lines = structure_path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Cannot read structure artifact {artifact_id}: {exc}",
+        ) from exc
+    comment_tag = parse_tag_comment(lines[1] if len(lines) > 1 else "").get("tag")
+    if (metadata_tag or comment_tag) != "TS":
+        raise HTTPException(
+            status_code=422,
+            detail=f"Artifact {artifact_id} must carry a TS role or TAG",
+        )
+
+    source_spec = source_record.spec
+    irc_spec = JobSpec(
+        workflow="irc",
+        name=f"{source_spec.name or job_id}_irc",
+        input={
+            "input_artifact": str(structure_path),
+            "input_role": "transition_state",
+            "directions": ["forward", "reverse"],
+        },
+        method=dict(source_spec.method),
+        resources=dict(source_spec.resources),
+        config_path=source_spec.config_path,
+        tags=list(source_spec.tags),
+        project_id=source_record.project_id or source_spec.project_id,
+        execution_mode=source_spec.execution_mode,
+        target_node=source_spec.target_node,
+        molecule_name=source_spec.molecule_name,
+        task_name="irc",
+    )
+    try:
+        validate_execution_request(irc_spec)
+        record = manager.submit(irc_spec)
+    except ExecutionTargetError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return V1JobCreatedResponse(
+        job_id=record.id,
+        status=record.status.value,
+        workflow=record.spec.workflow,
+        project_id=record.project_id,
+        mechanism_project_id=None,
+    )
 
 
 @router.get("/jobs/{job_id}/artifacts", response_model=ArtifactListResponse)

@@ -1,0 +1,6 @@
+COMMAND: python -m pytest tests/test_acp_api_v1.py::test_run_irc_endpoint -q
+KEY OUTPUT:
+.                                                                        [100%]
+1 passed, 1 warning in 2.73s
+The endpoint assertion covered 202 Accepted and the returned job_id for a manifest-backed TS artifact.
+EXIT CODE: 0
