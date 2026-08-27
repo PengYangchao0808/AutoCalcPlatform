@@ -33,7 +33,6 @@ from acp.scheduler.artifacts import ArtifactRegistry, capture_stage_artifacts
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
     EXIT_WAITING_REVIEW,
-    MECHANISM_CONFIG_FILENAME,
     SCAN_CONFIG_FILENAME,
     JobRecord,
     JobSpec,
@@ -42,15 +41,9 @@ from acp.scheduler.jobs import (
     censo_preset_from_method,
     censo_solvent_from_method,
     confsearch_method_flags,
-    highconfirm_method_flags,
     input_chemistry_flags,
-    lowconfirm_method_flags,
     nmr_method_flags,
-    pessearch_method_flags,
-    prepare_stage_batch_config,
     scan_method_flags,
-    stage_batch_request,
-    write_mechanism_job_config,
     xtbmd_method_flags,
 )
 from acp.scheduler.provenance import Provenance, build_provenance_for_job
@@ -174,107 +167,6 @@ def _read_json_object(path: Path) -> dict[str, Any] | None:
         logger.debug("Ignoring non-object JSON payload at %s", path)
         return None
     return payload
-
-
-def _find_mechanism_study_json(record: JobRecord) -> Path | None:
-    from acp.compat.legacy.layouts import find_study_layout
-
-    study_id = _opt_text(record.spec.method.get("study_id"))
-    layout = find_study_layout(Path(record.work_dir), study_id)
-    if layout is None:
-        logger.debug("No mechanism study.json found for job %s", record.id)
-        return None
-    if not layout.study_json.is_file():
-        logger.debug("Mechanism study.json missing for job %s at %s", record.id, layout.study_json)
-        return None
-    return layout.study_json
-
-
-def _extract_effective_fidelity(
-    study_data: Mapping[str, Any],
-    result: Mapping[str, Any],
-) -> str | None:
-    review_payload = result.get("review_payload")
-    if isinstance(review_payload, Mapping):
-        fidelity = _opt_text(review_payload.get("effective_fidelity"))
-        if fidelity is not None:
-            return fidelity
-
-    quality = _opt_text(study_data.get("quality"))
-    metadata = study_data.get("metadata")
-    metadata_dict = metadata if isinstance(metadata, Mapping) else {}
-    runner_meta = metadata_dict.get("study_runner")
-    runner_meta_dict = runner_meta if isinstance(runner_meta, Mapping) else {}
-    high_fidelity = metadata_dict.get("high_fidelity")
-    high_fidelity_dict = high_fidelity if isinstance(high_fidelity, Mapping) else {}
-
-    if quality == "high":
-        fidelity = _opt_text(high_fidelity_dict.get("profile"))
-        if fidelity is not None:
-            return fidelity
-        fidelity = _opt_text(runner_meta_dict.get("high_fidelity_profile_name"))
-        if fidelity is not None:
-            return fidelity
-
-    fidelity = _opt_text(runner_meta_dict.get("fidelity_profile_name"))
-    if fidelity is not None:
-        return fidelity
-    fidelity = _opt_text(runner_meta_dict.get("fidelity"))
-    if fidelity is not None:
-        return fidelity
-    fidelity = _opt_text(high_fidelity_dict.get("profile"))
-    if fidelity is not None:
-        return fidelity
-
-    routes = study_data.get("routes")
-    if isinstance(routes, list):
-        for route in routes:
-            if isinstance(route, Mapping):
-                fidelity = _opt_text(route.get("fidelity"))
-                if fidelity is not None:
-                    return fidelity
-    return None
-
-
-def populate_mechanism_study_result_metadata(
-    record: JobRecord,
-    result: Mapping[str, Any] | None,
-) -> dict[str, Any]:
-    enriched = dict(result or {})
-    if record.spec.workflow != "mechanism":
-        return enriched
-
-    study_path = _find_mechanism_study_json(record)
-    if study_path is None:
-        return enriched
-
-    study_data = _read_json_object(study_path)
-    if study_data is None:
-        return enriched
-
-    metadata = study_data.get("metadata")
-    metadata_dict = metadata if isinstance(metadata, Mapping) else {}
-    runner_meta = metadata_dict.get("study_runner")
-    runner_meta_dict = runner_meta if isinstance(runner_meta, Mapping) else {}
-    config_payload = runner_meta_dict.get("config")
-    config_dict = config_payload if isinstance(config_payload, Mapping) else {}
-    mechanism_config = config_dict.get("mechanism")
-    mechanism_config_dict = mechanism_config if isinstance(mechanism_config, Mapping) else {}
-
-    provider = (
-        _opt_text(runner_meta_dict.get("provider_backend"))
-        or _opt_text(mechanism_config_dict.get("provider_backend"))
-        or "native"
-    )
-    quality = _opt_text(study_data.get("quality"))
-    fidelity = _extract_effective_fidelity(study_data, enriched)
-
-    enriched["provider"] = provider
-    if fidelity is not None:
-        enriched["fidelity"] = fidelity
-    if quality is not None:
-        enriched["quality"] = quality
-    return enriched
 
 
 def _materialized_input_name(source: str, stem: str = "input") -> str:
@@ -408,95 +300,9 @@ def materialize_job_input(
     materialized_roles: dict[str, Path] | None = None,
 ) -> Path | None:
     if isinstance(inp.get("scan_request"), dict):
-        # S2 bond-length scan: the structure source is materialised inside
-        # the workflow (bond_scan.materialize_input), not by the scheduler.
         return None
-    if inp.get("source_type") == "mechanism":
-        reactant = _materialize_mechanism_role(
-            "reactant",
-            inp.get("reactant"),
-            inputs_dir,
-            run_root,
-        )
-        if materialized_roles is not None:
-            materialized_roles["reactant"] = reactant
-        for role in ("product", "ts_guess"):
-            payload = inp.get(role)
-            if payload is None:
-                continue
-            materialized = _materialize_mechanism_role(role, payload, inputs_dir, run_root)
-            if materialized_roles is not None:
-                materialized_roles[role] = materialized
-        return reactant
 
     return _materialize_single_input(inp, inputs_dir, run_root)
-
-
-def _mechanism_role_source(
-    inp: dict[str, Any],
-    role: str,
-    materialized_roles: Mapping[str, Path | str] | None = None,
-) -> str | None:
-    if materialized_roles and role in materialized_roles:
-        return str(materialized_roles[role])
-
-    legacy = inp.get(f"{role}_source")
-    if legacy:
-        return str(legacy)
-
-    role_value = inp.get(role)
-    if isinstance(role_value, dict):
-        nested_source = (
-            role_value.get("source") or role_value.get("input") or role_value.get("smiles")
-        )
-        if nested_source and role_value.get("source_type") != "xyz_text":
-            return str(nested_source)
-        return None
-
-    if role_value:
-        return str(role_value)
-    return None
-
-
-def _write_mechanism_config_if_needed(
-    spec: JobSpec,
-    work_dir: Path,
-    materialized: Path | None,
-    materialized_roles: Mapping[str, Path | str],
-) -> Path | None:
-    if spec.workflow != "mechanism":
-        return None
-
-    role_paths: dict[str, Path | str] = dict(materialized_roles)
-    if not role_paths and materialized is not None:
-        role_paths["reactant"] = materialized
-    reaction_definition = _load_mechanism_reaction_definition(work_dir, spec)
-    return write_mechanism_job_config(
-        work_dir,
-        spec.input,
-        spec.method,
-        spec.resources,
-        role_paths,
-        reaction_definition=reaction_definition,
-    )
-
-
-def _load_mechanism_reaction_definition(
-    work_dir: Path,
-    spec: JobSpec,
-) -> dict[str, Any] | None:
-    if spec.workflow != "mechanism":
-        return None
-    study_id = spec.method.get("study_id")
-    if not study_id:
-        return None
-    from acp.compat.legacy.layouts import find_reaction_json
-
-    path = find_reaction_json(work_dir, str(study_id))
-    if path is None:
-        return None
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    return payload if isinstance(payload, dict) else None
 
 
 def _looks_like_smiles(s: str) -> bool:
@@ -580,11 +386,7 @@ class JobRunner:
             raise RuntimeError(f"Local disk full, submission blocked for job {record.id}")
 
         materialized_roles: dict[str, Path] = {}
-        if record.spec.workflow == "mechanism":
-            inputs_dir = work_dir / "inputs"
-            inputs_dir.mkdir(parents=True, exist_ok=True)
-        else:
-            inputs_dir = work_dir
+        inputs_dir = work_dir
         materialized = materialize_job_input(
             record.spec.input,
             inputs_dir,
@@ -618,18 +420,11 @@ class JobRunner:
         effective_input_path = (
             str(materialized) if materialized else _extract_input_source(record.spec.input)
         )
-        mechanism_config_path = _write_mechanism_config_if_needed(
-            record.spec,
-            work_dir,
-            materialized,
-            materialized_roles,
-        )
         cmd = self._build_cmd(
             record.spec,
             work_dir,
             effective_input_path,
             materialized_roles,
-            mechanism_config_path=str(mechanism_config_path) if mechanism_config_path else None,
         )
         stdout_path = runtime_file(work_dir, "stdout.log")
         stderr_path = runtime_file(work_dir, "stderr.log")
@@ -903,18 +698,11 @@ class JobRunner:
         effective_input_path = (
             str(materialized) if materialized else _extract_input_source(record.spec.input)
         )
-        mechanism_config_path = _write_mechanism_config_if_needed(
-            record.spec,
-            work_dir,
-            materialized,
-            materialized_roles,
-        )
         cmd = self._build_cmd(
             record.spec,
             work_dir,
             effective_input_path,
             materialized_roles,
-            mechanism_config_path=str(mechanism_config_path) if mechanism_config_path else None,
         )
         stdout_path = runtime_file(work_dir, "stdout.log")
         stderr_path = runtime_file(work_dir, "stderr.log")
@@ -1130,19 +918,11 @@ class JobRunner:
         work_dir: Path,
         input_path: str = "",
         materialized_roles: Mapping[str, Path | str] | None = None,
-        mechanism_config_path: str | None = None,
     ) -> list[str]:
         wf = spec.workflow
         if wf not in (
-            "mechanism",
-            "mech-conf",
-            "mech-step",
-            "mech-confirm",
-            "mech-chain",
             "Confsearch",
             "PESsearch",
-            "Lowconfirm",
-            "Highconfirm",
             "BatchOptimize",
             "ensemble",
             "energy",
@@ -1151,8 +931,6 @@ class JobRunner:
             "singlepoint",
             "optimize",
             "frequency",
-            "optfreq",
-            "optfreqsp",
             "scan",
             "irc",
             "xtb_optimize",
@@ -1165,13 +943,8 @@ class JobRunner:
         res = spec.resources
 
         source = input_path or _extract_input_source(inp)
-        # Stage workflows receive their input via a validated artifact
-        # reference (plan §8), not a structure source — resolve before the
-        # single-source validation below.
-        if wf in ("PESsearch", "Lowconfirm", "Highconfirm"):
-            return self._build_stage_cmd(spec, work_dir)
-        # NMR carries multiple candidates + an experiment payload; resolve
-        # them before the standard single-source validation below.
+        if wf == "PESsearch":
+            return self._build_pessearch_cmd(spec, work_dir, source)
         if wf == "nmr":
             return self._build_nmr_cmd(spec, work_dir)
 
@@ -1210,51 +983,6 @@ class JobRunner:
             ewin = censo_ewin_from_method(method)
             if ewin is not None:
                 cmd += ["--ewin", str(ewin)]
-        elif wf == "mechanism":
-            cmd += ["--input", str(source), "--output", str(work_dir)]
-            cmd += [
-                "--mechanism-config",
-                mechanism_config_path or str(work_dir / MECHANISM_CONFIG_FILENAME),
-            ]
-            if spec.name:
-                cmd += ["--name", spec.name]
-            product = _mechanism_role_source(inp, "product", materialized_roles)
-            if product:
-                cmd += ["--product", str(product)]
-            ts_guess = _mechanism_role_source(inp, "ts_guess", materialized_roles)
-            if ts_guess:
-                cmd += ["--ts-guess", str(ts_guess)]
-            routes = inp.get("routes")
-            if routes:
-                cmd += ["--routes", json.dumps(routes)]
-        elif wf == "mech-conf":
-            cmd += ["--input", str(source), "--output", str(work_dir)]
-            if method.get("mode"):
-                cmd += ["--mode", str(method["mode"])]
-            if spec.name:
-                cmd += ["--name", spec.name]
-        elif wf == "mech-step":
-            cmd += ["--source", str(source), "--output", str(work_dir)]
-            target = inp.get("target") or method.get("target")
-            if target:
-                cmd += ["--target", str(target)]
-            plan = inp.get("coordinate_plan") or method.get("coordinate_plan")
-            if plan is not None:
-                cmd += ["--plan", json.dumps(plan)]
-            if method.get("strategy"):
-                cmd += ["--strategy", str(method["strategy"])]
-            if method.get("fidelity"):
-                cmd += ["--fidelity", str(method["fidelity"])]
-        elif wf == "mech-confirm":
-            step_manifest = inp.get("from") or inp.get("step_manifest") or source
-            cmd += ["--from", str(step_manifest), "--output", str(work_dir)]
-            if method.get("select"):
-                cmd += ["--select", str(method["select"])]
-            if method.get("fidelity"):
-                cmd += ["--fidelity", str(method["fidelity"])]
-        elif wf == "mech-chain":
-            chain_config = inp.get("config") or inp.get("chain_config") or source
-            cmd += ["--config", str(chain_config), "--output", str(work_dir)]
         elif wf in {"ensemble", "energy"}:
             cmd += ["--input", str(source), "--output", str(work_dir)]
             preset = censo_preset_from_method(method)
@@ -1303,7 +1031,7 @@ class JobRunner:
                 # GFN1 energy window for this workflow (CLI --ewin);
                 # the same flag name, different object vs. energy.
                 cmd += ["--ewin", str(ewin)]
-        elif wf in ("singlepoint", "optimize", "frequency", "scan", "optfreq", "optfreqsp"):
+        elif wf in ("singlepoint", "optimize", "frequency", "scan"):
             cmd += ["--input", str(source), "--output", str(work_dir)]
             if spec.name:
                 cmd += ["--name", spec.name]
@@ -1311,11 +1039,7 @@ class JobRunner:
             if levels:
                 from acp.catalog import method_levels_to_cli_flags
 
-                if wf == "optfreqsp":
-                    prefix_map = {"optfreq": "", "single_point": "sp-", "thermo": ""}
-                    cmd += method_levels_to_cli_flags(levels, prefix_map)
-                else:
-                    cmd += method_levels_to_cli_flags(levels)
+                cmd += method_levels_to_cli_flags(levels)
             if wf == "scan":
                 cmd += scan_method_flags(method, inp)
         elif wf == "irc":
@@ -1476,64 +1200,17 @@ class JobRunner:
             cmd += ["--mem", str(res["mem"])]
         return cmd
 
-    def _build_stage_cmd(self, spec: JobSpec, work_dir: Path) -> list[str]:
-        """Build the PESsearch / Lowconfirm / Highconfirm argv (plan §8, §11).
-
-        The source artifact was validated at submission time (API) and its
-        absolute path stored in ``input["from"]``. The runner materializes a
-        handoff copy (manifest + referenced payload dirs) under
-        ``WORK/01_PREPARE/handoff/`` so the job is self-contained on disk.
-        """
-        from acp.mechanism.stages.handoff import (
-            copy_handoff_payload,
-            resolve_source_job_work_dir,
-        )
-
-        wf = spec.workflow
+    def _build_pessearch_cmd(self, spec: JobSpec, work_dir: Path, source: str) -> list[str]:
+        """Build the PESsearch argv for local execution."""
         inp = spec.input
         method = spec.method
         res = spec.resources
-        bond_scan_mode = wf == "PESsearch" and str(method.get("mode") or "") == "bond_length_scan"
-        batch_mode = stage_batch_request(spec) is not None
+        bond_scan_mode = str(method.get("mode") or "") == "bond_length_scan"
 
-        cmd: list[str] = [self.python, "-m", "acp.cli", "run", wf]
-        if batch_mode:
-            batch_config = prepare_stage_batch_config(spec, work_dir)
-            if batch_config is None:
-                raise ValueError(f"{wf} batch_structures staging failed")
-            cmd += [
-                "--batch-config",
-                str(batch_config),
-                "--output",
-                str(work_dir),
-            ]
-            if wf == "Lowconfirm":
-                cmd += lowconfirm_method_flags(method)
-            else:
-                cmd += highconfirm_method_flags(method)
-        elif bond_scan_mode:
+        cmd: list[str] = [self.python, "-m", "acp.cli", "run", "PESsearch"]
+        if bond_scan_mode:
             cmd += ["--mode", "bond_length_scan"]
             scan_request = dict(inp.get("scan_request") or method.get("scan_request") or {})
-            src = dict(scan_request.get("source") or {})
-            if src.get("source_type") == "task_artifact":
-                from_manifest = inp.get("from")
-                if not from_manifest:
-                    source_job_id = inp.get("source_job_id") or src.get("source_job_id")
-                    from_artifact = inp.get("from_artifact")
-                    if not source_job_id or not from_artifact:
-                        raise ValueError(
-                            "bond_length_scan with task_artifact source requires "
-                            "input.from or input.source_job_id + input.from_artifact"
-                        )
-                    source_dir = resolve_source_job_work_dir(str(source_job_id))
-                    from_manifest = source_dir / str(from_artifact)
-                manifest_path = Path(str(from_manifest))
-                if not manifest_path.is_file():
-                    raise ValueError(f"{wf} source artifact not found: {manifest_path}")
-                handoff_dir = work_dir / "WORK" / "01_PREPARE" / "handoff"
-                local_manifest = copy_handoff_payload(manifest_path, handoff_dir)
-                src["artifact_path"] = str(local_manifest)
-                scan_request["source"] = src
             work_dir.mkdir(parents=True, exist_ok=True)
             scan_config_path = work_dir / SCAN_CONFIG_FILENAME
             scan_config_path.write_text(
@@ -1543,42 +1220,25 @@ class JobRunner:
             cmd += ["--scan-config", str(scan_config_path), "--output", str(work_dir)]
         else:
             from_manifest = inp.get("from")
-            if not from_manifest:
-                source_job_id = inp.get("source_job_id")
-                from_artifact = inp.get("from_artifact")
-                if not source_job_id or not from_artifact:
-                    raise ValueError(
-                        f"{wf} job requires input.from (resolved artifact path) or "
-                        "input.source_job_id + input.from_artifact"
-                    )
-                source_dir = resolve_source_job_work_dir(str(source_job_id))
-                from_manifest = source_dir / str(from_artifact)
-            manifest_path = Path(str(from_manifest))
-            if not manifest_path.is_file():
-                raise ValueError(f"{wf} source artifact not found: {manifest_path}")
-
-            handoff_dir = work_dir / "WORK" / "01_PREPARE" / "handoff"
-            snapshot_candidates = bool(inp.get("snapshot_candidates"))
-            local_manifest = copy_handoff_payload(manifest_path, handoff_dir)
-
-            cmd += ["--from", str(local_manifest), "--output", str(work_dir)]
-            if wf == "PESsearch":
-                cmd += pessearch_method_flags(method)
-                plan = inp.get("coordinate_plan") or method.get("coordinate_plan")
-                if plan is not None:
-                    cmd += ["--plan", json.dumps(plan)]
-                product = inp.get("product")
-                if product:
-                    cmd += ["--product", str(product)]
-                ts_guess = inp.get("ts_guess")
-                if ts_guess:
-                    cmd += ["--ts-guess", str(ts_guess)]
-            elif wf == "Lowconfirm":
-                cmd += lowconfirm_method_flags(method)
-                if snapshot_candidates:
-                    cmd += ["--snapshot-candidates"]
-            elif wf == "Highconfirm":
-                cmd += highconfirm_method_flags(method)
+            if from_manifest:
+                cmd += ["--from", str(from_manifest)]
+            cmd += ["--output", str(work_dir)]
+            if method.get("strategy"):
+                cmd += ["--strategy", str(method["strategy"])]
+            select = method.get("select")
+            if isinstance(select, (list, tuple)) and select:
+                cmd += ["--select", ",".join(str(item) for item in select)]
+            elif isinstance(select, str) and select.strip():
+                cmd += ["--select", select.strip()]
+            plan = inp.get("coordinate_plan") or method.get("coordinate_plan")
+            if plan is not None:
+                cmd += ["--plan", json.dumps(plan)]
+            product = inp.get("product")
+            if product:
+                cmd += ["--product", str(product)]
+            ts_guess = inp.get("ts_guess")
+            if ts_guess:
+                cmd += ["--ts-guess", str(ts_guess)]
 
         if spec.config_path:
             cmd += ["--config", str(spec.config_path)]
@@ -1923,5 +1583,4 @@ __all__ = [
     "JobRunnerRemoteProtocol",
     "find_workflow_state",
     "materialize_job_input",
-    "populate_mechanism_study_result_metadata",
 ]

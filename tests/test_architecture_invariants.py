@@ -194,3 +194,11 @@ def test_target_active_workflow_ids_are_exact() -> None:
         "BatchOptimize",
         "nmr",
     }
+
+
+def test_no_irc_calculation_step() -> None:
+    """IRC must be a standalone IrcRequest, never a CalculationStep."""
+    from acp.calculations.contracts import StepKind
+
+    irc_kinds = [k for k in StepKind if k.value == "irc"]
+    assert irc_kinds == [], f"StepKind should not contain irc, got: {irc_kinds}"

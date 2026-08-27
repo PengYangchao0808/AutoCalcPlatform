@@ -24,7 +24,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 from acp.calculations.contracts import JsonValue
-from acp.mechanism.project import MechanismProjectStore
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
     EXIT_WAITING_REVIEW,
@@ -32,7 +31,6 @@ from acp.scheduler.jobs import (
     JobRecord,
     JobSpec,
     JobStatus,
-    write_mechanism_reaction_json,
 )
 from acp.scheduler.metrics import MetricsExtractor
 from acp.scheduler.nodes import (
@@ -47,7 +45,6 @@ from acp.scheduler.provenance import compute_input_hash
 from acp.scheduler.runner import (
     JobRunner,
     find_workflow_state,
-    populate_mechanism_study_result_metadata,
 )
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
 from acp.scheduler.store import JobStore
@@ -189,7 +186,6 @@ class JobManager:
             self.runner.local_cleanup = self._local_cleanup
         self._projects = ProjectManager(self.store, self.run_root)
         self.default_project_id = self._projects.ensure_default_project()
-        self._mechanism_projects = MechanismProjectStore(self.store.db_path)
 
         # No ThreadPoolExecutor — all submitted jobs run concurrently via
         # the cluster/local system.  A background poller tracks status.
@@ -909,7 +905,6 @@ class JobManager:
             self.store.update(record)
             self._stage_task_observer.finalize_job(job_id, JobStatus.CANCELLED.value)
             self._write_job_json(record)
-            self._advance_mechanism_project_for_job(record)
             self._event_log(record).append("job.cancelled", job_id=job_id)
             self._dispatch_queued_jobs()
             return record
@@ -1103,9 +1098,7 @@ class JobManager:
     def continue_job(self, job_id: str) -> JobRecord:
         """Re-enter a FAILED/CANCELLED job from its checkpoint (plan §4.4).
 
-        Workflow matrix: ``mechanism`` re-enters the same work_dir (the
-        CLI auto-resumes from ``study.json`` phase fingerprints via the
-        stable study_id in ``mechanism_config.json``); ``xtbmd_censo_energy``
+        Workflow matrix: ``xtbmd_censo_energy``
         first persists ``method.resume=true`` into the spec so the rebuilt
         CLI command carries ``--resume``; calculation-plan workflows resume
         when their generic checkpoint is present. Other workflows without a
@@ -1464,7 +1457,6 @@ class JobManager:
                         reason="cancelled while waiting for execution capacity",
                     )
                     self._stage_task_observer.finalize_job(job_id, "cancelled")
-                    self._advance_mechanism_project_for_job(record)
                     return
                 if record.status.is_terminal:
                     return
@@ -1494,7 +1486,6 @@ class JobManager:
                     self._write_job_json(record)
                     self._event_log(record).append("job.failed", job_id=job_id, error=str(exc))
                     self._stage_task_observer.finalize_job(job_id, "failed")
-                    self._advance_mechanism_project_for_job(record)
                 return
 
         # Only poll if not already terminal (fake workflow finishes in _submit_job)
@@ -1595,7 +1586,6 @@ class JobManager:
 
         cancel_event = self._cancel_events.get(job_id, threading.Event())
         event_log = self._event_log(record)
-        self._materialize_mechanism_reaction_if_present(record)
 
         # ------------------------------------------------------------------
         # Fake workflow: run in-process to completion, mark COMPLETED now.
@@ -1612,7 +1602,6 @@ class JobManager:
             self._write_job_json(record)
             event_log.append("job.completed", job_id=job_id, exit_code=record.exit_code)
             self._stage_task_observer.finalize_job(job_id, "completed")
-            self._advance_mechanism_project_for_job(record)
             with self._lock:
                 self._cancel_events.pop(job_id, None)
             self._dispatch_queued_jobs()
@@ -1654,23 +1643,6 @@ class JobManager:
         self._sync_task_status(record)
         self._write_job_json(record)
         return True
-
-    def _materialize_mechanism_reaction_if_present(self, record: JobRecord) -> None:
-        if record.spec.workflow != "mechanism":
-            return
-        study_id = record.spec.method.get("study_id")
-        if not study_id:
-            return
-        study_row = self.store.get_mechanism_study(str(study_id))
-        if study_row is None:
-            return
-        reaction_json_raw = study_row.get("reaction_json")
-        if not isinstance(reaction_json_raw, str) or not reaction_json_raw.strip():
-            return
-        reaction_payload = json.loads(reaction_json_raw)
-        if not isinstance(reaction_payload, dict):
-            return
-        write_mechanism_reaction_json(Path(record.work_dir), str(study_id), reaction_payload)
 
     # ------------------------------------------------------------------ #
     # Execution target resolution (single decision point — P4)
@@ -1793,7 +1765,6 @@ class JobManager:
                 self._write_job_json(record)
                 event_log.append("job.failed", job_id=job_id, error=str(exc))
                 self._stage_task_observer.finalize_job(job_id, "failed")
-                self._advance_mechanism_project_for_job(record)
                 self._dispatch_queued_jobs()
                 return
             self._metrics_extractor.extract(record.id, Path(record.work_dir))
@@ -1813,7 +1784,7 @@ class JobManager:
             result = dict(record.result or {})
             if payload is not None:
                 result["review_payload"] = payload
-            record.result = populate_mechanism_study_result_metadata(record, result)
+            record.result = result
             record.touch()
             self.store.update(record)
             self._sync_task_status(record)
@@ -1850,7 +1821,6 @@ class JobManager:
         self.store.update(record)
         self._sync_task_status(record)
         self._write_job_json(record)
-        self._advance_mechanism_project_for_job(record)
         with self._lock:
             self._cancel_events.pop(job_id, None)
         self._dispatch_queued_jobs()
@@ -1900,7 +1870,7 @@ class JobManager:
                 result["state"] = json.loads(state_path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 pass
-        return populate_mechanism_study_result_metadata(record, result)
+        return result
 
     def _requeue_active_on_startup(self) -> None:
         # Mark interrupted jobs FAILED so their work_dir is retained for
@@ -1921,7 +1891,6 @@ class JobManager:
             record.touch()
             self.store.update(record)
             self._stage_task_observer.finalize_job(record.id, JobStatus.CANCELLED.value)
-            self._advance_mechanism_project_for_job(record)
             logger.info("Marked CANCELLING job %s as CANCELLED after restart", record.id)
 
         # PAUSED jobs: local ones died with the server (their frozen process
@@ -1946,7 +1915,6 @@ class JobManager:
             record.touch()
             self.store.update(record)
             self._stage_task_observer.finalize_job(record.id, JobStatus.FAILED.value)
-            self._advance_mechanism_project_for_job(record)
             logger.info("Marked paused job %s as FAILED after restart", record.id)
 
         # WAITING_REVIEW jobs are intentionally excluded here: a server restart
@@ -1972,7 +1940,6 @@ class JobManager:
                     self.store.update(record)
                     self._write_job_json(record)
                     self._stage_task_observer.finalize_job(record.id, JobStatus.COMPLETED.value)
-                    self._advance_mechanism_project_for_job(record)
                     logger.info("Marked interrupted job %s as COMPLETED (disk probe)", record.id)
                     continue
                 record.status = JobStatus.FAILED
@@ -1981,7 +1948,6 @@ class JobManager:
                 record.touch()
                 self.store.update(record)
                 self._stage_task_observer.finalize_job(record.id, JobStatus.FAILED.value)
-                self._advance_mechanism_project_for_job(record)
                 logger.info("Marked interrupted job %s as FAILED", record.id)
 
     def _disk_shows_completed(self, work_dir: Path) -> bool:
@@ -2027,35 +1993,6 @@ class JobManager:
         if not record.remote_job_id:
             return False
         return self.remote_runner.recover_job_state(record)
-
-    # ── Mechanism project hook ───────────────────────────────────────────
-
-    def _advance_mechanism_project_for_job(self, record: JobRecord) -> None:
-        """Advance the mechanism project state machine when a stage job finishes.
-
-        Called at every terminal-state transition (local poll, remote poll,
-        cancel, fake completion, restart recovery). Skips silently if the
-        job has no ``mechanism_project_id`` in its spec.
-        """
-        mech_project_id = getattr(record.spec, "mechanism_project_id", None)
-        if not mech_project_id:
-            return
-        workflow = record.spec.workflow
-        status_val = record.status.value
-        try:
-            self._mechanism_projects.advance_for_job(
-                project_id=mech_project_id,
-                job_id=record.id,
-                workflow=workflow,
-                job_status=status_val,
-            )
-        except Exception:
-            logger.warning(
-                "Failed to advance mechanism project %s for job %s",
-                mech_project_id,
-                record.id,
-                exc_info=True,
-            )
 
 
 __all__ = ["JobManager"]

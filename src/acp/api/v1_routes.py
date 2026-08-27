@@ -206,7 +206,7 @@ from acp.scheduler.remote.fetcher import (
     RemoteResultFetcher as _RemoteResultFetcher,
 )
 from acp.scheduler.remote.node_manager import NodeManager
-from acp.scheduler.runner import find_workflow_state, populate_mechanism_study_result_metadata
+from acp.scheduler.runner import find_workflow_state
 from acp.scheduler.stage_tasks import StageTask, StageTaskStore
 from acp.scheduler.store import JobStore
 from acp.scheduler.structure_sources import StructureSourceService
@@ -1416,13 +1416,6 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
             status_code=400,
             detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}",
         )
-    if req.mechanism_project_id is not None:
-        mech_proj = manager._mechanism_projects.get(req.mechanism_project_id)
-        if mech_proj is None:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Mechanism project not found: {req.mechanism_project_id}",
-            )
     if req.workflow == "mechanism":
         try:
             _ = MechanismJobInput.model_validate(req.input)
@@ -1464,7 +1457,6 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         config_path=req.config_path,
         tags=req.tags,
         project_id=req.project_id,
-        mechanism_project_id=req.mechanism_project_id,
         execution_mode=req.execution_mode,
         target_node=req.target_node,
         molecule_name=molecule_name,
@@ -1479,19 +1471,11 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         record = manager.submit(spec)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if req.mechanism_project_id is not None:
-        stage_map = {"Confsearch": "s1", "PESsearch": "s2", "Lowconfirm": "s3", "Highconfirm": "s4"}
-        stage = stage_map.get(req.workflow)
-        if stage:
-            manager._mechanism_projects.set_stage_job(req.mechanism_project_id, stage, record.id)
-            if record.status.is_terminal:
-                manager._advance_mechanism_project_for_job(record)
     return V1JobCreatedResponse(
         job_id=record.id,
         status=record.status.value,
         workflow=record.spec.workflow,
         project_id=record.project_id,
-        mechanism_project_id=req.mechanism_project_id,
     )
 
 
@@ -2666,8 +2650,7 @@ def _backfill_result_from_disk(record: JobRecord) -> dict[str, Any] | None:
                 payload = None
             if isinstance(payload, dict):
                 result["state"] = payload
-    enriched = populate_mechanism_study_result_metadata(record, result)
-    return enriched or None
+    return result or None
 
 
 def _mechanism_stage_fallback(record: JobRecord) -> list[JobStageEntry]:

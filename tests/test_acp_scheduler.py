@@ -17,17 +17,17 @@ import pytest
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
     EXIT_WAITING_REVIEW,
-    MECHANISM_CONFIG_FILENAME,
     JobRecord,
     JobSpec,
     JobStatus,
-    mechanism_method_flags,
-    write_mechanism_job_config,
 )
 from acp.scheduler.manager import JobManager
 from acp.scheduler.migrations import migrate
-from acp.scheduler.runner import JobRunner, _write_mechanism_config_if_needed, materialize_job_input
+from acp.scheduler.runner import JobRunner, materialize_job_input
 from acp.scheduler.store import JobStore
+
+# Local constant for tests that reference the retired mechanism config filename.
+MECHANISM_CONFIG_FILENAME = "mechanism_config.json"
 
 
 def _write_mechanism_study_json(
@@ -96,6 +96,7 @@ def test_materialize_structure_asset_preserves_com_suffix(tmp_path: Path) -> Non
     assert dest.name == "input.com"
 
 
+@pytest.mark.skip(reason="mechanism retired — write_mechanism_job_config removed")
 def test_mechanism_frontend_payload_materializes_and_builds_cmd(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -195,6 +196,7 @@ def test_mechanism_frontend_payload_materializes_and_builds_cmd(
     assert "--study-id" not in cmd
 
 
+@pytest.mark.skip(reason="mechanism retired — mechanism_method_flags removed")
 def test_mechanism_method_flags_emit_study_controls() -> None:
     assert mechanism_method_flags(
         {
@@ -219,6 +221,7 @@ def test_mechanism_method_flags_emit_study_controls() -> None:
     ]
 
 
+@pytest.mark.skip(reason="mechanism retired — _write_mechanism_config_if_needed removed")
 def test_mechanism_runner_cmd_uses_config_channel(tmp_path: Path) -> None:
     runner = JobRunner(python_executable="python")
     spec = JobSpec(
@@ -248,6 +251,7 @@ def test_mechanism_runner_cmd_uses_config_channel(tmp_path: Path) -> None:
     assert "--auto-converge" not in cmd
 
 
+@pytest.mark.skip(reason="mechanism retired — write_mechanism_job_config removed")
 def test_mechanism_reaction_json_materializes_and_sets_schema_version(tmp_path: Path) -> None:
     mgr = JobManager(run_root=tmp_path, max_running=1)
     try:
@@ -320,6 +324,7 @@ def test_mechanism_reaction_json_materializes_and_sets_schema_version(tmp_path: 
         mgr.shutdown()
 
 
+@pytest.mark.skip(reason="mechanism retired — materialize_job_input mechanism branch removed")
 def test_mechanism_materialize_requires_valid_reactant(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="reactant"):
         materialize_job_input(
@@ -761,6 +766,7 @@ def test_poll_job_translates_waiting_review_exit_code(tmp_path: Path) -> None:
         mgr.shutdown()
 
 
+@pytest.mark.skip(reason="mechanism retired — populate_mechanism_study_result_metadata removed")
 def test_collect_result_extracts_mechanism_study_metadata_for_completed_job(tmp_path: Path) -> None:
     mgr = JobManager(run_root=tmp_path, poll_interval=30)
     try:
@@ -793,6 +799,7 @@ def test_collect_result_extracts_mechanism_study_metadata_for_completed_job(tmp_
         mgr.shutdown()
 
 
+@pytest.mark.skip(reason="mechanism retired — populate_mechanism_study_result_metadata removed")
 def test_poll_job_waiting_review_extracts_mechanism_study_metadata(tmp_path: Path) -> None:
     mgr = JobManager(run_root=tmp_path, poll_interval=30)
     try:
@@ -841,6 +848,7 @@ def test_poll_job_waiting_review_extracts_mechanism_study_metadata(tmp_path: Pat
         mgr.shutdown()
 
 
+@pytest.mark.skip(reason="mechanism retired — populate_mechanism_study_result_metadata removed")
 def test_collect_result_skips_mechanism_metadata_when_study_dir_missing(tmp_path: Path) -> None:
     mgr = JobManager(run_root=tmp_path, poll_interval=30)
     try:
@@ -866,6 +874,7 @@ def test_collect_result_skips_mechanism_metadata_when_study_dir_missing(tmp_path
         mgr.shutdown()
 
 
+@pytest.mark.skip(reason="mechanism retired — mechanism store helpers removed")
 def test_migration_006_and_mechanism_store_helpers(tmp_path: Path) -> None:
     db_path = tmp_path / "db" / "scheduler.db"
     applied_first = migrate(db_path)

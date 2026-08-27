@@ -571,7 +571,6 @@ def _row_to_record(row: sqlite3.Row) -> JobRecord:
         config_path=spec_raw.get("config_path"),
         tags=spec_raw.get("tags", []),
         project_id=spec_raw.get("project_id", project_id),
-        mechanism_project_id=spec_raw.get("mechanism_project_id"),
         input_hash=spec_raw.get("input_hash", input_hash),
         execution_mode=spec_raw.get("execution_mode"),
         target_node=spec_raw.get("target_node"),

@@ -24,9 +24,14 @@ import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from acp.scheduler.events import JobEventLog
-from acp.scheduler.jobs import MECHANISM_CONFIG_FILENAME, JobRecord, JobSpec
+from acp.scheduler.jobs import JobRecord, JobSpec
 from acp.scheduler.remote import ssh as ssh_mod
+
+# Local constant for tests that reference the retired mechanism config filename.
+MECHANISM_CONFIG_FILENAME = "mechanism_config.json"
 from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
 from acp.scheduler.remote.monitor import RemoteJobMonitor
 from acp.scheduler.remote.runner import (
@@ -215,6 +220,7 @@ def make_node(name="compute-01", **kw):
 # ====================================================================== #
 
 
+@pytest.mark.skip(reason="mechanism retired — mechanism workflow removed from remote CLI")
 def test_build_remote_cli_command_mechanism():
     spec = JobSpec(
         workflow="mechanism",
@@ -234,6 +240,7 @@ def test_build_remote_cli_command_mechanism():
     print("  [OK] build_remote_cli_command: mechanism workflow")
 
 
+@pytest.mark.skip(reason="mechanism retired — mechanism workflow removed from remote CLI")
 def test_build_lsf_script_spec_mechanism_uses_remote_config_path():
     node = make_node()
     spec = JobSpec(workflow="mechanism", input={"source": "CCO"}, method={"fidelity": "s4"})
@@ -732,6 +739,7 @@ def test_runner_full_flow_success():
     print(f"  [OK] full flow: exit={exit_code}, lsf=54321, events={len(events)}, no download")
 
 
+@pytest.mark.skip(reason="mechanism retired — mechanism workflow removed from remote runner")
 def test_runner_full_flow_mechanism_uploads_mechanism_config():
     node = make_node()
     config = RemoteExecutionConfig(execution_mode="remote", auto_sync=False, nodes=[node])

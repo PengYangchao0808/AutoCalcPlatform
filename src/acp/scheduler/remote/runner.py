@@ -42,15 +42,10 @@ from typing import NotRequired, TypedDict, cast
 
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
-    BATCH_CONFIG_FILENAME,
-    MECHANISM_CONFIG_FILENAME,
     SCAN_CONFIG_FILENAME,
     JobRecord,
     JobSpec,
     JobStatus,
-    prepare_stage_batch_config,
-    stage_batch_request,
-    write_mechanism_job_config,
 )
 from acp.scheduler.nodes import ExecutionTargetError
 from acp.scheduler.provenance import build_provenance_for_job
@@ -744,11 +739,7 @@ class RemoteJobRunner:
         # 3. Prepare remote directory + upload input
         self._stager.make_remote_dir(node, remote_job_dir)
 
-        is_mechanism = spec.workflow == "mechanism"
-        # v2 layout (§5): non-mechanism primary input materializes at the task
-        # root as input.xyz (local + remote). Mechanism keeps the inputs/ dir
-        # for role files (mechanism_config.json role-path contract).
-        inputs_dir = work_dir / "inputs" if is_mechanism else work_dir
+        inputs_dir = work_dir
         inputs_dir.mkdir(parents=True, exist_ok=True)
         run_root = work_dir.parent.parent
         materialized_roles: dict[str, Path] = {}
@@ -757,14 +748,8 @@ class RemoteJobRunner:
         bond_scan_mode = spec.workflow == "PESsearch" and (
             str(spec.method.get("mode") or "") == "bond_length_scan"
         )
-        batch_mode = spec.workflow in ("Lowconfirm", "Highconfirm") and (
-            stage_batch_request(spec) is not None
-        )
         remote_input_name = materialized.name if materialized else "input.xyz"
-        remote_role_paths: dict[str, str] = {}
         if bond_scan_mode:
-            # S2 bond-length scan: the structure source is materialised inside
-            # the workflow; the scheduler only ships scan_config.json.
             scan_payload = build_remote_scan_config_payload(spec) or {}
             scan_config_local = work_dir / SCAN_CONFIG_FILENAME
             scan_config_local.write_text(
@@ -783,119 +768,17 @@ class RemoteJobRunner:
                 node=node.name,
                 role="scan_config",
             )
-        elif batch_mode:
-            # S3/S4 batch structures: the staged batch_config.json plus the
-            # handoff-copied S2 candidate manifests/structures under
-            # WORK/01_PREPARE/handoff/ make the job self-contained.
-            batch_config_local = prepare_stage_batch_config(spec, work_dir, remote=True)
-            if batch_config_local is None:
-                raise RemoteSubmissionError(
-                    f"Failed to stage batch_config.json for job {record.id}"
-                )
-            self._stager.upload_file(
-                node,
-                batch_config_local,
-                posixpath.join(remote_job_dir, BATCH_CONFIG_FILENAME),
-            )
-            handoff_dir = work_dir / "WORK" / "01_PREPARE" / "handoff"
-            if handoff_dir.is_dir():
-                self._stager.upload_directory(
-                    node,
-                    handoff_dir,
-                    posixpath.join(remote_job_dir, "WORK", "01_PREPARE", "handoff"),
-                )
-            remote_input_name = BATCH_CONFIG_FILENAME
+        elif materialized and materialized.is_file():
+            remote_path = posixpath.join(remote_job_dir, "input.xyz")
+            self._stager.upload_file(node, materialized, remote_path)
             event_log.append(
                 "remote.input_uploaded",
                 job_id=record.id,
                 node=node.name,
-                role="batch_config",
+                role="input",
             )
-        elif materialized and materialized.is_file():
-            if is_mechanism:
-                remote_inputs_dir = posixpath.join(remote_job_dir, "inputs")
-                self._stager.make_remote_dir(node, remote_inputs_dir)
-                upload_paths = materialized_roles or {"reactant": materialized}
-                for role, local_path in upload_paths.items():
-                    remote_path = posixpath.join(remote_inputs_dir, local_path.name)
-                    self._stager.upload_file(node, local_path, remote_path)
-                    remote_role_paths[role] = posixpath.join("inputs", local_path.name)
-                    event_log.append(
-                        "remote.input_uploaded",
-                        job_id=record.id,
-                        node=node.name,
-                        role=role,
-                    )
-            else:
-                remote_path = posixpath.join(remote_job_dir, "input.xyz")
-                self._stager.upload_file(node, materialized, remote_path)
-                event_log.append(
-                    "remote.input_uploaded",
-                    job_id=record.id,
-                    node=node.name,
-                    role="input",
-                )
         else:
             raise RemoteSubmissionError(f"Failed to materialise input for job {record.id}")
-
-        if spec.workflow == "mechanism":
-            reaction_definition = _load_local_reaction_definition(work_dir, spec)
-            mechanism_config_path = write_mechanism_job_config(
-                work_dir,
-                spec.input,
-                spec.method,
-                spec.resources,
-                remote_role_paths,
-                reaction_definition=reaction_definition,
-            )
-            remote_mechanism_config_path = posixpath.join(
-                remote_job_dir,
-                MECHANISM_CONFIG_FILENAME,
-            )
-            self._stager.upload_file(
-                node,
-                mechanism_config_path,
-                remote_mechanism_config_path,
-            )
-            event_log.append(
-                "remote.input_uploaded",
-                job_id=record.id,
-                node=node.name,
-                role="mechanism_config",
-            )
-            if reaction_definition is not None:
-                from acp.compat.legacy.layouts import find_reaction_json
-
-                local_reaction_path = find_reaction_json(
-                    work_dir,
-                    str(spec.method.get("study_id")),
-                )
-                if local_reaction_path is None:
-                    raise RemoteSubmissionError(
-                        f"reaction.json disappeared before remote upload for job {record.id}"
-                    )
-                try:
-                    relative_reaction_path = local_reaction_path.relative_to(work_dir)
-                except ValueError as exc:
-                    raise RemoteSubmissionError(
-                        f"reaction.json is outside task root for job {record.id}"
-                    ) from exc
-                remote_reaction_path = posixpath.join(
-                    remote_job_dir,
-                    relative_reaction_path.as_posix(),
-                )
-                self._stager.make_remote_dir(node, posixpath.dirname(remote_reaction_path))
-                self._stager.upload_file(
-                    node,
-                    local_reaction_path,
-                    remote_reaction_path,
-                )
-                event_log.append(
-                    "remote.input_uploaded",
-                    job_id=record.id,
-                    node=node.name,
-                    role="reaction_json",
-                )
 
         # 4. Generate + upload LSF script
         lsf_spec, cli_cmd = build_lsf_script_spec(
@@ -905,10 +788,7 @@ class RemoteJobRunner:
             queue=self._config.queue,
             walltime=self._config.walltime,
             extra_flags=self._config.extra_flags,
-            input_path=(
-                posixpath.join("inputs", remote_input_name) if is_mechanism else "input.xyz"
-            ),
-            materialized_role_paths=remote_role_paths,
+            input_path="input.xyz",
             remote_dir_name=spec.task_dir_name() if spec.uses_v2_naming else None,
         )
         script_text = generate_lsf_script(lsf_spec)
@@ -1511,18 +1391,4 @@ class RemoteJobRunner:
             logger.debug("Provenance build failed for %s", record.id, exc_info=True)
 
 
-def _load_local_reaction_definition(work_dir: Path, spec: JobSpec) -> dict[str, object] | None:
-    if spec.workflow != "mechanism":
-        return None
-    study_id = spec.method.get("study_id")
-    if not study_id:
-        return None
-    from acp.compat.legacy.layouts import find_reaction_json
-
-    path = find_reaction_json(work_dir, str(study_id))
-    if path is None:
-        return None
-    import json
-
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    return payload if isinstance(payload, dict) else None
+__all__ = ["RemoteJobRunner", "RemoteNodeUnavailableError", "RemoteSubmissionError"]

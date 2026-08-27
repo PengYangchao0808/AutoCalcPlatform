@@ -7,6 +7,7 @@ result_manifest.json products, downstream batch default-all inclusion, explicit 
 subsets, downstream handoff, and the energy-graph user-state projection.
 """
 
+# pyright: reportAny=false, reportExplicitAny=false, reportArgumentType=false, reportAttributeAccessIssue=false, reportFunctionMemberAccess=false, reportMissingParameterType=false, reportPossiblyUnboundVariable=false, reportPrivateLocalImportUsage=false, reportPrivateUsage=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownParameterType=false, reportUnknownVariableType=false, reportUnusedCallResult=false, reportUnusedFunction=false, reportUnusedParameter=false, reportUnannotatedClassAttribute=false
 from __future__ import annotations
 
 import json
@@ -347,7 +348,6 @@ class TestS2CandidateApi:
         self,
         client: TestClient,
         tmp_path: Path,
-        mechanism_project_id: str | None = None,
     ) -> str:
         manager = _api_manager(client)
         setattr(manager, "runner", _StubRunner(manager))
@@ -357,7 +357,6 @@ class TestS2CandidateApi:
             input={"from": str(tmp_path / "placeholder")},
             method={"mode": "bond_length_scan"},
             output_dir=str(tmp_path / "jobs"),
-            mechanism_project_id=mechanism_project_id,
             molecule_name="wd",
             task_name="PESsearch",
         )
@@ -370,19 +369,13 @@ class TestS2CandidateApi:
         assert payload["recommendations"]["ts"]
         return record.id
 
-    def _confirmed_project(
+    def _job_recommendations(
         self, client: TestClient, tmp_path: Path
-    ) -> tuple[str, str, dict[str, Any]]:
-        manager = _api_manager(client)
+    ) -> tuple[str, dict[str, Any]]:
         job_id = self._completed_job(client, tmp_path)
-        response = client.post("/api/v1/mechanism-projects", json={"name": "cand"})
-        project_id = str(response.json()["project_id"])
-        manager._mechanism_projects.set_stage_job(project_id, "s2", job_id)
-        project = manager._mechanism_projects.get(project_id)
-        assert project is not None
-        manager._mechanism_projects._advance_completed(project, "s2")
         response = client.get(f"/api/v1/jobs/{job_id}/s2/candidates")
-        return project_id, job_id, response.json()["recommendations"]
+        assert response.status_code == 200, response.text
+        return job_id, response.json()["recommendations"]
 
     def _job_candidate(self, client: TestClient, tmp_path: Path) -> tuple[str, dict[str, Any]]:
         job_id = self._completed_job(client, tmp_path)
@@ -506,12 +499,12 @@ class TestS2CandidateApi:
     def test_full_candidate_lifecycle(self, tmp_path: Path, fake_orca) -> None:
         with make_client(tmp_path) as client:
             manager = _api_manager(client)
-            project_id, job_id, recommendations = self._confirmed_project(client, tmp_path)
+            job_id, recommendations = self._job_recommendations(client, tmp_path)
             ts_id = recommendations["ts"][0]["candidate_id"]
             ts_frame = int(recommendations["ts"][0]["frame_index"])
 
             review = client.post(
-                f"/api/v1/mechanism-projects/{project_id}/s2/review",
+                f"/api/v1/jobs/{job_id}/s2/review",
                 json={
                     "candidates": [
                         {"candidate_id": ts_id, "frame_index": ts_frame, "role": "intermediate"},
@@ -521,7 +514,9 @@ class TestS2CandidateApi:
             )
             assert review.status_code == 200, review.text
             body = review.json()
-            assert body["project_status"] == "s2_confirmed"
+            assert body["job_id"] == job_id
+            assert body["project_id"] is None
+            assert body["active_count"] == 2
             assert body["review"]["status"] == "confirmed"
             rows = {row["candidate_id"]: row for row in body["candidates"]}
             assert rows[ts_id]["role"] == "intermediate"
@@ -557,14 +552,11 @@ class TestS2CandidateApi:
             }
             assert saved_ids == {ts_id, "manual_frame_012"}
 
-            assert (
-                client.post(f"/api/v1/mechanism-projects/{project_id}/s3", json={}).status_code
-                == 404
-            )
+            assert client.post(f"/api/v1/jobs/{job_id}/s3", json={}).status_code == 404
 
     def test_unsaved_recommendations_projected_as_pending(self, tmp_path: Path, fake_orca) -> None:
         with make_client(tmp_path) as client:
-            _project_id, job_id, _recs = self._confirmed_project(client, tmp_path)
+            job_id, _recs = self._job_recommendations(client, tmp_path)
             graph = client.get(f"/api/v1/jobs/{job_id}/energy-graph").json()
             ts_annotations = [
                 a for a in graph["annotations"] if a["type"] in {"ts", "intermediate"}
@@ -576,10 +568,10 @@ class TestS2CandidateApi:
 
     def test_legacy_payload_still_accepted(self, tmp_path: Path, fake_orca) -> None:
         with make_client(tmp_path) as client:
-            _project_id, _job_id, recommendations = self._confirmed_project(client, tmp_path)
+            job_id, recommendations = self._job_recommendations(client, tmp_path)
             ts_id = recommendations["ts"][0]["candidate_id"]
             review = client.post(
-                f"/api/v1/mechanism-projects/{_project_id}/s2/review",
+                f"/api/v1/jobs/{job_id}/s2/review",
                 json={"selected_ts": [ts_id]},
             )
             assert review.status_code == 200, review.text
@@ -591,11 +583,11 @@ class TestS2CandidateApi:
 
     def test_cancel_marking_deactivates_candidate(self, tmp_path: Path, fake_orca) -> None:
         with make_client(tmp_path) as client:
-            project_id, job_id, recommendations = self._confirmed_project(client, tmp_path)
+            job_id, recommendations = self._job_recommendations(client, tmp_path)
             ts_id = recommendations["ts"][0]["candidate_id"]
             ts_frame = int(recommendations["ts"][0]["frame_index"])
             first = client.post(
-                f"/api/v1/mechanism-projects/{project_id}/s2/review",
+                f"/api/v1/jobs/{job_id}/s2/review",
                 json={
                     "candidates": [{"candidate_id": ts_id, "frame_index": ts_frame, "role": "ts"}]
                 },
@@ -603,7 +595,7 @@ class TestS2CandidateApi:
             assert first.status_code == 200
 
             second = client.post(
-                f"/api/v1/mechanism-projects/{project_id}/s2/review",
+                f"/api/v1/jobs/{job_id}/s2/review",
                 json={"candidates": []},
             )
             assert second.status_code == 200
@@ -618,15 +610,15 @@ class TestS2CandidateApi:
 
     def test_validation_errors(self, tmp_path: Path, fake_orca) -> None:
         with make_client(tmp_path) as client:
-            project_id, _job_id, _recs = self._confirmed_project(client, tmp_path)
+            job_id, _recs = self._job_recommendations(client, tmp_path)
             unknown_frame = client.post(
-                f"/api/v1/mechanism-projects/{project_id}/s2/review",
+                f"/api/v1/jobs/{job_id}/s2/review",
                 json={"candidates": [{"frame_index": 99, "role": "ts"}]},
             )
             assert unknown_frame.status_code == 422
 
             dup_frame = client.post(
-                f"/api/v1/mechanism-projects/{project_id}/s2/review",
+                f"/api/v1/jobs/{job_id}/s2/review",
                 json={
                     "candidates": [
                         {"frame_index": 4, "role": "ts"},
@@ -637,24 +629,21 @@ class TestS2CandidateApi:
             assert dup_frame.status_code == 422
 
             bad_role = client.post(
-                f"/api/v1/mechanism-projects/{project_id}/s2/review",
+                f"/api/v1/jobs/{job_id}/s2/review",
                 json={"candidates": [{"frame_index": 4, "role": "transition"}]},
             )
             assert bad_role.status_code == 422
 
             legacy_unknown = client.post(
-                f"/api/v1/mechanism-projects/{project_id}/s2/review",
+                f"/api/v1/jobs/{job_id}/s2/review",
                 json={"selected_ts": ["ts_guess_999"]},
             )
             assert legacy_unknown.status_code == 422
 
-    def test_project_s3_creation_endpoint_removed(self, tmp_path: Path, fake_orca) -> None:
+    def test_s3_creation_endpoint_removed(self, tmp_path: Path, fake_orca) -> None:
         with make_client(tmp_path) as client:
-            project_id, _job_id, _recs = self._confirmed_project(client, tmp_path)
-            assert (
-                client.post(f"/api/v1/mechanism-projects/{project_id}/s3", json={}).status_code
-                == 404
-            )
+            job_id, _recs = self._job_recommendations(client, tmp_path)
+            assert client.post(f"/api/v1/jobs/{job_id}/s3", json={}).status_code == 404
 
 
 # ── module import guard ─────────────────────────────────────────────────

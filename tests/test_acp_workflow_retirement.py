@@ -135,7 +135,7 @@ def test_runner_builds_confsearch_cmd(tmp_path: Path) -> None:
     assert "--ewin 8.0" in joined
 
 
-def test_runner_builds_stage_cmd_with_handoff_copy(tmp_path: Path) -> None:
+def test_runner_builds_pessearch_cmd_from_manifest(tmp_path: Path) -> None:
     from acp.scheduler.runner import JobRunner
 
     source_job = _write_confsearch_source_job(tmp_path)
@@ -160,10 +160,8 @@ def test_runner_builds_stage_cmd_with_handoff_copy(tmp_path: Path) -> None:
     assert "run PESsearch" in joined
     assert "--strategy guided-scan" in joined
     assert "--plan" in joined
-    handoff = work_dir / "WORK" / "01_PREPARE" / "handoff"
-    assert (handoff / "confsearch_manifest.json").is_file()
-    assert (handoff / "conformers" / "conf_0001.xyz").is_file()
-    assert f"--from {handoff / 'confsearch_manifest.json'}" in joined
+    assert f"--from {source_job / 'RESULT' / 'confsearch' / 'confsearch_manifest.json'}" in joined
+    assert not (work_dir / "WORK" / "01_PREPARE" / "handoff").exists()
 
 
 def test_remote_script_gen_stage_and_confsearch() -> None:
@@ -184,12 +182,12 @@ def test_remote_script_gen_stage_and_confsearch() -> None:
 
     stage_cmd = build_remote_cli_command(
         JobSpec(
-            workflow="Lowconfirm",
-            input={"from": "/abs/s2_path_manifest.json"},
-            method={"select": ["ts_guess_001"]},
+            workflow="PESsearch",
+            input={"from": "/abs/confsearch_manifest.json"},
+            method={"strategy": "guided-scan"},
         ),
     )
     stage_joined = " ".join(stage_cmd)
-    assert "run Lowconfirm" in stage_joined
-    assert "--from /abs/s2_path_manifest.json" in stage_joined
-    assert "--select ts_guess_001" in stage_joined
+    assert "run PESsearch" in stage_joined
+    assert "--from /abs/confsearch_manifest.json" in stage_joined
+    assert "--strategy guided-scan" in stage_joined

@@ -12,16 +12,14 @@ metadata.
 from __future__ import annotations
 
 import json
-import os
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
 
 from acp.scheduler.nodes import ExecutionMode
-from acp.storage.layout import TaskLayout
 
 
 def _utc_now() -> datetime:
@@ -91,12 +89,9 @@ def _derive_supported_workflows() -> tuple[str, ...]:
         return (
             "ensemble",
             "energy",
-            "mechanism",
             "singlepoint",
             "optimize",
             "frequency",
-            "optfreq",
-            "optfreqsp",
             "fake",
         )
     active = tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
@@ -109,68 +104,8 @@ def _derive_supported_workflows() -> tuple[str, ...]:
 SUPPORTED_WORKFLOWS: tuple[str, ...] = _derive_supported_workflows()
 
 _CENSO_PRESETS: tuple[str, ...] = ("censo-light", "censo-default", "censo-zero")
-MECHANISM_CONFIG_FILENAME = "mechanism_config.json"
 SCAN_CONFIG_FILENAME = "scan_config.json"
 BATCH_CONFIG_FILENAME = "batch_config.json"
-
-
-def stage_batch_request(spec: JobSpec) -> dict[str, Any] | None:
-    """Return a Lowconfirm/Highconfirm job's batch-structure request (or None).
-
-    The API stores the normalized batch input under
-    ``input["batch_request"]`` (batch plan §3); the runner stages it as
-    ``batch_config.json`` next to the job root, mirroring the bond-scan
-    ``scan_config.json`` contract.
-    """
-    if spec.workflow not in ("Lowconfirm", "Highconfirm"):
-        return None
-    batch_request = spec.input.get("batch_request") or spec.method.get("batch_request")
-    return batch_request if isinstance(batch_request, dict) and batch_request else None
-
-
-def prepare_stage_batch_config(
-    spec: JobSpec,
-    work_dir: Path,
-    *,
-    remote: bool = False,
-) -> Path | None:
-    """Stage a batch-structure job's ``batch_config.json`` (E7 parity helper).
-
-    S2-candidate manifest entries are handoff-copied under
-    ``WORK/01_PREPARE/handoff/`` (manifest + candidate structures +
-    referenced payload dirs) so the job is self-contained; their paths are
-    rewritten to the staged copies — absolute for local execution, remote
-    job-dir-relative POSIX paths for remote execution.
-    """
-    batch_request = stage_batch_request(spec)
-    if batch_request is None:
-        return None
-    from acp.mechanism.stages.handoff import copy_handoff_payload
-
-    payload = dict(batch_request)
-    staged_items: list[dict[str, Any]] = []
-    handoff_dir = work_dir / "WORK" / "01_PREPARE" / "handoff"
-    for entry in payload.get("items") or []:
-        if not isinstance(entry, dict):
-            continue
-        manifest_ref = str(entry.get("manifest") or "").strip()
-        if manifest_ref and Path(manifest_ref).is_file():
-            staged_manifest = copy_handoff_payload(Path(manifest_ref), handoff_dir)
-            entry = dict(entry)
-            entry["manifest"] = (
-                PurePosixPath("WORK") / "01_PREPARE" / "handoff" / staged_manifest.name
-                if remote
-                else str(staged_manifest)
-            )
-        staged_items.append(entry)
-    payload["items"] = staged_items
-    work_dir.mkdir(parents=True, exist_ok=True)
-    config_path = work_dir / BATCH_CONFIG_FILENAME
-    config_path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
-    return config_path
 
 
 def censo_preset_from_method(method: dict[str, Any]) -> str | None:
@@ -501,35 +436,6 @@ def _select_flag(method: dict[str, Any]) -> list[str]:
     return []
 
 
-def pessearch_method_flags(method: dict[str, Any]) -> list[str]:
-    """Emit the PESsearch CLI flag group (mode/strategy select; plan via input)."""
-    flags: list[str] = []
-    if str(method.get("mode") or "") == "bond_length_scan":
-        flags += ["--mode", "bond_length_scan"]
-        flags += _select_flag(method)
-        return flags
-    if method.get("strategy"):
-        flags += ["--strategy", str(method["strategy"])]
-    flags += _select_flag(method)
-    return flags
-
-
-def lowconfirm_method_flags(method: dict[str, Any]) -> list[str]:
-    """Emit the Lowconfirm CLI flag group."""
-    flags = _select_flag(method)
-    if _as_bool(method.get("no_irc")) is True:
-        flags.append("--no-irc")
-    return flags
-
-
-def highconfirm_method_flags(method: dict[str, Any]) -> list[str]:
-    """Emit the Highconfirm CLI flag group."""
-    flags = _select_flag(method)
-    if _as_bool(method.get("irc")) is True:
-        flags.append("--irc")
-    return flags
-
-
 # ── BatchOptimize flag emission (E7: runner ⇄ script_gen parity) ──────────
 _BATCHOPTIMIZE_SCALAR_FLAGS: dict[str, str] = {
     "minimum_method": "--minimum-method",
@@ -567,242 +473,6 @@ def batchoptimize_method_flags(
     return flags
 
 
-# ── mechanism flag emission (E7: runner ⇄ script_gen parity) ─────────────
-# Mechanism method knobs that flow method → CLI. Strategy/fidelity are the
-# two orthogonal preset axes; scan/IRC counts and Hessian policy are the
-# per-stage scalars. Routes / reactant / product live in JobSpec.input, NOT
-# in the method dict (coordinate plans are the study, not the method).
-_MECHANISM_SCALAR_FLAGS: dict[str, str] = {
-    "strategy": "--strategy",
-    "fidelity": "--fidelity",
-    "scan_points": "--scan-points",
-    "irc_points": "--irc-points",
-    "conformer_mode": "--conformer-mode",
-    "max_elementary_steps": "--max-elementary-steps",
-    "promotion_policy": "--promotion-policy",
-    "study_id": "--study-id",
-}
-
-_MECHANISM_BOOL_OPT_IN_FLAGS: dict[str, str] = {
-    "int_extension": "--int-extension",
-    "auto_converge": "--auto-converge",
-}
-
-
-def _mechanism_preset_ids() -> frozenset[str]:
-    """Derive the mechanism preset profile ids from the catalog (single source)."""
-    try:
-        from acp.catalog import METHOD_SCHEMAS
-    except ImportError:
-        return frozenset({"rph-s3", "rph-s4"})
-    profiles = METHOD_SCHEMAS.get("mechanism", {}).get("profiles")
-    return frozenset(
-        str(profile.get("profile_id"))
-        for profile in profiles
-        if isinstance(profile, dict) and profile.get("profile_id")
-    )
-
-
-def mechanism_preset_from_method(method: dict[str, Any]) -> str | None:
-    """Resolve the mechanism fidelity preset from a job's method dict.
-
-    Priority: ``preset`` > ``profile_id``. Only catalog profile ids are
-    accepted; any other value resolves to ``None`` so the CLI default applies.
-    """
-    raw = method.get("preset") or method.get("profile_id")
-    if not raw:
-        return None
-    value = str(raw).strip().lower()
-    return value if value in _mechanism_preset_ids() else None
-
-
-def mechanism_method_flags(method: dict[str, Any]) -> list[str]:
-    """Emit the mechanism CLI flag group from a job's method dict (E7 parity).
-
-    Scalar fields are forwarded whenever present and non-empty. The preset
-    (rph-s3 / rph-s4) is emitted via ``--preset`` when set; otherwise the
-    per-axis ``--strategy`` / ``--fidelity`` flags are emitted from their
-    method keys.
-    """
-    flags: list[str] = []
-    preset = mechanism_preset_from_method(method)
-    if preset:
-        flags += ["--preset", preset]
-    for key, flag in _MECHANISM_SCALAR_FLAGS.items():
-        value = method.get(key)
-        if value is None or value == "":
-            continue
-        if key == "strategy" and preset:
-            continue
-        if key == "fidelity" and preset:
-            continue
-        flags += [flag, str(value)]
-    for key, flag in _MECHANISM_BOOL_OPT_IN_FLAGS.items():
-        if _as_bool(method.get(key)) is True:
-            flags.append(flag)
-    return flags
-
-
-def _mechanism_raw_scalar(method: Mapping[str, Any], key: str) -> Any:
-    value = method.get(key)
-    if key in {"int_extension", "auto_converge"}:
-        return _as_bool(value)
-    if value is None:
-        return None
-    if isinstance(value, str) and not value.strip():
-        return None
-    return value
-
-
-def mechanism_resolved_settings(method: Mapping[str, Any]) -> dict[str, Any]:
-    """Resolve the scheduler-side mechanism config summary from ``method``.
-
-    Priority mirrors the CLI file channel: explicit top-level method values win;
-    only ``strategy`` / ``fidelity`` inherit from the catalog preset when the
-    method omits them; everything else stays ``None`` so workflow defaults can
-    still be applied downstream.
-    """
-
-    preset = mechanism_preset_from_method(dict(method))
-    preset_strategy: str | None = None
-    preset_fidelity: str | None = None
-    if preset:
-        from acp.mechanism.presets import resolve_preset
-
-        preset_strategy, preset_fidelity = resolve_preset(preset)
-
-    return {
-        "preset": preset,
-        "strategy": _mechanism_raw_scalar(method, "strategy") or preset_strategy,
-        "fidelity": _mechanism_raw_scalar(method, "fidelity") or preset_fidelity,
-        "scan_points": _mechanism_raw_scalar(method, "scan_points"),
-        "irc_points": _mechanism_raw_scalar(method, "irc_points"),
-        "conformer_mode": _mechanism_raw_scalar(method, "conformer_mode"),
-        "max_elementary_steps": _mechanism_raw_scalar(method, "max_elementary_steps"),
-        "promotion_policy": _mechanism_raw_scalar(method, "promotion_policy"),
-        "int_extension": _mechanism_raw_scalar(method, "int_extension"),
-        "auto_converge": _mechanism_raw_scalar(method, "auto_converge"),
-        "require_sr_review": _mechanism_raw_scalar(method, "require_sr_review"),
-        "study_id": _mechanism_raw_scalar(method, "study_id"),
-    }
-
-
-def _mechanism_role_payload(inp: Mapping[str, Any], role: str) -> Any:
-    if inp.get("source_type") == "mechanism":
-        return inp.get(role)
-    if role == "reactant":
-        return inp
-    return inp.get(role)
-
-
-def _mechanism_role_source_from_payload(payload: Any) -> str | None:
-    if isinstance(payload, Mapping):
-        source = payload.get("source") or payload.get("input") or payload.get("smiles")
-        if source is None:
-            return None
-        return str(source)
-    if payload in (None, ""):
-        return None
-    return str(payload)
-
-
-def _mechanism_role_entry(
-    inp: Mapping[str, Any],
-    role: str,
-    role_paths: Mapping[str, str | Path],
-) -> dict[str, Any] | None:
-    payload = _mechanism_role_payload(inp, role)
-    path_value = role_paths.get(role)
-    if path_value is None:
-        path_value = _mechanism_role_source_from_payload(payload)
-        if path_value is None and role == "reactant":
-            path_value = _mechanism_role_source_from_payload(inp)
-
-    if path_value is None and role != "reactant":
-        return None
-
-    chemistry = payload if isinstance(payload, Mapping) else (inp if role == "reactant" else {})
-    charge = chemistry.get("charge") if isinstance(chemistry, Mapping) else None
-    multiplicity = chemistry.get("multiplicity") if isinstance(chemistry, Mapping) else None
-    return {
-        "path": str(path_value) if path_value is not None else None,
-        "charge": charge,
-        "multiplicity": multiplicity,
-    }
-
-
-def build_mechanism_job_config_payload(
-    inp: Mapping[str, Any],
-    method: Mapping[str, Any],
-    resources: Mapping[str, Any],
-    role_paths: Mapping[str, str | Path],
-    reaction_definition: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
-    """Build the scheduler/CLI handoff payload for mechanism jobs."""
-
-    payload = {
-        "version": 1,
-        "method": dict(method),
-        "resolved": mechanism_resolved_settings(method),
-        "roles": {
-            "reactant": _mechanism_role_entry(inp, "reactant", role_paths),
-            "product": _mechanism_role_entry(inp, "product", role_paths),
-            "ts_guess": _mechanism_role_entry(inp, "ts_guess", role_paths),
-        },
-        "resources": {
-            "nproc": resources.get("nproc"),
-            "mem": resources.get("mem"),
-        },
-    }
-    if reaction_definition is not None:
-        payload["mechanism_schema_version"] = int(reaction_definition.get("schema_version") or 0)
-    return payload
-
-
-def write_mechanism_job_config(
-    work_dir: Path,
-    inp: Mapping[str, Any],
-    method: Mapping[str, Any],
-    resources: Mapping[str, Any],
-    role_paths: Mapping[str, str | Path],
-    reaction_definition: Mapping[str, Any] | None = None,
-) -> Path:
-    """Write ``mechanism_config.json`` into *work_dir*."""
-
-    config_path = work_dir / MECHANISM_CONFIG_FILENAME
-    payload = build_mechanism_job_config_payload(
-        inp,
-        method,
-        resources,
-        role_paths,
-        reaction_definition=reaction_definition,
-    )
-    config_path.write_text(
-        json.dumps(payload, indent=2, sort_keys=True, default=str),
-        encoding="utf-8",
-    )
-    return config_path
-
-
-def write_mechanism_reaction_json(
-    work_dir: Path,
-    study_id: str,
-    reaction_definition: Mapping[str, Any],
-) -> Path:
-    """Materialize v2 ``reaction.json`` atomically; retain ``study_id`` for API compatibility."""
-
-    _ = study_id
-    path = work_dir / TaskLayout.WORK_DIR_NAME / TaskLayout().stage_analysis / "reaction.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path.with_suffix(".json.tmp")
-    temp_path.write_text(
-        json.dumps(dict(reaction_definition), indent=2, sort_keys=True, default=str),
-        encoding="utf-8",
-    )
-    os.replace(temp_path, path)
-    return path
-
-
 @dataclass(frozen=True)
 class JobSpec:
     """Immutable description of what a job should run.
@@ -837,7 +507,6 @@ class JobSpec:
     config_path: str | None = None
     tags: list[str] = field(default_factory=list)
     project_id: str | None = None
-    mechanism_project_id: str | None = None
     input_hash: str | None = None
     execution_mode: ExecutionMode | None = None
     target_node: str | None = None
@@ -938,19 +607,8 @@ __all__ = [
     "scan_method_flags",
     "xtbmd_method_flags",
     "nmr_method_flags",
-    "mechanism_method_flags",
-    "mechanism_preset_from_method",
-    "mechanism_resolved_settings",
-    "build_mechanism_job_config_payload",
-    "write_mechanism_reaction_json",
-    "write_mechanism_job_config",
-    "MECHANISM_CONFIG_FILENAME",
+    "batchoptimize_method_flags",
+    "confsearch_method_flags",
     "SCAN_CONFIG_FILENAME",
     "BATCH_CONFIG_FILENAME",
-    "lowconfirm_method_flags",
-    "highconfirm_method_flags",
-    "batchoptimize_method_flags",
-    "pessearch_method_flags",
-    "prepare_stage_batch_config",
-    "stage_batch_request",
 ]

@@ -1619,6 +1619,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 ],
             }
         ],
+        "stages": {"mode": "static", "static": ["single_point"]},
         "profiles": [
             {
                 "profile_id": "default",
@@ -1661,6 +1662,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 ],
             }
         ],
+        "stages": {"mode": "static", "static": ["optimize"]},
         "profiles": [
             {
                 "profile_id": "default",
@@ -1700,6 +1702,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 ],
             }
         ],
+        "stages": {"mode": "static", "static": ["frequency"]},
         "profiles": [],
     },
     "dft_scan": {
@@ -1738,6 +1741,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 ],
             }
         ],
+        "stages": {"mode": "static", "static": ["scan"]},
         "profiles": [
             {
                 "profile_id": "default",
@@ -1781,12 +1785,13 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "level_id": "irc",
                 "label": "Intrinsic Reaction Coordinate",
-                "label_zh": "内禀反应坐标",
+                "label_zh": "\u5185\u7968\u53cd\u5e94\u5750\u6807",
                 "required": True,
                 "allowed_engines": ["orca"],
                 "fields": ["method", "basis", "maxpoints", "step"],
             }
         ],
+        "stages": {"mode": "static", "static": ["irc"]},
         "profiles": [
             {
                 "profile_id": "default",
@@ -1934,6 +1939,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "fields": ["gfn", "opt_level", "solvent_model", "solvent", "max_steps"],
             }
         ],
+        "stages": {"mode": "static", "static": ["xtb_optimize"]},
         "profiles": [],
     },
     "mech_conf": {
@@ -2237,6 +2243,20 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 ],
             },
         ],
+        "stages": {
+            "mode": "static",
+            "static": [
+                "prepare",
+                "materialize_input",
+                "validate_coordinate",
+                "run_relaxed_scan",
+                "extract_frames",
+                "run_single_points",
+                "build_profile",
+                "select_candidates",
+                "finalize",
+            ],
+        },
         "profiles": [
             {
                 "profile_id": "default",
@@ -2285,17 +2305,20 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         "single_point_resume": True,
                     },
                 },
-                "stages": [
-                    "prepare",
-                    "materialize_input",
-                    "validate_coordinate",
-                    "run_relaxed_scan",
-                    "extract_frames",
-                    "run_single_points",
-                    "build_profile",
-                    "select_candidates",
-                    "finalize",
-                ],
+                "stages": {
+                    "mode": "static",
+                    "static": [
+                        "prepare",
+                        "materialize_input",
+                        "validate_coordinate",
+                        "run_relaxed_scan",
+                        "extract_frames",
+                        "run_single_points",
+                        "build_profile",
+                        "select_candidates",
+                        "finalize",
+                    ],
+                },
             },
         ],
     },
@@ -2410,7 +2433,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             {
                 "level_id": "batch",
                 "label": "Batch Optimization",
-                "label_zh": "批量优化",
+                "label_zh": "\u6279\u91cf\u4f18\u5316",
                 "required": True,
                 "allowed_engines": ["orca"],
                 "fields": [
@@ -2423,6 +2446,17 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 ],
             },
         ],
+        "stages": {
+            "mode": "by_profile",
+            "by_profile": {
+                "opt_only": ["prepare", "optimize", "finalize"],
+                "opt_freq": ["prepare", "optimize", "frequency", "finalize"],
+                "opt_freq_sp": ["prepare", "optimize", "frequency", "single_point", "finalize"],
+                "opt_freq_sp_thermo": [
+                    "prepare", "optimize", "frequency", "single_point", "thermochemistry", "finalize",
+                ],
+            },
+        },
         "profiles": [
             {
                 "profile_id": "opt_only",

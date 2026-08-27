@@ -226,7 +226,7 @@ def _select_structure_products(products: list[Any]) -> list[dict[str, Any]]:
 def _select_manifest_structure_products(products: list[Any]) -> list[dict[str, Any]]:
     """Select reusable structure products from a unified result manifest.
 
-    Explicit S2/S3/S4 candidates remain plural, while legacy energy manifests
+    Explicit candidates remain plural, while legacy energy manifests
     that expose both an ensemble and ``global_min`` contribute only the latter.
     """
     structures = [
@@ -513,7 +513,7 @@ class StructureSourceService:
         """Discover structure sources in a local job work directory.
 
         Discovery order (batch plan §6): unified ``result_manifest.json``
-        products (``kind: "structure"`` — S2 candidates, batch S3/S4
+        products (``kind: "structure"`` — candidates, batch
         outputs) first, then the legacy ``result_summary.json`` pointers,
         then nothing else — files not referenced by either manifest are
         invisible by design. Broken pointers are dropped silently.

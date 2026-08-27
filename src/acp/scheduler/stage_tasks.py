@@ -70,22 +70,6 @@ class _FakeStagePlanProvider:
         return [StagePlan("init"), StagePlan("compute"), StagePlan("finalize")]
 
 
-class _MechanismStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        # Study-mode vocabulary mirrors StudyOrchestrator phases: S0/S1/S2/S3/SR/S4.
-        # The observer still watches stage-task marker files; mechanism-study
-        # progress is primarily event-file based (events.jsonl), so these names
-        # are an initial UI plan rather than file-emitted phase markers.
-        return [
-            StagePlan("S0"),
-            StagePlan("S1"),
-            StagePlan("S2"),
-            StagePlan("S3"),
-            StagePlan("SR"),
-            StagePlan("S4"),
-        ]
-
-
 class _EnsembleStagePlanProvider:
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
         preset = censo_preset_from_method(spec.method) or "censo-light"
@@ -255,71 +239,116 @@ class _ConfsearchStagePlanProvider:
         return plan
 
 
-class _PesSearchStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        if str(spec.method.get("mode") or "") == "bond_length_scan":
-            from acp.calculations.pes.engine import PES_SEARCH_STAGES
+# ── PlanCompiler: generic stage-plan compilation from METHOD_SCHEMAS ────
 
-            return [StagePlan(name) for name in PES_SEARCH_STAGES]
-        return [
-            StagePlan("prepare"),
-            StagePlan("path_search"),
-            StagePlan("candidate_extract"),
-            StagePlan("finalize"),
-        ]
-
-
-class _LowConfirmStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        plan = [
-            StagePlan("prepare"),
-            StagePlan("optimize"),
-            StagePlan("frequency"),
-        ]
-        if not spec.method.get("no_irc"):
-            plan.append(StagePlan("irc"))
-        plan.append(StagePlan("finalize"))
-        return plan
-
-
-class _HighConfirmStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        plan = [
-            StagePlan("prepare"),
-            StagePlan("optimize"),
-            StagePlan("frequency"),
-            StagePlan("single_point"),
-            StagePlan("thermo"),
-        ]
-        if spec.method.get("irc"):
-            plan.append(StagePlan("irc"))
-        plan.append(StagePlan("finalize"))
-        return plan
-
-
-_BATCHOPTIMIZE_STAGES: dict[str, tuple[str, ...]] = {
-    "opt_only": ("prepare", "optimize", "finalize"),
-    "opt_freq": ("prepare", "optimize", "frequency", "finalize"),
-    "opt_freq_sp": ("prepare", "optimize", "frequency", "single_point", "finalize"),
-    "opt_freq_sp_thermo": (
-        "prepare",
-        "optimize",
-        "frequency",
-        "single_point",
-        "thermochemistry",
-        "finalize",
-    ),
+# Workflow → METHOD_SCHEMAS key mapping for the 8 calculation workflows.
+# nmr and Confsearch are exempt (protocol-internal stage orchestration).
+_WORKFLOW_TO_SCHEMA_KEY: dict[str, str] = {
+    "singlepoint": "dft_singlepoint",
+    "optimize": "dft_optimize",
+    "frequency": "dft_frequency",
+    "scan": "dft_scan",
+    "irc": "irc",
+    "xtb_optimize": "xtb_optimize",
+    "PESsearch": "pes_scan",
+    "BatchOptimize": "batch_optimize",
 }
 
+# Retired workflows that PlanCompiler rejects — derived from catalog.
+def _derive_retired_workflows() -> frozenset[str]:
+    try:
+        from acp.catalog import WORKFLOW_CATALOG
+    except ImportError:
+        return frozenset()
+    return frozenset(
+        w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "retired"
+    )
 
-class _BatchOptimizeStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        profile = str(spec.method.get("profile") or spec.method.get("profile_id") or "opt_freq")
+
+_RETIRED_WORKFLOWS: frozenset[str] = _derive_retired_workflows()
+
+
+class PlanCompiler:
+    """Compile generic StagePlan sequences from METHOD_SCHEMAS stages declarations.
+
+    Covers 8 calculation workflows: singlepoint/optimize/frequency/scan/irc/
+    xtb_optimize/PESsearch/BatchOptimize. nmr and Confsearch are exempt
+    (protocol-internal stage orchestration, kept as frozen providers).
+
+    Produces SCHEDULER StagePlan sequences (stage_tasks.py existing type),
+    NOT CalculationPlan.steps.
+    """
+
+    @staticmethod
+    def _load_schema_stages(schema_key: str) -> dict[str, Any] | None:
+        """Load the stages declaration from METHOD_SCHEMAS."""
         try:
-            stages = _BATCHOPTIMIZE_STAGES[profile.strip().lower()]
-        except KeyError as exc:
-            raise ValueError(f"unknown BatchOptimize profile: {profile!r}") from exc
-        return [StagePlan(stage_name) for stage_name in stages]
+            from acp.catalog import METHOD_SCHEMAS
+        except ImportError:
+            return None
+        schema = METHOD_SCHEMAS.get(schema_key)
+        if not isinstance(schema, dict):
+            return None
+        stages = schema.get("stages")
+        return stages if isinstance(stages, dict) else None
+
+    @staticmethod
+    def compile(spec: JobSpec) -> list[StagePlan]:
+        """Compile a StagePlan sequence for a calculation workflow.
+
+        Raises:
+            ValueError: For retired or unknown workflows.
+        """
+        wf = spec.workflow.strip()
+
+        # Retired workflows are rejected.
+        if wf.lower() in _RETIRED_WORKFLOWS or wf in _RETIRED_WORKFLOWS:
+            raise ValueError(f"PlanCompiler rejects retired workflow: {wf!r}")
+
+        schema_key = _WORKFLOW_TO_SCHEMA_KEY.get(wf)
+        if schema_key is None:
+            raise ValueError(f"PlanCompiler has no mapping for workflow: {wf!r}")
+
+        stages_decl = PlanCompiler._load_schema_stages(schema_key)
+        if stages_decl is None:
+            raise ValueError(f"No stages declaration in METHOD_SCHEMAS for {schema_key!r}")
+
+        mode = stages_decl.get("mode")
+
+        # Static mode: single fixed stage list.
+        if mode == "static":
+            static_stages = stages_decl.get("static")
+            if not isinstance(static_stages, list) or not static_stages:
+                raise ValueError(f"Invalid static stages for {schema_key!r}")
+
+            # PESsearch path-mode override: when mode is not bond_length_scan,
+            # use the path stages instead of the static bond_length_scan stages.
+            if wf == "PESsearch" and str(spec.method.get("mode") or "") != "bond_length_scan":
+                return [
+                    StagePlan("prepare"),
+                    StagePlan("path_search"),
+                    StagePlan("candidate_extract"),
+                    StagePlan("finalize"),
+                ]
+
+            return [StagePlan(name) for name in static_stages]
+
+        # By-profile mode: select stage list by profile key.
+        if mode == "by_profile":
+            by_profile = stages_decl.get("by_profile")
+            if not isinstance(by_profile, dict):
+                raise ValueError(f"Invalid by_profile stages for {schema_key!r}")
+            profile = str(
+                spec.method.get("profile")
+                or spec.method.get("profile_id")
+                or "opt_freq"
+            ).strip().lower()
+            profile_stages = by_profile.get(profile)
+            if not isinstance(profile_stages, list) or not profile_stages:
+                raise ValueError(f"unknown BatchOptimize profile: {profile!r}")
+            return [StagePlan(name) for name in profile_stages]
+
+        raise ValueError(f"Unknown stages mode {mode!r} for {schema_key!r}")
 
 
 class StageTaskStore:
@@ -623,67 +652,33 @@ def _task_snapshot(task: StageTask) -> dict[str, Any]:
 
 register_plan_provider("fake", _FakeStagePlanProvider())
 register_plan_provider("confsearch", _ConfsearchStagePlanProvider())
-register_plan_provider("pessearch", _PesSearchStagePlanProvider())
-register_plan_provider("lowconfirm", _LowConfirmStagePlanProvider())
-register_plan_provider("highconfirm", _HighConfirmStagePlanProvider())
-register_plan_provider("mechanism", _MechanismStagePlanProvider())
 register_plan_provider("ensemble", _EnsembleStagePlanProvider())
 register_plan_provider("energy", _EnergyStagePlanProvider())
 register_plan_provider("nmr", _NmrStagePlanProvider())
 register_plan_provider("xtbmd_censo_energy", _XtbmdCensoEnergyStagePlanProvider())
-register_plan_provider("batchoptimize", _BatchOptimizeStagePlanProvider())
 
 
-# Simple workflow providers
-class _IrcStagePlanProvider:
+# PlanCompiler-backed workflow registrations (8 calculation workflows).
+# nmr and Confsearch exempt (protocol-internal stage orchestration).
+_PLAN_COMPILER_WORKFLOWS = (
+    "singlepoint", "optimize", "frequency", "scan", "irc",
+    "xtb_optimize", "PESsearch", "BatchOptimize",
+)
+
+
+class _PlanCompilerStagePlanProvider:
+    """Thin provider that delegates to PlanCompiler.compile()."""
+
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        return [StagePlan(stage_name="irc")]
+        return PlanCompiler.compile(spec)
 
 
-class _SinglepointStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        return [StagePlan(stage_name="single_point")]
-
-
-class _OptimizeStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        return [StagePlan(stage_name="optimize")]
-
-
-class _FrequencyStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        return [StagePlan(stage_name="frequency")]
-
-
-class _ScanStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        return [StagePlan(stage_name="scan")]
-
-
-class _OptfreqStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        return [StagePlan(stage_name="opt_freq")]
-
-
-class _OptfreqspStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        return [
-            StagePlan(stage_name="opt_freq"),
-            StagePlan(stage_name="single_point"),
-            StagePlan(stage_name="shermo"),
-        ]
-
-
-register_plan_provider("singlepoint", _SinglepointStagePlanProvider())
-register_plan_provider("optimize", _OptimizeStagePlanProvider())
-register_plan_provider("frequency", _FrequencyStagePlanProvider())
-register_plan_provider("scan", _ScanStagePlanProvider())
-register_plan_provider("irc", _IrcStagePlanProvider())
-register_plan_provider("optfreq", _OptfreqStagePlanProvider())
-register_plan_provider("optfreqsp", _OptfreqspStagePlanProvider())
+for _wf in _PLAN_COMPILER_WORKFLOWS:
+    register_plan_provider(_wf, _PlanCompilerStagePlanProvider())
 
 
 __all__ = [
+    "PlanCompiler",
     "StagePlan",
     "StagePlanProvider",
     "StageTask",

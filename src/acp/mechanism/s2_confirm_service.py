@@ -51,7 +51,7 @@ def save_s2_review_for_job(
 
     rows = [row for row in summary["candidates"] if isinstance(row, dict)]
     active_count = sum(1 for row in rows if row.get("active"))
-    project_id = record.spec.mechanism_project_id or mechanism_project_id
+    project_id = getattr(record.spec, "mechanism_project_id", None) or mechanism_project_id
     if project_id and active_count:
         manager._mechanism_projects.confirm_s2_candidates(project_id)
     return {

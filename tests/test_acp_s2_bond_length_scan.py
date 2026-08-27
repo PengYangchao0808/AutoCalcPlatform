@@ -7,6 +7,7 @@ API surface (structure-assets, s2 profile/candidates/frame, review gate,
 gated S3 creation).
 """
 
+# pyright: reportAny=false, reportExplicitAny=false, reportArgumentType=false, reportAttributeAccessIssue=false, reportFunctionMemberAccess=false, reportMissingParameterType=false, reportPossiblyUnboundVariable=false, reportPrivateLocalImportUsage=false, reportPrivateUsage=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownParameterType=false, reportUnknownVariableType=false, reportUnusedCallResult=false, reportUnusedFunction=false, reportUnusedParameter=false, reportUnannotatedClassAttribute=false
 from __future__ import annotations
 
 import argparse
@@ -578,8 +579,12 @@ class TestSchedulerIntegration:
     def test_stage_cli_accepts_scheduler_resource_flags(self) -> None:
         from acp.cli import build_parser
 
-        for workflow in ("PESsearch", "Lowconfirm", "Highconfirm"):
-            args = build_parser().parse_args(["run", workflow, "--nproc", "4", "--mem", "8GB"])
+        cases = (("PESsearch", []), ("BatchOptimize", ["--items-file", "structures.xyz"]))
+        for workflow, source_args in cases:
+            args = build_parser().parse_args(
+                ["run", workflow, *source_args, "--nproc", "4", "--mem", "8GB"]
+            )
+            assert args.workflow == workflow
             assert args.nproc == 4
             assert args.mem == "8GB"
 
@@ -601,15 +606,29 @@ class TestSchedulerIntegration:
         assert legacy_stages == ["prepare", "path_search", "candidate_extract", "finalize"]
 
     def test_pessearch_method_flags_bond_mode(self) -> None:
-        from acp.scheduler.jobs import pessearch_method_flags
+        from acp.scheduler.remote.script_gen import build_remote_stage_cmd_tail
 
-        flags = pessearch_method_flags({"mode": "bond_length_scan"})
-        assert "--mode" in flags and "bond_length_scan" in flags
-        flags = pessearch_method_flags({"mode": "bond_length_scan", "select": ["ts_guess_001"]})
-        assert "--select" in flags
-        assert "--strategy" not in flags
-        flags = pessearch_method_flags({"strategy": "guided-scan"})
-        assert "--strategy" in flags and "--mode" not in flags
+        bond_flags = build_remote_stage_cmd_tail(
+            JobSpec(
+                workflow="PESsearch",
+                input={"scan_request": _scan_request()},
+                method={"mode": "bond_length_scan"},
+            )
+        )
+        assert "--mode" in bond_flags and "bond_length_scan" in bond_flags
+        assert "--scan-config" in bond_flags
+        assert "--strategy" not in bond_flags
+
+        path_flags = build_remote_stage_cmd_tail(
+            JobSpec(
+                workflow="PESsearch",
+                input={"from": "/abs/confsearch_manifest.json"},
+                method={"strategy": "guided-scan", "select": ["ts_guess_001"]},
+            )
+        )
+        assert "--strategy" in path_flags and "guided-scan" in path_flags
+        assert "--select" in path_flags
+        assert "ts_guess_001" in path_flags
 
     def test_runner_build_stage_cmd_bond_mode(self, tmp_path: Path) -> None:
         from acp.scheduler.runner import JobRunner
@@ -630,7 +649,7 @@ class TestSchedulerIntegration:
             resources={"nproc": 4, "mem": "8GB"},
             output_dir=str(tmp_path / "job"),
         )
-        cmd = runner._build_stage_cmd(spec, tmp_path / "job")
+        cmd = runner._build_pessearch_cmd(spec, tmp_path / "job", "")
         assert "--mode" in cmd and "bond_length_scan" in cmd
         assert "--scan-config" in cmd
         assert cmd[cmd.index("--nproc") + 1] == "4"
@@ -671,9 +690,7 @@ class TestSchedulerIntegration:
         assert flags[config_index + 1] == "scan_config.json"
         payload = build_remote_scan_config_payload(spec)
         assert payload is not None
-        assert (
-            payload["source"]["artifact_path"] == "WORK/01_PREPARE/handoff/confsearch_manifest.json"
-        )
+        assert payload["source"]["artifact_path"] == "RESULT/confsearch/confsearch_manifest.json"
         assert "--from" not in flags
 
 
@@ -890,14 +907,11 @@ class TestS2Api:
 
     def test_create_job_validation(self, tmp_path: Path) -> None:
         with make_client(tmp_path) as client:
-            response = client.post("/api/v1/mechanism-projects", json={"name": "p1"})
-            project_id = str(response.json()["project_id"])
             valid = client.post(
                 "/api/v1/jobs",
                 json={
                     "workflow": "PESsearch",
                     "name": "s2",
-                    "mechanism_project_id": project_id,
                     "method": {"mode": "bond_length_scan"},
                     "input": {
                         "source": {"source_type": "xyz_text", "xyz_text": WATER_DIMER_XYZ},
@@ -913,7 +927,6 @@ class TestS2Api:
                 json={
                     "workflow": "PESsearch",
                     "name": "s2_angle",
-                    "mechanism_project_id": project_id,
                     "method": {"mode": "bond_length_scan"},
                     "input": {
                         "source": {"source_type": "xyz_text", "xyz_text": WATER_DIMER_XYZ},
@@ -962,7 +975,6 @@ class TestS2Api:
                     "/api/v1/jobs",
                     json={
                         "workflow": "PESsearch",
-                        "mechanism_project_id": project_id,
                         "method": {"mode": "bond_length_scan"},
                         "input": payload,
                     },
@@ -996,13 +1008,6 @@ class TestS2Api:
             manager.runner = _StubRunner(manager)
             job_id = self._make_completed_scan_job(client, tmp_path)
 
-            response = client.post("/api/v1/mechanism-projects", json={"name": "p1"})
-            project_id = str(response.json()["project_id"])
-            manager._mechanism_projects.set_stage_job(project_id, "s2", job_id)
-            manager._mechanism_projects._advance_completed(
-                manager._mechanism_projects.get(project_id), "s2"
-            )
-
             profile = client.get(f"/api/v1/jobs/{job_id}/s2/profile")
             assert profile.status_code == 200
             assert len(profile.json()["frames"]) == 13
@@ -1031,16 +1036,16 @@ class TestS2Api:
             assert frame.json()["xyz"].startswith("6")
 
             review = client.post(
-                f"/api/v1/mechanism-projects/{project_id}/s2/review",
+                f"/api/v1/jobs/{job_id}/s2/review",
                 json={"selected_ts": [ts_id]},
             )
             assert review.status_code == 200
-            assert review.json()["project_status"] == "s2_confirmed"
             assert review.json()["review"]["status"] == "confirmed"
+            assert review.json()["project_id"] is None
             review_files = list((tmp_path / "jobs").rglob("s2_review.json"))
             assert review_files, "s2_review.json not written next to the manifest"
             assert (
-                client.post(f"/api/v1/mechanism-projects/{project_id}/s3", json={}).status_code
+                client.post(f"/api/v1/jobs/{job_id}/s3", json={}).status_code
                 == 404
             )
 
@@ -1049,14 +1054,8 @@ class TestS2Api:
             manager = _api_manager(client)
             manager.runner = _StubRunner(manager)
             job_id = self._make_completed_scan_job(client, tmp_path)
-            response = client.post("/api/v1/mechanism-projects", json={"name": "p1"})
-            project_id = str(response.json()["project_id"])
-            manager._mechanism_projects.set_stage_job(project_id, "s2", job_id)
-            manager._mechanism_projects._advance_completed(
-                manager._mechanism_projects.get(project_id), "s2"
-            )
             review = client.post(
-                f"/api/v1/mechanism-projects/{project_id}/s2/review",
+                f"/api/v1/jobs/{job_id}/s2/review",
                 json={"selected_ts": ["ts_guess_999"]},
             )
             assert review.status_code == 422
