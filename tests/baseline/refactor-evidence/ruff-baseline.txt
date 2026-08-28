@@ -7049,42 +7049,6 @@ I001 [*] Import block is un-sorted or un-formatted
   |
 help: Organize imports
 
-E501 Line too long (103 > 100)
-   --> tests/test_acp_mechanism_cli_study.py:161:101
-    |
-159 | def test_mechanism_cli_retired_rejects_missing_config_file(tmp_path: Path) -> None:
-160 |     missing = tmp_path / "does_not_exist.json"
-161 |     assert _handle_mechanism(_mechanism_args(output=str(tmp_path), mechanism_config=str(missing))) == 2
-    |                                                                                                     ^^^
-    |
-
-E501 Line too long (105 > 100)
-   --> tests/test_acp_mechanism_project.py:132:101
-    |
-131 | class TestMechanismProjectAdvance:
-132 |     def _setup_project_with_jobs(self, tmp_path: Path) -> tuple[MechanismProjectStore, MechanismProject]:
-    |                                                                                                     ^^^^^
-133 |         store = _make_store(tmp_path)
-134 |         project = store.create(name="Mech")
-    |
-
-E501 Line too long (103 > 100)
-   --> tests/test_acp_mechanism_stages.py:128:101
-    |
-128 | def test_resolve_source_job_via_job_json_scan(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    |                                                                                                     ^^^
-129 |     job_dir = tmp_path / "runs" / "ethanol_Confsearch_final"
-130 |     job_dir.mkdir(parents=True)
-    |
-
-E501 Line too long (105 > 100)
-    --> tests/test_acp_mechanism_study.py:1056:101
-     |
-1056 | def test_legacy_layout_fallback_can_be_disabled(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-     |                                                                                                     ^^^^^
-1057 |     import acp.mechanism.layout as layout_module
-     |
-
 I001 [*] Import block is un-sorted or un-formatted
   --> tests/test_acp_nmr_probability.py:77:5
    |

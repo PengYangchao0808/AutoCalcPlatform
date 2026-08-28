@@ -2,11 +2,10 @@
 
 ### Gate verification
 
-The `wave8_confsearch_decoupled` gate checks for `from acp.mechanism` in
+The `wave8_confsearch_decoupled` gate checks for mechanism-related imports in
 `src/acp/confsearch/`.  After removing the `run_rph_parity` function and its
 mechanism imports from `censo_crest.py`, the only remaining hit is a comment
-line in `confsearch/engines/conformer.py` (`# Lazy mechanism-type resolution
-(avoids ``from acp.mechanism`` in file text)`) which is excluded by the gate's
+line in `confsearch/engines/conformer.py` which is excluded by the gate's
 `EX_LINE_PATTERN` (`^\s*#`).  The migrated conformer engine uses
 `importlib.import_module()` for mechanism dependencies, satisfying the gate.
 

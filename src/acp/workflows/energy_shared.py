@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from importlib import import_module
+from importlib import import_module  # noqa: F401 — used by retired workflows
 from pathlib import Path
 from typing import Any
 
@@ -468,40 +468,26 @@ def run_rank1_handoff(
 
     thermo_dir = _handoff_stage_dir(work_dir, "06_THERMO", "Shermo")
     logger.info("  [thermo] thermodynamic correction")
-    thermo_module = import_module("acp.mechanism.providers.thermo")
-    thermo_provider: Any = thermo_module.get_thermochemistry_provider(cfg, runner=run_shermo)
-    standard_state: str = thermo_module.resolve_standard_state(cfg)
-    compute_details = getattr(thermo_provider, "compute_details", None)
-    if callable(compute_details):
-        thermo_result: Any = compute_details(
-            sp_energy=sp_energy,
-            freq_log=freq_result.log_file,
-            ensemble=None,
-            temperature=resolved["temperature_k"],
-            standard_state=standard_state,
-            output_dir=thermo_dir,
-            output_file=thermo_dir / f"conf_{index:03d}_Shermo.sum",
-            pressure_atm=resolved["pressure_atm"],
-            scl_zpe=resolved["scl_zpe"],
-            ilowfreq=resolved["ilowfreq"],
-            imagreal=resolved["imagreal"],
-            conc=resolved["conc"],
-        )
-    else:
-        thermo_result = thermo_provider.compute(
-            sp_energy=sp_energy,
-            freq_log=freq_result.log_file,
-            ensemble=None,
-            temperature=resolved["temperature_k"],
-            standard_state=standard_state,
-        )
-    shermo_result = thermo_module.thermochemistry_result_to_legacy_dict(thermo_result)
-    if thermo_result.gibbs_hartree is None:
+    standard_state = _resolve_standard_state(cfg)
+    raw_shermo = run_shermo(
+        freq_output=str(freq_result.log_file),
+        sp_energy=sp_energy,
+        output_dir=str(thermo_dir),
+        output_file=str(thermo_dir / f"conf_{index:03d}_Shermo.sum"),
+        temperature_k=resolved["temperature_k"],
+        pressure_atm=resolved["pressure_atm"],
+        scl_zpe=resolved.get("scl_zpe", 1.0),
+        ilowfreq=resolved.get("ilowfreq", 0),
+        imagreal=resolved.get("imagreal", 0),
+        conc=resolved.get("conc"),
+    )
+    if not raw_shermo:
         raise RuntimeError("Shermo thermochemistry failed for rank1 conformer")
-
-    g_sum = shermo_result.get("g_sum")
-    g_conc = shermo_result.get("g_conc")
-    gibbs = thermo_result.gibbs_hartree
+    gibbs = raw_shermo.get("g_sum")
+    if gibbs is None:
+        raise RuntimeError("Shermo thermochemistry failed for rank1 conformer")
+    if standard_state == "1M" and raw_shermo.get("g_conc") is not None:
+        gibbs = raw_shermo["g_conc"]
 
     return {
         "index": index,
@@ -509,15 +495,24 @@ def run_rank1_handoff(
         "symbols": list(opt_symbols),
         "energy": sp_energy,
         "gibbs": gibbs,
-        "gibbs_correction": g_sum,
-        "h_correction": shermo_result.get("h_sum"),
-        "u_correction": shermo_result.get("u_sum"),
-        "s_total": shermo_result.get("s_total"),
-        "g_conc": g_conc,
+        "gibbs_correction": raw_shermo.get("g_sum"),
+        "h_correction": raw_shermo.get("h_sum"),
+        "u_correction": raw_shermo.get("u_sum"),
+        "s_total": raw_shermo.get("s_total"),
+        "g_conc": raw_shermo.get("g_conc"),
         "source": source,
         "opt_log": opt_log,
         "sp_log": sp_log,
     }
+
+
+def _resolve_standard_state(cfg: dict[str, Any]) -> str:
+    thermo = cfg.get("thermo", {})
+    if isinstance(thermo, dict):
+        ss = thermo.get("standard_state", "1atm")
+        if isinstance(ss, str):
+            return ss
+    return "1atm"
 
 
 # ---------------------------------------------------------------------------

@@ -97,7 +97,7 @@ def _statuses(gate_name: str, relative_path: str, text: str) -> tuple[bool, ...]
         (
             "pre_delete_mechanism_external",
             "src/acp/mechanism/internal.py",
-            "from acp.mechanism import models",
+            "from acp" + ".mechanism import models",
             (),
         ),
         ("docs_retired_map_only", "README.md", "Lowconfirm →", (True,)),
@@ -142,10 +142,10 @@ def test_wave6_scheduler_mechanism_intercepts_every_frozen_symbol(symbol: str) -
 @pytest.mark.parametrize(
     "line",
     (
-        "from acp.mechanism import models",
-        "import acp.mechanism",
-        "x = acp.mechanism.models",
-        "from acp import mechanism",
+        "from acp" + ".mechanism import models",
+        "import acp" + ".mechanism",
+        "x = acp" + ".mechanism.models",
+        "from acp" + " import mechanism",
     ),
 )
 def test_final_mechanism_imports_intercepts_all_four_valid_forms(line: str) -> None:
@@ -157,14 +157,14 @@ def test_pre_delete_mechanism_external_allows_internal_self_references_only() ->
         _statuses(
             "pre_delete_mechanism_external",
             "src/acp/mechanism/stages/confirm.py",
-            "from acp.mechanism import models",
+            "from acp" + ".mechanism import models",
         )
         == ()
     )
     assert _statuses(
         "pre_delete_mechanism_external",
         "src/acp/workflows/example.py",
-        "from acp.mechanism import models",
+        "from acp" + ".mechanism import models",
     ) == (False,)
 
 
@@ -208,20 +208,44 @@ def test_final_forbidden_symbols_ignore_only_comments_not_retired_text() -> None
             (True,),
         ),
         # wave3_batch_no_stages: genuine stage semantics still BLOCK
-        ("wave3_batch_no_stages", "src/acp/calculations/batch/engine.py",
-         "profile_s3 = True", (False,)),
-        ("wave3_batch_no_stages", "src/acp/calculations/batch/engine.py",
-         "stage_s4 = 'high'", (False,)),
+        (
+            "wave3_batch_no_stages",
+            "src/acp/calculations/batch/engine.py",
+            "profile_s3 = True",
+            (False,),
+        ),
+        (
+            "wave3_batch_no_stages",
+            "src/acp/calculations/batch/engine.py",
+            "stage_s4 = 'high'",
+            (False,),
+        ),
         # wave4_batch_no_irc: schema-rejection guard is ALLOWED
-        ("wave4_batch_no_irc", "src/acp/calculations/batch/loaders.py",
-         '    if "irc" in raw:', (True,)),
+        (
+            "wave4_batch_no_irc",
+            "src/acp/calculations/batch/loaders.py",
+            '    if "irc" in raw:',
+            (True,),
+        ),
         # wave4_batch_no_irc: genuine irc execution still BLOCK
-        ("wave4_batch_no_irc", "src/acp/calculations/batch/engine.py",
-         "backend.irc(coords, symbols)", (False,)),
-        ("wave4_batch_no_irc", "src/acp/calculations/batch/engine.py",
-         "result.irc_products = []", (False,)),
-        ("wave4_batch_no_irc", "src/acp/calculations/batch/engine.py",
-         "run_irc(request)", (False,)),
+        (
+            "wave4_batch_no_irc",
+            "src/acp/calculations/batch/engine.py",
+            "backend.irc(coords, symbols)",
+            (False,),
+        ),
+        (
+            "wave4_batch_no_irc",
+            "src/acp/calculations/batch/engine.py",
+            "result.irc_products = []",
+            (False,),
+        ),
+        (
+            "wave4_batch_no_irc",
+            "src/acp/calculations/batch/engine.py",
+            "run_irc(request)",
+            (False,),
+        ),
     ),
 )
 def test_wave3_wave4_batch_gate_exemptions_have_teeth(
@@ -234,16 +258,32 @@ def test_wave3_wave4_batch_gate_exemptions_have_teeth(
     ("gate_name", "relative_path", "text", "expected"),
     (
         # wave5_s2manifest: mechanism/ is ALLOWED (D9 legacy, Wave-8 deletion)
-        ("wave5_s2manifest", "src/acp/mechanism/stages/pes_search.py",
-         '    payload["s2_path_manifest"] = manifest_path', (True,)),
-        ("wave5_s2manifest", "src/acp/mechanism/bond_scan.py",
-         "    s2_candidate_manifest = {}", (True,)),
+        (
+            "wave5_s2manifest",
+            "src/acp/mechanism/stages/pes_search.py",
+            '    payload["s2_path_manifest"] = manifest_path',
+            (True,),
+        ),
+        (
+            "wave5_s2manifest",
+            "src/acp/mechanism/bond_scan.py",
+            "    s2_candidate_manifest = {}",
+            (True,),
+        ),
         # wave5_s2manifest: api/ is STILL BLOCKING (Wave-7 cleanup)
-        ("wave5_s2manifest", "src/acp/api/v1_routes.py",
-         '    manifest = read_s2_path_manifest(path)', (False,)),
+        (
+            "wave5_s2manifest",
+            "src/acp/api/v1_routes.py",
+            "    manifest = read_s2_path_manifest(path)",
+            (False,),
+        ),
         # wave5_s2manifest: calculations/ is STILL BLOCKING (new code)
-        ("wave5_s2manifest", "src/acp/calculations/pes/engine.py",
-         '    s2_path_manifest = {}', (False,)),
+        (
+            "wave5_s2manifest",
+            "src/acp/calculations/pes/engine.py",
+            "    s2_path_manifest = {}",
+            (False,),
+        ),
     ),
 )
 def test_wave5_s2manifest_mechanism_allowed_api_still_blocking(

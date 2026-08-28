@@ -2109,9 +2109,8 @@ Examples:
 
 
 def _mechanism_preset_ids() -> list[str]:
-    from acp.mechanism.presets import mechanism_profile_ids
-
-    return list(mechanism_profile_ids())
+    # Hardcoded — mechanism presets are retired; kept for historical parser choices.
+    return ["rph-s3", "rph-s4", "guided-scan-fast"]
 
 
 def _load_mechanism_config(path_value: str | None) -> tuple[dict[str, Any] | None, Path | None]:

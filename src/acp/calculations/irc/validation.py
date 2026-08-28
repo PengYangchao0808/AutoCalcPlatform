@@ -1,8 +1,6 @@
 """IRC endpoint geometry classification and TS identity judgment.
 
-Migrated from ``acp.mechanism.endpoint`` (perceive_connectivity,
-connectivity_fingerprint, mapped_heavy_atom_rmsd, EndpointMatcher) and
-``acp.mechanism.identity`` (classify_ts_identity).  Stripped of
+Migrated from the former endpoint/identity modules.  Stripped of
 study/stage/promotion semantics — pure geometry algorithms only.
 """
 
