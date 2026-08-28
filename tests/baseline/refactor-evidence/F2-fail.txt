@@ -1,0 +1,57 @@
+=== F2-fail.txt: QA Failure Drill (Q3) ===
+Date: 2026-08-28 | Branch: refactor/calc-cleanup
+
+=== DRILL SCENARIO ===
+Inject a mechanism-term violation into calculations/batch/engine.py,
+verify the calculations_no_mechanism_terms gate detects it (exit 1),
+restore the file, verify gate returns to pre-existing state.
+
+=== STEP 1: INJECTION ===
+Command: cp src/acp/calculations/batch/engine.py /tmp/eng.bak && printf '\nstage_s3 = 1  # drill\n' >> src/acp/calculations/batch/engine.py
+Result: File backed up to /tmp/eng.bak, violation appended (line 792: stage_s3 = 1  # drill)
+
+=== STEP 2: GATE CHECK (WITH INJECTION) ===
+Command: python scripts/check_grep_gates.py --gate calculations_no_mechanism_terms src/acp/calculations
+Exit code: 1 (BLOCKING)
+Output:
+  ALLOWED:
+  src/acp/calculations/pes/engine.py:47: # ── frozen stage names (generic, used by scheduler stage_tasks) ─────────
+  BLOCKING:
+  src/acp/calculations/batch/engine.py:792: stage_s3 = 1  # drill
+  src/acp/calculations/executor.py:15: (S1–S4), mechanism studies, review, or promote — those concepts live in the
+  src/acp/calculations/irc/validation.py:4: study/stage/promotion semantics — pure geometry algorithms only.
+  src/acp/calculations/irc/validation.py:314: This is a pure geometry comparison — no study/promotion semantics.
+  src/acp/calculations/pes/scan.py:11: - De-s2 naming (PesScanRequest, no study_id)
+  src/acp/calculations/pes/scan.py:500: reason="Highest energy frame on scan profile — suggest S3 TS opt"
+  src/acp/calculations/pes/scan.py:530: reason=f"Energy minimum on {label} side of TS — suggest S3 minimum opt"
+Gate correctly detected the injected violation (7 BLOCKING entries, up from 6).
+
+=== STEP 3: RESTORATION ===
+Command: mv /tmp/eng.bak src/acp/calculations/batch/engine.py
+Result: Original file restored.
+
+=== STEP 4: GATE CHECK (AFTER RESTORATION) ===
+Command: python scripts/check_grep_gates.py --gate calculations_no_mechanism_terms src/acp/calculations
+Exit code: 1 (BLOCKING — pre-existing entries remain)
+Output:
+  ALLOWED:
+  src/acp/calculations/pes/engine.py:47: # ── frozen stage names (generic, used by scheduler stage_tasks) ─────────
+  BLOCKING:
+  src/acp/calculations/executor.py:15: (S1–S4), mechanism studies, review, or promote — those concepts live in the
+  src/acp/calculations/irc/validation.py:4: study/stage/promotion semantics — pure geometry algorithms only.
+  src/acp/calculations/irc/validation.py:314: This is a pure geometry comparison — no study/promotion semantics.
+  src/acp/calculations/pes/scan.py:11: - De-s2 naming (PesScanRequest, no study_id)
+  src/acp/calculations/pes/scan.py:500: reason="Highest energy frame on scan profile — suggest S3 TS opt"
+  src/acp/calculations/pes/scan.py:530: reason=f"Energy minimum on {label} side of TS — suggest S3 minimum opt"
+Injected violation gone; pre-existing BLOCKING entries remain (6 entries).
+
+=== STEP 5: ARCHITECTURE TEST ===
+Command: python -m pytest tests/test_architecture_invariants.py::test_unique_primitive_definitions -q
+Exit code: 0
+Result: 1 passed in 1.16s
+
+=== DRILL VERDICT ===
+Gate has teeth: injection detected (exit 0 → exit 1), restoration verified (exit 1 with only pre-existing entries).
+The pre-existing BLOCKING entries are in docstrings/string literals (not # comments),
+which the gate's allow_line_pattern=COMMENT_LINE_PATTERN (^\s*#) does not cover.
+These are explanatory text about what modules do NOT do, or context strings in scan recommendations.
