@@ -1,0 +1,43 @@
+VERDICT: REJECT
+
+## F4 Scope-Fidelity Audit — Failure Evidence
+
+### Test execution
+```
+$ python -m pytest tests/test_f4_scope_audit.py -q
+.F........
+FAILED tests/test_f4_scope_audit.py::test_algorithm_body_untouched
+1 failed, 9 passed in 8.81s
+```
+
+### Violations detected by test_algorithm_body_untouched
+
+**orca.py (2 non-comment modified lines in _build_input_blocks target region):**
+- Line 817: `route == "Freq"` (replaced `route in ("Freq", "Opt Freq")`)
+- Line 822: `route = "NumFreq"` (replaced `route = route.replace("Freq", "NumFreq")`)
+
+These are necessary simplifications after removing "Opt Freq" from calc_type_map.
+Within the declared target region (_build_input_blocks optfreq branch).
+Classified as: algorithm-body modification within target region.
+
+**backends/orca.py (26 non-comment added lines — interface-scope overflow):**
+- Lines 14, 16: 2 new imports (ReactionCoordinatePlan, RelaxedScanResult)
+- Lines 189-212: entire relaxed_scan method (24 lines of real code)
+
+Source: commit ca266d0 (wave-2 scan primitive workflow), NOT from opt_freq deletion.
+These additions are outside the declared target region (ORCABackend.opt_freq method).
+Classified as: interface-scope overflow from concurrent feature addition.
+
+### Drill adaptation (sub-drills i/ii/iii)
+
+Sub-drill (i) — SKIPPED: test already FAILs without injection (existing violations detected).
+Sub-drill (ii) — SKIPPED: opt_freq method already deleted in worktree (legitimate whole-deletion).
+Sub-drill (iii) — SKIPPED: test already FAILs without injection.
+
+The test correctly detects scope violations at current state; no injection needed.
+
+### Groups②-⑤: ALL PASS
+- ② Scheduler DB mechanism tables: PASS (migrate + fixture rows verified)
+- ③ .omo/ no new files: PASS (git log --diff-filter=A empty)
+- ④ Catalog retired IDs: PASS (final = baseline ∪ {optfreq, optfreqsp, Lowconfirm, Highconfirm})
+- ⑤ Grep gates + BatchOptimize no-IRC: PASS (exit 0, no IRC references)
