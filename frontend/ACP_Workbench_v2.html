@@ -2553,11 +2553,10 @@ option, optgroup {
     <div class="mech-section-inner">
       <div class="mech-section-head">
         <div>
-          <h2 class="mech-section-title">四阶段机理研究项目</h2>
-          <p class="mech-section-sub">管理机理研究项目：S1 Confsearch → S2 PESsearch → S3 Lowconfirm → S4 Highconfirm</p>
+          <h2 class="mech-section-title">机理研究项目</h2>
+          <p class="mech-section-sub">查看历史机理研究项目（只读）</p>
         </div>
         <div style="display:flex;gap:8px;align-items:center;">
-          <button class="btn primary" id="s2scan-entry-btn" data-i18n="s2scan.entry_btn">新建 S2 任务</button>
           <button class="btn ghost" id="mech-project-refresh">刷新</button>
         </div>
       </div>
@@ -2568,34 +2567,6 @@ option, optgroup {
         </div>
         <div class="panel-body">
           <div id="mech-project-list" class="mech-project-empty">加载中…</div>
-        </div>
-      </section>
-
-      <section class="panel-section mech-section-block">
-        <div class="panel-head">
-          <h2>新建项目</h2>
-        </div>
-        <div class="panel-body">
-          <div class="mech-create-form" id="mech-project-create-form">
-            <div>
-              <label>项目名称</label>
-              <input class="field-input" id="mech-project-name" placeholder="例如：Diels-Alder 反应研究">
-            </div>
-            <div class="form-row">
-              <div>
-                <label>电荷</label>
-                <input class="field-input" id="mech-project-charge" type="number" value="0">
-              </div>
-              <div>
-                <label>多重度</label>
-                <input class="field-input" id="mech-project-mult" type="number" value="1" min="1">
-              </div>
-            </div>
-            <div class="mech-actions">
-              <button class="btn primary" id="mech-project-create-btn">创建项目</button>
-              <span class="review-inline-status" id="mech-project-create-status"></span>
-            </div>
-          </div>
         </div>
       </section>
     </div>
@@ -2727,7 +2698,7 @@ option, optgroup {
           <div id="mech-plan-panel" class="measure-list" style="max-height:160px;overflow-y:auto;border:1px solid var(--border,#333);border-radius:6px;padding:6px;"></div>
         </div>
 
-        <!-- Stage handoff panel: only downstream Lowconfirm/Highconfirm use an
+        <!-- Stage handoff panel: downstream stage workflows use an
              upstream artifact. PESsearch reuses the structure parsed above. -->
         <div class="modal-section" id="stage-source-panel" style="display:none;">
           <div class="modal-section-title" data-i18n="modal.stage_source_title">阶段任务 — 上游产物引用 (Stage Source)</div>
@@ -2751,23 +2722,39 @@ option, optgroup {
               <input type="checkbox" id="stage-irc-toggle" autocomplete="off">
               <span data-i18n="modal.stage_irc">运行 IRC 验证</span>
             </label>
+            <div id="irc-ts-artifact-row" style="display:none;flex-direction:column;gap:6px;margin-top:6px;">
+              <label style="font-size:12px;">
+                <span data-i18n="modal.irc_ts_input">TS 结构（从任务产物选择 TS 角色的结构）</span>
+                <input type="text" id="irc-ts-artifact" class="modal-input" placeholder="source_job_id:product_id 或 TS 结构路径">
+              </label>
+              <span class="muted" style="font-size:11px;" data-i18n="modal.irc_ts_hint">IRC 需要 TS（过渡态）结构作为输入；从上游任务的产物中选择带 TS 标记的结构。</span>
+            </div>
           </div>
-          <label style="display:flex;align-items:center;gap:8px;margin:8px 0;" id="stage-batch-mode-row">
-            <input type="checkbox" id="stage-batch-mode" autocomplete="off">
+          <label style="display:flex;align-items:center;gap:8px;margin:8px 0;" id="batch-optimize-mode-row">
+            <input type="checkbox" id="batch-optimize-mode" autocomplete="off">
             <span data-i18n="modal.stage_batch_mode">批量结构来源 (S2 候选 / 任务结果 / 上传 XYZ)</span>
           </label>
-          <div id="stage-batch-panel" style="display:none;border:1px solid var(--border-subtle,#333);border-radius:8px;padding:10px;margin-top:8px;">
+          <div id="batch-optimize-panel" style="display:none;border:1px solid var(--border-subtle,#333);border-radius:8px;padding:10px;margin-top:8px;">
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
-              <button type="button" class="btn ghost" id="stage-batch-pick-results" data-i18n="modal.stage_batch_from_results">从任务结果选择</button>
-              <button type="button" class="btn ghost" id="stage-batch-use-wizard" data-i18n="modal.stage_batch_from_wizard">使用当前解析结构</button>
+              <button type="button" class="btn ghost" id="batch-optimize-pick-results" data-i18n="modal.stage_batch_from_results">从任务结果选择</button>
+              <button type="button" class="btn ghost" id="batch-optimize-use-wizard" data-i18n="modal.stage_batch_from_wizard">使用当前解析结构</button>
               <span class="muted" style="font-size:11px;" data-i18n="modal.stage_batch_hint">未检测到 TAG 的结构默认按 INT 处理；可逐项修改。</span>
             </div>
-            <div id="stage-batch-picker" style="display:none;border:1px solid var(--border-subtle,#333);border-radius:6px;padding:8px;margin-bottom:8px;max-height:200px;overflow-y:auto;"></div>
+            <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;" id="batch-optimize-profile-row">
+              <span style="font-size:12px;" data-i18n="modal.batch_profile">计算档案</span>
+              <select id="batch-optimize-profile" class="modal-select" style="width:auto;">
+                <option value="opt_only" data-i18n="modal.batch_profile_opt_only">仅优化 (opt_only)</option>
+                <option value="opt_freq" data-i18n="modal.batch_profile_opt_freq">优化+频率 (opt_freq)</option>
+                <option value="opt_freq_sp" data-i18n="modal.batch_profile_opt_freq_sp">优化+频率+单点 (opt_freq_sp)</option>
+                <option value="opt_freq_sp_thermo" selected data-i18n="modal.batch_profile_opt_freq_sp_thermo">优化+频率+单点+热力学 (opt_freq_sp_thermo)</option>
+              </select>
+            </label>
+            <div id="batch-optimize-picker" style="display:none;border:1px solid var(--border-subtle,#333);border-radius:6px;padding:8px;margin-bottom:8px;max-height:200px;overflow-y:auto;"></div>
             <table class="preview-table" style="width:100%;font-size:12px;margin-top:8px;">
               <thead><tr><th>选择</th><th>#</th><th>结构名</th><th>TAG</th><th>来源</th><th>原子</th><th>电荷</th><th>自旋</th><th>操作</th></tr></thead>
-              <tbody id="stage-batch-tbody"></tbody>
+              <tbody id="batch-optimize-tbody"></tbody>
             </table>
-            <div id="stage-batch-empty" class="muted" style="font-size:11px;padding:6px;" data-i18n="modal.stage_batch_empty">尚未添加结构</div>
+            <div id="batch-optimize-empty" class="muted" style="font-size:11px;padding:6px;" data-i18n="modal.stage_batch_empty">尚未添加结构</div>
           </div>
           <div id="stage-pes-row" style="display:none;flex-direction:column;gap:8px;">
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -4110,6 +4097,13 @@ const I18N = {
     "modal.stage_artifact": "产物路径（相对路径）",
     "modal.stage_select": "候选选择（逗号分隔）",
     "modal.stage_irc": "运行 IRC 验证",
+    "modal.irc_ts_input": "TS 结构（从任务产物选择 TS 角色的结构）",
+    "modal.irc_ts_hint": "IRC 需要 TS（过渡态）结构作为输入；从上游任务的产物中选择带 TS 标记的结构。",
+    "modal.batch_profile": "计算档案",
+    "modal.batch_profile_opt_only": "仅优化 (opt_only)",
+    "modal.batch_profile_opt_freq": "优化+频率 (opt_freq)",
+    "modal.batch_profile_opt_freq_sp": "优化+频率+单点 (opt_freq_sp)",
+    "modal.batch_profile_opt_freq_sp_thermo": "优化+频率+单点+热力学 (opt_freq_sp_thermo)",
     "modal.stage_product": "产物结构 XYZ 路径（可选）",
     "modal.stage_ts_guess": "TS 初猜 XYZ（可选）",
     "modal.stage_plan": "反应坐标计划 JSON（历史模式）",
@@ -4735,6 +4729,13 @@ const I18N = {
     "modal.stage_artifact": "Artifact path (relative)",
     "modal.stage_select": "Candidate selection (comma-separated)",
     "modal.stage_irc": "Run IRC validation",
+    "modal.irc_ts_input": "TS structure (select TS-role structure from job artifacts)",
+    "modal.irc_ts_hint": "IRC requires a TS (transition state) structure as input; select a TS-tagged structure from upstream job artifacts.",
+    "modal.batch_profile": "Calculation profile",
+    "modal.batch_profile_opt_only": "Optimize only (opt_only)",
+    "modal.batch_profile_opt_freq": "Optimize + Frequency (opt_freq)",
+    "modal.batch_profile_opt_freq_sp": "Optimize + Frequency + Single-point (opt_freq_sp)",
+    "modal.batch_profile_opt_freq_sp_thermo": "Optimize + Freq + SP + Thermochemistry (opt_freq_sp_thermo)",
     "modal.stage_product": "Product XYZ path (optional)",
     "modal.stage_ts_guess": "TS guess XYZ (optional)",
     "modal.stage_plan": "Reaction-coordinate plan JSON (legacy mode)",
@@ -7312,11 +7313,8 @@ async function renderMechanismTab(job, tab) {
   return renderMechanismTabFromCache(tab);
 }
 
-// SR review/promote functions removed — legacy mechanism study UI retired.
-// Retained as no-ops for callers that still reference them.
-function loadMechanismReview() { /* retired */ }
+// Mechanism write actions retired (410 Gone).
 function bindMechanismPromoteButton() { /* retired */ }
-function updateSrPickButtons() { /* retired */ }
 
 
 function initViewer() {
@@ -9185,13 +9183,8 @@ function renderInfoInto(container, job) {
     cancelBtn.addEventListener("click", function() { cancelJob(job.id || job.job_id); });
     actions.appendChild(cancelBtn);
   }
-  if (String(job.status || "").toLowerCase() === "waiting_review") {
-    const reviewBtn = document.createElement("button");
-    reviewBtn.className = "btn primary review-action";
-    reviewBtn.textContent = t("job.review") || "审核";
-    reviewBtn.addEventListener("click", function() { loadMechanismReview(job); });
-    actions.appendChild(reviewBtn);
-  }
+  // Review button removed — mechanism write actions retired (410 Gone).
+  // Read-only mechanism study detail is still displayed via fetchMechanismStudyDetail.
   if (recovery.can_continue) {
     const continueBtn = document.createElement("button");
     continueBtn.className = "btn";
@@ -10066,11 +10059,11 @@ function renderReactionChangesPanel() {
     el.addEventListener('change', function() {
       var candidateIndex = parseInt(this.value, 10);
       ensureReactionDefinitionState().selectedCandidate = candidateIndex;
-      previewReactionDefinition(candidateIndex);
+      _retiredPreviewReaction(candidateIndex);
     });
   });
   var acceptBtn = document.getElementById('mech-accept-lock');
-  if (acceptBtn) acceptBtn.addEventListener('click', confirmReactionDefinition);
+  if (acceptBtn) acceptBtn.addEventListener('click', _retiredConfirmReaction);
   var manualBtn = document.getElementById('mech-manual-mapping');
   if (manualBtn) manualBtn.addEventListener('click', function() {
     ensureReactionDefinitionState().showCandidatePicker = true;
@@ -10425,44 +10418,7 @@ function renderReactionDefinitionPanel() {
   renderReactionChangesPanel();
 }
 
-async function previewReactionDefinition(selectedCandidateOverride) {
-  var state = ensureReactionDefinitionState();
-  if (!wizardStructures.length) return;
-  try {
-    await ensureMechanismDraftStudy();
-    var previewBtn = document.getElementById('mech-preview-definition');
-    if (previewBtn) previewBtn.textContent = t('mech.definition.previewing');
-    var payload = buildReactionPreviewPayload(selectedCandidateOverride);
-    var resp = await api('/mechanism-studies/' + encodeURIComponent(mechStudyId) + '/reaction/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    state.previewData = resp;
-    state.previewHash = resp.preview_hash || "";
-    state.selectedCandidate = resp.selected_candidate !== undefined && resp.selected_candidate !== null
-      ? resp.selected_candidate
-      : payload.selected_candidate;
-    state.showCandidatePicker = resp.status === 'confirmation_required';
-    // Pure manual bond-editing mode: editing is ON by default, candidates
-    // and the picker are meaningless (backend returns none), and picking
-    // only targets the reactant view.
-    if (resp.manual_mode === true) {
-      state.selectedCandidate = null;
-      state.showCandidatePicker = false;
-      if (!state.locked) {
-        state.editMode = true;
-        reactionChangesViewMode = "reactant";
-      }
-    }
-    renderReactionDefinitionPanel();
-  } catch (err) {
-    window.alert((t('mech.definition.preview_failed') || '反应定义预览失败') + ': ' + err.message);
-  } finally {
-    var resetBtn = document.getElementById('mech-preview-definition');
-    if (resetBtn) resetBtn.textContent = t('mech.definition.preview');
-  }
-}
+async function _retiredPreviewReaction() { /* retired — mechanism write actions return 410 Gone */ }
 
 function mapSuggestedPlanToCoordinateSpecs(plan) {
   var coordinates = (plan && Array.isArray(plan.coordinates)) ? plan.coordinates : [];
@@ -10479,82 +10435,9 @@ function mapSuggestedPlanToCoordinateSpecs(plan) {
   });
 }
 
-async function persistConfirmedMechanismPlan() {
-  try {
-    var routes = buildMechanismRoutes();
-    if (!routes.length || !routes[0].coordinate_plan) return;
-    await api('/mechanism-studies/' + encodeURIComponent(mechStudyId) + '/mechanism/plan', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        plan: routes[0].coordinate_plan,
-        strategy: mechStrategy || 'guided-scan',
-        fidelity: mechFidelity || 's3',
-      }),
-    });
-  } catch (err) {
-    console.warn('Failed to persist mechanism plan:', err);
-  }
-}
+async function persistConfirmedMechanismPlan() { /* retired — mechanism write actions return 410 Gone */ }
 
-async function confirmReactionDefinition() {
-  var state = ensureReactionDefinitionState();
-  var manualMode = isManualBondMode(state);
-  var manualBondChanges = buildManualBondChangesPayload(state);
-  // Manual-mode lock guard: at least one user-defined bond change is
-  // required unless the "no bond changes" acknowledgment is checked.
-  if (manualMode && !manualBondChanges) {
-    var allowZeroEl = document.getElementById('mech-allow-zero-changes');
-    var allowZero = !!state.allowZeroChanges || !!(allowZeroEl && allowZeroEl.checked);
-    if (!allowZero) {
-      window.alert(t('mech.changes.manual_empty_guard'));
-      return;
-    }
-  }
-  try {
-    await ensureMechanismDraftStudy();
-    var payload = buildReactionPreviewPayload();
-    var confirmBody = Object.assign({}, payload, { user_note: t('mech.changes.confirm_note') });
-    if (manualMode) {
-      // Manual mode ALWAYS carries manual_bond_changes (even empty, paired
-      // with allow_zero_changes) — the backend requires them on confirm.
-      confirmBody.manual_bond_changes = manualBondChanges || [];
-      if (!manualBondChanges) confirmBody.allow_zero_changes = true;
-    } else if (manualBondChanges) {
-      // Auto mode with manual overrides (P2): only sent when non-empty so the
-      // no-manual-edit payload stays byte-identical to the previous behavior.
-      confirmBody.manual_bond_changes = manualBondChanges;
-    }
-    var resp = await api('/mechanism-studies/' + encodeURIComponent(mechStudyId) + '/reaction/confirm', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(confirmBody),
-    });
-    state.locked = true;
-    state.lockData = resp;
-    state.configHash = resp.config_hash || '';
-    state.lockedPayload = payload;
-    // Locked state keeps the manual overlays visible but freezes editing.
-    state.editMode = false;
-    reactionManualPick = null;
-    // In manual mode (and auto mode with manual edits) the confirm response
-    // carries a suggested_plan regenerated from the manual bonds — prefer it
-    // over the preview one.
-    var planSource = ((manualMode || manualBondChanges) && resp && resp.suggested_plan)
-      ? resp.suggested_plan
-      : (state.previewData && state.previewData.suggested_plan);
-    if (planSource) {
-      mechCoordinatePlans = mapSuggestedPlanToCoordinateSpecs(planSource);
-      if (planSource.points) mechScanPoints = planSource.points;
-    }
-    renderStructurePreview(wizardStructures, wizardParseWarnings || []);
-    renderMechanismPlanPanel();
-    renderReactionDefinitionPanel();
-    await persistConfirmedMechanismPlan();
-  } catch (err) {
-    window.alert((t('mech.definition.confirm_failed') || '反应定义锁定失败') + ': ' + err.message);
-  }
-}
+async function _retiredConfirmReaction() { /* retired — mechanism write actions return 410 Gone */ }
 
 function unlockReactionDefinition() {
   var state = ensureReactionDefinitionState();
@@ -13007,12 +12890,8 @@ async function loadMethodCatalog() {
   }
 }
 
-const STAGE_WORKFLOW_IDS = ["Lowconfirm", "Highconfirm"];
-const STAGE_DEFAULT_ARTIFACTS = {
-  PESsearch: "RESULT/confsearch/confsearch_manifest.json",
-  Lowconfirm: "RESULT/mechanism/s2_path_manifest.json",
-  Highconfirm: "RESULT/mechanism/s3_lowconfirm_manifest.json"
-};
+// Catalog-driven: no hardcoded stage workflow IDs or default artifacts.
+// BatchOptimize and IRC are resolved from the workflow catalog at runtime.
 
 function isS2CoordinateScan() {
   return isPESsearchTask();
@@ -13054,32 +12933,30 @@ function applyPendingNewTask() {
 function configureStageSourcePanel(workflowId) {
   var panel = document.getElementById("stage-source-panel");
   if (!panel) return;
-  var isStage = STAGE_WORKFLOW_IDS.indexOf(workflowId) >= 0;
+  var wf = workflowCatalogCache.find(function(w) { return w.id === workflowId; });
+  var isStage = wf && wf.requires_source;
   panel.style.display = isStage ? "block" : "none";
   if (!isStage) return;
   var artifactInput = document.getElementById("stage-artifact");
-  artifactInput.value = STAGE_DEFAULT_ARTIFACTS[workflowId] || "";
+  artifactInput.value = "";
   var pesRow = document.getElementById("stage-pes-row");
   pesRow.style.display = "none";
   var ircRow = document.getElementById("stage-irc-row");
-  ircRow.style.display = workflowId === "Lowconfirm" ? "flex" : "none";
-  var batchModeRow = document.getElementById("stage-batch-mode-row");
+  ircRow.style.display = workflowId === "irc" ? "flex" : "none";
+  var batchModeRow = document.getElementById("batch-optimize-mode-row");
   if (batchModeRow) {
-    var batchSupported = workflowId === "Lowconfirm" || workflowId === "Highconfirm";
+    var batchSupported = workflowId === "BatchOptimize";
     batchModeRow.style.display = batchSupported ? "flex" : "none";
   }
-  var ircToggle = document.getElementById("stage-irc-toggle");
-  if (workflowId === "Highconfirm") {
-    ircRow.style.display = "flex";
-    ircToggle.checked = false;
-  } else if (workflowId === "Lowconfirm") {
-    ircToggle.checked = true;
+  var profileRow = document.getElementById("batch-optimize-profile-row");
+  if (profileRow) {
+    profileRow.style.display = workflowId === "BatchOptimize" ? "flex" : "none";
   }
-  // Reset batch panel for Lowconfirm/Highconfirm
+  // Reset batch panel for BatchOptimize
   batchPreviewItems = [];
-  var batchMode = document.getElementById("stage-batch-mode");
+  var batchMode = document.getElementById("batch-optimize-mode");
   if (batchMode) { batchMode.checked = false; }
-  var batchPanel = document.getElementById("stage-batch-panel");
+  var batchPanel = document.getElementById("batch-optimize-panel");
   if (batchPanel) { batchPanel.style.display = "none"; }
   renderStageBatchPreview();
 }
@@ -13109,8 +12986,8 @@ function stageBatchAddItem(name, tag, xyz, charge, multiplicity, atomCount, form
 }
 
 function renderStageBatchPreview() {
-  var tbody = document.getElementById("stage-batch-tbody");
-  var emptyEl = document.getElementById("stage-batch-empty");
+  var tbody = document.getElementById("batch-optimize-tbody");
+  var emptyEl = document.getElementById("batch-optimize-empty");
   if (!tbody) return;
   if (!batchPreviewItems.length) {
     tbody.innerHTML = "";
@@ -13139,7 +13016,7 @@ function renderStageBatchPreview() {
 }
 
 function stageBatchSetMode(on) {
-  var batchPanel = document.getElementById("stage-batch-panel");
+  var batchPanel = document.getElementById("batch-optimize-panel");
   var selectRow = document.getElementById("stage-select-row");
   var sourceJobRow = document.getElementById("stage-source-job");
   // The source job/artifact row is the flex row containing stage-source-job
@@ -13173,7 +13050,7 @@ function stageBatchFromWizard() {
 }
 
 async function stageBatchFromResults() {
-  var picker = document.getElementById("stage-batch-picker");
+  var picker = document.getElementById("batch-optimize-picker");
   if (!picker) return;
   if (picker.style.display !== "none") {
     picker.style.display = "none";
@@ -13189,7 +13066,7 @@ async function stageBatchFromResults() {
       return;
     }
     var html = '<div style="display:flex;justify-content:flex-end;margin-bottom:4px;">' +
-      '<button type="button" class="btn ghost" id="stage-batch-picker-close">' + escapeHtml(t("modal.close") || "关闭") + '</button></div>';
+      '<button type="button" class="btn ghost" id="batch-optimize-picker-close">' + escapeHtml(t("modal.close") || "关闭") + '</button></div>';
     for (var i = 0; i < sources.length; i++) {
       var src = sources[i];
       var tagStr = src.tag === "TS" ? ' [TS]' : '';
@@ -13219,7 +13096,7 @@ async function stageBatchFromResults() {
         );
       });
     });
-    var closeBtn = document.getElementById("stage-batch-picker-close");
+    var closeBtn = document.getElementById("batch-optimize-picker-close");
     if (closeBtn) {
       closeBtn.addEventListener("click", function() {
         picker.style.display = "none";
@@ -13231,26 +13108,26 @@ async function stageBatchFromResults() {
 }
 
 function setupStageBatchListeners() {
-  var batchModeEl = document.getElementById("stage-batch-mode");
+  var batchModeEl = document.getElementById("batch-optimize-mode");
   if (batchModeEl) {
     batchModeEl.addEventListener("change", function() {
       stageBatchSetMode(batchModeEl.checked);
     });
   }
-  var useWizardBtn = document.getElementById("stage-batch-use-wizard");
+  var useWizardBtn = document.getElementById("batch-optimize-use-wizard");
   if (useWizardBtn) {
     useWizardBtn.addEventListener("click", function() {
       stageBatchFromWizard();
     });
   }
-  var pickResultsBtn = document.getElementById("stage-batch-pick-results");
+  var pickResultsBtn = document.getElementById("batch-optimize-pick-results");
   if (pickResultsBtn) {
     pickResultsBtn.addEventListener("click", function() {
       stageBatchFromResults();
     });
   }
   // Event delegation for batch table
-  var batchTbody = document.getElementById("stage-batch-tbody");
+  var batchTbody = document.getElementById("batch-optimize-tbody");
   if (batchTbody) {
     batchTbody.addEventListener("change", function(e) {
       var target = e.target;
@@ -13301,7 +13178,7 @@ function openPESsearchWizard(projectId) {
 }
 
 function collectStageJobPayload(workflow, methodBase) {
-  var batchMode = document.getElementById("stage-batch-mode") && document.getElementById("stage-batch-mode").checked;
+  var batchMode = document.getElementById("batch-optimize-mode") && document.getElementById("batch-optimize-mode").checked;
   if (batchMode && batchPreviewItems.length > 0) {
     var items = [];
     for (var bi = 0; bi < batchPreviewItems.length; bi++) {
@@ -13318,11 +13195,9 @@ function collectStageJobPayload(workflow, methodBase) {
     var globalCharge = parseInt(document.getElementById("modal-charge").value, 10) || 0;
     var globalMult = parseInt(document.getElementById("modal-mult").value, 10) || 1;
     var batchMethod = methodBase || {};
-    var batchIrcToggle = document.getElementById("stage-irc-toggle");
-    if (workflow === "Lowconfirm") {
-      batchMethod.no_irc = batchIrcToggle && !batchIrcToggle.checked;
-    } else if (workflow === "Highconfirm") {
-      batchMethod.irc = !!(batchIrcToggle && batchIrcToggle.checked);
+    var profileSelect = document.getElementById("batch-optimize-profile");
+    if (profileSelect && workflow === "BatchOptimize") {
+      batchMethod.profile = profileSelect.value || "opt_only";
     }
     return {
       input: { source_type: "batch_structures", charge: globalCharge, multiplicity: globalMult, items: items },
@@ -13337,17 +13212,11 @@ function collectStageJobPayload(workflow, methodBase) {
   var inputPayload = {
     source_type: "stage_artifact",
     source_job_id: sourceJob,
-    from_artifact: artifact || STAGE_DEFAULT_ARTIFACTS[workflow]
+    from_artifact: artifact
   };
   var method = methodBase || {};
   var select = String(document.getElementById("stage-select").value || "").trim();
   if (select) method.select = select.split(",").map(function(s) { return s.trim(); }).filter(Boolean);
-  var ircToggle = document.getElementById("stage-irc-toggle");
-  if (workflow === "Lowconfirm") {
-    method.no_irc = ircToggle && !ircToggle.checked;
-  } else if (workflow === "Highconfirm") {
-    method.irc = !!(ircToggle && ircToggle.checked);
-  }
   if (workflow === "PESsearch") {
     var product = String(document.getElementById("stage-product").value || "").trim();
     if (product) inputPayload.product = product;
@@ -14719,7 +14588,8 @@ async function submitJobModal() {
   }
   // Downstream stage workflows submit ONE job from
   // the §8 artifact reference — no structure parsing happens for them.
-  if (STAGE_WORKFLOW_IDS.indexOf(stageWf) >= 0) {
+  var _stageWfEntry = workflowCatalogCache.find(function(w) { return w.id === stageWf; });
+  if (_stageWfEntry && _stageWfEntry.requires_source) {
     await submitStageWorkflowJob(stageWf);
     return;
   }
@@ -14979,18 +14849,7 @@ async function submitJobModal() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(mechBody),
       });
-      api("/mechanism-studies", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          job_id: mechResult.job_id,
-          study_id: mechStudyId,
-          status: "plan_confirmed",
-          study_json: { reaction: reactionState.lockData ? reactionState.lockData.reaction : null },
-        }),
-      }).catch(function(err) {
-        console.warn("Failed to link mechanism study to job:", err);
-      });
+      // Mechanism study link retired — write endpoints return 410 Gone.
       closeModal();
       await refreshJobs();
       await selectJob(mechResult.job_id);
@@ -15337,7 +15196,6 @@ function renderMechSectionStudyList(studies) {
       '</div></div><div style="display:flex;gap:6px;align-items:center;">' + mechSectionStudyBadgeHtml(study) + pendingChip + '</div></div>' +
       '<div class="review-actions">' +
       '<button class="btn" data-study-action="view" data-study-id="' + escapeHtml(id) + '">' + escapeHtml(t("mechsec.study.view")) + '</button>' +
-      '<button class="btn primary" data-study-action="review" data-study-id="' + escapeHtml(id) + '"' + (study.job_id ? "" : " disabled") + '>' + escapeHtml(t("mechsec.study.review")) + '</button>' +
       '</div></div>';
   }).join("");
   box.querySelectorAll("[data-study-action]").forEach(function(btn) {
@@ -15345,8 +15203,7 @@ function renderMechSectionStudyList(studies) {
       const id = String(btn.getAttribute("data-study-id") || "");
       const study = (mechSectionStudiesCache || []).filter(function(s) { return String(s && s.id || "") === id; })[0];
       if (!study) return;
-      if (btn.getAttribute("data-study-action") === "view") openMechSectionStudy(study);
-      else openMechSectionReview(study);
+      openMechSectionStudy(study);
     });
   });
 }
@@ -15366,17 +15223,6 @@ async function openMechSectionStudy(study) {
   await fetchMechanismStudyReport(studyId);
   renderMechSectionStudyDetail();
   renderMechSectionStudyList(mechSectionStudiesCache);
-}
-
-async function openMechSectionReview(study) {
-  const jobId = study && study.job_id ? String(study.job_id) : "";
-  if (!jobId) { window.alert(t("mechsec.study.job_missing")); return; }
-  try {
-    const job = await api("/jobs/" + encodeURIComponent(jobId));
-    await loadMechanismReview(job);
-  } catch (e) {
-    window.alert(t("mechsec.study.job_missing") + ": " + (e && e.message ? e.message : e));
-  }
 }
 
 function bindMechSectionDetailInteractions(container) {
@@ -15435,13 +15281,7 @@ function renderMechSectionStudyDetail() {
   bindMechanismPromoteButton(box);
 }
 
-// ── Four-phase mechanism project panel ──────────────────────────────
-const MECH_PROJECT_STAGES = [
-  { key: "s1", label: "S1 Confsearch", workflow: "Confsearch" },
-  { key: "s2", label: "S2 PESsearch", workflow: "PESsearch" },
-  { key: "s3", label: "S3 Lowconfirm", workflow: "Lowconfirm" },
-  { key: "s4", label: "S4 Highconfirm", workflow: "Highconfirm" },
-];
+// Four-phase mechanism project panel retired.
 
 function getProjectStatusClass(status) {
   var s = String(status || "").toLowerCase();
@@ -15453,7 +15293,7 @@ function getProjectStatusClass(status) {
 
 function getProjectStatusLabel(status) {
   var s = String(status || "").toLowerCase();
-  var map = { created: "已创建", s1_ready: "S1 就绪", s2_ready: "S2 就绪", s3_ready: "S3 就绪", s4_ready: "S4 就绪", completed: "已完成", blocked: "已阻塞" };
+  var map = { created: "已创建", completed: "已完成", blocked: "已阻塞" };
   return map[s] || status || "未知";
 }
 
@@ -15464,40 +15304,13 @@ function renderMechProjectCard(project) {
   var charge = project.charge != null ? project.charge : 0;
   var mult = project.multiplicity != null ? project.multiplicity : 1;
   var created = project.created_at ? formatDateTime(project.created_at) : "";
-  var stageJobs = project.stage_jobs || {};
-
-  var stagesHtml = MECH_PROJECT_STAGES.map(function(stg) {
-    var job = stageJobs[stg.key];
-    var completed = job && (job.job_status === "completed" || job.status === "completed");
-    var cls = completed ? "completed" : "pending";
-    var icon = completed ? "✓" : " ";
-    return '<span class="mech-stage-chip ' + cls + '">[' + icon + '] ' + escapeHtml(stg.label) + '</span>';
-  }).join("");
-
-  // Find next stage
-  var nextStage = null;
-  for (var i = 0; i < MECH_PROJECT_STAGES.length; i++) {
-    var sj = stageJobs[MECH_PROJECT_STAGES[i].key];
-    if (!sj || (sj.job_status !== "completed" && sj.status !== "completed")) {
-      nextStage = MECH_PROJECT_STAGES[i];
-      break;
-    }
-  }
-  var actionsHtml = "";
-  if (nextStage) {
-    actionsHtml = '<div class="mech-project-actions">' +
-      '<button class="btn primary" data-project-submit="' + escapeHtml(id) + '" data-workflow="' + escapeHtml(nextStage.workflow) + '">' +
-      '提交 ' + escapeHtml(nextStage.label) + '</button></div>';
-  }
-
+  // Read-only: no stage chips or action buttons (mechanism write actions retired).
   return '<div class="mech-project-card" data-project-id="' + escapeHtml(id) + '">' +
     '<div class="mech-project-head">' +
     '<div><div class="mech-project-name">' + name + '</div>' +
     '<div class="mech-project-meta">' + escapeHtml(id) + ' · 电荷 ' + charge + ' · 多重度 ' + mult + (created ? ' · ' + created : '') + '</div></div>' +
     '<span class="badge ' + getProjectStatusClass(status) + '">' + escapeHtml(getProjectStatusLabel(status)) + '</span>' +
     '</div>' +
-    '<div class="mech-project-stages">' + stagesHtml + '</div>' +
-    actionsHtml +
     '</div>';
 }
 
@@ -15512,76 +15325,14 @@ async function fetchMechProjects(force) {
       return;
     }
     box.innerHTML = projects.map(renderMechProjectCard).join("");
-    // Bind submit buttons
-    box.querySelectorAll("[data-project-submit]").forEach(function(btn) {
-      btn.addEventListener("click", function() {
-        var projectId = btn.getAttribute("data-project-submit");
-        var workflow = btn.getAttribute("data-workflow");
-        submitNextMechStage(projectId, workflow);
-      });
-    });
   } catch (e) {
     box.innerHTML = '<div class="mech-project-empty">暂无项目（API 未就绪）</div>';
-  }
-}
-
-async function createMechProject() {
-  var nameEl = document.getElementById("mech-project-name");
-  var chargeEl = document.getElementById("mech-project-charge");
-  var multEl = document.getElementById("mech-project-mult");
-  var statusEl = document.getElementById("mech-project-create-status");
-  var btnEl = document.getElementById("mech-project-create-btn");
-  var name = nameEl ? nameEl.value.trim() : "";
-  if (!name) { if (statusEl) statusEl.textContent = "请输入项目名称"; return; }
-  if (btnEl) btnEl.disabled = true;
-  if (statusEl) statusEl.textContent = "创建中…";
-  try {
-    var body = { name: name };
-    if (chargeEl && chargeEl.value !== "") body.charge = parseInt(chargeEl.value, 10) || 0;
-    if (multEl && multEl.value !== "") body.multiplicity = parseInt(multEl.value, 10) || 1;
-    await api("/mechanism-projects", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (statusEl) statusEl.textContent = "创建成功";
-    if (nameEl) nameEl.value = "";
-    await fetchMechProjects(true);
-  } catch (e) {
-    if (statusEl) statusEl.textContent = "创建失败: " + (e && e.message ? e.message : e);
-  } finally {
-    if (btnEl) btnEl.disabled = false;
-  }
-}
-
-function submitNextMechStage(projectId, workflow) {
-  // S2 has a dedicated manual coordinate wizard.  Open it directly from the
-  // mechanism project card instead of routing through the generic job form.
-  if (workflow === "PESsearch") {
-    openPESsearchWizard(projectId);
-    return;
-  }
-  // Downstream stages still use the generic stage handoff form.
-  var modal = document.getElementById("job-modal");
-  if (modal) {
-    modal.style.display = "flex";
-    // Store project_id for job submission
-    window._mechProjectId = projectId;
-    // Try to select the workflow in the picker
-    var workflowBtns = document.querySelectorAll("[data-workflow-id]");
-    workflowBtns.forEach(function(btn) {
-      if (btn.getAttribute("data-workflow-id") === workflow || btn.textContent.indexOf(workflow) >= 0) {
-        btn.click();
-      }
-    });
   }
 }
 
 function setupMechanismSectionListeners() {
   var refreshBtn = document.getElementById("mech-project-refresh");
   if (refreshBtn) refreshBtn.addEventListener("click", function() { fetchMechProjects(true); });
-  var createBtn = document.getElementById("mech-project-create-btn");
-  if (createBtn) createBtn.addEventListener("click", createMechProject);
 }
 
 function setupEventListeners() {

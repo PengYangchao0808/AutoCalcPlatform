@@ -1200,3 +1200,65 @@ def test_route_matrix_v1(
         f"{method} {endpoint} → {response.status_code}, expected {expected_status}: "
         f"{response.text[:200]}"
     )
+
+
+def test_batchoptimize_submit_stageplan(client: TestClient) -> None:
+    """BatchOptimize submit yields a queued task with profile-trimmed stage plan."""
+    job = _submit_batch_optimize(
+        client,
+        [
+            {
+                "name": "ts_1",
+                "tag": "TS",
+                "xyz": "3\nTAG: TS | candidate_id=ts_1 | source=test\n"
+                "O 0 0 0\nH 0.9 0 0\nH -0.3 0.9 0\n",
+                "charge": 0,
+                "multiplicity": 1,
+                "include": True,
+            },
+            {
+                "name": "int_1",
+                "tag": "INT",
+                "xyz": "3\nTAG: INT\nO 0 0 0\nH 0.9 0 0\nH -0.3 0.9 0\n",
+                "include": True,
+            },
+        ],
+    )
+    assert job["status"] in {"queued", "pending", "starting", "failed"}
+
+    record = client.app.state.job_manager.get(job["job_id"])
+    assert record is not None
+    assert record.spec.workflow == "BatchOptimize"
+    assert record.spec.method["profile"] == "opt_freq"
+
+    tasks = client.get(f"/api/v1/jobs/{job['job_id']}/tasks")
+    assert tasks.status_code == 200
+    stage_names = [task["stage_name"] for task in tasks.json()["tasks"]]
+    assert "prepare" in stage_names
+    assert "optimize" in stage_names
+    assert "frequency" in stage_names
+    assert "finalize" in stage_names
+
+
+def test_non_ts_artifact_role_mismatch_422(client: TestClient, tmp_path: Path) -> None:
+    """Non-TS artifact with TS role request returns 422."""
+    source_dir = tmp_path / "irc-source"
+    _write_irc_manifest(
+        source_dir,
+        [
+            {
+                "id": "min_artifact",
+                "label": "Minimum",
+                "path": "structures/min.xyz",
+                "kind": "structure",
+                "role": "minimum",
+            }
+        ],
+        "TAG: INT | candidate_id=min_001",
+    )
+    manager = _FakeIrcManager({"source-job": _irc_source_record("source-job", source_dir)})
+    client.app.state.job_manager = manager
+
+    response = client.post("/api/v1/jobs/source-job/artifacts/min_artifact/run-irc")
+
+    assert response.status_code == 422

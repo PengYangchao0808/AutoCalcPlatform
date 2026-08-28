@@ -145,6 +145,10 @@ tbody tr.selected { background: rgba(88,166,255,.1); }
 </head>
 <body>
 
+<div style="background:#d29922;color:#0d1117;text-align:center;padding:8px;font-size:13px;font-weight:600;">
+  ⚠ 此为旧版工作台，请使用 <a href="/" style="color:#0d1117;text-decoration:underline;">v2 工作台</a>
+</div>
+
 <div class="topbar">
   <h1>ACP Workbench</h1>
   <span id="status-pill" class="status-pill err">connecting...</span>
@@ -218,7 +222,6 @@ const WF_META = {
   fake:       { label: "Fake (demo)",       needs: [] },
   ensemble:   { label: "Ensemble Generation", needs: ["crest", "censo", "orca"] },
   energy:     { label: "Conformer Energy",  needs: ["crest", "censo", "orca"] },
-  mechanism:  { label: "Mechanism / TS",    needs: ["orca"] },
 };
 const PROTOCOLS_DEFAULT = ["ext","censo-zero","censo-lite","censo-full","allopt","reference-sp"];
 
