@@ -152,7 +152,7 @@ def load_items_from_s2_candidate_manifest(
         path
         if path.name == "s2_candidate_manifest.json"
         else path.with_name("s2_candidate_manifest.json"),
-        payload,
+        payload,  # type: ignore[arg-type]  # structurally identical JsonValue; nominal mismatch between manifests and _items TypeAliases
         rows,
         candidate_ids,
     )
@@ -170,7 +170,7 @@ def load_items_from_s2_path_manifest(
         candidate_path = path.with_name("s2_candidate_manifest.json")
         rows = _rows(candidate_payload.get("candidates"))
         rows = [row for row in rows if row.get("active", True) is not False]
-        return _load_rows(candidate_path, payload, rows, select), payload
+        return _load_rows(candidate_path, payload, rows, select), payload  # type: ignore[arg-type,return-value]  # structurally identical JsonValue; nominal mismatch between manifests and _items TypeAliases
     rows = _rows(payload.get("candidates"))
     recommendations = _mapping(payload.get("recommendations")) or {}
     if not rows:
@@ -184,7 +184,7 @@ def load_items_from_s2_path_manifest(
     if not select:
         ts_rows = [row for row in rows if _row_tag(row) == "TS"]
         rows = ts_rows or rows
-    return _load_rows(path, payload, rows, select), payload
+    return _load_rows(path, payload, rows, select), payload  # type: ignore[arg-type,return-value]  # structurally identical JsonValue; nominal mismatch between manifests and _items TypeAliases
 
 
 def load_items_from_s3_manifest(
@@ -199,7 +199,7 @@ def load_items_from_s3_manifest(
     ]
     if not rows:
         raise ValueError("Manifest has no confirmed structure candidates")
-    return _load_rows(path, payload, rows, select), payload
+    return _load_rows(path, payload, rows, select), payload  # type: ignore[arg-type,return-value]  # structurally identical JsonValue; nominal mismatch between manifests and _items TypeAliases
 
 
 __all__ = [

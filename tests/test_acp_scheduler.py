@@ -614,14 +614,16 @@ def test_collect_result_for_generic_workflow(tmp_path: Path) -> None:
         result_dir = work_dir / "RESULT"
         result_dir.mkdir()
         (result_dir / "result_manifest.json").write_text(
-            json.dumps({
-                "version": 2,
-                "workflow": "BatchOptimize",
-                "status": "completed",
-                "products": [
-                    {"id": "batch_ts_001", "path": "structures/ts_001.xyz", "kind": "structure"}
-                ],
-            }),
+            json.dumps(
+                {
+                    "version": 2,
+                    "workflow": "BatchOptimize",
+                    "status": "completed",
+                    "products": [
+                        {"id": "batch_ts_001", "path": "structures/ts_001.xyz", "kind": "structure"}
+                    ],
+                }
+            ),
             encoding="utf-8",
         )
         record = JobRecord(

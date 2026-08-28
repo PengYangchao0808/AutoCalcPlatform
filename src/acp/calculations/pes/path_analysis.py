@@ -56,12 +56,12 @@ class PathProfile:
 @dataclass(frozen=True)
 class _XYZRecord:
     path: Path
-    coords: np.ndarray | None
+    coords: np.ndarray[Any, Any] | None
     symbols: tuple[str, ...] | None
     error: str | None
 
 
-def _kabsch_rmsd(coords1: np.ndarray, coords2: np.ndarray) -> float:
+def _kabsch_rmsd(coords1: np.ndarray[Any, Any], coords2: np.ndarray[Any, Any]) -> float:
     if coords1.shape != coords2.shape:
         raise ValueError(f"Shape mismatch: {coords1.shape} vs {coords2.shape}")
 
@@ -158,7 +158,7 @@ def _relative_energies_kcal(
     ]
 
 
-def _normalized_progress(arclength: np.ndarray) -> np.ndarray:
+def _normalized_progress(arclength: np.ndarray[Any, Any]) -> np.ndarray[Any, Any]:
     if arclength.size == 0:
         return np.asarray([], dtype=float)
     maximum = float(arclength[-1])
@@ -171,7 +171,7 @@ def _normalized_progress(arclength: np.ndarray) -> np.ndarray:
 
 def _energy_derivatives(
     relative_energies_kcal: tuple[float | None, ...] | list[float | None],
-    arclength: np.ndarray,
+    arclength: np.ndarray[Any, Any],
 ) -> tuple[list[float | None], list[float | None]]:
     gradients: list[float | None] = [None] * len(relative_energies_kcal)
     curvatures: list[float | None] = [None] * len(relative_energies_kcal)
@@ -203,7 +203,7 @@ def _energy_derivatives(
 def _write_derivative_segment(
     segment: tuple[int, ...] | list[int],
     relative_energies_kcal: tuple[float | None, ...] | list[float | None],
-    arclength: np.ndarray,
+    arclength: np.ndarray[Any, Any],
     gradients: list[float | None],
     curvatures: list[float | None],
 ) -> None:
@@ -219,13 +219,13 @@ def _write_derivative_segment(
     x_values = np.asarray([float(arclength[index]) for index in segment], dtype=float)
     if len(segment) == 2 or np.any(np.diff(x_values) <= 1.0e-12):
         x_values = np.arange(len(segment), dtype=float)
-    edge_order = 2 if len(segment) > 2 else 1
-    gradient_values = np.gradient(y_values, x_values, edge_order=edge_order)
+    edge_order: int = 2 if len(segment) > 2 else 1
+    gradient_values = np.gradient(y_values, x_values, edge_order=edge_order)  # type: ignore[arg-type]  # numpy gradient accepts int edge_order in practice
     for local_index, frame_index in enumerate(segment):
         gradients[frame_index] = float(gradient_values[local_index])
     if len(segment) < 3:
         return
-    curvature_values = np.gradient(gradient_values, x_values, edge_order=edge_order)
+    curvature_values = np.gradient(gradient_values, x_values, edge_order=edge_order)  # type: ignore[arg-type]  # numpy gradient accepts int edge_order in practice
     for local_index, frame_index in enumerate(segment):
         curvatures[frame_index] = float(curvature_values[local_index])
 
@@ -285,7 +285,7 @@ def compute_forming_bond_distances_by_frame(
 def compute_path_arclength(
     frame_paths: tuple[Path, ...] | list[Path],
     records: tuple[_XYZRecord, ...] | list[_XYZRecord] | None = None,
-) -> np.ndarray:
+) -> np.ndarray[Any, Any]:
     loaded = records if records is not None else _load_xyz_records(frame_paths)
     arclength = np.zeros(len(loaded), dtype=float)
     for index in range(1, len(loaded)):

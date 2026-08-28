@@ -73,8 +73,7 @@ def _validate_strategy(strategy: str | None) -> str:
     normalized = strategy.replace("-", "_")
     if normalized not in valid:
         raise PesSearchInputError(
-            f"[{PES_E_STRATEGY}] Unknown strategy {strategy!r}; "
-            f"expected one of: {', '.join(valid)}"
+            f"[{PES_E_STRATEGY}] Unknown strategy {strategy!r}; expected one of: {', '.join(valid)}"
         )
     return normalized
 
@@ -86,15 +85,12 @@ def _resolve_manifest_from_job(job_id: str) -> Path:
     store = JobStore()
     record = store.get(job_id)
     if record is None:
-        raise PesSearchInputError(
-            f"[{PES_E_MANIFEST}] Job not found: {job_id}"
-        )
+        raise PesSearchInputError(f"[{PES_E_MANIFEST}] Job not found: {job_id}")
     work_dir = Path(record.work_dir)
     manifest_path = work_dir / "RESULT" / "confsearch" / "confsearch_manifest.json"
     if not manifest_path.is_file():
         raise PesSearchInputError(
-            f"[{PES_E_MANIFEST}] Confsearch manifest not found for job {job_id}: "
-            f"{manifest_path}"
+            f"[{PES_E_MANIFEST}] Confsearch manifest not found for job {job_id}: {manifest_path}"
         )
     return manifest_path
 

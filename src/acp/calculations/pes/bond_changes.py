@@ -158,18 +158,20 @@ def _bond_changes_from_graphs(
         else:
             continue
 
-        product_pair = mapped_product_atoms.get(reactant_pair)
-        if product_pair is None:
+        mapped_product_pair: tuple[int, int] | None = mapped_product_atoms.get(reactant_pair)
+        if mapped_product_pair is None:
             mapped_left = reactant_to_product.get(reactant_pair[0])
             mapped_right = reactant_to_product.get(reactant_pair[1])
             if mapped_left is not None and mapped_right is not None:
-                product_pair = _pair(mapped_left, mapped_right)
+                mapped_product_pair = _pair(mapped_left, mapped_right)
         distance_before = GeometryUtils.calculate_distance(
             reactant_array, reactant_pair[0], reactant_pair[1]
         )
         distance_after = (
-            GeometryUtils.calculate_distance(product_array, product_pair[0], product_pair[1])
-            if product_pair is not None
+            GeometryUtils.calculate_distance(
+                product_array, mapped_product_pair[0], mapped_product_pair[1]
+            )
+            if mapped_product_pair is not None
             else 0.0
         )
         confidence = _bond_change_confidence(
@@ -180,7 +182,7 @@ def _bond_changes_from_graphs(
         raw_changes.append(
             BondChange(
                 reactant_atoms=reactant_pair,
-                product_atoms=product_pair,
+                product_atoms=mapped_product_pair,
                 change_type=change_type,
                 bond_order_before=bond_order_before,
                 bond_order_after=bond_order_after,
@@ -571,7 +573,9 @@ def _adjacent_bond_lookup(
 
 
 def _defining_pair(change: BondChange) -> tuple[int, int]:
-    return change.reactant_atoms if change.reactant_atoms is not None else change.product_atoms
+    result = change.reactant_atoms if change.reactant_atoms is not None else change.product_atoms
+    assert result is not None, "BondChange must have at least one side defined"
+    return result
 
 
 def _drive_priority(change_type: str) -> int:

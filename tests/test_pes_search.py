@@ -425,9 +425,7 @@ def test_from_confsearch_manifest(
         "selected_conformers": ["conf_0001"],
     }
     manifest_path = tmp_path / "confsearch_manifest.json"
-    manifest_path.write_text(
-        __import__("json").dumps(manifest), encoding="utf-8"
-    )
+    manifest_path.write_text(__import__("json").dumps(manifest), encoding="utf-8")
 
     coords = np.array(
         [
@@ -456,7 +454,11 @@ def test_from_confsearch_manifest(
     result = engine.run(
         confsearch_manifest=manifest_path,
         coordinate=ScanCoordinate(
-            kind="distance", atoms=(0, 1), start=1.2, end=2.5, n_points=n_points,
+            kind="distance",
+            atoms=(0, 1),
+            start=1.2,
+            end=2.5,
+            n_points=n_points,
         ),
         charge=0,
         multiplicity=1,
@@ -493,9 +495,7 @@ def test_bad_manifest_structured_error(
         "conformers": [],
     }
     empty_path = tmp_path / "empty_manifest.json"
-    empty_path.write_text(
-        __import__("json").dumps(empty_manifest), encoding="utf-8"
-    )
+    empty_path.write_text(__import__("json").dumps(empty_manifest), encoding="utf-8")
     with pytest.raises(PesSearchError, match=PES_E_MANIFEST):
         load_confsearch_manifest(empty_path)
 
@@ -564,13 +564,9 @@ def test_pes_engine_no_mechanism_imports() -> None:
 
     source = Path(engine_module.__file__).read_text(encoding="utf-8")
     import_lines = [
-        line
-        for line in source.splitlines()
-        if line.strip().startswith(("import ", "from "))
+        line for line in source.splitlines() if line.strip().startswith(("import ", "from "))
     ]
-    mechanism_imports = [
-        line for line in import_lines if "acp.mechanism" in line
-    ]
+    mechanism_imports = [line for line in import_lines if "acp.mechanism" in line]
     assert mechanism_imports == [], f"Found mechanism imports: {mechanism_imports}"
 
 
@@ -603,9 +599,7 @@ def _make_confsearch_manifest(tmp_path: Path) -> Path:
         "selected_conformers": ["conf_0001"],
     }
     manifest_path = tmp_path / "confsearch_manifest.json"
-    manifest_path.write_text(
-        __import__("json").dumps(manifest), encoding="utf-8"
-    )
+    manifest_path.write_text(__import__("json").dumps(manifest), encoding="utf-8")
     return manifest_path
 
 
@@ -649,7 +643,11 @@ def test_entry_from_artifact(
     result = run_pes_search(
         confsearch_manifest=manifest_path,
         coordinate=ScanCoordinate(
-            kind="distance", atoms=(0, 1), start=1.2, end=2.5, n_points=5,
+            kind="distance",
+            atoms=(0, 1),
+            start=1.2,
+            end=2.5,
+            n_points=5,
         ),
         output_dir=tmp_path,
         config={"resources": {"nproc": 1}},
@@ -674,7 +672,11 @@ def test_entry_from_direct_input(
     result = run_pes_search(
         input_xyz=xyz_path,
         coordinate=ScanCoordinate(
-            kind="distance", atoms=(0, 1), start=1.2, end=2.5, n_points=5,
+            kind="distance",
+            atoms=(0, 1),
+            start=1.2,
+            end=2.5,
+            n_points=5,
         ),
         output_dir=tmp_path,
         config={"resources": {"nproc": 1}},
@@ -715,7 +717,11 @@ def test_entry_with_reaction(
     result = run_pes_search(
         confsearch_manifest=manifest_path,
         coordinate=ScanCoordinate(
-            kind="distance", atoms=(0, 1), start=1.2, end=2.5, n_points=5,
+            kind="distance",
+            atoms=(0, 1),
+            start=1.2,
+            end=2.5,
+            n_points=5,
         ),
         reaction=reaction,
         output_dir=tmp_path,
@@ -770,8 +776,7 @@ def test_pes_workflow_no_mechanism_imports() -> None:
 
     source = Path(pes_module.__file__).read_text(encoding="utf-8")
     import_lines = [
-        line for line in source.splitlines()
-        if line.strip().startswith(("import ", "from "))
+        line for line in source.splitlines() if line.strip().startswith(("import ", "from "))
     ]
     mechanism_imports = [line for line in import_lines if "acp.mechanism" in line]
     assert mechanism_imports == [], f"Found mechanism imports: {mechanism_imports}"

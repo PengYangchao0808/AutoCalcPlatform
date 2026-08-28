@@ -144,8 +144,7 @@ def resolve_representative_conformer(
         raise PesSearchError(
             code=PES_E_MANIFEST,
             message=(
-                f"Conformer {chosen.get('conf_id')!r} has no geometry reference "
-                f"in {manifest_path}"
+                f"Conformer {chosen.get('conf_id')!r} has no geometry reference in {manifest_path}"
             ),
         )
     geometry_path = (manifest_path.parent / geometry_ref).resolve()
@@ -153,8 +152,7 @@ def resolve_representative_conformer(
         raise PesSearchError(
             code=PES_E_MANIFEST,
             message=(
-                f"Conformer geometry not found: {geometry_ref} "
-                f"(looked in {manifest_path.parent})"
+                f"Conformer geometry not found: {geometry_ref} (looked in {manifest_path.parent})"
             ),
         )
     return str(chosen.get("conf_id", "")), geometry_path
@@ -186,9 +184,7 @@ class PesSearchResult:
             "quality": self.quality,
             "ts_candidates": [c.to_dict() for c in self.ts_candidates],
             "int_candidates": [c.to_dict() for c in self.int_candidates],
-            "candidate_structures": {
-                k: str(v) for k, v in self.candidate_structures.items()
-            },
+            "candidate_structures": {k: str(v) for k, v in self.candidate_structures.items()},
             "pes_profile_path": str(self.pes_profile_path) if self.pes_profile_path else None,
             "metadata": dict(self.metadata),
             "error": self.error,
@@ -258,13 +254,13 @@ class PesSearchEngine:
             manifest_data = load_confsearch_manifest(confsearch_manifest)
             if structure_xyz is None:
                 _conf_id, structure_xyz = resolve_representative_conformer(
-                    confsearch_manifest, manifest_data,
+                    confsearch_manifest,
+                    manifest_data,
                 )
 
         if structure_xyz is None:
             raise ValueError(
-                "PesSearchEngine.run requires either structure_xyz or "
-                "confsearch_manifest"
+                "PesSearchEngine.run requires either structure_xyz or confsearch_manifest"
             )
 
         # Build coordinate if not provided
@@ -359,12 +355,8 @@ class PesSearchEngine:
             points=path_points,
             candidates=candidates,
             strategy="pes_engine",
-            selected_ts_id=(
-                ts_candidates[0].candidate_id if ts_candidates else None
-            ),
-            selected_int_id=(
-                int_candidates[0].candidate_id if int_candidates else None
-            ),
+            selected_ts_id=(ts_candidates[0].candidate_id if ts_candidates else None),
+            selected_int_id=(int_candidates[0].candidate_id if int_candidates else None),
             complete=quality.get("scan_complete", False),
         )
 
@@ -381,9 +373,7 @@ class PesSearchEngine:
                 "engine": "PesSearchEngine",
                 "strategy": "pes_engine",
                 "search_result": search_result.to_dict(),
-                "manifest_source": (
-                    str(confsearch_manifest) if confsearch_manifest else None
-                ),
+                "manifest_source": (str(confsearch_manifest) if confsearch_manifest else None),
             },
         )
 

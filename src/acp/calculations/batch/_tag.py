@@ -70,7 +70,7 @@ def parse_tag_comment(comment: str | None) -> TagInfo:
     for key, pattern in _KV_RES.items():
         value = pattern.search(text)
         if value:
-            result[key] = value.group(1)
+            result[key] = value.group(1)  # type: ignore[literal-required]  # dynamic key from _KV_RES matches TagInfo fields
     return result
 
 

@@ -12,8 +12,8 @@ It orchestrates seven responsibilities (design doc §6.3):
 7. Write a unique ``RESULT/result_manifest.json`` at finalization.
 
 The executor deliberately does NOT recognise retired stage-workflow semantics
-(S1–S4), mechanism studies, review, or promote — those concepts live in the
-mechanism orchestrator layer above.
+(numbered phases, orchestrator-level review, or promote) — those concepts live in the
+orchestrator layer above.
 """
 
 from __future__ import annotations

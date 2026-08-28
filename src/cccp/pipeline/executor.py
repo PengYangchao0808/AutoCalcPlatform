@@ -28,10 +28,7 @@ class PipelineExecutor:
         self.protocol_spec = protocol_spec
 
     def execute_final_opt_sp(
-        self,
-        engine: Any,
-        candidate_paths: list[Path],
-        output_dir: Path
+        self, engine: Any, candidate_paths: list[Path], output_dir: Path
     ) -> Dict[str, Any]:
         """
         Execute final OPT-SP stage.
@@ -46,12 +43,7 @@ class PipelineExecutor:
         """
         return engine._run_shared_dft_handoff(candidate_paths)
 
-    def execute_handoff(
-        self,
-        engine: Any,
-        candidate_set: Any,
-        mode: str
-    ) -> Any:
+    def execute_handoff(self, engine: Any, candidate_set: Any, mode: str) -> Any:
         """
         Execute handoff strategy.
 

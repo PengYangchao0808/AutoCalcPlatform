@@ -112,7 +112,7 @@ def _canonicalize_bond_pairs(
 
 
 def _build_bond_graph(
-    coords: np.ndarray,
+    coords: np.ndarray[Any, Any],
     symbols: list[str],
     *,
     scale: float = 1.25,
@@ -129,9 +129,7 @@ def _build_bond_graph(
             radius_i = _COVALENT_RADII.get(symbols[atom_i])
             radius_j = _COVALENT_RADII.get(symbols[atom_j])
             if radius_i is None or radius_j is None:
-                raise ValueError(
-                    f"Unknown element radius: {symbols[atom_i]}, {symbols[atom_j]}"
-                )
+                raise ValueError(f"Unknown element radius: {symbols[atom_i]}, {symbols[atom_j]}")
             threshold = scale * (radius_i + radius_j)
             if distance <= threshold:
                 graph[atom_i].append(atom_j)
@@ -139,7 +137,7 @@ def _build_bond_graph(
     return graph
 
 
-def _calculate_rmsd(left: np.ndarray, right: np.ndarray) -> float:
+def _calculate_rmsd(left: np.ndarray[Any, Any], right: np.ndarray[Any, Any]) -> float:
     return float(GeometryUtils.rmsd(left, right))
 
 
@@ -166,8 +164,8 @@ class RiskyContactResult:
 
 
 def compare_graph_topology(
-    product_coords: np.ndarray,
-    candidate_coords: np.ndarray,
+    product_coords: np.ndarray[Any, Any],
+    candidate_coords: np.ndarray[Any, Any],
     symbols: list[str],
     forming_bonds: tuple[tuple[int, int], ...] | list[tuple[int, int]],
     graph_scale: float = 1.25,
@@ -182,10 +180,16 @@ def compare_graph_topology(
     """
     try:
         product_graph = _build_bond_graph(
-            product_coords, symbols, scale=graph_scale, min_dist=min_dist,
+            product_coords,
+            symbols,
+            scale=graph_scale,
+            min_dist=min_dist,
         )
         candidate_graph = _build_bond_graph(
-            candidate_coords, symbols, scale=graph_scale, min_dist=min_dist,
+            candidate_coords,
+            symbols,
+            scale=graph_scale,
+            min_dist=min_dist,
         )
     except ValueError as exc:
         logger.warning("Failed to build bond graph: %s", exc)
@@ -254,8 +258,8 @@ def compare_graph_topology(
 
 
 def detect_risky_contacts(
-    product_coords: np.ndarray,
-    candidate_coords: np.ndarray,
+    product_coords: np.ndarray[Any, Any],
+    candidate_coords: np.ndarray[Any, Any],
     symbols: list[str],
     product_graph_scale: float = 1.25,
     near_bond_threshold_ratio: float = 0.85,
@@ -266,7 +270,10 @@ def detect_risky_contacts(
     """Detect non-product atom pairs that move into near-bond contact."""
     try:
         product_graph = _build_bond_graph(
-            product_coords, symbols, scale=product_graph_scale, min_dist=0.6,
+            product_coords,
+            symbols,
+            scale=product_graph_scale,
+            min_dist=0.6,
         )
     except ValueError as exc:
         logger.warning("Failed to build product graph for risk detection: %s", exc)
@@ -286,10 +293,14 @@ def detect_risky_contacts(
             if pair in product_edges:
                 continue
             product_distance = GeometryUtils.calculate_distance(
-                product_coords, atom_i, atom_j,
+                product_coords,
+                atom_i,
+                atom_j,
             )
             candidate_distance = GeometryUtils.calculate_distance(
-                candidate_coords, atom_i, atom_j,
+                candidate_coords,
+                atom_i,
+                atom_j,
             )
             if candidate_distance >= product_distance * min_shrink_ratio:
                 continue
@@ -300,9 +311,7 @@ def detect_risky_contacts(
                 near_bond_threshold_ratio * (radius_i + radius_j),
             )
             if candidate_distance <= near_bond_threshold:
-                risky_pairs.append(
-                    (atom_i, atom_j, candidate_distance, product_distance)
-                )
+                risky_pairs.append((atom_i, atom_j, candidate_distance, product_distance))
 
     risky_pairs.sort(key=lambda item: item[2])
     if len(risky_pairs) > max_pairs:
@@ -318,7 +327,7 @@ def detect_risky_contacts(
 
 
 def compute_min_nonbonded_distance(
-    coords: np.ndarray,
+    coords: np.ndarray[Any, Any],
     bonded_pairs: set[tuple[int, int]],
     forming_bonds: set[tuple[int, int]],
     min_considered: float = 1.25,
@@ -368,7 +377,7 @@ def generate_keepaway_constraints(
 
 def check_scan_trajectory(
     *,
-    product_coords: np.ndarray,
+    product_coords: np.ndarray[Any, Any],
     symbols: list[str],
     forming_bonds: tuple[tuple[int, int], ...] | list[tuple[int, int]],
     frame_paths: tuple[Path, ...] | list[Path],
@@ -382,7 +391,7 @@ def check_scan_trajectory(
     total_frames = len(frame_paths)
     off_path_indices: list[int] = []
     frame_issues: list[dict[str, Any]] = []
-    prev_coords: np.ndarray | None = None
+    prev_coords: np.ndarray[Any, Any] | None = None
     rmsd_surge_threshold = 0.5
 
     for index, frame_path in enumerate(frame_paths):
@@ -391,16 +400,12 @@ def check_scan_trajectory(
             frame_coords_np = np.asarray(frame_coords, dtype=float)
         except Exception as exc:
             off_path_indices.append(index)
-            frame_issues.append(
-                {"frame_index": index, "reason": f"frame_read_error:{exc}"}
-            )
+            frame_issues.append({"frame_index": index, "reason": f"frame_read_error:{exc}"})
             continue
 
         if len(frame_symbols) != len(symbols):
             off_path_indices.append(index)
-            frame_issues.append(
-                {"frame_index": index, "reason": "symbol_count_mismatch"}
-            )
+            frame_issues.append({"frame_index": index, "reason": "symbol_count_mismatch"})
             continue
 
         guard_result = compare_graph_topology(
@@ -449,11 +454,7 @@ def check_scan_trajectory(
         prev_coords = frame_coords_np
 
     topology_drift_frames = sorted(
-        {
-            issue["frame_index"]
-            for issue in frame_issues
-            if issue.get("reason") == "topology_drift"
-        }
+        {issue["frame_index"] for issue in frame_issues if issue.get("reason") == "topology_drift"}
     )
     if topology_drift_frames:
         logger.warning(

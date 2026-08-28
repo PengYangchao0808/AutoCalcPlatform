@@ -178,7 +178,7 @@ def _run_group(
             solvent=settings.solvent,
             cache=settings.cache,
             config=settings.config,
-            **call_options,
+            **call_options,  # type: ignore[arg-type]  # remaining options passed through as kwargs
         )
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
         message = str(exc).strip() or type(exc).__name__

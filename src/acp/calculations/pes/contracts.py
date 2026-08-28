@@ -155,7 +155,7 @@ class ScanCoordinate:
             raise ValueError("coordinate.kind must be one of 'distance', 'angle', or 'dihedral'")
         if not isinstance(raw_atoms, (list, tuple)) or len(raw_atoms) != expected_atoms:
             raise ValueError(f"coordinate.kind='{kind}' requires {expected_atoms} atoms")
-        atoms = (int(raw_atoms[0]), int(raw_atoms[1]))
+        atoms: tuple[int, ...] = (int(raw_atoms[0]), int(raw_atoms[1]))
         if expected_atoms > 2:
             atoms = tuple(int(atom) for atom in raw_atoms)
         start_raw = payload.get("start")

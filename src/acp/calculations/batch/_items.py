@@ -83,20 +83,21 @@ class BatchStructureItem:
     @classmethod
     def from_dict(cls, payload: Mapping[str, JsonValue]) -> BatchStructureItem:
         """Parse an input item mapping."""
+        _raw_role = payload.get("role")
         return cls(
             item_id=str(payload.get("item_id") or payload.get("id") or ""),
             name=str(payload.get("name") or payload.get("item_id") or payload.get("id") or ""),
             tag=str(payload.get("tag") or "INT"),
-            role=payload.get("role") if isinstance(payload.get("role"), str) else None,
+            role=_raw_role if isinstance(_raw_role, str) else None,
             xyz=str(payload.get("xyz") or ""),
             candidate_id=str(payload.get("candidate_id") or ""),
             source_type=str(payload.get("source_type") or "upload"),
             source_ref=str(payload.get("source_ref") or ""),
-            charge=int(payload["charge"]) if payload.get("charge") is not None else None,
+            charge=int(payload["charge"]) if payload.get("charge") is not None else None,  # type: ignore[arg-type]  # numeric JsonValue guarded by is not None
             multiplicity=(
-                int(payload["multiplicity"]) if payload.get("multiplicity") is not None else None
+                int(payload["multiplicity"]) if payload.get("multiplicity") is not None else None  # type: ignore[arg-type]  # numeric JsonValue guarded by is not None
             ),
-            atom_count=int(payload.get("atom_count") or 0),
+            atom_count=int(payload.get("atom_count") or 0),  # type: ignore[arg-type]  # numeric JsonValue with fallback
             formula=str(payload.get("formula") or ""),
             include=bool(payload.get("include", True)),
         )
@@ -183,17 +184,18 @@ class BatchCalculationItem:
             value = payload.get(key)
             return dict(value) if isinstance(value, dict) else {}
 
+        _raw_role = payload.get("role")
         return cls(
             item_id=str(payload.get("item_id") or ""),
             candidate_id=str(payload.get("candidate_id") or payload.get("item_id") or ""),
             name=str(payload.get("name") or ""),
             tag=str(payload.get("tag") or "INT"),
-            role=payload.get("role") if isinstance(payload.get("role"), str) else None,
+            role=_raw_role if isinstance(_raw_role, str) else None,
             status=str(payload.get("status") or "pending"),
             input_xyz=str(payload.get("input_xyz") or ""),
             optimized_xyz=str(payload.get("optimized_xyz") or ""),
-            charge=int(payload.get("charge") or 0),
-            multiplicity=int(payload.get("multiplicity") or 1),
+            charge=int(payload.get("charge") or 0),  # type: ignore[arg-type]  # numeric JsonValue with fallback
+            multiplicity=int(payload.get("multiplicity") or 1),  # type: ignore[arg-type]  # numeric JsonValue with fallback
             source_type=str(payload.get("source_type") or ""),
             source_ref=str(payload.get("source_ref") or ""),
             cache_key=str(payload.get("cache_key") or ""),
@@ -235,22 +237,24 @@ def apply_user_overrides(
         by_key.setdefault(item.item_id, item)
         by_key.setdefault(item.candidate_id, item)
     for key, change in overrides.items():
-        item = by_key.get(str(key))
-        if item is None:
+        matched = by_key.get(str(key))
+        if matched is None:
             continue
-        tag = normalize_tag(change.get("tag") if isinstance(change.get("tag"), str) else None)
-        role = change.get("role") if isinstance(change.get("role"), str) else None
+        raw_tag = change.get("tag")
+        tag = normalize_tag(raw_tag if isinstance(raw_tag, str) else None)
+        raw_role = change.get("role")
+        role = raw_role if isinstance(raw_role, str) else None
         tag = tag or normalize_tag(role)
         if tag:
-            _set_tag(item, tag)
+            _set_tag(matched, tag)
         if change.get("name"):
-            item.name = str(change["name"])
+            matched.name = str(change["name"])
         if change.get("charge") is not None:
-            item.charge = int(change["charge"])
+            matched.charge = int(change["charge"])  # type: ignore[arg-type]  # numeric JsonValue guarded by is not None
         if change.get("multiplicity") is not None:
-            item.multiplicity = int(change["multiplicity"])
+            matched.multiplicity = int(change["multiplicity"])  # type: ignore[arg-type]  # numeric JsonValue guarded by is not None
         if isinstance(change.get("include"), bool):
-            item.include = bool(change["include"])
+            matched.include = bool(change["include"])
     return items
 
 

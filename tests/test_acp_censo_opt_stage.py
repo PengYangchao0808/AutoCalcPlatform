@@ -64,9 +64,7 @@ def _make_record(conf_id: str, frame_index: int, gtot: float) -> CensoConformerR
         gsolv=0.0,
         grrho=-0.08,
         gtot=gtot,
-        coordinates=np.array(
-            [[0.0, 0.0, 0.0], [0.0, 0.0, 1.089], [1.027, 0.0, -0.363]]
-        ),
+        coordinates=np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 1.089], [1.027, 0.0, -0.363]]),
         symbols=["C", "H", "H"],
     )
 
@@ -86,9 +84,7 @@ def _mock_orca_instance() -> MagicMock:
     orca = MagicMock()
     opt_result = MagicMock()
     opt_result.success = True
-    opt_result.coordinates = np.array(
-        [[0.0, 0.0, 0.0], [0.0, 0.0, 1.09], [1.03, 0.0, -0.36]]
-    )
+    opt_result.coordinates = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 1.09], [1.03, 0.0, -0.36]])
     opt_result.symbols = ["C", "H", "H"]
     opt_result.energy = -154.90
     opt_result.log_file = Path("/tmp/opt.out")
@@ -149,7 +145,9 @@ def _run_energy(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)) as mock_get_backend,
+        patch(
+            "acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)
+        ) as mock_get_backend,
         patch("acp.workflows.energy_shared.run_shermo", return_value=shermo_return) as mock_shermo,
     ):
         backend = MagicMock()
@@ -172,12 +170,17 @@ def _run_energy(
 
 
 def test_opt_and_freq_use_same_method_and_basis(
-    tmp_path: Path, multiframe_xyz: Path,
+    tmp_path: Path,
+    multiframe_xyz: Path,
 ) -> None:
     orca = _mock_orca_instance()
     result, _, _, _ = _run_energy(
-        tmp_path, multiframe_xyz, _screening_result(), orca,
-        shermo_return=dict(_SHERMO_OK), preset="censo-light",
+        tmp_path,
+        multiframe_xyz,
+        _screening_result(),
+        orca,
+        shermo_return=dict(_SHERMO_OK),
+        preset="censo-light",
     )
     assert result.status == "completed"
 
@@ -195,12 +198,17 @@ def test_opt_and_freq_use_same_method_and_basis(
 
 
 def test_default_opt_functional_is_r2scan3c(
-    tmp_path: Path, multiframe_xyz: Path,
+    tmp_path: Path,
+    multiframe_xyz: Path,
 ) -> None:
     orca = _mock_orca_instance()
     result, _, _, _ = _run_energy(
-        tmp_path, multiframe_xyz, _screening_result(), orca,
-        shermo_return=dict(_SHERMO_OK), preset="censo-light",
+        tmp_path,
+        multiframe_xyz,
+        _screening_result(),
+        orca,
+        shermo_return=dict(_SHERMO_OK),
+        preset="censo-light",
     )
     assert result.status == "completed"
     assert orca.optimize.call_args.kwargs["method"] == "r2SCAN-3c"
@@ -208,12 +216,17 @@ def test_default_opt_functional_is_r2scan3c(
 
 
 def test_levels_dft_opt_functional_override(
-    tmp_path: Path, multiframe_xyz: Path,
+    tmp_path: Path,
+    multiframe_xyz: Path,
 ) -> None:
     orca = _mock_orca_instance()
     result, _, _, _ = _run_energy(
-        tmp_path, multiframe_xyz, _screening_result(), orca,
-        shermo_return=dict(_SHERMO_OK), preset="censo-light",
+        tmp_path,
+        multiframe_xyz,
+        _screening_result(),
+        orca,
+        shermo_return=dict(_SHERMO_OK),
+        preset="censo-light",
         levels={"dft_opt": {"functional": "B97-3c"}},
     )
     assert result.status == "completed"
@@ -222,12 +235,17 @@ def test_levels_dft_opt_functional_override(
 
 
 def test_levels_refinement_sp_override(
-    tmp_path: Path, multiframe_xyz: Path,
+    tmp_path: Path,
+    multiframe_xyz: Path,
 ) -> None:
     orca = _mock_orca_instance()
     result, _, _, _ = _run_energy(
-        tmp_path, multiframe_xyz, _screening_result(), orca,
-        shermo_return=dict(_SHERMO_OK), preset="censo-light",
+        tmp_path,
+        multiframe_xyz,
+        _screening_result(),
+        orca,
+        shermo_return=dict(_SHERMO_OK),
+        preset="censo-light",
         levels={"refinement_sp": {"functional": "DLPNO-CCSD(T)", "basis": "def2-TZVPP"}},
     )
     assert result.status == "completed"
@@ -240,12 +258,17 @@ def test_levels_refinement_sp_override(
 
 
 def test_thermo_scale_factor_reaches_run_shermo(
-    tmp_path: Path, multiframe_xyz: Path,
+    tmp_path: Path,
+    multiframe_xyz: Path,
 ) -> None:
     orca = _mock_orca_instance()
     result, _, _, mock_shermo = _run_energy(
-        tmp_path, multiframe_xyz, _screening_result(), orca,
-        shermo_return=dict(_SHERMO_OK), preset="censo-light",
+        tmp_path,
+        multiframe_xyz,
+        _screening_result(),
+        orca,
+        shermo_return=dict(_SHERMO_OK),
+        preset="censo-light",
         levels={"thermo": {"scale_factor": 0.98}},
     )
     assert result.status == "completed"
@@ -253,12 +276,17 @@ def test_thermo_scale_factor_reaches_run_shermo(
 
 
 def test_thermo_scale_factor_default_fallback(
-    tmp_path: Path, multiframe_xyz: Path,
+    tmp_path: Path,
+    multiframe_xyz: Path,
 ) -> None:
     orca = _mock_orca_instance()
     result, _, _, mock_shermo = _run_energy(
-        tmp_path, multiframe_xyz, _screening_result(), orca,
-        shermo_return=dict(_SHERMO_OK), preset="censo-light",
+        tmp_path,
+        multiframe_xyz,
+        _screening_result(),
+        orca,
+        shermo_return=dict(_SHERMO_OK),
+        preset="censo-light",
     )
     assert result.status == "completed"
     assert mock_shermo.call_args.kwargs["scl_zpe"] == pytest.approx(0.9905)
@@ -278,8 +306,12 @@ def test_no_opt_skips_orca_entirely(tmp_path: Path, multiframe_xyz: Path) -> Non
     )
     orca = _mock_orca_instance()
     result, backend, mock_get_backend, mock_shermo = _run_energy(
-        tmp_path, multiframe_xyz, refinement, orca,
-        preset="censo-light", no_opt=True,
+        tmp_path,
+        multiframe_xyz,
+        refinement,
+        orca,
+        preset="censo-light",
+        no_opt=True,
     )
     assert result.status == "completed"
     mock_get_backend.assert_not_called()
@@ -304,7 +336,9 @@ def test_config_can_disable_opt_stage(tmp_path: Path, multiframe_xyz: Path) -> N
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)) as mock_get_backend,
+        patch(
+            "acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)
+        ) as mock_get_backend,
         patch("acp.workflows.energy_shared.run_shermo"),
     ):
         backend = MagicMock()
@@ -324,19 +358,25 @@ def test_config_can_disable_opt_stage(tmp_path: Path, multiframe_xyz: Path) -> N
 
 
 def test_zero_opt_on_does_not_trigger_censo_parts(
-    tmp_path: Path, multiframe_xyz: Path,
+    tmp_path: Path,
+    multiframe_xyz: Path,
 ) -> None:
     orca = _mock_orca_instance()
     result, backend, _, _ = _run_energy(
-        tmp_path, multiframe_xyz, None, orca,
-        shermo_return=dict(_SHERMO_OK), preset="censo-zero",
+        tmp_path,
+        multiframe_xyz,
+        None,
+        orca,
+        shermo_return=dict(_SHERMO_OK),
+        preset="censo-zero",
     )
     assert result.status == "completed"
     backend.refine_ensemble.assert_not_called()
 
 
 def test_default_preset_runs_censo_optimization_and_survivor_thermo(
-    tmp_path: Path, multiframe_xyz: Path,
+    tmp_path: Path,
+    multiframe_xyz: Path,
 ) -> None:
     refinement = CensoRunResult(
         preset="censo-default",
@@ -346,8 +386,12 @@ def test_default_preset_runs_censo_optimization_and_survivor_thermo(
     )
     orca = _mock_orca_instance()
     result, backend, _, mock_shermo = _run_energy(
-        tmp_path, multiframe_xyz, refinement, orca,
-        shermo_return=dict(_SHERMO_OK), preset="censo-default",
+        tmp_path,
+        multiframe_xyz,
+        refinement,
+        orca,
+        shermo_return=dict(_SHERMO_OK),
+        preset="censo-default",
     )
     assert result.status == "completed"
     assert backend.refine_ensemble.call_args.kwargs["preset"] == "censo-default"
@@ -363,7 +407,10 @@ def test_opt_failure_fails_workflow(tmp_path: Path, multiframe_xyz: Path) -> Non
     orca.optimize.return_value.error_message = "SCF did not converge"
 
     result, _, _, _ = _run_energy(
-        tmp_path, multiframe_xyz, _screening_result(), orca,
+        tmp_path,
+        multiframe_xyz,
+        _screening_result(),
+        orca,
         preset="censo-light",
     )
     assert result.status == "failed"
@@ -384,8 +431,13 @@ def test_build_cli_nconf_flag(tmp_path: Path) -> None:
 
     preset = interface.resolve_preset("censo-zero")
     cmd = interface.build_cli(
-        input_xyz, rcfile, preset,
-        nproc=4, temperature=298.15, solvent=None, nconf=1,
+        input_xyz,
+        rcfile,
+        preset,
+        nproc=4,
+        temperature=298.15,
+        solvent=None,
+        nconf=1,
     )
     assert "-n" in cmd
     assert cmd[cmd.index("-n") + 1] == "1"
@@ -401,8 +453,12 @@ def test_build_cli_no_nconf_by_default(tmp_path: Path) -> None:
 
     preset = interface.resolve_preset("censo-light")
     cmd = interface.build_cli(
-        input_xyz, rcfile, preset,
-        nproc=4, temperature=298.15, solvent=None,
+        input_xyz,
+        rcfile,
+        preset,
+        nproc=4,
+        temperature=298.15,
+        solvent=None,
     )
     assert "-n" not in cmd
 
@@ -425,7 +481,8 @@ def test_refine_ensemble_include_refinement_appends_part(tmp_path: Path) -> None
         pytest.raises(Exception),
     ):
         interface.refine_ensemble(
-            input_xyz, tmp_path / "censo",
+            input_xyz,
+            tmp_path / "censo",
             preset="censo-light",
             include_refinement=True,
         )
@@ -450,7 +507,8 @@ def test_refine_ensemble_part_overrides_reach_rcfile(tmp_path: Path) -> None:
         pytest.raises(Exception),
     ):
         interface.refine_ensemble(
-            input_xyz, censo_dir,
+            input_xyz,
+            censo_dir,
             preset="censo-light",
             include_refinement=True,
             part_overrides={"refinement": {"func": "dlpno-ccsd(t)"}},

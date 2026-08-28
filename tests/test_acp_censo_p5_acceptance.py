@@ -729,7 +729,9 @@ def _g_record(conf_id: str, frame_index: int, gtot: float) -> Any:
 
 
 def test_select_cumulative_boltzmann_far_apart_keeps_rank1() -> None:
-    from acp.confsearch.shared.helpers import select_cumulative_boltzmann as _select_cumulative_boltzmann
+    from acp.confsearch.shared.helpers import (
+        select_cumulative_boltzmann as _select_cumulative_boltzmann,
+    )
 
     records = [_g_record("CONF1", 0, -155.00), _g_record("CONF2", 1, -154.95)]
     selected = _select_cumulative_boltzmann(records, 298.15, 0.99)
@@ -737,7 +739,9 @@ def test_select_cumulative_boltzmann_far_apart_keeps_rank1() -> None:
 
 
 def test_select_cumulative_boltzmann_close_keeps_all() -> None:
-    from acp.confsearch.shared.helpers import select_cumulative_boltzmann as _select_cumulative_boltzmann
+    from acp.confsearch.shared.helpers import (
+        select_cumulative_boltzmann as _select_cumulative_boltzmann,
+    )
 
     # ΔG ≈ 0.31 kcal/mol → weights ~0.63/0.37 → both needed for 99%
     records = [_g_record("CONF2", 1, -154.9995), _g_record("CONF1", 0, -155.0)]
@@ -746,7 +750,9 @@ def test_select_cumulative_boltzmann_close_keeps_all() -> None:
 
 
 def test_select_cumulative_boltzmann_threshold_crossing_included() -> None:
-    from acp.confsearch.shared.helpers import select_cumulative_boltzmann as _select_cumulative_boltzmann
+    from acp.confsearch.shared.helpers import (
+        select_cumulative_boltzmann as _select_cumulative_boltzmann,
+    )
 
     # Three equal-G conformers: weights 1/3 each; cumsum crosses 0.5 at #2
     records = [_g_record(f"CONF{i}", i - 1, -155.0) for i in (1, 2, 3)]
@@ -845,6 +851,7 @@ def test_energy_light_non_rank1_handoff_failure_is_skipped(tmp_path: Path) -> No
     import numpy as np
 
     from acp.backends.censo_backend import CensoRunResult
+
     pytest.importorskip("acp.workflows.energy")
     from acp.workflows.energy import run_conformer_energy
 
@@ -918,6 +925,7 @@ def test_energy_cheap_path_custom_threshold_propagates(tmp_path: Path) -> None:
     from unittest.mock import MagicMock, patch
 
     from acp.backends.censo_backend import CensoRunResult
+
     pytest.importorskip("acp.workflows.energy")
     from acp.workflows.energy import run_conformer_energy
 

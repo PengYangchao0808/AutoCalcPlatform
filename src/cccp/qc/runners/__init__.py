@@ -86,7 +86,7 @@ def run_shermo(
     scl_zpe: float = 0.9905,
     ilowfreq: int = 2,
     imagreal: int = 0,
-    conc: Optional[float] = None
+    conc: Optional[float] = None,
 ) -> Optional[Dict[str, float]]:
     """
     Run Shermo for thermochemical analysis.
@@ -121,27 +121,28 @@ def run_shermo(
     cmd = [
         str(shermo_bin),
         _shermo_input_path(freq_output, output_dir),
-        "-E", f"{sp_energy:.12f}",
-        "-T", str(temperature_k),
-        "-P", str(pressure_atm),
-        "-sclZPE", str(scl_zpe),
-        "-ilowfreq", str(ilowfreq),
-        "-imagreal", str(imagreal),
+        "-E",
+        f"{sp_energy:.12f}",
+        "-T",
+        str(temperature_k),
+        "-P",
+        str(pressure_atm),
+        "-sclZPE",
+        str(scl_zpe),
+        "-ilowfreq",
+        str(ilowfreq),
+        "-imagreal",
+        str(imagreal),
     ]
     if conc is not None:
         cmd.extend(["-conc", str(conc)])
 
     try:
         result = subprocess.run(
-            cmd,
-            cwd=output_dir,
-            capture_output=True,
-            text=True,
-            timeout=None,
-            env=_pinned_env(1)
+            cmd, cwd=output_dir, capture_output=True, text=True, timeout=None, env=_pinned_env(1)
         )
 
-        with open(output_file, 'w', encoding='utf-8') as f:
+        with open(output_file, "w", encoding="utf-8") as f:
             f.write(result.stdout)
             if result.stderr:
                 f.write("\nSTDERR:\n")
@@ -165,15 +166,15 @@ def _parse_sum_file(sum_file: Path) -> Optional[Dict[str, float]]:
         Dictionary with thermochemical data or None on failure
     """
     patterns = {
-        'u_sum': r"Sum of electronic energy and thermal correction to U:\s+([-+]?\d+\.\d+)",
-        'h_sum': r"Sum of electronic energy and thermal correction to H:\s+([-+]?\d+\.\d+)",
-        'g_sum': r"Sum of electronic energy and thermal correction to G:\s+([-+]?\d+\.\d+)",
-        'g_conc': r"Gibbs free energy at specified concentration:\s+([-+]?\d+\.\d+)",
-        's_total': r"Total S:\s+([-+]?\d+\.\d+)",
+        "u_sum": r"Sum of electronic energy and thermal correction to U:\s+([-+]?\d+\.\d+)",
+        "h_sum": r"Sum of electronic energy and thermal correction to H:\s+([-+]?\d+\.\d+)",
+        "g_sum": r"Sum of electronic energy and thermal correction to G:\s+([-+]?\d+\.\d+)",
+        "g_conc": r"Gibbs free energy at specified concentration:\s+([-+]?\d+\.\d+)",
+        "s_total": r"Total S:\s+([-+]?\d+\.\d+)",
     }
 
     try:
-        with open(sum_file, 'r', encoding='utf-8') as f:
+        with open(sum_file, "r", encoding="utf-8") as f:
             content = f.read()
 
         thermo_data = {}
@@ -225,9 +226,7 @@ def batch_process_thermo(
             "will be incorrect.  Provide the single-point energy (Hartree)."
         )
 
-    shermo_bin = str(
-        config.get("executables", {}).get("shermo", {}).get("path", "Shermo")
-    )
+    shermo_bin = str(config.get("executables", {}).get("shermo", {}).get("path", "Shermo"))
     results = {}
 
     for log_file in log_files:

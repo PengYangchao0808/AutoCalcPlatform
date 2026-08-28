@@ -92,10 +92,17 @@ def test_acp_run_nmr_spectrum_bruker_mutual_exclusion():
     """Passing both --spectrum and --bruker fails fast with exit code 1."""
     result = subprocess.run(
         [
-            sys.executable, "-m", "acp.cli", "run", "nmr",
-            "--input", "CCO",
-            "--spectrum", "C: 40.0(C1)",
-            "--bruker", "/tmp/nonexistent",
+            sys.executable,
+            "-m",
+            "acp.cli",
+            "run",
+            "nmr",
+            "--input",
+            "CCO",
+            "--spectrum",
+            "C: 40.0(C1)",
+            "--bruker",
+            "/tmp/nonexistent",
         ],
         capture_output=True,
         text=True,

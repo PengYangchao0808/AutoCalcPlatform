@@ -249,9 +249,7 @@ def parse_structure_text(content: str, fmt: str, filename: str = "") -> Structur
     return StructureParseResult(errors=[f"Unsupported format: {fmt}"])
 
 
-def _parse_bare_atom_block(
-    lines: list[str], start: int
-) -> StructureAsset | None:
+def _parse_bare_atom_block(lines: list[str], start: int) -> StructureAsset | None:
     symbols: list[str] = []
     coords: list[tuple[float, float, float]] = []
     for line in lines[start:]:
@@ -426,7 +424,7 @@ def _parse_molblock(block: str) -> dict[str, Any]:
         raise ValueError("RDKit failed to parse MOL block")
 
     conf = mol.GetConformer()
-    symbols = [atom.GetSymbol() for atom in mol.GetAtoms()]
+    symbols = [atom.GetSymbol() for atom in mol.GetAtoms()]  # type: ignore[no-untyped-call]  # RDKit stubs lack GetAtoms type
     coords = [
         (conf.GetAtomPosition(i).x, conf.GetAtomPosition(i).y, conf.GetAtomPosition(i).z)
         for i in range(mol.GetNumAtoms())
@@ -435,12 +433,13 @@ def _parse_molblock(block: str) -> dict[str, Any]:
 
     xyz = _xyz_from_symbols_coords(symbols, coords) if has_3d else ""
 
-    charge = sum(atom.GetFormalCharge() for atom in mol.GetAtoms())
-    n_radicals = sum(atom.GetNumRadicalElectrons() for atom in mol.GetAtoms())
+    charge = sum(atom.GetFormalCharge() for atom in mol.GetAtoms())  # type: ignore[no-untyped-call]  # RDKit stubs lack GetAtoms type
+    n_radicals = sum(atom.GetNumRadicalElectrons() for atom in mol.GetAtoms())  # type: ignore[no-untyped-call]  # RDKit stubs lack GetAtoms type
     mult = max(1, n_radicals + 1)
 
     try:
         from rdkit.Chem import rdMolDescriptors
+
         formula = rdMolDescriptors.CalcMolFormula(mol)
     except Exception:
         formula = _hill_formula(symbols)
@@ -503,7 +502,9 @@ def parse_gjf_text(content: str, filename: str = "input.gjf") -> StructureParseR
 
     blank_indices = [i for i, l in enumerate(lines) if l.strip() == ""]
     if len(blank_indices) < 2:
-        return StructureParseResult(errors=["Gaussian input needs at least 2 blank-line separators"])
+        return StructureParseResult(
+            errors=["Gaussian input needs at least 2 blank-line separators"]
+        )
 
     route_idx = blank_indices[0]
     charge_mult_line = ""
@@ -615,7 +616,11 @@ def parse_orca_inp_text(content: str, filename: str = "input.inp") -> StructureP
 
 
 def parse_smiles_list(content: str) -> StructureParseResult:
-    lines = [l.strip() for l in content.strip().splitlines() if l.strip() and not l.strip().startswith("#")]
+    lines = [
+        l.strip()
+        for l in content.strip().splitlines()
+        if l.strip() and not l.strip().startswith("#")
+    ]
     if not lines:
         return StructureParseResult(errors=["No SMILES found in input"])
 
@@ -647,10 +652,10 @@ def parse_smiles_list(content: str) -> StructureParseResult:
                 has_3d = True
 
         charge = Chem.GetFormalCharge(mol)
-        n_radicals = sum(a.GetNumRadicalElectrons() for a in mol.GetAtoms())
+        n_radicals = sum(a.GetNumRadicalElectrons() for a in mol.GetAtoms())  # type: ignore[no-untyped-call]  # RDKit stubs lack GetAtoms type
         mult = max(1, n_radicals + 1)
         n_atoms = mol3d.GetNumAtoms()
-        symbols = [a.GetSymbol() for a in mol3d.GetAtoms()]
+        symbols = [a.GetSymbol() for a in mol3d.GetAtoms()]  # type: ignore[no-untyped-call]  # RDKit stubs lack GetAtoms type
 
         structures.append(
             StructureAsset(

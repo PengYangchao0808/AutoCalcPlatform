@@ -6,7 +6,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Final, assert_never
+from typing import Any, Final
+
+from typing_extensions import assert_never
 
 from acp.backends.base import QCResult
 from acp.calculations.contracts import (

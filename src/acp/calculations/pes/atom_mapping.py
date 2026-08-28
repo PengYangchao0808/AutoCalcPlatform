@@ -47,12 +47,12 @@ class AtomIdentityMap:
             },
             mapping={
                 str(key): {
-                    str(inner_key): int(inner_value)
-                    for inner_key, inner_value in inner.items()
+                    str(inner_key): int(inner_value) for inner_key, inner_value in inner.items()
                 }
                 for key, inner in dict(data.get("mapping") or {}).items()
             },
         )
+
 
 _MAX_CANDIDATES = 8
 _CONFIDENCE_TOLERANCE = 1.0e-6

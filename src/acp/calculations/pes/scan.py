@@ -8,7 +8,7 @@ Implements the scan pipeline:
 
 Key migration changes vs bond_scan.py:
 - Uses ``get_backend("orca").relaxed_scan`` (not ``ORCAInterface`` directly)
-- De-s2 naming (PesScanRequest, no study_id)
+- Uses generic naming (PesScanRequest, no orchestrator identifiers)
 - Single-point delegation via BatchSinglePointExecutor (todo 31)
 - Result manifest via ``acp.storage.manifest.ResultManifest``
 """
@@ -497,7 +497,7 @@ def _recommend_bond_candidates(
                     "peak_energy_hartree": peak_energy,
                     "total_frames": len(frames),
                 },
-                reason="Highest energy frame on scan profile — suggest S3 TS opt",
+                reason="Highest energy frame on scan profile — suggest coarse TS optimization",
             )
         )
         if confidence == "low":
@@ -527,7 +527,7 @@ def _recommend_bond_candidates(
                         "depth_hartree": depth,
                         "ts_index": peak_idx,
                     },
-                    reason=f"Energy minimum on {label} side of TS — suggest S3 minimum opt",
+                    reason=f"Energy minimum on {label} side of TS — suggest coarse minimum optimization",
                 )
             )
 

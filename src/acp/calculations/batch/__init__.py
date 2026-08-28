@@ -51,7 +51,7 @@ def __getattr__(
     if name in _COMPAT_LOADER_NAMES:
         from . import models
 
-        return getattr(models, name)
+        return getattr(models, name)  # type: ignore[no-any-return]  # compat loader resolved dynamically from models
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 

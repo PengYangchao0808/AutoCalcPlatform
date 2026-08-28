@@ -254,15 +254,14 @@ _WORKFLOW_TO_SCHEMA_KEY: dict[str, str] = {
     "BatchOptimize": "batch_optimize",
 }
 
+
 # Retired workflows that PlanCompiler rejects — derived from catalog.
 def _derive_retired_workflows() -> frozenset[str]:
     try:
         from acp.catalog import WORKFLOW_CATALOG
     except ImportError:
         return frozenset()
-    return frozenset(
-        w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "retired"
-    )
+    return frozenset(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "retired")
 
 
 _RETIRED_WORKFLOWS: frozenset[str] = _derive_retired_workflows()
@@ -338,11 +337,11 @@ class PlanCompiler:
             by_profile = stages_decl.get("by_profile")
             if not isinstance(by_profile, dict):
                 raise ValueError(f"Invalid by_profile stages for {schema_key!r}")
-            profile = str(
-                spec.method.get("profile")
-                or spec.method.get("profile_id")
-                or "opt_freq"
-            ).strip().lower()
+            profile = (
+                str(spec.method.get("profile") or spec.method.get("profile_id") or "opt_freq")
+                .strip()
+                .lower()
+            )
             profile_stages = by_profile.get(profile)
             if not isinstance(profile_stages, list) or not profile_stages:
                 raise ValueError(f"unknown BatchOptimize profile: {profile!r}")
@@ -661,8 +660,14 @@ register_plan_provider("xtbmd_censo_energy", _XtbmdCensoEnergyStagePlanProvider(
 # PlanCompiler-backed workflow registrations (8 calculation workflows).
 # nmr and Confsearch exempt (protocol-internal stage orchestration).
 _PLAN_COMPILER_WORKFLOWS = (
-    "singlepoint", "optimize", "frequency", "scan", "irc",
-    "xtb_optimize", "PESsearch", "BatchOptimize",
+    "singlepoint",
+    "optimize",
+    "frequency",
+    "scan",
+    "irc",
+    "xtb_optimize",
+    "PESsearch",
+    "BatchOptimize",
 )
 
 

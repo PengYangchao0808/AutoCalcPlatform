@@ -133,8 +133,10 @@ def _request_geometry(entry: JsonObject, base_dir: Path) -> list[BatchStructureI
     )
     requested_id = _text(entry.get("id") or entry.get("item_id"))
     candidate = _text(entry.get("candidate_id"), requested_id)
-    tag = normalize_tag(entry.get("role") if isinstance(entry.get("role"), str) else None)
-    tag = tag or normalize_tag(entry.get("tag") if isinstance(entry.get("tag"), str) else None)
+    raw_role = entry.get("role")
+    tag = normalize_tag(raw_role if isinstance(raw_role, str) else None)
+    raw_tag = entry.get("tag")
+    tag = tag or normalize_tag(raw_tag if isinstance(raw_tag, str) else None)
     for index, item in enumerate(items, 1):
         item.item_id = requested_id if len(items) == 1 and requested_id else item.item_id
         if requested_id and len(items) > 1:
@@ -199,7 +201,8 @@ def load_batch_request(payload: JsonObject | Path | str) -> list[BatchStructureI
                 source_ref=_text(entry.get("source_ref"), _text(entry.get("name"), "mol")),
                 base_name=_text(entry.get("name"), "mol"),
             )
-            tag = normalize_tag(entry.get("role") if isinstance(entry.get("role"), str) else None)
+            raw_role_xyz = entry.get("role")
+            tag = normalize_tag(raw_role_xyz if isinstance(raw_role_xyz, str) else None)
             if tag:
                 for item in entry_items:
                     item.tag = tag

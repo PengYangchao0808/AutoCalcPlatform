@@ -2453,7 +2453,12 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "opt_freq": ["prepare", "optimize", "frequency", "finalize"],
                 "opt_freq_sp": ["prepare", "optimize", "frequency", "single_point", "finalize"],
                 "opt_freq_sp_thermo": [
-                    "prepare", "optimize", "frequency", "single_point", "thermochemistry", "finalize",
+                    "prepare",
+                    "optimize",
+                    "frequency",
+                    "single_point",
+                    "thermochemistry",
+                    "finalize",
                 ],
             },
         },

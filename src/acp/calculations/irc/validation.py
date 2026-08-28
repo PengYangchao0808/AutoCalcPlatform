@@ -1,7 +1,7 @@
 """IRC endpoint geometry classification and TS identity judgment.
 
 Migrated from the former endpoint/identity modules.  Stripped of
-study/stage/promotion semantics — pure geometry algorithms only.
+orchestrator-level workflow semantics — pure geometry algorithms only.
 """
 
 from __future__ import annotations
@@ -311,7 +311,7 @@ def classify_endpoint_geometry(
 ) -> EndpointClassification:
     """Classify an IRC endpoint geometry against a reference structure.
 
-    This is a pure geometry comparison — no study/promotion semantics.
+    This is a pure geometry comparison — no orchestrator-level workflow semantics.
 
     Args:
         candidate_symbols: Endpoint element symbols.

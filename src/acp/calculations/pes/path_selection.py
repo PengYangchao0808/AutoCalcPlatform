@@ -270,7 +270,7 @@ def policy_from_config(
             else max(
                 0.0,
                 float(
-                    dict(
+                    dict(  # type: ignore[arg-type]  # guarded by outer None check above
                         dict(selection_cfg.get("ts_seed", {}) or {}).get(
                             "right_shift",
                             {},
@@ -614,7 +614,7 @@ def _detect_stretch_plateau(
         return None
 
     ordered = sorted(candidates, key=lambda frame: positions[int(frame.frame_index)])
-    energies = [float(frame.relative_energy_kcal_mol) for frame in ordered]
+    energies = [float(frame.relative_energy_kcal_mol) for frame in ordered]  # type: ignore[arg-type]  # filtered candidates have non-None energy
     best_start: int | None = None
     best_len = 0
     run_start = 0
@@ -635,7 +635,7 @@ def _detect_stretch_plateau(
         return None
 
     plateau_run = ordered[best_start : best_start + best_len]
-    run_energies = [float(frame.relative_energy_kcal_mol) for frame in plateau_run]
+    run_energies = [float(frame.relative_energy_kcal_mol) for frame in plateau_run]  # type: ignore[arg-type]  # plateau frames have non-None energy
     slope = 0.0
     for index in range(1, len(plateau_run)):
         coord_prev = positions[int(plateau_run[index - 1].frame_index)]
@@ -882,12 +882,12 @@ def select_path_seeds(profile: PathProfile, policy: SelectionPolicy) -> SeedSele
         for index in range(1, len(segment) - 1):
             left, center, right = segment[index - 1 : index + 2]
             prominence = min(
-                float(center.relative_energy_kcal_mol) - float(left.relative_energy_kcal_mol),
-                float(center.relative_energy_kcal_mol) - float(right.relative_energy_kcal_mol),
+                float(center.relative_energy_kcal_mol) - float(left.relative_energy_kcal_mol),  # type: ignore[arg-type]  # energy_segments filtered for non-None energy
+                float(center.relative_energy_kcal_mol) - float(right.relative_energy_kcal_mol),  # type: ignore[arg-type]  # energy_segments filtered for non-None energy
             )
-            is_peak = float(center.relative_energy_kcal_mol) > float(
-                left.relative_energy_kcal_mol
-            ) and float(center.relative_energy_kcal_mol) > float(right.relative_energy_kcal_mol)
+            is_peak = float(center.relative_energy_kcal_mol) > float(  # type: ignore[arg-type]  # energy_segments filtered for non-None energy
+                left.relative_energy_kcal_mol  # type: ignore[arg-type]  # energy_segments filtered for non-None energy
+            ) and float(center.relative_energy_kcal_mol) > float(right.relative_energy_kcal_mol)  # type: ignore[arg-type]  # energy_segments filtered for non-None energy
             accepted = bool(
                 is_peak
                 and prominence >= policy.ts_min_prominence_kcal_mol
@@ -1159,18 +1159,21 @@ def select_path_seeds(profile: PathProfile, policy: SelectionPolicy) -> SeedSele
                         "int_target_coordinate_A": float(0.5 * (ts_position + endpoint_position)),
                     }
                 )
-        diagnostics["int_asynchronicity_A"] = _asynchronicity(int_frame)
-        int_gate = _scaffold_gate(profile, int_frame, policy)
-        diagnostics["int_scaffold_gate"] = int_gate
-        if policy.require_scaffold_for_search_seed and not bool(int_gate.get("accepted", False)):
-            return SeedSelection(
-                resolution="unresolved",
-                seed_evidence="knee_shifted",
-                rejection_reason="scaffold_rmsd",
-                diagnostics=diagnostics,
-                endpoint_evidence=endpoint_evidence,
-                knee_evidence=knee_evidence,
-            )
+        if int_frame is not None:
+            diagnostics["int_asynchronicity_A"] = _asynchronicity(int_frame)
+            int_gate = _scaffold_gate(profile, int_frame, policy)
+            diagnostics["int_scaffold_gate"] = int_gate
+            if policy.require_scaffold_for_search_seed and not bool(
+                int_gate.get("accepted", False)
+            ):
+                return SeedSelection(
+                    resolution="unresolved",
+                    seed_evidence="knee_shifted",
+                    rejection_reason="scaffold_rmsd",
+                    diagnostics=diagnostics,
+                    endpoint_evidence=endpoint_evidence,
+                    knee_evidence=knee_evidence,
+                )
 
     if int_seed is None and policy.allow_shared_search_seed:
         int_seed = _make_int_seed(
@@ -1223,7 +1226,7 @@ def replay_rescue_selection(
     profile = build_orca_scan_profile(
         frames=frames,
         energies_hartree=energies,
-        forming_bonds=forming_bonds,
+        forming_bonds=list(forming_bonds),
         product_xyz=Path(product_xyz),
         energy_source="B97-3c",
         source_provenance={"mode": "offline_replay"},

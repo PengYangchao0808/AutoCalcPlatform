@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from typing import assert_never
+from typing_extensions import assert_never
 
 from acp.calculations.contracts import StepKind
 

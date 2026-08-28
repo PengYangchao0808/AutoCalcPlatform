@@ -130,9 +130,7 @@ def select_candidates(
             continue
         current = energies[idx]
         is_maximum = current > prev_e and current >= next_e
-        is_plateau_peak = (
-            current == prev_e == next_e and current > profile_min + 0.25 * span
-        )
+        is_plateau_peak = current == prev_e == next_e and current > profile_min + 0.25 * span
         if is_maximum or is_plateau_peak:
             prominence = current - profile_min
             ts_seeds.append((prominence, idx))
