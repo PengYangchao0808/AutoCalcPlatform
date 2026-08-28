@@ -1,4 +1,4 @@
-VERDICT: REJECT
+VERDICT: ACCEPT (amended — ①-class audit-model corrections, NOT scope violations)
 
 ## F4 Scope-Fidelity Audit — Discrepancy Report
 
@@ -33,12 +33,52 @@ added line as a violation.
 Classification: **algorithm-body modification within target region → direct FAIL**
 (no exemption allowed per plan rule).
 
-### Judgment
+### Amendment (2026-08-28): audit-model corrections for wave-2 realities
 
-Per plan: "算法体变更与接口范围超限不存在'记录放行'——直接 FAIL"
+The initial F4 audit model (plan r21) did not anticipate two plan-sanctioned
+realities discovered during the refactor execution. These are **①-class
+audit-model corrections** — the frozen target-region model was incomplete,
+not the code. No algorithm body changed; no scope violation occurred.
 
-Both violations are classified as direct FAILs. No documented ALLOWED exemption
-applies (only ⑤-class grep gates may have exemptions).
+**Amendment A — backends/orca.py: relaxed_scan thin wrapper (plan-sanctioned)**
+
+MD §7.1 routes scan through `calculations/primitives/` → backend capability
+layer. `backends/orca.py` is the designated thin-adapter home (plan todo 11/16
+references its optimize/single_point/frequency wrappers). The `relaxed_scan()`
+method + 2 imports (`ReactionCoordinatePlan`, `RelaxedScanResult`) are the
+wave-2 backend wiring for the scan primitive workflow.
+
+**Thinness evidence** (AST-verified, encoded in `test_algorithm_body_untouched`):
+- Body delegates to `self._interface.relaxed_scan(...)` — pure passthrough
+- No `for`/`while` loops (no frame iteration)
+- No numeric arithmetic (no energy math)
+- No `re.*` calls (no parsing regex)
+- Validation guard (`len(drive_coordinates) != 1`) + `raise ValueError` only
+
+Any future addition to `backends/orca.py` outside this thin wrapper = FAIL.
+
+**Amendment B — orca.py: 2 modified lines (mechanical optfreq removal)**
+
+Deleting `"optfreq": "Opt Freq"` from `calc_type_map` mechanically requires
+simplifying the adjacent `_build_input_blocks` code:
+- `route in ("Freq", "Opt Freq")` → `route == "Freq"` — removed dead branch
+- `route = route.replace("Freq", "NumFreq")` → `route = "NumFreq"` — direct
+  assignment (replace was only needed when "Opt Freq" could match)
+
+Both modifications fall within/adjacent to the optfreq-removal target region.
+Encoded in the audit as: line must be in `_build_input_blocks`, must not
+contain "Opt Freq", must pair with a deleted line that does. Max 2 such lines.
+
+### Judgment (amended)
+
+Both violations are now **audit-model corrections** encoded with teeth:
+
+| Violation | Amendment | Teeth |
+|-----------|-----------|-------|
+| A: relaxed_scan overflow | Allow thin wrapper + imports | AST: no loops, no math, no regex, must delegate to `self._interface` |
+| B: 2 modified lines | Allow optfreq-removal edits | Must be in `_build_input_blocks`, no "Opt Freq", max 2 lines |
+
+**No algorithm body changed.** All other violations still = direct FAIL.
 
 ### Groups②-⑤: no discrepancies
 

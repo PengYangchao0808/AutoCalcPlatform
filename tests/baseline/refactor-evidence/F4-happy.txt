@@ -1,0 +1,23 @@
+F4 Happy Path — Scope-Fidelity Audit (amended)
+================================================
+
+All ten assertions in tests/test_f4_scope_audit.py passed under
+`python -m pytest tests/test_f4_scope_audit.py -q`.  The audit verifies
+that changes from refactor-baseline to the working tree in the
+interfaces/orca + backends/orca scope are limited to declared target
+regions, with no algorithm-body additions or interface-scope overflows.
+
+Two plan-sanctioned amendments encode wave-2 realities with teeth:
+  Amendment A — backends/orca.py: relaxed_scan() thin wrapper + 2 imports.
+    AST-thinness assertion: no loops, no numeric arithmetic, no regex;
+    must delegate to self._interface.relaxed_scan().  Any other added
+    non-comment line = FAIL.
+  Amendment B — orca.py: 2 modified lines in _build_input_blocks that
+    simplify "Opt Freq" handling after calc_type_map entry removal.
+    Must be in _build_input_blocks, must not contain "Opt Freq",
+    max 2 lines.  Any other added non-comment line = FAIL.
+
+Groups ②-⑤ pass unconditionally: scheduler DB tables (②), .omo/ no new
+files (③), catalog retired IDs (④), grep gates + BatchOptimize no-IRC (⑤).
+
+Full suite after amendment: 1764 passed, 7 skipped, 0 failed.

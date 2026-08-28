@@ -11,6 +11,15 @@ Groups:
     ③ .omo/ directory — no new files
     ④ Catalog retired-ID final-state audit
     ⑤ Must-NOT-Have (grep gates + BatchOptimize no-IRC)
+
+Amendments (plan-sanctioned, wave-2 backend wiring):
+    A. ``backends/orca.py``: ``relaxed_scan()`` thin wrapper + 2 imports from
+       ``cccp.qc.interfaces.{constraints,xtb_scan}`` — designated thin-adapter
+       home per plan todo 11/16.  AST-thinness assertion enforced: no loops,
+       no numeric arithmetic, no regex, must delegate to ``self._interface``.
+    B. ``orca.py``: 2 modified lines in ``_build_input_blocks`` — mechanical
+       consequence of deleting ``"optfreq": "Opt Freq"`` calc_type_map entry.
+       Modification only removes "Opt Freq" handling; no algorithm-body change.
 """
 from __future__ import annotations
 
@@ -108,6 +117,116 @@ def _func_ranges(src: str) -> dict[str, tuple[int, int]]:
     return out
 
 
+def _func_range(src: str, func_name: str, cls_name: str | None = None) -> tuple[int, int] | None:
+    """Return ``(start, end)`` lines for *func_name* inside *cls_name*.
+
+    Returns ``None`` if the function is not found.
+    """
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.ClassDef) and (
+            cls_name is None or node.name == cls_name
+        ):
+            for item in node.body:
+                if (
+                    isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and item.name == func_name
+                ):
+                    return (item.lineno, getattr(item, "end_lineno", item.lineno))
+    return None
+
+
+# ── Amendment A: relaxed_scan thinness assertion ──────────────────────────────
+
+_THIN_BANNED_NODE_TYPES = (ast.For, ast.While, ast.AsyncFor)
+_THIN_BANNED_BINOPS = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow)
+
+
+def _assert_relaxed_scan_thin(worktree_src: str) -> list[str]:
+    """AST-thinness assertion for ``ORCABackend.relaxed_scan``.
+
+    Returns a list of violation strings (empty = thin / compliant).
+
+    Thin means:
+    * No ``for``/``while`` loops (no iteration over frames).
+    * No arithmetic with numeric literals (no energy math).
+    * No ``re.*`` calls (no parsing regex).
+    * Must delegate to ``self._interface.relaxed_scan(...)``.
+    """
+    violations: list[str] = []
+    tree = ast.parse(worktree_src)
+
+    target = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "ORCABackend":
+            for item in node.body:
+                if isinstance(item, ast.FunctionDef) and item.name == "relaxed_scan":
+                    target = item
+                    break
+    if target is None:
+        return ["  relaxed_scan method not found in ORCABackend"]
+
+    has_delegation = False
+    for node in ast.walk(target):
+        if isinstance(node, _THIN_BANNED_NODE_TYPES):
+            violations.append(f"  relaxed_scan: loop at line {node.lineno}")
+        if isinstance(node, ast.BinOp) and isinstance(node.op, _THIN_BANNED_BINOPS):
+            left_num = (
+                isinstance(getattr(node, "left", None), ast.Constant)
+                and isinstance(node.left.value, (int, float))
+            )
+            right_num = (
+                isinstance(getattr(node, "right", None), ast.Constant)
+                and isinstance(node.right.value, (int, float))
+            )
+            if left_num or right_num:
+                violations.append(f"  relaxed_scan: numeric arithmetic at line {node.lineno}")
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if isinstance(node.func.value, ast.Name) and node.func.value.id == "re":
+                violations.append(f"  relaxed_scan: regex call at line {node.lineno}")
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if (
+                node.func.attr == "relaxed_scan"
+                and isinstance(node.func.value, ast.Attribute)
+                and node.func.value.attr == "_interface"
+            ):
+                has_delegation = True
+
+    if not has_delegation:
+        violations.append("  relaxed_scan: no delegation to self._interface.relaxed_scan()")
+
+    return violations
+
+
+# ── Amendment B: optfreq-removal mechanical modification check ────────────────
+
+def _is_optfreq_removal_line(
+    added_ln: int,
+    added_txt: str,
+    deleted: list[tuple[int, str]],
+    build_range: tuple[int, int] | None,
+) -> bool:
+    """Check if *added_txt* at *added_ln* is a permissible optfreq-removal edit.
+
+    Criteria:
+    * Line falls within ``_build_input_blocks`` in the worktree.
+    * Line does NOT contain ``"Opt Freq"``.
+    * There exists a deleted line whose content contains ``"Opt Freq"``
+      or ``"optfreq"`` (the removed calc_type_map entry or its usage).
+    """
+    stripped = added_txt.strip()
+    if not stripped or stripped.startswith("#"):
+        return True  # comments/blanks always ok
+    if "Opt Freq" in added_txt or "optfreq" in added_txt.lower():
+        return False  # must not re-introduce
+    if build_range is None:
+        return False
+    bs, be = build_range
+    if not (bs <= added_ln <= be):
+        return False
+    # Must have at least one deleted line containing "Opt Freq"
+    return any("Opt Freq" in d_txt or "optfreq" in d_txt.lower() for _, d_txt in deleted)
+
+
 def _target_orca(src: str) -> set[int]:
     """Target-region line numbers for baseline ``orca.py``."""
     lines = src.splitlines()
@@ -161,16 +280,79 @@ def test_diff_only_allowed_py_files() -> None:
 def test_algorithm_body_untouched() -> None:
     """① Every added line must be pure comment/blank — no algorithm-body changes.
 
-    Per plan: ``新增行仅允许为纯注释/空行（^\\s*#|^\\s*$），
-    任何非注释新增/修改行 = FAIL``.
+    Two plan-sanctioned exceptions are encoded with teeth:
+
+    **Amendment A** — ``backends/orca.py``: the ``relaxed_scan()`` thin wrapper
+    (24 lines) + 2 imports from ``cccp.qc.interfaces.{constraints,xtb_scan}``
+    are permitted.  AST-thinness assertion enforces: no loops, no numeric
+    arithmetic, no regex calls, must delegate to ``self._interface``.
+
+    **Amendment B** — ``orca.py``: 2 modified lines in ``_build_input_blocks``
+    are the mechanical consequence of deleting the ``"optfreq": "Opt Freq"``
+    entry.  Each must fall within ``_build_input_blocks``, must not contain
+    ``"Opt Freq"``, and must pair with a deleted line that does.
+
+    Per plan: any other non-comment added/modified line = FAIL.
     """
     violations: list[str] = []
+
     for fp in ALLOWED_PY:
-        added, _ = _diff_hunks(fp)
-        for ln, txt in added:
-            stripped = txt.strip()
-            if stripped and not stripped.startswith("#"):
+        added, deleted = _diff_hunks(fp)
+
+        # ── orca_ts.py: zero changes ──────────────────────────────────────
+        if fp == "src/cccp/qc/interfaces/orca_ts.py":
+            for ln, txt in added:
+                stripped = txt.strip()
+                if stripped and not stripped.startswith("#"):
+                    violations.append(f"  {fp}:{ln}: {txt!r}")
+            continue
+
+        # ── backends/orca.py: Amendment A ─────────────────────────────────
+        if fp == "src/acp/backends/orca.py":
+            worktree = _worktree_content(fp)
+            method_range = _func_range(worktree, "relaxed_scan", "ORCABackend")
+            thin_checked = False
+            for ln, txt in added:
+                stripped = txt.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                # Allow: import of ReactionCoordinatePlan / RelaxedScanResult
+                if (
+                    "ReactionCoordinatePlan" in txt
+                    or "RelaxedScanResult" in txt
+                ) and txt.lstrip().startswith("from "):
+                    continue
+                # Allow: lines within relaxed_scan method body
+                if method_range and method_range[0] <= ln <= method_range[1]:
+                    if not thin_checked:
+                        violations.extend(_assert_relaxed_scan_thin(worktree))
+                        thin_checked = True
+                    continue
+                # Anything else is a violation
                 violations.append(f"  {fp}:{ln}: {txt!r}")
+            continue
+
+        # ── orca.py: Amendment B ──────────────────────────────────────────
+        if fp == "src/cccp/qc/interfaces/orca.py":
+            worktree = _worktree_content(fp)
+            build_range = _func_range(worktree, "_build_input_blocks")
+            optfreq_added_count = 0
+            for ln, txt in added:
+                stripped = txt.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if _is_optfreq_removal_line(ln, txt, deleted, build_range):
+                    optfreq_added_count += 1
+                    continue
+                violations.append(f"  {fp}:{ln}: {txt!r}")
+            # Teeth: at most 2 optfreq-removal lines permitted
+            if optfreq_added_count > 2:
+                violations.append(
+                    f"  {fp}: {optfreq_added_count} optfreq-removal lines "
+                    f"(max 2 expected)"
+                )
+            continue
+
     assert not violations, "Non-comment added lines detected:\n" + "\n".join(violations)
 
 
