@@ -1,0 +1,47 @@
+Todo 48 — happy path evidence
+=============================
+
+## 1. Import smoke
+
+```
+$ python -c "import acp.confsearch.protocols.censo_crest, acp.confsearch.protocols.xtb_md, cccp, cccp.qc.interfaces.orca"
+SMOKE OK
+
+$ python -c "from cccp.core.candidates import ConformerCandidate, CandidateSet; from acp.core.models import Structure; assert Structure; print('CANDIDATES OK')"
+CANDIDATES OK
+```
+
+## 2. Confsearch tests
+
+```
+$ python -m pytest tests/test_acp_confsearch.py -q
+11 passed in 0.53s
+```
+
+## 3. Full pytest suite
+
+```
+$ python -m pytest tests/ -q --tb=no
+1613 passed, 36 skipped, 47 warnings in 206.88s
+```
+
+## 4. Grep gates
+
+```
+$ python scripts/check_grep_gates.py --gate wave8_cccp_engine_gone src/cccp
+ALLOWED:
+BLOCKING:
+(exit 0)
+
+$ python scripts/check_grep_gates.py --gate wave8_engine_import_gone src
+ALLOWED:
+BLOCKING:
+(exit 0)
+```
+
+## 5. Ruff
+
+```
+$ ruff check src tests
+Found 570 errors. (baseline was 645 — 75 fewer violations)
+```

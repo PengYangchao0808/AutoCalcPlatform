@@ -24,7 +24,7 @@ from acp.backends.capabilities import (
 )
 from acp.backends.censo_backend import CensoBackend
 from acp.backends.crest import CrestBackend
-from acp.backends.external import batch_process_thermo, run_isostat
+from acp.backends.external import batch_process_thermo
 from acp.backends.external_backend import ExternalBackend
 from acp.backends.isostat_backend import IsostatBackend
 from acp.backends.molclus_backend import MolclusBackend
@@ -61,7 +61,6 @@ __all__ = [
     "ExternalBackend",
     "MolclusBackend",
     "IsostatBackend",
-    "run_isostat",
     "batch_process_thermo",
     "batch_single_point",
     "register_backend",

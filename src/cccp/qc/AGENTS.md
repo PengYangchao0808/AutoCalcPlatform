@@ -18,12 +18,12 @@ qc/
 | ORCA DFT opt | `interfaces/orca.py` | Direct ORCA invocation |
 | ORCA SP energy | `interfaces/orca.py` | Direct subprocess |
 | CREST conformer search | `interfaces/crest.py` | `run_conformer_search()` single-stage; `run_two_stage_search` removed in Phase C |
-| CREST batch optimization | `interfaces/crest.py` | `run_batch_optimization()` (-mdopt); kept for dormant `ConformerEngine` |
+| CREST batch optimization | `interfaces/crest.py` | `run_batch_optimization()` (-mdopt); retained for upstream compatibility |
 | xTB preopt | `interfaces/xtb.py` | Standalone since Phase C (split from crest.py) |
 | CENSO refinement | `interfaces/censo.py` | `CensoInterface` — rcfile gen, presets, template injection, JSON/XYZ parsing, env pinning (single subprocess layer; 2026-08-02) |
 | ISOSTAT clustering | `interfaces/isostat.py` | `IsostatInterface` — exit-24 title normalisation, error classification, env pinning (single ISOSTAT path; 2026-08-02) |
 | Molclus pipeline | `interfaces/molclus.py` | `MolclusInterface.run_md()/search()` — md.inp/settings.ini, trajectory validation, env pinning (2026-08-02) |
-| Legacy ISOSTAT | `runners/__init__.py` | `run_isostat()` (DEPRECATED — thin wrapper over IsostatInterface for the dormant ConformerEngine) |
+| Legacy ISOSTAT | `runners/__init__.py` | DELETED — run_isostat removed in wave-8 |
 | Shermo thermo | `runners/__init__.py` | `run_shermo()`, `batch_process_thermo()` (DEPRECATED — prefer acp.backends) |
 | LSF job submission | `cluster/__init__.py` | `LSFClusterAdapter` (placeholder) |
 | Local execution | `cluster/__init__.py` | `LocalClusterAdapter` |

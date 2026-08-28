@@ -11,7 +11,7 @@ ships a unified `acp` CLI, stage-based workflows, FastAPI server, and scheduler.
 | `acp.core` | Generic domain models (`Structure`, `StructureEnsemble`, `StructureRecord`), workflow execution engine, pluggable registry, and state persistence. No chemistry-specific logic. |
 | `acp.backends` | QC backend abstraction layer with capability-based interfaces (`GeometryOptimizer`, `SinglePointCalculator`, `FrequencyCalculator`, `NMRCalculator`, `TSMechanismCalculator`). Wraps ORCAInterface, CrestBackend, XTBBackend from the legacy cccp package. |
 | `acp.io` | Molecular structure readers/writers. Thin wrapper delegating to `cccp.io.input_handler`. |
-| `acp.workflows` | Stage-based workflow implementations. `conformer` module wraps ConformerEngine as composable pipeline stages (embed, CREST search, ISOSTAT clustering, DFT optimization, frequency, single-point, Shermo thermo). |
+| `acp.workflows` | Stage-based workflow implementations. Confsearch engine provides unified conformer search via 4 protocols (xtb-crest, xtb-md, censo-crest, xtbmd-censo). |
 | `acp.api` | API server stubs (Phase 2). Not yet implemented. |
 | `acp.cli` | Unified command-line interface with subcommands: `run conformer`, `run nmr` (placeholder). |
 

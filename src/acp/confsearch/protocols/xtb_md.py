@@ -33,12 +33,8 @@ def run_xtb_md(request: ConfsearchRequest, overlay: dict[str, Any]) -> ProtocolO
     from acp.backends.registry import get_backend
     from acp.io.structures import StructureReader
     from acp.workflows._helpers import resolve_task_output_root, sanitize_job_name
-    from acp.workflows.energy_shared import (
-        resolve_crest_ewin,
-        v2_stage_dir,
-        xtb_passthrough_result,
-    )
-    from acp.workflows.xtbmd_censo_energy import _batch_opt_frames, _filter_energy_window
+    from ..shared import resolve_crest_ewin, v2_stage_dir, xtb_passthrough_result
+    from acp.workflows.xtbmd_censo_energy import _batch_opt_frames, _filter_energy_window  # noqa: F401 — retired, lazy
     from acp.workflows.xtbmd_md import run_md_replicas
     from cccp.config import load_config
 

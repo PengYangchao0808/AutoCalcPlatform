@@ -29,7 +29,7 @@ from acp.backends.base import (
     ThermoCalculator,
     TSMechanismCalculator,
 )
-from acp.backends.external import batch_process_thermo, run_isostat
+from acp.backends.external import batch_process_thermo
 from acp.backends.orca import ORCAInterface
 from acp.backends.registry import get_backend, require_backend
 from acp.backends.xtb import XTBInterface
@@ -252,11 +252,7 @@ def test_external_runner_exports_keep_non_shermo_legacy_exports() -> None:
     from cccp.qc.runners import (
         batch_process_thermo as legacy_batch_process_thermo,
     )
-    from cccp.qc.runners import (
-        run_isostat as legacy_run_isostat,
-    )
 
-    assert run_isostat is legacy_run_isostat
     assert batch_process_thermo is legacy_batch_process_thermo
 
 

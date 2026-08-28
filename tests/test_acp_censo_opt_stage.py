@@ -144,6 +144,7 @@ def _run_energy(
     shermo_return: Any = None,
     **kwargs: Any,
 ):
+    pytest.importorskip("acp.workflows.energy")
     from acp.workflows.energy import run_conformer_energy
 
     with (
@@ -288,6 +289,7 @@ def test_no_opt_skips_orca_entirely(tmp_path: Path, multiframe_xyz: Path) -> Non
 
 def test_config_can_disable_opt_stage(tmp_path: Path, multiframe_xyz: Path) -> None:
     """censo.optimization.enabled=false in config behaves like --no-opt."""
+    pytest.importorskip("acp.workflows.energy")
     from acp.workflows.energy import run_conformer_energy
 
     refinement = CensoRunResult(

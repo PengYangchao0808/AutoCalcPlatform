@@ -37,7 +37,7 @@ class PipelineExecutor:
         Execute final OPT-SP stage.
 
         Args:
-            engine: ConformerEngine instance
+            engine: (deprecated — engine removed in wave-8)
             candidate_paths: List of candidate XYZ paths
             output_dir: Output directory
 
@@ -56,7 +56,7 @@ class PipelineExecutor:
         Execute handoff strategy.
 
         Args:
-            engine: ConformerEngine instance
+            engine: (deprecated — engine removed in wave-8)
             candidate_set: Input candidate set
             mode: Handoff mode
 

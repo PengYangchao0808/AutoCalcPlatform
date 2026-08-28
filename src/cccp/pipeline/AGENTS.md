@@ -1,7 +1,7 @@
 # pipeline/ — Execution Orchestration
 
 ## OVERVIEW
-Thin orchestration layer. `PipelineExecutor` wraps `ConformerEngine` methods for stage-by-stage pipeline execution.
+Thin orchestration layer. PipelineExecutor wraps protocol methods for stage-by-stage pipeline execution.
 
 ## STRUCTURE
 ```
