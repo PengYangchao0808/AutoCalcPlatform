@@ -25,3 +25,11 @@ production path.
 `pytest tests/test_acp_confsearch.py tests/test_acp_backend_censo.py -q` —
 43 passed in 1.05s.  `pytest tests/ -q --tb=no` — 2025 passed, 19 skipped,
 0 failed.  Ruff check + format on changed files: all clean.
+
+### Migration subpackage removed (documented deviation)
+
+The `confsearch/engines/` subpackage created in the initial commit was removed
+(`git rm -r`) as unnecessary — see decisions.md "Wave 8 todo 46: conformer
+engine migration skipped as unnecessary".  Post-removal gate re-verified:
+`grep -rn 'from acp\.mechanism|import acp\.mechanism|import_module'
+src/acp/confsearch/` → 0 hits.  Full suite re-verified: 2025 passed, 0 failed.

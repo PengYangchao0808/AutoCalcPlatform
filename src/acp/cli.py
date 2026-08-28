@@ -961,9 +961,7 @@ def _handle_pessearch(args: argparse.Namespace) -> int:
                 config=cfg,
             )
         else:
-            logger.error(
-                "PESsearch requires --input, --from-artifact, or --from-job"
-            )
+            logger.error("PESsearch requires --input, --from-artifact, or --from-job")
             return 2
 
     except KeyboardInterrupt:
@@ -989,15 +987,16 @@ def _handle_pessearch(args: argparse.Namespace) -> int:
         return 1
 
     meta = result.metadata
-    logger.info("PESsearch completed: %d TS + %d INT candidates",
-                meta.get("ts_candidates", 0), meta.get("int_candidates", 0))
+    logger.info(
+        "PESsearch completed: %d TS + %d INT candidates",
+        meta.get("ts_candidates", 0),
+        meta.get("int_candidates", 0),
+    )
     logger.info("  Manifest    : %s", meta.get("manifest_path"))
     return 0
 
 
-def _resolve_pes_manifest_from_job(
-    job_id: str, from_artifact: str | None
-) -> Path:
+def _resolve_pes_manifest_from_job(job_id: str, from_artifact: str | None) -> Path:
     """Resolve a confsearch manifest path from a job ID."""
     from acp.scheduler.store import JobStore
 
@@ -2762,7 +2761,11 @@ def main(argv: list[str] | None = None) -> int:
         Exit code.
     """
     argv_values = list(sys.argv[1:] if argv is None else argv)
-    if len(argv_values) > 1 and argv_values[0] == "run" and argv_values[1] in _CLI_REMOVED_WORKFLOWS:
+    if (
+        len(argv_values) > 1
+        and argv_values[0] == "run"
+        and argv_values[1] in _CLI_REMOVED_WORKFLOWS
+    ):
         return _reject_retired_workflow(argv_values[1])
     if argv_values[:2] == ["mechanism", "resume"]:
         return _reject_retired_workflow("mechanism resume")
