@@ -406,14 +406,7 @@ class TestS2CandidateApi:
                 json=self._review_payload(candidate),
             )
 
-            assert response.status_code == 200, response.text
-            body = response.json()
-            assert body["job_id"] == job_id
-            assert body["project_id"] is None
-            assert body["active_count"] == 1
-            assert body["review"]["status"] == "confirmed"
-            assert body["candidates"][0]["name"] == "selected transition state"
-            assert body["candidate_manifest"] == "RESULT/mechanism/s2_candidate_manifest.json"
+            assert response.status_code == 410, response.text
 
     def test_job_level_review_empty_save_is_valid(self, tmp_path: Path, fake_orca) -> None:
         with make_client(tmp_path) as client:
@@ -424,9 +417,7 @@ class TestS2CandidateApi:
                 json={"candidates": []},
             )
 
-            assert response.status_code == 200, response.text
-            assert response.json()["active_count"] == 0
-            assert response.json()["review"]["status"] == "rejected"
+            assert response.status_code == 410, response.text
 
     def test_s3_creation_endpoints_removed(self, tmp_path: Path, fake_orca) -> None:
         with make_client(tmp_path) as client:
@@ -435,7 +426,7 @@ class TestS2CandidateApi:
                 f"/api/v1/jobs/{job_id}/s2/review",
                 json=self._review_payload(candidate),
             )
-            assert saved.status_code == 200, saved.text
+            assert saved.status_code == 410, saved.text
 
             assert (
                 client.post(
@@ -461,8 +452,7 @@ class TestS2CandidateApi:
                 json={"candidates": [{"frame_index": 999, "role": "ts"}]},
             )
 
-            assert response.status_code == 422
-            assert "Unknown frame_index" in response.json()["detail"]
+            assert response.status_code == 410
 
     def test_job_level_review_unknown_job_returns_404(self, tmp_path: Path) -> None:
         with make_client(tmp_path) as client:
@@ -471,7 +461,7 @@ class TestS2CandidateApi:
                 json={"candidates": []},
             )
 
-            assert response.status_code == 404
+            assert response.status_code == 410
 
     def test_job_level_review_rejects_wrong_workflow(self, tmp_path: Path) -> None:
         with make_client(tmp_path) as client:
@@ -494,65 +484,17 @@ class TestS2CandidateApi:
                 json={"candidates": []},
             )
 
-            assert response.status_code == 409
+            assert response.status_code == 410
 
     def test_full_candidate_lifecycle(self, tmp_path: Path, fake_orca) -> None:
+        """S2 review lifecycle is retired — all review POSTs return 410."""
         with make_client(tmp_path) as client:
-            manager = _api_manager(client)
-            job_id, recommendations = self._job_recommendations(client, tmp_path)
-            ts_id = recommendations["ts"][0]["candidate_id"]
-            ts_frame = int(recommendations["ts"][0]["frame_index"])
-
+            job_id, _recommendations = self._job_recommendations(client, tmp_path)
             review = client.post(
                 f"/api/v1/jobs/{job_id}/s2/review",
-                json={
-                    "candidates": [
-                        {"candidate_id": ts_id, "frame_index": ts_frame, "role": "intermediate"},
-                        {"frame_index": 12, "role": "ts"},
-                    ]
-                },
+                json={"candidates": []},
             )
-            assert review.status_code == 200, review.text
-            body = review.json()
-            assert body["job_id"] == job_id
-            assert body["project_id"] is None
-            assert body["active_count"] == 2
-            assert body["review"]["status"] == "confirmed"
-            rows = {row["candidate_id"]: row for row in body["candidates"]}
-            assert rows[ts_id]["role"] == "intermediate"
-            assert rows[ts_id]["recommended_role"] == "ts"
-            assert rows["manual_frame_012"]["selection_source"] == "manual"
-            assert body["structures_dir"] == "RESULT/structures/s2_candidates"
-
-            source_record = manager.get(job_id)
-            assert source_record is not None
-            work_dir = Path(source_record.work_dir)
-            candidates_dir = work_dir / "RESULT" / "structures" / "s2_candidates"
-            assert (candidates_dir / "manual_frame_012.xyz").is_file()
-            result_manifest = ResultManifest.read(work_dir / "RESULT")
-            assert any(
-                p.kind.value == "structure" and p.id == "s2_candidate_manual_frame_012"
-                for p in result_manifest.products
-            )
-
-            graph = client.get(f"/api/v1/jobs/{job_id}/energy-graph").json()
-            annotations = {
-                a["candidate_id"]: a
-                for a in graph["annotations"]
-                if a["type"] in {"ts", "intermediate"}
-            }
-            assert annotations[ts_id]["type"] == "intermediate"
-            assert annotations[ts_id]["recommended_type"] == "ts"
-            assert annotations[ts_id]["saved"] is True
-            assert annotations[ts_id]["active"] is True
-            assert annotations["manual_frame_012"]["selection_source"] == "manual"
-            assert graph["metadata"]["review"]["status"] == "confirmed"
-            saved_ids = {
-                key for key, value in annotations.items() if value["saved"] and value["active"]
-            }
-            assert saved_ids == {ts_id, "manual_frame_012"}
-
-            assert client.post(f"/api/v1/jobs/{job_id}/s3", json={}).status_code == 404
+            assert review.status_code == 410
 
     def test_unsaved_recommendations_projected_as_pending(self, tmp_path: Path, fake_orca) -> None:
         with make_client(tmp_path) as client:
@@ -567,78 +509,34 @@ class TestS2CandidateApi:
             assert graph["metadata"]["review"]["status"] == "pending"
 
     def test_legacy_payload_still_accepted(self, tmp_path: Path, fake_orca) -> None:
+        """S2 review is retired — POST returns 410."""
         with make_client(tmp_path) as client:
-            job_id, recommendations = self._job_recommendations(client, tmp_path)
-            ts_id = recommendations["ts"][0]["candidate_id"]
+            job_id, _ = self._job_candidate(client, tmp_path)
             review = client.post(
                 f"/api/v1/jobs/{job_id}/s2/review",
-                json={"selected_ts": [ts_id]},
+                json={"selected_ts": ["ts_001"]},
             )
-            assert review.status_code == 200, review.text
-            assert review.json()["review"]["selected_ts"] == [ts_id]
-            assert any(
-                row["candidate_id"] == ts_id and row["role"] == "ts"
-                for row in review.json()["candidates"]
-            )
+            assert review.status_code == 410
 
     def test_cancel_marking_deactivates_candidate(self, tmp_path: Path, fake_orca) -> None:
+        """S2 review is retired — POST returns 410."""
         with make_client(tmp_path) as client:
-            job_id, recommendations = self._job_recommendations(client, tmp_path)
-            ts_id = recommendations["ts"][0]["candidate_id"]
-            ts_frame = int(recommendations["ts"][0]["frame_index"])
-            first = client.post(
-                f"/api/v1/jobs/{job_id}/s2/review",
-                json={
-                    "candidates": [{"candidate_id": ts_id, "frame_index": ts_frame, "role": "ts"}]
-                },
-            )
-            assert first.status_code == 200
-
-            second = client.post(
+            job_id, _ = self._job_recommendations(client, tmp_path)
+            review = client.post(
                 f"/api/v1/jobs/{job_id}/s2/review",
                 json={"candidates": []},
             )
-            assert second.status_code == 200
-            rows = {row["candidate_id"]: row for row in second.json()["candidates"]}
-            assert rows[ts_id]["active"] is False
-            assert second.json()["review"]["status"] == "rejected"
-
-            graph = client.get(f"/api/v1/jobs/{job_id}/energy-graph").json()
-            annotation = next(a for a in graph["annotations"] if a.get("candidate_id") == ts_id)
-            assert annotation["active"] is False
-            assert annotation["recommended_type"] == "ts"
+            assert review.status_code == 410
 
     def test_validation_errors(self, tmp_path: Path, fake_orca) -> None:
+        """S2 review is retired — POST returns 410."""
         with make_client(tmp_path) as client:
-            job_id, _recs = self._job_recommendations(client, tmp_path)
-            unknown_frame = client.post(
+            job_id, _ = self._job_candidate(client, tmp_path)
+            review = client.post(
                 f"/api/v1/jobs/{job_id}/s2/review",
-                json={"candidates": [{"frame_index": 99, "role": "ts"}]},
+                json={"candidates": []},
             )
-            assert unknown_frame.status_code == 422
-
-            dup_frame = client.post(
-                f"/api/v1/jobs/{job_id}/s2/review",
-                json={
-                    "candidates": [
-                        {"frame_index": 4, "role": "ts"},
-                        {"frame_index": 4, "role": "intermediate"},
-                    ]
-                },
-            )
-            assert dup_frame.status_code == 422
-
-            bad_role = client.post(
-                f"/api/v1/jobs/{job_id}/s2/review",
-                json={"candidates": [{"frame_index": 4, "role": "transition"}]},
-            )
-            assert bad_role.status_code == 422
-
-            legacy_unknown = client.post(
-                f"/api/v1/jobs/{job_id}/s2/review",
-                json={"selected_ts": ["ts_guess_999"]},
-            )
-            assert legacy_unknown.status_code == 422
+            assert review.status_code == 410
 
     def test_s3_creation_endpoint_removed(self, tmp_path: Path, fake_orca) -> None:
         with make_client(tmp_path) as client:

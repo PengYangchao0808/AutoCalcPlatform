@@ -217,24 +217,25 @@ class TestMechanismProjectAPI:
             "/api/v1/mechanism-projects",
             json={"name": "Test Project", "charge": 1, "multiplicity": 2},
         )
-        assert response.status_code == 500
+        assert response.status_code == 410
 
     def test_list_projects(self, client: TestClient) -> None:
         response = client.get("/api/v1/mechanism-projects")
-        assert response.status_code == 500
+        assert response.status_code == 200
+        assert response.json()["projects"] == []
 
     def test_get_project_detail(self, client: TestClient) -> None:
         response = client.get("/api/v1/mechanism-projects/retired-project")
-        assert response.status_code == 500
+        assert response.status_code == 404
 
     def test_get_project_route_is_unavailable(self, client: TestClient) -> None:
         response = client.get("/api/v1/mechanism-projects/nonexistent")
-        assert response.status_code == 500
+        assert response.status_code == 404
 
     def test_submit_job_with_mechanism_project_id(self, client: TestClient) -> None:
         job_resp = _submit_fake_job(client, mechanism_project_id="retired-project")
         assert job_resp["workflow"] == "fake"
-        assert job_resp["mechanism_project_id"] is None
+        assert "mechanism_project_id" not in job_resp
         assert job_resp["project_id"]
         record = client.app.state.job_manager.get(job_resp["job_id"])
         assert record is not None
@@ -254,7 +255,7 @@ class TestMechanismProjectAPI:
         assert response.status_code == 201
         body = response.json()
         assert body["workflow"] == "fake"
-        assert body["mechanism_project_id"] is None
+        assert "mechanism_project_id" not in body
         record = client.app.state.job_manager.get(body["job_id"])
         assert record is not None
         assert record.spec.project_id == body["project_id"]
@@ -267,7 +268,7 @@ class TestMechanismProjectAPI:
 class TestMechanismProjectTimelineWithJobs:
     def test_timeline_route_is_unavailable(self, client: TestClient) -> None:
         response = client.get("/api/v1/mechanism-projects/retired-project")
-        assert response.status_code == 500
+        assert response.status_code == 404
 
     def test_submit_fake_job_ignores_mechanism_project_id(self, client: TestClient) -> None:
         job_resp = _submit_fake_job(
@@ -276,7 +277,7 @@ class TestMechanismProjectTimelineWithJobs:
             name="s1job",
         )
         assert job_resp["workflow"] == "fake"
-        assert job_resp["mechanism_project_id"] is None
+        assert "mechanism_project_id" not in job_resp
         terminal = _wait_for_terminal(client, job_resp["job_id"])
         assert terminal["status"] == "completed"
         detail_resp = client.get(f"/api/v1/jobs/{job_resp['job_id']}")

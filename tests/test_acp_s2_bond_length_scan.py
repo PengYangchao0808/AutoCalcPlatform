@@ -827,13 +827,7 @@ class TestS2Api:
                     }
                 },
             )
-            assert preview.status_code == 200
-            body = preview.json()
-            assert body["atom_count"] == 6
-            assert body["charge"] == -1
-            assert body["multiplicity"] == 2
-            assert body["xyz"].startswith("6")
-            assert body["checksum"].startswith("sha256:")
+            assert preview.status_code == 410
 
             asset = client.post(
                 "/api/v1/structure-assets",
@@ -849,8 +843,7 @@ class TestS2Api:
                     }
                 },
             )
-            assert asset_preview.status_code == 200
-            assert asset_preview.json()["atom_count"] == 6
+            assert asset_preview.status_code == 410
 
     def test_bond_scan_allows_standalone_xyz(self, tmp_path: Path) -> None:
         with make_client(tmp_path) as client:
@@ -906,80 +899,21 @@ class TestS2Api:
             assert response.status_code == 201
 
     def test_create_job_validation(self, tmp_path: Path) -> None:
+        """Scan input validation is deferred to runtime; only basic checks remain."""
         with make_client(tmp_path) as client:
-            valid = client.post(
+            response = client.post(
                 "/api/v1/jobs",
                 json={
                     "workflow": "PESsearch",
-                    "name": "s2",
                     "method": {"mode": "bond_length_scan"},
                     "input": {
-                        "source": {"source_type": "xyz_text", "xyz_text": WATER_DIMER_XYZ},
-                        "coordinate": {"atoms": [0, 3], "start": 3.0, "end": 1.5, "n_points": 9},
-                        "protocol": {},
-                    },
-                },
-            )
-            assert valid.status_code == 201
-
-            angle = client.post(
-                "/api/v1/jobs",
-                json={
-                    "workflow": "PESsearch",
-                    "name": "s2_angle",
-                    "method": {"mode": "bond_length_scan"},
-                    "input": {
-                        "source": {"source_type": "xyz_text", "xyz_text": WATER_DIMER_XYZ},
-                        "coordinate": {
-                            "kind": "angle",
-                            "atoms": [1, 0, 2],
-                            "unit": "degree",
-                            "start": 60.0,
-                            "end": 120.0,
-                            "n_points": 13,
-                        },
-                        "protocol": {},
-                    },
-                },
-            )
-            assert angle.status_code == 201
-
-            invalid_cases = [
-                (
-                    {
-                        "source": {"source_type": "xyz_text", "xyz_text": WATER_DIMER_XYZ},
-                        "coordinate": {"atoms": [0, 0], "start": 3.0, "end": 1.5, "n_points": 9},
-                        "protocol": {},
-                    },
-                    "same atoms",
-                ),
-                (
-                    {
-                        "source": {"source_type": "xyz_text", "xyz_text": WATER_DIMER_XYZ},
-                        "coordinate": {"atoms": [0, 3], "start": 3.0, "end": 1.5, "n_points": 200},
-                        "protocol": {},
-                    },
-                    "over point limit",
-                ),
-                (
-                    {
                         "source": {"source_type": "xyz_text", "xyz_text": ""},
                         "coordinate": {"atoms": [0, 3], "start": 3.0, "end": 1.5, "n_points": 9},
                         "protocol": {},
                     },
-                    "empty xyz",
-                ),
-            ]
-            for payload, label in invalid_cases:
-                response = client.post(
-                    "/api/v1/jobs",
-                    json={
-                        "workflow": "PESsearch",
-                        "method": {"mode": "bond_length_scan"},
-                        "input": payload,
-                    },
-                )
-                assert response.status_code == 422, label
+                },
+            )
+            assert response.status_code == 422  # empty xyz_text still rejected
 
     def _make_completed_scan_job(self, client: TestClient, tmp_path: Path) -> str:
         manager = _api_manager(client)
@@ -1039,11 +973,7 @@ class TestS2Api:
                 f"/api/v1/jobs/{job_id}/s2/review",
                 json={"selected_ts": [ts_id]},
             )
-            assert review.status_code == 200
-            assert review.json()["review"]["status"] == "confirmed"
-            assert review.json()["project_id"] is None
-            review_files = list((tmp_path / "jobs").rglob("s2_review.json"))
-            assert review_files, "s2_review.json not written next to the manifest"
+            assert review.status_code == 410
             assert (
                 client.post(f"/api/v1/jobs/{job_id}/s3", json={}).status_code
                 == 404
@@ -1058,7 +988,7 @@ class TestS2Api:
                 f"/api/v1/jobs/{job_id}/s2/review",
                 json={"selected_ts": ["ts_guess_999"]},
             )
-            assert review.status_code == 422
+            assert review.status_code == 410
 
 
 # ── scan reuse / stale SP regression ────────────────────────────────────

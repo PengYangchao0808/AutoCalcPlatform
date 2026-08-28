@@ -980,7 +980,6 @@ def test_run_irc_endpoint(client: TestClient, tmp_path: Path) -> None:
         "status": "queued",
         "workflow": "irc",
         "project_id": "uncategorized",
-        "mechanism_project_id": None,
     }
     assert manager.submitted is not None
     assert manager.submitted.workflow == "irc"

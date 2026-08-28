@@ -129,7 +129,6 @@ class V1JobCreateRequest(BaseModel):
     config_path: str | None = None
     tags: list[str] = Field(default_factory=list)
     project_id: str | None = None
-    mechanism_project_id: str | None = None
     execution_mode: Literal["local", "remote"] | None = None
     target_node: str | None = None
     molecule_name: str = ""
@@ -312,7 +311,6 @@ class V1JobCreatedResponse(BaseModel):
     status: str
     workflow: str
     project_id: str | None = None
-    mechanism_project_id: str | None = None
 
 
 class JobMoveRequest(BaseModel):

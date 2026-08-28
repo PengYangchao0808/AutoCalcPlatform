@@ -9,7 +9,6 @@ FastAPI router for ACP Workbench v2 resources under ``/api/v1``.
 from __future__ import annotations
 
 import hashlib
-import importlib
 import json
 import logging
 import posixpath
@@ -91,7 +90,6 @@ from acp.api.v1_schemas import (
     MechanismProjectListResponse,
     MechanismProjectModel,
     MechanismProjectTimelineEntry,
-    MechanismRolePayload,
     MechanismStudyCreateRequest,
     MechanismStudyDetail,
     MechanismStudyReportResponse,
@@ -123,7 +121,6 @@ from acp.api.v1_schemas import (
     S2FrameResponse,
     S2JobReviewResponse,
     S2ProfileResponse,
-    S2ReviewCandidateItem,
     S2ReviewRequest,
     S2ReviewResponse,
     S2StructurePreviewRequest,
@@ -166,27 +163,6 @@ from acp.chem.embedding import (
     parse_xyz_first_frame,
     smiles_to_xyz,
     xyz_formula,
-)
-from acp.core.config import resolve_manual_bond_editing
-from acp.intake.parsers import detect_format, parse_structure_text
-from acp.mechanism import (
-    MappingConfirmationRequired,
-    RoleSpec,
-    bond_changes_to_dicts,
-    build_reaction_definition,
-    compute_bond_changes,
-    compute_content_hash,
-    map_reactant_to_product,
-    suggest_mechanism_plan,
-)
-from acp.mechanism.s2_confirm_service import (
-    S2CandidateMark,
-    S2JobConflictError,
-    S2JobNotFoundError,
-    S2ManifestNotFoundError,
-    S2ReviewValidationError,
-    resolve_s2_manifest_for_job,
-    save_s2_review_for_job,
 )
 from acp.results.manifest import MANIFEST_FILENAME, load_result_manifest
 from acp.scheduler.artifacts import Artifact, ArtifactRegistry
@@ -543,38 +519,6 @@ def _mechanism_study_or_404(store: JobStore, study_id: str) -> dict[str, Any]:
     return row
 
 
-def _candidate_to_dict(candidate: Any, index: int) -> dict[str, Any]:
-    return {
-        "index": index,
-        "confidence": float(candidate.confidence),
-        "symmetric_alternatives": int(candidate.symmetric_alternatives),
-        "mapping": [
-            {"reactant_index": int(reactant_index), "product_index": int(product_index)}
-            for reactant_index, product_index in candidate.mapping
-        ],
-        "mapping_source": str(getattr(candidate, "mapping_source", "") or ""),
-    }
-
-
-def _reaction_plan_to_dict(plan: Any) -> dict[str, Any]:
-    return {
-        "coordinates": [
-            {
-                "id": coordinate.id,
-                "kind": coordinate.kind,
-                "atoms": list(coordinate.atoms),
-                "role": coordinate.role,
-                "start": coordinate.start,
-                "end": coordinate.end,
-            }
-            for coordinate in plan.coordinates
-        ],
-        "points": int(plan.points),
-        "coupling": plan.coupling,
-        "start_from": plan.start_from,
-    }
-
-
 def _resolve_structure_asset_path(run_root: Path, source: str) -> Path:
     candidate = (run_root / source).resolve()
     try:
@@ -584,231 +528,6 @@ def _resolve_structure_asset_path(run_root: Path, source: str) -> Path:
     if not candidate.is_file():
         raise ValueError(f"Asset file not found: {source}")
     return candidate
-
-
-def _atoms_from_xyz(xyz: str) -> tuple[list[str], list[list[float]]]:
-    atoms = parse_xyz_first_frame(xyz)
-    return (
-        [str(atom["elem"]) for atom in atoms],
-        [[float(atom["x"]), float(atom["y"]), float(atom["z"])] for atom in atoms],
-    )
-
-
-def _resolve_mechanism_role(
-    payload: MechanismRolePayload,
-    run_root: Path,
-    *,
-    default_charge: int,
-    default_multiplicity: int,
-) -> tuple[RoleSpec, list[str], list[list[float]], str | None, list[str]]:
-    charge = payload.charge if payload.charge is not None else default_charge
-    multiplicity = (
-        payload.multiplicity if payload.multiplicity is not None else default_multiplicity
-    )
-    warnings: list[str] = []
-
-    if payload.source_type == "smiles":
-        xyz = smiles_to_xyz(payload.source)
-        symbols, coords = _atoms_from_xyz(xyz)
-        return (
-            RoleSpec(
-                smiles=payload.source,
-                asset_id=payload.asset_id,
-                charge=charge,
-                multiplicity=multiplicity,
-            ),
-            symbols,
-            coords,
-            payload.source,
-            warnings,
-        )
-
-    if payload.source_type == "xyz_text":
-        symbols, coords = _atoms_from_xyz(payload.source)
-        return (
-            RoleSpec(
-                asset_id=payload.asset_id,
-                charge=charge,
-                multiplicity=multiplicity,
-            ),
-            symbols,
-            coords,
-            None,
-            warnings,
-        )
-
-    asset_path = _resolve_structure_asset_path(run_root, payload.source)
-    content = asset_path.read_text(encoding="utf-8")
-    fmt = detect_format(asset_path.name, content)
-    parsed = parse_structure_text(content, fmt, asset_path.name)
-    warnings.extend(str(error) for error in parsed.errors)
-    if not parsed.structures:
-        message = "; ".join(parsed.errors)
-        if not message:
-            message = f"Could not parse structure asset: {payload.source}"
-        raise ValueError(message)
-    structure = parsed.structures[0]
-    if not structure.xyz:
-        raise ValueError(f"Structure asset does not contain 3D XYZ data: {payload.source}")
-    symbols, coords = _atoms_from_xyz(structure.xyz)
-    return (
-        RoleSpec(
-            path=payload.source,
-            asset_id=payload.asset_id,
-            charge=charge,
-            multiplicity=multiplicity,
-        ),
-        symbols,
-        coords,
-        structure.smiles,
-        warnings,
-    )
-
-
-def _preview_hash_payload(req: ReactionPreviewRequest) -> dict[str, Any]:
-    return {
-        "reactant": _model_payload(req.reactant),
-        "product": _model_payload(req.product),
-        "ts_guess": _model_payload(req.ts_guess) if req.ts_guess is not None else None,
-        "charge": req.charge,
-        "multiplicity": req.multiplicity,
-    }
-
-
-def _selected_candidate_index(mapping_result: Any, selected_candidate: int | None) -> int:
-    if not mapping_result.candidates:
-        raise ValueError("Atom mapping did not produce any candidates")
-    if selected_candidate is None:
-        return 0
-    if selected_candidate < 0 or selected_candidate >= len(mapping_result.candidates):
-        raise ValueError(f"Selected atom-mapping candidate {selected_candidate} is out of range")
-    return int(selected_candidate)
-
-
-def _reaction_preview_response(
-    req: ReactionPreviewRequest,
-    run_root: Path,
-    *,
-    manual_mode: bool = False,
-) -> ReactionPreviewResponse:
-    reactant_role, reactant_symbols, reactant_coords, reactant_smiles, reactant_warnings = (
-        _resolve_mechanism_role(
-            req.reactant,
-            run_root,
-            default_charge=req.charge,
-            default_multiplicity=req.multiplicity,
-        )
-    )
-    _, product_symbols, product_coords, product_smiles, product_warnings = _resolve_mechanism_role(
-        req.product,
-        run_root,
-        default_charge=req.charge,
-        default_multiplicity=req.multiplicity,
-    )
-    warnings = [*reactant_warnings, *product_warnings]
-    if req.ts_guess is not None:
-        _, _, _, _, ts_warnings = _resolve_mechanism_role(
-            req.ts_guess,
-            run_root,
-            default_charge=req.charge,
-            default_multiplicity=req.multiplicity,
-        )
-        warnings.extend(ts_warnings)
-
-    if manual_mode:
-        warnings.append("自动成键判定已禁用：请在 3D 视图中手动指定成键/断键")
-        return ReactionPreviewResponse(
-            status="ok",
-            mapping_status="manual",
-            candidates=[],
-            selected_candidate=None,
-            unmatched_reactant_atoms=[],
-            unmatched_product_atoms=[],
-            bond_changes=[],
-            suggested_plan=None,
-            warnings=warnings,
-            preview_hash=compute_content_hash(_preview_hash_payload(req)),
-            manual_mode=True,
-        )
-
-    mapping_result = map_reactant_to_product(
-        reactant_symbols,
-        reactant_coords,
-        product_symbols,
-        product_coords,
-        charge=int(reactant_role.charge),
-        reactant_smiles=reactant_smiles,
-        product_smiles=product_smiles,
-    )
-    if mapping_result.status == "failed":
-        raise ValueError(mapping_result.message or "Atom mapping failed")
-
-    chosen_index = _selected_candidate_index(mapping_result, req.selected_candidate)
-    chosen_candidate = mapping_result.candidates[chosen_index]
-    bond_changes = compute_bond_changes(
-        reactant_symbols,
-        reactant_coords,
-        product_symbols,
-        product_coords,
-        chosen_candidate,
-        reactant_smiles=reactant_smiles,
-        product_smiles=product_smiles,
-        charge=int(reactant_role.charge),
-    )
-    suggested_plan = None
-    if bond_changes:
-        suggested_plan = _reaction_plan_to_dict(suggest_mechanism_plan(bond_changes))
-    else:
-        warnings.append("No bond changes were detected for the selected atom mapping")
-    if mapping_result.message:
-        warnings.append(mapping_result.message)
-    if req.selected_candidate is None and mapping_result.status in {"candidates", "count_mismatch"}:
-        warnings.append(
-            "Preview evaluated the best-ranked mapping candidate; confirm with selected_candidate"
-        )
-    return ReactionPreviewResponse(
-        status=(
-            "confirmation_required"
-            if mapping_result.status in {"candidates", "count_mismatch"}
-            else "ok"
-        ),
-        mapping_status=mapping_result.status,
-        candidates=[
-            _candidate_to_dict(candidate, index)
-            for index, candidate in enumerate(mapping_result.candidates)
-        ],
-        selected_candidate=chosen_index,
-        unmatched_reactant_atoms=[int(atom) for atom in mapping_result.unmatched_reactant_atoms],
-        unmatched_product_atoms=[int(atom) for atom in mapping_result.unmatched_product_atoms],
-        bond_changes=bond_changes_to_dicts(bond_changes),
-        suggested_plan=suggested_plan,
-        warnings=warnings,
-        preview_hash=compute_content_hash(_preview_hash_payload(req)),
-        manual_mode=False,
-    )
-
-
-def _validate_plan_request(req: MechanismPlanRequest) -> None:
-    if req.strategy == "direct-ts":
-        return
-    coordinates = req.plan.get("coordinates")
-    if not isinstance(coordinates, list) or not coordinates:
-        raise HTTPException(
-            status_code=422,
-            detail="Mechanism plan requires non-empty coordinates unless strategy='direct-ts'",
-        )
-    for index, coordinate in enumerate(coordinates):
-        if not isinstance(coordinate, dict):
-            raise HTTPException(
-                status_code=422,
-                detail=f"Coordinate {index} must be an object",
-            )
-        missing = [key for key in ("id", "kind", "atoms", "role") if key not in coordinate]
-        if missing:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Coordinate {index} is missing required keys: {', '.join(missing)}",
-            )
 
 
 def _build_mechanism_report(
@@ -824,7 +543,7 @@ def _build_mechanism_report(
     if study_dir is not None:
         write_study_reports = None
         try:
-            reports_module = importlib.import_module("acp.mechanism.reports")
+            reports_module = None  # mechanism reports retired
             write_study_reports = getattr(reports_module, "write_study_reports", None)
         except ImportError:
             write_study_reports = None
@@ -1139,15 +858,7 @@ def _resolve_stage_artifact_ref(
     inp: dict[str, Any],
     manager: Any,
 ) -> dict[str, Any]:
-    """Validate a stage workflow's artifact reference (plan §8) and pin it.
-
-    The server resolves the source job, verifies existence + sha256 + kind +
-    stage relation, and stores the absolute manifest path in ``input["from"]``
-    so the scheduler runner never re-resolves (or re-trusts) the reference.
-    """
-    from acp.mechanism.stages.handoff import ArtifactRefError, validate_stage_artifact
-
-    stage = _STAGE_WORKFLOW_SOURCE[workflow]
+    """Resolve a stage workflow's artifact reference path."""
     source_job_id = str(inp.get("source_job_id") or "").strip()
     relative_path = str(inp.get("from_artifact") or inp.get("relative_path") or "").strip()
     if not source_job_id or not relative_path:
@@ -1165,24 +876,12 @@ def _resolve_stage_artifact_ref(
             status_code=404,
             detail=f"Source job not found or has no work dir: {source_job_id}",
         )
-    default_kind = {
-        "S2": "confsearch_manifest",
-        "S3": "s2_path_manifest",
-        "S4": "s3_lowconfirm_manifest",
-    }[stage]
-    kind = str(inp.get("kind") or default_kind)
-    try:
-        manifest_path = validate_stage_artifact(
-            source_job_id=source_job_id,
-            relative_path=relative_path,
-            sha256=inp.get("sha256"),
-            kind=kind,
-            stage=stage,
-            work_dir=source_work_dir,
+    manifest_path = (source_work_dir / relative_path).resolve()
+    if not manifest_path.is_file():
+        raise HTTPException(
+            status_code=422,
+            detail=f"Artifact not found: {relative_path} (from job {source_job_id})",
         )
-    except ArtifactRefError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
     resolved = dict(inp)
     resolved["from"] = str(manifest_path)
     resolved["source_job_work_dir"] = str(source_work_dir)
@@ -1200,7 +899,6 @@ def _prepare_bond_scan_input(
     source manifest into ``input["from"]`` (and the source's artifact_path)
     so handoff copying works for both local and remote execution.
     """
-    from acp.mechanism.scan_models import BondLengthScanRequest, validate_scan_protocol
 
     try:
         _validated = BondLengthScanJobInput.model_validate(inp)
@@ -1251,32 +949,22 @@ def _prepare_bond_scan_input(
     elif src.get("source_type") == "xyz_text" and not str(src.get("xyz_text") or "").strip():
         raise HTTPException(status_code=422, detail="xyz_text source requires source.xyz_text")
 
-    try:
-        request = BondLengthScanRequest.from_dict(
-            {
-                "mode": "bond_length_scan",
-                "source": src,
-                "coordinate": inp.get("coordinate"),
-                "protocol": inp.get("protocol"),
-            }
+    coordinate = inp.get("coordinate")
+    protocol = inp.get("protocol")
+    if not isinstance(coordinate, dict) or not coordinate.get("atoms"):
+        raise HTTPException(
+            status_code=422, detail="bond_length_scan requires coordinate with atoms"
         )
-    except (TypeError, ValueError) as exc:
-        # Malformed scan coordinates/protocols are client input errors.  Keep
-        # the API contract at 4xx so the UI can show the actionable message;
-        # never leak a parser ValueError as an opaque HTTP 500.
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    try:
-        validate_scan_protocol(request.coordinate, request.protocol)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not isinstance(protocol, dict):
+        protocol = {}
 
     prepared = dict(inp)
     prepared["source"] = src
     prepared["scan_request"] = {
         "mode": "bond_length_scan",
         "source": src,
-        "coordinate": request.coordinate.to_dict(),
-        "protocol": request.protocol.to_dict(),
+        "coordinate": coordinate,
+        "protocol": protocol,
     }
     return prepared
 
@@ -1527,28 +1215,7 @@ def create_mechanism_study(
     req: MechanismStudyCreateRequest,
     request: Request,
 ) -> MechanismStudyDetail:
-    now = _utc_now_iso()
-    manager = _manager(request)
-    if req.job_id is not None:
-        job = manager.get(req.job_id)
-        if job is None:
-            raise HTTPException(status_code=404, detail=f"Job not found: {req.job_id}")
-    store = _job_store(request)
-    status = req.status
-    if req.job_id is not None and status == "draft":
-        status = "pending"
-    store.upsert_mechanism_study(
-        req.study_id,
-        job_id=req.job_id,
-        study_json=json.dumps(req.study_json),
-        status=status,
-        created_at=now,
-        updated_at=now,
-    )
-    row = store.get_mechanism_study(req.study_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail=f"Mechanism study not found: {req.study_id}")
-    return _study_detail_model(store, row, unified_status=_study_unified_status(manager, row))
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 @router.get("/mechanism-studies/{study_id}", response_model=MechanismStudyDetail)
@@ -1568,16 +1235,7 @@ def preview_mechanism_reaction(
     req: ReactionPreviewRequest,
     request: Request,
 ) -> ReactionPreviewResponse:
-    store = _job_store(request)
-    _mechanism_study_or_404(store, study_id)
-    try:
-        return _reaction_preview_response(
-            req,
-            Path(request.app.state.run_root),
-            manual_mode=resolve_manual_bond_editing(req.manual_bond_editing),
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 @router.post(
@@ -1589,112 +1247,7 @@ def confirm_mechanism_reaction(
     req: ReactionConfirmRequest,
     request: Request,
 ) -> ReactionConfirmResponse:
-    store = _job_store(request)
-    _mechanism_study_or_404(store, study_id)
-    run_root = Path(request.app.state.run_root)
-    manual_mode = resolve_manual_bond_editing(req.manual_bond_editing)
-    try:
-        reactant_role, reactant_symbols, reactant_coords, reactant_smiles, _ = (
-            _resolve_mechanism_role(
-                req.reactant,
-                run_root,
-                default_charge=req.charge,
-                default_multiplicity=req.multiplicity,
-            )
-        )
-        product_role, product_symbols, product_coords, product_smiles, _ = _resolve_mechanism_role(
-            req.product,
-            run_root,
-            default_charge=req.charge,
-            default_multiplicity=req.multiplicity,
-        )
-        ts_role: RoleSpec | None = None
-        if req.ts_guess is not None:
-            ts_role, _, _, _, _ = _resolve_mechanism_role(
-                req.ts_guess,
-                run_root,
-                default_charge=req.charge,
-                default_multiplicity=req.multiplicity,
-            )
-        if manual_mode:
-            if not req.manual_bond_changes and not req.allow_zero_changes:
-                raise HTTPException(
-                    status_code=422,
-                    detail=(
-                        "manual_bond_editing is enabled: manual_bond_changes must provide at "
-                        "least one entry ({reactant_atoms: [i, j]} or {product_atoms: [i, j]}, "
-                        'change_type: "break"|"form"), or set allow_zero_changes=true to lock '
-                        "an empty change set"
-                    ),
-                )
-            definition = build_reaction_definition(
-                study_id,
-                reactant_role,
-                product_role,
-                ts_role,
-                reactant_symbols,
-                reactant_coords,
-                product_symbols,
-                product_coords,
-                reactant_smiles=reactant_smiles,
-                product_smiles=product_smiles,
-                selected_candidate=req.selected_candidate,
-                confirmed_by="user",
-                manual_bond_changes=req.manual_bond_changes or [],
-                resolve_mapping=False,
-            )
-        else:
-            definition = build_reaction_definition(
-                study_id,
-                reactant_role,
-                product_role,
-                ts_role,
-                reactant_symbols,
-                reactant_coords,
-                product_symbols,
-                product_coords,
-                reactant_smiles=reactant_smiles,
-                product_smiles=product_smiles,
-                selected_candidate=req.selected_candidate,
-                confirmed_by="user",
-                manual_bond_changes=req.manual_bond_changes,
-            )
-    except MappingConfirmationRequired as exc:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "status": "confirmation_required",
-                "mapping_status": exc.mapping_result.status,
-                "candidates": [
-                    _candidate_to_dict(candidate, index)
-                    for index, candidate in enumerate(exc.mapping_result.candidates)
-                ],
-                "unmatched_reactant_atoms": exc.mapping_result.unmatched_reactant_atoms,
-                "unmatched_product_atoms": exc.mapping_result.unmatched_product_atoms,
-                "message": exc.mapping_result.message,
-            },
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    reaction_payload = definition.to_dict()
-    now = _utc_now_iso()
-    store.update_mechanism_study_reaction(
-        study_id,
-        reaction_json=json.dumps(reaction_payload),
-        config_hash=definition.content_hash,
-        status="reaction_confirmed",
-        updated_at=now,
-    )
-    suggested_plan = None
-    if definition.bond_changes:
-        suggested_plan = _reaction_plan_to_dict(suggest_mechanism_plan(definition.bond_changes))
-    return ReactionConfirmResponse(
-        status="locked",
-        reaction=reaction_payload,
-        config_hash=definition.content_hash,
-        suggested_plan=suggested_plan,
-    )
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 @router.get(
@@ -1721,28 +1274,7 @@ def confirm_mechanism_plan(
     req: MechanismPlanRequest,
     request: Request,
 ) -> MechanismPlanResponse:
-    store = _job_store(request)
-    row = _mechanism_study_or_404(store, study_id)
-    if str(row.get("status") or "") not in {
-        "reaction_confirmed",
-        "plan_confirmed",
-    }:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Mechanism study reaction is not locked: {study_id}",
-        )
-    _validate_plan_request(req)
-    now = _utc_now_iso()
-    store.update_mechanism_study_plan(
-        study_id,
-        plan_json=json.dumps(req.plan),
-        status="plan_confirmed",
-        updated_at=now,
-    )
-    return MechanismPlanResponse(
-        status="plan_confirmed",
-        plan_hash=compute_content_hash(req.plan),
-    )
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 @router.get(
@@ -1772,52 +1304,7 @@ def resolve_mechanism_decision(
     req: DecisionResolveRequest,
     request: Request,
 ) -> DecisionResolveResponse:
-    manager = _manager(request)
-    store = _job_store(request)
-    study_row = store.get_mechanism_study(study_id)
-    if study_row is None:
-        raise HTTPException(status_code=404, detail=f"Mechanism study not found: {study_id}")
-    decision_row = store.get_decision_point(decision_id)
-    if decision_row is None or str(decision_row.get("study_id") or "") != study_id:
-        raise HTTPException(status_code=404, detail=f"Decision point not found: {decision_id}")
-    if str(decision_row.get("status") or "") != "waiting":
-        raise HTTPException(status_code=409, detail=f"Decision point is not waiting: {decision_id}")
-    now = _utc_now_iso()
-    store.upsert_decision_point(
-        decision_id,
-        study_id=study_id,
-        status="resolved",
-        payload=str(decision_row.get("payload") or "{}"),
-        resolution=req.resolution,
-        created_at=str(decision_row.get("created_at") or now),
-        resolved_at=now,
-    )
-    job_id = str(study_row["job_id"]) if study_row.get("job_id") is not None else None
-    if job_id is None:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Mechanism study has no linked job: {study_id}",
-        )
-    try:
-        record = manager.resume(
-            job_id,
-            resolution={
-                "requeue": True,
-                "decisions": {decision_id: req.resolution},
-            },
-        )
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    updated = store.get_decision_point(decision_id)
-    if updated is None:
-        raise HTTPException(status_code=404, detail=f"Decision point not found: {decision_id}")
-    return DecisionResolveResponse(
-        decision=_decision_point_model(updated),
-        job_id=job_id,
-        job_status=record.status.value,
-    )
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 def _load_study_checkpoint(study_dir: Path | None) -> dict[str, Any] | None:
@@ -1831,19 +1318,6 @@ def _load_study_checkpoint(study_dir: Path | None) -> dict[str, Any] | None:
     except (OSError, ValueError):
         return None
     return payload if isinstance(payload, dict) else None
-
-
-def _study_job_record(
-    store: JobStore, manager: JobManager, study_id: str
-) -> tuple[dict[str, Any], str, JobRecord | None]:
-    study_row = _mechanism_study_or_404(store, study_id)
-    job_id = str(study_row["job_id"]) if study_row.get("job_id") is not None else None
-    if job_id is None:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Mechanism study has no linked job: {study_id}",
-        )
-    return study_row, job_id, manager.get(job_id)
 
 
 @router.get("/mechanism-studies/{study_id}/reviews", response_model=SRReviewListResponse)
@@ -1889,116 +1363,12 @@ def submit_mechanism_review_decision(
     req: SRDecisionRequest,
     request: Request,
 ) -> SRDecisionResponse:
-    manager = _manager(request)
-    store = _job_store(request)
-    study_row, job_id, record = _study_job_record(store, manager, study_id)
-    checkpoint = _load_study_checkpoint(_study_report_dir(study_row, record))
-    if checkpoint is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Mechanism study checkpoint not found: {study_id}",
-        )
-    decision_entry: dict[str, Any] | None = None
-    for entry in checkpoint.get("decision_points") or []:
-        if isinstance(entry, dict) and entry.get("id") == review_id:
-            decision_entry = entry
-            break
-    if decision_entry is None:
-        raise HTTPException(status_code=404, detail=f"Review not found: {review_id}")
-    if decision_entry.get("status") != "waiting":
-        raise HTTPException(status_code=409, detail=f"Review is not waiting: {review_id}")
-    current_cycle = int(checkpoint.get("cycle_index") or 0)
-    context = ((checkpoint.get("metadata") or {}).get("pending_decisions") or {}).get(
-        review_id
-    ) or {}
-    if req.decision == "continue" and not req.selected_bonds:
-        raise HTTPException(
-            status_code=422,
-            detail="selected_bonds are required when decision is 'continue'",
-        )
-    bonds: list[dict[str, Any]] = []
-    for bond in req.selected_bonds:
-        if len(bond.atoms) != 2 or any(int(atom) < 0 for atom in bond.atoms):
-            raise HTTPException(
-                status_code=422,
-                detail="each selected bond must contain two non-negative atom indices",
-            )
-        if bond.action in {"stretch", "form"} and (bond.target is None or bond.target <= 0):
-            raise HTTPException(
-                status_code=422,
-                detail=f"bond {bond.atoms} action {bond.action} requires a positive target",
-            )
-        bonds.append(
-            {
-                "atoms": [int(bond.atoms[0]), int(bond.atoms[1])],
-                "action": bond.action,
-                "start": bond.start,
-                "target": bond.target,
-            }
-        )
-    revision = {
-        "revision_id": f"rev_{current_cycle + 1:02d}_{review_id}",
-        "decision": req.decision,
-        "parent_state": req.parent_state
-        or context.get("source_state_id")
-        or (decision_entry.get("payload") or {}).get("source_state_id"),
-        "selected_bonds": bonds,
-        "comment": req.comment,
-        "config_hash": req.config_hash or "",
-    }
-    resolution = {
-        "resolution": "sr_revision",
-        "revision": revision,
-        "cycle_id": current_cycle,
-    }
-    try:
-        record = manager.resume(
-            job_id,
-            resolution={
-                "requeue": True,
-                "decisions": {review_id: resolution},
-                "cycle_id": current_cycle,
-            },
-        )
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    now = _utc_now_iso()
-    store.upsert_decision_point(
-        review_id,
-        study_id=study_id,
-        status="resolved",
-        payload=json.dumps(decision_entry.get("payload") or {}),
-        resolution=f"sr_revision:{req.decision}",
-        created_at=str(decision_entry.get("created_at") or now),
-        resolved_at=now,
-    )
-    return SRDecisionResponse(
-        status="accepted",
-        revision_id=str(revision["revision_id"]),
-        cycle=current_cycle + 1 if req.decision == "continue" else current_cycle,
-        job_id=job_id,
-        job_status=record.status.value,
-    )
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 @router.post("/mechanism-studies/{study_id}/resume", response_model=StudyResumeResponse)
 def resume_mechanism_study_job(study_id: str, request: Request) -> StudyResumeResponse:
-    manager = _manager(request)
-    store = _job_store(request)
-    _, job_id, _ = _study_job_record(store, manager, study_id)
-    try:
-        record = manager.resume(job_id, resolution={"requeue": True})
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return StudyResumeResponse(
-        status="resumed",
-        job_id=job_id,
-        job_status=record.status.value,
-    )
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 @router.post(
@@ -2006,83 +1376,15 @@ def resume_mechanism_study_job(study_id: str, request: Request) -> StudyResumeRe
     response_model=StudyPromoteResponse,
 )
 def promote_mechanism_study(study_id: str, request: Request) -> StudyPromoteResponse:
-    """Accept the SR cycle network and resume the study directly into S4."""
-    manager = _manager(request)
-    store = _job_store(request)
-    study_row, job_id, record = _study_job_record(store, manager, study_id)
-    checkpoint = _load_study_checkpoint(_study_report_dir(study_row, record))
-    if checkpoint is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Mechanism study checkpoint not found: {study_id}",
-        )
-    waiting_reviews = [
-        entry
-        for entry in checkpoint.get("decision_points") or []
-        if isinstance(entry, dict)
-        and entry.get("status") == "waiting"
-        and entry.get("type") == "sr_cycle_review"
-    ]
-    if not waiting_reviews:
-        raise HTTPException(status_code=409, detail="no waiting SR review to promote")
-    decision_entry = max(
-        waiting_reviews,
-        key=lambda entry: str(entry.get("id") or ""),
-    )
-    review_id = str(decision_entry.get("id") or "")
-    current_cycle = int(checkpoint.get("cycle_index") or 0)
-    context = ((checkpoint.get("metadata") or {}).get("pending_decisions") or {}).get(
-        review_id
-    ) or {}
-    revision = {
-        "revision_id": f"promote_{current_cycle + 1:02d}_{review_id}",
-        "decision": "accept_network",
-        "parent_state": context.get("source_state_id")
-        or (decision_entry.get("payload") or {}).get("source_state_id"),
-        "selected_bonds": [],
-        "comment": "promote to S4",
-        "config_hash": "",
-    }
-    try:
-        record = manager.resume(
-            job_id,
-            resolution={
-                "requeue": True,
-                "decisions": {
-                    review_id: {
-                        "resolution": "sr_revision",
-                        "revision": revision,
-                        "cycle_id": current_cycle,
-                    }
-                },
-                "cycle_id": current_cycle,
-            },
-        )
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    now = _utc_now_iso()
-    store.upsert_decision_point(
-        review_id,
-        study_id=study_id,
-        status="resolved",
-        payload=json.dumps(decision_entry.get("payload") or {}),
-        resolution="sr_revision:accept_network",
-        created_at=str(decision_entry.get("created_at") or now),
-        resolved_at=now,
-    )
-    return StudyPromoteResponse(
-        status="promoted",
-        revision_id=str(revision["revision_id"]),
-        job_id=job_id,
-        job_status=record.status.value,
-    )
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
-# ---------------------------------------------------------------------- #
-# Mechanism projects (design §9) — links four stage jobs.
-# ---------------------------------------------------------------------- #
+def _mechanism_project_or_404(store: Any, project_id: str) -> Any:
+    project = store._mechanism_projects.get(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"Mechanism project not found: {project_id}")
+    return project
+
 
 _ARTIFACT_MAP: dict[str, str] = {
     "s1": "RESULT/confsearch/confsearch_manifest.json",
@@ -2097,13 +1399,6 @@ _STAGE_WORKFLOW: dict[str, str] = {
     "s3": "Lowconfirm",
     "s4": "Highconfirm",
 }
-
-
-def _mechanism_project_or_404(store: Any, project_id: str) -> Any:
-    project = store._mechanism_projects.get(project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail=f"Mechanism project not found: {project_id}")
-    return project
 
 
 def _project_timeline(
@@ -2134,33 +1429,14 @@ def create_mechanism_project(
     req: MechanismProjectCreateRequest,
     request: Request,
 ) -> MechanismProjectModel:
-    manager = _manager(request)
-    project = manager._mechanism_projects.create(
-        name=req.name,
-        reaction_definition_hash=req.reaction_definition_hash,
-        charge=req.charge,
-        multiplicity=req.multiplicity,
-    )
-    return MechanismProjectModel(
-        project_id=project.project_id,
-        name=project.name,
-        reaction_definition_hash=project.reaction_definition_hash,
-        charge=project.charge,
-        multiplicity=project.multiplicity,
-        status=project.status.value,
-        s1_job_id=project.stage_jobs.get("s1"),
-        s2_job_id=project.stage_jobs.get("s2"),
-        s3_job_id=project.stage_jobs.get("s3"),
-        s4_job_id=project.stage_jobs.get("s4"),
-        created_at=project.created_at,
-        updated_at=project.updated_at,
-    )
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 @router.get("/mechanism-projects", response_model=MechanismProjectListResponse)
 def list_mechanism_projects(request: Request) -> MechanismProjectListResponse:
     manager = _manager(request)
-    projects = manager._mechanism_projects.list_all()
+    projects_store = getattr(manager, "_mechanism_projects", None)
+    projects = projects_store.list_all() if projects_store else []
     return MechanismProjectListResponse(
         projects=[
             MechanismProjectModel(
@@ -2185,7 +1461,12 @@ def list_mechanism_projects(request: Request) -> MechanismProjectListResponse:
 @router.get("/mechanism-projects/{project_id}", response_model=MechanismProjectDetail)
 def get_mechanism_project(project_id: str, request: Request) -> MechanismProjectDetail:
     manager = _manager(request)
-    project = _mechanism_project_or_404(manager, project_id)
+    projects_store = getattr(manager, "_mechanism_projects", None)
+    if projects_store is None:
+        raise HTTPException(status_code=404, detail=f"Mechanism project not found: {project_id}")
+    project = projects_store.get(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail=f"Mechanism project not found: {project_id}")
     store = _job_store(request)
     return MechanismProjectDetail(
         project_id=project.project_id,
@@ -2211,20 +1492,21 @@ def get_mechanism_project(project_id: str, request: Request) -> MechanismProject
 
 
 def _s2_manifest_for_job(manager: Any, job_id: str) -> tuple[Path, dict[str, Any]]:
-    """Locate + read the s2_path_v2 manifest for a PESsearch job."""
+    """Locate + read the s2_path manifest for a PESsearch job."""
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    work_dir = Path(record.work_dir) if record.work_dir else None
+    if work_dir is None or not work_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
+    manifest_path = work_dir / "RESULT" / "mechanism" / "s2_path_manifest.json"
+    if not manifest_path.is_file():
+        raise HTTPException(status_code=404, detail=f"No s2_path_manifest.json for job {job_id}")
+    from acp.compat.legacy.manifests import read_s2_path_manifest
+
     try:
-        _, manifest_path, payload = resolve_s2_manifest_for_job(
-            manager,
-            job_id,
-            reject_remote=False,
-        )
-    except S2JobNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except S2ManifestNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except S2JobConflictError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except S2ReviewValidationError as exc:
+        payload = read_s2_path_manifest(manifest_path)
+    except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return manifest_path, payload
 
@@ -2258,7 +1540,7 @@ def get_energy_graph(
     s2_review_state: dict[str, Any] | None = None
 
     if workflow == "PESsearch" and str(method.get("mode") or "") == "bond_length_scan":
-        from acp.mechanism.scan_manifest import read_s2_candidate_manifest, read_s2_review
+        from acp.compat.legacy.manifests import read_s2_candidate_manifest, read_s2_review
 
         _manifest_path, s2_payload = _s2_manifest_for_job(manager, job_id)
         if s2_payload is not None:
@@ -2269,7 +1551,7 @@ def get_energy_graph(
                 if isinstance(candidate_manifest, dict)
                 else None
             )
-            s2_review_state = saved_review.to_dict() if saved_review is not None else None
+            s2_review_state = saved_review if isinstance(saved_review, dict) else None
     elif workflow == "mechanism":
         store = _job_store(request)
         rows = store.list_mechanism_studies(limit=1, job_id=job_id)
@@ -2352,112 +1634,7 @@ def preview_s2_structure(
     req: S2StructurePreviewRequest,
     request: Request,
 ) -> S2StructurePreviewResponse:
-    """Resolve one S2 source and return normalized XYZ for the atom picker.
-
-    This is deliberately read-only.  It uses the same source validation as
-    S2 submission so the structure shown in the UI is the structure that can
-    actually be submitted to the scheduler.
-    """
-    from acp.confsearch.manifest import read_manifest, representative_conformer
-    from acp.intake.parsers import parse_xyz_text
-
-    manager = _manager(request)
-    source = req.source
-    source_payload = source.model_dump(exclude_none=True)
-    selector = dict(source.structure_selector or {})
-    source_id = ""
-    checksum: str | None = None
-
-    if source.source_type == "task_artifact":
-        source_job_id = str(source.source_job_id or "").strip()
-        artifact_path = str(source.artifact_path or "").strip()
-        if not source_job_id or not artifact_path:
-            raise HTTPException(
-                status_code=422,
-                detail="task_artifact preview requires source_job_id and artifact_path",
-            )
-        try:
-            resolved = _resolve_stage_artifact_ref(
-                "PESsearch",
-                {"source_job_id": source_job_id, "from_artifact": artifact_path},
-                manager,
-            )
-        except HTTPException:
-            raise
-        artifact = Path(str(resolved["from"]))
-        source_id = f"job_{source_job_id}:{artifact_path}"
-        if artifact.suffix.lower() == ".xyz":
-            try:
-                xyz_text = artifact.read_text(encoding="utf-8")
-            except (OSError, UnicodeError) as exc:
-                raise HTTPException(
-                    status_code=422, detail=f"Cannot read XYZ artifact: {exc}"
-                ) from exc
-        else:
-            try:
-                manifest = read_manifest(artifact)
-                frame_index = (
-                    selector.get("frame_index") if selector.get("kind") == "frame_index" else None
-                )
-                conf_id = None
-                if frame_index is not None:
-                    conformers = manifest.get("conformers") or []
-                    index = int(frame_index)
-                    if index < 0 or index >= len(conformers):
-                        raise ValueError(f"frame_index {index} is out of range")
-                    conf_id = str(conformers[index].get("conf_id") or "")
-                _selected_id, geometry = representative_conformer(artifact, conf_id)
-                xyz_text = Path(geometry).read_text(encoding="utf-8")
-            except (OSError, UnicodeError, ValueError, KeyError) as exc:
-                raise HTTPException(
-                    status_code=422, detail=f"Cannot resolve structure artifact: {exc}"
-                ) from exc
-        source_payload["artifact_path"] = artifact_path
-    elif source.source_type == "structure_asset":
-        asset_path = str(source.asset_path or "").strip()
-        if not asset_path:
-            raise HTTPException(
-                status_code=422, detail="structure_asset preview requires asset_path"
-            )
-        try:
-            resolved_asset = _resolve_structure_asset_path(manager.run_root, asset_path)
-            xyz_text = resolved_asset.read_text(encoding="utf-8")
-        except (OSError, UnicodeError, ValueError) as exc:
-            raise HTTPException(
-                status_code=422, detail=f"Cannot read structure asset: {exc}"
-            ) from exc
-        source_id = str(source.asset_id or asset_path)
-        source_payload["asset_path"] = asset_path
-    else:
-        xyz_text = str(source.xyz_text or "").strip()
-        if not xyz_text:
-            raise HTTPException(
-                status_code=422,
-                detail="xyz_text preview requires non-empty xyz_text",
-            )
-
-    parsed = parse_xyz_text(xyz_text)
-    if not parsed.structures:
-        detail = "; ".join(parsed.errors[:3]) if parsed.errors else "XYZ contains no structure"
-        raise HTTPException(status_code=422, detail=f"Could not parse structure: {detail}")
-    asset = parsed.structures[0]
-    normalized_xyz = str(asset.xyz or xyz_text)
-    charge = int(source.charge if source.charge is not None else (asset.charge or 0))
-    multiplicity = int(
-        source.multiplicity if source.multiplicity is not None else (asset.multiplicity or 1)
-    )
-    checksum = "sha256:" + hashlib.sha256(normalized_xyz.encode("utf-8")).hexdigest()
-    return S2StructurePreviewResponse(
-        source=source_payload,
-        xyz=normalized_xyz,
-        formula=str(asset.formula or ""),
-        atom_count=int(asset.atom_count or 0),
-        charge=charge,
-        multiplicity=multiplicity,
-        source_id=source_id,
-        checksum=checksum,
-        selector=selector,
-    )
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 @router.get("/jobs/{job_id}/s2/profile", response_model=S2ProfileResponse)
@@ -2521,45 +1698,6 @@ def get_s2_frame(job_id: str, frame_index: int, request: Request) -> S2FrameResp
     )
 
 
-def _s2_candidate_marks(items: list[S2ReviewCandidateItem]) -> list[S2CandidateMark]:
-    return [
-        S2CandidateMark(
-            candidate_id=str(item.candidate_id or ""),
-            frame_index=item.frame_index,
-            role=item.role,
-            name=item.name,
-        )
-        for item in items
-    ]
-
-
-def _save_s2_service_or_http(
-    manager: JobManager,
-    job_id: str,
-    req: S2ReviewRequest,
-    *,
-    conflict_status: int,
-    mechanism_project_id: str | None = None,
-) -> S2JobReviewResponse:
-    try:
-        summary = save_s2_review_for_job(
-            manager,
-            job_id,
-            _s2_candidate_marks(req.candidates),
-            req.note,
-            selected_ts=req.selected_ts,
-            selected_intermediates=req.selected_intermediates,
-            mechanism_project_id=mechanism_project_id,
-        )
-    except S2JobNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except S2ReviewValidationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    except S2JobConflictError as exc:
-        raise HTTPException(status_code=conflict_status, detail=str(exc)) from exc
-    return S2JobReviewResponse(**summary)
-
-
 @router.post(
     "/mechanism-projects/{project_id}/s2/review",
     response_model=S2ReviewResponse,
@@ -2569,32 +1707,7 @@ def save_s2_review(
     req: S2ReviewRequest,
     request: Request,
 ) -> S2ReviewResponse:
-    """Persist the user's TS/INT candidate marking and confirm S2 (§8.2)."""
-    manager = _manager(request)
-    project = _mechanism_project_or_404(manager, project_id)
-    s2_job_id = project.stage_jobs.get("s2")
-    if not s2_job_id:
-        raise HTTPException(status_code=409, detail="Project has no S2 job yet")
-    summary = _save_s2_service_or_http(
-        manager,
-        s2_job_id,
-        req,
-        conflict_status=400,
-        mechanism_project_id=project_id,
-    )
-    project_after = manager._mechanism_projects.get(project_id)
-    return S2ReviewResponse(
-        project_id=project_id,
-        job_id=s2_job_id,
-        review=summary.review,
-        project_status=(
-            project_after.status.value if project_after is not None else project.status.value
-        ),
-        candidates=summary.candidates,
-        candidate_manifest=summary.candidate_manifest,
-        structures_dir=summary.structures_dir,
-        result_manifest=summary.result_manifest,
-    )
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 @router.post(
@@ -2606,8 +1719,7 @@ def save_job_s2_review(
     req: S2ReviewRequest,
     request: Request,
 ) -> S2JobReviewResponse:
-    """Save editable S2 candidate markings for a standalone or project job."""
-    return _save_s2_service_or_http(_manager(request), job_id, req, conflict_status=409)
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 @router.get("/jobs/{job_id}", response_model=V1JobRecordModel)
@@ -3690,7 +2802,6 @@ def run_irc_from_artifact(
         status=record.status.value,
         workflow=record.spec.workflow,
         project_id=record.project_id,
-        mechanism_project_id=None,
     )
 
 
