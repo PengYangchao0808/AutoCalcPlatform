@@ -17,7 +17,11 @@ __all__ = [
     "get_workflow_entry",
     "list_workflow_entries",
     "register_workflow",
+    "run_conformer_energy",
+    "run_ensemble_generation",
+    "run_md_replicas",
     "run_nmr_analysis",
+    "run_xtbmd_censo_energy",
     "run_batch_optimize",
     "run_pes_search",
     "run_singlepoint",
@@ -31,12 +35,16 @@ __all__ = [
 # imported on first access only, keeping ``import acp.workflows`` cheap and
 # side-effect free.
 _LAZY_SOURCES: dict[str, str] = {
+    "run_md_replicas": "acp.workflows.xtbmd_md",
     "run_singlepoint": "acp.workflows.simple",
     "run_optimize": "acp.workflows.simple",
     "run_frequency": "acp.workflows.simple",
     "run_scan": "acp.workflows.simple",
     "run_irc": "acp.workflows.simple",
+    "run_ensemble_generation": "acp.workflows.ensemble",
+    "run_conformer_energy": "acp.workflows.energy",
     "run_nmr_analysis": "acp.workflows.nmr",
+    "run_xtbmd_censo_energy": "acp.workflows.xtbmd_censo_energy",
     "run_batch_optimize": "acp.workflows.batch_optimize",
     "run_pes_search": "acp.workflows.pes_search",
     "WorkflowRegistryEntry": "acp.workflows.registry",

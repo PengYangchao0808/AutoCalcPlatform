@@ -48,7 +48,7 @@ acp/
 | CENSO backend | `backends/censo_backend.py` | Thin adapter → `cccp.qc.interfaces.censo.CensoInterface` (presets, rcfile gen, JSON/XYZ parsing live in cccp) |
 | Isostat backend | `backends/isostat_backend.py` | Thin adapter → `cccp.qc.interfaces.isostat.IsostatInterface.cluster()` (title normalisation, env pinning in cccp) |
 | Molclus backend | `backends/molclus_backend.py` | Thin adapter → `cccp.qc.interfaces.molclus.MolclusInterface.run_md()/search()` |
-| External tools | `backends/external.py` + `external_backend.py` | run_shermo/batch_process_thermo re-exports; `cluster()` routes through `IsostatInterface` |
+| External tools | `backends/external.py` + `external_backend.py` | Shermo/batch_process_thermo re-exports; `cluster()` routes through `IsostatInterface` |
 | IO wrapper | `io/structures.py` | StructureReader.detect_format/read, StructureWriter |
 | RDKit embedding | `chem/embedding.py` | SMILES→3D, charge assignment, enumeration |
 | Composition analysis | `chem/composition.py` | normalize_recalc_hess etc. |

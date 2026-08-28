@@ -98,6 +98,7 @@ FINAL_FORBIDDEN_ALLOWED_PATHS: Final[tuple[str, ...]] = ("src/acp/compat/legacy/
 FINAL_SHERMO_ALLOWED_PATHS: Final[tuple[str, ...]] = (
     "src/cccp/",
     "src/acp/calculations/primitives/thermochemistry.py",
+    "src/acp/workflows/energy_shared.py",
 )
 SCOPE_SRC: Final[tuple[str, ...]] = ("src/",)
 SCOPE_ACP: Final[tuple[str, ...]] = ("src/acp",)

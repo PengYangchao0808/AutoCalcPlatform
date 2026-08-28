@@ -1,9 +1,15 @@
-Todo 48 — happy path evidence
-=============================
+Todo 48 — happy path evidence (corrected)
+==========================================
 
-## 1. Import smoke
+## 1. Import smoke (restored engines + candidates)
 
 ```
+$ python -c "from acp.workflows.ensemble import run_ensemble_generation; from acp.workflows.energy import run_conformer_energy; from acp.workflows.xtbmd_censo_energy import run_xtbmd_censo_energy; print('ALL 3 ENGINE IMPORTS OK')"
+ALL 3 ENGINE IMPORTS OK
+
+$ python -c "from acp.workflows import ensemble, energy, xtbmd_censo_energy, energy_shared; print('LAZY RE-EXPORTS OK')"
+LAZY RE-EXPORTS OK
+
 $ python -c "import acp.confsearch.protocols.censo_crest, acp.confsearch.protocols.xtb_md, cccp, cccp.qc.interfaces.orca"
 SMOKE OK
 
@@ -11,18 +17,18 @@ $ python -c "from cccp.core.candidates import ConformerCandidate, CandidateSet; 
 CANDIDATES OK
 ```
 
-## 2. Confsearch tests
+## 2. Targeted tests
 
 ```
-$ python -m pytest tests/test_acp_confsearch.py -q
-11 passed in 0.53s
+$ python -m pytest tests/test_acp_workflows_energy.py tests/test_acp_workflows_ensemble.py tests/test_acp_workflows_xtbmd_censo_energy.py tests/test_acp_confsearch.py tests/test_acp_workflows_nmr.py -q
+116 passed, 26 warnings in 7.78s
 ```
 
 ## 3. Full pytest suite
 
 ```
 $ python -m pytest tests/ -q --tb=no
-1613 passed, 36 skipped, 47 warnings in 206.88s
+1728 passed, 19 skipped, 47 warnings in 213.62s
 ```
 
 ## 4. Grep gates
@@ -37,11 +43,30 @@ $ python scripts/check_grep_gates.py --gate wave8_engine_import_gone src
 ALLOWED:
 BLOCKING:
 (exit 0)
+
+$ python scripts/check_grep_gates.py --gate final_shermo src
+ALLOWED: (energy_shared.py + cccp/ + thermochemistry.py)
+BLOCKING:
+(exit 0)
 ```
 
-## 5. Ruff
+## 5. Gate script tests
+
+```
+$ python -m pytest tests/test_grep_gates_script.py -q
+68 passed in 0.83s
+
+$ python scripts/check_grep_gates.py --list-gates | wc -l
+32
+```
+
+## 6. Ruff
 
 ```
 $ ruff check src tests
-Found 570 errors. (baseline was 645 — 75 fewer violations)
+Found 571 errors. (baseline was 645 — 74 fewer violations)
 ```
+
+## 7. Deviation documented
+
+See .omo/notepads/acp-calc-refactor-cleanup/decisions.md — "Wave 8 todo 48: retired-workflow implementations are LIVE protocol engines — deletion reverted"
