@@ -18,7 +18,7 @@ import json
 import logging
 import posixpath
 import shlex
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from acp.catalog import method_levels_to_cli_flags
@@ -123,6 +123,9 @@ class LSFScriptSpec:
             ``cd``\\ s here before launching the CLI.
         cli_command: Argv list (e.g.
             ``["python", "-m", "acp.cli", "run", ...]``).
+        pre_cmds: Shell lines injected verbatim into the script body
+            before the CLI runs (after the exit-code traps).  Used for
+            ``module load`` / environment setup on module-based clusters.
         extra_flags: Additional raw BSUB flags (e.g. ``"-R span[hosts=1]"``).
     """
 
@@ -134,6 +137,7 @@ class LSFScriptSpec:
     remote_code_dir: str
     remote_job_dir: str
     cli_command: list[str]
+    pre_cmds: list[str] = field(default_factory=list)
     extra_flags: str = ""
 
 
@@ -407,6 +411,7 @@ def build_lsf_script_spec(
     config_path: str | None = None,
     materialized_role_paths: dict[str, str] | None = None,
     python_executable: str | None = None,
+    pre_cmds: list[str] | None = None,
 ) -> tuple[LSFScriptSpec, list[str]]:
     """Build both the CLI command and :class:`LSFScriptSpec` for a job.
 
@@ -426,6 +431,8 @@ def build_lsf_script_spec(
             overrides ``node.python_executable`` — callers pass a
             probe-resolved (Python 3.10+) interpreter here so LSF scripts
             never fall back to a too-old default ``python``.
+        pre_cmds: Shell lines injected into the generated script before
+            the CLI runs (cluster-level environment setup).
 
     Returns:
         ``(lsf_spec, cli_command)``.
@@ -456,6 +463,7 @@ def build_lsf_script_spec(
         remote_code_dir=node.remote_code_dir,
         remote_job_dir=remote_job_dir,
         cli_command=cli_command,
+        pre_cmds=list(pre_cmds or []),
         extra_flags=extra_flags,
     )
     return lsf_spec, cli_command
@@ -500,6 +508,15 @@ def generate_lsf_script(s: LSFScriptSpec) -> str:
         '_acp_record_exit() { [ -f .exit_code ] || echo "$?" > .exit_code; }',
         "trap 'exit $?' USR2 TERM INT HUP",
         "trap _acp_record_exit EXIT",
+    ]
+    # Cluster-level environment setup (module load, spack, ...) — injected
+    # verbatim so module-based HPC clusters work without script surgery.
+    if s.pre_cmds:
+        lines.append("")
+        lines.append("# cluster.pre_cmds (module/environment setup)")
+        lines.extend(s.pre_cmds)
+    lines += [
+        "",
         f'export PYTHONPATH="{s.remote_code_dir}/src:$PYTHONPATH"',
         f'cd "{s.remote_job_dir}"',
         cli_str,

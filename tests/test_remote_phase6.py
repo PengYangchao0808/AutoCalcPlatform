@@ -22,6 +22,7 @@ from acp.scheduler.remote.node_manager import (
     InterpreterProbe,
     NodeManager,
     detect_node_python,
+    doctor_node,
 )
 from acp.scheduler.remote.ssh import SSHExecutionError
 
@@ -302,3 +303,70 @@ def test_interpreter_probe_is_frozen_dataclass() -> None:
     assert probe.python_executable == "python3.12"
     with pytest.raises(Exception):
         probe.version = "3.13.0"  # frozen
+
+
+# --------------------------------------------------------------------------- #
+# doctor_node — deployment self-check
+# --------------------------------------------------------------------------- #
+
+
+def test_doctor_node_reports_python_and_software() -> None:
+    node = _node()
+    pool = MagicMock()
+
+    def fake_execute(_node, command, timeout=15):
+        if "sys.version_info" in command:
+            return (0, "3.12.4\n", "")
+        if "cccp.software" in command or "detect_version" in command:
+            report = {
+                "orca": {"configured": "orca", "resolved": "/opt/orca/orca", "version": "6.1.1"},
+                "xtb": {"configured": "xtb", "resolved": "/opt/xtb/bin/xtb", "version": "6.6.1"},
+                "crest": {"configured": "crest", "resolved": None, "version": None},
+                "censo": {"configured": "censo", "resolved": "/opt/censo/bin/censo", "version": "1.5"},
+                "shermo": {"configured": "Shermo", "resolved": None, "version": None},
+                "isostat": {"configured": "isostat", "resolved": None, "version": None},
+                "molclus": {"configured": "molclus", "resolved": None, "version": None},
+            }
+            return (0, "prefix\n" + __import__("json").dumps(report), "")
+        if "~/bin/" in command:
+            return (0, "lrwxrwxrwx ... -> /opt/orca/orca\n", "")
+        return (0, "", "")
+
+    pool.execute.side_effect = fake_execute
+    node.bin_symlinks = {"orca": "/opt/orca/orca"}
+    report = doctor_node(pool, node)
+    assert report.reachable is True
+    assert report.python is not None
+    assert report.python.version == "3.12.4"
+    assert report.software["orca"]["resolved"] == "/opt/orca/orca"
+    assert report.software["orca"]["version"] == "6.1.1"
+    assert report.software["crest"]["resolved"] is None
+    assert report.symlinks["orca"] == "/opt/orca/orca"
+
+
+def test_doctor_node_reports_missing_symlink() -> None:
+    node = _node()
+    node.bin_symlinks = {"Shermo": "/opt/Shermo/Shermo"}
+    pool = MagicMock()
+
+    def fake_execute(_node, command, timeout=15):
+        if "sys.version_info" in command:
+            return (0, "3.12.4\n", "")
+        if "cccp.software" in command or "detect_version" in command:
+            return (0, '{"orca": {"configured": "orca", "resolved": null, "version": null}}', "")
+        if "~/bin/" in command:
+            return (0, "MISSING\n", "")
+        return (0, "", "")
+
+    pool.execute.side_effect = fake_execute
+    report = doctor_node(pool, node)
+    assert report.reachable is True
+    assert "NOT CREATED" in report.symlinks["Shermo"]
+
+
+def test_doctor_node_unreachable() -> None:
+    pool = MagicMock()
+    pool.execute.side_effect = SSHExecutionError("network down")
+    report = doctor_node(pool, _node())
+    assert report.reachable is False
+    assert report.python is None

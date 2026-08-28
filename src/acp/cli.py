@@ -403,6 +403,27 @@ def build_parser() -> argparse.ArgumentParser:
 
     mechanism_tools = subparsers.add_parser("mechanism", help="Mechanism-study utilities")
     mechanism_tools_sub = mechanism_tools.add_subparsers(dest="mechanism_command", required=True)
+
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="Deployment self-check for remote compute nodes",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp doctor                Check every enabled node in the cluster config
+  acp doctor --node compute-01
+        """,
+    )
+    doctor_parser.add_argument(
+        "--node",
+        default=None,
+        help="Check a single node by name (default: all enabled nodes)",
+    )
+    doctor_parser.add_argument(
+        "--log-level",
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
     mechanism_resume = mechanism_tools_sub.add_parser(
         "resume",
         help="Resume a persisted mechanism study",
@@ -2555,6 +2576,76 @@ def _preflight_workflow(workflow: str) -> None:
             )
 
 
+def _handle_doctor(args: argparse.Namespace) -> int:
+    """``acp doctor`` — deployment self-check for remote compute nodes.
+
+    Probes each node's Python interpreter and resolves every known QC
+    binary with the same centralized resolver the workflows use, so a
+    freshly configured cluster can be validated before any job is
+    submitted.  Exits non-zero when a node is unreachable or a binary is
+    missing.
+    """
+    logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO))
+
+    from acp.scheduler.remote.config import RemoteExecutionConfig
+    from acp.scheduler.remote.node_manager import doctor_node
+    from acp.scheduler.remote.ssh import SSHConnectionPool
+    from cccp.config import load_config
+
+    cfg = load_config()
+    cluster = cfg.get("cluster") or {}
+    remote_cfg = RemoteExecutionConfig.from_config_dict(cluster)
+    if not remote_cfg.nodes:
+        print("No remote nodes configured (cluster.nodes is empty).")
+        return 1
+
+    if args.node is not None:
+        node = remote_cfg.get_node(args.node)
+        if node is None:
+            print(f"Unknown node {args.node!r}. Configured: "
+                  f"{[n.name for n in remote_cfg.nodes]}")
+            return 1
+        nodes = [node]
+    else:
+        nodes = remote_cfg.enabled_nodes
+
+    pool = SSHConnectionPool()
+    failures = 0
+    try:
+        for node in nodes:
+            report = doctor_node(pool, node)
+            print(f"\n== node {report.node} ({report.host}) ==")
+            if not report.reachable:
+                print(f"  UNREACHABLE: {report.error}")
+                failures += 1
+                continue
+            if report.python is None:
+                print("  Python: NO usable Python 3.10+ interpreter "
+                      "(configure cluster.nodes[].python_executable)")
+                failures += 1
+            else:
+                print(f"  Python: {report.python.python_executable} "
+                      f"(version {report.python.version})")
+            for name, info in sorted(report.software.items()):
+                resolved = info.get("resolved")
+                if resolved:
+                    version = f" [version: {info.get('version')}]" if info.get("version") else ""
+                    print(f"  {name:8s} -> {resolved}{version}")
+                else:
+                    print(f"  {name:8s} -> MISSING (configured: "
+                          f"{info.get('configured')!r})")
+                    failures += 1
+            for name, state in sorted(report.symlinks.items()):
+                print(f"  ~/bin/{name}: {state}")
+            if report.error:
+                print(f"  note: {report.error}")
+    finally:
+        pool.close()
+    print("\nDoctor finished: " + ("all checks passed" if failures == 0
+                                   else f"{failures} failure(s) found"))
+    return 1 if failures else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """
     ACP CLI entry point.
@@ -2597,6 +2688,9 @@ def main(argv: list[str] | None = None) -> int:
             parser.print_help()
             return 1
         return handler(args)
+
+    if args.command == "doctor":
+        return _handle_doctor(args)
 
     if args.command != "run":
         parser.print_help()

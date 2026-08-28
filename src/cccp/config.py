@@ -443,6 +443,8 @@ def _get_default_config() -> dict[str, Any]:
             'poll_interval': 30,
             'retention_days': 180,
             'auto_sync': True,
+            'require_all_binaries': True,
+            'pre_cmds': [],
             'type': 'local',
             'queue': 'normal',
             # Empty = no #BSUB -W run-time limit by default (jobs run to

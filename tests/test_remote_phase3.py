@@ -765,6 +765,8 @@ def test_full_cluster_config_round_trip():
         "poll_interval": 15,
         "retention_days": 90,
         "auto_sync": True,
+        "require_all_binaries": False,
+        "pre_cmds": ["module load python/3.12", "  ", 7],
         "type": "lsf",
         "queue": "high",
         "walltime": "48:00",
@@ -777,6 +779,12 @@ def test_full_cluster_config_round_trip():
                 "remote_work_dir": "/scratch/<user>/acp_jobs",
                 "remote_code_dir": "/home/<user>/acp_code",
                 "max_concurrent_jobs": 5,
+                "python_executable": "/opt/anaconda3/bin/python",
+                "bin_symlinks": {
+                    "orca": "/opt/orca611/orca",
+                    "Shermo": "/opt/Shermo_2.6.1/Shermo",
+                    "": "",
+                },
             },
         ],
     }
@@ -788,8 +796,15 @@ def test_full_cluster_config_round_trip():
     assert cfg.walltime == "48:00"
     assert cfg.walltime_seconds == 48 * 3600
     assert cfg.extra_flags == "-R span[hosts=1]"
+    assert cfg.require_all_binaries is False
+    assert cfg.pre_cmds == ["module load python/3.12"]
     assert len(cfg.nodes) == 1
     assert cfg.nodes[0].name == "compute-01"
+    assert cfg.nodes[0].python_executable == "/opt/anaconda3/bin/python"
+    assert cfg.nodes[0].bin_symlinks == {
+        "orca": "/opt/orca611/orca",
+        "Shermo": "/opt/Shermo_2.6.1/Shermo",
+    }
     assert cfg.is_remote is True
 
 

@@ -814,6 +814,7 @@ class RemoteJobRunner:
             input_path=posixpath.join("inputs", remote_input_name),
             materialized_role_paths=remote_role_paths,
             python_executable=py,
+            pre_cmds=self._config.pre_cmds,
         )
         script_text = generate_lsf_script(lsf_spec)
         script_remote_path = posixpath.join(remote_job_dir, "submit.lsf")
@@ -1111,7 +1112,7 @@ class RemoteJobRunner:
     # ------------------------------------------------------------------ #
 
     _BINARY_PROBE_SCRIPT = (
-        "import json, os, shutil, subprocess, sys\n"
+        "import json, os, sys\n"
         "names = sys.argv[1:]\n"
         "cfg = {}\n"
         "try:\n"
@@ -1127,33 +1128,20 @@ class RemoteJobRunner:
         "            cfg = yaml.safe_load(fh) or {}\n"
         "except Exception:\n"
         "    cfg = {}\n"
+        "from cccp.software import detect_version, resolve_executable\n"
         "exes = cfg.get('executables') or {}\n"
         "report = {}\n"
         "for name in names:\n"
         "    configured = ((exes.get(name) or {}).get('path')) or name\n"
-        "    resolved = shutil.which(configured)\n"
-        "    if resolved is None and os.path.isfile(configured) "
-        "and os.access(configured, os.X_OK):\n"
-        "        resolved = configured\n"
+        "    resolved = resolve_executable(name, configured_path=configured)\n"
         "    version = None\n"
-        "    if resolved and name in ('censo', 'xtb'):\n"
-        "        flags = ('-v', '-version') if name == 'censo' else ('--version',)\n"
-        "        for flag in flags:\n"
-        "            try:\n"
-        "                proc = subprocess.run([resolved, flag], "
-        "capture_output=True, text=True, timeout=20)\n"
-        "            except Exception:\n"
-        "                continue\n"
-        "            if proc.returncode != 0:\n"
-        "                continue\n"
-        "            txt = (proc.stdout or proc.stderr).strip()\n"
-        "            lines = [l.strip() for l in txt.splitlines() if l.strip()]\n"
-        "            ver = next((l for l in lines if any(ch.isdigit() for ch in l)), None)\n"
-        "            version = ver[:120] if ver else (lines[0][:120] if lines else None)\n"
-        "            if version:\n"
-        "                break\n"
-        "    report[name] = {'configured': configured, "
-        "'resolved': resolved, 'version': version}\n"
+        "    if resolved:\n"
+        "        version = detect_version(name, resolved)\n"
+        "    report[name] = {\n"
+        "        'configured': configured,\n"
+        "        'resolved': str(resolved) if resolved else None,\n"
+        "        'version': version,\n"
+        "    }\n"
         "print(json.dumps(report))\n"
     )
 
@@ -1202,13 +1190,17 @@ class RemoteJobRunner:
     ) -> None:
         """Probe workflow-required binaries on *node* before submission.
 
-        Resolves each binary via the node-local ``~/.cccp.yaml``
-        (``executables.<name>.path``; falls back to ``~/.conformer_search.yaml``)
-        falling back to a PATH lookup in a
-        login shell. A missing ``censo`` raises
-        :class:`RemoteNodeUnavailableError` with configuration guidance
-        (acceptance gate 10); other missing binaries only log a warning —
-        they may be provided by the LSF job environment. SSH/transport
+        Resolves each binary with the same centralized resolver the
+        workflow uses (:func:`cccp.software.resolve_executable` against
+        the node-side ``~/.cccp.yaml`` merged with PATH, driven by the
+        synced codebase under ``remote_code_dir``) so the probe and the
+        job agree on what is available.  When
+        ``cluster.require_all_binaries`` is set (default), any missing
+        required binary raises :class:`RemoteNodeUnavailableError` with
+        configuration guidance — the job is never submitted to crash
+        seconds later.  With ``require_all_binaries: false`` missing
+        binaries only log a warning (they may be provided by the LSF job
+        environment).  A missing ``censo`` always raises.  SSH/transport
         failures are fail-open, consistent with housekeeping.
         """
         try:
@@ -1227,7 +1219,15 @@ class RemoteJobRunner:
         py = self._resolve_node_python(node, job_id=job_id)
         script_arg = _shlex.quote(self._BINARY_PROBE_SCRIPT)
         args = " ".join(_shlex.quote(b) for b in binaries)
-        command = "bash -lc " + _shlex.quote(f"{py} -c {script_arg} {args}")
+        # The probe imports cccp.software from the synced codebase — export
+        # PYTHONPATH so it resolves exactly like the workflow will.
+        command = (
+            "bash -lc "
+            + _shlex.quote(
+                f"export PYTHONPATH={node.remote_code_dir}/src:$PYTHONPATH && "
+                f"{py} -c {script_arg} {args}"
+            )
+        )
 
         try:
             code, out, err = self._ssh.execute(node, command, timeout=90)
@@ -1273,6 +1273,22 @@ class RemoteJobRunner:
                 f"  executables:\n"
                 f"    censo:\n"
                 f"      path: /home/<user>/censo-venv/bin/censo"
+            )
+
+        if missing and self._config.require_all_binaries:
+            detail = "\n".join(
+                f"  - {name}: configured={report[name].get('configured')!r}"
+                for name in missing
+            )
+            raise RemoteNodeUnavailableError(
+                f"Node {node.name!r} cannot resolve required binaries for "
+                f"workflow {spec.workflow!r} — submission aborted:\n{detail}\n"
+                f"Fix per binary: add it to PATH (or ~/bin), set "
+                f"CONFSEARCH_<NAME>_PATH, configure executables.<name>.path "
+                f"in the node-side ~/.cccp.yaml, or declare it via "
+                f"cluster.nodes[].bin_symlinks and re-bootstrap the node. "
+                f"To keep the historical warn-only behaviour, set "
+                f"cluster.require_all_binaries: false."
             )
 
         for name in missing:

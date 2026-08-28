@@ -8,6 +8,7 @@ small API surface used by the web dashboard (``/api/v1/nodes``).
 
 from __future__ import annotations
 
+import json
 import logging
 import posixpath
 import shlex
@@ -23,7 +24,15 @@ from acp.scheduler.remote.ssh import SSHConnectionPool, SSHExecutionError
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["BootstrapResult", "InterpreterProbe", "NodeManager", "NodeStatus", "detect_node_python"]
+__all__ = [
+    "BootstrapResult",
+    "InterpreterProbe",
+    "NodeDoctorReport",
+    "NodeManager",
+    "NodeStatus",
+    "detect_node_python",
+    "doctor_node",
+]
 
 # ACP requires Python 3.10+ (``typing.TypeAlias``, PEP 604 unions, ...).
 MIN_PYTHON_VERSION = (3, 10)
@@ -196,6 +205,8 @@ class BootstrapResult:
         sync_uploaded: Number of files uploaded by the pre-bootstrap code sync
             (the requirements file is synced alongside the code).
         sync_errors: Per-file sync errors, if any.
+        symlinks_applied: Names of ``~/bin`` symlinks created from
+            ``node.bin_symlinks``.
         error: Human-readable failure message when ``reachable`` is False.
     """
 
@@ -209,6 +220,7 @@ class BootstrapResult:
     stderr: str = ""
     sync_uploaded: int = 0
     sync_errors: list[str] = field(default_factory=list)
+    symlinks_applied: list[str] = field(default_factory=list)
     error: str | None = None
 
     @property
@@ -390,6 +402,34 @@ class NodeManager:
             )
 
         py = probe.python_executable
+
+        # Apply declared ~/bin symlinks (node.bin_symlinks) so QC binaries
+        # are resolvable from PATH on the node regardless of how the
+        # cluster's login-shell environment is composed.
+        symlinks_applied: list[str] = []
+        for name, target in node.bin_symlinks.items():
+            symlink_cmd = (
+                f"mkdir -p ~/bin && ln -sf {target} ~/bin/{shlex.quote(name)}"
+            )
+            try:
+                code, _out, _err = self._pool.execute(node, symlink_cmd, timeout=30)
+            except SSHExecutionError as exc:
+                logger.error(
+                    "Bootstrap symlink %r on %s failed: %s", name, node.name, exc
+                )
+                continue
+            if code == 0:
+                symlinks_applied.append(name)
+                logger.info("Symlinked %s -> %s on %s", name, target, node.name)
+            else:
+                logger.error(
+                    "Bootstrap symlink %r on %s failed (exit=%s): %s",
+                    name,
+                    node.name,
+                    code,
+                    _err.strip() or _out.strip(),
+                )
+
         # Quote paths/interpreter for the remote shell and chain pip so a
         # missing pip module surfaces a clear exit code rather than a hang.
         cmd = " && ".join(
@@ -434,6 +474,7 @@ class NodeManager:
             stderr=err,
             sync_uploaded=sync_uploaded,
             sync_errors=sync_errors,
+            symlinks_applied=symlinks_applied,
         )
 
     def _refresh_status(self, node: RemoteNode) -> NodeStatus:
@@ -496,3 +537,141 @@ def _stager_from_pool(pool: SSHConnectionPool) -> Any:
     from acp.scheduler.remote.sftp import FileStager
 
     return FileStager(pool)
+
+
+# --------------------------------------------------------------------------- #
+# Deployment doctor — per-node self-check for `acp doctor --node`
+# --------------------------------------------------------------------------- #
+
+_DOCTOR_SOFTWARE_SCRIPT = (
+    "import json, os, sys\n"
+    "cfg = {}\n"
+    "try:\n"
+    "    import yaml\n"
+    "    for cand in ('~/.cccp.yaml', '~/.conformer_search.yaml'):\n"
+    "        p = os.path.expanduser(cand)\n"
+    "        if os.path.isfile(p):\n"
+    "            with open(p) as fh:\n"
+    "                cfg = yaml.safe_load(fh) or {}\n"
+    "            break\n"
+    "except Exception:\n"
+    "    cfg = {}\n"
+    "from cccp.software import detect_version, resolve_executable\n"
+    "names = ['orca', 'xtb', 'crest', 'censo', 'shermo', 'isostat', 'molclus']\n"
+    "exes = cfg.get('executables') or {}\n"
+    "report = {}\n"
+    "for name in names:\n"
+    "    configured = ((exes.get(name) or {}).get('path')) or name\n"
+    "    resolved = resolve_executable(name, configured_path=configured)\n"
+    "    report[name] = {\n"
+    "        'configured': configured,\n"
+    "        'resolved': str(resolved) if resolved else None,\n"
+    "        'version': detect_version(name, resolved) if resolved else None,\n"
+    "    }\n"
+    "print(json.dumps(report))\n"
+)
+
+
+@dataclass(frozen=True)
+class NodeDoctorReport:
+    """Per-node deployment self-check result (``acp doctor``)."""
+
+    node: str
+    host: str
+    reachable: bool
+    python: InterpreterProbe | None = None
+    software: dict[str, dict[str, Any]] = field(default_factory=dict)
+    symlinks: dict[str, str] = field(default_factory=dict)
+    error: str | None = None
+
+
+def doctor_node(pool: SSHConnectionPool, node: RemoteNode, timeout: int = 30) -> NodeDoctorReport:
+    """Run the deployment self-check for a single *node*.
+
+    Probes the Python interpreter (:func:`detect_node_python`), resolves
+    every known QC binary with the same centralized resolver the workflows
+    use (driven by the synced codebase under ``remote_code_dir``), and
+    reports the ``~/bin`` symlink state for ``node.bin_symlinks``.
+
+    Returns:
+        :class:`NodeDoctorReport` — never raises for node failures; SSH
+        transport errors surface as ``reachable=False``.
+    """
+    if not node.enabled:
+        return NodeDoctorReport(
+            node=node.name, host=node.host, reachable=False, error="node is disabled"
+        )
+    try:
+        probe = detect_node_python(pool, node)
+    except SSHExecutionError as exc:
+        return NodeDoctorReport(
+            node=node.name, host=node.host, reachable=False, error=str(exc)
+        )
+
+    report = NodeDoctorReport(
+        node=node.name,
+        host=node.host,
+        reachable=True,
+        python=probe,
+    )
+    if probe is None:
+        return report
+
+    script_arg = shlex.quote(_DOCTOR_SOFTWARE_SCRIPT)
+    command = (
+        "bash -lc "
+        + shlex.quote(
+            f"export PYTHONPATH={node.remote_code_dir}/src:$PYTHONPATH && "
+            f"{probe.python_executable} -c {script_arg}"
+        )
+    )
+    try:
+        code, out, _err = pool.execute(node, command, timeout=timeout)
+    except SSHExecutionError as exc:
+        return NodeDoctorReport(
+            node=node.name,
+            host=node.host,
+            reachable=False,
+            error=f"software probe failed: {exc}",
+        )
+    if code == 0 and out.strip():
+        try:
+            report = NodeDoctorReport(
+                node=node.name,
+                host=node.host,
+                reachable=True,
+                python=probe,
+                software=json.loads(out.strip().splitlines()[-1]),
+            )
+        except Exception as exc:  # noqa: BLE001 — report, don't abort
+            report = NodeDoctorReport(
+                node=node.name,
+                host=node.host,
+                reachable=True,
+                python=probe,
+                error=f"software report unparseable: {exc}",
+            )
+
+    symlinks: dict[str, str] = {}
+    for name, target in node.bin_symlinks.items():
+        symlink_cmd = (
+            f"ls -l ~/bin/{shlex.quote(name)} 2>/dev/null || echo MISSING"
+        )
+        try:
+            scode, sout, _serr = pool.execute(node, symlink_cmd, timeout=15)
+            if scode == 0 and sout.strip() and "MISSING" not in sout:
+                symlinks[name] = target
+            else:
+                symlinks[name] = f"{target} (NOT CREATED — run node bootstrap)"
+        except SSHExecutionError:
+            symlinks[name] = f"{target} (unreachable)"
+    report = NodeDoctorReport(
+        node=report.node,
+        host=report.host,
+        reachable=report.reachable,
+        python=report.python,
+        software=report.software,
+        symlinks=symlinks,
+        error=report.error,
+    )
+    return report

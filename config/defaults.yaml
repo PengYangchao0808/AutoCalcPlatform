@@ -336,11 +336,31 @@ cluster:
   poll_interval: 30    # Remote job status poll interval (seconds)
   retention_days: 180  # Remote job directory retention before cleanup
   auto_sync: true      # Auto-sync ACP source to remote nodes before submitting
+  require_all_binaries: true  # Fail pre-submit when a workflow-required binary
+                              # is not resolvable on the node (false = warn only)
+  # pre_cmds:          # Shell lines injected into every LSF script before the
+  #   - "module load python/3.12"   # CLI runs (module-based HPC clusters)
+  #   - "source /opt/spack/share/spack/setup-env.sh"
   type: local          # 'local', 'lsf', 'slurm', 'pbs'
   queue: normal        # Cluster queue name
   walltime: ""         # Job walltime (HH:MM); empty = no #BSUB -W run-time limit
   extra_flags: ""      # Additional LSF/PBS flags
   nodes: []            # Remote compute nodes (see plan §13 for example)
+  # Per-node QC binary declaration (bootstrap_node creates these as ~/bin
+  # symlinks so binaries resolve regardless of the cluster's login PATH):
+  # nodes:
+  #   - name: compute-01
+  #     host: 10.0.0.1
+  #     username: acp
+  #     remote_work_dir: /scratch/acp/acp_jobs
+  #     remote_code_dir: /home/acp/acp_code
+  #     python_executable: /opt/anaconda3/bin/python
+  #     bin_symlinks:
+  #       orca: /opt/orca611/orca
+  #       xtb: /opt/xtb-dist/bin/xtb
+  #       crest: /opt/crest/crest
+  #       censo: /opt/anaconda3/bin/censo
+  #       Shermo: /opt/Shermo_2.6.1/Shermo
 
   # Local execution target (first-class). max_jobs caps concurrent local
   # jobs; submissions beyond the ceiling stay STARTING until a slot frees.
