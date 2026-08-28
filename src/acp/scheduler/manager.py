@@ -55,6 +55,21 @@ logger = logging.getLogger(__name__)
 
 _CALCULATION_CHECKPOINT_PATH: Final = "WORK/00_RUNTIME/checkpoint.json"
 _NO_CHECKPOINT_MESSAGE: Final = "该工作流不支持断点续算，请使用重算 (rerun)"
+_RETIRED_INFLIGHT_REASON: Final[str] = (
+    "[RETIRED_WORKFLOW] workflow retired by calc-refactor — 历史任务只读，可查看/清除，不可继续"
+)
+
+
+def _derive_retired_workflows() -> frozenset[str]:
+    """Derive retired workflow IDs from the catalog."""
+    try:
+        from acp.catalog import WORKFLOW_CATALOG
+    except ImportError:
+        return frozenset()
+    return frozenset(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "retired")
+
+
+_RETIRED_WORKFLOWS: frozenset[str] = _derive_retired_workflows()
 
 # Type-only import to avoid requiring paramiko when remote execution is off.
 if TYPE_CHECKING:
@@ -1872,7 +1887,56 @@ class JobManager:
                 pass
         return result
 
+    def _sweep_retired_inflight_jobs(self) -> None:
+        """Mark in-flight retired-workflow jobs as FAILED on startup.
+
+        Local PAUSED → SIGCONT cleanup; remote PAUSED → bkill cleanup.
+        Read-only detail and purge remain available.
+        """
+        if not _RETIRED_WORKFLOWS:
+            return
+        active_statuses = (
+            JobStatus.RUNNING.value,
+            JobStatus.QUEUED.value,
+            JobStatus.PAUSED.value,
+        )
+        for status_val in active_statuses:
+            for record in self.store.list(status=status_val, limit=100000):
+                if record.spec.workflow not in _RETIRED_WORKFLOWS:
+                    continue
+                if record.status == JobStatus.PAUSED:
+                    if self._is_remote_job(record) and self.remote_runner is not None:
+                        try:
+                            self.remote_runner.cancel_remote(record.id, record)
+                        except Exception:
+                            logger.debug(
+                                "bkill failed for retired PAUSED job %s", record.id, exc_info=True
+                            )
+                    else:
+                        try:
+                            if record.pid:
+                                import os
+                                import signal
+
+                                os.killpg(record.pid, signal.SIGCONT)
+                        except (OSError, ProcessLookupError):
+                            pass
+                record.status = JobStatus.FAILED
+                record.error = _RETIRED_INFLIGHT_REASON
+                record.completed_at = _utc_now_iso()
+                record.touch()
+                self.store.update(record)
+                self._stage_task_observer.finalize_job(record.id, JobStatus.FAILED.value)
+                logger.info(
+                    "Swept retired inflight job %s (workflow=%s, was=%s) → FAILED",
+                    record.id,
+                    record.spec.workflow,
+                    status_val,
+                )
+
     def _requeue_active_on_startup(self) -> None:
+        self._sweep_retired_inflight_jobs()
+
         # Mark interrupted jobs FAILED so their work_dir is retained for
         # triage.  The ``[RESTART_FAILED]`` prefix lets LocalCleanup
         # apply a shorter retention window (risk 5 mitigation, Phase 5B)

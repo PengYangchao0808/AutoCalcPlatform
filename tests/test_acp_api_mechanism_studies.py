@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 from pathlib import Path
 from typing import cast
 
@@ -36,19 +37,20 @@ def _submit_fake_job(client: TestClient, *, name: str = "study-job") -> str:
 
 
 def _seed_study(store, study_id, *, job_id=None, status="waiting", study_json=None):
-    """Seed a mechanism study directly in the store."""
+    """Seed a mechanism study directly in the store via raw SQL."""
     import json as _json
+    import sqlite3
 
     now = "2026-08-28T00:00:00Z"
     sj = study_json or {"study_id": study_id}
-    store.upsert_mechanism_study(
-        study_id,
-        job_id=job_id,
-        study_json=_json.dumps(sj),
-        status=status,
-        created_at=now,
-        updated_at=now,
-    )
+    with sqlite3.connect(str(store.db_path)) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO mechanism_studies "
+            "(id, job_id, study_json, status, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (study_id, job_id, _json.dumps(sj), status, now, now),
+        )
+        conn.commit()
 
 
 def _study_payload(study_id: str, study_dir: Path | None = None) -> dict[str, object]:
@@ -158,14 +160,19 @@ def test_reaction_get_readonly(tmp_path: Path) -> None:
             status="reaction_confirmed",
             study_json={"study_id": "study-rxn"},
         )
-        # Update reaction_json via store
-        store.update_mechanism_study_reaction(
-            "study-rxn",
-            reaction_json=json.dumps(reaction_data),
-            config_hash="sha256:abc",
-            status="reaction_confirmed",
-            updated_at="2026-08-28T00:00:00Z",
-        )
+        with sqlite3.connect(str(store.db_path)) as conn:
+            conn.execute(
+                "UPDATE mechanism_studies SET reaction_json=?,"
+                " config_hash=?, status=?, updated_at=? WHERE id=?",
+                (
+                    json.dumps(reaction_data),
+                    "sha256:abc",
+                    "reaction_confirmed",
+                    "2026-08-28T00:00:00Z",
+                    "study-rxn",
+                ),
+            )
+            conn.commit()
 
         response = client.get("/api/v1/mechanism-studies/study-rxn/reaction")
         assert response.status_code == 200

@@ -915,9 +915,7 @@ def test_rerun_unknown_job_returns_none(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("workflow", STAGE_WORKFLOWS)
-def test_rerun_stage_workflow_reuses_original_task(
-    tmp_path: Path, workflow: str
-) -> None:
+def test_rerun_stage_workflow_reuses_original_task(tmp_path: Path, workflow: str) -> None:
     mgr = _make_manager(tmp_path)
     try:
         source = _seed_job(
@@ -994,7 +992,6 @@ def _seed_cascade_children(
     study_id: str,
     decision_id: str,
 ) -> None:
-    store = JobStore(db)
     stage_store = StageTaskStore(db)
     artifacts = ArtifactRegistry(db)
     stage_store.create(
@@ -1011,23 +1008,35 @@ def _seed_cascade_children(
             size_bytes=128,
         )
     )
-    store.upsert_mechanism_study(
-        study_id,
-        job_id=job_id,
-        study_json=json.dumps({"study_id": study_id}),
-        status="completed",
-        created_at="2026-08-17T00:00:00+00:00",
-        updated_at="2026-08-17T00:00:00+00:00",
-    )
-    store.upsert_decision_point(
-        decision_id,
-        study_id=study_id,
-        status="resolved",
-        payload="{}",
-        resolution="ok",
-        created_at="2026-08-17T00:00:00+00:00",
-        resolved_at="2026-08-17T00:01:00+00:00",
-    )
+    with sqlite3.connect(str(db)) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO mechanism_studies "
+            "(id, job_id, study_json, status, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                study_id,
+                job_id,
+                json.dumps({"study_id": study_id}),
+                "completed",
+                "2026-08-17T00:00:00+00:00",
+                "2026-08-17T00:00:00+00:00",
+            ),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO decision_points "
+            "(id, study_id, status, payload, resolution, created_at, resolved_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                decision_id,
+                study_id,
+                "resolved",
+                "{}",
+                "ok",
+                "2026-08-17T00:00:00+00:00",
+                "2026-08-17T00:01:00+00:00",
+            ),
+        )
+        conn.commit()
 
 
 def _table_count(db: Path, table: str, where: str, param: tuple) -> int:

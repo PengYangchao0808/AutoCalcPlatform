@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 from pathlib import Path
 from typing import cast
 
@@ -23,14 +24,14 @@ def make_client(tmp_path: Path) -> TestClient:
 def _seed_study(store, study_id, *, job_id=None, status="draft", study_json=None):
     now = "2026-08-28T00:00:00Z"
     sj = study_json or {"study_id": study_id}
-    store.upsert_mechanism_study(
-        study_id,
-        job_id=job_id,
-        study_json=json.dumps(sj),
-        status=status,
-        created_at=now,
-        updated_at=now,
-    )
+    with sqlite3.connect(str(store.db_path)) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO mechanism_studies "
+            "(id, job_id, study_json, status, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (study_id, job_id, json.dumps(sj), status, now, now),
+        )
+        conn.commit()
 
 
 def test_preview_returns_410(tmp_path: Path) -> None:
@@ -77,19 +78,19 @@ def test_get_reaction_readonly(tmp_path: Path) -> None:
     with make_client(tmp_path) as client:
         store = cast(JobManager, cast(Starlette, client.app).state.job_manager).store
         _seed_study(store, "study-get", status="reaction_confirmed")
-        store.update_mechanism_study_reaction(
-            "study-get",
-            reaction_json=json.dumps(
-                {
-                    "schema_version": 2,
-                    "study_id": "study-get",
-                    "bond_changes": [],
-                }
-            ),
-            config_hash="sha256:abc",
-            status="reaction_confirmed",
-            updated_at="2026-08-28T00:00:00Z",
-        )
+        with sqlite3.connect(str(store.db_path)) as conn:
+            conn.execute(
+                "UPDATE mechanism_studies SET reaction_json=?, config_hash=?,"
+                " status=?, updated_at=? WHERE id=?",
+                (
+                    json.dumps({"schema_version": 2, "study_id": "study-get", "bond_changes": []}),
+                    "sha256:abc",
+                    "reaction_confirmed",
+                    "2026-08-28T00:00:00Z",
+                    "study-get",
+                ),
+            )
+            conn.commit()
         response = client.get("/api/v1/mechanism-studies/study-get/reaction")
         assert response.status_code == 200
         assert response.json()["reaction"]["schema_version"] == 2

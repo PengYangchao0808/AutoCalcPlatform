@@ -234,16 +234,24 @@ def test_mechanism_reaction_json_materializes_and_sets_schema_version(tmp_path: 
             "locked_at": "2026-08-16T00:00:00Z",
             "confirmed_by": "user",
         }
-        mgr.store.upsert_mechanism_study(
-            "study-lock",
-            job_id=None,
-            study_json=json.dumps({"study_id": "study-lock"}),
-            status="reaction_confirmed",
-            created_at="2026-08-16T00:00:00Z",
-            updated_at="2026-08-16T00:00:00Z",
-            reaction_json=json.dumps(reaction_payload),
-            config_hash="sha256:test",
-        )
+        with sqlite3.connect(str(mgr.store.db_path)) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO mechanism_studies "
+                "(id, job_id, study_json, status, created_at,"
+                " updated_at, reaction_json, config_hash) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "study-lock",
+                    None,
+                    json.dumps({"study_id": "study-lock"}),
+                    "reaction_confirmed",
+                    "2026-08-16T00:00:00Z",
+                    "2026-08-16T00:00:00Z",
+                    json.dumps(reaction_payload),
+                    "sha256:test",
+                ),
+            )
+            conn.commit()
 
         mgr._materialize_mechanism_reaction_if_present(record)
         reaction_path = work_dir / "WORK" / "08_ANALYSIS" / "reaction.json"
@@ -839,23 +847,35 @@ def test_migration_006_and_mechanism_store_helpers(tmp_path: Path) -> None:
     with sqlite3.connect(db_path) as conn:
         job_columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
     assert "group_id" in job_columns
-    store.upsert_mechanism_study(
-        "study-1",
-        job_id="job-1",
-        study_json='{"study_id": "study-1"}',
-        status="waiting",
-        created_at="2026-08-12T00:00:00+00:00",
-        updated_at="2026-08-12T01:00:00+00:00",
-    )
-    store.upsert_decision_point(
-        "decision-1",
-        study_id="study-1",
-        status="waiting",
-        payload='{"decision": 1}',
-        resolution=None,
-        created_at="2026-08-12T00:10:00+00:00",
-        resolved_at=None,
-    )
+    with sqlite3.connect(str(db_path)) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO mechanism_studies "
+            "(id, job_id, study_json, status, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                "study-1",
+                "job-1",
+                '{"study_id": "study-1"}',
+                "waiting",
+                "2026-08-12T00:00:00+00:00",
+                "2026-08-12T01:00:00+00:00",
+            ),
+        )
+        conn.execute(
+            "INSERT OR REPLACE INTO decision_points "
+            "(id, study_id, status, payload, resolution, created_at, resolved_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                "decision-1",
+                "study-1",
+                "waiting",
+                '{"decision": 1}',
+                None,
+                "2026-08-12T00:10:00+00:00",
+                None,
+            ),
+        )
+        conn.commit()
 
     study = store.get_mechanism_study("study-1")
     assert study is not None
