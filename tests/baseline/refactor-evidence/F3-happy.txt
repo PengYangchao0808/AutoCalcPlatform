@@ -1,0 +1,28 @@
+F3 Happy Path — End-to-End Chain QA
+====================================
+
+All four assertion nodes in tests/test_e2e_refactor.py passed under
+`python -m pytest tests/test_e2e_refactor.py -q`. The chain exercises
+real code paths (CalculationPlanExecutor, BatchOptimizeEngine,
+run_irc_workflow) with monkeypatched backends only. FakeBackend
+provides deterministic QC results including imaginary-frequency TS
+judgment and IRC responses.
+
+Node summary:
+  test_e2e_full_chain         — BatchOptimize(opt_freq_sp) + IRC on
+                                fake PESsearch upstream; result_manifest
+                                products registered; coordinator file written.
+  test_e2e_interrupt_continue — KeyboardInterrupt after first batch item;
+                                checkpoint verified (items_state + next_item_index);
+                                resume dispatches only the remaining item
+                                (fake call count: +1 from before resume).
+                                Supports E2E_SKIP_INTERRUPT=1 env var for
+                                independent Phase 2 execution (drill).
+  test_e2e_history_readonly   — Historical mechanism job: detail GET → 200;
+                                continue/pause/unpause → 409.
+  test_e2e_remote_parity      — BatchOptimize stage sequences for opt_only/
+                                opt_freq; IRC stage ["irc"]; remote CLI argv
+                                parity; checkpoint schema + manifest ProductKind
+                                consistency.
+
+Full suite after addition: 1754 passed, 7 skipped, 0 failed.
