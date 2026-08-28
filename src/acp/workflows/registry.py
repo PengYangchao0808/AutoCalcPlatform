@@ -53,7 +53,16 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
             "CREST → CENSO screening → rank1 DFT refinement "
             "(opt+freq+SP+Shermo) → free energy."
         ),
-        requires_binaries=["crest", "censo", "orca"],
+        requires_binaries=["crest", "censo", "orca", "shermo"],
+    ),
+    "xtbmd_censo_energy": WorkflowRegistryEntry(
+        name="xtbmd_censo_energy",
+        label="xTB-MD CENSO Energy",
+        description=(
+            "GFN-FF MD → GFN1 batch opt → isostat clustering → ewin filter "
+            "→ CENSO → fine DFT + Shermo total G."
+        ),
+        requires_binaries=["xtb", "molclus", "isostat", "censo", "orca", "shermo"],
     ),
     "nmr": WorkflowRegistryEntry(
         name="nmr",

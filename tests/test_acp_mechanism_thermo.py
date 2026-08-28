@@ -85,6 +85,57 @@ def test_shermo_provider_passes_sp_energy_and_maps_result(tmp_path: Path) -> Non
     }
 
 
+def test_shermo_provider_prefers_executables_path_over_legacy_thermo_path(
+    tmp_path: Path,
+) -> None:
+    """executables.shermo.path (project convention) wins over thermo.path."""
+    calls: list[dict[str, object]] = []
+
+    def fake_runner(**kwargs: object) -> dict[str, float]:
+        calls.append(dict(kwargs))
+        return {"g_sum": -99.95}
+
+    freq_log = tmp_path / "freq.log"
+    provider = ShermoProvider(
+        {
+            "executables": {"shermo": {"path": "/opt/shermo/Shermo"}},
+            "thermo": {"path": "legacy-binary"},
+        },
+        runner=fake_runner,
+    )
+    provider.compute(
+        sp_energy=-100.0,
+        freq_log=freq_log,
+        ensemble=None,
+        temperature=298.15,
+        standard_state="1atm",
+    )
+    assert calls[0]["shermo_bin"] == "/opt/shermo/Shermo"
+
+
+def test_shermo_provider_falls_back_to_legacy_thermo_path(tmp_path: Path) -> None:
+    """thermo.path remains honoured when executables.shermo.path is absent."""
+    calls: list[dict[str, object]] = []
+
+    def fake_runner(**kwargs: object) -> dict[str, float]:
+        calls.append(dict(kwargs))
+        return {"g_sum": -99.95}
+
+    freq_log = tmp_path / "freq.log"
+    provider = ShermoProvider(
+        {"thermo": {"path": "legacy-binary"}},
+        runner=fake_runner,
+    )
+    provider.compute(
+        sp_energy=-100.0,
+        freq_log=freq_log,
+        ensemble=None,
+        temperature=298.15,
+        standard_state="1atm",
+    )
+    assert calls[0]["shermo_bin"] == "legacy-binary"
+
+
 def test_rph_composite_provider_applies_ensemble_and_standard_state(tmp_path: Path) -> None:
     def fake_runner(**_: object) -> dict[str, float | None]:
         return {

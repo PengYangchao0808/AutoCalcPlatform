@@ -265,11 +265,16 @@ class ShermoProvider(_BaseThermochemistryProvider):
         if normalized_state == "1M" and effective_conc is None:
             effective_conc = 1.0
 
+        # Project convention is executables.shermo.path (same key the
+        # resolver-based interfaces read); thermo.path is the legacy
+        # location and remains honoured when the convention key is absent.
+        shermo_bin = _shermo_bin(self.config, shermo_config)
+
         raw_result = self.runner(
             freq_output=freq_path,
             sp_energy=float(sp_energy),
             output_dir=work_dir,
-            shermo_bin=str(shermo_config.get("path", "Shermo")),
+            shermo_bin=shermo_bin,
             output_file=output_path,
             temperature_k=temperature_value,
             pressure_atm=float(
@@ -572,6 +577,31 @@ def _thermo_config(config: Mapping[str, Any] | None) -> Mapping[str, Any]:
     if isinstance(thermo_cfg, Mapping):
         return thermo_cfg
     return {}
+
+
+def _shermo_bin(
+    config: Mapping[str, Any] | None, thermo_cfg: Mapping[str, Any] | None = None
+) -> str:
+    """Resolve the configured Shermo binary.
+
+    Prefers the project-wide ``executables.shermo.path`` key (the same key
+    the resolver-based interfaces read), then the legacy ``thermo.path``,
+    then the ``Shermo`` default that relies on PATH resolution.
+    """
+    if isinstance(config, Mapping):
+        exes = config.get("executables")
+        if isinstance(exes, Mapping):
+            shermo_entry = exes.get("shermo")
+            if isinstance(shermo_entry, Mapping):
+                configured = shermo_entry.get("path")
+                if isinstance(configured, str) and configured.strip():
+                    return configured
+    if thermo_cfg is None:
+        thermo_cfg = _thermo_config(config)
+    legacy = thermo_cfg.get("path")
+    if isinstance(legacy, str) and legacy.strip():
+        return legacy
+    return "Shermo"
 
 
 def _qrrho_enabled(config: Mapping[str, Any] | None, ilowfreq: int | None) -> bool:

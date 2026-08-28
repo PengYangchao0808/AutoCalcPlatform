@@ -318,3 +318,41 @@ def test_software_candidate_is_frozen(tmp_path: Path) -> None:
     candidate = SoftwareCandidate(path=tmp_path, source="path")
     with pytest.raises(AttributeError):
         candidate.source = "env"  # type: ignore[misc]
+
+
+def test_run_shermo_resolves_absolute_config_path(tmp_path: Path) -> None:
+    """run_shermo goes through resolve_executable, so an absolute
+    executables.shermo.path works even when 'Shermo' is not on PATH."""
+    binary = _make_executable(tmp_path)
+    from cccp.qc.runners import run_shermo
+
+    freq_log = tmp_path / "freq.log"
+    freq_log.write_text("dummy", encoding="utf-8")
+    with patch(
+        "cccp.qc.runners.subprocess.run",
+        return_value=subprocess.CompletedProcess(
+            args=[str(binary)],
+            returncode=0,
+            stdout="Sum of electronic energy and thermal correction to G: -100.5\n",
+            stderr="",
+        ),
+    ) as mock_run:
+        result = run_shermo(
+            freq_log,
+            -100.0,
+            tmp_path,
+            shermo_bin=str(binary),
+        )
+    assert result is not None
+    assert mock_run.call_args[0][0][0] == str(binary.resolve())
+
+
+def test_run_shermo_returns_none_when_unresolvable(tmp_path: Path) -> None:
+    """A missing Shermo yields None (contract) instead of a subprocess crash."""
+    from cccp.qc.runners import run_shermo
+
+    freq_log = tmp_path / "freq.log"
+    freq_log.write_text("dummy", encoding="utf-8")
+    with patch.object(software, "resolve_executable", return_value=None):
+        result = run_shermo(freq_log, -100.0, tmp_path, shermo_bin="Shermo")
+    assert result is None

@@ -168,6 +168,7 @@ def test_energy_in_workflow_registry() -> None:
     assert "censo" in entry.requires_binaries
     assert "crest" in entry.requires_binaries
     assert "orca" in entry.requires_binaries
+    assert "shermo" in entry.requires_binaries
 
 
 def test_energy_in_supported_workflows() -> None:
