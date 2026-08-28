@@ -164,17 +164,33 @@ def _select_rank1_conformer(payload: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _is_pes_candidate_item(item: dict[str, Any]) -> bool:
-    """Return whether a product is an exported PES stationary-point candidate."""
+    """Return whether a product is a PES stationary-point candidate.
+
+    Generic rule: structure product with candidate_id/TAG metadata, or
+    located under canonical PES output directories (``RESULT/structures/``,
+    ``RESULT/pes_search/``).
+    """
+    if not _product_is_xyz(item):
+        return False
+    if _candidate_id_from_item(item) != "":
+        return True
+    values = [str(item.get(key) or "") for key in ("id", "label", "path", "tag")]
+    joined = " ".join(values)
+    if _TAG_RE.search(joined):
+        return True
+    path = str(item.get("path") or "").replace("\\", "/")
+    if "/structures/" in path or "/pes_search/" in path:
+        return True
+    return False
+
+
+def _is_legacy_s2_candidate_item(item: dict[str, Any]) -> bool:
+    """Return whether a product matches legacy s2 candidate naming."""
     if not _product_is_xyz(item):
         return False
     values = [str(item.get(key) or "") for key in ("id", "label", "path")]
     joined = " ".join(values).lower()
-    return (
-        "s2_candidate" in joined
-        or "s2 candidate" in joined
-        or "/s2_candidates/" in joined
-        or _candidate_id_from_item(item) != ""
-    )
+    return "s2_candidate" in joined or "s2 candidate" in joined or "/s2_candidates/" in joined
 
 
 def _legacy_filename_matches(rel_path: str) -> bool:
@@ -260,9 +276,11 @@ def _select_minimum_manifest_products(products: list[Any]) -> list[dict[str, Any
     ranked = [
         item
         for item in structures
-        if re.search(r"(?:rank\s*1|lowest|minimum|global_min)",
-                     " ".join(str(item.get(key) or "") for key in ("id", "label", "path")),
-                     re.IGNORECASE)
+        if re.search(
+            r"(?:rank\s*1|lowest|minimum|global_min)",
+            " ".join(str(item.get(key) or "") for key in ("id", "label", "path")),
+            re.IGNORECASE,
+        )
     ]
     return ranked[:1] if ranked else structures[:1]
 
@@ -277,18 +295,26 @@ def _select_minimum_legacy_products(products: list[Any]) -> list[dict[str, Any]]
     optimized = [
         item
         for item in structures
-        if str(item.get("path") or "").replace("\\", "/").rsplit("/", 1)[-1]
-        == "optimized.xyz"
+        if str(item.get("path") or "").replace("\\", "/").rsplit("/", 1)[-1] == "optimized.xyz"
     ]
     return optimized[:1] or structures[:1]
 
 
-def _select_pes_products(products: list[Any]) -> list[dict[str, Any]]:
-    """Select all exported PES stationary-point products, and only those."""
+def _select_pes_candidates_generic(products: list[Any]) -> list[dict[str, Any]]:
+    """Select PES candidates via the generic rule (candidate_id/TAG/directory)."""
     return [
         item
         for item in products
         if isinstance(item, dict) and item.get("path") and _is_pes_candidate_item(item)
+    ]
+
+
+def _select_legacy_s2_products(products: list[Any]) -> list[dict[str, Any]]:
+    """Select legacy s2 candidates (s2_candidate naming patterns)."""
+    return [
+        item
+        for item in products
+        if isinstance(item, dict) and item.get("path") and _is_legacy_s2_candidate_item(item)
     ]
 
 
@@ -500,11 +526,18 @@ class StructureSourceService:
 
     def _discover_pessearch_job(self, record: JobRecord) -> list[dict[str, Any]]:
         """Return every exported TS/INT stationary-point candidate."""
+        entries = self._discover_product_listings(
+            record,
+            selectors=((_RESULT_MANIFEST_FILENAME, _select_pes_candidates_generic),),
+            candidate_hints=True,
+        )
+        if entries:
+            return entries
         return self._discover_product_listings(
             record,
             selectors=(
-                (_RESULT_MANIFEST_FILENAME, _select_pes_products),
-                (_RESULT_SUMMARY_FILENAME, _select_pes_products),
+                (_RESULT_MANIFEST_FILENAME, _select_legacy_s2_products),
+                (_RESULT_SUMMARY_FILENAME, _select_legacy_s2_products),
             ),
             candidate_hints=True,
         )
@@ -642,7 +675,12 @@ class StructureSourceService:
     ) -> str | None:
         """Resolve a manifest-relative product to a root-relative POSIX path."""
         try:
-            return (listing_path.parent / str(item["path"])).resolve().relative_to(root.resolve()).as_posix()
+            return (
+                (listing_path.parent / str(item["path"]))
+                .resolve()
+                .relative_to(root.resolve())
+                .as_posix()
+            )
         except (KeyError, OSError, ValueError):
             return None
 
@@ -754,11 +792,18 @@ class StructureSourceService:
 
     def _probe_remote_pessearch(self, record: JobRecord) -> list[dict[str, Any]] | None:
         """Return all remote PES stationary-point candidates."""
+        entries = self._probe_remote_product_listings(
+            record,
+            selectors=((_RESULT_MANIFEST_FILENAME, _select_pes_candidates_generic),),
+            candidate_hints=True,
+        )
+        if entries:
+            return entries
         return self._probe_remote_product_listings(
             record,
             selectors=(
-                (_RESULT_MANIFEST_FILENAME, _select_pes_products),
-                (_RESULT_SUMMARY_FILENAME, _select_pes_products),
+                (_RESULT_MANIFEST_FILENAME, _select_legacy_s2_products),
+                (_RESULT_SUMMARY_FILENAME, _select_legacy_s2_products),
             ),
             candidate_hints=True,
         )
@@ -783,9 +828,7 @@ class StructureSourceService:
                 )
             }
             for filename, selector in selectors:
-                for listing_rel in sorted(
-                    rel for rel in listings if rel.endswith(filename)
-                ):
+                for listing_rel in sorted(rel for rel in listings if rel.endswith(filename)):
                     payload = json.loads(
                         self._fetcher.read_file(record, listing_rel).decode(
                             "utf-8", errors="replace"
@@ -824,7 +867,9 @@ class StructureSourceService:
                         if candidate_id:
                             seen_candidates.add(candidate_id)
                         found.append(
-                            self._entry(record, item, rel_posix, meta, remote=True, needs_fetch=False)
+                            self._entry(
+                                record, item, rel_posix, meta, remote=True, needs_fetch=False
+                            )
                         )
                         if max_entries is not None and len(found) >= max_entries:
                             break

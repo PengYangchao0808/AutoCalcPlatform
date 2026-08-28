@@ -662,6 +662,7 @@ def test_confsearch_manifest_returns_only_rank_one_geometry(service, store, tmp_
     assert entries[0]["label"] == "Lowest-energy conformer (conf_0001)"
     assert entries[0]["candidate_id"] == ""
 
+
 _XYZ_TAG_TS = """\
 2
 TAG: TS | candidate_id=ts_guess_001 | source=PESsearch | frame=006
@@ -823,9 +824,7 @@ def test_result_manifest_wins_over_legacy_summary(service, store, tmp_path) -> N
         workflow="Lowconfirm",
     )
     _write(work_dir / "RESULT" / "structures" / "item_001__TAG_TS__optimized.xyz", _XYZ_TAG_TS)
-    store.create(
-        _make_record("job_mixed", workflow="Lowconfirm", work_dir=work_dir)
-    )
+    store.create(_make_record("job_mixed", workflow="Lowconfirm", work_dir=work_dir))
 
     entries = service.list_recent()
     assert len(entries) == 1, "identical product referenced twice must dedupe"
@@ -855,11 +854,7 @@ def test_duplicate_candidate_id_is_listed_once(service, store, tmp_path) -> None
     )
     _write(result_dir / "structures" / "a.xyz", _XYZ_TAG_INT)
     _write(result_dir / "structures" / "b.xyz", _XYZ_TAG_INT)
-    store.create(
-        _make_record(
-            "job_duplicate_candidate", workflow="PESsearch", work_dir=work_dir
-        )
-    )
+    store.create(_make_record("job_duplicate_candidate", workflow="PESsearch", work_dir=work_dir))
 
     entries = service.list_recent()
     assert len(entries) == 1
@@ -885,8 +880,146 @@ def test_remote_probe_reads_result_manifest(store, tmp_path) -> None:
         }
     ).encode()
     files["RESULT/mechanism/ts_guesses/ts_guess_001.xyz"] = _XYZ_TAG_TS.encode()
-    service = StructureSourceService(
-        store, tmp_path, fetcher=FakeFetcher(files)
-    )
+    service = StructureSourceService(store, tmp_path, fetcher=FakeFetcher(files))
     entries = service.list_recent()
     assert any(entry["remote"] and entry["tag"] == "TS" for entry in entries)
+
+
+# ---------------------------------------------------------------------------
+# Wave 7 Todo 44 — Generic PES candidate discovery
+# ---------------------------------------------------------------------------
+
+
+def test_pessearch_new_manifest_candidates(service, store, tmp_path) -> None:
+    """Generic PES candidates via RESULT/structures/ with TAG metadata."""
+    work_dir = tmp_path / "uncategorized" / "20260828_001_PESsearch"
+    result_dir = work_dir / "RESULT"
+    _write_result_manifest(
+        result_dir,
+        [
+            {
+                "id": "ts_guess_001",
+                "label": "TS guess 001",
+                "path": "structures/ts_guess_001.xyz",
+                "kind": "structure",
+                "tag": "TS",
+                "candidate_id": "ts_guess_001",
+            },
+            {
+                "id": "int_guess_002",
+                "label": "Intermediate guess 002",
+                "path": "structures/int_guess_002.xyz",
+                "kind": "structure",
+                "candidate_id": "int_guess_002",
+            },
+            {
+                "id": "pes_profile",
+                "label": "PES profile",
+                "path": "pes_search/pes_profile.json",
+                "kind": "pes_profile",
+            },
+        ],
+    )
+    _write(result_dir / "structures" / "ts_guess_001.xyz", _XYZ_TAG_TS)
+    _write(result_dir / "structures" / "int_guess_002.xyz", _XYZ_TAG_INT)
+    _write(result_dir / "pes_search" / "pes_profile.json", "{}")
+    store.create(
+        _make_record(
+            "20260828_001_PESsearch",
+            workflow="PESsearch",
+            work_dir=work_dir,
+            molecule_name="generic_mol",
+        )
+    )
+
+    entries = service.list_recent()
+    assert len(entries) == 2, "kind=pes_profile excluded; both structures listed"
+    by_id = {entry["candidate_id"]: entry for entry in entries}
+    ts = by_id["ts_guess_001"]
+    assert ts["tag"] == "TS"
+    assert ts["workflow"] == "PESsearch"
+    assert ts["source_id"] == ("job_20260828_001_PESsearch:RESULT/structures/ts_guess_001.xyz")
+    int_entry = by_id["int_guess_002"]
+    assert int_entry["tag"] == ""
+    assert ts["molecule_name"] == "generic_mol__ts_guess_001"
+    assert int_entry["molecule_name"] == "generic_mol__int_guess_002"
+
+
+def test_pessearch_legacy_s2_fallback(service, store, tmp_path) -> None:
+    """Legacy s2_candidate naming still discovered via fallback."""
+    work_dir = tmp_path / "uncategorized" / "20260828_002_PESsearch"
+    result_dir = work_dir / "RESULT"
+    _write_result_manifest(
+        result_dir,
+        [
+            {
+                "id": "s2_candidate_ts_guess_001",
+                "label": "S2 candidate ts_guess_001 (TS)",
+                "path": "mechanism/ts_guesses/ts_guess_001.xyz",
+                "kind": "structure",
+            },
+            {
+                "id": "s2_candidate_int_guess_002",
+                "label": "S2 candidate int_guess_002 (INT)",
+                "path": "mechanism/intermediate_guesses/int_guess_002.xyz",
+                "kind": "structure",
+            },
+        ],
+    )
+    _write(result_dir / "mechanism" / "ts_guesses" / "ts_guess_001.xyz", _XYZ_TAG_TS)
+    _write(
+        result_dir / "mechanism" / "intermediate_guesses" / "int_guess_002.xyz",
+        _XYZ_TAG_INT,
+    )
+    store.create(
+        _make_record(
+            "20260828_002_PESsearch",
+            workflow="PESsearch",
+            work_dir=work_dir,
+            molecule_name="legacy_mol",
+        )
+    )
+
+    entries = service.list_recent()
+    assert len(entries) == 2
+    by_label = {entry["label"]: entry for entry in entries}
+    ts = by_label["S2 candidate ts_guess_001 (TS)"]
+    assert ts["tag"] == "TS"
+    assert ts["candidate_id"] == "ts_guess_001"
+    int_entry = by_label["S2 candidate int_guess_002 (INT)"]
+    assert int_entry["tag"] == ""
+
+
+def test_manifest_without_structures_empty(service, store, tmp_path) -> None:
+    """result_manifest with no structure products returns empty list."""
+    work_dir = tmp_path / "uncategorized" / "20260828_003_PESsearch"
+    result_dir = work_dir / "RESULT"
+    _write_result_manifest(
+        result_dir,
+        [
+            {
+                "id": "pes_profile",
+                "label": "PES profile",
+                "path": "pes_search/pes_profile.json",
+                "kind": "pes_profile",
+            },
+            {
+                "id": "scan_trajectory",
+                "label": "Scan trajectory",
+                "path": "trajectories/scan_trajectory.json",
+                "kind": "trajectory",
+            },
+        ],
+    )
+    _write(result_dir / "pes_search" / "pes_profile.json", "{}")
+    _write(result_dir / "trajectories" / "scan_trajectory.json", "{}")
+    store.create(
+        _make_record(
+            "20260828_003_PESsearch",
+            workflow="PESsearch",
+            work_dir=work_dir,
+        )
+    )
+
+    entries = service.list_recent()
+    assert entries == []
