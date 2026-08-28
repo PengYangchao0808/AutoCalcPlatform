@@ -15,6 +15,7 @@ from acp.intake import detect_and_parse, detect_format
 def make_client(tmp_path: Path) -> TestClient:
     os.environ["ACP_RUN_ROOT"] = str(tmp_path)
     from acp.api.server import create_app
+
     return TestClient(create_app(run_root=tmp_path, max_running=2))
 
 
@@ -66,13 +67,7 @@ ORCA_PAL = (
     "*\n"
 )
 
-ORCA_BANG_ONLY = (
-    "! RKS B3LYP def2-SVP TightSCF\n"
-    "* xyz 0 1\n"
-    "H 0.0 0.0 0.0\n"
-    "H 0.0 0.0 0.74\n"
-    "*\n"
-)
+ORCA_BANG_ONLY = "! RKS B3LYP def2-SVP TightSCF\n* xyz 0 1\nH 0.0 0.0 0.0\nH 0.0 0.0 0.74\n*\n"
 
 # ORCA input carrying a `#` comment line + 2 blank-line separators: the
 # single-pass heuristic reads it as GJF; detect+verify must fall back to inp.
@@ -162,10 +157,13 @@ def test_detect_and_parse_unparseable_content_reports_failure() -> None:
 
 
 def test_parse_endpoint_reports_detected_format_auto(client: TestClient) -> None:
-    response = client.post("/api/v1/structures/parse", json={
-        "content": GJF_WITH_LINK0,
-        "format": "auto",
-    })
+    response = client.post(
+        "/api/v1/structures/parse",
+        json={
+            "content": GJF_WITH_LINK0,
+            "format": "auto",
+        },
+    )
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
@@ -173,10 +171,13 @@ def test_parse_endpoint_reports_detected_format_auto(client: TestClient) -> None
 
 
 def test_parse_endpoint_reports_forced_format(client: TestClient) -> None:
-    response = client.post("/api/v1/structures/parse", json={
-        "content": WATER_XYZ,
-        "format": "xyz",
-    })
+    response = client.post(
+        "/api/v1/structures/parse",
+        json={
+            "content": WATER_XYZ,
+            "format": "xyz",
+        },
+    )
     assert response.status_code == 200
     body = response.json()
     assert body["ok"] is True
