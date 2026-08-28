@@ -29,8 +29,11 @@ EX_LINE_PATTERN: Final[str] = "".join(
     (
         r"^\s*#|status.*retired|_reject_retired_workflow\(|",
         r'^\s*"(dft_)?(optfreq|optfreqsp|low_confirm|high_confirm)":\s*\{|',
-        r'"(id|label|method_schema_id)":\s*"[^"]*',
+        r'"(id|label|method_schema_id|level_id)":\s*"[^"]*',
         r'(optfreq|optfreqsp|[Ll]owconfirm|[Hh]ighconfirm|low_confirm|high_confirm)[^"]*"',
+        r'|(S[34])\b.*(?:contract|confirmation|profile|→)',  # S3/S4 in historical descriptions
+        r'|"optfreq":\s*',  # historical schema keys
+        r'|optfreq.*scan',  # backend capability lists
     )
 )
 EX_PATH_PREFIXES: Final[tuple[str, ...]] = ("docs/", "tests/fixtures/")

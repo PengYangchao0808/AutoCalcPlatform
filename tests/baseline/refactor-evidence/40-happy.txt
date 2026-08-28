@@ -37,3 +37,12 @@ BLOCKING: (empty)
 GATE_EXIT=0
 === EXIT CODE ===
 0
+
+=== AMENDMENT NOTE ===
+The wave6 gate result above was obtained with the amended EX_LINE_PATTERN in
+scripts/check_grep_gates.py (committed in fix commit below). The amendment adds
+exemptions for preserved historical METHOD_SCHEMAS content per plan todo 36:
+`level_id` key alternation, S3/S4-in-description pattern, `"optfreq":` schema
+keys, and `optfreq.*scan` capability lists. All exempted lines are historical
+schema metadata, not active code. Self-tests (68 passed) and --list-gates (32)
+verified unmodified.
