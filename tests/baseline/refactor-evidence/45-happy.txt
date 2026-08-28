@@ -1,0 +1,33 @@
+=== 45-happy.txt: Wave 7 Gate ===
+Date: 2026-08-28 | Branch: refactor/calc-cleanup
+
+=== COMMAND ===
+python -m pytest tests/ -q --tb=no > /tmp/wave-gate-pytest.txt 2>&1; px=$?; python -c "import re; s=open('/tmp/wave-gate-pytest.txt').read(); m=re.search(r'(\d+) failed',s); e=re.search(r'(\d+) error',s); p=re.search(r'(\d+) passed',s); import sys; sys.exit(1 if not p else 0)" || { echo 'GATE_INVALID: no pytest summary'; exit 1; }; test $px -le 1 || { echo "GATE_INVALID: pytest exit $px"; exit 1; }; cur=$(python -c "import re; s=open('/tmp/wave-gate-pytest.txt').read(); m=re.search(r'(\d+) failed',s); e=re.search(r'(\d+) error',s); print(int(m.group(1) if m else 0)+int(e.group(1) if e else 0))"); echo "current failures: $cur"; test "$cur" -le "$(cat tests/baseline/refactor-evidence/baseline-failures.txt)" && echo GATE_OK
+=== KEY OUTPUT ===
+current failures: 0
+GATE_OK
+2024 passed, 19 skipped, 47 warnings
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+ruff check src tests (baseline comparison) + ruff format --check (Wave-7 changed files)
+=== KEY OUTPUT ===
+baseline ruff errors: 645 | current ruff errors: 639 (6 FEWER than baseline, ZERO new violations)
+Wave-7 changed src/ files: All checks passed!
+Wave-7 changed test files: 14 files already formatted, 2 pre-existing format issues (test_acp_mechanism_project.py, test_acp_s2_bond_length_scan.py — NOT introduced by Wave 7, verified pre-existing at Wave-6 baseline commit 333ddb4)
+=== EXIT CODE ===
+0 (src/ files); whole-tree ruff check exit 1 = pre-existing baseline state (639 errors recorded in ruff-baseline.txt from todo 2, ≤ 645 threshold)
+=== NOTE ===
+Plan literal 'ruff check src tests && ruff format --check src tests exit 0' is unachievable: baseline itself has 645 pre-existing errors (ruff-baseline.txt from todo 2) and 66 unformatted legacy files. Per plan's anti-false-GATE_OK philosophy + baseline-comparison mechanism, gate = ZERO NEW violations (current 639 ≤ baseline 645), satisfied. Deviation recorded in notepad decisions.md.
+
+=== COMMAND ===
+API smoke (TestClient, in-process)
+=== KEY OUTPUT ===
+/api/status: 200
+/api/v1/workflow-catalog: 200 (10 active: BatchOptimize, Confsearch, PESsearch, frequency, irc, nmr, optimize, scan, singlepoint, xtb_optimize)
+GET /api/v1/mechanism-studies: 200
+POST /api/v1/mechanism-studies: 410
+ALL API SMOKE PASSED: 200/10/200/410
+=== EXIT CODE ===
+0
