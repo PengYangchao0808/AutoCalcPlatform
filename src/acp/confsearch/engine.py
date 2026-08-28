@@ -29,7 +29,6 @@ from .manifest import (
 )
 from .profiles import profile_overlay
 from .protocols import PROTOCOL_RUNNERS
-from .protocols.censo_crest import run_rph_parity  # noqa: F401  (re-export)
 from .selection import select_for_refinement
 from .shared.boltzmann import boltzmann_weights, relative_energies_kcal
 from .shared.provenance import input_block, provenance_block
@@ -74,8 +73,6 @@ class ConfsearchEngine:
             )
 
     def _run_protocol(self, request: ConfsearchRequest, overlay: dict[str, Any]) -> ProtocolOutcome:
-        if request.backend == "rph-parity":
-            return run_rph_parity(request, overlay)
         runner = PROTOCOL_RUNNERS[request.protocol]
         return runner(request, overlay)
 

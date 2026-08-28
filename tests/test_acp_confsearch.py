@@ -12,9 +12,9 @@ from acp.confsearch import (
     PROFILES,
     PROTOCOLS,
     REFINEMENT_POLICIES,
+    ConformerEntry,
     ConfsearchEngine,
     ConfsearchRequest,
-    ConformerEntry,
     validate_request,
 )
 from acp.confsearch.manifest import (
@@ -43,17 +43,17 @@ def test_protocol_constants_are_the_plan_set() -> None:
     assert PROTOCOLS == ("xtb-crest", "xtb-md", "censo-crest", "xtbmd-censo")
     assert PROFILES == ("light", "default", "high")
     assert REFINEMENT_POLICIES == ("screen", "rank1", "cumulative-99", "all")
-    assert BACKENDS == ("native", "rph-parity")
+    assert BACKENDS == ("native",)
 
 
-def test_rph_parity_rejects_unsupported_protocols() -> None:
+def test_rph_parity_rejected_as_retired() -> None:
     request = ConfsearchRequest(
         input_source="CCO",
         output_dir=Path("."),
-        protocol="xtb-md",
+        protocol="censo-crest",
         backend="rph-parity",
     )
-    with pytest.raises(ValueError, match="rph-parity only supports protocol=censo-crest"):
+    with pytest.raises(ValueError, match="RPH 已退役"):
         validate_request(request)
 
 
@@ -191,9 +191,7 @@ def test_engine_writes_unified_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     from acp.io.structures import StructureReader
 
     xyz = tmp_path / "water.xyz"
-    xyz.write_text(
-        "3\nwater\nO 0.0 0.0 0.0\nH 0.9 0.0 0.0\nH -0.3 0.9 0.0\n", encoding="utf-8"
-    )
+    xyz.write_text("3\nwater\nO 0.0 0.0 0.0\nH 0.9 0.0 0.0\nH -0.3 0.9 0.0\n", encoding="utf-8")
     monkeypatch.setattr(StructureReader, "read", lambda self, *a, **k: _stub_structure())
 
     request = ConfsearchRequest(
@@ -228,7 +226,9 @@ def _stub_structure() -> object:
     )
 
 
-def test_engine_reports_protocol_failure_as_result(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_engine_reports_protocol_failure_as_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     def _boom(request: ConfsearchRequest, overlay: dict) -> object:
         raise RuntimeError("crest exploded")
 
@@ -245,3 +245,47 @@ def test_engine_reports_protocol_failure_as_result(tmp_path: Path, monkeypatch: 
     result = ConfsearchEngine().run(request)
     assert result.status == "failed"
     assert "crest exploded" in (result.error or "")
+
+
+# --- RPH retirement (Wave 8, todo 46) --------------------------------------
+
+
+def test_rph_provider_retired() -> None:
+    """provider_backend='rph' → ValueError containing 'RPH 已退役' (zero mechanism refs)."""
+    for backend_value in ("rph", "rph-parity"):
+        request = ConfsearchRequest(
+            input_source="CCO",
+            output_dir=Path("."),
+            protocol="censo-crest",
+            backend=backend_value,
+        )
+        with pytest.raises(ValueError, match="RPH 已退役"):
+            validate_request(request)
+
+
+def test_native_default_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Default NATIVE backend smoke — no mechanism imports, protocol stub."""
+    (tmp_path / "job.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "task.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setitem(
+        __import__("acp.confsearch.protocols", fromlist=["PROTOCOL_RUNNERS"]).PROTOCOL_RUNNERS,
+        "censo-crest",
+        _StubOutcome(tmp_path),
+    )
+
+    from acp.io.structures import StructureReader
+
+    xyz = tmp_path / "water.xyz"
+    xyz.write_text("3\nwater\nO 0.0 0.0 0.0\nH 0.9 0.0 0.0\nH -0.3 0.9 0.0\n", encoding="utf-8")
+    monkeypatch.setattr(StructureReader, "read", lambda self, *a, **k: _stub_structure())
+
+    request = ConfsearchRequest(
+        input_source=str(xyz),
+        output_dir=tmp_path,
+        protocol="censo-crest",
+        backend="native",
+        refinement_policy="screen",
+    )
+    result = ConfsearchEngine().run(request)
+    assert result.status == "completed"
+    assert result.manifest_path is not None

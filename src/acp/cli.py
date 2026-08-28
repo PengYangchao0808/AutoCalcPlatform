@@ -573,8 +573,8 @@ Examples:
     conf.add_argument(
         "--backend",
         default="native",
-        choices=["native", "rph-parity"],
-        help="Execution backend (default: native; rph-parity is an explicit parity check)",
+        choices=["native"],
+        help="Execution backend (default: native; rph-parity retired 2026-08)",
     )
     conf.add_argument(
         "--preset",

@@ -44,10 +44,10 @@ REFINEMENT_POLICIES: tuple[str, ...] = ("screen", "rank1", "cumulative-99", "all
 lowest conformer, cumulative-99 = cumulative Boltzmann ≥99%, all = every
 retained conformer."""
 
-BACKENDS: tuple[str, ...] = ("native", "rph-parity")
-"""``native`` is the production backend; ``rph-parity`` is an explicit
-ReactionProfileHunter parity comparison backend (§4) and never silently
-downgrades."""
+BACKENDS: tuple[str, ...] = ("native",)
+"""``native`` is the only production backend.  The ``rph-parity`` backend
+was retired in the 2026-08 Wave 8 refactor — attempting to use it raises
+:class:`ValueError` at config-parsing time."""
 
 PURE_XTB_PROTOCOLS: tuple[str, ...] = ("xtb-crest", "xtb-md")
 CENSO_PROTOCOLS: tuple[str, ...] = ("censo-crest", "xtbmd-censo")
@@ -147,15 +147,10 @@ def validate_request(request: ConfsearchRequest) -> None:
             f"Unknown refinement_policy {request.refinement_policy!r}. "
             f"Allowed: {', '.join(REFINEMENT_POLICIES)}"
         )
+    if request.backend in ("rph-parity", "rph"):
+        raise ValueError("RPH 已退役（2026-08 重构）：请使用 NATIVE provider")
     if request.backend not in BACKENDS:
         raise ValueError(f"Unknown backend {request.backend!r}. Allowed: {', '.join(BACKENDS)}")
-    if request.backend == "rph-parity" and request.protocol != "censo-crest":
-        # §4: the parity backend must hard-error on unsupported protocols —
-        # silently falling back to CENSO-lite is explicitly forbidden.
-        raise ValueError(
-            "backend=rph-parity only supports protocol=censo-crest; "
-            f"protocol={request.protocol!r} has no RPH parity route"
-        )
     if request.protocol in PURE_XTB_PROTOCOLS and request.refinement_policy != "screen":
         logger.warning(
             "protocol=%s is pure xTB — refinement_policy=%s has no DFT stage to "
