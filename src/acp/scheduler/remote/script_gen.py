@@ -20,7 +20,6 @@ import posixpath
 import shlex
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import PurePosixPath
 from typing import Any
 
 from acp.catalog import method_levels_to_cli_flags
@@ -99,21 +98,23 @@ class LSFScriptSpec:
 
 # ── Allowed remote workflows ────────────────────────────────────────────
 
-_ALLOWED_REMOTE_WORKFLOWS: frozenset[str] = frozenset({
-    "Confsearch",
-    "PESsearch",
-    "BatchOptimize",
-    "ensemble",
-    "energy",
-    "nmr",
-    "xtbmd_censo_energy",
-    "singlepoint",
-    "optimize",
-    "frequency",
-    "scan",
-    "irc",
-    "xtb_optimize",
-})
+_ALLOWED_REMOTE_WORKFLOWS: frozenset[str] = frozenset(
+    {
+        "Confsearch",
+        "PESsearch",
+        "BatchOptimize",
+        "ensemble",
+        "energy",
+        "nmr",
+        "xtbmd_censo_energy",
+        "singlepoint",
+        "optimize",
+        "frequency",
+        "scan",
+        "irc",
+        "xtb_optimize",
+    }
+)
 
 
 def build_remote_cli_command(

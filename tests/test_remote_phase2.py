@@ -29,9 +29,6 @@ import pytest
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import JobRecord, JobSpec
 from acp.scheduler.remote import ssh as ssh_mod
-
-# Local constant for tests that reference the retired mechanism config filename.
-MECHANISM_CONFIG_FILENAME = "mechanism_config.json"
 from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
 from acp.scheduler.remote.monitor import RemoteJobMonitor
 from acp.scheduler.remote.runner import (
@@ -48,6 +45,9 @@ from acp.scheduler.remote.script_gen import (
 from acp.scheduler.remote.sftp import FileStager
 from acp.scheduler.remote.ssh import SSHConnectionPool
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
+
+# Local constant for tests that reference the retired mechanism config filename.
+MECHANISM_CONFIG_FILENAME = "mechanism_config.json"
 
 # ====================================================================== #
 # Reuse Phase 1 mock infrastructure

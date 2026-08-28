@@ -3216,7 +3216,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             },
             {
                 "profile_id": "guided-scan-fast",
-                "label": "Guided Scan Fast (xTB-fast → S3)",
+                "label": "Guided Scan Fast (xTB-fast)",
                 "summary": "xTB-fast conformer intake + guided relaxed scan + B97-3c OptTS/Freq + r2SCAN-3c SP",
                 "levels": {
                     "scan": {

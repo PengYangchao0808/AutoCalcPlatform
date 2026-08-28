@@ -132,7 +132,7 @@ def test_mechanism_frontend_payload_materializes_and_builds_cmd(
         "routes": [{"reactant_id": "reactant", "product_id": "product", "label": "frontend-shape"}],
     }
     inputs_dir = tmp_path / "job" / "inputs"
-    work_dir = tmp_path / "job"
+    _work_dir = tmp_path / "job"
     role_paths: dict[str, Path] = {}
 
     reactant_path = materialize_job_input(payload, inputs_dir, tmp_path, role_paths)
@@ -146,79 +146,13 @@ def test_mechanism_frontend_payload_materializes_and_builds_cmd(
     assert isinstance(reactant_payload, dict)
     assert reactant_payload["source"] == "CCO"
 
-    method = {
-        "preset": "rph-s3",
-        "fidelity": "s4",
-        "study_id": "study_001",
-        "conformer_mode": "xtb-fast",
-        "levels": {"sp": {"functional": "wB97M-V", "basis": "def2-TZVPP"}},
-    }
-    resources = {"nproc": 8, "mem": "16GB"}
-    config_path = write_mechanism_job_config(work_dir, payload, method, resources, role_paths)
-    config_payload = json.loads(config_path.read_text(encoding="utf-8"))
-
-    assert config_path == work_dir / MECHANISM_CONFIG_FILENAME
-    assert config_payload["resolved"]["preset"] == "rph-s3"
-    assert config_payload["resolved"]["fidelity"] == "s4"
-    assert config_payload["resolved"]["conformer_mode"] == "xtb-fast"
-    assert config_payload["resolved"]["study_id"] == "study_001"
-    assert config_payload["roles"]["reactant"]["path"] == str(reactant_path)
-    assert config_payload["roles"]["product"]["path"] == str(role_paths["product"])
-    assert config_payload["resources"] == resources
-
-    runner = JobRunner(python_executable="python")
-    spec = JobSpec(
-        workflow="mechanism",
-        name="frontend-mechanism",
-        input=payload,
-        method=method,
-        resources=resources,
-    )
-    cmd = runner._build_cmd(
-        spec,
-        work_dir,
-        str(reactant_path),
-        role_paths,
-        mechanism_config_path=str(config_path),
-    )
-
-    assert cmd[:5] == ["python", "-m", "acp.cli", "run", "mechanism"]
-    assert cmd[cmd.index("--input") + 1] == str(reactant_path)
-    assert cmd[cmd.index("--mechanism-config") + 1] == str(config_path)
-    assert cmd[cmd.index("--product") + 1] == str(role_paths["product"])
-    assert Path(cmd[cmd.index("--input") + 1]).is_file()
-    assert Path(cmd[cmd.index("--product") + 1]).is_file()
-    assert json.loads(cmd[cmd.index("--routes") + 1]) == payload["routes"]
-    assert cmd[cmd.index("--charge") + 1] == "0"
-    assert cmd[cmd.index("--multiplicity") + 1] == "1"
-    assert "--fidelity" not in cmd
-    assert "--conformer-mode" not in cmd
-    assert "--study-id" not in cmd
+    # write_mechanism_job_config removed in Wave 6 — test body gutted
+    pytest.skip("mechanism retired — write_mechanism_job_config removed")
 
 
 @pytest.mark.skip(reason="mechanism retired — mechanism_method_flags removed")
 def test_mechanism_method_flags_emit_study_controls() -> None:
-    assert mechanism_method_flags(
-        {
-            "conformer_mode": "xtb-fast",
-            "max_elementary_steps": 4,
-            "promotion_policy": "rate_relevant",
-            "study_id": "study_001",
-            "int_extension": True,
-            "auto_converge": True,
-        }
-    ) == [
-        "--conformer-mode",
-        "xtb-fast",
-        "--max-elementary-steps",
-        "4",
-        "--promotion-policy",
-        "rate_relevant",
-        "--study-id",
-        "study_001",
-        "--int-extension",
-        "--auto-converge",
-    ]
+    pytest.skip("mechanism retired — mechanism_method_flags removed")
 
 
 @pytest.mark.skip(reason="mechanism retired — _write_mechanism_config_if_needed removed")
@@ -315,11 +249,6 @@ def test_mechanism_reaction_json_materializes_and_sets_schema_version(tmp_path: 
         reaction_path = work_dir / "WORK" / "08_ANALYSIS" / "reaction.json"
         assert reaction_path.is_file()
         assert json.loads(reaction_path.read_text(encoding="utf-8"))["schema_version"] == 2
-
-        config_path = _write_mechanism_config_if_needed(record.spec, work_dir, None, {})
-        assert config_path is not None
-        config_payload = json.loads(config_path.read_text(encoding="utf-8"))
-        assert config_payload["mechanism_schema_version"] == 2
     finally:
         mgr.shutdown()
 

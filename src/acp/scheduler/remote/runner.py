@@ -748,7 +748,7 @@ class RemoteJobRunner:
         bond_scan_mode = spec.workflow == "PESsearch" and (
             str(spec.method.get("mode") or "") == "bond_length_scan"
         )
-        remote_input_name = materialized.name if materialized else "input.xyz"
+        _remote_input_name = materialized.name if materialized else "input.xyz"
         if bond_scan_mode:
             scan_payload = build_remote_scan_config_payload(spec) or {}
             scan_config_local = work_dir / SCAN_CONFIG_FILENAME
@@ -761,7 +761,6 @@ class RemoteJobRunner:
                 scan_config_local,
                 posixpath.join(remote_job_dir, SCAN_CONFIG_FILENAME),
             )
-            remote_input_name = SCAN_CONFIG_FILENAME
             event_log.append(
                 "remote.input_uploaded",
                 job_id=record.id,

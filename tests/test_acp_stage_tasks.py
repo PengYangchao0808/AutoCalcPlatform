@@ -6,9 +6,16 @@ import json
 import time
 from pathlib import Path
 
+import pytest
+
 from acp.scheduler.jobs import JobSpec
 from acp.scheduler.manager import JobManager
-from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore, get_stage_plan
+from acp.scheduler.stage_tasks import (
+    PlanCompiler,
+    StageTaskObserver,
+    StageTaskStore,
+    get_stage_plan,
+)
 
 
 def test_stage_plan_provider_fake() -> None:
@@ -25,11 +32,6 @@ def test_mechanism_stage_plan_uses_study_phases() -> None:
     assert plan == []
 
 
-import pytest
-
-from acp.scheduler.stage_tasks import PlanCompiler
-
-
 @pytest.mark.parametrize(
     "workflow,method,expected",
     [
@@ -39,18 +41,65 @@ from acp.scheduler.stage_tasks import PlanCompiler
         ("scan", {}, ["scan"]),
         ("irc", {}, ["irc"]),
         ("xtb_optimize", {}, ["xtb_optimize"]),
-        ("PESsearch", {"mode": "bond_length_scan"}, [
-            "prepare", "materialize_input", "validate_coordinate",
-            "run_relaxed_scan", "extract_frames", "run_single_points",
-            "build_profile", "select_candidates", "finalize",
-        ]),
-        ("PESsearch", {"mode": "path"}, [
-            "prepare", "path_search", "candidate_extract", "finalize",
-        ]),
+        (
+            "PESsearch",
+            {"mode": "bond_length_scan"},
+            [
+                "prepare",
+                "materialize_input",
+                "validate_coordinate",
+                "run_relaxed_scan",
+                "extract_frames",
+                "run_single_points",
+                "build_profile",
+                "select_candidates",
+                "finalize",
+            ],
+        ),
+        (
+            "PESsearch",
+            {"mode": "path"},
+            [
+                "prepare",
+                "path_search",
+                "candidate_extract",
+                "finalize",
+            ],
+        ),
         ("BatchOptimize", {"profile": "opt_only"}, ["prepare", "optimize", "finalize"]),
-        ("BatchOptimize", {"profile": "opt_freq"}, ["prepare", "optimize", "frequency", "finalize"]),
-        ("BatchOptimize", {"profile": "opt_freq_sp"}, ["prepare", "optimize", "frequency", "single_point", "finalize"]),
-        ("BatchOptimize", {"profile": "opt_freq_sp_thermo"}, ["prepare", "optimize", "frequency", "single_point", "thermochemistry", "finalize"]),
+        (
+            "BatchOptimize",
+            {"profile": "opt_freq"},
+            [
+                "prepare",
+                "optimize",
+                "frequency",
+                "finalize",
+            ],
+        ),
+        (
+            "BatchOptimize",
+            {"profile": "opt_freq_sp"},
+            [
+                "prepare",
+                "optimize",
+                "frequency",
+                "single_point",
+                "finalize",
+            ],
+        ),
+        (
+            "BatchOptimize",
+            {"profile": "opt_freq_sp_thermo"},
+            [
+                "prepare",
+                "optimize",
+                "frequency",
+                "single_point",
+                "thermochemistry",
+                "finalize",
+            ],
+        ),
     ],
 )
 def test_plancompiler_expected_sequences(workflow: str, method: dict, expected: list[str]) -> None:
@@ -59,7 +108,11 @@ def test_plancompiler_expected_sequences(workflow: str, method: dict, expected: 
 
 
 def test_plancompiler_batchoptimize_profile() -> None:
-    plan = PlanCompiler.compile(JobSpec(workflow="BatchOptimize", method={"profile": "opt_freq_sp_thermo"}))
+    spec = JobSpec(
+        workflow="BatchOptimize",
+        method={"profile": "opt_freq_sp_thermo"},
+    )
+    plan = PlanCompiler.compile(spec)
     names = [s.stage_name for s in plan]
     assert "thermochemistry" in names
     assert names[0] == "prepare"
@@ -296,6 +349,7 @@ def test_script_gen_no_role_materialization() -> None:
 
 def test_script_gen_no_mechanism_branch() -> None:
     import pytest
+
     from acp.scheduler.remote.script_gen import build_remote_cli_command
 
     spec = JobSpec(workflow="mechanism", input={"source": "CCO"}, method={}, resources={})
@@ -305,6 +359,7 @@ def test_script_gen_no_mechanism_branch() -> None:
 
 def test_script_gen_no_stage_artifact_names() -> None:
     import inspect
+
     from acp.scheduler.remote import script_gen
 
     source = inspect.getsource(script_gen)
@@ -314,6 +369,7 @@ def test_script_gen_no_stage_artifact_names() -> None:
 
 def test_remote_runner_layout_via_compat() -> None:
     import inspect
+
     from acp.scheduler.remote import runner as remote_runner
 
     source = inspect.getsource(remote_runner)
