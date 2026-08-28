@@ -1,0 +1,14 @@
+Todo 49 — cccp ORCA opt_freq deletion (D6 closure): QA Happy
+
+Deleted ORCAInterface.opt_freq method (orca.py L1676-1784), removed "optfreq" entry from
+_build_input_blocks calc_type_map (L812), and simplified the NumFreq fallback check to
+remove the now-unreachable "Opt Freq" route value (L818). ORCABackend.opt_freq in
+backends/orca.py was already absent. test_opt_freq_parses_real_output_into_qcresult removed
+from test_qc_interfaces_orca.py (L355-384); test_orca_composite_guard.py and
+fixtures/orca_optfreq_real_sections.txt kept (composite guard tests unrelated to optfreq;
+fixture used by frequency parser tests in test_acp_results.py).
+
+Gate wave8_optfreq_all on src/cccp: exit 0 (ALLOWED: 0, BLOCKING: 0).
+python -c "from cccp.qc.interfaces.orca import ORCAInterface; assert not hasattr(ORCAInterface,'opt_freq')": PASS.
+pytest tests/test_qc_interfaces_orca.py tests/test_orca_composite_guard.py: 19 passed, 1 skipped.
+Consumer check: zero opt_freq/optfreq references remaining in src/cccp/.

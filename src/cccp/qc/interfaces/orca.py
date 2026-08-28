@@ -809,18 +809,17 @@ class ORCAInterface(QCInterfaceBase):
             "opt": "Opt",
             "freq": "Freq",
             "sp": "SP",
-            "optfreq": "Opt Freq",
             "nmr": "NMR",
         }
         route = calc_type_map.get(calc_type, calc_type)
 
         if (
-            route in ("Freq", "Opt Freq")
+            route == "Freq"
             and _solvent
             and _solvent_model.lower() != "cpcm"
             and _solvent_model.lower() != "none"
         ):
-            route = route.replace("Freq", "NumFreq")
+            route = "NumFreq"
 
         meta = _resolve_method_meta(_method)
         basis_inline = True if meta is None else bool(meta.get("basis_inline", True))
@@ -1665,115 +1664,6 @@ class ORCAInterface(QCInterfaceBase):
             success=True,
             energy=energy,
             coordinates=coords if coords is not None else coordinates,
-            symbols=syms or symbols,
-            converged=True,
-            output_file=input_file,
-            log_file=output_file,
-            frequencies=frequencies if frequencies else None,
-            has_frequencies=len(frequencies) > 0,
-        )
-
-    def opt_freq(
-        self,
-        coordinates: np.ndarray,
-        symbols: list[str],
-        charge: int = 0,
-        multiplicity: int = 1,
-        output_dir: Path = None,
-        output_name: str = "orca_optfreq",
-        method: str = None,
-        basis: str = None,
-        route_extras: list = None,
-        geom_maxiter: int = None,
-        extra_blocks: list = None,
-        recalc_hess: object = None,
-        aux_basis: str = None,
-        aux_j_basis: str = None,
-        aux_c_basis: str = None,
-        **kwargs,
-    ) -> QCResult:
-        """Run combined optimization + frequency as single ORCA job.
-
-        Uses calc_type='optfreq' -> generates '! ... Opt Freq ...' route line.
-        NumFreq fallback is handled automatically by _build_input_blocks.
-
-        Args:
-            coordinates: Initial coordinates (N, 3)
-            symbols: Element symbols
-            charge: Molecular charge
-            multiplicity: Spin multiplicity
-            output_dir: Output directory
-            output_name: Base name for output files
-            method: Override method (uses self.method if None)
-            basis: Override basis (uses self.basis if None)
-            route_extras: Extra route-line keywords
-            geom_maxiter: Max geometry iterations
-            extra_blocks: Extra raw input blocks
-            recalc_hess: Hessian policy ("auto"/0/N/None) for Recalc_Hess
-            aux_basis: Legacy auxiliary basis (backward compat)
-            aux_j_basis: Auxiliary /J basis for RI-J fitting
-            aux_c_basis: Auxiliary /C basis for RI-MP2 correlation
-            **kwargs: Additional parameters
-
-        Returns:
-            QCResult with opt+freq results
-        """
-        output_dir = Path(output_dir) if output_dir else Path.cwd()
-        ensure_dir(output_dir)
-
-        input_file = output_dir / f"{output_name}.inp"
-        output_file = output_dir / f"{output_name}.out"
-
-        _solvent = kwargs.pop("solvent", None)
-        _solvent_model = kwargs.pop("solvent_model", None)
-
-        self._write_input(
-            input_file,
-            coordinates,
-            symbols,
-            "optfreq",
-            charge,
-            multiplicity,
-            method=method,
-            basis=basis,
-            route_extras=route_extras,
-            geom_maxiter=geom_maxiter,
-            extra_blocks=extra_blocks,
-            recalc_hess=recalc_hess,
-            solvent=_solvent,
-            solvent_model=_solvent_model,
-            aux_basis=aux_basis,
-            aux_j_basis=aux_j_basis,
-            aux_c_basis=aux_c_basis,
-        )
-
-        success = self._run_orca(input_file, output_file)
-
-        if not success:
-            return QCResult(
-                success=False,
-                error_message="ORCA opt+freq calculation failed",
-                output_file=input_file,
-                log_file=output_file,
-            )
-
-        coords, syms, error = LogParser.extract_last_converged_coords(output_file, "orca")
-        energy = LogParser.extract_energy(output_file, "orca")
-
-        frequencies = _parse_frequencies(output_file)
-
-        if coords is None:
-            return QCResult(
-                success=False,
-                error_message=error or "Could not extract coordinates from optfreq output",
-                output_file=input_file,
-                log_file=output_file,
-            )
-
-        return QCResult(
-            success=True,
-            energy=energy,
-            coordinates=coords,
             symbols=syms or symbols,
             converged=True,
             output_file=input_file,
