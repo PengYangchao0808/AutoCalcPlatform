@@ -1,5 +1,7 @@
 # ACP 计算工作流极简化重构与残留代码清理方案
 
+> **已实施 (implemented) 2026-08-28, branch refactor/calc-cleanup** — 本方案已按计划执行完毕。mechanism/ 已删除，计算基元上浮至 calculations/，BatchOptimize/irc/scan 独立工作流已上线。
+
 状态：方案冻结版（Refactor Baseline）
 适用版本：ACP v1.x → 极简计算架构
 文档性质：计算工作流、调度、API、前端和历史兼容代码的唯一重构依据

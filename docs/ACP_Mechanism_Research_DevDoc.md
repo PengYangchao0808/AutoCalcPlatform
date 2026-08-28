@@ -1,5 +1,7 @@
 # ACP 机理研究平台升级 — 开发文档 v2.0
 
+> **⚠️ RETIRED（2026-08-28）** — 本文档为历史设计方案，`src/acp/mechanism/` 已在 refactor/calc-cleanup 分支删除。机理研究能力已拆分为独立工作流：PESsearch（路径搜索）+ BatchOptimize（批量优化）+ irc（端点验证）。本文档仅保留供历史参考。
+
 **版本**: v2.0 · 2026-08-12
 **状态**: 方案设计(未实施 — 本文件仅含设计,不含代码改动)
 **配套可视化**: `ACP_Mechanism_Research_DevDoc.html`(核心架构变更速览)

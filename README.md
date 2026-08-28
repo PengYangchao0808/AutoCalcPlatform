@@ -9,11 +9,11 @@
 | 阶段 | 状态 | 内容 |
 |------|------|------|
 | **Phase 0** | ✅ 完成 | 底层 `cccp`（Computational Chemistry Connection Package）QC 接口库 |
-| **Phase 1** | ✅ 完成 | 模块化重构 + `acp` 统一模块 + Confsearch/PESsearch/Lowconfirm/Highconfirm 四阶段流水线 + nmr/simple 工作流 + CENSO 集成 |
+| **Phase 1** | ✅ 完成 | 模块化重构 + `acp` 统一模块 + Confsearch/PESsearch/BatchOptimize/irc/scan 计算工作流 + nmr/simple 工作流 + CENSO 集成 |
 | **Phase 2** | ✅ 完成 | FastAPI Web 后端 + 任务调度器 + 远程 LSF 执行 |
-| **Phase 4** | ✅ 完成 | 四阶段反应机理流水线（Confsearch → PESsearch → Lowconfirm → Highconfirm） |
+| **Phase 4** | ✅ 完成 | 极简化重构：mechanism/ 删除，计算基元上浮至 calculations/，BatchOptimize/irc/scan 独立工作流 |
 
-> 注：conformer / benchmark / ensemble / energy / xtbmd_censo_energy / mechanism / mech-conf / mech-step / mech-confirm / mech-chain 工作流已于 2026-08-23 退役（catalog 中保留为 `status:"retired"` 仅用于历史作业展示）。构象搜索能力统一由 `acp run Confsearch --protocol <4种协议>` 提供。
+> 注：conformer / benchmark / ensemble / energy / xtbmd_censo_energy / mechanism / mech-conf / mech-step / mech-confirm / mech-chain / optfreq / optfreqsp / Lowconfirm / Highconfirm 工作流已于 2026-08-28 退役（catalog 中保留为 `status:"retired"` 仅用于历史作业展示）。构象搜索能力统一由 `acp run Confsearch --protocol <4种协议>` 提供；低精度确认由 `acp run BatchOptimize --profile opt_freq` 提供；高精度确认由 `acp run BatchOptimize --profile opt_freq_sp_thermo` 提供。
 
 ---
 
@@ -28,29 +28,32 @@
 
 ### 2. PESsearch — 势能面搜索 `acp run PESsearch`
 - 从 Confsearch manifest 出发，搜索反应路径（PEB引导扫描 / 直接TS猜测）
-- 输出：`s2_path_manifest.json`（TS/中间体候选列表 + 能量曲线）
+- 输出：`RESULT/pes_search/pes_profile.json` + TS/中间体候选结构
 - 输入方式：`--from-job <Confsearch job id>` 或 `--from-artifact RESULT/confsearch/confsearch_manifest.json`
 
-### 3. Lowconfirm — 粗优化确认 `acp run Lowconfirm`
-- 对 PESsearch 候选进行粗Opt/TS + 频率 + 初步 IRC 验证
-- 质量门控 G3：频率分析 + IRC 连通性检查
-- 输出：`s3_lowconfirm_manifest.json`（确认候选 + 质量指标）
-- 支持 `--select ts_guess_001,ts_guess_004` 选择性确认
+### 3. BatchOptimize — 批量优化确认 `acp run BatchOptimize`
+- 对 PESsearch 候选或其他结构进行 per-item Opt/TS + 频率 + 单点能 + 热力学修正
+- 四种 profile：`--profile opt_only|opt_freq|opt_freq_sp|opt_freq_sp_thermo`
+- 支持 `--items-file` 批量输入、`--from-job` 继承上游产物
+- TS 候选自动识别（TAG: TS），频率分析 + IRC 连通性检查
 
-### 4. Highconfirm — 精细优化确认 `acp run Highconfirm`
-- 高精度 Opt/TS + 频率 + 单点能 + 热力学修正（Shermo）
-- 质量门控 G4（单点能收敛）+ G5（自由能排序）
-- 输出：`s4_highconfirm_manifest.json`（最终确认产物 + 能量表）
-- 支持 `--select` 选择性确认
+### 4. IRC — 端点验证 `acp run irc`
+- 对 TS 结构运行 IRC（正向 + 逆向），发现反应端点
+- 输出：`RESULT/irc/irc_forward.xyz` + `RESULT/irc/irc_reverse.xyz`
+- 端点分类：connectivity fingerprint + mapped heavy-atom RMSD
 
-### 5. 简单 ORCA 工作流 — `acp run singlepoint|opt|freq|...`
+### 5. Scan — 势能面扫描 `acp run scan`
+- 柔性坐标扫描（distance/angle/dihedral），逐步优化 + 单点能
+- 输出：`RESULT/trajectories/scan_trajectory.json` + 能量曲线
+- 坐标格式：`--coordinate atom1,atom2,start,end`
+
+### 6. 简单 ORCA 工作流 — `acp run singlepoint|opt|freq|...`
 - 单点能计算（singlepoint）
-- 几何优化（optimize / optfreq / optfreqsp）
+- 几何优化（optimize）
 - 频率计算（frequency）
-- 柔性扫描（scan）
 - xTB 优化（xtb-optimize）
 
-### 6. NMR 化学位移预测 — `acp run nmr` ✅
+### 7. NMR 化学位移预测 — `acp run nmr` ✅
 - GIAO + Boltzmann 平均 + DP4/DP5 立体归属
 - Goodman DP5 模型 + FCHL 原子表示（可选）
 
@@ -84,7 +87,11 @@
 | `acp run ensemble` | `acp run Confsearch --protocol censo-crest --refinement-policy screen` | CREST+CENSO P+S |
 | `acp run energy` | `acp run Confsearch --protocol censo-crest --refinement-policy rank1` 或 `cumulative-99` | 构象能量排名 |
 | `acp run xtbmd_censo_energy` | `acp run Confsearch --protocol xtbmd-censo` | xTB-MD+CENSO 全链路 |
-| `acp run mechanism` | `acp run PESsearch` → `acp run Lowconfirm` → `acp run Highconfirm` | 一次性机理研究拆分为独立阶段 |
+| `acp run mechanism` | `acp run PESsearch` → `acp run BatchOptimize` → `acp run irc` | 机理研究拆分为独立阶段 |
+| `acp run Lowconfirm` | `acp run BatchOptimize --profile opt_freq` → 粗优化确认 | 退役 |
+| `acp run Highconfirm` | `acp run BatchOptimize --profile opt_freq_sp_thermo` → 精细优化确认 | 退役 |
+| `acp run optfreq` | `acp run optimize` + `acp run frequency` 或 `acp run BatchOptimize` | 优化+频率 |
+| `acp run optfreqsp` | `acp run BatchOptimize --profile opt_freq_sp` | 优化+频率+单点 |
 
 ---
 
@@ -109,13 +116,18 @@ src/
 │   │   │   └── xtbmd_censo.py    #   xtbmd-censo（xTB-MD + ISOSTAT + CENSO）
 │   │   └── shared/               # 协议共享工具
 │   │
-│   ├── mechanism/                # 机理研究（orchestrator, providers, primitives, identity, rescue, strategies, layout.py）
-│   │   └── stages/               # 四阶段流水线
-│   │       ├── pes_search.py     #   PESsearch (S2)：反应路径搜索
-│   │       ├── low_confirm.py    #   Lowconfirm (S3)：粗优化确认
-│   │       ├── high_confirm.py   #   Highconfirm (S4)：精细优化确认
-│   │       ├── confirm.py        #   确认引擎（S3/S4 共用）
-│   │       └── handoff.py        #   阶段间产物交接
+│   ├── calculations/             # 计算基元和引擎
+│   │   ├── contracts.py          # CalculationPlan / CalculationRequest / Checkpoint 等冻结数据类
+│   │   ├── checkpoint.py         # 原子 JSON checkpoint 写入/加载（plan fingerprint 校验）
+│   │   ├── executor.py           # CalculationPlanExecutor：步骤调度 + 坐标交接 + checkpoint resume
+│   │   ├── plans.py              # build_simple_plan / build_batch_plan / build_irc_request
+│   │   ├── primitives/           # run_singlepoint / run_optimize / run_frequency / run_scan / run_irc / ThermochemistryCalculator
+│   │   ├── pes/                  # PESscan 核心：scan + engine + contracts + validation + path_analysis + path_selection + atom_mapping + bond_changes
+│   │   ├── batch/                # BatchOptimizeEngine + models + loaders + singlepoint
+│   │   └── irc/                  # IRC endpoint discovery + validation
+│   │
+│   ├── compat/                   # 遗留布局只读兼容层
+│   │   └── legacy/               # manifests.py（历史 manifest 读取器）+ layouts.py（布局探测）
 │   │
 │   ├── results/                  # 统一结果清单读取 (result_manifest.json)
 │   ├── storage/                  # 统一 v2 结果清单写入 (result_manifest.json)
@@ -143,7 +155,7 @@ src/
 │   │
 │   ├── workflows/                # 工作流模块（legacy：ensemble/energy/xtbmd_censo_energy 已退役 + nmr/simple + registry）
 │   │   ├── nmr.py                # NMR 化学位移预测（GIAO + DP4/DP5）
-│   │   ├── simple.py             # 简单 ORCA 工作流 (sp/opt/freq/optfreq/optfreqsp/scan/xtb-opt)
+│   │   ├── simple.py             # 简单 ORCA 工作流 (sp/opt/freq/scan/xtb-opt)
 │   │   ├── registry.py           # 工作流注册表（CLI 子命令 → WorkflowSpec）
 │   │   └── __init__.py           # PEP 562 懒加载 re-export
 │   │
@@ -272,13 +284,15 @@ acp run Confsearch --input "CCO" --protocol xtb-md --refinement-policy cumulativ
 acp run PESsearch --from-job 20260823_001_Confsearch --output ./pes_out
 acp run PESsearch --from-artifact RESULT/confsearch/confsearch_manifest.json --output ./pes_out
 
-# === Lowconfirm — 粗优化确认 ===
-acp run Lowconfirm --from-job 20260823_002_PESsearch --output ./low_out
-acp run Lowconfirm --from-artifact RESULT/mechanism/s2_path_manifest.json --select ts_guess_001,ts_guess_004 --output ./low_out
+# === BatchOptimize — 批量优化确认 ===
+acp run BatchOptimize --from-job 20260823_002_PESsearch --output ./batch_out
+acp run BatchOptimize --items-file structures.xyz --profile opt_freq_sp_thermo --output ./batch_out
 
-# === Highconfirm — 精细优化确认 ===
-acp run Highconfirm --from-job 20260823_003_Lowconfirm --output ./high_out
-acp run Highconfirm --from-artifact RESULT/mechanism/s3_lowconfirm_manifest.json --select ts_guess_001 --output ./high_out
+# === IRC — 端点验证 ===
+acp run irc --input ts_structure.xyz --output ./irc_out
+
+# === Scan — 势能面扫描 ===
+acp run scan --input "CCO" --coordinate 3,4,1.0,3.0 --output ./scan_out
 
 # === 简单 ORCA 工作流 ===
 acp run singlepoint --input "CCO" --method "wB97X-D4" --basis "def2-TZVPPD"
@@ -315,19 +329,24 @@ acp run PESsearch --from-job <Confsearch job id>
                   --output <输出目录>
                   --nproc --mem --config ...
 
-acp run Lowconfirm --from-job <PESsearch job id>
-                    --from-artifact <s2_path_manifest.json 路径>
-                    --select <ts_guess_001,ts_guess_004>
-                    --output <输出目录>
-                    --nproc --mem --config ...
+acp run BatchOptimize --from-job <PESsearch job id>
+                      --from-artifact <result_manifest.json 路径>
+                      --items-file <structures.xyz 路径>
+                      --profile <opt_only|opt_freq|opt_freq_sp|opt_freq_sp_thermo>
+                      --output <输出目录>
+                      --nproc --mem --config ...
 
-acp run Highconfirm --from-job <Lowconfirm job id>
-                     --from-artifact <s3_lowconfirm_manifest.json 路径>
-                     --select <ts_guess_001>
-                     --output <输出目录>
-                     --nproc --mem --config ...
+acp run irc --input <TS 结构文件路径>
+            --output <输出目录>
+            --direction <forward|reverse|both>
+            --nproc --mem --config ...
 
-acp run singlepoint|opt|freq|optfreq|optfreqsp|scan|xtb-opt --input <SMILES或文件路径>
+acp run scan --input <SMILES或文件路径>
+             --coordinate <atom1,atom2,start,end>
+             --output <输出目录>
+             --nproc --mem --config ...
+
+acp run singlepoint|optimize|frequency|xtb-optimize --input <SMILES或文件路径>
                   --output <输出目录>
                   --method <method> --basis <basis>
                   --nproc --mem --config ...
@@ -389,7 +408,7 @@ pytest tests/test_remote_phase*.py -v
 pytest -m "not slow" -v
 ```
 
-当前测试状态：**82 测试文件，涵盖 ACP 核心 + 工作流 + API + 调度器 + 远程执行**
+当前测试状态：**96 测试文件，涵盖 ACP 核心 + 工作流 + API + 调度器 + 远程执行**
 
 ### 代码质量
 
@@ -408,7 +427,7 @@ pytest -m "not slow" -v
 |------|--------|----------|
 | `src/acp/` | ~130 | ~65,000 |
 | `src/cccp/` | 17 | ~5,200 |
-| `tests/` | 82 | ~10,000+ |
+| `tests/` | 96 | ~10,000+ |
 | 合计 | ~229+ | ~80,000+ |
 
 ---
@@ -418,26 +437,26 @@ pytest -m "not slow" -v
 ```
 ┌───────────────────────────────────────────────────────────────────┐
 │  CLI                                                               │
-│  acp run Confsearch|PESsearch|Lowconfirm|Highconfirm|nmr|simple|serve │
+│  acp run Confsearch|PESsearch|BatchOptimize|irc|scan|nmr|simple|serve │
 └────────────────────────────┬──────────────────────────────────────┘
                              │
                              ▼
 ┌───────────────────────────────────────────────────────────────────┐
 │  WorkflowRunner (acp/core/workflow.py)                            │
-│  Stage 管道（按工作流组合）                                         │
+│  计算计划驱动管道                                                    │
 └────────────────────────────┬──────────────────────────────────────┘
                              │
         ┌────────────────────┼────────────────────┬────────────────┐
         ▼                    ▼                    ▼                ▼
   ┌───────────┐        ┌──────────┐        ┌──────────┐    ┌──────────┐
-  │Confsearch │        │PESsearch │        │Lowconfirm│    │Highconfirm│
-  │  (统一构象 │        │ (路径搜索│        │ (粗优化  │    │ (精细优化 │
-  │   搜索+能量)│       │  S2)     │        │  确认S3) │    │  确认S4)  │
+  │Confsearch │        │PESsearch │        │BatchOptimize│  │irc/scan  │
+  │  (统一构象 │        │ (路径搜索│        │(批量优化 │    │(IRC验证/ │
+  │   搜索+能量)│       │  PES)    │        │ 确认)    │    │ 坐标扫描)│
   └─────┬─────┘        └────┬─────┘        └────┬─────┘    └────┬─────┘
         │                   │                   │               │
         │    confsearch_manifest.json           │               │
-        │              s2_path_manifest.json    │               │
-        │                   s3_lowconfirm_manifest.json         │
+        │              pes_profile.json          │               │
+        │                   result_manifest.json│               │
         └───────────────────┴───────────────────┴───────────────┘
                                 │
                                 ▼

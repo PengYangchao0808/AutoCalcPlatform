@@ -1,12 +1,12 @@
 # Auto-Calc Platform (ACP) — Project Knowledge Base
 
-**Generated:** 2026-08-21
-**Branch:** main (git repo — uncommitted working tree carries the 2026-08-15/17 mechanism + PAUSED waves)
+**Generated:** 2026-08-28
+**Branch:** refactor/calc-cleanup (post-refactor minimal architecture)
 
 ## OVERVIEW
-Automated computational chemistry platform. Two-package architecture under `src/`: `cccp` (Computational Chemistry Connection Package — the QC interface library, formerly `conformer_search`) and the `acp` module (Phase 1+, stage-based workflow pipeline, unified CLI). Python 3.10+, setuptools, YAML config.
+Automated computational chemistry platform. Two-package architecture under `src/`: `cccp` (Computational Chemistry Connection Package — the QC interface library, formerly `conformer_search`) and the `acp` module (Phase 1+, calculation-plan-driven workflow pipeline, unified CLI). Python 3.10+, setuptools, YAML config.
 
-**Active workflows (v1.2, 2026-08-23):** four-stage reaction mechanism pipeline Confsearch → PESsearch → Lowconfirm → Highconfirm, plus nmr (DP4/DP5) and simple (singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt). Retired (kept read-only in catalog for historical-job display): ensemble, energy, xtbmd_censo_energy, mechanism, conformer, benchmark, mech-conf, mech-step, mech-confirm, mech-chain. Scheduler job lifecycle includes PAUSED (local SIGSTOP/SIGCONT, remote bstop/bresume) plus checkpoint continue, rerun, and cascade purge (2026-08-17 wave).
+**Active workflows (10, post-refactor 2026-08-28):** Confsearch, PESsearch, BatchOptimize, irc, scan, plus nmr (DP4/DP5) and simple (singlepoint/optimize/frequency/xtb-optimize). Retired (kept read-only in catalog for historical-job display): ensemble, energy, xtbmd_censo_energy, mechanism, conformer, benchmark, mech-conf, mech-step, mech-confirm, mech-chain, optfreq, optfreqsp, Lowconfirm, Highconfirm. Scheduler job lifecycle includes PAUSED (local SIGSTOP/SIGCONT, remote bstop/bresume) plus checkpoint continue, rerun, and cascade purge.
 
 ## STRUCTURE
 ```
@@ -22,12 +22,12 @@ ACP_V1_20260811/
 │   ├── io/                # MolecularInputHandler — format detection, RDKit embedding (442 lines)
 │   ├── pipeline/          # PipelineExecutor (thin, 12 lines)
 │   └── utils/             # File I/O, geometry, constants, solvent maps
-├── src/acp/               # Unified module (~130 .py, ~65k lines incl. API/scheduler/nmr/mechanism)
-│   ├── cli.py             # argparse subcommand CLI: `acp run Confsearch|PESsearch|Lowconfirm|Highconfirm|nmr|serve|simple|...` (2608 lines)
+├── src/acp/               # Unified module (~130 .py, ~65k lines incl. API/scheduler/nmr)
+│   ├── cli.py             # argparse subcommand CLI: `acp run Confsearch|PESsearch|BatchOptimize|irc|scan|nmr|serve|simple` (2608 lines)
 │   ├── catalog.py         # WORKFLOW_CATALOG + METHOD_META + METHOD_SCHEMAS (2915 lines — retired entries kept as status:"retired")
 │   ├── confsearch/        # Unified conformer search: engine, contracts, manifest, profiles, selection, protocols/ (xtb-crest/xtb-md/censo-crest/xtbmd-censo), shared/
-│   ├── mechanism/         # Mechanism study (orchestrator, providers, primitives, identity, rescue, strategies, layout.py)
-│   │   └── stages/        # Four-stage pipeline: pes_search.py, low_confirm.py, high_confirm.py, confirm.py, handoff.py
+│   ├── calculations/      # Calculation-plan primitives and engines: contracts, checkpoint, executor, plans, primitives/ (sp/opt/freq/scan/irc/thermochemistry), pes/, batch/, irc/
+│   ├── compat/            # Read-only legacy manifest readers and layout compatibility (legacy/ subpkg)
 │   ├── results/           # Unified result manifest reader (result_manifest.json)
 │   ├── storage/           # Unified v2 result manifest write (result_manifest.json schema)
 │   ├── core/              # Shared mechanism: Structure, WorkflowRunner, Registry, State, Config
@@ -43,7 +43,7 @@ ACP_V1_20260811/
 ├── frontend/              # ACP Workbench (v1 + v2) single-page dark dashboards
 ├── scripts/               # start_acp.sh, bootstrap_venv.sh, install_systemd.sh
 ├── config/defaults.yaml   # Default YAML config (may diverge from Python built-in — built-in is authoritative)
-├── tests/                 # 82 test files (~1315 tests), conftest.py, fixtures/, baseline/ (audit artifact)
+├── tests/                 # 96 test files (~1315 tests), conftest.py, fixtures/, baseline/ (audit artifact)
 ├── docs/                  # Dev docs: CENSO, NMR_DP4, xTBMD_CENSO, Mechanism Research, Job File Layout, Remote execution, Simple Workflows
 ├── requirements-node.txt  # Remote compute-node runtime deps (numpy/rdkit/pyyaml only — NOT pyproject); installed by NodeManager.bootstrap_node() and auto-synced by CodeSyncer. Add any new `acp run` runtime import HERE + pyproject.toml
 └── pyproject.toml         # api/remote/nmr/dev optional deps; console script `acp = acp.cli:main`
@@ -52,7 +52,7 @@ ACP_V1_20260811/
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| ACP CLI (unified entry) | `src/acp/cli.py` | `acp run Confsearch|PESsearch|Lowconfirm|Highconfirm|nmr|serve|simple workflows` (2608 lines) |
+| ACP CLI (unified entry) | `src/acp/cli.py` | `acp run Confsearch|PESsearch|BatchOptimize|irc|scan|nmr|serve|simple workflows` (2608 lines) |
 | Add new protocol | `src/cccp/core/protocols.py` | Update `_get_default_protocol_config()` (626 lines) |
 | Config loading | `src/cccp/config.py` | 6-source merge (756 lines) |
 | Config defaults (ACP) | `src/acp/core/config.py` | ACP-specific config loading (169 lines) |
@@ -70,9 +70,9 @@ ACP_V1_20260811/
 | Molclus interface | `src/cccp/qc/interfaces/molclus.py` | xTB-MD + Molclus full pipeline (md.inp, settings.ini, search()) |
 | CENSO interface | `src/cccp/qc/interfaces/censo.py` | CENSO subprocess: rcfile gen, preset injection, template injection, JSON/XYZ parsing |
 | Legacy ISOSTAT/Shermo | `src/cccp/qc/runners/__init__.py` | `run_isostat()` (DEPRECATED — IsostatInterface is the single path), `run_shermo()`, `batch_process_thermo()` (342 lines) |
-| Ensemble workflow | `src/acp/workflows/ensemble.py` | **RETIRED** (Confsearch v1.0): CREST → CENSO P+S (398 lines); kept for historical-job display only |
-| Energy workflow | `src/acp/workflows/energy.py` | **RETIRED** (Confsearch v1.0): rank1-only default (753 lines); maps to Confsearch + censo-crest + rank1/cumulative-99 |
-| xTB-MD CENSO energy | `src/acp/workflows/xtbmd_censo_energy.py` | **RETIRED** (Confsearch v1.0): GFN-FF MD → CENSO (2080 lines); maps to Confsearch + xtbmd-censo |
+| Ensemble workflow | `src/acp/workflows/ensemble.py` | **RETIRED CLI entry** (Confsearch v1.0): CREST → CENSO P+S (398 lines); still live as Confsearch protocol engine (censo-crest/xtb-crest screen policy) |
+| Energy workflow | `src/acp/workflows/energy.py` | **RETIRED CLI entry** (Confsearch v1.0): rank1-only default (753 lines); still live as Confsearch protocol engine (censo-crest rank1/cumulative-99) |
+| xTB-MD CENSO energy | `src/acp/workflows/xtbmd_censo_energy.py` | **RETIRED CLI entry** (Confsearch v1.0): GFN-FF MD → CENSO (2080 lines); still live as Confsearch protocol engine (xtbmd-censo) |
 | Shared energy helpers | `src/acp/workflows/energy_shared.py` | `resolve_levels`/`run_rank1_handoff`/`boltzmann_weights`/etc.; ORCA handoff via `get_backend("orca")` (2026-08-02) |
 | NMR workflow | `src/acp/workflows/nmr.py` | Conformer search → GIAO → Boltzmann averaging (1056 lines) |
 | Confsearch engine | `src/acp/confsearch/engine.py` | Unified conformer search + energies; protocols xtb-crest / xtb-md / censo-crest / xtbmd-censo |
@@ -81,27 +81,30 @@ ACP_V1_20260811/
 | Confsearch profiles | `src/acp/confsearch/profiles.py` | light / default / high resource profiles |
 | Confsearch selection | `src/acp/confsearch/selection.py` | Candidate selection and ranking logic |
 | Confsearch protocols | `src/acp/confsearch/protocols/` | xtb-crest / xtb-md / censo-crest / xtbmd-censo protocol implementations |
-| PESsearch (S2) | `src/acp/mechanism/stages/pes_search.py` | Reaction path search + TS/intermediate guesses; output `s2_path_manifest.json` |
-| Lowconfirm (S3) | `src/acp/mechanism/stages/low_confirm.py` | Coarse Opt/TS + frequency + preliminary IRC; output `s3_lowconfirm_manifest.json` — routed through BatchConfirmEngine |
-| Highconfirm (S4) | `src/acp/mechanism/stages/high_confirm.py` | High-fidelity Opt/TS + freq + SP + thermochemistry; output `s4_highconfirm_manifest.json` — routed through BatchConfirmEngine |
-| Batch S3/S4 engine | `src/acp/mechanism/batch_confirm.py` | `BatchConfirmEngine` — one engine, two profiles (s3/s4); per-item dirs `WORK/03_OPT/batch/<item_id>/`, resume/skip-completed via cache key, `batch_calculation_manifest.json`, structures → `RESULT/structures/<item_id>__TAG_<TS|INT>__optimized.xyz`, result_manifest/result_summary registration |
-| Batch input models | `src/acp/mechanism/batch_models.py` | TAG parsing (`TAG: TS|INT | candidate_id=...`), `BatchStructureItem`/`BatchCalculationItem`/`BatchCalculationManifest`, loaders (s2 candidate manifest / multi-frame XYZ / batch_structures_v1 request), user-override priority |
-| Stage handoff | `src/acp/mechanism/stages/handoff.py` | Artifact transfer between stages; also stages `s2_candidate_manifest.json` + `RESULT/structures/s2_candidates/` |
-| Mechanism layout | `src/acp/mechanism/layout.py` | `resolve_study_layout` / `find_study_layout` / `find_reaction_json` (path normalization) |
+| PESsearch (S2) | `src/acp/workflows/pes_search.py` | Reaction path search + TS/intermediate guesses; output `RESULT/pes_search/` |
+| BatchOptimize | `src/acp/calculations/batch/engine.py` | Per-item Opt/TS + frequency + SP + thermochemistry; profiles: opt_only/opt_freq/opt_freq_sp/opt_freq_sp_thermo |
+| Batch input models | `src/acp/calculations/batch/models.py` | TAG parsing (`TAG: TS|INT | candidate_id=...`), `BatchStructureItem`/`BatchCalculationItem`/`BatchCalculationManifest`, loaders |
+| IRC primitive | `src/acp/calculations/irc/` | `run_irc()` endpoint discovery + validation; `irc/contracts.py` + `irc/validation.py` (connectivity, fingerprint, RMSD, TS identity) |
+| PES scan core | `src/acp/calculations/pes/scan.py` | Standalone relaxed-scan execution + candidate recommendation + BatchSinglePointExecutor integration |
+| PES contracts | `src/acp/calculations/pes/contracts.py` | `PesScanRequest`, `ScanCoordinate`, `EnergyProfile`, `CandidateRecommendation` frozen dataclasses |
+| PES engine | `src/acp/calculations/pes/engine.py` | `PesSearchEngine` orchestrator: confsearch manifest → scan → candidates → `RESULT/pes_search/` |
+| PES path analysis | `src/acp/calculations/pes/path_analysis.py` | PathFrameEvidence, PathProfile, arclength, RMSD, energy derivatives |
+| PES path selection | `src/acp/calculations/pes/path_selection.py` | SelectionPolicy, SeedSelection, select_path_seeds, replay_rescue_selection |
+| PES validation | `src/acp/calculations/pes/validation.py` | Topology guards, bond graphs, risky contacts, scan trajectory validation |
+| PES atom mapping | `src/acp/calculations/pes/atom_mapping.py` | RDKit MCS atom mapping, AtomIdentityMap (standalone, no mechanism dependency) |
+| PES bond changes | `src/acp/calculations/pes/bond_changes.py` | BondChange, compute_bond_changes, suggest_coordinate_plan |
+| Calculation contracts | `src/acp/calculations/contracts.py` | `CalculationPlan`, `CalculationRequest`, `CalculationStep`, `StructureArtifact`, `Checkpoint` frozen dataclasses |
+| Plan builders | `src/acp/calculations/plans.py` | `build_simple_plan`, `build_batch_plan`, `build_irc_request` |
+| Plan executor | `src/acp/calculations/executor.py` | `CalculationPlanExecutor` — step dispatch + coordinate handoff + checkpoint resume + manifest write |
+| Calculation primitives | `src/acp/calculations/primitives/` | `run_singlepoint`, `run_optimize`, `run_frequency`, `run_scan`, `run_irc`, `ThermochemistryCalculator` |
+| Checkpoint protocol | `src/acp/calculations/checkpoint.py` | `write_checkpoint` / `load_checkpoint` — atomic JSON with plan fingerprint validation |
+| Compat legacy readers | `src/acp/compat/legacy/manifests.py` | Read-only adapters: `read_s2_path_manifest`, `read_s3_lowconfirm_manifest`, `read_s4_highconfirm_manifest`, etc. |
+| Compat layout probing | `src/acp/compat/legacy/layouts.py` | `find_study_layout`, `find_reaction_json` — v2 + legacy dual-probe read-only resolution |
 | Result manifest (read) | `src/acp/results/manifest.py` | Unified `result_manifest.json` reader |
 | Result manifest (write) | `src/acp/storage/manifest.py` | Unified v2 `result_manifest.json` writer (design doc §8) |
 | Scheduler tasks | `src/acp/scheduler/tasks.py` | Task-level scheduling for stage workflows |
 | API v2 routes | `src/acp/api/v2_routes.py` | v2 API surface |
-| Mechanism study entry | `src/acp/mechanism/study_runner.py` | `acp run mechanism` → `run_mechanism_study` / `resume_mechanism_study` → `StudyOrchestrator` phases S0→S1→S2→S3→SR→S4 (**RETIRED** for new runs, Confsearch v1.0, 2026-08-23; historical studies viewable read-only) |
-| Mechanism orchestrator | `src/acp/mechanism/orchestrator.py` | `StudyOrchestrator` — phase execution, review gates, strategies (guided-scan / rph-reverse / direct-ts), ts_guess route `ts_guess_01`; SR cycles: `sr_cycle_review` decisions, `MechanismRevision` resume payloads, per-cycle persistence under `cycles/cycle_NN/revision.json` |
-| Mechanism atom mapping | `src/acp/mechanism/atom_mapping.py` | Cross-state reactant↔product atom mapping (0-based indices) for reaction confirmation |
-| Mechanism bond changes | `src/acp/mechanism/bond_changes.py` | Bond-change classification + suggested drive-coordinate plan generation |
-| Mechanism reaction definition | `src/acp/mechanism/reaction_definition.py` | Locked reaction-definition models + reaction.json persistence with content hash |
-| Mechanism study engines | `src/acp/mechanism/providers/` | NATIVE default: `native_censo_lite.py` (S1) / `native_peb.py` (S2) / `native_refinement.py` (S3/S4); `rph_adapter.py` = parity-only (`config['mechanism']['provider_backend']='rph'`) |
-| Mechanism primitives | `src/acp/mechanism/primitives/` | Pure-algorithm S2 ports (path_selector/path_profile/geometry_guard/scan_trajectory/energy_refinement/scan_rescue) + torsion_dedup |
-| Mechanism support modules | `src/acp/mechanism/` | `rescue.py` (8-cell rescue matrix), `refinement_manifest.py` (S3/S4 manifest io), `identity.py` (study identity/fingerprints), `endpoint.py`/`gates.py`/`models.py`/`presets.py`/`reports.py`/`strategies.py`/`candidates.py`/`_helpers.py` (numbered-run resume via `next_sequence` disk scan); providers also include `guided_scan.py`/`xtb_ensemble.py`/`thermo.py`/`contracts.py`/`fake.py` |
-| Mechanism study API | `src/acp/api/v1_routes.py` | Study CRUD + two-layer surface: reaction preview/confirm/get, stationary preflight/status/confirm, mechanism/plan, SR cycle endpoints (GET `/{id}/reviews`, POST `/{id}/reviews/{rid}/decision`, POST `/{id}/promote`, POST `/{id}/resume`), `unified_status` projection on summary/detail |
-| Simple workflows | `src/acp/workflows/simple.py` | singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt (635 lines) |
+| Simple workflows | `src/acp/workflows/simple.py` | singlepoint/optimize/frequency/scan/xtb-opt (635 lines) |
 | Workflow registry | `src/acp/workflows/registry.py` | Maps CLI subcommands → WorkflowSpec builders (153 lines) |
 | Method catalog | `src/acp/catalog.py` | METHOD_META dict: methods, bases, route blocks (2915 lines) |
 | Core data models | `src/acp/core/models.py` | Structure, StructureRecord, StructureEnsemble (389 lines) |
@@ -184,6 +187,8 @@ ACP_V1_20260811/
 21. **`resume(job_id, resolution)` is WAITING_REVIEW-review-only** — pause/unpause/continue are separate methods (`pause_job`/`unpause_job`/`continue_job`); non-requeue `resume()` has the RUNNING-bounce footgun (sets RUNNING with no thread → `exit_code 77` persists → bounces back to WAITING_REVIEW on next poll)
 22. **NEVER put `job_id` (or any timestamp) into a disk path** — v1.2 (2026-08-23) contract: scheduler task dirs are named `<molecule>_<task>_<remark>` via `JobSpec.task_dir_name()`/`sanitize_task_dir_name`, deduped `__NN` by manager `_dedupe_task_dir`; `job_id` lives ONLY in DB PK, `job.json`, `task.json`, `WORK/00_RUNTIME` log headers, and `events.jsonl`. Workflow-side scheduler detection is `workflows/_helpers.is_scheduler_task_dir` (`job.json`+`task.json`) — in scheduler context workflows write at task ROOT (flat, no `{safe_name}/` nesting); non-scheduler CLI multi-molecule runs keep `{output}/{safe_name}/`. Old `{job_id}/`-named dirs stay read-compatible via `find_workflow_state` (shallow-first rglob) + DB `work_dir` authority. See `docs/ACP_Job_File_Layout_Spec.md` §1a/§2a/§6a
 23. **mechanism 布局已归一化（v1.2，2026-08-23）** — `mechanism_study/<study_id>/` 第三套命名体系废除：新任务产物落 `WORK/{02_SEARCH,03_OPT/TS,07_PATH,08_ANALYSIS}` + `RESULT/mechanism`，`study_id` 仅存 DB/指纹。所有路径读写经 `acp/mechanism/layout.py`（`resolve_study_layout` 写 / `find_study_layout` 双探针读 / `find_reaction_json` 预运行探测）；`study.study_dir` 持久化字段 = `WORK/08_ANALYSIS`。历史任务经 `LEGACY_FALLBACK_ENABLED` 只读兼容，**任何新代码不得再直接拼 `mechanism_study/<id>/` 路径**（grep 校验：字面量只允许出现在 layout.py）
+24. **calculations/ 是计算基元的唯一驻点** — `src/acp/calculations/` 包含所有 QC 计算原语（sp/opt/freq/scan/irc/thermochemistry）、计划构建器（plans.py）、执行器（executor.py）、合同数据类（contracts.py）、以及 pes/batch/irc 子包。**任何新计算能力必须加入 calculations/primitives/，不得散落在 workflows/ 或 backends/ 中。** `CalculationsPlanExecutor` 是 single-item 单步调度的唯一入口；多项目调度走 BatchOptimizeEngine。
+25. **compat/ 是遗留布局的只读兼容层** — `src/acp/calculations/compat/legacy/` 提供历史 manifest 读取器（`read_s2_path_manifest` 等）和布局探测（`find_study_layout`）。**只读，禁止写入。** 新代码消费数据必须通过 `acp.results.manifest`（v2 格式），仅在需要兼容历史任务时经由 compat 转接。
 
 ## UNIQUE STYLES
 - Module docstrings: title + `====` underline + `Author: QCcalc Team` (38 files, mostly cccp/)
@@ -212,13 +217,15 @@ acp run Confsearch --input "CCO" --protocol xtb-md --refinement-policy cumulativ
 acp run PESsearch --from-job 20260823_001_Confsearch --output ./pes_out
 acp run PESsearch --from-artifact RESULT/confsearch/confsearch_manifest.json --output ./pes_out
 
-# Lowconfirm — coarse Opt/TS + frequency + preliminary IRC (S3)
-acp run Lowconfirm --from-job 20260823_002_PESsearch --output ./low_out
-acp run Lowconfirm --from-artifact RESULT/mechanism/s2_path_manifest.json --select ts_guess_001,ts_guess_004 --output ./low_out
+# BatchOptimize — per-item Opt/TS + frequency + SP + thermochemistry
+acp run BatchOptimize --from-job 20260823_002_PESsearch --output ./batch_out
+acp run BatchOptimize --items-file structures.xyz --profile opt_freq_sp_thermo --output ./batch_out
 
-# Highconfirm — high-fidelity Opt/TS + freq + SP + thermochemistry (S4)
-acp run Highconfirm --from-job 20260823_003_Lowconfirm --output ./high_out
-acp run Highconfirm --from-artifact RESULT/mechanism/s3_lowconfirm_manifest.json --select ts_guess_001 --output ./high_out
+# IRC — endpoint discovery + validation
+acp run irc --input ts_structure.xyz --output ./irc_out
+
+# Scan — relaxed coordinate scan
+acp run scan --input "CCO" --coordinate 3,4,1.0,3.0 --output ./scan_out
 
 # NMR chemical shift prediction
 acp run nmr --input "CCO" --output ./nmr_results
@@ -237,6 +244,10 @@ acp run serve --port 8765
 # acp run energy    → Confsearch + censo-crest + rank1/cumulative-99
 # acp run xtbmd_censo_energy → Confsearch + xtbmd-censo
 # acp run mechanism → PESsearch / Lowconfirm / Highconfirm (split into 3 stages)
+# acp run Lowconfirm → BatchOptimize(opt_freq) + irc
+# acp run Highconfirm → BatchOptimize(opt_freq_sp_thermo) + irc
+# acp run optfreq → optimize + frequency (or BatchOptimize)
+# acp run optfreqsp → BatchOptimize
 
 # Test (real-binary tests are collection-skipped; use --run-slow to include)
 pytest tests/ -v

@@ -1,20 +1,20 @@
 # acp/ — ACP Unified Module
 
 ## OVERVIEW
-The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. ~130 files, ~65k lines (incl. API + scheduler + nmr + mechanism). Coexists with the underlying `cccp` package (Computational Chemistry Connection Package — the QC interface library).
+The unified `acp` CLI, stage-based workflow pipeline, capability-driven QC backends, and generic core models. ~130 files, ~65k lines (incl. API + scheduler + nmr). Coexists with the underlying `cccp` package (Computational Chemistry Connection Package — the QC interface library).
 
-**Active workflows (v1.2, 2026-08-23):** four-stage reaction mechanism pipeline Confsearch → PESsearch → Lowconfirm → Highconfirm, plus nmr (DP4/DP5) and simple (singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt). Retired (catalog `status:"retired"`, read-only for historical-job display): ensemble, energy, xtbmd_censo_energy, mechanism, conformer, benchmark, mech-conf, mech-step, mech-confirm, mech-chain.
+**Active workflows (10, post-refactor 2026-08-28):** Confsearch, PESsearch, BatchOptimize, irc, scan, plus nmr (DP4/DP5) and simple (singlepoint/optimize/frequency/xtb-optimize). Retired (catalog `status:"retired"`, read-only for historical-job display): ensemble, energy, xtbmd_censo_energy, mechanism, conformer, benchmark, mech-conf, mech-step, mech-confirm, mech-chain, optfreq, optfreqsp, Lowconfirm, Highconfirm.
 
 ## STRUCTURE
 ```
 acp/
-├── cli.py              # `acp run {Confsearch|PESsearch|Lowconfirm|Highconfirm|nmr|serve|simple workflows}` (~2608 lines)
+├── cli.py              # `acp run {Confsearch|PESsearch|BatchOptimize|irc|scan|nmr|serve|simple workflows}` (~2608 lines)
 ├── __init__.py          # Package docstring only
 ├── __main__.py          # `python -m acp` works
 ├── catalog.py           # WORKFLOW_CATALOG + METHOD_META + METHOD_SCHEMAS (2915 lines — retired entries kept as status:"retired")
 ├── confsearch/          # Unified conformer search: engine, contracts, manifest, profiles, selection, protocols/ (xtb-crest/xtb-md/censo-crest/xtbmd-censo), shared/
-├── mechanism/           # Mechanism study (orchestrator, providers, primitives, identity, rescue, strategies, layout.py)
-│   └── stages/          # Four-stage pipeline: pes_search.py, low_confirm.py, high_confirm.py, confirm.py, handoff.py
+├── calculations/        # Calculation-plan primitives and engines: contracts, checkpoint, executor, plans, primitives/ (sp/opt/freq/scan/irc/thermochemistry), pes/, batch/, irc/
+├── compat/              # Read-only legacy manifest readers and layout compatibility (legacy/ subpkg)
 ├── results/             # Unified result manifest reader (result_manifest.json)
 ├── storage/             # Unified v2 result manifest write (result_manifest.json schema)
 ├── core/                # Generic mechanism: Structure, WorkflowRunner, Registry, State, Config
@@ -31,7 +31,7 @@ acp/
 ## WHERE TO LOOK
 | Task | Location | Notes |
 |------|----------|-------|
-| ACP CLI entry | `cli.py` | `acp run {Confsearch\|PESsearch\|Lowconfirm\|Highconfirm\|serve\|nmr\|simple workflows}` dispatch (~2608 lines) |
+| ACP CLI entry | `cli.py` | `acp run {Confsearch\|PESsearch\|BatchOptimize\|irc\|scan\|serve\|nmr\|simple workflows}` dispatch (~2608 lines) |
 | Config resolution | `cli.py` | `_build_config()` → delegates to `cccp.config.load_config` |
 | Workflow catalog | `catalog.py` | `WORKFLOW_CATALOG` (active + retired), `SUPPORTED_WORKFLOWS`, `METHOD_META`, `METHOD_SCHEMAS` |
 | Method catalog | `catalog.py` | `METHOD_META` dict: wB97X-D4, r2SCAN-3c, DLPNO-CCSD(T) route blocks |
@@ -58,22 +58,32 @@ acp/
 | Confsearch engine | `confsearch/engine.py` | Unified conformer search + energies; protocols xtb-crest / xtb-md / censo-crest / xtbmd-censo |
 | Confsearch manifest | `confsearch/manifest.py` | `confsearch_manifest.json` handoff artifact (S1) |
 | Confsearch protocols | `confsearch/protocols/` | xtb-crest / xtb-md / censo-crest / xtbmd-censo protocol implementations |
-| PESsearch (S2) | `mechanism/stages/pes_search.py` | Reaction path search + TS/intermediate guesses; output `s2_path_manifest.json` |
-| Lowconfirm (S3) | `mechanism/stages/low_confirm.py` | Coarse Opt/TS + frequency + preliminary IRC; output `s3_lowconfirm_manifest.json` — routed through BatchConfirmEngine |
-| Highconfirm (S4) | `mechanism/stages/high_confirm.py` | High-fidelity Opt/TS + freq + SP + thermochemistry; output `s4_highconfirm_manifest.json` — routed through BatchConfirmEngine |
-| Batch S3/S4 engine | `mechanism/batch_confirm.py` | `BatchConfirmEngine` — one engine, two profiles (s3/s4); per-item dirs `WORK/03_OPT/batch/<item_id>/`, resume/skip-completed via cache key, `batch_calculation_manifest.json`, structures → `RESULT/structures/<item_id>__TAG_<TS|INT>__optimized.xyz`, result_manifest/result_summary registration |
-| Batch input models | `mechanism/batch_models.py` | TAG parsing (`TAG: TS|INT | candidate_id=...`), `BatchStructureItem`/`BatchCalculationItem`/`BatchCalculationManifest`, loaders (s2 candidate manifest / multi-frame XYZ / batch_structures_v1 request), user-override priority. **NOTE: `batch_confirm` imports `stages.confirm`, so it must NOT be re-exported from `stages/__init__.py`** (circular import) |
-| Stage handoff | `mechanism/stages/handoff.py` | Artifact transfer between stages; also stages `s2_candidate_manifest.json` + `RESULT/structures/s2_candidates/` |
-| Mechanism layout | `mechanism/layout.py` | `resolve_study_layout` / `find_study_layout` / `find_reaction_json` (path normalization) |
+| Calculation contracts | `calculations/contracts.py` | `CalculationPlan`, `CalculationRequest`, `CalculationStep`, `StructureArtifact`, `Checkpoint` frozen dataclasses |
+| Plan builders | `calculations/plans.py` | `build_simple_plan`, `build_batch_plan`, `build_irc_request` |
+| Plan executor | `calculations/executor.py` | `CalculationPlanExecutor` — step dispatch + coordinate handoff + checkpoint resume + manifest write |
+| Calculation primitives | `calculations/primitives/` | `run_singlepoint`, `run_optimize`, `run_frequency`, `run_scan`, `run_irc`, `ThermochemistryCalculator` |
+| Checkpoint protocol | `calculations/checkpoint.py` | `write_checkpoint` / `load_checkpoint` — atomic JSON with plan fingerprint validation |
+| PES scan core | `calculations/pes/scan.py` | Standalone relaxed-scan execution + candidate recommendation + BatchSinglePointExecutor integration |
+| PES engine | `calculations/pes/engine.py` | `PesSearchEngine` orchestrator: confsearch manifest → scan → candidates → `RESULT/pes_search/` |
+| PES contracts | `calculations/pes/contracts.py` | `PesScanRequest`, `ScanCoordinate`, `EnergyProfile`, `CandidateRecommendation` frozen dataclasses |
+| PES path analysis | `calculations/pes/path_analysis.py` | PathFrameEvidence, PathProfile, arclength, RMSD, energy derivatives |
+| PES path selection | `calculations/pes/path_selection.py` | SelectionPolicy, SeedSelection, select_path_seeds, replay_rescue_selection |
+| PES validation | `calculations/pes/validation.py` | Topology guards, bond graphs, risky contacts, scan trajectory validation |
+| PES atom mapping | `calculations/pes/atom_mapping.py` | RDKit MCS atom mapping, AtomIdentityMap (standalone, no mechanism dependency) |
+| PES bond changes | `calculations/pes/bond_changes.py` | BondChange, compute_bond_changes, suggest_coordinate_plan |
+| BatchOptimize engine | `calculations/batch/engine.py` | `BatchOptimizeEngine` — per-item Opt/TS + frequency + SP + thermochemistry |
+| Batch input models | `calculations/batch/models.py` | TAG parsing, `BatchStructureItem`/`BatchCalculationItem`/`BatchCalculationManifest`, loaders |
+| IRC primitive | `calculations/irc/` | `run_irc()` endpoint discovery + validation; `irc/contracts.py` + `irc/validation.py` |
+| Compat legacy readers | `compat/legacy/manifests.py` | Read-only adapters: `read_s2_path_manifest`, `read_s3_lowconfirm_manifest`, etc. |
+| Compat layout probing | `compat/legacy/layouts.py` | `find_study_layout`, `find_reaction_json` — v2 + legacy dual-probe read-only resolution |
 | Result manifest (read) | `results/manifest.py` | Unified `result_manifest.json` reader |
 | Result manifest (write) | `storage/manifest.py` | Unified v2 `result_manifest.json` writer (design doc §8) |
 | Scheduler tasks | `scheduler/tasks.py` | Task-level scheduling for stage workflows |
 | API v2 routes | `api/v2_routes.py` | v2 API surface |
-| Ensemble workflow | `workflows/ensemble.py` | **RETIRED** (Confsearch v1.0): CREST → CENSO P+S; kept for historical-job display only |
-| Energy workflow | `workflows/energy.py` | **RETIRED** (Confsearch v1.0): rank1-only default; maps to Confsearch + censo-crest |
-| xTB-MD CENSO energy | `workflows/xtbmd_censo_energy.py` | **RETIRED** (Confsearch v1.0): GFN-FF MD → CENSO; maps to Confsearch + xtbmd-censo |
-| Mechanism study | `mechanism/study_runner.py` + `mechanism/orchestrator.py` | **RETIRED** for new runs (Confsearch v1.0, 2026-08-23); historical studies viewable read-only |
-| Simple workflows | `workflows/simple.py` | singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt |
+| Ensemble workflow | `workflows/ensemble.py` | **RETIRED CLI entry** (Confsearch v1.0): CREST → CENSO P+S; still live as Confsearch protocol engine (censo-crest/xtb-crest screen policy) |
+| Energy workflow | `workflows/energy.py` | **RETIRED CLI entry** (Confsearch v1.0): rank1-only default; still live as Confsearch protocol engine (censo-crest rank1/cumulative-99) |
+| xTB-MD CENSO energy | `workflows/xtbmd_censo_energy.py` | **RETIRED CLI entry** (Confsearch v1.0): GFN-FF MD → CENSO; still live as Confsearch protocol engine (xtbmd-censo) |
+| Simple workflows | `workflows/simple.py` | singlepoint/optimize/frequency/scan/xtb-opt |
 | Workflow registry | `workflows/registry.py` | CLI subcommand → WorkflowSpec builder mapping |
 | API server | `api/server.py` | FastAPI app factory + static frontend hosting at `/` |
 | API routes | `api/routes.py` | `/api/status`, `/api/backends`, `/api/workflows` |
@@ -103,4 +113,4 @@ acp/
 - **`# pyright:` suppressions widespread**: ~14 acp/ files suppress type-checking rules; pyright is not in the project toolchain
 - **bare `except Exception:`**: several instances across api/, chem/, cli.py, scheduler/ silently swallow errors
 - **HARTREE_TO_KCAL duplication**: Defined in both `acp/core/models.py` and `cccp/utils/constants.py`
-- **Retired catalog entries retained**: conformer/benchmark/ensemble/energy/xtbmd_censo_energy/mechanism/mech-conf/mech-step/mech-confirm/mech-chain kept in `WORKFLOW_CATALOG` with `status:"retired"` + `visible:False` for historical-job display; do not re-add registry/CLI entries for them. **NMR was reactivated 2026-08-07 (P1a)** — it is now `status:"active"` with full CLI/registry/scheduler/frontend wiring (see `docs/ACP_NMR_DP4_DevDoc.md` appendix A).
+- **Retired catalog entries retained**: conformer/benchmark/ensemble/energy/xtbmd_censo_energy/mechanism/mech-conf/mech-step/mech-confirm/mech-chain/optfreq/optfreqsp/Lowconfirm/Highconfirm kept in `WORKFLOW_CATALOG` with `status:"retired"` + `visible:False` for historical-job display; do not re-add registry/CLI entries for them. **NMR was reactivated 2026-08-07 (P1a)** — it is now `status:"active"` with full CLI/registry/scheduler/frontend wiring (see `docs/ACP_NMR_DP4_DevDoc.md` appendix A).

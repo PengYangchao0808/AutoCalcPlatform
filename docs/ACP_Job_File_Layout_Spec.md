@@ -64,8 +64,11 @@ ACP 的前端文件树采用**本地磁盘直接映射**（后端 `build_manifes
 |---|---|---|
 | ensemble / energy / xtbmd_censo_energy | 任务根 `WORK/{02_SEARCH,03_OPT}` + `RESULT/` | `RESULT/{structures,energies,ensembles}/` 经 `energy_shared.write_final_outputs` 统一收口；历史 `finalDFT/` 仅只读兼容 |
 | nmr | 任务根（本就平铺） | `nmr_report.json`、`nmr_assignment.xlsx`、plots；`nmr_summary.json` |
-| simple (singlepoint/opt/freq/optfreq/optfreqsp/scan/xtb-opt) | 任务根 `WORK/<stage>` | `optimized.xyz`、`energy.json`、`frequencies.txt`、`thermo.json` |
-| mechanism | `WORK/{02_SEARCH,03_OPT/TS,07_PATH,08_ANALYSIS}` + `RESULT/mechanism` | 见 §4（v2 归一化；旧任务读 legacy） |
+| simple (singlepoint/optimize/frequency/xtb-optimize) | 任务根 `WORK/<stage>` | `optimized.xyz`、`energy.json`、`frequencies.txt`、`thermo.json` |
+| scan | 任务根 `RESULT/trajectories/` + `RESULT/structures/` | `scan_trajectory.json`、逐帧 XYZ |
+| irc | 任务根 `RESULT/irc/` | `irc_forward.xyz`、`irc_reverse.xyz`、`irc_report.json` |
+| BatchOptimize | 任务根 `RESULT/structures/` + `RESULT/batch_items.json` | 优化后结构 + 批量清单 |
+| PESsearch | 任务根 `RESULT/pes_search/` + `RESULT/structures/` | 能量曲线 + 候选结构 |
 
 非调度器 CLI 语境下，上表各"任务根"替换为 `{output}/{safe_name}/`（多分子批跑必需）。
 
@@ -170,3 +173,19 @@ RESULT/mechanism/                   # v2 投影：reaction_network/route_summary
 2. 历史任务只有在终态、确认 `RESULT/` 或结果摘要中的稳定产物可用，并完成必要归档后，才可删除 `finalDFT/`。
 3. 运行中、暂停、等待审核或仍可续算的任务不得清理；失败任务应先保留原始日志用于排障。
 4. 自动清理必须具备 dry-run、终态检查、白名单、归档校验和事件审计；本次代码变更不删除已有历史目录。
+
+## 6c. 新工作流产物约定（post-refactor 2026-08-28）
+
+极简化重构后，新增以下 Zone B 产物目录约定：
+
+| 工作流 | 新产物路径 | 说明 |
+|---|---|---|
+| PESsearch | `RESULT/pes_search/pes_profile.json` | 能量曲线 + TS/INT 候选推荐 |
+| PESsearch | `RESULT/structures/<candidate_id>.xyz` | TS/INT 候选结构 |
+| BatchOptimize | `RESULT/structures/<item_id>__TAG_<TS\|INT>__optimized.xyz` | 优化后结构（TAG 标记） |
+| BatchOptimize | `RESULT/batch_items.json` | 批量计算清单（resume 用） |
+| IRC | `RESULT/irc/irc_forward.xyz` + `irc_reverse.xyz` | IRC 端点结构 |
+| IRC | `RESULT/irc/irc_report.json` | 端点分类 + 连通性验证报告 |
+| Scan | `RESULT/trajectories/scan_trajectory.json` | 扫描轨迹 + 能量曲线 |
+| Scan | `RESULT/structures/frame_*.xyz` | 逐帧优化结构 |
+| All executor-based | `WORK/00_RUNTIME/checkpoint.json` | CalculationPlanExecutor / BatchOptimizeEngine checkpoint（plan fingerprint 校验 + step/item 状态） |
