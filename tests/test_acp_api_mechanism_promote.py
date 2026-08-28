@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 def make_client(tmp_path: Path) -> TestClient:
     os.environ["ACP_RUN_ROOT"] = str(tmp_path)
     from acp.api.server import create_app
+
     return TestClient(create_app(run_root=tmp_path, max_running=2))
 
 
