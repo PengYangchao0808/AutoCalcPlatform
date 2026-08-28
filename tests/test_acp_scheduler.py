@@ -96,185 +96,88 @@ def test_materialize_structure_asset_preserves_com_suffix(tmp_path: Path) -> Non
     assert dest.name == "input.com"
 
 
-@pytest.mark.skip(reason="mechanism retired — write_mechanism_job_config removed")
-def test_mechanism_frontend_payload_materializes_and_builds_cmd(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    def fake_smiles_to_xyz(smiles: str, *, seed: int = 42, comment: str | None = None) -> str:
-        del seed, comment
-        return (
-            "3\n"
-            f"source={smiles}\n"
-            "C 0.000000 0.000000 0.000000\n"
-            "H 0.000000 0.000000 1.089000\n"
-            "H 1.026719 0.000000 -0.363000\n"
-        )
-
-    monkeypatch.setattr("acp.scheduler.runner.smiles_to_xyz", fake_smiles_to_xyz)
-
-    payload = {
-        "source_type": "mechanism",
-        "reactant": {
-            "source_type": "smiles",
-            "source": "CCO",
-            "asset_id": None,
-            "charge": 0,
-            "multiplicity": 1,
-        },
-        "product": {
-            "source_type": "smiles",
-            "source": "CC=O",
-            "asset_id": None,
-            "charge": 0,
-            "multiplicity": 1,
-        },
-        "ts_guess": None,
-        "routes": [{"reactant_id": "reactant", "product_id": "product", "label": "frontend-shape"}],
-    }
-    inputs_dir = tmp_path / "job" / "inputs"
-    _work_dir = tmp_path / "job"
-    role_paths: dict[str, Path] = {}
-
-    reactant_path = materialize_job_input(payload, inputs_dir, tmp_path, role_paths)
-
-    assert reactant_path == inputs_dir / "reactant.xyz"
-    assert reactant_path is not None and reactant_path.is_file()
-    assert role_paths["product"] == inputs_dir / "product.xyz"
-    assert role_paths["product"].is_file()
-    assert "C 0.000000 0.000000 0.000000" in reactant_path.read_text(encoding="utf-8")
-    reactant_payload = payload["reactant"]
-    assert isinstance(reactant_payload, dict)
-    assert reactant_payload["source"] == "CCO"
-
-    # write_mechanism_job_config removed in Wave 6 — test body gutted
-    pytest.skip("mechanism retired — write_mechanism_job_config removed")
-
-
-@pytest.mark.skip(reason="mechanism retired — mechanism_method_flags removed")
-def test_mechanism_method_flags_emit_study_controls() -> None:
-    pytest.skip("mechanism retired — mechanism_method_flags removed")
-
-
-@pytest.mark.skip(reason="mechanism retired — _write_mechanism_config_if_needed removed")
-def test_mechanism_runner_cmd_uses_config_channel(tmp_path: Path) -> None:
+def test_batchoptimize_payload_builds_correct_cmd(tmp_path: Path) -> None:
     runner = JobRunner(python_executable="python")
     spec = JobSpec(
-        workflow="mechanism",
-        name="rxn",
-        input={"source": "C=C", "product": "CC"},
-        method={
-            "study_id": "study_001",
-            "conformer_mode": "xtb-fast",
-            "max_elementary_steps": 4,
-            "promotion_policy": "rate_relevant",
-            "int_extension": True,
-            "auto_converge": True,
-        },
+        workflow="BatchOptimize",
+        name="batch_test",
+        input={"from_artifact": "RESULT/pes_search/candidates.json", "select": ["ts_001"]},
+        method={"profile": "opt_freq_sp_thermo"},
+        resources={"nproc": 4, "mem": "8GB"},
+    )
+    cmd = runner._build_cmd(spec, tmp_path)
+    assert "BatchOptimize" in cmd
+    assert "--profile" in cmd
+    assert "opt_freq_sp_thermo" in cmd
+    assert "--select" in cmd
+    assert "ts_001" in cmd
+
+
+def test_pessearch_payload_builds_correct_cmd(tmp_path: Path) -> None:
+    runner = JobRunner(python_executable="python")
+    spec = JobSpec(
+        workflow="PESsearch",
+        name="pes_test",
+        input={"source": "ethylene.xyz"},
+        method={"mode": "bond_length_scan"},
         resources={"nproc": 8, "mem": "16GB"},
     )
-
-    mechanism_config_path = tmp_path / MECHANISM_CONFIG_FILENAME
-    cmd = runner._build_cmd(spec, tmp_path, mechanism_config_path=str(mechanism_config_path))
-
-    assert "--mechanism-config" in cmd and str(mechanism_config_path) in cmd
-    assert "--study-id" not in cmd
-    assert "--conformer-mode" not in cmd
-    assert "--max-elementary-steps" not in cmd
-    assert "--promotion-policy" not in cmd
-    assert "--int-extension" not in cmd
-    assert "--auto-converge" not in cmd
+    cmd = runner._build_cmd(spec, tmp_path)
+    assert "PESsearch" in cmd
+    assert "--mode" in cmd
+    assert "bond_length_scan" in cmd
 
 
-@pytest.mark.skip(reason="mechanism retired — write_mechanism_job_config removed")
-def test_mechanism_reaction_json_materializes_and_sets_schema_version(tmp_path: Path) -> None:
+def test_batchoptimize_runner_cmd_includes_method_overrides(tmp_path: Path) -> None:
+    runner = JobRunner(python_executable="python")
+    spec = JobSpec(
+        workflow="BatchOptimize",
+        name="batch_methods",
+        input={"items_file": "batch_structures_v1.json"},
+        method={
+            "profile": "opt_freq",
+            "minimum_method": "r2SCAN-3c",
+            "minimum_basis": "def2-TZVP",
+            "transition_state_method": "wB97X-D4",
+            "transition_state_basis": "def2-TZVPPD",
+        },
+        resources={"nproc": 4, "mem": "4GB"},
+    )
+    cmd = runner._build_cmd(spec, tmp_path)
+    assert "--minimum-method" in cmd
+    assert "r2SCAN-3c" in cmd
+    assert "--transition-state-method" in cmd
+    assert "wB97X-D4" in cmd
+
+
+def test_batchoptimize_job_submission_initializes_generic_stage_tasks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     mgr = JobManager(run_root=tmp_path, max_running=1)
+    monkeypatch.setattr(mgr, "_start_submission_thread", lambda job_id, thread_name: True)
     try:
-        work_dir = tmp_path / mgr.default_project_id / "job-mech"
-        work_dir.mkdir(parents=True, exist_ok=True)
-        record = JobRecord(
-            id="job-mech",
-            spec=JobSpec(
-                workflow="mechanism",
-                name="rxn",
-                input={
-                    "source_type": "mechanism",
-                    "reactant": {"source_type": "smiles", "source": "C1CC1"},
-                    "product": {"source_type": "smiles", "source": "C1CC1"},
-                    "routes": [],
-                },
-                method={"study_id": "study-lock"},
-                resources={"nproc": 2, "mem": "2GB"},
-                project_id=mgr.default_project_id,
-            ),
-            work_dir=str(work_dir),
-            project_id=mgr.default_project_id,
-        )
-        reaction_payload = {
-            "schema_version": 2,
-            "study_id": "study-lock",
-            "reactant": {
-                "path": None,
-                "smiles": "C1CC1",
-                "asset_id": None,
-                "charge": 0,
-                "multiplicity": 1,
-            },
-            "product": {
-                "path": None,
-                "smiles": "C1CC1",
-                "asset_id": None,
-                "charge": 0,
-                "multiplicity": 1,
-            },
-            "ts_guess": None,
-            "atom_mapping": [{"reactant_index": 0, "product_index": 0}],
-            "bond_changes": [],
-            "index_base": 0,
-            "content_hash": "sha256:test",
-            "locked_at": "2026-08-16T00:00:00Z",
-            "confirmed_by": "user",
-        }
-        with sqlite3.connect(str(mgr.store.db_path)) as conn:
-            conn.execute(
-                "INSERT OR REPLACE INTO mechanism_studies "
-                "(id, job_id, study_json, status, created_at,"
-                " updated_at, reaction_json, config_hash) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    "study-lock",
-                    None,
-                    json.dumps({"study_id": "study-lock"}),
-                    "reaction_confirmed",
-                    "2026-08-16T00:00:00Z",
-                    "2026-08-16T00:00:00Z",
-                    json.dumps(reaction_payload),
-                    "sha256:test",
-                ),
+        record = mgr.submit(
+            JobSpec(
+                workflow="BatchOptimize",
+                name="batch_stages",
+                input={"items_file": "batch_structures_v1.json"},
+                method={"profile": "opt_freq_sp"},
             )
-            conn.commit()
-
-        mgr._materialize_mechanism_reaction_if_present(record)
-        reaction_path = work_dir / "WORK" / "08_ANALYSIS" / "reaction.json"
-        assert reaction_path.is_file()
-        assert json.loads(reaction_path.read_text(encoding="utf-8"))["schema_version"] == 2
+        )
+        assert record.status == JobStatus.QUEUED
+        work_dir = Path(record.work_dir)
+        assert (work_dir / "job.json").is_file()
     finally:
         mgr.shutdown()
 
 
-@pytest.mark.skip(reason="mechanism retired — materialize_job_input mechanism branch removed")
-def test_mechanism_materialize_requires_valid_reactant(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="reactant"):
-        materialize_job_input(
-            {
-                "source_type": "mechanism",
-                "reactant": None,
-                "product": None,
-                "ts_guess": None,
-                "routes": [],
-            },
-            tmp_path / "inputs",
-            tmp_path,
-        )
+def test_materialize_xyz_text_source(tmp_path: Path) -> None:
+    inputs_dir = tmp_path / "inputs"
+    payload = {"source_type": "xyz_text", "source": "2\n\nH 0 0 0\nH 0 0 1\n"}
+    result = materialize_job_input(payload, inputs_dir, tmp_path)
+    assert result is not None
+    assert result.is_file()
+    assert "H 0 0 0" in result.read_text(encoding="utf-8")
 
 
 def test_store_roundtrip(tmp_path: Path) -> None:
@@ -703,189 +606,91 @@ def test_poll_job_translates_waiting_review_exit_code(tmp_path: Path) -> None:
         mgr.shutdown()
 
 
-@pytest.mark.skip(reason="mechanism retired — populate_mechanism_study_result_metadata removed")
-def test_collect_result_extracts_mechanism_study_metadata_for_completed_job(tmp_path: Path) -> None:
+def test_collect_result_for_generic_workflow(tmp_path: Path) -> None:
     mgr = JobManager(run_root=tmp_path, poll_interval=30)
     try:
-        work_dir = tmp_path / "job-mech-complete"
+        work_dir = tmp_path / "job-batch"
         work_dir.mkdir()
-        _write_mechanism_study_json(
-            work_dir,
-            study_id="study-1",
-            quality="high",
-            fidelity_profile_name="s3",
-            include_high_fidelity=True,
+        result_dir = work_dir / "RESULT"
+        result_dir.mkdir()
+        (result_dir / "result_manifest.json").write_text(
+            json.dumps({
+                "version": 2,
+                "workflow": "BatchOptimize",
+                "status": "completed",
+                "products": [
+                    {"id": "batch_ts_001", "path": "structures/ts_001.xyz", "kind": "structure"}
+                ],
+            }),
+            encoding="utf-8",
         )
         record = JobRecord(
-            id="job-mech-complete",
-            spec=JobSpec(
-                workflow="mechanism",
-                name="completed-study",
-                method={"study_id": "study-1"},
-            ),
+            id="job-batch",
+            spec=JobSpec(workflow="BatchOptimize", name="batch_result"),
             status=JobStatus.RUNNING,
             work_dir=str(work_dir),
         )
-
         result = mgr._collect_result(record)
-
-        assert result["provider"] == "native"
-        assert result["fidelity"] == "s4"
-        assert result["quality"] == "high"
+        assert isinstance(result, dict)
     finally:
         mgr.shutdown()
 
 
-@pytest.mark.skip(reason="mechanism retired — populate_mechanism_study_result_metadata removed")
-def test_poll_job_waiting_review_extracts_mechanism_study_metadata(tmp_path: Path) -> None:
+def test_poll_job_generic_workflow_records_exit_code(tmp_path: Path) -> None:
     mgr = JobManager(run_root=tmp_path, poll_interval=30)
     try:
-        work_dir = tmp_path / "job-mech-review"
+        work_dir = tmp_path / "job-poll"
         work_dir.mkdir()
-        _write_mechanism_study_json(
-            work_dir,
-            study_id="study-1",
-            quality="medium",
-            fidelity_profile_name="s3",
-        )
-        (work_dir / "review_payload.json").write_text(
-            json.dumps(
-                {
-                    "study_id": "study-1",
-                    "status": "waiting",
-                    "pending_decisions": ["decision-1"],
-                    "effective_fidelity": "s3",
-                }
-            ),
-            encoding="utf-8",
-        )
         record = JobRecord(
-            id="job-mech-review",
-            spec=JobSpec(
-                workflow="mechanism",
-                name="review-study",
-                method={"study_id": "study-1"},
-            ),
+            id="job-poll",
+            spec=JobSpec(workflow="BatchOptimize", name="poll_test"),
             status=JobStatus.RUNNING,
             work_dir=str(work_dir),
         )
         mgr.store.create(record)
-        mgr.runner.poll = lambda record: (True, EXIT_WAITING_REVIEW)  # type: ignore[method-assign]
+        mgr.runner.poll = lambda record: (True, 0)  # type: ignore[method-assign]
 
         mgr._poll_job(record.id)
 
         updated = mgr.get(record.id)
         assert updated is not None
-        assert updated.result is not None
-        assert updated.result["provider"] == "native"
-        assert updated.result["fidelity"] == "s3"
-        assert updated.result["quality"] == "medium"
-        assert updated.result["review_payload"]["study_id"] == "study-1"
+        assert updated.status == JobStatus.COMPLETED
+        assert updated.exit_code == 0
     finally:
         mgr.shutdown()
 
 
-@pytest.mark.skip(reason="mechanism retired — populate_mechanism_study_result_metadata removed")
-def test_collect_result_skips_mechanism_metadata_when_study_dir_missing(tmp_path: Path) -> None:
+def test_collect_result_handles_empty_work_dir(tmp_path: Path) -> None:
     mgr = JobManager(run_root=tmp_path, poll_interval=30)
     try:
-        work_dir = tmp_path / "job-mech-missing"
+        work_dir = tmp_path / "job-empty"
         work_dir.mkdir()
         record = JobRecord(
-            id="job-mech-missing",
-            spec=JobSpec(
-                workflow="mechanism",
-                name="missing-study",
-                method={"study_id": "missing-study"},
-            ),
+            id="job-empty",
+            spec=JobSpec(workflow="PESsearch", name="empty_result"),
             status=JobStatus.RUNNING,
             work_dir=str(work_dir),
         )
-
         result = mgr._collect_result(record)
-
-        assert "provider" not in result
-        assert "fidelity" not in result
-        assert "quality" not in result
+        assert isinstance(result, dict)
     finally:
         mgr.shutdown()
 
 
-@pytest.mark.skip(reason="mechanism retired — mechanism store helpers removed")
-def test_migration_006_and_mechanism_store_helpers(tmp_path: Path) -> None:
+def test_migration_applies_and_stage_tasks_table_exists(tmp_path: Path) -> None:
     db_path = tmp_path / "db" / "scheduler.db"
-    applied_first = migrate(db_path)
-    applied_second = migrate(db_path)
-
-    # 001-012 apply directly except the jobs-gated ones (002/005/008 check
-    # the jobs table, which only JobStore._init_schema creates, so they land
-    # on the JobStore init below).
-    assert applied_first == 9
-    assert applied_second == 0
+    JobStore(db_path)
+    migrate(db_path)
 
     with sqlite3.connect(db_path) as conn:
         tables = {
             row[0]
             for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
-        study_columns = {
-            row[1] for row in conn.execute("PRAGMA table_info(mechanism_studies)").fetchall()
-        }
         task_columns = {row[1] for row in conn.execute("PRAGMA table_info(stage_tasks)").fetchall()}
-    assert "mechanism_studies" in tables
-    assert "decision_points" in tables
-    assert {
-        "reaction_json",
-        "mechanism_plan_json",
-        "config_hash",
-        "cycle_index",
-        "consumed_cycle",
-    } <= study_columns
+    assert "jobs" in tables
+    assert "stage_tasks" in tables
     assert "status_detail" in task_columns
-
-    store = JobStore(db_path)
-    with sqlite3.connect(db_path) as conn:
-        job_columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
-    assert "group_id" in job_columns
-    with sqlite3.connect(str(db_path)) as conn:
-        conn.execute(
-            "INSERT OR REPLACE INTO mechanism_studies "
-            "(id, job_id, study_json, status, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            (
-                "study-1",
-                "job-1",
-                '{"study_id": "study-1"}',
-                "waiting",
-                "2026-08-12T00:00:00+00:00",
-                "2026-08-12T01:00:00+00:00",
-            ),
-        )
-        conn.execute(
-            "INSERT OR REPLACE INTO decision_points "
-            "(id, study_id, status, payload, resolution, created_at, resolved_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (
-                "decision-1",
-                "study-1",
-                "waiting",
-                '{"decision": 1}',
-                None,
-                "2026-08-12T00:10:00+00:00",
-                None,
-            ),
-        )
-        conn.commit()
-
-    study = store.get_mechanism_study("study-1")
-    assert study is not None
-    assert study["status"] == "waiting"
-    assert store.list_mechanism_studies(limit=10)[0]["id"] == "study-1"
-
-    decision = store.get_decision_point("decision-1")
-    assert decision is not None
-    assert decision["status"] == "waiting"
-    assert store.list_decision_points("study-1", limit=10)[0]["id"] == "decision-1"
 
 
 # ---------------------------------------------------------------------------

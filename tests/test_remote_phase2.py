@@ -16,15 +16,12 @@ Run with: PYTHONPATH=src python3 tests/test_remote_phase2.py
 from __future__ import annotations
 
 import io
-import json
 import posixpath
 import stat
 import tempfile
 import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import JobRecord, JobSpec
@@ -45,9 +42,6 @@ from acp.scheduler.remote.script_gen import (
 from acp.scheduler.remote.sftp import FileStager
 from acp.scheduler.remote.ssh import SSHConnectionPool
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
-
-# Local constant for tests that reference the retired mechanism config filename.
-MECHANISM_CONFIG_FILENAME = "mechanism_config.json"
 
 # ====================================================================== #
 # Reuse Phase 1 mock infrastructure
@@ -220,40 +214,40 @@ def make_node(name="compute-01", **kw):
 # ====================================================================== #
 
 
-@pytest.mark.skip(reason="mechanism retired — mechanism workflow removed from remote CLI")
-def test_build_remote_cli_command_mechanism():
+def test_build_remote_cli_command_batchoptimize():
     spec = JobSpec(
-        workflow="mechanism",
-        input={"source": "CCO"},
-        method={"fidelity": "s4", "conformer_mode": "xtb-fast", "study_id": "study_001"},
+        workflow="BatchOptimize",
+        input={
+            "source": "CCO",
+            "source_type": "smiles",
+            "from_artifact": "RESULT/pes_search/candidates.json",
+        },
+        method={"profile": "opt_freq_sp_thermo"},
+        resources={"nproc": 4, "mem": "4GB"},
     )
     cmd = build_remote_cli_command(spec)
-    assert "mechanism" in cmd
-    assert "--output" in cmd
-    assert "--mechanism-config" in cmd
-    assert cmd[cmd.index("--mechanism-config") + 1] == MECHANISM_CONFIG_FILENAME
-    assert "--fidelity" not in cmd
-    assert "--conformer-mode" not in cmd
-    assert "--study-id" not in cmd
-    # mechanism has no --protocol
-    assert "--protocol" not in cmd
-    print("  [OK] build_remote_cli_command: mechanism workflow")
+    assert "BatchOptimize" in cmd
+    assert "--profile" in cmd
+    assert "opt_freq_sp_thermo" in cmd
+    print("  [OK] build_remote_cli_command: BatchOptimize workflow")
 
 
-@pytest.mark.skip(reason="mechanism retired — mechanism workflow removed from remote CLI")
-def test_build_lsf_script_spec_mechanism_uses_remote_config_path():
+def test_build_lsf_script_spec_batchoptimize_uses_correct_flags():
     node = make_node()
-    spec = JobSpec(workflow="mechanism", input={"source": "CCO"}, method={"fidelity": "s4"})
-
-    lsf_spec, cli_cmd = build_lsf_script_spec(spec, "job_mech", node)
-
-    assert "--mechanism-config" in cli_cmd
-    assert cli_cmd[cli_cmd.index("--mechanism-config") + 1] == posixpath.join(
-        node.remote_work_dir,
-        "job_mech",
-        MECHANISM_CONFIG_FILENAME,
+    spec = JobSpec(
+        workflow="BatchOptimize",
+        input={"source": "CCO", "source_type": "smiles"},
+        method={"profile": "opt_freq"},
+        resources={"nproc": 4, "mem": "8GB"},
     )
-    assert lsf_spec.remote_job_dir == posixpath.join(node.remote_work_dir, "job_mech")
+
+    lsf_spec, cli_cmd = build_lsf_script_spec(spec, "job_batch", node)
+
+    assert lsf_spec.nproc == 4
+    assert lsf_spec.remote_job_dir == posixpath.join(node.remote_work_dir, "job_batch")
+    assert "BatchOptimize" in cli_cmd
+    assert "--profile" in cli_cmd
+    print("  [OK] build_lsf_script_spec: BatchOptimize workflow uses correct flags")
 
 
 def test_build_remote_cli_command_charge_mult():
@@ -739,82 +733,19 @@ def test_runner_full_flow_success():
     print(f"  [OK] full flow: exit={exit_code}, lsf=54321, events={len(events)}, no download")
 
 
-@pytest.mark.skip(reason="mechanism retired — mechanism workflow removed from remote runner")
-def test_runner_full_flow_mechanism_uploads_mechanism_config():
+def test_confsearch_workflow_supported_in_remote_script_gen():
     node = make_node()
-    config = RemoteExecutionConfig(execution_mode="remote", auto_sync=False, nodes=[node])
-    pool = SSHConnectionPool()
-    sftp = FakeSFTP()
-    polls = {"n": 0}
-
-    def fake_smiles_to_xyz(smiles: str, *, seed: int = 42, comment: str | None = None) -> str:
-        del seed, comment
-        return f"1\nsource={smiles}\nH 0.0 0.0 0.0\n"
-
-    def cmd_handler(cmd):
-        if "bsub" in cmd and "<" in cmd:
-            return (0, "Job <65432> is submitted to queue <normal>.\n", "")
-        if "bjobs" in cmd and "grep" not in cmd:
-            polls["n"] += 1
-            if polls["n"] == 1:
-                return (0, "RUN\n", "")
-            sftp.files[posixpath.join(node.remote_work_dir, "mol_mechanism", ".exit_code")] = b"0"
-            return (0, "DONE\n", "")
-        if "grep -c RUN" in cmd:
-            return (0, "0\n", "")
-        return (0, "", "")
-
-    client = FakeSSHClient(sftp)
-    client.cmd_handler = cmd_handler
-
-    def factory(n, timeout=30):
-        return client
-
-    with tempfile.TemporaryDirectory() as tmp:
-        work_dir = Path(tmp) / "proj" / "mechjob"
-        work_dir.mkdir(parents=True)
-        spec = JobSpec(
-            workflow="mechanism",
-            input={
-                "source_type": "mechanism",
-                "reactant": {
-                    "source_type": "smiles",
-                    "source": "C=C",
-                    "charge": 0,
-                    "multiplicity": 1,
-                },
-                "product": {
-                    "source_type": "smiles",
-                    "source": "CC",
-                    "charge": 0,
-                    "multiplicity": 1,
-                },
-                "ts_guess": None,
-            },
-            method={"preset": "rph-s3", "study_id": "study_001"},
-        )
-        record = JobRecord(id="mechjob", spec=spec, work_dir=str(work_dir))
-        event_log = JobEventLog(work_dir / "events.jsonl")
-        cancel = threading.Event()
-
-        runner = RemoteJobRunner(pool, config, stager=FileStager(pool), poll_interval=0)
-        with (
-            patch("acp.scheduler.runner.smiles_to_xyz", side_effect=fake_smiles_to_xyz),
-            patch.object(ssh_mod, "_create_client", side_effect=factory),
-        ):
-            exit_code = runner.run(record, event_log, cancel)
-
-    assert exit_code == 0
-    remote_config_path = posixpath.join(
-        node.remote_work_dir, "mol_mechanism", MECHANISM_CONFIG_FILENAME
+    spec = JobSpec(
+        workflow="Confsearch",
+        input={"source": "CCO", "source_type": "smiles"},
+        method={"protocol": "censo-crest"},
+        resources={"nproc": 4, "mem": "8GB"},
     )
-    assert remote_config_path in sftp.files
-    remote_config = json.loads(sftp.files[remote_config_path].decode("utf-8"))
-    assert remote_config["roles"]["reactant"]["path"] == "inputs/reactant.xyz"
-    assert remote_config["roles"]["product"]["path"] == "inputs/product.xyz"
-    assert remote_config["resolved"]["preset"] == "rph-s3"
-    assert remote_config["resolved"]["study_id"] == "study_001"
-    pool.close()
+    lsf_spec, cli_cmd = build_lsf_script_spec(spec, "job_conf", node)
+    assert "Confsearch" in cli_cmd
+    assert "--protocol" in cli_cmd
+    assert "censo-crest" in cli_cmd
+    assert lsf_spec.nproc == 4
 
 
 def test_runner_full_flow_failure():
@@ -1315,7 +1246,7 @@ def test_remote_config_queue_walltime():
 def main():
     tests = [
         # script_gen
-        test_build_remote_cli_command_mechanism,
+        test_build_remote_cli_command_batchoptimize,
         test_build_remote_cli_command_charge_mult,
         test_build_remote_cli_command_invalid_workflow,
         test_build_remote_cli_command_no_config_path,
@@ -1325,7 +1256,7 @@ def main():
         test_generate_lsf_script_omits_walltime_when_empty,
         test_generate_lsf_script_emits_walltime_when_set,
         test_build_lsf_script_spec_integration,
-        test_build_lsf_script_spec_mechanism_uses_remote_config_path,
+        test_build_lsf_script_spec_batchoptimize_uses_correct_flags,
         test_build_lsf_script_spec_default_has_no_walltime,
         # monitor
         test_monitor_lsf_status_mapping,
@@ -1345,7 +1276,7 @@ def main():
         test_runner_select_node_no_enabled,
         test_runner_select_node_all_at_capacity,
         test_runner_full_flow_success,
-        test_runner_full_flow_mechanism_uploads_mechanism_config,
+        test_confsearch_workflow_supported_in_remote_script_gen,
         test_runner_full_flow_failure,
         test_runner_cancel,
         test_runner_submission_failure,
