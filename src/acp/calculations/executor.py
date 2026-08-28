@@ -11,9 +11,9 @@ It orchestrates seven responsibilities (design doc §6.3):
 6. Record per-step errors without crashing the process.
 7. Write a unique ``RESULT/result_manifest.json`` at finalization.
 
-The executor deliberately does NOT recognise S1–S4, Lowconfirm, Highconfirm,
-MechanismStudy, review, or promote — those concepts live in the mechanism
-orchestrator layer above.
+The executor deliberately does NOT recognise retired stage-workflow semantics
+(S1–S4), mechanism studies, review, or promote — those concepts live in the
+mechanism orchestrator layer above.
 """
 
 from __future__ import annotations

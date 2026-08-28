@@ -6041,7 +6041,7 @@ function energyGraphLegendMarkup(data) {
 function energyGraphWorkspaceMarkup(data) {
   const series = Array.isArray(data.series) ? data.series : [];
   const job = lastSelectedJob || {};
-  const projectId = String(s2scanState.projectId || job.mechanism_project_id || (job.spec && job.spec.mechanism_project_id) || "");
+  const projectId = String(s2scanState.projectId || "");
   const candidateCount = s2scanState.candidates.length;
   const reviewMeta = (data.metadata || {}).review || {};
   const options = series.map(function(item) {
@@ -7108,7 +7108,7 @@ async function renderEnergyGraphWorkspace(job, options) {
         || allSeries.find(function(item) { return String(item.unit || "").toLowerCase().indexOf("kcal") >= 0; });
       energyGraphState.seriesId = preferredSeries ? String(preferredSeries.id) : String(data.default_series || "");
     }
-    var projectId = String(job.mechanism_project_id || (job.spec && job.spec.mechanism_project_id) || "");
+    var projectId = String(s2scanState.projectId || "");
     s2scanState.projectId = projectId;
     energyGraphSyncS2Selection(data);
     energyGraphState.loading = false;
@@ -11424,8 +11424,7 @@ async function refreshS2Report(job) {
   }
   s2scanState.jobId = String(job.id || job.job_id || "");
   s2scanState.projectId = String(
-    job.mechanism_project_id ||
-    (job.spec && job.spec.mechanism_project_id) || ""
+    s2scanState.projectId || ""
   );
   s2scanApplyJobStatus(job.status);
   if (activeViewerTab === "energy" && lastSelectedJob && String(lastSelectedJob.id || "") === s2scanState.jobId) {
@@ -15970,34 +15969,6 @@ function s2scanUpdateProjectStatus() {
   chip.className = "s2scan-status-chip running";
 }
 
-async function s2scanLoadMechanismProjects() {
-  var select = s2scanEl("s2scan-inline-project");
-  var status = s2scanEl("s2scan-inline-status");
-  if (!select) return;
-  try {
-    var resp = await api("/mechanism-projects");
-    var projects = Array.isArray(resp) ? resp : (resp && Array.isArray(resp.projects) ? resp.projects : []);
-    var selected = s2scanState.projectId || window._mechProjectId || "";
-    select.innerHTML = '<option value="">请选择机理研究项目</option>';
-    projects.forEach(function(project) {
-      var id = String(project.project_id || project.id || "");
-      if (!id) return;
-      var name = project.name ? String(project.name) + " · " + id : id;
-      select.insertAdjacentHTML("beforeend", '<option value="' + escapeHtml(id) + '">' + escapeHtml(name) + '</option>');
-    });
-    if (selected && projects.some(function(project) { return String(project.project_id || project.id || "") === selected; })) {
-      select.value = selected;
-      s2scanState.projectId = selected;
-    } else if (projects.length === 1) {
-      s2scanState.projectId = String(projects[0].project_id || projects[0].id || "");
-      select.value = s2scanState.projectId;
-    }
-    s2scanUpdateProjectStatus();
-    if (status) status.textContent = projects.length ? "" : t("s2scan.no_project");
-  } catch (e) {
-    if (status) status.textContent = e.message || String(e);
-  }
-}
 
 function s2scanSwitchSourceType(src) {
   s2scanState.sourceType = src;
@@ -16537,7 +16508,6 @@ async function s2scanSubmit() {
         mode: "bond_length_scan",
       },
     };
-    body.mechanism_project_id = projectId;
     body.remark = String(document.getElementById("modal-remark").value || "").trim();
     body.resources = {
       nproc: parseInt(document.getElementById("modal-nproc").value, 10) || 4,

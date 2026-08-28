@@ -224,9 +224,7 @@ def test_new_code_never_writes_s3_s4_manifest() -> None:
     for module in (be, pe):
         source = inspect.getsource(module).casefold()
         for pattern in ("s3_lowconfirm_manifest", "s4_highconfirm_manifest"):
-            assert pattern not in source, (
-                f"{module.__name__} still writes {pattern}"
-            )
+            assert pattern not in source, f"{module.__name__} still writes {pattern}"
 
 
 def test_legacy_api_mechanism_returns_410() -> None:
@@ -241,9 +239,7 @@ def test_legacy_api_mechanism_returns_410() -> None:
         ("POST", "/api/v1/mechanism-studies/study-x/resume"),
     ]:
         resp = client.request(method, url, json={})
-        assert resp.status_code == 410, (
-            f"{method} {url} returned {resp.status_code}, expected 410"
-        )
+        assert resp.status_code == 410, f"{method} {url} returned {resp.status_code}, expected 410"
 
 
 def test_all_new_results_register_result_manifest() -> None:
@@ -255,9 +251,7 @@ def test_all_new_results_register_result_manifest() -> None:
 
     for module in (executor_mod, scan_mod, irc_mod):
         source = inspect.getsource(module)
-        assert "ResultManifest" in source, (
-            f"{module.__name__} does not use ResultManifest"
-        )
+        assert "ResultManifest" in source, f"{module.__name__} does not use ResultManifest"
 
 
 # ---------------------------------------------------------------------------
@@ -313,4 +307,43 @@ def test_capability_evidence_table() -> None:
     for capability, node_id in rows:
         assert node_id in collected_ids, (
             f"capability row missing: {node_id.split('::')[0].split('/')[-1].replace('test_', '').replace('.py', '')}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Unique primitive definitions (todo 52 §e gate test)
+# ---------------------------------------------------------------------------
+
+_PRIMITIVES_DIR = (
+    Path(__file__).resolve().parent.parent / "src" / "acp" / "calculations" / "primitives"
+)
+
+_PRIMITIVE_DEFS: dict[str, str] = {
+    "run_singlepoint": "singlepoint.py",
+    "run_optimize": "optimize.py",
+    "run_frequency": "frequency.py",
+    "run_scan": "scan.py",
+    "run_irc": "irc.py",
+    "ThermochemistryCalculator": "thermochemistry.py",
+}
+
+
+def test_unique_primitive_definitions() -> None:
+    """Each calculation primitive must be defined in exactly one module under
+    ``calculations/primitives/``.  Import aliases in ``workflows/simple.py``
+    or elsewhere must NOT count as definitions."""
+    for name, expected_file in _PRIMITIVE_DEFS.items():
+        definition_sites: list[str] = []
+        for py_file in _PRIMITIVES_DIR.rglob("*.py"):
+            source = py_file.read_text(encoding="utf-8")
+            tree = ast.parse(source, filename=str(py_file))
+            for node in ast.walk(tree):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    if node.name == name:
+                        definition_sites.append(py_file.name)
+        assert len(definition_sites) == 1, (
+            f"{name} defined in {definition_sites}; expected exactly 1 in {expected_file}"
+        )
+        assert definition_sites[0] == expected_file, (
+            f"{name} defined in {definition_sites[0]}; expected {expected_file}"
         )

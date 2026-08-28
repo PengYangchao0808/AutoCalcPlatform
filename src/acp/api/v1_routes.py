@@ -81,15 +81,8 @@ from acp.api.v1_schemas import (
     JobRecovery,
     JobStageEntry,
     MaintenanceCleanupResponse,
-    MechanismJobInput,
-    MechanismJobMethod,
     MechanismPlanRequest,
     MechanismPlanResponse,
-    MechanismProjectCreateRequest,
-    MechanismProjectDetail,
-    MechanismProjectListResponse,
-    MechanismProjectModel,
-    MechanismProjectTimelineEntry,
     MechanismStudyCreateRequest,
     MechanismStudyDetail,
     MechanismStudyReportResponse,
@@ -846,13 +839,6 @@ def _resolve_job_molecule_name(
     return "mol"
 
 
-_STAGE_WORKFLOW_SOURCE: dict[str, str] = {
-    "PESsearch": "S2",
-    "Lowconfirm": "S3",
-    "Highconfirm": "S4",
-}
-
-
 def _resolve_stage_artifact_ref(
     workflow: str,
     inp: dict[str, Any],
@@ -969,133 +955,6 @@ def _prepare_bond_scan_input(
     return prepared
 
 
-def _prepare_stage_batch_input(
-    workflow: str,
-    inp: dict[str, Any],
-    request: Request,
-    manager: Any,
-) -> dict[str, Any]:
-    """Validate + expand a Lowconfirm/Highconfirm ``batch_structures`` input.
-
-    Accepted item forms (batch plan §3): inline structures (``xyz`` text),
-    task-result references (``source_id`` — resolved through the
-    StructureSourceService, remote fetch included) and S2 candidate
-    manifests (``source_job_id`` + ``from_artifact``, pinned locally and
-    handoff-copied by the runner).  The normalized result lands in
-    ``input["batch_request"]`` for the scheduler runner to stage as
-    ``batch_config.json``.
-    """
-    entries = inp.get("items")
-    if not isinstance(entries, list) or not entries:
-        raise HTTPException(
-            status_code=422,
-            detail=f"{workflow} batch_structures input requires a non-empty input.items list",
-        )
-    service = _structure_source_service(request)
-    resolved_items: list[dict[str, Any]] = []
-    for index, entry in enumerate(entries):
-        if not isinstance(entry, dict):
-            raise HTTPException(status_code=422, detail=f"input.items[{index}] must be an object")
-        if entry.get("include") is False:
-            continue
-        source_type = str(entry.get("source_type") or "")
-        if entry.get("xyz"):
-            resolved_items.append(
-                {
-                    "name": str(entry.get("name") or f"mol_{index + 1}"),
-                    "tag": str(entry.get("tag") or ""),
-                    "xyz": str(entry["xyz"]),
-                    "charge": entry.get("charge"),
-                    "multiplicity": entry.get("multiplicity"),
-                    "include": bool(entry.get("include", True)),
-                    "source_type": "upload",
-                    "source_ref": str(entry.get("source_ref") or entry.get("name") or ""),
-                }
-            )
-        elif entry.get("source_id"):
-            try:
-                asset, _checksum = service.get(str(entry["source_id"]))
-            except ValueError as exc:
-                raise HTTPException(
-                    status_code=422, detail=f"input.items[{index}].source_id: {exc}"
-                ) from exc
-            resolved_items.append(
-                {
-                    "name": str(
-                        entry.get("name") or asset.get("molecule_name") or asset.get("name") or ""
-                    ),
-                    "tag": str(entry.get("tag") or asset.get("tag") or ""),
-                    "xyz": str(asset.get("xyz") or ""),
-                    "charge": entry.get("charge", asset.get("charge")),
-                    "multiplicity": entry.get("multiplicity", asset.get("multiplicity")),
-                    "include": bool(entry.get("include", True)),
-                    "source_type": "job_artifact",
-                    "source_ref": str(entry["source_id"]),
-                }
-            )
-        elif source_type == "s2_candidates" or entry.get("source_job_id"):
-            source_job_id = str(entry.get("source_job_id") or "").strip()
-            from_artifact = str(
-                entry.get("from_artifact") or "RESULT/mechanism/s2_path_manifest.json"
-            )
-            if not source_job_id:
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"input.items[{index}]: s2_candidates requires source_job_id",
-                )
-            source_job = manager.get(source_job_id)
-            source_work_dir = (
-                Path(source_job.work_dir) if source_job and source_job.work_dir else None
-            )
-            if source_work_dir is None or not source_work_dir.is_dir():
-                raise HTTPException(
-                    status_code=404,
-                    detail=f"Source job not found or has no work dir: {source_job_id}",
-                )
-            if from_artifact.endswith("s2_candidate_manifest.json"):
-                pinned = (source_work_dir / from_artifact).resolve()
-                try:
-                    pinned.relative_to(source_work_dir.resolve())
-                except ValueError as exc:
-                    raise HTTPException(
-                        status_code=422,
-                        detail=(f"Artifact path escapes the source job: {from_artifact}"),
-                    ) from exc
-                if not pinned.is_file():
-                    raise HTTPException(
-                        status_code=422, detail=f"Source artifact not found: {pinned}"
-                    )
-            else:
-                pinned_str = _resolve_stage_artifact_ref(
-                    workflow,
-                    {"source_job_id": source_job_id, "from_artifact": from_artifact},
-                    manager,
-                )["from"]
-                pinned = Path(str(pinned_str))
-            resolved_items.append(
-                {
-                    "source_type": "s2_candidates",
-                    "manifest": str(pinned),
-                    "candidate_ids": entry.get("candidate_ids") or entry.get("select") or [],
-                }
-            )
-        else:
-            raise HTTPException(
-                status_code=422,
-                detail=f"input.items[{index}] needs one of xyz / source_id / source_job_id",
-            )
-
-    prepared = dict(inp)
-    prepared["batch_request"] = {
-        "schema_version": "batch_structures_v1",
-        "workflow_hint": workflow,
-        "charge": inp.get("charge"),
-        "multiplicity": inp.get("multiplicity"),
-        "items": resolved_items,
-    }
-    return prepared
-
-
 @router.post("/jobs", response_model=V1JobCreatedResponse, status_code=201)
 def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedResponse:
     manager = _manager(request)
@@ -1104,34 +963,9 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
             status_code=400,
             detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}",
         )
-    if req.workflow == "mechanism":
-        try:
-            _ = MechanismJobInput.model_validate(req.input)
-            mechanism_method = MechanismJobMethod.model_validate(req.method)
-        except ValidationError as exc:
-            raise HTTPException(
-                status_code=422,
-                detail=exc.errors(include_context=False, include_url=False),
-            ) from exc
-        if mechanism_method.require_sr_review and mechanism_method.auto_converge:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "require_sr_review and auto_converge are mutually exclusive "
-                    "SR execution modes; enable at most one"
-                ),
-            )
     if req.workflow == "PESsearch" and str(req.method.get("mode") or "") == "bond_length_scan":
-        # PESsearch is a normal task when submitted from the common task form.
-        # A mechanism project is optional bookkeeping for the later review/S3
-        # handoff, not a prerequisite for running the scan itself.
         req.input = _prepare_bond_scan_input(req.input, manager)
-    elif (
-        req.workflow in ("Lowconfirm", "Highconfirm")
-        and str(req.input.get("source_type") or "") == "batch_structures"
-    ):
-        req.input = _prepare_stage_batch_input(req.workflow, req.input, request, manager)
-    elif req.workflow in ("PESsearch", "Lowconfirm", "Highconfirm"):
+    elif req.workflow == "PESsearch":
         req.input = _resolve_stage_artifact_ref(req.workflow, req.input, manager)
     task_name = req.task_name or req.workflow
     molecule_name = _resolve_job_molecule_name(req.molecule_name, req.input, manager)
@@ -1377,112 +1211,6 @@ def resume_mechanism_study_job(study_id: str, request: Request) -> StudyResumeRe
 )
 def promote_mechanism_study(study_id: str, request: Request) -> StudyPromoteResponse:
     raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
-
-
-def _mechanism_project_or_404(store: Any, project_id: str) -> Any:
-    project = store._mechanism_projects.get(project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail=f"Mechanism project not found: {project_id}")
-    return project
-
-
-_ARTIFACT_MAP: dict[str, str] = {
-    "s1": "RESULT/confsearch/confsearch_manifest.json",
-    "s2": "RESULT/mechanism/s2_path_manifest.json",
-    "s3": "RESULT/mechanism/s3_lowconfirm_manifest.json",
-    "s4": "RESULT/mechanism/s4_highconfirm_manifest.json",
-}
-
-_STAGE_WORKFLOW: dict[str, str] = {
-    "s1": "Confsearch",
-    "s2": "PESsearch",
-    "s3": "Lowconfirm",
-    "s4": "Highconfirm",
-}
-
-
-def _project_timeline(
-    project: Any,
-    job_store: Any,
-) -> list[MechanismProjectTimelineEntry]:
-    entries: list[MechanismProjectTimelineEntry] = []
-    for stage in ("s1", "s2", "s3", "s4"):
-        job_id = project.stage_jobs.get(stage)
-        job_status: str | None = None
-        if job_id:
-            record = job_store.get(job_id)
-            job_status = record.status.value if record else None
-        entries.append(
-            MechanismProjectTimelineEntry(
-                stage=stage.upper(),
-                workflow=_STAGE_WORKFLOW[stage],
-                job_id=job_id,
-                job_status=job_status,
-                artifact=_ARTIFACT_MAP[stage],
-            )
-        )
-    return entries
-
-
-@router.post("/mechanism-projects", response_model=MechanismProjectModel, status_code=201)
-def create_mechanism_project(
-    req: MechanismProjectCreateRequest,
-    request: Request,
-) -> MechanismProjectModel:
-    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
-
-
-@router.get("/mechanism-projects", response_model=MechanismProjectListResponse)
-def list_mechanism_projects(request: Request) -> MechanismProjectListResponse:
-    manager = _manager(request)
-    projects_store = getattr(manager, "_mechanism_projects", None)
-    projects = projects_store.list_all() if projects_store else []
-    return MechanismProjectListResponse(
-        projects=[
-            MechanismProjectModel(
-                project_id=p.project_id,
-                name=p.name,
-                reaction_definition_hash=p.reaction_definition_hash,
-                charge=p.charge,
-                multiplicity=p.multiplicity,
-                status=p.status.value,
-                s1_job_id=p.stage_jobs.get("s1"),
-                s2_job_id=p.stage_jobs.get("s2"),
-                s3_job_id=p.stage_jobs.get("s3"),
-                s4_job_id=p.stage_jobs.get("s4"),
-                created_at=p.created_at,
-                updated_at=p.updated_at,
-            )
-            for p in projects
-        ]
-    )
-
-
-@router.get("/mechanism-projects/{project_id}", response_model=MechanismProjectDetail)
-def get_mechanism_project(project_id: str, request: Request) -> MechanismProjectDetail:
-    manager = _manager(request)
-    projects_store = getattr(manager, "_mechanism_projects", None)
-    if projects_store is None:
-        raise HTTPException(status_code=404, detail=f"Mechanism project not found: {project_id}")
-    project = projects_store.get(project_id)
-    if project is None:
-        raise HTTPException(status_code=404, detail=f"Mechanism project not found: {project_id}")
-    store = _job_store(request)
-    return MechanismProjectDetail(
-        project_id=project.project_id,
-        name=project.name,
-        reaction_definition_hash=project.reaction_definition_hash,
-        charge=project.charge,
-        multiplicity=project.multiplicity,
-        status=project.status.value,
-        s1_job_id=project.stage_jobs.get("s1"),
-        s2_job_id=project.stage_jobs.get("s2"),
-        s3_job_id=project.stage_jobs.get("s3"),
-        s4_job_id=project.stage_jobs.get("s4"),
-        created_at=project.created_at,
-        updated_at=project.updated_at,
-        timeline=_project_timeline(project, store),
-    )
 
 
 # ---------------------------------------------------------------------------

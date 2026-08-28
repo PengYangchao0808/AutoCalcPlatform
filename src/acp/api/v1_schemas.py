@@ -878,61 +878,6 @@ class NodeBootstrapResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Mechanism project (design §9) — links four stage jobs.
-# ---------------------------------------------------------------------------
-
-
-class MechanismProjectCreateRequest(BaseModel):
-    name: str
-    reaction_definition_hash: str = ""
-    charge: int = 0
-    multiplicity: int = 1
-
-
-class MechanismProjectModel(BaseModel):
-    project_id: str
-    name: str
-    reaction_definition_hash: str = ""
-    charge: int = 0
-    multiplicity: int = 1
-    status: str = "created"
-    s1_job_id: str | None = None
-    s2_job_id: str | None = None
-    s3_job_id: str | None = None
-    s4_job_id: str | None = None
-    created_at: str = ""
-    updated_at: str = ""
-
-
-class MechanismProjectTimelineEntry(BaseModel):
-    stage: str
-    workflow: str
-    job_id: str | None = None
-    job_status: str | None = None
-    artifact: str = ""
-
-
-class MechanismProjectDetail(BaseModel):
-    project_id: str
-    name: str
-    reaction_definition_hash: str = ""
-    charge: int = 0
-    multiplicity: int = 1
-    status: str = "created"
-    s1_job_id: str | None = None
-    s2_job_id: str | None = None
-    s3_job_id: str | None = None
-    s4_job_id: str | None = None
-    created_at: str = ""
-    updated_at: str = ""
-    timeline: list[MechanismProjectTimelineEntry] = Field(default_factory=list)
-
-
-class MechanismProjectListResponse(BaseModel):
-    projects: list[MechanismProjectModel] = Field(default_factory=list)
-
-
-# ---------------------------------------------------------------------------
 # S2 bond-length scan (docs/ACP_S2_Bond_Length_Scan_MD_Plan.md §7, §11).
 # ---------------------------------------------------------------------------
 
@@ -1163,11 +1108,6 @@ __all__ = [
     "JobRecovery",
     "JobStageEntry",
     "MaintenanceCleanupResponse",
-    "MechanismProjectCreateRequest",
-    "MechanismProjectDetail",
-    "MechanismProjectListResponse",
-    "MechanismProjectModel",
-    "MechanismProjectTimelineEntry",
     "MechanismStudyCreateRequest",
     "MechanismStudyDetail",
     "MechanismStudyReportResponse",
