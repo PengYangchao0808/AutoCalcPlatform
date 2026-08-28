@@ -95,6 +95,14 @@ WAVE5_S2MANIFEST_ALLOWED_PATHS: Final[tuple[str, ...]] = (
 WAVE6_SCHEDULER_ALLOWED_PATHS: Final[tuple[str, ...]] = ("src/acp/scheduler/store.py",)
 WAVE7_SCOPE_PATHS: Final[tuple[str, ...]] = ("src/acp/api", "src/acp/scheduler")
 FINAL_FORBIDDEN_ALLOWED_PATHS: Final[tuple[str, ...]] = ("src/acp/compat/legacy/",)
+FINAL_STAGE_ALLOWED_PATHS: Final[tuple[str, ...]] = (
+    "src/acp/compat/legacy/",
+    "src/acp/api/mechanism_readonly.py",
+    "src/acp/api/mechanism_readonly_schemas.py",
+)
+FINAL_OPTFREQ_ALLOWED_PATHS: Final[tuple[str, ...]] = (
+    "src/acp/results/energy_graph.py",
+)
 FINAL_SHERMO_ALLOWED_PATHS: Final[tuple[str, ...]] = (
     "src/cccp/",
     "src/acp/calculations/primitives/thermochemistry.py",
@@ -213,10 +221,12 @@ GATE_REGISTRY: Final[tuple[GateSpec, ...]] = (
         excluded_path_prefixes=SCOPE_MECHANISM,
     ),
     GateSpec(
-        "final_stage_terms", FINAL_STAGE_PATTERN, SCOPE_ACP_FRONTEND, use_shared_exemptions=True
+        "final_stage_terms", FINAL_STAGE_PATTERN, SCOPE_ACP_FRONTEND,
+        FINAL_STAGE_ALLOWED_PATHS, use_shared_exemptions=True,
     ),
     GateSpec(
-        "final_optfreq_terms", FINAL_OPTFREQ_PATTERN, SCOPE_ACP_FRONTEND, use_shared_exemptions=True
+        "final_optfreq_terms", FINAL_OPTFREQ_PATTERN, SCOPE_ACP_FRONTEND,
+        FINAL_OPTFREQ_ALLOWED_PATHS, use_shared_exemptions=True,
     ),
     GateSpec(
         "final_forbidden_symbols",
