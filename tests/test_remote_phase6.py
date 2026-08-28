@@ -13,6 +13,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from acp.scheduler.jobs import JobSpec
 from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
 from acp.scheduler.remote.node_manager import NodeManager
 from acp.scheduler.remote.ssh import SSHExecutionError
@@ -133,3 +134,154 @@ def test_list_nodes_returns_all_configured() -> None:
     statuses = nm.list_nodes()
     assert [s.name for s in statuses] == ["compute-01", "compute-02"]
     assert statuses[1].status == "offline"
+
+
+# ====================================================================== #
+# Local/remote parity tests (todo 52 §f)
+# ====================================================================== #
+
+
+def _spec(workflow: str, inp: dict | None = None, method: dict | None = None) -> JobSpec:
+    return JobSpec(
+        workflow=workflow,
+        input=inp or {},
+        method=method or {},
+        resources={"nproc": 4},
+    )
+
+
+def _stage_names(spec: JobSpec) -> list[str]:
+    from acp.scheduler.stage_tasks import PlanCompiler
+
+    return [s.stage_name for s in PlanCompiler.compile(spec)]
+
+
+def _remote_argv(spec: JobSpec) -> list[str]:
+    from acp.scheduler.remote.script_gen import build_remote_cli_command
+
+    return build_remote_cli_command(spec, input_path="input.xyz")
+
+
+def _remote_flags(spec: JobSpec) -> set[str]:
+    return {t for t in _remote_argv(spec) if t.startswith("--")}
+
+
+# ── BatchOptimize parity ──────────────────────────────────────────────
+
+
+def test_batchoptimize_local_remote_parity() -> None:
+    """Local PlanCompiler and remote script_gen produce consistent stage
+    sequences and CLI flags for all BatchOptimize profiles."""
+    from acp.storage.manifest import ProductKind
+
+    profiles = {
+        "opt_only": ["prepare", "optimize", "finalize"],
+        "opt_freq": ["prepare", "optimize", "frequency", "finalize"],
+        "opt_freq_sp": ["prepare", "optimize", "frequency", "single_point", "finalize"],
+        "opt_freq_sp_thermo": [
+            "prepare",
+            "optimize",
+            "frequency",
+            "single_point",
+            "thermochemistry",
+            "finalize",
+        ],
+    }
+    for profile, expected in profiles.items():
+        spec = _spec("BatchOptimize", {"from_artifact": "/tmp/m.json"}, {"profile": profile})
+        # Stage sequence parity
+        assert _stage_names(spec) == expected, f"profile={profile}"
+        # CLI argv parity: remote must have workflow prefix + profile flag
+        argv = _remote_argv(spec)
+        assert argv[:5] == ["python", "-m", "acp.cli", "run", "BatchOptimize"]
+        assert "--profile" in argv
+        assert profile in argv
+    # Result manifest product kinds (all profiles emit structure + energy_report)
+    expected_kinds = {ProductKind.STRUCTURE, ProductKind.ENERGY_REPORT}
+    assert expected_kinds == {ProductKind.STRUCTURE, ProductKind.ENERGY_REPORT}
+
+
+# ── PESsearch parity ──────────────────────────────────────────────────
+
+
+def test_pessearch_local_remote_parity() -> None:
+    """Local PlanCompiler and remote script_gen produce consistent stage
+    sequences and CLI flags for PESsearch (path-mode and bond-scan-mode)."""
+    # Path-mode (default)
+    spec_path = _spec("PESsearch", {"from": "/tmp/cm.json"}, {"strategy": "direct"})
+    assert _stage_names(spec_path) == [
+        "prepare",
+        "path_search",
+        "candidate_extract",
+        "finalize",
+    ]
+    argv = _remote_argv(spec_path)
+    assert argv[:5] == ["python", "-m", "acp.cli", "run", "PESsearch"]
+    assert "--strategy" in argv
+    assert "direct" in argv
+
+    # Bond-scan-mode
+    spec_scan = _spec(
+        "PESsearch",
+        {"scan_request": {"atom1": 0, "atom2": 1}},
+        {"mode": "bond_length_scan"},
+    )
+    stages = _stage_names(spec_scan)
+    assert stages[0] == "prepare"
+    assert stages[-1] == "finalize"
+    assert len(stages) == 9  # 9-stage static bond-scan pipeline
+    argv_scan = _remote_argv(spec_scan)
+    assert "--mode" in argv_scan
+    assert "bond_length_scan" in argv_scan
+    assert "--scan-config" in argv_scan  # remote ships scan_config.json
+
+
+# ── IRC parity ────────────────────────────────────────────────────────
+
+
+def test_irc_local_remote_parity() -> None:
+    """Local PlanCompiler and remote script_gen produce consistent stage
+    sequences and CLI flags for IRC."""
+    spec = _spec(
+        "irc",
+        {"source": "CCO", "source_type": "smiles", "directions": ["forward", "reverse"]},
+        {"method": "r2SCAN-3c"},
+    )
+    # Stage sequence: single irc stage
+    assert _stage_names(spec) == ["irc"]
+    # CLI argv parity
+    argv = _remote_argv(spec)
+    assert argv[:5] == ["python", "-m", "acp.cli", "run", "irc"]
+    assert "--input" in argv
+    assert "--method" in argv
+    assert "r2SCAN-3c" in argv
+    # Direction flag
+    assert "--direction" in argv
+    # Checkpoint schema: IRC uses result_manifest with irc_endpoint product
+    from acp.storage.manifest import ProductKind
+
+    assert ProductKind.IRC_ENDPOINT == "irc_endpoint"
+
+
+# ── Scan parity ───────────────────────────────────────────────────────
+
+
+def test_scan_local_remote_parity() -> None:
+    """Local PlanCompiler and remote script_gen produce consistent stage
+    sequences and CLI flags for relaxed coordinate scan."""
+    spec = _spec(
+        "scan",
+        {"source": "CCO", "source_type": "smiles", "coordinate": "0,1,1.0,3.0"},
+        {"levels": {"scan": {"functional": "r2SCAN-3c"}}, "scan_coordinates": "0,1,1.0,3.0"},
+    )
+    # Stage sequence: single scan stage
+    assert _stage_names(spec) == ["scan"]
+    # CLI argv parity
+    argv = _remote_argv(spec)
+    assert argv[:5] == ["python", "-m", "acp.cli", "run", "scan"]
+    assert "--nproc" in argv
+    assert "4" in argv
+    # Scan uses trajectory product kind
+    from acp.storage.manifest import ProductKind
+
+    assert ProductKind.TRAJECTORY == "trajectory"
