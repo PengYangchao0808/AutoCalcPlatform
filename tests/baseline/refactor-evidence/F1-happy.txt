@@ -1,0 +1,22 @@
+=== F1 QA Happy Drill ===
+Date: 2026-08-28T12:18:14Z
+
+--- Command 1: Evidence file count ---
+Command: ls tests/baseline/refactor-evidence/ | grep -cE '^(0[1-9]|[1-4][0-9]|5[0-2])-(happy|fail)\.txt$'
+Output: 104
+Exit: 0
+ASSERTION: 104 == 104 ✅ PASS
+
+--- Command 2: Happy file non-empty count (excluding F1-happy.txt) ---
+Command: find tests/baseline/refactor-evidence -name '*-happy.txt' -size +0 | grep -v F1-happy | wc -l
+Output: 52
+Exit: 0
+ASSERTION: 52 == 52 ✅ PASS
+
+--- Command 3: Fail file non-empty count ---
+Command: find tests/baseline/refactor-evidence -name '*-fail.txt' -size +0 | wc -l
+Output: 52
+Exit: 0
+ASSERTION: 52 == 52 ✅ PASS
+
+=== ALL_SECTIONS_OK ===
