@@ -710,9 +710,7 @@ def test_v1_create_job_without_v2_fields_defaults_naming(client: TestClient) -> 
 # ---------------------------------------------------------------------------
 
 
-def _submit_batch_optimize(
-    client: TestClient, items: list[dict[str, object]]
-) -> dict[str, object]:
+def _submit_batch_optimize(client: TestClient, items: list[dict[str, object]]) -> dict[str, object]:
     response = client.post(
         "/api/v1/jobs",
         json={
@@ -1087,3 +1085,118 @@ def test_run_irc_endpoint_rejections(
     assert response.status_code == expected_status
     assert response.status_code != 500
     assert manager.submitted is None
+
+
+# ---------------------------------------------------------------------------
+# MD §12.3 route matrix — 8 endpoints, one parametrized test
+# ---------------------------------------------------------------------------
+
+
+def _setup_job_for_state(client: TestClient, state: str, tmp_path: Path) -> str:
+    """Create a job record directly in the store at *state*."""
+    manager = client.app.state.job_manager
+    job_id = f"matrix-{state}-001"
+    work_dir = tmp_path / f"work-{state}"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    record = JobRecord(
+        id=job_id,
+        spec=JobSpec(
+            workflow="fake",
+            name=f"matrix-{state}",
+            input={"source": "CCO"},
+            method={"protocol": "ext"},
+            project_id=manager.default_project_id,
+            molecule_name="CCO",
+        ),
+        status=JobStatus(state) if state != "queued" else JobStatus.QUEUED,
+        work_dir=str(work_dir),
+        project_id=manager.default_project_id,
+    )
+    manager.store.create(record)
+    return job_id
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "method", "setup_state", "expected_status"),
+    [
+        # 1. POST /jobs — submit a new job
+        ("jobs", "POST", None, 201),
+        # 2. GET /jobs/{id} — retrieve a job record
+        ("jobs/{id}", "GET", "queued", 200),
+        # 3. POST /jobs/{id}/pause — pause a running job (409 if no live process)
+        ("jobs/{id}/pause", "POST", "running", 409),
+        # 4. POST /jobs/{id}/continue — continue a failed job (409 if unsupported workflow)
+        ("jobs/{id}/continue", "POST", "failed", 409),
+        # 5. POST /jobs/{id}/rerun — rerun a failed job
+        ("jobs/{id}/rerun", "POST", "failed", 200),
+        # 6. POST /jobs/purge — purge with status filter
+        ("jobs/purge", "POST", None, 200),
+        # 7. GET /jobs/{id}/artifacts — list artifacts for a job
+        ("jobs/{id}/artifacts", "GET", "queued", 200),
+        # 8. POST /jobs/{id}/artifacts/{artifact_id}/run-irc — submit IRC from TS artifact
+        ("jobs/{id}/artifacts/{artifact_id}/run-irc", "POST", "irc", 202),
+    ],
+    ids=[
+        "POST /jobs",
+        "GET /jobs/{id}",
+        "POST /jobs/{id}/pause",
+        "POST /jobs/{id}/continue",
+        "POST /jobs/{id}/rerun",
+        "POST /jobs/purge",
+        "GET /jobs/{id}/artifacts",
+        "POST /jobs/{id}/artifacts/{artifact_id}/run-irc",
+    ],
+)
+def test_route_matrix_v1(
+    client: TestClient,
+    tmp_path: Path,
+    endpoint: str,
+    method: str,
+    setup_state: str | None,
+    expected_status: int,
+) -> None:
+    """MD §12.3: assert all 8 core endpoints are registered and behave correctly."""
+    if setup_state == "irc":
+        # Special setup: use _FakeIrcManager with a completed PESsearch source
+        source_dir = tmp_path / "irc-source"
+        _write_irc_manifest(
+            source_dir,
+            [
+                {
+                    "id": "ts_artifact",
+                    "label": "TS candidate",
+                    "path": "structures/ts.xyz",
+                    "kind": "structure",
+                    "role": "transition_state",
+                }
+            ],
+            "TAG: TS | candidate_id=ts_001 | source=PESsearch",
+        )
+        irc_manager = _FakeIrcManager({"source-job": _irc_source_record("source-job", source_dir)})
+        client.app.state.job_manager = irc_manager
+        url = "/api/v1/jobs/source-job/artifacts/ts_artifact/run-irc"
+        response = client.post(url)
+    elif endpoint == "jobs" and method == "POST":
+        response = client.post(
+            "/api/v1/jobs",
+            json={
+                "workflow": "fake",
+                "name": "matrix-submit",
+                "input": {"source": "CCO"},
+                "method": {"protocol": "ext"},
+            },
+        )
+    elif endpoint == "jobs/purge":
+        response = client.post(
+            "/api/v1/jobs/purge",
+            json={"status": "completed", "older_than_days": 999},
+        )
+    else:
+        job_id = _setup_job_for_state(client, setup_state or "queued", tmp_path)
+        url = f"/api/v1/{endpoint.replace('{id}', job_id)}"
+        response = client.request(method, url)
+
+    assert response.status_code == expected_status, (
+        f"{method} {endpoint} → {response.status_code}, expected {expected_status}: "
+        f"{response.text[:200]}"
+    )
