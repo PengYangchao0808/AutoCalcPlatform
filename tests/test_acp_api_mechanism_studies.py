@@ -38,6 +38,7 @@ def _submit_fake_job(client: TestClient, *, name: str = "study-job") -> str:
 def _seed_study(store, study_id, *, job_id=None, status="waiting", study_json=None):
     """Seed a mechanism study directly in the store."""
     import json as _json
+
     now = "2026-08-28T00:00:00Z"
     sj = study_json or {"study_id": study_id}
     store.upsert_mechanism_study(
@@ -70,6 +71,7 @@ def _study_payload(study_id: str, study_dir: Path | None = None) -> dict[str, ob
 
 
 # === Read-only route tests (use seeded DB) ===
+
 
 def test_list_readonly(tmp_path: Path) -> None:
     """GET /mechanism-studies returns 200 with seeded data."""
@@ -115,14 +117,21 @@ def test_report_readonly(tmp_path: Path) -> None:
         study_dir = work_dir / "mechanism_study" / "study-report"
         study_dir.mkdir(parents=True, exist_ok=True)
         (study_dir / "network.json").write_text(
-            json.dumps({"nodes": [{"state_id": "s1"}], "edges": []}), encoding="utf-8",
+            json.dumps({"nodes": [{"state_id": "s1"}], "edges": []}),
+            encoding="utf-8",
         )
         (study_dir / "quality_gates.json").write_text(
-            json.dumps({"quality_gates": [{"gate_id": "G0", "status": "pass"}]}), encoding="utf-8",
+            json.dumps({"quality_gates": [{"gate_id": "G0", "status": "pass"}]}),
+            encoding="utf-8",
         )
 
         store = cast(JobManager, cast(Starlette, client.app).state.job_manager).store
-        _seed_study(store, "study-report", job_id=job_id, study_json=_study_payload("study-report", study_dir))
+        _seed_study(
+            store,
+            "study-report",
+            job_id=job_id,
+            study_json=_study_payload("study-report", study_dir),
+        )
 
         report = client.get("/api/v1/mechanism-studies/study-report/report")
         assert report.status_code == 200, report.text
@@ -144,7 +153,8 @@ def test_reaction_get_readonly(tmp_path: Path) -> None:
         store = cast(JobManager, cast(Starlette, client.app).state.job_manager).store
         reaction_data = {"schema_version": 2, "study_id": "study-rxn", "bond_changes": []}
         _seed_study(
-            store, "study-rxn",
+            store,
+            "study-rxn",
             status="reaction_confirmed",
             study_json={"study_id": "study-rxn"},
         )
@@ -185,6 +195,7 @@ def test_projects_list_readonly(tmp_path: Path) -> None:
 
 # === Write route tests (all should return 410 Gone) ===
 
+
 def test_create_returns_410(tmp_path: Path) -> None:
     """POST /mechanism-studies returns 410 Gone."""
     with make_client(tmp_path) as client:
@@ -203,7 +214,10 @@ def test_reaction_preview_returns_410(tmp_path: Path) -> None:
         _seed_study(store, "study-preview", study_json={"study_id": "study-preview"})
         response = client.post(
             "/api/v1/mechanism-studies/study-preview/reaction/preview",
-            json={"reactant": {"source_type": "smiles", "source": "CCO"}, "product": {"source_type": "smiles", "source": "CCO"}},
+            json={
+                "reactant": {"source_type": "smiles", "source": "CCO"},
+                "product": {"source_type": "smiles", "source": "CCO"},
+            },
         )
         assert response.status_code == 410
 
@@ -215,7 +229,10 @@ def test_reaction_confirm_returns_410(tmp_path: Path) -> None:
         _seed_study(store, "study-confirm", study_json={"study_id": "study-confirm"})
         response = client.post(
             "/api/v1/mechanism-studies/study-confirm/reaction/confirm",
-            json={"reactant": {"source_type": "smiles", "source": "CCO"}, "product": {"source_type": "smiles", "source": "CCO"}},
+            json={
+                "reactant": {"source_type": "smiles", "source": "CCO"},
+                "product": {"source_type": "smiles", "source": "CCO"},
+            },
         )
         assert response.status_code == 410
 
@@ -296,6 +313,7 @@ def test_s2_structure_preview_returns_410(tmp_path: Path) -> None:
 
 # === Unified status tests (read-only, seeded) ===
 
+
 def test_unified_status_draft(tmp_path: Path) -> None:
     with make_client(tmp_path) as client:
         store = cast(JobManager, cast(Starlette, client.app).state.job_manager).store
@@ -322,7 +340,10 @@ def test_unified_status_completed(tmp_path: Path) -> None:
             encoding="utf-8",
         )
         _seed_study(
-            store, "study-done", job_id=job_id, status="completed",
+            store,
+            "study-done",
+            job_id=job_id,
+            status="completed",
             study_json={"study_id": "study-done", "study_dir": str(study_dir)},
         )
         detail = client.get("/api/v1/mechanism-studies/study-done")
