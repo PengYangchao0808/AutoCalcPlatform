@@ -30,7 +30,7 @@ from acp.scheduler.remote.ssh import SSHExecutionError
 def _node(name: str = "compute-01", enabled: bool = True, max_jobs: int = 5) -> RemoteNode:
     return RemoteNode(
         name=name,
-        host="10.16.5.157",
+        host="10.0.0.1",
         username="<user>",
         remote_work_dir="/scratch/<user>/acp_jobs",
         remote_code_dir="/home/<user>/acp_code",
@@ -118,7 +118,9 @@ def test_ping_node_reachable_refreshes_cache() -> None:
     monitor.check_disk_usage.return_value = 10
     nm = NodeManager(_config([_node()]), pool, monitor=monitor)
     assert nm.ping_node("compute-01") is True
-    pool.execute.assert_called_once()
+    # First call is the ping itself; the post-ping status refresh may add
+    # further SSH calls (metrics + cached software probe).
+    assert pool.execute.call_args_list[0].args[1] == "echo ok"
 
 
 def test_ping_node_unreachable_returns_false() -> None:
@@ -370,3 +372,109 @@ def test_doctor_node_unreachable() -> None:
     report = doctor_node(pool, _node())
     assert report.reachable is False
     assert report.python is None
+
+
+# --------------------------------------------------------------------------- #
+# Status-polling software probe — NodeStatus.software
+# --------------------------------------------------------------------------- #
+
+_SOFTWARE_REPORT = {
+    "orca": {"configured": "orca", "resolved": "/opt/orca/orca", "version": "6.1.1"},
+    "xtb": {"configured": "xtb", "resolved": None, "version": None},
+    "crest": {"configured": "crest", "resolved": "/opt/crest/crest", "version": "3.0.2"},
+}
+
+
+def _pool_with_software(report: dict | None = None) -> MagicMock:
+    """Pool that answers the interpreter probe and the doctor software script."""
+    import json
+
+    pool = MagicMock()
+
+    def fake_execute(_node, command, timeout=15):
+        if "sys.version_info" in command:
+            return (0, "3.12.4\n", "")
+        if "cccp.software" in command:
+            if report is None:
+                return (1, "", "boom")
+            return (0, json.dumps(report), "")
+        raise AssertionError(f"unexpected command: {command}")
+
+    pool.execute.side_effect = fake_execute
+    return pool
+
+
+def _ok_monitor() -> MagicMock:
+    monitor = MagicMock()
+    monitor.get_running_job_count.return_value = 1
+    monitor.check_disk_usage.return_value = 20
+    return monitor
+
+
+def test_status_refresh_probes_software() -> None:
+    nm = NodeManager(
+        _config([_node()]), _pool_with_software(_SOFTWARE_REPORT), monitor=_ok_monitor()
+    )
+    status = nm.get_node_status("compute-01")
+    assert status.status == "online"
+    assert status.software["orca"]["resolved"] == "/opt/orca/orca"
+    assert status.software["crest"]["version"] == "3.0.2"
+
+
+def test_software_probe_uses_separate_ttl() -> None:
+    pool = _pool_with_software(_SOFTWARE_REPORT)
+    nm = NodeManager(_config([_node()]), pool, monitor=_ok_monitor(), software_ttl=300)
+    nm.get_node_status("compute-01")
+    calls_after_first = pool.execute.call_count
+    # Expire only the status cache — the software cache is still fresh.
+    nm._cache.pop("compute-01")
+    status = nm.get_node_status("compute-01")
+    assert status.software["orca"]["resolved"] == "/opt/orca/orca"
+    assert pool.execute.call_count == calls_after_first
+
+
+def test_software_probe_failure_keeps_stale_report() -> None:
+    import json
+
+    pool = _pool_with_software(_SOFTWARE_REPORT)
+    nm = NodeManager(_config([_node()]), pool, monitor=_ok_monitor(), software_ttl=1)
+    nm.get_node_status("compute-01")
+
+    def failing_execute(_node, command, timeout=15):
+        if "cccp.software" in command:
+            return (1, "", "boom")
+        return (0, "3.12.4\n", "")
+
+    pool.execute.side_effect = failing_execute
+    nm._cache.pop("compute-01")
+    nm._software_cache["compute-01"] = (0.0, nm._software_cache["compute-01"][1])
+    status = nm.get_node_status("compute-01")
+    assert status.software["orca"]["resolved"] == "/opt/orca/orca"
+    assert json.dumps(status.software) != ""
+
+
+def test_software_empty_when_probe_fails_and_no_cache() -> None:
+    nm = NodeManager(_config([_node()]), _pool_with_software(None), monitor=_ok_monitor())
+    status = nm.get_node_status("compute-01")
+    assert status.status == "online"
+    assert status.software == {}
+
+
+def test_offline_node_has_no_software() -> None:
+    pool = _pool_with_software(_SOFTWARE_REPORT)
+    nm = NodeManager(_config([_node(enabled=False)]), pool, monitor=MagicMock())
+    status = nm.get_node_status("compute-01")
+    assert status.status == "offline"
+    assert status.software == {}
+    pool.execute.assert_not_called()
+
+
+def test_cached_node_statuses_never_probes() -> None:
+    pool = _pool_with_software(_SOFTWARE_REPORT)
+    nm = NodeManager(_config([_node()]), pool, monitor=_ok_monitor())
+    assert nm.cached_node_statuses() == []
+    nm.get_node_status("compute-01")
+    calls = pool.execute.call_count
+    cached = nm.cached_node_statuses()
+    assert [s.name for s in cached] == ["compute-01"]
+    assert pool.execute.call_count == calls

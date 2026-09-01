@@ -55,6 +55,10 @@ class BackendInfo(BaseModel):
     path: str = ""
     version: str = ""
     capabilities: list[CapabilityInfo] = Field(default_factory=list)
+    remote_available: bool = False
+    remote_nodes: list[str] = Field(default_factory=list)
+    remote_path: str = ""
+    remote_version: str = ""
 
 
 class BackendsResponse(BaseModel):

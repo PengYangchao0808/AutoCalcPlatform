@@ -395,11 +395,11 @@ def detect_version(name: str, executable: Path | None) -> str | None:
             continue
         output = result.stdout or result.stderr
         first_line = output.split("\n")[0].strip()
-        if first_line and len(first_line) < 128:
+        if first_line and any(c.isdigit() for c in first_line) and len(first_line) < 128:
             return first_line
-        # The first line is blank or decorative (e.g. CENSO 3.x prints an
-        # ASCII banner with ``v 3.0.8`` on a later line) — fall back to the
-        # first semver-like token anywhere in the output.
+        # The first line is blank or decorative (e.g. the xtb ASCII banner's
+        # dashed separator, or CENSO 3.x with ``v 3.0.8`` on a later line) —
+        # fall back to the first semver-like token anywhere in the output.
         match = _SEMVER_RE.search(output)
         if match:
             return match.group(0)

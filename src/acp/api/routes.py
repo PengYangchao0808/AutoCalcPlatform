@@ -168,11 +168,44 @@ def _backend_version(name: str, path: str) -> str:
     return version_cached(name, Path(path))
 
 
+# Software probe names that map to a differently-named backend adapter.
+_REMOTE_SOFTWARE_TO_BACKEND = {"shermo": "external"}
+
+
+def _remote_backend_map(request: Request) -> dict[str, dict[str, Any]]:
+    """Aggregate QC software probed on reachable remote nodes, keyed by backend name.
+
+    Reads the NodeManager's cached node statuses only (no SSH), so this never
+    blocks ``/api/backends``; the node panel's own polling keeps the cache
+    warm.  Returns ``{}`` when remote execution is not configured.
+    """
+    manager = getattr(request.app.state, "job_manager", None)
+    nm = getattr(manager, "node_manager", None) if manager is not None else None
+    if nm is None:
+        return {}
+    result: dict[str, dict[str, Any]] = {}
+    for status in nm.cached_node_statuses():
+        if status.status == "offline":
+            continue
+        for sw_name, info in (status.software or {}).items():
+            resolved = info.get("resolved") if isinstance(info, dict) else None
+            if not resolved:
+                continue
+            backend = _REMOTE_SOFTWARE_TO_BACKEND.get(sw_name, sw_name)
+            entry = result.setdefault(backend, {"nodes": [], "path": "", "version": ""})
+            entry["nodes"].append(status.name)
+            if not entry["path"]:
+                entry["path"] = str(resolved)
+                entry["version"] = str(info.get("version") or "")
+    return result
+
+
 @router.get("/backends", response_model=BackendsResponse)
-def get_backends() -> BackendsResponse:
+def get_backends(request: Request) -> BackendsResponse:
     from acp.backends import BackendCapabilityStatus, backend_status, list_backends
 
     executables = _load_executables()
+    remote = _remote_backend_map(request)
     backends: list[BackendInfo] = []
     for name in list_backends():
         status = cast(dict[str, Any], backend_status(name))
@@ -182,6 +215,7 @@ def get_backends() -> BackendsResponse:
             for cap, st in capabilities.items()
         ]
         path = _resolve_backend_path(name, executables)
+        rinfo = remote.get(name) or {}
         backends.append(
             BackendInfo(
                 name=str(status["name"]),
@@ -189,6 +223,10 @@ def get_backends() -> BackendsResponse:
                 path=path,
                 version=_backend_version(name, path),
                 capabilities=caps,
+                remote_available=bool(rinfo),
+                remote_nodes=list(rinfo.get("nodes") or []),
+                remote_path=str(rinfo.get("path") or ""),
+                remote_version=str(rinfo.get("version") or ""),
             )
         )
     return BackendsResponse(backends=backends)

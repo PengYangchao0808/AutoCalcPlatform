@@ -3190,6 +3190,7 @@ const I18N = {
     "backend.empty": "无可用后端",
     "backend.load_error": "加载后端失败",
     "backend.version": "版本",
+    "backend.remote": "远程",
     "backend.active": "当前生效",
     "backend.multi_install": "检测到多个安装，当前生效项由解析顺序决定；可在 ~/.cccp.yaml 的 executables.{name}.path 钉版",
     "backend.multi_badge_title": "检测到多个安装",
@@ -3661,6 +3662,7 @@ const I18N = {
     "backend.empty": "No backends available",
     "backend.load_error": "Failed to load backends",
     "backend.version": "Version",
+    "backend.remote": "remote",
     "backend.active": "active",
     "backend.multi_install": "Multiple installs detected; the active one follows resolution order — pin via executables.{name}.path in ~/.cccp.yaml",
     "backend.multi_badge_title": "Multiple installs detected",
@@ -9093,14 +9095,17 @@ function renderBackendPanel() {
   backendsCache.forEach(function(b) {
     const name = String(b.name || "");
     const discovery = softwareDiscoveryCache[name] || null;
-    const version = String(b.version || (discovery && discovery.version) || "").trim();
-    const resolvedPath = String(b.path || (discovery && discovery.resolved) || "").trim();
+    const remoteNodes = Array.isArray(b.remote_nodes) ? b.remote_nodes : [];
+    const isRemote = b.remote_available === true && remoteNodes.length > 0;
+    const effective = b.available || isRemote;
+    const version = String(b.version || b.remote_version || (discovery && discovery.version) || "").trim();
+    const resolvedPath = String(b.path || b.remote_path || (discovery && discovery.resolved) || "").trim();
 
     const row = document.createElement("div");
-    row.className = "node-row" + (b.available ? "" : " offline");
+    row.className = "node-row" + (effective ? "" : " offline");
 
     const dot = document.createElement("span");
-    dot.className = "node-dot " + (b.available ? "online" : "offline");
+    dot.className = "node-dot " + (effective ? "online" : "offline");
 
     const info = document.createElement("div");
     info.className = "node-info";
@@ -9114,6 +9119,13 @@ function renderBackendPanel() {
       badge.title = t("backend.version");
       badge.textContent = version;
       nameEl.appendChild(badge);
+    }
+    if (isRemote) {
+      const rbadge = document.createElement("span");
+      rbadge.className = "backend-version";
+      rbadge.title = remoteNodes.join(", ");
+      rbadge.textContent = t("backend.remote") + ": " + remoteNodes.join(", ");
+      nameEl.appendChild(rbadge);
     }
     if (discovery && discovery.multiple === true && Array.isArray(discovery.candidates) && discovery.candidates.length) {
       nameEl.appendChild(buildMultiInstallDetails(discovery, resolvedPath));

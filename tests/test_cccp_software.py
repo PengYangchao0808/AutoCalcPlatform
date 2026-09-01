@@ -103,6 +103,20 @@ def test_detect_version_takes_first_line_of_successful_probe() -> None:
         assert detect_version("xtb", Path("/usr/bin/xtb")) == "xtb version 6.7.1"
 
 
+def test_detect_version_skips_decorative_banner_line() -> None:
+    """xtb --version prints an ASCII banner whose first line is a dashed
+    separator; the version must come from the semver token instead."""
+    banner = (
+        "      -----------------------------------------------------------\n"
+        "     |                   =====================                   |\n"
+        "     |                           x T B                           |\n"
+        "      -----------------------------------------------------------\n"
+        "       xtb version 6.6.1 (abcdef0) compiled by 'runner'\n"
+    )
+    with patch("subprocess.run", return_value=_completed(0, stdout=banner)):
+        assert detect_version("xtb", Path("/usr/bin/xtb")) == "6.6.1"
+
+
 # --- resolution with source -------------------------------------------------
 
 

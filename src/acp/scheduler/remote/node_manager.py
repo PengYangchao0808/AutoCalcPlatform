@@ -172,7 +172,15 @@ def _utc_now() -> str:
 
 @dataclass
 class NodeStatus:
-    """Live-ish status of a single remote node."""
+    """Live-ish status of a single remote node.
+
+    Attributes:
+        software: Per-package probe result from the node (same shape as
+            :attr:`NodeDoctorReport.software` — ``{name: {configured,
+            resolved, version}}``), refreshed on a slower cadence than the
+            status metrics.  Empty when the node is offline or the probe
+            has never succeeded.
+    """
 
     name: str
     host: str
@@ -182,6 +190,7 @@ class NodeStatus:
     disk_usage_pct: int = 0
     last_check: str = ""
     error: str | None = None
+    software: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -244,12 +253,18 @@ class NodeManager:
         ssh_pool: SSHConnectionPool,
         monitor: RemoteJobMonitor | None = None,
         cache_ttl: int = 30,
+        software_ttl: int = 300,
+        python_ttl: int = 3600,
     ) -> None:
         self.config = remote_config
         self._pool = ssh_pool
         self._monitor = monitor or RemoteJobMonitor(ssh_pool, _stager_from_pool(ssh_pool))
         self._cache_ttl = max(1, cache_ttl)
+        self._software_ttl = max(1, software_ttl)
+        self._python_ttl = max(1, python_ttl)
         self._cache: dict[str, tuple[float, NodeStatus]] = {}
+        self._software_cache: dict[str, tuple[float, dict[str, dict[str, Any]]]] = {}
+        self._python_cache: dict[str, tuple[float, InterpreterProbe]] = {}
         self._lock = threading.Lock()
 
     def list_nodes(self) -> list[NodeStatus]:
@@ -257,6 +272,15 @@ class NodeManager:
         if not self.config.is_remote:
             return []
         return [self.get_node_status(node.name) for node in self.config.nodes]
+
+    def cached_node_statuses(self) -> list[NodeStatus]:
+        """Return cached statuses without triggering SSH probes.
+
+        Used by read-only API consumers (e.g. ``/api/backends``) that must
+        not block on SSH; nodes never probed yet are simply absent.
+        """
+        with self._lock:
+            return [status for _, status in self._cache.values()]
 
     def get_node_status(self, node_name: str) -> NodeStatus:
         """Return the status of a node by name, using cache if fresh."""
@@ -529,7 +553,57 @@ class NodeManager:
             disk_usage_pct=disk,
             last_check=_utc_now(),
             error=None,
+            software=self._software_for(node),
         )
+
+    def _software_for(self, node: RemoteNode) -> dict[str, dict[str, Any]]:
+        """Return the node's QC software probe, refreshing on ``software_ttl``.
+
+        Probe failures keep the previous (stale) report so a transient SSH
+        hiccup does not blank out the dashboard backend panel.
+        """
+        with self._lock:
+            cached = self._software_cache.get(node.name)
+            if cached is not None and (time.monotonic() - cached[0]) < self._software_ttl:
+                return cached[1]
+        probed: dict[str, dict[str, Any]] | None = None
+        try:
+            probed = self._probe_software(node)
+        except Exception as exc:  # noqa: BLE001 — probe must not fail status
+            logger.debug("Software probe on %s raised: %s", node.name, exc)
+        if probed is None:
+            return cached[1] if cached is not None else {}
+        with self._lock:
+            self._software_cache[node.name] = (time.monotonic(), probed)
+        return probed
+
+    def _node_python(self, node: RemoteNode) -> InterpreterProbe | None:
+        """Return the node's Python 3.10+ interpreter, cached for ``python_ttl``."""
+        with self._lock:
+            cached = self._python_cache.get(node.name)
+            if cached is not None and (time.monotonic() - cached[0]) < self._python_ttl:
+                return cached[1]
+        try:
+            probe = detect_node_python(self._pool, node)
+        except SSHExecutionError as exc:
+            logger.debug("Python probe for %s failed: %s", node.name, exc)
+            return None
+        if probe is not None:
+            with self._lock:
+                self._python_cache[node.name] = (time.monotonic(), probe)
+        return probe
+
+    def _probe_software(
+        self, node: RemoteNode, timeout: int = 30
+    ) -> dict[str, dict[str, Any]] | None:
+        """Run the QC software probe on *node*; ``None`` on any failure."""
+        probe = self._node_python(node)
+        if probe is None:
+            return None
+        result = _run_software_script(self._pool, node, probe.python_executable, timeout)
+        if result is None:
+            logger.debug("Software probe on %s failed; keeping previous report", node.name)
+        return result
 
 
 def _stager_from_pool(pool: SSHConnectionPool) -> Any:
@@ -570,6 +644,41 @@ _DOCTOR_SOFTWARE_SCRIPT = (
     "    }\n"
     "print(json.dumps(report))\n"
 )
+
+
+def _run_software_script(
+    pool: SSHConnectionPool,
+    node: RemoteNode,
+    python_executable: str,
+    timeout: int = 30,
+) -> dict[str, dict[str, Any]] | None:
+    """Execute :data:`_DOCTOR_SOFTWARE_SCRIPT` on *node* and parse its report.
+
+    Returns:
+        The ``{name: {configured, resolved, version}}`` mapping, or ``None``
+        on SSH failure, non-zero exit, or unparseable output.
+    """
+    script_arg = shlex.quote(_DOCTOR_SOFTWARE_SCRIPT)
+    command = (
+        "bash -lc "
+        + shlex.quote(
+            f"export PYTHONPATH={node.remote_code_dir}/src:$PYTHONPATH && "
+            f"{python_executable} -c {script_arg}"
+        )
+    )
+    try:
+        code, out, _err = pool.execute(node, command, timeout=timeout)
+    except SSHExecutionError:
+        return None
+    if code != 0 or not out.strip():
+        return None
+    try:
+        parsed = json.loads(out.strip().splitlines()[-1])
+    except Exception:  # noqa: BLE001 — report, don't abort
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    return parsed
 
 
 @dataclass(frozen=True)
@@ -617,40 +726,23 @@ def doctor_node(pool: SSHConnectionPool, node: RemoteNode, timeout: int = 30) ->
     if probe is None:
         return report
 
-    script_arg = shlex.quote(_DOCTOR_SOFTWARE_SCRIPT)
-    command = (
-        "bash -lc "
-        + shlex.quote(
-            f"export PYTHONPATH={node.remote_code_dir}/src:$PYTHONPATH && "
-            f"{probe.python_executable} -c {script_arg}"
-        )
-    )
-    try:
-        code, out, _err = pool.execute(node, command, timeout=timeout)
-    except SSHExecutionError as exc:
-        return NodeDoctorReport(
+    software = _run_software_script(pool, node, probe.python_executable, timeout)
+    if software is not None:
+        report = NodeDoctorReport(
             node=node.name,
             host=node.host,
-            reachable=False,
-            error=f"software probe failed: {exc}",
+            reachable=True,
+            python=probe,
+            software=software,
         )
-    if code == 0 and out.strip():
-        try:
-            report = NodeDoctorReport(
-                node=node.name,
-                host=node.host,
-                reachable=True,
-                python=probe,
-                software=json.loads(out.strip().splitlines()[-1]),
-            )
-        except Exception as exc:  # noqa: BLE001 — report, don't abort
-            report = NodeDoctorReport(
-                node=node.name,
-                host=node.host,
-                reachable=True,
-                python=probe,
-                error=f"software report unparseable: {exc}",
-            )
+    else:
+        report = NodeDoctorReport(
+            node=node.name,
+            host=node.host,
+            reachable=True,
+            python=probe,
+            error="software probe failed or returned unparseable output",
+        )
 
     symlinks: dict[str, str] = {}
     for name, target in node.bin_symlinks.items():
