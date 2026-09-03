@@ -95,6 +95,44 @@ class V1JobSpecModel(BaseModel):
     remark: str = ""
 
 
+class JobLiveMetric(BaseModel):
+    """One display-ready metric describing a job's live computation state.
+
+    Attributes:
+        key: Stable identifier for the metric.
+        label_key: Optional frontend localization key.
+        label: Optional display label supplied by the backend.
+        value: Display value for the metric.
+        kind: Semantic rendering kind for the metric value.
+        priority: Ordering priority, with larger values shown first.
+        detail: Optional supporting detail for the metric.
+    """
+
+    key: str
+    label_key: str | None = None
+    label: str | None = None
+    value: str
+    kind: Literal["count", "iteration", "status", "text", "progress"]
+    priority: int = 0
+    detail: str | None = None
+
+
+class JobLiveStatus(BaseModel):
+    """Live computation status projected into the v1 job response.
+
+    Attributes:
+        stage_label: Optional localized label for the current stage.
+        stage_index: One-based index of the current workflow stage.
+        stage_total: Total number of workflow stages.
+        metrics: Semantic metrics for the current computation state.
+    """
+
+    stage_label: str | None = None
+    stage_index: int | None = None
+    stage_total: int | None = None
+    metrics: list[JobLiveMetric] = Field(default_factory=list)
+
+
 class V1JobRecordModel(BaseModel):
     id: str
     spec: V1JobSpecModel
@@ -124,6 +162,8 @@ class V1JobRecordModel(BaseModel):
     stage_detail: str | None = None  # e.g. "17/40 scan points"
     latest_event: str | None = None  # human-readable last event
     snapshot_version: int | None = None  # epoch seconds of state.json mtime
+    live_status: JobLiveStatus | None = None
+    display_method: str | None = None
 
 
 class V1JobCreateRequest(BaseModel):
@@ -1187,6 +1227,8 @@ __all__ = [
     "JobArtifactSummaryEntry",
     "JobDiskState",
     "JobErrorDetail",
+    "JobLiveMetric",
+    "JobLiveStatus",
     "JobMoveRequest",
     "JobRecovery",
     "JobStageEntry",
