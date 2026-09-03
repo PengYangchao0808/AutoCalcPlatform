@@ -29,6 +29,10 @@ STAGE_LABELS_ZH: dict[str, str] = {
     "scan": "坐标扫描",
     "irc": "IRC 验证",
     "xtb_optimize": "xTB 优化",
+    "preparing": "准备",
+    "irc_forward": "IRC 正向",
+    "irc_backward": "IRC 反向",
+    "validating": "端点验证",
     # NMR
     "embed_smiles": "SMILES 嵌入",
     "crest_search": "CREST 搜索",
