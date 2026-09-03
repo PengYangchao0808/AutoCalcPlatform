@@ -409,16 +409,10 @@ body.resizing-v canvas {
 .queue-panel.collapsed .queue-expanded { display: none; }
 .panel-section.collapsed,
 .queue-panel.collapsed { flex: 0 0 auto !important; }
-#node-panel.collapsed + .v-splitter,
-#backend-panel.collapsed + .v-splitter,
-#measure-panel.collapsed + .v-splitter { display: none; }
-.measure-panel.collapsed .measure-list { display: none; }
-.measure-panel.collapsed { flex: 0 0 auto !important; }
 .queue-panel.collapsed .queue-counts,
 .queue-panel.collapsed #queue-batch-purge { display: none; }
 .panel-section.collapsed > .panel-head,
-.queue-panel.collapsed .queue-summary,
-.measure-panel.collapsed { cursor: pointer; }
+.queue-panel.collapsed .queue-summary { cursor: pointer; }
 .right-col-spacer { display: none; flex: 1 1 auto; }
 .right-col.queue-collapsed > .right-col-spacer { display: block; }
 
@@ -438,19 +432,16 @@ body.resizing-v canvas {
   background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
 }
 
-/* Q4 layout swap: nodes/backends/measure size to content (capped), queue is
-   the flexible region, the info panel is a fixed-height bottom slice.
-   When a --*-h var is set the panel becomes fixed-height (drag-resized). */
-.right-col > #node-panel    { flex: 0 0 var(--node-h, auto);    max-height: var(--node-h, 30%); }
-.right-col > #backend-panel { flex: 0 0 var(--backend-h, auto); max-height: var(--backend-h, 30%); }
-.right-col > #measure-panel { flex: 0 0 var(--measure-h, auto); max-height: var(--measure-h, 30%); }
+/* Q4 layout swap: queue is the flexible region, the info panel is a
+   fixed-height bottom slice. When a --*-h var is set the panel becomes
+   fixed-height (drag-resized). */
 .right-col > .queue-panel { flex: 1 1 auto; min-height: 0; }
-.info-panel-section { flex: 0 0 var(--right-info-h, 260px); max-height: var(--right-info-h, 260px); border-top: 1px solid var(--border-default); }
+/* info-panel-section: natural height (260px cap removed in task-12) */
+.info-panel-section { flex: 0 0 auto; max-height: none; border-top: 1px solid var(--border-default); }
 .info-panel-section .panel-body { flex: 1 1 auto; min-height: 0; overflow: auto; }
 
 .panel-section,
-.queue-panel,
-.measure-panel {
+.queue-panel {
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -470,8 +461,7 @@ body.resizing-v canvas {
 
 .panel-head h2,
 .panel-head h3,
-.queue-title,
-.measure-title {
+.queue-title {
   margin: 0;
   font-size: 12px;
   letter-spacing: 0.12em;
@@ -1329,18 +1319,35 @@ textarea[data-sr-comment] { width: 100%; min-height: 54px; margin-top: 4px; font
 .frame-energy { font-size: 12px; color: var(--text-secondary); }
 .frame-slider { flex: 1 1 auto; min-width: 80px; }
 
-.measure-panel { border-bottom: 1px solid var(--border-default); display: flex; flex-direction: column; }
-.measure-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 14px 4px; }
-.measure-panel .measure-title { padding: 0; }
-.measure-list { padding: 4px 14px 14px; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
-.measure-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: 10px; background: rgba(255,255,255,0.02); }
-.measure-type { font-size: 12px; color: var(--text-secondary); }
-.measure-value { font-size: 12px; color: var(--text-primary); }
-.measure-del { width: 24px; height: 24px; border: 1px solid var(--border-default); border-radius: 999px; background: transparent; color: var(--text-tertiary); }
+/* measure toolbar dropdown */
+.measure-dropdown { position: relative; }
+.measure-count {
+  position: absolute; top: 2px; right: 2px;
+  min-width: 14px; height: 14px; padding: 0 3px;
+  border-radius: 999px; background: var(--accent);
+  color: #fff; font-size: 9px; font-weight: 700;
+  line-height: 14px; text-align: center;
+  pointer-events: none;
+}
+.measure-dropdown-panel {
+  display: none;
+  position: absolute; top: calc(100% + 6px); right: 0;
+  min-width: 220px; max-width: 320px; max-height: 280px;
+  overflow: auto;
+  background: var(--bg-panel); border: 1px solid var(--border-default);
+  border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+  z-index: 200; padding: 8px 10px;
+}
+.measure-dropdown-panel.open { display: flex; flex-direction: column; gap: 6px; }
+.measure-list { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.measure-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 6px 8px; border: 1px solid var(--border-subtle); border-radius: 8px; background: rgba(255,255,255,0.02); }
+.measure-type { font-size: 11px; color: var(--text-secondary); }
+.measure-value { font-size: 11px; color: var(--text-primary); }
+.measure-del { width: 20px; height: 20px; border: 1px solid var(--border-default); border-radius: 999px; background: transparent; color: var(--text-tertiary); font-size: 10px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
 .measure-del:hover { color: var(--red); border-color: rgba(229, 83, 83, 0.4); }
 .muted { color: var(--text-tertiary); font-size: 12px; }
 
-.node-panel .node-list { display: flex; flex-direction: column; gap: 8px; }
+.node-list { display: flex; flex-direction: column; gap: 8px; }
 .node-row {
   display: grid;
   grid-template-columns: 10px 1fr auto;
@@ -1637,6 +1644,281 @@ option, optgroup {
   flex: 0 0 auto;
 }
 
+/* ── Three-layer status panel (task-12 rewrite) ── */
+.v-panel-body { display: flex; flex-direction: column; gap: 10px; }
+
+.v-panel-section {
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.v-task-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 8px;
+}
+
+.v-summary-grid { display: flex; flex-direction: column; gap: 6px; }
+
+.v-summary-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 20px;
+}
+.v-summary-label {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  flex: 0 0 auto;
+  white-space: nowrap;
+  min-width: 32px;
+}
+.v-summary-value {
+  font-size: 12px;
+  color: var(--text-primary);
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+}
+.v-summary-value .badge { font-size: 11px; }
+.v-summary-command {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-secondary);
+  max-width: 160px;
+}
+.v-copy-btn {
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-tertiary);
+  padding: 1px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  line-height: 1.4;
+}
+.v-copy-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+
+/* Live computation section */
+.v-metrics-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 8px;
+  overflow-x: auto;
+}
+.v-metric-big {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 12px;
+  min-width: 0;
+}
+.v-metric-primary { flex: 1 1 auto; }
+.v-metric-big:not(.v-metric-primary) { flex: 0 0 auto; }
+.v-metric-label {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 2px;
+  white-space: nowrap;
+}
+.v-metric-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  white-space: nowrap;
+}
+.v-metric-primary .v-metric-value { font-size: 22px; }
+.v-metric-sep {
+  width: 1px;
+  height: 28px;
+  background: var(--border-default);
+  flex: 0 0 auto;
+}
+
+.v-progress-shell {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.v-progress-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  min-width: 0;
+}
+.v-progress-label {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+.v-elapsed {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+}
+
+.v-live-fallback {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-align: center;
+  padding: 12px 0;
+}
+
+/* Timeline slot (container for horizontal workflow timeline) */
+.v-timeline-slot {
+  min-height: 0;
+  contain: inline-size;
+}
+
+/* ── Horizontal workflow timeline (todo 13) ── */
+.stage-timeline-viewport {
+  position: relative;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+.stage-timeline-viewport::-webkit-scrollbar { height: 3px; }
+.stage-timeline-viewport::-webkit-scrollbar-thumb { background: var(--border-default); border-radius: 999px; }
+.stage-timeline-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  gap: 6px;
+}
+.stage-timeline-title {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.stage-timeline-title .tl-idx {
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  font-weight: 600;
+}
+.stage-timeline-arrows {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.stage-timeline-arrows button {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  transition: background var(--transition), color var(--transition);
+  line-height: 1;
+}
+.stage-timeline-arrows button:hover {
+  background: rgba(78, 161, 255, 0.12);
+  color: var(--accent);
+}
+.stage-timeline-track {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0;
+  padding: 4px 8px 28px 8px;
+  min-width: max-content;
+}
+.tl-connector {
+  width: 20px;
+  height: 2px;
+  flex: 0 0 auto;
+  background: var(--border-default);
+  border-radius: 1px;
+  transition: background var(--transition);
+}
+.tl-connector.completed { background: var(--green); }
+.tl-connector.running { background: linear-gradient(90deg, var(--green) 0%, var(--accent) 100%); }
+.tl-node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 0 0 auto;
+  min-width: 28px;
+  gap: 0;
+}
+.tl-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background: var(--border-default);
+  transition: background var(--transition), border-color var(--transition), box-shadow var(--transition);
+  z-index: 1;
+}
+.tl-node.completed .tl-dot {
+  background: var(--green);
+  border-color: rgba(56, 193, 114, 0.32);
+}
+.tl-node.running .tl-dot {
+  background: var(--accent);
+  border-color: rgba(78, 161, 255, 0.50);
+  box-shadow: 0 0 8px rgba(78, 161, 255, 0.55);
+}
+.tl-node.paused .tl-dot {
+  background: var(--amber);
+  border-color: rgba(242, 184, 75, 0.45);
+}
+.tl-node.failed .tl-dot {
+  background: var(--red);
+  border-color: rgba(229, 83, 83, 0.40);
+}
+.tl-label-below {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  line-height: 1.3;
+  pointer-events: none;
+}
+.tl-node.running .tl-label-below {
+  color: var(--accent);
+  font-weight: 600;
+  max-width: 100px;
+  pointer-events: auto;
+}
+
 /* ── Detail drawer (right slide-in) ── */
 .detail-drawer-overlay {
   position: fixed;
@@ -1693,6 +1975,95 @@ option, optgroup {
   overflow: auto;
   padding: 16px;
 }
+
+/* ── System & Resources drawer (right slide-in, mirrors detail-drawer) ── */
+.sysres-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background: rgba(4, 7, 11, 0.50);
+  backdrop-filter: blur(4px);
+  display: none;
+}
+.sysres-drawer-overlay.open { display: block; }
+.sysres-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(520px, 92vw);
+  background: var(--bg-panel);
+  border-left: 1px solid var(--border-default);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.3);
+  z-index: 56;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.2s ease;
+}
+.sysres-drawer.open { transform: translateX(0); }
+.sysres-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border-default);
+  flex: 0 0 auto;
+}
+.sysres-drawer-head h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.sysres-drawer-close {
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+}
+.sysres-drawer-close:hover { border-color: var(--accent); color: var(--text-primary); }
+.sysres-drawer-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 16px;
+}
+.sysres-section { margin-bottom: 20px; }
+.sysres-section:last-child { margin-bottom: 0; }
+.sysres-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.sysres-section-head h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sysres-section-head .btn { padding: 3px 10px; font-size: 11px; }
+.sysres-trigger {
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 3px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.sysres-trigger:hover { border-color: var(--accent); color: var(--text-primary); }
 
 /* ── Mobile fixed status bar ── */
 .mobile-status-bar {
@@ -2572,6 +2943,7 @@ option, optgroup {
     </div>
     <div class="topbar-actions">
       <div class="server-summary" id="server-summary">--</div>
+      <button class="sysres-trigger" id="btn-sysres" data-i18n="drawer.system_resources" title="系统与资源">⚙ 系统</button>
       <div class="topbar-tools">
         <button class="sidebar-toggle" id="btn-toggle-left" data-i18n-title="layout.toggle_left" title="收起/展开左侧栏">◀</button>
         <button class="sidebar-toggle" id="btn-toggle-right" data-i18n-title="layout.toggle_right" title="收起/展开右侧栏">▶</button>
@@ -2696,6 +3068,20 @@ option, optgroup {
             </button>
           </div>
 
+          <div class="tool-group measure-dropdown" id="measure-dropdown">
+            <button class="tool-icon" id="btn-measure-list" data-i18n-title="measure.title" title="测量列表">
+              <svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.5">
+                <path d="M4 6h12M4 10h12M4 14h8"/>
+              </svg>
+              <span class="measure-count" id="measure-count" style="display:none;"></span>
+            </button>
+            <div class="measure-dropdown-panel" id="measure-dropdown-panel">
+              <div class="measure-list" id="measure-list">
+                <span class="muted" data-i18n="measure.empty">暂无测量</span>
+              </div>
+            </div>
+          </div>
+
           <div class="tool-divider"></div>
 
           <div class="tool-group">
@@ -2742,51 +3128,6 @@ option, optgroup {
 
     <aside class="right-col" id="right-col-zone">
       <div class="right-resize-handle" id="right-resize-handle"></div>
-      <section class="panel-section node-panel" id="node-panel" data-panel-key="node">
-        <div class="panel-head">
-          <h2 data-i18n="nodes.title">远程节点</h2>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <button class="btn ghost" id="btn-refresh-nodes" data-i18n="nodes.refresh">刷新</button>
-            <button class="panel-collapse-btn" data-panel-key="node" data-i18n-title="layout.collapse_panel" title="折叠/展开">−</button>
-          </div>
-        </div>
-        <div class="panel-body">
-          <div class="node-list" id="node-list">
-            <div class="placeholder" data-i18n="nodes.loading">加载中…</div>
-          </div>
-        </div>
-      </section>
-
-      <div class="v-splitter" id="v-splitter-node"></div>
-
-      <section class="panel-section node-panel" id="backend-panel" data-panel-key="backend">
-        <div class="panel-head">
-          <h2 data-i18n="backend.title">计算后端</h2>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <button class="btn ghost" id="btn-refresh-backends" data-i18n="backend.refresh">刷新</button>
-            <button class="panel-collapse-btn" data-panel-key="backend" data-i18n-title="layout.collapse_panel" title="折叠/展开">−</button>
-          </div>
-        </div>
-        <div class="panel-body">
-          <div class="node-list" id="backend-list">
-            <div class="placeholder" data-i18n="backend.loading">加载中…</div>
-          </div>
-        </div>
-      </section>
-
-      <div class="v-splitter" id="v-splitter-backend"></div>
-
-      <div class="measure-panel" id="measure-panel" data-panel-key="measure">
-        <div class="measure-panel-head">
-          <h3 class="measure-title" data-i18n="measure.title">测量</h3>
-          <button class="panel-collapse-btn" data-panel-key="measure" data-i18n-title="layout.collapse_panel" title="折叠/展开">−</button>
-        </div>
-        <div class="measure-list" id="measure-list">
-          <span class="muted" data-i18n="measure.empty">暂无测量</span>
-        </div>
-      </div>
-
-      <div class="v-splitter" id="v-splitter-measure"></div>
 
       <div class="right-col-spacer"></div>
 
@@ -3710,6 +4051,36 @@ H -0.500  0.900  0.000" data-i18n-ph="s2scan.xyz_paste_ph" style="font-family:mo
   </div>
 </div>
 
+<!-- System & Resources drawer (nodes + backends, migrated from right column) -->
+<div class="sysres-drawer-overlay" id="sysres-drawer-overlay">
+  <div class="sysres-drawer" id="sysres-drawer">
+    <div class="sysres-drawer-head">
+      <h3 data-i18n="drawer.system_resources">系统与资源</h3>
+      <button class="sysres-drawer-close" id="sysres-drawer-close" aria-label="Close">X</button>
+    </div>
+    <div class="sysres-drawer-body" id="sysres-drawer-body">
+      <div class="sysres-section" id="sysres-nodes-section">
+        <div class="sysres-section-head">
+          <h4 data-i18n="nodes.title">远程节点</h4>
+          <button class="btn ghost" id="sysres-refresh-nodes" data-i18n="nodes.refresh">刷新</button>
+        </div>
+        <div class="node-list" id="sysres-node-list">
+          <div class="placeholder" data-i18n="nodes.loading">加载中…</div>
+        </div>
+      </div>
+      <div class="sysres-section" id="sysres-backends-section">
+        <div class="sysres-section-head">
+          <h4 data-i18n="backend.title">计算后端</h4>
+          <button class="btn ghost" id="sysres-refresh-backends" data-i18n="backend.refresh">刷新</button>
+        </div>
+        <div class="node-list" id="sysres-backend-list">
+          <div class="placeholder" data-i18n="backend.loading">加载中…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const API_BASE = "/api/v1";
 let currentLang = localStorage.getItem("acp-lang") || "zh-CN";
@@ -3736,10 +4107,8 @@ const LAYOUT_DEFAULTS = {
   left:   { width: 240, collapsed: false },
   right:  { width: 240, collapsed: false },
   panels: { file_tree: {collapsed: false}, log: {collapsed: false},
-            queue: {collapsed: false}, info: {collapsed: false},
-            node: {collapsed: false}, backend: {collapsed: false},
-            measure: {collapsed: false} },
-  heights: { left_log: 180, right_info: 220, node: null, backend: null, measure: null }
+            queue: {collapsed: false}, info: {collapsed: false} },
+  heights: { left_log: 180, right_info: 220 }
 };
 let layoutState = loadLayoutState();
 let layoutSaveTimer = null;
@@ -3802,9 +4171,6 @@ function applyLayout(opts) {
   }
   document.documentElement.style.setProperty("--left-log-h", layoutState.heights.left_log + "px");
   document.documentElement.style.setProperty("--right-info-h", layoutState.heights.right_info + "px");
-  setHVar("--node-h", layoutState.heights.node);
-  setHVar("--backend-h", layoutState.heights.backend);
-  setHVar("--measure-h", layoutState.heights.measure);
   const lz = document.getElementById("left-col-zone");
   const rz = document.getElementById("right-col-zone");
   if (lz) lz.classList.toggle("collapsed", layoutState.left.collapsed);
@@ -3878,9 +4244,6 @@ function makeColResizeHandle(handle, side) {
 const V_SPLITTER_DEFS = {
   left_log:   { sign: -1, target: null,             min: 120, max: 500 },
   right_info: { sign: -1, target: null,             min: 160, max: 600 },
-  node:       { sign: +1, target: "#node-panel",    min: 80,  max: 300 },
-  backend:    { sign: +1, target: "#backend-panel", min: 80,  max: 300 },
-  measure:    { sign: +1, target: "#measure-panel", min: 48,  max: 200 },
 };
 
 function makeVSplitter(handle, key) {
@@ -4052,12 +4415,20 @@ const I18N = {
     "layout.toggle_left": "收起/展开左侧栏",
     "layout.toggle_right": "收起/展开右侧栏",
     "layout.collapse_panel": "折叠/展开面板",
-    "status.online": "在线",
-    "status.degraded": "繁忙",
-    "status.offline": "离线",
-    "status.unknown": "未知",
-    "status.waiting_review": "等待审核",
-    "status.paused": "已暂停",
+     "status.online": "在线",
+     "status.degraded": "繁忙",
+     "status.offline": "离线",
+     "status.unknown": "未知",
+     "status.running": "运行中",
+     "status.queued": "排队中",
+     "status.completed": "已完成",
+     "status.failed": "失败",
+     "status.cancelled": "已取消",
+     "status.starting": "启动中",
+     "status.pending": "待处理",
+     "status.cancelling": "取消中",
+     "status.waiting_review": "等待审核",
+     "status.paused": "已暂停",
     "server.summary": "服务器: {host}:{port} | 队列 {queued} | 运行 {running}",
     "server.summary_short": "服务器状态加载中",
     "project.all": "项目: 全部",
@@ -4091,7 +4462,7 @@ const I18N = {
     "job.resume_hint": "从暂停处继续运行（本地 SIGCONT / 远程 bresume）",
     "job.resume_ok": "任务已恢复运行",
     "job.resume_failed": "恢复失败: {message}",
-    "job.continue": "续算",
+     "job.continue": "继续",
     "job.continue_hint": "从最近检查点继续（跳过已完成阶段）",
     "job.continue_ok": "任务已重新入队（续算）",
     "job.continue_failed": "续算失败: {message}",
@@ -4502,9 +4873,10 @@ const I18N = {
     "common.na": "暂无",
     "common.coming": "即将推出",
     "common.loading": "加载中...",
-    "common.percent": "{value}%",
-    "common.unknown": "未知",
-    "common.done": "完成",
+     "common.percent": "{value}%",
+     "common.unknown": "未知",
+     "common.unspecified": "未指定",
+     "common.done": "完成",
     "log.file_loaded": "已加载文件: {path}",
     "log.file_large": "文件过大: {path}",
     "log.download_link": "下载链接: {path}",
@@ -4713,51 +5085,71 @@ const I18N = {
     "time.hours_ago": "{n}小时前",
     "time.days_ago": "{n}天前",
     "mobile.bar_text": "{workflow} · {status} · {stage} · {progress}",
-    "drawer.title": "任务详情",
-    "stage.prepare": "准备",
-    "stage.materialize_input": "输入结构",
-    "stage.validate_coordinate": "坐标验证",
-    "stage.run_relaxed_scan": "松弛扫描",
-    "stage.extract_frames": "提取帧",
-    "stage.run_single_points": "单点计算",
-    "stage.build_profile": "构建能量剖面",
-    "stage.select_candidates": "筛选候选结构",
-    "stage.finalize": "完成",
-    "stage.sampling": "构象采样",
-    "stage.energy": "能量计算",
-    "stage.dedup": "去重",
-    "stage.refinement": "精修",
-    "stage.optimize": "结构优化",
-    "stage.frequency": "频率计算",
-    "stage.single_point": "单点能",
-    "stage.thermochemistry": "热化学修正",
-    "stage.scan": "坐标扫描",
-    "stage.irc": "IRC 验证",
-    "stage.xtb_optimize": "xTB 优化",
-    "stage.embed_smiles": "SMILES 嵌入",
-    "stage.crest_search": "CREST 搜索",
-    "stage.censo_prescreening": "CENSO 预筛",
-    "stage.censo_screening": "CENSO 筛选",
-    "stage.ensemble_export": "构象导出",
-    "stage.giao_nmr": "GIAO NMR 计算",
-    "stage.boltzmann_average": "Boltzmann 平均",
-    "stage.dp4_dp5_probability": "DP4/DP5 概率分析",
-    "stage.nmr_report": "NMR 报告",
-    "stage.confsearch": "构象搜索",
-    "stage.pes_search": "势能面搜索",
-    "stage.batch_optimize": "批量优化",
-    "stage.xtb_crest": "xTB-CREST 搜索",
-    "stage.xtb_md": "xTB-MD 采样",
-    "stage.censo_ranking": "CENSO 排序",
-    "stage.censo_refinement": "CENSO 精修",
-    "stage.md_sampling": "MD 采样",
-    "stage.isostat_clustering": "ISOSTAT 聚类",
-    "stage.molclus_search": "Molclus 搜索",
-    "stage.structure_input": "结构输入",
-    "stage.coordinate_scan": "坐标扫描",
-    "stage.irc_forward": "IRC 正向",
-    "stage.irc_reverse": "IRC 逆向",
-    "stage.path_analysis": "路径分析"
+     "drawer.title": "任务详情",
+     "drawer.system_resources": "系统与资源",
+     "live.single_points": "单点能",
+     "live.current_frame": "当前 Frame",
+     "live.frames_extracted": "提取帧",
+     "live.batch_item": "批量项",
+     "live.opt_step": "优化步数",
+     "live.opt_convergence": "收敛状态",
+     "live.irc_points": "IRC 点数",
+     "live.conformers_sampled": "已采样构象",
+     "live.conformers_kept": "已保留构象",
+     "live.empty": "暂无实时细节",
+     "summary.method": "方法",
+     "summary.command": "命令",
+     "summary.remark": "备注",
+     "summary.copy": "复制",
+     "timeline.placeholder": "工作流时间线（即将上线）",
+     "timeline.workflow": "工作流",
+     "timeline.scroll_left": "向左滚动",
+     "timeline.scroll_right": "向右滚动",
+     "common.stage": "阶段",
+     "stage.prepare": "准备",
+     "stage.sampling": "构象采样",
+     "stage.energy": "能量计算",
+     "stage.dedup": "去重",
+     "stage.refinement": "精修",
+     "stage.finalize": "完成",
+     "stage.materialize_input": "输入结构",
+     "stage.validate_coordinate": "坐标验证",
+     "stage.run_relaxed_scan": "松弛扫描",
+     "stage.extract_frames": "提取帧",
+     "stage.run_single_points": "单点计算",
+     "stage.build_profile": "构建能量剖面",
+     "stage.select_candidates": "筛选候选结构",
+     "stage.optimize": "结构优化",
+     "stage.frequency": "频率计算",
+     "stage.single_point": "单点能",
+     "stage.thermochemistry": "热化学修正",
+     "stage.scan": "坐标扫描",
+     "stage.irc": "IRC 验证",
+     "stage.xtb_optimize": "xTB 优化",
+     "stage.embed_smiles": "SMILES 嵌入",
+     "stage.crest_search": "CREST 搜索",
+     "stage.censo_prescreening": "CENSO 预筛",
+     "stage.censo_screening": "CENSO 筛选",
+     "stage.ensemble_export": "构象导出",
+     "stage.giao_nmr": "GIAO NMR 计算",
+     "stage.boltzmann_average": "Boltzmann 平均",
+     "stage.dp4_dp5_probability": "DP4/DP5 概率分析",
+     "stage.nmr_report": "NMR 报告",
+     "stage.censo_optimization": "CENSO 优化",
+     "stage.dft_optimize": "DFT 优化",
+     "stage.censo_refinement": "CENSO 精修",
+     "stage.final_format": "结果格式化",
+     "stage.shermo_thermo": "Shermo 热力学",
+     "stage.embed": "SMILES 嵌入",
+     "stage.xtbmd": "xTB-MD 采样",
+     "stage.batch_opt": "批量优化",
+     "stage.isostat": "构象聚类",
+     "stage.energy_filter": "能量筛选",
+     "stage.censo": "CENSO 排序",
+     "stage.dft_handoff": "DFT 交接",
+     "stage.conformer_energy": "构象能量",
+     "stage.init": "初始化",
+     "stage.compute": "计算中"
   },
   "en-US": {
     "app.title": "ACP Molecular Workbench",
@@ -4767,12 +5159,20 @@ const I18N = {
     "layout.toggle_left": "Collapse/expand left panel",
     "layout.toggle_right": "Collapse/expand right panel",
     "layout.collapse_panel": "Collapse/expand panel",
-    "status.online": "ONLINE",
-    "status.degraded": "BUSY",
-    "status.offline": "OFFLINE",
-    "status.unknown": "UNKNOWN",
-    "status.waiting_review": "Waiting Review",
-    "status.paused": "Paused",
+     "status.online": "ONLINE",
+     "status.degraded": "BUSY",
+     "status.offline": "OFFLINE",
+     "status.unknown": "UNKNOWN",
+     "status.running": "Running",
+     "status.queued": "Queued",
+     "status.completed": "Completed",
+     "status.failed": "Failed",
+     "status.cancelled": "Cancelled",
+     "status.starting": "Starting",
+     "status.pending": "Pending",
+     "status.cancelling": "Cancelling",
+     "status.waiting_review": "Waiting Review",
+     "status.paused": "Paused",
     "server.summary": "Server: {host}:{port} | Queued {queued} | Running {running}",
     "server.summary_short": "Loading server status",
     "project.all": "Project: All",
@@ -5217,9 +5617,10 @@ const I18N = {
     "common.na": "N/A",
     "common.coming": "Coming soon",
     "common.loading": "Loading...",
-    "common.percent": "{value}%",
-    "common.unknown": "Unknown",
-    "common.done": "Done",
+     "common.percent": "{value}%",
+     "common.unknown": "Unknown",
+     "common.unspecified": "Not specified",
+     "common.done": "Done",
     "log.file_loaded": "Loaded file: {path}",
     "log.file_large": "File too large: {path}",
     "log.download_link": "Download link: {path}",
@@ -5428,51 +5829,71 @@ const I18N = {
     "time.hours_ago": "{n}h ago",
     "time.days_ago": "{n}d ago",
     "mobile.bar_text": "{workflow} · {status} · {stage} · {progress}",
-    "drawer.title": "Job Details",
-    "stage.prepare": "Prepare",
-    "stage.materialize_input": "Materialize Input",
-    "stage.validate_coordinate": "Validate Coordinate",
-    "stage.run_relaxed_scan": "Relaxed Scan",
-    "stage.extract_frames": "Extract Frames",
-    "stage.run_single_points": "Single-Point Calcs",
-    "stage.build_profile": "Build Energy Profile",
-    "stage.select_candidates": "Select Candidates",
-    "stage.finalize": "Finalize",
-    "stage.sampling": "Conformer Sampling",
-    "stage.energy": "Energy Calculation",
-    "stage.dedup": "Deduplication",
-    "stage.refinement": "Refinement",
-    "stage.optimize": "Structure Optimization",
-    "stage.frequency": "Frequency Calculation",
-    "stage.single_point": "Single-Point Energy",
-    "stage.thermochemistry": "Thermochemistry",
-    "stage.scan": "Coordinate Scan",
-    "stage.irc": "IRC Verification",
-    "stage.xtb_optimize": "xTB Optimization",
-    "stage.embed_smiles": "SMILES Embedding",
-    "stage.crest_search": "CREST Search",
-    "stage.censo_prescreening": "CENSO Pre-screening",
-    "stage.censo_screening": "CENSO Screening",
-    "stage.ensemble_export": "Ensemble Export",
-    "stage.giao_nmr": "GIAO NMR Calc",
-    "stage.boltzmann_average": "Boltzmann Average",
-    "stage.dp4_dp5_probability": "DP4/DP5 Probability",
-    "stage.nmr_report": "NMR Report",
-    "stage.confsearch": "Conformer Search",
-    "stage.pes_search": "PES Search",
-    "stage.batch_optimize": "Batch Optimize",
-    "stage.xtb_crest": "xTB-CREST Search",
-    "stage.xtb_md": "xTB-MD Sampling",
-    "stage.censo_ranking": "CENSO Ranking",
-    "stage.censo_refinement": "CENSO Refinement",
-    "stage.md_sampling": "MD Sampling",
-    "stage.isostat_clustering": "ISOSTAT Clustering",
-    "stage.molclus_search": "Molclus Search",
-    "stage.structure_input": "Structure Input",
-    "stage.coordinate_scan": "Coordinate Scan",
-    "stage.irc_forward": "IRC Forward",
-    "stage.irc_reverse": "IRC Reverse",
-    "stage.path_analysis": "Path Analysis"
+     "drawer.title": "Job Details",
+     "drawer.system_resources": "System & Resources",
+     "live.single_points": "Single points",
+     "live.current_frame": "Current frame",
+     "live.frames_extracted": "Frames extracted",
+     "live.batch_item": "Batch item",
+     "live.opt_step": "Optimization step",
+     "live.opt_convergence": "Convergence",
+     "live.irc_points": "IRC points",
+     "live.conformers_sampled": "Conformers sampled",
+     "live.conformers_kept": "Conformers kept",
+     "live.empty": "No live details",
+     "summary.method": "Method",
+     "summary.command": "Command",
+     "summary.remark": "Remark",
+     "summary.copy": "Copy",
+     "timeline.placeholder": "Workflow timeline (coming soon)",
+     "timeline.workflow": "Workflow",
+     "timeline.scroll_left": "Scroll left",
+     "timeline.scroll_right": "Scroll right",
+     "common.stage": "Stage",
+     "stage.prepare": "Prepare",
+     "stage.sampling": "Conformer Sampling",
+     "stage.energy": "Energy Calculation",
+     "stage.dedup": "Deduplication",
+     "stage.refinement": "Refinement",
+     "stage.finalize": "Finalize",
+     "stage.materialize_input": "Materialize Input",
+     "stage.validate_coordinate": "Validate Coordinate",
+     "stage.run_relaxed_scan": "Relaxed Scan",
+     "stage.extract_frames": "Extract Frames",
+     "stage.run_single_points": "Single-point energies",
+     "stage.build_profile": "Build Energy Profile",
+     "stage.select_candidates": "Select Candidates",
+     "stage.optimize": "Structure Optimization",
+     "stage.frequency": "Frequency Calculation",
+     "stage.single_point": "Single-Point Energy",
+     "stage.thermochemistry": "Thermochemistry Correction",
+     "stage.scan": "Coordinate Scan",
+     "stage.irc": "IRC Validation",
+     "stage.xtb_optimize": "xTB Optimization",
+     "stage.embed_smiles": "SMILES Embedding",
+     "stage.crest_search": "CREST Search",
+     "stage.censo_prescreening": "CENSO Pre-screening",
+     "stage.censo_screening": "CENSO Screening",
+     "stage.ensemble_export": "Ensemble Export",
+     "stage.giao_nmr": "GIAO NMR Calculation",
+     "stage.boltzmann_average": "Boltzmann Average",
+     "stage.dp4_dp5_probability": "DP4/DP5 Probability Analysis",
+     "stage.nmr_report": "NMR Report",
+     "stage.censo_optimization": "CENSO Optimization",
+     "stage.dft_optimize": "DFT Optimization",
+     "stage.censo_refinement": "CENSO Refinement",
+     "stage.final_format": "Format Results",
+     "stage.shermo_thermo": "Shermo Thermochemistry",
+     "stage.embed": "SMILES Embedding",
+     "stage.xtbmd": "xTB-MD Sampling",
+     "stage.batch_opt": "Batch Optimization",
+     "stage.isostat": "Conformer Clustering",
+     "stage.energy_filter": "Energy Filtering",
+     "stage.censo": "CENSO Ranking",
+     "stage.dft_handoff": "DFT Handoff",
+     "stage.conformer_energy": "Conformer Energy",
+     "stage.init": "Initialize",
+     "stage.compute": "Computing"
   }
 };
 
@@ -8798,6 +9219,9 @@ function appendQueueInlineActions(actions, job) {
   if (status === "running" && recovery.can_cancel) {
     actions.appendChild(makeQueueIconButton("✕", t("job.cancel"), "danger", function() { cancelJob(jobId); }));
   }
+  if (recovery.can_continue) {
+    actions.appendChild(makeQueueIconButton("\u23f5", t("job.continue"), "", function() { continueJob(jobId); }));
+  }
   if (recovery.can_rerun) {
     actions.appendChild(makeQueueIconButton("↻", t("job.rerun"), "", function(btn) { rerunJob(jobId, btn); }));
   }
@@ -9699,7 +10123,9 @@ async function refreshSelectedJobSummary() {
       String(prev.progress || "") !== String(summary.progress || "") ||
       String(prev.current_stage || "") !== String(summary.current_stage || "") ||
       String(prev.stage_detail || "") !== String(summary.stage_detail || "") ||
-      String(prev.latest_event || "") !== String(summary.latest_event || "");
+      String(prev.latest_event || "") !== String(summary.latest_event || "") ||
+      String(prev.display_method || "") !== String(summary.display_method || "") ||
+      JSON.stringify(prev.live_status || null) !== JSON.stringify(summary.live_status || null);
     lastSelectedJob = summary;
     if (changed) {
       selectedJobIsRemote = !!(summary.result && summary.result.node);
@@ -9787,432 +10213,342 @@ function buildDetailCard(titleText) {
   return card;
 }
 
+// ── Horizontal workflow timeline (todo 13) ──
+// Renders into a container (the .v-timeline-slot placeholder).
+// Data: job.live_status.stage_index (1-based), stage_total, current_stage.
+// Stage names from detail cache → t("stage."+key) → generic "阶段 N".
+function renderWorkflowTimeline(container, job) {
+  container.innerHTML = "";
+  if (!job) return;
+  var ls = job.live_status || null;
+  var stageTotal = (ls && ls.stage_total) || job.stage_total || 0;
+  if (!stageTotal || stageTotal < 1) return; // hide when stage_total missing
+
+  var stageIndex = (ls && ls.stage_index) || job.stage_index || 0;
+  var currentKey = job.current_stage || "";
+
+  // ── Resolve stage names: detail cache → t("stage.key") → "阶段 N" ──
+  var stageNames = [];
+  var detail = getJobDetail(job.id || job.job_id || "");
+  var detailStages = (detail && Array.isArray(detail.stages)) ? detail.stages : [];
+  for (var i = 0; i < stageTotal; i++) {
+    var name = "";
+    if (detailStages[i]) {
+      name = detailStages[i].label || translateStageName(detailStages[i].stage_name || detailStages[i].name, "");
+    }
+    if (!name && i === stageIndex - 1 && currentKey) {
+      name = translateStageName(currentKey, (ls && ls.stage_label) || "");
+    }
+    if (!name) {
+      // Try using stage_index-based heuristic (not reliable; last resort)
+      name = t("common.stage") + " " + (i + 1);
+    }
+    stageNames.push(name);
+  }
+  // Current stage label for below-node display
+  var currentLabel = "";
+  if (stageIndex >= 1 && stageIndex <= stageTotal) {
+    currentLabel = stageNames[stageIndex - 1];
+  }
+
+  // ── Build header: title + arrows ──
+  var header = document.createElement("div");
+  header.className = "stage-timeline-header";
+  var title = document.createElement("div");
+  title.className = "stage-timeline-title";
+  title.innerHTML = t("timeline.workflow") + " <span class=\"tl-idx\">" + stageIndex + " / " + stageTotal + "</span>";
+  header.appendChild(title);
+  var arrows = document.createElement("div");
+  arrows.className = "stage-timeline-arrows";
+  var leftBtn = document.createElement("button");
+  leftBtn.type = "button";
+  leftBtn.textContent = "\u2039";
+  leftBtn.title = t("timeline.scroll_left");
+  leftBtn.setAttribute("aria-label", t("timeline.scroll_left"));
+  var rightBtn = document.createElement("button");
+  rightBtn.type = "button";
+  rightBtn.textContent = "\u203A";
+  rightBtn.title = t("timeline.scroll_right");
+  rightBtn.setAttribute("aria-label", t("timeline.scroll_right"));
+  arrows.appendChild(leftBtn);
+  arrows.appendChild(rightBtn);
+  header.appendChild(arrows);
+  container.appendChild(header);
+
+  // ── Build viewport > track ──
+  var viewport = document.createElement("div");
+  viewport.className = "stage-timeline-viewport";
+  var track = document.createElement("div");
+  track.className = "stage-timeline-track";
+
+  // Status labels for aria
+  var statusLabels = {
+    completed: t("status.completed"),
+    running: t("status.running"),
+    paused: t("status.paused"),
+    failed: t("status.failed"),
+    pending: t("status.pending")
+  };
+
+  for (var i = 0; i < stageTotal; i++) {
+    // Connector (before every node except first)
+    if (i > 0) {
+      var conn = document.createElement("div");
+      conn.className = "tl-connector";
+      if (i < stageIndex) conn.classList.add("completed");
+      else if (i === stageIndex) conn.classList.add("running");
+      track.appendChild(conn);
+    }
+    // Node
+    var node = document.createElement("div");
+    node.className = "tl-node";
+    var nodeStatus;
+    if (i + 1 < stageIndex) {
+      nodeStatus = "completed";
+    } else if (i + 1 === stageIndex) {
+      nodeStatus = getStatusClass(job.status) === "paused" ? "paused" : "running";
+    } else {
+      nodeStatus = "pending";
+    }
+    // Override with actual terminal states
+    if (job.status === "failed" && i + 1 === stageIndex) nodeStatus = "failed";
+    node.classList.add(nodeStatus);
+
+    var dot = document.createElement("div");
+    dot.className = "tl-dot";
+    node.appendChild(dot);
+
+    // Current stage label below node
+    if (i + 1 === stageIndex && currentLabel) {
+      var lbl = document.createElement("div");
+      lbl.className = "tl-label-below";
+      lbl.textContent = currentLabel;
+      lbl.title = currentLabel;
+      node.appendChild(lbl);
+    }
+
+    // Accessibility
+    var ariaStatus = statusLabels[nodeStatus] || nodeStatus;
+    node.setAttribute("aria-label", stageNames[i] + ", " + ariaStatus);
+    node.setAttribute("title", stageNames[i] + " — " + ariaStatus);
+
+    track.appendChild(node);
+  }
+  viewport.appendChild(track);
+  container.appendChild(viewport);
+
+  // ── Scroll positioning: center current node at ~60% of viewport ──
+  requestAnimationFrame(function() {
+    var currentNode = track.querySelectorAll(".tl-node")[stageIndex - 1];
+    if (!currentNode || !viewport.offsetWidth) return;
+    var nodeCenter = currentNode.offsetLeft + currentNode.offsetWidth / 2;
+    var targetScroll = nodeCenter - viewport.offsetWidth * 0.6;
+    viewport.scrollLeft = Math.max(0, targetScroll);
+  });
+
+  // ── Arrow button handlers ──
+  leftBtn.addEventListener("click", function() {
+    viewport.scrollBy({ left: -120, behavior: "smooth" });
+  });
+  rightBtn.addEventListener("click", function() {
+    viewport.scrollBy({ left: 120, behavior: "smooth" });
+  });
+}
+
+// Three-layer status panel (task-12 rewrite).
+// Section 1: task summary (name, badge, method, command, remark).
+// Section 2: live computation status (metrics, progress, elapsed).
+// Section 3: workflow timeline (task-13).
 function renderInfoInto(container, job) {
   container.innerHTML = "";
   if (!job) {
-    const empty = document.createElement("div");
+    var empty = document.createElement("div");
     empty.className = "placeholder";
     empty.textContent = t("info.empty");
     container.appendChild(empty);
     return;
   }
-  const energy = parseEnergyValue(job.result);
-  const thermo = (job.result && job.result.ensemble_thermo) || null;
-  const jobId = String(job.id || job.job_id || "");
-  const detail = getJobDetail(jobId);
-  const recovery = resolveJobRecovery(job);
-  const metrics = detail && detail.metrics;
-  const lastEnergy = (metrics && typeof metrics.last_energy_hartree === "number") ? metrics.last_energy_hartree : energy;
-  const status = String(job.status || "").toLowerCase();
+  var jobId = String(job.id || job.job_id || "");
+  var liveStatus = job.live_status || null;
 
-  // ── 1. Identity header (pinned, never scrolled away) ──
-  var ident = document.createElement("div");
-  ident.className = "identity-header";
-  var identName = document.createElement("div");
-  identName.className = "identity-header-name";
-  identName.textContent = canonicalTaskName(job) || String(job.id || "");
-  identName.title = identName.textContent;
-  ident.appendChild(identName);
-  var identMeta = document.createElement("div");
-  identMeta.className = "identity-header-meta";
-  var projectLabel = (job.project_name && String(job.project_name).trim()) || "";
-  var workflowLabel = (job.spec && job.spec.workflow) ? String(job.spec.workflow) : "";
-  var metaText = "";
-  if (projectLabel && workflowLabel) metaText = projectLabel + " \u00b7 " + workflowLabel;
-  else if (workflowLabel) metaText = workflowLabel;
-  else if (projectLabel) metaText = projectLabel;
-  if (metaText) {
-    var metaSpan = document.createElement("span");
-    metaSpan.textContent = metaText;
-    identMeta.appendChild(metaSpan);
-  }
-  identMeta.appendChild(createStatusBadge(job.status));
-  ident.appendChild(identMeta);
-  container.appendChild(ident);
+  // ── Section 1: Task Summary ──
+  var sec1 = document.createElement("div");
+  sec1.className = "v-panel-section v-summary-section";
+  sec1.setAttribute("data-testid", "summary-section");
 
-  // ── 2. Run overview (2-col compact grid) ──
-  function addOvRow(parent, labelKey, valueText, valueClass) {
-    if (valueText == null || valueText === "" || valueText === "--") return;
-    var row = document.createElement("div");
-    row.className = "run-overview-row";
-    var lbl = document.createElement("span");
-    lbl.className = "ov-label";
-    lbl.textContent = t(labelKey) || labelKey;
-    var val = document.createElement("span");
-    val.className = "ov-value" + (valueClass ? " " + valueClass : "");
-    val.textContent = String(valueText);
-    row.appendChild(lbl);
-    row.appendChild(val);
-    parent.appendChild(row);
-  }
+  // Task name
+  var taskName = document.createElement("div");
+  taskName.className = "v-task-name";
+  taskName.textContent = canonicalTaskName(job) || String(job.id || "");
+  taskName.title = taskName.textContent;
+  sec1.appendChild(taskName);
+
+  // Summary grid: status / method / command / remark
   var grid = document.createElement("div");
-  grid.className = "run-overview-grid";
-  // Overall progress
-  var overallPct = isProgressIndeterminate(job) ? t("common.computing") : t("common.percent", { value: normalizedProgress(job) });
-  addOvRow(grid, "overview.overall_progress", overallPct, "accent");
-  // Current stage (translated)
-  var curStageLabel = translateStageName(job.current_stage, job.stage_label);
-  if (!curStageLabel && isProgressIndeterminate(job)) curStageLabel = t("common.computing");
-  if (curStageLabel && job.stage_index && job.stage_total) {
-    curStageLabel += " \u00b7 " + t("stage_pattern.xy", { x: job.stage_index, y: job.stage_total });
-  }
-  addOvRow(grid, "overview.current_stage", curStageLabel, "accent");
-  // Stage progress
-  if (job.stage_detail) {
-    addOvRow(grid, "overview.stage_progress", job.stage_detail, "");
-  }
-  // Elapsed
-  var elapsed = formatDuration(job.started_at, job.completed_at || null);
-  addOvRow(grid, "overview.elapsed", elapsed || null, "");
-  // Latest energy + updated time
-  if (lastEnergy !== null && lastEnergy !== undefined) {
-    var energyStr = typeof lastEnergy === "number" ? lastEnergy.toFixed(6) + " Ha" : String(lastEnergy);
-    addOvRow(grid, "overview.latest_energy", energyStr, "");
-  }
-  if (job.updated_at) {
-    addOvRow(grid, "overview.updated_at", formatRelativeTime(job.updated_at), "");
-  }
-  // Compute node
-  var nodeVal = "";
-  if (selectedJobIsRemote && lastRemoteNode) nodeVal = lastRemoteNode;
-  else if (job.result && job.result.node) nodeVal = String(job.result.node);
-  if (nodeVal) addOvRow(grid, "overview.compute_node", nodeVal, "");
-  // Latest event (hide when null)
-  var latestEvent = (detail && detail.job && detail.job.latest_event) ? String(detail.job.latest_event) : (job.latest_event ? String(job.latest_event) : "");
-  if (latestEvent) addOvRow(grid, "overview.latest_event", latestEvent, "");
-  container.appendChild(grid);
+  grid.className = "v-summary-grid";
 
-  // ── 3. Compact stage timeline ──
-  var stages = detail && Array.isArray(detail.stages)
-    ? detail.stages.filter(function(st) { return st && typeof st === "object"; })
-    : [];
-  if (stages.length) {
-    var timeline = document.createElement("div");
-    timeline.className = "stage-timeline";
-    stages.forEach(function(st) {
-      var stStatus = String(st.status || "").toLowerCase();
-      var row = document.createElement("div");
-      row.className = "st-row st-" + stStatus;
-      // Icon
-      var icon = document.createElement("span");
-      icon.className = "st-icon";
-      if (stStatus === "completed") { icon.textContent = "\u2713"; icon.className += " done"; }
-      else if (stStatus === "running") { icon.textContent = "\u25cf"; icon.className += " running"; }
-      else if (stStatus === "failed") { icon.textContent = "\u2715"; icon.className += " failed"; }
-      else if (stStatus === "skipped") { icon.textContent = "\u2013"; icon.className += " skipped"; }
-      else { icon.textContent = "\u25cb"; icon.className += " pending"; }
-      row.appendChild(icon);
-      // Label (translated)
-      var label = document.createElement("span");
-      label.className = "st-label";
-      label.textContent = translateStageName(st.stage_name || st.name || st.stage, st.label);
-      var rawName = String(st.stage_name || st.name || st.stage || "");
-      if (rawName) label.title = rawName;
-      if (st.error) label.title = (label.title ? label.title + " — " : "") + String(st.error);
-      row.appendChild(label);
-      // Meta: right-aligned — for running show detail/progress, for others show duration
-      var meta = document.createElement("span");
-      meta.className = "st-meta";
-      if (stStatus === "running") {
-        var metaText2 = "";
-        if (st.detail) metaText2 = String(st.detail);
-        else if (st.progress != null) metaText2 = String(st.progress);
-        if (!metaText2) {
-          var durRun = formatDuration(st.started_at, null);
-          if (durRun) metaText2 = durRun;
-        }
-        meta.textContent = metaText2;
-      } else {
-        var dur = formatDuration(st.started_at, st.completed_at);
-        var retryText = st.retry_count ? t("detail.retry_count", { count: st.retry_count }) + " \u00b7 " : "";
-        meta.textContent = retryText + (dur || "--");
-      }
-      row.appendChild(meta);
-      timeline.appendChild(row);
-    });
-    container.appendChild(timeline);
-  }
+  // Status badge
+  var statusRow = document.createElement("div");
+  statusRow.className = "v-summary-row";
+  var statusLbl = document.createElement("span");
+  statusLbl.className = "v-summary-label";
+  statusLbl.textContent = t("info.status");
+  var statusVal = document.createElement("span");
+  statusVal.className = "v-summary-value";
+  statusVal.appendChild(createStatusBadge(job.status));
+  statusRow.appendChild(statusLbl);
+  statusRow.appendChild(statusVal);
+  grid.appendChild(statusRow);
 
-  // ── 4. Transient action feedback ──
-  if (detailActionMessage.jobId === jobId && detailActionMessage.text && Date.now() - detailActionMessage.at < 12000) {
-    var msg = document.createElement("div");
-    msg.className = "detail-msg " + (detailActionMessage.kind === "ok" ? "ok" : "err");
-    msg.textContent = detailActionMessage.text;
-    container.appendChild(msg);
-  }
-
-  // ── 5. Error card (prominent, shown inline for failed jobs) ──
-  if (job.error) {
-    var errCard = document.createElement("div");
-    errCard.className = "detail-error-card";
-    var errLabel = document.createElement("div");
-    errLabel.className = "detail-error-label";
-    errLabel.textContent = t("detail.error_title");
-    var errText = document.createElement("div");
-    errText.className = "detail-error-text";
-    errText.textContent = String(job.error);
-    errCard.appendChild(errLabel);
-    errCard.appendChild(errText);
-    container.appendChild(errCard);
-  }
-
-  // ── 6. Grouped action bar ──
-  var actions = document.createElement("div");
-  actions.className = "info-actions-grouped";
-  // Run control group
-  var runGroup = document.createElement("div");
-  runGroup.className = "action-group";
-  if (recovery.can_pause) {
-    var pauseBtn = document.createElement("button");
-    pauseBtn.className = "btn";
-    pauseBtn.textContent = t("job.pause");
-    pauseBtn.title = t("job.pause_hint");
-    pauseBtn.addEventListener("click", function() { pauseJob(jobId); });
-    runGroup.appendChild(pauseBtn);
-  }
-  if (recovery.can_unpause) {
-    var resumeBtn = document.createElement("button");
-    resumeBtn.className = "btn";
-    resumeBtn.textContent = t("job.resume");
-    resumeBtn.title = t("job.resume_hint");
-    resumeBtn.addEventListener("click", function() { unpauseJob(jobId); });
-    runGroup.appendChild(resumeBtn);
-  }
-  if (recovery.can_cancel) {
-    var cancelBtn = document.createElement("button");
-    cancelBtn.className = "btn";
-    cancelBtn.textContent = t("job.cancel");
-    cancelBtn.addEventListener("click", function() { cancelJob(job.id || job.job_id); });
-    runGroup.appendChild(cancelBtn);
-  }
-  if (recovery.can_continue) {
-    var continueBtn = document.createElement("button");
-    continueBtn.className = "btn";
-    continueBtn.textContent = t("job.continue");
-    continueBtn.title = recovery.continue_notes || t("job.continue_hint");
-    continueBtn.addEventListener("click", function() { continueJob(jobId); });
-    runGroup.appendChild(continueBtn);
-  }
-  if (recovery.can_rerun) {
-    var rerunBtn = document.createElement("button");
-    rerunBtn.className = "btn";
-    rerunBtn.textContent = t("job.rerun");
-    rerunBtn.title = t("job.rerun_hint");
-    rerunBtn.addEventListener("click", function() { rerunJob(jobId, rerunBtn); });
-    runGroup.appendChild(rerunBtn);
-  }
-  if (runGroup.childNodes.length) actions.appendChild(runGroup);
-  // Task management group
-  var mgrGroup = document.createElement("div");
-  mgrGroup.className = "action-group";
-  var moveBtn = document.createElement("button");
-  moveBtn.className = "btn";
-  moveBtn.textContent = t("move.button");
-  moveBtn.addEventListener("click", function() { openTargetProjectModal("move", job); });
-  mgrGroup.appendChild(moveBtn);
-  var cloneBtn = document.createElement("button");
-  cloneBtn.className = "btn";
-  cloneBtn.textContent = t("clone.button");
-  cloneBtn.addEventListener("click", function() { openTargetProjectModal("clone", job); });
-  mgrGroup.appendChild(cloneBtn);
-  actions.appendChild(mgrGroup);
-  // Danger zone
-  var divider1 = document.createElement("div");
-  divider1.className = "action-divider";
-  actions.appendChild(divider1);
-  var dangerGroup = document.createElement("div");
-  dangerGroup.className = "action-group";
-  var deleteBtn = document.createElement("button");
-  deleteBtn.className = "btn danger";
-  deleteBtn.textContent = t("job.delete");
-  deleteBtn.addEventListener("click", function() { openDeleteJobModal(job); });
-  dangerGroup.appendChild(deleteBtn);
-  actions.appendChild(dangerGroup);
-  // Details button
-  var divider2 = document.createElement("div");
-  divider2.className = "action-divider";
-  actions.appendChild(divider2);
-  var detailBtn = document.createElement("button");
-  detailBtn.className = "btn ghost";
-  detailBtn.textContent = t("actions.details");
-  detailBtn.addEventListener("click", function() { openDetailDrawer(job); });
-  actions.appendChild(detailBtn);
-  container.appendChild(actions);
-
-  // ── 7. Advanced info (collapsible) ──
-  var advToggle = document.createElement("details");
-  advToggle.className = "info-details-toggle";
-  var advSummary = document.createElement("summary");
-  advSummary.textContent = t("actions.advanced");
-  advToggle.appendChild(advSummary);
-
-  // Advanced items grid (method/basis/solvent/workdir/size/created/source/frame/selection)
-  var advItems = [];
-  var methodStr = "";
-  if (job.spec && job.spec.method) {
+  // Method line: display_method → fallback spec.method → unspecified
+  var methodText = "";
+  if (job.display_method) {
+    methodText = String(job.display_method);
+  } else if (job.spec && job.spec.method) {
     var m = job.spec.method;
-    if (m.method) methodStr = String(m.method);
-    if (m.basis) methodStr += " / " + String(m.basis);
-    if (m.solvent) methodStr += " (" + String(m.solvent) + ")";
+    if (m.method) methodText = String(m.method);
+    if (m.basis) methodText += " / " + String(m.basis);
   }
-  if (methodStr) advItems.push([t("info.workflow") + " / " + (t("info.protocol") || "Method"), methodStr]);
-  if (job.spec && job.spec.workflow) advItems.push([t("info.workflow"), String(job.spec.workflow)]);
-  if (job.spec && job.spec.method && job.spec.method.protocol) advItems.push([t("info.protocol"), String(job.spec.method.protocol)]);
-  var workDir = (detail && detail.disk_state && detail.disk_state.work_dir) || "";
-  if (workDir) advItems.push(["Work Dir", workDir]);
-  if (detail && detail.disk_state && typeof detail.disk_state.size_bytes === "number" && detail.disk_state.size_bytes >= 0) {
-    advItems.push(["Size", formatBytes(detail.disk_state.size_bytes)]);
+  if (!methodText) methodText = t("common.unspecified");
+  // Append stage_label parenthetical
+  var stageParen = "";
+  if (liveStatus && liveStatus.stage_label) {
+    stageParen = String(liveStatus.stage_label);
+  } else if (job.current_stage) {
+    stageParen = translateStageName(job.current_stage, job.stage_label);
   }
-  advItems.push([t("info.created_at"), formatDateTime(job.created_at)]);
-  advItems.push([t("info.started_at"), formatDateTime(job.started_at)]);
-  if (job.completed_at) advItems.push([t("info.completed_at"), formatDateTime(job.completed_at)]);
-  if (molDoc.meta.source) advItems.push([t("info.source"), molDoc.meta.source]);
-  if (molDoc.meta.formula) advItems.push([t("info.formula"), molDoc.meta.formula]);
-  if (molDoc.frames.length) advItems.push([t("info.frame"), String(molDoc.currentFrame + 1) + " / " + String(molDoc.frames.length)]);
-  if (molDoc.selection.size) advItems.push([t("info.selection"), formatSelectionIds()]);
-  // PID
-  if (job.pid) advItems.push(["PID", String(job.pid)]);
-  // Input source
-  if (job.input_source) advItems.push([t("info.source"), String(job.input_source)]);
+  if (stageParen) methodText += " (" + stageParen + ")";
 
-  var advGrid = document.createElement("div");
-  advGrid.className = "info-grid";
-  advItems.forEach(function(entry) {
-    if (!entry[1] || entry[1] === "--" || entry[1] === "null") return;
-    var item = document.createElement("div");
-    item.className = "info-item";
-    var label = document.createElement("span");
-    label.className = "info-label";
-    label.textContent = entry[0];
-    var value = document.createElement("div");
-    value.className = "info-value";
-    value.textContent = entry[1];
-    item.appendChild(label);
-    item.appendChild(value);
-    advGrid.appendChild(item);
-  });
-  advToggle.appendChild(advGrid);
+  var methodRow = document.createElement("div");
+  methodRow.className = "v-summary-row";
+  var methodLbl = document.createElement("span");
+  methodLbl.className = "v-summary-label";
+  methodLbl.textContent = t("summary.method");
+  var methodVal = document.createElement("span");
+  methodVal.className = "v-summary-value";
+  methodVal.textContent = methodText;
+  methodRow.appendChild(methodLbl);
+  methodRow.appendChild(methodVal);
+  grid.appendChild(methodRow);
 
-  // Ensemble total Gibbs
-  if (thermo && typeof thermo.total_gibbs_kcal_mol === "number") {
-    var gibbsCard = document.createElement("div");
-    gibbsCard.className = "info-total-gibbs";
-    var gibbsLabel = document.createElement("div");
-    gibbsLabel.className = "info-total-gibbs-label";
-    gibbsLabel.textContent = t("info.total_gibbs");
-    var gibbsValue = document.createElement("div");
-    gibbsValue.className = "info-total-gibbs-value";
-    gibbsValue.innerHTML = escapeHtml(String(thermo.total_gibbs_kcal_mol.toFixed(4))) + '<span class="info-total-gibbs-unit">kcal/mol</span>';
-    gibbsCard.appendChild(gibbsLabel);
-    gibbsCard.appendChild(gibbsValue);
-    var metaParts = [];
-    if (typeof thermo.total_gibbs_hartree === "number") metaParts.push("G_total <b>" + thermo.total_gibbs_hartree.toFixed(8) + "</b> Ha");
-    if (typeof thermo.rank1_weight === "number") metaParts.push("p\u2081 <b>" + thermo.rank1_weight.toFixed(4) + "</b>");
-    if (typeof thermo.t_s_mix_kcal_per_mol === "number") metaParts.push("T\u00b7S_mix <b>" + thermo.t_s_mix_kcal_per_mol.toFixed(4) + "</b> kcal/mol");
-    if (typeof thermo.population_coverage === "number") metaParts.push("coverage <b>" + (thermo.population_coverage * 100).toFixed(1) + "%</b>");
-    if (metaParts.length) {
-      var gibbsMeta = document.createElement("div");
-      gibbsMeta.className = "info-total-gibbs-meta";
-      gibbsMeta.innerHTML = metaParts.join("");
-      gibbsCard.appendChild(gibbsMeta);
-    }
-    advToggle.appendChild(gibbsCard);
-  }
-
-  // disk_state chips
-  if (detail && isPlainObject(detail.disk_state)) {
-    var ds = detail.disk_state;
-    var bits = [];
-    if (typeof ds.work_dir_exists === "boolean") bits.push(ds.work_dir_exists ? t("detail.workdir_exists") : t("detail.workdir_missing"));
-    if (typeof ds.size_bytes === "number" && ds.size_bytes >= 0) bits.push(formatBytes(ds.size_bytes));
-    if (bits.length) {
-      var dsMeta = document.createElement("div");
-      dsMeta.className = "detail-meta-row";
-      dsMeta.textContent = bits.join(" \u00b7 ");
-      advToggle.appendChild(dsMeta);
-    }
-  }
-
-  // Artifacts
-  var artifacts = detail && Array.isArray(detail.artifacts_summary)
-    ? detail.artifacts_summary.filter(function(a) { return a && typeof a === "object"; })
-    : [];
-  if (artifacts.length) {
-    var artCard = buildDetailCard(t("detail.artifacts"));
-    artifacts.forEach(function(artifact) {
-      var row = document.createElement("div");
-      row.className = "detail-artifact";
-      var atype = document.createElement("span");
-      atype.className = "artifact-type";
-      atype.textContent = String(artifact.type || "file");
-      var apath = document.createElement("span");
-      apath.className = "artifact-path";
-      apath.textContent = String(artifact.path || "");
-      var asize = document.createElement("span");
-      asize.className = "artifact-size";
-      asize.textContent = typeof artifact.size === "number" ? formatBytes(artifact.size) : "";
-      row.appendChild(atype);
-      row.appendChild(apath);
-      row.appendChild(asize);
-      var artifactPath = String(artifact.path || "");
-      if (artifactPath && !selectedJobIsRemote) {
-        row.className += " clickable";
-        row.title = t("detail.artifact_jump");
-        row.addEventListener("click", function() {
-          var dir = artifactPath.includes("/") ? artifactPath.slice(0, artifactPath.lastIndexOf("/")) : "";
-          if (dir) expandPath(jobId, dir);
-        });
-      }
-      artCard.appendChild(row);
+  // Run command with copy button (only in non-mobile / detail context)
+  if (job.run_command) {
+    var cmdRow = document.createElement("div");
+    cmdRow.className = "v-summary-row";
+    var cmdLbl = document.createElement("span");
+    cmdLbl.className = "v-summary-label";
+    cmdLbl.textContent = t("summary.command");
+    var cmdVal = document.createElement("span");
+    cmdVal.className = "v-summary-value v-summary-command";
+    cmdVal.textContent = String(job.run_command);
+    cmdVal.title = String(job.run_command);
+    var copyBtn = document.createElement("button");
+    copyBtn.className = "v-copy-btn";
+    copyBtn.textContent = "\u2398";
+    copyBtn.title = t("summary.copy");
+    copyBtn.addEventListener("click", function() {
+      try { navigator.clipboard.writeText(String(job.run_command)); copyBtn.textContent = "\u2713"; setTimeout(function() { copyBtn.textContent = "\u2398"; }, 1500); } catch (e) { /* ignore */ }
     });
-    advToggle.appendChild(artCard);
+    cmdRow.appendChild(cmdLbl);
+    cmdRow.appendChild(cmdVal);
+    cmdRow.appendChild(copyBtn);
+    grid.appendChild(cmdRow);
   }
 
-  // Failure detail card
-  var errDetail = detail && isPlainObject(detail.error_detail) ? detail.error_detail : null;
-  var stderrTail = errDetail && typeof errDetail.stderr_tail === "string" ? errDetail.stderr_tail.trim() : "";
-  var errDetailText = errDetail && typeof errDetail.error === "string" && errDetail.error
-    ? errDetail.error
-    : (errDetail && typeof errDetail.message === "string" && errDetail.message ? errDetail.message : "");
-  var failedStage = errDetail && errDetail.failed_stage ? String(errDetail.failed_stage) : "";
-  var showFailureCard = status === "failed" || !!stderrTail ||
-    (!!errDetailText && errDetailText !== String(job.error || ""));
-  if (showFailureCard) {
-    var failCard = buildDetailCard(t("detail.failure_title"));
-    if (failedStage) {
-      var chipRow = document.createElement("div");
-      chipRow.className = "detail-meta-row";
-      chipRow.textContent = t("detail.failed_stage") + ": " + failedStage;
-      failCard.appendChild(chipRow);
-    }
-    if (errDetailText && errDetailText !== String(job.error || "")) {
-      var failText = document.createElement("div");
-      failText.className = "detail-error-text";
-      failText.textContent = errDetailText;
-      failCard.appendChild(failText);
-    }
-    if (stderrTail) {
-      var stderrLabel = document.createElement("div");
-      stderrLabel.className = "detail-stderr-label";
-      stderrLabel.textContent = t("detail.stderr_tail");
-      var pre = document.createElement("pre");
-      pre.className = "detail-stderr";
-      pre.textContent = stderrTail;
-      failCard.appendChild(stderrLabel);
-      failCard.appendChild(pre);
-    }
-    advToggle.appendChild(failCard);
+  // Remark
+  var remarkText = "";
+  if (job.spec && job.spec.remark) remarkText = String(job.spec.remark).trim();
+  if (remarkText) {
+    var remRow = document.createElement("div");
+    remRow.className = "v-summary-row";
+    var remLbl = document.createElement("span");
+    remLbl.className = "v-summary-label";
+    remLbl.textContent = t("summary.remark");
+    var remVal = document.createElement("span");
+    remVal.className = "v-summary-value";
+    remVal.textContent = remarkText;
+    remRow.appendChild(remLbl);
+    remRow.appendChild(remVal);
+    grid.appendChild(remRow);
   }
 
-  // Continue guidance
-  if (recovery.can_continue && recovery.continue_notes) {
-    var hint = document.createElement("div");
-    hint.className = "detail-hint";
-    hint.textContent = recovery.continue_notes;
-    advToggle.appendChild(hint);
+  sec1.appendChild(grid);
+  container.appendChild(sec1);
+
+  // ── Section 2: Live Computation Status ──
+  var sec2 = document.createElement("div");
+  sec2.className = "v-panel-section v-live-section";
+  sec2.setAttribute("data-testid", "live-section");
+
+  if (liveStatus && liveStatus.metrics && liveStatus.metrics.length > 0) {
+    // Metrics row: ≤3 metrics, vertical separator, first item prominent
+    var metricsRow = document.createElement("div");
+    metricsRow.className = "v-metrics-row";
+    var metricList = liveStatus.metrics.slice(0, 3);
+    metricList.forEach(function(metric, idx) {
+      if (idx > 0) {
+        var sep = document.createElement("span");
+        sep.className = "v-metric-sep";
+        metricsRow.appendChild(sep);
+      }
+      var metricEl = document.createElement("div");
+      metricEl.className = "v-metric-big" + (idx === 0 ? " v-metric-primary" : "");
+      var labelKey = metric.label_key;
+      var labelStr = labelKey ? t(labelKey) : (metric.label || metric.key);
+      var valueStr = String(metric.value || "");
+      var labelSpan = document.createElement("span");
+      labelSpan.className = "v-metric-label";
+      labelSpan.textContent = labelStr;
+      var valueSpan = document.createElement("span");
+      valueSpan.className = "v-metric-value";
+      valueSpan.textContent = valueStr;
+      metricEl.appendChild(labelSpan);
+      metricEl.appendChild(valueSpan);
+      metricsRow.appendChild(metricEl);
+    });
+    sec2.appendChild(metricsRow);
+
+    // Progress bar (from stage_index / stage_total)
+    if (liveStatus.stage_index && liveStatus.stage_total) {
+      var pct = Math.round((liveStatus.stage_index / liveStatus.stage_total) * 100);
+      var shell = document.createElement("div");
+      shell.className = "v-progress-shell";
+      var bar = document.createElement("div");
+      bar.className = "v-progress-bar";
+      bar.style.width = pct + "%";
+      shell.appendChild(bar);
+      sec2.appendChild(shell);
+      var progLabel = document.createElement("div");
+      progLabel.className = "v-progress-label";
+      progLabel.textContent = liveStatus.stage_index + " / " + liveStatus.stage_total;
+      sec2.appendChild(progLabel);
+    }
+
+    // Elapsed
+    var elapsedStr = formatDuration(job.started_at, job.completed_at || null);
+    if (elapsedStr) {
+      var elapsedEl = document.createElement("div");
+      elapsedEl.className = "v-elapsed";
+      elapsedEl.textContent = t("overview.elapsed") + ": " + elapsedStr;
+      sec2.appendChild(elapsedEl);
+    }
+  } else {
+    // Fallback: stage name or "no live details"
+    var fallbackEl = document.createElement("div");
+    fallbackEl.className = "v-live-fallback";
+    var stageName = translateStageName(job.current_stage, job.stage_label);
+    fallbackEl.textContent = stageName || t("live.empty");
+    sec2.appendChild(fallbackEl);
   }
 
-  container.appendChild(advToggle);
+  container.appendChild(sec2);
+
+  // ── Section 3: Workflow Timeline ──
+  var sec3 = document.createElement("div");
+  sec3.className = "v-timeline-slot";
+  sec3.setAttribute("data-testid", "timeline-slot");
+  renderWorkflowTimeline(sec3, job);
+  container.appendChild(sec3);
 }
 
 function updateInfoPanel(job) {
@@ -10334,25 +10670,181 @@ async function openDetailDrawer(job) {
     stCard.appendChild(stepper);
     body.appendChild(stCard);
   }
-  // All parameters
-  var params = [
-    [t("info.workflow"), job.spec && job.spec.workflow ? job.spec.workflow : ""],
-    [t("info.protocol"), job.spec && job.spec.method && job.spec.method.protocol ? job.spec.method.protocol : ""]
-  ];
-  if (job.spec && job.spec.method) {
-    var m = job.spec.method;
-    if (m.method) params.push(["Method", String(m.method)]);
-    if (m.basis) params.push(["Basis", String(m.basis)]);
-    if (m.solvent) params.push(["Solvent", String(m.solvent)]);
+  // ── Action bar ──
+  var recovery = resolveJobRecovery(job);
+  var drawerActions = document.createElement("div");
+  drawerActions.className = "info-actions-grouped";
+  var drawerRunGroup = document.createElement("div");
+  drawerRunGroup.className = "action-group";
+  if (recovery.can_pause) {
+    var dPauseBtn = document.createElement("button");
+    dPauseBtn.className = "btn";
+    dPauseBtn.textContent = t("job.pause");
+    dPauseBtn.title = t("job.pause_hint");
+    dPauseBtn.addEventListener("click", function() { pauseJob(jobId); });
+    drawerRunGroup.appendChild(dPauseBtn);
   }
-  params.push([t("info.created_at"), formatDateTime(job.created_at)]);
-  params.push([t("info.started_at"), formatDateTime(job.started_at)]);
-  if (job.completed_at) params.push([t("info.completed_at"), formatDateTime(job.completed_at)]);
-  if (job.pid) params.push(["PID", String(job.pid)]);
-  var paramGrid = document.createElement("div");
-  paramGrid.className = "info-grid";
-  params.forEach(function(entry) {
-    if (!entry[1] || entry[1] === "--") return;
+  if (recovery.can_unpause) {
+    var dResumeBtn = document.createElement("button");
+    dResumeBtn.className = "btn";
+    dResumeBtn.textContent = t("job.resume");
+    dResumeBtn.title = t("job.resume_hint");
+    dResumeBtn.addEventListener("click", function() { unpauseJob(jobId); });
+    drawerRunGroup.appendChild(dResumeBtn);
+  }
+  if (recovery.can_cancel) {
+    var dCancelBtn = document.createElement("button");
+    dCancelBtn.className = "btn";
+    dCancelBtn.textContent = t("job.cancel");
+    dCancelBtn.addEventListener("click", function() { cancelJob(jobId); });
+    drawerRunGroup.appendChild(dCancelBtn);
+  }
+  if (recovery.can_continue) {
+    var dContinueBtn = document.createElement("button");
+    dContinueBtn.className = "btn";
+    dContinueBtn.textContent = t("job.continue");
+    dContinueBtn.title = recovery.continue_notes || t("job.continue_hint");
+    dContinueBtn.addEventListener("click", function() { continueJob(jobId); });
+    drawerRunGroup.appendChild(dContinueBtn);
+  }
+  if (recovery.can_rerun) {
+    var dRerunBtn = document.createElement("button");
+    dRerunBtn.className = "btn";
+    dRerunBtn.textContent = t("job.rerun");
+    dRerunBtn.title = t("job.rerun_hint");
+    dRerunBtn.addEventListener("click", function() { rerunJob(jobId, dRerunBtn); });
+    drawerRunGroup.appendChild(dRerunBtn);
+  }
+  if (drawerRunGroup.childNodes.length) drawerActions.appendChild(drawerRunGroup);
+  var drawerMgrGroup = document.createElement("div");
+  drawerMgrGroup.className = "action-group";
+  var dMoveBtn = document.createElement("button");
+  dMoveBtn.className = "btn";
+  dMoveBtn.textContent = t("move.button");
+  dMoveBtn.addEventListener("click", function() { openTargetProjectModal("move", job); });
+  drawerMgrGroup.appendChild(dMoveBtn);
+  var dCloneBtn = document.createElement("button");
+  dCloneBtn.className = "btn";
+  dCloneBtn.textContent = t("clone.button");
+  dCloneBtn.addEventListener("click", function() { openTargetProjectModal("clone", job); });
+  drawerMgrGroup.appendChild(dCloneBtn);
+  drawerActions.appendChild(drawerMgrGroup);
+  var drawerDiv = document.createElement("div");
+  drawerDiv.className = "action-divider";
+  drawerActions.appendChild(drawerDiv);
+  var drawerDangerGroup = document.createElement("div");
+  drawerDangerGroup.className = "action-group";
+  var dDeleteBtn = document.createElement("button");
+  dDeleteBtn.className = "btn danger";
+  dDeleteBtn.textContent = t("job.delete");
+  dDeleteBtn.addEventListener("click", function() { openDeleteJobModal(job); });
+  drawerDangerGroup.appendChild(dDeleteBtn);
+  drawerActions.appendChild(drawerDangerGroup);
+  body.appendChild(drawerActions);
+
+  // ── Error card ──
+  var errDetail = detail && isPlainObject(detail.error_detail) ? detail.error_detail : null;
+  var stderrTail = errDetail && typeof errDetail.stderr_tail === "string" ? errDetail.stderr_tail.trim() : "";
+  var errDetailText = errDetail && typeof errDetail.error === "string" && errDetail.error
+    ? errDetail.error
+    : (errDetail && typeof errDetail.message === "string" && errDetail.message ? errDetail.message : "");
+  var failedStage = errDetail && errDetail.failed_stage ? String(errDetail.failed_stage) : "";
+  var hasError = job.error || errDetailText || stderrTail || failedStage;
+  if (hasError) {
+    var drawerErrCard = document.createElement("div");
+    drawerErrCard.className = "detail-error-card";
+    var drawerErrLabel = document.createElement("div");
+    drawerErrLabel.className = "detail-error-label";
+    drawerErrLabel.textContent = t("detail.error_title");
+    drawerErrCard.appendChild(drawerErrLabel);
+    if (job.error) {
+      var drawerErrText = document.createElement("div");
+      drawerErrText.className = "detail-error-text";
+      drawerErrText.textContent = String(job.error);
+      drawerErrCard.appendChild(drawerErrText);
+    }
+    if (failedStage) {
+      var drawerFailStage = document.createElement("div");
+      drawerFailStage.className = "detail-meta-row";
+      drawerFailStage.textContent = t("detail.failed_stage") + ": " + failedStage;
+      drawerErrCard.appendChild(drawerFailStage);
+    }
+    if (errDetailText && errDetailText !== String(job.error || "")) {
+      var drawerErrDetailText = document.createElement("div");
+      drawerErrDetailText.className = "detail-error-text";
+      drawerErrDetailText.textContent = errDetailText;
+      drawerErrCard.appendChild(drawerErrDetailText);
+    }
+    if (stderrTail) {
+      var drawerStderrLabel = document.createElement("div");
+      drawerStderrLabel.className = "detail-stderr-label";
+      drawerStderrLabel.textContent = t("detail.stderr_tail");
+      var drawerStderrPre = document.createElement("pre");
+      drawerStderrPre.className = "detail-stderr";
+      drawerStderrPre.textContent = stderrTail;
+      drawerErrCard.appendChild(drawerStderrLabel);
+      drawerErrCard.appendChild(drawerStderrPre);
+    }
+    body.appendChild(drawerErrCard);
+  }
+
+  // ── Latest event ──
+  var latestEvent = (detail && detail.job && detail.job.latest_event) ? String(detail.job.latest_event) : (job.latest_event ? String(job.latest_event) : "");
+  if (latestEvent) {
+    var evRow = document.createElement("div");
+    evRow.className = "detail-meta-row";
+    evRow.textContent = t("overview.latest_event") + ": " + latestEvent;
+    body.appendChild(evRow);
+  }
+
+  // ── Work dir + size + disk state ──
+  var drawerAdvItems = [];
+  var drawerWorkDir = (detail && detail.disk_state && detail.disk_state.work_dir) || "";
+  if (drawerWorkDir) drawerAdvItems.push(["Work Dir", drawerWorkDir]);
+  if (detail && detail.disk_state && typeof detail.disk_state.size_bytes === "number" && detail.disk_state.size_bytes >= 0) {
+    drawerAdvItems.push(["Size", formatBytes(detail.disk_state.size_bytes)]);
+  }
+  if (detail && isPlainObject(detail.disk_state)) {
+    var dsBits = [];
+    if (typeof detail.disk_state.work_dir_exists === "boolean") dsBits.push(detail.disk_state.work_dir_exists ? t("detail.workdir_exists") : t("detail.workdir_missing"));
+    if (typeof detail.disk_state.size_bytes === "number" && detail.disk_state.size_bytes >= 0) dsBits.push(formatBytes(detail.disk_state.size_bytes));
+    if (dsBits.length) {
+      var dsChipRow = document.createElement("div");
+      dsChipRow.className = "detail-meta-row";
+      dsChipRow.textContent = dsBits.join(" \u00b7 ");
+      body.appendChild(dsChipRow);
+    }
+  }
+
+  // ── Advanced params grid ──
+  var drawerAdvToggle = document.createElement("details");
+  drawerAdvToggle.className = "info-details-toggle";
+  var drawerAdvSummary = document.createElement("summary");
+  drawerAdvSummary.textContent = t("actions.advanced");
+  drawerAdvToggle.appendChild(drawerAdvSummary);
+  var drawerMethodStr = "";
+  if (job.spec && job.spec.method) {
+    var dm = job.spec.method;
+    if (dm.method) drawerMethodStr = String(dm.method);
+    if (dm.basis) drawerMethodStr += " / " + String(dm.basis);
+    if (dm.solvent) drawerMethodStr += " (" + String(dm.solvent) + ")";
+  }
+  if (drawerMethodStr) drawerAdvItems.push([t("info.workflow") + " / " + (t("info.protocol") || "Method"), drawerMethodStr]);
+  if (job.spec && job.spec.workflow) drawerAdvItems.push([t("info.workflow"), String(job.spec.workflow)]);
+  if (job.spec && job.spec.method && job.spec.method.protocol) drawerAdvItems.push([t("info.protocol"), String(job.spec.method.protocol)]);
+  drawerAdvItems.push([t("info.created_at"), formatDateTime(job.created_at)]);
+  drawerAdvItems.push([t("info.started_at"), formatDateTime(job.started_at)]);
+  if (job.completed_at) drawerAdvItems.push([t("info.completed_at"), formatDateTime(job.completed_at)]);
+  if (molDoc.meta.source) drawerAdvItems.push([t("info.source"), molDoc.meta.source]);
+  if (molDoc.meta.formula) drawerAdvItems.push([t("info.formula"), molDoc.meta.formula]);
+  if (molDoc.frames.length) drawerAdvItems.push([t("info.frame"), String(molDoc.currentFrame + 1) + " / " + String(molDoc.frames.length)]);
+  if (molDoc.selection.size) drawerAdvItems.push([t("info.selection"), formatSelectionIds()]);
+  if (job.pid) drawerAdvItems.push(["PID", String(job.pid)]);
+  if (job.input_source) drawerAdvItems.push([t("info.source"), String(job.input_source)]);
+  var drawerAdvGrid = document.createElement("div");
+  drawerAdvGrid.className = "info-grid";
+  drawerAdvItems.forEach(function(entry) {
+    if (!entry[1] || entry[1] === "--" || entry[1] === "null") return;
     var item = document.createElement("div");
     item.className = "info-item";
     var label = document.createElement("span");
@@ -10363,10 +10855,39 @@ async function openDetailDrawer(job) {
     value.textContent = entry[1];
     item.appendChild(label);
     item.appendChild(value);
-    paramGrid.appendChild(item);
+    drawerAdvGrid.appendChild(item);
   });
-  body.appendChild(paramGrid);
-  // Artifacts
+  drawerAdvToggle.appendChild(drawerAdvGrid);
+
+  // Ensemble total Gibbs
+  var thermo = (job.result && job.result.ensemble_thermo) || null;
+  if (thermo && typeof thermo.total_gibbs_kcal_mol === "number") {
+    var dGibbsCard = document.createElement("div");
+    dGibbsCard.className = "info-total-gibbs";
+    var dGibbsLabel = document.createElement("div");
+    dGibbsLabel.className = "info-total-gibbs-label";
+    dGibbsLabel.textContent = t("info.total_gibbs");
+    var dGibbsValue = document.createElement("div");
+    dGibbsValue.className = "info-total-gibbs-value";
+    dGibbsValue.innerHTML = escapeHtml(String(thermo.total_gibbs_kcal_mol.toFixed(4))) + '<span class="info-total-gibbs-unit">kcal/mol</span>';
+    dGibbsCard.appendChild(dGibbsLabel);
+    dGibbsCard.appendChild(dGibbsValue);
+    var dGibbsMeta = [];
+    if (typeof thermo.total_gibbs_hartree === "number") dGibbsMeta.push("G_total <b>" + thermo.total_gibbs_hartree.toFixed(8) + "</b> Ha");
+    if (typeof thermo.rank1_weight === "number") dGibbsMeta.push("p\u2081 <b>" + thermo.rank1_weight.toFixed(4) + "</b>");
+    if (typeof thermo.t_s_mix_kcal_per_mol === "number") dGibbsMeta.push("T\u00b7S_mix <b>" + thermo.t_s_mix_kcal_per_mol.toFixed(4) + "</b> kcal/mol");
+    if (typeof thermo.population_coverage === "number") dGibbsMeta.push("coverage <b>" + (thermo.population_coverage * 100).toFixed(1) + "%</b>");
+    if (dGibbsMeta.length) {
+      var dGibbsMetaEl = document.createElement("div");
+      dGibbsMetaEl.className = "info-total-gibbs-meta";
+      dGibbsMetaEl.innerHTML = dGibbsMeta.join("");
+      dGibbsCard.appendChild(dGibbsMetaEl);
+    }
+    drawerAdvToggle.appendChild(dGibbsCard);
+  }
+  body.appendChild(drawerAdvToggle);
+
+  // ── Artifacts ──
   var artifacts = detail && Array.isArray(detail.artifacts_summary)
     ? detail.artifacts_summary.filter(function(a) { return a && typeof a === "object"; })
     : [];
@@ -10391,21 +10912,8 @@ async function openDetailDrawer(job) {
     });
     body.appendChild(artCard);
   }
-  // Error stack
-  var errDetail = detail && isPlainObject(detail.error_detail) ? detail.error_detail : null;
-  var stderrTail = errDetail && typeof errDetail.stderr_tail === "string" ? errDetail.stderr_tail.trim() : "";
-  if (stderrTail) {
-    var stderrLabel = document.createElement("div");
-    stderrLabel.className = "detail-stderr-label";
-    stderrLabel.textContent = t("detail.stderr_tail");
-    var pre = document.createElement("pre");
-    pre.className = "detail-stderr";
-    pre.textContent = stderrTail;
-    body.appendChild(stderrLabel);
-    body.appendChild(pre);
-  }
+
   // Recovery notes
-  var recovery = resolveJobRecovery(job);
   if (recovery && recovery.continue_notes) {
     var hint = document.createElement("div");
     hint.className = "detail-hint";
@@ -10422,6 +10930,29 @@ function closeDetailDrawer() {
   var drawer = document.getElementById("detail-drawer");
   if (overlay) overlay.classList.remove("open");
   if (drawer) drawer.classList.remove("open");
+}
+
+async function openSysresDrawer() {
+  var overlay = document.getElementById("sysres-drawer-overlay");
+  var drawer = document.getElementById("sysres-drawer");
+  if (!overlay || !drawer) return;
+  overlay.classList.add("open");
+  drawer.classList.add("open");
+  await Promise.all([loadNodes(), loadBackends()]);
+  var closeBtn = document.getElementById("sysres-drawer-close");
+  if (closeBtn) closeBtn.focus();
+}
+
+function closeSysresDrawer() {
+  var overlay = document.getElementById("sysres-drawer-overlay");
+  var drawer = document.getElementById("sysres-drawer");
+  if (overlay) overlay.classList.remove("open");
+  if (drawer) drawer.classList.remove("open");
+}
+
+function isSysresDrawerOpen() {
+  var drawer = document.getElementById("sysres-drawer");
+  return !!(drawer && drawer.classList.contains("open"));
 }
 
 function renderLogPlaceholder() {
@@ -12121,6 +12652,11 @@ function parseXyzAtoms(xyzText) {
 
 function renderMeasurementList() {
   const panel = document.getElementById("measure-list");
+  const badge = document.getElementById("measure-count");
+  if (badge) {
+    badge.textContent = molDoc.measures.length || "";
+    badge.style.display = molDoc.measures.length ? "" : "none";
+  }
   if (!panel) return;
   if (!molDoc.measures.length) {
     panel.innerHTML = '<span class="muted">' + escapeHtml(t("measure.empty")) + '</span>';
@@ -12150,28 +12686,24 @@ function renderMeasurementList() {
 // ----------------------------------------------------------------------
 
 async function loadNodes() {
-  const list = document.getElementById("node-list");
+  const list = document.getElementById("sysres-node-list");
   if (!list) return;
   try {
     const data = await api("/nodes");
     nodesCache = data.nodes || [];
     renderNodePanel();
   } catch (e) {
-    // 503 = remote execution not configured (expected, show empty placeholder).
-    // Other errors = real failure, show the error message so it's not masked.
     nodesCache = [];
-    if (list) {
-      if (String(e.message).indexOf("not configured") >= 0) {
-        list.innerHTML = '<div class="muted">' + escapeHtml(t("nodes.empty")) + '</div>';
-      } else {
-        list.innerHTML = '<div class="node-error">' + escapeHtml(t("nodes.load_error") + ": " + e.message) + '</div>';
-      }
+    if (String(e.message).indexOf("not configured") >= 0) {
+      list.innerHTML = '<div class="muted">' + escapeHtml(t("nodes.empty")) + '</div>';
+    } else {
+      list.innerHTML = '<div class="node-error">' + escapeHtml(t("nodes.load_error") + ": " + e.message) + '</div>';
     }
   }
 }
 
 function renderNodePanel() {
-  const list = document.getElementById("node-list");
+  const list = document.getElementById("sysres-node-list");
   if (!list) return;
   list.innerHTML = "";
   if (!nodesCache.length) {
@@ -12235,10 +12767,9 @@ async function pingNode(name) {
 // ----------------------------------------------------------------------
 
 async function loadBackends() {
-  const list = document.getElementById("backend-list");
+  const list = document.getElementById("sysres-backend-list");
   if (!list) return;
   try {
-    // /api/backends lives outside API_BASE (mounted at /api, not /api/v1).
     const resp = await fetch("/api/backends");
     if (!resp.ok) throw new Error("HTTP " + resp.status);
     const data = await resp.json();
@@ -12263,7 +12794,7 @@ async function loadBackends() {
 }
 
 function renderBackendPanel() {
-  const list = document.getElementById("backend-list");
+  const list = document.getElementById("sysres-backend-list");
   if (!list) return;
   list.innerHTML = "";
   if (!backendsCache.length) {
@@ -16924,8 +17455,6 @@ function setupEventListeners() {
     updatePESSelectionSummary();
     updatePESConfigNote();
   });
-  document.getElementById("btn-refresh-nodes").addEventListener("click", loadNodes);
-document.getElementById("btn-refresh-backends").addEventListener("click", loadBackends);
   document.getElementById("job-modal").addEventListener("mousedown", function(event) {
     if (event.target.id === "job-modal") closeModal();
   });
@@ -16992,6 +17521,15 @@ document.getElementById("btn-refresh-backends").addEventListener("click", loadBa
   document.getElementById("detail-drawer-overlay").addEventListener("mousedown", function(event) {
     if (event.target.id === "detail-drawer-overlay") closeDetailDrawer();
   });
+
+  // System & Resources drawer handlers
+  document.getElementById("btn-sysres").addEventListener("click", openSysresDrawer);
+  document.getElementById("sysres-drawer-close").addEventListener("click", closeSysresDrawer);
+  document.getElementById("sysres-drawer-overlay").addEventListener("mousedown", function(event) {
+    if (event.target.id === "sysres-drawer-overlay") closeSysresDrawer();
+  });
+  document.getElementById("sysres-refresh-nodes").addEventListener("click", loadNodes);
+  document.getElementById("sysres-refresh-backends").addEventListener("click", loadBackends);
 
   document.querySelectorAll(".input-mode-tab").forEach(function(tab) {
     tab.addEventListener("click", function() {
@@ -17103,6 +17641,23 @@ document.getElementById("btn-refresh-backends").addEventListener("click", loadBa
     setMode("measure");
   });
 
+  /* measure-results dropdown toggle */
+  (function() {
+    var btn = document.getElementById("btn-measure-list");
+    var panel = document.getElementById("measure-dropdown-panel");
+    if (btn && panel) {
+      btn.addEventListener("click", function(e) {
+        e.stopPropagation();
+        panel.classList.toggle("open");
+      });
+      document.addEventListener("click", function(e) {
+        if (!panel.contains(e.target) && e.target !== btn) {
+          panel.classList.remove("open");
+        }
+      });
+    }
+  })();
+
   document.getElementById("frame-prev").addEventListener("click", function() { setFrame(molDoc.currentFrame - 1); });
   document.getElementById("frame-next").addEventListener("click", function() { setFrame(molDoc.currentFrame + 1); });
   document.getElementById("frame-slider").addEventListener("input", function() { setFrame(parseInt(this.value, 10) || 0); });
@@ -17155,6 +17710,7 @@ document.getElementById("btn-refresh-backends").addEventListener("click", loadBa
         restoreInitialView();
         break;
       case "Escape":
+        closeSysresDrawer();
         closeDetailDrawer();
         molDoc.selection.clear();
         measureBuffer = [];
@@ -17332,13 +17888,15 @@ function startPolling() {
     }
   }
 
-  // --- Lane 4: Slow lane (disk, nodes, backends, file tree) — 30s ---
+  // --- Lane 4: Slow lane (disk, nodes/backends when drawer open, file tree) — 30s ---
   async function slowPoll() {
     if (generation !== jobsPollGeneration) return;
     try {
       await loadDiskUsage();
-      await loadNodes();
-      await loadBackends();
+      if (isSysresDrawerOpen()) {
+        await loadNodes();
+        await loadBackends();
+      }
       await refreshFileTreeIfActive();
     } catch (e) {
       console.error("Slow poll error:", e);
@@ -18628,9 +19186,6 @@ window.addEventListener("DOMContentLoaded", async function() {
     makeColResizeHandle(document.getElementById("right-resize-handle"), "right");
     makeVSplitter(document.getElementById("v-splitter-left"), "left_log");
     makeVSplitter(document.getElementById("v-splitter-right"), "right_info");
-    makeVSplitter(document.getElementById("v-splitter-node"), "node");
-    makeVSplitter(document.getElementById("v-splitter-backend"), "backend");
-    makeVSplitter(document.getElementById("v-splitter-measure"), "measure");
 
     const btnL = document.getElementById("btn-toggle-left");
     const btnR = document.getElementById("btn-toggle-right");
