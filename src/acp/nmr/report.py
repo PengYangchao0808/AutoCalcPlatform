@@ -14,10 +14,17 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
+from typing import TypedDict
 
 from acp.nmr.models import NmrReport
 
 logger = logging.getLogger(__name__)
+
+
+class ReportPaths(TypedDict):
+    json: Path
+    xlsx: Path | None
+    plots: list[Path]
 
 
 def write_json_report(report: NmrReport, output_path: Path) -> Path:
@@ -146,7 +153,7 @@ def write_plots(report: NmrReport, output_dir: Path) -> list[Path]:
     return written
 
 
-def write_all_reports(report: NmrReport, output_dir: Path) -> dict[str, Path | None]:
+def write_all_reports(report: NmrReport, output_dir: Path) -> ReportPaths:
     """Write JSON + XLSX + plots into *output_dir*.
 
     Returns ``{"json": path, "xlsx": path|None, "plots": [paths...]}``.
@@ -172,4 +179,5 @@ __all__ = [
     "write_xlsx_report",
     "write_plots",
     "write_all_reports",
+    "ReportPaths",
 ]

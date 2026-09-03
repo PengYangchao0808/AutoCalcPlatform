@@ -23,7 +23,9 @@ from acp.calculations import (
 )
 from acp.calculations.plans import build_simple_plan
 from acp.calculations.primitives.irc import run_irc
-from acp.calculations.primitives.scan import run_scan
+from acp.calculations.primitives.optimize import optimization_progress_context
+from acp.calculations.primitives.scan import run_scan as _run_scan
+from acp.calculations.progress import ProgressReporter
 from acp.core.models import HARTREE_TO_KCAL
 from acp.core.utils import ensure_unique_dir
 from acp.core.workflow import WorkflowResult
@@ -360,9 +362,30 @@ def _workflow_result(execution: Any, calc_dir: Path) -> WorkflowResult:
     )
 
 
-def _execute(plan: CalculationPlan, calc_dir: Path) -> WorkflowResult:
-    execution = CalculationPlanExecutor().execute(plan, calc_dir)
-    return _workflow_result(execution, calc_dir)
+def _execute(
+    plan: CalculationPlan,
+    calc_dir: Path,
+    *,
+    progress_reporter: ProgressReporter | None = None,
+    stage_name: str,
+) -> WorkflowResult:
+    if progress_reporter is not None:
+        progress_reporter.initialize()
+        progress_reporter.start_stage(stage_name)
+    try:
+        with optimization_progress_context(progress_reporter):
+            execution = CalculationPlanExecutor().execute(plan, calc_dir)
+    except (OSError, RuntimeError, TypeError, ValueError) as error:
+        if progress_reporter is not None:
+            progress_reporter.fail_stage(stage_name, str(error) or type(error).__name__)
+        raise
+    result = _workflow_result(execution, calc_dir)
+    if progress_reporter is not None:
+        if result.status == "completed":
+            progress_reporter.complete_stage(stage_name)
+        else:
+            progress_reporter.fail_stage(stage_name, result.error or f"{stage_name} failed")
+    return result
 
 
 def run_singlepoint(
@@ -373,6 +396,7 @@ def run_singlepoint(
     multiplicity: int | None = None,
     name: str | None = None,
     method_kwargs: dict[str, Any] | None = None,
+    progress_reporter: ProgressReporter | None = None,
 ) -> WorkflowResult:
     context = _context(input_source, config, charge, multiplicity, name)
     calc_dir = _calc_subdir(_resolve_output_dir(output_dir), name, input_source, "singlepoint")
@@ -380,7 +404,12 @@ def run_singlepoint(
         context,
         _RequestDefinition("singlepoint", "orca", method_kwargs or {}),
     )
-    return _execute(_build_plan(StepKind.SINGLEPOINT, [request], [StepKind.SINGLEPOINT]), calc_dir)
+    return _execute(
+        _build_plan(StepKind.SINGLEPOINT, [request], [StepKind.SINGLEPOINT]),
+        calc_dir,
+        progress_reporter=progress_reporter,
+        stage_name="single_point",
+    )
 
 
 def run_optimize(
@@ -391,6 +420,7 @@ def run_optimize(
     multiplicity: int | None = None,
     name: str | None = None,
     method_kwargs: dict[str, Any] | None = None,
+    progress_reporter: ProgressReporter | None = None,
 ) -> WorkflowResult:
     context = _context(input_source, config, charge, multiplicity, name)
     calc_dir = _calc_subdir(_resolve_output_dir(output_dir), name, input_source, "optimize")
@@ -398,7 +428,12 @@ def run_optimize(
         context,
         _RequestDefinition("optimize", "orca", method_kwargs or {}),
     )
-    return _execute(_build_plan(StepKind.OPTIMIZE, [request], [StepKind.OPTIMIZE]), calc_dir)
+    return _execute(
+        _build_plan(StepKind.OPTIMIZE, [request], [StepKind.OPTIMIZE]),
+        calc_dir,
+        progress_reporter=progress_reporter,
+        stage_name="optimize",
+    )
 
 
 def run_xtb_optimize(
@@ -409,6 +444,7 @@ def run_xtb_optimize(
     multiplicity: int | None = None,
     name: str | None = None,
     method_kwargs: dict[str, Any] | None = None,
+    progress_reporter: ProgressReporter | None = None,
 ) -> WorkflowResult:
     context = _context(input_source, config, charge, multiplicity, name)
     calc_dir = _calc_subdir(_resolve_output_dir(output_dir), name, input_source, "xtb_optimize")
@@ -416,7 +452,12 @@ def run_xtb_optimize(
         context,
         _RequestDefinition("xtb_optimize", "xtb", method_kwargs or {}),
     )
-    return _execute(_build_plan(StepKind.OPTIMIZE, [request], [StepKind.OPTIMIZE]), calc_dir)
+    return _execute(
+        _build_plan(StepKind.OPTIMIZE, [request], [StepKind.OPTIMIZE]),
+        calc_dir,
+        progress_reporter=progress_reporter,
+        stage_name="xtb_optimize",
+    )
 
 
 def run_frequency(
@@ -427,6 +468,7 @@ def run_frequency(
     multiplicity: int | None = None,
     name: str | None = None,
     method_kwargs: dict[str, Any] | None = None,
+    progress_reporter: ProgressReporter | None = None,
 ) -> WorkflowResult:
     context = _context(input_source, config, charge, multiplicity, name)
     calc_dir = _calc_subdir(_resolve_output_dir(output_dir), name, input_source, "frequency")
@@ -434,7 +476,35 @@ def run_frequency(
         context,
         _RequestDefinition("frequency", "orca", method_kwargs or {}),
     )
-    return _execute(_build_plan(StepKind.FREQUENCY, [request], [StepKind.FREQUENCY]), calc_dir)
+    return _execute(
+        _build_plan(StepKind.FREQUENCY, [request], [StepKind.FREQUENCY]),
+        calc_dir,
+        progress_reporter=progress_reporter,
+        stage_name="frequency",
+    )
+
+
+def run_scan(
+    req: CalculationRequest,
+    *,
+    progress_reporter: ProgressReporter | None = None,
+) -> CalculationResult:
+    """Run a relaxed scan and optionally report its single workflow stage."""
+    if progress_reporter is None:
+        return _run_scan(req)
+
+    progress_reporter.initialize()
+    progress_reporter.start_stage("scan")
+    try:
+        result = _run_scan(req)
+    except (OSError, RuntimeError, TypeError, ValueError) as error:
+        progress_reporter.fail_stage("scan", str(error) or type(error).__name__)
+        raise
+    if result.status == "completed":
+        progress_reporter.complete_stage("scan")
+    else:
+        progress_reporter.fail_stage("scan", "; ".join(result.errors) or "scan failed")
+    return result
 
 
 __all__ = [

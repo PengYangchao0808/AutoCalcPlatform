@@ -11,7 +11,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import numpy as np
 import pytest
@@ -19,6 +19,7 @@ from numpy.typing import NDArray
 from typing_extensions import Unpack
 
 from acp.backends.base import QCResult
+from acp.calculations.progress import ProgressReporter
 from acp.catalog import METHOD_SCHEMAS, WORKFLOW_CATALOG
 from acp.core.utils import ensure_unique_dir
 from acp.workflows.simple import (
@@ -395,6 +396,96 @@ def test_run_optimize_mock(fake_backend, tmp_path):
     assert len(fake_backend.calls) == 1
 
 
+def test_run_optimize_reports_stage_lifecycle(fake_backend, tmp_path: Path) -> None:
+    input_path = tmp_path / "mol.xyz"
+    input_path.write_text("1\nmol\nC 0.0 0.0 0.0\n", encoding="utf-8")
+    transitions: list[tuple[str, str]] = []
+
+    class RecordingReporter(ProgressReporter):
+        def start_stage(self, name: str) -> None:
+            super().start_stage(name)
+            state = json.loads((self._work_dir / "state.json").read_text(encoding="utf-8"))
+            transitions.append(("start", state["stages"][name]["status"]))
+
+        def complete_stage(self, name: str, result: dict[str, Any] | None = None) -> None:
+            super().complete_stage(name, result)
+            state = json.loads((self._work_dir / "state.json").read_text(encoding="utf-8"))
+            transitions.append(("complete", state["stages"][name]["status"]))
+
+    reporter = RecordingReporter(tmp_path / "progress", stages=["optimize"], min_interval=0.0)
+    fake_backend.set_result(
+        "optimize",
+        coordinates=np.array([[0.0, 0.0, 0.0]]),
+        symbols=["C"],
+        converged=True,
+        success=True,
+    )
+
+    result = run_optimize(
+        str(input_path),
+        output_dir=tmp_path / "output",
+        progress_reporter=reporter,
+    )
+
+    assert result.status == "completed"
+    assert transitions == [("start", "running"), ("complete", "completed")]
+    state = json.loads((tmp_path / "progress" / "state.json").read_text(encoding="utf-8"))
+    assert state["current_stage"] is None
+    assert state["stages"]["optimize"]["status"] == "completed"
+
+
+def test_run_optimize_without_reporter_preserves_direct_failure(
+    fake_backend, tmp_path: Path
+) -> None:
+    input_path = tmp_path / "mol.xyz"
+    input_path.write_text("1\nmol\nC 0.0 0.0 0.0\n", encoding="utf-8")
+    fake_backend.set_results(
+        "optimize", [_fake_qc_result(success=False, error_message="No convergence")] * 8
+    )
+
+    result = run_optimize(str(input_path), output_dir=tmp_path / "output")
+
+    assert result.status == "failed"
+    assert "No convergence" in (result.error or "")
+    assert not (tmp_path / "output" / "state.json").exists()
+
+
+def test_simple_optimize_threads_reporter_to_orca_trajectory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    input_path = tmp_path / "mol.xyz"
+    input_path.write_text("1\nmol\nC 0.0 0.0 0.0\n", encoding="utf-8")
+
+    class SyntheticOrca:
+        def optimize(self, coordinates, symbols, **kwargs) -> QCResult:
+            output_callback = kwargs["output_callback"]
+            output_callback("CYCLE 7")
+            output_callback("FINAL SINGLE POINT ENERGY -1.000000")
+            return QCResult(
+                success=True,
+                energy=-1.0,
+                coordinates=np.asarray(coordinates, dtype=float),
+                symbols=list(symbols),
+                converged=True,
+            )
+
+    monkeypatch.setattr("acp.backends.get_backend", lambda _name: SyntheticOrca())
+    reporter = ProgressReporter(tmp_path / "progress", min_interval=60.0)
+
+    result = run_optimize(
+        str(input_path),
+        output_dir=tmp_path / "output",
+        progress_reporter=reporter,
+    )
+
+    assert result.status == "completed"
+    state = json.loads((tmp_path / "progress" / "state.json").read_text(encoding="utf-8"))
+    assert {metric["key"]: metric["value"] for metric in state["live_metrics"]} == {
+        "opt_step": "Step 7",
+        "opt_convergence": "converged",
+    }
+
+
 def test_run_optimize_failure(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
@@ -489,6 +580,85 @@ def test_run_frequency_no_modes(fake_backend, tmp_path):
     result = run_frequency(str(inp), output_dir=out)
     assert result.status == "completed"
     assert result.metadata.get("n_frequencies") == 0
+
+
+@pytest.mark.parametrize(
+    ("workflow", "handler", "stage"),
+    [
+        ("singlepoint", "_handle_singlepoint", "single_point"),
+        ("optimize", "_handle_optimize", "optimize"),
+        ("frequency", "_handle_frequency", "frequency"),
+        ("xtb_optimize", "_handle_xtb_optimize", "xtb_optimize"),
+    ],
+)
+def test_simple_cli_handlers_construct_reporter(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    workflow: str,
+    handler: str,
+    stage: str,
+) -> None:
+    import acp.cli as acp_cli
+    import acp.workflows.simple as simple_workflow
+    from acp.core.workflow import WorkflowResult
+
+    input_path = tmp_path / "mol.xyz"
+    input_path.write_text("1\nmol\nC 0.0 0.0 0.0\n", encoding="utf-8")
+    output_dir = tmp_path / f"{workflow}-output"
+    args = acp_cli.build_parser().parse_args(
+        [
+            "run",
+            workflow,
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_dir),
+            "--log-level",
+            "ERROR",
+        ]
+    )
+    captured: dict[str, Any] = {}
+
+    def fake_run(**kwargs) -> WorkflowResult:
+        captured.update(kwargs)
+        return WorkflowResult(status="completed", metadata={})
+
+    monkeypatch.setattr(simple_workflow, f"run_{workflow}", fake_run)
+
+    assert getattr(acp_cli, handler)(args) == 0
+    assert isinstance(captured["progress_reporter"], ProgressReporter)
+    state = json.loads((output_dir / "state.json").read_text(encoding="utf-8"))
+    assert list(state["stages"]) == [stage]
+    assert state["status"] == "completed"
+
+
+def test_simple_scan_reports_stage_without_point_metric(fake_backend, tmp_path: Path) -> None:
+    import acp.cli as acp_cli
+
+    input_path = tmp_path / "mol.xyz"
+    input_path.write_text("2\nmol\nH 0.0 0.0 0.0\nH 0.0 0.0 1.0\n", encoding="utf-8")
+    output_dir = tmp_path / "scan-output"
+    args = acp_cli.build_parser().parse_args(
+        [
+            "run",
+            "scan",
+            "--input",
+            str(input_path),
+            "--coordinate",
+            "0,1,1.0,1.5",
+            "--scan-points",
+            "3",
+            "--output",
+            str(output_dir),
+            "--log-level",
+            "ERROR",
+        ]
+    )
+
+    assert acp_cli._handle_scan(args) == 0
+    state = json.loads((output_dir / "state.json").read_text(encoding="utf-8"))
+    assert state["stages"]["scan"]["status"] == "completed"
+    assert "live_metrics" not in state
 
 
 # ---------------------------------------------------------------------------
@@ -853,3 +1023,28 @@ def test_run_optimize_passes_recalc_hess(fake_backend, tmp_path):
     result = run_optimize(str(inp), output_dir=out, method_kwargs={"recalc_hess": 4})
     assert result.status == "completed"
     assert fake_backend.calls[0].kwargs["recalc_hess"] == 4
+
+
+def test_simple_optimize_cli_constructs_reporter(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import acp.cli as acp_cli
+    import acp.workflows.simple as simple_workflow
+    from acp.core.workflow import WorkflowResult
+
+    input_path = tmp_path / "mol.xyz"
+    input_path.write_text("1\nmol\nC 0.0 0.0 0.0\n", encoding="utf-8")
+    output_dir = tmp_path / "output"
+    args = acp_cli.build_parser().parse_args(
+        ["run", "optimize", "--input", str(input_path), "--output", str(output_dir)]
+    )
+    captured: dict[str, Any] = {}
+
+    def fake_run_optimize(**kwargs) -> WorkflowResult:
+        captured.update(kwargs)
+        return WorkflowResult(status="completed", metadata={"energy": -1.0})
+
+    monkeypatch.setattr(simple_workflow, "run_optimize", fake_run_optimize)
+
+    assert acp_cli._handle_optimize(args) == 0
+    assert isinstance(captured["progress_reporter"], ProgressReporter)
