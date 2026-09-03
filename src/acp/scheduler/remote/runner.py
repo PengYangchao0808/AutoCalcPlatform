@@ -558,6 +558,10 @@ class RemoteJobRunner:
         )
         record.progress = round(done / total, 3)
 
+        overall = data.get("overall_progress")
+        if isinstance(overall, (int, float)):
+            record.progress = round(float(overall), 3)
+
         pending_events: list[tuple[float, str, str, dict[str, object]]] = []
         for name, info in stages.items():
             if not isinstance(info, dict):

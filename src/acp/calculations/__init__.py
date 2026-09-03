@@ -39,6 +39,7 @@ from .pes import (
     run_pes_scan,
     select_candidates,
 )
+from .progress import ProgressReporter
 
 __all__ = [
     "ArtifactRef",
@@ -64,6 +65,7 @@ __all__ = [
     "PesSearchError",
     "PesSearchResult",
     "Provenance",
+    "ProgressReporter",
     "SCAN_DIR_NAME",
     "ScanCoordinate",
     "ScanFrame",

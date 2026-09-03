@@ -791,6 +791,11 @@ class JobRunner:
         )
         record.progress = round(done / total, 3)
 
+        # Extended schema: ProgressReporter provides blended overall progress
+        overall = data.get("overall_progress")
+        if isinstance(overall, (int, float)):
+            record.progress = round(float(overall), 3)
+
         # Mirror the running stage onto its stage_tasks row so the job-detail
         # stepper can show live phase detail ("status_detail").
         if record.current_stage:
