@@ -2,13 +2,9 @@
 
 from .contracts import (
     EndpointMatchResult,
-    EndpointProvider,
     EndpointVerdict,
-    FidelityLike,
     IrcEndpointArtifact,
     IrcResult,
-    StableStateLike,
-    TransitionStateLike,
 )
 from .validation import (
     EndpointClassification,
@@ -24,13 +20,9 @@ __all__ = [
     "EndpointClassification",
     "EndpointMatchResult",
     "EndpointMatchThresholds",
-    "EndpointProvider",
     "EndpointVerdict",
-    "FidelityLike",
     "IrcEndpointArtifact",
     "IrcResult",
-    "StableStateLike",
-    "TransitionStateLike",
     "classify_endpoint_geometry",
     "classify_ts_identity",
     "connectivity_fingerprint",

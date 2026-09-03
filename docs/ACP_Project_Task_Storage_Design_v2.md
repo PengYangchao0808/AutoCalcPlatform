@@ -700,6 +700,7 @@ GET  /api/v2/tasks/{task_id}/frequencies/{id}
 | energy | `02_SEARCH/`、`03_OPT/`、`05_SP/`、`06_THERMO/` | `ensembles/`、`energies/`、`structures/` |
 | xtbmd_censo_energy | `02_SEARCH/`、`03_OPT/`、`06_THERMO/` | `ensembles/`、`energies/`、`structures/` |
 | nmr | `02_SEARCH/`、`03_OPT/`、`05_SP/` | `reports/`、`structures/` |
+| PESsearch | `07_PATH/pes_scan_001/` | `pes_search/`、`structures/` |
 | mechanism | `02_SEARCH/`、`03_OPT/`、`07_PATH/`、`08_ANALYSIS/` | `mechanism/`、`structures/`、`energies/`、`trajectories/` |
 
 ---

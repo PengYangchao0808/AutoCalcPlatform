@@ -3,15 +3,16 @@
 """ACP CLI — Unified command-line interface for Auto-Calc Platform.
 
 Subcommands:
-    run ensemble    Ensemble generation (CREST → CENSO)
-    run energy      Conformer energy ranking
-    run mechanism   Mechanism study workflow
+    run Confsearch  Conformer search and energy refinement
+    run PESsearch   PES scan and candidate extraction
+    run BatchOptimize  Multi-structure calculation plan
+    run irc         Standalone IRC calculation
     run serve       Start the ACP web dashboard (FastAPI + uvicorn)
 
 Usage:
-    acp run ensemble --input "CCO" --output ./result
-    acp run energy --help
-    acp run mechanism --help
+    acp run Confsearch --input "CCO" --output ./result
+    acp run BatchOptimize --items-file structures.xyz --profile opt_freq
+    acp run irc --input ts.xyz --output ./irc_result
     acp run serve --help
 """
 
@@ -384,159 +385,11 @@ def _add_xtb_optimize_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def _add_mechanism_module_parsers(run_sub: argparse._SubParsersAction) -> None:
-    """Register standalone mechanism module subcommands (M1-M4)."""
-    conf = run_sub.add_parser(
-        "mech-conf",
-        help="Mechanism conformer search for one stable state (module M1)",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\
-Examples:
-  acp run mech-conf --input "CCO" --output ./conf_out
-  acp run mech-conf --input mol.xyz --mode xtb-fast --output ./conf_out
-        """,
-    )
-    conf.set_defaults(workflow="mech-conf")
-    conf.add_argument("--input", "-i", required=True, help="SMILES string or XYZ file path")
-    conf.add_argument("--output", "-o", default="./mech_conf_out", help="Output directory")
-    conf.add_argument(
-        "--mode",
-        default="censo-lite",
-        choices=["censo-lite", "xtb-fast"],
-        help="Ensemble provider mode (default: censo-lite)",
-    )
-    conf.add_argument("--charge", type=int, help="Molecular charge (default: 0)")
-    conf.add_argument("--multiplicity", type=int, help="Spin multiplicity (default: 1)")
-    conf.add_argument("--name", type=str, help="Molecule name")
-    conf.add_argument("--label", type=str, help="Module label recorded in the manifest")
-    conf.add_argument("--config", type=str, help="Configuration YAML file")
-    conf.add_argument(
-        "--log-level",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
-        help="Logging level (default: INFO)",
-    )
-
-    step = run_sub.add_parser(
-        "mech-step",
-        aliases=["mech-sr"],
-        help="Mechanism elementary step: path -> refine -> IRC -> endpoints (module M2)",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\
-Examples:
-  acp run mech-step --source reactant.xyz --target product.xyz \\
-      --plan '{"coordinates":[{"id":"rc1","kind":"distance","atoms":[0,1],"start":3.0,"end":1.5}],"points":21}' \\
-      --strategy rph-reverse --fidelity s3 --output ./step_out
-  acp run mech-sr --source reactant.xyz --plan plan.json --strategy guided-scan
-        """,
-    )
-    step.set_defaults(workflow="mech-step")
-    step.add_argument("--source", required=True, help="Source-state XYZ file")
-    step.add_argument("--target", help="Target-state XYZ file (required by rph-reverse)")
-    step.add_argument(
-        "--plan",
-        required=True,
-        help="Coordinate plan as a JSON string or path to a JSON file",
-    )
-    step.add_argument(
-        "--strategy",
-        default="rph-reverse",
-        choices=["guided-scan", "rph-reverse"],
-        help="Path-search strategy (default: rph-reverse)",
-    )
-    step.add_argument(
-        "--fidelity",
-        default="s3",
-        choices=["s3", "s4"],
-        help="Refinement fidelity (default: s3)",
-    )
-    step.add_argument(
-        "--endpoint-method",
-        default="irc",
-        choices=["irc"],
-        help="Endpoint resolution method (default: irc)",
-    )
-    step.add_argument("--output", "-o", default="./mech_step_out", help="Output directory")
-    step.add_argument("--charge", type=int, default=0, help="Molecular charge (default: 0)")
-    step.add_argument("--multiplicity", type=int, default=1, help="Spin multiplicity (default: 1)")
-    step.add_argument("--label", type=str, help="Module label recorded in the manifest")
-    step.add_argument("--config", type=str, help="Configuration YAML file")
-    step.add_argument(
-        "--log-level",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
-        help="Logging level (default: INFO)",
-    )
-
-    confirm = run_sub.add_parser(
-        "mech-confirm",
-        help="High-fidelity confirmation of one mech-step artifact (module M3)",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\
-Examples:
-  acp run mech-confirm --from ./step_out/elementary_step_manifest.json --select ts:canonical
-  acp run mech-confirm --from ./step_out/elementary_step_manifest.json --select endpoint:sink
-        """,
-    )
-    confirm.set_defaults(workflow="mech-confirm")
-    confirm.add_argument(
-        "--from",
-        dest="step_manifest",
-        required=True,
-        help="Path to an elementary_step_manifest.json produced by mech-step",
-    )
-    confirm.add_argument(
-        "--select",
-        default="ts:canonical",
-        choices=["ts:canonical", "endpoint:sink"],
-        help="Which artifact to confirm (default: ts:canonical)",
-    )
-    confirm.add_argument(
-        "--fidelity",
-        default="s4",
-        choices=["s3", "s4"],
-        help="Confirmation fidelity (default: s4)",
-    )
-    confirm.add_argument("--output", "-o", default="./mech_confirm_out", help="Output directory")
-    confirm.add_argument("--label", type=str, help="Module label recorded in the manifest")
-    confirm.add_argument("--config", type=str, help="Configuration YAML file")
-    confirm.add_argument(
-        "--log-level",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
-        help="Logging level (default: INFO)",
-    )
-
-    chain = run_sub.add_parser(
-        "mech-chain",
-        help="Run a declarative chain of mechanism modules (module M4)",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\
-Examples:
-  acp run mech-chain --config chain.yaml
-        """,
-    )
-    chain.set_defaults(workflow="mech-chain")
-    chain.add_argument("--config", required=True, help="Chain definition YAML file")
-    chain.add_argument(
-        "--output",
-        "-o",
-        default="./mech_chain_out",
-        help="Base output directory for steps that omit output_dir",
-    )
-    chain.add_argument(
-        "--log-level",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
-        help="Logging level (default: INFO)",
-    )
-
-
 def _add_stage_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
     """Register the active staged workflow subcommands."""
     conf = run_sub.add_parser(
         "Confsearch",
-        help="Unified conformer search + energies (S1)",
+        help="Unified conformer search + energies",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
@@ -2050,159 +1903,6 @@ Examples:
     # -- simple workflows (singlepoint / optimize / frequency / scan / irc) --
     _add_simple_workflow_parsers(run_sub)
 
-    # -- run mechanism -------------------------------------------------------
-    mechanism = run_sub.add_parser(
-        "mechanism",
-        help="Retired mechanism workflow (historical runs are read-only)",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\
-Examples:
-  acp run mechanism --input "CCO" --output ./mechanism_results
-  acp run mechanism --input reaction.xyz --name substrate
-  acp run mechanism --input "C=C" --product "CC" --preset rph-s3 --output ./mech_out
-  acp run mechanism --input "C=C" --strategy guided-scan --fidelity s3 \\
-      --routes '[{"route_id":"r1","coordinate_plan":{"coordinates":[{"id":"rc1","kind":"distance","atoms":[0,1],"start":3.2,"end":1.55}],"points":21},"path_strategy":"guided-scan","fidelity":"s3"}]'
-        """,
-    )
-    mechanism.add_argument(
-        "--input",
-        type=str,
-        help=(
-            "Reactant SMILES string or input file path (XYZ, GJF, LOG, OUT); "
-            "optional when --mechanism-config provides roles.reactant.path"
-        ),
-    )
-    mechanism.add_argument(
-        "--mechanism-config",
-        type=str,
-        help="Path to a scheduler-generated mechanism_config.json handoff file",
-    )
-    mechanism.add_argument(
-        "--product",
-        type=str,
-        help="Product SMILES string or file path (optional for guided-scan)",
-    )
-    mechanism.add_argument(
-        "--ts-guess",
-        type=str,
-        help="TS-guess SMILES string or file path (used by direct-ts strategy)",
-    )
-    mechanism.add_argument(
-        "--preset",
-        type=str,
-        choices=_mechanism_preset_ids(),
-        help="RPH fidelity preset from the mechanism catalog (rph-s3 = B97-3c → "
-        "r2SCAN-3c, rph-s4 = M062X → wB97M-V)",
-    )
-    mechanism.add_argument(
-        "--strategy",
-        type=str,
-        choices=["guided-scan", "rph-reverse", "direct-ts"],
-        help="Path-search strategy (default: guided-scan)",
-    )
-    mechanism.add_argument(
-        "--fidelity",
-        type=str,
-        choices=["s3", "s4"],
-        help="Refinement fidelity (default: s3; rph-s3/rph-s4 presets set this)",
-    )
-    mechanism.add_argument(
-        "--routes",
-        type=str,
-        help="JSON string: list of route dicts (coordinate plans + strategy + fidelity)",
-    )
-    mechanism.add_argument(
-        "--scan-points",
-        type=int,
-        help="Override relaxed-scan frame count (range: 5-100; default profile value: 21)",
-    )
-    mechanism.add_argument(
-        "--irc-points",
-        type=int,
-        help="Override IRC MaxIter point count (range: 5-200; default profile value: 30)",
-    )
-    mechanism.add_argument(
-        "--study-id",
-        type=str,
-        help="Mechanism-study identifier (checkpoint/resume id; auto-generated when omitted)",
-    )
-    mechanism.add_argument(
-        "--conformer-mode",
-        type=str,
-        default=None,
-        choices=["auto", "censo-lite", "xtb-fast"],
-        help="Stable-state ensemble mode for study orchestration (default: auto)",
-    )
-    mechanism.add_argument(
-        "--max-elementary-steps",
-        type=int,
-        default=None,
-        help="Maximum elementary steps to confirm in study mode (default: 3)",
-    )
-    mechanism.add_argument(
-        "--int-extension",
-        action="store_true",
-        default=False,
-        help="Allow recursive intermediate extension in study mode",
-    )
-    mechanism.add_argument(
-        "--promotion-policy",
-        type=str,
-        default=None,
-        choices=["all_confirmed", "rate_relevant", "user_selected"],
-        help="Study promotion policy for downstream confirmation (default: all_confirmed)",
-    )
-    mechanism.add_argument(
-        "--auto-converge",
-        action="store_true",
-        default=False,
-        help="Automatically resolve waiting review decisions with the default policy",
-    )
-    mechanism.add_argument(
-        "--output",
-        type=str,
-        default="./mechanism_output",
-        help="Output directory (default: ./mechanism_output)",
-    )
-    mechanism.add_argument(
-        "--config",
-        type=str,
-        help="Configuration YAML file",
-    )
-    mechanism.add_argument(
-        "--nproc",
-        type=int,
-        help="Number of CPU cores (overrides config)",
-    )
-    mechanism.add_argument(
-        "--mem",
-        type=str,
-        help="Memory limit, e.g. 32GB, 4096MB (overrides config)",
-    )
-    mechanism.add_argument(
-        "--log-level",
-        type=str,
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
-        help="Logging level (default: INFO)",
-    )
-    mechanism.add_argument(
-        "--name",
-        type=str,
-        help="Molecule name (auto-generated if not specified)",
-    )
-    mechanism.add_argument(
-        "--charge",
-        type=int,
-        help="Molecular charge (auto-detected if not specified)",
-    )
-    mechanism.add_argument(
-        "--multiplicity",
-        type=int,
-        help="Spin multiplicity (auto-detected if not specified)",
-    )
-
-    _add_mechanism_module_parsers(run_sub)
     _add_stage_workflow_parsers(run_sub)
     _add_batch_optimize_parser(run_sub)
 
@@ -2285,104 +1985,6 @@ Examples:
 # ---------------------------------------------------------------------------
 # Workflow handlers
 # ---------------------------------------------------------------------------
-
-
-def _mechanism_preset_ids() -> list[str]:
-    # Hardcoded — mechanism presets are retired; kept for historical parser choices.
-    return ["rph-s3", "rph-s4", "guided-scan-fast"]
-
-
-def _load_mechanism_config(path_value: str | None) -> tuple[dict[str, Any] | None, Path | None]:
-    if not path_value:
-        return None, None
-
-    config_path = Path(path_value)
-    if not config_path.exists():
-        raise FileNotFoundError(f"Mechanism config file not found: {config_path}")
-
-    try:
-        payload = json.loads(config_path.read_text(encoding="utf-8"))
-    except OSError as exc:
-        raise ValueError(f"Failed to read mechanism config file: {exc}") from exc
-    except ValueError as exc:
-        raise ValueError(f"Mechanism config file is not valid JSON: {exc}") from exc
-
-    if not isinstance(payload, dict):
-        raise ValueError("Mechanism config file must be a JSON object")
-    return payload, config_path
-
-
-def _mechanism_config_dict(payload: dict[str, Any] | None, key: str) -> dict[str, Any]:
-    if not isinstance(payload, dict):
-        return {}
-    value = payload.get(key)
-    return dict(value) if isinstance(value, dict) else {}
-
-
-def _mechanism_config_levels(payload: dict[str, Any] | None) -> dict[str, Any] | None:
-    method = _mechanism_config_dict(payload, "method")
-    levels = method.get("levels")
-    return dict(levels) if isinstance(levels, dict) else None
-
-
-def _mechanism_role_config(payload: dict[str, Any] | None, role: str) -> dict[str, Any]:
-    roles = _mechanism_config_dict(payload, "roles")
-    role_value = roles.get(role)
-    return dict(role_value) if isinstance(role_value, dict) else {}
-
-
-def _mechanism_config_scalar(section: dict[str, Any], key: str) -> Any:
-    value = section.get(key)
-    if isinstance(value, str) and not value.strip():
-        return None
-    return value
-
-
-def _mechanism_config_int(value: Any) -> int | None:
-    if value is None or value == "":
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _mechanism_role_path(role_cfg: dict[str, Any], config_path: Path | None) -> str | None:
-    raw_path = _mechanism_config_scalar(role_cfg, "path")
-    if raw_path is None:
-        return None
-    path = Path(str(raw_path))
-    if not path.is_absolute() and config_path is not None:
-        path = config_path.parent / path
-    return str(path)
-
-
-def _handle_mechanism(_args: argparse.Namespace) -> int:
-    return _reject_retired_workflow("mechanism")
-
-
-def _module_exit_code(status: str) -> int:
-    if status in {"validated", "partial"}:
-        if status == "partial":
-            logger.warning("Module finished with status=partial (recoverable evidence kept)")
-        return 0
-    return 1
-
-
-def _handle_mech_conf(_args: argparse.Namespace) -> int:
-    return _reject_retired_workflow("mech-conf")
-
-
-def _handle_mech_step(_args: argparse.Namespace) -> int:
-    return _reject_retired_workflow("mech-step")
-
-
-def _handle_mech_confirm(_args: argparse.Namespace) -> int:
-    return _reject_retired_workflow("mech-confirm")
-
-
-def _handle_mech_chain(_args: argparse.Namespace) -> int:
-    return _reject_retired_workflow("mech-chain")
 
 
 def _build_simple_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
@@ -2746,15 +2348,28 @@ def _try_open_browser(url: str) -> None:
 _RETIRED_WORKFLOW_MESSAGE = (
     "The workflow has been retired.\n"
     "该工作流已退役，不能用于新任务。\n"
-    "Use Confsearch, PESsearch, Lowconfirm or Highconfirm.\n"  # status=retired
+    "Use Confsearch, PESsearch, BatchOptimize or the standalone irc workflow.\n"
     "Mapping: ensemble -> Confsearch + censo-crest + screen; "
     "energy -> Confsearch + censo-crest + rank1/cumulative-99; "
     "xtbmd_censo_energy -> Confsearch + xtbmd-censo; "
-    "mechanism/mech-* -> the four stage workflows."
+    "mechanism/mech-* -> PESsearch + BatchOptimize + irc."
 )
 
 _CLI_REMOVED_WORKFLOWS: Final[frozenset[str]] = frozenset(
-    {"optfreq", "optfreqsp", "Lowconfirm", "Highconfirm"}  # status=retired
+    {
+        "ensemble",
+        "energy",
+        "xtbmd_censo_energy",
+        "mechanism",
+        "mech-conf",
+        "mech-step",
+        "mech-confirm",
+        "mech-chain",
+        "optfreq",
+        "optfreqsp",
+        "Lowconfirm",
+        "Highconfirm",
+    }
 )
 
 
@@ -2949,9 +2564,6 @@ def main(argv: list[str] | None = None) -> int:
         and argv_values[1] in _CLI_REMOVED_WORKFLOWS
     ):
         return _reject_retired_workflow(argv_values[1])
-    if argv_values[:2] == ["mechanism", "resume"]:
-        return _reject_retired_workflow("mechanism resume")
-
     parser = build_parser()
     args = parser.parse_args(argv_values)
 
@@ -2964,11 +2576,6 @@ def main(argv: list[str] | None = None) -> int:
             "energy": _handle_energy,
             "nmr": _handle_nmr,
             "xtbmd_censo_energy": _handle_xtbmd_censo_energy,
-            "mechanism": _handle_mechanism,
-            "mech-conf": _handle_mech_conf,
-            "mech-step": _handle_mech_step,
-            "mech-confirm": _handle_mech_confirm,
-            "mech-chain": _handle_mech_chain,
             "serve": _handle_serve,
             "singlepoint": _handle_singlepoint,
             "optimize": _handle_optimize,

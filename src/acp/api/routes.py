@@ -257,6 +257,7 @@ def list_jobs(
         queued=counts.get("queued", 0),
         pending=counts.get("pending", 0),
         running=counts.get("running", 0) + counts.get("starting", 0),
+        paused=counts.get("paused", 0),
         completed=counts.get("completed", 0),
         failed=counts.get("failed", 0),
         cancelled=counts.get("cancelled", 0),

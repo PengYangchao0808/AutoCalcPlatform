@@ -189,6 +189,7 @@ ACP_V1_20260811/
 23. **mechanism 布局已归一化（v1.2，2026-08-23）** — `mechanism_study/<study_id>/` 第三套命名体系废除：新任务产物落 `WORK/{02_SEARCH,03_OPT/TS,07_PATH,08_ANALYSIS}` + `RESULT/mechanism`，`study_id` 仅存 DB/指纹。所有路径读写经 `acp/mechanism/layout.py`（`resolve_study_layout` 写 / `find_study_layout` 双探针读 / `find_reaction_json` 预运行探测）；`study.study_dir` 持久化字段 = `WORK/08_ANALYSIS`。历史任务经 `LEGACY_FALLBACK_ENABLED` 只读兼容，**任何新代码不得再直接拼 `mechanism_study/<id>/` 路径**（grep 校验：字面量只允许出现在 layout.py）
 24. **calculations/ 是计算基元的唯一驻点** — `src/acp/calculations/` 包含所有 QC 计算原语（sp/opt/freq/scan/irc/thermochemistry）、计划构建器（plans.py）、执行器（executor.py）、合同数据类（contracts.py）、以及 pes/batch/irc 子包。**任何新计算能力必须加入 calculations/primitives/，不得散落在 workflows/ 或 backends/ 中。** `CalculationsPlanExecutor` 是 single-item 单步调度的唯一入口；多项目调度走 BatchOptimizeEngine。
 25. **compat/ 是遗留布局的只读兼容层** — `src/acp/calculations/compat/legacy/` 提供历史 manifest 读取器（`read_s2_path_manifest` 等）和布局探测（`find_study_layout`）。**只读，禁止写入。** 新代码消费数据必须通过 `acp.results.manifest`（v2 格式），仅在需要兼容历史任务时经由 compat 转接。
+26. **两层目录约定（2026-08-30）：安装目录 ≠ 数据目录** — run_root（任务产物 + `acp_jobs.db`）必须落在原生文件系统，禁止位于安装目录或 9p/nfs/cifs 等网络挂载（QC 子进程 I/O 在 9p 上慢 ~1000×，2026-08-30 实测）。解析唯一权威 `acp/core/paths.py::resolve_run_root`：CLI `--run-root` > `ACP_RUN_ROOT` env > 平台默认（root → `/var/lib/acp/runs`，用户 → XDG `~/.local/share/acp/runs`）。**任何新代码不得再写 `./ACP_runs` 相对默认**（已清除 3 处，grep 校验零残留）。启动哨兵 `check_run_root_safety` 只警告不阻断，`ACP_ALLOW_SLOW_FS=1` 豁免。迁移用 `python scripts/migrate_run_root.py <old> <new>`（DB 自动备份 + TEXT 前缀改写 + job.json/task.json 改写 + 校验，旧树只读归档）。scratch 独立分层明确延后——QC 临时文件维持与 WORK 同层，结果全量持久。
 
 ## UNIQUE STYLES
 - Module docstrings: title + `====` underline + `Author: QCcalc Team` (38 files, mostly cccp/)
@@ -271,6 +272,6 @@ ruff format --check src tests
 - **Service name**: `acp.service`
 - **Config file**: `/etc/systemd/system/acp.service`
 - **Runs as**: user `<user>`
-- **URL**: http://localhost:8765
+- **URL**: http://127.0.0.1:8765
 - **Logs**: `sudo journalctl -u acp -f`
 - **Reload reminder**: After any code modification, run `sudo systemctl restart acp`. The service does **not** use `--reload`, so a manual restart is required.

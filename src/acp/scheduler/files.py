@@ -67,7 +67,7 @@ def build_manifest(
             stat = path.stat()
         except OSError:
             continue
-        file_path = str(path.relative_to(root))
+        file_path = path.relative_to(root).as_posix()
         if path.is_dir():
             files.append(
                 {

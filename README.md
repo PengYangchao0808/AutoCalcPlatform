@@ -30,11 +30,18 @@
 - 从 Confsearch manifest 出发，搜索反应路径（PEB引导扫描 / 直接TS猜测）
 - 输出：`RESULT/pes_search/pes_profile.json` + TS/中间体候选结构
 - 输入方式：`--from-job <Confsearch job id>` 或 `--from-artifact RESULT/confsearch/confsearch_manifest.json`
+- 人工确认（2026-09-03 起）：Workbench 能量图上手动增删/修改 TS、INT 选点后
+  `POST /api/v1/jobs/{id}/pes/review` 写入 `RESULT/pes_search/pes_review.json`，
+  物化 `RESULT/structures/*.xyz` 并更新 `RESULT/result_manifest.json`；
+  历史 mechanism 任务保持只读（410）。详见 `docs/ACP_PES_Manual_Review_DevDoc.md`
 
 ### 3. BatchOptimize — 批量优化确认 `acp run BatchOptimize`
 - 对 PESsearch 候选或其他结构进行 per-item Opt/TS + 频率 + 单点能 + 热力学修正
 - 四种 profile：`--profile opt_only|opt_freq|opt_freq_sp|opt_freq_sp_thermo`
-- 支持 `--items-file` 批量输入、`--from-job` 继承上游产物
+- 支持 `--items-file` 批量输入、`--from-job` 继承上游产物（读取
+  `<PES任务>/RESULT/result_manifest.json` 中人工确认的有效候选）、
+  `--select pes_ts_frame_027,...` 按稳定 candidate_id 筛选
+- 前端 batch_structures 提交在 runner 层自动物化为 items 文件（2026-09-03 起）
 - TS 候选自动识别（TAG: TS），频率分析 + IRC 连通性检查
 
 ### 4. IRC — 端点验证 `acp run irc`
@@ -383,6 +390,24 @@ acp run Confsearch --input "CCO" --config my_config.yaml
 
 > ⚠️ `config/defaults.yaml` 仅供参考——Python 内置函数 `_get_default_config()` 是唯一权威默认值源。
 
+### 数据目录（run_root）——两层目录约定
+
+**安装目录 ≠ 数据目录**：所有任务产物（`WORK/`、`RESULT/`、QC 中间文件）与任务索引 `acp_jobs.db` 都落在数据目录 run_root，必须位于**原生文件系统**（WSL 下不要放 `/mnt/*`——9p 网络挂载会让 QC 子进程 I/O 慢约 1000 倍）。
+
+解析优先级：`--run-root` CLI 参数 > `ACP_RUN_ROOT` 环境变量 > 平台默认（root → `/var/lib/acp/runs`；普通用户 → `~/.local/share/acp/runs`）。
+
+```bash
+# 查看生效的数据目录
+acp run serve                       # 启动时打印生效 run_root；落在慢文件系统会 WARNING
+ACP_RUN_ROOT=/data/acp/runs acp run serve
+
+# 迁移历史数据（旧树保留只读归档，DB 自动备份 + 路径改写 + 校验）
+python scripts/migrate_run_root.py ./ACP_runs /var/lib/acp/runs --dry-run
+python scripts/migrate_run_root.py ./ACP_runs /var/lib/acp/runs
+```
+
+启动哨兵 `acp.core.paths.check_run_root_safety` 会对慢文件系统（9p/nfs/cifs/fuse 等）、与安装目录重叠、磁盘空间不足打警告（只警告不阻断；`ACP_ALLOW_SLOW_FS=1` 豁免）。
+
 ---
 
 ## 开发
@@ -492,7 +517,7 @@ pytest -m "not slow" -v
 
 | 资源 | 位置 |
 |------|------|
-| Web 服务 | http://localhost:8765（启动 `acp run serve` 后）|
+| Web 服务 | http://127.0.0.1:8765（启动 `acp run serve` 后；WSL 用户优先使用 127.0.0.1 避免 IPv6 问题）|
 | 前端仪表盘 | `frontend/ACP_Workbench.html` / `ACP_Workbench_v2.html` |
 | 开发文档 | `docs/`（CENSO 集成、MethodMeta、Simple Workflows） |
 
@@ -510,7 +535,7 @@ sudo journalctl -u acp -f          # Tail logs
 - **Service**: `acp.service`
 - **Config**: `/etc/systemd/system/acp.service`
 - **User**: `<user>`
-- **URL**: http://localhost:8765
+- **URL**: http://127.0.0.1:8765
 - **Reload reminder**: After any code modification, run `sudo systemctl restart acp`.
 
 ---

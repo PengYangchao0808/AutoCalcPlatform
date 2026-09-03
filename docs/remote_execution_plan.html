@@ -1794,7 +1794,7 @@ sudo systemctl daemon-reload
 sudo systemctl restart acp
 
 # 5. 验证
-curl http://localhost:8765/api/status | python -m json.tool</code></pre>
+curl http://127.0.0.1:8765/api/status | python -m json.tool</code></pre>
 <p><strong>验收</strong>：服务正常启动，<code>/api/status</code> 返回正常，<code>journalctl -u acp</code> 无 run_root 相关错误</p>
 </div>
 

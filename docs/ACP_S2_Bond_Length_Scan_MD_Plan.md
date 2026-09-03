@@ -100,8 +100,8 @@ XYZ 通常不携带可靠键级信息，因此“单键/双键”只能作为用
 ~~~text
 <job_work_dir>/
 ├── WORK/
-│   ├── 02_SEARCH/
-│   │   └── s2_bond_scan_001/
+│   ├── 07_PATH/
+│   │   └── pes_scan_001/
 │   │       ├── input.xyz
 │   │       ├── scan_protocol.json
 │   │       ├── scan.inp
@@ -113,12 +113,17 @@ XYZ 通常不携带可靠键级信息，因此“单键/双键”只能作为用
 │   │       └── candidates.json
 │   └── 08_ANALYSIS/
 ├── RESULT/
-│   └── mechanism/
-│       └── s2_path_manifest.json
+│   ├── pes_search/
+│   │   └── pes_profile.json
+│   └── structures/
 └── input_source.json
 ~~~
 
 所有中间文件必须落盘，确保失败后可诊断、可续算、可重新分析。
+
+新任务的扫描中间文件必须落在 `WORK/07_PATH/pes_scan_001/`；历史任务中的
+`WORK/02_SEARCH/s2_bond_scan_001/` 和 `RESULT/mechanism/s2_path_manifest.json`
+仅通过兼容读取，不再作为新任务写入位置。
 
 ## 5. 3D 选键交互
 

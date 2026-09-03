@@ -70,7 +70,7 @@ def test_cli_rejects_retired_workflows_with_mapping_message(
         assert rc == 2, legacy
     stderr = capsys.readouterr().err
     assert "The workflow has been retired." in stderr
-    assert "Use Confsearch, PESsearch, Lowconfirm or Highconfirm." in stderr
+    assert "Use Confsearch, PESsearch, BatchOptimize or the standalone irc workflow." in stderr
 
 
 def test_confsearch_method_flag_emission() -> None:

@@ -2,8 +2,8 @@
 Scheduler Runner
 ================
 
-Maps a :class:`JobSpec` to a concrete execution. Real workflows (conformer,
-nmr, benchmark, mechanism) run as ``python -m acp.cli run <workflow>`` subprocesses for
+Maps a :class:`JobSpec` to a concrete execution. Real workflows run as
+``python -m acp.cli run <workflow>`` subprocesses for
 crash isolation and clean PID-based cancellation. The ``fake`` workflow runs
 in-process so the workbench is demoable without QC binaries.
 
@@ -280,18 +280,38 @@ def _materialize_single_input(
         return None
 
 
-def _materialize_mechanism_role(
-    role: str,
-    payload: Any,
-    inputs_dir: Path,
-    run_root: Path,
-) -> Path:
-    if not isinstance(payload, dict):
-        raise ValueError(f"mechanism job requires a valid {role} input structure")
-    materialized = _materialize_single_input(payload, inputs_dir, run_root, stem=role)
-    if materialized is None:
-        raise ValueError(f"mechanism job requires a valid {role} input structure")
-    return materialized
+def _materialize_batch_structures(inp: dict[str, Any], inputs_dir: Path) -> Path | None:
+    """Expand a Workbench ``batch_structures`` payload into an items file.
+
+    The v2 frontend bundles per-structure entries into
+    ``{source_type: "batch_structures", items: [...]}``; the BatchOptimize
+    CLI only reads files, so the payload is serialised to
+    ``inputs/batch_items.json`` (schema ``batch_structures_v1``) before the
+    subprocess starts.  ``source_id`` references must already have been
+    inlined by the API layer (they need store/remote-fetcher access).
+    """
+    items = inp.get("items")
+    if not isinstance(items, list):
+        return None
+    entries: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        xyz = str(item.get("xyz") or "")
+        if not xyz.strip():
+            continue
+        entry: dict[str, Any] = {"xyz": xyz}
+        for key in ("name", "tag", "role", "candidate_id", "charge", "multiplicity", "include"):
+            if item.get(key) is not None:
+                entry[key] = item[key]
+        entries.append(entry)
+    if not entries:
+        return None
+    payload = {"schema_version": "batch_structures_v1", "items": entries}
+    inputs_dir.mkdir(parents=True, exist_ok=True)
+    dest = inputs_dir / "batch_items.json"
+    dest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return dest
 
 
 def materialize_job_input(
@@ -1070,16 +1090,31 @@ class JobRunner:
             return self._build_nmr_cmd(spec, work_dir)
 
         if wf == "BatchOptimize":
-            artifact = inp.get("from_artifact") or inp.get("source")
+            artifact = inp.get("from_artifact")
             items_file = inp.get("items_file")
             if artifact:
-                cmd += ["--from-artifact", str(artifact), "--output", str(work_dir)]
+                cmd += ["--from-artifact", str(artifact), "--output", cli_work_dir]
             elif items_file:
-                cmd += ["--items-file", str(items_file), "--output", str(work_dir)]
+                cmd += ["--items-file", str(items_file), "--output", cli_work_dir]
+            elif input_path and Path(input_path).is_file():
+                # The Workbench creates one scheduler job per structure.  Its
+                # materialized input.xyz is therefore a valid one-item XYZ
+                # batch for the BatchOptimize CLI.  Keep this task flat, just
+                # like the ordinary single-structure workflows.
+                # Prefer the scheduler's canonical root input.xyz even when
+                # the uploaded source had another suffix (e.g. .gjf).
+                staged_input = work_dir / "input.xyz"
+                batch_input = staged_input if staged_input.is_file() else Path(input_path)
+                cmd += ["--items-file", str(batch_input), "--output", cli_work_dir]
             else:
                 raise ValueError(
-                    "BatchOptimize job requires input.from_artifact or input.items_file"
+                    "BatchOptimize job requires a batch artifact, items file, or "
+                    "materialized structure"
                 )
+            # Scheduler tasks are one-structure-per-task (layout spec §1a):
+            # every dispatch shape must produce the flat WORK/03_OPT…
+            # layout, never the nested WORK/03_OPT/batch/item_001 tree.
+            cmd += ["--layout-mode", "single_flat"]
             cmd += batchoptimize_method_flags(method, inp)
             if spec.config_path:
                 cmd += ["--config", str(spec.config_path)]
@@ -1094,7 +1129,7 @@ class JobRunner:
             raise ValueError(f"{wf} job requires a valid input structure")
 
         if wf == "Confsearch":
-            cmd += ["--input", str(source), "--output", str(work_dir)]
+            cmd += ["--input", str(source), "--output", cli_work_dir]
             if spec.name:
                 cmd += ["--name", spec.name]
             cmd += confsearch_method_flags(method)
@@ -1105,7 +1140,7 @@ class JobRunner:
             if ewin is not None:
                 cmd += ["--ewin", str(ewin)]
         elif wf in {"ensemble", "energy"}:
-            cmd += ["--input", str(source), "--output", str(work_dir)]
+            cmd += ["--input", str(source), "--output", cli_work_dir]
             preset = censo_preset_from_method(method)
             if preset:
                 cmd += ["--preset", preset]
@@ -1132,7 +1167,7 @@ class JobRunner:
             if ewin is not None:
                 cmd += ["--ewin", str(ewin)]
         elif wf == "xtbmd_censo_energy":
-            cmd += ["--input", str(source), "--output", str(work_dir)]
+            cmd += ["--input", str(source), "--output", cli_work_dir]
             preset = censo_preset_from_method(method)
             if preset:
                 cmd += ["--preset", preset]
@@ -1153,7 +1188,7 @@ class JobRunner:
                 # the same flag name, different object vs. energy.
                 cmd += ["--ewin", str(ewin)]
         elif wf in ("singlepoint", "optimize", "frequency", "scan"):
-            cmd += ["--input", str(source), "--output", str(work_dir)]
+            cmd += ["--input", str(source), "--output", cli_work_dir]
             if spec.name:
                 cmd += ["--name", spec.name]
             levels = method.get("levels", {})
@@ -1164,7 +1199,7 @@ class JobRunner:
             if wf == "scan":
                 cmd += scan_method_flags(method, inp)
         elif wf == "irc":
-            cmd += ["--input", str(source), "--output", str(work_dir)]
+            cmd += ["--input", str(source), "--output", cli_work_dir]
             if spec.name:
                 cmd += ["--name", spec.name]
             input_role = inp.get("input_role")
@@ -1198,7 +1233,7 @@ class JobRunner:
             if irc_step is not None:
                 cmd += ["--step", str(irc_step)]
         elif wf == "xtb_optimize":
-            cmd += ["--input", str(source), "--output", str(work_dir)]
+            cmd += ["--input", str(source), "--output", cli_work_dir]
             if spec.name:
                 cmd += ["--name", spec.name]
             xtb_level = (method.get("levels") or {}).get("xtb_opt", {})
@@ -1235,7 +1270,7 @@ class JobRunner:
         also accepted (treated as a one-element candidate list).
         """
         cmd: list[str] = [self.python, "-m", "acp.cli", "run", "nmr"]
-        cmd += ["--output", str(work_dir)]
+        cmd += ["--output", work_dir.as_posix()]
 
         inp = spec.input
         method = spec.method
@@ -1338,12 +1373,17 @@ class JobRunner:
                 json.dumps(scan_request, ensure_ascii=False, indent=2) + "\n",
                 encoding="utf-8",
             )
-            cmd += ["--scan-config", str(scan_config_path), "--output", str(work_dir)]
+            cmd += [
+                "--scan-config",
+                scan_config_path.as_posix(),
+                "--output",
+                work_dir.as_posix(),
+            ]
         else:
             from_manifest = inp.get("from")
             if from_manifest:
                 cmd += ["--from", str(from_manifest)]
-            cmd += ["--output", str(work_dir)]
+            cmd += ["--output", work_dir.as_posix()]
             if method.get("strategy"):
                 cmd += ["--strategy", str(method["strategy"])]
             select = method.get("select")

@@ -178,13 +178,16 @@ def capture_stage_artifacts(
     if not stage_root.exists():
         return []
 
-    known_files = snapshot_before or set()
+    # Snapshots may have been produced by older Windows code using ``\\``.
+    # Normalize at the boundary so persisted artifact paths stay POSIX while
+    # incremental capture remains backward-compatible.
+    known_files = {entry.replace("\\", "/") for entry in (snapshot_before or set())}
     discovered: list[Artifact] = []
     for path in sorted(stage_root.rglob("*")):
         if path.is_dir() or _is_ignored(path):
             continue
         try:
-            relative = str(path.relative_to(work_root))
+            relative = path.relative_to(work_root).as_posix()
             stat = path.stat()
         except (OSError, ValueError):
             continue
@@ -194,9 +197,9 @@ def capture_stage_artifacts(
             continue
 
         try:
-            stage_relative = str(stage_root.relative_to(work_root))
+            stage_relative = stage_root.relative_to(work_root).as_posix()
         except ValueError:
-            stage_relative = str(stage_root)
+            stage_relative = stage_root.as_posix()
 
         artifact = Artifact(
             artifact_id=str(uuid.uuid4()),

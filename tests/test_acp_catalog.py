@@ -63,6 +63,10 @@ _ADVANCED_FIELD_NAMES = frozenset(
         "max_steps",
         "recalc_hess",
         "scale_factor",
+        "minimum_method",
+        "minimum_basis",
+        "transition_state_method",
+        "transition_state_basis",
         # xtbmd_censo_energy control group (DevDoc §10.1): 17 advanced fields;
         # md_temperature / md_seeds are regular (high-frequency user controls).
         "opt_level",
@@ -119,7 +123,7 @@ def test_pes_scan_catalog_exposes_complete_protocol_levels() -> None:
     catalog = get_method_catalog()
     workflow = next(item for item in WORKFLOW_CATALOG if item["id"] == "PESsearch")
     assert workflow["method_schema_id"] == "pes_scan"
-    assert "XYZ" in workflow["description_zh"]
+    assert "势能面扫描" in workflow["description_zh"]
 
     schema = catalog["method_schemas"]["pes_scan"]
     assert [level["level_id"] for level in schema["method_levels"]] == [
@@ -687,17 +691,15 @@ def test_mechanism_entries_retired_and_stage_workflows_active() -> None:
         assert module["visible"] is False, module_id
 
     stage_ids = ["Confsearch", "PESsearch"]
-    visible_stage = set()
     for stage_id in stage_ids:
         stage = next(w for w in WORKFLOW_CATALOG if w["id"] == stage_id)
         assert stage["status"] == "active", stage_id
-        assert stage["category"] == "stages", stage_id
+        assert stage["category"] == "preset", stage_id
         assert stage["visible"] is True, stage_id
         assert stage_id in SUPPORTED_WORKFLOWS
-        visible_stage.add(stage_id)
-    assert visible_stage == {
+    assert not [
         w["id"] for w in WORKFLOW_CATALOG if w.get("category") == "stages" and w.get("visible")
-    }
+    ]
 
     custom = next(w for w in WORKFLOW_CATALOG if w["id"] == "custom_sequence")
     assert custom["visible"] is False

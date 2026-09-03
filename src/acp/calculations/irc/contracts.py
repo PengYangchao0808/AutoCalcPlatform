@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Literal, Protocol, cast, runtime_checkable
+from typing import Literal, Protocol, cast
 
 from acp.calculations.contracts import JsonValue
 
@@ -122,37 +121,6 @@ class EndpointMatchResult:
         )
 
 
-class TransitionStateLike(Protocol):
-    point_id: str
-
-
-class FidelityLike(Protocol):
-    @property
-    def name(self) -> str: ...
-
-
-class StableStateLike(Protocol):
-    state_id: str
-    role: Literal["reactant", "product", "intermediate"]
-
-
-@runtime_checkable
-class EndpointProvider(Protocol):
-    """Legacy mechanism endpoint provider retained until the Wave 8 deletion."""
-
-    def run_irc(self, ts: TransitionStateLike, fidelity: FidelityLike | str) -> IrcResult:
-        """Run an IRC for a refined transition state."""
-        ...
-
-    def classify_endpoints(
-        self,
-        irc_result: IrcResult,
-        known_states: Sequence[StableStateLike],
-    ) -> EndpointMatchResult:
-        """Classify IRC endpoints against known stable states."""
-        ...
-
-
 def cast_endpoint_verdict(value: JsonValue) -> EndpointVerdict:
     """Normalize a serialized endpoint verdict."""
     verdict = str(value or "FAILED").upper()
@@ -163,11 +131,7 @@ def cast_endpoint_verdict(value: JsonValue) -> EndpointVerdict:
 
 __all__ = [
     "EndpointMatchResult",
-    "EndpointProvider",
     "EndpointVerdict",
-    "FidelityLike",
     "IrcEndpointArtifact",
     "IrcResult",
-    "StableStateLike",
-    "TransitionStateLike",
 ]

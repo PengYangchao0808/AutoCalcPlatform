@@ -86,11 +86,16 @@ def _derive_supported_workflows() -> tuple[str, ...]:
         from acp.catalog import WORKFLOW_CATALOG
     except ImportError:
         return (
-            "ensemble",
-            "energy",
+            "Confsearch",
+            "PESsearch",
+            "BatchOptimize",
+            "irc",
+            "scan",
+            "nmr",
             "singlepoint",
             "optimize",
             "frequency",
+            "xtb_optimize",
             "fake",
         )
     active = tuple(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "active")
@@ -170,15 +175,11 @@ def censo_ewin_from_method(method: dict[str, Any]) -> float | None:
 def input_chemistry_flags(inp: dict[str, Any]) -> list[str]:
     """Emit ``--charge`` / ``--multiplicity`` from the job input payload.
 
-    Mechanism jobs carry those fields on the nested ``reactant`` role,
-    whereas the other workflows keep them at the top level. This helper keeps
-    the runner and remote script generator in parity.
+    All current workflows keep chemistry flags at the top level. Historical
+    nested role payloads are read only and are intentionally not part of the
+    active scheduler contract.
     """
     chemistry = inp
-    if inp.get("source_type") == "mechanism":
-        reactant = inp.get("reactant")
-        if isinstance(reactant, dict):
-            chemistry = reactant
 
     flags: list[str] = []
     if chemistry.get("charge") is not None:

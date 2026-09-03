@@ -17,16 +17,15 @@ def test_acp_help_exits_zero():
     assert "Auto-Calc Platform" in result.stdout or "acp" in result.stdout
 
 
-def test_acp_run_mechanism_help():
-    """``acp run mechanism --help`` shows real mechanism workflow options."""
+def test_acp_run_mechanism_is_retired():
+    """The removed mechanism entry cannot be used as a new task entry."""
     result = subprocess.run(
         [sys.executable, "-m", "acp.cli", "run", "mechanism", "--help"],
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0
-    assert "--input" in result.stdout
-    assert "--output" in result.stdout
+    assert result.returncode == 2
+    assert "已退役" in result.stdout + result.stderr
 
 
 def test_acp_run_removed_workflows_reject_with_retired_message():

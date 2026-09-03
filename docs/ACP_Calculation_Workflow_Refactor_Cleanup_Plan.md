@@ -1,12 +1,14 @@
 # ACP 计算工作流极简化重构与残留代码清理方案
 
-> **已实施 (implemented) 2026-08-28, branch refactor/calc-cleanup** — 本方案已按计划执行完毕。mechanism/ 已删除，计算基元上浮至 calculations/，BatchOptimize/irc/scan 独立工作流已上线。
+> **第一版可测试基线 2026-08-29, branch refactor/calc-cleanup** — 极简计算架构已收口：计算基元统一位于 `calculations/`，BatchOptimize 与 IRC 分界固定，默认工作台已切换为通用任务界面。历史任务仍通过只读兼容层访问。
 
-状态：方案冻结版（Refactor Baseline）
+状态：方案冻结版 + 第一版可测试基线（Refactor Baseline v1）
 适用版本：ACP v1.x → 极简计算架构
 文档性质：计算工作流、调度、API、前端和历史兼容代码的唯一重构依据
 
 > 本文档是代码重构方案，不是当前代码已经完成的状态说明。实施时应以本文档的任务分类、接口边界、删除矩阵和验收条件为准。
+
+> 当前实现状态：本文件同时作为第一版验收基线；推荐先运行 `scripts/test_first_version.ps1`，再按环境决定是否运行完整测试集。完整测试集中的真实 QC 二进制、Linux 命令和可选 NMR 依赖仍按环境条件执行。
 
 ## 1. 目标与范围
 

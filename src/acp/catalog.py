@@ -293,7 +293,7 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "id": "Confsearch",
         "label": "Conformer Search",
         "label_zh": "构象搜索",
-        "category": "stages",
+        "category": "preset",
         "description": (
             "Unified conformer search + energies: protocols xtb-crest / "
             "xtb-md / censo-crest / xtbmd-censo"

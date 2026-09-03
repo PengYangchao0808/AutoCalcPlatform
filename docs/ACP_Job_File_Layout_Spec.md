@@ -67,8 +67,9 @@ ACP 的前端文件树采用**本地磁盘直接映射**（后端 `build_manifes
 | simple (singlepoint/optimize/frequency/xtb-optimize) | 任务根 `WORK/<stage>` | `optimized.xyz`、`energy.json`、`frequencies.txt`、`thermo.json` |
 | scan | 任务根 `RESULT/trajectories/` + `RESULT/structures/` | `scan_trajectory.json`、逐帧 XYZ |
 | irc | 任务根 `RESULT/irc/` | `irc_forward.xyz`、`irc_reverse.xyz`、`irc_report.json` |
-| BatchOptimize | 任务根 `RESULT/structures/` + `RESULT/batch_items.json` | 优化后结构 + 批量清单 |
-| PESsearch | 任务根 `RESULT/pes_search/` + `RESULT/structures/` | 能量曲线 + 候选结构 |
+| BatchOptimize（调度器单分子任务） | 任务根 `WORK/{03_OPT,04_FREQ,05_SP,06_THERMO}` + `RESULT/` | 与普通单分子任务一致；不存在 `03_OPT/batch/<item_id>/` |
+| BatchOptimize（CLI 多结构批处理） | `WORK/03_OPT/batch/<item_id>/` + `RESULT/` | 同一进程内多结构执行时保留 item 隔离 |
+| PESsearch | 任务根 `WORK/07_PATH/pes_scan_001/` + `RESULT/` | 扫描原始文件落 `07_PATH`；能量曲线落 `RESULT/pes_search/`，候选结构落 `RESULT/structures/` |
 
 非调度器 CLI 语境下，上表各"任务根"替换为 `{output}/{safe_name}/`（多分子批跑必需）。
 
@@ -79,7 +80,7 @@ v1.2 起机理任务与普通任务遵守**同一目录契约**（v2 设计 §6.
 ```
 WORK/
 ├── 01_PREPARE/inputs/              # 稳定态输入几何（state_*.xyz）
-├── 02_SEARCH/{s1,s1_xtbfast,states}/  # S1 构象系综 + states 清单
+├── 02_SEARCH/{s1,s1_xtbfast,states}/  # S1 构象系综 + states 清单（Confsearch）
 ├── 03_OPT/{TS,refinements}/        # S3/S4 TS 精修（s3s4→TS）+ 精修清单
 ├── 07_PATH/{s2,s2_peb,sr,routes}/  # S2 路径搜索 + 端点 + 路径清单
 └── 08_ANALYSIS/                    # 检查点根：study.json network.json reaction.json
@@ -89,6 +90,10 @@ WORK/
 RESULT/mechanism/                   # v2 投影：reaction_network/route_summary/ts_summary/
                                     # irc_validation/energy_profile.json + structures/
 ```
+
+PESsearch（S2）的新任务使用 `WORK/07_PATH/pes_scan_001/`，不得再把扫描中间
+文件写入 `WORK/02_SEARCH/`。`02_SEARCH/` 仅保留 Confsearch/S1 产物。旧任务中的
+`WORK/02_SEARCH/s2_bond_scan_001/` 仍由只读兼容探针读取，不做在线重命名或自动迁移。
 
 **路径解析**统一经 `acp/mechanism/layout.py`：`resolve_study_layout(task_root, study_id)`（新布局，写路径用）、`find_study_layout(task_root)`（**双探针**：新布局 study.json → legacy `mechanism_study/*/study.json` 回退，读路径用）、`find_reaction_json`（预运行物化探测）。`study_dir` 别名 = `WORK/08_ANALYSIS`（checkpoint 根，`study.study_dir` 持久化字段）。
 
@@ -183,6 +188,7 @@ RESULT/mechanism/                   # v2 投影：reaction_network/route_summary
 | PESsearch | `RESULT/pes_search/pes_profile.json` | 能量曲线 + TS/INT 候选推荐 |
 | PESsearch | `RESULT/structures/<candidate_id>.xyz` | TS/INT 候选结构 |
 | BatchOptimize | `RESULT/structures/<item_id>__TAG_<TS\|INT>__optimized.xyz` | 优化后结构（TAG 标记） |
+| BatchOptimize（调度器单分子） | `WORK/03_OPT/`、`WORK/04_FREQ/`、`WORK/05_SP/`、`WORK/06_THERMO/` | 原始 QC 文件按阶段直接落盘；TS rescue 目录仅在确实触发重试时出现 |
 | BatchOptimize | `RESULT/batch_items.json` | 批量计算清单（resume 用） |
 | IRC | `RESULT/irc/irc_forward.xyz` + `irc_reverse.xyz` | IRC 端点结构 |
 | IRC | `RESULT/irc/irc_report.json` | 端点分类 + 连通性验证报告 |
