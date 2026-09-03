@@ -38,6 +38,7 @@ try:
 except ImportError:  # pragma: no cover
     ZipStream = None
 
+from acp.api.job_status_view import build_live_status, resolve_display_method
 from acp.api.routes import (
     get_backends as legacy_get_backends,
 )
@@ -335,6 +336,15 @@ def _enrich_job_snapshot(
             val = data.get(key)
             if val is not None:
                 updates[key] = val
+    live = build_live_status(data)
+    if live is not None:
+        updates["live_status"] = live
+    updates["display_method"] = resolve_display_method(
+        record.spec.method,
+        record.spec.input,
+        record.spec.workflow,
+        data.get("current_stage") or record.current_stage,
+    )
     if state_stat is not None:
         updates["snapshot_version"] = int(state_stat.st_mtime)
     if include_event:
