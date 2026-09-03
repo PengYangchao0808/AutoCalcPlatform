@@ -196,10 +196,26 @@ class ORCABackend(QCBackend):
         multiplicity: int = 1,
         **kwargs: Any,
     ) -> RelaxedScanResult:
-        """Delegate a single-coordinate relaxed scan to ``ORCAInterface``."""
+        """Delegate a relaxed scan to ``ORCAInterface``.
+
+        A plan with multiple drive coordinates is kept synchronous by the
+        interface: every frame constrains all coordinates at the same
+        interpolation value.
+        """
         drive_coordinates = plan.drive_coordinates()
-        if len(drive_coordinates) != 1:
-            raise ValueError("ORCA relaxed_scan requires exactly one drive coordinate")
+        if not drive_coordinates:
+            raise ValueError("ORCA relaxed_scan requires at least one drive coordinate")
+        if len(drive_coordinates) > 1:
+            return self._interface.relaxed_scan(
+                coordinates,
+                symbols,
+                plan=plan,
+                points=plan.points,
+                charge=charge,
+                multiplicity=multiplicity,
+                output_dir=output_dir,
+                **kwargs,
+            )
         return self._interface.relaxed_scan(
             coordinates,
             symbols,

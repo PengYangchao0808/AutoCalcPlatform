@@ -25,6 +25,7 @@ from .executor import CalculationPlanExecutor, ExecutionResult, StepState
 from .pes import (
     PES_E_MANIFEST,
     SCAN_DIR_NAME,
+    FunctionalAtomSelection,
     PathCandidate,
     PathPoint,
     PesScanRequest,
@@ -35,9 +36,13 @@ from .pes import (
     ScanFrame,
     ScanProtocol,
     SearchResult,
+    SelectionKind,
     build_coordinate_plan,
+    normalize_selection_kind,
+    parse_functional_atom_selection,
     run_pes_scan,
     select_candidates,
+    validate_scan_coordinates,
 )
 from .progress import ProgressReporter
 
@@ -55,6 +60,7 @@ __all__ = [
     "CalculationStep",
     "Checkpoint",
     "ExecutionResult",
+    "FunctionalAtomSelection",
     "OptimizationMode",
     "OptimizationSpec",
     "PES_E_MANIFEST",
@@ -70,6 +76,7 @@ __all__ = [
     "ScanCoordinate",
     "ScanFrame",
     "ScanProtocol",
+    "SelectionKind",
     "SearchResult",
     "StepKind",
     "StepState",
@@ -77,6 +84,9 @@ __all__ = [
     "StructureRole",
     "TaskManifest",
     "build_coordinate_plan",
+    "normalize_selection_kind",
+    "parse_functional_atom_selection",
+    "validate_scan_coordinates",
     "run_pes_scan",
     "select_candidates",
     "validate_plan",

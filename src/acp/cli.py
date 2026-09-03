@@ -605,7 +605,7 @@ Examples:
 
     pes = run_sub.add_parser(
         "PESsearch",
-        help="XYZ-based one-dimensional PES scan + candidate guesses (S2)",
+        help="PES scan + candidate structure extraction",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
@@ -620,7 +620,7 @@ Examples:
         default="bond_length_scan",
         help=(
             "Search mode (default: bond_length_scan). 'path' is retained only "
-            "for legacy manifest-based mechanism studies."
+            "for legacy result manifests."
         ),
     )
     pes.add_argument(
@@ -631,8 +631,8 @@ Examples:
     pes.add_argument("--from-job", help="Source Confsearch job id (resolved via the jobs root)")
     pes.add_argument(
         "--from-artifact",
-        default="RESULT/confsearch/confsearch_manifest.json",
-        help="Artifact path relative to the source job directory",
+        default=None,
+        help="Artifact path relative to the source job directory (default: RESULT/confsearch/confsearch_manifest.json)",
     )
     pes.add_argument(
         "--strategy",
@@ -650,7 +650,7 @@ Examples:
     pes.add_argument("--product-conf", help="Product conformer id (default: rank 1)")
     pes.add_argument("--ts-guess", help="TS guess XYZ (required by direct-ts)")
     # ---------------------------------------------------------------------------
-    # bond_length_scan mode (S2 v2)
+    # bond_length_scan mode
     # ---------------------------------------------------------------------------
     pes.add_argument(
         "--source-type",
@@ -678,6 +678,13 @@ Examples:
         "--scan-kind",
         choices=["distance", "angle", "dihedral"],
         help="Scanned coordinate kind (default: distance)",
+    )
+    pes.add_argument(
+        "--selection-kind",
+        choices=["bond_stretch", "angle", "dihedral", "double_bond_scan"],
+        help=(
+            "Generic atom-selection function: bond_stretch, angle, dihedral, or double_bond_scan"
+        ),
     )
     pes.add_argument(
         "--scan-bond-type",
@@ -947,6 +954,16 @@ def _handle_pessearch(args: argparse.Namespace) -> int:
     """Execute the PESsearch workflow."""
     setup_logging(args.log_level)
     cfg = _build_config(args)
+
+    from acp.calculations.pes.scan import PES_SCAN_STAGES
+    from acp.calculations.progress import ProgressReporter
+
+    pes_stages = list(PES_SCAN_STAGES)
+    reporter = ProgressReporter(Path(args.output), job_name="PESsearch", stages=pes_stages)
+
+    error_msg: str | None = None
+    rc = 0
+
     try:
         # -- resolve reaction definition (optional, form ④) --
         reaction_path = getattr(args, "reaction", None)
@@ -963,28 +980,40 @@ def _handle_pessearch(args: argparse.Namespace) -> int:
         from_manifest = getattr(args, "from_manifest", None)
         _mode = getattr(args, "mode", "bond_length_scan")
 
-        if input_xyz_str:
+        if _mode == "bond_length_scan" and _has_bond_scan_source(args):
+            # Form ⑤: scheduler --scan-config / direct bond-scan source args
+            from acp.workflows.pes_search import run_bond_length_scan
+
+            result = run_bond_length_scan(
+                scan_request=_build_bond_scan_request(args),
+                output_dir=Path(args.output),
+                config=cfg,
+                progress_reporter=reporter,
+            )
+        elif input_xyz_str:
             # Form ③: direct XYZ + coordinate
             input_xyz = Path(input_xyz_str).expanduser().resolve()
             if not input_xyz.is_file():
                 logger.error("PES_E_MANIFEST: Input file not found: %s", input_xyz)
-                return 2
+                error_msg = f"PES_E_MANIFEST: Input file not found: {input_xyz}"
+                rc = 2
+            else:
+                coord_strings = getattr(args, "coordinates", None)
+                coordinate = _parse_pes_coordinates(coord_strings, args)
 
-            coord_strings = getattr(args, "coordinates", None)
-            coordinate = _parse_pes_coordinates(coord_strings, args)
+                from acp.workflows.pes_search import run_pes_search
 
-            from acp.workflows.pes_search import run_pes_search
-
-            result = run_pes_search(
-                input_xyz=input_xyz,
-                coordinate=coordinate,
-                strategy=getattr(args, "strategy", None),
-                reaction=reaction,
-                charge=getattr(args, "charge", 0) or 0,
-                multiplicity=getattr(args, "multiplicity", 1) or 1,
-                output_dir=Path(args.output),
-                config=cfg,
-            )
+                result = run_pes_search(
+                    input_xyz=input_xyz,
+                    coordinate=coordinate,
+                    strategy=getattr(args, "strategy", None),
+                    reaction=reaction,
+                    charge=getattr(args, "charge", 0) or 0,
+                    multiplicity=getattr(args, "multiplicity", 1) or 1,
+                    output_dir=Path(args.output),
+                    config=cfg,
+                    progress_reporter=reporter,
+                )
         elif from_manifest or from_job or from_artifact:
             # Forms ①/②: manifest-based
             manifest_path: Path | None = None
@@ -998,61 +1027,85 @@ def _handle_pessearch(args: argparse.Namespace) -> int:
             if manifest_path is None or not manifest_path.is_file():
                 code = "PES_E_MANIFEST"
                 logger.error("%s: Manifest not found: %s", code, manifest_path)
-                return 2
+                error_msg = f"{code}: Manifest not found: {manifest_path}"
+                rc = 2
+            else:
+                from acp.workflows.pes_search import run_pes_search
 
-            from acp.workflows.pes_search import run_pes_search
-
-            result = run_pes_search(
-                confsearch_manifest=manifest_path,
-                strategy=getattr(args, "strategy", None),
-                reaction=reaction,
-                charge=getattr(args, "charge", 0) or 0,
-                multiplicity=getattr(args, "multiplicity", 1) or 1,
-                output_dir=Path(args.output),
-                config=cfg,
-            )
+                result = run_pes_search(
+                    confsearch_manifest=manifest_path,
+                    strategy=getattr(args, "strategy", None),
+                    reaction=reaction,
+                    charge=getattr(args, "charge", 0) or 0,
+                    multiplicity=getattr(args, "multiplicity", 1) or 1,
+                    output_dir=Path(args.output),
+                    config=cfg,
+                    progress_reporter=reporter,
+                )
         else:
-            logger.error("PESsearch requires --input, --from-artifact, or --from-job")
-            return 2
+            logger.error(
+                "PESsearch requires --input, --from-artifact, --from-job, "
+                "or a bond-scan source (--scan-config / --xyz-text)"
+            )
+            error_msg = (
+                "PESsearch requires --input, --from-artifact, --from-job, "
+                "or a bond-scan source (--scan-config / --xyz-text)"
+            )
+            rc = 2
+
+        if error_msg is None:
+            if result.status != "completed":
+                error_str = result.error or ""
+                for code in ("PES_E_MANIFEST", "PES_E_COORD", "PES_E_STRATEGY"):
+                    if code in error_str:
+                        logger.error("PESsearch failed: %s", error_str)
+                        error_msg = error_str
+                        rc = 2
+                        break
+                else:
+                    logger.error("PESsearch failed: %s", error_str)
+                    error_msg = error_str
+                    rc = 1
+            else:
+                meta = result.metadata
+                logger.info(
+                    "PESsearch completed: %d TS + %d INT candidates",
+                    meta.get("ts_candidates", 0),
+                    meta.get("int_candidates", 0),
+                )
+                logger.info("  Manifest    : %s", meta.get("manifest_path"))
+                reporter.complete()
 
     except KeyboardInterrupt:
         logger.warning("Interrupted by user")
-        return 130
+        error_msg = "interrupted"
+        rc = 130
     except Exception as exc:
         error_str = str(exc)
         # Extract error code prefix for exit code 2
         for code in ("PES_E_MANIFEST", "PES_E_COORD", "PES_E_STRATEGY"):
             if code in error_str:
                 logger.error("%s", exc)
-                return 2
-        logger.exception("PESsearch failed: %s", exc)
-        return 1
+                error_msg = error_str
+                rc = 2
+                break
+        else:
+            logger.exception("PESsearch failed: %s", exc)
+            error_msg = error_str
+            rc = 1
+    finally:
+        if error_msg is not None:
+            reporter.fail(error_msg)
 
-    if result.status != "completed":
-        error_str = result.error or ""
-        for code in ("PES_E_MANIFEST", "PES_E_COORD", "PES_E_STRATEGY"):
-            if code in error_str:
-                logger.error("PESsearch failed: %s", error_str)
-                return 2
-        logger.error("PESsearch failed: %s", error_str)
-        return 1
-
-    meta = result.metadata
-    logger.info(
-        "PESsearch completed: %d TS + %d INT candidates",
-        meta.get("ts_candidates", 0),
-        meta.get("int_candidates", 0),
-    )
-    logger.info("  Manifest    : %s", meta.get("manifest_path"))
-    return 0
+    return rc
 
 
 def _resolve_pes_manifest_from_job(job_id: str, from_artifact: str | None) -> Path:
     """Resolve a confsearch manifest path from a job ID."""
+    from acp.core.paths import resolve_run_root
     from acp.scheduler.store import JobStore
 
-    run_root = Path(os.environ.get("ACP_RUN_ROOT", "./ACP_runs"))
-    store = JobStore(run_root / "acp_jobs.db")
+    store = JobStore(resolve_run_root() / "acp_jobs.db")
     record = store.get(job_id)
     if record is None:
         raise FileNotFoundError(f"Job not found: {job_id}")
@@ -1130,8 +1183,26 @@ def _parse_pes_coordinates(
     return None
 
 
+def _has_bond_scan_source(args: argparse.Namespace) -> bool:
+    """Return whether an explicit bond-length-scan source is present.
+
+    Covers the scheduler contract (``--scan-config`` ships the full request
+    including the source) and the direct CLI source forms (``--source-type``
+    / ``--xyz-text`` / ``--asset-path``). Plain ``--input`` stays on the
+    engine path.
+    """
+    return any(
+        [
+            getattr(args, "scan_config", None),
+            getattr(args, "source_type", None),
+            getattr(args, "xyz_text", None),
+            getattr(args, "asset_path", None),
+        ]
+    )
+
+
 def _build_bond_scan_request(args: argparse.Namespace) -> dict[str, Any]:
-    """Assemble the bond-length-scan request dict from CLI args (S2 v2)."""
+    """Assemble the bond-length-scan request dict from CLI args."""
     scan_config = _load_plan_argument(getattr(args, "scan_config", None)) or {}
 
     explicit_source = any(
@@ -1186,26 +1257,42 @@ def _build_bond_scan_request(args: argparse.Namespace) -> dict[str, Any]:
         source["multiplicity"] = args.multiplicity
 
     coordinate = dict(scan_config.get("coordinate") or {})
+    coordinates = scan_config.get("coordinates")
+    selection = dict(scan_config.get("selection") or {})
     protocol = dict(scan_config.get("protocol") or {})
 
     if getattr(args, "scan_kind", None):
         coordinate["kind"] = args.scan_kind
     if getattr(args, "scan_bond_type", None):
         coordinate["bond_type"] = args.scan_bond_type
+    if getattr(args, "selection_kind", None):
+        selection["kind"] = args.selection_kind
 
     atoms = getattr(args, "scan_atoms", None)
     if atoms:
         parts = [int(part) for part in str(atoms).split(",") if part.strip()]
-        expected_atoms = {"distance": 2, "angle": 3, "dihedral": 4}.get(
-            str(coordinate.get("kind") or "distance"),
-            2,
-        )
+        selection_kind = str(selection.get("kind") or "")
+        expected_atoms = {
+            "bond_stretch": 2,
+            "distance": 2,
+            "angle": 3,
+            "dihedral": 4,
+            "double_bond_scan": 4,
+        }.get(selection_kind or str(coordinate.get("kind") or "distance"), 2)
         if len(parts) != expected_atoms:
             raise ValueError(
                 f"--scan-atoms must contain {expected_atoms} indices for "
-                f"{coordinate.get('kind') or 'distance'} scan"
+                f"{selection_kind or coordinate.get('kind') or 'distance'} scan"
             )
-        coordinate["atoms"] = parts
+        if selection_kind == "double_bond_scan":
+            coordinate["kind"] = "distance"
+            coordinate["atoms"] = parts[:2]
+            coordinates = [
+                dict(coordinate, atoms=parts[:2]),
+                dict(coordinate, atoms=parts[2:4]),
+            ]
+        else:
+            coordinate["atoms"] = parts
     if getattr(args, "scan_start", None) is not None:
         coordinate["start"] = args.scan_start
     if getattr(args, "scan_end", None) is not None:
@@ -1224,12 +1311,17 @@ def _build_bond_scan_request(args: argparse.Namespace) -> dict[str, Any]:
         protocol.setdefault("scan_driver", {})["max_iterations"] = args.max_iterations
         protocol.setdefault("scan_optimizer", {})["max_iterations"] = args.max_iterations
 
-    return {
+    result = {
         "mode": "bond_length_scan",
         "source": source,
         "coordinate": coordinate,
         "protocol": protocol,
     }
+    if isinstance(coordinates, list):
+        result["coordinates"] = coordinates
+    if selection:
+        result["selection"] = selection
+    return result
 
 
 def _handle_batch_optimize(args: argparse.Namespace) -> int:

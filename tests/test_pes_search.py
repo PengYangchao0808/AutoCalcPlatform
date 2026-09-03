@@ -19,6 +19,7 @@ from acp.calculations.pes.contracts import (
     build_default_protocol,
     coordinate_step,
     validate_scan_coordinate,
+    validate_scan_coordinates,
 )
 from acp.calculations.pes.scan import build_coordinate_plan, run_pes_scan
 from acp.core.models import Structure
@@ -336,9 +337,10 @@ def test_scan_five_frames_profile(
     assert len(ts_recs) >= 1
     assert ts_recs[0]["kind"] == "ts"
 
-    scan_dir = tmp_path / "WORK" / "02_SEARCH" / "pes_scan_001"
+    scan_dir = tmp_path / "WORK" / "07_PATH" / "pes_scan_001"
     assert (scan_dir / "scan_frames" / "frame_000.xyz").exists()
     assert (scan_dir / "scan_frames" / "frame_004.xyz").exists()
+    assert not (tmp_path / "WORK" / "02_SEARCH" / "pes_scan_001").exists()
 
 
 def test_frame_extraction_rescue_or_structured_fail(
@@ -361,6 +363,191 @@ def test_frame_extraction_rescue_or_structured_fail(
             output_dir=tmp_path,
             config={"resources": {"nproc": 1}},
         )
+
+
+_DOUBLE_SCAN_XYZ = """\
+5
+C5 chain
+C   0.000000   0.000000   0.000000
+C   1.400000   0.000000   0.000000
+C   2.800000   0.000000   0.000000
+C   4.200000   0.000000   0.000000
+C   5.600000   0.000000   0.000000
+"""
+
+
+def _double_scan_request() -> dict[str, Any]:
+    coordinate = {
+        "kind": "distance",
+        "atoms": [0, 1],
+        "start": 1.2,
+        "end": 2.2,
+        "n_points": 4,
+    }
+    return {
+        "mode": "bond_length_scan",
+        "source": {
+            "source_type": "xyz_text",
+            "xyz_text": _DOUBLE_SCAN_XYZ,
+            "charge": 0,
+            "multiplicity": 1,
+        },
+        "coordinate": coordinate,
+        "coordinates": [
+            coordinate,
+            {"kind": "distance", "atoms": [3, 4], "start": 1.2, "end": 2.2, "n_points": 4},
+        ],
+        "selection": {"kind": "double_bond_scan", "atom_indices": [0, 1, 3, 4]},
+    }
+
+
+def test_double_scan_persists_per_frame_target_and_actual(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    """Both bonds carry target+actual values on every frame (synchronous λ)."""
+    symbols = ["C"] * 5
+    points: list[RelaxedScanPoint] = []
+    for i in range(4):
+        target = 1.2 + i * (2.2 - 1.2) / 3
+        coords = np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [target, 0.0, 0.0],
+                [target + 1.4, 0.0, 0.0],
+                [target + 2.8, 0.0, 0.0],
+                [target + 2.8 + target, 0.0, 0.0],
+            ]
+        )
+        points.append(
+            RelaxedScanPoint(
+                frame_index=i,
+                progress=i / 3,
+                coordinates=coords,
+                symbols=list(symbols),
+                energy_hartree=-1.0 - i * 0.01,
+                success=True,
+                coordinate_values={"coordinate_1": target, "coordinate_2": target},
+            )
+        )
+    fake_backend.set_result(
+        "relaxed_scan",
+        RelaxedScanResult(
+            points=points,
+            input_xyz=tmp_path / "input.xyz",
+            scan_dir=tmp_path,
+            success=True,
+        ),
+    )
+    fake_backend.set_results(
+        "single_point",
+        [QCResult(success=True, energy=-1.0 - i * 0.01) for i in range(4)],
+    )
+
+    result = run_pes_scan(
+        request=_double_scan_request(),
+        output_dir=tmp_path,
+        config={"resources": {"nproc": 1}},
+    )
+
+    assert len(result["coordinates"]) == 2
+    assert result["selection"]["kind"] == "double_bond_scan"
+    assert result["coordinate"]["atoms"] == [0, 1]
+    frames = result["frames"]
+    assert len(frames) == 4
+    for position, frame in enumerate(frames):
+        target = 1.2 + position * (2.2 - 1.2) / 3
+        assert set(frame["target_coordinates"]) == {"coordinate_1", "coordinate_2"}
+        assert set(frame["actual_coordinates"]) == {"coordinate_1", "coordinate_2"}
+        assert frame["target_coordinates"]["coordinate_1"] == pytest.approx(target)
+        assert frame["target_coordinates"]["coordinate_2"] == pytest.approx(target)
+        assert frame["actual_coordinates"]["coordinate_1"] == pytest.approx(target, abs=1e-3)
+        assert frame["actual_coordinates"]["coordinate_2"] == pytest.approx(target, abs=1e-3)
+
+
+def test_coordinates_only_request_resolves_primary(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    request = _pes_request(5)
+    del request["coordinate"]
+    request["coordinates"] = [
+        {"kind": "distance", "atoms": [0, 1], "start": 1.2, "end": 2.5, "n_points": 5}
+    ]
+    ethylene = np.array(
+        [
+            [0.0, 0.0, 0.0],
+            [1.339, 0.0, 0.0],
+            [-0.506, 0.934, 0.0],
+            [-0.506, -0.934, 0.0],
+            [1.845, 0.934, 0.0],
+            [1.845, -0.934, 0.0],
+        ]
+    )
+    fake_backend.set_result(
+        "relaxed_scan",
+        _pes_scan_result(5, ethylene, ["C", "C", "H", "H", "H", "H"], output_dir=tmp_path),
+    )
+
+    result = run_pes_scan(request=request, output_dir=tmp_path)
+
+    assert result["coordinate"]["atoms"] == [0, 1]
+    assert len(result["coordinates"]) == 1
+    assert len(result["frames"]) == 5
+
+
+def test_partial_synchronous_failure_fails_fast(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    """success=False with partial points aborts before frames/SP (no scan_dir/'')."""
+    good_point = RelaxedScanPoint(
+        frame_index=0,
+        progress=0.0,
+        coordinates=np.array([[0.0, 0.0, 0.0], [1.2, 0.0, 0.0]]),
+        symbols=["C", "C"],
+        energy_hartree=-1.0,
+        success=True,
+        coordinate_values={"distance": 1.2},
+    )
+    failed_point = RelaxedScanPoint(
+        frame_index=1,
+        progress=1.0,
+        coordinates=None,
+        symbols=None,
+        energy_hartree=None,
+        success=False,
+        coordinate_values={"distance": 2.5},
+    )
+    fake_backend.set_result(
+        "relaxed_scan",
+        RelaxedScanResult(
+            points=[good_point, failed_point],
+            input_xyz=tmp_path / "input.xyz",
+            scan_dir=tmp_path,
+            success=False,
+            message="constrained optimization failed at frame 1",
+        ),
+    )
+
+    with pytest.raises(RuntimeError, match="Relaxed scan failed"):
+        _ = run_pes_scan(
+            request=_pes_request(3),
+            output_dir=tmp_path,
+            config={"resources": {"nproc": 1}},
+        )
+
+    assert not (tmp_path / "WORK" / "07_PATH" / "pes_scan_001" / "scan_frames").exists()
+    assert not any(call.method == "single_point" for call in fake_backend.calls)
+
+
+def test_validate_scan_coordinates_rejects_too_many() -> None:
+    coordinates = [
+        ScanCoordinate(kind="distance", atoms=(0, 1), start=1.0, end=2.0, n_points=5)
+        for _ in range(5)
+    ]
+    with pytest.raises(ValueError, match="at most 4"):
+        _ = validate_scan_coordinates(tuple(coordinates))
 
 
 def test_scan_coordinate_out_of_range(
@@ -469,6 +656,14 @@ def test_from_confsearch_manifest(
     assert len(result.ts_candidates) >= 1
     assert result.pes_profile_path is not None
     assert result.pes_profile_path.exists()
+    assert (tmp_path / "RESULT" / "result_manifest.json").exists()
+    result_manifest = __import__("json").loads(
+        (tmp_path / "RESULT" / "result_manifest.json").read_text(encoding="utf-8")
+    )
+    assert {product["kind"] for product in result_manifest["products"]} >= {
+        "pes_profile",
+        "structure",
+    }
 
     for cand in result.ts_candidates:
         if cand.candidate_id in result.candidate_structures:
@@ -657,6 +852,10 @@ def test_entry_from_artifact(
     assert result.metadata["ts_candidates"] >= 1
     pes_profile = tmp_path / "RESULT" / "pes_search" / "pes_profile.json"
     assert pes_profile.exists()
+    profile = __import__("json").loads(pes_profile.read_text(encoding="utf-8"))
+    assert profile["schema_version"] == "pes_profile_v2"
+    assert profile["scan_dir"] == "WORK/07_PATH/pes_scan_001"
+    assert (tmp_path / "RESULT" / "result_manifest.json").exists()
 
 
 def test_entry_from_direct_input(
@@ -802,7 +1001,17 @@ def test_pes_search_stage_tasks_provider() -> None:
 
     plan_path = get_stage_plan(JobSpec(workflow="PESsearch", method={"mode": "path"}))
     names_path = [s.stage_name for s in plan_path]
-    assert names_path == ["prepare", "path_search", "candidate_extract", "finalize"]
+    assert names_path == [
+        "prepare",
+        "validate_coordinate",
+        "materialize_input",
+        "run_relaxed_scan",
+        "extract_frames",
+        "run_single_points",
+        "build_profile",
+        "select_candidates",
+        "finalize",
+    ]
 
 
 def test_cli_pessearch_help() -> None:
@@ -816,3 +1025,240 @@ def test_cli_pessearch_help() -> None:
     )
     assert result.returncode == 0
     assert "PESsearch" in result.stdout or "coordinate" in result.stdout
+
+
+# ── distance-scan path-selection integration ───────────────────────────
+
+
+_ETHYLENE_COORDS = np.array(
+    [
+        [0.0, 0.0, 0.0],
+        [1.34, 0.0, 0.0],
+        [-0.51, 0.93, 0.0],
+        [-0.51, -0.93, 0.0],
+        [1.85, 0.93, 0.0],
+        [1.85, -0.93, 0.0],
+    ]
+)
+
+
+def _stretch_scan_result(
+    n_points: int,
+    coords: np.ndarray[Any, Any],
+    symbols: list[str],
+    *,
+    energies: list[float],
+    output_dir: Path | None = None,
+) -> RelaxedScanResult:
+    """Scan result whose frames rigidly translate the second CH2 group."""
+    delta = 1.6 / max(n_points - 1, 1)
+    points: list[RelaxedScanPoint] = []
+    for i in range(n_points):
+        frame_coordinates = coords.copy()
+        frame_coordinates[[1, 4, 5], 0] += delta * i
+        points.append(
+            RelaxedScanPoint(
+                frame_index=i,
+                progress=i / max(n_points - 1, 1),
+                coordinates=frame_coordinates,
+                symbols=symbols.copy(),
+                energy_hartree=energies[i],
+                success=True,
+                coordinate_values={"distance": float(coords[1, 0] - coords[0, 0]) + delta * i},
+            )
+        )
+    scan_dir = output_dir or Path("/tmp/pes_test")
+    return RelaxedScanResult(
+        points=points,
+        input_xyz=scan_dir / "input.xyz",
+        scan_dir=scan_dir,
+        success=True,
+    )
+
+
+def _run_barrier_scan(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+    *,
+    energies: list[float],
+    config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    symbols = ["C", "C", "H", "H", "H", "H"]
+    n_points = len(energies)
+    fake_backend.set_result(
+        "relaxed_scan",
+        _stretch_scan_result(
+            n_points,
+            _ETHYLENE_COORDS,
+            symbols,
+            energies=energies,
+            output_dir=tmp_path,
+        ),
+    )
+    fake_backend.set_results(
+        "single_point",
+        [QCResult(success=True, energy=e) for e in energies],
+    )
+    return run_pes_scan(
+        request=_pes_request(n_points),
+        output_dir=tmp_path,
+        config=config or {"resources": {"nproc": 1}},
+    )
+
+
+def test_distance_scan_knee_selection_resolves(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    """Barrier-shaped profile → knee-shifted selection, not global max/endpoint."""
+    energies = [float(-1.0 + 0.03 * np.exp(-((i - 9) ** 2) / 8.0)) for i in range(15)]
+    result = _run_barrier_scan(fake_backend, tmp_path, energies=energies)
+
+    ts_recs = result["ts_recommendations"]
+    assert len(ts_recs) == 1
+    ts = ts_recs[0]
+    assert ts["evidence"]["selection_algorithm"] == "endpoint_knee_shift_midpoint_v1"
+    assert 5 <= ts["frame_index"] <= 13
+    assert ts["confidence"] in ("medium", "high")
+    assert ts["evidence"]["barrier_from_reactant_kcal_mol"] is not None
+
+    int_recs = result["int_recommendations"]
+    assert len(int_recs) == 1
+    assert int_recs[0]["frame_index"] > ts["frame_index"]
+
+    quality = result["quality"]
+    assert "distance_selection_knee_shift_v1" in quality["notes"]
+    assert quality["needs_review"] is False
+
+
+def test_distance_scan_monotonic_rise_no_endpoint_ts(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    """Monotonic saturating rise → TS is knee-shifted, never the last frame."""
+    energies = [float(-1.0 + 0.03 * (1.0 - np.exp(-i / 4.0))) for i in range(15)]
+    result = _run_barrier_scan(fake_backend, tmp_path, energies=energies)
+
+    ts_recs = result["ts_recommendations"]
+    assert len(ts_recs) == 1
+    ts = ts_recs[0]
+    assert ts["frame_index"] <= 13
+    assert ts["evidence"]["selection_algorithm"] == "endpoint_knee_shift_midpoint_v1"
+    assert "distance_selection_knee_shift_v1" in result["quality"]["notes"]
+
+
+def test_distance_scan_selection_config_gate_triggers_fallback(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    """Selection config flows into the policy: a barrier gate defers to fallback."""
+    energies = [float(-1.0 + 0.03 * np.exp(-((i - 9) ** 2) / 8.0)) for i in range(15)]
+    config = {
+        "resources": {"nproc": 1},
+        "pes": {
+            "scan_selection": {
+                "require_barrier_for_search_seed": True,
+                "ts_min_reactant_barrier_kcal_mol": 100.0,
+            }
+        },
+    }
+    result = _run_barrier_scan(fake_backend, tmp_path, energies=energies, config=config)
+
+    quality = result["quality"]
+    assert "distance_selection_fallback:insufficient_barrier" in quality["notes"]
+    assert quality["needs_review"] is True
+
+    ts = result["ts_recommendations"][0]
+    assert ts["evidence"]["peak_index"] == 9
+    assert "selection_algorithm" not in ts["evidence"]
+
+
+def test_engine_candidates_match_persisted_recommendations(
+    fake_backend: FakeBackend,
+    tmp_path: Path,
+) -> None:
+    """Engine candidates mirror the persisted recommendations (single source)."""
+    from acp.calculations.pes.engine import PesSearchEngine
+
+    manifest_path = _make_confsearch_manifest(tmp_path)
+    _setup_pes_fake_backend(fake_backend, tmp_path)
+
+    engine = PesSearchEngine(config={"resources": {"nproc": 1}}, output_dir=tmp_path)
+    result = engine.run(
+        confsearch_manifest=manifest_path,
+        coordinate=ScanCoordinate(
+            kind="distance",
+            atoms=(0, 1),
+            start=1.2,
+            end=2.5,
+            n_points=5,
+        ),
+        charge=0,
+        multiplicity=1,
+    )
+
+    assert result.status == "complete"
+    profile_payload = __import__("json").loads(result.pes_profile_path.read_text(encoding="utf-8"))
+    assert {c.candidate_id for c in result.ts_candidates} == {
+        c["candidate_id"] for c in profile_payload["ts_candidates"]
+    }
+    assert {c.candidate_id for c in result.int_candidates} == {
+        c["candidate_id"] for c in profile_payload["int_candidates"]
+    }
+    search_result = result.metadata["search_result"]
+    assert search_result["selected_ts_id"] == result.ts_candidates[0].candidate_id
+    assert search_result["selected_ts_id"] in {
+        c["candidate_id"] for c in profile_payload["ts_candidates"]
+    }
+
+
+def test_coordinate_scan_ids_rank_ordered() -> None:
+    """Angle/dihedral ids follow prominence rank; config thresholds apply."""
+    from acp.calculations.pes.scan import _recommend_coordinate_candidates
+
+    energies = [-1.0, -0.9, -0.7, -0.95, -0.5, -0.96, -0.98, -0.97, -1.0]
+    frames = [
+        ScanFrame(
+            index=i,
+            target_coordinate=float(i),
+            actual_coordinate=float(i),
+            coordinate_unit="degree",
+            geometry_path=f"scan_frames/frame_{i:03d}.xyz",
+        )
+        for i in range(len(energies))
+    ]
+    coordinate = ScanCoordinate(
+        kind="dihedral",
+        atoms=(0, 1, 2, 3),
+        start=-180.0,
+        end=180.0,
+        n_points=len(energies),
+    )
+    profile = EnergyProfile(
+        energy_source="scan",
+        unit="kcal/mol",
+        reference_index=0,
+        relative_energies_kcal_mol=tuple(float((e - energies[0]) * 627.509) for e in energies),
+        raw_hartree=tuple(energies),
+    )
+
+    ts_rows, int_rows, _quality = _recommend_coordinate_candidates(frames, coordinate, profile, {})
+    assert [row.candidate_id for row in ts_rows] == [
+        "ts_guess_001",
+        "ts_guess_002",
+        "ts_guess_003",
+    ]
+    assert ts_rows[0].frame_index == 4
+    assert ts_rows[1].frame_index == 2
+    assert ts_rows[2].frame_index == 7
+    assert ts_rows[0].confidence == "medium"
+    assert [row.candidate_id for row in int_rows] == ["int_guess_001", "int_guess_002"]
+    assert int_rows[0].frame_index == 3
+    assert int_rows[1].frame_index == 6
+
+    strict_cfg = {"pes": {"scan_selection": {"ts_min_prominence_kcal_mol": 200.0}}}
+    strict_rows, _int_rows, _quality = _recommend_coordinate_candidates(
+        frames, coordinate, profile, strict_cfg
+    )
+    assert strict_rows[0].confidence == "medium"
+    assert strict_rows[1].confidence == "low"

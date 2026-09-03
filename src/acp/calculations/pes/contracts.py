@@ -33,6 +33,7 @@ __all__ = [
     "build_default_protocol",
     "coordinate_step",
     "normalize_candidate_role",
+    "validate_scan_coordinates",
     "validate_scan_coordinate",
     "validate_scan_protocol",
 ]
@@ -41,6 +42,7 @@ __all__ = [
 
 MIN_SCAN_POINTS = 3
 MAX_SCAN_POINTS = 101
+MAX_SYNC_COORDINATES = 4
 MIN_SCAN_STEP_ANGSTROM = 0.01
 MIN_SCAN_STEP_DEGREE = 0.1
 DEFAULT_SCAN_PROTOCOL_NAME = "orca_relaxed_scan_xtb_gfn2_sp_b973c_v1"
@@ -391,31 +393,62 @@ class PesScanRequest:
     mode: str = "bond_length_scan"
     source: StructureSource = field(default_factory=StructureSource)
     coordinate: ScanCoordinate = field(default_factory=ScanCoordinate)
+    coordinates: tuple[ScanCoordinate, ...] = ()
     protocol: ScanProtocol = field(default_factory=ScanProtocol)
+    selection: dict[str, Any] = field(default_factory=dict)
     resources: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any] | None) -> PesScanRequest:
         payload = dict(payload or {})
-        coordinate = ScanCoordinate.from_dict(dict(payload.get("coordinate") or {}))
+        raw_coordinates = payload.get("coordinates")
+        if raw_coordinates is None:
+            coordinates: tuple[ScanCoordinate, ...] = ()
+        elif isinstance(raw_coordinates, (list, tuple)):
+            coordinates = tuple(
+                ScanCoordinate.from_dict(dict(item))
+                for item in raw_coordinates
+                if isinstance(item, dict)
+            )
+            if len(coordinates) != len(raw_coordinates):
+                raise ValueError("coordinates entries must be objects")
+        else:
+            raise ValueError("coordinates must be a list of coordinate objects")
+        raw_coordinate = payload.get("coordinate")
+        if not raw_coordinate and coordinates:
+            coordinate = coordinates[0]
+        else:
+            coordinate = ScanCoordinate.from_dict(dict(raw_coordinate or {}))
         protocol_payload = dict(payload.get("protocol") or {})
         protocol_payload["coordinate"] = coordinate.to_dict()
         return cls(
             mode=str(payload.get("mode") or "bond_length_scan"),
             source=StructureSource.from_dict(dict(payload.get("source") or {})),
             coordinate=coordinate,
+            coordinates=coordinates,
             protocol=ScanProtocol.from_dict(protocol_payload),
+            selection=dict(payload.get("selection") or {}),
             resources=dict(payload.get("resources") or {}),
         )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        payload: dict[str, Any] = {
             "mode": self.mode,
             "source": self.source.to_dict(),
             "coordinate": self.coordinate.to_dict(),
             "protocol": self.protocol.to_dict(),
             "resources": dict(self.resources),
         }
+        if self.coordinates:
+            payload["coordinates"] = [coordinate.to_dict() for coordinate in self.coordinates]
+        if self.selection:
+            payload["selection"] = dict(self.selection)
+        return payload
+
+    @property
+    def scan_coordinates(self) -> tuple[ScanCoordinate, ...]:
+        """Return all synchronized driven coordinates, preserving legacy input."""
+        return self.coordinates or (self.coordinate,)
 
 
 # ── scan frame ─────────────────────────────────────────────────────────
@@ -435,6 +468,8 @@ class ScanFrame:
     optimization_converged: bool = True
     single_point_status: str = "skipped"
     source_log: str = ""
+    target_coordinates: dict[str, float] = field(default_factory=dict)
+    actual_coordinates: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -448,6 +483,8 @@ class ScanFrame:
             "optimization_converged": self.optimization_converged,
             "single_point_status": self.single_point_status,
             "source_log": self.source_log,
+            "target_coordinates": dict(self.target_coordinates),
+            "actual_coordinates": dict(self.actual_coordinates),
         }
 
 
@@ -660,3 +697,29 @@ def validate_scan_protocol(
                 raise ValueError("single_point charge and multiplicity are required")
             if not sp.method:
                 raise ValueError("single_point method is required when single_point is enabled")
+
+
+def validate_scan_coordinates(
+    coordinates: tuple[ScanCoordinate, ...] | list[ScanCoordinate],
+    protocol: ScanProtocol | None = None,
+) -> None:
+    """Validate a synchronized scan coordinate set.
+
+    All coordinates in one frame share the same interpolation parameter, so
+    they must use the same number of points.  The single-coordinate legacy
+    request remains valid and follows :func:`validate_scan_protocol`.
+    """
+    if not coordinates:
+        raise ValueError("at least one scan coordinate is required")
+    if len(coordinates) > MAX_SYNC_COORDINATES:
+        raise ValueError(
+            f"synchronized scans support at most {MAX_SYNC_COORDINATES} coordinates "
+            f"(got {len(coordinates)})"
+        )
+    for coordinate in coordinates:
+        validate_scan_coordinate(coordinate)
+    point_counts = {coordinate.n_points for coordinate in coordinates}
+    if len(point_counts) != 1:
+        raise ValueError("synchronized scan coordinates must use the same n_points")
+    if protocol is not None:
+        validate_scan_protocol(coordinates[0], protocol)

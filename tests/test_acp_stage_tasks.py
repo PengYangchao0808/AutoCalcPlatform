@@ -46,8 +46,8 @@ def test_mechanism_stage_plan_uses_study_phases() -> None:
             {"mode": "bond_length_scan"},
             [
                 "prepare",
-                "materialize_input",
                 "validate_coordinate",
+                "materialize_input",
                 "run_relaxed_scan",
                 "extract_frames",
                 "run_single_points",
@@ -61,8 +61,13 @@ def test_mechanism_stage_plan_uses_study_phases() -> None:
             {"mode": "path"},
             [
                 "prepare",
-                "path_search",
-                "candidate_extract",
+                "validate_coordinate",
+                "materialize_input",
+                "run_relaxed_scan",
+                "extract_frames",
+                "run_single_points",
+                "build_profile",
+                "select_candidates",
                 "finalize",
             ],
         ),
@@ -145,7 +150,17 @@ def test_pessearch_bond_scan_stage_plan() -> None:
 def test_pessearch_path_stage_plan() -> None:
     plan = get_stage_plan(JobSpec(workflow="PESsearch", method={"mode": "path"}))
     names = [s.stage_name for s in plan]
-    assert names == ["prepare", "path_search", "candidate_extract", "finalize"]
+    assert names == [
+        "prepare",
+        "validate_coordinate",
+        "materialize_input",
+        "run_relaxed_scan",
+        "extract_frames",
+        "run_single_points",
+        "build_profile",
+        "select_candidates",
+        "finalize",
+    ]
 
 
 def test_observer_initializes_pending_tasks(tmp_path: Path) -> None:

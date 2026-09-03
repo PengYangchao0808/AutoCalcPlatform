@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
+from acp.calculations.pes.scan import PES_SCAN_STAGES
 from acp.scheduler.jobs import JobSpec, censo_preset_from_method
 from acp.scheduler.migrations import migrate
 
@@ -323,12 +324,7 @@ class PlanCompiler:
             # PESsearch path-mode override: when mode is not bond_length_scan,
             # use the path stages instead of the static bond_length_scan stages.
             if wf == "PESsearch" and str(spec.method.get("mode") or "") != "bond_length_scan":
-                return [
-                    StagePlan("prepare"),
-                    StagePlan("path_search"),
-                    StagePlan("candidate_extract"),
-                    StagePlan("finalize"),
-                ]
+                return [StagePlan(name) for name in PES_SCAN_STAGES]
 
             return [StagePlan(name) for name in static_stages]
 

@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -123,6 +123,7 @@ def run_prepared_frames(
     backend: SinglePointCalculator,
     prepared: Sequence[PreparedFrame],
     settings: BatchSinglePointExecutionOptions,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> dict[str, BatchSinglePointFrameResult]:
     """Run normalized frames through the shared threaded/cache helper."""
     batch_root = settings.output_dir / ".batch_sp" / scope([frame.cache_key for frame in prepared])
@@ -131,15 +132,19 @@ def run_prepared_frames(
         groups.setdefault((frame.symbols, frame.charge, frame.multiplicity), []).append(frame)
 
     records: dict[str, BatchSinglePointFrameResult] = {}
+    total_frames = len(prepared)
+    completed_frames = 0
     for group_index, group in enumerate(groups.values()):
-        records.update(
-            _run_group(
-                backend,
-                group,
-                batch_root / f"group_{group_index:03d}",
-                settings,
-            )
+        group_result = _run_group(
+            backend,
+            group,
+            batch_root / f"group_{group_index:03d}",
+            settings,
         )
+        records.update(group_result)
+        completed_frames += len(group)
+        if progress_callback is not None:
+            progress_callback(completed_frames, total_frames)
     return records
 
 

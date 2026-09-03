@@ -44,6 +44,7 @@ from acp.calculations.contracts import (
 )
 from acp.calculations.primitives.frequency import run_frequency
 from acp.calculations.primitives.optimize import run_optimize
+from acp.calculations.primitives.scan import run_scan
 from acp.calculations.primitives.singlepoint import run_singlepoint
 from acp.calculations.primitives.thermochemistry import ThermochemistryCalculator
 from acp.storage.manifest import ProductKind, ResultManifest
@@ -139,6 +140,7 @@ _PRIMITIVE_DISPATCH: dict[StepKind, Callable[[CalculationRequest], CalculationRe
     StepKind.SINGLEPOINT: run_singlepoint,
     StepKind.OPTIMIZE: run_optimize,
     StepKind.FREQUENCY: run_frequency,
+    StepKind.SCAN: run_scan,
     StepKind.THERMOCHEMISTRY: _run_thermochemistry,
 }
 

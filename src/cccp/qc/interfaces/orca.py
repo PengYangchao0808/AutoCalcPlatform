@@ -29,6 +29,7 @@ from cccp.qc.interfaces.base import QCInterfaceBase, QCResult
 from cccp.qc.interfaces.constraints import (
     CoordinateConstraint,
     CoordinateSpec,
+    ReactionCoordinatePlan,
     orca_constraint_block,
 )
 from cccp.qc.interfaces.orca_ts import (
@@ -1361,8 +1362,8 @@ class ORCAInterface(QCInterfaceBase):
         self,
         coordinates: NDArray[np.float64],
         symbols: list[str],
-        scan_coordinate: CoordinateSpec,
-        points: int,
+        scan_coordinate: CoordinateSpec | None = None,
+        points: int | None = None,
         charge: int = 0,
         multiplicity: int = 1,
         output_dir: Path = None,
@@ -1373,6 +1374,7 @@ class ORCAInterface(QCInterfaceBase):
         solvent_model: str | None = None,
         use_scants: bool = True,
         full_scan: bool = True,
+        plan: ReactionCoordinatePlan | None = None,
         **kwargs,
     ) -> RelaxedScanResult:
         """Run an ORCA relaxed scan over one local coordinate.
@@ -1381,8 +1383,27 @@ class ORCAInterface(QCInterfaceBase):
         primitive; ORCA input text follows the relaxed-scan rendering used by
         the RPH reference implementation.
         """
-        if points < 2:
+        if points is not None and points < 2:
             raise ValueError("ORCA relaxed_scan requires points >= 2")
+        if plan is not None and len(plan.drive_coordinates()) > 1:
+            return self._run_synchronous_relaxed_scan(
+                coordinates,
+                symbols,
+                plan,
+                charge=charge,
+                multiplicity=multiplicity,
+                output_dir=output_dir,
+                output_name=output_name,
+                method=method,
+                basis=basis,
+                solvent=solvent,
+                solvent_model=solvent_model,
+                geom_maxiter=kwargs.pop("geom_maxiter", kwargs.pop("max_cycles", None)),
+                recalc_hess=kwargs.pop("recalc_hess", 0),
+                route_extras=kwargs.pop("route_extras", None),
+            )
+        if scan_coordinate is None or points is None:
+            raise ValueError("ORCA relaxed_scan requires one scan coordinate and points")
         if scan_coordinate.role == "monitor":
             raise ValueError("ORCA relaxed_scan requires a drive/freeze coordinate")
 
@@ -1484,6 +1505,130 @@ class ORCAInterface(QCInterfaceBase):
             scan_dir=output_dir,
             success=scan_success,
             message=message,
+        )
+
+    def _run_synchronous_relaxed_scan(
+        self,
+        coordinates: NDArray[np.float64],
+        symbols: list[str],
+        plan: ReactionCoordinatePlan,
+        *,
+        charge: int,
+        multiplicity: int,
+        output_dir: Path | None,
+        output_name: str,
+        method: str,
+        basis: str | None,
+        solvent: str | None,
+        solvent_model: str | None,
+        geom_maxiter: int | None,
+        recalc_hess: object,
+        route_extras: list[str] | None,
+    ) -> RelaxedScanResult:
+        """Run multiple driven coordinates at one shared progress value.
+
+        ORCA's native ``Scan`` block is intentionally limited to one
+        coordinate in this interface.  The generic four-atom double-bond
+        selection therefore uses one constrained optimization per frame,
+        placing both distance constraints in the same ``%geom`` block.
+        """
+        output_dir = Path(output_dir) if output_dir else Path.cwd()
+        ensure_dir(output_dir)
+        input_xyz = output_dir / f"{output_name}_start.xyz"
+        write_xyz(
+            input_xyz,
+            np.asarray(coordinates, dtype=float),
+            symbols,
+            title="ORCA synchronous relaxed scan start",
+        )
+
+        drive_coordinates = plan.drive_coordinates()
+        if not drive_coordinates:
+            raise ValueError("synchronous relaxed scan requires a drive coordinate")
+        eff_method = method or self.method or "GFN2-xTB"
+        eff_basis = (
+            basis
+            if basis is not None
+            else ("" if _is_orca_gfn_xtb_method(eff_method) else self.basis)
+        )
+        eff_solvent = solvent if solvent is not None else self.solvent
+        eff_solvent_model = (
+            solvent_model
+            if solvent_model is not None
+            else ("ALPB" if _is_orca_gfn_xtb_method(eff_method) else self.solvent_model)
+        )
+        resolved_route_extras, input_solvent, input_solvent_model = _orca_scan_route_settings(
+            eff_method,
+            eff_solvent,
+            eff_solvent_model,
+            False,
+            route_extras,
+        )
+
+        current_coordinates = np.asarray(coordinates, dtype=float)
+        result_points: list[RelaxedScanPoint] = []
+        for index in range(plan.points):
+            frame_dir = output_dir / f"frame_{index:03d}"
+            result = self.constrained_optimize(
+                current_coordinates,
+                symbols,
+                plan.frame_constraints(index),
+                charge=charge,
+                multiplicity=multiplicity,
+                output_dir=frame_dir,
+                output_name=output_name,
+                method=eff_method,
+                basis=eff_basis,
+                solvent=input_solvent,
+                solvent_model=input_solvent_model,
+                geom_maxiter=geom_maxiter,
+                recalc_hess=recalc_hess,
+                route_extras=resolved_route_extras,
+            )
+            targets = plan.coordinate_targets(index)
+            progress = index / max(plan.points - 1, 1)
+            if not result.success or result.coordinates is None:
+                result_points.append(
+                    RelaxedScanPoint(
+                        frame_index=index,
+                        progress=progress,
+                        coordinates=None,
+                        symbols=None,
+                        energy_hartree=None,
+                        success=False,
+                        coordinate_values=targets,
+                    )
+                )
+                return RelaxedScanResult(
+                    points=result_points,
+                    input_xyz=input_xyz,
+                    scan_dir=output_dir,
+                    success=False,
+                    message=(
+                        f"Synchronous ORCA scan failed at frame {index}: "
+                        f"{result.error_message or 'constrained optimization failed'}"
+                    ),
+                )
+
+            current_coordinates = np.asarray(result.coordinates, dtype=float)
+            result_points.append(
+                RelaxedScanPoint(
+                    frame_index=index,
+                    progress=progress,
+                    coordinates=current_coordinates,
+                    symbols=list(result.symbols or symbols),
+                    energy_hartree=result.energy,
+                    success=True,
+                    coordinate_values=targets,
+                )
+            )
+
+        return RelaxedScanResult(
+            points=result_points,
+            input_xyz=input_xyz,
+            scan_dir=output_dir,
+            success=True,
+            message="",
         )
 
     def parse_relaxed_scan_output(

@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import final
 
@@ -47,6 +47,7 @@ class BatchSinglePointExecutor:
         solvent: str | None = None,
         cache: bool = True,
         cache_profile: str = "singlepoint",
+        progress_callback: Callable[[int, int], None] | None = None,
         **sp_kwargs: object,
     ) -> None:
         self._frames = list(frames) if frames is not None else None
@@ -66,6 +67,7 @@ class BatchSinglePointExecutor:
         self._solvent = solvent
         self._cache = cache
         self._cache_profile = cache_profile
+        self._progress_callback = progress_callback
         self._sp_kwargs = dict(sp_kwargs)
 
     def run(
@@ -133,6 +135,7 @@ class BatchSinglePointExecutor:
                         config=self._config,
                         options=options,
                     ),
+                    progress_callback=self._progress_callback,
                 )
             )
         return BatchSinglePointResult(

@@ -6,7 +6,7 @@ Fidelity parameters inlined.
 
 Pipeline:
     structure / confsearch manifest / coordinate plan →
-    run_pes_scan → build energy profile → select candidates →
+    run_pes_scan (scan + energy profile + path-selection candidates) →
     write RESULT/structures/<candidate_id>.xyz +
     write RESULT/pes_search/pes_profile.json +
     register result_manifest products
@@ -16,17 +16,14 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from acp.calculations.pes.candidates import (
     PathCandidate,
     PathPoint,
     SearchResult,
-    select_candidates,
 )
 from acp.calculations.pes.contracts import (
     PesScanRequest,
@@ -34,7 +31,9 @@ from acp.calculations.pes.contracts import (
     StructureSource,
     build_default_protocol,
 )
-from acp.calculations.pes.scan import run_pes_scan
+from acp.calculations.pes.outputs import copy_xyz_atomic, persist_pes_outputs
+from acp.calculations.pes.scan import PES_SCAN_STAGES, run_pes_scan
+from acp.calculations.progress import ProgressReporter
 from cccp.utils.file_io import read_xyz
 
 logger = logging.getLogger(__name__)
@@ -46,17 +45,7 @@ PES_E_MANIFEST = "PES_E_MANIFEST"
 
 # ── frozen stage names (generic, used by scheduler stage_tasks) ─────────
 
-PES_SEARCH_STAGES: tuple[str, ...] = (
-    "prepare",
-    "materialize_input",
-    "validate_coordinate",
-    "run_relaxed_scan",
-    "extract_frames",
-    "run_single_points",
-    "build_profile",
-    "select_candidates",
-    "finalize",
-)
+PES_SEARCH_STAGES: tuple[str, ...] = PES_SCAN_STAGES
 
 
 # ── structured error ────────────────────────────────────────────────────
@@ -221,6 +210,7 @@ class PesSearchEngine:
         coordinate: ScanCoordinate | None = None,
         charge: int = 0,
         multiplicity: int = 1,
+        progress_reporter: ProgressReporter | None = None,
     ) -> PesSearchResult:
         """Execute the PES search pipeline.
 
@@ -296,6 +286,7 @@ class PesSearchEngine:
                 request=request,
                 output_dir=out_root,
                 config=self.config,
+                progress_reporter=progress_reporter,
             )
         except (ValueError, RuntimeError) as exc:
             return PesSearchResult(
@@ -311,49 +302,44 @@ class PesSearchEngine:
         ts_recs = scan_result.get("ts_recommendations", [])
         int_recs = scan_result.get("int_recommendations", [])
 
-        # Build PathPoint list for candidate selection
+        # Single source of truth: the persisted scan recommendations are
+        # mirrored as engine candidates (no second selection pass).
         path_points = _build_path_points(frames, profile)
-        candidates = select_candidates(
-            path_points,
-            energy_key="sp" if profile.get("energy_source") == "single_point" else "scan",
+        ts_candidates = _candidates_from_recommendations(ts_recs, kind="ts_seed", frames=frames)
+        int_candidates = _candidates_from_recommendations(
+            int_recs, kind="intermediate_seed", frames=frames
         )
-
-        # Separate TS and INT candidates
-        ts_candidates = [c for c in candidates if c.kind == "ts_seed"]
-        int_candidates = [c for c in candidates if c.kind == "intermediate_seed"]
 
         # Materialize candidate structures
         candidate_structures: dict[str, Path] = {}
-        scan_dir = out_root / "WORK" / "02_SEARCH"
+        scan_dir = Path(str(scan_result.get("scan_dir") or "")).resolve()
         for rec in ts_recs + int_recs:
-            candidate_id = rec.get("candidate_id", "")
-            geometry_path = rec.get("geometry_path", "")
-            if not geometry_path:
+            candidate_id = str(rec.get("candidate_id", ""))
+            geometry_path = str(rec.get("geometry_path", ""))
+            if not candidate_id or not geometry_path:
                 continue
             src = scan_dir / geometry_path
             if src.is_file():
                 dst = structures_dir / f"{candidate_id}.xyz"
-                _copy_xyz(src, dst)
+                copy_xyz_atomic(src, dst)
                 candidate_structures[candidate_id] = dst
 
-        # Write pes_profile.json
-        pes_profile_payload = {
-            "schema_version": "pes_profile_v1",
-            "coordinate": coordinate.to_dict(),
-            "profile": profile,
-            "quality": quality,
-            "ts_candidates": ts_recs,
-            "int_candidates": int_recs,
-            "frames_count": len(frames),
-            "manifest_source": str(confsearch_manifest) if confsearch_manifest else None,
-        }
-        pes_profile_path = pes_dir / "pes_profile.json"
-        _write_json_atomic(pes_profile_path, pes_profile_payload)
+        if progress_reporter is not None:
+            progress_reporter.start_stage("finalize")
+        pes_profile_path, result_manifest_path = persist_pes_outputs(
+            out_root,
+            scan_result=scan_result,
+            candidate_structures=candidate_structures,
+            manifest_source=str(confsearch_manifest) if confsearch_manifest else None,
+            status="completed",
+        )
+        if progress_reporter is not None:
+            progress_reporter.complete_stage("finalize")
 
         # Build search result
         search_result = SearchResult(
             points=path_points,
-            candidates=candidates,
+            candidates=ts_candidates + int_candidates,
             strategy="pes_engine",
             selected_ts_id=(ts_candidates[0].candidate_id if ts_candidates else None),
             selected_int_id=(int_candidates[0].candidate_id if int_candidates else None),
@@ -374,6 +360,8 @@ class PesSearchEngine:
                 "strategy": "pes_engine",
                 "search_result": search_result.to_dict(),
                 "manifest_source": (str(confsearch_manifest) if confsearch_manifest else None),
+                "scan_dir": str(scan_dir),
+                "result_manifest_path": str(result_manifest_path),
             },
         )
 
@@ -405,50 +393,33 @@ def _build_path_points(
     return points
 
 
-def _copy_xyz(src: Path, dst: Path) -> None:
-    """Atomically copy an XYZ file."""
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    handle = tempfile.NamedTemporaryFile(
-        dir=str(dst.parent),
-        suffix=".tmp",
-        delete=False,
-        mode="w",
-        encoding="utf-8",
-    )
-    try:
-        handle.write(src.read_text(encoding="utf-8"))
-        handle.close()
-        os.replace(handle.name, dst)
-    except Exception:
-        handle.close()
-        try:
-            os.unlink(handle.name)
-        except OSError:
-            pass
-        raise
-
-
-def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
-    """Write JSON atomically (temp + rename)."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    handle = tempfile.NamedTemporaryFile(
-        dir=str(path.parent),
-        suffix=".tmp",
-        delete=False,
-        mode="w",
-        encoding="utf-8",
-    )
-    try:
-        json.dump(payload, handle, indent=2, sort_keys=True, default=str)
-        handle.close()
-        os.replace(handle.name, path)
-    except Exception:
-        handle.close()
-        try:
-            os.unlink(handle.name)
-        except OSError:
-            pass
-        raise
+def _candidates_from_recommendations(
+    recommendations: list[dict[str, Any]],
+    *,
+    kind: Literal["ts_seed", "intermediate_seed"],
+    frames: list[dict[str, Any]],
+) -> list[PathCandidate]:
+    """Mirror persisted :class:`CandidateRecommendation` dicts as PathCandidates."""
+    progress_by_index = {
+        int(frame.get("index", i)): float(frame.get("actual_coordinate", 0.0))
+        for i, frame in enumerate(frames)
+    }
+    candidates: list[PathCandidate] = []
+    for rec in recommendations:
+        frame_index = int(rec.get("frame_index", -1))
+        if frame_index < 0:
+            continue
+        candidates.append(
+            PathCandidate(
+                candidate_id=str(rec.get("candidate_id", "")),
+                kind=kind,
+                point_id=f"p{frame_index:03d}",
+                reason=str(rec.get("reason") or ""),
+                progress=progress_by_index.get(frame_index, 0.0),
+                score=float(rec.get("score") or 0.0),
+            )
+        )
+    return candidates
 
 
 __all__ = [

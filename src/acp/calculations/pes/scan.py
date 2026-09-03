@@ -2,9 +2,29 @@
 
 Implements the scan pipeline:
 
-    prepare → validate_coordinate → compile_plan → run_relaxed_scan →
-    extract_frames → run_single_points → build_energy_profile →
-    recommend_candidates
+    prepare → validate_coordinate → materialize_input → run_relaxed_scan →
+    extract_frames → run_single_points → build_profile → select_candidates →
+    finalize
+
+The pipeline fails fast: a backend result with ``success=False`` aborts the
+run before frame extraction, so partial scan geometries are never promoted
+to frames, single points, or candidates.
+
+Candidate recommendation reuses the full path-selection policy from
+:mod:`acp.calculations.pes.path_selection` (endpoint guard, reaction-progress
+filter, knee detection, TS right-shift, INT plateau/midpoint, reactant-barrier
+and scaffold gates) for distance scans.  When the policy cannot resolve a seed
+(flat curves, gated candidates, incomplete profiles) the recommendation
+falls back to the self-contained peak/minimum heuristic and records the
+rejection reason in the scan-quality notes.
+
+Selection policy overrides are read from the merged ACP config under
+``pes.scan_selection`` (or the legacy ``step2.scan.selection`` block) and
+forwarded to :func:`policy_from_config`.  Recognised flat keys include
+``endpoint_exclusion_frames``, ``ts_min_prominence_kcal_mol``,
+``int_min_basin_prominence_kcal_mol``, ``min_reaction_progress`` and
+``ts_right_shift_override_A``; nested policy blocks (``knee``, ``ts_seed``,
+``int_plateau``, ``admission``) are accepted as well.
 
 Key migration changes vs bond_scan.py:
 - Uses ``get_backend("orca").relaxed_scan`` (not ``ORCAInterface`` directly)
@@ -27,6 +47,11 @@ import numpy as np
 import acp.backends
 from acp.backends.base import RelaxedScanCalculator
 from acp.calculations.batch.singlepoint import BatchSinglePointExecutor
+from acp.calculations.pes.atom_selection import (
+    FunctionalAtomSelection,
+    normalize_selection_kind,
+    parse_functional_atom_selection,
+)
 from acp.calculations.pes.contracts import (
     CandidateRecommendation,
     EnergyProfile,
@@ -37,9 +62,24 @@ from acp.calculations.pes.contracts import (
     ScanQuality,
     SinglePointSpec,
     StructureSource,
+    validate_scan_coordinates,
     validate_scan_protocol,
 )
-from cccp.qc.interfaces.constraints import ConstraintKind, CoordinateSpec
+from acp.calculations.pes.outputs import (
+    PES_SCAN_DIR_NAME,
+    PES_SCAN_RELATIVE_PATH,
+    PES_SCAN_STAGE,
+)
+from acp.calculations.pes.path_analysis import build_orca_scan_profile
+from acp.calculations.pes.path_selection import (
+    SeedSelection,
+    SelectionPolicy,
+    policy_from_config,
+    select_path_seeds,
+)
+from acp.calculations.progress import ProgressReporter
+from acp.storage.layout import TaskStorage
+from cccp.qc.interfaces.constraints import ConstraintKind, CoordinateSpec, ReactionCoordinatePlan
 from cccp.qc.interfaces.xtb_scan import RelaxedScanResult
 from cccp.utils.constants import HARTREE_TO_KCAL
 from cccp.utils.file_io import read_xyz, write_xyz
@@ -47,29 +87,35 @@ from cccp.utils.geometry_tools import GeometryUtils
 
 logger = logging.getLogger(__name__)
 
-SCAN_DIR_NAME = "pes_scan_001"
+SCAN_DIR_NAME = PES_SCAN_DIR_NAME
+"""Stable per-task PES scan directory name."""
 PES_SCAN_STAGES = (
     "prepare",
     "validate_coordinate",
-    "compile_plan",
+    "materialize_input",
     "run_relaxed_scan",
     "extract_frames",
     "run_single_points",
-    "build_energy_profile",
-    "recommend_candidates",
+    "build_profile",
+    "select_candidates",
+    "finalize",
 )
 
 
 # ── coordinate plan ────────────────────────────────────────────────────
 
 
-def build_coordinate_plan(coordinate: ScanCoordinate) -> CoordinateSpec:
+def build_coordinate_plan(
+    coordinate: ScanCoordinate,
+    *,
+    coordinate_id: str | None = None,
+) -> CoordinateSpec:
     """Build a 0-based :class:`CoordinateSpec` from a :class:`ScanCoordinate`."""
     kind = coordinate.kind
     if not _is_constraint_kind(kind):
         raise ValueError(f"Unsupported scan coordinate kind: {kind!r}")
     return CoordinateSpec(
-        id=kind,
+        id=coordinate_id or kind,
         kind=kind,
         atoms=tuple(int(atom) for atom in coordinate.atoms),
         role="drive",
@@ -91,6 +137,7 @@ def run_pes_scan(
     request: dict[str, Any] | PesScanRequest,
     output_dir: Path | str,
     config: dict[str, Any] | None = None,
+    progress_reporter: ProgressReporter | None = None,
 ) -> dict[str, Any]:
     """Run a one-dimensional PES relaxed scan.
 
@@ -98,6 +145,7 @@ def run_pes_scan(
         request: PesScanRequest payload or dict.
         output_dir: Task output root.
         config: Merged ACP config dict.
+        progress_reporter: Optional progress reporter for scheduler observation.
 
     Returns:
         The scan result payload with frames, profile, and candidates.
@@ -112,64 +160,140 @@ def run_pes_scan(
             f"request.mode must be 'bond_length_scan' or 'coordinate_scan', got {req.mode!r}"
         )
 
-    cfg = config or {}
-    out_root = Path(output_dir).resolve()
-    work_root = out_root / "WORK"
-    scan_dir = work_root / "02_SEARCH" / SCAN_DIR_NAME
-    scan_dir.mkdir(parents=True, exist_ok=True)
+    if progress_reporter is not None:
+        progress_reporter.initialize()
 
-    # Validate
-    validate_scan_protocol(req.coordinate, req.protocol)
-    coordinate = req.coordinate
-    protocol = req.protocol
+    try:
+        cfg = config or {}
+        out_root = Path(output_dir).resolve()
+        work_root = out_root / "WORK"
 
-    # Materialise structure
-    coords, symbols, charge, multiplicity = _materialize_structure(req.source, work_root, cfg)
-    for index in coordinate.atoms:
-        if index < 0 or index >= len(symbols):
-            raise ValueError(
-                f"Scan atom index {index} is out of range (structure has {len(symbols)} atoms)"
-            )
+        # -- prepare --
+        if progress_reporter is not None:
+            progress_reporter.start_stage("prepare")
+        scan_dir = TaskStorage(out_root).stage_dir(PES_SCAN_STAGE, SCAN_DIR_NAME)
+        scan_dir.mkdir(parents=True, exist_ok=True)
+        if progress_reporter is not None:
+            progress_reporter.complete_stage("prepare")
 
-    input_xyz = scan_dir / "input.xyz"
-    write_xyz(input_xyz, coords, symbols, title="PES scan input")
+        # -- validate_coordinate --
+        if progress_reporter is not None:
+            progress_reporter.start_stage("validate_coordinate")
+        scan_coordinates = req.scan_coordinates
+        coordinate = scan_coordinates[0]
+        validate_scan_protocol(coordinate, req.protocol)
+        validate_scan_coordinates(scan_coordinates)
+        protocol = req.protocol
+        if progress_reporter is not None:
+            progress_reporter.complete_stage("validate_coordinate")
 
-    # Run relaxed scan via backend
-    scan_result = _run_relaxed_scan_backend(
-        coords=coords,
-        symbols=symbols,
-        charge=charge,
-        multiplicity=multiplicity,
-        coordinate=coordinate,
-        protocol=protocol,
-        scan_dir=scan_dir,
-        cfg=cfg,
-    )
-    if not scan_result.success and not scan_result.points:
-        raise RuntimeError(f"Relaxed scan failed: {scan_result.message}")
+        # -- materialize_input --
+        if progress_reporter is not None:
+            progress_reporter.start_stage("materialize_input")
+        coords, symbols, charge, multiplicity = _materialize_structure(req.source, work_root, cfg)
+        for scan_coordinate in scan_coordinates:
+            for index in scan_coordinate.atoms:
+                if index < 0 or index >= len(symbols):
+                    raise ValueError(
+                        f"Scan atom index {index} is out of range "
+                        f"(structure has {len(symbols)} atoms)"
+                    )
+        selection = _validate_functional_selection(
+            req.selection,
+            scan_coordinates,
+            symbols,
+            coords,
+        )
+        input_xyz = scan_dir / "input.xyz"
+        write_xyz(input_xyz, coords, symbols, title="PES scan input")
+        if progress_reporter is not None:
+            progress_reporter.complete_stage("materialize_input")
 
-    # Extract frames
-    frames = _extract_frames(scan_result, coordinate, scan_dir)
+        # -- run_relaxed_scan --
+        if progress_reporter is not None:
+            progress_reporter.start_stage("run_relaxed_scan")
+        scan_result = _run_relaxed_scan_backend(
+            coords=coords,
+            symbols=symbols,
+            charge=charge,
+            multiplicity=multiplicity,
+            coordinates=scan_coordinates,
+            protocol=protocol,
+            scan_dir=scan_dir,
+            cfg=cfg,
+        )
+        if not scan_result.success:
+            # Fail fast: partial scan geometries must never reach frame
+            # extraction, single points, or candidate recommendation.  The
+            # per-frame artifacts already written by the backend stay on disk
+            # as diagnostics only.
+            raise RuntimeError(f"Relaxed scan failed: {scan_result.message}")
+        if progress_reporter is not None:
+            progress_reporter.complete_stage("run_relaxed_scan")
 
-    # Run single points (delegates to BatchSinglePointExecutor when available)
-    sp_spec = protocol.single_point
-    _run_single_points(frames, charge, multiplicity, sp_spec, scan_dir, cfg)
+        # -- extract_frames --
+        if progress_reporter is not None:
+            progress_reporter.start_stage("extract_frames")
+        frames = _extract_frames(
+            scan_result,
+            coordinate,
+            scan_dir,
+            reporter=progress_reporter,
+            coordinates=scan_coordinates,
+        )
+        if progress_reporter is not None:
+            progress_reporter.complete_stage("extract_frames")
 
-    # Build energy profile
-    profile = _build_energy_profile(frames, sp_spec)
+        # -- run_single_points --
+        if progress_reporter is not None:
+            progress_reporter.start_stage("run_single_points")
+        sp_spec = protocol.single_point
+        _run_single_points(
+            frames,
+            charge,
+            multiplicity,
+            sp_spec,
+            scan_dir,
+            cfg,
+            reporter=progress_reporter,
+        )
+        if progress_reporter is not None:
+            progress_reporter.complete_stage("run_single_points")
 
-    # Recommend candidates
-    ts_recs, int_recs, quality = _recommend_candidates(frames, coordinate, profile, cfg)
+        # -- build_profile --
+        if progress_reporter is not None:
+            progress_reporter.start_stage("build_profile")
+        profile = _build_energy_profile(frames, sp_spec)
+        if progress_reporter is not None:
+            progress_reporter.complete_stage("build_profile")
+
+        # -- select_candidates --
+        if progress_reporter is not None:
+            progress_reporter.start_stage("select_candidates")
+        ts_recs, int_recs, quality = _recommend_candidates(
+            frames, coordinate, profile, cfg, scan_dir
+        )
+        if progress_reporter is not None:
+            progress_reporter.complete_stage("select_candidates")
+
+    except Exception as exc:
+        if progress_reporter is not None:
+            progress_reporter.fail_stage(progress_reporter.current_stage or "unknown", str(exc))
+        raise
 
     return {
+        "mode": req.mode,
         "frames": [f.to_dict() for f in frames],
         "profile": profile.to_dict(),
         "quality": quality.to_dict(),
         "ts_recommendations": [r.to_dict() for r in ts_recs],
         "int_recommendations": [r.to_dict() for r in int_recs],
         "coordinate": coordinate.to_dict(),
+        "coordinates": [item.to_dict() for item in scan_coordinates],
+        "selection": selection,
         "protocol": protocol.to_dict(),
         "scan_dir": str(scan_dir),
+        "scan_dir_rel": PES_SCAN_RELATIVE_PATH,
     }
 
 
@@ -241,7 +365,8 @@ def _run_relaxed_scan_backend(
     symbols: list[str],
     charge: int,
     multiplicity: int,
-    coordinate: ScanCoordinate,
+    coordinate: ScanCoordinate | None = None,
+    coordinates: tuple[ScanCoordinate, ...] | None = None,
     protocol: ScanProtocol,
     scan_dir: Path,
     cfg: dict[str, Any],
@@ -255,17 +380,26 @@ def _run_relaxed_scan_backend(
     backend = backend_ref(cfg) if isinstance(backend_ref, type) else backend_ref
     if not isinstance(backend, RelaxedScanCalculator):
         raise TypeError(f"Backend {protocol.scan_driver.software!r} does not support relaxed scans")
-    spec = build_coordinate_plan(coordinate)
+    scan_coordinates = tuple(coordinates or ((coordinate,) if coordinate is not None else ()))
+    if not scan_coordinates:
+        raise ValueError("at least one scan coordinate is required")
+    specs = tuple(
+        build_coordinate_plan(
+            item,
+            coordinate_id=(item.kind if len(scan_coordinates) == 1 else f"coordinate_{index + 1}"),
+        )
+        for index, item in enumerate(scan_coordinates)
+    )
+    plan = ReactionCoordinatePlan(coordinates=specs, points=scan_coordinates[0].n_points)
     nproc = int((cfg.get("resources") or {}).get("nproc") or 1)
     result = backend.relaxed_scan(
         coords,
         symbols,
         output_dir=scan_dir,
-        plan=spec,
+        plan=plan,
         charge=charge,
         multiplicity=multiplicity,
         method=protocol.scan_optimizer.method,
-        points=coordinate.n_points,
         nprocs=nproc,
         use_scants=bool(protocol.scan_driver.use_scants),
         full_scan=bool(protocol.scan_driver.full_scan),
@@ -285,11 +419,20 @@ def _extract_frames(
     scan_result: RelaxedScanResult,
     coordinate: ScanCoordinate,
     scan_dir: Path,
+    reporter: ProgressReporter | None = None,
+    *,
+    coordinates: tuple[ScanCoordinate, ...] | None = None,
 ) -> list[ScanFrame]:
     """Build per-frame records from the scan result."""
     frames: list[ScanFrame] = []
     frames_dir = scan_dir / "scan_frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
+    total_points = len(scan_result.points)
+    scan_coordinates = coordinates or (coordinate,)
+    coordinate_ids = [
+        item.kind if len(scan_coordinates) == 1 else f"coordinate_{index + 1}"
+        for index, item in enumerate(scan_coordinates)
+    ]
     for point in scan_result.points:
         index = int(point.frame_index)
         frame_path = frames_dir / f"frame_{index:03d}.xyz"
@@ -301,14 +444,32 @@ def _extract_frames(
                 [str(symbol) for symbol in (point.symbols or [])],
                 title=f"scan frame {index} target={point.progress:.4f}",
             )
-            try:
-                actual = _measure_scan_coordinate(coords, coordinate)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Scan coordinate computation failed for frame %d: %s", index, exc)
-                actual = float("nan")
+            actual_values: dict[str, float] = {}
+            for coordinate_item, coordinate_id in zip(scan_coordinates, coordinate_ids):
+                try:
+                    actual_values[coordinate_id] = _measure_scan_coordinate(coords, coordinate_item)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning(
+                        "Scan coordinate computation failed for frame %d (%s): %s",
+                        index,
+                        coordinate_id,
+                        exc,
+                    )
+                    actual_values[coordinate_id] = float("nan")
         else:
-            actual = float("nan")
-        target = float(point.coordinate_values.get(coordinate.kind, point.progress))
+            actual_values = {coordinate_id: float("nan") for coordinate_id in coordinate_ids}
+        target_values = {
+            coordinate_id: float(
+                point.coordinate_values.get(
+                    coordinate_id,
+                    _interpolated_coordinate_target(coordinate_item, index, total_points),
+                )
+            )
+            for coordinate_item, coordinate_id in zip(scan_coordinates, coordinate_ids)
+        }
+        primary_id = coordinate_ids[0]
+        target = target_values[primary_id]
+        actual = actual_values[primary_id]
         unit = "angstrom" if coordinate.kind == "distance" else "degree"
         frames.append(
             ScanFrame(
@@ -322,9 +483,70 @@ def _extract_frames(
                 optimization_converged=bool(point.success),
                 single_point_status="pending",
                 source_log="scan.out",
+                target_coordinates=target_values,
+                actual_coordinates=actual_values,
             )
         )
+        if reporter is not None:
+            reporter.update_stage("extract_frames", completed=len(frames), total=total_points)
     return frames
+
+
+def _interpolated_coordinate_target(
+    coordinate: ScanCoordinate,
+    index: int,
+    total_points: int,
+) -> float:
+    """Rebuild a coordinate target when a backend omitted its target ledger."""
+    if coordinate.start is None or coordinate.end is None:
+        return float(index / max(total_points - 1, 1))
+    progress = index / max(total_points - 1, 1)
+    return float(coordinate.start + progress * (coordinate.end - coordinate.start))
+
+
+def _validate_functional_selection(
+    selection_payload: dict[str, Any],
+    coordinates: tuple[ScanCoordinate, ...],
+    symbols: list[str],
+    geometry: np.ndarray[Any, Any],
+) -> dict[str, Any]:
+    """Validate the optional generic selector and return normalized metadata."""
+    payload = dict(selection_payload or {})
+    raw_kind = payload.get("kind")
+    if raw_kind is None and len(coordinates) == 1:
+        return payload
+    selection_kind = normalize_selection_kind(raw_kind or "double_bond_scan")
+    raw_atoms = payload.get("atom_indices") or payload.get("atoms")
+    if raw_atoms is None:
+        raw_atoms = [atom for item in coordinates for atom in item.atoms]
+    parsed: FunctionalAtomSelection = parse_functional_atom_selection(
+        selection_kind,
+        raw_atoms,
+        symbols,
+        geometry,
+    )
+    if selection_kind == "double_bond_scan":
+        if len(coordinates) != 2 or any(item.kind != "distance" for item in coordinates):
+            raise ValueError("double_bond_scan requires exactly two distance coordinates")
+        expected_pairs = tuple(tuple(group) for group in parsed.groups)
+        actual_pairs = tuple(tuple(item.atoms) for item in coordinates)
+        if {frozenset(pair) for pair in expected_pairs} != {
+            frozenset(pair) for pair in actual_pairs
+        }:
+            raise ValueError("double-bond scan coordinates must match the selected atom groups")
+    else:
+        expected_kind = {
+            "bond_stretch": "distance",
+            "angle": "angle",
+            "dihedral": "dihedral",
+        }[selection_kind]
+        if len(coordinates) != 1 or coordinates[0].kind != expected_kind:
+            raise ValueError(f"selection.kind='{selection_kind}' does not match coordinate")
+        if tuple(coordinates[0].atoms) != parsed.atoms:
+            raise ValueError("coordinate atoms must preserve the selected atom order")
+    normalized = dict(payload)
+    normalized.update(parsed.to_dict())
+    return normalized
 
 
 def _measure_scan_coordinate(coords: np.ndarray[Any, Any], coordinate: ScanCoordinate) -> float:
@@ -348,6 +570,7 @@ def _run_single_points(
     sp_spec: SinglePointSpec,
     scan_dir: Path,
     cfg: dict[str, Any],
+    reporter: ProgressReporter | None = None,
 ) -> None:
     """Run one cached, isolated single point per extracted scan frame."""
     if not sp_spec.enabled:
@@ -355,6 +578,19 @@ def _run_single_points(
             frames[i] = replace(frame, single_point_status="skipped")
         return
 
+    sp_callback = None
+    if reporter is not None:
+        n_frames = len(frames)
+
+        def sp_callback(done: int, total: int) -> None:
+            reporter.update_stage("run_single_points", completed=done, total=n_frames)
+
+    for frame in frames:
+        if not frame.geometry_path:
+            raise RuntimeError(
+                f"scan frame {frame.index} has no geometry file; "
+                "cannot run single points on an incomplete scan"
+            )
     frame_paths = [scan_dir / frame.geometry_path for frame in frames]
     result = BatchSinglePointExecutor(
         frames=frame_paths,
@@ -375,6 +611,7 @@ def _run_single_points(
         aux_c_basis=sp_spec.aux_c_basis,
         grid=sp_spec.grid,
         scf_convergence=sp_spec.scf_convergence,
+        progress_callback=sp_callback,
     ).run()
 
     for i, frame in enumerate(frames):
@@ -439,12 +676,13 @@ def _recommend_candidates(
     coordinate: ScanCoordinate,
     profile: EnergyProfile,
     cfg: dict[str, Any],
+    scan_dir: Path,
 ) -> tuple[list[CandidateRecommendation], list[CandidateRecommendation], ScanQuality]:
     """Recommend TS/INT initial guesses."""
     if coordinate.kind != "distance":
-        return _recommend_coordinate_candidates(frames, coordinate, profile)
+        return _recommend_coordinate_candidates(frames, coordinate, profile, cfg)
 
-    return _recommend_bond_candidates(frames, coordinate, profile, cfg)
+    return _recommend_bond_candidates(frames, coordinate, profile, cfg, scan_dir)
 
 
 def _recommend_bond_candidates(
@@ -452,12 +690,15 @@ def _recommend_bond_candidates(
     coordinate: ScanCoordinate,
     profile: EnergyProfile,
     cfg: dict[str, Any],
+    scan_dir: Path,
 ) -> tuple[list[CandidateRecommendation], list[CandidateRecommendation], ScanQuality]:
     """Recommend candidates for bond-length scans.
 
-    Self-contained implementation (no mechanism imports).  Identifies the
-    highest-energy frame as the TS guess and the deepest minimum on each
-    side as intermediate guesses.
+    Primary path: the full :func:`select_path_seeds` policy (endpoint guard,
+    reaction-progress filter, knee detection, TS right shift, INT
+    plateau/midpoint, barrier and scaffold gates).  When the policy defers
+    (``resolution == "unresolved"``) the self-contained peak/minimum
+    heuristic takes over and the rejection reason is recorded in the notes.
     """
     energies = list(profile.raw_hartree)
     notes: list[str] = []
@@ -469,67 +710,31 @@ def _recommend_bond_candidates(
     if any(not frame.optimization_converged for frame in frames):
         notes.append("non_converged_frames")
 
+    policy = policy_from_config(_selection_config(cfg))
+    selection = _select_distance_seeds(frames, coordinate, profile, scan_dir, policy)
+
     ts_recs: list[CandidateRecommendation] = []
     int_recs: list[CandidateRecommendation] = []
+    policy_resolved = (
+        selection is not None
+        and selection.resolution != "unresolved"
+        and selection.ts_search_seed is not None
+    )
+    if policy_resolved and selection is not None:
+        notes.append("distance_selection_knee_shift_v1")
+        ts_recs = _ts_recommendation_from_seed(selection, frames)
+        int_recs = _int_recommendation_from_seed(selection, frames, notes)
+    else:
+        rejection_reason = None if selection is None else selection.rejection_reason
+        notes.append(f"distance_selection_fallback:{rejection_reason or 'no_seed'}")
+        ts_recs, int_recs = _fallback_bond_recommendations(frames, energies, notes)
+
     needs_review = False
-
-    # Find TS: highest energy frame (excluding None)
-    energy_frames = [(i, e) for i, e in enumerate(energies) if e is not None]
-    if energy_frames:
-        peak_idx, peak_energy = max(energy_frames, key=lambda x: x[1])
-        peak_frame = frames[peak_idx]
-        confidence = "high"
-        if peak_idx == 0 or peak_idx == len(frames) - 1:
-            confidence = "low"
-            needs_review = True
-            notes.append("ts_at_endpoint")
-
-        ts_recs.append(
-            CandidateRecommendation(
-                candidate_id=f"ts_guess_{peak_idx + 1:03d}",
-                kind="ts",
-                frame_index=peak_frame.index,
-                geometry_path=peak_frame.geometry_path,
-                score=_confidence_score(confidence),
-                confidence=confidence,
-                evidence={
-                    "peak_index": peak_idx,
-                    "peak_energy_hartree": peak_energy,
-                    "total_frames": len(frames),
-                },
-                reason="Highest energy frame on scan profile — suggest coarse TS optimization",
-            )
-        )
-        if confidence == "low":
-            needs_review = True
-            notes.append("low_confidence_ts_candidate")
-
-        # Find intermediates: deepest minima on each side of the peak
-        left_min = _find_minimum(energy_frames[:peak_idx])
-        right_min = _find_minimum(energy_frames[peak_idx + 1 :])
-        for label, min_info in [("left", left_min), ("right", right_min)]:
-            if min_info is None:
-                continue
-            min_idx, min_energy = min_info
-            min_frame = frames[min_idx]
-            depth = peak_energy - min_energy
-            int_confidence = "medium" if depth > 0.001 else "low"
-            int_recs.append(
-                CandidateRecommendation(
-                    candidate_id=f"int_guess_{min_idx + 1:03d}",
-                    kind="intermediate",
-                    frame_index=min_frame.index,
-                    geometry_path=min_frame.geometry_path,
-                    score=_confidence_score(int_confidence),
-                    confidence=int_confidence,
-                    evidence={
-                        "side": label,
-                        "depth_hartree": depth,
-                        "ts_index": peak_idx,
-                    },
-                    reason=f"Energy minimum on {label} side of TS — suggest coarse minimum optimization",
-                )
-            )
+    if any(rec.confidence == "low" for rec in ts_recs):
+        needs_review = True
+        notes.append("low_confidence_ts_candidate")
+    if not policy_resolved:
+        needs_review = True
 
     complete = len(frames) >= 3 and all(value is not None for value in energies)
     if not complete:
@@ -552,6 +757,205 @@ def _recommend_bond_candidates(
     return ts_recs, int_recs, quality
 
 
+def _select_distance_seeds(
+    frames: list[ScanFrame],
+    coordinate: ScanCoordinate,
+    profile: EnergyProfile,
+    scan_dir: Path,
+    policy: SelectionPolicy,
+) -> SeedSelection | None:
+    """Run the path-selection policy over the scan profile.
+
+    Frame 0 (the scan-start/input geometry side) is treated as the reactant
+    reference end, so the reactant-side tail is endpoint-excluded and the
+    barrier is measured from the input geometry.  Returns ``None`` when the
+    profile cannot be built (missing frames or reference geometry).
+    """
+    if len(frames) < 3:
+        return None
+    product_xyz = scan_dir / "input.xyz"
+    if not product_xyz.is_file():
+        return None
+    frame_paths: list[Path] = []
+    for frame in frames:
+        if not frame.geometry_path:
+            return None
+        frame_paths.append(scan_dir / frame.geometry_path)
+
+    path_profile = build_orca_scan_profile(
+        frames=frame_paths,
+        energies_hartree=list(profile.raw_hartree),
+        forming_bonds=[(int(atom_i), int(atom_j)) for atom_i, atom_j in [coordinate.atoms[:2]]],
+        product_xyz=product_xyz,
+        energy_source=str(profile.energy_source),
+        endpoint_direction="start",
+        source_provenance={
+            "pipeline": "run_pes_scan",
+            "coordinate": coordinate.to_dict(),
+        },
+    )
+    return select_path_seeds(path_profile, policy)
+
+
+def _ts_recommendation_from_seed(
+    selection: SeedSelection,
+    frames: list[ScanFrame],
+) -> list[CandidateRecommendation]:
+    seed = dict(selection.ts_search_seed or {})
+    frame_index = int(seed.get("frame_index", -1))
+    if frame_index < 0 or frame_index >= len(frames):
+        return []
+    frame = frames[frame_index]
+    confidence = str(seed.get("confidence") or "low")
+    diagnostics = dict(selection.diagnostics)
+    evidence: dict[str, Any] = {
+        "selection_algorithm": str(diagnostics.get("selection_algorithm") or ""),
+        "selection_mode": str(seed.get("selection_mode") or ""),
+        "peak_index": frame_index,
+        "total_frames": len(frames),
+        "knee_frame_index": diagnostics.get("knee_frame_index"),
+        "knee_anchor_type": diagnostics.get("knee_anchor_type"),
+        "energy_peak_index": diagnostics.get("energy_peak_index"),
+        "ts_right_shift_applied_A": diagnostics.get("ts_right_shift_applied_A"),
+        "barrier_from_reactant_kcal_mol": diagnostics.get("barrier_from_reactant_kcal_mol"),
+        "knee_evidence": selection.knee_evidence,
+        "endpoint_evidence": selection.endpoint_evidence,
+        "seed_selection": selection.to_dict(),
+    }
+    anchor = str(diagnostics.get("knee_anchor_type") or "knee")
+    return [
+        CandidateRecommendation(
+            candidate_id=f"ts_guess_{frame.index + 1:03d}",
+            kind="ts",
+            frame_index=frame.index,
+            geometry_path=frame.geometry_path,
+            score=_confidence_score(confidence),
+            confidence=confidence,
+            evidence=evidence,
+            reason=f"Knee-shifted TS seed on scan profile ({anchor}) — "
+            "suggest coarse TS optimization",
+        )
+    ]
+
+
+_INT_CONFIDENCE_BY_MODE: dict[str, str] = {
+    "stretch_plateau": "medium",
+    "ts_to_effective_endpoint_midpoint": "low",
+}
+
+
+def _int_recommendation_from_seed(
+    selection: SeedSelection,
+    frames: list[ScanFrame],
+    notes: list[str],
+) -> list[CandidateRecommendation]:
+    seed = dict(selection.int_search_seed or {})
+    if not seed:
+        return []
+    if bool(seed.get("shared_with_ts")):
+        notes.append("int_shared_ts_fallback")
+        return []
+    frame_index = int(seed.get("frame_index", -1))
+    if frame_index < 0 or frame_index >= len(frames):
+        return []
+    frame = frames[frame_index]
+    mode = str(seed.get("selection_mode") or "")
+    confidence = _INT_CONFIDENCE_BY_MODE.get(mode, "low")
+    evidence: dict[str, Any] = {
+        "side": "right",
+        "selection_mode": mode,
+        "ts_index": dict(selection.diagnostics).get("ts_frame_index"),
+        "seed_selection": selection.to_dict(),
+    }
+    reasons = {
+        "stretch_plateau": "Energy plateau after TS on scan profile — "
+        "suggest coarse minimum optimization",
+        "ts_to_effective_endpoint_midpoint": "Midpoint seed between TS and scan endpoint — "
+        "suggest coarse minimum optimization",
+    }
+    return [
+        CandidateRecommendation(
+            candidate_id=f"int_guess_{frame.index + 1:03d}",
+            kind="intermediate",
+            frame_index=frame.index,
+            geometry_path=frame.geometry_path,
+            score=_confidence_score(confidence),
+            confidence=confidence,
+            evidence=evidence,
+            reason=reasons.get(mode, "Intermediate seed from path-selection policy"),
+        )
+    ]
+
+
+def _fallback_bond_recommendations(
+    frames: list[ScanFrame],
+    energies: list[float | None],
+    notes: list[str],
+) -> tuple[list[CandidateRecommendation], list[CandidateRecommendation]]:
+    """Peak + deepest-side-minimum heuristic for profiles the policy defers."""
+    ts_recs: list[CandidateRecommendation] = []
+    int_recs: list[CandidateRecommendation] = []
+
+    energy_frames = [(i, e) for i, e in enumerate(energies) if e is not None]
+    if not energy_frames:
+        return ts_recs, int_recs
+
+    peak_idx, peak_energy = max(energy_frames, key=lambda x: x[1])
+    peak_frame = frames[peak_idx]
+    confidence = "high"
+    if peak_idx == 0 or peak_idx == len(frames) - 1:
+        confidence = "low"
+        notes.append("ts_at_endpoint")
+
+    ts_recs.append(
+        CandidateRecommendation(
+            candidate_id=f"ts_guess_{peak_idx + 1:03d}",
+            kind="ts",
+            frame_index=peak_frame.index,
+            geometry_path=peak_frame.geometry_path,
+            score=_confidence_score(confidence),
+            confidence=confidence,
+            evidence={
+                "peak_index": peak_idx,
+                "peak_energy_hartree": peak_energy,
+                "total_frames": len(frames),
+            },
+            reason="Highest energy frame on scan profile — suggest coarse TS optimization",
+        )
+    )
+    if confidence == "low":
+        notes.append("low_confidence_ts_candidate")
+
+    left_min = _find_minimum(energy_frames[:peak_idx])
+    right_min = _find_minimum(energy_frames[peak_idx + 1 :])
+    for label, min_info in [("left", left_min), ("right", right_min)]:
+        if min_info is None:
+            continue
+        min_idx, min_energy = min_info
+        min_frame = frames[min_idx]
+        depth = peak_energy - min_energy
+        int_confidence = "medium" if depth > 0.001 else "low"
+        int_recs.append(
+            CandidateRecommendation(
+                candidate_id=f"int_guess_{min_idx + 1:03d}",
+                kind="intermediate",
+                frame_index=min_frame.index,
+                geometry_path=min_frame.geometry_path,
+                score=_confidence_score(int_confidence),
+                confidence=int_confidence,
+                evidence={
+                    "side": label,
+                    "depth_hartree": depth,
+                    "ts_index": peak_idx,
+                },
+                reason=(
+                    f"Energy minimum on {label} side of TS — suggest coarse minimum optimization"
+                ),
+            )
+        )
+    return ts_recs, int_recs
+
+
 def _find_minimum(
     energy_frames: list[tuple[int, float]],
 ) -> tuple[int, float] | None:
@@ -564,13 +968,27 @@ def _recommend_coordinate_candidates(
     frames: list[ScanFrame],
     coordinate: ScanCoordinate,
     profile: EnergyProfile,
+    cfg: dict[str, Any],
 ) -> tuple[list[CandidateRecommendation], list[CandidateRecommendation], ScanQuality]:
-    """Recommend extrema for angle/dihedral scans."""
+    """Recommend extrema for angle/dihedral scans.
+
+    Local-extrema heuristic ranked by prominence; candidate ids are rank
+    based (``ts_guess_001`` is the most prominent peak) and the confidence
+    thresholds come from the scan-selection config (kcal/mol, converted to
+    Hartree).
+    """
     energies = list(profile.raw_hartree)
     usable = [value for value in energies if value is not None]
     notes = ["coordinate_scan_extrema_heuristic"]
-    ts_rows: list[CandidateRecommendation] = []
-    int_rows: list[CandidateRecommendation] = []
+    selection_values = _selection_config(cfg)
+    ts_min_hartree = (
+        float(selection_values.get("ts_min_prominence_kcal_mol", 0.40)) / HARTREE_TO_KCAL
+    )
+    int_min_hartree = (
+        float(selection_values.get("int_min_basin_prominence_kcal_mol", 0.50)) / HARTREE_TO_KCAL
+    )
+    ts_hits: list[tuple[int, float]] = []
+    int_hits: list[tuple[int, float]] = []
     for index in range(1, len(frames) - 1):
         energy = energies[index]
         left = energies[index - 1]
@@ -578,45 +996,47 @@ def _recommend_coordinate_candidates(
         if energy is None or left is None or right is None:
             continue
         if energy > left and energy >= right:
-            prominence = float(energy - max(left, right))
-            ts_rows.append(
-                CandidateRecommendation(
-                    candidate_id=f"ts_guess_{len(ts_rows) + 1:03d}",
-                    kind="ts",
-                    frame_index=frames[index].index,
-                    geometry_path=frames[index].geometry_path,
-                    score=prominence,
-                    confidence="medium" if prominence >= 0.0005 else "low",
-                    evidence={
-                        "coordinate_kind": coordinate.kind,
-                        "coordinate_value": frames[index].actual_coordinate,
-                        "prominence_hartree": prominence,
-                    },
-                    reason=f"Local energy peak ({coordinate.kind} scan)",
-                )
-            )
+            ts_hits.append((index, float(energy - max(left, right))))
         if energy < left and energy <= right:
-            depth = float(min(left, right) - energy)
-            int_rows.append(
-                CandidateRecommendation(
-                    candidate_id=f"int_guess_{len(int_rows) + 1:03d}",
-                    kind="intermediate",
-                    frame_index=frames[index].index,
-                    geometry_path=frames[index].geometry_path,
-                    score=depth,
-                    confidence="medium" if depth >= 0.0005 else "low",
-                    evidence={
-                        "coordinate_kind": coordinate.kind,
-                        "coordinate_value": frames[index].actual_coordinate,
-                        "basin_depth_hartree": depth,
-                    },
-                    reason=f"Local energy valley ({coordinate.kind} scan)",
-                )
-            )
-    ts_rows.sort(key=lambda row: row.score, reverse=True)
-    int_rows.sort(key=lambda row: row.score, reverse=True)
-    ts_rows = ts_rows[:5]
-    int_rows = int_rows[:5]
+            int_hits.append((index, float(min(left, right) - energy)))
+    ts_hits.sort(key=lambda item: item[1], reverse=True)
+    int_hits.sort(key=lambda item: item[1], reverse=True)
+    ts_rows = [
+        CandidateRecommendation(
+            candidate_id=f"ts_guess_{rank:03d}",
+            kind="ts",
+            frame_index=frames[index].index,
+            geometry_path=frames[index].geometry_path,
+            score=prominence,
+            confidence="medium" if prominence >= ts_min_hartree else "low",
+            evidence={
+                "coordinate_kind": coordinate.kind,
+                "coordinate_value": frames[index].actual_coordinate,
+                "prominence_hartree": prominence,
+                "rank": rank,
+            },
+            reason=f"Local energy peak ({coordinate.kind} scan, rank {rank})",
+        )
+        for rank, (index, prominence) in enumerate(ts_hits[:5], start=1)
+    ]
+    int_rows = [
+        CandidateRecommendation(
+            candidate_id=f"int_guess_{rank:03d}",
+            kind="intermediate",
+            frame_index=frames[index].index,
+            geometry_path=frames[index].geometry_path,
+            score=depth,
+            confidence="medium" if depth >= int_min_hartree else "low",
+            evidence={
+                "coordinate_kind": coordinate.kind,
+                "coordinate_value": frames[index].actual_coordinate,
+                "basin_depth_hartree": depth,
+                "rank": rank,
+            },
+            reason=f"Local energy valley ({coordinate.kind} scan, rank {rank})",
+        )
+        for rank, (index, depth) in enumerate(int_hits[:5], start=1)
+    ]
     if not usable:
         notes.append("no_energies")
     if profile.sp_incomplete:
@@ -639,15 +1059,31 @@ def _recommend_coordinate_candidates(
     return ts_rows, int_rows, quality
 
 
+_SELECTION_DEFAULTS: dict[str, Any] = {
+    "endpoint_exclusion_frames": 2,
+    "ts_min_prominence_kcal_mol": 0.40,
+    "int_min_basin_prominence_kcal_mol": 0.50,
+    "min_reaction_progress": 0.30,
+    "ts_right_shift_override_A": 0.10,
+}
+
+
 def _selection_config(cfg: dict[str, Any]) -> dict[str, Any]:
-    scan_selection = dict((cfg.get("step2") or {}).get("scan") or {})
-    base = dict(scan_selection.get("selection") or {})
-    base.setdefault("endpoint_exclusion_frames", 2)
-    base.setdefault("ts_min_prominence_kcal_mol", 0.40)
-    base.setdefault("int_min_basin_prominence_kcal_mol", 0.50)
-    base.setdefault("min_reaction_progress", 0.30)
-    base.setdefault("ts_right_shift_override_A", 0.10)
-    return base
+    """Resolve the seed-selection policy config for candidate selection.
+
+    Reads ``pes.scan_selection`` (canonical) while still honouring the
+    legacy ``step2.scan.selection`` block, then applies the PESsearch
+    defaults.  The merged mapping is consumed by
+    :func:`acp.calculations.pes.path_selection.policy_from_config`, which
+    accepts both flat keys and nested policy blocks (``knee``, ``ts_seed``,
+    ``int_plateau``, ``admission``).
+    """
+    legacy = dict((cfg.get("step2") or {}).get("scan") or {}).get("selection") or {}
+    current = dict((cfg.get("pes") or {}).get("scan_selection") or {})
+    merged = dict(_SELECTION_DEFAULTS)
+    merged.update(dict(legacy))
+    merged.update(dict(current))
+    return merged
 
 
 def _confidence_score(confidence: str) -> float:

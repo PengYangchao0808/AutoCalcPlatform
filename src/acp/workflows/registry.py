@@ -48,8 +48,8 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         name="PESsearch",
         label="PES Search",
         description=(
-            "Reaction path search + TS/intermediate guesses from a Confsearch "
-            "manifest (mechanism stage S2)."
+            "PES scan and TS/intermediate candidate extraction from a structure "
+            "or upstream result."
         ),
         requires_binaries=["orca", "xtb"],
     ),

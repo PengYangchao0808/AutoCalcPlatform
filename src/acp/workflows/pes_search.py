@@ -5,6 +5,8 @@ Wraps :class:`PesSearchEngine` for the four CLI input forms:
   ② ``--from-job <job_id>`` → resolves via store work_dir to ①
   ③ ``--input <xyz> --mode bond_length_scan --coordinate ...``
   ④ optional ``--reaction <reaction.json>`` → read-only via compat/legacy
+  ⑤ ``--scan-config <request.json>`` → direct bond-length scan (form ⑤,
+     scheduler contract: the full request incl. source ships in one file)
 
 Outputs land in ``RESULT/pes_search/``.
 """
@@ -17,11 +19,13 @@ from typing import Any
 
 from acp.calculations.pes.contracts import ScanCoordinate
 from acp.calculations.pes.engine import (
-    PES_E_MANIFEST,
     PesSearchEngine,
     PesSearchError,
     PesSearchResult,
 )
+from acp.calculations.pes.outputs import copy_xyz_atomic, persist_pes_outputs
+from acp.calculations.pes.scan import PES_SCAN_STAGES, run_pes_scan
+from acp.calculations.progress import ProgressReporter
 from acp.core.workflow import WorkflowResult
 
 logger = logging.getLogger(__name__)
@@ -36,17 +40,7 @@ PES_E_STRATEGY = "PES_E_STRATEGY"
 
 # ── frozen stages ───────────────────────────────────────────────────────
 
-PES_SEARCH_STAGES: tuple[str, ...] = (
-    "prepare",
-    "materialize_input",
-    "validate_coordinate",
-    "run_relaxed_scan",
-    "extract_frames",
-    "run_single_points",
-    "build_profile",
-    "select_candidates",
-    "finalize",
-)
+PES_SEARCH_STAGES: tuple[str, ...] = PES_SCAN_STAGES
 
 # ── workflow entry ──────────────────────────────────────────────────────
 
@@ -76,23 +70,6 @@ def _validate_strategy(strategy: str | None) -> str:
             f"[{PES_E_STRATEGY}] Unknown strategy {strategy!r}; expected one of: {', '.join(valid)}"
         )
     return normalized
-
-
-def _resolve_manifest_from_job(job_id: str) -> Path:
-    """Resolve a confsearch_manifest.json path from a job ID."""
-    from acp.scheduler.store import JobStore
-
-    store = JobStore()
-    record = store.get(job_id)
-    if record is None:
-        raise PesSearchInputError(f"[{PES_E_MANIFEST}] Job not found: {job_id}")
-    work_dir = Path(record.work_dir)
-    manifest_path = work_dir / "RESULT" / "confsearch" / "confsearch_manifest.json"
-    if not manifest_path.is_file():
-        raise PesSearchInputError(
-            f"[{PES_E_MANIFEST}] Confsearch manifest not found for job {job_id}: {manifest_path}"
-        )
-    return manifest_path
 
 
 def _load_reaction_definition(reaction_path: Path | None) -> dict[str, Any] | None:
@@ -131,6 +108,7 @@ def run_pes_search(
     multiplicity: int = 1,
     output_dir: str | Path = "./pes_search_out",
     config: dict[str, Any] | None = None,
+    progress_reporter: ProgressReporter | None = None,
 ) -> WorkflowResult:
     """Run PESsearch from one of the four input forms.
 
@@ -183,6 +161,7 @@ def run_pes_search(
             coordinate=coordinate,
             charge=charge,
             multiplicity=multiplicity,
+            progress_reporter=progress_reporter,
         )
     except PesSearchError as exc:
         logger.error("PESsearch failed: %s", exc)
@@ -214,10 +193,95 @@ def run_pes_search(
     )
 
 
+def run_bond_length_scan(
+    *,
+    scan_request: dict[str, Any],
+    output_dir: str | Path = "./pes_scan_out",
+    config: dict[str, Any] | None = None,
+    progress_reporter: ProgressReporter | None = None,
+) -> WorkflowResult:
+    """Run a direct bond-length scan from a full request payload (form ⑤).
+
+    This is the scheduler contract: the complete request
+    (``mode``/``source``/``coordinate``/``protocol``) ships as one JSON
+    document (``--scan-config``), typically written by
+    ``JobRunner._build_pessearch_cmd``. The scan primitive
+    :func:`run_pes_scan` materialises the structure, runs the relaxed scan,
+    the single points, and recommends TS/INT candidates.
+
+    Args:
+        scan_request: Full scan request dict (``PesScanRequest``-compatible).
+        output_dir: Task output root (``WORK/`` + ``RESULT/`` are created).
+        config: QC configuration dict.
+
+    Returns:
+        A :class:`WorkflowResult` with status and metadata; results are
+        persisted to ``RESULT/pes_search/pes_profile.json`` and candidate
+        structures to ``RESULT/structures/``.
+    """
+    output_root = Path(output_dir).expanduser()
+    try:
+        scan_result = run_pes_scan(
+            request=scan_request,
+            output_dir=output_root,
+            config=config,
+            progress_reporter=progress_reporter,
+        )
+    except (ValueError, RuntimeError) as exc:
+        logger.error("PESsearch bond_length_scan failed: %s", exc)
+        return WorkflowResult(status="failed", error=str(exc))
+
+    ts_recs = list(scan_result.get("ts_recommendations", []))
+    int_recs = list(scan_result.get("int_recommendations", []))
+    frames = list(scan_result.get("frames", []))
+    scan_dir = Path(scan_result.get("scan_dir") or "")
+    structures_dir = output_root / "RESULT" / "structures"
+    structures_dir.mkdir(parents=True, exist_ok=True)
+
+    candidate_structures: dict[str, Path] = {}
+    for rec in ts_recs + int_recs:
+        candidate_id = str(rec.get("candidate_id", ""))
+        geometry_path = str(rec.get("geometry_path", ""))
+        if not candidate_id or not geometry_path:
+            continue
+        src = scan_dir / geometry_path if scan_dir else Path(geometry_path)
+        if src.is_file():
+            destination = structures_dir / f"{candidate_id}.xyz"
+            copy_xyz_atomic(src, destination)
+            candidate_structures[candidate_id] = destination
+
+    if progress_reporter is not None:
+        progress_reporter.start_stage("finalize")
+    pes_profile_path, result_manifest_path = persist_pes_outputs(
+        output_root,
+        scan_result=scan_result,
+        candidate_structures=candidate_structures,
+        status="completed",
+    )
+    if progress_reporter is not None:
+        progress_reporter.complete_stage("finalize")
+
+    return WorkflowResult(
+        status="completed",
+        stages_completed=list(PES_SEARCH_STAGES),
+        metadata={
+            "output_dir": str(output_root),
+            "ts_candidates": len(ts_recs),
+            "int_candidates": len(int_recs),
+            "frames_count": len(frames),
+            "pes_profile_path": str(pes_profile_path),
+            "manifest_path": str(pes_profile_path),
+            "result_manifest_path": str(result_manifest_path),
+            "scan_dir": str(scan_dir),
+        },
+    )
+
+
 __all__ = [
     "PES_E_COORD",
     "PES_E_STRATEGY",
     "PES_SEARCH_STAGES",
     "PesSearchInputError",
+    "run_bond_length_scan",
     "run_pes_search",
 ]

@@ -603,14 +603,30 @@ def build_orca_scan_profile(
     energy_source: str,
     scan_ts_candidate_xyz: Path | None = None,
     source_provenance: dict[str, Any] | None = None,
+    endpoint_direction: str = "end",
 ) -> PathProfile:
+    """Build a :class:`PathProfile` from an ORCA relaxed scan.
+
+    Args:
+        frames: Per-frame XYZ paths (index-aligned with ``energies_hartree``).
+        energies_hartree: Per-frame energies (``None`` allowed).
+        forming_bonds: Reactive bond pairs; exempt from topology drift checks
+            and used as reaction coordinates.
+        product_xyz: Reference structure for topology and scaffold RMSD.
+        energy_source: Energy provenance label.
+        scan_ts_candidate_xyz: Optional driver-reported TS candidate.
+        source_provenance: Extra provenance merged into the profile.
+        endpoint_direction: Which scan tail is the reactant end
+            (``"end"`` — mechanism rescue semantics; ``"start"`` — generic
+            scans whose frame 0 is the reference/reactant geometry).
+    """
     provenance = dict(source_provenance or {})
     provenance["energy_source"] = str(energy_source)
     if scan_ts_candidate_xyz is not None:
         provenance["scan_ts_candidate_xyz"] = str(Path(scan_ts_candidate_xyz))
     return _build_profile(
         source="orca_relaxed_scan",
-        endpoint_direction="end",
+        endpoint_direction=endpoint_direction,
         frame_paths=frames,
         energies_hartree=energies_hartree,
         forming_bonds=forming_bonds,

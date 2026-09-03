@@ -211,8 +211,13 @@ def test_pessearch_local_remote_parity() -> None:
     spec_path = _spec("PESsearch", {"from": "/tmp/cm.json"}, {"strategy": "direct"})
     assert _stage_names(spec_path) == [
         "prepare",
-        "path_search",
-        "candidate_extract",
+        "validate_coordinate",
+        "materialize_input",
+        "run_relaxed_scan",
+        "extract_frames",
+        "run_single_points",
+        "build_profile",
+        "select_candidates",
         "finalize",
     ]
     argv = _remote_argv(spec_path)

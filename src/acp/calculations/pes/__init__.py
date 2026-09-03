@@ -12,6 +12,12 @@ Submodules:
     bond_changes — bond-change classification and coordinate-plan suggestion
 """
 
+from acp.calculations.pes.atom_selection import (
+    FunctionalAtomSelection,
+    SelectionKind,
+    normalize_selection_kind,
+    parse_functional_atom_selection,
+)
 from acp.calculations.pes.candidates import (
     PathCandidate,
     PathPoint,
@@ -34,6 +40,7 @@ from acp.calculations.pes.contracts import (
     build_default_protocol,
     coordinate_step,
     validate_scan_coordinate,
+    validate_scan_coordinates,
     validate_scan_protocol,
 )
 from acp.calculations.pes.engine import (
@@ -65,6 +72,16 @@ from acp.calculations.pes.path_selection import (
     replay_rescue_selection,
     select_path_seeds,
 )
+from acp.calculations.pes.review import (
+    PES_REVIEW_RELATIVE_PATH,
+    PES_REVIEW_SCHEMA,
+    PesReviewError,
+    RevisionConflictError,
+    candidate_id_for,
+    load_pes_review,
+    normalize_role,
+    save_pes_review,
+)
 from acp.calculations.pes.scan import (
     PES_SCAN_STAGES,
     SCAN_DIR_NAME,
@@ -87,12 +104,15 @@ from acp.calculations.pes.validation import (
 __all__ = [
     # contracts
     "CandidateRecommendation",
+    "FunctionalAtomSelection",
     "ConfsearchManifestInput",
     "EnergyProfile",
     # path_analysis
     "HARTREE_TO_KCAL",
     # engine
     "PES_E_MANIFEST",
+    "PES_REVIEW_RELATIVE_PATH",
+    "PES_REVIEW_SCHEMA",
     "PES_SCAN_STAGES",
     "PathCandidate",
     "PathFrame",
@@ -102,7 +122,9 @@ __all__ = [
     "PesScanRequest",
     "PesSearchEngine",
     "PesSearchError",
+    "PesReviewError",
     "PesSearchResult",
+    "RevisionConflictError",
     "RiskyContactResult",
     "SCAN_DIR_NAME",
     "ScanCoordinate",
@@ -110,6 +132,7 @@ __all__ = [
     "ScanOptimizer",
     "ScanProtocol",
     "ScanQuality",
+    "SelectionKind",
     # path_selection
     "SeedSelection",
     "SelectionPolicy",
@@ -125,6 +148,7 @@ __all__ = [
     "build_default_protocol",
     "build_orca_scan_profile",
     "build_xtb_path_profile",
+    "candidate_id_for",
     "check_scan_trajectory",
     "compare_graph_topology",
     "compute_forming_bond_distances_by_frame",
@@ -135,10 +159,15 @@ __all__ = [
     "detect_risky_contacts",
     "generate_keepaway_constraints",
     "load_confsearch_manifest",
+    "load_pes_review",
+    "normalize_role",
+    "normalize_selection_kind",
+    "parse_functional_atom_selection",
     "policy_from_config",
     "replay_rescue_selection",
     "resolve_representative_conformer",
     "run_pes_scan",
+    "save_pes_review",
     "scaffold_rmsd_admission",
     # candidates
     "select_candidates",
@@ -146,5 +175,6 @@ __all__ = [
     "select_primary_int",
     "select_primary_ts",
     "validate_scan_coordinate",
+    "validate_scan_coordinates",
     "validate_scan_protocol",
 ]
