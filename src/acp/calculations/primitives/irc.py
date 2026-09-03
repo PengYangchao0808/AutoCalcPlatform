@@ -24,6 +24,7 @@ from acp.calculations.contracts import (
     StructureArtifact,
     StructureRole,
 )
+from acp.calculations.progress import ProgressReporter
 from acp.storage.manifest import ProductKind, ResultManifest
 from cccp.qc.interfaces.orca_ts import parse_irc_endpoints
 from cccp.utils import file_io
@@ -41,6 +42,7 @@ from ._common import (
 logger = logging.getLogger(__name__)
 
 _BACKEND_FAILURES = (OSError, RuntimeError, ValueError)
+IRC_PROGRESS_STAGES = ("preparing", "irc_forward", "irc_backward", "validating")
 _IRC_RESOURCE_KEYS = frozenset(
     {
         "backend",
@@ -65,6 +67,7 @@ def run_irc(
     resources: dict[str, Any] | None = None,
     workflow: str = "irc",
     profile: str | None = None,
+    progress_reporter: ProgressReporter | None = None,
 ) -> CalculationResult:
     """Run an IRC calculation from a converged transition state.
 
@@ -76,6 +79,7 @@ def run_irc(
         resources: Additional resources (backend, charge, multiplicity, etc.).
         workflow: Workflow label for the result manifest.
         profile: Profile label for provenance.
+        progress_reporter: Optional scheduler progress reporter.
 
     Returns:
         CalculationResult with endpoint artifacts and manifest registration.
@@ -83,95 +87,142 @@ def run_irc(
     Raises:
         ValueError: If the input artifact role is not ``TRANSITION_STATE``.
     """
-    if ts_artifact.role != StructureRole.TRANSITION_STATE:
-        raise ValueError(
-            f"IRC requires a transition-state artifact; got role={ts_artifact.role.value!r}"
-        )
+    if progress_reporter is not None:
+        progress_reporter.initialize()
+    active_stage: str | None = None
 
-    resources = dict(resources or {})
-    resources.setdefault("backend", "orca")
-    if method:
-        resources["method"] = method
-
-    from acp.calculations.contracts import CalculationRequest
-
-    request = CalculationRequest(
-        input_artifact=ts_artifact,
-        method=method,
-        resources=resources,
-        workflow=workflow,
-        profile=profile,
-    )
-
-    inputs = load_inputs(request)
-    selected_backend = backend_name(request)
-    backend = backend_for_request(request, selected_backend)
-    target_dir = output_dir(request) or Path.cwd() / "irc_work"
-    target_dir.mkdir(parents=True, exist_ok=True)
-
-    direction_str = _resolve_direction(directions)
-
-    # --- Backend call ---
     try:
-        raw_result = backend.irc(
-            inputs.coordinates,
-            list(inputs.symbols),
-            charge=inputs.charge,
-            multiplicity=inputs.multiplicity,
-            output_dir=target_dir,
-            direction=direction_str,
-            **_irc_kwargs(request),
+        if progress_reporter is not None:
+            progress_reporter.start_stage("preparing")
+            active_stage = "preparing"
+
+        if ts_artifact.role != StructureRole.TRANSITION_STATE:
+            raise ValueError(
+                f"IRC requires a transition-state artifact; got role={ts_artifact.role.value!r}"
+            )
+
+        resources = dict(resources or {})
+        resources.setdefault("backend", "orca")
+        if method:
+            resources["method"] = method
+
+        from acp.calculations.contracts import CalculationRequest
+
+        request = CalculationRequest(
+            input_artifact=ts_artifact,
+            method=method,
+            resources=resources,
+            workflow=workflow,
+            profile=profile,
         )
-    except _BACKEND_FAILURES as error:
+
+        inputs = load_inputs(request)
+        selected_backend = backend_name(request)
+        backend = backend_for_request(request, selected_backend)
+        target_dir = output_dir(request) or Path.cwd() / "irc_work"
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        direction_str = _resolve_direction(directions)
+        if progress_reporter is not None:
+            progress_reporter.complete_stage("preparing")
+            active_stage = None
+
+            direction_stage = "irc_backward" if direction_str == "reverse" else "irc_forward"
+            progress_reporter.start_stage(direction_stage)
+            active_stage = direction_stage
+
+        # --- Backend call ---
+        try:
+            raw_result = backend.irc(
+                inputs.coordinates,
+                list(inputs.symbols),
+                charge=inputs.charge,
+                multiplicity=inputs.multiplicity,
+                output_dir=target_dir,
+                direction=direction_str,
+                **_irc_kwargs(request),
+            )
+        except _BACKEND_FAILURES as error:
+            if progress_reporter is not None and active_stage is not None:
+                progress_reporter.fail_stage(active_stage, error_text(error))
+            return result_from_qc(
+                request,
+                selected_backend,
+                None,
+                [error_text(error)],
+                [],
+                metadata=_irc_metadata(directions),
+                status="failed",
+            )
+
+        # Normalise to QCResult
+        qc_result = to_qc_result(raw_result) if not isinstance(raw_result, QCResult) else raw_result
+        success = bool(getattr(raw_result, "success", False)) or bool(qc_result.success)
+        errors: list[str] = []
+        if not success:
+            raw_error = getattr(raw_result, "error_message", None) or qc_result.error_message
+            if raw_error:
+                errors.append(str(raw_error))
+            failure_message = errors[0] if errors else "IRC calculation failed"
+            if progress_reporter is not None and active_stage is not None:
+                progress_reporter.fail_stage(active_stage, failure_message)
+        elif progress_reporter is not None and active_stage is not None:
+            progress_reporter.complete_stage(active_stage)
+            active_stage = None
+            if direction_str == "both":
+                # ORCA executes both directions in one backend call. The second
+                # lifecycle stage represents the completed direction once that
+                # combined call has returned; it does not invent intermediate data.
+                progress_reporter.start_stage("irc_backward")
+                progress_reporter.complete_stage("irc_backward")
+
+        if success and progress_reporter is not None:
+            progress_reporter.start_stage("validating")
+            active_stage = "validating"
+
+        # --- Parse endpoint geometries ---
+        endpoints = _discover_endpoints(raw_result, target_dir, inputs)
+
+        # ORCAInterface.forward_points/reverse_points currently count direction
+        # header occurrences, not validated IRC iterations. Until a parser is
+        # backed by real ORCA point records, intentionally publish no point-count
+        # metric rather than exposing a fabricated count.
+
+        # --- Materialise endpoint structures ---
+        result_dir = _result_dir(request, target_dir)
+        artifacts = _write_endpoint_products(
+            request,
+            selected_backend,
+            result_dir,
+            endpoints,
+            inputs,
+            success,
+        )
+
+        if success and progress_reporter is not None and active_stage is not None:
+            progress_reporter.complete_stage(active_stage)
+            active_stage = None
+
+        metadata = _irc_metadata(directions)
+        metadata["endpoint_count"] = len(endpoints)
+        for direction in ("forward", "reverse"):
+            key = f"{direction}_endpoint"
+            if direction in endpoints:
+                metadata[key] = str(endpoints[direction]["path"])
+
         return result_from_qc(
             request,
             selected_backend,
-            None,
-            [error_text(error)],
-            [],
-            metadata=_irc_metadata(directions),
-            status="failed",
+            qc_result,
+            errors,
+            artifacts,
+            metadata=metadata,
+            status="completed" if success else "failed",
         )
-
-    # Normalise to QCResult
-    qc_result = to_qc_result(raw_result) if not isinstance(raw_result, QCResult) else raw_result
-
-    # --- Parse endpoint geometries ---
-    endpoints = _discover_endpoints(raw_result, target_dir, inputs)
-    success = bool(getattr(raw_result, "success", False)) or bool(qc_result.success)
-    errors: list[str] = []
-    if not success:
-        raw_error = getattr(raw_result, "error_message", None) or qc_result.error_message
-        if raw_error:
-            errors.append(str(raw_error))
-
-    # --- Materialise endpoint structures ---
-    result_dir = _result_dir(request, target_dir)
-    artifacts = _write_endpoint_products(
-        request,
-        selected_backend,
-        result_dir,
-        endpoints,
-        inputs,
-        success,
-    )
-
-    metadata = _irc_metadata(directions)
-    metadata["endpoint_count"] = len(endpoints)
-    for direction in ("forward", "reverse"):
-        key = f"{direction}_endpoint"
-        if direction in endpoints:
-            metadata[key] = str(endpoints[direction]["path"])
-
-    return result_from_qc(
-        request,
-        selected_backend,
-        qc_result,
-        errors,
-        artifacts,
-        metadata=metadata,
-        status="completed" if success else "failed",
-    )
+    except Exception as error:
+        if progress_reporter is not None and active_stage is not None:
+            progress_reporter.fail_stage(active_stage, error_text(error))
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -337,4 +388,4 @@ def _write_endpoint_products(
     return artifacts
 
 
-__all__ = ["run_irc"]
+__all__ = ["IRC_PROGRESS_STAGES", "run_irc"]

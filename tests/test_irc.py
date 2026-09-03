@@ -11,12 +11,14 @@ from typing import Any
 import numpy as np
 import pytest
 
+import acp.cli as acp_cli
 from acp.backends.base import QCResult
 from acp.calculations import CalculationPlan
 from acp.calculations.contracts import StructureArtifact, StructureRole
 from acp.calculations.plans import IrcRequest, build_irc_request
 from acp.calculations.primitives.irc import run_irc
 from acp.calculations.primitives.irc import run_irc as primitive_run_irc
+from acp.calculations.progress import ProgressReporter
 from acp.scheduler.jobs import JobSpec
 from acp.scheduler.remote.script_gen import build_remote_cli_command
 from acp.scheduler.runner import JobRunner
@@ -228,6 +230,156 @@ class TestIrcBothDirections:
             },
         )
         assert result.status == "completed"
+
+
+def test_irc_progress_reports_lifecycle_and_no_unverified_point_count(
+    tmp_path: Path,
+    fake_backend: Any,
+) -> None:
+    """Endpoint files are real artifacts, but do not establish path point counts."""
+    ts = _ts_artifact(tmp_path)
+    work_dir = tmp_path / "irc_work"
+    _fake_irc_with_endpoints(tmp_path, fake_backend, output_dir=work_dir)
+    progress_dir = tmp_path / "progress"
+    events: list[tuple[str, str]] = []
+
+    class RecordingReporter(ProgressReporter):
+        def start_stage(self, name: str) -> None:
+            events.append(("start", name))
+            super().start_stage(name)
+
+        def complete_stage(self, name: str, result: dict[str, Any] | None = None) -> None:
+            events.append(("complete", name))
+            super().complete_stage(name, result)
+
+    reporter = RecordingReporter(
+        progress_dir,
+        job_name="irc",
+        stages=["preparing", "irc_forward", "irc_backward", "validating"],
+        min_interval=0.0,
+    )
+
+    result = primitive_run_irc(
+        ts,
+        resources={"output_dir": str(work_dir), "result_dir": str(tmp_path / "RESULT")},
+        progress_reporter=reporter,
+    )
+
+    assert result.status == "completed"
+    assert events == [
+        ("start", "preparing"),
+        ("complete", "preparing"),
+        ("start", "irc_forward"),
+        ("complete", "irc_forward"),
+        ("start", "irc_backward"),
+        ("complete", "irc_backward"),
+        ("start", "validating"),
+        ("complete", "validating"),
+    ]
+    state = json.loads((progress_dir / "state.json").read_text(encoding="utf-8"))
+    assert state["current_stage"] is None
+    assert all(info["status"] == "completed" for info in state["stages"].values())
+    assert "live_metrics" not in state
+
+
+def test_irc_progress_does_not_expose_legacy_header_counts(
+    tmp_path: Path,
+    fake_backend: Any,
+) -> None:
+    """Legacy forward_points fields are not reliable path-point evidence."""
+    ts = _ts_artifact(tmp_path)
+    response = QCResult(success=True, coordinates=np.zeros((6, 3)), symbols=ts.elements)
+    setattr(response, "forward_points", 12)
+    setattr(response, "reverse_points", 18)
+    fake_backend.set_result("irc", response)
+    progress_dir = tmp_path / "progress"
+    reporter = ProgressReporter(
+        progress_dir,
+        stages=["preparing", "irc_forward", "irc_backward", "validating"],
+        min_interval=0.0,
+    )
+
+    result = primitive_run_irc(
+        ts,
+        resources={
+            "output_dir": str(tmp_path / "irc_work"),
+            "result_dir": str(tmp_path / "RESULT"),
+        },
+        progress_reporter=reporter,
+    )
+
+    assert result.status == "completed"
+    state = json.loads((progress_dir / "state.json").read_text(encoding="utf-8"))
+    assert "live_metrics" not in state
+
+
+def test_irc_progress_marks_backend_failure(
+    tmp_path: Path,
+    fake_backend: Any,
+) -> None:
+    ts = _ts_artifact(tmp_path)
+    fake_backend.fail_next("irc", RuntimeError("IRC backend failed"))
+    progress_dir = tmp_path / "progress"
+    reporter = ProgressReporter(
+        progress_dir,
+        stages=["preparing", "irc_forward", "irc_backward", "validating"],
+        min_interval=0.0,
+    )
+
+    result = primitive_run_irc(
+        ts,
+        resources={
+            "output_dir": str(tmp_path / "irc_work"),
+            "result_dir": str(tmp_path / "RESULT"),
+        },
+        progress_reporter=reporter,
+    )
+
+    assert result.status == "failed"
+    state = json.loads((progress_dir / "state.json").read_text(encoding="utf-8"))
+    assert state["status"] == "failed"
+    assert state["current_stage"] == "irc_forward"
+    assert state["stages"]["irc_forward"]["status"] == "failed"
+    assert state["stages"]["irc_forward"]["error"] == "IRC backend failed"
+
+
+def test_irc_cli_completes_reporter_after_workflow(
+    tmp_path: Path,
+    fake_backend: Any,
+) -> None:
+    ts = _ts_artifact(tmp_path)
+    output_root = tmp_path / "irc_output"
+    _fake_irc_with_endpoints(
+        tmp_path,
+        fake_backend,
+        output_dir=output_root / "WORK" / "07_PATH" / "ORCA",
+    )
+    args = acp_cli.build_parser().parse_args(
+        [
+            "run",
+            "irc",
+            "--input",
+            str(ts.path),
+            "--input-role",
+            "transition_state",
+            "--output",
+            str(output_root),
+            "--log-level",
+            "ERROR",
+        ]
+    )
+
+    assert acp_cli._handle_irc(args) == 0
+    state = json.loads((output_root / "state.json").read_text(encoding="utf-8"))
+    assert state["status"] == "completed"
+    assert list(state["stages"]) == [
+        "preparing",
+        "irc_forward",
+        "irc_backward",
+        "validating",
+    ]
+    assert all(info["status"] == "completed" for info in state["stages"].values())
+    assert "live_metrics" not in state
 
 
 # ---------------------------------------------------------------------------

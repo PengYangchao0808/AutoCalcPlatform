@@ -16,6 +16,7 @@ from acp.calculations.checkpoint import write_checkpoint
 from acp.calculations.contracts import Checkpoint, JsonValue, StructureArtifact, StructureRole
 from acp.calculations.plans import build_irc_request
 from acp.calculations.primitives.irc import run_irc
+from acp.calculations.progress import ProgressReporter
 from acp.core.workflow import WorkflowResult
 from acp.storage.layout import TaskStorage
 from acp.storage.manifest import ProductKind, ResultManifest
@@ -36,6 +37,7 @@ def run_irc_workflow(
     multiplicity: int = 1,
     profile: str = "default",
     resources: Mapping[str, JsonValue] | None = None,
+    progress_reporter: ProgressReporter | None = None,
 ) -> WorkflowResult:
     """Run an independent IRC request from a transition-state artifact."""
     if maxpoints < 1:
@@ -125,14 +127,25 @@ def run_irc_workflow(
         resources=resources,
     )
     _write_irc_checkpoint(storage.runtime_dir(), checkpoint_fingerprint, "running")
-    calculation = run_irc(
-        irc_request.input_artifact,
-        directions=irc_request.directions,
-        method=method,
-        resources=request_resources,
-        workflow=irc_request.workflow,
-        profile=profile,
-    )
+    if progress_reporter is None:
+        calculation = run_irc(
+            irc_request.input_artifact,
+            directions=irc_request.directions,
+            method=method,
+            resources=request_resources,
+            workflow=irc_request.workflow,
+            profile=profile,
+        )
+    else:
+        calculation = run_irc(
+            irc_request.input_artifact,
+            directions=irc_request.directions,
+            method=method,
+            resources=request_resources,
+            workflow=irc_request.workflow,
+            profile=profile,
+            progress_reporter=progress_reporter,
+        )
     _write_irc_checkpoint(
         storage.runtime_dir(),
         checkpoint_fingerprint,
