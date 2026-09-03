@@ -13,7 +13,77 @@ import time
 from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO, Final
+
+_READ_CHUNK_SIZE: Final = 64 * 1024
+
+
+def _decode_event(line: bytes) -> dict[str, Any] | None:
+    try:
+        value = json.loads(line.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _newline_positions_backwards(handle: BinaryIO, end: int) -> Iterator[int]:
+    position = end
+    while position > 0:
+        start = max(0, position - _READ_CHUNK_SIZE)
+        handle.seek(start)
+        chunk = handle.read(position - start)
+        for offset in range(len(chunk) - 1, -1, -1):
+            if chunk[offset] == 10:
+                yield start + offset
+        position = start
+
+
+def _complete_lines(handle: BinaryIO, start: int, end: int) -> Iterator[bytes]:
+    handle.seek(start)
+    remaining = max(0, end - start)
+    buffer = bytearray()
+    while remaining > 0:
+        chunk = handle.read(min(_READ_CHUNK_SIZE, remaining))
+        if not chunk:
+            return
+        remaining -= len(chunk)
+        buffer.extend(chunk)
+        consumed = 0
+        while True:
+            newline = buffer.find(b"\n", consumed)
+            if newline < 0:
+                break
+            yield bytes(buffer[consumed:newline])
+            consumed = newline + 1
+        if consumed:
+            del buffer[:consumed]
+
+
+def _complete_end(handle: BinaryIO, file_size: int) -> int:
+    for position in _newline_positions_backwards(handle, file_size):
+        return position + 1
+    return 0
+
+
+def _complete_lines_backwards(handle: BinaryIO, file_size: int) -> Iterator[bytes]:
+    pending = bytearray()
+    complete_boundary_seen = False
+    position = file_size
+    while position > 0:
+        start = max(0, position - _READ_CHUNK_SIZE)
+        handle.seek(start)
+        chunk = handle.read(position - start)
+        for byte in reversed(chunk):
+            if byte == 10:
+                if complete_boundary_seen:
+                    yield bytes(reversed(pending))
+                complete_boundary_seen = True
+                pending.clear()
+            elif complete_boundary_seen:
+                pending.append(byte)
+        position = start
+    if complete_boundary_seen:
+        yield bytes(reversed(pending))
 
 
 def _utc_now_iso() -> str:
@@ -32,6 +102,62 @@ class JobEventLog:
         record.update(data)
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(record, default=str) + "\n")
+
+    def count(self) -> int:
+        """Count newline-terminated event slots without decoding the file."""
+        try:
+            with self.path.open("rb") as handle:
+                total = 0
+                while chunk := handle.read(_READ_CHUNK_SIZE):
+                    total += chunk.count(b"\n")
+                return total
+        except FileNotFoundError:
+            return 0
+
+    def read_recent(self, n: int) -> tuple[int, list[dict[str, Any]]]:
+        """Return the last *n* complete event slots and their absolute start."""
+        total = self.count()
+        if n <= 0 or total == 0:
+            return total, []
+
+        start_index = max(0, total - n)
+        try:
+            with self.path.open("rb") as handle:
+                file_size = handle.seek(0, 2)
+                complete_end = _complete_end(handle, file_size)
+                if complete_end == 0:
+                    return 0, []
+
+                start_offset = 0
+                if start_index > 0:
+                    boundary_count = 0
+                    for position in _newline_positions_backwards(handle, complete_end):
+                        boundary_count += 1
+                        if boundary_count == n + 1:
+                            start_offset = position + 1
+                            break
+
+                events = []
+                for line in _complete_lines(handle, start_offset, complete_end):
+                    event = _decode_event(line)
+                    if event is not None:
+                        events.append(event)
+                return start_index, events
+        except FileNotFoundError:
+            return 0, []
+
+    def read_last(self) -> dict[str, Any] | None:
+        """Return the last decodable complete event, ignoring corrupt lines."""
+        try:
+            with self.path.open("rb") as handle:
+                file_size = handle.seek(0, 2)
+                for line in _complete_lines_backwards(handle, file_size):
+                    event = _decode_event(line)
+                    if event is not None:
+                        return event
+        except FileNotFoundError:
+            return None
+        return None
 
     def read_all(self) -> list[dict[str, Any]]:
         if not self.path.exists():

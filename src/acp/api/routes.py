@@ -9,12 +9,13 @@ and result file manifest.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import sys
 import time
+from collections.abc import AsyncIterator, Iterator
 from typing import Any, cast
 
+import anyio
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
@@ -333,38 +334,210 @@ def download_job_file(job_id: str, file_path: str, request: Request) -> FileResp
 
 
 @router.get("/jobs/{job_id}/events")
-async def stream_job_events(job_id: str, request: Request) -> StreamingResponse:
+async def stream_job_events(
+    job_id: str,
+    request: Request,
+    after_seq: int = Query(default=0, ge=0),
+    history: int = Query(default=200, ge=0, le=2000),
+) -> StreamingResponse:
     manager = _manager(request)
     event_log = manager.event_log(job_id)
     if event_log is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
 
-    async def event_generator():
-        idx = 0
+    last_event_id = request.headers.get("Last-Event-ID")
+    has_valid_last_event_id = False
+    if last_event_id is not None:
+        try:
+            parsed_last_event_id = int(last_event_id)
+        except (ValueError, TypeError):
+            parsed_last_event_id = None
+        if parsed_last_event_id is not None and parsed_last_event_id >= 0:
+            after_seq = max(after_seq, parsed_last_event_id)
+            has_valid_last_event_id = True
+
+    bounded_initial = after_seq == 0 and not has_valid_last_event_id
+    if type(history) is int:
+        history_limit = history
+    else:
+        history_limit = 200
+        raw_history = request.query_params.get("history")
+        if raw_history is not None:
+            try:
+                history_limit = max(0, min(2000, int(raw_history)))
+            except ValueError:
+                pass
+
+    def _decode_event(line: bytes) -> dict[str, Any] | None:
+        try:
+            value = json.loads(line.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return None
+        return value if isinstance(value, dict) else None
+
+    def _event_frame(seq: int, event: dict[str, Any]) -> str:
+        event_type = event.get("type", "message")
+        payload = json.dumps(event, default=str)
+        return f"id: {seq}\nevent: {event_type}\ndata: {payload}\n\n"
+
+    def _last_complete_offset() -> int:
+        try:
+            with event_log.path.open("rb") as handle:
+                position = handle.seek(0, 2)
+                while position > 0:
+                    start = max(0, position - 64 * 1024)
+                    handle.seek(start)
+                    chunk = handle.read(position - start)
+                    newline = chunk.rfind(b"\n")
+                    if newline >= 0:
+                        return start + newline + 1
+                    position = start
+        except FileNotFoundError:
+            return 0
+        return 0
+
+    def _replay(fresh: bool) -> Iterator[tuple[int, int, str | None]]:
+        if fresh or bounded_initial:
+            replay_start = 0
+            if history_limit > 0:
+                total = event_log.count()
+                replay_start = max(0, total - history_limit)
+                recent_start, recent_events = event_log.read_recent(history_limit)
+                expected_events = min(history_limit, total)
+                if recent_start == replay_start and len(recent_events) == expected_events:
+                    complete_end = _last_complete_offset()
+                    if complete_end > 0 or total == 0:
+                        for recent_seq, event in enumerate(recent_events, start=recent_start + 1):
+                            yield recent_seq, complete_end, _event_frame(recent_seq, event)
+                        return
+        else:
+            replay_start = after_seq
+
+        line_seq = 0
+        try:
+            with event_log.path.open("rb") as handle:
+                while True:
+                    line = handle.readline()
+                    if not line or not line.endswith(b"\n"):
+                        return
+                    line_seq += 1
+                    line_offset = handle.tell()
+                    if line_seq <= replay_start:
+                        yield line_seq, line_offset, None
+                        continue
+                    event = _decode_event(line)
+                    frame = _event_frame(line_seq, event) if event is not None else None
+                    yield line_seq, line_offset, frame
+        except FileNotFoundError:
+            return
+
+    def _read_tail(current_seq: int, current_offset: int) -> tuple[int, int, list[str], bool]:
+        try:
+            with event_log.path.open("rb") as handle:
+                file_size = handle.seek(0, 2)
+                if file_size < current_offset:
+                    return current_seq, current_offset, [], True
+                handle.seek(current_offset)
+                next_seq = current_seq
+                next_offset = current_offset
+                frames: list[str] = []
+                while True:
+                    line = handle.readline()
+                    if not line or not line.endswith(b"\n"):
+                        break
+                    next_offset = handle.tell()
+                    next_seq += 1
+                    event = _decode_event(line)
+                    if event is not None:
+                        frames.append(_event_frame(next_seq, event))
+                return next_seq, next_offset, frames, False
+        except FileNotFoundError:
+            return current_seq, current_offset, [], current_offset > 0
+
+    async def event_generator() -> AsyncIterator[str]:
+        yield "retry: 3000\n\n"
+
+        seq = 0
+        byte_offset = 0
         terminal_seen = False
+        last_heartbeat = anyio.current_time()
+
+        try:
+            for replay_seq, replay_offset, frame in _replay(False):
+                seq = replay_seq
+                byte_offset = replay_offset
+                if frame is not None:
+                    yield frame
+        except OSError:
+            error_payload = json.dumps({"job_id": job_id, "message": "event log read error"})
+            yield f"event: error\ndata: {error_payload}\n\n"
+            return
+        if seq < after_seq:
+            seq = after_seq
+
         while True:
             if await request.is_disconnected():
                 break
-            events = event_log.read_all()
-            new_events = events[idx:]
-            for evt in new_events:
-                evt_type = evt.get("type", "message")
-                payload = json.dumps(evt, default=str)
-                yield f"event: {evt_type}\ndata: {payload}\n\n"
-            idx = len(events)
+
+            try:
+                seq, byte_offset, frames, needs_resync = _read_tail(seq, byte_offset)
+            except OSError:
+                error_payload = json.dumps({"job_id": job_id, "message": "event log read error"})
+                yield f"event: error\ndata: {error_payload}\n\n"
+                break
+
+            if needs_resync:
+                seq = 0
+                byte_offset = 0
+                try:
+                    for replay_seq, replay_offset, frame in _replay(True):
+                        seq = replay_seq
+                        byte_offset = replay_offset
+                        if frame is not None:
+                            yield frame
+                except OSError:
+                    error_payload = json.dumps(
+                        {"job_id": job_id, "message": "event log read error"}
+                    )
+                    yield f"event: error\ndata: {error_payload}\n\n"
+                    break
+
+            for frame in frames:
+                yield frame
+
+            now = anyio.current_time()
+            if now - last_heartbeat >= 15.0:
+                yield ": heartbeat\n\n"
+                last_heartbeat = now
+
             record = manager.get(job_id)
             if record is not None and record.status.is_terminal:
                 if not terminal_seen:
-                    done_payload = json.dumps({"job_id": job_id, "status": record.status.value})
-                    yield f"event: done\ndata: {done_payload}\n\n"
+                    done_payload = json.dumps(
+                        {
+                            "job_id": job_id,
+                            "status": record.status.value,
+                            "progress": record.progress,
+                            "current_stage": record.current_stage,
+                            "completed_at": record.completed_at,
+                        },
+                        default=str,
+                    )
+                    seq += 1
+                    yield f"id: {seq}\nevent: done\ndata: {done_payload}\n\n"
                     terminal_seen = True
                 break
-            await asyncio.sleep(1.0)
+
+            await anyio.sleep(5.0)
 
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
     )
 
 
