@@ -4,6 +4,9 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
@@ -18,6 +21,7 @@ from acp.calculations.contracts import (
     JsonValue,
     StructureRole,
 )
+from acp.calculations.progress import LiveMetric, ProgressReporter
 
 from ._common import (
     CalculationInputs,
@@ -100,6 +104,20 @@ _RESCUE_DESCRIPTIONS: Final[dict[str, str]] = {
 _BACKEND_FAILURES = (OSError, RuntimeError, ValueError)
 logger = logging.getLogger(__name__)
 
+_OPTIMIZATION_PROGRESS_REPORTER: ContextVar[ProgressReporter | None] = ContextVar(
+    "optimization_progress_reporter", default=None
+)
+
+
+@contextmanager
+def optimization_progress_context(reporter: ProgressReporter | None) -> Iterator[None]:
+    """Make a reporter available to an optimization dispatched by a plan."""
+    token = _OPTIMIZATION_PROGRESS_REPORTER.set(reporter)
+    try:
+        yield
+    finally:
+        _OPTIMIZATION_PROGRESS_REPORTER.reset(token)
+
 
 @dataclass(frozen=True, slots=True)
 class RescueAction:
@@ -140,8 +158,14 @@ def build_rescue_plan(failure_type: str, structure_kind: str) -> RescuePlan:
     )
 
 
-def run_optimize(req: CalculationRequest) -> CalculationResult:
+def run_optimize(
+    req: CalculationRequest,
+    *,
+    progress_reporter: ProgressReporter | None = None,
+) -> CalculationResult:
     """Optimize a structure and retry recoverable backend failures."""
+    if progress_reporter is None:
+        progress_reporter = _OPTIMIZATION_PROGRESS_REPORTER.get()
     inputs = load_inputs(req)
     selected_backend = backend_name(req)
     backend = backend_for_request(req, selected_backend)
@@ -160,6 +184,7 @@ def run_optimize(req: CalculationRequest) -> CalculationResult:
         base_kwargs,
         selected_backend=selected_backend,
         trajectory_item_id=str(req.resources.get("trajectory_item_id") or ""),
+        progress_reporter=progress_reporter,
     )
     if _successful_geometry(qc_result):
         if qc_result is not None:
@@ -190,6 +215,7 @@ def run_optimize(req: CalculationRequest) -> CalculationResult:
             attempt_kwargs,
             selected_backend=selected_backend,
             trajectory_item_id=str(req.resources.get("trajectory_item_id") or ""),
+            progress_reporter=progress_reporter,
         )
         if qc_result is not None:
             all_artifacts = artifacts_from_qc(qc_result, selected_backend, all_artifacts)
@@ -240,14 +266,49 @@ def _run_attempt(
     *,
     selected_backend: str,
     trajectory_item_id: str = "",
+    progress_reporter: ProgressReporter | None = None,
 ) -> tuple[QCResult | None, str | None]:
     recorder = None
     attempt_kwargs = dict(kwargs)
     if selected_backend == "orca" and target_dir is not None:
-        recorder = OptimizationTrajectoryRecorder(
-            target_dir,
-            item_id=trajectory_item_id or target_dir.parent.name,
-        )
+        if progress_reporter is not None:
+            reporter = progress_reporter
+
+            def publish_cycle(cycle: int, status: str) -> None:
+                convergence = {
+                    "running": "running",
+                    "converged": "converged",
+                    "failed": "failed",
+                }.get(status, "running")
+                reporter.set_live_metrics(
+                    [
+                        LiveMetric(
+                            key="opt_step",
+                            label_key="live.opt_step",
+                            value=f"Step {cycle}",
+                            kind="iteration",
+                            priority=100,
+                        ),
+                        LiveMetric(
+                            key="opt_convergence",
+                            label_key="live.opt_convergence",
+                            value=convergence,
+                            kind="status",
+                            priority=90,
+                        ),
+                    ]
+                )
+
+            recorder = OptimizationTrajectoryRecorder(
+                target_dir,
+                item_id=trajectory_item_id or target_dir.parent.name,
+                on_cycle=publish_cycle,
+            )
+        else:
+            recorder = OptimizationTrajectoryRecorder(
+                target_dir,
+                item_id=trajectory_item_id or target_dir.parent.name,
+            )
         attempt_kwargs["output_callback"] = recorder.feed_line
     try:
         result = call_capability(backend, capability, inputs, target_dir, attempt_kwargs)
@@ -325,5 +386,6 @@ __all__ = [
     "RescueAction",
     "RescuePlan",
     "build_rescue_plan",
+    "optimization_progress_context",
     "run_optimize",
 ]

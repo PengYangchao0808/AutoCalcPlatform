@@ -14,9 +14,10 @@ import logging
 import os
 import re
 import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Final, cast
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,18 @@ _ATOM_RE = re.compile(
 )
 _COORD_HEADER_RE = re.compile(r"CARTESIAN\s+COORDINATES\s*\(\s*ANGSTROEM\s*\)", re.IGNORECASE)
 _DASH_RE = re.compile(r"^\s*-{3,}\s*$")
+_RECORDED_CYCLE_KEYS: Final[frozenset[str]] = frozenset(
+    {
+        "energy_hartree",
+        "rms_gradient",
+        "max_gradient",
+        "rms_displacement",
+        "max_displacement",
+        "scf_iterations",
+        "geometry_ref",
+        "atom_count",
+    }
+)
 
 
 def _float(value: str) -> float:
@@ -57,15 +70,24 @@ class OptimizationTrajectoryRecorder:
     cycle.
     """
 
-    def __init__(self, output_dir: Path, *, item_id: str = "") -> None:
+    def __init__(
+        self,
+        output_dir: Path,
+        *,
+        item_id: str = "",
+        on_cycle: Callable[[int, str], None] | None = None,
+    ) -> None:
         self.output_dir = Path(output_dir)
         self.path = self.output_dir / "optimization_trajectory.json"
         self.cycles_dir = self.output_dir / "cycles"
         self.item_id = item_id
+        self._on_cycle = on_cycle
         self._lock = threading.RLock()
         self._cycles: list[dict[str, Any]] = []
         self._current: dict[str, Any] | None = None
         self._cycle_number = 0
+        self._cycle_announced = False
+        self._last_cycle_callback: tuple[int, str] | None = None
         self._geometry_active = False
         self._geometry_started = False
         self._geometry_rows: list[tuple[str, float, float, float]] = []
@@ -80,7 +102,7 @@ class OptimizationTrajectoryRecorder:
             text = str(line).rstrip("\r\n")
             cycle_match = _CYCLE_RE.match(text)
             if cycle_match:
-                self._start_cycle(int(cycle_match.group(1)))
+                self._start_cycle(int(cycle_match.group(1)), announced=True)
 
             if _COORD_HEADER_RE.search(text):
                 self._begin_geometry()
@@ -108,8 +130,11 @@ class OptimizationTrajectoryRecorder:
 
             if self._current is None:
                 # Some ORCA output variants omit the explicit cycle banner.
-                self._start_cycle(self._cycle_number + 1)
+                self._start_cycle(self._cycle_number + 1, announced=False)
             current = self._current
+            if current is None:
+                return
+            current = cast(dict[str, Any], current)
 
             energy_match = _ENERGY_RE.search(text)
             if energy_match:
@@ -149,8 +174,9 @@ class OptimizationTrajectoryRecorder:
                     "converged" if converged else self._current.get("status", "failed")
                 )
             self._write_snapshot(force=True)
+            self._notify_cycle()
 
-    def _start_cycle(self, number: int) -> None:
+    def _start_cycle(self, number: int, *, announced: bool) -> None:
         if self._geometry_active:
             self._finish_geometry()
         if self._current is not None and self._current not in self._cycles:
@@ -163,11 +189,12 @@ class OptimizationTrajectoryRecorder:
             "cycle": self._cycle_number,
             "status": "running",
         }
+        self._cycle_announced = announced
         self._publish()
 
     def _begin_geometry(self) -> None:
         if self._current is None:
-            self._start_cycle(self._cycle_number + 1)
+            self._start_cycle(self._cycle_number + 1, announced=False)
         self._geometry_active = True
         self._geometry_started = False
         self._geometry_rows = []
@@ -204,6 +231,36 @@ class OptimizationTrajectoryRecorder:
         if self._current not in self._cycles and "energy_hartree" in self._current:
             self._cycles.append(self._current)
         self._write_snapshot()
+        self._notify_cycle()
+
+    def _notify_cycle(self) -> None:
+        if self._on_cycle is None or self._current is None:
+            return
+        if not self._cycle_announced and not _RECORDED_CYCLE_KEYS.intersection(self._current):
+            return
+        cycle = self._current.get("cycle")
+        if not isinstance(cycle, int):
+            return
+        status = self._live_status()
+        signature = (cycle, status)
+        if signature == self._last_cycle_callback:
+            return
+        self._last_cycle_callback = signature
+        try:
+            self._on_cycle(cycle, status)
+        except OSError:
+            logger.debug("Could not publish optimization cycle metrics", exc_info=True)
+
+    def _live_status(self) -> str:
+        if self._status == "failed":
+            return "failed"
+        if (
+            self._status == "completed"
+            or self._converged
+            or (self._current is not None and self._current.get("status") == "converged")
+        ):
+            return "converged"
+        return "running"
 
     def _write_snapshot(self, *, force: bool = False) -> None:
         cycles = [dict(cycle) for cycle in self._cycles]
