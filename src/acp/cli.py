@@ -750,9 +750,16 @@ def _handle_confsearch(args: argparse.Namespace) -> int:
         if value is not None:
             md_params[param_key] = value
 
+    from acp.calculations.progress import ProgressReporter
     from acp.confsearch import ConfsearchEngine, ConfsearchRequest
+    from acp.confsearch.engine import CONFSEARCH_STAGES
 
     def _run_one(source: str, name: str | None) -> int:
+        reporter = ProgressReporter(
+            output_dir,
+            job_name="Confsearch",
+            stages=list(CONFSEARCH_STAGES),
+        )
         request = ConfsearchRequest(
             input_source=source,
             output_dir=output_dir,
@@ -773,9 +780,10 @@ def _handle_confsearch(args: argparse.Namespace) -> int:
             config=cfg,
         )
         try:
-            result = ConfsearchEngine().run(request)
+            result = ConfsearchEngine().run(request, progress_reporter=reporter)
         except KeyboardInterrupt:
             logger.warning("Interrupted by user")
+            reporter.fail("interrupted")
             return 130
         except ValueError as exc:
             logger.error("%s", exc)
@@ -811,11 +819,12 @@ def _handle_pessearch(args: argparse.Namespace) -> int:
     from acp.calculations.pes.scan import PES_SCAN_STAGES
     from acp.calculations.progress import ProgressReporter
 
-    pes_stages = list(PES_SCAN_STAGES)
+    pes_stages: list[str] = [str(stage) for stage in PES_SCAN_STAGES]
     reporter = ProgressReporter(Path(args.output), job_name="PESsearch", stages=pes_stages)
 
     error_msg: str | None = None
     rc = 0
+    result: Any | None = None
 
     try:
         # -- resolve reaction definition (optional, form ④) --
@@ -906,7 +915,7 @@ def _handle_pessearch(args: argparse.Namespace) -> int:
             )
             rc = 2
 
-        if error_msg is None:
+        if error_msg is None and result is not None:
             if result.status != "completed":
                 error_str = result.error or ""
                 for code in ("PES_E_MANIFEST", "PES_E_COORD", "PES_E_STRATEGY"):
@@ -1164,7 +1173,7 @@ def _build_bond_scan_request(args: argparse.Namespace) -> dict[str, Any]:
         protocol.setdefault("scan_driver", {})["max_iterations"] = args.max_iterations
         protocol.setdefault("scan_optimizer", {})["max_iterations"] = args.max_iterations
 
-    result = {
+    result: dict[str, Any] = {
         "mode": "bond_length_scan",
         "source": source,
         "coordinate": coordinate,
@@ -1178,10 +1187,18 @@ def _build_bond_scan_request(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _handle_batch_optimize(args: argparse.Namespace) -> int:
+    from acp.calculations.batch.engine import batch_stage_names
     from acp.calculations.batch.options import BatchMethodOptions
+    from acp.calculations.progress import ProgressReporter
     from acp.workflows.batch_optimize import BatchOptimizeInputError, run_batch_optimize
 
     setup_logging(args.log_level)
+    output_dir = Path(args.output)
+    reporter = ProgressReporter(
+        output_dir,
+        job_name="BatchOptimize",
+        stages=batch_stage_names(args.profile),
+    )
     from_job = getattr(args, "from_job", None)
     if from_job:
         source = _resolve_batch_artifact_from_job(from_job, args.from_artifact)
@@ -1191,7 +1208,7 @@ def _handle_batch_optimize(args: argparse.Namespace) -> int:
         result = run_batch_optimize(
             source,
             profile=args.profile,
-            output_dir=Path(args.output),
+            output_dir=output_dir,
             config=_build_config(args),
             charge=args.charge,
             multiplicity=args.multiplicity,
@@ -1210,22 +1227,28 @@ def _handle_batch_optimize(args: argparse.Namespace) -> int:
                 transition_state_basis=args.transition_state_basis or "",
             ),
             layout_mode=args.layout_mode,
+            progress_reporter=reporter,
         )
     except BatchOptimizeInputError as exc:
         logger.error("BatchOptimize input error: %s", exc)
+        reporter.fail(str(exc))
         return 2
     except ValueError as exc:
         logger.error("BatchOptimize input error: %s", exc)
+        reporter.fail(str(exc))
         return 2
     except KeyboardInterrupt:
         logger.warning("BatchOptimize interrupted by user")
+        reporter.fail("interrupted")
         return 130
 
     if result.status != "completed":
         logger.error("BatchOptimize failed: %s", result.error)
+        reporter.fail(result.error or "BatchOptimize failed")
         return 1
     logger.info("BatchOptimize completed: profile=%s", args.profile)
     logger.info("  Manifest: %s", result.metadata.get("manifest_path"))
+    reporter.complete()
     return 0
 
 
@@ -2023,12 +2046,14 @@ def _build_simple_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _handle_singlepoint(args: argparse.Namespace) -> int:
+    from acp.calculations.progress import ProgressReporter
     from acp.workflows.simple import run_singlepoint
 
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
     method_kwargs = _build_simple_method_kwargs(args)
+    reporter = ProgressReporter(out, job_name="singlepoint", stages=["single_point"])
     try:
         result = run_singlepoint(
             input_source=args.input,
@@ -2038,28 +2063,35 @@ def _handle_singlepoint(args: argparse.Namespace) -> int:
             multiplicity=args.multiplicity,
             name=args.name,
             method_kwargs=method_kwargs,
+            progress_reporter=reporter,
         )
     except KeyboardInterrupt:
         logger.warning("Singlepoint interrupted by user")
+        reporter.fail("interrupted")
         return 130
     except Exception as exc:
         logger.exception("Singlepoint failed: %s", exc)
+        reporter.fail(str(exc))
         return 1
     if result.status == "completed":
         logger.info("Single-point calculation completed")
         logger.info("  Energy: %s Hartree", result.metadata.get("energy", "N/A"))
+        reporter.complete()
         return 0
     logger.error("Single-point calculation failed: %s", result.error)
+    reporter.fail(result.error or "Single-point calculation failed")
     return 1
 
 
 def _handle_optimize(args: argparse.Namespace) -> int:
+    from acp.calculations.progress import ProgressReporter
     from acp.workflows.simple import run_optimize
 
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
     method_kwargs = _build_simple_method_kwargs(args)
+    reporter = ProgressReporter(out, job_name="optimize", stages=["optimize"])
     try:
         result = run_optimize(
             input_source=args.input,
@@ -2069,28 +2101,35 @@ def _handle_optimize(args: argparse.Namespace) -> int:
             multiplicity=args.multiplicity,
             name=args.name,
             method_kwargs=method_kwargs,
+            progress_reporter=reporter,
         )
     except KeyboardInterrupt:
         logger.warning("Optimization interrupted by user")
+        reporter.fail("interrupted")
         return 130
     except Exception as exc:
         logger.exception("Optimization failed: %s", exc)
+        reporter.fail(str(exc))
         return 1
     if result.status == "completed":
         logger.info("Geometry optimization completed")
         logger.info("  Energy: %s Hartree", result.metadata.get("energy", "N/A"))
+        reporter.complete()
         return 0
     logger.error("Optimization failed: %s", result.error)
+    reporter.fail(result.error or "Optimization failed")
     return 1
 
 
 def _handle_frequency(args: argparse.Namespace) -> int:
+    from acp.calculations.progress import ProgressReporter
     from acp.workflows.simple import run_frequency
 
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
     method_kwargs = _build_simple_method_kwargs(args)
+    reporter = ProgressReporter(out, job_name="frequency", stages=["frequency"])
     try:
         result = run_frequency(
             input_source=args.input,
@@ -2100,29 +2139,36 @@ def _handle_frequency(args: argparse.Namespace) -> int:
             multiplicity=args.multiplicity,
             name=args.name,
             method_kwargs=method_kwargs,
+            progress_reporter=reporter,
         )
     except KeyboardInterrupt:
         logger.warning("Frequency calculation interrupted by user")
+        reporter.fail("interrupted")
         return 130
     except Exception as exc:
         logger.exception("Frequency calculation failed: %s", exc)
+        reporter.fail(str(exc))
         return 1
     if result.status == "completed":
         logger.info("Frequency calculation completed")
         logger.info("  Modes: %s", result.metadata.get("n_frequencies", "N/A"))
+        reporter.complete()
         return 0
     logger.error("Frequency calculation failed: %s", result.error)
+    reporter.fail(result.error or "Frequency calculation failed")
     return 1
 
 
 def _handle_scan(args: argparse.Namespace) -> int:
     """Execute a relaxed internal-coordinate scan."""
     from acp.calculations.contracts import CalculationRequest, StructureArtifact
-    from acp.calculations.primitives.scan import ScanCoordinateError, run_scan
+    from acp.calculations.primitives.scan import ScanCoordinateError
+    from acp.calculations.progress import ProgressReporter
     from acp.storage.layout import TaskStorage
-    from acp.workflows.simple import _calc_subdir, _check_input, _resolve_output_dir
+    from acp.workflows.simple import _calc_subdir, _check_input, _resolve_output_dir, run_scan
 
     setup_logging(args.log_level)
+    reporter = ProgressReporter(Path(args.output), job_name="scan", stages=["scan"])
     try:
         _check_input(args.input)
         cfg = _build_config(args)
@@ -2159,34 +2205,48 @@ def _handle_scan(args: argparse.Namespace) -> int:
                 resources=resources,
                 workflow="scan",
                 profile="default",
-            )
+            ),
+            progress_reporter=reporter,
         )
     except ScanCoordinateError as exc:
         logger.error("Scan coordinate validation failed: %s", exc)
+        reporter.fail(str(exc))
         return 2
     except KeyboardInterrupt:
         logger.warning("Relaxed scan interrupted by user")
+        reporter.fail("interrupted")
         return 130
     except Exception as exc:
         logger.exception("Relaxed scan failed: %s", exc)
+        reporter.fail(str(exc))
         return 1
 
     if result.status == "completed":
         logger.info("Relaxed scan completed")
         logger.info("  Frames: %s", result.metadata.get("frame_count", "N/A"))
         logger.info("  Output: %s", result.metadata.get("output_dir", args.output))
+        reporter.complete()
         return 0
     logger.error("Relaxed scan failed: %s", "; ".join(result.errors))
+    reporter.fail("; ".join(result.errors) or "Relaxed scan failed")
     return 1
 
 
 def _handle_irc(args: argparse.Namespace) -> int:
     """Execute an independent IRC request from one transition-state artifact."""
     from acp.calculations.contracts import StructureArtifact
+    from acp.calculations.progress import ProgressReporter
     from acp.workflows.irc import run_irc_workflow
 
     setup_logging(args.log_level)
     directions = ("forward", "reverse") if args.direction == "both" else (args.direction,)
+    stages = ["preparing"]
+    if "forward" in directions:
+        stages.append("irc_forward")
+    if "reverse" in directions:
+        stages.append("irc_backward")
+    stages.append("validating")
+    reporter = ProgressReporter(Path(args.output), job_name="irc", stages=stages)
     try:
         result = run_irc_workflow(
             input_artifact=StructureArtifact(path=Path(args.input), source="cli"),
@@ -2200,22 +2260,28 @@ def _handle_irc(args: argparse.Namespace) -> int:
             input_role=args.input_role,
             charge=args.charge,
             multiplicity=args.multiplicity,
+            progress_reporter=reporter,
         )
     except ValueError as exc:
         logger.error("IRC input error: %s", exc)
+        reporter.fail(str(exc))
         return 2
     except KeyboardInterrupt:
         logger.warning("IRC interrupted by user")
+        reporter.fail("interrupted")
         return 130
     except (OSError, RuntimeError, TypeError) as exc:
         logger.exception("IRC failed: %s", exc)
+        reporter.fail(str(exc))
         return 1
 
     if result.status == "completed":
         logger.info("IRC completed")
         logger.info("  Report: %s", result.metadata.get("report_path", "N/A"))
+        reporter.complete()
         return 0
     logger.error("IRC failed: %s", result.error)
+    reporter.fail(result.error or "IRC failed")
     return 1
 
 
@@ -2229,12 +2295,14 @@ def _build_xtb_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _handle_xtb_optimize(args: argparse.Namespace) -> int:
+    from acp.calculations.progress import ProgressReporter
     from acp.workflows.simple import run_xtb_optimize
 
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
     method_kwargs = _build_xtb_method_kwargs(args)
+    reporter = ProgressReporter(out, job_name="xtb_optimize", stages=["xtb_optimize"])
     try:
         result = run_xtb_optimize(
             input_source=args.input,
@@ -2244,18 +2312,23 @@ def _handle_xtb_optimize(args: argparse.Namespace) -> int:
             multiplicity=args.multiplicity,
             name=args.name,
             method_kwargs=method_kwargs,
+            progress_reporter=reporter,
         )
     except KeyboardInterrupt:
         logger.warning("xTB optimization interrupted by user")
+        reporter.fail("interrupted")
         return 130
     except Exception as exc:
         logger.exception("xTB optimization failed: %s", exc)
+        reporter.fail(str(exc))
         return 1
     if result.status == "completed":
         logger.info("xTB geometry optimization completed")
         logger.info("  Energy: %s Hartree", result.metadata.get("energy", "N/A"))
+        reporter.complete()
         return 0
     logger.error("xTB optimization failed: %s", result.error)
+    reporter.fail(result.error or "xTB optimization failed")
     return 1
 
 
@@ -2457,9 +2530,16 @@ def _handle_nmr(args: argparse.Namespace) -> int:
         save_cfg(cfg, Path(args.save_config))
         logger.info("Configuration saved to: %s", args.save_config)
 
-    try:
-        from acp.workflows.nmr import run_nmr_analysis
+    from acp.calculations.progress import ProgressReporter
+    from acp.workflows.nmr import NMR_STAGES, run_nmr_analysis
 
+    reporter = ProgressReporter(
+        output_dir,
+        job_name="nmr",
+        stages=list(NMR_STAGES),
+    )
+
+    try:
         result = run_nmr_analysis(
             input_sources=args.input,
             spectrum=args.spectrum,
@@ -2482,12 +2562,15 @@ def _handle_nmr(args: argparse.Namespace) -> int:
             stereocenters=args.stereocenters,
             bruker=args.bruker,
             bruker_references=bruker_references,
+            progress_reporter=reporter,
         )
     except KeyboardInterrupt:
         logger.warning("Interrupted by user")
+        reporter.fail("interrupted")
         return 130
     except Exception as exc:
         logger.exception("Fatal error: %s", exc)
+        reporter.fail(str(exc))
         return 1
 
     if result.status == "completed":
@@ -2508,9 +2591,11 @@ def _handle_nmr(args: argparse.Namespace) -> int:
         logger.info("  Error model       : %s", meta.get("error_model", "N/A"))
         if meta.get("note"):
             logger.warning("  NOTE: %s", meta["note"])
+        reporter.complete()
         return 0
 
     logger.error("NMR workflow failed: %s", result.error)
+    reporter.fail(result.error or "NMR workflow failed")
     return 1
 
 
