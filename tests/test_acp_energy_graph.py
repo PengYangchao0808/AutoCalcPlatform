@@ -81,6 +81,49 @@ def test_s2_projection_contains_series_nodes_and_annotations() -> None:
     assert any(item["type"] == "minimum" for item in graph["annotations"])
 
 
+def test_pes_profile_v2_projection_uses_canonical_fields() -> None:
+    payload = {
+        "schema_version": "pes_profile_v2",
+        "workflow": "PESsearch",
+        "mode": "bond_length_scan",
+        "status": "completed",
+        "coordinate": {"kind": "distance", "unit": "angstrom"},
+        "protocol": {"coordinate": {"kind": "distance", "unit": "angstrom"}},
+        "scan_dir": "WORK/07_PATH/pes_scan_001",
+        "frames": [
+            {
+                "index": 0,
+                "target_coordinate": 1.2,
+                "actual_coordinate": 1.2,
+                "geometry_path": "scan_frames/frame_000.xyz",
+                "scan_energy_hartree": -10.0,
+                "optimization_converged": True,
+                "single_point_status": "skipped",
+            }
+        ],
+        "profile": {
+            "energy_source": "scan",
+            "relative_energies_kcal_mol": [0.0],
+            "raw_hartree": [-10.0],
+        },
+        "quality": {"scan_complete": True},
+        "ts_candidates": [],
+        "int_candidates": [],
+    }
+
+    graph = build_energy_graph_from_job(
+        "pes-job",
+        workflow="PESsearch",
+        method={"mode": "bond_length_scan"},
+        work_dir=Path("."),
+        s2_payload=payload,
+    )
+
+    assert graph["title"] == "PESsearch 扫描能量"
+    assert graph["source"] == "RESULT/pes_search/pes_profile.json"
+    assert graph["nodes"][0]["geometry_ref"] == "scan_frames/frame_000.xyz"
+
+
 def test_optimization_projection_reads_existing_result_product(tmp_path: Path) -> None:
     path = tmp_path / "RESULT" / "trajectories" / "optimization.json"
     path.parent.mkdir(parents=True)

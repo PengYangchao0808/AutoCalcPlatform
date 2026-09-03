@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -34,21 +35,31 @@ class ProductKind(str, Enum):
 
 @dataclass
 class Product:
-    """One result product entry: ``{id, label, path, kind}`` with path relative to ``RESULT/``."""
+    """One result product entry: ``{id, label, path, kind}`` with path relative to ``RESULT/``.
+
+    ``metadata`` carries optional structured fields (e.g. ``candidate_id``,
+    ``role``, ``frame_index``, ``selection_source``) for consumers such as the
+    BatchOptimize manifest loader; it is omitted from the JSON when empty so
+    pre-metadata manifest files keep their exact shape.
+    """
 
     id: str
     label: str
     path: str
     kind: ProductKind = ProductKind.FILE
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise to a JSON-safe dict."""
-        return {
+        payload: dict[str, Any] = {
             "id": self.id,
             "label": self.label,
             "path": self.path,
             "kind": self.kind.value,
         }
+        if self.metadata:
+            payload["metadata"] = dict(self.metadata)
+        return payload
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> Product:
@@ -58,11 +69,14 @@ class Product:
         except ValueError:
             logger.warning("unknown product kind %r; falling back to 'file'", payload.get("kind"))
             kind = ProductKind.FILE
+        raw_metadata = payload.get("metadata")
+        metadata = dict(raw_metadata) if isinstance(raw_metadata, dict) else {}
         return cls(
             id=str(payload.get("id", "")),
             label=str(payload.get("label", "")),
             path=str(payload.get("path", "")),
             kind=kind,
+            metadata=metadata,
         )
 
 
@@ -82,9 +96,16 @@ class ResultManifest:
         label: str,
         path: str,
         kind: ProductKind | str = ProductKind.FILE,
+        metadata: Mapping[str, Any] | None = None,
     ) -> Product:
         """Append or replace (by ``id``) a product entry; returns the stored product."""
-        product = Product(id=id, label=label, path=path, kind=ProductKind(kind))
+        product = Product(
+            id=id,
+            label=label,
+            path=path,
+            kind=ProductKind(kind),
+            metadata=dict(metadata) if metadata else {},
+        )
         self.products = [p for p in self.products if p.id != id]
         self.products.append(product)
         return product

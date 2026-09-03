@@ -96,6 +96,10 @@ from acp.api.v1_schemas import (
     NodePingResponse,
     NodeStatusModel,
     OptimizationFrameResponse,
+    PesReviewCandidate,
+    PesReviewRequest,
+    PesReviewResponse,
+    PesReviewStateResponse,
     ProjectCreateRequest,
     ProjectListResponse,
     ProjectModel,
@@ -159,6 +163,11 @@ from acp.chem.embedding import (
     xyz_formula,
 )
 from acp.results.manifest import MANIFEST_FILENAME, load_result_manifest
+from acp.results.pes_profile import (
+    LEGACY_S2_PROFILE_RELATIVE_PATH,
+    PES_PROFILE_RELATIVE_PATH,
+    load_pes_profile,
+)
 from acp.scheduler.artifacts import Artifact, ArtifactRegistry
 from acp.scheduler.files import build_manifest, resolve_safe
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
@@ -937,6 +946,8 @@ def _prepare_bond_scan_input(
         raise HTTPException(status_code=422, detail="xyz_text source requires source.xyz_text")
 
     coordinate = inp.get("coordinate")
+    coordinates = inp.get("coordinates")
+    selection = inp.get("selection")
     protocol = inp.get("protocol")
     if not isinstance(coordinate, dict) or not coordinate.get("atoms"):
         raise HTTPException(
@@ -944,6 +955,17 @@ def _prepare_bond_scan_input(
         )
     if not isinstance(protocol, dict):
         protocol = {}
+    if coordinates is not None and (
+        not isinstance(coordinates, list)
+        or not coordinates
+        or not all(isinstance(item, dict) and item.get("atoms") for item in coordinates)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="coordinates must be a non-empty list of coordinate objects with atoms",
+        )
+    if selection is not None and not isinstance(selection, dict):
+        raise HTTPException(status_code=422, detail="selection must be an object")
 
     prepared = dict(inp)
     prepared["source"] = src
@@ -1254,29 +1276,45 @@ def promote_mechanism_study(study_id: str, request: Request) -> StudyPromoteResp
 
 
 # ---------------------------------------------------------------------------
-# S2 bond-length scan (§11): structure assets, profile, candidates, frames,
-# review persistence and candidate-result handoff.
+# PESsearch scan projection (§11): profile, candidates, frames, and the
+# legacy /s2 route compatibility surface.
 # ---------------------------------------------------------------------------
 
 
-def _s2_manifest_for_job(manager: Any, job_id: str) -> tuple[Path, dict[str, Any]]:
-    """Locate + read the s2_path manifest for a PESsearch job."""
+def _pes_profile_for_job(manager: Any, job_id: str) -> tuple[Path, dict[str, Any]]:
+    """Locate a canonical PES profile, with read-only legacy S2 fallback."""
     record = manager.get(job_id)
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     work_dir = Path(record.work_dir) if record.work_dir else None
     if work_dir is None or not work_dir.is_dir():
         raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
-    manifest_path = work_dir / "RESULT" / "mechanism" / "s2_path_manifest.json"
-    if not manifest_path.is_file():
-        raise HTTPException(status_code=404, detail=f"No s2_path_manifest.json for job {job_id}")
-    from acp.compat.legacy.manifests import read_s2_path_manifest
+    canonical_path = work_dir / PES_PROFILE_RELATIVE_PATH
+    if canonical_path.is_file():
+        try:
+            payload = load_pes_profile(
+                canonical_path,
+                source_path=PES_PROFILE_RELATIVE_PATH,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return canonical_path, payload
 
-    try:
-        payload = read_s2_path_manifest(manifest_path)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return manifest_path, payload
+    legacy_path = work_dir / LEGACY_S2_PROFILE_RELATIVE_PATH
+    if legacy_path.is_file():
+        from acp.compat.legacy.manifests import read_s2_path_manifest
+
+        try:
+            payload = read_s2_path_manifest(legacy_path)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        payload["_source_path"] = LEGACY_S2_PROFILE_RELATIVE_PATH
+        return legacy_path, payload
+
+    raise HTTPException(
+        status_code=404,
+        detail=(f"No PES profile for job {job_id}; expected {PES_PROFILE_RELATIVE_PATH}"),
+    )
 
 
 @router.get("/jobs/{job_id}/energy-graph", response_model=EnergyGraphResponse)
@@ -1284,6 +1322,7 @@ def get_energy_graph(
     job_id: str,
     request: Request,
     view_type: str = Query(default="auto"),
+    item_id: str | None = Query(default=None),
 ) -> EnergyGraphResponse:
     """Return the normalized energy-workspace projection for a job.
 
@@ -1308,18 +1347,42 @@ def get_energy_graph(
     s2_review_state: dict[str, Any] | None = None
 
     if workflow == "PESsearch" and str(method.get("mode") or "") == "bond_length_scan":
+        from acp.calculations.pes.review import load_pes_review
         from acp.compat.legacy.manifests import read_s2_candidate_manifest, read_s2_review
 
-        _manifest_path, s2_payload = _s2_manifest_for_job(manager, job_id)
+        _manifest_path, s2_payload = _pes_profile_for_job(manager, job_id)
         if s2_payload is not None:
-            saved_review = read_s2_review(_manifest_path)
-            candidate_manifest = read_s2_candidate_manifest(_manifest_path)
-            s2_candidates = (
-                candidate_manifest.get("candidates")
-                if isinstance(candidate_manifest, dict)
-                else None
-            )
-            s2_review_state = saved_review if isinstance(saved_review, dict) else None
+            manual_review = load_pes_review(work_dir)
+            if manual_review is not None:
+                selected_rows = []
+                for row in manual_review.get("selected") or []:
+                    if not isinstance(row, dict) or not row.get("candidate_id"):
+                        continue
+                    role_token = str(row.get("role") or "").upper()
+                    selected_rows.append(
+                        {
+                            "candidate_id": str(row.get("candidate_id") or ""),
+                            "frame_index": int(row.get("frame_index") or 0),
+                            "role": "ts" if role_token == "TS" else "intermediate",
+                            "active": True,
+                            "selection_source": str(row.get("selection_source") or "manual"),
+                        }
+                    )
+                s2_candidates = selected_rows or None
+                s2_review_state = {
+                    "status": str(manual_review.get("status") or "confirmed"),
+                    "decided_at": manual_review.get("confirmed_at"),
+                    "revision": manual_review.get("revision"),
+                }
+            else:
+                saved_review = read_s2_review(_manifest_path)
+                candidate_manifest = read_s2_candidate_manifest(_manifest_path)
+                s2_candidates = (
+                    candidate_manifest.get("candidates")
+                    if isinstance(candidate_manifest, dict)
+                    else None
+                )
+                s2_review_state = saved_review if isinstance(saved_review, dict) else None
     elif workflow == "mechanism":
         store = _job_store(request)
         rows = store.list_mechanism_studies(limit=1, job_id=job_id)
@@ -1339,6 +1402,7 @@ def get_energy_graph(
         mechanism_report=mechanism_report,
         s2_candidates=s2_candidates,
         s2_review_state=s2_review_state,
+        item_id=item_id,
     )
     if view_type not in {"", "auto", str(graph.get("view_type") or "")}:
         raise HTTPException(
@@ -1470,7 +1534,7 @@ def preview_s2_structure(
 @router.get("/jobs/{job_id}/s2/profile", response_model=S2ProfileResponse)
 def get_s2_profile(job_id: str, request: Request) -> S2ProfileResponse:
     manager = _manager(request)
-    _manifest_path, payload = _s2_manifest_for_job(manager, job_id)
+    _manifest_path, payload = _pes_profile_for_job(manager, job_id)
     scan = payload.get("scan") or {}
     frames = [S2FrameModel(**frame) for frame in scan.get("frames") or []]
     return S2ProfileResponse(
@@ -1478,6 +1542,10 @@ def get_s2_profile(job_id: str, request: Request) -> S2ProfileResponse:
         mode=str(payload.get("mode") or ""),
         status=str(payload.get("status") or ""),
         stationary_point_claimed=bool(payload.get("stationary_point_claimed")),
+        coordinate=dict(payload.get("coordinate") or {}),
+        coordinates=[item for item in payload.get("coordinates") or [] if isinstance(item, dict)],
+        selection=dict(payload.get("selection") or {}),
+        protocol=dict(payload.get("protocol") or {}),
         scan={key: value for key, value in scan.items() if key != "frames"},
         energy_profile=dict(payload.get("energy_profile") or {}),
         frames=frames,
@@ -1487,7 +1555,7 @@ def get_s2_profile(job_id: str, request: Request) -> S2ProfileResponse:
 @router.get("/jobs/{job_id}/s2/candidates", response_model=S2CandidatesResponse)
 def get_s2_candidates(job_id: str, request: Request) -> S2CandidatesResponse:
     manager = _manager(request)
-    _manifest_path, payload = _s2_manifest_for_job(manager, job_id)
+    _manifest_path, payload = _pes_profile_for_job(manager, job_id)
     return S2CandidatesResponse(
         job_id=job_id,
         mode=str(payload.get("mode") or ""),
@@ -1501,19 +1569,25 @@ def get_s2_candidates(job_id: str, request: Request) -> S2CandidatesResponse:
 @router.get("/jobs/{job_id}/s2/frame/{frame_index}", response_model=S2FrameResponse)
 def get_s2_frame(job_id: str, frame_index: int, request: Request) -> S2FrameResponse:
     manager = _manager(request)
-    manifest_path, payload = _s2_manifest_for_job(manager, job_id)
+    manifest_path, payload = _pes_profile_for_job(manager, job_id)
     frames = (payload.get("scan") or {}).get("frames") or []
-    frame = next((f for f in frames if int(f.get("index") or -1) == frame_index), None)
+    frame = next(
+        (f for f in frames if f.get("index") is not None and int(f.get("index")) == frame_index),
+        None,
+    )
     if frame is None:
         raise HTTPException(
             status_code=404, detail=f"Frame {frame_index} not found in job {job_id}"
         )
-    work_dir = Path(str(manifest_path))
-    work_dir = work_dir.parent.parent.parent
     scan_dir = str((payload.get("scan") or {}).get("scan_dir") or "")
-    xyz_path = work_dir / scan_dir / str(frame.get("geometry_path") or "")
+    task_root = manifest_path.parent.parent.parent
+    geometry_path = str(frame.get("geometry_path") or "")
+    relative_geometry = posixpath.join(
+        scan_dir.replace("\\", "/"), geometry_path.replace("\\", "/")
+    )
+    xyz_path = resolve_safe(task_root, relative_geometry)
     xyz = ""
-    if xyz_path.is_file():
+    if xyz_path is not None:
         xyz = xyz_path.read_text(encoding="utf-8")
     return S2FrameResponse(
         job_id=job_id,
@@ -1525,6 +1599,8 @@ def get_s2_frame(job_id: str, frame_index: int, request: Request) -> S2FrameResp
         single_point_energy_hartree=frame.get("single_point_energy_hartree"),
         optimization_converged=bool(frame.get("optimization_converged")),
         single_point_status=str(frame.get("single_point_status") or ""),
+        target_coordinates=dict(frame.get("target_coordinates") or {}),
+        actual_coordinates=dict(frame.get("actual_coordinates") or {}),
     )
 
 
@@ -1550,6 +1626,111 @@ def save_job_s2_review(
     request: Request,
 ) -> S2JobReviewResponse:
     raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
+
+
+# ---------------------------------------------------------------------------
+# PES manual review (pes_review_v1): user-confirmed TS/INT selections are the
+# authoritative hand-off to BatchOptimize via RESULT/result_manifest.json.
+# ---------------------------------------------------------------------------
+
+
+def _pes_review_work_dir(request: Request, job_id: str, *, require_completed: bool) -> Path:
+    """Resolve the task dir of a canonical PESsearch job for manual review.
+
+    Raises:
+        404: job/work_dir missing or no canonical PES profile.
+        400: job is not a PESsearch job.
+        409: job has not completed yet (POST only).
+        410: legacy mechanism task (read-only compatibility).
+    """
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if str(record.spec.workflow or "") != "PESsearch":
+        raise HTTPException(
+            status_code=400,
+            detail=f"PES review is only available for PESsearch jobs, got {record.spec.workflow!r}",
+        )
+    if not record.work_dir:
+        raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
+    work_dir = Path(record.work_dir)
+    canonical = work_dir / PES_PROFILE_RELATIVE_PATH
+    legacy = work_dir / LEGACY_S2_PROFILE_RELATIVE_PATH
+    if not canonical.is_file():
+        if legacy.is_file():
+            raise HTTPException(
+                status_code=410,
+                detail="历史 mechanism 任务保持只读，不支持人工确认选点",
+            )
+        raise HTTPException(
+            status_code=404,
+            detail=f"No PES profile for job {job_id}; expected {PES_PROFILE_RELATIVE_PATH}",
+        )
+    if require_completed and record.status != JobStatus.COMPLETED:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job {job_id} is not completed yet (status={record.status.value})",
+        )
+    return work_dir
+
+
+@router.get("/jobs/{job_id}/pes/review", response_model=PesReviewStateResponse)
+def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
+    """Return the saved manual-review state (``pending`` when never saved)."""
+    work_dir = _pes_review_work_dir(request, job_id, require_completed=False)
+
+    from acp.calculations.pes.review import load_pes_review
+
+    review = load_pes_review(work_dir)
+    if review is None:
+        return PesReviewStateResponse(job_id=job_id, status="pending", review={})
+    return PesReviewStateResponse(job_id=job_id, status="confirmed", review=review)
+
+
+@router.post("/jobs/{job_id}/pes/review", response_model=PesReviewResponse)
+def save_pes_review_endpoint(
+    job_id: str,
+    req: PesReviewRequest,
+    request: Request,
+) -> PesReviewResponse:
+    """Confirm TS/INT selections: materialise RESULT/structures + pes_review.json + manifest."""
+    work_dir = _pes_review_work_dir(request, job_id, require_completed=True)
+
+    from acp.calculations.pes.review import PesReviewError, RevisionConflictError
+    from acp.calculations.pes.review import save_pes_review as persist_pes_review
+
+    try:
+        payload = persist_pes_review(
+            work_dir,
+            job_id=job_id,
+            candidates=[item.model_dump(exclude_none=True) for item in req.candidates],
+            note=req.note or "",
+            expected_revision=req.expected_revision,
+        )
+    except RevisionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except PesReviewError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return PesReviewResponse(
+        job_id=job_id,
+        status=str(payload.get("status") or "confirmed"),
+        revision=int(payload.get("revision") or 0),
+        selected_count=len(payload.get("selected") or []),
+        note=payload.get("note") or None,
+        confirmed_at=payload.get("confirmed_at"),
+        candidates=[
+            PesReviewCandidate(
+                candidate_id=str(row.get("candidate_id") or ""),
+                role=str(row.get("role") or ""),
+                frame_index=int(row.get("frame_index") or 0),
+                name=str(row.get("name") or ""),
+                structure_path=str(row.get("structure_path") or ""),
+            )
+            for row in payload.get("selected") or []
+        ],
+    )
 
 
 @router.get("/jobs/{job_id}", response_model=V1JobRecordModel)

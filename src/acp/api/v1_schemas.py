@@ -934,6 +934,8 @@ class S2StructurePreviewResponse(BaseModel):
 class BondLengthScanJobInput(BaseModel):
     source: BondLengthScanSource
     coordinate: dict[str, Any]
+    coordinates: list[dict[str, Any]] | None = None
+    selection: dict[str, Any] = Field(default_factory=dict)
     protocol: dict[str, Any] = Field(default_factory=dict)
     source_job_id: str | None = None
     from_artifact: str | None = None
@@ -949,6 +951,8 @@ class S2FrameModel(BaseModel):
     single_point_energy_hartree: float | None = None
     optimization_converged: bool = True
     single_point_status: str = "skipped"
+    target_coordinates: dict[str, float] = Field(default_factory=dict)
+    actual_coordinates: dict[str, float] = Field(default_factory=dict)
     source_log: str = ""
 
 
@@ -957,6 +961,10 @@ class S2ProfileResponse(BaseModel):
     mode: str
     status: str
     stationary_point_claimed: bool
+    coordinate: dict[str, Any] = Field(default_factory=dict)
+    coordinates: list[dict[str, Any]] = Field(default_factory=list)
+    selection: dict[str, Any] = Field(default_factory=dict)
+    protocol: dict[str, Any] = Field(default_factory=dict)
     scan: dict[str, Any] = Field(default_factory=dict)
     energy_profile: dict[str, Any] = Field(default_factory=dict)
     frames: list[S2FrameModel] = Field(default_factory=list)
@@ -981,6 +989,8 @@ class S2FrameResponse(BaseModel):
     single_point_energy_hartree: float | None = None
     optimization_converged: bool = True
     single_point_status: str = ""
+    target_coordinates: dict[str, float] = Field(default_factory=dict)
+    actual_coordinates: dict[str, float] = Field(default_factory=dict)
 
 
 class OptimizationFrameResponse(BaseModel):
@@ -1042,6 +1052,51 @@ class S2JobReviewResponse(BaseModel):
     candidate_manifest: str = ""
     structures_dir: str = ""
     result_manifest: str = ""
+
+
+class PesReviewCandidateItem(BaseModel):
+    """One manually confirmed PES frame selection (``POST /jobs/{id}/pes/review``)."""
+
+    frame_index: int
+    role: str  # TS / INT (case-insensitive; ``ts``/``intermediate`` aliases accepted)
+    candidate_id: str | None = None  # generated server-side when omitted
+    name: str | None = None
+
+
+class PesReviewRequest(BaseModel):
+    """Manual PES review payload — the full selection replaces the stored one."""
+
+    candidates: list[PesReviewCandidateItem] = Field(default_factory=list)
+    note: str | None = None
+    expected_revision: int | None = None  # 409 when it mismatches the stored revision
+
+
+class PesReviewCandidate(BaseModel):
+    candidate_id: str
+    role: str
+    frame_index: int
+    name: str = ""
+    structure_path: str = ""
+
+
+class PesReviewResponse(BaseModel):
+    job_id: str
+    status: str
+    review_path: str = "RESULT/pes_search/pes_review.json"
+    revision: int = 0
+    selected_count: int = 0
+    note: str | None = None
+    confirmed_at: str | None = None
+    candidates: list[PesReviewCandidate] = Field(default_factory=list)
+    result_manifest: str = "RESULT/result_manifest.json"
+
+
+class PesReviewStateResponse(BaseModel):
+    """Current manual-review state (``GET /jobs/{id}/pes/review``)."""
+
+    job_id: str
+    status: str = "pending"  # "pending" | "confirmed"
+    review: dict[str, Any] = Field(default_factory=dict)  # full pes_review_v1 payload
 
 
 class EnergyGraphSeriesModel(BaseModel):

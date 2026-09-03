@@ -23,6 +23,7 @@ __all__ = [
     "build_energy_graph_from_job",
     "build_mechanism_energy_graph",
     "build_optimization_energy_graph",
+    "build_pes_energy_graph",
     "build_s2_energy_graph",
     "build_unavailable_energy_graph",
 ]
@@ -148,6 +149,11 @@ def build_s2_energy_graph(
     the manifest's algorithm recommendations shown as unsaved initial
     markings.
     """
+    original_schema = str(payload.get("schema_version") or "")
+    if not (isinstance(payload.get("scan"), dict) and "energy_profile" in payload):
+        from acp.results.pes_profile import normalize_pes_profile
+
+        payload = normalize_pes_profile(payload)
     scan = payload.get("scan") or {}
     frames = [frame for frame in (scan.get("frames") or []) if isinstance(frame, dict)]
     profile = payload.get("energy_profile") or {}
@@ -183,6 +189,8 @@ def build_s2_energy_graph(
                 "metadata": {
                     "target_coordinate": frame.get("target_coordinate"),
                     "actual_coordinate": frame.get("actual_coordinate"),
+                    "target_coordinates": frame.get("target_coordinates") or {},
+                    "actual_coordinates": frame.get("actual_coordinates") or {},
                     "scan_energy_hartree": frame.get("scan_energy_hartree"),
                     "single_point_energy_hartree": frame.get("single_point_energy_hartree"),
                     "single_point_status": frame.get("single_point_status"),
@@ -290,10 +298,19 @@ def build_s2_energy_graph(
     complete = bool(
         quality.get("scan_complete", payload.get("status") in {"ready_for_review", "completed"})
     )
+    source = str(
+        payload.get("_source_path")
+        or (
+            "RESULT/pes_search/pes_profile.json"
+            if original_schema == "pes_profile_v2"
+            else "RESULT/mechanism/s2_path_manifest.json"
+        )
+    )
+    title = "PESsearch 扫描能量" if original_schema == "pes_profile_v2" else "S2 扫描能量"
     return {
         "job_id": job_id,
         "view_type": "scan",
-        "title": "S2 扫描能量",
+        "title": title,
         "status": str(payload.get("status") or "unknown"),
         "complete": complete,
         "revision": _revision(payload),
@@ -304,16 +321,19 @@ def build_s2_energy_graph(
         "nodes": nodes,
         "edges": [],
         "annotations": annotations,
-        "source": "RESULT/mechanism/s2_path_manifest.json",
+        "source": source,
         "provenance": payload.get("provenance") or {},
         "metadata": {
             "energy_source": profile.get("energy_source"),
             "sp_incomplete": bool(profile.get("sp_incomplete")),
             "frame_count": len(frames),
             "coordinate": (payload.get("protocol") or {}).get("coordinate") or {},
+            "coordinates": payload.get("coordinates") or [],
+            "selection": payload.get("selection") or {},
             "review": {
                 "status": str(review_state.get("status") or "pending"),
                 "decided_at": review_state.get("decided_at"),
+                "revision": review_state.get("revision"),
                 "saved": saved_any,
                 "active_candidates": sum(
                     1
@@ -325,88 +345,243 @@ def build_s2_energy_graph(
     }
 
 
-def build_optimization_energy_graph(job_id: str, work_dir: Path) -> dict[str, Any] | None:
-    """Build an optimization graph from the existing RESULT projections."""
-    trajectory_path = work_dir / "RESULT" / "trajectories" / "optimization.json"
-    if not trajectory_path.is_file():
-        return None
-    try:
-        trajectory = json.loads(trajectory_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    scf = _aligned(
-        trajectory.get("scf_energies"), max(len(trajectory.get("scf_energies") or []), 0)
+def build_pes_energy_graph(
+    job_id: str,
+    payload: dict[str, Any],
+    *,
+    s2_candidates: list[dict[str, Any]] | None = None,
+    s2_review_state: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build the PESsearch scan projection.
+
+    ``build_s2_energy_graph`` remains as the compatibility name for older
+    callers and historical mechanism payloads.
+    """
+    return build_s2_energy_graph(
+        job_id,
+        payload,
+        s2_candidates=s2_candidates,
+        s2_review_state=s2_review_state,
     )
-    gradients = _aligned(trajectory.get("gradients_rms"), len(scf))
-    if not scf and not gradients:
+
+
+def build_optimization_energy_graph(
+    job_id: str,
+    work_dir: Path,
+    item_id: str | None = None,
+) -> dict[str, Any] | None:
+    """Build a live or completed optimization projection."""
+    trajectory_path, trajectory = _find_optimization_trajectory(work_dir, item_id)
+    if trajectory_path is None or trajectory is None:
         return None
-    relative = _relative_hartree(scf)
+
+    raw_cycles = trajectory.get("cycles")
+    has_cycle_payload = isinstance(raw_cycles, list)
+    cycles: list[dict[str, Any]] = []
+    if has_cycle_payload:
+        for index, raw_cycle in enumerate(raw_cycles or []):
+            if not isinstance(raw_cycle, dict):
+                continue
+            cycle_number = _number(raw_cycle.get("cycle"))
+            cycles.append(
+                {
+                    **raw_cycle,
+                    "cycle": int(cycle_number) if cycle_number is not None else index + 1,
+                    "energy_hartree": _number(
+                        raw_cycle.get("energy_hartree", raw_cycle.get("energy"))
+                    ),
+                }
+            )
+    else:
+        scf_values = trajectory.get("scf_energies")
+        gradient_values = trajectory.get("gradients_rms")
+        count = max(
+            len(scf_values) if isinstance(scf_values, (list, tuple)) else 0,
+            len(gradient_values) if isinstance(gradient_values, (list, tuple)) else 0,
+        )
+        scf = _aligned(scf_values, count)
+        gradients = _aligned(gradient_values, count)
+        cycles = [
+            {
+                "cycle": index + 1,
+                "energy_hartree": scf[index],
+                "rms_gradient": gradients[index],
+            }
+            for index in range(count)
+        ]
+    if not cycles:
+        return None
+
+    source = _relative_path(trajectory_path, work_dir)
+    energy_values = [_number(cycle.get("energy_hartree")) for cycle in cycles]
+    relative = _relative_from_first(energy_values)
+    delta = [
+        None
+        if index == 0 or energy_values[index] is None or energy_values[index - 1] is None
+        else (energy_values[index] - energy_values[index - 1]) * HARTREE_TO_KCAL
+        for index in range(len(energy_values))
+    ]
+    x_values = [_number(cycle.get("cycle")) or index + 1 for index, cycle in enumerate(cycles)]
+
+    series_specs = [
+        ("relative_energy", "相对初始能量", "kcal/mol", "left", relative),
+        ("scf_energy", "SCF 能量", "Eh", "left", energy_values),
+        ("rms_gradient", "RMS 梯度", "Eh/Bohr", "right", _cycle_values(cycles, "rms_gradient")),
+        ("max_gradient", "最大梯度", "Eh/Bohr", "right", _cycle_values(cycles, "max_gradient")),
+        ("rms_displacement", "RMS 位移", "Å", "right", _cycle_values(cycles, "rms_displacement")),
+        ("max_displacement", "最大位移", "Å", "right", _cycle_values(cycles, "max_displacement")),
+    ]
+    if has_cycle_payload:
+        series_specs.insert(1, ("delta_energy", "步间能量变化", "kcal/mol", "left", delta))
     series = [
         {
-            "id": "relative_energy",
-            "label": "相对能量",
-            "unit": "kcal/mol",
-            "axis": "left",
-            "values": relative,
-            "source": str(trajectory_path.relative_to(work_dir)).replace("\\", "/"),
-        },
-        {
-            "id": "scf_energy",
-            "label": "SCF 能量",
-            "unit": "Eh",
-            "axis": "left",
-            "values": scf,
-            "source": str(trajectory_path.relative_to(work_dir)).replace("\\", "/"),
-        },
+            "id": series_id,
+            "label": label,
+            "unit": unit,
+            "axis": axis,
+            "values": values,
+            "x_values": x_values,
+            "source": source,
+        }
+        for series_id, label, unit, axis, values in series_specs
+        if any(value is not None for value in values)
     ]
-    if any(value is not None for value in gradients):
-        series.append(
+
+    raw_status = str(trajectory.get("status") or "").lower()
+    complete = bool(trajectory.get("converged")) or raw_status in {"complete", "completed"}
+    status = (
+        "completed"
+        if complete
+        else raw_status
+        if raw_status in {"running", "failed"}
+        else "partial"
+    )
+    last_index = len(cycles) - 1
+    nodes = []
+    for index, cycle in enumerate(cycles):
+        cycle_status = str(cycle.get("status") or "")
+        if index == last_index and complete:
+            cycle_status = "converged"
+        elif index == last_index and status == "running":
+            cycle_status = "running"
+        elif not cycle_status:
+            cycle_status = "completed"
+        node_metadata = {
+            "cycle": x_values[index],
+            "scf_energy_hartree": energy_values[index],
+            "delta_energy_kcal_mol": delta[index],
+            "rms_gradient": _number(cycle.get("rms_gradient")),
+            "max_gradient": _number(cycle.get("max_gradient")),
+            "rms_displacement": _number(cycle.get("rms_displacement")),
+            "max_displacement": _number(cycle.get("max_displacement")),
+            "scf_iterations": cycle.get("scf_iterations"),
+        }
+        nodes.append(
             {
-                "id": "rms_gradient",
-                "label": "RMS Gradient",
-                "unit": "Eh/Bohr",
-                "axis": "right",
-                "values": gradients,
-                "source": str(trajectory_path.relative_to(work_dir)).replace("\\", "/"),
+                "id": f"cycle_{index}",
+                "label": f"Cycle {int(x_values[index])}",
+                "type": "optimization_cycle",
+                "frame_index": index,
+                "x": x_values[index],
+                "energy": relative[index],
+                "status": cycle_status,
+                "geometry_ref": str(cycle.get("geometry_ref") or ""),
+                "metadata": node_metadata,
             }
         )
-    nodes = [
-        {
-            "id": f"cycle_{index}",
-            "label": f"Cycle {index + 1}",
-            "type": "optimization_cycle",
-            "frame_index": index,
-            "x": index,
-            "energy": relative[index] if index < len(relative) else None,
-            "status": "converged"
-            if bool(trajectory.get("converged")) and index == len(scf) - 1
-            else "completed",
-            "geometry_ref": "",
-            "metadata": {
-                "scf_energy_hartree": scf[index] if index < len(scf) else None,
-                "rms_gradient": gradients[index] if index < len(gradients) else None,
-            },
-        }
-        for index in range(max(len(scf), len(gradients)))
-    ]
+
+    metadata = {
+        "n_cycles": len(nodes),
+        "current_cycle": trajectory.get("current_cycle") or x_values[-1],
+        "item_id": trajectory.get("item_id") or item_id or "",
+        "live": not complete,
+        "thresholds": dict(trajectory.get("thresholds") or {}),
+        "last_cycle": nodes[-1]["metadata"],
+    }
     return {
         "job_id": job_id,
         "view_type": "optimization",
         "title": "几何结构优化",
-        "status": "completed" if bool(trajectory.get("converged")) else "partial",
-        "complete": bool(trajectory.get("converged")),
+        "status": status,
+        "complete": complete,
         "revision": _revision(trajectory),
         "default_series": "relative_energy",
         "available_views": ["optimization"],
-        "x_axis": {"label": "优化步数", "unit": "cycle"},
+        "x_axis": {"label": "优化周期", "unit": "cycle"},
         "series": series,
         "nodes": nodes,
         "edges": [],
         "annotations": [],
-        "source": str(trajectory_path.relative_to(work_dir)).replace("\\", "/"),
-        "provenance": {},
-        "metadata": {"n_cycles": len(nodes)},
+        "source": source,
+        "provenance": {"capture": trajectory.get("source", "ORCA output")},
+        "metadata": metadata,
     }
+
+
+def _relative_from_first(values: list[float | None]) -> list[float | None]:
+    """Return energy relative to the first available cycle, not the minimum."""
+    reference = next((value for value in values if value is not None), None)
+    if reference is None:
+        return [None] * len(values)
+    return [None if value is None else (value - reference) * HARTREE_TO_KCAL for value in values]
+
+
+def _cycle_values(cycles: list[dict[str, Any]], key: str) -> list[float | None]:
+    return [_number(cycle.get(key)) for cycle in cycles]
+
+
+def _relative_path(path: Path, work_dir: Path) -> str:
+    try:
+        return path.resolve().relative_to(work_dir.resolve()).as_posix()
+    except ValueError:
+        return path.as_posix().replace("\\", "/")
+
+
+def _find_optimization_trajectory(
+    work_dir: Path,
+    item_id: str | None,
+) -> tuple[Path | None, dict[str, Any] | None]:
+    """Find the newest valid live/result trajectory."""
+    live_stage_root = work_dir / "WORK" / "03_OPT"
+    batch_root = live_stage_root / "batch"
+    result_root = work_dir / "RESULT" / "trajectories"
+    if item_id:
+        safe_id = Path(str(item_id)).name
+        roots = [
+            live_stage_root / "optimization_trajectory.json",
+            *live_stage_root.glob("rescue_*/optimization_trajectory.json"),
+            batch_root / safe_id / "optimize" / "optimization_trajectory.json",
+            *batch_root.glob(f"{safe_id}/optimize/rescue_*/optimization_trajectory.json"),
+            result_root / "optimization.json",
+            result_root / safe_id / "optimization.json",
+            result_root / f"{safe_id}_optimization.json",
+        ]
+    else:
+        roots = [
+            live_stage_root / "optimization_trajectory.json",
+            *live_stage_root.glob("rescue_*/optimization_trajectory.json"),
+            *batch_root.glob("*/optimize/optimization_trajectory.json"),
+            *batch_root.glob("*/optimize/rescue_*/optimization_trajectory.json"),
+            result_root / "optimization.json",
+            *result_root.glob("*/optimization.json"),
+            *result_root.glob("*_optimization.json"),
+        ]
+    candidates: list[tuple[Path, dict[str, Any]]] = []
+    for path in dict.fromkeys(roots):
+        if not path.is_file():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict):
+            candidates.append((path, payload))
+    if not candidates:
+        return None, None
+    running = [item for item in candidates if str(item[1].get("status") or "").lower() == "running"]
+    pool = running or candidates
+    selected = max(pool, key=lambda item: item[0].stat().st_mtime_ns)
+    return selected
 
 
 def build_mechanism_energy_graph(job_id: str, report: dict[str, Any]) -> dict[str, Any] | None:
@@ -847,10 +1022,11 @@ def build_energy_graph_from_job(
     mechanism_report: dict[str, Any] | None = None,
     s2_candidates: list[dict[str, Any]] | None = None,
     s2_review_state: dict[str, Any] | None = None,
+    item_id: str | None = None,
 ) -> dict[str, Any]:
     """Select the first supported energy projection for a scheduler job."""
     if workflow == "PESsearch" and str((method or {}).get("mode") or "") == "bond_length_scan":
-        return build_s2_energy_graph(
+        return build_pes_energy_graph(
             job_id,
             s2_payload or {},
             s2_candidates=s2_candidates,
@@ -863,8 +1039,8 @@ def build_energy_graph_from_job(
         return build_unavailable_energy_graph(
             job_id, workflow=workflow, reason="energy_data_missing"
         )
-    if workflow in {"optimize", "optfreq", "optfreqsp", "xtb-opt", "simple"}:
-        result = build_optimization_energy_graph(job_id, work_dir)
+    if workflow in {"optimize", "optfreq", "optfreqsp", "xtb-opt", "simple", "BatchOptimize"}:
+        result = build_optimization_energy_graph(job_id, work_dir, item_id=item_id)
         if result is not None:
             return result
         return build_unavailable_energy_graph(
