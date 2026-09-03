@@ -743,6 +743,10 @@ Examples:
     batch.set_defaults(workflow="BatchOptimize")
     source = batch.add_mutually_exclusive_group(required=True)
     source.add_argument(
+        "--from-job",
+        help="Source PESsearch job id (reads <job_dir>/RESULT/result_manifest.json)",
+    )
+    source.add_argument(
         "--from-artifact",
         help="Task directory or result_manifest.json containing structure products",
     )
@@ -756,7 +760,54 @@ Examples:
         choices=["opt_only", "opt_freq", "opt_freq_sp", "opt_freq_sp_thermo"],
         help="Batch calculation profile (default: opt_freq)",
     )
+    batch.add_argument(
+        "--layout-mode",
+        choices=["batch", "single_flat"],
+        default="batch",
+        help=(
+            "On-disk layout: batch isolates multiple items under batch/<item_id>; "
+            "single_flat is for one scheduler task (default: batch)"
+        ),
+    )
     batch.add_argument("--select", help="Comma-separated item or candidate ids")
+    batch.add_argument(
+        "--method",
+        "--optimization-method",
+        dest="optimization_method",
+        default="",
+        help="Shared ORCA method for optimization and frequency",
+    )
+    batch.add_argument(
+        "--basis",
+        "--optimization-basis",
+        dest="optimization_basis",
+        default="",
+        help="Shared ORCA basis for optimization and frequency",
+    )
+    batch.add_argument(
+        "--sp-method", dest="single_point_method", default="", help="ORCA method for single-point"
+    )
+    batch.add_argument(
+        "--sp-basis", dest="single_point_basis", default="", help="ORCA basis for single-point"
+    )
+    batch.add_argument(
+        "--temperature",
+        type=float,
+        default=298.15,
+        help="Thermochemistry temperature in K (default: 298.15)",
+    )
+    batch.add_argument(
+        "--pressure",
+        type=float,
+        default=1.0,
+        help="Thermochemistry pressure in atm (default: 1.0)",
+    )
+    batch.add_argument(
+        "--scale-factor",
+        type=float,
+        default=0.9905,
+        help="Frequency scale factor for thermochemistry (default: 0.9905)",
+    )
     batch.add_argument("--minimum-method", help="ORCA method override for minimum structures")
     batch.add_argument("--minimum-basis", help="ORCA basis override for minimum structures")
     batch.add_argument(
@@ -1013,6 +1064,25 @@ def _resolve_pes_manifest_from_job(job_id: str, from_artifact: str | None) -> Pa
     return artifact.resolve()
 
 
+def _resolve_batch_artifact_from_job(job_id: str, from_artifact: str | None) -> Path:
+    """Resolve a BatchOptimize source path (task dir or manifest) from a job ID."""
+    from acp.core.paths import resolve_run_root
+    from acp.scheduler.store import JobStore
+
+    store = JobStore(resolve_run_root() / "acp_jobs.db")
+    record = store.get(job_id)
+    if record is None:
+        raise FileNotFoundError(f"Job not found: {job_id}")
+    work_dir = Path(record.work_dir)
+    if not work_dir.is_dir():
+        raise FileNotFoundError(f"Job work dir not found: {work_dir}")
+    relative = from_artifact or "RESULT/result_manifest.json"
+    artifact = work_dir / relative
+    if not artifact.is_file():
+        raise FileNotFoundError(f"Result artifact not found: {artifact}")
+    return artifact.resolve()
+
+
 def _parse_pes_coordinates(
     coord_strings: list[str] | None,
     args: argparse.Namespace,
@@ -1167,7 +1237,11 @@ def _handle_batch_optimize(args: argparse.Namespace) -> int:
     from acp.workflows.batch_optimize import BatchOptimizeInputError, run_batch_optimize
 
     setup_logging(args.log_level)
-    source = args.items_file or args.from_artifact
+    from_job = getattr(args, "from_job", None)
+    if from_job:
+        source = _resolve_batch_artifact_from_job(from_job, args.from_artifact)
+    else:
+        source = args.items_file or args.from_artifact
     try:
         result = run_batch_optimize(
             source,
@@ -1178,11 +1252,19 @@ def _handle_batch_optimize(args: argparse.Namespace) -> int:
             multiplicity=args.multiplicity,
             select=_parse_select(args.select),
             methods=BatchMethodOptions(
+                optimization_method=args.optimization_method,
+                optimization_basis=args.optimization_basis,
+                single_point_method=args.single_point_method,
+                single_point_basis=args.single_point_basis,
+                temperature=args.temperature,
+                pressure=args.pressure,
+                scale_factor=args.scale_factor,
                 minimum_method=args.minimum_method or "",
                 minimum_basis=args.minimum_basis or "",
                 transition_state_method=args.transition_state_method or "",
                 transition_state_basis=args.transition_state_basis or "",
             ),
+            layout_mode=args.layout_mode,
         )
     except BatchOptimizeInputError as exc:
         logger.error("BatchOptimize input error: %s", exc)

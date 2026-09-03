@@ -232,6 +232,22 @@ def test_build_remote_cli_command_batchoptimize():
     print("  [OK] build_remote_cli_command: BatchOptimize workflow")
 
 
+def test_build_remote_cli_command_batchoptimize_uses_staged_structure():
+    """Remote per-structure jobs consume their staged one-item XYZ file."""
+    spec = JobSpec(
+        workflow="BatchOptimize",
+        input={"source": "CCO", "source_type": "smiles"},
+        method={"profile": "opt_freq"},
+        resources={"nproc": 2, "mem": "4GB"},
+    )
+    cmd = build_remote_cli_command(spec, input_path="input.xyz")
+
+    assert "--items-file" in cmd
+    assert "input.xyz" in cmd
+    assert "--layout-mode" in cmd and "single_flat" in cmd
+    assert "--from-artifact" not in cmd
+
+
 def test_build_lsf_script_spec_batchoptimize_uses_correct_flags():
     node = make_node()
     spec = JobSpec(
@@ -1247,6 +1263,7 @@ def main():
     tests = [
         # script_gen
         test_build_remote_cli_command_batchoptimize,
+        test_build_remote_cli_command_batchoptimize_uses_staged_structure,
         test_build_remote_cli_command_charge_mult,
         test_build_remote_cli_command_invalid_workflow,
         test_build_remote_cli_command_no_config_path,

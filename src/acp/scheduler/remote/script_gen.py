@@ -153,7 +153,7 @@ def build_remote_cli_command(
 
     source = ""
     if wf == "BatchOptimize":
-        artifact = inp.get("from_artifact") or inp.get("source")
+        artifact = inp.get("from_artifact")
         items_file = inp.get("items_file")
         if artifact:
             source = str(artifact)
@@ -161,8 +161,20 @@ def build_remote_cli_command(
         elif items_file:
             source = str(items_file)
             cmd += ["--items-file", str(items_file), "--output", "."]
+        elif input_path:
+            # RemoteJobRunner stages one structure as input.xyz for each
+            # independent scheduler job.  Treat that file as a one-item
+            # BatchOptimize request rather than as an artifact path, and use
+            # the same flat task layout as local scheduler execution.
+            source = str(input_path)
+            cmd += ["--items-file", str(input_path), "--output", "."]
         else:
-            raise ValueError("BatchOptimize job requires input.from_artifact or input.items_file")
+            raise ValueError(
+                "BatchOptimize job requires a batch artifact, items file, or staged structure"
+            )
+        # One structure per scheduler task (layout spec §1a): every dispatch
+        # shape uses the flat WORK/<stage> layout, matching runner._build_cmd.
+        cmd += ["--layout-mode", "single_flat"]
         cmd += batchoptimize_method_flags(method, inp)
     else:
         source = (

@@ -232,6 +232,50 @@ def test_entry(tmp_path: Path, fake_backend: object) -> None:
     assert parsed.transition_state_basis == "def2-TZVPPD"
 
 
+def test_single_item_flat_layout_matches_scheduler_task_contract(
+    tmp_path: Path, fake_backend: object
+) -> None:
+    """A scheduler-fanned one-structure task has no batch/item nesting."""
+    from tests.conftest import FakeBackend
+
+    assert isinstance(fake_backend, FakeBackend)
+    task_root = tmp_path / "task"
+    item = BatchStructureItem(
+        item_id="item_001",
+        name="single molecule",
+        tag="INT",
+        xyz="2\nTAG: INT | candidate_id=item_001\nH 0.0 0.0 0.0\nH 0.0 0.0 0.7\n",
+        candidate_id="item_001",
+    )
+    engine = BatchOptimizeEngine(
+        work_root=task_root / "WORK",
+        result_root=task_root / "RESULT",
+    )
+
+    outcome = engine.run([item], profile="opt_freq", layout_mode="single_flat")
+
+    assert outcome.items[0].status == "completed"
+    assert outcome.items[0].input_xyz == "input.xyz"
+    assert outcome.items[0].work_dir == "WORK"
+    assert (task_root / "input.xyz").is_file()
+    assert (task_root / "WORK" / "03_OPT" / "optimized.xyz").is_file()
+    assert (task_root / "WORK" / "04_FREQ").is_dir()
+    assert not (task_root / "WORK" / "03_OPT" / "batch").exists()
+    assert (task_root / "RESULT" / "structures" / "item_001__TAG_INT__optimized.xyz").is_file()
+
+
+def test_single_item_flat_layout_rejects_multiple_items(
+    tmp_path: Path, batch_items_ts_int: list[BatchStructureItem]
+) -> None:
+    engine = BatchOptimizeEngine(
+        work_root=tmp_path / "task" / "WORK",
+        result_root=tmp_path / "task" / "RESULT",
+    )
+
+    with pytest.raises(ValueError, match="exactly one item"):
+        engine.run(batch_items_ts_int, profile="opt_only", layout_mode="single_flat")
+
+
 def test_batchoptimize_method_flags() -> None:
     from acp.scheduler.jobs import batchoptimize_method_flags
 
@@ -259,6 +303,42 @@ def test_batchoptimize_method_flags() -> None:
         "wB97X-D4",
         "--transition-state-basis",
         "def2-TZVPPD",
+    ]
+
+
+def test_batchoptimize_method_flags_include_shared_settings() -> None:
+    from acp.scheduler.jobs import batchoptimize_method_flags
+
+    flags = batchoptimize_method_flags(
+        {
+            "profile": "opt_freq_sp_thermo",
+            "optimization_method": "B3LYP",
+            "optimization_basis": "def2-SVP",
+            "single_point_method": "wB97M-V",
+            "single_point_basis": "def2-TZVPP",
+            "temperature": 333.15,
+            "pressure": 2.0,
+            "scale_factor": 0.98,
+        }
+    )
+
+    assert flags == [
+        "--profile",
+        "opt_freq_sp_thermo",
+        "--method",
+        "B3LYP",
+        "--basis",
+        "def2-SVP",
+        "--sp-method",
+        "wB97M-V",
+        "--sp-basis",
+        "def2-TZVPP",
+        "--temperature",
+        "333.15",
+        "--pressure",
+        "2.0",
+        "--scale-factor",
+        "0.98",
     ]
 
 
@@ -316,6 +396,63 @@ def test_role_specific_method_overrides_reach_qc_requests(
         if "int_001" in output_dir:
             assert call.kwargs["method"] == "r2SCAN-3c"
             assert call.kwargs["basis"] == "def2-TZVP"
+
+
+def test_optimization_and_frequency_share_method_with_separate_sp_settings(
+    tmp_path: Path,
+    batch_items_ts_int: list[BatchStructureItem],
+    fake_backend: object,
+) -> None:
+    from acp.calculations.batch.options import BatchMethodOptions
+    from tests.conftest import FakeBackend
+
+    assert isinstance(fake_backend, FakeBackend)
+    coordinates = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.7]])
+    fake_backend.set_results(
+        "frequency",
+        [
+            QCResult(
+                success=True,
+                coordinates=coordinates,
+                symbols=["H", "H"],
+                frequencies=[-500.0, 100.0],
+                has_frequencies=True,
+            ),
+            QCResult(
+                success=True,
+                coordinates=coordinates,
+                symbols=["H", "H"],
+                frequencies=[100.0, 200.0],
+                has_frequencies=True,
+            ),
+        ],
+    )
+
+    engine = BatchOptimizeEngine(
+        work_root=tmp_path / "task" / "WORK",
+        result_root=tmp_path / "task" / "RESULT",
+    )
+    outcome = engine.run(
+        batch_items_ts_int,
+        profile="opt_freq_sp",
+        methods=BatchMethodOptions(
+            optimization_method="B3LYP",
+            optimization_basis="def2-SVP",
+            single_point_method="wB97M-V",
+            single_point_basis="def2-TZVPP",
+            frequency_method="M062X",
+            frequency_basis="def2-TZVP",
+        ),
+    )
+
+    assert all(item.status == "completed" for item in outcome.items)
+    for call in fake_backend.calls:
+        if call.method in {"optimize", "transition_state_opt", "frequency"}:
+            assert call.kwargs["method"] == "B3LYP"
+            assert call.kwargs["basis"] == "def2-SVP"
+        elif call.method == "single_point":
+            assert call.kwargs["method"] == "wB97M-V"
+            assert call.kwargs["basis"] == "def2-TZVPP"
 
 
 def test_batchoptimize_cli_passes_role_specific_method_options(tmp_path: Path) -> None:
@@ -570,6 +707,7 @@ def test_mixed_ts_int_opt_freq_sp_thermo(
     fake_backend: object,
 ) -> None:
     """QA happy: 2 items TS+INT → RESULT/structures products + manifest."""
+    from acp.calculations.batch.options import BatchMethodOptions
     from tests.conftest import FakeBackend
 
     assert isinstance(fake_backend, FakeBackend)
@@ -629,7 +767,18 @@ def test_mixed_ts_int_opt_freq_sp_thermo(
     with patch("acp.calculations.primitives.thermochemistry.run_shermo") as mock_shermo:
         mock_shermo.return_value = {"g_sum": -1.2, "h_sum": -1.1, "s_sum": 0.01}
 
-        outcome = engine.run(items, profile="opt_freq_sp_thermo", charge=0)
+        outcome = engine.run(
+            items,
+            profile="opt_freq_sp_thermo",
+            charge=0,
+            methods=BatchMethodOptions(temperature=333.15, pressure=2.0, scale_factor=0.98),
+        )
+
+        assert mock_shermo.call_count == 2
+        for call in mock_shermo.call_args_list:
+            assert call.kwargs["temperature_k"] == 333.15
+            assert call.kwargs["pressure_atm"] == 2.0
+            assert call.kwargs["scl_zpe"] == 0.98
 
     assert len(outcome.items) == 2
     assert all(item.status == "completed" for item in outcome.items)

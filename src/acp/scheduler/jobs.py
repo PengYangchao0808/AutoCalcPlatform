@@ -441,6 +441,13 @@ _BATCHOPTIMIZE_SCALAR_FLAGS: dict[str, str] = {
     "minimum_basis": "--minimum-basis",
     "transition_state_method": "--transition-state-method",
     "transition_state_basis": "--transition-state-basis",
+    "optimization_method": "--method",
+    "optimization_basis": "--basis",
+    "single_point_method": "--sp-method",
+    "single_point_basis": "--sp-basis",
+    "temperature": "--temperature",
+    "pressure": "--pressure",
+    "scale_factor": "--scale-factor",
 }
 _BATCHOPTIMIZE_PROFILES: frozenset[str] = frozenset(
     {"opt_only", "opt_freq", "opt_freq_sp", "opt_freq_sp_thermo"}
@@ -451,7 +458,7 @@ def batchoptimize_method_flags(
     method: Mapping[str, Any],
     inp: Mapping[str, Any] | None = None,
 ) -> list[str]:
-    """Emit BatchOptimize profile, selection, and role-level CLI flags."""
+    """Emit BatchOptimize profile, shared settings, and override flags."""
     flags: list[str] = []
     profile = method.get("profile") or method.get("profile_id")
     if profile is not None and str(profile) in _BATCHOPTIMIZE_PROFILES:

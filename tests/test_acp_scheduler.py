@@ -113,6 +113,34 @@ def test_batchoptimize_payload_builds_correct_cmd(tmp_path: Path) -> None:
     assert "ts_001" in cmd
 
 
+def test_batchoptimize_per_structure_cmd_uses_materialized_xyz_as_items_file(
+    tmp_path: Path,
+) -> None:
+    """A scheduler task may represent exactly one BatchOptimize structure."""
+    runner = JobRunner(python_executable="python")
+    spec = JobSpec(
+        workflow="BatchOptimize",
+        name="one_structure",
+        input={"source_type": "xyz_text", "source": "1\nC\nC 0 0 0\n"},
+        method={
+            "profile": "opt_freq",
+            "optimization_method": "r2SCAN-3c",
+            "optimization_basis": "def2-mTZVPP",
+        },
+        resources={"nproc": 2, "mem": "4GB"},
+    )
+    materialized = materialize_job_input(spec.input, tmp_path, tmp_path)
+    assert materialized is not None
+    cmd = runner._build_cmd(spec, tmp_path, str(materialized))
+
+    assert "--items-file" in cmd
+    assert str(materialized) in cmd
+    assert "--layout-mode" in cmd and "single_flat" in cmd
+    assert "--from-artifact" not in cmd
+    assert "--method" in cmd and "r2SCAN-3c" in cmd
+    assert "--basis" in cmd and "def2-mTZVPP" in cmd
+
+
 def test_pessearch_payload_builds_correct_cmd(tmp_path: Path) -> None:
     runner = JobRunner(python_executable="python")
     spec = JobSpec(

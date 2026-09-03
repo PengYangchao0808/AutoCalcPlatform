@@ -3,9 +3,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import cast
-
 from ._items import (
     BatchCalculationItem,
     BatchStructureItem,
@@ -36,28 +33,6 @@ from .loaders import (
     load_items_from_xyz_text,
 )
 
-_COMPAT_LOADER_NAMES: dict[str, str] = {
-    "load_items_from_s2_" + "candidate_manifest": "load_items_from_s2_" + "candidate_manifest",
-    "load_items_from_s2_" + "path_manifest": "load_items_from_s2_" + "path_manifest",
-    "load_items_from_s3_" + "manifest": "load_items_from_s3_" + "manifest",
-}
-
-
-def __getattr__(
-    name: str,
-) -> Callable[..., list[BatchStructureItem] | tuple[list[BatchStructureItem], JsonObject]]:
-    """Resolve retired manifest loader names through the compat boundary."""
-    target = _COMPAT_LOADER_NAMES.get(name)
-    if target is None:
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    from acp.compat.legacy import batch_loaders
-
-    return cast(
-        Callable[..., list[BatchStructureItem] | tuple[list[BatchStructureItem], JsonObject]],
-        getattr(batch_loaders, target),
-    )
-
-
 __all__ = [
     "BATCH_CALCULATION_SCHEMA_VERSION",
     "BATCH_REQUEST_SCHEMA_VERSION",
@@ -80,7 +55,4 @@ __all__ = [
     "parse_tag_comment",
     "role_for_tag",
     "tag_for_kind",
-    "load_items_from_s2_" + "candidate_manifest",
-    "load_items_from_s2_" + "path_manifest",
-    "load_items_from_s3_" + "manifest",
 ]

@@ -950,9 +950,46 @@ def _prepare_bond_scan_input(
         "mode": "bond_length_scan",
         "source": src,
         "coordinate": coordinate,
+        **({"coordinates": coordinates} if coordinates is not None else {}),
+        **({"selection": selection} if isinstance(selection, dict) else {}),
         "protocol": protocol,
     }
     return prepared
+
+
+def _resolve_batch_structures_input(inp: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Inline ``source_id`` references in a Workbench ``batch_structures`` payload.
+
+    Items may reference reusable structures via ``source_id``
+    (``job_<id>:<rel_path>``).  The runner materializer only understands
+    inline XYZ, so references are expanded here while the API still has
+    store + remote-fetcher access (works for local and remote source jobs).
+    """
+    items = inp.get("items")
+    if not isinstance(items, list) or not items:
+        return inp
+    if not any(isinstance(item, dict) and item.get("source_id") for item in items):
+        return inp
+    service = _structure_source_service(request)
+    resolved_items: list[Any] = []
+    for item in items:
+        if not isinstance(item, dict):
+            resolved_items.append(item)
+            continue
+        source_id = str(item.get("source_id") or "").strip()
+        if not source_id:
+            resolved_items.append(item)
+            continue
+        try:
+            asset, _ = service.get(source_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        resolved = {key: value for key, value in item.items() if key != "source_id"}
+        resolved["xyz"] = str(asset.get("xyz") or "")
+        resolved_items.append(resolved)
+    resolved_inp = dict(inp)
+    resolved_inp["items"] = resolved_items
+    return resolved_inp
 
 
 @router.post("/jobs", response_model=V1JobCreatedResponse, status_code=201)
@@ -967,6 +1004,8 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         req.input = _prepare_bond_scan_input(req.input, manager)
     elif req.workflow == "PESsearch":
         req.input = _resolve_stage_artifact_ref(req.workflow, req.input, manager)
+    elif req.workflow == "BatchOptimize":
+        req.input = _resolve_batch_structures_input(req.input, request)
     task_name = req.task_name or req.workflow
     molecule_name = _resolve_job_molecule_name(req.molecule_name, req.input, manager)
     spec = JobSpec(

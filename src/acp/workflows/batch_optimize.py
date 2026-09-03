@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Final, assert_never
 
-from acp.calculations.batch.engine import BatchOptimizeEngine
+from acp.calculations.batch.engine import BatchLayoutMode, BatchOptimizeEngine
 from acp.calculations.batch.models import (
     BatchStructureItem,
     JsonObject,
@@ -114,8 +114,14 @@ def run_batch_optimize(
     multiplicity: int = 1,
     select: BatchSelection = None,
     methods: BatchMethodOptions | None = None,
+    layout_mode: BatchLayoutMode = "batch",
 ) -> WorkflowResult:
-    """Run BatchOptimize for structures loaded from an artifact or input file."""
+    """Run BatchOptimize for structures loaded from an artifact or input file.
+
+    ``single_flat`` is used by the scheduler when it fans a multi-structure
+    UI submission out into independent one-structure tasks.  A direct
+    multi-item CLI invocation keeps the isolated ``batch/<item_id>`` layout.
+    """
     profile_key = profile.strip().lower()
     stages = _PROFILE_STAGES.get(profile_key)
     if stages is None:
@@ -141,6 +147,7 @@ def run_batch_optimize(
         multiplicity=multiplicity,
         workflow="BatchOptimize",
         methods=methods,
+        layout_mode=layout_mode,
     )
     errors = outcome.errors
     return WorkflowResult(

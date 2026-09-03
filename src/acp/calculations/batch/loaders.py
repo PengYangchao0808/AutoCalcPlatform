@@ -121,6 +121,23 @@ def _task_dir_for_artifact(path: Path) -> Path:
     return path.parent.parent if path.parent.name == "RESULT" else path.parent
 
 
+def _apply_entry_overrides(entry: JsonObject, items: list[BatchStructureItem]) -> None:
+    """Apply one request entry's role/charge/multiplicity/include to its items."""
+    for item in items:
+        charge = entry.get("charge")
+        if isinstance(charge, int) and not isinstance(charge, bool):
+            item.charge = charge
+        multiplicity = entry.get("multiplicity")
+        if (
+            isinstance(multiplicity, int)
+            and not isinstance(multiplicity, bool)
+            and multiplicity > 0
+        ):
+            item.multiplicity = multiplicity
+        if entry.get("include") is False:
+            item.include = False
+
+
 def _request_geometry(entry: JsonObject, base_dir: Path) -> list[BatchStructureItem]:
     reference = _text(entry.get("geometry") or entry.get("path"))
     if not reference:
@@ -149,8 +166,7 @@ def _request_geometry(entry: JsonObject, base_dir: Path) -> list[BatchStructureI
             item.xyz = _rewrite_comment(
                 item.xyz, build_tag_title(tag, candidate_id=item.candidate_id, source="user")
             )
-        if entry.get("include") is False:
-            item.include = False
+    _apply_entry_overrides(entry, items)
     return items
 
 
@@ -203,12 +219,19 @@ def load_batch_request(payload: JsonObject | Path | str) -> list[BatchStructureI
             )
             raw_role_xyz = entry.get("role")
             tag = normalize_tag(raw_role_xyz if isinstance(raw_role_xyz, str) else None)
-            if tag:
-                for item in entry_items:
+            if not tag:
+                tag = normalize_tag(_text(entry.get("tag")))
+            requested_xyz_id = _text(entry.get("id") or entry.get("item_id"))
+            candidate_xyz = _text(entry.get("candidate_id"), requested_xyz_id)
+            for item in entry_items:
+                if tag:
                     item.tag = tag
                     item.role = (
                         StructureRole.TRANSITION_STATE if tag == "TS" else StructureRole.MINIMUM
                     )
+                if candidate_xyz:
+                    item.candidate_id = candidate_xyz
+            _apply_entry_overrides(entry, entry_items)
             items.extend(entry_items)
         else:
             raise ValueError(f"Batch entry has neither xyz, geometry nor manifest: {entry}")

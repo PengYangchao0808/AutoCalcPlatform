@@ -1,7 +1,4 @@
-"""BatchOptimizeEngine — multi-item batch optimization with profile-driven steps.
-
-This engine is the mechanism-free replacement for ``mechanism/batch_confirm.py``
-and the item-orchestration part of ``mechanism/providers/native_refinement.py``.
+"""BatchOptimizeEngine — profile-driven optimization for one or more structures.
 
 **Layering decision**: the engine calls calculation primitives directly
 (``run_optimize``, ``run_frequency``, ``run_singlepoint``,
@@ -18,8 +15,8 @@ and the item-orchestration part of ``mechanism/providers/native_refinement.py``.
 4. Item failure isolation and per-item cache-key skip are batch-level
    concerns that don't fit the executor's per-step checkpoint model.
 
-The engine has no dependency on the mechanism orchestrator layer (Wave 8
-deletes the old mechanism modules).  Product names follow the canonical
+The engine has no dependency on retired workflow orchestrators. Product names
+follow the canonical
 ``RESULT/structures/<item_id>__TAG_<TS|INT>__optimized.xyz`` convention
 parsed by ``structure_sources.py``.
 """
@@ -34,7 +31,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal, TypeAlias
 
 from acp.calculations.batch._items import (
     BatchCalculationItem,
@@ -63,11 +60,13 @@ from acp.calculations.primitives.thermochemistry import ThermochemistryCalculato
 from acp.storage.manifest import ProductKind, ResultManifest
 
 from .options import BatchMethodOptions
+from .profiles import BATCH_PROFILE_STEPS
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "BATCH_STRUCTURES_SUBDIR",
+    "BatchLayoutMode",
     "BatchOptimizeEngine",
     "BatchRunOutcome",
     "TERMINAL_ITEM_STATUSES",
@@ -76,19 +75,18 @@ __all__ = [
 BATCH_STRUCTURES_SUBDIR = "structures"
 TERMINAL_ITEM_STATUSES = frozenset({"completed", "failed", "skipped"})
 _BATCH_CHECKPOINT_METADATA_KEY: Final = "__batch__"
+BatchLayoutMode: TypeAlias = Literal["batch", "single_flat"]
+_BATCH_LAYOUT_MODES: Final = frozenset({"batch", "single_flat"})
+_SINGLE_ITEM_STAGE_DIRS: Final[dict[StepKind, str]] = {
+    StepKind.OPTIMIZE: "03_OPT",
+    StepKind.FREQUENCY: "04_FREQ",
+    StepKind.SINGLEPOINT: "05_SP",
+    StepKind.THERMOCHEMISTRY: "06_THERMO",
+}
 
 # ── profile → ordered step kinds ─────────────────────────────────────────
-_PROFILE_STEPS: dict[str, tuple[StepKind, ...]] = {
-    "opt_only": (StepKind.OPTIMIZE,),
-    "opt_freq": (StepKind.OPTIMIZE, StepKind.FREQUENCY),
-    "opt_freq_sp": (StepKind.OPTIMIZE, StepKind.FREQUENCY, StepKind.SINGLEPOINT),
-    "opt_freq_sp_thermo": (
-        StepKind.OPTIMIZE,
-        StepKind.FREQUENCY,
-        StepKind.SINGLEPOINT,
-        StepKind.THERMOCHEMISTRY,
-    ),
-}
+# Kept as a private import alias for callers that used the old test seam.
+_PROFILE_STEPS = BATCH_PROFILE_STEPS
 
 
 def _utc_now_iso() -> str:
@@ -121,6 +119,7 @@ def _batch_plan_fingerprint(
     items: list[BatchStructureItem],
     profile: str,
     methods: BatchMethodOptions | None = None,
+    layout_mode: BatchLayoutMode = "batch",
 ) -> str:
     """Return a stable fingerprint for the batch profile and ordered inputs."""
     resolved_methods = methods or BatchMethodOptions()
@@ -131,12 +130,27 @@ def _batch_plan_fingerprint(
         }
         for item in items
     ]
-    payload = json.dumps(
-        {"profile": profile, "methods": resolved_methods.cache_key, "items": item_signature},
-        sort_keys=True,
-        separators=(",", ":"),
-    )
+    payload_data: dict[str, object] = {
+        "profile": profile,
+        "methods": resolved_methods.cache_key,
+        "items": item_signature,
+    }
+    # Keep the historical fingerprint byte-for-byte stable for the default
+    # multi-item layout.  Only the new flat mode needs a distinct checkpoint
+    # namespace so it cannot accidentally reuse nested-path records.
+    if layout_mode != "batch":
+        payload_data["layout_mode"] = layout_mode
+    payload = json.dumps(payload_data, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def _normalize_layout_mode(value: str) -> BatchLayoutMode:
+    """Validate the on-disk layout selected for this BatchOptimize run."""
+    normalized = str(value or "batch").strip().lower().replace("-", "_")
+    if normalized not in _BATCH_LAYOUT_MODES:
+        allowed = ", ".join(sorted(_BATCH_LAYOUT_MODES))
+        raise ValueError(f"unknown BatchOptimize layout mode {value!r}; expected {allowed}")
+    return normalized  # type: ignore[return-value]
 
 
 def _to_checkpoint_json(value: BatchJsonValue) -> JsonValue:
@@ -226,7 +240,7 @@ def _ts_frequency_judgment(
 
 
 class BatchOptimizeEngine:
-    """Multi-item batch optimization engine (profile-driven, mechanism-free).
+    """Profile-driven, mechanism-free BatchOptimize calculation engine.
 
     Profiles:
         ``opt_only``          — optimize only
@@ -240,6 +254,11 @@ class BatchOptimizeEngine:
     Item failure isolation: a failed item is recorded as ``"failed"`` in
     ``items_state`` but does NOT abort other items.  On re-run, items whose
     ``item_cache_key`` matches a previously ``"completed"`` record are skipped.
+
+    ``layout_mode="batch"`` keeps one work directory per item for a direct
+    multi-item CLI invocation.  ``layout_mode="single_flat"`` is the scheduler
+    adapter for a one-structure task and writes directly to the canonical
+    ``WORK/<stage>`` directories.
     """
 
     def __init__(
@@ -260,16 +279,35 @@ class BatchOptimizeEngine:
             Path(result_root) if result_root is not None else self._work_root / "RESULT"
         )
         self._active_methods: BatchMethodOptions = methods or BatchMethodOptions()
+        self._active_layout_mode: BatchLayoutMode = "batch"
 
     @property
     def batch_root(self) -> Path:
-        """Per-item work dirs live under ``WORK/03_OPT/batch``."""
+        """Per-item work dirs for a real multi-item CLI batch."""
         return self._work_root / "03_OPT" / "batch"
 
     @property
     def task_root(self) -> Path:
         """Task root is one level above ``WORK/``."""
         return self._work_root.parent
+
+    def _item_work_dir(self, item: BatchStructureItem) -> Path:
+        """Return the work root that owns *item* in the active layout."""
+        if self._active_layout_mode == "single_flat":
+            return self._work_root
+        return self.batch_root / item.item_id
+
+    def _item_input_path(self, item: BatchStructureItem) -> Path:
+        """Return the input path for *item* in the active layout."""
+        if self._active_layout_mode == "single_flat":
+            return self.task_root / "input.xyz"
+        return self._item_work_dir(item) / "input.xyz"
+
+    def _step_dir(self, item: BatchStructureItem, step_kind: StepKind) -> Path:
+        """Return the canonical output directory for one item step."""
+        if self._active_layout_mode == "single_flat":
+            return self._work_root / _SINGLE_ITEM_STAGE_DIRS[step_kind]
+        return self._item_work_dir(item) / step_kind.value
 
     # ── public entry point ───────────────────────────────────────────────
 
@@ -282,6 +320,7 @@ class BatchOptimizeEngine:
         multiplicity: int = 1,
         workflow: str = "BatchOptimize",
         methods: BatchMethodOptions | None = None,
+        layout_mode: BatchLayoutMode = "batch",
     ) -> BatchRunOutcome:
         """Execute (or resume) the batch for *items*.
 
@@ -293,6 +332,9 @@ class BatchOptimizeEngine:
             multiplicity: Job-level multiplicity default.
             workflow: Workflow label persisted in the checkpoint and result manifest.
             methods: Optional role-specific method and basis overrides.
+            layout_mode: ``batch`` keeps per-item directories for a real multi-item
+                CLI run; ``single_flat`` matches the scheduler's one-structure
+                task layout and requires exactly one item.
 
         Returns:
             The aggregated outcome.
@@ -301,11 +343,15 @@ class BatchOptimizeEngine:
             raise ValueError("Batch run requires at least one structure item")
         if profile not in _PROFILE_STEPS:
             raise ValueError(f"unknown batch profile: {profile!r}")
+        resolved_layout = _normalize_layout_mode(layout_mode)
+        if resolved_layout == "single_flat" and len(items) != 1:
+            raise ValueError("single_flat BatchOptimize layout requires exactly one item")
         steps = _PROFILE_STEPS[profile]
         resolved_methods = methods or self._active_methods
         self._active_methods = resolved_methods
+        self._active_layout_mode = resolved_layout
 
-        fingerprint = _batch_plan_fingerprint(items, profile, resolved_methods)
+        fingerprint = _batch_plan_fingerprint(items, profile, resolved_methods, resolved_layout)
         runtime_dir = self._work_root / "00_RUNTIME"
         checkpoint = load_checkpoint(runtime_dir, fingerprint)
         previous_by_id = self._checkpoint_items(checkpoint)
@@ -322,9 +368,9 @@ class BatchOptimizeEngine:
             record = BatchCalculationItem.from_item(item, charge, multiplicity)
             record.cache_key = item_cache_key(item, profile, resolved_methods.cache_key)
 
-            item_dir = self.batch_root / item.item_id
+            item_dir = self._item_work_dir(item)
             item_dir.mkdir(parents=True, exist_ok=True)
-            input_path = self._materialize_item_input(item, item_dir)
+            input_path = self._materialize_item_input(item, self._item_input_path(item))
             record.input_xyz = _rel_to(self.task_root, input_path)
             record.work_dir = _rel_to(self.task_root, item_dir)
 
@@ -404,8 +450,8 @@ class BatchOptimizeEngine:
     ) -> None:
         """Run all profile steps for one item.  Raises on failure."""
         resolved_methods = methods or self._active_methods
-        item_dir = self.batch_root / item.item_id
-        input_path = item_dir / "input.xyz"
+        item_dir = self._item_work_dir(item)
+        input_path = self._item_input_path(item)
         is_ts = item.tag == "TS"
         item_charge = item.resolved_charge(charge)
         item_multiplicity = item.resolved_multiplicity(multiplicity)
@@ -418,7 +464,7 @@ class BatchOptimizeEngine:
         optimized_coords: list[list[float]] | None = None
 
         for step_kind in steps:
-            step_dir = item_dir / step_kind.value
+            step_dir = self._step_dir(item, step_kind)
             step_dir.mkdir(parents=True, exist_ok=True)
 
             if step_kind is StepKind.OPTIMIZE:
@@ -505,11 +551,12 @@ class BatchOptimizeEngine:
                 current_result = ThermochemistryCalculator(
                     config=self._config,
                     output_dir=step_dir,
+                    runner_options={"scl_zpe": resolved_methods.scale_factor},
                 ).compute(
                     freq_log_path=frequency_log_path,
                     sp_energy_hartree=sp_energy,
-                    temperature=298.15,
-                    pressure=1.0,
+                    temperature=resolved_methods.temperature,
+                    pressure=resolved_methods.pressure,
                     standard_state="1atm",
                 )
                 thermochemistry: dict[str, BatchJsonValue] = {
@@ -521,7 +568,11 @@ class BatchOptimizeEngine:
                 record.thermochemistry.update(thermochemistry)
 
         if optimized_coords is not None:
-            optimized_path = item_dir / "optimized.xyz"
+            optimized_path = (
+                self._step_dir(item, StepKind.OPTIMIZE) / "optimized.xyz"
+                if self._active_layout_mode == "single_flat"
+                else item_dir / "optimized.xyz"
+            )
             self._write_xyz(optimized_path, optimized_coords, current_symbols, item.item_id)
             record.optimized_xyz = _rel_to(self.task_root, optimized_path)
 
@@ -600,7 +651,7 @@ class BatchOptimizeEngine:
             resources["basis"] = basis
         return CalculationRequest(
             input_artifact=StructureArtifact(
-                path=self.batch_root / item.item_id / "input.xyz",
+                path=self._item_input_path(item),
                 role=StructureRole.TRANSITION_STATE if item.tag == "TS" else StructureRole.MINIMUM,
             ),
             method=method,
@@ -632,7 +683,7 @@ class BatchOptimizeEngine:
             resources["basis"] = basis
         return CalculationRequest(
             input_artifact=StructureArtifact(
-                path=self.batch_root / item.item_id / "input.xyz",
+                path=self._item_input_path(item),
                 role=StructureRole.TRANSITION_STATE if item.tag == "TS" else StructureRole.MINIMUM,
             ),
             method=method,
@@ -642,9 +693,9 @@ class BatchOptimizeEngine:
 
     # ── item input materialization ───────────────────────────────────────
 
-    def _materialize_item_input(self, item: BatchStructureItem, item_dir: Path) -> Path:
-        """Write the TAG-annotated input geometry under the item's dir."""
-        input_path = item_dir / "input.xyz"
+    def _materialize_item_input(self, item: BatchStructureItem, input_path: Path) -> Path:
+        """Write the TAG-annotated input geometry at its canonical path."""
+        input_path.parent.mkdir(parents=True, exist_ok=True)
         xyz = item.xyz
         lines = xyz.splitlines()
         tag_info = parse_tag_comment(lines[1] if len(lines) > 1 else "")

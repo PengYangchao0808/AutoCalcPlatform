@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Final, TypeAlias
+from typing import TypeAlias
 
 from typing_extensions import assert_never
 
@@ -23,25 +23,9 @@ from .contracts import (
     StructureArtifact,
     StructureRole,
 )
+from .batch.profiles import BATCH_PROFILE_STEPS
 
 _BatchItem: TypeAlias = StructureArtifact | Mapping[str, JsonValue]
-
-_PROFILE_STEPS: Final[dict[str, tuple[StepKind, ...]]] = {
-    "opt_only": (StepKind.OPTIMIZE,),
-    "opt_freq": (StepKind.OPTIMIZE, StepKind.FREQUENCY),
-    "opt_freq_sp": (
-        StepKind.OPTIMIZE,
-        StepKind.FREQUENCY,
-        StepKind.SINGLEPOINT,
-    ),
-    "opt_freq_sp_thermo": (
-        StepKind.OPTIMIZE,
-        StepKind.FREQUENCY,
-        StepKind.SINGLEPOINT,
-        StepKind.THERMOCHEMISTRY,
-    ),
-}
-
 
 @dataclass(frozen=True, slots=True)
 class IrcRequest:
@@ -113,7 +97,7 @@ def build_batch_plan(items: Sequence[_BatchItem], profile: str) -> CalculationPl
         raise ValueError(message)
 
     try:
-        step_kinds = _PROFILE_STEPS[profile]
+        step_kinds = BATCH_PROFILE_STEPS[profile]
     except KeyError:
         message = f"unknown batch profile: {profile!r}"
         raise ValueError(message) from None

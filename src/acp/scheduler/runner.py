@@ -303,6 +303,11 @@ def materialize_job_input(
     if isinstance(inp.get("scan_request"), dict):
         return None
 
+    if str(inp.get("source_type") or "") == "batch_structures":
+        materialized = _materialize_batch_structures(inp, inputs_dir)
+        if materialized is not None:
+            return materialized
+
     return _materialize_single_input(inp, inputs_dir, run_root)
 
 
@@ -1056,6 +1061,7 @@ class JobRunner:
         inp = spec.input
         method = spec.method
         res = spec.resources
+        cli_work_dir = work_dir.as_posix()
 
         source = input_path or _extract_input_source(inp)
         if wf == "PESsearch":
