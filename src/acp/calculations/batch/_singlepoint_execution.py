@@ -1,15 +1,18 @@
-# pyright: reportAny=false, reportArgumentType=false, reportExplicitAny=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownVariableType=false
-
+# pyright: reportAny=false, reportArgumentType=false, reportExplicitAny=false, reportPrivateUsage=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownVariableType=false
 """Preparation and execution helpers for frame-wise single points."""
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
+from threading import Lock
+
+import numpy as np
+from numpy.typing import NDArray
 
 from acp.backends import batch as batch_backend
-from acp.backends.base import SinglePointCalculator
+from acp.backends.base import QCResult, SinglePointCalculator, to_qc_result
 from acp.calculations.batch._items import BatchStructureItem, item_cache_key
 
 from ._singlepoint_frames import frame_data, frame_id, method_signature, scope
@@ -48,6 +51,86 @@ class BatchSinglePointExecutionOptions:
     cache: bool
     config: Mapping[str, object] | None
     options: Mapping[str, object]
+
+
+@dataclass(frozen=True, slots=True)
+class _FrameCallbacks:
+    """Callbacks used to expose frame lifecycle events from worker execution."""
+
+    on_start: Callable[[str], None] | None
+    on_done: Callable[[int, int], None]
+
+
+@dataclass(frozen=True, slots=True)
+class _FrameSignalContext:
+    """Worker context for frame identity, callbacks, and cache preservation."""
+
+    frames: Sequence[PreparedFrame]
+    callbacks: _FrameCallbacks
+    cache_root: Path
+    cache_paths: Mapping[int, Path]
+    cached_records: Mapping[int, batch_backend.BatchSpFrameResult]
+
+
+@dataclass(frozen=True, slots=True)
+class _SignallingBackend:
+    """Proxy that signals starts while preserving the shared helper's workers."""
+
+    backend: SinglePointCalculator
+    context: _FrameSignalContext
+
+    def single_point(
+        self,
+        coordinates: NDArray[np.float64],
+        symbols: list[str],
+        charge: int = 0,
+        multiplicity: int = 1,
+        output_dir: Path | None = None,
+        **kwargs: object,
+    ) -> QCResult:
+        """Signal a frame and delegate its single-point calculation."""
+        output_name = kwargs.get("output_name")
+        if not isinstance(output_name, str):
+            raise TypeError("output_name must be a string")
+        frame_index = int(output_name.rsplit("_", 1)[1])
+        frame = self.context.frames[frame_index]
+        if self.context.callbacks.on_start is not None:
+            self.context.callbacks.on_start(frame.frame_id)
+
+        cached_record = self.context.cached_records.get(frame_index)
+        if cached_record is not None:
+            return QCResult(
+                success=True,
+                energy=cached_record.energy_hartree,
+                output_file=cached_record.output_path,
+            )
+
+        result = to_qc_result(
+            self.backend.single_point(
+                coordinates,
+                symbols,
+                charge=charge,
+                multiplicity=multiplicity,
+                output_dir=output_dir,
+                **kwargs,
+            )
+        )
+        cache_path = self.context.cache_paths.get(frame_index)
+        if cache_path is not None and result.success and result.energy is not None:
+            frame_dir = output_dir if output_dir is not None else Path.cwd()
+            output_path = batch_backend._normalize_output_path(result.output_file, frame_dir)
+            try:
+                output_ref = output_path.relative_to(self.context.cache_root)
+            except ValueError:
+                output_ref = output_path
+            batch_backend._write_cache(
+                cache_path,
+                {
+                    "energy_hartree": float(result.energy),
+                    "output_ref": str(output_ref),
+                },
+            )
+        return result
 
 
 def prepare_frames(
@@ -124,8 +207,19 @@ def run_prepared_frames(
     prepared: Sequence[PreparedFrame],
     settings: BatchSinglePointExecutionOptions,
     progress_callback: Callable[[int, int], None] | None = None,
+    on_frame_start: Callable[[str, int, int], None] | None = None,
 ) -> dict[str, BatchSinglePointFrameResult]:
-    """Run normalized frames through the shared threaded/cache helper."""
+    """Run normalized frames through the shared threaded/cache helper.
+
+    Each resolved frame emits ``on_frame_start(frame_id, done_so_far, total)``
+    immediately before its backend call (or cache return), followed by
+    ``progress_callback(done, total)``.  With sequential workers, the
+    deterministic order is ``start(f0), done(1), start(f1), done(2), ...``;
+    cache hits therefore emit start and done back-to-back, and failures still
+    emit done before siblings continue.  With concurrent workers, start
+    callbacks may interleave; a consumer's current frame is the most recently
+    started frame, so that value is an approximation under parallelism.
+    """
     batch_root = settings.output_dir / ".batch_sp" / scope([frame.cache_key for frame in prepared])
     groups: dict[tuple[tuple[str, ...], int, int], list[PreparedFrame]] = {}
     for frame in prepared:
@@ -134,17 +228,42 @@ def run_prepared_frames(
     records: dict[str, BatchSinglePointFrameResult] = {}
     total_frames = len(prepared)
     completed_frames = 0
+    progress_lock = Lock()
+    signalling = progress_callback is not None or on_frame_start is not None
+
+    def notify_frame_start(frame_id_value: str) -> None:
+        """Forward a worker start event with the global completed count."""
+        with progress_lock:
+            done_so_far = completed_frames
+        if on_frame_start is not None:
+            on_frame_start(frame_id_value, done_so_far, total_frames)
+
+    def notify_frame_done(_group_done: int, _group_total: int) -> None:
+        """Advance the global completed count after a worker result returns."""
+        nonlocal completed_frames
+        with progress_lock:
+            completed_frames += 1
+            done = completed_frames
+        if progress_callback is not None:
+            progress_callback(done, total_frames)
+
+    callbacks = (
+        _FrameCallbacks(
+            on_start=notify_frame_start if on_frame_start is not None else None,
+            on_done=notify_frame_done,
+        )
+        if signalling
+        else None
+    )
     for group_index, group in enumerate(groups.values()):
         group_result = _run_group(
             backend,
             group,
             batch_root / f"group_{group_index:03d}",
             settings,
+            callbacks,
         )
         records.update(group_result)
-        completed_frames += len(group)
-        if progress_callback is not None:
-            progress_callback(completed_frames, total_frames)
     return records
 
 
@@ -153,6 +272,7 @@ def _run_group(
     frames: list[PreparedFrame],
     output_dir: Path,
     settings: BatchSinglePointExecutionOptions,
+    callbacks: _FrameCallbacks | None = None,
 ) -> dict[str, BatchSinglePointFrameResult]:
     """Run one same-shape/electronic-state group through the batch helper."""
     call_options = dict(settings.options)
@@ -169,9 +289,74 @@ def _run_group(
         "config",
     ):
         _ = call_options.pop(key, None)
+
+    execution_backend: SinglePointCalculator = backend
+    execution_cache = settings.cache
+    helper_progress: Callable[[int, int], None] | None = None
+    cached_records: dict[int, batch_backend.BatchSpFrameResult] = {}
+    cache_paths: dict[int, Path] = {}
+    if callbacks is not None:
+        helper_progress = callbacks.on_done
+        execution_cache = False
+        if settings.cache:
+            cache_root = output_dir
+            cache_dir = cache_root / ".cache"
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            resolved_method = batch_backend._resolve_option(
+                settings.method,
+                "method",
+                call_options,
+                settings.config,
+                ("theory", "single_point", "method"),
+                ("theory", "optimization", "method"),
+            )
+            resolved_basis = batch_backend._resolve_option(
+                settings.basis,
+                "basis",
+                call_options,
+                settings.config,
+                ("theory", "single_point", "basis"),
+                ("theory", "optimization", "basis"),
+            )
+            resolved_solvent = batch_backend._resolve_option(
+                settings.solvent,
+                "solvent",
+                call_options,
+                None,
+            )
+            for index, frame in enumerate(frames):
+                cache_key = batch_backend._geometry_cache_key(
+                    frame.symbols,
+                    frame.coordinates,
+                    frame.charge,
+                    frame.multiplicity,
+                    resolved_method,
+                    resolved_basis,
+                    resolved_solvent,
+                )
+                cache_path = cache_dir / f"{cache_key}.json"
+                cache_paths[index] = cache_path
+                cached_record = batch_backend._read_cache(
+                    cache_path,
+                    index,
+                    frame.coordinates,
+                    cache_root,
+                )
+                if cached_record is not None:
+                    cached_records[index] = cached_record
+        execution_backend = _SignallingBackend(
+            backend,
+            _FrameSignalContext(
+                frames=frames,
+                callbacks=callbacks,
+                cache_root=output_dir,
+                cache_paths=cache_paths,
+                cached_records=cached_records,
+            ),
+        )
     try:
         batch_result = batch_backend.batch_single_point(
-            backend,
+            execution_backend,
             [frame.coordinates for frame in frames],
             list(frames[0].symbols),
             charge=frames[0].charge,
@@ -181,8 +366,9 @@ def _run_group(
             basis=settings.basis,
             max_workers=settings.max_workers,
             solvent=settings.solvent,
-            cache=settings.cache,
+            cache=execution_cache,
             config=settings.config,
+            progress_callback=helper_progress,
             **call_options,  # type: ignore[arg-type]  # remaining options passed through as kwargs
         )
     except (OSError, RuntimeError, TypeError, ValueError) as exc:
@@ -200,7 +386,12 @@ def _run_group(
 
     by_index = {record.index: record for record in batch_result.records}
     return {
-        frame.frame_id: _frame_result(frame, by_index.get(index))
+        frame.frame_id: replace(
+            _frame_result(frame, by_index.get(index)),
+            cache_hit=True,
+        )
+        if index in cached_records
+        else _frame_result(frame, by_index.get(index))
         for index, frame in enumerate(frames)
     }
 
