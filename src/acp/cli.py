@@ -2041,7 +2041,7 @@ Examples:
 Examples:
   acp run serve
   acp run serve --host 127.0.0.1 --port 8765
-  acp run serve --run-root ./ACP_runs --reload
+  acp run serve --run-root /var/lib/acp/runs --reload
         """,
     )
     serve_parser.add_argument(
@@ -2059,8 +2059,13 @@ Examples:
     serve_parser.add_argument(
         "--run-root",
         type=str,
-        default="./ACP_runs",
-        help="Root directory for job work directories and the SQLite index (default: ./ACP_runs)",
+        default=None,
+        help=(
+            "Root directory for job work directories and the SQLite index. "
+            "Falls back to $ACP_RUN_ROOT, then the platform default "
+            "(~/.local/share/acp/runs, or /var/lib/acp/runs for root). "
+            "Must be on a native filesystem."
+        ),
     )
     serve_parser.add_argument(
         "--max-running",
@@ -2492,14 +2497,18 @@ def _handle_serve(args: argparse.Namespace) -> int:
     host = getattr(args, "host", "127.0.0.1")
     port = getattr(args, "port", 8765)
     reload_flag = getattr(args, "reload", False)
-    run_root = getattr(args, "run_root", "./ACP_runs")
+    run_root = getattr(args, "run_root", None)
     max_running = getattr(args, "max_running", 1)
     poll_interval = getattr(args, "poll_interval", 15)
     log_level = getattr(args, "log_level", "INFO").lower()
     no_browser = getattr(args, "no_browser", False)
 
-    run_root_path = Path(run_root).resolve()
+    from acp.core.paths import check_run_root_safety, resolve_run_root
+
+    run_root_path = resolve_run_root(run_root)
     run_root_path.mkdir(parents=True, exist_ok=True)
+    for safety_message in check_run_root_safety(run_root_path):
+        print(f"WARNING: {safety_message}", file=sys.stderr)
 
     os.environ["ACP_RUN_ROOT"] = str(run_root_path)
     os.environ["ACP_HOST"] = host
