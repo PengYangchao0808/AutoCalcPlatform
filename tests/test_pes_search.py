@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -9,19 +10,26 @@ import numpy as np
 import pytest
 
 from acp.backends.base import QCResult
-from acp.calculations.batch.singlepoint import BatchSinglePointExecutor
+from acp.calculations.batch.singlepoint import BatchSinglePointExecutor, BatchSinglePointFrameResult
 from acp.calculations.pes.contracts import (
     CandidateRecommendation,
     EnergyProfile,
     PesScanRequest,
     ScanCoordinate,
     ScanFrame,
+    SinglePointSpec,
     build_default_protocol,
     coordinate_step,
     validate_scan_coordinate,
     validate_scan_coordinates,
 )
-from acp.calculations.pes.scan import build_coordinate_plan, run_pes_scan
+from acp.calculations.pes.scan import (
+    _extract_frames,
+    _run_single_points,
+    build_coordinate_plan,
+    run_pes_scan,
+)
+from acp.calculations.progress import ProgressReporter
 from acp.core.models import Structure
 from cccp.qc.interfaces.constraints import CoordinateSpec
 from cccp.qc.interfaces.xtb_scan import RelaxedScanPoint, RelaxedScanResult
@@ -341,6 +349,122 @@ def test_scan_five_frames_profile(
     assert (scan_dir / "scan_frames" / "frame_000.xyz").exists()
     assert (scan_dir / "scan_frames" / "frame_004.xyz").exists()
     assert not (tmp_path / "WORK" / "02_SEARCH" / "pes_scan_001").exists()
+
+
+def test_single_points_report_live_metrics_during_and_after_execution(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    frames = [
+        ScanFrame(
+            index=index,
+            target_coordinate=1.2,
+            actual_coordinate=1.2,
+            geometry_path=f"scan_frames/frame_{index:03d}.xyz",
+        )
+        for index in range(25)
+    ]
+    reporter = ProgressReporter(tmp_path, stages=["run_single_points"])
+    reporter.initialize()
+    reporter.start_stage("run_single_points")
+    snapshots: list[dict[str, Any]] = []
+
+    class StubExecutor:
+        def __init__(self, **kwargs: Any) -> None:
+            self._frame_ids = kwargs["frame_ids"]
+            self._on_frame_start = kwargs.get("on_frame_start")
+            self._progress_callback = kwargs.get("progress_callback")
+
+        def run(self) -> dict[str, BatchSinglePointFrameResult]:
+            snapshots.append(json.loads((tmp_path / "state.json").read_text(encoding="utf-8")))
+            if self._on_frame_start is not None:
+                self._on_frame_start("malformed", 0, 25)
+                self._on_frame_start("frame_015", 0, 25)
+            if self._progress_callback is not None:
+                self._progress_callback(14, 25)
+            snapshots.append(json.loads((tmp_path / "state.json").read_text(encoding="utf-8")))
+            return {
+                frame_id: BatchSinglePointFrameResult(
+                    frame_id=frame_id,
+                    energy_hartree=-1.0,
+                    status="completed",
+                    cache_key=frame_id,
+                )
+                for frame_id in self._frame_ids
+            }
+
+    monkeypatch.setattr("acp.calculations.pes.scan.BatchSinglePointExecutor", StubExecutor)
+
+    _run_single_points(
+        frames,
+        charge=0,
+        multiplicity=1,
+        sp_spec=build_default_protocol(
+            ScanCoordinate(kind="distance", atoms=(0, 1), start=1.2, end=2.5, n_points=25)
+        ).single_point,
+        scan_dir=tmp_path,
+        cfg={},
+        reporter=reporter,
+    )
+
+    initial_metrics = {metric["key"]: metric for metric in snapshots[0]["live_metrics"]}
+    assert initial_metrics["completed_total"]["value"] == "0 / 25"
+    mid_run_metrics = {metric["key"]: metric for metric in snapshots[1]["live_metrics"]}
+    assert mid_run_metrics["completed_total"]["value"] == "14 / 25"
+    assert mid_run_metrics["current_frame"]["value"] == "Frame 15"
+    final_metrics = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))[
+        "live_metrics"
+    ]
+    assert [(metric["key"], metric["value"]) for metric in final_metrics] == [
+        ("completed_total", "25 / 25")
+    ]
+
+
+def test_single_points_disabled_does_not_write_live_metrics(tmp_path: Path) -> None:
+    reporter = ProgressReporter(tmp_path, stages=["run_single_points"])
+    reporter.initialize()
+    reporter.start_stage("run_single_points")
+
+    _run_single_points(
+        [],
+        charge=0,
+        multiplicity=1,
+        sp_spec=SinglePointSpec(enabled=False),
+        scan_dir=tmp_path,
+        cfg={},
+        reporter=reporter,
+    )
+
+    state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    assert "live_metrics" not in state
+
+
+def test_extract_frames_reports_live_metric(tmp_path: Path) -> None:
+    coords = np.array([[0.0, 0.0, 0.0], [1.2, 0.0, 0.0]])
+    coordinate = ScanCoordinate(kind="distance", atoms=(0, 1), start=1.2, end=2.5, n_points=3)
+    reporter = ProgressReporter(tmp_path, stages=["extract_frames"], min_interval=999.0)
+    reporter.initialize()
+    reporter.start_stage("extract_frames")
+
+    _extract_frames(
+        _pes_scan_result(3, coords, ["C", "C"], output_dir=tmp_path),
+        coordinate,
+        tmp_path,
+        reporter,
+    )
+
+    state = json.loads((tmp_path / "state.json").read_text(encoding="utf-8"))
+    assert state["live_metrics"] == [
+        {
+            "key": "frames_extracted",
+            "label_key": "live.frames_extracted",
+            "label": None,
+            "value": "3 / 3",
+            "kind": "count",
+            "priority": 100,
+            "detail": None,
+        }
+    ]
 
 
 def test_frame_extraction_rescue_or_structured_fail(
@@ -1198,7 +1322,9 @@ def test_engine_candidates_match_persisted_recommendations(
     )
 
     assert result.status == "complete"
-    profile_payload = __import__("json").loads(result.pes_profile_path.read_text(encoding="utf-8"))
+    profile_path = result.pes_profile_path
+    assert profile_path is not None
+    profile_payload = json.loads(profile_path.read_text(encoding="utf-8"))
     assert {c.candidate_id for c in result.ts_candidates} == {
         c["candidate_id"] for c in profile_payload["ts_candidates"]
     }

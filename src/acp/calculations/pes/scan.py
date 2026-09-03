@@ -38,6 +38,7 @@ Key migration changes vs bond_scan.py:
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, TypeGuard
@@ -77,7 +78,7 @@ from acp.calculations.pes.path_selection import (
     policy_from_config,
     select_path_seeds,
 )
-from acp.calculations.progress import ProgressReporter
+from acp.calculations.progress import LiveMetric, ProgressReporter
 from acp.storage.layout import TaskStorage
 from cccp.qc.interfaces.constraints import ConstraintKind, CoordinateSpec, ReactionCoordinatePlan
 from cccp.qc.interfaces.xtb_scan import RelaxedScanResult
@@ -489,6 +490,17 @@ def _extract_frames(
         )
         if reporter is not None:
             reporter.update_stage("extract_frames", completed=len(frames), total=total_points)
+            reporter.set_live_metrics(
+                [
+                    LiveMetric(
+                        key="frames_extracted",
+                        label_key="live.frames_extracted",
+                        value=f"{len(frames)} / {total_points}",
+                        kind="count",
+                        priority=100,
+                    )
+                ]
+            )
     return frames
 
 
@@ -578,12 +590,80 @@ def _run_single_points(
             frames[i] = replace(frame, single_point_status="skipped")
         return
 
-    sp_callback = None
+    n_frames = len(frames)
+    sp_callback: Callable[[int, int], None] | None = None
+    on_frame_start: Callable[[str, int, int], None] | None = None
     if reporter is not None:
-        n_frames = len(frames)
+        done = 0
+        current_frame: str | None = None
+        reporter.set_live_metrics(
+            [
+                LiveMetric(
+                    key="completed_total",
+                    label_key="live.single_points",
+                    value=f"0 / {n_frames}",
+                    kind="count",
+                    priority=100,
+                )
+            ]
+        )
 
-        def sp_callback(done: int, total: int) -> None:
+        def _on_frame_start(frame_id: str, _done_so_far: int, _total: int) -> None:
+            nonlocal current_frame
+            _, separator, raw_index = frame_id.rpartition("_")
+            if not separator:
+                return
+            try:
+                index = int(raw_index)
+            except ValueError:
+                return
+            current_frame = f"Frame {index}"
+            reporter.set_live_metrics(
+                [
+                    LiveMetric(
+                        key="completed_total",
+                        label_key="live.single_points",
+                        value=f"{done} / {n_frames}",
+                        kind="count",
+                        priority=100,
+                    ),
+                    LiveMetric(
+                        key="current_frame",
+                        label_key="live.current_frame",
+                        value=current_frame,
+                        kind="text",
+                        priority=90,
+                    ),
+                ]
+            )
+
+        def _sp_callback(completed: int, _total: int) -> None:
+            nonlocal done
+            done = completed
             reporter.update_stage("run_single_points", completed=done, total=n_frames)
+            metrics = [
+                LiveMetric(
+                    key="completed_total",
+                    label_key="live.single_points",
+                    value=f"{done} / {n_frames}",
+                    kind="count",
+                    priority=100,
+                )
+            ]
+            if current_frame is not None:
+                metrics.append(
+                    LiveMetric(
+                        key="current_frame",
+                        label_key="live.current_frame",
+                        value=current_frame,
+                        kind="text",
+                        priority=90,
+                    )
+                )
+            reporter.set_live_metrics(metrics)
+
+        on_frame_start = _on_frame_start
+        sp_callback = _sp_callback
 
     for frame in frames:
         if not frame.geometry_path:
@@ -612,7 +692,20 @@ def _run_single_points(
         grid=sp_spec.grid,
         scf_convergence=sp_spec.scf_convergence,
         progress_callback=sp_callback,
+        on_frame_start=on_frame_start,
     ).run()
+    if reporter is not None:
+        reporter.set_live_metrics(
+            [
+                LiveMetric(
+                    key="completed_total",
+                    label_key="live.single_points",
+                    value=f"{n_frames} / {n_frames}",
+                    kind="count",
+                    priority=100,
+                )
+            ]
+        )
 
     for i, frame in enumerate(frames):
         frame_result = result[f"frame_{frame.index:03d}"]
