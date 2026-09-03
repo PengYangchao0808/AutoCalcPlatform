@@ -48,6 +48,7 @@ class BatchSinglePointExecutor:
         cache: bool = True,
         cache_profile: str = "singlepoint",
         progress_callback: Callable[[int, int], None] | None = None,
+        on_frame_start: Callable[[str, int, int], None] | None = None,
         **sp_kwargs: object,
     ) -> None:
         self._frames = list(frames) if frames is not None else None
@@ -68,6 +69,7 @@ class BatchSinglePointExecutor:
         self._cache = cache
         self._cache_profile = cache_profile
         self._progress_callback = progress_callback
+        self._on_frame_start = on_frame_start
         self._sp_kwargs = dict(sp_kwargs)
 
     def run(
@@ -136,6 +138,7 @@ class BatchSinglePointExecutor:
                         options=options,
                     ),
                     progress_callback=self._progress_callback,
+                    on_frame_start=self._on_frame_start,
                 )
             )
         return BatchSinglePointResult(

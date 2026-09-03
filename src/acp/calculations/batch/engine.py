@@ -33,6 +33,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final, Literal, TypeAlias
 
+from acp.api.stage_labels import stage_label
 from acp.calculations.batch._items import (
     BatchCalculationItem,
     BatchStructureItem,
@@ -57,6 +58,7 @@ from acp.calculations.primitives.frequency import run_frequency
 from acp.calculations.primitives.optimize import run_optimize
 from acp.calculations.primitives.singlepoint import run_singlepoint
 from acp.calculations.primitives.thermochemistry import ThermochemistryCalculator
+from acp.calculations.progress import LiveMetric, ProgressReporter
 from acp.storage.manifest import ProductKind, ResultManifest
 
 from .options import BatchMethodOptions
@@ -70,6 +72,7 @@ __all__ = [
     "BatchOptimizeEngine",
     "BatchRunOutcome",
     "TERMINAL_ITEM_STATUSES",
+    "batch_stage_names",
 ]
 
 BATCH_STRUCTURES_SUBDIR = "structures"
@@ -83,10 +86,22 @@ _SINGLE_ITEM_STAGE_DIRS: Final[dict[StepKind, str]] = {
     StepKind.SINGLEPOINT: "05_SP",
     StepKind.THERMOCHEMISTRY: "06_THERMO",
 }
+_STEP_STAGE_KEYS: Final[dict[StepKind, str]] = {
+    StepKind.OPTIMIZE: "optimize",
+    StepKind.FREQUENCY: "frequency",
+    StepKind.SINGLEPOINT: "single_point",
+    StepKind.THERMOCHEMISTRY: "thermochemistry",
+    StepKind.SCAN: "scan",
+}
 
 # ── profile → ordered step kinds ─────────────────────────────────────────
 # Kept as a private import alias for callers that used the old test seam.
 _PROFILE_STEPS = BATCH_PROFILE_STEPS
+
+
+def batch_stage_names(profile: str) -> list[str]:
+    """Return canonical progress stage keys for a BatchOptimize profile."""
+    return [_STEP_STAGE_KEYS[step] for step in _PROFILE_STEPS[profile]]
 
 
 def _utc_now_iso() -> str:
@@ -210,6 +225,13 @@ class BatchRunOutcome:
         return [item.error for item in self.items if item.error]
 
 
+@dataclass(frozen=True, slots=True)
+class _BatchProgress:
+    reporter: ProgressReporter
+    item_number: int
+    item_total: int
+
+
 # ── TS imaginary-frequency judgment ──────────────────────────────────────
 
 
@@ -269,6 +291,7 @@ class BatchOptimizeEngine:
         work_root: Path | None = None,
         result_root: Path | None = None,
         methods: BatchMethodOptions | None = None,
+        progress_reporter: ProgressReporter | None = None,
     ) -> None:
         self._config: Mapping[str, JsonValue] | None = config
         self._backend_factory: Callable[..., object] | None = backend_factory
@@ -280,6 +303,7 @@ class BatchOptimizeEngine:
         )
         self._active_methods: BatchMethodOptions = methods or BatchMethodOptions()
         self._active_layout_mode: BatchLayoutMode = "batch"
+        self._progress_reporter: ProgressReporter | None = progress_reporter
 
     @property
     def batch_root(self) -> Path:
@@ -321,6 +345,7 @@ class BatchOptimizeEngine:
         workflow: str = "BatchOptimize",
         methods: BatchMethodOptions | None = None,
         layout_mode: BatchLayoutMode = "batch",
+        progress_reporter: ProgressReporter | None = None,
     ) -> BatchRunOutcome:
         """Execute (or resume) the batch for *items*.
 
@@ -335,14 +360,27 @@ class BatchOptimizeEngine:
             layout_mode: ``batch`` keeps per-item directories for a real multi-item
                 CLI run; ``single_flat`` matches the scheduler's one-structure
                 task layout and requires exactly one item.
+            progress_reporter: Optional state reporter for per-item stage progress.
 
         Returns:
             The aggregated outcome.
         """
-        if not items:
-            raise ValueError("Batch run requires at least one structure item")
+        active_progress_reporter = progress_reporter or self._progress_reporter
         if profile not in _PROFILE_STEPS:
             raise ValueError(f"unknown batch profile: {profile!r}")
+        if not items:
+            if active_progress_reporter is None:
+                raise ValueError("Batch run requires at least one structure item")
+            timestamp = _utc_now_iso()
+            return BatchRunOutcome(
+                profile=profile,
+                manifest=BatchCalculationManifest(
+                    profile=profile,
+                    workflow=workflow,
+                    created_at=timestamp,
+                    updated_at=timestamp,
+                ),
+            )
         resolved_layout = _normalize_layout_mode(layout_mode)
         if resolved_layout == "single_flat" and len(items) != 1:
             raise ValueError("single_flat BatchOptimize layout requires exactly one item")
@@ -390,11 +428,34 @@ class BatchOptimizeEngine:
                 logger.info("Batch item %s skipped (cache hit)", item.item_id)
             else:
                 executed_count += 1
+                progress = (
+                    _BatchProgress(
+                        reporter=active_progress_reporter,
+                        item_number=index + 1,
+                        item_total=len(items),
+                    )
+                    if active_progress_reporter is not None
+                    else None
+                )
                 try:
-                    self._process_item(item, record, steps, charge, multiplicity)
+                    if progress is None:
+                        self._process_item(item, record, steps, charge, multiplicity)
+                    else:
+                        self._process_item(
+                            item,
+                            record,
+                            steps,
+                            charge,
+                            multiplicity,
+                            progress=progress,
+                        )
                 except Exception as exc:
                     record.status = "failed"
                     record.error = str(exc) or type(exc).__name__
+                    if active_progress_reporter is not None:
+                        current_stage = active_progress_reporter.current_stage
+                        if current_stage is not None:
+                            active_progress_reporter.fail_stage(current_stage, record.error)
                     logger.warning("Batch item %s failed: %s", item.item_id, exc)
 
             records.append(record)
@@ -447,8 +508,16 @@ class BatchOptimizeEngine:
         charge: int,
         multiplicity: int,
         methods: BatchMethodOptions | None = None,
+        *,
+        progress: _BatchProgress | None = None,
     ) -> None:
-        """Run all profile steps for one item.  Raises on failure."""
+        """Run all profile steps for one item, serially.  Raises on failure.
+
+        Items are the outer loop in :meth:`run`, so repeated profile stages are
+        reported for each item.  ``current_stage`` therefore identifies the
+        step of the item currently being processed, while the reporter's
+        canonical stage order supplies the workflow position.
+        """
         resolved_methods = methods or self._active_methods
         item_dir = self._item_work_dir(item)
         input_path = self._item_input_path(item)
@@ -464,6 +533,28 @@ class BatchOptimizeEngine:
         optimized_coords: list[list[float]] | None = None
 
         for step_kind in steps:
+            if progress is not None:
+                stage_key = _STEP_STAGE_KEYS[step_kind]
+                progress.reporter.start_stage(stage_key)
+                progress.reporter.set_live_metrics(
+                    [
+                        LiveMetric(
+                            key="batch_item",
+                            label_key="live.batch_item",
+                            value=f"{progress.item_number} / {progress.item_total}",
+                            kind="count",
+                            priority=100,
+                        ),
+                        LiveMetric(
+                            key="batch_step",
+                            label_key="live.batch_step",
+                            label=stage_label(stage_key),
+                            value=stage_key,
+                            kind="status",
+                            priority=90,
+                        ),
+                    ]
+                )
             step_dir = self._step_dir(item, step_kind)
             step_dir.mkdir(parents=True, exist_ok=True)
 
@@ -478,7 +569,10 @@ class BatchOptimizeEngine:
                     resolved_methods,
                     trajectory_item_id=item.item_id,
                 )
-                current_result = run_optimize(req)
+                if progress is None:
+                    current_result = run_optimize(req)
+                else:
+                    current_result = run_optimize(req, progress_reporter=progress.reporter)
                 if current_result.status == "failed":
                     raise RuntimeError(
                         f"optimization failed for {item.item_id}: "
@@ -567,6 +661,9 @@ class BatchOptimizeEngine:
                     thermochemistry[key] = _to_batch_json(value)
                 record.thermochemistry.clear()
                 record.thermochemistry.update(thermochemistry)
+
+            if progress is not None:
+                progress.reporter.complete_stage(_STEP_STAGE_KEYS[step_kind])
 
         if optimized_coords is not None:
             optimized_path = (

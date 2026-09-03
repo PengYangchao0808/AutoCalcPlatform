@@ -17,6 +17,7 @@ from acp.calculations.batch.models import (
 )
 from acp.calculations.batch.options import BatchMethodOptions
 from acp.calculations.contracts import JsonValue
+from acp.calculations.progress import ProgressReporter
 from acp.core.workflow import WorkflowResult
 
 BatchItemsSource = Path | str | list[BatchStructureItem] | JsonObject
@@ -115,6 +116,7 @@ def run_batch_optimize(
     select: BatchSelection = None,
     methods: BatchMethodOptions | None = None,
     layout_mode: BatchLayoutMode = "batch",
+    progress_reporter: ProgressReporter | None = None,
 ) -> WorkflowResult:
     """Run BatchOptimize for structures loaded from an artifact or input file.
 
@@ -139,6 +141,7 @@ def run_batch_optimize(
         config=dict(config) if config is not None else None,
         work_root=output_root / "WORK",
         result_root=output_root / "RESULT",
+        progress_reporter=progress_reporter,
     )
     outcome = engine.run(
         items,
@@ -148,6 +151,7 @@ def run_batch_optimize(
         workflow="BatchOptimize",
         methods=methods,
         layout_mode=layout_mode,
+        progress_reporter=progress_reporter,
     )
     errors = outcome.errors
     return WorkflowResult(
