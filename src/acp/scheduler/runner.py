@@ -46,6 +46,7 @@ from acp.scheduler.jobs import (
     scan_method_flags,
     xtbmd_method_flags,
 )
+from acp.scheduler.processctl import find_task_processes, pid_is_alive
 from acp.scheduler.provenance import Provenance, build_provenance_for_job
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
 from acp.storage.layout import TaskStorage, runtime_file
@@ -339,6 +340,9 @@ class JobRunner:
         self._seen_stages: dict[str, set[str]] = {}
         self._cancel_events: dict[str, threading.Event] = {}
         self._event_logs: dict[str, JobEventLog] = {}
+        # Per-task execution locks (WORK/00_RUNTIME/run.lock): at most one
+        # live execution per task directory, across service restarts.
+        self._run_locks: dict[str, Path] = {}
 
     # ------------------------------------------------------------------ #
     # New non-blocking API (poller-driven)
@@ -376,7 +380,22 @@ class JobRunner:
         # backward compatibility with logs.py / events.py / v1_routes readers.
         storage = TaskStorage(work_dir)
         storage.ensure_layout()
+        self._guard_single_execution(record)
+        self._acquire_run_lock(record)
+        try:
+            self._prepare_and_launch(record, work_dir, storage, event_log)
+        except BaseException:
+            self._release_run_lock(record.id)
+            raise
 
+    def _prepare_and_launch(
+        self,
+        record: JobRecord,
+        work_dir: Path,
+        storage: TaskStorage,
+        event_log: JobEventLog,
+    ) -> None:
+        """Materialize input, build the command, and spawn the subprocess."""
         observer = self._observer_for_record(record)
         observer.initialize_job_stages(record.id, record.spec)
         event_log.append("job.started", job_id=record.id, workflow=record.spec.workflow)
@@ -448,6 +467,7 @@ class JobRunner:
             )
             record.pid = proc.pid
 
+        self._write_run_lock(self._run_locks[record.id], record, task_pid=proc.pid)
         with self._proc_lock:
             self._processes[record.id] = proc
             self._seen_stages[record.id] = set()
@@ -471,6 +491,7 @@ class JobRunner:
                     job_id=record.id,
                     exit_code=exit_code,
                 )
+            self._release_run_lock(record.id)
             with self._proc_lock:
                 self._seen_stages.pop(record.id, None)
                 self._cancel_events.pop(record.id, None)
@@ -485,6 +506,7 @@ class JobRunner:
             event_log = self._event_logs.get(record.id)
             if event_log:
                 event_log.append("job.cancelled", job_id=record.id, exit_code=130)
+            self._release_run_lock(record.id)
             with self._proc_lock:
                 self._processes.pop(record.id, None)
                 self._seen_stages.pop(record.id, None)
@@ -521,6 +543,7 @@ class JobRunner:
                 event_log.append(
                     "job.failed", job_id=record.id, exit_code=ret
                 ) if event_log else None
+            self._release_run_lock(record.id)
             with self._proc_lock:
                 self._processes.pop(record.id, None)
                 self._seen_stages.pop(record.id, None)
@@ -540,6 +563,7 @@ class JobRunner:
 
     def cancel_local(self, job_id: str) -> None:
         """Terminate a locally-running subprocess."""
+        self._release_run_lock(job_id)
         with self._proc_lock:
             proc = self._processes.pop(job_id, None)
             self._seen_stages.pop(job_id, None)
@@ -598,6 +622,92 @@ class JobRunner:
             logger.warning("Failed to SIGCONT process group for job %s", job_id, exc_info=True)
             return False
         return True
+
+    # ------------------------------------------------------------------ #
+    # Per-task single-execution guard (run.lock)
+    # ------------------------------------------------------------------ #
+
+    def _live_task_pids(self, record: JobRecord) -> list[int]:
+        """Live, non-zombie processes still bound to this task directory.
+
+        Combines the runner-tracked subprocess (same-service case) with a
+        ``/proc`` scan so orphans from a previous service instance are found.
+        """
+        work_dir = Path(record.work_dir)
+        with self._proc_lock:
+            proc = self._processes.get(record.id)
+        pids = set(find_task_processes(work_dir))
+        if proc is not None and proc.poll() is None and pid_is_alive(proc.pid):
+            pids.add(proc.pid)
+        return sorted(pids)
+
+    def _guard_single_execution(self, record: JobRecord) -> None:
+        """Refuse to start when a live process already occupies the task."""
+        live = self._live_task_pids(record)
+        if live:
+            raise RuntimeError(
+                f"task {record.id} still has live process(es) {live} in "
+                f"{record.work_dir}; refusing to start a second execution"
+            )
+
+    def _write_run_lock(self, lock_path: Path, record: JobRecord, task_pid: int | None) -> None:
+        payload = {
+            "job_id": record.id,
+            "owner_pid": os.getpid(),
+            "task_pid": task_pid,
+            "acquired_at": datetime.now(timezone.utc).isoformat(),
+        }
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    def _acquire_run_lock(self, record: JobRecord) -> None:
+        """Atomically claim ``WORK/00_RUNTIME/run.lock`` for this execution.
+
+        A pre-existing lock is stale (and stolen) when its owner service is
+        gone, or when it belongs to this very service with no live task
+        process left behind by a crashed submission thread.  A lock held by
+        a live foreign owner is a hard conflict.
+        """
+        lock_path = runtime_file(Path(record.work_dir), "run.lock")
+        try:
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.close(fd)
+        except FileExistsError:
+            self._resolve_existing_run_lock(record, lock_path)
+        self._write_run_lock(lock_path, record, task_pid=None)
+        self._run_locks[record.id] = lock_path
+
+    def _resolve_existing_run_lock(self, record: JobRecord, lock_path: Path) -> None:
+        try:
+            payload = json.loads(lock_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            payload = {}
+        owner_pid = payload.get("owner_pid") if isinstance(payload, dict) else None
+        owner_pid = int(owner_pid) if isinstance(owner_pid, int) else 0
+        if pid_is_alive(owner_pid):
+            if owner_pid == os.getpid() and not self._live_task_pids(record):
+                logger.warning(
+                    "Stolen stale run.lock for job %s (crashed submission thread)",
+                    record.id,
+                )
+            else:
+                raise RuntimeError(
+                    f"run.lock for task {record.id} is held by live process {owner_pid}; "
+                    "refusing to start a duplicate execution"
+                )
+            return
+        logger.info("Stolen run.lock of dead service (pid=%s) for job %s", owner_pid, record.id)
+        lock_path.unlink(missing_ok=True)
+
+    def _release_run_lock(self, job_id: str) -> None:
+        lock_path = self._run_locks.pop(job_id, None)
+        if lock_path is None:
+            return
+        try:
+            lock_path.unlink(missing_ok=True)
+        except OSError:
+            logger.debug("Failed to remove run.lock for job %s", job_id, exc_info=True)
 
     # ------------------------------------------------------------------ #
     # Legacy blocking API (kept for backward compat)

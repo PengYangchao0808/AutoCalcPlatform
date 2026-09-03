@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
 from acp.calculations.contracts import JsonValue
+from acp.scheduler.artifacts import ArtifactRegistry
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
     EXIT_WAITING_REVIEW,
@@ -40,6 +41,7 @@ from acp.scheduler.nodes import (
     NodeSpec,
     validate_execution_request,
 )
+from acp.scheduler.processctl import terminate_task_processes
 from acp.scheduler.projects import ProjectManager
 from acp.scheduler.provenance import compute_input_hash
 from acp.scheduler.runner import (
@@ -55,9 +57,19 @@ logger = logging.getLogger(__name__)
 
 _CALCULATION_CHECKPOINT_PATH: Final = "WORK/00_RUNTIME/checkpoint.json"
 _NO_CHECKPOINT_MESSAGE: Final = "该工作流不支持断点续算，请使用重算 (rerun)"
+_BATCH_NO_CONTINUE_MESSAGE: Final = "BatchOptimize 不支持断点续算，请使用重算 (rerun)"
 _RETIRED_INFLIGHT_REASON: Final[str] = (
-    "[RETIRED_WORKFLOW] workflow retired by calc-refactor — 历史任务只读，可查看/清除，不可继续"
+    "[RESTART_FAILED] workflow retired by calc-refactor — 历史任务只读，可查看/清除，不可继续"
 )
+# Task-identity files preserved across an in-place rerun; everything else
+# in the task directory (WORK, RESULT, legacy _attempts, logs, markers)
+# is attempt-scoped and gets cleared.
+_RERUN_STABLE_FILES: Final[frozenset[str]] = frozenset(
+    {"input.xyz", "input_source.json", "task.json", "job.json"}
+)
+# Workflows with first-class resume support at startup-triage time; every
+# other workflow only hints "try continue" when a generic checkpoint exists.
+_STARTUP_RESUMABLE_WORKFLOWS: Final[frozenset[str]] = frozenset({"mechanism", "xtbmd_censo_energy"})
 
 
 def _derive_retired_workflows() -> frozenset[str]:
@@ -515,6 +527,14 @@ class JobManager:
         start a new child process, but it must never allocate a new
         ``job_id``/``work_dir`` pair.
 
+        Before requeueing, every process still bound to the task directory
+        (including orphans from a previous service run) is terminated, then
+        all attempt-scoped content (``WORK``/``RESULT``, legacy ``_attempts``,
+        logs and markers) is cleared in place — no ``_attempts/`` archive is
+        created.  Only ``input.xyz``/``input_source.json``/``task.json``/
+        ``job.json`` survive; attempt history lives in the database
+        ``result`` metadata alone.
+
         ``project_id`` is retained as a backwards-compatible request
         parameter.  It may only repeat the task's current project; moving or
         copying a task remains the responsibility of ``move``/``clone``.
@@ -534,15 +554,18 @@ class JobManager:
                 raise ValueError("原地重跑不能切换项目，请使用复制到项目")
             if not record.status.is_terminal:
                 raise ValueError(f"rerun requires a terminal status; got {record.status.value}")
-            if self._has_live_process(job_id):
-                raise ValueError(f"job {job_id} still has a live process tracked by the runner")
             if job_id in self._submission_jobs:
                 raise ValueError(f"job {job_id} is already being submitted")
 
+            killed = self._terminate_stale_task_processes(record)
+            if self._has_live_task_process(record):
+                raise ValueError(
+                    f"job {job_id} still has live process(es) in its task directory; "
+                    "refusing to rerun — terminate them first"
+                )
+
             attempts = int((record.result or {}).get("attempts") or 1) + 1
             old_status = record.status.value
-            self._archive_attempt(record, attempts)
-
             result = dict(record.result or {})
             history = result.get("attempt_history")
             if not isinstance(history, list):
@@ -557,6 +580,10 @@ class JobManager:
                     "error": record.error,
                 }
             )
+            # Clear the task directory while the job is still terminal —
+            # flipping to QUEUED lets the poller dispatch a submission at
+            # any moment, and that submission must find a clean task root.
+            self._reset_work_dir_in_place(record)
             # Do not carry a previous workflow state, remote submission, or
             # result payload into a full rerun.  Keep only scheduler history.
             record.result = {
@@ -577,7 +604,10 @@ class JobManager:
             self.store.update(record)
 
         self._stage_task_observer.reset_job(job_id)
+        self._reset_job_artifacts(job_id)
+        TaskStorage(Path(record.work_dir)).ensure_layout()
         self._sync_task_status(record)
+        self._update_task_json_status(Path(record.work_dir), record.status.value)
         self._write_job_json(record)
         self._event_log(record).append(
             "job.rerun",
@@ -585,45 +615,46 @@ class JobManager:
             rerun_from=old_status,
             attempts=attempts,
             work_dir=record.work_dir,
+            killed_pids=killed,
         )
         self._start_submission_thread(job_id, f"acp-rerun-{job_id}")
         return record
 
-    def _archive_attempt(self, record: JobRecord, attempt: int) -> None:
-        """Move prior run material into a recoverable per-attempt archive.
+    def _reset_work_dir_in_place(self, record: JobRecord) -> None:
+        """Clear attempt-scoped content, keeping the task identity files.
 
-        The task identity files and event log stay at the task root.  All
-        workflow-generated content is moved as a unit so a full rerun starts
-        with a clean ``WORK``/``RESULT`` tree without deleting diagnostic
-        data.  The archive is intentionally inside the task directory and
-        therefore remains available to the existing file browser.
+        Deletes ``WORK``/``RESULT``, any legacy ``_attempts/`` archives, and
+        all run markers/logs in place so the rerun starts from a clean task
+        root without creating a duplicate directory.  The v2 scaffold is
+        recreated by the caller afterwards.
         """
         work_dir = Path(record.work_dir)
         if not work_dir.is_dir():
             return
-        archive_root = work_dir / "_attempts" / f"attempt_{attempt - 1:03d}"
-        archive_root.mkdir(parents=True, exist_ok=True)
-        stable = {
-            "input.xyz",
-            "input_source.json",
-            "task.json",
-            "job.json",
-            "events.jsonl",
-            "_attempts",
-        }
         for child in list(work_dir.iterdir()):
-            if child.name in stable:
+            if child.name in _RERUN_STABLE_FILES:
                 continue
-            destination = archive_root / child.name
             try:
-                shutil.move(str(child), str(destination))
+                if child.is_dir() and not child.is_symlink():
+                    shutil.rmtree(child)
+                else:
+                    child.unlink()
             except OSError:
                 logger.warning(
-                    "Could not archive %s before rerun of %s",
+                    "Could not clear %s before rerun of %s",
                     child,
                     record.id,
                     exc_info=True,
                 )
+
+    def _reset_job_artifacts(self, job_id: str) -> None:
+        """Drop artifact rows captured by the previous attempt."""
+        try:
+            registry = ArtifactRegistry(self._stage_task_store.db_path)
+            for artifact in registry.list_by_job(job_id):
+                registry.delete(artifact.artifact_id)
+        except Exception:
+            logger.warning("Artifact reset failed for job %s", job_id, exc_info=True)
 
     def delete_job(self, job_id: str, delete_data: bool = False) -> bool:
         """Delete a job record and optionally its local and remote data.
@@ -1116,9 +1147,10 @@ class JobManager:
         Workflow matrix: ``xtbmd_censo_energy``
         first persists ``method.resume=true`` into the spec so the rebuilt
         CLI command carries ``--resume``; calculation-plan workflows resume
-        when their generic checkpoint is present. Other workflows without a
-        checkpoint are rejected (the API maps the ``ValueError`` to 409 with
-        a rerun hint).
+        when their generic checkpoint is present. ``BatchOptimize`` is
+        always rejected — its checkpoint is a per-item cache, not a full
+        resume contract. Other workflows without a checkpoint are rejected
+        (the API maps the ``ValueError`` to 409 with a rerun hint).
 
         Args:
             job_id: Job identifier.
@@ -1153,6 +1185,10 @@ class JobManager:
                 pass
             elif workflow == "xtbmd_censo_energy":
                 record.spec = replace(record.spec, method={**record.spec.method, "resume": True})
+            elif workflow == "BatchOptimize":
+                # Its per-item checkpoint is a cache, not a full resume
+                # contract — never let the API re-enter a BatchOptimize job.
+                raise ValueError(_BATCH_NO_CONTINUE_MESSAGE)
             else:
                 self._require_generic_checkpoint(record)
 
@@ -1245,6 +1281,24 @@ class JobManager:
         """True when the runner still tracks a live (un-exited) subprocess."""
         proc = self.runner._processes.get(job_id)
         return proc is not None and proc.poll() is None
+
+    def _has_live_task_process(self, record: JobRecord) -> bool:
+        """True when any live process is still bound to the task directory.
+
+        Unlike :meth:`_has_live_process` this survives service restarts: it
+        scans ``/proc`` for processes whose cmdline/cwd references the task
+        work_dir (ORCA children included) and treats zombies as dead.
+        """
+        return bool(self.runner._live_task_pids(record))
+
+    def _terminate_stale_task_processes(self, record: JobRecord) -> list[int]:
+        """Kill every process still bound to the task work_dir.
+
+        Escalates SIGCONT → SIGTERM → SIGKILL per process group and waits
+        for exit.  The recorded ``record.pid`` is only signalled when it
+        actually references the task directory (PID-recycling guard).
+        """
+        return terminate_task_processes(Path(record.work_dir), extra_pids=[record.pid or 0])
 
     def _remote_bstop_bresume(self, record: JobRecord, method_name: str, action: str) -> None:
         """Invoke the remote monitor's bstop/bresume contract for *record*.
@@ -1914,10 +1968,10 @@ class JobManager:
                             )
                     else:
                         try:
-                            if record.pid:
-                                import os
-                                import signal
+                            import os
+                            import signal
 
+                            if record.pid and hasattr(os, "killpg"):
                                 os.killpg(record.pid, signal.SIGCONT)
                         except (OSError, ProcessLookupError):
                             pass
@@ -1942,29 +1996,27 @@ class JobManager:
         # apply a shorter retention window (risk 5 mitigation, Phase 5B)
         # since these dirs hold no useful partial results.
         #
-        # Remote jobs with a valid remote_job_id can be recovered — the background
-        # poller will re-check bjobs + .exit_code.
+        # Local subprocesses orphaned by the restart are detected through
+        # /proc and terminated BEFORE the job is finalised, so "failed" in
+        # the UI/DB can never coexist with a still-computing ORCA process.
+        # Remote jobs with a valid remote_job_id are recovered instead —
+        # the poller re-checks bjobs + .exit_code.
         restart_marker = "[RESTART_FAILED] interrupted by server restart"
-        resume_hint = " — 可尝试续算 (try continue)"
         # CANCELLING jobs that were interrupted mid-cancellation should stay
         # CANCELLED — the user's cancel intent must survive a restart.
         for record in self.store.list(status=JobStatus.CANCELLING.value):
-            record.status = JobStatus.CANCELLED
-            record.error = restart_marker
-            record.completed_at = _utc_now_iso()
-            record.touch()
-            self.store.update(record)
-            self._stage_task_observer.finalize_job(record.id, JobStatus.CANCELLED.value)
+            self._cleanup_local_orphans(record)
+            self._finalize_restarted_job(
+                record, JobStatus.CANCELLED, restart_marker, "job.cancelled"
+            )
             logger.info("Marked CANCELLING job %s as CANCELLED after restart", record.id)
 
-        # PAUSED jobs: local ones died with the server (their frozen process
-        # groups live in the service's cgroup — nothing to kill), so fail
-        # them with the resumable hint.  Remote ones keep their bstop state
-        # on the LSF side: recover the polling state and KEEP them PAUSED
-        # until an explicit unpause (bresume) flips them back to RUNNING.
-        paused_marker = (
-            "[RESTART_FAILED] paused job frozen at restart — 可续算 (resumable via continue)"
-        )
+        # PAUSED jobs: local ones lost their owning server — terminate any
+        # surviving frozen process group, then fail them with a resumption
+        # hint matching the workflow's real resume support.  Remote ones
+        # keep their bstop state on the LSF side: recover the polling state
+        # and KEEP them PAUSED until an explicit unpause (bresume).
+        paused_marker = "[RESTART_FAILED] paused job frozen at restart"
         for record in self.store.list(status=JobStatus.PAUSED.value):
             if self._try_recover_remote_job(record):
                 logger.info(
@@ -1973,12 +2025,13 @@ class JobManager:
                     record.remote_job_id,
                 )
                 continue
-            record.status = JobStatus.FAILED
-            record.error = paused_marker
-            record.completed_at = _utc_now_iso()
-            record.touch()
-            self.store.update(record)
-            self._stage_task_observer.finalize_job(record.id, JobStatus.FAILED.value)
+            self._cleanup_local_orphans(record)
+            self._finalize_restarted_job(
+                record,
+                JobStatus.FAILED,
+                paused_marker + self._restart_resume_hint(record),
+                "job.failed",
+            )
             logger.info("Marked paused job %s as FAILED after restart", record.id)
 
         # WAITING_REVIEW jobs are intentionally excluded here: a server restart
@@ -2006,13 +2059,95 @@ class JobManager:
                     self._stage_task_observer.finalize_job(record.id, JobStatus.COMPLETED.value)
                     logger.info("Marked interrupted job %s as COMPLETED (disk probe)", record.id)
                     continue
-                record.status = JobStatus.FAILED
-                record.error = restart_marker + resume_hint
-                record.completed_at = _utc_now_iso()
-                record.touch()
-                self.store.update(record)
-                self._stage_task_observer.finalize_job(record.id, JobStatus.FAILED.value)
+                self._cleanup_local_orphans(record)
+                self._finalize_restarted_job(
+                    record,
+                    JobStatus.FAILED,
+                    restart_marker + self._restart_resume_hint(record),
+                    "job.failed",
+                )
                 logger.info("Marked interrupted job %s as FAILED", record.id)
+
+    def _restart_resume_hint(self, record: JobRecord) -> str:
+        """Restart-failure hint matching the workflow's real resume support.
+
+        BatchOptimize is never pointed at continue (its checkpoint is not a
+        full resume contract); checkpoint-less workflows are pointed at
+        rerun instead.
+        """
+        if record.spec.workflow in _STARTUP_RESUMABLE_WORKFLOWS:
+            return " — 可尝试续算 (try continue)"
+        if record.spec.workflow == "BatchOptimize" or self._read_generic_checkpoint(record) is None:
+            return " — 请使用重算 (rerun)"
+        return " — 可尝试续算 (try continue)"
+
+    def _cleanup_local_orphans(self, record: JobRecord) -> list[int]:
+        """Terminate local processes orphaned by the restart; log the sweep.
+
+        Returns the terminated PIDs (empty for remote jobs, whose lifecycle
+        is owned by LSF).
+        """
+        if self._is_remote_job(record):
+            return []
+        killed = self._terminate_stale_task_processes(record)
+        if killed:
+            try:
+                self._event_log(record).append("process.cleaned", job_id=record.id, pids=killed)
+            except OSError:
+                logger.debug("process.cleaned event failed for %s", record.id, exc_info=True)
+        return killed
+
+    def _finalize_restarted_job(
+        self,
+        record: JobRecord,
+        status: JobStatus,
+        error: str,
+        event_type: str,
+    ) -> None:
+        """Persist a restart-finalised state across DB, disk, and events.
+
+        Clears the stale PID and refreshes the database row, task index,
+        ``job.json``, on-disk ``task.json``, and ``events.jsonl`` so every
+        surface reports the same terminal status.
+        """
+        record.status = status
+        record.pid = None
+        record.error = error
+        record.completed_at = _utc_now_iso()
+        record.touch()
+        self.store.update(record)
+        self._stage_task_observer.finalize_job(record.id, status.value)
+        self._sync_task_status(record)
+        try:
+            self._write_job_json(record)
+        except OSError:
+            logger.debug("job.json refresh failed for %s", record.id, exc_info=True)
+        self._update_task_json_status(Path(record.work_dir), status.value)
+        try:
+            self._event_log(record).append(
+                event_type, job_id=record.id, error=error, reason="server_restart"
+            )
+        except OSError:
+            logger.debug("Restart event failed for %s", record.id, exc_info=True)
+
+    def _update_task_json_status(self, work_dir: Path, status: str) -> None:
+        """Best-effort status refresh of the on-disk ``task.json``."""
+        path = TaskStorage(work_dir).task_json()
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        if not isinstance(payload, dict):
+            return
+        payload["status"] = status
+        payload["updated_at"] = _utc_now_iso()
+        try:
+            path.write_text(
+                json.dumps(payload, indent=2, sort_keys=True, default=str),
+                encoding="utf-8",
+            )
+        except OSError:
+            logger.debug("task.json refresh failed for %s", work_dir, exc_info=True)
 
     def _disk_shows_completed(self, work_dir: Path) -> bool:
         """Probe disk for a job that finished exactly as the server died.
@@ -2060,3 +2195,4 @@ class JobManager:
 
 
 __all__ = ["JobManager"]
+

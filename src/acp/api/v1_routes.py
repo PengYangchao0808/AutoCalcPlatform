@@ -1552,23 +1552,118 @@ def _mechanism_gap_status(record: JobRecord) -> str:
 
 def _detail_stages(job_id: str, record: JobRecord, request: Request) -> list[JobStageEntry]:
     tasks = _stage_task_store(request).list_by_job(job_id)
+    state_stages: dict[str, dict[str, Any]] = {}
+    if record.work_dir:
+        try:
+            state_path = find_workflow_state(Path(record.work_dir))
+        except OSError:
+            state_path = None
+        if state_path is not None:
+            try:
+                state_data = json.loads(state_path.read_text(encoding="utf-8"))
+                raw = state_data.get("stages") if isinstance(state_data, dict) else None
+                if isinstance(raw, dict):
+                    state_stages = raw
+            except (OSError, json.JSONDecodeError):
+                pass
     if tasks:
-        # stage_tasks columns: ``state`` → status, ``stderr_summary`` → error.
-        return [
+        entries = _overlay_state_on_entries(tasks, state_stages)
+        if entries:
+            _apply_terminal_projection(entries, record.status)
+            return entries
+    if state_stages:
+        entries = _synthesize_entries_from_state(state_stages)
+        _apply_terminal_projection(entries, record.status)
+        return entries
+    if record.spec.workflow == "mechanism":
+        return _mechanism_stage_fallback(record)
+    return []
+
+
+_STAGE_ADVANCE_ORDER: dict[str, int] = {
+    "pending": 0,
+    "running": 1,
+    "completed": 2,
+    "failed": 2,
+    "skipped": 2,
+    "cancelled": 2,
+}
+
+_TERMINAL_STAGE_STATUSES = frozenset({"completed", "failed", "skipped", "cancelled"})
+
+
+def _apply_terminal_projection(entries: list[JobStageEntry], record_status: JobStatus) -> None:
+    if not record_status.is_terminal:
+        return
+    for entry in entries:
+        if entry.status not in _TERMINAL_STAGE_STATUSES:
+            entry.status = "skipped"
+
+
+def _overlay_state_on_entries(
+    tasks: list[StageTask],
+    state_stages: dict[str, dict[str, Any]],
+) -> list[JobStageEntry]:
+    """Build stage entries from stage_tasks rows, overlaying state.json data."""
+    entries: list[JobStageEntry] = []
+    for task in tasks:
+        name = task.stage_name
+        status = task.state
+        progress: float | None = None
+        detail: str | None = task.status_detail
+        state_info = state_stages.get(name)
+        if isinstance(state_info, dict):
+            state_status = str(state_info.get("status") or "")
+            state_order = _STAGE_ADVANCE_ORDER.get(state_status, 0)
+            db_order = _STAGE_ADVANCE_ORDER.get(status, 0)
+            if state_order > db_order:
+                status = state_status
+            state_progress = state_info.get("progress")
+            if isinstance(state_progress, (int, float)):
+                progress = float(state_progress)
+            state_detail = state_info.get("detail")
+            if isinstance(state_detail, str) and state_detail:
+                detail = state_detail
+        entries.append(
             JobStageEntry(
-                stage_name=task.stage_name,
-                status=task.state,
+                stage_name=name,
+                status=status,
                 started_at=task.started_at,
                 completed_at=task.completed_at,
                 error=task.stderr_summary,
                 retry_count=task.retry_count,
-                status_detail=task.status_detail,
+                status_detail=detail,
+                label=stage_label(name),
+                progress=progress,
+                detail=detail,
             )
-            for task in tasks
-        ]
-    if record.spec.workflow == "mechanism":
-        return _mechanism_stage_fallback(record)
-    return []
+        )
+    return entries
+
+
+def _synthesize_entries_from_state(
+    state_stages: dict[str, dict[str, Any]],
+) -> list[JobStageEntry]:
+    """Build stage entries purely from state.json when stage_tasks has no rows."""
+    entries: list[JobStageEntry] = []
+    for name, info in state_stages.items():
+        if not isinstance(info, dict):
+            continue
+        status = str(info.get("status") or "pending")
+        progress_raw = info.get("progress")
+        progress = float(progress_raw) if isinstance(progress_raw, (int, float)) else None
+        detail_raw = info.get("detail")
+        detail = str(detail_raw) if isinstance(detail_raw, str) and detail_raw else None
+        entries.append(
+            JobStageEntry(
+                stage_name=name,
+                status=status,
+                label=stage_label(name),
+                progress=progress,
+                detail=detail,
+            )
+        )
+    return entries
 
 
 def _detail_artifacts_summary(record: JobRecord, request: Request) -> list[JobArtifactSummaryEntry]:

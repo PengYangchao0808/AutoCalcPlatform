@@ -381,11 +381,29 @@ def test_startup_disk_probe_recovers_completed_race(tmp_path: Path) -> None:
 
 
 def test_startup_disk_probe_without_exit_code_fails_with_continue_hint(tmp_path: Path) -> None:
+    """A checkpoint-capable workflow gets the continue hint; the hint is
+    workflow-aware (BatchOptimize etc. are pointed at rerun instead)."""
     store = JobStore(tmp_path / "jobs.db")
     work = tmp_path / "runs/j1"
     state = {"current_stage": "opt", "stages": {"opt": {"status": "completed"}}}
-    _seed_job(store, work, "no-exit-code", status=JobStatus.RUNNING)
+    _seed_job(store, work, "no-exit-code", status=JobStatus.RUNNING, workflow="irc")
     (work / "state.json").write_text(json.dumps(state), encoding="utf-8")
+    runtime = work / "WORK" / "00_RUNTIME"
+    runtime.mkdir(parents=True)
+    # Valid generic checkpoint → the restart failure hints at continue.
+    (runtime / "checkpoint.json").write_text(
+        json.dumps(
+            {
+                "task_id": "no-exit-code",
+                "workflow": "irc",
+                "plan_fingerprint": "fp",
+                "step_states": [],
+                "items_state": {},
+                "attempts": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
     # No .exit_code marker — the wrapper sentinel never ran.
 
     mgr = _make_manager(tmp_path, store=store)
@@ -395,6 +413,42 @@ def test_startup_disk_probe_without_exit_code_fails_with_continue_hint(tmp_path:
         assert rec.status == JobStatus.FAILED
         assert "[RESTART_FAILED]" in (rec.error or "")
         assert RESTART_HINT in (rec.error or "")
+    finally:
+        mgr.shutdown()
+
+
+def test_startup_failure_hint_matches_workflow_resume_support(tmp_path: Path) -> None:
+    """BatchOptimize is pointed at rerun; checkpoint-less workflows too."""
+    store = JobStore(tmp_path / "jobs.db")
+    batch_work = tmp_path / "runs/batch"
+    _seed_job(
+        store,
+        batch_work,
+        "batch-restart",
+        status=JobStatus.RUNNING,
+        workflow="BatchOptimize",
+    )
+    simple_work = tmp_path / "runs/simple"
+    _seed_job(
+        store,
+        simple_work,
+        "simple-restart",
+        status=JobStatus.RUNNING,
+        workflow="singlepoint",
+    )
+
+    mgr = _make_manager(tmp_path, store=store)
+    try:
+        batch = mgr.get("batch-restart")
+        assert batch is not None
+        assert batch.status == JobStatus.FAILED
+        assert "[RESTART_FAILED]" in (batch.error or "")
+        assert "请使用重算 (rerun)" in (batch.error or "")
+        assert "可尝试续算" not in (batch.error or "")
+
+        simple = mgr.get("simple-restart")
+        assert simple is not None
+        assert "请使用重算 (rerun)" in (simple.error or "")
     finally:
         mgr.shutdown()
 
@@ -843,7 +897,7 @@ def test_continue_rejects_live_zombie_process(tmp_path: Path) -> None:
 # ====================================================================== #
 
 
-def test_rerun_preserves_job_identity_and_archives_prior_attempt(tmp_path: Path) -> None:
+def test_rerun_preserves_job_identity_and_clears_work_dir_in_place(tmp_path: Path) -> None:
     mgr = _make_manager(tmp_path)
     try:
         source = _seed_job(
@@ -860,6 +914,11 @@ def test_rerun_preserves_job_identity_and_archives_prior_attempt(tmp_path: Path)
         (work_dir / "WORK" / "02_SEARCH" / "failed.out").write_text("failed")
         (work_dir / "RESULT").mkdir(parents=True)
         (work_dir / "RESULT" / "result.json").write_text("{}")
+        (work_dir / "input.xyz").write_text("3\n\nC 0 0 0\n")
+        (work_dir / ".exit_code").write_text("1")
+        legacy_archive = work_dir / "_attempts" / "attempt_001"
+        legacy_archive.mkdir(parents=True)
+        (legacy_archive / "stale.txt").write_text("old")
         calls: list[str] = []
         mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
 
@@ -874,10 +933,51 @@ def test_rerun_preserves_job_identity_and_archives_prior_attempt(tmp_path: Path)
         assert rerun.result is not None
         assert rerun.result["attempts"] == 2
         assert Path(rerun.work_dir) == work_dir
-        assert (work_dir / "_attempts" / "attempt_001" / "WORK").is_dir()
-        assert (work_dir / "_attempts" / "attempt_001" / "RESULT").is_dir()
+        # No _attempts archive: attempt history lives in DB metadata only.
+        assert not (work_dir / "_attempts").exists()
+        # Attempt-scoped content cleared in place; identity files preserved.
+        assert not (work_dir / "WORK" / "02_SEARCH").exists()
+        assert not (work_dir / "RESULT" / "result.json").exists()
+        assert not (work_dir / ".exit_code").exists()
+        assert (work_dir / "input.xyz").is_file()
+        # v2 scaffold recreated for the new attempt.
+        assert (work_dir / "WORK" / "00_RUNTIME").is_dir()
+        assert (work_dir / "RESULT").is_dir()
         assert len(mgr.store.list(limit=20)) == 1
         _wait_submission(calls, source.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_rerun_terminates_orphaned_task_process(tmp_path: Path) -> None:
+    """An orphaned workflow process in the task dir dies before the rerun."""
+    mgr = _make_manager(tmp_path)
+    try:
+        source = _seed_job(
+            mgr.store,
+            tmp_path / "runs/j1",
+            "orphan",
+            status=JobStatus.FAILED,
+            project_id=mgr.default_project_id,
+        )
+        work_dir = Path(source.work_dir)
+        orphan = subprocess.Popen(  # noqa: S604
+            ["sleep", "60"], cwd=str(work_dir), start_new_session=True
+        )
+        try:
+            assert _proc_state(orphan.pid) in {"S", "R", "T"}
+            calls: list[str] = []
+            mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
+
+            rerun = mgr.rerun_job("orphan")
+            assert rerun is not None
+            assert rerun.status == JobStatus.QUEUED
+            _wait_for(lambda: orphan.poll() is not None)
+            assert orphan.poll() is not None
+            _wait_submission(calls, "orphan")
+        finally:
+            orphan.kill()
+            orphan.wait(timeout=10)
     finally:
         mgr.shutdown()
 
@@ -1489,7 +1589,9 @@ def test_detail_endpoint_stage_column_mapping(tmp_path: Path) -> None:
 
         detail = get_job_detail("staged", _StubRequest(mgr))
         by_name = {s.stage_name: s for s in detail.stages}
-        assert by_name["crest"].status == "running"
+        # Terminal job: a stage recorded as "running" when the process died is
+        # projected to "skipped" — nothing is executing on a failed job.
+        assert by_name["crest"].status == "skipped"
         assert by_name["crest"].error is None
         assert by_name["dft_optimize"].status == "failed"
         assert by_name["dft_optimize"].error == "ORCA out of memory"
@@ -1682,6 +1784,215 @@ def test_poll_remote_transitions_paused_back_to_running(tmp_path: Path) -> None:
 
     assert is_terminal is False
     assert record.status == JobStatus.RUNNING
+
+
+# ====================================================================== #
+# (i) Rerun/restart process hygiene + single-execution lock (2026-08-30).
+#     Acceptance: in-place rerun without _attempts, orphan termination on
+#     restart, run.lock single-execution guard, BatchOptimize continue
+#     rejection, flat BatchOptimize scheduler layout.
+# ====================================================================== #
+
+
+def test_rerun_refreshes_job_and_task_json(tmp_path: Path) -> None:
+    mgr = _make_manager(tmp_path)
+    try:
+        source = _seed_job(
+            mgr.store,
+            tmp_path / "runs/j1",
+            "meta",
+            status=JobStatus.FAILED,
+            project_id=mgr.default_project_id,
+        )
+        work = Path(source.work_dir)
+        (work / "task.json").write_text(
+            json.dumps({"task_id": "meta", "status": "failed", "layout_version": 2}),
+            encoding="utf-8",
+        )
+        calls: list[str] = []
+        mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
+
+        rerun = mgr.rerun_job("meta")
+        assert rerun is not None
+        assert rerun.status == JobStatus.QUEUED
+
+        job_json = json.loads((work / "job.json").read_text(encoding="utf-8"))
+        assert job_json["status"] == "queued"
+        task_json = json.loads((work / "task.json").read_text(encoding="utf-8"))
+        assert task_json["status"] == "queued"
+
+        events = mgr.event_log("meta")
+        assert events is not None
+        types = [event["type"] for event in events.read_all()]
+        assert "job.rerun" in types
+        _wait_submission(calls, "meta")
+    finally:
+        mgr.shutdown()
+
+
+def test_restart_failure_terminates_orphan_and_syncs_surfaces(tmp_path: Path) -> None:
+    """After restart: orphan killed, pid cleared, DB/job.json/task.json/events agree."""
+    store = JobStore(tmp_path / "jobs.db")
+    work = tmp_path / "runs/j1"
+    work.mkdir(parents=True)
+    orphan = subprocess.Popen(  # noqa: S604
+        ["sleep", "60"], cwd=str(work), start_new_session=True
+    )
+    try:
+        record = _seed_job(
+            store,
+            work,
+            "orphan-restart",
+            status=JobStatus.RUNNING,
+            workflow="singlepoint",
+            make_dir=False,
+        )
+        record.pid = orphan.pid
+        store.update(record)
+        (work / "job.json").write_text(
+            json.dumps({"id": "orphan-restart", "status": "running"}), encoding="utf-8"
+        )
+        (work / "task.json").write_text(
+            json.dumps({"task_id": "orphan-restart", "status": "running"}),
+            encoding="utf-8",
+        )
+
+        mgr = _make_manager(tmp_path, store=store)
+        fresh = mgr.get("orphan-restart")
+        assert fresh is not None
+        assert fresh.status == JobStatus.FAILED
+        assert "[RESTART_FAILED]" in (fresh.error or "")
+        assert fresh.pid is None
+
+        _wait_for(lambda: orphan.poll() is not None)
+        assert orphan.poll() is not None
+
+        job_json = json.loads((work / "job.json").read_text(encoding="utf-8"))
+        assert job_json["status"] == "failed"
+        task_json = json.loads((work / "task.json").read_text(encoding="utf-8"))
+        assert task_json["status"] == "failed"
+
+        events = mgr.event_log("orphan-restart")
+        assert events is not None
+        entries = events.read_all()
+        types = [event["type"] for event in entries]
+        assert "job.failed" in types
+        cleaned = [event for event in entries if event["type"] == "process.cleaned"]
+        assert cleaned and orphan.pid in cleaned[-1]["pids"]
+    finally:
+        orphan.kill()
+        orphan.wait(timeout=10)
+
+
+def test_run_lock_blocks_live_owner_and_steals_stale(tmp_path: Path) -> None:
+    mgr = _make_manager(tmp_path)
+    holder = subprocess.Popen(["sleep", "60"], start_new_session=True)  # noqa: S604
+    try:
+        record = _seed_job(
+            mgr.store,
+            tmp_path / "runs/j1",
+            "locked",
+            status=JobStatus.QUEUED,
+            workflow="Confsearch",
+        )
+        runtime = Path(record.work_dir) / "WORK" / "00_RUNTIME"
+        runtime.mkdir(parents=True)
+        lock = runtime / "run.lock"
+
+        # A live foreign owner is a hard conflict.
+        lock.write_text(json.dumps({"owner_pid": holder.pid, "job_id": "locked"}), encoding="utf-8")
+        with pytest.raises(RuntimeError, match="run.lock"):
+            mgr.runner._acquire_run_lock(record)
+
+        # A lock from a dead service is stale and gets stolen.
+        dead = subprocess.Popen(["true"])  # noqa: S604
+        dead.wait(timeout=5)
+        lock.write_text(json.dumps({"owner_pid": dead.pid, "job_id": "locked"}), encoding="utf-8")
+        mgr.runner._acquire_run_lock(record)
+        payload = json.loads(lock.read_text(encoding="utf-8"))
+        assert payload["owner_pid"] == os.getpid()
+        assert mgr.runner._run_locks["locked"] == lock
+
+        mgr.runner._release_run_lock("locked")
+        assert not lock.exists()
+    finally:
+        holder.kill()
+        holder.wait(timeout=10)
+        mgr.shutdown()
+
+
+def test_continue_batch_optimize_rejected_unconditionally(tmp_path: Path) -> None:
+    """Even a well-formed generic checkpoint must not re-enter BatchOptimize."""
+    mgr = _make_manager(tmp_path)
+    try:
+        work = tmp_path / "runs/j1"
+        _seed_job(
+            mgr.store,
+            work,
+            "batch-failed",
+            status=JobStatus.FAILED,
+            workflow="BatchOptimize",
+        )
+        runtime = work / "WORK" / "00_RUNTIME"
+        runtime.mkdir(parents=True)
+        (runtime / "checkpoint.json").write_text(
+            json.dumps(
+                {
+                    "task_id": "batch",
+                    "workflow": "BatchOptimize",
+                    "plan_fingerprint": "abc",
+                    "step_states": [],
+                    "items_state": {},
+                    "attempts": 1,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        with pytest.raises(ValueError, match="不支持断点续算"):
+            mgr.continue_job("batch-failed")
+        record = mgr.get("batch-failed")
+        assert record is not None
+        assert record.status == JobStatus.FAILED
+    finally:
+        mgr.shutdown()
+
+
+def test_batch_optimize_scheduler_cmd_always_flat(tmp_path: Path) -> None:
+    """Every dispatch shape carries --layout-mode single_flat (layout §1a)."""
+    mgr = _make_manager(tmp_path)
+    try:
+        work = tmp_path / "runs" / "t"
+        work.mkdir(parents=True)
+
+        def _flat(spec: JobSpec, input_path: str = "") -> bool:
+            cmd = mgr.runner._build_cmd(spec, work, input_path)
+            return cmd[cmd.index("--layout-mode") + 1] == "single_flat"
+
+        artifact_spec = JobSpec(
+            workflow="BatchOptimize",
+            name="t",
+            input={"from_artifact": "RESULT/pes_search/candidates.json"},
+        )
+        assert _flat(artifact_spec)
+
+        items_spec = JobSpec(
+            workflow="BatchOptimize",
+            name="t",
+            input={"items_file": str(tmp_path / "items.xyz")},
+        )
+        assert _flat(items_spec)
+
+        staged = work / "input.xyz"
+        staged.write_text("3\n\nC 0.0 0.0 0.0\n", encoding="utf-8")
+        path_spec = JobSpec(
+            workflow="BatchOptimize",
+            name="t",
+            input={"source_type": "xyz_text", "source": staged.read_text(encoding="utf-8")},
+        )
+        assert _flat(path_spec, input_path=str(staged))
+    finally:
+        mgr.shutdown()
 
 
 if __name__ == "__main__":

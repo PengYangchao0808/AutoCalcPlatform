@@ -244,9 +244,15 @@ def test_irc_continue_requeues_from_generic_checkpoint(
         manager.shutdown()
 
 
-def test_batchoptimize_continue_requeues_from_generic_checkpoint(
+def test_batchoptimize_continue_rejected_despite_generic_checkpoint(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    """BatchOptimize's checkpoint is a per-item cache, not a resume contract.
+
+    The workbench must never offer continue for BatchOptimize — even with a
+    well-formed generic checkpoint on disk, the API refuses re-entry and
+    points at rerun instead.
+    """
     manager = _make_manager(tmp_path)
     work_dir = tmp_path / "runs" / "batch-optimize-task"
     record = _seed_job(
@@ -274,12 +280,13 @@ def test_batchoptimize_continue_requeues_from_generic_checkpoint(
     )
 
     try:
-        continued = manager.continue_job(record.id)
+        with pytest.raises(ValueError, match="不支持断点续算"):
+            manager.continue_job(record.id)
 
-        assert continued.status == JobStatus.QUEUED
-        assert continued.result is not None
-        assert continued.result["continued_from"] == "failed"
-        assert submissions == [record.id]
+        unchanged = manager.get(record.id)
+        assert unchanged is not None
+        assert unchanged.status == JobStatus.FAILED
+        assert submissions == []
     finally:
         manager.shutdown()
 
