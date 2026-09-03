@@ -117,6 +117,13 @@ class V1JobRecordModel(BaseModel):
     study_id: str | None = None
     study_status: str | None = None
     result: dict[str, Any] | None = None
+    progress_state: str | None = None  # "determinate" | "indeterminate" | None
+    stage_index: int | None = None  # 1-based index of current stage
+    stage_total: int | None = None  # total number of stages
+    stage_progress: float | None = None  # 0-1 progress within current stage
+    stage_detail: str | None = None  # e.g. "17/40 scan points"
+    latest_event: str | None = None  # human-readable last event
+    snapshot_version: int | None = None  # epoch seconds of state.json mtime
 
 
 class V1JobCreateRequest(BaseModel):
@@ -372,6 +379,9 @@ class JobStageEntry(BaseModel):
     error: str | None = None
     retry_count: int = 0
     status_detail: str | None = None
+    label: str | None = None
+    progress: float | None = None
+    detail: str | None = None
 
 
 class JobMetrics(BaseModel):

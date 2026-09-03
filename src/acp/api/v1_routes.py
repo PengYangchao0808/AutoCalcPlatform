@@ -13,18 +13,20 @@ import json
 import logging
 import posixpath
 import re
+import threading
 import urllib.parse
-from collections import Counter
+from collections import Counter, OrderedDict
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Final, Protocol
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import ValidationError
 from rdkit import Chem
 from rdkit.Chem import rdMolDescriptors
+from typing_extensions import assert_never
 
 try:
     from rdkit.Chem import rdDetermineBonds
@@ -60,6 +62,7 @@ from acp.api.schemas import (
     StatusResponse,
     WorkflowsResponse,
 )
+from acp.api.stage_labels import stage_label
 from acp.api.v1_schemas import (
     ArtifactListResponse,
     ArtifactModel,
@@ -169,9 +172,10 @@ from acp.results.pes_profile import (
     load_pes_profile,
 )
 from acp.scheduler.artifacts import Artifact, ArtifactRegistry
+from acp.scheduler.events import JobEventLog
 from acp.scheduler.files import build_manifest, resolve_safe
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
-from acp.scheduler.logs import read_log_tail
+from acp.scheduler.logs import read_log_range, read_log_tail
 from acp.scheduler.manager import JobManager
 from acp.scheduler.naming import canonical_molecule_name, molecule_name_from_input
 from acp.scheduler.nodes import ExecutionTargetError, validate_execution_request
@@ -194,6 +198,12 @@ from acp.storage.layout import runtime_file
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_ENRICHMENT_CACHE_LIMIT: Final = 256
+_ENRICHMENT_CACHE: OrderedDict[tuple[str, int | None, int | None, bool], V1JobRecordModel] = (
+    OrderedDict()
+)
+_ENRICHMENT_CACHE_LOCK = threading.Lock()
 
 if TYPE_CHECKING:
     from acp.chem.composition import HessianResolution
@@ -233,6 +243,143 @@ def _artifact_registry(request: Request) -> ArtifactRegistry:
 
 def _job_store(request: Request) -> JobStore:
     return JobStore(_db_path(request))
+
+
+def _compute_progress_state(record: JobRecord) -> str | None:
+    """Derive progress_state from record fields."""
+    if record.progress is not None:
+        return "determinate"
+    if record.status in (JobStatus.RUNNING, JobStatus.STARTING, JobStatus.PENDING):
+        return "indeterminate"
+    return None
+
+
+def _enrich_from_state_json(record: JobRecord, job_model: V1JobRecordModel) -> V1JobRecordModel:
+    """Read state.json from the job's work_dir and merge extended progress fields."""
+    return _enrich_job_snapshot(record, job_model, include_event=False)
+
+
+def _enrich_job_snapshot(
+    record: JobRecord,
+    job_model: V1JobRecordModel,
+    *,
+    include_event: bool = False,
+) -> V1JobRecordModel:
+    """Shared state.json enrichment for both list and detail endpoints.
+
+    Reads state.json via ``find_workflow_state`` and merges progress fields
+    (stage_index, stage_total, stage_progress, stage_detail, progress_state)
+    plus ``snapshot_version`` (state.json mtime epoch).  When *include_event*
+    is ``True``, also reads the last line of ``events.jsonl`` and populates
+    ``latest_event``.
+    """
+    match record.status:
+        case JobStatus.COMPLETED:
+            completed = True
+            job_model = job_model.model_copy(
+                update={"progress": 1.0, "progress_state": "determinate"}
+            )
+        case (
+            JobStatus.QUEUED
+            | JobStatus.STARTING
+            | JobStatus.PENDING
+            | JobStatus.RUNNING
+            | JobStatus.PAUSED
+            | JobStatus.CANCELLING
+            | JobStatus.WAITING_REVIEW
+            | JobStatus.CANCELLED
+            | JobStatus.FAILED
+        ):
+            completed = False
+        case unreachable:
+            assert_never(unreachable)
+    if not record.work_dir:
+        return job_model
+    try:
+        state_path = find_workflow_state(Path(record.work_dir))
+    except OSError:
+        return job_model
+    if state_path is None:
+        return job_model
+    try:
+        state_stat = state_path.stat()
+    except OSError:
+        state_stat = None
+    state_mtime_ns = state_stat.st_mtime_ns if state_stat is not None else None
+    events_path = runtime_file(record.work_dir, "events.jsonl")
+    try:
+        events_mtime_ns = events_path.stat().st_mtime_ns
+    except OSError:
+        events_mtime_ns = None
+    cache_key = (record.id, state_mtime_ns, events_mtime_ns, include_event)
+    with _ENRICHMENT_CACHE_LOCK:
+        cached_model = _ENRICHMENT_CACHE.get(cache_key)
+        if cached_model is not None and cached_model.status == job_model.status:
+            _ENRICHMENT_CACHE.move_to_end(cache_key)
+            return cached_model
+    try:
+        data = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return job_model
+    if not isinstance(data, dict):
+        return job_model
+    updates: dict[str, Any] = {}
+    if not record.status.is_terminal:
+        for key in (
+            "stage_index",
+            "stage_total",
+            "stage_progress",
+            "stage_detail",
+            "progress_state",
+        ):
+            val = data.get(key)
+            if val is not None:
+                updates[key] = val
+    if state_stat is not None:
+        updates["snapshot_version"] = int(state_stat.st_mtime)
+    if include_event:
+        latest = _read_latest_event(record.work_dir)
+        if latest is not None:
+            updates["latest_event"] = latest
+    if completed:
+        updates["progress"] = 1.0
+        updates["progress_state"] = "determinate"
+    if updates:
+        job_model = job_model.model_copy(update=updates)
+    with _ENRICHMENT_CACHE_LOCK:
+        _ENRICHMENT_CACHE[cache_key] = job_model
+        _ENRICHMENT_CACHE.move_to_end(cache_key)
+        if len(_ENRICHMENT_CACHE) > _ENRICHMENT_CACHE_LIMIT:
+            _ENRICHMENT_CACHE.popitem(last=False)
+    return job_model
+
+
+def _read_latest_event(work_dir: str) -> str | None:
+    """Read the last event from events.jsonl and format as human-readable."""
+    events_path = runtime_file(work_dir, "events.jsonl")
+    try:
+        log = JobEventLog(events_path)
+        last = log.read_last()
+    except (OSError, json.JSONDecodeError):
+        return None
+    if last is None:
+        return None
+    event_type = str(last.get("type") or "")
+    stage = last.get("stage")
+    if stage:
+        return f"{event_type}: {stage}"
+    return event_type or None
+
+
+def _count_lines(path: Path) -> int:
+    """Count total lines in a log file."""
+    if not path.exists():
+        return 0
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return sum(1 for _ in f)
+    except Exception:
+        return 0
 
 
 def _record_to_v1_model(
@@ -280,6 +427,7 @@ def _record_to_v1_model(
         study_id=study_id,
         study_status=study_status,
         result=record.result,
+        progress_state=_compute_progress_state(record),
     )
 
 
@@ -1067,6 +1215,7 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
 def list_jobs(
     request: Request,
     status: str | None = Query(default=None),
+    workflow: str | None = Query(default=None),
     project_id: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=1000),
 ) -> V1JobListResponse:
@@ -1077,15 +1226,18 @@ def list_jobs(
             enriched = [item for item in enriched if item["record"].status.value == status]
     else:
         enriched = store.list_enriched(status=status, limit=limit)
-    jobs = [
-        _record_to_v1_model(
+    if workflow:
+        enriched = [item for item in enriched if item["record"].spec.workflow == workflow]
+    jobs = []
+    for item in enriched:
+        model = _record_to_v1_model(
             item["record"],
             project_name=item["project_name"],
             study_id=item["study_id"],
             study_status=item["study_status"],
         )
-        for item in enriched
-    ]
+        model = _enrich_job_snapshot(item["record"], model, include_event=False)
+        jobs.append(model)
     return V1JobListResponse(
         jobs=jobs,
         counts=_counts_for_records([item["record"] for item in enriched]),
@@ -1742,6 +1894,16 @@ def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     return _record_to_v1_model(record)
 
 
+@router.get("/jobs/{job_id}/summary", response_model=V1JobRecordModel)
+def get_job_summary(job_id: str, request: Request) -> V1JobRecordModel:
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    model = _record_to_v1_model(record)
+    return _enrich_job_snapshot(record, model, include_event=True)
+
+
 # ---------------------------------------------------------------------- #
 # Rich job detail (plan §4.5) — GET /jobs/{id}/detail.
 # Response field names are the frozen frontend contract; do not rename.
@@ -2085,6 +2247,7 @@ def get_job_detail(job_id: str, request: Request) -> V1JobDetailResponse:
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     job_model = _record_to_v1_model(record)
+    job_model = _enrich_job_snapshot(record, job_model, include_event=True)
     if record.result is None:
         backfilled = _backfill_result_from_disk(record)
         if backfilled is not None:
@@ -2259,8 +2422,12 @@ def purge_jobs(body: V1JobPurgeRequest, request: Request) -> V1JobPurgeResponse:
 
 
 @router.get("/jobs/{job_id}/events")
-async def stream_job_events(job_id: str, request: Request) -> StreamingResponse:
-    return await legacy_stream_job_events(job_id, request)
+async def stream_job_events(
+    job_id: str,
+    request: Request,
+    after_seq: int = Query(default=0, ge=0),
+) -> StreamingResponse:
+    return await legacy_stream_job_events(job_id, request, after_seq=after_seq)
 
 
 @router.get("/jobs/{job_id}/logs")
@@ -2268,15 +2435,50 @@ def get_job_logs(
     job_id: str,
     request: Request,
     lines: int = Query(default=300, ge=1, le=5000),
+    stdout_offset: int = Query(default=0, ge=0),
+    stderr_offset: int = Query(default=0, ge=0),
 ) -> JSONResponse:
     manager = _manager(request)
     work_dir = manager.work_dir_of(job_id)
     if work_dir is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+    stdout_path = runtime_file(work_dir, "stdout.log")
+    stderr_path = runtime_file(work_dir, "stderr.log")
+
+    if stdout_offset > 0 or stderr_offset > 0:
+        # Cursor mode: incremental fetch from offset
+        stdout_lines = read_log_range(stdout_path, offset=stdout_offset, max_lines=lines)
+        stderr_lines = read_log_range(stderr_path, offset=stderr_offset, max_lines=lines)
+        stdout_total = _count_lines(stdout_path)
+        stderr_total = _count_lines(stderr_path)
+        return JSONResponse(
+            {
+                "stdout": "\n".join(stdout_lines),
+                "stderr": "\n".join(stderr_lines),
+                "stdout_lines": stdout_lines,
+                "stderr_lines": stderr_lines,
+                "stdout_next_offset": stdout_offset + len(stdout_lines),
+                "stderr_next_offset": stderr_offset + len(stderr_lines),
+                "has_more": (stdout_offset + len(stdout_lines)) < stdout_total
+                or (stderr_offset + len(stderr_lines)) < stderr_total,
+            }
+        )
+
+    # Legacy mode: tail fetch (backward compatible)
+    stdout_lines = read_log_tail(stdout_path, lines=lines)
+    stderr_lines = read_log_tail(stderr_path, lines=lines)
+    stdout_total = _count_lines(stdout_path)
+    stderr_total = _count_lines(stderr_path)
     return JSONResponse(
         {
-            "stdout": read_log_tail(runtime_file(work_dir, "stdout.log"), lines=lines),
-            "stderr": read_log_tail(runtime_file(work_dir, "stderr.log"), lines=lines),
+            "stdout": "\n".join(stdout_lines),
+            "stderr": "\n".join(stderr_lines),
+            "stdout_lines": stdout_lines,
+            "stderr_lines": stderr_lines,
+            "stdout_next_offset": stdout_total,
+            "stderr_next_offset": stderr_total,
+            "has_more": False,
         }
     )
 

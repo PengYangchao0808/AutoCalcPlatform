@@ -324,6 +324,72 @@ def test_v1_energy_graph_reads_legacy_result_files(client: TestClient) -> None:
     assert body["nodes"]
 
 
+def test_v1_pessearch_reads_canonical_profile_and_07_path_frame(client: TestClient) -> None:
+    created = _submit_fake_job(client, name="pes-canonical-energy-graph")
+    job_id = str(created["job_id"])
+    record_data = _wait_for_terminal_job(client, job_id)
+    manager = client.app.state.job_manager
+    record = manager.get(job_id)
+    assert record is not None
+    record.spec = replace(
+        record.spec,
+        workflow="PESsearch",
+        method={"mode": "bond_length_scan"},
+    )
+    manager.store.update(record)
+
+    task_root = Path(record_data["work_dir"])
+    scan_dir = task_root / "WORK" / "07_PATH" / "pes_scan_001"
+    frames_dir = scan_dir / "scan_frames"
+    frames_dir.mkdir(parents=True)
+    (frames_dir / "frame_000.xyz").write_text("2\nPES frame\nC 0 0 0\nH 0 0 1\n", encoding="utf-8")
+    profile_path = task_root / "RESULT" / "pes_search" / "pes_profile.json"
+    profile_path.parent.mkdir(parents=True)
+    profile_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "pes_profile_v2",
+                "workflow": "PESsearch",
+                "mode": "bond_length_scan",
+                "status": "completed",
+                "coordinate": {"kind": "distance", "unit": "angstrom"},
+                "protocol": {"coordinate": {"kind": "distance", "unit": "angstrom"}},
+                "scan_dir": "WORK/07_PATH/pes_scan_001",
+                "frames": [
+                    {
+                        "index": 0,
+                        "target_coordinate": 1.2,
+                        "actual_coordinate": 1.2,
+                        "geometry_path": "scan_frames/frame_000.xyz",
+                        "scan_energy_hartree": -10.0,
+                        "single_point_energy_hartree": -10.0,
+                        "optimization_converged": True,
+                        "single_point_status": "completed",
+                    }
+                ],
+                "profile": {
+                    "energy_source": "single_point",
+                    "relative_energies_kcal_mol": [0.0],
+                    "raw_hartree": [-10.0],
+                },
+                "quality": {"scan_complete": True},
+                "ts_candidates": [],
+                "int_candidates": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    graph = client.get(f"/api/v1/jobs/{job_id}/energy-graph")
+    assert graph.status_code == 200, graph.text
+    assert graph.json()["source"] == "RESULT/pes_search/pes_profile.json"
+    assert graph.json()["title"] == "PESsearch 扫描能量"
+
+    frame = client.get(f"/api/v1/jobs/{job_id}/s2/frame/0")
+    assert frame.status_code == 200, frame.text
+    assert "C 0 0 0" in frame.json()["xyz"]
+
+
 def test_v1_energy_graph_unsupported_workflow_is_explicit(client: TestClient) -> None:
     created = _submit_fake_job(client, name="unsupported-energy-graph")
 
@@ -334,6 +400,55 @@ def test_v1_energy_graph_unsupported_workflow_is_explicit(client: TestClient) ->
     assert body["view_type"] == "unsupported"
     assert body["status"] == "unavailable"
     assert body["metadata"]["reason"] == "workflow_has_no_energy_graph"
+
+
+def test_v1_batch_optimize_live_energy_graph_and_frame(client: TestClient) -> None:
+    created = _submit_fake_job(client, name="batch-live-energy-graph")
+    job_id = str(created["job_id"])
+    record_data = _wait_for_terminal_job(client, job_id)
+    manager = client.app.state.job_manager
+    record = manager.get(job_id)
+    assert record is not None
+    record.spec = replace(record.spec, workflow="BatchOptimize")
+    manager.store.update(record)
+
+    trajectory_dir = (
+        Path(str(record_data["work_dir"])) / "WORK" / "03_OPT" / "batch" / "TS1" / "optimize"
+    )
+    trajectory_dir.mkdir(parents=True)
+    (trajectory_dir / "cycles").mkdir()
+    (trajectory_dir / "cycles" / "cycle_0001.xyz").write_text(
+        "2\ncycle 1\nC 0 0 0\nH 0 0 1\n", encoding="utf-8"
+    )
+    (trajectory_dir / "optimization_trajectory.json").write_text(
+        json.dumps(
+            {
+                "item_id": "TS1",
+                "status": "running",
+                "converged": False,
+                "current_cycle": 1,
+                "cycles": [
+                    {
+                        "cycle": 1,
+                        "energy_hartree": -10.0,
+                        "rms_gradient": 0.2,
+                        "geometry_ref": "cycles/cycle_0001.xyz",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    graph_response = client.get(f"/api/v1/jobs/{job_id}/energy-graph?item_id=TS1")
+    assert graph_response.status_code == 200, graph_response.text
+    assert graph_response.json()["view_type"] == "optimization"
+    assert graph_response.json()["status"] == "running"
+
+    frame_response = client.get(f"/api/v1/jobs/{job_id}/optimization/frame/0?item_id=TS1")
+    assert frame_response.status_code == 200, frame_response.text
+    assert frame_response.json()["cycle"] == 1
+    assert "C 0 0 0" in frame_response.json()["xyz"]
 
 
 def test_v1_job_rerun_running_job_returns_conflict(client: TestClient) -> None:
@@ -785,6 +900,8 @@ def test_v1_batch_structures_inline_xyz_submission(client: TestClient) -> None:
 
 
 def test_v1_batch_structures_source_id_resolution(client: TestClient, tmp_path: Path) -> None:
+    # 2026-09-03 wave: source_id references are inlined to XYZ at submission
+    # so the runner materializer never sees unresolved references.
     # Complete an upstream PESsearch job whose result list exposes a candidate.
     source_dir = tmp_path / "uncategorized" / "20260823_001_PESsearch"
     result_dir = source_dir / "RESULT"
@@ -838,10 +955,10 @@ def test_v1_batch_structures_source_id_resolution(client: TestClient, tmp_path: 
     assert record.spec.workflow == "BatchOptimize"
     items = record.spec.input["items"]
     assert len(items) == 1
-    assert items[0]["source_id"] == (
-        "job_20260823_001_PESsearch:RESULT/mechanism/ts_guesses/ts_guess_001.xyz"
-    )
-    assert "xyz" not in items[0]
+    assert "source_id" not in items[0]
+    assert "TAG: TS | candidate_id=ts_guess_001" in items[0]["xyz"]
+    assert items[0]["tag"] == "TS"
+    assert items[0]["name"] == "ts_1"
 
 
 def test_v1_batch_structures_requires_nonempty_items(client: TestClient) -> None:
@@ -1262,3 +1379,381 @@ def test_non_ts_artifact_role_mismatch_422(client: TestClient, tmp_path: Path) -
     response = client.post("/api/v1/jobs/source-job/artifacts/min_artifact/run-irc")
 
     assert response.status_code == 422
+
+
+# ── Progress / log cursor / SSE v2 tests ─────────────────────────────────
+
+
+def test_v1_job_list_has_progress_state(client: TestClient) -> None:
+    """Job list items carry the progress_state field."""
+    _submit_fake_job(client, name="progress-state-check")
+    response = client.get("/api/v1/jobs")
+    assert response.status_code == 200
+    jobs = response.json()["jobs"]
+    assert len(jobs) >= 1
+    for j in jobs:
+        assert "progress_state" in j
+        assert "stage_index" in j
+        assert "stage_total" in j
+        assert "stage_progress" in j
+        assert "stage_detail" in j
+
+
+def test_v1_job_detail_has_progress_state(client: TestClient) -> None:
+    """Job detail response carries progress_state on the job model."""
+    job = _submit_fake_job(client, name="detail-progress-state")
+    job_id = str(job["job_id"])
+    response = client.get(f"/api/v1/jobs/{job_id}/detail")
+    assert response.status_code == 200
+    detail = response.json()
+    assert "progress_state" in detail["job"]
+
+
+def test_v1_job_logs_legacy_mode(client: TestClient) -> None:
+    """Log endpoint returns joined strings + arrays + offsets in legacy mode."""
+    job = _submit_fake_job(client, name="log-legacy")
+    job_id = str(job["job_id"])
+    _wait_for_terminal_job(client, job_id)
+    response = client.get(f"/api/v1/jobs/{job_id}/logs?lines=100")
+    assert response.status_code == 200
+    data = response.json()
+    # Legacy fields: joined strings
+    assert isinstance(data["stdout"], str)
+    assert isinstance(data["stderr"], str)
+    # New fields: arrays + offsets
+    assert isinstance(data["stdout_lines"], list)
+    assert isinstance(data["stderr_lines"], list)
+    assert isinstance(data["stdout_next_offset"], int)
+    assert isinstance(data["stderr_next_offset"], int)
+    assert isinstance(data["has_more"], bool)
+
+
+def test_v1_job_logs_cursor_mode(client: TestClient) -> None:
+    """Log endpoint supports cursor-based incremental fetch."""
+    job = _submit_fake_job(client, name="log-cursor")
+    job_id = str(job["job_id"])
+    _wait_for_terminal_job(client, job_id)
+    # First fetch: legacy mode to get initial offsets
+    resp1 = client.get(f"/api/v1/jobs/{job_id}/logs?lines=100")
+    assert resp1.status_code == 200
+    data1 = resp1.json()
+    stdout_off = data1["stdout_next_offset"]
+    stderr_off = data1["stderr_next_offset"]
+    # Second fetch: cursor mode from the returned offsets
+    resp2 = client.get(
+        f"/api/v1/jobs/{job_id}/logs?stdout_offset={stdout_off}&stderr_offset={stderr_off}"
+    )
+    assert resp2.status_code == 200
+    data2 = resp2.json()
+    # Cursor mode should return empty or minimal new lines (job is done)
+    assert isinstance(data2["stdout_lines"], list)
+    assert isinstance(data2["stderr_lines"], list)
+
+
+def test_v1_job_logs_not_found(client: TestClient) -> None:
+    """Log endpoint returns 404 for nonexistent job."""
+    response = client.get("/api/v1/jobs/nonexistent-job/logs")
+    assert response.status_code == 404
+
+
+def test_v1_sse_endpoint_exists(client: TestClient) -> None:
+    """SSE endpoint returns event-stream content type."""
+    job = _submit_fake_job(client, name="sse-test")
+    job_id = str(job["job_id"])
+    _wait_for_terminal_job(client, job_id)
+    # For terminal jobs, the SSE stream should close quickly with a done event
+    response = client.get(f"/api/v1/jobs/{job_id}/events")
+    assert response.status_code == 200
+    assert "text/event-stream" in response.headers.get("content-type", "")
+
+
+def test_v1_sse_after_seq_param(client: TestClient) -> None:
+    """SSE endpoint accepts after_seq query param for resume."""
+    job = _submit_fake_job(client, name="sse-resume")
+    job_id = str(job["job_id"])
+    _wait_for_terminal_job(client, job_id)
+    response = client.get(f"/api/v1/jobs/{job_id}/events?after_seq=999")
+    assert response.status_code == 200
+    assert "text/event-stream" in response.headers.get("content-type", "")
+
+
+def test_v1_sse_done_event_has_snapshot(client: TestClient) -> None:
+    """SSE done event includes job snapshot fields."""
+    job = _submit_fake_job(client, name="sse-done-payload")
+    job_id = str(job["job_id"])
+    _wait_for_terminal_job(client, job_id)
+    response = client.get(f"/api/v1/jobs/{job_id}/events")
+    assert response.status_code == 200
+    # Read the response text — for terminal jobs the stream closes immediately
+    text = response.text
+    # Should contain a done event with job snapshot
+    assert "event: done" in text or "event:done" in text or '"job_id"' in text
+
+
+# ── Unified snapshot / stage-label tests ────────────────────────────────────
+
+
+def test_v1_detail_stages_have_labels(client: TestClient) -> None:
+    created = _submit_fake_job(client, name="label-check")
+    job_id = str(created["job_id"])
+    _wait_for_terminal_job(client, job_id)
+    detail = client.get(f"/api/v1/jobs/{job_id}/detail")
+    assert detail.status_code == 200
+    stages = detail.json()["stages"]
+    assert len(stages) >= 1
+    for entry in stages:
+        assert "label" in entry
+        assert entry["label"] is not None
+        assert "progress" in entry
+        assert "detail" in entry
+
+
+def test_v1_detail_snapshot_version_present(client: TestClient) -> None:
+    created = _submit_fake_job(client, name="snapshot-ver")
+    job_id = str(created["job_id"])
+    _wait_for_terminal_job(client, job_id)
+    detail = client.get(f"/api/v1/jobs/{job_id}/detail")
+    assert detail.status_code == 200
+    job = detail.json()["job"]
+    assert "snapshot_version" in job
+    assert job["snapshot_version"] is not None
+    assert isinstance(job["snapshot_version"], int)
+    assert job["snapshot_version"] > 0
+
+
+def test_v1_detail_latest_event_present(client: TestClient) -> None:
+    created = _submit_fake_job(client, name="latest-event")
+    job_id = str(created["job_id"])
+    _wait_for_terminal_job(client, job_id)
+    detail = client.get(f"/api/v1/jobs/{job_id}/detail")
+    assert detail.status_code == 200
+    job = detail.json()["job"]
+    assert "latest_event" in job
+    assert job["latest_event"] is not None
+    assert isinstance(job["latest_event"], str)
+    assert len(job["latest_event"]) > 0
+
+
+def test_v1_list_detail_agree_on_progress_fields(client: TestClient) -> None:
+    created = _submit_fake_job(client, name="progress-agree")
+    job_id = str(created["job_id"])
+    _wait_for_terminal_job(client, job_id)
+    list_resp = client.get("/api/v1/jobs")
+    assert list_resp.status_code == 200
+    list_job = next(j for j in list_resp.json()["jobs"] if j["id"] == job_id)
+    detail_resp = client.get(f"/api/v1/jobs/{job_id}/detail")
+    assert detail_resp.status_code == 200
+    detail_job = detail_resp.json()["job"]
+    for field in ("stage_index", "stage_total", "stage_progress", "stage_detail", "progress_state"):
+        assert list_job.get(field) == detail_job.get(field), f"Mismatch on {field}"
+
+
+def test_v1_list_has_snapshot_version_for_completed(client: TestClient) -> None:
+    created = _submit_fake_job(client, name="list-snap-ver")
+    job_id = str(created["job_id"])
+    _wait_for_terminal_job(client, job_id)
+    list_resp = client.get("/api/v1/jobs")
+    assert list_resp.status_code == 200
+    list_job = next(j for j in list_resp.json()["jobs"] if j["id"] == job_id)
+    assert "snapshot_version" in list_job
+    assert list_job["snapshot_version"] is not None
+
+
+def test_v1_terminal_job_ignores_stale_state_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Terminal jobs are DB-authoritative: a stale ``state.json`` left behind
+    with ``status: running`` must NOT override job-level progress fields, and
+    non-terminal stage rows are projected to ``skipped``."""
+    with make_client(tmp_path, monkeypatch) as client:
+        created = _submit_fake_job(client, name="overlay-test")
+        job_id = str(created["job_id"])
+        _wait_for_terminal_job(client, job_id)
+
+        manager = client.app.state.job_manager
+        rec = manager.get(job_id)
+        assert rec is not None
+        work_dir = Path(rec.work_dir)
+
+        from acp.scheduler.stage_tasks import StageTaskStore
+
+        db_path = manager.store.db_path
+        store = StageTaskStore(db_path)
+        for task in store.list_by_job(job_id):
+            task.state = "pending"
+            store.update(task)
+
+        state_data = {
+            "version": "1.0",
+            "job_name": "overlay-test",
+            "status": "running",
+            "current_stage": "compute",
+            "stage_index": 2,
+            "stage_total": 3,
+            "stage_progress": 0.56,
+            "stage_detail": "17/30",
+            "progress_state": "determinate",
+            "created_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:01:00Z",
+            "stages": {
+                "init": {"status": "completed", "progress": 1.0, "detail": "done"},
+                "compute": {"status": "running", "progress": 0.56, "detail": "17/30"},
+                "finalize": {"status": "pending"},
+            },
+        }
+        (work_dir / "state.json").write_text(json.dumps(state_data), encoding="utf-8")
+
+        detail = client.get(f"/api/v1/jobs/{job_id}/detail")
+        assert detail.status_code == 200
+        body = detail.json()
+
+        assert body["job"]["stage_index"] is None
+        assert body["job"]["stage_total"] is None
+        assert body["job"]["stage_progress"] is None
+        assert body["job"]["stage_detail"] is None
+        assert body["job"]["progress"] == 1.0
+        assert body["job"]["progress_state"] == "determinate"
+        assert isinstance(body["job"]["snapshot_version"], int)
+
+        stages = {s["stage_name"]: s for s in body["stages"]}
+        assert stages["init"]["status"] == "completed"
+        assert stages["init"]["label"] == "初始化"
+        assert stages["compute"]["status"] == "skipped"
+        assert stages["compute"]["label"] == "计算中"
+        assert stages["compute"]["progress"] == 0.56
+        assert stages["compute"]["detail"] == "17/30"
+        assert stages["finalize"]["status"] == "skipped"
+
+
+def test_v1_terminal_job_projects_pending_as_skipped(client: TestClient) -> None:
+    created = _submit_fake_job(client, name="terminal-skip")
+    job_id = str(created["job_id"])
+    _wait_for_terminal_job(client, job_id)
+    detail = client.get(f"/api/v1/jobs/{job_id}/detail")
+    assert detail.status_code == 200
+    stages = detail.json()["stages"]
+    assert len(stages) >= 1
+    for entry in stages:
+        assert entry["status"] != "pending"
+        assert entry["status"] != "running"
+
+
+def test_bond_scan_create_job_accepts_double_coordinates(client: TestClient) -> None:
+    xyz = (
+        "5\nC5 chain\nC 0.0 0.0 0.0\nC 1.4 0.0 0.0\nC 2.8 0.0 0.0\n"
+        "C 4.2 0.0 0.0\nC 5.6 0.0 0.0\n"
+    )
+    coordinate = {"kind": "distance", "atoms": [0, 1], "start": 1.2, "end": 2.2, "n_points": 4}
+    payload = {
+        "workflow": "PESsearch",
+        "name": "pes-double-scan",
+        "method": {"mode": "bond_length_scan"},
+        "input": {
+            "source": {"source_type": "xyz_text", "xyz_text": xyz},
+            "coordinate": coordinate,
+            "coordinates": [
+                coordinate,
+                {"kind": "distance", "atoms": [3, 4], "start": 1.2, "end": 2.2, "n_points": 4},
+            ],
+            "selection": {
+                "mode": "functional",
+                "kind": "double_bond_scan",
+                "atom_indices": [0, 1, 3, 4],
+            },
+            "protocol": {},
+        },
+    }
+    response = client.post("/api/v1/jobs", json=payload)
+    assert response.status_code == 201, response.text
+
+    manager = client.app.state.job_manager
+    record = manager.get(str(response.json()["job_id"]))
+    assert record is not None
+    assert len(record.spec.input["coordinates"]) == 2
+    assert record.spec.input["coordinates"][1]["atoms"] == [3, 4]
+    assert record.spec.input["selection"]["kind"] == "double_bond_scan"
+
+
+def test_bond_scan_create_job_rejects_malformed_coordinates(client: TestClient) -> None:
+    base = {
+        "workflow": "PESsearch",
+        "name": "pes-bad-coordinates",
+        "method": {"mode": "bond_length_scan"},
+        "input": {
+            "source_type": "xyz_text",
+            "xyz_text": "2\nC2\nC 0 0 0\nC 1.4 0 0\n",
+            "coordinate": {
+                "kind": "distance",
+                "atoms": [0, 1],
+                "start": 1.2,
+                "end": 2.2,
+                "n_points": 4,
+            },
+        },
+    }
+    bad_coordinates = dict(base, input=dict(base["input"], coordinates="nope"))
+    response = client.post("/api/v1/jobs", json=bad_coordinates)
+    assert response.status_code == 422
+
+    bad_selection = dict(
+        base,
+        name="pes-bad-selection",
+        input=dict(base["input"], selection="nope"),
+    )
+    response = client.post("/api/v1/jobs", json=bad_selection)
+    assert response.status_code == 422
+
+
+def test_s2_profile_exposes_coordinates_and_selection(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    created = _submit_fake_job(client, name="pes-profile-metadata")
+    job_id = str(created["job_id"])
+    record_data = _wait_for_terminal_job(client, job_id)
+    manager = client.app.state.job_manager
+    record = manager.get(job_id)
+    assert record is not None
+    record.spec = replace(
+        record.spec,
+        workflow="PESsearch",
+        method={"mode": "bond_length_scan"},
+    )
+    manager.store.update(record)
+
+    task_root = Path(record_data["work_dir"])
+    profile_path = task_root / "RESULT" / "pes_search" / "pes_profile.json"
+    profile_path.parent.mkdir(parents=True)
+    profile_path.write_text(
+        json.dumps(
+            {
+                "schema_version": "pes_profile_v2",
+                "workflow": "PESsearch",
+                "mode": "bond_length_scan",
+                "status": "completed",
+                "coordinate": {"kind": "distance", "atoms": [0, 1], "unit": "angstrom"},
+                "coordinates": [
+                    {"kind": "distance", "atoms": [0, 1], "unit": "angstrom"},
+                    {"kind": "distance", "atoms": [3, 4], "unit": "angstrom"},
+                ],
+                "selection": {"kind": "double_bond_scan", "atom_indices": [0, 1, 3, 4]},
+                "protocol": {"scan_type": "distance_scan"},
+                "scan_dir": "WORK/07_PATH/pes_scan_001",
+                "frames": [],
+                "profile": {},
+                "quality": {},
+                "ts_candidates": [],
+                "int_candidates": [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    response = client.get(f"/api/v1/jobs/{job_id}/s2/profile")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert len(body["coordinates"]) == 2
+    assert body["coordinates"][1]["atoms"] == [3, 4]
+    assert body["selection"]["kind"] == "double_bond_scan"
+    assert body["protocol"]["scan_type"] == "distance_scan"
+    assert body["coordinate"]["atoms"] == [0, 1]
