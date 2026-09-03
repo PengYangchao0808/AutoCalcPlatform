@@ -1,14 +1,21 @@
+# pyright: basic, reportAny=false, reportArgumentType=false, reportIndexIssue=false, reportOptionalSubscript=false, reportCallIssue=false, reportAttributeAccessIssue=false, reportOptionalMemberAccess=false, reportOperatorIssue=false, reportGeneralTypeIssues=false, reportUnknownArgumentType=false, reportUnknownMemberType=false, reportUnknownVariableType=false, reportOptionalIterable=false, reportUnusedCallResult=false
 """Tests for the ProgressReporter (calculations/progress.py)."""
 
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict
 from pathlib import Path
+from threading import Barrier
+from typing import TypeAlias
 
-from acp.calculations.progress import ProgressReporter
+from acp.calculations.progress import LiveMetric, ProgressReporter
+
+JsonValue: TypeAlias = str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
 
 
-def _read_state(work_dir: Path) -> dict:
+def _read_state(work_dir: Path) -> dict[str, JsonValue]:
     return json.loads((work_dir / "state.json").read_text(encoding="utf-8"))
 
 
@@ -150,10 +157,12 @@ class TestOverallProgress:
         reporter = ProgressReporter(tmp_path, stages=["a", "b"], min_interval=0.0)
         reporter.initialize()
         reporter.start_stage("a")
+        reporter.set_live_metrics([LiveMetric(key="phase", value="final", kind="status")])
         reporter.complete()  # should complete all stages
         data = _read_state(tmp_path)
         assert data["status"] == "completed"
         assert data["overall_progress"] == 1.0
+        assert data["live_metrics"][0]["value"] == "final"
         assert all(s["status"] == "completed" for s in data["stages"].values())
 
     def test_fail_marks_failed(self, tmp_path: Path) -> None:
@@ -186,6 +195,61 @@ class TestThrottling:
         assert data["stages"]["a"]["status"] == "completed"
 
 
+class TestLiveMetrics:
+    def test_round_trip_and_force_write_all_fields(self, tmp_path: Path) -> None:
+        metric = LiveMetric(
+            key="energy",
+            label_key="live.energy",
+            label="Energy",
+            value="12.3",
+            kind="text",
+            priority=7,
+            detail="Hartree",
+        )
+        reporter = ProgressReporter(tmp_path, min_interval=999.0)
+        reporter.initialize()
+        reporter.set_live_metrics([metric])
+        assert _read_state(tmp_path)["live_metrics"] == [asdict(metric)]
+
+    def test_normalizes_and_limits_metrics(self, tmp_path: Path) -> None:
+        reporter = ProgressReporter(tmp_path, min_interval=0.0)
+        reporter.set_live_metrics(
+            [
+                LiveMetric(key="b", value="old", kind="text", priority=9),
+                LiveMetric(key="b", value="<b>" + "x" * 60 + "</b>", kind="text", priority=9),
+                LiveMetric(key="count", value=17, kind="count", priority=8),
+                LiveMetric(key="c", value="tie", kind="text", priority=8),
+                LiveMetric(key="z", value="dropped", kind="text"),
+                LiveMetric(key="bad", value="ignored", kind="garbage", priority=100),
+            ]
+        )
+        metrics = _read_state(tmp_path)["live_metrics"]
+        assert [metric["key"] for metric in metrics] == ["b", "c", "count"]
+        assert all(char not in metrics[0]["value"] for char in "<>")
+        assert len(metrics[0]["value"]) <= 48 and metrics[0]["value"] != "old"
+        assert metrics[2]["value"] == "17"
+
+    def test_concurrent_metric_writes_leave_valid_json(self, tmp_path: Path) -> None:
+        reporter = ProgressReporter(tmp_path, min_interval=999.0)
+        barrier = Barrier(2)
+
+        def write_metrics(key: str) -> None:
+            barrier.wait()
+            for index in range(8):
+                metric = LiveMetric(key=key, value=f"{key}-{index}", kind="text")
+                reporter.set_live_metrics([metric])
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            list(executor.map(write_metrics, ("thread_a", "thread_b")))
+        assert isinstance(_read_state(tmp_path)["live_metrics"], list)
+
+    def test_empty_metrics_clears_state(self, tmp_path: Path) -> None:
+        reporter = ProgressReporter(tmp_path, min_interval=999.0)
+        reporter.set_live_metrics([LiveMetric(key="phase", value="old", kind="status")])
+        reporter.set_live_metrics([])
+        assert "live_metrics" not in _read_state(tmp_path)
+
+
 class TestAtomicWrite:
     def test_state_json_is_valid_json(self, tmp_path: Path) -> None:
         reporter = ProgressReporter(tmp_path, stages=["a"], min_interval=0.0)
@@ -196,7 +260,6 @@ class TestAtomicWrite:
         reporter.complete()
         # Should be parseable
         data = _read_state(tmp_path)
-        assert isinstance(data, dict)
         assert "stages" in data
         assert "overall_progress" in data
 
