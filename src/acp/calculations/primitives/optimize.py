@@ -31,6 +31,7 @@ from ._common import (
     output_dir,
     result_from_qc,
 )
+from .optimization_trajectory import OptimizationTrajectoryRecorder
 
 FRESH_HESSIAN_RESTART = "fresh_hessian_restart"
 FRESH_HESSIAN_MODE_MONITOR = "fresh_hessian_mode_monitor"
@@ -157,6 +158,8 @@ def run_optimize(req: CalculationRequest) -> CalculationResult:
         inputs,
         target_dir,
         base_kwargs,
+        selected_backend=selected_backend,
+        trajectory_item_id=str(req.resources.get("trajectory_item_id") or ""),
     )
     if _successful_geometry(qc_result):
         if qc_result is not None:
@@ -185,6 +188,8 @@ def run_optimize(req: CalculationRequest) -> CalculationResult:
             inputs,
             attempt_dir,
             attempt_kwargs,
+            selected_backend=selected_backend,
+            trajectory_item_id=str(req.resources.get("trajectory_item_id") or ""),
         )
         if qc_result is not None:
             all_artifacts = artifacts_from_qc(qc_result, selected_backend, all_artifacts)
@@ -232,13 +237,29 @@ def _run_attempt(
     inputs: CalculationInputs,
     target_dir: Path | None,
     kwargs: dict[str, Any],
+    *,
+    selected_backend: str,
+    trajectory_item_id: str = "",
 ) -> tuple[QCResult | None, str | None]:
-    try:
-        return (
-            call_capability(backend, capability, inputs, target_dir, kwargs),
-            None,
+    recorder = None
+    attempt_kwargs = dict(kwargs)
+    if selected_backend == "orca" and target_dir is not None:
+        recorder = OptimizationTrajectoryRecorder(
+            target_dir,
+            item_id=trajectory_item_id or target_dir.parent.name,
         )
+        attempt_kwargs["output_callback"] = recorder.feed_line
+    try:
+        result = call_capability(backend, capability, inputs, target_dir, attempt_kwargs)
+        if recorder is not None:
+            recorder.finish(
+                converged=bool(result.success),
+                status="completed" if result.success else "failed",
+            )
+        return result, None
     except _BACKEND_FAILURES as error:
+        if recorder is not None:
+            recorder.finish(converged=False, status="failed")
         return None, error_text(error)
 
 

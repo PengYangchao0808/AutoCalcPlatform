@@ -39,6 +39,7 @@ _RESOURCE_KEYS = frozenset(
         "multiplicity",
         "failure_type",
         "structure_kind",
+        "trajectory_item_id",
     }
 )
 

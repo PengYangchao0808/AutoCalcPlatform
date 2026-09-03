@@ -95,6 +95,7 @@ from acp.api.v1_schemas import (
     NodeListResponse,
     NodePingResponse,
     NodeStatusModel,
+    OptimizationFrameResponse,
     ProjectCreateRequest,
     ProjectListResponse,
     ProjectModel,
@@ -1345,6 +1346,68 @@ def get_energy_graph(
             detail=f"Energy graph view is not available: {view_type}",
         )
     return EnergyGraphResponse.model_validate(graph)
+
+
+@router.get(
+    "/jobs/{job_id}/optimization/frame/{frame_index}",
+    response_model=OptimizationFrameResponse,
+)
+def get_optimization_frame(
+    job_id: str,
+    frame_index: int,
+    request: Request,
+    item_id: str | None = Query(default=None),
+) -> OptimizationFrameResponse:
+    """Return the XYZ geometry and metrics for one optimization cycle."""
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    work_dir = Path(record.work_dir) if record.work_dir else None
+    if work_dir is None or not work_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
+
+    from acp.results.energy_graph import build_optimization_energy_graph
+
+    graph = build_optimization_energy_graph(job_id, work_dir, item_id=item_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail=f"No optimization trajectory for job {job_id}")
+    node = next(
+        (
+            candidate
+            for candidate in graph.get("nodes", [])
+            if int(candidate.get("frame_index", -1)) == frame_index
+        ),
+        None,
+    )
+    if node is None:
+        raise HTTPException(status_code=404, detail=f"Optimization frame {frame_index} not found")
+
+    xyz = ""
+    geometry_ref = str(node.get("geometry_ref") or "")
+    source_path = work_dir / str(graph.get("source") or "")
+    if geometry_ref and source_path.is_file():
+        candidate_path = (source_path.parent / geometry_ref).resolve()
+        work_root = work_dir.resolve()
+        if candidate_path.is_relative_to(work_root) and candidate_path.is_file():
+            xyz = candidate_path.read_text(encoding="utf-8", errors="replace")
+
+    metadata = dict(node.get("metadata") or {})
+    return OptimizationFrameResponse(
+        job_id=job_id,
+        item_id=str((graph.get("metadata") or {}).get("item_id") or item_id or ""),
+        frame_index=frame_index,
+        cycle=int(metadata.get("cycle") or node.get("x") or frame_index + 1),
+        xyz=xyz,
+        energy_hartree=metadata.get("scf_energy_hartree"),
+        relative_energy_kcal_mol=node.get("energy"),
+        delta_energy_kcal_mol=metadata.get("delta_energy_kcal_mol"),
+        rms_gradient=metadata.get("rms_gradient"),
+        max_gradient=metadata.get("max_gradient"),
+        rms_displacement=metadata.get("rms_displacement"),
+        max_displacement=metadata.get("max_displacement"),
+        scf_iterations=metadata.get("scf_iterations"),
+    )
 
 
 @router.post("/structure-assets", response_model=StructureAssetResponse, status_code=201)

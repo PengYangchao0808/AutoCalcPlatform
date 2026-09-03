@@ -476,6 +476,7 @@ class BatchOptimizeEngine:
                     step_dir,
                     opt_kwargs,
                     resolved_methods,
+                    trajectory_item_id=item.item_id,
                 )
                 current_result = run_optimize(req)
                 if current_result.status == "failed":
@@ -609,11 +610,14 @@ class BatchOptimizeEngine:
         output_dir: Path,
         opt_kwargs: dict[str, JsonValue],
         methods: BatchMethodOptions,
+        *,
+        trajectory_item_id: str = "",
     ) -> CalculationRequest:
         role = StructureRole.TRANSITION_STATE if is_ts else StructureRole.MINIMUM
         method, basis = methods.for_step(StepKind.OPTIMIZE, is_ts)
         resources: dict[str, JsonValue] = {
             "output_dir": str(output_dir),
+            "trajectory_item_id": trajectory_item_id or input_path.parent.name,
             "charge": charge,
             "multiplicity": multiplicity,
             **opt_kwargs,
@@ -714,7 +718,7 @@ class BatchOptimizeEngine:
     # ── result products ──────────────────────────────────────────────────
 
     def _materialize_result_products(self, manifest: BatchCalculationManifest) -> None:
-        """Copy optimized geometries to ``RESULT/structures/`` + register products."""
+        """Copy optimized geometries/trajectories to ``RESULT/`` products."""
         structures_dir = self._result_root / BATCH_STRUCTURES_SUBDIR
         completed = [i for i in manifest.items if i.status in {"completed", "skipped"}]
         if not completed:
@@ -723,6 +727,7 @@ class BatchOptimizeEngine:
 
         result_manifest = self._read_result_manifest()
         for item in completed:
+            self._materialize_optimization_trajectory(item)
             source = self._resolve_output_geometry(item)
             if source is None:
                 logger.warning(
@@ -751,6 +756,34 @@ class BatchOptimizeEngine:
                 ProductKind.STRUCTURE,
             )
         _ = result_manifest.write(self._result_root)
+
+    def _materialize_optimization_trajectory(self, item: BatchCalculationItem) -> None:
+        """Copy a live item trajectory into the stable RESULT tree.
+
+        Trajectories are intentionally not added to the batch result manifest:
+        that manifest's public product list is reserved for reusable
+        structures.  The energy-graph projection discovers this canonical
+        trajectory directory directly.
+        """
+        source_dir = self._step_dir(item, StepKind.OPTIMIZE)
+        sources = [
+            source_dir / "optimization_trajectory.json",
+            *source_dir.glob("rescue_*/optimization_trajectory.json"),
+        ]
+        existing = [path for path in sources if path.is_file()]
+        if not existing:
+            return
+        source = max(existing, key=lambda path: path.stat().st_mtime_ns)
+        target_dir = self._result_root / "trajectories"
+        if self._active_layout_mode != "single_flat":
+            target_dir /= item.item_id
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / "optimization.json"
+        if source.resolve() != target.resolve():
+            _ = shutil.copy2(source, target)
+        cycles = source.parent / "cycles"
+        if cycles.is_dir():
+            _ = shutil.copytree(cycles, target_dir / "cycles", dirs_exist_ok=True)
 
     def _resolve_output_geometry(self, item: BatchCalculationItem) -> Path | None:
         """Resolve an item's optimized geometry."""

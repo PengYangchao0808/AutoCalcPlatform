@@ -18,8 +18,15 @@ Amendments (plan-sanctioned, wave-2 backend wiring):
        home per plan todo 11/16.  AST-thinness assertion enforced: no loops,
        no numeric arithmetic, no regex, must delegate to ``self._interface``.
     B. ``orca.py``: 2 modified lines in ``_build_input_blocks`` — mechanical
-       consequence of deleting ``"optfreq": "Opt Freq"`` calc_type_map entry.
+       consequence of deleting the ``"optfreq": "Opt Freq"`` calc_type_map entry.
        Modification only removes "Opt Freq" handling; no algorithm-body change.
+    C. ``orca.py`` + ``backends/orca.py``: live optimization-trajectory
+       streaming (2026-09 wave) — ``_run_orca`` gains an ``output_callback``
+       streaming branch (threading/Callable imports) with call-site plumbing
+       in ``optimize``/``transition_state_opt``; ``relaxed_scan`` gains
+       multi-coordinate support via ``ReactionCoordinatePlan`` and the new
+       ``_run_synchronous_relaxed_scan`` helper.  Sanctioned scopes are the
+       named functions only; presence teeth assert the wave actually landed.
 """
 from __future__ import annotations
 
@@ -227,6 +234,60 @@ def _is_optfreq_removal_line(
     return any("Opt Freq" in d_txt or "optfreq" in d_txt.lower() for _, d_txt in deleted)
 
 
+# ── Amendment C: trajectory streaming + multi-coordinate scan (2026-09) ─────
+
+_AMENDMENT_C_ORCA_FUNCS = (
+    "_run_orca",
+    "optimize",
+    "transition_state_opt",
+    "relaxed_scan",
+    "_run_synchronous_relaxed_scan",
+)
+_AMENDMENT_C_IMPORT_MARKERS = ("threading", "Callable", "ReactionCoordinatePlan")
+
+
+def _is_amendment_c_addition(added_ln: int, added_txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``orca.py`` additions for the trajectory/scan wave.
+
+    * Import lines introducing ``threading`` / ``Callable`` /
+      ``ReactionCoordinatePlan``.
+    * Lines inside the sanctioned function scopes in the worktree.
+    """
+    stripped = added_txt.strip()
+    is_import_line = stripped.startswith(("import ", "from ")) or stripped.rstrip(
+        ","
+    ) in _AMENDMENT_C_IMPORT_MARKERS
+    if is_import_line and any(marker in stripped for marker in _AMENDMENT_C_IMPORT_MARKERS):
+        return True
+    ranges = _func_ranges(worktree_src)
+    return any(
+        (fr := ranges.get(name)) is not None and fr[0] <= added_ln <= fr[1]
+        for name in _AMENDMENT_C_ORCA_FUNCS
+    )
+
+
+def _is_amendment_c_deletion(ln: int, txt: str, baseline_src: str) -> bool:
+    """Sanctioned ``orca.py`` deletions for the trajectory/scan wave.
+
+    * The old synchronous-only ``_run_orca`` body and ``relaxed_scan``
+      single-coordinate signature (baseline function ranges).
+    * The two ``success = self._run_orca(input_file, output_file)`` call
+      sites in ``optimize``/``transition_state_opt``.
+    * The ``from collections.abc import Sequence`` import line (gains
+      ``Callable``).
+    """
+    stripped = txt.strip()
+    if stripped == "success = self._run_orca(input_file, output_file)":
+        return True
+    if stripped == "from collections.abc import Sequence":
+        return True
+    ranges = _func_ranges(baseline_src)
+    return any(
+        (fr := ranges.get(name)) is not None and fr[0] <= ln <= fr[1]
+        for name in ("_run_orca", "relaxed_scan")
+    )
+
+
 def _target_orca(src: str) -> set[int]:
     """Target-region line numbers for baseline ``orca.py``."""
     lines = src.splitlines()
@@ -344,6 +405,8 @@ def test_algorithm_body_untouched() -> None:
                 if _is_optfreq_removal_line(ln, txt, deleted, build_range):
                     optfreq_added_count += 1
                     continue
+                if _is_amendment_c_addition(ln, txt, worktree):
+                    continue
                 violations.append(f"  {fp}:{ln}: {txt!r}")
             # Teeth: at most 2 optfreq-removal lines permitted
             if optfreq_added_count > 2:
@@ -351,6 +414,18 @@ def test_algorithm_body_untouched() -> None:
                     f"  {fp}: {optfreq_added_count} optfreq-removal lines "
                     f"(max 2 expected)"
                 )
+            # Amendment C teeth: the sanctioned scopes must exist and deliver
+            # the wave — otherwise the allowance is masking scope drift.
+            wt_ranges = _func_ranges(worktree)
+            if "_run_synchronous_relaxed_scan" not in wt_ranges:
+                violations.append(
+                    f"  {fp}: Amendment C scope missing _run_synchronous_relaxed_scan"
+                )
+            run_orca_range = _func_range(worktree, "_run_orca", "ORCAInterface")
+            if run_orca_range is None or "output_callback" not in "\n".join(
+                worktree.splitlines()[run_orca_range[0] - 1 : run_orca_range[0] + 8]
+            ):
+                violations.append(f"  {fp}: Amendment C scope _run_orca lacks output_callback")
             continue
 
     assert not violations, "Non-comment added lines detected:\n" + "\n".join(violations)
@@ -372,7 +447,24 @@ def test_deleted_lines_in_target_regions() -> None:
     for fp, builder in checks:
         tgt = builder(_baseline_content(fp))
         _, deleted = _diff_hunks(fp)
-        bad = [f"  {fp}:{ln}: {t!r}" for ln, t in deleted if ln not in tgt]
+        bad_entries = [(ln, t) for ln, t in deleted if ln not in tgt]
+        if fp == "src/cccp/qc/interfaces/orca.py":
+            baseline_src = _baseline_content(fp)
+            bad_entries = [
+                (ln, t)
+                for ln, t in bad_entries
+                if not _is_amendment_c_deletion(ln, t, baseline_src)
+            ]
+        elif fp == "src/acp/backends/orca.py":
+            # Amendment C: relaxed_scan multi-coordinate rewrite lives in the
+            # method body (baseline range); Amendment A covers its additions.
+            baseline_src = _baseline_content(fp)
+            scan_range = _func_range(baseline_src, "relaxed_scan", "ORCABackend")
+            if scan_range is not None:
+                bad_entries = [
+                    (ln, t) for ln, t in bad_entries if not scan_range[0] <= ln <= scan_range[1]
+                ]
+        bad = [f"  {fp}:{ln}: {t!r}" for ln, t in bad_entries]
         assert not bad, "Deleted lines outside target regions:\n" + "\n".join(bad)
 
 

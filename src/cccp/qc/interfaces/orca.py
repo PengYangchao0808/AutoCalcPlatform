@@ -16,7 +16,8 @@ import os
 import re
 import shutil
 import subprocess
-from collections.abc import Sequence
+import threading
+from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -1059,7 +1060,12 @@ class ORCAInterface(QCInterfaceBase):
                 config_value=configured_recalc,
             )
 
-    def _run_orca(self, input_file: Path, output_file: Path) -> bool:
+    def _run_orca(
+        self,
+        input_file: Path,
+        output_file: Path,
+        output_callback: Callable[[str], None] | None = None,
+    ) -> bool:
         """
         Run ORCA calculation.
 
@@ -1083,22 +1089,88 @@ class ORCAInterface(QCInterfaceBase):
                 env = dict(os.environ)
                 env["LD_LIBRARY_PATH"] = self._orca_ld_library_path
 
-            result = subprocess.run(
+            # Keep the established synchronous path for callers that do not
+            # request live parsing (NMR, SP, scan, and older integrations).
+            # Optimization primitives opt into the streaming path below by
+            # passing ``output_callback``.
+            if output_callback is None:
+                result = subprocess.run(
+                    [executable, str(input_file)],
+                    cwd=input_file.parent,
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                    timeout=timeout,
+                )
+                with open(output_file, "w", encoding="utf-8") as handle:
+                    handle.write(result.stdout)
+                    if result.stderr:
+                        handle.write("\nSTDERR:\n")
+                        handle.write(result.stderr)
+                return result.returncode == 0
+
+            process = subprocess.Popen(
                 [executable, str(input_file)],
                 cwd=input_file.parent,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
+                bufsize=1,
                 env=env,
-                timeout=timeout,
             )
 
-            with open(output_file, "w", encoding="utf-8") as f:
-                f.write(result.stdout)
-                if result.stderr:
-                    f.write("\nSTDERR:\n")
-                    f.write(result.stderr)
+            write_lock = threading.Lock()
+            stderr_header_written = False
 
-            return result.returncode == 0
+            def drain(stream: Any, *, is_stderr: bool) -> None:
+                nonlocal stderr_header_written
+                if stream is None:
+                    return
+                for line in iter(stream.readline, ""):
+                    with write_lock, open(output_file, "a", encoding="utf-8") as handle:
+                        if is_stderr and not stderr_header_written:
+                            handle.write("\nSTDERR:\n")
+                            stderr_header_written = True
+                        handle.write(line)
+                        handle.flush()
+                    if not is_stderr and output_callback is not None:
+                        try:
+                            output_callback(line)
+                        except Exception:
+                            # A visualization recorder must never terminate a
+                            # production QC process because of malformed output.
+                            logger.debug("ORCA output callback failed", exc_info=True)
+
+            # The output file is created before the reader threads start, so a
+            # polling API can distinguish "running with no output yet" from a
+            # calculation that has not started.
+            output_file.write_text("", encoding="utf-8")
+            stdout_thread = threading.Thread(
+                target=drain,
+                args=(process.stdout,),
+                kwargs={"is_stderr": False},
+                daemon=True,
+            )
+            stderr_thread = threading.Thread(
+                target=drain,
+                args=(process.stderr,),
+                kwargs={"is_stderr": True},
+                daemon=True,
+            )
+            stdout_thread.start()
+            stderr_thread.start()
+            try:
+                return_code = process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                return_code = process.wait()
+                logger.error("ORCA calculation timed out: %s", input_file)
+                return False
+            finally:
+                stdout_thread.join(timeout=2)
+                stderr_thread.join(timeout=2)
+
+            return return_code == 0
 
         except subprocess.TimeoutExpired:
             logger.error(f"ORCA calculation timed out: {input_file}")
@@ -1144,6 +1216,7 @@ class ORCAInterface(QCInterfaceBase):
 
         _solvent = kwargs.pop("solvent", None)
         _solvent_model = kwargs.pop("solvent_model", None)
+        _output_callback = kwargs.pop("output_callback", None)
 
         self._write_input(
             input_file,
@@ -1165,7 +1238,11 @@ class ORCAInterface(QCInterfaceBase):
             aux_c_basis=kwargs.get("aux_c_basis"),
         )
 
-        success = self._run_orca(input_file, output_file)
+        success = (
+            self._run_orca(input_file, output_file, output_callback=_output_callback)
+            if _output_callback is not None
+            else self._run_orca(input_file, output_file)
+        )
 
         if not success:
             return QCResult(
@@ -1821,6 +1898,7 @@ class ORCAInterface(QCInterfaceBase):
         _mode_displacement = kwargs.pop("mode_displacement", None)
         _mode_vector = kwargs.pop("mode_vector", None)
         _mode_displacement_sign = kwargs.pop("mode_displacement_sign", "plus")
+        _output_callback = kwargs.pop("output_callback", None)
         geom_maxiter = kwargs.pop("geom_maxiter", kwargs.pop("max_cycles", None))
         if kwargs:
             logger.warning(
@@ -1879,7 +1957,11 @@ class ORCAInterface(QCInterfaceBase):
                 f.write(f"{symbol:2s} {coord[0]:15.10f} {coord[1]:15.10f} {coord[2]:15.10f}\n")
             f.write("*\n")
 
-        success = self._run_orca(input_file, output_file)
+        success = (
+            self._run_orca(input_file, output_file, output_callback=_output_callback)
+            if _output_callback is not None
+            else self._run_orca(input_file, output_file)
+        )
 
         if not success:
             return TsOptResult(

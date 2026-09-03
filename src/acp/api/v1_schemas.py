@@ -983,6 +983,24 @@ class S2FrameResponse(BaseModel):
     single_point_status: str = ""
 
 
+class OptimizationFrameResponse(BaseModel):
+    """One optimization-cycle geometry and convergence snapshot."""
+
+    job_id: str
+    item_id: str = ""
+    frame_index: int
+    cycle: int
+    xyz: str = ""
+    energy_hartree: float | None = None
+    relative_energy_kcal_mol: float | None = None
+    delta_energy_kcal_mol: float | None = None
+    rms_gradient: float | None = None
+    max_gradient: float | None = None
+    rms_displacement: float | None = None
+    max_displacement: float | None = None
+    scf_iterations: int | None = None
+
+
 class S2ReviewCandidateItem(BaseModel):
     candidate_id: str | None = None
     frame_index: int
@@ -1132,6 +1150,7 @@ __all__ = [
     "S2CandidatesResponse",
     "S2FrameModel",
     "S2FrameResponse",
+    "OptimizationFrameResponse",
     "S2ProfileResponse",
     "S2ReviewCandidateItem",
     "S2ReviewRequest",
