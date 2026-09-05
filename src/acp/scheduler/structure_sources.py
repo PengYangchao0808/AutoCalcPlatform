@@ -72,8 +72,12 @@ _MULT_RE = re.compile(r"mult(?:i(?:plicity)?)?\s*=\s*(\d+)", re.IGNORECASE)
 #: (batch plan §4) — parsed for the result-list badges.
 _TAG_RE = re.compile(r"\bTAG\s*[:=]\s*(TS|INT)\b", re.IGNORECASE)
 _TAG_ID_RE = re.compile(r"\bcandidate_id\s*=\s*([^\s|]+)", re.IGNORECASE)
+# Candidate-id recovery patterns.  ``pes_ts_frame_*`` / ``pes_int_frame_*``
+# are the deterministic ids written by the PES manual-review pipeline
+# (``acp.calculations.pes.review.candidate_id_for``); the bare ``*_guess_*``
+# forms are the legacy S2/engine recommendation names.
 _CANDIDATE_PATH_RE = re.compile(
-    r"(?<![A-Za-z0-9])((?:ts|int)_(?:guess|candidate)_[A-Za-z0-9_-]+)",
+    r"(?<![A-Za-z0-9])((?:pes_)?(?:ts|int)_(?:guess|candidate|frame)_[A-Za-z0-9_-]+)",
     re.IGNORECASE,
 )
 _S2_CANDIDATE_ID_RE = re.compile(r"s2_candidate[_-]([A-Za-z0-9_-]+)", re.IGNORECASE)
@@ -117,6 +121,11 @@ def _candidate_id_from_item(item: dict[str, Any]) -> str:
     explicit = str(item.get("candidate_id") or "").strip()
     if explicit:
         return explicit
+    metadata = item.get("metadata")
+    if isinstance(metadata, dict):
+        explicit = str(metadata.get("candidate_id") or "").strip()
+        if explicit:
+            return explicit
     for value in (item.get("id"), item.get("label"), item.get("path")):
         text = str(value or "")
         match = _CANDIDATE_PATH_RE.search(text)
@@ -130,12 +139,17 @@ def _candidate_id_from_item(item: dict[str, Any]) -> str:
 
 def _tag_from_item(item: dict[str, Any]) -> str:
     """Recover only the exceptional TS marker from a product descriptor."""
+    metadata = item.get("metadata")
+    if isinstance(metadata, dict):
+        role = str(metadata.get("role") or metadata.get("tag") or "").strip().upper()
+        if role == "TS":
+            return "TS"
     for value in (item.get("tag"), item.get("id"), item.get("label"), item.get("path")):
         text = str(value or "")
         if re.search(r"\bTS\b", text, re.IGNORECASE):
             return "TS"
     candidate_id = _candidate_id_from_item(item)
-    return "TS" if candidate_id.lower().startswith("ts_") else ""
+    return "TS" if candidate_id.lower().startswith(("ts_", "pes_ts_")) else ""
 
 
 def _conformer_sort_key(entry: dict[str, Any]) -> tuple[int, float, str]:
@@ -179,7 +193,10 @@ def _is_pes_candidate_item(item: dict[str, Any]) -> bool:
     if _TAG_RE.search(joined):
         return True
     path = str(item.get("path") or "").replace("\\", "/")
-    if "/structures/" in path or "/pes_search/" in path:
+    # v2 manifests store RESULT-relative paths ("structures/x.xyz"); pad a
+    # leading slash so the canonical RESULT subdirectory names still match.
+    padded = f"/{path}"
+    if "/structures/" in padded or "/pes_search/" in padded:
         return True
     return False
 
@@ -1009,11 +1026,13 @@ class StructureSourceService:
             if tag_id_match
             else (_candidate_id_from_path(rel_path) or candidate_hint)
         )
-        inferred_tag = (
-            "TS"
-            if candidate_id.lower().startswith("ts_")
-            else ("INT" if candidate_id.lower().startswith("int_") else "")
-        )
+        lowered = candidate_id.lower()
+        if lowered.startswith(("ts_", "pes_ts_")):
+            inferred_tag = "TS"
+        elif lowered.startswith(("int_", "pes_int_")):
+            inferred_tag = "INT"
+        else:
+            inferred_tag = ""
         # INT is the default stationary-point interpretation.  Persist only
         # the exceptional TS marker so callers cannot accidentally render or
         # re-apply a redundant INT annotation.

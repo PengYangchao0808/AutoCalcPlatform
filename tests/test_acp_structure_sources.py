@@ -945,6 +945,169 @@ def test_pessearch_new_manifest_candidates(service, store, tmp_path) -> None:
     assert int_entry["molecule_name"] == "generic_mol__int_guess_002"
 
 
+_XYZ_TAG_TS_PES = """\
+2
+TAG: TS | candidate_id=pes_ts_frame_012 | source=PESsearch | frame=012 | selection_source=manual
+C 0.000000 0.000000 0.000000
+O 1.200000 0.000000 0.000000
+"""
+
+_XYZ_TAG_INT_PES = """\
+2
+TAG: INT | candidate_id=pes_int_frame_019 | source=PESsearch | frame=019 | selection_source=manual
+C 0.000000 0.000000 0.000000
+O 1.200000 0.000000 0.000000
+"""
+
+
+def test_pessearch_review_pes_frame_candidates(service, store, tmp_path) -> None:
+    """PEB manual-review products (pes_candidate_* + nested metadata) survive filtering."""
+    work_dir = tmp_path / "uncategorized" / "20260905_001_PESsearch"
+    result_dir = work_dir / "RESULT"
+    _write_result_manifest(
+        result_dir,
+        [
+            {
+                "id": "pes_candidate_pes_ts_frame_012",
+                "label": "PESsearch TS candidate pes_ts_frame_012 (manual)",
+                "path": "structures/pes_ts_frame_012.xyz",
+                "kind": "structure",
+                "metadata": {
+                    "candidate_id": "pes_ts_frame_012",
+                    "role": "TS",
+                    "frame_index": 12,
+                    "source": "PESsearch",
+                    "selection_source": "manual",
+                },
+            },
+            {
+                "id": "pes_candidate_pes_int_frame_019",
+                "label": "PESsearch INT candidate pes_int_frame_019 (manual)",
+                "path": "structures/pes_int_frame_019.xyz",
+                "kind": "structure",
+                "metadata": {
+                    "candidate_id": "pes_int_frame_019",
+                    "role": "INT",
+                    "frame_index": 19,
+                    "source": "PESsearch",
+                    "selection_source": "manual",
+                },
+            },
+        ],
+    )
+    _write(result_dir / "structures" / "pes_ts_frame_012.xyz", _XYZ_TAG_TS_PES)
+    _write(result_dir / "structures" / "pes_int_frame_019.xyz", _XYZ_TAG_INT_PES)
+    store.create(
+        _make_record(
+            "20260905_001_PESsearch",
+            workflow="PESsearch",
+            work_dir=work_dir,
+            molecule_name="review_mol",
+        )
+    )
+
+    entries = service.list_recent()
+    assert len(entries) == 2, "review TS and INT must both be listed"
+    by_id = {entry["candidate_id"]: entry for entry in entries}
+    ts = by_id["pes_ts_frame_012"]
+    assert ts["tag"] == "TS"
+    assert ts["workflow"] == "PESsearch"
+    assert ts["source_id"] == "job_20260905_001_PESsearch:RESULT/structures/pes_ts_frame_012.xyz"
+    assert ts["molecule_name"] == "review_mol__pes_ts_frame_012"
+    int_entry = by_id["pes_int_frame_019"]
+    assert int_entry["tag"] == ""
+    assert int_entry["molecule_name"] == "review_mol__pes_int_frame_019"
+
+
+def test_pes_frame_relative_path_without_metadata(service, store, tmp_path) -> None:
+    """Metadata-less relative-path products under structures/ still discovered."""
+    work_dir = tmp_path / "uncategorized" / "20260905_002_PESsearch"
+    result_dir = work_dir / "RESULT"
+    _write_result_manifest(
+        result_dir,
+        [
+            {
+                "id": "pes_candidate_pes_ts_frame_007",
+                "label": "PESsearch TS candidate pes_ts_frame_007",
+                "path": "structures/pes_ts_frame_007.xyz",
+                "kind": "structure",
+            }
+        ],
+    )
+    xyz_007 = _XYZ_TAG_TS_PES.replace("pes_ts_frame_012", "pes_ts_frame_007").replace(
+        "frame=012", "frame=007"
+    )
+    _write(result_dir / "structures" / "pes_ts_frame_007.xyz", xyz_007)
+    store.create(_make_record("20260905_002_PESsearch", workflow="PESsearch", work_dir=work_dir))
+
+    entries = service.list_recent()
+    assert len(entries) == 1
+    assert entries[0]["candidate_id"] == "pes_ts_frame_007"
+    assert entries[0]["tag"] == "TS"
+
+
+def test_pes_frame_tag_from_metadata_role(service, store, tmp_path) -> None:
+    """metadata.role=TS marks the entry even when the XYZ comment lacks TAG."""
+    work_dir = tmp_path / "uncategorized" / "20260905_003_PESsearch"
+    result_dir = work_dir / "RESULT"
+    _write_result_manifest(
+        result_dir,
+        [
+            {
+                "id": "pes_candidate_pes_ts_frame_003",
+                "label": "PESsearch TS candidate pes_ts_frame_003",
+                "path": "structures/pes_ts_frame_003.xyz",
+                "kind": "structure",
+                "metadata": {"candidate_id": "pes_ts_frame_003", "role": "TS"},
+            }
+        ],
+    )
+    _write(result_dir / "structures" / "pes_ts_frame_003.xyz", _XYZ_PLAIN)
+    store.create(_make_record("20260905_003_PESsearch", workflow="PESsearch", work_dir=work_dir))
+
+    entries = service.list_recent()
+    assert len(entries) == 1
+    assert entries[0]["tag"] == "TS"
+    assert entries[0]["candidate_id"] == "pes_ts_frame_003"
+
+
+def test_remote_probe_reads_pes_review_manifest(store, tmp_path) -> None:
+    """Remote PESsearch probes honour the PEB review manifest format too."""
+    record = _make_record(
+        "rjob_pes",
+        workflow="PESsearch",
+        work_dir=tmp_path / "uncategorized" / "rjob_pes",
+        result={"node": "node1", "remote_dir": "/remote/root/rjob_pes", "lsf_job_id": "9912"},
+    )
+    store.create(record)
+    files = {
+        "RESULT/result_manifest.json": json.dumps(
+            {
+                "version": 2,
+                "workflow": "PESsearch",
+                "status": "completed",
+                "products": [
+                    {
+                        "id": "pes_candidate_pes_ts_frame_012",
+                        "label": "PESsearch TS candidate pes_ts_frame_012 (manual)",
+                        "path": "structures/pes_ts_frame_012.xyz",
+                        "kind": "structure",
+                        "metadata": {"candidate_id": "pes_ts_frame_012", "role": "TS"},
+                    }
+                ],
+            }
+        ).encode(),
+        "RESULT/structures/pes_ts_frame_012.xyz": _XYZ_TAG_TS_PES.encode(),
+    }
+    service = StructureSourceService(store, tmp_path, fetcher=FakeFetcher(files))
+    entries = service.list_recent()
+    assert len(entries) == 1
+    assert entries[0]["remote"] is True
+    assert entries[0]["workflow"] == "PESsearch"
+    assert entries[0]["tag"] == "TS"
+    assert entries[0]["candidate_id"] == "pes_ts_frame_012"
+
+
 def test_pessearch_legacy_s2_fallback(service, store, tmp_path) -> None:
     """Legacy s2_candidate naming still discovered via fallback."""
     work_dir = tmp_path / "uncategorized" / "20260828_002_PESsearch"
