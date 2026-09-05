@@ -25,6 +25,10 @@ def _fake_run_shermo(monkeypatch, tmp_path, freq_path):
 
     monkeypatch.setattr("cccp.qc.runners.subprocess.run", fake_run)
     monkeypatch.setattr(
+        "cccp.qc.runners.resolve_executable",
+        lambda name, configured_path=None: "Shermo",
+    )
+    monkeypatch.setattr(
         "cccp.qc.runners._parse_sum_file",
         lambda sum_file: {"g_sum": -1.0},
     )
