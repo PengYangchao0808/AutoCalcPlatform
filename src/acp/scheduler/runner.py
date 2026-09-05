@@ -46,7 +46,7 @@ from acp.scheduler.jobs import (
     scan_method_flags,
     xtbmd_method_flags,
 )
-from acp.scheduler.processctl import find_task_processes, pid_is_alive
+from acp.scheduler.processctl import find_task_processes, pid_is_alive, process_references
 from acp.scheduler.provenance import Provenance, build_provenance_for_job
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
 from acp.storage.layout import TaskStorage, runtime_file
@@ -508,6 +508,13 @@ class JobRunner:
             proc = self._processes.get(record.id)
 
         if proc is None:
+            # Untracked RUNNING job: when its task process is still alive the
+            # job is owned by a peer server (or was deliberately skipped by
+            # restart recovery) — keep waiting instead of failing it.  The
+            # 2026-09-05 incident showed a second server instance must not
+            # re-fail a job just because it is absent from ``_processes``.
+            if self._foreign_task_alive(record):
+                return (False, None)
             event_log = self._event_logs.get(record.id)
             exit_code = record.exit_code if record.exit_code is not None else 1
             if event_log:
@@ -539,12 +546,15 @@ class JobRunner:
                 self._event_logs.pop(record.id, None)
             return (True, 130)
 
+        if record.pid is None:
+            record.pid = proc.pid
+
         ret = proc.poll()
         if ret is not None:
             record.exit_code = ret
             event_log = self._event_logs.get(record.id)
             with self._proc_lock:
-                seen = self._seen_stages.get(record.id, set()).copy()
+                seen = self._seen_stages.setdefault(record.id, set())
             if event_log:
                 state_path = find_workflow_state(Path(record.work_dir))
                 self._observe_state(record, event_log, state_path, seen)
@@ -579,7 +589,7 @@ class JobRunner:
         event_log = self._event_logs.get(record.id)
         if event_log:
             with self._proc_lock:
-                seen = self._seen_stages.get(record.id, set()).copy()
+                seen = self._seen_stages.setdefault(record.id, set())
             state_path = find_workflow_state(Path(record.work_dir))
             self._observe_state(record, event_log, state_path, seen)
         observer = self._observer_for_record(record)
@@ -665,6 +675,26 @@ class JobRunner:
         if proc is not None and proc.poll() is None and pid_is_alive(proc.pid):
             pids.add(proc.pid)
         return sorted(pids)
+
+    def _foreign_task_alive(self, record: JobRecord) -> bool:
+        """True when an untracked task process is still computing in work_dir.
+
+        Probes the ``run.lock`` task pid first (cheap) and falls back to a
+        ``/proc`` scan; the PID-recycling guard requires the pid to actually
+        reference the task directory.  Only invoked on the rare
+        untracked-RUNNING poll path, so the scan cost is bounded.
+        """
+        work_dir = Path(record.work_dir)
+        payload: dict[str, object] = {}
+        try:
+            payload = json.loads(runtime_file(work_dir, "run.lock").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            payload = {}
+        task_pid = payload.get("task_pid") if isinstance(payload, dict) else None
+        if isinstance(task_pid, int) and task_pid > 0:
+            if pid_is_alive(task_pid) and process_references(task_pid, work_dir):
+                return True
+        return bool(find_task_processes(work_dir))
 
     def _guard_single_execution(self, record: JobRecord) -> None:
         """Refuse to start when a live process already occupies the task."""

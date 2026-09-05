@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import random
 import shutil
 import threading
@@ -41,7 +42,7 @@ from acp.scheduler.nodes import (
     NodeSpec,
     validate_execution_request,
 )
-from acp.scheduler.processctl import terminate_task_processes
+from acp.scheduler.processctl import pid_is_alive, read_cmdline, terminate_task_processes
 from acp.scheduler.projects import ProjectManager
 from acp.scheduler.provenance import compute_input_hash
 from acp.scheduler.runner import (
@@ -70,6 +71,9 @@ _RERUN_STABLE_FILES: Final[frozenset[str]] = frozenset(
 # Workflows with first-class resume support at startup-triage time; every
 # other workflow only hints "try continue" when a generic checkpoint exists.
 _STARTUP_RESUMABLE_WORKFLOWS: Final[frozenset[str]] = frozenset({"mechanism", "xtbmd_censo_energy"})
+# Single-instance guard: run_root ownership marker file (see
+# ``JobManager._acquire_instance_lock``).
+_MANAGER_LOCK_NAME: Final = ".manager.lock"
 
 
 def _derive_retired_workflows() -> frozenset[str]:
@@ -167,6 +171,13 @@ class JobManager:
     ):
         self.run_root = Path(run_root)
         self.run_root.mkdir(parents=True, exist_ok=True)
+        # Single-instance guard (2026-09-05 incident): a second server
+        # process constructing a JobManager against the same run_root used
+        # to run restart-recovery below and kill the first instance's
+        # healthy RUNNING jobs.  Refuse to boot when a live ACP owner exists.
+        self._manager_lock_path: Path | None = None
+        self._acquire_instance_lock()
+        logger.info("JobManager booted: pid=%s run_root=%s", os.getpid(), self.run_root)
         self.store = store or JobStore(self.run_root / "acp_jobs.db")
         self.max_running = max_running  # retained for API compatibility (unused)
         self.poll_interval = max(5, int(poll_interval))
@@ -237,6 +248,69 @@ class JobManager:
         self._requeue_active_on_startup()
         self._dispatch_queued_jobs()
         self._poll_thread.start()
+
+    # ------------------------------------------------------------------ #
+    # Single-instance guard (run_root ownership)
+    # ------------------------------------------------------------------ #
+
+    def _acquire_instance_lock(self) -> None:
+        """Claim exclusive run_root ownership for this server process.
+
+        A leftover lock is stolen when its recorded owner is dead, unreadable,
+        or a non-ACP process (PID recycling); a lock recorded under this very
+        PID is stale debris from an un-shutdown manager (tests, double init).
+        Only a *live foreign ACP process* blocks startup — that peer's
+        restart-recovery must never run against our RUNNING jobs.
+        """
+        lock_path = self.run_root / _MANAGER_LOCK_NAME
+        for _attempt in range(3):
+            try:
+                fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                owner_pid = self._lock_owner_pid(lock_path)
+                if owner_pid is not None and self._owner_is_live_acp(owner_pid):
+                    raise RuntimeError(
+                        f"run_root '{self.run_root}' is already owned by another ACP "
+                        f"server process (pid={owner_pid}, cmdline="
+                        f"{read_cmdline(owner_pid)!r}); refusing to start a second "
+                        "instance — it would kill the owner's running jobs"
+                    ) from None
+                logger.warning(
+                    "Stealing stale manager lock %s (recorded owner pid=%s)",
+                    lock_path,
+                    owner_pid,
+                )
+                lock_path.unlink(missing_ok=True)
+                continue
+            payload = {
+                "pid": os.getpid(),
+                "cmdline": read_cmdline(os.getpid()),
+                "acquired_at": datetime.now(timezone.utc).isoformat(),
+                "run_root": str(self.run_root),
+            }
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(payload, handle, indent=2)
+            self._manager_lock_path = lock_path
+            return
+        raise RuntimeError(f"could not claim manager lock {lock_path} after retries")
+
+    @staticmethod
+    def _lock_owner_pid(lock_path: Path) -> int | None:
+        try:
+            payload = json.loads(lock_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        owner = payload.get("pid") if isinstance(payload, dict) else None
+        return owner if isinstance(owner, int) and owner > 0 else None
+
+    @staticmethod
+    def _owner_is_live_acp(owner_pid: int) -> bool:
+        if owner_pid == os.getpid():
+            return False
+        if not pid_is_alive(owner_pid):
+            return False
+        cmdline = read_cmdline(owner_pid).lower()
+        return "acp" in cmdline or "uvicorn" in cmdline
 
     def _is_remote_enabled(self) -> bool:
         return self._remote_config is not None and self._remote_config.is_remote
@@ -1410,6 +1484,12 @@ class JobManager:
         return Path(record.work_dir) if record else None
 
     def shutdown(self) -> None:
+        if self._manager_lock_path is not None:
+            try:
+                self._manager_lock_path.unlink(missing_ok=True)
+            except OSError:
+                logger.debug("Failed to remove manager lock", exc_info=True)
+            self._manager_lock_path = None
         if self._cleanup_stop_event is not None and self._cleanup_thread is not None:
             self._cleanup_stop_event.set()
             self._cleanup_thread.join(timeout=10)
@@ -1988,6 +2068,47 @@ class JobManager:
                     status_val,
                 )
 
+    def _run_lock_peer_pid(self, record: JobRecord) -> int | None:
+        """Live foreign ACP server process still owning the task's run.lock."""
+        try:
+            payload = json.loads(
+                runtime_file(Path(record.work_dir), "run.lock").read_text(encoding="utf-8")
+            )
+        except (OSError, ValueError):
+            return None
+        owner = payload.get("owner_pid") if isinstance(payload, dict) else None
+        if not isinstance(owner, int) or owner <= 0:
+            return None
+        if owner == os.getpid() or not pid_is_alive(owner):
+            return None
+        cmdline = read_cmdline(owner).lower()
+        if "acp" in cmdline or "uvicorn" in cmdline:
+            return owner
+        return None
+
+    def _skip_recovery_for_peer(self, record: JobRecord) -> bool:
+        """True when a live peer server owns this task — leave it alone.
+
+        Belt-and-braces companion to the run_root instance lock: even if a
+        second manager somehow booted, restart-recovery must not kill a task
+        whose ``run.lock`` owner is still alive and computing.
+        """
+        peer = self._run_lock_peer_pid(record)
+        if peer is None:
+            return False
+        logger.warning(
+            "Skipping restart-recovery for job %s: run.lock held by live server pid=%s",
+            record.id,
+            peer,
+        )
+        try:
+            self._event_log(record).append(
+                "manager.peer_conflict", job_id=record.id, owner_pid=peer
+            )
+        except OSError:
+            logger.debug("peer_conflict event failed for %s", record.id, exc_info=True)
+        return True
+
     def _requeue_active_on_startup(self) -> None:
         self._sweep_retired_inflight_jobs()
 
@@ -2005,6 +2126,8 @@ class JobManager:
         # CANCELLING jobs that were interrupted mid-cancellation should stay
         # CANCELLED — the user's cancel intent must survive a restart.
         for record in self.store.list(status=JobStatus.CANCELLING.value):
+            if self._skip_recovery_for_peer(record):
+                continue
             self._cleanup_local_orphans(record)
             self._finalize_restarted_job(
                 record, JobStatus.CANCELLED, restart_marker, "job.cancelled"
@@ -2025,6 +2148,8 @@ class JobManager:
                     record.remote_job_id,
                 )
                 continue
+            if self._skip_recovery_for_peer(record):
+                continue
             self._cleanup_local_orphans(record)
             self._finalize_restarted_job(
                 record,
@@ -2044,6 +2169,8 @@ class JobManager:
                         record.id,
                         record.remote_job_id,
                     )
+                    continue
+                if self._skip_recovery_for_peer(record):
                     continue
                 # Restart race guard: the workflow may have finished exactly
                 # as the server went down — probe disk before failing (Q12).
@@ -2093,8 +2220,15 @@ class JobManager:
         if killed:
             try:
                 self._event_log(record).append("process.cleaned", job_id=record.id, pids=killed)
+                self._event_log(record).append(
+                    "manager.recovered",
+                    job_id=record.id,
+                    recovered_by_pid=os.getpid(),
+                    killed_pid_count=len(killed),
+                    reason="startup-recovery",
+                )
             except OSError:
-                logger.debug("process.cleaned event failed for %s", record.id, exc_info=True)
+                logger.debug("recovery event failed for %s", record.id, exc_info=True)
         return killed
 
     def _finalize_restarted_job(
@@ -2123,6 +2257,10 @@ class JobManager:
         except OSError:
             logger.debug("job.json refresh failed for %s", record.id, exc_info=True)
         self._update_task_json_status(Path(record.work_dir), status.value)
+        try:
+            runtime_file(Path(record.work_dir), "run.lock").unlink(missing_ok=True)
+        except OSError:
+            logger.debug("run.lock cleanup failed for %s", record.id, exc_info=True)
         try:
             self._event_log(record).append(
                 event_type, job_id=record.id, error=error, reason="server_restart"
@@ -2195,4 +2333,3 @@ class JobManager:
 
 
 __all__ = ["JobManager"]
-
