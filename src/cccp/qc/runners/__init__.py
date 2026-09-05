@@ -13,8 +13,9 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
+from cccp.software import resolve_executable
 from cccp.utils import ensure_dir
 
 logger = logging.getLogger(__name__)
@@ -118,8 +119,23 @@ def run_shermo(
     if output_file is None:
         output_file = output_dir / "Shermo.sum"
 
+    # Resolve through the centralized software resolver (same semantics as
+    # every other QC interface) so absolute executables.<name>.path configs
+    # work, and a miss produces an actionable error instead of a bare
+    # FileNotFoundError from subprocess.
+    resolved = resolve_executable("shermo", configured_path=shermo_bin)
+    if resolved is None:
+        logger.error(
+            "Shermo executable not found. Add 'Shermo' to PATH, set "
+            "CONFSEARCH_SHERMO_PATH, or configure executables.shermo.path "
+            "(configured shermo_bin=%r).",
+            shermo_bin,
+        )
+        return None
+    effective_bin = str(resolved)
+
     cmd = [
-        str(shermo_bin),
+        effective_bin,
         _shermo_input_path(freq_output, output_dir),
         "-E",
         f"{sp_energy:.12f}",

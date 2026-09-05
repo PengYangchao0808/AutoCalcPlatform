@@ -14,7 +14,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 HARTREE_TO_KCAL = 627.5094740631
 

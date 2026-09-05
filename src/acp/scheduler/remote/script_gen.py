@@ -19,7 +19,7 @@ import logging
 import posixpath
 import shlex
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from acp.catalog import method_levels_to_cli_flags
@@ -83,7 +83,29 @@ _GFN_DISPLAY_TO_INT: dict[str, int] = {
 
 @dataclass(frozen=True)
 class LSFScriptSpec:
-    """Parameters describing a remote LSF submission."""
+    """Parameters describing a remote LSF submission.
+
+    Attributes:
+        job_name: BSUB ``-J`` job name.
+        queue: BSUB ``-q`` queue name.
+        nproc: BSUB ``-n`` number of CPU cores.
+        mem_mb_per_core: Per-core memory in MB; used to compute the per-process
+            ``-M`` RLIMIT_AS as ``mem_mb_per_core * nproc * 1.05`` (MB→KB
+            included). Chosen over ``rusage[mem=...]`` to avoid OpenLava's
+            double-counting of reserved vs. actually-used memory, which
+            caused jobs to PEND unnecessarily.
+        walltime: BSUB ``-W`` wall-clock limit (e.g. ``"24:00"``).
+        remote_code_dir: Directory where ACP source is synced; used to
+            build ``PYTHONPATH={remote_code_dir}/src``.
+        remote_job_dir: The remote job working directory; the script
+            ``cd``\\ s here before launching the CLI.
+        cli_command: Argv list (e.g.
+            ``["python", "-m", "acp.cli", "run", ...]``).
+        pre_cmds: Shell lines injected verbatim into the script body
+            before the CLI runs (after the exit-code traps).  Used for
+            ``module load`` / environment setup on module-based clusters.
+        extra_flags: Additional raw BSUB flags (e.g. ``"-R span[hosts=1]"``).
+    """
 
     job_name: str
     queue: str
@@ -93,6 +115,7 @@ class LSFScriptSpec:
     remote_code_dir: str
     remote_job_dir: str
     cli_command: list[str]
+    pre_cmds: list[str] = field(default_factory=list)
     extra_flags: str = ""
 
 
@@ -509,14 +532,41 @@ def build_lsf_script_spec(
     input_path: str = "inputs/input.xyz",
     config_path: str | None = None,
     remote_dir_name: str | None = None,
+    python_executable: str | None = None,
+    pre_cmds: list[str] | None = None,
 ) -> tuple[LSFScriptSpec, list[str]]:
-    """Build both the CLI command and :class:`LSFScriptSpec` for a job."""
+    """Build both the CLI command and :class:`LSFScriptSpec` for a job.
+
+    Args:
+        spec: The scheduler job specification.
+        job_id: The ACP job identifier (used for the BSUB job name and the
+            remote working directory).
+        node: The target remote compute node.
+        queue: LSF queue name.
+        walltime: LSF wall-clock limit.
+        extra_flags: Additional BSUB flags.
+        input_path: Relative path to the uploaded input file (default
+            ``inputs/input.xyz``).
+        config_path: Optional path to a job-level YAML config on the remote
+            node (e.g. ``cccp.yaml`` in the job directory).
+        remote_dir_name: Leaf directory name for the remote job dir (v1.2
+            task-dir naming); falls back to ``job_id`` when not given.
+        python_executable: Interpreter to use on the node.  When given it
+            overrides ``node.python_executable`` — callers pass a
+            probe-resolved (Python 3.10+) interpreter here so LSF scripts
+            never fall back to a too-old default ``python``.
+        pre_cmds: Shell lines injected into the generated script before
+            the CLI runs (cluster-level environment setup).
+
+    Returns:
+        ``(lsf_spec, cli_command)``.
+    """
     dir_leaf = remote_dir_name or job_id
     remote_job_dir = posixpath.join(node.remote_work_dir, dir_leaf)
     cli_command = build_remote_cli_command(
         spec,
         input_path=input_path,
-        python_executable=node.python_executable,
+        python_executable=python_executable or node.python_executable,
         config_path=config_path,
     )
     nproc, mem_mb_per_core, queue, walltime, extra_flags = derive_lsf_resources(
@@ -531,6 +581,7 @@ def build_lsf_script_spec(
         remote_code_dir=node.remote_code_dir,
         remote_job_dir=remote_job_dir,
         cli_command=cli_command,
+        pre_cmds=list(pre_cmds or []),
         extra_flags=extra_flags,
     )
     return lsf_spec, cli_command
@@ -559,6 +610,15 @@ def generate_lsf_script(s: LSFScriptSpec) -> str:
         '_acp_record_exit() { [ -f .exit_code ] || echo "$?" > .exit_code; }',
         "trap 'exit $?' USR2 TERM INT HUP",
         "trap _acp_record_exit EXIT",
+    ]
+    # Cluster-level environment setup (module load, spack, ...) — injected
+    # verbatim so module-based HPC clusters work without script surgery.
+    if s.pre_cmds:
+        lines.append("")
+        lines.append("# cluster.pre_cmds (module/environment setup)")
+        lines.extend(s.pre_cmds)
+    lines += [
+        "",
         f'export PYTHONPATH="{s.remote_code_dir}/src:$PYTHONPATH"',
         f'cd "{s.remote_job_dir}"',
         cli_str,

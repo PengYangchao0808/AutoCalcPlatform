@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Mapping
 
 __all__ = ["RemoteNode", "RemoteExecutionConfig"]
 
@@ -50,6 +50,11 @@ class RemoteNode:
             ``/opt/acp/venv/bin/python``) to pin a specific runtime per
             node — keeps node configuration portable across hosts whose
             default ``python`` differs.
+        bin_symlinks: Mapping ``{name: target}`` of symlinks created under
+            ``~/bin`` on the node by :meth:`NodeManager.bootstrap_node`
+            (e.g. ``{"Shermo": "/opt/shermo/Shermo"}``).  Declares the
+            node's QC binaries in configuration instead of relying on the
+            login shell PATH, which varies per cluster.
         max_concurrent_jobs: Maximum simultaneous LSF jobs allowed on this
             node; also governs the SSH connection-pool size.
         enabled: Whether this node is eligible for job dispatch.
@@ -68,6 +73,7 @@ class RemoteNode:
     password: str | None = None
     key_file: str | None = None
     python_executable: str = "python"
+    bin_symlinks: dict[str, str] = field(default_factory=dict)
     max_concurrent_jobs: int = 5
     enabled: bool = True
     host_key_policy: str = "reject"
@@ -121,6 +127,7 @@ class RemoteNode:
             password=data.get("password"),
             key_file=data.get("key_file"),
             python_executable=str(data.get("python_executable", "python")),
+            bin_symlinks=_parse_bin_symlinks(data.get("bin_symlinks")),
             max_concurrent_jobs=int(data.get("max_concurrent_jobs", 5)),
             enabled=bool(data.get("enabled", True)),
             host_key_policy=str(data.get("host_key_policy", "reject")),
@@ -136,6 +143,15 @@ class RemoteExecutionConfig:
         poll_interval: Seconds between remote status polls (default 15).
         retention_days: Days before remote job dirs are cleaned up.
         auto_sync: Whether to auto-sync code to nodes before submitting.
+        require_all_binaries: When True (default), pre-submit probes treat
+            a missing workflow-required binary as a hard error that aborts
+            the submission with configuration guidance.  Set False to keep
+            the historical warn-only behaviour (e.g. binaries injected by
+            the job scheduler environment only).
+        pre_cmds: Shell lines injected into every generated LSF script
+            before the ACP CLI runs (e.g. ``module load python/3.12``,
+            ``source /opt/spack/share/spack/setup-env.sh``).  Makes module-
+            based HPC clusters work without editing generated scripts.
         nodes: List of configured :class:`RemoteNode` objects.
         max_concurrent_sessions: Maximum SFTP sessions in the connection pool.
         connect_timeout: Seconds to wait for an SSH connection.
@@ -146,6 +162,8 @@ class RemoteExecutionConfig:
     poll_interval: int = 15
     retention_days: int = 180
     auto_sync: bool = True
+    require_all_binaries: bool = True
+    pre_cmds: list[str] = field(default_factory=list)
     queue: str = "normal"
     # Empty by default = no ``#BSUB -W`` walltime directive (jobs run to
     # completion).  Set ``cluster.walltime`` (e.g. "24:00") to re-enable a
@@ -203,6 +221,11 @@ class RemoteExecutionConfig:
         poll_interval = int(data.get("poll_interval", 15))
         retention_days = int(data.get("retention_days", 180))
         auto_sync = bool(data.get("auto_sync", True))
+        require_all_binaries = bool(data.get("require_all_binaries", True))
+        raw_pre_cmds = data.get("pre_cmds") or []
+        pre_cmds: list[str] = []
+        if isinstance(raw_pre_cmds, list):
+            pre_cmds = [str(c) for c in raw_pre_cmds if isinstance(c, str) and c.strip()]
         queue = str(data.get("queue", "normal"))
         walltime = str(data.get("walltime", ""))
         extra_flags = str(data.get("extra_flags", ""))
@@ -222,6 +245,8 @@ class RemoteExecutionConfig:
             poll_interval=poll_interval,
             retention_days=retention_days,
             auto_sync=auto_sync,
+            require_all_binaries=require_all_binaries,
+            pre_cmds=pre_cmds,
             queue=queue,
             walltime=walltime,
             extra_flags=extra_flags,
@@ -232,10 +257,23 @@ class RemoteExecutionConfig:
         )
 
 
-def _parse_walltime(text: str) -> int:
-    """Parse an LSF/BSUB wall-clock spec into whole seconds.
+def _parse_bin_symlinks(value: Any) -> dict[str, str]:
+    """Parse the ``bin_symlinks`` mapping (``{name: target}``) from config.
 
-    Accepts ``"HH:MM"`` and ``"HH:MM:SS"``.  Returns 0 on parse failure.
+    Non-mapping values (``None``, lists, scalars) produce an empty mapping
+    so a typo never crashes node parsing.
+    """
+    if not isinstance(value, Mapping):
+        return {}
+    parsed: dict[str, str] = {}
+    for name, target in value.items():
+        if isinstance(target, str) and target.strip():
+            parsed[str(name)] = target
+    return parsed
+
+
+def _parse_walltime(text: str) -> int:
+    """Parse an LSF/BSUB wall-clock spec into whole seconds.    Accepts ``"HH:MM"`` and ``"HH:MM:SS"``.  Returns 0 on parse failure.
     """
     if not text:
         return 0

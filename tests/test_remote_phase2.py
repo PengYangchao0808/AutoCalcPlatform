@@ -165,7 +165,11 @@ class FakeSSHClient:
         return self._transport
 
     def exec_command(self, command, timeout=None):
-        if self.cmd_handler is not None:
+        if "sys.version_info" in command:
+            # Python interpreter probe (detect_node_python) — report a
+            # usable 3.12 runtime so submissions don't fail the probe.
+            result = (0, "3.12.4\n", "")
+        elif self.cmd_handler is not None:
             result = self.cmd_handler(command)
         else:
             result = self.cmd_results.get(command, (0, "", ""))
@@ -350,6 +354,28 @@ def test_generate_lsf_script():
     assert "python -m acp.cli run conformer" in script
     assert "echo $? > .exit_code" in script
     print("  [OK] generate_lsf_script: all BSUB directives + PYTHONPATH + cd + echo")
+
+
+def test_generate_lsf_script_injects_pre_cmds():
+    """cluster.pre_cmds land in the script body before the CLI runs."""
+    lsf_spec = LSFScriptSpec(
+        job_name="acp_precmd",
+        queue="normal",
+        nproc=4,
+        mem_mb_per_core=2000,
+        walltime="",
+        remote_code_dir="/home/u/acp_code",
+        remote_job_dir="/scratch/u/acp_jobs/precmd",
+        cli_command=["python", "-m", "acp.cli", "run", "energy"],
+        pre_cmds=["module load python/3.12", "source /opt/spack/setup-env.sh"],
+    )
+    script = generate_lsf_script(lsf_spec)
+    assert "module load python/3.12" in script
+    assert "source /opt/spack/setup-env.sh" in script
+    # pre_cmds run after the exit-code traps, before the CLI line.
+    assert script.index("module load python/3.12") < script.index("python -m acp.cli run energy")
+    assert script.index("trap _acp_record_exit EXIT") < script.index("module load python/3.12")
+    print("  [OK] generate_lsf_script: pre_cmds injected between traps and CLI")
 
 
 def test_build_lsf_script_spec_integration():

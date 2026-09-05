@@ -276,10 +276,12 @@ async function loadBackends() {
     bar.innerHTML = '<span class="label">Backends</span>';
     data.backends.forEach((b) => {
       const caps = (b.capabilities || []).filter((c) => c.available).map((c) => escapeHtml(c.name)).slice(0, 4);
+      const isRemote = b.remote_available === true && (b.remote_nodes || []).length > 0;
       const chip = document.createElement("span");
       chip.className = "be-chip";
-      chip.innerHTML = '<span class="dot ' + (b.available ? "on" : "off") + '"></span>' +
-        '<span class="name">' + escapeHtml(b.name) + "</span>" +
+      if (isRemote) chip.title = "remote: " + b.remote_nodes.join(", ");
+      chip.innerHTML = '<span class="dot ' + ((b.available || isRemote) ? "on" : "off") + '"></span>' +
+        '<span class="name">' + escapeHtml(b.name) + (isRemote && !b.available ? " (remote)" : "") + "</span>" +
         (caps.length ? '<span class="caps">' + caps.join(", ") + "</span>" : "");
       bar.appendChild(chip);
     });

@@ -858,6 +858,7 @@ class NodeStatusModel(BaseModel):
     disk_usage_pct: int = 0
     last_check: str = ""
     error: str | None = None
+    software: dict[str, Any] = Field(default_factory=dict)
 
 
 class NodeListResponse(BaseModel):

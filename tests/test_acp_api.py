@@ -74,6 +74,57 @@ def test_backends_use_real_capability_matrix(client: TestClient) -> None:
     assert "conformer_search" in crest_caps, "crest should expose conformer_search"
 
 
+def test_backends_merge_remote_node_software(client: TestClient) -> None:
+    """/api/backends must surface QC software probed on reachable remote nodes."""
+    from acp.scheduler.remote.node_manager import NodeStatus
+
+    statuses = [
+        NodeStatus(
+            name="compute-01",
+            host="10.0.0.1",
+            status="online",
+            software={
+                "orca": {"configured": "orca", "resolved": "/opt/orca/orca", "version": "6.1.1"},
+                "crest": {"configured": "crest", "resolved": None, "version": None},
+                "shermo": {
+                    "configured": "Shermo",
+                    "resolved": "/opt/Shermo/Shermo",
+                    "version": "2.5",
+                },
+            },
+        ),
+        NodeStatus(
+            name="compute-02",
+            host="10.0.0.2",
+            status="offline",
+            software={"xtb": {"configured": "xtb", "resolved": "/opt/xtb/xtb", "version": "6.6.1"}},
+        ),
+    ]
+
+    class _FakeNM:
+        def cached_node_statuses(self):
+            return list(statuses)
+
+    manager = client.app.state.job_manager
+    manager._node_manager = _FakeNM()
+    try:
+        backends = client.get("/api/backends").json()["backends"]
+    finally:
+        manager._node_manager = None
+    by_name = {b["name"]: b for b in backends}
+    orca = by_name["orca"]
+    assert orca["remote_available"] is True
+    assert orca["remote_nodes"] == ["compute-01"]
+    assert orca["remote_path"] == "/opt/orca/orca"
+    assert orca["remote_version"] == "6.1.1"
+    # shermo software maps to the external backend adapter.
+    assert by_name["external"]["remote_available"] is True
+    # crest was probed but unresolved on the node.
+    assert by_name["crest"]["remote_available"] is False
+    # xtb is only on an offline node — must not count.
+    assert by_name["xtb"]["remote_available"] is False
+
+
 def test_workflows_and_protocols(client: TestClient) -> None:
     wf = client.get("/api/workflows").json()
     names = {w["name"] for w in wf["workflows"]}

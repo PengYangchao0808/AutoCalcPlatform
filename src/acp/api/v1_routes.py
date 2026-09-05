@@ -816,8 +816,8 @@ def get_status(request: Request) -> StatusResponse:
 
 
 @router.get("/backends", response_model=BackendsResponse)
-def get_backends() -> BackendsResponse:
-    return legacy_get_backends()
+def get_backends(request: Request) -> BackendsResponse:
+    return legacy_get_backends(request)
 
 
 @router.get("/software/discovery", response_model=V1SoftwareDiscoveryResponse)
@@ -3831,6 +3831,7 @@ def _node_status_to_model(status) -> NodeStatusModel:
         disk_usage_pct=status.disk_usage_pct,
         last_check=status.last_check,
         error=status.error,
+        software=status.software,
     )
 
 

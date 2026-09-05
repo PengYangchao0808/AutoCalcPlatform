@@ -56,7 +56,6 @@ def test_orca_interface_instantiates_with_minimal_config(
 def test_orca_optimize_parses_mocked_run_into_qcresult(
     sample_config: dict[str, object], tmp_path: Path
 ) -> None:
-    interface = ORCAInterface(sample_config)
     output_name = "orca_opt"
 
     completed = subprocess.CompletedProcess(
@@ -66,10 +65,17 @@ def test_orca_optimize_parses_mocked_run_into_qcresult(
         stderr="",
     )
 
-    with patch(
-        "cccp.qc.interfaces.orca.subprocess.run",
-        return_value=completed,
-    ) as mock_run:
+    with (
+        patch(
+            "cccp.qc.interfaces.orca.subprocess.run",
+            return_value=completed,
+        ) as mock_run,
+        patch(
+            "cccp.qc.interfaces.orca.resolve_executable",
+            return_value=Path("/fake/orca"),
+        ),
+    ):
+        interface = ORCAInterface(sample_config)
         result = interface.optimize(
             COORDINATES,
             SYMBOLS,
@@ -101,7 +107,6 @@ def test_orca_binary_smoke_check(sample_config: dict[str, object]) -> None:
 def test_orca_nmr_shielding_parses_mocked_run_into_qcresult(
     sample_config: dict[str, object], tmp_path: Path
 ) -> None:
-    interface = ORCAInterface(sample_config)
     output_name = "orca_nmr"
 
     completed = subprocess.CompletedProcess(
@@ -111,10 +116,17 @@ def test_orca_nmr_shielding_parses_mocked_run_into_qcresult(
         stderr="",
     )
 
-    with patch(
-        "cccp.qc.interfaces.orca.subprocess.run",
-        return_value=completed,
-    ) as mock_run:
+    with (
+        patch(
+            "cccp.qc.interfaces.orca.subprocess.run",
+            return_value=completed,
+        ) as mock_run,
+        patch(
+            "cccp.qc.interfaces.orca.resolve_executable",
+            return_value=Path("/fake/orca"),
+        ),
+    ):
+        interface = ORCAInterface(sample_config)
         result = interface.nmr_shielding(
             COORDINATES,
             SYMBOLS,
@@ -348,3 +360,4 @@ def test_parse_frequencies_no_section_returns_empty(tmp_path: Path) -> None:
 
 def test_parse_frequencies_missing_file_returns_empty(tmp_path: Path) -> None:
     assert _parse_frequencies(tmp_path / "does_not_exist.out") == []
+

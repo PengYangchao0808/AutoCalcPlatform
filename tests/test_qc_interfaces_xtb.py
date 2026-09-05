@@ -55,7 +55,6 @@ def test_xtb_interface_nproc_never_zero_or_negative(
 def test_xtb_optimize_parses_mocked_run_into_qcresult(
     sample_config: dict[str, object], tmp_path: Path
 ) -> None:
-    interface = XTBInterface(sample_config)
     captured_env: dict[str, str] | None = None
 
     def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -69,10 +68,17 @@ def test_xtb_optimize_parses_mocked_run_into_qcresult(
             stderr="",
         )
 
-    with patch(
-        "cccp.qc.interfaces.xtb.subprocess.run",
-        side_effect=fake_run,
-    ) as mock_run:
+    with (
+        patch(
+            "cccp.qc.interfaces.xtb.subprocess.run",
+            side_effect=fake_run,
+        ) as mock_run,
+        patch(
+            "cccp.qc.interfaces.xtb.resolve_executable",
+            return_value=Path("/fake/xtb"),
+        ),
+    ):
+        interface = XTBInterface(sample_config)
         result = interface.optimize(COORDINATES, SYMBOLS, output_dir=tmp_path)
 
     assert result.success is True

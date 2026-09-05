@@ -107,6 +107,13 @@ def _build_sync_file_list(project_root: Path) -> list[Path]:
     if reqs.is_file():
         files.append(reqs)
 
+    # 4. config/defaults.yaml — default configuration merged by cccp.config
+    #    on the node.  Without this, an old defaults.yaml left behind on a
+    #    node silently diverges from the server (stale executable paths).
+    defaults = project_root / "config" / "defaults.yaml"
+    if defaults.is_file():
+        files.append(defaults)
+
     files.sort()
     return files
 

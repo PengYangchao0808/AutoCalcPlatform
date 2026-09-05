@@ -8,10 +8,15 @@
 # (fastapi, uvicorn, paramiko, pytest, ruff, ...) is NOT needed on compute
 # nodes and is deliberately omitted to keep nodes slim.
 #
-# Floors are chosen to remain installable on Python 3.9+ nodes so that a node
-# whose system interpreter is 3.9 can still be bootstrapped; the server may
-# run newer versions.  Add any new runtime import used by ``acp run <workflow>``
-# here as well as in ``pyproject.toml`` so bootstrapped nodes stay in sync.
+# The ACP codebase requires Python 3.10+ (``typing.TypeAlias``, PEP 604
+# unions).  Bootstrap and job submission resolve the interpreter on the node
+# via `detect_node_python()` — a node whose system interpreter is 3.9 is
+# automatically re-routed to a newer interpreter (e.g. anaconda/miniconda)
+# or rejected with configuration guidance.  Set ``cluster.nodes[].python_executable``
+# to pin a specific interpreter per node.
+#
+# Add any new runtime import used by ``acp run <workflow>`` here as well as
+# in ``pyproject.toml`` so bootstrapped nodes stay in sync.
 numpy>=1.26
 rdkit>=2022.09.1
 pyyaml>=6.0
