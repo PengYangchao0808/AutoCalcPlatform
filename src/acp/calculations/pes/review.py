@@ -42,10 +42,12 @@ from acp.storage.manifest import ProductKind, ResultManifest
 
 PES_REVIEW_RELATIVE_PATH = "RESULT/pes_search/pes_review.json"
 PES_REVIEW_SCHEMA = "pes_review_v1"
+PES_REVIEW_BACKUP_TEMPLATE = "pes_review_backup_{n:03d}.json"
 PES_REVIEW_PRODUCT_PREFIX = "pes_candidate_"
 _ROLE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 __all__ = [
+    "PES_REVIEW_BACKUP_TEMPLATE",
     "PES_REVIEW_PRODUCT_PREFIX",
     "PES_REVIEW_RELATIVE_PATH",
     "PES_REVIEW_SCHEMA",
@@ -53,7 +55,9 @@ __all__ = [
     "RevisionConflictError",
     "candidate_id_for",
     "load_pes_review",
+    "load_pes_review_backups",
     "normalize_role",
+    "restore_pes_review",
     "save_pes_review",
 ]
 
@@ -310,8 +314,14 @@ def save_pes_review(
     note: str = "",
     expected_revision: int | None = None,
     now: datetime | None = None,
+    restored_from: int | None = None,
 ) -> dict[str, Any]:
     """Validate and persist a manual PES review (all-or-nothing).
+
+    The previous confirmed state (revision >= 1) is first rotated into
+    ``RESULT/pes_search/pes_review_backup_<n>.json`` (n = previous revision
+    = attempt count); backups are never deleted, enabling multi-round
+    selection switching via :func:`restore_pes_review`.
 
     Args:
         task_root: PESsearch job working directory.
@@ -322,6 +332,7 @@ def save_pes_review(
         expected_revision: When given, the currently stored revision must
             match; otherwise a :class:`RevisionConflictError` is raised.
         now: Injectable timestamp (tests); defaults to local time now.
+        restored_from: Set by :func:`restore_pes_review` for audit.
 
     Returns:
         The written ``pes_review.json`` payload.
@@ -344,6 +355,8 @@ def save_pes_review(
 
     result_dir = root / "RESULT"
     structures_dir = result_dir / "structures"
+    if existing and current_revision >= 1:
+        _rotate_backup(root, existing, current_revision)
     entries = _materialise_structures(structures_dir, validated)
     manifest_path = _update_result_manifest(result_dir, job_id, validated, entries)
 
@@ -365,10 +378,105 @@ def save_pes_review(
         "status": "confirmed",
         "confirmed_at": confirmed_at,
         "revision": current_revision + 1,
+        "attempt": current_revision + 1,
         "profile_sha256": _profile_digest(root),
         "note": str(note or ""),
         "selected": selected,
     }
+    if restored_from is not None:
+        payload["restored_from"] = int(restored_from)
     _write_json_atomic(root / PES_REVIEW_RELATIVE_PATH, payload)
     payload["result_manifest_path"] = str(manifest_path)
+    return payload
+
+
+def _rotate_backup(root: Path, existing: dict[str, Any], revision: int) -> Path:
+    """Preserve the current review as ``pes_review_backup_<revision>.json``."""
+    backup_path = root / "RESULT" / "pes_search" / PES_REVIEW_BACKUP_TEMPLATE.format(n=revision)
+    _atomic_write_text(backup_path, json.dumps(existing, indent=2, sort_keys=True, default=str))
+    return backup_path
+
+
+def load_pes_review_backups(task_root: Path | str) -> list[dict[str, Any]]:
+    """List review backups (n, confirmed_at, note, selected_count, selected).
+
+    Sorted by attempt number ascending; corrupt entries are skipped.
+    """
+    pes_dir = Path(task_root) / "RESULT" / "pes_search"
+    if not pes_dir.is_dir():
+        return []
+    backups: list[dict[str, Any]] = []
+    for path in pes_dir.glob("pes_review_backup_*.json"):
+        match = re.search(r"pes_review_backup_(\d+)\.json$", path.name)
+        if match is None:
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        selected = payload.get("selected")
+        backups.append(
+            {
+                "n": int(match.group(1)),
+                "confirmed_at": payload.get("confirmed_at"),
+                "note": payload.get("note") or "",
+                "selected_count": len(selected) if isinstance(selected, list) else 0,
+                "selected": selected if isinstance(selected, list) else [],
+            }
+        )
+    backups.sort(key=lambda item: item["n"])
+    return backups
+
+
+def restore_pes_review(
+    task_root: Path | str,
+    backup_n: int,
+    *,
+    expected_revision: int | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Re-activate backup *backup_n* as the current review (rotation-aware).
+
+    The restore goes through the full save pipeline: structures are
+    re-materialised, the result manifest switches to the restored selection,
+    the current state is first rotated into a fresh backup, and the review
+    revision/attempt advance by one.
+
+    Raises:
+        PesReviewError: Unknown backup or invalid stored selection.
+        RevisionConflictError: ``expected_revision`` mismatch.
+    """
+    root = Path(task_root).expanduser().resolve()
+    backup_path = root / "RESULT" / "pes_search" / PES_REVIEW_BACKUP_TEMPLATE.format(n=backup_n)
+    if not backup_path.is_file():
+        raise PesReviewError(f"review backup not found: {backup_path.name}")
+    try:
+        backup = json.loads(backup_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise PesReviewError(f"unreadable review backup: {backup_path.name}") from exc
+    if not isinstance(backup, dict):
+        raise PesReviewError(f"malformed review backup: {backup_path.name}")
+
+    candidates = [
+        {
+            "frame_index": row.get("frame_index"),
+            "role": row.get("role"),
+            "candidate_id": row.get("candidate_id"),
+            "name": row.get("name"),
+        }
+        for row in backup.get("selected") or []
+        if isinstance(row, dict)
+    ]
+    payload = save_pes_review(
+        root,
+        job_id=str(backup.get("job_id") or ""),
+        candidates=candidates,
+        note=str(backup.get("note") or ""),
+        expected_revision=expected_revision,
+        now=now,
+        restored_from=int(backup_n),
+    )
+    payload["restored_from"] = int(backup_n)
     return payload

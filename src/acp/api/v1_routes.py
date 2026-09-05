@@ -100,9 +100,12 @@ from acp.api.v1_schemas import (
     NodePingResponse,
     NodeStatusModel,
     OptimizationFrameResponse,
+    PesReviewBackupSummary,
     PesReviewCandidate,
     PesReviewRequest,
     PesReviewResponse,
+    PesReviewRestoreRequest,
+    PesReviewRestoreResponse,
     PesReviewStateResponse,
     ProjectCreateRequest,
     ProjectListResponse,
@@ -1839,15 +1842,68 @@ def _pes_review_work_dir(request: Request, job_id: str, *, require_completed: bo
 
 @router.get("/jobs/{job_id}/pes/review", response_model=PesReviewStateResponse)
 def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
-    """Return the saved manual-review state (``pending`` when never saved)."""
+    """Return the saved manual-review state plus backup rounds (``pending`` when never saved)."""
     work_dir = _pes_review_work_dir(request, job_id, require_completed=False)
 
-    from acp.calculations.pes.review import load_pes_review
+    from acp.calculations.pes.review import load_pes_review, load_pes_review_backups
 
     review = load_pes_review(work_dir)
+    backups = [
+        PesReviewBackupSummary(
+            n=int(row.get("n") or 0),
+            confirmed_at=row.get("confirmed_at"),
+            note=str(row.get("note") or ""),
+            selected_count=int(row.get("selected_count") or 0),
+        )
+        for row in load_pes_review_backups(work_dir)
+    ]
     if review is None:
-        return PesReviewStateResponse(job_id=job_id, status="pending", review={})
-    return PesReviewStateResponse(job_id=job_id, status="confirmed", review=review)
+        return PesReviewStateResponse(job_id=job_id, status="pending", review={}, backups=backups)
+    return PesReviewStateResponse(job_id=job_id, status="confirmed", review=review, backups=backups)
+
+
+@router.post("/jobs/{job_id}/pes/review/restore", response_model=PesReviewRestoreResponse)
+def restore_pes_review_endpoint(
+    job_id: str,
+    req: PesReviewRestoreRequest,
+    request: Request,
+) -> PesReviewRestoreResponse:
+    """Re-activate a previous review backup; manifest switches to that round."""
+    work_dir = _pes_review_work_dir(request, job_id, require_completed=True)
+
+    from acp.calculations.pes.review import PesReviewError, RevisionConflictError
+    from acp.calculations.pes.review import restore_pes_review as restore_pes_review_state
+
+    try:
+        payload = restore_pes_review_state(
+            work_dir,
+            int(req.backup),
+            expected_revision=req.expected_revision,
+        )
+    except RevisionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except PesReviewError as exc:
+        message = str(exc)
+        status_code = 404 if "not found" in message else 422
+        raise HTTPException(status_code=status_code, detail=message) from exc
+
+    return PesReviewRestoreResponse(
+        job_id=job_id,
+        status=str(payload.get("status") or "confirmed"),
+        restored_from=int(payload.get("restored_from") or req.backup),
+        revision=int(payload.get("revision") or 0),
+        selected_count=len(payload.get("selected") or []),
+        candidates=[
+            PesReviewCandidate(
+                candidate_id=str(row.get("candidate_id") or ""),
+                role=str(row.get("role") or ""),
+                frame_index=int(row.get("frame_index") or 0),
+                name=str(row.get("name") or ""),
+                structure_path=str(row.get("structure_path") or ""),
+            )
+            for row in payload.get("selected") or []
+        ],
+    )
 
 
 @router.post("/jobs/{job_id}/pes/review", response_model=PesReviewResponse)

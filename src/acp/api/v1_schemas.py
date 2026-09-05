@@ -1141,12 +1141,36 @@ class PesReviewResponse(BaseModel):
     result_manifest: str = "RESULT/result_manifest.json"
 
 
+class PesReviewBackupSummary(BaseModel):
+    n: int
+    confirmed_at: str | None = None
+    note: str = ""
+    selected_count: int = 0
+
+
 class PesReviewStateResponse(BaseModel):
     """Current manual-review state (``GET /jobs/{id}/pes/review``)."""
 
     job_id: str
     status: str = "pending"  # "pending" | "confirmed"
     review: dict[str, Any] = Field(default_factory=dict)  # full pes_review_v1 payload
+    backups: list[PesReviewBackupSummary] = Field(default_factory=list)
+
+
+class PesReviewRestoreRequest(BaseModel):
+    """Re-activate a previous review backup (multi-round selection switching)."""
+
+    backup: int
+    expected_revision: int | None = None
+
+
+class PesReviewRestoreResponse(BaseModel):
+    job_id: str
+    status: str = "confirmed"
+    restored_from: int
+    revision: int = 0
+    selected_count: int = 0
+    candidates: list[PesReviewCandidate] = Field(default_factory=list)
 
 
 class EnergyGraphSeriesModel(BaseModel):

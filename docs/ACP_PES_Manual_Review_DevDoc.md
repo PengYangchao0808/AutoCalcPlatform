@@ -1,7 +1,24 @@
 # PES 人工确认（Manual Review）设计文档
 
-**状态**: v1.0（2026-09-03）
+**状态**: v1.1（2026-09-03）
 **范围**: PESsearch 人工确认选点 → BatchOptimize 批量确认的完整链路
+
+## 0. v1.1 变更：推荐选点隔离 + 选点历史备份
+
+1. **推荐选点不再进入最终结果**：任务完成时算法推荐点只写入审计文件
+   `RESULT/pes_search/pes_recommendations.json`，`result_manifest.json` 中
+   **没有任何 `kind:"structure"` 条目**（仅 `pes_profile` + `pes_recommendations`
+   两个 report 类条目）。推荐点 XYZ 不再复制进 `RESULT/structures/`。
+   下游（结构选择器 / BatchOptimize / 前端预填）从机制上不可能拿到推荐点。
+2. **人工确认是唯一入口**：`result_manifest.json` 出现结构条目当且仅当存在
+   人工确认（`pes_review.json`）。未确认的 PES 任务被 Batch 入口明确拒绝：
+   `load_items_from_result_manifest` 检测到 pes_profile 存在而 pes_review
+   缺失时抛出含指引的错误（前端/CLI 均可见）。
+3. **选点历史备份**：每次保存/修改选点前，当前确认集自动轮换为
+   `RESULT/pes_search/pes_review_backup_<n>.json`（n = 保存前 revision =
+   尝试次数；零填充三位便于排序）。备份永不删除；`pes_review.json` 增加
+   `attempt` 字段；恢复某轮 = 走完整保存管线（结构重新物化 + manifest 切换 +
+   当前集自动成为新备份 + revision/attempt 递增 + `restored_from` 审计字段）。
 
 ## 1. 目标流程
 
@@ -105,8 +122,9 @@ BatchOptimize 默认输入。
 
 | 端点 | 说明 |
 |------|------|
-| `POST /api/v1/jobs/{job_id}/pes/review` | 确认选点；body `{note?, expected_revision?, candidates:[{frame_index, role, candidate_id?, name?}]}` |
-| `GET /api/v1/jobs/{job_id}/pes/review` | 当前确认状态（未保存时 `{"status": "pending"}`） |
+| `POST /api/v1/jobs/{job_id}/pes/review` | 确认选点；body `{note?, expected_revision?, candidates:[{frame_index, role, candidate_id?, name?}]}`；保存前自动轮换备份 |
+| `GET /api/v1/jobs/{job_id}/pes/review` | 当前确认状态 + `backups: [{n, confirmed_at, note, selected_count}]`；未保存时 `{"status": "pending"}` |
+| `POST /api/v1/jobs/{job_id}/pes/review/restore` | 恢复历史轮次；body `{backup: <n>, expected_revision?}`；404=备份不存在、409=revision 冲突 |
 
 前置校验：job 必须是 PESsearch（400）；必须存在 canonical pes_profile（404）；
 POST 要求 COMPLETED（409）；**历史 mechanism 任务（legacy s2 manifest）返回 410 保持只读**。
@@ -150,17 +168,21 @@ POST 要求 COMPLETED（409）；**历史 mechanism 任务（legacy s2 manifest�
 
 ## 6. 迁移与兼容说明
 
+- **v1.0 已确认的任务**：不受影响；pes_review/manifest 照常工作，新保存开始产生备份。
+- **v1.0 仅完成、未确认的任务**：manifest 中仍含旧推荐结构条目（历史不回写）；
+  用户首次人工确认时整体替换为确认集。若在确认前提交 Batch，将得到
+  "尚未人工确认"指引错误（v1.1 起未确认任务不再被下游消费是预期行为收紧）。
+- **v1.1 新任务**：完成即 `pes_recommendations.json` + 零结构 manifest；
+  全链路只在确认后放行。
 - 历史 mechanism 任务：`RESULT/mechanism/s2_path_manifest.json` 只读兼容不变，
   PES review 端点对其返回 410；不执行任何写入。
-- 旧 PES 任务（pes_profile_v2，无 pes_review.json）：GET 返回 pending，保存即建立确认状态。
-- `result_manifest.json` 旧格式（products 无 metadata）：读入不受影响；
-  一旦人工确认写入，manifest 中 PES 结构条目会携带 metadata 并按确认集整体替换。
 - 升级部署后建议 `sudo systemctl restart acp`（服务非 --reload 模式）。
 
 ## 7. 测试
 
 | 文件 | 覆盖 |
 |------|------|
-| `tests/test_acp_pes_review.py` | 服务层：幂等、revision 冲突、越界/角色/路径逃逸拒绝、manifest 替换、batch loader 集成、Product.metadata 往返 |
-| `tests/test_acp_api_pes_review.py` | GET/POST 端点、400/409/410/422、energy-graph 投影 |
+| `tests/test_acp_pes_review.py` | 服务层：幂等、revision 冲突、越界/角色/路径逃逸拒绝、manifest 替换、batch loader 集成、Product.metadata 往返；**v1.1**：备份轮换（n 递增、内容为上一版）、恢复切换 manifest 且恢复自备份、推荐点隔离（manifest 零结构条目 + 审计文件）、未确认任务专用报错 |
+| `tests/test_acp_api_pes_review.py` | GET/POST 端点、400/409/410/422、energy-graph 投影；**v1.1**：GET backups、restore 200/404/409、结构选择器不泄漏未确认任务 |
 | `tests/test_acp_batch_materializer.py` | batch_structures 物化往返、`--from-job` 解析与 CLI 解析、API source_id 内联 |
+| `tests/test_pes_search.py` | **v1.1**：engine 完成后 manifest 仅 `pes_profile`+`report`、recommendations 审计文件内容 |
