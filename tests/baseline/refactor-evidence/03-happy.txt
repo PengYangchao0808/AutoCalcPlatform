@@ -1,0 +1,44 @@
+=== 03-happy.txt: Wave 0 Todo 3 — Inventory Document Happy Path ===
+Date: 2026-08-27
+Branch: refactor/calc-cleanup
+
+=== COMMAND ===
+grep -cE "s2_confirm_service|batch_confirm|orchestrator" docs/ACP_Refactor_Wave0_Inventory.md
+
+=== KEY OUTPUT ===
+3
+
+=== EXIT CODE ===
+0
+
+=== VERIFICATION: table row count ===
+COMMAND: grep -c "^| " docs/ACP_Refactor_Wave0_Inventory.md
+OUTPUT: 93
+EXIT: 0
+
+=== VERIFICATION: QA checker (with __init__.py in S111) ===
+COMMAND: python3 - <<'EOF'
+import re, sys
+rows = open('docs/ACP_Refactor_Wave0_Inventory.md').read()
+S111 = ["orchestrator.py","study_runner.py","project.py","chain.py","engines/","modules/","stages/confirm.py","stages/low_confirm.py","stages/high_confirm.py","stages/handoff.py","results_v2.py","__init__.py"]
+S112 = ["batch_confirm.py","batch_models.py","providers/native_refinement.py","providers/thermo.py","bond_scan.py","scan_models.py","scan_manifest.py","primitives/path_selector.py","primitives/path_profile.py","primitives/scan_trajectory.py","primitives/scan_rescue.py","primitives/geometry_guard.py","identity.py","layout.py","_helpers.py"]
+c1 = sum(1 for s in S111 if re.search(r'^\| .*mechanism/' + re.escape(s), rows, re.M))
+c2 = sum(1 for s in S112 if re.search(r'^\| .*mechanism/' + re.escape(s), rows, re.M))
+c3 = len(re.findall(r's2_confirm_service\.py|s2_confirm_support\.py', rows))
+c4 = len(set(re.findall(r'test_acp_[a-z0-9_]+\.py|test_acp_s2_[a-z_]+\.py', rows)))
+S113 = ["reaction_definition.py","endpoint.py","atom_mapping.py","bond_changes.py","scan_manifest.py","scan_models.py","bond_scan.py","batch_confirm.py","batch_models.py","providers/native_refinement.py","providers/thermo.py","presets.py","reports.py","rescue.py","refinement_manifest.py","candidates.py","strategies.py"]
+c5 = sum(1 for s in S113 if re.search(r'^\| .*mechanism/' + re.escape(s), rows, re.M))
+assert (c1, c2, c3, c4, c5) == (12, 14, 2, 22, 17), f'MISMATCH: {(c1,c2,c3,c4,c5)} != (12,14,2,22,17)'
+print('INVENTORY_ROWS_OK 12/14/2/22/17')
+EOF
+OUTPUT: INVENTORY_ROWS_OK 12/14/2/22/17
+EXIT: 0
+
+=== ACCEPTANCE ===
+- grep count ≥ 3: PASS (3)
+- Table rows ≥ 50: PASS (93)
+- QA checker c1=12: PASS
+- QA checker c2=14: PASS
+- QA checker c3=2: PASS
+- QA checker c4=22: PASS
+- QA checker c5=17: PASS

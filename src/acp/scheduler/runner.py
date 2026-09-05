@@ -2,8 +2,8 @@
 Scheduler Runner
 ================
 
-Maps a :class:`JobSpec` to a concrete execution. Real workflows (conformer,
-nmr, benchmark, mechanism) run as ``python -m acp.cli run <workflow>`` subprocesses for
+Maps a :class:`JobSpec` to a concrete execution. Real workflows run as
+``python -m acp.cli run <workflow>`` subprocesses for
 crash isolation and clean PID-based cancellation. The ``fake`` workflow runs
 in-process so the workbench is demoable without QC binaries.
 
@@ -33,19 +33,24 @@ from acp.scheduler.artifacts import ArtifactRegistry, capture_stage_artifacts
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
     EXIT_WAITING_REVIEW,
-    MECHANISM_CONFIG_FILENAME,
+    SCAN_CONFIG_FILENAME,
     JobRecord,
     JobSpec,
+    batchoptimize_method_flags,
     censo_ewin_from_method,
     censo_preset_from_method,
     censo_solvent_from_method,
+    confsearch_method_flags,
     input_chemistry_flags,
     nmr_method_flags,
-    write_mechanism_job_config,
+    scan_method_flags,
     xtbmd_method_flags,
 )
+from acp.scheduler.processctl import find_task_processes, pid_is_alive, process_references
 from acp.scheduler.provenance import Provenance, build_provenance_for_job
 from acp.scheduler.stage_tasks import StageTaskObserver, StageTaskStore
+from acp.storage.layout import TaskStorage, runtime_file
+from acp.storage.record import TaskRecord
 
 logger = logging.getLogger(__name__)
 
@@ -165,121 +170,6 @@ def _read_json_object(path: Path) -> dict[str, Any] | None:
     return payload
 
 
-def _find_mechanism_study_json(record: JobRecord) -> Path | None:
-    study_root = Path(record.work_dir) / "mechanism_study"
-    if not study_root.is_dir():
-        logger.debug("No mechanism_study directory for job %s", record.id)
-        return None
-
-    study_id = _opt_text(record.spec.method.get("study_id"))
-    if study_id is not None:
-        study_path = study_root / study_id / "study.json"
-        if study_path.is_file():
-            return study_path
-        logger.debug("Mechanism study.json missing for job %s at %s", record.id, study_path)
-        return None
-
-    candidates = sorted(study_root.glob("*/study.json"))
-    if len(candidates) == 1:
-        return candidates[0]
-    if len(candidates) > 1:
-        logger.debug(
-            "Ambiguous mechanism study discovery for job %s: %s candidates",
-            record.id,
-            len(candidates),
-        )
-    else:
-        logger.debug("No mechanism study.json found for job %s", record.id)
-    return None
-
-
-def _extract_effective_fidelity(
-    study_data: Mapping[str, Any],
-    result: Mapping[str, Any],
-) -> str | None:
-    review_payload = result.get("review_payload")
-    if isinstance(review_payload, Mapping):
-        fidelity = _opt_text(review_payload.get("effective_fidelity"))
-        if fidelity is not None:
-            return fidelity
-
-    quality = _opt_text(study_data.get("quality"))
-    metadata = study_data.get("metadata")
-    metadata_dict = metadata if isinstance(metadata, Mapping) else {}
-    runner_meta = metadata_dict.get("study_runner")
-    runner_meta_dict = runner_meta if isinstance(runner_meta, Mapping) else {}
-    high_fidelity = metadata_dict.get("high_fidelity")
-    high_fidelity_dict = high_fidelity if isinstance(high_fidelity, Mapping) else {}
-
-    if quality == "high":
-        fidelity = _opt_text(high_fidelity_dict.get("profile"))
-        if fidelity is not None:
-            return fidelity
-        fidelity = _opt_text(runner_meta_dict.get("high_fidelity_profile_name"))
-        if fidelity is not None:
-            return fidelity
-
-    fidelity = _opt_text(runner_meta_dict.get("fidelity_profile_name"))
-    if fidelity is not None:
-        return fidelity
-    fidelity = _opt_text(runner_meta_dict.get("fidelity"))
-    if fidelity is not None:
-        return fidelity
-    fidelity = _opt_text(high_fidelity_dict.get("profile"))
-    if fidelity is not None:
-        return fidelity
-
-    routes = study_data.get("routes")
-    if isinstance(routes, list):
-        for route in routes:
-            if isinstance(route, Mapping):
-                fidelity = _opt_text(route.get("fidelity"))
-                if fidelity is not None:
-                    return fidelity
-    return None
-
-
-def populate_mechanism_study_result_metadata(
-    record: JobRecord,
-    result: Mapping[str, Any] | None,
-) -> dict[str, Any]:
-    enriched = dict(result or {})
-    if record.spec.workflow != "mechanism":
-        return enriched
-
-    study_path = _find_mechanism_study_json(record)
-    if study_path is None:
-        return enriched
-
-    study_data = _read_json_object(study_path)
-    if study_data is None:
-        return enriched
-
-    metadata = study_data.get("metadata")
-    metadata_dict = metadata if isinstance(metadata, Mapping) else {}
-    runner_meta = metadata_dict.get("study_runner")
-    runner_meta_dict = runner_meta if isinstance(runner_meta, Mapping) else {}
-    config_payload = runner_meta_dict.get("config")
-    config_dict = config_payload if isinstance(config_payload, Mapping) else {}
-    mechanism_config = config_dict.get("mechanism")
-    mechanism_config_dict = mechanism_config if isinstance(mechanism_config, Mapping) else {}
-
-    provider = (
-        _opt_text(runner_meta_dict.get("provider_backend"))
-        or _opt_text(mechanism_config_dict.get("provider_backend"))
-        or "native"
-    )
-    quality = _opt_text(study_data.get("quality"))
-    fidelity = _extract_effective_fidelity(study_data, enriched)
-
-    enriched["provider"] = provider
-    if fidelity is not None:
-        enriched["fidelity"] = fidelity
-    if quality is not None:
-        enriched["quality"] = quality
-    return enriched
-
-
 def _materialized_input_name(source: str, stem: str = "input") -> str:
     """Name for a materialized input file."""
     suffix = Path(source).suffix.lower()
@@ -289,8 +179,43 @@ def _materialized_input_name(source: str, stem: str = "input") -> str:
 
 
 def _extract_input_source(inp: dict[str, Any]) -> str:
-    source = inp.get("source") or inp.get("input") or inp.get("smiles") or ""
+    source = (
+        inp.get("input_artifact")
+        or inp.get("source")
+        or inp.get("input")
+        or inp.get("smiles")
+        or ""
+    )
     return str(source)
+
+
+def _write_log_header(
+    record: JobRecord,
+    work_dir: Path,
+    cmd: list[str],
+    out: Any,
+    err: Any,
+) -> None:
+    """Write the v2 provenance header to ``stdout.log`` and ``stderr.log``.
+
+    The timestamped job id no longer appears in any path (v2 task dirs are
+    named ``<molecule>_<task>_<remark>``); instead it is embedded into the
+    log content itself, ahead of any subprocess output.
+    """
+    header_lines = [
+        f"# job_id: {record.id}",
+        f"# workflow: {record.spec.workflow}",
+        f"# task_dir_name: {work_dir.name}",
+        f"# work_dir: {work_dir}",
+        f"# launched_at: {datetime.now(timezone.utc).isoformat()}",
+        f"# command: {' '.join(cmd)}",
+        "",
+    ]
+    header = "\n".join(header_lines)
+    out.write(header)
+    out.flush()
+    err.write(header)
+    err.flush()
 
 
 def _copy_structure_asset(source: str, inputs_dir: Path, run_root: Path, stem: str) -> Path:
@@ -355,18 +280,38 @@ def _materialize_single_input(
         return None
 
 
-def _materialize_mechanism_role(
-    role: str,
-    payload: Any,
-    inputs_dir: Path,
-    run_root: Path,
-) -> Path:
-    if not isinstance(payload, dict):
-        raise ValueError(f"mechanism job requires a valid {role} input structure")
-    materialized = _materialize_single_input(payload, inputs_dir, run_root, stem=role)
-    if materialized is None:
-        raise ValueError(f"mechanism job requires a valid {role} input structure")
-    return materialized
+def _materialize_batch_structures(inp: dict[str, Any], inputs_dir: Path) -> Path | None:
+    """Expand a Workbench ``batch_structures`` payload into an items file.
+
+    The v2 frontend bundles per-structure entries into
+    ``{source_type: "batch_structures", items: [...]}``; the BatchOptimize
+    CLI only reads files, so the payload is serialised to
+    ``inputs/batch_items.json`` (schema ``batch_structures_v1``) before the
+    subprocess starts.  ``source_id`` references must already have been
+    inlined by the API layer (they need store/remote-fetcher access).
+    """
+    items = inp.get("items")
+    if not isinstance(items, list):
+        return None
+    entries: list[dict[str, Any]] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        xyz = str(item.get("xyz") or "")
+        if not xyz.strip():
+            continue
+        entry: dict[str, Any] = {"xyz": xyz}
+        for key in ("name", "tag", "role", "candidate_id", "charge", "multiplicity", "include"):
+            if item.get(key) is not None:
+                entry[key] = item[key]
+        entries.append(entry)
+    if not entries:
+        return None
+    payload = {"schema_version": "batch_structures_v1", "items": entries}
+    inputs_dir.mkdir(parents=True, exist_ok=True)
+    dest = inputs_dir / "batch_items.json"
+    dest.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return dest
 
 
 def materialize_job_input(
@@ -375,92 +320,15 @@ def materialize_job_input(
     run_root: Path,
     materialized_roles: dict[str, Path] | None = None,
 ) -> Path | None:
-    if inp.get("source_type") == "mechanism":
-        reactant = _materialize_mechanism_role(
-            "reactant",
-            inp.get("reactant"),
-            inputs_dir,
-            run_root,
-        )
-        if materialized_roles is not None:
-            materialized_roles["reactant"] = reactant
-        for role in ("product", "ts_guess"):
-            payload = inp.get(role)
-            if payload is None:
-                continue
-            materialized = _materialize_mechanism_role(role, payload, inputs_dir, run_root)
-            if materialized_roles is not None:
-                materialized_roles[role] = materialized
-        return reactant
+    if isinstance(inp.get("scan_request"), dict):
+        return None
+
+    if str(inp.get("source_type") or "") == "batch_structures":
+        materialized = _materialize_batch_structures(inp, inputs_dir)
+        if materialized is not None:
+            return materialized
 
     return _materialize_single_input(inp, inputs_dir, run_root)
-
-
-def _mechanism_role_source(
-    inp: dict[str, Any],
-    role: str,
-    materialized_roles: Mapping[str, Path | str] | None = None,
-) -> str | None:
-    if materialized_roles and role in materialized_roles:
-        return str(materialized_roles[role])
-
-    legacy = inp.get(f"{role}_source")
-    if legacy:
-        return str(legacy)
-
-    role_value = inp.get(role)
-    if isinstance(role_value, dict):
-        nested_source = (
-            role_value.get("source")
-            or role_value.get("input")
-            or role_value.get("smiles")
-        )
-        if nested_source and role_value.get("source_type") != "xyz_text":
-            return str(nested_source)
-        return None
-
-    if role_value:
-        return str(role_value)
-    return None
-
-
-def _write_mechanism_config_if_needed(
-    spec: JobSpec,
-    work_dir: Path,
-    materialized: Path | None,
-    materialized_roles: Mapping[str, Path | str],
-) -> Path | None:
-    if spec.workflow != "mechanism":
-        return None
-
-    role_paths: dict[str, Path | str] = dict(materialized_roles)
-    if not role_paths and materialized is not None:
-        role_paths["reactant"] = materialized
-    reaction_definition = _load_mechanism_reaction_definition(work_dir, spec)
-    return write_mechanism_job_config(
-        work_dir,
-        spec.input,
-        spec.method,
-        spec.resources,
-        role_paths,
-        reaction_definition=reaction_definition,
-    )
-
-
-def _load_mechanism_reaction_definition(
-    work_dir: Path,
-    spec: JobSpec,
-) -> dict[str, Any] | None:
-    if spec.workflow != "mechanism":
-        return None
-    study_id = spec.method.get("study_id")
-    if not study_id:
-        return None
-    path = work_dir / "mechanism_study" / str(study_id) / "reaction.json"
-    if not path.is_file():
-        return None
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    return payload if isinstance(payload, dict) else None
 
 
 def _looks_like_smiles(s: str) -> bool:
@@ -497,6 +365,9 @@ class JobRunner:
         self._seen_stages: dict[str, set[str]] = {}
         self._cancel_events: dict[str, threading.Event] = {}
         self._event_logs: dict[str, JobEventLog] = {}
+        # Per-task execution locks (WORK/00_RUNTIME/run.lock): at most one
+        # live execution per task directory, across service restarts.
+        self._run_locks: dict[str, Path] = {}
 
     # ------------------------------------------------------------------ #
     # New non-blocking API (poller-driven)
@@ -522,16 +393,34 @@ class JobRunner:
             self._event_logs[record.id] = event_log
 
         if record.spec.workflow == "fake":
-            (work_dir / "results").mkdir(exist_ok=True)
+            TaskStorage(work_dir).result_dir().mkdir(parents=True, exist_ok=True)
             self._run_fake(record, event_log, cancel_event)
             record.exit_code = 0
             record.completed_at = datetime.now(timezone.utc).isoformat()
             return
 
-        (work_dir / "inputs").mkdir(exist_ok=True)
-        (work_dir / "work").mkdir(exist_ok=True)
-        (work_dir / "results").mkdir(exist_ok=True)
+        # v2 task-storage layout (§3/§5): WORK/00_RUNTIME + RESULT/ scaffold,
+        # input.xyz + task.json at the task root.  Scheduler zone-A files
+        # (stdout/stderr/events/job.json) intentionally stay at the root for
+        # backward compatibility with logs.py / events.py / v1_routes readers.
+        storage = TaskStorage(work_dir)
+        storage.ensure_layout()
+        self._guard_single_execution(record)
+        self._acquire_run_lock(record)
+        try:
+            self._prepare_and_launch(record, work_dir, storage, event_log)
+        except BaseException:
+            self._release_run_lock(record.id)
+            raise
 
+    def _prepare_and_launch(
+        self,
+        record: JobRecord,
+        work_dir: Path,
+        storage: TaskStorage,
+        event_log: JobEventLog,
+    ) -> None:
+        """Materialize input, build the command, and spawn the subprocess."""
         observer = self._observer_for_record(record)
         observer.initialize_job_stages(record.id, record.spec)
         event_log.append("job.started", job_id=record.id, workflow=record.spec.workflow)
@@ -541,33 +430,48 @@ class JobRunner:
             raise RuntimeError(f"Local disk full, submission blocked for job {record.id}")
 
         materialized_roles: dict[str, Path] = {}
+        inputs_dir = work_dir
         materialized = materialize_job_input(
             record.spec.input,
-            work_dir / "inputs",
+            inputs_dir,
             work_dir.parent.parent,
             materialized_roles,
         )
+        if materialized is not None and materialized != work_dir / "input.xyz":
+            try:
+                storage.write_input_xyz(materialized.read_text(encoding="utf-8"))
+            except OSError:
+                logger.warning("Could not copy primary input.xyz for job %s", record.id)
+        storage.write_task_json(
+            TaskRecord(
+                task_id=record.id,
+                project_id=record.project_id or "",
+                molecule_name=record.spec.molecule_name,
+                task_name=record.spec.task_name,
+                remark=record.spec.remark,
+                display_name=record.spec.name,
+                workflow=record.spec.workflow,
+                task_dir_name=work_dir.name,
+                status=record.status.value,
+                node_path=record.work_dir,
+                input_hash=record.input_hash,
+                current_stage=record.current_stage,
+                created_at=record.created_at,
+                updated_at=record.updated_at,
+            )
+        )
 
         effective_input_path = (
-            str(materialized)
-            if materialized
-            else _extract_input_source(record.spec.input)
-        )
-        mechanism_config_path = _write_mechanism_config_if_needed(
-            record.spec,
-            work_dir,
-            materialized,
-            materialized_roles,
+            str(materialized) if materialized else _extract_input_source(record.spec.input)
         )
         cmd = self._build_cmd(
             record.spec,
             work_dir,
             effective_input_path,
             materialized_roles,
-            mechanism_config_path=str(mechanism_config_path) if mechanism_config_path else None,
         )
-        stdout_path = work_dir / "stdout.log"
-        stderr_path = work_dir / "stderr.log"
+        stdout_path = runtime_file(work_dir, "stdout.log")
+        stderr_path = runtime_file(work_dir, "stderr.log")
 
         event_log.append("process.starting", job_id=record.id, cmd=" ".join(cmd))
 
@@ -575,6 +479,7 @@ class JobRunner:
             stdout_path.open("w", encoding="utf-8") as out,
             stderr_path.open("w", encoding="utf-8") as err,
         ):
+            _write_log_header(record, work_dir, cmd, out, err)
             env = dict(os.environ)
             env["PYTHONUNBUFFERED"] = "1"
             proc = subprocess.Popen(
@@ -587,6 +492,7 @@ class JobRunner:
             )
             record.pid = proc.pid
 
+        self._write_run_lock(self._run_locks[record.id], record, task_pid=proc.pid)
         with self._proc_lock:
             self._processes[record.id] = proc
             self._seen_stages[record.id] = set()
@@ -602,6 +508,13 @@ class JobRunner:
             proc = self._processes.get(record.id)
 
         if proc is None:
+            # Untracked RUNNING job: when its task process is still alive the
+            # job is owned by a peer server (or was deliberately skipped by
+            # restart recovery) — keep waiting instead of failing it.  The
+            # 2026-09-05 incident showed a second server instance must not
+            # re-fail a job just because it is absent from ``_processes``.
+            if self._foreign_task_alive(record):
+                return (False, None)
             event_log = self._event_logs.get(record.id)
             exit_code = record.exit_code if record.exit_code is not None else 1
             if event_log:
@@ -610,6 +523,7 @@ class JobRunner:
                     job_id=record.id,
                     exit_code=exit_code,
                 )
+            self._release_run_lock(record.id)
             with self._proc_lock:
                 self._seen_stages.pop(record.id, None)
                 self._cancel_events.pop(record.id, None)
@@ -624,6 +538,7 @@ class JobRunner:
             event_log = self._event_logs.get(record.id)
             if event_log:
                 event_log.append("job.cancelled", job_id=record.id, exit_code=130)
+            self._release_run_lock(record.id)
             with self._proc_lock:
                 self._processes.pop(record.id, None)
                 self._seen_stages.pop(record.id, None)
@@ -631,12 +546,15 @@ class JobRunner:
                 self._event_logs.pop(record.id, None)
             return (True, 130)
 
+        if record.pid is None:
+            record.pid = proc.pid
+
         ret = proc.poll()
         if ret is not None:
             record.exit_code = ret
             event_log = self._event_logs.get(record.id)
             with self._proc_lock:
-                seen = self._seen_stages.get(record.id, set()).copy()
+                seen = self._seen_stages.setdefault(record.id, set())
             if event_log:
                 state_path = find_workflow_state(Path(record.work_dir))
                 self._observe_state(record, event_log, state_path, seen)
@@ -660,6 +578,7 @@ class JobRunner:
                 event_log.append(
                     "job.failed", job_id=record.id, exit_code=ret
                 ) if event_log else None
+            self._release_run_lock(record.id)
             with self._proc_lock:
                 self._processes.pop(record.id, None)
                 self._seen_stages.pop(record.id, None)
@@ -670,7 +589,7 @@ class JobRunner:
         event_log = self._event_logs.get(record.id)
         if event_log:
             with self._proc_lock:
-                seen = self._seen_stages.get(record.id, set()).copy()
+                seen = self._seen_stages.setdefault(record.id, set())
             state_path = find_workflow_state(Path(record.work_dir))
             self._observe_state(record, event_log, state_path, seen)
         observer = self._observer_for_record(record)
@@ -679,6 +598,7 @@ class JobRunner:
 
     def cancel_local(self, job_id: str) -> None:
         """Terminate a locally-running subprocess."""
+        self._release_run_lock(job_id)
         with self._proc_lock:
             proc = self._processes.pop(job_id, None)
             self._seen_stages.pop(job_id, None)
@@ -739,6 +659,112 @@ class JobRunner:
         return True
 
     # ------------------------------------------------------------------ #
+    # Per-task single-execution guard (run.lock)
+    # ------------------------------------------------------------------ #
+
+    def _live_task_pids(self, record: JobRecord) -> list[int]:
+        """Live, non-zombie processes still bound to this task directory.
+
+        Combines the runner-tracked subprocess (same-service case) with a
+        ``/proc`` scan so orphans from a previous service instance are found.
+        """
+        work_dir = Path(record.work_dir)
+        with self._proc_lock:
+            proc = self._processes.get(record.id)
+        pids = set(find_task_processes(work_dir))
+        if proc is not None and proc.poll() is None and pid_is_alive(proc.pid):
+            pids.add(proc.pid)
+        return sorted(pids)
+
+    def _foreign_task_alive(self, record: JobRecord) -> bool:
+        """True when an untracked task process is still computing in work_dir.
+
+        Probes the ``run.lock`` task pid first (cheap) and falls back to a
+        ``/proc`` scan; the PID-recycling guard requires the pid to actually
+        reference the task directory.  Only invoked on the rare
+        untracked-RUNNING poll path, so the scan cost is bounded.
+        """
+        work_dir = Path(record.work_dir)
+        payload: dict[str, object] = {}
+        try:
+            payload = json.loads(runtime_file(work_dir, "run.lock").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            payload = {}
+        task_pid = payload.get("task_pid") if isinstance(payload, dict) else None
+        if isinstance(task_pid, int) and task_pid > 0:
+            if pid_is_alive(task_pid) and process_references(task_pid, work_dir):
+                return True
+        return bool(find_task_processes(work_dir))
+
+    def _guard_single_execution(self, record: JobRecord) -> None:
+        """Refuse to start when a live process already occupies the task."""
+        live = self._live_task_pids(record)
+        if live:
+            raise RuntimeError(
+                f"task {record.id} still has live process(es) {live} in "
+                f"{record.work_dir}; refusing to start a second execution"
+            )
+
+    def _write_run_lock(self, lock_path: Path, record: JobRecord, task_pid: int | None) -> None:
+        payload = {
+            "job_id": record.id,
+            "owner_pid": os.getpid(),
+            "task_pid": task_pid,
+            "acquired_at": datetime.now(timezone.utc).isoformat(),
+        }
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        lock_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    def _acquire_run_lock(self, record: JobRecord) -> None:
+        """Atomically claim ``WORK/00_RUNTIME/run.lock`` for this execution.
+
+        A pre-existing lock is stale (and stolen) when its owner service is
+        gone, or when it belongs to this very service with no live task
+        process left behind by a crashed submission thread.  A lock held by
+        a live foreign owner is a hard conflict.
+        """
+        lock_path = runtime_file(Path(record.work_dir), "run.lock")
+        try:
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.close(fd)
+        except FileExistsError:
+            self._resolve_existing_run_lock(record, lock_path)
+        self._write_run_lock(lock_path, record, task_pid=None)
+        self._run_locks[record.id] = lock_path
+
+    def _resolve_existing_run_lock(self, record: JobRecord, lock_path: Path) -> None:
+        try:
+            payload = json.loads(lock_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            payload = {}
+        owner_pid = payload.get("owner_pid") if isinstance(payload, dict) else None
+        owner_pid = int(owner_pid) if isinstance(owner_pid, int) else 0
+        if pid_is_alive(owner_pid):
+            if owner_pid == os.getpid() and not self._live_task_pids(record):
+                logger.warning(
+                    "Stolen stale run.lock for job %s (crashed submission thread)",
+                    record.id,
+                )
+            else:
+                raise RuntimeError(
+                    f"run.lock for task {record.id} is held by live process {owner_pid}; "
+                    "refusing to start a duplicate execution"
+                )
+            return
+        logger.info("Stolen run.lock of dead service (pid=%s) for job %s", owner_pid, record.id)
+        lock_path.unlink(missing_ok=True)
+
+    def _release_run_lock(self, job_id: str) -> None:
+        lock_path = self._run_locks.pop(job_id, None)
+        if lock_path is None:
+            return
+        try:
+            lock_path.unlink(missing_ok=True)
+        except OSError:
+            logger.debug("Failed to remove run.lock for job %s", job_id, exc_info=True)
+
+    # ------------------------------------------------------------------ #
     # Legacy blocking API (kept for backward compat)
     # ------------------------------------------------------------------ #
 
@@ -769,10 +795,6 @@ class JobRunner:
         if self._should_run_remote(record.spec):
             assert self.remote_runner is not None
             return self.remote_runner.run(record, event_log, cancel_event)
-
-        (work_dir / "inputs").mkdir(exist_ok=True)
-        (work_dir / "work").mkdir(exist_ok=True)
-        (work_dir / "results").mkdir(exist_ok=True)
 
         observer = self._observer_for_record(record)
         observer.initialize_job_stages(record.id, record.spec)
@@ -839,25 +861,16 @@ class JobRunner:
             return 1
 
         effective_input_path = (
-            str(materialized)
-            if materialized
-            else _extract_input_source(record.spec.input)
-        )
-        mechanism_config_path = _write_mechanism_config_if_needed(
-            record.spec,
-            work_dir,
-            materialized,
-            materialized_roles,
+            str(materialized) if materialized else _extract_input_source(record.spec.input)
         )
         cmd = self._build_cmd(
             record.spec,
             work_dir,
             effective_input_path,
             materialized_roles,
-            mechanism_config_path=str(mechanism_config_path) if mechanism_config_path else None,
         )
-        stdout_path = work_dir / "stdout.log"
-        stderr_path = work_dir / "stderr.log"
+        stdout_path = runtime_file(work_dir, "stdout.log")
+        stderr_path = runtime_file(work_dir, "stderr.log")
 
         event_log.append("process.starting", job_id=record.id, cmd=" ".join(cmd))
 
@@ -865,6 +878,7 @@ class JobRunner:
             stdout_path.open("w", encoding="utf-8") as out,
             stderr_path.open("w", encoding="utf-8") as err,
         ):
+            _write_log_header(record, work_dir, cmd, out, err)
             env = dict(os.environ)
             env["PYTHONUNBUFFERED"] = "1"
             proc = subprocess.Popen(
@@ -941,6 +955,11 @@ class JobRunner:
             if isinstance(stage, dict) and stage.get("status") in ("completed", "skipped")
         )
         record.progress = round(done / total, 3)
+
+        # Extended schema: ProgressReporter provides blended overall progress
+        overall = data.get("overall_progress")
+        if isinstance(overall, (int, float)):
+            record.progress = round(float(overall), 3)
 
         # Mirror the running stage onto its stage_tasks row so the job-detail
         # stepper can show live phase detail ("status_detail").
@@ -1069,11 +1088,12 @@ class JobRunner:
         work_dir: Path,
         input_path: str = "",
         materialized_roles: Mapping[str, Path | str] | None = None,
-        mechanism_config_path: str | None = None,
     ) -> list[str]:
         wf = spec.workflow
         if wf not in (
-            "mechanism",
+            "Confsearch",
+            "PESsearch",
+            "BatchOptimize",
             "ensemble",
             "energy",
             "nmr",
@@ -1081,8 +1101,8 @@ class JobRunner:
             "singlepoint",
             "optimize",
             "frequency",
-            "optfreq",
-            "optfreqsp",
+            "scan",
+            "irc",
             "xtb_optimize",
         ):
             raise ValueError(f"No subprocess mapping for workflow: {wf}")
@@ -1091,35 +1111,66 @@ class JobRunner:
         inp = spec.input
         method = spec.method
         res = spec.resources
+        cli_work_dir = work_dir.as_posix()
 
         source = input_path or _extract_input_source(inp)
-        # NMR carries multiple candidates + an experiment payload; resolve
-        # them before the standard single-source validation below.
+        if wf == "PESsearch":
+            return self._build_pessearch_cmd(spec, work_dir, source)
         if wf == "nmr":
             return self._build_nmr_cmd(spec, work_dir)
+
+        if wf == "BatchOptimize":
+            artifact = inp.get("from_artifact")
+            items_file = inp.get("items_file")
+            if artifact:
+                cmd += ["--from-artifact", str(artifact), "--output", cli_work_dir]
+            elif items_file:
+                cmd += ["--items-file", str(items_file), "--output", cli_work_dir]
+            elif input_path and Path(input_path).is_file():
+                # The Workbench creates one scheduler job per structure.  Its
+                # materialized input.xyz is therefore a valid one-item XYZ
+                # batch for the BatchOptimize CLI.  Keep this task flat, just
+                # like the ordinary single-structure workflows.
+                # Prefer the scheduler's canonical root input.xyz even when
+                # the uploaded source had another suffix (e.g. .gjf).
+                staged_input = work_dir / "input.xyz"
+                batch_input = staged_input if staged_input.is_file() else Path(input_path)
+                cmd += ["--items-file", str(batch_input), "--output", cli_work_dir]
+            else:
+                raise ValueError(
+                    "BatchOptimize job requires a batch artifact, items file, or "
+                    "materialized structure"
+                )
+            # Scheduler tasks are one-structure-per-task (layout spec §1a):
+            # every dispatch shape must produce the flat WORK/03_OPT…
+            # layout, never the nested WORK/03_OPT/batch/item_001 tree.
+            cmd += ["--layout-mode", "single_flat"]
+            cmd += batchoptimize_method_flags(method, inp)
+            if spec.config_path:
+                cmd += ["--config", str(spec.config_path)]
+            if res.get("nproc") is not None:
+                cmd += ["--nproc", str(res["nproc"])]
+            if res.get("mem"):
+                cmd += ["--mem", str(res["mem"])]
+            cmd += input_chemistry_flags(inp)
+            return cmd
 
         if not source:
             raise ValueError(f"{wf} job requires a valid input structure")
 
-        if wf == "mechanism":
-            cmd += ["--input", str(source), "--output", str(work_dir)]
-            cmd += [
-                "--mechanism-config",
-                mechanism_config_path or str(work_dir / MECHANISM_CONFIG_FILENAME),
-            ]
+        if wf == "Confsearch":
+            cmd += ["--input", str(source), "--output", cli_work_dir]
             if spec.name:
                 cmd += ["--name", spec.name]
-            product = _mechanism_role_source(inp, "product", materialized_roles)
-            if product:
-                cmd += ["--product", str(product)]
-            ts_guess = _mechanism_role_source(inp, "ts_guess", materialized_roles)
-            if ts_guess:
-                cmd += ["--ts-guess", str(ts_guess)]
-            routes = inp.get("routes")
-            if routes:
-                cmd += ["--routes", json.dumps(routes)]
+            cmd += confsearch_method_flags(method)
+            solvent = censo_solvent_from_method(method)
+            if solvent:
+                cmd += ["--solvent", solvent]
+            ewin = censo_ewin_from_method(method)
+            if ewin is not None:
+                cmd += ["--ewin", str(ewin)]
         elif wf in {"ensemble", "energy"}:
-            cmd += ["--input", str(source), "--output", str(work_dir)]
+            cmd += ["--input", str(source), "--output", cli_work_dir]
             preset = censo_preset_from_method(method)
             if preset:
                 cmd += ["--preset", preset]
@@ -1146,7 +1197,7 @@ class JobRunner:
             if ewin is not None:
                 cmd += ["--ewin", str(ewin)]
         elif wf == "xtbmd_censo_energy":
-            cmd += ["--input", str(source), "--output", str(work_dir)]
+            cmd += ["--input", str(source), "--output", cli_work_dir]
             preset = censo_preset_from_method(method)
             if preset:
                 cmd += ["--preset", preset]
@@ -1166,21 +1217,53 @@ class JobRunner:
                 # GFN1 energy window for this workflow (CLI --ewin);
                 # the same flag name, different object vs. energy.
                 cmd += ["--ewin", str(ewin)]
-        elif wf in ("singlepoint", "optimize", "frequency", "optfreq", "optfreqsp"):
-            cmd += ["--input", str(source), "--output", str(work_dir)]
+        elif wf in ("singlepoint", "optimize", "frequency", "scan"):
+            cmd += ["--input", str(source), "--output", cli_work_dir]
             if spec.name:
                 cmd += ["--name", spec.name]
             levels = method.get("levels", {})
             if levels:
                 from acp.catalog import method_levels_to_cli_flags
 
-                if wf == "optfreqsp":
-                    prefix_map = {"optfreq": "", "single_point": "sp-", "thermo": ""}
-                    cmd += method_levels_to_cli_flags(levels, prefix_map)
-                else:
-                    cmd += method_levels_to_cli_flags(levels)
+                cmd += method_levels_to_cli_flags(levels)
+            if wf == "scan":
+                cmd += scan_method_flags(method, inp)
+        elif wf == "irc":
+            cmd += ["--input", str(source), "--output", cli_work_dir]
+            if spec.name:
+                cmd += ["--name", spec.name]
+            input_role = inp.get("input_role")
+            if input_role:
+                cmd += ["--input-role", str(input_role)]
+            raw_directions = inp.get("directions")
+            if isinstance(raw_directions, (list, tuple)):
+                direction_names = {str(direction).strip().lower() for direction in raw_directions}
+                if direction_names == {"forward"}:
+                    cmd += ["--direction", "forward"]
+                elif direction_names == {"reverse"}:
+                    cmd += ["--direction", "reverse"]
+                elif direction_names in ({"forward", "reverse"}, {"both"}):
+                    cmd += ["--direction", "both"]
+                elif direction_names:
+                    raise ValueError("irc directions must be forward, reverse, or both")
+            levels = method.get("levels")
+            irc_level = levels.get("irc", {}) if isinstance(levels, Mapping) else {}
+            if not isinstance(irc_level, Mapping):
+                irc_level = {}
+            irc_method = method.get("method") or method.get("functional") or irc_level.get("method")
+            if irc_method:
+                cmd += ["--method", str(irc_method)]
+            irc_basis = method.get("basis") or irc_level.get("basis")
+            if irc_basis:
+                cmd += ["--basis", str(irc_basis)]
+            maxpoints = method.get("maxpoints") or irc_level.get("maxpoints")
+            if maxpoints is not None:
+                cmd += ["--maxpoints", str(maxpoints)]
+            irc_step = method.get("step") or irc_level.get("step")
+            if irc_step is not None:
+                cmd += ["--step", str(irc_step)]
         elif wf == "xtb_optimize":
-            cmd += ["--input", str(source), "--output", str(work_dir)]
+            cmd += ["--input", str(source), "--output", cli_work_dir]
             if spec.name:
                 cmd += ["--name", spec.name]
             xtb_level = (method.get("levels") or {}).get("xtb_opt", {})
@@ -1198,7 +1281,7 @@ class JobRunner:
             if sm and str(sm).lower() not in ("", "none"):
                 cmd += ["--solvent-model", str(sm)]
 
-        if spec.config_path:
+        if spec.config_path and wf != "mech-chain":
             cmd += ["--config", str(spec.config_path)]
         if res.get("nproc") is not None:
             cmd += ["--nproc", str(res["nproc"])]
@@ -1217,7 +1300,7 @@ class JobRunner:
         also accepted (treated as a one-element candidate list).
         """
         cmd: list[str] = [self.python, "-m", "acp.cli", "run", "nmr"]
-        cmd += ["--output", str(work_dir)]
+        cmd += ["--output", work_dir.as_posix()]
 
         inp = spec.input
         method = spec.method
@@ -1301,6 +1384,60 @@ class JobRunner:
             cmd += ["--nproc", str(res["nproc"])]
         if res.get("mem"):
             cmd += ["--mem", str(res["mem"])]
+        return cmd
+
+    def _build_pessearch_cmd(self, spec: JobSpec, work_dir: Path, source: str) -> list[str]:
+        """Build the PESsearch argv for local execution."""
+        inp = spec.input
+        method = spec.method
+        res = spec.resources
+        bond_scan_mode = str(method.get("mode") or "") == "bond_length_scan"
+
+        cmd: list[str] = [self.python, "-m", "acp.cli", "run", "PESsearch"]
+        if bond_scan_mode:
+            cmd += ["--mode", "bond_length_scan"]
+            scan_request = dict(inp.get("scan_request") or method.get("scan_request") or {})
+            work_dir.mkdir(parents=True, exist_ok=True)
+            scan_config_path = work_dir / SCAN_CONFIG_FILENAME
+            scan_config_path.write_text(
+                json.dumps(scan_request, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            cmd += [
+                "--scan-config",
+                scan_config_path.as_posix(),
+                "--output",
+                work_dir.as_posix(),
+            ]
+        else:
+            from_manifest = inp.get("from")
+            if from_manifest:
+                cmd += ["--from", str(from_manifest)]
+            cmd += ["--output", work_dir.as_posix()]
+            if method.get("strategy"):
+                cmd += ["--strategy", str(method["strategy"])]
+            select = method.get("select")
+            if isinstance(select, (list, tuple)) and select:
+                cmd += ["--select", ",".join(str(item) for item in select)]
+            elif isinstance(select, str) and select.strip():
+                cmd += ["--select", select.strip()]
+            plan = inp.get("coordinate_plan") or method.get("coordinate_plan")
+            if plan is not None:
+                cmd += ["--plan", json.dumps(plan)]
+            product = inp.get("product")
+            if product:
+                cmd += ["--product", str(product)]
+            ts_guess = inp.get("ts_guess")
+            if ts_guess:
+                cmd += ["--ts-guess", str(ts_guess)]
+
+        if spec.config_path:
+            cmd += ["--config", str(spec.config_path)]
+        if res.get("nproc") is not None:
+            cmd += ["--nproc", str(res["nproc"])]
+        if res.get("mem"):
+            cmd += ["--mem", str(res["mem"])]
+        cmd += input_chemistry_flags(inp)
         return cmd
 
     @staticmethod
@@ -1469,7 +1606,7 @@ class JobRunner:
             else:
                 xyz = smiles_to_xyz(str(source))
 
-            (work_dir / "results" / "input_preview.xyz").write_text(
+            (TaskStorage(work_dir).result_dir() / "input_preview.xyz").write_text(
                 xyz,
                 encoding="utf-8",
             )
@@ -1477,7 +1614,7 @@ class JobRunner:
             demo_frames = bool(record.spec.input.get("demo_frames"))
             if demo_frames:
                 demo_xyz = xyz_to_multiframe_demo(xyz, frames=3)
-                (work_dir / "results" / "demo_frames.xyz").write_text(
+                (TaskStorage(work_dir).result_dir() / "demo_frames.xyz").write_text(
                     demo_xyz,
                     encoding="utf-8",
                 )
@@ -1490,7 +1627,7 @@ class JobRunner:
                 wf_config = method_levels_to_workflow_config(
                     method_levels, schema_id, record.spec.workflow
                 )
-                (work_dir / "results" / "method_config.json").write_text(
+                (TaskStorage(work_dir).result_dir() / "method_config.json").write_text(
                     json.dumps(wf_config, indent=2),
                     encoding="utf-8",
                 )
@@ -1534,7 +1671,7 @@ class JobRunner:
         observer = self.stage_task_observer
         store = getattr(observer, "store", None) if observer is not None else None
         db_path = getattr(store, "db_path", None)
-        results_dir = work_dir / "results"
+        results_dir = TaskStorage(work_dir).result_dir()
         if db_path is None or not results_dir.exists():
             return
 
@@ -1558,13 +1695,19 @@ class JobRunner:
 
         Makes ``total_gibbs_kcal_mol`` (and friends) available to the
         workbench info panel without re-parsing the workflow output files.
-        The shallowest ``finalDFT/ensemble_thermo.json`` wins (single-mol
-        jobs nest one level under ``work_dir``).
+        The canonical ``RESULT/energies/ensemble_thermo.json`` is preferred;
+        historical ``finalDFT/ensemble_thermo.json`` is accepted as a
+        read-only fallback (single-mol jobs nest one level under ``work_dir``).
         """
-        candidates = sorted(
+        canonical = sorted(
+            work_dir.rglob("RESULT/energies/ensemble_thermo.json"),
+            key=lambda p: len(p.parts),
+        )
+        legacy = sorted(
             work_dir.rglob("finalDFT/ensemble_thermo.json"),
             key=lambda p: len(p.parts),
         )
+        candidates = canonical or legacy
         if not candidates:
             return
         try:
@@ -1631,5 +1774,4 @@ __all__ = [
     "JobRunnerRemoteProtocol",
     "find_workflow_state",
     "materialize_job_input",
-    "populate_mechanism_study_result_metadata",
 ]

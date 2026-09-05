@@ -1,0 +1,37 @@
+=== 44-happy.txt: Generic PES candidate discovery in structure sources ===
+Date: 2026-08-28 | Branch: refactor/calc-cleanup
+
+=== COMMAND ===
+python -m pytest tests/test_acp_structure_sources.py::test_pessearch_new_manifest_candidates tests/test_acp_structure_sources.py::test_pessearch_legacy_s2_fallback -q
+=== KEY OUTPUT ===
+2 passed in 0.99s
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+python -m pytest tests/test_acp_structure_sources.py -q
+=== KEY OUTPUT ===
+32 passed in 4.83s
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+ruff check src/acp/scheduler/structure_sources.py tests/test_acp_structure_sources.py
+=== KEY OUTPUT ===
+All checks passed!
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+ruff format --check src/acp/scheduler/structure_sources.py tests/test_acp_structure_sources.py
+=== KEY OUTPUT ===
+2 files already formatted
+=== EXIT CODE ===
+0
+
+=== SUMMARY ===
+Generic PES candidate discovery: new manifest with RESULT/structures/ + TAG metadata
++ candidate_id → 2 candidates discovered (TS + INT). Legacy s2_candidate naming →
+fallback path works, 2 candidates discovered. All 32 structure_sources tests green.
+Ruff clean on changed files. Total tree ruff: 639 (2 fewer than 641 pre-change baseline).
+Zero new violations introduced.

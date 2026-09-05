@@ -1,0 +1,28 @@
+## 46-fail.txt — RPH provider retirement drill (Wave 8)
+
+### Test execution
+
+`pytest tests/test_acp_confsearch.py::test_rph_provider_retired -q` — PASSED.
+
+The test validates that both `"rph"` and `"rph-parity"` backend values in a
+`ConfsearchRequest` raise `ValueError` containing the string "RPH 已退役".
+This confirms the RPH branch is fully removed and the retirement guard fires
+at config-parsing time (before any protocol execution or mechanism import).
+
+### Drill procedure (Q3 template)
+
+1. Identify: `provider_backend='rph'` config → `ValueError("RPH 已退役…")`
+2. Reproduce: `pytest tests/test_acp_confsearch.py::test_rph_provider_retired -v`
+3. Root cause: `validate_request()` in `contracts.py` checks
+   `request.backend in ("rph-parity", "rph")` before the unknown-backend
+   guard, raising the retirement ValueError
+4. Fix verification: both `backend="rph"` and `backend="rph-parity"` produce
+   the same error; `backend="native"` passes through normally
+5. Zero mechanism references: the test file imports only from
+   `acp.confsearch` — no `acp.mechanism` symbols
+
+### Evidence
+
+- Error message: "RPH 已退役（2026-08 重构）：请使用 NATIVE provider"
+- Test covers both legacy backend names: `rph-parity` and `rph`
+- No lazy/conditional imports of `RPHEnsembleProvider` remain in confsearch/

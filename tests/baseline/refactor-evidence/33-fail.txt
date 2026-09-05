@@ -1,0 +1,15 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.12, pytest-8.3.4, pluggy-1.6.0 -- /root/miniforge3/bin/python
+cachedir: .pytest_cache
+rootdir: /mnt/e/Calculations/Common_Script/Auto_Calc_Platform/ACP_V1_20260811
+configfile: pyproject.toml
+plugins: mock-3.15.1, anyio-4.12.1, cov-7.1.0
+collecting ... collected 5 items
+
+tests/test_pes_search.py::test_entry_from_job_missing PASSED             [ 20%]
+tests/test_pes_search.py::test_pes_e_manifest_structured_error PASSED    [ 40%]
+tests/test_pes_search.py::test_pes_e_coord_out_of_range PASSED           [ 60%]
+tests/test_pes_search.py::test_pes_e_strategy_unknown PASSED             [ 80%]
+tests/test_pes_search.py::test_entry_with_reaction_invalid PASSED        [100%]
+
+============================== 5 passed in 0.50s ===============================

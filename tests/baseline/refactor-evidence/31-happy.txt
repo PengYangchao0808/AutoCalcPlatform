@@ -1,0 +1,19 @@
+COMMAND: python -m pytest tests/test_pes_search.py -q
+KEY OUTPUT:
+..................                                                       [100%]
+18 passed in 0.68s
+EXIT CODE: 0
+
+COMMAND: python - <<'PY'
+from acp.calculations.batch.singlepoint import BatchSinglePointExecutor
+print(BatchSinglePointExecutor.__name__)
+PY
+KEY OUTPUT:
+BatchSinglePointExecutor
+EXIT CODE: 0
+
+COMMAND: ruff check src/acp/calculations/pes/scan.py src/acp/calculations/batch/singlepoint.py src/acp/calculations/batch/_singlepoint_execution.py src/acp/calculations/batch/_singlepoint_frames.py src/acp/calculations/batch/_singlepoint_models.py tests/test_pes_search.py && ruff format --check src/acp/calculations/pes/scan.py src/acp/calculations/batch/singlepoint.py src/acp/calculations/batch/_singlepoint_execution.py src/acp/calculations/batch/_singlepoint_frames.py src/acp/calculations/batch/_singlepoint_models.py tests/test_pes_search.py
+KEY OUTPUT:
+All checks passed!
+6 files already formatted
+EXIT CODE: 0

@@ -16,8 +16,10 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
 from acp import __version__
+from acp.api.mechanism_readonly import router as mechanism_readonly_router
 from acp.api.routes import router as api_router
 from acp.api.v1_routes import router as v1_router
+from acp.api.v2_routes import router as v2_router
 
 _FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent.parent / "frontend"
 
@@ -142,16 +144,21 @@ def create_app(
     ``ACP_POLL_INTERVAL`` env vars (set by ``acp run serve``) so the
     configuration survives uvicorn's module re-import under ``--reload``.
     """
+    from acp.core.paths import check_run_root_safety, resolve_run_root
     from acp.scheduler.manager import JobManager
 
-    run_root_path = Path(run_root or os.environ.get("ACP_RUN_ROOT", "./ACP_runs")).resolve()
+    run_root_path = resolve_run_root(run_root or os.environ.get("ACP_RUN_ROOT"))
     eff_host = host or os.environ.get("ACP_HOST", "127.0.0.1")
     eff_port = int(port if port is not None else os.environ.get("ACP_PORT", "8765"))
     max_running_env = os.environ.get("ACP_MAX_RUNNING", "1")
     eff_max = int(max_running if max_running is not None else max_running_env)
-    poll_interval_env = os.environ.get("ACP_POLL_INTERVAL", "15")
+    poll_interval_env = os.environ.get("ACP_POLL_INTERVAL", "5")
     eff_poll = int(poll_interval if poll_interval is not None else poll_interval_env)
     run_root_path.mkdir(parents=True, exist_ok=True)
+    for safety_message in check_run_root_safety(run_root_path):
+        import logging
+
+        logging.getLogger(__name__).warning("run_root safety: %s", safety_message)
 
     remote_config = _load_remote_config()
     _apply_execution_mode_override(remote_config)
@@ -189,6 +196,8 @@ def create_app(
     )
 
     app.include_router(v1_router, prefix="/api/v1")
+    app.include_router(mechanism_readonly_router, prefix="/api/v1")
+    app.include_router(v2_router, prefix="/api/v2")
     app.include_router(api_router, prefix="/api")
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)

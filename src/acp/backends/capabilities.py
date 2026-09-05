@@ -85,7 +85,7 @@ CAPABILITY_MATRIX: dict[str, dict[str, BackendCapabilityStatus]] = {
         "thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "mrrho_thermochemistry": BackendCapabilityStatus.NOT_IMPLEMENTED,
         "nmr_shielding": BackendCapabilityStatus.AVAILABLE,
-        "relaxed_scan": BackendCapabilityStatus.NOT_IMPLEMENTED,
+        "relaxed_scan": BackendCapabilityStatus.AVAILABLE,
         "transition_state": BackendCapabilityStatus.AVAILABLE,
         "irc": BackendCapabilityStatus.AVAILABLE,
     },

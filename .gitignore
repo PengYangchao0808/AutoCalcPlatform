@@ -32,6 +32,9 @@ Thumbs.db
 # --- Sisyphus tool data (keep locally, skip in repo) ---
 .sisyphus/
 
+# --- OMO tool data ---
+.omo/
+
 # --- Local run outputs ---
 ACP_runs/
 conformer_output/
@@ -59,6 +62,7 @@ coord.original
 *.out
 *.chk
 scratch/
-results/
+/results/
 output/
+irc_output/
 uploads/

@@ -1,0 +1,12 @@
+Todo 49 — cccp ORCA opt_freq deletion (D6 closure): QA Failure Drill
+
+Temporarily injected a stub `def opt_freq(self, *a, **k): raise NotImplementedError` into
+ORCAInterface in orca.py (L1675). Ran the wave8_optfreq_all gate on src/cccp.
+
+Gate wave8_optfreq_all on src/cccp: exit 1 (BLOCKING).
+BLOCKING finding: src/cccp/qc/interfaces/orca.py:1675: def opt_freq(self, *a, **k)
+ALLOWED findings: 0.
+This confirms the gate correctly detects any opt_freq re-introduction in the cccp layer.
+
+Stub removed after verification. The gate provides zero-tolerance enforcement against
+opt_freq/optfreq/optfreqsp re-introduction in src/cccp/.

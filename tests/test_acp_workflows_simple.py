@@ -1,8 +1,9 @@
-"""Tests for simple ORCA workflows (singlepoint/optimize/frequency/optfreq/optfreqsp).
+"""Tests for simple ORCA workflows (singlepoint/optimize/frequency/xtb_optimize).
 
 Covers: catalog validation, input parsing, ensure_unique_dir, mocked workflow
-execution for all 5 entry points, CLI help smoke tests, and optfreqsp data flow.
+execution for supported entry points, and CLI help smoke tests.
 """
+
 # pyright: reportUnknownVariableType=false,reportUnknownMemberType=false
 from __future__ import annotations
 
@@ -10,13 +11,16 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from typing import Any, TypedDict
 
 import numpy as np
 import pytest
+from numpy.typing import NDArray
+from typing_extensions import Unpack
 
 from acp.backends.base import QCResult
-from acp.catalog import FIELD_DEFINITIONS, METHOD_SCHEMAS, WORKFLOW_CATALOG
+from acp.calculations.progress import ProgressReporter
+from acp.catalog import METHOD_SCHEMAS, WORKFLOW_CATALOG
 from acp.core.utils import ensure_unique_dir
 from acp.workflows.simple import (
     _check_input,
@@ -27,8 +31,6 @@ from acp.workflows.simple import (
     _write_optimized_xyz,
     _write_thermo_json,
     run_frequency,
-    run_optfreq,
-    run_optfreqsp,
     run_optimize,
     run_singlepoint,
     run_xtb_optimize,
@@ -38,7 +40,7 @@ from acp.workflows.simple import (
 # catalog validation
 # ---------------------------------------------------------------------------
 
-_SIMPLE_IDS = {"singlepoint", "optimize", "frequency", "optfreq", "optfreqsp", "xtb_optimize"}
+_SIMPLE_IDS = {"singlepoint", "optimize", "frequency", "xtb_optimize"}
 
 
 def test_all_simple_workflows_in_catalog_and_active():
@@ -49,18 +51,6 @@ def test_all_simple_workflows_in_catalog_and_active():
     for wid in _SIMPLE_IDS:
         assert wid in found, f"Missing catalog entry for {wid}"
         assert found[wid] == "active", f"{wid} status={found[wid]}, expected active"
-
-
-def test_dft_optfreqsp_schema_has_three_levels():
-    schema = METHOD_SCHEMAS["dft_optfreqsp"]
-    level_ids = {lv["level_id"] for lv in schema["method_levels"]}
-    assert level_ids == {"optfreq", "single_point", "thermo"}
-
-
-def test_dft_optfreqsp_schema_has_default_profile():
-    schema = METHOD_SCHEMAS["dft_optfreqsp"]
-    profiles = schema["profiles"]
-    assert any(p["profile_id"] == "default" for p in profiles)
 
 
 def test_schema_level_id_naming_consistent():
@@ -75,8 +65,6 @@ _SIMPLE_SCHEMAS = [
     "dft_singlepoint",
     "dft_optimize",
     "dft_frequency",
-    "dft_optfreq",
-    "dft_optfreqsp",
 ]
 
 
@@ -94,6 +82,7 @@ def test_simple_schemas_exist_and_have_fields(schema_id):
 # ---------------------------------------------------------------------------
 # ensure_unique_dir
 # ---------------------------------------------------------------------------
+
 
 def test_ensure_unique_dir_creates_new_dir(tmp_path):
     d = ensure_unique_dir(tmp_path / "new_dir")
@@ -121,18 +110,15 @@ def test_ensure_unique_dir_increments_counter(tmp_path):
 # _resolve_output_dir
 # ---------------------------------------------------------------------------
 
-_SCHEDULER_PRE_CREATED = ["inputs", "work", "results"]
-_SCHEDULER_JOB_FILES = ["events.jsonl", "job.json", "stdout.log", "stderr.log"]
+_SCHEDULER_JOB_FILES = ["events.jsonl", "job.json", "task.json", "stdout.log", "stderr.log"]
 
 
 def _make_scheduler_dir(root: Path, name: str) -> Path:
-    """Create a directory pre-populated with scheduler artifacts (dirs + job
-    metadata files), mirroring what the runner/manager create before the
-    workflow subprocess starts."""
+    """Create a directory pre-populated with scheduler job metadata files,
+    mirroring what the runner/manager create before the workflow subprocess
+    starts."""
     d = root / name
     d.mkdir()
-    for sub in _SCHEDULER_PRE_CREATED:
-        (d / sub).mkdir()
     for fname in _SCHEDULER_JOB_FILES:
         (d / fname).write_text("placeholder")
     return d
@@ -155,8 +141,64 @@ def test_resolve_output_dir_redirects_when_extra_file_present(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# resolve_task_output_root / scheduler task-dir flattening
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_task_output_root(tmp_path):
+    from acp.workflows._helpers import resolve_task_output_root
+
+    # Scheduler task dir (job.json + task.json) → write flat at the root.
+    sched = _make_scheduler_dir(tmp_path, "task_dir")
+    assert resolve_task_output_root(sched, "mol") == sched
+    # Only one marker file → not a scheduler task dir → nested.
+    partial = tmp_path / "partial"
+    partial.mkdir()
+    (partial / "job.json").write_text("placeholder")
+    assert resolve_task_output_root(partial, "mol") == partial / "mol"
+    # Plain dir → nested.
+    plain = tmp_path / "plain"
+    plain.mkdir()
+    assert resolve_task_output_root(plain, "mol") == plain / "mol"
+    # Empty dir → nested.
+    empty = tmp_path / "empty"
+    assert resolve_task_output_root(empty, "mol") == empty / "mol"
+
+
+def test_scheduler_dir_flat_layout(fake_backend, tmp_path):
+    """Inside a scheduler task dir (job.json + task.json) the workflow must
+    write directly at the task root — no ``{safe_name}`` subdir."""
+    inp = tmp_path / "mol.xyz"
+    inp.write_text("1\n\nC 0 0 0\n")
+    out = _make_scheduler_dir(tmp_path, "task_root")
+
+    result = run_singlepoint(str(inp), output_dir=out)
+
+    assert result.status == "completed"
+    assert Path(result.metadata["output_dir"]) == out
+    assert (out / "WORK" / "00_RUNTIME" / "checkpoint.json").is_file()
+    assert (out / "RESULT" / "result_manifest.json").is_file()
+    assert not (out / "result_summary.json").exists()
+    assert not (out / "mol").exists()
+
+
+def test_run_optimize_manifest_only(fake_backend, tmp_path):
+    inp = tmp_path / "mol.xyz"
+    inp.write_text("1\n\nC 0 0 0\n")
+    out = tmp_path / "opt_out"
+
+    result = run_optimize(str(inp), output_dir=out)
+
+    calc_dir = Path(result.metadata["output_dir"])
+    assert result.status == "completed"
+    assert (calc_dir / "RESULT" / "result_manifest.json").is_file()
+    assert not (calc_dir / "result_summary.json").exists()
+
+
+# ---------------------------------------------------------------------------
 # input parsing
 # ---------------------------------------------------------------------------
+
 
 def test_check_input_rejects_smiles(tmp_path):
     smi = tmp_path / "mol.smi"
@@ -246,111 +288,244 @@ def test_write_thermo_json_empty(tmp_path):
     assert data["free_energy_hartree"] == 0.0
 
 
+def test_write_result_summary_role_passthrough(tmp_path):
+    from acp.workflows._helpers import write_result_summary
+
+    summary_path = write_result_summary(
+        tmp_path,
+        workflow="test",
+        products=[
+            {"label": "A", "path": "a.xyz", "kind": "xyz", "role": "final_stable_structure"},
+            {"label": "B", "path": "b.json", "kind": "report"},
+            {"label": "C", "path": "c.json", "kind": "report", "role": ""},
+        ],
+    )
+    assert summary_path is not None
+    raw = summary_path.read_text()
+    data = json.loads(raw)
+    assert data["version"] == 1
+    assert data["products"][0] == {
+        "label": "A",
+        "path": "a.xyz",
+        "kind": "xyz",
+        "role": "final_stable_structure",
+    }
+    assert data["products"][1] == {"label": "B", "path": "b.json", "kind": "report"}
+    assert data["products"][2] == {"label": "C", "path": "c.json", "kind": "report"}
+    assert '"role": null' not in raw
+
+
 # ---------------------------------------------------------------------------
-# mock helpers
 # ---------------------------------------------------------------------------
 
-def _fake_qc_result(**overrides):
-    defaults = {"success": True, "energy": -76.42, "coordinates": None, "symbols": None,
-                "converged": True, "frequencies": None, "has_frequencies": False,
-                "log_file": Path("/tmp/fake.out"), "error_message": None}
+
+class _QCResultFields(TypedDict, total=False):
+    success: bool
+    energy: float | None
+    coordinates: NDArray[np.float64] | None
+    symbols: list[str] | None
+    converged: bool
+    output_file: Path | None
+    log_file: Path | None
+    freq_log_file: Path | None
+    error_message: str | None
+    frequencies: list[float] | None
+    has_frequencies: bool
+    zpe: float | None
+    enthalpy: float | None
+    gibbs: float | None
+    entropy: float | None
+
+
+def _fake_qc_result(**overrides: Unpack[_QCResultFields]) -> QCResult:
+    defaults: _QCResultFields = {
+        "success": True,
+        "energy": -76.42,
+        "coordinates": None,
+        "symbols": None,
+        "converged": True,
+        "frequencies": None,
+        "has_frequencies": False,
+        "log_file": Path("/tmp/fake.out"),
+        "error_message": None,
+    }
     defaults.update(overrides)
     return QCResult(**defaults)
 
 
-def _mock_backend_method(name, return_value):
-    """Patch ORCABackend's named method to return return_value."""
-    return patch.object(
-        type("Dummy", (), {}), "x", side_effect=None, autospec=False
-    )
-
-
-# ---------------------------------------------------------------------------
-# singlepoint
-# ---------------------------------------------------------------------------
-
-def test_run_singlepoint_mock(tmp_path):
+def test_run_singlepoint_mock(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "sp_out"
 
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        mk_backend.return_value.single_point.return_value = _fake_qc_result(energy=-40.0)
-        result = run_singlepoint(str(inp), output_dir=out)
-        mk_backend.return_value.single_point.assert_called_once()
-        assert result.status == "completed"
-        assert result.metadata.get("energy") == -40.0
+    fake_backend.set_result("single_point", energy=-40.0, success=True)
+    result = run_singlepoint(str(inp), output_dir=out)
+    assert result.status == "completed"
+    assert result.metadata.get("sp_energy") == -40.0
+    assert len(fake_backend.calls) == 1
 
 
-def test_run_singlepoint_failure(tmp_path):
+def test_run_singlepoint_failure(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "sp_out"
 
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        mk_backend.return_value.single_point.return_value = _fake_qc_result(success=False, error_message="ORCA error")
-        result = run_singlepoint(str(inp), output_dir=out)
-        assert result.status == "failed"
+    fake_backend.set_result("single_point", success=False, error_message="ORCA error")
+    result = run_singlepoint(str(inp), output_dir=out)
+    assert result.status == "failed"
+    assert "ORCA error" in (result.error or "")
 
 
 # ---------------------------------------------------------------------------
 # optimize
 # ---------------------------------------------------------------------------
 
-def test_run_optimize_mock(tmp_path):
+
+def test_run_optimize_mock(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "opt_out"
 
     coords = np.array([[0.0, 0.0, 0.0]])
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        mk_backend.return_value.optimize.return_value = _fake_qc_result(
-            coordinates=coords, symbols=["C"], converged=True,
-        )
-        result = run_optimize(str(inp), output_dir=out)
-        mk_backend.return_value.optimize.assert_called_once()
-        assert result.status == "completed"
-        assert result.metadata.get("converged") is True
+    fake_backend.set_result(
+        "optimize", coordinates=coords, symbols=["C"], converged=True, success=True
+    )
+    result = run_optimize(str(inp), output_dir=out)
+    assert result.status == "completed"
+    assert result.metadata.get("converged") is True
+    assert len(fake_backend.calls) == 1
 
 
-def test_run_optimize_failure(tmp_path):
+def test_run_optimize_reports_stage_lifecycle(fake_backend, tmp_path: Path) -> None:
+    input_path = tmp_path / "mol.xyz"
+    input_path.write_text("1\nmol\nC 0.0 0.0 0.0\n", encoding="utf-8")
+    transitions: list[tuple[str, str]] = []
+
+    class RecordingReporter(ProgressReporter):
+        def start_stage(self, name: str) -> None:
+            super().start_stage(name)
+            state = json.loads((self._work_dir / "state.json").read_text(encoding="utf-8"))
+            transitions.append(("start", state["stages"][name]["status"]))
+
+        def complete_stage(self, name: str, result: dict[str, Any] | None = None) -> None:
+            super().complete_stage(name, result)
+            state = json.loads((self._work_dir / "state.json").read_text(encoding="utf-8"))
+            transitions.append(("complete", state["stages"][name]["status"]))
+
+    reporter = RecordingReporter(tmp_path / "progress", stages=["optimize"], min_interval=0.0)
+    fake_backend.set_result(
+        "optimize",
+        coordinates=np.array([[0.0, 0.0, 0.0]]),
+        symbols=["C"],
+        converged=True,
+        success=True,
+    )
+
+    result = run_optimize(
+        str(input_path),
+        output_dir=tmp_path / "output",
+        progress_reporter=reporter,
+    )
+
+    assert result.status == "completed"
+    assert transitions == [("start", "running"), ("complete", "completed")]
+    state = json.loads((tmp_path / "progress" / "state.json").read_text(encoding="utf-8"))
+    assert state["current_stage"] is None
+    assert state["stages"]["optimize"]["status"] == "completed"
+
+
+def test_run_optimize_without_reporter_preserves_direct_failure(
+    fake_backend, tmp_path: Path
+) -> None:
+    input_path = tmp_path / "mol.xyz"
+    input_path.write_text("1\nmol\nC 0.0 0.0 0.0\n", encoding="utf-8")
+    fake_backend.set_results(
+        "optimize", [_fake_qc_result(success=False, error_message="No convergence")] * 8
+    )
+
+    result = run_optimize(str(input_path), output_dir=tmp_path / "output")
+
+    assert result.status == "failed"
+    assert "No convergence" in (result.error or "")
+    assert not (tmp_path / "output" / "state.json").exists()
+
+
+def test_simple_optimize_threads_reporter_to_orca_trajectory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    input_path = tmp_path / "mol.xyz"
+    input_path.write_text("1\nmol\nC 0.0 0.0 0.0\n", encoding="utf-8")
+
+    class SyntheticOrca:
+        def optimize(self, coordinates, symbols, **kwargs) -> QCResult:
+            output_callback = kwargs["output_callback"]
+            output_callback("CYCLE 7")
+            output_callback("FINAL SINGLE POINT ENERGY -1.000000")
+            return QCResult(
+                success=True,
+                energy=-1.0,
+                coordinates=np.asarray(coordinates, dtype=float),
+                symbols=list(symbols),
+                converged=True,
+            )
+
+    monkeypatch.setattr("acp.backends.get_backend", lambda _name: SyntheticOrca())
+    reporter = ProgressReporter(tmp_path / "progress", min_interval=60.0)
+
+    result = run_optimize(
+        str(input_path),
+        output_dir=tmp_path / "output",
+        progress_reporter=reporter,
+    )
+
+    assert result.status == "completed"
+    state = json.loads((tmp_path / "progress" / "state.json").read_text(encoding="utf-8"))
+    assert {metric["key"]: metric["value"] for metric in state["live_metrics"]} == {
+        "opt_step": "Step 7",
+        "opt_convergence": "converged",
+    }
+
+
+def test_run_optimize_failure(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "opt_out"
 
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        mk_backend.return_value.optimize.return_value = _fake_qc_result(success=False, error_message="No convergence")
-        result = run_optimize(str(inp), output_dir=out)
-        assert result.status == "failed"
+    fake_backend.set_results(
+        "optimize", [_fake_qc_result(success=False, error_message="No convergence")] * 8
+    )
+    result = run_optimize(str(inp), output_dir=out)
+    assert result.status == "failed"
 
 
 # ---------------------------------------------------------------------------
 # xtb_optimize
 # ---------------------------------------------------------------------------
 
-def test_run_xtb_optimize_mock(tmp_path):
+
+def test_run_xtb_optimize_mock(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "xtb_out"
 
     coords = np.array([[0.0, 0.0, 0.0]])
-    with patch("acp.workflows.simple._build_xtb_backend") as mk_backend:
-        mk_backend.return_value.optimize.return_value = _fake_qc_result(
-            coordinates=coords, symbols=["C"], converged=True, energy=-10.5,
-        )
-        result = run_xtb_optimize(
-            str(inp), output_dir=out,
-            method_kwargs={"gfn": "GFN2-xTB", "opt_level": "tight"},
-        )
-        mk_backend.return_value.optimize.assert_called_once()
-        assert result.status == "completed"
-        assert result.metadata.get("converged") is True
-        assert result.metadata.get("energy") == -10.5
+    fake_backend.set_result(
+        "optimize", coordinates=coords, symbols=["C"], converged=True, energy=-10.5, success=True
+    )
+    result = run_xtb_optimize(
+        str(inp),
+        output_dir=out,
+        method_kwargs={"gfn": "GFN2-xTB", "opt_level": "tight"},
+    )
+    assert result.status == "completed"
+    assert result.metadata.get("converged") is True
+    assert result.metadata.get("energy") == -10.5
 
 
 def test_run_xtb_optimize_gfn_mapping(tmp_path):
     """Catalog sends display names like 'GFN2-xTB'; workflow maps to int."""
     from acp.workflows.simple import _normalize_gfn
+
     assert _normalize_gfn("GFN2-xTB") == 2
     assert _normalize_gfn("GFN0-xTB") == 0
     assert _normalize_gfn("2") == 2
@@ -358,19 +533,21 @@ def test_run_xtb_optimize_gfn_mapping(tmp_path):
     assert _normalize_gfn(None) is None
 
 
-def test_run_xtb_optimize_failure(tmp_path):
+def test_run_xtb_optimize_failure(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "xtb_out"
 
-    with patch("acp.workflows.simple._build_xtb_backend") as mk_backend:
-        mk_backend.return_value.optimize.return_value = _fake_qc_result(success=False, error_message="xTB crashed")
-        result = run_xtb_optimize(str(inp), output_dir=out)
-        assert result.status == "failed"
+    fake_backend.set_results(
+        "optimize", [_fake_qc_result(success=False, error_message="xTB crashed")] * 8
+    )
+    result = run_xtb_optimize(str(inp), output_dir=out)
+    assert result.status == "failed"
 
 
 def test_xtb_optimize_in_catalog_and_registry():
     from acp.workflows.registry import get_workflow_entry
+
     entry = get_workflow_entry("xtb_optimize")
     assert entry is not None
     assert "xtb" in entry.requires_binaries
@@ -380,305 +557,108 @@ def test_xtb_optimize_in_catalog_and_registry():
 # frequency
 # ---------------------------------------------------------------------------
 
-def test_run_frequency_mock(tmp_path):
+
+def test_run_frequency_mock(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "freq_out"
 
     freqs = [100.0, 200.0, 3500.0]
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        mk_backend.return_value.frequency.return_value = _fake_qc_result(
-            frequencies=freqs, has_frequencies=True,
-        )
-        result = run_frequency(str(inp), output_dir=out)
-        mk_backend.return_value.frequency.assert_called_once()
-        assert result.status == "completed"
-        assert result.metadata.get("n_frequencies") == 3
-        assert result.metadata.get("has_frequencies") is True
+    fake_backend.set_result("frequency", frequencies=freqs, has_frequencies=True, success=True)
+    result = run_frequency(str(inp), output_dir=out)
+    assert result.status == "completed"
+    assert result.metadata.get("n_frequencies") == 3
+    assert result.metadata.get("has_frequencies") is True
 
 
-def test_run_frequency_no_modes(tmp_path):
+def test_run_frequency_no_modes(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "freq_out"
 
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        mk_backend.return_value.frequency.return_value = _fake_qc_result(has_frequencies=False)
-        result = run_frequency(str(inp), output_dir=out)
-        assert result.status == "completed"
-        assert result.metadata.get("n_frequencies") == 0
+    fake_backend.set_result("frequency", has_frequencies=False, success=True)
+    result = run_frequency(str(inp), output_dir=out)
+    assert result.status == "completed"
+    assert result.metadata.get("n_frequencies") == 0
 
 
-# ---------------------------------------------------------------------------
-# optfreq
-# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("workflow", "handler", "stage"),
+    [
+        ("singlepoint", "_handle_singlepoint", "single_point"),
+        ("optimize", "_handle_optimize", "optimize"),
+        ("frequency", "_handle_frequency", "frequency"),
+        ("xtb_optimize", "_handle_xtb_optimize", "xtb_optimize"),
+    ],
+)
+def test_simple_cli_handlers_construct_reporter(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    workflow: str,
+    handler: str,
+    stage: str,
+) -> None:
+    import acp.cli as acp_cli
+    import acp.workflows.simple as simple_workflow
+    from acp.core.workflow import WorkflowResult
 
-def test_run_optfreq_mock(tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "optfreq_out"
-
-    coords = np.array([[0.1, 0.0, 0.0]])
-    freqs = [500.0, 1600.0]
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        mk_backend.return_value.opt_freq.return_value = _fake_qc_result(
-            coordinates=coords, symbols=["C"], frequencies=freqs, has_frequencies=True, converged=True,
-        )
-        result = run_optfreq(str(inp), output_dir=out)
-        mk_backend.return_value.opt_freq.assert_called_once()
-        assert result.status == "completed"
-        assert result.metadata.get("n_frequencies") == 2
-
-
-def test_run_optfreq_failure(tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "optfreq_out"
-
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        mk_backend.return_value.opt_freq.return_value = _fake_qc_result(success=False, error_message="Opt Freq failed")
-        result = run_optfreq(str(inp), output_dir=out)
-        assert result.status == "failed"
-
-
-# ---------------------------------------------------------------------------
-# optfreqsp
-# ---------------------------------------------------------------------------
-
-def test_run_optfreqsp_mock(tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "optfreqsp_out"
-    log_file = tmp_path / "fake_optfreq.out"
-    log_file.write_text("ORCA log placeholder")
-
-    opt_coords = np.array([[0.1, 0.0, 0.0]])
-    freqs = [500.0, 1600.0]
-
-    with (
-        patch("acp.workflows.simple._find_shermo", return_value=True),
-        patch("acp.workflows.simple._build_backend") as mk_backend,
-        patch("acp.backends.external.run_shermo") as mk_shermo,
-    ):
-        mk_shermo.return_value = {"g_sum": -40.5, "h_sum": -40.4, "u_sum": -40.6, "s_total": 0.0001}
-
-        optfreq_result = _fake_qc_result(
-            coordinates=opt_coords, symbols=["C"], frequencies=freqs, has_frequencies=True, log_file=log_file,
-        )
-        sp_result = _fake_qc_result(energy=-40.0)
-
-        def _se_side_effect(cfg):
-            be = MagicMock()
-            be.opt_freq.return_value = optfreq_result
-            be.single_point.return_value = sp_result
-            return be
-
-        mk_backend.side_effect = _se_side_effect
-
-        from acp.workflows.simple import run_optfreqsp
-        result = run_optfreqsp(str(inp), output_dir=out)
-
-        assert result.status == "completed"
-        assert result.metadata.get("sp_energy") == -40.0
-        assert result.metadata.get("n_frequencies") == 2
-        assert result.metadata.get("thermo_success") is True
-
-        mk_shermo.assert_called_once()
-        call_kwargs = mk_shermo.call_args.kwargs
-        assert "freq_output" in call_kwargs
-        assert "sp_energy" in call_kwargs
-
-
-def test_run_optfreqsp_no_shermo(tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "no_shermo_out"
-
-    with patch("acp.workflows.simple._find_shermo", return_value=False):
-        from acp.workflows.simple import run_optfreqsp
-        result = run_optfreqsp(str(inp), output_dir=out)
-        assert result.status == "failed"
-        assert "Shermo" in (result.error or "")
-
-
-def test_run_optfreqsp_shermo_failure_marks_job_failed(tmp_path):
-    """Shermo producing no output must fail the job (per §5.6), not silently
-    return completed with missing thermochemistry."""
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "shermo_fail_out"
-    log_file = tmp_path / "fake_optfreq.out"
-    log_file.write_text("ORCA log placeholder")
-
-    with (
-        patch("acp.workflows.simple._find_shermo", return_value=True),
-        patch("acp.workflows.simple._build_backend") as mk_backend,
-        patch("acp.backends.external.run_shermo", return_value=None) as mk_shermo,
-    ):
-        optfreq_result = _fake_qc_result(
-            coordinates=np.array([[0.1, 0.0, 0.0]]),
-            symbols=["C"],
-            frequencies=[500.0],
-            has_frequencies=True,
-            log_file=log_file,
-        )
-        sp_result = _fake_qc_result(energy=-40.0)
-
-        def _se_side_effect(cfg):
-            be = MagicMock()
-            be.opt_freq.return_value = optfreq_result
-            be.single_point.return_value = sp_result
-            return be
-
-        mk_backend.side_effect = _se_side_effect
-
-        result = run_optfreqsp(str(inp), output_dir=out)
-
-        assert result.status == "failed"
-        assert "Shermo" in (result.error or "")
-        mk_shermo.assert_called_once()
-
-
-def test_scale_factor_default_consistent_across_sources():
-    """FIELD_DEFINITIONS / optfreqsp profile / simple.py fallback must agree."""
-    from acp.workflows.simple import run_optfreqsp as _run_optfreqsp
-
-    assert FIELD_DEFINITIONS["scale_factor"]["default"]["*"] == 0.9905
-    profile = next(
-        p for p in METHOD_SCHEMAS["dft_optfreqsp"]["profiles"] if p["profile_id"] == "default"
+    input_path = tmp_path / "mol.xyz"
+    input_path.write_text("1\nmol\nC 0.0 0.0 0.0\n", encoding="utf-8")
+    output_dir = tmp_path / f"{workflow}-output"
+    args = acp_cli.build_parser().parse_args(
+        [
+            "run",
+            workflow,
+            "--input",
+            str(input_path),
+            "--output",
+            str(output_dir),
+            "--log-level",
+            "ERROR",
+        ]
     )
-    assert profile["levels"]["thermo"]["scale_factor"] == 0.9905
-    assert _run_optfreqsp.__defaults__ is not None  # entry kept importable
-    import acp.workflows.simple as _simple
+    captured: dict[str, Any] = {}
 
-    assert _simple._DEFAULT_SCALE_FACTOR == 0.9905
+    def fake_run(**kwargs) -> WorkflowResult:
+        captured.update(kwargs)
+        return WorkflowResult(status="completed", metadata={})
 
+    monkeypatch.setattr(simple_workflow, f"run_{workflow}", fake_run)
 
-def test_run_optfreqsp_optfreq_failure(tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "fail_out"
-
-    with (
-        patch("acp.workflows.simple._find_shermo", return_value=True),
-        patch("acp.workflows.simple._build_backend") as mk_backend,
-    ):
-        mk_backend.return_value.opt_freq.return_value = _fake_qc_result(success=False, error_message="Opt+Freq crash")
-
-        from acp.workflows.simple import run_optfreqsp
-        result = run_optfreqsp(str(inp), output_dir=out)
-        assert result.status == "failed"
-        assert "Opt+Freq" in (result.error or "")
-
-        assert mk_backend.call_count >= 1
-        call_args = mk_backend.call_args_list[0][0]
-        assert len(call_args) == 1
+    assert getattr(acp_cli, handler)(args) == 0
+    assert isinstance(captured["progress_reporter"], ProgressReporter)
+    state = json.loads((output_dir / "state.json").read_text(encoding="utf-8"))
+    assert list(state["stages"]) == [stage]
+    assert state["status"] == "completed"
 
 
-def test_run_optfreqsp_sp_failure(tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "sp_fail_out"
+def test_simple_scan_reports_stage_without_point_metric(fake_backend, tmp_path: Path) -> None:
+    import acp.cli as acp_cli
 
-    opt_coords = np.array([[0.1, 0.0, 0.0]])
-    log_file = tmp_path / "f.out"
-    log_file.write_text("ORCA log")
-    with (
-        patch("acp.workflows.simple._find_shermo", return_value=True),
-        patch("acp.workflows.simple._build_backend") as mk_backend,
-    ):
-        optfreq_result = _fake_qc_result(
-            coordinates=opt_coords, symbols=["C"], frequencies=[500.0], has_frequencies=True, log_file=log_file,
-        )
-
-        def _se_side_effect(cfg):
-            be = MagicMock()
-            be.opt_freq.return_value = optfreq_result
-            be.single_point.return_value = _fake_qc_result(success=False, error_message="SP crash")
-            return be
-
-        mk_backend.side_effect = _se_side_effect
-
-        from acp.workflows.simple import run_optfreqsp
-        result = run_optfreqsp(str(inp), output_dir=out)
-        assert result.status == "failed"
-        assert "SP" in (result.error or "")
-
-
-def test_run_optfreqsp_no_log_file(tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "no_log_out"
-
-    opt_coords = np.array([[0.1, 0.0, 0.0]])
-    with (
-        patch("acp.workflows.simple._find_shermo", return_value=True),
-        patch("acp.workflows.simple._build_backend") as mk_backend,
-    ):
-        optfreq_result = _fake_qc_result(
-            coordinates=opt_coords, symbols=["C"], frequencies=[500.0], has_frequencies=True, log_file=None,
-        )
-
-        def _se_side_effect(cfg):
-            be = MagicMock()
-            be.opt_freq.return_value = optfreq_result
-            be.single_point.return_value = _fake_qc_result(energy=-40.0)
-            return be
-
-        mk_backend.side_effect = _se_side_effect
-
-        from acp.workflows.simple import run_optfreqsp
-        result = run_optfreqsp(str(inp), output_dir=out)
-        assert result.status == "failed"
-        assert "log file" in (result.error or "").lower()
-
-
-def test_run_optfreqsp_sp_energy_none(tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "no_sp_en_out"
-
-    opt_coords = np.array([[0.1, 0.0, 0.0]])
-    log_file = tmp_path / "spen_f.out"
-    log_file.write_text("ORCA log")
-    with (
-        patch("acp.workflows.simple._find_shermo", return_value=True),
-        patch("acp.workflows.simple._build_backend") as mk_backend,
-    ):
-        optfreq_result = _fake_qc_result(
-            coordinates=opt_coords, symbols=["C"], frequencies=[500.0], has_frequencies=True, log_file=log_file,
-        )
-
-        def _se_side_effect(cfg):
-            be = MagicMock()
-            be.opt_freq.return_value = optfreq_result
-            be.single_point.return_value = _fake_qc_result(energy=None)
-            return be
-
-        mk_backend.side_effect = _se_side_effect
-
-        from acp.workflows.simple import run_optfreqsp
-        result = run_optfreqsp(str(inp), output_dir=out)
-        assert result.status == "failed"
-        assert "no energy" in (result.error or "").lower()
-
-
-# ---------------------------------------------------------------------------
-# QCResult field verification
-# ---------------------------------------------------------------------------
-
-def test_optfreq_qcresult_fields_from_mock():
-    """Verify opt_freq returns QCResult with coordinates+frequencies+has_frequencies=True."""
-    fake = _fake_qc_result(
-        coordinates=np.array([[0.0, 0.0, 0.0]]),
-        symbols=["C"],
-        frequencies=[500.0],
-        has_frequencies=True,
+    input_path = tmp_path / "mol.xyz"
+    input_path.write_text("2\nmol\nH 0.0 0.0 0.0\nH 0.0 0.0 1.0\n", encoding="utf-8")
+    output_dir = tmp_path / "scan-output"
+    args = acp_cli.build_parser().parse_args(
+        [
+            "run",
+            "scan",
+            "--input",
+            str(input_path),
+            "--coordinate",
+            "0,1,1.0,1.5",
+            "--scan-points",
+            "3",
+            "--output",
+            str(output_dir),
+            "--log-level",
+            "ERROR",
+        ]
     )
-    assert fake.has_frequencies is True
-    assert fake.frequencies == [500.0]
-    assert fake.coordinates is not None
-    assert fake.coordinates.shape == (1, 3)
+
+    assert acp_cli._handle_scan(args) == 0
+    state = json.loads((output_dir / "state.json").read_text(encoding="utf-8"))
+    assert state["stages"]["scan"]["status"] == "completed"
+    assert "live_metrics" not in state
 
 
 # ---------------------------------------------------------------------------
@@ -689,8 +669,6 @@ _SIMPLE_WF = [
     ("singlepoint", "--method"),
     ("optimize", "--geom-maxiter"),
     ("frequency", "--solvent-model"),
-    ("optfreq", "--calc-hess"),
-    ("optfreqsp", "--sp-method"),
 ]
 
 
@@ -698,7 +676,8 @@ _SIMPLE_WF = [
 def test_cli_help_contains_expected_flags(wf_name, expected_flag):
     result = subprocess.run(
         [sys.executable, "-m", "acp.cli", "run", wf_name, "--help"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     assert result.returncode == 0, f"stderr: {result.stderr}"
     assert expected_flag in result.stdout, f"Expected '{expected_flag}' in help for {wf_name}"
@@ -707,7 +686,8 @@ def test_cli_help_contains_expected_flags(wf_name, expected_flag):
 def test_cli_singlepoint_help_common_args():
     result = subprocess.run(
         [sys.executable, "-m", "acp.cli", "run", "singlepoint", "--help"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     assert result.returncode == 0
     assert "--input" in result.stdout
@@ -717,105 +697,13 @@ def test_cli_singlepoint_help_common_args():
     assert "--mem" in result.stdout
 
 
-def test_cli_optfreqsp_has_sp_args():
-    result = subprocess.run(
-        [sys.executable, "-m", "acp.cli", "run", "optfreqsp", "--help"],
-        capture_output=True, text=True,
-    )
-    assert result.returncode == 0
-    assert "--sp-method" in result.stdout
-    assert "--sp-basis" in result.stdout
-    assert "--sp-aux-j-basis" in result.stdout
-    assert "--sp-aux-c-basis" in result.stdout
-    assert "--sp-ri-approximation" in result.stdout
-
-
-# ---------------------------------------------------------------------------
-# optfreqsp data flow: opt_coords → SP, opt_log → Shermo
-# ---------------------------------------------------------------------------
-
-def test_optfreqsp_data_flow_passes_opt_coords_to_sp(tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "dataflow_out"
-
-    opt_coords = np.array([[0.1, 0.2, 0.3]])
-    instances: list[MagicMock] = []
-    log_file = tmp_path / "df.out"
-    log_file.write_text("ORCA log")
-
-    with (
-        patch("acp.workflows.simple._find_shermo", return_value=True),
-        patch("acp.workflows.simple._build_backend") as mk_backend,
-        patch("acp.backends.external.run_shermo") as mk_shermo,
-    ):
-        mk_shermo.return_value = {"g_sum": -40.5}
-
-        def _se_side_effect(cfg):
-            be = MagicMock()
-            instances.append(be)
-            be.opt_freq.return_value = _fake_qc_result(
-                coordinates=opt_coords, symbols=["C"], frequencies=[500.0], has_frequencies=True, log_file=log_file,
-            )
-            be.single_point.return_value = _fake_qc_result(energy=-40.0)
-            return be
-
-        mk_backend.side_effect = _se_side_effect
-
-        from acp.workflows.simple import run_optfreqsp
-        result = run_optfreqsp(str(inp), output_dir=out)
-        assert result.status == "completed"
-
-        sp_mock = instances[1]
-        sp_call_coords = sp_mock.single_point.call_args[0][0]
-        np.testing.assert_array_equal(sp_call_coords, opt_coords)
-
-
-def test_optfreqsp_data_flow_passes_log_file_to_shermo(tmp_path):
-    inp = tmp_path / "mol.xyz"
-    inp.write_text("1\n\nC 0 0 0\n")
-    out = tmp_path / "logflow_out"
-
-    fake_log = tmp_path / "optfreq_test_log.out"
-    fake_log.write_text("ORCA log placeholder")
-
-    with (
-        patch("acp.workflows.simple._find_shermo", return_value=True),
-        patch("acp.workflows.simple._build_backend") as mk_backend,
-        patch("acp.backends.external.run_shermo") as mk_shermo,
-    ):
-        mk_shermo.return_value = {"g_sum": -40.5}
-
-        def _se_side_effect(cfg):
-            be = MagicMock()
-            be.opt_freq.return_value = _fake_qc_result(
-                coordinates=np.array([[0.0, 0.0, 0.0]]), symbols=["C"],
-                frequencies=[500.0], has_frequencies=True, log_file=fake_log,
-            )
-            be.single_point.return_value = _fake_qc_result(energy=-40.0)
-            return be
-
-        mk_backend.side_effect = _se_side_effect
-
-        from acp.workflows.simple import run_optfreqsp
-        result = run_optfreqsp(str(inp), output_dir=out)
-        assert result.status == "completed"
-
-        call_kwargs = mk_shermo.call_args.kwargs
-        assert call_kwargs["freq_output"] == fake_log
-
-
 # ---------------------------------------------------------------------------
 # recalc_hess configurability
 # ---------------------------------------------------------------------------
 
+
 def test_recalc_hess_field_in_opt_schemas():
-    """recalc_hess must be configurable for all opt-bearing simple schemas."""
-    for schema_id, level_id in [
-        ("dft_optimize", "optimize"),
-        ("dft_optfreq", "optfreq"),
-        ("dft_optfreqsp", "optfreq"),
-    ]:
+    for schema_id, level_id in [("dft_optimize", "optimize")]:
         schema = METHOD_SCHEMAS[schema_id]
         level = next(lv for lv in schema["method_levels"] if lv["level_id"] == level_id)
         assert "recalc_hess" in level["fields"], f"{schema_id} missing recalc_hess field"
@@ -823,44 +711,33 @@ def test_recalc_hess_field_in_opt_schemas():
 
 def test_thermo_fields_absent_from_plain_freq_schemas():
     """temperature/pressure/scale_factor are useless without a Shermo stage."""
-    for schema_id, level_id in [("dft_frequency", "frequency"), ("dft_optfreq", "optfreq")]:
+    for schema_id, level_id in [("dft_frequency", "frequency")]:
         schema = METHOD_SCHEMAS[schema_id]
         level = next(lv for lv in schema["method_levels"] if lv["level_id"] == level_id)
         for dead in ("temperature", "pressure", "scale_factor"):
             assert dead not in level["fields"], f"{schema_id} still has dead field {dead}"
-    thermo = next(lv for lv in METHOD_SCHEMAS["dft_optfreqsp"]["method_levels"] if lv["level_id"] == "thermo")
-    assert "temperature" in thermo["fields"]
-    assert "scale_factor" in thermo["fields"]
 
 
-@pytest.mark.parametrize("wf_name,dead_flag", [
-    ("frequency", "--temperature"),
-    ("frequency", "--scale-factor"),
-    ("optfreq", "--temperature"),
-    ("optfreq", "--scale-factor"),
-])
+@pytest.mark.parametrize(
+    "wf_name,dead_flag",
+    [
+        ("frequency", "--temperature"),
+        ("frequency", "--scale-factor"),
+    ],
+)
 def test_cli_dead_thermo_flags_removed(wf_name, dead_flag):
     result = subprocess.run(
         [sys.executable, "-m", "acp.cli", "run", wf_name, "--help"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     assert result.returncode == 0, f"stderr: {result.stderr}"
     assert dead_flag not in result.stdout, f"'{dead_flag}' should not exist for {wf_name}"
 
 
-def test_cli_optfreqsp_keeps_thermo_flags():
-    result = subprocess.run(
-        [sys.executable, "-m", "acp.cli", "run", "optfreqsp", "--help"],
-        capture_output=True, text=True,
-    )
-    assert result.returncode == 0
-    assert "--temperature" in result.stdout
-    assert "--pressure" in result.stdout
-    assert "--scale-factor" in result.stdout
-
-
 def test_recalc_hess_field_definition_exists():
     from acp.catalog import FIELD_DEFINITIONS
+
     fd = FIELD_DEFINITIONS.get("recalc_hess")
     assert fd is not None
     assert fd["type"] == "hessian_interval"
@@ -871,31 +748,33 @@ def test_recalc_hess_not_in_generic_cli_flag_map():
     """recalc_hess is handled inline in method_levels_to_cli_flags(); the
     generic map no longer contains it (plan §11.1)."""
     from acp.catalog import _LEVEL_TO_CLI_FLAG_MAP
+
     assert "recalc_hess" not in _LEVEL_TO_CLI_FLAG_MAP
 
 
 def test_recalc_hess_emits_calc_hess_flags():
     from acp.catalog import method_levels_to_cli_flags
+
     # auto / 0 / N
-    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": "auto"}}) == ["--calc-hess", "auto"]
-    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": 0}}) == ["--no-calc-hess"]
-    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": 5}}) == ["--calc-hess", "5"]
+    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": "auto"}}) == [
+        "--calc-hess",
+        "auto",
+    ]
+    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": 0}}) == [
+        "--no-calc-hess"
+    ]
+    assert method_levels_to_cli_flags({"optimize": {"engine": "orca", "recalc_hess": 5}}) == [
+        "--calc-hess",
+        "5",
+    ]
 
 
-def test_recalc_hess_skipped_on_prefixed_sp_level():
-    from acp.catalog import method_levels_to_cli_flags
-    flags = method_levels_to_cli_flags(
-        {"optfreq": {"engine": "orca", "recalc_hess": 7}, "single_point": {"engine": "orca", "functional": "wB97M-V"}},
-        {"optfreq": "", "single_point": "sp-", "thermo": ""},
-    )
-    assert flags == ["--calc-hess", "7", "--sp-method", "wB97M-V"]
-
-
-@pytest.mark.parametrize("wf_name", ["optimize", "optfreq", "optfreqsp"])
+@pytest.mark.parametrize("wf_name", ["optimize"])
 def test_cli_help_has_calc_hess(wf_name):
     result = subprocess.run(
         [sys.executable, "-m", "acp.cli", "run", wf_name, "--help"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     assert result.returncode == 0, f"stderr: {result.stderr}"
     assert "--calc-hess" in result.stdout, f"Expected '--calc-hess' in help for {wf_name}"
@@ -907,7 +786,8 @@ def test_cli_sp_freq_no_hess_flags(wf_name):
     """singlepoint/frequency must not advertise hessian flags (AC15)."""
     result = subprocess.run(
         [sys.executable, "-m", "acp.cli", "run", wf_name, "--help"],
-        capture_output=True, text=True,
+        capture_output=True,
+        text=True,
     )
     assert result.returncode == 0, f"stderr: {result.stderr}"
     assert "--calc-hess" not in result.stdout
@@ -917,20 +797,46 @@ def test_cli_sp_freq_no_hess_flags(wf_name):
 def test_cli_legacy_recalc_hess_rejected():
     """--recalc-hess is removed; argparse must reject it (AC14)."""
     result = subprocess.run(
-        [sys.executable, "-m", "acp.cli", "run", "optimize",
-         "--recalc-hess", "5", "--input", "/dev/null", "--output", "/tmp/out"],
-        capture_output=True, text=True,
+        [
+            sys.executable,
+            "-m",
+            "acp.cli",
+            "run",
+            "optimize",
+            "--recalc-hess",
+            "5",
+            "--input",
+            "/dev/null",
+            "--output",
+            "/tmp/out",
+        ],
+        capture_output=True,
+        text=True,
     )
-    assert "unrecognized arguments: --recalc-hess" in result.stderr or \
-           "unrecognized arguments" in result.stderr
+    assert (
+        "unrecognized arguments: --recalc-hess" in result.stderr
+        or "unrecognized arguments" in result.stderr
+    )
 
 
 def test_cli_calc_hess_rejects_zero():
     """--calc-hess 0 must error; users must use --no-calc-hess (AC16)."""
     result = subprocess.run(
-        [sys.executable, "-m", "acp.cli", "run", "optimize",
-         "--calc-hess", "0", "--input", "/dev/null", "--output", "/tmp/out"],
-        capture_output=True, text=True,
+        [
+            sys.executable,
+            "-m",
+            "acp.cli",
+            "run",
+            "optimize",
+            "--calc-hess",
+            "0",
+            "--input",
+            "/dev/null",
+            "--output",
+            "/tmp/out",
+        ],
+        capture_output=True,
+        text=True,
     )
     assert result.returncode != 0
     assert "--no-calc-hess" in result.stderr or "invalid" in result.stderr.lower()
@@ -938,6 +844,7 @@ def test_cli_calc_hess_rejects_zero():
 
 def test_orca_input_blocks_recalc_hess_override():
     from cccp.qc.interfaces.orca import ORCAInterface
+
     iface = ORCAInterface(config={})
     # Explicit N — emits Recalc_Hess N, no symbols needed.
     blocks, res = iface._build_input_blocks("opt", recalc_hess=5, symbols=["C", "H"])
@@ -948,42 +855,65 @@ def test_orca_input_blocks_recalc_hess_override():
     assert "Recalc_Hess" not in blocks_default
     assert res.interval == 0 and res.reason == "auto"
     # Config int 3 → still 3 (legacy integer config preserved).
-    blocks_cfg, _ = ORCAInterface(config={"optimization_control": {"recalc_hess": 3}})._build_input_blocks("opt", symbols=["C"])
+    blocks_cfg, _ = ORCAInterface(
+        config={"optimization_control": {"recalc_hess": 3}}
+    )._build_input_blocks("opt", symbols=["C"])
     assert "Recalc_Hess 3" in blocks_cfg
-
-
-def test_orca_input_blocks_recalc_hess_optfreq():
-    from cccp.qc.interfaces.orca import ORCAInterface
-    iface = ORCAInterface(config={})
-    blocks, _ = iface._build_input_blocks("optfreq", recalc_hess=20, symbols=["C", "H"])
-    assert "Recalc_Hess 20" in blocks
 
 
 def test_orca_input_blocks_auto_graded_defaults():
     """AC1/AC2/AC4/AC4b: two-tier auto defaults — light → off, non-light → 10."""
     from cccp.qc.interfaces.orca import ORCAInterface
+
     iface = ORCAInterface(config={})
     # AC1 ethanol (light) → no Recalc_Hess
     b, _ = iface._build_input_blocks("opt", symbols=["C", "C", "O", "H", "H", "H", "H", "H", "H"])
     assert "Recalc_Hess" not in b
     # AC2 DMSO (S only beyond light) → 10
-    b, _ = iface._build_input_blocks("opt", symbols=["C", "C", "S", "O", "H", "H", "H", "H", "H", "H"])
+    b, _ = iface._build_input_blocks(
+        "opt", symbols=["C", "C", "S", "O", "H", "H", "H", "H", "H", "H"]
+    )
     assert "Recalc_Hess 10" in b
     # AC3 chlorobenzene (Cl is a halogen = light) → no Recalc_Hess
-    b, _ = iface._build_input_blocks("opt", symbols=["C", "C", "C", "C", "C", "C", "Cl", "H", "H", "H", "H", "H"])
+    b, _ = iface._build_input_blocks(
+        "opt", symbols=["C", "C", "C", "C", "C", "C", "Cl", "H", "H", "H", "H", "H"]
+    )
     assert "Recalc_Hess" not in b
     # AC4 FeCl2 (metal Fe) → 10 (all non-light elements share one tier)
     b, _ = iface._build_input_blocks("opt", symbols=["Fe", "Cl", "Cl"])
     assert "Recalc_Hess 10" in b
     # AC4b TMS (Si only beyond light) → 10
-    b, _ = iface._build_input_blocks("opt", symbols=["Si", "C", "C", "C", "C", "H", "H", "H", "H", "H", "H", "H", "H", "H", "H", "H", "H"])
+    b, _ = iface._build_input_blocks(
+        "opt",
+        symbols=[
+            "Si",
+            "C",
+            "C",
+            "C",
+            "C",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+            "H",
+        ],
+    )
     assert "Recalc_Hess 10" in b
 
 
 def test_orca_input_blocks_auto_requires_symbols():
     """Direct auto call without symbols must raise (plan AC)."""
     import pytest as _pytest
+
     from cccp.qc.interfaces.orca import ORCAInterface
+
     iface = ORCAInterface(config={})
     with _pytest.raises(ValueError):
         iface._build_input_blocks("opt", recalc_hess="auto")
@@ -995,15 +925,20 @@ def test_orca_input_blocks_auto_requires_symbols():
 def test_orca_input_blocks_sidecar_written(tmp_path):
     """AC19: *.hessian.json sidecar captures the resolved policy."""
     import json
+
     import numpy as np
+
     from cccp.qc.interfaces.orca import ORCAInterface
+
     iface = ORCAInterface(config={})
     inp = tmp_path / "conf_000_opt.inp"
     iface._write_input(
         inp,
         np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]),
         ["Fe", "Cl", "Cl"],
-        "opt", 0, 1,
+        "opt",
+        0,
+        1,
     )
     sidecar = tmp_path / "conf_000_opt.hessian.json"
     assert sidecar.exists()
@@ -1016,6 +951,7 @@ def test_orca_input_blocks_sidecar_written(tmp_path):
 
 def test_build_method_kwargs_passes_recalc_hess():
     from acp.workflows.simple import _build_method_kwargs
+
     kwargs = _build_method_kwargs({"recalc_hess": 15, "method": "r2SCAN-3c"})
     assert kwargs["recalc_hess"] == 15
 
@@ -1026,10 +962,19 @@ def test_build_simple_method_kwargs_includes_recalc_hess():
     import argparse
 
     from acp.cli import _build_simple_method_kwargs
+
     base = dict(
-        method="r2SCAN-3c", basis="def2-mTZVPP", dispersion="none",
-        solvent_model="none", solvent="", aux_j_basis="", aux_c_basis="", ri_approximation="none",
-        geom_maxiter=None, opt_convergence="Tight", route_extras=None,
+        method="r2SCAN-3c",
+        basis="def2-mTZVPP",
+        dispersion="none",
+        solvent_model="none",
+        solvent="",
+        aux_j_basis="",
+        aux_c_basis="",
+        ri_approximation="none",
+        geom_maxiter=None,
+        opt_convergence="Tight",
+        route_extras=None,
         aux_j_basis_legacy=None,
     )
     # --calc-hess 8
@@ -1052,24 +997,54 @@ def test_build_simple_method_kwargs_singlepoint_no_hess():
     import argparse
 
     from acp.cli import _build_simple_method_kwargs
+
     args = argparse.Namespace(
-        method="r2SCAN-3c", basis="def2-mTZVPP", dispersion="none",
-        solvent_model="none", solvent="", aux_j_basis="", aux_c_basis="", ri_approximation="none",
-        route_extras=None, aux_j_basis_legacy=None,
+        method="r2SCAN-3c",
+        basis="def2-mTZVPP",
+        dispersion="none",
+        solvent_model="none",
+        solvent="",
+        aux_j_basis="",
+        aux_c_basis="",
+        ri_approximation="none",
+        route_extras=None,
+        aux_j_basis_legacy=None,
     )
     # getattr() must tolerate the missing calc_hess / no_calc_hess attrs.
     kwargs = _build_simple_method_kwargs(args)
     assert "recalc_hess" not in kwargs
 
 
-def test_run_optimize_passes_recalc_hess(tmp_path):
+def test_run_optimize_passes_recalc_hess(fake_backend, tmp_path):
     inp = tmp_path / "mol.xyz"
     inp.write_text("1\n\nC 0 0 0\n")
     out = tmp_path / "opt_out"
-    with patch("acp.workflows.simple._build_backend") as mk_backend:
-        be = MagicMock()
-        be.optimize.return_value = _fake_qc_result(energy=-40.0)
-        mk_backend.return_value = be
-        result = run_optimize(str(inp), output_dir=out, method_kwargs={"recalc_hess": 4})
-        assert result.status == "completed"
-        assert be.optimize.call_args.kwargs["recalc_hess"] == 4
+    fake_backend.set_result("optimize", energy=-40.0, coordinates=np.array([[0.0, 0.0, 0.0]]))
+    result = run_optimize(str(inp), output_dir=out, method_kwargs={"recalc_hess": 4})
+    assert result.status == "completed"
+    assert fake_backend.calls[0].kwargs["recalc_hess"] == 4
+
+
+def test_simple_optimize_cli_constructs_reporter(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import acp.cli as acp_cli
+    import acp.workflows.simple as simple_workflow
+    from acp.core.workflow import WorkflowResult
+
+    input_path = tmp_path / "mol.xyz"
+    input_path.write_text("1\nmol\nC 0.0 0.0 0.0\n", encoding="utf-8")
+    output_dir = tmp_path / "output"
+    args = acp_cli.build_parser().parse_args(
+        ["run", "optimize", "--input", str(input_path), "--output", str(output_dir)]
+    )
+    captured: dict[str, Any] = {}
+
+    def fake_run_optimize(**kwargs) -> WorkflowResult:
+        captured.update(kwargs)
+        return WorkflowResult(status="completed", metadata={"energy": -1.0})
+
+    monkeypatch.setattr(simple_workflow, "run_optimize", fake_run_optimize)
+
+    assert acp_cli._handle_optimize(args) == 0
+    assert isinstance(captured["progress_reporter"], ProgressReporter)

@@ -17,16 +17,35 @@ def test_acp_help_exits_zero():
     assert "Auto-Calc Platform" in result.stdout or "acp" in result.stdout
 
 
-def test_acp_run_mechanism_help():
-    """``acp run mechanism --help`` shows real mechanism workflow options."""
+def test_acp_run_mechanism_is_retired():
+    """The removed mechanism entry cannot be used as a new task entry."""
     result = subprocess.run(
         [sys.executable, "-m", "acp.cli", "run", "mechanism", "--help"],
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0
-    assert "--input" in result.stdout
-    assert "--output" in result.stdout
+    assert result.returncode == 2
+    assert "已退役" in result.stdout + result.stderr
+
+
+def test_acp_run_removed_workflows_reject_with_retired_message():
+    for workflow in ("optfreq", "optfreqsp", "Lowconfirm", "Highconfirm"):
+        result = subprocess.run(
+            [sys.executable, "-m", "acp.cli", "run", workflow],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 2
+        assert "已退役" in result.stdout + result.stderr
+
+
+def test_acp_run_lowconfirm_help_is_retired():
+    result = subprocess.run(
+        [sys.executable, "-m", "acp.cli", "run", "Lowconfirm", "--help"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
 
 
 def test_acp_run_serve_help():
@@ -49,7 +68,11 @@ def test_acp_no_command_shows_help():
         text=True,
     )
     # argparse with required=True subparser returns error code
-    assert result.returncode != 0 or "usage" in result.stderr.lower() or "usage" in result.stdout.lower()
+    assert (
+        result.returncode != 0
+        or "usage" in result.stderr.lower()
+        or "usage" in result.stdout.lower()
+    )
 
 
 def test_acp_run_nmr_help_shows_bruker():
@@ -68,14 +91,20 @@ def test_acp_run_nmr_spectrum_bruker_mutual_exclusion():
     """Passing both --spectrum and --bruker fails fast with exit code 1."""
     result = subprocess.run(
         [
-            sys.executable, "-m", "acp.cli", "run", "nmr",
-            "--input", "CCO",
-            "--spectrum", "C: 40.0(C1)",
-            "--bruker", "/tmp/nonexistent",
+            sys.executable,
+            "-m",
+            "acp.cli",
+            "run",
+            "nmr",
+            "--input",
+            "CCO",
+            "--spectrum",
+            "C: 40.0(C1)",
+            "--bruker",
+            "/tmp/nonexistent",
         ],
         capture_output=True,
         text=True,
     )
     assert result.returncode == 1
     assert "exactly one" in result.stderr.lower()
-

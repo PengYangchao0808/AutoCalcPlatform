@@ -1,0 +1,13 @@
+## 42-fail — DB 停写 + store 只读化 failure drill
+
+POST /api/v1/mechanism-studies with `{"study_id": "new-study"}` returns 410 Gone
+(the write endpoint was already retired in todo 41). GET /api/v1/mechanism-studies
+returns 200 OK with an empty list, confirming that read-only endpoints are not
+broken by the store write-method deletion. The mechanism_studies table and
+decision_points table still exist (migrations untouched) and can be queried via
+read methods (`get_mechanism_study`, `list_mechanism_studies`, `get_decision_point`,
+`list_decision_points`). `purge_cascade` still performs cascade DELETE on all
+child tables.
+
+Acceptance: `pytest tests/test_retired_inflight_upgrade.py::test_write_route_returns_410 -q`
+→ 1 passed in 2.05s.

@@ -1,0 +1,12 @@
+Command: cp src/acp/calculations/batch/engine.py /tmp/eng.bak && printf '\nirc = "drill"\n' >> src/acp/calculations/batch/engine.py && python -m pytest tests/test_architecture_invariants.py::test_batch_no_irc -q
+Key output:
+FAILED tests/test_architecture_invariants.py::test_batch_no_irc
+E       assert 'irc' not in source
+1 failed in 2.42s
+Injected exit code: 1
+
+Command: mv /tmp/eng.bak src/acp/calculations/batch/engine.py && python -m pytest tests/test_architecture_invariants.py::test_batch_no_irc -q
+Key output:
+.                                                                        [100%]
+1 passed in 1.35s
+Restored exit code: 0

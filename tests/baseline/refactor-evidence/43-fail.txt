@@ -1,0 +1,14 @@
+COMMAND:
+  python -m pytest tests/test_acp_api_v1.py::test_non_ts_artifact_role_mismatch_422 -q
+
+KEY OUTPUT:
+  1 passed, 1 warning in 2.51s
+
+  Non-TS artifact with TS role request returns 422.
+  - Source job has a minimum-role artifact (TAG: INT)
+  - POST /api/v1/jobs/{id}/artifacts/{artifact_id}/run-irc with non-TS artifact
+  - Response: 422 (TS role required for IRC)
+
+JUDGEMENT: PASS — non-TS artifact correctly rejected with 422 status
+
+EXIT CODE: 0

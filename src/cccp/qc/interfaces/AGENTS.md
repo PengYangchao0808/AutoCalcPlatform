@@ -23,7 +23,7 @@ interfaces/
 | ABC contract | `base.py` | `QCInterfaceBase`, `QCResult` dataclass |
 | ORCA SP energy | `orca.py` | Direct subprocess invocation |
 | CREST conformer search | `crest.py` | `run_conformer_search()` single-stage |
-| CREST batch optimization | `crest.py` | `run_batch_optimization()` (-mdopt); used by dormant `ConformerEngine` |
+| CREST batch optimization | `crest.py` | `run_batch_optimization()` (-mdopt); retained for upstream compatibility |
 | xTB pre-optimization | `xtb.py` | `XTBInterface` standalone (split from crest.py in Phase C) |
 | xTB thermo | `xtb_thermo.py` | `run_xtb_enso()`, `_xyz_to_coord()` |
 | CENSO refinement | `censo.py` | `CensoInterface.refine_ensemble()/search()` — presets, rcfile, part templates, JSON/XYZ parsing; env pins `OMP/MKL/OPENBLAS_NUM_THREADS` to nproc |
@@ -39,5 +39,5 @@ interfaces/
 ## NOTES
 - **`XTBInterface` split to `xtb.py`** (Phase C, 2026-07-27): was co-located in `crest.py`; now standalone. Top-level re-export preserved for existing consumers.
 - **`CRESTInterface` has no base class**: `class CRESTInterface:` — does NOT inherit `QCInterfaceBase` (upstream form restored by 2026-07-13 reverse-sync; kept intentionally).
-- **CENSO/ISOSTAT/Molclus moved into cccp** (2026-08-02): previously lived as subprocess logic inside `acp/backends/censo_backend.py`, `isostat_backend.py`, `molclus_backend.py`; those are now thin adapters delegating here. `cccp.qc.runners.run_isostat` is a DEPRECATED thin wrapper over `IsostatInterface` kept only for the dormant `ConformerEngine`.
-- **`run_two_stage_search` removed** (Phase C): was deprecated; `ConformerEngine` uses `_step_two_stage_crest()` internally and never called it. Zero consumers remained.
+- **CENSO/ISOSTAT/Molclus moved into cccp** (2026-08-02): previously lived as subprocess logic inside `acp/backends/censo_backend.py`, `isostat_backend.py`, `molclus_backend.py`; those are now thin adapters delegating here. run_isostat was removed in wave-8. IsostatInterface is the single ISOSTAT path.
+- **`run_two_stage_search` removed** (Phase C): was deprecated; The engine was removed in wave-8. Zero consumers remained.

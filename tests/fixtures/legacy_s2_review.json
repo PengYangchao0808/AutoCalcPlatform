@@ -1,0 +1,17 @@
+{
+  "required": true,
+  "status": "confirmed",
+  "selected_ts": ["ts_guess_001"],
+  "selected_intermediates": [],
+  "selected": ["ts_guess_001"],
+  "candidates": [
+    {
+      "candidate_id": "ts_guess_001",
+      "frame_index": 4,
+      "role": "ts",
+      "name": "Selected transition state"
+    }
+  ],
+  "decided_at": "2026-08-27T00:00:00+00:00",
+  "note": "accepted"
+}

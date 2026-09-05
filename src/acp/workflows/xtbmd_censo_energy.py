@@ -48,7 +48,7 @@ from acp.core.models import HARTREE_TO_KCAL, StructureEnsemble
 from acp.core.state import WorkflowState
 from acp.core.workflow import WorkflowResult
 from acp.io.structures import StructureReader
-from acp.workflows._helpers import sanitize_job_name
+from acp.workflows._helpers import resolve_task_output_root, sanitize_job_name
 from acp.workflows.energy_shared import (
     build_result_ensemble,
     censo_record_to_candidate,
@@ -57,6 +57,7 @@ from acp.workflows.energy_shared import (
     resolve_solvent_config,
     run_rank1_handoff,
     select_cumulative_boltzmann,
+    v2_stage_dir,
     write_final_outputs,
     xtb_passthrough_result,
 )
@@ -1230,7 +1231,7 @@ def run_xtbmd_censo_energy(
     distinct from the CREST window of ``acp run energy``) → CENSO
     (censo-light / censo-default / censo-zero) → fine DFT handoff (dual
     mode: full ensemble ≥99% cumulative Boltzmann, or ``--rank1-only``)
-    → ensemble total Gibbs finalization (``finalDFT/ensemble_thermo.json``).
+    → ensemble total Gibbs finalization (``RESULT/energies/ensemble_thermo.json``).
 
     ``--resume`` skips stages whose checkpoint fingerprint (full input
     parameter set per stage) still matches and whose products exist; a
@@ -1342,7 +1343,8 @@ def run_xtbmd_censo_energy(
             error="Input embedding produced no 3D coordinates",
         )
 
-    state = WorkflowState(output_root / safe_name, safe_name)
+    mol_dir = resolve_task_output_root(output_root, safe_name)
+    state = WorkflowState(mol_dir, safe_name)
     state.initialize(
         input_source=input_source,
         stage_names=[
@@ -1357,8 +1359,6 @@ def run_xtbmd_censo_energy(
             "conformer_energy",
         ],
     )
-
-    mol_dir = output_root / safe_name
 
     # Solvent priority: CLI --solvent > levels (UI wizard fields) > YAML.
     # The resolved solvent is applied consistently to MD, batch opt, ISOSTAT
@@ -1390,8 +1390,8 @@ def run_xtbmd_censo_energy(
 
     try:
         # ------------------------------------------------------------------ MD --
-        xtbmd_dir = mol_dir / "xtbmd"
-        embed_xyz = mol_dir / "embed.xyz"
+        xtbmd_dir = v2_stage_dir(mol_dir, "02_SEARCH", "xTB")
+        embed_xyz = v2_stage_dir(mol_dir, "01_PREPARE") / "embed.xyz"
         with open(embed_xyz, "w", encoding="utf-8") as f:
             f.write(f"{len(structure.symbols)}\n")
             f.write(f"Embedded input for {safe_name}\n")
@@ -1448,7 +1448,7 @@ def run_xtbmd_censo_energy(
                 solvent_model=_solvent_model,
                 charge=structure.charge,
                 multiplicity=structure.multiplicity,
-                output_dir=mol_dir,
+                output_dir=xtbmd_dir,
                 config=cfg,
                 timeout=_resolve_md_timeout(md_timeout, md_time_ps),
             )
@@ -1475,7 +1475,7 @@ def run_xtbmd_censo_energy(
         stages_completed.append("xtbmd")
 
         # ---------------------------------------------------------- batch_opt --
-        batch_dir = mol_dir / "batch_opt"
+        batch_dir = v2_stage_dir(mol_dir, "03_OPT", "xTB")
         # Fingerprint = the full stage parameter set (doc §4 E1): the opt
         # engine parameters + the conv-check controls + temperature (they
         # shape the isomers products and the diagnostic verdicts).  edis/gdis
@@ -1553,7 +1553,7 @@ def run_xtbmd_censo_energy(
         stages_completed.append("batch_opt")
 
         # ------------------------------------------------------------- isostat --
-        isostat_dir = mol_dir / "isostat"
+        isostat_dir = v2_stage_dir(mol_dir, "02_SEARCH", "ISOSTAT")
         cluster_xyz = isostat_dir / "cluster.xyz"
         iso_params: dict[str, Any] = {
             "edis": edis,
@@ -1620,7 +1620,7 @@ def run_xtbmd_censo_energy(
             isomers_xyz,
             isomers_energies_json,
             ewin=ewin_eff,
-            work_dir=mol_dir / "energy_filter",
+            work_dir=v2_stage_dir(mol_dir, "03_OPT", "xTB") / "energy_filter",
         )
         ensemble_xyz = filter_result.ensemble_xyz
         state.complete_stage(
@@ -1652,7 +1652,7 @@ def run_xtbmd_censo_energy(
             """
             results: list[dict[str, Any]] = []
             for i, rec in enumerate(selected):
-                handoff_dir = mol_dir / "finalDFT" / f"conf_{i:03d}"
+                handoff_dir = v2_stage_dir(mol_dir, "03_OPT", "ORCA") / f"conf_{i:03d}"
                 try:
                     cand = run_rank1_handoff(
                         cfg,
@@ -1699,7 +1699,7 @@ def run_xtbmd_censo_energy(
                     list(rank1.symbols),
                     structure.charge,
                     structure.multiplicity,
-                    mol_dir / "finalDFT" / "conf_000",
+                    v2_stage_dir(mol_dir, "03_OPT", "ORCA") / "conf_000",
                     resolved,
                     censo_solvent,
                     _solvent_model,
@@ -1734,8 +1734,7 @@ def run_xtbmd_censo_energy(
 
         else:
             # All remaining paths invoke CENSO
-            censo_dir = mol_dir / "censo"
-            censo_dir.mkdir(parents=True, exist_ok=True)
+            censo_dir = v2_stage_dir(mol_dir, "02_SEARCH", "CENSO")
             backend = CensoBackend(cfg)
 
             part_overrides: dict[str, dict[str, Any]] = {}
@@ -1793,7 +1792,7 @@ def run_xtbmd_censo_energy(
                         list(rank1.symbols),
                         structure.charge,
                         structure.multiplicity,
-                        mol_dir / "finalDFT" / "conf_000",
+                        v2_stage_dir(mol_dir, "03_OPT", "ORCA") / "conf_000",
                         resolved,
                         censo_solvent,
                         _solvent_model,
@@ -1960,7 +1959,7 @@ def run_xtbmd_censo_energy(
                             list(rank1.symbols),
                             structure.charge,
                             structure.multiplicity,
-                            mol_dir / "finalDFT" / "conf_000",
+                            v2_stage_dir(mol_dir, "03_OPT", "ORCA") / "conf_000",
                             resolved,
                             censo_solvent,
                             _solvent_model,
@@ -1988,7 +1987,7 @@ def run_xtbmd_censo_energy(
                     state.set_stage("dft_handoff")
                     candidates = []
                     for i, rec in enumerate(censo_result.records):
-                        handoff_dir = mol_dir / "finalDFT" / f"conf_{i:03d}"
+                        handoff_dir = v2_stage_dir(mol_dir, "03_OPT", "ORCA") / f"conf_{i:03d}"
                         try:
                             cand = run_rank1_handoff(
                                 cfg,

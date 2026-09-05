@@ -1,0 +1,33 @@
+=== 39-happy.txt: Wave 6 Workflows Cleanup ===
+Date: 2026-08-27 | Branch: refactor/calc-cleanup
+
+=== COMMAND ===
+python scripts/check_grep_gates.py --gate wave6_zero src/acp/workflows
+=== KEY OUTPUT ===
+ALLOWED:
+BLOCKING:
+GATE_EXIT=0
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+python -c "import acp.workflows.simple as s; assert not hasattr(s,'run_optfreq') and not hasattr(s,'run_optfreqsp')"
+=== KEY OUTPUT ===
+ABSENT_OK
+IMPORT_EXIT=0
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+python -m pytest tests/test_acp_workflows_simple.py -q
+=== KEY OUTPUT ===
+59 passed in 24.49s
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+python -c "from acp.workflows.simple import run_singlepoint, run_optimize, run_frequency, run_scan, run_irc, run_xtb_optimize"
+=== KEY OUTPUT ===
+SUPPORTED_IMPORTS_OK
+=== EXIT CODE ===
+0

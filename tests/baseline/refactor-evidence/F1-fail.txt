@@ -1,0 +1,28 @@
+=== F1 QA Failure Drill ===
+Date: 2026-08-28T12:18:23Z
+
+--- Step 1: Remove 37-happy.txt ---
+Command: rm tests/baseline/refactor-evidence/37-happy.txt
+Exit: 0
+
+--- Step 2: Count after removal (expect 103) ---
+Command: ls tests/baseline/refactor-evidence/ | grep -cE '^(0[1-9]|[1-4][0-9]|5[0-2])-(happy|fail)\.txt$'
+Output: 103
+ASSERTION: 103 == 103 ✅ (gap detected: 37-happy.txt missing)
+
+--- Step 3: Restore 37-happy.txt ---
+Command: git checkout tests/baseline/refactor-evidence/37-happy.txt
+Updated 1 path from the index
+Exit: 0
+
+--- Step 4: Count after restore (expect 104) ---
+Command: ls tests/baseline/refactor-evidence/ | grep -cE '^(0[1-9]|[1-4][0-9]|5[0-2])-(happy|fail)\.txt$'
+Output: 104
+ASSERTION: 104 == 104 ✅ (restored)
+
+--- Step 5: Verify restored file non-empty ---
+Command: find tests/baseline/refactor-evidence -name '37-happy.txt' -size +0 | wc -l
+Output: 1
+ASSERTION: 1 == 1 ✅ (non-empty)
+
+=== DRILL_COMPLETE ===

@@ -21,11 +21,13 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import numpy as np
+from numpy.typing import NDArray
 
 from acp.backends.registry import get_backend
+from acp.calculations.progress import ProgressReporter
 from acp.core.models import Structure, StructureEnsemble
 from acp.core.workflow import WorkflowResult
 from acp.io.structures import StructureReader
@@ -63,10 +65,35 @@ from acp.nmr.probability import (
 )
 from acp.nmr.report import write_all_reports
 from acp.nmr.scaling import build_assignments, fit_scaling_goodman
+from acp.storage.layout import TaskStorage
+from acp.storage.manifest import ResultManifest
 from acp.workflows._helpers import sanitize_job_name, write_result_summary
 from cccp.config import load_config
 
 logger = logging.getLogger(__name__)
+
+NMR_STAGES: Final[tuple[str, ...]] = (
+    "embed_smiles",
+    "crest_search",
+    "censo_prescreening",
+    "censo_screening",
+    "ensemble_export",
+    "giao_nmr",
+    "boltzmann_average",
+    "dp4_dp5_probability",
+    "nmr_report",
+)
+
+
+def _fail_progress(reporter: ProgressReporter | None, error: str) -> None:
+    """Fail the active stage, or the whole run before stages begin."""
+    if reporter is None:
+        return
+    current_stage = reporter.current_stage
+    if current_stage is None:
+        reporter.fail(error)
+    else:
+        reporter.fail_stage(current_stage, error)
 
 
 # ---------------------------------------------------------------------------
@@ -336,10 +363,12 @@ def _structure_to_xyz(structure: Structure, work_dir: Path) -> str:
 
     work_dir.mkdir(parents=True, exist_ok=True)
     xyz_path = work_dir / "input.xyz"
-    coords = (
-        np.asarray(structure.coordinates) if structure.coordinates is not None else np.zeros((0, 3))
+    coords: NDArray[np.float64] = (
+        np.asarray(structure.coordinates, dtype=np.float64)
+        if structure.coordinates is not None
+        else np.zeros((0, 3), dtype=np.float64)
     )
-    write_xyz(str(xyz_path), structure.symbols, coords, title=structure.id)
+    write_xyz(xyz_path, coords, list(structure.symbols), title=structure.id)
     return str(xyz_path)
 
 
@@ -358,7 +387,11 @@ def _select_conformers(
             rec.free_energy_hartree if rec.free_energy_hartree is not None else rec.energy_hartree
         )
 
-    valid = [(r, _g(r)) for r in records if _g(r) is not None]
+    valid: list[tuple[Any, float]] = []
+    for record in records:
+        energy = _g(record)
+        if energy is not None:
+            valid.append((record, energy))
     if not valid:
         logger.warning("No energies on ensemble records; using raw records without window")
         valid = [(r, 0.0) for r in records]
@@ -391,11 +424,16 @@ def _select_conformers(
 def _run_giao_for_conformers(
     conformers: list[tuple[Structure, float, float]],
     nmr_config: NmrConfig,
-    work_dir: Path,
+    giao_dir: Path,
     cfg: dict[str, Any],
     solvent: str | None,
 ) -> list[ConformerShielding]:
-    """Run ORCA GIAO NMR for each conformer and parse shieldings."""
+    """Run ORCA GIAO NMR for each conformer and parse shieldings.
+
+    *giao_dir* is the final per-candidate GIAO root (v2 layout:
+    ``WORK/05_SP/ORCA/<candidate_id>``); per-conformer outputs land in
+    ``conf_<idx>`` subdirectories beneath it.
+    """
     orca_backend_cls = get_backend("orca")
     orca = orca_backend_cls(
         cfg,
@@ -404,6 +442,7 @@ def _run_giao_for_conformers(
         solvent=nmr_config.solvent,
         solvent_model=nmr_config.solvent_model,
     )
+    nmr_shielding = getattr(orca, "nmr_shielding")
     nmr_nuclei = [n.split(maxsplit=1)[-1] if n[0].isdigit() else n for n in nmr_config.nuclei]
     # deduplicate elements
     seen: set[str] = set()
@@ -413,20 +452,19 @@ def _run_giao_for_conformers(
             seen.add(n)
             target_elements.append(n)
 
-    giao_dir = work_dir / "giao"
     giao_dir.mkdir(parents=True, exist_ok=True)
 
     results: list[ConformerShielding] = []
     for idx, (structure, weight, delta) in enumerate(conformers):
-        coords = (
-            np.asarray(structure.coordinates)
+        coords: NDArray[np.float64] = (
+            np.asarray(structure.coordinates, dtype=np.float64)
             if structure.coordinates is not None
-            else np.zeros((0, 3))
+            else np.zeros((0, 3), dtype=np.float64)
         )
         out_dir = giao_dir / f"conf_{idx:03d}"
         out_dir.mkdir(parents=True, exist_ok=True)
         try:
-            qc_result = orca.nmr_shielding(
+            qc_result = nmr_shielding(
                 coords,
                 structure.symbols,
                 charge=structure.charge,
@@ -447,7 +485,8 @@ def _run_giao_for_conformers(
                 getattr(qc_result, "error_message", "unknown"),
             )
             continue
-        shieldings = dict(qc_result.metadata.get("shieldings") or {})
+        metadata = getattr(qc_result, "metadata", {})
+        shieldings = dict(metadata.get("shieldings") or {})
         if not shieldings:
             logger.warning("No shieldings parsed for conformer %d of %s", idx, structure.id)
             continue
@@ -583,6 +622,8 @@ def _try_build_rdkit_mol(structure: Structure):
     available (the element-only equivalence fallback then applies).
     """
     source = structure.metadata.get("source", "")
+    if not isinstance(source, str):
+        return None
     if not source or _looks_like_smiles(source):
         try:
             from rdkit import Chem
@@ -647,16 +688,17 @@ def _compute_candidate_dp5(
         return 0.0
 
     exp_c = [a.exp_ppm for a in c_assignments]
-    c_indices = [label_to_idx.get(a.atom_label) for a in c_assignments]
-    if any(idx is None for idx in c_indices):
+    maybe_indices = [label_to_idx.get(a.atom_label) for a in c_assignments]
+    if any(idx is None for idx in maybe_indices):
         # label mismatch — fall back to averaged-residual path
         residual_by_nuc = {"13C": [a.residual for a in c_assignments]}
         return compute_dp5_goodman(residual_by_nuc, dp5_model)
+    c_indices = [idx for idx in maybe_indices if idx is not None]
 
     # per-conformer ¹³C calc shifts (TMS-converted)
     conformer_shifts: list[list[float]] = []
     weights: list[float] = []
-    conformer_reps: list[list[np.ndarray]] = []
+    conformer_reps: list[list[NDArray[np.float64]]] = []
     # FCHL atomic path is only valid for molecules < 86 atoms (DP5.py:57);
     # larger molecules need the openbabel fragmentation + frag_reps path
     # (not yet wired → degrade to fallback for those rare cases).
@@ -666,11 +708,12 @@ def _compute_candidate_dp5(
         shifts: list[float] = []
         ok = True
         for idx in c_indices:
-            sh = conf.shieldings.get(idx)  # type: ignore[arg-type]
-            if not sh or "isotropic" not in sh:
+            sh = conf.shieldings.get(idx)
+            isotropic = sh.get("isotropic") if sh else None
+            if not isinstance(isotropic, (int, float, str)):
                 ok = False
                 break
-            iso = float(sh["isotropic"])
+            iso = float(isotropic)
             # Goodman TMS formula (NMR.py:392): δ = (σ_TMS − σ) / (1 − σ_TMS/10⁶)
             shifts.append((tms_c - iso) / (1.0 - tms_c / 1e6) if tms_c is not None else iso)
         if ok:
@@ -679,7 +722,7 @@ def _compute_candidate_dp5(
             if fchl_ok:
                 coords = conf.coordinates
                 conf_symbols = conf.symbols
-                if coords is None or not conf_symbols:
+                if not isinstance(coords, np.ndarray) or not conf_symbols:
                     fchl_ok = False
                     conformer_reps = []
                 else:
@@ -687,7 +730,7 @@ def _compute_candidate_dp5(
                         reps = build_atom_representations(
                             coords,
                             conf_symbols,
-                            c_indices,  # type: ignore[list-item]
+                            c_indices,
                         )
                     except Exception as exc:  # pragma: no cover - qml/kernel edge
                         logger.warning(
@@ -752,6 +795,7 @@ def run_nmr_analysis(
     prebuilt_ensembles: list[StructureEnsemble] | None = None,
     bruker: str | Path | None = None,
     bruker_references: dict[str, float] | None = None,
+    progress_reporter: ProgressReporter | None = None,
 ) -> WorkflowResult:
     """Run the full NMR + DP4/DP5 workflow.
 
@@ -794,39 +838,62 @@ def run_nmr_analysis(
     output_root = Path(output_dir).resolve()
     output_root.mkdir(parents=True, exist_ok=True)
 
+    if progress_reporter is not None:
+        progress_reporter.initialize()
+        progress_reporter.start_stage("embed_smiles")
+
+    # v2 task-storage layout (design doc §5/§13): WORK/ for engine work, RESULT/ for products.
+    storage = TaskStorage(output_root)
+    storage.ensure_layout(stages=["02_SEARCH", "05_SP"], categories=["reports", "structures"])
+
     stages_completed: list[str] = []
 
     # Stage 0: input parsing (stage 0a = Bruker raw processing, P3)
     if (spectrum is None) == (bruker is None):
+        error = "exactly one of spectrum / bruker input is required"
+        _fail_progress(progress_reporter, error)
         return WorkflowResult(
             status="failed",
             stages_completed=[],
-            error="exactly one of spectrum / bruker input is required",
+            error=error,
         )
     try:
         candidates = _parse_candidates(input_sources, charge, multiplicity)
         if bruker is not None:
             experiment = _load_experiment_bruker(bruker, bruker_references, output_root)
         else:
-            experiment = _load_experiment(spectrum)  # type: ignore[arg-type]
+            if spectrum is None:
+                error = "spectrum input is required when bruker is not supplied"
+                _fail_progress(progress_reporter, error)
+                return WorkflowResult(
+                    status="failed",
+                    stages_completed=stages_completed,
+                    error=error,
+                )
+            experiment = _load_experiment(spectrum)
     except Exception as exc:
         logger.exception("Input parsing failed: %s", exc)
+        error = f"input parsing: {exc}"
+        _fail_progress(progress_reporter, error)
         return WorkflowResult(
             status="failed",
             stages_completed=[],
-            error=f"input parsing: {exc}",
+            error=error,
         )
     if not candidates:
+        error = "no candidate structures parsed"
+        _fail_progress(progress_reporter, error)
         return WorkflowResult(
             status="failed",
             stages_completed=[],
-            error="no candidate structures parsed",
+            error=error,
         )
 
     # Stage 1 (optional): diastereomer enumeration (DevDoc §5, P2)
     if enumerate_stereoisomers:
         enum_result = _enumerate_input(input_sources, stereocenters, charge, multiplicity)
         if isinstance(enum_result, str):
+            _fail_progress(progress_reporter, enum_result)
             return WorkflowResult(
                 status="failed",
                 stages_completed=[],
@@ -834,6 +901,9 @@ def run_nmr_analysis(
             )
         input_sources, candidates, charge = enum_result
     stages_completed.append("input_parsing")
+    if progress_reporter is not None:
+        progress_reporter.complete_stage("embed_smiles")
+        progress_reporter.start_stage("crest_search")
 
     cfg = _resolve_config(config, nmr_method, nmr_basis, solvent, nproc)
     nmr_config = _build_nmr_config(
@@ -853,71 +923,117 @@ def run_nmr_analysis(
     try:
         validate_error_model_binding(nmr_config)
     except ValueError as exc:
+        _fail_progress(progress_reporter, str(exc))
         return WorkflowResult(
             status="failed",
             stages_completed=stages_completed,
             error=str(exc),
         )
 
-    em = load_error_model(nmr_config.error_model)
+    try:
+        em = load_error_model(nmr_config.error_model)
+    except ValueError as exc:
+        _fail_progress(progress_reporter, str(exc))
+        return WorkflowResult(
+            status="failed",
+            stages_completed=stages_completed,
+            error=str(exc),
+        )
     actual_error_model = em.model_id
 
     # Stages 2–3: conformer generation + GIAO NMR per candidate
     candidate_results: list[CandidateResult] = []
-    ensembles = prebuilt_ensembles or ([None] * len(candidates))  # type: ignore[list-item]
+    ensembles: list[StructureEnsemble | None]
+    if prebuilt_ensembles is None:
+        ensembles = [None] * len(candidates)
+    else:
+        ensembles = list(prebuilt_ensembles)
     if len(ensembles) != len(candidates):
+        error = "prebuilt_ensembles length != input_sources length"
+        _fail_progress(progress_reporter, error)
         return WorkflowResult(
             status="failed",
             stages_completed=stages_completed,
-            error="prebuilt_ensembles length != input_sources length",
+            error=error,
         )
 
+    generated_ensembles: list[bool] = []
+    resolved_ensembles: list[StructureEnsemble] = []
+    needs_generation = any(ensemble is None for ensemble in ensembles)
     for idx, structure in enumerate(candidates):
-        cand_dir = output_root / structure.id
-        cand_dir.mkdir(parents=True, exist_ok=True)
+        source_ensemble = ensembles[idx]
+        if source_ensemble is not None:
+            resolved_ensembles.append(source_ensemble)
+            generated_ensembles.append(False)
+            continue
+        ensemble = _run_conformer_generation(
+            structure, storage.stage_dir("02_SEARCH"), nmr_config, cfg, solvent, nproc, ewin
+        )
+        if ensemble is None:
+            error = f"conformer generation failed for {structure.id}"
+            _fail_progress(progress_reporter, error)
+            return WorkflowResult(
+                status="failed",
+                stages_completed=stages_completed,
+                error=error,
+            )
+        resolved_ensembles.append(ensemble)
+        generated_ensembles.append(True)
 
-        if ensembles[idx] is not None and not skip_conformers:
-            conformer_shieldings = _run_giao_for_conformers(
-                _select_conformers(ensembles[idx], nmr_config),  # type: ignore[arg-type]
-                nmr_config,
-                cand_dir,
-                cfg,
-                solvent,
-            )
-        elif skip_conformers and ensembles[idx] is not None:
+    if progress_reporter is not None:
+        skipped = {"status": "skipped"} if not needs_generation else None
+        progress_reporter.complete_stage("crest_search", skipped)
+        progress_reporter.start_stage("censo_prescreening")
+        progress_reporter.complete_stage("censo_prescreening", skipped)
+        progress_reporter.start_stage("censo_screening")
+        progress_reporter.complete_stage("censo_screening", skipped)
+        progress_reporter.start_stage("ensemble_export")
+        progress_reporter.complete_stage("ensemble_export", skipped)
+        progress_reporter.start_stage("giao_nmr")
+
+    conformer_shieldings_by_candidate: list[list[ConformerShielding]] = []
+    for idx, structure in enumerate(candidates):
+        giao_dir = storage.stage_dir("05_SP", "ORCA") / structure.id
+        ensemble = resolved_ensembles[idx]
+        if not generated_ensembles[idx] and skip_conformers:
             # test path: shieldings already attached — skip GIAO entirely
-            conformer_shieldings = getattr(ensembles[idx], "data", []) or []  # type: ignore[union-attr]
+            conformer_shieldings = [
+                item for item in ensemble.data if isinstance(item, ConformerShielding)
+            ]
         else:
-            ensemble = _run_conformer_generation(
-                structure, output_root, nmr_config, cfg, solvent, nproc, ewin
-            )
-            if ensemble is None:
-                return WorkflowResult(
-                    status="failed",
-                    stages_completed=stages_completed,
-                    error=f"conformer generation failed for {structure.id}",
-                )
             conformer_shieldings = _run_giao_for_conformers(
                 _select_conformers(ensemble, nmr_config),
                 nmr_config,
-                cand_dir,
+                giao_dir,
                 cfg,
                 solvent,
             )
 
         if not conformer_shieldings:
+            error = f"no GIAO shieldings for {structure.id}"
+            _fail_progress(progress_reporter, error)
             return WorkflowResult(
                 status="failed",
                 stages_completed=stages_completed,
-                error=f"no GIAO shieldings for {structure.id}",
+                error=error,
             )
+        conformer_shieldings_by_candidate.append(conformer_shieldings)
 
+    if progress_reporter is not None:
+        progress_reporter.complete_stage("giao_nmr")
+        progress_reporter.start_stage("boltzmann_average")
+    for idx, (structure, conformer_shieldings) in enumerate(
+        zip(candidates, conformer_shieldings_by_candidate, strict=True)
+    ):
         candidate_results.append(
             _analyze_candidate(idx, structure, conformer_shieldings, experiment, nmr_config)
         )
 
     stages_completed.append("giao_shielding")
     stages_completed.append("averaging_matching_scaling")
+    if progress_reporter is not None:
+        progress_reporter.complete_stage("boltzmann_average")
+        progress_reporter.start_stage("dp4_dp5_probability")
 
     # Stage 7: DP4 / DP5
     log_likelihoods = [
@@ -954,6 +1070,9 @@ def run_nmr_analysis(
         else:
             cr.dp5_probability = float(dp5_log_to_probability(compute_dp5(residual_by_nuc, em)))
     stages_completed.append("probability")
+    if progress_reporter is not None:
+        progress_reporter.complete_stage("dp4_dp5_probability")
+        progress_reporter.start_stage("nmr_report")
 
     # Stage 8: report
     dp5_mode = getattr(dp5_model, "dp5_mode", "fallback") if dp5_model is not None else "fallback"
@@ -965,7 +1084,8 @@ def run_nmr_analysis(
         dp5_mode=dp5_mode,
         metadata={"n_candidates": len(candidate_results), "fchl_kernel": fchl_kernel},
     )
-    paths = write_all_reports(report, output_root)
+    reports_dir = storage.result_category_dir("reports")
+    paths = write_all_reports(report, reports_dir)
     stages_completed.append("report")
 
     # write a small machine-readable summary next to the report
@@ -992,14 +1112,14 @@ def run_nmr_analysis(
             "plots": [str(p) for p in paths["plots"]],
         },
     }
-    (output_root / "nmr_summary.json").write_text(
+    (reports_dir / "nmr_summary.json").write_text(
         json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
     products: list[dict[str, Any]] = [
         {
             "label": "NMR report (JSON)",
-            "path": str(paths["json"].relative_to(output_root)),
+            "path": f"RESULT/reports/{paths['json'].name}",
             "kind": "report",
         }
     ]
@@ -1007,7 +1127,7 @@ def run_nmr_analysis(
         products.append(
             {
                 "label": "NMR assignment (XLSX)",
-                "path": str(paths["xlsx"].relative_to(output_root)),
+                "path": f"RESULT/reports/{paths['xlsx'].name}",
                 "kind": "table",
             }
         )
@@ -1016,13 +1136,31 @@ def run_nmr_analysis(
             products.append(
                 {
                     "label": f"Plot {i}",
-                    "path": str(plot.relative_to(output_root)),
+                    "path": f"RESULT/reports/{plot.name}",
                     "kind": "plot",
                 }
             )
         except ValueError:
             continue
     write_result_summary(output_root, workflow="nmr", products=products)
+
+    manifest = ResultManifest(task_id="", workflow="nmr", status="completed")
+    manifest.add_product(
+        "nmr_report", "NMR report (JSON)", f"reports/{paths['json'].name}", "report"
+    )
+    if paths["xlsx"]:
+        manifest.add_product(
+            "nmr_xlsx",
+            "NMR assignment (XLSX)",
+            f"reports/{paths['xlsx'].name}",
+            "report",
+        )
+    for i, plot in enumerate(paths["plots"], start=1):
+        manifest.add_product(f"plot_{i}", f"Plot {i}", f"reports/{plot.name}", "report")
+    manifest.write(storage.result_dir())
+
+    if progress_reporter is not None:
+        progress_reporter.complete_stage("nmr_report")
 
     return WorkflowResult(
         status="completed",
@@ -1053,4 +1191,4 @@ def _nucleus_of_element(element: str) -> str:
     return defaults.get(sym, f"1{sym}")
 
 
-__all__ = ["run_nmr_analysis"]
+__all__ = ["NMR_STAGES", "run_nmr_analysis"]

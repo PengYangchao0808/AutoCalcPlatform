@@ -1,0 +1,10 @@
+Command:
+python -m pytest tests/test_scan_workflow.py -q && python -c "import subprocess,sys; r=subprocess.run(['python','-m','acp.cli','run','scan','--help'],capture_output=True); sys.exit(0 if r.returncode==0 else 1)"
+
+Key output:
+...                                                                      [100%]
+3 passed in 2.57s
+The scan help subprocess returned exit code 0.
+
+Exit code: 0
+Result: PASS — scan primitive, trajectory manifest product, and CLI help path verified.

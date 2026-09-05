@@ -3,15 +3,16 @@
 """ACP CLI — Unified command-line interface for Auto-Calc Platform.
 
 Subcommands:
-    run ensemble    Ensemble generation (CREST → CENSO)
-    run energy      Conformer energy ranking
-    run mechanism   Mechanism study workflow
+    run Confsearch  Conformer search and energy refinement
+    run PESsearch   PES scan and candidate extraction
+    run BatchOptimize  Multi-structure calculation plan
+    run irc         Standalone IRC calculation
     run serve       Start the ACP web dashboard (FastAPI + uvicorn)
 
 Usage:
-    acp run ensemble --input "CCO" --output ./result
-    acp run energy --help
-    acp run mechanism --help
+    acp run Confsearch --input "CCO" --output ./result
+    acp run BatchOptimize --items-file structures.xyz --profile opt_freq
+    acp run irc --input ts.xyz --output ./irc_result
     acp run serve --help
 """
 
@@ -23,9 +24,8 @@ import logging
 import os
 import sys
 from collections.abc import Callable
-from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 logger = logging.getLogger(__name__)
 
@@ -123,7 +123,7 @@ def _parse_calc_hess_arg(value: str) -> int | str:
 
 
 def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
-    """Register 5 simple ORCA workflow subcommand parsers + xtb_optimize."""
+    """Register simple ORCA workflow subcommand parsers + xtb_optimize."""
     for wf, wf_label, wf_desc, wf_epilog in [
         (
             "singlepoint",
@@ -144,16 +144,10 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
             "Examples:\n  acp run frequency --input mol.xyz --output ./out\n  acp run frequency --input mol.inp --method wB97M-V --basis def2-TZVPP",
         ),
         (
-            "optfreq",
-            "Opt + Freq",
-            "Run ORCA Opt+Freq as single job",
-            "Examples:\n  acp run optfreq --input mol.xyz --output ./out\n  acp run optfreq --input mol.gjf --method r2SCAN-3c",
-        ),
-        (
-            "optfreqsp",
-            "Opt+Freq+SP+Thermo",
-            "Full pipeline: opt -> freq -> SP -> Shermo",
-            "Examples:\n  acp run optfreqsp --input mol.xyz --output ./out\n  acp run optfreqsp --input mol.xyz --method r2SCAN-3c --sp-method wB97M-V",
+            "scan",
+            "Relaxed Scan",
+            "Run an ORCA relaxed internal-coordinate scan",
+            "Examples:\n  acp run scan --input mol.xyz --coordinate 0,1,1.0,2.0 --output ./out",
         ),
     ]:
         p = run_sub.add_parser(
@@ -161,6 +155,43 @@ def _add_simple_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
         )
         p.set_defaults(workflow=wf)
         _add_simple_workflow_args(p, wf)
+
+    p = run_sub.add_parser(
+        "irc",
+        help="Run an independent IRC from a transition-state structure",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  acp run irc --input ts.xyz --input-role transition_state\n"
+            "  acp run irc --input ts.xyz --direction forward --output ./out"
+        ),
+    )
+    p.set_defaults(workflow="irc")
+    p.add_argument("--input", "-i", required=True, help="Transition-state XYZ input")
+    p.add_argument("--input-role", choices=["transition_state"], help="Explicit input role")
+    p.add_argument(
+        "--direction",
+        choices=["both", "forward", "reverse"],
+        default="both",
+        help="IRC direction (default: both)",
+    )
+    p.add_argument("--output", "-o", default="./irc_output", help="Output directory")
+    p.add_argument("--method", default="r2SCAN-3c", help="IRC method (default: r2SCAN-3c)")
+    p.add_argument("--basis", default="", help="Basis set (default: empty)")
+    p.add_argument("--maxpoints", "--max-points", dest="maxpoints", type=int, default=100)
+    p.add_argument("--step", type=float, default=0.1, help="IRC step size (default: 0.1)")
+    p.add_argument("--charge", type=int, default=0)
+    p.add_argument("--multiplicity", type=int, default=1)
+    p.add_argument("--name", type=str, help="Task name")
+    p.add_argument("--nproc", type=int, help="Number of CPU cores")
+    p.add_argument("--mem", type=str, help="Memory limit")
+    p.add_argument("--config", type=str, help="Configuration YAML file")
+    p.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
 
     # xTB optimization (separate parser — different solvent models & params)
     p = run_sub.add_parser(
@@ -220,7 +251,7 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
         help="Comma-separated ORCA route extras (e.g. SlowConv,NoFinalGrid)",
     )
 
-    if wf in ("singlepoint", "optimize", "frequency", "optfreq", "optfreqsp"):
+    if wf in ("singlepoint", "optimize", "frequency", "scan"):
         parser.add_argument(
             "--aux-j-basis",
             default="AutoAux",
@@ -245,7 +276,7 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
             "--aux-basis", dest="aux_j_basis_legacy", default=None, help=argparse.SUPPRESS
         )
 
-    if wf in ("optimize", "optfreq", "optfreqsp"):
+    if wf == "optimize":
         parser.add_argument(
             "--geom-maxiter",
             type=int,
@@ -284,53 +315,19 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
             ),
         )
 
-    if wf == "optfreqsp":
+    if wf == "scan":
         parser.add_argument(
-            "--temperature", type=float, default=298.15, help="Temperature in K (default: 298.15)"
+            "--coordinate",
+            action="append",
+            required=True,
+            metavar="ATOM1,ATOM2,START,END",
+            help="Zero-based distance coordinate; repeat for coupled coordinates",
         )
         parser.add_argument(
-            "--pressure", type=float, default=1.0, help="Pressure in atm (default: 1.0)"
-        )
-        parser.add_argument(
-            "--scale-factor",
-            type=float,
-            default=0.9905,
-            help="Frequency scale factor for ZPE/thermo (default: 0.9905)",
-        )
-
-    if wf == "optfreqsp":
-        parser.add_argument(
-            "--sp-method", default="wB97M-V", help="SP functional (default: wB97M-V)"
-        )
-        parser.add_argument(
-            "--sp-basis", default="def2-TZVPP", help="SP basis set (default: def2-TZVPP)"
-        )
-        parser.add_argument(
-            "--sp-aux-j-basis",
-            default="AutoAux",
-            metavar="BASIS",
-            help="SP auxiliary /J basis for RI-J fitting (default: AutoAux). Common: AutoAux, def2/J.",
-        )
-        parser.add_argument(
-            "--sp-aux-c-basis",
-            default="AutoAux",
-            metavar="BASIS",
-            help="SP auxiliary /C basis for RI-MP2 correlation (default: AutoAux). "
-            "Common: AutoAux, def2-TZVPP/C. Only used by double-hybrid functionals (PWPB95) and DLPNO.",
-        )
-        parser.add_argument("--sp-aux-basis", default=None, help=argparse.SUPPRESS)
-        parser.add_argument(
-            "--sp-ri-approximation",
-            default="RIJCOSX",
-            choices=["none", "RI", "RIJCOSX", "RIJK"],
-            help="SP RI approximation (default: RIJCOSX)",
-        )
-        parser.add_argument("--sp-dispersion", default="none", help="SP dispersion correction")
-        parser.add_argument(
-            "--sp-solvent", default="", help="SP solvent name (e.g. water; defaults to --solvent)"
-        )
-        parser.add_argument(
-            "--sp-solvent-model", default="", help="SP solvent model (defaults to --solvent-model)"
+            "--scan-points",
+            type=int,
+            default=21,
+            help="Number of scan frames including both endpoints (default: 21)",
         )
 
 
@@ -388,6 +385,873 @@ def _add_xtb_optimize_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_stage_workflow_parsers(run_sub: argparse._SubParsersAction) -> None:
+    """Register the active staged workflow subcommands."""
+    conf = run_sub.add_parser(
+        "Confsearch",
+        help="Unified conformer search + energies",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run Confsearch --input "CCO" --protocol xtb-crest --refinement-policy screen --output ./out
+  acp run Confsearch --input "CCO" --protocol xtbmd-censo --profile light \\
+      --refinement-policy rank1 --output ./out
+        """,
+    )
+    conf.set_defaults(workflow="Confsearch")
+    conf_input = conf.add_mutually_exclusive_group(required=True)
+    conf_input.add_argument("--input", "-i", type=str, help="SMILES string or input file path")
+    conf_input.add_argument(
+        "--batch-file", type=str, help="Batch input file (one molecule per line)"
+    )
+    conf.add_argument("--output", "-o", default="./confsearch_out", help="Output directory")
+    conf.add_argument(
+        "--protocol",
+        default="censo-crest",
+        choices=["xtb-crest", "xtb-md", "censo-crest", "xtbmd-censo"],
+        help="Sampling/energy protocol (default: censo-crest)",
+    )
+    conf.add_argument(
+        "--profile",
+        default="default",
+        choices=["light", "default", "high"],
+        help="Quality profile inside the protocol (default: default)",
+    )
+    conf.add_argument(
+        "--refinement-policy",
+        default="screen",
+        choices=["screen", "rank1", "cumulative-99", "all"],
+        help="Fine-refinement scope (default: screen)",
+    )
+    conf.add_argument(
+        "--backend",
+        default="native",
+        choices=["native"],
+        help="Execution backend (default: native; rph-parity retired 2026-08)",
+    )
+    conf.add_argument(
+        "--preset",
+        choices=["censo-light", "censo-default", "censo-zero"],
+        help="CENSO preset override (censo-crest / xtbmd-censo only)",
+    )
+    conf.add_argument("--levels", type=str, help="Method level overrides as JSON")
+    conf.add_argument("--solvent", type=str, help="Solvent (gas phase if omitted)")
+    conf.add_argument("--ewin", type=float, help="Energy window in kcal/mol")
+    conf.add_argument("--temperature", type=float, help="Temperature in K (Boltzmann/MD)")
+    conf.add_argument("--md-temp", type=float, help="MD temperature in K (xtb-md / xtbmd-censo)")
+    conf.add_argument("--md-time", type=float, help="MD length in ps")
+    conf.add_argument("--md-seeds", type=int, help="MD replica count")
+    conf.add_argument("--max-frames", type=int, help="Batch-opt frame cap")
+    conf.add_argument("--charge", type=int, help="Molecular charge (default: 0)")
+    conf.add_argument("--multiplicity", type=int, help="Spin multiplicity (default: 1)")
+    conf.add_argument("--name", type=str, help="Molecule name")
+    conf.add_argument("--nproc", type=int, help="Number of processors")
+    conf.add_argument("--mem", type=str, help="Memory limit")
+    conf.add_argument("--config", type=str, help="Configuration YAML file")
+    conf.add_argument("--save-config", type=str, help="Save the merged configuration to YAML")
+    conf.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
+    pes = run_sub.add_parser(
+        "PESsearch",
+        help="PES scan + candidate structure extraction",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run PESsearch --xyz-text @molecule.xyz --scan-atoms 0,1 \\
+      --scan-start 1.0 --scan-end 3.0 --scan-points 21 --output ./pes_out
+        """,
+    )
+    pes.set_defaults(workflow="PESsearch")
+    pes.add_argument(
+        "--mode",
+        choices=["path", "bond_length_scan"],
+        default="bond_length_scan",
+        help=(
+            "Search mode (default: bond_length_scan). 'path' is retained only "
+            "for legacy result manifests."
+        ),
+    )
+    pes.add_argument(
+        "--from",
+        dest="from_manifest",
+        help="Direct path to a confsearch_manifest.json (path mode) or a structure/xyz source",
+    )
+    pes.add_argument("--from-job", help="Source Confsearch job id (resolved via the jobs root)")
+    pes.add_argument(
+        "--from-artifact",
+        default=None,
+        help="Artifact path relative to the source job directory (default: RESULT/confsearch/confsearch_manifest.json)",
+    )
+    pes.add_argument(
+        "--strategy",
+        default="guided-scan",
+        choices=["guided-scan", "reverse-peb", "direct-ts"],
+        help="Path-search strategy (default: guided-scan)",
+    )
+    pes.add_argument(
+        "--plan",
+        help="Reaction coordinate plan as a JSON string or path to a JSON file",
+    )
+    pes.add_argument("--product", help="Product XYZ file path")
+    pes.add_argument("--product-manifest", help="Product-side confsearch_manifest.json path")
+    pes.add_argument("--reactant-conf", help="Reactant conformer id (default: rank 1)")
+    pes.add_argument("--product-conf", help="Product conformer id (default: rank 1)")
+    pes.add_argument("--ts-guess", help="TS guess XYZ (required by direct-ts)")
+    # ---------------------------------------------------------------------------
+    # bond_length_scan mode
+    # ---------------------------------------------------------------------------
+    pes.add_argument(
+        "--source-type",
+        choices=["task_artifact", "structure_asset", "xyz_text"],
+        help="Structure source for bond_length_scan (default: xyz_text)",
+    )
+    pes.add_argument(
+        "--xyz-text",
+        help="Pasted XYZ text (or @file path) for source_type=xyz_text",
+    )
+    pes.add_argument(
+        "--asset-path",
+        help="Resolved structure-asset file path for source_type=structure_asset",
+    )
+    pes.add_argument(
+        "--from-frame",
+        type=int,
+        help="frame_index selector into a task_artifact structure list (0-based)",
+    )
+    pes.add_argument(
+        "--scan-config",
+        help="Bond-length-scan request as a JSON string or path to a JSON file",
+    )
+    pes.add_argument(
+        "--scan-kind",
+        choices=["distance", "angle", "dihedral"],
+        help="Scanned coordinate kind (default: distance)",
+    )
+    pes.add_argument(
+        "--selection-kind",
+        choices=["bond_stretch", "angle", "dihedral", "double_bond_scan"],
+        help=(
+            "Generic atom-selection function: bond_stretch, angle, dihedral, or double_bond_scan"
+        ),
+    )
+    pes.add_argument(
+        "--scan-bond-type",
+        choices=["auto", "single", "double", "multiple", "aromatic"],
+        help="Bond type metadata for distance scans (default: auto)",
+    )
+    pes.add_argument(
+        "--scan-atoms",
+        help="Comma-separated 0-based atom pair for the scan, e.g. '0,1'",
+    )
+    pes.add_argument("--scan-start", type=float, help="Scan start distance (Angstrom)")
+    pes.add_argument("--scan-end", type=float, help="Scan end distance (Angstrom)")
+    pes.add_argument("--scan-points", type=int, help="Scan point count (3–101)")
+    pes.add_argument("--scan-method", help="Scan optimisation method (default: GFN2-xTB)")
+    pes.add_argument("--sp-method", help="Single-point method (default: B97-3c)")
+    pes.add_argument("--sp-basis", help="Single-point basis (composite methods: none)")
+    pes.add_argument("--no-sp", action="store_true", help="Disable the single-point refinement")
+    pes.add_argument("--max-iterations", type=int, help="Max optimisation iterations per point")
+    pes.add_argument(
+        "--input", "-i", dest="input_xyz", help="Input XYZ file for direct bond-length scan"
+    )
+    pes.add_argument(
+        "--coordinate",
+        action="append",
+        dest="coordinates",
+        metavar="A1,A2,START,END",
+        help=(
+            "Scan coordinate as comma-separated atom indices + range "
+            "(repeatable, e.g. --coordinate '0,1,1.0,3.0')"
+        ),
+    )
+    pes.add_argument("--points", type=int, help="Number of scan points (3-101)")
+    pes.add_argument("--reaction", help="Path to a reaction.json definition (optional)")
+    pes.add_argument("--output", "-o", default="./pes_search_out", help="Output directory")
+    pes.add_argument("--charge", type=int, help="Molecular charge override")
+    pes.add_argument("--multiplicity", type=int, help="Spin multiplicity override")
+    pes.add_argument("--nproc", type=int, help="Number of CPU cores (overrides config)")
+    pes.add_argument(
+        "--mem",
+        type=str,
+        help="Memory limit, e.g. 32GB, 4096MB (overrides config)",
+    )
+    pes.add_argument("--config", type=str, help="Configuration YAML file")
+    pes.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
+
+def _add_batch_optimize_parser(run_sub: argparse._SubParsersAction) -> None:
+    batch = run_sub.add_parser(
+        "BatchOptimize",
+        help="Batch optimization with optional frequency, single-point, and thermochemistry steps",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""\
+Examples:
+  acp run BatchOptimize --from-artifact ./pes_job --profile opt_freq
+  acp run BatchOptimize --items-file structures.xyz --profile opt_freq_sp --select ts_001
+        """,
+    )
+    batch.set_defaults(workflow="BatchOptimize")
+    source = batch.add_mutually_exclusive_group(required=True)
+    source.add_argument(
+        "--from-job",
+        help="Source PESsearch job id (reads <job_dir>/RESULT/result_manifest.json)",
+    )
+    source.add_argument(
+        "--from-artifact",
+        help="Task directory or result_manifest.json containing structure products",
+    )
+    source.add_argument(
+        "--items-file",
+        help="Batch request JSON or multi-frame XYZ file",
+    )
+    batch.add_argument(
+        "--profile",
+        default="opt_freq",
+        choices=["opt_only", "opt_freq", "opt_freq_sp", "opt_freq_sp_thermo"],
+        help="Batch calculation profile (default: opt_freq)",
+    )
+    batch.add_argument(
+        "--layout-mode",
+        choices=["batch", "single_flat"],
+        default="batch",
+        help=(
+            "On-disk layout: batch isolates multiple items under batch/<item_id>; "
+            "single_flat is for one scheduler task (default: batch)"
+        ),
+    )
+    batch.add_argument("--select", help="Comma-separated item or candidate ids")
+    batch.add_argument(
+        "--method",
+        "--optimization-method",
+        dest="optimization_method",
+        default="",
+        help="Shared ORCA method for optimization and frequency",
+    )
+    batch.add_argument(
+        "--basis",
+        "--optimization-basis",
+        dest="optimization_basis",
+        default="",
+        help="Shared ORCA basis for optimization and frequency",
+    )
+    batch.add_argument(
+        "--sp-method", dest="single_point_method", default="", help="ORCA method for single-point"
+    )
+    batch.add_argument(
+        "--sp-basis", dest="single_point_basis", default="", help="ORCA basis for single-point"
+    )
+    batch.add_argument(
+        "--temperature",
+        type=float,
+        default=298.15,
+        help="Thermochemistry temperature in K (default: 298.15)",
+    )
+    batch.add_argument(
+        "--pressure",
+        type=float,
+        default=1.0,
+        help="Thermochemistry pressure in atm (default: 1.0)",
+    )
+    batch.add_argument(
+        "--scale-factor",
+        type=float,
+        default=0.9905,
+        help="Frequency scale factor for thermochemistry (default: 0.9905)",
+    )
+    batch.add_argument("--minimum-method", help="ORCA method override for minimum structures")
+    batch.add_argument("--minimum-basis", help="ORCA basis override for minimum structures")
+    batch.add_argument(
+        "--transition-state-method",
+        help="ORCA method override for transition-state structures",
+    )
+    batch.add_argument(
+        "--transition-state-basis",
+        help="ORCA basis override for transition-state structures",
+    )
+    batch.add_argument("--output", "-o", default="./batch_optimize_out", help="Output directory")
+    batch.add_argument("--charge", type=int, default=0, help="Default molecular charge")
+    batch.add_argument("--multiplicity", type=int, default=1, help="Default spin multiplicity")
+    batch.add_argument("--nproc", type=int, help="Number of CPU cores (overrides config)")
+    batch.add_argument("--mem", type=str, help="Memory limit (overrides config)")
+    batch.add_argument("--config", type=str, help="Configuration YAML file")
+    batch.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
+
+def _load_plan_argument(plan_arg: str | None) -> dict[str, Any] | None:
+    """Parse --plan as a JSON string or a path to a JSON file."""
+    if not plan_arg:
+        return None
+    text = plan_arg
+    # Guard: stat'ing inline JSON longer than NAME_MAX raises OSError(ENAMETOOLONG);
+    # only probe the filesystem for non-JSON values, path errors fall through to json.loads.
+    if not plan_arg.lstrip().startswith("{"):
+        try:
+            plan_path = Path(plan_arg)
+            if plan_path.is_file():
+                text = plan_path.read_text(encoding="utf-8")
+        except (OSError, ValueError):
+            pass
+    try:
+        parsed = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid --plan JSON: {exc}") from exc
+    if not isinstance(parsed, dict):
+        raise ValueError("--plan must be a JSON object")
+    return parsed
+
+
+def _parse_select(select_arg: str | None) -> list[str] | None:
+    if not select_arg:
+        return None
+    return [part.strip() for part in select_arg.split(",") if part.strip()]
+
+
+def _handle_confsearch(args: argparse.Namespace) -> int:
+    """Execute the unified Confsearch workflow."""
+    setup_logging(args.log_level)
+
+    levels = _parse_levels_json(args.levels)
+    if args.levels and levels is None:
+        return 1
+
+    cfg = _build_config(args)
+    output_dir = Path(args.output)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.save_config:
+        from cccp.config import save_config as save_cfg
+
+        save_cfg(cfg, Path(args.save_config))
+        logger.info("Configuration saved to: %s", args.save_config)
+
+    md_params: dict[str, Any] = {}
+    for cli_key, param_key in (
+        ("md_temp", "md_temperature"),
+        ("md_time", "md_time_ps"),
+        ("md_seeds", "md_seeds"),
+        ("max_frames", "max_frames"),
+    ):
+        value = getattr(args, cli_key, None)
+        if value is not None:
+            md_params[param_key] = value
+
+    from acp.calculations.progress import ProgressReporter
+    from acp.confsearch import ConfsearchEngine, ConfsearchRequest
+    from acp.confsearch.engine import CONFSEARCH_STAGES
+
+    def _run_one(source: str, name: str | None) -> int:
+        reporter = ProgressReporter(
+            output_dir,
+            job_name="Confsearch",
+            stages=list(CONFSEARCH_STAGES),
+        )
+        request = ConfsearchRequest(
+            input_source=source,
+            output_dir=output_dir,
+            protocol=args.protocol,
+            profile=args.profile,
+            refinement_policy=args.refinement_policy,
+            backend=args.backend,
+            name=name,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            solvent=args.solvent,
+            nproc=args.nproc,
+            preset=args.preset,
+            levels=levels,
+            temperature=args.temperature,
+            energy_window=args.ewin,
+            md_params=md_params,
+            config=cfg,
+        )
+        try:
+            result = ConfsearchEngine().run(request, progress_reporter=reporter)
+        except KeyboardInterrupt:
+            logger.warning("Interrupted by user")
+            reporter.fail("interrupted")
+            return 130
+        except ValueError as exc:
+            logger.error("%s", exc)
+            return 1
+        if result.status != "completed":
+            logger.error("Confsearch failed: %s", result.error)
+            return 1
+        logger.info("Confsearch completed (%s + %s)", result.protocol, result.refinement_policy)
+        logger.info("  Conformers  : %d", len(result.conformers))
+        logger.info("  Manifest    : %s", result.manifest_path)
+        logger.info("  G1 gate     : %s", result.quality_gates.get("G1"))
+        return 0
+
+    if args.batch_file:
+        from cccp.io import load_batch_inputs
+
+        inputs = load_batch_inputs(Path(args.batch_file))
+        failures = 0
+        for index, molecule in enumerate(inputs, start=1):
+            source = str(molecule.source_path or molecule.metadata.get("smiles", ""))
+            logger.info("[%d/%d] Confsearch %s", index, len(inputs), molecule.name)
+            if _run_one(source, molecule.name) != 0:
+                failures += 1
+        return 1 if failures else 0
+    return _run_one(args.input, args.name)
+
+
+def _handle_pessearch(args: argparse.Namespace) -> int:
+    """Execute the PESsearch workflow."""
+    setup_logging(args.log_level)
+    cfg = _build_config(args)
+
+    from acp.calculations.pes.scan import PES_SCAN_STAGES
+    from acp.calculations.progress import ProgressReporter
+
+    pes_stages: list[str] = [str(stage) for stage in PES_SCAN_STAGES]
+    reporter = ProgressReporter(Path(args.output), job_name="PESsearch", stages=pes_stages)
+
+    error_msg: str | None = None
+    rc = 0
+    result: Any | None = None
+
+    try:
+        # -- resolve reaction definition (optional, form ④) --
+        reaction_path = getattr(args, "reaction", None)
+        reaction: dict[str, Any] | None = None
+        if reaction_path:
+            from acp.compat.legacy.manifests import read_reaction_definition
+
+            reaction = read_reaction_definition(Path(reaction_path))
+
+        # -- determine input form --
+        input_xyz_str = getattr(args, "input_xyz", None)
+        from_artifact = getattr(args, "from_artifact", None)
+        from_job = getattr(args, "from_job", None)
+        from_manifest = getattr(args, "from_manifest", None)
+        _mode = getattr(args, "mode", "bond_length_scan")
+
+        if _mode == "bond_length_scan" and _has_bond_scan_source(args):
+            # Form ⑤: scheduler --scan-config / direct bond-scan source args
+            from acp.workflows.pes_search import run_bond_length_scan
+
+            result = run_bond_length_scan(
+                scan_request=_build_bond_scan_request(args),
+                output_dir=Path(args.output),
+                config=cfg,
+                progress_reporter=reporter,
+            )
+        elif input_xyz_str:
+            # Form ③: direct XYZ + coordinate
+            input_xyz = Path(input_xyz_str).expanduser().resolve()
+            if not input_xyz.is_file():
+                logger.error("PES_E_MANIFEST: Input file not found: %s", input_xyz)
+                error_msg = f"PES_E_MANIFEST: Input file not found: {input_xyz}"
+                rc = 2
+            else:
+                coord_strings = getattr(args, "coordinates", None)
+                coordinate = _parse_pes_coordinates(coord_strings, args)
+
+                from acp.workflows.pes_search import run_pes_search
+
+                result = run_pes_search(
+                    input_xyz=input_xyz,
+                    coordinate=coordinate,
+                    strategy=getattr(args, "strategy", None),
+                    reaction=reaction,
+                    charge=getattr(args, "charge", 0) or 0,
+                    multiplicity=getattr(args, "multiplicity", 1) or 1,
+                    output_dir=Path(args.output),
+                    config=cfg,
+                    progress_reporter=reporter,
+                )
+        elif from_manifest or from_job or from_artifact:
+            # Forms ①/②: manifest-based
+            manifest_path: Path | None = None
+            if from_manifest:
+                manifest_path = Path(from_manifest).expanduser().resolve()
+            elif from_job:
+                manifest_path = _resolve_pes_manifest_from_job(from_job, from_artifact)
+            elif from_artifact:
+                manifest_path = Path(from_artifact).expanduser().resolve()
+
+            if manifest_path is None or not manifest_path.is_file():
+                code = "PES_E_MANIFEST"
+                logger.error("%s: Manifest not found: %s", code, manifest_path)
+                error_msg = f"{code}: Manifest not found: {manifest_path}"
+                rc = 2
+            else:
+                from acp.workflows.pes_search import run_pes_search
+
+                result = run_pes_search(
+                    confsearch_manifest=manifest_path,
+                    strategy=getattr(args, "strategy", None),
+                    reaction=reaction,
+                    charge=getattr(args, "charge", 0) or 0,
+                    multiplicity=getattr(args, "multiplicity", 1) or 1,
+                    output_dir=Path(args.output),
+                    config=cfg,
+                    progress_reporter=reporter,
+                )
+        else:
+            logger.error(
+                "PESsearch requires --input, --from-artifact, --from-job, "
+                "or a bond-scan source (--scan-config / --xyz-text)"
+            )
+            error_msg = (
+                "PESsearch requires --input, --from-artifact, --from-job, "
+                "or a bond-scan source (--scan-config / --xyz-text)"
+            )
+            rc = 2
+
+        if error_msg is None and result is not None:
+            if result.status != "completed":
+                error_str = result.error or ""
+                for code in ("PES_E_MANIFEST", "PES_E_COORD", "PES_E_STRATEGY"):
+                    if code in error_str:
+                        logger.error("PESsearch failed: %s", error_str)
+                        error_msg = error_str
+                        rc = 2
+                        break
+                else:
+                    logger.error("PESsearch failed: %s", error_str)
+                    error_msg = error_str
+                    rc = 1
+            else:
+                meta = result.metadata
+                logger.info(
+                    "PESsearch completed: %d TS + %d INT candidates",
+                    meta.get("ts_candidates", 0),
+                    meta.get("int_candidates", 0),
+                )
+                logger.info("  Manifest    : %s", meta.get("manifest_path"))
+                reporter.complete()
+
+    except KeyboardInterrupt:
+        logger.warning("Interrupted by user")
+        error_msg = "interrupted"
+        rc = 130
+    except Exception as exc:
+        error_str = str(exc)
+        # Extract error code prefix for exit code 2
+        for code in ("PES_E_MANIFEST", "PES_E_COORD", "PES_E_STRATEGY"):
+            if code in error_str:
+                logger.error("%s", exc)
+                error_msg = error_str
+                rc = 2
+                break
+        else:
+            logger.exception("PESsearch failed: %s", exc)
+            error_msg = error_str
+            rc = 1
+    finally:
+        if error_msg is not None:
+            reporter.fail(error_msg)
+
+    return rc
+
+
+def _resolve_pes_manifest_from_job(job_id: str, from_artifact: str | None) -> Path:
+    """Resolve a confsearch manifest path from a job ID."""
+    from acp.core.paths import resolve_run_root
+    from acp.scheduler.store import JobStore
+
+    store = JobStore(resolve_run_root() / "acp_jobs.db")
+    record = store.get(job_id)
+    if record is None:
+        raise FileNotFoundError(f"Job not found: {job_id}")
+    work_dir = Path(record.work_dir)
+    relative = from_artifact or "RESULT/confsearch/confsearch_manifest.json"
+    artifact = work_dir / relative
+    if not artifact.is_file():
+        raise FileNotFoundError(f"Source artifact not found: {artifact}")
+    return artifact.resolve()
+
+
+def _resolve_batch_artifact_from_job(job_id: str, from_artifact: str | None) -> Path:
+    """Resolve a BatchOptimize source path (task dir or manifest) from a job ID."""
+    from acp.core.paths import resolve_run_root
+    from acp.scheduler.store import JobStore
+
+    store = JobStore(resolve_run_root() / "acp_jobs.db")
+    record = store.get(job_id)
+    if record is None:
+        raise FileNotFoundError(f"Job not found: {job_id}")
+    work_dir = Path(record.work_dir)
+    if not work_dir.is_dir():
+        raise FileNotFoundError(f"Job work dir not found: {work_dir}")
+    relative = from_artifact or "RESULT/result_manifest.json"
+    artifact = work_dir / relative
+    if not artifact.is_file():
+        raise FileNotFoundError(f"Result artifact not found: {artifact}")
+    return artifact.resolve()
+
+
+def _parse_pes_coordinates(
+    coord_strings: list[str] | None,
+    args: argparse.Namespace,
+) -> Any:
+    """Parse --coordinate arguments into a ScanCoordinate."""
+    from acp.calculations.pes.contracts import ScanCoordinate
+
+    n_points = getattr(args, "points", None) or 21
+
+    if coord_strings:
+        parts = [float(x.strip()) for x in coord_strings[0].split(",") if x.strip()]
+        if len(parts) != 4:
+            from acp.workflows.pes_search import PES_E_COORD
+
+            raise ValueError(
+                f"[{PES_E_COORD}] --coordinate requires exactly 4 values: "
+                "a1,a2,start,end (e.g. '0,1,1.0,3.0')"
+            )
+        a1, a2, start, end = int(parts[0]), int(parts[1]), parts[2], parts[3]
+        return ScanCoordinate(
+            kind="distance",
+            atoms=(a1, a2),
+            start=start,
+            end=end,
+            n_points=n_points,
+        )
+
+    # Fallback to legacy scan args
+    atoms_str = getattr(args, "scan_atoms", None)
+    if atoms_str:
+        atom_parts = [int(x.strip()) for x in str(atoms_str).split(",") if x.strip()]
+        start = getattr(args, "scan_start", None) or 1.0
+        end = getattr(args, "scan_end", None) or 3.0
+        points = getattr(args, "scan_points", None) or n_points
+        kind = getattr(args, "scan_kind", None) or "distance"
+        return ScanCoordinate(
+            kind=kind,
+            atoms=tuple(atom_parts),
+            start=start,
+            end=end,
+            n_points=points,
+        )
+
+    # Default coordinate
+    return None
+
+
+def _has_bond_scan_source(args: argparse.Namespace) -> bool:
+    """Return whether an explicit bond-length-scan source is present.
+
+    Covers the scheduler contract (``--scan-config`` ships the full request
+    including the source) and the direct CLI source forms (``--source-type``
+    / ``--xyz-text`` / ``--asset-path``). Plain ``--input`` stays on the
+    engine path.
+    """
+    return any(
+        [
+            getattr(args, "scan_config", None),
+            getattr(args, "source_type", None),
+            getattr(args, "xyz_text", None),
+            getattr(args, "asset_path", None),
+        ]
+    )
+
+
+def _build_bond_scan_request(args: argparse.Namespace) -> dict[str, Any]:
+    """Assemble the bond-length-scan request dict from CLI args."""
+    scan_config = _load_plan_argument(getattr(args, "scan_config", None)) or {}
+
+    explicit_source = any(
+        [
+            getattr(args, "source_type", None),
+            getattr(args, "xyz_text", None),
+            getattr(args, "asset_path", None),
+            getattr(args, "from_manifest", None),
+            getattr(args, "from_job", None),
+        ]
+    )
+    config_source = scan_config.get("source")
+
+    if not explicit_source and isinstance(config_source, dict) and config_source.get("source_type"):
+        # Scheduler path: the full scan_request (source included) ships in scan_config.
+        source = dict(config_source)
+    else:
+        source_type = getattr(args, "source_type", None) or (
+            "task_artifact"
+            if (getattr(args, "from_manifest", None) or getattr(args, "from_job", None))
+            else "xyz_text"
+        )
+
+        from_frame = getattr(args, "from_frame", None)
+        if source_type == "task_artifact":
+            source = {
+                "source_type": "task_artifact",
+                "source_job_id": getattr(args, "from_job", None),
+                "artifact_path": getattr(args, "from_manifest", None),
+                "structure_selector": {
+                    "kind": "frame_index" if from_frame is not None else "final_structure",
+                    "frame_index": from_frame,
+                },
+            }
+        elif source_type == "structure_asset":
+            source = {
+                "source_type": "structure_asset",
+                "asset_path": getattr(args, "asset_path", None),
+                "asset_id": getattr(args, "from_job", None),
+            }
+        else:
+            xyz_text = getattr(args, "xyz_text", None)
+            if xyz_text and xyz_text.startswith("@"):
+                xyz_path = Path(xyz_text[1:])
+                if not xyz_path.is_file():
+                    raise ValueError(f"--xyz-text file not found: {xyz_path}")
+                xyz_text = xyz_path.read_text(encoding="utf-8")
+            source = {"source_type": "xyz_text", "xyz_text": xyz_text}
+    if getattr(args, "charge", None) is not None:
+        source["charge"] = args.charge
+    if getattr(args, "multiplicity", None) is not None:
+        source["multiplicity"] = args.multiplicity
+
+    coordinate = dict(scan_config.get("coordinate") or {})
+    coordinates = scan_config.get("coordinates")
+    selection = dict(scan_config.get("selection") or {})
+    protocol = dict(scan_config.get("protocol") or {})
+
+    if getattr(args, "scan_kind", None):
+        coordinate["kind"] = args.scan_kind
+    if getattr(args, "scan_bond_type", None):
+        coordinate["bond_type"] = args.scan_bond_type
+    if getattr(args, "selection_kind", None):
+        selection["kind"] = args.selection_kind
+
+    atoms = getattr(args, "scan_atoms", None)
+    if atoms:
+        parts = [int(part) for part in str(atoms).split(",") if part.strip()]
+        selection_kind = str(selection.get("kind") or "")
+        expected_atoms = {
+            "bond_stretch": 2,
+            "distance": 2,
+            "angle": 3,
+            "dihedral": 4,
+            "double_bond_scan": 4,
+        }.get(selection_kind or str(coordinate.get("kind") or "distance"), 2)
+        if len(parts) != expected_atoms:
+            raise ValueError(
+                f"--scan-atoms must contain {expected_atoms} indices for "
+                f"{selection_kind or coordinate.get('kind') or 'distance'} scan"
+            )
+        if selection_kind == "double_bond_scan":
+            coordinate["kind"] = "distance"
+            coordinate["atoms"] = parts[:2]
+            coordinates = [
+                dict(coordinate, atoms=parts[:2]),
+                dict(coordinate, atoms=parts[2:4]),
+            ]
+        else:
+            coordinate["atoms"] = parts
+    if getattr(args, "scan_start", None) is not None:
+        coordinate["start"] = args.scan_start
+    if getattr(args, "scan_end", None) is not None:
+        coordinate["end"] = args.scan_end
+    if getattr(args, "scan_points", None) is not None:
+        coordinate["n_points"] = args.scan_points
+    if getattr(args, "scan_method", None):
+        protocol.setdefault("scan_optimizer", {})["method"] = args.scan_method
+    if getattr(args, "sp_method", None):
+        protocol.setdefault("single_point", {})["method"] = args.sp_method
+    if getattr(args, "sp_basis", None):
+        protocol.setdefault("single_point", {})["basis"] = args.sp_basis
+    if getattr(args, "no_sp", False):
+        protocol.setdefault("single_point", {})["enabled"] = False
+    if getattr(args, "max_iterations", None) is not None:
+        protocol.setdefault("scan_driver", {})["max_iterations"] = args.max_iterations
+        protocol.setdefault("scan_optimizer", {})["max_iterations"] = args.max_iterations
+
+    result: dict[str, Any] = {
+        "mode": "bond_length_scan",
+        "source": source,
+        "coordinate": coordinate,
+        "protocol": protocol,
+    }
+    if isinstance(coordinates, list):
+        result["coordinates"] = coordinates
+    if selection:
+        result["selection"] = selection
+    return result
+
+
+def _handle_batch_optimize(args: argparse.Namespace) -> int:
+    from acp.calculations.batch.engine import batch_stage_names
+    from acp.calculations.batch.options import BatchMethodOptions
+    from acp.calculations.progress import ProgressReporter
+    from acp.workflows.batch_optimize import BatchOptimizeInputError, run_batch_optimize
+
+    setup_logging(args.log_level)
+    output_dir = Path(args.output)
+    reporter = ProgressReporter(
+        output_dir,
+        job_name="BatchOptimize",
+        stages=batch_stage_names(args.profile),
+    )
+    from_job = getattr(args, "from_job", None)
+    if from_job:
+        source = _resolve_batch_artifact_from_job(from_job, args.from_artifact)
+    else:
+        source = args.items_file or args.from_artifact
+    try:
+        result = run_batch_optimize(
+            source,
+            profile=args.profile,
+            output_dir=output_dir,
+            config=_build_config(args),
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            select=_parse_select(args.select),
+            methods=BatchMethodOptions(
+                optimization_method=args.optimization_method,
+                optimization_basis=args.optimization_basis,
+                single_point_method=args.single_point_method,
+                single_point_basis=args.single_point_basis,
+                temperature=args.temperature,
+                pressure=args.pressure,
+                scale_factor=args.scale_factor,
+                minimum_method=args.minimum_method or "",
+                minimum_basis=args.minimum_basis or "",
+                transition_state_method=args.transition_state_method or "",
+                transition_state_basis=args.transition_state_basis or "",
+            ),
+            layout_mode=args.layout_mode,
+            progress_reporter=reporter,
+        )
+    except BatchOptimizeInputError as exc:
+        logger.error("BatchOptimize input error: %s", exc)
+        reporter.fail(str(exc))
+        return 2
+    except ValueError as exc:
+        logger.error("BatchOptimize input error: %s", exc)
+        reporter.fail(str(exc))
+        return 2
+    except KeyboardInterrupt:
+        logger.warning("BatchOptimize interrupted by user")
+        reporter.fail("interrupted")
+        return 130
+
+    if result.status != "completed":
+        logger.error("BatchOptimize failed: %s", result.error)
+        reporter.fail(result.error or "BatchOptimize failed")
+        return 1
+    logger.info("BatchOptimize completed: profile=%s", args.profile)
+    logger.info("  Manifest: %s", result.metadata.get("manifest_path"))
+    reporter.complete()
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the top-level ACP argument parser."""
     parser = argparse.ArgumentParser(
@@ -400,9 +1264,6 @@ def build_parser() -> argparse.ArgumentParser:
     # -- run -----------------------------------------------------------------
     run_parser = subparsers.add_parser("run", help="Run a computational workflow")
     run_sub = run_parser.add_subparsers(dest="workflow", required=True)
-
-    mechanism_tools = subparsers.add_parser("mechanism", help="Mechanism-study utilities")
-    mechanism_tools_sub = mechanism_tools.add_subparsers(dest="mechanism_command", required=True)
 
     doctor_parser = subparsers.add_parser(
         "doctor",
@@ -421,41 +1282,6 @@ Examples:
     )
     doctor_parser.add_argument(
         "--log-level",
-        default="INFO",
-        help="Logging level (default: INFO)",
-    )
-    mechanism_resume = mechanism_tools_sub.add_parser(
-        "resume",
-        help="Resume a persisted mechanism study",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\
-Examples:
-  acp mechanism resume --study study_001
-  acp mechanism resume --study study_001 --study-root ./mechanism_output
-  acp mechanism resume --study study_001 --decision decision_001=continue
-        """,
-    )
-    mechanism_resume.add_argument(
-        "--study",
-        required=True,
-        help="Study identifier under <study-root>/mechanism_study/<study>",
-    )
-    mechanism_resume.add_argument(
-        "--study-root",
-        default="./mechanism_output",
-        help="Mechanism-study root directory (default: ./mechanism_output)",
-    )
-    mechanism_resume.add_argument(
-        "--decision",
-        action="append",
-        default=[],
-        metavar="ID=RESOLUTION",
-        help="Decision resolution (repeatable; resolution may be plain text or JSON)",
-    )
-    mechanism_resume.add_argument(
-        "--log-level",
-        type=str,
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         default="INFO",
         help="Logging level (default: INFO)",
     )
@@ -1118,160 +1944,11 @@ Examples:
         help="Resume from stage checkpoints (traj/isomers/cluster; fingerprint-validated)",
     )
 
-    # -- simple workflows (singlepoint / optimize / frequency / optfreq / optfreqsp) --
+    # -- simple workflows (singlepoint / optimize / frequency / scan / irc) --
     _add_simple_workflow_parsers(run_sub)
 
-    # -- run mechanism -------------------------------------------------------
-    mechanism = run_sub.add_parser(
-        "mechanism",
-        help="Mechanism study (S0→S4 reaction-network exploration)",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""\
-Examples:
-  acp run mechanism --input "CCO" --output ./mechanism_results
-  acp run mechanism --input reaction.xyz --name substrate
-  acp run mechanism --input "C=C" --product "CC" --preset rph-s3 --output ./mech_out
-  acp run mechanism --input "C=C" --strategy guided-scan --fidelity s3 \\
-      --routes '[{"route_id":"r1","coordinate_plan":{"coordinates":[{"id":"rc1","kind":"distance","atoms":[0,1],"start":3.2,"end":1.55}],"points":21},"path_strategy":"guided-scan","fidelity":"s3"}]'
-        """,
-    )
-    mechanism.add_argument(
-        "--input",
-        type=str,
-        help=(
-            "Reactant SMILES string or input file path (XYZ, GJF, LOG, OUT); "
-            "optional when --mechanism-config provides roles.reactant.path"
-        ),
-    )
-    mechanism.add_argument(
-        "--mechanism-config",
-        type=str,
-        help="Path to a scheduler-generated mechanism_config.json handoff file",
-    )
-    mechanism.add_argument(
-        "--product",
-        type=str,
-        help="Product SMILES string or file path (optional for guided-scan)",
-    )
-    mechanism.add_argument(
-        "--ts-guess",
-        type=str,
-        help="TS-guess SMILES string or file path (used by direct-ts strategy)",
-    )
-    mechanism.add_argument(
-        "--preset",
-        type=str,
-        choices=_mechanism_preset_ids(),
-        help="RPH fidelity preset from the mechanism catalog (rph-s3 = B97-3c → "
-        "r2SCAN-3c, rph-s4 = M062X → wB97M-V)",
-    )
-    mechanism.add_argument(
-        "--strategy",
-        type=str,
-        choices=["guided-scan", "rph-reverse", "direct-ts"],
-        help="Path-search strategy (default: guided-scan)",
-    )
-    mechanism.add_argument(
-        "--fidelity",
-        type=str,
-        choices=["s3", "s4"],
-        help="Refinement fidelity (default: s3; rph-s3/rph-s4 presets set this)",
-    )
-    mechanism.add_argument(
-        "--routes",
-        type=str,
-        help="JSON string: list of route dicts (coordinate plans + strategy + fidelity)",
-    )
-    mechanism.add_argument(
-        "--scan-points",
-        type=int,
-        help="Override relaxed-scan frame count (range: 5-100; default profile value: 21)",
-    )
-    mechanism.add_argument(
-        "--irc-points",
-        type=int,
-        help="Override IRC MaxIter point count (range: 5-200; default profile value: 30)",
-    )
-    mechanism.add_argument(
-        "--study-id",
-        type=str,
-        help="Mechanism-study identifier (checkpoint/resume id; auto-generated when omitted)",
-    )
-    mechanism.add_argument(
-        "--conformer-mode",
-        type=str,
-        default=None,
-        choices=["auto", "censo-lite", "xtb-fast"],
-        help="Stable-state ensemble mode for study orchestration (default: auto)",
-    )
-    mechanism.add_argument(
-        "--max-elementary-steps",
-        type=int,
-        default=None,
-        help="Maximum elementary steps to confirm in study mode (default: 3)",
-    )
-    mechanism.add_argument(
-        "--int-extension",
-        action="store_true",
-        default=False,
-        help="Allow recursive intermediate extension in study mode",
-    )
-    mechanism.add_argument(
-        "--promotion-policy",
-        type=str,
-        default=None,
-        choices=["all_confirmed", "rate_relevant", "user_selected"],
-        help="Study promotion policy for downstream confirmation (default: all_confirmed)",
-    )
-    mechanism.add_argument(
-        "--auto-converge",
-        action="store_true",
-        default=False,
-        help="Automatically resolve waiting review decisions with the default policy",
-    )
-    mechanism.add_argument(
-        "--output",
-        type=str,
-        default="./mechanism_output",
-        help="Output directory (default: ./mechanism_output)",
-    )
-    mechanism.add_argument(
-        "--config",
-        type=str,
-        help="Configuration YAML file",
-    )
-    mechanism.add_argument(
-        "--nproc",
-        type=int,
-        help="Number of CPU cores (overrides config)",
-    )
-    mechanism.add_argument(
-        "--mem",
-        type=str,
-        help="Memory limit, e.g. 32GB, 4096MB (overrides config)",
-    )
-    mechanism.add_argument(
-        "--log-level",
-        type=str,
-        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
-        default="INFO",
-        help="Logging level (default: INFO)",
-    )
-    mechanism.add_argument(
-        "--name",
-        type=str,
-        help="Molecule name (auto-generated if not specified)",
-    )
-    mechanism.add_argument(
-        "--charge",
-        type=int,
-        help="Molecular charge (auto-detected if not specified)",
-    )
-    mechanism.add_argument(
-        "--multiplicity",
-        type=int,
-        help="Spin multiplicity (auto-detected if not specified)",
-    )
+    _add_stage_workflow_parsers(run_sub)
+    _add_batch_optimize_parser(run_sub)
 
     # -- run serve (FastAPI server) -----------------------------------------
     serve_parser = run_sub.add_parser(
@@ -1282,7 +1959,7 @@ Examples:
 Examples:
   acp run serve
   acp run serve --host 127.0.0.1 --port 8765
-  acp run serve --run-root ./ACP_runs --reload
+  acp run serve --run-root /var/lib/acp/runs --reload
         """,
     )
     serve_parser.add_argument(
@@ -1300,8 +1977,13 @@ Examples:
     serve_parser.add_argument(
         "--run-root",
         type=str,
-        default="./ACP_runs",
-        help="Root directory for job work directories and the SQLite index (default: ./ACP_runs)",
+        default=None,
+        help=(
+            "Root directory for job work directories and the SQLite index. "
+            "Falls back to $ACP_RUN_ROOT, then the platform default "
+            "(~/.local/share/acp/runs, or /var/lib/acp/runs for root). "
+            "Must be on a native filesystem."
+        ),
     )
     serve_parser.add_argument(
         "--max-running",
@@ -1349,277 +2031,6 @@ Examples:
 # ---------------------------------------------------------------------------
 
 
-def _mechanism_preset_ids() -> list[str]:
-    from acp.mechanism.presets import mechanism_profile_ids
-
-    return list(mechanism_profile_ids())
-
-
-def _load_mechanism_config(path_value: str | None) -> tuple[dict[str, Any] | None, Path | None]:
-    if not path_value:
-        return None, None
-
-    config_path = Path(path_value)
-    if not config_path.exists():
-        raise FileNotFoundError(f"Mechanism config file not found: {config_path}")
-
-    try:
-        payload = json.loads(config_path.read_text(encoding="utf-8"))
-    except OSError as exc:
-        raise ValueError(f"Failed to read mechanism config file: {exc}") from exc
-    except ValueError as exc:
-        raise ValueError(f"Mechanism config file is not valid JSON: {exc}") from exc
-
-    if not isinstance(payload, dict):
-        raise ValueError("Mechanism config file must be a JSON object")
-    return payload, config_path
-
-
-def _mechanism_config_dict(payload: dict[str, Any] | None, key: str) -> dict[str, Any]:
-    if not isinstance(payload, dict):
-        return {}
-    value = payload.get(key)
-    return dict(value) if isinstance(value, dict) else {}
-
-
-def _mechanism_config_levels(payload: dict[str, Any] | None) -> dict[str, Any] | None:
-    method = _mechanism_config_dict(payload, "method")
-    levels = method.get("levels")
-    return dict(levels) if isinstance(levels, dict) else None
-
-
-def _mechanism_role_config(payload: dict[str, Any] | None, role: str) -> dict[str, Any]:
-    roles = _mechanism_config_dict(payload, "roles")
-    role_value = roles.get(role)
-    return dict(role_value) if isinstance(role_value, dict) else {}
-
-
-def _mechanism_config_scalar(section: dict[str, Any], key: str) -> Any:
-    value = section.get(key)
-    if isinstance(value, str) and not value.strip():
-        return None
-    return value
-
-
-def _mechanism_config_int(value: Any) -> int | None:
-    if value is None or value == "":
-        return None
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _mechanism_role_path(role_cfg: dict[str, Any], config_path: Path | None) -> str | None:
-    raw_path = _mechanism_config_scalar(role_cfg, "path")
-    if raw_path is None:
-        return None
-    path = Path(str(raw_path))
-    if not path.is_absolute() and config_path is not None:
-        path = config_path.parent / path
-    return str(path)
-
-
-def _handle_mechanism(args: argparse.Namespace) -> int:
-    """Execute the mechanism-study workflow."""
-    setup_logging(args.log_level)
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    try:
-        try:
-            mechanism_config, mechanism_config_path = _load_mechanism_config(
-                getattr(args, "mechanism_config", None)
-            )
-        except (FileNotFoundError, ValueError) as exc:
-            logger.error("%s", exc)
-            return 1
-
-        cfg = _build_config(args)
-        from acp.mechanism.study_runner import (
-            read_review_handoff,
-            resume_mechanism_study,
-            run_mechanism_study,
-            waiting_study_exists,
-            write_review_payload,
-        )
-        from acp.scheduler.jobs import EXIT_WAITING_REVIEW
-
-        config_resolved = _mechanism_config_dict(mechanism_config, "resolved")
-        config_levels = _mechanism_config_levels(mechanism_config)
-        reactant_cfg = _mechanism_role_config(mechanism_config, "reactant")
-        product_cfg = _mechanism_role_config(mechanism_config, "product")
-        ts_guess_cfg = _mechanism_role_config(mechanism_config, "ts_guess")
-        config_resources = _mechanism_config_dict(mechanism_config, "resources")
-
-        if getattr(args, "nproc", None) is None:
-            config_nproc = _mechanism_config_int(config_resources.get("nproc"))
-            if config_nproc is not None:
-                cfg.setdefault("resources", {})["nproc"] = config_nproc
-                cfg.setdefault("executables", {}).setdefault("orca", {})["nproc"] = config_nproc
-        if getattr(args, "mem", None) is None:
-            config_mem = _mechanism_config_scalar(config_resources, "mem")
-            if config_mem is not None:
-                cfg.setdefault("resources", {})["mem"] = str(config_mem)
-
-        routes: list[dict[str, object]] | None = None
-        if getattr(args, "routes", None):
-            try:
-                parsed_routes = json.loads(args.routes)
-                if isinstance(parsed_routes, list):
-                    routes = [dict(r) for r in parsed_routes]
-            except (TypeError, ValueError) as exc:
-                logger.error("Invalid --routes JSON: %s", exc)
-                return 1
-
-        preset = getattr(args, "preset", None) or _mechanism_config_scalar(config_resolved, "preset")
-        strategy = getattr(args, "strategy", None)
-        fidelity = getattr(args, "fidelity", None)
-        input_source = getattr(args, "input", None) or _mechanism_role_path(
-            reactant_cfg,
-            mechanism_config_path,
-        )
-        if not input_source:
-            logger.error(
-                "Mechanism study requires --input or a mechanism config with roles.reactant.path"
-            )
-            return 1
-        product_source = getattr(args, "product", None) or _mechanism_role_path(
-            product_cfg,
-            mechanism_config_path,
-        )
-        ts_guess_source = getattr(args, "ts_guess", None) or _mechanism_role_path(
-            ts_guess_cfg,
-            mechanism_config_path,
-        )
-        charge = (
-            getattr(args, "charge", None)
-            if getattr(args, "charge", None) is not None
-            else _mechanism_config_int(reactant_cfg.get("charge"))
-        )
-        multiplicity = (
-            getattr(args, "multiplicity", None)
-            if getattr(args, "multiplicity", None) is not None
-            else _mechanism_config_int(reactant_cfg.get("multiplicity"))
-        )
-
-        # Scheduler restart handoff: the JobManager mirrors job state to
-        # <output>/job.json. When a study paused at a review gate, reuse
-        # the persisted study id + review resolutions instead of starting
-        # a fresh study (the derived id is timestamped and not stable).
-        study_id = getattr(args, "study_id", None) or _mechanism_config_scalar(
-            config_resolved,
-            "study_id",
-        )
-        handed_off_study_id, review_decisions = read_review_handoff(output_dir)
-        if not study_id and handed_off_study_id:
-            study_id = handed_off_study_id
-
-        if study_id and waiting_study_exists(output_dir, study_id):
-            summary = resume_mechanism_study(
-                study_id=study_id,
-                study_root=output_dir,
-                decision_resolutions=review_decisions,
-            )
-        else:
-            summary = run_mechanism_study(
-                input_source=input_source,
-                output_dir=output_dir,
-                config=cfg,
-                name=args.name,
-                charge=charge,
-                multiplicity=multiplicity,
-                product_source=product_source,
-                ts_guess_source=ts_guess_source,
-                routes=routes,
-                preset=preset,
-                strategy=strategy,
-                fidelity=fidelity,
-                scan_points=getattr(args, "scan_points", None),
-                irc_points=getattr(args, "irc_points", None),
-                study_id=study_id,
-                conformer_mode=getattr(args, "conformer_mode", None),
-                max_elementary_steps=getattr(args, "max_elementary_steps", None),
-                int_extension=bool(getattr(args, "int_extension", False)),
-                promotion_policy=getattr(args, "promotion_policy", None),
-                auto_converge=bool(getattr(args, "auto_converge", False)),
-                config_resolved=config_resolved,
-                method_levels=config_levels,
-                mechanism_config_path=mechanism_config_path,
-            )
-        status = str(summary.get("status") or "unknown")
-        logger.info("Mechanism study %s", status)
-        logger.info("  Study ID            : %s", summary.get("study_id", "N/A"))
-        logger.info("  Study dir           : %s", summary.get("study_dir", "N/A"))
-        logger.info("  Network size        : %s", summary.get("network_size", {}))
-        logger.info("  Gates               : %s", summary.get("gates_summary", {}))
-        pending = summary.get("pending_decisions", [])
-        if pending:
-            logger.info("  Pending decisions   : %s", pending)
-        if status == "waiting":
-            write_review_payload(output_dir, summary)
-            return EXIT_WAITING_REVIEW
-        return 0 if status in {"completed", "waiting", "running"} else 1
-    except KeyboardInterrupt:
-        logger.warning("Interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("Fatal error: %s", exc)
-        return 1
-
-
-def _parse_decision_resolutions(values: list[str]) -> dict[str, Any]:
-    resolutions: dict[str, Any] = {}
-    for raw in values:
-        decision_id, separator, payload = raw.partition("=")
-        decision_key = decision_id.strip()
-        if not separator or not decision_key:
-            raise ValueError(f"Invalid --decision value: {raw!r}; expected ID=RESOLUTION")
-        payload_text = payload.strip()
-        try:
-            resolutions[decision_key] = json.loads(payload_text)
-        except json.JSONDecodeError:
-            resolutions[decision_key] = payload_text
-    return resolutions
-
-
-def _handle_mechanism_resume(args: argparse.Namespace) -> int:
-    """Resume a persisted mechanism study."""
-    setup_logging(args.log_level)
-    try:
-        from acp.mechanism.study_runner import resume_mechanism_study
-
-        resolutions = _parse_decision_resolutions(list(getattr(args, "decision", []) or []))
-        summary = resume_mechanism_study(
-            study_id=args.study,
-            study_root=args.study_root,
-            decision_resolutions=resolutions,
-        )
-    except KeyboardInterrupt:
-        logger.warning("Interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("Fatal error: %s", exc)
-        return 1
-
-    status = str(summary.get("status") or "unknown")
-    logger.info("Mechanism study %s", status)
-    logger.info("  Study ID            : %s", summary.get("study_id", "N/A"))
-    logger.info("  Study dir           : %s", summary.get("study_dir", "N/A"))
-    logger.info("  Network size        : %s", summary.get("network_size", {}))
-    logger.info("  Gates               : %s", summary.get("gates_summary", {}))
-    pending = summary.get("pending_decisions", [])
-    if pending:
-        logger.info("  Pending decisions   : %s", pending)
-    if status == "waiting":
-        from acp.mechanism.study_runner import write_review_payload
-        from acp.scheduler.jobs import EXIT_WAITING_REVIEW
-
-        write_review_payload(Path(args.study_root), summary)
-        return EXIT_WAITING_REVIEW
-    return 0 if status in {"completed", "waiting", "running"} else 1
-
-
 def _build_simple_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
     kwargs: dict[str, Any] = {}
     for key in (
@@ -1656,12 +2067,14 @@ def _build_simple_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _handle_singlepoint(args: argparse.Namespace) -> int:
+    from acp.calculations.progress import ProgressReporter
     from acp.workflows.simple import run_singlepoint
 
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
     method_kwargs = _build_simple_method_kwargs(args)
+    reporter = ProgressReporter(out, job_name="singlepoint", stages=["single_point"])
     try:
         result = run_singlepoint(
             input_source=args.input,
@@ -1671,28 +2084,35 @@ def _handle_singlepoint(args: argparse.Namespace) -> int:
             multiplicity=args.multiplicity,
             name=args.name,
             method_kwargs=method_kwargs,
+            progress_reporter=reporter,
         )
     except KeyboardInterrupt:
         logger.warning("Singlepoint interrupted by user")
+        reporter.fail("interrupted")
         return 130
     except Exception as exc:
         logger.exception("Singlepoint failed: %s", exc)
+        reporter.fail(str(exc))
         return 1
     if result.status == "completed":
         logger.info("Single-point calculation completed")
         logger.info("  Energy: %s Hartree", result.metadata.get("energy", "N/A"))
+        reporter.complete()
         return 0
     logger.error("Single-point calculation failed: %s", result.error)
+    reporter.fail(result.error or "Single-point calculation failed")
     return 1
 
 
 def _handle_optimize(args: argparse.Namespace) -> int:
+    from acp.calculations.progress import ProgressReporter
     from acp.workflows.simple import run_optimize
 
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
     method_kwargs = _build_simple_method_kwargs(args)
+    reporter = ProgressReporter(out, job_name="optimize", stages=["optimize"])
     try:
         result = run_optimize(
             input_source=args.input,
@@ -1702,28 +2122,35 @@ def _handle_optimize(args: argparse.Namespace) -> int:
             multiplicity=args.multiplicity,
             name=args.name,
             method_kwargs=method_kwargs,
+            progress_reporter=reporter,
         )
     except KeyboardInterrupt:
         logger.warning("Optimization interrupted by user")
+        reporter.fail("interrupted")
         return 130
     except Exception as exc:
         logger.exception("Optimization failed: %s", exc)
+        reporter.fail(str(exc))
         return 1
     if result.status == "completed":
         logger.info("Geometry optimization completed")
         logger.info("  Energy: %s Hartree", result.metadata.get("energy", "N/A"))
+        reporter.complete()
         return 0
     logger.error("Optimization failed: %s", result.error)
+    reporter.fail(result.error or "Optimization failed")
     return 1
 
 
 def _handle_frequency(args: argparse.Namespace) -> int:
+    from acp.calculations.progress import ProgressReporter
     from acp.workflows.simple import run_frequency
 
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
     method_kwargs = _build_simple_method_kwargs(args)
+    reporter = ProgressReporter(out, job_name="frequency", stages=["frequency"])
     try:
         result = run_frequency(
             input_source=args.input,
@@ -1733,115 +2160,149 @@ def _handle_frequency(args: argparse.Namespace) -> int:
             multiplicity=args.multiplicity,
             name=args.name,
             method_kwargs=method_kwargs,
+            progress_reporter=reporter,
         )
     except KeyboardInterrupt:
         logger.warning("Frequency calculation interrupted by user")
+        reporter.fail("interrupted")
         return 130
     except Exception as exc:
         logger.exception("Frequency calculation failed: %s", exc)
+        reporter.fail(str(exc))
         return 1
     if result.status == "completed":
         logger.info("Frequency calculation completed")
         logger.info("  Modes: %s", result.metadata.get("n_frequencies", "N/A"))
+        reporter.complete()
         return 0
     logger.error("Frequency calculation failed: %s", result.error)
+    reporter.fail(result.error or "Frequency calculation failed")
     return 1
 
 
-def _handle_optfreq(args: argparse.Namespace) -> int:
-    from acp.workflows.simple import run_optfreq
+def _handle_scan(args: argparse.Namespace) -> int:
+    """Execute a relaxed internal-coordinate scan."""
+    from acp.calculations.contracts import CalculationRequest, StructureArtifact
+    from acp.calculations.primitives.scan import ScanCoordinateError
+    from acp.calculations.progress import ProgressReporter
+    from acp.storage.layout import TaskStorage
+    from acp.workflows.simple import _calc_subdir, _check_input, _resolve_output_dir, run_scan
 
     setup_logging(args.log_level)
-    cfg = _build_config(args)
-    out = Path(args.output)
-    method_kwargs = _build_simple_method_kwargs(args)
+    reporter = ProgressReporter(Path(args.output), job_name="scan", stages=["scan"])
     try:
-        result = run_optfreq(
-            input_source=args.input,
-            output_dir=out,
-            config=cfg,
-            charge=args.charge,
-            multiplicity=args.multiplicity,
-            name=args.name,
-            method_kwargs=method_kwargs,
+        _check_input(args.input)
+        cfg = _build_config(args)
+        output_root = _resolve_output_dir(Path(args.output))
+        calc_dir = _calc_subdir(output_root, args.name, args.input, "scan")
+        storage = TaskStorage(calc_dir)
+        storage.ensure_layout(stages=["07_PATH"], categories=["structures", "trajectories"])
+
+        method_kwargs = _build_simple_method_kwargs(args)
+        method_kwargs.pop("method", None)
+        resources: dict[str, Any] = dict(method_kwargs)
+        resources.update(
+            {
+                "backend": "orca",
+                "config": cfg,
+                "output_dir": str(storage.stage_dir("07_PATH", "ORCA")),
+                "result_dir": str(storage.result_dir()),
+                "scan_coordinates": list(args.coordinate),
+                "scan_points": args.scan_points,
+            }
         )
+        if args.charge is not None:
+            resources["charge"] = args.charge
+        if args.multiplicity is not None:
+            resources["multiplicity"] = args.multiplicity
+
+        result = run_scan(
+            CalculationRequest(
+                input_artifact=StructureArtifact(
+                    path=Path(args.input),
+                    source="cli",
+                ),
+                method=args.method,
+                resources=resources,
+                workflow="scan",
+                profile="default",
+            ),
+            progress_reporter=reporter,
+        )
+    except ScanCoordinateError as exc:
+        logger.error("Scan coordinate validation failed: %s", exc)
+        reporter.fail(str(exc))
+        return 2
     except KeyboardInterrupt:
-        logger.warning("Opt+Freq interrupted by user")
+        logger.warning("Relaxed scan interrupted by user")
+        reporter.fail("interrupted")
         return 130
     except Exception as exc:
-        logger.exception("Opt+Freq failed: %s", exc)
+        logger.exception("Relaxed scan failed: %s", exc)
+        reporter.fail(str(exc))
         return 1
+
     if result.status == "completed":
-        logger.info("Opt+Freq calculation completed")
-        logger.info("  Energy: %s Hartree", result.metadata.get("energy", "N/A"))
-        logger.info("  Modes: %s", result.metadata.get("n_frequencies", "N/A"))
+        logger.info("Relaxed scan completed")
+        logger.info("  Frames: %s", result.metadata.get("frame_count", "N/A"))
+        logger.info("  Output: %s", result.metadata.get("output_dir", args.output))
+        reporter.complete()
         return 0
-    logger.error("Opt+Freq failed: %s", result.error)
+    logger.error("Relaxed scan failed: %s", "; ".join(result.errors))
+    reporter.fail("; ".join(result.errors) or "Relaxed scan failed")
     return 1
 
 
-def _handle_optfreqsp(args: argparse.Namespace) -> int:
-    from acp.workflows.simple import run_optfreqsp
+def _handle_irc(args: argparse.Namespace) -> int:
+    """Execute an independent IRC request from one transition-state artifact."""
+    from acp.calculations.contracts import StructureArtifact
+    from acp.calculations.progress import ProgressReporter
+    from acp.workflows.irc import run_irc_workflow
 
     setup_logging(args.log_level)
-    cfg = _build_config(args)
-    out = Path(args.output)
-
-    optfreq_kwargs = _build_simple_method_kwargs(args)
-    sp_kwargs: dict[str, Any] = {
-        "method": args.sp_method,
-        "basis": args.sp_basis,
-        "ri_approximation": args.sp_ri_approximation,
-    }
-    sp_aux_j = getattr(args, "sp_aux_j_basis", None)
-    sp_aux_legacy = getattr(args, "sp_aux_basis", None)
-    if sp_aux_legacy and sp_aux_j in (None, "AutoAux"):
-        sp_aux_j = sp_aux_legacy
-    if sp_aux_j and sp_aux_j != "AutoAux":
-        sp_kwargs["aux_j_basis"] = sp_aux_j
-    sp_aux_c = getattr(args, "sp_aux_c_basis", None)
-    if sp_aux_c and sp_aux_c != "AutoAux":
-        sp_kwargs["aux_c_basis"] = sp_aux_c
-    if args.sp_dispersion and args.sp_dispersion != "none":
-        sp_kwargs["dispersion"] = args.sp_dispersion
-    sp_solvent = args.sp_solvent or args.solvent
-    sp_solvent_model = args.sp_solvent_model or args.solvent_model
-    if sp_solvent_model and sp_solvent_model != "none":
-        sp_kwargs["solvent_model"] = sp_solvent_model
-    if sp_solvent:
-        sp_kwargs["solvent"] = sp_solvent
-    sp_extras = getattr(args, "route_extras", None)
-    if sp_extras:
-        sp_kwargs["route_extras"] = [x.strip() for x in sp_extras.split(",") if x.strip()]
-    thermo_kwargs: dict[str, Any] = {
-        "temperature": args.temperature,
-        "pressure": args.pressure,
-        "scale_factor": args.scale_factor,
-    }
+    directions = ("forward", "reverse") if args.direction == "both" else (args.direction,)
+    stages = ["preparing"]
+    if "forward" in directions:
+        stages.append("irc_forward")
+    if "reverse" in directions:
+        stages.append("irc_backward")
+    stages.append("validating")
+    reporter = ProgressReporter(Path(args.output), job_name="irc", stages=stages)
     try:
-        result = run_optfreqsp(
-            input_source=args.input,
-            output_dir=out,
-            config=cfg,
+        result = run_irc_workflow(
+            input_artifact=StructureArtifact(path=Path(args.input), source="cli"),
+            directions=directions,
+            output_dir=Path(args.output),
+            config=_build_config(args),
+            method=args.method,
+            basis=args.basis,
+            maxpoints=args.maxpoints,
+            step=args.step,
+            input_role=args.input_role,
             charge=args.charge,
             multiplicity=args.multiplicity,
-            name=args.name,
-            optfreq_kwargs=optfreq_kwargs,
-            sp_kwargs=sp_kwargs,
-            thermo_kwargs=thermo_kwargs,
+            progress_reporter=reporter,
         )
+    except ValueError as exc:
+        logger.error("IRC input error: %s", exc)
+        reporter.fail(str(exc))
+        return 2
     except KeyboardInterrupt:
-        logger.warning("Opt+Freq+SP+Thermo interrupted by user")
+        logger.warning("IRC interrupted by user")
+        reporter.fail("interrupted")
         return 130
-    except Exception as exc:
-        logger.exception("Opt+Freq+SP+Thermo failed: %s", exc)
+    except (OSError, RuntimeError, TypeError) as exc:
+        logger.exception("IRC failed: %s", exc)
+        reporter.fail(str(exc))
         return 1
+
     if result.status == "completed":
-        logger.info("Opt+Freq+SP+Thermo completed")
-        logger.info("  SP energy: %s Hartree", result.metadata.get("sp_energy", "N/A"))
-        logger.info("  Free energy: %s Hartree", result.metadata.get("free_energy_hartree", "N/A"))
+        logger.info("IRC completed")
+        logger.info("  Report: %s", result.metadata.get("report_path", "N/A"))
+        reporter.complete()
         return 0
-    logger.error("Opt+Freq+SP+Thermo failed: %s", result.error)
+    logger.error("IRC failed: %s", result.error)
+    reporter.fail(result.error or "IRC failed")
     return 1
 
 
@@ -1855,12 +2316,14 @@ def _build_xtb_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _handle_xtb_optimize(args: argparse.Namespace) -> int:
+    from acp.calculations.progress import ProgressReporter
     from acp.workflows.simple import run_xtb_optimize
 
     setup_logging(args.log_level)
     cfg = _build_config(args)
     out = Path(args.output)
     method_kwargs = _build_xtb_method_kwargs(args)
+    reporter = ProgressReporter(out, job_name="xtb_optimize", stages=["xtb_optimize"])
     try:
         result = run_xtb_optimize(
             input_source=args.input,
@@ -1870,18 +2333,23 @@ def _handle_xtb_optimize(args: argparse.Namespace) -> int:
             multiplicity=args.multiplicity,
             name=args.name,
             method_kwargs=method_kwargs,
+            progress_reporter=reporter,
         )
     except KeyboardInterrupt:
         logger.warning("xTB optimization interrupted by user")
+        reporter.fail("interrupted")
         return 130
     except Exception as exc:
         logger.exception("xTB optimization failed: %s", exc)
+        reporter.fail(str(exc))
         return 1
     if result.status == "completed":
         logger.info("xTB geometry optimization completed")
         logger.info("  Energy: %s Hartree", result.metadata.get("energy", "N/A"))
+        reporter.complete()
         return 0
     logger.error("xTB optimization failed: %s", result.error)
+    reporter.fail(result.error or "xTB optimization failed")
     return 1
 
 
@@ -1899,14 +2367,18 @@ def _handle_serve(args: argparse.Namespace) -> int:
     host = getattr(args, "host", "127.0.0.1")
     port = getattr(args, "port", 8765)
     reload_flag = getattr(args, "reload", False)
-    run_root = getattr(args, "run_root", "./ACP_runs")
+    run_root = getattr(args, "run_root", None)
     max_running = getattr(args, "max_running", 1)
     poll_interval = getattr(args, "poll_interval", 15)
     log_level = getattr(args, "log_level", "INFO").lower()
     no_browser = getattr(args, "no_browser", False)
 
-    run_root_path = Path(run_root).resolve()
+    from acp.core.paths import check_run_root_safety, resolve_run_root
+
+    run_root_path = resolve_run_root(run_root)
     run_root_path.mkdir(parents=True, exist_ok=True)
+    for safety_message in check_run_root_safety(run_root_path):
+        print(f"WARNING: {safety_message}", file=sys.stderr)
 
     os.environ["ACP_RUN_ROOT"] = str(run_root_path)
     os.environ["ACP_HOST"] = host
@@ -1967,123 +2439,43 @@ def _try_open_browser(url: str) -> None:
                 continue
 
 
-def _handle_ensemble(args: argparse.Namespace) -> int:
-    """Execute the ensemble generation workflow."""
-    setup_logging(args.log_level)
+_RETIRED_WORKFLOW_MESSAGE = (
+    "The workflow has been retired.\n"
+    "该工作流已退役，不能用于新任务。\n"
+    "Use Confsearch, PESsearch, BatchOptimize or the standalone irc workflow.\n"
+    "Mapping: ensemble -> Confsearch + censo-crest + screen; "
+    "energy -> Confsearch + censo-crest + rank1/cumulative-99; "
+    "xtbmd_censo_energy -> Confsearch + xtbmd-censo; "
+    "mechanism/mech-* -> PESsearch + BatchOptimize + irc."
+)
 
-    if not args.input and not args.batch_file:
-        print("Error: --input or --batch-file is required", file=sys.stderr)
-        return 1
-
-    cfg = _build_config(args)
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    if args.save_config:
-        from cccp.config import save_config as save_cfg
-
-        save_cfg(cfg, Path(args.save_config))
-        logger.info("Configuration saved to: %s", args.save_config)
-
-    if args.batch_file:
-        return _handle_ensemble_batch(args, cfg, output_dir)
-
-    try:
-        from acp.workflows.ensemble import run_ensemble_generation
-
-        result = run_ensemble_generation(
-            input_source=args.input,
-            output_dir=str(output_dir),
-            preset=args.preset,
-            config=cfg,
-            name=args.name,
-            charge=args.charge,
-            multiplicity=args.multiplicity,
-            solvent=args.solvent,
-            nproc=args.nproc,
-            keep_all=True if getattr(args, "keep_all", False) else None,
-            ewin=getattr(args, "ewin", None),
-        )
-    except KeyboardInterrupt:
-        logger.warning("Interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("Fatal error: %s", exc)
-        return 1
-
-    if result.status == "completed":
-        meta = result.metadata or {}
-        logger.info("Ensemble generation completed successfully")
-        logger.info("  Conformers         : %s", meta.get("n_conformers", "N/A"))
-        logger.info("  Ensemble XYZ       : %s", meta.get("ensemble_xyz", "N/A"))
-        logger.info("  Ensemble JSON      : %s", meta.get("ensemble_json", "N/A"))
-        return 0
-
-    logger.error("Ensemble generation failed: %s", result.error)
-    return 1
-
-
-def _handle_ensemble_batch(
-    args: argparse.Namespace,
-    cfg: dict[str, Any],
-    output_dir: Path,
-) -> int:
-    """Run ensemble generation for multiple molecules (batch mode)."""
-    from acp.workflows.ensemble import run_ensemble_generation
-    from cccp.io import load_batch_inputs
-
-    logger.info("ACP ensemble workflow — batch mode")
-    batch_file = Path(args.batch_file)
-    inputs = load_batch_inputs(batch_file)
-
-    logger.info("Found %d molecules to process", len(inputs))
-    results: list[dict[str, Any]] = []
-    errors: list[dict[str, Any]] = []
-
-    for i, mi in enumerate(inputs, start=1):
-        source = str(mi.source_path or mi.metadata.get("smiles", ""))
-        logger.info("[%d/%d] Processing %s", i, len(inputs), mi.name)
-        try:
-            r = run_ensemble_generation(
-                input_source=source,
-                output_dir=str(output_dir),
-                preset=args.preset,
-                config=cfg,
-                name=mi.name,
-                charge=getattr(args, "charge", None),
-                multiplicity=getattr(args, "multiplicity", None),
-                solvent=args.solvent,
-                nproc=args.nproc,
-                keep_all=True if getattr(args, "keep_all", False) else None,
-                ewin=getattr(args, "ewin", None),
-            )
-            if r.status == "completed":
-                results.append({"molecule": mi.name, "status": "completed", "metadata": r.metadata})
-            else:
-                errors.append({"molecule": mi.name, "error": str(r.error)})
-        except Exception as exc:
-            logger.error("  Failed: %s", exc)
-            errors.append({"molecule": mi.name, "error": str(exc)})
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    summary_path = output_dir / f"batch_summary_{timestamp}.json"
-    summary = {
-        "timestamp": timestamp,
-        "total": len(inputs),
-        "successful": len(results),
-        "failed": len(errors),
-        "preset": args.preset,
-        "results": results,
-        "errors": errors,
+_CLI_REMOVED_WORKFLOWS: Final[frozenset[str]] = frozenset(
+    {
+        "ensemble",
+        "energy",
+        "xtbmd_censo_energy",
+        "mechanism",
+        "mech-conf",
+        "mech-step",
+        "mech-confirm",
+        "mech-chain",
+        "optfreq",
+        "optfreqsp",
+        "Lowconfirm",
+        "Highconfirm",
     }
-    summary_path.write_text(json.dumps(summary, indent=2))
-    logger.info(
-        "Batch complete: %d/%d successful — summary saved to %s",
-        len(results),
-        len(inputs),
-        summary_path,
-    )
-    return 0 if not errors else 1
+)
+
+
+def _reject_retired_workflow(workflow: str) -> int:
+    setup_logging("INFO")
+    print(f"Error: '{workflow}' is no longer available for new runs.", file=sys.stderr)
+    print(_RETIRED_WORKFLOW_MESSAGE, file=sys.stderr)
+    return 2
+
+
+def _handle_ensemble(_args: argparse.Namespace) -> int:
+    return _reject_retired_workflow("ensemble")
 
 
 def _parse_levels_json(levels_str: str | None) -> dict[str, Any] | None:
@@ -2101,339 +2493,12 @@ def _parse_levels_json(levels_str: str | None) -> dict[str, Any] | None:
     return parsed
 
 
-def _handle_energy(args: argparse.Namespace) -> int:
-    """Execute the conformer energy workflow."""
-    setup_logging(args.log_level)
-
-    if not args.input and not args.batch_file:
-        print("Error: --input or --batch-file is required", file=sys.stderr)
-        return 1
-
-    levels = _parse_levels_json(args.levels)
-    if args.levels and levels is None:
-        return 1
-
-    if levels is None:
-        levels = {}
-    if args.threshold != 0.99:
-        levels["refinement_threshold"] = args.threshold
-    else:
-        levels.setdefault("refinement_threshold", 0.99)
-
-    cfg = _build_config(args)
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    if args.save_config:
-        from cccp.config import save_config as save_cfg
-
-        save_cfg(cfg, Path(args.save_config))
-        logger.info("Configuration saved to: %s", args.save_config)
-
-    if args.batch_file:
-        return _handle_energy_batch(args, cfg, output_dir, levels)
-
-    try:
-        from acp.workflows.energy import run_conformer_energy
-
-        result = run_conformer_energy(
-            input_source=args.input,
-            output_dir=str(output_dir),
-            preset=args.preset,
-            config=cfg,
-            name=args.name,
-            charge=args.charge,
-            multiplicity=args.multiplicity,
-            solvent=args.solvent,
-            nproc=args.nproc,
-            no_opt=args.no_opt,
-            rank1_only=not args.full_ensemble,
-            levels=levels,
-            ewin=getattr(args, "ewin", None),
-        )
-    except KeyboardInterrupt:
-        logger.warning("Interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("Fatal error: %s", exc)
-        return 1
-
-    if result.status == "completed":
-        meta = result.metadata or {}
-        logger.info("Conformer energy workflow completed successfully")
-        logger.info("  Conformers         : %s", meta.get("n_conformers", "N/A"))
-        logger.info("  Global minimum     : %s", meta.get("global_min_xyz", "N/A"))
-        logger.info("  Thermo CSV         : %s", meta.get("thermo_csv", "N/A"))
-        logger.info(
-            "  Total G(ensemble)  : %s kcal/mol",
-            meta.get("total_gibbs_kcal_mol", "N/A"),
-        )
-        return 0
-
-    logger.error("Conformer energy workflow failed: %s", result.error)
-    return 1
+def _handle_energy(_args: argparse.Namespace) -> int:
+    return _reject_retired_workflow("energy")
 
 
-def _handle_energy_batch(
-    args: argparse.Namespace,
-    cfg: dict[str, Any],
-    output_dir: Path,
-    levels: dict[str, Any] | None,
-) -> int:
-    """Run the conformer energy workflow for multiple molecules (batch mode)."""
-    from acp.workflows.energy import run_conformer_energy
-    from cccp.io import load_batch_inputs
-
-    logger.info("ACP energy workflow — batch mode")
-    batch_file = Path(args.batch_file)
-    inputs = load_batch_inputs(batch_file)
-
-    logger.info("Found %d molecules to process", len(inputs))
-    results: list[dict[str, Any]] = []
-    errors: list[dict[str, Any]] = []
-
-    for i, mi in enumerate(inputs, start=1):
-        source = str(mi.source_path or mi.metadata.get("smiles", ""))
-        logger.info("[%d/%d] Processing %s", i, len(inputs), mi.name)
-        try:
-            r = run_conformer_energy(
-                input_source=source,
-                output_dir=str(output_dir),
-                preset=args.preset,
-                config=cfg,
-                name=mi.name,
-                charge=getattr(args, "charge", None),
-                multiplicity=getattr(args, "multiplicity", None),
-                solvent=args.solvent,
-                nproc=args.nproc,
-                no_opt=args.no_opt,
-                rank1_only=not args.full_ensemble,
-                levels=levels,
-                ewin=getattr(args, "ewin", None),
-            )
-            if r.status == "completed":
-                results.append({"molecule": mi.name, "status": "completed", "metadata": r.metadata})
-            else:
-                errors.append({"molecule": mi.name, "error": str(r.error)})
-        except Exception as exc:
-            logger.error("  Failed: %s", exc)
-            errors.append({"molecule": mi.name, "error": str(exc)})
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    summary_path = output_dir / f"batch_summary_{timestamp}.json"
-    summary = {
-        "timestamp": timestamp,
-        "total": len(inputs),
-        "successful": len(results),
-        "failed": len(errors),
-        "preset": args.preset,
-        "results": results,
-        "errors": errors,
-    }
-    summary_path.write_text(json.dumps(summary, indent=2))
-    logger.info(
-        "Batch complete: %d/%d successful — summary saved to %s",
-        len(results),
-        len(inputs),
-        summary_path,
-    )
-    return 0 if not errors else 1
-
-
-def _handle_xtbmd_censo_energy(args: argparse.Namespace) -> int:
-    """Execute the xTB-MD conformer-search free-energy workflow."""
-    setup_logging(args.log_level)
-
-    if not args.input and not args.batch_file:
-        print("Error: --input or --batch-file is required", file=sys.stderr)
-        return 1
-
-    levels = _parse_levels_json(args.levels)
-    if args.levels and levels is None:
-        return 1
-    if levels is None:
-        levels = {}
-    if args.threshold != 0.99:
-        levels["refinement_threshold"] = args.threshold
-    else:
-        # Match energy handler semantics: an explicit --levels
-        # refinement_threshold survives; only the default is backfilled.
-        levels.setdefault("refinement_threshold", 0.99)
-
-    cfg = _build_config(args)
-    output_dir = Path(args.output)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    if args.save_config:
-        from cccp.config import save_config as save_cfg
-
-        save_cfg(cfg, Path(args.save_config))
-        logger.info("Configuration saved to: %s", args.save_config)
-
-    if args.batch_file:
-        return _handle_xtbmd_censo_energy_batch(args, cfg, output_dir, levels)
-
-    try:
-        from acp.workflows.xtbmd_censo_energy import run_xtbmd_censo_energy
-
-        result = run_xtbmd_censo_energy(
-            input_source=args.input,
-            output_dir=str(output_dir),
-            preset=args.preset,
-            config=cfg,
-            name=args.name,
-            charge=args.charge,
-            multiplicity=args.multiplicity,
-            solvent=args.solvent,
-            nproc=args.nproc,
-            no_opt=args.no_opt,
-            levels=levels,
-            threshold=None,  # refinement_threshold already merged into levels
-            ewin=args.ewin,
-            rank1_only=args.rank1_only,
-            resume=args.resume,
-            md_temperature=args.md_temp,
-            md_time_ps=args.md_time,
-            md_dump_fs=args.md_dump,
-            md_step_fs=args.md_step,
-            md_hmass=args.md_hmass,
-            md_shake=not args.md_no_shake,
-            md_nvt=args.md_nvt,
-            md_seed=args.md_seed,
-            md_seeds=args.md_seeds,
-            md_method=args.md_method,
-            md_timeout=getattr(args, "md_timeout", None),
-            conv_check=args.conv_check,
-            conv_novelty_max=args.conv_novelty_max,
-            conv_rmsd=args.conv_rmsd,
-            max_frames=args.max_frames,
-            opt_gfn_level=args.opt_gfn,
-            opt_level=args.opt_level,
-            opt_timeout=args.opt_timeout,
-            keep_frames=args.keep_frames,
-            edis=args.edis,
-            gdis=args.gdis,
-        )
-    except KeyboardInterrupt:
-        logger.warning("Interrupted by user")
-        return 130
-    except Exception as exc:
-        logger.exception("Fatal error: %s", exc)
-        return 1
-
-    if result.status == "completed":
-        meta = result.metadata or {}
-        logger.info("xTB-MD CENSO energy workflow completed successfully")
-        logger.info("  Conformers         : %s", meta.get("n_conformers", "N/A"))
-        logger.info("  Global minimum     : %s", meta.get("global_min_xyz", "N/A"))
-        logger.info("  Thermo CSV         : %s", meta.get("thermo_csv", "N/A"))
-        logger.info(
-            "  Frames (raw/kept)  : %s / %s",
-            meta.get("n_frames_raw", "N/A"),
-            meta.get("n_frames", "N/A"),
-        )
-        logger.info(
-            "  Batch opt ok/fail  : %s / %s",
-            meta.get("n_ok", "N/A"),
-            meta.get("n_failed", "N/A"),
-        )
-        logger.info(
-            "  Total G(ensemble)  : %s kcal/mol",
-            meta.get("total_gibbs_kcal_mol", "N/A"),
-        )
-        return 0
-
-    logger.error("xTB-MD CENSO energy workflow failed: %s", result.error)
-    return 1
-
-
-def _handle_xtbmd_censo_energy_batch(
-    args: argparse.Namespace,
-    cfg: dict[str, Any],
-    output_dir: Path,
-    levels: dict[str, Any] | None,
-) -> int:
-    """Run the xTB-MD CENSO energy workflow for multiple molecules (batch mode)."""
-    from acp.workflows.xtbmd_censo_energy import run_xtbmd_censo_energy
-    from cccp.io import load_batch_inputs
-
-    logger.info("ACP xtbmd_censo_energy workflow — batch mode")
-    batch_file = Path(args.batch_file)
-    inputs = load_batch_inputs(batch_file)
-
-    logger.info("Found %d molecules to process", len(inputs))
-    results: list[dict[str, Any]] = []
-    errors: list[dict[str, Any]] = []
-
-    for i, mi in enumerate(inputs, start=1):
-        source = str(mi.source_path or mi.metadata.get("smiles", ""))
-        logger.info("[%d/%d] Processing %s", i, len(inputs), mi.name)
-        try:
-            r = run_xtbmd_censo_energy(
-                input_source=source,
-                output_dir=str(output_dir),
-                preset=args.preset,
-                config=cfg,
-                name=mi.name,
-                charge=getattr(args, "charge", None),
-                multiplicity=getattr(args, "multiplicity", None),
-                solvent=args.solvent,
-                nproc=args.nproc,
-                no_opt=args.no_opt,
-                levels=levels,
-                threshold=None,  # refinement_threshold already merged into levels
-                ewin=args.ewin,
-                rank1_only=args.rank1_only,
-                resume=args.resume,
-                md_temperature=args.md_temp,
-                md_time_ps=args.md_time,
-                md_dump_fs=args.md_dump,
-                md_step_fs=args.md_step,
-                md_hmass=args.md_hmass,
-                md_shake=not args.md_no_shake,
-                md_nvt=args.md_nvt,
-                md_seed=args.md_seed,
-                md_seeds=args.md_seeds,
-                md_method=args.md_method,
-                md_timeout=getattr(args, "md_timeout", None),
-                conv_check=args.conv_check,
-                conv_novelty_max=args.conv_novelty_max,
-                conv_rmsd=args.conv_rmsd,
-                max_frames=args.max_frames,
-                opt_gfn_level=args.opt_gfn,
-                opt_level=args.opt_level,
-                opt_timeout=args.opt_timeout,
-                keep_frames=args.keep_frames,
-                edis=args.edis,
-                gdis=args.gdis,
-            )
-            if r.status == "completed":
-                results.append({"molecule": mi.name, "status": "completed", "metadata": r.metadata})
-            else:
-                errors.append({"molecule": mi.name, "error": str(r.error)})
-        except Exception as exc:
-            logger.error("  Failed: %s", exc)
-            errors.append({"molecule": mi.name, "error": str(exc)})
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    summary_path = output_dir / f"batch_summary_{timestamp}.json"
-    summary = {
-        "timestamp": timestamp,
-        "total": len(inputs),
-        "successful": len(results),
-        "failed": len(errors),
-        "preset": args.preset,
-        "results": results,
-        "errors": errors,
-    }
-    summary_path.write_text(json.dumps(summary, indent=2))
-    logger.info(
-        "Batch complete: %d/%d successful — summary saved to %s",
-        len(results),
-        len(inputs),
-        summary_path,
-    )
-    return 0 if not errors else 1
+def _handle_xtbmd_censo_energy(_args: argparse.Namespace) -> int:
+    return _reject_retired_workflow("xtbmd_censo_energy")
 
 
 def _handle_nmr(args: argparse.Namespace) -> int:
@@ -2486,9 +2551,16 @@ def _handle_nmr(args: argparse.Namespace) -> int:
         save_cfg(cfg, Path(args.save_config))
         logger.info("Configuration saved to: %s", args.save_config)
 
-    try:
-        from acp.workflows.nmr import run_nmr_analysis
+    from acp.calculations.progress import ProgressReporter
+    from acp.workflows.nmr import NMR_STAGES, run_nmr_analysis
 
+    reporter = ProgressReporter(
+        output_dir,
+        job_name="nmr",
+        stages=list(NMR_STAGES),
+    )
+
+    try:
         result = run_nmr_analysis(
             input_sources=args.input,
             spectrum=args.spectrum,
@@ -2511,12 +2583,15 @@ def _handle_nmr(args: argparse.Namespace) -> int:
             stereocenters=args.stereocenters,
             bruker=args.bruker,
             bruker_references=bruker_references,
+            progress_reporter=reporter,
         )
     except KeyboardInterrupt:
         logger.warning("Interrupted by user")
+        reporter.fail("interrupted")
         return 130
     except Exception as exc:
         logger.exception("Fatal error: %s", exc)
+        reporter.fail(str(exc))
         return 1
 
     if result.status == "completed":
@@ -2537,9 +2612,11 @@ def _handle_nmr(args: argparse.Namespace) -> int:
         logger.info("  Error model       : %s", meta.get("error_model", "N/A"))
         if meta.get("note"):
             logger.warning("  NOTE: %s", meta["note"])
+        reporter.complete()
         return 0
 
     logger.error("NMR workflow failed: %s", result.error)
+    reporter.fail(result.error or "NMR workflow failed")
     return 1
 
 
@@ -2558,17 +2635,25 @@ def _preflight_workflow(workflow: str) -> None:
     actually needs one.
     """
     from acp.workflows.registry import get_workflow_entry
+    from cccp.config import load_config
     from cccp.software import ENV_VARS, resolve_executable
 
     entry = get_workflow_entry(workflow)
     if entry is None or not entry.requires_binaries:
         return
+    try:
+        configured_executables = load_config().get("executables") or {}
+    except Exception:
+        configured_executables = {}
     for name in entry.requires_binaries:
-        if resolve_executable(name) is None:
+        configured = configured_executables.get(name)
+        configured_path = configured.get("path") if isinstance(configured, dict) else None
+        if resolve_executable(name, configured_path=configured_path) is None:
             env_var = ENV_VARS.get(name, f"CONFSEARCH_{name.upper()}_PATH")
             logger.warning(
-                "Preflight: executable '%s' (required by '%s') was not found. "
-                "Add it to PATH, set %s, or configure executables.%s.path.",
+                "Preflight: executable '%s' (declared by '%s'; engine "
+                "configurations that never call it are unaffected) was not "
+                "found. Add it to PATH, set %s, or configure executables.%s.path.",
                 name,
                 workflow,
                 env_var,
@@ -2656,22 +2741,31 @@ def main(argv: list[str] | None = None) -> int:
     Returns:
         Exit code.
     """
+    argv_values = list(sys.argv[1:] if argv is None else argv)
+    if (
+        len(argv_values) > 1
+        and argv_values[0] == "run"
+        and argv_values[1] in _CLI_REMOVED_WORKFLOWS
+    ):
+        return _reject_retired_workflow(argv_values[1])
     parser = build_parser()
-    args = parser.parse_args(argv)
+    args = parser.parse_args(argv_values)
 
     if args.command == "run":
         dispatch: dict[str, Callable[[argparse.Namespace], int]] = {
+            "Confsearch": _handle_confsearch,
+            "PESsearch": _handle_pessearch,
+            "BatchOptimize": _handle_batch_optimize,
             "ensemble": _handle_ensemble,
             "energy": _handle_energy,
             "nmr": _handle_nmr,
             "xtbmd_censo_energy": _handle_xtbmd_censo_energy,
-            "mechanism": _handle_mechanism,
             "serve": _handle_serve,
             "singlepoint": _handle_singlepoint,
             "optimize": _handle_optimize,
             "frequency": _handle_frequency,
-            "optfreq": _handle_optfreq,
-            "optfreqsp": _handle_optfreqsp,
+            "scan": _handle_scan,
+            "irc": _handle_irc,
             "xtb_optimize": _handle_xtb_optimize,
         }
         handler = dispatch.get(args.workflow)
@@ -2679,14 +2773,6 @@ def main(argv: list[str] | None = None) -> int:
             parser.print_help()
             return 1
         _preflight_workflow(args.workflow)
-        return handler(args)
-
-    if args.command == "mechanism":
-        dispatch = {"resume": _handle_mechanism_resume}
-        handler = dispatch.get(args.mechanism_command)
-        if handler is None:
-            parser.print_help()
-            return 1
         return handler(args)
 
     if args.command == "doctor":

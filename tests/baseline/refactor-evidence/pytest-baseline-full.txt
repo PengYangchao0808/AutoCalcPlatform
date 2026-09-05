@@ -1,0 +1,104 @@
+........................................................................ [  4%]
+........................................................................ [  8%]
+....................................................s................... [ 12%]
+........................................................................ [ 16%]
+........................................................................ [ 20%]
+........................................................................ [ 24%]
+........................................................................ [ 28%]
+........................................................................ [ 32%]
+........................................................................ [ 36%]
+........................................................................ [ 40%]
+........................................................................ [ 44%]
+........................................................................ [ 48%]
+........................................................................ [ 52%]
+........................................................................ [ 56%]
+........................................................................ [ 60%]
+........................................................................ [ 64%]
+........................................................................ [ 68%]
+........................................................................ [ 72%]
+........................................................................ [ 76%]
+........................................................................ [ 80%]
+........................................................................ [ 84%]
+.................................................s.................s.... [ 88%]
+.............s.......................sss................................ [ 92%]
+........................................................................ [ 96%]
+......................................................................   [100%]
+=============================== warnings summary ===============================
+../../../../../../root/miniforge3/lib/python3.12/site-packages/fastapi/testclient.py:1
+  /root/miniforge3/lib/python3.12/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/test_acp_nmr_spectra.py::test_process_proton_peaks_and_multiplicity
+  /root/miniforge3/lib/python3.12/site-packages/nmrglue/fileio/tecmag.py:27: DeprecationWarning: Data type alias 'a' was deprecated in NumPy 2.0. Use the 'S' alias instead.
+    TNTMAGIC = np.dtype('a8')
+
+tests/test_acp_nmr_spectra.py::test_process_proton_peaks_and_multiplicity
+  /root/miniforge3/lib/python3.12/site-packages/nmrglue/fileio/tecmag.py:28: DeprecationWarning: Data type alias 'a' was deprecated in NumPy 2.0. Use the 'S' alias instead.
+    TNTTLV = np.dtype([('tag', 'a4'), ('bool', '<u4'), ('length', '<u4')])
+
+tests/test_acp_nmr_spectra.py: 11 warnings
+  /root/miniforge3/lib/python3.12/site-packages/nmrglue/fileio/tecmag.py:30: DeprecationWarning: Data type alias 'a' was deprecated in NumPy 2.0. Use the 'S' alias instead.
+    TNTTMAG = np.dtype([
+
+tests/test_acp_nmr_spectra.py::test_process_proton_peaks_and_multiplicity
+tests/test_acp_nmr_spectra.py::test_process_proton_peaks_and_multiplicity
+  /root/miniforge3/lib/python3.12/site-packages/nmrglue/fileio/tecmag.py:114: DeprecationWarning: Data type alias 'a' was deprecated in NumPy 2.0. Use the 'S' alias instead.
+    TNTGRIDANDAXIS = np.dtype([
+
+tests/test_acp_nmr_spectra.py: 11 warnings
+  /root/miniforge3/lib/python3.12/site-packages/nmrglue/fileio/tecmag.py:130: DeprecationWarning: Data type alias 'a' was deprecated in NumPy 2.0. Use the 'S' alias instead.
+    TNTTMG2 = np.dtype([
+
+tests/test_local_cleanup.py::test_api_disk_usage
+tests/test_local_cleanup.py::test_api_cleanup_dry_run
+tests/test_local_cleanup.py::test_api_cleanup_scope_work_dirs
+tests/test_local_cleanup.py::test_api_cleanup_bad_scope
+  /mnt/e/Calculations/Common_Script/Auto_Calc_Platform/ACP_V1_20260811/tests/test_local_cleanup.py:732: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/test_local_cleanup.py: 10 warnings
+  /root/miniforge3/lib/python3.12/site-packages/fastapi/applications.py:4675: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    return self.router.on_event(event_type)  # ty: ignore[deprecated]
+
+tests/test_local_cleanup.py::test_api_disk_usage
+tests/test_local_cleanup.py::test_api_cleanup_dry_run
+tests/test_local_cleanup.py::test_api_cleanup_scope_work_dirs
+tests/test_local_cleanup.py::test_api_cleanup_bad_scope
+  /mnt/e/Calculations/Common_Script/Auto_Calc_Platform/ACP_V1_20260811/tests/test_local_cleanup.py:738: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+tests/test_local_cleanup.py::test_api_cleanup_disabled_returns_503
+  /mnt/e/Calculations/Common_Script/Auto_Calc_Platform/ACP_V1_20260811/tests/test_local_cleanup.py:802: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("startup")
+
+tests/test_local_cleanup.py::test_api_cleanup_disabled_returns_503
+  /mnt/e/Calculations/Common_Script/Auto_Calc_Platform/ACP_V1_20260811/tests/test_local_cleanup.py:808: DeprecationWarning: 
+          on_event is deprecated, use lifespan event handlers instead.
+  
+          Read more about it in the
+          [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
+          
+    @app.on_event("shutdown")
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1791 passed, 7 skipped, 47 warnings in 265.33s (0:04:25)

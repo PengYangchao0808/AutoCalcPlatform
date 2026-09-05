@@ -1,0 +1,17 @@
+=== Failure Drill: capability evidence audit ===
+
+Step 1: Rename test_batch_optimize.py to deselect its tests
+  mv tests/test_batch_optimize.py tests/test_batch_optimize.py.bak
+
+Step 2: Run audit test — should FAIL with "capability row missing: batch_optimize"
+  $ python -m pytest tests/test_architecture_invariants.py::test_capability_evidence_table -q
+  FAILED tests/test_architecture_invariants.py::test_capability_evidence_table
+  E   AssertionError: capability row missing: batch_optimize
+  1 failed in 8.40s
+
+Step 3: Restore and verify pass
+  mv tests/test_batch_optimize.py.bak tests/test_batch_optimize.py
+  $ python -m pytest tests/test_architecture_invariants.py::test_capability_evidence_table -q
+  1 passed in 7.50s
+
+CONCLUSION: Audit test has teeth — correctly detects missing capability test files.

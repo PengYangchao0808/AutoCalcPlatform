@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ACP Molecular Workbench</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0d151e; --panel:#151f2b; --panel2:#101923; --line:#293a4b; --text:#e7edf5; --muted:#91a0b2; --accent:#4da3ff; --good:#5dd39e; --warn:#f4c96b; --bad:#ff7c86; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+    main { max-width:1440px; margin:0 auto; padding:22px; }
+    h1,h2,h3 { margin:0 0 10px; } h1 { font-size:24px; } h2 { font-size:17px; } h3 { font-size:15px; }
+    .sub { color:var(--muted); margin-bottom:18px; }
+    .grid { display:grid; grid-template-columns:minmax(390px,.9fr) minmax(460px,1.1fr); gap:16px; align-items:start; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px; }
+    .stack { display:grid; gap:10px; }
+    .field-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+    .field-grid .full { grid-column:1/-1; }
+    label { color:var(--muted); font-size:12px; display:grid; gap:5px; }
+    input,select,textarea,button { font:inherit; color:var(--text); }
+    input,select,textarea { width:100%; background:#0f1822; border:1px solid var(--line); border-radius:7px; padding:8px 10px; }
+    textarea { min-height:86px; resize:vertical; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12px; }
+    textarea.source { min-height:125px; }
+    button { background:#19324a; border:1px solid #3c79aa; border-radius:7px; padding:8px 12px; cursor:pointer; }
+    button:hover { background:#234766; } button:disabled { opacity:.5; cursor:wait; }
+    button.secondary { background:transparent; border-color:var(--line); } button.danger { background:#512932; border-color:#a34f5b; }
+    .toolbar,.row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; } .toolbar { justify-content:space-between; }
+    .status { color:var(--muted); min-height:22px; } .error { color:var(--bad); white-space:pre-wrap; } .ok { color:var(--good); } .hint { color:var(--muted); font-size:12px; }
+    .job { border-top:1px solid var(--line); padding:11px 0; display:grid; gap:6px; } .job:first-child { border-top:0; }
+    .job-title { display:flex; justify-content:space-between; gap:12px; } .job-meta { color:var(--muted); font-size:12px; }
+    .badge { border:1px solid var(--line); border-radius:999px; padding:2px 8px; font-size:12px; white-space:nowrap; }
+    .badge.running { color:var(--accent); border-color:#3c79aa; } .badge.paused { color:var(--warn); border-color:#8f713c; }
+    .badge.completed { color:var(--good); border-color:#39785e; } .badge.failed,.badge.cancelled { color:var(--bad); border-color:#934853; }
+    pre { margin:0; padding:10px; background:#0b121a; border-radius:7px; overflow:auto; color:#cbd6e3; font-size:12px; max-height:310px; white-space:pre-wrap; word-break:break-word; }
+    .wide { grid-column:1/-1; } .metrics { display:flex; gap:8px; flex-wrap:wrap; margin:4px 0 16px; }
+    .metric { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:7px 10px; color:var(--muted); } .metric strong { color:var(--text); margin-right:3px; }
+    .backend { font-size:12px; color:var(--muted); } .backend.available { color:var(--good); } .backend.missing { color:var(--bad); }
+    details { border-top:1px solid var(--line); padding-top:10px; } summary { cursor:pointer; color:var(--muted); }
+    .form-title { color:var(--text); font-size:13px; font-weight:600; margin:5px 0 1px; } .stage { display:grid; grid-template-columns:1.1fr .75fr 1.4fr; gap:8px; padding:8px 0; border-top:1px solid var(--line); font-size:12px; }
+    .stage:first-child { border-top:0; } .stage span { color:var(--muted); } .files { display:grid; gap:4px; max-height:260px; overflow:auto; }
+    .file { display:flex; justify-content:space-between; gap:8px; border-bottom:1px solid #20303e; padding:4px 0; font-size:12px; } .file a { color:var(--accent); text-decoration:none; overflow-wrap:anywhere; } .file small { color:var(--muted); white-space:nowrap; }
+    .detail-columns { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; } .detail-card { background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:11px; }
+    .empty { color:var(--muted); padding:12px 0; }
+    @media (max-width:980px) { .grid,.detail-columns { grid-template-columns:1fr; } } @media (max-width:560px) { main { padding:12px; } .field-grid { grid-template-columns:1fr; } .field-grid .full { grid-column:auto; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>ACP Workbench</h1>
+  <div class="sub">统一计算任务工作台：计算类型、输入、方法、队列状态、恢复操作与结果产物均通过同一 v1 API 管理。</div>
+  <div id="metrics" class="metrics"><span class="metric">正在连接服务…</span></div>
+  <div class="grid">
+    <section class="panel stack">
+      <div class="toolbar"><h2>提交计算任务</h2><span id="form-status" class="status"></span></div>
+      <label>计算类型<select id="workflow"></select></label>
+      <div id="workflow-description" class="hint"></div>
+      <label>任务名称<input id="name" placeholder="可选；用于任务目录和列表显示"></label>
+      <div id="form-fields"></div>
+      <details><summary>提交 JSON（表单生成，可手动微调）</summary><div class="stack" style="margin-top:10px">
+        <label>input<textarea id="input-json"></textarea></label><label>method<textarea id="method-json"></textarea></label><label>resources<textarea id="resources-json">{}</textarea></label>
+        <div class="hint">提交时以后面三段 JSON 为准；表单变化会自动刷新 JSON。</div>
+      </div></details>
+      <div class="row"><button id="submit">提交任务</button><button id="refresh" class="secondary">刷新队列</button></div>
+    </section>
+    <section class="panel">
+      <div class="toolbar"><h2>任务队列</h2><span id="queue-status" class="status"></span></div>
+      <div class="row" style="margin-bottom:10px"><label style="min-width:150px">状态<select id="status-filter"><option value="">全部状态</option><option>queued</option><option>running</option><option>paused</option><option>completed</option><option>failed</option><option>cancelled</option></select></label>
+        <label style="min-width:190px">工作流<select id="workflow-filter"><option value="">全部工作流</option></select></label></div>
+      <div id="jobs" class="stack"><div class="status">正在加载…</div></div>
+    </section>
+    <section class="panel wide"><div class="toolbar"><h2>任务详情</h2><button id="clear-detail" class="secondary">清除</button></div><div id="detail" class="status">选择一个任务查看阶段、恢复操作、结果摘要、文件和日志。</div></section>
+  </div>
+</main>
+<script>
+  const API = "/api/v1";
+  const $ = id => document.getElementById(id);
+  const esc = value => String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+  const pretty = value => JSON.stringify(value ?? {}, null, 2);
+  const state = { selectedJobId:null, workflows:[], detailTimer:null };
+  const publicOrder = ["Confsearch","PESsearch","BatchOptimize","irc","scan","nmr","singlepoint","optimize","frequency","xtb_optimize"];
+  const simpleWorkflows = new Set(["singlepoint","optimize","frequency","scan"]);
+  async function call(path, options = {}) {
+    const response = await fetch(API + path, options); const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.detail ? (typeof body.detail === "string" ? body.detail : pretty(body.detail)) : `${response.status} ${response.statusText}`); return body;
+  }
+  function optionalText(id) { const value = $(id)?.value?.trim(); return value || undefined; }
+  function optionalNumber(id, integer = false) { const raw = optionalText(id); if (raw === undefined) return undefined; const value = Number(raw); if (!Number.isFinite(value) || (integer && !Number.isInteger(value))) throw new Error(`${id} 需要填写有效数字`); return value; }
+  function put(obj, key, value) { if (value !== undefined && value !== "") obj[key] = value; }
+  function sourcePayload(prefix = "source") { const source = optionalText(prefix); if (!source) throw new Error("请填写输入结构或来源路径"); const type = $(`${prefix}-type`)?.value || "auto"; const payload = {source}; if (type !== "auto") payload.source_type = type; return payload; }
+  function commonChemistry(input, prefix = "source") { put(input, "charge", optionalNumber(`${prefix}-charge`, true)); put(input, "multiplicity", optionalNumber(`${prefix}-multiplicity`, true)); return input; }
+  function field(label, id, control, full = false) { return `<label class="${full ? "full" : ""}">${esc(label)}${control.replace("__ID__", id)}</label>`; }
+  const text = placeholder => `<input id="__ID__" placeholder="${esc(placeholder || "")}">`;
+  const select = options => `<select id="__ID__">${options.map(([value,label]) => `<option value="${esc(value)}">${esc(label)}</option>`).join("")}</select>`;
+  const number = placeholder => `<input id="__ID__" type="number" step="any" placeholder="${esc(placeholder || "")}">`;
+  const area = (placeholder, cls = "") => `<textarea id="__ID__" class="${cls}" placeholder="${esc(placeholder || "")}"></textarea>`;
+  function sourceFields(label = "输入结构 / 来源") { return `<div class="form-title">${label}</div><div class="field-grid">${field("来源","source",area("SMILES、XYZ 文本或服务器可见的文件路径","source"),true)}${field("来源类型","source-type",select([["auto","自动识别"],["smiles","SMILES"],["xyz_text","XYZ 文本"],["structure_asset","结构资产路径"]]))}${field("电荷","source-charge",number("默认自动识别"))}${field("多重度","source-multiplicity",number("默认自动识别"))}</div>`; }
+  function methodFields() { return `<div class="form-title">方法级别</div><div class="field-grid">${field("泛函 / 复合方法","simple-functional",text("r2SCAN-3c"))}${field("基组（复合方法可留空）","simple-basis",text("def2-TZVPP"))}${field("溶剂模型","simple-solvent-model",select([["none","无"],["smd","SMD"],["cpcm","CPCM"]]))}${field("溶剂","simple-solvent",text("如 water"))}${field("额外 route 关键词","simple-route-extras",text("逗号分隔，可选"))}</div>`; }
+  function renderForm() {
+    const wf = $("workflow").value; let html = "";
+    if (simpleWorkflows.has(wf)) { html = sourceFields() + methodFields(); if (wf === "scan") html += `<div class="form-title">扫描坐标</div><div class="field-grid">${field("原子与范围","scan-coordinate",text("0,1,1.0,3.0"),true)}${field("扫描点数","scan-points",number("21"))}</div>`; }
+    else if (wf === "xtb_optimize") html = sourceFields() + `<div class="form-title">xTB 参数</div><div class="field-grid">${field("GFN","xtb-gfn",select([["2","GFN2-xTB"],["1","GFN1-xTB"],["0","GFN0-xTB"]]))}${field("优化等级","xtb-opt-level",select([["normal","normal"],["tight","tight"],["vtight","vtight"]]))}${field("溶剂模型","xtb-solvent-model",select([["none","无"],["gbsa","GBSA"]]))}${field("溶剂","xtb-solvent",text("如 water"))}</div>`;
+    else if (wf === "Confsearch") html = sourceFields("搜索输入") + `<div class="form-title">构象搜索协议</div><div class="field-grid">${field("协议","conf-protocol",select([["censo-crest","CENSO + CREST"],["xtb-crest","xTB + CREST"],["xtb-md","xTB-MD"],["xtbmd-censo","xTB-MD + CENSO"]]))}${field("质量档位","conf-profile",select([["default","default"],["light","light"],["high","high"]]))}${field("精修范围","conf-policy",select([["screen","screen"],["rank1","rank1"],["cumulative-99","cumulative-99"],["all","all"]]))}${field("溶剂","conf-solvent",text("可选"))}${field("能量窗口 kcal/mol","conf-ewin",number("可选"))}${field("最大构象数","conf-max-conformers",number("可选"))}</div>`;
+    else if (wf === "PESsearch") html = `<div class="form-title">PES 输入</div><div class="field-grid">${field("模式","pes-mode",select([["bond_length_scan","坐标扫描"],["path","已有路径 / 结果"]]),true)}${field("来源类型","pes-source-type",select([["xyz_text","XYZ 文本"],["task_artifact","任务产物"],["structure_asset","结构资产"]]))}${field("XYZ / 任务 ID / 资产路径","pes-source",area("坐标扫描可粘贴 XYZ；任务产物模式填写任务 ID","source"),true)}${field("来源产物相对路径","pes-artifact",text("如 RESULT/confsearch/confsearch_manifest.json"))}${field("扫描原子（0-based）","pes-atoms",text("0,1"))}${field("起点","pes-start",number("1.0"))}${field("终点","pes-end",number("3.0"))}${field("扫描点数","pes-points",number("21"))}${field("扫描优化方法","pes-scan-method",text("GFN2-xTB"))}${field("单点方法","pes-sp-method",text("B97-3c"))}${field("单点基组","pes-sp-basis",text("复合方法可留空"))}${field("路径策略","pes-strategy",select([["guided-scan","guided-scan"],["reverse-peb","reverse-peb"],["direct-ts","direct-ts"]]))}${field("产品结构路径","pes-product",text("path 模式可选"))}${field("TS guess 路径","pes-ts-guess",text("direct-ts 可选"))}</div>`;
+    else if (wf === "BatchOptimize") html = `<div class="form-title">批量结构来源</div><div class="field-grid">${field("来源方式","batch-source-kind",select([["items_file","批量文件路径"],["from_artifact","上游结果产物"]]),true)}${field("文件 / 任务目录 / manifest","batch-source",text("structures.xyz 或任务目录"),true)}${field("选择项（可选）","batch-select",text("候选 ID，逗号分隔"),true)}${field("默认电荷","batch-charge",number("0"))}${field("默认多重度","batch-multiplicity",number("1"))}${field("Batch profile","batch-profile",select([["opt_only","opt_only"],["opt_freq","opt_freq"],["opt_freq_sp","opt_freq_sp"],["opt_freq_sp_thermo","opt_freq_sp_thermo"]]),true)}${field("最低态方法","batch-min-method",text("可选"))}${field("最低态基组","batch-min-basis",text("可选"))}${field("过渡态方法","batch-ts-method",text("可选"))}${field("过渡态基组","batch-ts-basis",text("可选"))}</div>`;
+    else if (wf === "irc") html = sourceFields("过渡态输入") + `<div class="form-title">独立 IRC 参数</div><div class="field-grid">${field("方向","irc-direction",select([["both","正向 + 反向"],["forward","正向"],["reverse","反向"]]))}${field("方法","irc-method",text("r2SCAN-3c"))}${field("基组","irc-basis",text("复合方法可留空"))}${field("最大点数","irc-maxpoints",number("100"))}${field("步长","irc-step",number("0.1"))}</div>`;
+    else if (wf === "nmr") html = `<div class="form-title">候选结构</div><div class="field-grid">${field("候选来源（每行一个）","nmr-candidates",area("SMILES、XYZ 文本或路径，每行一个","source"),true)}${field("候选来源类型","nmr-source-type",select([["auto","自动识别"],["smiles","SMILES"],["xyz_text","XYZ 文本"]]))}${field("核种","nmr-nuclei",text("1H,13C"))}${field("谱数据 / 参考文本","nmr-spectrum",area("实验峰数据文本","source"),true)}${field("CENSO preset","nmr-preset",select([["censo-light","censo-light"],["censo-default","censo-default"],["censo-zero","censo-zero"]]))}${field("溶剂","nmr-solvent",text("可选"))}${field("Boltzmann 温度 K","nmr-temperature",number("298.15"))}</div>`;
+    else html = `<div class="hint">当前工作流没有专用表单，请直接编辑下方 JSON。</div>`;
+    $("form-fields").innerHTML = html; const meta = state.workflows.find(item => item.name === wf); $("workflow-description").textContent = meta?.description || ""; syncJsonFromForm();
+  }
+  function makeSimplePayload(wf) {
+    const input = commonChemistry(sourcePayload()); const levelId = {singlepoint:"single_point",optimize:"optimize",frequency:"frequency",scan:"scan"}[wf]; const level = {engine:"orca"};
+    put(level,"functional",optionalText("simple-functional")); put(level,"basis",optionalText("simple-basis")); put(level,"solvent_model",optionalText("simple-solvent-model")); put(level,"solvent",optionalText("simple-solvent")); put(level,"route_extras",optionalText("simple-route-extras"));
+    const method = {levels:{[levelId]:level}}; if (wf === "scan") { const coordinate = optionalText("scan-coordinate"); if (!coordinate) throw new Error("scan 需要填写原子与扫描范围"); input.scan_coordinates = [coordinate]; put(method,"scan_points",optionalNumber("scan-points",true)); } return {input,method};
+  }
+  function makePayload() {
+    const wf = $("workflow").value;
+    if (simpleWorkflows.has(wf)) return makeSimplePayload(wf);
+    if (wf === "xtb_optimize") return {input:commonChemistry(sourcePayload()),method:{levels:{xtb_opt:{engine:"xtb",gfn:$("xtb-gfn").value,opt_level:$("xtb-opt-level").value,solvent_model:$("xtb-solvent-model").value,solvent:optionalText("xtb-solvent")}}}};
+    if (wf === "Confsearch") { const input = commonChemistry(sourcePayload()); const method = {protocol:$("conf-protocol").value,profile:$("conf-profile").value,refinement_policy:$("conf-policy").value}; put(method,"solvent",optionalText("conf-solvent")); put(method,"ewin",optionalNumber("conf-ewin")); put(method,"max_conformers",optionalNumber("conf-max-conformers",true)); return {input,method}; }
+    if (wf === "PESsearch") {
+      const mode = $("pes-mode").value; const sourceType = $("pes-source-type").value; const raw = optionalText("pes-source"); if (!raw) throw new Error("PESsearch 需要填写来源");
+      if (mode === "bond_length_scan") { const atoms = (optionalText("pes-atoms") || "").split(",").map(value => Number(value.trim())); if (atoms.length !== 2 || atoms.some(value => !Number.isInteger(value) || value < 0)) throw new Error("扫描原子应为两个 0-based 整数"); const coordinate = {kind:"distance",atoms,start:optionalNumber("pes-start"),end:optionalNumber("pes-end")}; if (coordinate.start === undefined || coordinate.end === undefined) throw new Error("请填写扫描起点和终点"); const source = sourceType === "xyz_text" ? {source_type:"xyz_text",xyz_text:raw} : sourceType === "task_artifact" ? {source_type:"task_artifact",source_job_id:raw,artifact_path:optionalText("pes-artifact") || "RESULT/confsearch/confsearch_manifest.json"} : {source_type:"structure_asset",asset_path:raw}; const input = {source,coordinate,protocol:{scan_method:optionalText("pes-scan-method") || "GFN2-xTB",sp_method:optionalText("pes-sp-method") || "B97-3c",sp_basis:optionalText("pes-sp-basis")}}; put(input.protocol,"points",optionalNumber("pes-points",true)); return {input,method:{mode:"bond_length_scan"}}; }
+      const input = {source_job_id:raw,from_artifact:optionalText("pes-artifact") || "RESULT/confsearch/confsearch_manifest.json"}; put(input,"product",optionalText("pes-product")); put(input,"ts_guess",optionalText("pes-ts-guess")); return {input,method:{strategy:$("pes-strategy").value}};
+    }
+    if (wf === "BatchOptimize") { const input = {}; const source = optionalText("batch-source"); if (!source) throw new Error("BatchOptimize 需要填写批量文件或上游任务目录"); input[$("batch-source-kind").value] = source; const selected = optionalText("batch-select"); if (selected) input.select = selected.split(",").map(value => value.trim()).filter(Boolean); put(input,"charge",optionalNumber("batch-charge",true)); put(input,"multiplicity",optionalNumber("batch-multiplicity",true)); const method = {profile:$("batch-profile").value}; put(method,"minimum_method",optionalText("batch-min-method")); put(method,"minimum_basis",optionalText("batch-min-basis")); put(method,"transition_state_method",optionalText("batch-ts-method")); put(method,"transition_state_basis",optionalText("batch-ts-basis")); return {input,method}; }
+    if (wf === "irc") { const input = commonChemistry(sourcePayload()); input.input_role = "transition_state"; input.directions = [$("irc-direction").value]; return {input,method:{levels:{irc:{engine:"orca",method:optionalText("irc-method") || "r2SCAN-3c",basis:optionalText("irc-basis") || "",maxpoints:optionalNumber("irc-maxpoints",true) || 100,step:optionalNumber("irc-step") || .1}}}}; }
+    if (wf === "nmr") { const lines = (optionalText("nmr-candidates") || "").split(/\r?\n/).map(value => value.trim()).filter(Boolean); if (!lines.length) throw new Error("NMR 需要至少一个候选结构"); const sourceType = $("nmr-source-type").value; const candidates = lines.map(source => sourceType === "auto" ? {source} : {source,source_type:sourceType}); const input = {candidates,experiment:{mode:"assigned",content:optionalText("nmr-spectrum") || ""}}; const method = {preset:$("nmr-preset").value,nuclei:(optionalText("nmr-nuclei") || "1H,13C").split(",").map(value => value.trim()).filter(Boolean)}; put(method,"solvent",optionalText("nmr-solvent")); put(method,"boltzmann_temp",optionalNumber("nmr-temperature")); return {input,method}; }
+    return {input:{},method:{}};
+  }
+  function syncJsonFromForm() { try { const payload = makePayload(); $("input-json").value = pretty(payload.input); $("method-json").value = pretty(payload.method); $("form-status").textContent = "表单已同步"; $("form-status").className = "status ok"; } catch (error) { $("form-status").textContent = error.message; $("form-status").className = "status error"; } }
+  function queueText(counts) { const get = key => Number(counts?.[key] || 0); return `运行 ${get("running")} · 暂停 ${get("paused")} · 排队 ${get("queued")} · 完成 ${get("completed")} · 失败 ${get("failed")} · 取消 ${get("cancelled")}`; }
+  function statusClass(status) { return String(status || "").toLowerCase().replace(/[^a-z0-9_-]/g, ""); }
+  function renderMetrics(status, backends) { const queue = status?.queue || {}; const backendText = (backends?.backends || []).map(item => `<span class="backend ${item.available ? "available" : "missing"}">${esc(item.name)} ${item.available ? "可用" : "不可用"}</span>`).join(" · "); $("metrics").innerHTML = `<span class="metric"><strong>服务</strong>${esc(status?.version || "在线")}</span><span class="metric"><strong>队列</strong>${esc(queueText(queue))}</span><span class="metric"><strong>后端</strong>${backendText || "未返回"}</span>`; }
+  async function loadService() { try { const [status,backends] = await Promise.all([call("/status"),call("/backends")]); renderMetrics(status,backends); } catch (error) { $("metrics").innerHTML = `<span class="metric error">服务状态读取失败：${esc(error.message)}</span>`; } }
+  async function loadWorkflows() { const data = await call("/workflows"); state.workflows = (data.workflows || []).filter(item => item.name !== "fake").sort((a,b) => publicOrder.indexOf(a.name) - publicOrder.indexOf(b.name)); $("workflow").innerHTML = state.workflows.map(item => `<option value="${esc(item.name)}">${esc(item.label || item.name)} · ${esc(item.name)}</option>`).join(""); $("workflow-filter").innerHTML = `<option value="">全部工作流</option>` + state.workflows.map(item => `<option value="${esc(item.name)}">${esc(item.label || item.name)}</option>`).join(""); renderForm(); }
+  function renderJobs(data) { const counts = data.counts || {}; $("queue-status").textContent = queueText(counts); const jobs = data.jobs || []; if (!jobs.length) { $("jobs").innerHTML = `<div class="empty">暂无符合条件的任务</div>`; return; } $("jobs").innerHTML = jobs.map(job => { const status = String(job.status || ""); const progress = job.progress == null ? "" : ` · ${Math.round(Number(job.progress) * 100)}%`; return `<article class="job"><div class="job-title"><strong>${esc(job.spec?.name || job.id)}</strong><span class="badge ${statusClass(status)}">${esc(status)}</span></div><div class="job-meta">${esc(job.spec?.workflow || "-")} · ${esc(job.current_stage || "等待执行")}${progress}<br>${esc(job.id)}</div><div class="row"><button data-job-action="detail" data-job-id="${esc(job.id)}">查看详情</button></div>${job.error ? `<div class="error">${esc(job.error)}</div>` : ""}</article>`; }).join(""); $("jobs").querySelectorAll("button[data-job-action]").forEach(button => button.addEventListener("click", () => loadDetail(button.dataset.jobId))); }
+  async function loadJobs() { try { const params = new URLSearchParams({limit:"200"}); if ($("status-filter").value) params.set("status",$("status-filter").value); if ($("workflow-filter").value) params.set("workflow",$("workflow-filter").value); renderJobs(await call(`/jobs?${params}`)); } catch (error) { $("jobs").innerHTML = `<div class="error">${esc(error.message)}</div>`; } }
+  function actionButton(id, action, label, enabled = true, danger = false) { if (!enabled) return ""; return `<button class="${danger ? "danger" : ""}" data-detail-action="${esc(action)}" data-job-id="${esc(id)}">${esc(label)}</button>`; }
+  function renderStages(stages) { if (!stages?.length) return `<div class="empty">暂无阶段记录</div>`; return stages.map(stage => `<div class="stage"><strong>${esc(stage.stage_name)}</strong><span>${esc(stage.status)}</span><span>${esc(stage.status_detail || stage.error || "")}</span></div>`).join(""); }
+  function renderArtifacts(items) { if (!items?.length) return `<div class="empty">暂无结果摘要</div>`; return items.map(item => `<div class="file"><span>${esc(item.type || "artifact")} · ${esc(item.path)}</span><small>${item.size == null ? "" : `${item.size} B`}</small></div>`).join(""); }
+  function renderFiles(manifest, jobId) { const files = manifest?.files || []; if (!files.length) return `<div class="empty">暂无文件</div>`; return `<div class="files">${files.map(item => { const path = String(item.path || ""); const link = item.is_dir ? esc(path) : `<a href="${API}/jobs/${encodeURIComponent(jobId)}/files/${path.split("/").map(encodeURIComponent).join("/")}" target="_blank" rel="noreferrer">${esc(path)}</a>`; return `<div class="file"><span>${item.is_dir ? "📁 " : "📄 "}${link}</span><small>${item.is_dir ? "目录" : `${item.size} B`}</small></div>`; }).join("")}</div>${manifest.truncated ? `<div class="hint">文件清单已截断。</div>` : ""}`; }
+  function renderDetail(detail, summary, raw, logs) {
+    const job = detail.job || {}; const recovery = detail.recovery || {}; const id = job.id; const actions = [actionButton(id,"pause","暂停",recovery.can_pause),actionButton(id,"unpause","恢复运行",recovery.can_unpause),actionButton(id,"continue","断点续算",recovery.can_continue),actionButton(id,"rerun","重新运行",recovery.can_rerun),actionButton(id,"cancel","取消",recovery.can_cancel,true),actionButton(id,"purge","清理任务",recovery.can_purge,true)].join(""); const error = detail.error_detail?.error || job.error; const result = job.result || {};
+    $("detail").innerHTML = `<div class="stack"><div class="toolbar"><div><h3>${esc(job.spec?.name || id)} · <span class="badge ${statusClass(job.status)}">${esc(job.status)}</span></h3><div class="job-meta">${esc(job.spec?.workflow || "-")} · ${esc(id)}<br>工作目录：${esc(job.work_dir || "-")}<br>阶段：${esc(job.current_stage || "-")} · 进度：${job.progress == null ? "-" : `${Math.round(Number(job.progress) * 100)}%`}</div></div><div class="row">${actions}</div></div>${recovery.continue_notes ? `<div class="hint">${esc(recovery.continue_notes)}</div>` : ""}${error ? `<div class="error">${esc(error)}${detail.error_detail?.stderr_tail ? `\n\n${esc(detail.error_detail.stderr_tail)}` : ""}</div>` : ""}<div class="detail-columns"><div class="detail-card"><h3>计算阶段</h3>${renderStages(detail.stages)}</div><div class="detail-card"><h3>结果摘要</h3><pre>${esc(pretty(result))}</pre><h3 style="margin-top:10px">结果产物</h3>${renderArtifacts(detail.artifacts_summary)}</div><div class="detail-card"><h3>文件</h3>${renderFiles(raw,id)}</div><div class="detail-card"><h3>日志</h3><div class="hint">stdout</div><pre>${esc(logs?.stdout || "")}</pre><div class="hint" style="margin-top:8px">stderr</div><pre>${esc(logs?.stderr || "")}</pre></div></div></div>`;
+    $("detail").querySelectorAll("button[data-detail-action]").forEach(button => button.addEventListener("click", () => handleDetailAction(button.dataset.jobId,button.dataset.detailAction)));
+  }
+  async function loadDetail(id) { state.selectedJobId = id; if (state.detailTimer) clearInterval(state.detailTimer); $("detail").innerHTML = `<div class="status">正在读取任务详情…</div>`; const refresh = async () => { try { const results = await Promise.all([call(`/jobs/${encodeURIComponent(id)}/detail`),call(`/jobs/${encodeURIComponent(id)}/files?view=summary`),call(`/jobs/${encodeURIComponent(id)}/files?view=raw`),call(`/jobs/${encodeURIComponent(id)}/logs?lines=300`)]); if (state.selectedJobId === id) renderDetail(results[0],results[1],results[2],results[3]); } catch (error) { if (state.selectedJobId === id) $("detail").innerHTML = `<div class="error">${esc(error.message)}</div>`; } }; await refresh(); state.detailTimer = setInterval(refresh,5000); }
+  async function handleDetailAction(id, action) { if (action === "purge" && !window.confirm("确认清理该任务记录？默认不删除工作目录数据。")) return; const button = Array.from(document.querySelectorAll("button[data-detail-action]")).find(item => item.dataset.jobId === id && item.dataset.detailAction === action); if (button) button.disabled = true; try { const path = action === "purge" ? "/jobs/purge" : `/jobs/${encodeURIComponent(id)}/${action}`; const options = {method:"POST",headers:{"Content-Type":"application/json"}}; if (action === "purge") options.body = JSON.stringify({job_ids:[id],delete_data:false,force_cancel:false}); await call(path,options); if (action === "purge") { state.selectedJobId = null; $("detail").innerHTML = `<div class="ok">任务已清理</div>`; } else await loadDetail(id); await loadJobs(); await loadService(); } catch (error) { $("detail").innerHTML = `<div class="error">${esc(error.message)}</div>`; } finally { if (button) button.disabled = false; } }
+  $("workflow").addEventListener("change",renderForm); $("form-fields").addEventListener("input",syncJsonFromForm); $("form-fields").addEventListener("change",syncJsonFromForm); $("status-filter").addEventListener("change",loadJobs); $("workflow-filter").addEventListener("change",loadJobs);
+  $("refresh").addEventListener("click",async () => { await Promise.all([loadJobs(),loadService()]); }); $("clear-detail").addEventListener("click",() => { state.selectedJobId = null; if (state.detailTimer) clearInterval(state.detailTimer); $("detail").textContent = "选择一个任务查看阶段、恢复操作、结果摘要、文件和日志。"; });
+  $("submit").addEventListener("click",async () => { const button = $("submit"); button.disabled = true; try { const body = {workflow:$("workflow").value,name:$("name").value.trim(),input:JSON.parse($("input-json").value || "{}"),method:JSON.parse($("method-json").value || "{}"),resources:JSON.parse($("resources-json").value || "{}")} ; const created = await call("/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}); $("form-status").textContent = `已提交 ${created.job_id}`; $("form-status").className = "status ok"; await Promise.all([loadJobs(),loadService()]); await loadDetail(created.job_id); } catch (error) { $("form-status").textContent = error.message; $("form-status").className = "status error"; } finally { button.disabled = false; } });
+  (async () => { try { await loadWorkflows(); await Promise.all([loadJobs(),loadService()]); } catch (error) { $("form-status").textContent = error.message; $("form-status").className = "status error"; } })(); setInterval(() => { loadJobs(); loadService(); },5000);
+</script>
+</body>
+</html>

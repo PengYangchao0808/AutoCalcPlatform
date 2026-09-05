@@ -15,6 +15,7 @@ from acp.catalog import (
     FIELD_DEFINITIONS,
     FUNCTIONAL_OPTIONS_MAP,
     METHOD_META,
+    WORKFLOW_CATALOG,
     _case_insensitive_get,
     _match_option_case_insensitive,
     convert_method_levels_to_protocol_levels,
@@ -62,6 +63,10 @@ _ADVANCED_FIELD_NAMES = frozenset(
         "max_steps",
         "recalc_hess",
         "scale_factor",
+        "minimum_method",
+        "minimum_basis",
+        "transition_state_method",
+        "transition_state_basis",
         # xtbmd_censo_energy control group (DevDoc §10.1): 17 advanced fields;
         # md_temperature / md_seeds are regular (high-frequency user controls).
         "opt_level",
@@ -112,6 +117,80 @@ def test_method_catalog_xtb_solvent_model_options() -> None:
     field_defs = catalog["field_definitions"]
     xtb_options = field_defs["solvent_model"]["per_backend"]["xtb"]
     assert xtb_options == ["none", "ALPB", "GBSA"]
+
+
+def test_pes_scan_catalog_exposes_complete_protocol_levels() -> None:
+    catalog = get_method_catalog()
+    workflow = next(item for item in WORKFLOW_CATALOG if item["id"] == "PESsearch")
+    assert workflow["method_schema_id"] == "pes_scan"
+    assert "势能面扫描" in workflow["description_zh"]
+
+    schema = catalog["method_schemas"]["pes_scan"]
+    assert [level["level_id"] for level in schema["method_levels"]] == [
+        "scan_coordinate",
+        "scan_driver",
+        "scan_optimizer",
+        "single_point",
+    ]
+    fields = {field_name for level in schema["method_levels"] for field_name in level["fields"]}
+    assert {
+        "scan_coordinate_kind",
+        "scan_bond_type",
+        "scan_coordinate_start",
+        "scan_coordinate_end",
+        "scan_coordinate_points",
+        "scan_mode",
+        "scan_reuse_previous_geometry",
+        "scan_full_scan",
+        "scan_failure_policy",
+        "scan_retry_count",
+        "scan_use_scants",
+        "scan_optimizer_method",
+        "scan_optimizer_max_iterations",
+        "scan_optimizer_convergence",
+        "scan_optimizer_retries",
+        "scan_optimizer_retry_strategy",
+        "functional",
+        "basis",
+        "dispersion",
+        "ri_approximation",
+        "aux_j_basis",
+        "aux_c_basis",
+        "solvent_model",
+        "solvent",
+        "grid",
+        "scf_convergence",
+        "single_point_resume",
+    }.issubset(fields)
+    # The point-optimization iteration limit has one owner. The historical
+    # driver-level alias remains backend-compatible but is not rendered as a
+    # second, duplicate UI control.
+    assert "scan_max_iterations" not in fields
+    assert "path_strategy" not in fields
+    assert catalog["method_schemas"]["pes_bond_scan"] is schema
+
+    field_defs = catalog["field_definitions"]
+    for field_name in schema["method_levels"][1]["fields"]:
+        assert field_defs[field_name]["label_zh"]
+        assert field_defs[field_name]["help_zh"]
+    assert field_defs["scan_mode"]["option_labels_zh"]["relaxed_scan"] == "松弛扫描"
+
+
+def test_irc_catalog_is_active_simple_workflow() -> None:
+    # Given: the public workflow and method catalogs.
+    catalog = get_method_catalog()
+
+    # When: the standalone IRC workflow entry is selected.
+    workflow = next(item for item in WORKFLOW_CATALOG if item["id"] == "irc")
+    schema = catalog["method_schemas"][workflow["method_schema_id"]]
+
+    # Then: it exposes the independent IRC controls and ORCA requirement.
+    assert workflow["category"] == "simple"
+    assert workflow["status"] == "active"
+    assert workflow["default_backend"] == "orca"
+    fields = {field_name for level in schema["method_levels"] for field_name in level["fields"]}
+    assert {"method", "basis", "maxpoints", "step"}.issubset(fields)
+    assert schema["method_levels"][0]["allowed_engines"] == ["orca"]
 
 
 def test_normalize_and_validate_accepts_uppercase_solvent_model() -> None:
@@ -586,6 +665,44 @@ def test_supported_workflows_matches_catalog_active() -> None:
     active_ids = {w["id"] for w in wf_catalog if w.get("status") == "active"}
     derived = set(SUPPORTED_WORKFLOWS) - {"fake"}
     assert derived == active_ids, f"SUPPORTED_WORKFLOWS mismatch: {derived ^ active_ids}"
+
+
+def test_mechanism_entries_retired_and_stage_workflows_active() -> None:
+    entry = next(w for w in WORKFLOW_CATALOG if w["id"] == "mechanism")
+    assert entry["status"] == "retired"
+    assert entry["visible"] is False
+
+    retired_ids = {
+        "mech-conf",
+        "mech-step",
+        "mech-confirm",
+        "mech-chain",
+        "ensemble",
+        "energy",
+        "xtbmd_censo_energy",
+        "optfreq",
+        "optfreqsp",
+        "Lowconfirm",
+        "Highconfirm",
+    }
+    for module_id in retired_ids:
+        module = next(w for w in WORKFLOW_CATALOG if w["id"] == module_id)
+        assert module["status"] == "retired", module_id
+        assert module["visible"] is False, module_id
+
+    stage_ids = ["Confsearch", "PESsearch"]
+    for stage_id in stage_ids:
+        stage = next(w for w in WORKFLOW_CATALOG if w["id"] == stage_id)
+        assert stage["status"] == "active", stage_id
+        assert stage["category"] == "preset", stage_id
+        assert stage["visible"] is True, stage_id
+        assert stage_id in SUPPORTED_WORKFLOWS
+    assert not [
+        w["id"] for w in WORKFLOW_CATALOG if w.get("category") == "stages" and w.get("visible")
+    ]
+
+    custom = next(w for w in WORKFLOW_CATALOG if w["id"] == "custom_sequence")
+    assert custom["visible"] is False
 
 
 # --- 3.13 ---

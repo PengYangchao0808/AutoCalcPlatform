@@ -107,3 +107,62 @@ def test_job_list_by_project(tmp_path: Path) -> None:
         assert [job.id for job in beta_jobs] == [second.id]
     finally:
         mgr.shutdown()
+
+
+def test_new_project_dir_uses_sanitized_name(tmp_path: Path) -> None:
+    mgr = JobManager(run_root=tmp_path, max_running=1)
+    try:
+        project = mgr.projects.create_project("My TS Project")
+        record = mgr.submit(
+            JobSpec(
+                workflow="fake",
+                input={"source": "CCO"},
+                project_id=project["project_id"],
+                molecule_name="ethanol",
+            )
+        )
+        assert Path(record.work_dir).parent.name == "My_TS_Project"
+    finally:
+        mgr.shutdown()
+
+
+def test_duplicate_project_name_rejected(tmp_path: Path) -> None:
+    mgr = JobManager(run_root=tmp_path, max_running=1)
+    try:
+        mgr.projects.create_project("Alpha")
+        try:
+            mgr.projects.create_project("ALPHA")
+            raise AssertionError("duplicate name accepted")
+        except ValueError:
+            pass
+    finally:
+        mgr.shutdown()
+
+
+def test_project_rename_freezes_disk_dir(tmp_path: Path) -> None:
+    mgr = JobManager(run_root=tmp_path, max_running=1)
+    try:
+        project = mgr.projects.create_project("Original")
+        first = mgr.submit(
+            JobSpec(workflow="fake", input={"source": "A"}, project_id=project["project_id"])
+        )
+        mgr.projects.update_project(project["project_id"], name="Renamed")
+
+        second = mgr.submit(
+            JobSpec(workflow="fake", input={"source": "B"}, project_id=project["project_id"])
+        )
+        assert Path(second.work_dir).parent.name == "Original"
+        assert Path(first.work_dir).parent == Path(second.work_dir).parent
+    finally:
+        mgr.shutdown()
+
+
+def test_unknown_project_id_falls_back_to_sanitized_id(tmp_path: Path) -> None:
+    mgr = JobManager(run_root=tmp_path, max_running=1)
+    try:
+        record = mgr.submit(
+            JobSpec(workflow="fake", input={"source": "A"}, project_id="stale-id 01")
+        )
+        assert Path(record.work_dir).parent.name == "stale-id_01"
+    finally:
+        mgr.shutdown()

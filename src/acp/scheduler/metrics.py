@@ -22,6 +22,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from acp.storage.layout import runtime_file
+
 logger = logging.getLogger(__name__)
 
 _METRICS_FILENAME = "metrics.json"
@@ -54,7 +56,7 @@ class MetricsExtractor:
         Returns the merged metrics dict when a write happened, else ``None``.
         Never raises: any I/O or parse error is logged and swallowed.
         """
-        stdout_path = Path(work_dir) / "stdout.log"
+        stdout_path = runtime_file(work_dir, "stdout.log")
         try:
             if not stdout_path.exists():
                 return None

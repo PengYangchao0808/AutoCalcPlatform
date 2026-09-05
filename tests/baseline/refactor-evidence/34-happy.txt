@@ -1,0 +1,13 @@
+COMMAND:
+python scripts/check_grep_gates.py --gate wave5_layout_imports src/acp/cli.py src/acp/api src/acp/scheduler
+KEY OUTPUT:
+ALLOWED:
+BLOCKING:
+EXIT_CODE=0
+
+COMMAND:
+python -m pytest tests/test_legacy_layout_compat.py::test_legacy_workdir_resolves_readonly -q
+KEY OUTPUT:
+.                                                                        [100%]
+1 passed in 1.05s
+EXIT_CODE=0

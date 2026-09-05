@@ -1,0 +1,14 @@
+## 42-happy — DB 停写 + store 只读化 happy path
+
+Fixture RUNNING Lowconfirm job seeded into SQLite store. After manager startup
+(restart sweep), the job is marked FAILED with reason string
+`[RETIRED_WORKFLOW] workflow retired by calc-refactor — 历史任务只读，可查看/清除，不可继续`.
+Completed timestamp is set. The job is no longer active and can be purged via
+`purge_jobs()`. All three retired job types (RUNNING, QUEUED, PAUSED) are swept.
+Active workflow jobs (Confsearch QUEUED) are not affected. Completed retired jobs
+are not swept. Write methods (`upsert_mechanism_study`, `update_mechanism_study_reaction`,
+`update_mechanism_study_plan`, `upsert_decision_point`) are confirmed absent from
+`JobStore`. Read methods and `purge_cascade` remain intact.
+
+Acceptance: `pytest tests/test_retired_inflight_upgrade.py::test_running_retired_swept_to_failed -q`
+→ 1 passed in 0.90s.

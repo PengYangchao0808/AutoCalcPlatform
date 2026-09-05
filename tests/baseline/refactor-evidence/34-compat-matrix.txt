@@ -1,0 +1,11 @@
+Todo 34 DB/work_dir compatibility matrix
+
+| Legacy row type | Fixture DB `work_dir` | Compat resolution path | Read-only result |
+|---|---|---|---|
+| legacy `mechanism_study/<id>/` study root | `mechanism_study/study-legacy/` | `find_study_layout(work_dir, study_id)` + `find_reaction_json(work_dir, study_id)` | PASS: legacy checkpoint and reaction path resolve; DB value and files unchanged |
+| historical v2 `<molecule>_<task>_<remark>` task root | `ethanol_PESsearch_notes/` | `find_study_layout(work_dir, study_id)` + `find_reaction_json(work_dir, study_id)` | PASS: `WORK/08_ANALYSIS` checkpoint and reaction path resolve; DB value and files unchanged |
+| legacy S2 calculation path | `mechanism_study/study-s2/calc/s2/` | ancestor probe → legacy `find_study_layout(work_dir, study_id)` + `find_reaction_json(work_dir, study_id)` | PASS: legacy study resolves and `calc/s2` remains the S2 root; DB value and files unchanged |
+| legacy S3 calculation path | `mechanism_study/study-s3/calc/s3s4/s3/` | ancestor probe → legacy `find_study_layout(work_dir, study_id)` + `find_reaction_json(work_dir, study_id)` | PASS: legacy study resolves and `calc/s3s4` remains the TS root; DB value and files unchanged |
+| legacy S4 calculation path | `mechanism_study/study-s4/calc/s3s4/s4/` | ancestor probe → legacy `find_study_layout(work_dir, study_id)` + `find_reaction_json(work_dir, study_id)` | PASS: legacy study resolves and `calc/s3s4` remains the TS root; DB value and files unchanged |
+
+Namespace isolation: `JobSpec.task_dir_name()` produces `study-legacy_mechanism_resume`, never the legacy `study-legacy` leaf or a `mechanism_study/` path.

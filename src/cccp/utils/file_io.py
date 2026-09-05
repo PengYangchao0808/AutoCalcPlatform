@@ -283,8 +283,13 @@ def read_xyz_multiframe(xyz_file: Path) -> Tuple[np.ndarray, List[str]]:
 
     while offset < len(lines):
         # Parse atom count from header line
+        stripped_header = lines[offset].strip()
+        if stripped_header in {"", ">"}:
+            # ORCA/xtb multi-XYZ frame separators
+            offset += 1
+            continue
         try:
-            atom_count = int(lines[offset].strip())
+            atom_count = int(stripped_header)
         except (ValueError, IndexError):
             logger.warning(f"Malformed frame header at line {offset}, skipping")
             offset += 1

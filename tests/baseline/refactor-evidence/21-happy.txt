@@ -1,0 +1,10 @@
+COMMAND
+python -m pytest tests/test_batch_optimize.py::test_entry -q
+
+KEY OUTPUT
+.                                                                        [100%]
+1 passed in 1.40s
+test_entry: PASS
+
+EXIT CODE
+0

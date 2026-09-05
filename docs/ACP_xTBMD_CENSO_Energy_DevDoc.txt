@@ -112,8 +112,8 @@ CENSO ───────── 三预设：censo-light / censo-default / cens
 dft_handoff ──── 两模式：全系综（累积 Boltzmann ≥99%）或 --rank1-only（仅 CENSO 排名第一）
   │                 ORCA opt/freq/SP → Shermo → 精细 G
   ▼
-finalize ────── finalDFT/all_conformers.xyz + conformer_thermo.csv（含 TOTAL 行）
-  │                 finalDFT/ensemble_thermo.json（G_total）+ ensemble/boltzmann_table.json（rank1-only）
+finalize ────── RESULT/structures/all_conformers.xyz + RESULT/energies/conformer_thermo.csv（含 TOTAL 行）
+  │                 RESULT/energies/ensemble_thermo.json（G_total）+ RESULT/ensembles/boltzmann_table.json（rank1-only）
   ▼
 WorkflowResult.metadata（含 total_gibbs_hartree / total_gibbs_kcal_mol）
 
@@ -482,7 +482,7 @@ import 复用（不复制）：经 新共享模块 workflows/energy_shared.py（
   
 模式二：ensemble_total_gibbs(G₁, censo_weights, T) → method=censo_table_rank1，另写 ensemble/boltzmann_table.json（conf_id→p, T, source="censo"）与 total_gibbs_censo_hartree 对照；
   
-写 finalDFT/ensemble_thermo.json；给 conformer_thermo.csv 追加 TOTAL 汇总行（列头不变）；
+写 RESULT/energies/ensemble_thermo.json；给 RESULT/energies/conformer_thermo.csv 追加 TOTAL 汇总行（列头不变）；
   
 
 metadata 并入：total_gibbs_hartree / total_gibbs_kcal_mol / ensemble_thermo_json；模式二另加 total_gibbs_censo_hartree / boltzmann_table_json；附 md_seed / md_seeds / start_conf_index（多起点嵌入起始构象索引，v1.3）/ n_frames_raw（轨迹原始帧数）/ n_frames（平衡期丢弃 + max_frames 子采样后）/ n_ok / n_failed / n_timeout（帧级超时数，v1.3）/ n_after_isostat / n_after_filter / conv_novelty_rate / conv_passed（--conv-check 关闭时为 null）。
@@ -758,13 +758,13 @@ pytest tests/ -v
 
  | 文件 | 状态 | 内容
 
- | finalDFT/ensemble_thermo.json | 新增 | method（dft_table / censo_table_rank1）/ T / G_total(Ha+kcal/mol) / G₁ / p₁ / S_mix / T·S_mix / population_coverage / 逐构象表（G_i、ΔG_i、p_i）
+ | RESULT/energies/ensemble_thermo.json | 新增 | method（dft_table / censo_table_rank1）/ T / G_total(Ha+kcal/mol) / G₁ / p₁ / S_mix / T·S_mix / population_coverage / 逐构象表（G_i、ΔG_i、p_i）
 
  | ensemble/boltzmann_table.json | 新增（模式二） | CENSO 权重表：conf_id → p、T、source="censo"
 
- | finalDFT/conformer_thermo.csv | 兼容扩展 | 列头不变，末尾追加 TOTAL 汇总行
+ | RESULT/energies/conformer_thermo.csv | 兼容扩展 | 列头不变，末尾追加 TOTAL 汇总行
 
- | finalDFT/all_conformers.xyz / <name>_global_min.xyz | 既有 | 模式二下 all_conformers 仅 1 帧（语义差异标注）
+ | RESULT/structures/all_conformers.xyz / RESULT/structures/<name>_global_min.xyz | 既有 | 模式二下 all_conformers 仅 1 帧（语义差异标注）
 
  | traj.xyz / isomers.xyz / cluster.xyz | 既有（阶段产物） | 中间产物，--resume 的检查点；cluster.xyz 为过滤前系综
 
@@ -953,4 +953,3 @@ Phase 5 落地后对平台接线代码（cli.py / catalog.py / scheduler/jobs.py
  | 9 | levels 与 --threshold 双通道一致性（核对） | 前端删 censo 层 refinement_threshold + 顶层 threshold + runner --threshold；API 用户 levels.censo.refinement_threshold + threshold 并存 | ⚠️ 核对通过：workflow 顶层 levels.refinement_threshold 优先，两条路径殊途同归；resolve_levels 三场景（显式 0.9 / levels 0.95 / config 0.99）验证正确
 
  | 10 | ISOSTAT 拒绝 "Frame N | Energy: X" 标题（高，生产事故） | curcusone-test（2026-08-01 远程 LSF 任务）在 batch_opt 500/500 帧优化成功后于 isostat 阶段失败（exit 24）。真实二进制实测：ISOSTAT 只接受 Molclus 裸能量标题（        -11.39433937），write_xyz_multiframe(energies=...) 生成的 Frame N | Energy: X 标题触发 "Unable to load energy from comment line" + forrtl severe 24。§18 第 5 行"待计算节点核实"的标题格式假设被证伪（v1.4 摘要预测的 graceful 回退不存在——isostat 输入无兼容通道） | ✅ 已修复（isostat_backend.py）：cluster() 新增 _normalise_titles_for_isostat()——调用 ISOSTAT 前把每帧标题重写为 Molclus 裸能量格式（提取首浮点，坐标不动，原文件不突变，tempfile 用完即删）；主流程 isostat + conv_check 诊断两处调用点均受益。回归测试 test_isostat_title_normalisation_to_molclus_format / test_isostat_title_normalisation_keeps_coord_lines；远程节点用真实 500 帧输入端到端验证（2 clusters，exit 0）后同步部署。ISOSTAT 输出 cluster.xyz 的 Energy = X a.u. 标题经 _parse_title_energy_hartree 首浮点解析天然兼容，energy_filter 全链路重放通过（n_total=2 均在 6.0 kcal/mol 窗内）
-

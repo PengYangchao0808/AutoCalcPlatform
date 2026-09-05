@@ -1,0 +1,39 @@
+Todo 48 — failure drill evidence (Q3)
+======================================
+
+## 1. Inject drill: write back ConformerEngine import to cccp/core/__init__.py
+
+```
+$ printf '\nfrom cccp.core.engine import ConformerEngine  # drill\n' >> src/cccp/core/__init__.py
+```
+
+## 2. Gate BLOCKING (exit 1)
+
+```
+$ python scripts/check_grep_gates.py --gate wave8_cccp_engine_gone src/cccp
+ALLOWED:
+BLOCKING:
+src/cccp/core/__init__.py:48: from cccp.core.engine import ConformerEngine  # drill
+EXIT: 1
+```
+
+## 3. Import smoke fails (ModuleNotFoundError)
+
+```
+$ python -c "from cccp.core import ConformerEngine"
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File ".../src/cccp/core/__init__.py", line 48, in <module>
+    from cccp.core.engine import ConformerEngine  # drill
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ModuleNotFoundError: No module named 'cccp.core.engine'
+EXIT: 1
+```
+
+## 4. Restore + verify
+
+```
+$ cp /tmp/cccp_core_init_backup.py src/cccp/core/__init__.py
+$ python -c "from cccp.core.candidates import ConformerCandidate; print('RESTORED OK')"
+RESTORED OK
+```

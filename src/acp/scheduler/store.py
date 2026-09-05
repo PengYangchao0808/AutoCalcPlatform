@@ -152,6 +152,41 @@ class JobStore:
             rows = conn.execute(query, params).fetchall()
         return [_row_to_record(r) for r in rows]
 
+    def list_recent_completed(
+        self,
+        limit: int = 20,
+        *,
+        project_id: str | None = None,
+        workflow: str | None = None,
+        completed_after: str | None = None,
+    ) -> list[JobRecord]:
+        """List COMPLETED jobs, most recently completed first.
+
+        Args:
+            limit: Maximum rows returned.
+            project_id: Restrict to one project.
+            workflow: Restrict to one workflow id.
+            completed_after: ISO cutoff — only rows with ``completed_at``
+                at or after this timestamp.
+        """
+        clauses: list[str] = ["status=?"]
+        params: list[Any] = [JobStatus.COMPLETED.value]
+        if project_id is not None:
+            clauses.append("project_id=?")
+            params.append(project_id)
+        if workflow is not None:
+            clauses.append("workflow=?")
+            params.append(workflow)
+        if completed_after is not None:
+            clauses.append("completed_at IS NOT NULL AND completed_at != '' AND completed_at>=?")
+            params.append(completed_after)
+        where = " AND ".join(clauses)
+        query = f"SELECT * FROM jobs WHERE {where} ORDER BY completed_at DESC LIMIT ?"
+        params.append(limit)
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [_row_to_record(r) for r in rows]
+
     def list_by_project(self, project_id: str, limit: int = 200) -> list[JobRecord]:
         with self._lock, self._connect() as conn:
             rows = conn.execute(
@@ -276,102 +311,6 @@ class JobStore:
             )
             conn.commit()
 
-    def upsert_mechanism_study(
-        self,
-        study_id: str,
-        *,
-        job_id: str | None,
-        study_json: str,
-        status: str,
-        created_at: str,
-        updated_at: str,
-        reaction_json: str | None = None,
-        mechanism_plan_json: str | None = None,
-        config_hash: str | None = None,
-        cycle_index: int | None = None,
-        consumed_cycle: int | None = None,
-    ) -> None:
-        with self._lock, self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO mechanism_studies (
-                    id, job_id, study_json, status, created_at, updated_at,
-                    reaction_json, mechanism_plan_json, config_hash, cycle_index, consumed_cycle
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    job_id=COALESCE(excluded.job_id, mechanism_studies.job_id),
-                    study_json=excluded.study_json,
-                    status=excluded.status,
-                    created_at=mechanism_studies.created_at,
-                    updated_at=excluded.updated_at,
-                    reaction_json=COALESCE(excluded.reaction_json, mechanism_studies.reaction_json),
-                    mechanism_plan_json=COALESCE(
-                        excluded.mechanism_plan_json,
-                        mechanism_studies.mechanism_plan_json
-                    ),
-                    config_hash=COALESCE(excluded.config_hash, mechanism_studies.config_hash),
-                    cycle_index=COALESCE(excluded.cycle_index, mechanism_studies.cycle_index),
-                    consumed_cycle=COALESCE(
-                        excluded.consumed_cycle,
-                        mechanism_studies.consumed_cycle
-                    )
-                """,
-                (
-                    study_id,
-                    job_id,
-                    study_json,
-                    status,
-                    created_at,
-                    updated_at,
-                    reaction_json,
-                    mechanism_plan_json,
-                    config_hash,
-                    cycle_index,
-                    consumed_cycle,
-                ),
-            )
-            conn.commit()
-
-    def update_mechanism_study_reaction(
-        self,
-        study_id: str,
-        *,
-        reaction_json: str,
-        config_hash: str,
-        status: str,
-        updated_at: str,
-    ) -> None:
-        with self._lock, self._connect() as conn:
-            conn.execute(
-                """
-                UPDATE mechanism_studies
-                SET reaction_json=?, config_hash=?, status=?, updated_at=?
-                WHERE id=?
-                """,
-                (reaction_json, config_hash, status, updated_at, study_id),
-            )
-            conn.commit()
-
-    def update_mechanism_study_plan(
-        self,
-        study_id: str,
-        *,
-        plan_json: str,
-        status: str,
-        updated_at: str,
-    ) -> None:
-        with self._lock, self._connect() as conn:
-            conn.execute(
-                """
-                UPDATE mechanism_studies
-                SET mechanism_plan_json=?, status=?, updated_at=?
-                WHERE id=?
-                """,
-                (plan_json, status, updated_at, study_id),
-            )
-            conn.commit()
-
     def get_mechanism_study(self, study_id: str) -> dict[str, Any] | None:
         with self._lock, self._connect() as conn:
             row = conn.execute(
@@ -399,35 +338,6 @@ class JobStore:
         with self._lock, self._connect() as conn:
             rows = conn.execute(query, params).fetchall()
         return [_mechanism_study_row(row) for row in rows]
-
-    def upsert_decision_point(
-        self,
-        decision_id: str,
-        *,
-        study_id: str,
-        status: str,
-        payload: str,
-        resolution: str | None,
-        created_at: str,
-        resolved_at: str | None,
-    ) -> None:
-        with self._lock, self._connect() as conn:
-            conn.execute(
-                """
-                INSERT INTO decision_points (
-                    id, study_id, status, payload, resolution, created_at, resolved_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    study_id=excluded.study_id,
-                    status=excluded.status,
-                    payload=excluded.payload,
-                    resolution=excluded.resolution,
-                    created_at=excluded.created_at,
-                    resolved_at=excluded.resolved_at
-                """,
-                (decision_id, study_id, status, payload, resolution, created_at, resolved_at),
-            )
-            conn.commit()
 
     def get_decision_point(self, decision_id: str) -> dict[str, Any] | None:
         with self._lock, self._connect() as conn:
@@ -539,6 +449,9 @@ def _row_to_record(row: sqlite3.Row) -> JobRecord:
         input_hash=spec_raw.get("input_hash", input_hash),
         execution_mode=spec_raw.get("execution_mode"),
         target_node=spec_raw.get("target_node"),
+        molecule_name=spec_raw.get("molecule_name", ""),
+        task_name=spec_raw.get("task_name", ""),
+        remark=spec_raw.get("remark", ""),
     )
     result = json.loads(row["result_json"]) if row["result_json"] else None
     return JobRecord(

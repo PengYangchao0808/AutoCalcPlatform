@@ -1,0 +1,10 @@
+=== 29-fail.txt: Wave 4 Gate QA Failure Drill ===
+=== STEP 1: inject failing test ===
+COMMAND: printf 'def test_gate_drill():\n    assert False\n' > tests/test_tmp_gate_fail.py; <wave gate comparison>
+KEY OUTPUT: gate blocked (failures > 0)
+EXIT CODE: non-zero
+
+=== STEP 2: restore ===
+COMMAND: rm tests/test_tmp_gate_fail.py
+KEY OUTPUT: suite returns to 1975 passed / 0 failed
+EXIT CODE: 0

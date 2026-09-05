@@ -1,0 +1,12 @@
+.                                                                        [100%]
+1 passed in 0.40s
+
+--- Q3 drill: inject mutation → exit 1 → restore → exit 0 ---
+$ sed -i 's/assert result.step_states[1].status == "failed"/assert result.step_states[1].status == "completed"  # MUTATED/' tests/test_calculation_executor.py
+$ python -m pytest tests/test_calculation_executor.py::test_step2_failure_isolated -q
+FAILED: AssertionError: assert 'failed' == 'completed'
+EXIT: 1
+$ # restore original assertion
+$ python -m pytest tests/test_calculation_executor.py::test_step2_failure_isolated -q
+. 1 passed
+EXIT: 0

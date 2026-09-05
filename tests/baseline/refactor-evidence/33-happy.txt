@@ -1,0 +1,16 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.12, pytest-8.3.4, pluggy-1.6.0 -- /root/miniforge3/bin/python
+cachedir: .pytest_cache
+rootdir: /mnt/e/Calculations/Common_Script/Auto_Calc_Platform/ACP_V1_20260811
+configfile: pyproject.toml
+plugins: mock-3.15.1, anyio-4.12.1, cov-7.1.0
+collecting ... collected 6 items
+
+tests/test_pes_search.py::test_entry_from_artifact PASSED                [ 16%]
+tests/test_pes_search.py::test_entry_from_direct_input PASSED            [ 33%]
+tests/test_pes_search.py::test_entry_with_reaction PASSED                [ 50%]
+tests/test_pes_search.py::test_pes_search_stage_tasks_provider PASSED    [ 66%]
+tests/test_pes_search.py::test_pes_search_stages_exported PASSED         [ 83%]
+tests/test_pes_search.py::test_cli_pessearch_help PASSED                 [100%]
+
+============================== 6 passed in 3.15s ===============================

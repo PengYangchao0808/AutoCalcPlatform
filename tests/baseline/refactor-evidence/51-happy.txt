@@ -1,0 +1,12 @@
+=== QA Happy: docs_retired_map_only gate ===
+
+Command: python scripts/check_grep_gates.py --gate docs_retired_map_only README.md
+
+Output:
+ALLOWED:
+README.md:16: > 注：conformer / benchmark / ensemble / energy / xtbmd_censo_energy / mechanism / mech-conf / mech-step / mech-confirm / mech-chain / optfreq / optfreqsp / Lowconfirm / Highconfirm 工作流已于 2026-08-28 退役（catalog 中保留为 `status:"retired"` 仅用于历史作业展示）。构象搜索能力统一由 `acp run Confsearch --protocol <4种协议>` 提供；低精度确认由 `acp run BatchOptimize --profile opt_freq` 提供；高精度确认由 `acp run BatchOptimize --profile opt_freq_sp_thermo` 提供。
+README.md:91: | `acp run Lowconfirm` | `acp run BatchOptimize --profile opt_freq` → 粗优化确认 | 退役 |
+README.md:92: | `acp run Highconfirm` | `acp run BatchOptimize --profile opt_freq_sp_thermo` → 精细优化确认 | 退役 |
+BLOCKING:
+
+Exit code: 0

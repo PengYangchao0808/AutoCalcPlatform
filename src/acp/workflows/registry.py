@@ -10,8 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from acp.scheduler.jobs import SUPPORTED_WORKFLOWS
-
 
 @dataclass(frozen=True)
 class WorkflowRegistryEntry:
@@ -37,32 +35,32 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         description="Built-in no-op workflow; no external binaries required.",
         requires_binaries=[],
     ),
-    "ensemble": WorkflowRegistryEntry(
-        name="ensemble",
-        label="Ensemble Generation",
+    "Confsearch": WorkflowRegistryEntry(
+        name="Confsearch",
+        label="Conformer Search",
         description=(
-            "CREST conformer search → CENSO prescreening/screening → "
-            "Boltzmann-weighted ensemble."
+            "Unified conformer search + energies via protocol "
+            "(xtb-crest / xtb-md / censo-crest / xtbmd-censo)."
         ),
         requires_binaries=["crest", "censo", "orca"],
     ),
-    "energy": WorkflowRegistryEntry(
-        name="energy",
-        label="Conformer Energy",
+    "PESsearch": WorkflowRegistryEntry(
+        name="PESsearch",
+        label="PES Search",
         description=(
-            "CREST → CENSO screening → rank1 DFT refinement "
-            "(opt+freq+SP+Shermo) → free energy."
+            "PES scan and TS/intermediate candidate extraction from a structure "
+            "or upstream result."
         ),
-        requires_binaries=["crest", "censo", "orca", "shermo"],
+        requires_binaries=["orca", "xtb"],
     ),
-    "xtbmd_censo_energy": WorkflowRegistryEntry(
-        name="xtbmd_censo_energy",
-        label="xTB-MD CENSO Energy",
+    "BatchOptimize": WorkflowRegistryEntry(
+        name="BatchOptimize",
+        label="Batch Optimization",
         description=(
-            "GFN-FF MD → GFN1 batch opt → isostat clustering → ewin filter "
-            "→ CENSO → fine DFT + Shermo total G."
+            "Batch structure optimization with optional frequency, single-point, "
+            "and thermochemistry steps."
         ),
-        requires_binaries=["xtb", "molclus", "isostat", "censo", "orca", "shermo"],
+        requires_binaries=["orca", "shermo"],
     ),
     "nmr": WorkflowRegistryEntry(
         name="nmr",
@@ -72,12 +70,6 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
             "Boltzmann averaging + DP4/DP5 stereochemistry assignment."
         ),
         requires_binaries=["crest", "censo", "orca"],
-    ),
-    "mechanism": WorkflowRegistryEntry(
-        name="mechanism",
-        label="Mechanism / TS",
-        description="TS search + optimization + IRC validation + energy barrier analysis.",
-        requires_binaries=["orca"],
     ),
     "singlepoint": WorkflowRegistryEntry(
         name="singlepoint",
@@ -97,17 +89,17 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         description="ORCA vibrational frequency calculation.",
         requires_binaries=["orca"],
     ),
-    "optfreq": WorkflowRegistryEntry(
-        name="optfreq",
-        label="Optimization + Frequency",
-        description="ORCA combined Opt+Freq as a single job.",
+    "scan": WorkflowRegistryEntry(
+        name="scan",
+        label="Relaxed Scan",
+        description="Relax an internal coordinate at each scan point with ORCA.",
         requires_binaries=["orca"],
     ),
-    "optfreqsp": WorkflowRegistryEntry(
-        name="optfreqsp",
-        label="Opt+Freq+SP+Thermo",
-        description="Full pipeline: ORCA opt+freq -> SP -> Shermo thermo -> free energy.",
-        requires_binaries=["orca", "shermo"],
+    "irc": WorkflowRegistryEntry(
+        name="irc",
+        label="Intrinsic Reaction Coordinate",
+        description="Run an independent IRC from a transition-state structure.",
+        requires_binaries=["orca"],
     ),
     "xtb_optimize": WorkflowRegistryEntry(
         name="xtb_optimize",
@@ -126,6 +118,8 @@ def list_workflow_entries() -> list[WorkflowRegistryEntry]:
     are included, so newly added workflows appear automatically once they are
     registered and supported.
     """
+    from acp.scheduler.jobs import SUPPORTED_WORKFLOWS
+
     return [_WORKFLOW_REGISTRY[name] for name in _WORKFLOW_REGISTRY if name in SUPPORTED_WORKFLOWS]
 
 

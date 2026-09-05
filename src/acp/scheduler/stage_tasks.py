@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol
 
+from acp.calculations.pes.scan import PES_SCAN_STAGES
 from acp.scheduler.jobs import JobSpec, censo_preset_from_method
 from acp.scheduler.migrations import migrate
 
@@ -68,22 +69,6 @@ def get_stage_plan(spec: JobSpec) -> list[StagePlan]:
 class _FakeStagePlanProvider:
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
         return [StagePlan("init"), StagePlan("compute"), StagePlan("finalize")]
-
-
-class _MechanismStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        # Study-mode vocabulary mirrors StudyOrchestrator phases: S0/S1/S2/S3/SR/S4.
-        # The observer still watches stage-task marker files; mechanism-study
-        # progress is primarily event-file based (events.jsonl), so these names
-        # are an initial UI plan rather than file-emitted phase markers.
-        return [
-            StagePlan("S0"),
-            StagePlan("S1"),
-            StagePlan("S2"),
-            StagePlan("S3"),
-            StagePlan("SR"),
-            StagePlan("S4"),
-        ]
 
 
 class _EnsembleStagePlanProvider:
@@ -235,6 +220,132 @@ class _XtbmdCensoEnergyStagePlanProvider:
         return plan
 
 
+class _ConfsearchStagePlanProvider:
+    """Confsearch stage plan (plan §12.3): prepare → sampling → energy →
+    dedup → refinement → finalize. The refinement stage is policy-dependent
+    (``screen`` protocols stop after dedup)."""
+
+    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
+        policy = str(spec.method.get("refinement_policy") or "screen")
+        protocol = str(spec.method.get("protocol") or "censo-crest")
+        plan = [
+            StagePlan("prepare"),
+            StagePlan("sampling"),
+            StagePlan("energy"),
+            StagePlan("dedup"),
+        ]
+        if policy != "screen" and protocol not in ("xtb-crest", "xtb-md"):
+            plan.append(StagePlan("refinement"))
+        plan.append(StagePlan("finalize"))
+        return plan
+
+
+# ── PlanCompiler: generic stage-plan compilation from METHOD_SCHEMAS ────
+
+# Workflow → METHOD_SCHEMAS key mapping for the 8 calculation workflows.
+# nmr and Confsearch are exempt (protocol-internal stage orchestration).
+_WORKFLOW_TO_SCHEMA_KEY: dict[str, str] = {
+    "singlepoint": "dft_singlepoint",
+    "optimize": "dft_optimize",
+    "frequency": "dft_frequency",
+    "scan": "dft_scan",
+    "irc": "irc",
+    "xtb_optimize": "xtb_optimize",
+    "PESsearch": "pes_scan",
+    "BatchOptimize": "batch_optimize",
+}
+
+
+# Retired workflows that PlanCompiler rejects — derived from catalog.
+def _derive_retired_workflows() -> frozenset[str]:
+    try:
+        from acp.catalog import WORKFLOW_CATALOG
+    except ImportError:
+        return frozenset()
+    return frozenset(w["id"] for w in WORKFLOW_CATALOG if w.get("status") == "retired")
+
+
+_RETIRED_WORKFLOWS: frozenset[str] = _derive_retired_workflows()
+
+
+class PlanCompiler:
+    """Compile generic StagePlan sequences from METHOD_SCHEMAS stages declarations.
+
+    Covers 8 calculation workflows: singlepoint/optimize/frequency/scan/irc/
+    xtb_optimize/PESsearch/BatchOptimize. nmr and Confsearch are exempt
+    (protocol-internal stage orchestration, kept as frozen providers).
+
+    Produces SCHEDULER StagePlan sequences (stage_tasks.py existing type),
+    NOT CalculationPlan.steps.
+    """
+
+    @staticmethod
+    def _load_schema_stages(schema_key: str) -> dict[str, Any] | None:
+        """Load the stages declaration from METHOD_SCHEMAS."""
+        try:
+            from acp.catalog import METHOD_SCHEMAS
+        except ImportError:
+            return None
+        schema = METHOD_SCHEMAS.get(schema_key)
+        if not isinstance(schema, dict):
+            return None
+        stages = schema.get("stages")
+        return stages if isinstance(stages, dict) else None
+
+    @staticmethod
+    def compile(spec: JobSpec) -> list[StagePlan]:
+        """Compile a StagePlan sequence for a calculation workflow.
+
+        Raises:
+            ValueError: For retired or unknown workflows.
+        """
+        wf = spec.workflow.strip()
+
+        # Retired workflows are rejected.
+        if wf.lower() in _RETIRED_WORKFLOWS or wf in _RETIRED_WORKFLOWS:
+            raise ValueError(f"PlanCompiler rejects retired workflow: {wf!r}")
+
+        schema_key = _WORKFLOW_TO_SCHEMA_KEY.get(wf)
+        if schema_key is None:
+            raise ValueError(f"PlanCompiler has no mapping for workflow: {wf!r}")
+
+        stages_decl = PlanCompiler._load_schema_stages(schema_key)
+        if stages_decl is None:
+            raise ValueError(f"No stages declaration in METHOD_SCHEMAS for {schema_key!r}")
+
+        mode = stages_decl.get("mode")
+
+        # Static mode: single fixed stage list.
+        if mode == "static":
+            static_stages = stages_decl.get("static")
+            if not isinstance(static_stages, list) or not static_stages:
+                raise ValueError(f"Invalid static stages for {schema_key!r}")
+
+            # PESsearch path-mode override: when mode is not bond_length_scan,
+            # use the path stages instead of the static bond_length_scan stages.
+            if wf == "PESsearch" and str(spec.method.get("mode") or "") != "bond_length_scan":
+                return [StagePlan(name) for name in PES_SCAN_STAGES]
+
+            return [StagePlan(name) for name in static_stages]
+
+        # By-profile mode: select stage list by profile key.
+        if mode == "by_profile":
+            by_profile = stages_decl.get("by_profile")
+            if not isinstance(by_profile, dict):
+                raise ValueError(f"Invalid by_profile stages for {schema_key!r}")
+            profile = (
+                str(spec.method.get("profile") or spec.method.get("profile_id") or "opt_freq")
+                .strip()
+                .lower()
+            )
+            profile_stages = by_profile.get(profile)
+            if not isinstance(profile_stages, list) or not profile_stages:
+                raise ValueError(f"unknown BatchOptimize profile: {profile!r}")
+            return [StagePlan(name) for name in profile_stages]
+
+        raise ValueError(f"Unknown stages mode {mode!r} for {schema_key!r}")
+
+
 class StageTaskStore:
     """Thread-safe SQLite persistence for stage-level task rows."""
 
@@ -345,6 +456,29 @@ class StageTaskObserver:
             self.store.create(task)
             existing[stage.stage_name] = task
         return self.store.list_by_job(job_id)
+
+    def reset_job(self, job_id: str) -> None:
+        """Reset mirrored stage rows for a full in-place rerun.
+
+        The job identity and stage task IDs remain stable, while execution
+        state from the previous attempt is cleared so the UI does not show a
+        finished stage from an earlier full rerun as the current result.
+        Checkpoint continuation intentionally does not call this method.
+        """
+        now = _utc_now_iso()
+        for task in self.store.list_by_job(job_id):
+            task.state = "pending"
+            task.exit_status = None
+            task.retry_count = 0
+            task.pid = None
+            task.stderr_summary = None
+            task.status_detail = None
+            task.started_at = None
+            task.completed_at = None
+            task.updated_at = now
+            task.result = None
+            task.provenance = None
+            self.store.update(task)
 
     def poll_and_mirror(self, job_id: str, work_dir: Path) -> list[StageTask]:
         stage_root = work_dir / "stage_tasks"
@@ -512,51 +646,40 @@ def _task_snapshot(task: StageTask) -> dict[str, Any]:
 
 
 register_plan_provider("fake", _FakeStagePlanProvider())
-register_plan_provider("mechanism", _MechanismStagePlanProvider())
+register_plan_provider("confsearch", _ConfsearchStagePlanProvider())
 register_plan_provider("ensemble", _EnsembleStagePlanProvider())
 register_plan_provider("energy", _EnergyStagePlanProvider())
 register_plan_provider("nmr", _NmrStagePlanProvider())
 register_plan_provider("xtbmd_censo_energy", _XtbmdCensoEnergyStagePlanProvider())
 
 
-# Simple workflow providers
-class _SinglepointStagePlanProvider:
+# PlanCompiler-backed workflow registrations (8 calculation workflows).
+# nmr and Confsearch exempt (protocol-internal stage orchestration).
+_PLAN_COMPILER_WORKFLOWS = (
+    "singlepoint",
+    "optimize",
+    "frequency",
+    "scan",
+    "irc",
+    "xtb_optimize",
+    "PESsearch",
+    "BatchOptimize",
+)
+
+
+class _PlanCompilerStagePlanProvider:
+    """Thin provider that delegates to PlanCompiler.compile()."""
+
     def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        return [StagePlan(stage_name="single_point")]
+        return PlanCompiler.compile(spec)
 
 
-class _OptimizeStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        return [StagePlan(stage_name="optimize")]
-
-
-class _FrequencyStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        return [StagePlan(stage_name="frequency")]
-
-
-class _OptfreqStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        return [StagePlan(stage_name="opt_freq")]
-
-
-class _OptfreqspStagePlanProvider:
-    def initial_plan(self, spec: JobSpec) -> list[StagePlan]:
-        return [
-            StagePlan(stage_name="opt_freq"),
-            StagePlan(stage_name="single_point"),
-            StagePlan(stage_name="shermo"),
-        ]
-
-
-register_plan_provider("singlepoint", _SinglepointStagePlanProvider())
-register_plan_provider("optimize", _OptimizeStagePlanProvider())
-register_plan_provider("frequency", _FrequencyStagePlanProvider())
-register_plan_provider("optfreq", _OptfreqStagePlanProvider())
-register_plan_provider("optfreqsp", _OptfreqspStagePlanProvider())
+for _wf in _PLAN_COMPILER_WORKFLOWS:
+    register_plan_provider(_wf, _PlanCompilerStagePlanProvider())
 
 
 __all__ = [
+    "PlanCompiler",
     "StagePlan",
     "StagePlanProvider",
     "StageTask",

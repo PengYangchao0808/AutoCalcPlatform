@@ -9,16 +9,20 @@ verifies the report artifacts are written.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 
+from acp.calculations.progress import ProgressReporter
 from acp.core.models import Structure, StructureEnsemble, StructureRecord
 from acp.nmr.models import ConformerShielding
 
 
-def _make_orca_backend_cls(shieldings_by_charge: dict[int, dict[int, dict]]) -> MagicMock:
+def _make_orca_backend_cls(
+    shieldings_by_charge: dict[int, dict[int, dict[str, str | float]]],
+) -> MagicMock:
     """Build a mock ORCA backend class returning canned shieldings."""
     backend_cls = MagicMock()
 
@@ -56,13 +60,16 @@ def _make_structure(symbols: list[str], coords: list[tuple[float, float, float]]
 
 
 def _ensemble_with_shieldings(
-    structure: Structure, shieldings: dict[int, dict[str, object]]
+    structure: Structure, shieldings: Mapping[int, Mapping[str, str | float]]
 ) -> StructureEnsemble:
     """Build a StructureEnsemble whose .data holds pre-computed shieldings.
 
     The workflow's ``skip_conformers`` path reads ``ensemble.data`` to
     bypass the GIAO subprocess entirely (test fast-path).
     """
+    normalized_shieldings: dict[int, dict[str, object]] = {
+        index: dict(values) for index, values in shieldings.items()
+    }
     ens = StructureEnsemble(
         records=[
             StructureRecord(
@@ -70,7 +77,7 @@ def _ensemble_with_shieldings(
             )
         ]
     )
-    ens.data = [ConformerShielding("conf_000", 1.0, shieldings)]
+    ens.data = [ConformerShielding("conf_000", 1.0, normalized_shieldings)]
     return ens
 
 
@@ -190,6 +197,139 @@ def test_run_nmr_analysis_unassigned(tmp_path: Path) -> None:
     assert result.metadata["winner"]["index"] == 0
 
 
+def test_run_nmr_analysis_reports_all_stage_lifecycle(tmp_path: Path) -> None:
+    symbols = ["C", "H"]
+    structure = _make_structure(symbols, [(0.0, 0.0, 0.0)] * 2)
+    shieldings = {
+        0: {"symbol": "C", "isotropic": 188.452125 - 40.0},
+        1: {"symbol": "H", "isotropic": 32.1243166667 - 4.0},
+    }
+    ensemble = _ensemble_with_shieldings(structure, shieldings)
+    expected_stages = [
+        "embed_smiles",
+        "crest_search",
+        "censo_prescreening",
+        "censo_screening",
+        "ensemble_export",
+        "giao_nmr",
+        "boltzmann_average",
+        "dp4_dp5_probability",
+        "nmr_report",
+    ]
+    events: list[tuple[str, str]] = []
+
+    class RecordingReporter(ProgressReporter):
+        def start_stage(self, name: str) -> None:
+            events.append(("start", name))
+            super().start_stage(name)
+
+        def complete_stage(self, name: str, result=None) -> None:
+            events.append(("complete", name))
+            super().complete_stage(name, result)
+
+    reporter = RecordingReporter(
+        tmp_path / "progress",
+        job_name="nmr",
+        stages=expected_stages,
+        min_interval=0.0,
+    )
+    with patch("acp.workflows.nmr.StructureReader") as reader_cls:
+        reader = MagicMock()
+        reader.read.return_value = structure
+        reader_cls.return_value = reader
+
+        from acp.workflows.nmr import run_nmr_analysis
+
+        result = run_nmr_analysis(
+            input_sources=["CCO"],
+            spectrum="C: 40.0(C1)\nH: 4.0(H1)",
+            output_dir=str(tmp_path / "out"),
+            skip_conformers=True,
+            prebuilt_ensembles=[ensemble],
+            error_model="placeholder-student-t",
+            progress_reporter=reporter,
+        )
+
+    assert result.status == "completed", result.error
+    assert events == [
+        event for stage in expected_stages for event in (("start", stage), ("complete", stage))
+    ]
+    state = json.loads((tmp_path / "progress" / "state.json").read_text(encoding="utf-8"))
+    assert list(state["stages"]) == expected_stages
+    assert all(info["status"] == "completed" for info in state["stages"].values())
+    assert state["current_stage"] is None
+
+
+def test_nmr_cli_constructs_and_completes_reporter(monkeypatch, tmp_path: Path) -> None:
+    import acp.cli as acp_cli
+    import acp.workflows.nmr as nmr_workflow
+    from acp.core.workflow import WorkflowResult
+
+    output_dir = tmp_path / "nmr-output"
+    args = acp_cli.build_parser().parse_args(
+        [
+            "run",
+            "nmr",
+            "--input",
+            "CCO",
+            "--spectrum",
+            "C: 40.0(C1)",
+            "--output",
+            str(output_dir),
+            "--log-level",
+            "ERROR",
+        ]
+    )
+    captured = {}
+
+    def fake_run(**kwargs):
+        captured.update(kwargs)
+        return WorkflowResult(status="completed", metadata={})
+
+    monkeypatch.setattr(nmr_workflow, "run_nmr_analysis", fake_run)
+
+    assert acp_cli._handle_nmr(args) == 0
+    assert isinstance(captured["progress_reporter"], ProgressReporter)
+    state = json.loads((output_dir / "state.json").read_text(encoding="utf-8"))
+    assert list(state["stages"]) == [
+        "embed_smiles",
+        "crest_search",
+        "censo_prescreening",
+        "censo_screening",
+        "ensemble_export",
+        "giao_nmr",
+        "boltzmann_average",
+        "dp4_dp5_probability",
+        "nmr_report",
+    ]
+    assert state["status"] == "completed"
+
+
+def test_run_nmr_analysis_reports_malformed_input_failure(tmp_path: Path) -> None:
+    from acp.workflows.nmr import NMR_STAGES, run_nmr_analysis
+
+    reporter = ProgressReporter(
+        tmp_path / "progress",
+        job_name="nmr",
+        stages=list(NMR_STAGES),
+        min_interval=0.0,
+    )
+
+    result = run_nmr_analysis(
+        input_sources=[],
+        spectrum="C: 40.0(C1)",
+        output_dir=tmp_path / "out",
+        progress_reporter=reporter,
+    )
+
+    assert result.status == "failed"
+    assert result.error == "no candidate structures parsed"
+    state = json.loads((tmp_path / "progress" / "state.json").read_text(encoding="utf-8"))
+    assert state["status"] == "failed"
+    assert state["stages"]["embed_smiles"]["status"] == "failed"
+    assert state["stages"]["embed_smiles"]["error"] == result.error
+
+
 def test_run_nmr_analysis_rejects_mismatched_error_model(tmp_path: Path) -> None:
     from acp.workflows.nmr import run_nmr_analysis
 
@@ -286,13 +426,20 @@ def test_run_nmr_analysis_bruker_input(tmp_path: Path) -> None:
     # Write synthetic Bruker experiments with peaks matching the shifts.
     bruker_root = tmp_path / "bruker"
     _write_synthetic_bruker(
-        bruker_root / "Proton", "1H", 500.13,
+        bruker_root / "Proton",
+        "1H",
+        500.13,
         [(4.0, 1.0, 5.0), (3.0, 1.0, 5.0), (1.0, 1.0, 5.0), (0.0, 1.0, 5.0)],
-        sw_ppm=10.0, o1_ppm=5.0,
+        sw_ppm=10.0,
+        o1_ppm=5.0,
     )
     _write_synthetic_bruker(
-        bruker_root / "Carbon", "13C", 125.76,
-        [(40.0, 1.0, 4.0)], sw_ppm=200.0, o1_ppm=100.0,
+        bruker_root / "Carbon",
+        "13C",
+        125.76,
+        [(40.0, 1.0, 4.0)],
+        sw_ppm=200.0,
+        o1_ppm=100.0,
     )
 
     with (
@@ -356,11 +503,11 @@ def _write_synthetic_bruker(
         nu = (o1_ppm - ppm) * bf1
         fid += amp * np.exp(2j * np.pi * nu * t) * np.exp(-np.pi * r2 * t)
     rng = np.random.default_rng(42)
-    fid += (rng.normal(0, 0.0002, td) + 1j * rng.normal(0, 0.0002, td))
+    fid += rng.normal(0, 0.0002, td) + 1j * rng.normal(0, 0.0002, td)
     fid *= 1e6
     raw = np.empty(2 * td, dtype=np.int32)
-    raw[0::2] = fid.real.astype(np.int32)
-    raw[1::2] = fid.imag.astype(np.int32)
+    raw[0::2] = np.real(fid).astype(np.int32)
+    raw[1::2] = np.imag(fid).astype(np.int32)
     raw.astype("<i4").tofile(root / "fid")
     (root / "acqus").write_text(
         f"##$TD= {2 * td}\n##$SFO1= {bf1}\n##$BF1= {bf1}\n"

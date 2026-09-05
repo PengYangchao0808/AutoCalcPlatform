@@ -29,7 +29,7 @@ from acp.core.models import Structure, StructureEnsemble
 from acp.core.state import WorkflowState
 from acp.core.workflow import WorkflowResult
 from acp.io.structures import InputFormat, StructureReader
-from acp.workflows._helpers import sanitize_job_name
+from acp.workflows._helpers import resolve_task_output_root, sanitize_job_name
 from acp.workflows.energy_shared import (
     build_result_ensemble as _build_result_ensemble,
 )
@@ -50,6 +50,12 @@ from acp.workflows.energy_shared import (
 )
 from acp.workflows.energy_shared import (
     select_cumulative_boltzmann as _select_cumulative_boltzmann,
+)
+from acp.workflows.energy_shared import (
+    v2_result_category as _v2_result_category,
+)
+from acp.workflows.energy_shared import (
+    v2_stage_dir as _v2_stage_dir,
 )
 from acp.workflows.energy_shared import (
     write_final_outputs as _write_final_outputs,
@@ -84,9 +90,8 @@ _ENERGY_PRESETS = ("censo-light", "censo-default", "censo-zero")
 
 def _write_screening_ranking(result: CensoRunResult, mol_dir: Path) -> str:
     """Write the auxiliary screening ranking table (ΔGconf,rel estimation)."""
-    ensemble_dir = mol_dir / "ensemble"
-    ensemble_dir.mkdir(parents=True, exist_ok=True)
-    csv_path = ensemble_dir / "screening_ranking.csv"
+    report_dir = _v2_result_category(mol_dir, "reports")
+    csv_path = report_dir / "screening_ranking.csv"
 
     weights = result.boltzmann_weights()
     with open(csv_path, "w", newline="") as f:
@@ -227,13 +232,12 @@ def run_conformer_energy(
         metadata=structure.metadata,
     )
 
-    state = WorkflowState(output_root / safe_name, safe_name)
+    mol_dir = resolve_task_output_root(output_root, safe_name)
+    state = WorkflowState(mol_dir, safe_name)
     state.initialize(
         input_source=input_source,
         stage_names=["crest", "censo", "dft_handoff", "finalize", "conformer_energy"],
     )
-
-    mol_dir = output_root / safe_name
 
     # Solvent priority: CLI --solvent > levels (UI wizard fields) > YAML.
     effective_solvent_arg = solvent if solvent is not None else resolved["levels_solvent"]
@@ -262,7 +266,7 @@ def run_conformer_energy(
             state.complete_stage("crest", {"status": "skipped", "reason": "multi-frame XYZ input"})
             crest_skipped = True
         else:
-            crest_dir = mol_dir / "crest"
+            crest_dir = _v2_stage_dir(mol_dir, "02_SEARCH", "CREST")
             crest_dir.mkdir(parents=True, exist_ok=True)
 
             crest_cfg = cfg.get("executables", {}).get("crest", {})
@@ -321,7 +325,7 @@ def run_conformer_energy(
             """
             results: list[dict[str, Any]] = []
             for i, rec in enumerate(selected):
-                handoff_dir = mol_dir / "finalDFT" / f"conf_{i:03d}"
+                handoff_dir = _v2_stage_dir(mol_dir, "03_OPT", "ORCA") / f"conf_{i:03d}"
                 try:
                     cand = _run_rank1_handoff(
                         cfg,
@@ -370,7 +374,7 @@ def run_conformer_energy(
                     list(rank1.symbols),
                     structure.charge,
                     structure.multiplicity,
-                    mol_dir / "finalDFT" / "conf_000",
+                    _v2_stage_dir(mol_dir, "03_OPT", "ORCA") / "conf_000",
                     resolved,
                     censo_solvent,
                     _solvent_model,
@@ -406,7 +410,7 @@ def run_conformer_energy(
 
         else:
             # All remaining paths invoke CENSO
-            censo_dir = mol_dir / "censo"
+            censo_dir = _v2_stage_dir(mol_dir, "02_SEARCH", "CENSO")
             censo_dir.mkdir(parents=True, exist_ok=True)
             backend = CensoBackend(cfg)
 
@@ -467,7 +471,7 @@ def run_conformer_energy(
                         list(rank1.symbols),
                         structure.charge,
                         structure.multiplicity,
-                        mol_dir / "finalDFT" / "conf_000",
+                        _v2_stage_dir(mol_dir, "03_OPT", "ORCA") / "conf_000",
                         resolved,
                         censo_solvent,
                         _solvent_model,
@@ -640,7 +644,7 @@ def run_conformer_energy(
                             list(rank1.symbols),
                             structure.charge,
                             structure.multiplicity,
-                            mol_dir / "finalDFT" / "conf_000",
+                            _v2_stage_dir(mol_dir, "03_OPT", "ORCA") / "conf_000",
                             resolved,
                             censo_solvent,
                             _solvent_model,
@@ -668,7 +672,7 @@ def run_conformer_energy(
                     state.set_stage("dft_handoff")
                     candidates = []
                     for i, rec in enumerate(censo_result.records):
-                        handoff_dir = mol_dir / "finalDFT" / f"conf_{i:03d}"
+                        handoff_dir = _v2_stage_dir(mol_dir, "03_OPT", "ORCA") / f"conf_{i:03d}"
                         try:
                             cand = _run_rank1_handoff(
                                 cfg,

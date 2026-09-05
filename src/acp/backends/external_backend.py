@@ -6,10 +6,20 @@ from pathlib import Path
 from typing import Any
 
 from acp.backends.base import QCBackend, QCResult
-from acp.backends.external import batch_process_thermo, run_shermo
 from acp.backends.registry import register_backend
+from acp.calculations.contracts import JsonValue
+from acp.calculations.primitives.thermochemistry import (
+    ThermochemistryCalculator,
+    ThermochemistryInputError,
+)
 from cccp.qc.interfaces.isostat import IsostatInterface
 from cccp.software import resolve_executable
+
+
+def _metadata_float(value: JsonValue) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return float(value)
 
 
 class ExternalBackend(QCBackend):
@@ -73,37 +83,45 @@ class ExternalBackend(QCBackend):
         target_dir = output_dir or log_file.parent
         output_file = Path(kwargs.pop("output_file", target_dir / f"{log_file.stem}.sum"))
         sp_energy = float(kwargs.pop("sp_energy", 0.0))
+        temperature = float(kwargs.pop("temperature_k", 298.15))
+        pressure = float(kwargs.pop("pressure_atm", 1.0))
+        standard_state = str(kwargs.pop("standard_state", "1atm"))
+        runner_options: dict[str, Any] = {"shermo_bin": self._executable_path("shermo", "Shermo")}
+        for key in ("scl_zpe", "ilowfreq", "imagreal", "conc"):
+            if key in kwargs:
+                runner_options[key] = kwargs.pop(key)
 
-        thermo = run_shermo(
-            freq_output=log_file,
-            sp_energy=sp_energy,
-            output_dir=target_dir,
-            shermo_bin=self._executable_path("shermo", "Shermo"),
-            output_file=output_file,
-            **kwargs,
-        )
-        if thermo is None:
+        try:
+            calculation = ThermochemistryCalculator(
+                self.config,
+                output_dir=target_dir,
+                output_file=output_file,
+                runner_options=runner_options,
+            ).compute(
+                freq_log_path=log_file,
+                sp_energy_hartree=sp_energy,
+                temperature=temperature,
+                pressure=pressure,
+                standard_state=standard_state,
+            )
+        except ThermochemistryInputError as exc:
             return QCResult(
                 success=False,
                 energy=sp_energy,
                 log_file=log_file,
                 output_file=output_file,
-                error_message=f"Shermo thermochemistry failed for {log_file}",
+                error_message=str(exc),
             )
-
         return QCResult(
-            success=True,
+            success=calculation.status == "completed",
             energy=sp_energy,
             log_file=log_file,
             output_file=output_file,
-            enthalpy=thermo.get("h_sum"),
-            gibbs=thermo.get("g_sum"),
-            entropy=thermo.get("s_total"),
-            metadata={
-                "u_sum": thermo.get("u_sum"),
-                "g_conc": thermo.get("g_conc"),
-                "thermo": thermo,
-            },
+            enthalpy=_metadata_float(calculation.metadata.get("enthalpy_hartree")),
+            gibbs=_metadata_float(calculation.metadata.get("gibbs_hartree")),
+            entropy=_metadata_float(calculation.metadata.get("entropy_au")),
+            error_message=calculation.errors[0] if calculation.errors else None,
+            metadata=dict(calculation.metadata),
         )
 
     def batch_thermochemistry(
@@ -113,47 +131,19 @@ class ExternalBackend(QCBackend):
         **kwargs: Any,
     ) -> list[QCResult]:
         target_dir = output_dir or Path.cwd()
-        executables = dict(self.config.get("executables", {}))
-        shermo_config = dict(executables.get("shermo", {}))
-        shermo_config["path"] = self._executable_path("shermo", "Shermo")
-        executables["shermo"] = shermo_config
-        config = dict(self.config)
-        config["executables"] = executables
-        thermo_results = batch_process_thermo(
-            log_files=log_files,
-            output_dir=target_dir,
-            config=config,
-            **kwargs,
-        )
-
+        thermo_kwargs = dict(kwargs)
+        if "temperature_k" not in thermo_kwargs and "temperature" in thermo_kwargs:
+            thermo_kwargs["temperature_k"] = thermo_kwargs.pop("temperature")
+        if "pressure_atm" not in thermo_kwargs and "pressure" in thermo_kwargs:
+            thermo_kwargs["pressure_atm"] = thermo_kwargs.pop("pressure")
         results: list[QCResult] = []
         for log_file in log_files:
-            output_file = target_dir / log_file.stem / "Shermo.sum"
-            thermo = thermo_results.get(log_file.stem)
-            if thermo is None:
-                results.append(
-                    QCResult(
-                        success=False,
-                        log_file=log_file,
-                        output_file=output_file,
-                        error_message=f"Shermo thermochemistry failed for {log_file}",
-                    )
-                )
-                continue
-
             results.append(
-                QCResult(
-                    success=True,
-                    log_file=log_file,
-                    output_file=output_file,
-                    enthalpy=thermo.get("h_sum"),
-                    gibbs=thermo.get("g_sum"),
-                    entropy=thermo.get("s_total"),
-                    metadata={
-                        "u_sum": thermo.get("u_sum"),
-                        "g_conc": thermo.get("g_conc"),
-                        "thermo": thermo,
-                    },
+                self.thermochemistry(
+                    log_file,
+                    output_dir=target_dir / log_file.stem,
+                    output_file=target_dir / log_file.stem / "Shermo.sum",
+                    **thermo_kwargs,
                 )
             )
 

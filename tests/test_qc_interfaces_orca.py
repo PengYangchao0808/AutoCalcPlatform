@@ -16,9 +16,7 @@ from tests.conftest import requires_orca
 COORDINATES = np.array([[0.0, 0.0, 0.0]])
 SYMBOLS = ["H"]
 
-REAL_FREQ_FIXTURE = (
-    Path(__file__).resolve().parent / "fixtures" / "orca_optfreq_real_sections.txt"
-)
+REAL_FREQ_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "orca_optfreq_real_sections.txt"
 
 ORCA_OPT_OUTPUT = """FINAL SINGLE POINT ENERGY      -200.654321
 CARTESIAN COORDINATES (ANGSTROEM)
@@ -363,40 +361,3 @@ def test_parse_frequencies_no_section_returns_empty(tmp_path: Path) -> None:
 def test_parse_frequencies_missing_file_returns_empty(tmp_path: Path) -> None:
     assert _parse_frequencies(tmp_path / "does_not_exist.out") == []
 
-
-def test_opt_freq_parses_real_output_into_qcresult(
-    sample_config: dict[str, object], tmp_path: Path
-) -> None:
-    """End-to-end: mocked ORCA subprocess emitting real-format output must
-    yield a QCResult carrying the final-section frequencies."""
-    output_name = "orca_optfreq"
-
-    completed = subprocess.CompletedProcess(
-        args=["orca", f"{output_name}.inp"],
-        returncode=0,
-        stdout=ORCA_OPT_OUTPUT + "\n" + REAL_FREQ_FIXTURE.read_text(encoding="utf-8"),
-        stderr="",
-    )
-
-    with (
-        patch(
-            "cccp.qc.interfaces.orca.subprocess.run",
-            return_value=completed,
-        ) as mock_run,
-        patch(
-            "cccp.qc.interfaces.orca.resolve_executable",
-            return_value=Path("/fake/orca"),
-        ),
-    ):
-        interface = ORCAInterface(sample_config)
-        result = interface.opt_freq(
-            COORDINATES,
-            SYMBOLS,
-            output_dir=tmp_path,
-            output_name=output_name,
-        )
-
-    assert result.success is True
-    assert result.frequencies == [1615.84, 3795.36, 3896.58]
-    assert result.has_frequencies is True
-    mock_run.assert_called_once()

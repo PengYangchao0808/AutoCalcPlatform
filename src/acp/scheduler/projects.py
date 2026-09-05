@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import sqlite3
 import threading
@@ -16,6 +17,27 @@ from acp.scheduler.store import JobStore
 
 _DEFAULT_PROJECT_ID = "uncategorized"
 _DEFAULT_PROJECT_NAME = "Uncategorized"
+
+_FORBIDDEN_CHARS = re.compile(r'[/\\:*?"<>|]')
+_WHITESPACE = re.compile(r"\s+")
+_REPEAT_UNDERSCORE = re.compile(r"_+")
+
+
+def sanitize_project_dir_name(name: str) -> str:
+    """Sanitise a project name into a disk directory component (v2 design §3)."""
+    cleaned = _WHITESPACE.sub("_", str(name).strip())
+    cleaned = _FORBIDDEN_CHARS.sub("_", cleaned)
+    cleaned = _REPEAT_UNDERSCORE.sub("_", cleaned).strip("_")
+    return cleaned[:64]
+
+
+def _unique_project_dir(project_root: Path, base_name: str) -> Path:
+    candidate = project_root / base_name
+    index = 2
+    while candidate.exists():
+        candidate = project_root / f"{base_name}__{index:02d}"
+        index += 1
+    return candidate
 
 
 def _utc_now_iso() -> str:
@@ -80,6 +102,16 @@ class ProjectManager:
         if not updates:
             return project
 
+        if "name" in updates:
+            new_name = str(updates["name"])
+            with self._lock, self._connect() as conn:
+                dup = conn.execute(
+                    "SELECT project_id FROM projects WHERE lower(name)=lower(?) AND project_id<>?",
+                    (new_name, project_id),
+                ).fetchone()
+            if dup is not None:
+                raise ValueError(f"Project name already exists: {new_name!r}")
+
         now = _utc_now_iso()
         merged = dict(project)
         merged.update(updates)
@@ -116,6 +148,24 @@ class ProjectManager:
             shutil.rmtree(Path(project["run_root"]), ignore_errors=True)
         return True
 
+    def dir_leaf_for(self, project_id: str) -> str:
+        """Return the on-disk directory leaf for a project.
+
+        The recorded ``run_root`` column is authoritative (frozen at
+        creation; renames never move the directory). Falls back to the
+        sanitized project name, then the sanitized id, so resolution never
+        fails for stale specs.
+        """
+        project = self.get_project(project_id)
+        if project is not None:
+            recorded = Path(project["run_root"])
+            if recorded.parent == self.run_root.resolve() and recorded.name:
+                return recorded.name
+            from_name = sanitize_project_dir_name(project["name"])
+            if from_name:
+                return from_name
+        return sanitize_project_dir_name(project_id) or "project"
+
     def ensure_default_project(self) -> str:
         project = self.get_project(_DEFAULT_PROJECT_ID)
         if project is not None:
@@ -135,6 +185,7 @@ class ProjectManager:
             description="",
             tags=[],
             settings={},
+            dir_name=_DEFAULT_PROJECT_ID,
         )
         return str(created["project_id"])
 
@@ -146,9 +197,21 @@ class ProjectManager:
         description: str,
         tags: list[str] | None,
         settings: dict[str, Any] | None,
+        dir_name: str = "",
     ) -> dict[str, Any]:
+        with self._lock, self._connect() as conn:
+            dup = conn.execute(
+                "SELECT project_id FROM projects WHERE lower(name)=lower(?)",
+                (name,),
+            ).fetchone()
+        if dup is not None:
+            raise ValueError(f"Project name already exists: {name!r}")
+
         now = _utc_now_iso()
-        project_dir = (self.run_root / project_id).resolve()
+        base_name = dir_name or sanitize_project_dir_name(name)
+        if not base_name:
+            raise ValueError(f"Project name has no usable characters: {name!r}")
+        project_dir = _unique_project_dir(self.run_root, base_name).resolve()
         project_dir.mkdir(parents=True, exist_ok=True)
 
         with self._lock, self._connect() as conn:

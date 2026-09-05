@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from acp.intake.models import StructureAsset, StructureParseResult
 from acp.intake.parsers import (
+    detect_and_parse,
     detect_format,
     parse_gjf_text,
     parse_mol_text,
@@ -17,6 +18,7 @@ from acp.intake.parsers import (
 __all__ = [
     "StructureAsset",
     "StructureParseResult",
+    "detect_and_parse",
     "detect_format",
     "parse_gjf_text",
     "parse_mol_text",

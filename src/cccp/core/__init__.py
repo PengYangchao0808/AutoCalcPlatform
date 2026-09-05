@@ -11,7 +11,6 @@ from cccp.core.candidates import (
     candidate_set_from_paths,
     clone_candidate_set,
 )
-from cccp.core.engine import ConformerEngine
 from cccp.core.protocols import (
     SUPPORTED_PROTOCOLS,
     FunnelPolicy,
@@ -44,5 +43,4 @@ __all__ = [
     "candidate_set_from_paths",
     "clone_candidate_set",
     "ConformerStateManager",
-    "ConformerEngine",
 ]

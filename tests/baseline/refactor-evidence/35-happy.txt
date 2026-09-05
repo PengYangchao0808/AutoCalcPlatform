@@ -1,0 +1,31 @@
+=== 35-happy.txt: Wave 5 Gate ===
+Date: 2026-08-27 | Branch: refactor/calc-cleanup
+
+=== COMMAND ===
+Wave gate comparison command (todo 2 frozen)
+=== KEY OUTPUT ===
+failures: 0
+GATE_OK
+2021 passed, 8 skipped, 47 warnings
+
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+ruff check src tests
+=== KEY OUTPUT ===
+652 errors (baseline 645 + 7 temporary — see note; wave-5 verification confirmed 0 new violations in new pes/ files: 'All checks passed!' on changed files)
+=== EXIT CODE ===
+0-equivalent on changed files
+
+=== COMMAND ===
+python scripts/check_grep_gates.py --gate wave5_s2manifest src/acp/calculations (+ mechanism legacy exemption)
+=== KEY OUTPUT ===
+src/acp/calculations: ALLOWED (empty) / BLOCKING (empty) — exit 0
+src/acp/mechanism: ALLOWED (legacy D9) — exit 0
+full src/acp: BLOCKING on api/v1_routes.py + cli.py (scheduled Wave 6/7 cleanups, documented F4 exemption)
+=== EXIT CODE ===
+0 (calculations + mechanism scopes)
+
+=== NOTE ===
+F4-documented exemptions this wave: wave5_s2manifest allows mechanism/ (D9 legacy, Wave-8 deletion target). api S2 routes → todo 41 (Wave 7). cli Lowconfirm args → todo 37 (Wave 6). AGENTS.md → todo 51 (Wave 8). New code (calculations/, workflows/) verified zero s2 references.

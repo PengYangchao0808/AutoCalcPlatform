@@ -1,0 +1,26 @@
+=== 10-happy.txt: Wave 1 Gate ===
+Date: 2026-08-27 | Branch: refactor/calc-cleanup
+
+=== COMMAND ===
+python -m pytest tests/ -q --tb=no > /tmp/wave-gate-pytest.txt 2>&1; <wave gate comparison command>
+
+=== KEY OUTPUT ===
+current failures: 0
+GATE_OK
+1880 passed, 8 skipped, 47 warnings in 259.24s
+
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+ruff check src tests (via baseline comparison) + ruff format --check (new files)
+
+=== KEY OUTPUT ===
+baseline ruff errors: 645 | current ruff errors: 645 (ZERO new violations)
+new files: "All checks passed!" + "12 files already formatted"
+
+=== EXIT CODE ===
+0 (new files); whole-tree ruff exit 1 = pre-existing baseline state (645 errors recorded in ruff-baseline.txt from todo 2)
+
+=== NOTE ===
+Plan literal 'ruff check src tests && ruff format --check src tests exit 0' is unachievable: baseline itself has 645 pre-existing errors (ruff-baseline.txt from todo 2) and 66 unformatted legacy files. Per plan's anti-false-GATE_OK philosophy + baseline-comparison mechanism, gate = ZERO NEW violations, satisfied. Deviation recorded in notepad decisions.md.

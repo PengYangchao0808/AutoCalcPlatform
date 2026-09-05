@@ -1,0 +1,9 @@
+COMMAND:
+  GIT_MASTER=1 git stash list
+
+KEY OUTPUT:
+  (empty — no stashes)
+
+JUDGEMENT: PASS — no stray stash entries that could cause baseline drift
+
+EXIT CODE: 0

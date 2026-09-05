@@ -1,0 +1,10 @@
+=== 17-fail.txt: Wave 2 Gate QA Failure Drill ===
+=== STEP 1: inject failing test ===
+COMMAND: printf 'def test_gate_drill():\n    assert False\n' > tests/test_tmp_gate_fail.py; <wave gate comparison>
+KEY OUTPUT: with injected fail: 1 (gate blocked)
+EXIT CODE: non-zero
+
+=== STEP 2: restore ===
+COMMAND: rm tests/test_tmp_gate_fail.py; <wave gate comparison>
+KEY OUTPUT: 1900 passed, 8 skipped, 47 warnings
+EXIT CODE: 0 (GATE_OK)

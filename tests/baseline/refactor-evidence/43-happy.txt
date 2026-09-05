@@ -1,0 +1,15 @@
+COMMAND:
+  python -m pytest tests/test_acp_api_v1.py::test_batchoptimize_submit_stageplan -q
+
+KEY OUTPUT:
+  1 passed, 1 warning in 2.51s
+
+  BatchOptimize submit yields a queued task with profile-trimmed stage plan.
+  - Workflow: BatchOptimize, profile: opt_freq
+  - Stage plan includes: prepare, optimize, frequency, finalize
+  - TS and INT items received with correct tags
+  - Catalog-driven workflow resolution confirmed (10 active IDs)
+
+JUDGEMENT: PASS — BatchOptimize submit creates queued task with correct profile-trimmed stage plan
+
+EXIT CODE: 0

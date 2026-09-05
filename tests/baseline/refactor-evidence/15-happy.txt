@@ -1,0 +1,9 @@
+COMMAND
+python -m pytest tests/test_checkpoint_continue.py::test_simple_workflow_resume_skips_done -q
+
+KEY OUTPUT
+.                                                                        [100%]
+1 passed in 1.84s
+
+EXIT CODE
+0

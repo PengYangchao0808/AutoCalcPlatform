@@ -18,18 +18,22 @@ import json
 import logging
 import posixpath
 import shlex
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
 from acp.catalog import method_levels_to_cli_flags
 from acp.scheduler.jobs import (
-    MECHANISM_CONFIG_FILENAME,
+    SCAN_CONFIG_FILENAME,
     JobSpec,
+    batchoptimize_method_flags,
     censo_ewin_from_method,
     censo_preset_from_method,
     censo_solvent_from_method,
+    confsearch_method_flags,
     input_chemistry_flags,
     nmr_method_flags,
+    scan_method_flags,
     xtbmd_method_flags,
 )
 from acp.scheduler.remote.config import RemoteNode
@@ -47,49 +51,23 @@ def _looks_like_smiles(s: str) -> bool:
     return True
 
 
-def _mechanism_role_source(
-    inp: dict[str, Any],
-    role: str,
-    materialized_role_paths: dict[str, str] | None = None,
-) -> str | None:
-    if materialized_role_paths and role in materialized_role_paths:
-        return materialized_role_paths[role]
-
-    legacy = inp.get(f"{role}_source")
-    if legacy:
-        return str(legacy)
-
-    role_value = inp.get(role)
-    if isinstance(role_value, dict):
-        nested_source = (
-            role_value.get("source")
-            or role_value.get("input")
-            or role_value.get("smiles")
-        )
-        if nested_source and role_value.get("source_type") != "xyz_text":
-            return str(nested_source)
-        return None
-
-    if role_value:
-        return str(role_value)
-    return None
-
-
 __all__ = [
     "LSFScriptSpec",
     "build_lsf_script_spec",
     "build_remote_cli_command",
     "build_remote_nmr_cmd_tail",
+    "build_remote_scan_config_payload",
+    "build_remote_stage_cmd_tail",
     "derive_lsf_resources",
     "generate_lsf_script",
 ]
 
+_REMOTE_CHECKPOINT_PATH = "WORK/00_RUNTIME/checkpoint.json"
+_REMOTE_RESULT_MANIFEST_PATH = "RESULT/result_manifest.json"
+
 _DEFAULT_NPROC = 8
 _DEFAULT_MEM_MB_PER_CORE = 2000
 _DEFAULT_QUEUE = "normal"
-# No walltime by default — LSF jobs run to completion unless an operator
-# explicitly configures `cluster.walltime`.  An empty value omits the
-# ``#BSUB -W`` directive entirely (task: drop the default 24h timeout).
 _DEFAULT_WALLTIME = ""
 _MIN_MEM_MB_PER_CORE = 256
 
@@ -141,32 +119,13 @@ class LSFScriptSpec:
     extra_flags: str = ""
 
 
-def build_remote_cli_command(
-    spec: JobSpec,
-    input_path: str = "inputs/input.xyz",
-    python_executable: str = "python",
-    config_path: str | None = None,
-    materialized_role_paths: dict[str, str] | None = None,
-    mechanism_config_path: str | None = None,
-) -> list[str]:
-    """Build the ``python -m acp.cli ...`` argv for remote execution.
+# ── Allowed remote workflows ────────────────────────────────────────────
 
-    The mapping rules are identical to :meth:`JobRunner._build_cmd`:
-
-    * mechanism / ensemble / energy / simple workflows → ``acp.cli run <wf>``
-
-    The ``--output`` target is ``"."`` (the remote job dir, after ``cd``).
-
-    Args:
-        python_executable: Interpreter to use on the node (from
-            :attr:`RemoteNode.python_executable`).  Defaults to ``"python"``.
-        config_path: Optional path to a job-level YAML config on the remote
-            node. When provided, ``--config`` is added to the CLI.
-    """
-    py = python_executable or "python"
-    wf = spec.workflow
-    if wf not in (
-        "mechanism",
+_ALLOWED_REMOTE_WORKFLOWS: frozenset[str] = frozenset(
+    {
+        "Confsearch",
+        "PESsearch",
+        "BatchOptimize",
         "ensemble",
         "energy",
         "nmr",
@@ -174,10 +133,29 @@ def build_remote_cli_command(
         "singlepoint",
         "optimize",
         "frequency",
-        "optfreq",
-        "optfreqsp",
+        "scan",
+        "irc",
         "xtb_optimize",
-    ):
+    }
+)
+
+
+def build_remote_cli_command(
+    spec: JobSpec,
+    input_path: str = "inputs/input.xyz",
+    python_executable: str = "python",
+    config_path: str | None = None,
+) -> list[str]:
+    """Build the ``python -m acp.cli ...`` argv for remote execution.
+
+    Args:
+        python_executable: Interpreter to use on the node.
+        config_path: Optional path to a job-level YAML config on the remote
+            node.
+    """
+    py = python_executable or "python"
+    wf = spec.workflow
+    if wf not in _ALLOWED_REMOTE_WORKFLOWS:
         raise ValueError(f"No remote subprocess mapping for workflow: {wf}")
 
     cmd: list[str] = [py, "-m", "acp.cli", "run", wf]
@@ -189,26 +167,62 @@ def build_remote_cli_command(
     # NMR has a distinct multi-candidate + spectrum payload shape.
     if wf == "nmr":
         cmd += build_remote_nmr_cmd_tail(spec, input_path)
-        return cmd
+        return _append_resources_and_return(cmd, wf, inp, method, res, config_path)
 
-    source = input_path or inp.get("source") or inp.get("input") or inp.get("smiles") or ""
+    # Stage workflows (PESsearch) use the stage tail.
+    if wf == "PESsearch":
+        cmd += build_remote_pessearch_tail(spec)
+        return _append_resources_and_return(cmd, wf, inp, method, res, config_path)
+
+    source = ""
+    if wf == "BatchOptimize":
+        artifact = inp.get("from_artifact")
+        items_file = inp.get("items_file")
+        if artifact:
+            source = str(artifact)
+            cmd += ["--from-artifact", str(artifact), "--output", "."]
+        elif items_file:
+            source = str(items_file)
+            cmd += ["--items-file", str(items_file), "--output", "."]
+        elif input_path:
+            # RemoteJobRunner stages one structure as input.xyz for each
+            # independent scheduler job.  Treat that file as a one-item
+            # BatchOptimize request rather than as an artifact path, and use
+            # the same flat task layout as local scheduler execution.
+            source = str(input_path)
+            cmd += ["--items-file", str(input_path), "--output", "."]
+        else:
+            raise ValueError(
+                "BatchOptimize job requires a batch artifact, items file, or staged structure"
+            )
+        # One structure per scheduler task (layout spec §1a): every dispatch
+        # shape uses the flat WORK/<stage> layout, matching runner._build_cmd.
+        cmd += ["--layout-mode", "single_flat"]
+        cmd += batchoptimize_method_flags(method, inp)
+    else:
+        source = (
+            input_path
+            or inp.get("input_artifact")
+            or inp.get("source")
+            or inp.get("input")
+            or inp.get("smiles")
+            or ""
+        )
+
     if not source:
         raise ValueError(f"{wf} job requires a valid input structure")
 
-    if wf == "mechanism":
+    if wf == "Confsearch":
         cmd += ["--input", str(source), "--output", "."]
-        cmd += ["--mechanism-config", mechanism_config_path or MECHANISM_CONFIG_FILENAME]
         if spec.name:
             cmd += ["--name", spec.name]
-        product = _mechanism_role_source(inp, "product", materialized_role_paths)
-        if product:
-            cmd += ["--product", str(product)]
-        ts_guess = _mechanism_role_source(inp, "ts_guess", materialized_role_paths)
-        if ts_guess:
-            cmd += ["--ts-guess", str(ts_guess)]
-        routes = inp.get("routes")
-        if routes:
-            cmd += ["--routes", json.dumps(routes)]
+        cmd += confsearch_method_flags(method)
+        solvent = censo_solvent_from_method(method)
+        if solvent:
+            cmd += ["--solvent", solvent]
+        ewin = censo_ewin_from_method(method)
+        if ewin is not None:
+            cmd += ["--ewin", str(ewin)]
     elif wf in {"ensemble", "energy"}:
         cmd += ["--input", str(source), "--output", "."]
         preset = censo_preset_from_method(method)
@@ -221,8 +235,6 @@ def build_remote_cli_command(
         if wf == "energy" and method.get("rank1_only"):
             cmd += ["--rank1-only"]
         if wf == "energy" and method.get("rank1_only") is False:
-            # CLI defaults to rank1-only; an explicit opt-out must be
-            # forwarded so the full-ensemble path is restored.
             cmd += ["--full-ensemble"]
         if wf == "energy" and method.get("threshold") is not None:
             cmd += ["--threshold", str(method["threshold"])]
@@ -245,8 +257,6 @@ def build_remote_cli_command(
             cmd += ["--name", spec.name]
         if method.get("levels"):
             cmd += ["--levels", json.dumps(method["levels"])]
-        # Shared flag builder (E7): identical to JobRunner._build_cmd so
-        # local and remote execution can never drift (DevDoc §10.2).
         cmd += xtbmd_method_flags(method)
         solvent = censo_solvent_from_method(method)
         if solvent:
@@ -254,17 +264,17 @@ def build_remote_cli_command(
         ewin = censo_ewin_from_method(method)
         if ewin is not None:
             cmd += ["--ewin", str(ewin)]
-    elif wf in ("singlepoint", "optimize", "frequency", "optfreq", "optfreqsp"):
+    elif wf in ("singlepoint", "optimize", "frequency", "scan"):
         cmd += ["--input", str(source), "--output", "."]
         if spec.name:
             cmd += ["--name", spec.name]
         levels = method.get("levels", {})
         if levels:
-            if wf == "optfreqsp":
-                prefix_map = {"optfreq": "", "single_point": "sp-", "thermo": ""}
-                cmd += method_levels_to_cli_flags(levels, prefix_map)
-            else:
-                cmd += method_levels_to_cli_flags(levels)
+            cmd += method_levels_to_cli_flags(levels)
+        if wf == "scan":
+            cmd += scan_method_flags(method, inp)
+    elif wf == "irc":
+        cmd += build_remote_irc_tail(spec, source)
     elif wf == "xtb_optimize":
         cmd += ["--input", str(source), "--output", "."]
         if spec.name:
@@ -284,7 +294,17 @@ def build_remote_cli_command(
         if sm and str(sm).lower() not in ("", "none"):
             cmd += ["--solvent-model", str(sm)]
 
-    # Resources and input chemistry (applies to all workflows).
+    return _append_resources_and_return(cmd, wf, inp, method, res, config_path)
+
+
+def _append_resources_and_return(
+    cmd: list[str],
+    wf: str,
+    inp: dict[str, Any],
+    method: dict[str, Any],
+    res: dict[str, Any],
+    config_path: str | None,
+) -> list[str]:
     if config_path:
         cmd += ["--config", config_path]
     if res.get("nproc") is not None:
@@ -292,23 +312,139 @@ def build_remote_cli_command(
     if res.get("mem"):
         cmd += ["--mem", str(res["mem"])]
     cmd += input_chemistry_flags(inp)
-
     return cmd
+
+
+# ──⑧ new-workflow remote tail generators ────────────────────────────────
+
+
+def build_remote_pessearch_tail(spec: JobSpec) -> list[str]:
+    """Generate argv tail for PESsearch remote execution."""
+    inp = spec.input
+    method = spec.method
+    flags: list[str] = ["--output", "."]
+    bond_scan_mode = str(method.get("mode") or "") == "bond_length_scan"
+    if bond_scan_mode:
+        flags += ["--mode", "bond_length_scan"]
+        flags += ["--scan-config", SCAN_CONFIG_FILENAME]
+        return flags + input_chemistry_flags(inp)
+    from_manifest = inp.get("from")
+    if from_manifest:
+        flags += ["--from", str(from_manifest)]
+    if method.get("strategy"):
+        flags += ["--strategy", str(method["strategy"])]
+    select = method.get("select")
+    if isinstance(select, (list, tuple)) and select:
+        flags += ["--select", ",".join(str(item) for item in select)]
+    elif isinstance(select, str) and select.strip():
+        flags += ["--select", select.strip()]
+    plan = inp.get("coordinate_plan") or method.get("coordinate_plan")
+    if plan is not None:
+        flags += ["--plan", json.dumps(plan)]
+    product = inp.get("product")
+    if product:
+        flags += ["--product", str(product)]
+    ts_guess = inp.get("ts_guess")
+    if ts_guess:
+        flags += ["--ts-guess", str(ts_guess)]
+    flags += input_chemistry_flags(inp)
+    return flags
+
+
+def build_remote_irc_tail(spec: JobSpec, source: str) -> list[str]:
+    """Generate argv tail for IRC remote execution."""
+    inp = spec.input
+    method = spec.method
+    cmd: list[str] = ["--input", str(source), "--output", "."]
+    if spec.name:
+        cmd += ["--name", spec.name]
+    input_role = inp.get("input_role")
+    if input_role:
+        cmd += ["--input-role", str(input_role)]
+    directions = inp.get("directions") or ["both"]
+    direction_names = {str(d).strip().lower() for d in directions}
+    if direction_names == {"forward"}:
+        cmd += ["--direction", "forward"]
+    elif direction_names == {"reverse"}:
+        cmd += ["--direction", "reverse"]
+    elif direction_names in ({"forward", "reverse"}, {"both"}):
+        cmd += ["--direction", "both"]
+    elif direction_names:
+        raise ValueError("irc directions must be forward, reverse, or both")
+    levels = method.get("levels")
+    irc_level = levels.get("irc", {}) if isinstance(levels, Mapping) else {}
+    if not isinstance(irc_level, Mapping):
+        irc_level = {}
+    irc_method = method.get("method") or method.get("functional") or irc_level.get("method")
+    if irc_method:
+        cmd += ["--method", str(irc_method)]
+    irc_basis = method.get("basis") or irc_level.get("basis")
+    if irc_basis:
+        cmd += ["--basis", str(irc_basis)]
+    maxpoints = method.get("maxpoints") or irc_level.get("maxpoints")
+    if maxpoints is not None:
+        cmd += ["--maxpoints", str(maxpoints)]
+    irc_step = method.get("step") or irc_level.get("step")
+    if irc_step is not None:
+        cmd += ["--step", str(irc_step)]
+    return cmd
+
+
+# ── Stage tail (PESsearch bond-scan only) ───────────────────────────────
+
+
+def build_remote_scan_config_payload(spec: JobSpec) -> dict[str, Any] | None:
+    """Bond-scan scan_request payload staged as ``scan_config.json``."""
+    wf = spec.workflow
+    if not (wf == "PESsearch" and str(spec.method.get("mode") or "") == "bond_length_scan"):
+        return None
+    scan_request = dict(spec.input.get("scan_request") or spec.method.get("scan_request") or {})
+    return scan_request
+
+
+def build_remote_stage_cmd_tail(spec: JobSpec) -> list[str]:
+    """E7 parity helper: append the stage-workflow argv for remote execution.
+
+    Handles PESsearch bond-scan mode only (ships scan_config.json).
+    """
+    wf = spec.workflow
+    inp = spec.input
+    method = spec.method
+    flags: list[str] = ["--output", "."]
+    bond_scan_mode = wf == "PESsearch" and str(method.get("mode") or "") == "bond_length_scan"
+    if bond_scan_mode:
+        flags += ["--mode", "bond_length_scan"]
+        flags += ["--scan-config", SCAN_CONFIG_FILENAME]
+        return flags + input_chemistry_flags(inp)
+    from_manifest = inp.get("from")
+    if from_manifest:
+        flags += ["--from", str(from_manifest)]
+    if wf == "PESsearch":
+        if method.get("strategy"):
+            flags += ["--strategy", str(method["strategy"])]
+        select = method.get("select")
+        if isinstance(select, (list, tuple)) and select:
+            flags += ["--select", ",".join(str(item) for item in select)]
+        elif isinstance(select, str) and select.strip():
+            flags += ["--select", select.strip()]
+        plan = inp.get("coordinate_plan") or method.get("coordinate_plan")
+        if plan is not None:
+            flags += ["--plan", json.dumps(plan)]
+        product = inp.get("product")
+        if product:
+            flags += ["--product", str(product)]
+        ts_guess = inp.get("ts_guess")
+        if ts_guess:
+            flags += ["--ts-guess", str(ts_guess)]
+    flags += input_chemistry_flags(inp)
+    return flags
 
 
 def build_remote_nmr_cmd_tail(
     spec: JobSpec,
     input_path: str = "inputs/input.xyz",
 ) -> list[str]:
-    """E7 parity helper: append the NMR-specific argv for remote execution.
-
-    Mirrors :meth:`JobRunner._build_nmr_cmd`. The remote ``inputs/``
-    directory is expected to contain one ``input_<i>.xyz`` per candidate
-    (synced by the remote code-sync layer) plus ``experiment.txt``.
-
-    Single-candidate fallback: when ``spec.input`` has no ``candidates``
-    list, the synced ``input_path`` is reused as the lone candidate.
-    """
+    """E7 parity helper: append the NMR-specific argv for remote execution."""
     cmd: list[str] = ["--output", "."]
     inp = spec.input
     method = spec.method
@@ -323,9 +459,6 @@ def build_remote_nmr_cmd_tail(
                 else None
             )
             if enumerate_mode and cand_source and _looks_like_smiles(str(cand_source)):
-                # Enumerate needs bond information (stereochemistry is
-                # topological): pass the SMILES verbatim. The synced
-                # input_<i>.xyz has no bond table and cannot be enumerated.
                 cmd += ["--input", str(cand_source)]
                 continue
             cmd += ["--input", f"inputs/input_{idx}.xyz"]
@@ -338,9 +471,6 @@ def build_remote_nmr_cmd_tail(
     else:
         exp_mode = "assigned"
     if exp_mode == "bruker":
-        # P3: the extracted Bruker tree is expected at inputs/bruker
-        # (mirrors JobRunner._materialize_bruker_asset; the remote input
-        # staging layer must sync it alongside the candidate inputs).
         cmd += ["--bruker", "inputs/bruker"]
         refs = experiment.get("references") if isinstance(experiment, dict) else None
         if isinstance(refs, dict):
@@ -352,8 +482,6 @@ def build_remote_nmr_cmd_tail(
             raise ValueError("nmr remote job requires experiment.content (spectrum text)")
         cmd += ["--spectrum", "inputs/experiment.txt"]
 
-    # P2: diastereomer enumeration (single-candidate payload only). Mirrors
-    # JobRunner._build_nmr_cmd — the backend expands the one candidate.
     if inp.get("enumerate"):
         cmd += ["--enumerate"]
         stereocenters = inp.get("stereocenters")
@@ -383,20 +511,14 @@ def derive_lsf_resources(
     walltime: str = _DEFAULT_WALLTIME,
     extra_flags: str = "",
 ) -> tuple[int, int, str, str, str]:
-    """Derive LSF resource parameters from a :class:`JobSpec`.
-
-    Returns:
-        ``(nproc, mem_mb_per_core, queue, walltime, extra_flags)``.
-    """
+    """Derive LSF resource parameters from a :class:`JobSpec`."""
     res = spec.resources
     nproc = _coerce_int(res.get("nproc")) or _DEFAULT_NPROC
-
     total_mem_mb = _parse_total_mem_mb(res.get("mem"))
     if total_mem_mb is not None and nproc > 0:
         mem_mb_per_core = max(total_mem_mb // nproc, _MIN_MEM_MB_PER_CORE)
     else:
         mem_mb_per_core = _DEFAULT_MEM_MB_PER_CORE
-
     return nproc, mem_mb_per_core, queue, walltime, extra_flags
 
 
@@ -409,7 +531,7 @@ def build_lsf_script_spec(
     extra_flags: str = "",
     input_path: str = "inputs/input.xyz",
     config_path: str | None = None,
-    materialized_role_paths: dict[str, str] | None = None,
+    remote_dir_name: str | None = None,
     python_executable: str | None = None,
     pre_cmds: list[str] | None = None,
 ) -> tuple[LSFScriptSpec, list[str]]:
@@ -427,6 +549,8 @@ def build_lsf_script_spec(
             ``inputs/input.xyz``).
         config_path: Optional path to a job-level YAML config on the remote
             node (e.g. ``cccp.yaml`` in the job directory).
+        remote_dir_name: Leaf directory name for the remote job dir (v1.2
+            task-dir naming); falls back to ``job_id`` when not given.
         python_executable: Interpreter to use on the node.  When given it
             overrides ``node.python_executable`` — callers pass a
             probe-resolved (Python 3.10+) interpreter here so LSF scripts
@@ -437,23 +561,17 @@ def build_lsf_script_spec(
     Returns:
         ``(lsf_spec, cli_command)``.
     """
-    remote_job_dir = posixpath.join(node.remote_work_dir, job_id)
+    dir_leaf = remote_dir_name or job_id
+    remote_job_dir = posixpath.join(node.remote_work_dir, dir_leaf)
     cli_command = build_remote_cli_command(
         spec,
         input_path=input_path,
         python_executable=python_executable or node.python_executable,
         config_path=config_path,
-        materialized_role_paths=materialized_role_paths,
-        mechanism_config_path=(
-            posixpath.join(remote_job_dir, MECHANISM_CONFIG_FILENAME)
-            if spec.workflow == "mechanism"
-            else None
-        ),
     )
     nproc, mem_mb_per_core, queue, walltime, extra_flags = derive_lsf_resources(
         spec, queue=queue, walltime=walltime, extra_flags=extra_flags
     )
-
     lsf_spec = LSFScriptSpec(
         job_name=f"acp_{job_id}",
         queue=queue,
@@ -470,18 +588,7 @@ def build_lsf_script_spec(
 
 
 def generate_lsf_script(s: LSFScriptSpec) -> str:
-    """Render a complete ``bsub`` submission script.
-
-    The script sets ``PYTHONPATH`` to include the synced source tree,
-    ``cd``\\ s into the remote job directory, runs the CLI command, and
-    writes the exit code to ``.exit_code`` for reliable status detection.
-
-    A termination-signal trap ensures ``.exit_code`` is recorded even when
-    LSF kills the job (e.g. a configured ``-W`` walltime / ``RUNLIMIT``
-    sends ``SIGUSR2`` to the whole process group) \u2014 without it the
-    trailing ``echo $? > .exit_code`` never runs and the scheduler cannot
-    tell a walltime-killed job from one that is still running.
-    """
+    """Render a complete ``bsub`` submission script."""
     cli_str = " ".join(shlex.quote(arg) for arg in s.cli_command)
     lines: list[str] = [
         "#!/bin/bash",
@@ -490,8 +597,6 @@ def generate_lsf_script(s: LSFScriptSpec) -> str:
         f"#BSUB -n {s.nproc}",
         f"#BSUB -M {int(s.mem_mb_per_core * s.nproc * 1024 * 1.05)}",
     ]
-    # Only emit a walltime directive when one is explicitly configured;
-    # an empty walltime means "no LSF run-time limit" (default).
     if s.walltime:
         lines.append(f"#BSUB -W {s.walltime}")
     lines += [
@@ -502,9 +607,6 @@ def generate_lsf_script(s: LSFScriptSpec) -> str:
         lines.append(f"#BSUB {s.extra_flags}")
     lines += [
         "",
-        "# Record the workflow exit code even if LSF terminates the job by",
-        "# signal (walltime/RUNLIMIT).  Forward such signals to a normal",
-        "# shell exit so the EXIT trap fires and writes .exit_code.",
         '_acp_record_exit() { [ -f .exit_code ] || echo "$?" > .exit_code; }',
         "trap 'exit $?' USR2 TERM INT HUP",
         "trap _acp_record_exit EXIT",
@@ -526,6 +628,14 @@ def generate_lsf_script(s: LSFScriptSpec) -> str:
     return "\n".join(lines)
 
 
+# ── Remote artifact pull helpers ────────────────────────────────────────
+
+
+def remote_artifact_pull_list() -> list[str]:
+    """Standard remote artifact paths to fetch after job completion."""
+    return [_REMOTE_RESULT_MANIFEST_PATH, _REMOTE_CHECKPOINT_PATH]
+
+
 # ---------------------------------------------------------------------- #
 # Internal helpers
 # ---------------------------------------------------------------------- #
@@ -543,11 +653,7 @@ def _coerce_int(value: Any) -> int | None:
 
 
 def _parse_total_mem_mb(value: Any) -> int | None:
-    """Parse a memory specification into megabytes.
-
-    Accepts plain numbers (treated as MB), or strings with suffixes
-    like ``"16GB"``, ``"16000MB"``, ``"2TB"`` (case-insensitive).
-    """
+    """Parse a memory specification into megabytes."""
     if value is None or isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):

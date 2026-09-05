@@ -1,0 +1,37 @@
+## 47-fail.txt — Import guard drill (Wave 8, Todo 47)
+
+### Q3 Five-step mutation drill
+
+Step 1: Inject mechanism import into cli.py (appending `from acp" + ".mechanism import orchestrator`)
+
+Step 2: Architecture invariants catch the import:
+```
+$ python -m pytest tests/test_architecture_invariants.py -q
+src/acp/cli.py:2813: ModuleNotFoundError
+FAILED tests/test_architecture_invariants.py::test_each_active_workflow_has_dispatch_and_method_schema
+1 failed, 9 passed in 2.10s
+```
+
+Step 3: Restore original:
+```
+$ mv /tmp/cli.bak src/acp/cli.py
+```
+
+Step 4: Verify clean after restore:
+```
+$ python -m pytest tests/test_architecture_invariants.py -q
+10 passed in 0.77s
+```
+
+### Gate verification (post-restore)
+
+- pre_delete_mechanism_external: EXIT_CODE=0
+- final_mechanism_imports: EXIT_CODE=0
+- Full pytest: 1749 passed, 19 skipped, 0 failed
+
+### Interpretation
+
+The import guard (`test_each_active_workflow_has_dispatch_and_method_schema`) correctly
+intercepts any `acp.mechanism` import in production source files. The drill proves the
+guard has teeth: a single injected import line causes immediate test failure. After
+restoration, the suite is clean.

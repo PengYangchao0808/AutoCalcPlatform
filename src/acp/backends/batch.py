@@ -8,7 +8,7 @@ import logging
 import os
 import tempfile
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from numbers import Integral
@@ -314,6 +314,7 @@ def batch_single_point(
     solvent: str | None = None,
     cache: bool = True,
     config: Mapping[str, object] | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
     **sp_kwargs: object,
 ) -> BatchSpResult:
     """Run parallel single-point jobs with per-geometry SHA-256 caching.
@@ -456,9 +457,13 @@ def batch_single_point(
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(_run_frame, index): index for index in range(n_total)}
+        completed_count = 0
         for future in as_completed(futures):
             index, record = future.result()
             results[index] = record
+            completed_count += 1
+            if progress_callback is not None:
+                progress_callback(completed_count, n_total)
 
     records = [record for record in results if record is not None]
     n_success = sum(1 for record in records if record.success)

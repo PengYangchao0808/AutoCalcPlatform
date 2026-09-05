@@ -1,0 +1,29 @@
+F3 Failure Drill — End-to-End Chain QA
+=======================================
+
+Drill sequence (deterministic, zero placeholders):
+  1. `root=$(cat tests/baseline/refactor-evidence/e2e-task-root.txt)` —
+     reads the absolute path written by test_e2e_full_chain.
+  2. `cp "$root/batch_interrupt/WORK/00_RUNTIME/checkpoint.json" /tmp/cp.bak`
+     backup the checkpoint file.
+  3. `mv "$root/batch_interrupt/WORK/00_RUNTIME/checkpoint.json"
+     "$root/batch_interrupt/WORK/00_RUNTIME/checkpoint.json.off"` —
+     simulate checkpoint loss.
+  4. `E2E_SKIP_INTERRUPT=1 python -m pytest
+     tests/test_e2e_refactor.py::test_e2e_interrupt_continue -q` —
+     exit code 1; output contains "checkpoint_exists" assertion failure.
+     (E2E_SKIP_INTERRUPT skips Phase 1 interrupt so Phase 2 verifies
+     against the absent checkpoint file.)
+  5. `mv "$root/batch_interrupt/WORK/00_RUNTIME/checkpoint.json.off"
+     "$root/batch_interrupt/WORK/00_RUNTIME/checkpoint.json"` — restore.
+  6. `python -m pytest tests/test_e2e_refactor.py::test_e2e_full_chain
+     tests/test_e2e_refactor.py::test_e2e_interrupt_continue -q` —
+     exit code 0; both nodes pass.
+
+NOTE: The e2e task root is a pytest session-scoped tmp dir that does not
+persist across separate pytest invocations. In a later shell the original
+tmp dir no longer exists. The actual drill sequence first re-ran
+test_e2e_full_chain (step 6 above, which also creates the task root),
+then used the NEW tmp path for the drill steps 1-5 in a second invocation,
+then re-ran step 6 for the final pass. The E2E_SKIP_INTERRUPT env var
+enables Phase 2-only execution so checkpoint removal is observable.

@@ -1,0 +1,4 @@
+Command: python -m pytest tests/test_acp_workflows_simple.py::test_scheduler_dir_flat_layout -q
+.                                                                        [100%]
+1 passed in 0.77s
+Exit code: 0

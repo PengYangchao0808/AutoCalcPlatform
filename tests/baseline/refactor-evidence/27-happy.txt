@@ -1,0 +1,6 @@
+Command: python -m pytest tests/test_acp_mechanism_stages.py::test_lowconfirm_irc_via_independent_bridge -q
+Key output:
+.                                                                        [100%]
+1 passed in 1.37s
+Result: Lowconfirm independent IRC bridge test passed.
+Exit code: 0

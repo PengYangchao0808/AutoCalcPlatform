@@ -45,28 +45,64 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "visible": True,
     },
     {
-        "id": "optfreq",
-        "label": "Optimization + Frequency",
-        "label_zh": "优化+频率",
+        "id": "scan",
+        "label": "Relaxed Scan",
+        "label_zh": "松弛扫描",
         "category": "simple",
-        "description": "Optimize then compute frequencies",
-        "method_schema_id": "dft_optfreq",
+        "description": "Scan an internal coordinate while relaxing the remaining geometry",
+        "method_schema_id": "dft_scan",
         "default_backend": "orca",
         "requires_binaries": ["orca"],
         "status": "active",
         "visible": True,
     },
     {
+        "id": "irc",
+        "label": "Intrinsic Reaction Coordinate",
+        "label_zh": "内禀反应坐标",
+        "category": "simple",
+        "description": "Follow both directions of a transition-state IRC",
+        "method_schema_id": "irc",
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
+        "status": "active",
+        "visible": True,
+    },
+    {
+        "id": "optfreq",
+        "label": "Optimization + Frequency",
+        "label_zh": "优化+频率",
+        "category": "simple",
+        "description": (
+            "Retired in the 2026-08 refactor; use optimize + frequency or "
+            "BatchOptimize; historical jobs are read-only"
+        ),
+        "description_zh": "已由 BatchOptimize 取代，历史任务只读",
+        "method_schema_id": "dft_optfreq",
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
+        "reason": "2026-08 refactor",
+        "replacements": ["optimize + frequency", "BatchOptimize"],
+        "status": "retired",
+        "visible": False,
+    },
+    {
         "id": "optfreqsp",
         "label": "Opt+Freq+SP+Thermo",
         "label_zh": "优化+频率+单点+热化学",
         "category": "simple",
-        "description": "ORCA opt → freq → SP → Shermo free energy",
+        "description": (
+            "Retired in the 2026-08 refactor; use BatchOptimize for optimization, "
+            "frequency, single-point, and thermochemistry; historical jobs are read-only"
+        ),
+        "description_zh": "已由 BatchOptimize 取代，历史任务只读",
         "method_schema_id": "dft_optfreqsp",
         "default_backend": "orca",
         "requires_binaries": ["orca", "shermo"],
-        "status": "active",
-        "visible": True,
+        "reason": "2026-08 refactor",
+        "replacements": ["BatchOptimize"],
+        "status": "retired",
+        "visible": False,
     },
     {
         "id": "xtb_optimize",
@@ -137,8 +173,10 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "censo_ensemble",
         "default_backend": "censo",
         "requires_binaries": ["crest", "censo", "orca"],
-        "status": "active",
-        "visible": True,
+        # Retired (Confsearch v1.0, 2026-08-23): unified into
+        # Confsearch + protocol=censo-crest + refinement_policy=screen.
+        "status": "retired",
+        "visible": False,
     },
     {
         "id": "energy",
@@ -149,8 +187,10 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "censo_energy",
         "default_backend": "censo",
         "requires_binaries": ["crest", "censo", "orca"],
-        "status": "active",
-        "visible": True,
+        # Retired (Confsearch v1.0, 2026-08-23): rank1-only maps to
+        # Confsearch + censo-crest + rank1; full-ensemble to cumulative-99.
+        "status": "retired",
+        "visible": False,
     },
     {
         "id": "xtbmd_censo_energy",
@@ -161,8 +201,10 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "xtbmd_censo_energy",
         "default_backend": "censo",
         "requires_binaries": ["xtb", "isostat", "censo", "orca"],
-        "status": "active",
-        "visible": True,
+        # Retired (Confsearch v1.0, 2026-08-23): the full chain is now the
+        # single protocol Confsearch + protocol=xtbmd-censo.
+        "status": "retired",
+        "visible": False,
     },
     {
         "id": "mechanism",
@@ -173,21 +215,156 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "method_schema_id": "mechanism",
         "default_backend": "orca",
         "requires_binaries": ["orca"],
-        # Phase 1 verification step 4: mechanism is now implemented and active.
-        "status": "active",
-        "visible": True,
+        # Retired for new runs (Confsearch v1.0, 2026-08-23): the one-shot
+        # S0→S4 study is replaced by the four independent stage workflows
+        # Confsearch / PESsearch / Lowconfirm / Highconfirm. Historical
+        # studies remain viewable read-only.
+        "status": "retired",
+        "visible": False,
     },
     {
         "id": "custom_sequence",
         "label": "Custom Task Sequence",
-        "label_zh": "\u81ea\u5b9a\u4e49\u4efb\u52a1\u5e8f\u5217",
+        "label_zh": "自定义任务序列",
         "category": "custom",
         "description": "Build a linear pipeline of calculation blocks",
         "method_schema_id": "custom",
         "default_backend": "",
         "requires_binaries": [],
         "status": "planned",
+        "visible": False,
+    },
+    {
+        "id": "mech-conf",
+        "label": "Mechanism Conformer / Stable State",
+        "label_zh": "机理构象 / 稳定态",
+        "category": "mechanism",
+        "description": "Standalone conformer search for one mechanism stable state",
+        "method_schema_id": "mech_conf",
+        "default_backend": "orca",
+        "requires_binaries": ["crest", "orca"],
+        # Retired (Confsearch v1.0, 2026-08-23): superseded by Confsearch.
+        "status": "retired",
+        "visible": False,
+    },
+    {
+        "id": "mech-step",
+        "label": "Mechanism Elementary Step",
+        "label_zh": "机理基元步骤",
+        "category": "mechanism",
+        "description": "Elementary step: PEB path -> coarse refine -> IRC -> endpoints",
+        "method_schema_id": "mech_step",
+        "default_backend": "orca",
+        "requires_binaries": ["orca", "xtb"],
+        # Retired (Confsearch v1.0, 2026-08-23): split into PESsearch (S2)
+        # + Lowconfirm (S3).
+        "status": "retired",
+        "visible": False,
+    },
+    {
+        "id": "mech-confirm",
+        "label": "Mechanism High-Fidelity Confirmation",
+        "label_zh": "机理高精度确认",
+        "category": "mechanism",
+        "description": "High-fidelity confirmation of one elementary-step artifact",
+        "method_schema_id": "mech_confirm",
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
+        # Retired (Confsearch v1.0, 2026-08-23): superseded by Highconfirm (S4).
+        "status": "retired",
+        "visible": False,
+    },
+    {
+        "id": "mech-chain",
+        "label": "Mechanism Chain",
+        "label_zh": "机理模块链",
+        "category": "mechanism",
+        "description": "Declarative composition of standalone mechanism modules",
+        "method_schema_id": "mech_chain",
+        "default_backend": "",
+        "requires_binaries": [],
+        # Retired (Confsearch v1.0, 2026-08-23): the four-stage manual flow
+        # (Confsearch → PESsearch → Lowconfirm → Highconfirm) replaces
+        # module chaining.
+        "status": "retired",
+        "visible": False,
+    },
+    {
+        "id": "Confsearch",
+        "label": "Conformer Search",
+        "label_zh": "构象搜索",
+        "category": "preset",
+        "description": (
+            "Unified conformer search + energies: protocols xtb-crest / "
+            "xtb-md / censo-crest / xtbmd-censo"
+        ),
+        "method_schema_id": "confsearch_unified",
+        "default_backend": "censo",
+        "requires_binaries": ["crest", "xtb", "isostat", "censo", "orca"],
+        "status": "active",
         "visible": True,
+    },
+    {
+        "id": "PESsearch",
+        "label": "PES Search",
+        "label_zh": "势能面搜索",
+        "category": "preset",
+        "description": "PES scan and candidate extraction from a structure or upstream result",
+        "description_zh": "从结构或上游结果执行势能面扫描并提取候选结构",
+        "method_schema_id": "pes_scan",
+        "default_backend": "orca",
+        "requires_binaries": ["orca", "xtb"],
+        "status": "active",
+        "visible": True,
+    },
+    {
+        "id": "BatchOptimize",
+        "label": "Batch Optimization",
+        "label_zh": "批量优化",
+        "category": "preset",
+        "description": "Batch optimization and optional frequency, single-point, and thermochemistry steps",
+        "description_zh": "批量执行结构优化，并可选执行频率、单点能和热化学步骤",
+        "method_schema_id": "batch_optimize",
+        "default_backend": "orca",
+        "requires_binaries": ["orca", "shermo"],
+        "status": "active",
+        "visible": True,
+    },
+    {
+        "id": "Lowconfirm",
+        "label": "Low Confirmation",
+        "label_zh": "粗优化",
+        "category": "stages",
+        "description": (
+            "Retired in the 2026-08 refactor; use BatchOptimize and the standalone "
+            "IRC workflow when needed; historical jobs are read-only"
+        ),
+        "description_zh": "已由 BatchOptimize 取代，历史任务只读",
+        "method_schema_id": "low_confirm",
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
+        "reason": "2026-08 refactor",
+        "replacements": ["BatchOptimize", "irc"],
+        "status": "retired",
+        "visible": False,
+    },
+    {
+        "id": "Highconfirm",
+        "label": "High Confirmation",
+        "label_zh": "精细优化",
+        "category": "stages",
+        "description": (
+            "Retired in the 2026-08 refactor; use BatchOptimize and the standalone "
+            "IRC workflow when needed; historical jobs are read-only"
+        ),
+        "description_zh": "已由 BatchOptimize 取代，历史任务只读",
+        "method_schema_id": "high_confirm",
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
+        "reason": "2026-08 refactor",
+        "replacements": ["BatchOptimize", "irc"],
+        "status": "retired",
+        "visible": False,
     },
 ]
 
@@ -420,6 +597,8 @@ FUNCTIONAL_OPTIONS_MAP: dict[str, dict[str, list[str]]] = _derive_functional_opt
 FIELD_DEFINITIONS: dict[str, Any] = {
     "functional": {
         "type": "select",
+        "label": "Electronic Structure Method",
+        "label_zh": "电子结构方法",
         "per_backend": {
             "orca": [
                 "r2SCAN-3c",
@@ -441,27 +620,73 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     },
     "basis": {
         "type": "select",
+        "label": "Basis Set",
+        "label_zh": "基组",
         "per_backend": {
             "orca": _BASIS_CATALOG_REF,
         },
         "default": {"*": ""},
         "supports_custom": True,
     },
+    "single_point_method": {
+        "type": "select",
+        "label": "Single-Point Method",
+        "label_zh": "单点能方法",
+        "per_backend": {
+            "orca": [
+                "r2SCAN-3c",
+                "PBEh-3c",
+                "B97-3c",
+                "B3LYP",
+                "PBE0",
+                "M062X",
+                "mPW1PW91",
+                "wB97X-D4",
+                "wB97M-V",
+                "PWPB95",
+                "revDSD-PBEP86",
+                "DLPNO-CCSD(T)",
+            ]
+        },
+        "default": {"*": "wB97M-V"},
+    },
+    "single_point_basis": {
+        "type": "select",
+        "label": "Single-Point Basis Set",
+        "label_zh": "单点能基组",
+        "per_backend": {"orca": _BASIS_CATALOG_REF},
+        "default": {"*": "def2-TZVPP"},
+        "supports_custom": True,
+    },
     "dispersion": {
         "type": "select",
+        "label": "Dispersion Correction",
+        "label_zh": "色散校正",
         "options": ["none", "D3", "D3BJ", "D4", "VV10"],
+        "option_labels_zh": {"none": "无", "D3": "D3", "D3BJ": "D3BJ", "D4": "D4", "VV10": "VV10"},
         "default": {"*": "D4"},
     },
     "solvent_model": {
         "type": "select",
+        "label": "Solvation Model",
+        "label_zh": "溶剂模型",
         "per_backend": {
             "orca": ["none", "CPCM", "SMD"],
             "xtb": ["none", "ALPB", "GBSA"],
+        },
+        "option_labels_zh": {
+            "none": "无",
+            "CPCM": "CPCM（连续介质）",
+            "SMD": "SMD（溶剂化）",
+            "ALPB": "ALPB",
+            "GBSA": "GBSA",
         },
         "default": {"*": "none"},
     },
     "solvent": {
         "type": "select",
+        "label": "Solvent",
+        "label_zh": "溶剂",
         "options": [
             "none",
             "water",
@@ -477,19 +702,49 @@ FIELD_DEFINITIONS: dict[str, Any] = {
             "hexane",
             "benzene",
         ],
+        "option_labels_zh": {
+            "none": "无",
+            "water": "水",
+            "methanol": "甲醇",
+            "ethanol": "乙醇",
+            "acetone": "丙酮",
+            "dichloromethane": "二氯甲烷",
+            "toluene": "甲苯",
+            "THF": "四氢呋喃（THF）",
+            "DMSO": "二甲基亚砜（DMSO）",
+            "acetonitrile": "乙腈",
+            "chloroform": "氯仿",
+            "hexane": "正己烷",
+            "benzene": "苯",
+        },
         "default": {"*": "none"},
         "depends_on": {"field": "solvent_model", "not_values": ["none"]},
     },
     "grid": {
         "type": "select",
         "advanced": True,
+        "label": "Integration Grid",
+        "label_zh": "积分网格",
         "options": ["SG1", "Fine", "UltraFine", "SuperFine"],
+        "option_labels_zh": {
+            "SG1": "SG1（粗）",
+            "Fine": "Fine（细）",
+            "UltraFine": "UltraFine（超细）",
+            "SuperFine": "SuperFine（特细）",
+        },
         "default": {"*": "UltraFine"},
     },
     "scf_convergence": {
         "type": "select",
         "advanced": True,
+        "label": "SCF Convergence",
+        "label_zh": "SCF 收敛标准",
         "options": ["Normal", "Tight", "VeryTight"],
+        "option_labels_zh": {
+            "Normal": "标准",
+            "Tight": "严格",
+            "VeryTight": "非常严格",
+        },
         "default": {"*": "Tight"},
     },
     "opt_convergence": {
@@ -499,6 +754,28 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "default": {"*": "Tight"},
     },
     "max_steps": {"type": "int", "advanced": True, "min": 1, "max": 10000, "default": {"*": 100}},
+    "method": {
+        "type": "select",
+        "label": "IRC Method",
+        "label_zh": "IRC 方法",
+        "per_backend": {"orca": list(METHOD_META)},
+        "default": {"*": "r2SCAN-3c"},
+    },
+    "maxpoints": {
+        "type": "int",
+        "label": "IRC Maximum Points",
+        "label_zh": "IRC 最大步数",
+        "min": 1,
+        "max": 10000,
+        "default": {"*": 100},
+    },
+    "step": {
+        "type": "float",
+        "label": "IRC Step",
+        "label_zh": "IRC 步长",
+        "min": 0,
+        "default": {"*": 0.1},
+    },
     "recalc_hess": {
         "type": "hessian_interval",
         "advanced": True,
@@ -563,6 +840,8 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     "aux_j_basis": {
         "type": "select",
         "advanced": True,
+        "label": "Auxiliary /J Basis",
+        "label_zh": "辅助基组 /J",
         "per_backend": {"orca": _AUX_J_BASIS_FALLBACK},
         "default": {"*": "AutoAux"},
         "supports_custom": True,
@@ -576,6 +855,8 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     "aux_c_basis": {
         "type": "select",
         "advanced": True,
+        "label": "Auxiliary /C Basis",
+        "label_zh": "辅助基组 /C",
         "per_backend": {"orca": _AUX_C_BASIS_FALLBACK},
         "default": {"*": "AutoAux"},
         "supports_custom": True,
@@ -588,7 +869,15 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     "ri_approximation": {
         "type": "select",
         "advanced": True,
+        "label": "RI Approximation",
+        "label_zh": "RI 近似",
         "per_backend": {"orca": ["none", "RI", "RIJCOSX", "RIJK"]},
+        "option_labels_zh": {
+            "none": "不使用",
+            "RI": "RI",
+            "RIJCOSX": "RIJCOSX",
+            "RIJK": "RIJK",
+        },
         "default": {"*": "RIJCOSX"},
     },
     # ── xtbmd_censo_energy control group (DevDoc §10.1) ────────────────
@@ -762,10 +1051,224 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     },
     "path_strategy": {
         "type": "select",
-        "options": ["guided-scan", "rph-reverse", "direct-ts"],
+        "options": ["guided-scan", "reverse-peb", "rph-reverse", "direct-ts"],
         "default": {"*": "guided-scan"},
         "label": "Path Search Strategy",
         "label_zh": "路径搜索策略",
+    },
+    # PESsearch coordinate + relaxed-scan protocol fields. The structure
+    # picker supplies atom indices; task kind, range, and QC settings are all
+    # rendered by the shared method-protocol dialog.
+    "scan_coordinate_kind": {
+        "type": "select",
+        "options": ["distance", "angle", "dihedral"],
+        "option_labels_zh": {
+            "distance": "键长扫描",
+            "angle": "键角扫描",
+            "dihedral": "二面角扫描",
+        },
+        "default": {"*": "distance"},
+        "label": "Coordinate Type",
+        "label_zh": "扫描坐标类型",
+        "help": "Choose bond length, bond angle, or dihedral scanning. Atom selection stays in the structure preview.",
+    },
+    "scan_bond_type": {
+        "type": "select",
+        "options": ["auto", "single", "double", "multiple", "aromatic"],
+        "option_labels_zh": {
+            "auto": "自动识别",
+            "single": "单键",
+            "double": "双键",
+            "multiple": "多键",
+            "aromatic": "芳香键",
+        },
+        "default": {"*": "auto"},
+        "label": "Bond Type",
+        "label_zh": "键类型",
+        "help": "Used for the task label and scan provenance; auto keeps the structure-derived bond type when available.",
+    },
+    "scan_coordinate_start": {
+        "type": "float",
+        "default": {"*": 1.0},
+        "label": "Start Coordinate",
+        "label_zh": "起始值",
+        "help": "Start of the coordinate range. Distances use Å; angles and dihedrals use degrees.",
+    },
+    "scan_coordinate_end": {
+        "type": "float",
+        "default": {"*": 3.0},
+        "label": "End Coordinate",
+        "label_zh": "终止值",
+        "help": "End of the coordinate range. Distances use Å; angles and dihedrals use degrees.",
+    },
+    "scan_coordinate_points": {
+        "type": "int",
+        "min": 3,
+        "max": 101,
+        "default": {"*": 21},
+        "label": "Scan Points",
+        "label_zh": "扫描点数",
+        "help": "Number of equally spaced points in the coordinate scan.",
+    },
+    "scan_mode": {
+        "type": "select",
+        "options": ["relaxed_scan"],
+        "option_labels_zh": {"relaxed_scan": "松弛扫描"},
+        "default": {"*": "relaxed_scan"},
+        "label": "Scan Mode",
+        "label_zh": "扫描模式",
+        "help": "Relaxed scan optimizes the remaining geometry at every coordinate point.",
+        "help_zh": "固定扫描坐标后，逐点优化其余分子几何结构。",
+    },
+    "scan_reuse_previous_geometry": {
+        "type": "bool",
+        "default": {"*": True},
+        "label": "Reuse Previous Geometry",
+        "label_zh": "沿用前一点几何",
+        "help": "Use the converged geometry from the previous point as the next point's initial guess.",
+        "help_zh": "使用前一个扫描点的收敛结构作为下一个扫描点的初始结构。",
+    },
+    "scan_full_scan": {
+        "type": "bool",
+        "default": {"*": True},
+        "label": "Run Full Scan",
+        "label_zh": "执行完整扫描",
+        "help": "Keep all requested coordinate points even when a local rescue is needed.",
+        "help_zh": "尽量执行并保留全部扫描点；遇到局部困难时交由失败处理策略处理。",
+    },
+    "scan_failure_policy": {
+        "type": "select",
+        "options": ["retry_previous", "retry_original", "mark_failed_continue", "abort"],
+        "option_labels_zh": {
+            "retry_previous": "沿用前一点重试",
+            "retry_original": "使用原始结构重试",
+            "mark_failed_continue": "标记失败并继续",
+            "abort": "立即终止扫描",
+        },
+        "default": {"*": "retry_previous"},
+        "label": "Point Failure Policy",
+        "label_zh": "扫描点失败处理",
+        "help": "Controls how a point is handled when its geometry optimization does not converge.",
+        "help_zh": "单个扫描点优化不收敛时，选择重试、跳过或终止扫描。",
+    },
+    "scan_retry_count": {
+        "type": "int",
+        "min": 0,
+        "max": 5,
+        "default": {"*": 2},
+        "label": "Point Retry Count",
+        "label_zh": "扫描点失败重试次数",
+        "help": "Maximum retries for an individual scan point.",
+        "help_zh": "每个扫描点允许的最大重试次数。",
+    },
+    "scan_use_scants": {
+        "type": "bool",
+        "default": {"*": False},
+        "label": "Use ORCA ScanTS",
+        "label_zh": "使用 ORCA ScanTS",
+        "help": "Use the ScanTS route for transition-state-oriented scans; normally leave disabled.",
+        "help_zh": "面向过渡态的扫描才启用；普通键长、键角和二面角扫描通常关闭。",
+    },
+    "scan_max_iterations": {
+        "type": "int",
+        "min": 1,
+        "max": 10000,
+        "default": {"*": 250},
+        "label": "Per-Point Optimization Max Iterations",
+        "label_zh": "每个扫描点最大优化迭代",
+        "help": "Maximum geometry-optimization iterations allowed for each scan point.",
+    },
+    "scan_optimizer_method": {
+        "type": "select",
+        "options": ["GFN2-xTB", "GFN1-xTB", "GFN-FF"],
+        "default": {"*": "GFN2-xTB"},
+        "label": "Scan Optimization Method",
+        "label_zh": "扫描点优化方法",
+        "help": "Low-cost method used to relax each point on the PES scan.",
+    },
+    "scan_optimizer_max_iterations": {
+        "type": "int",
+        "min": 1,
+        "max": 10000,
+        "default": {"*": 250},
+        "label": "Optimization Max Iterations",
+        "label_zh": "逐点优化最大迭代",
+        "help": "Maximum optimization cycles for the per-point optimizer.",
+    },
+    "scan_optimizer_convergence": {
+        "type": "select",
+        "options": ["normal", "tight", "very_tight"],
+        "option_labels_zh": {
+            "normal": "标准",
+            "tight": "严格",
+            "very_tight": "非常严格",
+        },
+        "default": {"*": "normal"},
+        "label": "Optimization Convergence",
+        "label_zh": "逐点优化收敛等级",
+        "help": "Convergence level applied to each optimized scan point.",
+    },
+    "scan_optimizer_retries": {
+        "type": "int",
+        "min": 0,
+        "max": 5,
+        "default": {"*": 2},
+        "label": "Optimization Retries",
+        "label_zh": "优化失败重试次数",
+        "help": "Maximum retries before the point follows the selected failure policy.",
+    },
+    "scan_optimizer_retry_strategy": {
+        "type": "select",
+        "options": ["previous_geometry", "original_geometry", "looser_convergence"],
+        "option_labels_zh": {
+            "previous_geometry": "前一点几何",
+            "original_geometry": "原始结构",
+            "looser_convergence": "放宽收敛条件",
+        },
+        "default": {"*": "previous_geometry"},
+        "label": "Optimization Retry Strategy",
+        "label_zh": "优化失败重试策略",
+        "help": "Initial geometry or convergence fallback used for a retry.",
+    },
+    "single_point_resume": {
+        "type": "bool",
+        "default": {"*": True},
+        "label": "Resume Single Points",
+        "label_zh": "单点能断点续算",
+        "help": "Reuse completed single-point results when resuming an interrupted scan.",
+    },
+    "protocol": {
+        "type": "select",
+        "options": ["xtb-crest", "xtb-md", "censo-crest", "xtbmd-censo"],
+        "option_labels_zh": {
+            "xtb-crest": "xTB + CREST",
+            "xtb-md": "xTB-MD",
+            "censo-crest": "CREST + CENSO",
+            "xtbmd-censo": "xTB-MD + CENSO + DFT",
+        },
+        "default": {"*": "censo-crest"},
+        "label": "Confsearch Protocol",
+        "label_zh": "计算协议",
+    },
+    "confsearch_profile": {
+        "type": "select",
+        "options": ["light", "default", "high"],
+        "default": {"*": "default"},
+        "label": "Quality Profile",
+        "label_zh": "精度档位",
+    },
+    "refinement_policy": {
+        "type": "select",
+        "options": ["screen", "rank1", "cumulative-99", "all"],
+        "option_labels_zh": {
+            "screen": "仅筛选",
+            "rank1": "Rank 1",
+            "cumulative-99": "累计 Boltzmann 99%",
+            "all": "全部构象",
+        },
+        "default": {"*": "screen"},
+        "label": "Refinement Policy",
+        "label_zh": "精修策略",
     },
     "fidelity": {
         "type": "select",
@@ -874,6 +1377,40 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "default": {"*": ""},
         "unit": "ppm",
         "help": "TMS ¹³C reference shielding at the GIAO level (empty = solvent-aware Goodman table lookup)",
+    },
+    "minimum_method": {
+        "type": "select",
+        "advanced": True,
+        "label": "Minimum Method Override",
+        "label_zh": "最低点方法覆盖",
+        "per_backend": {"orca": ["r2SCAN-3c", "B3LYP", "PBE0", "M062X", "wB97X-D4", "wB97M-V"]},
+        "default": {"*": ""},
+    },
+    "minimum_basis": {
+        "type": "select",
+        "advanced": True,
+        "label": "Minimum Basis Override",
+        "label_zh": "最低点基组覆盖",
+        "per_backend": {"orca": _BASIS_CATALOG_REF},
+        "default": {"*": ""},
+        "supports_custom": True,
+    },
+    "transition_state_method": {
+        "type": "select",
+        "advanced": True,
+        "label": "Transition-State Method Override",
+        "label_zh": "过渡态方法覆盖",
+        "per_backend": {"orca": ["r2SCAN-3c", "B3LYP", "PBE0", "M062X", "wB97X-D4", "wB97M-V"]},
+        "default": {"*": ""},
+    },
+    "transition_state_basis": {
+        "type": "select",
+        "advanced": True,
+        "label": "Transition-State Basis Override",
+        "label_zh": "过渡态基组覆盖",
+        "per_backend": {"orca": _BASIS_CATALOG_REF},
+        "default": {"*": ""},
+        "supports_custom": True,
     },
 }
 
@@ -1101,6 +1638,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 ],
             }
         ],
+        "stages": {"mode": "static", "static": ["single_point"]},
         "profiles": [
             {
                 "profile_id": "default",
@@ -1143,6 +1681,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 ],
             }
         ],
+        "stages": {"mode": "static", "static": ["optimize"]},
         "profiles": [
             {
                 "profile_id": "default",
@@ -1182,7 +1721,113 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 ],
             }
         ],
+        "stages": {"mode": "static", "static": ["frequency"]},
         "profiles": [],
+    },
+    "dft_scan": {
+        "method_levels": [
+            {
+                "level_id": "scan",
+                "label": "Relaxed Scan",
+                "label_zh": "松弛扫描",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "dispersion",
+                    "ri_approximation",
+                    "aux_j_basis",
+                    "aux_c_basis",
+                    "solvent_model",
+                    "solvent",
+                    "scan_coordinate_kind",
+                    "scan_coordinate_start",
+                    "scan_coordinate_end",
+                    "scan_coordinate_points",
+                    "scan_mode",
+                    "scan_reuse_previous_geometry",
+                    "scan_full_scan",
+                    "scan_failure_policy",
+                    "scan_retry_count",
+                    "scan_use_scants",
+                    "scan_max_iterations",
+                    "scan_optimizer_method",
+                    "scan_optimizer_max_iterations",
+                    "scan_optimizer_convergence",
+                    "scan_optimizer_retries",
+                    "scan_optimizer_retry_strategy",
+                ],
+            }
+        ],
+        "stages": {"mode": "static", "static": ["scan"]},
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default Relaxed Scan",
+                "label_zh": "标准松弛扫描",
+                "summary": "r2SCAN-3c/ORCA relaxed scan over a distance coordinate",
+                "levels": {
+                    "scan": {
+                        "engine": "orca",
+                        "functional": "r2SCAN-3c",
+                        "basis": "",
+                        "dispersion": "none",
+                        "ri_approximation": "none",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
+                        "solvent_model": "none",
+                        "solvent": "",
+                        "scan_coordinate_kind": "distance",
+                        "scan_coordinate_start": 1.0,
+                        "scan_coordinate_end": 3.0,
+                        "scan_coordinate_points": 21,
+                        "scan_mode": "relaxed_scan",
+                        "scan_reuse_previous_geometry": True,
+                        "scan_full_scan": True,
+                        "scan_failure_policy": "retry_previous",
+                        "scan_retry_count": 2,
+                        "scan_use_scants": False,
+                        "scan_max_iterations": 250,
+                        "scan_optimizer_method": "GFN2-xTB",
+                        "scan_optimizer_max_iterations": 250,
+                        "scan_optimizer_convergence": "normal",
+                        "scan_optimizer_retries": 2,
+                        "scan_optimizer_retry_strategy": "previous_geometry",
+                    }
+                },
+            }
+        ],
+    },
+    "irc": {
+        "method_levels": [
+            {
+                "level_id": "irc",
+                "label": "Intrinsic Reaction Coordinate",
+                "label_zh": "\u5185\u7968\u53cd\u5e94\u5750\u6807",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": ["method", "basis", "maxpoints", "step"],
+            }
+        ],
+        "stages": {"mode": "static", "static": ["irc"]},
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default IRC",
+                "label_zh": "标准 IRC",
+                "summary": "r2SCAN-3c IRC in both directions",
+                "levels": {
+                    "irc": {
+                        "engine": "orca",
+                        "method": "r2SCAN-3c",
+                        "basis": "",
+                        "maxpoints": 100,
+                        "step": 0.1,
+                    }
+                },
+            }
+        ],
     },
     "dft_optfreq": {
         "method_levels": [
@@ -1313,7 +1958,428 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "fields": ["gfn", "opt_level", "solvent_model", "solvent", "max_steps"],
             }
         ],
+        "stages": {"mode": "static", "static": ["xtb_optimize"]},
         "profiles": [],
+    },
+    "mech_conf": {
+        "method_levels": [
+            {
+                "level_id": "module",
+                "label": "Module",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [],
+            }
+        ],
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default",
+                "summary": "CENSO-lite conformer search for one stable state",
+                "levels": {},
+            }
+        ],
+    },
+    "mech_step": {
+        "method_levels": [
+            {
+                "level_id": "module",
+                "label": "Module",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [],
+            }
+        ],
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default",
+                "summary": "Elementary step: PEB path -> coarse refine -> IRC -> endpoints",
+                "levels": {},
+            }
+        ],
+    },
+    "mech_confirm": {
+        "method_levels": [
+            {
+                "level_id": "module",
+                "label": "Module",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [],
+            }
+        ],
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default",
+                "summary": "High-fidelity (S4) confirmation of one step artifact",
+                "levels": {},
+            }
+        ],
+    },
+    "mech_chain": {
+        "method_levels": [
+            {
+                "level_id": "module",
+                "label": "Module",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [],
+            }
+        ],
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default",
+                "summary": "Declarative composition of standalone mechanism modules",
+                "levels": {},
+            }
+        ],
+    },
+    "confsearch_unified": {
+        "method_levels": [
+            {
+                "level_id": "confsearch",
+                "label": "Conformer Search Protocol",
+                "label_zh": "构象搜索协议",
+                "required": True,
+                "allowed_engines": ["crest", "xtb", "censo"],
+                "fields": [
+                    "protocol",
+                    "confsearch_profile",
+                    "refinement_policy",
+                    "ewin",
+                    "refinement_threshold",
+                ],
+            },
+            {
+                "level_id": "dft_opt",
+                "label": "DFT Optimization",
+                "label_zh": "DFT 结构优化",
+                "required": False,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "dispersion",
+                    "solvent_model",
+                    "solvent",
+                    "grid",
+                    "scf_convergence",
+                    "opt_convergence",
+                    "max_steps",
+                ],
+            },
+            {
+                "level_id": "refinement_sp",
+                "label": "Single Point Energy",
+                "label_zh": "单点能",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "ri_approximation",
+                    "aux_j_basis",
+                    "dispersion",
+                    "solvent_model",
+                    "solvent",
+                    "grid",
+                    "scf_convergence",
+                ],
+            },
+            {
+                "level_id": "thermo",
+                "label": "Thermochemistry",
+                "label_zh": "热力学修正",
+                "required": False,
+                "allowed_engines": ["shermo"],
+                "fields": ["temperature", "pressure", "scale_factor"],
+            },
+        ],
+        "profiles": [
+            {
+                "profile_id": "xtb-crest",
+                "label": "xTB + CREST",
+                "summary": "CREST → xTB energies → Boltzmann (pure xTB, fastest)",
+                "levels": {
+                    "confsearch": {
+                        "engine": "crest",
+                        "protocol": "xtb-crest",
+                        "confsearch_profile": "default",
+                        "refinement_policy": "screen",
+                        "ewin": 6.0,
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                    },
+                },
+            },
+            {
+                "profile_id": "xtb-md",
+                "label": "xTB-MD",
+                "summary": "GFN-FF MD → GFN1 opt → ISOSTAT dedup → Boltzmann (pure xTB)",
+                "levels": {
+                    "confsearch": {
+                        "engine": "xtb",
+                        "protocol": "xtb-md",
+                        "confsearch_profile": "default",
+                        "refinement_policy": "screen",
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                    },
+                },
+            },
+            {
+                "profile_id": "censo-crest",
+                "label": "CREST + CENSO",
+                "summary": "CREST → CENSO free energies → rank1 DFT refinement (recommended)",
+                "levels": {
+                    "confsearch": {
+                        "engine": "censo",
+                        "protocol": "censo-crest",
+                        "confsearch_profile": "default",
+                        "refinement_policy": "rank1",
+                        "ewin": 6.0,
+                        "refinement_threshold": 0.99,
+                    },
+                    "refinement_sp": {
+                        "engine": "orca",
+                        "functional": "wB97M-V",
+                        "basis": "def2-TZVPP",
+                        "ri_approximation": "RIJCOSX",
+                        "solvent_model": "none",
+                        "solvent": "",
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                        "scale_factor": 0.9905,
+                    },
+                },
+            },
+            {
+                "profile_id": "xtbmd-censo",
+                "label": "xTB-MD + CENSO + DFT",
+                "summary": "GFN-FF MD → GFN1 opt → ISOSTAT → CENSO → fine DFT (full chain)",
+                "levels": {
+                    "confsearch": {
+                        "engine": "censo",
+                        "protocol": "xtbmd-censo",
+                        "confsearch_profile": "default",
+                        "refinement_policy": "cumulative-99",
+                        "refinement_threshold": 0.99,
+                    },
+                    "refinement_sp": {
+                        "engine": "orca",
+                        "functional": "wB97M-V",
+                        "basis": "def2-TZVPP",
+                        "ri_approximation": "RIJCOSX",
+                        "solvent_model": "none",
+                        "solvent": "",
+                    },
+                    "thermo": {
+                        "engine": "shermo",
+                        "temperature": 298.15,
+                        "pressure": 1.0,
+                        "scale_factor": 0.9905,
+                    },
+                },
+            },
+        ],
+    },
+    "pes_scan": {
+        "method_levels": [
+            {
+                "level_id": "scan_coordinate",
+                "label": "Scan Coordinate",
+                "label_zh": "扫描坐标与范围",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "hide_engine": True,
+                "fields": [
+                    "scan_coordinate_kind",
+                    "scan_bond_type",
+                    "scan_coordinate_start",
+                    "scan_coordinate_end",
+                    "scan_coordinate_points",
+                ],
+            },
+            {
+                "level_id": "scan_driver",
+                "label": "Scan Driver",
+                "label_zh": "扫描驱动",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "scan_mode",
+                    "scan_reuse_previous_geometry",
+                    "scan_full_scan",
+                    "scan_failure_policy",
+                    "scan_retry_count",
+                    "scan_use_scants",
+                ],
+            },
+            {
+                "level_id": "scan_optimizer",
+                "label": "Per-Point Optimization",
+                "label_zh": "扫描点优化",
+                "required": True,
+                "allowed_engines": ["xtb"],
+                "fields": [
+                    "scan_optimizer_method",
+                    "scan_optimizer_max_iterations",
+                    "scan_optimizer_convergence",
+                    "scan_optimizer_retries",
+                    "scan_optimizer_retry_strategy",
+                ],
+            },
+            {
+                "level_id": "single_point",
+                "label": "Single Point Energy",
+                "label_zh": "单点能",
+                "required": False,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "dispersion",
+                    "ri_approximation",
+                    "aux_j_basis",
+                    "aux_c_basis",
+                    "solvent_model",
+                    "solvent",
+                    "grid",
+                    "scf_convergence",
+                    "single_point_resume",
+                ],
+            },
+        ],
+        "stages": {
+            "mode": "static",
+            "static": [
+                "prepare",
+                "validate_coordinate",
+                "materialize_input",
+                "run_relaxed_scan",
+                "extract_frames",
+                "run_single_points",
+                "build_profile",
+                "select_candidates",
+                "finalize",
+            ],
+        },
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "Default PES Scan",
+                "label_zh": "标准 PES 扫描",
+                "summary": "ORCA relaxed scan | GFN2-xTB point optimization | B97-3c single points",
+                "summary_zh": "ORCA 松弛扫描｜GFN2-xTB 扫描点优化｜B97-3c 单点能",
+                "levels": {
+                    "scan_coordinate": {
+                        "engine": "orca",
+                        "scan_coordinate_kind": "distance",
+                        "scan_bond_type": "auto",
+                        "scan_coordinate_start": 1.0,
+                        "scan_coordinate_end": 3.0,
+                        "scan_coordinate_points": 21,
+                    },
+                    "scan_driver": {
+                        "engine": "orca",
+                        "scan_mode": "relaxed_scan",
+                        "scan_reuse_previous_geometry": True,
+                        "scan_full_scan": True,
+                        "scan_failure_policy": "retry_previous",
+                        "scan_retry_count": 2,
+                        "scan_use_scants": False,
+                    },
+                    "scan_optimizer": {
+                        "engine": "xtb",
+                        "scan_optimizer_method": "GFN2-xTB",
+                        "scan_optimizer_max_iterations": 250,
+                        "scan_optimizer_convergence": "normal",
+                        "scan_optimizer_retries": 2,
+                        "scan_optimizer_retry_strategy": "previous_geometry",
+                    },
+                    "single_point": {
+                        "engine": "orca",
+                        "functional": "B97-3c",
+                        "basis": "",
+                        "dispersion": "none",
+                        "ri_approximation": "none",
+                        "aux_j_basis": "",
+                        "aux_c_basis": "",
+                        "solvent_model": "none",
+                        "solvent": "",
+                        "grid": "UltraFine",
+                        "scf_convergence": "Tight",
+                        "single_point_resume": True,
+                    },
+                },
+                "stages": {
+                    "mode": "static",
+                    "static": [
+                        "prepare",
+                        "validate_coordinate",
+                        "materialize_input",
+                        "run_relaxed_scan",
+                        "extract_frames",
+                        "run_single_points",
+                        "build_profile",
+                        "select_candidates",
+                        "finalize",
+                    ],
+                },
+            },
+        ],
+    },
+    "low_confirm": {
+        "method_levels": [
+            {
+                "level_id": "confirm",
+                "label": "Low Confirmation",
+                "label_zh": "粗优化确认",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": ["scan_points"],
+            },
+        ],
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "B97-3c + r2SCAN-3c SP",
+                "summary": "B97-3c Opt/TS + freq + preliminary IRC + r2SCAN-3c SP",
+                "levels": {},
+            },
+        ],
+    },
+    "high_confirm": {
+        "method_levels": [
+            {
+                "level_id": "confirm",
+                "label": "High Confirmation",
+                "label_zh": "高精度确认",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": ["scan_points"],
+            },
+        ],
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "M062X + wB97M-V SP",
+                "summary": "M062X/def2-SVP Opt/TS + freq + wB97M-V/def2-TZVPP SP + thermo",
+                "levels": {},
+            },
+        ],
     },
     "nmr": {
         # NMR + DP4/DP5 method schema (P1a, 2026-08-07). Two levels:
@@ -1377,6 +2443,78 @@ METHOD_SCHEMAS: dict[str, Any] = {
                         # Goodman TMSdata table (tms_shielding_h/c remain
                         # advanced manual overrides).
                     },
+                },
+            },
+        ],
+    },
+    "batch_optimize": {
+        "method_levels": [
+            {
+                "level_id": "batch",
+                "label": "Batch Optimization",
+                "label_zh": "\u6279\u91cf\u4f18\u5316",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "functional",
+                    "basis",
+                    "single_point_method",
+                    "single_point_basis",
+                    "temperature",
+                    "pressure",
+                    "scale_factor",
+                    "minimum_method",
+                    "minimum_basis",
+                    "transition_state_method",
+                    "transition_state_basis",
+                ],
+            },
+        ],
+        "stages": {
+            "mode": "by_profile",
+            "by_profile": {
+                "opt_only": ["prepare", "optimize", "finalize"],
+                "opt_freq": ["prepare", "optimize", "frequency", "finalize"],
+                "opt_freq_sp": ["prepare", "optimize", "frequency", "single_point", "finalize"],
+                "opt_freq_sp_thermo": [
+                    "prepare",
+                    "optimize",
+                    "frequency",
+                    "single_point",
+                    "thermochemistry",
+                    "finalize",
+                ],
+            },
+        },
+        "profiles": [
+            {
+                "profile_id": "opt_only",
+                "label": "Optimization Only",
+                "label_zh": "仅优化",
+                "summary": "Optimize every selected structure.",
+                "levels": {"batch": {"steps": ["optimize"]}},
+            },
+            {
+                "profile_id": "opt_freq",
+                "label": "Optimization + Frequency",
+                "label_zh": "优化 + 频率",
+                "summary": "Optimize and calculate frequencies.",
+                "levels": {"batch": {"steps": ["optimize", "frequency"]}},
+            },
+            {
+                "profile_id": "opt_freq_sp",
+                "label": "Optimization + Frequency + SP",
+                "label_zh": "优化 + 频率 + 单点能",
+                "summary": "Optimize, calculate frequencies, and run single points.",
+                "levels": {"batch": {"steps": ["optimize", "frequency", "singlepoint"]}},
+            },
+            {
+                "profile_id": "opt_freq_sp_thermo",
+                "label": "Optimization + Frequency + SP + Thermochemistry",
+                "label_zh": "优化 + 频率 + 单点能 + 热化学",
+                "summary": "Run the complete optimization, frequency, single-point, and thermochemistry chain.",
+                "levels": {
+                    "batch": {"steps": ["optimize", "frequency", "singlepoint", "thermochemistry"]}
                 },
             },
         ],
@@ -2107,7 +3245,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
             },
             {
                 "profile_id": "guided-scan-fast",
-                "label": "Guided Scan Fast (xTB-fast → S3)",
+                "label": "Guided Scan Fast (xTB-fast)",
                 "summary": "xTB-fast conformer intake + guided relaxed scan + B97-3c OptTS/Freq + r2SCAN-3c SP",
                 "levels": {
                     "scan": {
@@ -2151,6 +3289,11 @@ METHOD_SCHEMAS: dict[str, Any] = {
     },
 }
 
+# Historical frontend/task records used ``pes_bond_scan``. Keep it as a
+# read-compatible alias while ``pes_scan`` becomes the canonical schema for
+# distance, angle, and dihedral PES tasks.
+METHOD_SCHEMAS["pes_bond_scan"] = METHOD_SCHEMAS["pes_scan"]
+
 # ── Backend discovery (R22 / Phase 4.5) ────────────────────────────────
 # Dynamically resolves the availability and version of every external binary
 # that the platform depends on so the frontend can surface pre-flight
@@ -2166,7 +3309,7 @@ _BACKEND_BINARIES: dict[str, dict[str, Any]] = {
 }
 
 _BACKEND_SUPPORTS: dict[str, list[str]] = {
-    "orca": ["singlepoint", "optimize", "frequency", "optfreq"],
+    "orca": ["singlepoint", "optimize", "frequency", "optfreq", "scan"],
     "xtb": ["singlepoint", "optimize"],
     "crest": ["conformer_search"],
     "censo": ["censo_refinement", "censo_energy"],

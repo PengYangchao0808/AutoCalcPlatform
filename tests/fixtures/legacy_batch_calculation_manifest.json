@@ -1,0 +1,38 @@
+{
+  "kind": "batch_calculation_manifest",
+  "schema_version": "batch_calculation_v1",
+  "workflow": "Lowconfirm",
+  "profile_level": "low",
+  "created_at": "2026-08-27T00:00:00+00:00",
+  "updated_at": "2026-08-27T00:05:00+00:00",
+  "counts": {
+    "total": 1,
+    "completed": 1,
+    "failed": 0
+  },
+  "items": [
+    {
+      "item_id": "item_001",
+      "candidate_id": "ts_guess_001",
+      "name": "TS guess 001",
+      "tag": "TS",
+      "kind": "ts",
+      "role": "transition_state",
+      "status": "completed",
+      "input_xyz": "input/ts_guess_001.xyz",
+      "optimized_xyz": "optimized/ts_guess_001.xyz",
+      "charge": 0,
+      "multiplicity": 1,
+      "source_type": "s2_candidate",
+      "source_ref": "s2_candidate_manifest.json#ts_guess_001",
+      "cache_key": "cache-key-001",
+      "frequency": {
+        "status": "complete"
+      },
+      "single_point": {},
+      "thermochemistry": {},
+      "error": "",
+      "work_dir": "WORK/03_OPT/batch/item_001"
+    }
+  ]
+}

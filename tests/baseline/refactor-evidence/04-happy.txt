@@ -1,0 +1,37 @@
+=== 04-happy.txt: Wave 0 Todo 4 — Architecture Invariants and Grep Gates ===
+Date: 2026-08-27
+Branch: refactor/calc-cleanup
+
+=== COMMAND ===
+python -m pytest tests/test_architecture_invariants.py tests/test_grep_gates_script.py -q
+
+=== KEY OUTPUT ===
+...s.........................................................            [100%]
+60 passed, 1 skipped in 3.36s
+TEST_EXIT_CODE=0
+
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+python scripts/check_grep_gates.py --list-gates | wc -l
+
+=== KEY OUTPUT ===
+32
+LIST_PIPE_EXIT_CODE=0
+The registry lists all 32 frozen gate names.
+
+=== EXIT CODE ===
+0
+
+=== COMMAND ===
+python scripts/check_grep_gates.py --gate wave6 src/acp/catalog.py; test $? -eq 1
+
+=== KEY OUTPUT ===
+BLOCKING:
+src/acp/catalog.py:289:         "description": "Coarse Opt/TS + frequency + preliminary IRC of PESsearch candidates (S3)",
+src/acp/catalog.py:301:         "description": "High-fidelity Opt/TS + frequency + SP + thermochemistry (S4)",
+WAVE6_EXIT_CODE=1 (intentional teeth check)
+
+=== EXIT CODE ===
+1 for the gate; the shell assertion completed successfully.

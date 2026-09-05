@@ -1,0 +1,6 @@
+COMMAND: temporarily replace the loaders.py IRC rejection with an optional irc: dict[str, JsonValue] | None field; pytest tests/test_architecture_invariants.py::test_batch_schema_rejects_irc -q
+KEY OUTPUT:
+FAILED tests/test_architecture_invariants.py::test_batch_schema_rejects_irc
+E       Failed: DID NOT RAISE <class 'ValueError'>
+EXIT CODE: 1
+RESTORED: src/acp/calculations/batch/loaders.py IRC rejection guard restored before continuing.

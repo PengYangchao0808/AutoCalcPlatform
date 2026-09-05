@@ -43,9 +43,7 @@ def _make_record(conf_id: str, frame_index: int, gtot: float) -> CensoConformerR
         gsolv=-0.004,
         grrho=-0.076,
         gtot=gtot,
-        coordinates=np.array(
-            [[0.0, 0.0, 0.0], [0.0, 0.0, 1.089], [1.027, 0.0, -0.363]]
-        ),
+        coordinates=np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 1.089], [1.027, 0.0, -0.363]]),
         symbols=["C", "H", "H"],
     )
 
@@ -96,9 +94,7 @@ def _mock_orca_instance() -> MagicMock:
     orca = MagicMock()
     opt_result = MagicMock()
     opt_result.success = True
-    opt_result.coordinates = np.array(
-        [[0.0, 0.0, 0.0], [0.0, 0.0, 1.09], [1.03, 0.0, -0.36]]
-    )
+    opt_result.coordinates = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 1.09], [1.03, 0.0, -0.36]])
     opt_result.symbols = ["C", "H", "H"]
     opt_result.energy = -154.90
     opt_result.log_file = Path("/tmp/opt.out")
@@ -126,6 +122,7 @@ def _mock_orca_backend_cls(orca: MagicMock) -> MagicMock:
     backend_cls = MagicMock()
     backend_cls.return_value = orca
     return backend_cls
+
 
 _SHERMO_OK = {
     "g_sum": -154.950123,
@@ -159,22 +156,20 @@ def test_energy_module_importable() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_energy_in_workflow_registry() -> None:
+def test_energy_retired_replaced_by_confsearch_registry_entry() -> None:
     from acp.workflows.registry import get_workflow_entry
 
-    entry = get_workflow_entry("energy")
-    assert entry is not None
-    assert entry.name == "energy"
-    assert "censo" in entry.requires_binaries
-    assert "crest" in entry.requires_binaries
-    assert "orca" in entry.requires_binaries
-    assert "shermo" in entry.requires_binaries
+    assert get_workflow_entry("energy") is None
+    confsearch = get_workflow_entry("Confsearch")
+    assert confsearch is not None
+    assert {"crest", "censo", "orca"} <= set(confsearch.requires_binaries)
 
 
-def test_energy_in_supported_workflows() -> None:
+def test_energy_retired_from_supported_workflows() -> None:
     from acp.scheduler.jobs import SUPPORTED_WORKFLOWS
 
-    assert "energy" in SUPPORTED_WORKFLOWS
+    assert "energy" not in SUPPORTED_WORKFLOWS
+    assert "Confsearch" in SUPPORTED_WORKFLOWS
 
 
 # ---------------------------------------------------------------------------
@@ -194,36 +189,28 @@ def test_energy_subparser_registered() -> None:
 
 
 def test_energy_cli_rank1_only_default_and_optout(tmp_path: Path) -> None:
-    """CLI 默认开启 rank1-only；--full-ensemble 显式关闭并透传 workflow 层。"""
-    from unittest.mock import MagicMock
-
+    """energy 已退役：CLI 拒绝新建（rc=2），rank1/full-ensemble 语义迁移到 Confsearch。"""
     from acp.cli import main
-
-    calls: list[bool] = []
-
-    def fake_run(**kwargs: Any) -> MagicMock:
-        calls.append(kwargs.get("rank1_only"))
-        res = MagicMock()
-        res.status = "completed"
-        res.metadata = {}
-        return res
 
     with (
         patch("acp.cli._build_config", return_value={}),
-        patch("acp.workflows.energy.run_conformer_energy", side_effect=fake_run) as m,
+        patch("acp.workflows.energy.run_conformer_energy") as m,
     ):
         rc = main(["run", "energy", "--input", "CCO", "--output", str(tmp_path / "a")])
-        assert rc == 0
+        assert rc == 2
         rc2 = main(
             [
-                "run", "energy", "--input", "CCO",
-                "--output", str(tmp_path / "b"),
+                "run",
+                "energy",
+                "--input",
+                "CCO",
+                "--output",
+                str(tmp_path / "b"),
                 "--full-ensemble",
             ]
         )
-        assert rc2 == 0
-    assert m.call_count == 2
-    assert calls == [True, False]
+        assert rc2 == 2
+    assert m.call_count == 0
 
 
 def test_energy_help_output() -> None:
@@ -246,12 +233,19 @@ def test_energy_invalid_preset_rejected() -> None:
 def test_energy_invalid_levels_json_returns_error(tmp_path: Path) -> None:
     from acp.cli import main
 
-    rc = main([
-        "run", "energy", "--input", "CCO",
-        "--output", str(tmp_path),
-        "--levels", "{not json",
-    ])
-    assert rc == 1
+    rc = main(
+        [
+            "run",
+            "energy",
+            "--input",
+            "CCO",
+            "--output",
+            str(tmp_path),
+            "--levels",
+            "{not json",
+        ]
+    )
+    assert rc == 2
 
 
 def test_parse_levels_json_valid() -> None:
@@ -390,7 +384,9 @@ def test_energy_light_opt_on_end_to_end(
 
     with (
         patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
-        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)) as mock_get_backend,
+        patch(
+            "acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)
+        ) as mock_get_backend,
         patch(
             "acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)
         ) as mock_shermo,
@@ -430,18 +426,18 @@ def test_energy_light_opt_on_end_to_end(
 
     # finalDFT products (2 frames / 2 rows + TOTAL row) + global min + screening ranking
     mol_dir = tmp_path / "out" / "input"
-    assert (mol_dir / "finalDFT" / "all_conformers.xyz").exists()
-    thermo_csv = mol_dir / "finalDFT" / "conformer_thermo.csv"
+    assert (mol_dir / "RESULT" / "structures" / "all_conformers.xyz").exists()
+    thermo_csv = mol_dir / "RESULT" / "energies" / "conformer_thermo.csv"
     assert thermo_csv.exists()
     lines = thermo_csv.read_text().strip().splitlines()
     assert lines[0].startswith("index,rank,energy_hartree,gibbs_correction,gibbs_hartree")
     assert len(lines) == 4  # header + both ensemble members + TOTAL row
     assert lines[-1].startswith("TOTAL,")
-    assert (mol_dir / "input_global_min.xyz").exists()
-    assert (mol_dir / "ensemble" / "screening_ranking.csv").exists()
+    assert (mol_dir / "RESULT" / "structures" / "input_global_min.xyz").exists()
+    assert (mol_dir / "RESULT" / "reports" / "screening_ranking.csv").exists()
     # ensemble total Gibbs: both mock candidates share the same Shermo Gibbs
     # → equal weights 0.5/0.5 → G_total = G1 + kT·ln 0.5
-    thermo_json = mol_dir / "finalDFT" / "ensemble_thermo.json"
+    thermo_json = mol_dir / "RESULT" / "energies" / "ensemble_thermo.json"
     assert thermo_json.exists()
     summary = json.loads(thermo_json.read_text())
     assert summary["method"] == "dft_table"
@@ -684,15 +680,15 @@ def test_energy_default_full_funnel(
     assert mock_shermo.call_count == 2
 
     # Shermo consumed the refinement SP energies from CENSO JSON
-    sp_energies = sorted(
-        c.kwargs["sp_energy"] for c in mock_shermo.call_args_list
-    )
+    sp_energies = sorted(c.kwargs["sp_energy"] for c in mock_shermo.call_args_list)
     expected = sorted(r.energy for r in mock_refinement_result.records)
     assert sp_energies == pytest.approx(expected)
 
     # Multi-frame outputs
     mol_dir = tmp_path / "out" / "input"
-    lines = (mol_dir / "finalDFT" / "conformer_thermo.csv").read_text().strip().splitlines()
+    lines = (
+        (mol_dir / "RESULT" / "energies" / "conformer_thermo.csv").read_text().strip().splitlines()
+    )
     assert len(lines) == 4  # header + 2 conformers + TOTAL row
     weights = [r.weight for r in result.ensemble.records]
     assert sum(weights) == pytest.approx(1.0, abs=1e-6)
@@ -767,6 +763,7 @@ def test_final_outputs_format(tmp_path: Path) -> None:
         "h_correction,u_correction,s_total,g_conc,weight,source"
     )
     assert Path(outputs["global_min_xyz"]).name == "mol_global_min.xyz"
+    assert not (tmp_path / "finalDFT").exists()
 
     # New ensemble-total outputs (workflow 1, single conformer → p1 = 1.0)
     assert outputs["total_gibbs_hartree"] == pytest.approx(-154.95)
@@ -778,6 +775,15 @@ def test_final_outputs_format(tmp_path: Path) -> None:
     assert thermo["population_coverage"] == pytest.approx(1.0)
     assert thermo["censo_reference_gibbs_hartree"] is None
     assert "boltzmann_table_json" not in outputs
+
+    # role contract: global_min carries it; all other products must not.
+    summary = json.loads((tmp_path / "result_summary.json").read_text())
+    assert summary["version"] == 1
+    products = {p["path"]: p for p in summary["products"]}
+    assert products["RESULT/structures/mol_global_min.xyz"]["role"] == "final_stable_structure"
+    for path, prod in products.items():
+        if path != "RESULT/structures/mol_global_min.xyz":
+            assert "role" not in prod
 
 
 def test_final_outputs_external_table_workflow2(tmp_path: Path) -> None:
@@ -838,6 +844,7 @@ def test_screening_ranking_csv(tmp_path: Path, mock_screening_result: CensoRunRe
     assert "conf_id" in content
     assert "CONF1" in content
     assert "CONF2" in content
+
 
 # ---------------------------------------------------------------------------
 # rank1_only (workflow 2): fine DFT on rank1 only + CENSO-table total G
@@ -903,23 +910,25 @@ def test_energy_rank1_only_light_opt_on(
     )
 
     # outputs: ensemble_thermo.json (censo_table_rank1) + boltzmann_table.json
-    summary = json.loads((mol_dir / "finalDFT" / "ensemble_thermo.json").read_text())
+    summary = json.loads((mol_dir / "RESULT" / "energies" / "ensemble_thermo.json").read_text())
     assert summary["method"] == "censo_table_rank1"
     assert summary["rank1_weight"] == pytest.approx(p1, abs=1e-6)
-    assert summary["total_gibbs_hartree"] == pytest.approx(
-        result.metadata["total_gibbs_hartree"]
-    )
+    assert summary["total_gibbs_hartree"] == pytest.approx(result.metadata["total_gibbs_hartree"])
     assert summary["population_coverage"] == pytest.approx(1.0)
     assert len(summary["conformers"]) == 2  # full CENSO table preserved
 
-    bt = json.loads((mol_dir / "ensemble" / "boltzmann_table.json").read_text())
+    bt = json.loads((mol_dir / "RESULT" / "ensembles" / "boltzmann_table.json").read_text())
     assert bt["source"] == "censo"
     assert set(bt["weights"]) == {"CONF1", "CONF2"}
 
     # single-frame outputs: 1 frame + TOTAL row
-    xyz_lines = (mol_dir / "finalDFT" / "all_conformers.xyz").read_text().strip().splitlines()
+    xyz_lines = (
+        (mol_dir / "RESULT" / "structures" / "all_conformers.xyz").read_text().strip().splitlines()
+    )
     assert xyz_lines[0] == "3"
-    csv_lines = (mol_dir / "finalDFT" / "conformer_thermo.csv").read_text().strip().splitlines()
+    csv_lines = (
+        (mol_dir / "RESULT" / "energies" / "conformer_thermo.csv").read_text().strip().splitlines()
+    )
     assert len(csv_lines) == 3  # header + 1 conformer + TOTAL row
     # single-conformer DFT table → weight 1.0
     assert result.ensemble.records[0].weight == pytest.approx(1.0)
@@ -989,9 +998,74 @@ def test_energy_rank1_only_cheap_path(
     assert result.metadata["total_gibbs_kcal_mol"] == pytest.approx(expected_total, abs=1e-6)
 
     mol_dir = tmp_path / "out" / "close"
-    summary = json.loads((mol_dir / "finalDFT" / "ensemble_thermo.json").read_text())
+    summary = json.loads((mol_dir / "RESULT" / "energies" / "ensemble_thermo.json").read_text())
     assert summary["method"] == "xtb_table_rank1"
     assert summary["rank1_weight"] == pytest.approx(p1, abs=1e-6)
-    bt = json.loads((mol_dir / "ensemble" / "boltzmann_table.json").read_text())
+    bt = json.loads((mol_dir / "RESULT" / "ensembles" / "boltzmann_table.json").read_text())
     assert bt["source"] == "xtb"
     assert set(bt["weights"]) == {"CONF1", "CONF2"}
+
+
+# ---------------------------------------------------------------------------
+# Scheduler task-dir flattening (v2): job.json + task.json → flat layout
+# ---------------------------------------------------------------------------
+
+
+def test_energy_scheduler_task_dir_writes_flat(
+    tmp_path: Path,
+    sample_config: dict[str, Any],
+    mock_screening_result: CensoRunResult,
+    multiframe_xyz: Path,
+) -> None:
+    """Inside a scheduler task dir (job.json + task.json) the workflow must
+    write directly at the task root — no ``{safe_name}`` subdir."""
+    from acp.workflows.energy import run_conformer_energy
+
+    out = tmp_path / "task_root"
+    out.mkdir()
+    (out / "job.json").write_text("placeholder")
+    (out / "task.json").write_text("placeholder")
+
+    orca = _mock_orca_instance()
+    with (
+        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
+        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
+        patch("acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)),
+    ):
+        backend = MagicMock()
+        backend.refine_ensemble.return_value = mock_screening_result
+        mock_backend_cls.return_value = backend
+
+        result = run_conformer_energy(
+            input_source=str(multiframe_xyz),
+            output_dir=str(out),
+            preset="censo-light",
+            config=sample_config,
+        )
+
+    assert result.status == "completed"
+    assert (out / "state.json").is_file()
+    assert (out / "WORK" / "02_SEARCH").is_dir()
+    assert (out / "RESULT" / "energies" / "ensemble_thermo.json").is_file()
+    assert not (out / "input").exists()
+
+
+def test_handoff_stage_dir_splits_freq_sp_thermo(tmp_path):
+    from acp.workflows.energy_shared import _handoff_stage_dir
+
+    conf_dir = tmp_path / "WORK" / "03_OPT" / "ORCA" / "conf_000"
+    conf_dir.mkdir(parents=True)
+
+    freq_dir = _handoff_stage_dir(conf_dir, "04_FREQ", "ORCA")
+    assert freq_dir == tmp_path / "WORK" / "04_FREQ" / "ORCA" / "conf_000"
+    assert freq_dir.is_dir()
+
+    sp_dir = _handoff_stage_dir(conf_dir, "05_SP", "ORCA")
+    assert sp_dir == tmp_path / "WORK" / "05_SP" / "ORCA" / "conf_000"
+
+    thermo_dir = _handoff_stage_dir(conf_dir, "06_THERMO", "Shermo")
+    assert thermo_dir == tmp_path / "WORK" / "06_THERMO" / "Shermo" / "conf_000"
+
+    bare = tmp_path / "plain_conf"
+    bare.mkdir()
+    assert _handoff_stage_dir(bare, "04_FREQ", "ORCA") == bare

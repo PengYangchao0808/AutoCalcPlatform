@@ -90,6 +90,47 @@ class V1JobSpecModel(BaseModel):
     project_id: str | None = None
     execution_mode: Literal["local", "remote"] | None = None
     target_node: str | None = None
+    molecule_name: str = ""
+    task_name: str = ""
+    remark: str = ""
+
+
+class JobLiveMetric(BaseModel):
+    """One display-ready metric describing a job's live computation state.
+
+    Attributes:
+        key: Stable identifier for the metric.
+        label_key: Optional frontend localization key.
+        label: Optional display label supplied by the backend.
+        value: Display value for the metric.
+        kind: Semantic rendering kind for the metric value.
+        priority: Ordering priority, with larger values shown first.
+        detail: Optional supporting detail for the metric.
+    """
+
+    key: str
+    label_key: str | None = None
+    label: str | None = None
+    value: str
+    kind: Literal["count", "iteration", "status", "text", "progress"]
+    priority: int = 0
+    detail: str | None = None
+
+
+class JobLiveStatus(BaseModel):
+    """Live computation status projected into the v1 job response.
+
+    Attributes:
+        stage_label: Optional localized label for the current stage.
+        stage_index: One-based index of the current workflow stage.
+        stage_total: Total number of workflow stages.
+        metrics: Semantic metrics for the current computation state.
+    """
+
+    stage_label: str | None = None
+    stage_index: int | None = None
+    stage_total: int | None = None
+    metrics: list[JobLiveMetric] = Field(default_factory=list)
 
 
 class V1JobRecordModel(BaseModel):
@@ -114,6 +155,15 @@ class V1JobRecordModel(BaseModel):
     study_id: str | None = None
     study_status: str | None = None
     result: dict[str, Any] | None = None
+    progress_state: str | None = None  # "determinate" | "indeterminate" | None
+    stage_index: int | None = None  # 1-based index of current stage
+    stage_total: int | None = None  # total number of stages
+    stage_progress: float | None = None  # 0-1 progress within current stage
+    stage_detail: str | None = None  # e.g. "17/40 scan points"
+    latest_event: str | None = None  # human-readable last event
+    snapshot_version: int | None = None  # epoch seconds of state.json mtime
+    live_status: JobLiveStatus | None = None
+    display_method: str | None = None
 
 
 class V1JobCreateRequest(BaseModel):
@@ -128,6 +178,9 @@ class V1JobCreateRequest(BaseModel):
     project_id: str | None = None
     execution_mode: Literal["local", "remote"] | None = None
     target_node: str | None = None
+    molecule_name: str = ""
+    task_name: str = ""
+    remark: str = ""
 
 
 class MechanismRolePayload(BaseModel):
@@ -312,7 +365,11 @@ class JobMoveRequest(BaseModel):
 
 
 class V1JobRerunRequest(BaseModel):
-    """Optional body for POST /jobs/{id}/rerun."""
+    """Legacy-compatible body for in-place POST /jobs/{id}/rerun.
+
+    ``project_id`` may only repeat the job's current project.  Cross-project
+    duplication uses POST /jobs/{id}/clone instead.
+    """
 
     project_id: str | None = None
 
@@ -362,6 +419,9 @@ class JobStageEntry(BaseModel):
     error: str | None = None
     retry_count: int = 0
     status_detail: str | None = None
+    label: str | None = None
+    progress: float | None = None
+    detail: str | None = None
 
 
 class JobMetrics(BaseModel):
@@ -567,6 +627,14 @@ class MoleculeEmbedResponse(BaseModel):
 class StructureAssetModel(BaseModel):
     asset_id: str
     name: str
+    # ``name`` is the source asset/file label; this is the identity inherited
+    # by a newly submitted task.
+    molecule_name: str = ""
+    # Optional stationary-point metadata.  These fields are intentionally
+    # present on the detail response as well as the recent-source summary so
+    # loading an S2 candidate cannot lose its TS/INT role or candidate id.
+    tag: str = ""
+    candidate_id: str = ""
     source_type: str = ""
     original_format: str = ""
     xyz: str | None = None
@@ -593,6 +661,7 @@ class StructureParseResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     ok: bool = False
+    detected_format: str | None = None
 
 
 class UploadResponse(BaseModel):
@@ -603,6 +672,38 @@ class UploadResponse(BaseModel):
     errors: list[str] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
     ok: bool = False
+    detected_format: str | None = None
+
+
+class StructureSourceSummary(BaseModel):
+    source_id: str
+    job_id: str
+    job_name: str
+    molecule_name: str = ""
+    workflow: str
+    project_id: str | None = None
+    completed_at: str = ""
+    label: str = ""
+    path: str = ""
+    formula: str = ""
+    atom_count: int = 0
+    charge: int = 0
+    multiplicity: int = 1
+    has_3d: bool = True
+    tag: str = ""
+    candidate_id: str = ""
+    remote: bool = False
+    needs_fetch: bool = False
+
+
+class StructureSourceListResponse(BaseModel):
+    sources: list[StructureSourceSummary] = Field(default_factory=list)
+
+
+class StructureSourceDetailResponse(BaseModel):
+    source_id: str
+    checksum: str | None = None
+    structure: StructureAssetModel
 
 
 class ValidateMethodRequest(BaseModel):
@@ -827,9 +928,319 @@ class NodeBootstrapResponse(BaseModel):
     error: str | None = None
 
 
+# ---------------------------------------------------------------------------
+# S2 bond-length scan (docs/ACP_S2_Bond_Length_Scan_MD_Plan.md §7, §11).
+# ---------------------------------------------------------------------------
+
+
+class StructureAssetCreateRequest(BaseModel):
+    name: str = ""
+    xyz_text: str
+    charge: int = 0
+    multiplicity: int = 1
+    project_id: str | None = None
+
+
+class StructureAssetResponse(BaseModel):
+    asset_id: str
+    name: str
+    atom_count: int = 0
+    formula: str = ""
+    charge: int = 0
+    multiplicity: int = 1
+    xyz: str = ""
+    asset_path: str = ""
+    ok: bool = True
+    errors: list[str] = Field(default_factory=list)
+
+
+class BondLengthScanSource(BaseModel):
+    source_type: Literal["task_artifact", "structure_asset", "xyz_text"] = "xyz_text"
+    source_job_id: str | None = None
+    artifact_path: str | None = None
+    structure_selector: dict[str, Any] = Field(default_factory=dict)
+    asset_id: str | None = None
+    asset_path: str | None = None
+    xyz_text: str | None = None
+    charge: int | None = None
+    multiplicity: int | None = None
+
+
+class S2StructurePreviewRequest(BaseModel):
+    source: BondLengthScanSource
+
+
+class S2StructurePreviewResponse(BaseModel):
+    source: dict[str, Any] = Field(default_factory=dict)
+    xyz: str = ""
+    formula: str = ""
+    atom_count: int = 0
+    charge: int = 0
+    multiplicity: int = 1
+    source_id: str = ""
+    checksum: str | None = None
+    selector: dict[str, Any] = Field(default_factory=dict)
+
+
+class BondLengthScanJobInput(BaseModel):
+    source: BondLengthScanSource
+    coordinate: dict[str, Any]
+    coordinates: list[dict[str, Any]] | None = None
+    selection: dict[str, Any] = Field(default_factory=dict)
+    protocol: dict[str, Any] = Field(default_factory=dict)
+    source_job_id: str | None = None
+    from_artifact: str | None = None
+
+
+class S2FrameModel(BaseModel):
+    index: int
+    target_coordinate: float
+    actual_coordinate: float
+    coordinate_unit: str = "angstrom"
+    geometry_path: str = ""
+    scan_energy_hartree: float | None = None
+    single_point_energy_hartree: float | None = None
+    optimization_converged: bool = True
+    single_point_status: str = "skipped"
+    target_coordinates: dict[str, float] = Field(default_factory=dict)
+    actual_coordinates: dict[str, float] = Field(default_factory=dict)
+    source_log: str = ""
+
+
+class S2ProfileResponse(BaseModel):
+    job_id: str
+    mode: str
+    status: str
+    stationary_point_claimed: bool
+    coordinate: dict[str, Any] = Field(default_factory=dict)
+    coordinates: list[dict[str, Any]] = Field(default_factory=list)
+    selection: dict[str, Any] = Field(default_factory=dict)
+    protocol: dict[str, Any] = Field(default_factory=dict)
+    scan: dict[str, Any] = Field(default_factory=dict)
+    energy_profile: dict[str, Any] = Field(default_factory=dict)
+    frames: list[S2FrameModel] = Field(default_factory=list)
+
+
+class S2CandidatesResponse(BaseModel):
+    job_id: str
+    mode: str
+    status: str
+    stationary_point_claimed: bool
+    recommendations: dict[str, Any] = Field(default_factory=dict)
+    review: dict[str, Any] = Field(default_factory=dict)
+
+
+class S2FrameResponse(BaseModel):
+    job_id: str
+    frame_index: int
+    target_coordinate: float
+    actual_coordinate: float
+    xyz: str = ""
+    scan_energy_hartree: float | None = None
+    single_point_energy_hartree: float | None = None
+    optimization_converged: bool = True
+    single_point_status: str = ""
+    target_coordinates: dict[str, float] = Field(default_factory=dict)
+    actual_coordinates: dict[str, float] = Field(default_factory=dict)
+
+
+class OptimizationFrameResponse(BaseModel):
+    """One optimization-cycle geometry and convergence snapshot."""
+
+    job_id: str
+    item_id: str = ""
+    frame_index: int
+    cycle: int
+    xyz: str = ""
+    energy_hartree: float | None = None
+    relative_energy_kcal_mol: float | None = None
+    delta_energy_kcal_mol: float | None = None
+    rms_gradient: float | None = None
+    max_gradient: float | None = None
+    rms_displacement: float | None = None
+    max_displacement: float | None = None
+    scf_iterations: int | None = None
+
+
+class S2ReviewCandidateItem(BaseModel):
+    candidate_id: str | None = None
+    frame_index: int
+    role: Literal["ts", "intermediate"]
+    name: str | None = None
+
+
+class S2ReviewRequest(BaseModel):
+    """Editable-candidate review payload.
+
+    ``candidates`` is the v2 contract (frame-indexed markings); the legacy
+    ``selected_ts`` / ``selected_intermediates`` id lists remain accepted
+    for older clients and are converted server-side.
+    """
+
+    candidates: list[S2ReviewCandidateItem] = Field(default_factory=list)
+    selected_ts: list[str] = Field(default_factory=list)
+    selected_intermediates: list[str] = Field(default_factory=list)
+    note: str | None = None
+
+
+class S2ReviewResponse(BaseModel):
+    project_id: str
+    job_id: str
+    review: dict[str, Any] = Field(default_factory=dict)
+    project_status: str
+    candidates: list[dict[str, Any]] = Field(default_factory=list)
+    candidate_manifest: str = ""
+    structures_dir: str = ""
+    result_manifest: str = ""
+
+
+class S2JobReviewResponse(BaseModel):
+    job_id: str
+    project_id: str | None = None
+    review: dict[str, Any] = Field(default_factory=dict)
+    candidates: list[dict[str, Any]] = Field(default_factory=list)
+    active_count: int = 0
+    candidate_manifest: str = ""
+    structures_dir: str = ""
+    result_manifest: str = ""
+
+
+class PesReviewCandidateItem(BaseModel):
+    """One manually confirmed PES frame selection (``POST /jobs/{id}/pes/review``)."""
+
+    frame_index: int
+    role: str  # TS / INT (case-insensitive; ``ts``/``intermediate`` aliases accepted)
+    candidate_id: str | None = None  # generated server-side when omitted
+    name: str | None = None
+
+
+class PesReviewRequest(BaseModel):
+    """Manual PES review payload — the full selection replaces the stored one."""
+
+    candidates: list[PesReviewCandidateItem] = Field(default_factory=list)
+    note: str | None = None
+    expected_revision: int | None = None  # 409 when it mismatches the stored revision
+
+
+class PesReviewCandidate(BaseModel):
+    candidate_id: str
+    role: str
+    frame_index: int
+    name: str = ""
+    structure_path: str = ""
+
+
+class PesReviewResponse(BaseModel):
+    job_id: str
+    status: str
+    review_path: str = "RESULT/pes_search/pes_review.json"
+    revision: int = 0
+    selected_count: int = 0
+    note: str | None = None
+    confirmed_at: str | None = None
+    candidates: list[PesReviewCandidate] = Field(default_factory=list)
+    result_manifest: str = "RESULT/result_manifest.json"
+
+
+class PesReviewBackupSummary(BaseModel):
+    n: int
+    confirmed_at: str | None = None
+    note: str = ""
+    selected_count: int = 0
+
+
+class PesReviewStateResponse(BaseModel):
+    """Current manual-review state (``GET /jobs/{id}/pes/review``)."""
+
+    job_id: str
+    status: str = "pending"  # "pending" | "confirmed"
+    review: dict[str, Any] = Field(default_factory=dict)  # full pes_review_v1 payload
+    backups: list[PesReviewBackupSummary] = Field(default_factory=list)
+
+
+class PesReviewRestoreRequest(BaseModel):
+    """Re-activate a previous review backup (multi-round selection switching)."""
+
+    backup: int
+    expected_revision: int | None = None
+
+
+class PesReviewRestoreResponse(BaseModel):
+    job_id: str
+    status: str = "confirmed"
+    restored_from: int
+    revision: int = 0
+    selected_count: int = 0
+    candidates: list[PesReviewCandidate] = Field(default_factory=list)
+
+
+class EnergyGraphSeriesModel(BaseModel):
+    id: str
+    label: str
+    unit: str = ""
+    axis: str = "left"
+    values: list[float | None] = Field(default_factory=list)
+    x_values: list[float | None] = Field(default_factory=list)
+    source: str = ""
+
+
+class EnergyGraphNodeModel(BaseModel):
+    id: str
+    label: str = ""
+    type: str = ""
+    frame_index: int | None = None
+    x: float | None = None
+    energy: float | None = None
+    status: str = ""
+    geometry_ref: str = ""
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class EnergyGraphAnnotationModel(BaseModel):
+    id: str
+    candidate_id: str | None = None
+    type: str
+    label: str = ""
+    frame_index: int | None = None
+    x: float | None = None
+    y: float | None = None
+    status: str = ""
+    geometry_ref: str = ""
+    selected: bool = False
+    active: bool | None = None
+    saved: bool | None = None
+    recommended_type: str | None = None
+    selection_source: str | None = None
+    confidence: str | None = None
+    reason: str | None = None
+
+
+class EnergyGraphResponse(BaseModel):
+    job_id: str
+    view_type: str
+    title: str = ""
+    status: str = ""
+    complete: bool = False
+    revision: str = ""
+    default_series: str = ""
+    available_views: list[str] = Field(default_factory=list)
+    x_axis: dict[str, Any] = Field(default_factory=dict)
+    series: list[EnergyGraphSeriesModel] = Field(default_factory=list)
+    nodes: list[EnergyGraphNodeModel] = Field(default_factory=list)
+    edges: list[dict[str, Any]] = Field(default_factory=list)
+    annotations: list[EnergyGraphAnnotationModel] = Field(default_factory=list)
+    source: str = ""
+    provenance: dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 __all__ = [
     "ArtifactListResponse",
     "ArtifactModel",
+    "BondLengthScanJobInput",
+    "BondLengthScanSource",
+    "S2StructurePreviewRequest",
+    "S2StructurePreviewResponse",
     "DecisionPointModel",
     "DecisionResolveRequest",
     "DecisionResolveResponse",
@@ -841,6 +1252,8 @@ __all__ = [
     "JobArtifactSummaryEntry",
     "JobDiskState",
     "JobErrorDetail",
+    "JobLiveMetric",
+    "JobLiveStatus",
     "JobMoveRequest",
     "JobRecovery",
     "JobStageEntry",
@@ -866,9 +1279,24 @@ __all__ = [
     "RemoteFilePreviewResponse",
     "RemoteFileChecksumResponse",
     "RemoteLogTailResponse",
+    "S2CandidatesResponse",
+    "S2FrameModel",
+    "S2FrameResponse",
+    "OptimizationFrameResponse",
+    "S2ProfileResponse",
+    "S2ReviewCandidateItem",
+    "S2ReviewRequest",
+    "S2ReviewResponse",
+    "S2JobReviewResponse",
+    "EnergyGraphAnnotationModel",
+    "EnergyGraphNodeModel",
+    "EnergyGraphResponse",
+    "EnergyGraphSeriesModel",
     "StageTaskListResponse",
     "StageTaskModel",
+    "StructureAssetCreateRequest",
     "StructureAssetModel",
+    "StructureAssetResponse",
     "StructureParseRequest",
     "StructureParseResponse",
     "UploadResponse",

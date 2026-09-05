@@ -1,0 +1,19 @@
+=== Todo 25 — IRC Primitive + Endpoint Validation — HAPPY ===
+
+COMMAND: python -m pytest tests/test_irc.py::TestIrcBothDirections::test_irc_both_directions -v
+
+OUTPUT:
+tests/test_irc.py::TestIrcBothDirections::test_irc_both_directions PASSED
+
+KEY OUTPUT:
+- Backend irc call recorded (1 call, method="irc")
+- RESULT/irc/irc_forward.xyz materialised (6 atoms, C2H4-like)
+- RESULT/irc/irc_reverse.xyz materialised (6 atoms, C2H4-like)
+- result_manifest.json written with 2 IRC_ENDPOINT products:
+  - irc_forward_endpoint (kind=irc_endpoint)
+  - irc_reverse_endpoint (kind=irc_endpoint)
+- CalculationResult: status=completed, 2 artifacts, no errors
+
+EXIT CODE: 0
+
+ADDITIONAL: All 14 tests pass (both directions, forward only, TS tag, validation algorithms)

@@ -5,26 +5,28 @@ API v1 Routes
 FastAPI router for ACP Workbench v2 resources under ``/api/v1``.
 """
 
+# pyright: reportAny=false, reportExplicitAny=false, reportUnknownArgumentType=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownParameterType=false, reportMissingTypeArgument=false, reportUnusedCallResult=false, reportImplicitStringConcatenation=false, reportMissingTypeStubs=false, reportPrivateUsage=false, reportCallInDefaultInitializer=false, reportUnnecessaryComparison=false, reportOptionalMemberAccess=false, reportArgumentType=false, reportIndexIssue=false, reportFunctionMemberAccess=false, reportAttributeAccessIssue=false, reportUnknownLambdaType=false, reportUnusedVariable=false, reportMissingParameterType=false
 from __future__ import annotations
 
 import hashlib
-import importlib
 import json
 import logging
 import posixpath
 import re
+import threading
 import urllib.parse
-from collections import Counter
+from collections import Counter, OrderedDict
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Final, Protocol
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import ValidationError
 from rdkit import Chem
 from rdkit.Chem import rdMolDescriptors
+from typing_extensions import assert_never
 
 try:
     from rdkit.Chem import rdDetermineBonds
@@ -36,6 +38,7 @@ try:
 except ImportError:  # pragma: no cover
     ZipStream = None
 
+from acp.api.job_status_view import build_live_status, resolve_display_method
 from acp.api.routes import (
     get_backends as legacy_get_backends,
 )
@@ -60,13 +63,16 @@ from acp.api.schemas import (
     StatusResponse,
     WorkflowsResponse,
 )
+from acp.api.stage_labels import stage_label
 from acp.api.v1_schemas import (
     ArtifactListResponse,
     ArtifactModel,
+    BondLengthScanJobInput,
     DecisionPointModel,
     DecisionResolveRequest,
     DecisionResolveResponse,
     DiskUsageResponse,
+    EnergyGraphResponse,
     HessianPreviewRequest,
     HessianPreviewResponse,
     HessianPreviewResult,
@@ -79,11 +85,8 @@ from acp.api.v1_schemas import (
     JobRecovery,
     JobStageEntry,
     MaintenanceCleanupResponse,
-    MechanismJobInput,
-    MechanismJobMethod,
     MechanismPlanRequest,
     MechanismPlanResponse,
-    MechanismRolePayload,
     MechanismStudyCreateRequest,
     MechanismStudyDetail,
     MechanismStudyReportResponse,
@@ -96,6 +99,14 @@ from acp.api.v1_schemas import (
     NodeListResponse,
     NodePingResponse,
     NodeStatusModel,
+    OptimizationFrameResponse,
+    PesReviewBackupSummary,
+    PesReviewCandidate,
+    PesReviewRequest,
+    PesReviewResponse,
+    PesReviewRestoreRequest,
+    PesReviewRestoreResponse,
+    PesReviewStateResponse,
     ProjectCreateRequest,
     ProjectListResponse,
     ProjectModel,
@@ -110,14 +121,28 @@ from acp.api.v1_schemas import (
     RemoteFileListResponse,
     RemoteFilePreviewResponse,
     RemoteLogTailResponse,
+    S2CandidatesResponse,
+    S2FrameModel,
+    S2FrameResponse,
+    S2JobReviewResponse,
+    S2ProfileResponse,
+    S2ReviewRequest,
+    S2ReviewResponse,
+    S2StructurePreviewRequest,
+    S2StructurePreviewResponse,
     SRDecisionRequest,
     SRDecisionResponse,
     SRReviewListResponse,
     StageTaskListResponse,
     StageTaskModel,
+    StructureAssetCreateRequest,
     StructureAssetModel,
+    StructureAssetResponse,
     StructureParseRequest,
     StructureParseResponse,
+    StructureSourceDetailResponse,
+    StructureSourceListResponse,
+    StructureSourceSummary,
     StudyPromoteResponse,
     StudyResumeResponse,
     UploadResponse,
@@ -137,29 +162,26 @@ from acp.api.v1_schemas import (
     ValidateMethodRequest,
     ValidateMethodResponse,
 )
+from acp.calculations.batch import normalize_tag, parse_tag_comment
 from acp.chem.embedding import (
     molfile_to_xyz,
     parse_xyz_first_frame,
     smiles_to_xyz,
     xyz_formula,
 )
-from acp.core.config import resolve_manual_bond_editing
-from acp.intake.parsers import detect_format, parse_structure_text
-from acp.mechanism import (
-    MappingConfirmationRequired,
-    RoleSpec,
-    bond_changes_to_dicts,
-    build_reaction_definition,
-    compute_bond_changes,
-    compute_content_hash,
-    map_reactant_to_product,
-    suggest_mechanism_plan,
+from acp.results.manifest import MANIFEST_FILENAME, load_result_manifest
+from acp.results.pes_profile import (
+    LEGACY_S2_PROFILE_RELATIVE_PATH,
+    PES_PROFILE_RELATIVE_PATH,
+    load_pes_profile,
 )
 from acp.scheduler.artifacts import Artifact, ArtifactRegistry
+from acp.scheduler.events import JobEventLog
 from acp.scheduler.files import build_manifest, resolve_safe
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
-from acp.scheduler.logs import read_log_tail
+from acp.scheduler.logs import read_log_range, read_log_tail
 from acp.scheduler.manager import JobManager
+from acp.scheduler.naming import canonical_molecule_name, molecule_name_from_input
 from acp.scheduler.nodes import ExecutionTargetError, validate_execution_request
 from acp.scheduler.remote.fetcher import (
     _MAX_READ_BYTES,
@@ -171,13 +193,21 @@ from acp.scheduler.remote.fetcher import (
     RemoteResultFetcher as _RemoteResultFetcher,
 )
 from acp.scheduler.remote.node_manager import NodeManager
-from acp.scheduler.runner import find_workflow_state, populate_mechanism_study_result_metadata
+from acp.scheduler.runner import find_workflow_state
 from acp.scheduler.stage_tasks import StageTask, StageTaskStore
 from acp.scheduler.store import JobStore
+from acp.scheduler.structure_sources import StructureSourceService
+from acp.storage.layout import runtime_file
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_ENRICHMENT_CACHE_LIMIT: Final = 256
+_ENRICHMENT_CACHE: OrderedDict[tuple[str, int | None, int | None, bool], V1JobRecordModel] = (
+    OrderedDict()
+)
+_ENRICHMENT_CACHE_LOCK = threading.Lock()
 
 if TYPE_CHECKING:
     from acp.chem.composition import HessianResolution
@@ -219,6 +249,152 @@ def _job_store(request: Request) -> JobStore:
     return JobStore(_db_path(request))
 
 
+def _compute_progress_state(record: JobRecord) -> str | None:
+    """Derive progress_state from record fields."""
+    if record.progress is not None:
+        return "determinate"
+    if record.status in (JobStatus.RUNNING, JobStatus.STARTING, JobStatus.PENDING):
+        return "indeterminate"
+    return None
+
+
+def _enrich_from_state_json(record: JobRecord, job_model: V1JobRecordModel) -> V1JobRecordModel:
+    """Read state.json from the job's work_dir and merge extended progress fields."""
+    return _enrich_job_snapshot(record, job_model, include_event=False)
+
+
+def _enrich_job_snapshot(
+    record: JobRecord,
+    job_model: V1JobRecordModel,
+    *,
+    include_event: bool = False,
+) -> V1JobRecordModel:
+    """Shared state.json enrichment for both list and detail endpoints.
+
+    Reads state.json via ``find_workflow_state`` and merges progress fields
+    (stage_index, stage_total, stage_progress, stage_detail, progress_state)
+    plus ``snapshot_version`` (state.json mtime epoch).  When *include_event*
+    is ``True``, also reads the last line of ``events.jsonl`` and populates
+    ``latest_event``.
+    """
+    match record.status:
+        case JobStatus.COMPLETED:
+            completed = True
+            job_model = job_model.model_copy(
+                update={"progress": 1.0, "progress_state": "determinate"}
+            )
+        case (
+            JobStatus.QUEUED
+            | JobStatus.STARTING
+            | JobStatus.PENDING
+            | JobStatus.RUNNING
+            | JobStatus.PAUSED
+            | JobStatus.CANCELLING
+            | JobStatus.WAITING_REVIEW
+            | JobStatus.CANCELLED
+            | JobStatus.FAILED
+        ):
+            completed = False
+        case unreachable:
+            assert_never(unreachable)
+    if not record.work_dir:
+        return job_model
+    try:
+        state_path = find_workflow_state(Path(record.work_dir))
+    except OSError:
+        return job_model
+    if state_path is None:
+        return job_model
+    try:
+        state_stat = state_path.stat()
+    except OSError:
+        state_stat = None
+    state_mtime_ns = state_stat.st_mtime_ns if state_stat is not None else None
+    events_path = runtime_file(record.work_dir, "events.jsonl")
+    try:
+        events_mtime_ns = events_path.stat().st_mtime_ns
+    except OSError:
+        events_mtime_ns = None
+    cache_key = (record.id, state_mtime_ns, events_mtime_ns, include_event)
+    with _ENRICHMENT_CACHE_LOCK:
+        cached_model = _ENRICHMENT_CACHE.get(cache_key)
+        if cached_model is not None and cached_model.status == job_model.status:
+            _ENRICHMENT_CACHE.move_to_end(cache_key)
+            return cached_model
+    try:
+        data = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return job_model
+    if not isinstance(data, dict):
+        return job_model
+    updates: dict[str, Any] = {}
+    if not record.status.is_terminal:
+        for key in (
+            "stage_index",
+            "stage_total",
+            "stage_progress",
+            "stage_detail",
+            "progress_state",
+        ):
+            val = data.get(key)
+            if val is not None:
+                updates[key] = val
+    live = build_live_status(data)
+    if live is not None:
+        updates["live_status"] = live
+    updates["display_method"] = resolve_display_method(
+        record.spec.method,
+        record.spec.input,
+        record.spec.workflow,
+        data.get("current_stage") or record.current_stage,
+    )
+    if state_stat is not None:
+        updates["snapshot_version"] = int(state_stat.st_mtime)
+    if include_event:
+        latest = _read_latest_event(record.work_dir)
+        if latest is not None:
+            updates["latest_event"] = latest
+    if completed:
+        updates["progress"] = 1.0
+        updates["progress_state"] = "determinate"
+    if updates:
+        job_model = job_model.model_copy(update=updates)
+    with _ENRICHMENT_CACHE_LOCK:
+        _ENRICHMENT_CACHE[cache_key] = job_model
+        _ENRICHMENT_CACHE.move_to_end(cache_key)
+        if len(_ENRICHMENT_CACHE) > _ENRICHMENT_CACHE_LIMIT:
+            _ENRICHMENT_CACHE.popitem(last=False)
+    return job_model
+
+
+def _read_latest_event(work_dir: str) -> str | None:
+    """Read the last event from events.jsonl and format as human-readable."""
+    events_path = runtime_file(work_dir, "events.jsonl")
+    try:
+        log = JobEventLog(events_path)
+        last = log.read_last()
+    except (OSError, json.JSONDecodeError):
+        return None
+    if last is None:
+        return None
+    event_type = str(last.get("type") or "")
+    stage = last.get("stage")
+    if stage:
+        return f"{event_type}: {stage}"
+    return event_type or None
+
+
+def _count_lines(path: Path) -> int:
+    """Count total lines in a log file."""
+    if not path.exists():
+        return 0
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            return sum(1 for _ in f)
+    except Exception:
+        return 0
+
+
 def _record_to_v1_model(
     record: JobRecord,
     *,
@@ -241,6 +417,9 @@ def _record_to_v1_model(
             project_id=spec.project_id,
             execution_mode=spec.execution_mode,
             target_node=spec.target_node,
+            molecule_name=spec.molecule_name,
+            task_name=spec.task_name,
+            remark=spec.remark,
         ),
         status=record.status.value,
         work_dir=record.work_dir,
@@ -261,6 +440,7 @@ def _record_to_v1_model(
         study_id=study_id,
         study_status=study_status,
         result=record.result,
+        progress_state=_compute_progress_state(record),
     )
 
 
@@ -490,7 +670,10 @@ def _study_report_dir(study_row: dict[str, Any], record: JobRecord | None) -> Pa
             return Path(study_dir)
     if record is None or not record.work_dir:
         return None
-    return Path(record.work_dir) / "mechanism_study" / str(study_row.get("id") or "")
+    from acp.compat.legacy.layouts import find_study_layout
+
+    layout = find_study_layout(Path(record.work_dir), str(study_row.get("id") or "") or None)
+    return layout.analysis_root if layout is not None else None
 
 
 def _mechanism_study_or_404(store: JobStore, study_id: str) -> dict[str, Any]:
@@ -498,38 +681,6 @@ def _mechanism_study_or_404(store: JobStore, study_id: str) -> dict[str, Any]:
     if row is None:
         raise HTTPException(status_code=404, detail=f"Mechanism study not found: {study_id}")
     return row
-
-
-def _candidate_to_dict(candidate: Any, index: int) -> dict[str, Any]:
-    return {
-        "index": index,
-        "confidence": float(candidate.confidence),
-        "symmetric_alternatives": int(candidate.symmetric_alternatives),
-        "mapping": [
-            {"reactant_index": int(reactant_index), "product_index": int(product_index)}
-            for reactant_index, product_index in candidate.mapping
-        ],
-        "mapping_source": str(getattr(candidate, "mapping_source", "") or ""),
-    }
-
-
-def _reaction_plan_to_dict(plan: Any) -> dict[str, Any]:
-    return {
-        "coordinates": [
-            {
-                "id": coordinate.id,
-                "kind": coordinate.kind,
-                "atoms": list(coordinate.atoms),
-                "role": coordinate.role,
-                "start": coordinate.start,
-                "end": coordinate.end,
-            }
-            for coordinate in plan.coordinates
-        ],
-        "points": int(plan.points),
-        "coupling": plan.coupling,
-        "start_from": plan.start_from,
-    }
 
 
 def _resolve_structure_asset_path(run_root: Path, source: str) -> Path:
@@ -541,231 +692,6 @@ def _resolve_structure_asset_path(run_root: Path, source: str) -> Path:
     if not candidate.is_file():
         raise ValueError(f"Asset file not found: {source}")
     return candidate
-
-
-def _atoms_from_xyz(xyz: str) -> tuple[list[str], list[list[float]]]:
-    atoms = parse_xyz_first_frame(xyz)
-    return (
-        [str(atom["elem"]) for atom in atoms],
-        [[float(atom["x"]), float(atom["y"]), float(atom["z"])] for atom in atoms],
-    )
-
-
-def _resolve_mechanism_role(
-    payload: MechanismRolePayload,
-    run_root: Path,
-    *,
-    default_charge: int,
-    default_multiplicity: int,
-) -> tuple[RoleSpec, list[str], list[list[float]], str | None, list[str]]:
-    charge = payload.charge if payload.charge is not None else default_charge
-    multiplicity = (
-        payload.multiplicity if payload.multiplicity is not None else default_multiplicity
-    )
-    warnings: list[str] = []
-
-    if payload.source_type == "smiles":
-        xyz = smiles_to_xyz(payload.source)
-        symbols, coords = _atoms_from_xyz(xyz)
-        return (
-            RoleSpec(
-                smiles=payload.source,
-                asset_id=payload.asset_id,
-                charge=charge,
-                multiplicity=multiplicity,
-            ),
-            symbols,
-            coords,
-            payload.source,
-            warnings,
-        )
-
-    if payload.source_type == "xyz_text":
-        symbols, coords = _atoms_from_xyz(payload.source)
-        return (
-            RoleSpec(
-                asset_id=payload.asset_id,
-                charge=charge,
-                multiplicity=multiplicity,
-            ),
-            symbols,
-            coords,
-            None,
-            warnings,
-        )
-
-    asset_path = _resolve_structure_asset_path(run_root, payload.source)
-    content = asset_path.read_text(encoding="utf-8")
-    fmt = detect_format(asset_path.name, content)
-    parsed = parse_structure_text(content, fmt, asset_path.name)
-    warnings.extend(str(error) for error in parsed.errors)
-    if not parsed.structures:
-        message = "; ".join(parsed.errors)
-        if not message:
-            message = f"Could not parse structure asset: {payload.source}"
-        raise ValueError(message)
-    structure = parsed.structures[0]
-    if not structure.xyz:
-        raise ValueError(f"Structure asset does not contain 3D XYZ data: {payload.source}")
-    symbols, coords = _atoms_from_xyz(structure.xyz)
-    return (
-        RoleSpec(
-            path=payload.source,
-            asset_id=payload.asset_id,
-            charge=charge,
-            multiplicity=multiplicity,
-        ),
-        symbols,
-        coords,
-        structure.smiles,
-        warnings,
-    )
-
-
-def _preview_hash_payload(req: ReactionPreviewRequest) -> dict[str, Any]:
-    return {
-        "reactant": _model_payload(req.reactant),
-        "product": _model_payload(req.product),
-        "ts_guess": _model_payload(req.ts_guess) if req.ts_guess is not None else None,
-        "charge": req.charge,
-        "multiplicity": req.multiplicity,
-    }
-
-
-def _selected_candidate_index(mapping_result: Any, selected_candidate: int | None) -> int:
-    if not mapping_result.candidates:
-        raise ValueError("Atom mapping did not produce any candidates")
-    if selected_candidate is None:
-        return 0
-    if selected_candidate < 0 or selected_candidate >= len(mapping_result.candidates):
-        raise ValueError(f"Selected atom-mapping candidate {selected_candidate} is out of range")
-    return int(selected_candidate)
-
-
-def _reaction_preview_response(
-    req: ReactionPreviewRequest,
-    run_root: Path,
-    *,
-    manual_mode: bool = False,
-) -> ReactionPreviewResponse:
-    reactant_role, reactant_symbols, reactant_coords, reactant_smiles, reactant_warnings = (
-        _resolve_mechanism_role(
-            req.reactant,
-            run_root,
-            default_charge=req.charge,
-            default_multiplicity=req.multiplicity,
-        )
-    )
-    _, product_symbols, product_coords, product_smiles, product_warnings = _resolve_mechanism_role(
-        req.product,
-        run_root,
-        default_charge=req.charge,
-        default_multiplicity=req.multiplicity,
-    )
-    warnings = [*reactant_warnings, *product_warnings]
-    if req.ts_guess is not None:
-        _, _, _, _, ts_warnings = _resolve_mechanism_role(
-            req.ts_guess,
-            run_root,
-            default_charge=req.charge,
-            default_multiplicity=req.multiplicity,
-        )
-        warnings.extend(ts_warnings)
-
-    if manual_mode:
-        warnings.append("自动成键判定已禁用：请在 3D 视图中手动指定成键/断键")
-        return ReactionPreviewResponse(
-            status="ok",
-            mapping_status="manual",
-            candidates=[],
-            selected_candidate=None,
-            unmatched_reactant_atoms=[],
-            unmatched_product_atoms=[],
-            bond_changes=[],
-            suggested_plan=None,
-            warnings=warnings,
-            preview_hash=compute_content_hash(_preview_hash_payload(req)),
-            manual_mode=True,
-        )
-
-    mapping_result = map_reactant_to_product(
-        reactant_symbols,
-        reactant_coords,
-        product_symbols,
-        product_coords,
-        charge=int(reactant_role.charge),
-        reactant_smiles=reactant_smiles,
-        product_smiles=product_smiles,
-    )
-    if mapping_result.status == "failed":
-        raise ValueError(mapping_result.message or "Atom mapping failed")
-
-    chosen_index = _selected_candidate_index(mapping_result, req.selected_candidate)
-    chosen_candidate = mapping_result.candidates[chosen_index]
-    bond_changes = compute_bond_changes(
-        reactant_symbols,
-        reactant_coords,
-        product_symbols,
-        product_coords,
-        chosen_candidate,
-        reactant_smiles=reactant_smiles,
-        product_smiles=product_smiles,
-        charge=int(reactant_role.charge),
-    )
-    suggested_plan = None
-    if bond_changes:
-        suggested_plan = _reaction_plan_to_dict(suggest_mechanism_plan(bond_changes))
-    else:
-        warnings.append("No bond changes were detected for the selected atom mapping")
-    if mapping_result.message:
-        warnings.append(mapping_result.message)
-    if req.selected_candidate is None and mapping_result.status in {"candidates", "count_mismatch"}:
-        warnings.append(
-            "Preview evaluated the best-ranked mapping candidate; confirm with selected_candidate"
-        )
-    return ReactionPreviewResponse(
-        status=(
-            "confirmation_required"
-            if mapping_result.status in {"candidates", "count_mismatch"}
-            else "ok"
-        ),
-        mapping_status=mapping_result.status,
-        candidates=[
-            _candidate_to_dict(candidate, index)
-            for index, candidate in enumerate(mapping_result.candidates)
-        ],
-        selected_candidate=chosen_index,
-        unmatched_reactant_atoms=[int(atom) for atom in mapping_result.unmatched_reactant_atoms],
-        unmatched_product_atoms=[int(atom) for atom in mapping_result.unmatched_product_atoms],
-        bond_changes=bond_changes_to_dicts(bond_changes),
-        suggested_plan=suggested_plan,
-        warnings=warnings,
-        preview_hash=compute_content_hash(_preview_hash_payload(req)),
-        manual_mode=False,
-    )
-
-
-def _validate_plan_request(req: MechanismPlanRequest) -> None:
-    if req.strategy == "direct-ts":
-        return
-    coordinates = req.plan.get("coordinates")
-    if not isinstance(coordinates, list) or not coordinates:
-        raise HTTPException(
-            status_code=422,
-            detail="Mechanism plan requires non-empty coordinates unless strategy='direct-ts'",
-        )
-    for index, coordinate in enumerate(coordinates):
-        if not isinstance(coordinate, dict):
-            raise HTTPException(
-                status_code=422,
-                detail=f"Coordinate {index} must be an object",
-            )
-        missing = [key for key in ("id", "kind", "atoms", "role") if key not in coordinate]
-        if missing:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Coordinate {index} is missing required keys: {', '.join(missing)}",
-            )
 
 
 def _build_mechanism_report(
@@ -781,7 +707,7 @@ def _build_mechanism_report(
     if study_dir is not None:
         write_study_reports = None
         try:
-            reports_module = importlib.import_module("acp.mechanism.reports")
+            reports_module = None  # mechanism reports retired
             write_study_reports = getattr(reports_module, "write_study_reports", None)
         except ImportError:
             write_study_reports = None
@@ -957,12 +883,15 @@ def list_projects(request: Request) -> ProjectListResponse:
 @router.post("/projects", response_model=ProjectModel, status_code=201)
 def create_project(req: ProjectCreateRequest, request: Request) -> ProjectModel:
     manager = _manager(request)
-    project = manager.projects.create_project(
-        req.name,
-        description=req.description,
-        tags=req.tags,
-        settings=req.settings,
-    )
+    try:
+        project = manager.projects.create_project(
+            req.name,
+            description=req.description,
+            tags=req.tags,
+            settings=req.settings,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return _project_to_model(project)
 
 
@@ -982,7 +911,10 @@ def update_project(
     request: Request,
 ) -> ProjectModel:
     manager = _manager(request)
-    project = manager.projects.update_project(project_id, **_model_payload(req))
+    try:
+        project = manager.projects.update_project(project_id, **_model_payload(req))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if project is None:
         raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
     return _project_to_model(project)
@@ -1024,6 +956,226 @@ def list_project_jobs(
     )
 
 
+def _job_input_source_stem(inp: dict[str, Any]) -> str:
+    """Derive a molecule-name component from the job input source.
+
+    Structured sources are inspected field-by-field.  They must never be
+    converted with ``str(dict)`` because that would put source metadata and
+    Job IDs into the physical task name.
+    """
+    return molecule_name_from_input(inp)
+
+
+def _source_job_molecule_name(inp: dict[str, Any], manager: Any) -> str:
+    """Read only the canonical molecule name from an explicitly referenced job."""
+    source = inp.get("source")
+    source_job_id = inp.get("source_job_id")
+    if isinstance(source, dict):
+        source_job_id = source_job_id or source.get("source_job_id")
+    source_job_id = str(source_job_id or "").strip()
+    if not source_job_id:
+        return ""
+    source_record = manager.get(source_job_id)
+    if source_record is None:
+        return ""
+    name = canonical_molecule_name(getattr(source_record.spec, "molecule_name", ""))
+    if name:
+        return name
+    # Legacy source jobs may not have the v2 field yet.  Use only their input
+    # source as a fallback; never use spec.name or the Job ID.
+    return _job_input_source_stem(getattr(source_record.spec, "input", {}))
+
+
+def _resolve_job_molecule_name(
+    requested: str,
+    inp: dict[str, Any],
+    manager: Any,
+) -> str:
+    """Resolve the one molecule identity allowed to cross a task boundary."""
+    source_name = _source_job_molecule_name(inp, manager)
+    source = inp.get("source")
+    has_source_job = bool(str(inp.get("source_job_id") or "").strip()) or (
+        isinstance(source, dict) and bool(str(source.get("source_job_id") or "").strip())
+    )
+    if source_name and has_source_job:
+        # A task-artifact import inherits exactly one field: molecule_name.
+        # Task name, remark, Job ID, work_dir and old input metadata stay out.
+        return source_name
+    name = canonical_molecule_name(requested)
+    if name:
+        return name
+    name = _job_input_source_stem(inp)
+    if name:
+        return name
+    return "mol"
+
+
+def _resolve_stage_artifact_ref(
+    workflow: str,
+    inp: dict[str, Any],
+    manager: Any,
+) -> dict[str, Any]:
+    """Resolve a stage workflow's artifact reference path."""
+    source_job_id = str(inp.get("source_job_id") or "").strip()
+    relative_path = str(inp.get("from_artifact") or inp.get("relative_path") or "").strip()
+    if not source_job_id or not relative_path:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"{workflow} requires input.source_job_id + input.from_artifact "
+                "(or a pre-resolved input.from path)"
+            ),
+        )
+    source_job = manager.get(source_job_id)
+    source_work_dir = Path(source_job.work_dir) if source_job and source_job.work_dir else None
+    if source_work_dir is None or not source_work_dir.is_dir():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Source job not found or has no work dir: {source_job_id}",
+        )
+    manifest_path = (source_work_dir / relative_path).resolve()
+    if not manifest_path.is_file():
+        raise HTTPException(
+            status_code=422,
+            detail=f"Artifact not found: {relative_path} (from job {source_job_id})",
+        )
+    resolved = dict(inp)
+    resolved["from"] = str(manifest_path)
+    resolved["source_job_work_dir"] = str(source_work_dir)
+    return resolved
+
+
+def _prepare_bond_scan_input(
+    inp: dict[str, Any],
+    manager: Any,
+) -> dict[str, Any]:
+    """Validate + pin a PESsearch ``mode=bond_length_scan`` job input (§7/§11).
+
+    Stores the full scan request under ``input["scan_request"]`` so the
+    scheduler runner can forward it verbatim; resolves/pins a task-artifact
+    source manifest into ``input["from"]`` (and the source's artifact_path)
+    so handoff copying works for both local and remote execution.
+    """
+
+    try:
+        _validated = BondLengthScanJobInput.model_validate(inp)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=exc.errors(include_context=False, include_url=False),
+        ) from exc
+
+    src = dict(inp.get("source") or {})
+    if src.get("source_type") == "task_artifact":
+        if not str(src.get("source_job_id") or "").strip():
+            raise HTTPException(
+                status_code=422,
+                detail="task_artifact source requires source.source_job_id",
+            )
+        artifact_path = str(src.get("artifact_path") or "").strip()
+        if not artifact_path:
+            raise HTTPException(
+                status_code=422,
+                detail="task_artifact source requires source.artifact_path "
+                "(or use source_job_id + from_artifact)",
+            )
+        resolved = _resolve_stage_artifact_ref(
+            "PESsearch",
+            {
+                "source_job_id": src.get("source_job_id"),
+                "from_artifact": artifact_path,
+            },
+            manager,
+        )
+        pinned = str(resolved.get("from"))
+        src["artifact_path"] = pinned
+        inp["from"] = pinned
+    elif src.get("source_type") == "structure_asset":
+        asset_path = str(src.get("asset_path") or "").strip()
+        if not asset_path:
+            raise HTTPException(
+                status_code=422,
+                detail="structure_asset source requires source.asset_path",
+            )
+        run_root = manager.run_root
+        try:
+            resolved_asset = _resolve_structure_asset_path(run_root, asset_path)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        src["asset_path"] = str(resolved_asset)
+    elif src.get("source_type") == "xyz_text" and not str(src.get("xyz_text") or "").strip():
+        raise HTTPException(status_code=422, detail="xyz_text source requires source.xyz_text")
+
+    coordinate = inp.get("coordinate")
+    coordinates = inp.get("coordinates")
+    selection = inp.get("selection")
+    protocol = inp.get("protocol")
+    if not isinstance(coordinate, dict) or not coordinate.get("atoms"):
+        raise HTTPException(
+            status_code=422, detail="bond_length_scan requires coordinate with atoms"
+        )
+    if not isinstance(protocol, dict):
+        protocol = {}
+    if coordinates is not None and (
+        not isinstance(coordinates, list)
+        or not coordinates
+        or not all(isinstance(item, dict) and item.get("atoms") for item in coordinates)
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="coordinates must be a non-empty list of coordinate objects with atoms",
+        )
+    if selection is not None and not isinstance(selection, dict):
+        raise HTTPException(status_code=422, detail="selection must be an object")
+
+    prepared = dict(inp)
+    prepared["source"] = src
+    prepared["scan_request"] = {
+        "mode": "bond_length_scan",
+        "source": src,
+        "coordinate": coordinate,
+        **({"coordinates": coordinates} if coordinates is not None else {}),
+        **({"selection": selection} if isinstance(selection, dict) else {}),
+        "protocol": protocol,
+    }
+    return prepared
+
+
+def _resolve_batch_structures_input(inp: dict[str, Any], request: Request) -> dict[str, Any]:
+    """Inline ``source_id`` references in a Workbench ``batch_structures`` payload.
+
+    Items may reference reusable structures via ``source_id``
+    (``job_<id>:<rel_path>``).  The runner materializer only understands
+    inline XYZ, so references are expanded here while the API still has
+    store + remote-fetcher access (works for local and remote source jobs).
+    """
+    items = inp.get("items")
+    if not isinstance(items, list) or not items:
+        return inp
+    if not any(isinstance(item, dict) and item.get("source_id") for item in items):
+        return inp
+    service = _structure_source_service(request)
+    resolved_items: list[Any] = []
+    for item in items:
+        if not isinstance(item, dict):
+            resolved_items.append(item)
+            continue
+        source_id = str(item.get("source_id") or "").strip()
+        if not source_id:
+            resolved_items.append(item)
+            continue
+        try:
+            asset, _ = service.get(source_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        resolved = {key: value for key, value in item.items() if key != "source_id"}
+        resolved["xyz"] = str(asset.get("xyz") or "")
+        resolved_items.append(resolved)
+    resolved_inp = dict(inp)
+    resolved_inp["items"] = resolved_items
+    return resolved_inp
+
+
 @router.post("/jobs", response_model=V1JobCreatedResponse, status_code=201)
 def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedResponse:
     manager = _manager(request)
@@ -1032,23 +1184,14 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
             status_code=400,
             detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}",
         )
-    if req.workflow == "mechanism":
-        try:
-            _ = MechanismJobInput.model_validate(req.input)
-            mechanism_method = MechanismJobMethod.model_validate(req.method)
-        except ValidationError as exc:
-            raise HTTPException(
-                status_code=422,
-                detail=exc.errors(include_context=False, include_url=False),
-            ) from exc
-        if mechanism_method.require_sr_review and mechanism_method.auto_converge:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "require_sr_review and auto_converge are mutually exclusive "
-                    "SR execution modes; enable at most one"
-                ),
-            )
+    if req.workflow == "PESsearch" and str(req.method.get("mode") or "") == "bond_length_scan":
+        req.input = _prepare_bond_scan_input(req.input, manager)
+    elif req.workflow == "PESsearch":
+        req.input = _resolve_stage_artifact_ref(req.workflow, req.input, manager)
+    elif req.workflow == "BatchOptimize":
+        req.input = _resolve_batch_structures_input(req.input, request)
+    task_name = req.task_name or req.workflow
+    molecule_name = _resolve_job_molecule_name(req.molecule_name, req.input, manager)
     spec = JobSpec(
         workflow=req.workflow,
         name=req.name,
@@ -1061,6 +1204,9 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         project_id=req.project_id,
         execution_mode=req.execution_mode,
         target_node=req.target_node,
+        molecule_name=molecule_name,
+        task_name=task_name,
+        remark=req.remark,
     )
     try:
         validate_execution_request(spec)
@@ -1082,6 +1228,7 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
 def list_jobs(
     request: Request,
     status: str | None = Query(default=None),
+    workflow: str | None = Query(default=None),
     project_id: str | None = Query(default=None),
     limit: int = Query(default=200, ge=1, le=1000),
 ) -> V1JobListResponse:
@@ -1092,15 +1239,18 @@ def list_jobs(
             enriched = [item for item in enriched if item["record"].status.value == status]
     else:
         enriched = store.list_enriched(status=status, limit=limit)
-    jobs = [
-        _record_to_v1_model(
+    if workflow:
+        enriched = [item for item in enriched if item["record"].spec.workflow == workflow]
+    jobs = []
+    for item in enriched:
+        model = _record_to_v1_model(
             item["record"],
             project_name=item["project_name"],
             study_id=item["study_id"],
             study_status=item["study_status"],
         )
-        for item in enriched
-    ]
+        model = _enrich_job_snapshot(item["record"], model, include_event=False)
+        jobs.append(model)
     return V1JobListResponse(
         jobs=jobs,
         counts=_counts_for_records([item["record"] for item in enriched]),
@@ -1126,28 +1276,7 @@ def create_mechanism_study(
     req: MechanismStudyCreateRequest,
     request: Request,
 ) -> MechanismStudyDetail:
-    now = _utc_now_iso()
-    manager = _manager(request)
-    if req.job_id is not None:
-        job = manager.get(req.job_id)
-        if job is None:
-            raise HTTPException(status_code=404, detail=f"Job not found: {req.job_id}")
-    store = _job_store(request)
-    status = req.status
-    if req.job_id is not None and status == "draft":
-        status = "pending"
-    store.upsert_mechanism_study(
-        req.study_id,
-        job_id=req.job_id,
-        study_json=json.dumps(req.study_json),
-        status=status,
-        created_at=now,
-        updated_at=now,
-    )
-    row = store.get_mechanism_study(req.study_id)
-    if row is None:
-        raise HTTPException(status_code=404, detail=f"Mechanism study not found: {req.study_id}")
-    return _study_detail_model(store, row, unified_status=_study_unified_status(manager, row))
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 @router.get("/mechanism-studies/{study_id}", response_model=MechanismStudyDetail)
@@ -1167,16 +1296,7 @@ def preview_mechanism_reaction(
     req: ReactionPreviewRequest,
     request: Request,
 ) -> ReactionPreviewResponse:
-    store = _job_store(request)
-    _mechanism_study_or_404(store, study_id)
-    try:
-        return _reaction_preview_response(
-            req,
-            Path(request.app.state.run_root),
-            manual_mode=resolve_manual_bond_editing(req.manual_bond_editing),
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 @router.post(
@@ -1188,112 +1308,7 @@ def confirm_mechanism_reaction(
     req: ReactionConfirmRequest,
     request: Request,
 ) -> ReactionConfirmResponse:
-    store = _job_store(request)
-    _mechanism_study_or_404(store, study_id)
-    run_root = Path(request.app.state.run_root)
-    manual_mode = resolve_manual_bond_editing(req.manual_bond_editing)
-    try:
-        reactant_role, reactant_symbols, reactant_coords, reactant_smiles, _ = (
-            _resolve_mechanism_role(
-                req.reactant,
-                run_root,
-                default_charge=req.charge,
-                default_multiplicity=req.multiplicity,
-            )
-        )
-        product_role, product_symbols, product_coords, product_smiles, _ = _resolve_mechanism_role(
-            req.product,
-            run_root,
-            default_charge=req.charge,
-            default_multiplicity=req.multiplicity,
-        )
-        ts_role: RoleSpec | None = None
-        if req.ts_guess is not None:
-            ts_role, _, _, _, _ = _resolve_mechanism_role(
-                req.ts_guess,
-                run_root,
-                default_charge=req.charge,
-                default_multiplicity=req.multiplicity,
-            )
-        if manual_mode:
-            if not req.manual_bond_changes and not req.allow_zero_changes:
-                raise HTTPException(
-                    status_code=422,
-                    detail=(
-                        "manual_bond_editing is enabled: manual_bond_changes must provide at "
-                        "least one entry ({reactant_atoms: [i, j]} or {product_atoms: [i, j]}, "
-                        'change_type: "break"|"form"), or set allow_zero_changes=true to lock '
-                        "an empty change set"
-                    ),
-                )
-            definition = build_reaction_definition(
-                study_id,
-                reactant_role,
-                product_role,
-                ts_role,
-                reactant_symbols,
-                reactant_coords,
-                product_symbols,
-                product_coords,
-                reactant_smiles=reactant_smiles,
-                product_smiles=product_smiles,
-                selected_candidate=req.selected_candidate,
-                confirmed_by="user",
-                manual_bond_changes=req.manual_bond_changes or [],
-                resolve_mapping=False,
-            )
-        else:
-            definition = build_reaction_definition(
-                study_id,
-                reactant_role,
-                product_role,
-                ts_role,
-                reactant_symbols,
-                reactant_coords,
-                product_symbols,
-                product_coords,
-                reactant_smiles=reactant_smiles,
-                product_smiles=product_smiles,
-                selected_candidate=req.selected_candidate,
-                confirmed_by="user",
-                manual_bond_changes=req.manual_bond_changes,
-            )
-    except MappingConfirmationRequired as exc:
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "status": "confirmation_required",
-                "mapping_status": exc.mapping_result.status,
-                "candidates": [
-                    _candidate_to_dict(candidate, index)
-                    for index, candidate in enumerate(exc.mapping_result.candidates)
-                ],
-                "unmatched_reactant_atoms": exc.mapping_result.unmatched_reactant_atoms,
-                "unmatched_product_atoms": exc.mapping_result.unmatched_product_atoms,
-                "message": exc.mapping_result.message,
-            },
-        ) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-    reaction_payload = definition.to_dict()
-    now = _utc_now_iso()
-    store.update_mechanism_study_reaction(
-        study_id,
-        reaction_json=json.dumps(reaction_payload),
-        config_hash=definition.content_hash,
-        status="reaction_confirmed",
-        updated_at=now,
-    )
-    suggested_plan = None
-    if definition.bond_changes:
-        suggested_plan = _reaction_plan_to_dict(suggest_mechanism_plan(definition.bond_changes))
-    return ReactionConfirmResponse(
-        status="locked",
-        reaction=reaction_payload,
-        config_hash=definition.content_hash,
-        suggested_plan=suggested_plan,
-    )
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 @router.get(
@@ -1320,28 +1335,7 @@ def confirm_mechanism_plan(
     req: MechanismPlanRequest,
     request: Request,
 ) -> MechanismPlanResponse:
-    store = _job_store(request)
-    row = _mechanism_study_or_404(store, study_id)
-    if str(row.get("status") or "") not in {
-        "reaction_confirmed",
-        "plan_confirmed",
-    }:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Mechanism study reaction is not locked: {study_id}",
-        )
-    _validate_plan_request(req)
-    now = _utc_now_iso()
-    store.update_mechanism_study_plan(
-        study_id,
-        plan_json=json.dumps(req.plan),
-        status="plan_confirmed",
-        updated_at=now,
-    )
-    return MechanismPlanResponse(
-        status="plan_confirmed",
-        plan_hash=compute_content_hash(req.plan),
-    )
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 @router.get(
@@ -1371,52 +1365,7 @@ def resolve_mechanism_decision(
     req: DecisionResolveRequest,
     request: Request,
 ) -> DecisionResolveResponse:
-    manager = _manager(request)
-    store = _job_store(request)
-    study_row = store.get_mechanism_study(study_id)
-    if study_row is None:
-        raise HTTPException(status_code=404, detail=f"Mechanism study not found: {study_id}")
-    decision_row = store.get_decision_point(decision_id)
-    if decision_row is None or str(decision_row.get("study_id") or "") != study_id:
-        raise HTTPException(status_code=404, detail=f"Decision point not found: {decision_id}")
-    if str(decision_row.get("status") or "") != "waiting":
-        raise HTTPException(status_code=409, detail=f"Decision point is not waiting: {decision_id}")
-    now = _utc_now_iso()
-    store.upsert_decision_point(
-        decision_id,
-        study_id=study_id,
-        status="resolved",
-        payload=str(decision_row.get("payload") or "{}"),
-        resolution=req.resolution,
-        created_at=str(decision_row.get("created_at") or now),
-        resolved_at=now,
-    )
-    job_id = str(study_row["job_id"]) if study_row.get("job_id") is not None else None
-    if job_id is None:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Mechanism study has no linked job: {study_id}",
-        )
-    try:
-        record = manager.resume(
-            job_id,
-            resolution={
-                "requeue": True,
-                "decisions": {decision_id: req.resolution},
-            },
-        )
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    updated = store.get_decision_point(decision_id)
-    if updated is None:
-        raise HTTPException(status_code=404, detail=f"Decision point not found: {decision_id}")
-    return DecisionResolveResponse(
-        decision=_decision_point_model(updated),
-        job_id=job_id,
-        job_status=record.status.value,
-    )
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 def _load_study_checkpoint(study_dir: Path | None) -> dict[str, Any] | None:
@@ -1430,19 +1379,6 @@ def _load_study_checkpoint(study_dir: Path | None) -> dict[str, Any] | None:
     except (OSError, ValueError):
         return None
     return payload if isinstance(payload, dict) else None
-
-
-def _study_job_record(
-    store: JobStore, manager: JobManager, study_id: str
-) -> tuple[dict[str, Any], str, JobRecord | None]:
-    study_row = _mechanism_study_or_404(store, study_id)
-    job_id = str(study_row["job_id"]) if study_row.get("job_id") is not None else None
-    if job_id is None:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Mechanism study has no linked job: {study_id}",
-        )
-    return study_row, job_id, manager.get(job_id)
 
 
 @router.get("/mechanism-studies/{study_id}/reviews", response_model=SRReviewListResponse)
@@ -1488,116 +1424,12 @@ def submit_mechanism_review_decision(
     req: SRDecisionRequest,
     request: Request,
 ) -> SRDecisionResponse:
-    manager = _manager(request)
-    store = _job_store(request)
-    study_row, job_id, record = _study_job_record(store, manager, study_id)
-    checkpoint = _load_study_checkpoint(_study_report_dir(study_row, record))
-    if checkpoint is None:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Mechanism study checkpoint not found: {study_id}",
-        )
-    decision_entry: dict[str, Any] | None = None
-    for entry in checkpoint.get("decision_points") or []:
-        if isinstance(entry, dict) and entry.get("id") == review_id:
-            decision_entry = entry
-            break
-    if decision_entry is None:
-        raise HTTPException(status_code=404, detail=f"Review not found: {review_id}")
-    if decision_entry.get("status") != "waiting":
-        raise HTTPException(status_code=409, detail=f"Review is not waiting: {review_id}")
-    current_cycle = int(checkpoint.get("cycle_index") or 0)
-    context = ((checkpoint.get("metadata") or {}).get("pending_decisions") or {}).get(
-        review_id
-    ) or {}
-    if req.decision == "continue" and not req.selected_bonds:
-        raise HTTPException(
-            status_code=422,
-            detail="selected_bonds are required when decision is 'continue'",
-        )
-    bonds: list[dict[str, Any]] = []
-    for bond in req.selected_bonds:
-        if len(bond.atoms) != 2 or any(int(atom) < 0 for atom in bond.atoms):
-            raise HTTPException(
-                status_code=422,
-                detail="each selected bond must contain two non-negative atom indices",
-            )
-        if bond.action in {"stretch", "form"} and (bond.target is None or bond.target <= 0):
-            raise HTTPException(
-                status_code=422,
-                detail=f"bond {bond.atoms} action {bond.action} requires a positive target",
-            )
-        bonds.append(
-            {
-                "atoms": [int(bond.atoms[0]), int(bond.atoms[1])],
-                "action": bond.action,
-                "start": bond.start,
-                "target": bond.target,
-            }
-        )
-    revision = {
-        "revision_id": f"rev_{current_cycle + 1:02d}_{review_id}",
-        "decision": req.decision,
-        "parent_state": req.parent_state
-        or context.get("source_state_id")
-        or (decision_entry.get("payload") or {}).get("source_state_id"),
-        "selected_bonds": bonds,
-        "comment": req.comment,
-        "config_hash": req.config_hash or "",
-    }
-    resolution = {
-        "resolution": "sr_revision",
-        "revision": revision,
-        "cycle_id": current_cycle,
-    }
-    try:
-        record = manager.resume(
-            job_id,
-            resolution={
-                "requeue": True,
-                "decisions": {review_id: resolution},
-                "cycle_id": current_cycle,
-            },
-        )
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    now = _utc_now_iso()
-    store.upsert_decision_point(
-        review_id,
-        study_id=study_id,
-        status="resolved",
-        payload=json.dumps(decision_entry.get("payload") or {}),
-        resolution=f"sr_revision:{req.decision}",
-        created_at=str(decision_entry.get("created_at") or now),
-        resolved_at=now,
-    )
-    return SRDecisionResponse(
-        status="accepted",
-        revision_id=str(revision["revision_id"]),
-        cycle=current_cycle + 1 if req.decision == "continue" else current_cycle,
-        job_id=job_id,
-        job_status=record.status.value,
-    )
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 @router.post("/mechanism-studies/{study_id}/resume", response_model=StudyResumeResponse)
 def resume_mechanism_study_job(study_id: str, request: Request) -> StudyResumeResponse:
-    manager = _manager(request)
-    store = _job_store(request)
-    _, job_id, _ = _study_job_record(store, manager, study_id)
-    try:
-        record = manager.resume(job_id, resolution={"requeue": True})
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return StudyResumeResponse(
-        status="resumed",
-        job_id=job_id,
-        job_status=record.status.value,
-    )
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
 
 
 @router.post(
@@ -1605,77 +1437,517 @@ def resume_mechanism_study_job(study_id: str, request: Request) -> StudyResumeRe
     response_model=StudyPromoteResponse,
 )
 def promote_mechanism_study(study_id: str, request: Request) -> StudyPromoteResponse:
-    """Accept the SR cycle network and resume the study directly into S4."""
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
+
+
+# ---------------------------------------------------------------------------
+# PESsearch scan projection (§11): profile, candidates, frames, and the
+# legacy /s2 route compatibility surface.
+# ---------------------------------------------------------------------------
+
+
+def _pes_profile_for_job(manager: Any, job_id: str) -> tuple[Path, dict[str, Any]]:
+    """Locate a canonical PES profile, with read-only legacy S2 fallback."""
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    work_dir = Path(record.work_dir) if record.work_dir else None
+    if work_dir is None or not work_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
+    canonical_path = work_dir / PES_PROFILE_RELATIVE_PATH
+    if canonical_path.is_file():
+        try:
+            payload = load_pes_profile(
+                canonical_path,
+                source_path=PES_PROFILE_RELATIVE_PATH,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return canonical_path, payload
+
+    legacy_path = work_dir / LEGACY_S2_PROFILE_RELATIVE_PATH
+    if legacy_path.is_file():
+        from acp.compat.legacy.manifests import read_s2_path_manifest
+
+        try:
+            payload = read_s2_path_manifest(legacy_path)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        payload["_source_path"] = LEGACY_S2_PROFILE_RELATIVE_PATH
+        return legacy_path, payload
+
+    raise HTTPException(
+        status_code=404,
+        detail=(f"No PES profile for job {job_id}; expected {PES_PROFILE_RELATIVE_PATH}"),
+    )
+
+
+@router.get("/jobs/{job_id}/energy-graph", response_model=EnergyGraphResponse)
+def get_energy_graph(
+    job_id: str,
+    request: Request,
+    view_type: str = Query(default="auto"),
+    item_id: str | None = Query(default=None),
+) -> EnergyGraphResponse:
+    """Return the normalized energy-workspace projection for a job.
+
+    The endpoint intentionally keeps workflow-specific manifest parsing on the
+    server.  The frontend receives only axes, series, nodes, annotations, and
+    geometry references, so S2 review data and future optimization/MD data can
+    use the same energy workspace.
+    """
     manager = _manager(request)
-    store = _job_store(request)
-    study_row, job_id, record = _study_job_record(store, manager, study_id)
-    checkpoint = _load_study_checkpoint(_study_report_dir(study_row, record))
-    if checkpoint is None:
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+    from acp.results.energy_graph import build_energy_graph_from_job
+
+    workflow = str(record.spec.workflow or "")
+    method = dict(record.spec.method or {})
+    work_dir = Path(record.work_dir) if record.work_dir else Path(".")
+    s2_payload: dict[str, Any] | None = None
+    mechanism_report: dict[str, Any] | None = None
+    s2_candidates: list[dict[str, Any]] | None = None
+    s2_review_state: dict[str, Any] | None = None
+
+    if workflow == "PESsearch" and str(method.get("mode") or "") == "bond_length_scan":
+        from acp.calculations.pes.review import load_pes_review
+        from acp.compat.legacy.manifests import read_s2_candidate_manifest, read_s2_review
+
+        _manifest_path, s2_payload = _pes_profile_for_job(manager, job_id)
+        if s2_payload is not None:
+            manual_review = load_pes_review(work_dir)
+            if manual_review is not None:
+                selected_rows = []
+                for row in manual_review.get("selected") or []:
+                    if not isinstance(row, dict) or not row.get("candidate_id"):
+                        continue
+                    role_token = str(row.get("role") or "").upper()
+                    selected_rows.append(
+                        {
+                            "candidate_id": str(row.get("candidate_id") or ""),
+                            "frame_index": int(row.get("frame_index") or 0),
+                            "role": "ts" if role_token == "TS" else "intermediate",
+                            "active": True,
+                            "selection_source": str(row.get("selection_source") or "manual"),
+                        }
+                    )
+                s2_candidates = selected_rows or None
+                s2_review_state = {
+                    "status": str(manual_review.get("status") or "confirmed"),
+                    "decided_at": manual_review.get("confirmed_at"),
+                    "revision": manual_review.get("revision"),
+                }
+            else:
+                saved_review = read_s2_review(_manifest_path)
+                candidate_manifest = read_s2_candidate_manifest(_manifest_path)
+                s2_candidates = (
+                    candidate_manifest.get("candidates")
+                    if isinstance(candidate_manifest, dict)
+                    else None
+                )
+                s2_review_state = saved_review if isinstance(saved_review, dict) else None
+    elif workflow == "mechanism":
+        store = _job_store(request)
+        rows = store.list_mechanism_studies(limit=1, job_id=job_id)
+        if rows:
+            row = rows[0]
+            study_id = str(row.get("id") or row.get("study_id") or "")
+            study_dir = _study_report_dir(row, record)
+            report = _build_mechanism_report(study_id, job_id, study_dir)
+            mechanism_report = report.model_dump()
+
+    graph = build_energy_graph_from_job(
+        job_id,
+        workflow=workflow,
+        method=method,
+        work_dir=work_dir,
+        s2_payload=s2_payload,
+        mechanism_report=mechanism_report,
+        s2_candidates=s2_candidates,
+        s2_review_state=s2_review_state,
+        item_id=item_id,
+    )
+    if view_type not in {"", "auto", str(graph.get("view_type") or "")}:
         raise HTTPException(
             status_code=404,
-            detail=f"Mechanism study checkpoint not found: {study_id}",
+            detail=f"Energy graph view is not available: {view_type}",
         )
-    waiting_reviews = [
-        entry
-        for entry in checkpoint.get("decision_points") or []
-        if isinstance(entry, dict)
-        and entry.get("status") == "waiting"
-        and entry.get("type") == "sr_cycle_review"
-    ]
-    if not waiting_reviews:
-        raise HTTPException(status_code=409, detail="no waiting SR review to promote")
-    decision_entry = max(
-        waiting_reviews,
-        key=lambda entry: str(entry.get("id") or ""),
+    return EnergyGraphResponse.model_validate(graph)
+
+
+@router.get(
+    "/jobs/{job_id}/optimization/frame/{frame_index}",
+    response_model=OptimizationFrameResponse,
+)
+def get_optimization_frame(
+    job_id: str,
+    frame_index: int,
+    request: Request,
+    item_id: str | None = Query(default=None),
+) -> OptimizationFrameResponse:
+    """Return the XYZ geometry and metrics for one optimization cycle."""
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    work_dir = Path(record.work_dir) if record.work_dir else None
+    if work_dir is None or not work_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
+
+    from acp.results.energy_graph import build_optimization_energy_graph
+
+    graph = build_optimization_energy_graph(job_id, work_dir, item_id=item_id)
+    if graph is None:
+        raise HTTPException(status_code=404, detail=f"No optimization trajectory for job {job_id}")
+    node = next(
+        (
+            candidate
+            for candidate in graph.get("nodes", [])
+            if int(candidate.get("frame_index", -1)) == frame_index
+        ),
+        None,
     )
-    review_id = str(decision_entry.get("id") or "")
-    current_cycle = int(checkpoint.get("cycle_index") or 0)
-    context = ((checkpoint.get("metadata") or {}).get("pending_decisions") or {}).get(
-        review_id
-    ) or {}
-    revision = {
-        "revision_id": f"promote_{current_cycle + 1:02d}_{review_id}",
-        "decision": "accept_network",
-        "parent_state": context.get("source_state_id")
-        or (decision_entry.get("payload") or {}).get("source_state_id"),
-        "selected_bonds": [],
-        "comment": "promote to S4",
-        "config_hash": "",
-    }
-    try:
-        record = manager.resume(
-            job_id,
-            resolution={
-                "requeue": True,
-                "decisions": {
-                    review_id: {
-                        "resolution": "sr_revision",
-                        "revision": revision,
-                        "cycle_id": current_cycle,
-                    }
-                },
-                "cycle_id": current_cycle,
-            },
-        )
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    now = _utc_now_iso()
-    store.upsert_decision_point(
-        review_id,
-        study_id=study_id,
-        status="resolved",
-        payload=json.dumps(decision_entry.get("payload") or {}),
-        resolution="sr_revision:accept_network",
-        created_at=str(decision_entry.get("created_at") or now),
-        resolved_at=now,
-    )
-    return StudyPromoteResponse(
-        status="promoted",
-        revision_id=str(revision["revision_id"]),
+    if node is None:
+        raise HTTPException(status_code=404, detail=f"Optimization frame {frame_index} not found")
+
+    xyz = ""
+    geometry_ref = str(node.get("geometry_ref") or "")
+    source_path = work_dir / str(graph.get("source") or "")
+    if geometry_ref and source_path.is_file():
+        candidate_path = (source_path.parent / geometry_ref).resolve()
+        work_root = work_dir.resolve()
+        if candidate_path.is_relative_to(work_root) and candidate_path.is_file():
+            xyz = candidate_path.read_text(encoding="utf-8", errors="replace")
+
+    metadata = dict(node.get("metadata") or {})
+    return OptimizationFrameResponse(
         job_id=job_id,
-        job_status=record.status.value,
+        item_id=str((graph.get("metadata") or {}).get("item_id") or item_id or ""),
+        frame_index=frame_index,
+        cycle=int(metadata.get("cycle") or node.get("x") or frame_index + 1),
+        xyz=xyz,
+        energy_hartree=metadata.get("scf_energy_hartree"),
+        relative_energy_kcal_mol=node.get("energy"),
+        delta_energy_kcal_mol=metadata.get("delta_energy_kcal_mol"),
+        rms_gradient=metadata.get("rms_gradient"),
+        max_gradient=metadata.get("max_gradient"),
+        rms_displacement=metadata.get("rms_displacement"),
+        max_displacement=metadata.get("max_displacement"),
+        scf_iterations=metadata.get("scf_iterations"),
+    )
+
+
+@router.post("/structure-assets", response_model=StructureAssetResponse, status_code=201)
+def create_structure_asset(
+    req: StructureAssetCreateRequest,
+    request: Request,
+) -> StructureAssetResponse:
+    """Register a pasted XYZ structure as a reusable ACP structure asset."""
+    from acp.intake.parsers import parse_xyz_text
+
+    manager = _manager(request)
+    parsed = parse_xyz_text(req.xyz_text)
+    if not parsed.structures and parsed.errors:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Could not parse XYZ: {'; '.join(parsed.errors[:3])}",
+        )
+    if not parsed.structures:
+        raise HTTPException(status_code=422, detail="XYZ text contains no structures")
+    asset = parsed.structures[0]
+    project_id = req.project_id or "default"
+    uploads = manager.run_root / project_id / "_uploads"
+    uploads.mkdir(parents=True, exist_ok=True)
+    from acp.intake.storage import UploadStorage
+
+    storage = UploadStorage(manager.run_root)
+    _asset_id, _ = storage.save_upload(
+        project_id, f"{req.name or 'paste'}.xyz", req.xyz_text.encode()
+    )
+    normalized = storage.save_normalized(
+        project_id,
+        _asset_id,
+        f"{req.name or 'paste'}",
+        str(asset.xyz),
+    )
+    rel_path = normalized.relative_to(manager.run_root).as_posix()
+    charge = req.charge if req.charge != 0 else int(asset.charge or 0)
+    multiplicity = req.multiplicity if req.multiplicity != 1 else int(asset.multiplicity or 1)
+    return StructureAssetResponse(
+        asset_id=_asset_id,
+        name=req.name or "paste",
+        atom_count=int(asset.atom_count or 0),
+        formula=str(asset.formula or ""),
+        charge=charge,
+        multiplicity=multiplicity,
+        xyz=str(asset.xyz),
+        asset_path=rel_path,
+        ok=True,
+    )
+
+
+@router.post("/s2/structure-preview", response_model=S2StructurePreviewResponse)
+def preview_s2_structure(
+    req: S2StructurePreviewRequest,
+    request: Request,
+) -> S2StructurePreviewResponse:
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
+
+
+@router.get("/jobs/{job_id}/s2/profile", response_model=S2ProfileResponse)
+def get_s2_profile(job_id: str, request: Request) -> S2ProfileResponse:
+    manager = _manager(request)
+    _manifest_path, payload = _pes_profile_for_job(manager, job_id)
+    scan = payload.get("scan") or {}
+    frames = [S2FrameModel(**frame) for frame in scan.get("frames") or []]
+    return S2ProfileResponse(
+        job_id=job_id,
+        mode=str(payload.get("mode") or ""),
+        status=str(payload.get("status") or ""),
+        stationary_point_claimed=bool(payload.get("stationary_point_claimed")),
+        coordinate=dict(payload.get("coordinate") or {}),
+        coordinates=[item for item in payload.get("coordinates") or [] if isinstance(item, dict)],
+        selection=dict(payload.get("selection") or {}),
+        protocol=dict(payload.get("protocol") or {}),
+        scan={key: value for key, value in scan.items() if key != "frames"},
+        energy_profile=dict(payload.get("energy_profile") or {}),
+        frames=frames,
+    )
+
+
+@router.get("/jobs/{job_id}/s2/candidates", response_model=S2CandidatesResponse)
+def get_s2_candidates(job_id: str, request: Request) -> S2CandidatesResponse:
+    manager = _manager(request)
+    _manifest_path, payload = _pes_profile_for_job(manager, job_id)
+    return S2CandidatesResponse(
+        job_id=job_id,
+        mode=str(payload.get("mode") or ""),
+        status=str(payload.get("status") or ""),
+        stationary_point_claimed=bool(payload.get("stationary_point_claimed")),
+        recommendations=dict(payload.get("recommendations") or {}),
+        review=dict(payload.get("review") or {}),
+    )
+
+
+@router.get("/jobs/{job_id}/s2/frame/{frame_index}", response_model=S2FrameResponse)
+def get_s2_frame(job_id: str, frame_index: int, request: Request) -> S2FrameResponse:
+    manager = _manager(request)
+    manifest_path, payload = _pes_profile_for_job(manager, job_id)
+    frames = (payload.get("scan") or {}).get("frames") or []
+    frame = next(
+        (f for f in frames if f.get("index") is not None and int(f.get("index")) == frame_index),
+        None,
+    )
+    if frame is None:
+        raise HTTPException(
+            status_code=404, detail=f"Frame {frame_index} not found in job {job_id}"
+        )
+    scan_dir = str((payload.get("scan") or {}).get("scan_dir") or "")
+    task_root = manifest_path.parent.parent.parent
+    geometry_path = str(frame.get("geometry_path") or "")
+    relative_geometry = posixpath.join(
+        scan_dir.replace("\\", "/"), geometry_path.replace("\\", "/")
+    )
+    xyz_path = resolve_safe(task_root, relative_geometry)
+    xyz = ""
+    if xyz_path is not None:
+        xyz = xyz_path.read_text(encoding="utf-8")
+    return S2FrameResponse(
+        job_id=job_id,
+        frame_index=frame_index,
+        target_coordinate=float(frame.get("target_coordinate") or 0.0),
+        actual_coordinate=float(frame.get("actual_coordinate") or 0.0),
+        xyz=xyz,
+        scan_energy_hartree=frame.get("scan_energy_hartree"),
+        single_point_energy_hartree=frame.get("single_point_energy_hartree"),
+        optimization_converged=bool(frame.get("optimization_converged")),
+        single_point_status=str(frame.get("single_point_status") or ""),
+        target_coordinates=dict(frame.get("target_coordinates") or {}),
+        actual_coordinates=dict(frame.get("actual_coordinates") or {}),
+    )
+
+
+@router.post(
+    "/mechanism-projects/{project_id}/s2/review",
+    response_model=S2ReviewResponse,
+)
+def save_s2_review(
+    project_id: str,
+    req: S2ReviewRequest,
+    request: Request,
+) -> S2ReviewResponse:
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
+
+
+@router.post(
+    "/jobs/{job_id}/s2/review",
+    response_model=S2JobReviewResponse,
+)
+def save_job_s2_review(
+    job_id: str,
+    req: S2ReviewRequest,
+    request: Request,
+) -> S2JobReviewResponse:
+    raise HTTPException(status_code=410, detail="该机制研究端点已退役，历史只读")
+
+
+# ---------------------------------------------------------------------------
+# PES manual review (pes_review_v1): user-confirmed TS/INT selections are the
+# authoritative hand-off to BatchOptimize via RESULT/result_manifest.json.
+# ---------------------------------------------------------------------------
+
+
+def _pes_review_work_dir(request: Request, job_id: str, *, require_completed: bool) -> Path:
+    """Resolve the task dir of a canonical PESsearch job for manual review.
+
+    Raises:
+        404: job/work_dir missing or no canonical PES profile.
+        400: job is not a PESsearch job.
+        409: job has not completed yet (POST only).
+        410: legacy mechanism task (read-only compatibility).
+    """
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if str(record.spec.workflow or "") != "PESsearch":
+        raise HTTPException(
+            status_code=400,
+            detail=f"PES review is only available for PESsearch jobs, got {record.spec.workflow!r}",
+        )
+    if not record.work_dir:
+        raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
+    work_dir = Path(record.work_dir)
+    canonical = work_dir / PES_PROFILE_RELATIVE_PATH
+    legacy = work_dir / LEGACY_S2_PROFILE_RELATIVE_PATH
+    if not canonical.is_file():
+        if legacy.is_file():
+            raise HTTPException(
+                status_code=410,
+                detail="历史 mechanism 任务保持只读，不支持人工确认选点",
+            )
+        raise HTTPException(
+            status_code=404,
+            detail=f"No PES profile for job {job_id}; expected {PES_PROFILE_RELATIVE_PATH}",
+        )
+    if require_completed and record.status != JobStatus.COMPLETED:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job {job_id} is not completed yet (status={record.status.value})",
+        )
+    return work_dir
+
+
+@router.get("/jobs/{job_id}/pes/review", response_model=PesReviewStateResponse)
+def get_pes_review(job_id: str, request: Request) -> PesReviewStateResponse:
+    """Return the saved manual-review state plus backup rounds (``pending`` when never saved)."""
+    work_dir = _pes_review_work_dir(request, job_id, require_completed=False)
+
+    from acp.calculations.pes.review import load_pes_review, load_pes_review_backups
+
+    review = load_pes_review(work_dir)
+    backups = [
+        PesReviewBackupSummary(
+            n=int(row.get("n") or 0),
+            confirmed_at=row.get("confirmed_at"),
+            note=str(row.get("note") or ""),
+            selected_count=int(row.get("selected_count") or 0),
+        )
+        for row in load_pes_review_backups(work_dir)
+    ]
+    if review is None:
+        return PesReviewStateResponse(job_id=job_id, status="pending", review={}, backups=backups)
+    return PesReviewStateResponse(job_id=job_id, status="confirmed", review=review, backups=backups)
+
+
+@router.post("/jobs/{job_id}/pes/review/restore", response_model=PesReviewRestoreResponse)
+def restore_pes_review_endpoint(
+    job_id: str,
+    req: PesReviewRestoreRequest,
+    request: Request,
+) -> PesReviewRestoreResponse:
+    """Re-activate a previous review backup; manifest switches to that round."""
+    work_dir = _pes_review_work_dir(request, job_id, require_completed=True)
+
+    from acp.calculations.pes.review import PesReviewError, RevisionConflictError
+    from acp.calculations.pes.review import restore_pes_review as restore_pes_review_state
+
+    try:
+        payload = restore_pes_review_state(
+            work_dir,
+            int(req.backup),
+            expected_revision=req.expected_revision,
+        )
+    except RevisionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except PesReviewError as exc:
+        message = str(exc)
+        status_code = 404 if "not found" in message else 422
+        raise HTTPException(status_code=status_code, detail=message) from exc
+
+    return PesReviewRestoreResponse(
+        job_id=job_id,
+        status=str(payload.get("status") or "confirmed"),
+        restored_from=int(payload.get("restored_from") or req.backup),
+        revision=int(payload.get("revision") or 0),
+        selected_count=len(payload.get("selected") or []),
+        candidates=[
+            PesReviewCandidate(
+                candidate_id=str(row.get("candidate_id") or ""),
+                role=str(row.get("role") or ""),
+                frame_index=int(row.get("frame_index") or 0),
+                name=str(row.get("name") or ""),
+                structure_path=str(row.get("structure_path") or ""),
+            )
+            for row in payload.get("selected") or []
+        ],
+    )
+
+
+@router.post("/jobs/{job_id}/pes/review", response_model=PesReviewResponse)
+def save_pes_review_endpoint(
+    job_id: str,
+    req: PesReviewRequest,
+    request: Request,
+) -> PesReviewResponse:
+    """Confirm TS/INT selections: materialise RESULT/structures + pes_review.json + manifest."""
+    work_dir = _pes_review_work_dir(request, job_id, require_completed=True)
+
+    from acp.calculations.pes.review import PesReviewError, RevisionConflictError
+    from acp.calculations.pes.review import save_pes_review as persist_pes_review
+
+    try:
+        payload = persist_pes_review(
+            work_dir,
+            job_id=job_id,
+            candidates=[item.model_dump(exclude_none=True) for item in req.candidates],
+            note=req.note or "",
+            expected_revision=req.expected_revision,
+        )
+    except RevisionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except PesReviewError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return PesReviewResponse(
+        job_id=job_id,
+        status=str(payload.get("status") or "confirmed"),
+        revision=int(payload.get("revision") or 0),
+        selected_count=len(payload.get("selected") or []),
+        note=payload.get("note") or None,
+        confirmed_at=payload.get("confirmed_at"),
+        candidates=[
+            PesReviewCandidate(
+                candidate_id=str(row.get("candidate_id") or ""),
+                role=str(row.get("role") or ""),
+                frame_index=int(row.get("frame_index") or 0),
+                name=str(row.get("name") or ""),
+                structure_path=str(row.get("structure_path") or ""),
+            )
+            for row in payload.get("selected") or []
+        ],
     )
 
 
@@ -1686,6 +1958,16 @@ def get_job(job_id: str, request: Request) -> V1JobRecordModel:
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     return _record_to_v1_model(record)
+
+
+@router.get("/jobs/{job_id}/summary", response_model=V1JobRecordModel)
+def get_job_summary(job_id: str, request: Request) -> V1JobRecordModel:
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    model = _record_to_v1_model(record)
+    return _enrich_job_snapshot(record, model, include_event=True)
 
 
 # ---------------------------------------------------------------------- #
@@ -1719,8 +2001,7 @@ def _backfill_result_from_disk(record: JobRecord) -> dict[str, Any] | None:
                 payload = None
             if isinstance(payload, dict):
                 result["state"] = payload
-    enriched = populate_mechanism_study_result_metadata(record, result)
-    return enriched or None
+    return result or None
 
 
 def _mechanism_stage_fallback(record: JobRecord) -> list[JobStageEntry]:
@@ -1728,9 +2009,14 @@ def _mechanism_stage_fallback(record: JobRecord) -> list[JobStageEntry]:
     if not record.work_dir:
         return []
     try:
-        candidates = sorted((Path(record.work_dir) / "mechanism_study").glob("*/study.json"))
+        from acp.compat.legacy.layouts import find_study_layout
+
+        layout = find_study_layout(Path(record.work_dir))
+        candidates = (
+            [layout.study_json] if layout is not None and layout.study_json.is_file() else []
+        )
     except OSError:
-        return []
+        candidates = []
     checkpoint: dict[str, Any] | None = None
     for path in candidates:
         checkpoint = _load_study_checkpoint(path.parent)
@@ -1777,23 +2063,118 @@ def _mechanism_gap_status(record: JobRecord) -> str:
 
 def _detail_stages(job_id: str, record: JobRecord, request: Request) -> list[JobStageEntry]:
     tasks = _stage_task_store(request).list_by_job(job_id)
+    state_stages: dict[str, dict[str, Any]] = {}
+    if record.work_dir:
+        try:
+            state_path = find_workflow_state(Path(record.work_dir))
+        except OSError:
+            state_path = None
+        if state_path is not None:
+            try:
+                state_data = json.loads(state_path.read_text(encoding="utf-8"))
+                raw = state_data.get("stages") if isinstance(state_data, dict) else None
+                if isinstance(raw, dict):
+                    state_stages = raw
+            except (OSError, json.JSONDecodeError):
+                pass
     if tasks:
-        # stage_tasks columns: ``state`` → status, ``stderr_summary`` → error.
-        return [
+        entries = _overlay_state_on_entries(tasks, state_stages)
+        if entries:
+            _apply_terminal_projection(entries, record.status)
+            return entries
+    if state_stages:
+        entries = _synthesize_entries_from_state(state_stages)
+        _apply_terminal_projection(entries, record.status)
+        return entries
+    if record.spec.workflow == "mechanism":
+        return _mechanism_stage_fallback(record)
+    return []
+
+
+_STAGE_ADVANCE_ORDER: dict[str, int] = {
+    "pending": 0,
+    "running": 1,
+    "completed": 2,
+    "failed": 2,
+    "skipped": 2,
+    "cancelled": 2,
+}
+
+_TERMINAL_STAGE_STATUSES = frozenset({"completed", "failed", "skipped", "cancelled"})
+
+
+def _apply_terminal_projection(entries: list[JobStageEntry], record_status: JobStatus) -> None:
+    if not record_status.is_terminal:
+        return
+    for entry in entries:
+        if entry.status not in _TERMINAL_STAGE_STATUSES:
+            entry.status = "skipped"
+
+
+def _overlay_state_on_entries(
+    tasks: list[StageTask],
+    state_stages: dict[str, dict[str, Any]],
+) -> list[JobStageEntry]:
+    """Build stage entries from stage_tasks rows, overlaying state.json data."""
+    entries: list[JobStageEntry] = []
+    for task in tasks:
+        name = task.stage_name
+        status = task.state
+        progress: float | None = None
+        detail: str | None = task.status_detail
+        state_info = state_stages.get(name)
+        if isinstance(state_info, dict):
+            state_status = str(state_info.get("status") or "")
+            state_order = _STAGE_ADVANCE_ORDER.get(state_status, 0)
+            db_order = _STAGE_ADVANCE_ORDER.get(status, 0)
+            if state_order > db_order:
+                status = state_status
+            state_progress = state_info.get("progress")
+            if isinstance(state_progress, (int, float)):
+                progress = float(state_progress)
+            state_detail = state_info.get("detail")
+            if isinstance(state_detail, str) and state_detail:
+                detail = state_detail
+        entries.append(
             JobStageEntry(
-                stage_name=task.stage_name,
-                status=task.state,
+                stage_name=name,
+                status=status,
                 started_at=task.started_at,
                 completed_at=task.completed_at,
                 error=task.stderr_summary,
                 retry_count=task.retry_count,
-                status_detail=task.status_detail,
+                status_detail=detail,
+                label=stage_label(name),
+                progress=progress,
+                detail=detail,
             )
-            for task in tasks
-        ]
-    if record.spec.workflow == "mechanism":
-        return _mechanism_stage_fallback(record)
-    return []
+        )
+    return entries
+
+
+def _synthesize_entries_from_state(
+    state_stages: dict[str, dict[str, Any]],
+) -> list[JobStageEntry]:
+    """Build stage entries purely from state.json when stage_tasks has no rows."""
+    entries: list[JobStageEntry] = []
+    for name, info in state_stages.items():
+        if not isinstance(info, dict):
+            continue
+        status = str(info.get("status") or "pending")
+        progress_raw = info.get("progress")
+        progress = float(progress_raw) if isinstance(progress_raw, (int, float)) else None
+        detail_raw = info.get("detail")
+        detail = str(detail_raw) if isinstance(detail_raw, str) and detail_raw else None
+        entries.append(
+            JobStageEntry(
+                stage_name=name,
+                status=status,
+                label=stage_label(name),
+                progress=progress,
+                detail=detail,
+            )
+        )
+    return entries
 
 
 def _detail_artifacts_summary(record: JobRecord, request: Request) -> list[JobArtifactSummaryEntry]:
@@ -1830,7 +2211,7 @@ def _detail_error_detail(record: JobRecord, stages: list[JobStageEntry]) -> JobE
     stderr_lines: list[str] = []
     if record.work_dir:
         stderr_lines = read_log_tail(
-            Path(record.work_dir) / "stderr.log", lines=_DETAIL_STDERR_TAIL_LINES
+            runtime_file(record.work_dir, "stderr.log"), lines=_DETAIL_STDERR_TAIL_LINES
         )
     failed_stage = next(
         (entry.stage_name for entry in stages if entry.status == "failed"),
@@ -1878,7 +2259,10 @@ def _probe_disk_state(record: JobRecord) -> JobDiskState:
         state.has_state_json = False
     if record.spec.workflow == "mechanism":
         try:
-            state.has_study_checkpoint = any((work_dir / "mechanism_study").glob("*/study.json"))
+            from acp.compat.legacy.layouts import find_study_layout
+
+            layout = find_study_layout(work_dir)
+            state.has_study_checkpoint = layout is not None and layout.study_json.is_file()
         except OSError:
             state.has_study_checkpoint = False
     has_payload = isinstance((record.result or {}).get("review_payload"), dict)
@@ -1929,6 +2313,7 @@ def get_job_detail(job_id: str, request: Request) -> V1JobDetailResponse:
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     job_model = _record_to_v1_model(record)
+    job_model = _enrich_job_snapshot(record, job_model, include_event=True)
     if record.result is None:
         backfilled = _backfill_result_from_disk(record)
         if backfilled is not None:
@@ -2052,26 +2437,28 @@ def continue_job(job_id: str, request: Request) -> V1JobRecordModel:
     return _run_job_state_action(_manager(request).continue_job, job_id)
 
 
-@router.post("/jobs/{job_id}/rerun", response_model=V1JobCreatedResponse, status_code=201)
+@router.post("/jobs/{job_id}/rerun", response_model=V1JobRecordModel)
 def rerun_job(
     job_id: str,
     request: Request,
     body: V1JobRerunRequest | None = None,
-) -> V1JobCreatedResponse:
-    """Submit a fresh job with the same spec (enhanced clone, plan §4.6)."""
+) -> V1JobRecordModel:
+    """Re-queue the existing task for a full in-place rerun.
+
+    Unlike ``/clone``, this endpoint never creates a new job row or task
+    directory.  The optional legacy ``project_id`` body is accepted only
+    when it matches the current project.
+    """
     manager = _manager(request)
     try:
         record = manager.rerun_job(job_id, project_id=body.project_id if body else None)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if record is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
-    return V1JobCreatedResponse(
-        job_id=record.id,
-        status=record.status.value,
-        workflow=record.spec.workflow,
-        project_id=record.project_id,
-    )
+    return _record_to_v1_model(record)
 
 
 @router.post("/jobs/purge", response_model=V1JobPurgeResponse)
@@ -2101,8 +2488,12 @@ def purge_jobs(body: V1JobPurgeRequest, request: Request) -> V1JobPurgeResponse:
 
 
 @router.get("/jobs/{job_id}/events")
-async def stream_job_events(job_id: str, request: Request) -> StreamingResponse:
-    return await legacy_stream_job_events(job_id, request)
+async def stream_job_events(
+    job_id: str,
+    request: Request,
+    after_seq: int = Query(default=0, ge=0),
+) -> StreamingResponse:
+    return await legacy_stream_job_events(job_id, request, after_seq=after_seq)
 
 
 @router.get("/jobs/{job_id}/logs")
@@ -2110,15 +2501,50 @@ def get_job_logs(
     job_id: str,
     request: Request,
     lines: int = Query(default=300, ge=1, le=5000),
+    stdout_offset: int = Query(default=0, ge=0),
+    stderr_offset: int = Query(default=0, ge=0),
 ) -> JSONResponse:
     manager = _manager(request)
     work_dir = manager.work_dir_of(job_id)
     if work_dir is None:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+    stdout_path = runtime_file(work_dir, "stdout.log")
+    stderr_path = runtime_file(work_dir, "stderr.log")
+
+    if stdout_offset > 0 or stderr_offset > 0:
+        # Cursor mode: incremental fetch from offset
+        stdout_lines = read_log_range(stdout_path, offset=stdout_offset, max_lines=lines)
+        stderr_lines = read_log_range(stderr_path, offset=stderr_offset, max_lines=lines)
+        stdout_total = _count_lines(stdout_path)
+        stderr_total = _count_lines(stderr_path)
+        return JSONResponse(
+            {
+                "stdout": "\n".join(stdout_lines),
+                "stderr": "\n".join(stderr_lines),
+                "stdout_lines": stdout_lines,
+                "stderr_lines": stderr_lines,
+                "stdout_next_offset": stdout_offset + len(stdout_lines),
+                "stderr_next_offset": stderr_offset + len(stderr_lines),
+                "has_more": (stdout_offset + len(stdout_lines)) < stdout_total
+                or (stderr_offset + len(stderr_lines)) < stderr_total,
+            }
+        )
+
+    # Legacy mode: tail fetch (backward compatible)
+    stdout_lines = read_log_tail(stdout_path, lines=lines)
+    stderr_lines = read_log_tail(stderr_path, lines=lines)
+    stdout_total = _count_lines(stdout_path)
+    stderr_total = _count_lines(stderr_path)
     return JSONResponse(
         {
-            "stdout": read_log_tail(work_dir / "stdout.log", lines=lines),
-            "stderr": read_log_tail(work_dir / "stderr.log", lines=lines),
+            "stdout": "\n".join(stdout_lines),
+            "stderr": "\n".join(stderr_lines),
+            "stdout_lines": stdout_lines,
+            "stderr_lines": stderr_lines,
+            "stdout_next_offset": stdout_total,
+            "stderr_next_offset": stderr_total,
+            "has_more": False,
         }
     )
 
@@ -2242,7 +2668,7 @@ def _log_remote_access(
     if work_dir is None:
         return
     try:
-        JobEventLog(work_dir / "events.jsonl").append(
+        JobEventLog(runtime_file(work_dir, "events.jsonl")).append(
             "remote_file_access",
             user=_user_from_request(request),
             job_id=job_id,
@@ -2608,6 +3034,151 @@ def get_stage_task(task_id: str, request: Request) -> StageTaskModel:
     return _stage_task_to_model(task)
 
 
+@router.post(
+    "/jobs/{job_id}/artifacts/{artifact_id}/run-irc",
+    response_model=V1JobCreatedResponse,
+    status_code=202,
+)
+def run_irc_from_artifact(
+    job_id: str,
+    artifact_id: str,
+    request: Request,
+) -> V1JobCreatedResponse:
+    """Submit an independent IRC job from a TS product in this job's manifest."""
+    manager = _manager(request)
+    source_record = manager.get(job_id)
+    if source_record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if not source_record.work_dir:
+        raise HTTPException(status_code=404, detail=f"Artifact not found: {artifact_id}")
+
+    source_dir = Path(source_record.work_dir)
+    result_dir = source_dir / "RESULT"
+    manifest_path = result_dir / MANIFEST_FILENAME
+    if not source_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"Artifact not found: {artifact_id}")
+    try:
+        manifest = load_result_manifest(source_dir)
+    except (
+        OSError,
+        UnicodeError,
+        ValueError,
+        TypeError,
+        KeyError,
+        AttributeError,
+        IndexError,
+    ) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid result manifest for job {job_id}: {exc}",
+        ) from exc
+    if manifest is None:
+        if manifest_path.is_file():
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid result manifest for job {job_id}",
+            )
+        raise HTTPException(status_code=404, detail=f"Artifact not found: {artifact_id}")
+
+    product = next((item for item in manifest.products if item.id == artifact_id), None)
+    if product is None:
+        raise HTTPException(status_code=404, detail=f"Artifact not found: {artifact_id}")
+    if product.kind.value != "structure":
+        raise HTTPException(
+            status_code=422,
+            detail=f"Artifact {artifact_id} is not a structure product",
+        )
+
+    structure_path = resolve_safe(result_dir, product.path)
+    if structure_path is None:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Artifact {artifact_id} has an invalid manifest path",
+        )
+
+    try:
+        raw_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(raw_manifest, dict):
+            raise HTTPException(status_code=422, detail="Result manifest root must be an object")
+        raw_products = raw_manifest.get("products")
+        if not isinstance(raw_products, list):
+            raise HTTPException(status_code=422, detail="Result manifest products must be a list")
+        raw_product = next(
+            (
+                item
+                for item in raw_products
+                if isinstance(item, dict) and str(item.get("id", "")) == artifact_id
+            ),
+            {},
+        )
+    except (
+        OSError,
+        UnicodeError,
+        json.JSONDecodeError,
+        ValueError,
+        TypeError,
+        AttributeError,
+    ) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid result manifest for job {job_id}: {exc}",
+        ) from exc
+
+    metadata_tag: str | None = None
+    for key in ("role", "tag"):
+        raw_tag = raw_product.get(key)
+        if isinstance(raw_tag, str):
+            metadata_tag = normalize_tag(raw_tag)
+            if metadata_tag is not None:
+                break
+    try:
+        lines = structure_path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as exc:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Cannot read structure artifact {artifact_id}: {exc}",
+        ) from exc
+    comment_tag = parse_tag_comment(lines[1] if len(lines) > 1 else "").get("tag")
+    if (metadata_tag or comment_tag) != "TS":
+        raise HTTPException(
+            status_code=422,
+            detail=f"Artifact {artifact_id} must carry a TS role or TAG",
+        )
+
+    source_spec = source_record.spec
+    irc_spec = JobSpec(
+        workflow="irc",
+        name=f"{source_spec.name or job_id}_irc",
+        input={
+            "input_artifact": str(structure_path),
+            "input_role": "transition_state",
+            "directions": ["forward", "reverse"],
+        },
+        method=dict(source_spec.method),
+        resources=dict(source_spec.resources),
+        config_path=source_spec.config_path,
+        tags=list(source_spec.tags),
+        project_id=source_record.project_id or source_spec.project_id,
+        execution_mode=source_spec.execution_mode,
+        target_node=source_spec.target_node,
+        molecule_name=source_spec.molecule_name,
+        task_name="irc",
+    )
+    try:
+        validate_execution_request(irc_spec)
+        record = manager.submit(irc_spec)
+    except ExecutionTargetError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return V1JobCreatedResponse(
+        job_id=record.id,
+        status=record.status.value,
+        workflow=record.spec.workflow,
+        project_id=record.project_id,
+    )
+
+
 @router.get("/jobs/{job_id}/artifacts", response_model=ArtifactListResponse)
 def list_artifacts(job_id: str, request: Request) -> ArtifactListResponse:
     manager = _manager(request)
@@ -2693,6 +3264,9 @@ def _asset_to_model(asset) -> StructureAssetModel:
     return StructureAssetModel(
         asset_id=asset.asset_id,
         name=asset.name,
+        molecule_name=getattr(asset, "molecule_name", ""),
+        tag=getattr(asset, "tag", ""),
+        candidate_id=getattr(asset, "candidate_id", ""),
         source_type=asset.source_type,
         original_format=asset.original_format,
         xyz=asset.xyz,
@@ -2711,18 +3285,82 @@ def _asset_to_model(asset) -> StructureAssetModel:
 
 @router.post("/structures/parse", response_model=StructureParseResponse)
 def parse_structures(req: StructureParseRequest) -> StructureParseResponse:
-    from acp.intake import detect_format, parse_structure_text
+    from acp.intake import detect_and_parse, parse_structure_text
 
     fmt = req.format
     if fmt == "auto" or not fmt:
-        fmt = detect_format(req.filename or "", req.content)
-
-    result = parse_structure_text(req.content, fmt, req.filename)
+        fmt, result = detect_and_parse(req.content, req.filename or "")
+    else:
+        result = parse_structure_text(req.content, fmt, req.filename)
     return StructureParseResponse(
         structures=[_asset_to_model(s) for s in result.structures],
         errors=result.errors,
         warnings=result.warnings,
         ok=result.ok,
+        detected_format=fmt,
+    )
+
+
+# ---------------------------------------------------------------------- #
+# Structure sources (reusable final structures from completed jobs)
+# ---------------------------------------------------------------------- #
+
+
+def _structure_source_service(request: Request) -> StructureSourceService:
+    """Build a StructureSourceService from app state (503 when uninitialized)."""
+    manager = _manager(request)
+    run_root = getattr(request.app.state, "run_root", None) or manager.run_root
+    return StructureSourceService(
+        manager.store,
+        Path(run_root),
+        fetcher=manager.remote_fetcher,
+    )
+
+
+@router.get("/structure-sources/recent", response_model=StructureSourceListResponse)
+def list_structure_sources(
+    request: Request,
+    project_id: str | None = None,
+    all_projects: bool = False,
+    workflow: str | None = None,
+    limit: int = Query(20, ge=1, le=50),
+    include_remote: bool = True,
+) -> StructureSourceListResponse:
+    """List reusable final structures from recent COMPLETED jobs."""
+    service = _structure_source_service(request)
+    if project_id:
+        effective_project = project_id
+    elif all_projects:
+        effective_project = None
+    else:
+        effective_project = "uncategorized"
+    entries = service.list_recent(
+        limit=limit,
+        project_id=effective_project,
+        workflow=workflow,
+        include_remote=include_remote,
+    )
+    return StructureSourceListResponse(
+        sources=[StructureSourceSummary(**entry) for entry in entries]
+    )
+
+
+@router.get("/structure-sources/{source_id:path}", response_model=StructureSourceDetailResponse)
+def get_structure_source(request: Request, source_id: str) -> StructureSourceDetailResponse:
+    """Load one structure source (local disk or on-demand remote fetch)."""
+    service = _structure_source_service(request)
+    try:
+        StructureSourceService.parse_source_id(source_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail=f"Invalid source_id: {source_id}")
+    try:
+        asset, checksum = service.get(source_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return StructureSourceDetailResponse(
+        source_id=source_id,
+        checksum=checksum,
+        structure=StructureAssetModel(**asset),
     )
 
 
@@ -3024,6 +3662,7 @@ async def upload_structure_file(
         errors=result.errors,
         warnings=result.warnings,
         ok=result.ok,
+        detected_format=fmt,
     )
 
 

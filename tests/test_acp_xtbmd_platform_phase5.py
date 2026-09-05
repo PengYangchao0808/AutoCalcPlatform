@@ -206,19 +206,31 @@ def test_cli_parse_roundtrip_defaults() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_catalog_workflow_entry_active_and_visible() -> None:
+def test_catalog_workflow_entry_retired_kept_for_history() -> None:
+    """Confsearch v1.0: xtbmd_censo_energy retired; the full chain lives on
+    the Confsearch + protocol=xtbmd-censo entry."""
     from acp.catalog import WORKFLOW_CATALOG
 
     entry = next((w for w in WORKFLOW_CATALOG if w["id"] == _XTBMD_WORKFLOW_ID), None)
     assert entry is not None
-    assert entry["status"] == "active"
-    assert entry["visible"] is True
+    assert entry["status"] == "retired"
+    assert entry["visible"] is False
     assert entry["method_schema_id"] == _XTBMD_WORKFLOW_ID
-    assert entry["default_backend"] == "censo"
     assert "xtb" in entry["requires_binaries"]
     assert "isostat" in entry["requires_binaries"]
     assert "censo" in entry["requires_binaries"]
     assert "orca" in entry["requires_binaries"]
+
+    confsearch = next(w for w in WORKFLOW_CATALOG if w["id"] == "Confsearch")
+    assert confsearch["status"] == "active"
+    assert {"xtb", "isostat", "censo", "orca"} <= set(confsearch["requires_binaries"])
+
+
+def test_supported_workflows_retires_xtbmd_and_keeps_confsearch() -> None:
+    from acp.scheduler.jobs import SUPPORTED_WORKFLOWS
+
+    assert _XTBMD_WORKFLOW_ID not in SUPPORTED_WORKFLOWS
+    assert "Confsearch" in SUPPORTED_WORKFLOWS
 
 
 def test_catalog_schema_levels_and_profiles() -> None:
@@ -262,12 +274,6 @@ def test_catalog_opt_level_xtb_options_corrected_per_v14() -> None:
     assert FIELD_DEFINITIONS["opt_level"]["per_backend"]["xtb"] == [
         "crude", "normal", "tight", "verytight",
     ]
-
-
-def test_supported_workflows_derives_from_catalog() -> None:
-    from acp.scheduler.jobs import SUPPORTED_WORKFLOWS
-
-    assert _XTBMD_WORKFLOW_ID in SUPPORTED_WORKFLOWS
 
 
 def test_validate_method_accepts_xtbmd_schema() -> None:

@@ -11,10 +11,13 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def client():
+def client(tmp_path, monkeypatch):
+    # Env must precede import: server.py's module-level create_app() resolves
+    # run_root at import time and would collide with a live server's lock.
+    monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path))
     from acp.api.server import create_app
 
-    app = create_app()
+    app = create_app(run_root=tmp_path)
     return TestClient(app)
 
 

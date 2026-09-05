@@ -28,6 +28,7 @@ Author: QCcalc Team
 
 from __future__ import annotations
 
+import json
 import logging
 import posixpath
 import re
@@ -41,11 +42,10 @@ from typing import NotRequired, TypedDict, cast
 
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
-    MECHANISM_CONFIG_FILENAME,
+    SCAN_CONFIG_FILENAME,
     JobRecord,
     JobSpec,
     JobStatus,
-    write_mechanism_job_config,
 )
 from acp.scheduler.nodes import ExecutionTargetError
 from acp.scheduler.provenance import build_provenance_for_job
@@ -55,6 +55,7 @@ from acp.scheduler.remote.monitor import STATUS_DONE, STATUS_PAUSED, RemoteJobMo
 from acp.scheduler.remote.node_manager import detect_node_python
 from acp.scheduler.remote.script_gen import (
     build_lsf_script_spec,
+    build_remote_scan_config_payload,
     generate_lsf_script,
 )
 from acp.scheduler.remote.sftp import FileStager
@@ -203,9 +204,7 @@ class RemoteJobRunner:
         if target_node is not None:
             node = self._find_node_by_name(target_node)
             if node is None or not node.enabled:
-                raise ExecutionTargetError(
-                    f"target_node '{target_node}' not found or disabled"
-                )
+                raise ExecutionTargetError(f"target_node '{target_node}' not found or disabled")
         else:
             node = self.select_node(spec)
         event_log.append("remote.node_selected", job_id=record.id, node=node.name, host=node.host)
@@ -216,7 +215,10 @@ class RemoteJobRunner:
         if self._config.auto_sync:
             self._sync_code_if_needed(node, event_log, record.id)
 
-        remote_job_dir = posixpath.join(node.remote_work_dir, record.id)
+        if spec.uses_v2_naming:
+            remote_job_dir = posixpath.join(node.remote_work_dir, spec.task_dir_name())
+        else:
+            remote_job_dir = posixpath.join(node.remote_work_dir, record.id)
 
         try:
             lsf_job_id, cli_cmd = self._prepare_and_submit(
@@ -302,8 +304,14 @@ class RemoteJobRunner:
         exit_code = self._monitor.get_exit_code(node, remote_job_dir)
         if exit_code is not None:
             return self._finalize_remote(
-                record, event_log, state, node, remote_job_dir, lsf_job_id,
-                exit_code, seen_stages,
+                record,
+                event_log,
+                state,
+                node,
+                remote_job_dir,
+                lsf_job_id,
+                exit_code,
+                seen_stages,
             )
 
         # --- Periodic state.json read (every _STATE_READ_INTERVAL cycles) ---
@@ -356,9 +364,7 @@ class RemoteJobRunner:
                     # and leaving the record stuck in "running".
                     exit_code = 0 if status == STATUS_DONE else 1
                     if exit_code != 0:
-                        record.error = record.error or _missing_exit_code_error(
-                            status, lsf_job_id
-                        )
+                        record.error = record.error or _missing_exit_code_error(status, lsf_job_id)
                         event_log.append(
                             "remote.no_exit_code",
                             job_id=record.id,
@@ -369,11 +375,18 @@ class RemoteJobRunner:
                         logger.warning(
                             "Remote job %s: LSF terminal '%s' with no .exit_code; "
                             "finalising as failed (likely killed by LSF)",
-                            record.id, status,
+                            record.id,
+                            status,
                         )
                 return self._finalize_remote(
-                    record, event_log, state, node, remote_job_dir, lsf_job_id,
-                    exit_code, seen_stages,
+                    record,
+                    event_log,
+                    state,
+                    node,
+                    remote_job_dir,
+                    lsf_job_id,
+                    exit_code,
+                    seen_stages,
                 )
 
         stdout_offset = self._tail_and_emit(
@@ -388,7 +401,9 @@ class RemoteJobRunner:
         return (False, None)
 
     def cancel_remote(
-        self, job_id: str, record: JobRecord | None = None,
+        self,
+        job_id: str,
+        record: JobRecord | None = None,
     ) -> bool:
         """Send ``bkill`` to cancel a remote job (best-effort).
 
@@ -548,6 +563,10 @@ class RemoteJobRunner:
         )
         record.progress = round(done / total, 3)
 
+        overall = data.get("overall_progress")
+        if isinstance(overall, (int, float)):
+            record.progress = round(float(overall), 3)
+
         pending_events: list[tuple[float, str, str, dict[str, object]]] = []
         for name, info in stages.items():
             if not isinstance(info, dict):
@@ -655,7 +674,10 @@ class RemoteJobRunner:
         if self._config.auto_sync:
             self._sync_code_if_needed(node, event_log, record.id)
 
-        remote_job_dir = posixpath.join(node.remote_work_dir, record.id)
+        if spec.uses_v2_naming:
+            remote_job_dir = posixpath.join(node.remote_work_dir, spec.task_dir_name())
+        else:
+            remote_job_dir = posixpath.join(node.remote_work_dir, record.id)
 
         # Steps 3–5: prepare remote dir, upload input + script, submit.
         # If anything fails before bsub succeeds, clean up the remote
@@ -726,81 +748,45 @@ class RemoteJobRunner:
         # 3. Prepare remote directory + upload input
         self._stager.make_remote_dir(node, remote_job_dir)
 
-        inputs_dir = work_dir / "inputs"
+        inputs_dir = work_dir
         inputs_dir.mkdir(parents=True, exist_ok=True)
         run_root = work_dir.parent.parent
         materialized_roles: dict[str, Path] = {}
         materialized = materialize_job_input(spec.input, inputs_dir, run_root, materialized_roles)
 
-        remote_input_name = materialized.name if materialized else "input.xyz"
-        if materialized and materialized.is_file():
-            remote_inputs_dir = posixpath.join(remote_job_dir, "inputs")
-            self._stager.make_remote_dir(node, remote_inputs_dir)
-
-            remote_role_paths: dict[str, str] = {}
-            upload_paths = materialized_roles or {"reactant": materialized}
-            for role, local_path in upload_paths.items():
-                remote_path = posixpath.join(remote_inputs_dir, local_path.name)
-                self._stager.upload_file(node, local_path, remote_path)
-                remote_role_paths[role] = posixpath.join("inputs", local_path.name)
-                event_log.append(
-                    "remote.input_uploaded",
-                    job_id=record.id,
-                    node=node.name,
-                    role=role,
-                )
-        else:
-            raise RemoteSubmissionError(f"Failed to materialise input for job {record.id}")
-
-        if spec.workflow == "mechanism":
-            reaction_definition = _load_local_reaction_definition(work_dir, spec)
-            mechanism_config_path = write_mechanism_job_config(
-                work_dir,
-                spec.input,
-                spec.method,
-                spec.resources,
-                remote_role_paths,
-                reaction_definition=reaction_definition,
-            )
-            remote_mechanism_config_path = posixpath.join(
-                remote_job_dir,
-                MECHANISM_CONFIG_FILENAME,
+        bond_scan_mode = spec.workflow == "PESsearch" and (
+            str(spec.method.get("mode") or "") == "bond_length_scan"
+        )
+        _remote_input_name = materialized.name if materialized else "input.xyz"
+        if bond_scan_mode:
+            scan_payload = build_remote_scan_config_payload(spec) or {}
+            scan_config_local = work_dir / SCAN_CONFIG_FILENAME
+            scan_config_local.write_text(
+                json.dumps(scan_payload, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
             )
             self._stager.upload_file(
                 node,
-                mechanism_config_path,
-                remote_mechanism_config_path,
+                scan_config_local,
+                posixpath.join(remote_job_dir, SCAN_CONFIG_FILENAME),
             )
             event_log.append(
                 "remote.input_uploaded",
                 job_id=record.id,
                 node=node.name,
-                role="mechanism_config",
+                role="scan_config",
             )
-            if reaction_definition is not None:
-                local_reaction_path = (
-                    work_dir
-                    / "mechanism_study"
-                    / str(spec.method.get("study_id"))
-                    / "reaction.json"
-                )
-                remote_study_dir = posixpath.join(
-                    remote_job_dir,
-                    "mechanism_study",
-                    str(spec.method.get("study_id")),
-                )
-                self._stager.make_remote_dir(node, remote_study_dir)
-                self._stager.upload_file(
-                    node,
-                    local_reaction_path,
-                    posixpath.join(remote_study_dir, "reaction.json"),
-                )
-                event_log.append(
-                    "remote.input_uploaded",
-                    job_id=record.id,
-                    node=node.name,
-                    role="reaction_json",
-                )
+        elif materialized and materialized.is_file():
+            remote_path = posixpath.join(remote_job_dir, "input.xyz")
+            self._stager.upload_file(node, materialized, remote_path)
+            event_log.append(
+                "remote.input_uploaded",
+                job_id=record.id,
+                node=node.name,
+                role="input",
+            )
+        else:
+            raise RemoteSubmissionError(f"Failed to materialise input for job {record.id}")
 
         # 4. Generate + upload LSF script
         py = self._resolve_node_python(node, job_id=record.id)
@@ -811,8 +797,8 @@ class RemoteJobRunner:
             queue=self._config.queue,
             walltime=self._config.walltime,
             extra_flags=self._config.extra_flags,
-            input_path=posixpath.join("inputs", remote_input_name),
-            materialized_role_paths=remote_role_paths,
+            input_path="input.xyz",
+            remote_dir_name=spec.task_dir_name() if spec.uses_v2_naming else None,
             python_executable=py,
             pre_cmds=self._config.pre_cmds,
         )
@@ -1471,16 +1457,4 @@ class RemoteJobRunner:
             logger.debug("Provenance build failed for %s", record.id, exc_info=True)
 
 
-def _load_local_reaction_definition(work_dir: Path, spec: JobSpec) -> dict[str, object] | None:
-    if spec.workflow != "mechanism":
-        return None
-    study_id = spec.method.get("study_id")
-    if not study_id:
-        return None
-    path = work_dir / "mechanism_study" / str(study_id) / "reaction.json"
-    if not path.is_file():
-        return None
-    import json
-
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    return payload if isinstance(payload, dict) else None
+__all__ = ["RemoteJobRunner", "RemoteNodeUnavailableError", "RemoteSubmissionError"]

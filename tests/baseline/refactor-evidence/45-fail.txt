@@ -1,0 +1,18 @@
+=== 45-fail.txt: Wave 7 Gate — Q3 Mutation Drill ===
+Date: 2026-08-28 | Branch: refactor/calc-cleanup
+
+=== STAGE 1: Inject failing test ===
+COMMAND: printf 'def test_gate_drill():\n    assert False\n' > tests/test_tmp_gate_fail.py
+RESULT: test_tmp_gate_fail.py created with assert False
+
+=== STAGE 2: Gate must exit non-zero, must NOT output GATE_OK ===
+COMMAND: python -m pytest tests/ -q --tb=no > /tmp/wave-gate-pytest.txt 2>&1; px=$?; python -c "import re; s=open('/tmp/wave-gate-pytest.txt').read(); m=re.search(r'(\d+) failed',s); e=re.search(r'(\d+) error',s); p=re.search(r'(\d+) passed',s); import sys; sys.exit(1 if not p else 0)" || { echo 'GATE_INVALID: no pytest summary'; exit 1; }; test $px -le 1 || { echo "GATE_INVALID: pytest exit $px"; exit 1; }; cur=$(python -c "import re; s=open('/tmp/wave-gate-pytest.txt').read(); m=re.search(r'(\d+) failed',s); e=re.search(r'(\d+) error',s); print(int(m.group(1) if m else 0)+int(e.group(1) if e else 0))"); echo "current failures: $cur"; test "$cur" -le "$(cat tests/baseline/refactor-evidence/baseline-failures.txt)" && echo GATE_OK
+KEY OUTPUT: current failures: 1 (no GATE_OK output)
+EXIT CODE: 1
+RESULT: DRILL_OK — injected failure correctly blocked (1 > 0 baseline)
+
+=== STAGE 3: Restore and verify GATE_OK ===
+COMMAND: rm tests/test_tmp_gate_fail.py && python -m pytest tests/ -q --tb=no > /tmp/wave-gate-pytest.txt 2>&1; px=$?; python -c "import re; s=open('/tmp/wave-gate-pytest.txt').read(); m=re.search(r'(\d+) failed',s); e=re.search(r'(\d+) error',s); p=re.search(r'(\d+) passed',s); import sys; sys.exit(1 if p else 0)" || { echo 'GATE_INVALID: no pytest summary'; exit 1; }; test $px -le 1 || { echo "GATE_INVALID: pytest exit $px"; exit 1; }; cur=$(python -c "import re; s=open('/tmp/wave-gate-pytest.txt').read(); m=re.search(r'(\d+) failed',s); e=re.search(r'(\d+) error',s); print(int(m.group(1) if m else 0)+int(e.group(1) if e else 0))"); echo "current failures: $cur"; test "$cur" -le "$(cat tests/baseline/refactor-evidence/baseline-failures.txt)" && echo GATE_OK
+KEY OUTPUT: current failures: 0, GATE_OK
+EXIT CODE: 0
+RESULT: RESTORE_OK — gate clean after cleanup

@@ -9,72 +9,96 @@
 | 阶段 | 状态 | 内容 |
 |------|------|------|
 | **Phase 0** | ✅ 完成 | 底层 `cccp`（Computational Chemistry Connection Package）QC 接口库 |
-| **Phase 1** | ✅ 完成 | 模块化重构 + `acp` 统一模块 + ensemble/energy/mechanism/simple 工作流 + CENSO 集成 |
+| **Phase 1** | ✅ 完成 | 模块化重构 + `acp` 统一模块 + Confsearch/PESsearch/BatchOptimize/irc/scan 计算工作流 + nmr/simple 工作流 + CENSO 集成 |
 | **Phase 2** | ✅ 完成 | FastAPI Web 后端 + 任务调度器 + 远程 LSF 执行 |
-| **Phase 4** | ✅ 完成 | 机理研究（S0→S4 研究型流水线：构象 → 路径搜索 → 精修 → IRC/端点匹配 → 高精度确认） |
+| **Phase 4** | ✅ 完成 | 极简化重构：mechanism/ 删除，计算基元上浮至 calculations/，BatchOptimize/irc/scan 独立工作流 |
 
-> 注：conformer / nmr / benchmark 三个工作流已于 2026-07-27 移除（catalog 中保留为 `status:"retired"` 仅用于历史作业展示）。构象搜索能力由 `ensemble` / `energy` 工作流经 `CrestBackend.search()` 提供。
+> 注：conformer / benchmark / ensemble / energy / xtbmd_censo_energy / mechanism / mech-conf / mech-step / mech-confirm / mech-chain / optfreq / optfreqsp / Lowconfirm / Highconfirm 工作流已于 2026-08-28 退役（catalog 中保留为 `status:"retired"` 仅用于历史作业展示）。构象搜索能力统一由 `acp run Confsearch --protocol <4种协议>` 提供；低精度确认由 `acp run BatchOptimize --profile opt_freq` 提供；高精度确认由 `acp run BatchOptimize --profile opt_freq_sp_thermo` 提供。
 
 ---
 
 ## 功能概览
 
-### 1. CREST→CENSO Ensemble — `acp run ensemble` ✅
+### 1. Confsearch — 统一构象搜索 + 能量排名 `acp run Confsearch`
 - SMILES / XYZ / GJF / LOG / OUT / SDF / MOL / ORCA INP 多格式输入
-- CREST 构象搜索（经 `CrestBackend.search()` 后端层）
-- CENSO 集成：P+S 排序筛选（censo-light / censo-default / censo-zero 预设）
-- 完整的 CENSO rcfile 模板注入
+- 四种协议：`--protocol xtb-crest`（CREST搜索+DFT精修）、`xtb-md`（xTB-MD采样+DFT）、`censo-crest`（CREST+CENSO排序）、`xtbmd-censo`（xTB-MD+ISOSTAT+CENSO）
+- 资源档位：`--profile light|default|high`
+- 精修策略：`--refinement-policy screen|rank1|cumulative-99|all`
+- 统一产物：`confsearch_manifest.json` 供下游 PESsearch 消费
 
-### 2. 自由能排名 — `acp run energy` ✅
-- 从 CREST/CENSO ensemble 中提取 Boltzmann ≥99% 的子集
-- ORCA 优化 + 频率 + 单点 + Shermo 热力学（opt/freq same-level）
-- 支持 `--levels` 自定义计算级别
-- 支持 `--no-opt` 快速 RSH//xTB 路径
-- DFT handoff 经 `CrestBackend` / `CensoBackend` 后端层（不再绕过直连 `CRESTInterface`）
+### 2. PESsearch — 势能面搜索 `acp run PESsearch`
+- 从 Confsearch manifest 出发，搜索反应路径（PEB引导扫描 / 直接TS猜测）
+- 输出：`RESULT/pes_search/pes_profile.json` + TS/中间体候选结构
+- 输入方式：`--from-job <Confsearch job id>` 或 `--from-artifact RESULT/confsearch/confsearch_manifest.json`
+- 人工确认（2026-09-03 起）：Workbench 能量图上手动增删/修改 TS、INT 选点后
+  `POST /api/v1/jobs/{id}/pes/review` 写入 `RESULT/pes_search/pes_review.json`，
+  物化 `RESULT/structures/*.xyz` 并更新 `RESULT/result_manifest.json`；
+  历史 mechanism 任务保持只读（410）。详见 `docs/ACP_PES_Manual_Review_DevDoc.md`
 
-> ⚠️ **注意事项（`--rank1-only` 模式）**：`acp run energy --rank1-only` 与未来的 `acp run xtbmd_censo_energy --rank1-only` 中，`G_total = G₁(fine DFT) + k_B·T·ln p₁` 的混合修正项采用 CENSO 权重表（半经验/低精度 DFT 级），而 G₁ 来自高精度 DFT，属于**混级量**：当 CENSO 排序与高精度方法不一致（rank 反转）时误差可达数 kcal/mol 量级。该模式仅适合"只看排名第一构象"的快速筛选场景；正式结果请使用默认全系综模式（完整混合式，DFT 级权重）。两种模式均输出 `total_gibbs_censo_hartree` 参考量用于对照修正。
+### 3. BatchOptimize — 批量优化确认 `acp run BatchOptimize`
+- 对 PESsearch 候选或其他结构进行 per-item Opt/TS + 频率 + 单点能 + 热力学修正
+- 四种 profile：`--profile opt_only|opt_freq|opt_freq_sp|opt_freq_sp_thermo`
+- 支持 `--items-file` 批量输入、`--from-job` 继承上游产物（读取
+  `<PES任务>/RESULT/result_manifest.json` 中人工确认的有效候选）、
+  `--select pes_ts_frame_027,...` 按稳定 candidate_id 筛选
+- 前端 batch_structures 提交在 runner 层自动物化为 items 文件（2026-09-03 起）
+- TS 候选自动识别（TAG: TS），频率分析 + IRC 连通性检查
 
-### 3. 机理研究 — `acp run mechanism` ✅（研究型流水线，study-only，2026-08-15 起）
-- **S0** 反应物/产物端点感知 + 稳定态构象搜索（`--conformer-mode`：censo-lite / xtb-fast / auto）
-- **S1** 稳定态构象系综（native-censo-lite provider）
-- **S2** 反应路径搜索（策略：`guided-scan` / `rph-reverse`（native PEB）/ `direct-ts`）
-- **S3** 路径精修（TS 优化 + 频率，fidelity `s3`）
-- **SR** IRC 扫描 + 端点匹配（connectivity fingerprint）；**SR 审核闭环**：S3 完成后进入 SR 人工审核（`sr_cycle_review` 决策点）——`continue`（修订坐标继续下一周期）/ `accept_network`（接受网络，经 promote 直接进入 S4）/ `auto_converge`（自动收敛，跳过人工审核）
-- **S4** 高精度确认（`select_s4_candidates` + refinement provider，fidelity `s4`）
-- 质量分级：`MechanismStudy.quality` ∈ {`high`, `medium`, `null`} —— `high` = 所有选中的 S4 候选均精修成功；`medium` = 保留但未获完整 S4 确认（不算失败）
-- 研究参数：`--study-id --conformer-mode --max-elementary-steps --promotion-policy --int-extension --auto-converge`；调度器写入 `<work_dir>/mechanism_config.json`，经 `--mechanism-config` 传入 CLI
-- Web 前端机理面板：反应定义 / 反应变化 / 驻点确认 / 机理解析 / SR 审核（`unified_status` 状态徽标 + promote 按钮，走 `/api/v1/mechanism-studies/{id}/reviews|promote|resume`）
-- 原生 provider 为锁定生产路径（native_censo_lite / native_peb / native_refinement）；`rph_adapter.py` 仅为 parity 保留（`config['mechanism']['provider_backend']='rph'`，无 CLI 标志）
-- 计算产物目录：S1–S4 全部 QC 文件落于 `mechanism_study/<study_id>/calc/`（`s1`/`s1_xtbfast`/`s2`/`s2_peb`/`s3s4` 子目录），前端文件树运行中自动刷新可见（本地 15s / 远程 30s）
-- ⚠️ 旧版 9 阶段单反应工作流已于 2026-08-15 移除
+### 4. IRC — 端点验证 `acp run irc`
+- 对 TS 结构运行 IRC（正向 + 逆向），发现反应端点
+- 输出：`RESULT/irc/irc_forward.xyz` + `RESULT/irc/irc_reverse.xyz`
+- 端点分类：connectivity fingerprint + mapped heavy-atom RMSD
 
-### 4. 简单 ORCA 工作流 — `acp run singlepoint|opt|freq|...` ✅
+### 5. Scan — 势能面扫描 `acp run scan`
+- 柔性坐标扫描（distance/angle/dihedral），逐步优化 + 单点能
+- 输出：`RESULT/trajectories/scan_trajectory.json` + 能量曲线
+- 坐标格式：`--coordinate atom1,atom2,start,end`
+
+### 6. 简单 ORCA 工作流 — `acp run singlepoint|opt|freq|...`
 - 单点能计算（singlepoint）
-- 几何优化（opt / optfreq / optfreqsp）
-- 频率计算（freq）
-- 柔性扫描（scan）
-- xTB 优化（xtb-opt）
+- 几何优化（optimize）
+- 频率计算（frequency）
+- xTB 优化（xtb-optimize）
 
-### 5. Web 服务 — `acp run serve` ✅
+### 7. NMR 化学位移预测 — `acp run nmr` ✅
+- GIAO + Boltzmann 平均 + DP4/DP5 立体归属
+- Goodman DP5 模型 + FCHL 原子表示（可选）
+
+### 7. Web 服务 — `acp run serve`
 - FastAPI 后端（`/api/status`, `/api/backends`, `/api/workflows`, `/api/v1/...`）
 - 任务提交、分子上传、任务管理 REST API
 - ACP Workbench 前端（暗色主题，实时轮询）
 - systemd 服务管理
 
-### 6. 远程 LSF 执行 ✅
+### 8. 远程 LSF 执行 ✅
 - SSH/SFTP 多节点连接池
 - LSF 脚本生成 + bsub 提交 + bjobs 监控
 - 增量代码同步 + 结果拉取
 - 磁盘压力 + 保留期清理
 
-### 7. 任务队列操作 ✅（2026-08-17 起）
+### 9. 任务队列操作 ✅（2026-08-17 起）
 - **暂停 / 恢复**：运行中任务可暂停（`PAUSED`），本地 SIGSTOP/SIGCONT 进程组冻结/复活、远程 LSF `bstop`/`bresume`；**暂停不释放内存/磁盘配额**，适合临时让出算力
-- **断点续算**：失败/取消任务按检查点继续 —— mechanism（相位级 S0–S4 指纹）、xtbmd（阶段级指纹）；其余工作流引导「重算」
+- **断点续算**：失败/取消任务按检查点继续（`continue` 操作）
 - **重新运行**：一键以同 spec 另起新任务（`{name}__rerun`）
-- **清除**：单任务级联删除（jobs + stage_tasks + artifacts + mechanism_studies + decision_points），支持按状态/项目/时间批量清除
-- **任务详情**：阶段 stepper、错误详情（error + stderr 尾部）、产物摘要、恢复操作建议（服务端计算 recovery 矩阵）
+- **清除**：单任务级联删除（jobs + stage_tasks + artifacts），支持按状态/项目/时间批量清除
+- **任务详情**：阶段 stepper、错误详情（error + stderr 尾部）、产物摘要、恢复操作建议
 
 队列操作端点：`GET /api/v1/jobs/{id}/detail` · `POST /api/v1/jobs/{id}/pause|unpause|continue|rerun` · `POST /api/v1/jobs/purge`
+
+---
+
+### 旧入口退役映射表
+
+| 旧入口 | 替代方案 | 说明 |
+|--------|----------|------|
+| `acp run ensemble` | `acp run Confsearch --protocol censo-crest --refinement-policy screen` | CREST+CENSO P+S |
+| `acp run energy` | `acp run Confsearch --protocol censo-crest --refinement-policy rank1` 或 `cumulative-99` | 构象能量排名 |
+| `acp run xtbmd_censo_energy` | `acp run Confsearch --protocol xtbmd-censo` | xTB-MD+CENSO 全链路 |
+| `acp run mechanism` | `acp run PESsearch` → `acp run BatchOptimize` → `acp run irc` | 机理研究拆分为独立阶段 |
+| `acp run Lowconfirm` | `acp run BatchOptimize --profile opt_freq` → 粗优化确认 | 退役 |
+| `acp run Highconfirm` | `acp run BatchOptimize --profile opt_freq_sp_thermo` → 精细优化确认 | 退役 |
+| `acp run optfreq` | `acp run optimize` + `acp run frequency` 或 `acp run BatchOptimize` | 优化+频率 |
+| `acp run optfreqsp` | `acp run BatchOptimize --profile opt_freq_sp` | 优化+频率+单点 |
 
 ---
 
@@ -82,9 +106,38 @@
 
 ```
 src/
-├── acp/                          # 统一模块 (~40 .py, ~8k 行)
-│   ├── cli.py                    # 统一命令行入口 (1,835 行)
-│   ├── catalog.py                # 计算方法元数据 (1,712 行)
+├── acp/                          # 统一模块 (~130 .py, ~65k 行)
+│   ├── cli.py                    # 统一命令行入口 (2,608 行)
+│   ├── catalog.py                # 计算方法元数据 (2,915 行)
+│   │
+│   ├── confsearch/               # 统一构象搜索 + 能量
+│   │   ├── engine.py             # ConfsearchEngine：协议调度、质量门控
+│   │   ├── contracts.py          # 协议特定约束和质量门控
+│   │   ├── manifest.py           # confsearch_manifest.json 产物
+│   │   ├── profiles.py           # light / default / high 资源档位
+│   │   ├── selection.py          # 候选筛选与排序
+│   │   ├── protocols/            # 四种协议实现
+│   │   │   ├── xtb_crest.py      #   xtb-crest（CREST搜索 + DFT精修）
+│   │   │   ├── xtb_md.py         #   xtb-md（xTB-MD采样 + DFT）
+│   │   │   ├── censo_crest.py    #   censo-crest（CREST + CENSO排序）
+│   │   │   └── xtbmd_censo.py    #   xtbmd-censo（xTB-MD + ISOSTAT + CENSO）
+│   │   └── shared/               # 协议共享工具
+│   │
+│   ├── calculations/             # 计算基元和引擎
+│   │   ├── contracts.py          # CalculationPlan / CalculationRequest / Checkpoint 等冻结数据类
+│   │   ├── checkpoint.py         # 原子 JSON checkpoint 写入/加载（plan fingerprint 校验）
+│   │   ├── executor.py           # CalculationPlanExecutor：步骤调度 + 坐标交接 + checkpoint resume
+│   │   ├── plans.py              # build_simple_plan / build_batch_plan / build_irc_request
+│   │   ├── primitives/           # run_singlepoint / run_optimize / run_frequency / run_scan / run_irc / ThermochemistryCalculator
+│   │   ├── pes/                  # PESscan 核心：scan + engine + contracts + validation + path_analysis + path_selection + atom_mapping + bond_changes
+│   │   ├── batch/                # BatchOptimizeEngine + models + loaders + singlepoint
+│   │   └── irc/                  # IRC endpoint discovery + validation
+│   │
+│   ├── compat/                   # 遗留布局只读兼容层
+│   │   └── legacy/               # manifests.py（历史 manifest 读取器）+ layouts.py（布局探测）
+│   │
+│   ├── results/                  # 统一结果清单读取 (result_manifest.json)
+│   ├── storage/                  # 统一 v2 结果清单写入 (result_manifest.json)
 │   │
 │   ├── core/                     # 共享核心机制（无化学逻辑）
 │   │   ├── models.py             # Structure, StructureRecord, StructureEnsemble
@@ -107,12 +160,9 @@ src/
 │   │   ├── external.py           # 外部工具 re-export
 │   │   └── external_backend.py   # ExternalBackend (ISOSTAT + Shermo)
 │   │
-│   ├── workflows/                # 工作流模块（5 个活跃 + registry；机理研究在 src/acp/mechanism/）
-│   │   ├── ensemble.py           # CREST→CENSO ensemble 工作流
-│   │   ├── energy.py             # 自由能排名工作流（Boltzmann + DFT handoff）
-│   │   ├── xtbmd_censo_energy.py # xTB-MD → CENSO 自由能
+│   ├── workflows/                # 工作流模块（legacy：ensemble/energy/xtbmd_censo_energy 已退役 + nmr/simple + registry）
 │   │   ├── nmr.py                # NMR 化学位移预测（GIAO + DP4/DP5）
-│   │   ├── simple.py             # 简单 ORCA 工作流 (sp/opt/freq/optfreq/optfreqsp/scan/xtb-opt)
+│   │   ├── simple.py             # 简单 ORCA 工作流 (sp/opt/freq/scan/xtb-opt)
 │   │   ├── registry.py           # 工作流注册表（CLI 子命令 → WorkflowSpec）
 │   │   └── __init__.py           # PEP 562 懒加载 re-export
 │   │
@@ -128,13 +178,14 @@ src/
 │   ├── io/                       # 分子结构 I/O
 │   │   └── structures.py         # StructureReader, StructureWriter
 │   │
-│   ├── api/                      # FastAPI 服务 (~1,600 行)
+│   ├── api/                      # FastAPI 服务 (~5,000 行)
 │   │   ├── server.py             # FastAPI app 工厂 + static 托管
 │   │   ├── routes.py             # /api/status, /api/backends
 │   │   ├── v1_routes.py          # v1 任务/分子/文件 API
+│   │   ├── v2_routes.py          # v2 API
 │   │   └── schemas.py            # Pydantic 模型
 │   │
-│   └── scheduler/                # 任务调度器 (~2,700 行)
+│   └── scheduler/                # 任务调度器 (~7,800 行)
 │       ├── jobs.py               # JobSpec, JobState
 │       ├── manager.py            # 生命周期管理
 │       ├── runner.py             # 后台进程执行
@@ -142,6 +193,7 @@ src/
 │       ├── provenance.py         # 事件溯源 + 审计日志
 │       ├── artifacts.py          # 制品管理
 │       ├── stage_tasks.py        # 阶段任务分解
+│       ├── tasks.py              # 阶段工作流任务调度
 │       ├── projects.py           # 项目管理
 │       ├── files.py              # 文件操作
 │       ├── logs.py               # 日志管理
@@ -229,24 +281,34 @@ pip install -e '.[dev]'
 # 查看帮助
 acp --help
 
-# === CREST→CENSO Ensemble ===
-acp run ensemble --input "CCO" --output ./out
-acp run ensemble --input "CCO" --preset censo-zero --output ./out
+# === Confsearch — 统一构象搜索 + 能量 ===
+acp run Confsearch --input "CCO" --protocol xtb-crest --refinement-policy screen --output ./out
+acp run Confsearch --input "CCO" --protocol censo-crest --profile light --output ./out
+acp run Confsearch --input "CCO" --protocol xtbmd-censo --refinement-policy rank1 --output ./out
+acp run Confsearch --input "CCO" --protocol xtb-md --refinement-policy cumulative-99 --output ./out
 
-# === 自由能排名 ===
-acp run energy --input "CCO" --output ./out
-acp run energy --input "CCO" --no-opt --output ./out
-acp run energy --input "CCO" --levels '{"opt":{"method":"wB97X-D4","basis":"def2-SVP"},"sp":{"method":"wB97X-D4","basis":"def2-TZVPPD"}}'
+# === PESsearch — 势能面搜索 ===
+acp run PESsearch --from-job 20260823_001_Confsearch --output ./pes_out
+acp run PESsearch --from-artifact RESULT/confsearch/confsearch_manifest.json --output ./pes_out
 
-# === 机理研究（研究型流水线 S0→S4）===
-acp run mechanism --input "C=O" --product "C[O-]" --output ./mech_out
-acp run mechanism --input "C=C" --product "CC" --conformer-mode censo-lite --max-elementary-steps 3 --output ./mech_out
-acp run mechanism --input "C=C" --strategy guided-scan --fidelity s3 --output ./mech_out
+# === BatchOptimize — 批量优化确认 ===
+acp run BatchOptimize --from-job 20260823_002_PESsearch --output ./batch_out
+acp run BatchOptimize --items-file structures.xyz --profile opt_freq_sp_thermo --output ./batch_out
+
+# === IRC — 端点验证 ===
+acp run irc --input ts_structure.xyz --output ./irc_out
+
+# === Scan — 势能面扫描 ===
+acp run scan --input "CCO" --coordinate 3,4,1.0,3.0 --output ./scan_out
 
 # === 简单 ORCA 工作流 ===
 acp run singlepoint --input "CCO" --method "wB97X-D4" --basis "def2-TZVPPD"
 acp run optimize --input molecule.xyz --method "r2SCAN-3c"
 acp run frequency --input molecule.xyz
+
+# === NMR 化学位移预测 ===
+acp run nmr --input "CCO" --output ./nmr_results
+acp run nmr --input "CCO" --backend orca --reference "13C=185.0" "1H=31.5"
 
 # === Web 服务 ===
 acp run serve --port 8765
@@ -255,49 +317,52 @@ acp run serve --port 8765
 ### 底层 QC 库（cccp）
 
 `cccp`（Computational Chemistry Connection Package）是 `acp` 之下的 QC 接口库，
-不再提供独立 CLI 入口——所有计算均通过 `acp run <workflow>` 触发：
-
-```bash
-# 构象搜索能力现由 ensemble/energy 工作流经 CrestBackend 提供
-acp run ensemble --input "CCO" --output ./results
-acp run energy --batch-file molecules.txt --output ./batch_out
-```
+不再提供独立 CLI 入口——所有计算均通过 `acp run <workflow>` 触发。
 
 ---
 
 ## CLI 选项
 
 ```
-acp run ensemble --input <SMILES或文件路径>
-                 --output <输出目录>
-                 --preset <censo-light|censo-default|censo-zero>
-                 --nproc --mem --config ...
+acp run Confsearch --input <SMILES或文件路径>
+                   --output <输出目录>
+                   --protocol <xtb-crest|xtb-md|censo-crest|xtbmd-censo>
+                   --profile <light|default|high>
+                   --refinement-policy <screen|rank1|cumulative-99|all>
+                   --nproc --mem --config ...
 
-acp run energy --input <SMILES或文件路径>
-               --output <输出目录>
-               [--no-opt] [--levels <JSON>]
-               --nproc --mem --config ...
-
-acp run mechanism --input <反应物 SMILES 或文件> [--product <产物>] [--ts-guess <TS 初猜>]
+acp run PESsearch --from-job <Confsearch job id>
+                  --from-artifact <confsearch_manifest.json 路径>
                   --output <输出目录>
-                  [--strategy <guided-scan|rph-reverse|direct-ts>]
-                  [--fidelity <s3|s4>] [--preset <rph-s3|rph-s4|...>]
-                  [--routes <JSON>] [--scan-points <N>] [--irc-points <N>]
-                  [--study-id <id>] [--conformer-mode <auto|censo-lite|xtb-fast>]
-                  [--max-elementary-steps <N>] [--promotion-policy <all_confirmed|rate_relevant|user_selected>]
-                  [--int-extension] [--auto-converge]
-                  [--mechanism-config <path>]
                   --nproc --mem --config ...
 
-acp run singlepoint|opt|freq|optfreq|optfreqsp|scan|xtb-opt --input <SMILES或文件路径>
+acp run BatchOptimize --from-job <PESsearch job id>
+                      --from-artifact <result_manifest.json 路径>
+                      --items-file <structures.xyz 路径>
+                      --profile <opt_only|opt_freq|opt_freq_sp|opt_freq_sp_thermo>
+                      --output <输出目录>
+                      --nproc --mem --config ...
+
+acp run irc --input <TS 结构文件路径>
+            --output <输出目录>
+            --direction <forward|reverse|both>
+            --nproc --mem --config ...
+
+acp run scan --input <SMILES或文件路径>
+             --coordinate <atom1,atom2,start,end>
+             --output <输出目录>
+             --nproc --mem --config ...
+
+acp run singlepoint|optimize|frequency|xtb-optimize --input <SMILES或文件路径>
                   --output <输出目录>
                   --method <method> --basis <basis>
                   --nproc --mem --config ...
 
+acp run nmr --input <SMILES或文件路径> --output <输出目录>
+            --backend <orca> --reference "13C=185.0" "1H=31.5"
+
 acp run serve [--host <host>] [--port <port>] [--reload]
 ```
-
-> 工作流/方法的可用选项与校验由 `catalog.METHOD_SCHEMAS` / `FIELD_DEFINITIONS` 驱动，可通过 `/api/v1/workflow-catalog` 与 `/api/v1/validate-method` 端点查询。
 
 ---
 
@@ -311,7 +376,7 @@ acp run singlepoint --input "CCO" --save-config my_config.yaml
 
 # 编辑 my_config.yaml 调整参数
 # 然后用该配置运行
-acp run ensemble --input "CCO" --config my_config.yaml
+acp run Confsearch --input "CCO" --config my_config.yaml
 ```
 
 ### 配置合并顺序（后覆盖前）
@@ -325,6 +390,24 @@ acp run ensemble --input "CCO" --config my_config.yaml
 
 > ⚠️ `config/defaults.yaml` 仅供参考——Python 内置函数 `_get_default_config()` 是唯一权威默认值源。
 
+### 数据目录（run_root）——两层目录约定
+
+**安装目录 ≠ 数据目录**：所有任务产物（`WORK/`、`RESULT/`、QC 中间文件）与任务索引 `acp_jobs.db` 都落在数据目录 run_root，必须位于**原生文件系统**（WSL 下不要放 `/mnt/*`——9p 网络挂载会让 QC 子进程 I/O 慢约 1000 倍）。
+
+解析优先级：`--run-root` CLI 参数 > `ACP_RUN_ROOT` 环境变量 > 平台默认（root → `/var/lib/acp/runs`；普通用户 → `~/.local/share/acp/runs`）。
+
+```bash
+# 查看生效的数据目录
+acp run serve                       # 启动时打印生效 run_root；落在慢文件系统会 WARNING
+ACP_RUN_ROOT=/data/acp/runs acp run serve
+
+# 迁移历史数据（旧树保留只读归档，DB 自动备份 + 路径改写 + 校验）
+python scripts/migrate_run_root.py ./ACP_runs /var/lib/acp/runs --dry-run
+python scripts/migrate_run_root.py ./ACP_runs /var/lib/acp/runs
+```
+
+启动哨兵 `acp.core.paths.check_run_root_safety` 会对慢文件系统（9p/nfs/cifs/fuse 等）、与安装目录重叠、磁盘空间不足打警告（只警告不阻断；`ACP_ALLOW_SLOW_FS=1` 豁免）。
+
 ---
 
 ## 开发
@@ -337,9 +420,8 @@ pytest tests/ -v
 
 # 运行特定模块测试
 pytest tests/test_acp_backends.py -v
-pytest tests/test_acp_workflows_ensemble.py -v
+pytest tests/test_acp_workflows_nmr.py -v
 pytest tests/test_acp_mechanism_study.py -v
-pytest tests/test_acp_workflows_energy.py -v
 
 # 运行 CENSO 集成测试
 pytest tests/test_acp_censo_p5_acceptance.py -v
@@ -351,7 +433,7 @@ pytest tests/test_remote_phase*.py -v
 pytest -m "not slow" -v
 ```
 
-当前测试状态：**46 测试文件，涵盖 ACP 核心 + 工作流 + API + 调度器 + 远程执行**
+当前测试状态：**96 测试文件，涵盖 ACP 核心 + 工作流 + API + 调度器 + 远程执行**
 
 ### 代码质量
 
@@ -368,62 +450,65 @@ pytest -m "not slow" -v
 
 | 项目 | 文件数 | 代码行数 |
 |------|--------|----------|
-| `src/acp/` | ~40 | ~8,000 |
+| `src/acp/` | ~130 | ~65,000 |
 | `src/cccp/` | 17 | ~5,200 |
-| `tests/` | 46 | ~8,000+ |
-| 合计 | ~100+ | ~21,000+ |
+| `tests/` | 96 | ~10,000+ |
+| 合计 | ~229+ | ~80,000+ |
 
 ---
 
 ## 架构图
 
 ```
-┌─────────────────────────────────────────────────┐
-│  CLI                                              │
-│  acp run ensemble|energy|mechanism|singlepoint|... │
-│  acp run serve                                     │
-└────────────────────┬────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────┐
-│  WorkflowRunner (acp/core/workflow.py)          │
-│  Stage 管道（按工作流组合）                       │
-└────────────────────┬────────────────────────────┘
-                     │
-          ┌───────────┼───────────┬───────────┐
-          ▼           ▼           ▼           ▼
-    ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
-    │ Ensemble │ │ 自由能排名│ │ 机理研究  │ │ Simple   │
-    │ (Phase1) │ │ (Phase1) │ │ (S0→S4)  │ │ (Phase1) │
-    └──────────┘ └──────────┘ └──────────┘ └──────────┘
-          │           │           │           │
-          └───────────┼───────────┼───────────┘
-                      │
-                      ▼
-┌─────────────────────────────────────────────────┐
-│  QC Backends (acp/backends/)                    │
-│  ORCA / CREST / xTB / CENSO / ISOSTAT / Molclus │
-│  能力协议：GeometryOptimizer / ConformerSearcher│
-└────────────────────┬────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────┐
-│  cccp — QC 接口库（子进程封装 + 配置加载）       │
-└────────────────────┬────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────┐
-│  Scheduler (acp/scheduler/)                      │
-│  Job Manager → Local Runner / Remote LSF Runner  │
-│  Provenance / Artifacts / Store                  │
-└────────────────────┬────────────────────────────┘
-                     │
-                     ▼
-┌─────────────────────────────────────────────────┐
-│  FastAPI Server (acp/api/)                       │
-│  /api/status, /api/backends, /api/workflows,    │
-│  /api/v1/...  ·  ACP Workbench Frontend          │
-└─────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│  CLI                                                               │
+│  acp run Confsearch|PESsearch|BatchOptimize|irc|scan|nmr|simple|serve │
+└────────────────────────────┬──────────────────────────────────────┘
+                             │
+                             ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  WorkflowRunner (acp/core/workflow.py)                            │
+│  计算计划驱动管道                                                    │
+└────────────────────────────┬──────────────────────────────────────┘
+                             │
+        ┌────────────────────┼────────────────────┬────────────────┐
+        ▼                    ▼                    ▼                ▼
+  ┌───────────┐        ┌──────────┐        ┌──────────┐    ┌──────────┐
+  │Confsearch │        │PESsearch │        │BatchOptimize│  │irc/scan  │
+  │  (统一构象 │        │ (路径搜索│        │(批量优化 │    │(IRC验证/ │
+  │   搜索+能量)│       │  PES)    │        │ 确认)    │    │ 坐标扫描)│
+  └─────┬─────┘        └────┬─────┘        └────┬─────┘    └────┬─────┘
+        │                   │                   │               │
+        │    confsearch_manifest.json           │               │
+        │              pes_profile.json          │               │
+        │                   result_manifest.json│               │
+        └───────────────────┴───────────────────┴───────────────┘
+                                │
+                                ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  QC Backends (acp/backends/)                                      │
+│  ORCA / CREST / xTB / CENSO / ISOSTAT / Molclus                   │
+│  能力协议：GeometryOptimizer / SinglePointCalculator / ConformerSearcher│
+└────────────────────────────┬──────────────────────────────────────┘
+                             │
+                             ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  cccp — QC 接口库（子进程封装 + 配置加载）                          │
+└────────────────────────────┬──────────────────────────────────────┘
+                             │
+                             ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  Scheduler (acp/scheduler/)                                        │
+│  Job Manager → Local Runner / Remote LSF Runner                    │
+│  Provenance / Artifacts / Store / Stage Tasks                      │
+└────────────────────────────┬──────────────────────────────────────┘
+                             │
+                             ▼
+┌───────────────────────────────────────────────────────────────────┐
+│  FastAPI Server (acp/api/)                                         │
+│  /api/status, /api/backends, /api/workflows, /api/v1/...          │
+│  ACP Workbench Frontend                                            │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -432,7 +517,7 @@ pytest -m "not slow" -v
 
 | 资源 | 位置 |
 |------|------|
-| Web 服务 | http://localhost:8765（启动 `acp run serve` 后）|
+| Web 服务 | http://127.0.0.1:8765（启动 `acp run serve` 后；WSL 用户优先使用 127.0.0.1 避免 IPv6 问题）|
 | 前端仪表盘 | `frontend/ACP_Workbench.html` / `ACP_Workbench_v2.html` |
 | 开发文档 | `docs/`（CENSO 集成、MethodMeta、Simple Workflows） |
 
@@ -450,7 +535,7 @@ sudo journalctl -u acp -f          # Tail logs
 - **Service**: `acp.service`
 - **Config**: `/etc/systemd/system/acp.service`
 - **User**: `<user>`
-- **URL**: http://localhost:8765
+- **URL**: http://127.0.0.1:8765
 - **Reload reminder**: After any code modification, run `sudo systemctl restart acp`.
 
 ---

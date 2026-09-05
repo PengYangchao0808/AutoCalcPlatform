@@ -1,0 +1,649 @@
+"""F4 scope-fidelity audit — deterministic audit test.
+
+Verifies that changes from ``refactor-baseline`` to the working tree in the
+interfaces/orca + backends/orca scope are limited to declared target regions
+(opt_freq deletion, calc_type_map cleanup, NumFreq branch simplification),
+with no algorithm-body additions or interface-scope overflows.
+
+Groups:
+    ① AST function-scope audit (deletion-only)
+    ② Scheduler DB mechanism tables (fixture via migrations)
+    ③ .omo/ directory — no new files
+    ④ Catalog retired-ID final-state audit
+    ⑤ Must-NOT-Have (grep gates + BatchOptimize no-IRC)
+
+Amendments (plan-sanctioned, wave-2 backend wiring):
+    A. ``backends/orca.py``: ``relaxed_scan()`` thin wrapper + 2 imports from
+       ``cccp.qc.interfaces.{constraints,xtb_scan}`` — designated thin-adapter
+       home per plan todo 11/16.  AST-thinness assertion enforced: no loops,
+       no numeric arithmetic, no regex, must delegate to ``self._interface``.
+    B. ``orca.py``: 2 modified lines in ``_build_input_blocks`` — mechanical
+       consequence of deleting the ``"optfreq": "Opt Freq"`` calc_type_map entry.
+       Modification only removes "Opt Freq" handling; no algorithm-body change.
+    C. ``orca.py`` + ``backends/orca.py``: live optimization-trajectory
+       streaming (2026-09 wave) — ``_run_orca`` gains an ``output_callback``
+       streaming branch (threading/Callable imports) with call-site plumbing
+       in ``optimize``/``transition_state_opt``; ``relaxed_scan`` gains
+       multi-coordinate support via ``ReactionCoordinatePlan`` and the new
+       ``_run_synchronous_relaxed_scan`` helper.  Sanctioned scopes are the
+        named functions only; presence teeth assert the wave actually landed.
+    D. ``constraints.py``: ``orca_constraint_block`` syntax fix (2026-09-04
+       incident) — ORCA ``%geom`` indices are 0-based and the target value
+       precedes the trailing ``C`` flag; the erroneous ``+1`` conversion is
+       removed.  ``CoordinateSpec.constraint_at`` monitor-only error reformat
+       rides along.  Teeth: the writer body must not contain ``+ 1`` and
+       must emit the target before ``C``.
+"""
+
+from __future__ import annotations
+
+import ast
+import inspect
+import re
+import sqlite3
+import subprocess
+import tempfile
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
+BASELINE = "refactor-baseline"
+ALLOWED_PY = frozenset(
+    {
+        "src/cccp/qc/interfaces/orca.py",
+        "src/cccp/qc/interfaces/orca_ts.py",
+        "src/cccp/qc/interfaces/constraints.py",
+        "src/acp/backends/orca.py",
+    }
+)
+
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+
+def _git(*args: str) -> str:
+    """Run a git command and return stdout."""
+    return subprocess.run(
+        ["git", *args],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+    ).stdout
+
+
+def _changed_files() -> set[str]:
+    """Files changed between *BASELINE* and worktree in the audited scope."""
+    out = _git(
+        "diff",
+        "--name-only",
+        BASELINE,
+        "--",
+        "src/cccp/qc/interfaces/",
+        "src/acp/backends/orca.py",
+    )
+    return set(out.strip().splitlines()) if out.strip() else set()
+
+
+def _diff_hunks(
+    path: str,
+) -> tuple[list[tuple[int, str]], list[tuple[int, str]]]:
+    """Parse unified diff for *path*.
+
+    Returns ``(added, deleted)`` where each entry is
+    ``(line_number_in_respective_version, content)``.
+    """
+    out = _git("diff", BASELINE, "--", path)
+    added: list[tuple[int, str]] = []
+    deleted: list[tuple[int, str]] = []
+    old = new = 0
+    for raw in out.splitlines():
+        if raw.startswith("@@"):
+            m = re.match(r"@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@", raw)
+            if m:
+                old, new = int(m[1]), int(m[2])
+        elif raw.startswith("-") and not raw.startswith("---"):
+            deleted.append((old, raw[1:]))
+            old += 1
+        elif raw.startswith("+") and not raw.startswith("+++"):
+            added.append((new, raw[1:]))
+            new += 1
+        elif raw.startswith("\\"):
+            continue  # "\ No newline at end of file"
+        else:
+            old += 1
+            new += 1
+    return added, deleted
+
+
+def _baseline_content(path: str) -> str:
+    """Return file content at the baseline ref, or skip if absent."""
+    r = subprocess.run(
+        ["git", "show", f"{BASELINE}:{path}"],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+    )
+    if r.returncode != 0:
+        pytest.skip(f"Not in baseline: {path}")
+    return r.stdout
+
+
+def _worktree_content(path: str) -> str:
+    """Return file content from the working tree."""
+    return (ROOT / path).read_text()
+
+
+def _func_ranges(src: str) -> dict[str, tuple[int, int]]:
+    """Parse AST and return ``{name: (start_line, end_line)}``."""
+    out: dict[str, tuple[int, int]] = {}
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            out[node.name] = (node.lineno, getattr(node, "end_lineno", node.lineno))
+    return out
+
+
+def _func_range(src: str, func_name: str, cls_name: str | None = None) -> tuple[int, int] | None:
+    """Return ``(start, end)`` lines for *func_name* inside *cls_name*.
+
+    Returns ``None`` if the function is not found.
+    """
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.ClassDef) and (cls_name is None or node.name == cls_name):
+            for item in node.body:
+                if (
+                    isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    and item.name == func_name
+                ):
+                    return (item.lineno, getattr(item, "end_lineno", item.lineno))
+    return None
+
+
+# ── Amendment A: relaxed_scan thinness assertion ──────────────────────────────
+
+_THIN_BANNED_NODE_TYPES = (ast.For, ast.While, ast.AsyncFor)
+_THIN_BANNED_BINOPS = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow)
+
+
+def _assert_relaxed_scan_thin(worktree_src: str) -> list[str]:
+    """AST-thinness assertion for ``ORCABackend.relaxed_scan``.
+
+    Returns a list of violation strings (empty = thin / compliant).
+
+    Thin means:
+    * No ``for``/``while`` loops (no iteration over frames).
+    * No arithmetic with numeric literals (no energy math).
+    * No ``re.*`` calls (no parsing regex).
+    * Must delegate to ``self._interface.relaxed_scan(...)``.
+    """
+    violations: list[str] = []
+    tree = ast.parse(worktree_src)
+
+    target = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name == "ORCABackend":
+            for item in node.body:
+                if isinstance(item, ast.FunctionDef) and item.name == "relaxed_scan":
+                    target = item
+                    break
+    if target is None:
+        return ["  relaxed_scan method not found in ORCABackend"]
+
+    has_delegation = False
+    for node in ast.walk(target):
+        if isinstance(node, _THIN_BANNED_NODE_TYPES):
+            violations.append(f"  relaxed_scan: loop at line {node.lineno}")
+        if isinstance(node, ast.BinOp) and isinstance(node.op, _THIN_BANNED_BINOPS):
+            left_num = isinstance(getattr(node, "left", None), ast.Constant) and isinstance(
+                node.left.value, (int, float)
+            )
+            right_num = isinstance(getattr(node, "right", None), ast.Constant) and isinstance(
+                node.right.value, (int, float)
+            )
+            if left_num or right_num:
+                violations.append(f"  relaxed_scan: numeric arithmetic at line {node.lineno}")
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if isinstance(node.func.value, ast.Name) and node.func.value.id == "re":
+                violations.append(f"  relaxed_scan: regex call at line {node.lineno}")
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if (
+                node.func.attr == "relaxed_scan"
+                and isinstance(node.func.value, ast.Attribute)
+                and node.func.value.attr == "_interface"
+            ):
+                has_delegation = True
+    if not has_delegation:
+        violations.append("  relaxed_scan: no delegation to self._interface.relaxed_scan()")
+
+    return violations
+
+
+# ── Amendment B: optfreq-removal mechanical modification check ────────────────
+
+
+def _is_optfreq_removal_line(
+    added_ln: int,
+    added_txt: str,
+    deleted: list[tuple[int, str]],
+    build_range: tuple[int, int] | None,
+) -> bool:
+    """Check if *added_txt* at *added_ln* is a permissible optfreq-removal edit.
+
+    Criteria:
+    * Line falls within ``_build_input_blocks`` in the worktree.
+    * Line does NOT contain ``"Opt Freq"``.
+    * There exists a deleted line whose content contains ``"Opt Freq"``
+      or ``"optfreq"`` (the removed calc_type_map entry or its usage).
+    """
+    stripped = added_txt.strip()
+    if not stripped or stripped.startswith("#"):
+        return True  # comments/blanks always ok
+    if "Opt Freq" in added_txt or "optfreq" in added_txt.lower():
+        return False  # must not re-introduce
+    if build_range is None:
+        return False
+    bs, be = build_range
+    if not (bs <= added_ln <= be):
+        return False
+    # Must have at least one deleted line containing "Opt Freq"
+    return any("Opt Freq" in d_txt or "optfreq" in d_txt.lower() for _, d_txt in deleted)
+
+
+# ── Amendment C: trajectory streaming + multi-coordinate scan (2026-09) ─────
+
+_AMENDMENT_C_ORCA_FUNCS = (
+    "_run_orca",
+    "optimize",
+    "transition_state_opt",
+    "relaxed_scan",
+    "_run_synchronous_relaxed_scan",
+)
+_AMENDMENT_C_IMPORT_MARKERS = ("threading", "Callable", "ReactionCoordinatePlan")
+
+
+def _is_amendment_c_addition(added_ln: int, added_txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``orca.py`` additions for the trajectory/scan wave.
+
+    * Import lines introducing ``threading`` / ``Callable`` /
+      ``ReactionCoordinatePlan``.
+    * Lines inside the sanctioned function scopes in the worktree.
+    """
+    stripped = added_txt.strip()
+    is_import_line = (
+        stripped.startswith(("import ", "from "))
+        or stripped.rstrip(",") in _AMENDMENT_C_IMPORT_MARKERS
+    )
+    if is_import_line and any(marker in stripped for marker in _AMENDMENT_C_IMPORT_MARKERS):
+        return True
+    ranges = _func_ranges(worktree_src)
+    return any(
+        (fr := ranges.get(name)) is not None and fr[0] <= added_ln <= fr[1]
+        for name in _AMENDMENT_C_ORCA_FUNCS
+    )
+
+
+def _is_amendment_c_deletion(ln: int, txt: str, baseline_src: str) -> bool:
+    """Sanctioned ``orca.py`` deletions for the trajectory/scan wave.
+
+    * The old synchronous-only ``_run_orca`` body and ``relaxed_scan``
+      single-coordinate signature (baseline function ranges).
+    * The two ``success = self._run_orca(input_file, output_file)`` call
+      sites in ``optimize``/``transition_state_opt``.
+    * The ``from collections.abc import Sequence`` import line (gains
+      ``Callable``).
+    """
+    stripped = txt.strip()
+    if stripped == "success = self._run_orca(input_file, output_file)":
+        return True
+    if stripped == "from collections.abc import Sequence":
+        return True
+    ranges = _func_ranges(baseline_src)
+    return any(
+        (fr := ranges.get(name)) is not None and fr[0] <= ln <= fr[1]
+        for name in ("_run_orca", "relaxed_scan")
+    )
+
+
+def _target_orca(src: str) -> set[int]:
+    """Target-region line numbers for baseline ``orca.py``."""
+    lines = src.splitlines()
+    fr = _func_ranges(src)
+    tgt: set[int] = set()
+
+    # 1. ORCAInterface.opt_freq method + trailing blank-line buffer
+    if "opt_freq" in fr:
+        s, e = fr["opt_freq"]
+        tgt.update(range(s, min(e + 4, len(lines) + 1)))
+
+    # 2. _build_input_blocks — lines referencing optfreq / Opt Freq + context
+    if "_build_input_blocks" in fr:
+        bs, be = fr["_build_input_blocks"]
+        for i in range(bs, be + 1):
+            txt = lines[i - 1]
+            if "optfreq" in txt or "Opt Freq" in txt:
+                for j in range(max(bs, i - 5), min(be + 1, i + 10)):
+                    tgt.add(j)
+
+    # 3. Module-level optfreq constants
+    for i, ln in enumerate(lines, 1):
+        if not ln[:1].strip():
+            low = ln.lower()
+            if ("optfreq" in low or "opt_freq" in low) and not ln.lstrip().startswith("#"):
+                tgt.add(i)
+
+    return tgt
+
+
+def _target_backend(src: str) -> set[int]:
+    """Target-region line numbers for baseline ``backends/orca.py``."""
+    lines = src.splitlines()
+    fr = _func_ranges(src)
+    tgt: set[int] = set()
+    if "opt_freq" in fr:
+        s, e = fr["opt_freq"]
+        tgt.update(range(s, min(e + 4, len(lines) + 1)))
+    return tgt
+
+
+# ── ① AST function-scope audit ──────────────────────────────────────────────
+
+
+def test_diff_only_allowed_py_files() -> None:
+    """① Only ``.py`` files in the allowed set appear in the diff."""
+    py = {f for f in _changed_files() if f.endswith(".py")}
+    assert not (py - ALLOWED_PY), f"Unexpected .py files changed: {py - ALLOWED_PY}"
+
+
+def test_algorithm_body_untouched() -> None:
+    """① Every added line must be pure comment/blank — no algorithm-body changes.
+
+    Two plan-sanctioned exceptions are encoded with teeth:
+
+    **Amendment A** — ``backends/orca.py``: the ``relaxed_scan()`` thin wrapper
+    (24 lines) + 2 imports from ``cccp.qc.interfaces.{constraints,xtb_scan}``
+    are permitted.  AST-thinness assertion enforces: no loops, no numeric
+    arithmetic, no regex calls, must delegate to ``self._interface``.
+
+    **Amendment B** — ``orca.py``: 2 modified lines in ``_build_input_blocks``
+    are the mechanical consequence of deleting the ``"optfreq": "Opt Freq"``
+    entry.  Each must fall within ``_build_input_blocks``, must not contain
+    ``"Opt Freq"``, and must pair with a deleted line that does.
+
+    Per plan: any other non-comment added/modified line = FAIL.
+    """
+    violations: list[str] = []
+
+    for fp in ALLOWED_PY:
+        added, deleted = _diff_hunks(fp)
+
+        # ── orca_ts.py: zero changes ──────────────────────────────────────
+        if fp == "src/cccp/qc/interfaces/orca_ts.py":
+            for ln, txt in added:
+                stripped = txt.strip()
+                if stripped and not stripped.startswith("#"):
+                    violations.append(f"  {fp}:{ln}: {txt!r}")
+            continue
+
+        # ── backends/orca.py: Amendment A ─────────────────────────────────
+        if fp == "src/acp/backends/orca.py":
+            worktree = _worktree_content(fp)
+            method_range = _func_range(worktree, "relaxed_scan", "ORCABackend")
+            thin_checked = False
+            for ln, txt in added:
+                stripped = txt.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                # Allow: import of ReactionCoordinatePlan / RelaxedScanResult
+                if (
+                    "ReactionCoordinatePlan" in txt or "RelaxedScanResult" in txt
+                ) and txt.lstrip().startswith("from "):
+                    continue
+                # Allow: lines within relaxed_scan method body
+                if method_range and method_range[0] <= ln <= method_range[1]:
+                    if not thin_checked:
+                        violations.extend(_assert_relaxed_scan_thin(worktree))
+                        thin_checked = True
+                    continue
+                # Anything else is a violation
+                violations.append(f"  {fp}:{ln}: {txt!r}")
+            continue
+
+        # ── constraints.py: Amendment D ─────────────────────────────────
+        if fp == "src/cccp/qc/interfaces/constraints.py":
+            worktree = _worktree_content(fp)
+            wt_ranges = _func_ranges(worktree)
+            allowed_ranges = [
+                wt_ranges[name]
+                for name in ("orca_constraint_block", "constraint_at")
+                if name in wt_ranges
+            ]
+            for ln, txt in added:
+                stripped = txt.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if any(start <= ln <= end for start, end in allowed_ranges):
+                    continue
+                violations.append(f"  {fp}:{ln}: {txt!r}")
+            # Teeth: 0-based writer, target-before-C syntax.
+            writer = wt_ranges.get("orca_constraint_block")
+            if writer is None:
+                violations.append(f"  {fp}: Amendment D scope missing orca_constraint_block")
+            else:
+                body = "\n".join(worktree.splitlines()[writer[0] - 1 : writer[1]])
+                if "+ 1" in body or "atom + 1" in body:
+                    violations.append(f"  {fp}: orca_constraint_block still applies +1 indexing")
+                if "{constraint.target:.8f} C" not in body:
+                    violations.append(f"  {fp}: orca_constraint_block must emit target before C")
+            continue
+
+        # ── orca.py: Amendment B ──────────────────────────────────────────
+        if fp == "src/cccp/qc/interfaces/orca.py":
+            worktree = _worktree_content(fp)
+            build_range = _func_range(worktree, "_build_input_blocks")
+            optfreq_added_count = 0
+            for ln, txt in added:
+                stripped = txt.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if _is_optfreq_removal_line(ln, txt, deleted, build_range):
+                    optfreq_added_count += 1
+                    continue
+                if _is_amendment_c_addition(ln, txt, worktree):
+                    continue
+                violations.append(f"  {fp}:{ln}: {txt!r}")
+            # Teeth: at most 2 optfreq-removal lines permitted
+            if optfreq_added_count > 2:
+                violations.append(
+                    f"  {fp}: {optfreq_added_count} optfreq-removal lines (max 2 expected)"
+                )
+            # Amendment C teeth: the sanctioned scopes must exist and deliver
+            # the wave — otherwise the allowance is masking scope drift.
+            wt_ranges = _func_ranges(worktree)
+            if "_run_synchronous_relaxed_scan" not in wt_ranges:
+                violations.append(
+                    f"  {fp}: Amendment C scope missing _run_synchronous_relaxed_scan"
+                )
+            run_orca_range = _func_range(worktree, "_run_orca", "ORCAInterface")
+            if run_orca_range is None or "output_callback" not in "\n".join(
+                worktree.splitlines()[run_orca_range[0] - 1 : run_orca_range[0] + 8]
+            ):
+                violations.append(f"  {fp}: Amendment C scope _run_orca lacks output_callback")
+            continue
+
+    assert not violations, "Non-comment added lines detected:\n" + "\n".join(violations)
+
+
+def test_orca_ts_no_changes() -> None:
+    """① ``orca_ts.py`` must have zero changes (empty target set)."""
+    assert "src/cccp/qc/interfaces/orca_ts.py" not in _changed_files(), (
+        "orca_ts.py has changes but target-region set is empty"
+    )
+
+
+def test_deleted_lines_in_target_regions() -> None:
+    """① Every deleted line falls inside a declared target region."""
+    checks = [
+        ("src/cccp/qc/interfaces/orca.py", _target_orca),
+        ("src/acp/backends/orca.py", _target_backend),
+    ]
+    for fp, builder in checks:
+        tgt = builder(_baseline_content(fp))
+        _, deleted = _diff_hunks(fp)
+        bad_entries = [(ln, t) for ln, t in deleted if ln not in tgt]
+        if fp == "src/cccp/qc/interfaces/orca.py":
+            baseline_src = _baseline_content(fp)
+            bad_entries = [
+                (ln, t)
+                for ln, t in bad_entries
+                if not _is_amendment_c_deletion(ln, t, baseline_src)
+            ]
+        elif fp == "src/acp/backends/orca.py":
+            # Amendment C: relaxed_scan multi-coordinate rewrite lives in the
+            # method body (baseline range); Amendment A covers its additions.
+            baseline_src = _baseline_content(fp)
+            scan_range = _func_range(baseline_src, "relaxed_scan", "ORCABackend")
+            if scan_range is not None:
+                bad_entries = [
+                    (ln, t) for ln, t in bad_entries if not scan_range[0] <= ln <= scan_range[1]
+                ]
+        bad = [f"  {fp}:{ln}: {t!r}" for ln, t in bad_entries]
+        assert not bad, "Deleted lines outside target regions:\n" + "\n".join(bad)
+
+
+def test_constraints_deletions_in_amendment_d_regions() -> None:
+    """① ``constraints.py`` deletions stay inside the Amendment D scopes."""
+    fp = "src/cccp/qc/interfaces/constraints.py"
+    baseline_src = _baseline_content(fp)
+    ranges = _func_ranges(baseline_src)
+    allowed = {
+        line
+        for name in ("orca_constraint_block", "constraint_at")
+        if name in ranges
+        for line in range(ranges[name][0], ranges[name][1] + 1)
+    }
+    _, deleted = _diff_hunks(fp)
+    bad = [f"  {fp}:{ln}: {t!r}" for ln, t in deleted if ln not in allowed]
+    assert not bad, "Deleted lines outside Amendment D regions:\n" + "\n".join(bad)
+
+
+def test_worktree_opt_freq_absent() -> None:
+    """① Target regions must not reappear in the working tree."""
+    # Class methods
+    for cls, fp in [
+        ("ORCAInterface", "src/cccp/qc/interfaces/orca.py"),
+        ("ORCABackend", "src/acp/backends/orca.py"),
+    ]:
+        tree = ast.parse(_worktree_content(fp))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == cls:
+                names = {
+                    d.name
+                    for d in node.body
+                    if isinstance(d, (ast.FunctionDef, ast.AsyncFunctionDef))
+                }
+                assert "opt_freq" not in names, f"{cls}.opt_freq still present"
+
+    # Module-level optfreq constants
+    for fp in ("src/cccp/qc/interfaces/orca.py", "src/acp/backends/orca.py"):
+        for i, ln in enumerate(_worktree_content(fp).splitlines(), 1):
+            if not ln[:1].strip():
+                low = ln.lower()
+                if ("optfreq" in low or "opt_freq" in low) and not ln.lstrip().startswith("#"):
+                    pytest.fail(f"{fp}:{i}: module-level optfreq reference: {ln!r}")
+
+
+# ── ② Scheduler DB mechanism tables ─────────────────────────────────────────
+
+
+def test_scheduler_db_mechanism_tables() -> None:
+    """② ``mechanism_studies`` / ``decision_points`` / ``mechanism_projects`` exist.
+
+    Built in-test via ``acp.scheduler.migrations.migrate``; fixture rows
+    inserted and verified.
+    """
+    from acp.scheduler.migrations import migrate
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db = Path(f.name)
+    try:
+        migrate(db)
+        conn = sqlite3.connect(str(db))
+        tables = {
+            r[0]
+            for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        }
+        for t in ("mechanism_studies", "decision_points", "mechanism_projects"):
+            assert t in tables, f"{t} table missing"
+
+        # Fixture rows
+        conn.execute(
+            "INSERT INTO mechanism_studies "
+            "(id, job_id, status, created_at, updated_at) "
+            "VALUES ('s1', 'j1', 'active', '2026-01-01', '2026-01-01')"
+        )
+        conn.execute(
+            "INSERT INTO decision_points (id, study_id, status, created_at) "
+            "VALUES ('dp1', 's1', 'pending', '2026-01-01')"
+        )
+        conn.execute(
+            "INSERT INTO mechanism_projects "
+            "(project_id, name, created_at, updated_at) "
+            "VALUES ('p1', 'test', '2026-01-01', '2026-01-01')"
+        )
+        conn.commit()
+
+        assert conn.execute("SELECT count(*) FROM mechanism_studies").fetchone()[0] == 1
+        assert conn.execute("SELECT count(*) FROM decision_points").fetchone()[0] == 1
+        assert conn.execute("SELECT count(*) FROM mechanism_projects").fetchone()[0] == 1
+        conn.close()
+    finally:
+        db.unlink(missing_ok=True)
+
+
+# ── ③ .omo/ no new files ────────────────────────────────────────────────────
+
+
+def test_omo_no_new_files() -> None:
+    """③ ``git log --all --diff-filter=A -- .omo/`` must be empty."""
+    assert not _git("log", "--all", "--diff-filter=A", "--", ".omo/").strip()
+
+
+# ── ④ Catalog retired-ID final-state audit ──────────────────────────────────
+
+
+def test_catalog_retired_ids() -> None:
+    """④ ``final == baseline ∪ {optfreq, optfreqsp, Lowconfirm, Highconfirm}``.
+
+    Also asserts ``baseline ⊆ final`` (zero drift on original ten).
+    """
+    base_path = ROOT / "tests/baseline/refactor-evidence/catalog-retired-ids.txt"
+    final_path = ROOT / "tests/baseline/refactor-evidence/catalog-retired-ids-final.txt"
+    base = set(base_path.read_text().splitlines())
+    final = set(final_path.read_text().splitlines())
+    expected = base | {"optfreq", "optfreqsp", "Lowconfirm", "Highconfirm"}
+    assert final == expected, (
+        f"Retired-ID mismatch: missing={expected - final}, extra={final - expected}"
+    )
+    assert base <= final, "Baseline IDs not subset of final"
+
+
+# ── ⑤ Must-NOT-Have ────────────────────────────────────────────────────────
+
+
+def test_grep_gate_final_forbidden_symbols() -> None:
+    """⑤ ``check_grep_gates --gate final_forbidden_symbols src/acp`` exit 0."""
+    r = subprocess.run(
+        ["python", "scripts/check_grep_gates.py", "--gate", "final_forbidden_symbols", "src/acp"],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+    )
+    assert r.returncode == 0, f"Gate failed:\n{r.stdout}\n{r.stderr}"
+
+
+def test_batch_no_irc_invariants() -> None:
+    """⑤ BatchOptimize engine source must not reference IRC."""
+    from acp.calculations.batch import engine as batch_engine
+
+    src = inspect.getsource(batch_engine).casefold()
+    assert "irc" not in src, "BatchOptimize engine contains IRC references"

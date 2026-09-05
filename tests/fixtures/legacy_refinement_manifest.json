@@ -1,0 +1,23 @@
+{
+  "schema_version": "refinement_manifest_v1",
+  "stage": "S3",
+  "fidelity": "low",
+  "profile_id": "b97_3c_r2scan_3c_v1_legacy",
+  "run_id": "run_001",
+  "structures": [
+    {
+      "id": "ts_guess_001",
+      "role": "ts",
+      "kind": "transition_state",
+      "status": "confirmed",
+      "charge": 0,
+      "multiplicity": 1,
+      "forming_bonds": [[0, 1]],
+      "opt_status": "complete",
+      "frequency_status": "complete",
+      "canonical_frequency_status": "complete",
+      "sp_status": "not_run",
+      "optimized_xyz": "optimized/ts_guess_001.xyz"
+    }
+  ]
+}

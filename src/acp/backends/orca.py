@@ -11,7 +11,9 @@ from numpy.typing import NDArray
 
 from acp.backends.base import QCBackend, QCResult, to_qc_result
 from acp.backends.registry import register_backend
+from cccp.qc.interfaces.constraints import ReactionCoordinatePlan
 from cccp.qc.interfaces.orca import ORCAInterface
+from cccp.qc.interfaces.xtb_scan import RelaxedScanResult
 from cccp.software import detect_version
 
 logger = logging.getLogger(__name__)
@@ -114,29 +116,6 @@ class ORCABackend(QCBackend):
             )
         )
 
-    def opt_freq(
-        self,
-        coordinates: NDArray[np.float64],
-        symbols: list[str],
-        charge: int = 0,
-        multiplicity: int = 1,
-        output_dir: Path | None = None,
-        output_name: str = "orca_optfreq",
-        **kwargs: Any,
-    ) -> QCResult:
-        target_dir = output_dir or Path.cwd()
-        return to_qc_result(
-            self._interface.opt_freq(
-                coordinates,
-                symbols,
-                charge=charge,
-                multiplicity=multiplicity,
-                output_dir=target_dir,
-                output_name=output_name,
-                **kwargs,
-            )
-        )
-
     def nmr_shielding(
         self,
         coordinates: NDArray[np.float64],
@@ -204,6 +183,47 @@ class ORCABackend(QCBackend):
             charge=charge,
             multiplicity=multiplicity,
             output_dir=target_dir,
+            **kwargs,
+        )
+
+    def relaxed_scan(
+        self,
+        coordinates: NDArray[np.float64],
+        symbols: list[str],
+        output_dir: Path,
+        plan: ReactionCoordinatePlan,
+        charge: int = 0,
+        multiplicity: int = 1,
+        **kwargs: Any,
+    ) -> RelaxedScanResult:
+        """Delegate a relaxed scan to ``ORCAInterface``.
+
+        A plan with multiple drive coordinates is kept synchronous by the
+        interface: every frame constrains all coordinates at the same
+        interpolation value.
+        """
+        drive_coordinates = plan.drive_coordinates()
+        if not drive_coordinates:
+            raise ValueError("ORCA relaxed_scan requires at least one drive coordinate")
+        if len(drive_coordinates) > 1:
+            return self._interface.relaxed_scan(
+                coordinates,
+                symbols,
+                plan=plan,
+                points=plan.points,
+                charge=charge,
+                multiplicity=multiplicity,
+                output_dir=output_dir,
+                **kwargs,
+            )
+        return self._interface.relaxed_scan(
+            coordinates,
+            symbols,
+            scan_coordinate=drive_coordinates[0],
+            points=plan.points,
+            charge=charge,
+            multiplicity=multiplicity,
+            output_dir=output_dir,
             **kwargs,
         )
 

@@ -1,0 +1,50 @@
+{
+  "schema_version": "s4_highconfirm_v1",
+  "workflow": "Highconfirm",
+  "stage": "S4",
+  "created_at": "2026-08-27T00:00:00+00:00",
+  "source": {
+    "kind": "s3_lowconfirm_manifest",
+    "stage": "S3",
+    "path": "s3_lowconfirm_manifest.json"
+  },
+  "profile": {
+    "level": "high",
+    "opt_method": "M06-2X",
+    "opt_basis": "def2-TZVP",
+    "freq_method": "M06-2X",
+    "freq_basis": "def2-TZVP",
+    "sp_method": "DLPNO-CCSD(T)",
+    "sp_basis": "def2-TZVPP",
+    "max_cycles": 250,
+    "irc": true
+  },
+  "charge": 0,
+  "multiplicity": 1,
+  "candidates": [
+    {
+      "id": "ts_guess_001",
+      "kind": "ts",
+      "status": "confirmed",
+      "opt_converged": true,
+      "optimized_xyz": "optimized/ts_guess_001.xyz",
+      "sp_energy_hartree": -100.123,
+      "gibbs_hartree": -100.1,
+      "frequency": {
+        "status": "complete",
+        "n_imaginary": 1
+      }
+    }
+  ],
+  "batch_manifest": "batch_calculation_manifest.json",
+  "irc": null,
+  "s3_s4_consistency": [],
+  "gates": {
+    "G4": "PASS",
+    "G5": "PASS"
+  },
+  "errors": [],
+  "provenance": {
+    "engine": "acp-highconfirm"
+  }
+}

@@ -1,0 +1,18 @@
+=== Todo 26 — Standalone IRC Workflow Integration — HAPPY ===
+
+COMMAND: pytest tests/test_irc.py tests/test_checkpoint_continue.py -q
+
+OUTPUT:
+...............................                                          [100%]
+31 passed in 5.46s
+
+KEY OUTPUT:
+- Standalone workflow adapter writes RESULT/irc/irc_forward.xyz and irc_reverse.xyz.
+- irc_report.json and RESULT/result_manifest.json are written.
+- Catalog, registry, stage plan, local command, and remote command all resolve irc.
+- simple.py and acp.workflows re-export the single primitive implementation.
+- Both directions remain a single explicit scheduler request.
+- IRC pause/unpause and checkpoint interruption/continue cases pass.
+- IRC request remains an IrcRequest, not a CalculationPlan/CalculationStep.
+
+EXIT CODE: 0

@@ -1,0 +1,29 @@
+=== STEP 1: failure-path tests ===
+COMMAND:
+  python -m pytest tests/test_calculations_checkpoint.py::test_fingerprint_mismatch_raises tests/test_calculations_checkpoint.py::test_corrupt_json_returns_none -q
+KEY OUTPUT:
+  ..                                                                       [100%]
+  2 passed in 0.58s
+  Tampered fingerprints raise CheckpointMismatchError; corrupt JSON returns None.
+EXIT CODE: 0
+
+=== STEP 2: Q3 mutation drill — back up and inject ===
+COMMAND:
+  cp src/acp/calculations/checkpoint.py /tmp/acp-calculations-checkpoint.py.bak
+  Temporarily replace the fingerprint guard with `if False and ...`.
+  python -m pytest tests/test_calculations_checkpoint.py::test_fingerprint_mismatch_raises tests/test_calculations_checkpoint.py::test_corrupt_json_returns_none -q
+KEY OUTPUT:
+  FAILED test_fingerprint_mismatch_raises
+  Failed: DID NOT RAISE <class 'acp.calculations.checkpoint.CheckpointMismatchError'>
+  1 failed, 1 passed in 0.65s
+EXIT CODE: 1 (expected mutation failure)
+
+=== STEP 3: Q3 restore and re-test ===
+COMMAND:
+  cp /tmp/acp-calculations-checkpoint.py.bak src/acp/calculations/checkpoint.py
+  python -m pytest tests/test_calculations_checkpoint.py::test_fingerprint_mismatch_raises tests/test_calculations_checkpoint.py::test_corrupt_json_returns_none -q
+KEY OUTPUT:
+  ..                                                                       [100%]
+  2 passed in 0.63s
+  Restored fingerprint guard rejects stale checkpoints again.
+EXIT CODE: 0

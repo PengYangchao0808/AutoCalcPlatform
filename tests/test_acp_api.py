@@ -4,6 +4,9 @@ Uses FastAPI's TestClient with the lifespan-driven JobManager. The ``fake``
 workflow runs in-process, so these tests need no external QC binaries.
 """
 
+# FastAPI's TestClient stubs expose untyped JSON payloads in these integration tests.
+# pyright: reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnusedParameter=false
+
 from __future__ import annotations
 
 import os
@@ -124,25 +127,43 @@ def test_backends_merge_remote_node_software(client: TestClient) -> None:
 
 def test_workflows_and_protocols(client: TestClient) -> None:
     wf = client.get("/api/workflows").json()
-    assert {"fake", "ensemble", "energy", "mechanism"} <= {
-        w["name"] for w in wf["workflows"]
+    names = {w["name"] for w in wf["workflows"]}
+    active = {
+        "singlepoint",
+        "optimize",
+        "frequency",
+        "scan",
+        "irc",
+        "xtb_optimize",
+        "nmr",
+        "Confsearch",
+        "PESsearch",
+        "BatchOptimize",
     }
-    names = [w["name"] for w in wf["workflows"]]
-    # Retired workflows (conformer/benchmark) must NOT appear.
-    # NMR was reactivated in P1a (2026-08-07).
-    assert "conformer" not in names
-    assert "benchmark" not in names
-    assert "nmr" in names
+    assert names == active | {"fake"}
     pr = client.get("/api/protocols").json()
     assert isinstance(pr["protocols"], list)
+
+
+def test_workflow_catalog_excludes_retired(client: TestClient) -> None:
+    response = client.get("/api/v1/workflow-catalog")
+
+    assert response.status_code == 200
+    workflows = response.json()["workflows"]
+    retired_ids = {"optfreq", "optfreqsp", "Lowconfirm", "Highconfirm"}
+    visible_ids = {workflow["id"] for workflow in workflows if workflow.get("visible")}
+
+    assert retired_ids.isdisjoint(visible_ids)
 
 
 def test_workflows_are_driven_by_registry(client: TestClient) -> None:
     """Workflow metadata must come from the workflow registry, not a hardcoded list."""
     wf = client.get("/api/workflows").json()
     by_name = {w["name"]: w for w in wf["workflows"]}
-    assert "mechanism" in by_name
-    assert by_name["mechanism"]["label"] == "Mechanism / TS"
+    assert "Confsearch" in by_name
+    assert by_name["Confsearch"]["label"] == "Conformer Search"
+    assert "BatchOptimize" in by_name
+    assert by_name["BatchOptimize"]["label"] == "Batch Optimization"
 
 
 def test_frontend_index_served(client: TestClient) -> None:
@@ -199,7 +220,9 @@ def test_fake_job_full_lifecycle(client: TestClient) -> None:
     files = client.get(f"/api/jobs/{job_id}/files").json()["files"]
     paths = {f["path"] for f in files}
     assert "state.json" in paths
-    assert "events.jsonl" in paths
+    assert "WORK" in paths
+    runtime = client.get(f"/api/jobs/{job_id}/files?path=WORK/00_RUNTIME").json()["files"]
+    assert "WORK/00_RUNTIME/events.jsonl" in {f["path"] for f in runtime}
 
     logs = client.get(f"/api/jobs/{job_id}/logs").json()
     assert "stdout" in logs and "stderr" in logs

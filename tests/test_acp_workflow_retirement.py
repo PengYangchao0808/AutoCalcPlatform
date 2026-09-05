@@ -1,0 +1,193 @@
+"""Old-entry retirement tests (plan §16, M7).
+
+Covers the acceptance criterion "旧任务可以查看，新任务不能使用旧入口":
+catalog status flips, scheduler submission rejection, CLI rejection, and
+runner/script_gen command mapping for the new stage workflows.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from acp.catalog import WORKFLOW_CATALOG
+from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobSpec, confsearch_method_flags
+
+# The tests intentionally exercise JobRunner's command-building seam.
+# pyright: reportPrivateUsage=false
+
+RETIRED_ENTRIES = (
+    "ensemble",
+    "energy",
+    "xtbmd_censo_energy",
+    "mechanism",
+    "mech-conf",
+    "mech-step",
+    "mech-confirm",
+    "mech-chain",
+    "optfreq",
+    "optfreqsp",
+    "Lowconfirm",
+    "Highconfirm",
+)
+STAGE_ENTRIES = ("Confsearch", "PESsearch")
+
+
+def test_all_legacy_entries_retired_and_kept_for_history() -> None:
+    by_id = {entry["id"]: entry for entry in WORKFLOW_CATALOG}
+    for legacy in RETIRED_ENTRIES:
+        assert by_id[legacy]["status"] == "retired", legacy
+        assert by_id[legacy]["visible"] is False, legacy
+        assert legacy not in SUPPORTED_WORKFLOWS
+
+
+def test_stage_entries_active() -> None:
+    for stage in STAGE_ENTRIES:
+        assert stage in SUPPORTED_WORKFLOWS
+
+
+def test_manager_rejects_retired_workflow(tmp_path: Path) -> None:
+    from acp.scheduler.manager import JobManager
+
+    mgr = JobManager(run_root=tmp_path)
+    try:
+        for legacy in ("ensemble", "energy", "mechanism", "Lowconfirm", "Highconfirm"):
+            with pytest.raises(ValueError, match="Unsupported workflow"):
+                _ = mgr.submit(JobSpec(workflow=legacy, name="legacy"))
+    finally:
+        mgr.shutdown()
+
+
+def test_cli_rejects_retired_workflows_with_mapping_message(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from acp.cli import main
+
+    for legacy in ("ensemble", "energy", "xtbmd_censo_energy", "mechanism", "mech-conf"):
+        rc = main(["run", legacy, "--input", "CCO", "--output", str(tmp_path)])
+        assert rc == 2, legacy
+    stderr = capsys.readouterr().err
+    assert "The workflow has been retired." in stderr
+    assert "Use Confsearch, PESsearch, BatchOptimize or the standalone irc workflow." in stderr
+
+
+def test_confsearch_method_flag_emission() -> None:
+    flags = confsearch_method_flags(
+        {
+            "profile_id": "xtbmd-censo",
+            "profile": "light",
+            "refinement_policy": "rank1",
+            "md_time_ps": 50,
+            "levels": {"refinement_threshold": 0.99},
+        }
+    )
+    assert flags[:2] == ["--protocol", "xtbmd-censo"]
+    assert ["--profile", "light"] in [flags[i : i + 2] for i in range(0, len(flags), 2)] or [
+        "--profile",
+        "light",
+    ] == flags[2:4]
+    joined = " ".join(flags)
+    assert "--refinement-policy rank1" in joined
+    assert "--md-time 50" in joined
+    assert "--levels" in joined
+
+
+def _write_confsearch_source_job(root: Path) -> Path:
+    job_dir = root / "mol_Confsearch_test"
+    manifest_dir = job_dir / "RESULT" / "confsearch" / "conformers"
+    manifest_dir.mkdir(parents=True)
+    _ = (manifest_dir / "conf_0001.xyz").write_text(
+        "3\nwater\nO 0.0 0.0 0.0\nH 0.9 0.0 0.0\nH -0.3 0.9 0.0\n",
+        encoding="utf-8",
+    )
+    manifest = {
+        "schema_version": "confsearch_v1",
+        "workflow": "Confsearch",
+        "conformers": [{"conf_id": "conf_0001", "geometry": "conformers/conf_0001.xyz", "rank": 1}],
+    }
+    _ = (job_dir / "RESULT" / "confsearch" / "confsearch_manifest.json").write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
+    return job_dir
+
+
+def test_runner_builds_confsearch_cmd(tmp_path: Path) -> None:
+    from acp.scheduler.runner import JobRunner
+
+    runner = JobRunner()
+    spec = JobSpec(
+        workflow="Confsearch",
+        name="demo",
+        input={"source": "CCO", "source_type": "smiles"},
+        method={
+            "protocol": "xtb-crest",
+            "refinement_policy": "screen",
+            "ewin": 8.0,
+        },
+    )
+    cmd = runner._build_cmd(spec, tmp_path / "job")
+    joined = " ".join(cmd)
+    assert "run Confsearch" in joined
+    assert "--protocol xtb-crest" in joined
+    assert "--refinement-policy screen" in joined
+    assert "--ewin 8.0" in joined
+
+
+def test_runner_builds_pessearch_cmd_from_manifest(tmp_path: Path) -> None:
+    from acp.scheduler.runner import JobRunner
+
+    source_job = _write_confsearch_source_job(tmp_path)
+    runner = JobRunner()
+    work_dir = tmp_path / "stage_job"
+    spec = JobSpec(
+        workflow="PESsearch",
+        name="pes",
+        input={
+            "from": str(source_job / "RESULT" / "confsearch" / "confsearch_manifest.json"),
+            "coordinate_plan": {
+                "coordinates": [
+                    {"id": "rc1", "kind": "distance", "atoms": [0, 1], "start": 2.0, "end": 1.0}
+                ],
+                "points": 21,
+            },
+        },
+        method={"strategy": "guided-scan"},
+    )
+    cmd = runner._build_cmd(spec, work_dir)
+    joined = " ".join(cmd)
+    assert "run PESsearch" in joined
+    assert "--strategy guided-scan" in joined
+    assert "--plan" in joined
+    assert f"--from {source_job / 'RESULT' / 'confsearch' / 'confsearch_manifest.json'}" in joined
+    assert not (work_dir / "WORK" / "01_PREPARE" / "handoff").exists()
+
+
+def test_remote_script_gen_stage_and_confsearch() -> None:
+    from acp.scheduler.remote.script_gen import build_remote_cli_command
+
+    confsearch_cmd = build_remote_cli_command(
+        JobSpec(
+            workflow="Confsearch",
+            input={"source": "CCO"},
+            method={"protocol": "censo-crest", "refinement_policy": "rank1"},
+        ),
+        input_path="inputs/input.xyz",
+    )
+    joined = " ".join(confsearch_cmd)
+    assert "run Confsearch" in joined
+    assert "--protocol censo-crest" in joined
+    assert "--refinement-policy rank1" in joined
+
+    stage_cmd = build_remote_cli_command(
+        JobSpec(
+            workflow="PESsearch",
+            input={"from": "/abs/confsearch_manifest.json"},
+            method={"strategy": "guided-scan"},
+        ),
+    )
+    stage_joined = " ".join(stage_cmd)
+    assert "run PESsearch" in stage_joined
+    assert "--from /abs/confsearch_manifest.json" in stage_joined
+    assert "--strategy guided-scan" in stage_joined

@@ -16,7 +16,8 @@ import os
 import re
 import shutil
 import subprocess
-from collections.abc import Sequence
+import threading
+from collections.abc import Callable, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,7 @@ from cccp.qc.interfaces.base import QCInterfaceBase, QCResult
 from cccp.qc.interfaces.constraints import (
     CoordinateConstraint,
     CoordinateSpec,
+    ReactionCoordinatePlan,
     orca_constraint_block,
 )
 from cccp.qc.interfaces.orca_ts import (
@@ -45,7 +47,7 @@ from cccp.qc.interfaces.orca_ts import (
 from cccp.qc.interfaces.xtb_scan import RelaxedScanPoint, RelaxedScanResult
 from cccp.software import SoftwareNotFoundError, resolve_executable
 from cccp.utils import ensure_dir
-from cccp.utils.file_io import read_xyz, write_xyz
+from cccp.utils.file_io import read_xyz, read_xyz_multiframe, write_xyz
 from cccp.utils.geometry_tools import LogParser
 from cccp.utils.resource_utils import calc_orca_maxcore, mem_to_mb
 from cccp.utils.solvent_map import orca_smd_solvent
@@ -315,7 +317,13 @@ def _normalize_nmr_symbol(symbol: str) -> str:
 _FREQ_SECTION_HEADER = "VIBRATIONAL FREQUENCIES"
 _FREQ_LINE_RE = re.compile(r"^\s*\d+:\s+([-+]?\d+\.\d+)\s+cm\*\*-1", re.MULTILINE)
 _CARTESIAN_COORD_HEADER = "CARTESIAN COORDINATES (ANGSTROEM)"
-_SCAN_STEP_RE = re.compile(r"^\s*RELAXED\s+SURFACE\s+SCAN\s+STEP\s+\d+.*$", re.MULTILINE)
+# ORCA prints the banner as ``*               RELAXED SURFACE SCAN STEP   1   *``:
+# allow an optional leading ``*``; use ``[ \t]`` (not ``\s``) so the match cannot
+# start on an earlier banner-decoration line.
+_SCAN_STEP_RE = re.compile(
+    r"^[ \t]*\*?[ \t]*RELAXED[ \t]+SURFACE[ \t]+SCAN[ \t]+STEP[ \t]+\d+.*$", re.MULTILINE
+)
+_SCAN_SUMMARY_MARKER = "calculated surface"
 _COORD_LINE_RE = re.compile(
     r"^\s*([A-Z][a-z]?)\s+"
     r"([-+]?\d+(?:\.\d+)?(?:[EeDd][+-]?\d+)?)\s+"
@@ -453,35 +461,77 @@ def _parse_all_cartesian_blocks(log_text: str) -> list[tuple[NDArray[np.float64]
 def _parse_relaxed_scan_cartesian_blocks(
     log_text: str,
 ) -> list[tuple[NDArray[np.float64], list[str]]]:
+    """Extract the converged geometry of every relaxed-scan step.
+
+    Each step section holds one ``CARTESIAN COORDINATES`` block per geometry
+    optimization cycle; the converged geometry is the LAST block before the
+    next step banner (or the summary table / end of file for the final step).
+    """
     step_matches = list(_SCAN_STEP_RE.finditer(log_text))
     if not step_matches:
         return _parse_all_cartesian_blocks(log_text)
+    summary_offset = log_text.lower().find(_SCAN_SUMMARY_MARKER)
     blocks: list[tuple[NDArray[np.float64], list[str]]] = []
     for index, match in enumerate(step_matches):
-        section_end = (
-            step_matches[index + 1].start() if index + 1 < len(step_matches) else len(log_text)
-        )
+        if index + 1 < len(step_matches):
+            section_end = step_matches[index + 1].start()
+        elif summary_offset >= 0:
+            section_end = summary_offset
+        else:
+            section_end = len(log_text)
         section_blocks = _parse_all_cartesian_blocks(log_text[match.end() : section_end])
         if section_blocks:
-            blocks.append(section_blocks[0])
+            blocks.append(section_blocks[-1])
     return blocks
 
 
-def _parse_relaxed_scan_energy_table(log_text: str, coordinate_count: int = 1) -> list[float]:
-    """Parse the relaxed-scan summary table from an ORCA output."""
-    lines = log_text.splitlines()
-    start = None
-    for index in range(len(lines) - 1, -1, -1):
-        lowered = lines[index].strip().lower()
-        if (
-            "calculated surface" in lowered
-            or ("relaxed surface scan" in lowered and "step" not in lowered)
-        ):
-            start = index + 1
-            break
-    if start is None:
+def _parse_relaxed_scan_allxyz_frames(
+    allxyz_path: Path,
+) -> list[tuple[NDArray[np.float64], list[str]]]:
+    """Read converged per-step geometries from ORCA's ``*.allxyz`` trajectory."""
+    try:
+        stacked, symbols = read_xyz_multiframe(allxyz_path)
+    except (OSError, ValueError) as exc:
+        logger.debug("Could not read %s: %s", allxyz_path, exc)
         return []
+    if not symbols or stacked.size == 0:
+        return []
+    n_atoms = len(symbols)
+    n_frames = int(stacked.shape[0] // n_atoms)
+    return [
+        (np.asarray(stacked[i * n_atoms : (i + 1) * n_atoms], dtype=np.float64), symbols)
+        for i in range(n_frames)
+    ]
 
+
+def _parse_relaxed_scan_energy_table(log_text: str, coordinate_count: int = 1) -> list[float]:
+    """Parse the relaxed-scan summary table from an ORCA output.
+
+    ORCA emits two sub-tables — ``'Actual Energy'`` followed by ``SCF energy``;
+    the SCF variant is all zeros for GFN-xTB methods (no SCF section), so
+    degenerate all-zero tables are skipped in favour of the last usable one.
+    """
+    lines = log_text.splitlines()
+    header_indices = [
+        index
+        for index, line in enumerate(lines)
+        if "calculated surface" in line.strip().lower()
+        or ("relaxed surface scan" in line.strip().lower() and "step" not in line.strip().lower())
+    ]
+    if not header_indices:
+        return []
+    for start in reversed(header_indices):
+        energies = _parse_relaxed_scan_energy_rows(lines, start + 1, coordinate_count)
+        if energies and any(value != 0.0 for value in energies):
+            return energies
+    return _parse_relaxed_scan_energy_rows(lines, header_indices[-1] + 1, coordinate_count)
+
+
+def _parse_relaxed_scan_energy_rows(
+    lines: list[str],
+    start: int,
+    coordinate_count: int,
+) -> list[float]:
     energies: list[float] = []
     saw_data = False
     for line in lines[start:]:
@@ -761,18 +811,17 @@ class ORCAInterface(QCInterfaceBase):
             "opt": "Opt",
             "freq": "Freq",
             "sp": "SP",
-            "optfreq": "Opt Freq",
             "nmr": "NMR",
         }
         route = calc_type_map.get(calc_type, calc_type)
 
         if (
-            route in ("Freq", "Opt Freq")
+            route == "Freq"
             and _solvent
             and _solvent_model.lower() != "cpcm"
             and _solvent_model.lower() != "none"
         ):
-            route = route.replace("Freq", "NumFreq")
+            route = "NumFreq"
 
         meta = _resolve_method_meta(_method)
         basis_inline = True if meta is None else bool(meta.get("basis_inline", True))
@@ -1012,7 +1061,12 @@ class ORCAInterface(QCInterfaceBase):
                 config_value=configured_recalc,
             )
 
-    def _run_orca(self, input_file: Path, output_file: Path) -> bool:
+    def _run_orca(
+        self,
+        input_file: Path,
+        output_file: Path,
+        output_callback: Callable[[str], None] | None = None,
+    ) -> bool:
         """
         Run ORCA calculation.
 
@@ -1036,22 +1090,88 @@ class ORCAInterface(QCInterfaceBase):
                 env = dict(os.environ)
                 env["LD_LIBRARY_PATH"] = self._orca_ld_library_path
 
-            result = subprocess.run(
+            # Keep the established synchronous path for callers that do not
+            # request live parsing (NMR, SP, scan, and older integrations).
+            # Optimization primitives opt into the streaming path below by
+            # passing ``output_callback``.
+            if output_callback is None:
+                result = subprocess.run(
+                    [executable, str(input_file)],
+                    cwd=input_file.parent,
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                    timeout=timeout,
+                )
+                with open(output_file, "w", encoding="utf-8") as handle:
+                    handle.write(result.stdout)
+                    if result.stderr:
+                        handle.write("\nSTDERR:\n")
+                        handle.write(result.stderr)
+                return result.returncode == 0
+
+            process = subprocess.Popen(
                 [executable, str(input_file)],
                 cwd=input_file.parent,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
+                bufsize=1,
                 env=env,
-                timeout=timeout,
             )
 
-            with open(output_file, "w", encoding="utf-8") as f:
-                f.write(result.stdout)
-                if result.stderr:
-                    f.write("\nSTDERR:\n")
-                    f.write(result.stderr)
+            write_lock = threading.Lock()
+            stderr_header_written = False
 
-            return result.returncode == 0
+            def drain(stream: Any, *, is_stderr: bool) -> None:
+                nonlocal stderr_header_written
+                if stream is None:
+                    return
+                for line in iter(stream.readline, ""):
+                    with write_lock, open(output_file, "a", encoding="utf-8") as handle:
+                        if is_stderr and not stderr_header_written:
+                            handle.write("\nSTDERR:\n")
+                            stderr_header_written = True
+                        handle.write(line)
+                        handle.flush()
+                    if not is_stderr and output_callback is not None:
+                        try:
+                            output_callback(line)
+                        except Exception:
+                            # A visualization recorder must never terminate a
+                            # production QC process because of malformed output.
+                            logger.debug("ORCA output callback failed", exc_info=True)
+
+            # The output file is created before the reader threads start, so a
+            # polling API can distinguish "running with no output yet" from a
+            # calculation that has not started.
+            output_file.write_text("", encoding="utf-8")
+            stdout_thread = threading.Thread(
+                target=drain,
+                args=(process.stdout,),
+                kwargs={"is_stderr": False},
+                daemon=True,
+            )
+            stderr_thread = threading.Thread(
+                target=drain,
+                args=(process.stderr,),
+                kwargs={"is_stderr": True},
+                daemon=True,
+            )
+            stdout_thread.start()
+            stderr_thread.start()
+            try:
+                return_code = process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                return_code = process.wait()
+                logger.error("ORCA calculation timed out: %s", input_file)
+                return False
+            finally:
+                stdout_thread.join(timeout=2)
+                stderr_thread.join(timeout=2)
+
+            return return_code == 0
 
         except subprocess.TimeoutExpired:
             logger.error(f"ORCA calculation timed out: {input_file}")
@@ -1097,6 +1217,7 @@ class ORCAInterface(QCInterfaceBase):
 
         _solvent = kwargs.pop("solvent", None)
         _solvent_model = kwargs.pop("solvent_model", None)
+        _output_callback = kwargs.pop("output_callback", None)
 
         self._write_input(
             input_file,
@@ -1118,7 +1239,11 @@ class ORCAInterface(QCInterfaceBase):
             aux_c_basis=kwargs.get("aux_c_basis"),
         )
 
-        success = self._run_orca(input_file, output_file)
+        success = (
+            self._run_orca(input_file, output_file, output_callback=_output_callback)
+            if _output_callback is not None
+            else self._run_orca(input_file, output_file)
+        )
 
         if not success:
             return QCResult(
@@ -1171,9 +1296,7 @@ class ORCAInterface(QCInterfaceBase):
 
         _solvent = kwargs.pop("solvent", None)
         _solvent_model = kwargs.pop("solvent_model", None)
-        geom_extra_lines = [
-            f"  {line}" for line in orca_constraint_block(constraints).splitlines()
-        ]
+        geom_extra_lines = [f"  {line}" for line in orca_constraint_block(constraints).splitlines()]
 
         self._write_input(
             input_file,
@@ -1239,8 +1362,8 @@ class ORCAInterface(QCInterfaceBase):
         self,
         coordinates: NDArray[np.float64],
         symbols: list[str],
-        scan_coordinate: CoordinateSpec,
-        points: int,
+        scan_coordinate: CoordinateSpec | None = None,
+        points: int | None = None,
         charge: int = 0,
         multiplicity: int = 1,
         output_dir: Path = None,
@@ -1251,6 +1374,7 @@ class ORCAInterface(QCInterfaceBase):
         solvent_model: str | None = None,
         use_scants: bool = True,
         full_scan: bool = True,
+        plan: ReactionCoordinatePlan | None = None,
         **kwargs,
     ) -> RelaxedScanResult:
         """Run an ORCA relaxed scan over one local coordinate.
@@ -1259,8 +1383,27 @@ class ORCAInterface(QCInterfaceBase):
         primitive; ORCA input text follows the relaxed-scan rendering used by
         the RPH reference implementation.
         """
-        if points < 2:
+        if points is not None and points < 2:
             raise ValueError("ORCA relaxed_scan requires points >= 2")
+        if plan is not None and len(plan.drive_coordinates()) > 1:
+            return self._run_synchronous_relaxed_scan(
+                coordinates,
+                symbols,
+                plan,
+                charge=charge,
+                multiplicity=multiplicity,
+                output_dir=output_dir,
+                output_name=output_name,
+                method=method,
+                basis=basis,
+                solvent=solvent,
+                solvent_model=solvent_model,
+                geom_maxiter=kwargs.pop("geom_maxiter", kwargs.pop("max_cycles", None)),
+                recalc_hess=kwargs.pop("recalc_hess", 0),
+                route_extras=kwargs.pop("route_extras", None),
+            )
+        if scan_coordinate is None or points is None:
+            raise ValueError("ORCA relaxed_scan requires one scan coordinate and points")
         if scan_coordinate.role == "monitor":
             raise ValueError("ORCA relaxed_scan requires a drive/freeze coordinate")
 
@@ -1346,9 +1489,206 @@ class ORCAInterface(QCInterfaceBase):
             )
 
         output_text = output_file.read_text(encoding="utf-8", errors="replace")
-        frame_blocks = _parse_relaxed_scan_cartesian_blocks(output_text)
-        if len(frame_blocks) > points:
-            frame_blocks = frame_blocks[-points:]
+        result_points = self._collect_relaxed_scan_points(
+            output_text, output_dir, output_name, scan_coordinate, points
+        )
+
+        message = ""
+        scan_success = bool(result_points)
+        if len(result_points) != points:
+            scan_success = False
+            message = f"ORCA relaxed scan returned {len(result_points)} frame(s); expected {points}"
+
+        return RelaxedScanResult(
+            points=result_points,
+            input_xyz=input_xyz,
+            scan_dir=output_dir,
+            success=scan_success,
+            message=message,
+        )
+
+    def _run_synchronous_relaxed_scan(
+        self,
+        coordinates: NDArray[np.float64],
+        symbols: list[str],
+        plan: ReactionCoordinatePlan,
+        *,
+        charge: int,
+        multiplicity: int,
+        output_dir: Path | None,
+        output_name: str,
+        method: str,
+        basis: str | None,
+        solvent: str | None,
+        solvent_model: str | None,
+        geom_maxiter: int | None,
+        recalc_hess: object,
+        route_extras: list[str] | None,
+    ) -> RelaxedScanResult:
+        """Run multiple driven coordinates at one shared progress value.
+
+        ORCA's native ``Scan`` block is intentionally limited to one
+        coordinate in this interface.  The generic four-atom double-bond
+        selection therefore uses one constrained optimization per frame,
+        placing both distance constraints in the same ``%geom`` block.
+        """
+        output_dir = Path(output_dir) if output_dir else Path.cwd()
+        ensure_dir(output_dir)
+        input_xyz = output_dir / f"{output_name}_start.xyz"
+        write_xyz(
+            input_xyz,
+            np.asarray(coordinates, dtype=float),
+            symbols,
+            title="ORCA synchronous relaxed scan start",
+        )
+
+        drive_coordinates = plan.drive_coordinates()
+        if not drive_coordinates:
+            raise ValueError("synchronous relaxed scan requires a drive coordinate")
+        eff_method = method or self.method or "GFN2-xTB"
+        eff_basis = (
+            basis
+            if basis is not None
+            else ("" if _is_orca_gfn_xtb_method(eff_method) else self.basis)
+        )
+        eff_solvent = solvent if solvent is not None else self.solvent
+        eff_solvent_model = (
+            solvent_model
+            if solvent_model is not None
+            else ("ALPB" if _is_orca_gfn_xtb_method(eff_method) else self.solvent_model)
+        )
+        resolved_route_extras, input_solvent, input_solvent_model = _orca_scan_route_settings(
+            eff_method,
+            eff_solvent,
+            eff_solvent_model,
+            False,
+            route_extras,
+        )
+
+        current_coordinates = np.asarray(coordinates, dtype=float)
+        result_points: list[RelaxedScanPoint] = []
+        for index in range(plan.points):
+            frame_dir = output_dir / f"frame_{index:03d}"
+            result = self.constrained_optimize(
+                current_coordinates,
+                symbols,
+                plan.frame_constraints(index),
+                charge=charge,
+                multiplicity=multiplicity,
+                output_dir=frame_dir,
+                output_name=output_name,
+                method=eff_method,
+                basis=eff_basis,
+                solvent=input_solvent,
+                solvent_model=input_solvent_model,
+                geom_maxiter=geom_maxiter,
+                recalc_hess=recalc_hess,
+                route_extras=resolved_route_extras,
+            )
+            targets = plan.coordinate_targets(index)
+            progress = index / max(plan.points - 1, 1)
+            if not result.success or result.coordinates is None:
+                result_points.append(
+                    RelaxedScanPoint(
+                        frame_index=index,
+                        progress=progress,
+                        coordinates=None,
+                        symbols=None,
+                        energy_hartree=None,
+                        success=False,
+                        coordinate_values=targets,
+                    )
+                )
+                return RelaxedScanResult(
+                    points=result_points,
+                    input_xyz=input_xyz,
+                    scan_dir=output_dir,
+                    success=False,
+                    message=(
+                        f"Synchronous ORCA scan failed at frame {index}: "
+                        f"{result.error_message or 'constrained optimization failed'}"
+                    ),
+                )
+
+            current_coordinates = np.asarray(result.coordinates, dtype=float)
+            result_points.append(
+                RelaxedScanPoint(
+                    frame_index=index,
+                    progress=progress,
+                    coordinates=current_coordinates,
+                    symbols=list(result.symbols or symbols),
+                    energy_hartree=result.energy,
+                    success=True,
+                    coordinate_values=targets,
+                )
+            )
+
+        return RelaxedScanResult(
+            points=result_points,
+            input_xyz=input_xyz,
+            scan_dir=output_dir,
+            success=True,
+            message="",
+        )
+
+    def parse_relaxed_scan_output(
+        self,
+        output_file: Path,
+        scan_coordinate: CoordinateSpec,
+        points: int,
+        output_dir: Path = None,
+        output_name: str = None,
+    ) -> RelaxedScanResult:
+        """Re-parse a completed ORCA relaxed-scan run without re-executing it.
+
+        Args:
+            output_file: Existing ORCA ``.out`` log from a finished relaxed scan.
+            scan_coordinate: The drive coordinate the scan was run with.
+            points: Expected number of scan points.
+            output_dir: Scan directory (defaults to ``output_file.parent``).
+            output_name: Scan basename (defaults to ``output_file.stem``).
+
+        Returns:
+            :class:`RelaxedScanResult` rebuilt from the existing artifacts
+            (``*.allxyz`` preferred, ``.out`` fallback), including regenerated
+            ``scan_frames/frame_NNN.xyz`` files.
+        """
+        output_file = Path(output_file)
+        output_dir = Path(output_dir) if output_dir else output_file.parent
+        output_name = output_name if output_name is not None else output_file.stem
+        output_text = output_file.read_text(encoding="utf-8", errors="replace")
+        result_points = self._collect_relaxed_scan_points(
+            output_text, output_dir, output_name, scan_coordinate, points
+        )
+        message = ""
+        scan_success = bool(result_points)
+        if len(result_points) != points:
+            scan_success = False
+            message = (
+                f"ORCA relaxed scan output {output_file.name} yielded "
+                f"{len(result_points)} frame(s); expected {points}"
+            )
+        return RelaxedScanResult(
+            points=result_points,
+            input_xyz=output_dir / f"{output_name}_start.xyz",
+            scan_dir=output_dir,
+            success=scan_success,
+            message=message,
+        )
+
+    def _collect_relaxed_scan_points(
+        self,
+        output_text: str,
+        output_dir: Path,
+        output_name: str,
+        scan_coordinate: CoordinateSpec,
+        points: int,
+    ) -> list[RelaxedScanPoint]:
+        frame_blocks = _parse_relaxed_scan_allxyz_frames(output_dir / f"{output_name}.allxyz")
+        if len(frame_blocks) != points:
+            frame_blocks = _parse_relaxed_scan_cartesian_blocks(output_text)
+            if len(frame_blocks) > points:
+                frame_blocks = frame_blocks[-points:]
 
         energies = _parse_relaxed_scan_energy_table(output_text, coordinate_count=1)
         if len(energies) < len(frame_blocks):
@@ -1383,23 +1723,7 @@ class ORCAInterface(QCInterfaceBase):
                     coordinate_values={scan_coordinate.id: target},
                 )
             )
-
-        message = ""
-        scan_success = bool(result_points)
-        if len(result_points) != points:
-            scan_success = False
-            message = (
-                f"ORCA relaxed scan returned {len(result_points)} frame(s); "
-                f"expected {points}"
-            )
-
-        return RelaxedScanResult(
-            points=result_points,
-            input_xyz=input_xyz,
-            scan_dir=output_dir,
-            success=scan_success,
-            message=message,
-        )
+        return result_points
 
     def single_point(
         self,
@@ -1570,115 +1894,6 @@ class ORCAInterface(QCInterfaceBase):
             has_frequencies=len(frequencies) > 0,
         )
 
-    def opt_freq(
-        self,
-        coordinates: np.ndarray,
-        symbols: list[str],
-        charge: int = 0,
-        multiplicity: int = 1,
-        output_dir: Path = None,
-        output_name: str = "orca_optfreq",
-        method: str = None,
-        basis: str = None,
-        route_extras: list = None,
-        geom_maxiter: int = None,
-        extra_blocks: list = None,
-        recalc_hess: object = None,
-        aux_basis: str = None,
-        aux_j_basis: str = None,
-        aux_c_basis: str = None,
-        **kwargs,
-    ) -> QCResult:
-        """Run combined optimization + frequency as single ORCA job.
-
-        Uses calc_type='optfreq' -> generates '! ... Opt Freq ...' route line.
-        NumFreq fallback is handled automatically by _build_input_blocks.
-
-        Args:
-            coordinates: Initial coordinates (N, 3)
-            symbols: Element symbols
-            charge: Molecular charge
-            multiplicity: Spin multiplicity
-            output_dir: Output directory
-            output_name: Base name for output files
-            method: Override method (uses self.method if None)
-            basis: Override basis (uses self.basis if None)
-            route_extras: Extra route-line keywords
-            geom_maxiter: Max geometry iterations
-            extra_blocks: Extra raw input blocks
-            recalc_hess: Hessian policy ("auto"/0/N/None) for Recalc_Hess
-            aux_basis: Legacy auxiliary basis (backward compat)
-            aux_j_basis: Auxiliary /J basis for RI-J fitting
-            aux_c_basis: Auxiliary /C basis for RI-MP2 correlation
-            **kwargs: Additional parameters
-
-        Returns:
-            QCResult with opt+freq results
-        """
-        output_dir = Path(output_dir) if output_dir else Path.cwd()
-        ensure_dir(output_dir)
-
-        input_file = output_dir / f"{output_name}.inp"
-        output_file = output_dir / f"{output_name}.out"
-
-        _solvent = kwargs.pop("solvent", None)
-        _solvent_model = kwargs.pop("solvent_model", None)
-
-        self._write_input(
-            input_file,
-            coordinates,
-            symbols,
-            "optfreq",
-            charge,
-            multiplicity,
-            method=method,
-            basis=basis,
-            route_extras=route_extras,
-            geom_maxiter=geom_maxiter,
-            extra_blocks=extra_blocks,
-            recalc_hess=recalc_hess,
-            solvent=_solvent,
-            solvent_model=_solvent_model,
-            aux_basis=aux_basis,
-            aux_j_basis=aux_j_basis,
-            aux_c_basis=aux_c_basis,
-        )
-
-        success = self._run_orca(input_file, output_file)
-
-        if not success:
-            return QCResult(
-                success=False,
-                error_message="ORCA opt+freq calculation failed",
-                output_file=input_file,
-                log_file=output_file,
-            )
-
-        coords, syms, error = LogParser.extract_last_converged_coords(output_file, "orca")
-        energy = LogParser.extract_energy(output_file, "orca")
-
-        frequencies = _parse_frequencies(output_file)
-
-        if coords is None:
-            return QCResult(
-                success=False,
-                error_message=error or "Could not extract coordinates from optfreq output",
-                output_file=input_file,
-                log_file=output_file,
-            )
-
-        return QCResult(
-            success=True,
-            energy=energy,
-            coordinates=coords,
-            symbols=syms or symbols,
-            converged=True,
-            output_file=input_file,
-            log_file=output_file,
-            frequencies=frequencies if frequencies else None,
-            has_frequencies=len(frequencies) > 0,
-        )
-
     def nmr_shielding(
         self,
         coordinates: np.ndarray,
@@ -1828,6 +2043,7 @@ class ORCAInterface(QCInterfaceBase):
         _mode_displacement = kwargs.pop("mode_displacement", None)
         _mode_vector = kwargs.pop("mode_vector", None)
         _mode_displacement_sign = kwargs.pop("mode_displacement_sign", "plus")
+        _output_callback = kwargs.pop("output_callback", None)
         geom_maxiter = kwargs.pop("geom_maxiter", kwargs.pop("max_cycles", None))
         if kwargs:
             logger.warning(
@@ -1886,7 +2102,11 @@ class ORCAInterface(QCInterfaceBase):
                 f.write(f"{symbol:2s} {coord[0]:15.10f} {coord[1]:15.10f} {coord[2]:15.10f}\n")
             f.write("*\n")
 
-        success = self._run_orca(input_file, output_file)
+        success = (
+            self._run_orca(input_file, output_file, output_callback=_output_callback)
+            if _output_callback is not None
+            else self._run_orca(input_file, output_file)
+        )
 
         if not success:
             return TsOptResult(

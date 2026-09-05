@@ -17,7 +17,7 @@ backends/
 ├── censo_backend.py     # CENSO adapter → cccp.qc.interfaces.censo.CensoInterface
 ├── isostat_backend.py   # ISOSTAT adapter → cccp.qc.interfaces.isostat.IsostatInterface
 ├── molclus_backend.py   # Molclus adapter → cccp.qc.interfaces.molclus.MolclusInterface
-├── external.py          # run_isostat, run_shermo, batch_process_thermo re-exports
+├── external.py          # batch_process_thermo re-exports (run_isostat removed in wave-8)
 └── external_backend.py  # External tool backend adapter (shermo; cluster() → IsostatInterface)
 ```
 
@@ -34,7 +34,7 @@ backends/
 | CENSO | `censo_backend.py` | Thin adapter → `cccp.qc.interfaces.censo.CensoInterface` (rcfile/preset/parsing all in cccp) |
 | ISOSTAT | `isostat_backend.py` | Thin adapter → `cccp.qc.interfaces.isostat.IsostatInterface.cluster()` (title normalisation, env pinning in cccp) |
 | Molclus | `molclus_backend.py` | Thin adapter → `cccp.qc.interfaces.molclus.MolclusInterface.run_md()/search()` (md.inp, settings.ini, trajectory validation in cccp) |
-| External tools | `external.py` | Re-exports `run_shermo`/`batch_process_thermo`/`run_isostat` (cccp runners) |
+| External tools | `external.py` | Re-exports batch_process_thermo (cccp runners; run_isostat removed in wave-8) |
 | External backend | `external_backend.py` | External tool adapter; `cluster()` routes through `IsostatInterface` |
 | Registry | `registry.py` | Registration + discovery of available backends |
 

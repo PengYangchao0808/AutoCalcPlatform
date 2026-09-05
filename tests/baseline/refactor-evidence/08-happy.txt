@@ -1,0 +1,8 @@
+COMMAND:
+  python -m pytest tests/test_storage_manifest_kinds.py::test_new_kinds_roundtrip -q
+
+KEY OUTPUT:
+  .                                                                        [100%]
+  1 passed in 0.62s
+
+EXIT CODE: 0

@@ -1,0 +1,6 @@
+COMMAND: python -m pytest tests/test_pes_search.py -q
+KEY OUTPUT:
+Failure-path coverage: test_batch_sp_frame_isolation passed within the 18-test PES suite.
+..................                                                       [100%]
+18 passed in 0.68s
+EXIT CODE: 0

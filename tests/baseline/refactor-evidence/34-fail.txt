@@ -1,0 +1,20 @@
+Q3 MUTATION DRILL:
+Temporarily changed test_new_task_cannot_reuse_legacy_dir expected task_dir_name to "drill-must-fail".
+
+COMMAND:
+python -m pytest tests/test_legacy_layout_compat.py::test_non_task_dir_returns_none tests/test_legacy_layout_compat.py::test_new_task_cannot_reuse_legacy_dir -q
+KEY OUTPUT:
+.F                                                                       [100%]
+1 failed, 1 passed in 2.94s
+AssertionError: assert 'study-legacy_mechanism_resume' == 'drill-must-fail'
+MUTATION_EXIT_CODE=1
+
+RESTORE:
+Restored the expected task_dir_name assertion.
+
+COMMAND:
+python -m pytest tests/test_legacy_layout_compat.py::test_non_task_dir_returns_none tests/test_legacy_layout_compat.py::test_new_task_cannot_reuse_legacy_dir -q
+KEY OUTPUT:
+..                                                                       [100%]
+2 passed in 1.34s
+RESTORED_EXIT_CODE=0

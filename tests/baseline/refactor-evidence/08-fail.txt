@@ -1,0 +1,14 @@
+COMMAND:
+  Injected a temporary failure by changing `assert loaded.version == 2` to `assert loaded.version == 999` in `test_old_manifest_backward_compat`.
+  python -m pytest tests/test_storage_manifest_kinds.py::test_old_manifest_backward_compat -q
+  Restored the assertion to `assert loaded.version == 2`.
+  python -m pytest tests/test_storage_manifest_kinds.py::test_old_manifest_backward_compat -q
+
+KEY OUTPUT:
+  Injected run: AssertionError: assert 2 == 999; 1 failed in 0.72s
+  Restored run: .                                                                        [100%]
+  1 passed in 0.67s
+
+EXIT CODE:
+  Injected run: 1
+  Restored run: 0

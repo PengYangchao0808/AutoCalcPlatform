@@ -1,0 +1,45 @@
+=== 52-fail.txt: QA Failure Drill ===
+Date: 2026-08-28 | Branch: refactor/calc-cleanup
+
+=== STAGE 1: Pre-injection (baseline clean) ===
+
+=== COMMAND ===
+python -m pytest tests/ -q --tb=no (before injection)
+
+=== KEY OUTPUT ===
+1745 passed, 7 skipped, 47 warnings in 222.31s
+GATE_OK (from section a — same run)
+
+=== EXIT CODE ===
+0
+
+=== STAGE 2: Post-injection (failing test injected) ===
+
+=== COMMAND ===
+printf 'def test_gate_drill():\n    assert False\n' > tests/test_tmp_gate_fail.py
+python -m pytest tests/ -q --tb=no > /tmp/wave-gate-pytest-drill.txt 2>&1; <gate comparison>
+
+=== KEY OUTPUT ===
+FAILED tests/test_tmp_gate_fail.py::test_gate_drill - assert False
+1 failed, 1749 passed, 7 skipped, 47 warnings in 219.65s
+GATE_FAIL: 1 failures > baseline 0
+
+=== EXIT CODE ===
+non-zero (gate correctly rejected the injection)
+
+=== STAGE 3: Post-restore (failing test removed) ===
+
+=== COMMAND ===
+rm tests/test_tmp_gate_fail.py
+python -m pytest tests/ -q --tb=no > /tmp/wave-gate-pytest-restore.txt 2>&1; <gate comparison>
+
+=== KEY OUTPUT ===
+1745 passed, 7 skipped in 222s
+GATE_OK
+
+=== EXIT CODE ===
+0
+
+=== DRILL VERDICT ===
+Gate correctly: (1) passes on clean tree, (2) rejects injected failure, (3) passes after removal.
+Three-stage drill PASSED.

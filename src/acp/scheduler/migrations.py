@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -129,6 +130,60 @@ CREATE TABLE IF NOT EXISTS decision_points (
         "description": "add status_detail to stage_tasks (phase sub-step progress)",
         "sql": "-- handled in Python for SQLite ALTER TABLE compatibility",
     },
+    {
+        "id": "011",
+        "description": "unique index on lower(name) for projects (v2 project dir naming)",
+        "sql": "-- handled in Python for SQLite ALTER TABLE compatibility",
+    },
+    {
+        "id": "010",
+        "description": "create tasks table (v2 task index §9.1/§9.3)",
+        "sql": """
+CREATE TABLE IF NOT EXISTS tasks (
+    task_id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    project_id TEXT,
+    molecule_name TEXT NOT NULL DEFAULT '',
+    task_name TEXT NOT NULL DEFAULT '',
+    remark TEXT NOT NULL DEFAULT '',
+    display_name TEXT NOT NULL DEFAULT '',
+    workflow TEXT NOT NULL DEFAULT '',
+    task_dir_name TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    node_id TEXT,
+    node_path TEXT,
+    input_hash TEXT,
+    result_manifest_path TEXT,
+    current_stage TEXT,
+    storage_mode TEXT NOT NULL DEFAULT 'local',
+    layout_version INTEGER NOT NULL DEFAULT 2,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_tasks_job_id ON tasks(job_id);
+CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id);
+""",
+    },
+    {
+        "id": "012",
+        "description": "create mechanism_projects table (design §9)",
+        "sql": """
+CREATE TABLE IF NOT EXISTS mechanism_projects (
+    project_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    reaction_definition_hash TEXT NOT NULL DEFAULT '',
+    charge INTEGER NOT NULL DEFAULT 0,
+    multiplicity INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'created',
+    s1_job_id TEXT,
+    s2_job_id TEXT,
+    s3_job_id TEXT,
+    s4_job_id TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+""",
+    },
 ]
 
 
@@ -221,6 +276,22 @@ def _apply_stage_tasks_status_detail_column(conn: sqlite3.Connection) -> bool:
     return True
 
 
+def _apply_projects_name_unique_index(conn: sqlite3.Connection) -> bool:
+    """Index lower(name) on projects; tolerated when legacy duplicates exist."""
+    if not _table_exists(conn, "projects"):
+        return False
+    try:
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_name_ci ON projects(lower(name))"
+        )
+    except sqlite3.IntegrityError:
+        logging.getLogger(__name__).warning(
+            "projects table has duplicate names; skipping unique index (v2 dir naming "
+            "still enforced at creation time by ProjectManager)"
+        )
+    return True
+
+
 def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> bool:
     migration_id = migration["id"]
     if migration_id == "002":
@@ -233,6 +304,8 @@ def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> boo
         return _apply_jobs_group_id_column(conn)
     if migration_id == "009":
         return _apply_stage_tasks_status_detail_column(conn)
+    if migration_id == "011":
+        return _apply_projects_name_unique_index(conn)
     sql = migration["sql"].strip()
     if sql:
         conn.executescript(sql)

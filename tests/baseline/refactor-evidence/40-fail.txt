@@ -1,0 +1,27 @@
+=== 40-fail.txt: Wave 6 Gate — Q3 Mutation Drill ===
+Date: 2026-08-27 | Branch: refactor/calc-cleanup
+
+=== STAGE 1: Inject mutation into cli.py ===
+COMMAND: cp src/acp/cli.py /tmp/cli40.bak && printf '\nx = Lowconfirm()  # drill\n' >> src/acp/cli.py
+RESULT: cli.py mutated with active Lowconfirm() call at EOF
+
+=== STAGE 2: Gate must exit 1 with BLOCKING ===
+COMMAND: python scripts/check_grep_gates.py --gate wave6 src/acp/cli.py
+KEY OUTPUT:
+ALLOWED:
+src/acp/cli.py:2568:     "Use Confsearch, PESsearch, Lowconfirm or Highconfirm.\n"  # status=retired
+src/acp/cli.py:2576:     {"optfreq", "optfreqsp", "Lowconfirm", "Highconfirm"}  # status=retired
+BLOCKING:
+src/acp/cli.py:2811: x = Lowconfirm()  # drill
+EXIT CODE: 1
+RESULT: DRILL_OK — injected mutation correctly intercepted as BLOCKING
+
+=== STAGE 3: Restore cli.py and verify gate returns to 0 ===
+COMMAND: mv /tmp/cli40.bak src/acp/cli.py && python scripts/check_grep_gates.py --gate wave6 src/acp/cli.py
+KEY OUTPUT:
+ALLOWED:
+src/acp/cli.py:2568:     "Use Confsearch, PESsearch, Lowconfirm or Highconfirm.\n"  # status=retired
+src/acp/cli.py:2576:     {"optfreq", "optfreqsp", "Lowconfirm", "Highconfirm"}  # status=retired
+BLOCKING:
+EXIT CODE: 0
+RESULT: RESTORE_OK — cli.py restored, gate clean again

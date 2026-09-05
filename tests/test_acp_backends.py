@@ -29,7 +29,7 @@ from acp.backends.base import (
     ThermoCalculator,
     TSMechanismCalculator,
 )
-from acp.backends.external import batch_process_thermo, run_isostat, run_shermo
+from acp.backends.external import batch_process_thermo
 from acp.backends.orca import ORCAInterface
 from acp.backends.registry import get_backend, require_backend
 from acp.backends.xtb import XTBInterface
@@ -248,19 +248,11 @@ def test_legacy_interface_imports_remain_available() -> None:
     assert CRESTInterface.__name__ == "CRESTInterface"
 
 
-def test_external_runner_exports_match_legacy_exports() -> None:
+def test_external_runner_exports_keep_non_shermo_legacy_exports() -> None:
     from cccp.qc.runners import (
         batch_process_thermo as legacy_batch_process_thermo,
     )
-    from cccp.qc.runners import (
-        run_isostat as legacy_run_isostat,
-    )
-    from cccp.qc.runners import (
-        run_shermo as legacy_run_shermo,
-    )
 
-    assert run_isostat is legacy_run_isostat
-    assert run_shermo is legacy_run_shermo
     assert batch_process_thermo is legacy_batch_process_thermo
 
 

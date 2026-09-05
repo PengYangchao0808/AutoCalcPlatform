@@ -35,6 +35,8 @@ from acp.scheduler.provenance import ParserRegistry, Provenance, ResultSchema, c
 from acp.scheduler.runner import JobRunner
 from acp.scheduler.stage_tasks import StagePlan, StageTask, StageTaskObserver, StageTaskStore
 from acp.scheduler.store import JobStore
+from acp.scheduler.structure_sources import StructureSourceService
+from acp.scheduler.tasks import TaskIndex
 
 __all__ = [
     "JobEventLog",
@@ -70,6 +72,8 @@ __all__ = [
     "StageTask",
     "StageTaskObserver",
     "StageTaskStore",
+    "StructureSourceService",
+    "TaskIndex",
     "capture_stage_artifacts",
     "compute_input_hash",
     "validate_execution_request",

@@ -1,0 +1,22 @@
+COMMAND:
+  GIT_MASTER=1 git show --stat refactor-baseline | head -50
+
+KEY OUTPUT:
+  commit 42fec35ae994e1c2ba3690d813b53dfcba7db2e2
+  Author: PengYangchao0808 <12331080@mail.sustech.edu.cn>
+  Date:   Thu Aug 27 01:30:01 2026 +0800
+
+      chore: refactor baseline - snapshot v1.2 four-stage working tree
+
+   src/acp/mechanism/batch_confirm.py                 |  459 ++
+   src/acp/mechanism/batch_models.py                  |  940 ++++
+   src/acp/mechanism/bond_scan.py                     | 1173 +++++
+   src/acp/mechanism/s2_confirm_service.py            |   78 +
+   src/acp/mechanism/s2_confirm_support.py            |  178 +
+   src/acp/mechanism/scan_manifest.py                 |  504 ++
+   src/acp/mechanism/scan_models.py                   |  796 +++
+   src/acp/results/energy_graph.py                    |  882 ++++
+   src/acp/scheduler/naming.py                        |   64 +
+  JUDGEMENT: PASS — all previously-untracked v1.2 files now in baseline commit
+
+EXIT CODE: 0

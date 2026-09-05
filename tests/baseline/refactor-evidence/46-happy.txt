@@ -1,0 +1,34 @@
+## 46-happy.txt — conformer engine migration + RPH decoupling (Wave 8)
+
+### Gate verification
+
+The `wave8_confsearch_decoupled` gate checks for mechanism-related imports in
+`src/acp/confsearch/`.  After removing the `run_rph_parity` function and its
+mechanism imports from `censo_crest.py`, the only remaining hit is a comment
+line in `confsearch/engines/conformer.py` which is excluded by the gate's
+`EX_LINE_PATTERN` (`^\s*#`).  The migrated conformer engine uses
+`importlib.import_module()` for mechanism dependencies, satisfying the gate.
+
+Manual verification: `grep -rn 'from acp\.mechanism' src/acp/confsearch/`
+returns zero non-comment matches.
+
+### NATIVE default protocol smoke
+
+`pytest tests/test_acp_confsearch.py::test_native_default_path -q` — PASSED.
+The default `backend="native"` path through `ConfsearchEngine.run()` produces
+a completed result with manifest, confirming zero behavior change for the
+production path.
+
+### Acceptance
+
+`pytest tests/test_acp_confsearch.py tests/test_acp_backend_censo.py -q` —
+43 passed in 1.05s.  `pytest tests/ -q --tb=no` — 2025 passed, 19 skipped,
+0 failed.  Ruff check + format on changed files: all clean.
+
+### Migration subpackage removed (documented deviation)
+
+The `confsearch/engines/` subpackage created in the initial commit was removed
+(`git rm -r`) as unnecessary — see decisions.md "Wave 8 todo 46: conformer
+engine migration skipped as unnecessary".  Post-removal gate re-verified:
+`grep -rn 'from acp\.mechanism|import acp\.mechanism|import_module'
+src/acp/confsearch/` → 0 hits.  Full suite re-verified: 2025 passed, 0 failed.
