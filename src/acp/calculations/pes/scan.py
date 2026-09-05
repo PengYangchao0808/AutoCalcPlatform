@@ -655,13 +655,28 @@ _SP_MAX_WORKERS = 8
 
 
 def _sp_resource_plan(cfg: dict[str, Any]) -> tuple[int, dict[str, Any]]:
-    """Return ``(workers, sp_cfg)`` dividing the task nproc across SP workers."""
+    """Return ``(workers, sp_cfg)`` dividing the task nproc across SP workers.
+
+    Both ``resources.nproc`` and ``executables.orca.nproc`` must be lowered:
+    the CLI propagates ``--nproc`` into both, and ``ORCAInterface`` gives
+    ``executables.orca.nproc`` precedence when building ``%pal`` blocks.
+    """
     resources = cfg.get("resources")
     resources = dict(resources) if isinstance(resources, dict) else {}
     task_nproc = int(resources.get("nproc") or 1)
     per_job = max(1, min(_SP_MAX_NPROC_PER_JOB, task_nproc))
     workers = max(1, min(task_nproc // per_job, _SP_MAX_WORKERS))
-    sp_cfg = {**cfg, "resources": {**resources, "nproc": per_job}}
+    executables = cfg.get("executables")
+    executables = dict(executables) if isinstance(executables, dict) else {}
+    orca_exec = executables.get("orca")
+    orca_exec = dict(orca_exec) if isinstance(orca_exec, dict) else {}
+    orca_exec["nproc"] = per_job
+    executables["orca"] = orca_exec
+    sp_cfg = {
+        **cfg,
+        "resources": {**resources, "nproc": per_job},
+        "executables": executables,
+    }
     return workers, sp_cfg
 
 

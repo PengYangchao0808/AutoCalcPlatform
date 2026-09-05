@@ -2614,13 +2614,20 @@ def _preflight_workflow(workflow: str) -> None:
     actually needs one.
     """
     from acp.workflows.registry import get_workflow_entry
+    from cccp.config import load_config
     from cccp.software import ENV_VARS, resolve_executable
 
     entry = get_workflow_entry(workflow)
     if entry is None or not entry.requires_binaries:
         return
+    try:
+        configured_executables = load_config().get("executables") or {}
+    except Exception:
+        configured_executables = {}
     for name in entry.requires_binaries:
-        if resolve_executable(name) is None:
+        configured = configured_executables.get(name)
+        configured_path = configured.get("path") if isinstance(configured, dict) else None
+        if resolve_executable(name, configured_path=configured_path) is None:
             env_var = ENV_VARS.get(name, f"CONFSEARCH_{name.upper()}_PATH")
             logger.warning(
                 "Preflight: executable '%s' (declared by '%s'; engine "
