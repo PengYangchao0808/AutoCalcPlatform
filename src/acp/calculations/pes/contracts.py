@@ -470,6 +470,10 @@ class ScanFrame:
     source_log: str = ""
     target_coordinates: dict[str, float] = field(default_factory=dict)
     actual_coordinates: dict[str, float] = field(default_factory=dict)
+    constraint_residuals: dict[str, float] = field(default_factory=dict)
+    constraint_residual_ok: bool | None = None
+    max_constraint_residual: float | None = None
+    invalid_reasons: tuple[str, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -485,6 +489,10 @@ class ScanFrame:
             "source_log": self.source_log,
             "target_coordinates": dict(self.target_coordinates),
             "actual_coordinates": dict(self.actual_coordinates),
+            "constraint_residuals": dict(self.constraint_residuals),
+            "constraint_residual_ok": self.constraint_residual_ok,
+            "max_constraint_residual": self.max_constraint_residual,
+            "invalid_reasons": list(self.invalid_reasons),
         }
 
 
@@ -554,6 +562,9 @@ class ScanQuality:
     sp_incomplete: bool = False
     needs_review: bool = False
     notes: tuple[str, ...] = ()
+    constraints_satisfied: bool = True
+    constraint_tolerance: float | None = None
+    max_constraint_residual: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -562,6 +573,9 @@ class ScanQuality:
             "sp_incomplete": self.sp_incomplete,
             "needs_review": self.needs_review,
             "notes": list(self.notes),
+            "constraints_satisfied": self.constraints_satisfied,
+            "constraint_tolerance": self.constraint_tolerance,
+            "max_constraint_residual": self.max_constraint_residual,
         }
 
 

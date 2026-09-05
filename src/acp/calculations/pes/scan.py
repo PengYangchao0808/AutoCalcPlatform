@@ -88,6 +88,24 @@ from cccp.utils.geometry_tools import GeometryUtils
 
 logger = logging.getLogger(__name__)
 
+# Corrector-acceptance bounds (RPH): |q_actual - q_target| beyond these
+# marks the frame off-constraint and gates candidate recommendation.
+_DEFAULT_CONSTRAINT_TOLERANCES: dict[str, float] = {
+    "distance": 0.01,  # Å
+    "angle": 0.5,  # degrees
+    "dihedral": 1.0,  # degrees
+}
+
+
+def _constraint_tolerances(cfg: dict[str, Any]) -> dict[str, float]:
+    """Resolve per-kind constraint-residual tolerances (config-overridable)."""
+    tolerances = dict(_DEFAULT_CONSTRAINT_TOLERANCES)
+    override = cfg.get("pes_scan", {}).get("constraint_residual_tolerance_angstrom")
+    if override is not None:
+        tolerances["distance"] = float(override)
+    return tolerances
+
+
 SCAN_DIR_NAME = PES_SCAN_DIR_NAME
 """Stable per-task PES scan directory name."""
 PES_SCAN_STAGES = (
@@ -235,12 +253,14 @@ def run_pes_scan(
         # -- extract_frames --
         if progress_reporter is not None:
             progress_reporter.start_stage("extract_frames")
+        tolerances = _constraint_tolerances(cfg)
         frames = _extract_frames(
             scan_result,
             coordinate,
             scan_dir,
             reporter=progress_reporter,
             coordinates=scan_coordinates,
+            tolerances=tolerances,
         )
         if progress_reporter is not None:
             progress_reporter.complete_stage("extract_frames")
@@ -271,9 +291,33 @@ def run_pes_scan(
         # -- select_candidates --
         if progress_reporter is not None:
             progress_reporter.start_stage("select_candidates")
+        off_constraint = [f for f in frames if f.constraint_residual_ok is False]
+        constraints_satisfied = not off_constraint
+        max_residual: float | None = None
+        for frame in frames:
+            if frame.max_constraint_residual is not None:
+                if max_residual is None or frame.max_constraint_residual > max_residual:
+                    max_residual = frame.max_constraint_residual
         ts_recs, int_recs, quality = _recommend_candidates(
-            frames, coordinate, profile, cfg, scan_dir
+            frames,
+            coordinate,
+            profile,
+            cfg,
+            scan_dir,
+            coordinates=scan_coordinates,
+            constraints_satisfied=constraints_satisfied,
+            constraint_tolerance=tolerances.get(coordinate.kind),
+            max_constraint_residual=max_residual,
         )
+        if not constraints_satisfied:
+            logger.error(
+                "PES scan constraint gate: %d/%d frames off-constraint "
+                "(max residual %s, tolerance %s) — candidates suppressed",
+                len(off_constraint),
+                len(frames),
+                max_residual,
+                tolerances.get(coordinate.kind),
+            )
         if progress_reporter is not None:
             progress_reporter.complete_stage("select_candidates")
 
@@ -423,13 +467,21 @@ def _extract_frames(
     reporter: ProgressReporter | None = None,
     *,
     coordinates: tuple[ScanCoordinate, ...] | None = None,
+    tolerances: dict[str, float] | None = None,
 ) -> list[ScanFrame]:
-    """Build per-frame records from the scan result."""
+    """Build per-frame records from the scan result.
+
+    Every frame carries per-coordinate constraint residuals
+    (``actual - target``) plus an acceptance flag against *tolerances*;
+    optimizer convergence alone does not imply the frame sits on the
+    prescribed reaction-coordinate slice.
+    """
     frames: list[ScanFrame] = []
     frames_dir = scan_dir / "scan_frames"
     frames_dir.mkdir(parents=True, exist_ok=True)
     total_points = len(scan_result.points)
     scan_coordinates = coordinates or (coordinate,)
+    resolved_tolerances = tolerances or dict(_DEFAULT_CONSTRAINT_TOLERANCES)
     coordinate_ids = [
         item.kind if len(scan_coordinates) == 1 else f"coordinate_{index + 1}"
         for index, item in enumerate(scan_coordinates)
@@ -472,6 +524,20 @@ def _extract_frames(
         target = target_values[primary_id]
         actual = actual_values[primary_id]
         unit = "angstrom" if coordinate.kind == "distance" else "degree"
+        residuals: dict[str, float] = {}
+        invalid_reasons: list[str] = []
+        for coordinate_item, coordinate_id in zip(scan_coordinates, coordinate_ids):
+            value = actual_values.get(coordinate_id)
+            if value is None or not np.isfinite(value):
+                residuals[coordinate_id] = float("nan")
+                invalid_reasons.append(f"{coordinate_id}:unmeasured")
+                continue
+            residual = float(value - float(target_values[coordinate_id]))
+            residuals[coordinate_id] = residual
+            tolerance = float(resolved_tolerances.get(coordinate_item.kind, 0.01))
+            if abs(residual) > tolerance:
+                invalid_reasons.append(f"{coordinate_id}:residual_{residual:+.4f}")
+        finite_residuals = [abs(r) for r in residuals.values() if np.isfinite(r)]
         frames.append(
             ScanFrame(
                 index=index,
@@ -486,6 +552,10 @@ def _extract_frames(
                 source_log="scan.out",
                 target_coordinates=target_values,
                 actual_coordinates=actual_values,
+                constraint_residuals=residuals,
+                constraint_residual_ok=not invalid_reasons,
+                max_constraint_residual=max(finite_residuals) if finite_residuals else None,
+                invalid_reasons=tuple(invalid_reasons),
             )
         )
         if reporter is not None:
@@ -770,12 +840,52 @@ def _recommend_candidates(
     profile: EnergyProfile,
     cfg: dict[str, Any],
     scan_dir: Path,
+    *,
+    coordinates: tuple[ScanCoordinate, ...] | None = None,
+    constraints_satisfied: bool = True,
+    constraint_tolerance: float | None = None,
+    max_constraint_residual: float | None = None,
 ) -> tuple[list[CandidateRecommendation], list[CandidateRecommendation], ScanQuality]:
-    """Recommend TS/INT initial guesses."""
-    if coordinate.kind != "distance":
-        return _recommend_coordinate_candidates(frames, coordinate, profile, cfg)
+    """Recommend TS/INT initial guesses.
 
-    return _recommend_bond_candidates(frames, coordinate, profile, cfg, scan_dir)
+    Frames whose driven coordinates drifted off the constraint targets are
+    not on the prescribed reaction path (failed correctors in RPH terms);
+    their energies do not represent the path and candidates are suppressed.
+    """
+    if not constraints_satisfied:
+        quality = ScanQuality(
+            status="invalid",
+            scan_complete=len(frames) >= 3,
+            sp_incomplete=profile.sp_incomplete,
+            needs_review=True,
+            notes=("constraint_residual_exceeded",),
+            constraints_satisfied=False,
+            constraint_tolerance=constraint_tolerance,
+            max_constraint_residual=max_constraint_residual,
+        )
+        return [], [], quality
+    if coordinate.kind != "distance":
+        return _recommend_coordinate_candidates(
+            frames,
+            coordinate,
+            profile,
+            cfg,
+            constraints_satisfied,
+            constraint_tolerance,
+            max_constraint_residual,
+        )
+
+    return _recommend_bond_candidates(
+        frames,
+        coordinate,
+        profile,
+        cfg,
+        scan_dir,
+        coordinates=coordinates,
+        constraints_satisfied=constraints_satisfied,
+        constraint_tolerance=constraint_tolerance,
+        max_constraint_residual=max_constraint_residual,
+    )
 
 
 def _recommend_bond_candidates(
@@ -784,6 +894,11 @@ def _recommend_bond_candidates(
     profile: EnergyProfile,
     cfg: dict[str, Any],
     scan_dir: Path,
+    *,
+    coordinates: tuple[ScanCoordinate, ...] | None = None,
+    constraints_satisfied: bool = True,
+    constraint_tolerance: float | None = None,
+    max_constraint_residual: float | None = None,
 ) -> tuple[list[CandidateRecommendation], list[CandidateRecommendation], ScanQuality]:
     """Recommend candidates for bond-length scans.
 
@@ -804,7 +919,9 @@ def _recommend_bond_candidates(
         notes.append("non_converged_frames")
 
     policy = policy_from_config(_selection_config(cfg))
-    selection = _select_distance_seeds(frames, coordinate, profile, scan_dir, policy)
+    selection = _select_distance_seeds(
+        frames, coordinate, profile, scan_dir, policy, coordinates=coordinates
+    )
 
     ts_recs: list[CandidateRecommendation] = []
     int_recs: list[CandidateRecommendation] = []
@@ -846,6 +963,9 @@ def _recommend_bond_candidates(
         sp_incomplete=profile.sp_incomplete,
         needs_review=needs_review,
         notes=tuple(dict.fromkeys(notes)),
+        constraints_satisfied=constraints_satisfied,
+        constraint_tolerance=constraint_tolerance,
+        max_constraint_residual=max_constraint_residual,
     )
     return ts_recs, int_recs, quality
 
@@ -856,6 +976,8 @@ def _select_distance_seeds(
     profile: EnergyProfile,
     scan_dir: Path,
     policy: SelectionPolicy,
+    *,
+    coordinates: tuple[ScanCoordinate, ...] | None = None,
 ) -> SeedSelection | None:
     """Run the path-selection policy over the scan profile.
 
@@ -863,6 +985,10 @@ def _select_distance_seeds(
     reference end, so the reactant-side tail is endpoint-excluded and the
     barrier is measured from the input geometry.  Returns ``None`` when the
     profile cannot be built (missing frames or reference geometry).
+
+    For double-bond (multi-distance) scans every distance coordinate's atom
+    pair is passed as a forming bond so the path analysis models the full
+    concerted coordinate, not just the first bond.
     """
     if len(frames) < 3:
         return None
@@ -875,10 +1001,18 @@ def _select_distance_seeds(
             return None
         frame_paths.append(scan_dir / frame.geometry_path)
 
+    scan_coordinates = coordinates or (coordinate,)
+    forming_bonds = [
+        (int(pair[0]), int(pair[1]))
+        for pair in (item.atoms[:2] for item in scan_coordinates if item.kind == "distance")
+    ]
+    if not forming_bonds:
+        forming_bonds = [(int(coordinate.atoms[0]), int(coordinate.atoms[1]))]
+
     path_profile = build_orca_scan_profile(
         frames=frame_paths,
         energies_hartree=list(profile.raw_hartree),
-        forming_bonds=[(int(atom_i), int(atom_j)) for atom_i, atom_j in [coordinate.atoms[:2]]],
+        forming_bonds=forming_bonds,
         product_xyz=product_xyz,
         energy_source=str(profile.energy_source),
         endpoint_direction="start",
@@ -1062,6 +1196,9 @@ def _recommend_coordinate_candidates(
     coordinate: ScanCoordinate,
     profile: EnergyProfile,
     cfg: dict[str, Any],
+    constraints_satisfied: bool = True,
+    constraint_tolerance: float | None = None,
+    max_constraint_residual: float | None = None,
 ) -> tuple[list[CandidateRecommendation], list[CandidateRecommendation], ScanQuality]:
     """Recommend extrema for angle/dihedral scans.
 
@@ -1148,6 +1285,9 @@ def _recommend_coordinate_candidates(
         sp_incomplete=profile.sp_incomplete,
         needs_review=needs_review,
         notes=tuple(dict.fromkeys(notes)),
+        constraints_satisfied=constraints_satisfied,
+        constraint_tolerance=constraint_tolerance,
+        max_constraint_residual=max_constraint_residual,
     )
     return ts_rows, int_rows, quality
 

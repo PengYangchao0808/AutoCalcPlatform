@@ -170,9 +170,11 @@ def build_s2_energy_graph(
     axis = _coordinate_axis(payload)
     nodes: list[dict[str, Any]] = []
     for position, frame in enumerate(frames):
-        x = _number(frame.get("actual_coordinate"))
+        # Plot the prescribed coordinate (monotone by construction); actuals
+        # live in metadata — off-path frames plotted as x fold into zig-zags.
+        x = _number(frame.get("target_coordinate"))
         if x is None:
-            x = _number(frame.get("target_coordinate"))
+            x = _number(frame.get("actual_coordinate"))
         status = "converged" if bool(frame.get("optimization_converged")) else "failed"
         if str(frame.get("single_point_status") or "").lower() == "failed":
             status = "failed"
@@ -327,6 +329,9 @@ def build_s2_energy_graph(
             "energy_source": profile.get("energy_source"),
             "sp_incomplete": bool(profile.get("sp_incomplete")),
             "frame_count": len(frames),
+            "constraints_satisfied": bool(quality.get("constraints_satisfied", True)),
+            "max_constraint_residual": quality.get("max_constraint_residual"),
+            "constraint_tolerance": quality.get("constraint_tolerance"),
             "coordinate": (payload.get("protocol") or {}).get("coordinate") or {},
             "coordinates": payload.get("coordinates") or [],
             "selection": payload.get("selection") or {},

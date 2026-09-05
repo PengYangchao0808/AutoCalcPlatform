@@ -188,8 +188,10 @@ def _pes_scan_result(
         energies = [-1.0 + 0.5 * (i / max(n_points - 1, 1) - 0.5) ** 2 for i in range(n_points)]
     points: list[RelaxedScanPoint] = []
     for i in range(n_points):
+        target = 1.2 + i * (2.5 - 1.2) / max(n_points - 1, 1)
         frame_coordinates = coords.copy()
-        frame_coordinates[1, 0] += 0.01 * i
+        # driven pair must track the target schedule to pass constraint gating
+        frame_coordinates[1, 0] = frame_coordinates[0, 0] + target
         points.append(
             RelaxedScanPoint(
                 frame_index=i,
@@ -198,7 +200,7 @@ def _pes_scan_result(
                 symbols=symbols.copy(),
                 energy_hartree=energies[i],
                 success=True,
-                coordinate_values={"distance": 1.2 + i * (2.5 - 1.2) / max(n_points - 1, 1)},
+                coordinate_values={"distance": target},
             )
         )
     scan_dir = output_dir or Path("/tmp/pes_test")
