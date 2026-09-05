@@ -56,3 +56,32 @@ def test_minimal_frontend_is_not_the_default_page() -> None:
     server = SERVER.read_text(encoding="utf-8")
 
     assert "ACP_Workbench_minimal.html" not in server
+
+
+def test_energy_chart_axes_cannot_scroll_out_of_viewport() -> None:
+    """Regression guard for docs/ACP_Energy_Graph_Axis_Rendering_Issue_Report.md.
+
+    The axis band lives at the bottom of the fixed 1040x520 viewBox.  The
+    layout contract must guarantee the SVG always fits the chart viewport so
+    the axes stay visible: no vertical scrolling, no min-height forcing
+    overflow, and no full-replacement redraw leaving the axes below the fold.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Energy chart: viewport must never scroll vertically; SVG must adapt.
+    assert ".energy-chart-scroll { min-height: 0; overflow-x: auto; overflow-y: hidden;" in html
+    assert ".energy-chart-scroll { min-height: 0; overflow: auto;" not in html
+    svg_rule = ".energy-chart-svg { display: block; width: 100%; min-width: 640px; height: 100%; }"
+    assert svg_rule in html
+    assert ".energy-chart-svg { display: block; width: 100%; min-width: 640px; min-height: 360px; height: 100%; }" not in html
+
+    # Optimization chart: same contract — SVG fills the flex column, no fixed
+    # pixel height that can push the axis band out of the card.
+    assert ".optimization-chart-svg { display: block; width: 100%; min-width: 620px; height: 100%; }" in html
+    assert "min-width: 620px; height: 238px;" not in html
+    assert ".optimization-chart-scroll { flex: 1 1 0; min-height: 0; overflow: hidden;" in html
+    assert ".optimization-chart-card { display: flex; flex-direction: column;" in html
+
+    # Axes are still generated and appended inside the SVG viewBox.
+    assert "function energyGraphAxesMarkup(xDom, yDom)" in html
+    assert "svg += energyGraphAxesMarkup(xDom, yDom);" in html
