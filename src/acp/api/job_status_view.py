@@ -8,8 +8,8 @@ from collections.abc import Mapping
 from html import unescape
 from typing import Any, Final
 
-from acp.api.stage_labels import stage_label
 from acp.api.v1_schemas import JobLiveMetric, JobLiveStatus
+from acp.core.stage_labels import stage_label
 
 _ALLOWED_METRIC_KINDS: Final[frozenset[str]] = frozenset(
     {"count", "iteration", "status", "text", "progress"}
