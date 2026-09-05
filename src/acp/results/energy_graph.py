@@ -14,7 +14,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any
 
 HARTREE_TO_KCAL = 627.5094740631
 
@@ -37,6 +37,26 @@ def _number(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return result if result == result and abs(result) != float("inf") else None
+
+
+def _sanitize_json(value: Any) -> Any:
+    """Recursively replace non-finite floats (NaN/±Inf) with ``None``.
+
+    Scan frames persist ``float("nan")`` when coordinate measurement fails
+    (``calculations/pes/scan.py``).  ``json.dump`` writes those as bare
+    ``NaN``/``Infinity`` tokens which violate strict JSON, and FastAPI's
+    encoder rejects them with ``ValueError: Out of range float values are
+    not JSON compliant``.  Every projection handed to the API passes
+    through this guard so historical manifests with persisted NaN still
+    render instead of returning HTTP 500.
+    """
+    if isinstance(value, float):
+        return value if value == value and abs(value) != float("inf") else None
+    if isinstance(value, dict):
+        return {key: _sanitize_json(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_sanitize_json(item) for item in value]
+    return value
 
 
 def _aligned(values: Any, size: int) -> list[float | None]:
@@ -189,12 +209,14 @@ def build_s2_energy_graph(
                 "status": status,
                 "geometry_ref": str(frame.get("geometry_path") or ""),
                 "metadata": {
-                    "target_coordinate": frame.get("target_coordinate"),
-                    "actual_coordinate": frame.get("actual_coordinate"),
-                    "target_coordinates": frame.get("target_coordinates") or {},
-                    "actual_coordinates": frame.get("actual_coordinates") or {},
-                    "scan_energy_hartree": frame.get("scan_energy_hartree"),
-                    "single_point_energy_hartree": frame.get("single_point_energy_hartree"),
+                    "target_coordinate": _number(frame.get("target_coordinate")),
+                    "actual_coordinate": _number(frame.get("actual_coordinate")),
+                    "target_coordinates": _sanitize_json(frame.get("target_coordinates") or {}),
+                    "actual_coordinates": _sanitize_json(frame.get("actual_coordinates") or {}),
+                    "scan_energy_hartree": _number(frame.get("scan_energy_hartree")),
+                    "single_point_energy_hartree": _number(
+                        frame.get("single_point_energy_hartree")
+                    ),
                     "single_point_status": frame.get("single_point_status"),
                 },
             }
@@ -309,45 +331,48 @@ def build_s2_energy_graph(
         )
     )
     title = "PESsearch 扫描能量" if original_schema == "pes_profile_v2" else "S2 扫描能量"
-    return {
-        "job_id": job_id,
-        "view_type": "scan",
-        "title": title,
-        "status": str(payload.get("status") or "unknown"),
-        "complete": complete,
-        "revision": _revision(payload),
-        "default_series": default_series,
-        "available_views": ["scan"],
-        "x_axis": axis,
-        "series": series,
-        "nodes": nodes,
-        "edges": [],
-        "annotations": annotations,
-        "source": source,
-        "provenance": payload.get("provenance") or {},
-        "metadata": {
-            "energy_source": profile.get("energy_source"),
-            "sp_incomplete": bool(profile.get("sp_incomplete")),
-            "frame_count": len(frames),
-            "constraints_satisfied": bool(quality.get("constraints_satisfied", True)),
-            "max_constraint_residual": quality.get("max_constraint_residual"),
-            "constraint_tolerance": quality.get("constraint_tolerance"),
-            "coordinate": (payload.get("protocol") or {}).get("coordinate") or {},
-            "coordinates": payload.get("coordinates") or [],
-            "selection": payload.get("selection") or {},
-            "review": {
-                "status": str(review_state.get("status") or "pending"),
-                "decided_at": review_state.get("decided_at"),
-                "revision": review_state.get("revision"),
-                "saved": saved_any,
-                "active_candidates": sum(
-                    1
-                    for item in annotations
-                    if item["type"] in {"ts", "intermediate"} and item["active"]
-                ),
+    projection: dict[str, Any] = _sanitize_json(
+        {
+            "job_id": job_id,
+            "view_type": "scan",
+            "title": title,
+            "status": str(payload.get("status") or "unknown"),
+            "complete": complete,
+            "revision": _revision(payload),
+            "default_series": default_series,
+            "available_views": ["scan"],
+            "x_axis": axis,
+            "series": series,
+            "nodes": nodes,
+            "edges": [],
+            "annotations": annotations,
+            "source": source,
+            "provenance": payload.get("provenance") or {},
+            "metadata": {
+                "energy_source": profile.get("energy_source"),
+                "sp_incomplete": bool(profile.get("sp_incomplete")),
+                "frame_count": len(frames),
+                "constraints_satisfied": bool(quality.get("constraints_satisfied", True)),
+                "max_constraint_residual": _number(quality.get("max_constraint_residual")),
+                "constraint_tolerance": _number(quality.get("constraint_tolerance")),
+                "coordinate": (payload.get("protocol") or {}).get("coordinate") or {},
+                "coordinates": payload.get("coordinates") or [],
+                "selection": payload.get("selection") or {},
+                "review": {
+                    "status": str(review_state.get("status") or "pending"),
+                    "decided_at": review_state.get("decided_at"),
+                    "revision": review_state.get("revision"),
+                    "saved": saved_any,
+                    "active_candidates": sum(
+                        1
+                        for item in annotations
+                        if item["type"] in {"ts", "intermediate"} and item["active"]
+                    ),
+                },
             },
-        },
-    }
+        }
+    )
+    return projection
 
 
 def build_pes_energy_graph(
@@ -503,24 +528,27 @@ def build_optimization_energy_graph(
         "thresholds": dict(trajectory.get("thresholds") or {}),
         "last_cycle": nodes[-1]["metadata"],
     }
-    return {
-        "job_id": job_id,
-        "view_type": "optimization",
-        "title": "几何结构优化",
-        "status": status,
-        "complete": complete,
-        "revision": _revision(trajectory),
-        "default_series": "relative_energy",
-        "available_views": ["optimization"],
-        "x_axis": {"label": "优化周期", "unit": "cycle"},
-        "series": series,
-        "nodes": nodes,
-        "edges": [],
-        "annotations": [],
-        "source": source,
-        "provenance": {"capture": trajectory.get("source", "ORCA output")},
-        "metadata": metadata,
-    }
+    projection: dict[str, Any] = _sanitize_json(
+        {
+            "job_id": job_id,
+            "view_type": "optimization",
+            "title": "几何结构优化",
+            "status": status,
+            "complete": complete,
+            "revision": _revision(trajectory),
+            "default_series": "relative_energy",
+            "available_views": ["optimization"],
+            "x_axis": {"label": "优化周期", "unit": "cycle"},
+            "series": series,
+            "nodes": nodes,
+            "edges": [],
+            "annotations": [],
+            "source": source,
+            "provenance": {"capture": trajectory.get("source", "ORCA output")},
+            "metadata": metadata,
+        }
+    )
+    return projection
 
 
 def _relative_from_first(values: list[float | None]) -> list[float | None]:
@@ -1029,7 +1057,41 @@ def build_energy_graph_from_job(
     s2_review_state: dict[str, Any] | None = None,
     item_id: str | None = None,
 ) -> dict[str, Any]:
-    """Select the first supported energy projection for a scheduler job."""
+    """Select the first supported energy projection for a scheduler job.
+
+    The projection is sanitized for strict JSON compliance (non-finite
+    floats become ``None``) so the FastAPI encoder never rejects the
+    response with ``Out of range float values are not JSON compliant``.
+    """
+    projection: dict[str, Any] = _sanitize_json(
+        _build_energy_graph_projection(
+            job_id,
+            workflow=workflow,
+            method=method,
+            work_dir=work_dir,
+            s2_payload=s2_payload,
+            mechanism_report=mechanism_report,
+            s2_candidates=s2_candidates,
+            s2_review_state=s2_review_state,
+            item_id=item_id,
+        )
+    )
+    return projection
+
+
+def _build_energy_graph_projection(
+    job_id: str,
+    *,
+    workflow: str,
+    method: dict[str, Any] | None,
+    work_dir: Path,
+    s2_payload: dict[str, Any] | None = None,
+    mechanism_report: dict[str, Any] | None = None,
+    s2_candidates: list[dict[str, Any]] | None = None,
+    s2_review_state: dict[str, Any] | None = None,
+    item_id: str | None = None,
+) -> dict[str, Any]:
+    """Dispatch to the workflow-specific projection builder."""
     if workflow == "PESsearch" and str((method or {}).get("mode") or "") == "bond_length_scan":
         return build_pes_energy_graph(
             job_id,

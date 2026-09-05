@@ -1399,3 +1399,35 @@ def test_coordinate_scan_ids_rank_ordered() -> None:
     )
     assert strict_rows[0].confidence == "medium"
     assert strict_rows[1].confidence == "low"
+
+
+def test_persist_pes_outputs_writes_strict_json_for_nan_frames(tmp_path: Path) -> None:
+    from acp.calculations.pes.outputs import persist_pes_outputs
+
+    scan_result = {
+        "frames": [
+            {
+                "index": 0,
+                "target_coordinate": 1.2,
+                "actual_coordinate": float("nan"),
+                "actual_coordinates": {"distance": float("nan")},
+                "residuals": {"distance": float("nan")},
+            }
+        ],
+        "quality": {"max_constraint_residual": float("inf")},
+        "ts_recommendations": [],
+        "int_recommendations": [],
+    }
+
+    profile_path, _manifest_path = persist_pes_outputs(tmp_path, scan_result=scan_result)
+
+    # NaN/Infinity must never reach disk: strict parsers reject those tokens.
+    text = profile_path.read_text(encoding="utf-8")
+    assert "NaN" not in text
+    assert "Infinity" not in text
+    payload = json.loads(text)
+    frame = payload["frames"][0]
+    assert frame["actual_coordinate"] is None
+    assert frame["actual_coordinates"] == {"distance": None}
+    assert frame["residuals"] == {"distance": None}
+    assert payload["quality"]["max_constraint_residual"] is None

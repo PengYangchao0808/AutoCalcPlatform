@@ -328,3 +328,42 @@ def test_unrecognized_workflow_returns_unavailable_projection(tmp_path: Path) ->
         "reason": "workflow_has_no_energy_graph",
         "workflow": "nmr",
     }
+
+
+def test_s2_projection_sanitizes_nan_actual_coordinates() -> None:
+    payload = _s2_payload()
+    payload["scan"]["frames"][0]["actual_coordinate"] = float("nan")
+    payload["scan"]["frames"][0]["actual_coordinates"] = {"distance": float("nan")}
+    payload["scan"]["frames"][0]["target_coordinates"] = {"distance": 1.2}
+    payload["scan"]["frames"][1]["actual_coordinate"] = float("inf")
+    payload["scan"]["quality"]["max_constraint_residual"] = float("nan")
+
+    graph = build_s2_energy_graph("job-nan", payload)
+
+    # Strict JSON compliance — what the FastAPI encoder requires.
+    json.dumps(graph, allow_nan=False)
+    metadata = graph["nodes"][0]["metadata"]
+    assert metadata["actual_coordinate"] is None
+    assert metadata["actual_coordinates"] == {"distance": None}
+    assert metadata["target_coordinates"] == {"distance": 1.2}
+    assert graph["nodes"][1]["metadata"]["actual_coordinate"] is None
+    assert graph["metadata"]["max_constraint_residual"] is None
+
+
+def test_build_energy_graph_from_job_sanitizes_nan_in_pes_payload(tmp_path: Path) -> None:
+    payload = _s2_payload()
+    payload["scan"]["frames"][0]["actual_coordinate"] = float("nan")
+    payload["provenance"] = {"worst_residual": float("nan")}
+
+    graph = build_energy_graph_from_job(
+        "pes-nan",
+        workflow="PESsearch",
+        method={"mode": "bond_length_scan"},
+        work_dir=tmp_path,
+        s2_payload=payload,
+    )
+
+    json.dumps(graph, allow_nan=False)
+    assert graph["view_type"] == "scan"
+    assert graph["provenance"] == {"worst_residual": None}
+    assert graph["nodes"][0]["metadata"]["actual_coordinate"] is None
