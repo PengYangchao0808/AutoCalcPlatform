@@ -26,8 +26,15 @@ Amendments (plan-sanctioned, wave-2 backend wiring):
        in ``optimize``/``transition_state_opt``; ``relaxed_scan`` gains
        multi-coordinate support via ``ReactionCoordinatePlan`` and the new
        ``_run_synchronous_relaxed_scan`` helper.  Sanctioned scopes are the
-       named functions only; presence teeth assert the wave actually landed.
+        named functions only; presence teeth assert the wave actually landed.
+    D. ``constraints.py``: ``orca_constraint_block`` syntax fix (2026-09-04
+       incident) — ORCA ``%geom`` indices are 0-based and the target value
+       precedes the trailing ``C`` flag; the erroneous ``+1`` conversion is
+       removed.  ``CoordinateSpec.constraint_at`` monitor-only error reformat
+       rides along.  Teeth: the writer body must not contain ``+ 1`` and
+       must emit the target before ``C``.
 """
+
 from __future__ import annotations
 
 import ast
@@ -42,11 +49,14 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 BASELINE = "refactor-baseline"
-ALLOWED_PY = frozenset({
-    "src/cccp/qc/interfaces/orca.py",
-    "src/cccp/qc/interfaces/orca_ts.py",
-    "src/acp/backends/orca.py",
-})
+ALLOWED_PY = frozenset(
+    {
+        "src/cccp/qc/interfaces/orca.py",
+        "src/cccp/qc/interfaces/orca_ts.py",
+        "src/cccp/qc/interfaces/constraints.py",
+        "src/acp/backends/orca.py",
+    }
+)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -55,15 +65,22 @@ ALLOWED_PY = frozenset({
 def _git(*args: str) -> str:
     """Run a git command and return stdout."""
     return subprocess.run(
-        ["git", *args], capture_output=True, text=True, cwd=ROOT,
+        ["git", *args],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
     ).stdout
 
 
 def _changed_files() -> set[str]:
     """Files changed between *BASELINE* and worktree in the audited scope."""
     out = _git(
-        "diff", "--name-only", BASELINE, "--",
-        "src/cccp/qc/interfaces/", "src/acp/backends/orca.py",
+        "diff",
+        "--name-only",
+        BASELINE,
+        "--",
+        "src/cccp/qc/interfaces/",
+        "src/acp/backends/orca.py",
     )
     return set(out.strip().splitlines()) if out.strip() else set()
 
@@ -103,7 +120,9 @@ def _baseline_content(path: str) -> str:
     """Return file content at the baseline ref, or skip if absent."""
     r = subprocess.run(
         ["git", "show", f"{BASELINE}:{path}"],
-        capture_output=True, text=True, cwd=ROOT,
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
     )
     if r.returncode != 0:
         pytest.skip(f"Not in baseline: {path}")
@@ -130,9 +149,7 @@ def _func_range(src: str, func_name: str, cls_name: str | None = None) -> tuple[
     Returns ``None`` if the function is not found.
     """
     for node in ast.walk(ast.parse(src)):
-        if isinstance(node, ast.ClassDef) and (
-            cls_name is None or node.name == cls_name
-        ):
+        if isinstance(node, ast.ClassDef) and (cls_name is None or node.name == cls_name):
             for item in node.body:
                 if (
                     isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -177,13 +194,11 @@ def _assert_relaxed_scan_thin(worktree_src: str) -> list[str]:
         if isinstance(node, _THIN_BANNED_NODE_TYPES):
             violations.append(f"  relaxed_scan: loop at line {node.lineno}")
         if isinstance(node, ast.BinOp) and isinstance(node.op, _THIN_BANNED_BINOPS):
-            left_num = (
-                isinstance(getattr(node, "left", None), ast.Constant)
-                and isinstance(node.left.value, (int, float))
+            left_num = isinstance(getattr(node, "left", None), ast.Constant) and isinstance(
+                node.left.value, (int, float)
             )
-            right_num = (
-                isinstance(getattr(node, "right", None), ast.Constant)
-                and isinstance(node.right.value, (int, float))
+            right_num = isinstance(getattr(node, "right", None), ast.Constant) and isinstance(
+                node.right.value, (int, float)
             )
             if left_num or right_num:
                 violations.append(f"  relaxed_scan: numeric arithmetic at line {node.lineno}")
@@ -254,9 +269,10 @@ def _is_amendment_c_addition(added_ln: int, added_txt: str, worktree_src: str) -
     * Lines inside the sanctioned function scopes in the worktree.
     """
     stripped = added_txt.strip()
-    is_import_line = stripped.startswith(("import ", "from ")) or stripped.rstrip(
-        ","
-    ) in _AMENDMENT_C_IMPORT_MARKERS
+    is_import_line = (
+        stripped.startswith(("import ", "from "))
+        or stripped.rstrip(",") in _AMENDMENT_C_IMPORT_MARKERS
+    )
     if is_import_line and any(marker in stripped for marker in _AMENDMENT_C_IMPORT_MARKERS):
         return True
     ranges = _func_ranges(worktree_src)
@@ -379,8 +395,7 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 # Allow: import of ReactionCoordinatePlan / RelaxedScanResult
                 if (
-                    "ReactionCoordinatePlan" in txt
-                    or "RelaxedScanResult" in txt
+                    "ReactionCoordinatePlan" in txt or "RelaxedScanResult" in txt
                 ) and txt.lstrip().startswith("from "):
                     continue
                 # Allow: lines within relaxed_scan method body
@@ -391,6 +406,34 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 # Anything else is a violation
                 violations.append(f"  {fp}:{ln}: {txt!r}")
+            continue
+
+        # ── constraints.py: Amendment D ─────────────────────────────────
+        if fp == "src/cccp/qc/interfaces/constraints.py":
+            worktree = _worktree_content(fp)
+            wt_ranges = _func_ranges(worktree)
+            allowed_ranges = [
+                wt_ranges[name]
+                for name in ("orca_constraint_block", "constraint_at")
+                if name in wt_ranges
+            ]
+            for ln, txt in added:
+                stripped = txt.strip()
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if any(start <= ln <= end for start, end in allowed_ranges):
+                    continue
+                violations.append(f"  {fp}:{ln}: {txt!r}")
+            # Teeth: 0-based writer, target-before-C syntax.
+            writer = wt_ranges.get("orca_constraint_block")
+            if writer is None:
+                violations.append(f"  {fp}: Amendment D scope missing orca_constraint_block")
+            else:
+                body = "\n".join(worktree.splitlines()[writer[0] - 1 : writer[1]])
+                if "+ 1" in body or "atom + 1" in body:
+                    violations.append(f"  {fp}: orca_constraint_block still applies +1 indexing")
+                if "{constraint.target:.8f} C" not in body:
+                    violations.append(f"  {fp}: orca_constraint_block must emit target before C")
             continue
 
         # ── orca.py: Amendment B ──────────────────────────────────────────
@@ -411,8 +454,7 @@ def test_algorithm_body_untouched() -> None:
             # Teeth: at most 2 optfreq-removal lines permitted
             if optfreq_added_count > 2:
                 violations.append(
-                    f"  {fp}: {optfreq_added_count} optfreq-removal lines "
-                    f"(max 2 expected)"
+                    f"  {fp}: {optfreq_added_count} optfreq-removal lines (max 2 expected)"
                 )
             # Amendment C teeth: the sanctioned scopes must exist and deliver
             # the wave — otherwise the allowance is masking scope drift.
@@ -468,6 +510,22 @@ def test_deleted_lines_in_target_regions() -> None:
         assert not bad, "Deleted lines outside target regions:\n" + "\n".join(bad)
 
 
+def test_constraints_deletions_in_amendment_d_regions() -> None:
+    """① ``constraints.py`` deletions stay inside the Amendment D scopes."""
+    fp = "src/cccp/qc/interfaces/constraints.py"
+    baseline_src = _baseline_content(fp)
+    ranges = _func_ranges(baseline_src)
+    allowed = {
+        line
+        for name in ("orca_constraint_block", "constraint_at")
+        if name in ranges
+        for line in range(ranges[name][0], ranges[name][1] + 1)
+    }
+    _, deleted = _diff_hunks(fp)
+    bad = [f"  {fp}:{ln}: {t!r}" for ln, t in deleted if ln not in allowed]
+    assert not bad, "Deleted lines outside Amendment D regions:\n" + "\n".join(bad)
+
+
 def test_worktree_opt_freq_absent() -> None:
     """① Target regions must not reappear in the working tree."""
     # Class methods
@@ -512,9 +570,7 @@ def test_scheduler_db_mechanism_tables() -> None:
         conn = sqlite3.connect(str(db))
         tables = {
             r[0]
-            for r in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
-            ).fetchall()
+            for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
         }
         for t in ("mechanism_studies", "decision_points", "mechanism_projects"):
             assert t in tables, f"{t} table missing"
@@ -578,7 +634,9 @@ def test_grep_gate_final_forbidden_symbols() -> None:
     """⑤ ``check_grep_gates --gate final_forbidden_symbols src/acp`` exit 0."""
     r = subprocess.run(
         ["python", "scripts/check_grep_gates.py", "--gate", "final_forbidden_symbols", "src/acp"],
-        capture_output=True, text=True, cwd=ROOT,
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
     )
     assert r.returncode == 0, f"Gate failed:\n{r.stdout}\n{r.stderr}"
 
