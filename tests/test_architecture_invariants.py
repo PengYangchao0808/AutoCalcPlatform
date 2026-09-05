@@ -227,13 +227,16 @@ def test_new_code_never_writes_s3_s4_manifest() -> None:
             assert pattern not in source, f"{module.__name__} still writes {pattern}"
 
 
-def test_legacy_api_mechanism_returns_410() -> None:
+def test_legacy_api_mechanism_returns_410(tmp_path, monkeypatch) -> None:
     """Mechanism mutation endpoints must return 410 Gone (read-only)."""
+    # Env must precede import: server.py's module-level create_app() resolves
+    # run_root at import time and would collide with a live server's lock.
+    monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path))
     from fastapi.testclient import TestClient
 
     from acp.api.server import create_app
 
-    client = TestClient(create_app())
+    client = TestClient(create_app(run_root=tmp_path))
     for method, url in [
         ("POST", "/api/v1/mechanism-studies/study-x/promote"),
         ("POST", "/api/v1/mechanism-studies/study-x/resume"),
@@ -305,9 +308,8 @@ def test_capability_evidence_table() -> None:
             collected_ids.add(line)
 
     for capability, node_id in rows:
-        assert node_id in collected_ids, (
-            f"capability row missing: {node_id.split('::')[0].split('/')[-1].replace('test_', '').replace('.py', '')}"
-        )
+        short_name = node_id.split("::")[0].split("/")[-1].replace("test_", "").replace(".py", "")
+        assert node_id in collected_ids, f"capability row missing: {short_name}"
 
 
 # ---------------------------------------------------------------------------
