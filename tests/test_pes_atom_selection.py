@@ -22,12 +22,13 @@ def test_contiguous_selection_forms_are_topology_checked() -> None:
         "bond_stretch", [0, 1], symbols, coordinates
     ).bond_pairs == ((0, 1),)
     assert parse_functional_atom_selection("angle", [0, 1, 2], symbols, coordinates).kind == "angle"
-    assert parse_functional_atom_selection(
-        "dihedral", [0, 1, 2, 3], symbols, coordinates
-    ).kind == "dihedral"
+    assert (
+        parse_functional_atom_selection("dihedral", [0, 1, 2, 3], symbols, coordinates).kind
+        == "dihedral"
+    )
 
 
-def test_double_bond_scan_requires_two_separate_adjacent_groups() -> None:
+def test_double_bond_scan_accepts_separate_and_adjacent_groups() -> None:
     symbols = ["C"] * 5
     coordinates = [
         [0.0, 0.0, 0.0],
@@ -43,10 +44,20 @@ def test_double_bond_scan_requires_two_separate_adjacent_groups() -> None:
     assert selection.groups == ((0, 1), (3, 4))
     assert selection.bond_pairs == ((0, 1), (3, 4))
 
-    with pytest.raises(ValueError, match="non-adjacent"):
-        parse_functional_atom_selection(
-            "double_bond_scan", [0, 1, 2, 3], symbols, coordinates
-        )
+    # Regression guard: groups joined by an intervening bond (retro-[2+2],
+    # concerted flanking-bond break) are legitimate and must parse.
+    selection = parse_functional_atom_selection(
+        "double_bond_scan", [0, 1, 2, 3], symbols, coordinates
+    )
+    assert selection.groups == ((0, 1), (2, 3))
+    assert selection.bond_pairs == ((0, 1), (2, 3))
+
+    with pytest.raises(ValueError, match="must be an adjacent pair"):
+        parse_functional_atom_selection("double_bond_scan", [0, 2, 3, 4], symbols, coordinates)
+
+    # Shared atoms trip the earlier uniqueness guard, not the group check.
+    with pytest.raises(ValueError, match="unique"):
+        parse_functional_atom_selection("double_bond_scan", [0, 1, 1, 2], symbols, coordinates)
 
 
 def test_nonbonded_pair_is_rejected_for_bond_stretch() -> None:
@@ -96,9 +107,7 @@ def test_double_scan_request_roundtrip_preserves_both_coordinates() -> None:
     assert restored.scan_coordinates[1].atoms == (3, 4)
 
 
-def test_double_scan_compiles_to_one_synchronous_plan(
-    tmp_path, fake_backend: FakeBackend
-) -> None:
+def test_double_scan_compiles_to_one_synchronous_plan(tmp_path, fake_backend: FakeBackend) -> None:
     coordinates = (
         ScanCoordinate(kind="distance", atoms=(0, 1), start=1.2, end=2.2, n_points=3),
         ScanCoordinate(kind="distance", atoms=(3, 4), start=1.2, end=2.2, n_points=3),

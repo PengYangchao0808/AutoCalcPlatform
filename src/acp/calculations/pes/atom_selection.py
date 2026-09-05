@@ -81,7 +81,9 @@ def parse_functional_atom_selection(
 
     Connectivity is inferred from the input geometry, not trusted from the
     browser payload.  Thus a request cannot silently turn a non-bonded pair
-    into a bond or a connected four-atom chain into a double-bond scan.
+    into a bond.  The two double-scan groups may be adjacent to each other
+    (e.g. opposite bonds of a four-membered ring for a retro-[2+2], or two
+    bonds flanking a shared bridge) — those are legitimate concerted scans.
     """
     if isinstance(atoms, (str, bytes)):
         raise ValueError("selected atoms must be a sequence of integer indices")
@@ -131,10 +133,6 @@ def parse_functional_atom_selection(
         second_atoms = set(second)
         if first_atoms & second_atoms:
             raise ValueError("double-bond scan groups must not share atoms")
-        if any(
-            _ordered_pair(left, right) in edges for left in first_atoms for right in second_atoms
-        ):
-            raise ValueError("double-bond scan groups must be non-adjacent to each other")
         groups = (first, second)
 
     return FunctionalAtomSelection(
