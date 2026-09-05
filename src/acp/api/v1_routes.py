@@ -65,7 +65,6 @@ from acp.api.schemas import (
     StatusResponse,
     WorkflowsResponse,
 )
-from acp.api.stage_labels import stage_label
 from acp.api.v1_schemas import (
     ArtifactListResponse,
     ArtifactModel,
@@ -171,6 +170,7 @@ from acp.chem.embedding import (
     smiles_to_xyz,
     xyz_formula,
 )
+from acp.core.stage_labels import stage_label
 from acp.results.manifest import MANIFEST_FILENAME, load_result_manifest
 from acp.results.pes_profile import (
     LEGACY_S2_PROFILE_RELATIVE_PATH,

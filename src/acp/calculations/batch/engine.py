@@ -33,7 +33,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final, Literal, TypeAlias
 
-from acp.api.stage_labels import stage_label
 from acp.calculations.batch._items import (
     BatchCalculationItem,
     BatchStructureItem,
@@ -59,6 +58,7 @@ from acp.calculations.primitives.optimize import run_optimize
 from acp.calculations.primitives.singlepoint import run_singlepoint
 from acp.calculations.primitives.thermochemistry import ThermochemistryCalculator
 from acp.calculations.progress import LiveMetric, ProgressReporter
+from acp.core.stage_labels import stage_label
 from acp.storage.manifest import ProductKind, ResultManifest
 
 from .options import BatchMethodOptions

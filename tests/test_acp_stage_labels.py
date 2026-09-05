@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from acp.api.stage_labels import STAGE_LABELS_ZH, stage_label
+from acp.core.stage_labels import STAGE_LABELS_ZH, stage_label
 
 # ── Test 1: All 9 PES stage keys return their Chinese labels ─────────────
 
