@@ -644,6 +644,26 @@ def _measure_scan_coordinate(coords: np.ndarray[Any, Any], coordinate: ScanCoord
 
 # ── single points ──────────────────────────────────────────────────────
 
+# SP-stage resource policy (2026-09-05 incident): the batch helper derives
+# its worker count from ``resources.nproc`` while every ORCA job still
+# claims the FULL task nproc via ``%pal`` — 16 workers × 16 ranks = 256 MPI
+# processes on a 16-core host gridlocked in MPI bootstrap with zero output.
+# Split the budget instead: cap per-job cores, derive workers from the
+# remainder, hand the executor a reduced-nproc config.
+_SP_MAX_NPROC_PER_JOB = 4
+_SP_MAX_WORKERS = 8
+
+
+def _sp_resource_plan(cfg: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    """Return ``(workers, sp_cfg)`` dividing the task nproc across SP workers."""
+    resources = cfg.get("resources")
+    resources = dict(resources) if isinstance(resources, dict) else {}
+    task_nproc = int(resources.get("nproc") or 1)
+    per_job = max(1, min(_SP_MAX_NPROC_PER_JOB, task_nproc))
+    workers = max(1, min(task_nproc // per_job, _SP_MAX_WORKERS))
+    sp_cfg = {**cfg, "resources": {**resources, "nproc": per_job}}
+    return workers, sp_cfg
+
 
 def _run_single_points(
     frames: list[ScanFrame],
@@ -742,6 +762,7 @@ def _run_single_points(
                 "cannot run single points on an incomplete scan"
             )
     frame_paths = [scan_dir / frame.geometry_path for frame in frames]
+    sp_workers, sp_cfg = _sp_resource_plan(cfg)
     result = BatchSinglePointExecutor(
         frames=frame_paths,
         method=sp_spec.method,
@@ -751,7 +772,8 @@ def _run_single_points(
         charge=charge,
         multiplicity=multiplicity,
         frame_ids=[f"frame_{frame.index:03d}" for frame in frames],
-        config=cfg,
+        config=sp_cfg,
+        max_workers=sp_workers,
         cache=sp_spec.resume,
         cache_profile="pes_scan",
         solvent_model=sp_spec.solvent_model,

@@ -2623,8 +2623,9 @@ def _preflight_workflow(workflow: str) -> None:
         if resolve_executable(name) is None:
             env_var = ENV_VARS.get(name, f"CONFSEARCH_{name.upper()}_PATH")
             logger.warning(
-                "Preflight: executable '%s' (required by '%s') was not found. "
-                "Add it to PATH, set %s, or configure executables.%s.path.",
+                "Preflight: executable '%s' (declared by '%s'; engine "
+                "configurations that never call it are unaffected) was not "
+                "found. Add it to PATH, set %s, or configure executables.%s.path.",
                 name,
                 workflow,
                 env_var,
