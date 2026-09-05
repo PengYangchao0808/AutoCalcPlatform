@@ -271,7 +271,7 @@ a { color: var(--accent); }
 
 .workbench {
   display: grid;
-  grid-template-columns: 240px 1fr 240px;
+  grid-template-columns: minmax(200px, 240px) minmax(0, 1fr) minmax(200px, 240px);
   grid-template-areas: "left-col canvas right-col";
   height: calc(100vh - 64px);
   min-height: 0;
@@ -1185,6 +1185,15 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .optimization-workspace .energy-inspector-panel { min-height: 0; border: 1px solid var(--border-subtle); border-radius: 12px; overflow: hidden; background: rgba(10,16,24,.68); }
 .optimization-workspace-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 14px; color: var(--text-tertiary); font-size: 10px; }
 .optimization-workspace-footer strong { color: var(--text-secondary); font-weight: 400; }
+
+/* Transition zone: 1024–1279px — tighten topbar tracks, keep single-row */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .topbar {
+    grid-template-columns: minmax(0, 1.3fr) minmax(120px, 200px) minmax(0, 1fr);
+    gap: 10px;
+    padding: 0 12px;
+  }
+}
 
 @media (max-width: 1023px) {
   .energy-workspace { min-height: 50vh; }
@@ -4166,10 +4175,25 @@ function applyLayout(opts) {
   const wb = document.querySelector(".workbench");
   if (!wb) return;
   // At mobile widths, let the CSS media query control the grid layout
-  const isMobile = window.innerWidth <= 1023;
+  const vw = window.innerWidth;
+  const isMobile = vw <= 1023;
   if (!isMobile) {
-    const left = layoutState.left.collapsed ? 0 : layoutState.left.width;
-    const right = layoutState.right.collapsed ? 0 : layoutState.right.width;
+    let left = layoutState.left.collapsed ? 0 : layoutState.left.width;
+    let right = layoutState.right.collapsed ? 0 : layoutState.right.width;
+    // Transition zone (1024–1279px): clamp sidebars so center >= ~480px.
+    // Do NOT mutate layoutState — only the rendered values are clamped.
+    if (vw < 1280) {
+      const minCenter = 480;
+      const maxSide = Math.max(200, Math.floor((vw - minCenter) / 2));
+      left  = Math.min(left, maxSide);
+      right = Math.min(right, maxSide);
+      // If both together exceed budget, split evenly respecting floors
+      if (left + right > vw - minCenter) {
+        const budget = vw - minCenter;
+        left  = Math.min(left,  Math.floor(budget / 2));
+        right = Math.min(right, budget - left);
+      }
+    }
     wb.style.gridTemplateColumns = left + "px 1fr " + right + "px";
   } else {
     wb.style.gridTemplateColumns = "";
@@ -8603,12 +8627,7 @@ function initViewer() {
   }
   const container = document.getElementById("viewer-3d");
   viewer = $3Dmol.createViewer(container, { backgroundColor: molDoc.bgColor, antialias: true });
-  window.addEventListener("resize", function() {
-    if (viewer) {
-      viewer.resize();
-      viewer.render();
-    }
-  });
+  // Resize handled by the global rAF-throttled listener → applyLayout → viewer.resize
   return true;
 }
 
@@ -19305,6 +19324,19 @@ window.addEventListener("DOMContentLoaded", async function() {
     // initial apply (restores persisted widths/collapse/heights; replaces the
     // old setWidth(loadWidth()) from the legacy initResize)
     applyLayout();
+
+    // Global resize: single rAF-throttled path that calls applyLayout()
+    // (which already calls viewer.resize/render when the viewer exists).
+    // This ensures crossing the 1023px breakpoint clears stale inline
+    // grid-template-columns without a page refresh.
+    var _resizeRafId = 0;
+    window.addEventListener("resize", function() {
+      if (_resizeRafId) return;
+      _resizeRafId = requestAnimationFrame(function() {
+        _resizeRafId = 0;
+        applyLayout();
+      });
+    });
   })();
 });
 </script>
