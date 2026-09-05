@@ -34,6 +34,15 @@ def test_default_workbench_keeps_original_v2_frontend_and_v1_contract() -> None:
     assert "applyBatchOptimizeMethodFields(methodPayload);" in html
     assert "mc-number-with-unit" in html
     assert "mc-number-unit" in html
+    # PES manual selections are persisted independently; BatchOptimize is
+    # intentionally started from the new-task flow rather than from the
+    # energy viewer.
+    assert 'data-energy-action="toggle-selection-lock"' in html
+    assert "function energyGraphToggleSelectionLock()" in html
+    assert "选点已锁定" in html
+    assert "选点可编辑" in html
+    assert "energyGraphConfirmAndBatch" not in html
+    assert 'data-energy-action="to-batch"' not in html
     # BatchOptimize keeps one scheduler task per parsed structure.  The
     # frontend may group those tasks with batch_id, but must not submit one
     # batch_structures payload as a single scheduler job.

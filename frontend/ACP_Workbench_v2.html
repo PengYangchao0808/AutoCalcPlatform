@@ -969,6 +969,10 @@ body.resizing-v canvas {
 .energy-workspace-toolbar .energy-tool-label { color: var(--text-tertiary); font-size: 11px; white-space: nowrap; }
 .energy-workspace-toolbar .energy-toolbar-spacer { flex: 1 1 auto; min-width: 8px; }
 .energy-workspace-toolbar .energy-selection-count { color: var(--text-tertiary); font-size: 11px; white-space: nowrap; }
+.energy-workspace-toolbar .btn.energy-selection-lock-btn.locked { color: #b8f0c8; border-color: rgba(56, 193, 114, 0.42); background: rgba(56, 193, 114, 0.12); }
+.energy-workspace-toolbar .btn.energy-selection-lock-btn.locked:hover { border-color: rgba(56, 193, 114, 0.70); }
+.energy-workspace-toolbar .btn.energy-selection-lock-btn.editable { color: #ffe1a1; border-color: rgba(242, 184, 75, 0.48); background: rgba(242, 184, 75, 0.12); }
+.energy-workspace-toolbar .btn.energy-selection-lock-btn.editable:hover { border-color: rgba(242, 184, 75, 0.72); }
 .energy-workspace-toolbar .btn.small,
 .energy-workspace-toolbar .btn.ghost { height: var(--small-button-height); padding: 0 10px; font-size: 11px; white-space: nowrap; flex-shrink: 0; }
 .energy-workspace-toolbar .btn.primary { height: var(--primary-button-height); padding: 0 12px; font-size: 12px; white-space: nowrap; flex-shrink: 0; }
@@ -1055,6 +1059,7 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .energy-role-btn.active[data-energy-role="none"] { border-color: var(--text-secondary); color: var(--text-primary); background: rgba(255,255,255,0.08); }
 .energy-review-state { margin: 8px 0 0; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.04); color: var(--text-tertiary); font-size: 11px; }
 .energy-review-state.dirty { border: 1px solid rgba(242,184,75,0.45); color: #ffe1a1; }
+.energy-review-state.locked { border: 1px solid rgba(56,193,114,0.28); color: #b8f0c8; background: rgba(56,193,114,0.08); }
 .energy-dirty-badge { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px; background: rgba(242,184,75,0.16); border: 1px solid rgba(242,184,75,0.45); color: #ffe1a1; font-size: 10px; }
 .energy-standalone-badge { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px; background: rgba(78,161,255,0.10); border: 1px solid rgba(78,161,255,0.30); color: var(--accent); font-size: 10px; margin-left: 6px; }
 .energy-candidate-attr { margin-top: 10px; padding: 8px; border-radius: 8px; background: rgba(255,255,255,0.025); border: 1px solid var(--border-subtle); }
@@ -6738,7 +6743,7 @@ function energyGraphBindInspectorButtons(root) {
   var nameInput = root.querySelector("[data-energy-candidate-name]");
   if (nameInput) {
     nameInput.addEventListener("change", function() {
-      if (!data) return;
+      if (!data || s2scanState.selectionLocked) return;
       var node = energyGraphCurrentNode(data);
       if (!node || node.frame_index == null) return;
       var sanitized = energyGraphSanitizeName(nameInput.value);
@@ -6869,7 +6874,7 @@ function energyGraphBuildSvg(data) {
     var labelClass = isSelected ? " selected-label" : "";
     var isCandidate = at === "ts" || at === "intermediate";
     var stateClass = isCandidate ? (annotation.saved ? " saved" : " pending") : "";
-    var dragAttr = isCandidate ? ' data-energy-draggable="1"' : "";
+    var dragAttr = isCandidate && !s2scanState.selectionLocked ? ' data-energy-draggable="1"' : "";
     svg += '<g data-energy-annotation="' + escapeHtml(String(annotation.id)) + '" data-energy-frame="' + escapeHtml(String(item.frameIndex)) + '"' + dragAttr + '>';
     if (at === "ts") {
       svg += '<path class="energy-marker-ts' + selectedClass + stateClass + '" d="M ' + ax + ' ' + (ay - 7) + ' L ' + (ax + 7) + ' ' + ay + ' L ' + ax + ' ' + (ay + 7) + ' L ' + (ax - 7) + ' ' + ay + ' Z"></path>';
@@ -6932,23 +6937,30 @@ function energyGraphInspectorMarkup(data) {
   const workingEntry = frameIndexNum == null ? null : s2scanState.candidates.find(function(entry) {
     return Number(entry.frame_index) === frameIndexNum;
   });
+  const selectionLocked = !!s2scanState.selectionLocked;
   const currentRole = workingEntry ? String(workingEntry.role) : "";
   const recommendedRole = workingEntry && workingEntry.recommended_type ? String(workingEntry.recommended_type) : (annotation && annotation.recommended_type ? String(annotation.recommended_type) : "");
-  const roleStateText = workingEntry
-    ? (workingEntry.saved && !s2scanState.dirty ? "已保存" : "已修改，尚未保存")
-    : "未标记";
-  const canEditRole = data.view_type === "scan" && frameIndexNum != null;
+  const roleStateText = selectionLocked
+    ? "已锁定"
+    : workingEntry
+      ? (workingEntry.saved && !s2scanState.dirty ? "已保存" : "已修改，尚未保存")
+      : "未标记";
+  const canEditRole = data.view_type === "scan" && frameIndexNum != null && !selectionLocked;
+  const isScanFrame = data.view_type === "scan" && frameIndexNum != null;
   const nodes = Array.isArray(data.nodes) ? data.nodes : [];
   const nodeIndex = nodes.findIndex(function(item) { return String(item.id) === String(node.id); });
   const frameTotal = nodes.length;
   const frameDisplay = frameTotal > 0 ? ((nodeIndex >= 0 ? nodeIndex + 1 : 1) + ' / ' + frameTotal) : frame;
   const xAxisLabel = data.view_type === "scan" ? "\u626b\u63cf\u5750\u6807" : "\u6a2a\u5750\u6807";
   var candidateAttrHtml = "";
-  if (canEditRole && workingEntry) {
+  if (isScanFrame && workingEntry) {
     var autoName = energyGenCandidateName(frameIndexNum, workingEntry.role);
     var displayName = workingEntry.name || "";
     var namePlaceholder = escapeHtml(autoName);
     var nameValue = escapeHtml(displayName);
+    var nameControl = canEditRole
+      ? '<input type="text" class="energy-attr-input" data-energy-candidate-name value="' + nameValue + '" placeholder="' + namePlaceholder + '" maxlength="80" />'
+      : '<span class="energy-attr-value" title="点击顶部“选点已锁定”可进入编辑模式">' + escapeHtml(displayName || autoName) + '</span>';
     var candidateIdText = workingEntry.candidate_id ? escapeHtml(workingEntry.candidate_id) : '<span style="color:var(--text-tertiary);font-style:italic;">保存时自动生成</span>';
     var saveStateLabel = workingEntry.saved && !s2scanState.dirty ? "已保存" : workingEntry.saved && s2scanState.dirty ? "已修改" : "未保存";
     var saveStateClass = workingEntry.saved && !s2scanState.dirty ? "ok" : "pending";
@@ -6956,8 +6968,8 @@ function energyGraphInspectorMarkup(data) {
     var recText = recommendedRole ? (recommendedRole === "ts" ? "TS" : "INT") : "\u2014";
     candidateAttrHtml =
       '<div class="energy-candidate-attr">' +
-        '<div class="energy-candidate-attr-title">候选点属性</div>' +
-        '<div class="energy-attr-row"><span class="energy-attr-label">结构名称</span><input type="text" class="energy-attr-input" data-energy-candidate-name value="' + nameValue + '" placeholder="' + namePlaceholder + '" maxlength="80" /></div>' +
+      '<div class="energy-candidate-attr-title">候选点属性</div>' +
+        '<div class="energy-attr-row"><span class="energy-attr-label">结构名称</span>' + nameControl + '</div>' +
         '<div class="energy-attr-row"><span class="energy-attr-label">Candidate ID</span><span class="energy-attr-value">' + candidateIdText + '</span></div>' +
         '<div class="energy-attr-row"><span class="energy-attr-label">扫描帧</span><span class="energy-attr-value">' + escapeHtml(frameDisplay) + '</span></div>' +
         '<div class="energy-attr-row"><span class="energy-attr-label">' + escapeHtml(xAxisLabel) + '</span><span class="energy-attr-value">' + escapeHtml(energyGraphFormatNumber(node.x, 3)) + ' ' + escapeHtml(String((data.x_axis || {}).unit || "")) + '</span></div>' +
@@ -7006,7 +7018,9 @@ function energyGraphInspectorMarkup(data) {
           ' \u00b7 \u5f53\u524d\u6807\u8bb0\uff1a' + escapeHtml(currentRole === "ts" ? "TS" : currentRole === "intermediate" ? "INT" : "\u65e0\u6807\u8bb0") +
           ' \u00b7 \u72b6\u6001\uff1a' + escapeHtml(roleStateText) +
         '</div>'
-      : "") +
+      : (selectionLocked && workingEntry
+        ? '<div class="energy-review-state locked">选点已锁定 · 点击顶部“选点已锁定”可进入编辑模式</div>'
+        : "")) +
     candidateAttrHtml +
     '<div class="detail-hint">\u7ed3\u6784\u67e5\u770b\u5668\u4f1a\u968f\u5f53\u524d\u9009\u4e2d\u5e27\u81ea\u52a8\u540c\u6b65\uff1b\u70b9\u51fb\u56fe\u4e2d\u8282\u70b9\u53ef\u5207\u6362\u5e27\uff0c\u62d6\u52a8 TS/INT \u6807\u8bb0\u53ef\u8c03\u6574\u5019\u9009\u5e27\u3002</div>' +
   '</div>';
@@ -7191,8 +7205,9 @@ function energyGraphWorkspaceMarkup(data) {
   }).join("");
   const status = String(data.status || "unknown").toLowerCase();
   const statusText = status === "running" || status === "partial" ? "● 计算中" : status === "completed" || status === "ready_for_review" ? "● 已完成" : translateStatus(status);
-  const dirtyBadge = s2scanState.dirty ? '<span class="energy-dirty-badge">未保存修改</span>' : "";
-  const savedText = s2scanState.savedAt ? "已保存 " + String(s2scanState.savedAt).replace("T", " ").slice(0, 19) : (reviewMeta.saved ? "已保存" : "尚未保存");
+  const dirtyBadge = '<span class="energy-dirty-badge" data-energy-dirty-badge' + (s2scanState.dirty ? "" : ' style="display:none;"') + '>未保存修改</span>';
+  const savedText = s2scanState.savedAt ? "已保存 " + String(s2scanState.savedAt).replace("T", " ").slice(0, 19) : (reviewMeta.saved || s2scanState.reviewStatus === "confirmed" ? "已保存" : "尚未保存");
+  const selectionButtonClass = s2scanState.selectionLocked ? "locked" : "editable";
   const vm = energyGraphState.viewMode || "fit";
   const labelsActive = energyGraphState.annotationMode !== "hide";
   const standaloneBadge = !projectId ? '<span class="energy-standalone-badge">独立 PESsearch 任务</span>' : "";
@@ -7220,11 +7235,11 @@ function energyGraphWorkspaceMarkup(data) {
         '<button class="plot-tool" data-energy-action="reload" type="button" title="\u91cd\u65b0\u52a0\u8f7d" aria-label="\u91cd\u65b0\u52a0\u8f7d" data-tip="\u91cd\u65b0\u52a0\u8f7d" data-tip-keys="Ctrl+R"><svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10a7 7 0 1 1 2 5M3 10v4M3 10h4"/></svg></button>' +
       '</div>' +
       '<span class="energy-toolbar-spacer"></span>' +
-      '<span class="energy-selection-count">\u5df2\u9009\u5019\u9009\uff1a' + candidateCount + '</span>' +
+      '<span class="energy-selection-count" data-energy-selection-count>\u5df2\u9009\u5019\u9009\uff1a' + candidateCount + '</span>' +
       dirtyBadge +
-      '<span class="energy-selection-count">' + escapeHtml(savedText) + '</span>' +
-      '<button class="btn primary" data-energy-action="save-candidates">确认 PES 选点</button>' +
-      '<button class="btn ghost" data-energy-action="to-batch" title="保存当前选点并预填 BatchOptimize 表单（不会自动提交任务）">确认并进入 BatchOptimize</button>' +
+      '<span class="energy-selection-count" data-energy-saved-state>' + escapeHtml(savedText) + '</span>' +
+      (!reviewMeta.saved ? '<span class="energy-selection-count" data-energy-unconfirmed-hint style="opacity:0.7;">未确认 · 确认选点后才会进入 BatchOptimize</span>' : '') +
+      '<button class="btn primary energy-selection-lock-btn ' + selectionButtonClass + '" data-energy-action="toggle-selection-lock" title="' + escapeHtml(energyGraphSelectionActionTitle()) + '" aria-pressed="' + (s2scanState.selectionLocked ? "true" : "false") + '">' + escapeHtml(energyGraphSelectionActionLabel()) + '</button>' +
     '</div>' +
     '<div class="energy-workspace-grid">' +
       '<section class="energy-chart-panel" data-energy-chart-panel>' +
@@ -7327,9 +7342,13 @@ function s2CandidateLabel(entry, index) {
 
 function energyGraphSyncS2Selection(data) {
   if (!data || data.view_type !== "scan") return;
-  if (s2scanState.dirty && s2scanState.candidates.length) return;
+  // Once the user explicitly enters edit mode, polling must not silently
+  // restore the server snapshot over the local working selection.
+  if (s2scanState.selectionEditMode || s2scanState.dirty) return;
   const review = (data.metadata || {}).review || {};
   s2scanState.reviewStatus = String(review.status || "pending");
+  s2scanState.reviewConfirmed = s2scanState.reviewStatus === "confirmed";
+  s2scanState.selectionLocked = s2scanState.reviewConfirmed;
   s2scanState.savedAt = review.decided_at || null;
   s2scanState.revision = Number(review.revision || 0);
   s2scanState.candidates = [];
@@ -7337,6 +7356,10 @@ function energyGraphSyncS2Selection(data) {
     if (["ts", "intermediate"].indexOf(String(annotation.type)) < 0) return;
     if (annotation.active === false) return;
     if (annotation.frame_index == null) return;
+    // A confirmed empty review is meaningful: it means the user intentionally
+    // selected no candidates.  Do not repopulate the editor with algorithmic
+    // recommendations in that state.
+    if (s2scanState.reviewConfirmed && !annotation.saved) return;
     s2scanState.candidates.push({
       candidate_id: annotation.candidate_id ? String(annotation.candidate_id) : null,
       frame_index: Number(annotation.frame_index),
@@ -7347,6 +7370,7 @@ function energyGraphSyncS2Selection(data) {
       saved: !!annotation.saved,
     });
   });
+  s2scanState.activeCount = s2scanState.candidates.length;
   s2scanState.dirty = false;
 }
 
@@ -7786,8 +7810,7 @@ function energyGraphBind(root) {
         }
         return;
       }
-      if (action === "save-candidates") { energyGraphOpenSaveDialog(); return; }
-      if (action === "to-batch") { energyGraphConfirmAndBatch(); return; }
+      if (action === "toggle-selection-lock") { energyGraphToggleSelectionLock(); return; }
       if (action === "reload") { renderEnergyGraphWorkspace(lastSelectedJob); return; }
       if (action === "retry") { renderEnergyGraphWorkspace(lastSelectedJob); return; }
       const node = energyGraphCurrentNode(data);
@@ -7881,7 +7904,7 @@ function energyGraphSanitizeName(raw) {
 }
 
 function energyGraphUpsertCandidate(frameIndex, patch) {
-  if (frameIndex == null) return;
+  if (frameIndex == null || s2scanState.selectionLocked) return;
   frameIndex = Number(frameIndex);
   var existing = s2scanState.candidates.find(function(entry) {
     return Number(entry.frame_index) === frameIndex;
@@ -7914,7 +7937,7 @@ function energyGraphUpsertCandidate(frameIndex, patch) {
 }
 
 function energyGraphRemoveCandidate(frameIndex) {
-  if (frameIndex == null) return;
+  if (frameIndex == null || s2scanState.selectionLocked) return;
   frameIndex = Number(frameIndex);
   var existing = s2scanState.candidates.find(function(entry) {
     return Number(entry.frame_index) === frameIndex;
@@ -7926,7 +7949,7 @@ function energyGraphRemoveCandidate(frameIndex) {
 }
 
 function energyGraphSetFrameRole(frameIndex, role) {
-  if (frameIndex == null) return;
+  if (frameIndex == null || s2scanState.selectionLocked) return;
   frameIndex = Number(frameIndex);
   const existing = s2scanState.candidates.find(function(entry) {
     return Number(entry.frame_index) === frameIndex;
@@ -7959,6 +7982,7 @@ function energyGraphSetFrameRole(frameIndex, role) {
 }
 
 function energyGraphMoveCandidate(frameIndexFrom, frameIndexTo) {
+  if (s2scanState.selectionLocked) return false;
   frameIndexFrom = Number(frameIndexFrom);
   frameIndexTo = Number(frameIndexTo);
   if (frameIndexFrom === frameIndexTo) return false;
@@ -8002,6 +8026,8 @@ function energyGraphApplyReviewResult(result) {
   }
   s2scanState.dirty = false;
   s2scanState.reviewConfirmed = true;
+  s2scanState.selectionLocked = true;
+  s2scanState.selectionEditMode = false;
   s2scanState.reviewStatus = String(result.status || "confirmed");
   s2scanState.savedAt = result.confirmed_at || null;
   s2scanState.activeCount = (typeof result.selected_count === "number") ? result.selected_count : s2scanState.candidates.length;
@@ -8021,22 +8047,58 @@ function energyGraphReviewPayload() {
   return payload;
 }
 
-async function energyGraphSaveReview() {
-  const jobId = String(energyGraphState.jobId || "");
-  if (!jobId) { window.alert("当前没有选中任务，无法保存。"); return false; }
-  try {
-    const result = await api("/jobs/" + encodeURIComponent(jobId) + "/pes/review", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(energyGraphReviewPayload()),
-    });
-    energyGraphApplyReviewResult(result);
-    energyGraphRenderCurrent();
-    return true;
-  } catch (e) {
-    window.alert("确认 PES 选点失败：" + (e.message || String(e)));
-    return false;
+function energyGraphSelectionActionLabel() {
+  if (s2scanState.selectionLocked) return "选点已锁定";
+  if (s2scanState.reviewStatus === "confirmed" && !s2scanState.dirty) return "选点可编辑";
+  if (s2scanState.reviewStatus === "confirmed") return "保存并锁定选点";
+  return "确认并锁定选点";
+}
+
+function energyGraphSelectionActionTitle() {
+  if (s2scanState.selectionLocked) return "点击解锁，编辑手动选点";
+  if (s2scanState.reviewStatus === "confirmed" && !s2scanState.dirty) return "当前已进入编辑模式，点击重新锁定选点";
+  return "保存手动选点结果并锁定";
+}
+
+function energyGraphUpdateSelectionToolbar() {
+  var screen = getEnergyViewerContainer();
+  if (!screen) return;
+  var button = screen.querySelector('[data-energy-action="toggle-selection-lock"]');
+  if (button) {
+    button.textContent = energyGraphSelectionActionLabel();
+    button.title = energyGraphSelectionActionTitle();
+    button.setAttribute("aria-pressed", s2scanState.selectionLocked ? "true" : "false");
+    button.classList.toggle("locked", !!s2scanState.selectionLocked);
+    button.classList.toggle("editable", !s2scanState.selectionLocked);
   }
+  var dirtyBadge = screen.querySelector("[data-energy-dirty-badge]");
+  if (dirtyBadge) dirtyBadge.style.display = s2scanState.dirty ? "inline-flex" : "none";
+  var savedState = screen.querySelector("[data-energy-saved-state]");
+  if (savedState) {
+    var reviewMeta = (energyGraphState.data && energyGraphState.data.metadata || {}).review || {};
+    var savedText = s2scanState.savedAt
+      ? "已保存 " + String(s2scanState.savedAt).replace("T", " ").slice(0, 19)
+      : (reviewMeta.saved || s2scanState.reviewStatus === "confirmed" ? "已保存" : "尚未保存");
+    savedState.textContent = savedText;
+  }
+}
+
+function energyGraphToggleSelectionLock() {
+  if (s2scanState.selectionLocked) {
+    s2scanState.selectionLocked = false;
+    s2scanState.selectionEditMode = true;
+    energyGraphRenderCurrent();
+    return;
+  }
+  // Re-lock an unchanged saved review locally. Only changed selections need
+  // to go through the persistence endpoint again.
+  if (s2scanState.reviewStatus === "confirmed" && !s2scanState.dirty) {
+    s2scanState.selectionLocked = true;
+    s2scanState.selectionEditMode = false;
+    energyGraphRenderCurrent();
+    return;
+  }
+  energyGraphOpenSaveDialog();
 }
 
 function energyGraphOpenSaveDialog() {
@@ -8048,6 +8110,7 @@ function energyGraphOpenSaveDialog() {
   var tsCount = 0, intCount = 0;
   s2scanState.candidates.forEach(function(e) { if (e.role === "ts") tsCount++; else if (e.role === "intermediate") intCount++; });
   var totalCount = s2scanState.candidates.length;
+  var dialogTitle = s2scanState.reviewStatus === "confirmed" ? "保存并锁定 PES 选点" : "确认 PES 选点";
 
   var candidateRows = s2scanState.candidates.map(function(entry, idx) {
     var label = entry.name || energyGenCandidateName(entry.frame_index, entry.role);
@@ -8068,7 +8131,7 @@ function energyGraphOpenSaveDialog() {
   overlay.innerHTML =
     '<div class="modal-dialog" style="max-width:520px;">' +
       '<div class="modal-header">' +
-        '<h2>确认 PES 选点</h2>' +
+        '<h2>' + escapeHtml(dialogTitle) + '</h2>' +
         '<button class="modal-close" data-energy-dialog-close>&times;</button>' +
       '</div>' +
       '<div class="modal-body">' +
@@ -8082,17 +8145,70 @@ function energyGraphOpenSaveDialog() {
           '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">备注（可选）</label>' +
           '<textarea data-energy-dialog-note rows="2" style="width:100%;resize:vertical;padding:6px 8px;border:1px solid var(--border-default);border-radius:6px;background:rgba(255,255,255,0.03);color:var(--text-primary);font-size:12px;"></textarea>' +
         '</div>' +
+        '<div class="modal-section" style="margin-top:10px;">' +
+          '<label style="display:block;font-size:11px;color:var(--text-tertiary);margin-bottom:4px;">历史选点（每次修改前的自动备份）</label>' +
+          '<div data-energy-review-history><div class="muted" style="font-size:11px;">加载中…</div></div>' +
+        '</div>' +
         '<div class="energy-dialog-error" style="display:none;color:var(--red);font-size:11px;margin-top:6px;"></div>' +
       '</div>' +
       '<div class="modal-footer">' +
         '<button class="btn ghost" data-energy-dialog-close>取消</button>' +
-        '<button class="btn primary" data-energy-dialog-action="save"' + (s2scanState.dirty ? "" : ' title="当前没有未保存修改，但仍可重新写入候选结果"') + '>确认并保存</button>' +
+        '<button class="btn primary" data-energy-dialog-action="save"' + (s2scanState.dirty ? "" : ' title="当前没有未保存修改，但仍可重新写入候选结果"') + '>保存并锁定</button>' +
       '</div>' +
     '</div>';
 
   document.body.appendChild(overlay);
 
   function closeDialog() { overlay.remove(); }
+
+  (function loadReviewHistory() {
+    var box = overlay.querySelector("[data-energy-review-history]");
+    if (!box) return;
+    api("/jobs/" + encodeURIComponent(jobId) + "/pes/review").then(function(state) {
+      if (!box.isConnected) return;
+      var backups = (state && state.backups) || [];
+      if (!backups.length) {
+        box.innerHTML = '<div class="muted" style="font-size:11px;">暂无历史备份（每次确认/修改选点后自动生成）。</div>';
+        return;
+      }
+      box.innerHTML = backups.map(function(bk) {
+        return '<div class="energy-save-candidate-item" style="justify-content:space-between;">' +
+          '<span>第 ' + escapeHtml(String(bk.n)) + ' 轮</span>' +
+          '<span class="energy-save-candidate-frame">' + escapeHtml(String(bk.confirmed_at || "").replace("T", " ").slice(0, 16)) + '</span>' +
+          '<span class="energy-save-candidate-frame">' + escapeHtml(String(bk.selected_count || 0)) + ' 个选点</span>' +
+          (bk.note ? '<span class="energy-save-candidate-frame">' + escapeHtml(String(bk.note)) + '</span>' : '') +
+          '<button type="button" class="btn ghost" data-energy-review-restore="' + escapeHtml(String(bk.n)) + '" style="font-size:11px;padding:2px 8px;">恢复此轮</button>' +
+        '</div>';
+      }).join("");
+      box.querySelectorAll("[data-energy-review-restore]").forEach(function(btn) {
+        btn.addEventListener("click", async function() {
+          var n = parseInt(btn.getAttribute("data-energy-review-restore"), 10);
+          var errEl = overlay.querySelector(".energy-dialog-error");
+          btn.disabled = true;
+          try {
+            var payload = { backup: n };
+            if (s2scanState.revision) payload.expected_revision = s2scanState.revision;
+            var result = await api("/jobs/" + encodeURIComponent(jobId) + "/pes/review/restore", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            });
+            energyGraphApplyReviewResult(result);
+            closeDialog();
+            energyGraphRenderCurrent();
+          } catch (e) {
+            if (errEl) {
+              errEl.style.display = "block";
+              errEl.textContent = "恢复第 " + n + " 轮失败：" + (e.message || String(e));
+            }
+            btn.disabled = false;
+          }
+        });
+      });
+    }).catch(function() {
+      if (box.isConnected) box.innerHTML = '<div class="muted" style="font-size:11px;">历史备份加载失败。</div>';
+    });
+  })();
 
   overlay.querySelectorAll("[data-energy-dialog-close]").forEach(function(btn) {
     btn.addEventListener("click", closeDialog);
@@ -8132,51 +8248,6 @@ function energyGraphOpenSaveDialog() {
   });
 }
 
-async function energyGraphConfirmAndBatch() {
-  var jobId = String(energyGraphState.jobId || "");
-  if (!jobId) { window.alert("当前没有选中任务。"); return; }
-  var saved = await energyGraphSaveReview();
-  if (!saved) return;
-  var items = [];
-  for (var i = 0; i < s2scanState.candidates.length; i++) {
-    var entry = s2scanState.candidates[i];
-    if (!entry.candidate_id) continue;
-    var relPath = "RESULT/structures/" + entry.candidate_id + ".xyz";
-    try {
-      var xyz = await api("/jobs/" + encodeURIComponent(jobId) + "/files/" + relPath.split("/").map(encodeURIComponent).join("/"));
-      if (typeof xyz === "string" && xyz.trim()) {
-        items.push({
-          name: entry.name || entry.candidate_id,
-          tag: entry.role === "ts" ? "TS" : "",
-          xyz: xyz,
-          sourceType: "pes_candidate",
-          sourceRef: entry.candidate_id,
-        });
-      }
-    } catch (e) {
-      console.warn("跳过候选结构（读取失败）：" + entry.candidate_id, e);
-    }
-  }
-  if (!items.length) {
-    window.alert("没有可带入 BatchOptimize 的已确认结构（RESULT/structures 读取失败或为空）。");
-    return;
-  }
-  window._pendingNewTask = { workflow: "BatchOptimize", projectId: "" };
-  window._pendingBatchItems = items;
-  openModal();
-  var pending = window._pendingBatchItems;
-  window._pendingBatchItems = null;
-  if (!pending || !pending.length) return;
-  pending.forEach(function(item) {
-    stageBatchAddItem(item.name, item.tag, item.xyz, 0, 1, 0, "", item.sourceType, item.sourceRef);
-  });
-  var batchModeEl = document.getElementById("batch-optimize-mode");
-  if (batchModeEl) {
-    batchModeEl.checked = true;
-    stageBatchSetMode(true);
-  }
-}
-
 function energyGraphRenderCurrent() {
   var screen = getEnergyViewerContainer();
   if (!screen || !energyGraphState.data || activeViewerTab !== "energy") return;
@@ -8202,8 +8273,9 @@ function energyGraphRenderCurrent() {
   // alive across ordinary updates.
   energyGraphUpdateChart();
   energyGraphUpdateSelection(false, true);
-  var countEl = screen.querySelector(".energy-selection-count");
+  var countEl = screen.querySelector("[data-energy-selection-count]");
   if (countEl) countEl.textContent = "已选候选：" + s2scanState.candidates.length;
+  energyGraphUpdateSelectionToolbar();
 }
 
 function energyGraphRenderEmpty(message) {
@@ -13128,6 +13200,8 @@ async function selectJob(jobId) {
   s2scanState.selectedTs = [];
   s2scanState.selectedInt = [];
   s2scanState.reviewConfirmed = false;
+  s2scanState.selectionLocked = false;
+  s2scanState.selectionEditMode = false;
   s2scanState.candidates = [];
   s2scanState.dirty = false;
   s2scanState.savedAt = null;
@@ -14863,7 +14937,13 @@ function configureStageSourcePanel(workflowId) {
   panel.style.display = isStage ? "block" : "none";
   if (!isStage) return;
   var artifactInput = document.getElementById("stage-artifact");
-  artifactInput.value = "";
+  if (workflowId === "BatchOptimize") {
+    // Confirmed-candidate manifest is the only sanctioned PES hand-off;
+    // recommendations never appear in it, so this default cannot leak guesses.
+    artifactInput.value = "RESULT/result_manifest.json";
+  } else {
+    artifactInput.value = "";
+  }
   var pesRow = document.getElementById("stage-pes-row");
   pesRow.style.display = "none";
   var ircRow = document.getElementById("stage-irc-row");
@@ -17980,6 +18060,8 @@ var s2scanState = {
   profileData: null,
   candidatesData: null,
   reviewConfirmed: false,
+  selectionLocked: false,
+  selectionEditMode: false,
   selectedTs: [],
   selectedInt: [],
   candidates: [],
@@ -18079,6 +18161,8 @@ function s2scanResetState() {
   s2scanState.profileData = null;
   s2scanState.candidatesData = null;
   s2scanState.reviewConfirmed = false;
+  s2scanState.selectionLocked = false;
+  s2scanState.selectionEditMode = false;
   s2scanState.selectedTs = [];
   s2scanState.selectedInt = [];
   s2scanState.candidates = [];
