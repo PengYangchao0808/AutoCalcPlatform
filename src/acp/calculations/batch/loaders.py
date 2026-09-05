@@ -22,6 +22,10 @@ from ._xyz import (
 )
 
 BATCH_REQUEST_SCHEMA_VERSION = "batch_structures_v1"
+# Canonical layout paths (defined in acp.calculations.pes.outputs); repeated
+# here as literals to avoid a batch -> pes import cycle.
+_PES_PROFILE_RELPATH = Path("RESULT/pes_search/pes_profile.json")
+_PES_REVIEW_RELPATH = Path("RESULT/pes_search/pes_review.json")
 _CANDIDATE_RE = re.compile(
     r"(?<![A-Za-z0-9])((?:ts|int)_(?:guess|candidate)_[A-Za-z0-9_-]+)", re.IGNORECASE
 )
@@ -75,14 +79,26 @@ def _product_tag(product_id: str, label: str, path: str, metadata: JsonObject, c
     )
 
 
+def _raise_unconfirmed_pes(root: Path) -> None:
+    """Raise an actionable error for a PES task whose picks were never confirmed."""
+    if (root / _PES_PROFILE_RELPATH).is_file() and not (root / _PES_REVIEW_RELPATH).is_file():
+        raise ValueError(
+            "PES task has no confirmed selections yet (no pes_review.json); "
+            "confirm TS/INT picks via POST /jobs/{id}/pes/review (Workbench "
+            "'确认 PES 选点') before running BatchOptimize"
+        )
+
+
 def load_items_from_result_manifest(task_dir: Path | str) -> list[BatchStructureItem]:
     """Load structure products from a task's unified result manifest."""
     root = Path(task_dir)
     manifest = load_result_manifest(root)
     if manifest is None:
+        _raise_unconfirmed_pes(root)
         return []
     products = find_products(manifest, "structure")
     if not products:
+        _raise_unconfirmed_pes(root)
         import logging
 
         logging.getLogger(__name__).warning(

@@ -31,7 +31,7 @@ from acp.calculations.pes.contracts import (
     StructureSource,
     build_default_protocol,
 )
-from acp.calculations.pes.outputs import copy_xyz_atomic, persist_pes_outputs
+from acp.calculations.pes.outputs import persist_pes_outputs
 from acp.calculations.pes.scan import PES_SCAN_STAGES, run_pes_scan
 from acp.calculations.progress import ProgressReporter
 from cccp.utils.file_io import read_xyz
@@ -185,12 +185,13 @@ class PesSearchEngine:
 
     Inputs: structure / confsearch manifest / coordinate plan.
     Pipeline: scan → BatchSinglePointExecutor → energy profile →
-    candidate selection → output structures + profile.
+    candidate selection → outputs.
 
     Outputs:
-        * ``RESULT/structures/<candidate_id>.xyz``
         * ``RESULT/pes_search/pes_profile.json``
-        * ``result_manifest.json`` registration
+        * ``RESULT/pes_search/pes_recommendations.json`` (audit only)
+        * ``result_manifest.json`` registration (profile + audit report;
+          structure products appear only after manual review)
     """
 
     def __init__(
@@ -233,9 +234,7 @@ class PesSearchEngine:
         """
         out_root = Path(self.output_dir).resolve()
         result_root = out_root / "RESULT"
-        structures_dir = result_root / "structures"
         pes_dir = result_root / "pes_search"
-        structures_dir.mkdir(parents=True, exist_ok=True)
         pes_dir.mkdir(parents=True, exist_ok=True)
 
         # Resolve input structure
@@ -310,26 +309,15 @@ class PesSearchEngine:
             int_recs, kind="intermediate_seed", frames=frames
         )
 
-        # Materialize candidate structures
-        candidate_structures: dict[str, Path] = {}
-        scan_dir = Path(str(scan_result.get("scan_dir") or "")).resolve()
-        for rec in ts_recs + int_recs:
-            candidate_id = str(rec.get("candidate_id", ""))
-            geometry_path = str(rec.get("geometry_path", ""))
-            if not candidate_id or not geometry_path:
-                continue
-            src = scan_dir / geometry_path
-            if src.is_file():
-                dst = structures_dir / f"{candidate_id}.xyz"
-                copy_xyz_atomic(src, dst)
-                candidate_structures[candidate_id] = dst
-
         if progress_reporter is not None:
             progress_reporter.start_stage("finalize")
+        # Deliberate: no recommendation materialization here. Guesses live in
+        # pes_recommendations.json (audit); RESULT structures come only from
+        # the manual review. Do not re-add a copy loop for ts_recs/int_recs.
+        scan_dir = Path(str(scan_result.get("scan_dir") or "")).resolve()
         pes_profile_path, result_manifest_path = persist_pes_outputs(
             out_root,
             scan_result=scan_result,
-            candidate_structures=candidate_structures,
             manifest_source=str(confsearch_manifest) if confsearch_manifest else None,
             status="completed",
         )
@@ -353,7 +341,6 @@ class PesSearchEngine:
             quality=quality,
             ts_candidates=ts_candidates,
             int_candidates=int_candidates,
-            candidate_structures=candidate_structures,
             pes_profile_path=pes_profile_path,
             metadata={
                 "engine": "PesSearchEngine",

@@ -786,14 +786,23 @@ def test_from_confsearch_manifest(
     result_manifest = __import__("json").loads(
         (tmp_path / "RESULT" / "result_manifest.json").read_text(encoding="utf-8")
     )
-    assert {product["kind"] for product in result_manifest["products"]} >= {
+    # 2026-09-03 recommendation isolation: guesses are audit-only and never
+    # registered as structure products — only manual review adds those.
+    assert {product["kind"] for product in result_manifest["products"]} == {
         "pes_profile",
-        "structure",
+        "report",
     }
+    assert not [
+        product for product in result_manifest["products"] if product["kind"] == "structure"
+    ]
 
-    for cand in result.ts_candidates:
-        if cand.candidate_id in result.candidate_structures:
-            assert result.candidate_structures[cand.candidate_id].exists()
+    recommendations = __import__("json").loads(
+        (tmp_path / "RESULT" / "pes_search" / "pes_recommendations.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert recommendations["schema_version"] == "pes_recommendations_v1"
+    assert len(recommendations["ts"]) >= 1
 
 
 def test_bad_manifest_structured_error(

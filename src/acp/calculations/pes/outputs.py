@@ -3,6 +3,12 @@
 New PESsearch jobs keep calculation intermediates under ``WORK/07_PATH``
 and publish consumable products under ``RESULT/``.  This module is the
 single writer for the PES profile and its result-manifest entries.
+
+Recommendation isolation (2026-09-03): algorithmic TS/INT guesses are
+audit-only.  They are stored in ``pes_recommendations.json`` and never
+registered as ``kind: "structure"`` manifest products, so downstream
+consumers (BatchOptimize, structure sources) only ever see manually
+confirmed selections from ``pes_review.json``.
 """
 
 from __future__ import annotations
@@ -17,12 +23,16 @@ from typing import Any
 from acp.storage.manifest import ProductKind, ResultManifest
 
 PES_PROFILE_RELATIVE_PATH = "RESULT/pes_search/pes_profile.json"
+PES_RECOMMENDATIONS_RELATIVE_PATH = "RESULT/pes_search/pes_recommendations.json"
+PES_RECOMMENDATIONS_SCHEMA = "pes_recommendations_v1"
 PES_SCAN_STAGE = "07_PATH"
 PES_SCAN_DIR_NAME = "pes_scan_001"
 PES_SCAN_RELATIVE_PATH = f"WORK/{PES_SCAN_STAGE}/{PES_SCAN_DIR_NAME}"
 
 __all__ = [
     "PES_PROFILE_RELATIVE_PATH",
+    "PES_RECOMMENDATIONS_RELATIVE_PATH",
+    "PES_RECOMMENDATIONS_SCHEMA",
     "PES_SCAN_DIR_NAME",
     "PES_SCAN_RELATIVE_PATH",
     "PES_SCAN_STAGE",
@@ -58,16 +68,18 @@ def persist_pes_outputs(
     task_root: Path | str,
     *,
     scan_result: Mapping[str, Any],
-    candidate_structures: Mapping[str, Path],
     manifest_source: str | None = None,
     task_id: str = "",
     status: str = "completed",
 ) -> tuple[Path, Path]:
-    """Write the canonical PES profile and ``RESULT/result_manifest.json``.
+    """Write the canonical PES profile, recommendations audit, and manifest.
 
-    ``candidate_structures`` contains already-materialised files under
-    ``RESULT/structures``.  All paths persisted in the profile and result
-    manifest are relative to the task root or ``RESULT/`` respectively.
+    Algorithmic recommendations are audit-only: they land in
+    ``RESULT/pes_search/pes_recommendations.json`` and are registered as a
+    ``report`` manifest product — never as ``structure`` products.  Only the
+    manual review (``acp.calculations.pes.review``) adds structure products,
+    so downstream consumers (BatchOptimize, structure sources) exclusively
+    see manually confirmed selections.
 
     Returns:
         ``(pes_profile_path, result_manifest_path)``.
@@ -75,19 +87,7 @@ def persist_pes_outputs(
     root = Path(task_root).expanduser().resolve()
     result_dir = root / "RESULT"
     pes_dir = result_dir / "pes_search"
-    structures_dir = result_dir / "structures"
     pes_dir.mkdir(parents=True, exist_ok=True)
-    structures_dir.mkdir(parents=True, exist_ok=True)
-
-    candidate_paths: dict[str, str] = {}
-    for candidate_id, path in candidate_structures.items():
-        candidate_path = Path(path).resolve()
-        try:
-            candidate_paths[str(candidate_id)] = candidate_path.relative_to(result_dir).as_posix()
-        except ValueError:
-            raise ValueError(
-                f"PES candidate path must be under RESULT/: {candidate_path}"
-            ) from None
 
     quality = dict(scan_result.get("quality") or {})
     frames = list(scan_result.get("frames") or [])
@@ -111,11 +111,23 @@ def persist_pes_outputs(
         "int_candidates": int_candidates,
         "recommendations": {"ts": ts_candidates, "intermediates": int_candidates},
         "frames_count": len(frames),
-        "candidate_structures": candidate_paths,
+        "candidate_structures": {},
+        "recommendations_file": "pes_search/pes_recommendations.json",
         "manifest_source": manifest_source,
     }
     profile_path = pes_dir / "pes_profile.json"
     _write_json_atomic(profile_path, payload)
+
+    recommendations_payload: dict[str, Any] = {
+        "schema_version": PES_RECOMMENDATIONS_SCHEMA,
+        "workflow": "PESsearch",
+        "note": "Algorithmic recommendations — audit only, never batch inputs; "
+        "confirm selections via POST /jobs/{id}/pes/review.",
+        "scan_dir": scan_dir,
+        "ts": ts_candidates,
+        "intermediates": int_candidates,
+    }
+    _write_json_atomic(pes_dir / "pes_recommendations.json", recommendations_payload)
 
     try:
         manifest = ResultManifest.read(result_dir)
@@ -130,21 +142,12 @@ def persist_pes_outputs(
         path="pes_search/pes_profile.json",
         kind=ProductKind.PES_PROFILE,
     )
-    for candidate_id, result_relative_path in candidate_paths.items():
-        kind = next(
-            (
-                "TS" if str(candidate.get("kind") or "").lower() == "ts" else "INT"
-                for candidate in ts_candidates + int_candidates
-                if str(candidate.get("candidate_id") or "") == candidate_id
-            ),
-            "candidate",
-        )
-        manifest.add_product(
-            id=f"pes_candidate_{candidate_id}",
-            label=f"PESsearch {kind} candidate {candidate_id}",
-            path=result_relative_path,
-            kind=ProductKind.STRUCTURE,
-        )
+    manifest.add_product(
+        id="pes_recommendations",
+        label="PESsearch algorithm recommendations (audit only)",
+        path="pes_search/pes_recommendations.json",
+        kind=ProductKind.REPORT,
+    )
     manifest_path = manifest.write(result_dir)
     return profile_path, manifest_path
 

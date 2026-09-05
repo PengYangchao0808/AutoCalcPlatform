@@ -23,7 +23,7 @@ from acp.calculations.pes.engine import (
     PesSearchError,
     PesSearchResult,
 )
-from acp.calculations.pes.outputs import copy_xyz_atomic, persist_pes_outputs
+from acp.calculations.pes.outputs import persist_pes_outputs
 from acp.calculations.pes.scan import PES_SCAN_STAGES, run_pes_scan
 from acp.calculations.progress import ProgressReporter
 from acp.core.workflow import WorkflowResult
@@ -235,27 +235,14 @@ def run_bond_length_scan(
     int_recs = list(scan_result.get("int_recommendations", []))
     frames = list(scan_result.get("frames", []))
     scan_dir = Path(scan_result.get("scan_dir") or "")
-    structures_dir = output_root / "RESULT" / "structures"
-    structures_dir.mkdir(parents=True, exist_ok=True)
-
-    candidate_structures: dict[str, Path] = {}
-    for rec in ts_recs + int_recs:
-        candidate_id = str(rec.get("candidate_id", ""))
-        geometry_path = str(rec.get("geometry_path", ""))
-        if not candidate_id or not geometry_path:
-            continue
-        src = scan_dir / geometry_path if scan_dir else Path(geometry_path)
-        if src.is_file():
-            destination = structures_dir / f"{candidate_id}.xyz"
-            copy_xyz_atomic(src, destination)
-            candidate_structures[candidate_id] = destination
 
     if progress_reporter is not None:
         progress_reporter.start_stage("finalize")
+    # Deliberate: recommendations stay audit-only (pes_recommendations.json);
+    # RESULT structures come only from manual review. Do not re-add guessing.
     pes_profile_path, result_manifest_path = persist_pes_outputs(
         output_root,
         scan_result=scan_result,
-        candidate_structures=candidate_structures,
         status="completed",
     )
     if progress_reporter is not None:
