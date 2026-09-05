@@ -197,7 +197,6 @@ def _assert_relaxed_scan_thin(worktree_src: str) -> list[str]:
                 and node.func.value.attr == "_interface"
             ):
                 has_delegation = True
-
     if not has_delegation:
         violations.append("  relaxed_scan: no delegation to self._interface.relaxed_scan()")
 
@@ -205,6 +204,7 @@ def _assert_relaxed_scan_thin(worktree_src: str) -> list[str]:
 
 
 # ── Amendment B: optfreq-removal mechanical modification check ────────────────
+
 
 def _is_optfreq_removal_line(
     added_ln: int,

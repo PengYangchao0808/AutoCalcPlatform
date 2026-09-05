@@ -196,7 +196,7 @@ def test_irc_block_is_conditional_for_hessian_and_midpoint_restart() -> None:
     assert "InitHess Read" not in midpoint
 
 
-def test_orca_constraint_block_renders_one_based_constraints() -> None:
+def test_orca_constraint_block_renders_zero_based_constraints() -> None:
     block = orca_constraint_block(
         [
             DistanceConstraint(atoms=(0, 1), target=1.5),
@@ -205,11 +205,13 @@ def test_orca_constraint_block_renders_one_based_constraints() -> None:
         ]
     )
 
+    # ORCA %geom constraints are 0-based (manual: "{ B 0 1 1.25 C }"); a +1
+    # here silently constrains the neighbouring atoms (incident 2026-09-04).
     assert block == (
         "Constraints\n"
-        "  { B 1 2 C 1.50000000 }\n"
-        "  { A 1 2 3 C 120.00000000 }\n"
-        "  { D 1 2 3 4 C -60.00000000 }\n"
+        "  { B 0 1 1.50000000 C }\n"
+        "  { A 0 1 2 120.00000000 C }\n"
+        "  { D 0 1 2 3 -60.00000000 C }\n"
         "end"
     )
 
@@ -297,7 +299,7 @@ def test_constrained_optimize_writes_constraint_block_and_parses_output(
         np.array([[0.0, 0.0, 0.0], [1.5, 0.0, 0.0], [0.0, 1.0, 0.0]]),
     )
     assert "Constraints" in input_text
-    assert "{ B 1 2 C 1.50000000 }" in input_text
+    assert "{ B 0 1 1.50000000 C }" in input_text
 
 
 def test_relaxed_scan_reports_missing_orca_binary(

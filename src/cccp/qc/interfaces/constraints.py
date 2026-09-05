@@ -103,9 +103,7 @@ class CoordinateSpec:
         ``monitor`` → raises (monitor coordinates are never constrained).
         """
         if self.role == "monitor":
-            raise ValueError(
-                f"CoordinateSpec {self.id!r} is monitor-only; no constraint to build"
-            )
+            raise ValueError(f"CoordinateSpec {self.id!r} is monitor-only; no constraint to build")
         if self.role == "freeze":
             target = self.start
             assert target is not None  # validated in __post_init__
@@ -268,9 +266,16 @@ def _opt_int(value: object, *, default: int) -> int:
 def orca_constraint_block(constraints: Sequence[CoordinateConstraint]) -> str:
     """Render an ORCA ``Constraints`` sub-block for *constraints*.
 
-    ORCA constraint lines use 1-based atom indices and the per-line syntax
-    ``{ B i j C value }`` / ``{ A i j k C value }`` /
-    ``{ D i j k l C value }``.
+    ORCA ``%geom`` constraint/scan indices are **0-based** (manual:
+    ``{ B 0 1 1.25 C }``), so atoms are written verbatim without any +1
+    conversion — a +1 here silently constrains the neighbouring atoms.
+    Note the contrast with the xTB xcontrol writer
+    (:func:`cccp.qc.interfaces.xtb_scan.xcontrol_constraint_block`),
+    which is 1-based per the xTB convention.
+
+    Per-line syntax: ``{ B i j value C }`` / ``{ A i j k value C }`` /
+    ``{ D i j k l value C }`` — the target value precedes the trailing
+    ``C`` flag.
     """
     if not constraints:
         return ""
@@ -282,8 +287,8 @@ def orca_constraint_block(constraints: Sequence[CoordinateConstraint]) -> str:
             kind = "A"
         else:
             kind = "D"
-        atoms = " ".join(str(atom + 1) for atom in constraint.atoms)
-        lines.append(f"  {{ {kind} {atoms} C {constraint.target:.8f} }}")
+        atoms = " ".join(str(int(atom)) for atom in constraint.atoms)
+        lines.append(f"  {{ {kind} {atoms} {constraint.target:.8f} C }}")
     lines.append("end")
     return "\n".join(lines)
 
