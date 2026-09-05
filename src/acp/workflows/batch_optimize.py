@@ -5,7 +5,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Final, assert_never
+from typing import Final
+
+from typing_extensions import assert_never
 
 from acp.calculations.batch.engine import BatchLayoutMode, BatchOptimizeEngine
 from acp.calculations.batch.models import (
