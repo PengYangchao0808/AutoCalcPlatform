@@ -152,6 +152,24 @@ def persist_pes_outputs(
     return profile_path, manifest_path
 
 
+def _json_safe(value: Any) -> Any:
+    """Recursively replace non-finite floats (NaN/±Inf) with ``None``.
+
+    Scan frames carry ``float("nan")`` when coordinate measurement fails
+    (``scan.py::_extract_frames``).  Persisting those via ``json.dump``
+    writes bare ``NaN`` tokens that violate strict JSON and later crash
+    the API encoder (``Out of range float values are not JSON
+    compliant``).  ``None`` is the canonical "unmeasured" marker on disk.
+    """
+    if isinstance(value, float):
+        return value if value == value and abs(value) != float("inf") else None
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    return value
+
+
 def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
     """Write JSON atomically (temporary file followed by replace)."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -163,7 +181,9 @@ def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
         encoding="utf-8",
     )
     try:
-        json.dump(payload, handle, indent=2, sort_keys=True, default=str)
+        json.dump(
+            _json_safe(payload), handle, indent=2, sort_keys=True, default=str, allow_nan=False
+        )
         handle.close()
         os.replace(handle.name, path)
     except Exception:

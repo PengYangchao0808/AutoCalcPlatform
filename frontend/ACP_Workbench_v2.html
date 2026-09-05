@@ -968,8 +968,8 @@ body.resizing-v canvas {
 .energy-workspace-toolbar {
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
-  overflow-x: auto;
+  flex-wrap: wrap;
+  overflow-x: visible;
   gap: 8px;
   padding: 6px 8px;
   border: 1px solid var(--border-subtle);
@@ -1036,8 +1036,22 @@ body.resizing-v canvas {
 .energy-inspector-title { color: var(--text-primary); font-size: 13px; font-weight: 600; }
 .energy-chart-subtitle { color: var(--text-tertiary); font-size: 10px; padding: 1px 8px; border: 1px solid var(--border-subtle); border-radius: 999px; }
 .energy-inspector-subtitle { color: var(--text-tertiary); font-size: 11px; }
-.energy-chart-scroll { min-height: 0; overflow-x: auto; overflow-y: hidden; padding: 2px 8px 0; }
-.energy-chart-svg { display: block; width: 100%; min-width: 640px; height: 100%; }
+.energy-chart-scroll {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  padding: 2px 4px 0;
+}
+.energy-chart-svg {
+  display: block;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
 .energy-gridline { stroke: rgba(255, 255, 255, 0.05); stroke-width: 1; }
 .energy-axis { stroke: rgba(255, 255, 255, 0.22); stroke-width: 1; }
 .energy-axis-text { fill: var(--text-tertiary); font-size: 11px; }
@@ -1215,7 +1229,6 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
   .energy-inspector-panel { min-height: 300px; }
   .optimization-grid { grid-template-columns: 1fr; }
   .optimization-workspace .energy-inspector-panel { min-height: 360px; }
-  .energy-chart-svg { min-width: 360px; }
   .optimization-chart-svg { min-width: 360px; }
 }
 
@@ -1225,7 +1238,6 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
   .energy-workspace-meta { justify-content: flex-start; text-align: left; }
   .energy-toolbar-spacer { display: none; }
   .energy-selection-count { margin-left: auto; }
-  .energy-chart-svg { min-width: 360px; }
 }
 
 .mech-review-msg {
@@ -4415,6 +4427,7 @@ let energyGraphState = {
   structureAbort: null,
   priorViewMode: "",
   resizeObserver: null,
+  viewSize: { width: 0, height: 0 },
 };
 let bgIndex = 0;
 let labelMode = "none";
@@ -6641,9 +6654,21 @@ function energyGraphSeriesValueAtFrame(data, series, frameIndex) {
   return nodeIndex >= 0 ? energyGraphValue(values[nodeIndex]) : null;
 }
 
-function energyGraphAxesMarkup(xDom, yDom) {
-  var W = 1040, H = 520;
-  var pad = { left: 82, right: 28, top: 38, bottom: 72 };
+function energyGraphChartGeometry() {
+  var vs = energyGraphState.viewSize || { width: 0, height: 0 };
+  var W = Math.max(280, vs.width || 1040);
+  var H = Math.max(200, vs.height || 520);
+  var wClamp = Math.min(Math.max(W, 280), 2400);
+  var padLeft = Math.min(82, Math.max(48, Math.round(82 * wClamp / 1040)));
+  var padRight = Math.min(36, Math.max(20, Math.round(28 * wClamp / 1040)));
+  var padTop = 38;
+  var padBottom = 72;
+  var pad = { left: padLeft, right: padRight, top: padTop, bottom: padBottom };
+  return { W: W, H: H, pad: pad, plotRect: { left: pad.left, top: pad.top, right: W - pad.right, bottom: H - pad.bottom } };
+}
+
+function energyGraphAxesMarkup(xDom, yDom, geom) {
+  var W = geom.W, H = geom.H, pad = geom.pad;
   var markup = "";
   function xFor(v) { return pad.left + ((v - xDom[0]) / (xDom[1] - xDom[0] || 1)) * (W - pad.left - pad.right); }
   function yFor(v) { return pad.top + (1 - ((v - yDom[0]) / (yDom[1] - yDom[0] || 1))) * (H - pad.top - pad.bottom); }
@@ -6656,7 +6681,13 @@ function energyGraphAxesMarkup(xDom, yDom) {
   for (var j = 0; j <= 4; j += 1) {
     var x = xDom[0] + (xDom[1] - xDom[0]) * j / 4;
     var px = xFor(x);
-    markup += '<text class="energy-axis-text" x="' + px + '" y="' + (H - pad.bottom + 23) + '" text-anchor="middle">' + escapeHtml(energyGraphFormatNumber(x, 3)) + '</text>';
+    // Keep edge tick labels inside the SVG viewport.  Centering the first
+    // and last labels on the plot boundary lets half of the text fall into
+    // the clipped padding on narrow panels, which made the axis look skewed
+    // after a resize or zoom.
+    var xAnchor = j === 0 ? "start" : j === 4 ? "end" : "middle";
+    var xLabel = j === 0 ? px + 2 : j === 4 ? px - 2 : px;
+    markup += '<text class="energy-axis-text" x="' + xLabel + '" y="' + (H - pad.bottom + 23) + '" text-anchor="' + xAnchor + '">' + escapeHtml(energyGraphFormatNumber(x, 3)) + '</text>';
   }
   markup += '<line class="energy-axis" x1="' + pad.left + '" y1="' + pad.top + '" x2="' + pad.left + '" y2="' + (H - pad.bottom) + '"></line>';
   markup += '<line class="energy-axis" x1="' + pad.left + '" y1="' + (H - pad.bottom) + '" x2="' + (W - pad.right) + '" y2="' + (H - pad.bottom) + '"></line>';
@@ -6731,17 +6762,22 @@ function energyGraphUpdateSelection(frameChanged, skipSvg) {
             if (yVal !== null) {
               var xDom = energyGraphState.currentDomain ? energyGraphState.currentDomain.x : layout.baseX;
               var yDom = energyGraphState.currentDomain ? energyGraphState.currentDomain.y : layout.baseY;
-              var Lp = layout.pad.left, Rp = layout.pad.right, Tp = layout.pad.top, Bp = layout.pad.bottom;
-              var Pw = layout.W - Lp - Rp, Ph = layout.H - Tp - Bp;
-              var px = Lp + ((node.x - xDom[0]) / (xDom[1] - xDom[0] || 1)) * Pw;
-              var py = Tp + (1 - ((yVal - yDom[0]) / (yDom[1] - yDom[0] || 1))) * Ph;
-              var plotGroup = svg.querySelector("[data-energy-plot]");
-              if (plotGroup) {
-                var firstFrame = svg.querySelector("[data-energy-frame]");
-                var clSvg = '<line class="energy-current-line" x1="' + px + '" y1="' + Tp + '" x2="' + px + '" y2="' + (layout.H - Bp) + '"></line>';
-                var haloSvg = '<circle class="energy-point-halo" cx="' + px + '" cy="' + py + '" r="11"></circle>';
-                if (firstFrame) firstFrame.insertAdjacentHTML("beforebegin", clSvg + haloSvg);
-                else plotGroup.insertAdjacentHTML("afterbegin", clSvg + haloSvg);
+              var geom = energyGraphChartGeometry();
+              var Lp = geom.pad.left, Tp = geom.pad.top, Bp = geom.pad.bottom;
+              var nodeX = energyGraphValue(node.x);
+              var inDomain = nodeX >= xDom[0] && nodeX <= xDom[1] && yVal >= yDom[0] && yVal <= yDom[1];
+              if (inDomain) {
+                var Pw = geom.W - Lp - geom.pad.right, Ph = geom.H - Tp - Bp;
+                var px = Lp + ((node.x - xDom[0]) / (xDom[1] - xDom[0] || 1)) * Pw;
+                var py = Tp + (1 - ((yVal - yDom[0]) / (yDom[1] - yDom[0] || 1))) * Ph;
+                var plotGroup = svg.querySelector("[data-energy-plot]");
+                if (plotGroup) {
+                  var firstFrame = svg.querySelector("[data-energy-frame]");
+                  var clSvg = '<line class="energy-current-line" x1="' + px + '" y1="' + Tp + '" x2="' + px + '" y2="' + (geom.H - Bp) + '"></line>';
+                  var haloSvg = '<circle class="energy-point-halo" cx="' + px + '" cy="' + py + '" r="11"></circle>';
+                  if (firstFrame) firstFrame.insertAdjacentHTML("beforebegin", clSvg + haloSvg);
+                  else plotGroup.insertAdjacentHTML("afterbegin", clSvg + haloSvg);
+                }
               }
             }
           }
@@ -6819,8 +6855,8 @@ function energyGraphBuildSvg(data) {
     if (pxv !== null && pyv !== null) points.push({ x: pxv, y: pyv, index: pi, node: nodes[pi] });
   }
   if (!points.length) return '<div class="energy-empty"><div><strong>暂无可绘制数据</strong><span>曲线数据正在生成，完成后会自动刷新。</span></div></div>';
-  var W = 1040, H = 520;
-  var pad = { left: 82, right: 28, top: 38, bottom: 72 };
+  var geom = energyGraphChartGeometry();
+  var W = geom.W, H = geom.H, pad = geom.pad;
   var layout = energyGraphState.layout;
   if (!layout || layout._seriesId !== energyGraphState.seriesId || layout._jobId !== energyGraphState.jobId) {
     var xExtent = [Math.min.apply(null, points.map(function(p) { return p.x; })), Math.max.apply(null, points.map(function(p) { return p.x; }))];
@@ -6829,7 +6865,7 @@ function energyGraphBuildSvg(data) {
     var ySpread = Math.max(1e-9, yExtent[1] - yExtent[0]);
     var baseX = [xExtent[0] - xSpread * 0.06, xExtent[1] + xSpread * 0.06];
     var baseY = [yExtent[0] - ySpread * 0.12, yExtent[1] + ySpread * 0.12];
-    layout = { points: points, baseX: baseX, baseY: baseY, W: W, H: H, pad: pad, _seriesId: energyGraphState.seriesId, _jobId: energyGraphState.jobId, allAnnotations: null };
+    layout = { points: points, baseX: baseX, baseY: baseY, _seriesId: energyGraphState.seriesId, _jobId: energyGraphState.jobId, allAnnotations: null };
     energyGraphState.layout = layout;
   }
   var Pw = W - pad.left - pad.right, Ph = H - pad.top - pad.bottom;
@@ -6839,21 +6875,44 @@ function energyGraphBuildSvg(data) {
   function xFor(v) { return pad.left + ((v - xDom[0]) / (xDom[1] - xDom[0] || 1)) * Pw; }
   function yFor(v) { return pad.top + (1 - ((v - yDom[0]) / (yDom[1] - yDom[0] || 1))) * Ph; }
   var visiblePoints = points.filter(function(p) { return p.x >= xDom[0] && p.x <= xDom[1] && p.y >= yDom[0] && p.y <= yDom[1]; });
-  var path = visiblePoints.map(function(point, index) { return (index ? "L" : "M") + xFor(point.x) + " " + yFor(point.y); }).join(" ");
-  var area = visiblePoints.length ? path + " L " + xFor(visiblePoints[visiblePoints.length - 1].x) + " " + yFor(yDom[0]) + " L " + xFor(visiblePoints[0].x) + " " + yFor(yDom[0]) + " Z" : "";
+  /* ── (b) Continuous-segment path drawing: break at hidden frames ── */
+  var segments = [];
+  var seg = null;
+  for (var si = 0; si < visiblePoints.length; si += 1) {
+    if (!seg) { seg = [visiblePoints[si]]; }
+    else if (visiblePoints[si].index === seg[seg.length - 1].index + 1) { seg.push(visiblePoints[si]); }
+    else { segments.push(seg); seg = [visiblePoints[si]]; }
+  }
+  if (seg) segments.push(seg);
+  var linePath = "";
+  var areaPath = "";
+  segments.forEach(function(s) {
+    var cmds = s.map(function(pt, idx) { return (idx ? "L" : "M") + xFor(pt.x) + " " + yFor(pt.y); }).join(" ");
+    linePath += cmds + " ";
+    if (s.length >= 2) {
+      areaPath += cmds + " L " + xFor(s[s.length - 1].x) + " " + yFor(yDom[0]) + " L " + xFor(s[0].x) + " " + yFor(yDom[0]) + " Z ";
+    }
+  });
+  /* ── SVG root + clipPath (c) ── */
   var svg = '<svg class="energy-chart-svg' + (energyGraphState.viewMode === "box" ? " mode-box" : "") + (energyGraphState.viewMode === "pan" ? " mode-pan" : "") + (energyGraphState.annotationMode === "hide" ? " labels-hidden" : "") + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + escapeHtml(String(data.title || "能量图")) + '" data-energy-chart>';
-  svg += '<g data-energy-plot>';
-  if (area) svg += '<path class="energy-area" d="' + area + '"></path>';
-  if (path) svg += '<path class="energy-line" d="' + path + '"></path>';
+  svg += '<defs><clipPath id="energy-plot-clip"><rect x="' + pad.left + '" y="' + pad.top + '" width="' + Pw + '" height="' + Ph + '"/></clipPath></defs>';
+  svg += '<g data-energy-plot clip-path="url(#energy-plot-clip)">';
+  if (areaPath) svg += '<path class="energy-area" d="' + areaPath + '"></path>';
+  if (linePath) svg += '<path class="energy-line" d="' + linePath + '"></path>';
+  /* ── Selected frame guide line + halo (c: domain-boundary clipping) ── */
   var selectedFrame = energyGraphFrameIndexForNode(data, energyGraphState.selectedNodeId);
   if (selectedFrame != null) {
     var selNode = nodes.find(function(node) { return Number(node.frame_index) === selectedFrame; });
     if (selNode && energyGraphValue(selNode.x) !== null) {
+      var selX = energyGraphValue(selNode.x);
       var selY = energyGraphSeriesValueAtFrame(data, series, selectedFrame);
-      svg += '<line class="energy-current-line" x1="' + xFor(selNode.x) + '" y1="' + pad.top + '" x2="' + xFor(selNode.x) + '" y2="' + (H - pad.bottom) + '"></line>';
-      if (selY !== null) {
-        svg += '<circle class="energy-point-halo" cx="' + xFor(selNode.x) + '" cy="' + yFor(selY) + '" r="11"></circle>';
-        svg += '<circle class="energy-point selected" cx="' + xFor(selNode.x) + '" cy="' + yFor(selY) + '" r="6"></circle>';
+      var selInDomain = selX >= xDom[0] && selX <= xDom[1] && (selY === null || (selY >= yDom[0] && selY <= yDom[1]));
+      if (selInDomain) {
+        svg += '<line class="energy-current-line" x1="' + xFor(selNode.x) + '" y1="' + pad.top + '" x2="' + xFor(selNode.x) + '" y2="' + (H - pad.bottom) + '"></line>';
+        if (selY !== null) {
+          svg += '<circle class="energy-point-halo" cx="' + xFor(selNode.x) + '" cy="' + yFor(selY) + '" r="11"></circle>';
+          svg += '<circle class="energy-point selected" cx="' + xFor(selNode.x) + '" cy="' + yFor(selY) + '" r="6"></circle>';
+        }
       }
     }
   }
@@ -6865,6 +6924,7 @@ function energyGraphBuildSvg(data) {
     svg += '<circle class="energy-point' + selected + failed + '" cx="' + xFor(point.x) + '" cy="' + yFor(point.y) + '" r="' + (selected ? 6 : 4) + '"></circle>';
     svg += '</g>';
   });
+  /* ── Annotations: cache data-space info only, recompute pixel + lane on each render ── */
   var annotations = Array.isArray(data.annotations) ? data.annotations : [];
   if (!layout.allAnnotations) {
     var allItems = [];
@@ -6872,37 +6932,40 @@ function energyGraphBuildSvg(data) {
       var fi = annotation.frame_index;
       var annNode = nodes.find(function(item) { return Number(item.frame_index) === Number(fi); });
       if (!annNode || energyGraphValue(annNode.x) === null) return;
-      var ax = xFor(annNode.x);
       var annSeries = energyGraphSeries(data);
       var annVal = energyGraphSeriesValueAtFrame(data, annSeries, fi);
       if (annVal === null) return;
-      allItems.push({ annotation: annotation, x: ax, y: yFor(annVal), value: annVal, frameIndex: fi, type: String(annotation.type || "") });
-    });
-    allItems.sort(function(a, b) { return a.x - b.x; });
-    var LANE_UP = -14, LANE_DOWN = 16, LANE_STEP = 14, X_THRESHOLD = 34;
-    var laneSlots = [];
-    allItems.forEach(function(item) {
-      var lane = 0;
-      for (var li = 0; li < laneSlots.length; li++) {
-        if (Math.abs(item.x - laneSlots[li].x) < X_THRESHOLD && laneSlots[li].lane === lane) {
-          lane = (lane === 0) ? 1 : 0;
-          var sc = false;
-          for (var lj = 0; lj < laneSlots.length; lj++) {
-            if (Math.abs(item.x - laneSlots[lj].x) < X_THRESHOLD && laneSlots[lj].lane === lane) { sc = true; break; }
-          }
-          if (sc) lane = 2;
-          break;
-        }
-      }
-      for (var lk = 0; lk < laneSlots.length; lk++) {
-        if (Math.abs(item.x - laneSlots[lk].x) < X_THRESHOLD && laneSlots[lk].lane === lane) { lane = lane + 1; break; }
-      }
-      laneSlots.push({ x: item.x, lane: lane });
-      item.lane = lane;
+      allItems.push({ annotation: annotation, dataX: energyGraphValue(annNode.x), dataY: annVal, value: annVal, frameIndex: fi, type: String(annotation.type || "") });
     });
     layout.allAnnotations = allItems;
   }
-  var renderAnnotations = layout.allAnnotations.filter(function(item) {
+  var recomputed = layout.allAnnotations.map(function(item) {
+    return { annotation: item.annotation, dataX: item.dataX, x: xFor(item.dataX), y: yFor(item.dataY), value: item.value, frameIndex: item.frameIndex, type: item.type };
+  });
+  recomputed.sort(function(a, b) { return a.x - b.x; });
+  var LANE_UP = -14, LANE_DOWN = 16, LANE_STEP = 14, X_THRESHOLD = 34;
+  var laneSlots = [];
+  recomputed.forEach(function(item) {
+    var lane = 0;
+    for (var li = 0; li < laneSlots.length; li++) {
+      if (Math.abs(item.x - laneSlots[li].x) < X_THRESHOLD && laneSlots[li].lane === lane) {
+        lane = (lane === 0) ? 1 : 0;
+        var sc = false;
+        for (var lj = 0; lj < laneSlots.length; lj++) {
+          if (Math.abs(item.x - laneSlots[lj].x) < X_THRESHOLD && laneSlots[lj].lane === lane) { sc = true; break; }
+        }
+        if (sc) lane = 2;
+        break;
+      }
+    }
+    for (var lk = 0; lk < laneSlots.length; lk++) {
+      if (Math.abs(item.x - laneSlots[lk].x) < X_THRESHOLD && laneSlots[lk].lane === lane) { lane = lane + 1; break; }
+    }
+    laneSlots.push({ x: item.x, lane: lane });
+    item.lane = lane;
+  });
+  var renderAnnotations = recomputed.filter(function(item) {
+    if (item.dataX < xDom[0] || item.dataX > xDom[1]) return false;
     if (energyGraphState.annotationMode === "all") return true;
     if (energyGraphState.annotationMode === "candidate") return ["ts", "intermediate"].indexOf(item.type) >= 0;
     if (energyGraphState.annotationMode === "hide") return false;
@@ -6919,6 +6982,14 @@ function energyGraphBuildSvg(data) {
     var isCandidate = at === "ts" || at === "intermediate";
     var stateClass = isCandidate ? (annotation.saved ? " saved" : " pending") : "";
     var dragAttr = isCandidate && !s2scanState.selectionLocked ? ' data-energy-draggable="1"' : "";
+    /* (c) Flip label inward if it would overflow plotRect right edge */
+    var estLabelW = String(annotation.label || annotation.id).length * 7 + 6;
+    var labelAnchor = "start";
+    if (labelX + estLabelW > geom.plotRect.right) {
+      labelX = ax - 10;
+      labelAnchor = "end";
+    }
+    labelY = Math.max(pad.top + 12, Math.min(H - pad.bottom - 4, labelY));
     svg += '<g data-energy-annotation="' + escapeHtml(String(annotation.id)) + '" data-energy-frame="' + escapeHtml(String(item.frameIndex)) + '"' + dragAttr + '>';
     if (at === "ts") {
       svg += '<path class="energy-marker-ts' + selectedClass + stateClass + '" d="M ' + ax + ' ' + (ay - 7) + ' L ' + (ax + 7) + ' ' + ay + ' L ' + ax + ' ' + (ay + 7) + ' L ' + (ax - 7) + ' ' + ay + ' Z"></path>';
@@ -6932,16 +7003,17 @@ function energyGraphBuildSvg(data) {
       svg += '<line x1="' + ax + '" y1="' + ay + '" x2="' + (labelX - 2) + '" y2="' + (labelY + 3) + '" stroke="rgba(255,255,255,0.28)" stroke-width="1"></line>';
     }
     if (isSelected) {
-      svg += '<rect class="energy-marker-label-bg" x="' + (labelX - 3) + '" y="' + (labelY - 11) + '" width="' + (String(annotation.label || annotation.id).length * 7 + 6) + '" height="15" rx="3"></rect>';
+      var bgX = labelAnchor === "end" ? labelX - estLabelW + 3 : labelX - 3;
+      svg += '<rect class="energy-marker-label-bg" x="' + bgX + '" y="' + (labelY - 11) + '" width="' + estLabelW + '" height="15" rx="3"></rect>';
     }
-    svg += '<text class="energy-marker-label' + labelClass + '" x="' + labelX + '" y="' + labelY + '">' + escapeHtml(String(annotation.label || annotation.id)) + '</text>';
-    if (av !== null) svg += '<text class="energy-marker-caption" x="' + labelX + '" y="' + (labelY + 13) + '">' + escapeHtml(energyGraphFormatNumber(av, 2)) + '</text>';
+    svg += '<text class="energy-marker-label' + labelClass + '" x="' + labelX + '" y="' + labelY + '" text-anchor="' + labelAnchor + '">' + escapeHtml(String(annotation.label || annotation.id)) + '</text>';
+    if (av !== null) svg += '<text class="energy-marker-caption" x="' + labelX + '" y="' + (labelY + 13) + '" text-anchor="' + labelAnchor + '">' + escapeHtml(energyGraphFormatNumber(av, 2)) + '</text>';
     svg += '</g>';
   });
   svg += '</g>';
   svg += '<g data-energy-overlay></g>';
   svg += '<g data-energy-axes>';
-  svg += energyGraphAxesMarkup(xDom, yDom);
+  svg += energyGraphAxesMarkup(xDom, yDom, geom);
   svg += '<text class="energy-axis-text" x="' + ((pad.left + W - pad.right) / 2) + '" y="' + (H - 17) + '" text-anchor="middle">' + escapeHtml(String((data.x_axis || {}).label || "坐标")) + ' (' + escapeHtml(String((data.x_axis || {}).unit || "")) + ')</text>';
   svg += '<text class="energy-axis-text" x="18" y="' + (H / 2) + '" text-anchor="middle" transform="rotate(-90 18 ' + (H / 2) + ')">' + escapeHtml(String(series.label || "能量")) + ' (' + escapeHtml(String(series.unit || "")) + ')</text>';
   svg += '</g>';
@@ -7559,8 +7631,8 @@ function energyGraphClientToPlotPoint(event, svg) {
   var ctm = svg.getScreenCTM();
   if (!ctm) return null;
   pt = pt.matrixTransform(ctm.inverse());
-  var W = layout.W, H = layout.H, pad = layout.pad;
-  var plotRect = { left: pad.left, top: pad.top, right: W - pad.right, bottom: H - pad.bottom };
+  var geom = energyGraphChartGeometry();
+  var plotRect = geom.plotRect;
   if (pt.x < plotRect.left || pt.x > plotRect.right || pt.y < plotRect.top || pt.y > plotRect.bottom) return null;
   var xDom = energyGraphState.currentDomain ? energyGraphState.currentDomain.x : layout.baseX;
   var yDom = energyGraphState.currentDomain ? energyGraphState.currentDomain.y : layout.baseY;
@@ -7589,8 +7661,9 @@ function energyGraphNearestFrame(clientX, svg) {
   if (!ctm) return null;
   pt = pt.matrixTransform(ctm.inverse());
   var xDom = energyGraphState.currentDomain ? energyGraphState.currentDomain.x : layout.baseX;
-  var Pw = layout.W - layout.pad.left - layout.pad.right;
-  var dataX = xDom[0] + ((pt.x - layout.pad.left) / (Pw || 1)) * (xDom[1] - xDom[0]);
+  var geom = energyGraphChartGeometry();
+  var Pw = geom.W - geom.pad.left - geom.pad.right;
+  var dataX = xDom[0] + ((pt.x - geom.pad.left) / (Pw || 1)) * (xDom[1] - xDom[0]);
   var best = null;
   var bestDist = Infinity;
   (data.nodes || []).forEach(function(node) {
@@ -7729,8 +7802,9 @@ function energyGraphBindChartInteractions(root) {
       var ctm = svg.getScreenCTM();
       if (!ctm) return;
       pt = pt.matrixTransform(ctm.inverse());
-      var Pw = layout.W - layout.pad.left - layout.pad.right;
-      var Ph = layout.H - layout.pad.top - layout.pad.bottom;
+      var geom = energyGraphChartGeometry();
+      var Pw = geom.W - geom.pad.left - geom.pad.right;
+      var Ph = geom.H - geom.pad.top - geom.pad.bottom;
       var dxRatio = (pt.x - boxState.startSvgX) / Pw;
       var dyRatio = (pt.y - boxState.startSvgY) / Ph;
       var xSpan = boxState.startXDom[1] - boxState.startXDom[0];
@@ -7777,12 +7851,13 @@ function energyGraphBindChartInteractions(root) {
         if (layout) {
           var domain = energyGraphState.currentDomain;
           if (domain) {
-            var Pw = layout.W - layout.pad.left - layout.pad.right;
-            var Ph = layout.H - layout.pad.top - layout.pad.bottom;
-            var x0 = domain.x[0] + ((rx - layout.pad.left) / Pw) * (domain.x[1] - domain.x[0]);
-            var x1 = domain.x[0] + ((rx + rw - layout.pad.left) / Pw) * (domain.x[1] - domain.x[0]);
-            var y1 = domain.y[1] - ((ry - layout.pad.top) / Ph) * (domain.y[1] - domain.y[0]);
-            var y0 = domain.y[1] - ((ry + rh - layout.pad.top) / Ph) * (domain.y[1] - domain.y[0]);
+            var geom = energyGraphChartGeometry();
+            var Pw = geom.W - geom.pad.left - geom.pad.right;
+            var Ph = geom.H - geom.pad.top - geom.pad.bottom;
+            var x0 = domain.x[0] + ((rx - geom.pad.left) / Pw) * (domain.x[1] - domain.x[0]);
+            var x1 = domain.x[0] + ((rx + rw - geom.pad.left) / Pw) * (domain.x[1] - domain.x[0]);
+            var y1 = domain.y[1] - ((ry - geom.pad.top) / Ph) * (domain.y[1] - domain.y[0]);
+            var y0 = domain.y[1] - ((ry + rh - geom.pad.top) / Ph) * (domain.y[1] - domain.y[0]);
             energyGraphState.xDomain = [Math.min(x0, x1), Math.max(x0, x1)];
             energyGraphState.yDomain = [Math.min(y0, y1), Math.max(y0, y1)];
             energyGraphClampDomains();
@@ -7868,22 +7943,24 @@ function energyGraphBind(root) {
   });
   /* ── ResizeObserver ── */
   if (energyGraphState.resizeObserver) { energyGraphState.resizeObserver.disconnect(); energyGraphState.resizeObserver = null; }
-  var chartPanel = root.querySelector("[data-energy-chart-panel]") || root.querySelector("[data-energy-chart-scroll]");
-  if (chartPanel && typeof ResizeObserver !== "undefined") {
+  var chartScroll = root.querySelector("[data-energy-chart-scroll]");
+  if (chartScroll && typeof ResizeObserver !== "undefined") {
     var resizeTimer = null;
     var ro = new ResizeObserver(function() {
       if (resizeTimer) clearTimeout(resizeTimer);
       resizeTimer = setTimeout(function() {
         resizeTimer = null;
-        if (!chartPanel.isConnected || !energyGraphState.data) return;
+        if (!chartScroll.isConnected || !energyGraphState.data) return;
+        energyGraphState.viewSize = { width: chartScroll.clientWidth, height: chartScroll.clientHeight };
         energyGraphUpdateChart();
       }, 150);
     });
-    ro.observe(chartPanel);
+    ro.observe(chartScroll);
     energyGraphState.resizeObserver = ro;
   }
   const menu = root.querySelector("[data-energy-menu]");
   function closeMenu() { if (menu) menu.classList.remove("open"); }
+  var chartPanel = root.querySelector("[data-energy-chart-panel]") || chartScroll;
   if (chartPanel && menu) {
     chartPanel.addEventListener("contextmenu", function(event) {
       event.preventDefault();
