@@ -15,7 +15,9 @@ import os
 import re
 import threading
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+
+UTC = timezone.utc  # datetime.UTC is 3.11+; keep the short name on 3.10
 from pathlib import Path
 from typing import Any, Final, cast
 

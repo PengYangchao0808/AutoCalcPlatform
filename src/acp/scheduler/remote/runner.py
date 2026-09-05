@@ -38,7 +38,7 @@ import uuid
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import NotRequired, TypedDict, cast
+from typing import TypedDict, cast
 
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
@@ -87,16 +87,20 @@ _MONITOR_TIMEOUT_FALLBACK = 10 * 24 * 3600
 _STATE_READ_INTERVAL = 1
 
 
-class _RemoteJobState(TypedDict):
+class _RemoteJobStateBase(TypedDict):
     node: RemoteNode
     remote_job_dir: str
     lsf_job_id: str
     stdout_offset: int
     stderr_offset: int
     cli_cmd: list[str]
-    poll_cycle: NotRequired[int]
-    seen_stages: NotRequired[set[str]]
-    cancel_sent: NotRequired[bool]
+
+
+class _RemoteJobState(_RemoteJobStateBase, total=False):
+    # total=False subclass: typing.NotRequired is 3.11+, matrix includes 3.10.
+    poll_cycle: int
+    seen_stages: set[str]
+    cancel_sent: bool
 
 
 def _utc_now_iso() -> str:
