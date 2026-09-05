@@ -32,9 +32,10 @@ jobs:
       - name: Install package and dependencies
         run: |
           python -m pip install --upgrade pip
-          # remote extra required: scheduler/remote + test_remote_phase* import
-          # paramiko at module level; [dev] alone fails collection.
-          pip install -e '.[dev,remote]'
+          # api extra required: API/scheduler tests import fastapi at module
+          # level; remote extra required: scheduler/remote + test_remote_phase*
+          # import paramiko at module level; [dev] alone fails collection.
+          pip install -e '.[dev,api,remote]'
 
       - name: Compile all Python source
         run: python -m compileall src tests
