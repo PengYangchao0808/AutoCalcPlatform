@@ -68,10 +68,15 @@ def test_energy_chart_axes_cannot_scroll_out_of_viewport() -> None:
     """
     html = FRONTEND.read_text(encoding="utf-8")
 
-    # Energy chart: viewport must never scroll vertically; SVG must adapt.
-    assert ".energy-chart-scroll { min-height: 0; overflow-x: auto; overflow-y: hidden;" in html
+    # Energy chart: viewport must never scroll; the SVG is fully responsive
+    # (min-width: 0) so the axes can never be pushed out of the card — the
+    # contract is enforced by layout, not by scrollbars.
+    assert ".energy-chart-scroll {\n  min-width: 0;\n  min-height: 0;\n  overflow: hidden;" in html
     assert ".energy-chart-scroll { min-height: 0; overflow: auto;" not in html
-    svg_rule = ".energy-chart-svg { display: block; width: 100%; min-width: 640px; height: 100%; }"
+    svg_rule = (
+        ".energy-chart-svg {\n  display: block;\n  flex: 1 1 auto;\n  width: 100%;\n"
+        "  min-width: 0;\n  min-height: 0;\n  height: 100%;\n}"
+    )
     assert svg_rule in html
     assert ".energy-chart-svg { display: block; width: 100%; min-width: 640px; min-height: 360px; height: 100%; }" not in html
 
@@ -83,5 +88,5 @@ def test_energy_chart_axes_cannot_scroll_out_of_viewport() -> None:
     assert ".optimization-chart-card { display: flex; flex-direction: column;" in html
 
     # Axes are still generated and appended inside the SVG viewBox.
-    assert "function energyGraphAxesMarkup(xDom, yDom)" in html
-    assert "svg += energyGraphAxesMarkup(xDom, yDom);" in html
+    assert "function energyGraphAxesMarkup(xDom, yDom, geom)" in html
+    assert "svg += energyGraphAxesMarkup(xDom, yDom, geom);" in html
