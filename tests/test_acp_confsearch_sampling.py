@@ -180,6 +180,22 @@ class TestParseTrajFrames:
         assert frames[1].energy_kcal_mol is None
         assert frames[2].energy_kcal_mol == pytest.approx(-99.0)
 
+    def test_five_part_xyz_lines(self, tmp_path: Path) -> None:
+        """5-part lines (leading atom index) parse correctly."""
+        lines = [
+            "2",
+            "md: 0.5 -100.00 (kcal/mol) -98.50 (kcal/mol)",
+            "0 C  0.0  0.0  0.0",
+            "1 H  1.0  0.0  0.0",
+        ]
+        traj = tmp_path / "5part.xyz"
+        traj.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        frames = parse_traj_frames(traj)
+        assert len(frames) == 1
+        assert frames[0].coords.shape == (2, 3)
+        assert frames[0].coords[0, 0] == pytest.approx(0.0)
+        assert frames[0].coords[1, 0] == pytest.approx(1.0)
+
 
 # ---------------------------------------------------------------------------
 # Equilibration cutoff

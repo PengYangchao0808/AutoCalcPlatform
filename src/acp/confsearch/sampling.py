@@ -1,4 +1,4 @@
-"""MD sampling-history capture for Confsearch (todo 6+7).
+"""MD sampling-history pipeline for Confsearch.
 
 Parses xTB-MD trajectory frames, detects the equilibration prefix,
 clusters conformations into geometric basins via greedy plain-RMSD,
@@ -8,20 +8,18 @@ sampling-saturation metrics.  The resulting
 (schema ``sampling_history_v1``) by the Confsearch engine finalize hook
 for ``xtb-md`` / ``xtbmd-censo`` protocols only.
 
-Coordinates are **not** persisted — geometry stays in ``traj.xyz``;
-the JSON carries per-frame metadata only.
+Data models, serialization, and persistence helpers live in
+``acp.confsearch.sampling_models`` and are re-exported here so that
+existing ``from acp.confsearch.sampling import ...`` imports keep
+working.
 
 Third-party dependency: **numpy only** (no rdkit, sklearn, etc.).
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import math
-import os
-import re
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -29,13 +27,26 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from .sampling_models import (
+    _KCAL_PER_MOL_RE,
+    _MD_PREFIX_RE,
+    _SAMPLING_SCHEMA_VERSION,
+    MDS_COORD_TYPE,
+    BasinInfo,
+    SamplingHistory,
+    SamplingSaturation,
+    TrajFrame,
+    load_sampling_history,
+    read_traj_frame_xyz,
+    write_sampling_history,
+)
 from .shared.deduplication import plain_rmsd
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "BasinInfo",
-    "MDS_2D",
+    "MDS_COORD_TYPE",
     "SamplingHistory",
     "SamplingSaturation",
     "TrajFrame",
@@ -49,20 +60,6 @@ __all__ = [
     "write_sampling_history",
 ]
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-#: Regex for the first ``(kcal/mol)`` energy value in xTB MD titles.
-#: Mirrors ``xtbmd_censo_energy._KCAL_PER_MOL_RE`` (line 97).
-_KCAL_PER_MOL_RE = re.compile(r"(-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)\s*\(kcal/mol\)")
-
-#: Regex for the ``md:`` prefix carrying time in ps.
-_MD_PREFIX_RE = re.compile(r"^md:\s*([\d.]+)")
-
-#: Schema version for the persisted JSON.
-_SAMPLING_SCHEMA_VERSION = "sampling_history_v1"
-
 # Equilibration detection parameters — re-implements the ±2σ sliding-window
 # statistical test from ``xtbmd_censo_energy._equilibration_cutoff`` (line 228).
 # Import was evaluated but rejected: the source module carries heavy transitive
@@ -72,211 +69,6 @@ _EQ_SIGMA_MULT = 2.0
 _EQ_MIN_FRAC = 0.05
 _EQ_MAX_FRAC = 0.20
 _EQ_FALLBACK_FRAC = 0.10
-
-#: Path to trajectory relative to task root (merged-traj convention,
-#: ``xtbmd_md.py:170-173``).
-_TRAJ_REL_PATH = Path("WORK") / "02_SEARCH" / "xTB" / "traj.xyz"
-
-
-# ---------------------------------------------------------------------------
-# Data classes
-# ---------------------------------------------------------------------------
-
-
-@dataclass
-class TrajFrame:
-    """One parsed trajectory frame (in-memory only, not persisted)."""
-
-    index: int
-    time_ps: float | None
-    step: int
-    energy_kcal_mol: float | None
-    symbols: list[str]
-    coords: NDArray[np.float64]
-
-
-@dataclass
-class BasinInfo:
-    """Metadata for one geometric basin."""
-
-    basin_id: int
-    first_seen_index: int
-    first_seen_ps: float | None
-    visit_count: int
-    min_energy: float | None
-    representative_frame: int
-
-
-@dataclass
-class SamplingSaturation:
-    """Sampling-saturation metrics and level classification.
-
-    Level rule:
-        * **HIGH** — ``new_clusters_last_20pct == 0`` (no new basins in the
-          final 20% of sampled frames).
-        * **MEDIUM** — ``new_clusters_last_20pct <= max(1, unique // 10)``.
-        * **LOW** — otherwise.
-    """
-
-    unique_clusters: int
-    new_clusters_last_20pct: int
-    last_new_basin_ps: float | None
-    revisit_ratio: float
-    energy_window_kcal_mol: float
-    level: str
-    cumulative_unique: list[dict[str, Any]]
-
-
-@dataclass(frozen=True)
-class SamplingHistory:
-    """Complete sampling-history artifact (schema ``sampling_history_v1``).
-
-    Coordinates are **not** persisted — geometry stays in the source
-    trajectory file.  The ``frames`` list carries per-frame metadata only.
-    """
-
-    schema_version: str
-    protocol: str
-    source_trajectory: str
-    n_frames_raw: int
-    n_frames_used: int
-    equilibration_cut: int
-    frames: list[TrajFrame]
-    basin_ids: list[int]
-    is_new_basin: list[bool]
-    mds_coords: list[tuple[float, float]]
-    basins: list[BasinInfo]
-    saturation: SamplingSaturation
-    computed_at: str
-    subsampled: bool
-    subsample_stride: int
-
-    # -- serialization -------------------------------------------------------
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialize to JSON-safe dict (no coordinates)."""
-        min_e = min(
-            (f.energy_kcal_mol for f in self.frames if f.energy_kcal_mol is not None),
-            default=None,
-        )
-        frame_dicts: list[dict[str, Any]] = []
-        for f, basin_id, is_new, (mx, my) in zip(
-            self.frames, self.basin_ids, self.is_new_basin, self.mds_coords, strict=True
-        ):
-            rel = (
-                (f.energy_kcal_mol - min_e)
-                if (f.energy_kcal_mol is not None and min_e is not None)
-                else None
-            )
-            frame_dicts.append({
-                "index": f.index,
-                "time_ps": _sanitize(f.time_ps),
-                "step": f.step,
-                "energy_kcal_mol": _sanitize(f.energy_kcal_mol),
-                "relative_energy_kcal_mol": _sanitize(rel),
-                "basin_id": basin_id,
-                "is_new_basin": is_new,
-                "mds": [_sanitize(mx), _sanitize(my)],
-            })
-        return {
-            "schema_version": self.schema_version,
-            "protocol": self.protocol,
-            "source_trajectory": self.source_trajectory,
-            "n_frames_raw": self.n_frames_raw,
-            "n_frames_used": self.n_frames_used,
-            "equilibration_cut": self.equilibration_cut,
-            "frames": frame_dicts,
-            "basins": [
-                {
-                    "basin_id": b.basin_id,
-                    "first_seen_index": b.first_seen_index,
-                    "first_seen_ps": _sanitize(b.first_seen_ps),
-                    "visit_count": b.visit_count,
-                    "min_energy": _sanitize(b.min_energy),
-                    "representative_frame": b.representative_frame,
-                }
-                for b in self.basins
-            ],
-            "saturation": {
-                "unique_clusters": self.saturation.unique_clusters,
-                "new_clusters_last_20pct": self.saturation.new_clusters_last_20pct,
-                "last_new_basin_ps": _sanitize(self.saturation.last_new_basin_ps),
-                "revisit_ratio": _sanitize(self.saturation.revisit_ratio),
-                "energy_window_kcal_mol": _sanitize(self.saturation.energy_window_kcal_mol),
-                "level": self.saturation.level,
-                "cumulative_unique": self.saturation.cumulative_unique,
-            },
-            "computed_at": self.computed_at,
-            "subsampled": self.subsampled,
-            "subsample_stride": self.subsample_stride,
-        }
-
-    @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> SamplingHistory:
-        """Deserialize from JSON dict (coordinates not restored)."""
-        frames = [
-            TrajFrame(
-                index=f["index"],
-                time_ps=f.get("time_ps"),
-                step=f["step"],
-                energy_kcal_mol=f.get("energy_kcal_mol"),
-                symbols=[],  # not persisted
-                coords=np.empty((0, 3)),  # not persisted
-            )
-            for f in d["frames"]
-        ]
-        sat_d = d["saturation"]
-        sat = SamplingSaturation(
-            unique_clusters=sat_d["unique_clusters"],
-            new_clusters_last_20pct=sat_d["new_clusters_last_20pct"],
-            last_new_basin_ps=sat_d.get("last_new_basin_ps"),
-            revisit_ratio=sat_d["revisit_ratio"],
-            energy_window_kcal_mol=sat_d["energy_window_kcal_mol"],
-            level=sat_d["level"],
-            cumulative_unique=sat_d.get("cumulative_unique", []),
-        )
-        basins = [
-            BasinInfo(
-                basin_id=b["basin_id"],
-                first_seen_index=b["first_seen_index"],
-                first_seen_ps=b.get("first_seen_ps"),
-                visit_count=b["visit_count"],
-                min_energy=b.get("min_energy"),
-                representative_frame=b["representative_frame"],
-            )
-            for b in d["basins"]
-        ]
-        return cls(
-            schema_version=d["schema_version"],
-            protocol=d["protocol"],
-            source_trajectory=d["source_trajectory"],
-            n_frames_raw=d["n_frames_raw"],
-            n_frames_used=d["n_frames_used"],
-            equilibration_cut=d["equilibration_cut"],
-            frames=frames,
-            basin_ids=[fd.get("basin_id", 0) for fd in d["frames"]],
-            is_new_basin=[fd.get("is_new_basin", False) for fd in d["frames"]],
-            mds_coords=[tuple(fd.get("mds", [0.0, 0.0])) for fd in d["frames"]],  # type: ignore[misc]
-            basins=basins,
-            saturation=sat,
-            computed_at=d["computed_at"],
-            subsampled=d["subsampled"],
-            subsample_stride=d["subsample_stride"],
-        )
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _sanitize(value: float | None) -> float | None:
-    """Replace non-finite floats with None for JSON safety."""
-    if value is None:
-        return None
-    if not math.isfinite(value):
-        return None
-    return value
 
 
 # ---------------------------------------------------------------------------
@@ -289,6 +81,10 @@ def parse_traj_frames(traj_path: Path) -> list[TrajFrame]:
 
     Frame titles are expected to follow the xTB-MD convention:
     ``md: <t(ps)> <E_pot> (kcal/mol) <E_tot> (kcal/mol)``
+
+    Supports both 4-part (``C x y z``) and 5-part (``0 C x y z``) XYZ
+    coordinate lines.  The parser tries ``parts[1]`` as the first
+    coordinate; if that fails it tries ``parts[2]`` (leading index).
 
     Malformed titles produce frames with ``energy_kcal_mol=None`` and
     ``time_ps=None`` (no crash).  An empty file returns an empty list.
@@ -326,12 +122,26 @@ def parse_traj_frames(traj_path: Path) -> list[TrajFrame]:
                 if parts:
                     symbols.append(parts[0])
 
-        # Parse coordinates
+        # Parse coordinates — support 4-part and 5-part XYZ lines
         coords_list: list[list[float]] = []
         for line in lines[offset + 2 : end]:
             parts = line.split()
-            if len(parts) >= 4:
-                coords_list.append([float(parts[1]), float(parts[2]), float(parts[3])])
+            if len(parts) < 4:
+                continue
+            try:
+                coords_list.append(
+                    [float(parts[1]), float(parts[2]), float(parts[3])]
+                )
+            except ValueError:
+                if len(parts) >= 5:
+                    try:
+                        coords_list.append(
+                            [float(parts[2]), float(parts[3]), float(parts[4])]
+                        )
+                    except ValueError:
+                        skip_counter += 1
+                else:
+                    skip_counter += 1
 
         # Parse title
         energy: float | None = None
@@ -358,12 +168,18 @@ def parse_traj_frames(traj_path: Path) -> list[TrajFrame]:
             step=len(frames),
             energy_kcal_mol=energy,
             symbols=list(symbols),
-            coords=np.asarray(coords_list, dtype=np.float64) if coords_list else np.empty((0, 3)),
+            coords=(
+                np.asarray(coords_list, dtype=np.float64)
+                if coords_list
+                else np.empty((0, 3))
+            ),
         ))
         offset = end
 
     if skip_counter:
-        logger.debug("Skipped %d malformed title lines in %s", skip_counter, traj_path)
+        logger.debug(
+            "Skipped %d malformed lines in %s", skip_counter, traj_path
+        )
     return frames
 
 
@@ -385,9 +201,6 @@ def equilibration_cutoff(
 
     Re-implements the ±2σ sliding-window statistical test from
     ``acp.workflows.xtbmd_censo_energy._equilibration_cutoff`` (line 228).
-    Import was evaluated but rejected: the source module transitively imports
-    rdkit, cccp backends, and heavy workflow machinery — unacceptable for
-    this lightweight confsearch module.
 
     The trajectory is divided into non-overlapping sliding windows of
     *window* frames; the last adjacent window pair whose mean difference
@@ -446,11 +259,9 @@ def assign_basins(
     if n == 0:
         return [], []
 
-    # Determine sampling stride
     stride = max(1, n // max_cluster_frames) if n > max_cluster_frames else 1
     sampled_indices = list(range(0, n, stride))
 
-    # Greedy clustering on sampled frames
     basin_representatives: list[NDArray[np.float64]] = []
     basin_infos: list[BasinInfo] = []
     sampled_basin_ids: list[int] = []
@@ -484,7 +295,7 @@ def assign_basins(
                 representative_frame=idx,
             ))
 
-    # Carry-forward: non-sampled frames inherit the previous sampled frame's basin
+    # Carry-forward: non-sampled frames inherit previous sampled basin
     basin_ids: list[int] = []
     current_sampled_pos = 0
     for i in range(n):
@@ -500,11 +311,10 @@ def assign_basins(
 # Classical MDS
 # ---------------------------------------------------------------------------
 
-#: Type alias for 2D MDS coordinates.
-MDS_2D = list[tuple[float, float]]
 
-
-def mds_2d(distance_matrix: NDArray[np.float64] | list[list[float]]) -> MDS_2D:
+def mds_2d(
+    distance_matrix: NDArray[np.float64] | list[list[float]],
+) -> list[MDS_COORD_TYPE]:
     """Classical MDS: project a distance matrix to 2D coordinates.
 
     Double-centers the squared-distance matrix, computes eigenvalues via
@@ -527,16 +337,14 @@ def mds_2d(distance_matrix: NDArray[np.float64] | list[list[float]]) -> MDS_2D:
 
     eigenvalues, eigenvectors = np.linalg.eigh(gram)
 
-    # Take top-2 (largest eigenvalues, eigh returns ascending)
     idx = np.argsort(eigenvalues)[::-1][:2]
     top_vals = eigenvalues[idx]
     top_vecs = eigenvectors[:, idx]
 
-    # Scale by sqrt(eigenvalue), clamp negative eigenvalues to 0
     scales = np.sqrt(np.maximum(top_vals, 0.0))
     coords = top_vecs * scales[np.newaxis, :]
 
-    result: MDS_2D = []
+    result: list[MDS_COORD_TYPE] = []
     for i in range(n):
         result.append((float(coords[i, 0]), float(coords[i, 1])))
     return result
@@ -571,7 +379,6 @@ def _compute_saturation(
     all_basins = set(basin_ids[:-n_last_20]) if n > n_last_20 else set()
     new_in_last_20 = len(last_20_basins - all_basins)
 
-    # Last new basin time
     last_new_ps: float | None = None
     seen: set[int] = set()
     for i, bid in enumerate(basin_ids):
@@ -579,7 +386,6 @@ def _compute_saturation(
             seen.add(bid)
             last_new_ps = frames[i].time_ps
 
-    # Revisit ratio: fraction of frames that join an existing basin
     seen2: set[int] = set()
     revisits = 0
     for bid in basin_ids:
@@ -588,11 +394,11 @@ def _compute_saturation(
         seen2.add(bid)
     revisit_ratio = revisits / n if n > 0 else 0.0
 
-    # Energy window
-    energies = [f.energy_kcal_mol for f in frames if f.energy_kcal_mol is not None]
+    energies = [
+        f.energy_kcal_mol for f in frames if f.energy_kcal_mol is not None
+    ]
     energy_window = (max(energies) - min(energies)) if energies else 0.0
 
-    # Level rule
     if new_in_last_20 == 0:
         level = "HIGH"
     elif new_in_last_20 <= max(1, unique // 10):
@@ -600,12 +406,13 @@ def _compute_saturation(
     else:
         level = "LOW"
 
-    # Cumulative unique series
     cumulative_unique: list[dict[str, Any]] = []
     seen3: set[int] = set()
     for i, bid in enumerate(basin_ids):
         seen3.add(bid)
-        cumulative_unique.append({"time_ps": frames[i].time_ps, "unique": len(seen3)})
+        cumulative_unique.append(
+            {"time_ps": frames[i].time_ps, "unique": len(seen3)}
+        )
 
     return SamplingSaturation(
         unique_clusters=unique,
@@ -637,22 +444,20 @@ def compute_sampling_history(
     frames = parse_traj_frames(traj_path)
     n_raw = len(frames)
 
-    # Equilibration cut
     energies = [f.energy_kcal_mol for f in frames]
     eq_cut = equilibration_cutoff(energies)
     if eq_cut > 0:
         frames = frames[eq_cut:]
     n_used = len(frames)
 
-    # Basin assignment
     basin_ids, basin_infos = assign_basins(
-        frames, rmsd_threshold=rmsd_threshold, max_cluster_frames=max_cluster_frames
+        frames,
+        rmsd_threshold=rmsd_threshold,
+        max_cluster_frames=max_cluster_frames,
     )
 
-    # MDS 2D projection
     n_basins = len(basin_infos)
     if n_basins > 1:
-        # Build inter-basin distance matrix from representative frames
         dist_matrix = np.zeros((n_basins, n_basins), dtype=np.float64)
         for i in range(n_basins):
             for j in range(i + 1, n_basins):
@@ -666,22 +471,19 @@ def compute_sampling_history(
     else:
         basin_mds = [(0.0, 0.0)] * max(n_basins, 1)
 
-    # Map basin MDS coords to per-frame coords
-    mds_coords: MDS_2D = []
+    mds_coords: list[MDS_COORD_TYPE] = []
     for bid in basin_ids:
         if bid < len(basin_mds):
             mds_coords.append(basin_mds[bid])
         else:
             mds_coords.append((0.0, 0.0))
 
-    # is_new_basin
     is_new: list[bool] = []
     seen: set[int] = set()
     for bid in basin_ids:
         is_new.append(bid not in seen)
         seen.add(bid)
 
-    # Saturation
     saturation = _compute_saturation(frames, basin_ids, basin_infos)
 
     return SamplingHistory(
@@ -705,70 +507,3 @@ def compute_sampling_history(
             else 1
         ),
     )
-
-
-# ---------------------------------------------------------------------------
-# Atomic JSON persistence
-# ---------------------------------------------------------------------------
-
-
-def write_sampling_history(task_root: Path, history: SamplingHistory) -> Path:
-    """Atomically write ``RESULT/confsearch/sampling_history.json``."""
-    result_dir = task_root / "RESULT" / "confsearch"
-    result_dir.mkdir(parents=True, exist_ok=True)
-    path = result_dir / "sampling_history.json"
-    tmp = path.with_suffix(".json.tmp")
-    payload = history.to_dict()
-    tmp.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
-    os.replace(tmp, path)
-    return path
-
-
-def load_sampling_history(task_root: Path) -> SamplingHistory | None:
-    """Load ``RESULT/confsearch/sampling_history.json`` (None on missing/corrupt)."""
-    path = task_root / "RESULT" / "confsearch" / "sampling_history.json"
-    if not path.is_file():
-        return None
-    try:
-        text = path.read_text(encoding="utf-8")
-        data = json.loads(text)
-        return SamplingHistory.from_dict(data)
-    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
-        logger.debug("Failed to load sampling history from %s", path, exc_info=True)
-        return None
-
-
-# ---------------------------------------------------------------------------
-# Single-frame XYZ extraction
-# ---------------------------------------------------------------------------
-
-
-def read_traj_frame_xyz(traj_path: Path, index: int) -> str | None:
-    """Return the exact original XYZ text block for frame *index*.
-
-    Returns ``None`` when *index* is out of range.
-    """
-    text = Path(traj_path).read_text(encoding="utf-8")
-    lines = text.splitlines()
-    current = 0
-    offset = 0
-    while offset < len(lines):
-        header = lines[offset].strip()
-        if not header:
-            offset += 1
-            continue
-        try:
-            atom_count = int(header)
-        except ValueError:
-            offset += 1
-            continue
-        if atom_count == 0:
-            break
-        end = offset + 2 + atom_count
-        if end > len(lines):
-            break
-        if current == index:
-            return "\n".join(lines[offset:end]) + "\n"
-        current += 1
-        offset = end
-    return None
