@@ -325,6 +325,22 @@ def resolve_levels(
 # ---------------------------------------------------------------------------
 
 
+_TAG_UNSAFE_RE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def conformer_tag(source: str | None, index: int) -> str:
+    """Stable filesystem tag identifying one conformer across all artifacts.
+
+    Derived from the screening ``conf_id`` (e.g. ``CONF12``) so the DFT stage
+    directory, calculation file basenames, ``conformer_thermo.csv`` source
+    column, xyz frame ``conf_id=`` markers and Boltzmann-table rows all carry
+    the same name regardless of the (post-DFT) rank order.  Falls back to the
+    legacy positional ``conf_NNN`` when no screening id is available.
+    """
+    cleaned = _TAG_UNSAFE_RE.sub("_", str(source).strip()) if source else ""
+    return cleaned if cleaned and cleaned != "rank1" else f"conf_{index:03d}"
+
+
 def run_rank1_handoff(
     cfg: dict[str, Any],
     coordinates: np.ndarray[Any, Any],
@@ -354,6 +370,7 @@ def run_rank1_handoff(
         Candidate record dict (index/coordinates/symbols/energy/gibbs/...).
     """
     work_dir.mkdir(parents=True, exist_ok=True)
+    tag = conformer_tag(source, index)
 
     opt_solvent = resolved.get("opt_solvent") or solvent
     opt_solvent_model = (
@@ -386,7 +403,7 @@ def run_rank1_handoff(
             charge=charge,
             multiplicity=multiplicity,
             output_dir=work_dir,
-            output_name=f"conf_{index:03d}_opt",
+            output_name=f"{tag}_opt",
             method=resolved["opt_method"],
             basis=resolved["opt_basis"],
             route_extras=resolved.get("opt_route_extras"),
@@ -413,7 +430,7 @@ def run_rank1_handoff(
         charge=charge,
         multiplicity=multiplicity,
         output_dir=freq_dir,
-        output_name=f"conf_{index:03d}_freq",
+        output_name=f"{tag}_freq",
         method=resolved["opt_method"],
         basis=resolved["opt_basis"],
         route_extras=resolved.get("opt_freq_route_extras"),
@@ -453,7 +470,7 @@ def run_rank1_handoff(
             charge=charge,
             multiplicity=multiplicity,
             output_dir=sp_dir,
-            output_name=f"conf_{index:03d}_sp",
+            output_name=f"{tag}_sp",
             method=resolved["sp_method"],
             basis=resolved["sp_basis"],
             route_extras=resolved.get("sp_route_extras"),
@@ -473,7 +490,7 @@ def run_rank1_handoff(
         freq_output=str(freq_result.log_file),
         sp_energy=sp_energy,
         output_dir=str(thermo_dir),
-        output_file=str(thermo_dir / f"conf_{index:03d}_Shermo.sum"),
+        output_file=str(thermo_dir / f"{tag}_Shermo.sum"),
         temperature_k=resolved["temperature_k"],
         pressure_atm=resolved["pressure_atm"],
         scl_zpe=resolved.get("scl_zpe", 1.0),
@@ -602,11 +619,13 @@ def build_ensemble_summary(
             else ensemble_total_gibbs(rank1_gibbs, p1, temperature_k)
         )
         rows: list[dict[str, Any]] = []
-        for conf_id, w in sorted(external_weights.items()):
+        ordered_ext = sorted(external_weights.items(), key=lambda kv: (-float(kv[1]), str(kv[0])))
+        for row_rank, (conf_id, w) in enumerate(ordered_ext, start=1):
             g = rank1_gibbs if conf_id == rank1_source else None
             rows.append(
                 {
                     "conf_id": conf_id,
+                    "rank": row_rank,
                     "gibbs_hartree": g,
                     "delta_gibbs_kcal_mol": None,
                     "weight": round(float(w), 6),
@@ -625,6 +644,7 @@ def build_ensemble_summary(
         rows = [
             {
                 "conf_id": c.get("source", f"conf{c.get('index', i)}"),
+                "rank": i + 1,
                 "gibbs_hartree": c.get("gibbs"),
                 "delta_gibbs_kcal_mol": (
                     (float(c["gibbs"]) - float(rank1_gibbs)) * HARTREE_TO_KCAL
@@ -665,6 +685,81 @@ def build_ensemble_summary(
     )
 
 
+def _ensemble_xyz_frames(
+    candidates: list[dict[str, Any]],
+    external_weights: dict[str, float] | None,
+    screening_records: list[Any] | None,
+) -> list[dict[str, Any]]:
+    """Frames to serialize into ``all_conformers.xyz``.
+
+    Workflow 1 (no external table): the refined candidates themselves —
+    already 1:1 with the DFT Boltzmann table rows.
+
+    Workflow 2 (external CENSO/xTB table): *every* screened conformer,
+    ordered exactly like the table rows in :func:`build_ensemble_summary`
+    (weight descending, ``conf_id`` as tie-break). The refined ``conf_id``
+    contributes its fine (DFT) geometry and energy while the remaining
+    rows contribute their screening geometry, so the file stays 1:1 with
+    ``ensemble_thermo.json`` / ``boltzmann_table.json``.
+
+    Records are duck-typed (``.conf_id`` / ``.coordinates`` / ``.symbols``
+    / ``.energy`` / ``.gtot``, e.g. :class:`CensoConformerRecord`).  When
+    no *screening_records* are available the writer degrades to the old
+    candidates-only behaviour so the file never disappears.
+    """
+    if external_weights is None or not screening_records:
+        return list(candidates)
+
+    def record_id(rec: Any) -> str:
+        return str(getattr(rec, "conf_id", ""))
+
+    refined = {str(c.get("source", "")): c for c in candidates}
+    ordered = sorted(
+        screening_records,
+        key=lambda r: (-float(external_weights.get(record_id(r), 0.0)), record_id(r)),
+    )
+    frames: list[dict[str, Any]] = []
+    for rank, rec in enumerate(ordered, start=1):
+        conf_id = record_id(rec)
+        weight = float(external_weights.get(conf_id, 0.0))
+        cand = refined.get(conf_id)
+        if cand is not None:
+            frame = dict(cand)
+            frame["rank"] = rank
+            frame["weight"] = weight
+            frames.append(frame)
+            continue
+        coordinates = getattr(rec, "coordinates", None)
+        symbols = getattr(rec, "symbols", None)
+        if coordinates is None or symbols is None:
+            logger.warning(
+                "Screening record %s has no geometry — skipped in all_conformers.xyz",
+                conf_id,
+            )
+            continue
+        frames.append(
+            {
+                "index": rank - 1,
+                "coordinates": np.asarray(coordinates, dtype=float),
+                "symbols": list(symbols),
+                "energy": getattr(rec, "energy", None),
+                "gibbs": getattr(rec, "gtot", None),
+                "rank": rank,
+                "weight": weight,
+                "source": conf_id,
+            }
+        )
+    # A refined conformer whose id is missing from the screening table
+    # (frame-based id mismatch) must not silently vanish from the file.
+    record_ids = {record_id(rec) for rec in ordered}
+    for cand in candidates:
+        if str(cand.get("source", "")) not in record_ids:
+            frame = dict(cand)
+            frame["rank"] = len(frames) + 1
+            frames.append(frame)
+    return frames
+
+
 def write_final_outputs(
     candidates: list[dict[str, Any]],
     mol_dir: Path,
@@ -675,6 +770,7 @@ def write_final_outputs(
     external_total_gibbs_censo: float | None = None,
     population_weights: dict[str, float] | None = None,
     external_table_source: str = "censo",
+    screening_records: list[Any] | None = None,
 ) -> dict[str, Any]:
     """Write categorized final results under ``RESULT/``.
 
@@ -685,7 +781,10 @@ def write_final_outputs(
     legacy ``finalDFT/`` directory is read-only compatibility for historical
     tasks and is no longer created here.  When *external_weights* is given
     (workflow 2), the Boltzmann table is written to ``RESULT/ensembles``;
-    the thermo CSV keeps its legacy header and receives a TOTAL row.
+    the thermo CSV keeps its legacy header and receives a TOTAL row.  In
+    that mode ``all_conformers.xyz`` covers every conformer of the
+    Boltzmann table (see :func:`_ensemble_xyz_frames`) — not just the
+    refined candidates — so structures and weights stay 1:1.
 
     Args:
         external_weights: Full-ensemble weight table (conf_id → p) driving
@@ -697,6 +796,10 @@ def write_final_outputs(
             the cumulative population coverage of the workflow-1 DFT table.
         external_table_source: ``"censo"`` (default) or ``"xtb"`` for the
             workflow-2 weight-table provenance.
+        screening_records: Full post-screening conformer records backing
+            *external_weights* (``.conf_id`` / ``.coordinates`` /
+            ``.symbols`` / ``.energy`` / ``.gtot``); required for the
+            workflow-2 1:1 xyz ↔ Boltzmann-table output.
     """
     result_structures = v2_result_category(mol_dir, "structures")
     result_energies = v2_result_category(mol_dir, "energies")
@@ -714,6 +817,7 @@ def write_final_outputs(
     for rank, (cand, weight) in enumerate(zip(candidates, weights), start=1):
         cand["rank"] = rank
         cand["weight"] = weight
+        cand["index"] = rank - 1
 
     summary = build_ensemble_summary(
         candidates,
@@ -729,13 +833,16 @@ def write_final_outputs(
     summary.write_json(thermo_json)
 
     ensemble_xyz = result_structures / "all_conformers.xyz"
+    frames = _ensemble_xyz_frames(candidates, external_weights, screening_records)
     with open(ensemble_xyz, "w") as f:
-        for c in candidates:
+        for c in frames:
             e_fmt = f"{c['energy']:.6f}" if c.get("energy") is not None else "N/A"
-            f.write(f"{len(c['symbols'])}\n")
-            f.write(
-                f"Conformer {c['index']}, E={e_fmt}, Rank={c['rank']}, Weight={c['weight']:.4f}\n"
+            comment = (
+                f"Conformer {c['index']}, E={e_fmt}, Rank={c['rank']}, Weight={c['weight']:.4f},"
+                f" conf_id={c.get('source', 'unknown')}"
             )
+            f.write(f"{len(c['symbols'])}\n")
+            f.write(comment + "\n")
             for sym, coord in zip(c["symbols"], c["coordinates"]):
                 f.write(f"{sym:2s} {coord[0]:15.10f} {coord[1]:15.10f} {coord[2]:15.10f}\n")
 
@@ -1059,6 +1166,7 @@ __all__ = [
     "build_ensemble_summary",
     "build_result_ensemble",
     "censo_record_to_candidate",
+    "conformer_tag",
     "resolve_crest_ewin",
     "resolve_levels",
     "resolve_solvent_config",

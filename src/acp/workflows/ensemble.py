@@ -390,9 +390,9 @@ def run_ensemble_generation(
             "preset": preset,
             "n_conformers": len(ensemble.records),
             "crest_ewin": crest_ewin,
-            "ensemble_xyz": str(mol_dir / "ensemble" / "ensemble.xyz"),
-            "ensemble_json": str(mol_dir / "ensemble" / "ensemble.json"),
-            "ensemble_csv": str(mol_dir / "ensemble" / "ensemble.csv"),
+            "ensemble_xyz": str(mol_dir / "RESULT" / "ensembles" / "ensemble.xyz"),
+            "ensemble_json": str(mol_dir / "RESULT" / "ensembles" / "ensemble.json"),
+            "ensemble_csv": str(mol_dir / "RESULT" / "ensembles" / "ensemble.csv"),
             "crest_skipped": crest_skipped,
         },
     )

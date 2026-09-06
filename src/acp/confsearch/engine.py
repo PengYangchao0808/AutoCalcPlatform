@@ -30,7 +30,7 @@ from .manifest import (
 )
 from .profiles import profile_overlay
 from .protocols import PROTOCOL_RUNNERS
-from .result_helpers import build_entries, quality_gates, refinement_block
+from .result_helpers import build_entries, quality_gates, refinement_block, sorted_records
 from .selection import select_for_refinement
 from .shared.provenance import input_block, provenance_block
 
@@ -150,7 +150,7 @@ class ConfsearchEngine:
             progress_reporter.complete_stage("dedup")
             progress_reporter.start_stage("refinement")
         confsearch_dir = self._confsearch_dir(request)
-        write_conformer_geometries(confsearch_dir, entries, outcome.records)
+        write_conformer_geometries(confsearch_dir, entries, sorted_records(outcome.records))
         write_ensemble_table(confsearch_dir, entries)
 
         selected = select_for_refinement(
@@ -179,7 +179,7 @@ class ConfsearchEngine:
                         ),
                     ]
                 )
-        gates = quality_gates(entries, outcome, selected)
+        gates = quality_gates(entries, outcome, selected, protocol=request.protocol)
 
         if progress_reporter is not None:
             progress_reporter.complete_stage("refinement")

@@ -37,6 +37,9 @@ from acp.workflows.energy_shared import (
     censo_record_to_candidate as _censo_record_to_candidate,
 )
 from acp.workflows.energy_shared import (
+    conformer_tag as _conformer_tag,
+)
+from acp.workflows.energy_shared import (
     resolve_crest_ewin as _resolve_crest_ewin,
 )
 from acp.workflows.energy_shared import (
@@ -315,6 +318,7 @@ def run_conformer_energy(
         external_total_gibbs_censo: float | None = None
         population_weights: dict[str, float] | None = None
         external_table_source = "censo"
+        screening_records: list[Any] | None = None
 
         def _handoff_selected(selected: list[Any]) -> list[dict[str, Any]]:
             """Run the ACP handoff on each selected conformer (v15 ensemble).
@@ -325,7 +329,9 @@ def run_conformer_energy(
             """
             results: list[dict[str, Any]] = []
             for i, rec in enumerate(selected):
-                handoff_dir = _v2_stage_dir(mol_dir, "03_OPT", "ORCA") / f"conf_{i:03d}"
+                handoff_dir = _v2_stage_dir(mol_dir, "03_OPT", "ORCA") / _conformer_tag(
+                    getattr(rec, "conf_id", None), i
+                )
                 try:
                     cand = _run_rank1_handoff(
                         cfg,
@@ -374,7 +380,7 @@ def run_conformer_energy(
                     list(rank1.symbols),
                     structure.charge,
                     structure.multiplicity,
-                    _v2_stage_dir(mol_dir, "03_OPT", "ORCA") / "conf_000",
+                    _v2_stage_dir(mol_dir, "03_OPT", "ORCA") / _conformer_tag(rank1.conf_id, 0),
                     resolved,
                     censo_solvent,
                     _solvent_model,
@@ -385,6 +391,7 @@ def run_conformer_energy(
                 state.complete_stage("dft_handoff", {"status": "completed"})
                 stages_completed.append("dft_handoff")
                 external_weights = passthrough.boltzmann_weights()
+                screening_records = list(passthrough.records)
                 p1 = external_weights.get(rank1.conf_id, 0.0)
                 external_total_gibbs = ensemble_total_gibbs(cand["gibbs"], p1, temperature_k)
                 external_total_gibbs_censo = ensemble_total_gibbs(rank1.gtot, p1, temperature_k)
@@ -471,7 +478,7 @@ def run_conformer_energy(
                         list(rank1.symbols),
                         structure.charge,
                         structure.multiplicity,
-                        _v2_stage_dir(mol_dir, "03_OPT", "ORCA") / "conf_000",
+                        _v2_stage_dir(mol_dir, "03_OPT", "ORCA") / _conformer_tag(rank1.conf_id, 0),
                         resolved,
                         censo_solvent,
                         _solvent_model,
@@ -482,6 +489,7 @@ def run_conformer_energy(
                     state.complete_stage("dft_handoff", {"status": "completed"})
                     stages_completed.append("dft_handoff")
                     external_weights = censo_result.boltzmann_weights()
+                    screening_records = list(censo_result.records)
                     p1 = external_weights.get(rank1.conf_id, 0.0)
                     external_total_gibbs = ensemble_total_gibbs(cand["gibbs"], p1, temperature_k)
                     external_total_gibbs_censo = ensemble_total_gibbs(rank1.gtot, p1, temperature_k)
@@ -573,6 +581,7 @@ def run_conformer_energy(
                     rank1 = censo_result.records[0]
                     candidates = [_censo_record_to_candidate(rank1, index=0)]
                     external_weights = passthrough.boltzmann_weights()
+                    screening_records = list(passthrough.records)
                     external_table_source = "xtb"
                     # Prefer the weight of the CENSO-refined frame (conf_id
                     # is frame-based, matching the passthrough table); fall
@@ -644,7 +653,8 @@ def run_conformer_energy(
                             list(rank1.symbols),
                             structure.charge,
                             structure.multiplicity,
-                            _v2_stage_dir(mol_dir, "03_OPT", "ORCA") / "conf_000",
+                            _v2_stage_dir(mol_dir, "03_OPT", "ORCA")
+                            / _conformer_tag(rank1.conf_id, 0),
                             resolved,
                             censo_solvent,
                             _solvent_model,
@@ -665,6 +675,7 @@ def run_conformer_energy(
                     state.complete_stage("dft_handoff", {"status": "completed"})
                     stages_completed.append("dft_handoff")
                     external_weights = censo_result.boltzmann_weights()
+                    screening_records = list(censo_result.records)
                     p1 = external_weights.get(rank1.conf_id, 0.0)
                     external_total_gibbs = ensemble_total_gibbs(cand["gibbs"], p1, temperature_k)
                     external_total_gibbs_censo = ensemble_total_gibbs(rank1.gtot, p1, temperature_k)
@@ -672,7 +683,9 @@ def run_conformer_energy(
                     state.set_stage("dft_handoff")
                     candidates = []
                     for i, rec in enumerate(censo_result.records):
-                        handoff_dir = _v2_stage_dir(mol_dir, "03_OPT", "ORCA") / f"conf_{i:03d}"
+                        handoff_dir = _v2_stage_dir(mol_dir, "03_OPT", "ORCA") / _conformer_tag(
+                            getattr(rec, "conf_id", None), i
+                        )
                         try:
                             cand = _run_rank1_handoff(
                                 cfg,
@@ -714,6 +727,7 @@ def run_conformer_energy(
             external_total_gibbs_censo=external_total_gibbs_censo,
             population_weights=population_weights,
             external_table_source=external_table_source,
+            screening_records=screening_records,
         )
         ensemble = _build_result_ensemble(candidates, structure)
         state.complete_stage("finalize", {"n_conformers": len(candidates)})
@@ -745,6 +759,11 @@ def run_conformer_energy(
     }
     if screening_ranking_csv:
         metadata["screening_ranking_csv"] = screening_ranking_csv
+    # Screening conf_ids of the returned candidates (the set that received
+    # the fine refinement); matches conformer_thermo.csv "source" and the
+    # conf_id= markers in all_conformers.xyz so the Confsearch engine can
+    # populate ProtocolOutcome.refined_conf_ids (G1 gate).
+    metadata["refined_conf_ids"] = [str(c.get("source", "")) for c in candidates]
 
     return WorkflowResult(
         status="completed",

@@ -755,6 +755,7 @@ def test_final_outputs_format(tmp_path: Path) -> None:
     xyz_content = Path(outputs["all_conformers_xyz"]).read_text()
     assert xyz_content.startswith("2\n")
     assert "Conformer 0, E=-155.001000, Rank=1, Weight=1.0000" in xyz_content
+    assert "conf_id=CONF1" in xyz_content
 
     csv_content = Path(outputs["thermo_csv"]).read_text()
     header = csv_content.splitlines()[0]
@@ -834,6 +835,95 @@ def test_final_outputs_external_table_workflow2(tmp_path: Path) -> None:
     assert bt["source"] == "censo"
     assert bt["weights"]["CONF1"] == pytest.approx(0.8442)
     assert bt["weights"]["CONF2"] == pytest.approx(0.1558)
+
+
+def test_final_outputs_external_table_xyz_mirrors_boltzmann(tmp_path: Path) -> None:
+    """Workflow 2 regression: all_conformers.xyz carries every table conformer 1:1."""
+    from acp.workflows.energy import _write_final_outputs
+
+    candidates = [
+        {
+            "index": 0,
+            "coordinates": np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]]),
+            "symbols": ["C", "H", "H"],
+            "energy": -155.001,
+            "gibbs": -154.95,
+            "gibbs_correction": None,
+            "h_correction": None,
+            "u_correction": None,
+            "s_total": None,
+            "g_conc": None,
+            "source": "CONF1",
+        },
+    ]
+    ext_weights = {"CONF1": 0.8442, "CONF2": 0.1558}
+    records = [
+        _make_record("CONF1", 0, -154.834525),
+        _make_record("CONF2", 1, -154.834033),
+    ]
+    outputs = _write_final_outputs(
+        candidates,
+        tmp_path,
+        "mol",
+        298.15,
+        external_weights=ext_weights,
+        external_total_gibbs=ensemble_total_gibbs_import(-154.95, 0.8442, 298.15),
+        screening_records=records,
+    )
+
+    lines = Path(outputs["all_conformers_xyz"]).read_text().strip().splitlines()
+    assert len(lines) == 2 * 5
+    assert "conf_id=CONF1" in lines[1] and "Weight=0.8442" in lines[1]
+    assert "conf_id=CONF2" in lines[6] and "Weight=0.1558" in lines[6]
+
+    thermo = json.loads(Path(outputs["ensemble_thermo_json"]).read_text())
+    frame_ids = [lines[1].split("conf_id=")[1], lines[6].split("conf_id=")[1]]
+    assert frame_ids == [row["conf_id"] for row in thermo["conformers"]]
+    assert [row["rank"] for row in thermo["conformers"]] == [1, 2]
+
+
+def test_final_outputs_renumbering_and_markers(tmp_path: Path) -> None:
+    """DFT re-ranking renumbers xyz/CSV/table so all numbering agrees."""
+    from acp.workflows.energy import _write_final_outputs
+
+    def cand(index: int, source: str, energy: float, gibbs: float) -> dict[str, Any]:
+        return {
+            "index": index,
+            "coordinates": np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [index, 1.0, 0.0]]),
+            "symbols": ["C", "H", "H"],
+            "energy": energy,
+            "gibbs": gibbs,
+            "gibbs_correction": None,
+            "h_correction": None,
+            "u_correction": None,
+            "s_total": None,
+            "g_conc": None,
+            "source": source,
+        }
+
+    # handoff order (screening gtot): CONF2 first — but DFT gibbs flips them.
+    candidates = [
+        cand(0, "CONF2", -154.999, -154.990),
+        cand(1, "CONF1", -155.001, -154.995),
+    ]
+    outputs = _write_final_outputs(candidates, tmp_path, "mol", 298.15)
+
+    lines = Path(outputs["all_conformers_xyz"]).read_text().strip().splitlines()
+    assert "Conformer 0" in lines[1] and "Rank=1" in lines[1] and "conf_id=CONF1" in lines[1]
+    assert "Conformer 1" in lines[6] and "Rank=2" in lines[6] and "conf_id=CONF2" in lines[6]
+
+    thermo = json.loads(Path(outputs["ensemble_thermo_json"]).read_text())
+    assert [(row["rank"], row["conf_id"]) for row in thermo["conformers"]] == [
+        (1, "CONF1"),
+        (2, "CONF2"),
+    ]
+
+    csv_lines = Path(outputs["thermo_csv"]).read_text().strip().splitlines()
+    assert [line.split(",")[:3] for line in csv_lines[1:3]] == [
+        ["0", "1", "-155.0010000000"],
+        ["1", "2", "-154.9990000000"],
+    ]
+    assert csv_lines[1].endswith("CONF1") and csv_lines[2].endswith("CONF2")
 
 
 def test_screening_ranking_csv(tmp_path: Path, mock_screening_result: CensoRunResult) -> None:
@@ -921,17 +1011,76 @@ def test_energy_rank1_only_light_opt_on(
     assert bt["source"] == "censo"
     assert set(bt["weights"]) == {"CONF1", "CONF2"}
 
-    # single-frame outputs: 1 frame + TOTAL row
+    # all_conformers.xyz mirrors the Boltzmann table: one frame per screened
+    # conformer (CONF1 fine DFT geometry, CONF2 screening geometry), table order.
     xyz_lines = (
         (mol_dir / "RESULT" / "structures" / "all_conformers.xyz").read_text().strip().splitlines()
     )
-    assert xyz_lines[0] == "3"
+    assert len(xyz_lines) == 2 * 5  # 2 frames × (count + comment + 3 atoms)
+    assert "conf_id=CONF1" in xyz_lines[1]
+    assert "conf_id=CONF2" in xyz_lines[6]
+    cen_weights = mock_screening_result.boltzmann_weights()
+    assert f"Rank=1, Weight={cen_weights['CONF1']:.4f}" in xyz_lines[1]
+    assert f"Rank=2, Weight={cen_weights['CONF2']:.4f}" in xyz_lines[6]
+    assert [row["conf_id"] for row in summary["conformers"]] == ["CONF1", "CONF2"]
+
+    # thermo CSV stays candidate-centric: header + 1 conformer + TOTAL row
     csv_lines = (
         (mol_dir / "RESULT" / "energies" / "conformer_thermo.csv").read_text().strip().splitlines()
     )
-    assert len(csv_lines) == 3  # header + 1 conformer + TOTAL row
+    assert len(csv_lines) == 3
     # single-conformer DFT table → weight 1.0
     assert result.ensemble.records[0].weight == pytest.approx(1.0)
+
+
+def test_energy_rank1_xyz_mirrors_boltzmann_table(
+    tmp_path: Path,
+    sample_config: dict[str, Any],
+    mock_screening_result: CensoRunResult,
+    multiframe_xyz: Path,
+) -> None:
+    """Regression: rank1-only all_conformers.xyz lists every Boltzmann-table conformer.
+
+    Frames and ``ensemble_thermo.json`` rows must agree on conf_id order,
+    rank and weight (CONF1 carries the fine DFT geometry, CONF2 the
+    screening geometry).
+    """
+    from acp.workflows.energy import run_conformer_energy
+
+    orca = _mock_orca_instance()
+    with (
+        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
+        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
+        patch("acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)),
+    ):
+        backend = MagicMock()
+        backend.refine_ensemble.return_value = mock_screening_result
+        mock_backend_cls.return_value = backend
+        result = run_conformer_energy(
+            input_source=str(multiframe_xyz),
+            output_dir=str(tmp_path / "out"),
+            preset="censo-light",
+            config=sample_config,
+            rank1_only=True,
+        )
+
+    assert result.status == "completed"
+    assert result.metadata["refined_conf_ids"] == ["CONF1"]
+    mol_dir = tmp_path / "out" / "input"
+    # high-accuracy DFT artifacts live in the conf_id-named stage dirs
+    assert (mol_dir / "WORK" / "03_OPT" / "ORCA" / "CONF1").is_dir()
+    assert (mol_dir / "WORK" / "04_FREQ" / "ORCA" / "CONF1").is_dir()
+    assert not (mol_dir / "WORK" / "03_OPT" / "ORCA" / "conf_000").exists()
+    xyz_text = (mol_dir / "RESULT" / "structures" / "all_conformers.xyz").read_text()
+    summary = json.loads((mol_dir / "RESULT" / "energies" / "ensemble_thermo.json").read_text())
+    table_rows = summary["conformers"]
+    frame_lines = [line for line in xyz_text.splitlines() if "conf_id=" in line]
+    assert [line.split("conf_id=")[1].strip() for line in frame_lines] == [
+        row["conf_id"] for row in table_rows
+    ]
+    for line, row in zip(frame_lines, table_rows):
+        assert f"Rank={row['rank']}," in line
+        assert f"Weight={row['weight']:.4f}" in line
 
 
 def test_energy_rank1_only_cheap_path(
@@ -1004,6 +1153,13 @@ def test_energy_rank1_only_cheap_path(
     bt = json.loads((mol_dir / "RESULT" / "ensembles" / "boltzmann_table.json").read_text())
     assert bt["source"] == "xtb"
     assert set(bt["weights"]) == {"CONF1", "CONF2"}
+
+    xyz_lines = (
+        (mol_dir / "RESULT" / "structures" / "all_conformers.xyz").read_text().strip().splitlines()
+    )
+    assert len(xyz_lines) == 2 * 5
+    assert "conf_id=CONF1" in xyz_lines[1]
+    assert "conf_id=CONF2" in xyz_lines[6]
 
 
 # ---------------------------------------------------------------------------
