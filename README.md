@@ -30,10 +30,21 @@
 - 从 Confsearch manifest 出发，搜索反应路径（PEB引导扫描 / 直接TS猜测）
 - 输出：`RESULT/pes_search/pes_profile.json` + TS/中间体候选结构
 - 输入方式：`--from-job <Confsearch job id>` 或 `--from-artifact RESULT/confsearch/confsearch_manifest.json`
-- 人工确认（2026-09-03 起）：Workbench 能量图上手动增删/修改 TS、INT 选点后
+- 人工确认（2026-09-03 起）：Workbench 能量与轨迹查看器上手动增删/修改 TS、INT 选点后
   `POST /api/v1/jobs/{id}/pes/review` 写入 `RESULT/pes_search/pes_review.json`，
   物化 `RESULT/structures/*.xyz` 并更新 `RESULT/result_manifest.json`；
   历史 mechanism 任务保持只读（410）。详见 `docs/ACP_PES_Manual_Review_DevDoc.md`
+
+#### 能量与轨迹查看器（Energy & Trajectory）
+
+Workbench "能量与轨迹"标签页是 PES 扫描、几何优化、构象搜索、独立扫描的统一可视化入口：
+- 统一 `TrajectoryFrame` 契约，所有视图共享节点/标注数据形状
+- 通用帧操作：查看结构 / 锁定 / 导出 XYZ / 保存为候选（TS / INT / NONE）
+- xtb-md / xtbmd-censo 协议额外提供采样历史三视图：能量轨迹、采样空间（MDS 二维散点）、覆盖度（饱和度指标 + 累计唯一曲线）
+- 优化视图收敛面板：RMS/MAX 梯度和位移 vs 阈值达标判定
+- IRC / NEB 视图已注册占位，暂无数据投影
+
+详见 `docs/ACP_Energy_Trajectory_Viewer_DevDoc.md`
 
 ### 3. BatchOptimize — 批量优化确认 `acp run BatchOptimize`
 - 对 PESsearch 候选或其他结构进行 per-item Opt/TS + 频率 + 单点能 + 热力学修正

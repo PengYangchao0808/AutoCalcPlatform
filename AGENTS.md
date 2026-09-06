@@ -25,10 +25,10 @@ ACP_V1_20260811/
 ├── src/acp/               # Unified module (~130 .py, ~65k lines incl. API/scheduler/nmr)
 │   ├── cli.py             # argparse subcommand CLI: `acp run Confsearch|PESsearch|BatchOptimize|irc|scan|nmr|serve|simple` (2608 lines)
 │   ├── catalog.py         # WORKFLOW_CATALOG + METHOD_META + METHOD_SCHEMAS (2915 lines — retired entries kept as status:"retired")
-│   ├── confsearch/        # Unified conformer search: engine, contracts, manifest, profiles, selection, protocols/ (xtb-crest/xtb-md/censo-crest/xtbmd-censo), shared/
+│   ├── confsearch/        # Unified conformer search: engine, contracts, manifest, profiles, selection, protocols/ (xtb-crest/xtb-md/censo-crest/xtbmd-censo), shared/, sampling.py + sampling_models.py
 │   ├── calculations/      # Calculation-plan primitives and engines: contracts, checkpoint, executor, plans, primitives/ (sp/opt/freq/scan/irc/thermochemistry), pes/, batch/, irc/
 │   ├── compat/            # Read-only legacy manifest readers and layout compatibility (legacy/ subpkg)
-│   ├── results/           # Unified result manifest reader (result_manifest.json)
+│   ├── results/           # Unified result manifest reader (result_manifest.json) + frame contracts (frames.py) + sampling projection (sampling_graph.py) + frame-candidate service (frame_candidates.py + frame_candidate_geometry.py + frame_candidate_store.py)
 │   ├── storage/           # Unified v2 result manifest write (result_manifest.json schema)
 │   ├── core/              # Shared mechanism: Structure, WorkflowRunner, Registry, State, Config
 │   ├── backends/          # QC backends with capability Protocols — thin adapters only (no subprocess; see 2026-08-02 consolidation)
@@ -102,6 +102,15 @@ ACP_V1_20260811/
 | Compat layout probing | `src/acp/compat/legacy/layouts.py` | `find_study_layout`, `find_reaction_json` — v2 + legacy dual-probe read-only resolution |
 | Result manifest (read) | `src/acp/results/manifest.py` | Unified `result_manifest.json` reader |
 | Result manifest (write) | `src/acp/storage/manifest.py` | Unified v2 `result_manifest.json` writer (design doc §8) |
+| TrajectoryFrame contract | `src/acp/results/frames.py` | `TrajectoryFrame` / `TrajectoryAnnotation` frozen dataclasses, `VIEW_REGISTRY` (9 view_types), `ANNOTATION_TYPES`, `to_node()` / `to_annotation()` emitters |
+| Sampling projection | `src/acp/results/sampling_graph.py` | `build_sampling_energy_graph` (view_type "sampling"); series energy-vs-time; nodes carry basin/MDS metadata |
+| Frame-candidate service | `src/acp/results/frame_candidates.py` | `save_frame_candidate` / `list_frame_candidates` / `remove_frame_candidate`; authority file `RESULT/frame_candidates.json` (schema `frame_candidates_v1`) |
+| Frame geometry resolution | `src/acp/results/frame_candidate_geometry.py` | `resolve_frame_geometry` dispatcher; per-view_type resolvers (scan / optimization / sampling / conformer); path-escape guard |
+| Frame-candidate store | `src/acp/results/frame_candidate_store.py` | Authority file read/write/delete, `candidate_id_for`, `rewrite_xyz_comment`, `atomic_write_text`; `RevisionConflictError` |
+| Confsearch sampling capture | `src/acp/confsearch/sampling.py` | `parse_traj_frames` / `equilibration_cutoff` / `assign_basins` / `mds_2d` / `compute_sampling_history` / `read_traj_frame_xyz` |
+| Sampling data models | `src/acp/confsearch/sampling_models.py` | `TrajFrame` / `BasinInfo` / `SamplingSaturation` / `SamplingHistory` frozen dataclasses; `sampling_history_v1` schema; `to_dict` / `from_dict` |
+| PES manual-review doc | `docs/ACP_PES_Manual_Review_DevDoc.md` | PESsearch 人工确认选点 → BatchOptimize 批量确认的完整链路设计 |
+| Energy & Trajectory viewer doc | `docs/ACP_Energy_Trajectory_Viewer_DevDoc.md` | 统一能量与轨迹查看器设计：TrajectoryFrame 契约、采样管线、帧候选、三视图 |
 | Scheduler tasks | `src/acp/scheduler/tasks.py` | Task-level scheduling for stage workflows |
 | API v2 routes | `src/acp/api/v2_routes.py` | v2 API surface |
 | Simple workflows | `src/acp/workflows/simple.py` | singlepoint/optimize/frequency/scan/xtb-opt (635 lines) |
@@ -191,6 +200,8 @@ ACP_V1_20260811/
 25. **compat/ 是遗留布局的只读兼容层** — `src/acp/calculations/compat/legacy/` 提供历史 manifest 读取器（`read_s2_path_manifest` 等）和布局探测（`find_study_layout`）。**只读，禁止写入。** 新代码消费数据必须通过 `acp.results.manifest`（v2 格式），仅在需要兼容历史任务时经由 compat 转接。
 26. **两层目录约定（2026-08-30）：安装目录 ≠ 数据目录** — run_root（任务产物 + `acp_jobs.db`）必须落在原生文件系统，禁止位于安装目录或 9p/nfs/cifs 等网络挂载（QC 子进程 I/O 在 9p 上慢 ~1000×，2026-08-30 实测）。解析唯一权威 `acp/core/paths.py::resolve_run_root`：CLI `--run-root` > `ACP_RUN_ROOT` env > 平台默认（root → `/var/lib/acp/runs`，用户 → XDG `~/.local/share/acp/runs`）。**任何新代码不得再写 `./ACP_runs` 相对默认**（已清除 3 处，grep 校验零残留）。启动哨兵 `check_run_root_safety` 只警告不阻断，`ACP_ALLOW_SLOW_FS=1` 豁免。迁移用 `python scripts/migrate_run_root.py <old> <new>`（DB 自动备份 + TEXT 前缀改写 + job.json/task.json 改写 + 校验，旧树只读归档）。scratch 独立分层明确延后——QC 临时文件维持与 WORK 同层，结果全量持久。
 27. **前端禁止硬编码退役工作流/schema/profile id 作为默认值（2026-09-07）** — `frontend/ACP_Workbench_v2.html` 创建任务向导的默认工作流必须经 `resolveDefaultWorkflow()`（优先 `Confsearch`，其次任意 active 可见条目）解析，默认协议经 `pickDefaultProfile()`（`confsearch_unified` 下优先 `censo-crest`）选取，消费点（`updateConfigCards`/`openMethodConfig`/`submitJobModal`/`applyPendingNewTask`）一律先调 `ensureWizardWorkflowValid()` 自愈。硬编码字面量（如 `id: "energy"`、`schema_id || "confsearch"`）曾导致首次打开渲染退役期旧协议页、重选工作流才刷新（2026-09-07 修复）；退役 id 字面量只允许出现在历史作业兼容分支。`tests/test_frontend_sync.py::test_wizard_default_workflow_and_protocol_are_catalog_driven` 动态读取 `WORKFLOW_CATALOG`/`METHOD_SCHEMAS` 拦截任何回归（含未来目录演进）。
+28. **NEVER emit view projections bypassing acp.results.frames contract** — 所有 energy_graph.py builder 必须通过 `TrajectoryFrame.to_node()` / `TrajectoryAnnotation.to_annotation()` 产出节点和标注数据，不得绕过 frames.py 直接拼 dict；新增视图类型必须在 `VIEW_REGISTRY` 注册 `ViewSpec` 后才能被前端识别。违反此规则会导致 wire 形状不一致和前端渲染失败。
+29. **NEVER submit jobs from the energy viewer** — 帧操作仅限"保存为候选"（物化 XYZ + 注册 manifest）；`energyGraphConfirmAndBatch` 和 `data-energy-action="to-batch"` 保持前端禁止标识符（tests/test_frontend_sync.py 锁定）。任务创建统一走"新建任务"流程，通过结构来源面板发现已保存的候选。viewer 内嵌的 prompt() 角色选择器为 v1 简化实现，后续替换为模态对话框。
 
 ## UNIQUE STYLES
 - Module docstrings: title + `====` underline + `Author: QCcalc Team` (38 files, mostly cccp/)

@@ -12,10 +12,10 @@ acp/
 ├── __init__.py          # Package docstring only
 ├── __main__.py          # `python -m acp` works
 ├── catalog.py           # WORKFLOW_CATALOG + METHOD_META + METHOD_SCHEMAS (2915 lines — retired entries kept as status:"retired")
-├── confsearch/          # Unified conformer search: engine, contracts, manifest, profiles, selection, protocols/ (xtb-crest/xtb-md/censo-crest/xtbmd-censo), shared/
+├── confsearch/          # Unified conformer search: engine, contracts, manifest, profiles, selection, protocols/ (xtb-crest/xtb-md/censo-crest/xtbmd-censo), shared/, sampling.py + sampling_models.py
 ├── calculations/        # Calculation-plan primitives and engines: contracts, checkpoint, executor, plans, primitives/ (sp/opt/freq/scan/irc/thermochemistry), pes/, batch/, irc/
 ├── compat/              # Read-only legacy manifest readers and layout compatibility (legacy/ subpkg)
-├── results/             # Unified result manifest reader (result_manifest.json)
+├── results/             # Unified result manifest reader (result_manifest.json) + frame contracts (frames.py) + sampling projection (sampling_graph.py) + frame-candidate service (frame_candidates.py + frame_candidate_geometry.py + frame_candidate_store.py)
 ├── storage/             # Unified v2 result manifest write (result_manifest.json schema)
 ├── core/                # Generic mechanism: Structure, WorkflowRunner, Registry, State, Config
 ├── backends/            # Capability-Protocol QC adapters (ORCA/CREST/xTB/CENSO/Isostat/Molclus/external)
@@ -78,6 +78,13 @@ acp/
 | Compat layout probing | `compat/legacy/layouts.py` | `find_study_layout`, `find_reaction_json` — v2 + legacy dual-probe read-only resolution |
 | Result manifest (read) | `results/manifest.py` | Unified `result_manifest.json` reader |
 | Result manifest (write) | `storage/manifest.py` | Unified v2 `result_manifest.json` writer (design doc §8) |
+| TrajectoryFrame contract | `results/frames.py` | `TrajectoryFrame` / `TrajectoryAnnotation` frozen dataclasses, `VIEW_REGISTRY` (9 view_types), `ANNOTATION_TYPES`, `to_node()` / `to_annotation()` emitters |
+| Sampling projection | `results/sampling_graph.py` | `build_sampling_energy_graph` (view_type "sampling"); series energy-vs-time; nodes carry basin/MDS metadata |
+| Frame-candidate service | `results/frame_candidates.py` | `save_frame_candidate` / `list_frame_candidates` / `remove_frame_candidate`; authority file `RESULT/frame_candidates.json` (schema `frame_candidates_v1`) |
+| Frame geometry resolution | `results/frame_candidate_geometry.py` | `resolve_frame_geometry` dispatcher; per-view_type resolvers (scan / optimization / sampling / conformer); path-escape guard |
+| Frame-candidate store | `results/frame_candidate_store.py` | Authority file read/write/delete, `candidate_id_for`, `rewrite_xyz_comment`, `atomic_write_text`; `RevisionConflictError` |
+| Confsearch sampling capture | `confsearch/sampling.py` | `parse_traj_frames` / `equilibration_cutoff` / `assign_basins` / `mds_2d` / `compute_sampling_history` / `read_traj_frame_xyz` |
+| Sampling data models | `confsearch/sampling_models.py` | `TrajFrame` / `BasinInfo` / `SamplingSaturation` / `SamplingHistory` frozen dataclasses; `sampling_history_v1` schema; `to_dict` / `from_dict` |
 | Scheduler tasks | `scheduler/tasks.py` | Task-level scheduling for stage workflows |
 | API v2 routes | `api/v2_routes.py` | v2 API surface |
 | Ensemble workflow | `workflows/ensemble.py` | **RETIRED CLI entry** (Confsearch v1.0): CREST → CENSO P+S; still live as Confsearch protocol engine (censo-crest/xtb-crest screen policy) |
