@@ -26,6 +26,7 @@ __all__ = [
     "build_mechanism_energy_graph",
     "build_optimization_energy_graph",
     "build_pes_energy_graph",
+    "build_scan_trajectory_energy_graph",
     "build_s2_energy_graph",
     "build_unavailable_energy_graph",
     "find_optimization_trajectory",
@@ -591,6 +592,71 @@ def build_optimization_energy_graph(
         }
     )
     return projection
+
+
+def build_scan_trajectory_energy_graph(job_id: str, work_dir: Path) -> dict[str, Any] | None:
+    """Build the standalone scan projection from its persisted result trajectory."""
+    trajectory = _read_json_payload(work_dir / "RESULT/trajectories/scan_trajectory.json")
+    if not isinstance(trajectory, dict) or not isinstance(trajectory.get("frames"), list):
+        return None
+    frames = [
+        frame for frame in trajectory["frames"] if isinstance(frame, dict) and "index" in frame
+    ]
+    if not frames:
+        return None
+    energies = [_number(frame.get("energy_hartree")) for frame in frames]
+    relative = _relative_hartree(energies)
+    nodes: list[dict[str, Any]] = []
+    for position, frame in enumerate(frames):
+        frame_index = int(_number(frame["index"]) or 0)
+        coordinate_values = frame.get("coordinate_values") or {}
+        first_coordinate = _number(next(iter(coordinate_values.values()), None))
+        x = first_coordinate if first_coordinate is not None else _number(frame.get("progress"))
+        x = float(frame_index) if x is None else x
+        nodes.append(
+            TrajectoryFrame(
+                frame_id=f"frame_{frame_index}", label=f"Frame {frame_index + 1}",
+                frame_index=frame_index, x=x, energy=relative[position],
+                status="failed" if energies[position] is None else "completed",
+                geometry_ref=f"RESULT/{frame.get('path') or ''}",
+                metadata={"coordinate_values": coordinate_values},
+            ).to_node(VIEW_REGISTRY["scan_trajectory"].node_type)
+        )
+    coordinate_key = str(next(iter(nodes[0]["metadata"]["coordinate_values"]), "")).lower()
+    kind = next((name for name in ("distance", "angle", "dihedral") if name in coordinate_key), "")
+    axis = _coordinate_axis({"protocol": {"coordinate": {"kind": kind}}})
+    series = [
+        {"id": series_id, "label": label, "unit": unit, "axis": "left", "values": values}
+        for series_id, label, unit, values in (
+            ("scan_energy", "扫描能量", "Eh", energies),
+            ("relative_energy", "相对能量", "kcal/mol", relative),
+        )
+        if any(value is not None for value in values)
+    ]
+    minimum = min((node for node in nodes if node["energy"] is not None),
+                  key=lambda node: node["energy"], default=None)
+    markers = [("minimum", "最低能量", minimum)] if minimum else []
+    markers += [("failed", "未收敛", node) for node in nodes if node["status"] == "failed"]
+    annotations = [
+        TrajectoryAnnotation(
+            id=f"{marker_type}_{node['frame_index']}", type=marker_type, label=label,
+            frame_index=node["frame_index"], x=node["x"], y=node["energy"],
+            status=node["status"], geometry_ref=node["geometry_ref"],
+        ).to_annotation()
+        for marker_type, label, node in markers
+    ]
+    has_failed = None in energies
+    default_series = next(("relative_energy" for v in relative if v is not None), "scan_energy")
+    projection = build_unavailable_energy_graph(job_id, workflow="scan", reason="")
+    projection.update(dict(
+        view_type="scan", title=VIEW_REGISTRY["scan_trajectory"].title_zh,
+        status="partial" if has_failed else "completed",
+        complete=not has_failed, revision=_revision(trajectory), default_series=default_series,
+        available_views=["scan"], x_axis=axis, series=series, nodes=nodes,
+        annotations=annotations, source="RESULT/trajectories/scan_trajectory.json",
+        metadata={"frame_count": len(nodes), "workflow": "scan"},
+    ))
+    return _sanitize_json(projection)
 
 
 def _relative_from_first(values: list[float | None]) -> list[float | None]:
@@ -1222,6 +1288,10 @@ def _build_energy_graph_projection(
         return build_unavailable_energy_graph(
             job_id, workflow=workflow, reason="energy_data_missing"
         )
+    if workflow == "scan":
+        return (build_scan_trajectory_energy_graph(job_id, work_dir)
+                or build_unavailable_energy_graph(
+                    job_id, workflow=workflow, reason="energy_data_missing"))
     return build_unavailable_energy_graph(
         job_id, workflow=workflow, reason="workflow_has_no_energy_graph"
     )

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -14,6 +15,7 @@ from acp.results.energy_graph import (
     build_mechanism_energy_graph,
     build_optimization_energy_graph,
     build_s2_energy_graph,
+    build_scan_trajectory_energy_graph,
     find_optimization_trajectory,
 )
 
@@ -116,6 +118,96 @@ def test_s2_projection_contains_series_nodes_and_annotations() -> None:
     assert any(item["type"] == "ts" and item["selected"] for item in graph["annotations"])
     assert any(item["type"] == "failed" for item in graph["annotations"])
     assert any(item["type"] == "minimum" for item in graph["annotations"])
+
+
+def _scan_trajectory_payload() -> dict[str, Any]:
+    indices = [0, 1, 2, 4, 5, 6, 7, 8]
+    energies = [-10.0, -9.8, -10.1, None, -10.2, -10.05, -10.3, -10.0]
+    return {
+        "workflow": "scan",
+        "frame_count": len(indices),
+        "successful_frame_count": len(indices),
+        "frames": [
+            {
+                "index": index,
+                "path": f"structures/scan_frame_{index:03d}.xyz",
+                "progress": position / (len(indices) - 1),
+                "energy_hartree": energy,
+                "coordinate_values": {"distance": 1.0 + position * 0.1},
+            }
+            for position, (index, energy) in enumerate(zip(indices, energies, strict=True))
+        ],
+    }
+
+
+def test_standalone_scan_projection_preserves_frame_indices_and_annotations(
+    tmp_path: Path,
+) -> None:
+    # Given: a result trajectory with one failed frame and a skipped frame index.
+    trajectory_path = tmp_path / "RESULT" / "trajectories" / "scan_trajectory.json"
+    trajectory_path.parent.mkdir(parents=True)
+    trajectory_path.write_text(json.dumps(_scan_trajectory_payload()), encoding="utf-8")
+
+    # When: the standalone scan trajectory is projected for the energy viewer.
+    graph = build_scan_trajectory_energy_graph("scan-job", tmp_path)
+
+    # Then: the projection keeps persisted indices and marks the failed frame.
+    assert graph is not None
+    assert graph["view_type"] == "scan"
+    assert graph["title"] == "扫描能量剖面"
+    assert graph["x_axis"] == {"label": "扫描距离", "unit": "Å"}
+    assert len(graph["nodes"]) == 8
+    assert [node["frame_index"] for node in graph["nodes"]] == [0, 1, 2, 4, 5, 6, 7, 8]
+    assert all(node["geometry_ref"].startswith("RESULT/") for node in graph["nodes"])
+    assert graph["nodes"][3]["energy"] is None
+    assert graph["nodes"][3]["status"] == "failed"
+    relative = next(item for item in graph["series"] if item["id"] == "relative_energy")
+    finite_relative = [value for value in relative["values"] if value is not None]
+    assert min(finite_relative) == pytest.approx(0.0)
+    assert graph["default_series"] == "relative_energy"
+    assert any(
+        item["type"] == "minimum" and item["frame_index"] == 7 and item["y"] == 0.0
+        for item in graph["annotations"]
+    )
+    assert any(
+        item["type"] == "failed" and item["frame_index"] == 4
+        for item in graph["annotations"]
+    )
+
+
+def test_standalone_scan_missing_trajectory_returns_unavailable_projection(tmp_path: Path) -> None:
+    # Given: a scan job without its result trajectory.
+    # When: the workflow dispatch requests its energy graph.
+    graph = build_energy_graph_from_job(
+        "missing-scan", workflow="scan", method=None, work_dir=tmp_path
+    )
+
+    # Then: the caller receives the standard unavailable projection.
+    assert graph["view_type"] == "unsupported"
+    assert graph["status"] == "unavailable"
+    assert graph["metadata"] == {"reason": "energy_data_missing", "workflow": "scan"}
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "{",
+        json.dumps({"workflow": "scan"}),
+        json.dumps({"frames": []}),
+        json.dumps({"frames": [{}]}),
+    ],
+)
+def test_standalone_scan_malformed_trajectory_returns_none(tmp_path: Path, content: str) -> None:
+    # Given: corrupt JSON or a trajectory with no usable indexed frames.
+    trajectory_path = tmp_path / "RESULT" / "trajectories" / "scan_trajectory.json"
+    trajectory_path.parent.mkdir(parents=True)
+    trajectory_path.write_text(content, encoding="utf-8")
+
+    # When: the standalone scan builder reads the trajectory.
+    graph = build_scan_trajectory_energy_graph("malformed-scan", tmp_path)
+
+    # Then: malformed input is treated as missing graph data.
+    assert graph is None
 
 
 def test_pes_profile_v2_projection_uses_canonical_fields() -> None:
