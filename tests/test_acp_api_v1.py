@@ -383,7 +383,7 @@ def test_v1_pessearch_reads_canonical_profile_and_07_path_frame(client: TestClie
     graph = client.get(f"/api/v1/jobs/{job_id}/energy-graph")
     assert graph.status_code == 200, graph.text
     assert graph.json()["source"] == "RESULT/pes_search/pes_profile.json"
-    assert graph.json()["title"] == "PESsearch 扫描能量"
+    assert graph.json()["title"] == "PES 扫描能量"
 
     frame = client.get(f"/api/v1/jobs/{job_id}/s2/frame/0")
     assert frame.status_code == 200, frame.text
