@@ -1072,6 +1072,8 @@ body.resizing-v canvas {
 .energy-marker-int { fill: var(--amber); stroke: var(--amber); pointer-events: none; }
 .energy-marker-min { fill: var(--green); stroke: var(--green); pointer-events: none; }
 .energy-marker-failed { stroke: var(--red); pointer-events: none; }
+.energy-marker-max { fill: none; stroke: var(--red); stroke-width: 1.6; pointer-events: none; }
+.energy-marker-basin { fill: none; stroke: #5dd6ff; stroke-width: 1.6; pointer-events: none; }
 g[data-energy-draggable] { cursor: grab; }
 g[data-energy-draggable]:hover { filter: drop-shadow(0 0 4px rgba(78,161,255,0.65)); }
 g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
@@ -1088,6 +1090,8 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .energy-review-state { margin: 8px 0 0; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.04); color: var(--text-tertiary); font-size: 11px; }
 .energy-review-state.dirty { border: 1px solid rgba(242,184,75,0.45); color: #ffe1a1; }
 .energy-review-state.locked { border: 1px solid rgba(56,193,114,0.28); color: #b8f0c8; background: rgba(56,193,114,0.08); }
+.energy-inspector-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; padding-top: 8px; border-top: 1px solid var(--border-default); }
+.energy-inspector-action-btn { font-size: 11px; padding: 4px 10px; white-space: nowrap; }
 .energy-dirty-badge { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px; background: rgba(242,184,75,0.16); border: 1px solid rgba(242,184,75,0.45); color: #ffe1a1; font-size: 10px; }
 .energy-standalone-badge { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border-radius: 999px; background: rgba(78,161,255,0.10); border: 1px solid rgba(78,161,255,0.30); color: var(--accent); font-size: 10px; margin-left: 6px; }
 .energy-candidate-attr { margin-top: 10px; padding: 8px; border-radius: 8px; background: rgba(255,255,255,0.025); border: 1px solid var(--border-subtle); }
@@ -1163,7 +1167,7 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .energy-chart-svg.mode-pan.panning { cursor: grabbing; }
 .energy-box-select-rect { fill: rgba(56,189,248,0.12); stroke: rgba(56,189,248,0.55); stroke-width: 1; stroke-dasharray: 4 3; pointer-events: none; }
 .energy-chart-svg.labels-hidden [data-energy-annotation] { display: none; }
-.energy-point, .energy-point-halo, .energy-marker-ts, .energy-marker-int, .energy-marker-min, .energy-marker-failed, .energy-marker-line, .energy-current-line { vector-effect: non-scaling-stroke; }
+.energy-point, .energy-point-halo, .energy-marker-ts, .energy-marker-int, .energy-marker-min, .energy-marker-failed, .energy-marker-max, .energy-marker-basin, .energy-marker-line, .energy-current-line { vector-effect: non-scaling-stroke; }
 .plot-tip { position: fixed; z-index: 9999; pointer-events: none; opacity: 0; transition: opacity 120ms ease; background: #0d141c; border: 1px solid rgba(78,161,255,0.35); border-radius: 6px; padding: 6px 9px; color: #e8f2ff; font-size: 11px; line-height: 1.5; box-shadow: 0 6px 18px rgba(0,0,0,0.45); max-width: 240px; }
 .plot-tip.show { opacity: 1; }
 .plot-tip-keys { display: inline-flex; gap: 4px; margin-left: 6px; }
@@ -5162,6 +5166,14 @@ const I18N = {
     "energy.header.status.failed": "失败",
     "energy.header.status.unknown": "未知",
     "energy.header.status.unavailable": "不可用",
+    "energy.inspector.lock": "锁定",
+    "energy.inspector.unlock": "解锁",
+    "energy.inspector.export": "导出结构",
+    "energy.inspector.save_candidate": "保存为候选",
+    "energy.inspector.saved_badge": "已保存",
+    "energy.inspector.role_select": "角色选择",
+    "energy.inspector.role_none": "无",
+    "energy.inspector.misc": "其他",
     "overview.overall_progress": "总体进度",
     "overview.current_stage": "当前阶段",
     "overview.stage_progress": "阶段进度",
@@ -5921,6 +5933,14 @@ const I18N = {
     "energy.header.status.failed": "Failed",
     "energy.header.status.unknown": "Unknown",
     "energy.header.status.unavailable": "Unavailable",
+    "energy.inspector.lock": "Lock",
+    "energy.inspector.unlock": "Unlock",
+    "energy.inspector.export": "Export Structure",
+    "energy.inspector.save_candidate": "Save as Candidate",
+    "energy.inspector.saved_badge": "Saved",
+    "energy.inspector.role_select": "Role Selection",
+    "energy.inspector.role_none": "None",
+    "energy.inspector.misc": "Misc",
     "overview.overall_progress": "Overall progress",
     "overview.current_stage": "Current stage",
     "overview.stage_progress": "Stage progress",
@@ -6078,6 +6098,228 @@ function escapeHtml(s) {
     .replace(/>/g, "&gt;")
     .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+/* ── Generic Inspector Field Specs ── */
+var ENERGY_INSPECTOR_FIELD_SPECS = {
+  scan: [
+    { key: "target_coordinate", i18nKey: "\u76ee\u6807\u5750\u6807", unit: "", decimals: 3 },
+    { key: "actual_coordinate", i18nKey: "\u5b9e\u9645\u5750\u6807", unit: "", decimals: 3 },
+    { key: "scan_energy", i18nKey: "\u626b\u63cf\u80fd", unit: "", decimals: 4 },
+    { key: "sp_energy", i18nKey: "\u5355\u70b9\u80fd", unit: "", decimals: 4 },
+    { key: "sp_status", i18nKey: "SP \u72b6\u6001", unit: "", decimals: -1 },
+  ],
+  scan_trajectory: [
+    { key: "coordinate_values", i18nKey: "\u5750\u6807\u503c", unit: "", decimals: 3 },
+    { key: "energy_hartree", i18nKey: "\u80fd\u91cf (Ha)", unit: "", decimals: 6 },
+  ],
+  optimization: [
+    { key: "cycle", i18nKey: "\u4f18\u5316\u5468\u671f", unit: "", decimals: 0 },
+    { key: "scf_energy", i18nKey: "SCF \u80fd\u91cf", unit: "Ha", decimals: 6 },
+    { key: "delta_energy", i18nKey: "\u0394E", unit: "kcal/mol", decimals: 3 },
+    { key: "rms_gradient", i18nKey: "RMS \u68af\u5ea6", unit: "Eh/Bohr", decimals: 6 },
+    { key: "max_gradient", i18nKey: "MAX \u68af\u5ea6", unit: "Eh/Bohr", decimals: 6 },
+    { key: "rms_displacement", i18nKey: "RMS \u4f4d\u79fb", unit: "bohr", decimals: 6 },
+    { key: "max_displacement", i18nKey: "MAX \u4f4d\u79fb", unit: "bohr", decimals: 6 },
+    { key: "scf_iterations", i18nKey: "SCF \u8fed\u4ee3", unit: "", decimals: 0 },
+  ],
+  conformer: [
+    { key: "rank", i18nKey: "\u6392\u540d", unit: "", decimals: 0 },
+    { key: "gibbs_energy", i18nKey: "Gibbs \u80fd\u91cf", unit: "Ha", decimals: 6 },
+    { key: "relative_energy_kcal", i18nKey: "\u76f8\u5bf9\u80fd\u91cf", unit: "kcal/mol", decimals: 2 },
+    { key: "boltzmann_weight", i18nKey: "Boltzmann \u6743\u91cd", unit: "", decimals: 4 },
+  ],
+  sampling: [
+    { key: "time_ps", i18nKey: "\u6a21\u62df\u65f6\u95f4", unit: "ps", decimals: 2 },
+    { key: "step", i18nKey: "MD \u6b65", unit: "", decimals: 0 },
+    { key: "energy_kcal_mol", i18nKey: "\u52bf\u80fd", unit: "kcal/mol", decimals: 2 },
+    { key: "relative_energy_kcal_mol", i18nKey: "\u76f8\u5bf9\u80fd\u91cf", unit: "kcal/mol", decimals: 2 },
+    { key: "basin_id", i18nKey: "\u76c6\u5730 ID", unit: "", decimals: 0 },
+  ],
+};
+
+var _INSPECTOR_COMMON_KEYS = {
+  status: 1, frame_index: 1, target_coordinate: 1, actual_coordinate: 1,
+  actual_coordinates: 1, target_coordinates: 1, scan_energy: 1, sp_energy: 1,
+  sp_status: 1, cycle: 1, scf_energy: 1, delta_energy: 1, rms_gradient: 1,
+  max_gradient: 1, rms_displacement: 1, max_displacement: 1, scf_iterations: 1,
+  rank: 1, gibbs_energy: 1, relative_energy_kcal: 1, boltzmann_weight: 1,
+  time_ps: 1, step: 1, energy_kcal_mol: 1, relative_energy_kcal_mol: 1,
+  basin_id: 1, coordinate_values: 1, energy_hartree: 1, review: 1,
+};
+
+/* ── Frame Lock Set (client-only, localStorage) ── */
+function energyFrameLockKey(jobId, revision) {
+  return "acp-frame-lock:" + String(jobId || "") + ":" + String(revision || "");
+}
+
+function energyLoadFrameLockSet(jobId, revision) {
+  try {
+    var raw = localStorage.getItem(energyFrameLockKey(jobId, revision));
+    if (!raw) return [];
+    var parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) { return []; }
+}
+
+function energySaveFrameLockSet(jobId, revision, lockArr) {
+  try { localStorage.setItem(energyFrameLockKey(jobId, revision), JSON.stringify(lockArr)); } catch (e) {}
+}
+
+function energyToggleFrameLock(jobId, revision, frameId) {
+  var locks = energyLoadFrameLockSet(jobId, revision);
+  var idx = locks.indexOf(frameId);
+  if (idx >= 0) { locks.splice(idx, 1); } else { locks.push(frameId); }
+  energySaveFrameLockSet(jobId, revision, locks);
+  return locks;
+}
+
+/* ── Unified Geometry Loader ── */
+async function energyGraphLoadFrameGeometry(node) {
+  var data = energyGraphState.data;
+  var container = document.getElementById("energy-structure-viewer");
+  if (!data || !container || !node) return;
+  var frameIndex = node.frame_index;
+  if (frameIndex == null) return;
+  if (Number(frameIndex) === energyGraphState.loadedFrameIndex && energyGraphState.viewer && container.isConnected && container.querySelector("canvas")) return;
+  if (energyGraphState.structureAbort) { energyGraphState.structureAbort.abort(); energyGraphState.structureAbort = null; }
+  var ac = (typeof AbortController !== "undefined") ? new AbortController() : null;
+  energyGraphState.structureAbort = ac;
+  var tk = energyGraphState.requestToken;
+  var jobId = energyGraphState.jobId;
+  var view = String(data.view_type || "");
+  try {
+    var xyz = "";
+    /* (1) geometry_ref → files endpoint */
+    var geoRef = node.geometry_ref || "";
+    if (geoRef) {
+      var fileResp = await api("/jobs/" + encodeURIComponent(jobId) + "/files/" + encodeURIComponent(geoRef), ac ? { signal: ac.signal } : {});
+      if (tk !== energyGraphState.requestToken) return;
+      if (fileResp && typeof fileResp === "string") {
+        xyz = fileResp;
+      } else if (fileResp && fileResp.xyz) {
+        xyz = fileResp.xyz;
+      }
+    }
+    /* (2) optimization without geometry_ref → optimization frame endpoint */
+    if (!xyz && view === "optimization") {
+      var optUrl = "/jobs/" + encodeURIComponent(jobId) + "/optimization/frame/" + encodeURIComponent(frameIndex);
+      if (data.metadata && data.metadata.item_id) optUrl += "?item_id=" + encodeURIComponent(String(data.metadata.item_id));
+      var optResp = await api(optUrl, ac ? { signal: ac.signal } : {});
+      if (tk !== energyGraphState.requestToken) return;
+      if (optResp && optResp.xyz) xyz = optResp.xyz;
+    }
+    /* (3) sampling → sampling frame endpoint */
+    if (!xyz && view === "sampling") {
+      var sampUrl = "/jobs/" + encodeURIComponent(jobId) + "/sampling/frame/" + encodeURIComponent(frameIndex);
+      var sampResp = await api(sampUrl, ac ? { signal: ac.signal } : {});
+      if (tk !== energyGraphState.requestToken) return;
+      if (sampResp && sampResp.xyz) xyz = sampResp.xyz;
+    }
+    /* (4) fallback: legacy s2/frame for scan */
+    if (!xyz && (view === "scan" || view === "scan_trajectory")) {
+      var s2Url = "/jobs/" + encodeURIComponent(jobId) + "/s2/frame/" + encodeURIComponent(frameIndex);
+      var s2Resp = await api(s2Url, ac ? { signal: ac.signal } : {});
+      if (tk !== energyGraphState.requestToken) return;
+      if (s2Resp && s2Resp.xyz) xyz = s2Resp.xyz;
+    }
+    if (!container.isConnected) return;
+    if (!xyz) {
+      container.className = "energy-structure-viewer empty";
+      container.textContent = "\u5f53\u524d\u5e27\u6ca1\u6709\u53ef\u7528 XYZ \u7ed3\u6784";
+      return;
+    }
+    container.className = "energy-structure-viewer";
+    if (energyGraphState.viewer && container.querySelector("canvas")) {
+      try { energyGraphState.viewer.removeAllModels(); } catch (e) {}
+      energyGraphState.viewer.addModel(xyz, "xyz");
+      energyGraphState.viewer.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.26 } });
+      energyGraphState.viewer.zoomTo();
+      energyGraphState.viewer.render();
+    } else {
+      container.innerHTML = "";
+      if (typeof $3Dmol === "undefined") {
+        container.className = "energy-structure-viewer empty";
+        container.textContent = "3D \u67e5\u770b\u5668\u672a\u52a0\u8f7d";
+        return;
+      }
+      energyGraphState.viewer = $3Dmol.createViewer(container, { backgroundColor: "0x0e1419", antialias: true });
+      energyGraphState.viewer.addModel(xyz, "xyz");
+      energyGraphState.viewer.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.26 } });
+      energyGraphState.viewer.zoomTo();
+      energyGraphState.viewer.render();
+    }
+    energyGraphState.loadedFrameIndex = Number(frameIndex);
+  } catch (e) {
+    if (e && e.name === "AbortError") return;
+    if (tk !== energyGraphState.requestToken) return;
+    if (!container.isConnected) return;
+    container.className = "energy-structure-viewer empty";
+    container.textContent = e.message || String(e);
+  }
+}
+
+/* ── Fetch Frame XYZ (for export, no viewer update) ── */
+async function energyGraphFetchFrameXyz(node) {
+  var data = energyGraphState.data;
+  if (!data || !node) return null;
+  var frameIndex = node.frame_index;
+  if (frameIndex == null) return null;
+  var jobId = energyGraphState.jobId;
+  var view = String(data.view_type || "");
+  var geoRef = node.geometry_ref || "";
+  if (geoRef) {
+    try {
+      var fileResp = await api("/jobs/" + encodeURIComponent(jobId) + "/files/" + encodeURIComponent(geoRef));
+      if (fileResp && typeof fileResp === "string") return fileResp;
+      if (fileResp && fileResp.xyz) return fileResp.xyz;
+    } catch (e) {}
+  }
+  if (view === "optimization") {
+    try {
+      var optUrl = "/jobs/" + encodeURIComponent(jobId) + "/optimization/frame/" + encodeURIComponent(frameIndex);
+      if (data.metadata && data.metadata.item_id) optUrl += "?item_id=" + encodeURIComponent(String(data.metadata.item_id));
+      var optResp = await api(optUrl);
+      if (optResp && optResp.xyz) return optResp.xyz;
+    } catch (e) {}
+  }
+  if (view === "sampling") {
+    try {
+      var sampResp = await api("/jobs/" + encodeURIComponent(jobId) + "/sampling/frame/" + encodeURIComponent(frameIndex));
+      if (sampResp && sampResp.xyz) return sampResp.xyz;
+    } catch (e) {}
+  }
+  if (view === "scan" || view === "scan_trajectory") {
+    try {
+      var s2Resp = await api("/jobs/" + encodeURIComponent(jobId) + "/s2/frame/" + encodeURIComponent(frameIndex));
+      if (s2Resp && s2Resp.xyz) return s2Resp.xyz;
+    } catch (e) {}
+  }
+  return null;
+}
+
+/* ── Generic Metadata Renderer ── */
+function energyInspectorMetadataRows(data, node, metadata) {
+  var view = String(data.view_type || "");
+  var specs = ENERGY_INSPECTOR_FIELD_SPECS[view] || [];
+  var html = "";
+  specs.forEach(function(spec) {
+    var val = metadata[spec.key];
+    if (val == null) return;
+    if (spec.decimals >= 0 && typeof val === "number") {
+      html += '<dt>' + escapeHtml(spec.i18nKey) + '</dt><dd>' + escapeHtml(energyGraphFormatNumber(val, spec.decimals)) + (spec.unit ? ' ' + escapeHtml(spec.unit) : '') + '</dd>';
+    } else {
+      html += '<dt>' + escapeHtml(spec.i18nKey) + '</dt><dd>' + escapeHtml(String(val)) + '</dd>';
+    }
+  });
+  var known = _INSPECTOR_COMMON_KEYS;
+  Object.keys(metadata).forEach(function(key) {
+    if (known[key]) return;
+    var val = metadata[key];
+    if (val == null || typeof val === "object") return;
+    html += '<dt>' + escapeHtml(key) + '</dt><dd>' + escapeHtml(String(val)) + '</dd>';
+  });
+  return html;
 }
 
 async function api(path, opts) {
@@ -6935,6 +7177,66 @@ function energyGraphBindInspectorButtons(root) {
       }
     });
   }
+  /* ── Frame lock / export / save-candidate actions ── */
+  root.querySelectorAll('[data-energy-action-row] [data-energy-action]').forEach(function(button) {
+    button.addEventListener("click", async function() {
+      var action = button.getAttribute("data-energy-action");
+      if (!data) return;
+      var node = energyGraphCurrentNode(data);
+      if (!node) return;
+      if (action === "lock-frame") {
+        var rev = String((data && data.revision) || "");
+        var locks = energyToggleFrameLock(energyGraphState.jobId, rev, String(node.id || ""));
+        var isLocked = locks.indexOf(String(node.id || "")) >= 0;
+        button.textContent = (isLocked ? t("energy.inspector.unlock") : t("energy.inspector.lock")) + (isLocked ? ' \ud83d\udd12' : '');
+        button.title = isLocked ? t("energy.inspector.unlock") : t("energy.inspector.lock");
+      } else if (action === "export-frame") {
+        try {
+          var xyz = await energyGraphFetchFrameXyz(node);
+          if (!xyz) return;
+          var blob = new Blob([xyz], { type: "chemical/x-xyz" });
+          var fname = String(energyGraphState.jobId || "job") + "_" + String(node.id || "frame") + ".xyz";
+          var a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = fname;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(a.href);
+        } catch (e) {}
+      } else if (action === "save-candidate") {
+        var roleLabel = prompt(t("energy.inspector.role_select") + ": TS / INT / " + t("energy.inspector.role_none"));
+        if (!roleLabel) return;
+        var rl = roleLabel.trim().toUpperCase();
+        var role = rl === "TS" ? "TS" : rl === "NONE" || rl === t("energy.inspector.role_none").toUpperCase() ? "NONE" : "INT";
+        if (isFrameLocked) { alert("\u5e27\u5df2\u9501\u5b9a\uff0c\u8bf7\u5148\u89e3\u9501"); return; }
+        button.disabled = true;
+        try {
+          var body = { view_type: String(data.view_type || ""), frame_index: Number(node.frame_index), role: role };
+          var resp = await api("/jobs/" + encodeURIComponent(energyGraphState.jobId) + "/frame-candidate", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+          });
+          if (resp) {
+            var savedBadgeEl = root.querySelector('[data-energy-action-row] .energy-badge.ok');
+            if (!savedBadgeEl) {
+              var row = root.querySelector('[data-energy-action-row]');
+              if (row) row.insertAdjacentHTML("beforeend", ' <span class="energy-badge ok">' + escapeHtml(t("energy.inspector.saved_badge")) + '</span>');
+            }
+            node.metadata._candidateSaved = true;
+            energyGraphRenderCurrent();
+          }
+        } catch (e) {
+          if (e && e.message && e.message.indexOf("PESsearch") >= 0) {
+            alert(e.message);
+          } else {
+            alert(String(e.message || e));
+          }
+        } finally {
+          button.disabled = false;
+        }
+      }
+    });
+  });
 }
 
 function energyGraphBuildSvg(data) {
@@ -7154,6 +7456,10 @@ function energyGraphBuildSvg(data) {
       svg += '<path class="energy-marker-ts' + selectedClass + stateClass + '" d="M ' + ax + ' ' + (ay - 7) + ' L ' + (ax + 7) + ' ' + ay + ' L ' + ax + ' ' + (ay + 7) + ' L ' + (ax - 7) + ' ' + ay + ' Z"></path>';
     } else if (at === "failed") {
       svg += '<path class="energy-marker-failed" d="M ' + (ax - 6) + ' ' + (ay - 6) + ' L ' + (ax + 6) + ' ' + (ay + 6) + ' M ' + (ax + 6) + ' ' + (ay - 6) + ' L ' + (ax - 6) + ' ' + (ay + 6) + '"></path>';
+    } else if (at === "maximum") {
+      svg += '<polygon class="energy-marker-max' + selectedClass + '" points="' + ax + ',' + (ay - 8) + ' ' + (ax + 7) + ',' + (ay + 4) + ' ' + (ax - 7) + ',' + (ay + 4) + '"></polygon>';
+    } else if (at === "new_basin") {
+      svg += '<path class="energy-marker-basin' + selectedClass + '" d="M ' + ax + ' ' + (ay - 7) + ' L ' + (ax + 7) + ' ' + ay + ' L ' + ax + ' ' + (ay + 7) + ' L ' + (ax - 7) + ' ' + ay + ' Z"></path>';
     } else {
       svg += '<circle class="energy-marker-' + (at === "minimum" ? "min" : at === "intermediate" ? "int" : "failed") + selectedClass + stateClass + '" cx="' + ax + '" cy="' + ay + '" r="6"></circle>';
     }
@@ -7256,6 +7562,23 @@ function energyGraphInspectorMarkup(data) {
         '<div class="energy-attr-row"><span class="energy-attr-label">保存状态</span><span class="energy-badge ' + saveStateClass + '">' + escapeHtml(saveStateLabel) + '</span></div>' +
       '</div>';
   }
+  var isPES = !!(lastSelectedJob && lastSelectedJob.spec && lastSelectedJob.spec.workflow === "PESsearch");
+  var frameLockRevision = String((data && data.revision) || "");
+  var frameLockArr = energyLoadFrameLockSet(energyGraphState.jobId, frameLockRevision);
+  var frameIdStr = String(node.id || "");
+  var isFrameLocked = frameLockArr.indexOf(frameIdStr) >= 0;
+  var lockGlyph = isFrameLocked ? ' \ud83d\udd12' : '';
+  var lockLabel = isFrameLocked ? t("energy.inspector.unlock") : t("energy.inspector.lock");
+  var frameCandidateSaved = metadata._candidateSaved || false;
+  var savedBadge = frameCandidateSaved ? ' <span class="energy-badge ok">' + escapeHtml(t("energy.inspector.saved_badge")) + '</span>' : '';
+  var actionRowHtml =
+    '<div class="energy-inspector-actions" data-energy-action-row>' +
+      '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="lock-frame" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" title="' + escapeHtml(lockLabel) + '">' + escapeHtml(lockLabel) + lockGlyph + '</button>' +
+      '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="export-frame" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" title="' + escapeHtml(t("energy.inspector.export")) + '">' + escapeHtml(t("energy.inspector.export")) + '</button>' +
+      (!isPES
+        ? '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" title="' + escapeHtml(t("energy.inspector.save_candidate")) + '">' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' + savedBadge
+        : '') +
+    '</div>';
   return '<div class="energy-inspector-body">' +
     '<div class="energy-selected-title"><strong>' + escapeHtml(title) + '</strong><span class="energy-badge ' + badgeClass + '">' + escapeHtml(annotation ? String(annotation.type).toUpperCase() : translateStatus(node.status || "unknown")) + '</span></div>' +
     '<div class="frame-nav-row" style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">' +
@@ -7268,8 +7591,6 @@ function energyGraphInspectorMarkup(data) {
       '<dt>\u5e27 / \u6b65</dt><dd>' + escapeHtml(frame) + '</dd>' +
       '<dt>' + escapeHtml(xAxisLabel) + '</dt><dd>' + escapeHtml(energyGraphFormatNumber(node.x, 3)) + ' ' + escapeHtml(String((data.x_axis || {}).unit || "")) + '</dd>' +
       '<dt>\u80fd\u91cf</dt><dd>' + escapeHtml(energyGraphFormatNumber(node.energy, 4)) + '</dd>' +
-      '<dt>\u76ee\u6807\u5750\u6807</dt><dd>' + escapeHtml(energyGraphFormatNumber(metadata.target_coordinate, 3)) + '</dd>' +
-      '<dt>\u5b9e\u9645\u5750\u6807</dt><dd>' + escapeHtml(energyGraphFormatNumber(metadata.actual_coordinate, 3)) + '</dd>' +
       (function() {
         var actualMap = metadata.actual_coordinates || {};
         var keys = Object.keys(actualMap);
@@ -7281,6 +7602,7 @@ function energyGraphInspectorMarkup(data) {
             + escapeHtml(energyGraphFormatNumber(actualMap[key], 3)) + '</dd>';
         }).join("");
       })() +
+      energyInspectorMetadataRows(data, node, metadata) +
       '<dt>\u7ed3\u6784\u6765\u6e90</dt><dd title="' + escapeHtml(geometry || "--") + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;">' + escapeHtml(geometry || "--") + '</dd>' +
     '</dl>' +
     (canEditRole
@@ -7299,6 +7621,7 @@ function energyGraphInspectorMarkup(data) {
         ? '<div class="energy-review-state locked">选点已锁定 · 点击顶部“选点已锁定”可进入编辑模式</div>'
         : "")) +
     candidateAttrHtml +
+    actionRowHtml +
     '<div class="detail-hint">\u7ed3\u6784\u67e5\u770b\u5668\u4f1a\u968f\u5f53\u524d\u9009\u4e2d\u5e27\u81ea\u52a8\u540c\u6b65\uff1b\u70b9\u51fb\u56fe\u4e2d\u8282\u70b9\u53ef\u5207\u6362\u5e27\uff0c\u62d6\u52a8 TS/INT \u6807\u8bb0\u53ef\u8c03\u6574\u5019\u9009\u5e27\u3002</div>' +
   '</div>';
 }
@@ -7945,54 +8268,10 @@ function energyGraphCurrentNode(data) {
 
 async function energyGraphLoadStructure(frameIndex) {
   var data = energyGraphState.data;
-  var container = document.getElementById("energy-structure-viewer");
-  if (!data || !container || frameIndex == null || ["scan", "optimization"].indexOf(String(data.view_type)) < 0) return;
-  if (Number(frameIndex) === energyGraphState.loadedFrameIndex && energyGraphState.viewer && container.isConnected && container.querySelector("canvas")) return;
-  if (energyGraphState.structureAbort) { energyGraphState.structureAbort.abort(); energyGraphState.structureAbort = null; }
-  var ac = (typeof AbortController !== "undefined") ? new AbortController() : null;
-  energyGraphState.structureAbort = ac;
-  var tk = energyGraphState.requestToken;
-  try {
-    var frameUrl = data.view_type === "optimization"
-      ? "/jobs/" + encodeURIComponent(energyGraphState.jobId) + "/optimization/frame/" + encodeURIComponent(frameIndex)
-      : "/jobs/" + encodeURIComponent(energyGraphState.jobId) + "/s2/frame/" + encodeURIComponent(frameIndex);
-    if (data.view_type === "optimization" && data.metadata && data.metadata.item_id) frameUrl += "?item_id=" + encodeURIComponent(String(data.metadata.item_id));
-    var frame = await api(frameUrl, ac ? { signal: ac.signal } : {});
-    if (tk !== energyGraphState.requestToken) return;
-    if (!container.isConnected) return;
-    if (!frame || !frame.xyz) {
-      container.className = "energy-structure-viewer empty";
-      container.textContent = "当前帧没有可用 XYZ 结构";
-      return;
-    }
-    container.className = "energy-structure-viewer";
-    if (energyGraphState.viewer && container.querySelector("canvas")) {
-      try { energyGraphState.viewer.removeAllModels(); } catch (e) {}
-      energyGraphState.viewer.addModel(frame.xyz, "xyz");
-      energyGraphState.viewer.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.26 } });
-      energyGraphState.viewer.zoomTo();
-      energyGraphState.viewer.render();
-    } else {
-      container.innerHTML = "";
-      if (typeof $3Dmol === "undefined") {
-        container.className = "energy-structure-viewer empty";
-        container.textContent = "3D 查看器未加载";
-        return;
-      }
-      energyGraphState.viewer = $3Dmol.createViewer(container, { backgroundColor: "0x0e1419", antialias: true });
-      energyGraphState.viewer.addModel(frame.xyz, "xyz");
-      energyGraphState.viewer.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.26 } });
-      energyGraphState.viewer.zoomTo();
-      energyGraphState.viewer.render();
-    }
-    energyGraphState.loadedFrameIndex = Number(frameIndex);
-  } catch (e) {
-    if (e && e.name === "AbortError") return;
-    if (tk !== energyGraphState.requestToken) return;
-    if (!container.isConnected) return;
-    container.className = "energy-structure-viewer empty";
-    container.textContent = e.message || String(e);
-  }
+  if (!data || frameIndex == null) return;
+  var nodes = Array.isArray(data.nodes) ? data.nodes : [];
+  var node = nodes.find(function(n) { return Number(n.frame_index) === Number(frameIndex); }) || nodes[0];
+  if (node) return energyGraphLoadFrameGeometry(node);
 }
 
 function s2CandidateLabel(entry, index) {
