@@ -1074,6 +1074,201 @@ body.resizing-v canvas {
 .energy-marker-failed { stroke: var(--red); pointer-events: none; }
 .energy-marker-max { fill: none; stroke: var(--red); stroke-width: 1.6; pointer-events: none; }
 .energy-marker-basin { fill: none; stroke: #5dd6ff; stroke-width: 1.6; pointer-events: none; }
+.sampling-workspace {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 10px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(10, 14, 20, 0.74), rgba(10, 14, 20, 0.90)),
+    radial-gradient(circle at top left, rgba(78, 161, 255, 0.11), transparent 30%);
+}
+.sampling-workspace .energy-workspace-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+.sampling-workspace .energy-workspace-title {
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sampling-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: rgba(17, 24, 33, 0.86);
+}
+.sampling-view-toggle-btn {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+.sampling-view-toggle-btn:hover {
+  color: var(--text-primary);
+  background: rgba(78, 161, 255, 0.12);
+}
+.sampling-view-toggle-btn.active {
+  color: #ffffff;
+  background: #1d5d9d;
+  border-color: #55aaff;
+}
+.sampling-subview-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: rgba(17, 24, 33, 0.86);
+}
+.sampling-subview-tab {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+.sampling-subview-tab:hover {
+  color: var(--text-primary);
+  background: rgba(78, 161, 255, 0.12);
+}
+.sampling-subview-tab.active {
+  color: #ffffff;
+  background: #1d5d9d;
+  border-color: #55aaff;
+}
+.sampling-subview-content {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 8px;
+}
+.sampling-axis-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+}
+.sampling-axis-select {
+  height: var(--toolbar-control-height);
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: rgba(17, 24, 33, 0.86);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+.sampling-axis-select:hover {
+  border-color: var(--accent);
+}
+.sampling-coverage-panel {
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+}
+.sampling-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.sampling-metric-card {
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: rgba(17, 24, 33, 0.86);
+}
+.sampling-metric-label {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  margin-bottom: 4px;
+}
+.sampling-metric-value {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+.sampling-sat-dot {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  margin-right: 2px;
+}
+.sampling-sat-dot.active {
+  color: var(--green);
+}
+.sampling-cumulative-chart {
+  margin-bottom: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: rgba(17, 24, 33, 0.86);
+  padding: 8px;
+}
+.sampling-timeline-ribbon {
+  margin-bottom: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: rgba(17, 24, 33, 0.86);
+  padding: 8px;
+  overflow: hidden;
+}
+.sampling-timeline-ribbon svg {
+  width: 100%;
+  height: 30px;
+}
+.sampling-basin-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: rgba(17, 24, 33, 0.86);
+}
+.sampling-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+.sampling-legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+}
+.sampling-workspace .energy-inspector-panel {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background: rgba(14, 20, 29, 0.78);
+  overflow: hidden;
+}
 g[data-energy-draggable] { cursor: grab; }
 g[data-energy-draggable]:hover { filter: drop-shadow(0 0 4px rgba(78,161,255,0.65)); }
 g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
@@ -4467,6 +4662,12 @@ let energyGraphState = {
   optimizationPlot: null,
   optimizationViewSize: { width: 0, height: 0 },
 };
+let samplingState = {
+  activeSubview: "energy",
+  xAxis: "time_ps",
+  yAxis: "energy_potential",
+  jobId: "",
+};
 let bgIndex = 0;
 let labelMode = "none";
 let measureBuffer = [];
@@ -5193,6 +5394,30 @@ const I18N = {
     "energy.conv.max_gradient": "MAX 梯度",
     "energy.conv.rms_displacement": "RMS 位移",
     "energy.conv.max_displacement": "MAX 位移",
+    "energy.sampling.tabs.energy": "能量轨迹",
+    "energy.sampling.tabs.space": "采样空间",
+    "energy.sampling.tabs.coverage": "覆盖度",
+    "energy.sampling.axis.time_ps": "模拟时间 (ps)",
+    "energy.sampling.axis.step": "MD Step",
+    "energy.sampling.axis.frame": "帧",
+    "energy.sampling.axis.potential": "势能 (kcal/mol)",
+    "energy.sampling.axis.relative": "相对能量 (kcal/mol)",
+    "energy.sampling.view_toggle.conformer": "构象能量分布",
+    "energy.sampling.view_toggle.sampling": "构象搜索轨迹",
+    "energy.sampling.no_data": "数据不可用",
+    "energy.sampling.unique_clusters": "唯一簇",
+    "energy.sampling.new_clusters_20pct": "近20%新簇",
+    "energy.sampling.last_new_basin": "最近新盆地",
+    "energy.sampling.revisit_ratio": "重访率",
+    "energy.sampling.energy_window": "能量窗口",
+    "energy.sampling.saturation": "采样饱和度",
+    "energy.sampling.saturation_high": "高",
+    "energy.sampling.saturation_medium": "中",
+    "energy.sampling.saturation_low": "低",
+    "energy.sampling.basin_legend": "盆地",
+    "energy.sampling.first_seen": "首见时间",
+    "energy.sampling.visit_count": "访问次数",
+    "energy.sampling.cumulative_unique": "累积唯一构象",
     "overview.overall_progress": "总体进度",
     "overview.current_stage": "当前阶段",
     "overview.stage_progress": "阶段进度",
@@ -5968,6 +6193,30 @@ const I18N = {
     "energy.conv.max_gradient": "MAX Gradient",
     "energy.conv.rms_displacement": "RMS Displacement",
     "energy.conv.max_displacement": "MAX Displacement",
+    "energy.sampling.tabs.energy": "Energy Trajectory",
+    "energy.sampling.tabs.space": "Sampling Space",
+    "energy.sampling.tabs.coverage": "Coverage",
+    "energy.sampling.axis.time_ps": "Simulation Time (ps)",
+    "energy.sampling.axis.step": "MD Step",
+    "energy.sampling.axis.frame": "Frame",
+    "energy.sampling.axis.potential": "Potential Energy (kcal/mol)",
+    "energy.sampling.axis.relative": "Relative Energy (kcal/mol)",
+    "energy.sampling.view_toggle.conformer": "Conformer Energy",
+    "energy.sampling.view_toggle.sampling": "Sampling Trajectory",
+    "energy.sampling.no_data": "Data unavailable",
+    "energy.sampling.unique_clusters": "Unique Clusters",
+    "energy.sampling.new_clusters_20pct": "New Clusters (last 20%)",
+    "energy.sampling.last_new_basin": "Last New Basin",
+    "energy.sampling.revisit_ratio": "Revisit Ratio",
+    "energy.sampling.energy_window": "Energy Window",
+    "energy.sampling.saturation": "Sampling Saturation",
+    "energy.sampling.saturation_high": "High",
+    "energy.sampling.saturation_medium": "Medium",
+    "energy.sampling.saturation_low": "Low",
+    "energy.sampling.basin_legend": "Basin",
+    "energy.sampling.first_seen": "First Seen",
+    "energy.sampling.visit_count": "Visit Count",
+    "energy.sampling.cumulative_unique": "Cumulative Unique Conformers",
     "overview.overall_progress": "Overall progress",
     "overview.current_stage": "Current stage",
     "overview.stage_progress": "Stage progress",
@@ -7513,6 +7762,335 @@ function energyGraphBuildSvg(data) {
   svg += '</g>';
   svg += '</svg>';
   return svg;
+}
+
+/* ── Deterministic jitter for MDS scatter (seeded by frame_index) ── */
+function samplingDeterministicJitter(frameIndex, domainRange) {
+  var seed = Number(frameIndex) || 0;
+  seed = (seed * 1664525 + 1013904223) & 0xFFFFFFFF;
+  seed = ((seed >>> 16) ^ seed) * 0x45d9f3b & 0xFFFFFFFF;
+  seed = ((seed >>> 16) ^ seed) * 0x45d9f3b & 0xFFFFFFFF;
+  seed = (seed >>> 16) ^ seed;
+  var normalized = (seed & 0xFFFF) / 0xFFFF;
+  return (normalized - 0.5) * 0.06 * domainRange;
+}
+
+/* ── Sampling Energy Trajectory Chart (subview 1) ── */
+function samplingEnergyTrajectorySvg(data) {
+  var series = energyGraphSeries(data);
+  var nodes = Array.isArray(data.nodes) ? data.nodes : [];
+  if (!series || !nodes.length) return '<div class="energy-empty"><div><strong>' + escapeHtml(t("energy.sampling.no_data")) + '</strong></div></div>';
+  var values = Array.isArray(series.values) ? series.values : [];
+  var xValues = Array.isArray(series.x_values) && series.x_values.length
+    ? series.x_values
+    : nodes.map(function(node) { return energyGraphValue(node.x); });
+  var points = [];
+  for (var pi = 0; pi < Math.min(values.length, xValues.length); pi += 1) {
+    var pxv = energyGraphValue(xValues[pi]);
+    var pyv = energyGraphValue(values[pi]);
+    if (pxv !== null && pyv !== null) points.push({ x: pxv, y: pyv, index: pi, node: nodes[pi] });
+  }
+  if (!points.length) return '<div class="energy-empty"><div><strong>' + escapeHtml(t("energy.sampling.no_data")) + '</strong></div></div>';
+  var geom = energyGraphChartGeometry();
+  var W = geom.W, H = geom.H, pad = geom.pad;
+  var xExtent = [Math.min.apply(null, points.map(function(p) { return p.x; })), Math.max.apply(null, points.map(function(p) { return p.x; }))];
+  var yExtent = [Math.min.apply(null, points.map(function(p) { return p.y; })), Math.max.apply(null, points.map(function(p) { return p.y; }))];
+  var xSpread = Math.max(1e-9, xExtent[1] - xExtent[0]);
+  var ySpread = Math.max(1e-9, yExtent[1] - yExtent[0]);
+  var xDom = [xExtent[0] - xSpread * 0.06, xExtent[1] + xSpread * 0.06];
+  var yDom = [yExtent[0] - ySpread * 0.12, yExtent[1] + ySpread * 0.12];
+  var Pw = W - pad.left - pad.right, Ph = H - pad.top - pad.bottom;
+  function xFor(v) { return pad.left + ((v - xDom[0]) / (xDom[1] - xDom[0] || 1)) * Pw; }
+  function yFor(v) { return pad.top + (1 - ((v - yDom[0]) / (yDom[1] - yDom[0] || 1))) * Ph; }
+  var svg = '<svg class="energy-chart-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Sampling Energy Trajectory" data-sampling-chart>';
+  svg += '<defs><clipPath id="sampling-plot-clip"><rect x="' + pad.left + '" y="' + pad.top + '" width="' + Pw + '" height="' + Ph + '"/></clipPath></defs>';
+  svg += '<g data-energy-plot clip-path="url(#sampling-plot-clip)">';
+  var segments = [];
+  var seg = null;
+  for (var si = 0; si < points.length; si += 1) {
+    if (!seg) { seg = [points[si]]; }
+    else if (points[si].index === seg[seg.length - 1].index + 1) { seg.push(points[si]); }
+    else { segments.push(seg); seg = [points[si]]; }
+  }
+  if (seg) segments.push(seg);
+  var linePath = "";
+  segments.forEach(function(s) {
+    var cmds = s.map(function(pt, idx) { return (idx ? "L" : "M") + xFor(pt.x) + " " + yFor(pt.y); }).join(" ");
+    linePath += cmds + " ";
+  });
+  if (linePath) svg += '<path class="energy-line" d="' + linePath + '"></path>';
+  var selectedFrame = energyGraphFrameIndexForNode(data, energyGraphState.selectedNodeId);
+  points.forEach(function(point) {
+    var nodeId = point.node && point.node.id != null ? point.node.id : "";
+    var selected = String(nodeId) === String(energyGraphState.selectedNodeId) ? " selected" : "";
+    var basinId = point.node && point.node.metadata ? point.node.metadata.basin_id : 0;
+    var basinColor = samplingBasinColor(basinId);
+    svg += '<g data-energy-frame="' + escapeHtml(String(point.node && point.node.frame_index != null ? point.node.frame_index : point.index)) + '" data-energy-node="' + escapeHtml(String(nodeId)) + '">';
+    svg += '<circle class="energy-point' + selected + '" cx="' + xFor(point.x) + '" cy="' + yFor(point.y) + '" r="' + (selected ? 6 : 4) + '" fill="' + basinColor + '" stroke="' + (selected ? '#fff' : 'none') + '" stroke-width="' + (selected ? 2 : 0) + '"></circle>';
+    svg += '</g>';
+  });
+  var annotations = Array.isArray(data.annotations) ? data.annotations : [];
+  annotations.forEach(function(annotation) {
+    if (annotation.type !== "new_basin") return;
+    var fi = annotation.frame_index;
+    var annNode = nodes.find(function(item) { return Number(item.frame_index) === Number(fi); });
+    if (!annNode || energyGraphValue(annNode.x) === null) return;
+    var annSeries = energyGraphSeries(data);
+    var annVal = energyGraphSeriesValueAtFrame(data, annSeries, fi);
+    if (annVal === null) return;
+    var ax = xFor(energyGraphValue(annNode.x)), ay = yFor(annVal);
+    svg += '<path class="energy-marker-basin" d="M ' + ax + ' ' + (ay - 7) + ' L ' + (ax + 7) + ' ' + ay + ' L ' + ax + ' ' + (ay + 7) + ' L ' + (ax - 7) + ' ' + ay + ' Z"></path>';
+  });
+  svg += '</g>';
+  svg += '<g data-energy-overlay></g>';
+  svg += '<g data-energy-axes>';
+  svg += energyGraphAxesMarkup(xDom, yDom, geom);
+  var xAxisKey = samplingState.xAxis || "time_ps";
+  var xAxisLabel = t("energy.sampling.axis." + xAxisKey);
+  svg += '<text class="energy-axis-text" x="' + ((pad.left + W - pad.right) / 2) + '" y="' + (H - 17) + '" text-anchor="middle">' + escapeHtml(xAxisLabel) + '</text>';
+  svg += '<text class="energy-axis-text" x="18" y="' + (H / 2) + '" text-anchor="middle" transform="rotate(-90 18 ' + (H / 2) + ')">' + escapeHtml(String(series.label || "能量")) + ' (' + escapeHtml(String(series.unit || "")) + ')</text>';
+  svg += '</g>';
+  svg += '</svg>';
+  return svg;
+}
+
+/* ── Basin color palette ── */
+function samplingBasinColor(basinId) {
+  var palette = ['#55aaff', '#42d6a4', '#ffb85d', '#ff8f6b', '#b792ff', '#5dd6ff', '#ff6b9d', '#9dff6b', '#ff6b6b', '#6b9dff'];
+  return palette[Number(basinId) % palette.length] || palette[0];
+}
+
+/* ── Sampling Space Scatter (subview 2) ── */
+function samplingSpaceScatterSvg(data) {
+  var nodes = Array.isArray(data.nodes) ? data.nodes : [];
+  var metadata = data.metadata || {};
+  var basins = Array.isArray(metadata.basins) ? metadata.basins : [];
+  if (!nodes.length) return '<div class="energy-empty"><div><strong>' + escapeHtml(t("energy.sampling.no_data")) + '</strong></div></div>';
+  var hasMds = nodes.some(function(n) { return n.metadata && n.metadata.mds && n.metadata.mds[0] != null; });
+  if (!hasMds) return '<div class="energy-empty"><div><strong>' + escapeHtml(t("energy.sampling.no_data")) + '</strong></div></div>';
+  var mdsPoints = nodes.map(function(n, idx) {
+    var mds = (n.metadata && n.metadata.mds) || [null, null];
+    return { x: mds[0], y: mds[1], node: n, index: idx };
+  }).filter(function(p) { return p.x != null && p.y != null; });
+  if (!mdsPoints.length) return '<div class="energy-empty"><div><strong>' + escapeHtml(t("energy.sampling.no_data")) + '</strong></div></div>';
+  var xExtent = [Math.min.apply(null, mdsPoints.map(function(p) { return p.x; })), Math.max.apply(null, mdsPoints.map(function(p) { return p.x; }))];
+  var yExtent = [Math.min.apply(null, mdsPoints.map(function(p) { return p.y; })), Math.max.apply(null, mdsPoints.map(function(p) { return p.y; }))];
+  var xSpread = Math.max(1e-9, xExtent[1] - xExtent[0]);
+  var ySpread = Math.max(1e-9, yExtent[1] - yExtent[0]);
+  var xDom = [xExtent[0] - xSpread * 0.1, xExtent[1] + xSpread * 0.1];
+  var yDom = [yExtent[0] - ySpread * 0.1, yExtent[1] + ySpread * 0.1];
+  var geom = energyGraphChartGeometry();
+  var W = geom.W, H = geom.H, pad = geom.pad;
+  var Pw = W - pad.left - pad.right, Ph = H - pad.top - pad.bottom;
+  function xFor(v) { return pad.left + ((v - xDom[0]) / (xDom[1] - xDom[0] || 1)) * Pw; }
+  function yFor(v) { return pad.top + (1 - ((v - yDom[0]) / (yDom[1] - yDom[0] || 1))) * Ph; }
+  var representativeFrames = {};
+  basins.forEach(function(b) {
+    if (b.representative_frame != null) {
+      representativeFrames[b.representative_frame] = b.basin_id;
+    }
+  });
+  var svg = '<svg class="energy-chart-svg" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Sampling Space" data-sampling-space-chart>';
+  svg += '<defs><clipPath id="sampling-space-clip"><rect x="' + pad.left + '" y="' + pad.top + '" width="' + Pw + '" height="' + Ph + '"/></clipPath></defs>';
+  svg += '<g clip-path="url(#sampling-space-clip)">';
+  mdsPoints.forEach(function(point) {
+    var nodeId = point.node.id || "";
+    var selected = String(nodeId) === String(energyGraphState.selectedNodeId);
+    var basinId = point.node.metadata ? point.node.metadata.basin_id : 0;
+    var color = samplingBasinColor(basinId);
+    var jitterX = samplingDeterministicJitter(point.node.frame_index, xSpread);
+    var jitterY = samplingDeterministicJitter(point.node.frame_index + 1000, ySpread);
+    var px = xFor(point.x + jitterX);
+    var py = yFor(point.y + jitterY);
+    var isRepresentative = representativeFrames[point.index] != null;
+    svg += '<g data-energy-frame="' + escapeHtml(String(point.node.frame_index != null ? point.node.frame_index : point.index)) + '" data-energy-node="' + escapeHtml(String(nodeId)) + '">';
+    if (isRepresentative) {
+      svg += '<circle cx="' + px + '" cy="' + py + '" r="8" fill="none" stroke="' + color + '" stroke-width="2" opacity="0.6"></circle>';
+    }
+    svg += '<circle class="energy-point' + (selected ? ' selected' : '') + '" cx="' + px + '" cy="' + py + '" r="' + (selected ? 6 : 3) + '" fill="' + color + '" stroke="' + (selected ? '#fff' : 'none') + '" stroke-width="' + (selected ? 2 : 0) + '"></circle>';
+    svg += '</g>';
+  });
+  svg += '</g>';
+  svg += '<g data-energy-overlay></g>';
+  svg += '<g data-energy-axes>';
+  svg += energyGraphAxesMarkup(xDom, yDom, geom);
+  svg += '<text class="energy-axis-text" x="' + ((pad.left + W - pad.right) / 2) + '" y="' + (H - 17) + '" text-anchor="middle">MDS 1</text>';
+  svg += '<text class="energy-axis-text" x="18" y="' + (H / 2) + '" text-anchor="middle" transform="rotate(-90 18 ' + (H / 2) + ')">MDS 2</text>';
+  svg += '</g>';
+  svg += '</svg>';
+  return svg;
+}
+
+/* ── Sampling Coverage Metrics (subview 3) ── */
+function samplingCoverageMarkup(data) {
+  var metadata = data.metadata || {};
+  var saturation = metadata.saturation;
+  var cumulativeUnique = Array.isArray(metadata.cumulative_unique) ? metadata.cumulative_unique : [];
+  var basins = Array.isArray(metadata.basins) ? metadata.basins : [];
+  if (!saturation) return '<div class="energy-empty"><div><strong>' + escapeHtml(t("energy.sampling.no_data")) + '</strong></div></div>';
+  var satLevel = String(saturation.level || "LOW").toUpperCase();
+  var satDots = "";
+  var dotCount = satLevel === "HIGH" ? 5 : satLevel === "MEDIUM" ? 3 : 1;
+  for (var i = 0; i < 5; i++) {
+    satDots += '<span class="sampling-sat-dot' + (i < dotCount ? ' active' : '') + '">●</span>';
+  }
+  var satLevelI18n = satLevel === "HIGH" ? t("energy.sampling.saturation_high") : satLevel === "MEDIUM" ? t("energy.sampling.saturation_medium") : t("energy.sampling.saturation_low");
+  var cardsHtml = '';
+  cardsHtml += '<div class="sampling-metric-card"><div class="sampling-metric-label">' + escapeHtml(t("energy.sampling.unique_clusters")) + '</div><div class="sampling-metric-value">' + escapeHtml(String(saturation.unique_clusters || 0)) + '</div></div>';
+  cardsHtml += '<div class="sampling-metric-card"><div class="sampling-metric-label">' + escapeHtml(t("energy.sampling.new_clusters_20pct")) + '</div><div class="sampling-metric-value">' + escapeHtml(String(saturation.new_clusters_last_20pct || 0)) + '</div></div>';
+  cardsHtml += '<div class="sampling-metric-card"><div class="sampling-metric-label">' + escapeHtml(t("energy.sampling.last_new_basin")) + '</div><div class="sampling-metric-value">' + escapeHtml(saturation.last_new_basin_ps != null ? saturation.last_new_basin_ps.toFixed(2) + ' ps' : '--') + '</div></div>';
+  cardsHtml += '<div class="sampling-metric-card"><div class="sampling-metric-label">' + escapeHtml(t("energy.sampling.revisit_ratio")) + '</div><div class="sampling-metric-value">' + escapeHtml(saturation.revisit_ratio != null ? (saturation.revisit_ratio * 100).toFixed(1) + '%' : '--') + '</div></div>';
+  cardsHtml += '<div class="sampling-metric-card"><div class="sampling-metric-label">' + escapeHtml(t("energy.sampling.energy_window")) + '</div><div class="sampling-metric-value">' + escapeHtml(saturation.energy_window_kcal_mol != null ? saturation.energy_window_kcal_mol.toFixed(2) + ' kcal/mol' : '--') + '</div></div>';
+  cardsHtml += '<div class="sampling-metric-card"><div class="sampling-metric-label">' + escapeHtml(t("energy.sampling.saturation")) + '</div><div class="sampling-metric-value">' + satDots + ' ' + escapeHtml(satLevelI18n) + '</div></div>';
+  var chartHtml = '';
+  if (cumulativeUnique.length > 1) {
+    var geom = energyGraphChartGeometry();
+    var W = geom.W, H = 160, pad = { left: 50, right: 20, top: 20, bottom: 30 };
+    var Pw = W - pad.left - pad.right, Ph = H - pad.top - pad.bottom;
+    var xExtent = [cumulativeUnique[0].time_ps, cumulativeUnique[cumulativeUnique.length - 1].time_ps];
+    var yExtent = [0, Math.max.apply(null, cumulativeUnique.map(function(p) { return p.unique; }))];
+    var xSpread = Math.max(1e-9, xExtent[1] - xExtent[0]);
+    var ySpread = Math.max(1e-9, yExtent[1] - yExtent[0]);
+    var xDom = [xExtent[0] - xSpread * 0.02, xExtent[1] + xSpread * 0.02];
+    var yDom = [0, yExtent[1] + ySpread * 0.1];
+    function xFor(v) { return pad.left + ((v - xDom[0]) / (xDom[1] - xDom[0] || 1)) * Pw; }
+    function yFor(v) { return pad.top + (1 - ((v - yDom[0]) / (yDom[1] - yDom[0] || 1))) * Ph; }
+    var linePath = cumulativeUnique.map(function(pt, idx) {
+      return (idx === 0 ? "M" : "L") + xFor(pt.time_ps) + " " + yFor(pt.unique);
+    }).join(" ");
+    chartHtml = '<div class="sampling-cumulative-chart"><svg viewBox="0 0 ' + W + ' ' + H + '">';
+    chartHtml += '<path class="energy-line" d="' + linePath + '"></path>';
+    chartHtml += energyGraphAxesMarkup(xDom, yDom, { W: W, H: H, pad: pad, plotRect: { left: pad.left, top: pad.top, width: Pw, height: Ph } });
+    chartHtml += '<text class="energy-axis-text" x="' + ((pad.left + W - pad.right) / 2) + '" y="' + (H - 5) + '" text-anchor="middle">' + escapeHtml(t("energy.sampling.axis.time_ps")) + '</text>';
+    chartHtml += '<text class="energy-axis-text" x="18" y="' + (H / 2) + '" text-anchor="middle" transform="rotate(-90 18 ' + (H / 2) + ')">' + escapeHtml(t("energy.sampling.cumulative_unique")) + '</text>';
+    chartHtml += '</svg></div>';
+  }
+  var timelineHtml = '';
+  if (basins.length > 0) {
+    var nodes = Array.isArray(data.nodes) ? data.nodes : [];
+    var timelineWidth = 600;
+    var timelineHeight = 30;
+    var timeRange = nodes.length > 1 ? (nodes[nodes.length - 1].x - nodes[0].x) : 1;
+    timelineHtml = '<div class="sampling-timeline-ribbon"><svg viewBox="0 0 ' + timelineWidth + ' ' + timelineHeight + '">';
+    var segments = [];
+    var currentBasin = null;
+    var segStart = 0;
+    nodes.forEach(function(node, idx) {
+      var bid = node.metadata ? node.metadata.basin_id : 0;
+      if (bid !== currentBasin) {
+        if (currentBasin !== null) {
+          segments.push({ basin: currentBasin, start: segStart, end: idx - 1 });
+        }
+        currentBasin = bid;
+        segStart = idx;
+      }
+    });
+    if (currentBasin !== null) {
+      segments.push({ basin: currentBasin, start: segStart, end: nodes.length - 1 });
+    }
+    segments.forEach(function(seg) {
+      var x1 = (seg.start / (nodes.length - 1 || 1)) * timelineWidth;
+      var x2 = (seg.end / (nodes.length - 1 || 1)) * timelineWidth;
+      timelineHtml += '<rect x="' + x1 + '" y="0" width="' + Math.max(1, x2 - x1) + '" height="' + timelineHeight + '" fill="' + samplingBasinColor(seg.basin) + '" opacity="0.7"></rect>';
+    });
+    basins.forEach(function(b) {
+      if (b.first_seen_index != null && nodes.length > 0) {
+        var tickX = (b.first_seen_index / (nodes.length - 1 || 1)) * timelineWidth;
+        timelineHtml += '<line x1="' + tickX + '" y1="0" x2="' + tickX + '" y2="' + timelineHeight + '" stroke="#fff" stroke-width="1.5" opacity="0.9"></line>';
+      }
+    });
+    timelineHtml += '</svg></div>';
+  }
+  var legendHtml = '<div class="sampling-basin-legend">';
+  basins.forEach(function(b) {
+    legendHtml += '<span class="sampling-legend-item"><span class="sampling-legend-swatch" style="background:' + samplingBasinColor(b.basin_id) + '"></span>';
+    legendHtml += escapeHtml(t("energy.sampling.basin_legend")) + ' ' + escapeHtml(String(b.basin_id));
+    legendHtml += ' · ' + escapeHtml(t("energy.sampling.first_seen")) + ': ' + escapeHtml(b.first_seen_ps != null ? b.first_seen_ps.toFixed(2) + 'ps' : '--');
+    legendHtml += ' · ' + escapeHtml(t("energy.sampling.visit_count")) + ': ' + escapeHtml(String(b.visit_count || 0));
+    legendHtml += '</span>';
+  });
+  legendHtml += '</div>';
+  return '<div class="sampling-coverage-panel">' +
+    '<div class="sampling-metrics-grid">' + cardsHtml + '</div>' +
+    chartHtml +
+    timelineHtml +
+    legendHtml +
+  '</div>';
+}
+
+/* ── Sampling Workspace Markup ── */
+function samplingWorkspaceMarkup(data) {
+  var metadata = data.metadata || {};
+  var axisOptions = metadata.axis_options || {};
+  var xOptions = Array.isArray(axisOptions.x) ? axisOptions.x : ["time_ps", "step", "frame"];
+  var yOptions = Array.isArray(axisOptions.y) ? axisOptions.y : ["potential", "relative"];
+  var activeSubview = samplingState.activeSubview || "energy";
+  if (samplingState.jobId !== energyGraphState.jobId) {
+    samplingState.activeSubview = "energy";
+    samplingState.xAxis = "time_ps";
+    samplingState.yAxis = "energy_potential";
+    samplingState.jobId = energyGraphState.jobId;
+    activeSubview = "energy";
+  }
+  var series = Array.isArray(data.series) ? data.series : [];
+  var currentSeries = series.find(function(s) { return s.id === samplingState.yAxis; }) || series[0];
+  if (currentSeries) {
+    data = Object.assign({}, data, { series: [currentSeries] });
+  }
+  var tabButtons = [
+    { id: "energy", label: t("energy.sampling.tabs.energy") },
+    { id: "space", label: t("energy.sampling.tabs.space") },
+    { id: "coverage", label: t("energy.sampling.tabs.coverage") }
+  ].map(function(tab) {
+    return '<button class="sampling-subview-tab' + (tab.id === activeSubview ? ' active' : '') + '" data-sampling-view="' + tab.id + '">' + escapeHtml(tab.label) + '</button>';
+  }).join("");
+  var xSelectorHtml = '<select class="sampling-axis-select" data-sampling-x-axis>';
+  xOptions.forEach(function(opt) {
+    xSelectorHtml += '<option value="' + escapeHtml(opt) + '"' + (opt === samplingState.xAxis ? ' selected' : '') + '>' + escapeHtml(t("energy.sampling.axis." + opt)) + '</option>';
+  });
+  xSelectorHtml += '</select>';
+  var ySelectorHtml = '<select class="sampling-axis-select" data-sampling-y-axis>';
+  yOptions.forEach(function(opt) {
+    var seriesId = opt === "potential" ? "energy_potential" : "relative_energy";
+    var seriesObj = (Array.isArray(data.series) ? data.series : []).find(function(s) { return s.id === seriesId; });
+    var label = seriesObj ? seriesObj.label : opt;
+    ySelectorHtml += '<option value="' + escapeHtml(seriesId) + '"' + (seriesId === samplingState.yAxis ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
+  });
+  ySelectorHtml += '</select>';
+  var subviewContent = '';
+  if (activeSubview === "energy") {
+    subviewContent = '<div class="sampling-subview-content" data-sampling-subview="energy">' +
+      '<div class="sampling-axis-controls">' + xSelectorHtml + ySelectorHtml + '</div>' +
+      '<div class="energy-chart-scroll" data-energy-chart-scroll>' + samplingEnergyTrajectorySvg(data) + '</div>' +
+    '</div>';
+  } else if (activeSubview === "space") {
+    subviewContent = '<div class="sampling-subview-content" data-sampling-subview="space">' +
+      '<div class="energy-chart-scroll" data-energy-chart-scroll>' + samplingSpaceScatterSvg(data) + '</div>' +
+    '</div>';
+  } else {
+    subviewContent = '<div class="sampling-subview-content" data-sampling-subview="coverage">' +
+      samplingCoverageMarkup(data) +
+    '</div>';
+  }
+  var viewToggleHtml = '';
+  var availableViews = Array.isArray(data.available_views) ? data.available_views : [];
+  if (availableViews.indexOf("conformer") >= 0 && availableViews.indexOf("sampling") >= 0) {
+    viewToggleHtml = '<div class="sampling-view-toggle">' +
+      '<button class="sampling-view-toggle-btn' + (data.view_type === "conformer" ? ' active' : '') + '" data-sampling-switch-view="conformer">' + escapeHtml(t("energy.sampling.view_toggle.conformer")) + '</button>' +
+      '<button class="sampling-view-toggle-btn' + (data.view_type === "sampling" ? ' active' : '') + '" data-sampling-switch-view="sampling">' + escapeHtml(t("energy.sampling.view_toggle.sampling")) + '</button>' +
+    '</div>';
+  }
+  return '<div class="sampling-workspace" data-energy-workspace data-energy-view="sampling">' +
+    '<div class="energy-workspace-header">' +
+      '<div class="energy-workspace-title">' + escapeHtml(String(data.title || "")) + '</div>' +
+      viewToggleHtml +
+    '</div>' +
+    '<div class="sampling-subview-tabs">' + tabButtons + '</div>' +
+    subviewContent +
+    '<div class="energy-inspector-panel">' +
+      energyGraphInspectorMarkup(data) +
+    '</div>' +
+  '</div>';
 }
 
 function energyGraphSelectedNode(data) {
@@ -9298,9 +9876,14 @@ function energyGraphRenderCurrent() {
     optimizationGraphRenderCurrent();
     return;
   }
+  if (energyGraphState.data.view_type === "sampling") {
+    samplingGraphRenderCurrent();
+    return;
+  }
   energyGraphUpdateSelectionOnData();
   var root = screen.querySelector("[data-energy-workspace]");
   if (root && root.getAttribute("data-energy-view") === "optimization") root = null;
+  if (root && root.getAttribute("data-energy-view") === "sampling") root = null;
   if (!root) {
     // Mount once.  Replacing the complete workspace would also detach the
     // 3Dmol container and reset the user's chart view on every data update.
@@ -9319,6 +9902,113 @@ function energyGraphRenderCurrent() {
   var countEl = screen.querySelector("[data-energy-selection-count]");
   if (countEl) countEl.textContent = "已选候选：" + s2scanState.candidates.length;
   energyGraphUpdateSelectionToolbar();
+}
+
+/* ── Sampling Graph Render ── */
+function samplingGraphRenderCurrent() {
+  var screen = getEnergyViewerContainer();
+  if (!screen || !energyGraphState.data || energyGraphState.data.view_type !== "sampling") return;
+  var root = screen.querySelector('[data-energy-view="sampling"]');
+  if (!root) {
+    screen.style.display = "block";
+    screen.innerHTML = samplingWorkspaceMarkup(energyGraphState.data);
+    root = screen.querySelector('[data-energy-view="sampling"]');
+    if (root) samplingGraphBind(root);
+    return;
+  }
+  var activeSubview = samplingState.activeSubview || "energy";
+  var subviewContent = root.querySelector('.sampling-subview-content');
+  if (subviewContent) {
+    var data = energyGraphState.data;
+    var series = Array.isArray(data.series) ? data.series : [];
+    var currentSeries = series.find(function(s) { return s.id === samplingState.yAxis; }) || series[0];
+    if (currentSeries) {
+      data = Object.assign({}, data, { series: [currentSeries] });
+    }
+    if (activeSubview === "energy") {
+      subviewContent.innerHTML = '<div class="sampling-axis-controls">' +
+        samplingAxisSelectHtml(data, "x") + samplingAxisSelectHtml(data, "y") +
+      '</div><div class="energy-chart-scroll" data-energy-chart-scroll>' + samplingEnergyTrajectorySvg(data) + '</div>';
+    } else if (activeSubview === "space") {
+      subviewContent.innerHTML = '<div class="energy-chart-scroll" data-energy-chart-scroll>' + samplingSpaceScatterSvg(data) + '</div>';
+    } else {
+      subviewContent.innerHTML = samplingCoverageMarkup(data);
+    }
+    subviewContent.setAttribute("data-sampling-subview", activeSubview);
+  }
+  var inspectorBody = root.querySelector(".energy-inspector-body");
+  if (inspectorBody) inspectorBody.outerHTML = energyGraphInspectorMarkup(energyGraphState.data);
+  samplingGraphBind(root);
+}
+
+function samplingAxisSelectHtml(data, axis) {
+  var metadata = data.metadata || {};
+  var axisOptions = metadata.axis_options || {};
+  if (axis === "x") {
+    var xOptions = Array.isArray(axisOptions.x) ? axisOptions.x : ["time_ps", "step", "frame"];
+    var html = '<select class="sampling-axis-select" data-sampling-x-axis>';
+    xOptions.forEach(function(opt) {
+      html += '<option value="' + escapeHtml(opt) + '"' + (opt === samplingState.xAxis ? ' selected' : '') + '>' + escapeHtml(t("energy.sampling.axis." + opt)) + '</option>';
+    });
+    html += '</select>';
+    return html;
+  } else {
+    var yOptions = Array.isArray(axisOptions.y) ? axisOptions.y : ["potential", "relative"];
+    var html = '<select class="sampling-axis-select" data-sampling-y-axis>';
+    yOptions.forEach(function(opt) {
+      var seriesId = opt === "potential" ? "energy_potential" : "relative_energy";
+      var seriesObj = (Array.isArray(data.series) ? data.series : []).find(function(s) { return s.id === seriesId; });
+      var label = seriesObj ? seriesObj.label : opt;
+      html += '<option value="' + escapeHtml(seriesId) + '"' + (seriesId === samplingState.yAxis ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
+    });
+    html += '</select>';
+    return html;
+  }
+}
+
+/* ── Sampling Graph Bind ── */
+function samplingGraphBind(root) {
+  if (!root) return;
+  var data = energyGraphState.data;
+  root.querySelectorAll('.sampling-subview-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      samplingState.activeSubview = tab.getAttribute('data-sampling-view');
+      root.querySelectorAll('.sampling-subview-tab').forEach(function(t) { t.classList.remove('active'); });
+      tab.classList.add('active');
+      samplingGraphRenderCurrent();
+    });
+  });
+  root.querySelectorAll('[data-sampling-x-axis]').forEach(function(select) {
+    select.addEventListener('change', function() {
+      samplingState.xAxis = select.value;
+      samplingGraphRenderCurrent();
+    });
+  });
+  root.querySelectorAll('[data-sampling-y-axis]').forEach(function(select) {
+    select.addEventListener('change', function() {
+      samplingState.yAxis = select.value;
+      samplingGraphRenderCurrent();
+    });
+  });
+  root.querySelectorAll('[data-sampling-switch-view]').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var view = btn.getAttribute('data-sampling-switch-view');
+      if (view && view !== energyGraphState.data.view_type) {
+        renderEnergyGraphWorkspace(lastSelectedJob, { view: view });
+      }
+    });
+  });
+  root.querySelectorAll('[data-energy-frame]').forEach(function(el) {
+    el.addEventListener('click', function(event) {
+      event.stopPropagation();
+      var frame = el.getAttribute('data-energy-frame');
+      if (frame != null) {
+        energyGraphSelectFrame(Number(frame));
+      }
+    });
+  });
+  var current = energyGraphCurrentNode(data);
+  if (current && current.frame_index != null) energyGraphLoadStructure(current.frame_index);
 }
 
 function energyGraphRenderEmpty(message) {
@@ -9402,6 +10092,7 @@ async function renderEnergyGraphWorkspace(job, options) {
     var graphUrl = "/jobs/" + encodeURIComponent(jobId) + "/energy-graph";
     var lockedItemId = energyGraphState.itemId || optimizationJobItemId(job);
     if (lockedItemId) graphUrl += "?item_id=" + encodeURIComponent(lockedItemId);
+    if (options.view) graphUrl += (lockedItemId ? "&" : "?") + "view=" + encodeURIComponent(options.view);
     var data = await api(graphUrl, ac ? { signal: ac.signal } : {});
     if (token !== energyGraphState.requestToken || activeViewerTab !== "energy") return false;
     if (data && String(data.view_type || "") === "unsupported") {
