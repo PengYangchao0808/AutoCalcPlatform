@@ -159,6 +159,11 @@ from acp.api.v1_schemas import (
     V1JobSpecModel,
     V1SoftwareCandidate,
     V1SoftwareDiscoveryResponse,
+    V1FrameCandidateInfo,
+    V1FrameCandidateListResponse,
+    V1FrameCandidateRequest,
+    V1FrameCandidateResponse,
+    V1SamplingFrameResponse,
     V1SoftwareEntry,
     ValidateMethodRequest,
     ValidateMethodResponse,
@@ -1489,6 +1494,7 @@ def get_energy_graph(
     job_id: str,
     request: Request,
     view_type: str = Query(default="auto"),
+    view: str | None = Query(default=None),
     item_id: str | None = Query(default=None),
 ) -> EnergyGraphResponse:
     """Return the normalized energy-workspace projection for a job.
@@ -1570,12 +1576,26 @@ def get_energy_graph(
         s2_candidates=s2_candidates,
         s2_review_state=s2_review_state,
         item_id=item_id,
+        view=view,
     )
-    if view_type not in {"", "auto", str(graph.get("view_type") or "")}:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Energy graph view is not available: {view_type}",
-        )
+    # view_type or explicit view param must match the returned projection;
+    # unknown views safely default to the default projection (200, never 500)
+    effective_view = view if view else view_type
+    if effective_view not in {"", "auto", str(graph.get("view_type") or "")}:
+        # Unknown view: fall back to default projection (re-build without view)
+        if view:
+            graph = build_energy_graph_from_job(
+                job_id,
+                workflow=workflow,
+                method=method,
+                work_dir=work_dir,
+                s2_payload=s2_payload,
+                mechanism_report=mechanism_report,
+                s2_candidates=s2_candidates,
+                s2_review_state=s2_review_state,
+                item_id=item_id,
+                view=None,
+            )
     return EnergyGraphResponse.model_validate(graph)
 
 
@@ -1950,6 +1970,257 @@ def save_pes_review_endpoint(
             )
             for row in payload.get("selected") or []
         ],
+    )
+
+
+
+# ---------------------------------------------------------------------------
+# Frame-candidate CRUD: save/list/remove energy-viewer frames as tagged
+# structures.  Follows the PES review ordering and revision-guard pattern.
+# ---------------------------------------------------------------------------
+
+
+def _frame_candidate_work_dir(
+    request: Request, job_id: str, *, require_completed: bool
+) -> tuple[Path, str]:
+    """Resolve work_dir + workflow for frame-candidate operations.
+
+    Returns:
+        (work_dir, workflow)
+
+    Raises:
+        404: job/work_dir missing.
+        409: job not COMPLETED (POST/DELETE only).
+    """
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if not record.work_dir:
+        raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
+    work_dir = Path(record.work_dir)
+    if require_completed and record.status != JobStatus.COMPLETED:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job {job_id} is not completed yet (status={record.status.value})",
+        )
+    return work_dir, str(record.spec.workflow or "")
+
+
+@router.post(
+    "/jobs/{job_id}/frame-candidate",
+    response_model=V1FrameCandidateResponse,
+    status_code=200,
+)
+def save_frame_candidate_endpoint(
+    job_id: str,
+    req: V1FrameCandidateRequest,
+    request: Request,
+) -> V1FrameCandidateResponse:
+    """Save an energy-viewer frame as a tagged candidate structure."""
+    work_dir, workflow = _frame_candidate_work_dir(request, job_id, require_completed=True)
+
+    from acp.results.frame_candidate_geometry import FrameCandidateError
+    from acp.results.frame_candidate_store import RevisionConflictError
+    from acp.results.frame_candidates import save_frame_candidate
+
+    try:
+        entry = save_frame_candidate(
+            work_dir,
+            job_id=job_id,
+            workflow=workflow,
+            view_type=req.view_type,
+            frame_index=req.frame_index,
+            role=req.role,
+            name=req.name,
+            expected_revision=req.expected_revision,
+        )
+    except RevisionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except FrameCandidateError as exc:
+        message = str(exc)
+        # PESsearch jobs get guidance to /pes/review
+        if "PESsearch" in message or "/pes/review" in message:
+            raise HTTPException(status_code=400, detail=message) from exc
+        # Invalid view type or role
+        if "unknown view_type" in message or "invalid candidate role" in message:
+            raise HTTPException(status_code=400, detail=message) from exc
+        # Frame not found / geometry missing
+        raise HTTPException(status_code=404, detail=message) from exc
+
+    # Re-read the full list for the response
+    from acp.results.frame_candidates import list_frame_candidates
+
+    payload = list_frame_candidates(work_dir)
+    candidates = [
+        V1FrameCandidateInfo(
+            candidate_id=str(c.get("candidate_id", "")),
+            view_type=str(c.get("view_type", "")),
+            frame_index=int(c.get("frame_index", 0)),
+            role=str(c.get("role", "")),
+            name=str(c.get("name", "")),
+            structure_path=str(c.get("structure_path", "")),
+            saved_at=str(c.get("saved_at", "")),
+        )
+        for c in payload.get("candidates", [])
+    ]
+    saved = next((c for c in candidates if c.candidate_id == entry.get("candidate_id")), None)
+    return V1FrameCandidateResponse(
+        job_id=job_id,
+        revision=int(payload.get("revision", 0)),
+        candidate=saved,
+        candidates=candidates,
+    )
+
+
+@router.get(
+    "/jobs/{job_id}/frame-candidates",
+    response_model=V1FrameCandidateListResponse,
+)
+def list_frame_candidates_endpoint(
+    job_id: str,
+    request: Request,
+) -> V1FrameCandidateListResponse:
+    """List all saved frame candidates for a job."""
+    work_dir, _workflow = _frame_candidate_work_dir(request, job_id, require_completed=False)
+
+    from acp.results.frame_candidates import list_frame_candidates
+
+    payload = list_frame_candidates(work_dir)
+    candidates = [
+        V1FrameCandidateInfo(
+            candidate_id=str(c.get("candidate_id", "")),
+            view_type=str(c.get("view_type", "")),
+            frame_index=int(c.get("frame_index", 0)),
+            role=str(c.get("role", "")),
+            name=str(c.get("name", "")),
+            structure_path=str(c.get("structure_path", "")),
+            saved_at=str(c.get("saved_at", "")),
+        )
+        for c in payload.get("candidates", [])
+    ]
+    return V1FrameCandidateListResponse(
+        job_id=job_id,
+        revision=int(payload.get("revision", 0)),
+        candidates=candidates,
+    )
+
+
+@router.delete(
+    "/jobs/{job_id}/frame-candidate/{candidate_id}",
+    response_model=V1FrameCandidateListResponse,
+)
+def delete_frame_candidate_endpoint(
+    job_id: str,
+    candidate_id: str,
+    request: Request,
+    expected_revision: int | None = Query(default=None),
+) -> V1FrameCandidateListResponse:
+    """Remove a frame candidate (authority + manifest; XYZ kept on disk)."""
+    work_dir, _workflow = _frame_candidate_work_dir(request, job_id, require_completed=False)
+
+    from acp.results.frame_candidate_geometry import FrameCandidateError
+    from acp.results.frame_candidate_store import RevisionConflictError
+    from acp.results.frame_candidates import remove_frame_candidate
+
+    try:
+        payload = remove_frame_candidate(
+            work_dir,
+            candidate_id,
+            expected_revision=expected_revision,
+        )
+    except RevisionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except FrameCandidateError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    candidates = [
+        V1FrameCandidateInfo(
+            candidate_id=str(c.get("candidate_id", "")),
+            view_type=str(c.get("view_type", "")),
+            frame_index=int(c.get("frame_index", 0)),
+            role=str(c.get("role", "")),
+            name=str(c.get("name", "")),
+            structure_path=str(c.get("structure_path", "")),
+            saved_at=str(c.get("saved_at", "")),
+        )
+        for c in payload.get("candidates", [])
+    ]
+    return V1FrameCandidateListResponse(
+        job_id=job_id,
+        revision=int(payload.get("revision", 0)),
+        candidates=candidates,
+    )
+
+
+@router.get(
+    "/jobs/{job_id}/sampling/frame/{frame_index}",
+    response_model=V1SamplingFrameResponse,
+)
+def get_sampling_frame(
+    job_id: str,
+    frame_index: int,
+    request: Request,
+) -> V1SamplingFrameResponse:
+    """Return the XYZ geometry and metadata for one MD sampling frame."""
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    work_dir = Path(record.work_dir) if record.work_dir else None
+    if work_dir is None or not work_dir.is_dir():
+        raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
+
+    from acp.confsearch.sampling_models import load_sampling_history, read_traj_frame_xyz
+
+    history = load_sampling_history(work_dir)
+    if history is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No sampling history for job {job_id}",
+        )
+
+    # Find the frame by its trajectory index (not positional)
+    frame = None
+    for f in history.frames:
+        if f.index == frame_index:
+            frame = f
+            break
+    if frame is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Sampling frame {frame_index} not found (job has {len(history.frames)} frames)",
+        )
+
+    # Read XYZ from the source trajectory
+    traj_path = Path(history.source_trajectory)
+    xyz = ""
+    if traj_path.is_file():
+        xyz_text = read_traj_frame_xyz(traj_path, frame_index)
+        if xyz_text is not None:
+            xyz = xyz_text
+
+    # Compute relative energy
+    energies = [f.energy_kcal_mol for f in history.frames if f.energy_kcal_mol is not None]
+    min_energy = min(energies) if energies else None
+    relative = None
+    if frame.energy_kcal_mol is not None and min_energy is not None:
+        relative = frame.energy_kcal_mol - min_energy
+
+    # Basin id from history
+    basin_id = None
+    if frame_index < len(history.basin_ids):
+        basin_id = history.basin_ids[frame_index]
+
+    return V1SamplingFrameResponse(
+        job_id=job_id,
+        frame_index=frame_index,
+        time_ps=frame.time_ps,
+        step=frame.step,
+        energy_kcal_mol=frame.energy_kcal_mol,
+        relative_energy_kcal_mol=relative,
+        basin_id=basin_id,
+        xyz=xyz,
     )
 
 

@@ -1174,6 +1174,58 @@ class PesReviewRestoreResponse(BaseModel):
     candidates: list[PesReviewCandidate] = Field(default_factory=list)
 
 
+class V1FrameCandidateRequest(BaseModel):
+    """Body for POST /jobs/{job_id}/frame-candidate."""
+
+    view_type: str  # scan | optimization | sampling | conformer
+    frame_index: int
+    role: str  # TS | INT | NONE
+    name: str | None = None
+    expected_revision: int | None = None
+
+
+class V1FrameCandidateInfo(BaseModel):
+    """One saved frame-candidate entry."""
+
+    candidate_id: str
+    view_type: str
+    frame_index: int
+    role: str
+    name: str = ""
+    structure_path: str = ""
+    saved_at: str = ""
+
+
+class V1FrameCandidateResponse(BaseModel):
+    """Response for POST /jobs/{job_id}/frame-candidate."""
+
+    job_id: str
+    revision: int
+    candidate: V1FrameCandidateInfo | None = None
+    candidates: list[V1FrameCandidateInfo] = Field(default_factory=list)
+
+
+class V1FrameCandidateListResponse(BaseModel):
+    """Response for GET /jobs/{job_id}/frame-candidates."""
+
+    job_id: str
+    revision: int
+    candidates: list[V1FrameCandidateInfo] = Field(default_factory=list)
+
+
+class V1SamplingFrameResponse(BaseModel):
+    """Response for GET /jobs/{job_id}/sampling/frame/{frame_index}."""
+
+    job_id: str
+    frame_index: int
+    time_ps: float | None = None
+    step: int | None = None
+    energy_kcal_mol: float | None = None
+    relative_energy_kcal_mol: float | None = None
+    basin_id: int | None = None
+    xyz: str = ""
+
+
 class EnergyGraphSeriesModel(BaseModel):
     id: str
     label: str
@@ -1292,6 +1344,11 @@ __all__ = [
     "EnergyGraphNodeModel",
     "EnergyGraphResponse",
     "EnergyGraphSeriesModel",
+    "V1FrameCandidateInfo",
+    "V1FrameCandidateListResponse",
+    "V1FrameCandidateRequest",
+    "V1FrameCandidateResponse",
+    "V1SamplingFrameResponse",
     "StageTaskListResponse",
     "StageTaskModel",
     "StructureAssetCreateRequest",
