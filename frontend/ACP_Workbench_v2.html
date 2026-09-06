@@ -3059,7 +3059,7 @@ option, optgroup {
           <button class="canvas-tab active" data-tab="3d" data-i18n="tab.3d">三维结构</button>
           <button class="canvas-tab" data-tab="conformers" data-i18n="tab.conformers">构象集合</button>
           <button class="canvas-tab" data-tab="path" data-i18n="tab.path">反应路径</button>
-          <button class="canvas-tab" data-tab="energy" data-i18n="tab.energy">能量图</button>
+          <button class="canvas-tab" data-tab="energy" data-i18n="tab.energy">能量与轨迹</button>
           <button class="canvas-tab" data-tab="wavefunction" data-i18n="tab.wavefunction">波函数</button>
         </nav>
 
@@ -4626,7 +4626,7 @@ const I18N = {
     "tab.3d": "三维结构",
     "tab.conformers": "构象集合",
     "tab.path": "反应路径",
-    "tab.energy": "能量图",
+    "tab.energy": "能量与轨迹",
     "tab.wavefunction": "波函数",
     "job.review": "审核",
     "review.title": "审核机制决策点",
@@ -5149,11 +5149,19 @@ const I18N = {
     "s2scan.load_assets": "加载资产列表",
     "energy.retry": "重试",
     "energy.reload": "重新加载",
-    "energy.loading": "正在加载能量图数据…",
+    "energy.loading": "正在加载能量与轨迹数据…",
     "energy.empty": "当前任务没有能量数据",
-    "energy.error": "能量图数据加载失败",
-    "energy.idle_prompt": "请选择任务后查看能量图。",
+    "energy.error": "能量与轨迹数据加载失败",
+    "energy.idle_prompt": "请选择任务后查看能量与轨迹。",
     "energy.unsupported": "该任务没有可绘制的能量曲线，但结果文件仍然可用。",
+    "energy.header.frames": "帧",
+    "energy.header.status.running": "运行中",
+    "energy.header.status.partial": "部分完成",
+    "energy.header.status.completed": "已完成",
+    "energy.header.status.converged": "已收敛",
+    "energy.header.status.failed": "失败",
+    "energy.header.status.unknown": "未知",
+    "energy.header.status.unavailable": "不可用",
     "overview.overall_progress": "总体进度",
     "overview.current_stage": "当前阶段",
     "overview.stage_progress": "阶段进度",
@@ -5377,7 +5385,7 @@ const I18N = {
     "tab.3d": "3D Structure",
     "tab.conformers": "Conformer Set",
     "tab.path": "Reaction Path",
-    "tab.energy": "Energy Plot",
+    "tab.energy": "Energy & Trajectory",
     "tab.wavefunction": "Wavefunction",
     "job.review": "Review",
     "review.title": "Review mechanism decision points",
@@ -5900,11 +5908,19 @@ const I18N = {
     "s2scan.load_assets": "Load Asset List",
     "energy.retry": "Retry",
     "energy.reload": "Reload data",
-    "energy.loading": "Loading energy graph data…",
+    "energy.loading": "Loading energy & trajectory data…",
     "energy.empty": "No energy data available for this job",
-    "energy.error": "Failed to load energy graph data",
-    "energy.idle_prompt": "Select a job to view the energy graph.",
+    "energy.error": "Failed to load energy & trajectory data",
+    "energy.idle_prompt": "Select a job to view Energy & Trajectory.",
     "energy.unsupported": "This job has no plottable energy curve, but its result files remain available.",
+    "energy.header.frames": "frames",
+    "energy.header.status.running": "Running",
+    "energy.header.status.partial": "Partial",
+    "energy.header.status.completed": "Completed",
+    "energy.header.status.converged": "Converged",
+    "energy.header.status.failed": "Failed",
+    "energy.header.status.unknown": "Unknown",
+    "energy.header.status.unavailable": "Unavailable",
     "overview.overall_progress": "Overall progress",
     "overview.current_stage": "Current stage",
     "overview.stage_progress": "Stage progress",
@@ -6326,6 +6342,30 @@ function getMechanismViewerContainer() {
 }
 
 function getEnergyViewerContainer() { return document.getElementById("viewer-energy"); }
+
+/* Unified header status helper — returns {color, text} for a projection data.status */
+function energyHeaderStatusInfo(data) {
+  var s = String((data && data.status) || "unknown").toLowerCase();
+  var color = (s === "running" || s === "partial") ? "var(--accent)"
+    : (s === "completed" || s === "converged" || s === "ready_for_review") ? "var(--green)"
+    : (s === "failed") ? "var(--red)"
+    : "var(--text-tertiary)";
+  var key = "energy.header.status." + s;
+  var text = t(key);
+  if (text === key) text = translateStatus(s);
+  return { color: color, text: text };
+}
+
+/* Unified header strip markup: <title> · N 帧 · ● status */
+function energyHeaderStripMarkup(data, titleFallback) {
+  var title = escapeHtml(String((data && data.title) || titleFallback || t("tab.energy")));
+  var frameCount = (data && Array.isArray(data.nodes)) ? data.nodes.length : ((data && data.metadata && data.metadata.frame_count) || 0);
+  var info = energyHeaderStatusInfo(data);
+  return '<div class="energy-chart-head">' +
+    '<div class="energy-chart-title">' + title + ' \u00b7 ' + frameCount + ' ' + t("energy.header.frames") + '</div>' +
+    '<div class="energy-chart-subtitle" style="color:' + info.color + ';">\u25cf ' + escapeHtml(info.text) + '</div>' +
+  '</div>';
+}
 
 function energyGraphRenderState(state, message) {
   var screen = getEnergyViewerContainer();
@@ -6971,7 +7011,7 @@ function energyGraphBuildSvg(data) {
     }
   });
   /* ── SVG root + clipPath (c) ── */
-  var svg = '<svg class="energy-chart-svg' + (energyGraphState.viewMode === "box" ? " mode-box" : "") + (energyGraphState.viewMode === "pan" ? " mode-pan" : "") + (energyGraphState.annotationMode === "hide" ? " labels-hidden" : "") + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + escapeHtml(String(data.title || "能量图")) + '" data-energy-chart>';
+  var svg = '<svg class="energy-chart-svg' + (energyGraphState.viewMode === "box" ? " mode-box" : "") + (energyGraphState.viewMode === "pan" ? " mode-pan" : "") + (energyGraphState.annotationMode === "hide" ? " labels-hidden" : "") + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + escapeHtml(String(data.title || "能量与轨迹")) + '" data-energy-chart>';
   svg += '<defs><clipPath id="energy-plot-clip"><rect x="' + pad.left + '" y="' + pad.top + '" width="' + Pw + '" height="' + Ph + '"/></clipPath></defs>';
   svg += '<g data-energy-plot clip-path="url(#energy-plot-clip)">';
   if (areaPath) svg += '<path class="energy-area" d="' + areaPath + '"></path>';
@@ -7540,7 +7580,7 @@ function optimizationWorkspaceMarkup(data) {
   return '<div class="optimization-workspace" data-energy-workspace data-energy-view="optimization">' +
     '<div class="optimization-workspace-head"><div><div class="optimization-workspace-kicker">任务观察 · Optimization Viewer</div><div class="optimization-workspace-title">' + escapeHtml(String(job.name || job.id || data.job_id || "几何结构优化")) + '</div></div><div class="optimization-workspace-meta"><span>几何优化</span><span>当前周期 ' + escapeHtml(String(currentCycle)) + '</span><span class="live">' + escapeHtml(statusText) + '</span></div></div>' +
     '<div class="optimization-workspace-toolbar"><div class="optimization-view-switch" role="tablist">' + viewButtons + '</div><label for="optimization-energy-series" data-optimization-energy-label' + energyPickerHidden + '>能量曲线</label><select id="optimization-energy-series" class="tool-select" data-optimization-energy' + energyPickerHidden + '>' + energyOptions + '</select><span class="optimization-toolbar-spacer"></span><button class="plot-tool' + (energyGraphState.optimizationTool === "box" ? ' active' : '') + '" data-optimization-action="box" type="button" title="框选放大" aria-label="框选放大">⬚</button><button class="plot-tool' + (energyGraphState.optimizationTool !== "box" ? ' active' : '') + '" data-optimization-action="pan" type="button" title="拖动平移" aria-label="拖动平移">✥</button><button class="plot-tool" data-optimization-action="reset" type="button" title="重置视图" aria-label="重置视图">⟲</button><button class="optimization-follow-btn' + (energyGraphState.liveFollow ? ' active' : '') + '" data-optimization-action="follow" type="button">' + (energyGraphState.liveFollow ? '跟随最新周期' : '回到最新周期') + '</button><button class="plot-tool" data-optimization-action="reload" type="button" title="刷新">↻ 刷新</button></div>' +
-    '<div class="optimization-grid"><div class="optimization-charts"><section class="optimization-chart-card"><div class="optimization-chart-card-head"><span class="optimization-chart-card-title" data-optimization-title>' + escapeHtml(cfg.title) + '</span><span class="optimization-chart-card-subtitle" data-optimization-subtitle>' + escapeHtml(cfg.subtitle) + '</span></div><div class="optimization-chart-scroll" data-optimization-scroll="main">' + optimizationGraphBuildSvg(data, view) + '</div><div class="optimization-chart-legend" data-optimization-legend>' + optimizationLegendMarkup(data, view) + '</div></section></div><aside class="energy-inspector-panel"><div class="energy-inspector-head"><div class="energy-inspector-title">结构查看器</div><div class="energy-inspector-subtitle">点选周期查看对应几何</div></div><div id="energy-structure-viewer" class="energy-structure-viewer' + (selectedNode && selectedNode.geometry_ref ? '' : ' empty') + '">' + (selectedNode && selectedNode.geometry_ref ? '' : '当前周期没有可加载的 XYZ 结构') + '</div>' + energyGraphInspectorMarkup(data) + '</aside></div>' +
+    '<div class="optimization-grid"><div class="optimization-charts"><section class="optimization-chart-card"><div class="optimization-chart-card-head"><span class="optimization-chart-card-title" data-optimization-title>' + escapeHtml(cfg.title) + ' \u00b7 ' + ((data.nodes || []).length) + ' ' + t("energy.header.frames") + '</span><span class="optimization-chart-card-subtitle" data-optimization-subtitle style="color:' + energyHeaderStatusInfo(data).color + ';">\u25cf ' + escapeHtml(energyHeaderStatusInfo(data).text) + '</span></div><div class="optimization-chart-scroll" data-optimization-scroll="main">' + optimizationGraphBuildSvg(data, view) + '</div><div class="optimization-chart-legend" data-optimization-legend>' + optimizationLegendMarkup(data, view) + '</div></section></div><aside class="energy-inspector-panel"><div class="energy-inspector-head"><div class="energy-inspector-title">结构查看器</div><div class="energy-inspector-subtitle">点选周期查看对应几何</div></div><div id="energy-structure-viewer" class="energy-structure-viewer' + (selectedNode && selectedNode.geometry_ref ? '' : ' empty') + '">' + (selectedNode && selectedNode.geometry_ref ? '' : '当前周期没有可加载的 XYZ 结构') + '</div>' + energyGraphInspectorMarkup(data) + '</aside></div>' +
     '<div class="optimization-workspace-footer"><span>数据源：<strong>' + escapeHtml(String(data.source || '--')) + '</strong> · 周期 ' + escapeHtml(String(nCycles)) + selectedItem + '</span><span>' + optimizationQualityBadge(data) + ' · revision <strong>' + escapeHtml(String(data.revision || '--')) + '</strong></span></div></div>';
 }
 
@@ -7838,7 +7878,7 @@ function energyGraphWorkspaceMarkup(data) {
   return '<div class="energy-workspace" data-energy-workspace>' +
     '<div class="energy-workspace-head">' +
       '<div style="min-width:0"><div class="energy-workspace-kicker">\u4efb\u52a1\u89c2\u5bdf \u00b7 Calculation Viewer</div><div class="energy-workspace-title">' + escapeHtml(String(job.name || job.id || data.job_id || "\u5f53\u524d\u4efb\u52a1")) + '</div></div>' +
-      '<div class="energy-workspace-meta"><span>' + escapeHtml(String(data.title || "\u80fd\u91cf\u56fe")) + '</span><span>' + escapeHtml(String((data.metadata || {}).frame_count || (data.nodes || []).length)) + ' frames</span><span class="energy-live">' + escapeHtml(statusText) + '</span>' + standaloneBadge + '</div>' +
+      '<div class="energy-workspace-meta"><span>' + escapeHtml(String(data.title || "能量与轨迹")) + '</span><span>' + escapeHtml(String((data.metadata || {}).frame_count || (data.nodes || []).length)) + ' frames</span><span class="energy-live">' + escapeHtml(statusText) + '</span>' + standaloneBadge + '</div>' +
     '</div>' +
     '<div class="energy-workspace-toolbar">' +
       '<span class="energy-tool-label">\u5f53\u524d\u66f2\u7ebf</span>' +
@@ -7867,7 +7907,7 @@ function energyGraphWorkspaceMarkup(data) {
     '</div>' +
     '<div class="energy-workspace-grid">' +
       '<section class="energy-chart-panel" data-energy-chart-panel>' +
-        '<div class="energy-chart-head"><div class="energy-chart-title">' + escapeHtml(String(data.title || "能量图")) + '</div><div class="energy-chart-subtitle">' + escapeHtml(String((series.find(function(item) { return item.id === energyGraphState.seriesId; }) || series[0] || {}).unit || "")) + '</div></div>' +
+        energyHeaderStripMarkup(data) +
         '<div class="energy-chart-scroll" data-energy-chart-scroll>' + energyGraphBuildSvg(data) + '</div>' +
         energyGraphLegendMarkup(data) +
       '</section>' +
