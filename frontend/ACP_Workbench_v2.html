@@ -8133,7 +8133,8 @@ function energyGraphInspectorMarkup(data) {
     : workingEntry
       ? (workingEntry.saved && !s2scanState.dirty ? "已保存" : "已修改，尚未保存")
       : "未标记";
-  const canEditRole = data.view_type === "scan" && frameIndexNum != null && !selectionLocked;
+  const hasReview = !!(data.metadata && data.metadata.review);
+  const canEditRole = data.view_type === "scan" && frameIndexNum != null && !selectionLocked && hasReview;
   const isScanFrame = data.view_type === "scan" && frameIndexNum != null;
   const nodes = Array.isArray(data.nodes) ? data.nodes : [];
   const nodeIndex = nodes.findIndex(function(item) { return String(item.id) === String(node.id); });
@@ -8860,6 +8861,7 @@ function energyGraphWorkspaceMarkup(data) {
   const projectId = String(s2scanState.projectId || "");
   const candidateCount = s2scanState.candidates.length;
   const reviewMeta = (data.metadata || {}).review || {};
+  const hasReview = !!reviewMeta.status;
   const options = series.map(function(item) {
     return '<option value="' + escapeHtml(String(item.id)) + '"' + (String(item.id) === String(energyGraphState.seriesId) ? " selected" : "") + '>' + escapeHtml(String(item.label || item.id)) + ' · ' + escapeHtml(String(item.unit || "")) + '</option>';
   }).join("");
@@ -8870,7 +8872,7 @@ function energyGraphWorkspaceMarkup(data) {
   const selectionButtonClass = s2scanState.selectionLocked ? "locked" : "editable";
   const vm = energyGraphState.viewMode || "fit";
   const labelsActive = energyGraphState.annotationMode !== "hide";
-  const standaloneBadge = !projectId ? '<span class="energy-standalone-badge">独立 PESsearch 任务</span>' : "";
+  const standaloneBadge = hasReview && !projectId ? '<span class="energy-standalone-badge">独立 PESsearch 任务</span>' : "";
   return '<div class="energy-workspace" data-energy-workspace>' +
     '<div class="energy-workspace-head">' +
       '<div style="min-width:0"><div class="energy-workspace-kicker">\u4efb\u52a1\u89c2\u5bdf \u00b7 Calculation Viewer</div><div class="energy-workspace-title">' + escapeHtml(String(job.name || job.id || data.job_id || "\u5f53\u524d\u4efb\u52a1")) + '</div></div>' +
@@ -8895,11 +8897,13 @@ function energyGraphWorkspaceMarkup(data) {
         '<button class="plot-tool" data-energy-action="reload" type="button" title="\u91cd\u65b0\u52a0\u8f7d" aria-label="\u91cd\u65b0\u52a0\u8f7d" data-tip="\u91cd\u65b0\u52a0\u8f7d" data-tip-keys="Ctrl+R"><svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10a7 7 0 1 1 2 5M3 10v4M3 10h4"/></svg></button>' +
       '</div>' +
       '<span class="energy-toolbar-spacer"></span>' +
-      '<span class="energy-selection-count" data-energy-selection-count>\u5df2\u9009\u5019\u9009\uff1a' + candidateCount + '</span>' +
-      dirtyBadge +
-      '<span class="energy-selection-count" data-energy-saved-state>' + escapeHtml(savedText) + '</span>' +
-      (!reviewMeta.saved ? '<span class="energy-selection-count" data-energy-unconfirmed-hint style="opacity:0.7;">未确认 · 确认选点后才会进入 BatchOptimize</span>' : '') +
-      '<button class="btn primary energy-selection-lock-btn ' + selectionButtonClass + '" data-energy-action="toggle-selection-lock" title="' + escapeHtml(energyGraphSelectionActionTitle()) + '" aria-pressed="' + (s2scanState.selectionLocked ? "true" : "false") + '">' + escapeHtml(energyGraphSelectionActionLabel()) + '</button>' +
+      (hasReview
+        ? '<span class="energy-selection-count" data-energy-selection-count>\u5df2\u9009\u5019\u9009\uff1a' + candidateCount + '</span>' +
+          dirtyBadge +
+          '<span class="energy-selection-count" data-energy-saved-state>' + escapeHtml(savedText) + '</span>' +
+          (!reviewMeta.saved ? '<span class="energy-selection-count" data-energy-unconfirmed-hint style="opacity:0.7;">未确认 · 确认选点后才会进入 BatchOptimize</span>' : '') +
+          '<button class="btn primary energy-selection-lock-btn ' + selectionButtonClass + '" data-energy-action="toggle-selection-lock" title="' + escapeHtml(energyGraphSelectionActionTitle()) + '" aria-pressed="' + (s2scanState.selectionLocked ? "true" : "false") + '">' + escapeHtml(energyGraphSelectionActionLabel()) + '</button>'
+        : '') +
     '</div>' +
     '<div class="energy-workspace-grid">' +
       '<section class="energy-chart-panel" data-energy-chart-panel>' +
