@@ -1234,6 +1234,17 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .optimization-workspace .energy-inspector-panel { min-height: 0; border: 1px solid var(--border-subtle); border-radius: 12px; overflow: hidden; background: rgba(10,16,24,.68); }
 .optimization-workspace-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 14px; color: var(--text-tertiary); font-size: 10px; }
 .optimization-workspace-footer strong { color: var(--text-secondary); font-weight: 400; }
+.energy-convergence-panel { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: 10px; background: rgba(10,16,24,.68); }
+.energy-conv-title { color: var(--text-primary); font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+.energy-conv-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 11px; }
+.energy-conv-label { color: var(--text-secondary); min-width: 80px; }
+.energy-conv-value { color: var(--text-primary); font-family: var(--font-mono, monospace); min-width: 100px; }
+.energy-conv-sep { color: var(--text-tertiary); font-size: 10px; }
+.energy-conv-threshold { color: var(--text-tertiary); font-family: var(--font-mono, monospace); min-width: 100px; }
+.energy-badge { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 10px; border: 1px solid transparent; }
+.energy-badge.ok { color: #b8f0c8; border-color: rgba(56,193,114,.3); background: rgba(56,193,114,.08); }
+.energy-badge.err { color: #ffc5c5; border-color: rgba(229,83,83,.35); background: rgba(229,83,83,.10); }
+.energy-badge.missing { color: #ffe1a1; border-color: rgba(242,184,75,.35); background: rgba(242,184,75,.10); }
 
 /* Transition zone: 1024–1279px — tighten topbar tracks, keep single-row */
 @media (min-width: 1024px) and (max-width: 1279px) {
@@ -5174,6 +5185,14 @@ const I18N = {
     "energy.inspector.role_select": "角色选择",
     "energy.inspector.role_none": "无",
     "energy.inspector.misc": "其他",
+    "energy.conv.title": "收敛判据",
+    "energy.conv.met": "达标",
+    "energy.conv.unmet": "未达标",
+    "energy.conv.missing": "数据缺失",
+    "energy.conv.rms_gradient": "RMS 梯度",
+    "energy.conv.max_gradient": "MAX 梯度",
+    "energy.conv.rms_displacement": "RMS 位移",
+    "energy.conv.max_displacement": "MAX 位移",
     "overview.overall_progress": "总体进度",
     "overview.current_stage": "当前阶段",
     "overview.stage_progress": "阶段进度",
@@ -5941,6 +5960,14 @@ const I18N = {
     "energy.inspector.role_select": "Role Selection",
     "energy.inspector.role_none": "None",
     "energy.inspector.misc": "Misc",
+    "energy.conv.title": "Convergence Criteria",
+    "energy.conv.met": "Met",
+    "energy.conv.unmet": "Not met",
+    "energy.conv.missing": "No data",
+    "energy.conv.rms_gradient": "RMS Gradient",
+    "energy.conv.max_gradient": "MAX Gradient",
+    "energy.conv.rms_displacement": "RMS Displacement",
+    "energy.conv.max_displacement": "MAX Displacement",
     "overview.overall_progress": "Overall progress",
     "overview.current_stage": "Current stage",
     "overview.stage_progress": "Stage progress",
@@ -7882,6 +7909,64 @@ function optimizationLegendMarkup(data, view) {
   }).join("");
 }
 
+function energyOptCriteriaRows(data) {
+  var metadata = data.metadata || {};
+  var thresholds = metadata.thresholds || {};
+  var lastCycle = metadata.last_cycle || {};
+  var criteria = [
+    { key: "rms_gradient", i18n: "energy.conv.rms_gradient", unit: "Eh/Bohr" },
+    { key: "max_gradient", i18n: "energy.conv.max_gradient", unit: "Eh/Bohr" },
+    { key: "rms_displacement", i18n: "energy.conv.rms_displacement", unit: "bohr" },
+    { key: "max_displacement", i18n: "energy.conv.max_displacement", unit: "bohr" }
+  ];
+  return criteria.map(function(c) {
+    var value = lastCycle[c.key];
+    var threshold = thresholds[c.key];
+    var valueStr = value != null ? energyGraphFormatNumber(value, 6) : null;
+    var thresholdStr = threshold != null ? energyGraphFormatNumber(threshold, 6) : null;
+    var status, badgeClass;
+    if (value == null || threshold == null) {
+      status = t("energy.conv.missing");
+      badgeClass = "missing";
+    } else if (value <= threshold) {
+      status = t("energy.conv.met");
+      badgeClass = "ok";
+    } else {
+      status = t("energy.conv.unmet");
+      badgeClass = "err";
+    }
+    return {
+      label: t(c.i18n),
+      value: valueStr,
+      threshold: thresholdStr,
+      unit: c.unit,
+      status: status,
+      badgeClass: badgeClass
+    };
+  });
+}
+
+function optimizationConvergencePanelMarkup(data) {
+  var rows = energyOptCriteriaRows(data);
+  var hasAnyData = rows.some(function(r) { return r.value != null || r.threshold != null; });
+  if (!hasAnyData) return '';
+  var rowsHtml = rows.map(function(r) {
+    var valueDisplay = r.value != null ? escapeHtml(r.value) + ' ' + escapeHtml(r.unit) : '--';
+    var thresholdDisplay = r.threshold != null ? escapeHtml(r.threshold) + ' ' + escapeHtml(r.unit) : '--';
+    return '<div class="energy-conv-row">' +
+      '<span class="energy-conv-label">' + escapeHtml(r.label) + '</span>' +
+      '<span class="energy-conv-value">' + valueDisplay + '</span>' +
+      '<span class="energy-conv-sep">vs</span>' +
+      '<span class="energy-conv-threshold">' + thresholdDisplay + '</span>' +
+      '<span class="energy-badge ' + escapeHtml(r.badgeClass) + '">' + escapeHtml(r.status) + '</span>' +
+    '</div>';
+  }).join("");
+  return '<div class="energy-convergence-panel" data-optimization-convergence>' +
+    '<div class="energy-conv-title">' + escapeHtml(t("energy.conv.title")) + '</div>' +
+    rowsHtml +
+  '</div>';
+}
+
 function optimizationWorkspaceMarkup(data) {
   var job = lastSelectedJob || {};
   var series = Array.isArray(data.series) ? data.series : [];
@@ -7903,7 +7988,7 @@ function optimizationWorkspaceMarkup(data) {
   return '<div class="optimization-workspace" data-energy-workspace data-energy-view="optimization">' +
     '<div class="optimization-workspace-head"><div><div class="optimization-workspace-kicker">任务观察 · Optimization Viewer</div><div class="optimization-workspace-title">' + escapeHtml(String(job.name || job.id || data.job_id || "几何结构优化")) + '</div></div><div class="optimization-workspace-meta"><span>几何优化</span><span>当前周期 ' + escapeHtml(String(currentCycle)) + '</span><span class="live">' + escapeHtml(statusText) + '</span></div></div>' +
     '<div class="optimization-workspace-toolbar"><div class="optimization-view-switch" role="tablist">' + viewButtons + '</div><label for="optimization-energy-series" data-optimization-energy-label' + energyPickerHidden + '>能量曲线</label><select id="optimization-energy-series" class="tool-select" data-optimization-energy' + energyPickerHidden + '>' + energyOptions + '</select><span class="optimization-toolbar-spacer"></span><button class="plot-tool' + (energyGraphState.optimizationTool === "box" ? ' active' : '') + '" data-optimization-action="box" type="button" title="框选放大" aria-label="框选放大">⬚</button><button class="plot-tool' + (energyGraphState.optimizationTool !== "box" ? ' active' : '') + '" data-optimization-action="pan" type="button" title="拖动平移" aria-label="拖动平移">✥</button><button class="plot-tool" data-optimization-action="reset" type="button" title="重置视图" aria-label="重置视图">⟲</button><button class="optimization-follow-btn' + (energyGraphState.liveFollow ? ' active' : '') + '" data-optimization-action="follow" type="button">' + (energyGraphState.liveFollow ? '跟随最新周期' : '回到最新周期') + '</button><button class="plot-tool" data-optimization-action="reload" type="button" title="刷新">↻ 刷新</button></div>' +
-    '<div class="optimization-grid"><div class="optimization-charts"><section class="optimization-chart-card"><div class="optimization-chart-card-head"><span class="optimization-chart-card-title" data-optimization-title>' + escapeHtml(cfg.title) + ' \u00b7 ' + ((data.nodes || []).length) + ' ' + t("energy.header.frames") + '</span><span class="optimization-chart-card-subtitle" data-optimization-subtitle style="color:' + energyHeaderStatusInfo(data).color + ';">\u25cf ' + escapeHtml(energyHeaderStatusInfo(data).text) + '</span></div><div class="optimization-chart-scroll" data-optimization-scroll="main">' + optimizationGraphBuildSvg(data, view) + '</div><div class="optimization-chart-legend" data-optimization-legend>' + optimizationLegendMarkup(data, view) + '</div></section></div><aside class="energy-inspector-panel"><div class="energy-inspector-head"><div class="energy-inspector-title">结构查看器</div><div class="energy-inspector-subtitle">点选周期查看对应几何</div></div><div id="energy-structure-viewer" class="energy-structure-viewer' + (selectedNode && selectedNode.geometry_ref ? '' : ' empty') + '">' + (selectedNode && selectedNode.geometry_ref ? '' : '当前周期没有可加载的 XYZ 结构') + '</div>' + energyGraphInspectorMarkup(data) + '</aside></div>' +
+    '<div class="optimization-grid"><div class="optimization-charts"><section class="optimization-chart-card"><div class="optimization-chart-card-head"><span class="optimization-chart-card-title" data-optimization-title>' + escapeHtml(cfg.title) + ' \u00b7 ' + ((data.nodes || []).length) + ' ' + t("energy.header.frames") + '</span><span class="optimization-chart-card-subtitle" data-optimization-subtitle style="color:' + energyHeaderStatusInfo(data).color + ';">\u25cf ' + escapeHtml(energyHeaderStatusInfo(data).text) + '</span></div><div class="optimization-chart-scroll" data-optimization-scroll="main">' + optimizationGraphBuildSvg(data, view) + '</div><div class="optimization-chart-legend" data-optimization-legend>' + optimizationLegendMarkup(data, view) + '</div></section>' + optimizationConvergencePanelMarkup(data) + '</div><aside class="energy-inspector-panel"><div class="energy-inspector-head"><div class="energy-inspector-title">结构查看器</div><div class="energy-inspector-subtitle">点选周期查看对应几何</div></div><div id="energy-structure-viewer" class="energy-structure-viewer' + (selectedNode && selectedNode.geometry_ref ? '' : ' empty') + '">' + (selectedNode && selectedNode.geometry_ref ? '' : '当前周期没有可加载的 XYZ 结构') + '</div>' + energyGraphInspectorMarkup(data) + '</aside></div>' +
     '<div class="optimization-workspace-footer"><span>数据源：<strong>' + escapeHtml(String(data.source || '--')) + '</strong> · 周期 ' + escapeHtml(String(nCycles)) + selectedItem + '</span><span>' + optimizationQualityBadge(data) + ' · revision <strong>' + escapeHtml(String(data.revision || '--')) + '</strong></span></div></div>';
 }
 
@@ -7949,6 +8034,16 @@ function optimizationGraphRenderCurrent() {
   if (legend) legend.innerHTML = optimizationLegendMarkup(data, view);
   var qualitySlot = root.querySelector("[data-optimization-quality]");
   if (qualitySlot) qualitySlot.outerHTML = optimizationQualityBadge(data);
+  var convergenceSlot = root.querySelector("[data-optimization-convergence]");
+  if (convergenceSlot) {
+    convergenceSlot.outerHTML = optimizationConvergencePanelMarkup(data);
+  } else {
+    var chartsDiv = root.querySelector(".optimization-charts");
+    if (chartsDiv) {
+      var chartCard = chartsDiv.querySelector(".optimization-chart-card");
+      if (chartCard) chartCard.insertAdjacentHTML("afterend", optimizationConvergencePanelMarkup(data));
+    }
+  }
   var body = root.querySelector(".energy-inspector-body");
   if (body) body.outerHTML = energyGraphInspectorMarkup(data);
   energyGraphBindInspectorButtons(root);
