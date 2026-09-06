@@ -4807,11 +4807,17 @@ const I18N = {
     "parse.success": "解析成功（{count} 个结构）",
     "parse.failed": "解析失败",
     "parse.detected": "识别为 {format}",
+  "parse.no_3d_embedded": "解析成功，但缺少 3D 坐标（3D 嵌入失败）——该结构无法提交需要坐标的计算，鼠标悬停查看原因。",
+  "parse.no_3d_waiting": "无 3D 坐标",
     "results.title": "任务结果",
     "results.project_current": "当前项目",
     "results.project_all": "全部项目",
     "results.search_placeholder": "搜索任务名称…",
     "results.empty": "暂无可复用的结构",
+  "results.scope_project": "范围：项目 {project}",
+  "results.scope_all": "范围：全部项目",
+  "results.empty_hint": "仅显示已完成且写入结构产物（result_manifest.json / result_summary.json）的任务；singlepoint/frequency 等无结构产出的任务不会出现在此列表。",
+  "results.project_current_top_all": "顶部筛选为全部，即全部项目",
     "results.loading": "加载中…",
     "results.error": "加载失败",
     "results.load": "载入",
@@ -5552,11 +5558,17 @@ const I18N = {
     "parse.success": "Parsed successfully ({count} structures)",
     "parse.failed": "Parse failed",
     "parse.detected": "Detected as {format}",
+  "parse.no_3d_embedded": "Parsed OK, but no 3D coordinates (3D embedding failed) — this structure cannot be submitted for coordinate-requiring jobs. Hover for the reason.",
+  "parse.no_3d_waiting": "No 3D coordinates",
     "results.title": "Job Results",
     "results.project_current": "Current Project",
     "results.project_all": "All Projects",
     "results.search_placeholder": "Search job name…",
     "results.empty": "No reusable structures yet",
+  "results.scope_project": "Scope: project {project}",
+  "results.scope_all": "Scope: all projects",
+  "results.empty_hint": "Only COMPLETED jobs that wrote structure products (result_manifest.json / result_summary.json) are listed; jobs without structure products (e.g. singlepoint/frequency) never appear here.",
+  "results.project_current_top_all": "top filter is All, i.e. all projects",
     "results.loading": "Loading…",
     "results.error": "Failed to load",
     "results.load": "Load",
@@ -9387,6 +9399,21 @@ function renderProjects() {
   });
   select.value = selectedProjectId;
   updateDeleteProjectButton();
+  updateResultsProjectLabel();
+}
+
+// Keep the results-toolbar "当前项目" option honest about what it resolves
+// to (P1): the top project filter, or all projects when the filter is 全部.
+function updateResultsProjectLabel() {
+  var opt = document.querySelector('#results-project option[value="current"]');
+  if (!opt) return;
+  if (selectedProjectId) {
+    var proj = projectsCache.find(function(p) { return String(p.project_id || "") === selectedProjectId; });
+    var name = proj ? (proj.name || selectedProjectId) : selectedProjectId;
+    opt.textContent = t("results.project_current") + "（" + name + "）";
+  } else {
+    opt.textContent = t("results.project_current") + "（" + t("results.project_current_top_all") + "）";
+  }
 }
 
 function updateDeleteProjectButton() {
@@ -14261,6 +14288,8 @@ function openModal() {
   document.getElementById("parse-errors").style.display = "none";
   document.getElementById("parse-status").textContent = "";
   document.getElementById("modal-structure-input").value = "";
+  lastParsedStructureInput = null;
+  lastParsedUploadName = null;
   setDetectedFormatChip(null);
   renderPreviewWaiting();
   document.getElementById("upload-file-input").value = "";
@@ -14356,10 +14385,23 @@ function setWizardInputMode(mode) {
   parseSeqToken++;
   if (parseDebounceTimer) { clearTimeout(parseDebounceTimer); parseDebounceTimer = null; }
   if (mode === "results") loadStructureSources(false);
+  // Parse-race fix: the token bump above cancels any parse still in flight,
+  // so returning to a tab whose input was never applied must re-parse or
+  // the preview stays stuck on "等待输入" forever.
+  if (mode === "structure") {
+    var txt = document.getElementById("modal-structure-input").value;
+    if (txt.trim() && txt !== lastParsedStructureInput) scheduleParseStructures();
+  } else if (mode === "upload" && wizardUploadFile && wizardUploadFile.name !== lastParsedUploadName) {
+    scheduleParseStructures();
+  }
 }
 
 var parseSeqToken = 0;
 var parseDebounceTimer = null;
+// Content/name of the last parse whose result was actually applied. Null
+// means the current input has no applied parse result yet.
+var lastParsedStructureInput = null;
+var lastParsedUploadName = null;
 
 function scheduleParseStructures() {
   if (parseDebounceTimer) clearTimeout(parseDebounceTimer);
@@ -14387,7 +14429,11 @@ function renderPreviewWaiting() {
     tbody.innerHTML = '<tr><td colspan="5" class="preview-waiting-cell">' + escapeHtml(t("parse.waiting")) + "</td></tr>";
   }
   var emptyEl = document.getElementById("preview-3d-empty");
-  if (emptyEl) emptyEl.style.display = "grid";
+  if (emptyEl) {
+    emptyEl.textContent = t("parse.no_3d_waiting");
+    emptyEl.title = "";
+    emptyEl.style.display = "grid";
+  }
   if (container) container.style.display = "grid";
   updatePreviewActionState();
   if (previewViewer) {
@@ -14444,6 +14490,7 @@ async function parseStructuresPreview() {
       }
       var uploadBody = await uploadResp.json();
       if (myToken !== parseSeqToken) return;
+      if (wizardUploadFile) lastParsedUploadName = wizardUploadFile.name;
       wizardStructures = uploadBody.structures || [];
       setDetectedFormatChip(uploadBody.detected_format);
       handleParseResult(uploadBody);
@@ -14457,6 +14504,7 @@ async function parseStructuresPreview() {
     });
     var body = await resp.json();
     if (myToken !== parseSeqToken) return;
+    if (body.ok) lastParsedStructureInput = content;
     wizardStructures = body.structures || [];
     setDetectedFormatChip(body.detected_format);
     handleParseResult(body);
@@ -14637,7 +14685,20 @@ function renderPreviewStructure3D(structure) {
   previewModel = null;
   var emptyEl = document.getElementById("preview-3d-empty");
   if (!structure || !structure.has_3d) {
-    if (emptyEl) emptyEl.style.display = "grid";
+    if (emptyEl) {
+      // Parsed OK but no 3D coordinates is a different situation from
+      // "nothing parsed" — say so explicitly (P2) instead of a bare
+      // "无 3D 坐标" that reads like a parse failure.
+      if (structure) {
+        emptyEl.textContent = t("parse.no_3d_embedded");
+        var firstWarn = (structure.warnings || [])[0];
+        if (firstWarn) emptyEl.title = firstWarn;
+      } else {
+        emptyEl.textContent = t("parse.no_3d_waiting");
+        emptyEl.title = "";
+      }
+      emptyEl.style.display = "grid";
+    }
     previewViewer.render();
     return;
   }
@@ -15019,10 +15080,14 @@ async function loadStructureSources(force) {
   var projEl = document.getElementById("results-project");
   if (projEl && projEl.value === "all") {
     url += "&all_projects=true";
+  } else if (selectedProjectId) {
+    // "当前项目" follows the top project filter — NOT the modal
+    // project select, which is a submission target and silently falls
+    // back to "uncategorized" when the top filter is "全部" (P1).
+    url += "&project_id=" + encodeURIComponent(selectedProjectId);
   } else {
-    var projSel = document.getElementById("modal-project-select");
-    var pid = projSel ? projSel.value : "";
-    if (pid) url += "&project_id=" + encodeURIComponent(pid);
+    // Top filter is "全部": no silent uncategorized narrowing.
+    url += "&all_projects=true";
   }
   try {
     var body = await api(url);
@@ -15067,7 +15132,15 @@ function renderResultsList() {
     return hay.toLowerCase().indexOf(q) >= 0;
   });
   if (!items.length) {
-    list.innerHTML = '<div class="results-list-note">' + escapeHtml(t("results.empty")) + "</div>";
+    // Empty state must explain WHY: effective project scope + the
+    // manifest-only source policy (P2: silent filtering confused users).
+    var projEl = document.getElementById("results-project");
+    var scopeAll = !projEl || projEl.value === "all" || !selectedProjectId;
+    var scopeText = scopeAll
+      ? t("results.scope_all")
+      : t("results.scope_project", { project: selectedProjectId });
+    list.innerHTML = '<div class="results-list-note">' + escapeHtml(t("results.empty")) +
+      '<br><span class="muted">' + escapeHtml(scopeText) + " · " + escapeHtml(t("results.empty_hint")) + "</span></div>";
     return;
   }
   list.innerHTML = items.map(function(src) {
@@ -15622,7 +15695,12 @@ async function stageBatchFromResults() {
   picker.style.display = "block";
   picker.innerHTML = '<div class="muted" style="font-size:11px;">' + escapeHtml(t("results.loading")) + '</div>';
   try {
-    var body = await api("/structure-sources/recent?limit=50&_t=" + Date.now());
+    // Follow the top project filter (P1): 全部 → all projects, never the
+    // silent uncategorized default.
+    var pickerUrl = "/structure-sources/recent?limit=50&_t=" + Date.now();
+    if (selectedProjectId) pickerUrl += "&project_id=" + encodeURIComponent(selectedProjectId);
+    else pickerUrl += "&all_projects=true";
+    var body = await api(pickerUrl);
     var sources = (body && body.sources) || [];
     if (!sources.length) {
       picker.innerHTML = '<div class="muted" style="font-size:11px;">' + escapeHtml(t("results.empty")) + '</div>';
@@ -19658,7 +19736,11 @@ async function s2scanLoadAssets() {
   listEl.style.display = "";
   listEl.innerHTML = '<div style="padding:8px;font-size:12px;color:var(--text-tertiary);">加载中…</div>';
   try {
-    var resp = await api("/structure-sources/recent?limit=50&_t=" + Date.now());
+    // Follow the top project filter (P1): 全部 → all projects.
+    var s2scanUrl = "/structure-sources/recent?limit=50&_t=" + Date.now();
+    if (selectedProjectId) s2scanUrl += "&project_id=" + encodeURIComponent(selectedProjectId);
+    else s2scanUrl += "&all_projects=true";
+    var resp = await api(s2scanUrl);
     var sources = (resp && resp.sources) || [];
     if (!sources.length) { listEl.innerHTML = '<div style="padding:8px;font-size:12px;color:var(--text-tertiary);">' + t("s2scan.no_assets") + '</div>'; return; }
     listEl.innerHTML = sources.map(function(s) {
