@@ -154,7 +154,7 @@ ANNOTATION_TYPES = frozenset(
 )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ViewSpec:
     """Default labels and node type for one energy-graph view."""
 
