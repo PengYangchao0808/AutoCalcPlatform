@@ -30,6 +30,7 @@ __all__ = [
     "build_s2_energy_graph",
     "build_unavailable_energy_graph",
     "find_optimization_trajectory",
+    "has_sampling_history",
 ]
 
 
@@ -61,6 +62,13 @@ def _sanitize_json(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_sanitize_json(item) for item in value]
     return value
+
+
+def has_sampling_history(work_dir: Path) -> bool:
+    """Return ``True`` when a valid sampling history file exists for the job."""
+    from acp.confsearch.sampling_models import load_sampling_history
+
+    return load_sampling_history(work_dir) is not None
 
 
 def _aligned(values: Any, size: int) -> list[float | None]:
@@ -1280,12 +1288,16 @@ def build_energy_graph_from_job(
     s2_candidates: list[dict[str, Any]] | None = None,
     s2_review_state: dict[str, Any] | None = None,
     item_id: str | None = None,
+    view: str | None = None,
 ) -> dict[str, Any]:
     """Select the first supported energy projection for a scheduler job.
 
     The projection is sanitized for strict JSON compliance (non-finite
     floats become ``None``) so the FastAPI encoder never rejects the
     response with ``Out of range float values are not JSON compliant``.
+
+    *view* selects among ``available_views``.  An unknown or ``None`` view
+    falls back to the default projection for the workflow.
     """
     projection: dict[str, Any] = _sanitize_json(
         _build_energy_graph_projection(
@@ -1298,6 +1310,7 @@ def build_energy_graph_from_job(
             s2_candidates=s2_candidates,
             s2_review_state=s2_review_state,
             item_id=item_id,
+            view=view,
         )
     )
     return projection
@@ -1314,6 +1327,7 @@ def _build_energy_graph_projection(
     s2_candidates: list[dict[str, Any]] | None = None,
     s2_review_state: dict[str, Any] | None = None,
     item_id: str | None = None,
+    view: str | None = None,
 ) -> dict[str, Any]:
     """Dispatch to the workflow-specific projection builder."""
     if workflow == "PESsearch" and str((method or {}).get("mode") or "") == "bond_length_scan":
@@ -1338,8 +1352,22 @@ def _build_energy_graph_projection(
             job_id, workflow=workflow, reason="energy_data_missing"
         )
     if workflow in {"energy", "ensemble", "Confsearch", "xtbmd_censo_energy"}:
+        sampling_available = has_sampling_history(work_dir)
+        # If the caller requests the sampling view and it exists, return it
+        if view == "sampling" and sampling_available:
+            from acp.results.sampling_graph import build_sampling_energy_graph
+
+            sampling_result = build_sampling_energy_graph(job_id, work_dir)
+            if sampling_result is not None:
+                return sampling_result
         result = build_conformer_energy_graph(job_id, work_dir)
         if result is not None:
+            # Expose sampling as an available view when the history file exists
+            if sampling_available:
+                available = result.get("available_views") or []
+                if "sampling" not in available:
+                    available.append("sampling")
+                result["available_views"] = available
             return result
         return build_unavailable_energy_graph(
             job_id, workflow=workflow, reason="energy_data_missing"
