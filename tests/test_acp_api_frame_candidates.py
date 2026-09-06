@@ -476,35 +476,42 @@ class TestSamplingFrameEndpoint:
         job_id = _register_job(
             client, tmp_path, work_dir, job_id="samp_cut", workflow="Confsearch"
         )
-        # frame_index=3 → position 1 → basin_ids[1] = 1
+        # frame_index=3 is at positional index 1 (indices 2,3,4 -> positions 0,1,2)
+        # basin_ids[1] == 20 (distinct from basin_ids[0]=10 and basin_ids[2]=30)
         resp = client.get(f"/api/v1/jobs/{job_id}/sampling/frame/3")
         assert resp.status_code == 200
         body = resp.json()
         assert body["frame_index"] == 3
-        assert body["basin_id"] == 1
+        assert body["basin_id"] == 20
 
-    def test_sampling_frame_basin_last_frame_with_cut(
+    def test_sampling_frame_beyond_basin_ids_len(
         self, client: TestClient, tmp_path: Path
     ) -> None:
-        """Regression: last frame with equilibration cut returns correct basin."""
+        """Trajectory index 4 > len(basin_ids)=3 but positional index 2 < len.
+
+        The old buggy code checked ``frame_index < len(basin_ids)`` which
+        returned None for frame_index=4.  The fix uses the positional index.
+        """
         work_dir = _make_sampling_task_with_equilibration_cut(tmp_path)
         job_id = _register_job(
-            client, tmp_path, work_dir, job_id="samp_cut2", workflow="Confsearch"
+            client, tmp_path, work_dir, job_id="samp_cut3", workflow="Confsearch"
         )
-        # frame_index=4 → position 2 → basin_ids[2] = 1
+        # frame_index=4 -> positional index 2 -> basin_ids[2] == 30
+        # Old code: 4 < len(basin_ids)=3 is False -> None (WRONG)
+        # Fixed code: pos=2 < 3 -> basin_ids[2] == 30 (CORRECT)
         resp = client.get(f"/api/v1/jobs/{job_id}/sampling/frame/4")
         assert resp.status_code == 200
         body = resp.json()
         assert body["frame_index"] == 4
-        assert body["basin_id"] == 1
+        assert body["basin_id"] == 30
 
 
 def _make_sampling_task_with_equilibration_cut(tmp_path: Path) -> Path:
-    """Sampling task where equilibration_cut=2 makes traj indices ≠ positions.
+    """Sampling task where equilibration_cut=2 makes traj indices != positions.
 
     Trajectory has 5 frames (indices 0-4); after cutting the first 2,
     history.frames contains indices [2, 3, 4] at positions [0, 1, 2].
-    basin_ids = [0, 1, 1] — distinct basins to verify positional lookup.
+    basin_ids = [10, 20, 30] -- distinct basins to verify positional lookup.
     """
     root = tmp_path / "sampling_cut_task"
     result_dir = root / "RESULT" / "confsearch"
@@ -512,6 +519,7 @@ def _make_sampling_task_with_equilibration_cut(tmp_path: Path) -> Path:
     work_traj_dir = root / "WORK" / "02_SEARCH" / "xTB"
     work_traj_dir.mkdir(parents=True, exist_ok=True)
 
+    # Write a 5-frame trajectory
     frames_xyz = []
     for i in range(5):
         frames_xyz.append(
@@ -530,20 +538,20 @@ def _make_sampling_task_with_equilibration_cut(tmp_path: Path) -> Path:
         "equilibration_cut": 2,
         "frames": [
             {
-                "index": i + 2,
+                "index": i + 2,  # trajectory indices start at 2
                 "time_ps": 0.5 * (i + 3),
                 "step": i + 2,
                 "energy_kcal_mol": -100.0 + (i + 2) * 0.5,
                 "relative_energy_kcal_mol": i * 0.5,
-                "basin_id": [0, 1, 1][i],
-                "is_new_basin": i == 0 or i == 1,
+                "basin_id": [10, 20, 30][i],
+                "is_new_basin": i == 0,
                 "mds": [0.0, float(i)],
             }
             for i in range(3)
         ],
         "basins": [
             {
-                "basin_id": 0,
+                "basin_id": 10,
                 "first_seen_index": 0,
                 "first_seen_ps": 1.5,
                 "visit_count": 1,
@@ -551,25 +559,33 @@ def _make_sampling_task_with_equilibration_cut(tmp_path: Path) -> Path:
                 "representative_frame": 0,
             },
             {
-                "basin_id": 1,
+                "basin_id": 20,
                 "first_seen_index": 1,
                 "first_seen_ps": 2.0,
-                "visit_count": 2,
+                "visit_count": 1,
                 "min_energy": -98.5,
                 "representative_frame": 1,
             },
+            {
+                "basin_id": 30,
+                "first_seen_index": 2,
+                "first_seen_ps": 2.5,
+                "visit_count": 1,
+                "min_energy": -98.0,
+                "representative_frame": 2,
+            },
         ],
         "saturation": {
-            "unique_clusters": 2,
+            "unique_clusters": 3,
             "new_clusters_last_20pct": 0,
-            "last_new_basin_ps": 2.0,
-            "revisit_ratio": 0.5,
+            "last_new_basin_ps": 2.5,
+            "revisit_ratio": 0.0,
             "energy_window_kcal_mol": 1.0,
             "level": "HIGH",
             "cumulative_unique": [
                 {"time_ps": 1.5, "unique": 1},
                 {"time_ps": 2.0, "unique": 2},
-                {"time_ps": 2.5, "unique": 2},
+                {"time_ps": 2.5, "unique": 3},
             ],
         },
         "computed_at": "2026-09-07T00:00:00Z",
@@ -578,6 +594,7 @@ def _make_sampling_task_with_equilibration_cut(tmp_path: Path) -> Path:
     }
     (result_dir / "sampling_history.json").write_text(json.dumps(history), encoding="utf-8")
 
+    # Conformer manifest for default view
     manifest = {
         "schema_version": "confsearch_v1",
         "workflow": "Confsearch",
