@@ -1169,8 +1169,8 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .plot-tip-keys { display: inline-flex; gap: 4px; margin-left: 6px; }
 .plot-tip-key { display: inline-block; padding: 0 5px 1px; border: 1px solid rgba(255,255,255,0.22); border-bottom-width: 2px; border-radius: 4px; background: rgba(255,255,255,0.06); color: #cfe3ff; font-size: 10px; }
 
-/* Live optimization viewer: two synchronized GaussView-style panels. */
-.optimization-workspace { display: grid; gap: 10px; min-height: 100%; padding: 14px; color: var(--text-secondary); }
+/* Live optimization viewer: one GaussView-style chart with view switching. */
+.optimization-workspace { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 10px; height: 100%; padding: 14px; color: var(--text-secondary); }
 .optimization-workspace-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .optimization-workspace-kicker { color: var(--text-tertiary); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
 .optimization-workspace-title { margin-top: 4px; color: var(--text-primary); font-size: 17px; font-weight: 650; }
@@ -1184,13 +1184,24 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .optimization-follow-btn.active { color: #fff; background: rgba(78,161,255,.28); }
 .optimization-toolbar-spacer { flex: 1 1 auto; }
 .optimization-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, 290px); gap: 10px; min-height: 0; }
-.optimization-charts { display: grid; grid-template-rows: repeat(2, minmax(220px, 1fr)); gap: 10px; min-width: 0; min-height: 0; }
+.optimization-charts { display: grid; grid-template-rows: minmax(0, 1fr); gap: 10px; min-width: 0; min-height: 0; }
 .optimization-chart-card { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--border-subtle); border-radius: 12px; background: rgba(10,16,24,.68); }
 .optimization-chart-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px 3px; flex-shrink: 0; }
 .optimization-chart-card-title { color: var(--text-primary); font-size: 12px; font-weight: 650; }
 .optimization-chart-card-subtitle { color: var(--text-tertiary); font-size: 10px; }
 .optimization-chart-scroll { flex: 1 1 0; min-height: 0; overflow: hidden; padding: 0 6px 4px; }
-.optimization-chart-svg { display: block; width: 100%; min-width: 620px; height: 100%; }
+.optimization-chart-svg { display: block; width: 100%; min-width: 0; min-height: 0; height: 100%; cursor: grab; }
+.optimization-chart-svg.mode-box { cursor: crosshair; }
+.optimization-chart-svg.panning { cursor: grabbing; }
+.optimization-view-switch { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--border-subtle); border-radius: 8px; background: rgba(255,255,255,.02); }
+.optimization-view-btn { height: 24px; padding: 0 10px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 11px; cursor: pointer; white-space: nowrap; }
+.optimization-view-btn:hover { border-color: rgba(78,161,255,.45); color: var(--text-primary); }
+.optimization-view-btn.active { color: #fff; background: #1d5d9d; border-color: #55aaff; box-shadow: 0 0 0 2px rgba(78,161,255,.12); }
+.optimization-quality { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 10px; border: 1px solid transparent; }
+.optimization-quality.q-complete { color: #b8f0c8; border-color: rgba(56,193,114,.3); background: rgba(56,193,114,.08); }
+.optimization-quality.q-partial { color: #ffe1a1; border-color: rgba(242,184,75,.35); background: rgba(242,184,75,.10); }
+.optimization-quality.q-missing { color: #ffc5c5; border-color: rgba(229,83,83,.35); background: rgba(229,83,83,.10); }
+.optimization-zero-line { stroke: rgba(255,255,255,.30); stroke-width: 1; }
 .optimization-gridline { stroke: rgba(255,255,255,.075); stroke-width: 1; }
 .optimization-axis { stroke: rgba(255,255,255,.22); stroke-width: 1; }
 .optimization-axis-text { fill: #8fa1b5; font-size: 10px; }
@@ -1198,17 +1209,23 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .optimization-series-delta { fill: none; stroke: #b792ff; stroke-width: 1.8; stroke-dasharray: 5 4; }
 .optimization-series-rms { fill: none; stroke: #42d6a4; stroke-width: 2.2; }
 .optimization-series-max { fill: none; stroke: #ffb85d; stroke-width: 2; stroke-dasharray: 5 3; }
+.optimization-series-rmsd { fill: none; stroke: #ff8f6b; stroke-width: 2; }
+.optimization-series-maxd { fill: none; stroke: #5dd6ff; stroke-width: 2; stroke-dasharray: 2 3; }
 .optimization-point { cursor: pointer; vector-effect: non-scaling-stroke; }
 .optimization-point:hover { stroke: #fff; stroke-width: 2; }
 .optimization-point.selected { stroke: #fff; stroke-width: 2; }
 .optimization-current-line { stroke: rgba(255,255,255,.36); stroke-width: 1; stroke-dasharray: 4 4; }
 .optimization-threshold { stroke: rgba(242,184,75,.52); stroke-width: 1; stroke-dasharray: 4 4; }
+.optimization-threshold.disp { stroke: rgba(255,138,107,.45); }
 .optimization-threshold-label { fill: #f2b84b; font-size: 9px; }
+.optimization-threshold-label.disp { fill: #ff8f6b; }
 .optimization-chart-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 0 12px 8px; color: var(--text-tertiary); font-size: 10px; flex-shrink: 0; }
 .optimization-chart-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .optimization-chart-legend i { display: inline-block; width: 17px; height: 2px; background: #55aaff; }
 .optimization-chart-legend i.rms { background: #42d6a4; }
 .optimization-chart-legend i.max { background: #ffb85d; }
+.optimization-chart-legend i.rmsd { background: #ff8f6b; }
+.optimization-chart-legend i.maxd { background: #5dd6ff; }
 .optimization-chart-legend i.delta { height: 0; border-top: 2px dashed #b792ff; background: none; }
 .optimization-workspace .energy-inspector-panel { min-height: 0; border: 1px solid var(--border-subtle); border-radius: 12px; overflow: hidden; background: rgba(10,16,24,.68); }
 .optimization-workspace-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 14px; color: var(--text-tertiary); font-size: 10px; }
@@ -1228,8 +1245,8 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
   .energy-workspace-grid { grid-template-columns: 1fr; grid-template-rows: minmax(390px, 1fr) auto; overflow: auto; }
   .energy-inspector-panel { min-height: 300px; }
   .optimization-grid { grid-template-columns: 1fr; }
+  .optimization-charts { min-height: 280px; }
   .optimization-workspace .energy-inspector-panel { min-height: 360px; }
-  .optimization-chart-svg { min-width: 360px; }
 }
 
 @media (max-width: 600px) {
@@ -4428,6 +4445,12 @@ let energyGraphState = {
   priorViewMode: "",
   resizeObserver: null,
   viewSize: { width: 0, height: 0 },
+  itemId: "",
+  optimizationView: "energy",
+  optimizationTool: "pan",
+  optimizationDomains: {},
+  optimizationPlot: null,
+  optimizationViewSize: { width: 0, height: 0 },
 };
 let bgIndex = 0;
 let labelMode = "none";
@@ -7166,79 +7189,236 @@ function optimizationGraphExactSeries(data, id) {
   return series.find(function(item) { return String(item.id) === String(id); }) || null;
 }
 
-function optimizationGraphBuildSvg(data, kind) {
-  var nodes = Array.isArray(data && data.nodes) ? data.nodes : [];
-  if (!nodes.length) return '<div class="energy-empty"><div><strong>暂无优化周期</strong><span>优化数据正在生成。</span></div></div>';
-  var W = 820, H = 238, pad = { left: 64, right: 24, top: 20, bottom: 42 };
-  var nodeX = nodes.map(function(node, index) { return energyGraphValue(node.x) == null ? index + 1 : Number(node.x); });
+var OPTIMIZATION_VIEW_IDS = ["energy", "force", "energy_derivative", "force_derivative"];
+var OPTIMIZATION_SERIES_COLORS = {
+  relative_energy: "#55aaff",
+  scf_energy: "#55aaff",
+  delta_energy: "#b792ff",
+  rms_gradient: "#42d6a4",
+  max_gradient: "#ffb85d",
+  rms_displacement: "#ff8f6b",
+  max_displacement: "#5dd6ff",
+  rms_gradient_delta: "#42d6a4",
+  max_gradient_delta: "#ffb85d",
+};
+
+function optimizationViewConfig(view) {
+  var configs = {
+    energy: { label: "能量", title: "能量变化", subtitle: "相对初始能量 / SCF 能量" },
+    force: { label: "受力", title: "受力与位移", subtitle: "梯度 Eh/Bohr（左轴） · 位移 bohr（右轴）", dual: true },
+    energy_derivative: { label: "能量导数", title: "能量导数", subtitle: "步间能量变化 ΔE · kcal/mol" },
+    force_derivative: { label: "受力导数", title: "受力导数", subtitle: "步间梯度变化 Δg · Eh/Bohr" },
+  };
+  return configs[view] || configs.energy;
+}
+
+function optimizationViewSeries(data, view) {
+  function unique(list) {
+    return list.filter(function(item, index, all) {
+      return item && all.findIndex(function(other) { return other && other.id === item.id; }) === index;
+    });
+  }
+  function byIds(ids) {
+    return unique(ids.map(function(id) { return optimizationGraphExactSeries(data, id); }));
+  }
+  if (view === "force") return { left: byIds(["rms_gradient", "max_gradient"]), right: byIds(["rms_displacement", "max_displacement"]) };
+  if (view === "energy_derivative") return { left: byIds(["delta_energy"]), right: [] };
+  if (view === "force_derivative") return { left: byIds(["rms_gradient_delta", "max_gradient_delta"]), right: [] };
   var selected = optimizationGraphSeries(data, energyGraphState.energySeriesId);
   if (selected) energyGraphState.energySeriesId = String(selected.id);
-  var plotSeries = kind === "energy"
-    ? (selected ? [selected] : [])
-    : ["rms_gradient", "max_gradient"].map(function(id) { return optimizationGraphExactSeries(data, id); }).filter(function(item, index, all) {
-        return item && all.findIndex(function(other) { return other && other.id === item.id; }) === index;
-      });
-  if (!plotSeries.length) return '<div class="energy-empty"><div><strong>暂无可绘制指标</strong><span>当前输出还没有该类收敛数据。</span></div></div>';
-  var points = [];
-  plotSeries.forEach(function(series) {
+  return { left: selected ? [selected] : [], right: [] };
+}
+
+function optimizationSeriesClass(id) {
+  if (id === "rms_gradient" || id === "rms_gradient_delta") return "optimization-series-rms";
+  if (id === "max_gradient" || id === "max_gradient_delta") return "optimization-series-max";
+  if (id === "rms_displacement") return "optimization-series-rmsd";
+  if (id === "max_displacement") return "optimization-series-maxd";
+  if (id === "delta_energy") return "optimization-series-delta";
+  return "optimization-series-energy";
+}
+
+function optimizationChartGeometry(hasRightAxis) {
+  var vs = energyGraphState.optimizationViewSize || { width: 0, height: 0 };
+  var W = Math.max(280, vs.width || 820);
+  var H = Math.max(220, vs.height || 340);
+  var pad = { left: 64, right: hasRightAxis ? 68 : 24, top: 24, bottom: 44 };
+  return { W: W, H: H, pad: pad };
+}
+
+function optimizationSeriesExtent(seriesList, nodeX) {
+  var values = [];
+  seriesList.forEach(function(series) {
     (Array.isArray(series.values) ? series.values : []).forEach(function(value, index) {
       var y = energyGraphValue(value);
-      if (y !== null && nodeX[index] != null) points.push({ x: nodeX[index], y: y });
+      if (y !== null && nodeX[index] != null) values.push(y);
     });
   });
-  if (!points.length) return '<div class="energy-empty"><div><strong>暂无可绘制指标</strong><span>曲线数据正在生成，完成后会自动刷新。</span></div></div>';
+  if (!values.length) return null;
+  var lo = Math.min.apply(null, values);
+  var hi = Math.max.apply(null, values);
+  if (lo === hi) { var span = Math.max(Math.abs(lo) * 0.1, 0.001); lo -= span; hi += span; }
+  var pad = (hi - lo) * 0.12;
+  return [lo - pad, hi + pad];
+}
+
+function optimizationStoreDomains(view, x, y, y2) {
+  energyGraphState.optimizationDomains[view] = { x: x, y: y, y2: y2 };
+}
+
+var optimizationFramePending = false;
+function optimizationGraphScheduleRender() {
+  if (optimizationFramePending) return;
+  optimizationFramePending = true;
+  requestAnimationFrame(function() { optimizationFramePending = false; optimizationGraphRenderCurrent(); });
+}
+
+function optimizationGraphBuildSvg(data, view) {
+  var nodes = Array.isArray(data && data.nodes) ? data.nodes : [];
+  if (!nodes.length) return '<div class="energy-empty"><div><strong>暂无优化周期</strong><span>优化数据正在生成。</span></div></div>';
+  var cfg = optimizationViewConfig(view);
+  var groups = optimizationViewSeries(data, view);
+  if (!groups.left.length && !groups.right.length) {
+    var emptyHint = view === "energy_derivative" || view === "force_derivative"
+      ? "导数视图需要至少 2 个优化周期。"
+      : "当前输出还没有该类收敛数据。";
+    return '<div class="energy-empty"><div><strong>暂无可绘制指标</strong><span>' + emptyHint + '</span></div></div>';
+  }
+  var hasRight = groups.right.length > 0;
+  var geom = optimizationChartGeometry(hasRight);
+  var W = geom.W, H = geom.H, pad = geom.pad;
+  var nodeX = nodes.map(function(node, index) { return energyGraphValue(node.x) == null ? index + 1 : Number(node.x); });
   var xMin = Math.min.apply(null, nodeX), xMax = Math.max.apply(null, nodeX);
   if (xMin === xMax) { xMin -= 0.5; xMax += 0.5; }
-  var yMin = Math.min.apply(null, points.map(function(point) { return point.y; }));
-  var yMax = Math.max.apply(null, points.map(function(point) { return point.y; }));
-  if (kind === "gradient" && yMin > 0) yMin = 0;
-  if (yMin === yMax) { var span = Math.max(Math.abs(yMin) * 0.1, 0.001); yMin -= span; yMax += span; }
-  var yPad = (yMax - yMin) * 0.12;
-  yMin -= yPad; yMax += yPad;
-  function xFor(value) { return pad.left + ((value - xMin) / (xMax - xMin || 1)) * (W - pad.left - pad.right); }
-  function yFor(value) { return pad.top + (1 - ((value - yMin) / (yMax - yMin || 1))) * (H - pad.top - pad.bottom); }
-  var svg = '<svg class="optimization-chart-svg" data-energy-chart data-optimization-chart="' + escapeHtml(kind) + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + escapeHtml(kind === "energy" ? "优化能量曲线" : "优化受力与位移曲线") + '">';
+  var baseX = [xMin, xMax];
+  var baseY = optimizationSeriesExtent(groups.left, nodeX) || [0, 1];
+  var baseY2 = hasRight ? optimizationSeriesExtent(groups.right, nodeX) : null;
+  if (view === "force" || view === "energy_derivative" || view === "force_derivative") {
+    // Convergence metrics and derivatives read against a zero baseline.
+    if (baseY[0] > 0) baseY[0] = 0;
+    if (baseY2 && baseY2[0] > 0) baseY2[0] = 0;
+    if (view !== "force" && baseY[1] < 0) baseY[1] = 0;
+  }
+  var base = { x: baseX, y: baseY, y2: baseY2 ? baseY2.slice() : null };
+  var stored = (energyGraphState.optimizationDomains || {})[view];
+  var xDom = stored && stored.x ? stored.x.slice() : baseX.slice();
+  var yDom = stored && stored.y ? stored.y.slice() : baseY.slice();
+  var y2Dom = stored && stored.y2 ? stored.y2.slice() : (baseY2 ? baseY2.slice() : null);
+  energyGraphState.optimizationPlot = { view: view, geom: geom, base: base, xDom: xDom, yDom: yDom, y2Dom: y2Dom };
+  var Pw = W - pad.left - pad.right, Ph = H - pad.top - pad.bottom;
+  function xFor(value) { return pad.left + ((value - xDom[0]) / (xDom[1] - xDom[0] || 1)) * Pw; }
+  function yFor(value) { return pad.top + (1 - ((value - yDom[0]) / (yDom[1] - yDom[0] || 1))) * Ph; }
+  function y2For(value) { var dom = y2Dom || [0, 1]; return pad.top + (1 - ((value - dom[0]) / (dom[1] - dom[0] || 1))) * Ph; }
+
+  var svg = '<svg class="optimization-chart-svg' + (energyGraphState.optimizationTool === "box" ? " mode-box" : "") + '" data-optimization-chart viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + escapeHtml(cfg.title) + '">';
+  svg += '<defs><clipPath id="optimization-plot-clip"><rect x="' + pad.left + '" y="' + pad.top + '" width="' + Pw + '" height="' + Ph + '"/></clipPath></defs>';
+  var leftDigits = view === "energy" ? 2 : 5;
   for (var gi = 0; gi <= 4; gi += 1) {
-    var gy = yMin + (yMax - yMin) * gi / 4;
+    var gy = yDom[0] + (yDom[1] - yDom[0]) * gi / 4;
     var py = yFor(gy);
     svg += '<line class="optimization-gridline" x1="' + pad.left + '" y1="' + py + '" x2="' + (W - pad.right) + '" y2="' + py + '"></line>';
-    svg += '<text class="optimization-axis-text" x="' + (pad.left - 8) + '" y="' + (py + 4) + '" text-anchor="end">' + escapeHtml(energyGraphFormatNumber(gy, kind === "gradient" ? 4 : 2)) + '</text>';
+    svg += '<text class="optimization-axis-text" x="' + (pad.left - 8) + '" y="' + (py + 4) + '" text-anchor="end">' + escapeHtml(energyGraphFormatNumber(gy, leftDigits)) + '</text>';
+  }
+  if (hasRight && y2Dom) {
+    for (var ri = 0; ri <= 4; ri += 1) {
+      var rv = y2Dom[0] + (y2Dom[1] - y2Dom[0]) * ri / 4;
+      svg += '<text class="optimization-axis-text right" x="' + (W - pad.right + 8) + '" y="' + (y2For(rv) + 4) + '" text-anchor="start">' + escapeHtml(energyGraphFormatNumber(rv, 4)) + '</text>';
+    }
+    svg += '<line class="optimization-axis" x1="' + (W - pad.right) + '" y1="' + pad.top + '" x2="' + (W - pad.right) + '" y2="' + (H - pad.bottom) + '"></line>';
   }
   for (var xi = 0; xi <= 4; xi += 1) {
-    var xv = xMin + (xMax - xMin) * xi / 4;
-    svg += '<text class="optimization-axis-text" x="' + xFor(xv) + '" y="' + (H - pad.bottom + 20) + '" text-anchor="middle">' + escapeHtml(energyGraphFormatNumber(xv, 0)) + '</text>';
+    var xv = xDom[0] + (xDom[1] - xDom[0]) * xi / 4;
+    var xAnchor = xi === 0 ? "start" : xi === 4 ? "end" : "middle";
+    var xPos = xi === 0 ? xFor(xv) + 2 : xi === 4 ? xFor(xv) - 2 : xFor(xv);
+    svg += '<text class="optimization-axis-text" x="' + xPos + '" y="' + (H - pad.bottom + 20) + '" text-anchor="' + xAnchor + '">' + escapeHtml(energyGraphFormatNumber(xv, 0)) + '</text>';
   }
   svg += '<line class="optimization-axis" x1="' + pad.left + '" y1="' + pad.top + '" x2="' + pad.left + '" y2="' + (H - pad.bottom) + '"></line><line class="optimization-axis" x1="' + pad.left + '" y1="' + (H - pad.bottom) + '" x2="' + (W - pad.right) + '" y2="' + (H - pad.bottom) + '"></line>';
-  if (kind === "gradient") {
+  var leftUnit = String((groups.left[0] || {}).unit || "");
+  if (leftUnit) svg += '<text class="optimization-axis-text" x="' + (pad.left - 8) + '" y="' + (pad.top - 9) + '" text-anchor="end">' + escapeHtml(leftUnit) + '</text>';
+  if (hasRight) {
+    var rightUnit = String((groups.right[0] || {}).unit || "");
+    if (rightUnit) svg += '<text class="optimization-axis-text right" x="' + (W - pad.right + 8) + '" y="' + (pad.top - 9) + '" text-anchor="start">' + escapeHtml(rightUnit) + '</text>';
+  }
+  svg += '<g data-optimization-plot clip-path="url(#optimization-plot-clip)">';
+  if (view !== "energy" && view !== "force" && yDom[0] < 0 && yDom[1] > 0) {
+    svg += '<line class="optimization-zero-line" x1="' + pad.left + '" y1="' + yFor(0) + '" x2="' + (W - pad.right) + '" y2="' + yFor(0) + '"></line>';
+  }
+  if (view === "force") {
     var thresholds = (data.metadata || {}).thresholds || {};
-    [{ key: "rms_gradient", label: "RMS threshold" }, { key: "max_gradient", label: "MAX threshold" }].forEach(function(item) {
+    [{ key: "rms_gradient", label: "RMS 阈值", disp: false }, { key: "max_gradient", label: "MAX 阈值", disp: false },
+     { key: "rms_displacement", label: "RMS 位移阈值", disp: true }, { key: "max_displacement", label: "MAX 位移阈值", disp: true }].forEach(function(item) {
+      var dom = item.disp ? y2Dom : yDom;
+      if (!dom) return;
       var threshold = energyGraphValue(thresholds[item.key]);
-      if (threshold === null) return;
-      var ty = yFor(threshold);
-      svg += '<line class="optimization-threshold" x1="' + pad.left + '" y1="' + ty + '" x2="' + (W - pad.right) + '" y2="' + ty + '"></line><text class="optimization-threshold-label" x="' + (W - pad.right - 4) + '" y="' + (ty - 4) + '" text-anchor="end">' + escapeHtml(item.label) + '</text>';
+      if (threshold === null || threshold < dom[0] || threshold > dom[1]) return;
+      var ty = item.disp ? y2For(threshold) : yFor(threshold);
+      svg += '<line class="optimization-threshold' + (item.disp ? ' disp' : '') + '" x1="' + pad.left + '" y1="' + ty + '" x2="' + (W - pad.right) + '" y2="' + ty + '"></line><text class="optimization-threshold-label' + (item.disp ? ' disp' : '') + '" x="' + (W - pad.right - 4) + '" y="' + (ty - 4) + '" text-anchor="end">' + escapeHtml(item.label) + '</text>';
     });
   }
-  var colors = kind === "energy" ? ["#55aaff"] : ["#42d6a4", "#ffb85d"];
-  plotSeries.forEach(function(series, seriesIndex) {
+  function drawSeries(series, axisFor) {
     var values = Array.isArray(series.values) ? series.values : [];
+    var color = OPTIMIZATION_SERIES_COLORS[series.id] || "#55aaff";
     var path = [];
     values.forEach(function(value, index) {
       var y = energyGraphValue(value);
       if (y === null || nodeX[index] == null) return;
-      path.push((path.length ? "L" : "M") + xFor(nodeX[index]) + " " + yFor(y));
+      if (nodeX[index] < xDom[0] || nodeX[index] > xDom[1]) return;
+      path.push((path.length ? "L" : "M") + xFor(nodeX[index]) + " " + axisFor(y));
     });
-    if (path.length) svg += '<path class="' + (series.id === "rms_gradient" ? "optimization-series-rms" : series.id === "max_gradient" ? "optimization-series-max" : series.id === "delta_energy" ? "optimization-series-delta" : "optimization-series-energy") + '" d="' + path.join(" ") + '"></path>';
+    if (path.length) svg += '<path class="' + optimizationSeriesClass(String(series.id)) + '" d="' + path.join(" ") + '"></path>';
     values.forEach(function(value, index) {
       var y = energyGraphValue(value);
       if (y === null || nodeX[index] == null || !nodes[index]) return;
+      if (nodeX[index] < xDom[0] || nodeX[index] > xDom[1]) return;
       var isSelected = String(nodes[index].id) === String(energyGraphState.selectedNodeId);
-      svg += '<circle class="optimization-point' + (isSelected ? ' selected' : '') + '" data-energy-frame="' + escapeHtml(String(nodes[index].frame_index)) + '" data-energy-node="' + escapeHtml(String(nodes[index].id)) + '" cx="' + xFor(nodeX[index]) + '" cy="' + yFor(y) + '" r="' + (isSelected ? '5.5' : '3.5') + '" fill="' + colors[seriesIndex % colors.length] + '" stroke="#0b0f14" stroke-width="1.2"><title>' + escapeHtml(String(nodes[index].label || "Cycle")) + ' · ' + escapeHtml(String(series.label || series.id)) + ': ' + escapeHtml(energyGraphFormatNumber(y, kind === "gradient" ? 6 : 4)) + ' ' + escapeHtml(String(series.unit || "")) + '</title></circle>';
+      svg += '<circle class="optimization-point' + (isSelected ? ' selected' : '') + '" data-energy-frame="' + escapeHtml(String(nodes[index].frame_index)) + '" data-energy-node="' + escapeHtml(String(nodes[index].id)) + '" cx="' + xFor(nodeX[index]) + '" cy="' + axisFor(y) + '" r="' + (isSelected ? '5.5' : '3.5') + '" fill="' + color + '" stroke="#0b0f14" stroke-width="1.2"><title>' + escapeHtml(String(nodes[index].label || "Cycle")) + ' · ' + escapeHtml(String(series.label || series.id)) + ': ' + escapeHtml(energyGraphFormatNumber(y, 6)) + ' ' + escapeHtml(String(series.unit || "")) + '</title></circle>';
     });
-  });
+  }
+  groups.left.forEach(function(series) { drawSeries(series, yFor); });
+  groups.right.forEach(function(series) { drawSeries(series, y2For); });
+  svg += '</g>';
+  svg += '<g data-optimization-overlay></g>';
   var selectedNode = energyGraphSelectedNode(data);
-  if (selectedNode) svg += '<line class="optimization-current-line" x1="' + xFor(Number(selectedNode.x)) + '" y1="' + pad.top + '" x2="' + xFor(Number(selectedNode.x)) + '" y2="' + (H - pad.bottom) + '"></line>';
-  svg += '<text class="optimization-axis-text" x="' + (W / 2) + '" y="' + (H - 7) + '" text-anchor="middle">优化周期</text></svg>';
+  if (selectedNode && energyGraphValue(selectedNode.x) !== null) {
+    var sx = Number(selectedNode.x);
+    if (sx >= xDom[0] && sx <= xDom[1]) svg += '<line class="optimization-current-line" x1="' + xFor(sx) + '" y1="' + pad.top + '" x2="' + xFor(sx) + '" y2="' + (H - pad.bottom) + '"></line>';
+  }
+  svg += '<text class="optimization-axis-text" x="' + ((pad.left + W - pad.right) / 2) + '" y="' + (H - 8) + '" text-anchor="middle">优化周期</text></svg>';
   return svg;
+}
+
+function optimizationQualityBadge(data) {
+  var quality = (data && data.metadata && data.metadata.quality) || {};
+  var status = String(quality.status || (data && data.complete ? "complete" : "partial"));
+  if (["complete", "partial", "missing"].indexOf(status) < 0) status = "partial";
+  var text = status === "complete" ? "数据完整" : status === "missing" ? "数据缺失" : "数据不完整";
+  var issueLabels = {
+    single_cycle: "仅采集到 1 个周期，曲线只能是相对基准的零值点",
+    energy_missing: "部分周期缺少能量",
+    rms_gradient_partial: "部分周期缺少 RMS 梯度",
+    max_gradient_partial: "部分周期缺少最大梯度",
+    rms_displacement_partial: "部分周期缺少 RMS 位移",
+    max_displacement_partial: "部分周期缺少最大位移",
+  };
+  var detail = (Array.isArray(quality.issues) ? quality.issues : []).map(function(issue) {
+    return issueLabels[issue] || String(issue);
+  }).join("；");
+  return '<span class="optimization-quality q-' + status + '" data-optimization-quality' + (detail ? ' title="' + escapeHtml(detail) + '"' : '') + '>' + escapeHtml(text) + '</span>';
+}
+
+function optimizationLegendMarkup(data, view) {
+  var groups = optimizationViewSeries(data, view);
+  var chipFor = function(id) {
+    if (id === "rms_gradient" || id === "rms_gradient_delta") return "rms";
+    if (id === "max_gradient" || id === "max_gradient_delta") return "max";
+    if (id === "rms_displacement") return "rmsd";
+    if (id === "max_displacement") return "maxd";
+    if (id === "delta_energy") return "delta";
+    return "";
+  };
+  return groups.left.concat(groups.right).map(function(series) {
+    return '<span><i class="' + chipFor(String(series.id)) + '"></i>' + escapeHtml(String(series.label || series.id)) + '</span>';
+  }).join("");
 }
 
 function optimizationWorkspaceMarkup(data) {
@@ -7251,11 +7431,19 @@ function optimizationWorkspaceMarkup(data) {
   var currentCycle = (data.metadata || {}).current_cycle || (selectedNode && selectedNode.x) || "--";
   var energyOptions = energySeries.map(function(item) { return '<option value="' + escapeHtml(String(item.id)) + '"' + (String(item.id) === String(energyGraphState.energySeriesId) ? ' selected' : '') + '>' + escapeHtml(String(item.label || item.id)) + ' · ' + escapeHtml(String(item.unit || '')) + '</option>'; }).join("");
   var selectedItem = selectedNode && selectedNode.frame_index != null ? ' · 周期 ' + escapeHtml(String(selectedNode.x)) : '';
+  var view = OPTIMIZATION_VIEW_IDS.indexOf(energyGraphState.optimizationView) >= 0 ? energyGraphState.optimizationView : "energy";
+  energyGraphState.optimizationView = view;
+  var cfg = optimizationViewConfig(view);
+  var viewButtons = OPTIMIZATION_VIEW_IDS.map(function(id) {
+    return '<button class="optimization-view-btn' + (id === view ? ' active' : '') + '" data-optimization-view="' + id + '" type="button" role="tab" aria-selected="' + (id === view) + '">' + escapeHtml(optimizationViewConfig(id).label) + '</button>';
+  }).join("");
+  var energyPickerHidden = view === "energy" ? "" : ' style="display:none;"';
+  var nCycles = (data.metadata || {}).n_cycles || (Array.isArray(data.nodes) ? data.nodes.length : 0);
   return '<div class="optimization-workspace" data-energy-workspace data-energy-view="optimization">' +
     '<div class="optimization-workspace-head"><div><div class="optimization-workspace-kicker">任务观察 · Optimization Viewer</div><div class="optimization-workspace-title">' + escapeHtml(String(job.name || job.id || data.job_id || "几何结构优化")) + '</div></div><div class="optimization-workspace-meta"><span>几何优化</span><span>当前周期 ' + escapeHtml(String(currentCycle)) + '</span><span class="live">' + escapeHtml(statusText) + '</span></div></div>' +
-    '<div class="optimization-workspace-toolbar"><label for="optimization-energy-series">能量曲线</label><select id="optimization-energy-series" class="tool-select" data-optimization-energy>' + energyOptions + '</select><button class="optimization-follow-btn' + (energyGraphState.liveFollow ? ' active' : '') + '" data-optimization-action="follow" type="button">' + (energyGraphState.liveFollow ? '跟随最新周期' : '回到最新周期') + '</button><span class="optimization-toolbar-spacer"></span><button class="plot-tool" data-optimization-action="reload" type="button" title="刷新">↻ 刷新</button></div>' +
-    '<div class="optimization-grid"><div class="optimization-charts"><section class="optimization-chart-card"><div class="optimization-chart-card-head"><span class="optimization-chart-card-title">能量变化</span><span class="optimization-chart-card-subtitle">相对初始能量 / 步间变化</span></div><div class="optimization-chart-scroll" data-optimization-scroll="energy">' + optimizationGraphBuildSvg(data, "energy") + '</div><div class="optimization-chart-legend"><span><i></i>' + escapeHtml(String((optimizationGraphSeries(data, energyGraphState.energySeriesId) || {}).label || "能量")) + '</span><span><i class="delta"></i>步间能量变化</span></div></section><section class="optimization-chart-card"><div class="optimization-chart-card-head"><span class="optimization-chart-card-title">受力与位移</span><span class="optimization-chart-card-subtitle">Eh/Bohr · Å</span></div><div class="optimization-chart-scroll" data-optimization-scroll="gradient">' + optimizationGraphBuildSvg(data, "gradient") + '</div><div class="optimization-chart-legend"><span><i class="rms"></i>RMS 梯度</span><span><i class="max"></i>最大梯度</span></div></section></div><aside class="energy-inspector-panel"><div class="energy-inspector-head"><div class="energy-inspector-title">结构查看器</div><div class="energy-inspector-subtitle">点选周期查看对应几何</div></div><div id="energy-structure-viewer" class="energy-structure-viewer' + (selectedNode && selectedNode.geometry_ref ? '' : ' empty') + '">' + (selectedNode && selectedNode.geometry_ref ? '' : '当前周期没有可加载的 XYZ 结构') + '</div>' + energyGraphInspectorMarkup(data) + '</aside></div>' +
-    '<div class="optimization-workspace-footer"><span>数据源：<strong>' + escapeHtml(String(data.source || '--')) + '</strong>' + selectedItem + '</span><span>revision <strong>' + escapeHtml(String(data.revision || '--')) + '</strong> · ' + (data.complete ? '数据完整' : '实时快照') + '</span></div></div>';
+    '<div class="optimization-workspace-toolbar"><div class="optimization-view-switch" role="tablist">' + viewButtons + '</div><label for="optimization-energy-series" data-optimization-energy-label' + energyPickerHidden + '>能量曲线</label><select id="optimization-energy-series" class="tool-select" data-optimization-energy' + energyPickerHidden + '>' + energyOptions + '</select><span class="optimization-toolbar-spacer"></span><button class="plot-tool' + (energyGraphState.optimizationTool === "box" ? ' active' : '') + '" data-optimization-action="box" type="button" title="框选放大" aria-label="框选放大">⬚</button><button class="plot-tool' + (energyGraphState.optimizationTool !== "box" ? ' active' : '') + '" data-optimization-action="pan" type="button" title="拖动平移" aria-label="拖动平移">✥</button><button class="plot-tool" data-optimization-action="reset" type="button" title="重置视图" aria-label="重置视图">⟲</button><button class="optimization-follow-btn' + (energyGraphState.liveFollow ? ' active' : '') + '" data-optimization-action="follow" type="button">' + (energyGraphState.liveFollow ? '跟随最新周期' : '回到最新周期') + '</button><button class="plot-tool" data-optimization-action="reload" type="button" title="刷新">↻ 刷新</button></div>' +
+    '<div class="optimization-grid"><div class="optimization-charts"><section class="optimization-chart-card"><div class="optimization-chart-card-head"><span class="optimization-chart-card-title" data-optimization-title>' + escapeHtml(cfg.title) + '</span><span class="optimization-chart-card-subtitle" data-optimization-subtitle>' + escapeHtml(cfg.subtitle) + '</span></div><div class="optimization-chart-scroll" data-optimization-scroll="main">' + optimizationGraphBuildSvg(data, view) + '</div><div class="optimization-chart-legend" data-optimization-legend>' + optimizationLegendMarkup(data, view) + '</div></section></div><aside class="energy-inspector-panel"><div class="energy-inspector-head"><div class="energy-inspector-title">结构查看器</div><div class="energy-inspector-subtitle">点选周期查看对应几何</div></div><div id="energy-structure-viewer" class="energy-structure-viewer' + (selectedNode && selectedNode.geometry_ref ? '' : ' empty') + '">' + (selectedNode && selectedNode.geometry_ref ? '' : '当前周期没有可加载的 XYZ 结构') + '</div>' + energyGraphInspectorMarkup(data) + '</aside></div>' +
+    '<div class="optimization-workspace-footer"><span>数据源：<strong>' + escapeHtml(String(data.source || '--')) + '</strong> · 周期 ' + escapeHtml(String(nCycles)) + selectedItem + '</span><span>' + optimizationQualityBadge(data) + ' · revision <strong>' + escapeHtml(String(data.revision || '--')) + '</strong></span></div></div>';
 }
 
 function optimizationGraphRenderCurrent() {
@@ -7270,10 +7458,36 @@ function optimizationGraphRenderCurrent() {
     if (root) optimizationGraphBind(root);
     return;
   }
-  var energyScroll = root.querySelector('[data-optimization-scroll="energy"]');
-  var gradientScroll = root.querySelector('[data-optimization-scroll="gradient"]');
-  if (energyScroll) energyScroll.innerHTML = optimizationGraphBuildSvg(data, "energy");
-  if (gradientScroll) gradientScroll.innerHTML = optimizationGraphBuildSvg(data, "gradient");
+  var view = OPTIMIZATION_VIEW_IDS.indexOf(energyGraphState.optimizationView) >= 0 ? energyGraphState.optimizationView : "energy";
+  energyGraphState.optimizationView = view;
+  var cfg = optimizationViewConfig(view);
+  var title = root.querySelector("[data-optimization-title]");
+  if (title) title.textContent = cfg.title;
+  var subtitle = root.querySelector("[data-optimization-subtitle]");
+  if (subtitle) subtitle.textContent = cfg.subtitle;
+  root.querySelectorAll("[data-optimization-view]").forEach(function(button) {
+    var active = button.getAttribute("data-optimization-view") === view;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  var energyPicker = view === "energy";
+  var select = root.querySelector("[data-optimization-energy]");
+  if (select) { select.style.display = energyPicker ? "" : "none"; select.value = energyGraphState.energySeriesId; }
+  var selectLabel = root.querySelector("[data-optimization-energy-label]");
+  if (selectLabel) selectLabel.style.display = energyPicker ? "" : "none";
+  root.querySelectorAll('[data-optimization-action="box"], [data-optimization-action="pan"]').forEach(function(button) {
+    var action = button.getAttribute("data-optimization-action");
+    button.classList.toggle("active", action === "pan" ? energyGraphState.optimizationTool !== "box" : energyGraphState.optimizationTool === "box");
+  });
+  var scroll = root.querySelector('[data-optimization-scroll="main"]');
+  if (scroll) {
+    scroll.innerHTML = optimizationGraphBuildSvg(data, view);
+    optimizationGraphBindChart(root);
+  }
+  var legend = root.querySelector("[data-optimization-legend]");
+  if (legend) legend.innerHTML = optimizationLegendMarkup(data, view);
+  var qualitySlot = root.querySelector("[data-optimization-quality]");
+  if (qualitySlot) qualitySlot.outerHTML = optimizationQualityBadge(data);
   var body = root.querySelector(".energy-inspector-body");
   if (body) body.outerHTML = energyGraphInspectorMarkup(data);
   energyGraphBindInspectorButtons(root);
@@ -7283,14 +7497,186 @@ function optimizationGraphRenderCurrent() {
   if (current && current.frame_index != null) energyGraphLoadStructure(current.frame_index);
 }
 
+function optimizationGraphBindChart(root) {
+  var svg = root.querySelector("[data-optimization-chart]");
+  if (!svg) return;
+  function plotContext() {
+    var ctx = energyGraphState.optimizationPlot;
+    return ctx && ctx.geom ? ctx : null;
+  }
+  function clientToData(event) {
+    var ctx = plotContext();
+    if (!ctx) return null;
+    var pt = svg.createSVGPoint();
+    pt.x = event.clientX;
+    pt.y = event.clientY;
+    var ctm = svg.getScreenCTM();
+    if (!ctm) return null;
+    pt = pt.matrixTransform(ctm.inverse());
+    var pad = ctx.geom.pad;
+    var Pw = ctx.geom.W - pad.left - pad.right;
+    var Ph = ctx.geom.H - pad.top - pad.bottom;
+    var fx = (pt.x - pad.left) / Pw;
+    var fy = (pt.y - pad.top) / Ph;
+    return {
+      svgX: pt.x,
+      svgY: pt.y,
+      fx: fx,
+      fy: fy,
+      x: ctx.xDom[0] + fx * (ctx.xDom[1] - ctx.xDom[0]),
+      y: ctx.yDom[1] - fy * (ctx.yDom[1] - ctx.yDom[0]),
+      y2: ctx.y2Dom ? ctx.y2Dom[1] - fy * (ctx.y2Dom[1] - ctx.y2Dom[0]) : null,
+    };
+  }
+  svg.addEventListener("wheel", function(event) {
+    event.preventDefault();
+    var ctx = plotContext();
+    var anchor = clientToData(event);
+    if (!ctx || !anchor) return;
+    var factor = event.deltaY < 0 ? 0.82 : 1.22;
+    function zoomAround(dom, anchorValue, base) {
+      var lo = anchorValue - (anchorValue - dom[0]) * factor;
+      var hi = anchorValue + (dom[1] - anchorValue) * factor;
+      var minSpan = (base[1] - base[0]) / 500;
+      if (hi - lo < minSpan) { var mid = (lo + hi) / 2; lo = mid - minSpan / 2; hi = mid + minSpan / 2; }
+      return [lo, hi];
+    }
+    var nx = zoomAround(ctx.xDom, anchor.x, ctx.base.x);
+    var ny = zoomAround(ctx.yDom, anchor.y, ctx.base.y);
+    var ny2 = ctx.y2Dom && anchor.y2 !== null && ctx.base.y2 ? zoomAround(ctx.y2Dom, anchor.y2, ctx.base.y2) : ctx.y2Dom;
+    optimizationStoreDomains(ctx.view, nx, ny, ny2 ? ny2.slice() : null);
+    optimizationGraphScheduleRender();
+  }, { passive: false });
+  svg.addEventListener("dblclick", function(event) {
+    event.preventDefault();
+    var ctx = plotContext();
+    if (!ctx) return;
+    delete energyGraphState.optimizationDomains[ctx.view];
+    optimizationGraphRenderCurrent();
+  });
+  var dragState = null;
+  svg.addEventListener("pointerdown", function(event) {
+    if (event.button !== 0) return;
+    if (event.target.closest && event.target.closest("[data-energy-frame]")) return;
+    var ctx = plotContext();
+    var start = clientToData(event);
+    if (!ctx || !start) return;
+    event.preventDefault();
+    svg.setPointerCapture(event.pointerId);
+    if (energyGraphState.optimizationTool === "box") {
+      var overlay = svg.querySelector("[data-optimization-overlay]");
+      var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rect.setAttribute("class", "energy-box-select-rect");
+      rect.setAttribute("x", start.svgX);
+      rect.setAttribute("y", start.svgY);
+      rect.setAttribute("width", "0");
+      rect.setAttribute("height", "0");
+      if (overlay) overlay.appendChild(rect);
+      dragState = { id: event.pointerId, mode: "box", startFx: start.fx, startFy: start.fy, rect: rect };
+    } else {
+      dragState = { id: event.pointerId, mode: "pan", startSvgX: start.svgX, startSvgY: start.svgY, xDom: ctx.xDom.slice(), yDom: ctx.yDom.slice(), y2Dom: ctx.y2Dom ? ctx.y2Dom.slice() : null };
+      svg.classList.add("panning");
+    }
+  });
+  svg.addEventListener("pointermove", function(event) {
+    if (!dragState || event.pointerId !== dragState.id) return;
+    var ctx = plotContext();
+    if (!ctx) return;
+    var pt = svg.createSVGPoint();
+    pt.x = event.clientX;
+    pt.y = event.clientY;
+    var ctm = svg.getScreenCTM();
+    if (!ctm) return;
+    pt = pt.matrixTransform(ctm.inverse());
+    if (dragState.mode === "pan") {
+      var pad = ctx.geom.pad;
+      var Pw = ctx.geom.W - pad.left - pad.right;
+      var Ph = ctx.geom.H - pad.top - pad.bottom;
+      var dxRatio = (pt.x - dragState.startSvgX) / Pw;
+      var dyRatio = (pt.y - dragState.startSvgY) / Ph;
+      function shifted(dom, dr, invert) {
+        if (!dom) return null;
+        var span = dom[1] - dom[0];
+        return invert ? [dom[0] + dr * span, dom[1] + dr * span] : [dom[0] - dr * span, dom[1] - dr * span];
+      }
+      optimizationStoreDomains(ctx.view, shifted(dragState.xDom, dxRatio, false), shifted(dragState.yDom, dyRatio, true), shifted(dragState.y2Dom, dyRatio, true));
+      optimizationGraphScheduleRender();
+      return;
+    }
+    if (dragState.rect) {
+      var startXpx = ctx.geom.pad.left + dragState.startFx * (ctx.geom.W - ctx.geom.pad.left - ctx.geom.pad.right);
+      var startYpx = ctx.geom.pad.top + dragState.startFy * (ctx.geom.H - ctx.geom.pad.top - ctx.geom.pad.bottom);
+      dragState.rect.setAttribute("x", Math.min(startXpx, pt.x));
+      dragState.rect.setAttribute("y", Math.min(startYpx, pt.y));
+      dragState.rect.setAttribute("width", Math.abs(pt.x - startXpx));
+      dragState.rect.setAttribute("height", Math.abs(pt.y - startYpx));
+    }
+  });
+  svg.addEventListener("pointerup", function(event) {
+    if (!dragState || event.pointerId !== dragState.id) return;
+    var ctx = plotContext();
+    svg.releasePointerCapture(event.pointerId);
+    svg.classList.remove("panning");
+    if (dragState.mode === "box" && dragState.rect && ctx) {
+      var rx = parseFloat(dragState.rect.getAttribute("x"));
+      var ry = parseFloat(dragState.rect.getAttribute("y"));
+      var rw = parseFloat(dragState.rect.getAttribute("width"));
+      var rh = parseFloat(dragState.rect.getAttribute("height"));
+      dragState.rect.remove();
+      if (rw >= 6 && rh >= 6) {
+        var pad = ctx.geom.pad;
+        var Pw = ctx.geom.W - pad.left - pad.right;
+        var Ph = ctx.geom.H - pad.top - pad.bottom;
+        var fx0 = (rx - pad.left) / Pw, fx1 = (rx + rw - pad.left) / Pw;
+        var fy0 = (ry - pad.top) / Ph, fy1 = (ry + rh - pad.top) / Ph;
+        function zoomedBox(dom, lo, hi, invert) {
+          if (!dom) return null;
+          var span = dom[1] - dom[0];
+          return invert ? [dom[1] - hi * span, dom[1] - lo * span] : [dom[0] + lo * span, dom[0] + hi * span];
+        }
+        optimizationStoreDomains(ctx.view, zoomedBox(ctx.xDom, fx0, fx1, false), zoomedBox(ctx.yDom, fy0, fy1, true), zoomedBox(ctx.y2Dom, fy0, fy1, true));
+        energyGraphState.optimizationTool = "pan";
+      }
+    }
+    dragState = null;
+    optimizationGraphRenderCurrent();
+  });
+  svg.addEventListener("pointercancel", function(event) {
+    if (!dragState || event.pointerId !== dragState.id) return;
+    if (dragState.rect) dragState.rect.remove();
+    svg.classList.remove("panning");
+    svg.releasePointerCapture(event.pointerId);
+    dragState = null;
+  });
+}
+
 function optimizationGraphBind(root) {
   if (!root) return;
   var select = root.querySelector("[data-optimization-energy]");
   if (select) select.addEventListener("change", function() { energyGraphState.energySeriesId = select.value; optimizationGraphRenderCurrent(); });
+  root.querySelectorAll("[data-optimization-view]").forEach(function(button) {
+    button.addEventListener("click", function() {
+      var view = String(button.getAttribute("data-optimization-view") || "energy");
+      if (view !== energyGraphState.optimizationView) {
+        energyGraphState.optimizationView = view;
+        optimizationGraphRenderCurrent();
+      }
+    });
+  });
   root.querySelectorAll("[data-optimization-action]").forEach(function(button) {
     button.addEventListener("click", function() {
       var action = button.getAttribute("data-optimization-action");
       if (action === "reload") { renderEnergyGraphWorkspace(lastSelectedJob); return; }
+      if (action === "reset") {
+        delete energyGraphState.optimizationDomains[energyGraphState.optimizationView];
+        optimizationGraphRenderCurrent();
+        return;
+      }
+      if (action === "box" || action === "pan") {
+        energyGraphState.optimizationTool = action === "box" && energyGraphState.optimizationTool !== "box" ? "box" : "pan";
+        optimizationGraphRenderCurrent();
+        return;
+      }
       if (action === "follow") {
         energyGraphState.liveFollow = true;
         var nodes = energyGraphState.data && energyGraphState.data.nodes || [];
@@ -7306,6 +7692,30 @@ function optimizationGraphBind(root) {
     energyGraphSelectFrame(Number(target.getAttribute("data-energy-frame")));
   });
   energyGraphBindInspectorButtons(root);
+  /* ResizeObserver: the chart geometry follows the live container size, so
+     sidebar drags and window resizes re-render the active view instead of
+     clipping a fixed-size SVG. */
+  if (energyGraphState.resizeObserver) { energyGraphState.resizeObserver.disconnect(); energyGraphState.resizeObserver = null; }
+  var chartScroll = root.querySelector('[data-optimization-scroll="main"]');
+  if (chartScroll && typeof ResizeObserver !== "undefined") {
+    var resizeTimer = null;
+    var ro = new ResizeObserver(function() {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function() {
+        resizeTimer = null;
+        if (!chartScroll.isConnected || !energyGraphState.data) return;
+        energyGraphState.optimizationViewSize = { width: chartScroll.clientWidth, height: chartScroll.clientHeight };
+        optimizationGraphRenderCurrent();
+      }, 150);
+    });
+    ro.observe(chartScroll);
+    energyGraphState.resizeObserver = ro;
+    if (chartScroll.clientWidth > 0 && chartScroll.clientHeight > 0) {
+      energyGraphState.optimizationViewSize = { width: chartScroll.clientWidth, height: chartScroll.clientHeight };
+      optimizationGraphRenderCurrent();
+    }
+  }
+  optimizationGraphBindChart(root);
   var current = energyGraphSelectedNode(energyGraphState.data);
   if (current && current.frame_index != null) energyGraphLoadStructure(current.frame_index);
 }
@@ -8436,6 +8846,12 @@ function energyGraphDataRevision(data) {
   }
 }
 
+function optimizationJobItemId(job) {
+  if (!job) return "";
+  var resources = job.resources || (job.spec && job.spec.resources) || {};
+  return String(job.item_id || resources.item_id || "");
+}
+
 async function renderEnergyGraphWorkspace(job, options) {
   options = options || {};
   var screen = getEnergyViewerContainer();
@@ -8455,6 +8871,11 @@ async function renderEnergyGraphWorkspace(job, options) {
   var wasReady = sameJob && energyGraphState.status === "ready" && !!screen.querySelector("[data-energy-workspace]");
   var previousRevision = energyGraphState.dataRevision || "";
   var token = ++energyGraphState.requestToken;
+  if (!sameJob) {
+    energyGraphState.itemId = "";
+    energyGraphState.optimizationDomains = {};
+    energyGraphState.optimizationPlot = null;
+  }
   energyGraphState.jobId = String(jobId);
   energyGraphState.loading = true;
   // Silent polling must not turn a working view into a loading state.  That
@@ -8463,7 +8884,13 @@ async function renderEnergyGraphWorkspace(job, options) {
   energyGraphSetReloadDisabled(true);
   if (!options.silent) energyGraphRenderState("loading", t("energy.loading"));
   try {
-    var data = await api("/jobs/" + encodeURIComponent(jobId) + "/energy-graph", ac ? { signal: ac.signal } : {});
+    // Batch jobs share one work dir across items: once the backend has told
+    // us which trajectory item this job maps to, lock the identifier into
+    // every later request so polling can never drift to a sibling item.
+    var graphUrl = "/jobs/" + encodeURIComponent(jobId) + "/energy-graph";
+    var lockedItemId = energyGraphState.itemId || optimizationJobItemId(job);
+    if (lockedItemId) graphUrl += "?item_id=" + encodeURIComponent(lockedItemId);
+    var data = await api(graphUrl, ac ? { signal: ac.signal } : {});
     if (token !== energyGraphState.requestToken || activeViewerTab !== "energy") return false;
     if (data && String(data.view_type || "") === "unsupported") {
       energyGraphState.data = data;
@@ -8485,6 +8912,9 @@ async function renderEnergyGraphWorkspace(job, options) {
     energyGraphState.data = data;
     energyGraphState.dataRevision = nextRevision;
     energyGraphState.layout = null;
+    if (data && data.metadata && data.metadata.item_id) {
+      energyGraphState.itemId = String(data.metadata.item_id);
+    }
     if (String(data.view_type || "") === "optimization") {
       var optSeries = Array.isArray(data.series) ? data.series : [];
       if (!optSeries.some(function(item) { return String(item.id) === String(energyGraphState.energySeriesId); })) {

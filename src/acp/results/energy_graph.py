@@ -453,16 +453,51 @@ def build_optimization_energy_graph(
     ]
     x_values = [_number(cycle.get("cycle")) or index + 1 for index, cycle in enumerate(cycles)]
 
+    rms_gradient = _cycle_values(cycles, "rms_gradient")
+    max_gradient = _cycle_values(cycles, "max_gradient")
     series_specs = [
         ("relative_energy", "相对初始能量", "kcal/mol", "left", relative),
         ("scf_energy", "SCF 能量", "Eh", "left", energy_values),
-        ("rms_gradient", "RMS 梯度", "Eh/Bohr", "right", _cycle_values(cycles, "rms_gradient")),
-        ("max_gradient", "最大梯度", "Eh/Bohr", "right", _cycle_values(cycles, "max_gradient")),
-        ("rms_displacement", "RMS 位移", "Å", "right", _cycle_values(cycles, "rms_displacement")),
-        ("max_displacement", "最大位移", "Å", "right", _cycle_values(cycles, "max_displacement")),
+        ("rms_gradient", "RMS 梯度", "Eh/Bohr", "right", rms_gradient),
+        ("max_gradient", "最大梯度", "Eh/Bohr", "right", max_gradient),
+        # ORCA convergence-table displacements are reported in bohr.
+        (
+            "rms_displacement",
+            "RMS 位移",
+            "bohr",
+            "right",
+            _cycle_values(cycles, "rms_displacement"),
+        ),
+        (
+            "max_displacement",
+            "最大位移",
+            "bohr",
+            "right",
+            _cycle_values(cycles, "max_displacement"),
+        ),
     ]
     if has_cycle_payload:
+        # Numerical step derivatives: 能量导数 = ΔE per cycle, 受力导数 =
+        # Δ(gradient) per cycle.  Both are deterministic from the cycle list.
         series_specs.insert(1, ("delta_energy", "步间能量变化", "kcal/mol", "left", delta))
+        series_specs.extend(
+            [
+                (
+                    "rms_gradient_delta",
+                    "Δ RMS 梯度",
+                    "Eh/Bohr",
+                    "right",
+                    _step_deltas(rms_gradient),
+                ),
+                (
+                    "max_gradient_delta",
+                    "Δ MAX 梯度",
+                    "Eh/Bohr",
+                    "right",
+                    _step_deltas(max_gradient),
+                ),
+            ]
+        )
     series = [
         {
             "id": series_id,
@@ -527,6 +562,7 @@ def build_optimization_energy_graph(
         "live": not complete,
         "thresholds": dict(trajectory.get("thresholds") or {}),
         "last_cycle": nodes[-1]["metadata"],
+        "quality": _optimization_quality(cycles, complete),
     }
     projection: dict[str, Any] = _sanitize_json(
         {
@@ -557,6 +593,60 @@ def _relative_from_first(values: list[float | None]) -> list[float | None]:
     if reference is None:
         return [None] * len(values)
     return [None if value is None else (value - reference) * HARTREE_TO_KCAL for value in values]
+
+
+def _step_deltas(values: list[float | None]) -> list[float | None]:
+    """Cycle-over-cycle difference of one metric (first cycle is ``None``)."""
+    result: list[float | None] = [None]
+    for index in range(1, len(values)):
+        current = values[index]
+        previous = values[index - 1]
+        if current is None or previous is None:
+            result.append(None)
+        else:
+            result.append(current - previous)
+    return result
+
+
+def _optimization_quality(cycles: list[dict[str, Any]], complete: bool) -> dict[str, Any]:
+    """Classify trajectory completeness as ``complete`` / ``partial`` / ``missing``.
+
+    A converged single cycle is flagged ``single_cycle``: legitimate one-step
+    optimizations exist, but a lone cycle is also the signature of truncated
+    capture, and the frontend should surface that doubt instead of rendering
+    a silently flat zero line.
+    """
+    size = len(cycles)
+    counts = {
+        key: sum(1 for cycle in cycles if _number(cycle.get(key)) is not None)
+        for key in (
+            "energy_hartree",
+            "rms_gradient",
+            "max_gradient",
+            "rms_displacement",
+            "max_displacement",
+        )
+    }
+    issues: list[str] = []
+    if 0 < counts["energy_hartree"] < size:
+        issues.append("energy_missing")
+    for key in ("rms_gradient", "max_gradient", "rms_displacement", "max_displacement"):
+        if 0 < counts[key] < size:
+            issues.append(f"{key}_partial")
+    if size <= 1 and complete:
+        issues.append("single_cycle")
+    if counts["energy_hartree"] == 0:
+        status = "missing"
+    elif issues:
+        status = "partial"
+    else:
+        status = "complete"
+    return {
+        "status": status,
+        "n_cycles": size,
+        "counts": counts,
+        "issues": issues,
+    }
 
 
 def _cycle_values(cycles: list[dict[str, Any]], key: str) -> list[float | None]:

@@ -35,7 +35,10 @@ from ._common import (
     output_dir,
     result_from_qc,
 )
-from .optimization_trajectory import OptimizationTrajectoryRecorder
+from .optimization_trajectory import (
+    OptimizationTrajectoryRecorder,
+    finalize_optimization_trajectory,
+)
 
 FRESH_HESSIAN_RESTART = "fresh_hessian_restart"
 FRESH_HESSIAN_MODE_MONITOR = "fresh_hessian_mode_monitor"
@@ -158,6 +161,18 @@ def build_rescue_plan(failure_type: str, structure_kind: str) -> RescuePlan:
     )
 
 
+def _finalize_trajectory(target_dir: Path | None, selected_backend: str, item_id: str) -> None:
+    """Best-effort terminal trajectory rebuild; never fails the calculation."""
+    if target_dir is None or selected_backend != "orca":
+        return
+    try:
+        finalize_optimization_trajectory(target_dir, item_id=item_id)
+    except Exception:  # noqa: BLE001
+        logger.debug(
+            "Could not finalize optimization trajectory: %s", target_dir, exc_info=True
+        )
+
+
 def run_optimize(
     req: CalculationRequest,
     *,
@@ -175,6 +190,7 @@ def run_optimize(
     base_kwargs = capability_kwargs(req)
     all_artifacts: list[ArtifactRef] = []
     errors: list[str] = []
+    trajectory_item_id = str(req.resources.get("trajectory_item_id") or "")
 
     qc_result, failure = _run_attempt(
         backend,
@@ -183,10 +199,11 @@ def run_optimize(
         target_dir,
         base_kwargs,
         selected_backend=selected_backend,
-        trajectory_item_id=str(req.resources.get("trajectory_item_id") or ""),
+        trajectory_item_id=trajectory_item_id,
         progress_reporter=progress_reporter,
     )
     if _successful_geometry(qc_result):
+        _finalize_trajectory(target_dir, selected_backend, trajectory_item_id)
         if qc_result is not None:
             all_artifacts = artifacts_from_qc(qc_result, selected_backend, all_artifacts)
         return result_from_qc(req, selected_backend, qc_result, errors, all_artifacts)
@@ -214,12 +231,13 @@ def run_optimize(
             attempt_dir,
             attempt_kwargs,
             selected_backend=selected_backend,
-            trajectory_item_id=str(req.resources.get("trajectory_item_id") or ""),
+            trajectory_item_id=trajectory_item_id,
             progress_reporter=progress_reporter,
         )
         if qc_result is not None:
             all_artifacts = artifacts_from_qc(qc_result, selected_backend, all_artifacts)
         if _successful_geometry(qc_result):
+            _finalize_trajectory(target_dir, selected_backend, trajectory_item_id)
             rescue_metadata["rescue_attempts"] = action.index + 1
             return result_from_qc(
                 req,
@@ -233,6 +251,7 @@ def run_optimize(
         errors.append(f"{action.strategy}: {failure_message}")
 
     rescue_metadata["rescue_attempts"] = len(plan.actions)
+    _finalize_trajectory(target_dir, selected_backend, trajectory_item_id)
     return result_from_qc(
         req,
         selected_backend,

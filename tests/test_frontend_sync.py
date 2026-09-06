@@ -80,9 +80,10 @@ def test_energy_chart_axes_cannot_scroll_out_of_viewport() -> None:
     assert svg_rule in html
     assert ".energy-chart-svg { display: block; width: 100%; min-width: 640px; min-height: 360px; height: 100%; }" not in html
 
-    # Optimization chart: same contract — SVG fills the flex column, no fixed
-    # pixel height that can push the axis band out of the card.
-    assert ".optimization-chart-svg { display: block; width: 100%; min-width: 620px; height: 100%; }" in html
+    # Optimization chart: same contract — the SVG is measured from the live
+    # container (ResizeObserver), so no fixed pixel width can force clipping.
+    assert ".optimization-chart-svg { display: block; width: 100%; min-width: 0; min-height: 0; height: 100%; cursor: grab; }" in html
+    assert "min-width: 620px" not in html
     assert "min-width: 620px; height: 238px;" not in html
     assert ".optimization-chart-scroll { flex: 1 1 0; min-height: 0; overflow: hidden;" in html
     assert ".optimization-chart-card { display: flex; flex-direction: column;" in html
@@ -90,3 +91,40 @@ def test_energy_chart_axes_cannot_scroll_out_of_viewport() -> None:
     # Axes are still generated and appended inside the SVG viewBox.
     assert "function energyGraphAxesMarkup(xDom, yDom, geom)" in html
     assert "svg += energyGraphAxesMarkup(xDom, yDom, geom);" in html
+
+
+def test_optimization_chart_single_view_switching_contract() -> None:
+    """Contract for the reworked optimization viewer (2026-09 report).
+
+    One chart container with four mutually exclusive views, geometry measured
+    from the live container, zoom/pan/box/reset interactions wired for the
+    optimization branch, and item_id-locked polling for batch trajectories.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    view_ids = (
+        'OPTIMIZATION_VIEW_IDS = ["energy", "force", '
+        '"energy_derivative", "force_derivative"]'
+    )
+    assert view_ids in html
+    assert 'data-optimization-view="' in html
+    assert 'data-optimization-scroll="main"' in html
+    assert 'data-optimization-scroll="energy"' not in html
+    assert 'data-optimization-scroll="gradient"' not in html
+    assert "W = 820, H = 238" not in html
+
+    bind = html.split("function optimizationGraphBind(root)", 1)[1].split("\nfunction ", 1)[0]
+    assert "ResizeObserver" in bind
+    assert "optimizationGraphBindChart(root)" in bind
+    chart = html.split("function optimizationGraphBindChart(root)", 1)[1].split("\nfunction ", 1)[0]
+    for event in ('"wheel"', '"dblclick"', '"pointerdown"', '"pointermove"', '"pointerup"'):
+        assert event in chart
+
+    # Batch jobs share one work dir: polling must lock the item the backend
+    # resolved instead of re-picking the newest trajectory every time.
+    assert "function optimizationJobItemId(job)" in html
+    assert '"?item_id=" + encodeURIComponent(lockedItemId)' in html
+
+    # The force view draws displacement; derivative views use backend series.
+    assert '"rms_displacement", "max_displacement"' in html
+    assert '"rms_gradient_delta", "max_gradient_delta"' in html

@@ -24,15 +24,34 @@ from typing import Any, Final, cast
 logger = logging.getLogger(__name__)
 
 _FLOAT = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[EeDd][-+]?\d+)?"
+# ORCA prints the cycle banner as ``* GEOMETRY OPTIMIZATION CYCLE   5 *``,
+# so the keyword may only be preceded by whitespace/stars; otherwise the
+# convergence rows ("RMS step 0.0083 ...") and timing lines ("Making the
+# step : 0.001 s") would trigger phantom cycles.  The negative lookahead
+# rejects plurals ("SCF CONVERGED AFTER 14 CYCLES").
 _CYCLE_RE = re.compile(
-    r"^\s*(?:GEOMETRY\s+OPTIMIZATION\s+)?(?:CYCLE|STEP)\s*[:#]?\s*(\d+)",
+    r"^[\s*]*(?:GEOMETRY\s+OPTIMIZATION\s+)?(?:CYCLE|STEP)(?![A-Za-z])\s*[:#]?\s*(\d+)",
     re.IGNORECASE,
 )
 _ENERGY_RE = re.compile(rf"FINAL\s+SINGLE\s+POINT\s+ENERGY\s+({_FLOAT})", re.IGNORECASE)
-_RMS_GRADIENT_RE = re.compile(rf"RMS\s+GRAD(?:IENT)?\D+({_FLOAT})", re.IGNORECASE)
-_MAX_GRADIENT_RE = re.compile(rf"MAX\s+GRAD(?:IENT)?\D+({_FLOAT})", re.IGNORECASE)
-_RMS_DISPLACEMENT_RE = re.compile(rf"RMS\s+DISPLACEMENT\D+({_FLOAT})", re.IGNORECASE)
-_MAX_DISPLACEMENT_RE = re.compile(rf"MAX\s+DISPLACEMENT\D+({_FLOAT})", re.IGNORECASE)
+# ``\b`` after the optional ``IENT`` blocks regex backtracking and
+# ``(?!\s*Tol)`` keeps the convergence-tolerance header ("RMS Gradient
+# TolRMSG .... 1.0000e-04") from being captured as a cycle metric.
+_RMS_GRADIENT_RE = re.compile(rf"RMS\s+GRAD(?:IENT)?\b(?!\s*Tol)\D+?({_FLOAT})", re.IGNORECASE)
+_MAX_GRADIENT_RE = re.compile(rf"MAX\s+GRAD(?:IENT)?\b(?!\s*Tol)\D+?({_FLOAT})", re.IGNORECASE)
+_RMS_DISPLACEMENT_RE = re.compile(rf"RMS\s+DISPLACEMENT(?!\s*Tol)\D+({_FLOAT})", re.IGNORECASE)
+_MAX_DISPLACEMENT_RE = re.compile(rf"MAX\s+DISPLACEMENT(?!\s*Tol)\D+({_FLOAT})", re.IGNORECASE)
+# ORCA 6 renamed the convergence-table rows to "RMS step"/"MAX step".
+_RMS_STEP_RE = re.compile(rf"RMS\s+STEP\D+({_FLOAT})", re.IGNORECASE)
+_MAX_STEP_RE = re.compile(rf"MAX\s+STEP\D+({_FLOAT})", re.IGNORECASE)
+# Convergence tolerances from the output header ("RMS Gradient TolRMSG
+# .... 1.0000e-04 Eh/bohr").  The force view draws these as threshold lines.
+_THRESHOLD_RES: Final[tuple[tuple[str, re.Pattern[str]], ...]] = (
+    ("rms_gradient", re.compile(rf"TolRMSG\D+({_FLOAT})", re.IGNORECASE)),
+    ("max_gradient", re.compile(rf"TolMAXG\D+({_FLOAT})", re.IGNORECASE)),
+    ("rms_displacement", re.compile(rf"TolRMSD\D+({_FLOAT})", re.IGNORECASE)),
+    ("max_displacement", re.compile(rf"TolMAXD\D+({_FLOAT})", re.IGNORECASE)),
+)
 _SCF_ITER_RE = re.compile(r"SCF\s+CONVERGED\s+AFTER\s+(\d+)\s+ITER", re.IGNORECASE)
 _ATOM_RE = re.compile(
     rf"^\s*(?:\d+\s+)?([A-Za-z][A-Za-z]?)\s+({_FLOAT})\s+({_FLOAT})\s+({_FLOAT})(?:\s|$)"
@@ -78,12 +97,14 @@ class OptimizationTrajectoryRecorder:
         *,
         item_id: str = "",
         on_cycle: Callable[[int, str], None] | None = None,
+        persist: bool = True,
     ) -> None:
         self.output_dir = Path(output_dir)
         self.path = self.output_dir / "optimization_trajectory.json"
         self.cycles_dir = self.output_dir / "cycles"
         self.item_id = item_id
         self._on_cycle = on_cycle
+        self._persist = persist
         self._lock = threading.RLock()
         self._cycles: list[dict[str, Any]] = []
         self._current: dict[str, Any] | None = None
@@ -95,6 +116,7 @@ class OptimizationTrajectoryRecorder:
         self._geometry_rows: list[tuple[str, float, float, float]] = []
         self._status = "running"
         self._converged = False
+        self._thresholds: dict[str, float] = {}
         self._last_write_signature = ""
         self._write_snapshot()
 
@@ -102,9 +124,14 @@ class OptimizationTrajectoryRecorder:
         """Consume one ORCA stdout line."""
         with self._lock:
             text = str(line).rstrip("\r\n")
-            cycle_match = _CYCLE_RE.match(text)
+            cycle_match = _CYCLE_RE.search(text)
             if cycle_match:
                 self._start_cycle(int(cycle_match.group(1)), announced=True)
+
+            for key, pattern in _THRESHOLD_RES:
+                match = pattern.search(text)
+                if match:
+                    self._thresholds[key] = _float(match.group(1))
 
             if _COORD_HEADER_RE.search(text):
                 self._begin_geometry()
@@ -130,35 +157,50 @@ class OptimizationTrajectoryRecorder:
                 if self._geometry_started and not text.strip():
                     self._finish_geometry()
 
+            energy_match = _ENERGY_RE.search(text)
+            metric_matches = []
+            for key, pattern in (
+                ("rms_gradient", _RMS_GRADIENT_RE),
+                ("max_gradient", _MAX_GRADIENT_RE),
+                ("rms_displacement", _RMS_DISPLACEMENT_RE),
+                ("max_displacement", _MAX_DISPLACEMENT_RE),
+                ("rms_displacement", _RMS_STEP_RE),
+                ("max_displacement", _MAX_STEP_RE),
+            ):
+                match = pattern.search(text)
+                if match:
+                    metric_matches.append((key, match))
+            scf_match = _SCF_ITER_RE.search(text)
+            lower = text.lower()
+            converged_hit = (
+                "geometry optimization converged" in lower
+                or "optimization converged" in lower
+                or "optimization has converged" in lower
+            )
+
             if self._current is None:
-                # Some ORCA output variants omit the explicit cycle banner.
+                # Some ORCA output variants omit the explicit cycle banner:
+                # start lazily on the first metric line, never on boilerplate,
+                # or real banners would be renumbered with a +1 offset.
+                if not (energy_match or metric_matches or scf_match or converged_hit):
+                    return
                 self._start_cycle(self._cycle_number + 1, announced=False)
             current = self._current
             if current is None:
                 return
             current = cast(dict[str, Any], current)
 
-            energy_match = _ENERGY_RE.search(text)
             if energy_match:
                 current["energy_hartree"] = _float(energy_match.group(1))
                 self._publish()
-            for key, pattern in (
-                ("rms_gradient", _RMS_GRADIENT_RE),
-                ("max_gradient", _MAX_GRADIENT_RE),
-                ("rms_displacement", _RMS_DISPLACEMENT_RE),
-                ("max_displacement", _MAX_DISPLACEMENT_RE),
-            ):
-                match = pattern.search(text)
-                if match:
-                    current[key] = _float(match.group(1))
-                    self._publish()
-            scf_match = _SCF_ITER_RE.search(text)
+            for key, match in metric_matches:
+                current[key] = _float(match.group(1))
+                self._publish()
             if scf_match:
                 current["scf_iterations"] = int(scf_match.group(1))
                 self._publish()
 
-            lower = text.lower()
-            if "geometry optimization converged" in lower or "optimization converged" in lower:
+            if converged_hit:
                 current["status"] = "converged"
                 self._converged = True
                 self._publish()
@@ -207,7 +249,6 @@ class OptimizationTrajectoryRecorder:
         if self._current is not None and self._geometry_rows:
             cycle = int(self._current["cycle"])
             geometry_path = self.cycles_dir / f"cycle_{cycle:04d}.xyz"
-            self.cycles_dir.mkdir(parents=True, exist_ok=True)
             xyz = "\n".join(
                 [
                     str(len(self._geometry_rows)),
@@ -219,7 +260,9 @@ class OptimizationTrajectoryRecorder:
                     "",
                 ]
             )
-            _atomic_text_write(geometry_path, xyz)
+            if self._persist:
+                self.cycles_dir.mkdir(parents=True, exist_ok=True)
+                _atomic_text_write(geometry_path, xyz)
             self._current["geometry_ref"] = geometry_path.relative_to(self.output_dir).as_posix()
             self._current["atom_count"] = len(self._geometry_rows)
             self._publish()
@@ -264,7 +307,7 @@ class OptimizationTrajectoryRecorder:
             return "converged"
         return "running"
 
-    def _write_snapshot(self, *, force: bool = False) -> None:
+    def _snapshot_payload(self) -> dict[str, Any]:
         cycles = [dict(cycle) for cycle in self._cycles]
         if self._current is not None and self._current not in self._cycles:
             cycles.append(dict(self._current))
@@ -278,6 +321,14 @@ class OptimizationTrajectoryRecorder:
             "updated_at": _now(),
             "source": "ORCA incremental stdout",
         }
+        if self._thresholds:
+            payload["thresholds"] = dict(self._thresholds)
+        return payload
+
+    def _write_snapshot(self, *, force: bool = False) -> None:
+        if not self._persist:
+            return
+        payload = self._snapshot_payload()
         signature = json.dumps(payload, sort_keys=True, default=str)
         if not force and signature == self._last_write_signature:
             return
@@ -287,6 +338,165 @@ class OptimizationTrajectoryRecorder:
             _atomic_json_write(self.path, payload)
         except OSError:
             logger.debug("Could not update optimization trajectory: %s", self.path, exc_info=True)
+
+
+def parse_output_text(text: str, *, item_id: str = "") -> dict[str, Any]:
+    """Parse a complete ORCA optimization output into a trajectory payload.
+
+    Uses the same line grammar as the live recorder but never writes files;
+    at completion the authoritative final ``.out`` is re-parsed so the
+    persisted cycle list does not depend on truncated incremental callbacks.
+    """
+    recorder = OptimizationTrajectoryRecorder(Path("."), item_id=item_id, persist=False)
+    for line in str(text).splitlines():
+        recorder.feed_line(line)
+    recorder.finish(
+        converged=recorder._converged,
+        status="completed" if recorder._converged else "failed",
+    )
+    payload = recorder._snapshot_payload()
+    payload["source"] = "ORCA final output"
+    return payload
+
+
+def merge_trajectories(
+    entries: list[tuple[dict[str, Any], str]],
+    *,
+    item_id: str = "",
+) -> dict[str, Any]:
+    """Merge ordered per-attempt payloads (base attempt first, then rescues).
+
+    ``entries`` pairs each payload with a geometry-ref prefix: rescue cycles
+    keep their XYZ files inside the rescue directory, so refs are rewritten
+    to ``<attempt-dir>/<original ref>`` and stay resolvable relative to the
+    merged file's directory.  Cycles are renumbered sequentially across
+    attempts; terminal status/convergence come from the last attempt.
+    """
+    merged_cycles: list[dict[str, Any]] = []
+    thresholds: dict[str, Any] = {}
+    used: list[dict[str, Any]] = []
+    for payload, prefix in entries:
+        if not isinstance(payload, dict):
+            continue
+        cycles = [cycle for cycle in (payload.get("cycles") or []) if isinstance(cycle, dict)]
+        if not cycles:
+            continue
+        used.append(payload)
+        for cycle in cycles:
+            row = dict(cycle)
+            row["attempt_cycle"] = row.get("cycle", len(merged_cycles) + 1)
+            row["cycle"] = len(merged_cycles) + 1
+            ref = str(row.get("geometry_ref") or "")
+            if prefix and ref and not ref.startswith(prefix):
+                row["geometry_ref"] = prefix + ref
+            merged_cycles.append(row)
+        raw_thresholds = payload.get("thresholds")
+        if isinstance(raw_thresholds, dict):
+            thresholds.update(raw_thresholds)
+    last = used[-1] if used else {}
+    converged = bool(last.get("converged"))
+    status = str(last.get("status") or "").lower()
+    if status not in {"completed", "failed", "running"}:
+        status = "completed" if converged else "failed"
+    merged: dict[str, Any] = {
+        "schema_version": 1,
+        "item_id": item_id or str(last.get("item_id") or ""),
+        "status": status,
+        "converged": converged,
+        "current_cycle": len(merged_cycles) or None,
+        "cycles": merged_cycles,
+        "updated_at": _now(),
+        "source": (
+            f"ORCA final output (merged {len(used)} attempts)"
+            if len(used) > 1
+            else str(last.get("source") or "ORCA final output")
+        ),
+        "attempts": len(used),
+    }
+    if thresholds:
+        merged["thresholds"] = thresholds
+    return merged
+
+
+def finalize_optimization_trajectory(
+    target_dir: Path,
+    *,
+    item_id: str = "",
+) -> dict[str, Any] | None:
+    """Rebuild the terminal trajectory from the final ORCA outputs.
+
+    The incremental snapshot can lose cycles (truncated stdout callbacks,
+    banner format drift across ORCA versions), so at completion each attempt
+    directory's final ``*.out`` is re-parsed and merged (base + ``rescue_*``,
+    in order).  An attempt without a parseable output falls back to its
+    incremental JSON.  The merged payload is written back to
+    ``optimization_trajectory.json`` and returned; ``None`` when the run
+    produced no trajectory data at all.
+    """
+    target_dir = Path(target_dir)
+    if not target_dir.is_dir():
+        return None
+    attempt_dirs = [target_dir]
+    attempt_dirs.extend(
+        path for path in sorted(target_dir.glob("rescue_*/")) if path.is_dir()
+    )
+    entries: list[tuple[dict[str, Any], str]] = []
+    for index, attempt_dir in enumerate(attempt_dirs):
+        incremental = _read_json_dict(attempt_dir / "optimization_trajectory.json")
+        reparsed = _reparse_attempt_output(attempt_dir, item_id=item_id)
+        payload = _richer_payload(reparsed, incremental)
+        if payload is None:
+            continue
+        prefix = "" if index == 0 else f"{attempt_dir.name}/"
+        entries.append((payload, prefix))
+    if not entries:
+        return None
+    merged = merge_trajectories(entries, item_id=item_id)
+    try:
+        _atomic_json_write(target_dir / "optimization_trajectory.json", merged)
+    except OSError:
+        logger.debug("Could not finalize optimization trajectory: %s", target_dir, exc_info=True)
+    return merged
+
+
+def _read_json_dict(path: Path) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _reparse_attempt_output(attempt_dir: Path, *, item_id: str) -> dict[str, Any] | None:
+    try:
+        outputs = [path for path in attempt_dir.glob("*.out") if path.is_file()]
+    except OSError:
+        return None
+    if not outputs:
+        return None
+    preferred = [path for path in outputs if "opt" in path.name.lower()]
+    pool = preferred or outputs
+    try:
+        newest = max(pool, key=lambda path: path.stat().st_mtime_ns)
+        text = newest.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    payload = parse_output_text(text, item_id=item_id)
+    return payload if payload.get("cycles") else None
+
+
+def _richer_payload(
+    reparsed: dict[str, Any] | None,
+    incremental: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Prefer the authoritative re-parse unless the live snapshot saw more."""
+    if reparsed is None:
+        return incremental
+    if incremental is None:
+        return reparsed
+    reparsed_cycles = len(reparsed.get("cycles") or [])
+    incremental_cycles = len(incremental.get("cycles") or [])
+    return incremental if incremental_cycles > reparsed_cycles else reparsed
 
 
 def _atomic_json_write(path: Path, payload: dict[str, Any]) -> None:
@@ -304,4 +514,9 @@ def _atomic_text_write(path: Path, text: str) -> None:
     os.replace(tmp, path)
 
 
-__all__ = ["OptimizationTrajectoryRecorder"]
+__all__ = [
+    "OptimizationTrajectoryRecorder",
+    "finalize_optimization_trajectory",
+    "merge_trajectories",
+    "parse_output_text",
+]

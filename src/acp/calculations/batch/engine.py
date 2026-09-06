@@ -235,6 +235,15 @@ class _BatchProgress:
 # ── TS imaginary-frequency judgment ──────────────────────────────────────
 
 
+def _trajectory_cycle_count(path: Path) -> int:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return -1
+    cycles = payload.get("cycles") if isinstance(payload, dict) else None
+    return len(cycles) if isinstance(cycles, list) else -1
+
+
 def _count_significant_imaginary(frequencies: list[float], cutoff: float = -50.0) -> int:
     """Count frequencies at or below *cutoff* (cm⁻¹)."""
     return sum(1 for f in frequencies if float(f) <= cutoff)
@@ -861,6 +870,12 @@ class BatchOptimizeEngine:
         that manifest's public product list is reserved for reusable
         structures.  The energy-graph projection discovers this canonical
         trajectory directory directly.
+
+        ``run_optimize`` finalizes the base trajectory at completion
+        (re-parsed from the final ORCA output with rescue attempts merged
+        in), so the richest snapshot wins over the merely newest one; merged
+        trajectories reference rescue cycle geometries by subdirectory, and
+        those folders are copied alongside the flat ``cycles/`` directory.
         """
         source_dir = self._step_dir(item, StepKind.OPTIMIZE)
         sources = [
@@ -870,7 +885,10 @@ class BatchOptimizeEngine:
         existing = [path for path in sources if path.is_file()]
         if not existing:
             return
-        source = max(existing, key=lambda path: path.stat().st_mtime_ns)
+        source = max(
+            existing,
+            key=lambda path: (_trajectory_cycle_count(path), path.stat().st_mtime_ns),
+        )
         target_dir = self._result_root / "trajectories"
         if self._active_layout_mode != "single_flat":
             target_dir /= item.item_id
@@ -878,9 +896,13 @@ class BatchOptimizeEngine:
         target = target_dir / "optimization.json"
         if source.resolve() != target.resolve():
             _ = shutil.copy2(source, target)
-        cycles = source.parent / "cycles"
-        if cycles.is_dir():
-            _ = shutil.copytree(cycles, target_dir / "cycles", dirs_exist_ok=True)
+        for cycles in [source_dir / "cycles", *sorted(source_dir.glob("rescue_*/cycles"))]:
+            if cycles.is_dir():
+                _ = shutil.copytree(
+                    cycles,
+                    target_dir / cycles.relative_to(source_dir),
+                    dirs_exist_ok=True,
+                )
 
     def _resolve_output_geometry(self, item: BatchCalculationItem) -> Path | None:
         """Resolve an item's optimized geometry."""

@@ -6,6 +6,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from acp.results.energy_graph import (
     build_energy_graph_from_job,
     build_optimization_energy_graph,
@@ -149,6 +151,114 @@ def test_optimization_projection_reads_existing_result_product(tmp_path: Path) -
         "scf_energy",
         "rms_gradient",
     }
+    assert graph["metadata"]["quality"]["status"] == "complete"
+
+
+def _cycle_payload(cycles: list[dict], **overrides) -> dict:
+    payload = {
+        "schema_version": 1,
+        "item_id": "TS1",
+        "status": "completed",
+        "converged": True,
+        "current_cycle": len(cycles),
+        "cycles": cycles,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_optimization_projection_includes_step_derivatives_and_quality(tmp_path: Path) -> None:
+    path = tmp_path / "RESULT" / "trajectories" / "optimization.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps(
+            _cycle_payload(
+                [
+                    {"cycle": 1, "energy_hartree": -10.0, "rms_gradient": 0.2,
+                     "max_gradient": 0.4, "rms_displacement": 0.01, "max_displacement": 0.02},
+                    {"cycle": 2, "energy_hartree": -10.1, "rms_gradient": 0.01,
+                     "max_gradient": 0.02, "rms_displacement": 0.005, "max_displacement": 0.01},
+                    {"cycle": 3, "energy_hartree": -10.2, "rms_gradient": 0.001,
+                     "max_gradient": 0.002, "rms_displacement": 0.0005, "max_displacement": 0.001},
+                ],
+                thresholds={"rms_gradient": 1e-4, "max_gradient": 3e-4},
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    graph = build_optimization_energy_graph("job-opt", tmp_path)
+
+    assert graph is not None
+    series_ids = {item["id"] for item in graph["series"]}
+    assert series_ids >= {
+        "relative_energy",
+        "delta_energy",
+        "rms_gradient_delta",
+        "max_gradient_delta",
+        "rms_displacement",
+        "max_displacement",
+    }
+    quality = graph["metadata"]["quality"]
+    assert quality["status"] == "complete"
+    assert quality["n_cycles"] == 3
+    assert quality["issues"] == []
+    assert graph["metadata"]["thresholds"]["rms_gradient"] == pytest.approx(1e-4)
+    delta_series = next(item for item in graph["series"] if item["id"] == "rms_gradient_delta")
+    assert delta_series["values"][0] is None
+    assert delta_series["values"][1] == pytest.approx(0.01 - 0.2)
+    assert delta_series["values"][2] == pytest.approx(0.001 - 0.01)
+    displacement = next(item for item in graph["series"] if item["id"] == "rms_displacement")
+    assert displacement["unit"] == "bohr"
+
+
+def test_optimization_projection_flags_single_cycle_as_partial(tmp_path: Path) -> None:
+    """A converged lone cycle renders as a flat zero line; surface the doubt."""
+    path = tmp_path / "RESULT" / "trajectories" / "optimization.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps(
+            _cycle_payload(
+                [{"cycle": 1, "energy_hartree": -10.0, "rms_gradient": 0.001,
+                  "max_gradient": 0.002}]
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    graph = build_optimization_energy_graph("job-one", tmp_path)
+
+    assert graph is not None
+    assert graph["complete"] is True
+    assert graph["nodes"][0]["energy"] == 0.0
+    quality = graph["metadata"]["quality"]
+    assert quality["status"] == "partial"
+    assert "single_cycle" in quality["issues"]
+
+
+def test_optimization_projection_marks_energy_gaps_partial(tmp_path: Path) -> None:
+    path = tmp_path / "RESULT" / "trajectories" / "optimization.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        json.dumps(
+            _cycle_payload(
+                [
+                    {"cycle": 1, "energy_hartree": -10.0, "rms_gradient": 0.2},
+                    {"cycle": 2, "rms_gradient": 0.01},
+                    {"cycle": 3, "energy_hartree": -10.2, "rms_gradient": 0.001},
+                ]
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    graph = build_optimization_energy_graph("job-gap", tmp_path)
+
+    assert graph is not None
+    quality = graph["metadata"]["quality"]
+    assert quality["status"] == "partial"
+    assert "energy_missing" in quality["issues"]
+    assert quality["counts"]["energy_hartree"] == 2
 
 
 def test_legacy_energy_projection_merges_thermo_sources(tmp_path: Path) -> None:
