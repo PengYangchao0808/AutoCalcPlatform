@@ -14,9 +14,12 @@ from .contracts import (
 from .shared.boltzmann import boltzmann_weights, relative_energies_kcal
 
 
-def build_entries(outcome: ProtocolOutcome) -> list[ConformerEntry]:
-    """Rank protocol records by free energy and calculate their weights."""
-    records = list(outcome.records)
+def sorted_records(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return records ranked by free energy (stable on ties).
+
+    ``build_entries`` assigns ``conf_NNNN`` ids in this order, so geometry
+    writers must pair entries against the same ranking.
+    """
 
     def sort_key(record: dict[str, Any]) -> float:
         value = record.get("free_energy_hartree")
@@ -24,7 +27,12 @@ def build_entries(outcome: ProtocolOutcome) -> list[ConformerEntry]:
             value = record.get("energy_hartree")
         return float(value) if value is not None else float("inf")
 
-    records.sort(key=sort_key)
+    return sorted(records, key=sort_key)
+
+
+def build_entries(outcome: ProtocolOutcome) -> list[ConformerEntry]:
+    """Rank protocol records by free energy and calculate their weights."""
+    records = sorted_records(outcome.records)
 
     energies = [
         record.get("free_energy_hartree") or record.get("energy_hartree") for record in records
@@ -59,7 +67,7 @@ def refinement_block(
     artifacts: list[str] = []
     for key in (
         "thermo_csv",
-        "boltzmann_table",
+        "boltzmann_table_json",
         "ensemble_thermo_json",
         "global_min_xyz",
     ):
@@ -79,6 +87,8 @@ def quality_gates(
     entries: list[ConformerEntry],
     outcome: ProtocolOutcome,
     selected: list[str],
+    *,
+    protocol: str = "",
 ) -> dict[str, Any]:
     """Build the Confsearch G1 quality-gate payload."""
     weight_sum = sum(entry.boltzmann_weight or 0.0 for entry in entries)
@@ -87,16 +97,19 @@ def quality_gates(
         for entry in entries
     )
     ranked = [entry.rank for entry in entries]
+    pure_xtb_refinement = protocol in PURE_XTB_PROTOCOLS
     gates: dict[str, Any] = {
         "input_valid": True,
         "at_least_one_conformer": len(entries) > 0,
         "dedup_completed": bool(outcome.sampling.get("method")),
         "energy_ranking_valid": relative_valid and ranked == list(range(1, len(entries) + 1)),
         "boltzmann_weights_valid": abs(weight_sum - 1.0) < 1e-3,
-        "refinement_consistent": not selected or bool(outcome.refined_conf_ids),
+        "refinement_consistent": (
+            not selected or pure_xtb_refinement or bool(outcome.refined_conf_ids)
+        ),
     }
     gates["G1"] = "PASS" if all(gates.values()) else "FAIL"
     return gates
 
 
-__all__ = ["build_entries", "quality_gates", "refinement_block"]
+__all__ = ["build_entries", "quality_gates", "refinement_block", "sorted_records"]

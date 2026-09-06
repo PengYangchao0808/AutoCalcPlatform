@@ -40,6 +40,10 @@ ACP_runs/
 conformer_output/
 tmp_bench_top/
 
+# --- Local machine config (may contain cluster credentials — never commit) ---
+cccp.yaml
+conformer_search.yaml
+
 # --- Generated HTML reports (except frontend) ---
 *.html
 !frontend/*.html

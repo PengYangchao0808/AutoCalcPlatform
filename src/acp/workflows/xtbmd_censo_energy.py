@@ -52,6 +52,7 @@ from acp.workflows._helpers import resolve_task_output_root, sanitize_job_name
 from acp.workflows.energy_shared import (
     build_result_ensemble,
     censo_record_to_candidate,
+    conformer_tag,
     resolve_crest_ewin,
     resolve_levels,
     resolve_solvent_config,
@@ -1642,6 +1643,7 @@ def run_xtbmd_censo_energy(
         external_total_gibbs_censo: float | None = None
         population_weights: dict[str, float] | None = None
         external_table_source = "censo"
+        screening_records: list[Any] | None = None
 
         def _handoff_selected(selected: list[Any]) -> list[dict[str, Any]]:
             """Run the ACP handoff on each selected conformer (v15 ensemble).
@@ -1652,7 +1654,9 @@ def run_xtbmd_censo_energy(
             """
             results: list[dict[str, Any]] = []
             for i, rec in enumerate(selected):
-                handoff_dir = v2_stage_dir(mol_dir, "03_OPT", "ORCA") / f"conf_{i:03d}"
+                handoff_dir = v2_stage_dir(mol_dir, "03_OPT", "ORCA") / conformer_tag(
+                    getattr(rec, "conf_id", None), i
+                )
                 try:
                     cand = run_rank1_handoff(
                         cfg,
@@ -1699,7 +1703,7 @@ def run_xtbmd_censo_energy(
                     list(rank1.symbols),
                     structure.charge,
                     structure.multiplicity,
-                    v2_stage_dir(mol_dir, "03_OPT", "ORCA") / "conf_000",
+                    v2_stage_dir(mol_dir, "03_OPT", "ORCA") / conformer_tag(rank1.conf_id, 0),
                     resolved,
                     censo_solvent,
                     _solvent_model,
@@ -1710,6 +1714,7 @@ def run_xtbmd_censo_energy(
                 state.complete_stage("dft_handoff", {"status": "completed"})
                 stages_completed.append("dft_handoff")
                 external_weights = passthrough.boltzmann_weights()
+                screening_records = list(passthrough.records)
                 p1 = external_weights.get(rank1.conf_id, 0.0)
                 external_total_gibbs = ensemble_total_gibbs(cand["gibbs"], p1, temperature_k)
                 external_total_gibbs_censo = ensemble_total_gibbs(rank1.gtot, p1, temperature_k)
@@ -1792,7 +1797,7 @@ def run_xtbmd_censo_energy(
                         list(rank1.symbols),
                         structure.charge,
                         structure.multiplicity,
-                        v2_stage_dir(mol_dir, "03_OPT", "ORCA") / "conf_000",
+                        v2_stage_dir(mol_dir, "03_OPT", "ORCA") / conformer_tag(rank1.conf_id, 0),
                         resolved,
                         censo_solvent,
                         _solvent_model,
@@ -1803,6 +1808,7 @@ def run_xtbmd_censo_energy(
                     state.complete_stage("dft_handoff", {"status": "completed"})
                     stages_completed.append("dft_handoff")
                     external_weights = censo_result.boltzmann_weights()
+                    screening_records = list(censo_result.records)
                     p1 = external_weights.get(rank1.conf_id, 0.0)
                     external_total_gibbs = ensemble_total_gibbs(cand["gibbs"], p1, temperature_k)
                     external_total_gibbs_censo = ensemble_total_gibbs(rank1.gtot, p1, temperature_k)
@@ -1889,6 +1895,7 @@ def run_xtbmd_censo_energy(
                     rank1 = censo_result.records[0]
                     candidates = [censo_record_to_candidate(rank1, index=0)]
                     external_weights = passthrough.boltzmann_weights()
+                    screening_records = list(passthrough.records)
                     external_table_source = "xtb"
                     # Prefer the weight of the CENSO-refined frame (conf_id
                     # is frame-based, matching the passthrough table); fall
@@ -1959,7 +1966,8 @@ def run_xtbmd_censo_energy(
                             list(rank1.symbols),
                             structure.charge,
                             structure.multiplicity,
-                            v2_stage_dir(mol_dir, "03_OPT", "ORCA") / "conf_000",
+                            v2_stage_dir(mol_dir, "03_OPT", "ORCA")
+                            / conformer_tag(rank1.conf_id, 0),
                             resolved,
                             censo_solvent,
                             _solvent_model,
@@ -1980,6 +1988,7 @@ def run_xtbmd_censo_energy(
                     state.complete_stage("dft_handoff", {"status": "completed"})
                     stages_completed.append("dft_handoff")
                     external_weights = censo_result.boltzmann_weights()
+                    screening_records = list(censo_result.records)
                     p1 = external_weights.get(rank1.conf_id, 0.0)
                     external_total_gibbs = ensemble_total_gibbs(cand["gibbs"], p1, temperature_k)
                     external_total_gibbs_censo = ensemble_total_gibbs(rank1.gtot, p1, temperature_k)
@@ -1987,7 +1996,9 @@ def run_xtbmd_censo_energy(
                     state.set_stage("dft_handoff")
                     candidates = []
                     for i, rec in enumerate(censo_result.records):
-                        handoff_dir = v2_stage_dir(mol_dir, "03_OPT", "ORCA") / f"conf_{i:03d}"
+                        handoff_dir = v2_stage_dir(mol_dir, "03_OPT", "ORCA") / conformer_tag(
+                            getattr(rec, "conf_id", None), i
+                        )
                         try:
                             cand = run_rank1_handoff(
                                 cfg,
@@ -2028,6 +2039,7 @@ def run_xtbmd_censo_energy(
             external_total_gibbs_censo=external_total_gibbs_censo,
             population_weights=population_weights,
             external_table_source=external_table_source,
+            screening_records=screening_records,
         )
         ensemble = build_result_ensemble(candidates, structure)
         state.complete_stage("finalize", {"n_conformers": len(candidates)})
@@ -2065,6 +2077,9 @@ def run_xtbmd_censo_energy(
         "conv_passed": batch_summary.get("conv_passed"),
         "ensemble_xyz": str(ensemble_xyz),
         "ensemble_energies_json": str(filter_result.ensemble_energies_json),
+        # Screening conf_ids of the refined candidates, for the Confsearch
+        # G1 gate (matches conformer_thermo.csv source + xyz conf_id markers).
+        "refined_conf_ids": [str(c.get("source", "")) for c in candidates],
         **outputs,
     }
 
