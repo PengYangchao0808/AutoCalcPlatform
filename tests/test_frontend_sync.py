@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from acp.catalog import METHOD_SCHEMAS, WORKFLOW_CATALOG
@@ -7,6 +8,18 @@ from acp.catalog import METHOD_SCHEMAS, WORKFLOW_CATALOG
 REPO_ROOT = Path(__file__).parents[1]
 FRONTEND = REPO_ROOT / "frontend" / "ACP_Workbench_v2.html"
 SERVER = REPO_ROOT / "src" / "acp" / "api" / "server.py"
+
+_I18N_KEY_RE = re.compile(r'"((?:energy|tab\.energy)\.[^"]+)":')
+_ZH_BLOCK_RE = re.compile(r'"zh-CN":\s*\{(.*?)\n\s*"en-US":', re.DOTALL)
+_EN_BLOCK_RE = re.compile(r'"en-US":\s*\{(.*?)(?:\n\s*\};)', re.DOTALL)
+
+
+def _extract_energy_keys(html: str, block_re: re.Pattern[str]) -> set[str]:  # type: ignore[type-arg]
+    """Extract energy.* / tab.energy.* i18n keys from a single locale block."""
+    m = block_re.search(html)
+    if not m:
+        return set()
+    return set(_I18N_KEY_RE.findall(m.group(1)))
 
 
 def test_default_workbench_keeps_original_v2_frontend_and_v1_contract() -> None:
@@ -52,6 +65,28 @@ def test_default_workbench_keeps_original_v2_frontend_and_v1_contract() -> None:
     assert "batch_id: batchId" in html
     assert "await submitJobBatch(batchBodies);" in html
     assert "var batchBody = {" not in html
+
+    # Renamed tab: HTML button + i18n zh-CN + i18n en-US
+    assert '>能量与轨迹</button>' in html
+    assert '"tab.energy": "能量与轨迹"' in html
+    assert '"tab.energy": "Energy & Trajectory"' in html
+    assert "能量图" not in html
+
+    # Generic frame actions
+    assert 'data-energy-action="save-candidate"' in html
+    assert 'data-energy-action="export-frame"' in html
+    assert "acp-frame-lock" in html
+
+    # Sampling hooks
+    assert 'data-sampling-view="' in html
+    assert "samplingState" in html
+
+    # Convergence panel hooks
+    assert 'data-optimization-convergence' in html
+    assert "function energyOptCriteriaRows(data)" in html
+
+    # Unified geometry loader
+    assert "function energyGraphLoadFrameGeometry(node)" in html
 
 
 def test_minimal_frontend_is_not_the_default_page() -> None:
@@ -187,3 +222,24 @@ def test_optimization_chart_single_view_switching_contract() -> None:
     # The force view draws displacement; derivative views use backend series.
     assert '"rms_displacement", "max_displacement"' in html
     assert '"rms_gradient_delta", "max_gradient_delta"' in html
+
+
+def test_energy_i18n_keys_complete_across_locales() -> None:
+    """Dual-locale completeness: every energy.* / tab.energy.* key in zh-CN
+    must also exist in en-US and vice-versa.
+
+    A future edit that adds an energy key to only one locale will fail here —
+    that is its purpose.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    zh_keys = _extract_energy_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_energy_keys(html, _EN_BLOCK_RE)
+
+    assert zh_keys, "No energy.* / tab.energy.* keys found in zh-CN block"
+    assert en_keys, "No energy.* / tab.energy.* keys found in en-US block"
+
+    only_zh = zh_keys - en_keys
+    only_en = en_keys - zh_keys
+    assert not only_zh, f"Keys in zh-CN but missing from en-US: {sorted(only_zh)}"
+    assert not only_en, f"Keys in en-US but missing from zh-CN: {sorted(only_en)}"
