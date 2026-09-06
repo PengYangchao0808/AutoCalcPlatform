@@ -3608,7 +3608,7 @@ async def upload_structure_file(
     project_id: str = Query(default=""),
     parse: bool = Query(default=True),
 ) -> UploadResponse:
-    from acp.intake import detect_format, parse_structure_text
+    from acp.intake import detect_and_parse
     from acp.intake.storage import UploadStorage
 
     run_root = getattr(request.app.state, "run_root", None)
@@ -3645,8 +3645,9 @@ async def upload_structure_file(
         )
 
     text = body.decode("utf-8", errors="replace")
-    fmt = detect_format(filename, text)
-    result = parse_structure_text(text, fmt, filename)
+    # Upload must parse identically to paste (/structures/parse): same
+    # candidate-fallback chain, so extension/content mismatch still parses.
+    fmt, result = detect_and_parse(text, filename)
 
     for asset in result.structures:
         if asset.xyz:
