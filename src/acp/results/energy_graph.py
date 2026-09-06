@@ -334,11 +334,7 @@ def build_s2_energy_graph(
             else "RESULT/mechanism/s2_path_manifest.json"
         )
     )
-    title = (
-        VIEW_REGISTRY["scan"].title_zh
-        if original_schema == "pes_profile_v2"
-        else "S2 扫描能量"
-    )
+    title = VIEW_REGISTRY["scan"].title_zh if original_schema == "pes_profile_v2" else "S2 扫描能量"
     projection: dict[str, Any] = _sanitize_json(
         {
             "job_id": job_id,
@@ -585,7 +581,7 @@ def build_optimization_energy_graph(
             "series": series,
             "nodes": nodes,
             "edges": [],
-            "annotations": [],
+            "annotations": _energy_cycle_annotations(nodes),
             "source": source,
             "provenance": {"capture": trajectory.get("source", "ORCA output")},
             "metadata": metadata,
@@ -615,8 +611,11 @@ def build_scan_trajectory_energy_graph(job_id: str, work_dir: Path) -> dict[str,
         x = float(frame_index) if x is None else x
         nodes.append(
             TrajectoryFrame(
-                frame_id=f"frame_{frame_index}", label=f"Frame {frame_index + 1}",
-                frame_index=frame_index, x=x, energy=relative[position],
+                frame_id=f"frame_{frame_index}",
+                label=f"Frame {frame_index + 1}",
+                frame_index=frame_index,
+                x=x,
+                energy=relative[position],
                 status="failed" if energies[position] is None else "completed",
                 geometry_ref=f"RESULT/{frame.get('path') or ''}",
                 metadata={"coordinate_values": coordinate_values},
@@ -633,29 +632,46 @@ def build_scan_trajectory_energy_graph(job_id: str, work_dir: Path) -> dict[str,
         )
         if any(value is not None for value in values)
     ]
-    minimum = min((node for node in nodes if node["energy"] is not None),
-                  key=lambda node: node["energy"], default=None)
+    minimum = min(
+        (node for node in nodes if node["energy"] is not None),
+        key=lambda node: node["energy"],
+        default=None,
+    )
     markers = [("minimum", "最低能量", minimum)] if minimum else []
     markers += [("failed", "未收敛", node) for node in nodes if node["status"] == "failed"]
     annotations = [
         TrajectoryAnnotation(
-            id=f"{marker_type}_{node['frame_index']}", type=marker_type, label=label,
-            frame_index=node["frame_index"], x=node["x"], y=node["energy"],
-            status=node["status"], geometry_ref=node["geometry_ref"],
+            id=f"{marker_type}_{node['frame_index']}",
+            type=marker_type,
+            label=label,
+            frame_index=node["frame_index"],
+            x=node["x"],
+            y=node["energy"],
+            status=node["status"],
+            geometry_ref=node["geometry_ref"],
         ).to_annotation()
         for marker_type, label, node in markers
     ]
     has_failed = None in energies
     default_series = next(("relative_energy" for v in relative if v is not None), "scan_energy")
     projection = build_unavailable_energy_graph(job_id, workflow="scan", reason="")
-    projection.update(dict(
-        view_type="scan", title=VIEW_REGISTRY["scan_trajectory"].title_zh,
-        status="partial" if has_failed else "completed",
-        complete=not has_failed, revision=_revision(trajectory), default_series=default_series,
-        available_views=["scan"], x_axis=axis, series=series, nodes=nodes,
-        annotations=annotations, source="RESULT/trajectories/scan_trajectory.json",
-        metadata={"frame_count": len(nodes), "workflow": "scan"},
-    ))
+    projection.update(
+        dict(
+            view_type="scan",
+            title=VIEW_REGISTRY["scan_trajectory"].title_zh,
+            status="partial" if has_failed else "completed",
+            complete=not has_failed,
+            revision=_revision(trajectory),
+            default_series=default_series,
+            available_views=["scan"],
+            x_axis=axis,
+            series=series,
+            nodes=nodes,
+            annotations=annotations,
+            source="RESULT/trajectories/scan_trajectory.json",
+            metadata={"frame_count": len(nodes), "workflow": "scan"},
+        )
+    )
     return _sanitize_json(projection)
 
 
@@ -678,6 +694,48 @@ def _step_deltas(values: list[float | None]) -> list[float | None]:
         else:
             result.append(current - previous)
     return result
+
+
+def _energy_cycle_annotations(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Emit minimum/maximum cycle annotations over finite relative energies.
+
+    The minimum annotation (labeled 最低能量周期) is always
+    emitted when at least one node carries a finite energy.  The maximum
+    annotation (labeled 最高能量周期) is emitted only when
+    its target differs from the minimum.  Both annotations have
+    selected=False.
+    """
+    finite_nodes = [node for node in nodes if node.get("energy") is not None]
+    if not finite_nodes:
+        return []
+    minimum = min(finite_nodes, key=lambda node: float(node["energy"]))
+    annotations: list[dict[str, Any]] = [
+        TrajectoryAnnotation(
+            id=f"minimum_{minimum['frame_index']}",
+            type="minimum",
+            label="最低能量周期",
+            frame_index=minimum["frame_index"],
+            x=minimum["x"],
+            y=minimum["energy"],
+            status=minimum["status"],
+            geometry_ref=minimum["geometry_ref"],
+        ).to_annotation()
+    ]
+    maximum = max(finite_nodes, key=lambda node: float(node["energy"]))
+    if maximum["frame_index"] != minimum["frame_index"]:
+        annotations.append(
+            TrajectoryAnnotation(
+                id=f"maximum_{maximum['frame_index']}",
+                type="maximum",
+                label="最高能量周期",
+                frame_index=maximum["frame_index"],
+                x=maximum["x"],
+                y=maximum["energy"],
+                status=maximum["status"],
+                geometry_ref=maximum["geometry_ref"],
+            ).to_annotation()
+        )
+    return annotations
 
 
 def _optimization_quality(cycles: list[dict[str, Any]], complete: bool) -> dict[str, Any]:
@@ -823,9 +881,7 @@ def build_mechanism_energy_graph(job_id: str, report: dict[str, Any]) -> dict[st
                         point.get("point_id") or f"route_{route_index}_point_{point_index}"
                     )
                     point_x = _number(point.get("progress")) or float(point_index)
-                    point_energy = (
-                        relative[point_index] if point_index < len(relative) else None
-                    )
+                    point_energy = relative[point_index] if point_index < len(relative) else None
                     nodes.append(
                         TrajectoryFrame(
                             frame_id=point_id,
@@ -1289,9 +1345,9 @@ def _build_energy_graph_projection(
             job_id, workflow=workflow, reason="energy_data_missing"
         )
     if workflow == "scan":
-        return (build_scan_trajectory_energy_graph(job_id, work_dir)
-                or build_unavailable_energy_graph(
-                    job_id, workflow=workflow, reason="energy_data_missing"))
+        return build_scan_trajectory_energy_graph(
+            job_id, work_dir
+        ) or build_unavailable_energy_graph(job_id, workflow=workflow, reason="energy_data_missing")
     return build_unavailable_energy_graph(
         job_id, workflow=workflow, reason="workflow_has_no_energy_graph"
     )

@@ -170,8 +170,7 @@ def test_standalone_scan_projection_preserves_frame_indices_and_annotations(
         for item in graph["annotations"]
     )
     assert any(
-        item["type"] == "failed" and item["frame_index"] == 4
-        for item in graph["annotations"]
+        item["type"] == "failed" and item["frame_index"] == 4 for item in graph["annotations"]
     )
 
 
@@ -314,16 +313,14 @@ def test_four_view_projections_preserve_pre_migration_wire_key_sets(tmp_path: Pa
     # When: each projection is inspected at the frontend wire boundary.
     expected_annotation_key_sets = [
         {frozenset(ANNOTATION_WIRE_KEYS), frozenset(ANNOTATION_CANDIDATE_KEYS)},
-        set(),
+        {frozenset(ANNOTATION_WIRE_KEYS)},
         {frozenset(ANNOTATION_WIRE_KEYS)},
         {frozenset(ANNOTATION_WIRE_KEYS)},
     ]
     for graph, expected_keys in zip(graphs, expected_annotation_key_sets, strict=True):
         assert graph is not None
         assert graph["nodes"]
-        assert {frozenset(node) for node in graph["nodes"]} == {
-            frozenset(NODE_WIRE_KEYS)
-        }
+        assert {frozenset(node) for node in graph["nodes"]} == {frozenset(NODE_WIRE_KEYS)}
         assert {frozenset(annotation) for annotation in graph["annotations"]} == expected_keys
 
     # Then: registry-backed titles replace only the two stale labels.
@@ -386,12 +383,30 @@ def test_optimization_projection_includes_step_derivatives_and_quality(tmp_path:
         json.dumps(
             _cycle_payload(
                 [
-                    {"cycle": 1, "energy_hartree": -10.0, "rms_gradient": 0.2,
-                     "max_gradient": 0.4, "rms_displacement": 0.01, "max_displacement": 0.02},
-                    {"cycle": 2, "energy_hartree": -10.1, "rms_gradient": 0.01,
-                     "max_gradient": 0.02, "rms_displacement": 0.005, "max_displacement": 0.01},
-                    {"cycle": 3, "energy_hartree": -10.2, "rms_gradient": 0.001,
-                     "max_gradient": 0.002, "rms_displacement": 0.0005, "max_displacement": 0.001},
+                    {
+                        "cycle": 1,
+                        "energy_hartree": -10.0,
+                        "rms_gradient": 0.2,
+                        "max_gradient": 0.4,
+                        "rms_displacement": 0.01,
+                        "max_displacement": 0.02,
+                    },
+                    {
+                        "cycle": 2,
+                        "energy_hartree": -10.1,
+                        "rms_gradient": 0.01,
+                        "max_gradient": 0.02,
+                        "rms_displacement": 0.005,
+                        "max_displacement": 0.01,
+                    },
+                    {
+                        "cycle": 3,
+                        "energy_hartree": -10.2,
+                        "rms_gradient": 0.001,
+                        "max_gradient": 0.002,
+                        "rms_displacement": 0.0005,
+                        "max_displacement": 0.001,
+                    },
                 ],
                 thresholds={"rms_gradient": 1e-4, "max_gradient": 3e-4},
             )
@@ -431,8 +446,14 @@ def test_optimization_projection_flags_single_cycle_as_partial(tmp_path: Path) -
     path.write_text(
         json.dumps(
             _cycle_payload(
-                [{"cycle": 1, "energy_hartree": -10.0, "rms_gradient": 0.001,
-                  "max_gradient": 0.002}]
+                [
+                    {
+                        "cycle": 1,
+                        "energy_hartree": -10.0,
+                        "rms_gradient": 0.001,
+                        "max_gradient": 0.002,
+                    }
+                ]
             )
         ),
         encoding="utf-8",
@@ -689,3 +710,167 @@ def test_build_energy_graph_from_job_sanitizes_nan_in_pes_payload(tmp_path: Path
     assert graph["view_type"] == "scan"
     assert graph["provenance"] == {"worst_residual": None}
     assert graph["nodes"][0]["metadata"]["actual_coordinate"] is None
+
+
+def _opt_payload(cycles, **overrides):
+    """Build an optimization trajectory payload for min/max annotation tests."""
+    payload = {
+        "schema_version": 1,
+        "status": "completed",
+        "converged": True,
+        "current_cycle": len(cycles),
+        "cycles": cycles,
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _write_opt(tmp_path, payload):
+    path = tmp_path / "RESULT" / "trajectories" / "optimization.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def test_optimization_five_cycle_annotations_min_max(tmp_path):
+    """Five distinct-energy cycles produce both minimum and maximum annotations."""
+    _write_opt(
+        tmp_path,
+        _opt_payload(
+            [
+                {"cycle": 1, "energy_hartree": -10.0},
+                {"cycle": 2, "energy_hartree": -10.1},
+                {"cycle": 3, "energy_hartree": -9.9},
+                {"cycle": 4, "energy_hartree": -10.2},
+                {"cycle": 5, "energy_hartree": -10.05},
+            ]
+        ),
+    )
+
+    graph = build_optimization_energy_graph("job-five", tmp_path)
+
+    assert graph is not None
+    annotations = graph["annotations"]
+    ann_types = [a["type"] for a in annotations]
+    assert ann_types.count("minimum") == 1
+    assert ann_types.count("maximum") == 1
+    min_ann = next(a for a in annotations if a["type"] == "minimum")
+    max_ann = next(a for a in annotations if a["type"] == "maximum")
+    assert min_ann["label"] == "最低能量周期"
+    assert max_ann["label"] == "最高能量周期"
+    assert min_ann["selected"] is False
+    assert max_ann["selected"] is False
+    # Cycle 4 has energy -10.2 (lowest); cycle 3 has -9.9 (highest)
+    assert min_ann["frame_index"] == 3
+    assert max_ann["frame_index"] == 2
+    assert min_ann["x"] == 4.0
+    assert max_ann["x"] == 3.0
+    assert min_ann["y"] is not None
+    assert max_ann["y"] is not None
+
+
+def test_optimization_single_cycle_only_minimum(tmp_path):
+    """Single-cycle trajectory emits minimum only, no maximum."""
+    _write_opt(
+        tmp_path,
+        _opt_payload([{"cycle": 1, "energy_hartree": -10.0}]),
+    )
+
+    graph = build_optimization_energy_graph("job-one", tmp_path)
+
+    assert graph is not None
+    annotations = graph["annotations"]
+    ann_types = [a["type"] for a in annotations]
+    assert "minimum" in ann_types
+    assert "maximum" not in ann_types
+    assert len([a for a in annotations if a["type"] == "minimum"]) == 1
+
+
+def test_optimization_all_none_energies_no_annotations(tmp_path):
+    """All-None energies produce no min/max annotations without raising."""
+    _write_opt(
+        tmp_path,
+        _opt_payload(
+            [
+                {"cycle": 1, "energy_hartree": None},
+                {"cycle": 2, "energy_hartree": None},
+            ]
+        ),
+    )
+
+    graph = build_optimization_energy_graph("job-allnone", tmp_path)
+
+    assert graph is not None
+    annotations = graph["annotations"]
+    assert all(a["type"] not in {"minimum", "maximum"} for a in annotations)
+
+
+def test_optimization_min_max_coincide_skips_maximum(tmp_path):
+    """When minimum and maximum coincide, only minimum is emitted."""
+    _write_opt(
+        tmp_path,
+        _opt_payload(
+            [
+                {"cycle": 1, "energy_hartree": -10.0},
+                {"cycle": 2, "energy_hartree": -10.0},
+            ]
+        ),
+    )
+
+    graph = build_optimization_energy_graph("job-same", tmp_path)
+
+    assert graph is not None
+    annotations = graph["annotations"]
+    ann_types = [a["type"] for a in annotations]
+    assert "minimum" in ann_types
+    assert "maximum" not in ann_types
+    assert len([a for a in annotations if a["type"] == "minimum"]) == 1
+
+
+def test_optimization_annotations_do_not_alter_series_x_axis_nodes(tmp_path):
+    """Annotations are additive: series, x_axis, and node metadata are preserved."""
+    _write_opt(
+        tmp_path,
+        _opt_payload(
+            [
+                {"cycle": 1, "energy_hartree": -10.0, "rms_gradient": 0.1},
+                {"cycle": 2, "energy_hartree": -10.1, "rms_gradient": 0.01},
+                {"cycle": 3, "energy_hartree": -9.9, "rms_gradient": 0.001},
+            ]
+        ),
+    )
+
+    graph = build_optimization_energy_graph("job-preserve", tmp_path)
+
+    assert graph is not None
+    assert len(graph["nodes"]) == 3
+    assert graph["x_axis"] == {"label": "优化周期", "unit": "cycle"}
+    series_ids = {item["id"] for item in graph["series"]}
+    assert "relative_energy" in series_ids
+    assert "scf_energy" in series_ids
+    # Nodes still have the same wire shape
+    for node in graph["nodes"]:
+        assert set(node.keys()) == NODE_WIRE_KEYS
+    # Annotations do not carry node metadata keys
+    for ann in graph["annotations"]:
+        assert ann["type"] in {"minimum", "maximum"}
+
+
+def test_optimization_min_max_annotations_wire_key_parity(tmp_path):
+    """Min/max annotations have exactly the standard annotation wire keys."""
+    _write_opt(
+        tmp_path,
+        _opt_payload(
+            [
+                {"cycle": 1, "energy_hartree": -10.0},
+                {"cycle": 2, "energy_hartree": -10.1},
+                {"cycle": 3, "energy_hartree": -9.9},
+            ]
+        ),
+    )
+
+    graph = build_optimization_energy_graph("job-wire", tmp_path)
+
+    assert graph is not None
+    for ann in graph["annotations"]:
+        assert frozenset(ann) == frozenset(ANNOTATION_WIRE_KEYS)
