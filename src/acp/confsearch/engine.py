@@ -204,6 +204,10 @@ class ConfsearchEngine:
             ),
             quality_gates=gates,
         )
+
+        # Sampling history capture for MD protocols (best-effort).
+        self._capture_sampling_history(request, confsearch_dir, payload)
+
         manifest_path = write_manifest(confsearch_dir, payload)
         logger.info("Confsearch manifest written: %s", manifest_path)
         if progress_reporter is not None:
@@ -219,6 +223,43 @@ class ConfsearchEngine:
             quality_gates=gates,
             metadata=dict(outcome.workflow_metadata),
         )
+
+    @staticmethod
+    def _capture_sampling_history(
+        request: ConfsearchRequest,
+        confsearch_dir: Path,
+        payload: dict[str, Any],
+    ) -> None:
+        """Write sampling_history.json for MD protocols (best-effort).
+
+        For ``xtb-md`` / ``xtbmd-censo`` protocols, locates the merged
+        trajectory at ``WORK/02_SEARCH/xTB/traj.xyz`` and runs the full
+        sampling pipeline.  Failure is swallowed to a warning — the job
+        must never fail because of sampling capture.
+        """
+        if request.protocol not in ("xtb-md", "xtbmd-censo"):
+            logger.debug("Skipping sampling history for protocol %s", request.protocol)
+            return
+        try:
+            from .sampling import compute_sampling_history, write_sampling_history
+
+            task_root = confsearch_dir.parent.parent
+            traj_path = task_root / "WORK" / "02_SEARCH" / "xTB" / "traj.xyz"
+            if not traj_path.is_file():
+                logger.warning("Sampling history: trajectory not found at %s", traj_path)
+                return
+            history = compute_sampling_history(traj_path, protocol=request.protocol)
+            write_sampling_history(task_root, history)
+            payload["sampling"]["sampling_history"] = "confsearch/sampling_history.json"
+            payload["sampling"]["saturation"] = history.saturation.level
+            logger.info(
+                "Sampling history captured: %d frames, %d basins, saturation=%s",
+                history.n_frames_used,
+                len(history.basins),
+                history.saturation.level,
+            )
+        except Exception as exc:
+            logger.warning("Sampling history capture failed: %s", exc)
 
     def _confsearch_dir(self, request: ConfsearchRequest) -> Path:
         from acp.io.structures import StructureReader
