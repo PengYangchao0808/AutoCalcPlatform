@@ -463,6 +463,144 @@ class TestSamplingFrameEndpoint:
         resp = client.get("/api/v1/jobs/nonexistent/sampling/frame/0")
         assert resp.status_code == 404
 
+    def test_sampling_frame_basin_with_equilibration_cut(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        """Regression: basin lookup must use positional index, not trajectory index.
+
+        When equilibration_cut > 0, trajectory indices (2, 3, 4) diverge from
+        positional indices (0, 1, 2) in history.frames / basin_ids.  The old
+        code used basin_ids[frame_index] which returned None (or IndexError).
+        """
+        work_dir = _make_sampling_task_with_equilibration_cut(tmp_path)
+        job_id = _register_job(
+            client, tmp_path, work_dir, job_id="samp_cut", workflow="Confsearch"
+        )
+        # frame_index=3 → position 1 → basin_ids[1] = 1
+        resp = client.get(f"/api/v1/jobs/{job_id}/sampling/frame/3")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["frame_index"] == 3
+        assert body["basin_id"] == 1
+
+    def test_sampling_frame_basin_last_frame_with_cut(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        """Regression: last frame with equilibration cut returns correct basin."""
+        work_dir = _make_sampling_task_with_equilibration_cut(tmp_path)
+        job_id = _register_job(
+            client, tmp_path, work_dir, job_id="samp_cut2", workflow="Confsearch"
+        )
+        # frame_index=4 → position 2 → basin_ids[2] = 1
+        resp = client.get(f"/api/v1/jobs/{job_id}/sampling/frame/4")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["frame_index"] == 4
+        assert body["basin_id"] == 1
+
+
+def _make_sampling_task_with_equilibration_cut(tmp_path: Path) -> Path:
+    """Sampling task where equilibration_cut=2 makes traj indices ≠ positions.
+
+    Trajectory has 5 frames (indices 0-4); after cutting the first 2,
+    history.frames contains indices [2, 3, 4] at positions [0, 1, 2].
+    basin_ids = [0, 1, 1] — distinct basins to verify positional lookup.
+    """
+    root = tmp_path / "sampling_cut_task"
+    result_dir = root / "RESULT" / "confsearch"
+    result_dir.mkdir(parents=True, exist_ok=True)
+    work_traj_dir = root / "WORK" / "02_SEARCH" / "xTB"
+    work_traj_dir.mkdir(parents=True, exist_ok=True)
+
+    frames_xyz = []
+    for i in range(5):
+        frames_xyz.append(
+            f"3\nmd: {0.5 * (i + 1):.1f} {-100.0 + i * 0.5:.2f} (kcal/mol) -300.0\n"
+            "O 0.0 0.0 0.0\nH 0.0 0.0 0.96\nH 0.0 0.0 -0.96\n"
+        )
+    (work_traj_dir / "traj.xyz").write_text("".join(frames_xyz), encoding="utf-8")
+
+    # After equilibration_cut=2, only frames with index 2,3,4 remain
+    history = {
+        "schema_version": "sampling_history_v1",
+        "protocol": "xtb-md",
+        "source_trajectory": str(work_traj_dir / "traj.xyz"),
+        "n_frames_raw": 5,
+        "n_frames_used": 3,
+        "equilibration_cut": 2,
+        "frames": [
+            {
+                "index": i + 2,
+                "time_ps": 0.5 * (i + 3),
+                "step": i + 2,
+                "energy_kcal_mol": -100.0 + (i + 2) * 0.5,
+                "relative_energy_kcal_mol": i * 0.5,
+                "basin_id": [0, 1, 1][i],
+                "is_new_basin": i == 0 or i == 1,
+                "mds": [0.0, float(i)],
+            }
+            for i in range(3)
+        ],
+        "basins": [
+            {
+                "basin_id": 0,
+                "first_seen_index": 0,
+                "first_seen_ps": 1.5,
+                "visit_count": 1,
+                "min_energy": -99.0,
+                "representative_frame": 0,
+            },
+            {
+                "basin_id": 1,
+                "first_seen_index": 1,
+                "first_seen_ps": 2.0,
+                "visit_count": 2,
+                "min_energy": -98.5,
+                "representative_frame": 1,
+            },
+        ],
+        "saturation": {
+            "unique_clusters": 2,
+            "new_clusters_last_20pct": 0,
+            "last_new_basin_ps": 2.0,
+            "revisit_ratio": 0.5,
+            "energy_window_kcal_mol": 1.0,
+            "level": "HIGH",
+            "cumulative_unique": [
+                {"time_ps": 1.5, "unique": 1},
+                {"time_ps": 2.0, "unique": 2},
+                {"time_ps": 2.5, "unique": 2},
+            ],
+        },
+        "computed_at": "2026-09-07T00:00:00Z",
+        "subsampled": False,
+        "subsample_stride": 1,
+    }
+    (result_dir / "sampling_history.json").write_text(json.dumps(history), encoding="utf-8")
+
+    manifest = {
+        "schema_version": "confsearch_v1",
+        "workflow": "Confsearch",
+        "conformers": [
+            {
+                "rank": 1,
+                "conf_id": "conf_1",
+                "free_energy_hartree": -100.0,
+                "relative_energy_kcal": 0.0,
+                "geometry": "conf_1.xyz",
+            }
+        ],
+        "selected_conformers": [],
+    }
+    (result_dir / "confsearch_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (result_dir / "conf_1.xyz").write_text(
+        _XYZ_3ATOM.replace("comment", "conf 1"), encoding="utf-8"
+    )
+    (root / "RESULT" / "result_manifest.json").write_text(
+        json.dumps({"version": 2, "task_id": "", "products": []}), encoding="utf-8"
+    )
+    return root
+
 
 class TestEnergyGraphViewParam:
     """GET /jobs/{job_id}/energy-graph?view=sampling tests."""

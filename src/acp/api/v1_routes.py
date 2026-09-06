@@ -2182,9 +2182,10 @@ def get_sampling_frame(
 
     # Find the frame by its trajectory index (not positional)
     frame = None
-    for f in history.frames:
+    frame_pos: int | None = None
+    for pos, f in enumerate(history.frames):
         if f.index == frame_index:
-            frame = f
+            frame, frame_pos = f, pos
             break
     if frame is None:
         raise HTTPException(
@@ -2207,10 +2208,10 @@ def get_sampling_frame(
     if frame.energy_kcal_mol is not None and min_energy is not None:
         relative = frame.energy_kcal_mol - min_energy
 
-    # Basin id from history
+    # Basin id from history — use positional index, not trajectory index
     basin_id = None
-    if frame_index < len(history.basin_ids):
-        basin_id = history.basin_ids[frame_index]
+    if frame_pos is not None and frame_pos < len(history.basin_ids):
+        basin_id = history.basin_ids[frame_pos]
 
     return V1SamplingFrameResponse(
         job_id=job_id,
