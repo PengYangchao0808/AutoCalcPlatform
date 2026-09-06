@@ -16,6 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from acp.results.frames import VIEW_REGISTRY, TrajectoryAnnotation, TrajectoryFrame
+
 HARTREE_TO_KCAL = 627.5094740631
 
 __all__ = [
@@ -26,6 +28,7 @@ __all__ = [
     "build_pes_energy_graph",
     "build_s2_energy_graph",
     "build_unavailable_energy_graph",
+    "find_optimization_trajectory",
 ]
 
 
@@ -198,17 +201,17 @@ def build_s2_energy_graph(
         status = "converged" if bool(frame.get("optimization_converged")) else "failed"
         if str(frame.get("single_point_status") or "").lower() == "failed":
             status = "failed"
+        frame_index = int(frame.get("index", position))
         nodes.append(
-            {
-                "id": f"frame_{int(frame.get('index', position))}",
-                "label": f"Frame {int(frame.get('index', position)) + 1}",
-                "type": "frame",
-                "frame_index": int(frame.get("index", position)),
-                "x": x,
-                "energy": default_values[position] if position < len(default_values) else None,
-                "status": status,
-                "geometry_ref": str(frame.get("geometry_path") or ""),
-                "metadata": {
+            TrajectoryFrame(
+                frame_id=f"frame_{frame_index}",
+                label=f"Frame {frame_index + 1}",
+                frame_index=frame_index,
+                x=x,
+                energy=default_values[position] if position < len(default_values) else None,
+                status=status,
+                geometry_ref=str(frame.get("geometry_path") or ""),
+                metadata={
                     "target_coordinate": _number(frame.get("target_coordinate")),
                     "actual_coordinate": _number(frame.get("actual_coordinate")),
                     "target_coordinates": _sanitize_json(frame.get("target_coordinates") or {}),
@@ -219,7 +222,7 @@ def build_s2_energy_graph(
                     ),
                     "single_point_status": frame.get("single_point_status"),
                 },
-            }
+            ).to_node(VIEW_REGISTRY["scan"].node_type)
         )
 
     node_by_frame = {node["frame_index"]: node for node in nodes}
@@ -266,56 +269,56 @@ def build_s2_energy_graph(
             continue
         label_source = recommendation or saved or {}
         annotations.append(
-            {
-                "id": candidate_id,
-                "candidate_id": candidate_id,
-                "type": marker_type,
-                "label": _candidate_label(label_source, position),
-                "frame_index": frame_index,
-                "x": node["x"],
-                "y": node["energy"],
-                "status": node["status"],
-                "geometry_ref": node["geometry_ref"],
-                "selected": active,
-                "active": active,
-                "saved": saved_any and saved is not None,
-                "recommended_type": recommended_type,
-                "selection_source": selection_source,
-                "confidence": (recommendation or saved or {}).get("confidence"),
-                "reason": (recommendation or saved or {}).get("reason"),
-            }
+            TrajectoryAnnotation(
+                id=candidate_id,
+                type=marker_type,
+                label=_candidate_label(label_source, position),
+                frame_index=frame_index,
+                x=node["x"],
+                y=node["energy"],
+                status=node["status"],
+                geometry_ref=node["geometry_ref"],
+                selected=active,
+                metadata={
+                    "candidate_id": candidate_id,
+                    "active": active,
+                    "saved": saved_any and saved is not None,
+                    "recommended_type": recommended_type,
+                    "selection_source": selection_source,
+                    "confidence": (recommendation or saved or {}).get("confidence"),
+                    "reason": (recommendation or saved or {}).get("reason"),
+                },
+            ).to_annotation()
         )
 
     finite_nodes = [node for node in nodes if node.get("energy") is not None]
     if finite_nodes:
         minimum = min(finite_nodes, key=lambda node: float(node["energy"]))
         annotations.append(
-            {
-                "id": f"minimum_{minimum['frame_index']}",
-                "type": "minimum",
-                "label": "最低能量",
-                "frame_index": minimum["frame_index"],
-                "x": minimum["x"],
-                "y": minimum["energy"],
-                "status": minimum["status"],
-                "geometry_ref": minimum["geometry_ref"],
-                "selected": False,
-            }
+            TrajectoryAnnotation(
+                id=f"minimum_{minimum['frame_index']}",
+                type="minimum",
+                label="最低能量",
+                frame_index=minimum["frame_index"],
+                x=minimum["x"],
+                y=minimum["energy"],
+                status=minimum["status"],
+                geometry_ref=minimum["geometry_ref"],
+            ).to_annotation()
         )
     for node in nodes:
         if node["status"] == "failed":
             annotations.append(
-                {
-                    "id": f"failed_{node['frame_index']}",
-                    "type": "failed",
-                    "label": "未收敛",
-                    "frame_index": node["frame_index"],
-                    "x": node["x"],
-                    "y": node["energy"],
-                    "status": "failed",
-                    "geometry_ref": node["geometry_ref"],
-                    "selected": False,
-                }
+                TrajectoryAnnotation(
+                    id=f"failed_{node['frame_index']}",
+                    type="failed",
+                    label="未收敛",
+                    frame_index=node["frame_index"],
+                    x=node["x"],
+                    y=node["energy"],
+                    status="failed",
+                    geometry_ref=node["geometry_ref"],
+                ).to_annotation()
             )
 
     quality = scan.get("quality") or {}
@@ -330,7 +333,11 @@ def build_s2_energy_graph(
             else "RESULT/mechanism/s2_path_manifest.json"
         )
     )
-    title = "PESsearch 扫描能量" if original_schema == "pes_profile_v2" else "S2 扫描能量"
+    title = (
+        VIEW_REGISTRY["scan"].title_zh
+        if original_schema == "pes_profile_v2"
+        else "S2 扫描能量"
+    )
     projection: dict[str, Any] = _sanitize_json(
         {
             "job_id": job_id,
@@ -542,17 +549,16 @@ def build_optimization_energy_graph(
             "scf_iterations": cycle.get("scf_iterations"),
         }
         nodes.append(
-            {
-                "id": f"cycle_{index}",
-                "label": f"Cycle {int(x_values[index])}",
-                "type": "optimization_cycle",
-                "frame_index": index,
-                "x": x_values[index],
-                "energy": relative[index],
-                "status": cycle_status,
-                "geometry_ref": str(cycle.get("geometry_ref") or ""),
-                "metadata": node_metadata,
-            }
+            TrajectoryFrame(
+                frame_id=f"cycle_{index}",
+                label=f"Cycle {int(x_values[index])}",
+                frame_index=index,
+                x=x_values[index],
+                energy=relative[index],
+                status=cycle_status,
+                geometry_ref=str(cycle.get("geometry_ref") or ""),
+                metadata=node_metadata,
+            ).to_node(VIEW_REGISTRY["optimization"].node_type)
         )
 
     metadata = {
@@ -568,7 +574,7 @@ def build_optimization_energy_graph(
         {
             "job_id": job_id,
             "view_type": "optimization",
-            "title": "几何结构优化",
+            "title": VIEW_REGISTRY["optimization"].title_zh,
             "status": status,
             "complete": complete,
             "revision": _revision(trajectory),
@@ -707,6 +713,14 @@ def _find_optimization_trajectory(
     return selected
 
 
+def find_optimization_trajectory(
+    work_dir: Path,
+    item_id: str | None = None,
+) -> tuple[Path | None, dict[str, Any] | None]:
+    """Return the newest valid optimization trajectory for a work directory."""
+    return _find_optimization_trajectory(work_dir, item_id)
+
+
 def build_mechanism_energy_graph(job_id: str, report: dict[str, Any]) -> dict[str, Any] | None:
     """Build a reaction-path graph from ``mechanism_profile`` JSON data."""
     profile = report.get("mechanism_profile") if isinstance(report, dict) else None
@@ -739,22 +753,23 @@ def build_mechanism_energy_graph(job_id: str, report: dict[str, Any]) -> dict[st
             )
             if method_index == 0:
                 for point_index, point in enumerate(ordered):
+                    point_id = str(
+                        point.get("point_id") or f"route_{route_index}_point_{point_index}"
+                    )
+                    point_x = _number(point.get("progress")) or float(point_index)
+                    point_energy = (
+                        relative[point_index] if point_index < len(relative) else None
+                    )
                     nodes.append(
-                        {
-                            "id": str(
-                                point.get("point_id") or f"route_{route_index}_point_{point_index}"
-                            ),
-                            "label": str(point.get("point_id") or f"Point {point_index + 1}"),
-                            "type": "reaction_point",
-                            "frame_index": point_index,
-                            "x": _number(point.get("progress")) or float(point_index),
-                            "energy": relative[point_index]
-                            if point_index < len(relative)
-                            else None,
-                            "status": str(route.get("status") or "unknown"),
-                            "geometry_ref": "",
-                            "metadata": {"route_id": route.get("route_id"), "method": method},
-                        }
+                        TrajectoryFrame(
+                            frame_id=point_id,
+                            label=str(point.get("point_id") or f"Point {point_index + 1}"),
+                            frame_index=point_index,
+                            x=point_x,
+                            energy=point_energy,
+                            status=str(route.get("status") or "unknown"),
+                            metadata={"route_id": route.get("route_id"), "method": method},
+                        ).to_node(VIEW_REGISTRY["reaction_path"].node_type)
                     )
         for point in route.get("refined_stationary_points") or []:
             if not isinstance(point, dict):
@@ -762,27 +777,26 @@ def build_mechanism_energy_graph(job_id: str, report: dict[str, Any]) -> dict[st
             match = next((node for node in nodes if node["id"] == str(point.get("point_id"))), None)
             if match is not None:
                 annotations.append(
-                    {
-                        "id": str(point.get("point_id")),
-                        "type": "ts"
+                    TrajectoryAnnotation(
+                        id=str(point.get("point_id")),
+                        type="ts"
                         if str(point.get("role") or point.get("kind") or "").lower()
                         in {"ts", "transition_state"}
                         else "intermediate",
-                        "label": str(point.get("point_id")),
-                        "frame_index": match["frame_index"],
-                        "x": match["x"],
-                        "y": match["energy"],
-                        "status": "canonical" if point.get("canonical") else "candidate",
-                        "geometry_ref": "",
-                        "selected": bool(point.get("canonical")),
-                    }
+                        label=str(point.get("point_id")),
+                        frame_index=match["frame_index"],
+                        x=match["x"],
+                        y=match["energy"],
+                        status="canonical" if point.get("canonical") else "candidate",
+                        selected=bool(point.get("canonical")),
+                    ).to_annotation()
                 )
     if not series:
         return None
     return {
         "job_id": job_id,
         "view_type": "reaction_path",
-        "title": "反应路径能量图",
+        "title": VIEW_REGISTRY["reaction_path"].title_zh,
         "status": "completed",
         "complete": True,
         "revision": _revision(report),
@@ -1005,22 +1019,21 @@ def _build_conformer_graph(
     for index, record in enumerate(records):
         rank = int(record["rank"])
         nodes.append(
-            {
-                "id": f"conf_{rank}",
-                "label": str(record["conf_id"]),
-                "type": "conformer",
-                "frame_index": rank - 1,
-                "x": rank,
-                "energy": default_values[index] if index < len(default_values) else None,
-                "status": "completed",
-                "geometry_ref": str(record.get("geometry_ref") or ""),
-                "metadata": {
+            TrajectoryFrame(
+                frame_id=f"conf_{rank}",
+                label=str(record["conf_id"]),
+                frame_index=rank - 1,
+                x=rank,
+                energy=default_values[index] if index < len(default_values) else None,
+                status="completed",
+                geometry_ref=str(record.get("geometry_ref") or ""),
+                metadata={
                     "gibbs_hartree": gibbs[index],
                     "energy_hartree": absolute[index],
                     "weight": weights[index],
                     "rank": rank,
                 },
-            }
+            ).to_node(VIEW_REGISTRY["conformer"].node_type)
         )
 
     gibbs_indices = [index for index, value in enumerate(gibbs) if value is not None]
@@ -1031,17 +1044,16 @@ def _build_conformer_graph(
         minimum_index = min(relative_indices, key=lambda index: relative[index] or 0.0)
     minimum = nodes[minimum_index]
     annotations = [
-        {
-            "id": f"minimum_{minimum['frame_index']}",
-            "type": "minimum",
-            "label": "最低能量",
-            "frame_index": minimum["frame_index"],
-            "x": minimum["x"],
-            "y": minimum["energy"],
-            "status": minimum["status"],
-            "geometry_ref": minimum["geometry_ref"],
-            "selected": False,
-        }
+        TrajectoryAnnotation(
+            id=f"minimum_{minimum['frame_index']}",
+            type="minimum",
+            label="最低能量",
+            frame_index=minimum["frame_index"],
+            x=minimum["x"],
+            y=minimum["energy"],
+            status=minimum["status"],
+            geometry_ref=minimum["geometry_ref"],
+        ).to_annotation()
     ]
     metadata: dict[str, Any] = {"conformer_count": len(nodes)}
     if result_status:
@@ -1049,7 +1061,7 @@ def _build_conformer_graph(
     return {
         "job_id": job_id,
         "view_type": "conformer",
-        "title": "构象能量分布",
+        "title": VIEW_REGISTRY["conformer"].title_zh,
         "status": "completed",
         "complete": True,
         "revision": _revision(revision_payload),

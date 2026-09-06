@@ -9,10 +9,45 @@ from pathlib import Path
 import pytest
 
 from acp.results.energy_graph import (
+    build_conformer_energy_graph,
     build_energy_graph_from_job,
+    build_mechanism_energy_graph,
     build_optimization_energy_graph,
     build_s2_energy_graph,
+    find_optimization_trajectory,
 )
+
+NODE_WIRE_KEYS = {
+    "id",
+    "label",
+    "type",
+    "frame_index",
+    "x",
+    "energy",
+    "status",
+    "geometry_ref",
+    "metadata",
+}
+ANNOTATION_WIRE_KEYS = {
+    "id",
+    "type",
+    "label",
+    "frame_index",
+    "x",
+    "y",
+    "status",
+    "geometry_ref",
+    "selected",
+}
+ANNOTATION_CANDIDATE_KEYS = ANNOTATION_WIRE_KEYS | {
+    "active",
+    "saved",
+    "candidate_id",
+    "recommended_type",
+    "selection_source",
+    "confidence",
+    "reason",
+}
 
 
 def _s2_payload() -> dict:
@@ -121,9 +156,89 @@ def test_pes_profile_v2_projection_uses_canonical_fields() -> None:
         s2_payload=payload,
     )
 
-    assert graph["title"] == "PESsearch 扫描能量"
+    assert graph["title"] == "PES 扫描能量"
     assert graph["source"] == "RESULT/pes_search/pes_profile.json"
     assert graph["nodes"][0]["geometry_ref"] == "scan_frames/frame_000.xyz"
+
+
+def test_four_view_projections_preserve_pre_migration_wire_key_sets(tmp_path: Path) -> None:
+    # Given: one representative projection for each pre-migration graph builder.
+    optimization_path = tmp_path / "RESULT" / "trajectories" / "optimization.json"
+    optimization_path.parent.mkdir(parents=True)
+    optimization_path.write_text(
+        json.dumps(_cycle_payload([{"cycle": 1, "energy_hartree": -10.0}]))
+    )
+    conformer_path = tmp_path / "RESULT" / "confsearch" / "confsearch_manifest.json"
+    conformer_path.parent.mkdir(parents=True)
+    conformer_path.write_text(
+        json.dumps(
+            {
+                "status": "completed",
+                "conformers": [
+                    {
+                        "conf_id": "CONF1",
+                        "free_energy_hartree": -10.0,
+                        "relative_energy_kcal": 0.0,
+                        "rank": 1,
+                    }
+                ],
+            }
+        )
+    )
+    mechanism = build_mechanism_energy_graph(
+        "mechanism",
+        {
+            "mechanism_profile": {
+                "routes": [
+                    {
+                        "route_id": "route-1",
+                        "status": "completed",
+                        "methods": {
+                            "orca": [
+                                {
+                                    "point_id": "p0",
+                                    "progress": 0.0,
+                                    "energy_hartree": -10.0,
+                                }
+                            ]
+                        },
+                        "refined_stationary_points": [
+                            {"point_id": "p0", "role": "ts", "canonical": True}
+                        ],
+                    }
+                ]
+            }
+        },
+    )
+    scan_payload = _s2_payload()
+    scan_payload["schema_version"] = "pes_profile_v2"
+    graphs = [
+        build_s2_energy_graph("scan", scan_payload),
+        build_optimization_energy_graph("optimization", tmp_path),
+        build_conformer_energy_graph("conformer", tmp_path),
+        mechanism,
+    ]
+
+    # When: each projection is inspected at the frontend wire boundary.
+    expected_annotation_key_sets = [
+        {frozenset(ANNOTATION_WIRE_KEYS), frozenset(ANNOTATION_CANDIDATE_KEYS)},
+        set(),
+        {frozenset(ANNOTATION_WIRE_KEYS)},
+        {frozenset(ANNOTATION_WIRE_KEYS)},
+    ]
+    for graph, expected_keys in zip(graphs, expected_annotation_key_sets, strict=True):
+        assert graph is not None
+        assert graph["nodes"]
+        assert {frozenset(node) for node in graph["nodes"]} == {
+            frozenset(NODE_WIRE_KEYS)
+        }
+        assert {frozenset(annotation) for annotation in graph["annotations"]} == expected_keys
+
+    # Then: registry-backed titles replace only the two stale labels.
+    assert graphs[0]["title"] == "PES 扫描能量"
+    assert graphs[1]["title"] == "几何优化轨迹"
+    assert graphs[2]["title"] == "构象能量分布"
+    assert graphs[3]["title"] == "反应路径能量图"
 
 
 def test_optimization_projection_reads_existing_result_product(tmp_path: Path) -> None:
@@ -144,6 +259,7 @@ def test_optimization_projection_reads_existing_result_product(tmp_path: Path) -
 
     assert graph is not None
     assert graph["view_type"] == "optimization"
+    assert graph["title"] == "几何优化轨迹"
     assert graph["complete"] is True
     assert len(graph["nodes"]) == 3
     assert {item["id"] for item in graph["series"]} == {
@@ -152,6 +268,10 @@ def test_optimization_projection_reads_existing_result_product(tmp_path: Path) -
         "rms_gradient",
     }
     assert graph["metadata"]["quality"]["status"] == "complete"
+
+
+def test_public_optimization_trajectory_lookup_returns_empty_result(tmp_path: Path) -> None:
+    assert find_optimization_trajectory(tmp_path) == (None, None)
 
 
 def _cycle_payload(cycles: list[dict], **overrides) -> dict:
