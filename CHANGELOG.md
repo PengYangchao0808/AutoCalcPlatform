@@ -13,6 +13,17 @@ The git tag `v0.N.X` on `main` is the single source of truth; the four
 in-repo version sites (`pyproject.toml`, `src/acp/__init__.py`,
 `src/cccp/__init__.py`, `src/cccp/version.py`) must always equal the latest tag.
 
+## [0.1.2] - 2026-09-06
+
+Patch release: post-milestone frontend and API fixes.
+
+### Fixes
+
+- optimization: rebuild optimization energy viewer and trajectory capture.
+- api: upload parses via detect_and_parse candidate-fallback chain.
+- frontend: task-result scope, parse race and empty-state clarity in wizard.
+- frontend: collision-aware annotation layout for energy chart.
+
 ## [0.1.1] - 2026-09-05
 
 Patch release: CI enablement repairs and post-milestone fixes.
@@ -69,5 +80,6 @@ First external sync milestone: post-refactor minimal architecture
 - cli: preflight warning now states that a missing executable only affects
   engine configurations that actually call it.
 
+[0.1.2]: https://github.com/PengYangchao0808/AutoCalcPlatform/releases/tag/v0.1.2
 [0.1.1]: https://github.com/PengYangchao0808/AutoCalcPlatform/releases/tag/v0.1.1
 [0.1.0]: https://github.com/PengYangchao0808/AutoCalcPlatform/releases/tag/v0.1.0
