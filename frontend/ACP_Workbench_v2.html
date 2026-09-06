@@ -6689,6 +6689,28 @@ function energyGraphSeriesValueAtFrame(data, series, frameIndex) {
   return nodeIndex >= 0 ? energyGraphValue(values[nodeIndex]) : null;
 }
 
+/* ── Text measurement: canvas-based with CJK-aware fallback ── */
+var _egMeasureCanvas = null;
+var _egMeasureCtx = null;
+var _egFontFamily = "'IBM Plex Sans', 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', sans-serif";
+function energyGraphMeasureText(text, fontSize, bold) {
+  if (!_egMeasureCanvas) {
+    try { _egMeasureCanvas = document.createElement("canvas"); _egMeasureCtx = _egMeasureCanvas.getContext("2d"); } catch (_e) { _egMeasureCanvas = null; _egMeasureCtx = null; }
+  }
+  var fs = fontSize || 11;
+  if (_egMeasureCtx) {
+    _egMeasureCtx.font = (bold ? "600 " : "") + fs + "px " + _egFontFamily;
+    return _egMeasureCtx.measureText(String(text || "")).width;
+  }
+  /* CJK/fullwidth-aware fallback: CJK ~1.0*fs, ASCII ~0.59*fs */
+  var w = 0, s = String(text || "");
+  for (var i = 0; i < s.length; i += 1) {
+    var c = s.charCodeAt(i);
+    w += (c > 0x2e7f && c < 0xa000) || (c > 0xf8ff && c < 0xfb00) || (c > 0xfe2f && c < 0xfe70) || (c > 0xfeff && c < 0xff60) || (c > 0xffe0) || (c > 0x3000 && c < 0x3040) ? fs : fs * 0.59;
+  }
+  return w;
+}
+
 function energyGraphChartGeometry() {
   var vs = energyGraphState.viewSize || { width: 0, height: 0 };
   var W = Math.max(280, vs.width || 1040);
@@ -6797,7 +6819,7 @@ function energyGraphUpdateSelection(frameChanged, skipSvg) {
             if (yVal !== null) {
               var xDom = energyGraphState.currentDomain ? energyGraphState.currentDomain.x : layout.baseX;
               var yDom = energyGraphState.currentDomain ? energyGraphState.currentDomain.y : layout.baseY;
-              var geom = energyGraphChartGeometry();
+              var geom = energyGraphState._cachedGeom || energyGraphChartGeometry();
               var Lp = geom.pad.left, Tp = geom.pad.top, Bp = geom.pad.bottom;
               var nodeX = energyGraphValue(node.x);
               var inDomain = nodeX >= xDom[0] && nodeX <= xDom[1] && yVal >= yDom[0] && yVal <= yDom[1];
@@ -6907,6 +6929,26 @@ function energyGraphBuildSvg(data) {
   var xDom = Array.isArray(energyGraphState.xDomain) ? energyGraphState.xDomain : layout.baseX;
   var yDom = Array.isArray(energyGraphState.yDomain) ? energyGraphState.yDomain : layout.baseY;
   energyGraphState.currentDomain = { x: xDom.slice(), y: yDom.slice() };
+  /* ── Dynamic padLeft: prevent Y-axis title/tick overlap ── */
+  (function() {
+    var maxTickW = 0;
+    for (var ti = 0; ti <= 4; ti += 1) {
+      var yv = yDom[0] + (yDom[1] - yDom[0]) * ti / 4;
+      var tw = energyGraphMeasureText(energyGraphFormatNumber(yv, 2), 11, false);
+      if (tw > maxTickW) maxTickW = tw;
+    }
+    /* title at x=18 rotated occupies ~11px in x-direction (font-size); tick text
+       at pad.left-12 anchor=end extends left by maxTickW.
+       Need: pad.left - 12 - maxTickW > 18 + 6 + 4  (title right + gap) */
+    var needed = Math.ceil(40 + maxTickW);
+    if (needed > pad.left) {
+      pad.left = Math.min(130, needed);
+      geom.pad.left = pad.left;
+      geom.plotRect.left = pad.left;
+      Pw = W - pad.left - pad.right;
+    }
+  })();
+  energyGraphState._cachedGeom = geom;
   function xFor(v) { return pad.left + ((v - xDom[0]) / (xDom[1] - xDom[0] || 1)) * Pw; }
   function yFor(v) { return pad.top + (1 - ((v - yDom[0]) / (yDom[1] - yDom[0] || 1))) * Ph; }
   var visiblePoints = points.filter(function(p) { return p.x >= xDom[0] && p.x <= xDom[1] && p.y >= yDom[0] && p.y <= yDom[1]; });
@@ -6974,57 +7016,99 @@ function energyGraphBuildSvg(data) {
     });
     layout.allAnnotations = allItems;
   }
-  var recomputed = layout.allAnnotations.map(function(item) {
-    return { annotation: item.annotation, dataX: item.dataX, x: xFor(item.dataX), y: yFor(item.dataY), value: item.value, frameIndex: item.frameIndex, type: item.type };
-  });
-  recomputed.sort(function(a, b) { return a.x - b.x; });
-  var LANE_UP = -14, LANE_DOWN = 16, LANE_STEP = 14, X_THRESHOLD = 34;
-  var laneSlots = [];
-  recomputed.forEach(function(item) {
-    var lane = 0;
-    for (var li = 0; li < laneSlots.length; li++) {
-      if (Math.abs(item.x - laneSlots[li].x) < X_THRESHOLD && laneSlots[li].lane === lane) {
-        lane = (lane === 0) ? 1 : 0;
-        var sc = false;
-        for (var lj = 0; lj < laneSlots.length; lj++) {
-          if (Math.abs(item.x - laneSlots[lj].x) < X_THRESHOLD && laneSlots[lj].lane === lane) { sc = true; break; }
-        }
-        if (sc) lane = 2;
-        break;
-      }
-    }
-    for (var lk = 0; lk < laneSlots.length; lk++) {
-      if (Math.abs(item.x - laneSlots[lk].x) < X_THRESHOLD && laneSlots[lk].lane === lane) { lane = lane + 1; break; }
-    }
-    laneSlots.push({ x: item.x, lane: lane });
-    item.lane = lane;
-  });
-  var renderAnnotations = recomputed.filter(function(item) {
+  /* ── (a) Filter BEFORE layout: visible + annotationMode ── */
+  var visibleAnnotations = layout.allAnnotations.filter(function(item) {
     if (item.dataX < xDom[0] || item.dataX > xDom[1]) return false;
     if (energyGraphState.annotationMode === "all") return true;
     if (energyGraphState.annotationMode === "candidate") return ["ts", "intermediate"].indexOf(item.type) >= 0;
     if (energyGraphState.annotationMode === "hide") return false;
     return energyGraphState.annotationMode === item.type;
   });
-  renderAnnotations.forEach(function(item) {
+  var pixelItems = visibleAnnotations.map(function(item) {
+    return { annotation: item.annotation, dataX: item.dataX, x: xFor(item.dataX), y: yFor(item.dataY), value: item.value, frameIndex: item.frameIndex, type: item.type,
+      label: String(item.annotation.label || item.annotation.id), caption: item.value !== null ? energyGraphFormatNumber(item.value, 2) : "" };
+  });
+  pixelItems.sort(function(a, b) { return a.x - b.x; });
+  /* ── (b+c+d) Collision-aware placement ── */
+  function _egRectOverlap(a, b) {
+    var xo = Math.max(0, Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left));
+    var yo = Math.max(0, Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top));
+    return xo * yo;
+  }
+  function _egLaneOffset(lane) {
+    if (lane === 0) return -14;
+    return lane > 0 ? 16 + (lane - 1) * 14 : -14 + lane * 14;
+  }
+  var placedRects = [];
+  /* (d) Selected-point halo as collision obstacle */
+  if (selectedFrame != null) {
+    var haloNode = nodes.find(function(n) { return Number(n.frame_index) === selectedFrame; });
+    if (haloNode && energyGraphValue(haloNode.x) !== null) {
+      var haloY = energyGraphSeriesValueAtFrame(data, series, selectedFrame);
+      if (haloY !== null) {
+        var hcx = xFor(haloNode.x), hcy = yFor(haloY);
+        if (hcx >= pad.left && hcx <= W - pad.right && hcy >= pad.top && hcy <= H - pad.bottom) {
+          placedRects.push({ left: hcx - 15, top: hcy - 15, width: 30, height: 30 });
+        }
+      }
+    }
+  }
+  pixelItems.forEach(function(item) {
+    var ax = item.x, ay = item.y;
+    var labelW = energyGraphMeasureText(item.label, 11, true);
+    var captionW = item.caption ? energyGraphMeasureText(item.caption, 10, false) : 0;
+    var blockW = Math.max(labelW, captionW) + 10;
+    var blockH = 32;
+    var bestSlot = null;
+    var bestOverlap = Infinity;
+    var maxLanes = 10;
+    for (var step = 0; step < maxLanes; step += 1) {
+      var lanes = step === 0 ? [0] : [step, -step];
+      for (var li = 0; li < lanes.length; li += 1) {
+        var lane = lanes[li];
+        var off = _egLaneOffset(lane);
+        var anchors = [{ lx: ax + 10, anc: "start" }, { lx: ax - 10, anc: "end" }];
+        for (var ai = 0; ai < anchors.length; ai += 1) {
+          var lx = anchors[ai].lx, anc = anchors[ai].anc;
+          var ly = Math.max(pad.top + 14, Math.min(H - pad.bottom - 6, ay + off));
+          var rect = anc === "start"
+            ? { left: lx - 5, top: ly - 14, width: blockW, height: blockH }
+            : { left: lx - blockW + 5, top: ly - 14, width: blockW, height: blockH };
+          var overlap = 0;
+          for (var ri = 0; ri < placedRects.length; ri += 1) {
+            overlap += _egRectOverlap(rect, placedRects[ri]);
+          }
+          if (rect.left < pad.left - 4) overlap += (pad.left - 4 - rect.left) * rect.height;
+          if (rect.left + rect.width > W - pad.right + 4) overlap += (rect.left + rect.width - W + pad.right - 4) * rect.height;
+          if (rect.top < pad.top - 2) overlap += (pad.top - 2 - rect.top) * rect.width;
+          if (rect.top + rect.height > H - pad.bottom + 2) overlap += (rect.top + rect.height - H + pad.bottom - 2) * rect.width;
+          if (overlap === 0) { bestSlot = { lx: lx, ly: ly, anc: anc, lane: lane, rect: rect }; break; }
+          if (overlap < bestOverlap) { bestOverlap = overlap; bestSlot = { lx: lx, ly: ly, anc: anc, lane: lane, rect: rect }; }
+        }
+        if (bestSlot && bestOverlap === 0) break;
+      }
+      if (bestSlot && bestOverlap === 0) break;
+    }
+    /* (g) Never drop labels: fall back to bestSlot even if crowded */
+    if (!bestSlot) bestSlot = { lx: ax + 10, ly: Math.max(pad.top + 14, ay - 14), anc: "start", lane: 0, rect: { left: ax + 5, top: Math.max(pad.top + 14, ay - 14) - 14, width: blockW, height: blockH } };
+    placedRects.push(bestSlot.rect);
+    item._lx = bestSlot.lx;
+    item._ly = bestSlot.ly;
+    item._anc = bestSlot.anc;
+    item._lane = bestSlot.lane;
+  });
+  /* ── Render annotations ── */
+  pixelItems.forEach(function(item) {
     var annotation = item.annotation;
-    var ax = item.x, ay = item.y, av = item.value, at = item.type, al = item.lane;
-    var labelOffsetY = al === 0 ? LANE_UP : (al === 1 ? LANE_DOWN : LANE_DOWN + (al - 1) * LANE_STEP);
-    var labelX = ax + 10, labelY = ay + labelOffsetY;
+    var ax = item.x, ay = item.y, av = item.value, at = item.type;
+    var labelX = item._lx, labelY = item._ly, labelAnchor = item._anc, al = item._lane;
     var isSelected = annotation.id === energyGraphState.selectedAnnotationId;
     var selectedClass = isSelected ? " selected" : "";
     var labelClass = isSelected ? " selected-label" : "";
     var isCandidate = at === "ts" || at === "intermediate";
     var stateClass = isCandidate ? (annotation.saved ? " saved" : " pending") : "";
     var dragAttr = isCandidate && !s2scanState.selectionLocked ? ' data-energy-draggable="1"' : "";
-    /* (c) Flip label inward if it would overflow plotRect right edge */
-    var estLabelW = String(annotation.label || annotation.id).length * 7 + 6;
-    var labelAnchor = "start";
-    if (labelX + estLabelW > geom.plotRect.right) {
-      labelX = ax - 10;
-      labelAnchor = "end";
-    }
-    labelY = Math.max(pad.top + 12, Math.min(H - pad.bottom - 4, labelY));
+    var estLabelW = energyGraphMeasureText(String(annotation.label || annotation.id), 11, true) + 6;
     svg += '<g data-energy-annotation="' + escapeHtml(String(annotation.id)) + '" data-energy-frame="' + escapeHtml(String(item.frameIndex)) + '"' + dragAttr + '>';
     if (at === "ts") {
       svg += '<path class="energy-marker-ts' + selectedClass + stateClass + '" d="M ' + ax + ' ' + (ay - 7) + ' L ' + (ax + 7) + ' ' + ay + ' L ' + ax + ' ' + (ay + 7) + ' L ' + (ax - 7) + ' ' + ay + ' Z"></path>';
@@ -7034,8 +7118,10 @@ function energyGraphBuildSvg(data) {
       svg += '<circle class="energy-marker-' + (at === "minimum" ? "min" : at === "intermediate" ? "int" : "failed") + selectedClass + stateClass + '" cx="' + ax + '" cy="' + ay + '" r="6"></circle>';
     }
     svg += '<line class="energy-marker-line" x1="' + ax + '" y1="' + (H - pad.bottom) + '" x2="' + ax + '" y2="' + ay + '"></line>';
+    /* (f) Leader line from data point to final label position */
     if (al !== 0) {
-      svg += '<line x1="' + ax + '" y1="' + ay + '" x2="' + (labelX - 2) + '" y2="' + (labelY + 3) + '" stroke="rgba(255,255,255,0.28)" stroke-width="1"></line>';
+      var connX = labelAnchor === "end" ? labelX + 2 : labelX - 2;
+      svg += '<line x1="' + ax + '" y1="' + ay + '" x2="' + connX + '" y2="' + (labelY + 3) + '" stroke="rgba(255,255,255,0.28)" stroke-width="1"></line>';
     }
     if (isSelected) {
       var bgX = labelAnchor === "end" ? labelX - estLabelW + 3 : labelX - 3;
@@ -8053,7 +8139,7 @@ function energyGraphClientToPlotPoint(event, svg) {
   var ctm = svg.getScreenCTM();
   if (!ctm) return null;
   pt = pt.matrixTransform(ctm.inverse());
-  var geom = energyGraphChartGeometry();
+  var geom = energyGraphState._cachedGeom || energyGraphChartGeometry();
   var plotRect = geom.plotRect;
   if (pt.x < plotRect.left || pt.x > plotRect.right || pt.y < plotRect.top || pt.y > plotRect.bottom) return null;
   var xDom = energyGraphState.currentDomain ? energyGraphState.currentDomain.x : layout.baseX;
@@ -8083,7 +8169,7 @@ function energyGraphNearestFrame(clientX, svg) {
   if (!ctm) return null;
   pt = pt.matrixTransform(ctm.inverse());
   var xDom = energyGraphState.currentDomain ? energyGraphState.currentDomain.x : layout.baseX;
-  var geom = energyGraphChartGeometry();
+  var geom = energyGraphState._cachedGeom || energyGraphChartGeometry();
   var Pw = geom.W - geom.pad.left - geom.pad.right;
   var dataX = xDom[0] + ((pt.x - geom.pad.left) / (Pw || 1)) * (xDom[1] - xDom[0]);
   var best = null;
@@ -8224,7 +8310,7 @@ function energyGraphBindChartInteractions(root) {
       var ctm = svg.getScreenCTM();
       if (!ctm) return;
       pt = pt.matrixTransform(ctm.inverse());
-      var geom = energyGraphChartGeometry();
+      var geom = energyGraphState._cachedGeom || energyGraphChartGeometry();
       var Pw = geom.W - geom.pad.left - geom.pad.right;
       var Ph = geom.H - geom.pad.top - geom.pad.bottom;
       var dxRatio = (pt.x - boxState.startSvgX) / Pw;
@@ -8273,7 +8359,7 @@ function energyGraphBindChartInteractions(root) {
         if (layout) {
           var domain = energyGraphState.currentDomain;
           if (domain) {
-            var geom = energyGraphChartGeometry();
+            var geom = energyGraphState._cachedGeom || energyGraphChartGeometry();
             var Pw = geom.W - geom.pad.left - geom.pad.right;
             var Ph = geom.H - geom.pad.top - geom.pad.bottom;
             var x0 = domain.x[0] + ((rx - geom.pad.left) / Pw) * (domain.x[1] - domain.x[0]);
