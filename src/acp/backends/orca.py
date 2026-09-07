@@ -116,6 +116,33 @@ class ORCABackend(QCBackend):
             )
         )
 
+    def casscf(
+        self,
+        coordinates: NDArray[np.float64],
+        symbols: list[str],
+        charge: int = 0,
+        multiplicity: int = 1,
+        output_dir: Path | None = None,
+        **kwargs: Any,
+    ) -> QCResult:
+        """Run a CASSCF / NEVPT2 single point through ``ORCAInterface``.
+
+        The ``metadata["casscf"]`` payload follows the electronic-state
+        design doc §12.1 (active space, natural occupations, per-root
+        NEVPT2 energies).
+        """
+        target_dir = output_dir or Path.cwd()
+        return to_qc_result(
+            self._interface.casscf(
+                coordinates,
+                symbols,
+                charge=charge,
+                multiplicity=multiplicity,
+                output_dir=target_dir,
+                **kwargs,
+            )
+        )
+
     def nmr_shielding(
         self,
         coordinates: NDArray[np.float64],

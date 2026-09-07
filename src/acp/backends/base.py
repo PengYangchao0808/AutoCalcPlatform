@@ -248,6 +248,28 @@ class TSMechanismCalculator(Protocol):
 
 
 @runtime_checkable
+class CASSCFCalculator(Protocol):
+    """Capability: can run CASSCF / NEVPT2 single-point calculations.
+
+    Implementations return a :class:`QCResult` whose ``metadata["casscf"]``
+    carries active-space provenance, natural orbital occupations, and
+    per-root NEVPT2 energies (electronic-state design doc §11, §12.1).
+    """
+
+    def casscf(
+        self,
+        coordinates: NDArray[np.float64],
+        symbols: list[str],
+        charge: int = 0,
+        multiplicity: int = 1,
+        output_dir: Path | None = None,
+        **kwargs: Any,
+    ) -> QCResult:
+        """Run a CASSCF (optionally NEVPT2) calculation."""
+        ...
+
+
+@runtime_checkable
 class NmrShieldingCalculator(Protocol):
     """Capability: can compute NMR shielding constants (GIAO).
 
@@ -307,5 +329,6 @@ __all__ = [
     "MrrhoThermoCalculator",
     "TSMechanismCalculator",
     "RelaxedScanCalculator",
+    "CASSCFCalculator",
     "NmrShieldingCalculator",
 ]
