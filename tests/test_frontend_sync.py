@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from acp.catalog import METHOD_SCHEMAS, WORKFLOW_CATALOG
+
 REPO_ROOT = Path(__file__).parents[1]
 FRONTEND = REPO_ROOT / "frontend" / "ACP_Workbench_v2.html"
 SERVER = REPO_ROOT / "src" / "acp" / "api" / "server.py"
@@ -56,6 +58,63 @@ def test_minimal_frontend_is_not_the_default_page() -> None:
     server = SERVER.read_text(encoding="utf-8")
 
     assert "ACP_Workbench_minimal.html" not in server
+
+
+def test_wizard_default_workflow_and_protocol_are_catalog_driven() -> None:
+    """Regression guard for the stale-protocol-page bug (2026-09-07).
+
+    The create-task wizard used to hardcode the retired "energy" workflow as
+    the default and fall back to the legacy "confsearch" method schema, so the
+    first open rendered the pre-refactor protocol page until a workflow was
+    re-picked. The default must now come from the catalog at runtime:
+    ``resolveDefaultWorkflow`` (Confsearch first) + ``pickDefaultProfile``
+    (censo-crest preferred) + self-healing ``ensureWizardWorkflowValid``.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # 1. Catalog integrity: every visible workflow must resolve to a schema
+    #    the method catalog actually defines, otherwise the wizard cannot
+    #    derive a default profile from it.
+    for wf in WORKFLOW_CATALOG:
+        if wf.get("visible") is False:
+            continue
+        assert wf["method_schema_id"] in METHOD_SCHEMAS, (
+            f"workflow {wf['id']!r} -> schema {wf['method_schema_id']!r} "
+            "missing from METHOD_SCHEMAS"
+        )
+    assert METHOD_SCHEMAS["confsearch_unified"]["profiles"], (
+        "confsearch_unified must define profiles (xtb-crest/xtb-md/"
+        "censo-crest/xtbmd-censo) for the wizard default"
+    )
+    censo_ids = {p["profile_id"] for p in METHOD_SCHEMAS["confsearch_unified"]["profiles"]}
+    assert "censo-crest" in censo_ids
+
+    # 2. No hardcoded retired workflow id may serve as the wizard default.
+    retired_ids = [w["id"] for w in WORKFLOW_CATALOG if w.get("status") != "active"]
+    for rid in retired_ids:
+        assert f'wizardState.workflow.id || "{rid}"' not in html, (
+            f"retired workflow {rid!r} must not be a hardcoded wizard default"
+        )
+    assert 'workflow: { id: "", label: "" }' in html
+    assert 'id: "energy", label: "Conformer Energy"' not in html
+
+    # 3. No hardcoded schema-id fallback (legacy "confsearch" literal) may
+    #    bypass the catalog-derived method_schema_id.
+    assert '|| "confsearch"' not in html
+
+    # 4. Catalog-driven helpers exist and are wired into the consumers.
+    assert "function resolveDefaultWorkflow(preferredId)" in html
+    assert 'w.id === "Confsearch" && w.status === "active"' in html
+    assert "function ensureWizardWorkflowValid()" in html
+    assert "function pickDefaultProfile(schema)" in html
+    assert 'p.profile_id === "censo-crest"' in html
+    for consumer in ("updateConfigCards", "openMethodConfig", "submitJobModal"):
+        fn_body = html.split(f"function {consumer}(", 1)[1].split("\nfunction ", 1)[0]
+        assert "ensureWizardWorkflowValid()" in fn_body, (
+            f"{consumer} must self-heal a stale wizard workflow"
+        )
+    assert "resolveDefaultWorkflow(wizardState.workflow.id)" in html  # init block
+    assert "resolveDefaultWorkflow(pending.workflow)" in html  # applyPendingNewTask
 
 
 def test_energy_chart_axes_cannot_scroll_out_of_viewport() -> None:

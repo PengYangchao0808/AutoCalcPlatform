@@ -14355,7 +14355,10 @@ var CatalogUtils = (function() {
 var lookupCI = CatalogUtils.lookupCI;
 
 const wizardState = {
-  workflow: { id: "energy", label: "Conformer Energy" },
+  // Default workflow is resolved at init from the visible catalog
+  // (see the DOMContentLoaded initialiser). An empty id must never be
+  // substituted with a retired entry such as the legacy "energy" default.
+  workflow: { id: "", label: "" },
   method: {
     profile_id: "",
     profile_label: "",
@@ -15456,6 +15459,7 @@ async function uploadNmrBruker(input) {
 }
 
 function updateConfigCards() {
+  ensureWizardWorkflowValid();
   syncBatchOptimizeProfileSummary();
   var wfTitle = document.getElementById("workflow-card-title");
   var wfDesc = document.getElementById("workflow-card-desc");
@@ -15623,17 +15627,62 @@ function canonicalMethodSchemaId(workflowId, schemaId) {
   return schemaId || "";
 }
 
+function pickDefaultProfile(schema) {
+  if (!schema || !Array.isArray(schema.profiles) || !schema.profiles.length) return null;
+  // Unified Confsearch schema lists protocols in xtb-crest-first order;
+  // the default protocol is the recommended CREST + CENSO one (rank1
+  // refinement), falling back to the first entry for other schemas.
+  var preferred = schema.profiles.find(function(p) { return p.profile_id === "censo-crest"; });
+  return preferred || schema.profiles[0];
+}
+
+// Catalog-driven default workflow resolution. The wizard default must never
+// come from a hardcoded id: retired/hidden entries (e.g. the legacy
+// "energy"/"ensemble" defaults) are absent from workflowCatalogCache, so any
+// stale id falls back to Confsearch (the flagship conformer-search workflow),
+// then any active entry, then null (catalog not loaded yet).
+function resolveDefaultWorkflow(preferredId) {
+  var id = preferredId || "";
+  var entry = workflowCatalogCache.find(function(w) { return w.id === id && w.status === "active"; });
+  return entry
+    || workflowCatalogCache.find(function(w) { return w.id === "Confsearch" && w.status === "active"; })
+    || workflowCatalogCache.find(function(w) { return w.status === "active"; })
+    || null;
+}
+
+// Self-healing guard: if wizardState.workflow is missing, stale, or refers to
+// an id absent from the visible catalog (any code path may leave it so —
+// hardcoded defaults, pending-new-task payloads, state snapshots), repair it
+// to the resolved default so consumers never render retired-schema protocols.
+// Returns false only when the catalog is not loaded yet (R5/R16 loading and
+// retry paths then handle the empty state).
+function ensureWizardWorkflowValid() {
+  var entry = resolveDefaultWorkflow(wizardState.workflow && wizardState.workflow.id);
+  if (!entry) return false;
+  if (wizardState.workflow.id !== entry.id || !wizardState.workflow.schema_id) {
+    wizardState.workflow = {
+      id: entry.id,
+      label: entry.label,
+      schema_id: canonicalMethodSchemaId(entry.id, entry.method_schema_id)
+    };
+  }
+  return true;
+}
+
 function applyPendingNewTask() {
   var pending = window._pendingNewTask;
   if (!pending) return;
   window._pendingNewTask = null;
   window._mechProjectId = pending.projectId || "";
-  var wf = workflowCatalogCache.find(function(item) { return item.id === pending.workflow; });
+  // Resolve through the catalog so an invalid/stale pending workflow id
+  // (e.g. a retired entry) self-heals to the current default instead of
+  // rendering a legacy schema.
+  var wf = resolveDefaultWorkflow(pending.workflow);
   var pendingSchemaId = wf ? wf.method_schema_id : "";
   wizardState.workflow = {
-    id: pending.workflow,
+    id: wf ? wf.id : pending.workflow,
     label: wf ? wf.label : pending.workflow,
-    schema_id: canonicalMethodSchemaId(pending.workflow, pendingSchemaId)
+    schema_id: canonicalMethodSchemaId(wf ? wf.id : pending.workflow, pendingSchemaId)
   };
   loadDefaultMethodProfile(wizardState.workflow.schema_id);
   var projectSelect = document.getElementById("modal-project-select");
@@ -16132,14 +16181,14 @@ function loadDefaultMethodProfile(schemaId) {
     updateConfigCards();
     return;
   }
-  var profiles = schema.profiles || [];
-  if (profiles.length) {
-    wizardState.method.profile_id = profiles[0].profile_id;
+  var profile = pickDefaultProfile(schema);
+  if (profile) {
+    wizardState.method.profile_id = profile.profile_id;
     wizardState.method.profile_label = currentLang === "zh-CN"
-      ? (profiles[0].label_zh || profiles[0].label)
-      : profiles[0].label;
-    wizardState.method.stages = JSON.parse(JSON.stringify(profiles[0].levels || {}));
-    if (wizardState.workflow && wizardState.workflow.id === "mechanism") syncMechanismPanelFromProfile(profiles[0]);
+      ? (profile.label_zh || profile.label)
+      : profile.label;
+    wizardState.method.stages = JSON.parse(JSON.stringify(profile.levels || {}));
+    if (wizardState.workflow && wizardState.workflow.id === "mechanism") syncMechanismPanelFromProfile(profile);
   } else {
     wizardState.method.profile_id = "";
     var firstLevel = (schema.method_levels || [])[0];
@@ -16151,6 +16200,7 @@ function loadDefaultMethodProfile(schemaId) {
 }
 
 async function openMethodConfig() {
+  ensureWizardWorkflowValid();
   var title = document.getElementById("mc-modal-title");
   var wfEntry = workflowCatalogCache.find(function(w) { return w.id === wizardState.workflow.id; });
   var wfLabel = wfEntry
@@ -16184,7 +16234,7 @@ async function openMethodConfig() {
 
   var schemaId = canonicalMethodSchemaId(
     wizardState.workflow.id,
-    wizardState.workflow.schema_id || "confsearch"
+    wizardState.workflow.schema_id || (wfEntry && wfEntry.method_schema_id) || ""
   );
   wizardState.workflow.schema_id = schemaId;
   var schema = (methodCatalogCache.method_schemas || {})[schemaId];
@@ -17432,6 +17482,7 @@ async function submitPESsearchTask() {
 }
 
 async function submitJobModal() {
+  ensureWizardWorkflowValid();
   var stageWf = wizardState.workflow && wizardState.workflow.id;
   if (stageWf === "PESsearch") {
     await submitPESsearchTask();
@@ -19948,16 +19999,29 @@ window.addEventListener("DOMContentLoaded", async function() {
   await safeLoad("loadMethodCatalog", loadMethodCatalog);
 
   try {
-    var defaultWfId = wizardState.workflow.id || "energy";
-    var wfEntry = workflowCatalogCache.find(function(w) { return w.id === defaultWfId; });
-    var schemaId = (wfEntry && wfEntry.method_schema_id) || "confsearch";
+    // Catalog-driven default: never trust a hardcoded/legacy workflow id.
+    // resolveDefaultWorkflow() picks the current id when it is a visible
+    // active entry, otherwise Confsearch (flagship conformer search),
+    // otherwise the first active entry — so the first open always shows
+    // the current-generation protocol schema.
+    var wfEntry = resolveDefaultWorkflow(wizardState.workflow.id);
+    if (wfEntry) {
+      wizardState.workflow = {
+        id: wfEntry.id,
+        label: wfEntry.label,
+        schema_id: canonicalMethodSchemaId(wfEntry.id, wfEntry.method_schema_id)
+      };
+    }
+    var schemaId = (wfEntry && wizardState.workflow.schema_id) || "";
     var schema = (methodCatalogCache.method_schemas || {})[schemaId];
     if (schema) {
       wizardState.workflow.schema_id = schemaId;
-      if (schema.profiles && schema.profiles.length) {
-        var p = schema.profiles[0];
+      var p = pickDefaultProfile(schema);
+      if (p) {
         wizardState.method.profile_id = p.profile_id;
-        wizardState.method.profile_label = p.label;
+        wizardState.method.profile_label = currentLang === "zh-CN"
+          ? (p.label_zh || p.label)
+          : p.label;
         wizardState.method.stages = JSON.parse(JSON.stringify(p.levels || {}));
         if (wizardState.workflow && wizardState.workflow.id === "mechanism") syncMechanismPanelFromProfile(p);
       } else {
