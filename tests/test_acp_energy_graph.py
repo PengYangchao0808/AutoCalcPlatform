@@ -1,15 +1,17 @@
 """Tests for normalized energy-workspace projections."""
 
-# pyright: reportMissingTypeArgument=false, reportAny=false, reportUnknownArgumentType=false, reportUnknownVariableType=false, reportUnknownParameterType=false, reportUnusedCallResult=false, reportImplicitStringConcatenation=false, reportIndexIssue=false
+# pyright: reportMissingTypeArgument=false, reportAny=false, reportExplicitAny=false, reportUnknownArgumentType=false, reportUnknownVariableType=false, reportUnknownParameterType=false, reportUnknownMemberType=false, reportMissingParameterType=false, reportUnusedCallResult=false, reportImplicitStringConcatenation=false, reportIndexIssue=false, reportPrivateUsage=false
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from acp.results.energy_graph import (
+    _resolvable_geometry_count,
     build_conformer_energy_graph,
     build_energy_graph_from_job,
     build_mechanism_energy_graph,
@@ -341,10 +343,15 @@ def test_four_view_projections_preserve_pre_migration_wire_key_sets(tmp_path: Pa
         assert {frozenset(annotation) for annotation in graph["annotations"]} == expected_keys
 
     # Then: registry-backed titles replace only the two stale labels.
-    assert graphs[0]["title"] == "PES 扫描能量"
-    assert graphs[1]["title"] == "几何优化轨迹"
-    assert graphs[2]["title"] == "构象能量分布"
-    assert graphs[3]["title"] == "反应路径能量图"
+    first_graph, second_graph, third_graph, fourth_graph = graphs
+    assert first_graph is not None
+    assert second_graph is not None
+    assert third_graph is not None
+    assert fourth_graph is not None
+    assert first_graph["title"] == "PES 扫描能量"
+    assert second_graph["title"] == "几何优化轨迹"
+    assert third_graph["title"] == "构象能量分布"
+    assert fourth_graph["title"] == "反应路径能量图"
 
 
 def test_optimization_projection_reads_existing_result_product(tmp_path: Path) -> None:
@@ -378,6 +385,173 @@ def test_optimization_projection_reads_existing_result_product(tmp_path: Path) -
 
 def test_public_optimization_trajectory_lookup_returns_empty_result(tmp_path: Path) -> None:
     assert find_optimization_trajectory(tmp_path) == (None, None)
+
+
+def _write_optimization_candidate(path: Path, payload: dict[str, Any]) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    return path
+
+
+def test_optimization_trajectory_prefers_intact_geometry_over_newer_dangling(
+    tmp_path: Path,
+) -> None:
+    # Given: an older intact batch trajectory and a newer trajectory whose geometry is missing.
+    intact_path = (
+        tmp_path / "WORK" / "03_OPT" / "batch" / "TS1" / "optimize" / "optimization_trajectory.json"
+    )
+    dangling_path = (
+        tmp_path
+        / "WORK"
+        / "03_OPT"
+        / "batch"
+        / "TS1"
+        / "optimize"
+        / "rescue_01"
+        / "optimization_trajectory.json"
+    )
+    intact_payload = _cycle_payload(
+        [
+            {"cycle": 1, "energy_hartree": -10.0, "geometry_ref": "cycles/cycle_0001.xyz"},
+            {"cycle": 2, "energy_hartree": -10.1, "geometry_ref": "cycles/cycle_0002.xyz"},
+        ],
+        item_id="TS1",
+    )
+    dangling_payload = _cycle_payload(
+        [{"cycle": 1, "energy_hartree": -20.0, "geometry_ref": "cycles/cycle_0001.xyz"}],
+        item_id="TS1",
+    )
+    _write_optimization_candidate(intact_path, intact_payload)
+    _write_optimization_candidate(dangling_path, dangling_payload)
+    cycles_dir = intact_path.parent / "cycles"
+    cycles_dir.mkdir()
+    for cycle in (1, 2):
+        (cycles_dir / f"cycle_{cycle:04d}.xyz").write_text("1\ncycle\nC 0 0 0\n", encoding="utf-8")
+    os.utime(intact_path, ns=(1_000_000_000, 1_000_000_000))
+    os.utime(dangling_path, ns=(2_000_000_000, 2_000_000_000))
+
+    # When: the item trajectory and its optimization graph are requested.
+    selected_path, _ = find_optimization_trajectory(tmp_path, "TS1")
+    graph = build_optimization_energy_graph("job-intact", tmp_path, item_id="TS1")
+
+    # Then: the intact trajectory wins despite being older, and its cycles reach the graph.
+    assert selected_path == intact_path
+    assert graph is not None
+    assert graph["source"] == "WORK/03_OPT/batch/TS1/optimize/optimization_trajectory.json"
+    assert len(graph["nodes"]) == 2
+    assert graph["nodes"][1]["metadata"]["scf_energy_hartree"] == -10.1
+
+
+def test_optimization_trajectory_uses_newest_when_all_geometry_dangles(tmp_path: Path) -> None:
+    # Given: two candidate trajectories whose geometry references are all dangling.
+    older_path = (
+        tmp_path / "WORK" / "03_OPT" / "batch" / "TS1" / "optimize" / "optimization_trajectory.json"
+    )
+    newer_path = (
+        tmp_path
+        / "WORK"
+        / "03_OPT"
+        / "batch"
+        / "TS1"
+        / "optimize"
+        / "rescue_01"
+        / "optimization_trajectory.json"
+    )
+    _write_optimization_candidate(
+        older_path,
+        _cycle_payload(
+            [{"cycle": 1, "energy_hartree": -10.0, "geometry_ref": "cycles/missing.xyz"}],
+            item_id="TS1",
+        ),
+    )
+    _write_optimization_candidate(
+        newer_path,
+        _cycle_payload(
+            [{"cycle": 1, "energy_hartree": -20.0, "geometry_ref": "cycles/missing.xyz"}],
+            item_id="TS1",
+        ),
+    )
+    os.utime(older_path, ns=(1_000_000_000, 1_000_000_000))
+    os.utime(newer_path, ns=(2_000_000_000, 2_000_000_000))
+
+    # When: the item trajectory is requested.
+    selected_path, selected_payload = find_optimization_trajectory(tmp_path, "TS1")
+
+    # Then: missing geometry degrades gracefully to the existing newest-file choice.
+    assert selected_path == newer_path
+    assert selected_payload is not None
+    assert selected_payload["cycles"][0]["energy_hartree"] == -20.0
+
+
+def test_resolvable_geometry_count_handles_rescue_prefix(tmp_path: Path) -> None:
+    # Given: geometry references include a rescue subdirectory relative to the JSON file.
+    trajectory_path = tmp_path / "optimization_trajectory.json"
+    rescue_cycles = tmp_path / "rescue_01" / "cycles"
+    rescue_cycles.mkdir(parents=True)
+    for cycle in (1, 2):
+        (rescue_cycles / f"cycle_{cycle:04d}.xyz").write_text(
+            "1\ncycle\nC 0 0 0\n", encoding="utf-8"
+        )
+    payload = {
+        "cycles": [
+            {"geometry_ref": "rescue_01/cycles/cycle_0001.xyz"},
+            {"geometry_ref": "rescue_01/cycles/cycle_0002.xyz"},
+            {"geometry_ref": "rescue_01/cycles/missing.xyz"},
+            {"geometry_ref": ""},
+        ]
+    }
+
+    # When: geometry-reference integrity is counted for the candidate.
+    resolvable = _resolvable_geometry_count(trajectory_path, payload)
+
+    # Then: existing files under the prefixed rescue directory are counted.
+    assert resolvable == 2
+
+
+def test_running_trajectory_wins_over_completed_intact_geometry(tmp_path: Path) -> None:
+    # Given: a completed intact trajectory and a running dangling rescue trajectory.
+    completed_path = (
+        tmp_path / "WORK" / "03_OPT" / "batch" / "TS1" / "optimize" / "optimization_trajectory.json"
+    )
+    running_path = (
+        tmp_path
+        / "WORK"
+        / "03_OPT"
+        / "batch"
+        / "TS1"
+        / "optimize"
+        / "rescue_01"
+        / "optimization_trajectory.json"
+    )
+    _write_optimization_candidate(
+        completed_path,
+        _cycle_payload(
+            [{"cycle": 1, "energy_hartree": -10.0, "geometry_ref": "cycles/cycle_0001.xyz"}],
+            item_id="TS1",
+            status="completed",
+        ),
+    )
+    _write_optimization_candidate(
+        running_path,
+        _cycle_payload(
+            [{"cycle": 1, "energy_hartree": -20.0, "geometry_ref": "cycles/missing.xyz"}],
+            item_id="TS1",
+            status="running",
+        ),
+    )
+    cycles_dir = completed_path.parent / "cycles"
+    cycles_dir.mkdir()
+    (cycles_dir / "cycle_0001.xyz").write_text("1\ncycle\nC 0 0 0\n", encoding="utf-8")
+    os.utime(completed_path, ns=(2_000_000_000, 2_000_000_000))
+    os.utime(running_path, ns=(1_000_000_000, 1_000_000_000))
+
+    # When: the item trajectory is requested.
+    selected_path, selected_payload = find_optimization_trajectory(tmp_path, "TS1")
+
+    # Then: the existing running-pool precedence still beats geometry integrity and mtime.
+    assert selected_path == running_path
+    assert selected_payload is not None
+    assert selected_payload["status"] == "running"
 
 
 def _cycle_payload(cycles: list[dict], **overrides) -> dict:

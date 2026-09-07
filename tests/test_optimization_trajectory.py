@@ -440,3 +440,212 @@ def test_finalize_merges_rescue_attempt_outputs(tmp_path: Path) -> None:
     assert merged["cycles"][2]["energy_hartree"] == pytest.approx(-10.08)
     assert merged["converged"] is True
     assert merged["attempts"] == 2
+
+
+def test_parse_output_text_without_output_dir_omits_geometry_refs() -> None:
+    text = "\n".join(
+        [
+            "GEOMETRY OPTIMIZATION CYCLE 1",
+            "CARTESIAN COORDINATES (ANGSTROEM)",
+            "---------------------------------",
+            "    0         C    0.000000    0.000000    0.000000",
+            "    1         H    0.000000    0.000000    1.100000",
+            "---------------------------------",
+            "FINAL SINGLE POINT ENERGY     -10.000000",
+        ]
+    )
+
+    payload = parse_output_text(text, item_id="X1")
+
+    assert all("geometry_ref" not in cycle for cycle in payload["cycles"])
+
+
+def test_parse_output_text_materializes_geometries_in_output_dir(tmp_path: Path) -> None:
+    text = "\n".join(
+        [
+            "GEOMETRY OPTIMIZATION CYCLE 1",
+            "CARTESIAN COORDINATES (ANGSTROEM)",
+            "---------------------------------",
+            "    0         C    0.000000    0.000000    0.000000",
+            "    1         H    0.000000    0.000000    1.100000",
+            "---------------------------------",
+            "FINAL SINGLE POINT ENERGY     -10.000000",
+            "GEOMETRY OPTIMIZATION CYCLE 2",
+            "CARTESIAN COORDINATES (ANGSTROEM)",
+            "---------------------------------",
+            "    0         C    0.100000    0.000000    0.000000",
+            "    1         H    0.100000    0.000000    1.100000",
+            "---------------------------------",
+            "FINAL SINGLE POINT ENERGY     -10.100000",
+        ]
+    )
+
+    payload = parse_output_text(text, item_id="X1", output_dir=tmp_path)
+
+    assert len(payload["cycles"]) == 2
+    for cycle in payload["cycles"]:
+        geometry_path = tmp_path / cycle["geometry_ref"]
+        assert geometry_path.is_file()
+        assert geometry_path.read_text(encoding="utf-8").splitlines()[0] == str(cycle["atom_count"])
+
+
+def test_finalize_materializes_geometries_from_full_output(tmp_path: Path) -> None:
+    (tmp_path / "optimization_trajectory.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "item_id": "X1",
+                "status": "running",
+                "converged": False,
+                "cycles": [{"cycle": 1, "energy_hartree": -10.0}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (tmp_path / "orca_opt.out").write_text(
+        "\n".join(
+            [
+                "GEOMETRY OPTIMIZATION CYCLE 1",
+                "CARTESIAN COORDINATES (ANGSTROEM)",
+                "---------------------------------",
+                "    0         C    0.000000    0.000000    0.000000",
+                "    1         H    0.000000    0.000000    1.100000",
+                "---------------------------------",
+                "FINAL SINGLE POINT ENERGY     -10.000000",
+                "GEOMETRY OPTIMIZATION CYCLE 2",
+                "CARTESIAN COORDINATES (ANGSTROEM)",
+                "---------------------------------",
+                "    0         C    0.100000    0.000000    0.000000",
+                "    1         H    0.100000    0.000000    1.100000",
+                "---------------------------------",
+                "FINAL SINGLE POINT ENERGY     -10.100000",
+                "GEOMETRY OPTIMIZATION CYCLE 3",
+                "CARTESIAN COORDINATES (ANGSTROEM)",
+                "---------------------------------",
+                "    0         C    0.200000    0.000000    0.000000",
+                "    1         H    0.200000    0.000000    1.100000",
+                "---------------------------------",
+                "FINAL SINGLE POINT ENERGY     -10.200000",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    merged = finalize_optimization_trajectory(tmp_path, item_id="X1")
+
+    assert merged is not None
+    assert len(merged["cycles"]) == 3
+    for cycle in merged["cycles"]:
+        geometry_ref = cycle.get("geometry_ref")
+        assert geometry_ref
+        assert (tmp_path / geometry_ref).is_file()
+    on_disk = json.loads((tmp_path / "optimization_trajectory.json").read_text(encoding="utf-8"))
+    assert len(on_disk["cycles"]) == 3
+    assert all(
+        (tmp_path / cycle["geometry_ref"]).is_file()
+        for cycle in on_disk["cycles"]
+        if cycle.get("geometry_ref")
+    )
+
+
+def test_finalize_materializes_base_and_rescue_geometries(tmp_path: Path) -> None:
+    (tmp_path / "orca_opt.out").write_text(
+        "\n".join(
+            [
+                "GEOMETRY OPTIMIZATION CYCLE 1",
+                "CARTESIAN COORDINATES (ANGSTROEM)",
+                "---------------------------------",
+                "    0         C    0.000000    0.000000    0.000000",
+                "---------------------------------",
+                "FINAL SINGLE POINT ENERGY     -10.000000",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    rescue_dir = tmp_path / "rescue_01_calcall_opt"
+    rescue_dir.mkdir()
+    (rescue_dir / "orca_opt.out").write_text(
+        "\n".join(
+            [
+                "GEOMETRY OPTIMIZATION CYCLE 1",
+                "CARTESIAN COORDINATES (ANGSTROEM)",
+                "---------------------------------",
+                "    0         C    0.100000    0.000000    0.000000",
+                "---------------------------------",
+                "FINAL SINGLE POINT ENERGY     -10.100000",
+                "GEOMETRY OPTIMIZATION CYCLE 2",
+                "CARTESIAN COORDINATES (ANGSTROEM)",
+                "---------------------------------",
+                "    0         C    0.200000    0.000000    0.000000",
+                "---------------------------------",
+                "FINAL SINGLE POINT ENERGY     -10.200000",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    merged = finalize_optimization_trajectory(tmp_path, item_id="X1")
+
+    assert merged is not None
+    assert len(merged["cycles"]) == 3
+    assert merged["cycles"][0]["geometry_ref"].startswith("cycles/")
+    assert merged["cycles"][1]["geometry_ref"].startswith("rescue_01_calcall_opt/")
+    assert merged["cycles"][2]["geometry_ref"].startswith("rescue_01_calcall_opt/")
+    for cycle in merged["cycles"]:
+        assert (tmp_path / cycle["geometry_ref"]).is_file()
+
+
+def test_recorder_omits_geometry_ref_when_xyz_write_fails(monkeypatch, tmp_path: Path) -> None:
+    def fail_write(_path: Path, _text: str) -> None:
+        raise OSError("synthetic geometry write failure")
+
+    monkeypatch.setattr(
+        "acp.calculations.primitives.optimization_trajectory._atomic_text_write",
+        fail_write,
+    )
+    recorder = OptimizationTrajectoryRecorder(tmp_path, item_id="X1")
+    for line in (
+        "GEOMETRY OPTIMIZATION CYCLE 1",
+        "CARTESIAN COORDINATES (ANGSTROEM)",
+        "---------------------------------",
+        "    0         C    0.000000    0.000000    0.000000",
+        "---------------------------------",
+        "FINAL SINGLE POINT ENERGY     -10.000000",
+    ):
+        recorder.feed_line(line)
+
+    recorder.finish(converged=False)
+
+    cycle = recorder._snapshot_payload()["cycles"][0]
+    assert cycle["atom_count"] == 1
+    assert "geometry_ref" not in cycle
+
+
+def test_finalize_prunes_dangling_geometry_ref_without_output(tmp_path: Path) -> None:
+    (tmp_path / "optimization_trajectory.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "item_id": "X1",
+                "status": "failed",
+                "converged": False,
+                "cycles": [
+                    {
+                        "cycle": 1,
+                        "energy_hartree": -10.0,
+                        "geometry_ref": "cycles/missing.xyz",
+                        "atom_count": 1,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    merged = finalize_optimization_trajectory(tmp_path, item_id="X1")
+
+    assert merged is not None
+    assert "geometry_ref" not in merged["cycles"][0]
+    assert merged["cycles"][0]["atom_count"] == 1
+    on_disk = json.loads((tmp_path / "optimization_trajectory.json").read_text(encoding="utf-8"))
+    assert "geometry_ref" not in on_disk["cycles"][0]

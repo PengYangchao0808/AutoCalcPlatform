@@ -12,11 +12,14 @@ from __future__ import annotations
 import csv
 import hashlib
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from acp.results.frames import VIEW_REGISTRY, TrajectoryAnnotation, TrajectoryFrame
+
+logger = logging.getLogger(__name__)
 
 HARTREE_TO_KCAL = 627.5094740631
 
@@ -458,10 +461,7 @@ def build_optimization_energy_graph(
     energy_values = [_number(cycle.get("energy_hartree")) for cycle in cycles]
     relative = _relative_from_first(energy_values)
     delta = [
-        None
-        if index == 0 or energy_values[index] is None or energy_values[index - 1] is None
-        else (energy_values[index] - energy_values[index - 1]) * HARTREE_TO_KCAL
-        for index in range(len(energy_values))
+        None if value is None else value * HARTREE_TO_KCAL for value in _step_deltas(energy_values)
     ]
     x_values = [_number(cycle.get("cycle")) or index + 1 for index, cycle in enumerate(cycles)]
 
@@ -814,11 +814,31 @@ def _relative_path(path: Path, work_dir: Path) -> str:
         return path.as_posix().replace("\\", "/")
 
 
+def _resolvable_geometry_count(path: Path, payload: dict[str, Any]) -> int:
+    cycles = payload.get("cycles")
+    if not isinstance(cycles, list):
+        return 0
+    resolvable = 0
+    for cycle in cycles:
+        if not isinstance(cycle, dict):
+            continue
+        geometry_ref = cycle.get("geometry_ref")
+        if not isinstance(geometry_ref, str) or not geometry_ref:
+            continue
+        geometry_path = path.parent / geometry_ref
+        try:
+            if geometry_path.is_file():
+                resolvable += 1
+        except OSError as exc:
+            logger.debug("could not resolve optimization geometry %s: %s", geometry_path, exc)
+    return resolvable
+
+
 def _find_optimization_trajectory(
     work_dir: Path,
     item_id: str | None,
 ) -> tuple[Path | None, dict[str, Any] | None]:
-    """Find the newest valid live/result trajectory."""
+    """Find the best valid live/result trajectory by geometry integrity, then mtime."""
     live_stage_root = work_dir / "WORK" / "03_OPT"
     batch_root = live_stage_root / "batch"
     result_root = work_dir / "RESULT" / "trajectories"
@@ -857,7 +877,13 @@ def _find_optimization_trajectory(
         return None, None
     running = [item for item in candidates if str(item[1].get("status") or "").lower() == "running"]
     pool = running or candidates
-    selected = max(pool, key=lambda item: item[0].stat().st_mtime_ns)
+    selected = max(
+        pool,
+        key=lambda item: (
+            _resolvable_geometry_count(item[0], item[1]),
+            item[0].stat().st_mtime_ns,
+        ),
+    )
     return selected
 
 
@@ -865,7 +891,7 @@ def find_optimization_trajectory(
     work_dir: Path,
     item_id: str | None = None,
 ) -> tuple[Path | None, dict[str, Any] | None]:
-    """Return the newest valid optimization trajectory for a work directory."""
+    """Return the best valid optimization trajectory for a work directory."""
     return _find_optimization_trajectory(work_dir, item_id)
 
 

@@ -16,10 +16,10 @@ import re
 import threading
 from collections.abc import Callable
 from datetime import datetime, timezone
-
-UTC = timezone.utc  # datetime.UTC is 3.11+; keep the short name on 3.10
 from pathlib import Path
 from typing import Any, Final, cast
+
+UTC = timezone.utc  # datetime.UTC is 3.11+; keep the short name on 3.10
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +98,7 @@ class OptimizationTrajectoryRecorder:
         item_id: str = "",
         on_cycle: Callable[[int, str], None] | None = None,
         persist: bool = True,
+        persist_geometries: bool | None = None,
     ) -> None:
         self.output_dir = Path(output_dir)
         self.path = self.output_dir / "optimization_trajectory.json"
@@ -105,6 +106,9 @@ class OptimizationTrajectoryRecorder:
         self.item_id = item_id
         self._on_cycle = on_cycle
         self._persist = persist
+        self._persist_geometries: bool = (
+            persist if persist_geometries is None else persist_geometries
+        )
         self._lock = threading.RLock()
         self._cycles: list[dict[str, Any]] = []
         self._current: dict[str, Any] | None = None
@@ -260,11 +264,23 @@ class OptimizationTrajectoryRecorder:
                     "",
                 ]
             )
-            if self._persist:
-                self.cycles_dir.mkdir(parents=True, exist_ok=True)
-                _atomic_text_write(geometry_path, xyz)
-            self._current["geometry_ref"] = geometry_path.relative_to(self.output_dir).as_posix()
+            self._current.pop("geometry_ref", None)
             self._current["atom_count"] = len(self._geometry_rows)
+            if self._persist_geometries:
+                try:
+                    self.cycles_dir.mkdir(parents=True, exist_ok=True)
+                    _atomic_text_write(geometry_path, xyz)
+                except OSError:
+                    logger.debug(
+                        "Could not persist optimization geometry: %s",
+                        geometry_path,
+                        exc_info=True,
+                    )
+                else:
+                    if geometry_path.is_file():
+                        self._current["geometry_ref"] = geometry_path.relative_to(
+                            self.output_dir
+                        ).as_posix()
             self._publish()
         self._geometry_active = False
         self._geometry_started = False
@@ -340,14 +356,24 @@ class OptimizationTrajectoryRecorder:
             logger.debug("Could not update optimization trajectory: %s", self.path, exc_info=True)
 
 
-def parse_output_text(text: str, *, item_id: str = "") -> dict[str, Any]:
+def parse_output_text(
+    text: str,
+    *,
+    item_id: str = "",
+    output_dir: Path | None = None,
+) -> dict[str, Any]:
     """Parse a complete ORCA optimization output into a trajectory payload.
 
-    Uses the same line grammar as the live recorder but never writes files;
-    at completion the authoritative final ``.out`` is re-parsed so the
-    persisted cycle list does not depend on truncated incremental callbacks.
+    Uses the same line grammar as the live recorder.  When ``output_dir`` is
+    supplied, geometry snapshots are materialized there without writing a JSON
+    snapshot; otherwise parsing is entirely in memory.
     """
-    recorder = OptimizationTrajectoryRecorder(Path("."), item_id=item_id, persist=False)
+    recorder = OptimizationTrajectoryRecorder(
+        Path(output_dir) if output_dir is not None else Path("."),
+        item_id=item_id,
+        persist=False,
+        persist_geometries=output_dir is not None,
+    )
     for line in str(text).splitlines():
         recorder.feed_line(line)
     recorder.finish(
@@ -437,9 +463,7 @@ def finalize_optimization_trajectory(
     if not target_dir.is_dir():
         return None
     attempt_dirs = [target_dir]
-    attempt_dirs.extend(
-        path for path in sorted(target_dir.glob("rescue_*/")) if path.is_dir()
-    )
+    attempt_dirs.extend(path for path in sorted(target_dir.glob("rescue_*/")) if path.is_dir())
     entries: list[tuple[dict[str, Any], str]] = []
     for index, attempt_dir in enumerate(attempt_dirs):
         incremental = _read_json_dict(attempt_dir / "optimization_trajectory.json")
@@ -452,6 +476,14 @@ def finalize_optimization_trajectory(
     if not entries:
         return None
     merged = merge_trajectories(entries, item_id=item_id)
+    cycles = merged.get("cycles")
+    if isinstance(cycles, list):
+        for cycle in cycles:
+            if not isinstance(cycle, dict):
+                continue
+            geometry_ref = cycle.get("geometry_ref")
+            if not isinstance(geometry_ref, str) or not (target_dir / geometry_ref).is_file():
+                cycle.pop("geometry_ref", None)
     try:
         _atomic_json_write(target_dir / "optimization_trajectory.json", merged)
     except OSError:
@@ -481,7 +513,7 @@ def _reparse_attempt_output(attempt_dir: Path, *, item_id: str) -> dict[str, Any
         text = newest.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
-    payload = parse_output_text(text, item_id=item_id)
+    payload = parse_output_text(text, item_id=item_id, output_dir=attempt_dir)
     return payload if payload.get("cycles") else None
 
 
