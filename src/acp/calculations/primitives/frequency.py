@@ -13,10 +13,12 @@ from ._common import (
     backend_name,
     call_capability,
     capability_kwargs,
+    electronic_state_result_metadata,
     error_text,
     load_inputs,
     output_dir,
     result_from_qc,
+    write_state_artifacts,
 )
 
 _BACKEND_FAILURES = (OSError, RuntimeError, ValueError)
@@ -47,9 +49,32 @@ def run_frequency(req: CalculationRequest) -> CalculationResult:
         )
 
     artifacts = artifacts_from_qc(qc_result, selected_backend)
+    state_metadata, state_errors, forced_status = electronic_state_result_metadata(
+        inputs, qc_result
+    )
+    artifacts.extend(write_state_artifacts(inputs, qc_result, output_dir(req), selected_backend))
     if not qc_result.success:
         message = qc_result.error_message or "frequency calculation failed"
         return result_from_qc(req, selected_backend, qc_result, [message], artifacts)
+    if state_errors:
+        return result_from_qc(
+            req,
+            selected_backend,
+            qc_result,
+            state_errors,
+            artifacts,
+            metadata={"electronic_state": state_metadata},
+            status=forced_status or "failed",
+        )
+    if state_metadata:
+        return result_from_qc(
+            req,
+            selected_backend,
+            qc_result,
+            [],
+            artifacts,
+            metadata={"electronic_state": state_metadata},
+        )
     return result_from_qc(req, selected_backend, qc_result, [], artifacts)
 
 

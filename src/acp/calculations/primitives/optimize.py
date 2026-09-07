@@ -30,10 +30,12 @@ from ._common import (
     backend_name,
     call_capability,
     capability_kwargs,
+    electronic_state_result_metadata,
     error_text,
     load_inputs,
     output_dir,
     result_from_qc,
+    write_state_artifacts,
 )
 from .optimization_trajectory import (
     OptimizationTrajectoryRecorder,
@@ -206,7 +208,19 @@ def run_optimize(
         _finalize_trajectory(target_dir, selected_backend, trajectory_item_id)
         if qc_result is not None:
             all_artifacts = artifacts_from_qc(qc_result, selected_backend, all_artifacts)
-        return result_from_qc(req, selected_backend, qc_result, errors, all_artifacts)
+        state_metadata, state_errors, forced_status = _state_outcome(inputs, qc_result)
+        all_artifacts.extend(
+            write_state_artifacts(inputs, qc_result, target_dir, selected_backend)
+        )
+        return result_from_qc(
+            req,
+            selected_backend,
+            qc_result,
+            errors + state_errors,
+            all_artifacts,
+            {"electronic_state": state_metadata} if state_metadata else None,
+            status=forced_status,
+        )
 
     if qc_result is not None:
         all_artifacts = artifacts_from_qc(qc_result, selected_backend, all_artifacts)
@@ -239,13 +253,20 @@ def run_optimize(
         if _successful_geometry(qc_result):
             _finalize_trajectory(target_dir, selected_backend, trajectory_item_id)
             rescue_metadata["rescue_attempts"] = action.index + 1
+            state_metadata, state_errors, forced_status = _state_outcome(inputs, qc_result)
+            all_artifacts.extend(
+                write_state_artifacts(inputs, qc_result, target_dir, selected_backend)
+            )
+            if state_metadata:
+                rescue_metadata["electronic_state"] = state_metadata
             return result_from_qc(
                 req,
                 selected_backend,
                 qc_result,
-                errors,
+                errors + state_errors,
                 all_artifacts,
                 rescue_metadata,
+                status=forced_status,
             )
         failure_message = failure or _qc_failure_message(qc_result, capability)
         errors.append(f"{action.strategy}: {failure_message}")
@@ -261,6 +282,14 @@ def run_optimize(
         rescue_metadata,
         status="failed",
     )
+
+
+def _state_outcome(
+    inputs: CalculationInputs,
+    qc_result: QCResult | None,
+) -> tuple[dict[str, JsonValue], list[str], str | None]:
+    """Electronic-state metadata, gate errors, and forced status (§10.3)."""
+    return electronic_state_result_metadata(inputs, qc_result)
 
 
 def _structure_kind(request: CalculationRequest) -> str:
