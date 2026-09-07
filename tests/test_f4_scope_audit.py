@@ -33,6 +33,17 @@ Amendments (plan-sanctioned, wave-2 backend wiring):
        removed.  ``CoordinateSpec.constraint_at`` monitor-only error reformat
        rides along.  Teeth: the writer body must not contain ``+ 1`` and
        must emit the target before ``C``.
+    E. ``orca.py`` + ``backends/orca.py``: electronic-state & CASSCF wave
+       (2026-09-07, ``docs/ACP_Electronic_State_CASSCF_Design.md``) — the
+       structured ``%scf`` renderer (HFTyp/GuessMix/FlipSpin/BrokenSym/MORead/
+       STAB), spin-diagnostics parsing (``<S²>`` + Mulliken/Loewdin spin
+       populations), CASSCF/NEVPT2 input rendering and output parsing, the
+       ``ORCAInterface.casscf`` method, plus ``scf_options`` threading through
+       the six existing input methods.  Sanctioned scopes: the contiguous
+       module-level block from ``_SCF_OPTIONS_KEYS`` through
+       ``parse_casscf_output``, the six method bodies, and the
+       ``ORCABackend.casscf`` thin forwarder.  Teeth: the renderer must emit
+       ``FlipSpin`` and the CASSCF parser must read the NEVPT2 results block.
 """
 
 from __future__ import annotations
@@ -304,6 +315,65 @@ def _is_amendment_c_deletion(ln: int, txt: str, baseline_src: str) -> bool:
     )
 
 
+_E_METHOD_SCOPES = (
+    "_build_input_blocks",
+    "_write_input",
+    "optimize",
+    "constrained_optimize",
+    "single_point",
+    "frequency",
+    "casscf",
+)
+
+
+def _amendment_e_orca_block(worktree_src: str) -> tuple[int, int] | None:
+    """Contiguous module-level E block: ``_SCF_OPTIONS_KEYS``..``parse_casscf_output``."""
+    lines = worktree_src.splitlines()
+    start = None
+    for idx, line in enumerate(lines, start=1):
+        if line.startswith("_SCF_OPTIONS_KEYS"):
+            start = idx
+            break
+    end_range = _func_ranges(worktree_src).get("parse_casscf_output")
+    if start is None or end_range is None:
+        return None
+    return (start, end_range[1])
+
+
+def _is_amendment_e_addition(ln: int, txt: str, worktree_src: str, class_name: str | None) -> bool:
+    """Sanctioned additions for the electronic-state & CASSCF wave.
+
+    ``orca.py``: the contiguous module-level renderer/parsing block plus the
+    ``scf_options``-threading lines inside the six existing input methods
+    (and the new ``casscf`` method).  ``backends/orca.py``: the
+    ``casscf`` thin forwarder only.
+    """
+    if class_name is None:
+        block = _amendment_e_orca_block(worktree_src)
+        if block is not None and block[0] <= ln <= block[1]:
+            return True
+        method_names = _E_METHOD_SCOPES[:-1]
+        ranges = _func_ranges(worktree_src)
+        if any(
+            (fr := ranges.get(name)) is not None and fr[0] <= ln <= fr[1]
+            for name in method_names
+        ):
+            return True
+        casscf_method = _func_range(worktree_src, "casscf", "ORCAInterface")
+        return casscf_method is not None and casscf_method[0] <= ln <= casscf_method[1]
+    scope = _func_range(worktree_src, "casscf", class_name)
+    return scope is not None and scope[0] <= ln <= scope[1]
+
+
+def _is_amendment_e_deletion(ln: int, baseline_src: str) -> bool:
+    """Sanctioned E deletions: docstring reflow inside the six input methods."""
+    ranges = _func_ranges(baseline_src)
+    return any(
+        (fr := ranges.get(name)) is not None and fr[0] <= ln <= fr[1]
+        for name in _E_METHOD_SCOPES[:-1]
+    )
+
+
 def _target_orca(src: str) -> set[int]:
     """Target-region line numbers for baseline ``orca.py``."""
     lines = src.splitlines()
@@ -384,7 +454,7 @@ def test_algorithm_body_untouched() -> None:
                     violations.append(f"  {fp}:{ln}: {txt!r}")
             continue
 
-        # ── backends/orca.py: Amendment A ─────────────────────────────────
+        # ── backends/orca.py: Amendment A + E ─────────────────────────────
         if fp == "src/acp/backends/orca.py":
             worktree = _worktree_content(fp)
             method_range = _func_range(worktree, "relaxed_scan", "ORCABackend")
@@ -403,6 +473,9 @@ def test_algorithm_body_untouched() -> None:
                     if not thin_checked:
                         violations.extend(_assert_relaxed_scan_thin(worktree))
                         thin_checked = True
+                    continue
+                # Amendment E: the casscf thin forwarder (delegates to _interface)
+                if _is_amendment_e_addition(ln, txt, worktree, "ORCABackend"):
                     continue
                 # Anything else is a violation
                 violations.append(f"  {fp}:{ln}: {txt!r}")
@@ -436,7 +509,7 @@ def test_algorithm_body_untouched() -> None:
                     violations.append(f"  {fp}: orca_constraint_block must emit target before C")
             continue
 
-        # ── orca.py: Amendment B ──────────────────────────────────────────
+        # ── orca.py: Amendment B + C + E ──────────────────────────────────
         if fp == "src/cccp/qc/interfaces/orca.py":
             worktree = _worktree_content(fp)
             build_range = _func_range(worktree, "_build_input_blocks")
@@ -445,10 +518,12 @@ def test_algorithm_body_untouched() -> None:
                 stripped = txt.strip()
                 if not stripped or stripped.startswith("#"):
                     continue
+                if _is_amendment_c_addition(ln, txt, worktree):
+                    continue
+                if _is_amendment_e_addition(ln, txt, worktree, None):
+                    continue
                 if _is_optfreq_removal_line(ln, txt, deleted, build_range):
                     optfreq_added_count += 1
-                    continue
-                if _is_amendment_c_addition(ln, txt, worktree):
                     continue
                 violations.append(f"  {fp}:{ln}: {txt!r}")
             # Teeth: at most 2 optfreq-removal lines permitted
@@ -468,6 +543,22 @@ def test_algorithm_body_untouched() -> None:
                 worktree.splitlines()[run_orca_range[0] - 1 : run_orca_range[0] + 8]
             ):
                 violations.append(f"  {fp}: Amendment C scope _run_orca lacks output_callback")
+            # Amendment E teeth: the electronic-state wave must actually land.
+            wt_func_ranges = _func_ranges(worktree)
+            scf_range = wt_func_ranges.get("render_scf_block")
+            if scf_range is None or "FlipSpin" not in "\n".join(
+                worktree.splitlines()[scf_range[0] - 1 : scf_range[1]]
+            ):
+                violations.append(f"  {fp}: Amendment E scope render_scf_block missing FlipSpin")
+            casscf_range = wt_func_ranges.get("parse_casscf_output")
+            if casscf_range is None or "_parse_nevpt2_roots" not in "\n".join(
+                worktree.splitlines()[casscf_range[0] - 1 : casscf_range[1]]
+            ):
+                violations.append(
+                    f"  {fp}: Amendment E scope parse_casscf_output missing NEVPT2 parsing"
+                )
+            if _func_range(worktree, "casscf", "ORCAInterface") is None:
+                violations.append(f"  {fp}: Amendment E scope ORCAInterface.casscf missing")
             continue
 
     assert not violations, "Non-comment added lines detected:\n" + "\n".join(violations)
@@ -496,6 +587,11 @@ def test_deleted_lines_in_target_regions() -> None:
                 (ln, t)
                 for ln, t in bad_entries
                 if not _is_amendment_c_deletion(ln, t, baseline_src)
+            ]
+            bad_entries = [
+                (ln, t)
+                for ln, t in bad_entries
+                if not _is_amendment_e_deletion(ln, baseline_src)
             ]
         elif fp == "src/acp/backends/orca.py":
             # Amendment C: relaxed_scan multi-coordinate rewrite lives in the

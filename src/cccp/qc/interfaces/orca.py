@@ -369,6 +369,346 @@ def _is_orca_gfn_xtb_method(method: str | None) -> bool:
     return normalized.startswith("GFN") and normalized.endswith("-XTB")
 
 
+# ── Electronic-state SCF block renderer (design doc §9) ─────────────────
+#
+# ``scf_options`` is a JSON-safe dict produced by the ACP electronic-state
+# module. It is the ONLY sanctioned way to build a ``%scf`` block for spin
+# control; raw ``extra_blocks`` containing ``%scf`` are rejected so the
+# rendered input stays verifiable (§9.6).
+
+_SCF_OPTIONS_KEYS = frozenset(
+    {
+        "hf_typ",
+        "guess_mix_angle",
+        "flip_spin_atoms",
+        "final_ms",
+        "broken_sym_na",
+        "broken_sym_nb",
+        "mo_read_path",
+        "stab_perform",
+        "stab_restart",
+        "no_use_sym",
+        "write_spin_density",
+        "scf_extra_lines",
+    }
+)
+
+
+def _scf_option_bool(options: dict, key: str) -> bool:
+    return bool(options.get(key, False))
+
+
+def _scf_option_float(options: dict, key: str) -> float | None:
+    value = options.get(key)
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _scf_option_int(options: dict, key: str) -> int | None:
+    value = options.get(key)
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float) and float(value).is_integer():
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
+
+
+def render_scf_block(scf_options: dict | None) -> str | None:
+    """Render the single structured ``%scf`` block (§9.6).
+
+    Args:
+        scf_options: Structured spin/guess/stability options. Unknown keys
+            are ignored so future contract fields do not break rendering.
+
+    Returns:
+        The rendered input text, or ``None`` when no SCF directives apply.
+    """
+    if not scf_options:
+        return None
+
+    lines: list[str] = []
+
+    hf_typ = scf_options.get("hf_typ")
+    if isinstance(hf_typ, str) and hf_typ.strip():
+        lines.append(f"  HFTyp {hf_typ.strip()}")
+
+    guess_mix_angle = _scf_option_float(scf_options, "guess_mix_angle")
+    if guess_mix_angle is not None:
+        lines.append(f"  GuessMix {guess_mix_angle:g}")
+
+    flip_atoms = scf_options.get("flip_spin_atoms")
+    if isinstance(flip_atoms, (list, tuple)) and flip_atoms:
+        atoms = [int(a) for a in flip_atoms if isinstance(a, (int, float))]
+        if atoms:
+            lines.append("  FlipSpin " + ", ".join(str(a) for a in atoms))
+        final_ms = _scf_option_float(scf_options, "final_ms")
+        if final_ms is not None:
+            lines.append(f"  FinalMs {final_ms:g}")
+
+    broken_na = _scf_option_int(scf_options, "broken_sym_na")
+    broken_nb = _scf_option_int(scf_options, "broken_sym_nb")
+    if broken_na is not None and broken_nb is not None:
+        lines.append(f"  BrokenSym {broken_na},{broken_nb}")
+
+    if _scf_option_bool(scf_options, "stab_perform"):
+        lines.append("  STABPerform true")
+        if _scf_option_bool(scf_options, "stab_restart"):
+            lines.append("  STABRestartUHFifUnstable true")
+
+    for extra in scf_options.get("scf_extra_lines") or []:
+        if isinstance(extra, str) and extra.strip():
+            lines.append(f"  {extra.strip()}")
+
+    if not lines:
+        return None
+    return "%scf\n" + "\n".join(lines) + "\nend"
+
+
+def render_moinp_block(scf_options: dict | None) -> str | None:
+    """Render the ``%moinp`` block for MORead guesses (§5.3 moread)."""
+    if not scf_options:
+        return None
+    path = scf_options.get("mo_read_path")
+    if not isinstance(path, str) or not path:
+        return None
+    return f'%moinp "{path}"'
+
+
+def render_spin_density_plots_block(scf_options: dict | None) -> str | None:
+    """Render a ``%plots`` block writing a spin-density cube (§5.1)."""
+    if not scf_options or not _scf_option_bool(scf_options, "write_spin_density"):
+        return None
+    return "%plots\n  Format Gaussian_Cube\n  SpinDens true\nend"
+
+
+def scf_route_extras(scf_options: dict | None) -> list[str]:
+    """Route-line keywords implied by the electronic-state options."""
+    if not scf_options:
+        return []
+    extras: list[str] = []
+    if _scf_option_bool(scf_options, "no_use_sym"):
+        extras.append("NoUseSym")
+    if scf_options.get("mo_read_path"):
+        extras.append("Moread")
+    return extras
+
+
+# ── Spin diagnostics parsing (design doc §10.3, §12.1) ──────────────────
+
+_SPIN_CONTAMINATION_HEADER = "UHF SPIN CONTAMINATION"
+_S2_EXPECTATION_RE = re.compile(
+    r"Expectation value of <S\*\*2>\s*:\s*([-+]?\d+\.\d+)"
+)
+_S2_IDEAL_RE = re.compile(
+    r"Ideal value S\*\(S\+1\) for S=([-+]?\d+\.\d+)\s*:\s*([-+]?\d+\.\d+)"
+)
+_MULLIKEN_SPIN_HEADER = "MULLIKEN ATOMIC CHARGES AND SPIN POPULATIONS"
+_LOEWDIN_SPIN_HEADER = "LOEWDIN ATOMIC CHARGES AND SPIN POPULATIONS"
+_ATOMIC_POPULATION_ROW_RE = re.compile(
+    r"^\s*(\d+)\s+([A-Za-z]{1,2})\s*:\s+([-+]?\d+\.\d+)(?:\s+([-+]?\d+\.\d+))?\s*$"
+)
+
+
+def _parse_spin_contamination(text: str) -> dict[str, Any]:
+    """Parse the last ``UHF SPIN CONTAMINATION`` block."""
+    sections = text.split(_SPIN_CONTAMINATION_HEADER)
+    if len(sections) < 2:
+        return {}
+    tail = sections[-1]
+    result: dict[str, Any] = {}
+    match = _S2_EXPECTATION_RE.search(tail)
+    if match:
+        result["s2"] = float(match.group(1))
+    ideal = _S2_IDEAL_RE.search(tail)
+    if ideal:
+        result["ideal_s"] = float(ideal.group(1))
+        result["expected_s2"] = float(ideal.group(2))
+    return result
+
+
+def _parse_atomic_spin_populations(text: str, header: str) -> dict[int, float]:
+    """Parse one atomic-charges-and-spin-populations table."""
+    sections = text.split(header)
+    if len(sections) < 2:
+        return {}
+    populations: dict[int, float] = {}
+    for line in sections[-1].splitlines():
+        match = _ATOMIC_POPULATION_ROW_RE.match(line)
+        if not match:
+            stripped = line.strip()
+            if populations and (not stripped or stripped.startswith("-")):
+                break
+            continue
+        atom_index = int(match.group(1))
+        spin_value = match.group(4)
+        if spin_value is None:
+            continue
+        populations[atom_index] = float(spin_value)
+    return populations
+
+
+def parse_electronic_state_diagnostics(output_file: Path) -> dict[str, Any]:
+    """Extract ``<S²>`` and atomic spin populations from an ORCA log (§10.3).
+
+    Args:
+        output_file: ORCA ``.out`` log path.
+
+    Returns:
+        ``{"s2", "expected_s2", "ideal_s", "mulliken_spin_populations",
+        "loewdin_spin_populations"}`` — fields absent when ORCA did not
+        print them (e.g. restricted runs have no spin contamination block).
+    """
+    diagnostics: dict[str, Any] = {}
+    try:
+        text = Path(output_file).read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        logger.warning("Could not read spin diagnostics from %s: %s", output_file, exc)
+        return diagnostics
+
+    diagnostics.update(_parse_spin_contamination(text))
+    mulliken = _parse_atomic_spin_populations(text, _MULLIKEN_SPIN_HEADER)
+    if mulliken:
+        diagnostics["mulliken_spin_populations"] = mulliken
+    loewdin = _parse_atomic_spin_populations(text, _LOEWDIN_SPIN_HEADER)
+    if loewdin:
+        diagnostics["loewdin_spin_populations"] = loewdin
+    return diagnostics
+
+
+def _with_spin_metadata(metadata: dict[str, Any] | None, output_file: Path) -> dict[str, Any]:
+    """Attach parsed spin diagnostics to a QCResult metadata dict."""
+    merged = dict(metadata or {})
+    diagnostics = parse_electronic_state_diagnostics(output_file)
+    if diagnostics:
+        merged["electronic_state_diagnostics"] = diagnostics
+    return merged
+
+
+# ── CASSCF / NEVPT2 parsing (design doc §11, §12.1) ─────────────────────
+
+_FINAL_ENERGY_RE = re.compile(r"FINAL SINGLE POINT ENERGY\s+([-+]?\d+\.\d+)")
+_NATURAL_OCCUPATION_RE = re.compile(
+    r"^\s*N\[\s*(\d+)\]\s*=\s*([-+]?\d+\.\d+)\s*$", re.MULTILINE
+)
+_NATURAL_OCCUPATION_HEADER_RE = re.compile(
+    r"Natural Orbital Occupation Numbers\s*?:?", re.IGNORECASE
+)
+_ORBITAL_OPT_CONVERGED_MARKER = "ORBITAL OPTIMIZATION HAS CONVERGED"
+_NEVPT2_ROOT_HEADER_RE = re.compile(r"MULT\s+(\d+)\s*,\s*ROOT\s+(\d+)")
+_NEVPT2_TOTAL_CORRECTION_RE = re.compile(
+    r"Total Energy Correction\s*:\s*dE\s*=\s*([-+]?\d+\.\d+)"
+)
+_NEVPT2_ZERO_ORDER_RE = re.compile(r"Zero Order Energy\s*:\s*E0\s*=\s*([-+]?\d+\.\d+)")
+_NEVPT2_TOTAL_RE = re.compile(r"Total Energy \(E0\+dE\)\s*:\s*E\s*=\s*([-+]?\d+\.\d+)")
+_CASSCF_RESULTS_HEADER = "CAS-SCF RESULTS"
+_CASSCF_ROOT_ENERGY_RE = re.compile(
+    r"^\s*(?:Mult|MULT)\s+(\d+)\s*,\s*(?:Root|ROOT)\s+(\d+).*?([-+]?\d+\.\d{4,})",
+)
+
+
+def _parse_natural_occupations(text: str) -> list[float]:
+    """Parse the last ``Natural Orbital Occupation Numbers`` listing."""
+    header_matches = list(_NATURAL_OCCUPATION_HEADER_RE.finditer(text))
+    if not header_matches:
+        return []
+    tail = text[header_matches[-1].end() :]
+    occupations: list[tuple[int, float]] = []
+    for match in _NATURAL_OCCUPATION_RE.finditer(tail):
+        occupations.append((int(match.group(1)), float(match.group(2))))
+        if len(occupations) >= 500:
+            break
+    return [value for _, value in sorted(occupations)]
+
+
+def _parse_nevpt2_roots(text: str) -> list[dict[str, Any]]:
+    """Parse per-root blocks of the ``NEVPT2 Results`` section (§12.1)."""
+    sections = text.split("NEVPT2 Results")
+    if len(sections) < 2:
+        return []
+    roots: list[dict[str, Any]] = []
+    for block in sections[1:]:
+        header = _NEVPT2_ROOT_HEADER_RE.search(block)
+        correction = _NEVPT2_TOTAL_CORRECTION_RE.search(block)
+        zero_order = _NEVPT2_ZERO_ORDER_RE.search(block)
+        total = _NEVPT2_TOTAL_RE.search(block)
+        if not (header and (total or zero_order)):
+            continue
+        roots.append(
+            {
+                "multiplicity": int(header.group(1)),
+                "root": int(header.group(2)),
+                "casscf_energy_hartree": float(zero_order.group(1)) if zero_order else None,
+                "nevpt2_correction_hartree": float(correction.group(1)) if correction else None,
+                "correlated_energy_hartree": float(total.group(1)) if total else None,
+            }
+        )
+    return roots
+
+
+def _parse_casscf_root_energies(text: str) -> list[dict[str, Any]]:
+    """Best-effort per-root energies from the ``CAS-SCF RESULTS`` section."""
+    sections = text.split(_CASSCF_RESULTS_HEADER)
+    if len(sections) < 2:
+        return []
+    roots: list[dict[str, Any]] = []
+    for line in sections[-1].splitlines():
+        match = _CASSCF_ROOT_ENERGY_RE.match(line)
+        if match:
+            roots.append(
+                {
+                    "multiplicity": int(match.group(1)),
+                    "root": int(match.group(2)),
+                    "casscf_energy_hartree": float(match.group(3)),
+                }
+            )
+    return roots
+
+
+def parse_casscf_output(output_file: Path) -> dict[str, Any]:
+    """Extract CASSCF/NEVPT2 energies and natural occupations (§12.1).
+
+    Args:
+        output_file: ORCA ``.out`` log path.
+
+    Returns:
+        ``{"casscf_energy", "natural_occupations", "nevpt2_roots",
+        "casscf_roots", "converged"}``.
+    """
+    result: dict[str, Any] = {
+        "casscf_energy": None,
+        "natural_occupations": [],
+        "nevpt2_roots": [],
+        "casscf_roots": [],
+        "converged": False,
+    }
+    try:
+        text = Path(output_file).read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        logger.warning("Could not read CASSCF output %s: %s", output_file, exc)
+        return result
+
+    energy_matches = _FINAL_ENERGY_RE.findall(text)
+    if energy_matches:
+        result["casscf_energy"] = float(energy_matches[-1])
+    result["converged"] = (
+        _ORBITAL_OPT_CONVERGED_MARKER in text or "THE SCF HAS CONVERGED" in text
+    )
+    result["natural_occupations"] = _parse_natural_occupations(text)
+    result["nevpt2_roots"] = _parse_nevpt2_roots(text)
+    result["casscf_roots"] = _parse_casscf_root_energies(text)
+    return result
+
+
 def _orca_scan_line(scan_coordinate: CoordinateSpec, points: int) -> str:
     """Render one ORCA relaxed-scan line from a :class:`CoordinateSpec`."""
     if scan_coordinate.role == "monitor":
@@ -765,6 +1105,7 @@ class ORCAInterface(QCInterfaceBase):
         aux_c_basis: str = None,
         symbols: list[str] | None = None,
         geom_extra_lines: list[str] | None = None,
+        scf_options: dict | None = None,
     ) -> tuple[str, Any]:
         """Build ORCA input blocks.
 
@@ -789,6 +1130,10 @@ class ORCAInterface(QCInterfaceBase):
                 numeric value is available; ignored otherwise.
             geom_extra_lines: Extra lines appended inside the generated
                 ``%geom`` block (after Recalc_Hess / MaxIter, before ``end``).
+            scf_options: Structured electronic-state options; the single
+                sanctioned source of ``%scf`` spin directives (§9.6). A raw
+                ``extra_blocks`` entry starting with ``%scf`` is rejected
+                while structured options are present.
 
         Returns:
             A 2-tuple ``(input_str, resolution)`` where ``input_str`` is
@@ -804,6 +1149,8 @@ class ORCAInterface(QCInterfaceBase):
         _solvent_model = (
             solvent_model if solvent_model is not None else self.solvent_model
         ) or "none"
+
+        _route_extras.extend(scf_route_extras(scf_options))
 
         blocks = []
 
@@ -950,6 +1297,16 @@ class ORCAInterface(QCInterfaceBase):
                     ",".join(resolution.heavy_elements) or "(none)",
                 )
 
+        scf_block = render_scf_block(scf_options)
+        if scf_block:
+            blocks.append(scf_block)
+        moinp_block = render_moinp_block(scf_options)
+        if moinp_block:
+            blocks.append(moinp_block)
+        plots_block = render_spin_density_plots_block(scf_options)
+        if plots_block:
+            blocks.append(plots_block)
+
         if extra_blocks:
             for blk in extra_blocks:
                 # Skip dict entries — they are structured overrides consumed
@@ -958,6 +1315,13 @@ class ORCAInterface(QCInterfaceBase):
                 if isinstance(blk, dict):
                     continue
                 if blk:
+                    raw = str(blk).lstrip()
+                    if scf_block and raw.lower().startswith("%scf"):
+                        message = (
+                            "raw %scf block conflicts with the structured "
+                            "electronic-state module (§9.6); use scf_options"
+                        )
+                        raise ValueError(message)
                     blocks.append(str(blk))
 
         if _solvent and _solvent_model.lower() != "none":
@@ -991,6 +1355,7 @@ class ORCAInterface(QCInterfaceBase):
         aux_j_basis: str = None,
         aux_c_basis: str = None,
         geom_extra_lines: list[str] | None = None,
+        scf_options: dict | None = None,
     ):
         """Write ORCA input file.
 
@@ -1000,7 +1365,9 @@ class ORCAInterface(QCInterfaceBase):
             symbols: Element symbols
             calc_type: Calculation type
             charge: Molecular charge
-            multiplicity: Spin multiplicity
+            multiplicity: Spin multiplicity written to the ``* xyz`` line —
+                for FlipSpin broken-symmetry states the caller passes the
+                reference multiplicity (§3.1)
             method: Override method (uses self.method if None)
             basis: Override basis (uses self.basis if None)
             route_extras: Extra route-line keywords (see _build_input_blocks)
@@ -1014,6 +1381,7 @@ class ORCAInterface(QCInterfaceBase):
             aux_c_basis: Auxiliary /C basis for RI-MP2 correlation
             geom_extra_lines: Extra lines appended inside the generated
                 ``%geom`` block.
+            scf_options: Structured electronic-state options (§9.6)
         """
         charge = charge if charge is not None else self.charge
         multiplicity = multiplicity if multiplicity is not None else self.multiplicity
@@ -1033,6 +1401,7 @@ class ORCAInterface(QCInterfaceBase):
             aux_c_basis=aux_c_basis,
             symbols=symbols,
             geom_extra_lines=geom_extra_lines,
+            scf_options=scf_options,
         )
 
         ensure_dir(input_file.parent)
@@ -1237,6 +1606,7 @@ class ORCAInterface(QCInterfaceBase):
             aux_basis=kwargs.get("aux_basis"),
             aux_j_basis=kwargs.get("aux_j_basis"),
             aux_c_basis=kwargs.get("aux_c_basis"),
+            scf_options=kwargs.get("scf_options"),
         )
 
         success = (
@@ -1272,6 +1642,7 @@ class ORCAInterface(QCInterfaceBase):
             converged=True,
             output_file=input_file,
             log_file=output_file,
+            metadata=_with_spin_metadata(None, output_file),
         )
 
     def constrained_optimize(
@@ -1317,6 +1688,7 @@ class ORCAInterface(QCInterfaceBase):
             aux_j_basis=kwargs.get("aux_j_basis"),
             aux_c_basis=kwargs.get("aux_c_basis"),
             geom_extra_lines=geom_extra_lines,
+            scf_options=kwargs.get("scf_options"),
         )
 
         try:
@@ -1779,6 +2151,7 @@ class ORCAInterface(QCInterfaceBase):
             aux_basis=kwargs.get("aux_basis"),
             aux_j_basis=kwargs.get("aux_j_basis"),
             aux_c_basis=kwargs.get("aux_c_basis"),
+            scf_options=kwargs.get("scf_options"),
         )
 
         success = self._run_orca(input_file, output_file)
@@ -1809,6 +2182,7 @@ class ORCAInterface(QCInterfaceBase):
             converged=True,
             output_file=input_file,
             log_file=output_file,
+            metadata=_with_spin_metadata(None, output_file),
         )
 
     def frequency(
@@ -1865,6 +2239,7 @@ class ORCAInterface(QCInterfaceBase):
             aux_basis=kwargs.get("aux_basis"),
             aux_j_basis=kwargs.get("aux_j_basis"),
             aux_c_basis=kwargs.get("aux_c_basis"),
+            scf_options=kwargs.get("scf_options"),
         )
 
         success = self._run_orca(input_file, output_file)
@@ -1892,6 +2267,200 @@ class ORCAInterface(QCInterfaceBase):
             log_file=output_file,
             frequencies=frequencies if frequencies else None,
             has_frequencies=len(frequencies) > 0,
+            metadata=_with_spin_metadata(None, output_file),
+        )
+
+    def casscf(
+        self,
+        coordinates: np.ndarray,
+        symbols: list[str],
+        charge: int = 0,
+        multiplicity: int = 1,
+        output_dir: Path = None,
+        output_name: str = "casscf",
+        method: str = None,
+        basis: str = None,
+        *,
+        active_electrons: int = None,
+        active_orbitals: int = None,
+        nroots: int = 1,
+        state_weights: Sequence[float] = (),
+        dynamic_correlation: str = "none",
+        orbital_source: str | Path | None = None,
+        active_orbital_indices: Sequence[int] = (),
+        frozen_core: bool = True,
+        max_iterations: int | None = None,
+        **kwargs,
+    ) -> QCResult:
+        """Run a CASSCF (optionally NEVPT2) single-point calculation.
+
+        Args:
+            coordinates: Molecular coordinates (N, 3)
+            symbols: Element symbols
+            charge: Molecular charge
+            multiplicity: Target multiplicity (``%casscf mult``)
+            output_dir: Output directory
+            output_name: Base name for output files
+            method: Unused for the route (CASSCF is its own model chemistry);
+                accepted for interface symmetry
+            basis: Basis set override (uses self.basis if None)
+            active_electrons: Number of active-space electrons (``nel``)
+            active_orbitals: Number of active-space orbitals (``norb``)
+            nroots: Number of roots (state-averaged when > 1)
+            state_weights: Optional per-root state-average weights
+            dynamic_correlation: ``"none"`` | ``"sc_nevpt2"`` | ``"fic_nevpt2"``
+            orbital_source: Existing ``.gbw`` used as initial orbitals (MORead)
+            active_orbital_indices: Explicit active orbital indices (recorded
+                as provenance; ORCA uses the Moread orbital order)
+            frozen_core: Keep core orbitals frozen (ORCA default)
+            max_iterations: Optional CI MaxIter override
+            **kwargs: ``scf_options`` renders an additional ``%scf`` block
+
+        Returns:
+            QCResult with ``metadata["casscf"]`` carrying energies, natural
+            occupations and per-root NEVPT2 data (design doc §12.1).
+        """
+        if active_electrons is None or active_orbitals is None:
+            return QCResult(
+                success=False,
+                error_message="CASSCF requires active_electrons and active_orbitals",
+            )
+        if active_electrons <= 0 or active_orbitals <= 0:
+            return QCResult(
+                success=False,
+                error_message="CASSCF active space must be positive",
+            )
+
+        output_dir = Path(output_dir) if output_dir else Path.cwd()
+        ensure_dir(output_dir)
+
+        input_file = output_dir / f"{output_name}.inp"
+        output_file = output_dir / f"{output_name}.out"
+
+        _basis = basis if basis is not None else self.basis
+
+        route_keywords = ["CASSCF", "TightSCF"]
+        dc = str(dynamic_correlation or "none").lower()
+        if dc in ("sc_nevpt2", "nevpt2"):
+            route_keywords.append("NEVPT2")
+        elif dc == "fic_nevpt2":
+            route_keywords.append("FIC-NEVPT2")
+        elif dc not in ("", "none"):
+            return QCResult(
+                success=False,
+                error_message=f"unknown dynamic_correlation {dynamic_correlation!r}",
+            )
+        if not frozen_core:
+            route_keywords.append("NoFrozenCore")
+
+        scf_options = kwargs.get("scf_options")
+        route_keywords.extend(scf_route_extras(scf_options))
+        if orbital_source:
+            if "Moread" not in route_keywords:
+                route_keywords.append("Moread")
+
+        lines: list[str] = []
+        route = " ".join([_basis] + route_keywords) if _basis else " ".join(route_keywords)
+        lines.append(f"! {route}")
+
+        lines.append("%casscf")
+        lines.append(f"  nel {int(active_electrons)}")
+        lines.append(f"  norb {int(active_orbitals)}")
+        lines.append(f"  mult {int(multiplicity)}")
+        lines.append(f"  nroots {int(nroots)}")
+        weights = [float(w) for w in state_weights or ()]
+        if weights:
+            weight_text = ", ".join(f"{w:g}" for w in weights)
+            lines.append(f"  weights[0] = {weight_text}")
+        if max_iterations is not None and int(max_iterations) > 0:
+            lines.append("  CI")
+            lines.append(f"    MaxIter {int(max_iterations)}")
+            lines.append("  end")
+        lines.append("end")
+
+        scf_block = render_scf_block(scf_options)
+        if scf_block:
+            lines.append(scf_block)
+        if orbital_source:
+            lines.append(f'%moinp "{orbital_source}"')
+
+        lines.append(f"%maxcore {self.maxcore}")
+        lines.append(f"%pal nprocs {self.nproc} end")
+
+        body = "\n".join(lines) + "\n"
+        body += f"\n* xyz {charge} {int(multiplicity)}\n"
+        for symbol, coord in zip(symbols, coordinates):
+            body += f"{symbol:2s} {coord[0]:15.10f} {coord[1]:15.10f} {coord[2]:15.10f}\n"
+        body += "*\n"
+
+        ensure_dir(input_file.parent)
+        input_file.write_text(body, encoding="utf-8")
+
+        try:
+            success = self._run_orca(input_file, output_file)
+        except SoftwareNotFoundError as exc:
+            return QCResult(
+                success=False,
+                error_message=str(exc),
+                output_file=input_file,
+                log_file=output_file,
+            )
+        if not success:
+            return QCResult(
+                success=False,
+                error_message="ORCA CASSCF calculation failed",
+                output_file=input_file,
+                log_file=output_file,
+            )
+
+        parsed = parse_casscf_output(output_file)
+        energy = None
+        nevpt2_roots = parsed.get("nevpt2_roots") or []
+        if dc != "none" and nevpt2_roots:
+            energy = nevpt2_roots[0].get("correlated_energy_hartree")
+        if energy is None:
+            energy = parsed.get("casscf_energy")
+
+        if energy is None:
+            return QCResult(
+                success=False,
+                error_message="Could not extract CASSCF energy",
+                output_file=input_file,
+                log_file=output_file,
+            )
+
+        metadata = {
+            "casscf": {
+                "active_electrons": int(active_electrons),
+                "active_orbitals": int(active_orbitals),
+                "multiplicity": int(multiplicity),
+                "nroots": int(nroots),
+                "state_weights": weights,
+                "active_orbital_indices": [int(i) for i in active_orbital_indices or ()],
+                "orbital_source": str(orbital_source) if orbital_source else None,
+                "dynamic_correlation": dc,
+                "casscf_energy_hartree": parsed.get("casscf_energy"),
+                "nevpt2_correction_hartree": nevpt2_roots[0].get("nevpt2_correction_hartree")
+                if nevpt2_roots
+                else None,
+                "correlated_energy_hartree": nevpt2_roots[0].get("correlated_energy_hartree")
+                if nevpt2_roots
+                else None,
+                "natural_occupations": parsed.get("natural_occupations") or [],
+                "nevpt2_roots": nevpt2_roots,
+                "casscf_roots": parsed.get("casscf_roots") or [],
+                "converged": bool(parsed.get("converged")),
+            },
+        }
+        return QCResult(
+            success=True,
+            energy=energy,
+            coordinates=coordinates,
+            symbols=symbols,
+            converged=bool(parsed.get("converged")),
+            output_file=input_file,
+            log_file=output_file,
+            metadata=metadata,
         )
 
     def nmr_shielding(
