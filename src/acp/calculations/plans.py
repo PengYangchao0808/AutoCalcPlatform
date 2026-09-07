@@ -13,6 +13,7 @@ from typing import TypeAlias
 
 from typing_extensions import assert_never
 
+from .batch.profiles import BATCH_PROFILE_STEPS
 from .contracts import (
     CalculationPlan,
     CalculationRequest,
@@ -23,7 +24,6 @@ from .contracts import (
     StructureArtifact,
     StructureRole,
 )
-from .batch.profiles import BATCH_PROFILE_STEPS
 
 _BatchItem: TypeAlias = StructureArtifact | Mapping[str, JsonValue]
 
@@ -63,7 +63,13 @@ def _optimization_mode(kind: StepKind, transition_state: bool) -> OptimizationMo
     match kind:
         case StepKind.OPTIMIZE:
             return OptimizationMode.TRANSITION_STATE
-        case StepKind.SINGLEPOINT | StepKind.FREQUENCY | StepKind.SCAN | StepKind.THERMOCHEMISTRY:
+        case (
+            StepKind.SINGLEPOINT
+            | StepKind.FREQUENCY
+            | StepKind.SCAN
+            | StepKind.THERMOCHEMISTRY
+            | StepKind.CASSCF
+        ):
             return OptimizationMode.UNCONSTRAINED
         case unreachable:
             assert_never(unreachable)

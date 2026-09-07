@@ -60,7 +60,7 @@ class BatchMethodOptions:
                     self.single_point_method or role_method,
                     self.single_point_basis or role_basis,
                 )
-            case StepKind.OPTIMIZE | StepKind.SCAN | StepKind.THERMOCHEMISTRY:
+            case StepKind.OPTIMIZE | StepKind.SCAN | StepKind.THERMOCHEMISTRY | StepKind.CASSCF:
                 return role_method, role_basis
             case unreachable:
                 assert_never(unreachable)
