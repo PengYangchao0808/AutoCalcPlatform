@@ -31,6 +31,11 @@ class ProductKind(str, Enum):
     PES_PROFILE = "pes_profile"
     IRC_ENDPOINT = "irc_endpoint"
     THERMO_REPORT = "thermo_report"
+    MULTIREFERENCE_REPORT = "multireference_report"
+    WAVEFUNCTION = "wavefunction"
+    SPIN_DIAGNOSTICS = "spin_diagnostics"
+    ACTIVE_SPACE = "active_space"
+    STATE_COMPARISON = "state_comparison"
 
 
 @dataclass

@@ -260,6 +260,11 @@ class TestResultManifest:
             "pes_profile",
             "irc_endpoint",
             "thermo_report",
+            "multireference_report",
+            "wavefunction",
+            "spin_diagnostics",
+            "active_space",
+            "state_comparison",
         }
 
     def test_unknown_kind_falls_back_to_file(self) -> None:
