@@ -43,6 +43,9 @@ class BatchStructureItem:
     atom_count: int = 0
     formula: str = ""
     include: bool = True
+    electronic_state_override: JsonObject | None = None
+    electronic_state: JsonObject | None = None
+    reference_only: bool = False
 
     def __post_init__(self) -> None:
         role_tag = normalize_tag(self.role if isinstance(self.role, (str, StructureRole)) else None)
@@ -78,12 +81,22 @@ class BatchStructureItem:
             "formula": self.formula,
             "include": self.include,
             "xyz": self.xyz,
+            "electronic_state_override": dict(self.electronic_state_override)
+            if self.electronic_state_override
+            else None,
+            "electronic_state": dict(self.electronic_state) if self.electronic_state else None,
+            "reference_only": self.reference_only,
         }
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, JsonValue]) -> BatchStructureItem:
         """Parse an input item mapping."""
         _raw_role = payload.get("role")
+
+        def optional_mapping(key: str) -> JsonObject | None:
+            value = payload.get(key)
+            return dict(value) if isinstance(value, Mapping) else None
+
         return cls(
             item_id=str(payload.get("item_id") or payload.get("id") or ""),
             name=str(payload.get("name") or payload.get("item_id") or payload.get("id") or ""),
@@ -100,6 +113,9 @@ class BatchStructureItem:
             atom_count=int(payload.get("atom_count") or 0),  # type: ignore[arg-type]  # numeric JsonValue with fallback
             formula=str(payload.get("formula") or ""),
             include=bool(payload.get("include", True)),
+            electronic_state_override=optional_mapping("electronic_state_override"),
+            electronic_state=optional_mapping("electronic_state"),
+            reference_only=bool(payload.get("reference_only", False)),
         )
 
 
@@ -125,6 +141,9 @@ class BatchCalculationItem:
     thermochemistry: dict[str, JsonValue] = field(default_factory=dict)
     error: str = ""
     work_dir: str = ""
+    state_id: str = ""
+    state_label: str = ""
+    reference_only: bool = False
 
     def __post_init__(self) -> None:
         role_tag = normalize_tag(self.role if isinstance(self.role, (str, StructureRole)) else None)
@@ -137,9 +156,19 @@ class BatchCalculationItem:
 
     @classmethod
     def from_item(
-        cls, item: BatchStructureItem, charge: int, multiplicity: int
+        cls,
+        item: BatchStructureItem,
+        charge: int,
+        multiplicity: int,
     ) -> BatchCalculationItem:
         """Create an execution record from an input item."""
+        state_id = ""
+        state_label = ""
+        if item.electronic_state:
+            states = item.electronic_state.get("states")
+            if isinstance(states, list) and len(states) == 1 and isinstance(states[0], Mapping):
+                state_id = str(states[0].get("state_id") or "")
+                state_label = str(states[0].get("label") or "")
         return cls(
             item_id=item.item_id,
             candidate_id=item.candidate_id or item.item_id,
@@ -150,6 +179,9 @@ class BatchCalculationItem:
             multiplicity=item.resolved_multiplicity(multiplicity),
             source_type=item.source_type,
             source_ref=item.source_ref,
+            state_id=state_id,
+            state_label=state_label,
+            reference_only=item.reference_only,
         )
 
     def to_dict(self) -> JsonObject:
@@ -174,6 +206,9 @@ class BatchCalculationItem:
             "thermochemistry": dict(self.thermochemistry),
             "error": self.error,
             "work_dir": self.work_dir,
+            "state_id": self.state_id,
+            "state_label": self.state_label,
+            "reference_only": self.reference_only,
         }
 
     @classmethod
@@ -204,6 +239,9 @@ class BatchCalculationItem:
             thermochemistry=mapping_value("thermochemistry"),
             error=str(payload.get("error") or ""),
             work_dir=str(payload.get("work_dir") or ""),
+            state_id=str(payload.get("state_id") or ""),
+            state_label=str(payload.get("state_label") or ""),
+            reference_only=bool(payload.get("reference_only", False)),
         )
 
 
@@ -211,11 +249,18 @@ def item_cache_key(
     item: BatchStructureItem,
     profile_key: str,
     method_signature: str = "",
+    electronic_signature: str = "",
 ) -> str:
-    """Return a stable cache key for profile, methods, identity, TAG, and geometry."""
+    """Return a stable cache key covering profile, methods, identity, TAG,
+    geometry, and electronic state.
+
+    The electronic signature keeps RKS / UKS / BS branches with different
+    FlipSpin atom sets from sharing cache entries (design doc §8.3).
+    """
     values = (
         str(profile_key),
         method_signature,
+        electronic_signature,
         item.candidate_id,
         item.tag,
         str(item.resolved_charge(0)),

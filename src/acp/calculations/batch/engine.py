@@ -48,10 +48,15 @@ from acp.calculations.contracts import (
     CalculationRequest,
     CalculationResult,
     Checkpoint,
+    ElectronicStateConfig,
+    ElectronicStateSpec,
     JsonValue,
     StepKind,
     StructureArtifact,
     StructureRole,
+    electronic_state_config_from_dict,
+    electronic_state_spec_to_dict,
+    validate_electronic_state,
 )
 from acp.calculations.primitives.frequency import run_frequency
 from acp.calculations.primitives.optimize import run_optimize
@@ -166,6 +171,74 @@ def _normalize_layout_mode(value: str) -> BatchLayoutMode:
         allowed = ", ".join(sorted(_BATCH_LAYOUT_MODES))
         raise ValueError(f"unknown BatchOptimize layout mode {value!r}; expected {allowed}")
     return normalized  # type: ignore[return-value]
+
+
+def _resolve_state_module(raw: Mapping[str, BatchJsonValue] | None) -> ElectronicStateConfig | None:
+    """Resolve a raw electronic-state payload, applying ``preset_id`` (§6.1).
+
+    Preset resolution lazily imports the catalog so the calculation layer
+    keeps no import-time dependency on the UI catalog.
+    """
+    if not raw:
+        return None
+    payload = dict(raw)
+    preset_id = payload.pop("preset_id", None)
+    if isinstance(preset_id, str) and preset_id:
+        from acp.catalog import get_electronic_state_preset
+
+        preset_payload = get_electronic_state_preset(preset_id)
+        if preset_payload is None:
+            message = f"unknown electronic-state preset {preset_id!r}"
+            raise ValueError(message)
+        merged = dict(preset_payload)
+        merged.update({k: v for k, v in payload.items() if v is not None})
+        payload = merged
+    config = electronic_state_config_from_dict(payload)
+    return config if config.states else None
+
+
+def _merge_state_override(
+    base: ElectronicStateConfig,
+    override_payload: Mapping[str, BatchJsonValue],
+) -> ElectronicStateConfig:
+    """Apply an item-level state override onto the job-level module (§8.1).
+
+    States with matching ``state_id`` are patched field-by-field; new
+    states are appended.  ``execution_mode``/``default_state_id`` come from
+    the override when present.
+    """
+    override = _resolve_state_module(override_payload)
+    if override is None:
+        return base
+    merged_states: dict[str, ElectronicStateSpec] = {s.state_id: s for s in base.states}
+    ordered_ids = [s.state_id for s in base.states]
+    for state in override.states:
+        if state.state_id in merged_states:
+            merged_states[state.state_id] = state
+        else:
+            merged_states[state.state_id] = state
+            ordered_ids.append(state.state_id)
+    return ElectronicStateConfig(
+        execution_mode=override.execution_mode,
+        default_state_id=override.default_state_id or base.default_state_id,
+        states=tuple(merged_states[sid] for sid in ordered_ids),
+    )
+
+
+def _single_state_payload(state: ElectronicStateSpec) -> dict[str, BatchJsonValue]:
+    """Wrap one state as the ``single``-mode module handed to primitives."""
+    return {
+        "schema_version": 1,
+        "execution_mode": "single",
+        "default_state_id": state.state_id,
+        "states": [electronic_state_spec_to_dict(state)],  # type: ignore[list-item]
+    }
+
+
+def _electronic_signature(payload: Mapping[str, BatchJsonValue] | None) -> str:
+    if not payload:
+        return ""
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
 
 
 def _to_checkpoint_json(value: BatchJsonValue) -> JsonValue:
@@ -355,6 +428,7 @@ class BatchOptimizeEngine:
         methods: BatchMethodOptions | None = None,
         layout_mode: BatchLayoutMode = "batch",
         progress_reporter: ProgressReporter | None = None,
+        electronic_state: Mapping[str, BatchJsonValue] | None = None,
     ) -> BatchRunOutcome:
         """Execute (or resume) the batch for *items*.
 
@@ -370,6 +444,8 @@ class BatchOptimizeEngine:
                 CLI run; ``single_flat`` matches the scheduler's one-structure
                 task layout and requires exactly one item.
             progress_reporter: Optional state reporter for per-item stage progress.
+            electronic_state: Job-level electronic-state module (preset or full
+                envelope, §8.1); expanded into item × state branches (§7.2).
 
         Returns:
             The aggregated outcome.
@@ -398,7 +474,11 @@ class BatchOptimizeEngine:
         self._active_methods = resolved_methods
         self._active_layout_mode = resolved_layout
 
-        fingerprint = _batch_plan_fingerprint(items, profile, resolved_methods, resolved_layout)
+        expanded_items = self._expand_item_states(items, electronic_state, charge)
+
+        fingerprint = _batch_plan_fingerprint(
+            expanded_items, profile, resolved_methods, resolved_layout
+        )
         runtime_dir = self._work_root / "00_RUNTIME"
         checkpoint = load_checkpoint(runtime_dir, fingerprint)
         previous_by_id = self._checkpoint_items(checkpoint)
@@ -411,9 +491,14 @@ class BatchOptimizeEngine:
         carried: list[BatchCalculationItem] = []
         executed_count = 0
 
-        for index, item in enumerate(items):
+        for index, item in enumerate(expanded_items):
             record = BatchCalculationItem.from_item(item, charge, multiplicity)
-            record.cache_key = item_cache_key(item, profile, resolved_methods.cache_key)
+            record.cache_key = item_cache_key(
+                item,
+                profile,
+                resolved_methods.cache_key,
+                _electronic_signature(item.electronic_state),
+            )
 
             item_dir = self._item_work_dir(item)
             item_dir.mkdir(parents=True, exist_ok=True)
@@ -441,7 +526,7 @@ class BatchOptimizeEngine:
                     _BatchProgress(
                         reporter=active_progress_reporter,
                         item_number=index + 1,
-                        item_total=len(items),
+                        item_total=len(expanded_items),
                     )
                     if active_progress_reporter is not None
                     else None
@@ -473,7 +558,9 @@ class BatchOptimizeEngine:
             checkpoint_items_state[_BATCH_CHECKPOINT_METADATA_KEY] = {
                 "profile": profile,
                 "next_item_index": next_index,
-                "next_item_id": items[next_index].item_id if next_index < len(items) else "",
+                "next_item_id": (
+                    expanded_items[next_index].item_id if next_index < len(expanded_items) else ""
+                ),
                 "last_item_id": item.item_id,
             }
             write_checkpoint(
@@ -496,6 +583,7 @@ class BatchOptimizeEngine:
             updated_at=_utc_now_iso(),
         )
         self._materialize_result_products(manifest)
+        self._write_state_comparison(records)
 
         logger.info(
             "Batch %s: %d items (%d executed, %d carried, %d failed)",
@@ -506,6 +594,221 @@ class BatchOptimizeEngine:
             sum(1 for r in records if r.status == "failed"),
         )
         return BatchRunOutcome(profile=profile, manifest=manifest, carried_items=carried)
+
+    # ── electronic-state expansion (design doc §7, §8) ────────────────────
+
+    def _expand_item_states(
+        self,
+        items: list[BatchStructureItem],
+        electronic_state: Mapping[str, BatchJsonValue] | None,
+        charge: int,
+    ) -> list[BatchStructureItem]:
+        """Expand items × states into per-state branch items (§7.2).
+
+        A single implicit or explicit state keeps the original item id (and
+        therefore the historical work-dir layout); multi-state sweeps get
+        ``<item_id>__<state_id>`` branch directories with independent
+        checkpoints.  BS states referencing a high-spin state not in the
+        selection inject a visible ``reference_only`` bootstrap branch
+        (§7.3) whose optimized ``.gbw`` is wired into the BS guess.
+        """
+        from dataclasses import replace
+
+        job_config = _resolve_state_module(electronic_state)
+        expanded: list[BatchStructureItem] = []
+        for item in items:
+            override = item.electronic_state_override
+            config = job_config
+            if override is not None:
+                if config is None:
+                    config = _resolve_state_module(override)
+                else:
+                    config = _merge_state_override(config, override)
+            if config is None or not config.states:
+                expanded.append(replace(item, electronic_state=None))
+                continue
+
+            states = list(config.states)
+            requested_ids = {s.state_id for s in states}
+            by_id = {s.state_id: s for s in states}
+            ordered_states: list[ElectronicStateSpec] = []
+            placed: set[str] = set()
+
+            def place(state: ElectronicStateSpec) -> None:
+                reference_id = state.reference_state_id
+                if (
+                    reference_id
+                    and reference_id in by_id
+                    and reference_id not in placed
+                    and reference_id != state.state_id
+                ):
+                    place(by_id[reference_id])
+                if state.state_id not in placed:
+                    placed.add(state.state_id)
+                    ordered_states.append(state)
+
+            injected: dict[str, ElectronicStateSpec] = {}
+            for state in states:
+                reference_id = state.reference_state_id
+                if (
+                    reference_id
+                    and reference_id not in requested_ids
+                    and reference_id not in injected
+                ):
+                    injected[reference_id] = ElectronicStateSpec(
+                        state_id=reference_id,
+                        label=f"{reference_id} (reference bootstrap)",
+                        target_multiplicity=(
+                            state.guess.reference_multiplicity or state.target_multiplicity + 2
+                        ),
+                    )
+            for state in states:
+                place(state)
+            for bootstrap_state in injected.values():
+                ordered_states.insert(0, bootstrap_state)
+
+            effective_config = ElectronicStateConfig(
+                execution_mode=config.execution_mode,
+                default_state_id=config.default_state_id,
+                states=tuple(ordered_states),
+            )
+            validation = validate_electronic_state(effective_config, backend="orca")
+            if validation.errors:
+                message = (
+                    f"electronic_state for item {item.item_id!r} invalid: "
+                    + "; ".join(validation.errors)
+                )
+                raise ValueError(message)
+
+            multi_state = len(ordered_states) > 1
+            branch_specs: list[tuple[ElectronicStateSpec, bool]] = [
+                (state, state.state_id in injected) for state in ordered_states
+            ]
+            branch_gbw: dict[str, str] = {}
+            if multi_state:
+                for state, _ in branch_specs:
+                    branch_gbw[state.state_id] = self._branch_wavefunction_path(
+                        item, state.state_id
+                    )
+
+            for state, reference_only in branch_specs:
+                payload = _single_state_payload(state)
+                if state.reference_state_id and branch_gbw.get(state.reference_state_id):
+                    payload["wavefunction_bootstrap"] = branch_gbw[state.reference_state_id]
+                branch_item = replace(
+                    item,
+                    item_id=(
+                        f"{item.item_id}__{state.state_id}" if multi_state else item.item_id
+                    ),
+                    name=(
+                        f"{item.name} [{state.label or state.state_id}]"
+                        if multi_state
+                        else item.name
+                    ),
+                    multiplicity=state.target_multiplicity,
+                    electronic_state=payload,  # type: ignore[arg-type]
+                    electronic_state_override=None,
+                    reference_only=reference_only,
+                )
+                expanded.append(branch_item)
+        return expanded
+
+    def _branch_wavefunction_path(self, item: BatchStructureItem, state_id: str) -> str:
+        """Future ``.gbw`` path of one branch's optimized wavefunction."""
+        branch_id = f"{item.item_id}__{state_id}"
+        gbw_name = "ts_opt.gbw" if item.tag == "TS" else "optimize.gbw"
+        if self._active_layout_mode == "single_flat":
+            return str((self._work_root / StepKind.OPTIMIZE.value / gbw_name).resolve())
+        return str((self.batch_root / branch_id / StepKind.OPTIMIZE.value / gbw_name).resolve())
+
+    def _write_state_comparison(self, records: list[BatchCalculationItem]) -> None:
+        """Write ``RESULT/state_comparison.json`` for multi-state runs (§7.4)."""
+        state_records = [r for r in records if r.state_id and not r.reference_only]
+        if len(state_records) < 2:
+            return
+        groups: dict[str, list[BatchCalculationItem]] = {}
+        for record in state_records:
+            base_id = (
+                record.item_id.rsplit("__", 1)[0] if "__" in record.item_id else record.item_id
+            )
+            groups.setdefault(base_id, []).append(record)
+
+        comparisons: dict[str, BatchJsonValue] = {}
+        for base_id, group in groups.items():
+            if len(group) < 2:
+                continue
+            energies: dict[str, float | None] = {}
+            gibbs: dict[str, float | None] = {}
+            for record in group:
+                sp_energy = record.single_point.get("energy_hartree")
+                energies[record.state_id] = (
+                    float(sp_energy) if isinstance(sp_energy, (int, float)) else None
+                )
+                gibbs_value = record.thermochemistry.get("gibbs_free_energy_hartree")
+                gibbs[record.state_id] = (
+                    float(gibbs_value) if isinstance(gibbs_value, (int, float)) else None
+                )
+            valid = {sid: e for sid, e in energies.items() if e is not None}
+            if not valid:
+                continue
+            reference_energy = min(valid.values())
+            entry: dict[str, BatchJsonValue] = {
+                "states": {
+                    record.state_id: {
+                        "energy_hartree": energies.get(record.state_id),
+                        "delta_e_hartree": (
+                            energies[record.state_id] - reference_energy
+                            if energies.get(record.state_id) is not None
+                            else None
+                        ),
+                        "status": record.status,
+                        "multiplicity": record.multiplicity,
+                    }
+                    for record in group
+                },
+            }
+            mults = {record.state_id: record.multiplicity for record in group}
+            singlet = next((sid for sid, m in mults.items() if m == 1), None)
+            triplet = next((sid for sid, m in mults.items() if m == 3), None)
+            if (
+                singlet
+                and triplet
+                and energies.get(singlet) is not None
+                and energies.get(triplet) is not None
+            ):
+                entry["singlet_triplet_gap_hartree"] = energies[singlet] - energies[triplet]
+            if all(value is not None for value in gibbs.values()) and len(gibbs) == len(group):
+                entry["gibbs_hartree"] = {sid: value for sid, value in gibbs.items()}
+            comparisons[base_id] = entry
+
+        if not comparisons:
+            return
+        payload: dict[str, BatchJsonValue] = {
+            "kind": "acp.state_comparison",
+            "schema_version": 1,
+            "items": comparisons,
+            "note": (
+                "Projected (Yamaguchi/Noodleman) values are not included; "
+                "raw BS energies only (§7.4)"
+            ),
+        }
+        comparison_path = self._result_root / "state_comparison.json"
+        try:
+            comparison_path.parent.mkdir(parents=True, exist_ok=True)
+            comparison_path.write_text(
+                json.dumps(payload, indent=2, sort_keys=True, default=str),
+                encoding="utf-8",
+            )
+            result_manifest = self._read_result_manifest()
+            result_manifest.add_product(
+                "batch_state_comparison",
+                "Multi-state energy comparison",
+                "state_comparison.json",
+                ProductKind.STATE_COMPARISON,
+            )
+            result_manifest.write(self._result_root)
+        except OSError:
+            logger.warning("failed to write state_comparison.json", exc_info=True)
 
     # ── per-item processing ──────────────────────────────────────────────
 
@@ -540,6 +843,7 @@ class BatchOptimizeEngine:
         frequency_log_path: Path | None = None
         sp_energy: float | None = None
         optimized_coords: list[list[float]] | None = None
+        last_optimize_gbw: str | None = None
 
         for step_kind in steps:
             if progress is not None:
@@ -566,6 +870,9 @@ class BatchOptimizeEngine:
                 )
             step_dir = self._step_dir(item, step_kind)
             step_dir.mkdir(parents=True, exist_ok=True)
+            step_electronic_state = self._step_state_payload(
+                item, step_kind, inherit_gbw=last_optimize_gbw
+            )
 
             if step_kind is StepKind.OPTIMIZE:
                 req = self._build_opt_request(
@@ -577,6 +884,7 @@ class BatchOptimizeEngine:
                     opt_kwargs,
                     resolved_methods,
                     trajectory_item_id=item.item_id,
+                    electronic_state=step_electronic_state,
                 )
                 if progress is None:
                     current_result = run_optimize(req)
@@ -593,6 +901,8 @@ class BatchOptimizeEngine:
                     )
                 if current_result.coords is not None:
                     optimized_coords = [[float(v) for v in row] for row in current_result.coords]
+                gbw_name = "ts_opt.gbw" if is_ts else "optimize.gbw"
+                last_optimize_gbw = (step_dir / gbw_name).as_posix()
 
             elif step_kind is StepKind.FREQUENCY:
                 if current_result is None or current_result.coords is None:
@@ -605,6 +915,7 @@ class BatchOptimizeEngine:
                     step_dir,
                     current_symbols,
                     resolved_methods,
+                    electronic_state=step_electronic_state,
                 )
                 current_result = run_frequency(req)
                 if current_result.status == "failed":
@@ -636,6 +947,7 @@ class BatchOptimizeEngine:
                     step_dir,
                     current_symbols,
                     resolved_methods,
+                    electronic_state=step_electronic_state,
                 )
                 current_result = run_singlepoint(req)
                 if current_result.status == "failed":
@@ -707,6 +1019,34 @@ class BatchOptimizeEngine:
             "structure_kind": "minimum",
         }
 
+    def _step_state_payload(
+        self,
+        item: BatchStructureItem,
+        step_kind: StepKind,
+        *,
+        inherit_gbw: str | None,
+    ) -> Mapping[str, BatchJsonValue] | None:
+        """Electronic-state payload for one step, wiring ``.gbw`` inheritance (§10.2).
+
+        Downstream FREQ/SP steps read the optimized wavefunction via
+        ``wavefunction_bootstrap`` unless the state opts out of inheritance.
+        """
+        base = item.electronic_state
+        if base is None:
+            return None
+        if step_kind is StepKind.OPTIMIZE or not inherit_gbw:
+            return base
+        if base.get("wavefunction_bootstrap"):
+            return base
+        try:
+            config = electronic_state_config_from_dict(base)
+            state = config.selected_state()
+            if state is None or not state.wavefunction.inherit_between_steps:
+                return base
+        except (ValueError, TypeError):
+            return base
+        return {**base, "wavefunction_bootstrap": inherit_gbw}
+
     def _build_opt_request(
         self,
         input_path: Path,
@@ -718,6 +1058,7 @@ class BatchOptimizeEngine:
         methods: BatchMethodOptions,
         *,
         trajectory_item_id: str = "",
+        electronic_state: Mapping[str, BatchJsonValue] | None = None,
     ) -> CalculationRequest:
         role = StructureRole.TRANSITION_STATE if is_ts else StructureRole.MINIMUM
         method, basis = methods.for_step(StepKind.OPTIMIZE, is_ts)
@@ -730,6 +1071,8 @@ class BatchOptimizeEngine:
         }
         if basis:
             resources["basis"] = basis
+        if electronic_state:
+            resources["electronic_state"] = dict(electronic_state)
         return CalculationRequest(
             input_artifact=StructureArtifact(path=input_path, role=role),
             method=method,
@@ -746,6 +1089,8 @@ class BatchOptimizeEngine:
         output_dir: Path,
         symbols: list[str],
         methods: BatchMethodOptions,
+        *,
+        electronic_state: Mapping[str, BatchJsonValue] | None = None,
     ) -> CalculationRequest:
         coordinates = _json_coordinates(opt_result.coords)
         symbols_json = _json_text_list(symbols)
@@ -759,6 +1104,8 @@ class BatchOptimizeEngine:
         }
         if basis:
             resources["basis"] = basis
+        if electronic_state:
+            resources["electronic_state"] = dict(electronic_state)
         return CalculationRequest(
             input_artifact=StructureArtifact(
                 path=self._item_input_path(item),
@@ -778,6 +1125,8 @@ class BatchOptimizeEngine:
         output_dir: Path,
         symbols: list[str],
         methods: BatchMethodOptions,
+        *,
+        electronic_state: Mapping[str, BatchJsonValue] | None = None,
     ) -> CalculationRequest:
         coordinates = _json_coordinates(result.coords)
         symbols_json = _json_text_list(symbols)
@@ -791,6 +1140,8 @@ class BatchOptimizeEngine:
         }
         if basis:
             resources["basis"] = basis
+        if electronic_state:
+            resources["electronic_state"] = dict(electronic_state)
         return CalculationRequest(
             input_artifact=StructureArtifact(
                 path=self._item_input_path(item),
