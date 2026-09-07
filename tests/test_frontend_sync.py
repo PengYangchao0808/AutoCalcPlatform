@@ -89,6 +89,31 @@ def test_default_workbench_keeps_original_v2_frontend_and_v1_contract() -> None:
     assert "function energyGraphLoadFrameGeometry(node)" in html
 
 
+def test_optimization_geometry_loader_frame_endpoint_first() -> None:
+    """Regression guard for the optimization structure viewer (2026-09 report).
+
+    geometry_ref is stored relative to the trajectory file
+    (e.g. WORK/03_OPT/optimization_trajectory.json), so the job-root files
+    endpoint cannot resolve it and returns 404.  The optimization view must
+    therefore call /optimization/frame/{frame_index} FIRST, and every source
+    must live in its own try/catch so a failed request never blocks the
+    remaining fallbacks (only AbortError is rethrown).
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    body = html.split("function energyGraphLoadFrameGeometry(node)", 1)[1]
+    body = body.split("\nasync function ", 1)[0]
+
+    frame_pos = body.find('"/optimization/frame/"')
+    files_pos = body.find('"/files/"')
+    assert frame_pos != -1 and files_pos != -1
+    assert frame_pos < files_pos
+
+    # Four sources, each in an independent try/catch that only rethrows
+    # AbortError — a 404 in one can never skip the rest.
+    assert body.count('if (e && e.name === "AbortError") throw e;') >= 4
+
+
 def test_minimal_frontend_is_not_the_default_page() -> None:
     server = SERVER.read_text(encoding="utf-8")
 

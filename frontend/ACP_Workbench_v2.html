@@ -6466,38 +6466,59 @@ async function energyGraphLoadFrameGeometry(node) {
   var view = String(data.view_type || "");
   try {
     var xyz = "";
-    /* (1) geometry_ref → files endpoint */
     var geoRef = node.geometry_ref || "";
-    if (geoRef) {
-      var fileResp = await api("/jobs/" + encodeURIComponent(jobId) + "/files/" + encodeURIComponent(geoRef), ac ? { signal: ac.signal } : {});
-      if (tk !== energyGraphState.requestToken) return;
-      if (fileResp && typeof fileResp === "string") {
-        xyz = fileResp;
-      } else if (fileResp && fileResp.xyz) {
-        xyz = fileResp.xyz;
+    /* Each source runs in its own try/catch so one failure (e.g. a 404 from
+       the files endpoint) never blocks the remaining fallbacks; AbortError
+       is rethrown so cancellation still short-circuits the whole load. */
+    /* (1) optimization → dedicated frame endpoint FIRST: geometry_ref is
+       relative to the trajectory file (e.g. WORK/03_OPT/...), so the
+       job-root files endpoint cannot resolve it and would 404. */
+    if (view === "optimization") {
+      try {
+        var optUrl = "/jobs/" + encodeURIComponent(jobId) + "/optimization/frame/" + encodeURIComponent(frameIndex);
+        if (data.metadata && data.metadata.item_id) optUrl += "?item_id=" + encodeURIComponent(String(data.metadata.item_id));
+        var optResp = await api(optUrl, ac ? { signal: ac.signal } : {});
+        if (tk !== energyGraphState.requestToken) return;
+        if (optResp && optResp.xyz) xyz = optResp.xyz;
+      } catch (e) {
+        if (e && e.name === "AbortError") throw e;
       }
     }
-    /* (2) optimization without geometry_ref → optimization frame endpoint */
-    if (!xyz && view === "optimization") {
-      var optUrl = "/jobs/" + encodeURIComponent(jobId) + "/optimization/frame/" + encodeURIComponent(frameIndex);
-      if (data.metadata && data.metadata.item_id) optUrl += "?item_id=" + encodeURIComponent(String(data.metadata.item_id));
-      var optResp = await api(optUrl, ac ? { signal: ac.signal } : {});
-      if (tk !== energyGraphState.requestToken) return;
-      if (optResp && optResp.xyz) xyz = optResp.xyz;
+    /* (2) geometry_ref → files endpoint */
+    if (!xyz && geoRef) {
+      try {
+        var fileResp = await api("/jobs/" + encodeURIComponent(jobId) + "/files/" + encodeURIComponent(geoRef), ac ? { signal: ac.signal } : {});
+        if (tk !== energyGraphState.requestToken) return;
+        if (fileResp && typeof fileResp === "string") {
+          xyz = fileResp;
+        } else if (fileResp && fileResp.xyz) {
+          xyz = fileResp.xyz;
+        }
+      } catch (e) {
+        if (e && e.name === "AbortError") throw e;
+      }
     }
     /* (3) sampling → sampling frame endpoint */
     if (!xyz && view === "sampling") {
-      var sampUrl = "/jobs/" + encodeURIComponent(jobId) + "/sampling/frame/" + encodeURIComponent(frameIndex);
-      var sampResp = await api(sampUrl, ac ? { signal: ac.signal } : {});
-      if (tk !== energyGraphState.requestToken) return;
-      if (sampResp && sampResp.xyz) xyz = sampResp.xyz;
+      try {
+        var sampUrl = "/jobs/" + encodeURIComponent(jobId) + "/sampling/frame/" + encodeURIComponent(frameIndex);
+        var sampResp = await api(sampUrl, ac ? { signal: ac.signal } : {});
+        if (tk !== energyGraphState.requestToken) return;
+        if (sampResp && sampResp.xyz) xyz = sampResp.xyz;
+      } catch (e) {
+        if (e && e.name === "AbortError") throw e;
+      }
     }
     /* (4) fallback: legacy s2/frame for scan */
     if (!xyz && (view === "scan" || view === "scan_trajectory")) {
-      var s2Url = "/jobs/" + encodeURIComponent(jobId) + "/s2/frame/" + encodeURIComponent(frameIndex);
-      var s2Resp = await api(s2Url, ac ? { signal: ac.signal } : {});
-      if (tk !== energyGraphState.requestToken) return;
-      if (s2Resp && s2Resp.xyz) xyz = s2Resp.xyz;
+      try {
+        var s2Url = "/jobs/" + encodeURIComponent(jobId) + "/s2/frame/" + encodeURIComponent(frameIndex);
+        var s2Resp = await api(s2Url, ac ? { signal: ac.signal } : {});
+        if (tk !== energyGraphState.requestToken) return;
+        if (s2Resp && s2Resp.xyz) xyz = s2Resp.xyz;
+      } catch (e) {
+        if (e && e.name === "AbortError") throw e;
+      }
     }
     if (!container.isConnected) return;
     if (!xyz) {
