@@ -13,6 +13,35 @@ The git tag `v0.N.X` on `main` is the single source of truth; the four
 in-repo version sites (`pyproject.toml`, `src/acp/__init__.py`,
 `src/cccp/__init__.py`, `src/cccp/version.py`) must always equal the latest tag.
 
+## [0.1.3] - 2026-09-07
+
+Release: energy & trajectory viewer, CASSCF/electronic-state support, and
+optimization trajectory repair.
+
+### Added — Energy & Trajectory viewer
+
+- unified trajectory-frame visualization for PES scans, geometry optimizations,
+  conformer search, and standalone scans.
+- generic frame inspector with lock / export / save-as-candidate operations.
+- optimization convergence-criteria panel (RMS/MAX gradient & displacement vs
+  threshold).
+- conformer sampling history (MD energy trajectory, sampling-space map,
+  saturation coverage) for xtb-md protocols.
+
+### Added — CASSCF / electronic-state
+
+- CASSCF/NEVPT2 calculation support with spin diagnostics parsing.
+- structured %scf rendering for output analysis.
+- electronic-state contracts and product kinds.
+- batch item×state expansion for multi-state workflows.
+- casscf CLI / workflow entry point.
+
+### Fixed — optimization trajectory repair
+
+- dangling geometry_ref recovery for robust trajectory capture.
+- recorder hardening against edge-case state transitions.
+- batch FIFO dispatch fix for correct task ordering.
+
 ## [0.1.2] - 2026-09-06
 
 Patch release: post-milestone frontend and API fixes.
@@ -80,6 +109,7 @@ First external sync milestone: post-refactor minimal architecture
 - cli: preflight warning now states that a missing executable only affects
   engine configurations that actually call it.
 
+[0.1.3]: https://github.com/PengYangchao0808/AutoCalcPlatform/releases/tag/v0.1.3
 [0.1.2]: https://github.com/PengYangchao0808/AutoCalcPlatform/releases/tag/v0.1.2
 [0.1.1]: https://github.com/PengYangchao0808/AutoCalcPlatform/releases/tag/v0.1.1
 [0.1.0]: https://github.com/PengYangchao0808/AutoCalcPlatform/releases/tag/v0.1.0
