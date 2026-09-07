@@ -147,6 +147,10 @@ from acp.api.v1_schemas import (
     StudyPromoteResponse,
     StudyResumeResponse,
     UploadResponse,
+    V1FrameCandidateInfo,
+    V1FrameCandidateListResponse,
+    V1FrameCandidateRequest,
+    V1FrameCandidateResponse,
     V1JobCreatedResponse,
     V1JobCreateRequest,
     V1JobDetailResponse,
@@ -157,13 +161,9 @@ from acp.api.v1_schemas import (
     V1JobRecordModel,
     V1JobRerunRequest,
     V1JobSpecModel,
+    V1SamplingFrameResponse,
     V1SoftwareCandidate,
     V1SoftwareDiscoveryResponse,
-    V1FrameCandidateInfo,
-    V1FrameCandidateListResponse,
-    V1FrameCandidateRequest,
-    V1FrameCandidateResponse,
-    V1SamplingFrameResponse,
     V1SoftwareEntry,
     ValidateMethodRequest,
     ValidateMethodResponse,
@@ -1183,6 +1183,50 @@ def _resolve_batch_structures_input(inp: dict[str, Any], request: Request) -> di
     return resolved_inp
 
 
+def _expand_method_electronic_state(method: dict[str, Any]) -> dict[str, Any]:
+    """Expand electronic-state modules in a method payload (§14.1, §14.3).
+
+    Each level's ``electronic_state`` object is validated through the typed
+    model + contract, presets are applied, and the fully expanded
+    configuration replaces the user payload so the persisted job spec never
+    depends on a bare preset id.
+    """
+    levels = method.get("levels")
+    if not isinstance(levels, dict):
+        return method
+    from pydantic import ValidationError
+
+    from acp.api.v1_schemas import ElectronicStateModuleModel
+    from acp.catalog import _normalize_electronic_state_module
+
+    for level in levels.values():
+        if not isinstance(level, dict) or "electronic_state" not in level:
+            continue
+        raw_module = level.get("electronic_state")
+        if raw_module in (None, "", {}):
+            level.pop("electronic_state", None)
+            continue
+        try:
+            typed = ElectronicStateModuleModel.model_validate(raw_module)
+            payload = typed.payload()
+        except ValidationError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"invalid electronic_state module: {exc.errors()[0].get('msg', str(exc))}",
+            ) from exc
+        expanded, errors = _normalize_electronic_state_module(payload)
+        if errors:
+            raise HTTPException(
+                status_code=400,
+                detail=f"invalid electronic_state module: {'; '.join(errors)}",
+            )
+        if expanded is None:
+            level.pop("electronic_state", None)
+        else:
+            level["electronic_state"] = expanded
+    return method
+
+
 @router.post("/jobs", response_model=V1JobCreatedResponse, status_code=201)
 def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedResponse:
     manager = _manager(request)
@@ -1191,6 +1235,7 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
             status_code=400,
             detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}",
         )
+    req.method = _expand_method_electronic_state(req.method)
     if req.workflow == "PESsearch" and str(req.method.get("mode") or "") == "bond_length_scan":
         req.input = _prepare_bond_scan_input(req.input, manager)
     elif req.workflow == "PESsearch":
