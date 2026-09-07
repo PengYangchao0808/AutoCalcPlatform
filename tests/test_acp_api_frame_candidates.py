@@ -445,6 +445,20 @@ class TestSamplingFrameEndpoint:
         assert body["relative_energy_kcal_mol"] == 0.5
         assert "O" in body["xyz"]
 
+    def test_sampling_frame_404_unreadable_trajectory(
+        self, client: TestClient, tmp_path: Path
+    ) -> None:
+        work_dir = _make_sampling_task(tmp_path)
+        (work_dir / "WORK" / "02_SEARCH" / "xTB" / "traj.xyz").unlink()
+        job_id = _register_job(
+            client, tmp_path, work_dir, job_id="samp_missing_traj", workflow="Confsearch"
+        )
+
+        resp = client.get(f"/api/v1/jobs/{job_id}/sampling/frame/1")
+
+        assert resp.status_code == 404
+        assert "trajectory file is unreadable" in resp.json()["detail"]
+
     def test_sampling_frame_404_no_history(self, client: TestClient, tmp_path: Path) -> None:
         work_dir = _make_conformer_task(tmp_path)
         job_id = _register_job(

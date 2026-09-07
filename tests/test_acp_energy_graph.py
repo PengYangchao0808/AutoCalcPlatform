@@ -174,6 +174,23 @@ def test_standalone_scan_projection_preserves_frame_indices_and_annotations(
     )
 
 
+def test_standalone_scan_rejects_geometry_path_escape(tmp_path: Path) -> None:
+    # Given: a scan trajectory containing an escaping geometry path.
+    payload = _scan_trajectory_payload()
+    payload["frames"][0]["path"] = "../evil.xyz"
+    trajectory_path = tmp_path / "RESULT" / "trajectories" / "scan_trajectory.json"
+    trajectory_path.parent.mkdir(parents=True)
+    trajectory_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    # When: the standalone scan trajectory is projected for the energy viewer.
+    graph = build_scan_trajectory_energy_graph("scan-job", tmp_path)
+
+    # Then: the unsafe node remains visible but has no geometry reference.
+    assert graph is not None
+    assert graph["nodes"][0]["geometry_ref"] == ""
+    assert graph["nodes"][1]["geometry_ref"] == "RESULT/structures/scan_frame_001.xyz"
+
+
 def test_standalone_scan_missing_trajectory_returns_unavailable_projection(tmp_path: Path) -> None:
     # Given: a scan job without its result trajectory.
     # When: the workflow dispatch requests its energy graph.

@@ -611,12 +611,28 @@ def build_scan_trajectory_energy_graph(job_id: str, work_dir: Path) -> dict[str,
     energies = [_number(frame.get("energy_hartree")) for frame in frames]
     relative = _relative_hartree(energies)
     nodes: list[dict[str, Any]] = []
+    result_root = (work_dir / "RESULT").resolve()
     for position, frame in enumerate(frames):
         frame_index = int(_number(frame["index"]) or 0)
         coordinate_values = frame.get("coordinate_values") or {}
         first_coordinate = _number(next(iter(coordinate_values.values()), None))
         x = first_coordinate if first_coordinate is not None else _number(frame.get("progress"))
         x = float(frame_index) if x is None else x
+        relative_path = (
+            frame["path"].replace("\\", "/").lstrip("/")
+            if isinstance(frame.get("path"), str)
+            else ""
+        )
+        geometry_ref = ""
+        if relative_path and ".." not in Path(relative_path).parts:
+            result_path = relative_path.removeprefix("RESULT/")
+            resolved_path = (result_root / result_path).resolve()
+            if resolved_path.is_relative_to(result_root):
+                geometry_ref = (
+                    relative_path
+                    if relative_path.startswith("RESULT/")
+                    else f"RESULT/{relative_path}"
+                )
         nodes.append(
             TrajectoryFrame(
                 frame_id=f"frame_{frame_index}",
@@ -625,7 +641,7 @@ def build_scan_trajectory_energy_graph(job_id: str, work_dir: Path) -> dict[str,
                 x=x,
                 energy=relative[position],
                 status="failed" if energies[position] is None else "completed",
-                geometry_ref=f"RESULT/{frame.get('path') or ''}",
+                geometry_ref=geometry_ref,
                 metadata={"coordinate_values": coordinate_values},
             ).to_node(VIEW_REGISTRY["scan_trajectory"].node_type)
         )

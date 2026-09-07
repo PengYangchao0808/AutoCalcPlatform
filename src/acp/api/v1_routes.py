@@ -2195,11 +2195,17 @@ def get_sampling_frame(
 
     # Read XYZ from the source trajectory
     traj_path = Path(history.source_trajectory)
-    xyz = ""
-    if traj_path.is_file():
-        xyz_text = read_traj_frame_xyz(traj_path, frame_index)
-        if xyz_text is not None:
-            xyz = xyz_text
+    if not traj_path.is_file():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Sampling trajectory file is unreadable for job {job_id}",
+        )
+    xyz = read_traj_frame_xyz(traj_path, frame_index)
+    if xyz is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Sampling trajectory file is unreadable for job {job_id}",
+        )
 
     # Compute relative energy
     energies = [f.energy_kcal_mol for f in history.frames if f.energy_kcal_mol is not None]

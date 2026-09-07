@@ -160,6 +160,8 @@ def _resolve_conformer_geometry(task_root: Path, frame_index: int) -> str:
         geometry_path = resolve_manifest_geometry(manifest_path, geometry_ref)
     except FileNotFoundError as exc:
         raise FrameCandidateError(str(exc)) from exc
+    if not geometry_path.resolve().is_relative_to(task_root.resolve()):
+        raise FrameCandidateError(f"conformer geometry escapes the task directory: {geometry_ref}")
     try:
         return geometry_path.read_text(encoding="utf-8")
     except OSError as exc:

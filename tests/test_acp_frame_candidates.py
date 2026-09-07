@@ -17,6 +17,7 @@ from acp.results.frame_candidates import (
     resolve_frame_geometry,
     save_frame_candidate,
 )
+from acp.storage.manifest import ResultManifest
 
 # ---------------------------------------------------------------------------
 # Fixtures — synthetic task roots per view_type
@@ -565,6 +566,30 @@ class TestRemoveFrameCandidate:
         ]
         assert len(frame_products) == 0
 
+    def test_remove_manifest_failure_restores_authority(
+        self, scan_task: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        save_frame_candidate(
+            scan_task,
+            job_id="test_job_001",
+            workflow="scan",
+            view_type="scan",
+            frame_index=0,
+            role="TS",
+        )
+        authority_path = scan_task / "RESULT" / FRAME_CANDIDATES_RELATIVE_PATH.split("/", 1)[1]
+        authority_before = authority_path.read_bytes()
+
+        def fail_manifest_write(_manifest: ResultManifest, _result_dir: Path | str) -> Path:
+            raise OSError("manifest write failed")
+
+        monkeypatch.setattr(ResultManifest, "write", fail_manifest_write)
+        with pytest.raises(OSError, match="manifest write failed"):
+            remove_frame_candidate(scan_task, "scan_ts_frame_000")
+
+        assert authority_path.read_bytes() == authority_before
+        assert len(list_frame_candidates(scan_task)["candidates"]) == 1
+
 
 # ---------------------------------------------------------------------------
 # Path escape tests
@@ -584,6 +609,22 @@ class TestPathEscape:
         traj_path.write_text(json.dumps(trajectory, indent=2), encoding="utf-8")
         with pytest.raises(FrameCandidateError, match="escapes"):
             resolve_frame_geometry(scan_task, view_type="scan", frame_index=99, workflow="scan")
+
+    def test_conformer_manifest_path_escape_rejected(self, conformer_task: Path) -> None:
+        manifest_root = conformer_task / "manifest-root"
+        manifest_root.mkdir()
+        manifest_path = conformer_task / "RESULT" / "confsearch" / "confsearch_manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["conformers"][0]["geometry"] = "../escape.xyz"
+        (manifest_root / "confsearch_manifest.json").write_text(
+            json.dumps(manifest), encoding="utf-8"
+        )
+        (manifest_root.parent / "escape.xyz").write_text(_SAMPLE_XYZ, encoding="utf-8")
+
+        with pytest.raises(FrameCandidateError, match="escapes"):
+            resolve_frame_geometry(
+                manifest_root, view_type="conformer", frame_index=0, workflow="Confsearch"
+            )
 
 
 # ---------------------------------------------------------------------------

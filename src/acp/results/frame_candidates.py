@@ -253,23 +253,7 @@ def remove_frame_candidate(
     candidate_id: str,
     expected_revision: int | None = None,
 ) -> dict[str, Any]:
-    """Remove a frame candidate from the authority file and manifest.
-
-    The XYZ file is **kept** on disk (following the PES review precedent).
-
-    Args:
-        task_root: Job working directory.
-        candidate_id: The candidate id to remove.
-        expected_revision: When given, the currently stored revision must
-            match.
-
-    Returns:
-        The updated authority payload.
-
-    Raises:
-        FrameCandidateError: Candidate not found.
-        RevisionConflictError: ``expected_revision`` mismatch.
-    """
+    """Remove a candidate atomically; its XYZ file is kept on disk."""
     root = Path(task_root).expanduser().resolve()
     existing = load_authority(root)
     if existing is None:
@@ -286,24 +270,32 @@ def remove_frame_candidate(
         raise FrameCandidateError(f"candidate not found: {candidate_id}")
 
     # Remove from authority
-    new_candidates = [c for c in candidates_list if c.get("candidate_id") != candidate_id]
     new_revision = current_revision + 1
     authority_payload: dict[str, Any] = {
         "schema_version": FRAME_CANDIDATES_SCHEMA,
         "job_id": existing.get("job_id", ""),
         "revision": new_revision,
-        "candidates": new_candidates,
+        "candidates": [c for c in candidates_list if c.get("candidate_id") != candidate_id],
     }
-    write_authority(root, authority_payload)
 
     # Remove from manifest
-    result_dir = root / "RESULT"
     try:
-        manifest = ResultManifest.read(result_dir)
-        product_id = f"frame_candidate_{candidate_id}"
-        manifest.products = [p for p in manifest.products if p.id != product_id]
-        manifest.write(result_dir)
+        manifest = ResultManifest.read(root / "RESULT")
     except (FileNotFoundError, OSError, json.JSONDecodeError, ValueError, TypeError, KeyError):
-        pass  # manifest may not exist yet
+        manifest = None
+    else:
+        manifest.products = [
+            p for p in manifest.products if p.id != f"frame_candidate_{candidate_id}"
+        ]
+
+    authority_path = root / FRAME_CANDIDATES_RELATIVE_PATH
+    previous_authority = authority_path.read_text(encoding="utf-8")
+    write_authority(root, authority_payload)
+    if manifest is not None:
+        try:
+            manifest.write(root / "RESULT")
+        except (OSError, TypeError, ValueError, RuntimeError):
+            atomic_write_text(authority_path, previous_authority)
+            raise
 
     return authority_payload
