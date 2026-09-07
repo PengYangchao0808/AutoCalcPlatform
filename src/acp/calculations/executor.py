@@ -38,10 +38,13 @@ from acp.calculations.contracts import (
     JsonValue,
     OptimizationMode,
     OptimizationSpec,
+    StabilityMode,
     StepKind,
     StructureArtifact,
+    electronic_state_config_from_dict,
     validate_plan,
 )
+from acp.calculations.primitives.casscf import run_casscf
 from acp.calculations.primitives.frequency import run_frequency
 from acp.calculations.primitives.optimize import run_optimize
 from acp.calculations.primitives.scan import run_scan
@@ -58,6 +61,7 @@ _STEP_DIRS: dict[StepKind, str] = {
     StepKind.SINGLEPOINT: "05_SP",
     StepKind.THERMOCHEMISTRY: "06_THERMO",
     StepKind.SCAN: "07_PATH",
+    StepKind.CASSCF: "08_CASSCF",
 }
 
 
@@ -142,6 +146,7 @@ _PRIMITIVE_DISPATCH: dict[StepKind, Callable[[CalculationRequest], CalculationRe
     StepKind.FREQUENCY: run_frequency,
     StepKind.SCAN: run_scan,
     StepKind.THERMOCHEMISTRY: _run_thermochemistry,
+    StepKind.CASSCF: run_casscf,
 }
 
 # Step kinds whose results feed coordinates into downstream steps.
@@ -246,6 +251,12 @@ def _extract_method(step_spec: OptimizationSpec | dict[str, JsonValue] | None, d
     return default
 
 
+def _extract_method_from_resources(resources: dict[str, JsonValue], default: str) -> str:
+    """Extract method from merged step resources, falling back to *default*."""
+    method = resources.get("method")
+    return str(method) if isinstance(method, str) and method else default
+
+
 def _ensure_artifact(item: StructureArtifact | Mapping[str, JsonValue]) -> StructureArtifact:
     """Coerce a plan item to ``StructureArtifact``."""
     if isinstance(item, StructureArtifact):
@@ -297,6 +308,7 @@ def _product_kind_for_step(kind: StepKind) -> ProductKind:
         StepKind.SINGLEPOINT: ProductKind.ENERGY_REPORT,
         StepKind.THERMOCHEMISTRY: ProductKind.THERMO_REPORT,
         StepKind.SCAN: ProductKind.TRAJECTORY,
+        StepKind.CASSCF: ProductKind.MULTIREFERENCE_REPORT,
     }
     return mapping.get(kind, ProductKind.FILE)
 
@@ -566,6 +578,29 @@ class CalculationPlanExecutor:
                 handoff_symbols,
             )
 
+        # ③④⑥ post-hoc stability SP node (§3.4, §9.5): OPT/FREQ never carry
+        # STABPerform; a dedicated SP diagnostic runs on the final geometry
+        # and is recorded as a visible step state + manifest product.
+        stability_state = self._run_post_stability_node(
+            plan=plan,
+            steps=steps,
+            item=item,
+            work_dir=work_dir,
+            handoff_coords=handoff_coords,
+            handoff_symbols=handoff_symbols,
+            base_resources=base_resources,
+        )
+        if stability_state is not None:
+            step_states.append(stability_state)
+            self._persist_checkpoint(
+                runtime_dir,
+                fingerprint,
+                plan,
+                step_states,
+                handoff_coords,
+                handoff_symbols,
+            )
+
         # ⑦ finalize: write RESULT/result_manifest.json
         overall_status = "completed"
         all_errors: list[str] = []
@@ -589,6 +624,83 @@ class CalculationPlanExecutor:
         )
 
     # ── private helpers ─────────────────────────────────────────────────
+
+    def _run_post_stability_node(
+        self,
+        *,
+        plan: CalculationPlan,
+        steps: list[CalculationStep],
+        item: StructureArtifact,
+        work_dir: Path,
+        handoff_coords: list[list[float]] | None,
+        handoff_symbols: list[str] | None,
+        base_resources: dict[str, JsonValue],
+    ) -> StepState | None:
+        """Append the §9.5 stability SP on the final geometry, or ``None``.
+
+        Only fires when the plan contains OPT/FREQ steps (a pure SP plan
+        already carries ``STABPerform`` in its own input) and every such
+        step completed.
+        """
+        geometry_kinds = {StepKind.OPTIMIZE, StepKind.FREQUENCY}
+        if not any(step.kind in geometry_kinds for step in steps):
+            return None
+
+        state_resources = self._find_electronic_state_resources(steps)
+        if state_resources is None:
+            return None
+        raw_state = state_resources.get("electronic_state")
+        if not isinstance(raw_state, dict):
+            return None
+        try:
+            config = electronic_state_config_from_dict(raw_state)
+        except ValueError:
+            logger.warning("post-stability node: invalid electronic_state payload", exc_info=True)
+            return None
+        state = config.selected_state()
+        if state is None or state.diagnostics.stability is not StabilityMode.FINAL_GEOMETRY:
+            return None
+
+        stability_dir = work_dir / "05_SP" / "stability"
+        stability_dir.mkdir(parents=True, exist_ok=True)
+        resources: dict[str, JsonValue] = {**base_resources, **state_resources}
+        resources["stability_check"] = True
+        resources.pop("freq_log_path", None)
+        request = _build_request(
+            StepKind.SINGLEPOINT,
+            item,
+            _extract_method_from_resources(resources, plan.profile or "r2SCAN-3c"),
+            resources,
+            output_dir=stability_dir,
+            coordinates=handoff_coords,
+            symbols=handoff_symbols,
+        )
+
+        state_record = StepState(index=len(steps), kind=StepKind.SINGLEPOINT, status="pending")
+        logger.info("post-stability: running SCF stability diagnostic on the final geometry")
+        try:
+            result = run_singlepoint(request)
+        except Exception as exc:
+            state_record.status = "failed"
+            state_record.error = str(exc) or type(exc).__name__
+            return state_record
+        state_record.result = result
+        if result.status == "failed":
+            state_record.status = "failed"
+            state_record.error = "; ".join(result.errors) or "stability diagnostic failed"
+        else:
+            state_record.status = "completed"
+        return state_record
+
+    @staticmethod
+    def _find_electronic_state_resources(
+        steps: list[CalculationStep],
+    ) -> dict[str, JsonValue] | None:
+        for step in steps:
+            resources = _step_resources(step)
+            if isinstance(resources.get("electronic_state"), dict):
+                return resources
+        return None
 
     @staticmethod
     def _persist_checkpoint(
