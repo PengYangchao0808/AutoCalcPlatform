@@ -250,6 +250,16 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
         type=str,
         help="Comma-separated ORCA route extras (e.g. SlowConv,NoFinalGrid)",
     )
+    parser.add_argument(
+        "--spin-preset",
+        type=str,
+        help="Built-in electronic-state preset id (e.g. bs_singlet_flipspin, singlet_triplet_pair)",
+    )
+    parser.add_argument(
+        "--spin-config",
+        type=str,
+        help="Electronic-state module YAML/JSON file (authoritative for multi-state configurations)",
+    )
 
     if wf in ("singlepoint", "optimize", "frequency", "scan"):
         parser.add_argument(
@@ -1946,6 +1956,7 @@ Examples:
 
     # -- simple workflows (singlepoint / optimize / frequency / scan / irc) --
     _add_simple_workflow_parsers(run_sub)
+    _add_casscf_parser(run_sub)
 
     _add_stage_workflow_parsers(run_sub)
     _add_batch_optimize_parser(run_sub)
@@ -2063,7 +2074,145 @@ def _build_simple_method_kwargs(args: argparse.Namespace) -> dict[str, Any]:
     extras = getattr(args, "route_extras", None)
     if extras:
         kwargs["route_extras"] = [x.strip() for x in extras.split(",") if x.strip()]
+    electronic_state = _resolve_spin_flags(getattr(args, "spin_preset", None), getattr(args, "spin_config", None))
+    if electronic_state is not None:
+        kwargs["electronic_state"] = electronic_state
     return kwargs
+
+
+def _resolve_spin_flags(spin_preset: str | None, spin_config: str | None) -> dict[str, Any] | None:
+    """Resolve --spin-config / --spin-preset into an electronic-state module.
+
+    ``--spin-config`` wins when both are given; YAML/JSON files may carry
+    either the bare module object or the ``{"electronic_state": {...}}``
+    envelope (design doc §14.2).
+    """
+    if spin_config:
+        import yaml
+
+        path = Path(spin_config)
+        if not path.is_file():
+            raise FileNotFoundError(f"spin config file not found: {spin_config}")
+        payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError(f"spin config must be a mapping: {spin_config}")
+        module = payload.get("electronic_state", payload)
+        if not isinstance(module, dict):
+            raise ValueError(f"spin config electronic_state must be a mapping: {spin_config}")
+        return module
+    if spin_preset:
+        from acp.catalog import ELECTRONIC_STATE_PRESETS, get_electronic_state_preset
+
+        preset = get_electronic_state_preset(spin_preset)
+        if preset is None:
+            known = ", ".join(sorted(ELECTRONIC_STATE_PRESETS))
+            raise ValueError(f"unknown --spin-preset {spin_preset!r}; available: {known}")
+        return {"preset_id": spin_preset, **preset}
+    return None
+
+
+def _add_casscf_parser(run_sub: argparse._SubParsersAction) -> None:
+    """Register the CASSCF / NEVPT2 subcommand (design doc §11.3)."""
+    parser = run_sub.add_parser(
+        "casscf",
+        help="CASSCF / NEVPT2 single-point calculation",
+        description="Run a CASSCF (optionally SC-/FIC-NEVPT2) single point on one structure",
+        epilog=(
+            "Examples:\n"
+            "  acp run casscf --input mol.xyz --active-electrons 6 --active-orbitals 6\n"
+            "  acp run casscf --input mol.xyz --nel 4 --norb 4 --dynamic-correlation sc_nevpt2\n"
+            "  acp run casscf --input ts.xyz --nel 6 --norb 6 --spin-preset bs_singlet_flipspin"
+        ),
+    )
+    _add_simple_workflow_args(parser, "casscf")
+    parser.add_argument(
+        "--active-electrons",
+        "--nel",
+        type=int,
+        required=True,
+        help="Number of active-space electrons (mandatory, §19 item 12)",
+    )
+    parser.add_argument(
+        "--active-orbitals",
+        "--norb",
+        type=int,
+        required=True,
+        help="Number of active-space orbitals (mandatory, §19 item 12)",
+    )
+    parser.add_argument(
+        "--nroots",
+        type=int,
+        default=1,
+        help="Number of roots; >1 performs state-averaged CASSCF (default: 1)",
+    )
+    parser.add_argument(
+        "--dynamic-correlation",
+        choices=["none", "sc_nevpt2", "fic_nevpt2"],
+        default="none",
+        help="Post-CASSCF dynamic correlation (default: none)",
+    )
+    parser.add_argument(
+        "--orbital-source",
+        type=str,
+        default=None,
+        help="Existing .gbw used as initial orbitals (MORead)",
+    )
+    parser.add_argument(
+        "--frozen-core/--no-frozen-core",
+        dest="frozen_core",
+        default=True,
+        help="Keep core orbitals frozen (default: frozen)",
+    )
+
+
+def _handle_casscf(args: argparse.Namespace) -> int:
+    from acp.calculations.progress import ProgressReporter
+    from acp.workflows.simple import run_casscf
+
+    setup_logging(args.log_level)
+    cfg = _build_config(args)
+    out = Path(args.output)
+    method_kwargs = _build_simple_method_kwargs(args)
+    method_kwargs.pop("method", None)
+    method_kwargs["casscf"] = {
+        "active_electrons": args.active_electrons,
+        "active_orbitals": args.active_orbitals,
+        "nroots": args.nroots,
+        "dynamic_correlation": args.dynamic_correlation,
+        "frozen_core": args.frozen_core,
+    }
+    if args.orbital_source:
+        method_kwargs["casscf"]["orbital_source"] = args.orbital_source
+    if args.nroots > 1:
+        method_kwargs["casscf"]["state_weights"] = [1.0 / args.nroots] * args.nroots
+    reporter = ProgressReporter(out, job_name="casscf", stages=["casscf"])
+    try:
+        result = run_casscf(
+            input_source=args.input,
+            output_dir=out,
+            config=cfg,
+            charge=args.charge,
+            multiplicity=args.multiplicity,
+            name=args.name,
+            method_kwargs=method_kwargs,
+            progress_reporter=reporter,
+        )
+    except KeyboardInterrupt:
+        logger.warning("CASSCF interrupted by user")
+        reporter.fail("interrupted")
+        return 130
+    except Exception as exc:
+        logger.exception("CASSCF failed: %s", exc)
+        reporter.fail(str(exc))
+        return 1
+    if result.status == "completed":
+        logger.info("CASSCF calculation completed")
+        logger.info("  Energy: %s Hartree", result.metadata.get("energy", "N/A"))
+        reporter.complete()
+        return 0
+    logger.error("CASSCF calculation failed: %s", result.error)
+    reporter.fail(result.error or "CASSCF calculation failed")
+    return 1
 
 
 def _handle_singlepoint(args: argparse.Namespace) -> int:
@@ -2766,6 +2915,7 @@ def main(argv: list[str] | None = None) -> int:
             "frequency": _handle_frequency,
             "scan": _handle_scan,
             "irc": _handle_irc,
+            "casscf": _handle_casscf,
             "xtb_optimize": _handle_xtb_optimize,
         }
         handler = dispatch.get(args.workflow)

@@ -144,6 +144,10 @@ class FakeBackend:
         """Record and answer a single-point call."""
         return self._respond("single_point", *args, **kwargs)
 
+    def casscf(self, *args: Any, **kwargs: Any) -> QCResult:
+        """Record and answer a CASSCF call for electronic-state tests."""
+        return self._respond("casscf", *args, **kwargs)
+
     def frequency(self, *args: Any, **kwargs: Any) -> QCResult:
         """Record and answer a frequency call."""
         return self._respond("frequency", *args, **kwargs)

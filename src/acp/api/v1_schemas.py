@@ -23,6 +23,112 @@ class ProjectModel(BaseModel):
     updated_at: str = ""
 
 
+# ── Electronic-state typed models (design doc §14.1) ─────────────────────
+
+
+class ElectronicStateGuessModel(BaseModel):
+    """Typed guess strategy block (contract ``GuessSpec``)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    strategy: Literal[
+        "default",
+        "guessmix",
+        "flipspin",
+        "broken_sym",
+        "moread",
+        "stability_restart",
+    ] = "default"
+    reference_multiplicity: int | None = Field(default=None, ge=1)
+    final_ms: float | None = None
+    flip_atoms: list[int] = Field(default_factory=list)
+    atom_index_base: Literal[0, 1] = 1
+    guess_mix_angle: float = Field(default=45.0, gt=0, lt=90)
+    orbital_source: str | None = None
+    broken_sym_na: int | None = Field(default=None, ge=0)
+    broken_sym_nb: int | None = Field(default=None, ge=0)
+
+
+class SpinDiagnosticsModel(BaseModel):
+    """Spin/stability diagnostics attached to one state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    population: Literal["mulliken", "loewdin"] = "mulliken"
+    stability: Literal["none", "final_geometry"] = "none"
+    write_spin_density: bool = False
+
+
+class SpinQualityGateModel(BaseModel):
+    """Acceptance gate for broken-symmetry solutions (§10.3)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    collapse_policy: Literal["error", "warning", "ignore"] = "warning"
+    s2_min: float | None = None
+    s2_max: float | None = None
+    require_opposite_spin_centers: bool = False
+    spin_center_threshold: float = Field(default=0.05, gt=0)
+
+
+class ElectronicStateSpecModel(BaseModel):
+    """One target electronic state (contract ``ElectronicStateSpec``)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    state_id: str = Field(min_length=1)
+    label: str = ""
+    target_multiplicity: int = Field(default=1, ge=1)
+    spin_mode: Literal["auto", "restricted", "unrestricted", "broken_symmetry"] = "auto"
+    guess: ElectronicStateGuessModel = Field(default_factory=ElectronicStateGuessModel)
+    spatial_symmetry: Literal["auto", "disable", "preserve"] = "auto"
+    reference_state_id: str = ""
+    diagnostics: SpinDiagnosticsModel = Field(default_factory=SpinDiagnosticsModel)
+    quality_gate: SpinQualityGateModel = Field(default_factory=SpinQualityGateModel)
+
+
+class ElectronicStateModuleModel(BaseModel):
+    """Electronic-state module envelope for a method level (§5.1, §14.1).
+
+    ``preset_id`` entries are expanded server-side; the persisted
+    ``method`` always carries the fully expanded configuration, never a
+    bare preset reference.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    preset_id: str | None = None
+    mode: Literal["automatic"] | None = None
+    execution_mode: Literal["single", "state_sweep"] | None = None
+    default_state_id: str | None = None
+    states: list[ElectronicStateSpecModel] | None = None
+
+    def payload(self) -> dict[str, Any]:
+        """Return the JSON payload with typed states re-serialized."""
+        data = dict(self.model_dump(exclude_none=True))
+        if self.states is not None:
+            data["states"] = [state.model_dump(exclude_none=True) for state in self.states]
+        return data
+
+
+class CASSCFSpecModel(BaseModel):
+    """Active-space definition for CASSCF jobs (contract ``CASSCFSpec``)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    active_electrons: int = Field(ge=1)
+    active_orbitals: int = Field(ge=1)
+    multiplicity: int = Field(default=1, ge=1)
+    nroots: int = Field(default=1, ge=1)
+    state_weights: list[float] = Field(default_factory=list)
+    orbital_source: str | None = None
+    active_orbital_indices: list[int] = Field(default_factory=list)
+    orbital_selection: str = "manual"
+    dynamic_correlation: Literal["none", "sc_nevpt2", "fic_nevpt2"] = "none"
+    frozen_core: bool = True
+    max_iterations: int | None = Field(default=None, ge=1)
+
+
 class ProjectCreateRequest(BaseModel):
     name: str
     description: str = ""
@@ -1291,6 +1397,12 @@ __all__ = [
     "ArtifactModel",
     "BondLengthScanJobInput",
     "BondLengthScanSource",
+    "CASSCFSpecModel",
+    "ElectronicStateGuessModel",
+    "ElectronicStateModuleModel",
+    "ElectronicStateSpecModel",
+    "SpinDiagnosticsModel",
+    "SpinQualityGateModel",
     "S2StructurePreviewRequest",
     "S2StructurePreviewResponse",
     "DecisionPointModel",

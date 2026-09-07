@@ -134,6 +134,7 @@ def test_workflows_and_protocols(client: TestClient) -> None:
         "frequency",
         "scan",
         "irc",
+        "casscf",
         "xtb_optimize",
         "nmr",
         "Confsearch",

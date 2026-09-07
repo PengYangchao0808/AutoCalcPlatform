@@ -67,6 +67,8 @@ _ADVANCED_FIELD_NAMES = frozenset(
         "minimum_basis",
         "transition_state_method",
         "transition_state_basis",
+        # Electronic-state module (design doc §4.1: advanced composite card).
+        "electronic_state",
         # xtbmd_censo_energy control group (DevDoc §10.1): 17 advanced fields;
         # md_temperature / md_seeds are regular (high-frequency user controls).
         "opt_level",

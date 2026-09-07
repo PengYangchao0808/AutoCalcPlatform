@@ -56,6 +56,23 @@ logger = logging.getLogger(__name__)
 
 _POLL_INTERVAL = 1.0
 
+
+def _electronic_state_cli_flags(module: Mapping[str, object], work_dir: Path) -> list[str]:
+    """Materialize an expanded electronic-state module as a ``--spin-config`` file.
+
+    The submitted config is persisted verbatim next to the job files so the
+    subprocess never depends on in-memory scheduler state (§14.1).
+    """
+    import json as _json
+
+    work_dir.mkdir(parents=True, exist_ok=True)
+    sidecar = work_dir / "electronic_state.json"
+    sidecar.write_text(
+        _json.dumps({"electronic_state": dict(module)}, indent=2, sort_keys=True, default=str),
+        encoding="utf-8",
+    )
+    return ["--spin-config", sidecar.as_posix()]
+
 _GFN_DISPLAY_TO_INT: dict[str, int] = {
     "GFN0-xTB": 0,
     "GFN1-xTB": 1,
@@ -1103,6 +1120,7 @@ class JobRunner:
             "frequency",
             "scan",
             "irc",
+            "casscf",
             "xtb_optimize",
         ):
             raise ValueError(f"No subprocess mapping for workflow: {wf}")
@@ -1226,8 +1244,48 @@ class JobRunner:
                 from acp.catalog import method_levels_to_cli_flags
 
                 cmd += method_levels_to_cli_flags(levels)
+                spin_module = next(
+                    (
+                        lv.get("electronic_state")
+                        for lv in levels.values()
+                        if isinstance(lv, Mapping) and lv.get("electronic_state")
+                    ),
+                    None,
+                )
+                if isinstance(spin_module, Mapping):
+                    cmd += _electronic_state_cli_flags(spin_module, work_dir)
             if wf == "scan":
                 cmd += scan_method_flags(method, inp)
+        elif wf == "casscf":
+            cmd += ["--input", str(source), "--output", cli_work_dir]
+            if spec.name:
+                cmd += ["--name", spec.name]
+            levels = method.get("levels", {})
+            casscf_level = levels.get("casscf", {}) if isinstance(levels, Mapping) else {}
+            if not isinstance(casscf_level, Mapping):
+                casscf_level = {}
+            nel = casscf_level.get("cas_active_electrons") or method.get("active_electrons")
+            norb = casscf_level.get("cas_active_orbitals") or method.get("active_orbitals")
+            if nel is None or norb is None:
+                raise ValueError(
+                    "casscf job requires active-space information "
+                    "(cas_active_electrons / cas_active_orbitals)"
+                )
+            cmd += ["--active-electrons", str(nel), "--active-orbitals", str(norb)]
+            basis = casscf_level.get("basis") or method.get("basis")
+            if basis:
+                cmd += ["--basis", str(basis)]
+            nroots = casscf_level.get("cas_nroots")
+            if nroots:
+                cmd += ["--nroots", str(nroots)]
+            dc = casscf_level.get("cas_dynamic_correlation")
+            if dc and dc != "none":
+                cmd += ["--dynamic-correlation", str(dc)]
+            orbital_source = method.get("orbital_source")
+            if orbital_source:
+                cmd += ["--orbital-source", str(orbital_source)]
+            if casscf_level.get("electronic_state"):
+                cmd += _electronic_state_cli_flags(casscf_level["electronic_state"], work_dir)
         elif wf == "irc":
             cmd += ["--input", str(source), "--output", cli_work_dir]
             if spec.name:

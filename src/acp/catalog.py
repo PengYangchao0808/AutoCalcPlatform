@@ -69,6 +69,19 @@ WORKFLOW_CATALOG: list[dict[str, Any]] = [
         "visible": True,
     },
     {
+        "id": "casscf",
+        "label": "CASSCF / NEVPT2",
+        "label_zh": "CASSCF / NEVPT2",
+        "category": "simple",
+        "description": "Multi-reference CASSCF single point with optional SC-/FIC-NEVPT2",
+        "description_zh": "多参考 CASSCF 单点，可选 SC-/FIC-NEVPT2 动态相关",
+        "method_schema_id": "casscf",
+        "default_backend": "orca",
+        "requires_binaries": ["orca"],
+        "status": "active",
+        "visible": True,
+    },
+    {
         "id": "optfreq",
         "label": "Optimization + Frequency",
         "label_zh": "优化+频率",
@@ -1412,10 +1425,173 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "default": {"*": ""},
         "supports_custom": True,
     },
+    "electronic_state": {
+        "type": "module",
+        "renderer": "electronic_state",
+        "label": "Electronic State and Spin",
+        "label_zh": "电子态与自旋",
+        "advanced": True,
+        "schema_version": 1,
+        "presets": [
+            "auto_ground_state",
+            "closed_shell_singlet",
+            "unrestricted_doublet",
+            "unrestricted_triplet",
+            "bs_singlet_guessmix",
+            "bs_singlet_flipspin",
+            "singlet_triplet_pair",
+            "bs_singlet_triplet_pair",
+            "spin_ladder_1_3_5",
+        ],
+        "default": {"*": {"mode": "automatic"}},
+        "help": "Advanced electronic-state module: restricted/unrestricted, broken-symmetry singlets (GuessMix/FlipSpin), and multi-spin state sweeps. Complex configurations travel via --spin-config YAML/JSON.",
+        "help_zh": "高级电子态模块：restricted/unrestricted、自旋极化单重态（GuessMix/FlipSpin）与多自旋状态集合。复杂配置经 --spin-config YAML/JSON 传入。",
+    },
+    "cas_active_electrons": {
+        "type": "int",
+        "min": 1,
+        "label": "Active Electrons",
+        "label_zh": "活性电子数",
+        "default": {"*": 2},
+        "unit": "e",
+        "help": "Number of electrons in the CASSCF active space (nel).",
+    },
+    "cas_active_orbitals": {
+        "type": "int",
+        "min": 1,
+        "label": "Active Orbitals",
+        "label_zh": "活性轨道数",
+        "default": {"*": 2},
+        "help": "Number of orbitals in the CASSCF active space (norb).",
+    },
+    "cas_nroots": {
+        "type": "int",
+        "min": 1,
+        "max": 20,
+        "label": "Number of Roots",
+        "label_zh": "态数目 (nroots)",
+        "default": {"*": 1},
+        "help": "State-averaged roots; >1 performs SA-CASSCF.",
+    },
+    "cas_dynamic_correlation": {
+        "type": "select",
+        "label": "Dynamic Correlation",
+        "label_zh": "动态相关",
+        "options": ["none", "sc_nevpt2", "fic_nevpt2"],
+        "option_labels_zh": {
+            "none": "无（纯 CASSCF）",
+            "sc_nevpt2": "SC-NEVPT2",
+            "fic_nevpt2": "FIC-NEVPT2",
+        },
+        "default": {"*": "none"},
+    },
 }
 
-METHOD_SCHEMAS: dict[str, Any] = {
-    "confsearch": {
+# ── Electronic-state presets (design doc §6.1) ───────────────────────────
+# Presets contain ONLY the electronic-state module — no functional, basis,
+# or solvent binding. Loading copies the payload; callers must never mutate
+# or return a live reference into this table.
+
+ELECTRONIC_STATE_PRESETS: dict[str, dict[str, Any]] = {
+    "auto_ground_state": {"mode": "automatic"},
+    "closed_shell_singlet": {
+        "execution_mode": "single",
+        "states": [
+            {"state_id": "s1", "label": "Closed-shell singlet", "target_multiplicity": 1, "spin_mode": "restricted"},
+        ],
+    },
+    "unrestricted_doublet": {
+        "execution_mode": "single",
+        "states": [
+            {"state_id": "d1", "label": "Doublet", "target_multiplicity": 2, "spin_mode": "unrestricted"},
+        ],
+    },
+    "unrestricted_triplet": {
+        "execution_mode": "single",
+        "states": [
+            {"state_id": "t1", "label": "Triplet", "target_multiplicity": 3, "spin_mode": "unrestricted"},
+        ],
+    },
+    "bs_singlet_guessmix": {
+        "execution_mode": "single",
+        "states": [
+            {
+                "state_id": "s1_bs",
+                "label": "BS singlet (GuessMix)",
+                "target_multiplicity": 1,
+                "spin_mode": "broken_symmetry",
+                "guess": {"strategy": "guessmix", "guess_mix_angle": 45},
+                "spatial_symmetry": "disable",
+            },
+        ],
+    },
+    "bs_singlet_flipspin": {
+        "execution_mode": "single",
+        "states": [
+            {
+                "state_id": "s1_bs",
+                "label": "BS singlet (FlipSpin)",
+                "target_multiplicity": 1,
+                "spin_mode": "broken_symmetry",
+                "guess": {"strategy": "flipspin", "reference_multiplicity": 3, "final_ms": 0.0, "flip_atoms": [1], "atom_index_base": 1},
+                "spatial_symmetry": "disable",
+                "diagnostics": {"write_spin_density": True},
+                "quality_gate": {"collapse_policy": "warning", "require_opposite_spin_centers": True},
+            },
+        ],
+    },
+    "singlet_triplet_pair": {
+        "execution_mode": "state_sweep",
+        "states": [
+            {"state_id": "s1", "label": "Singlet", "target_multiplicity": 1, "spin_mode": "restricted"},
+            {"state_id": "t1", "label": "Triplet", "target_multiplicity": 3, "spin_mode": "unrestricted"},
+        ],
+    },
+    "bs_singlet_triplet_pair": {
+        "execution_mode": "state_sweep",
+        "states": [
+            {
+                "state_id": "t1",
+                "label": "Triplet reference",
+                "target_multiplicity": 3,
+                "spin_mode": "unrestricted",
+                "wavefunction": {"inherit_between_steps": True},
+            },
+            {
+                "state_id": "s1_bs",
+                "label": "BS singlet",
+                "target_multiplicity": 1,
+                "spin_mode": "broken_symmetry",
+                "guess": {"strategy": "flipspin", "reference_multiplicity": 3, "final_ms": 0.0, "flip_atoms": [1], "atom_index_base": 1},
+                "reference_state_id": "t1",
+                "spatial_symmetry": "disable",
+                "diagnostics": {"write_spin_density": True},
+                "quality_gate": {"collapse_policy": "error", "require_opposite_spin_centers": True},
+            },
+        ],
+    },
+    "spin_ladder_1_3_5": {
+        "execution_mode": "state_sweep",
+        "states": [
+            {"state_id": "s1", "label": "Singlet", "target_multiplicity": 1, "spin_mode": "restricted"},
+            {"state_id": "t1", "label": "Triplet", "target_multiplicity": 3, "spin_mode": "unrestricted"},
+            {"state_id": "q1", "label": "Quintet", "target_multiplicity": 5, "spin_mode": "unrestricted"},
+        ],
+    },
+}
+
+
+def get_electronic_state_preset(preset_id: str) -> dict[str, Any] | None:
+    """Return a deep copy of one built-in electronic-state preset (§6.1)."""
+    import copy
+
+    preset = ELECTRONIC_STATE_PRESETS.get(preset_id)
+    if preset is None:
+        return None
+    return copy.deepcopy(preset)
+
+
+METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
         "method_levels": [
             {
                 "level_id": "preopt",
@@ -1635,6 +1811,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "solvent",
                     "grid",
                     "scf_convergence",
+                    "electronic_state",
                 ],
             }
         ],
@@ -1678,6 +1855,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "max_steps",
                     "opt_convergence",
                     "recalc_hess",
+                    "electronic_state",
                 ],
             }
         ],
@@ -1718,6 +1896,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "aux_c_basis",
                     "solvent_model",
                     "solvent",
+                    "electronic_state",
                 ],
             }
         ],
@@ -1757,6 +1936,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "scan_optimizer_convergence",
                     "scan_optimizer_retries",
                     "scan_optimizer_retry_strategy",
+                    "electronic_state",
                 ],
             }
         ],
@@ -1807,7 +1987,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "label_zh": "\u5185\u7968\u53cd\u5e94\u5750\u6807",
                 "required": True,
                 "allowed_engines": ["orca"],
-                "fields": ["method", "basis", "maxpoints", "step"],
+                "fields": ["method", "basis", "maxpoints", "step", "electronic_state"],
             }
         ],
         "stages": {"mode": "static", "static": ["irc"]},
@@ -2467,6 +2647,7 @@ METHOD_SCHEMAS: dict[str, Any] = {
                     "minimum_basis",
                     "transition_state_method",
                     "transition_state_basis",
+                    "electronic_state",
                 ],
             },
         ],
@@ -2515,6 +2696,42 @@ METHOD_SCHEMAS: dict[str, Any] = {
                 "summary": "Run the complete optimization, frequency, single-point, and thermochemistry chain.",
                 "levels": {
                     "batch": {"steps": ["optimize", "frequency", "singlepoint", "thermochemistry"]}
+                },
+            },
+        ],
+    },
+    "casscf": {
+        "method_levels": [
+            {
+                "level_id": "casscf",
+                "label": "CASSCF / NEVPT2",
+                "label_zh": "CASSCF / NEVPT2",
+                "required": True,
+                "allowed_engines": ["orca"],
+                "fields": [
+                    "basis",
+                    "cas_active_electrons",
+                    "cas_active_orbitals",
+                    "cas_dynamic_correlation",
+                    "cas_nroots",
+                    "electronic_state",
+                ],
+            },
+        ],
+        "stages": {"mode": "static", "static": ["casscf"]},
+        "profiles": [
+            {
+                "profile_id": "default",
+                "label": "CAS(2,2)",
+                "summary": "Minimal CASSCF(2,2) single point",
+                "levels": {
+                    "casscf": {
+                        "engine": "orca",
+                        "cas_active_electrons": 2,
+                        "cas_active_orbitals": 2,
+                        "cas_dynamic_correlation": "none",
+                        "cas_nroots": 1,
+                    },
                 },
             },
         ],
@@ -3670,6 +3887,51 @@ def _match_option_case_insensitive(
     return idx, options[idx]
 
 
+def _normalize_electronic_state_module(
+    module_value: dict[str, Any],
+) -> tuple[dict[str, Any] | None, list[str]]:
+    """Expand and validate an electronic-state module payload (§14.3).
+
+    Applies ``preset_id`` first, then parses through the typed contract so
+    unknown inner fields surface as errors instead of being silently
+    dropped by the scalar field mapping.
+    """
+    import copy
+
+    payload = copy.deepcopy(module_value)
+    preset_id = payload.pop("preset_id", None)
+    if isinstance(preset_id, str) and preset_id:
+        preset = get_electronic_state_preset(preset_id)
+        if preset is None:
+            return None, [f"unknown electronic-state preset {preset_id!r}"]
+        merged = dict(preset)
+        merged.update({key: value for key, value in payload.items() if value is not None})
+        payload = merged
+
+    if payload == {"mode": "automatic"} or payload.get("mode") == "automatic":
+        return None, []
+
+    try:
+        from acp.calculations.contracts import (
+            electronic_state_config_from_dict as parse_config,
+        )
+        from acp.calculations.contracts import (
+            electronic_state_config_to_dict as dump_config,
+        )
+        from acp.calculations.contracts import validate_electronic_state
+
+        config = parse_config(payload)
+        if not config.states:
+            return None, []
+        validation = validate_electronic_state(config, backend="orca")
+        if validation.errors:
+            return None, validation.errors
+        expanded = dump_config(config)
+    except (ValueError, TypeError) as exc:
+        return None, [str(exc)]
+    return expanded, []
+
+
 def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[dict, list[str]]:
     """Return (normalized_levels, errors)."""
     errors: list[str] = []
@@ -3707,6 +3969,29 @@ def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[di
                     normalized[field_name] = normalize_recalc_hess(user_val)
                 except ValueError as exc:
                     errors.append(f"Level '{lid}', field '{field_name}': {exc}")
+                continue
+            # module fields (electronic_state): deep-copy the nested object,
+            # apply preset_id, validate the contract, and persist the fully
+            # expanded payload — never the bare preset id (§14.1, §14.3).
+            if fd and fd.get("type") == "module":
+                module_value = user_val
+                if module_value is None or module_value == "":
+                    module_value = _resolve_field_default(field_name, engine, None)
+                if module_value in (None, "", {}):
+                    continue
+                if not isinstance(module_value, dict):
+                    errors.append(
+                        f"Level '{lid}', field '{field_name}': module value must be an object"
+                    )
+                    continue
+                expanded_module, module_errors = _normalize_electronic_state_module(module_value)
+                if module_errors:
+                    errors.extend(
+                        f"Level '{lid}', field '{field_name}': {err}" for err in module_errors
+                    )
+                    continue
+                if expanded_module is not None:
+                    normalized[field_name] = expanded_module
                 continue
             if user_val is not None and user_val != "":
                 # Multi-select fields (e.g. NMR ``nuclei``): accept a scalar
@@ -4035,11 +4320,13 @@ def get_method_profiles(schema_id: str) -> list[dict[str, Any]]:
 
 __all__ = [
     "BASIS_CATALOG",
+    "ELECTRONIC_STATE_PRESETS",
     "FIELD_DEFINITIONS",
     "FUNCTIONAL_OPTIONS_MAP",
     "METHOD_CATALOG",
     "METHOD_META",
     "METHOD_SCHEMAS",
+    "get_electronic_state_preset",
     "refresh_backend_versions",
     "WORKFLOW_CATALOG",
     "_case_insensitive_get",
