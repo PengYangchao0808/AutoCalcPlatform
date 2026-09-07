@@ -352,6 +352,13 @@ def _workflow_result(execution: Any, calc_dir: Path) -> WorkflowResult:
             if free_energy is None:
                 free_energy = result.metadata.get("free_energy_hartree")
             metadata["free_energy_hartree"] = free_energy
+        elif step_state.kind is StepKind.CASSCF:
+            metadata["energy"] = result.energy
+            multireference = result.metadata.get("multireference")
+            if isinstance(multireference, dict):
+                metadata["casscf_energy"] = multireference.get("casscf_energy_hartree")
+                metadata["nevpt2_energy"] = multireference.get("correlated_energy_hartree")
+                metadata["natural_occupations"] = multireference.get("natural_occupations")
 
     errors = "; ".join(execution.errors) if execution.errors else None
     return WorkflowResult(
@@ -409,6 +416,31 @@ def run_singlepoint(
         calc_dir,
         progress_reporter=progress_reporter,
         stage_name="single_point",
+    )
+
+
+def run_casscf(
+    input_source: str,
+    output_dir: str | Path = "./casscf_output",
+    config: dict[str, Any] | None = None,
+    charge: int | None = None,
+    multiplicity: int | None = None,
+    name: str | None = None,
+    method_kwargs: dict[str, Any] | None = None,
+    progress_reporter: ProgressReporter | None = None,
+) -> WorkflowResult:
+    """Run a CASSCF / NEVPT2 single point via the calculation-plan executor."""
+    context = _context(input_source, config, charge, multiplicity, name)
+    calc_dir = _calc_subdir(_resolve_output_dir(output_dir), name, input_source, "casscf")
+    request = _build_request(
+        context,
+        _RequestDefinition("casscf", "orca", method_kwargs or {}),
+    )
+    return _execute(
+        _build_plan(StepKind.CASSCF, [request], [StepKind.CASSCF]),
+        calc_dir,
+        progress_reporter=progress_reporter,
+        stage_name="casscf",
     )
 
 

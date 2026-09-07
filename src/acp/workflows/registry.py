@@ -101,6 +101,12 @@ _WORKFLOW_REGISTRY: dict[str, WorkflowRegistryEntry] = {
         description="Run an independent IRC from a transition-state structure.",
         requires_binaries=["orca"],
     ),
+    "casscf": WorkflowRegistryEntry(
+        name="casscf",
+        label="CASSCF / NEVPT2",
+        description="Multi-reference CASSCF single point with optional SC-/FIC-NEVPT2.",
+        requires_binaries=["orca"],
+    ),
     "xtb_optimize": WorkflowRegistryEntry(
         name="xtb_optimize",
         label="xTB Optimization",
