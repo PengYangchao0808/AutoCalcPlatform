@@ -26,6 +26,11 @@ from typing import TYPE_CHECKING, Any, Final
 
 from acp.calculations.contracts import JsonValue
 from acp.scheduler.artifacts import ArtifactRegistry
+from acp.scheduler.capabilities import (
+    NoCapableNodeError,
+    derive_required_software,
+    local_satisfies,
+)
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
     EXIT_WAITING_REVIEW,
@@ -36,6 +41,7 @@ from acp.scheduler.jobs import (
 )
 from acp.scheduler.metrics import MetricsExtractor
 from acp.scheduler.nodes import (
+    LOCAL_NODE_NAME,
     ExecutionCapacityUnavailable,
     ExecutionTargetError,
     NodeRegistry,
@@ -246,6 +252,8 @@ class JobManager:
         self._start_cleanup_thread()
 
         self._requeue_active_on_startup()
+        with self._lock:
+            self._rebuild_reservations()
         self._dispatch_queued_jobs()
         self._poll_thread.start()
 
@@ -1581,7 +1589,25 @@ class JobManager:
 
         while True:
             try:
-                submitted = self._submit_job(job_id)
+                try:
+                    submitted = self._submit_job(job_id)
+                except NoCapableNodeError as exc:
+                    # Config drift at dispatch (creation-time validation is
+                    # T5): record the event, then degrade to capacity-retry
+                    # semantics so the job is retried instead of failing —
+                    # an admin fixing node capabilities unblocks it (R13).
+                    drift = self.store.get(job_id)
+                    if drift is not None:
+                        self._event_log(drift).append(
+                            "execution.no_capable_node",
+                            job_id=job_id,
+                            message=str(exc),
+                            missing_software=list(exc.missing_software),
+                            missing_tags=list(exc.missing_tags),
+                        )
+                    raise ExecutionCapacityUnavailable(
+                        f"no capable node (capability drift): {exc}"
+                    ) from exc
                 if not submitted:
                     # A persisted batch slot is currently occupied. The job
                     # remains QUEUED and the poller will retry it after a
@@ -1606,6 +1632,7 @@ class JobManager:
                         reason="cancelled while waiting for execution capacity",
                     )
                     self._stage_task_observer.finalize_job(job_id, "cancelled")
+                    self._release_reservation(job_id)
                     return
                 if record.status.is_terminal:
                     return
@@ -1635,6 +1662,7 @@ class JobManager:
                     self._write_job_json(record)
                     self._event_log(record).append("job.failed", job_id=job_id, error=str(exc))
                     self._stage_task_observer.finalize_job(job_id, "failed")
+                self._release_reservation(job_id)
                 return
 
         # Only poll if not already terminal (fake workflow finishes in _submit_job)
@@ -1782,8 +1810,16 @@ class JobManager:
                 "Remote execution target resolved but no remote runner is "
                 "available (no enabled remote nodes configured)"
             )
-        self._ensure_remote_capacity(target)
-        lsf_job_id = self.remote_runner.submit_remote(record, event_log, target_node=target.name)
+        try:
+            self._ensure_remote_capacity(target)
+            lsf_job_id = self.remote_runner.submit_remote(
+                record, event_log, target_node=target.name
+            )
+        except BaseException:
+            # The select→submit window closed without a live LSF job —
+            # give the reservation back before the error propagates.
+            self._release_reservation(record.id)
+            raise
         record.remote_job_id = lsf_job_id
         record.status = JobStatus.PENDING
 
@@ -1801,11 +1837,45 @@ class JobManager:
         """Resolve the execution target: target_node > execution_mode > default.
 
         This is the only place the server default mode is consulted.
+
+        Auto semantics (design D14) apply when the spec pins neither a
+        ``target_node`` nor an ``execution_mode``: an empty derived
+        requirement follows the server default; a non-empty requirement
+        the local machine satisfies stays local; anything else escalates
+        to a capability-matched remote node (select + reserve atomically
+        under the manager lock).  The derived set is stashed on
+        ``record.result["required_software"]`` for audit (design §1.3) and
+        persisted by the following :meth:`_record_execution_target` call.
         """
         spec = record.spec
         validate_execution_request(spec)
+        derived = derive_required_software(spec)
+        if derived:
+            result = dict(record.result or {})
+            result["required_software"] = sorted(derived)
+            record.result = result
         if spec.target_node:
-            return self.registry.require(spec.target_node)
+            return self.registry.require(
+                spec.target_node,
+                required=derived,
+                required_tags=frozenset(spec.node_tags),
+            )
+        if spec.execution_mode is None and derived:
+            if local_satisfies(derived):
+                return self.registry.local
+            with self._lock:
+                try:
+                    target = self.registry.select_remote(
+                        required=derived,
+                        required_tags=frozenset(spec.node_tags),
+                        affinity_node=None,  # execution-target affinity wired in T6
+                    )
+                except ExecutionTargetError as exc:
+                    # Zero enabled remote nodes: the match set is trivially
+                    # empty — same no-capable semantics as an empty match.
+                    raise NoCapableNodeError(str(exc)) from exc
+                self.registry.reserve(target.name, record.id)
+            return target
         mode = spec.execution_mode or self.default_execution_mode
         if mode == "local":
             return self.registry.local
@@ -1826,6 +1896,35 @@ class JobManager:
             target=target.name,
             kind=target.kind,
         )
+
+    def _release_reservation(self, job_id: str) -> None:
+        """Idempotently release a job's in-flight node reservation."""
+        with self._lock:
+            self.registry.release_job(job_id)
+
+    def _rebuild_reservations(self) -> None:
+        """Rebuild in-flight node reservations from persisted targets.
+
+        Startup counterpart of the restart-recovery scan (design §3.3):
+        every job still RUNNING/PENDING/PAUSED after recovery with a
+        persisted remote ``execution_target`` re-claims its reservation,
+        so a restart never under-counts in-flight work (soft cap).  Must
+        run AFTER ``_requeue_active_on_startup`` — jobs the recovery scan
+        finalised no longer hold a slot.  Caller holds ``self._lock``.
+        """
+        rebuilt = 0
+        for status in (JobStatus.RUNNING, JobStatus.PENDING, JobStatus.PAUSED):
+            for record in self.store.list(status=status.value, limit=10000):
+                result = record.result or {}
+                target = result.get("execution_target")
+                if not isinstance(target, str) or target == LOCAL_NODE_NAME:
+                    continue
+                if self.registry.get(target) is None:
+                    continue  # node no longer configured — nothing to reserve
+                self.registry.reserve(target, record.id)
+                rebuilt += 1
+        if rebuilt:
+            logger.info("Rebuilt %d in-flight node reservation(s) after restart", rebuilt)
 
     def count_local_running_jobs(self, exclude_id: str | None = None) -> int:
         """Local jobs holding a slot (STARTING or RUNNING, not remote)."""
@@ -1881,6 +1980,10 @@ class JobManager:
                     record, event_log, cancel_event
                 )
                 self._poll_failures.pop(job_id, None)
+                # First successful poll reached bjobs: the LSF-side running
+                # count now includes this job — the select-window
+                # reservation is redundant.
+                self._release_reservation(job_id)
             except Exception as exc:
                 # Transport-layer failure (SSH/bjobs unreachable).  This is
                 # NOT a job failure: keep the status, do not cancel, do not
@@ -1914,6 +2017,7 @@ class JobManager:
                 self._write_job_json(record)
                 event_log.append("job.failed", job_id=job_id, error=str(exc))
                 self._stage_task_observer.finalize_job(job_id, "failed")
+                self._release_reservation(job_id)
                 self._dispatch_queued_jobs()
                 return
             self._metrics_extractor.extract(record.id, Path(record.work_dir))
@@ -1923,6 +2027,10 @@ class JobManager:
             self.store.update(record)
             self._sync_task_status(record)
             return
+
+        # Terminal transition — any lingering reservation goes back
+        # (fail/cancel/complete before the first successful poll).
+        self._release_reservation(job_id)
 
         # A mechanism study paused at a review gate: translate the dedicated
         # exit code into WAITING_REVIEW instead of COMPLETED/FAILED.

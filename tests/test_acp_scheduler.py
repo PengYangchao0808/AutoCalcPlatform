@@ -280,8 +280,14 @@ def test_manager_runs_fake_job_to_completion(tmp_path: Path) -> None:
     mgr.shutdown()
 
 
-def test_batch_parallelism_one_persists_all_jobs_and_dispatches_fifo(tmp_path: Path) -> None:
+def test_batch_parallelism_one_persists_all_jobs_and_dispatches_fifo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A two-molecule batch creates two durable jobs before execution is gated."""
+    # D14 auto-resolution: Confsearch derives {xtb, crest, censo, orca} —
+    # pin the local branch so dispatch is machine-independent (the CI host
+    # may not have the QC binaries installed).
+    monkeypatch.setattr("acp.scheduler.manager.local_satisfies", lambda required: True)
     runner = MagicMock()
     runner.poll.return_value = (False, None)
     mgr = JobManager(run_root=tmp_path, runner=runner, poll_interval=30, local_max_jobs=4)

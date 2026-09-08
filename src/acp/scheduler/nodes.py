@@ -29,8 +29,14 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
+from acp.scheduler.capabilities import (
+    NoCapableNodeError,
+    is_degraded,
+    matches_capabilities,
+)
+
 if TYPE_CHECKING:
-    from acp.scheduler.remote.config import RemoteNode
+    from acp.scheduler.remote.config import NodeCapabilities, RemoteNode
 
 __all__ = [
     "ExecutionMode",
@@ -89,6 +95,15 @@ class NodeSpec:
         host: Hostname/IP (remote only).
         max_jobs: Concurrent-job ceiling.  Always ``> 0`` — there is no
             ``None = unlimited`` special case.
+        capabilities: Static capability declaration from the remote
+            config (``None`` = generic node, design D8).  The live
+            probe-inferred state is resolved at match time through the
+            wired ``status_provider`` — this field only carries the
+            declaration half.
+        capability_state: Static tri-state summary — ``"declared"`` when
+            ``capabilities`` is set, ``"unknown"`` otherwise (an
+            undeclared node may resolve to ``"probe-inferred"`` at match
+            time via its software probe).
     """
 
     name: str
@@ -96,6 +111,8 @@ class NodeSpec:
     enabled: bool = True
     host: str | None = None
     max_jobs: int = 1
+    capabilities: NodeCapabilities | None = None
+    capability_state: str = "unknown"
 
 
 @dataclass
@@ -110,12 +127,16 @@ class NodeState:
 
 def _to_node_spec(node: RemoteNode) -> NodeSpec:
     """Map a configured :class:`RemoteNode` onto a :class:`NodeSpec`."""
+    # ``getattr`` keeps duck-typed RemoteNode stand-ins (tests) working.
+    capabilities = getattr(node, "capabilities", None)
     return NodeSpec(
         name=node.name,
         kind="remote",
         enabled=node.enabled,
         host=node.host,
         max_jobs=max(1, int(node.max_concurrent_jobs)),
+        capabilities=capabilities,
+        capability_state="declared" if capabilities is not None else "unknown",
     )
 
 
@@ -161,6 +182,11 @@ class NodeRegistry:
         )
         self._remotes = [_to_node_spec(n) for n in (remote_nodes or [])]
         self.status_provider: Callable[[str], Any] | None = None
+        #: In-flight reservations per remote node (node name → job ids).
+        #: Soft-cap accounting for the select→submit window (design §3.3):
+        #: NOT synchronised here — every mutation happens under the owning
+        #: ``JobManager._lock``.
+        self.reservations: dict[str, set[str]] = {}
 
     @property
     def local(self) -> NodeSpec:
@@ -177,11 +203,23 @@ class NodeRegistry:
                 return spec
         return None
 
-    def require(self, name: str) -> NodeSpec:
-        """Explicit target lookup — unknown/disabled targets fail fast.
+    def require(
+        self,
+        name: str,
+        required: frozenset[str] | None = None,
+        required_tags: frozenset[str] | None = None,
+    ) -> NodeSpec:
+        """Explicit target lookup — unknown/disabled/incapable fail fast.
+
+        Capability hard check (design §3.1 ①): when ``required`` /
+        ``required_tags`` are given and the node cannot satisfy them, the
+        error carries ``code="target_node_incapable"`` plus the missing
+        software/tag fields.  The local target is never capability-checked
+        (design §3.1 ③ — local execution stays unchecked).
 
         Raises:
-            ExecutionTargetError: If the node does not exist or is disabled.
+            ExecutionTargetError: If the node does not exist, is disabled,
+                or lacks the required capabilities.
         """
         if name == LOCAL_NODE_NAME:
             return self._local
@@ -189,45 +227,145 @@ class NodeRegistry:
             if spec.name == name:
                 if not spec.enabled:
                     raise ExecutionTargetError(f"target_node {name!r} is disabled")
+                if required or required_tags:
+                    match = matches_capabilities(
+                        frozenset(required or ()),
+                        frozenset(required_tags or ()),
+                        declared=spec.capabilities,
+                        probed_software=self._probed_software(spec.name),
+                    )
+                    if not match.satisfies:
+                        raise ExecutionTargetError(
+                            f"target_node {name!r} cannot satisfy the job "
+                            f"requirements: {'; '.join(match.reasons)}",
+                            code="target_node_incapable",
+                            missing_software=match.missing_software,
+                            missing_tags=match.missing_tags,
+                        )
                 return spec
         raise ExecutionTargetError(f"target_node {name!r} not found")
+
+    def reserve(self, node_name: str, job_id: str) -> None:
+        """Record one job's in-flight reservation on a node (soft cap).
+
+        Caller must hold the owning ``JobManager._lock`` (design §3.3).
+        """
+        self.reservations.setdefault(node_name, set()).add(job_id)
+
+    def release(self, node_name: str, job_id: str) -> None:
+        """Idempotently drop one reservation (empty sets are pruned)."""
+        jobs = self.reservations.get(node_name)
+        if jobs is None:
+            return
+        jobs.discard(job_id)
+        if not jobs:
+            self.reservations.pop(node_name, None)
+
+    def release_job(self, job_id: str) -> None:
+        """Idempotently drop a job's reservation on whichever node holds it."""
+        for node_name in list(self.reservations):
+            self.release(node_name, job_id)
 
     def derive_local_state(self, running_jobs: int) -> NodeState:
         """Local node state derived from the manager's own job table."""
         status = "ready" if running_jobs < self._local.max_jobs else "busy"
         return NodeState(status=status, running_jobs=running_jobs)
 
-    def select_remote(self, required: frozenset[str] | None = None) -> NodeSpec:
-        """Pick an enabled remote node: least loaded (running/max), YAML order ties.
+    def select_remote(
+        self,
+        required: frozenset[str] | None = None,
+        required_tags: frozenset[str] | None = None,
+        affinity_node: str | None = None,
+    ) -> NodeSpec:
+        """Pick an enabled, capability-matching remote node (design §3.2).
 
-        ``required`` is accepted for Phase 2 capability filtering; Phase 1
-        ignores it (capability matching is not implemented yet).
+        Set terminology (design §2.1): **match set** = enabled ∧ capability
+        match (:func:`matches_capabilities`, D8/D13); **candidate set** =
+        match set ∧ not offline ∧ not degraded ∧ below capacity counting
+        in-flight reservations.  Selection: affinity node when it is a
+        candidate → least-loaded ratio ``(running + reservations) /
+        max_jobs`` → YAML order tie-break.
+
+        Args:
+            required: Required software names (empty = no constraint).
+            required_tags: Required node tags (empty = no constraint; only
+                declared nodes can ever satisfy tags, D13).
+            affinity_node: Preferred node name — returned when it is part
+                of the candidate set.
 
         Raises:
             ExecutionTargetError: No enabled remote nodes configured.
-            ExecutionCapacityUnavailable: All enabled nodes are full or
-                unreachable (temporary — the caller retries).
+            NoCapableNodeError: The match set is empty — no enabled node
+                satisfies the requirements (permanent).
+            ExecutionCapacityUnavailable: Match set non-empty but every
+                matching node is offline, degraded, or at capacity
+                (temporary — the caller retries).
         """
         enabled = [s for s in self._remotes if s.enabled]
         if not enabled:
             raise ExecutionTargetError("No enabled remote nodes configured")
 
-        best: NodeSpec | None = None
-        best_ratio: float | None = None
-        for spec in enabled:
-            running = self._remote_running_jobs(spec)
-            if running is None:  # unreachable / offline — stop dispatching here
-                continue
-            if running >= spec.max_jobs:
-                continue
-            ratio = running / spec.max_jobs
-            if best is None or ratio < (best_ratio if best_ratio is not None else 1.0):
-                best = spec
-                best_ratio = ratio
+        required_sw = frozenset(required or ())
+        required_tag_set = frozenset(required_tags or ())
 
-        if best is None:
-            raise ExecutionCapacityUnavailable("All remote nodes are at capacity or unreachable")
-        return best
+        match_set: list[NodeSpec] = []
+        missing_software = frozenset(required_sw)
+        missing_tags = frozenset(required_tag_set)
+        for spec in enabled:
+            match = matches_capabilities(
+                required_sw,
+                required_tag_set,
+                declared=spec.capabilities,
+                probed_software=self._probed_software(spec.name),
+            )
+            if match.satisfies:
+                match_set.append(spec)
+            else:
+                # Aggregate what NO node provides: the intersection of the
+                # per-node missing sets.
+                missing_software &= frozenset(match.missing_software)
+                missing_tags &= frozenset(match.missing_tags)
+
+        if not match_set:
+            raise NoCapableNodeError(
+                "No enabled remote node satisfies the job requirements "
+                f"(missing everywhere: software={sorted(missing_software)}, "
+                f"tags={sorted(missing_tags)})",
+                missing_software=missing_software,
+                missing_tags=missing_tags,
+            )
+
+        candidates: list[tuple[NodeSpec, int]] = []
+        for spec in match_set:
+            status = self._live_status(spec)
+            if status is None:  # offline / unreachable
+                continue
+            if is_degraded(status):
+                continue
+            load = int(getattr(status, "running_jobs", 0) or 0) + len(
+                self.reservations.get(spec.name, ())
+            )
+            if load >= spec.max_jobs:
+                continue
+            candidates.append((spec, load))
+
+        if not candidates:
+            raise ExecutionCapacityUnavailable(
+                "All capability-matching remote nodes are offline, degraded, or at capacity"
+            )
+
+        if affinity_node is not None:
+            for spec, _load in candidates:
+                if spec.name == affinity_node:
+                    return spec
+
+        best_spec, best_load = candidates[0]
+        best_ratio = best_load / best_spec.max_jobs
+        for spec, load in candidates[1:]:
+            ratio = load / spec.max_jobs
+            if ratio < best_ratio:  # strict < keeps the YAML-order tie-break
+                best_spec, best_ratio = spec, ratio
+        return best_spec
 
     def remote_running_jobs(self, name: str) -> int | None:
         """Running-job count for a remote node (``None`` when unreachable)."""
@@ -237,13 +375,47 @@ class NodeRegistry:
         return self._remote_running_jobs(spec)
 
     def _remote_running_jobs(self, spec: NodeSpec) -> int | None:
+        status = self._live_status(spec)
+        if status is None:
+            return None
+        return int(getattr(status, "running_jobs", 0))
+
+    def _live_status(self, spec: NodeSpec) -> Any | None:
+        """Cached live status for a remote node; ``None`` when offline.
+
+        A missing ``status_provider`` yields a synthetic idle status — the
+        Phase-1 contract (no probe wired — assume empty and reachable).
+        """
         provider = self.status_provider
         if provider is None:
-            return 0  # no probe wired — assume empty
+            return NodeState(status="ready", running_jobs=0)
         try:
             status = provider(spec.name)
         except Exception:
             return None
         if getattr(status, "status", None) == "offline":
             return None
-        return int(getattr(status, "running_jobs", 0))
+        return status
+
+    def _probed_software(self, name: str) -> frozenset[str] | None:
+        """Probe-resolved software names for a node; ``None`` = no probe.
+
+        Reads the wired ``status_provider``'s cached software report (the
+        same NodeManager probe the panel uses).  Unreachable/offline nodes
+        have no usable probe — ``None`` maps to the *unknown* capability
+        state in :func:`matches_capabilities` (software falls back to
+        generic, so a temporarily-offline node never fails a match
+        permanently).
+        """
+        spec = self.get(name)
+        if spec is None:
+            return None
+        status = self._live_status(spec)
+        if status is None:
+            return None
+        software = getattr(status, "software", None)
+        if not isinstance(software, dict):
+            return None
+        return frozenset(
+            sw for sw, info in software.items() if isinstance(info, dict) and info.get("resolved")
+        )

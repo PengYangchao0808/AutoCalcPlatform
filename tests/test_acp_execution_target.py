@@ -1,16 +1,23 @@
-"""Tests for the Unified Execution Target (Phase 1).
+"""Tests for the Unified Execution Target (Phase 1 + W2-T4).
 
 Covers DevDoc ``docs/ACP_Unified_Execution_Target_DevDoc.txt`` §16:
 NodeRegistry construction, conflict validation, resolution priority,
 ``_is_remote_job`` provenance routing, M3 poll transport tolerance,
 M5 local admission, and the exception dichotomy.
+
+W2-T4 additions (plan node-selection-at-submission): capability-filtered
+``select_remote`` (D8/D13), ``require`` hard check, in-flight reservations
+(G2), and the D14 auto-escalation orchestration in
+``JobManager._resolve_execution_target``.
 """
 
 from __future__ import annotations
 
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
@@ -23,10 +30,16 @@ from acp.scheduler.nodes import (
     NodeSpec,
     validate_execution_request,
 )
+from acp.scheduler.store import JobStore
 
 try:
-    from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
+    from acp.scheduler.remote.config import (
+        NodeCapabilities,
+        RemoteExecutionConfig,
+        RemoteNode,
+    )
 except ImportError:  # paramiko not installed — remote-config tests skip
+    NodeCapabilities = None
     RemoteExecutionConfig = None
     RemoteNode = None
 
@@ -40,6 +53,24 @@ def _node(name: str, max_jobs: int = 4, enabled: bool = True):
         host=f"{name}.example.com",
         max_concurrent_jobs=max_jobs,
         enabled=enabled,
+        capabilities=None,
+    )
+
+
+def _cap_node(
+    name: str,
+    software: tuple[str, ...] = (),
+    tags: tuple[str, ...] = (),
+    max_jobs: int = 4,
+    enabled: bool = True,
+):
+    """Duck-typed RemoteNode stand-in with a declared capability block."""
+    return SimpleNamespace(
+        name=name,
+        host=f"{name}.example.com",
+        max_concurrent_jobs=max_jobs,
+        enabled=enabled,
+        capabilities=NodeCapabilities(software=software, tags=tags),
     )
 
 
@@ -55,8 +86,22 @@ def _real_node(name: str, max_jobs: int = 4, enabled: bool = True) -> RemoteNode
     )
 
 
-def _status(name: str, running: int, status: str = "online") -> SimpleNamespace:
-    return SimpleNamespace(name=name, status=status, running_jobs=running)
+def _status(
+    name: str,
+    running: int,
+    status: str = "online",
+    software: dict | None = None,
+    max_jobs: int | None = None,
+    disk_usage_pct: int | None = None,
+) -> SimpleNamespace:
+    ns = SimpleNamespace(name=name, status=status, running_jobs=running)
+    if software is not None:
+        ns.software = software
+    if max_jobs is not None:
+        ns.max_jobs = max_jobs
+    if disk_usage_pct is not None:
+        ns.disk_usage_pct = disk_usage_pct
+    return ns
 
 
 # --------------------------------------------------------------------- #
@@ -85,7 +130,13 @@ def test_registry_maps_remote_nodes() -> None:
 def test_registry_nodespec_field_subtraction() -> None:
     spec = NodeSpec(name="local", kind="local")
     assert not hasattr(spec, "priority")
-    assert not hasattr(spec, "tags")
+    # W2-T4 capability carriage: declared capabilities + tri-state summary
+    # (live probe-inferred state is resolved at match time via the status
+    # provider — the static field only records the declaration half).
+    assert hasattr(spec, "capabilities")
+    assert hasattr(spec, "capability_state")
+    assert spec.capabilities is None
+    assert spec.capability_state == "unknown"
     assert spec.max_jobs > 0
 
 
@@ -449,3 +500,428 @@ def test_api_rejects_conflicting_execution_request(tmp_path: Path) -> None:
         # Non-conflicting request passes validation (fake workflow completes).
         resp = client.post("/api/v1/jobs", json={"workflow": "fake", "target_node": "local"})
         assert resp.status_code == 201
+
+
+# --------------------------------------------------------------------- #
+# W2-T4: capability-filtered select_remote (D8/D13) + affinity
+# --------------------------------------------------------------------- #
+
+
+@requires_remote_config
+def test_select_remote_excludes_declared_node_missing_software() -> None:
+    reg = NodeRegistry(
+        local_max_jobs=1,
+        remote_nodes=[
+            _cap_node("xtb-only", software=("xtb",)),
+            _cap_node("full", software=("xtb", "orca")),
+        ],
+    )
+    reg.status_provider = lambda name: _status(name, running=0)
+    assert reg.select_remote(required=frozenset({"orca"})).name == "full"
+
+
+@requires_remote_config
+def test_select_remote_unknown_node_software_fallback_included() -> None:
+    reg = NodeRegistry(local_max_jobs=1, remote_nodes=[_node("mystery")])
+    reg.status_provider = lambda name: _status(name, running=0, software={})
+    # Unknown capability state: software requirements fall back to generic (D8).
+    assert reg.select_remote(required=frozenset({"orca"})).name == "mystery"
+
+
+@requires_remote_config
+def test_select_remote_probe_inferred_judged_by_probe_set() -> None:
+    reg = NodeRegistry(local_max_jobs=1, remote_nodes=[_node("probed")])
+    software = {"orca": {"resolved": True}}
+    reg.status_provider = lambda name: _status(name, running=0, software=software)
+    assert reg.select_remote(required=frozenset({"orca"})).name == "probed"
+    with pytest.raises(Exception) as ei:  # NoCapableNodeError: probe set lacks crest
+        reg.select_remote(required=frozenset({"crest"}))
+    assert ei.value.missing_software == ("crest",)
+
+
+@requires_remote_config
+def test_select_remote_tag_insufficient_excluded() -> None:
+    reg = NodeRegistry(
+        local_max_jobs=1,
+        remote_nodes=[_cap_node("plain", software=("orca",))],
+    )
+    reg.status_provider = lambda name: _status(name, running=0)
+    with pytest.raises(Exception) as ei:  # NoCapableNodeError: no declared gpu tag
+        reg.select_remote(required=frozenset({"orca"}), required_tags=frozenset({"gpu"}))
+    assert ei.value.missing_tags == ("gpu",)
+
+    reg2 = NodeRegistry(
+        local_max_jobs=1,
+        remote_nodes=[_cap_node("tagged", software=("orca",), tags=("gpu",))],
+    )
+    reg2.status_provider = lambda name: _status(name, running=0)
+    picked = reg2.select_remote(required=frozenset({"orca"}), required_tags=frozenset({"gpu"}))
+    assert picked.name == "tagged"
+
+
+@requires_remote_config
+def test_select_remote_undeclared_node_never_satisfies_tags() -> None:
+    # D13: tags are not probeable — even a fully probed undeclared node fails.
+    reg = NodeRegistry(local_max_jobs=1, remote_nodes=[_node("probed")])
+    software = {"orca": {"resolved": True}}
+    reg.status_provider = lambda name: _status(name, running=0, software=software)
+    with pytest.raises(Exception) as ei:
+        reg.select_remote(required_tags=frozenset({"gpu"}))
+    assert ei.value.missing_tags == ("gpu",)
+
+
+@requires_remote_config
+def test_select_remote_match_empty_is_permanent_candidates_empty_is_temporary() -> None:
+    match_but_offline = NodeRegistry(
+        local_max_jobs=1,
+        remote_nodes=[_cap_node("full", software=("orca",))],
+    )
+    match_but_offline.status_provider = lambda name: _status(name, running=0, status="offline")
+    with pytest.raises(ExecutionCapacityUnavailable):
+        match_but_offline.select_remote(required=frozenset({"orca"}))
+
+    match_but_degraded = NodeRegistry(
+        local_max_jobs=1,
+        remote_nodes=[_cap_node("full", software=("orca",))],
+    )
+    match_but_degraded.status_provider = lambda name: _status(name, running=0, disk_usage_pct=95)
+    with pytest.raises(ExecutionCapacityUnavailable):
+        match_but_degraded.select_remote(required=frozenset({"orca"}))
+
+    no_match = NodeRegistry(
+        local_max_jobs=1,
+        remote_nodes=[_cap_node("xtb-only", software=("xtb",))],
+    )
+    no_match.status_provider = lambda name: _status(name, running=0)
+    with pytest.raises(Exception) as ei:  # NoCapableNodeError — permanent
+        no_match.select_remote(required=frozenset({"orca", "crest"}))
+    assert set(ei.value.missing_software) == {"orca", "crest"}
+
+
+@requires_remote_config
+def test_select_remote_affinity_preferred_over_emptier_node() -> None:
+    reg = NodeRegistry(
+        local_max_jobs=1,
+        remote_nodes=[_node("n1", max_jobs=4), _node("n2", max_jobs=4)],
+    )
+    loads = {"n1": _status("n1", running=0), "n2": _status("n2", running=2)}
+    reg.status_provider = lambda name: loads[name]
+    assert reg.select_remote(affinity_node="n2").name == "n2"
+    # Affinity to a node outside the candidate set (offline) falls through
+    # to least-loaded.
+    loads = {"n1": _status("n1", running=1), "n2": _status("n2", running=0, status="offline")}
+    reg.status_provider = lambda name: loads[name]
+    assert reg.select_remote(affinity_node="n2").name == "n1"
+
+
+# --------------------------------------------------------------------- #
+# W2-T4: require() capability hard check
+# --------------------------------------------------------------------- #
+
+
+@requires_remote_config
+def test_require_rejects_incapable_target_with_code_and_missing() -> None:
+    reg = NodeRegistry(
+        local_max_jobs=1,
+        remote_nodes=[_cap_node("xtb-only", software=("xtb",))],
+    )
+    reg.status_provider = lambda name: _status(name, running=0)
+    with pytest.raises(ExecutionTargetError) as ei:
+        reg.require("xtb-only", required=frozenset({"orca"}), required_tags=frozenset({"gpu"}))
+    assert ei.value.code == "target_node_incapable"
+    assert ei.value.missing_software == ("orca",)
+    assert ei.value.missing_tags == ("gpu",)
+
+
+@requires_remote_config
+def test_require_capable_and_local_pass() -> None:
+    reg = NodeRegistry(
+        local_max_jobs=1,
+        remote_nodes=[_cap_node("full", software=("xtb", "crest"), tags=("gpu",))],
+    )
+    reg.status_provider = lambda name: _status(name, running=0)
+    assert (
+        reg.require("full", required=frozenset({"crest"}), required_tags=frozenset({"gpu"})).name
+        == "full"
+    )
+    # Local is never capability-checked (design §3.1 ③).
+    assert reg.require("local", required=frozenset({"orca"})).name == "local"
+
+
+# --------------------------------------------------------------------- #
+# W2-T4: in-flight reservations (G2) — soft cap, lock-free registry
+# --------------------------------------------------------------------- #
+
+
+def test_reservations_counted_against_max() -> None:
+    reg = NodeRegistry(local_max_jobs=1, remote_nodes=[_node("n1", max_jobs=1)])
+    reg.status_provider = lambda name: _status(name, running=0)
+    first = reg.select_remote()
+    reg.reserve(first.name, "job-a")
+    # The reservation covers the select→bsub window: a concurrent second
+    # select on the same node must see it at capacity.
+    with pytest.raises(ExecutionCapacityUnavailable):
+        reg.select_remote()
+
+
+def test_reservations_shift_least_loaded_choice() -> None:
+    reg = NodeRegistry(
+        local_max_jobs=1,
+        remote_nodes=[_node("n1", max_jobs=4), _node("n2", max_jobs=4)],
+    )
+    reg.status_provider = lambda name: _status(name, running=0)
+    a = reg.select_remote()
+    reg.reserve(a.name, "job-a")
+    # n1 now counts one in-flight job (ratio 1/4) — n2 (0/4) wins.
+    assert reg.select_remote().name == "n2"
+
+
+def test_reservation_release_is_idempotent() -> None:
+    reg = NodeRegistry(local_max_jobs=1, remote_nodes=[_node("n1")])
+    reg.reserve("n1", "job-a")
+    reg.release("n1", "job-a")
+    reg.release("n1", "job-a")
+    reg.release_job("job-a")
+    assert reg.reservations == {}
+
+
+def test_release_job_drops_reservation_on_whichever_node() -> None:
+    reg = NodeRegistry(local_max_jobs=1, remote_nodes=[_node("n1"), _node("n2")])
+    reg.reserve("n2", "job-a")
+    reg.reserve("n2", "job-b")
+    reg.release_job("job-a")
+    assert reg.reservations == {"n2": {"job-b"}}
+
+
+# --------------------------------------------------------------------- #
+# W2-T4: D14 auto escalation in JobManager._resolve_execution_target
+# --------------------------------------------------------------------- #
+
+
+def _confsearch_spec(**kwargs) -> JobSpec:
+    """Confsearch xtb-crest spec → derived requirements {xtb, crest}."""
+    return JobSpec(workflow="Confsearch", method={"protocol": "xtb-crest"}, **kwargs)
+
+
+def _idle_provider(registry: NodeRegistry) -> None:
+    registry.status_provider = lambda name: _status(name, running=0)
+
+
+@requires_remote_config
+def test_auto_prefers_local_when_derived_satisfied(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("acp.scheduler.manager.local_satisfies", lambda required: True)
+    cfg = RemoteExecutionConfig(execution_mode="local", nodes=[_real_node("compute-01")])
+    mgr = JobManager(run_root=tmp_path, remote_config=cfg)
+    try:
+        rec = JobRecord(id="a1", spec=_confsearch_spec())
+        assert mgr._resolve_execution_target(rec).name == "local"
+        assert rec.result["required_software"] == ["crest", "xtb"]
+        assert mgr.registry.reservations == {}
+    finally:
+        mgr.shutdown()
+
+
+@requires_remote_config
+def test_auto_empty_derived_follows_server_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("acp.scheduler.manager.local_satisfies", lambda required: False)
+    cfg = RemoteExecutionConfig(execution_mode="local", nodes=[_real_node("compute-01")])
+    mgr = JobManager(run_root=tmp_path, remote_config=cfg)
+    try:
+        rec = JobRecord(id="a2", spec=JobSpec(workflow="fake"))
+        assert mgr._resolve_execution_target(rec).kind == "local"
+        assert "required_software" not in (rec.result or {})
+    finally:
+        mgr.shutdown()
+
+
+@requires_remote_config
+def test_auto_escalates_to_capability_matched_remote(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("acp.scheduler.manager.local_satisfies", lambda required: False)
+    node = _real_node("compute-01")
+    node.capabilities = NodeCapabilities(software=("xtb", "crest"), tags=("gpu",))
+    cfg = RemoteExecutionConfig(execution_mode="local", nodes=[node])
+    mgr = JobManager(run_root=tmp_path, remote_config=cfg)
+    try:
+        _idle_provider(mgr.registry)
+        original = mgr.registry.select_remote
+        calls: dict[str, object] = {}
+
+        def spy(**kwargs):
+            calls.update(kwargs)
+            return original(**kwargs)
+
+        mgr.registry.select_remote = spy  # type: ignore[assignment]
+        rec = JobRecord(id="a3", spec=_confsearch_spec(node_tags=["gpu"]))
+        target = mgr._resolve_execution_target(rec)
+        assert target.name == "compute-01"
+        assert calls["required"] == frozenset({"xtb", "crest"})
+        assert calls["required_tags"] == frozenset({"gpu"})
+        assert calls["affinity_node"] is None
+        assert mgr.registry.reservations.get("compute-01") == {"a3"}
+    finally:
+        mgr.shutdown()
+
+
+@requires_remote_config
+def test_auto_no_capable_node_raises_no_capable_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from acp.scheduler.capabilities import NoCapableNodeError
+
+    monkeypatch.setattr("acp.scheduler.manager.local_satisfies", lambda required: False)
+    node = _real_node("orca-only")
+    node.capabilities = NodeCapabilities(software=("orca",))
+    cfg = RemoteExecutionConfig(execution_mode="local", nodes=[node])
+    mgr = JobManager(run_root=tmp_path, remote_config=cfg)
+    try:
+        _idle_provider(mgr.registry)
+        rec = JobRecord(id="a4", spec=_confsearch_spec())
+        with pytest.raises(NoCapableNodeError) as ei:
+            mgr._resolve_execution_target(rec)
+        assert set(ei.value.missing_software) == {"xtb", "crest"}
+        assert mgr.registry.reservations == {}
+    finally:
+        mgr.shutdown()
+
+
+# --------------------------------------------------------------------- #
+# W2-T4: submission wiring — audit field, reservation release paths
+# --------------------------------------------------------------------- #
+
+
+class _FakeRemoteRunner:
+    def __init__(self, lsf_id: str = "424242", error: Exception | None = None) -> None:
+        self.lsf_id = lsf_id
+        self.error = error
+
+    def submit_remote(self, record, event_log, target_node=None) -> str:
+        if self.error is not None:
+            raise self.error
+        return self.lsf_id
+
+    def poll_remote(self, record, event_log, cancel_event):
+        return (False, None)
+
+
+def _manager_for_remote_submit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    software: tuple[str, ...] = ("xtb", "crest"),
+) -> JobManager:
+    monkeypatch.setattr("acp.scheduler.manager.local_satisfies", lambda required: False)
+    node = _real_node("compute-01")
+    node.capabilities = NodeCapabilities(software=software)
+    cfg = RemoteExecutionConfig(execution_mode="local", nodes=[node])
+    mgr = JobManager(run_root=tmp_path, remote_config=cfg)
+    _idle_provider(mgr.registry)
+    return mgr
+
+
+def _seed_queued(mgr: JobManager, tmp_path: Path, job_id: str, spec: JobSpec) -> None:
+    work_dir = tmp_path / job_id
+    work_dir.mkdir(parents=True, exist_ok=True)
+    mgr.store.create(
+        JobRecord(id=job_id, spec=spec, status=JobStatus.QUEUED, work_dir=str(work_dir))
+    )
+
+
+@requires_remote_config
+def test_submit_job_persists_required_software_and_holds_reservation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mgr = _manager_for_remote_submit(tmp_path, monkeypatch)
+    try:
+        mgr.remote_runner = _FakeRemoteRunner()  # type: ignore[assignment]
+        _seed_queued(mgr, tmp_path, "sub1", _confsearch_spec())
+        assert mgr._submit_job("sub1") is True
+        stored = mgr.store.get("sub1")
+        assert stored.status == JobStatus.PENDING
+        assert stored.result["required_software"] == ["crest", "xtb"]
+        assert stored.result["execution_target"] == "compute-01"
+        assert mgr.registry.reservations.get("compute-01") == {"sub1"}
+    finally:
+        mgr.shutdown()
+
+
+@requires_remote_config
+def test_submit_failure_releases_reservation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mgr = _manager_for_remote_submit(tmp_path, monkeypatch)
+    try:
+        mgr.remote_runner = _FakeRemoteRunner(error=RuntimeError("ssh down"))  # type: ignore[assignment]
+        _seed_queued(mgr, tmp_path, "sub2", _confsearch_spec())
+        with pytest.raises(RuntimeError, match="ssh down"):
+            mgr._submit_job("sub2")
+        assert mgr.registry.reservations == {}
+    finally:
+        mgr.shutdown()
+
+
+@requires_remote_config
+def test_first_successful_remote_poll_releases_reservation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mgr = _manager_for_remote_submit(tmp_path, monkeypatch)
+    try:
+        mgr.remote_runner = _FakeRemoteRunner()  # type: ignore[assignment]
+        _seed_queued(mgr, tmp_path, "sub3", _confsearch_spec())
+        mgr._submit_job("sub3")
+        assert mgr.registry.reservations.get("compute-01") == {"sub3"}
+        # First successful poll: the LSF-side running count takes over.
+        mgr._poll_job("sub3")
+        assert "compute-01" not in mgr.registry.reservations
+        assert mgr.store.get("sub3").status == JobStatus.PENDING
+    finally:
+        mgr.shutdown()
+
+
+@requires_remote_config
+def test_dispatch_no_capable_node_degrades_to_capacity_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mgr = _manager_for_remote_submit(tmp_path, monkeypatch, software=("orca",))
+    try:
+        _seed_queued(mgr, tmp_path, "nc1", _confsearch_spec())
+        cancel = threading.Event()
+        cancel.set()
+        mgr._cancel_events["nc1"] = cancel
+        mgr._execute_submission_impl("nc1")
+        stored = mgr.store.get("nc1")
+        assert stored.status == JobStatus.CANCELLED
+        events = mgr.event_log("nc1").read_all()
+        assert any(e["type"] == "execution.no_capable_node" for e in events)
+        assert not any(e["type"] == "job.failed" for e in events)
+        assert mgr.registry.reservations == {}
+    finally:
+        mgr.shutdown()
+
+
+@requires_remote_config
+def test_startup_rebuilds_reservations_from_persisted_targets(tmp_path: Path) -> None:
+    store = JobStore(tmp_path / "acp_jobs.db")
+    work_dir = tmp_path / "running-remote"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    store.create(
+        JobRecord(
+            id="res-1",
+            spec=JobSpec(workflow="Confsearch"),
+            status=JobStatus.RUNNING,
+            work_dir=str(work_dir),
+            remote_job_id="111",
+            result={"execution_target": "compute-01", "execution_kind": "remote"},
+        )
+    )
+    cfg = RemoteExecutionConfig(execution_mode="local", nodes=[_real_node("compute-01")])
+    with patch.object(JobManager, "_try_recover_remote_job", return_value=True):
+        mgr = JobManager(run_root=tmp_path, store=store, remote_config=cfg)
+    try:
+        assert mgr.registry.reservations.get("compute-01") == {"res-1"}
+    finally:
+        mgr.shutdown()
