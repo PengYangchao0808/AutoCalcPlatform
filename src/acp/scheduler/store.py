@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     exit_code INTEGER,
     remote_job_id TEXT,
     group_id TEXT,
+    node_id TEXT,
+    host TEXT,
     result_json TEXT
 )
 """
@@ -89,7 +91,8 @@ class JobStore:
                 """UPDATE jobs SET status=?, current_stage=?, progress=?, error=?,
                        pid=?, exit_code=?, remote_job_id=?, started_at=?,
                        completed_at=?, updated_at=?,
-                       result_json=?, spec_json=?, project_id=?, input_hash=?, group_id=?
+                       result_json=?, spec_json=?, project_id=?, input_hash=?, group_id=?,
+                       node_id=?, host=?
                        WHERE id=?""",
                 (
                     record.status.value,
@@ -107,6 +110,8 @@ class JobStore:
                     record.project_id or record.spec.project_id,
                     record.input_hash or record.spec.input_hash,
                     record.group_id,
+                    record.node_id,
+                    record.host,
                     record.id,
                 ),
             )
@@ -473,6 +478,8 @@ def _row_to_record(row: sqlite3.Row) -> JobRecord:
         exit_code=row["exit_code"],
         remote_job_id=row["remote_job_id"] if "remote_job_id" in columns else None,
         group_id=row["group_id"] if "group_id" in columns else None,
+        node_id=row["node_id"] if "node_id" in columns else None,
+        host=row["host"] if "host" in columns else None,
         result=result,
     )
 

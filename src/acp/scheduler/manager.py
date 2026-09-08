@@ -17,6 +17,7 @@ import logging
 import os
 import random
 import shutil
+import socket
 import threading
 import time
 from dataclasses import replace
@@ -1867,7 +1868,14 @@ class JobManager:
 
         record.touch()
         self.store.update(record)
+        # Full re-sync now that remote_job_id / result.node are known: the
+        # submit-time row predates dispatch and still says node_id="local".
         self._sync_task_status(record)
+        if self.tasks is not None:
+            try:
+                self.tasks.sync_from_job(record)
+            except Exception:
+                logger.warning("Task index node sync failed for job %s", job_id, exc_info=True)
         self._write_job_json(record)
         return True
 
@@ -1951,6 +1959,12 @@ class JobManager:
         result["execution_target"] = target.name
         result["execution_kind"] = target.kind
         record.result = result
+        # Persist the chosen execution target in the jobs columns as well
+        # (migration 013).  Local jobs record the head-node hostname; remote
+        # jobs record the configured node host.  Historical rows stay NULL —
+        # read side falls back to ``result`` / ``spec.target_node``.
+        record.node_id = target.name
+        record.host = socket.gethostname() if target.kind == "local" else target.host
         record.touch()
         self.store.update(record)
         self._event_log(record).append(

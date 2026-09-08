@@ -580,6 +580,8 @@ class JobRecord:
     exit_code: int | None = None
     remote_job_id: str | None = None
     group_id: str | None = None
+    node_id: str | None = None
+    host: str | None = None
     result: dict[str, Any] | None = None
 
     def touch(self) -> None:
@@ -604,6 +606,8 @@ class JobRecord:
             "exit_code": self.exit_code,
             "remote_job_id": self.remote_job_id,
             "group_id": self.group_id,
+            "node_id": self.node_id,
+            "host": self.host,
             "result": self.result,
         }
 

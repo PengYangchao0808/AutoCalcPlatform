@@ -2201,3 +2201,59 @@ def test_v1_node_matching_unknown_workflow_is_400(client: TestClient) -> None:
     )
     assert response.status_code == 400
     assert "not_a_workflow" in response.json()["detail"]
+
+
+def _seed_job(client: TestClient, record: JobRecord) -> None:
+    """Insert a record directly through the store (columns NULL as in a
+    pre-migration row)."""
+    manager = client.app.state.job_manager
+    Path(record.work_dir).mkdir(parents=True, exist_ok=True)
+    manager.store.create(record)
+
+
+def test_v1_job_lifts_node_id_host_from_result_for_historical_row(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    """A historical row (node_id/host columns NULL) with ``result.node``
+    surfaces its real node at the v1 top level via the read fallback."""
+    job_id = "hist-node-1"
+    _seed_job(
+        client,
+        JobRecord(
+            id=job_id,
+            spec=JobSpec(workflow="energy", name="hist-node"),
+            status=JobStatus.COMPLETED,
+            work_dir=str(tmp_path / "hist-node"),
+            result={
+                "node": "comp-01",
+                "host": "comp-01.example.com",
+                "execution_target": "comp-01",
+            },
+        ),
+    )
+    response = client.get(f"/api/v1/jobs/{job_id}")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["node_id"] == "comp-01"
+    assert body["host"] == "comp-01.example.com"
+
+
+def test_v1_job_node_id_falls_back_to_spec_target_node(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    """With no DB column and no result node, an explicit spec target wins."""
+    job_id = "spec-target-1"
+    _seed_job(
+        client,
+        JobRecord(
+            id=job_id,
+            spec=JobSpec(workflow="energy", name="spec-target", target_node="comp-02"),
+            status=JobStatus.QUEUED,
+            work_dir=str(tmp_path / "spec-target"),
+        ),
+    )
+    response = client.get(f"/api/v1/jobs/{job_id}")
+    assert response.status_code == 200
+    assert response.json()["node_id"] == "comp-02"

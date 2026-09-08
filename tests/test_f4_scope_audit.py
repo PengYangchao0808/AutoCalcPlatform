@@ -696,6 +696,41 @@ def test_scheduler_db_mechanism_tables() -> None:
         db.unlink(missing_ok=True)
 
 
+def test_scheduler_db_jobs_node_columns() -> None:
+    """② Migration 013 adds ``jobs.node_id`` / ``jobs.host`` (no backfill).
+
+    JobStore init creates the ``jobs`` table then runs migrations; the 013
+    ALTER must leave both columns present so dispatch can persist the
+    chosen execution target (plan todo W3-T8).  Columns stay NULL for rows
+    inserted before the migration — the read side falls back to
+    ``result["node"]`` / ``spec.target_node``.
+    """
+    from acp.scheduler.store import JobStore
+
+    with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
+        db = Path(f.name)
+    try:
+        JobStore(db)
+        conn = sqlite3.connect(str(db))
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(jobs)").fetchall()}
+        assert "node_id" in columns, "migration 013 missing jobs.node_id"
+        assert "host" in columns, "migration 013 missing jobs.host"
+
+        conn.execute(
+            "INSERT INTO jobs (id, workflow, name, status, work_dir, spec_json, "
+            "created_at, updated_at) VALUES ('legacy-1', 'fake', 'legacy', "
+            "'completed', '/tmp/x', '{}', '2026-01-01', '2026-01-01')"
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT node_id, host FROM jobs WHERE id='legacy-1'"
+        ).fetchone()
+        assert (row[0], row[1]) == (None, None), "migration 013 must not backfill"
+        conn.close()
+    finally:
+        db.unlink(missing_ok=True)
+
+
 # ── ③ .omo/ no new files ────────────────────────────────────────────────────
 
 

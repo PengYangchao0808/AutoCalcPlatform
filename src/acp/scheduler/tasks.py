@@ -201,9 +201,17 @@ class TaskIndex:
 
         ``task_id == job_id`` (existing jobs are indexed as-is); the node
         mapping follows §9.3 — ``node_id``/``storage_mode`` distinguish the
-        remote (``sftp``) and local execution paths.
+        remote (``sftp``) and local execution paths.  ``node_id`` carries
+        the real execution-node name when dispatch already recorded one
+        (``result["node"]`` or ``result["execution_target"]``); the
+        fallback chain (``remote_job_id`` present → ``"remote"``, else
+        ``"local"``) keeps pre-dispatch and historical rows indexed.
         """
         remote = bool(record.remote_job_id)
+        result = record.result if isinstance(record.result, dict) else {}
+        node = result.get("node") or result.get("execution_target")
+        if not isinstance(node, str) or not node:
+            node = "remote" if remote else "local"
         self.upsert(
             {
                 "task_id": record.id,
@@ -218,7 +226,7 @@ class TaskIndex:
                 "workflow": record.spec.workflow,
                 "task_dir_name": Path(record.work_dir).name if record.work_dir else "",
                 "status": record.status.value,
-                "node_id": "remote" if remote else "local",
+                "node_id": node,
                 "node_path": record.work_dir,
                 "input_hash": record.input_hash or record.spec.input_hash,
                 "result_manifest_path": None,

@@ -258,6 +258,8 @@ class V1JobRecordModel(BaseModel):
     exit_code: int | None = None
     remote_job_id: str | None = None
     group_id: str | None = None
+    node_id: str | None = None
+    host: str | None = None
     study_id: str | None = None
     study_status: str | None = None
     result: dict[str, Any] | None = None

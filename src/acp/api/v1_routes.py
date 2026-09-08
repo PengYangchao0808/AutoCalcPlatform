@@ -425,6 +425,7 @@ def _record_to_v1_model(
     study_status: str | None = None,
 ) -> V1JobRecordModel:
     spec = record.spec
+    result = record.result if isinstance(record.result, dict) else {}
     return V1JobRecordModel(
         id=record.id,
         spec=V1JobSpecModel(
@@ -459,6 +460,8 @@ def _record_to_v1_model(
         exit_code=record.exit_code,
         remote_job_id=record.remote_job_id,
         group_id=record.group_id or record.id,
+        node_id=record.node_id or result.get("node") or spec.target_node,
+        host=record.host or result.get("host"),
         study_id=study_id,
         study_status=study_status,
         result=record.result,
