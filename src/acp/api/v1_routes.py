@@ -4158,6 +4158,11 @@ def _node_status_to_model(status) -> NodeStatusModel:
         last_check=status.last_check,
         error=status.error,
         software=status.software,
+        declared=status.declared,
+        capability_state=status.capability_state,
+        declared_ok=status.declared_ok,
+        mismatch=status.mismatch,
+        probe_note=status.probe_note,
     )
 
 

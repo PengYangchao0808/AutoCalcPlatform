@@ -965,6 +965,11 @@ class NodeStatusModel(BaseModel):
     last_check: str = ""
     error: str | None = None
     software: dict[str, Any] = Field(default_factory=dict)
+    declared: dict[str, Any] | None = None
+    capability_state: str = "unknown"  # "declared" | "probe-inferred" | "unknown"
+    declared_ok: bool | None = None
+    mismatch: list[str] = Field(default_factory=list)
+    probe_note: str | None = None
 
 
 class NodeListResponse(BaseModel):

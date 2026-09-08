@@ -17,18 +17,25 @@ from unittest.mock import MagicMock
 import pytest
 
 from acp.scheduler.jobs import JobSpec
-from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
+from acp.scheduler.remote.config import NodeCapabilities, RemoteExecutionConfig, RemoteNode
 from acp.scheduler.remote.node_manager import (
     DEFAULT_PYTHON_CANDIDATES,
     InterpreterProbe,
     NodeManager,
+    capability_state_fields,
     detect_node_python,
     doctor_node,
 )
 from acp.scheduler.remote.ssh import SSHExecutionError
 
 
-def _node(name: str = "compute-01", enabled: bool = True, max_jobs: int = 5) -> RemoteNode:
+def _node(
+    name: str = "compute-01",
+    enabled: bool = True,
+    max_jobs: int = 5,
+    capabilities: NodeCapabilities | None = None,
+    queue: str | None = None,
+) -> RemoteNode:
     return RemoteNode(
         name=name,
         host="10.0.0.1",
@@ -37,6 +44,8 @@ def _node(name: str = "compute-01", enabled: bool = True, max_jobs: int = 5) -> 
         remote_code_dir="/home/<user>/acp_code",
         max_concurrent_jobs=max_jobs,
         enabled=enabled,
+        capabilities=capabilities,
+        queue=queue,
     )
 
 
@@ -634,3 +643,101 @@ def test_cached_node_statuses_never_probes() -> None:
     cached = nm.cached_node_statuses()
     assert [s.name for s in cached] == ["compute-01"]
     assert pool.execute.call_count == calls
+
+
+# --------------------------------------------------------------------------- #
+# Mixed capability model (design D8) — NodeStatus three-state fields
+# --------------------------------------------------------------------------- #
+
+
+def test_node_capability_state_fields_pure() -> None:
+    """Pure helper: undeclared + empty probe dict → unknown + note."""
+    fields = capability_state_fields(None, None, {})
+    assert fields["capability_state"] == "unknown"
+    assert fields["declared"] is None
+    assert fields["declared_ok"] is None
+    assert fields["mismatch"] == []
+    assert fields["probe_note"] == "capability unknown; treated as generic"
+    # probe-inferred when undeclared but a report exists
+    inferred = capability_state_fields(None, "q", _SOFTWARE_REPORT)
+    assert inferred["capability_state"] == "probe-inferred"
+    assert inferred["probe_note"] is None
+    # declared is authoritative even without any probe data
+    declared = capability_state_fields(NodeCapabilities(software=("orca",)), None, {})
+    assert declared["capability_state"] == "declared"
+    assert declared["declared_ok"] is None
+    assert declared["mismatch"] == []
+
+
+def test_node_status_declared_with_mismatch() -> None:
+    """Declared node whose probe misses a declared item → declared_ok=False."""
+    node = _node(
+        capabilities=NodeCapabilities(software=("orca", "xtb"), tags=("gpu",)),
+        queue="bigmem",
+    )
+    # _SOFTWARE_REPORT: orca resolved, xtb resolved=None, crest resolved.
+    nm = NodeManager(_config([node]), _pool_with_software(_SOFTWARE_REPORT), monitor=_ok_monitor())
+    status = nm.get_node_status("compute-01")
+    assert status.status == "online"
+    assert status.capability_state == "declared"
+    assert status.declared == {"software": ["orca", "xtb"], "tags": ["gpu"], "queue": "bigmem"}
+    assert status.declared_ok is False
+    assert status.mismatch == ["xtb"]
+    assert status.probe_note is None
+
+
+def test_node_status_declared_ok_true_when_probe_covers_declaration() -> None:
+    node = _node(capabilities=NodeCapabilities(software=("orca", "crest")))
+    nm = NodeManager(_config([node]), _pool_with_software(_SOFTWARE_REPORT), monitor=_ok_monitor())
+    status = nm.get_node_status("compute-01")
+    assert status.capability_state == "declared"
+    assert status.declared_ok is True
+    assert status.mismatch == []
+
+
+def test_node_status_probe_inferred_without_declaration() -> None:
+    """Undeclared node with a successful probe → probe-inferred state."""
+    pool = _pool_with_software(_SOFTWARE_REPORT)
+    nm = NodeManager(_config([_node()]), pool, monitor=_ok_monitor())
+    status = nm.get_node_status("compute-01")
+    assert status.capability_state == "probe-inferred"
+    assert status.declared is None
+    assert status.declared_ok is None
+    assert status.mismatch == []
+    assert status.probe_note is None
+    # the raw probe report still rides along unchanged
+    assert status.software["orca"]["resolved"] == "/opt/orca/orca"
+
+
+def test_node_status_unknown_when_probe_never_succeeded() -> None:
+    """Undeclared node with a failed probe → unknown + fallback note."""
+    nm = NodeManager(_config([_node()]), _pool_with_software(None), monitor=_ok_monitor())
+    status = nm.get_node_status("compute-01")
+    assert status.status == "online"
+    assert status.software == {}
+    assert status.capability_state == "unknown"
+    assert status.probe_note == "capability unknown; treated as generic"
+
+
+def test_node_status_declared_unaffected_by_probe_failure() -> None:
+    """Probe failure only affects undeclared nodes (D8): declared_ok → None."""
+    node = _node(capabilities=NodeCapabilities(software=("orca", "xtb")))
+    nm = NodeManager(_config([node]), _pool_with_software(None), monitor=_ok_monitor())
+    status = nm.get_node_status("compute-01")
+    assert status.capability_state == "declared"
+    assert status.declared_ok is None
+    assert status.mismatch == []
+    assert status.probe_note is None
+    assert status.declared == {"software": ["orca", "xtb"], "tags": [], "queue": None}
+
+
+def test_node_status_offline_declared_keeps_declared_state() -> None:
+    """A disabled/offline declared node still reports its static declaration."""
+    node = _node(enabled=False, capabilities=NodeCapabilities(software=("orca",)))
+    nm = NodeManager(_config([node]), MagicMock(), monitor=MagicMock())
+    status = nm.get_node_status("compute-01")
+    assert status.status == "offline"
+    assert status.capability_state == "declared"
+    assert status.declared == {"software": ["orca"], "tags": [], "queue": None}
+    assert status.declared_ok is None
+    assert status.mismatch == []
