@@ -284,9 +284,12 @@ def test_node_selector_structure_and_disabled_logic_lock() -> None:
 
     The selector is a three-state dropdown (auto / local / one option per
     remote node) rendered purely from ``POST /api/v1/nodes/matching``.  These
-    assertions exist so that removing the disabled logic — either the
-    capability-based option disabling or the E4 local-mode guard — turns
-    this test red, and so T12 can rely on the stable ids/hooks named here.
+    assertions exist so that removing the capability-based option disabling
+    turns this test red, so that re-introducing the removed E4 local-mode
+    guard (which disabled every per-node option while 本地 was selected and
+    deadlocked the dropdown — users could never switch back from 本地 to a
+    node) also turns it red, and so T12 can rely on the stable ids/hooks
+    named here.
     """
     html = FRONTEND.read_text(encoding="utf-8")
 
@@ -321,14 +324,20 @@ def test_node_selector_structure_and_disabled_logic_lock() -> None:
     assert "opt.title = nodeDisabledReason(node);" in html
     assert "function nodeDisabledReason(node)" in html
 
-    # Disabled logic lock 2 (E4): while 本地 is selected every per-node
-    # option is disabled so a local+node combination can never be emitted.
-    assert "function applyNodeSelectLocalGuard()" in html
-    assert "opt.disabled = isLocal || opt.getAttribute(\"data-node-satisfies\") !== \"true\";" in html
+    # Disabled logic lock 2 (deadlock regression): capability/health is the
+    # ONLY source of option disabling. The E4 local guard disabled every
+    # per-node option while 本地 was selected, which deadlocked the
+    # three-state select — once 本地 was chosen no node option could be
+    # picked again. It was removed because the single-select value plus the
+    # applyNodeSelectionToBody payload mapping are already mutually
+    # exclusive; re-introducing any "local selection disables node options"
+    # branch must turn this test red.
+    assert "applyNodeSelectLocalGuard" not in html
+    assert "isLocal" not in html
     render_body = html.split("function renderNodeSelector()", 1)[1].split("\nfunction ", 1)[0]
-    assert "applyNodeSelectLocalGuard();" in render_body
+    assert "opt.disabled = true;" in render_body
     change_body = html.split("function onNodeSelectChange()", 1)[1].split("\nfunction ", 1)[0]
-    assert "applyNodeSelectLocalGuard();" in change_body
+    assert "opt.disabled" not in change_body
 
     # Wizard change points flow through updateConfigCards → debounced
     # refresh; the select has its own change listener; modal open resets

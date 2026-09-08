@@ -14988,20 +14988,6 @@ function renderNodeSelectDetail() {
   appendNodeBadge(detail, node.declared_ok === false, t("nodes.badge.mismatch"), false);
 }
 
-// E4 guard: "local" and a remote node are mutually exclusive. While 本地 is
-// selected every per-node option is disabled so the control can never hold
-// a local+node combination; leaving 本地 restores each option's own
-// capability-based disabled state (locked by tests/test_frontend_sync.py).
-function applyNodeSelectLocalGuard() {
-  var sel = document.getElementById("modal-node-select");
-  if (!sel) return;
-  var isLocal = sel.value === "local";
-  Array.prototype.forEach.call(sel.options, function(opt) {
-    if (!opt.hasAttribute("data-node-name")) return;
-    opt.disabled = isLocal || opt.getAttribute("data-node-satisfies") !== "true";
-  });
-}
-
 function updateNodeSelectorHints() {
   var sel = document.getElementById("modal-node-select");
   var hint = document.getElementById("modal-node-auto-hint");
@@ -15068,7 +15054,6 @@ function renderNodeSelector() {
     applyNodePreselect(sel, nodeMatchingState.preselectNode);
   }
 
-  applyNodeSelectLocalGuard();
   var selected = sel.selectedOptions && sel.selectedOptions[0];
   if (selected && selected.disabled) sel.value = "";
   updateNodeSelectorHints();
@@ -15081,7 +15066,6 @@ function onNodeSelectChange() {
   // applied via .value stays "untouched" so the stage payload omits it and
   // the server-side source inheritance (T6) remains the authority.
   nodeMatchingState.userTouched = true;
-  applyNodeSelectLocalGuard();
   var sel = document.getElementById("modal-node-select");
   var selected = sel && sel.selectedOptions && sel.selectedOptions[0];
   if (selected && selected.disabled) sel.value = "";
