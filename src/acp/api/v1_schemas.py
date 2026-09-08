@@ -193,6 +193,7 @@ class V1JobSpecModel(BaseModel):
     output_dir: str | None = None
     config_path: str | None = None
     tags: list[str] = Field(default_factory=list)
+    node_tags: list[str] = Field(default_factory=list)
     project_id: str | None = None
     execution_mode: Literal["local", "remote"] | None = None
     target_node: str | None = None
@@ -283,6 +284,7 @@ class V1JobCreateRequest(BaseModel):
     output_dir: str | None = None
     config_path: str | None = None
     tags: list[str] = Field(default_factory=list)
+    node_tags: list[str] = Field(default_factory=list)
     project_id: str | None = None
     execution_mode: Literal["local", "remote"] | None = None
     target_node: str | None = None

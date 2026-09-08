@@ -69,6 +69,7 @@ def _submit_fake_job(
     name: str = "demo",
     project_id: str | None = None,
     demo_frames: bool = False,
+    node_tags: list[str] | None = None,
 ) -> dict[str, object]:
     payload: dict[str, object] = {
         "workflow": "fake",
@@ -78,6 +79,8 @@ def _submit_fake_job(
     }
     if project_id is not None:
         payload["project_id"] = project_id
+    if node_tags is not None:
+        payload["node_tags"] = node_tags
     response = client.post("/api/v1/jobs", json=payload)
     assert response.status_code == 201
     return response.json()
@@ -200,6 +203,29 @@ def test_v1_job_submit_with_project(client: TestClient) -> None:
     project_jobs = client.get(f"/api/v1/projects/{project['project_id']}/jobs")
     assert project_jobs.status_code == 200
     assert [job["id"] for job in project_jobs.json()["jobs"]] == [created["job_id"]]
+
+
+def test_v1_job_create_persists_node_tags(client: TestClient) -> None:
+    """v1 create forwards node_tags to the job spec (T15 — D13 required_tags)."""
+    created = _submit_fake_job(client, name="tagged-fake", node_tags=["gpu"])
+    job_id = str(created["job_id"])
+
+    detail = client.get(f"/api/v1/jobs/{job_id}")
+    assert detail.status_code == 200
+    assert detail.json()["spec"]["node_tags"] == ["gpu"]
+
+    record = client.app.state.job_manager.get(job_id)
+    assert record is not None
+    assert record.spec.node_tags == ["gpu"]
+
+
+def test_v1_job_create_defaults_node_tags_to_empty(client: TestClient) -> None:
+    created = _submit_fake_job(client, name="untagged-fake")
+    job_id = str(created["job_id"])
+
+    detail = client.get(f"/api/v1/jobs/{job_id}")
+    assert detail.status_code == 200
+    assert detail.json()["spec"]["node_tags"] == []
 
 
 def test_v1_job_move_to_project(client: TestClient) -> None:
