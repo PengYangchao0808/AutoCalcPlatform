@@ -7,11 +7,13 @@ import shutil
 import time
 from collections.abc import Generator
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
+from acp.scheduler.nodes import NodeRegistry
 from acp.storage.manifest import ResultManifest
 
 
@@ -319,3 +321,191 @@ def test_v2_batch_partial_failure(client: TestClient) -> None:
 def test_v2_batch_empty_tasks_rejected(client: TestClient) -> None:
     response = client.post("/api/v2/tasks/batch", json={"tasks": []})
     assert response.status_code == 422
+
+
+def _duck_node(name: str, *, software: tuple[str, ...] = (), tags: tuple[str, ...] = ()) -> Any:
+    """Duck-typed RemoteNode stand-in — NodeRegistry reads attributes only."""
+    capabilities = SimpleNamespace(software=software, tags=tags)
+    return SimpleNamespace(
+        name=name,
+        host=f"{name}.example.com",
+        max_concurrent_jobs=4,
+        enabled=True,
+        capabilities=capabilities if (software or tags) else None,
+    )
+
+
+def _client_registry(client: TestClient, remote_nodes: list[Any] | None = None) -> None:
+    """Pin the app's manager to a deterministic registry (no ambient config)."""
+    manager = client.app.state.job_manager
+    manager.registry = NodeRegistry(local_max_jobs=1, remote_nodes=remote_nodes or [])
+
+
+def _valid_fake_item(molecule_name: str, **extra: object) -> dict[str, object]:
+    item: dict[str, object] = {
+        "molecule_name": molecule_name,
+        "task_name": "opt",
+        "remark": "final",
+        "workflow": "fake",
+        "input": {"source": "CCO"},
+    }
+    item.update(extra)
+    return item
+
+
+def test_v2_batch_unknown_target_node_goes_to_failed(client: TestClient) -> None:
+    """Unknown target_node rejects that item into failed[] — never an HTTP 4xx.
+
+    Locked contract: v2 batch is per-item (test_v2_batch_partial_failure); a
+    target-validation failure must surface with its machine-readable code in
+    the ``failed[]`` error while sibling items still create normally.
+    """
+    _client_registry(client, remote_nodes=[])
+    body = _batch_create(
+        client,
+        [
+            _valid_fake_item("ethanol"),
+            _valid_fake_item(
+                "butanol",
+                execution_mode="remote",
+                target_node="comp-99",
+            ),
+        ],
+    )
+    created = body["created"]
+    failed = body["failed"]
+    assert len(created) == 1
+    assert created[0]["molecule_name"] == "ethanol"
+    assert len(failed) == 1
+    assert failed[0]["molecule_name"] == "butanol"
+    assert "unknown_target_node" in failed[0]["error"]
+    assert "comp-99" in failed[0]["error"]
+
+
+def test_v2_batch_incapable_target_node_goes_to_failed(client: TestClient) -> None:
+    """A target that cannot satisfy the derived software rejects per-item.
+
+    ``xtb-crest`` derives software ``{xtb, crest}`` (confsearch table);
+    ``comp-01`` declares only ``xtb``, so the item carries
+    ``target_node_incapable`` plus the missing software — as a ``failed[]``
+    entry, leaving the batch 201 and the sibling item created.
+    """
+    _client_registry(client, remote_nodes=[_duck_node("comp-01", software=("xtb",))])
+    body = _batch_create(
+        client,
+        [
+            _valid_fake_item("ethanol"),
+            {
+                "molecule_name": "propanol",
+                "task_name": "conf",
+                "remark": "",
+                "workflow": "Confsearch",
+                "input": {"source": "CCCO"},
+                "method": {"protocol": "xtb-crest"},
+                "target_node": "comp-01",
+            },
+        ],
+    )
+    created = body["created"]
+    failed = body["failed"]
+    assert len(created) == 1
+    assert len(failed) == 1
+    assert failed[0]["molecule_name"] == "propanol"
+    error = failed[0]["error"]
+    assert "target_node_incapable" in error
+    assert "crest" in error
+
+
+def test_v2_batch_node_fields_passthrough_to_spec(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A valid target passes its selection fields through to the job spec.
+
+    A spy on ``validate_submission_target`` proves the *exact* spec handed to
+    the shared helper (and then to ``manager.submit``) carries the three new
+    fields; the detail endpoint then shows the persisted ``target_node``.
+    ``comp-01`` declares software + the requested ``gpu`` tag so the real
+    validation passes end-to-end (deterministic regardless of the dev
+    machine's QC binaries — ``fake`` derives an empty software set).
+    """
+    _client_registry(
+        client,
+        remote_nodes=[_duck_node("comp-01", software=("xtb", "crest"), tags=("gpu",))],
+    )
+    from acp.api import v2_routes
+
+    captured: list[Any] = []
+    real = v2_routes.validate_submission_target
+
+    def spy(spec: Any, *, registry: NodeRegistry) -> None:
+        captured.append(spec)
+        real(spec, registry=registry)
+
+    monkeypatch.setattr(v2_routes, "validate_submission_target", spy)
+    body = _batch_create(
+        client,
+        [
+            _valid_fake_item(
+                "ethanol",
+                execution_mode="remote",
+                target_node="comp-01",
+                node_tags=["gpu"],
+            )
+        ],
+    )
+    assert body["failed"] == []
+    created = body["created"]
+    assert len(created) == 1
+
+    assert len(captured) == 1
+    spec = captured[0]
+    assert spec.execution_mode == "remote"
+    assert spec.target_node == "comp-01"
+    assert spec.node_tags == ["gpu"]
+
+    detail = client.get(f"/api/v2/tasks/{created[0]['task_id']}")
+    assert detail.status_code == 200
+    assert detail.json()["node_id"] == "comp-01"
+
+
+def test_v2_batch_without_node_fields_matches_previous_behaviour(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Field-less items keep the pre-change submission behaviour.
+
+    The shared target validator runs for every item (mirroring v1), but a
+    field-less auto item whose derived software the local machine satisfies
+    still submits normally — the new fields are a pure addition, so the
+    existing batch tests (all field-less, ``fake`` workflow) must stay green.
+    ``local_satisfies`` is pinned True so the auto branch is deterministic
+    regardless of which QC binaries the dev machine happens to have.
+    """
+    _client_registry(client, remote_nodes=[_duck_node("comp-01", software=("xtb", "crest"))])
+    monkeypatch.setattr("acp.scheduler.capabilities.local_satisfies", lambda required: True)
+    from acp.api import v2_routes
+
+    calls: list[Any] = []
+
+    def spy(spec: Any, *, registry: NodeRegistry) -> None:
+        calls.append(spec)
+
+    monkeypatch.setattr(v2_routes, "validate_submission_target", spy)
+    body = _batch_create(
+        client,
+        [
+            _valid_fake_item("ethanol"),
+            {
+                "molecule_name": "propanol",
+                "task_name": "conf",
+                "remark": "",
+                "workflow": "Confsearch",
+                "input": {"source": "CCCO"},
+                "method": {"protocol": "xtb-crest"},
+            },
+        ],
+    )
+    assert len(calls) == 2  # validator ran for both — none rejected
+    assert body["failed"] == []
+    assert len(body["created"]) == 2

@@ -27,9 +27,15 @@ from acp.api.v2_schemas import (
     V2TaskSummary,
     V2TreeResponse,
 )
+from acp.scheduler.capabilities import NoCapableNodeError
 from acp.scheduler.files import resolve_safe
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec
 from acp.scheduler.manager import JobManager
+from acp.scheduler.nodes import (
+    ExecutionTargetError,
+    validate_execution_request,
+    validate_submission_target,
+)
 from acp.storage.backend import (
     LocalStorageBackend,
     StorageError,
@@ -272,12 +278,37 @@ def create_task_batch(req: V2TaskBatchRequest, request: Request) -> V2TaskBatchR
     return V2TaskBatchResponse(created=created, failed=failed)
 
 
+def _execution_target_error_message(exc: Exception) -> str:
+    """Serialize a target-validation error into a per-item ``failed`` string.
+
+    The batch contract is per-item (never an HTTP 400/500 for one bad
+    element), so the structured v1 400 body (``_target_validation_detail``)
+    is flattened into the string form ``failed[]`` entries carry: the stable
+    machine-readable ``code`` first, then the English reason and any
+    ``missing_software``/``missing_tags`` payload.
+    """
+    code = getattr(exc, "code", None) or "execution_target_error"
+    parts = [f"{code}: {exc}"]
+    for field in ("missing_software", "missing_tags"):
+        values = sorted(getattr(exc, field, ()) or ())
+        if values:
+            parts.append(f"{field}={values}")
+    return "; ".join(parts)
+
+
 def _submit_batch_item(
     manager: JobManager,
     item: V2TaskBatchItem,
     request_project_id: str | None,
 ) -> V2TaskSummary | str:
-    """Submit one batch item; returns the summary or an error message."""
+    """Submit one batch item; returns the summary or an error message.
+
+    Node-selection fields (``execution_mode`` / ``target_node`` /
+    ``node_tags``) pass straight through to the job spec.  The creation-time
+    target validation shared with v1 (``validate_submission_target``) runs
+    here too, but a rejected item becomes a ``failed[]`` entry carrying the
+    error ``code`` — it never aborts the batch as a whole.
+    """
     if item.workflow not in SUPPORTED_WORKFLOWS:
         return f"Unsupported workflow '{item.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}"
     spec = JobSpec(
@@ -290,7 +321,20 @@ def _submit_batch_item(
         molecule_name=item.molecule_name,
         task_name=item.task_name,
         remark=item.remark,
+        execution_mode=item.execution_mode,
+        target_node=item.target_node,
+        node_tags=item.node_tags,
     )
+    try:
+        validate_execution_request(spec)
+    except ExecutionTargetError as exc:
+        logger.warning("batch item %s/%s rejected: %s", item.molecule_name, item.task_name, exc)
+        return _execution_target_error_message(exc)
+    try:
+        validate_submission_target(spec, registry=manager.registry)
+    except (ExecutionTargetError, NoCapableNodeError) as exc:
+        logger.warning("batch item %s/%s rejected: %s", item.molecule_name, item.task_name, exc)
+        return _execution_target_error_message(exc)
     try:
         record = manager.submit(spec)
     except Exception as exc:  # noqa: BLE001 — one bad item must not abort the batch
