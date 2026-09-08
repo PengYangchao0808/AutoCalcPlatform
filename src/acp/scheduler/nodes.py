@@ -24,7 +24,7 @@ Author: QCcalc Team
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
@@ -46,6 +46,7 @@ __all__ = [
     "NodeState",
     "NodeRegistry",
     "validate_execution_request",
+    "validate_submission_target",
 ]
 
 ExecutionMode = Literal["local", "remote"]
@@ -155,6 +156,155 @@ def validate_execution_request(spec: Any) -> None:
         raise ExecutionTargetError("execution_mode=remote conflicts with target_node=local")
     if mode == "local" and node not in (None, LOCAL_NODE_NAME):
         raise ExecutionTargetError(f"execution_mode=local conflicts with target_node={node!r}")
+
+
+def _probed_software_of(registry: Any, name: str) -> frozenset[str] | None:
+    """Resolve a node's probe-inferred software set, or ``None`` (unknown).
+
+    Read-only snapshot helper for creation-time validation: mirrors the
+    dispatch-time probe resolution without mutating anything.  A missing
+    status provider yields ``None`` — the unknown capability state, under
+    which software requirements fall back to generic (D8).
+    """
+    getter = getattr(registry, "_probed_software", None)
+    if not callable(getter):
+        return None
+    return getter(name)
+
+
+def validate_submission_target(
+    spec: Any,
+    *,
+    registry: NodeRegistry,
+    derive_fn: Callable[[Any], frozenset[str]] | None = None,
+    local_satisfies_fn: Callable[[Iterable[str]], bool] | None = None,
+) -> None:
+    """Validate an explicit or auto execution target at submission time.
+
+    Creation-time fail-fast mirror of the dispatch decisions in
+    ``JobManager._resolve_execution_target`` (design ``node-selection-design.md``
+    §3.1/D9/D14).  It is a pure decision over the injected ``registry`` node
+    snapshot plus the job's own fields — it never mutates reservations and
+    never selects a node.
+
+    Two permanent conditions are rejected here so the caller can return an
+    immediate HTTP 400 instead of letting a doomed job spin ``STARTING``:
+
+    * an explicit remote ``target_node`` that is unknown
+      (``code="unknown_target_node"``), disabled
+      (``code="target_node_disabled"``), or cannot satisfy the derived
+      requirements (``code="target_node_incapable"`` plus ``missing_*``);
+    * an auto job (no ``target_node``, no explicit ``execution_mode``) whose
+      derived software the local machine cannot run and no enabled remote
+      node can satisfy (``code="no_capable_node"`` plus ``missing_*``).
+
+    Local paths (``execution_mode="local"`` or ``target_node="local"``) are
+    never capability-checked (design §3.1).  Explicit ``execution_mode``
+    keeps its legacy dispatch behaviour (design §3.1 ③) — only the
+    mode-free auto case is gated here.  Capacity conditions (nodes present
+    but busy/offline/degraded) are deliberately **not** rejected: the
+    dispatch backstop keeps those ``STARTING`` and retries for capacity.
+
+    ``derive_fn`` and ``local_satisfies_fn`` default to the capabilities
+    module's functions and are injectable so tests stay deterministic
+    regardless of which QC binaries the CI/dev machine happens to have.
+
+    Args:
+        spec: The job specification (fields ``workflow``/``method``/
+            ``node_tags``/``target_node``/``execution_mode`` are read).
+        registry: Node snapshot source.  Must expose ``get(name)`` returning
+            a ``NodeSpec``-like object and ``nodes``; probe-inferred state is
+            resolved through the registry's optional ``_probed_software``.
+
+    Raises:
+        ExecutionTargetError: Unknown/disabled/incapable explicit target.
+        NoCapableNodeError: Auto job with no satisfying remote node.
+    """
+    from acp.scheduler import capabilities as _capabilities
+
+    derive = derive_fn if derive_fn is not None else _capabilities.derive_required_software
+    local_ok = (
+        local_satisfies_fn if local_satisfies_fn is not None else _capabilities.local_satisfies
+    )
+    mode = getattr(spec, "execution_mode", None)
+    target = getattr(spec, "target_node", None)
+    tags = frozenset(getattr(spec, "node_tags", None) or ())
+
+    # Local paths never capability-checked (design §3.1).
+    if mode == "local" or target == LOCAL_NODE_NAME:
+        return
+
+    derived = derive(spec)
+
+    # Explicit remote target — existence/enabled/capability hard check.
+    if target:
+        node = registry.get(target)
+        if node is None:
+            raise ExecutionTargetError(
+                f"target_node {target!r} is not a configured node",
+                code="unknown_target_node",
+            )
+        if not node.enabled:
+            raise ExecutionTargetError(
+                f"target_node {target!r} is disabled",
+                code="target_node_disabled",
+            )
+        if node.kind == "local":
+            return
+        if derived or tags:
+            match = matches_capabilities(
+                derived,
+                tags,
+                declared=node.capabilities,
+                probed_software=_probed_software_of(registry, node.name),
+            )
+            if not match.satisfies:
+                raise ExecutionTargetError(
+                    f"target_node {target!r} cannot run the job: {'; '.join(match.reasons)}",
+                    code="target_node_incapable",
+                    missing_software=match.missing_software,
+                    missing_tags=match.missing_tags,
+                )
+        return
+
+    # Auto (no explicit target, no explicit mode): D14 escalation guard.
+    if mode is not None or not derived:
+        return
+    if local_ok(derived):
+        return  # dispatch runs this on the local machine (tags ignored, E3).
+
+    # Escalation would go remote: reject only when enabled remote nodes
+    # exist but none can satisfy (a permanent, not capacity, condition).
+    enabled_remotes = [n for n in registry.nodes if n.kind == "remote" and n.enabled]
+    if not enabled_remotes:
+        return  # no remote capability configured — dispatch backstop governs.
+    for remote in enabled_remotes:
+        match = matches_capabilities(
+            derived,
+            tags,
+            declared=remote.capabilities,
+            probed_software=_probed_software_of(registry, remote.name),
+        )
+        if match.satisfies:
+            return
+    missing_software = frozenset(derived)
+    missing_tags = frozenset(tags)
+    for remote in enabled_remotes:
+        match = matches_capabilities(
+            derived,
+            tags,
+            declared=remote.capabilities,
+            probed_software=_probed_software_of(registry, remote.name),
+        )
+        missing_software &= frozenset(match.missing_software)
+        missing_tags &= frozenset(match.missing_tags)
+    raise NoCapableNodeError(
+        "no enabled remote node can satisfy the job requirements "
+        f"(missing everywhere: software={sorted(missing_software)}, "
+        f"tags={sorted(missing_tags)})",
+        missing_software=missing_software,
+        missing_tags=missing_tags,
+    )
 
 
 class NodeRegistry:

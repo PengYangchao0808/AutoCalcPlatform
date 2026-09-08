@@ -185,6 +185,7 @@ from acp.results.pes_profile import (
 )
 from acp.scheduler.artifacts import Artifact, ArtifactRegistry
 from acp.scheduler.capabilities import (
+    NoCapableNodeError,
     derive_required_software,
     is_degraded,
     local_satisfies,
@@ -196,7 +197,11 @@ from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatu
 from acp.scheduler.logs import read_log_range, read_log_tail
 from acp.scheduler.manager import JobManager
 from acp.scheduler.naming import canonical_molecule_name, molecule_name_from_input
-from acp.scheduler.nodes import ExecutionTargetError, validate_execution_request
+from acp.scheduler.nodes import (
+    ExecutionTargetError,
+    validate_execution_request,
+    validate_submission_target,
+)
 from acp.scheduler.remote.fetcher import (
     _MAX_READ_BYTES,
     _MAX_TAIL_LINES,
@@ -1236,6 +1241,21 @@ def _expand_method_electronic_state(method: dict[str, Any]) -> dict[str, Any]:
     return method
 
 
+def _target_validation_detail(exc: Exception) -> dict[str, Any]:
+    """Serialize a submission-time target error into the 400 body (D12).
+
+    Carries the machine-readable ``code`` plus ``missing_software`` /
+    ``missing_tags`` so clients (and the frontend i18n layer) can map errors
+    without parsing free-form English.
+    """
+    return {
+        "code": getattr(exc, "code", None) or "execution_target_error",
+        "message": str(exc),
+        "missing_software": list(getattr(exc, "missing_software", ()) or ()),
+        "missing_tags": list(getattr(exc, "missing_tags", ()) or ()),
+    }
+
+
 @router.post("/jobs", response_model=V1JobCreatedResponse, status_code=201)
 def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedResponse:
     manager = _manager(request)
@@ -1273,6 +1293,10 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         validate_execution_request(spec)
     except ExecutionTargetError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        validate_submission_target(spec, registry=manager.registry)
+    except (ExecutionTargetError, NoCapableNodeError) as exc:
+        raise HTTPException(status_code=400, detail=_target_validation_detail(exc)) from exc
     try:
         record = manager.submit(spec)
     except ValueError as exc:

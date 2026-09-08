@@ -37,6 +37,7 @@ from acp.scheduler.nodes import (
     NodeSpec,
     NodeState,
     validate_execution_request,
+    validate_submission_target,
 )
 from acp.scheduler.projects import ProjectManager
 from acp.scheduler.provenance import ParserRegistry, Provenance, ResultSchema, compute_input_hash
@@ -91,4 +92,5 @@ __all__ = [
     "local_satisfies",
     "matches_capabilities",
     "validate_execution_request",
+    "validate_submission_target",
 ]

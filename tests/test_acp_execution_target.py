@@ -29,6 +29,7 @@ from acp.scheduler.nodes import (
     NodeRegistry,
     NodeSpec,
     validate_execution_request,
+    validate_submission_target,
 )
 from acp.scheduler.store import JobStore
 
@@ -449,7 +450,10 @@ def test_local_admission_ignores_remote_starting_jobs(tmp_path: Path) -> None:
 # --------------------------------------------------------------------- #
 
 
-def test_invalid_target_node_fails_fast_no_retry(tmp_path: Path) -> None:
+def test_dispatch_unknown_target_still_fails_fast_no_retry(tmp_path: Path) -> None:
+    # W2-T5: creation-time validation now rejects unknown targets with 400,
+    # but a spec that slips past it (e.g. a stage-copied target) must still
+    # fail fast at dispatch — permanent, never a capacity retry.
     mgr = JobManager(run_root=tmp_path)
     try:
         record = mgr.submit(JobSpec(workflow="Confsearch", target_node="ghost"))
@@ -499,6 +503,205 @@ def test_api_rejects_conflicting_execution_request(tmp_path: Path) -> None:
 
         # Non-conflicting request passes validation (fake workflow completes).
         resp = client.post("/api/v1/jobs", json={"workflow": "fake", "target_node": "local"})
+        assert resp.status_code == 201
+
+
+# --------------------------------------------------------------------- #
+# W2-T5: creation-time target validation (design §3.1 D9/D12/D14)
+# --------------------------------------------------------------------- #
+
+
+@requires_remote_config
+def test_validate_submission_target_unknown_node_code() -> None:
+    reg = NodeRegistry(local_max_jobs=1, remote_nodes=[])
+    spec = _confsearch_spec(target_node="ghost")
+    with pytest.raises(ExecutionTargetError) as ei:
+        validate_submission_target(spec, registry=reg)
+    assert ei.value.code == "unknown_target_node"
+
+
+@requires_remote_config
+def test_validate_submission_target_disabled_node_code() -> None:
+    reg = NodeRegistry(local_max_jobs=1, remote_nodes=[_cap_node("off", enabled=False)])
+    spec = _confsearch_spec(target_node="off")
+    with pytest.raises(ExecutionTargetError) as ei:
+        validate_submission_target(spec, registry=reg)
+    assert ei.value.code == "target_node_disabled"
+
+
+@requires_remote_config
+def test_validate_submission_target_incapable_node_code_and_missing() -> None:
+    reg = NodeRegistry(local_max_jobs=1, remote_nodes=[_cap_node("xtb-only", software=("xtb",))])
+    reg.status_provider = lambda name: _status(name, running=0)
+    spec = _confsearch_spec(target_node="xtb-only")  # requires xtb + crest
+    with pytest.raises(ExecutionTargetError) as ei:
+        validate_submission_target(spec, registry=reg)
+    assert ei.value.code == "target_node_incapable"
+    assert ei.value.missing_software == ("crest",)
+
+
+@requires_remote_config
+def test_validate_submission_target_local_node_and_mode_never_checked() -> None:
+    reg = NodeRegistry(local_max_jobs=1, remote_nodes=[])
+    # local target / local mode are never capability-checked (§3.1 note).
+    validate_submission_target(_confsearch_spec(target_node="local"), registry=reg)
+    validate_submission_target(_confsearch_spec(execution_mode="local"), registry=reg)
+
+
+@requires_remote_config
+def test_validate_submission_target_auto_no_capable_node(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("acp.scheduler.capabilities.local_satisfies", lambda required: False)
+    reg = NodeRegistry(local_max_jobs=1, remote_nodes=[_cap_node("xtb-only", software=("xtb",))])
+    reg.status_provider = lambda name: _status(name, running=0)
+    from acp.scheduler.capabilities import NoCapableNodeError
+
+    with pytest.raises(NoCapableNodeError) as ei:
+        validate_submission_target(_confsearch_spec(), registry=reg)
+    assert ei.value.code == "no_capable_node"
+    assert ei.value.missing_software == ("crest",)
+
+
+@requires_remote_config
+def test_validate_submission_target_auto_local_satisfies_passes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("acp.scheduler.capabilities.local_satisfies", lambda required: True)
+    reg = NodeRegistry(local_max_jobs=1, remote_nodes=[_cap_node("xtb-only", software=("xtb",))])
+    reg.status_provider = lambda name: _status(name, running=0)
+    validate_submission_target(_confsearch_spec(), registry=reg)
+
+
+@requires_remote_config
+def test_validate_submission_target_auto_capacity_is_not_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A matching node at full load must NOT block creation — dispatch handles
+    # capacity with ExecutionCapacityUnavailable retries (D11).
+    monkeypatch.setattr("acp.scheduler.capabilities.local_satisfies", lambda required: False)
+    reg = NodeRegistry(
+        local_max_jobs=1, remote_nodes=[_cap_node("full", software=("xtb", "crest"))]
+    )
+    reg.status_provider = lambda name: _status(name, running=2, max_jobs=2)
+    validate_submission_target(_confsearch_spec(), registry=reg)
+
+
+@requires_remote_config
+def test_validate_submission_target_auto_zero_remote_nodes_is_deferred(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # No remote capability configured → dispatch backstop governs (a job that
+    # cannot run locally only spins waiting for capacity, never fails fast).
+    monkeypatch.setattr("acp.scheduler.capabilities.local_satisfies", lambda required: False)
+    reg = NodeRegistry(local_max_jobs=1, remote_nodes=[])
+    validate_submission_target(_confsearch_spec(), registry=reg)
+
+
+# --------------------------------------------------------------------- #
+# W2-T5: API-level creation-time validation → HTTP 400 with codes
+# --------------------------------------------------------------------- #
+
+
+def _app_client(tmp_path: Path):
+    pytest.importorskip("paramiko")  # v1_routes imports remote fetcher at module level
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from acp.api.server import create_app
+
+    return TestClient(create_app(run_root=tmp_path))
+
+
+def test_api_create_job_unknown_target_node_400(tmp_path: Path) -> None:
+    with _app_client(tmp_path) as client:
+        resp = client.post(
+            "/api/v1/jobs",
+            json={"workflow": "fake", "target_node": "ghost", "name": "n"},
+        )
+        assert resp.status_code == 400
+        body = resp.json()
+        assert body["detail"]["code"] == "unknown_target_node"
+
+
+@requires_remote_config
+def test_api_create_job_target_node_incapable_400(tmp_path: Path) -> None:
+    with _app_client(tmp_path) as client:
+        manager = client.app.state.job_manager
+        reg = NodeRegistry(
+            local_max_jobs=1,
+            remote_nodes=[_cap_node("xtb-only", software=("xtb",))],
+        )
+        reg.status_provider = lambda name: _status(name, running=0)
+        manager.registry = reg
+        resp = client.post(
+            "/api/v1/jobs",
+            json={
+                "workflow": "Confsearch",
+                "method": {"protocol": "xtb-crest"},
+                "target_node": "xtb-only",
+                "name": "n",
+            },
+        )
+        assert resp.status_code == 400
+        body = resp.json()
+        assert body["detail"]["code"] == "target_node_incapable"
+        assert body["detail"]["missing_software"] == ["crest"]
+
+
+@requires_remote_config
+def test_api_create_job_auto_no_capable_400(tmp_path: Path) -> None:
+    with _app_client(tmp_path) as client:
+        manager = client.app.state.job_manager
+        reg = NodeRegistry(
+            local_max_jobs=1,
+            remote_nodes=[_cap_node("xtb-only", software=("xtb",))],
+        )
+        reg.status_provider = lambda name: _status(name, running=0)
+        manager.registry = reg
+        monkeypatch = pytest.MonkeyPatch()
+        monkeypatch.setattr("acp.scheduler.capabilities.local_satisfies", lambda required: False)
+        try:
+            resp = client.post(
+                "/api/v1/jobs",
+                json={
+                    "workflow": "Confsearch",
+                    "method": {"protocol": "xtb-crest"},
+                    "name": "n",
+                },
+            )
+        finally:
+            monkeypatch.undo()
+        assert resp.status_code == 400
+        body = resp.json()
+        assert body["detail"]["code"] == "no_capable_node"
+        assert body["detail"]["missing_software"] == ["crest"]
+
+
+@requires_remote_config
+def test_api_create_job_capable_target_full_node_201(tmp_path: Path) -> None:
+    # Capacity (node full) must NOT block creation: helper only rejects empty
+    # match sets; dispatch converts full nodes to a capacity retry (STARTING).
+    with _app_client(tmp_path) as client:
+        manager = client.app.state.job_manager
+        reg = NodeRegistry(
+            local_max_jobs=1,
+            remote_nodes=[_cap_node("full", software=("xtb", "crest"))],
+        )
+        reg.status_provider = lambda name: _status(name, running=2, max_jobs=2)
+        manager.registry = reg
+        monkeypatch = pytest.MonkeyPatch()
+        monkeypatch.setattr("acp.scheduler.capabilities.local_satisfies", lambda required: False)
+        try:
+            resp = client.post(
+                "/api/v1/jobs",
+                json={
+                    "workflow": "Confsearch",
+                    "method": {"protocol": "xtb-crest"},
+                    "target_node": "full",
+                    "name": "n",
+                },
+            )
+        finally:
+            monkeypatch.undo()
         assert resp.status_code == 201
 
 
@@ -896,6 +1099,42 @@ def test_dispatch_no_capable_node_degrades_to_capacity_retry(
         stored = mgr.store.get("nc1")
         assert stored.status == JobStatus.CANCELLED
         events = mgr.event_log("nc1").read_all()
+        assert any(e["type"] == "execution.no_capable_node" for e in events)
+        assert not any(e["type"] == "job.failed" for e in events)
+        assert mgr.registry.reservations == {}
+    finally:
+        mgr.shutdown()
+
+
+@requires_remote_config
+def test_dispatch_config_drift_after_creation_degrades_to_capacity_retry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # T5 dispatch backstop: a spec whose target passes creation-time
+    # validation must not permanently fail when the node config drifts
+    # (capability removed) before dispatch — it degrades to capacity
+    # semantics (no_capable_node event, retry), never job.failed.
+    mgr = _manager_for_remote_submit(tmp_path, monkeypatch, software=("xtb", "crest"))
+    try:
+        validate_submission_target(_confsearch_spec(), registry=mgr.registry)
+
+        # Config drift between creation and dispatch: the node loses its
+        # capability. NodeSpec is frozen, so swap in a drifted registry.
+        drifted = NodeRegistry(
+            local_max_jobs=1,
+            remote_nodes=[_cap_node("compute-01", software=("orca",))],
+        )
+        drifted.status_provider = lambda name: _status(name, running=0)
+        mgr.registry = drifted
+
+        _seed_queued(mgr, tmp_path, "drift1", _confsearch_spec())
+        cancel = threading.Event()
+        cancel.set()
+        mgr._cancel_events["drift1"] = cancel
+        mgr._execute_submission_impl("drift1")
+        stored = mgr.store.get("drift1")
+        assert stored.status == JobStatus.CANCELLED
+        events = mgr.event_log("drift1").read_all()
         assert any(e["type"] == "execution.no_capable_node" for e in events)
         assert not any(e["type"] == "job.failed" for e in events)
         assert mgr.registry.reservations == {}
