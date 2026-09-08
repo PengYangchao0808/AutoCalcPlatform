@@ -979,6 +979,66 @@ class NodeListResponse(BaseModel):
     auto_select: bool = True
 
 
+class NodeMatchingRequest(BaseModel):
+    """Request for ``POST /api/v1/nodes/matching`` (submission-time preview).
+
+    The ``node_tags`` key is required but nullable (design R6): an explicit
+    ``null`` means "no tag constraint", while an absent key is a client bug
+    that the route rejects with HTTP 400 (FastAPI's default for a required
+    pydantic field would be 422).  ``protocol`` duplicates the Confsearch
+    method protocol at the top level for wizard convenience and feeds the
+    same derivation path as ``method.protocol``.
+    """
+
+    workflow: str
+    method: dict[str, Any] = Field(default_factory=dict)
+    protocol: str | None = None
+    node_tags: list[str] | None
+
+
+class NodeMatchingItem(BaseModel):
+    """One node's outcome in ``POST /api/v1/nodes/matching`` (design §2.2).
+
+    Attributes:
+        satisfies: Hard-constraint verdict shared with dispatch — the node
+            is a member of the match set (enabled ∧ capability match under
+            D8/D13) and is not offline.  Capacity/degradation are soft
+            constraints surfaced via ``degraded`` and never affect
+            ``satisfies``.
+        degraded: Load/disk soft-constraint flag (single shared
+            :func:`is_degraded` implementation).
+        tags: Declared capability tags — the frontend chips' only data
+            source; empty for undeclared nodes (D13).
+    """
+
+    name: str
+    host: str
+    status: str = "offline"  # "online" | "degraded" | "offline"
+    running_jobs: int = 0
+    max_jobs: int = 0
+    disk_usage_pct: int = 0
+    queue: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    capability_state: str = "unknown"  # "declared" | "probe-inferred" | "unknown"
+    declared_ok: bool | None = None
+    mismatch: list[str] = Field(default_factory=list)
+    satisfies: bool = False
+    missing_software: list[str] = Field(default_factory=list)
+    missing_tags: list[str] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+    degraded: bool = False
+
+
+class NodeMatchingResponse(BaseModel):
+    """Response for ``POST /api/v1/nodes/matching`` (design §2.2)."""
+
+    required_software: list[str] = Field(default_factory=list)
+    node_tags: list[str] = Field(default_factory=list)
+    local_satisfies: bool = False
+    nodes: list[NodeMatchingItem] = Field(default_factory=list)
+    note: str | None = None
+
+
 class NodePingResponse(BaseModel):
     """Response for ``POST /api/v1/nodes/{name}/ping`` (Phase 6)."""
 
@@ -1437,6 +1497,9 @@ __all__ = [
     "MoleculeResolveResponse",
     "NodeBootstrapResponse",
     "NodeListResponse",
+    "NodeMatchingItem",
+    "NodeMatchingRequest",
+    "NodeMatchingResponse",
     "NodePingResponse",
     "NodeStatusModel",
     "ProjectCreateRequest",

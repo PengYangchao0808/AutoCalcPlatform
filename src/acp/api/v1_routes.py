@@ -18,12 +18,10 @@ import urllib.parse
 from collections import Counter, OrderedDict
 from collections.abc import Callable
 from datetime import datetime, timezone
-
-UTC = timezone.utc  # datetime.UTC is 3.11+; keep the short name on 3.10
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Protocol
 
-from fastapi import APIRouter, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi import APIRouter, Body, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import ValidationError
 from rdkit import Chem
@@ -98,6 +96,9 @@ from acp.api.v1_schemas import (
     MoleculeResolveResponse,
     NodeBootstrapResponse,
     NodeListResponse,
+    NodeMatchingItem,
+    NodeMatchingRequest,
+    NodeMatchingResponse,
     NodePingResponse,
     NodeStatusModel,
     OptimizationFrameResponse,
@@ -183,6 +184,12 @@ from acp.results.pes_profile import (
     load_pes_profile,
 )
 from acp.scheduler.artifacts import Artifact, ArtifactRegistry
+from acp.scheduler.capabilities import (
+    derive_required_software,
+    is_degraded,
+    local_satisfies,
+    matches_capabilities,
+)
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.files import build_manifest, resolve_safe
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
@@ -205,6 +212,8 @@ from acp.scheduler.stage_tasks import StageTask, StageTaskStore
 from acp.scheduler.store import JobStore
 from acp.scheduler.structure_sources import StructureSourceService
 from acp.storage.layout import runtime_file
+
+UTC = timezone.utc  # datetime.UTC is 3.11+; keep the short name on 3.10
 
 logger = logging.getLogger(__name__)
 
@@ -4174,6 +4183,164 @@ def list_nodes(request: Request) -> NodeListResponse:
         nodes=[_node_status_to_model(s) for s in nm.list_nodes()],
         auto_select=True,
     )
+
+
+# ---------------------------------------------------------------------- #
+# Submission-time matching preview (design §2.2)
+# ---------------------------------------------------------------------- #
+
+_NO_REMOTE_NODES_NOTE = "no remote nodes configured"
+
+
+def _configured_node(nm: NodeManager, status) -> Any | None:
+    """Config node backing a status; ``None`` when the manager has no config."""
+    get_node = getattr(getattr(nm, "config", None), "get_node", None)
+    if not callable(get_node):
+        return None
+    try:
+        return get_node(status.name)
+    except Exception:  # noqa: BLE001 — duck-typed NodeManager stubs in tests
+        return None
+
+
+def _node_declared_inputs(nm: NodeManager, status) -> tuple[Any, bool, str | None]:
+    """Resolve ``(declared, enabled, queue)`` for one node status.
+
+    ``declared`` is fed straight into :func:`matches_capabilities`, so the
+    preview shares the dispatch-time declaration source.  The live config
+    node is preferred (the same object the scheduler registry maps); a
+    ``status.declared`` snapshot (dict-shaped, as produced by
+    ``capability_state_fields``) is the fallback for duck-typed stubs.
+    """
+    node = _configured_node(nm, status)
+    if node is not None:
+        return (
+            getattr(node, "capabilities", None),
+            bool(getattr(node, "enabled", True)),
+            getattr(node, "queue", None),
+        )
+    snapshot = getattr(status, "declared", None)
+    if isinstance(snapshot, dict) and (snapshot.get("software") or snapshot.get("tags")):
+        from acp.scheduler.remote.config import NodeCapabilities
+
+        return (
+            NodeCapabilities(
+                software=tuple(snapshot.get("software") or ()),
+                tags=tuple(snapshot.get("tags") or ()),
+            ),
+            getattr(status, "status", "") != "offline",
+            snapshot.get("queue"),
+        )
+    return None, getattr(status, "status", "") != "offline", None
+
+
+def _probed_software_names(status) -> frozenset[str]:
+    """Resolved probe names from a status (empty = unknown generic fallback).
+
+    Mirrors the registry's ``_probed_software`` extraction so preview and
+    dispatch judge undeclared nodes identically.
+    """
+    software = getattr(status, "software", None)
+    if not isinstance(software, dict):
+        return frozenset()
+    return frozenset(
+        name for name, info in software.items() if isinstance(info, dict) and info.get("resolved")
+    )
+
+
+def _node_matching_item(
+    nm: NodeManager,
+    status: Any,
+    required_software: frozenset[str],
+    required_tags: frozenset[str],
+) -> NodeMatchingItem:
+    """Match one node against the requirements (single shared implementation)."""
+    declared, enabled, queue = _node_declared_inputs(nm, status)
+    match = matches_capabilities(
+        required_software,
+        required_tags,
+        declared=declared,
+        probed_software=_probed_software_names(status),
+    )
+    node_status = getattr(status, "status", "offline")
+    return NodeMatchingItem(
+        name=status.name,
+        host=status.host,
+        status=node_status,
+        running_jobs=int(getattr(status, "running_jobs", 0) or 0),
+        max_jobs=int(getattr(status, "max_jobs", 0) or 0),
+        disk_usage_pct=int(getattr(status, "disk_usage_pct", 0) or 0),
+        queue=queue,
+        tags=list(declared.tags) if declared is not None else [],
+        capability_state=getattr(status, "capability_state", "unknown"),
+        declared_ok=getattr(status, "declared_ok", None),
+        mismatch=list(getattr(status, "mismatch", []) or []),
+        satisfies=bool(match.satisfies and enabled and node_status != "offline"),
+        missing_software=list(match.missing_software),
+        missing_tags=list(match.missing_tags),
+        reasons=list(match.reasons),
+        degraded=bool(is_degraded(status)),
+    )
+
+
+def _evaluate_matching(manager: JobManager, req: NodeMatchingRequest) -> NodeMatchingResponse:
+    """Derive the requirements and judge every remote node (design §2.2)."""
+    method = dict(req.method or {})
+    if req.protocol is not None:
+        method["protocol"] = req.protocol
+    spec = JobSpec(workflow=req.workflow, method=method)
+    required_software = derive_required_software(spec)
+    required_tags = frozenset(req.node_tags or ())
+
+    nm = manager.node_manager
+    statuses = nm.list_nodes() if nm is not None else []
+    nodes = [_node_matching_item(nm, s, required_software, required_tags) for s in statuses]
+    return NodeMatchingResponse(
+        required_software=sorted(required_software),
+        node_tags=list(req.node_tags or ()),
+        local_satisfies=bool(local_satisfies(required_software)),
+        nodes=nodes,
+        note=None if nodes else _NO_REMOTE_NODES_NOTE,
+    )
+
+
+@router.post("/nodes/matching", response_model=NodeMatchingResponse)
+def node_matching(
+    request: Request,
+    payload: dict[str, Any] = Body(...),
+) -> NodeMatchingResponse:
+    """Preview which remote nodes can run a prospective submission.
+
+    Read-only capability preview for the frontend node selector (design
+    §2.2): derives the required software exactly as dispatch does (same
+    :func:`derive_required_software` / :func:`matches_capabilities` calls)
+    and reports per-node satisfies/missing fields.  Reuses the NodeManager
+    30 s status cache; never forces an SSH refresh.
+
+    The raw body is validated explicitly so an absent ``node_tags`` key
+    fails with HTTP 400 (FastAPI's pydantic default for a required field is
+    422); ``node_tags: null`` is allowed and means "no tag constraint".
+    """
+    if "node_tags" not in payload:
+        raise HTTPException(status_code=400, detail="Missing required field 'node_tags'")
+    try:
+        req = NodeMatchingRequest.model_validate(payload)
+    except ValidationError as exc:
+        first_error = exc.errors()[0] if exc.errors() else {}
+        raise HTTPException(status_code=400, detail=first_error.get("msg", str(exc))) from exc
+    if req.workflow not in SUPPORTED_WORKFLOWS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}",
+        )
+    manager = _manager(request)
+    try:
+        return _evaluate_matching(manager, req)
+    except Exception:
+        logger.exception("Node matching preview failed for workflow=%s", req.workflow)
+        raise HTTPException(
+            status_code=500, detail="Failed to evaluate node matching for the request"
+        )
 
 
 @router.get("/nodes/{name}/status", response_model=NodeStatusModel)

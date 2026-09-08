@@ -1757,3 +1757,231 @@ def test_s2_profile_exposes_coordinates_and_selection(
     assert body["selection"]["kind"] == "double_bond_scan"
     assert body["protocol"]["scan_type"] == "distance_scan"
     assert body["coordinate"]["atoms"] == [0, 1]
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/nodes/matching — submission-time node-selection preview (T9)
+# ---------------------------------------------------------------------------
+
+
+def _matching_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "workflow": "Confsearch",
+        "method": {"protocol": "censo-crest"},
+        "protocol": None,
+        "node_tags": ["gpu"],
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _matching_node(
+    name: str,
+    *,
+    host: str,
+    software: tuple[str, ...] = (),
+    tags: tuple[str, ...] = (),
+    enabled: bool = True,
+    queue: str | None = None,
+    max_jobs: int = 5,
+    status: str = "online",
+    running: int = 0,
+    disk: int = 0,
+) -> tuple[object, object]:
+    """Build a (RemoteNode, NodeStatus) pair mirroring ``capability_state_fields``."""
+    from acp.scheduler.remote.config import NodeCapabilities, RemoteNode
+    from acp.scheduler.remote.node_manager import NodeStatus
+
+    caps = NodeCapabilities(software=software, tags=tags)
+    node = RemoteNode(
+        name=name,
+        host=host,
+        username="acp",
+        remote_work_dir="/scratch/acp",
+        remote_code_dir="/home/acp/acp_code",
+        enabled=enabled,
+        queue=queue,
+        capabilities=caps if (software or tags) else None,
+        max_concurrent_jobs=max_jobs,
+    )
+    if software or tags:
+        declared: dict[str, object] | None = {
+            "software": list(software),
+            "tags": list(tags),
+            "queue": queue,
+        }
+        capability_state = "declared"
+        declared_ok: bool | None = True
+        mismatch: list[str] = []
+    else:
+        declared = None
+        capability_state = "unknown"
+        declared_ok = None
+        mismatch = []
+    software_probe = (
+        {sw: {"configured": sw, "resolved": f"/opt/{sw}/{sw}", "version": "x"} for sw in software}
+        if software
+        else {}
+    )
+    return node, NodeStatus(
+        name=node.name,
+        host=node.host,
+        status=status,
+        running_jobs=running,
+        max_jobs=node.max_concurrent_jobs,
+        disk_usage_pct=disk,
+        software=software_probe,
+        declared=declared,
+        capability_state=capability_state,
+        declared_ok=declared_ok,
+        mismatch=mismatch,
+        probe_note=None,
+    )
+
+
+class _MatchingFakeNodeManager:
+    """Minimal NodeManager stand-in exposing ``config`` + ``list_nodes``."""
+
+    def __init__(self, config: object, statuses: list[object]) -> None:
+        self.config = config
+        self._statuses = statuses
+
+    def list_nodes(self) -> list[object]:
+        return list(self._statuses)
+
+
+def test_v1_node_matching_multinode_satisfies_and_missing(client: TestClient) -> None:
+    """POST /api/v1/nodes/matching reports per-node satisfies/missing fields."""
+    from acp.scheduler.remote.config import RemoteExecutionConfig
+
+    n1, s1 = _matching_node(
+        "comp-01",
+        host="10.0.0.1",
+        software=("xtb", "censo", "orca"),
+        tags=("gpu",),
+        queue="bigmem",
+    )
+    n2, s2 = _matching_node("comp-02", host="10.0.0.2")
+    n3, s3 = _matching_node(
+        "comp-03",
+        host="10.0.0.3",
+        software=("xtb", "crest", "censo", "orca"),
+        tags=("gpu",),
+        running=5,
+        max_jobs=5,
+    )
+    n4, s4 = _matching_node(
+        "comp-04",
+        host="10.0.0.4",
+        software=("xtb", "crest", "censo", "orca"),
+        tags=("gpu",),
+        enabled=False,
+        status="offline",
+    )
+    config = RemoteExecutionConfig(execution_mode="remote", nodes=[n1, n2, n3, n4])
+    fake = _MatchingFakeNodeManager(config, [s1, s2, s3, s4])
+    manager = client.app.state.job_manager
+    manager._node_manager = fake
+    try:
+        response = client.post("/api/v1/nodes/matching", json=_matching_payload())
+    finally:
+        manager._node_manager = None
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["required_software"] == ["censo", "crest", "orca", "xtb"]
+    assert body["node_tags"] == ["gpu"]
+    assert body["note"] is None
+    nodes = {n["name"]: n for n in body["nodes"]}
+    # Declared node missing crest from its declaration.
+    n1 = nodes["comp-01"]
+    assert n1["satisfies"] is False
+    assert n1["missing_software"] == ["crest"]
+    assert n1["missing_tags"] == []
+    assert n1["reasons"]
+    assert n1["queue"] == "bigmem"
+    assert n1["tags"] == ["gpu"]
+    assert n1["capability_state"] == "declared"
+    assert n1["declared_ok"] is True
+    assert n1["degraded"] is False
+    # Undeclared/unknown node: software satisfied generically, tag unmet.
+    n2 = nodes["comp-02"]
+    assert n2["satisfies"] is False
+    assert n2["missing_software"] == []
+    assert n2["missing_tags"] == ["gpu"]
+    assert n2["tags"] == []
+    assert n2["capability_state"] == "unknown"
+    # Matching node that is at full load: satisfies, soft constraint only.
+    n3 = nodes["comp-03"]
+    assert n3["satisfies"] is True
+    assert n3["missing_software"] == []
+    assert n3["missing_tags"] == []
+    assert n3["reasons"] == []
+    assert n3["degraded"] is True
+    # Disabled node: capability match but enabled=False gates satisfies.
+    n4 = nodes["comp-04"]
+    assert n4["status"] == "offline"
+    assert n4["satisfies"] is False
+    assert n4["missing_software"] == []
+    assert n4["missing_tags"] == []
+    assert n4["tags"] == ["gpu"]
+
+
+def test_v1_node_matching_local_satisfies_reflects_parse(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """local_satisfies is deterministic under a patched capabilities helper."""
+    from acp.scheduler.remote.config import RemoteExecutionConfig
+
+    node, status = _matching_node("comp-01", host="10.0.0.1")
+    config = RemoteExecutionConfig(execution_mode="remote", nodes=[node])
+    fake = _MatchingFakeNodeManager(config, [status])
+    manager = client.app.state.job_manager
+    manager._node_manager = fake
+    try:
+        payload = _matching_payload(node_tags=None)
+        monkeypatch.setattr("acp.api.v1_routes.local_satisfies", lambda required: False)
+        body = client.post("/api/v1/nodes/matching", json=payload).json()
+        assert body["local_satisfies"] is False
+        monkeypatch.setattr("acp.api.v1_routes.local_satisfies", lambda required: True)
+        body = client.post("/api/v1/nodes/matching", json=payload).json()
+        assert body["local_satisfies"] is True
+    finally:
+        manager._node_manager = None
+
+
+def test_v1_node_matching_zero_remote_nodes_returns_note(client: TestClient) -> None:
+    """No remote node manager configured → nodes=[] and a non-empty note."""
+    manager = client.app.state.job_manager
+    original = manager._node_manager
+    manager._node_manager = None
+    try:
+        response = client.post(
+            "/api/v1/nodes/matching",
+            json=_matching_payload(node_tags=["gpu"]),
+        )
+    finally:
+        manager._node_manager = original
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["nodes"] == []
+    assert body["note"]
+    assert body["required_software"] == ["censo", "crest", "orca", "xtb"]
+
+
+def test_v1_node_matching_missing_node_tags_is_400(client: TestClient) -> None:
+    """Absent ``node_tags`` key fails with HTTP 400, not pydantic's 422."""
+    payload = _matching_payload()
+    payload.pop("node_tags")
+    response = client.post("/api/v1/nodes/matching", json=payload)
+    assert response.status_code == 400
+    assert response.json()["detail"]
+
+
+def test_v1_node_matching_unknown_workflow_is_400(client: TestClient) -> None:
+    """Unknown workflow id fails with HTTP 400."""
+    response = client.post(
+        "/api/v1/nodes/matching",
+        json=_matching_payload(workflow="not_a_workflow"),
+    )
+    assert response.status_code == 400
+    assert "not_a_workflow" in response.json()["detail"]
