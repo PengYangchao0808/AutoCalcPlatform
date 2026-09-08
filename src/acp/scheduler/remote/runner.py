@@ -798,7 +798,8 @@ class RemoteJobRunner:
             spec,
             record.id,
             node,
-            queue=self._config.queue,
+            # Per-node queue override; None keeps cluster queue byte-identically.
+            queue=node.queue or self._config.queue,
             walltime=self._config.walltime,
             extra_flags=self._config.extra_flags,
             input_path="input.xyz",
