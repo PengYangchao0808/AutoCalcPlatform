@@ -10,11 +10,49 @@ Author: QCcalc Team
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-__all__ = ["RemoteNode", "RemoteExecutionConfig"]
+__all__ = [
+    "DECLARED_SOFTWARE_NAMES",
+    "NodeCapabilities",
+    "RemoteNode",
+    "RemoteExecutionConfig",
+]
+
+logger = logging.getLogger(__name__)
+
+#: QC software names a node may declare under ``capabilities.software``.
+#: MUST stay identical to the probe names in
+#: ``acp.scheduler.remote.node_manager._DOCTOR_SOFTWARE_SCRIPT`` —
+#: ``tests/test_node_capabilities.py::test_declared_enum_matches_doctor_probe_script``
+#: locks the two sites against drift (plan node-selection-at-submission, T1).
+DECLARED_SOFTWARE_NAMES: frozenset[str] = frozenset(
+    {"orca", "xtb", "crest", "censo", "shermo", "isostat", "molclus"}
+)
+
+
+@dataclass(frozen=True)
+class NodeCapabilities:
+    """Static capability declaration for a remote compute node.
+
+    Consumed by the submission-time capability filter (design §1.1, D8/D13).
+    A node without this declaration (``None`` on :class:`RemoteNode`) is
+    treated as *generic*: software requirements fall back to probe-inferred
+    or unknown state, and tag requirements can never be satisfied.
+
+    Attributes:
+        software: QC software names the node provides, drawn from
+            :data:`DECLARED_SOFTWARE_NAMES` (deduplicated, order-preserving).
+            Names outside the enum are dropped with a warning at parse time.
+        tags: Free-form labels (e.g. ``"gpu"``) submissions may require;
+            only declared tags ever satisfy a tag requirement (D13).
+    """
+
+    software: tuple[str, ...] = ()
+    tags: tuple[str, ...] = ()
 
 
 def _env_var_name(node_name: str) -> str:
@@ -62,6 +100,12 @@ class RemoteNode:
             ``"reject"`` (default — refuse unknown hosts, safest),
             ``"auto_add"`` (accept and record new hosts, for trusted
             internal networks), ``"warn"`` (log a warning but accept).
+        queue: Per-node LSF queue override (``#BSUB -q``). ``None`` (default)
+            falls back to :attr:`RemoteExecutionConfig.queue` at submission
+            time. Purely a submission attribute — never a filtering axis.
+        capabilities: Static capability declaration
+            (:class:`NodeCapabilities`). ``None`` (default) marks the node
+            *generic* for the submission-time capability filter.
     """
 
     name: str
@@ -77,6 +121,8 @@ class RemoteNode:
     max_concurrent_jobs: int = 5
     enabled: bool = True
     host_key_policy: str = "reject"
+    queue: str | None = None
+    capabilities: NodeCapabilities | None = None
 
     def resolved_password(self) -> str | None:
         """Return the effective password, honouring env-var override.
@@ -99,7 +145,10 @@ class RemoteNode:
         Required keys: ``name``, ``host``, ``username``,
         ``remote_work_dir``, ``remote_code_dir``.
         Optional keys: ``port``, ``password``, ``key_file``,
-        ``max_concurrent_jobs``, ``enabled``.
+        ``max_concurrent_jobs``, ``enabled``, ``queue``, ``capabilities``.
+        A missing/blank ``queue`` or a missing ``capabilities`` block yields
+        ``None`` (generic-node sentinel); unknown ``capabilities.software``
+        names are dropped with a warning and never abort parsing.
 
         Raises:
             ValueError: If a required key is missing or ``remote_work_dir``
@@ -117,8 +166,9 @@ class RemoteNode:
                 f"(BSUB -o/-e directives break on unquoted paths): {remote_work_dir!r}"
             )
 
+        node_name = str(data["name"])
         return cls(
-            name=str(data["name"]),
+            name=node_name,
             host=str(data["host"]),
             username=str(data["username"]),
             remote_work_dir=remote_work_dir,
@@ -131,6 +181,8 @@ class RemoteNode:
             max_concurrent_jobs=int(data.get("max_concurrent_jobs", 5)),
             enabled=bool(data.get("enabled", True)),
             host_key_policy=str(data.get("host_key_policy", "reject")),
+            queue=_parse_node_queue(data.get("queue")),
+            capabilities=_parse_capabilities(data.get("capabilities"), node_name),
         )
 
 
@@ -270,6 +322,84 @@ def _parse_bin_symlinks(value: Any) -> dict[str, str]:
         if isinstance(target, str) and target.strip():
             parsed[str(name)] = target
     return parsed
+
+
+def _parse_node_queue(value: Any) -> str | None:
+    """Parse the optional per-node ``queue`` override.
+
+    Missing or blank values yield ``None`` so the node falls back to
+    :attr:`RemoteExecutionConfig.queue` at submission time.
+    """
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _parse_capabilities(value: Any, node_name: str) -> NodeCapabilities | None:
+    """Parse the optional ``capabilities`` block into a :class:`NodeCapabilities`.
+
+    A missing or non-mapping block yields ``None`` — the generic-node
+    sentinel the downstream capability filter relies on.  Unknown software
+    names are dropped with a warning; parsing never raises.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        logger.warning(
+            "RemoteNode %r: capabilities block is not a mapping (%r); treating node as generic",
+            node_name,
+            value,
+        )
+        return None
+    return NodeCapabilities(
+        software=_parse_declared_software(value.get("software"), node_name),
+        tags=_parse_name_tuple(value.get("tags"), node_name, "capabilities.tags"),
+    )
+
+
+def _parse_declared_software(value: Any, node_name: str) -> tuple[str, ...]:
+    """Parse ``capabilities.software``: dedup, order-preserving, enum-checked.
+
+    Names outside :data:`DECLARED_SOFTWARE_NAMES` are dropped with a warning
+    listing the valid enum (design D3 — never abort config loading).
+    """
+    names: list[str] = []
+    for item in _clean_string_list(value, node_name, "capabilities.software"):
+        if item not in DECLARED_SOFTWARE_NAMES:
+            logger.warning(
+                "RemoteNode %r: dropping unknown declared software %r (valid names: %s)",
+                node_name,
+                item,
+                ", ".join(sorted(DECLARED_SOFTWARE_NAMES)),
+            )
+            continue
+        if item not in names:
+            names.append(item)
+    return tuple(names)
+
+
+def _parse_name_tuple(value: Any, node_name: str, label: str) -> tuple[str, ...]:
+    """Parse a free-form name list (``capabilities.tags``): dedup, order-preserving."""
+    names: list[str] = []
+    for item in _clean_string_list(value, node_name, label):
+        if item not in names:
+            names.append(item)
+    return tuple(names)
+
+
+def _clean_string_list(value: Any, node_name: str, label: str) -> list[str]:
+    """Coerce a YAML list into stripped, non-empty strings.
+
+    ``None`` yields an empty list; a non-list shape (scalar/typo) logs a
+    warning and yields an empty list; non-string entries are dropped.
+    """
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        logger.warning("RemoteNode %r: %s is not a list (%r); ignoring", node_name, label, value)
+        return []
+    return [text for item in value if isinstance(item, str) and (text := item.strip())]
 
 
 def _parse_walltime(text: str) -> int:

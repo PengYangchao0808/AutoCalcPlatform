@@ -451,6 +451,14 @@ def _get_default_config() -> dict[str, Any]:
             # completion). Keep in sync with config/defaults.yaml.
             'walltime': '',
             'extra_flags': '',
+            # Node entries are parsed by acp.scheduler.remote.config.RemoteNode.
+            # Optional per-node keys (see config/defaults.yaml cluster example):
+            #   queue: LSF queue override; omitted/blank -> cluster.queue.
+            #   capabilities: static declaration; omitted -> node is generic.
+            #     software: only orca, xtb, crest, censo, shermo, isostat,
+            #       molclus are valid (unknown names dropped with a warning).
+            #     tags: free-form labels; only declared tags ever satisfy a
+            #       tag requirement at submission.
             'nodes': [],
             # Local execution-target admission ceiling. MUST stay in sync
             # with config/defaults.yaml cluster.local.
