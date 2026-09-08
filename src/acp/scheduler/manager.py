@@ -47,6 +47,7 @@ from acp.scheduler.nodes import (
     NodeRegistry,
     NodeSpec,
     validate_execution_request,
+    validate_submission_target,
 )
 from acp.scheduler.processctl import pid_is_alive, read_cmdline, terminate_task_processes
 from acp.scheduler.projects import ProjectManager
@@ -649,6 +650,9 @@ class JobManager:
             attempts = int((record.result or {}).get("attempts") or 1) + 1
             old_status = record.status.value
             result = dict(record.result or {})
+            # Affinity capture (design §3.4): remember where this job ran so
+            # the rerun's auto dispatch prefers the same node.
+            source_target = result.get("execution_target")
             history = result.get("attempt_history")
             if not isinstance(history, list):
                 history = []
@@ -672,6 +676,15 @@ class JobManager:
                 "attempts": attempts,
                 "attempt_history": history,
             }
+            if (
+                isinstance(source_target, str)
+                and source_target != LOCAL_NODE_NAME
+                and record.spec.target_node is None
+                and record.spec.execution_mode is None
+            ):
+                # Transient affinity hint for the auto branch; consumed when
+                # the next execution target is recorded.
+                record.result["affinity_node"] = source_target
             record.status = JobStatus.QUEUED
             record.started_at = None
             record.completed_at = None
@@ -1223,7 +1236,7 @@ class JobManager:
         self._event_log(record).append("job.resumed", job_id=job_id, mode=mode)
         return record
 
-    def continue_job(self, job_id: str) -> JobRecord:
+    def continue_job(self, job_id: str, *, target_node: str | None = None) -> JobRecord:
         """Re-enter a FAILED/CANCELLED job from its checkpoint (plan §4.4).
 
         Workflow matrix: ``xtbmd_censo_energy``
@@ -1234,8 +1247,17 @@ class JobManager:
         resume contract. Other workflows without a checkpoint are rejected
         (the API maps the ``ValueError`` to 409 with a rerun hint).
 
+        Execution-target semantics (design §3.4, D15): ``target_node=None``
+        (the default) returns to the source node — the previous
+        ``result["execution_target"]`` survives in the result and becomes
+        the affinity hint for the next auto dispatch.  An explicit
+        ``target_node`` re-pins the job's spec (override) and is validated
+        with the same creation-time rules as a new submission
+        (unknown/disabled/incapable → :class:`ExecutionTargetError`).
+
         Args:
             job_id: Job identifier.
+            target_node: Optional explicit execution-node override (D15).
 
         Returns:
             Updated job record (status ``QUEUED``, re-dispatch started).
@@ -1244,6 +1266,8 @@ class JobManager:
             KeyError: If the job does not exist.
             ValueError: If the status is not ``FAILED``/``CANCELLED``, a
                 live process is still tracked, or the workflow cannot resume.
+            ExecutionTargetError: If an explicit ``target_node`` override is
+                unknown, disabled, or cannot satisfy the job requirements.
         """
         with self._lock:
             # Re-read under the manager lock for the same double-submit guard
@@ -1262,11 +1286,26 @@ class JobManager:
                 )
             if job_id in self._submission_jobs:
                 raise ValueError(f"job {job_id} is already being submitted")
+
+            # D15: explicit override supersedes any previous mode.
+            effective = record.spec
+            if target_node is not None and target_node != record.spec.target_node:
+                effective = replace(
+                    record.spec,
+                    target_node=target_node,
+                    execution_mode=None,
+                )
+                validate_execution_request(effective)
+                validate_submission_target(effective, registry=self.registry)
+
             workflow = record.spec.workflow
             if workflow == "mechanism":
                 pass
             elif workflow == "xtbmd_censo_energy":
-                record.spec = replace(record.spec, method={**record.spec.method, "resume": True})
+                effective = replace(
+                    effective,
+                    method={**effective.method, "resume": True},
+                )
             elif workflow == "BatchOptimize":
                 # Its per-item checkpoint is a cache, not a full resume
                 # contract — never let the API re-enter a BatchOptimize job.
@@ -1278,6 +1317,7 @@ class JobManager:
             result = dict(record.result or {})
             result["attempts"] = int(result.get("attempts") or 1) + 1
             result["continued_from"] = old_status
+            record.spec = effective
             record.result = result
             record.status = JobStatus.QUEUED
             record.error = None
@@ -1286,7 +1326,9 @@ class JobManager:
             record.pid = None
             record.remote_job_id = None
             record.completed_at = None
-            for key in ("lsf_job_id", "node", "remote_dir", "command_line"):
+            # LSF runtime state only — node/execution_target/execution_kind
+            # stay so dispatch returns to the source node (回源, §3.4/R2).
+            for key in ("lsf_job_id", "remote_dir", "command_line"):
                 result.pop(key, None)
             record.touch()
             self.store.update(record)
@@ -1868,7 +1910,7 @@ class JobManager:
                     target = self.registry.select_remote(
                         required=derived,
                         required_tags=frozenset(spec.node_tags),
-                        affinity_node=None,  # execution-target affinity wired in T6
+                        affinity_node=self._execution_affinity(record),
                     )
                 except ExecutionTargetError as exc:
                     # Zero enabled remote nodes: the match set is trivially
@@ -1881,10 +1923,31 @@ class JobManager:
             return self.registry.local
         return self.registry.select_remote()
 
+    def _execution_affinity(self, record: JobRecord) -> str | None:
+        """Preferred remote node for an auto job (design §3.4, D6/D15).
+
+        The affinity source is the previous attempt's ``execution_target``:
+        continue keeps it in the result (回源), rerun re-stores it under the
+        transient ``affinity_node`` key before its result reset.  Only the
+        auto path (no pinned ``target_node`` / ``execution_mode``) consults
+        it, and only remote names count — ``local`` never carries affinity.
+        """
+        spec = record.spec
+        if spec.target_node is not None or spec.execution_mode is not None:
+            return None
+        result = record.result or {}
+        target = result.get("execution_target")
+        if not isinstance(target, str) or target == LOCAL_NODE_NAME:
+            target = result.get("affinity_node")
+        if not isinstance(target, str) or target == LOCAL_NODE_NAME:
+            return None
+        return target
+
     def _record_execution_target(self, record: JobRecord, target: NodeSpec) -> None:
         """Persist execution provenance so poll/cancel/recovery never need
         the server default mode again for this job."""
         result = dict(record.result or {})
+        result.pop("affinity_node", None)
         result["execution_target"] = target.name
         result["execution_kind"] = target.kind
         record.result = result

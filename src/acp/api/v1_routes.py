@@ -152,6 +152,7 @@ from acp.api.v1_schemas import (
     V1FrameCandidateListResponse,
     V1FrameCandidateRequest,
     V1FrameCandidateResponse,
+    V1JobContinueRequest,
     V1JobCreatedResponse,
     V1JobCreateRequest,
     V1JobDetailResponse,
@@ -1256,6 +1257,59 @@ def _target_validation_detail(exc: Exception) -> dict[str, Any]:
     }
 
 
+def _source_job_id_from_input(inp: dict[str, Any]) -> str:
+    """Read an explicitly referenced source job id from a stage input."""
+    source = inp.get("source")
+    if isinstance(source, dict):
+        source_job_id = inp.get("source_job_id") or source.get("source_job_id")
+    else:
+        source_job_id = inp.get("source_job_id")
+    return str(source_job_id or "").strip()
+
+
+def _inherit_stage_execution_fields(
+    workflow: str,
+    inp: dict[str, Any],
+    execution_mode: str | None,
+    target_node: str | None,
+    manager: Any,
+) -> tuple[str | None, str | None]:
+    """Inherit a stage job's explicit execution fields from its source job.
+
+    Stage chains (Confsearch → PESsearch → BatchOptimize → irc) stay on
+    the parent's explicitly pinned node unless the request overrides it
+    (design §3.4, D6 — IRC inherits via ``run_irc_from_artifact``).  A
+    request that already pins either field wins.  Only *explicit* source
+    spec values are inherited — an auto parent (no ``target_node`` /
+    ``execution_mode``) leaves the child auto; its resolved
+    ``execution_target`` is not copied to the child spec (there is no
+    creation-time affinity channel — recorded design boundary).
+    """
+    if workflow not in ("PESsearch", "BatchOptimize"):
+        return execution_mode, target_node
+    if execution_mode is not None or target_node is not None:
+        return execution_mode, target_node
+    source_job_id = _source_job_id_from_input(inp)
+    if not source_job_id:
+        return execution_mode, target_node
+    source_record = manager.get(source_job_id)
+    if source_record is None:
+        return execution_mode, target_node
+    source_spec = source_record.spec
+    inherited_mode = getattr(source_spec, "execution_mode", None)
+    inherited_node = getattr(source_spec, "target_node", None)
+    if inherited_mode is None and inherited_node is None:
+        return execution_mode, target_node
+    logger.info(
+        "Stage %s inherits source job %s execution fields (execution_mode=%r, target_node=%r)",
+        workflow,
+        source_job_id,
+        inherited_mode,
+        inherited_node,
+    )
+    return inherited_mode, inherited_node
+
+
 @router.post("/jobs", response_model=V1JobCreatedResponse, status_code=201)
 def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedResponse:
     manager = _manager(request)
@@ -1271,6 +1325,9 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         req.input = _resolve_stage_artifact_ref(req.workflow, req.input, manager)
     elif req.workflow == "BatchOptimize":
         req.input = _resolve_batch_structures_input(req.input, request)
+    req.execution_mode, req.target_node = _inherit_stage_execution_fields(
+        req.workflow, req.input, req.execution_mode, req.target_node, manager
+    )
     task_name = req.task_name or req.workflow
     molecule_name = _resolve_job_molecule_name(req.molecule_name, req.input, manager)
     spec = JobSpec(
@@ -2051,7 +2108,6 @@ def save_pes_review_endpoint(
     )
 
 
-
 # ---------------------------------------------------------------------------
 # Frame-candidate CRUD: save/list/remove energy-viewer frames as tagged
 # structures.  Follows the PES review ordering and revision-guard pattern.
@@ -2790,9 +2846,28 @@ def unpause_job(job_id: str, request: Request) -> V1JobRecordModel:
 
 
 @router.post("/jobs/{job_id}/continue", response_model=V1JobRecordModel)
-def continue_job(job_id: str, request: Request) -> V1JobRecordModel:
-    """Re-enter a FAILED/CANCELLED job from its checkpoint → QUEUED."""
-    return _run_job_state_action(_manager(request).continue_job, job_id)
+def continue_job(
+    job_id: str,
+    request: Request,
+    body: V1JobContinueRequest | None = None,
+) -> V1JobRecordModel:
+    """Re-enter a FAILED/CANCELLED job from its checkpoint → QUEUED.
+
+    Optional ``body.target_node`` re-pins the execution node (D15).  An
+    unknown/disabled/incapable override → HTTP 400 with the same error
+    codes as job creation; ``None`` returns to the source node.
+    """
+    manager = _manager(request)
+    target_node = body.target_node if body else None
+    try:
+        record = manager.continue_job(job_id, target_node=target_node)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
+    except (ExecutionTargetError, NoCapableNodeError) as exc:
+        raise HTTPException(status_code=400, detail=_target_validation_detail(exc)) from exc
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return _record_to_v1_model(record)
 
 
 @router.post("/jobs/{job_id}/rerun", response_model=V1JobRecordModel)

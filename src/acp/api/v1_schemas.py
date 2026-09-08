@@ -480,6 +480,19 @@ class V1JobRerunRequest(BaseModel):
     project_id: str | None = None
 
 
+class V1JobContinueRequest(BaseModel):
+    """Body for POST /jobs/{id}/continue (design §3.4, D15).
+
+    ``target_node`` absent/``None`` returns to the source node — the
+    preserved ``result["execution_target"]`` drives the next auto dispatch.
+    An explicit ``target_node`` re-pins the job's spec and is validated
+    with the same rules as job creation (unknown/disabled/incapable
+    → HTTP 400 with a stable error ``code``).
+    """
+
+    target_node: str | None = None
+
+
 class V1JobPurgeRequest(BaseModel):
     """Body for POST /jobs/purge (plan §4.6)."""
 

@@ -281,6 +281,225 @@ def test_v1_job_rerun_requeues_original_task(client: TestClient) -> None:
     assert [job["id"] for job in jobs.json()["jobs"]].count(job_id) == 1
 
 
+def _seed_failed_job(client: TestClient, tmp_path: Path, job_id: str) -> None:
+    """Seed a FAILED mechanism job directly into the app manager's store."""
+    manager = client.app.state.job_manager
+    work_dir = tmp_path / job_id
+    work_dir.mkdir(parents=True, exist_ok=True)
+    manager.store.create(
+        JobRecord(
+            id=job_id,
+            spec=JobSpec(
+                workflow="mechanism",
+                name=job_id,
+                project_id=manager.default_project_id,
+            ),
+            status=JobStatus.FAILED,
+            work_dir=str(work_dir),
+            project_id=manager.default_project_id,
+            error="boom",
+            completed_at="2026-09-08T00:00:00+00:00",
+        )
+    )
+
+
+def _stub_manager_submit(client: TestClient, tmp_path: Path) -> dict[str, object]:
+    """Stub JobManager.submit to capture the built spec (no real dispatch)."""
+    from acp.scheduler.jobs import JobRecord
+
+    manager = client.app.state.job_manager
+    captured: dict[str, object] = {}
+    original = manager.submit
+
+    def _submit(spec, group_id=None):
+        captured["spec"] = spec
+        work_dir = tmp_path / "captured"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        return JobRecord(
+            id="captured-1",
+            spec=spec,
+            status=JobStatus.QUEUED,
+            work_dir=str(work_dir),
+            project_id=spec.project_id,
+        )
+
+    manager.submit = _submit  # type: ignore[method-assign]
+    return captured, original
+
+
+def test_v1_continue_explicit_target_override_returns_200(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from acp.scheduler.nodes import NodeRegistry
+    from acp.scheduler.remote.config import NodeCapabilities, RemoteNode
+
+    manager = client.app.state.job_manager
+    node = RemoteNode(
+        name="comp-01",
+        host="comp-01.example.com",
+        username="qc",
+        remote_work_dir="/scratch/qc/acp",
+        remote_code_dir="/home/qc/acp_code",
+        max_concurrent_jobs=4,
+        host_key_policy="auto_add",
+        capabilities=NodeCapabilities(software=("xtb", "orca"), tags=()),
+    )
+    manager.registry = NodeRegistry(local_max_jobs=2, remote_nodes=[node])
+    manager._execute_submission = lambda job_id: None  # type: ignore[method-assign]
+    _seed_failed_job(client, tmp_path, "continue-override")
+
+    response = client.post(
+        "/api/v1/jobs/continue-override/continue",
+        json={"target_node": "comp-01"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["spec"]["target_node"] == "comp-01"
+    assert body["status"] == "queued"
+    record = manager.get("continue-override")
+    assert record is not None
+    assert record.spec.target_node == "comp-01"
+
+
+def test_v1_continue_unknown_target_returns_400_code(client: TestClient, tmp_path: Path) -> None:
+    manager = client.app.state.job_manager
+    manager._execute_submission = lambda job_id: None  # type: ignore[method-assign]
+    _seed_failed_job(client, tmp_path, "continue-ghost")
+
+    response = client.post(
+        "/api/v1/jobs/continue-ghost/continue",
+        json={"target_node": "ghost-node"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "unknown_target_node"
+    unchanged = manager.get("continue-ghost")
+    assert unchanged is not None
+    assert unchanged.status == JobStatus.FAILED
+    assert unchanged.spec.target_node is None
+
+
+def test_v1_continue_no_target_stays_auto(client: TestClient, tmp_path: Path) -> None:
+    """A continue without a body keeps the spec auto (no new fields)."""
+    manager = client.app.state.job_manager
+    manager._execute_submission = lambda job_id: None  # type: ignore[method-assign]
+    _seed_failed_job(client, tmp_path, "continue-auto")
+
+    response = client.post("/api/v1/jobs/continue-auto/continue")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["spec"]["target_node"] is None
+    assert body["spec"]["execution_mode"] is None
+    assert body["status"] == "queued"
+
+
+def test_v1_batch_optimize_from_job_inherits_source_target_node(
+    client: TestClient, tmp_path: Path
+) -> None:
+    """Stage chain (D6): a BatchOptimize from a PESsearch job whose spec pins
+    target_node explicitly inherits that node server-side."""
+    from acp.scheduler.nodes import NodeRegistry
+    from acp.scheduler.remote.config import NodeCapabilities, RemoteNode
+
+    manager = client.app.state.job_manager
+    node = RemoteNode(
+        name="comp-01",
+        host="comp-01.example.com",
+        username="qc",
+        remote_work_dir="/scratch/qc/acp",
+        remote_code_dir="/home/qc/acp_code",
+        max_concurrent_jobs=4,
+        host_key_policy="auto_add",
+        capabilities=NodeCapabilities(software=("orca",), tags=()),
+    )
+    manager.registry = NodeRegistry(local_max_jobs=2, remote_nodes=[node])
+
+    source_dir = tmp_path / "pes-source"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    source_spec = JobSpec(
+        workflow="PESsearch",
+        name="pes-src",
+        method={"mode": "relaxed_scan"},
+        project_id=manager.default_project_id,
+        target_node="comp-01",
+    )
+    manager.store.create(
+        JobRecord(
+            id="pes-src",
+            spec=source_spec,
+            status=JobStatus.COMPLETED,
+            work_dir=str(source_dir),
+            project_id=manager.default_project_id,
+        )
+    )
+    captured, original = _stub_manager_submit(client, tmp_path)
+    try:
+        response = client.post(
+            "/api/v1/jobs",
+            json={
+                "workflow": "BatchOptimize",
+                "name": "batch-from-pes",
+                "input": {
+                    "source_type": "stage_artifact",
+                    "source_job_id": "pes-src",
+                    "from_artifact": "RESULT/result_manifest.json",
+                },
+                "method": {"profile": "opt_freq"},
+            },
+        )
+    finally:
+        manager.submit = original  # type: ignore[method-assign]
+
+    assert response.status_code == 201, response.text
+    spec = captured["spec"]
+    assert spec is not None
+    assert spec.target_node == "comp-01"
+
+
+def test_v1_batch_optimize_auto_source_stays_auto(client: TestClient, tmp_path: Path) -> None:
+    """An auto source (no pinned target) leaves the child auto — unchanged."""
+    manager = client.app.state.job_manager
+    source_dir = tmp_path / "auto-pes-source"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    manager.store.create(
+        JobRecord(
+            id="auto-pes-src",
+            spec=JobSpec(
+                workflow="PESsearch",
+                name="auto-pes-src",
+                project_id=manager.default_project_id,
+            ),
+            status=JobStatus.COMPLETED,
+            work_dir=str(source_dir),
+            project_id=manager.default_project_id,
+        )
+    )
+    captured, original = _stub_manager_submit(client, tmp_path)
+    try:
+        response = client.post(
+            "/api/v1/jobs",
+            json={
+                "workflow": "BatchOptimize",
+                "name": "auto-batch",
+                "input": {
+                    "source_type": "stage_artifact",
+                    "source_job_id": "auto-pes-src",
+                    "from_artifact": "RESULT/result_manifest.json",
+                },
+            },
+        )
+    finally:
+        manager.submit = original  # type: ignore[method-assign]
+
+    assert response.status_code == 201, response.text
+    spec = captured["spec"]
+    assert spec is not None
+    assert spec.target_node is None
+    assert spec.execution_mode is None
+
+
 def test_v1_energy_graph_reads_legacy_result_files(client: TestClient) -> None:
     created = _submit_fake_job(client, name="legacy-energy-graph")
     job_id = str(created["job_id"])
@@ -1639,10 +1858,7 @@ def test_v1_terminal_job_projects_pending_as_skipped(client: TestClient) -> None
 
 
 def test_bond_scan_create_job_accepts_double_coordinates(client: TestClient) -> None:
-    xyz = (
-        "5\nC5 chain\nC 0.0 0.0 0.0\nC 1.4 0.0 0.0\nC 2.8 0.0 0.0\n"
-        "C 4.2 0.0 0.0\nC 5.6 0.0 0.0\n"
-    )
+    xyz = "5\nC5 chain\nC 0.0 0.0 0.0\nC 1.4 0.0 0.0\nC 2.8 0.0 0.0\nC 4.2 0.0 0.0\nC 5.6 0.0 0.0\n"
     coordinate = {"kind": "distance", "atoms": [0, 1], "start": 1.2, "end": 2.2, "n_points": 4}
     payload = {
         "workflow": "PESsearch",
