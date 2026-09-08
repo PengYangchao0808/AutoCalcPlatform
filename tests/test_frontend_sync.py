@@ -368,6 +368,9 @@ def test_node_selector_i18n_keys_complete_across_locales() -> None:
         "nodes.section",
         "nodes.opt.auto",
         "nodes.opt.local",
+        "nodes.continue_source",
+        "nodes.continue_to_hint",
+        "nodes.source_pin",
         "nodes.auto_remote_hint",
         "nodes.matching_error",
         "nodes.tags_hint",
@@ -390,3 +393,98 @@ def test_node_selector_i18n_keys_complete_across_locales() -> None:
     only_en = en_keys - zh_keys
     assert not only_zh, f"Keys in zh-CN but missing from en-US: {sorted(only_zh)}"
     assert not only_en, f"Keys in en-US but missing from zh-CN: {sorted(only_en)}"
+
+
+def test_submit_payload_carries_node_selection() -> None:
+    """T12 lock: wizard submit payloads carry target_node / node_tags.
+
+    The selector state must reach the v1 create body on every submit branch:
+    a picked node (or "local") becomes ``target_node``, checked tag chips
+    become ``node_tags``, and auto ("") omits both so the server default
+    applies.  Removing a payload key or a branch's wiring turns this red.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Shared helper maps the selector state onto the payload.
+    helper = html.split("function applyNodeSelectionToBody(body, opts)", 1)[1]
+    helper = helper.split("\nfunction ", 1)[0]
+    assert "body.target_node = sel.value;" in helper
+    assert "body.node_tags = nodeMatchingState.selectedTags.slice();" in helper
+    # Stage chains may only send an explicit user pick (the server inherits
+    # the source pin when the field is omitted).
+    assert "opts.requireUserChoice" in helper
+    assert "nodeMatchingState.userTouched" in helper
+
+    # Every wizard submit branch routes through the helper: NMR single-job,
+    # mechanism single-job, the general per-structure batch loop, the
+    # PESsearch inline coordinate-scan path, and stage chains.
+    assert "applyNodeSelectionToBody(nmrBody);" in html
+    assert "applyNodeSelectionToBody(mechBody);" in html
+    assert html.count("applyNodeSelectionToBody(body);") >= 2
+    stage_body = html.split("async function submitStageWorkflowJob(workflow)", 1)[1]
+    stage_body = stage_body.split("\nasync function ", 1)[0]
+    assert "applyNodeSelectionToBody(body, { requireUserChoice: true });" in stage_body
+
+    # No hardcoded node names anywhere — options and payloads are data-driven
+    # from /nodes/matching responses only.
+    for literal in ('"comp-', "'comp-", "gpu-node", "fat-node", "bigmem"):
+        assert literal not in html, f"hardcoded node literal {literal!r} in frontend"
+
+
+def test_continue_node_override_and_stage_preselect_lock() -> None:
+    """T12 lock: continue node override, stage preselect, top-level node_id.
+
+    The detail continue action gains an optional "continue to node" select
+    whose blank option means back-to-source (no request field); the stage
+    wizard mirrors the source job's explicit pin without sending it; and the
+    remote-node display reads the T8 top-level node_id with a result.node
+    fallback for older responses.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Continue override control in the detail action bar.
+    assert 'dContinueNodeSel.id = "detail-continue-node-select";' in html
+    pop = html.split("function populateContinueNodeOptions(sel)", 1)[1]
+    pop = pop.split("\nasync function ", 1)[0]
+    assert 't("nodes.continue_source")' in pop
+    assert 't("nodes.opt.local")' in pop
+    assert 'node.status === "offline"' in pop  # offline nodes are not offered
+
+    # The continue request only carries target_node when the user picked a
+    # node; the default path keeps the previous no-body POST (= back to
+    # source, T6 contract).
+    cont = html.split("async function continueJob(jobId)", 1)[1]
+    cont = cont.split("\nasync function ", 1)[0]
+    assert "if (targetNode) {" in cont
+    assert "opts.body = JSON.stringify({ target_node: targetNode });" in cont
+
+    # Stage preselect: mirror the source job's explicit spec.target_node.
+    assert "async function preselectNodeFromSourceJob(sourceJobId)" in html
+    pre = html.split("async function preselectNodeFromSourceJob(sourceJobId)", 1)[1]
+    pre = pre.split("\nfunction ", 1)[0]
+    assert "srcSpec.target_node" in pre
+    assert "function applyNodePreselect(sel, pinned)" in html
+    render_body = html.split("function renderNodeSelector()", 1)[1]
+    render_body = render_body.split("\nfunction ", 1)[0]
+    assert "applyNodePreselect(sel, nodeMatchingState.preselectNode);" in render_body
+    # A programmatic mirror never counts as a user choice — only the change
+    # handler may set userTouched.
+    change_body = html.split("function onNodeSelectChange()", 1)[1]
+    change_body = change_body.split("\nfunction ", 1)[0]
+    assert "nodeMatchingState.userTouched = true;" in change_body
+    # Source-field listener + both configureStageSourcePanel directions.
+    assert "preselectNodeFromSourceJob(this.value);" in html
+    cfg = html.split("function configureStageSourcePanel(workflowId)", 1)[1]
+    cfg = cfg.split("\nfunction ", 1)[0]
+    assert 'preselectNodeFromSourceJob("");' in cfg
+    assert 'preselectNodeFromSourceJob(stageSourceInput ? stageSourceInput.value : "");' in cfg
+
+    # Node display: top-level node_id (T8) first, result.node fallback, and
+    # "local" is never a remote node.
+    helper = html.split("function jobRemoteNodeName(job)", 1)[1]
+    helper = helper.split("\nfunction ", 1)[0]
+    assert "job.node_id" in helper
+    assert "job.result && job.result.node" in helper
+    assert 'node !== "local"' in helper
+    assert html.count("lastRemoteNode = jobRemoteNodeName(") >= 3
+    assert "selectedJobIsRemote = !!(job.result && job.result.node)" not in html
