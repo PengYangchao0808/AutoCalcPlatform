@@ -49,7 +49,29 @@ LOCAL_NODE_NAME = "local"
 
 
 class ExecutionTargetError(RuntimeError):
-    """Permanent target selection/config error — retrying will not help."""
+    """Permanent target selection/config error — retrying will not help.
+
+    Attributes:
+        code: Optional stable machine-readable error code (e.g.
+            ``"unknown_target_node"``, ``"target_node_incapable"``);
+            ``None`` keeps the legacy codeless behaviour.
+        missing_software: Software the rejected target lacked (sorted
+            tuple; empty unless capability validation populated it).
+        missing_tags: Tags the rejected target lacked (sorted tuple).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str | None = None,
+        missing_software: tuple[str, ...] | list[str] | None = None,
+        missing_tags: tuple[str, ...] | list[str] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.missing_software = tuple(sorted(missing_software or ()))
+        self.missing_tags = tuple(sorted(missing_tags or ()))
 
 
 class ExecutionCapacityUnavailable(RuntimeError):  # noqa: N818 — name fixed by DevDoc §6
