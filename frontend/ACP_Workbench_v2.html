@@ -1712,6 +1712,46 @@ textarea[data-sr-comment] { width: 100%; min-height: 54px; margin-top: 4px; font
   outline: none;
 }
 .node-select option:disabled { color: var(--text-tertiary); background: rgba(255,255,255,0.03); }
+.node-select-hint { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+.node-select-hint.node-note-error { color: var(--red); }
+.node-select-detail { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.node-select-detail .node-meta { margin-top: 0; }
+.node-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 7px;
+  height: 16px;
+  border-radius: 999px;
+  font-size: 10px;
+  border: 1px solid rgba(242, 184, 75, 0.35);
+  color: var(--amber);
+  background: rgba(242, 184, 75, 0.10);
+}
+.node-badge.node-badge-info {
+  border-color: rgba(78, 161, 255, 0.35);
+  color: var(--accent);
+  background: rgba(78, 161, 255, 0.12);
+}
+.node-tag-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.node-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+}
+.node-tag-chip:hover { border-color: var(--accent); }
+.node-tag-chip.active {
+  color: var(--accent);
+  border-color: rgba(78, 161, 255, 0.35);
+  background: rgba(78, 161, 255, 0.12);
+}
 
 select, option, optgroup {
   color-scheme: dark;
@@ -2555,6 +2595,7 @@ option, optgroup {
 .resource-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .resource-field { display: flex; flex-direction: column; gap: 6px; }
 .resource-field label { font-size: 12px; color: var(--text-secondary); }
+.resource-field-wide { grid-column: 1 / -1; }
 @media (max-width: 680px) { .resource-grid { grid-template-columns: 1fr; } }
 .preview-waiting-cell { text-align: center; padding: 22px 10px; color: var(--text-tertiary); }
 
@@ -3856,6 +3897,19 @@ option, optgroup {
             <label for="modal-parallelism" data-i18n="modal.parallelism">并行数量</label>
             <input id="modal-parallelism" class="modal-input" type="number" min="1" value="1">
           </div>
+        </div>
+        <!-- Compute-node selector (node-selection-at-submission T11):
+             three-state dropdown — auto (server default) / local / one
+             option per remote node. Options are rebuilt from
+             POST /api/v1/nodes/matching; the frontend never re-derives
+             capability requirements itself. T12 wires the submit payload. -->
+        <div class="resource-field resource-field-wide" id="modal-node-section">
+          <label for="modal-node-select" data-i18n="nodes.section">计算节点</label>
+          <select id="modal-node-select" class="modal-select node-select"></select>
+          <div class="node-select-hint" id="modal-node-auto-hint" style="display:none;"></div>
+          <div class="node-select-detail" id="modal-node-detail" style="display:none;"></div>
+          <div class="node-tag-chips" id="modal-node-tags" style="display:none;"></div>
+          <div class="node-select-hint" id="modal-node-note" style="display:none;"></div>
         </div>
       </div>
     </div>
@@ -5165,6 +5219,24 @@ const I18N = {
     "nodes.status.offline": "离线",
     "nodes.ping": "测试",
     "nodes.load_error": "加载节点失败",
+    "nodes.section": "计算节点",
+    "nodes.opt.auto": "自动选择（跟随服务器默认）",
+    "nodes.opt.local": "本地",
+    "nodes.auto_remote_hint": "本机缺少所需软件，将选择可用远程节点",
+    "nodes.matching_error": "节点匹配失败",
+    "nodes.tags_hint": "按标签筛选节点（多取交集）",
+    "nodes.badge.degraded": "当前满载/磁盘告警",
+    "nodes.badge.probe_inferred": "探测推断",
+    "nodes.badge.unknown": "能力未知，按通用",
+    "nodes.badge.mismatch": "声明不一致",
+    "nodes.reason.offline": "离线",
+    "nodes.reason.missing_software": "缺少软件: {software}",
+    "nodes.reason.missing_tags": "缺少标签: {tags}",
+    "nodes.error.no_capable_node": "当前没有可运行该任务的节点（本机与远程均不满足软件/标签要求）",
+    "nodes.error.target_node_incapable": "目标节点不具备运行该任务的能力",
+    "nodes.error.unknown_target_node": "未知的目标节点",
+    "nodes.error.target_node_disabled": "目标节点已禁用",
+    "nodes.error.execution_target_error": "执行目标校验失败",
     "backend.title": "计算后端",
     "backend.refresh": "刷新",
     "backend.loading": "加载中…",
@@ -5964,6 +6036,24 @@ const I18N = {
     "nodes.status.offline": "offline",
     "nodes.ping": "Ping",
     "nodes.load_error": "Failed to load nodes",
+    "nodes.section": "Compute Node",
+    "nodes.opt.auto": "Auto (server default)",
+    "nodes.opt.local": "Local",
+    "nodes.auto_remote_hint": "Local lacks the required software — a capable remote node will be selected",
+    "nodes.matching_error": "Node matching failed",
+    "nodes.tags_hint": "Filter nodes by tags (AND)",
+    "nodes.badge.degraded": "busy / disk warning",
+    "nodes.badge.probe_inferred": "probe-inferred",
+    "nodes.badge.unknown": "capability unknown, generic",
+    "nodes.badge.mismatch": "declared mismatch",
+    "nodes.reason.offline": "offline",
+    "nodes.reason.missing_software": "missing software: {software}",
+    "nodes.reason.missing_tags": "missing tags: {tags}",
+    "nodes.error.no_capable_node": "No capable node can run this job (local and remotes lack the required software/tags)",
+    "nodes.error.target_node_incapable": "The target node cannot run this job",
+    "nodes.error.unknown_target_node": "Unknown target node",
+    "nodes.error.target_node_disabled": "The target node is disabled",
+    "nodes.error.execution_target_error": "Execution target validation failed",
     "backend.title": "Backends",
     "backend.refresh": "Refresh",
     "backend.loading": "Loading…",
@@ -14622,6 +14712,323 @@ async function pingNode(name) {
 }
 
 // ----------------------------------------------------------------------
+// Submit-wizard compute-node selector (node-selection-at-submission T11).
+// Data flow: wizard workflow/method/profile/tag changes (debounced 300 ms)
+// → POST /api/v1/nodes/matching → render. The backend is the single
+// authority on capability derivation — the frontend only renders the
+// response (satisfies/missing_*/degraded/capability_state) and never
+// re-implements the derivation table. T12 wires the submit payload
+// (target_node/node_tags) off this control's state.
+// ----------------------------------------------------------------------
+
+var nodeMatchingState = {
+  response: null,      // last applied NodeMatchingResponse (null = not loaded)
+  error: null,         // last refresh error message (null when healthy)
+  selectedTags: [],    // checked tag chips (AND semantics, enforced server-side)
+  timer: null,         // debounce timer
+  seq: 0               // race token — only the newest response may render
+};
+
+function scheduleNodeMatchingRefresh() {
+  if (nodeMatchingState.timer) clearTimeout(nodeMatchingState.timer);
+  nodeMatchingState.timer = setTimeout(function() {
+    nodeMatchingState.timer = null;
+    refreshNodeMatching();
+  }, 300);
+}
+
+function buildNodeMatchingRequest() {
+  var stages = (wizardState.method && wizardState.method.stages) || {};
+  var levels = {};
+  Object.keys(stages).forEach(function(lid) {
+    var st = stages[lid];
+    if (!st || !st.engine || st._disabled === true) return;
+    var copy = JSON.parse(JSON.stringify(st));
+    delete copy._disabled;
+    levels[lid] = copy;
+  });
+  var method = {
+    schema_id: (wizardState.workflow && wizardState.workflow.schema_id) || "",
+    profile_id: (wizardState.method && wizardState.method.profile_id) || "",
+    levels: levels
+  };
+  // Confsearch protocol/policy hoisting mirrors the submit payload (the
+  // backend resolves protocol from method.protocol, then profile_id), so
+  // the preview judges the job that would actually be submitted.
+  var csStage = levels.confsearch || {};
+  if (csStage.protocol) method.protocol = csStage.protocol;
+  if (csStage.refinement_policy) method.refinement_policy = csStage.refinement_policy;
+  if (!method.protocol && method.profile_id && method.profile_id !== "__custom__") {
+    method.protocol = method.profile_id;
+  }
+  return {
+    workflow: (wizardState.workflow && wizardState.workflow.id) || "",
+    method: method,
+    node_tags: nodeMatchingState.selectedTags.slice()
+  };
+}
+
+async function refreshNodeMatching() {
+  var modal = document.getElementById("job-modal");
+  if (!modal || modal.style.display === "none") return;
+  var reqBody = buildNodeMatchingRequest();
+  if (!reqBody.workflow) return;
+  var seq = ++nodeMatchingState.seq;
+  try {
+    var data = await api("/nodes/matching", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(reqBody)
+    });
+    if (seq !== nodeMatchingState.seq) return;
+    nodeMatchingState.response = data;
+    nodeMatchingState.error = null;
+  } catch (e) {
+    if (seq !== nodeMatchingState.seq) return;
+    nodeMatchingState.response = null;
+    nodeMatchingState.error = (e && e.message) || String(e);
+  }
+  renderNodeSelector();
+}
+
+function nodeOptionStatusGlyph(status) {
+  if (status === "online") return "🟢";
+  if (status === "degraded") return "🟡";
+  return "🔴";
+}
+
+function nodeOptionLabel(node) {
+  var status = node.status || "offline";
+  var parts = [
+    nodeOptionStatusGlyph(status),
+    node.name,
+    (node.running_jobs || 0) + "/" + (node.max_jobs || 0)
+  ];
+  if (node.queue) parts.push(node.queue);
+  parts.push(t("nodes.status." + status));
+  var label = parts.join("  ");
+  if (node.degraded) label += "  [" + t("nodes.badge.degraded") + "]";
+  if (node.capability_state === "probe-inferred") label += "  [" + t("nodes.badge.probe_inferred") + "]";
+  else if (node.capability_state === "unknown") label += "  [" + t("nodes.badge.unknown") + "]";
+  if (node.declared_ok === false) label += "  [" + t("nodes.badge.mismatch") + "]";
+  return label;
+}
+
+function nodeDisabledReason(node) {
+  var reasons = [];
+  if ((node.status || "offline") === "offline") reasons.push(t("nodes.reason.offline"));
+  if (node.missing_software && node.missing_software.length) {
+    reasons.push(t("nodes.reason.missing_software", { software: node.missing_software.join(", ") }));
+  }
+  if (node.missing_tags && node.missing_tags.length) {
+    reasons.push(t("nodes.reason.missing_tags", { tags: node.missing_tags.join(", ") }));
+  }
+  if (!reasons.length && node.reasons && node.reasons.length) {
+    reasons.push(node.reasons.join("; "));
+  }
+  return reasons.join("; ");
+}
+
+function appendNodeBadge(container, show, text, infoStyle) {
+  if (!show) return;
+  var badge = document.createElement("span");
+  badge.className = "node-badge" + (infoStyle ? " node-badge-info" : "");
+  badge.textContent = text;
+  container.appendChild(badge);
+}
+
+function nodeMatchingTagUniverse(nodes) {
+  var seen = {};
+  var tags = [];
+  (nodes || []).forEach(function(node) {
+    (node.tags || []).forEach(function(tag) {
+      if (!seen[tag]) { seen[tag] = true; tags.push(tag); }
+    });
+  });
+  return tags.sort();
+}
+
+function renderNodeTagChips(nodes) {
+  var box = document.getElementById("modal-node-tags");
+  if (!box) return;
+  var tags = nodeMatchingTagUniverse(nodes);
+  nodeMatchingState.selectedTags = nodeMatchingState.selectedTags.filter(function(tag) {
+    return tags.indexOf(tag) >= 0;
+  });
+  if (!tags.length) { box.style.display = "none"; box.innerHTML = ""; return; }
+  box.style.display = "flex";
+  box.innerHTML = "";
+  tags.forEach(function(tag) {
+    var chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "node-tag-chip" + (nodeMatchingState.selectedTags.indexOf(tag) >= 0 ? " active" : "");
+    chip.textContent = tag;
+    chip.setAttribute("data-node-tag", tag);
+    chip.setAttribute("aria-pressed", nodeMatchingState.selectedTags.indexOf(tag) >= 0 ? "true" : "false");
+    chip.title = t("nodes.tags_hint");
+    chip.addEventListener("click", function() {
+      var idx = nodeMatchingState.selectedTags.indexOf(tag);
+      if (idx >= 0) nodeMatchingState.selectedTags.splice(idx, 1);
+      else nodeMatchingState.selectedTags.push(tag);
+      scheduleNodeMatchingRefresh();
+      renderNodeTagChips((nodeMatchingState.response && nodeMatchingState.response.nodes) || []);
+    });
+    box.appendChild(chip);
+  });
+}
+
+function renderNodeSelectDetail() {
+  var sel = document.getElementById("modal-node-select");
+  var detail = document.getElementById("modal-node-detail");
+  if (!sel || !detail) return;
+  var nodes = (nodeMatchingState.response && nodeMatchingState.response.nodes) || [];
+  var node = null;
+  for (var i = 0; i < nodes.length; i++) {
+    if (nodes[i].name === sel.value) { node = nodes[i]; break; }
+  }
+  if (!node) { detail.style.display = "none"; detail.innerHTML = ""; return; }
+  detail.style.display = "flex";
+  detail.innerHTML = "";
+  var dot = document.createElement("span");
+  dot.className = "node-dot " + (node.status || "offline");
+  detail.appendChild(dot);
+  var meta = document.createElement("span");
+  meta.className = "node-meta";
+  meta.textContent = (node.host || "") + "  " + (node.running_jobs || 0) + "/" + (node.max_jobs || 0) +
+    "  DISK " + (node.disk_usage_pct || 0) + "%" + (node.queue ? "  " + node.queue : "");
+  detail.appendChild(meta);
+  appendNodeBadge(detail, node.degraded, t("nodes.badge.degraded"), false);
+  appendNodeBadge(detail, node.capability_state === "probe-inferred", t("nodes.badge.probe_inferred"), true);
+  appendNodeBadge(detail, node.capability_state === "unknown", t("nodes.badge.unknown"), true);
+  appendNodeBadge(detail, node.declared_ok === false, t("nodes.badge.mismatch"), false);
+}
+
+// E4 guard: "local" and a remote node are mutually exclusive. While 本地 is
+// selected every per-node option is disabled so the control can never hold
+// a local+node combination; leaving 本地 restores each option's own
+// capability-based disabled state (locked by tests/test_frontend_sync.py).
+function applyNodeSelectLocalGuard() {
+  var sel = document.getElementById("modal-node-select");
+  if (!sel) return;
+  var isLocal = sel.value === "local";
+  Array.prototype.forEach.call(sel.options, function(opt) {
+    if (!opt.hasAttribute("data-node-name")) return;
+    opt.disabled = isLocal || opt.getAttribute("data-node-satisfies") !== "true";
+  });
+}
+
+function updateNodeSelectorHints() {
+  var sel = document.getElementById("modal-node-select");
+  var hint = document.getElementById("modal-node-auto-hint");
+  var note = document.getElementById("modal-node-note");
+  if (!sel || !hint || !note) return;
+  var resp = nodeMatchingState.response;
+  var required = (resp && resp.required_software) || [];
+  var showAutoHint = sel.value === "" && !!resp && resp.local_satisfies === false && required.length > 0;
+  hint.style.display = showAutoHint ? "block" : "none";
+  if (showAutoHint) hint.textContent = t("nodes.auto_remote_hint");
+  if (nodeMatchingState.error) {
+    note.style.display = "block";
+    note.classList.add("node-note-error");
+    note.textContent = t("nodes.matching_error") + ": " + nodeMatchingState.error;
+  } else if (resp && !(resp.nodes || []).length) {
+    note.style.display = "block";
+    note.classList.remove("node-note-error");
+    note.textContent = t("nodes.empty");
+  } else {
+    note.style.display = "none";
+  }
+}
+
+function renderNodeSelector() {
+  var sel = document.getElementById("modal-node-select");
+  if (!sel) return;
+  var resp = nodeMatchingState.response;
+  var nodes = (resp && resp.nodes) || [];
+  var previousValue = sel.value;
+
+  sel.innerHTML = "";
+  var autoOpt = document.createElement("option");
+  autoOpt.value = "";
+  autoOpt.textContent = t("nodes.opt.auto");
+  sel.appendChild(autoOpt);
+  var localOpt = document.createElement("option");
+  localOpt.value = "local";
+  localOpt.textContent = t("nodes.opt.local");
+  localOpt.setAttribute("data-node-local", "true");
+  sel.appendChild(localOpt);
+
+  nodes.forEach(function(node) {
+    var opt = document.createElement("option");
+    opt.value = node.name;
+    opt.textContent = nodeOptionLabel(node);
+    opt.setAttribute("data-node-name", node.name);
+    opt.setAttribute("data-node-satisfies", node.satisfies ? "true" : "false");
+    if (!node.satisfies) {
+      opt.disabled = true;
+      opt.title = nodeDisabledReason(node);
+    }
+    sel.appendChild(opt);
+  });
+
+  var stillThere = false;
+  Array.prototype.forEach.call(sel.options, function(opt) {
+    if (opt.value === previousValue) stillThere = true;
+  });
+  sel.value = stillThere ? previousValue : "";
+
+  applyNodeSelectLocalGuard();
+  var selected = sel.selectedOptions && sel.selectedOptions[0];
+  if (selected && selected.disabled) sel.value = "";
+  updateNodeSelectorHints();
+  renderNodeTagChips(nodes);
+  renderNodeSelectDetail();
+}
+
+function onNodeSelectChange() {
+  applyNodeSelectLocalGuard();
+  var sel = document.getElementById("modal-node-select");
+  var selected = sel && sel.selectedOptions && sel.selectedOptions[0];
+  if (selected && selected.disabled) sel.value = "";
+  updateNodeSelectorHints();
+  renderNodeSelectDetail();
+}
+
+function resetNodeSelector() {
+  nodeMatchingState.selectedTags = [];
+  nodeMatchingState.error = null;
+  renderNodeSelector();
+}
+
+// D12: submission-time target errors carry a machine-readable code in the
+// 400 body ({code, missing_software, missing_tags}); map codes to localized
+// text instead of surfacing the server's English message.
+function translateNodeError(err) {
+  var msg = (err && err.message) || String(err || "");
+  var parsed = null;
+  try {
+    var candidate = JSON.parse(msg);
+    if (candidate && typeof candidate === "object" && candidate.code) parsed = candidate;
+  } catch (e) { /* not a coded error body */ }
+  if (!parsed) return null;
+  var key = "nodes.error." + parsed.code;
+  var translated = t(key);
+  if (translated === key) translated = t("nodes.error.execution_target_error");
+  var extras = [];
+  if (parsed.missing_software && parsed.missing_software.length) {
+    extras.push(t("nodes.reason.missing_software", { software: parsed.missing_software.join(", ") }));
+  }
+  if (parsed.missing_tags && parsed.missing_tags.length) {
+    extras.push(t("nodes.reason.missing_tags", { tags: parsed.missing_tags.join(", ") }));
+  }
+  return extras.length ? translated + " (" + extras.join("; ") + ")" : translated;
+}
+
+function formatSubmitError(err) {
+  return translateNodeError(err) || (err && err.message) || String(err);
+}
+
+// ----------------------------------------------------------------------
 // Local QC backends panel (GET /api/backends + /api/v1/software/discovery).
 // Version badge + multi-install warning are display-only; the discovery
 // endpoint is best-effort and degrades silently when unavailable.
@@ -15588,6 +15995,10 @@ function openModal() {
   }
   document.getElementById("job-modal").style.display = "flex";
   applyPendingNewTask();
+  // Node selector: fresh tag selection per open; refresh fires after the
+  // modal is visible (refreshNodeMatching no-ops while it is hidden).
+  resetNodeSelector();
+  scheduleNodeMatchingRefresh();
 }
 
 function closeModal() { document.getElementById("job-modal").style.display = "none"; }
@@ -16591,6 +17002,7 @@ async function uploadNmrBruker(input) {
 function updateConfigCards() {
   ensureWizardWorkflowValid();
   syncBatchOptimizeProfileSummary();
+  scheduleNodeMatchingRefresh();
   var wfTitle = document.getElementById("workflow-card-title");
   var wfDesc = document.getElementById("workflow-card-desc");
   var cat = currentLang === "zh-CN" ? "label_zh" : "label";
@@ -17210,7 +17622,7 @@ async function submitStageWorkflowJob(workflow) {
     await refreshJobs();
     if (created && created.job_id) await selectJob(created.job_id);
   } catch (err) {
-    window.alert((t("modal.submit_failed") || "提交失败") + ": " + (err.message || err));
+    window.alert((t("modal.submit_failed") || "提交失败") + ": " + formatSubmitError(err));
   }
 }
 
@@ -18605,7 +19017,7 @@ async function submitPESsearchTask() {
     await refreshJobs();
     if (result && result.job_id) await selectJob(result.job_id);
   } catch (err) {
-    window.alert((t("modal.submit_failed") || "提交失败") + ": " + (err.message || err));
+    window.alert((t("modal.submit_failed") || "提交失败") + ": " + formatSubmitError(err));
   } finally {
     if (submitButton) submitButton.disabled = false;
   }
@@ -19049,7 +19461,7 @@ async function submitJobModal() {
   try {
     await submitJobBatch(batchBodies);
   } catch (error) {
-    window.alert(t("modal.submit_failed", { message: error.message || String(error) }));
+    window.alert(t("modal.submit_failed", { message: formatSubmitError(error) }));
   }
   await refreshJobs();
 }
@@ -19378,6 +19790,7 @@ function setupEventListeners() {
     currentLang = currentLang === "zh-CN" ? "en-US" : "zh-CN";
     localStorage.setItem("acp-lang", currentLang);
     applyI18n();
+    renderNodeSelector();
     if (lastStatus) {
       const pill = statusPillMode(lastStatus);
       const node = document.getElementById("status-pill");
@@ -19454,6 +19867,8 @@ function setupEventListeners() {
     document.getElementById("method-config-modal").style.display = "none";
     updateConfigCards();
   });
+
+  document.getElementById("modal-node-select").addEventListener("change", onNodeSelectChange);
 
   document.getElementById("btn-new-project").addEventListener("click", openProjectModal);
   document.getElementById("btn-delete-project").addEventListener("click", openDeleteProjectModal);

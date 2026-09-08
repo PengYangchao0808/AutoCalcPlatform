@@ -10,6 +10,7 @@ FRONTEND = REPO_ROOT / "frontend" / "ACP_Workbench_v2.html"
 SERVER = REPO_ROOT / "src" / "acp" / "api" / "server.py"
 
 _I18N_KEY_RE = re.compile(r'"((?:energy|tab\.energy)\.[^"]+)":')
+_NODES_I18N_KEY_RE = re.compile(r'"(nodes\.[^"]+)":')
 _ZH_BLOCK_RE = re.compile(r'"zh-CN":\s*\{(.*?)\n\s*"en-US":', re.DOTALL)
 _EN_BLOCK_RE = re.compile(r'"en-US":\s*\{(.*?)(?:\n\s*\};)', re.DOTALL)
 
@@ -20,6 +21,14 @@ def _extract_energy_keys(html: str, block_re: re.Pattern[str]) -> set[str]:  # t
     if not m:
         return set()
     return set(_I18N_KEY_RE.findall(m.group(1)))
+
+
+def _extract_nodes_keys(html: str, block_re: re.Pattern[str]) -> set[str]:  # type: ignore[type-arg]
+    """Extract nodes.* i18n keys from a single locale block."""
+    m = block_re.search(html)
+    if not m:
+        return set()
+    return set(_NODES_I18N_KEY_RE.findall(m.group(1)))
 
 
 def test_default_workbench_keeps_original_v2_frontend_and_v1_contract() -> None:
@@ -263,6 +272,119 @@ def test_energy_i18n_keys_complete_across_locales() -> None:
 
     assert zh_keys, "No energy.* / tab.energy.* keys found in zh-CN block"
     assert en_keys, "No energy.* / tab.energy.* keys found in en-US block"
+
+    only_zh = zh_keys - en_keys
+    only_en = en_keys - zh_keys
+    assert not only_zh, f"Keys in zh-CN but missing from en-US: {sorted(only_zh)}"
+    assert not only_en, f"Keys in en-US but missing from zh-CN: {sorted(only_en)}"
+
+
+def test_node_selector_structure_and_disabled_logic_lock() -> None:
+    """Structural lock for the submit-wizard compute-node selector (T11).
+
+    The selector is a three-state dropdown (auto / local / one option per
+    remote node) rendered purely from ``POST /api/v1/nodes/matching``.  These
+    assertions exist so that removing the disabled logic — either the
+    capability-based option disabling or the E4 local-mode guard — turns
+    this test red, and so T12 can rely on the stable ids/hooks named here.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Stable DOM hooks (T12 payload wiring + manual QA target these ids).
+    assert 'id="modal-node-select"' in html
+    assert 'id="modal-node-auto-hint"' in html
+    assert 'id="modal-node-detail"' in html
+    assert 'id="modal-node-tags"' in html
+    assert 'id="modal-node-note"' in html
+    assert "data-node-name" in html
+    assert "data-node-satisfies" in html
+    assert "data-node-tag" in html
+
+    # The dropdown is data-driven: no static <option> may be hardcoded into
+    # the select element itself (options come from the matching response).
+    select_markup = html.split('id="modal-node-select"', 1)[1].split("</select>", 1)[0]
+    assert "<option" not in select_markup
+
+    # Data flow: debounced (~300 ms) refresh → matching endpoint; the
+    # frontend never re-derives capability requirements (no derivation
+    # tables in the frontend — only response consumption).
+    assert '"/nodes/matching"' in html
+    assert "function scheduleNodeMatchingRefresh()" in html
+    assert "}, 300);" in html
+    assert "function buildNodeMatchingRequest()" in html
+    assert "node_tags: nodeMatchingState.selectedTags.slice()" in html
+    assert "function refreshNodeMatching()" in html
+    assert "function renderNodeSelector()" in html
+
+    # Disabled logic lock 1: unsatisfying nodes render disabled + reason.
+    assert "opt.disabled = true;" in html
+    assert "opt.title = nodeDisabledReason(node);" in html
+    assert "function nodeDisabledReason(node)" in html
+
+    # Disabled logic lock 2 (E4): while 本地 is selected every per-node
+    # option is disabled so a local+node combination can never be emitted.
+    assert "function applyNodeSelectLocalGuard()" in html
+    assert "opt.disabled = isLocal || opt.getAttribute(\"data-node-satisfies\") !== \"true\";" in html
+    render_body = html.split("function renderNodeSelector()", 1)[1].split("\nfunction ", 1)[0]
+    assert "applyNodeSelectLocalGuard();" in render_body
+    change_body = html.split("function onNodeSelectChange()", 1)[1].split("\nfunction ", 1)[0]
+    assert "applyNodeSelectLocalGuard();" in change_body
+
+    # Wizard change points flow through updateConfigCards → debounced
+    # refresh; the select has its own change listener; modal open resets
+    # tag selection and schedules a refresh after becoming visible.
+    cards_body = html.split("function updateConfigCards()", 1)[1].split("\nfunction ", 1)[0]
+    assert "scheduleNodeMatchingRefresh();" in cards_body
+    assert 'document.getElementById("modal-node-select").addEventListener("change", onNodeSelectChange);' in html
+    open_body = html.split("function openModal()", 1)[1].split("\nfunction ", 1)[0]
+    assert "resetNodeSelector();" in open_body
+    assert "scheduleNodeMatchingRefresh();" in open_body
+
+    # D12: submission-time target error codes map to localized text.
+    assert "function translateNodeError(err)" in html
+    assert "function formatSubmitError(err)" in html
+    assert 'key = "nodes.error." + parsed.code;' in html
+    assert html.count("formatSubmitError(err)") >= 3  # definition + alert sites
+
+    # Badge/hint rendering for degraded / capability_state / declared_ok.
+    assert "nodes.badge.degraded" in html
+    assert "nodes.badge.probe_inferred" in html
+    assert "nodes.badge.unknown" in html
+    assert "nodes.badge.mismatch" in html
+    assert "nodes.auto_remote_hint" in html
+
+
+def test_node_selector_i18n_keys_complete_across_locales() -> None:
+    """Dual-locale completeness for nodes.* keys (selector + D12 codes)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    zh_keys = _extract_nodes_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_nodes_keys(html, _EN_BLOCK_RE)
+
+    assert zh_keys, "No nodes.* keys found in zh-CN block"
+    assert en_keys, "No nodes.* keys found in en-US block"
+
+    required = {
+        "nodes.section",
+        "nodes.opt.auto",
+        "nodes.opt.local",
+        "nodes.auto_remote_hint",
+        "nodes.matching_error",
+        "nodes.tags_hint",
+        "nodes.badge.degraded",
+        "nodes.badge.probe_inferred",
+        "nodes.badge.unknown",
+        "nodes.badge.mismatch",
+        "nodes.reason.offline",
+        "nodes.reason.missing_software",
+        "nodes.reason.missing_tags",
+        "nodes.error.no_capable_node",
+        "nodes.error.target_node_incapable",
+        "nodes.error.unknown_target_node",
+        "nodes.error.target_node_disabled",
+        "nodes.error.execution_target_error",
+    }
+    assert required <= zh_keys, f"missing zh-CN nodes.* keys: {sorted(required - zh_keys)}"
 
     only_zh = zh_keys - en_keys
     only_en = en_keys - zh_keys
