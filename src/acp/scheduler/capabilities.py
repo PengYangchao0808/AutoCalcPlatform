@@ -15,11 +15,13 @@ This module is the single authority for:
 * :func:`matches_capabilities` — pure three-state capability match
   (declared / probe-inferred / unknown) implementing decisions D8/D13.
 * :func:`local_satisfies` — server-local binary resolution via
-  :func:`cccp.software.resolve_executable` (no SSH).
+  :func:`cccp.software.resolve_executable` seeded with the configured
+  ``executables.<name>.path`` (no SSH).
 * :func:`is_degraded` — single shared load/disk degradation predicate
   (consumed by node selection, the matching preview, and frontend badges).
 
-Pure functions only: no IO, no subprocess, no SSH, no node_manager import
+Pure functions plus one read-only cccp config load (:func:`local_satisfies`):
+no subprocess, no SSH, no node_manager import
 (its ``(declared, probed_software)`` inputs are passed in by callers,
 avoiding an import cycle with the remote layer).
 
@@ -33,6 +35,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from cccp.config import load_config
 from cccp.software import resolve_executable
 
 if TYPE_CHECKING:
@@ -433,11 +436,26 @@ def matches_capabilities(
 def local_satisfies(required_software: Iterable[str]) -> bool:
     """Whether the server-local machine provides every required binary.
 
-    Resolves each name via :func:`cccp.software.resolve_executable`
-    (config → env → PATH → fallbacks).  No SSH: this describes the head
-    node the scheduler runs on (D14).
+    Resolves each name via :func:`cccp.software.resolve_executable`, seeded
+    with the ``executables.<name>.path`` from the cccp YAML config
+    (``~/.cccp.yaml``) so config-only installs count as present — mirrors
+    the CLI preflight (cli.py ``_preflight_workflow``).  Per-name order:
+    configured path → env → PATH → fallbacks.  No SSH: this describes the
+    head node the scheduler runs on (D14).
     """
-    return all(resolve_executable(name) is not None for name in required_software)
+    names = list(required_software)
+    if not names:
+        return True
+    try:
+        configured_executables = load_config().get("executables") or {}
+    except Exception:
+        configured_executables = {}
+    for name in names:
+        configured = configured_executables.get(name)
+        configured_path = configured.get("path") if isinstance(configured, dict) else None
+        if resolve_executable(name, configured_path=configured_path) is None:
+            return False
+    return True
 
 
 def is_degraded(node_status: Any) -> bool:

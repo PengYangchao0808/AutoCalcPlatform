@@ -16,7 +16,8 @@ Covers the acceptance criteria of todo 3 in
 3. ``matches_capabilities`` implements the D8 three-state model and the
    D13 tags-never-satisfied-on-undeclared-nodes rule.
 4. ``local_satisfies`` resolves through ``cccp.software.resolve_executable``
-   (monkeypatched — CI machines may have QC software installed).
+   seeded with the configured ``executables.<name>.path`` (all monkeypatched
+   — deterministic regardless of the host's QC installs).
 5. ``is_degraded`` is the single load/disk predicate.
 6. Error classes carry machine-readable ``code`` / ``missing_*`` fields.
 7. ``JobSpec.node_tags`` round-trips through the store, and old
@@ -473,7 +474,7 @@ def test_match_result_is_frozen() -> None:
 
 
 # ---------------------------------------------------------------------- #
-# 4. local_satisfies — monkeypatched resolver
+# 4. local_satisfies — config-aware monkeypatched resolver
 # ---------------------------------------------------------------------- #
 
 
@@ -484,9 +485,17 @@ def _fake_resolver(found: set[str]):
     return resolve
 
 
+def _patch_config(monkeypatch: pytest.MonkeyPatch, executables: dict) -> None:
+    """Pin capabilities.load_config to a static ``executables`` table."""
+    import acp.scheduler.capabilities as cap
+
+    monkeypatch.setattr(cap, "load_config", lambda: {"executables": executables})
+
+
 def test_local_satisfies_all_resolved(monkeypatch: pytest.MonkeyPatch) -> None:
     import acp.scheduler.capabilities as cap
 
+    _patch_config(monkeypatch, {})
     monkeypatch.setattr(cap, "resolve_executable", _fake_resolver({"orca", "xtb"}))
     assert local_satisfies(["orca", "xtb"]) is True
 
@@ -494,6 +503,7 @@ def test_local_satisfies_all_resolved(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_local_satisfies_one_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     import acp.scheduler.capabilities as cap
 
+    _patch_config(monkeypatch, {})
     monkeypatch.setattr(cap, "resolve_executable", _fake_resolver({"orca"}))
     assert local_satisfies(["orca", "crest"]) is False
 
@@ -501,12 +511,86 @@ def test_local_satisfies_one_missing(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_local_satisfies_empty_requirement(monkeypatch: pytest.MonkeyPatch) -> None:
     import acp.scheduler.capabilities as cap
 
+    def _fail_load() -> dict:
+        raise AssertionError("load_config must not run for empty requirements")
+
     calls: list[str] = []
+    monkeypatch.setattr(cap, "load_config", _fail_load)
     monkeypatch.setattr(
         cap, "resolve_executable", lambda name, configured_path=None: calls.append(name) or None
     )
     assert local_satisfies([]) is True
     assert calls == []
+
+
+def test_local_satisfies_forwards_configured_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``executables.<name>.path`` is forwarded to the resolver (config fix).
+
+    Mirrors cli.py ``_preflight_workflow``: dict entries contribute
+    ``path``; non-dict entries are ignored.  The bug this locks: bare
+    ``resolve_executable(name)`` never saw ``~/.cccp.yaml``, so config-only
+    installs mis-reported False (spurious auto→remote upgrade + bogus
+    "本机缺少所需软件" hint).
+    """
+    import acp.scheduler.capabilities as cap
+
+    received: dict[str, object] = {}
+
+    def fake_resolve(name: str, configured_path: object = None) -> Path | None:
+        received[name] = configured_path
+        return Path(f"/opt/fake/{name}")
+
+    _patch_config(
+        monkeypatch,
+        {
+            "orca": {"path": "/opt/orca/orca"},
+            "xtb": "/not/a/dict",  # non-dict entry → ignored (cli.py parity)
+        },
+    )
+    monkeypatch.setattr(cap, "resolve_executable", fake_resolve)
+    assert local_satisfies(["orca", "xtb"]) is True
+    assert received["orca"] == "/opt/orca/orca"
+    assert received["xtb"] is None
+
+
+def test_local_satisfies_config_only_install(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Software absent from PATH but configured in ``~/.cccp.yaml`` → True.
+
+    The fake resolver succeeds only through an explicit configured_path,
+    so this fails against the old bare-resolution implementation.
+    """
+    import acp.scheduler.capabilities as cap
+
+    def resolve(name: str, configured_path: object = None) -> Path | None:
+        return Path(str(configured_path)) if configured_path else None
+
+    _patch_config(monkeypatch, {"crest": {"path": "/opt/censo/crest"}})
+    monkeypatch.setattr(cap, "resolve_executable", resolve)
+    assert local_satisfies(["crest"]) is True
+
+
+def test_local_satisfies_missing_everywhere(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No config entry and nothing resolvable → False."""
+    import acp.scheduler.capabilities as cap
+
+    _patch_config(monkeypatch, {})
+    monkeypatch.setattr(cap, "resolve_executable", _fake_resolver(set()))
+    assert local_satisfies(["censo"]) is False
+
+
+def test_local_satisfies_tolerates_config_load_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unreadable/malformed config degrades to bare env/PATH resolution
+    (cli.py ``_preflight_workflow`` except-branch parity)."""
+    import acp.scheduler.capabilities as cap
+
+    def _boom() -> dict:
+        raise RuntimeError("malformed yaml")
+
+    monkeypatch.setattr(cap, "load_config", _boom)
+    monkeypatch.setattr(cap, "resolve_executable", _fake_resolver({"orca"}))
+    assert local_satisfies(["orca"]) is True
 
 
 # ---------------------------------------------------------------------- #
