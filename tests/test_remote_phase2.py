@@ -16,6 +16,7 @@ Run with: PYTHONPATH=src python3 tests/test_remote_phase2.py
 from __future__ import annotations
 
 import io
+import json
 import posixpath
 import stat
 import tempfile
@@ -1251,6 +1252,50 @@ def test_poll_remote_done_without_exit_code_finalizes_completed():
         assert "donejob" not in runner._job_states
 
     print("  [OK] done-without-exit-code: finalised COMPLETED (exit=0)")
+
+
+def test_observe_remote_state_mirrors_state_json_to_work_dir():
+    """Remote state.json observations are mirrored into the local work dir.
+
+    The API's live-status enrichment reads only local files, so without the
+    mirror the frontend live timeline/metrics never see remote progress.
+    """
+    node = make_node()
+    config = RemoteExecutionConfig(execution_mode="remote", nodes=[node])
+    runner = RemoteJobRunner(MagicMock(), config, monitor=MagicMock(), code_syncer=MagicMock())
+
+    payload = {
+        "version": "1.0",
+        "status": "running",
+        "current_stage": "sampling",
+        "stage_index": 2,
+        "stage_total": 6,
+        "overall_progress": 0.25,
+        "stages": {
+            "prepare": {"status": "completed"},
+            "sampling": {"status": "running"},
+        },
+    }
+    runner._monitor.find_remote_state_json.return_value = payload
+
+    with tempfile.TemporaryDirectory() as tmp:
+        work_dir = Path(tmp) / "proj" / "mirrorjob"
+        work_dir.mkdir(parents=True)
+        spec = JobSpec(workflow="energy", input={"source": "CCO", "source_type": "smiles"})
+        record = JobRecord(id="mirrorjob", spec=spec, work_dir=str(work_dir))
+        event_log = JobEventLog(work_dir / "events.jsonl")
+
+        runner._observe_remote_state(
+            record, event_log, node, "/scratch/test/acp_jobs/mirrorjob", set()
+        )
+
+        mirrored = json.loads((work_dir / "state.json").read_text(encoding="utf-8"))
+        assert mirrored["current_stage"] == "sampling"
+        assert mirrored["stage_index"] == 2
+        assert mirrored["stage_total"] == 6
+        assert record.current_stage == "sampling"
+
+    print("  [OK] remote state.json mirrored to local work dir")
 
 
 # ====================================================================== #

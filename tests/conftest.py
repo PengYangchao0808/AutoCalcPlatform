@@ -241,6 +241,10 @@ def _clean_env_vars(monkeypatch: pytest.MonkeyPatch) -> None:
     # (leaked into later tests, breaking handoff jobs_root() resolution).
     # Test-local overrides re-set it inside the test body.
     monkeypatch.delenv("ACP_RUN_ROOT", raising=False)
+    # The MPI login-shell sniff spawns `bash -lc` (cached per process);
+    # disable it suite-wide so fake subprocess.run fixtures never observe
+    # the sniff's probe call. Sniff-specific tests opt back out locally.
+    monkeypatch.setenv("ACP_DISABLE_MPI_SNIFF", "1")
 
 
 @pytest.fixture()

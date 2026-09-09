@@ -40,6 +40,7 @@ from acp.workflows.ensemble_thermo import (
     t_s_mix_kcal_per_mol,
 )
 from cccp.qc.runners import run_shermo
+from cccp.software import get_configured_path
 from cccp.utils.file_io import read_xyz_multiframe, write_xyz
 
 logger = logging.getLogger(__name__)
@@ -491,6 +492,7 @@ def run_rank1_handoff(
         sp_energy=sp_energy,
         output_dir=str(thermo_dir),
         output_file=str(thermo_dir / f"{tag}_Shermo.sum"),
+        shermo_bin=get_configured_path(cfg, "shermo"),
         temperature_k=resolved["temperature_k"],
         pressure_atm=resolved["pressure_atm"],
         scl_zpe=resolved.get("scl_zpe", 1.0),

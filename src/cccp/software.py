@@ -411,7 +411,7 @@ def normalize_version(raw: str | None) -> str:
 
     Extracts the first semver-like token (``\\d+(\\.\\d+)+``) when present;
     otherwise returns the raw string truncated to 64 characters.  ``""``
-    when *raw* is empty or ``None``.
+    when *raw* is empty or *None*.
     """
     if not raw:
         return ""
@@ -442,12 +442,331 @@ def version_cached(name: str, executable: Path | None) -> str:
     return version
 
 
+# ---------------------------------------------------------------------------
+# MPI runtime discovery (ORCA parallel startup)
+# ---------------------------------------------------------------------------
+#
+# ORCA's driver spawns its parallel startup helper via a *PATH lookup* of
+# ``mpirun`` (``mpirun -np N <orca>/orca_startup_mpi ...``).  On stripped
+# environments (systemd services, cron, bare SSH exec) the MPI bin directory
+# is absent from PATH even though the ORCA binary itself resolves fine, and
+# every parallel run aborts with
+# ``ORCA finished by error termination in Startup``.
+#
+# This section discovers a usable MPI launcher and builds the subprocess
+# environment for ORCA-family runs:  explicit pin -> env var -> PATH ->
+# login-shell sniff (``bash -lc`` — sees ``module load``, conda init and
+# rc-file exports) -> static rc-file parse -> conventional install globs.
+
+
+#: Binary ORCA's driver spawns for parallel runs (looked up via PATH).
+MPI_BINARY = "mpirun"
+
+#: Environment override for an explicit MPI launcher pin (see
+#: :func:`resolve_mpirun`).
+MPI_ENV_VAR = "CONFSEARCH_ORCA_MPI_PATH"
+
+#: Set this env var to disable the login-shell sniff entirely (air-gapped
+#: or security-hardened environments; also used to keep test fixtures that
+#: stub ``subprocess.run`` from seeing the sniff's probe call).
+SNIFF_DISABLE_ENV_VAR = "ACP_DISABLE_MPI_SNIFF"
+
+#: Glob patterns for last-resort MPI discovery.  ``{orca_dir}`` is replaced
+#: with the resolved ORCA install directory when available.
+_MPI_GLOB_PATTERNS: tuple[str, ...] = (
+    "{orca_dir}/mpirun",
+    "{orca_dir}/*/mpirun",
+    "{orca_dir}/*/bin/mpirun",
+    "~/openmpi*/bin/mpirun",
+    "/opt/openmpi*/bin/mpirun",
+    "/usr/lib64/openmpi/bin/mpirun",
+    "/usr/lib/openmpi/bin/mpirun",
+)
+
+#: Shell init files parsed by :func:`sniff_rc_files` (in lookup order).
+_RC_FILES: tuple[str, ...] = (".bashrc", ".bash_profile", ".profile")
+
+#: Login-shell sniff timeout (seconds).  Login shells can source arbitrary
+#: rc content, so a hard cap keeps job startup bounded.
+_SHELL_SNIFF_TIMEOUT = 5.0
+
+#: bash snippet evaluated by the sniff: NUL-separated PATH, LD_LIBRARY_PATH
+#: and the resolved mpirun (empty when absent).
+_SNIFF_SCRIPT = (
+    'printf "%s\\000%s\\000%s" "$PATH" "$LD_LIBRARY_PATH" "$(command -v mpirun 2>/dev/null)"'
+)
+
+#: ``export PATH=/dir:$PATH`` style assignments parsed from rc files.
+_RC_ENV_ASSIGN_RE = re.compile(
+    r"^\s*(?:export\s+)?(?P<var>PATH|LD_LIBRARY_PATH)\s*=\s*(?P<value>.+?)\s*(?:#.*)?$"
+)
+
+
+@dataclass(frozen=True)
+class ShellEnvironment:
+    """Environment snapshot extracted from a login shell or rc files.
+
+    Attributes:
+        path_dirs: Absolute directories from PATH, in order.
+        ld_library_path_dirs: Absolute directories from LD_LIBRARY_PATH.
+        mpirun: Resolved MPI launcher, when one is visible.
+        source: Where the snapshot came from — ``"login-shell"`` or
+            ``"rc-files"``.
+    """
+
+    path_dirs: tuple[Path, ...] = ()
+    ld_library_path_dirs: tuple[Path, ...] = ()
+    mpirun: Path | None = None
+    source: str = "unknown"
+
+
+_SHELL_ENV_CACHE: ShellEnvironment | None = None
+_SHELL_ENV_SNIFFED = False
+
+
+def _reset_shell_env_cache() -> None:
+    """Drop the cached login-shell sniff (tests and re-sniff on demand)."""
+    global _SHELL_ENV_CACHE, _SHELL_ENV_SNIFFED
+    _SHELL_ENV_CACHE = None
+    _SHELL_ENV_SNIFFED = False
+
+
+def _dirs_from_env_value(value: str) -> tuple[Path, ...]:
+    """Absolute directories in a ``$PATH``-style value, order preserved."""
+    dirs: list[Path] = []
+    for entry in value.split(os.pathsep):
+        entry = entry.strip()
+        if not entry:
+            continue
+        expanded = os.path.expanduser(entry)
+        if not expanded.startswith("/"):
+            continue
+        path = Path(expanded)
+        if path not in dirs:
+            dirs.append(path)
+    return tuple(dirs)
+
+
+def sniff_login_shell_env(
+    timeout: float = _SHELL_SNIFF_TIMEOUT,
+) -> ShellEnvironment | None:
+    """Probe what a login bash would see (``~/.bashrc``, ``module load``,
+    conda init) and cache the result for the process lifetime.
+
+    This is the primary "sniff the user's shell" mechanism: instead of
+    approximating rc-file semantics, ask a real login shell for PATH,
+    LD_LIBRARY_PATH and the location of :data:`MPI_BINARY`.
+
+    Returns:
+        :class:`ShellEnvironment`, or ``None`` when bash is unavailable,
+        times out, or exits non-zero.  ``None`` results are cached too
+        (negative caching) so per-job call sites pay the sniff at most
+        once.
+    """
+    global _SHELL_ENV_CACHE, _SHELL_ENV_SNIFFED
+    if _SHELL_ENV_SNIFFED:
+        return _SHELL_ENV_CACHE
+    _SHELL_ENV_SNIFFED = True
+    if os.environ.get(SNIFF_DISABLE_ENV_VAR):
+        logger.debug("Login-shell sniff disabled via %s", SNIFF_DISABLE_ENV_VAR)
+        return None
+    try:
+        result = subprocess.run(
+            ["bash", "-lc", _SNIFF_SCRIPT],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        logger.debug("Login-shell environment sniff failed", exc_info=True)
+        return None
+    if result.returncode != 0:
+        logger.debug("Login-shell sniff exited %s", result.returncode)
+        return None
+    parts = (result.stdout or "").split("\x00")
+    if len(parts) != 3:
+        logger.debug("Login-shell sniff produced %d fields, expected 3", len(parts))
+        return None
+    _SHELL_ENV_CACHE = ShellEnvironment(
+        path_dirs=_dirs_from_env_value(parts[0]),
+        ld_library_path_dirs=_dirs_from_env_value(parts[1]),
+        mpirun=_valid_executable(parts[2].strip()),
+        source="login-shell",
+    )
+    logger.info(
+        "Login-shell sniff: %d PATH dirs, mpirun=%s",
+        len(_SHELL_ENV_CACHE.path_dirs),
+        _SHELL_ENV_CACHE.mpirun,
+    )
+    return _SHELL_ENV_CACHE
+
+
+def sniff_rc_files(home: Path | None = None) -> ShellEnvironment:
+    """Static parse of shell init files (fallback without a login shell).
+
+    Extracts ``PATH``/``LD_LIBRARY_PATH`` assignments whose entries are
+    absolute paths (the ``dir:$PATH`` prepend idiom).  Variable references
+    (``$HOME``, ``${CONDA_PREFIX}``, ...) are skipped conservatively —
+    :func:`sniff_login_shell_env` handles those correctly and is the
+    primary mechanism.
+
+    Args:
+        home: Home directory to read ``.bashrc``/``.bash_profile``/
+            ``.profile`` from; defaults to ``Path.home()``.
+    """
+    home = Path.home() if home is None else Path(home)
+    path_dirs: list[Path] = []
+    ld_dirs: list[Path] = []
+    for name in _RC_FILES:
+        rc_file = home / name
+        try:
+            text = rc_file.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for line in text.splitlines():
+            match = _RC_ENV_ASSIGN_RE.match(line)
+            if match is None:
+                continue
+            target = path_dirs if match.group("var") == "PATH" else ld_dirs
+            for entry in match.group("value").split(":"):
+                entry = entry.strip().strip('"').strip("'")
+                if not entry or "$" in entry or not entry.startswith("/"):
+                    continue
+                path = Path(entry)
+                if path not in target:
+                    target.append(path)
+    mpirun: Path | None = None
+    for directory in path_dirs:
+        candidate = _valid_executable(directory / MPI_BINARY)
+        if candidate is not None:
+            mpirun = candidate
+            break
+    return ShellEnvironment(
+        path_dirs=tuple(path_dirs),
+        ld_library_path_dirs=tuple(ld_dirs),
+        mpirun=mpirun,
+        source="rc-files",
+    )
+
+
+def resolve_mpirun(
+    configured_path: str | Path | None = None,
+    orca_dir: str | Path | None = None,
+) -> Path | None:
+    """Resolve an MPI launcher for ORCA parallel runs (first hit wins):
+
+    1. Explicit *configured_path* (``executables.orca.mpi_path``).
+    2. :data:`MPI_ENV_VAR` environment override.
+    3. Current PATH (+ current Python env directory).
+    4. Login-shell sniff (:func:`sniff_login_shell_env` — sees ``module
+       load``, conda init and rc-file exports a service env lacks).
+    5. Static rc-file parse (:func:`sniff_rc_files`).
+    6. Conventional install globs (:data:`_MPI_GLOB_PATTERNS`), including
+       bundled MPI inside *orca_dir*.
+    """
+    path = _valid_executable(configured_path)
+    if path:
+        return path
+
+    path = _valid_executable(os.environ.get(MPI_ENV_VAR))
+    if path:
+        return path
+
+    found = shutil.which(MPI_BINARY, path=_search_path())
+    if found:
+        return Path(found).resolve()
+
+    sniffed = sniff_login_shell_env()
+    if sniffed is not None and sniffed.mpirun is not None:
+        return sniffed.mpirun
+
+    rc_env = sniff_rc_files()
+    if rc_env.mpirun is not None:
+        return rc_env.mpirun
+
+    for pattern in _MPI_GLOB_PATTERNS:
+        if "{orca_dir}" in pattern:
+            if not orca_dir:
+                continue
+            pattern = pattern.replace("{orca_dir}", str(orca_dir))
+        for match in sorted(glob.glob(os.path.expanduser(pattern))):
+            path = _valid_executable(match)
+            if path:
+                return path
+    return None
+
+
+def orca_runtime_env(
+    ld_library_path: str | None = None,
+    mpi_path: str | Path | None = None,
+    orca_dir: str | Path | None = None,
+) -> dict[str, str] | None:
+    """Build the subprocess environment for ORCA-family runs.
+
+    Resolves an MPI launcher via :func:`resolve_mpirun` and injects:
+
+    - its bin directory at the **front of PATH** (ORCA's driver looks up
+      ``mpirun`` by name — stripped service environments without the MPI
+      bin dir abort every parallel run at Startup), and
+    - the matching ``../lib`` directory at the front of LD_LIBRARY_PATH
+      when it exists.
+
+    Explicit *ld_library_path* (``executables.orca.ld_library_path``)
+    keeps its existing override semantics.  Nothing else is merged —
+    blanket-importing a login LD_LIBRARY_PATH is deliberately avoided
+    because conda entries (libstdc++ et al.) are a known source of
+    ABI conflicts for ORCA.
+
+    Args:
+        ld_library_path: Explicit LD_LIBRARY_PATH override, or ``None``.
+        mpi_path: Explicit MPI launcher pin, or ``None``.
+        orca_dir: Resolved ORCA install directory (enables bundled-MPI
+            glob discovery), or ``None``.
+
+    Returns:
+        A copy of ``os.environ`` with the injections applied, or ``None``
+        when nothing would change (callers pass ``env=None`` through to
+        :mod:`subprocess`, preserving the inherit-everything behaviour).
+    """
+    mpirun = resolve_mpirun(mpi_path, orca_dir=orca_dir)
+    if mpirun is None and not ld_library_path:
+        return None
+
+    env = dict(os.environ)
+    changed = False
+    if ld_library_path:
+        env["LD_LIBRARY_PATH"] = str(ld_library_path)
+        changed = True
+
+    if mpirun is not None:
+        bin_dir = str(mpirun.parent)
+        current_path = env.get("PATH", "")
+        if bin_dir not in current_path.split(os.pathsep):
+            env["PATH"] = f"{bin_dir}{os.pathsep}{current_path}" if current_path else bin_dir
+            logger.info("ORCA MPI runtime: prepended %s to PATH (mpirun=%s)", bin_dir, mpirun)
+            changed = True
+        lib_dir = mpirun.parent.parent / "lib"
+        if lib_dir.is_dir():
+            current_ld = env.get("LD_LIBRARY_PATH", "")
+            if str(lib_dir) not in current_ld.split(os.pathsep):
+                env["LD_LIBRARY_PATH"] = (
+                    f"{lib_dir}{os.pathsep}{current_ld}" if current_ld else str(lib_dir)
+                )
+                changed = True
+
+    return env if changed else None
+
+
 __all__ = [
     "ENV_VARS",
     "EXECUTABLES",
     "FALLBACKS",
+    "MPI_BINARY",
+    "MPI_ENV_VAR",
     "SCAN_PATTERNS",
+    "SNIFF_DISABLE_ENV_VAR",
     "VERSION_CACHE_TTL",
+    "ShellEnvironment",
     "SoftwareCandidate",
     "SoftwareDiscovery",
     "SoftwareNotFoundError",
@@ -457,8 +776,11 @@ __all__ = [
     "discover_candidates",
     "get_configured_path",
     "normalize_version",
-    "require_executable",
+    "orca_runtime_env",
     "resolve_executable",
     "resolve_executable_with_source",
+    "resolve_mpirun",
+    "sniff_login_shell_env",
+    "sniff_rc_files",
     "version_cached",
 ]

@@ -453,6 +453,47 @@ def test_energy_light_opt_on_end_to_end(
     assert orca_kwargs["method"] == "r2SCAN-3c"
 
 
+def test_rank1_handoff_passes_configured_shermo_bin(
+    tmp_path: Path,
+    sample_config: dict[str, Any],
+    mock_screening_result: CensoRunResult,
+    multiframe_xyz: Path,
+) -> None:
+    """Regression: run_rank1_handoff must resolve executables.shermo.path.
+
+    The rank1/cumulative handoff calls ``run_shermo`` directly; without this
+    wiring it fell back to the bare name ``"Shermo"`` and failed in stripped
+    service environments even when ``~/.cccp.yaml`` configured an absolute
+    Shermo path.
+    """
+    from acp.workflows.energy import run_conformer_energy
+
+    sample_config["executables"]["shermo"]["path"] = "/opt/shermo/Shermo"
+    orca = _mock_orca_instance()
+
+    with (
+        patch("acp.workflows.energy.CensoBackend") as mock_backend_cls,
+        patch("acp.workflows.energy_shared.get_backend", return_value=_mock_orca_backend_cls(orca)),
+        patch(
+            "acp.workflows.energy_shared.run_shermo", return_value=dict(_SHERMO_OK)
+        ) as mock_shermo,
+    ):
+        backend = MagicMock()
+        backend.refine_ensemble.return_value = mock_screening_result
+        mock_backend_cls.return_value = backend
+
+        result = run_conformer_energy(
+            input_source=str(multiframe_xyz),
+            output_dir=str(tmp_path / "out"),
+            preset="censo-light",
+            config=sample_config,
+        )
+
+    assert result.status == "completed"
+    assert mock_shermo.call_count >= 1
+    assert mock_shermo.call_args.kwargs["shermo_bin"] == "/opt/shermo/Shermo"
+
+
 def test_energy_light_opt_on_rank1_is_lowest_gtot(
     tmp_path: Path,
     sample_config: dict[str, Any],

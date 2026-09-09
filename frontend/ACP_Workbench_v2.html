@@ -12094,6 +12094,8 @@ async function refreshSelectedJobDetail(opts) {
       String(prev.updated_at || "") !== String(job.updated_at || "") ||
       String(prev.progress || "") !== String(job.progress || "") ||
       String(prev.current_stage || "") !== String(job.current_stage || "") ||
+      String(prev.stage_index || "") !== String(job.stage_index || "") ||
+      String(prev.stage_total || "") !== String(job.stage_total || "") ||
       String(prev.stage_detail || "") !== String(job.stage_detail || "") ||
       String(prev.latest_event || "") !== String(job.latest_event || "");
   }
@@ -12128,6 +12130,8 @@ async function refreshSelectedJobSummary() {
       String(prev.updated_at || "") !== String(summary.updated_at || "") ||
       String(prev.progress || "") !== String(summary.progress || "") ||
       String(prev.current_stage || "") !== String(summary.current_stage || "") ||
+      String(prev.stage_index || "") !== String(summary.stage_index || "") ||
+      String(prev.stage_total || "") !== String(summary.stage_total || "") ||
       String(prev.stage_detail || "") !== String(summary.stage_detail || "") ||
       String(prev.latest_event || "") !== String(summary.latest_event || "") ||
       String(prev.display_method || "") !== String(summary.display_method || "") ||
@@ -12312,7 +12316,8 @@ function renderWorkflowTimeline(container, job) {
     if (i + 1 < stageIndex) {
       nodeStatus = "completed";
     } else if (i + 1 === stageIndex) {
-      nodeStatus = getStatusClass(job.status) === "paused" ? "paused" : "running";
+      var jobCls = getStatusClass(job.status);
+      nodeStatus = jobCls === "paused" ? "paused" : (jobCls === "completed" ? "completed" : "running");
     } else {
       nodeStatus = "pending";
     }
