@@ -7,6 +7,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.manager import JobManager
 from acp.scheduler.store import JobStore
@@ -165,6 +167,35 @@ def test_sync_from_job_remote_maps_sftp(tmp_path: Path) -> None:
     assert row["storage_mode"] == "sftp"
 
 
+def test_sync_from_job_node_id_uses_real_node_name(tmp_path: Path) -> None:
+    """A dispatched remote job indexes under its real execution node name."""
+    store = JobStore(tmp_path / "jobs.db")
+    index = TaskIndex(store.db_path)
+    record = _make_record(tmp_path, remote_job_id="12345")
+    record.result = {"node": "comp-01", "host": "comp-01.example.com"}
+
+    index.sync_from_job(record)
+    row = index.get(record.id)
+    assert row is not None
+    assert row["node_id"] == "comp-01"
+    assert row["storage_mode"] == "sftp"
+
+
+def test_sync_from_job_local_execution_target_stays_local(tmp_path: Path) -> None:
+    """A dispatched local job keeps ``node_id == "local"`` even when its
+    result carries ``execution_target`` provenance."""
+    store = JobStore(tmp_path / "jobs.db")
+    index = TaskIndex(store.db_path)
+    record = _make_record(tmp_path)
+    record.result = {"execution_target": "local", "execution_kind": "local"}
+
+    index.sync_from_job(record)
+    row = index.get(record.id)
+    assert row is not None
+    assert row["node_id"] == "local"
+    assert row["storage_mode"] == "local"
+
+
 def test_update_status(tmp_path: Path) -> None:
     store = JobStore(tmp_path / "jobs.db")
     index = TaskIndex(store.db_path)
@@ -255,3 +286,89 @@ def test_manager_survives_broken_task_index(tmp_path: Path) -> None:
     record = mgr.submit(JobSpec(workflow="fake", name="no-index", input={"source": "CCO"}))
     assert mgr.store.get(record.id) is not None
     mgr.shutdown()
+
+
+try:  # paramiko not installed — remote-config tests skip
+    from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
+except ImportError:  # pragma: no cover
+    RemoteExecutionConfig = None
+    RemoteNode = None
+
+_requires_remote_config = pytest.mark.skipif(
+    RemoteNode is None, reason="paramiko not installed"
+)
+
+
+def _real_node(name: str, max_jobs: int = 8) -> RemoteNode:
+    return RemoteNode(
+        name=name,
+        host=f"{name}.example.com",
+        username="qc",
+        remote_work_dir="/scratch/qc/acp",
+        remote_code_dir="/home/qc/acp_code",
+        max_concurrent_jobs=max_jobs,
+        enabled=True,
+    )
+
+
+class _NodeAwareRemoteRunner:
+    """Stands in for ``RemoteJobRunner.submit_remote``: records the node."""
+
+    def submit_remote(self, record, event_log, target_node=None) -> str:
+        result = dict(record.result or {})
+        result["node"] = target_node or "comp-01"
+        result["lsf_job_id"] = "424242"
+        record.result = result
+        return "424242"
+
+    def poll_remote(self, record, event_log, cancel_event):
+        return (False, None)
+
+
+@_requires_remote_config
+def test_manager_remote_submit_syncs_real_node(tmp_path: Path) -> None:
+    """After a successful remote submit the task row and jobs columns carry
+    the real execution node name, not the pre-dispatch ``"local"`` value."""
+    from types import SimpleNamespace
+
+    node = _real_node("comp-01")
+    cfg = RemoteExecutionConfig(execution_mode="local", nodes=[node])
+    mgr = JobManager(run_root=tmp_path, remote_config=cfg)
+    try:
+        mgr.registry.status_provider = lambda name: SimpleNamespace(
+            name=name, status="ready", running_jobs=0, disk_usage_pct=0
+        )
+        mgr.remote_runner = _NodeAwareRemoteRunner()  # type: ignore[assignment]
+
+        work_dir = tmp_path / "sub8"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        mgr.store.create(
+            JobRecord(
+                id="sub8",
+                spec=JobSpec(
+                    workflow="Confsearch",
+                    name="demo",
+                    method={"protocol": "xtb-crest", "refinement_policy": "screen"},
+                    execution_mode="remote",
+                    target_node="comp-01",
+                ),
+                status=JobStatus.QUEUED,
+                work_dir=str(work_dir),
+            )
+        )
+
+        assert mgr._submit_job("sub8") is True
+
+        stored = mgr.store.get("sub8")
+        assert stored is not None
+        assert stored.node_id == "comp-01"
+        assert stored.host == "comp-01.example.com"
+        assert stored.result is not None and stored.result["node"] == "comp-01"
+
+        assert mgr.tasks is not None
+        row = mgr.tasks.get("sub8")
+        assert row is not None
+        assert row["node_id"] == "comp-01"
+        assert row["storage_mode"] == "sftp"
+    finally:
+        mgr.shutdown()

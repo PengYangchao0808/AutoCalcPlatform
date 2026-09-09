@@ -1712,6 +1712,46 @@ textarea[data-sr-comment] { width: 100%; min-height: 54px; margin-top: 4px; font
   outline: none;
 }
 .node-select option:disabled { color: var(--text-tertiary); background: rgba(255,255,255,0.03); }
+.node-select-hint { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+.node-select-hint.node-note-error { color: var(--red); }
+.node-select-detail { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.node-select-detail .node-meta { margin-top: 0; }
+.node-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 7px;
+  height: 16px;
+  border-radius: 999px;
+  font-size: 10px;
+  border: 1px solid rgba(242, 184, 75, 0.35);
+  color: var(--amber);
+  background: rgba(242, 184, 75, 0.10);
+}
+.node-badge.node-badge-info {
+  border-color: rgba(78, 161, 255, 0.35);
+  color: var(--accent);
+  background: rgba(78, 161, 255, 0.12);
+}
+.node-tag-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.node-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+}
+.node-tag-chip:hover { border-color: var(--accent); }
+.node-tag-chip.active {
+  color: var(--accent);
+  border-color: rgba(78, 161, 255, 0.35);
+  background: rgba(78, 161, 255, 0.12);
+}
 
 select, option, optgroup {
   color-scheme: dark;
@@ -2555,6 +2595,7 @@ option, optgroup {
 .resource-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .resource-field { display: flex; flex-direction: column; gap: 6px; }
 .resource-field label { font-size: 12px; color: var(--text-secondary); }
+.resource-field-wide { grid-column: 1 / -1; }
 @media (max-width: 680px) { .resource-grid { grid-template-columns: 1fr; } }
 .preview-waiting-cell { text-align: center; padding: 22px 10px; color: var(--text-tertiary); }
 
@@ -3857,6 +3898,19 @@ option, optgroup {
             <input id="modal-parallelism" class="modal-input" type="number" min="1" value="1">
           </div>
         </div>
+        <!-- Compute-node selector (node-selection-at-submission T11):
+             three-state dropdown — auto (server default) / local / one
+             option per remote node. Options are rebuilt from
+             POST /api/v1/nodes/matching; the frontend never re-derives
+             capability requirements itself. T12 wires the submit payload. -->
+        <div class="resource-field resource-field-wide" id="modal-node-section">
+          <label for="modal-node-select" data-i18n="nodes.section">计算节点</label>
+          <select id="modal-node-select" class="modal-select node-select"></select>
+          <div class="node-select-hint" id="modal-node-auto-hint" style="display:none;"></div>
+          <div class="node-select-detail" id="modal-node-detail" style="display:none;"></div>
+          <div class="node-tag-chips" id="modal-node-tags" style="display:none;"></div>
+          <div class="node-select-hint" id="modal-node-note" style="display:none;"></div>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
@@ -4370,6 +4424,17 @@ let viewer = null;
 let currentModel = null;
 let currentModelAtoms = [];
 let viewerModelLoaded = false;
+
+// T12/T8: a job's execution node is exposed at the top level of the v1
+// record (node_id/host, lifted from the jobs table). Read it first and fall
+// back to result.node for older server responses; "local" is the local
+// sentinel, not a remote node. Returns "" for local/unknown.
+function jobRemoteNodeName(job) {
+  if (!job) return "";
+  var node = job.node_id || (job.result && job.result.node) || "";
+  node = String(node || "").trim();
+  return node && node !== "local" ? node : "";
+}
 // Q2: collapsed queue group_ids (persist across poll re-renders).
 let queueCollapsedGroups = {};
 
@@ -5165,6 +5230,28 @@ const I18N = {
     "nodes.status.offline": "离线",
     "nodes.ping": "测试",
     "nodes.load_error": "加载节点失败",
+    "nodes.section": "计算节点",
+    "nodes.opt.auto": "自动选择（跟随服务器默认）",
+    "nodes.opt.local": "本地",
+    "nodes.continue_source": "回源节点（默认）",
+    "nodes.continue_to_hint": "继续到其他节点（留空 = 回源节点）",
+    "nodes.source_pin": "源任务节点",
+    "nodes.auto_remote_hint": "本机缺少所需软件，将选择可用远程节点",
+    "nodes.matching_error": "节点匹配失败",
+    "nodes.tags_hint": "按标签筛选节点（多取交集）",
+    "nodes.badge.degraded": "当前满载/磁盘告警",
+    "nodes.badge.probe_inferred": "探测推断",
+    "nodes.badge.unknown": "能力未知，按通用",
+    "nodes.badge.mismatch": "声明不一致",
+    "nodes.reason.offline": "离线",
+    "nodes.reason.missing_software": "缺少软件: {software}",
+    "nodes.reason.missing_tags": "缺少标签: {tags}",
+    "nodes.error.no_capable_node": "当前没有可运行该任务的节点（本机与远程均不满足软件/标签要求）",
+    "nodes.error.target_node_incapable": "目标节点不具备运行该任务的能力",
+    "nodes.error.unknown_target_node": "未知的目标节点",
+    "nodes.error.target_node_disabled": "目标节点已禁用",
+    "nodes.error.execution_target_error": "执行目标校验失败",
+    "nodes.selected_unavailable": "所选节点当前不满足要求，提交将被拒绝",
     "backend.title": "计算后端",
     "backend.refresh": "刷新",
     "backend.loading": "加载中…",
@@ -5964,6 +6051,28 @@ const I18N = {
     "nodes.status.offline": "offline",
     "nodes.ping": "Ping",
     "nodes.load_error": "Failed to load nodes",
+    "nodes.section": "Compute Node",
+    "nodes.opt.auto": "Auto (server default)",
+    "nodes.opt.local": "Local",
+    "nodes.continue_source": "Source node (default)",
+    "nodes.continue_to_hint": "Continue on a different node (blank = source node)",
+    "nodes.source_pin": "Source job node",
+    "nodes.auto_remote_hint": "Local lacks the required software — a capable remote node will be selected",
+    "nodes.matching_error": "Node matching failed",
+    "nodes.tags_hint": "Filter nodes by tags (AND)",
+    "nodes.badge.degraded": "busy / disk warning",
+    "nodes.badge.probe_inferred": "probe-inferred",
+    "nodes.badge.unknown": "capability unknown, generic",
+    "nodes.badge.mismatch": "declared mismatch",
+    "nodes.reason.offline": "offline",
+    "nodes.reason.missing_software": "missing software: {software}",
+    "nodes.reason.missing_tags": "missing tags: {tags}",
+    "nodes.error.no_capable_node": "No capable node can run this job (local and remotes lack the required software/tags)",
+    "nodes.error.target_node_incapable": "The target node cannot run this job",
+    "nodes.error.unknown_target_node": "Unknown target node",
+    "nodes.error.target_node_disabled": "The target node is disabled",
+    "nodes.error.execution_target_error": "Execution target validation failed",
+    "nodes.selected_unavailable": "The selected node no longer meets the job requirements — submitting will be rejected",
     "backend.title": "Backends",
     "backend.refresh": "Refresh",
     "backend.loading": "Loading…",
@@ -10912,15 +11021,51 @@ async function unpauseJob(jobId) {
   }
 }
 
+// T12: optional "continue to node" override in the job-detail action bar.
+// The blank option means "return to the source node" (server default when
+// the request carries no body) — the override field is only sent when the
+// user explicitly picks a node, so a coded 400 can only come from a real
+// choice. Options come from the cached /nodes list (offline nodes skipped —
+// the server would reject them anyway).
+function populateContinueNodeOptions(sel) {
+  if (!sel) return;
+  var current = sel.value || "";
+  sel.innerHTML = "";
+  var srcOpt = document.createElement("option");
+  srcOpt.value = "";
+  srcOpt.textContent = t("nodes.continue_source") + (lastRemoteNode ? " (" + lastRemoteNode + ")" : "");
+  sel.appendChild(srcOpt);
+  var localOpt = document.createElement("option");
+  localOpt.value = "local";
+  localOpt.textContent = t("nodes.opt.local");
+  sel.appendChild(localOpt);
+  nodesCache.forEach(function(node) {
+    if (!node || !node.name || node.status === "offline") return;
+    var opt = document.createElement("option");
+    opt.value = node.name;
+    opt.textContent = node.name + (node.host ? "  " + node.host : "");
+    sel.appendChild(opt);
+  });
+  sel.value = current;
+  if (sel.selectedIndex < 0) sel.value = "";
+}
+
 async function continueJob(jobId) {
   if (!jobId) return;
+  var nodeSel = document.getElementById("detail-continue-node-select");
+  var targetNode = nodeSel && nodeSel.value ? String(nodeSel.value) : "";
+  var opts = { method: "POST" };
+  if (targetNode) {
+    opts.headers = { "Content-Type": "application/json" };
+    opts.body = JSON.stringify({ target_node: targetNode });
+  }
   try {
-    await api("/jobs/" + encodeURIComponent(jobId) + "/continue", { method: "POST" });
+    await api("/jobs/" + encodeURIComponent(jobId) + "/continue", opts);
     setDetailActionMessage(jobId, t("job.continue_ok"), "ok");
     await refreshJobs();
     await refreshSelectedJobDetail({ force: true });
   } catch (e) {
-    setDetailActionMessage(jobId, t("job.continue_failed", { message: describeJobOpError(e) }), "err");
+    setDetailActionMessage(jobId, t("job.continue_failed", { message: translateNodeError(e) || describeJobOpError(e) }), "err");
   }
 }
 
@@ -11949,12 +12094,14 @@ async function refreshSelectedJobDetail(opts) {
       String(prev.updated_at || "") !== String(job.updated_at || "") ||
       String(prev.progress || "") !== String(job.progress || "") ||
       String(prev.current_stage || "") !== String(job.current_stage || "") ||
+      String(prev.stage_index || "") !== String(job.stage_index || "") ||
+      String(prev.stage_total || "") !== String(job.stage_total || "") ||
       String(prev.stage_detail || "") !== String(job.stage_detail || "") ||
       String(prev.latest_event || "") !== String(job.latest_event || "");
   }
   if (!changed) return;
-  selectedJobIsRemote = !!(job.result && job.result.node);
-  lastRemoteNode = selectedJobIsRemote ? String(job.result.node || "") : "";
+  lastRemoteNode = jobRemoteNodeName(job);
+  selectedJobIsRemote = !!lastRemoteNode;
   updateInfoPanel(job);
   if (statusChanged) refreshNmrReport(job);
 }
@@ -11983,14 +12130,16 @@ async function refreshSelectedJobSummary() {
       String(prev.updated_at || "") !== String(summary.updated_at || "") ||
       String(prev.progress || "") !== String(summary.progress || "") ||
       String(prev.current_stage || "") !== String(summary.current_stage || "") ||
+      String(prev.stage_index || "") !== String(summary.stage_index || "") ||
+      String(prev.stage_total || "") !== String(summary.stage_total || "") ||
       String(prev.stage_detail || "") !== String(summary.stage_detail || "") ||
       String(prev.latest_event || "") !== String(summary.latest_event || "") ||
       String(prev.display_method || "") !== String(summary.display_method || "") ||
       JSON.stringify(prev.live_status || null) !== JSON.stringify(summary.live_status || null);
     lastSelectedJob = summary;
     if (changed) {
-      selectedJobIsRemote = !!(summary.result && summary.result.node);
-      lastRemoteNode = selectedJobIsRemote ? String(summary.result.node || "") : "";
+      lastRemoteNode = jobRemoteNodeName(summary);
+      selectedJobIsRemote = !!lastRemoteNode;
       updateInfoPanel(summary);
       if (statusChanged) refreshNmrReport(summary);
     }
@@ -12167,7 +12316,8 @@ function renderWorkflowTimeline(container, job) {
     if (i + 1 < stageIndex) {
       nodeStatus = "completed";
     } else if (i + 1 === stageIndex) {
-      nodeStatus = getStatusClass(job.status) === "paused" ? "paused" : "running";
+      var jobCls = getStatusClass(job.status);
+      nodeStatus = jobCls === "paused" ? "paused" : (jobCls === "completed" ? "completed" : "running");
     } else {
       nodeStatus = "pending";
     }
@@ -12567,6 +12717,20 @@ async function openDetailDrawer(job) {
     dContinueBtn.title = recovery.continue_notes || t("job.continue_hint");
     dContinueBtn.addEventListener("click", function() { continueJob(jobId); });
     drawerRunGroup.appendChild(dContinueBtn);
+    // T12: optional "continue to node" override; blank = back to source.
+    var dContinueNodeSel = document.createElement("select");
+    dContinueNodeSel.className = "modal-select node-select";
+    dContinueNodeSel.id = "detail-continue-node-select";
+    dContinueNodeSel.title = t("nodes.continue_to_hint");
+    populateContinueNodeOptions(dContinueNodeSel);
+    drawerRunGroup.appendChild(dContinueNodeSel);
+    // The node list may not be loaded yet (sysres drawer never opened):
+    // fetch it once and rebuild the options in place when it arrives.
+    if (!nodesCache.length) {
+      loadNodes().then(function() {
+        populateContinueNodeOptions(document.getElementById("detail-continue-node-select"));
+      });
+    }
   }
   if (recovery.can_rerun) {
     var dRerunBtn = document.createElement("button");
@@ -14622,6 +14786,440 @@ async function pingNode(name) {
 }
 
 // ----------------------------------------------------------------------
+// Submit-wizard compute-node selector (node-selection-at-submission T11).
+// Data flow: wizard workflow/method/profile/tag changes (debounced 300 ms)
+// → POST /api/v1/nodes/matching → render. The backend is the single
+// authority on capability derivation — the frontend only renders the
+// response (satisfies/missing_*/degraded/capability_state) and never
+// re-implements the derivation table. T12 wires the submit payload
+// (target_node/node_tags) off this control's state.
+// ----------------------------------------------------------------------
+
+var nodeMatchingState = {
+  response: null,      // last applied NodeMatchingResponse (null = not loaded)
+  error: null,         // last refresh error message (null when healthy)
+  selectedTags: [],    // checked tag chips (AND semantics, enforced server-side)
+  timer: null,         // debounce timer
+  seq: 0,              // race token — only the newest response may render
+  userTouched: false,  // true once the user changes the dropdown (a stage
+                       // preselect applied programmatically never sets this)
+  preselectSourceId: "", // source job id the current mirror was derived from
+  preselectNode: "",   // stage mirror: source job's explicit spec.target_node
+  preselectHost: ""    // stage mirror: source job's host (display only)
+};
+
+function scheduleNodeMatchingRefresh() {
+  if (nodeMatchingState.timer) clearTimeout(nodeMatchingState.timer);
+  nodeMatchingState.timer = setTimeout(function() {
+    nodeMatchingState.timer = null;
+    refreshNodeMatching();
+  }, 300);
+}
+
+function buildNodeMatchingRequest() {
+  var stages = (wizardState.method && wizardState.method.stages) || {};
+  var levels = {};
+  Object.keys(stages).forEach(function(lid) {
+    var st = stages[lid];
+    if (!st || !st.engine || st._disabled === true) return;
+    var copy = JSON.parse(JSON.stringify(st));
+    delete copy._disabled;
+    levels[lid] = copy;
+  });
+  var method = {
+    schema_id: (wizardState.workflow && wizardState.workflow.schema_id) || "",
+    profile_id: (wizardState.method && wizardState.method.profile_id) || "",
+    levels: levels
+  };
+  // Confsearch protocol/policy hoisting mirrors the submit payload (the
+  // backend resolves protocol from method.protocol, then profile_id), so
+  // the preview judges the job that would actually be submitted.
+  var csStage = levels.confsearch || {};
+  if (csStage.protocol) method.protocol = csStage.protocol;
+  if (csStage.refinement_policy) method.refinement_policy = csStage.refinement_policy;
+  if (!method.protocol && method.profile_id && method.profile_id !== "__custom__") {
+    method.protocol = method.profile_id;
+  }
+  return {
+    workflow: (wizardState.workflow && wizardState.workflow.id) || "",
+    method: method,
+    node_tags: nodeMatchingState.selectedTags.slice()
+  };
+}
+
+async function refreshNodeMatching() {
+  var modal = document.getElementById("job-modal");
+  if (!modal || modal.style.display === "none") return;
+  var reqBody = buildNodeMatchingRequest();
+  if (!reqBody.workflow) return;
+  var seq = ++nodeMatchingState.seq;
+  try {
+    var data = await api("/nodes/matching", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(reqBody)
+    });
+    if (seq !== nodeMatchingState.seq) return;
+    nodeMatchingState.response = data;
+    nodeMatchingState.error = null;
+  } catch (e) {
+    if (seq !== nodeMatchingState.seq) return;
+    nodeMatchingState.response = null;
+    nodeMatchingState.error = (e && e.message) || String(e);
+  }
+  renderNodeSelector();
+}
+
+function nodeOptionStatusGlyph(status) {
+  if (status === "online") return "🟢";
+  if (status === "degraded") return "🟡";
+  return "🔴";
+}
+
+function nodeOptionLabel(node) {
+  var status = node.status || "offline";
+  var parts = [
+    nodeOptionStatusGlyph(status),
+    node.name,
+    (node.running_jobs || 0) + "/" + (node.max_jobs || 0)
+  ];
+  if (node.queue) parts.push(node.queue);
+  parts.push(t("nodes.status." + status));
+  var label = parts.join("  ");
+  if (node.degraded) label += "  [" + t("nodes.badge.degraded") + "]";
+  if (node.capability_state === "probe-inferred") label += "  [" + t("nodes.badge.probe_inferred") + "]";
+  else if (node.capability_state === "unknown") label += "  [" + t("nodes.badge.unknown") + "]";
+  if (node.declared_ok === false) label += "  [" + t("nodes.badge.mismatch") + "]";
+  return label;
+}
+
+function nodeDisabledReason(node) {
+  var reasons = [];
+  if ((node.status || "offline") === "offline") reasons.push(t("nodes.reason.offline"));
+  if (node.missing_software && node.missing_software.length) {
+    reasons.push(t("nodes.reason.missing_software", { software: node.missing_software.join(", ") }));
+  }
+  if (node.missing_tags && node.missing_tags.length) {
+    reasons.push(t("nodes.reason.missing_tags", { tags: node.missing_tags.join(", ") }));
+  }
+  if (!reasons.length && node.reasons && node.reasons.length) {
+    reasons.push(node.reasons.join("; "));
+  }
+  return reasons.join("; ");
+}
+
+function appendNodeBadge(container, show, text, infoStyle) {
+  if (!show) return;
+  var badge = document.createElement("span");
+  badge.className = "node-badge" + (infoStyle ? " node-badge-info" : "");
+  badge.textContent = text;
+  container.appendChild(badge);
+}
+
+function nodeMatchingTagUniverse(nodes) {
+  var seen = {};
+  var tags = [];
+  (nodes || []).forEach(function(node) {
+    (node.tags || []).forEach(function(tag) {
+      if (!seen[tag]) { seen[tag] = true; tags.push(tag); }
+    });
+  });
+  return tags.sort();
+}
+
+function renderNodeTagChips(nodes) {
+  var box = document.getElementById("modal-node-tags");
+  if (!box) return;
+  var tags = nodeMatchingTagUniverse(nodes);
+  nodeMatchingState.selectedTags = nodeMatchingState.selectedTags.filter(function(tag) {
+    return tags.indexOf(tag) >= 0;
+  });
+  if (!tags.length) { box.style.display = "none"; box.innerHTML = ""; return; }
+  box.style.display = "flex";
+  box.innerHTML = "";
+  tags.forEach(function(tag) {
+    var chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "node-tag-chip" + (nodeMatchingState.selectedTags.indexOf(tag) >= 0 ? " active" : "");
+    chip.textContent = tag;
+    chip.setAttribute("data-node-tag", tag);
+    chip.setAttribute("aria-pressed", nodeMatchingState.selectedTags.indexOf(tag) >= 0 ? "true" : "false");
+    chip.title = t("nodes.tags_hint");
+    chip.addEventListener("click", function() {
+      var idx = nodeMatchingState.selectedTags.indexOf(tag);
+      if (idx >= 0) nodeMatchingState.selectedTags.splice(idx, 1);
+      else nodeMatchingState.selectedTags.push(tag);
+      scheduleNodeMatchingRefresh();
+      renderNodeTagChips((nodeMatchingState.response && nodeMatchingState.response.nodes) || []);
+    });
+    box.appendChild(chip);
+  });
+}
+
+function renderNodeSelectDetail() {
+  var sel = document.getElementById("modal-node-select");
+  var detail = document.getElementById("modal-node-detail");
+  if (!sel || !detail) return;
+  var nodes = (nodeMatchingState.response && nodeMatchingState.response.nodes) || [];
+  var node = null;
+  for (var i = 0; i < nodes.length; i++) {
+    if (nodes[i].name === sel.value) { node = nodes[i]; break; }
+  }
+  if (!node && nodeMatchingState.preselectNode && !nodeMatchingState.userTouched) {
+    // Stage mirror whose pin is not selectable for the child workflow
+    // (offline/incapable/not in the matching list): still show where the
+    // chain came from; the server validates the inherited pin at creation.
+    detail.style.display = "flex";
+    detail.innerHTML = "";
+    var pin = document.createElement("span");
+    pin.className = "node-meta";
+    pin.textContent = t("nodes.source_pin") + ": " + nodeMatchingState.preselectNode +
+      (nodeMatchingState.preselectHost ? "  " + nodeMatchingState.preselectHost : "");
+    detail.appendChild(pin);
+    return;
+  }
+  if (!node) { detail.style.display = "none"; detail.innerHTML = ""; return; }
+  detail.style.display = "flex";
+  detail.innerHTML = "";
+  var dot = document.createElement("span");
+  dot.className = "node-dot " + (node.status || "offline");
+  detail.appendChild(dot);
+  var meta = document.createElement("span");
+  meta.className = "node-meta";
+  meta.textContent = (node.host || "") + "  " + (node.running_jobs || 0) + "/" + (node.max_jobs || 0) +
+    "  DISK " + (node.disk_usage_pct || 0) + "%" + (node.queue ? "  " + node.queue : "");
+  detail.appendChild(meta);
+  appendNodeBadge(detail, node.degraded, t("nodes.badge.degraded"), false);
+  appendNodeBadge(detail, node.capability_state === "probe-inferred", t("nodes.badge.probe_inferred"), true);
+  appendNodeBadge(detail, node.capability_state === "unknown", t("nodes.badge.unknown"), true);
+  appendNodeBadge(detail, node.declared_ok === false, t("nodes.badge.mismatch"), false);
+}
+
+function updateNodeSelectorHints() {
+  var sel = document.getElementById("modal-node-select");
+  var hint = document.getElementById("modal-node-auto-hint");
+  var note = document.getElementById("modal-node-note");
+  if (!sel || !hint || !note) return;
+  var resp = nodeMatchingState.response;
+  var required = (resp && resp.required_software) || [];
+  var showAutoHint = sel.value === "" && !!resp && resp.local_satisfies === false && required.length > 0;
+  hint.style.display = showAutoHint ? "block" : "none";
+  if (showAutoHint) hint.textContent = t("nodes.auto_remote_hint");
+  // m11: the current pick may be a disabled option kept visible by
+  // renderNodeSelector (a refresh made the picked node unsatisfying).
+  // Surface that loudly instead of silently falling back to auto.
+  var selectedOpt = sel.selectedOptions && sel.selectedOptions[0];
+  var selectedUnavailable = !!(sel.value && selectedOpt && selectedOpt.disabled);
+  if (nodeMatchingState.error) {
+    note.style.display = "block";
+    note.classList.add("node-note-error");
+    note.textContent = t("nodes.matching_error") + ": " + nodeMatchingState.error;
+  } else if (selectedUnavailable) {
+    note.style.display = "block";
+    note.classList.add("node-note-error");
+    note.textContent = t("nodes.selected_unavailable");
+  } else if (resp && !(resp.nodes || []).length) {
+    note.style.display = "block";
+    note.classList.remove("node-note-error");
+    note.textContent = t("nodes.empty");
+  } else {
+    note.style.display = "none";
+  }
+}
+
+function renderNodeSelector() {
+  var sel = document.getElementById("modal-node-select");
+  if (!sel) return;
+  var resp = nodeMatchingState.response;
+  var nodes = (resp && resp.nodes) || [];
+  var previousValue = sel.value;
+
+  sel.innerHTML = "";
+  var autoOpt = document.createElement("option");
+  autoOpt.value = "";
+  autoOpt.textContent = t("nodes.opt.auto");
+  sel.appendChild(autoOpt);
+  var localOpt = document.createElement("option");
+  localOpt.value = "local";
+  localOpt.textContent = t("nodes.opt.local");
+  localOpt.setAttribute("data-node-local", "true");
+  sel.appendChild(localOpt);
+
+  nodes.forEach(function(node) {
+    var opt = document.createElement("option");
+    opt.value = node.name;
+    opt.textContent = nodeOptionLabel(node);
+    opt.setAttribute("data-node-name", node.name);
+    opt.setAttribute("data-node-satisfies", node.satisfies ? "true" : "false");
+    if (!node.satisfies) {
+      opt.disabled = true;
+      opt.title = nodeDisabledReason(node);
+    }
+    sel.appendChild(opt);
+  });
+
+  var stillThere = false;
+  Array.prototype.forEach.call(sel.options, function(opt) {
+    if (opt.value === previousValue) stillThere = true;
+  });
+  sel.value = stillThere ? previousValue : "";
+
+  // T12 stage mirror: an untouched selector follows the source job's
+  // explicit pin (a manual pick always wins over the mirror).
+  if (!nodeMatchingState.userTouched && nodeMatchingState.preselectNode) {
+    applyNodePreselect(sel, nodeMatchingState.preselectNode);
+  }
+
+  // m11: a refresh may have disabled the option the user already picked
+  // (node went offline / lost a required capability). KEEP the pick
+  // visible — a disabled option can stay the selected value; the warning
+  // renders in updateNodeSelectorHints, the submit still carries the pick,
+  // and the server's coded 400 (localized via formatSubmitError) is the
+  // backstop. Never silently fall back to auto here.
+  updateNodeSelectorHints();
+  renderNodeTagChips(nodes);
+  renderNodeSelectDetail();
+}
+
+function onNodeSelectChange() {
+  // The change event only fires on user interaction — a stage preselect
+  // applied via .value stays "untouched" so the stage payload omits it and
+  // the server-side source inheritance (T6) remains the authority.
+  nodeMatchingState.userTouched = true;
+  updateNodeSelectorHints();
+  renderNodeSelectDetail();
+}
+
+function resetNodeSelector() {
+  nodeMatchingState.selectedTags = [];
+  nodeMatchingState.error = null;
+  nodeMatchingState.userTouched = false;
+  nodeMatchingState.preselectSourceId = "";
+  nodeMatchingState.preselectNode = "";
+  nodeMatchingState.preselectHost = "";
+  renderNodeSelector();
+}
+
+// ----------------------------------------------------------------------
+// T12: submit payload wiring (target_node / node_tags), stage source-node
+// preselect, and the job-detail continue override. The selector's "local"
+// value maps directly to target_node="local" — a first-class local pin in
+// the v1 model (LOCAL_NODE_NAME), never capability-checked server-side.
+// Auto ("") omits target_node entirely so the server default applies.
+// ----------------------------------------------------------------------
+
+function applyNodeSelectionToBody(body, opts) {
+  opts = opts || {};
+  var sel = document.getElementById("modal-node-select");
+  // requireUserChoice (stage chains): only an explicit user pick is sent.
+  // The server already inherits the source job's explicit pin when the
+  // request omits the field, so the preselect mirror stays a UX hint.
+  if (sel && sel.value && (!opts.requireUserChoice || nodeMatchingState.userTouched)) {
+    body.target_node = sel.value;
+  }
+  if (nodeMatchingState.selectedTags.length) {
+    body.node_tags = nodeMatchingState.selectedTags.slice();
+  }
+  return body;
+}
+
+// Select the pinned node when its option exists and is enabled; a pin that
+// is missing or capability-disabled for the child workflow stays visible as
+// a detail-line note instead (the server validates the inherited value).
+function applyNodePreselect(sel, pinned) {
+  var found = null;
+  Array.prototype.forEach.call(sel.options, function(opt) {
+    if (opt.value === pinned) found = opt;
+  });
+  if (found && !found.disabled) {
+    sel.value = pinned;
+    return true;
+  }
+  return false;
+}
+
+// Stage wizards mirror the source job's explicit node pin as a dropdown
+// preselection. Only explicit spec.target_node values are mirrored — an
+// auto source leaves the child auto. Idempotent per source id: repeated
+// configureStageSourcePanel passes for the same source never clobber a
+// manual override made in between. userTouched semantics (m10):
+//   * A NEW source id is a new decision point — a manual pick made under
+//     the previous source is superseded by the new source's pin, so
+//     userTouched resets SYNCHRONOUSLY when the id changes (pre-fetch).
+//   * A manual pick made DURING the fetch window sets userTouched again;
+//     when the response arrives the pin is only recorded (source-pin
+//     detail line) — never applied, and userTouched is never reset, so
+//     the in-flight pick always wins.
+async function preselectNodeFromSourceJob(sourceJobId) {
+  sourceJobId = String(sourceJobId || "").trim();
+  if (sourceJobId === nodeMatchingState.preselectSourceId) return;
+  nodeMatchingState.preselectSourceId = sourceJobId;
+  nodeMatchingState.preselectNode = "";
+  nodeMatchingState.preselectHost = "";
+  var sel = document.getElementById("modal-node-select");
+  if (!sourceJobId) {
+    // Source cleared / left a stage workflow: drop the programmatic mirror.
+    // A node the user explicitly picked survives the switch.
+    if (!nodeMatchingState.userTouched && sel) sel.value = "";
+    renderNodeSelector();
+    return;
+  }
+  // New decision point (see header): the new source's pin may override a
+  // manual pick made under the previous source. Resetting here — before
+  // the fetch — is what protects a pick made during the fetch window.
+  nodeMatchingState.userTouched = false;
+  try {
+    var data = await api("/jobs/" + encodeURIComponent(sourceJobId));
+    // Stale-response guard: the source field moved on while fetching.
+    if (nodeMatchingState.preselectSourceId !== sourceJobId) return;
+    var srcSpec = (data && data.spec) || {};
+    if (srcSpec.target_node) {
+      // Always record the pin for the source-pin detail line. Whether it
+      // is APPLIED is decided by renderNodeSelector(): applyNodePreselect
+      // only fires for an untouched selector, so a manual pick made while
+      // this fetch was in flight keeps the dropdown value. Never reset
+      // userTouched here — that was the m10 clobber race.
+      nodeMatchingState.preselectNode = String(srcSpec.target_node);
+      nodeMatchingState.preselectHost = String((data && data.host) || "");
+    } else if (!nodeMatchingState.userTouched && sel) {
+      sel.value = "";
+    }
+  } catch (e) {
+    // Unknown/unreachable source id — leave auto; the submit surfaces the
+    // server's source-resolution error.
+  }
+  renderNodeSelector();
+}
+
+// D12: submission-time target errors carry a machine-readable code in the
+// 400 body ({code, missing_software, missing_tags}); map codes to localized
+// text instead of surfacing the server's English message.
+function translateNodeError(err) {
+  var msg = (err && err.message) || String(err || "");
+  var parsed = null;
+  try {
+    var candidate = JSON.parse(msg);
+    if (candidate && typeof candidate === "object" && candidate.code) parsed = candidate;
+  } catch (e) { /* not a coded error body */ }
+  if (!parsed) return null;
+  var key = "nodes.error." + parsed.code;
+  var translated = t(key);
+  if (translated === key) translated = t("nodes.error.execution_target_error");
+  var extras = [];
+  if (parsed.missing_software && parsed.missing_software.length) {
+    extras.push(t("nodes.reason.missing_software", { software: parsed.missing_software.join(", ") }));
+  }
+  if (parsed.missing_tags && parsed.missing_tags.length) {
+    extras.push(t("nodes.reason.missing_tags", { tags: parsed.missing_tags.join(", ") }));
+  }
+  return extras.length ? translated + " (" + extras.join("; ") + ")" : translated;
+}
+
+function formatSubmitError(err) {
+  return translateNodeError(err) || (err && err.message) || String(err);
+}
+
+// ----------------------------------------------------------------------
 // Local QC backends panel (GET /api/backends + /api/v1/software/discovery).
 // Version badge + multi-install warning are display-only; the discovery
 // endpoint is best-effort and degrades silently when unavailable.
@@ -15012,8 +15610,8 @@ async function selectJob(jobId) {
   // servers and throws only when the job itself cannot be fetched.
   const detail = await fetchJobDetail(jobId);
   const job = detail.job;
-  selectedJobIsRemote = !!(job.result && job.result.node);
-  lastRemoteNode = selectedJobIsRemote ? String(job.result.node || "") : "";
+  lastRemoteNode = jobRemoteNodeName(job);
+  selectedJobIsRemote = !!lastRemoteNode;
   let filesResp;
   if (selectedJobIsRemote) {
     filesResp = await api("/jobs/" + encodeURIComponent(jobId) + "/remote-files");
@@ -15177,7 +15775,7 @@ async function fetchNmrReportJson(job) {
   var jobId = job.id;
   var path = "nmr_report.json";
   var url;
-  if (job.result && job.result.node) {
+  if (jobRemoteNodeName(job)) {
     url = "/jobs/" + encodeURIComponent(jobId) + "/remote-files/" + encodeURIComponent(path) + "/preview";
   } else {
     url = "/jobs/" + encodeURIComponent(jobId) + "/files/" + encodeURIComponent(path);
@@ -15588,6 +16186,10 @@ function openModal() {
   }
   document.getElementById("job-modal").style.display = "flex";
   applyPendingNewTask();
+  // Node selector: fresh tag selection per open; refresh fires after the
+  // modal is visible (refreshNodeMatching no-ops while it is hidden).
+  resetNodeSelector();
+  scheduleNodeMatchingRefresh();
 }
 
 function closeModal() { document.getElementById("job-modal").style.display = "none"; }
@@ -16591,6 +17193,7 @@ async function uploadNmrBruker(input) {
 function updateConfigCards() {
   ensureWizardWorkflowValid();
   syncBatchOptimizeProfileSummary();
+  scheduleNodeMatchingRefresh();
   var wfTitle = document.getElementById("workflow-card-title");
   var wfDesc = document.getElementById("workflow-card-desc");
   var cat = currentLang === "zh-CN" ? "label_zh" : "label";
@@ -16829,7 +17432,12 @@ function configureStageSourcePanel(workflowId) {
   var wf = workflowCatalogCache.find(function(w) { return w.id === workflowId; });
   var isStage = wf && wf.requires_source;
   panel.style.display = isStage ? "block" : "none";
-  if (!isStage) return;
+  if (!isStage) {
+    // Left the stage chain: drop any programmatic node mirror (manual picks
+    // survive — preselectNodeFromSourceJob keeps userTouched values).
+    preselectNodeFromSourceJob("");
+    return;
+  }
   var artifactInput = document.getElementById("stage-artifact");
   if (workflowId === "BatchOptimize") {
     // Confirmed-candidate manifest is the only sanctioned PES hand-off;
@@ -16860,6 +17468,10 @@ function configureStageSourcePanel(workflowId) {
     stageBatchFromWizard();
   }
   renderStageBatchPreview();
+  // T12: mirror the source job's explicit node pin into the node selector
+  // (no-op when the source field is empty or unchanged).
+  var stageSourceInput = document.getElementById("stage-source-job");
+  preselectNodeFromSourceJob(stageSourceInput ? stageSourceInput.value : "");
 }
 
 var _batchKeyCounter = 0;
@@ -17200,6 +17812,9 @@ async function submitStageWorkflowJob(workflow) {
   if (taskName) body.task_name = taskName;
   var modalProjectId = document.getElementById("modal-project-select").value;
   if (modalProjectId) body.project_id = modalProjectId;
+  // T12: node selection — only an explicit user pick is sent for stage
+  // chains; the server inherits the source job's pin otherwise (T6).
+  applyNodeSelectionToBody(body, { requireUserChoice: true });
   closeModal();
   try {
     var created = await api("/jobs", {
@@ -17210,7 +17825,7 @@ async function submitStageWorkflowJob(workflow) {
     await refreshJobs();
     if (created && created.job_id) await selectJob(created.job_id);
   } catch (err) {
-    window.alert((t("modal.submit_failed") || "提交失败") + ": " + (err.message || err));
+    window.alert((t("modal.submit_failed") || "提交失败") + ": " + formatSubmitError(err));
   }
 }
 
@@ -18593,6 +19208,7 @@ async function submitPESsearchTask() {
   }
   var projectId = String(document.getElementById("modal-project-select").value || "").trim();
   if (projectId) body.project_id = projectId;
+  applyNodeSelectionToBody(body);
   var submitButton = document.getElementById("modal-submit");
   if (submitButton) submitButton.disabled = true;
   try {
@@ -18605,7 +19221,7 @@ async function submitPESsearchTask() {
     await refreshJobs();
     if (result && result.job_id) await selectJob(result.job_id);
   } catch (err) {
-    window.alert((t("modal.submit_failed") || "提交失败") + ": " + (err.message || err));
+    window.alert((t("modal.submit_failed") || "提交失败") + ": " + formatSubmitError(err));
   } finally {
     if (submitButton) submitButton.disabled = false;
   }
@@ -18754,6 +19370,7 @@ async function submitJobModal() {
     var nmrProjectId = document.getElementById("modal-project-select").value;
     if (nmrProjectId) nmrBody.project_id = nmrProjectId;
     if (taskName) nmrBody.task_name = taskName;
+    applyNodeSelectionToBody(nmrBody);
     try {
       var nmrResult = await api("/jobs", {
         method: "POST",
@@ -18764,7 +19381,7 @@ async function submitJobModal() {
       await refreshJobs();
       await selectJob(nmrResult.job_id);
     } catch (err) {
-      window.alert((t("modal.submit_failed") || "提交失败") + ": " + err);
+      window.alert((t("modal.submit_failed") || "提交失败") + ": " + formatSubmitError(err));
     }
     return;
   }
@@ -18875,6 +19492,7 @@ async function submitJobModal() {
     var mechProjectId = document.getElementById("modal-project-select").value;
     if (mechProjectId) mechBody.project_id = mechProjectId;
     if (taskName) mechBody.task_name = taskName;
+    applyNodeSelectionToBody(mechBody);
     try {
       var mechResult = await api("/jobs", {
         method: "POST",
@@ -18886,7 +19504,7 @@ async function submitJobModal() {
       await refreshJobs();
       await selectJob(mechResult.job_id);
     } catch (err) {
-      window.alert((t("modal.submit_failed") || "提交失败") + ": " + err);
+      window.alert((t("modal.submit_failed") || "提交失败") + ": " + formatSubmitError(err));
     }
     return;
   }
@@ -19042,6 +19660,7 @@ async function submitJobModal() {
     var modalProjectId = document.getElementById("modal-project-select").value;
     if (modalProjectId) body.project_id = modalProjectId;
     if (taskName) body.task_name = taskName;
+    applyNodeSelectionToBody(body);
 
     batchBodies.push(body);
   }
@@ -19049,7 +19668,7 @@ async function submitJobModal() {
   try {
     await submitJobBatch(batchBodies);
   } catch (error) {
-    window.alert(t("modal.submit_failed", { message: error.message || String(error) }));
+    window.alert(t("modal.submit_failed", { message: formatSubmitError(error) }));
   }
   await refreshJobs();
 }
@@ -19378,6 +19997,7 @@ function setupEventListeners() {
     currentLang = currentLang === "zh-CN" ? "en-US" : "zh-CN";
     localStorage.setItem("acp-lang", currentLang);
     applyI18n();
+    renderNodeSelector();
     if (lastStatus) {
       const pill = statusPillMode(lastStatus);
       const node = document.getElementById("status-pill");
@@ -19454,6 +20074,16 @@ function setupEventListeners() {
     document.getElementById("method-config-modal").style.display = "none";
     updateConfigCards();
   });
+
+  document.getElementById("modal-node-select").addEventListener("change", onNodeSelectChange);
+  // T12 stage mirror: re-derive the node preselect when the source job id
+  // changes (blur after edit). Guarded — the element exists in the modal.
+  var stageSourceJobEl = document.getElementById("stage-source-job");
+  if (stageSourceJobEl) {
+    stageSourceJobEl.addEventListener("change", function() {
+      preselectNodeFromSourceJob(this.value);
+    });
+  }
 
   document.getElementById("btn-new-project").addEventListener("click", openProjectModal);
   document.getElementById("btn-delete-project").addEventListener("click", openDeleteProjectModal);

@@ -52,7 +52,9 @@ ACP 远程计算节点支持 — 详细开发计划
 
 阶段 7：测试 ⏳ 待办
 
-阶段 8：文档与部署 ⏳ 待办
+阶段 8：提交时能力过滤（Capability-Aware Node Selection）✅ 2026-09-08
+
+阶段 9：文档与部署 ⏳ 待办
 
 文件变更清单
 
@@ -81,7 +83,7 @@ ACP Server (本地)
                  |  SSH/SFTP port 22
                  v
     Remote Compute Node Pool
-      Node A: 10.16.5.157 ({remote_code_dir}/src + OpenLAVA + QC全套)
+      Node A: 192.168.1.100 ({remote_code_dir}/src + OpenLAVA + QC全套)
       Node B: <future>
       {remote_code_dir}/
         src/acp/ (排除 api/, scheduler/)
@@ -174,7 +176,7 @@ scripts/run_g16_worker.sh — Gaussian 包装脚本
 
 评审日期：2026-07-12 ｜ 文件：config.py (163行) / ssh.py (286行) / sftp.py (266行) / sync.py (269行) / __init__.py (32行)
 
-测试：mock 单元测试 23/23 通过（含 8 个 P0 修复测试） + 真实节点 10.16.5.157 集成测试 3/3 通过 ｜ lint：ruff 0 error ｜ 类型：mypy 0 error
+测试：mock 单元测试 23/23 通过（含 8 个 P0 修复测试） + 真实节点 192.168.1.100 集成测试 3/3 通过 ｜ lint：ruff 0 error ｜ 类型：mypy 0 error
 
 ✅ 优点
 
@@ -488,7 +490,7 @@ P1 隐患修复：tail_log 加 max_size 参数（默认 8MB，防 OOM）；移�
 
  | target_node 支持 | select_node() 使用 getattr(spec, "target_node", None) 前向兼容，但 JobSpec 尚未声明此字段 | 阶段 3.6 / 阶段 6.2
 
- | 日志阶段解析 | 基础版本仅展示原始日志文本，不做阶段 marker 正则解析 | 阶段 9（增强）
+ | 日志阶段解析 | 基础版本仅展示原始日志文本，不做阶段 marker 正则解析 | 阶段 10（增强）
 
  | manager 预创建 stages | JobManager.submit() 在 runner 前调用 initialize_job_stages() 创建 conformer stages；remote runner 的 finalize_job() 将其标记为 skipped | 阶段 3 可选优化
 
@@ -549,7 +551,7 @@ shutdown() 关闭 SSHConnectionPool 所有空闲连接
 
 评审日期：2026-07-12 ｜ 改动文件：config.py / defaults.yaml / runner.py / manager.py / server.py / jobs.py / v1_schemas.py / v1_routes.py / monitor.py / sftp.py / sync.py
 
-测试：mock 单元测试 93/93 通过（Phase 1: 23 + Phase 2: 35 + Phase 3: 35） ｜ lint：ruff 0 error ｜ 真实节点集成测试：✅ CCO conformer 搜索在 10.16.5.157 上成功执行（CREST → ISOSTAT → 完成，LSF Job 561）
+测试：mock 单元测试 93/93 通过（Phase 1: 23 + Phase 2: 35 + Phase 3: 35） ｜ lint：ruff 0 error ｜ 真实节点集成测试：✅ CCO conformer 搜索在 192.168.1.100 上成功执行（CREST → ISOSTAT → 完成，LSF Job 561）
 
 ✅ 集成测试验证结果（CCO 远程 conformer 搜索）
 
@@ -567,7 +569,7 @@ LSF 提交：bsub 成功，LSF Job <561> 在 workstation 节点 8 核执行
 
 不下载文件：本地 work_dir 仅有 events.jsonl / job.json / inputs/，QC 输出全部保留在远程节点
 
-provenance.hostname：正确记录为 10.16.5.157（远程节点），非 ACP Server
+provenance.hostname：正确记录为 192.168.1.100（远程节点），非 ACP Server
 
 wall_time：43.88 秒（含 CREST 两阶段 + ISOSTAT 聚类，CCO 2 个构象异构体）
 
@@ -807,7 +809,7 @@ if protocol not in ('ext', 'full', 'lite', 'zero', 'benchmark'):
 
 步骤 CS-7：远程回归测试 ✓ 完成（2026-07-13）
 
-ACP Server 是纯调度器，不在本地运行 cccp。所有 QC 验证通过远程节点（10.16.5.157）直接执行 python -m acp.cli run conformer（PYTHONPATH=/home/<user>/acp_code/src）进行：
+ACP Server 是纯调度器，不在本地运行 cccp。所有 QC 验证通过远程节点（192.168.1.100）直接执行 python -m acp.cli run conformer（PYTHONPATH=/home/<user>/acp_code/src）进行：
 
  | 协议 | 结果 | 关键指标
 
@@ -931,7 +933,7 @@ GET /jobs/{id}/remote-logs/{name} — 获取日志尾部（stdout.log / stderr.l
 
 评审日期：2026-07-13 ｜ 文件：fetcher.py (196行) / v1_routes.py (+118行) / v1_schemas.py (+25行) / manager.py (+6行) / remote/__init__.py (+3导出)
 
-测试：mock 单元测试 28/28 通过（resolve/is_remote_job/list_files/file_exists/read_file/stream_file/log_tail/path-traversal/manager-wiring）+ 真实节点 10.16.5.157 端到端验证（list/download/log-tail 均通过） ｜ lint：ruff 0 error（除既有 N816 rdDetermineBonds） ｜ 格式：ruff format 通过
+测试：mock 单元测试 28/28 通过（resolve/is_remote_job/list_files/file_exists/read_file/stream_file/log_tail/path-traversal/manager-wiring）+ 真实节点 192.168.1.100 端到端验证（list/download/log-tail 均通过） ｜ lint：ruff 0 error（除既有 N816 rdDetermineBonds） ｜ 格式：ruff format 通过
 
 ✅ 优点
 
@@ -939,7 +941,7 @@ GET /jobs/{id}/remote-logs/{name} — 获取日志尾部（stdout.log / stderr.l
 
 路径遍历防护：_safe_join() 用 posixpath.normpath + 前缀校验，../../etc/passwd 和绝对路径 /etc/shadow 均被拦截并返回 400
 
-流式下载不占满内存：stream_file 64KB 分块 yield，借 sftp_session 上下文管理器，迭代结束自动归还连接。10.16.5.157 真实下载 CCO_remote_v2_global_min.xyz（541B）和 submit.lsf（587B）验证通过
+流式下载不占满内存：stream_file 64KB 分块 yield，借 sftp_session 上下文管理器，迭代结束自动归还连接。192.168.1.100 真实下载 CCO_remote_v2_global_min.xyz（541B）和 submit.lsf（587B）验证通过
 
 日志尾部高效：仅读末尾 4MB（_LOG_TAIL_MAX_BYTES），从 max(0, size - 4MB) seek，截断首行丢弃不完整行。GB 级日志不爆内存
 
@@ -975,7 +977,7 @@ JobManager 惰性集成：remote_fetcher 属性仅在远程启用时构造，本
  | stream_file 借 SFTP 会话期间若池满则阻塞（默认 60s borrow 超时）
  | 可接受：下载为低频用户操作，非并发场景
 
-真实节点端到端验证（10.16.5.157）
+真实节点端到端验证（192.168.1.100）
 
  | 端点 | 测试用例 | 结果
 
@@ -1130,7 +1132,7 @@ JobManager 惰性集成：remote_fetcher 属性仅在远程启用时构造，本
  | ⏳ 待修复
 
  | P2-6 | P4 | api/v1_routes.py:543, 547
- | 信息泄露：主机名在 RemoteFileListResponse 中暴露：host 字段泄露了内部计算节点的主机名。API 消费者可以看到 10.16.5.157 等值
+ | 信息泄露：主机名在 RemoteFileListResponse 中暴露：host 字段泄露了内部计算节点的主机名。API 消费者可以看到 192.168.1.100 等值
  | 从 RemoteFileListResponse schema 中移除 host 字段，或在仅限管理员查看的场景中保留
  | ✅ 已修复 — schema 和 API 响应中移除 host 字段
 
@@ -2231,6 +2233,27 @@ dry_run 贯穿全链路：work_dir / DB / full_cleanup / API 端点均支持预�
 
 7. 阶段 6：网页端节点选择
 
+⚠️ 状态修正（2026-09-08，node-selection-at-submission 特性实施后按代码复核）
+
+原 2026-07-13 评审把本阶段各步骤全部标为 ✓ 完成，但 6.4/6.5 的"前端选择器"当时只落到 UI 规范与资源抽屉的节点状态展示，作业提交表单里并没有节点选择器（.node-select CSS 已定义未用）。各步骤的真实状态以 2026-09-08 代码为准：
+
+ | 步骤 | 真实状态（2026-09-08 代码复核）
+
+ | 6.1 节点管理 API
+ | ✓ 已实现：api/v1_routes.py list_nodes / get_node_status / ping_node 三个端点 + remote/node_manager.py（30s TTL 缓存、软件探测）。2026-09-08 另加能力预览端点 POST /api/v1/nodes/matching（见 阶段 8）
+
+ | 6.2 作业提交支持节点指定
+ | ✓ 已实现：JobSpec.target_node / execution_mode / node_tags（scheduler/jobs.py:523-525）与 V1JobCreateRequest 字段真实存在。但下方 _select_node() 伪代码不代表现行路径，节点判定已由 scheduler/nodes.py 的 NodeRegistry.require/select_remote 与 manager._resolve_execution_target 承担（创建时校验 + 调度后盾，见 阶段 8）
+
+ | 6.3 NodeManager 实现
+ | ✓ 已实现：NodeManager + NodeStatus。NodeStatus 于 2026-09-08 扩展混合三态能力字段（declared / capability_state / declared_ok / mismatch / probe_note，node_manager.py:253-292），下方 dataclass 草图未含这些字段
+
+ | 6.4 前端节点选择 UI
+ | ✅ 由阶段 8 补齐（2026-09-08，W4-T11）：提交向导 modal-node-select 三态下拉 + 标签 chips + 徽标 + 置灰原因，数据源 POST /nodes/matching；本节下方 UI 草图即为该实现遵循的设计规范
+
+ | 6.5 前端 API 调用
+ | ✅ 数据流由阶段 8 接入（向导变更防抖 → POST /nodes/matching → 渲染，前端只消费后端结果）；下方 fetchNodes/submitJob/pingNode 为早期示意，资源抽屉的 loadNodes 与测试连接早已生效。载荷接线（target_node/node_tags 随提交 body 发出）已由 W4-T12 完成（d8de072，HEAD 14fe141）：applyNodeSelectionToBody 覆盖向导五支路提交、stage 预选与 continue 改选控件均落地，test_frontend_sync 载荷锁保护
+
 步骤 6.1：节点管理 API ✓ 完成
 
 修改 api/v1_routes.py + 新建 remote/node_manager.py
@@ -2249,7 +2272,7 @@ POST /api/v1/nodes/{name}/ping — 测试节点连通性
   "nodes": [
     {
       "name": "compute-01",
-      "host": "10.16.5.157",
+      "host": "192.168.1.100",
       "status": "online",
       "running_jobs": 2,
       "max_jobs": 5,
@@ -2332,9 +2355,11 @@ class NodeStatus:
     last_check: str = ""
     error: str | None = None
 
-步骤 6.4：前端节点选择 UI ✓ 完成
+步骤 6.4：前端节点选择 UI ✅ 完成（2026-09-08 由阶段 8 补齐；原 "✓ 完成" 标记超前）
 
 修改 frontend/ACP_Workbench_v2.html
+
+下方 UI 规范自 2026-07-13 写好起长期只有 CSS（.node-select，ACP_Workbench_v2.html:1699/1714）与资源抽屉节点面板，未接入提交表单；2026-09-08（阶段 8 W4-T11）按本规范在提交向导实现：select#modal-node-select（自动/本地/节点三态）+ #modal-node-tags 标签 chips + 能力/退化/不一致徽标 + disabled 置灰原因，节点列表与置灰判定全部来自 POST /api/v1/nodes/matching 响应，前端不复制推导逻辑。
 
 在作业提交表单中增加节点选择器：
 
@@ -2363,7 +2388,7 @@ UI 组件示意：
 ┌──────────────────────────────────────────────┐
 │ 远程节点状态                                  │
 │ ┌──────────────────────────────────────────┐ │
-│ │ compute-01  10.16.5.157  🟢 在线         │ │
+│ │ compute-01  192.168.1.100  🟢 在线         │ │
 │ │ 运行作业: 2/5  磁盘: 45%  [测试连接]     │ │
 │ ├──────────────────────────────────────────┤ │
 │ │ compute-02  10.16.5.200  🔴 离线         │ │
@@ -2372,9 +2397,11 @@ UI 组件示意：
 │ [刷新状态]                                    │
 └──────────────────────────────────────────────┘
 
-步骤 6.5：前端 API 调用 ✓ 完成
+步骤 6.5：前端 API 调用 ✅ 完成（2026-09-08 接入 matching 数据流；下方为早期示意代码）
 
 修改 frontend/ACP_Workbench_v2.html
+
+实现说明：fetchNodes/submitJob/pingNode 为 2026-07 阶段的示意代码。实际现状：loadNodes 拉取 GET /api/v1/nodes 用于资源抽屉节点面板与测试连接（早已生效）；2026-09-08（阶段 8 W4-T11）提交向导改由 refreshNodeMatching 防抖调用 POST /api/v1/nodes/matching 渲染节点选择器（matching 响应即提交期判定，同函数）；submit 载荷携带 target_node/node_tags 已由 W4-T12 落地（d8de072，HEAD 14fe141）：applyNodeSelectionToBody 统一接入向导五支路（NMR / mechanism / 逐结构循环 / PESsearch 内联 / stage 工作流，stage 链传 requireUserChoice），stage 源任务显式 pin 经 preselectNodeFromSourceJob 镜像预选，continue 改选经 continueJob 以 {target_node} body 提交；载荷由 v1/v2 校验 helper（validate_submission_target）把关，test_frontend_sync 载荷锁（test_submit_payload_carries_node_selection / test_continue_node_override_and_stage_preselect_lock）锁定。
 
 // 获取节点列表
 async function fetchNodes() {
@@ -2406,6 +2433,8 @@ async function pingNode(nodeName) {
 📋 阶段 6 代码评审报告
 
 完成日期：2026-07-13 ｜ 文件：remote/node_manager.py (~180行) / api/v1_routes.py (+~45行) / api/v1_schemas.py (+~30行) / scheduler/manager.py (+~10行) / frontend/ACP_Workbench_v2.html (+~120行)
+
+⚠️ 本报告反映 2026-07-13 时的状态：文中"前端：节点选择器"实际指资源抽屉节点状态面板 + 测试连接；提交表单内真正的节点选择器于 2026-09-08（阶段 8 W4-T11）补齐。后端端点（GET /api/v1/nodes、GET /api/v1/nodes/{name}/status、POST /api/v1/nodes/{name}/ping）与 target_node 字段经复核真实存在。
 
 新增端点：GET /api/v1/nodes、GET /api/v1/nodes/{name}/status、POST /api/v1/nodes/{name}/ping ｜ 前端：节点选择器 + 节点状态面板 + 测试连接按钮
 
@@ -2463,7 +2492,7 @@ fail-closed：当远程执行未配置时，/nodes 返回 503，前端面板显�
 
  | test_remote_sync.py | Mock SFTP 同步、验证排除 api/scheduler、本地 mtime 记录与比较逻辑
 
- | test_remote_integration.py | 真实 SSH/SFTP 连接 10.16.5.157、提交 LSF 作业、日志 tail 验证
+ | test_remote_integration.py | 真实 SSH/SFTP 连接 192.168.1.100、提交 LSF 作业、日志 tail 验证
 
  | test_remote_phase3.py ✓ 35 tests | Phase 3 集成测试：config defaults、execution_mode 校验、walltime 解析、JobSpec.target_node、_should_run_remote 分发、JobManager 远程接线、server 降级、监控超时、部分失败清理、started_at 语义、task_id 缓存、shlex.quote、原子写入、_ensure_remote_dir 去重
 
@@ -2473,15 +2502,131 @@ fail-closed：当远程执行未配置时，/nodes 返回 503，前端面板显�
 
 当前测试状态：155 mock 单元测试全部通过（Phase 1: 23 + Phase 2: 35 + Phase 3: 35 + Phase 4: 28 + Phase 5: 34，其中 2 skipped 为真实节点集成测试）+ 真实节点端到端验证（CCO 远程搜索 + 阶段 4 端点 10 项）
 
-9. 阶段 8：文档与部署
+9. 阶段 8：提交时能力过滤（Capability-Aware Node Selection, 2026-09-08）
+
+本阶段实现"提交时按能力过滤选择计算节点"：多异构远程节点以 静态能力声明 + 动态软件探测 的混合模型参与任务节点过滤，手动指定与自动默认（least-loaded + 同源亲缘）双模式并存。后端权威设计与实施见 .omo/drafts/node-selection-design.md（决策 D1-D15，定稿 v0.2）与 .omo/plans/node-selection-at-submission.md（T1-T11 已提交）；判定/推导的单一实现驻留 src/acp/scheduler/capabilities.py 与 scheduler/nodes.py。本阶段同时补齐了阶段 6 遗留的前端缺口（6.4/6.5，见上节状态修正）。
+
+步骤 8.1：节点能力声明模型（D8/D13）✅ 完成
+
+RemoteNode 增加 queue: str | None 与 capabilities: NodeCapabilities | None（src/acp/scheduler/remote/config.py:37-56, 68-126；from_config_dict 解析）。capabilities.software 合法值 = 固定 7 名枚举 {orca, xtb, crest, censo, shermo, isostat, molclus}（DECLARED_SOFTWARE_NAMES，config.py:32-34），与 node_manager.py 的 _DOCTOR_SOFTWARE_SCRIPT（远程软件探测脚本，node_manager.py:725-751）恰好同集合；两处漂移由 tests/test_node_capabilities.py::test_declared_enum_matches_doctor_probe_script 锁定（T1）。解析去重保序；枚举外的软件名 → logger.warning + 丢弃，不阻断加载；capabilities 区块整体缺省 → None（generic 哨兵）。
+
+YAML 声明示例（与 config/defaults.yaml cluster 段注释示例、cccp.config 内置默认一致；版本约束不参与过滤）：
+
+cluster:
+  nodes:
+    - name: compute-01
+      host: 192.168.1.100
+      username: <user>
+      remote_work_dir: /scratch/<user>/acp_jobs
+      remote_code_dir: /home/<user>/acp_code
+      max_concurrent_jobs: 5
+      queue: bigmem            # 可选 per-node LSF 队列覆盖；省略/空 → cluster.queue
+      capabilities:            # 可选静态能力声明；省略 → 节点按 generic 处理
+        software: [orca, xtb, crest, censo]   # 仅 7 枚举名合法（未知值丢弃 + warning）
+        tags: [gpu, fast-scratch]             # 自由标签；仅声明 tags 可满足 (D13)
+
+运行时三态视图：NodeStatus 扩展 declared / capability_state（"declared" | "probe-inferred" | "unknown"）/ declared_ok / mismatch / probe_note（node_manager.py capability_state_fields:180-249 + NodeStatus:253-292）。有声明 → declared（声明权威；探测仅生成 declared_ok/mismatch 一致性提示，不参与判定）；无声明且探测成功 → probe-inferred（以探测软件集参与过滤）；无声明且探测空/失败 → unknown，软件需求回退"通用"（probe_note = "capability unknown; treated as generic"，D8）。标签无回退：未声明/探测推断节点恒不满足任何 node_tags（D13）。queue 为非过滤轴：只作提交属性（#BSUB -q），不参与 matches_capabilities/过滤/排序。
+
+步骤 8.2：软件需求权威推导（derive_required_software）✅ 完成
+
+新模块 src/acp/scheduler/capabilities.py。derive_required_software(spec) 纯推导（只读 spec + WORKFLOW_CATALOG/METHOD_SCHEMAS），输出任务所需 QC 软件集：
+
+workflow/protocol/profile 固定表 WORKFLOW_SOFTWARE_REQUIREMENTS（nmr 行）+ Confsearch 子表（_CONFSEARCH_PROTOCOL_SOFTWARE + _CONFSEARCH_REFINEMENT_SOFTWARE + _REFINEMENT_POLICIES_WITH_DFT）+ BatchOptimize 子表（_BATCHOPTIMIZE_PROFILE_SOFTWARE）。method-schema engine 映射：schema_id/profile/levels → profiles[].levels.<level_id>.engine → ENGINE_TO_SOFTWARE（identity 表；未知 engine 忽略 + 警告）。PESsearch/irc/scan/simple 无固定行，完全走 engine 映射（单 profile schema → 该 profile 各 level engine 并集；PESsearch 默认 {orca, xtb}、irc/singlepoint/optimize/frequency/scan 默认 {orca}、xtb_optimize → {xtb}）。Confsearch 刻意只走固定表，不展开其 unified profile levels（thermo 等是配置旋钮，展开会过度推导）。
+
+种子行（每行均有 file:line 代码证据，载于 tests/test_capabilities.py 各用例 docstring）：
+
+ | 工作流 | protocol / profile / policy | 推导软件集（frozenset）
+
+ | Confsearch | xtb-crest，任意 policy | {xtb, crest}
+ | Confsearch | xtb-md，任意 policy | {xtb, molclus, isostat}
+ | Confsearch | censo-crest + screen | {xtb, crest, censo, orca}
+ | Confsearch | censo-crest + rank1/cumulative-99/all | {xtb, crest, censo, orca, shermo}
+ | Confsearch | xtbmd-censo + screen | {xtb, molclus, isostat, censo, orca}
+ | Confsearch | xtbmd-censo + rank1/cumulative-99/all | {xtb, molclus, isostat, censo, orca, shermo}
+ | BatchOptimize | opt_only / opt_freq / opt_freq_sp | {orca}
+ | BatchOptimize | opt_freq_sp_thermo | {orca, shermo}
+ | nmr | 全部 | {xtb, crest, censo, orca}
+
+⚠️ 与设计 v0.2 种子行的三处代码事实修正（实施 wave-0 逐行复核落定，非推导逻辑变化）：
+
+1. nmr 实际含 xtb：构象生成走 censo-light（CREST + CENSO），CREST 运行在 xTB 二进制上（crest.py:56-57）且 CENSO rcfile [paths] 引用 xtb，设计稿 nmr→{crest,censo,orca} 少算 xtb；
+2. censo-crest / xtbmd-censo 的基座（含 screen 策略）即含 orca：CENSO rcfile 对每个活动 part 固定 prog = orca（cccp censo.py:295）且 censo-light 预筛/筛在 B97-3c DFT 泛函上跑，非仅精修策略才需 orca；
+3. rank1/cumulative-99/all 相对基座只追加 {shermo}（精修 handoff 的 orca 已在基座），而非 orca+shermo。
+
+推导结果在提交解析后写入 result["required_software"] 供审计（design §1.3）。同模块匹配原语（单一实现，matching 预览与提交期共用）：matches_capabilities(required_software, required_tags, declared, probed_software) 实现 D8 三态 + D13；local_satisfies(required_software) 经 cccp.software.resolve_executable 逐一解析（无 SSH，描述服务端本机）；is_degraded(node_status) 单一负载/磁盘谓词（running >= max 或 disk >= 90），节点选择/matching 预览/前端徽标共用。
+
+步骤 8.3：auto 语义与节点选择（D14）✅ 完成
+
+集合术语与设计一致：匹配集 = enabled ∧ 能力匹配；候选集 = 匹配集 ∧ 非 offline/degraded ∧ 容量未满（含预留计数）。JobManager._resolve_execution_target（scheduler/manager.py）：
+
+① spec.target_node 显式 → registry.require(name, required=derived, required_tags=…)：未知/禁用/能力不足 → ExecutionTargetError（code + missing_*）；
+② auto（execution_mode 与 target_node 均空）：derived 空 → 跟随服务器默认；derived 非空 ∧ local_satisfies(derived) → local；否则在锁下 select_remote(required, required_tags, affinity_node) + reserve；匹配集空 → NoCapableNodeError(code="no_capable_node")；候选集空但匹配集非空 → ExecutionCapacityUnavailable（60s 重试吸收）。
+
+NodeRegistry.select_remote（scheduler/nodes.py:424-518）：affinity_node 满足候选即返回 → least-loaded ratio（running + reservations）/ max_jobs → YAML 序平局。预留计数为软上限（design §3.3）：reservations: dict[node_name, set[job_id]] 变更全在 JobManager._lock 下，select 选中 +1，终局幂等释放；启动 _rebuild_reservations 从 RUNNING/PENDING/PAUSED 行的 result.execution_target 重建（防重启后计数丢失与在途双计）。
+
+同源亲缘（D6/D15）：亲和源 = result.execution_target（_execution_affinity）；continue 缺省回源（pop 只清 LSF 运行时字段，保留 node/execution_target）、支持显式改选（同创建规则校验 400）；rerun 替换 result 前捕获原 execution_target 存入 affinity_node；stage 链 PESsearch/BatchOptimize 由服务端复制显式 execution_mode/target_node（v1_routes.py _inherit_stage_execution_fields）。显式 node_tags + local/无远程场景 → 忽略 + 记事件。
+
+步骤 8.4：提交时校验与错误码契约（D9/D12）✅ 完成
+
+validate_submission_target(spec, registry)（scheduler/nodes.py:175-307）为 v1/v2 共用的创建时校验纯决策：显式 target_node 未知/禁用/能力不满足 → 立即 400（不进入 STARTING）；auto 且 derived 非空、本机不满足、存在 enabled 远程节点但无一可满足 → 400 no_capable_node。只门控"无显式 mode 的 auto 路径"：execution_mode=local 或 target_node=local 恒不做能力校验（design §3.1）。校验只读注册表快照，不预留、不选节点；derive/local_satisfies 可注入（测试确定性）。
+
+错误码（英文消息 + 机器可读字段，D12）：unknown_target_node / target_node_disabled / target_node_incapable（含 missing_software/missing_tags）/ no_capable_node（含 missing_*）。v1 create_job → HTTP 400，body = {code, message, missing_software, missing_tags}（v1_routes.py _target_validation_detail）。v2 batch → 不整体 400，校验失败的 item 进 failed[]（per-item 200 契约），字符串形如 "code: message; missing_software=[...]"（v2_routes.py _execution_target_error_message / _submit_batch_item）。⚠️ 覆盖注：设计 §3.1 写 v2 batch 校验失败返回 "HTTP 400"，已被实施计划 T10 更新为保持既有 per-item 契约（test_v2_batch_partial_failure 语义不变），文档以 T10 为准。
+
+调度后盾：_resolve_execution_target 处保留同规则校验（registry.require/select_remote），防创建后配置漂移；dispatch 出现 NoCapableNodeError → 记事件 execution.no_capable_node + 转 ExecutionCapacityUnavailable 语义（60s 重试），防 STARTING-forever（R13）。
+
+步骤 8.5：matching 预览端点 ✅ 完成
+
+POST /api/v1/nodes/matching（v1_routes.py:4409，只读）：请求 {workflow, method:{schema_id, profile_id, levels}, protocol?, node_tags}（node_tags 键必含可空，缺键显式 400，避开 pydantic 必填缺省 422）；响应 {required_software, node_tags, local_satisfies, nodes:[...], note}，逐节点 name/host/status/running_jobs/max_jobs/disk_usage_pct/queue/tags（声明 tags；未声明 → []，D13 前端 chips 唯一数据源）/capability_state/declared_ok/mismatch/satisfies/missing_software/missing_tags/reasons/degraded。satisfies = 匹配集成员 ∧ status != offline；容量/degraded 不进 satisfies（软约束单独徽标，is_degraded 单实现）。derive/matches 与提交期同一函数（无第二份推导），复用 NodeManager 30s 缓存不强制 SSH；零远程节点 → nodes=[] + note。
+
+步骤 8.6：queue 非过滤轴与兼容策略 ✅ 完成
+
+queue：per-node 覆盖经提交路径传入 build_lsf_script_spec（queue=node.queue or config.queue）；None 时 LSF 脚本输出与改动前字节一致（tests/test_remote_phase2.py derive_lsf_resources/generate_lsf_script 锁定，T7）。queue 永不参与匹配/排序。
+
+兼容红线验证：旧节点无 capabilities → D8 混合模型（probe-inferred / unknown 回退通用），不勾标签时零破坏；勾选 node_tags → 未声明节点恒被排除（D13 语义），UI 置灰 + 原因引导。历史行：migration 013 追加 jobs.node_id/host（不回填，NULL 兼容）。读端回退：v1 模型 node_id = 列值 → result.node → spec.target_node → null（v1_routes.py:463）；tasks.node_id 与 on-disk task.json 取 result.node / result.execution_target（缺省回退 remote_job_id 存在 → "remote" 否则 "local"，tasks.py:199-238，保持既有测试绿）。v1/v2 共用校验 helper，probe-inferred 状态经注册表 status_provider 读取 NodeManager 探测缓存，无额外 SSH。
+
+📋 阶段 8 代码评审报告
+
+完成日期：2026-09-08，2026-09-09 补录 T12 后为完成态（HEAD 14fe141） ｜ 计划：.omo/plans/node-selection-at-submission.md（T1-T12 已全部提交；T12 前端载荷接线 d8de072 已合并，见下方测试清单与"前端载荷接线"补记）
+
+核心文件：remote/config.py（声明/queue 解析 + 枚举） / remote/node_manager.py（三态字段 + 探测） / scheduler/capabilities.py（derive/matches/local_satisfies/is_degraded + NoCapableNodeError） / scheduler/nodes.py（NodeRegistry 过滤/亲和/预留 + 校验 helper） / scheduler/manager.py（_resolve_execution_target 编排 + 预留重建） / scheduler/jobs.py（JobSpec.node_tags） / api/v1_routes.py + v2_routes.py（400 与 per-item 契约） / scheduler/migrations.py + store.py + tasks.py + remote/runner.py（node_id 持久化） / frontend/ACP_Workbench_v2.html（提交向导 modal-node-select，W4-T11）
+
+✅ 实现要点
+
+后端权威单一：derive/matches/local_satisfies/is_degraded 全在 capabilities.py；matching 端点与提交期同函数（无双实现，G3）。
+
+三态 + 标签硬规则：D8 declared 权威 / probe-inferred 探测集 / unknown 软件回退通用；D13 未声明节点恒不满足标签，matches_capabilities 一处实现。
+
+错误契约：英文消息 + code/missing_* 字段（D12）；v1 400 structured body、v2 per-item failed[]、调度后盾 NoCapableNodeError 转容量重试（防 STARTING-forever）。
+
+queue=None 字节兼容：test_remote_phase2 锁定，脚本输出零回归。
+
+预留软上限：全部变更在 JobManager._lock 下 + 启动重建（_rebuild_reservations），超发由 LSF 队列兜底不硬阻断（E8）。
+
+🔬 测试（mock，无需真实节点与 QC 软件）
+
+tests/test_node_capabilities.py（T1：解析/去重/未知名丢弃 + 声明枚举 == 探测脚本漂移锁）、tests/test_capabilities.py（T3：每行推导精确 frozenset 断言 + matches 四象限 + local_satisfies monkeypatch + is_degraded 三用例 + 错误类字段；docstring 附每行 file:line 证据）、tests/test_acp_execution_target.py（registry 过滤/预留并发与重启重建/创建即 400 + 调度后盾漂移）、tests/test_acp_job_operations.py（continue 覆盖/rerun 亲和）、tests/test_remote_phase2.py（queue=None 字节一致）、tests/test_acp_api_v1.py -k matching（预览端点）、tests/test_f4_scope_audit.py（migration 013 表结构）、tests/test_frontend_sync.py::test_node_selector_structure_and_disabled_logic_lock（T11 结构锁）+ test_node_selector_i18n_keys_complete_across_locales + test_submit_payload_carries_node_selection + test_continue_node_override_and_stage_preselect_lock（T12 i18n/载荷/stage 预选与 continue 改选锁，d8de072）。
+
+📌 技术债记录
+
+WORKFLOW_CATALOG.requires_binaries 漂移：各工作流目录条目仍带 requires_binaries，由 remote/runner.py _probe_required_binaries（提交前地上真值）消费，与 WORKFLOW_SOFTWARE_REQUIREMENTS 部分重叠且 protocol-blind。本次未重写（计划 Key Decisions 明确留待后续单独 wave 用 WORKFLOW_SOFTWARE_REQUIREMENTS 收敛合并）。
+
+推导粒度保守：derive 只到 workflow/protocol/refinement-policy 粒度，不建模 preset 差异。censo-zero 等快路径（如 xtbmd_censo_energy.py:1689 起，需 opt_enabled）在推导上仍要求其所属协议基座软件（xtbmd-censo 含 censo/orca），宁严勿宽的过度推导，可接受，不阻断（实际运行由 CENSO preset 决定）。
+
+同 host 多逻辑节点计数：同一物理机多 LSF 队列需登记多个逻辑节点条目（name 唯一，host 可重复）；bjobs 计数按 name 分开统计，而 LSF 实际负载按 host 合并，计数不精确为既有行为，文档明示不改（D3）。
+
+错误码非枚举：ExecutionTargetError.code 为 str | None（NoCapableNodeError.code 固定字符串 "no_capable_node"），无 Literal/枚举类型约束，后续可收敛为共享枚举防拼写漂移（API 契约以现有字符串为准）。
+
+前端载荷接线（2026-09-09 补记，W4-T12 已于 d8de072 合并，HEAD 14fe141）：提交 body 携带 target_node/node_tags（applyNodeSelectionToBody 覆盖向导五支路）、stage 源任务显式 pin 预选（preselectNodeFromSourceJob，仅镜像显式 pin）、continue 改选（continueJob 以 {target_node} body 提交）均已实现；T11 渲染与选择器交互由结构锁保护，T12 载荷/改选行为由 test_submit_payload_carries_node_selection 与 test_continue_node_override_and_stage_preselect_lock 锁定。
+
+10. 阶段 9：文档与部署
 
 修改 src/acp/scheduler/AGENTS.md + 根 AGENTS.md — 添加 remote/ 模块描述
 
 sudo systemctl restart acp
 
-10. 阶段 9：日志阶段解析（增强）
+11. 阶段 10：日志阶段解析（增强）
 
-步骤 9.1：实现日志阶段解析器 ⏳ 待办
+步骤 10.1：实现日志阶段解析器 ⏳ 待办
 
 新建 log_parser.py — LogStageParser
 
@@ -2495,7 +2640,7 @@ sudo systemctl restart acp
 
 说明：此阶段在基础版本（bjobs + .exit_code）稳定运行后实施，作为增强功能。
 
-11. 文件变更清单
+12. 文件变更清单
 
  | 操作 | 文件路径 | 说明
 
@@ -2521,7 +2666,7 @@ sudo systemctl restart acp
 
  | 新建 | remote/sync.py | CodeSyncer（本地 mtime 记录，增量代码同步，排除 api/scheduler）
 
- | 新建 | remote/log_parser.py | LogStageParser（阶段 9 增强功能）
+ | 新建 | remote/log_parser.py | LogStageParser（阶段 10 增强功能）
 
  | 新建 | scheduler/local_cleanup.py ✓ 完成 | LocalCleanup + RetentionPolicy + LocalCleanupReport + LocalHousekeepingDecision（阶段 5B 本地磁盘保护，~570 行）
 
@@ -2549,7 +2694,7 @@ sudo systemctl restart acp
 
  | 新建 | tests/test_local_cleanup.py ✓ 完成（51 项） | 阶段 5B 测试：LocalCleanup 单元 + runner 集成 + manager 接线 + maintenance API（TestClient），51 项全通过
 
-12. 执行顺序与依赖关系
+13. 执行顺序与依赖关系
 
 1.1 pyproject.toml       ✓ 完成
   |
@@ -2584,11 +2729,11 @@ sudo systemctl restart acp
   |
 7.1-7.8 测试     <-- 依赖全部（基础版本）
   |
-8.1-8.2 文档+部署 <-- 基础版本部署
+9.1-9.2 文档+部署 <-- 基础版本部署
   |
-9.1 日志阶段解析  <-- 最后实施（增强功能，需验证实际日志格式）
+10.1 日志阶段解析  <-- 最后实施（增强功能，需验证实际日志格式）
 
-13. 配置示例
+14. 配置示例
 
 cluster:
   enabled: true
@@ -2598,7 +2743,7 @@ cluster:
   auto_sync: true
   nodes:
     - name: "compute-01"
-      host: "10.16.5.157"
+      host: "192.168.1.100"
       username: "<user>"
       # password 通过环境变量设置：export ACP_REMOTE_PASSWORD_COMPUTE_01="..."
       # 或使用密钥认证：
@@ -2618,9 +2763,9 @@ cluster:
 
 export ACP_REMOTE_PASSWORD_COMPUTE_01="..."
 
-14. 实施注意事项
+15. 实施注意事项
 
-14.1 远程节点一次性准备
+15.1 远程节点一次性准备
 
 Python ≥ 3.10
 
@@ -2632,7 +2777,7 @@ OpenLAVA (LSF) 客户端
 
 无需安装 ACP — 代码由 CodeSyncer 自动同步到 {remote_code_dir}/
 
-14.2 代码同步策略
+15.2 代码同步策略
 
 同步内容：src/acp/（排除 api/、scheduler/）+ src/cccp/（完整）+ scripts/run_g16_worker.sh
 
@@ -2644,13 +2789,13 @@ OpenLAVA (LSF) 客户端
 
 远程 PYTHONPATH：LSF 脚本设置 export PYTHONPATH={remote_code_dir}/src:$PYTHONPATH，无需 pip install
 
-14.3 日志阶段解析（分阶段实施）
+15.3 日志阶段解析（分阶段实施）
 
-基础版本（阶段 1-8）：仅依赖 bjobs 状态 + .exit_code，日志 tail 仅作为原始文本展示，不做阶段解析。
+基础版本（阶段 1-9）：仅依赖 bjobs 状态 + .exit_code，日志 tail 仅作为原始文本展示，不做阶段解析。
 
-增强版本（阶段 9）：实现 LogStageParser，通过正则匹配日志中的阶段标志行，更新 stage task 子阶段状态。具体标志行需要在远程节点配置完成后，通过实际运行作业验证。
+增强版本（阶段 10）：实现 LogStageParser，通过正则匹配日志中的阶段标志行，更新 stage task 子阶段状态。具体标志行需要在远程节点配置完成后，通过实际运行作业验证。
 
-14.4 安全
+15.4 安全
 
 密码仅通过环境变量传递，YAML 中不存储明文密码
 
@@ -2658,7 +2803,7 @@ SSH 日志脱敏：不输出密码、密钥内容
 
 远程文件保留 180 天后自动清理
 
-14.5 StageTaskObserver 集成
+15.5 StageTaskObserver 集成
 
 远程作业创建简化的 remote_execution stage task，状态跟随 LSF 状态更新：
 
@@ -2672,7 +2817,7 @@ EXIT → failed
 
 前端可显示"远程执行: PEND/RUN/DONE"，提供基本的进度反馈。
 
-14.6 作业取消策略
+15.6 作业取消策略
 
 发送 bkill <lsf_job_id> 后检查返回值：
 
@@ -2680,7 +2825,7 @@ EXIT → failed
 
 返回非 0：取消失败（可能作业已结束），记录日志但不抛异常
 
-15. 设计决策记录
+16. 设计决策记录
 
  | 问题 | 选项 | 决策 | 理由
 
@@ -2739,7 +2884,7 @@ B) 抛 RemoteNodeUnavailableError 让作业失败
  | B
  | housekeeping 仅针对已选节点（避免对每个候选 df 查询）。重试时 least_loaded 自然选到其他节点。Phase 6 可在 _select_least_loaded 融合磁盘检查实现自动故障转移
 
-16. 后续任务清单（按优先级排序）
+17. 后续任务清单（按优先级排序）
 
 P0 — 必须在 Phase 3 集成前完成
 
@@ -2761,7 +2906,7 @@ P1 — 建议在 Phase 3/4 完成
 
  | P1-3 | 监控循环添加超时上限 | 添加 max_monitor_seconds（walltime + 1h），超时标记 FAILED | ✓ 已修复
 
- | P1-4 | bjobs 命令在真实节点验证 | 在 10.16.5.157 上确认输出格式 | ✓ 已验证 + 修复
+ | P1-4 | bjobs 命令在真实节点验证 | 在 192.168.1.100 上确认输出格式 | ✓ 已验证 + 修复
 
 P2 — 后续迭代
 
@@ -2805,10 +2950,12 @@ P2 — 后续迭代
 
  | 5B. 本地磁盘保护 | ✓ 完成 | local_cleanup.py / runner.py / manager.py / server.py / v1_routes.py / v1_schemas.py / defaults.yaml / config.py / systemd / 前端 | 51 mock（含 6 项 API TestClient）
 
- | 6. 网页端节点选择 | ⏳ 待办 | node_manager.py / v1_routes.py / 前端 | —
+ | 6. 网页端节点选择 | ✓ 完成（2026-07 后端 API 与字段；2026-09-08 前端提交向导选择器补齐） | node_manager.py / v1_routes.py / v1_schemas.py / jobs.py / 前端 | —
 
  | 7. 测试 | ⏳ 待办 | test_remote_*.py (8 files) | —
 
- | 8. 文档与部署 | ⏳ 待办 | AGENTS.md / systemd | —
+ | 8. 提交时能力过滤（Capability-Aware Node Selection） | ✓ 完成（2026-09-08） | capabilities.py / nodes.py / manager.py / remote/config.py / remote/node_manager.py / v1_routes.py / v2_routes.py / 前端 | test_node_capabilities / test_capabilities / test_acp_execution_target / test_acp_job_operations / test_remote_phase2 / test_acp_api_v1 -k matching / test_f4_scope_audit
 
- | 9. 日志阶段解析（增强） | ⏳ 待办 | log_parser.py | —
+ | 9. 文档与部署 | ⏳ 待办 | AGENTS.md / systemd | —
+
+ | 10. 日志阶段解析（增强） | ⏳ 待办 | log_parser.py | —

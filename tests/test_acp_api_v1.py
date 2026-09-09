@@ -53,6 +53,22 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[TestCli
         yield test_client
 
 
+@pytest.fixture()
+def qc_capable_local(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Simulate a server with all QC binaries installed.
+
+    Creation-time validation resolves ``local_satisfies`` at call time via
+    the capabilities module, while dispatch resolves it through manager's
+    by-name import — patch both so these API tests stay hermetic on
+    machines without QC binaries (CI).
+    """
+    import acp.scheduler.capabilities as capabilities_module
+    import acp.scheduler.manager as manager_module
+
+    monkeypatch.setattr(capabilities_module, "local_satisfies", lambda required: True)
+    monkeypatch.setattr(manager_module, "local_satisfies", lambda required: True)
+
+
 def _create_project(client: TestClient, name: str = "Alpha") -> dict[str, object]:
     response = client.post(
         "/api/v1/projects",
@@ -69,6 +85,7 @@ def _submit_fake_job(
     name: str = "demo",
     project_id: str | None = None,
     demo_frames: bool = False,
+    node_tags: list[str] | None = None,
 ) -> dict[str, object]:
     payload: dict[str, object] = {
         "workflow": "fake",
@@ -78,6 +95,8 @@ def _submit_fake_job(
     }
     if project_id is not None:
         payload["project_id"] = project_id
+    if node_tags is not None:
+        payload["node_tags"] = node_tags
     response = client.post("/api/v1/jobs", json=payload)
     assert response.status_code == 201
     return response.json()
@@ -202,6 +221,73 @@ def test_v1_job_submit_with_project(client: TestClient) -> None:
     assert [job["id"] for job in project_jobs.json()["jobs"]] == [created["job_id"]]
 
 
+def test_v1_job_create_persists_node_tags(client: TestClient) -> None:
+    """v1 create forwards node_tags to the job spec (T15 — D13 required_tags)."""
+    created = _submit_fake_job(client, name="tagged-fake", node_tags=["gpu"])
+    job_id = str(created["job_id"])
+
+    detail = client.get(f"/api/v1/jobs/{job_id}")
+    assert detail.status_code == 200
+    assert detail.json()["spec"]["node_tags"] == ["gpu"]
+
+    record = client.app.state.job_manager.get(job_id)
+    assert record is not None
+    assert record.spec.node_tags == ["gpu"]
+
+
+def test_v1_job_create_defaults_node_tags_to_empty(client: TestClient) -> None:
+    created = _submit_fake_job(client, name="untagged-fake")
+    job_id = str(created["job_id"])
+
+    detail = client.get(f"/api/v1/jobs/{job_id}")
+    assert detail.status_code == 200
+    assert detail.json()["spec"]["node_tags"] == []
+
+
+def test_v1_job_create_mode_conflict_returns_400_code(client: TestClient) -> None:
+    """A validate_execution_request conflict shares the D12 dict detail (m4).
+
+    Same shape as the continue endpoint and the unknown/disabled target
+    errors: a dict with a stable machine-readable ``code``.
+    """
+    response = client.post(
+        "/api/v1/jobs",
+        json={
+            "workflow": "fake",
+            "name": "conflict-fake",
+            "input": {"source": "CCO"},
+            "method": {"protocol": "ext"},
+            "execution_mode": "remote",
+            "target_node": "local",
+        },
+    )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert isinstance(detail, dict)
+    assert detail["code"] == "execution_mode_conflict"
+    assert "conflict" in detail["message"]
+
+
+def test_v1_job_create_normalizes_node_tags(client: TestClient) -> None:
+    """node_tags are stripped, deduped, empties dropped and capped (m7)."""
+    valid_long = "g" * 63
+    too_long = "x" * 65
+    created = _submit_fake_job(
+        client,
+        name="tag-normalized",
+        node_tags=["gpu", "", " gpu ", "gpu", valid_long, too_long],
+    )
+    job_id = str(created["job_id"])
+
+    detail = client.get(f"/api/v1/jobs/{job_id}")
+    assert detail.status_code == 200
+    assert detail.json()["spec"]["node_tags"] == ["gpu", valid_long]
+
+    record = client.app.state.job_manager.get(job_id)
+    assert record is not None
+    assert record.spec.node_tags == ["gpu", valid_long]
+
+
 def test_v1_job_move_to_project(client: TestClient) -> None:
     source = _create_project(client, name="Source")
     target = _create_project(client, name="Target")
@@ -279,6 +365,227 @@ def test_v1_job_rerun_requeues_original_task(client: TestClient) -> None:
     jobs = client.get("/api/v1/jobs?limit=100")
     assert jobs.status_code == 200
     assert [job["id"] for job in jobs.json()["jobs"]].count(job_id) == 1
+
+
+def _seed_failed_job(client: TestClient, tmp_path: Path, job_id: str) -> None:
+    """Seed a FAILED mechanism job directly into the app manager's store."""
+    manager = client.app.state.job_manager
+    work_dir = tmp_path / job_id
+    work_dir.mkdir(parents=True, exist_ok=True)
+    manager.store.create(
+        JobRecord(
+            id=job_id,
+            spec=JobSpec(
+                workflow="mechanism",
+                name=job_id,
+                project_id=manager.default_project_id,
+            ),
+            status=JobStatus.FAILED,
+            work_dir=str(work_dir),
+            project_id=manager.default_project_id,
+            error="boom",
+            completed_at="2026-09-08T00:00:00+00:00",
+        )
+    )
+
+
+def _stub_manager_submit(client: TestClient, tmp_path: Path) -> dict[str, object]:
+    """Stub JobManager.submit to capture the built spec (no real dispatch)."""
+    from acp.scheduler.jobs import JobRecord
+
+    manager = client.app.state.job_manager
+    captured: dict[str, object] = {}
+    original = manager.submit
+
+    def _submit(spec, group_id=None):
+        captured["spec"] = spec
+        work_dir = tmp_path / "captured"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        return JobRecord(
+            id="captured-1",
+            spec=spec,
+            status=JobStatus.QUEUED,
+            work_dir=str(work_dir),
+            project_id=spec.project_id,
+        )
+
+    manager.submit = _submit  # type: ignore[method-assign]
+    return captured, original
+
+
+def test_v1_continue_explicit_target_override_returns_200(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from acp.scheduler.nodes import NodeRegistry
+    from acp.scheduler.remote.config import NodeCapabilities, RemoteNode
+
+    manager = client.app.state.job_manager
+    node = RemoteNode(
+        name="comp-01",
+        host="comp-01.example.com",
+        username="qc",
+        remote_work_dir="/scratch/qc/acp",
+        remote_code_dir="/home/qc/acp_code",
+        max_concurrent_jobs=4,
+        host_key_policy="auto_add",
+        capabilities=NodeCapabilities(software=("xtb", "orca"), tags=()),
+    )
+    manager.registry = NodeRegistry(local_max_jobs=2, remote_nodes=[node])
+    manager._execute_submission = lambda job_id: None  # type: ignore[method-assign]
+    _seed_failed_job(client, tmp_path, "continue-override")
+
+    response = client.post(
+        "/api/v1/jobs/continue-override/continue",
+        json={"target_node": "comp-01"},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["spec"]["target_node"] == "comp-01"
+    assert body["status"] == "queued"
+    record = manager.get("continue-override")
+    assert record is not None
+    assert record.spec.target_node == "comp-01"
+
+
+def test_v1_continue_unknown_target_returns_400_code(client: TestClient, tmp_path: Path) -> None:
+    manager = client.app.state.job_manager
+    manager._execute_submission = lambda job_id: None  # type: ignore[method-assign]
+    _seed_failed_job(client, tmp_path, "continue-ghost")
+
+    response = client.post(
+        "/api/v1/jobs/continue-ghost/continue",
+        json={"target_node": "ghost-node"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "unknown_target_node"
+    unchanged = manager.get("continue-ghost")
+    assert unchanged is not None
+    assert unchanged.status == JobStatus.FAILED
+    assert unchanged.spec.target_node is None
+
+
+def test_v1_continue_no_target_stays_auto(client: TestClient, tmp_path: Path) -> None:
+    """A continue without a body keeps the spec auto (no new fields)."""
+    manager = client.app.state.job_manager
+    manager._execute_submission = lambda job_id: None  # type: ignore[method-assign]
+    _seed_failed_job(client, tmp_path, "continue-auto")
+
+    response = client.post("/api/v1/jobs/continue-auto/continue")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["spec"]["target_node"] is None
+    assert body["spec"]["execution_mode"] is None
+    assert body["status"] == "queued"
+
+
+def test_v1_batch_optimize_from_job_inherits_source_target_node(
+    client: TestClient, tmp_path: Path
+) -> None:
+    """Stage chain (D6): a BatchOptimize from a PESsearch job whose spec pins
+    target_node explicitly inherits that node server-side."""
+    from acp.scheduler.nodes import NodeRegistry
+    from acp.scheduler.remote.config import NodeCapabilities, RemoteNode
+
+    manager = client.app.state.job_manager
+    node = RemoteNode(
+        name="comp-01",
+        host="comp-01.example.com",
+        username="qc",
+        remote_work_dir="/scratch/qc/acp",
+        remote_code_dir="/home/qc/acp_code",
+        max_concurrent_jobs=4,
+        host_key_policy="auto_add",
+        capabilities=NodeCapabilities(software=("orca",), tags=()),
+    )
+    manager.registry = NodeRegistry(local_max_jobs=2, remote_nodes=[node])
+
+    source_dir = tmp_path / "pes-source"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    source_spec = JobSpec(
+        workflow="PESsearch",
+        name="pes-src",
+        method={"mode": "relaxed_scan"},
+        project_id=manager.default_project_id,
+        target_node="comp-01",
+    )
+    manager.store.create(
+        JobRecord(
+            id="pes-src",
+            spec=source_spec,
+            status=JobStatus.COMPLETED,
+            work_dir=str(source_dir),
+            project_id=manager.default_project_id,
+        )
+    )
+    captured, original = _stub_manager_submit(client, tmp_path)
+    try:
+        response = client.post(
+            "/api/v1/jobs",
+            json={
+                "workflow": "BatchOptimize",
+                "name": "batch-from-pes",
+                "input": {
+                    "source_type": "stage_artifact",
+                    "source_job_id": "pes-src",
+                    "from_artifact": "RESULT/result_manifest.json",
+                },
+                "method": {"profile": "opt_freq"},
+            },
+        )
+    finally:
+        manager.submit = original  # type: ignore[method-assign]
+
+    assert response.status_code == 201, response.text
+    spec = captured["spec"]
+    assert spec is not None
+    assert spec.target_node == "comp-01"
+
+
+def test_v1_batch_optimize_auto_source_stays_auto(
+    client: TestClient, tmp_path: Path, qc_capable_local: None
+) -> None:
+    """An auto source (no pinned target) leaves the child auto — unchanged."""
+    manager = client.app.state.job_manager
+    source_dir = tmp_path / "auto-pes-source"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    manager.store.create(
+        JobRecord(
+            id="auto-pes-src",
+            spec=JobSpec(
+                workflow="PESsearch",
+                name="auto-pes-src",
+                project_id=manager.default_project_id,
+            ),
+            status=JobStatus.COMPLETED,
+            work_dir=str(source_dir),
+            project_id=manager.default_project_id,
+        )
+    )
+    captured, original = _stub_manager_submit(client, tmp_path)
+    try:
+        response = client.post(
+            "/api/v1/jobs",
+            json={
+                "workflow": "BatchOptimize",
+                "name": "auto-batch",
+                "input": {
+                    "source_type": "stage_artifact",
+                    "source_job_id": "auto-pes-src",
+                    "from_artifact": "RESULT/result_manifest.json",
+                },
+            },
+        )
+    finally:
+        manager.submit = original  # type: ignore[method-assign]
+
+    assert response.status_code == 201, response.text
+    spec = captured["spec"]
+    assert spec is not None
+    assert spec.target_node is None
+    assert spec.execution_mode is None
 
 
 def test_v1_energy_graph_reads_legacy_result_files(client: TestClient) -> None:
@@ -847,7 +1154,9 @@ def _submit_batch_optimize(client: TestClient, items: list[dict[str, object]]) -
     return response.json()
 
 
-def test_v1_batch_structures_inline_xyz_submission(client: TestClient) -> None:
+def test_v1_batch_structures_inline_xyz_submission(
+    client: TestClient, qc_capable_local: None
+) -> None:
     job = _submit_batch_optimize(
         client,
         [
@@ -899,7 +1208,9 @@ def test_v1_batch_structures_inline_xyz_submission(client: TestClient) -> None:
     ]
 
 
-def test_v1_batch_structures_source_id_resolution(client: TestClient, tmp_path: Path) -> None:
+def test_v1_batch_structures_source_id_resolution(
+    client: TestClient, tmp_path: Path, qc_capable_local: None
+) -> None:
     # 2026-09-03 wave: source_id references are inlined to XYZ at submission
     # so the runner materializer never sees unresolved references.
     # Complete an upstream PESsearch job whose result list exposes a candidate.
@@ -961,7 +1272,9 @@ def test_v1_batch_structures_source_id_resolution(client: TestClient, tmp_path: 
     assert items[0]["name"] == "ts_1"
 
 
-def test_v1_batch_structures_requires_nonempty_items(client: TestClient) -> None:
+def test_v1_batch_structures_requires_nonempty_items(
+    client: TestClient, qc_capable_local: None
+) -> None:
     response = client.post(
         "/api/v1/jobs",
         json={
@@ -982,7 +1295,9 @@ def test_v1_batch_structures_requires_nonempty_items(client: TestClient) -> None
     assert record.spec.input["items"] == []
 
 
-def test_v1_batch_structures_rejects_bad_item(client: TestClient) -> None:
+def test_v1_batch_structures_rejects_bad_item(
+    client: TestClient, qc_capable_local: None
+) -> None:
     response = client.post(
         "/api/v1/jobs",
         json={
@@ -1319,7 +1634,7 @@ def test_route_matrix_v1(
     )
 
 
-def test_batchoptimize_submit_stageplan(client: TestClient) -> None:
+def test_batchoptimize_submit_stageplan(client: TestClient, qc_capable_local: None) -> None:
     """BatchOptimize submit yields a queued task with profile-trimmed stage plan."""
     job = _submit_batch_optimize(
         client,
@@ -1638,11 +1953,10 @@ def test_v1_terminal_job_projects_pending_as_skipped(client: TestClient) -> None
         assert entry["status"] != "running"
 
 
-def test_bond_scan_create_job_accepts_double_coordinates(client: TestClient) -> None:
-    xyz = (
-        "5\nC5 chain\nC 0.0 0.0 0.0\nC 1.4 0.0 0.0\nC 2.8 0.0 0.0\n"
-        "C 4.2 0.0 0.0\nC 5.6 0.0 0.0\n"
-    )
+def test_bond_scan_create_job_accepts_double_coordinates(
+    client: TestClient, qc_capable_local: None
+) -> None:
+    xyz = "5\nC5 chain\nC 0.0 0.0 0.0\nC 1.4 0.0 0.0\nC 2.8 0.0 0.0\nC 4.2 0.0 0.0\nC 5.6 0.0 0.0\n"
     coordinate = {"kind": "distance", "atoms": [0, 1], "start": 1.2, "end": 2.2, "n_points": 4}
     payload = {
         "workflow": "PESsearch",
@@ -1757,3 +2071,329 @@ def test_s2_profile_exposes_coordinates_and_selection(
     assert body["selection"]["kind"] == "double_bond_scan"
     assert body["protocol"]["scan_type"] == "distance_scan"
     assert body["coordinate"]["atoms"] == [0, 1]
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/nodes/matching — submission-time node-selection preview (T9)
+# ---------------------------------------------------------------------------
+
+
+def _matching_payload(**overrides: object) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "workflow": "Confsearch",
+        "method": {"protocol": "censo-crest"},
+        "protocol": None,
+        "node_tags": ["gpu"],
+    }
+    payload.update(overrides)
+    return payload
+
+
+def _matching_node(
+    name: str,
+    *,
+    host: str,
+    software: tuple[str, ...] = (),
+    tags: tuple[str, ...] = (),
+    enabled: bool = True,
+    queue: str | None = None,
+    max_jobs: int = 5,
+    status: str = "online",
+    running: int = 0,
+    disk: int = 0,
+) -> tuple[object, object]:
+    """Build a (RemoteNode, NodeStatus) pair mirroring ``capability_state_fields``."""
+    from acp.scheduler.remote.config import NodeCapabilities, RemoteNode
+    from acp.scheduler.remote.node_manager import NodeStatus
+
+    caps = NodeCapabilities(software=software, tags=tags)
+    node = RemoteNode(
+        name=name,
+        host=host,
+        username="acp",
+        remote_work_dir="/scratch/acp",
+        remote_code_dir="/home/acp/acp_code",
+        enabled=enabled,
+        queue=queue,
+        capabilities=caps if (software or tags) else None,
+        max_concurrent_jobs=max_jobs,
+    )
+    if software or tags:
+        declared: dict[str, object] | None = {
+            "software": list(software),
+            "tags": list(tags),
+            "queue": queue,
+        }
+        capability_state = "declared"
+        declared_ok: bool | None = True
+        mismatch: list[str] = []
+    else:
+        declared = None
+        capability_state = "unknown"
+        declared_ok = None
+        mismatch = []
+    software_probe = (
+        {sw: {"configured": sw, "resolved": f"/opt/{sw}/{sw}", "version": "x"} for sw in software}
+        if software
+        else {}
+    )
+    return node, NodeStatus(
+        name=node.name,
+        host=node.host,
+        status=status,
+        running_jobs=running,
+        max_jobs=node.max_concurrent_jobs,
+        disk_usage_pct=disk,
+        queue=queue,
+        software=software_probe,
+        declared=declared,
+        capability_state=capability_state,
+        declared_ok=declared_ok,
+        mismatch=mismatch,
+        probe_note=None,
+    )
+
+
+class _MatchingFakeNodeManager:
+    """Minimal NodeManager stand-in exposing ``config`` + ``list_nodes``."""
+
+    def __init__(self, config: object, statuses: list[object]) -> None:
+        self.config = config
+        self._statuses = statuses
+
+    def list_nodes(self) -> list[object]:
+        return list(self._statuses)
+
+
+def test_v1_node_matching_multinode_satisfies_and_missing(client: TestClient) -> None:
+    """POST /api/v1/nodes/matching reports per-node satisfies/missing fields."""
+    from acp.scheduler.remote.config import RemoteExecutionConfig
+
+    n1, s1 = _matching_node(
+        "comp-01",
+        host="10.0.0.1",
+        software=("xtb", "censo", "orca"),
+        tags=("gpu",),
+        queue="bigmem",
+    )
+    n2, s2 = _matching_node("comp-02", host="10.0.0.2")
+    n3, s3 = _matching_node(
+        "comp-03",
+        host="10.0.0.3",
+        software=("xtb", "crest", "censo", "orca"),
+        tags=("gpu",),
+        running=5,
+        max_jobs=5,
+    )
+    n4, s4 = _matching_node(
+        "comp-04",
+        host="10.0.0.4",
+        software=("xtb", "crest", "censo", "orca"),
+        tags=("gpu",),
+        enabled=False,
+        status="offline",
+    )
+    config = RemoteExecutionConfig(execution_mode="remote", nodes=[n1, n2, n3, n4])
+    fake = _MatchingFakeNodeManager(config, [s1, s2, s3, s4])
+    manager = client.app.state.job_manager
+    manager._node_manager = fake
+    try:
+        response = client.post("/api/v1/nodes/matching", json=_matching_payload())
+    finally:
+        manager._node_manager = None
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["required_software"] == ["censo", "crest", "orca", "xtb"]
+    assert body["node_tags"] == ["gpu"]
+    assert body["note"] is None
+    nodes = {n["name"]: n for n in body["nodes"]}
+    # Declared node missing crest from its declaration.
+    n1 = nodes["comp-01"]
+    assert n1["satisfies"] is False
+    assert n1["missing_software"] == ["crest"]
+    assert n1["missing_tags"] == []
+    assert n1["reasons"]
+    assert n1["queue"] == "bigmem"
+    assert n1["tags"] == ["gpu"]
+    assert n1["capability_state"] == "declared"
+    assert n1["declared_ok"] is True
+    assert n1["degraded"] is False
+    # Undeclared/unknown node: software satisfied generically, tag unmet.
+    n2 = nodes["comp-02"]
+    assert n2["satisfies"] is False
+    assert n2["missing_software"] == []
+    assert n2["missing_tags"] == ["gpu"]
+    assert n2["tags"] == []
+    assert n2["capability_state"] == "unknown"
+    # Matching node that is at full load: satisfies, soft constraint only.
+    n3 = nodes["comp-03"]
+    assert n3["satisfies"] is True
+    assert n3["missing_software"] == []
+    assert n3["missing_tags"] == []
+    assert n3["reasons"] == []
+    assert n3["degraded"] is True
+    # Disabled node: capability match but enabled=False gates satisfies.
+    n4 = nodes["comp-04"]
+    assert n4["status"] == "offline"
+    assert n4["satisfies"] is False
+    assert n4["missing_software"] == []
+    assert n4["missing_tags"] == []
+    assert n4["tags"] == ["gpu"]
+
+
+def test_v1_node_matching_local_satisfies_reflects_parse(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """local_satisfies is deterministic under a patched capabilities helper."""
+    from acp.scheduler.remote.config import RemoteExecutionConfig
+
+    node, status = _matching_node("comp-01", host="10.0.0.1")
+    config = RemoteExecutionConfig(execution_mode="remote", nodes=[node])
+    fake = _MatchingFakeNodeManager(config, [status])
+    manager = client.app.state.job_manager
+    manager._node_manager = fake
+    try:
+        payload = _matching_payload(node_tags=None)
+        monkeypatch.setattr("acp.api.v1_routes.local_satisfies", lambda required: False)
+        body = client.post("/api/v1/nodes/matching", json=payload).json()
+        assert body["local_satisfies"] is False
+        monkeypatch.setattr("acp.api.v1_routes.local_satisfies", lambda required: True)
+        body = client.post("/api/v1/nodes/matching", json=payload).json()
+        assert body["local_satisfies"] is True
+    finally:
+        manager._node_manager = None
+
+
+def test_v1_node_matching_zero_remote_nodes_returns_note(client: TestClient) -> None:
+    """No remote node manager configured → nodes=[] and a non-empty note."""
+    manager = client.app.state.job_manager
+    original = manager._node_manager
+    manager._node_manager = None
+    try:
+        response = client.post(
+            "/api/v1/nodes/matching",
+            json=_matching_payload(node_tags=["gpu"]),
+        )
+    finally:
+        manager._node_manager = original
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["nodes"] == []
+    assert body["note"]
+    assert body["required_software"] == ["censo", "crest", "orca", "xtb"]
+
+
+def test_v1_node_matching_missing_node_tags_is_400(client: TestClient) -> None:
+    """Absent ``node_tags`` key fails with HTTP 400, not pydantic's 422."""
+    payload = _matching_payload()
+    payload.pop("node_tags")
+    response = client.post("/api/v1/nodes/matching", json=payload)
+    assert response.status_code == 400
+    assert response.json()["detail"]
+
+
+def test_v1_node_matching_unknown_workflow_is_400(client: TestClient) -> None:
+    """Unknown workflow id fails with HTTP 400."""
+    response = client.post(
+        "/api/v1/nodes/matching",
+        json=_matching_payload(workflow="not_a_workflow"),
+    )
+    assert response.status_code == 400
+    assert "not_a_workflow" in response.json()["detail"]
+
+
+def test_v1_node_matching_normalizes_node_tags(client: TestClient) -> None:
+    """Matching node_tags are stripped/deduped/emptied and capped (m7)."""
+    valid_long = "g" * 63
+    too_long = "x" * 65
+    payload = _matching_payload(
+        node_tags=["gpu", "", " gpu ", "gpu", valid_long, too_long],
+    )
+    response = client.post("/api/v1/nodes/matching", json=payload)
+    assert response.status_code == 200, response.text
+    assert response.json()["node_tags"] == ["gpu", valid_long]
+
+
+def test_v1_node_matching_blank_node_tags_mean_no_constraint(client: TestClient) -> None:
+    """Tags that normalize to empty impose no constraint (m7).
+
+    Before normalization ``[""]`` produced an unsatisfiable filter (every
+    node reported missing_tags=[""]); now it degrades to "no constraint"
+    and an unknown undeclared node satisfies the preview.
+    """
+    node, status = _matching_node("comp-01", host="10.0.0.1")
+    from acp.scheduler.remote.config import RemoteExecutionConfig
+
+    config = RemoteExecutionConfig(execution_mode="remote", nodes=[node])
+    fake = _MatchingFakeNodeManager(config, [status])
+    manager = client.app.state.job_manager
+    manager._node_manager = fake
+    try:
+        response = client.post(
+            "/api/v1/nodes/matching",
+            json=_matching_payload(node_tags=["", "   "]),
+        )
+    finally:
+        manager._node_manager = None
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["node_tags"] == []
+    item = body["nodes"][0]
+    assert item["missing_tags"] == []
+    assert item["satisfies"] is True
+
+
+def _seed_job(client: TestClient, record: JobRecord) -> None:
+    """Insert a record directly through the store (columns NULL as in a
+    pre-migration row)."""
+    manager = client.app.state.job_manager
+    Path(record.work_dir).mkdir(parents=True, exist_ok=True)
+    manager.store.create(record)
+
+
+def test_v1_job_lifts_node_id_host_from_result_for_historical_row(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    """A historical row (node_id/host columns NULL) with ``result.node``
+    surfaces its real node at the v1 top level via the read fallback."""
+    job_id = "hist-node-1"
+    _seed_job(
+        client,
+        JobRecord(
+            id=job_id,
+            spec=JobSpec(workflow="energy", name="hist-node"),
+            status=JobStatus.COMPLETED,
+            work_dir=str(tmp_path / "hist-node"),
+            result={
+                "node": "comp-01",
+                "host": "comp-01.example.com",
+                "execution_target": "comp-01",
+            },
+        ),
+    )
+    response = client.get(f"/api/v1/jobs/{job_id}")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["node_id"] == "comp-01"
+    assert body["host"] == "comp-01.example.com"
+
+
+def test_v1_job_node_id_falls_back_to_spec_target_node(
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    """With no DB column and no result node, an explicit spec target wins."""
+    job_id = "spec-target-1"
+    _seed_job(
+        client,
+        JobRecord(
+            id=job_id,
+            spec=JobSpec(workflow="energy", name="spec-target", target_node="comp-02"),
+            status=JobStatus.QUEUED,
+            work_dir=str(tmp_path / "spec-target"),
+        ),
+    )
+    response = client.get(f"/api/v1/jobs/{job_id}")
+    assert response.status_code == 200
+    assert response.json()["node_id"] == "comp-02"

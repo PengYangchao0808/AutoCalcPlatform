@@ -196,7 +196,22 @@ class ProgressReporter:
         """Return the stage index while the state lock is held."""
         if self._current_stage and self._current_stage in self._stage_names:
             return self._stage_names.index(self._current_stage) + 1
-        return None
+        # current_stage is None at init, between stages, and after
+        # complete()/fail() — derive a stable index from stage statuses;
+        # returning None here renders as "0 / N" in the frontend timeline.
+        if not self._stage_names:
+            return None
+        for index, name in enumerate(self._stage_names):
+            if self._stages.get(name, {}).get("status") == "failed":
+                return index + 1
+        done = sum(
+            1
+            for name in self._stage_names
+            if self._stages.get(name, {}).get("status") in ("completed", "skipped")
+        )
+        if done >= len(self._stage_names):
+            return len(self._stage_names)
+        return done + 1
 
     def _progress_state(self) -> str:
         """Return 'determinate' or 'indeterminate' for frontend progress bar."""

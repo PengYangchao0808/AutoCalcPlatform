@@ -34,8 +34,13 @@ from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
 from acp.scheduler.local_cleanup import LocalCleanup, RetentionPolicy
 from acp.scheduler.manager import JobManager
+from acp.scheduler.nodes import ExecutionTargetError
 from acp.scheduler.remote import ssh as ssh_mod
-from acp.scheduler.remote.config import RemoteNode
+from acp.scheduler.remote.config import (
+    NodeCapabilities,
+    RemoteExecutionConfig,
+    RemoteNode,
+)
 from acp.scheduler.remote.monitor import _LSF_STATE_MAP, STATUS_PAUSED, RemoteJobMonitor
 from acp.scheduler.remote.runner import RemoteJobRunner
 from acp.scheduler.remote.sftp import FileStager
@@ -188,6 +193,75 @@ def _make_node(name: str = "compute-01") -> RemoteNode:
         remote_code_dir="/home/test/acp_code",
         max_concurrent_jobs=5,
         host_key_policy="auto_add",
+    )
+
+
+def _cap_node(name: str, software: tuple[str, ...] = ("xtb", "crest")) -> RemoteNode:
+    """Remote node with a declared capability block (auto-escalation tests)."""
+    return RemoteNode(
+        name=name,
+        host=f"{name}.example.com",
+        username="qc",
+        remote_work_dir="/scratch/qc/acp",
+        remote_code_dir="/home/qc/acp_code",
+        max_concurrent_jobs=4,
+        host_key_policy="auto_add",
+        capabilities=NodeCapabilities(software=software, tags=()),
+    )
+
+
+def _node_state(name: str, running: int = 0) -> SimpleNamespace:
+    return SimpleNamespace(
+        name=name,
+        status="ready",
+        running_jobs=running,
+        max_jobs=4,
+        disk_usage_pct=0,
+    )
+
+
+def _make_remote_manager(
+    tmp_path: Path,
+    *,
+    node_names: tuple[str, ...] = ("comp-01", "comp-02"),
+    software: tuple[str, ...] = ("xtb", "crest", "orca"),
+    running: dict[str, int] | None = None,
+) -> JobManager:
+    """JobManager wired to capability-declared remote nodes + idle probes."""
+    running = running or {}
+    nodes = [_cap_node(name, software=software) for name in node_names]
+    cfg = RemoteExecutionConfig(execution_mode="local", nodes=nodes)
+    mgr = JobManager(run_root=tmp_path / "runs", remote_config=cfg)
+    mgr.registry.status_provider = lambda name: _node_state(name, running=running.get(name, 0))
+    return mgr
+
+
+def _seed_confsearch_checkpoint(work_dir: Path) -> None:
+    """Write a generic calculation checkpoint a Confsearch continue accepts."""
+    checkpoint_dir = work_dir / "WORK" / "00_RUNTIME"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    (checkpoint_dir / "checkpoint.json").write_text(
+        json.dumps(
+            {
+                "task_id": "confsearch",
+                "workflow": "Confsearch",
+                "plan_fingerprint": "cf-fingerprint",
+                "step_states": [{"index": 0, "status": "completed"}],
+                "items_state": {},
+                "attempts": 1,
+                "status": "running",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _confsearch_auto_spec(**kwargs) -> JobSpec:
+    """Confsearch xtb-crest spec with an auto (unpinned) execution target."""
+    return JobSpec(
+        workflow="Confsearch",
+        method={"protocol": "xtb-crest"},
+        **kwargs,
     )
 
 
@@ -892,6 +966,152 @@ def test_continue_rejects_live_zombie_process(tmp_path: Path) -> None:
         mgr.shutdown()
 
 
+def test_continue_explicit_target_override_pins_spec_and_resolves(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D15: continue with an explicit target_node re-pins the spec (override)
+    and the next dispatch resolves to that node."""
+    mgr = _make_remote_manager(tmp_path)
+    try:
+        _seed_job(
+            mgr.store,
+            tmp_path / "runs" / "j1",
+            "override-me",
+            workflow="mechanism",
+            status=JobStatus.FAILED,
+            project_id=mgr.default_project_id,
+        )
+        calls: list[str] = []
+        mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
+
+        rec = mgr.continue_job("override-me", target_node="comp-02")
+
+        assert rec.spec.target_node == "comp-02"
+        assert rec.spec.execution_mode is None
+        assert mgr._resolve_execution_target(rec).name == "comp-02"
+        _wait_submission(calls, "override-me")
+    finally:
+        mgr.shutdown()
+
+
+def test_continue_explicit_target_unknown_raises_error_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D15: an unknown target override fails with the creation-time code."""
+    mgr = _make_remote_manager(tmp_path)
+    try:
+        _seed_job(
+            mgr.store,
+            tmp_path / "runs" / "j1",
+            "override-ghost",
+            workflow="mechanism",
+            status=JobStatus.FAILED,
+        )
+        calls: list[str] = []
+        mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
+
+        with pytest.raises(ExecutionTargetError) as ei:
+            mgr.continue_job("override-ghost", target_node="ghost-node")
+        assert ei.value.code == "unknown_target_node"
+
+        unchanged = mgr.get("override-ghost")
+        assert unchanged is not None
+        assert unchanged.status == JobStatus.FAILED
+        assert unchanged.spec.target_node is None
+        assert calls == []
+    finally:
+        mgr.shutdown()
+
+
+def test_continue_explicit_target_incapable_raises_error_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D15: an incapable override carries target_node_incapable + missing_*."""
+    mgr = _make_remote_manager(tmp_path, software=("xtb",))
+    try:
+        work_dir = tmp_path / "runs" / "override-incapable"
+        _seed_confsearch_checkpoint(work_dir)
+        _seed_job(
+            mgr.store,
+            work_dir,
+            "override-incapable",
+            workflow="Confsearch",
+            status=JobStatus.FAILED,
+            name="override-incapable",
+            method={"protocol": "xtb-crest"},  # derived = {xtb, crest}
+            project_id=mgr.default_project_id,
+        )
+        calls: list[str] = []
+        mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
+
+        with pytest.raises(ExecutionTargetError) as ei:
+            mgr.continue_job("override-incapable", target_node="comp-01")
+        assert ei.value.code == "target_node_incapable"
+        assert ei.value.missing_software == ("crest",)
+
+        unchanged = mgr.get("override-incapable")
+        assert unchanged is not None
+        assert unchanged.status == JobStatus.FAILED
+        assert calls == []
+    finally:
+        mgr.shutdown()
+
+
+def test_continue_default_returns_to_source_and_preserves_provenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D6/D15 + R2: continue without a target keeps node/execution_target and
+    drops only LSF runtime state; the auto dispatch prefers the source node."""
+    monkeypatch.setattr("acp.scheduler.manager.local_satisfies", lambda required: False)
+    # comp-01 is busier than comp-02 — only affinity can return to it.
+    mgr = _make_remote_manager(tmp_path, running={"comp-01": 1, "comp-02": 0})
+    try:
+        work_dir = tmp_path / "runs" / "source-retry"
+        _seed_confsearch_checkpoint(work_dir)
+        _seed_job(
+            mgr.store,
+            work_dir,
+            "source-retry",
+            workflow="Confsearch",
+            status=JobStatus.FAILED,
+            name="source-retry",
+            method={"protocol": "xtb-crest"},
+            project_id=mgr.default_project_id,
+            error="transient ssh error",
+            exit_code=1,
+            result={
+                "attempts": 1,
+                "node": "comp-01",
+                "execution_target": "comp-01",
+                "execution_kind": "remote",
+                "lsf_job_id": "424242",
+                "remote_dir": "/scratch/qc/acp/source-retry",
+                "command_line": "python -m acp.cli run Confsearch ...",
+            },
+        )
+        calls: list[str] = []
+        mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
+
+        rec = mgr.continue_job("source-retry")
+
+        assert rec.status == JobStatus.QUEUED
+        assert rec.result is not None
+        assert rec.result["attempts"] == 2
+        assert rec.result["continued_from"] == "failed"
+        assert rec.result["node"] == "comp-01"
+        assert rec.result["execution_target"] == "comp-01"
+        assert rec.result["execution_kind"] == "remote"
+        assert "lsf_job_id" not in rec.result
+        assert "remote_dir" not in rec.result
+        assert "command_line" not in rec.result
+        _wait_submission(calls, "source-retry")
+
+        target = mgr._resolve_execution_target(rec)
+        assert target.name == "comp-01"
+    finally:
+        mgr.shutdown()
+
+
 # ====================================================================== #
 # (d) rerun_job — in-place full rerun.
 # ====================================================================== #
@@ -1038,6 +1258,94 @@ def test_rerun_stage_workflow_reuses_original_task(tmp_path: Path, workflow: str
         assert rerun.spec.workflow == workflow
         assert rerun.spec.name == source.spec.name
         _wait_submission(calls, source.id)
+    finally:
+        mgr.shutdown()
+
+
+def test_rerun_captures_affinity_from_previous_execution_target(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """D6: rerun of an auto job stores its previous execution_target as the
+    transient affinity hint; the auto dispatch prefers that node."""
+    monkeypatch.setattr("acp.scheduler.manager.local_satisfies", lambda required: False)
+    # comp-01 is busier than comp-02 — only affinity can select it.
+    mgr = _make_remote_manager(tmp_path, running={"comp-01": 1, "comp-02": 0})
+    try:
+        work_dir = tmp_path / "runs" / "rerun-affinity"
+        _seed_job(
+            mgr.store,
+            work_dir,
+            "rerun-affinity",
+            workflow="Confsearch",
+            status=JobStatus.FAILED,
+            name="rerun-affinity",
+            method={"protocol": "xtb-crest"},  # derived = {xtb, crest}
+            project_id=mgr.default_project_id,
+            result={
+                "node": "comp-01",
+                "execution_target": "comp-01",
+                "execution_kind": "remote",
+                "lsf_job_id": "7",
+                "remote_dir": "/scratch/qc/acp/rerun-affinity",
+            },
+        )
+        calls: list[str] = []
+        mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
+
+        rerun = mgr.rerun_job("rerun-affinity")
+
+        assert rerun is not None
+        assert rerun.status == JobStatus.QUEUED
+        assert rerun.result is not None
+        assert rerun.result["attempts"] == 2
+        assert "execution_target" not in rerun.result
+        assert rerun.result["affinity_node"] == "comp-01"
+        _wait_submission(calls, "rerun-affinity")
+
+        target = mgr._resolve_execution_target(rerun)
+        assert target.name == "comp-01"
+        mgr._record_execution_target(rerun, target)
+        assert rerun.result["execution_target"] == "comp-01"
+        assert "affinity_node" not in rerun.result
+    finally:
+        mgr.shutdown()
+
+
+def test_rerun_pinned_spec_keeps_target_without_affinity_hint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A rerun whose spec already pins target_node needs no affinity hint —
+    the explicit pin is inherited by the spec (unchanged behaviour)."""
+    mgr = _make_remote_manager(tmp_path)
+    try:
+        work_dir = tmp_path / "runs" / "rerun-pinned"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        spec = _confsearch_auto_spec(
+            name="rerun-pinned",
+            project_id=mgr.default_project_id,
+            target_node="comp-01",
+        )
+        mgr.store.create(
+            JobRecord(
+                id="rerun-pinned",
+                spec=spec,
+                status=JobStatus.FAILED,
+                work_dir=str(work_dir),
+                project_id=mgr.default_project_id,
+                result={"execution_target": "comp-01", "execution_kind": "remote"},
+            )
+        )
+        calls: list[str] = []
+        mgr._execute_submission = lambda job_id: calls.append(job_id)  # type: ignore[method-assign]
+
+        rerun = mgr.rerun_job("rerun-pinned")
+
+        assert rerun is not None
+        assert rerun.spec.target_node == "comp-01"
+        assert rerun.result is not None
+        assert "affinity_node" not in rerun.result
+        assert mgr._resolve_execution_target(rerun).name == "comp-01"
+        _wait_submission(calls, "rerun-pinned")
     finally:
         mgr.shutdown()
 

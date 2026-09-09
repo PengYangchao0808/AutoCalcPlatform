@@ -280,8 +280,14 @@ def test_manager_runs_fake_job_to_completion(tmp_path: Path) -> None:
     mgr.shutdown()
 
 
-def test_batch_parallelism_one_persists_all_jobs_and_dispatches_fifo(tmp_path: Path) -> None:
+def test_batch_parallelism_one_persists_all_jobs_and_dispatches_fifo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """A two-molecule batch creates two durable jobs before execution is gated."""
+    # D14 auto-resolution: Confsearch derives {xtb, crest, censo, orca} —
+    # pin the local branch so dispatch is machine-independent (the CI host
+    # may not have the QC binaries installed).
+    monkeypatch.setattr("acp.scheduler.manager.local_satisfies", lambda required: True)
     runner = MagicMock()
     runner.poll.return_value = (False, None)
     mgr = JobManager(run_root=tmp_path, runner=runner, poll_interval=30, local_max_jobs=4)
@@ -782,7 +788,9 @@ def test_submit_dedupes_colliding_task_dirs(tmp_path: Path) -> None:
         mgr.shutdown()
 
 
-def _launch_with_mocked_popen(tmp_path: Path) -> JobRecord:
+def _launch_with_mocked_popen(
+    tmp_path: Path, node_id: str | None = None
+) -> JobRecord:
     """Drive JobRunner.submit with Popen mocked so only pre-launch io runs."""
     work_dir = tmp_path / "proj" / "ethanol_energy"
     work_dir.mkdir(parents=True)
@@ -792,7 +800,12 @@ def _launch_with_mocked_popen(tmp_path: Path) -> JobRecord:
         input={"source": "CCO", "source_type": "smiles"},
         molecule_name="ethanol",
     )
-    record = JobRecord(id="20260823_120000_001_demo", spec=spec, work_dir=str(work_dir))
+    record = JobRecord(
+        id="20260823_120000_001_demo",
+        spec=spec,
+        work_dir=str(work_dir),
+        node_id=node_id,
+    )
     event_log = JobEventLog(work_dir / "events.jsonl")
     runner = JobRunner()
     with patch("acp.scheduler.runner.subprocess.Popen") as popen:
@@ -819,3 +832,10 @@ def test_task_json_carries_job_id_and_task_dir_name(tmp_path: Path) -> None:
     assert payload["task_id"] == record.id
     assert payload["task_dir_name"] == "ethanol_energy"
     assert payload["workflow"] == "energy"
+
+
+def test_task_json_carries_resolved_node_id(tmp_path: Path) -> None:
+    """On-disk task.json mirrors the dispatched execution node (node_id)."""
+    record = _launch_with_mocked_popen(tmp_path, node_id="comp-01")
+    payload = json.loads((Path(record.work_dir) / "task.json").read_text(encoding="utf-8"))
+    assert payload["node_id"] == "comp-01"

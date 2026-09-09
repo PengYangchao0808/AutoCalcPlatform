@@ -125,6 +125,70 @@ def test_backends_merge_remote_node_software(client: TestClient) -> None:
     assert by_name["xtb"]["remote_available"] is False
 
 
+def test_v1_nodes_capability_state(client: TestClient) -> None:
+    """GET /api/v1/nodes must surface the D8 capability-state fields.
+
+    Mock NodeManager injected via ``app.state.job_manager._node_manager``
+    (same pattern as ``test_backends_merge_remote_node_software``); the
+    statuses carry the fields exactly as ``capability_state_fields`` would
+    produce them for a declared-with-mismatch and an unknown node.
+    """
+    from acp.scheduler.remote.node_manager import NodeStatus
+
+    statuses = [
+        NodeStatus(
+            name="compute-01",
+            host="10.0.0.1",
+            status="online",
+            queue="bigmem",
+            declared={"software": ["orca", "xtb"], "tags": ["gpu"], "queue": "bigmem"},
+            capability_state="declared",
+            declared_ok=False,
+            mismatch=["xtb"],
+        ),
+        NodeStatus(
+            name="compute-02",
+            host="10.0.0.2",
+            status="online",
+            queue="short-q",
+            capability_state="unknown",
+            probe_note="capability unknown; treated as generic",
+        ),
+    ]
+
+    class _FakeNM:
+        def list_nodes(self):
+            return list(statuses)
+
+    manager = client.app.state.job_manager
+    manager._node_manager = _FakeNM()
+    try:
+        r = client.get("/api/v1/nodes")
+    finally:
+        manager._node_manager = None
+    assert r.status_code == 200
+    body = r.json()
+    assert body["auto_select"] is True
+    nodes = {n["name"]: n for n in body["nodes"]}
+    assert nodes["compute-01"]["capability_state"] == "declared"
+    assert nodes["compute-01"]["declared"] == {
+        "software": ["orca", "xtb"],
+        "tags": ["gpu"],
+        "queue": "bigmem",
+    }
+    assert nodes["compute-01"]["declared_ok"] is False
+    assert nodes["compute-01"]["mismatch"] == ["xtb"]
+    assert nodes["compute-01"]["probe_note"] is None
+    assert nodes["compute-01"]["queue"] == "bigmem"
+    assert nodes["compute-02"]["capability_state"] == "unknown"
+    assert nodes["compute-02"]["declared"] is None
+    assert nodes["compute-02"]["declared_ok"] is None
+    assert nodes["compute-02"]["mismatch"] == []
+    assert nodes["compute-02"]["probe_note"] == "capability unknown; treated as generic"
+    # queue is visible for undeclared nodes too (m6 — same RemoteNode source)
+    assert nodes["compute-02"]["queue"] == "short-q"
+
+
 def test_workflows_and_protocols(client: TestClient) -> None:
     wf = client.get("/api/workflows").json()
     names = {w["name"] for w in wf["workflows"]}

@@ -20,7 +20,12 @@ from typing import Any, Dict, List, Optional, Set
 
 import numpy as np
 
-from cccp.software import SoftwareNotFoundError, detect_version, resolve_executable
+from cccp.software import (
+    SoftwareNotFoundError,
+    detect_version,
+    orca_runtime_env,
+    resolve_executable,
+)
 from cccp.utils.file_io import read_xyz_multiframe
 
 logger = logging.getLogger(__name__)
@@ -705,10 +710,10 @@ class CensoInterface:
         env: Optional[Dict[str, str]] = None
 
         orca_cfg = self.config.get("executables", {}).get("orca", {})
-        ld_path = orca_cfg.get("ld_library_path")
-        if ld_path:
-            env = dict(os.environ)
-            env["LD_LIBRARY_PATH"] = ld_path
+        env = orca_runtime_env(
+            orca_cfg.get("ld_library_path"),
+            mpi_path=orca_cfg.get("mpi_path"),
+        )
 
         if effective_templates:
             if env is None:

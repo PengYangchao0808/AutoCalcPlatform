@@ -8,6 +8,14 @@ from acp.scheduler.artifacts import (
     ParserStatus,
     capture_stage_artifacts,
 )
+from acp.scheduler.capabilities import (
+    MatchResult,
+    NoCapableNodeError,
+    derive_required_software,
+    is_degraded,
+    local_satisfies,
+    matches_capabilities,
+)
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
 from acp.scheduler.local_cleanup import (
@@ -29,6 +37,7 @@ from acp.scheduler.nodes import (
     NodeSpec,
     NodeState,
     validate_execution_request,
+    validate_submission_target,
 )
 from acp.scheduler.projects import ProjectManager
 from acp.scheduler.provenance import ParserRegistry, Provenance, ResultSchema, compute_input_hash
@@ -46,7 +55,9 @@ __all__ = [
     "JobSpec",
     "JobStatus",
     "JobStore",
+    "MatchResult",
     "MetricsExtractor",
+    "NoCapableNodeError",
     "Artifact",
     "ArtifactRegistry",
     "DEFAULT_MAX_DIRS_PER_SWEEP",
@@ -76,5 +87,10 @@ __all__ = [
     "TaskIndex",
     "capture_stage_artifacts",
     "compute_input_hash",
+    "derive_required_software",
+    "is_degraded",
+    "local_satisfies",
+    "matches_capabilities",
     "validate_execution_request",
+    "validate_submission_target",
 ]

@@ -470,6 +470,7 @@ class JobRunner:
                 workflow=record.spec.workflow,
                 task_dir_name=work_dir.name,
                 status=record.status.value,
+                node_id=record.node_id,
                 node_path=record.work_dir,
                 input_hash=record.input_hash,
                 current_stage=record.current_stage,

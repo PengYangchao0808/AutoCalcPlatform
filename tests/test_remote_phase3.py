@@ -774,7 +774,7 @@ def test_full_cluster_config_round_trip():
         "nodes": [
             {
                 "name": "compute-01",
-                "host": "10.16.5.157",
+                "host": "192.168.1.100",
                 "username": "<user>",
                 "remote_work_dir": "/scratch/<user>/acp_jobs",
                 "remote_code_dir": "/home/<user>/acp_code",

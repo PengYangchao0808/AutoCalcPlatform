@@ -552,6 +552,11 @@ class RemoteJobRunner:
         if data is None:
             return
 
+        # Mirror the observed payload into the local work dir: the API's
+        # state.json enrichment reads only local files, so without this the
+        # live timeline/metrics never see remote progress.
+        self._mirror_state_json(record, data)
+
         if data.get("status") == "failed":
             return
 
@@ -593,6 +598,18 @@ class RemoteJobRunner:
 
         for _ts, event_type, _name, payload in sorted(pending_events, key=lambda x: x[0]):
             event_log.append(event_type, job_id=record.id, **payload)
+
+    def _mirror_state_json(self, record: JobRecord, data: dict[str, object]) -> None:
+        """Write the observed remote state payload to the local work dir."""
+        work_dir = Path(record.work_dir)
+        try:
+            work_dir.mkdir(parents=True, exist_ok=True)
+            state_path = work_dir / "state.json"
+            tmp = state_path.with_suffix(".json.tmp")
+            tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+            tmp.replace(state_path)
+        except OSError:
+            logger.debug("state.json mirror failed for %s", record.id, exc_info=True)
 
     # ------------------------------------------------------------------ #
     # Legacy blocking API (kept for backward compatibility)
@@ -798,7 +815,8 @@ class RemoteJobRunner:
             spec,
             record.id,
             node,
-            queue=self._config.queue,
+            # Per-node queue override; None keeps cluster queue byte-identically.
+            queue=node.queue or self._config.queue,
             walltime=self._config.walltime,
             extra_flags=self._config.extra_flags,
             input_path="input.xyz",

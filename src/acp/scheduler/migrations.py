@@ -184,6 +184,11 @@ CREATE TABLE IF NOT EXISTS mechanism_projects (
 );
 """,
     },
+    {
+        "id": "013",
+        "description": "add node_id and host to jobs (persisted execution target)",
+        "sql": "-- handled in Python for SQLite ALTER TABLE compatibility",
+    },
 ]
 
 
@@ -276,6 +281,21 @@ def _apply_stage_tasks_status_detail_column(conn: sqlite3.Connection) -> bool:
     return True
 
 
+def _apply_jobs_node_columns(conn: sqlite3.Connection) -> bool:
+    """Add ``node_id`` / ``host`` to jobs (persisted execution target).
+
+    NULL for historical rows — read side falls back to ``result["node"]`` /
+    ``spec.target_node``.  Deliberately no backfill (plan locked).
+    """
+    if not _table_exists(conn, "jobs"):
+        return False
+    if not _column_exists(conn, "jobs", "node_id"):
+        conn.execute("ALTER TABLE jobs ADD COLUMN node_id TEXT")
+    if not _column_exists(conn, "jobs", "host"):
+        conn.execute("ALTER TABLE jobs ADD COLUMN host TEXT")
+    return True
+
+
 def _apply_projects_name_unique_index(conn: sqlite3.Connection) -> bool:
     """Index lower(name) on projects; tolerated when legacy duplicates exist."""
     if not _table_exists(conn, "projects"):
@@ -306,6 +326,8 @@ def _apply_migration(conn: sqlite3.Connection, migration: dict[str, str]) -> boo
         return _apply_stage_tasks_status_detail_column(conn)
     if migration_id == "011":
         return _apply_projects_name_unique_index(conn)
+    if migration_id == "013":
+        return _apply_jobs_node_columns(conn)
     sql = migration["sql"].strip()
     if sql:
         conn.executescript(sql)

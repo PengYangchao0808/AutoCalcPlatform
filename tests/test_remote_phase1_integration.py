@@ -1,5 +1,5 @@
 """
-Phase 1 real integration tests against 10.16.5.157.
+Phase 1 real integration tests against 192.168.1.100.
 
 Requires: ACP_REMOTE_PASSWORD_COMPUTE_01 env var (NOT stored in any file).
 Skips automatically if the env var or paramiko is missing.
@@ -26,7 +26,7 @@ from acp.scheduler.remote.sync import CodeSyncer
 
 NODE = RemoteNode(
     name="compute-01",
-    host="10.16.5.157",
+    host="192.168.1.100",
     username="<user>",
     remote_work_dir="/home/<user>/acp_test_jobs",
     remote_code_dir="/home/<user>/acp_test_code",

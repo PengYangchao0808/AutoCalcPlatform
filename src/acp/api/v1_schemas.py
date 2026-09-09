@@ -7,9 +7,49 @@ Pydantic models for the ACP Workbench v2 ``/api/v1`` surface.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+logger = logging.getLogger(__name__)
+
+#: node_tags sanitation caps (m7): at most 16 tags of at most 64 chars each.
+NODE_TAGS_MAX_COUNT = 16
+NODE_TAGS_MAX_LENGTH = 64
+
+
+def normalize_node_tags(values: list[str]) -> list[str]:
+    """Sanitize a ``node_tags`` list: strip, drop empties, dedupe
+    (order-preserving), cap at :data:`NODE_TAGS_MAX_COUNT` tags of at most
+    :data:`NODE_TAGS_MAX_LENGTH` chars.
+
+    Over-limit entries are dropped with a warning; a list that normalizes
+    to empty imposes no tag constraint (never an unsatisfiable filter).
+    """
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in values:
+        tag = str(raw).strip()
+        if not tag or tag in seen:
+            continue
+        if len(tag) > NODE_TAGS_MAX_LENGTH:
+            logger.warning(
+                "node_tags entry dropped (exceeds %d chars): %.64s",
+                NODE_TAGS_MAX_LENGTH,
+                tag,
+            )
+            continue
+        if len(cleaned) >= NODE_TAGS_MAX_COUNT:
+            logger.warning(
+                "node_tags entry dropped (more than %d tags): %.64s",
+                NODE_TAGS_MAX_COUNT,
+                tag,
+            )
+            continue
+        seen.add(tag)
+        cleaned.append(tag)
+    return cleaned
 
 
 class ProjectModel(BaseModel):
@@ -193,12 +233,18 @@ class V1JobSpecModel(BaseModel):
     output_dir: str | None = None
     config_path: str | None = None
     tags: list[str] = Field(default_factory=list)
+    node_tags: list[str] = Field(default_factory=list)
     project_id: str | None = None
     execution_mode: Literal["local", "remote"] | None = None
     target_node: str | None = None
     molecule_name: str = ""
     task_name: str = ""
     remark: str = ""
+
+    @field_validator("node_tags")
+    @classmethod
+    def _normalize_node_tags(cls, value: list[str]) -> list[str]:
+        return normalize_node_tags(value)
 
 
 class JobLiveMetric(BaseModel):
@@ -258,6 +304,8 @@ class V1JobRecordModel(BaseModel):
     exit_code: int | None = None
     remote_job_id: str | None = None
     group_id: str | None = None
+    node_id: str | None = None
+    host: str | None = None
     study_id: str | None = None
     study_status: str | None = None
     result: dict[str, Any] | None = None
@@ -281,12 +329,18 @@ class V1JobCreateRequest(BaseModel):
     output_dir: str | None = None
     config_path: str | None = None
     tags: list[str] = Field(default_factory=list)
+    node_tags: list[str] = Field(default_factory=list)
     project_id: str | None = None
     execution_mode: Literal["local", "remote"] | None = None
     target_node: str | None = None
     molecule_name: str = ""
     task_name: str = ""
     remark: str = ""
+
+    @field_validator("node_tags")
+    @classmethod
+    def _normalize_node_tags(cls, value: list[str]) -> list[str]:
+        return normalize_node_tags(value)
 
 
 class MechanismRolePayload(BaseModel):
@@ -478,6 +532,19 @@ class V1JobRerunRequest(BaseModel):
     """
 
     project_id: str | None = None
+
+
+class V1JobContinueRequest(BaseModel):
+    """Body for POST /jobs/{id}/continue (design §3.4, D15).
+
+    ``target_node`` absent/``None`` returns to the source node — the
+    preserved ``result["execution_target"]`` drives the next auto dispatch.
+    An explicit ``target_node`` re-pins the job's spec and is validated
+    with the same rules as job creation (unknown/disabled/incapable
+    → HTTP 400 with a stable error ``code``).
+    """
+
+    target_node: str | None = None
 
 
 class V1JobPurgeRequest(BaseModel):
@@ -964,7 +1031,13 @@ class NodeStatusModel(BaseModel):
     disk_usage_pct: int = 0
     last_check: str = ""
     error: str | None = None
+    queue: str | None = None
     software: dict[str, Any] = Field(default_factory=dict)
+    declared: dict[str, Any] | None = None
+    capability_state: str = "unknown"  # "declared" | "probe-inferred" | "unknown"
+    declared_ok: bool | None = None
+    mismatch: list[str] = Field(default_factory=list)
+    probe_note: str | None = None
 
 
 class NodeListResponse(BaseModel):
@@ -972,6 +1045,72 @@ class NodeListResponse(BaseModel):
 
     nodes: list[NodeStatusModel] = Field(default_factory=list)
     auto_select: bool = True
+
+
+class NodeMatchingRequest(BaseModel):
+    """Request for ``POST /api/v1/nodes/matching`` (submission-time preview).
+
+    The ``node_tags`` key is required but nullable (design R6): an explicit
+    ``null`` means "no tag constraint", while an absent key is a client bug
+    that the route rejects with HTTP 400 (FastAPI's default for a required
+    pydantic field would be 422).  ``protocol`` duplicates the Confsearch
+    method protocol at the top level for wizard convenience and feeds the
+    same derivation path as ``method.protocol``.
+    """
+
+    workflow: str
+    method: dict[str, Any] = Field(default_factory=dict)
+    protocol: str | None = None
+    node_tags: list[str] | None
+
+    @field_validator("node_tags")
+    @classmethod
+    def _normalize_node_tags(cls, value: list[str] | None) -> list[str] | None:
+        # ``null`` = "no tag constraint" (design R6) — preserved as-is.
+        return None if value is None else normalize_node_tags(value)
+
+
+class NodeMatchingItem(BaseModel):
+    """One node's outcome in ``POST /api/v1/nodes/matching`` (design §2.2).
+
+    Attributes:
+        satisfies: Hard-constraint verdict shared with dispatch — the node
+            is a member of the match set (enabled ∧ capability match under
+            D8/D13) and is not offline.  Capacity/degradation are soft
+            constraints surfaced via ``degraded`` and never affect
+            ``satisfies``.
+        degraded: Load/disk soft-constraint flag (single shared
+            :func:`is_degraded` implementation).
+        tags: Declared capability tags — the frontend chips' only data
+            source; empty for undeclared nodes (D13).
+    """
+
+    name: str
+    host: str
+    status: str = "offline"  # "online" | "degraded" | "offline"
+    running_jobs: int = 0
+    max_jobs: int = 0
+    disk_usage_pct: int = 0
+    queue: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    capability_state: str = "unknown"  # "declared" | "probe-inferred" | "unknown"
+    declared_ok: bool | None = None
+    mismatch: list[str] = Field(default_factory=list)
+    satisfies: bool = False
+    missing_software: list[str] = Field(default_factory=list)
+    missing_tags: list[str] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+    degraded: bool = False
+
+
+class NodeMatchingResponse(BaseModel):
+    """Response for ``POST /api/v1/nodes/matching`` (design §2.2)."""
+
+    required_software: list[str] = Field(default_factory=list)
+    node_tags: list[str] = Field(default_factory=list)
+    local_satisfies: bool = False
+    nodes: list[NodeMatchingItem] = Field(default_factory=list)
+    note: str | None = None
 
 
 class NodePingResponse(BaseModel):
@@ -1432,6 +1571,9 @@ __all__ = [
     "MoleculeResolveResponse",
     "NodeBootstrapResponse",
     "NodeListResponse",
+    "NodeMatchingItem",
+    "NodeMatchingRequest",
+    "NodeMatchingResponse",
     "NodePingResponse",
     "NodeStatusModel",
     "ProjectCreateRequest",

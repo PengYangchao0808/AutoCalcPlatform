@@ -9,9 +9,11 @@ existing scheduler jobs — the jobs table is the task index.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from acp.api.v1_schemas import normalize_node_tags
 
 __all__ = [
     "V2FileEntry",
@@ -82,7 +84,12 @@ class V2TreeResponse(BaseModel):
 
 
 class V2TaskBatchItem(BaseModel):
-    """One independent task in a §12 batch submission."""
+    """One independent task in a §12 batch submission.
+
+    The optional ``execution_mode`` / ``target_node`` / ``node_tags`` fields
+    pass a node-selection preference through to the created job's spec
+    (pure additive — omitted, they leave dispatch fully automatic).
+    """
 
     molecule_name: str
     task_name: str
@@ -93,6 +100,14 @@ class V2TaskBatchItem(BaseModel):
     resources: dict[str, Any] = Field(default_factory=dict)
     project_id: str | None = None
     name: str = ""
+    execution_mode: Literal["local", "remote"] | None = None
+    target_node: str | None = None
+    node_tags: list[str] = Field(default_factory=list)
+
+    @field_validator("node_tags")
+    @classmethod
+    def _normalize_node_tags(cls, value: list[str]) -> list[str]:
+        return normalize_node_tags(value)
 
 
 class V2TaskBatchRequest(BaseModel):

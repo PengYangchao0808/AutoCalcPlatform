@@ -503,6 +503,11 @@ class JobSpec:
         target_node: Name of a specific execution target to run on
             (``"local"`` or a configured remote node name).  Takes priority
             over ``execution_mode`` and the server default.
+        node_tags: User-required node capability tags (AND semantics).
+            Only statically declared tags can ever satisfy them
+            (design D13); empty = no tag constraint.  Persisted in
+            spec_json — deserialization tolerates the missing key
+            (older rows predate the field).
     """
 
     workflow: str
@@ -517,6 +522,7 @@ class JobSpec:
     input_hash: str | None = None
     execution_mode: ExecutionMode | None = None
     target_node: str | None = None
+    node_tags: list[str] = field(default_factory=list)
     # v2 task-storage naming (docs/ACP_Project_Task_Storage_Design_v2.md §4):
     # physical task dir name is "<molecule>_<task>_<remark>".  The fields are
     # optional — :meth:`task_dir_name` applies a defaulting chain so every
@@ -574,6 +580,8 @@ class JobRecord:
     exit_code: int | None = None
     remote_job_id: str | None = None
     group_id: str | None = None
+    node_id: str | None = None
+    host: str | None = None
     result: dict[str, Any] | None = None
 
     def touch(self) -> None:
@@ -598,6 +606,8 @@ class JobRecord:
             "exit_code": self.exit_code,
             "remote_job_id": self.remote_job_id,
             "group_id": self.group_id,
+            "node_id": self.node_id,
+            "host": self.host,
             "result": self.result,
         }
 

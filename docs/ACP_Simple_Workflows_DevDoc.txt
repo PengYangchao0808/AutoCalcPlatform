@@ -1392,7 +1392,7 @@ optfreqsp 的 SP stage 使用独立 kwarg 字典（sp_kwargs），与 optfreq kw
 
 ✅ GitHub 推送成功：b947035
 
-✅ 远程计算节点 (10.16.5.157) rsync 同步完成
+✅ 远程计算节点 (192.168.1.100) rsync 同步完成
 
 ✅ acp 服务重启完成（systemctl）
 
@@ -1765,7 +1765,7 @@ updateConfigCards() 描述文本：当 stage 为空时显示调暗的 label (def
 
 新增 v8.0 · 2026-07-31
 
-基于计算节点（10.16.5.157，用户 <user>）上真实运行的 ORCA/Shermo 产物进行逐行核对，验证样本：20260720_223201_001_optfreqsp（H₂O，optfreqsp 全流程）、20260721_135435_004_2-epi-curcusone-i（大分子 Opt Freq）。这是首次以真实 ORCA 5.x 输出对照代码解析逻辑——此前全部测试均基于 mock，无真实 log fixture。
+基于计算节点（192.168.1.100，用户 <user>）上真实运行的 ORCA/Shermo 产物进行逐行核对，验证样本：20260720_223201_001_optfreqsp（H₂O，optfreqsp 全流程）、20260721_135435_004_2-epi-curcusone-i（大分子 Opt Freq）。这是首次以真实 ORCA 5.x 输出对照代码解析逻辑——此前全部测试均基于 mock，无真实 log fixture。
 
 18.1 结论 1（Critical）：频率解析正则 bug 已证实 —— 真实 ORCA 输出 0 匹配
 

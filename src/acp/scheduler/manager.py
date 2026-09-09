@@ -17,6 +17,7 @@ import logging
 import os
 import random
 import shutil
+import socket
 import threading
 import time
 from dataclasses import replace
@@ -26,6 +27,11 @@ from typing import TYPE_CHECKING, Any, Final
 
 from acp.calculations.contracts import JsonValue
 from acp.scheduler.artifacts import ArtifactRegistry
+from acp.scheduler.capabilities import (
+    NoCapableNodeError,
+    derive_required_software,
+    local_satisfies,
+)
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.jobs import (
     EXIT_WAITING_REVIEW,
@@ -36,11 +42,13 @@ from acp.scheduler.jobs import (
 )
 from acp.scheduler.metrics import MetricsExtractor
 from acp.scheduler.nodes import (
+    LOCAL_NODE_NAME,
     ExecutionCapacityUnavailable,
     ExecutionTargetError,
     NodeRegistry,
     NodeSpec,
     validate_execution_request,
+    validate_submission_target,
 )
 from acp.scheduler.processctl import pid_is_alive, read_cmdline, terminate_task_processes
 from acp.scheduler.projects import ProjectManager
@@ -246,6 +254,8 @@ class JobManager:
         self._start_cleanup_thread()
 
         self._requeue_active_on_startup()
+        with self._lock:
+            self._rebuild_reservations()
         self._dispatch_queued_jobs()
         self._poll_thread.start()
 
@@ -641,6 +651,9 @@ class JobManager:
             attempts = int((record.result or {}).get("attempts") or 1) + 1
             old_status = record.status.value
             result = dict(record.result or {})
+            # Affinity capture (design §3.4): remember where this job ran so
+            # the rerun's auto dispatch prefers the same node.
+            source_target = result.get("execution_target")
             history = result.get("attempt_history")
             if not isinstance(history, list):
                 history = []
@@ -664,6 +677,15 @@ class JobManager:
                 "attempts": attempts,
                 "attempt_history": history,
             }
+            if (
+                isinstance(source_target, str)
+                and source_target != LOCAL_NODE_NAME
+                and record.spec.target_node is None
+                and record.spec.execution_mode is None
+            ):
+                # Transient affinity hint for the auto branch; consumed when
+                # the next execution target is recorded.
+                record.result["affinity_node"] = source_target
             record.status = JobStatus.QUEUED
             record.started_at = None
             record.completed_at = None
@@ -1215,7 +1237,7 @@ class JobManager:
         self._event_log(record).append("job.resumed", job_id=job_id, mode=mode)
         return record
 
-    def continue_job(self, job_id: str) -> JobRecord:
+    def continue_job(self, job_id: str, *, target_node: str | None = None) -> JobRecord:
         """Re-enter a FAILED/CANCELLED job from its checkpoint (plan §4.4).
 
         Workflow matrix: ``xtbmd_censo_energy``
@@ -1226,8 +1248,17 @@ class JobManager:
         resume contract. Other workflows without a checkpoint are rejected
         (the API maps the ``ValueError`` to 409 with a rerun hint).
 
+        Execution-target semantics (design §3.4, D15): ``target_node=None``
+        (the default) returns to the source node — the previous
+        ``result["execution_target"]`` survives in the result and becomes
+        the affinity hint for the next auto dispatch.  An explicit
+        ``target_node`` re-pins the job's spec (override) and is validated
+        with the same creation-time rules as a new submission
+        (unknown/disabled/incapable → :class:`ExecutionTargetError`).
+
         Args:
             job_id: Job identifier.
+            target_node: Optional explicit execution-node override (D15).
 
         Returns:
             Updated job record (status ``QUEUED``, re-dispatch started).
@@ -1236,6 +1267,8 @@ class JobManager:
             KeyError: If the job does not exist.
             ValueError: If the status is not ``FAILED``/``CANCELLED``, a
                 live process is still tracked, or the workflow cannot resume.
+            ExecutionTargetError: If an explicit ``target_node`` override is
+                unknown, disabled, or cannot satisfy the job requirements.
         """
         with self._lock:
             # Re-read under the manager lock for the same double-submit guard
@@ -1254,11 +1287,26 @@ class JobManager:
                 )
             if job_id in self._submission_jobs:
                 raise ValueError(f"job {job_id} is already being submitted")
+
+            # D15: explicit override supersedes any previous mode.
+            effective = record.spec
+            if target_node is not None and target_node != record.spec.target_node:
+                effective = replace(
+                    record.spec,
+                    target_node=target_node,
+                    execution_mode=None,
+                )
+                validate_execution_request(effective)
+                validate_submission_target(effective, registry=self.registry)
+
             workflow = record.spec.workflow
             if workflow == "mechanism":
                 pass
             elif workflow == "xtbmd_censo_energy":
-                record.spec = replace(record.spec, method={**record.spec.method, "resume": True})
+                effective = replace(
+                    effective,
+                    method={**effective.method, "resume": True},
+                )
             elif workflow == "BatchOptimize":
                 # Its per-item checkpoint is a cache, not a full resume
                 # contract — never let the API re-enter a BatchOptimize job.
@@ -1270,6 +1318,7 @@ class JobManager:
             result = dict(record.result or {})
             result["attempts"] = int(result.get("attempts") or 1) + 1
             result["continued_from"] = old_status
+            record.spec = effective
             record.result = result
             record.status = JobStatus.QUEUED
             record.error = None
@@ -1278,7 +1327,9 @@ class JobManager:
             record.pid = None
             record.remote_job_id = None
             record.completed_at = None
-            for key in ("lsf_job_id", "node", "remote_dir", "command_line"):
+            # LSF runtime state only — node/execution_target/execution_kind
+            # stay so dispatch returns to the source node (回源, §3.4/R2).
+            for key in ("lsf_job_id", "remote_dir", "command_line"):
                 result.pop(key, None)
             record.touch()
             self.store.update(record)
@@ -1581,7 +1632,25 @@ class JobManager:
 
         while True:
             try:
-                submitted = self._submit_job(job_id)
+                try:
+                    submitted = self._submit_job(job_id)
+                except NoCapableNodeError as exc:
+                    # Config drift at dispatch (creation-time validation is
+                    # T5): record the event, then degrade to capacity-retry
+                    # semantics so the job is retried instead of failing —
+                    # an admin fixing node capabilities unblocks it (R13).
+                    drift = self.store.get(job_id)
+                    if drift is not None:
+                        self._event_log(drift).append(
+                            "execution.no_capable_node",
+                            job_id=job_id,
+                            message=str(exc),
+                            missing_software=list(exc.missing_software),
+                            missing_tags=list(exc.missing_tags),
+                        )
+                    raise ExecutionCapacityUnavailable(
+                        f"no capable node (capability drift): {exc}"
+                    ) from exc
                 if not submitted:
                     # A persisted batch slot is currently occupied. The job
                     # remains QUEUED and the poller will retry it after a
@@ -1606,6 +1675,7 @@ class JobManager:
                         reason="cancelled while waiting for execution capacity",
                     )
                     self._stage_task_observer.finalize_job(job_id, "cancelled")
+                    self._release_reservation(job_id)
                     return
                 if record.status.is_terminal:
                     return
@@ -1635,6 +1705,7 @@ class JobManager:
                     self._write_job_json(record)
                     self._event_log(record).append("job.failed", job_id=job_id, error=str(exc))
                     self._stage_task_observer.finalize_job(job_id, "failed")
+                self._release_reservation(job_id)
                 return
 
         # Only poll if not already terminal (fake workflow finishes in _submit_job)
@@ -1782,14 +1853,29 @@ class JobManager:
                 "Remote execution target resolved but no remote runner is "
                 "available (no enabled remote nodes configured)"
             )
-        self._ensure_remote_capacity(target)
-        lsf_job_id = self.remote_runner.submit_remote(record, event_log, target_node=target.name)
+        try:
+            self._ensure_remote_capacity(record, target)
+            lsf_job_id = self.remote_runner.submit_remote(
+                record, event_log, target_node=target.name
+            )
+        except BaseException:
+            # The select→submit window closed without a live LSF job —
+            # give the reservation back before the error propagates.
+            self._release_reservation(record.id)
+            raise
         record.remote_job_id = lsf_job_id
         record.status = JobStatus.PENDING
 
         record.touch()
         self.store.update(record)
+        # Full re-sync now that remote_job_id / result.node are known: the
+        # submit-time row predates dispatch and still says node_id="local".
         self._sync_task_status(record)
+        if self.tasks is not None:
+            try:
+                self.tasks.sync_from_job(record)
+            except Exception:
+                logger.warning("Task index node sync failed for job %s", job_id, exc_info=True)
         self._write_job_json(record)
         return True
 
@@ -1801,23 +1887,124 @@ class JobManager:
         """Resolve the execution target: target_node > execution_mode > default.
 
         This is the only place the server default mode is consulted.
+
+        Auto semantics (design D14) apply when the spec pins neither a
+        ``target_node`` nor an ``execution_mode``: an empty derived
+        requirement follows the server default; a non-empty requirement
+        the local machine satisfies stays local; anything else escalates
+        to a capability-matched remote node.  An explicit
+        ``execution_mode="remote"`` (or a remote server default) selects
+        through the same capability/tag filter — only an empty derived
+        set keeps the legacy pure least-loaded selection.  Every remote
+        selection is prefetched, then selected + reserved atomically
+        under the manager lock (design §3.3); explicit remote targets
+        occupy the same select→submit reservation.  The derived set is
+        stashed on ``record.result["required_software"]`` for audit
+        (design §1.3) and persisted by the following
+        :meth:`_record_execution_target` call.
         """
         spec = record.spec
         validate_execution_request(spec)
+        derived = derive_required_software(spec)
+        if derived:
+            result = dict(record.result or {})
+            result["required_software"] = sorted(derived)
+            record.result = result
         if spec.target_node:
-            return self.registry.require(spec.target_node)
+            target = self.registry.require(
+                spec.target_node,
+                required=derived,
+                required_tags=frozenset(spec.node_tags or ()),
+            )
+            if target.kind == "remote":
+                with self._lock:
+                    self.registry.reserve(target.name, record.id)
+            return target
+        if spec.execution_mode is None and derived:
+            if local_satisfies(derived):
+                return self.registry.local
+            return self._select_and_reserve_remote(
+                record,
+                required=derived,
+                required_tags=frozenset(spec.node_tags or ()),
+            )
         mode = spec.execution_mode or self.default_execution_mode
         if mode == "local":
             return self.registry.local
-        return self.registry.select_remote()
+        return self._select_and_reserve_remote(
+            record,
+            required=derived,
+            required_tags=frozenset(spec.node_tags or ()),
+        )
+
+    def _select_and_reserve_remote(
+        self,
+        record: JobRecord,
+        *,
+        required: frozenset[str],
+        required_tags: frozenset[str],
+    ) -> NodeSpec:
+        """Select + reserve a remote node atomically under the manager lock.
+
+        Node statuses are prefetched **outside** the lock first: a status
+        cache miss means a live SSH probe (30 s timeout × retries), which
+        must never block lock-holding operations — after the prefetch the
+        in-lock ``select_remote`` only hits the warmed cache.
+
+        Raises:
+            NoCapableNodeError: No enabled remote node is configured or
+                none satisfies the requirements (permanent; the dispatch
+                loop degrades it to a capacity retry, R13).
+        """
+        self.registry.prefetch_statuses()
+        with self._lock:
+            try:
+                target = self.registry.select_remote(
+                    required=required,
+                    required_tags=required_tags,
+                    affinity_node=self._execution_affinity(record),
+                )
+            except ExecutionTargetError as exc:
+                # Zero enabled remote nodes: the match set is trivially
+                # empty — same no-capable semantics as an empty match.
+                raise NoCapableNodeError(str(exc)) from exc
+            self.registry.reserve(target.name, record.id)
+        return target
+
+    def _execution_affinity(self, record: JobRecord) -> str | None:
+        """Preferred remote node for an auto job (design §3.4, D6/D15).
+
+        The affinity source is the previous attempt's ``execution_target``:
+        continue keeps it in the result (回源), rerun re-stores it under the
+        transient ``affinity_node`` key before its result reset.  Only the
+        auto path (no pinned ``target_node`` / ``execution_mode``) consults
+        it, and only remote names count — ``local`` never carries affinity.
+        """
+        spec = record.spec
+        if spec.target_node is not None or spec.execution_mode is not None:
+            return None
+        result = record.result or {}
+        target = result.get("execution_target")
+        if not isinstance(target, str) or target == LOCAL_NODE_NAME:
+            target = result.get("affinity_node")
+        if not isinstance(target, str) or target == LOCAL_NODE_NAME:
+            return None
+        return target
 
     def _record_execution_target(self, record: JobRecord, target: NodeSpec) -> None:
         """Persist execution provenance so poll/cancel/recovery never need
         the server default mode again for this job."""
         result = dict(record.result or {})
+        result.pop("affinity_node", None)
         result["execution_target"] = target.name
         result["execution_kind"] = target.kind
         record.result = result
+        # Persist the chosen execution target in the jobs columns as well
+        # (migration 013).  Local jobs record the head-node hostname; remote
+        # jobs record the configured node host.  Historical rows stay NULL —
+        # read side falls back to ``result`` / ``spec.target_node``.
+        record.node_id = target.name
+        record.host = socket.gethostname() if target.kind == "local" else target.host
         record.touch()
         self.store.update(record)
         self._event_log(record).append(
@@ -1826,6 +2013,35 @@ class JobManager:
             target=target.name,
             kind=target.kind,
         )
+
+    def _release_reservation(self, job_id: str) -> None:
+        """Idempotently release a job's in-flight node reservation."""
+        with self._lock:
+            self.registry.release_job(job_id)
+
+    def _rebuild_reservations(self) -> None:
+        """Rebuild in-flight node reservations from persisted targets.
+
+        Startup counterpart of the restart-recovery scan (design §3.3):
+        every job still RUNNING/PENDING/PAUSED after recovery with a
+        persisted remote ``execution_target`` re-claims its reservation,
+        so a restart never under-counts in-flight work (soft cap).  Must
+        run AFTER ``_requeue_active_on_startup`` — jobs the recovery scan
+        finalised no longer hold a slot.  Caller holds ``self._lock``.
+        """
+        rebuilt = 0
+        for status in (JobStatus.RUNNING, JobStatus.PENDING, JobStatus.PAUSED):
+            for record in self.store.list(status=status.value, limit=10000):
+                result = record.result or {}
+                target = result.get("execution_target")
+                if not isinstance(target, str) or target == LOCAL_NODE_NAME:
+                    continue
+                if self.registry.get(target) is None:
+                    continue  # node no longer configured — nothing to reserve
+                self.registry.reserve(target, record.id)
+                rebuilt += 1
+        if rebuilt:
+            logger.info("Rebuilt %d in-flight node reservation(s) after restart", rebuilt)
 
     def count_local_running_jobs(self, exclude_id: str | None = None) -> int:
         """Local jobs holding a slot (STARTING or RUNNING, not remote)."""
@@ -1847,22 +2063,28 @@ class JobManager:
                 f"Local execution at capacity ({running}/{limit}); waiting for a slot"
             )
 
-    def _ensure_remote_capacity(self, target: NodeSpec) -> None:
-        """Capacity check for an explicitly pinned remote node.
+    def _ensure_remote_capacity(self, record: JobRecord, target: NodeSpec) -> None:
+        """Capacity check for a remote dispatch target.
 
         Auto-selected nodes are already capacity-filtered by
-        ``NodeRegistry.select_remote``; this covers the explicit
-        ``target_node`` path.  Offline/full targets are temporary
-        conditions — the caller retries rather than failing the job.
+        ``NodeRegistry.select_remote``; this is the submit-time gate for
+        every remote target.  In-flight reservations held by *other*
+        jobs count toward the load — the LSF running count only sees
+        submitted jobs, so without this two concurrent explicit
+        dispatches to the same node would oversubscribe it.  Offline/full
+        targets are temporary conditions — the caller retries rather
+        than failing the job.
         """
         running = self.registry.remote_running_jobs(target.name)
         if running is None:
             raise ExecutionCapacityUnavailable(
                 f"target node '{target.name}' is offline or unreachable"
             )
-        if running >= target.max_jobs:
+        in_flight = self.registry.reservations.get(target.name, set()) - {record.id}
+        if running + len(in_flight) >= target.max_jobs:
             raise ExecutionCapacityUnavailable(
-                f"target node '{target.name}' is at capacity ({running}/{target.max_jobs})"
+                f"target node '{target.name}' is at capacity "
+                f"({running + len(in_flight)}/{target.max_jobs})"
             )
 
     def _poll_job(self, job_id: str) -> None:
@@ -1881,6 +2103,14 @@ class JobManager:
                     record, event_log, cancel_event
                 )
                 self._poll_failures.pop(job_id, None)
+                # Release the select→submit reservation only once LSF has
+                # actually started the job: PEND/PSUSP jobs do not count
+                # toward the node's running-jobs probe, so an earlier
+                # release would under-count in-flight work.  poll_remote
+                # flips the record to RUNNING exactly when it observes
+                # the LSF RUN state; terminal transitions release below.
+                if record.status == JobStatus.RUNNING:
+                    self._release_reservation(job_id)
             except Exception as exc:
                 # Transport-layer failure (SSH/bjobs unreachable).  This is
                 # NOT a job failure: keep the status, do not cancel, do not
@@ -1914,6 +2144,7 @@ class JobManager:
                 self._write_job_json(record)
                 event_log.append("job.failed", job_id=job_id, error=str(exc))
                 self._stage_task_observer.finalize_job(job_id, "failed")
+                self._release_reservation(job_id)
                 self._dispatch_queued_jobs()
                 return
             self._metrics_extractor.extract(record.id, Path(record.work_dir))
@@ -1923,6 +2154,10 @@ class JobManager:
             self.store.update(record)
             self._sync_task_status(record)
             return
+
+        # Terminal transition — any lingering reservation goes back
+        # (fail/cancel/complete before the first successful poll).
+        self._release_reservation(job_id)
 
         # A mechanism study paused at a review gate: translate the dedicated
         # exit code into WAITING_REVIEW instead of COMPLETED/FAILED.

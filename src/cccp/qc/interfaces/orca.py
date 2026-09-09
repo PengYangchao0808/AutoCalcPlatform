@@ -12,7 +12,6 @@ Author: QCcalc Team (adapted from RPH)
 
 import json
 import logging
-import os
 import re
 import shutil
 import subprocess
@@ -45,7 +44,7 @@ from cccp.qc.interfaces.orca_ts import (
     ts_opt_route,
 )
 from cccp.qc.interfaces.xtb_scan import RelaxedScanPoint, RelaxedScanResult
-from cccp.software import SoftwareNotFoundError, resolve_executable
+from cccp.software import SoftwareNotFoundError, orca_runtime_env, resolve_executable
 from cccp.utils import ensure_dir
 from cccp.utils.file_io import read_xyz, read_xyz_multiframe, write_xyz
 from cccp.utils.geometry_tools import LogParser
@@ -1057,6 +1056,7 @@ class ORCAInterface(QCInterfaceBase):
             configured_path=orca_config.get("path", "orca"),
         )
         self._orca_ld_library_path = orca_config.get("ld_library_path")
+        self._orca_mpi_path = orca_config.get("mpi_path")
 
         resources = self.resources
         orca_nproc_config = orca_config.get("nproc")
@@ -1454,10 +1454,11 @@ class ORCAInterface(QCInterfaceBase):
         executable = self._require_executable()
 
         try:
-            env = None
-            if self._orca_ld_library_path:
-                env = dict(os.environ)
-                env["LD_LIBRARY_PATH"] = self._orca_ld_library_path
+            env = orca_runtime_env(
+                self._orca_ld_library_path,
+                mpi_path=self._orca_mpi_path,
+                orca_dir=self.executable.parent if self.executable else None,
+            )
 
             # Keep the established synchronous path for callers that do not
             # request live parsing (NMR, SP, scan, and older integrations).

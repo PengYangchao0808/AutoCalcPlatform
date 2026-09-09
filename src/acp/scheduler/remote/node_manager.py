@@ -14,11 +14,11 @@ import posixpath
 import shlex
 import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from acp.scheduler.remote.config import RemoteExecutionConfig, RemoteNode
+from acp.scheduler.remote.config import NodeCapabilities, RemoteExecutionConfig, RemoteNode
 from acp.scheduler.remote.monitor import RemoteJobMonitor
 from acp.scheduler.remote.ssh import SSHConnectionPool, SSHExecutionError
 
@@ -30,6 +30,7 @@ __all__ = [
     "NodeDoctorReport",
     "NodeManager",
     "NodeStatus",
+    "capability_state_fields",
     "detect_node_python",
     "doctor_node",
 ]
@@ -170,6 +171,94 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+#: Panel hint surfaced on *unknown*-state nodes (design D8: software
+#: requirements fall back to "generic" when nothing is declared and no
+#: probe has ever succeeded).  English per D12.
+_UNKNOWN_CAPABILITY_NOTE = "capability unknown; treated as generic"
+
+
+def capability_state_fields(
+    capabilities: NodeCapabilities | None,
+    queue: str | None,
+    software: dict[str, Any],
+) -> dict[str, Any]:
+    """Derive the mixed capability-state view fields for one node (design D8).
+
+    Pure function over the static declaration and the latest software-probe
+    report; no SSH, no cache.  An empty *software* dict means the probe has
+    never succeeded (cold start, offline node, or a failed probe with no
+    stale cache).  Probe failure only affects *undeclared* nodes: a declared
+    node keeps ``capability_state="declared"`` with ``declared_ok=None``.
+
+    For *undeclared* nodes the state signal is keyed on the same resolved
+    subset :func:`acp.scheduler.capabilities.matches_capabilities` judges:
+    ``probe-inferred`` requires at least one software entry with a truthy
+    ``resolved`` value; a report that parsed zero software is ``unknown``
+    (the matching layer treats it as generic — the label must agree).
+
+    Args:
+        capabilities: Static declaration (``None`` = generic node sentinel).
+        queue: Per-node LSF queue override.  A submission attribute of the
+            configured node regardless of declaration — surfaced top level
+            so undeclared nodes display it too (never a filtering axis).
+        software: Latest ``{name: {configured, resolved, version}}`` probe
+            report, or ``{}`` when no probe has ever succeeded.
+
+    Returns:
+        Mapping of the :class:`NodeStatus` capability fields — ``queue``,
+        ``declared``, ``capability_state``, ``declared_ok``, ``mismatch``,
+        ``probe_note`` — safe to splat into the constructor.
+    """
+    declared: dict[str, Any] | None = (
+        None
+        if capabilities is None
+        else {
+            "software": list(capabilities.software),
+            "tags": list(capabilities.tags),
+            "queue": queue,
+        }
+    )
+    probed_ok = {
+        name
+        for name, info in software.items()
+        if isinstance(info, Mapping) and info.get("resolved")
+    }
+    if capabilities is not None:
+        # Declared is authoritative; the probe only feeds the consistency
+        # hint (declared_ok/mismatch) and never gates anything.
+        if not software:
+            declared_ok: bool | None = None
+            mismatch: list[str] = []
+        else:
+            mismatch = [name for name in capabilities.software if name not in probed_ok]
+            declared_ok = not mismatch
+        return {
+            "queue": queue,
+            "declared": declared,
+            "capability_state": "declared",
+            "declared_ok": declared_ok,
+            "mismatch": mismatch,
+            "probe_note": None,
+        }
+    if probed_ok:
+        return {
+            "queue": queue,
+            "declared": None,
+            "capability_state": "probe-inferred",
+            "declared_ok": None,
+            "mismatch": [],
+            "probe_note": None,
+        }
+    return {
+        "queue": queue,
+        "declared": None,
+        "capability_state": "unknown",
+        "declared_ok": None,
+        "mismatch": [],
+        "probe_note": _UNKNOWN_CAPABILITY_NOTE,
+    }
+
+
 @dataclass
 class NodeStatus:
     """Live-ish status of a single remote node.
@@ -180,6 +269,24 @@ class NodeStatus:
             resolved, version}}``), refreshed on a slower cadence than the
             status metrics.  Empty when the node is offline or the probe
             has never succeeded.
+        queue: Per-node LSF queue override from :class:`RemoteNode` —
+            carried for every node regardless of declaration (submission
+            attribute; never a filtering axis).  ``None`` when unset.
+        declared: Static capability snapshot ``{software: [...], tags:
+            [...], queue: str|None}`` from :class:`RemoteNode`; ``None``
+            when the node declares nothing (generic sentinel).
+        capability_state: Mixed capability model (design D8) —
+            ``"declared"`` (declaration is authoritative),
+            ``"probe-inferred"`` (undeclared, probe resolved at least one
+            software), or ``"unknown"`` (undeclared, nothing resolved yet).
+        declared_ok: Declared nodes only: ``True`` when the probed software
+            covers every declared item, ``False`` when the probe misses
+            declared items (see :attr:`mismatch`), ``None`` when no probe
+            has ever succeeded.  Display hint only — never gates anything.
+        mismatch: Declared software names the latest probe could not find
+            (non-empty exactly when ``declared_ok`` is ``False``).
+        probe_note: Panel hint for ``unknown``-state nodes (e.g.
+            ``"capability unknown; treated as generic"``); ``None`` otherwise.
     """
 
     name: str
@@ -190,7 +297,13 @@ class NodeStatus:
     disk_usage_pct: int = 0
     last_check: str = ""
     error: str | None = None
+    queue: str | None = None
     software: dict[str, dict[str, Any]] = field(default_factory=dict)
+    declared: dict[str, Any] | None = None
+    capability_state: str = "unknown"  # "declared" | "probe-inferred" | "unknown"
+    declared_ok: bool | None = None
+    mismatch: list[str] = field(default_factory=list)
+    probe_note: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -317,6 +430,7 @@ class NodeManager:
                 disk_usage_pct=0,
                 last_check=_utc_now(),
                 error=str(exc),
+                **capability_state_fields(node.capabilities, node.queue, {}),
             )
             with self._lock:
                 self._cache[node_name] = (time.monotonic(), status)
@@ -513,6 +627,7 @@ class NodeManager:
                 disk_usage_pct=0,
                 last_check=_utc_now(),
                 error="disabled",
+                **capability_state_fields(node.capabilities, node.queue, {}),
             )
         try:
             running = self._monitor.get_running_job_count(node)
@@ -527,6 +642,7 @@ class NodeManager:
                 disk_usage_pct=0,
                 last_check=_utc_now(),
                 error=str(exc),
+                **capability_state_fields(node.capabilities, node.queue, {}),
             )
         except Exception as exc:  # noqa: BLE001
             logger.debug("Unexpected status refresh error for %s: %s", node.name, exc)
@@ -539,11 +655,13 @@ class NodeManager:
                 disk_usage_pct=0,
                 last_check=_utc_now(),
                 error=str(exc),
+                **capability_state_fields(node.capabilities, node.queue, {}),
             )
 
         status = "online"
         if disk >= 90 or running >= node.max_concurrent_jobs:
             status = "degraded"
+        software = self._software_for(node)
         return NodeStatus(
             name=node.name,
             host=node.host,
@@ -553,7 +671,8 @@ class NodeManager:
             disk_usage_pct=disk,
             last_check=_utc_now(),
             error=None,
-            software=self._software_for(node),
+            software=software,
+            **capability_state_fields(node.capabilities, node.queue, software),
         )
 
     def _software_for(self, node: RemoteNode) -> dict[str, dict[str, Any]]:

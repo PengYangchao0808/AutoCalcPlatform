@@ -104,7 +104,7 @@ pre code{background:none;padding:0}
                  |  SSH/SFTP port 22
                  v
     Remote Compute Node Pool
-      Node A: 10.16.5.157 ({remote_code_dir}/src + OpenLAVA + QC全套)
+      Node A: 192.168.1.100 ({remote_code_dir}/src + OpenLAVA + QC全套)
       Node B: &lt;future&gt;
       {remote_code_dir}/
         src/acp/ (排除 api/, scheduler/)
@@ -184,7 +184,7 @@ pre code{background:none;padding:0}
 <div class="review-box">
 <h4>📋 阶段 1 代码评审报告</h4>
 <p><strong>评审日期：</strong>2026-07-12 ｜ <strong>文件：</strong>config.py (163行) / ssh.py (286行) / sftp.py (266行) / sync.py (269行) / __init__.py (32行)</p>
-<p><strong>测试：</strong>mock 单元测试 23/23 通过（含 8 个 P0 修复测试） + 真实节点 10.16.5.157 集成测试 3/3 通过 ｜ <strong>lint：</strong>ruff 0 error ｜ <strong>类型：</strong>mypy 0 error</p>
+<p><strong>测试：</strong>mock 单元测试 23/23 通过（含 8 个 P0 修复测试） + 真实节点 192.168.1.100 集成测试 3/3 通过 ｜ <strong>lint：</strong>ruff 0 error ｜ <strong>类型：</strong>mypy 0 error</p>
 
 <h4 style="color:var(--accent2)">✅ 优点</h4>
 <ul>
@@ -544,7 +544,7 @@ echo $? &gt; .exit_code</code></pre>
 <div class="review-box">
 <h4>📋 阶段 3 代码评审报告 + 真实节点集成测试</h4>
 <p><strong>评审日期：</strong>2026-07-12 ｜ <strong>改动文件：</strong>config.py / defaults.yaml / runner.py / manager.py / server.py / jobs.py / v1_schemas.py / v1_routes.py / monitor.py / sftp.py / sync.py</p>
-<p><strong>测试：</strong>mock 单元测试 93/93 通过（Phase 1: 23 + Phase 2: 35 + Phase 3: 35） ｜ <strong>lint：</strong>ruff 0 error ｜ <strong>真实节点集成测试：</strong>✅ CCO conformer 搜索在 10.16.5.157 上成功执行（CREST → ISOSTAT → 完成，LSF Job 561）</p>
+<p><strong>测试：</strong>mock 单元测试 93/93 通过（Phase 1: 23 + Phase 2: 35 + Phase 3: 35） ｜ <strong>lint：</strong>ruff 0 error ｜ <strong>真实节点集成测试：</strong>✅ CCO conformer 搜索在 192.168.1.100 上成功执行（CREST → ISOSTAT → 完成，LSF Job 561）</p>
 
 <h4 style="color:var(--accent2)">✅ 集成测试验证结果（CCO 远程 conformer 搜索）</h4>
 <ul>
@@ -555,7 +555,7 @@ echo $? &gt; .exit_code</code></pre>
 <li><strong>日志 tail</strong>：stdout/stderr 增量拉取，含 CREST 引擎输出和 LSF 资源报告</li>
 <li><strong>.exit_code 捕获</strong>：正确读取退出码 0</li>
 <li><strong>不下载文件</strong>：本地 work_dir 仅有 events.jsonl / job.json / inputs/，QC 输出全部保留在远程节点</li>
-<li><strong>provenance.hostname</strong>：正确记录为 <code>10.16.5.157</code>（远程节点），非 ACP Server</li>
+<li><strong>provenance.hostname</strong>：正确记录为 <code>192.168.1.100</code>（远程节点），非 ACP Server</li>
 <li><strong>wall_time</strong>：43.88 秒（含 CREST 两阶段 + ISOSTAT 聚类，CCO 2 个构象异构体）</li>
 </ul>
 
@@ -803,7 +803,7 @@ if protocol not in ('ext', 'full', 'lite', 'zero', 'benchmark'):</code></pre>
 
 <div class="step-card done">
 <h4>步骤 CS-7：远程回归测试 <span class="tag-done">✓ 完成（2026-07-13）</span></h4>
-<p>ACP Server 是纯调度器，<strong>不在本地运行 cccp</strong>。所有 QC 验证通过远程节点（<code>10.16.5.157</code>）直接执行 <code>python -m acp.cli run conformer</code>（<code>PYTHONPATH=/home/<user>/acp_code/src</code>）进行：</p>
+<p>ACP Server 是纯调度器，<strong>不在本地运行 cccp</strong>。所有 QC 验证通过远程节点（<code>192.168.1.100</code>）直接执行 <code>python -m acp.cli run conformer</code>（<code>PYTHONPATH=/home/<user>/acp_code/src</code>）进行：</p>
 <table>
 <tr><th>协议</th><th>结果</th><th>关键指标</th></tr>
 <tr><td><strong>CCO <code>lite</code></strong></td><td><span class="review-pass">✅ 通过</span></td><td>Energy = <strong>-154.9428981 Ha</strong>（≠0），2 构象（top2 fallback），opt(B3LYP-D3)+freq+sp(PWPB95-D4)+shermo 全执行，~1m53s，无协议不匹配警告</td></tr>
@@ -895,13 +895,13 @@ if protocol not in ('ext', 'full', 'lite', 'zero', 'benchmark'):</code></pre>
 <div class="review-box">
 <h4>📋 阶段 4 代码评审报告</h4>
 <p><strong>评审日期：</strong>2026-07-13 ｜ <strong>文件：</strong>fetcher.py (196行) / v1_routes.py (+118行) / v1_schemas.py (+25行) / manager.py (+6行) / remote/__init__.py (+3导出)</p>
-<p><strong>测试：</strong>mock 单元测试 28/28 通过（resolve/is_remote_job/list_files/file_exists/read_file/stream_file/log_tail/path-traversal/manager-wiring）+ 真实节点 10.16.5.157 端到端验证（list/download/log-tail 均通过） ｜ <strong>lint：</strong>ruff 0 error（除既有 N816 rdDetermineBonds） ｜ <strong>格式：</strong>ruff format 通过</p>
+<p><strong>测试：</strong>mock 单元测试 28/28 通过（resolve/is_remote_job/list_files/file_exists/read_file/stream_file/log_tail/path-traversal/manager-wiring）+ 真实节点 192.168.1.100 端到端验证（list/download/log-tail 均通过） ｜ <strong>lint：</strong>ruff 0 error（除既有 N816 rdDetermineBonds） ｜ <strong>格式：</strong>ruff format 通过</p>
 
 <h4 style="color:var(--accent2)">✅ 优点</h4>
 <ul>
 <li><strong>复用既有 SSH 池</strong>：fetcher 与 RemoteJobRunner 共享同一 <code>SSHConnectionPool</code> + <code>FileStager</code>，无额外连接开销，线程安全由池保证</li>
 <li><strong>路径遍历防护</strong>：<code>_safe_join()</code> 用 <code>posixpath.normpath</code> + 前缀校验，<code>../../etc/passwd</code> 和绝对路径 <code>/etc/shadow</code> 均被拦截并返回 400</li>
-<li><strong>流式下载不占满内存</strong>：<code>stream_file</code> 64KB 分块 yield，借 <code>sftp_session</code> 上下文管理器，迭代结束自动归还连接。10.16.5.157 真实下载 <code>CCO_remote_v2_global_min.xyz</code>（541B）和 <code>submit.lsf</code>（587B）验证通过</li>
+<li><strong>流式下载不占满内存</strong>：<code>stream_file</code> 64KB 分块 yield，借 <code>sftp_session</code> 上下文管理器，迭代结束自动归还连接。192.168.1.100 真实下载 <code>CCO_remote_v2_global_min.xyz</code>（541B）和 <code>submit.lsf</code>（587B）验证通过</li>
 <li><strong>日志尾部高效</strong>：仅读末尾 4MB（<code>_LOG_TAIL_MAX_BYTES</code>），从 <code>max(0, size - 4MB)</code> seek，截断首行丢弃不完整行。GB 级日志不爆内存</li>
 <li><strong>错误码语义清晰</strong>：404（文件/目录不存在或已清理）vs 400（客户端错误：路径遍历/非远程作业）vs 502（SSH/SFTP 网络失败）vs 503（远程未配置）分层</li>
 <li><strong>嵌套子目录下载</strong>：<code>{file_path:path}</code> 转换器支持 <code>finalDFT/sp.out</code> 等多级路径，与本地 <code>/jobs/{id}/files/{file_path:path}</code> 一致</li>
@@ -939,7 +939,7 @@ if protocol not in ('ext', 'full', 'lite', 'zero', 'benchmark'):</code></pre>
 </tr>
 </table>
 
-<h4 style="color:var(--accent3)">真实节点端到端验证（10.16.5.157）</h4>
+<h4 style="color:var(--accent3)">真实节点端到端验证（192.168.1.100）</h4>
 <table>
 <tr><th>端点</th><th>测试用例</th><th>结果</th></tr>
 <tr><td><code>GET /remote-files</code></td><td>列出 <code>20260712_021216_001_CCO_remote_v2</code> 顶层</td><td><span class="review-pass">✅</span> 6 项（inputs/submit.lsf/CCO_remote_v2/.exit_code/stdout.log/stderr.log），含 is_dir 标记</td></tr>
@@ -1109,7 +1109,7 @@ if protocol not in ('ext', 'full', 'lite', 'zero', 'benchmark'):</code></pre>
 </tr>
 <tr>
 <td>P2-6</td><td>P4</td><td><code>api/v1_routes.py:543, 547</code></td>
-<td><strong>信息泄露：主机名在 RemoteFileListResponse 中暴露</strong>：<code>host</code> 字段泄露了内部计算节点的主机名。API 消费者可以看到 <code>10.16.5.157</code> 等值</td>
+<td><strong>信息泄露：主机名在 RemoteFileListResponse 中暴露</strong>：<code>host</code> 字段泄露了内部计算节点的主机名。API 消费者可以看到 <code>192.168.1.100</code> 等值</td>
 <td>从 RemoteFileListResponse schema 中移除 host 字段，或在仅限管理员查看的场景中保留</td>
 <td><span class="review-pass">✅ 已修复</span> — schema 和 API 响应中移除 <code>host</code> 字段</td>
 </tr>
@@ -2142,7 +2142,7 @@ Step 5B.1 ──  配置 + LocalCleanup 模块（核心逻辑）
   "nodes": [
     {
       "name": "compute-01",
-      "host": "10.16.5.157",
+      "host": "192.168.1.100",
       "status": "online",
       "running_jobs": 2,
       "max_jobs": 5,
@@ -2244,7 +2244,7 @@ class NodeStatus:
 <pre><code>┌──────────────────────────────────────────────┐
 │ 远程节点状态                                  │
 │ ┌──────────────────────────────────────────┐ │
-│ │ compute-01  10.16.5.157  🟢 在线         │ │
+│ │ compute-01  192.168.1.100  🟢 在线         │ │
 │ │ 运行作业: 2/5  磁盘: 45%  [测试连接]     │ │
 │ ├──────────────────────────────────────────┤ │
 │ │ compute-02  10.16.5.200  🔴 离线         │ │
@@ -2341,7 +2341,7 @@ async function pingNode(nodeName) {
 <tr><td><code>test_remote_monitor.py</code></td><td>Mock bjobs 状态映射、exit_code 读取、日志 tail 增量、bkill 返回值检查</td></tr>
 <tr><td><code>test_remote_runner.py</code></td><td>Mock 全流程、节点选择、取消逻辑（bkill + 返回值检查）、异常处理、不下载文件验证、remote_execution stage task 创建</td></tr>
 <tr><td><code>test_remote_sync.py</code></td><td>Mock SFTP 同步、验证排除 api/scheduler、本地 mtime 记录与比较逻辑</td></tr>
-<tr><td><code>test_remote_integration.py</code></td><td>真实 SSH/SFTP 连接 10.16.5.157、提交 LSF 作业、日志 tail 验证</td></tr>
+<tr><td><code>test_remote_integration.py</code></td><td>真实 SSH/SFTP 连接 192.168.1.100、提交 LSF 作业、日志 tail 验证</td></tr>
 <tr><td><code>test_remote_phase3.py</code> <span class="tag-done">✓ 35 tests</span></td><td><strong>Phase 3 集成测试</strong>：config defaults、execution_mode 校验、walltime 解析、JobSpec.target_node、_should_run_remote 分发、JobManager 远程接线、server 降级、监控超时、部分失败清理、started_at 语义、task_id 缓存、shlex.quote、原子写入、_ensure_remote_dir 去重</td></tr>
 <tr><td><code>test_remote_phase4.py</code> <span class="tag-done">✓ 28 tests</span></td><td><strong>Phase 4 单元测试</strong>：is_remote_job/resolve（含 NotARemoteJobError + 未知节点）、list_files（含缺失目录）、file_exists、read_file（嵌套子目录 + 缺失）、stream_file（分块拼接 + 小文件）、log_tail（基本/缺失/截断丢首行/lines 限制）、_safe_join 路径遍历防护（4 例）、JobManager.remote_fetcher 接线（本地 None / 远程构建）</td></tr>
 <tr><td><code>test_remote_phase5.py</code> <span class="tag-done">✓ 34 tests</span></td><td><strong>Phase 5 单元测试</strong>：_is_safe_work_dir（合法/根/浅/相对）、cleanup_old_jobs（删旧留新/dry_run/配置默认/覆盖/跳过 mtime=0/危险 base/缺失 work_dir/listdir 失败/base 永不删/report 序列化/<strong>max_dirs 封顶/默认 100/0=无限</strong>）、pre_submit_housekeeping（低盘无操作/高盘触发/&gt;95% 拒绝/df 失败 fail-open/清理异常/decision 序列化/阈值校验/<strong>after-probe 失败保守</strong>）、runner 集成（disabled 无操作/继续+事件/skip 抛异常/崩溃 fail-open/run() 端到端）、manager wiring（remote 启用/禁用）、_format_bytes</td></tr>
@@ -2442,7 +2442,7 @@ async function pingNode(nodeName) {
   auto_sync: true
   nodes:
     - name: "compute-01"
-      host: "10.16.5.157"
+      host: "192.168.1.100"
       username: "<user>"
       # password 通过环境变量设置：export ACP_REMOTE_PASSWORD_COMPUTE_01="..."
       # 或使用密钥认证：
@@ -2592,7 +2592,7 @@ async function pingNode(nodeName) {
 <tr><td>P1-1</td><td>provenance hostname 覆盖为远程节点</td><td>runner.py 构建后覆盖 <code>provenance.hostname</code></td><td><span class="tag-done">✓ 已修复</span></td></tr>
 <tr><td>P1-2</td><td><code>poll_interval=0</code> 被 <code>or</code> 吞掉</td><td>改为 <code>is not None</code> 判断</td><td><span class="tag-done">✓ 已修复</span></td></tr>
 <tr><td>P1-3</td><td><strong>监控循环添加超时上限</strong></td><td>添加 <code>max_monitor_seconds</code>（walltime + 1h），超时标记 FAILED</td><td><span class="tag-done">✓ 已修复</span></td></tr>
-<tr><td>P1-4</td><td><strong>bjobs 命令在真实节点验证</strong></td><td>在 10.16.5.157 上确认输出格式</td><td><span class="tag-done">✓ 已验证 + 修复</span></td></tr>
+<tr><td>P1-4</td><td><strong>bjobs 命令在真实节点验证</strong></td><td>在 192.168.1.100 上确认输出格式</td><td><span class="tag-done">✓ 已验证 + 修复</span></td></tr>
 </table>
 </div>
 <div class="step-card pending">

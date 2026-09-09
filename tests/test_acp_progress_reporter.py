@@ -88,6 +88,43 @@ class TestStageLifecycle:
         assert data["stage_total"] == 3
 
 
+class TestStageIndexDerivation:
+    """stage_index stays meaningful when no stage is currently running."""
+
+    def test_index_at_initialize_points_to_first_stage(self, tmp_path: Path) -> None:
+        reporter = ProgressReporter(tmp_path, stages=["a", "b"])
+        reporter.initialize()
+        assert _read_state(tmp_path)["stage_index"] == 1
+
+    def test_index_between_stages_points_to_next(self, tmp_path: Path) -> None:
+        reporter = ProgressReporter(tmp_path, stages=["a", "b", "c"])
+        reporter.initialize()
+        reporter.start_stage("a")
+        reporter.complete_stage("a")
+        assert _read_state(tmp_path)["stage_index"] == 2
+
+    def test_index_after_complete_equals_total(self, tmp_path: Path) -> None:
+        reporter = ProgressReporter(tmp_path, stages=["a", "b"])
+        reporter.initialize()
+        reporter.start_stage("a")
+        reporter.complete()
+        data = _read_state(tmp_path)
+        assert data["stage_index"] == data["stage_total"] == 2
+
+    def test_index_points_at_failed_stage(self, tmp_path: Path) -> None:
+        reporter = ProgressReporter(tmp_path, stages=["a", "b", "c"])
+        reporter.initialize()
+        reporter.start_stage("a")
+        reporter.complete_stage("a")
+        reporter.fail_stage("b", "ORCA timeout")
+        assert _read_state(tmp_path)["stage_index"] == 2
+
+    def test_index_none_without_stages(self, tmp_path: Path) -> None:
+        reporter = ProgressReporter(tmp_path)
+        reporter.initialize()
+        assert _read_state(tmp_path)["stage_index"] is None
+
+
 class TestSubStageProgress:
     def test_update_stage(self, tmp_path: Path) -> None:
         reporter = ProgressReporter(tmp_path, stages=["scan"], min_interval=0.0)

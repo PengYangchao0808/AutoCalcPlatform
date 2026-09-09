@@ -16,6 +16,7 @@ Run with: PYTHONPATH=src python3 tests/test_remote_phase2.py
 from __future__ import annotations
 
 import io
+import json
 import posixpath
 import stat
 import tempfile
@@ -1253,6 +1254,147 @@ def test_poll_remote_done_without_exit_code_finalizes_completed():
     print("  [OK] done-without-exit-code: finalised COMPLETED (exit=0)")
 
 
+def test_observe_remote_state_mirrors_state_json_to_work_dir():
+    """Remote state.json observations are mirrored into the local work dir.
+
+    The API's live-status enrichment reads only local files, so without the
+    mirror the frontend live timeline/metrics never see remote progress.
+    """
+    node = make_node()
+    config = RemoteExecutionConfig(execution_mode="remote", nodes=[node])
+    runner = RemoteJobRunner(MagicMock(), config, monitor=MagicMock(), code_syncer=MagicMock())
+
+    payload = {
+        "version": "1.0",
+        "status": "running",
+        "current_stage": "sampling",
+        "stage_index": 2,
+        "stage_total": 6,
+        "overall_progress": 0.25,
+        "stages": {
+            "prepare": {"status": "completed"},
+            "sampling": {"status": "running"},
+        },
+    }
+    runner._monitor.find_remote_state_json.return_value = payload
+
+    with tempfile.TemporaryDirectory() as tmp:
+        work_dir = Path(tmp) / "proj" / "mirrorjob"
+        work_dir.mkdir(parents=True)
+        spec = JobSpec(workflow="energy", input={"source": "CCO", "source_type": "smiles"})
+        record = JobRecord(id="mirrorjob", spec=spec, work_dir=str(work_dir))
+        event_log = JobEventLog(work_dir / "events.jsonl")
+
+        runner._observe_remote_state(
+            record, event_log, node, "/scratch/test/acp_jobs/mirrorjob", set()
+        )
+
+        mirrored = json.loads((work_dir / "state.json").read_text(encoding="utf-8"))
+        assert mirrored["current_stage"] == "sampling"
+        assert mirrored["stage_index"] == 2
+        assert mirrored["stage_total"] == 6
+        assert record.current_stage == "sampling"
+
+    print("  [OK] remote state.json mirrored to local work dir")
+
+
+# ====================================================================== #
+# Per-node queue override in the BSUB script (plan node-selection T7)
+# ====================================================================== #
+
+# submit.lsf captured from the PRE-change runner (node.queue=None,
+# cluster queue="normal").  Locks the compatibility red line: a node
+# without a queue override must produce a byte-identical script.
+_PRECHANGE_NORMAL_QUEUE_SCRIPT = """#!/bin/bash
+#BSUB -J acp_queuejob
+#BSUB -q normal
+#BSUB -n 4
+#BSUB -M 8601600
+#BSUB -o /scratch/test/acp_jobs/mol_ensemble/stdout.log
+#BSUB -e /scratch/test/acp_jobs/mol_ensemble/stderr.log
+
+_acp_record_exit() { [ -f .exit_code ] || echo "$?" > .exit_code; }
+trap 'exit $?' USR2 TERM INT HUP
+trap _acp_record_exit EXIT
+
+export PYTHONPATH="/home/test/acp_code/src:$PYTHONPATH"
+cd "/scratch/test/acp_jobs/mol_ensemble"
+python3.13 -m acp.cli run ensemble --input input.xyz --output . --nproc 4
+echo $? > .exit_code
+"""
+
+
+def _submit_and_capture_script(node: RemoteNode, config: RemoteExecutionConfig) -> str:
+    """Run the real submit path against the fakes, return uploaded submit.lsf text.
+
+    Args:
+        node: The single configured remote node (may carry a queue override).
+        config: Remote execution config holding the cluster-level queue.
+
+    Returns:
+        The exact UTF-8 text of the ``submit.lsf`` the runner uploaded.
+    """
+    pool = SSHConnectionPool()
+    sftp = FakeSFTP()
+    client = FakeSSHClient(sftp)
+
+    def cmd_handler(cmd):
+        if "bsub" in cmd and "<" in cmd:
+            return (0, "Job <54321> is submitted to queue <normal>.\n", "")
+        return (0, "", "")
+
+    client.cmd_handler = cmd_handler
+
+    with tempfile.TemporaryDirectory() as tmp:
+        work_dir = Path(tmp) / "proj" / "queuejob"
+        work_dir.mkdir(parents=True)
+        spec = JobSpec(
+            workflow="ensemble",
+            input={"source": "CCO", "source_type": "smiles"},
+            resources={"nproc": 4},
+        )
+        record = JobRecord(id="queuejob", spec=spec, work_dir=str(work_dir))
+        event_log = JobEventLog(work_dir / "events.jsonl")
+        runner = RemoteJobRunner(pool, config, stager=FileStager(pool), poll_interval=0)
+        with patch.object(ssh_mod, "_create_client", side_effect=lambda n, timeout=30: client):
+            runner.submit_remote(record, event_log)
+        key = posixpath.join(node.remote_work_dir, "mol_ensemble", "submit.lsf")
+        script = sftp.files[key].decode("utf-8")
+    pool.close()
+    return script
+
+
+def test_runner_node_queue_override_emits_bsub_queue():
+    """node.queue='bigmem' → the uploaded script carries '#BSUB -q bigmem'."""
+    node = make_node(queue="bigmem")
+    config = RemoteExecutionConfig(execution_mode="remote", auto_sync=False, nodes=[node])
+    script = _submit_and_capture_script(node, config)
+    assert "#BSUB -q bigmem\n" in script
+    assert "#BSUB -q normal" not in script
+    print("  [OK] runner: node.queue override reaches #BSUB -q")
+
+
+def test_runner_node_queue_none_falls_back_to_config_queue():
+    """node.queue=None → the cluster-level config.queue is used."""
+    node = make_node()
+    config = RemoteExecutionConfig(
+        execution_mode="remote", auto_sync=False, queue="gpu", nodes=[node]
+    )
+    script = _submit_and_capture_script(node, config)
+    assert node.queue is None
+    assert "#BSUB -q gpu\n" in script
+    print("  [OK] runner: node.queue=None falls back to config.queue")
+
+
+def test_runner_node_queue_none_script_byte_identical_to_prechange():
+    """node.queue=None + default cluster queue → byte-identical to pre-change output."""
+    node = make_node()
+    config = RemoteExecutionConfig(execution_mode="remote", auto_sync=False, nodes=[node])
+    script = _submit_and_capture_script(node, config)
+    assert script == _PRECHANGE_NORMAL_QUEUE_SCRIPT
+    print("  [OK] runner: queue=None script byte-identical to pre-change fixture")
+
+
 # ====================================================================== #
 # Config (Phase 2 additions)
 # ====================================================================== #
@@ -1329,6 +1471,10 @@ def main():
         test_runner_log_tailing,
         test_poll_remote_terminal_without_exit_code_finalizes_failed,
         test_poll_remote_done_without_exit_code_finalizes_completed,
+        # per-node queue override (T7)
+        test_runner_node_queue_override_emits_bsub_queue,
+        test_runner_node_queue_none_falls_back_to_config_queue,
+        test_runner_node_queue_none_script_byte_identical_to_prechange,
         # config
         test_remote_config_queue_walltime,
     ]

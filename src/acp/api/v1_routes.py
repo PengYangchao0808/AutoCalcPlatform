@@ -18,12 +18,10 @@ import urllib.parse
 from collections import Counter, OrderedDict
 from collections.abc import Callable
 from datetime import datetime, timezone
-
-UTC = timezone.utc  # datetime.UTC is 3.11+; keep the short name on 3.10
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final, Protocol
 
-from fastapi import APIRouter, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi import APIRouter, Body, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import ValidationError
 from rdkit import Chem
@@ -98,6 +96,9 @@ from acp.api.v1_schemas import (
     MoleculeResolveResponse,
     NodeBootstrapResponse,
     NodeListResponse,
+    NodeMatchingItem,
+    NodeMatchingRequest,
+    NodeMatchingResponse,
     NodePingResponse,
     NodeStatusModel,
     OptimizationFrameResponse,
@@ -151,6 +152,7 @@ from acp.api.v1_schemas import (
     V1FrameCandidateListResponse,
     V1FrameCandidateRequest,
     V1FrameCandidateResponse,
+    V1JobContinueRequest,
     V1JobCreatedResponse,
     V1JobCreateRequest,
     V1JobDetailResponse,
@@ -183,13 +185,24 @@ from acp.results.pes_profile import (
     load_pes_profile,
 )
 from acp.scheduler.artifacts import Artifact, ArtifactRegistry
+from acp.scheduler.capabilities import (
+    NoCapableNodeError,
+    derive_required_software,
+    is_degraded,
+    local_satisfies,
+    matches_capabilities,
+)
 from acp.scheduler.events import JobEventLog
 from acp.scheduler.files import build_manifest, resolve_safe
 from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
 from acp.scheduler.logs import read_log_range, read_log_tail
 from acp.scheduler.manager import JobManager
 from acp.scheduler.naming import canonical_molecule_name, molecule_name_from_input
-from acp.scheduler.nodes import ExecutionTargetError, validate_execution_request
+from acp.scheduler.nodes import (
+    ExecutionTargetError,
+    validate_execution_request,
+    validate_submission_target,
+)
 from acp.scheduler.remote.fetcher import (
     _MAX_READ_BYTES,
     _MAX_TAIL_LINES,
@@ -205,6 +218,8 @@ from acp.scheduler.stage_tasks import StageTask, StageTaskStore
 from acp.scheduler.store import JobStore
 from acp.scheduler.structure_sources import StructureSourceService
 from acp.storage.layout import runtime_file
+
+UTC = timezone.utc  # datetime.UTC is 3.11+; keep the short name on 3.10
 
 logger = logging.getLogger(__name__)
 
@@ -410,6 +425,7 @@ def _record_to_v1_model(
     study_status: str | None = None,
 ) -> V1JobRecordModel:
     spec = record.spec
+    result = record.result if isinstance(record.result, dict) else {}
     return V1JobRecordModel(
         id=record.id,
         spec=V1JobSpecModel(
@@ -421,6 +437,7 @@ def _record_to_v1_model(
             output_dir=spec.output_dir,
             config_path=spec.config_path,
             tags=spec.tags,
+            node_tags=spec.node_tags,
             project_id=spec.project_id,
             execution_mode=spec.execution_mode,
             target_node=spec.target_node,
@@ -444,6 +461,8 @@ def _record_to_v1_model(
         exit_code=record.exit_code,
         remote_job_id=record.remote_job_id,
         group_id=record.group_id or record.id,
+        node_id=record.node_id or result.get("node") or spec.target_node,
+        host=record.host or result.get("host"),
         study_id=study_id,
         study_status=study_status,
         result=record.result,
@@ -1227,6 +1246,74 @@ def _expand_method_electronic_state(method: dict[str, Any]) -> dict[str, Any]:
     return method
 
 
+def _target_validation_detail(exc: Exception) -> dict[str, Any]:
+    """Serialize a submission-time target error into the 400 body (D12).
+
+    Carries the machine-readable ``code`` plus ``missing_software`` /
+    ``missing_tags`` so clients (and the frontend i18n layer) can map errors
+    without parsing free-form English.
+    """
+    return {
+        "code": getattr(exc, "code", None) or "execution_target_error",
+        "message": str(exc),
+        "missing_software": list(getattr(exc, "missing_software", ()) or ()),
+        "missing_tags": list(getattr(exc, "missing_tags", ()) or ()),
+    }
+
+
+def _source_job_id_from_input(inp: dict[str, Any]) -> str:
+    """Read an explicitly referenced source job id from a stage input."""
+    source = inp.get("source")
+    if isinstance(source, dict):
+        source_job_id = inp.get("source_job_id") or source.get("source_job_id")
+    else:
+        source_job_id = inp.get("source_job_id")
+    return str(source_job_id or "").strip()
+
+
+def _inherit_stage_execution_fields(
+    workflow: str,
+    inp: dict[str, Any],
+    execution_mode: str | None,
+    target_node: str | None,
+    manager: Any,
+) -> tuple[str | None, str | None]:
+    """Inherit a stage job's explicit execution fields from its source job.
+
+    Stage chains (Confsearch → PESsearch → BatchOptimize → irc) stay on
+    the parent's explicitly pinned node unless the request overrides it
+    (design §3.4, D6 — IRC inherits via ``run_irc_from_artifact``).  A
+    request that already pins either field wins.  Only *explicit* source
+    spec values are inherited — an auto parent (no ``target_node`` /
+    ``execution_mode``) leaves the child auto; its resolved
+    ``execution_target`` is not copied to the child spec (there is no
+    creation-time affinity channel — recorded design boundary).
+    """
+    if workflow not in ("PESsearch", "BatchOptimize"):
+        return execution_mode, target_node
+    if execution_mode is not None or target_node is not None:
+        return execution_mode, target_node
+    source_job_id = _source_job_id_from_input(inp)
+    if not source_job_id:
+        return execution_mode, target_node
+    source_record = manager.get(source_job_id)
+    if source_record is None:
+        return execution_mode, target_node
+    source_spec = source_record.spec
+    inherited_mode = getattr(source_spec, "execution_mode", None)
+    inherited_node = getattr(source_spec, "target_node", None)
+    if inherited_mode is None and inherited_node is None:
+        return execution_mode, target_node
+    logger.info(
+        "Stage %s inherits source job %s execution fields (execution_mode=%r, target_node=%r)",
+        workflow,
+        source_job_id,
+        inherited_mode,
+        inherited_node,
+    )
+    return inherited_mode, inherited_node
+
+
 @router.post("/jobs", response_model=V1JobCreatedResponse, status_code=201)
 def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedResponse:
     manager = _manager(request)
@@ -1242,6 +1329,9 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         req.input = _resolve_stage_artifact_ref(req.workflow, req.input, manager)
     elif req.workflow == "BatchOptimize":
         req.input = _resolve_batch_structures_input(req.input, request)
+    req.execution_mode, req.target_node = _inherit_stage_execution_fields(
+        req.workflow, req.input, req.execution_mode, req.target_node, manager
+    )
     task_name = req.task_name or req.workflow
     molecule_name = _resolve_job_molecule_name(req.molecule_name, req.input, manager)
     spec = JobSpec(
@@ -1253,6 +1343,7 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
         output_dir=req.output_dir,
         config_path=req.config_path,
         tags=req.tags,
+        node_tags=req.node_tags,
         project_id=req.project_id,
         execution_mode=req.execution_mode,
         target_node=req.target_node,
@@ -1263,7 +1354,15 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
     try:
         validate_execution_request(spec)
     except ExecutionTargetError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # Same D12 dict shape as the continue endpoint; the conflict check
+        # in nodes.py carries no code, so stamp the stable one here.
+        detail = _target_validation_detail(exc)
+        detail["code"] = getattr(exc, "code", None) or "execution_mode_conflict"
+        raise HTTPException(status_code=400, detail=detail) from exc
+    try:
+        validate_submission_target(spec, registry=manager.registry)
+    except (ExecutionTargetError, NoCapableNodeError) as exc:
+        raise HTTPException(status_code=400, detail=_target_validation_detail(exc)) from exc
     try:
         record = manager.submit(spec)
     except ValueError as exc:
@@ -2018,7 +2117,6 @@ def save_pes_review_endpoint(
     )
 
 
-
 # ---------------------------------------------------------------------------
 # Frame-candidate CRUD: save/list/remove energy-viewer frames as tagged
 # structures.  Follows the PES review ordering and revision-guard pattern.
@@ -2757,9 +2855,28 @@ def unpause_job(job_id: str, request: Request) -> V1JobRecordModel:
 
 
 @router.post("/jobs/{job_id}/continue", response_model=V1JobRecordModel)
-def continue_job(job_id: str, request: Request) -> V1JobRecordModel:
-    """Re-enter a FAILED/CANCELLED job from its checkpoint → QUEUED."""
-    return _run_job_state_action(_manager(request).continue_job, job_id)
+def continue_job(
+    job_id: str,
+    request: Request,
+    body: V1JobContinueRequest | None = None,
+) -> V1JobRecordModel:
+    """Re-enter a FAILED/CANCELLED job from its checkpoint → QUEUED.
+
+    Optional ``body.target_node`` re-pins the execution node (D15).  An
+    unknown/disabled/incapable override → HTTP 400 with the same error
+    codes as job creation; ``None`` returns to the source node.
+    """
+    manager = _manager(request)
+    target_node = body.target_node if body else None
+    try:
+        record = manager.continue_job(job_id, target_node=target_node)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}") from exc
+    except (ExecutionTargetError, NoCapableNodeError) as exc:
+        raise HTTPException(status_code=400, detail=_target_validation_detail(exc)) from exc
+    except (ValueError, RuntimeError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return _record_to_v1_model(record)
 
 
 @router.post("/jobs/{job_id}/rerun", response_model=V1JobRecordModel)
@@ -4157,7 +4274,13 @@ def _node_status_to_model(status) -> NodeStatusModel:
         disk_usage_pct=status.disk_usage_pct,
         last_check=status.last_check,
         error=status.error,
+        queue=getattr(status, "queue", None),
         software=status.software,
+        declared=status.declared,
+        capability_state=status.capability_state,
+        declared_ok=status.declared_ok,
+        mismatch=status.mismatch,
+        probe_note=status.probe_note,
     )
 
 
@@ -4169,6 +4292,166 @@ def list_nodes(request: Request) -> NodeListResponse:
         nodes=[_node_status_to_model(s) for s in nm.list_nodes()],
         auto_select=True,
     )
+
+
+# ---------------------------------------------------------------------- #
+# Submission-time matching preview (design §2.2)
+# ---------------------------------------------------------------------- #
+
+_NO_REMOTE_NODES_NOTE = "no remote nodes configured"
+
+
+def _configured_node(nm: NodeManager, status) -> Any | None:
+    """Config node backing a status; ``None`` when the manager has no config."""
+    get_node = getattr(getattr(nm, "config", None), "get_node", None)
+    if not callable(get_node):
+        return None
+    try:
+        return get_node(status.name)
+    except Exception:  # noqa: BLE001 — duck-typed NodeManager stubs in tests
+        return None
+
+
+def _node_declared_inputs(nm: NodeManager, status) -> tuple[Any, bool, str | None]:
+    """Resolve ``(declared, enabled, queue)`` for one node status.
+
+    ``declared`` is fed straight into :func:`matches_capabilities`, so the
+    preview shares the dispatch-time declaration source.  The live config
+    node is preferred (the same object the scheduler registry maps); a
+    ``status.declared`` snapshot (dict-shaped, as produced by
+    ``capability_state_fields``) is the fallback for duck-typed stubs.
+    """
+    node = _configured_node(nm, status)
+    if node is not None:
+        return (
+            getattr(node, "capabilities", None),
+            bool(getattr(node, "enabled", True)),
+            getattr(node, "queue", None),
+        )
+    snapshot = getattr(status, "declared", None)
+    if isinstance(snapshot, dict) and (snapshot.get("software") or snapshot.get("tags")):
+        from acp.scheduler.remote.config import NodeCapabilities
+
+        return (
+            NodeCapabilities(
+                software=tuple(snapshot.get("software") or ()),
+                tags=tuple(snapshot.get("tags") or ()),
+            ),
+            getattr(status, "status", "") != "offline",
+            snapshot.get("queue"),
+        )
+    return None, getattr(status, "status", "") != "offline", None
+
+
+def _probed_software_names(status) -> frozenset[str]:
+    """Resolved probe names from a status (empty = unknown generic fallback).
+
+    Mirrors the registry's ``_probed_software`` extraction so preview and
+    dispatch judge undeclared nodes identically.
+    """
+    software = getattr(status, "software", None)
+    if not isinstance(software, dict):
+        return frozenset()
+    return frozenset(
+        name for name, info in software.items() if isinstance(info, dict) and info.get("resolved")
+    )
+
+
+def _node_matching_item(
+    nm: NodeManager,
+    status: Any,
+    required_software: frozenset[str],
+    required_tags: frozenset[str],
+) -> NodeMatchingItem:
+    """Match one node against the requirements (single shared implementation)."""
+    declared, enabled, _ = _node_declared_inputs(nm, status)
+    match = matches_capabilities(
+        required_software,
+        required_tags,
+        declared=declared,
+        probed_software=_probed_software_names(status),
+    )
+    node_status = getattr(status, "status", "offline")
+    return NodeMatchingItem(
+        name=status.name,
+        host=status.host,
+        status=node_status,
+        running_jobs=int(getattr(status, "running_jobs", 0) or 0),
+        max_jobs=int(getattr(status, "max_jobs", 0) or 0),
+        disk_usage_pct=int(getattr(status, "disk_usage_pct", 0) or 0),
+        # Same top-level source as /nodes — visible for undeclared nodes too.
+        queue=getattr(status, "queue", None),
+        tags=list(declared.tags) if declared is not None else [],
+        capability_state=getattr(status, "capability_state", "unknown"),
+        declared_ok=getattr(status, "declared_ok", None),
+        mismatch=list(getattr(status, "mismatch", []) or []),
+        satisfies=bool(match.satisfies and enabled and node_status != "offline"),
+        missing_software=list(match.missing_software),
+        missing_tags=list(match.missing_tags),
+        reasons=list(match.reasons),
+        degraded=bool(is_degraded(status)),
+    )
+
+
+def _evaluate_matching(manager: JobManager, req: NodeMatchingRequest) -> NodeMatchingResponse:
+    """Derive the requirements and judge every remote node (design §2.2)."""
+    method = dict(req.method or {})
+    if req.protocol is not None:
+        method["protocol"] = req.protocol
+    spec = JobSpec(workflow=req.workflow, method=method)
+    required_software = derive_required_software(spec)
+    required_tags = frozenset(req.node_tags or ())
+
+    nm = manager.node_manager
+    statuses = nm.list_nodes() if nm is not None else []
+    nodes = [_node_matching_item(nm, s, required_software, required_tags) for s in statuses]
+    return NodeMatchingResponse(
+        required_software=sorted(required_software),
+        node_tags=list(req.node_tags or ()),
+        local_satisfies=bool(local_satisfies(required_software)),
+        nodes=nodes,
+        note=None if nodes else _NO_REMOTE_NODES_NOTE,
+    )
+
+
+@router.post("/nodes/matching", response_model=NodeMatchingResponse)
+def node_matching(
+    request: Request,
+    payload: dict[str, Any] = Body(...),
+) -> NodeMatchingResponse:
+    """Preview which remote nodes can run a prospective submission.
+
+    Read-only capability preview for the frontend node selector (design
+    §2.2): derives the required software exactly as dispatch does (same
+    :func:`derive_required_software` / :func:`matches_capabilities` calls)
+    and reports per-node satisfies/missing fields.  Reuses the NodeManager
+    30 s status cache; a cold cache triggers the same live SSH probe as
+    ``GET /nodes``, so latency matches that endpoint.
+
+    The raw body is validated explicitly so an absent ``node_tags`` key
+    fails with HTTP 400 (FastAPI's pydantic default for a required field is
+    422); ``node_tags: null`` is allowed and means "no tag constraint".
+    """
+    if "node_tags" not in payload:
+        raise HTTPException(status_code=400, detail="Missing required field 'node_tags'")
+    try:
+        req = NodeMatchingRequest.model_validate(payload)
+    except ValidationError as exc:
+        first_error = exc.errors()[0] if exc.errors() else {}
+        raise HTTPException(status_code=400, detail=first_error.get("msg", str(exc))) from exc
+    if req.workflow not in SUPPORTED_WORKFLOWS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported workflow '{req.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}",
+        )
+    manager = _manager(request)
+    try:
+        return _evaluate_matching(manager, req)
+    except Exception:
+        logger.exception("Node matching preview failed for workflow=%s", req.workflow)
+        raise HTTPException(
+            status_code=500, detail="Failed to evaluate node matching for the request"
+        )
 
 
 @router.get("/nodes/{name}/status", response_model=NodeStatusModel)
