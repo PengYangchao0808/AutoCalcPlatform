@@ -5251,6 +5251,7 @@ const I18N = {
     "nodes.error.unknown_target_node": "未知的目标节点",
     "nodes.error.target_node_disabled": "目标节点已禁用",
     "nodes.error.execution_target_error": "执行目标校验失败",
+    "nodes.selected_unavailable": "所选节点当前不满足要求，提交将被拒绝",
     "backend.title": "计算后端",
     "backend.refresh": "刷新",
     "backend.loading": "加载中…",
@@ -6071,6 +6072,7 @@ const I18N = {
     "nodes.error.unknown_target_node": "Unknown target node",
     "nodes.error.target_node_disabled": "The target node is disabled",
     "nodes.error.execution_target_error": "Execution target validation failed",
+    "nodes.selected_unavailable": "The selected node no longer meets the job requirements — submitting will be rejected",
     "backend.title": "Backends",
     "backend.refresh": "Refresh",
     "backend.loading": "Loading…",
@@ -14998,10 +15000,19 @@ function updateNodeSelectorHints() {
   var showAutoHint = sel.value === "" && !!resp && resp.local_satisfies === false && required.length > 0;
   hint.style.display = showAutoHint ? "block" : "none";
   if (showAutoHint) hint.textContent = t("nodes.auto_remote_hint");
+  // m11: the current pick may be a disabled option kept visible by
+  // renderNodeSelector (a refresh made the picked node unsatisfying).
+  // Surface that loudly instead of silently falling back to auto.
+  var selectedOpt = sel.selectedOptions && sel.selectedOptions[0];
+  var selectedUnavailable = !!(sel.value && selectedOpt && selectedOpt.disabled);
   if (nodeMatchingState.error) {
     note.style.display = "block";
     note.classList.add("node-note-error");
     note.textContent = t("nodes.matching_error") + ": " + nodeMatchingState.error;
+  } else if (selectedUnavailable) {
+    note.style.display = "block";
+    note.classList.add("node-note-error");
+    note.textContent = t("nodes.selected_unavailable");
   } else if (resp && !(resp.nodes || []).length) {
     note.style.display = "block";
     note.classList.remove("node-note-error");
@@ -15054,8 +15065,12 @@ function renderNodeSelector() {
     applyNodePreselect(sel, nodeMatchingState.preselectNode);
   }
 
-  var selected = sel.selectedOptions && sel.selectedOptions[0];
-  if (selected && selected.disabled) sel.value = "";
+  // m11: a refresh may have disabled the option the user already picked
+  // (node went offline / lost a required capability). KEEP the pick
+  // visible — a disabled option can stay the selected value; the warning
+  // renders in updateNodeSelectorHints, the submit still carries the pick,
+  // and the server's coded 400 (localized via formatSubmitError) is the
+  // backstop. Never silently fall back to auto here.
   updateNodeSelectorHints();
   renderNodeTagChips(nodes);
   renderNodeSelectDetail();
@@ -15066,9 +15081,6 @@ function onNodeSelectChange() {
   // applied via .value stays "untouched" so the stage payload omits it and
   // the server-side source inheritance (T6) remains the authority.
   nodeMatchingState.userTouched = true;
-  var sel = document.getElementById("modal-node-select");
-  var selected = sel && sel.selectedOptions && sel.selectedOptions[0];
-  if (selected && selected.disabled) sel.value = "";
   updateNodeSelectorHints();
   renderNodeSelectDetail();
 }
@@ -15125,7 +15137,14 @@ function applyNodePreselect(sel, pinned) {
 // preselection. Only explicit spec.target_node values are mirrored — an
 // auto source leaves the child auto. Idempotent per source id: repeated
 // configureStageSourcePanel passes for the same source never clobber a
-// manual override made in between.
+// manual override made in between. userTouched semantics (m10):
+//   * A NEW source id is a new decision point — a manual pick made under
+//     the previous source is superseded by the new source's pin, so
+//     userTouched resets SYNCHRONOUSLY when the id changes (pre-fetch).
+//   * A manual pick made DURING the fetch window sets userTouched again;
+//     when the response arrives the pin is only recorded (source-pin
+//     detail line) — never applied, and userTouched is never reset, so
+//     the in-flight pick always wins.
 async function preselectNodeFromSourceJob(sourceJobId) {
   sourceJobId = String(sourceJobId || "").trim();
   if (sourceJobId === nodeMatchingState.preselectSourceId) return;
@@ -15140,17 +15159,23 @@ async function preselectNodeFromSourceJob(sourceJobId) {
     renderNodeSelector();
     return;
   }
+  // New decision point (see header): the new source's pin may override a
+  // manual pick made under the previous source. Resetting here — before
+  // the fetch — is what protects a pick made during the fetch window.
+  nodeMatchingState.userTouched = false;
   try {
     var data = await api("/jobs/" + encodeURIComponent(sourceJobId));
     // Stale-response guard: the source field moved on while fetching.
     if (nodeMatchingState.preselectSourceId !== sourceJobId) return;
     var srcSpec = (data && data.spec) || {};
     if (srcSpec.target_node) {
+      // Always record the pin for the source-pin detail line. Whether it
+      // is APPLIED is decided by renderNodeSelector(): applyNodePreselect
+      // only fires for an untouched selector, so a manual pick made while
+      // this fetch was in flight keeps the dropdown value. Never reset
+      // userTouched here — that was the m10 clobber race.
       nodeMatchingState.preselectNode = String(srcSpec.target_node);
       nodeMatchingState.preselectHost = String((data && data.host) || "");
-      // The new source's pin replaces any prior manual choice; the user may
-      // still override afterwards (which sets userTouched again).
-      nodeMatchingState.userTouched = false;
     } else if (!nodeMatchingState.userTouched && sel) {
       sel.value = "";
     }
@@ -19351,7 +19376,7 @@ async function submitJobModal() {
       await refreshJobs();
       await selectJob(nmrResult.job_id);
     } catch (err) {
-      window.alert((t("modal.submit_failed") || "提交失败") + ": " + err);
+      window.alert((t("modal.submit_failed") || "提交失败") + ": " + formatSubmitError(err));
     }
     return;
   }
@@ -19474,7 +19499,7 @@ async function submitJobModal() {
       await refreshJobs();
       await selectJob(mechResult.job_id);
     } catch (err) {
-      window.alert((t("modal.submit_failed") || "提交失败") + ": " + err);
+      window.alert((t("modal.submit_failed") || "提交失败") + ": " + formatSubmitError(err));
     }
     return;
   }

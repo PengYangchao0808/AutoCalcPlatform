@@ -353,7 +353,28 @@ def test_node_selector_structure_and_disabled_logic_lock() -> None:
     assert "function translateNodeError(err)" in html
     assert "function formatSubmitError(err)" in html
     assert 'key = "nodes.error." + parsed.code;' in html
-    assert html.count("formatSubmitError(err)") >= 3  # definition + alert sites
+    # m9: EVERY submit-branch alert routes coded 400 bodies through
+    # formatSubmitError — definition + stage chain + PESsearch inline scan
+    # + NMR + mechanism.  (The general per-structure loop alerts with a
+    # different local name: formatSubmitError(error).)
+    assert html.count("formatSubmitError(err)") == 5
+    submit_failed_prefix = 'window.alert((t("modal.submit_failed") || "提交失败") + ": "'
+    assert html.count(submit_failed_prefix + " + formatSubmitError(err));") == 4
+    # No submit branch may surface the raw Error (bare JSON) again.
+    assert 'window.alert((t("modal.submit_failed") || "提交失败") + ": " + err);' not in html
+
+    # m11: a refresh that disables the already-picked node must NOT
+    # silently clear the dropdown to auto — the pick stays selected (a
+    # disabled option can remain the current value) and a localized
+    # warning renders in the note area.  The submit still carries the
+    # pick; the server's coded 400 (localized via formatSubmitError) is
+    # the backstop.
+    assert 'if (selected && selected.disabled) sel.value = "";' not in html
+    hints_body = html.split("function updateNodeSelectorHints()", 1)[1]
+    hints_body = hints_body.split("\nfunction ", 1)[0]
+    assert "selectedOpt.disabled" in hints_body
+    assert 't("nodes.selected_unavailable")' in hints_body
+    assert '"nodes.selected_unavailable":' in html
 
     # Badge/hint rendering for degraded / capability_state / declared_ok.
     assert "nodes.badge.degraded" in html
@@ -395,6 +416,7 @@ def test_node_selector_i18n_keys_complete_across_locales() -> None:
         "nodes.error.unknown_target_node",
         "nodes.error.target_node_disabled",
         "nodes.error.execution_target_error",
+        "nodes.selected_unavailable",
     }
     assert required <= zh_keys, f"missing zh-CN nodes.* keys: {sorted(required - zh_keys)}"
 
@@ -472,6 +494,19 @@ def test_continue_node_override_and_stage_preselect_lock() -> None:
     pre = html.split("async function preselectNodeFromSourceJob(sourceJobId)", 1)[1]
     pre = pre.split("\nfunction ", 1)[0]
     assert "srcSpec.target_node" in pre
+    # m10: userTouched resets ONLY synchronously at the new-source decision
+    # point (before the fetch); the fetch-return path records the pin for
+    # the source-pin detail line but never resets/applies over a manual
+    # pick made while the fetch was in flight.
+    reset_pos = pre.find("nodeMatchingState.userTouched = false;")
+    fetch_pos = pre.find('await api("/jobs/"')
+    assert reset_pos != -1 and fetch_pos != -1
+    assert reset_pos < fetch_pos, (
+        "userTouched must reset before the source-job fetch (new decision point)"
+    )
+    assert "nodeMatchingState.userTouched = false;" not in pre[fetch_pos:], (
+        "fetch-return must never reset userTouched — that was the m10 race"
+    )
     assert "function applyNodePreselect(sel, pinned)" in html
     render_body = html.split("function renderNodeSelector()", 1)[1]
     render_body = render_body.split("\nfunction ", 1)[0]
