@@ -1369,7 +1369,7 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .plot-tip-key { display: inline-block; padding: 0 5px 1px; border: 1px solid rgba(255,255,255,0.22); border-bottom-width: 2px; border-radius: 4px; background: rgba(255,255,255,0.06); color: #cfe3ff; font-size: 10px; }
 
 /* Live optimization viewer: one GaussView-style chart with view switching. */
-.optimization-workspace { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 10px; height: 100%; padding: 14px; color: var(--text-secondary); }
+.optimization-workspace { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 10px; height: 100%; padding: 14px; color: var(--text-secondary); container-type: inline-size; }
 .optimization-workspace-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .optimization-workspace-kicker { color: var(--text-tertiary); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
 .optimization-workspace-title { margin-top: 4px; color: var(--text-primary); font-size: 17px; font-weight: 650; }
@@ -1379,9 +1379,37 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .optimization-workspace-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: 10px; background: rgba(255,255,255,.025); }
 .optimization-workspace-toolbar label { color: var(--text-tertiary); font-size: 11px; }
 .optimization-workspace-toolbar .tool-select { min-width: 170px; }
-.optimization-follow-btn { border: 1px solid rgba(78,161,255,.42); border-radius: 7px; padding: 6px 10px; color: #cfe3ff; background: rgba(78,161,255,.11); cursor: pointer; font-size: 11px; }
+.optimization-follow-btn { border: 1px solid rgba(78,161,255,.42); border-radius: 7px; padding: 6px 10px; color: #cfe3ff; background: rgba(78,161,255,.11); cursor: pointer; font-size: 11px; white-space: nowrap; flex: 0 0 auto; }
 .optimization-follow-btn.active { color: #fff; background: rgba(78,161,255,.28); }
 .optimization-toolbar-spacer { flex: 1 1 auto; }
+/* Right-side tool buttons form one unbreakable group: the toolbar may wrap
+   around the group, never inside it (prevents per-character CJK folding). */
+.optimization-action-group { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; flex-wrap: nowrap; }
+/* Reload button carries icon + text, so it must size to content instead of
+   inheriting .plot-tool's fixed 30px icon-only box. */
+.plot-tool.optimization-reload-btn {
+  width: auto;
+  min-width: 62px;
+  height: 30px;
+  padding: 0 9px;
+  gap: 5px;
+  white-space: nowrap;
+  line-height: 1;
+  flex: 0 0 auto;
+  font-size: 11px;
+}
+.optimization-reload-btn .reload-label { white-space: nowrap; }
+/* Container-width tiers (viewer width, not viewport width):
+   >= 900px  icon + "刷新" text (~62px); 640-899px icon only (30x30);
+   < 640px   whole action group wraps to a second row, buttons stay 30x30. */
+@container (max-width: 899px) {
+  .plot-tool.optimization-reload-btn { width: 30px; min-width: 30px; padding: 0; }
+  .optimization-reload-btn .reload-label { display: none; }
+}
+@container (max-width: 639px) {
+  .optimization-workspace-toolbar .optimization-toolbar-spacer { flex-basis: 100%; height: 0; }
+  .optimization-workspace-toolbar .optimization-action-group { margin-left: auto; }
+}
 .optimization-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, 290px); gap: 10px; min-height: 0; }
 .optimization-charts { display: grid; grid-template-rows: minmax(0, 1fr); gap: 10px; min-width: 0; min-height: 0; }
 .optimization-chart-card { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border: 1px solid var(--border-subtle); border-radius: 12px; background: rgba(10,16,24,.68); }
@@ -8754,7 +8782,7 @@ function optimizationWorkspaceMarkup(data) {
   var nCycles = (data.metadata || {}).n_cycles || (Array.isArray(data.nodes) ? data.nodes.length : 0);
   return '<div class="optimization-workspace" data-energy-workspace data-energy-view="optimization">' +
     '<div class="optimization-workspace-head"><div><div class="optimization-workspace-kicker">任务观察 · Optimization Viewer</div><div class="optimization-workspace-title">' + escapeHtml(String(job.name || job.id || data.job_id || "几何结构优化")) + '</div></div><div class="optimization-workspace-meta"><span>几何优化</span><span>当前周期 ' + escapeHtml(String(currentCycle)) + '</span><span class="live">' + escapeHtml(statusText) + '</span></div></div>' +
-    '<div class="optimization-workspace-toolbar"><div class="optimization-view-switch" role="tablist">' + viewButtons + '</div><label for="optimization-energy-series" data-optimization-energy-label' + energyPickerHidden + '>能量曲线</label><select id="optimization-energy-series" class="tool-select" data-optimization-energy' + energyPickerHidden + '>' + energyOptions + '</select><span class="optimization-toolbar-spacer"></span><button class="plot-tool' + (energyGraphState.optimizationTool === "box" ? ' active' : '') + '" data-optimization-action="box" type="button" title="框选放大" aria-label="框选放大">⬚</button><button class="plot-tool' + (energyGraphState.optimizationTool !== "box" ? ' active' : '') + '" data-optimization-action="pan" type="button" title="拖动平移" aria-label="拖动平移">✥</button><button class="plot-tool" data-optimization-action="reset" type="button" title="重置视图" aria-label="重置视图">⟲</button><button class="optimization-follow-btn' + (energyGraphState.liveFollow ? ' active' : '') + '" data-optimization-action="follow" type="button">' + (energyGraphState.liveFollow ? '跟随最新周期' : '回到最新周期') + '</button><button class="plot-tool" data-optimization-action="reload" type="button" title="刷新">↻ 刷新</button></div>' +
+    '<div class="optimization-workspace-toolbar"><div class="optimization-view-switch" role="tablist">' + viewButtons + '</div><label for="optimization-energy-series" data-optimization-energy-label' + energyPickerHidden + '>能量曲线</label><select id="optimization-energy-series" class="tool-select" data-optimization-energy' + energyPickerHidden + '>' + energyOptions + '</select><span class="optimization-toolbar-spacer"></span><div class="optimization-action-group"><button class="plot-tool' + (energyGraphState.optimizationTool === "box" ? ' active' : '') + '" data-optimization-action="box" type="button" title="框选放大" aria-label="框选放大">⬚</button><button class="plot-tool' + (energyGraphState.optimizationTool !== "box" ? ' active' : '') + '" data-optimization-action="pan" type="button" title="拖动平移" aria-label="拖动平移">✥</button><button class="plot-tool" data-optimization-action="reset" type="button" title="重置视图" aria-label="重置视图">⟲</button><button class="optimization-follow-btn' + (energyGraphState.liveFollow ? ' active' : '') + '" data-optimization-action="follow" type="button">' + (energyGraphState.liveFollow ? '跟随最新周期' : '回到最新周期') + '</button><button class="plot-tool optimization-reload-btn" data-optimization-action="reload" type="button" title="刷新" aria-label="刷新"><svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10a7 7 0 1 1 2 5M3 10v4M3 10h4"/></svg><span class="reload-label">刷新</span></button></div></div>' +
     '<div class="optimization-grid"><div class="optimization-charts"><section class="optimization-chart-card"><div class="optimization-chart-card-head"><span class="optimization-chart-card-title" data-optimization-title>' + escapeHtml(cfg.title) + ' \u00b7 ' + ((data.nodes || []).length) + ' ' + t("energy.header.frames") + '</span><span class="optimization-chart-card-subtitle" data-optimization-subtitle style="color:' + energyHeaderStatusInfo(data).color + ';">\u25cf ' + escapeHtml(energyHeaderStatusInfo(data).text) + '</span></div><div class="optimization-chart-scroll" data-optimization-scroll="main">' + optimizationGraphBuildSvg(data, view) + '</div><div class="optimization-chart-legend" data-optimization-legend>' + optimizationLegendMarkup(data, view) + '</div></section>' + optimizationConvergencePanelMarkup(data) + '</div><aside class="energy-inspector-panel"><div class="energy-inspector-head"><div class="energy-inspector-title">结构查看器</div><div class="energy-inspector-subtitle">点选周期查看对应几何</div></div><div id="energy-structure-viewer" class="energy-structure-viewer' + (selectedNode && selectedNode.geometry_ref ? '' : ' empty') + '">' + (selectedNode && selectedNode.geometry_ref ? '' : '当前周期没有可加载的 XYZ 结构') + '</div>' + energyGraphInspectorMarkup(data) + '</aside></div>' +
     '<div class="optimization-workspace-footer"><span>数据源：<strong>' + escapeHtml(String(data.source || '--')) + '</strong> · 周期 ' + escapeHtml(String(nCycles)) + selectedItem + '</span><span>' + optimizationQualityBadge(data) + ' · revision <strong>' + escapeHtml(String(data.revision || '--')) + '</strong></span></div></div>';
 }
