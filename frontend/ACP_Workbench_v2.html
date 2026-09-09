@@ -4726,6 +4726,8 @@ let energyGraphState = {
   optimizationDomains: {},
   optimizationPlot: null,
   optimizationViewSize: { width: 0, height: 0 },
+  frameCandidates: { revision: 0, list: [] },
+  jobStatus: "",
 };
 let samplingState = {
   activeSubview: "energy",
@@ -5465,13 +5467,15 @@ const I18N = {
     "energy.header.status.failed": "失败",
     "energy.header.status.unknown": "未知",
     "energy.header.status.unavailable": "不可用",
-    "energy.inspector.lock": "锁定",
-    "energy.inspector.unlock": "解锁",
     "energy.inspector.export": "导出结构",
     "energy.inspector.save_candidate": "保存为候选",
     "energy.inspector.saved_badge": "已保存",
     "energy.inspector.role_select": "角色选择",
-    "energy.inspector.role_none": "无",
+    "energy.inspector.role_cancel": "取消",
+    "energy.inspector.more": "更多",
+    "energy.inspector.change_role": "修改角色",
+    "energy.inspector.remove_candidate": "移除候选",
+    "energy.inspector.save_after_complete": "任务完成后可保存候选",
     "energy.inspector.misc": "其他",
     "energy.conv.title": "收敛判据",
     "energy.conv.met": "达标",
@@ -6286,13 +6290,15 @@ const I18N = {
     "energy.header.status.failed": "Failed",
     "energy.header.status.unknown": "Unknown",
     "energy.header.status.unavailable": "Unavailable",
-    "energy.inspector.lock": "Lock",
-    "energy.inspector.unlock": "Unlock",
     "energy.inspector.export": "Export Structure",
     "energy.inspector.save_candidate": "Save as Candidate",
     "energy.inspector.saved_badge": "Saved",
     "energy.inspector.role_select": "Role Selection",
-    "energy.inspector.role_none": "None",
+    "energy.inspector.role_cancel": "Cancel",
+    "energy.inspector.more": "More",
+    "energy.inspector.change_role": "Change Role",
+    "energy.inspector.remove_candidate": "Remove Candidate",
+    "energy.inspector.save_after_complete": "Available after the job completes",
     "energy.inspector.misc": "Misc",
     "energy.conv.title": "Convergence Criteria",
     "energy.conv.met": "Met",
@@ -6533,30 +6539,30 @@ var _INSPECTOR_COMMON_KEYS = {
   basin_id: 1, coordinate_values: 1, energy_hartree: 1, review: 1,
 };
 
-/* ── Frame Lock Set (client-only, localStorage) ── */
-function energyFrameLockKey(jobId, revision) {
-  return "acp-frame-lock:" + String(jobId || "") + ":" + String(revision || "");
+/* ── Frame-candidate state (server-authoritative via /frame-candidates) ── */
+function energyGraphFrameCandidateFor(viewType, frameIndex) {
+  var fc = energyGraphState.frameCandidates;
+  if (!fc || !Array.isArray(fc.list)) return null;
+  for (var i = 0; i < fc.list.length; i++) {
+    var c = fc.list[i];
+    if (String(c.view_type || "") === String(viewType || "") && Number(c.frame_index) === Number(frameIndex)) return c;
+  }
+  return null;
 }
 
-function energyLoadFrameLockSet(jobId, revision) {
+function energyGraphApplyFrameCandidates(payload) {
+  if (!payload) return;
+  energyGraphState.frameCandidates = {
+    revision: Number(payload.revision) || 0,
+    list: Array.isArray(payload.candidates) ? payload.candidates : [],
+  };
+}
+
+async function energyGraphFetchFrameCandidates(jobId) {
   try {
-    var raw = localStorage.getItem(energyFrameLockKey(jobId, revision));
-    if (!raw) return [];
-    var parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (e) { return []; }
-}
-
-function energySaveFrameLockSet(jobId, revision, lockArr) {
-  try { localStorage.setItem(energyFrameLockKey(jobId, revision), JSON.stringify(lockArr)); } catch (e) {}
-}
-
-function energyToggleFrameLock(jobId, revision, frameId) {
-  var locks = energyLoadFrameLockSet(jobId, revision);
-  var idx = locks.indexOf(frameId);
-  if (idx >= 0) { locks.splice(idx, 1); } else { locks.push(frameId); }
-  energySaveFrameLockSet(jobId, revision, locks);
-  return locks;
+    var resp = await api("/jobs/" + encodeURIComponent(jobId) + "/frame-candidates");
+    return { revision: Number(resp && resp.revision) || 0, list: (resp && Array.isArray(resp.candidates)) ? resp.candidates : [] };
+  } catch (e) { return null; }
 }
 
 /* ── Unified Geometry Loader ── */
@@ -7583,23 +7589,24 @@ function energyGraphBindInspectorButtons(root) {
       }
     });
   }
-  /* ── Frame lock / export / save-candidate actions ── */
+  /* ── Frame candidate save / change-role / remove + more-menu actions ── */
   root.querySelectorAll('[data-energy-action-row] [data-energy-action]').forEach(function(button) {
     button.addEventListener("click", async function() {
       var action = button.getAttribute("data-energy-action");
       if (!data) return;
       var node = energyGraphCurrentNode(data);
       if (!node) return;
-      if (action === "lock-frame") {
-        var rev = String((data && data.revision) || "");
-        var locks = energyToggleFrameLock(energyGraphState.jobId, rev, String(node.id || ""));
-        var isLocked = locks.indexOf(String(node.id || "")) >= 0;
-        button.textContent = (isLocked ? t("energy.inspector.unlock") : t("energy.inspector.lock")) + (isLocked ? ' \ud83d\udd12' : '');
-        button.title = isLocked ? t("energy.inspector.unlock") : t("energy.inspector.lock");
-      } else if (action === "export-frame") {
+      if (action === "more-menu") {
+        var menu = root.querySelector("[data-energy-more-menu]");
+        if (menu) menu.style.display = menu.style.display === "none" ? "" : "none";
+        return;
+      }
+      if (action === "export-frame") {
+        var openMenu = root.querySelector("[data-energy-more-menu]");
+        if (openMenu) openMenu.style.display = "none";
         try {
           var xyz = await energyGraphFetchFrameXyz(node);
-          if (!xyz) return;
+          if (!xyz) throw new Error("frame geometry unavailable");
           var blob = new Blob([xyz], { type: "chemical/x-xyz" });
           var fname = String(energyGraphState.jobId || "job") + "_" + String(node.id || "frame") + ".xyz";
           var a = document.createElement("a");
@@ -7609,37 +7616,67 @@ function energyGraphBindInspectorButtons(root) {
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(a.href);
-        } catch (e) {}
-      } else if (action === "save-candidate") {
-        var roleLabel = prompt(t("energy.inspector.role_select") + ": TS / INT / " + t("energy.inspector.role_none"));
-        if (!roleLabel) return;
-        var rl = roleLabel.trim().toUpperCase();
-        var role = rl === "TS" ? "TS" : rl === "NONE" || rl === t("energy.inspector.role_none").toUpperCase() ? "NONE" : "INT";
-        if (isFrameLocked) { alert("\u5e27\u5df2\u9501\u5b9a\uff0c\u8bf7\u5148\u89e3\u9501"); return; }
+        } catch (e) {
+          alert(String((e && e.message) || e));
+        }
+        return;
+      }
+      if (action === "save-candidate" || action === "change-role") {
+        var picker = root.querySelector("[data-energy-role-picker]");
+        if (picker) picker.style.display = picker.style.display === "none" ? "" : "none";
+        return;
+      }
+      if (action === "remove-candidate") {
+        var entry = energyGraphFrameCandidateFor(data.view_type, node.frame_index);
+        if (!entry) return;
+        if (!confirm(t("energy.inspector.remove_candidate") + ": " + String(entry.candidate_id || "") + "?")) return;
         button.disabled = true;
         try {
-          var body = { view_type: String(data.view_type || ""), frame_index: Number(node.frame_index), role: role };
-          var resp = await api("/jobs/" + encodeURIComponent(energyGraphState.jobId) + "/frame-candidate", {
-            method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-          });
-          if (resp) {
-            var savedBadgeEl = root.querySelector('[data-energy-action-row] .energy-badge.ok');
-            if (!savedBadgeEl) {
-              var row = root.querySelector('[data-energy-action-row]');
-              if (row) row.insertAdjacentHTML("beforeend", ' <span class="energy-badge ok">' + escapeHtml(t("energy.inspector.saved_badge")) + '</span>');
-            }
-            node.metadata._candidateSaved = true;
+          var delUrl = "/jobs/" + encodeURIComponent(energyGraphState.jobId) + "/frame-candidate/" + encodeURIComponent(String(entry.candidate_id)) + "?expected_revision=" + String(Number(energyGraphState.frameCandidates.revision) || 0);
+          var delResp = await api(delUrl, { method: "DELETE" });
+          if (delResp) {
+            energyGraphApplyFrameCandidates(delResp);
             energyGraphRenderCurrent();
           }
         } catch (e) {
-          if (e && e.message && e.message.indexOf("PESsearch") >= 0) {
-            alert(e.message);
-          } else {
-            alert(String(e.message || e));
-          }
+          alert(String((e && e.message) || e));
         } finally {
           button.disabled = false;
         }
+        return;
+      }
+    });
+  });
+  root.querySelectorAll("[data-energy-candidate-role]").forEach(function(button) {
+    button.addEventListener("click", async function() {
+      var role = String(button.getAttribute("data-energy-candidate-role") || "");
+      if (!data) return;
+      if (!role) {
+        var pickerEl = root.querySelector("[data-energy-role-picker]");
+        if (pickerEl) pickerEl.style.display = "none";
+        return;
+      }
+      var node = energyGraphCurrentNode(data);
+      if (!node || node.frame_index == null) return;
+      button.disabled = true;
+      try {
+        var body = {
+          view_type: String(data.view_type || ""),
+          frame_index: Number(node.frame_index),
+          role: role,
+          expected_revision: Number(energyGraphState.frameCandidates.revision) || 0,
+        };
+        var resp = await api("/jobs/" + encodeURIComponent(energyGraphState.jobId) + "/frame-candidate", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+        });
+        if (resp) {
+          energyGraphApplyFrameCandidates(resp);
+          energyGraphRenderCurrent();
+        }
+      } catch (e) {
+        alert(String((e && e.message) || e));
+      } finally {
+        button.disabled = false;
       }
     });
   });
@@ -8299,22 +8336,43 @@ function energyGraphInspectorMarkup(data) {
       '</div>';
   }
   var isPES = !!(lastSelectedJob && lastSelectedJob.spec && lastSelectedJob.spec.workflow === "PESsearch");
-  var frameLockRevision = String((data && data.revision) || "");
-  var frameLockArr = energyLoadFrameLockSet(energyGraphState.jobId, frameLockRevision);
   var frameIdStr = String(node.id || "");
-  var isFrameLocked = frameLockArr.indexOf(frameIdStr) >= 0;
-  var lockGlyph = isFrameLocked ? ' \ud83d\udd12' : '';
-  var lockLabel = isFrameLocked ? t("energy.inspector.unlock") : t("energy.inspector.lock");
-  var frameCandidateSaved = metadata._candidateSaved || false;
-  var savedBadge = frameCandidateSaved ? ' <span class="energy-badge ok">' + escapeHtml(t("energy.inspector.saved_badge")) + '</span>' : '';
+  var candEntry = isPES ? null : energyGraphFrameCandidateFor(data.view_type, node.frame_index);
+  var jobCompleted = String(energyGraphState.jobStatus || "") === "completed";
+  var savedBadge = candEntry ? ' <span class="energy-badge ok">' + escapeHtml(t("energy.inspector.saved_badge")) + ' · ' + escapeHtml(String(candEntry.role || "")) + '</span>' : '';
+  var candidateButtons = "";
+  if (!isPES) {
+    if (candEntry) {
+      candidateButtons =
+        '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="change-role" title="' + escapeHtml(t("energy.inspector.change_role")) + '">' + escapeHtml(t("energy.inspector.change_role")) + '</button>' +
+        '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="remove-candidate" title="' + escapeHtml(t("energy.inspector.remove_candidate")) + '">' + escapeHtml(t("energy.inspector.remove_candidate")) + '</button>' + savedBadge;
+    } else if (jobCompleted) {
+      candidateButtons =
+        '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" title="' + escapeHtml(t("energy.inspector.save_candidate")) + '">' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>';
+    } else {
+      candidateButtons =
+        '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled title="' + escapeHtml(t("energy.inspector.save_after_complete")) + '">' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' +
+        '<span class="energy-badge pending" title="' + escapeHtml(t("energy.inspector.save_after_complete")) + '">' + escapeHtml(t("energy.inspector.save_after_complete")) + '</span>';
+    }
+  }
+  var rolePickerHtml = (!isPES && jobCompleted)
+    ? '<div class="energy-candidate-role-picker" data-energy-role-picker style="display:none;margin-top:6px;">' +
+      '<span class="energy-role-label">' + escapeHtml(t("energy.inspector.role_select")) + '</span>' +
+      '<button type="button" class="energy-role-btn" data-energy-candidate-role="TS">TS</button>' +
+      '<button type="button" class="energy-role-btn" data-energy-candidate-role="INT">INT</button>' +
+      '<button type="button" class="energy-role-btn" data-energy-candidate-role="">' + escapeHtml(t("energy.inspector.role_cancel")) + '</button>' +
+      '</div>'
+    : '';
   var actionRowHtml =
     '<div class="energy-inspector-actions" data-energy-action-row>' +
-      '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="lock-frame" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" title="' + escapeHtml(lockLabel) + '">' + escapeHtml(lockLabel) + lockGlyph + '</button>' +
-      '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="export-frame" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" title="' + escapeHtml(t("energy.inspector.export")) + '">' + escapeHtml(t("energy.inspector.export")) + '</button>' +
-      (!isPES
-        ? '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" title="' + escapeHtml(t("energy.inspector.save_candidate")) + '">' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' + savedBadge
-        : '') +
-    '</div>';
+      candidateButtons +
+      '<div class="energy-inspector-more" style="position:relative;display:inline-block;">' +
+        '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="more-menu" title="' + escapeHtml(t("energy.inspector.more")) + '">⋯</button>' +
+        '<div class="energy-inspector-more-menu" data-energy-more-menu style="display:none;position:absolute;right:0;top:calc(100% + 4px);z-index:30;background:var(--bg-secondary,#1b212b);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:4px;min-width:120px;">' +
+          '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="export-frame" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" title="' + escapeHtml(t("energy.inspector.export")) + '">' + escapeHtml(t("energy.inspector.export")) + '</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>' + rolePickerHtml;
   return '<div class="energy-inspector-body">' +
     '<div class="energy-selected-title"><strong>' + escapeHtml(title) + '</strong><span class="energy-badge ' + badgeClass + '">' + escapeHtml(annotation ? String(annotation.type).toUpperCase() : translateStatus(node.status || "unknown")) + '</span></div>' +
     '<div class="frame-nav-row" style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">' +
@@ -10211,8 +10269,10 @@ async function renderEnergyGraphWorkspace(job, options) {
     energyGraphState.itemId = "";
     energyGraphState.optimizationDomains = {};
     energyGraphState.optimizationPlot = null;
+    energyGraphState.frameCandidates = { revision: 0, list: [] };
   }
   energyGraphState.jobId = String(jobId);
+  energyGraphState.jobStatus = String((job && job.status) || "").toLowerCase();
   energyGraphState.loading = true;
   // Silent polling must not turn a working view into a loading state.  That
   // state transition was the reason the old silent fast path was unreachable.
@@ -10227,8 +10287,14 @@ async function renderEnergyGraphWorkspace(job, options) {
     var lockedItemId = energyGraphState.itemId || optimizationJobItemId(job);
     if (lockedItemId) graphUrl += "?item_id=" + encodeURIComponent(lockedItemId);
     if (options.view) graphUrl += (lockedItemId ? "&" : "?") + "view=" + encodeURIComponent(options.view);
+    var candPromise = energyGraphFetchFrameCandidates(jobId);
     var data = await api(graphUrl, ac ? { signal: ac.signal } : {});
     if (token !== energyGraphState.requestToken || activeViewerTab !== "energy") return false;
+    var candPayload = await candPromise;
+    if (token !== energyGraphState.requestToken || activeViewerTab !== "energy") return false;
+    // Restore server-authoritative saved-candidate state so badges survive
+    // page refreshes, job re-selection and graph reloads.
+    if (candPayload) energyGraphApplyFrameCandidates(candPayload);
     if (data && String(data.view_type || "") === "unsupported") {
       energyGraphState.data = data;
       energyGraphState.dataRevision = energyGraphDataRevision(data);

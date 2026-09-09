@@ -81,10 +81,30 @@ def test_default_workbench_keeps_original_v2_frontend_and_v1_contract() -> None:
     assert '"tab.energy": "Energy & Trajectory"' in html
     assert "能量图" not in html
 
-    # Generic frame actions
+    # Generic frame actions: one primary action (save-as-candidate) with an
+    # explicit TS/INT picker; export lives in the overflow menu; the
+    # misleading localStorage "lock" was removed (2026-09 review).
     assert 'data-energy-action="save-candidate"' in html
+    assert 'data-energy-action="change-role"' in html
+    assert 'data-energy-action="remove-candidate"' in html
+    assert 'data-energy-action="more-menu"' in html
     assert 'data-energy-action="export-frame"' in html
-    assert "acp-frame-lock" in html
+    assert 'data-energy-candidate-role="TS"' in html
+    assert 'data-energy-candidate-role="INT"' in html
+    assert "acp-frame-lock" not in html
+    assert 'data-energy-action="lock-frame"' not in html
+    assert "isFrameLocked" not in html
+    # Saved-candidate state is server-authoritative: restored from
+    # GET /frame-candidates and guarded by expected_revision on mutations.
+    assert '"/jobs/" + encodeURIComponent(jobId) + "/frame-candidates"' in html
+    assert "expected_revision" in html
+    # The role prompt() free-text flow is gone — roles come only from the
+    # TS/INT picker buttons.
+    assert "energy.inspector.role_none" not in html
+    # Running jobs disable the save action with an explicit reason instead of
+    # offering a button the backend will reject with 409.
+    assert "energy.inspector.save_after_complete" in html
+    assert "save-candidate\" data-energy-frame-id=\"' + escapeHtml(frameIdStr) + '\" disabled" in html
 
     # Sampling hooks
     assert 'data-sampling-view="' in html
