@@ -55,7 +55,7 @@ def load_authority(task_root: Path) -> dict[str, Any] | None:
 
 
 def candidate_id_for(prefix: str, role: str, frame_index: int) -> str:
-    """Deterministic candidate id: ``scan_ts_frame_000`` / ``opt_none_frame_003``."""
+    """Deterministic candidate id: ``scan_ts_frame_000`` / ``opt_int_frame_003``."""
     token = _ROLE_TOKEN_MAP.get(role, "none")
     return f"{prefix}_{token}_frame_{frame_index:03d}"
 

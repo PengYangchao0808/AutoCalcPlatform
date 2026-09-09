@@ -64,7 +64,7 @@ __all__ = [
     "save_frame_candidate",
 ]
 
-_VALID_ROLES = frozenset({"TS", "INT", "NONE"})
+_VALID_ROLES = frozenset({"TS", "INT"})
 _PREFIX_MAP = {
     "optimization": "opt",
     "sampling": "md",
@@ -99,7 +99,8 @@ def save_frame_candidate(
         view_type: One of ``scan``, ``optimization``, ``sampling``,
             ``conformer``.
         frame_index: 0-based frame index.
-        role: One of ``TS``, ``INT``, ``NONE``.
+        role: One of ``TS``, ``INT``.  Re-saving the same frame with the
+            other role atomically replaces the previous candidate.
         name: Optional display name; defaults to the candidate_id.
         expected_revision: When given, the currently stored revision must
             match.
@@ -123,12 +124,13 @@ def save_frame_candidate(
         )
 
     # --- Validate role ---
+    # Only TS / INT are meaningful candidate roles.  ``NONE`` was accepted
+    # historically but produced self-contradictory artifacts (authority said
+    # NONE while the XYZ TAG comment read ``TAG: INT``); it is now rejected.
     effective_role = role.upper().strip()
     if effective_role not in _VALID_ROLES:
-        raise FrameCandidateError(f"invalid candidate role: {role!r} (expected TS, INT, or NONE)")
-    # NONE is not a chemistry tag -- it's our own sentinel for "no role";
-    # normalize_tag maps it to None, which build_tag_title renders as "INT".
-    normalized_role = normalize_tag(role) if effective_role != "NONE" else "INT"
+        raise FrameCandidateError(f"invalid candidate role: {role!r} (expected TS or INT)")
+    normalized_role = normalize_tag(effective_role)
 
     # --- Check revision ---
     existing = load_authority(root)
@@ -178,8 +180,23 @@ def save_frame_candidate(
         "saved_at": (now or datetime.now().astimezone()).isoformat(timespec="seconds"),
     }
     candidates_list = list(existing.get("candidates", [])) if existing else []
+    # Role change is an atomic replace: one frame can only carry one role, so
+    # any stale entry for the same (view_type, frame_index) under a different
+    # candidate_id (e.g. TS -> INT) is dropped together with its manifest
+    # product.  Its materialised XYZ is kept on disk, matching remove().
+    stale_ids = {
+        str(c.get("candidate_id"))
+        for c in candidates_list
+        if c.get("view_type") == view_type
+        and c.get("frame_index") == frame_index
+        and c.get("candidate_id") != cid
+    }
     # Idempotent: replace existing entry with same candidate_id
-    candidates_list = [c for c in candidates_list if c.get("candidate_id") != cid]
+    candidates_list = [
+        c
+        for c in candidates_list
+        if c.get("candidate_id") != cid and c.get("candidate_id") not in stale_ids
+    ]
     candidates_list.append(entry)
     new_revision = current_revision + 1
     authority_payload: dict[str, Any] = {
@@ -197,6 +214,12 @@ def save_frame_candidate(
     except (FileNotFoundError, OSError, json.JSONDecodeError, ValueError, TypeError, KeyError):
         manifest = ResultManifest()
     manifest.task_id = manifest.task_id or job_id
+    if stale_ids:
+        manifest.products = [
+            p
+            for p in manifest.products
+            if p.id not in {f"frame_candidate_{sid}" for sid in stale_ids}
+        ]
     product_id = f"frame_candidate_{cid}"
     manifest.add_product(
         id=product_id,

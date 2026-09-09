@@ -288,9 +288,9 @@ class TestSaveFrameCandidate:
             workflow="Confsearch",
             view_type="conformer",
             frame_index=0,
-            role="NONE",
+            role="INT",
         )
-        assert result["candidate_id"] == "conf_none_frame_000"
+        assert result["candidate_id"] == "conf_int_frame_000"
 
     def test_idempotent_re_save(self, scan_task: Path) -> None:
         first = save_frame_candidate(
@@ -369,6 +369,37 @@ class TestSaveFrameCandidate:
         candidates = list_frame_candidates(scan_task)
         assert candidates["candidates"][0]["name"] == "My Custom Candidate"
 
+    def test_role_change_replaces_candidate(self, scan_task: Path) -> None:
+        """Re-saving the same frame with a different role atomically replaces."""
+        save_frame_candidate(
+            scan_task,
+            job_id="test_job_001",
+            workflow="scan",
+            view_type="scan",
+            frame_index=0,
+            role="TS",
+        )
+        result = save_frame_candidate(
+            scan_task,
+            job_id="test_job_001",
+            workflow="scan",
+            view_type="scan",
+            frame_index=0,
+            role="INT",
+        )
+        assert result["candidate_id"] == "scan_int_frame_000"
+        candidates = list_frame_candidates(scan_task)
+        assert len(candidates["candidates"]) == 1
+        assert candidates["candidates"][0]["candidate_id"] == "scan_int_frame_000"
+        # The stale TS product is removed from the manifest; its XYZ stays.
+        manifest = json.loads(
+            (scan_task / "RESULT" / "result_manifest.json").read_text(encoding="utf-8")
+        )
+        frame_products = [p for p in manifest.get("products", []) if p.get("id", "").startswith("frame_candidate_")]
+        assert len(frame_products) == 1
+        assert frame_products[0]["metadata"]["candidate_id"] == "scan_int_frame_000"
+        assert (scan_task / "RESULT" / "structures" / "scan_ts_frame_000.xyz").is_file()
+
 
 # ---------------------------------------------------------------------------
 # Validation tests
@@ -399,6 +430,19 @@ class TestValidation:
                 frame_index=0,
                 role="INVALID",
             )
+
+    def test_none_role_rejected(self, scan_task: Path) -> None:
+        """NONE was retired: it produced authority=NONE with a TAG: INT comment."""
+        with pytest.raises(FrameCandidateError, match="role"):
+            save_frame_candidate(
+                scan_task,
+                job_id="test_job_001",
+                workflow="scan",
+                view_type="scan",
+                frame_index=0,
+                role="NONE",
+            )
+        assert not (scan_task / "RESULT" / "structures").exists()
 
     def test_save_failure_writes_nothing(self, scan_task: Path) -> None:
         """FrameCandidateError on resolve should leave zero artifacts."""
@@ -663,8 +707,8 @@ class TestStructureSourcesIntegration:
         assert id_match is not None, f"candidate_id regex failed on: {comment}"
         assert id_match.group(1) == "scan_ts_frame_000"
 
-    def test_tag_none_role_parsed_as_int(self, scan_task: Path) -> None:
-        """NONE role produces TAG: INT which structure_sources sees."""
+    def test_tag_int_role_parsed_as_int(self, scan_task: Path) -> None:
+        """INT role produces TAG: INT which structure_sources sees."""
         import re
 
         tag_re = re.compile(r"\bTAG\s*[:=]\s*(TS|INT)\b", re.IGNORECASE)
@@ -674,9 +718,9 @@ class TestStructureSourcesIntegration:
             workflow="scan",
             view_type="scan",
             frame_index=0,
-            role="NONE",
+            role="INT",
         )
-        xyz_path = scan_task / "RESULT" / "structures" / "scan_none_frame_000.xyz"
+        xyz_path = scan_task / "RESULT" / "structures" / "scan_int_frame_000.xyz"
         xyz_text = xyz_path.read_text(encoding="utf-8")
         comment = xyz_text.strip().splitlines()[1]
         tag_match = tag_re.search(comment)

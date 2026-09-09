@@ -1424,7 +1424,7 @@ class V1FrameCandidateRequest(BaseModel):
 
     view_type: str  # scan | optimization | sampling | conformer
     frame_index: int
-    role: str  # TS | INT | NONE
+    role: str  # TS | INT
     name: str | None = None
     expected_revision: int | None = None
 
