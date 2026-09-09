@@ -663,6 +663,80 @@ def test_confsearch_manifest_returns_only_rank_one_geometry(service, store, tmp_
     assert entries[0]["candidate_id"] == ""
 
 
+_XYZ_TAG_FRAME_CANDIDATE = """\
+2
+TAG: TS | candidate_id=conf_ts_frame_000 | source=Confsearch | frame=000 | selection_source=manual_frame
+C 0.000000 0.000000 0.000000
+O 1.200000 0.000000 0.000000
+"""
+
+
+def test_confsearch_frame_candidates_appear_alongside_rank_one(service, store, tmp_path) -> None:
+    """Saved conformer/sampling candidates must reach the structure picker.
+
+    Regression guard for the 2026-09 review: the Confsearch policy used to
+    return only rank-1, so materialised frame candidates were invisible to
+    BatchOptimize even though they were registered in result_manifest.json.
+    """
+    work_dir = tmp_path / "uncategorized" / "confsearch_cand"
+    conf_dir = work_dir / "RESULT" / "confsearch"
+    _write(
+        conf_dir / "confsearch_manifest.json",
+        json.dumps(
+            {
+                "schema_version": "confsearch_v1",
+                "workflow": "Confsearch",
+                "conformers": [
+                    {
+                        "conf_id": "conf_0001",
+                        "geometry": "conformers/conf_0001.xyz",
+                        "energy_hartree": -10.0,
+                        "rank": 1,
+                    },
+                ],
+            }
+        ),
+    )
+    _write(conf_dir / "conformers" / "conf_0001.xyz", _XYZ_PLAIN)
+    _write_result_manifest(
+        work_dir / "RESULT",
+        [
+            {
+                "id": "frame_candidate_conf_ts_frame_000",
+                "label": "Confsearch frame 0 candidate (TS)",
+                "path": "structures/conf_ts_frame_000.xyz",
+                "kind": "structure",
+                "metadata": {
+                    "candidate_id": "conf_ts_frame_000",
+                    "role": "TS",
+                    "frame_index": 0,
+                    "source": "Confsearch",
+                    "selection_source": "manual_frame",
+                    "view_type": "conformer",
+                },
+            },
+        ],
+        workflow="Confsearch",
+    )
+    _write(work_dir / "RESULT" / "structures" / "conf_ts_frame_000.xyz", _XYZ_TAG_FRAME_CANDIDATE)
+    store.create(
+        _make_record(
+            "confsearch_cand",
+            workflow="Confsearch",
+            work_dir=work_dir,
+            molecule_name="INT_S",
+        )
+    )
+
+    entries = service.list_recent()
+    assert len(entries) == 2
+    by_path = {entry["path"]: entry for entry in entries}
+    assert "RESULT/confsearch/conformers/conf_0001.xyz" in by_path
+    cand = by_path["RESULT/structures/conf_ts_frame_000.xyz"]
+    assert cand["candidate_id"] == "conf_ts_frame_000"
+    assert cand["tag"] == "TS"
+
+
 _XYZ_TAG_TS = """\
 2
 TAG: TS | candidate_id=ts_guess_001 | source=PESsearch | frame=006

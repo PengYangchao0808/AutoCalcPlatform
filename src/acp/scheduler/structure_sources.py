@@ -283,6 +283,28 @@ def _select_manifest_structure_products(products: list[Any]) -> list[dict[str, A
     return preferred or structures
 
 
+def _select_frame_candidate_products(products: list[Any]) -> list[dict[str, Any]]:
+    """Select manually saved frame candidates (``selection_source=manual_frame``).
+
+    Frame candidates are registered by ``acp.results.frame_candidates`` with
+    product ids ``frame_candidate_*`` and metadata
+    ``selection_source=manual_frame``.  They must remain visible in the
+    structure-source panel for every workflow that allows saving them
+    (optimize/scan via the generic path; Confsearch conformer/sampling via
+    the dedicated policy).
+    """
+    selected: list[dict[str, Any]] = []
+    for item in products:
+        if not isinstance(item, dict) or not item.get("path"):
+            continue
+        if not _product_is_xyz(item):
+            continue
+        metadata = item.get("metadata")
+        if isinstance(metadata, dict) and metadata.get("selection_source") == "manual_frame":
+            selected.append(item)
+    return selected
+
+
 def _select_minimum_manifest_products(products: list[Any]) -> list[dict[str, Any]]:
     """Select exactly one final minimum from a legacy v2 structure manifest."""
     structures = _select_manifest_structure_products(products)
@@ -410,7 +432,10 @@ class StructureSourceService:
             workflow = str(entry.get("workflow") or "")
             job_id = str(entry.get("job_id") or "")
             if workflow in _CONFORMER_SEARCH_WORKFLOWS:
-                identity = "minimum"
+                # Rank-1 entries have no candidate_id and share the legacy
+                # "minimum" identity (one card per job); manually saved frame
+                # candidates keep their own identity so they survive alongside.
+                identity = str(entry.get("candidate_id") or "") or "minimum"
             elif workflow in _PESSEARCH_WORKFLOWS:
                 identity = str(entry.get("candidate_id") or entry.get("path") or "")
             else:
@@ -497,6 +522,27 @@ class StructureSourceService:
         return self._discover_generic_job(record)
 
     def _discover_confsearch_job(self, record: JobRecord) -> list[dict[str, Any]]:
+        """Return rank-1 plus any manually saved frame candidates.
+
+        The Confsearch policy historically exposed only the rank-1 conformer,
+        which made saved conformer/sampling frame candidates
+        (``conf_*_frame_*`` / ``md_*_frame_*``) invisible to the new-task
+        structure picker even though they were materialised and registered
+        in ``result_manifest.json``.
+        """
+        entries = self._confsearch_rank1_entries(record)
+        candidate_entries = self._discover_product_listings(
+            record,
+            selectors=((_RESULT_MANIFEST_FILENAME, _select_frame_candidate_products),),
+            candidate_hints=True,
+        )
+        seen_paths = {str(entry.get("path") or "") for entry in entries}
+        for entry in candidate_entries:
+            if str(entry.get("path") or "") not in seen_paths:
+                entries.append(entry)
+        return entries
+
+    def _confsearch_rank1_entries(self, record: JobRecord) -> list[dict[str, Any]]:
         """Return only rank-1 from the active Confsearch manifest."""
         root = Path(record.work_dir)
         manifest_path = find_confsearch_manifest(root)
@@ -754,6 +800,25 @@ class StructureSourceService:
         return entries
 
     def _probe_remote_confsearch(self, record: JobRecord) -> list[dict[str, Any]] | None:
+        """Return rank-1 plus any manually saved frame candidates (remote)."""
+        rank1_entries = self._probe_remote_confsearch_rank1(record)
+        if rank1_entries is None:
+            return None
+        candidate_entries = (
+            self._probe_remote_product_listings(
+                record,
+                selectors=((_RESULT_MANIFEST_FILENAME, _select_frame_candidate_products),),
+                candidate_hints=True,
+            )
+            or []
+        )
+        seen_paths = {str(entry.get("path") or "") for entry in rank1_entries}
+        for entry in candidate_entries:
+            if str(entry.get("path") or "") not in seen_paths:
+                rank1_entries.append(entry)
+        return rank1_entries
+
+    def _probe_remote_confsearch_rank1(self, record: JobRecord) -> list[dict[str, Any]] | None:
         """Return only rank-1 from a remote Confsearch manifest."""
         if self._fetcher is None:
             return None
