@@ -24,6 +24,7 @@ Author: QCcalc Team
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import datetime
@@ -37,6 +38,8 @@ from acp.scheduler.capabilities import (
 
 if TYPE_CHECKING:
     from acp.scheduler.remote.config import NodeCapabilities, RemoteNode
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "ExecutionMode",
@@ -187,23 +190,28 @@ def validate_submission_target(
     snapshot plus the job's own fields — it never mutates reservations and
     never selects a node.
 
-    Two permanent conditions are rejected here so the caller can return an
-    immediate HTTP 400 instead of letting a doomed job spin ``STARTING``:
+    Three permanent conditions are rejected here so the caller can return
+    an immediate HTTP 400 instead of letting a doomed job spin ``STARTING``:
 
     * an explicit remote ``target_node`` that is unknown
       (``code="unknown_target_node"``), disabled
       (``code="target_node_disabled"``), or cannot satisfy the derived
       requirements (``code="target_node_incapable"`` plus ``missing_*``);
-    * an auto job (no ``target_node``, no explicit ``execution_mode``) whose
-      derived software the local machine cannot run and no enabled remote
-      node can satisfy (``code="no_capable_node"`` plus ``missing_*``).
+    * an auto job (no ``target_node``, no explicit ``execution_mode``)
+      whose derived software the local machine cannot run and no enabled
+      remote node can satisfy (``code="no_capable_node"`` plus
+      ``missing_*``) — including the zero-enabled-remote case: without an
+      admin configuring a node, retrying can never succeed;
+    * an explicit ``execution_mode="remote"`` job whose derived
+      requirements or tags no enabled remote node can satisfy — the same
+      ``no_capable_node`` rejection, because local satisfaction is
+      irrelevant when the user explicitly chose remote execution.
 
-    Local paths (``execution_mode="local"`` or ``target_node="local"``) are
-    never capability-checked (design §3.1).  Explicit ``execution_mode``
-    keeps its legacy dispatch behaviour (design §3.1 ③) — only the
-    mode-free auto case is gated here.  Capacity conditions (nodes present
-    but busy/offline/degraded) are deliberately **not** rejected: the
-    dispatch backstop keeps those ``STARTING`` and retries for capacity.
+    Local paths (``execution_mode="local"`` or ``target_node="local"``)
+    are never capability-checked (design §3.1).  Capacity conditions
+    (nodes present but busy/offline/degraded) are deliberately **not**
+    rejected: the dispatch backstop keeps those ``STARTING`` and retries
+    for capacity.
 
     ``derive_fn`` and ``local_satisfies_fn`` default to the capabilities
     module's functions and are injectable so tests stay deterministic
@@ -218,7 +226,8 @@ def validate_submission_target(
 
     Raises:
         ExecutionTargetError: Unknown/disabled/incapable explicit target.
-        NoCapableNodeError: Auto job with no satisfying remote node.
+        NoCapableNodeError: Auto or explicit-remote job with no satisfying
+            enabled remote node (zero enabled remotes included).
     """
     from acp.scheduler import capabilities as _capabilities
 
@@ -267,17 +276,29 @@ def validate_submission_target(
                 )
         return
 
-    # Auto (no explicit target, no explicit mode): D14 escalation guard.
-    if mode is not None or not derived:
-        return
-    if local_ok(derived):
-        return  # dispatch runs this on the local machine (tags ignored, E3).
+    if mode == "remote":
+        # Explicit remote mode (no pinned target): dispatch filters
+        # candidates through the same required/tags match — mirror that
+        # gate here.  Local satisfaction is irrelevant: the job is going
+        # remote whether or not the local machine could run it.  Nothing
+        # derivable and no tags → pure least-loaded selection, ungated.
+        if not (derived or tags):
+            return
+    else:
+        # Auto (no explicit target, no explicit mode): D14 escalation
+        # guard — local execution is a real outcome, so a locally
+        # satisfiable requirement passes unchecked (tags ignored, E3).
+        if not derived:
+            return
+        if local_ok(derived):
+            return
 
-    # Escalation would go remote: reject only when enabled remote nodes
-    # exist but none can satisfy (a permanent, not capacity, condition).
+    # The job is going remote (auto escalation or explicit remote
+    # choice).  Reject when no enabled remote node can satisfy the
+    # requirements — a permanent, not capacity, condition.  Zero enabled
+    # remotes counts as "no node can satisfy": without an admin adding
+    # one, retrying can never succeed.
     enabled_remotes = [n for n in registry.nodes if n.kind == "remote" and n.enabled]
-    if not enabled_remotes:
-        return  # no remote capability configured — dispatch backstop governs.
     for remote in enabled_remotes:
         match = matches_capabilities(
             derived,
@@ -415,6 +436,28 @@ class NodeRegistry:
         """Idempotently drop a job's reservation on whichever node holds it."""
         for node_name in list(self.reservations):
             self.release(node_name, job_id)
+
+    def prefetch_statuses(self) -> None:
+        """Warm the live-status cache for every enabled remote node.
+
+        Calls the wired ``status_provider`` once per enabled remote node
+        **before** the caller takes the manager lock, so a status-cache
+        miss (a live SSH probe with a 30 s timeout) fills here instead of
+        blocking every lock-holding operation during ``select_remote``;
+        the in-lock selection then only hits the warmed cache.  Probe
+        failures are swallowed and logged — the in-lock fallback still
+        consults the provider and treats unreachable nodes as offline.
+        """
+        provider = self.status_provider
+        if provider is None:
+            return
+        for spec in self._remotes:
+            if not spec.enabled:
+                continue
+            try:
+                provider(spec.name)
+            except Exception:
+                logger.warning("Status prefetch failed for node %s", spec.name, exc_info=True)
 
     def derive_local_state(self, running_jobs: int) -> NodeState:
         """Local node state derived from the manager's own job table."""

@@ -493,7 +493,9 @@ def test_api_rejects_conflicting_execution_request(tmp_path: Path) -> None:
             json={"workflow": "fake", "execution_mode": "remote", "target_node": "local"},
         )
         assert resp.status_code == 400
-        assert "conflicts" in resp.json()["detail"]
+        detail = resp.json()["detail"]
+        # Detail shape is API-version-dependent (plain string vs D12 dict).
+        assert "conflicts" in (detail["message"] if isinstance(detail, dict) else detail)
 
         resp = client.post(
             "/api/v1/jobs",
@@ -586,14 +588,61 @@ def test_validate_submission_target_auto_capacity_is_not_rejected(
 
 
 @requires_remote_config
-def test_validate_submission_target_auto_zero_remote_nodes_is_deferred(
+def test_validate_submission_target_auto_zero_remote_nodes_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # No remote capability configured → dispatch backstop governs (a job that
-    # cannot run locally only spins waiting for capacity, never fails fast).
+    # m8: zero enabled remotes + software the local machine lacks is a
+    # permanent condition — fail fast at creation (HTTP 400) instead of
+    # letting the job spin STARTING on the dispatch capacity-retry loop.
     monkeypatch.setattr("acp.scheduler.capabilities.local_satisfies", lambda required: False)
     reg = NodeRegistry(local_max_jobs=1, remote_nodes=[])
+    from acp.scheduler.capabilities import NoCapableNodeError
+
+    with pytest.raises(NoCapableNodeError) as ei:
+        validate_submission_target(_confsearch_spec(), registry=reg)
+    assert set(ei.value.missing_software) == {"xtb", "crest"}
+
+
+@requires_remote_config
+def test_validate_submission_target_auto_zero_remote_local_satisfies_passes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Local execution is a real auto outcome — zero remotes stays creatable.
+    monkeypatch.setattr("acp.scheduler.capabilities.local_satisfies", lambda required: True)
+    reg = NodeRegistry(local_max_jobs=1, remote_nodes=[])
     validate_submission_target(_confsearch_spec(), registry=reg)
+
+
+@requires_remote_config
+def test_validate_submission_target_explicit_remote_no_capable_node(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from acp.scheduler.capabilities import NoCapableNodeError
+
+    # Local satisfaction is irrelevant for an explicit remote choice —
+    # the job is going remote regardless (M2b).
+    monkeypatch.setattr("acp.scheduler.capabilities.local_satisfies", lambda required: True)
+    reg = NodeRegistry(local_max_jobs=1, remote_nodes=[_cap_node("xtb-only", software=("xtb",))])
+    reg.status_provider = lambda name: _status(name, running=0)
+    with pytest.raises(NoCapableNodeError) as ei:
+        validate_submission_target(_confsearch_spec(execution_mode="remote"), registry=reg)
+    assert ei.value.missing_software == ("crest",)
+
+
+@requires_remote_config
+def test_validate_submission_target_explicit_remote_capable_node_passes() -> None:
+    reg = NodeRegistry(local_max_jobs=1, remote_nodes=[_cap_node("ok", software=("xtb", "crest"))])
+    reg.status_provider = lambda name: _status(name, running=0)
+    validate_submission_target(_confsearch_spec(execution_mode="remote"), registry=reg)
+
+
+@requires_remote_config
+def test_validate_submission_target_explicit_remote_zero_nodes_rejected() -> None:
+    from acp.scheduler.capabilities import NoCapableNodeError
+
+    reg = NodeRegistry(local_max_jobs=1, remote_nodes=[])
+    with pytest.raises(NoCapableNodeError):
+        validate_submission_target(_confsearch_spec(execution_mode="remote"), registry=reg)
 
 
 # --------------------------------------------------------------------- #
@@ -999,9 +1048,15 @@ def test_auto_no_capable_node_raises_no_capable_error(
 
 
 class _FakeRemoteRunner:
-    def __init__(self, lsf_id: str = "424242", error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        lsf_id: str = "424242",
+        error: Exception | None = None,
+        lsf_status: str = "running",
+    ) -> None:
         self.lsf_id = lsf_id
         self.error = error
+        self.lsf_status = lsf_status
 
     def submit_remote(self, record, event_log, target_node=None) -> str:
         if self.error is not None:
@@ -1009,6 +1064,13 @@ class _FakeRemoteRunner:
         return self.lsf_id
 
     def poll_remote(self, record, event_log, cancel_event):
+        # Mirrors RemoteJobRunner.poll_remote: the record flips to RUNNING
+        # exactly when bjobs reports the LSF RUN state.
+        if self.lsf_status == "running" and record.status in (
+            JobStatus.PENDING,
+            JobStatus.PAUSED,
+        ):
+            record.status = JobStatus.RUNNING
         return (False, None)
 
 
@@ -1068,19 +1130,39 @@ def test_submit_failure_releases_reservation(
 
 
 @requires_remote_config
-def test_first_successful_remote_poll_releases_reservation(
+def test_poll_releases_reservation_once_lsf_run_observed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     mgr = _manager_for_remote_submit(tmp_path, monkeypatch)
     try:
-        mgr.remote_runner = _FakeRemoteRunner()  # type: ignore[assignment]
+        mgr.remote_runner = _FakeRemoteRunner(lsf_status="running")  # type: ignore[assignment]
         _seed_queued(mgr, tmp_path, "sub3", _confsearch_spec())
         mgr._submit_job("sub3")
         assert mgr.registry.reservations.get("compute-01") == {"sub3"}
-        # First successful poll: the LSF-side running count takes over.
+        # LSF reports RUN: the node's running-jobs probe now counts this
+        # job — the select-window reservation is redundant.
         mgr._poll_job("sub3")
         assert "compute-01" not in mgr.registry.reservations
-        assert mgr.store.get("sub3").status == JobStatus.PENDING
+        assert mgr.store.get("sub3").status == JobStatus.RUNNING
+    finally:
+        mgr.shutdown()
+
+
+@requires_remote_config
+def test_poll_keeps_reservation_while_lsf_pending(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mgr = _manager_for_remote_submit(tmp_path, monkeypatch)
+    try:
+        mgr.remote_runner = _FakeRemoteRunner(lsf_status="pending")  # type: ignore[assignment]
+        _seed_queued(mgr, tmp_path, "pend-1", _confsearch_spec())
+        mgr._submit_job("pend-1")
+        assert mgr.registry.reservations.get("compute-01") == {"pend-1"}
+        # PEND does not count toward the node's running-jobs probe — an
+        # early release would under-count in-flight work (m1).
+        mgr._poll_job("pend-1")
+        assert mgr.registry.reservations.get("compute-01") == {"pend-1"}
+        assert mgr.store.get("pend-1").status == JobStatus.PENDING
     finally:
         mgr.shutdown()
 
@@ -1162,5 +1244,170 @@ def test_startup_rebuilds_reservations_from_persisted_targets(tmp_path: Path) ->
         mgr = JobManager(run_root=tmp_path, store=store, remote_config=cfg)
     try:
         assert mgr.registry.reservations.get("compute-01") == {"res-1"}
+    finally:
+        mgr.shutdown()
+
+
+# --------------------------------------------------------------------- #
+# Post-review batch ① (M1/M2/m2/m3): lock-external status prefetch,
+# explicit-remote capability parity, reservation coverage for pinned
+# dispatches, and null node_tags tolerance.
+# --------------------------------------------------------------------- #
+
+
+class _InstrumentedLock:
+    """Context-manager wrapper recording whether the wrapped lock is held."""
+
+    def __init__(self, inner) -> None:
+        self._inner = inner
+        self.held = False
+
+    def __enter__(self) -> None:
+        self._inner.acquire()
+        self.held = True
+
+    def __exit__(self, *exc: object) -> None:
+        self.held = False
+        self._inner.release()
+
+
+@requires_remote_config
+def test_auto_selection_probes_node_status_outside_manager_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("acp.scheduler.manager.local_satisfies", lambda required: False)
+    node = _real_node("compute-01")
+    node.capabilities = NodeCapabilities(software=("xtb", "crest"))
+    cfg = RemoteExecutionConfig(execution_mode="local", nodes=[node])
+    mgr = JobManager(run_root=tmp_path, remote_config=cfg)
+    try:
+        lock_probe = _InstrumentedLock(mgr._lock)
+        mgr._lock = lock_probe  # type: ignore[assignment]
+        cache: dict[str, object] = {}
+        misses: list[bool] = []  # lock-held flag per cache-miss probe
+
+        def caching_provider(name: str):
+            # Models NodeManager.get_node_status: one network probe per
+            # node per TTL window; repeat calls are cache hits.
+            if name not in cache:
+                misses.append(lock_probe.held)
+                cache[name] = _status(name, running=0)
+            return cache[name]
+
+        mgr.registry.status_provider = caching_provider
+        rec = JobRecord(id="lock-1", spec=_confsearch_spec())
+        assert mgr._resolve_execution_target(rec).name == "compute-01"
+        assert misses  # the node status was actually probed
+        assert not any(misses)  # …and never while holding the manager lock
+    finally:
+        mgr.shutdown()
+
+
+@requires_remote_config
+def test_explicit_remote_mode_filters_by_derived_requirements(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from acp.scheduler.capabilities import NoCapableNodeError
+
+    mgr = _manager_for_remote_submit(tmp_path, monkeypatch, software=("orca",))
+    try:
+        rec = JobRecord(id="rem-f1", spec=_confsearch_spec(execution_mode="remote"))
+        with pytest.raises(NoCapableNodeError):
+            mgr._resolve_execution_target(rec)
+        assert mgr.registry.reservations == {}
+    finally:
+        mgr.shutdown()
+
+
+@requires_remote_config
+def test_explicit_remote_mode_filters_by_node_tags(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from acp.scheduler.capabilities import NoCapableNodeError
+
+    mgr = _manager_for_remote_submit(tmp_path, monkeypatch)  # declares no tags
+    try:
+        rec = JobRecord(
+            id="rem-f2", spec=_confsearch_spec(execution_mode="remote", node_tags=["gpu"])
+        )
+        with pytest.raises(NoCapableNodeError) as ei:
+            mgr._resolve_execution_target(rec)
+        assert ei.value.missing_tags == ("gpu",)
+    finally:
+        mgr.shutdown()
+
+
+@requires_remote_config
+def test_explicit_target_dispatch_holds_reservation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mgr = _manager_for_remote_submit(tmp_path, monkeypatch)
+    try:
+        mgr.remote_runner = _FakeRemoteRunner()  # type: ignore[assignment]
+        _seed_queued(mgr, tmp_path, "pin-1", _confsearch_spec(target_node="compute-01"))
+        assert mgr._submit_job("pin-1") is True
+        assert mgr.registry.reservations.get("compute-01") == {"pin-1"}
+    finally:
+        mgr.shutdown()
+
+
+@requires_remote_config
+def test_explicit_remote_mode_dispatch_holds_reservation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mgr = _manager_for_remote_submit(tmp_path, monkeypatch)
+    try:
+        mgr.remote_runner = _FakeRemoteRunner()  # type: ignore[assignment]
+        _seed_queued(mgr, tmp_path, "rem-1", _confsearch_spec(execution_mode="remote"))
+        assert mgr._submit_job("rem-1") is True
+        assert mgr.registry.reservations.get("compute-01") == {"rem-1"}
+    finally:
+        mgr.shutdown()
+
+
+@requires_remote_config
+def test_concurrent_explicit_target_dispatches_respect_max_jobs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("acp.scheduler.manager.local_satisfies", lambda required: False)
+    node = _real_node("compute-01", max_jobs=1)
+    node.capabilities = NodeCapabilities(software=("xtb", "crest"))
+    cfg = RemoteExecutionConfig(execution_mode="local", nodes=[node])
+    mgr = JobManager(run_root=tmp_path, remote_config=cfg)
+    try:
+        _idle_provider(mgr.registry)
+        mgr.remote_runner = _FakeRemoteRunner()  # type: ignore[assignment]
+        _seed_queued(mgr, tmp_path, "pin-a", _confsearch_spec(target_node="compute-01"))
+        _seed_queued(mgr, tmp_path, "pin-b", _confsearch_spec(target_node="compute-01"))
+        assert mgr._submit_job("pin-a") is True
+        assert mgr.registry.reservations.get("compute-01") == {"pin-a"}
+        # max_jobs=1 and pin-a's LSF job is not running yet: its in-flight
+        # reservation must block the second explicit dispatch (soft cap).
+        with pytest.raises(ExecutionCapacityUnavailable):
+            mgr._submit_job("pin-b")
+        assert mgr.registry.reservations.get("compute-01") == {"pin-a"}
+    finally:
+        mgr.shutdown()
+
+
+@requires_remote_config
+def test_null_node_tags_row_dispatches_without_crash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mgr = _manager_for_remote_submit(tmp_path, monkeypatch)
+    try:
+        # A persisted spec_json with "node_tags": null deserializes to
+        # node_tags=None (the store's .get default only covers a missing
+        # key) — dispatch must not crash on frozenset(None).
+        _seed_queued(mgr, tmp_path, "null-tags", _confsearch_spec(node_tags=None))
+        reloaded = mgr.store.get("null-tags")
+        assert reloaded is not None and reloaded.spec.node_tags is None
+        assert mgr._resolve_execution_target(reloaded).name == "compute-01"
+
+        pinned = JobRecord(
+            id="null-tags-2",
+            spec=_confsearch_spec(target_node="compute-01", node_tags=None),
+        )
+        assert mgr._resolve_execution_target(pinned).name == "compute-01"
     finally:
         mgr.shutdown()

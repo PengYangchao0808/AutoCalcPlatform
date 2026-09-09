@@ -1854,7 +1854,7 @@ class JobManager:
                 "available (no enabled remote nodes configured)"
             )
         try:
-            self._ensure_remote_capacity(target)
+            self._ensure_remote_capacity(record, target)
             lsf_job_id = self.remote_runner.submit_remote(
                 record, event_log, target_node=target.name
             )
@@ -1892,10 +1892,16 @@ class JobManager:
         ``target_node`` nor an ``execution_mode``: an empty derived
         requirement follows the server default; a non-empty requirement
         the local machine satisfies stays local; anything else escalates
-        to a capability-matched remote node (select + reserve atomically
-        under the manager lock).  The derived set is stashed on
-        ``record.result["required_software"]`` for audit (design §1.3) and
-        persisted by the following :meth:`_record_execution_target` call.
+        to a capability-matched remote node.  An explicit
+        ``execution_mode="remote"`` (or a remote server default) selects
+        through the same capability/tag filter — only an empty derived
+        set keeps the legacy pure least-loaded selection.  Every remote
+        selection is prefetched, then selected + reserved atomically
+        under the manager lock (design §3.3); explicit remote targets
+        occupy the same select→submit reservation.  The derived set is
+        stashed on ``record.result["required_software"]`` for audit
+        (design §1.3) and persisted by the following
+        :meth:`_record_execution_target` call.
         """
         spec = record.spec
         validate_execution_request(spec)
@@ -1905,31 +1911,65 @@ class JobManager:
             result["required_software"] = sorted(derived)
             record.result = result
         if spec.target_node:
-            return self.registry.require(
+            target = self.registry.require(
                 spec.target_node,
                 required=derived,
-                required_tags=frozenset(spec.node_tags),
+                required_tags=frozenset(spec.node_tags or ()),
             )
+            if target.kind == "remote":
+                with self._lock:
+                    self.registry.reserve(target.name, record.id)
+            return target
         if spec.execution_mode is None and derived:
             if local_satisfies(derived):
                 return self.registry.local
-            with self._lock:
-                try:
-                    target = self.registry.select_remote(
-                        required=derived,
-                        required_tags=frozenset(spec.node_tags),
-                        affinity_node=self._execution_affinity(record),
-                    )
-                except ExecutionTargetError as exc:
-                    # Zero enabled remote nodes: the match set is trivially
-                    # empty — same no-capable semantics as an empty match.
-                    raise NoCapableNodeError(str(exc)) from exc
-                self.registry.reserve(target.name, record.id)
-            return target
+            return self._select_and_reserve_remote(
+                record,
+                required=derived,
+                required_tags=frozenset(spec.node_tags or ()),
+            )
         mode = spec.execution_mode or self.default_execution_mode
         if mode == "local":
             return self.registry.local
-        return self.registry.select_remote()
+        return self._select_and_reserve_remote(
+            record,
+            required=derived,
+            required_tags=frozenset(spec.node_tags or ()),
+        )
+
+    def _select_and_reserve_remote(
+        self,
+        record: JobRecord,
+        *,
+        required: frozenset[str],
+        required_tags: frozenset[str],
+    ) -> NodeSpec:
+        """Select + reserve a remote node atomically under the manager lock.
+
+        Node statuses are prefetched **outside** the lock first: a status
+        cache miss means a live SSH probe (30 s timeout × retries), which
+        must never block lock-holding operations — after the prefetch the
+        in-lock ``select_remote`` only hits the warmed cache.
+
+        Raises:
+            NoCapableNodeError: No enabled remote node is configured or
+                none satisfies the requirements (permanent; the dispatch
+                loop degrades it to a capacity retry, R13).
+        """
+        self.registry.prefetch_statuses()
+        with self._lock:
+            try:
+                target = self.registry.select_remote(
+                    required=required,
+                    required_tags=required_tags,
+                    affinity_node=self._execution_affinity(record),
+                )
+            except ExecutionTargetError as exc:
+                # Zero enabled remote nodes: the match set is trivially
+                # empty — same no-capable semantics as an empty match.
+                raise NoCapableNodeError(str(exc)) from exc
+            self.registry.reserve(target.name, record.id)
+        return target
 
     def _execution_affinity(self, record: JobRecord) -> str | None:
         """Preferred remote node for an auto job (design §3.4, D6/D15).
@@ -2023,22 +2063,28 @@ class JobManager:
                 f"Local execution at capacity ({running}/{limit}); waiting for a slot"
             )
 
-    def _ensure_remote_capacity(self, target: NodeSpec) -> None:
-        """Capacity check for an explicitly pinned remote node.
+    def _ensure_remote_capacity(self, record: JobRecord, target: NodeSpec) -> None:
+        """Capacity check for a remote dispatch target.
 
         Auto-selected nodes are already capacity-filtered by
-        ``NodeRegistry.select_remote``; this covers the explicit
-        ``target_node`` path.  Offline/full targets are temporary
-        conditions — the caller retries rather than failing the job.
+        ``NodeRegistry.select_remote``; this is the submit-time gate for
+        every remote target.  In-flight reservations held by *other*
+        jobs count toward the load — the LSF running count only sees
+        submitted jobs, so without this two concurrent explicit
+        dispatches to the same node would oversubscribe it.  Offline/full
+        targets are temporary conditions — the caller retries rather
+        than failing the job.
         """
         running = self.registry.remote_running_jobs(target.name)
         if running is None:
             raise ExecutionCapacityUnavailable(
                 f"target node '{target.name}' is offline or unreachable"
             )
-        if running >= target.max_jobs:
+        in_flight = self.registry.reservations.get(target.name, set()) - {record.id}
+        if running + len(in_flight) >= target.max_jobs:
             raise ExecutionCapacityUnavailable(
-                f"target node '{target.name}' is at capacity ({running}/{target.max_jobs})"
+                f"target node '{target.name}' is at capacity "
+                f"({running + len(in_flight)}/{target.max_jobs})"
             )
 
     def _poll_job(self, job_id: str) -> None:
@@ -2057,10 +2103,14 @@ class JobManager:
                     record, event_log, cancel_event
                 )
                 self._poll_failures.pop(job_id, None)
-                # First successful poll reached bjobs: the LSF-side running
-                # count now includes this job — the select-window
-                # reservation is redundant.
-                self._release_reservation(job_id)
+                # Release the select→submit reservation only once LSF has
+                # actually started the job: PEND/PSUSP jobs do not count
+                # toward the node's running-jobs probe, so an earlier
+                # release would under-count in-flight work.  poll_remote
+                # flips the record to RUNNING exactly when it observes
+                # the LSF RUN state; terminal transitions release below.
+                if record.status == JobStatus.RUNNING:
+                    self._release_reservation(job_id)
             except Exception as exc:
                 # Transport-layer failure (SSH/bjobs unreachable).  This is
                 # NOT a job failure: keep the status, do not cancel, do not
