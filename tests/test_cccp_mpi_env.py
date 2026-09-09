@@ -166,7 +166,9 @@ def test_orca_runtime_env_without_lib_sibling(tmp_path: Path) -> None:
 
     assert env is not None
     assert env["PATH"].split(os.pathsep)[0] == str(mpirun.parent)
-    assert "LD_LIBRARY_PATH" not in env
+    assert str(tmp_path / "ompi" / "lib") not in env.get("LD_LIBRARY_PATH", ""), (
+        "MPI lib dir must not be injected when no ../lib sibling exists"
+    )
 
 
 def test_orca_runtime_env_keeps_explicit_ld_library_path(tmp_path: Path) -> None:
