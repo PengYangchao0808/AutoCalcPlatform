@@ -2252,7 +2252,7 @@ dry_run 贯穿全链路：work_dir / DB / full_cleanup / API 端点均支持预�
  | ✅ 由阶段 8 补齐（2026-09-08，W4-T11）：提交向导 modal-node-select 三态下拉 + 标签 chips + 徽标 + 置灰原因，数据源 POST /nodes/matching；本节下方 UI 草图即为该实现遵循的设计规范
 
  | 6.5 前端 API 调用
- | ✅ 数据流由阶段 8 接入（向导变更防抖 → POST /nodes/matching → 渲染，前端只消费后端结果）；下方 fetchNodes/submitJob/pingNode 为早期示意，资源抽屉的 loadNodes 与测试连接早已生效。载荷接线（target_node/node_tags 随提交发出）属 W4-T12，进行中
+ | ✅ 数据流由阶段 8 接入（向导变更防抖 → POST /nodes/matching → 渲染，前端只消费后端结果）；下方 fetchNodes/submitJob/pingNode 为早期示意，资源抽屉的 loadNodes 与测试连接早已生效。载荷接线（target_node/node_tags 随提交 body 发出）已由 W4-T12 完成（d8de072，HEAD 14fe141）：applyNodeSelectionToBody 覆盖向导五支路提交、stage 预选与 continue 改选控件均落地，test_frontend_sync 载荷锁保护
 
 步骤 6.1：节点管理 API ✓ 完成
 
@@ -2401,7 +2401,7 @@ UI 组件示意：
 
 修改 frontend/ACP_Workbench_v2.html
 
-实现说明：fetchNodes/submitJob/pingNode 为 2026-07 阶段的示意代码。实际现状：loadNodes 拉取 GET /api/v1/nodes 用于资源抽屉节点面板与测试连接（早已生效）；2026-09-08（阶段 8 W4-T11）提交向导改由 refreshNodeMatching 防抖调用 POST /api/v1/nodes/matching 渲染节点选择器（matching 响应即提交期判定，同函数）；submit 载荷携带 target_node/node_tags 属 W4-T12（进行中），其实现以 v1/v2 校验 helper（validate_submission_target）为准。
+实现说明：fetchNodes/submitJob/pingNode 为 2026-07 阶段的示意代码。实际现状：loadNodes 拉取 GET /api/v1/nodes 用于资源抽屉节点面板与测试连接（早已生效）；2026-09-08（阶段 8 W4-T11）提交向导改由 refreshNodeMatching 防抖调用 POST /api/v1/nodes/matching 渲染节点选择器（matching 响应即提交期判定，同函数）；submit 载荷携带 target_node/node_tags 已由 W4-T12 落地（d8de072，HEAD 14fe141）：applyNodeSelectionToBody 统一接入向导五支路（NMR / mechanism / 逐结构循环 / PESsearch 内联 / stage 工作流，stage 链传 requireUserChoice），stage 源任务显式 pin 经 preselectNodeFromSourceJob 镜像预选，continue 改选经 continueJob 以 {target_node} body 提交；载荷由 v1/v2 校验 helper（validate_submission_target）把关，test_frontend_sync 载荷锁（test_submit_payload_carries_node_selection / test_continue_node_override_and_stage_preselect_lock）锁定。
 
 // 获取节点列表
 async function fetchNodes() {
@@ -2586,7 +2586,7 @@ queue：per-node 覆盖经提交路径传入 build_lsf_script_spec（queue=node.
 
 📋 阶段 8 代码评审报告
 
-完成日期：2026-09-08 ｜ 计划：.omo/plans/node-selection-at-submission.md（T1-T11 已提交，HEAD bfccefe；T12 前端载荷接线进行中，未含于本报告）
+完成日期：2026-09-08，2026-09-09 补录 T12 后为完成态（HEAD 14fe141） ｜ 计划：.omo/plans/node-selection-at-submission.md（T1-T12 已全部提交；T12 前端载荷接线 d8de072 已合并，见下方测试清单与"前端载荷接线"补记）
 
 核心文件：remote/config.py（声明/queue 解析 + 枚举） / remote/node_manager.py（三态字段 + 探测） / scheduler/capabilities.py（derive/matches/local_satisfies/is_degraded + NoCapableNodeError） / scheduler/nodes.py（NodeRegistry 过滤/亲和/预留 + 校验 helper） / scheduler/manager.py（_resolve_execution_target 编排 + 预留重建） / scheduler/jobs.py（JobSpec.node_tags） / api/v1_routes.py + v2_routes.py（400 与 per-item 契约） / scheduler/migrations.py + store.py + tasks.py + remote/runner.py（node_id 持久化） / frontend/ACP_Workbench_v2.html（提交向导 modal-node-select，W4-T11）
 
@@ -2604,7 +2604,7 @@ queue=None 字节兼容：test_remote_phase2 锁定，脚本输出零回归。
 
 🔬 测试（mock，无需真实节点与 QC 软件）
 
-tests/test_node_capabilities.py（T1：解析/去重/未知名丢弃 + 声明枚举 == 探测脚本漂移锁）、tests/test_capabilities.py（T3：每行推导精确 frozenset 断言 + matches 四象限 + local_satisfies monkeypatch + is_degraded 三用例 + 错误类字段；docstring 附每行 file:line 证据）、tests/test_acp_execution_target.py（registry 过滤/预留并发与重启重建/创建即 400 + 调度后盾漂移）、tests/test_acp_job_operations.py（continue 覆盖/rerun 亲和）、tests/test_remote_phase2.py（queue=None 字节一致）、tests/test_acp_api_v1.py -k matching（预览端点）、tests/test_f4_scope_audit.py（migration 013 表结构）、tests/test_frontend_sync.py::test_node_selector_structure_and_disabled_logic_lock（T11 结构锁，i18n/载荷锁归 T12）。
+tests/test_node_capabilities.py（T1：解析/去重/未知名丢弃 + 声明枚举 == 探测脚本漂移锁）、tests/test_capabilities.py（T3：每行推导精确 frozenset 断言 + matches 四象限 + local_satisfies monkeypatch + is_degraded 三用例 + 错误类字段；docstring 附每行 file:line 证据）、tests/test_acp_execution_target.py（registry 过滤/预留并发与重启重建/创建即 400 + 调度后盾漂移）、tests/test_acp_job_operations.py（continue 覆盖/rerun 亲和）、tests/test_remote_phase2.py（queue=None 字节一致）、tests/test_acp_api_v1.py -k matching（预览端点）、tests/test_f4_scope_audit.py（migration 013 表结构）、tests/test_frontend_sync.py::test_node_selector_structure_and_disabled_logic_lock（T11 结构锁）+ test_node_selector_i18n_keys_complete_across_locales + test_submit_payload_carries_node_selection + test_continue_node_override_and_stage_preselect_lock（T12 i18n/载荷/stage 预选与 continue 改选锁，d8de072）。
 
 📌 技术债记录
 
@@ -2616,7 +2616,7 @@ WORKFLOW_CATALOG.requires_binaries 漂移：各工作流目录条目仍带 requi
 
 错误码非枚举：ExecutionTargetError.code 为 str | None（NoCapableNodeError.code 固定字符串 "no_capable_node"），无 Literal/枚举类型约束，后续可收敛为共享枚举防拼写漂移（API 契约以现有字符串为准）。
 
-前端载荷接线：提交 body 携带 target_node/node_tags、stage 预选、continue 改选控件由 W4-T12 完成；T11 仅渲染与选择器交互，已由 test_frontend_sync 结构锁保护。
+前端载荷接线（2026-09-09 补记，W4-T12 已于 d8de072 合并，HEAD 14fe141）：提交 body 携带 target_node/node_tags（applyNodeSelectionToBody 覆盖向导五支路）、stage 源任务显式 pin 预选（preselectNodeFromSourceJob，仅镜像显式 pin）、continue 改选（continueJob 以 {target_node} body 提交）均已实现；T11 渲染与选择器交互由结构锁保护，T12 载荷/改选行为由 test_submit_payload_carries_node_selection 与 test_continue_node_override_and_stage_preselect_lock 锁定。
 
 10. 阶段 9：文档与部署
 

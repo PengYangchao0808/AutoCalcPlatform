@@ -345,7 +345,7 @@ cluster:
   queue: normal        # Cluster queue name
   walltime: ""         # Job walltime (HH:MM); empty = no #BSUB -W run-time limit
   extra_flags: ""      # Additional LSF/PBS flags
-  nodes: []            # Remote compute nodes (see plan §13 for example)
+  nodes: []            # Remote compute nodes (see plan §14 for example)
   # Per-node QC binary declaration (bootstrap_node creates these as ~/bin
   # symlinks so binaries resolve regardless of the cluster's login PATH):
   # nodes:
