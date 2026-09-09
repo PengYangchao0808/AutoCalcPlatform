@@ -124,7 +124,7 @@ ACP_V1_20260811/
 | Job file layout spec | `docs/ACP_Job_File_Layout_Spec.md` | Authoritative job/work_dir file-layout contract (scheduler + frontend file tree) |
 | Mechanism research doc | `docs/ACP_Mechanism_Research_DevDoc.md` | **RETIRED** mechanism study S0→S4 design (native-first, RPH parity); kept for reference only |
 | Input parsing | `src/cccp/io/input_handler.py` | SMILES→RDKit embed; XYZ/GJF/LOG/OUT parse (442 lines) |
-| ACP intake parsers | `src/acp/intake/parsers.py` | 6 format parsers: XYZ/SDF/MOL/GJF/INP/SMILES (565 lines) |
+| ACP intake parsers | `src/acp/intake/parsers.py` | Format detection/parsing for XYZ/SDF/MOL/GJF/INP/Gaussian/ORCA LOG/OUT/SMILES; SMILES fallback is bounded before RDKit (823 lines) |
 | RDKit embedding | `src/acp/chem/embedding.py` | SMILES→RDKit embed, charge assignment, XYZ tools (517 lines) |
 | Constants / units | `src/cccp/utils/constants.py` | HARTREE_TO_KCAL, element masses (38 lines) |
 | NMR models | `src/acp/nmr/models.py` | NmrConfig, ExperimentalNmr/Peak, ConformerShielding, NmrReport (385 lines) |

@@ -3,7 +3,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
+import numpy as np
+from numpy.typing import NDArray
+
 from acp.intake.models import StructureAsset, StructureParseResult
+from cccp.utils.geometry_tools import LogParser
 
 _ASSET_COUNTER = 0
 
@@ -17,6 +21,12 @@ def _next_asset_id() -> str:
 def _reset_asset_counter() -> None:
     global _ASSET_COUNTER
     _ASSET_COUNTER = 0
+
+# Bounds for SMILES fallback — rejects oversized content before RDKit is called.
+# These protect against large unknown text (e.g. log files) leaking into the
+# SMILES parse path via detect_and_parse's fallback chain.
+_SMILES_MAX_CONTENT_BYTES = 100 * 1024  # 100 KB
+_SMILES_MAX_LINES = 500
 
 
 def _hill_formula(symbols: list[str]) -> str:
@@ -54,12 +64,33 @@ _EXT_FORMAT_MAP = {
     "gjf": "gjf",
     "com": "gjf",
     "inp": "inp",
+    "log": "log",
+    "out": "log",
 }
 
-# Content-detection priority (§4.1): sdf -> mol -> xyz -> gjf -> inp -> smiles
-_DETECT_ORDER = ("sdf", "mol", "xyz", "gjf", "inp", "smiles")
+# Content-detection priority (§4.1): sdf -> mol -> log -> xyz -> gjf -> inp -> smiles
+_DETECT_ORDER = ("sdf", "mol", "log", "xyz", "gjf", "inp", "smiles")
 
 _ORCA_BLOCK_RE = re.compile(r"^\*\s*(xyz|int|gzmt|internal)\b", re.IGNORECASE | re.MULTILINE)
+_GAUSSIAN_GEOM_RE = re.compile(
+    r"(?:Standard|Input)\s+orientation:.*?Coordinates\s*\(Angstroms\)",
+    re.IGNORECASE | re.DOTALL,
+)
+_ORCA_GEOM_RE = re.compile(
+    r"CARTESIAN\s+COORDINATES\s+\((?:ANGSTROEM|A\.U\.)\)", re.IGNORECASE
+)
+_QC_CHARGE_MULT_RE = re.compile(
+    r"\bCharge\s*=\s*(-?\d+)\s+Multiplicity\s*=\s*(\d+)",
+    re.IGNORECASE,
+)
+_QC_CHARGE_RE = re.compile(
+    r"^\s*(?:Total\s+)?Charge\b[^\n]*?(-?\d+)\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_QC_MULTIPLICITY_RE = re.compile(
+    r"^\s*(?:Multiplicity|Mult)\b[^\n]*?(\d+)\s*$",
+    re.IGNORECASE | re.MULTILINE,
+)
 
 
 def _has_route_line(content: str) -> bool:
@@ -70,6 +101,11 @@ def _has_route_line(content: str) -> bool:
 def _has_orca_block_marker(content: str) -> bool:
     """True if an ORCA coordinate block (``* xyz`` / ``* int`` ...) is present."""
     return bool(_ORCA_BLOCK_RE.search(content))
+
+
+def _looks_like_qc_output(content: str) -> bool:
+    """Return whether content contains a Gaussian or ORCA output geometry header."""
+    return bool(_GAUSSIAN_GEOM_RE.search(content) or _ORCA_GEOM_RE.search(content))
 
 
 def _looks_like_gjf(content: str) -> bool:
@@ -114,6 +150,8 @@ def _candidate_formats(content: str) -> list[str]:
         found.add("sdf")
     if "M  END" in stripped:
         found.add("mol")
+    if _looks_like_qc_output(content):
+        found.add("log")
     if _first_line_is_atom_count(stripped) or _looks_like_atom_coordinates(stripped):
         found.add("xyz")
     if _looks_like_gjf(content):
@@ -167,8 +205,8 @@ def detect_and_parse(content: str, filename: str = "") -> tuple[str, StructurePa
     """Detect the format and parse, verifying candidates in priority order.
 
     Tries the extension fast-path format (if any) first, then the
-    content-detected candidates in the order sdf -> mol -> xyz -> gjf ->
-    inp, with smiles as the last resort. If a candidate parse fails and a
+    content-detected candidates in the order sdf -> mol -> log -> xyz -> gjf
+    -> inp, with smiles as the last resort. If a candidate parse fails and a
     next candidate exists, falls back.
 
     Returns:
@@ -234,6 +272,8 @@ def _looks_like_atom_coordinates(text: str) -> bool:
 
 
 def parse_structure_text(content: str, fmt: str, filename: str = "") -> StructureParseResult:
+    if fmt == "log":
+        return parse_qc_output_text(content, filename or "input.log")
     if fmt == "xyz":
         return parse_xyz_text(content)
     if fmt == "sdf":
@@ -247,6 +287,66 @@ def parse_structure_text(content: str, fmt: str, filename: str = "") -> Structur
     if fmt == "smiles":
         return parse_smiles_list(content)
     return StructureParseResult(errors=[f"Unsupported format: {fmt}"])
+
+
+def _parse_qc_charge_mult(content: str) -> tuple[int, int, list[str]]:
+    charge = 0
+    multiplicity = 1
+    warnings: list[str] = []
+
+    pair_match = _QC_CHARGE_MULT_RE.search(content)
+    if pair_match:
+        charge = int(pair_match.group(1))
+        multiplicity = int(pair_match.group(2))
+        return charge, multiplicity, warnings
+
+    charge_match = _QC_CHARGE_RE.search(content)
+    multiplicity_match = _QC_MULTIPLICITY_RE.search(content)
+    missing: list[str] = []
+    if charge_match:
+        charge = int(charge_match.group(1))
+    else:
+        missing.append("charge")
+    if multiplicity_match:
+        multiplicity = int(multiplicity_match.group(1))
+    else:
+        missing.append("multiplicity")
+    if missing:
+        warnings.append(
+            "Missing "
+            + " and ".join(missing)
+            + " in QC output; defaulting missing values to charge=0 and multiplicity=1"
+        )
+    return charge, multiplicity, warnings
+
+
+def parse_qc_output_text(content: str, filename: str = "input.log") -> StructureParseResult:
+    """Parse the last Gaussian or ORCA output geometry into one structure asset."""
+    coordinates: NDArray[np.float64] | None
+    coordinates, symbols, error = LogParser.extract_from_text(content, engine_type="auto")
+    if coordinates is None or symbols is None or not symbols:
+        return StructureParseResult(errors=[error or "No coordinates found in QC output"])
+
+    source_name = filename or "input.log"
+    xyz_coords = [
+        (float(row[0]), float(row[1]), float(row[2]))
+        for row in coordinates
+    ]
+    charge, multiplicity, warnings = _parse_qc_charge_mult(content)
+    asset = StructureAsset(
+        asset_id=_next_asset_id(),
+        name=Path_safe(source_name),
+        source_type="paste",
+        original_format="log",
+        xyz=_xyz_from_symbols_coords(symbols, xyz_coords, source_name),
+        has_3d=True,
+        charge=charge,
+        multiplicity=multiplicity,
+        atom_count=len(symbols),
+        formula=_hill_formula(symbols),
+        warnings=warnings,
+    )
+    return StructureParseResult(structures=[asset])
 
 
 def _parse_bare_atom_block(lines: list[str], start: int) -> StructureAsset | None:
@@ -616,13 +716,31 @@ def parse_orca_inp_text(content: str, filename: str = "input.inp") -> StructureP
 
 
 def parse_smiles_list(content: str) -> StructureParseResult:
+    # --- bounds gate (before RDKit import) ---
+    content_bytes = len(content.encode("utf-8"))
+    if content_bytes > _SMILES_MAX_CONTENT_BYTES:
+        return StructureParseResult(
+            errors=[
+                f"SMILES input too large ({content_bytes} bytes, "
+                f"max {_SMILES_MAX_CONTENT_BYTES})"
+            ]
+        )
+
     lines = [
-        l.strip()
-        for l in content.strip().splitlines()
-        if l.strip() and not l.strip().startswith("#")
+        line.strip()
+        for line in content.strip().splitlines()
+        if line.strip() and not line.strip().startswith("#")
     ]
     if not lines:
         return StructureParseResult(errors=["No SMILES found in input"])
+
+    if len(lines) > _SMILES_MAX_LINES:
+        return StructureParseResult(
+            errors=[
+                f"SMILES input has too many lines ({len(lines)}, "
+                f"max {_SMILES_MAX_LINES})"
+            ]
+        )
 
     try:
         from rdkit import Chem
@@ -634,28 +752,42 @@ def parse_smiles_list(content: str) -> StructureParseResult:
     errors: list[str] = []
 
     for idx, smiles in enumerate(lines):
-        mol = Chem.MolFromSmiles(smiles)
+        try:
+            mol = Chem.MolFromSmiles(smiles)
+        except RuntimeError as exc:
+            errors.append(
+                f"Line {idx + 1}: RDKit error parsing SMILES "
+                f"'{smiles[:40]}': {exc}"
+            )
+            continue
         if mol is None:
             errors.append(f"Line {idx + 1}: invalid SMILES '{smiles}'")
             continue
 
-        mol3d = Chem.AddHs(mol)
-        etkdg = getattr(AllChem, "ETKDGv3", None) or getattr(AllChem, "ETKDG", None)
-        embed = getattr(AllChem, "EmbedMolecule", None)
-        has_3d = False
-        xyz: str | None = None
-        if etkdg is not None and embed is not None:
-            params = etkdg()
-            params.randomSeed = 42
-            if embed(mol3d, params) == 0:
-                xyz = Chem.MolToXYZBlock(mol3d)
-                has_3d = True
+        try:
+            mol3d = Chem.AddHs(mol)
+            etkdg = getattr(AllChem, "ETKDGv3", None) or getattr(AllChem, "ETKDG", None)
+            embed = getattr(AllChem, "EmbedMolecule", None)
+            has_3d = False
+            xyz: str | None = None
+            if etkdg is not None and embed is not None:
+                params = etkdg()
+                params.randomSeed = 42
+                if embed(mol3d, params) == 0:
+                    xyz = Chem.MolToXYZBlock(mol3d)
+                    has_3d = True
 
-        charge = Chem.GetFormalCharge(mol)
-        n_radicals = sum(a.GetNumRadicalElectrons() for a in mol.GetAtoms())  # type: ignore[no-untyped-call]  # RDKit stubs lack GetAtoms type
-        mult = max(1, n_radicals + 1)
-        n_atoms = mol3d.GetNumAtoms()
-        symbols = [a.GetSymbol() for a in mol3d.GetAtoms()]  # type: ignore[no-untyped-call]  # RDKit stubs lack GetAtoms type
+            charge = Chem.GetFormalCharge(mol)
+            n_radicals = sum(a.GetNumRadicalElectrons() for a in mol.GetAtoms())  # type: ignore[no-untyped-call]  # RDKit stubs lack GetAtoms type
+            mult = max(1, n_radicals + 1)
+            n_atoms = mol3d.GetNumAtoms()
+            symbols = [a.GetSymbol() for a in mol3d.GetAtoms()]  # type: ignore[no-untyped-call]  # RDKit stubs lack GetAtoms type
+        except RuntimeError as exc:
+            errors.append(
+                f"Line {idx + 1}: RDKit embedding error for SMILES "
+                f"'{smiles[:40]}': {exc}"
+            )
+            continue
 
         structures.append(
             StructureAsset(
@@ -683,6 +815,7 @@ __all__ = [
     "parse_gjf_text",
     "parse_mol_text",
     "parse_orca_inp_text",
+    "parse_qc_output_text",
     "parse_sdf_text",
     "parse_smiles_list",
     "parse_structure_text",
