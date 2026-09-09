@@ -4095,6 +4095,9 @@ async def upload_structure_file(
             norm_path = upload_storage.save_normalized(project_id, upload_id, norm_name, asset.xyz)
             asset.normalized_path = str(norm_path.relative_to(upload_storage.run_root))
 
+    if not result.structures:
+        upload_storage.remove_upload(project_id, upload_id)
+
     asset_models = [_asset_to_model(s) for s in result.structures]
 
     return UploadResponse(

@@ -8,12 +8,13 @@ and a process-wide :class:`~acp.scheduler.manager.JobManager` via lifespan.
 
 from __future__ import annotations
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from acp import __version__
 from acp.api.mechanism_readonly import router as mechanism_readonly_router
@@ -22,6 +23,7 @@ from acp.api.v1_routes import router as v1_router
 from acp.api.v2_routes import router as v2_router
 
 _FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent.parent / "frontend"
+logger = logging.getLogger(__name__)
 
 
 def _load_remote_config():
@@ -194,6 +196,17 @@ def create_app(
         redoc_url="/redoc",
         lifespan=lifespan,
     )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        logger.exception(
+            "Unhandled API exception",
+            extra={"method": request.method, "path": request.url.path},
+        )
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"{type(exc).__name__}: {exc}"},
+        )
 
     app.include_router(v1_router, prefix="/api/v1")
     app.include_router(mechanism_readonly_router, prefix="/api/v1")

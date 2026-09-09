@@ -47,6 +47,9 @@ class UploadStorage:
         dest.write_text(text, encoding="utf-8")
         return dest
 
+    def remove_upload(self, project_id: str, upload_id: str) -> None:
+        shutil.rmtree(self.upload_dir(project_id, upload_id), ignore_errors=True)
+
 
 def _is_safe_filename(name: str) -> bool:
     if not name or len(name) > 255:
