@@ -3601,7 +3601,7 @@ option, optgroup {
               <path d="M10 14V4M6 8l4-4 4 4M3 16v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2"/>
             </svg>
             <span data-i18n="modal.upload_hint">拖拽文件到此处，或点击选择</span>
-            <input type="file" id="upload-file-input" style="display:none;" accept=".xyz,.sdf,.mol,.gjf,.com,.inp">
+            <input type="file" id="upload-file-input" style="display:none;" accept=".xyz,.sdf,.sd,.mol,.gjf,.com,.inp,.log,.out">
           </div>
         </div>
 
@@ -4437,6 +4437,7 @@ H -0.500  0.900  0.000" data-i18n-ph="s2scan.xyz_paste_ph" style="font-family:mo
 
 <script>
 const API_BASE = "/api/v1";
+const STRUCTURE_UPLOAD_EXTS = [".xyz", ".sdf", ".sd", ".mol", ".gjf", ".com", ".inp", ".log", ".out"];
 let currentLang = localStorage.getItem("acp-lang") || "zh-CN";
 let selectedProjectId = "";
 let selectedJobId = "";
@@ -5255,6 +5256,7 @@ const I18N = {
     "modal.hessian_loading": "正在解析…",
     "modal.hessian_no_structures": "请先添加结构",
     "modal.hessian_preview_error": "预览失败",
+    "modal.unsupported_ext": "不支持的文件格式，请上传以下格式",
     "nodes.title": "远程节点",
     "nodes.loading": "加载中…",
     "nodes.empty": "未配置远程节点",
@@ -6093,6 +6095,7 @@ const I18N = {
     "modal.hessian_loading": "Resolving…",
     "modal.hessian_no_structures": "Add a structure first",
     "modal.hessian_preview_error": "Preview failed",
+    "modal.unsupported_ext": "Unsupported file format. Please upload one of these formats",
     "nodes.title": "Remote Nodes",
     "nodes.loading": "Loading…",
     "nodes.empty": "No remote nodes configured",
@@ -15897,6 +15900,15 @@ let wizardParseWarnings = [];
 let wizardInputMode = "structure";
 let wizardSelectedStructureIndex = 0;
 let wizardUploadFile = null;
+function isAcceptedStructureFile(file) {
+  if (!file || !file.name) return false;
+  var ext = file.name.lastIndexOf(".") >= 0 ? file.name.slice(file.name.lastIndexOf(".")).toLowerCase() : "";
+  return STRUCTURE_UPLOAD_EXTS.indexOf(ext) >= 0;
+}
+function rejectUnsupportedFile(file) {
+  var name = file && file.name ? file.name : String(file);
+  window.alert((t("modal.unsupported_ext") || "不支持的文件格式") + ": " + name);
+}
 let workflowCatalogCache = [];
 let methodCatalogCache = {};
 let previewViewer = null;
@@ -20387,7 +20399,13 @@ function setupEventListeners() {
   dropzone.addEventListener("click", function() { fileInput.click(); });
   fileInput.addEventListener("change", function() {
     if (fileInput.files.length) {
-      wizardUploadFile = fileInput.files[0];
+      var file = fileInput.files[0];
+      if (!isAcceptedStructureFile(file)) {
+        rejectUnsupportedFile(file);
+        fileInput.value = "";
+        return;
+      }
+      wizardUploadFile = file;
       var status = document.querySelector(".upload-dropzone span");
       if (status) status.textContent = wizardUploadFile.name;
       parseStructuresPreview();
@@ -20402,7 +20420,12 @@ function setupEventListeners() {
     e.preventDefault();
     dropzone.classList.remove("dragover");
     if (e.dataTransfer.files.length) {
-      wizardUploadFile = e.dataTransfer.files[0];
+      var file = e.dataTransfer.files[0];
+      if (!isAcceptedStructureFile(file)) {
+        rejectUnsupportedFile(file);
+        return;
+      }
+      wizardUploadFile = file;
       var status = document.querySelector(".upload-dropzone span");
       if (status) status.textContent = wizardUploadFile.name;
       parseStructuresPreview();

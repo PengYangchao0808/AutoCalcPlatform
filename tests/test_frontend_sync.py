@@ -666,3 +666,150 @@ def test_continue_node_override_and_stage_preselect_lock() -> None:
     assert 'node !== "local"' in helper
     assert html.count("lastRemoteNode = jobRemoteNodeName(") >= 3
     assert "selectedJobIsRemote = !!(job.result && job.result.node)" not in html
+
+
+# ---------------------------------------------------------------------------
+# S5 — Structure upload validation (STRUCTURE_UPLOAD_EXTS + reject helpers)
+# ---------------------------------------------------------------------------
+
+_EXPECTED_STRUCTURE_EXTS = [
+    ".xyz", ".sdf", ".sd", ".mol", ".gjf", ".com", ".inp", ".log", ".out",
+]
+
+
+def test_structure_upload_exts_constant_defined() -> None:
+    """STRUCTURE_UPLOAD_EXTS must be a single constant listing all accepted extensions."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "STRUCTURE_UPLOAD_EXTS" in html, "STRUCTURE_UPLOAD_EXTS constant missing"
+    for ext in _EXPECTED_STRUCTURE_EXTS:
+        assert f'"{ext}"' in html.split("STRUCTURE_UPLOAD_EXTS")[1].split("\n")[0] or \
+               f"'{ext}'" in html.split("STRUCTURE_UPLOAD_EXTS")[1].split("\n")[0], (
+            f"{ext} missing from STRUCTURE_UPLOAD_EXTS definition"
+        )
+
+
+def test_structure_upload_exts_include_sd_log_out() -> None:
+    """Regression guard: .sd, .log, .out must be in the accept list (S5)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    accept_line = html.split('id="upload-file-input"')[1].split(">")[0]
+    for ext in (".sd", ".log", ".out"):
+        assert ext in accept_line, (
+            f"{ext} missing from file picker accept attribute"
+        )
+
+
+def test_file_picker_accept_matches_constant() -> None:
+    """The file picker accept attribute must list the same extensions as STRUCTURE_UPLOAD_EXTS."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    # Extract accept attribute value
+    accept_match = re.search(r'id="upload-file-input"[^>]*accept="([^"]*)"', html)
+    assert accept_match, "Could not find accept attribute on upload-file-input"
+    accept_exts = {e.strip().lower() for e in accept_match.group(1).split(",") if e.strip()}
+    expected_exts = {e.lower() for e in _EXPECTED_STRUCTURE_EXTS}
+    assert accept_exts == expected_exts, (
+        f"accept attribute extensions {sorted(accept_exts)} != expected {sorted(expected_exts)}"
+    )
+
+
+def test_is_accepted_structure_file_function_exists() -> None:
+    """isAcceptedStructureFile(file) must exist and use STRUCTURE_UPLOAD_EXTS."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "function isAcceptedStructureFile(" in html, (
+        "isAcceptedStructureFile function missing"
+    )
+    # The function body must reference STRUCTURE_UPLOAD_EXTS
+    fn_body = html.split("function isAcceptedStructureFile(")[1].split("\nfunction ")[0]
+    assert "STRUCTURE_UPLOAD_EXTS" in fn_body, (
+        "isAcceptedStructureFile must use STRUCTURE_UPLOAD_EXTS"
+    )
+
+
+def test_reject_unsupported_file_function_exists() -> None:
+    """rejectUnsupportedFile(file) must exist and use modal.unsupported_ext."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "function rejectUnsupportedFile(" in html, (
+        "rejectUnsupportedFile function missing"
+    )
+    fn_body = html.split("function rejectUnsupportedFile(")[1].split("\nfunction ")[0]
+    assert "modal.unsupported_ext" in fn_body, (
+        "rejectUnsupportedFile must use modal.unsupported_ext i18n key"
+    )
+
+
+def test_change_handler_calls_reject_unsupported() -> None:
+    """The file input change handler must call rejectUnsupportedFile for unsupported files."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    # Find the change handler block (fileInput.addEventListener("change", ...
+    change_block = html.split('fileInput.addEventListener("change"')[1].split("});")[0]
+    assert "rejectUnsupportedFile(" in change_block, (
+        "change handler must call rejectUnsupportedFile"
+    )
+    assert "isAcceptedStructureFile(" in change_block, (
+        "change handler must call isAcceptedStructureFile"
+    )
+
+
+def test_drop_handler_calls_reject_unsupported() -> None:
+    """The dropzone drop handler must call rejectUnsupportedFile for unsupported files."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    # Find the drop handler block
+    drop_block = html.split('dropzone.addEventListener("drop"')[1].split("});")[0]
+    assert "rejectUnsupportedFile(" in drop_block, (
+        "drop handler must call rejectUnsupportedFile"
+    )
+    assert "isAcceptedStructureFile(" in drop_block, (
+        "drop handler must call isAcceptedStructureFile"
+    )
+
+
+def test_reject_unsupported_does_not_clear_wizard_state() -> None:
+    """rejectUnsupportedFile must not reset wizardUploadFile or other wizard state."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    fn_body = html.split("function rejectUnsupportedFile(")[1].split("\nfunction ")[0]
+    assert "wizardUploadFile = null" not in fn_body, (
+        "rejectUnsupportedFile must NOT clear wizardUploadFile"
+    )
+    assert "parseStructuresPreview" not in fn_body, (
+        "rejectUnsupportedFile must NOT trigger parseStructuresPreview"
+    )
+
+
+def test_unsupported_ext_locale_key_in_both_locales() -> None:
+    """modal.unsupported_ext must exist in both zh-CN and en-US locale dictionaries."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    zh_keys = _extract_all_modal_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_all_modal_keys(html, _EN_BLOCK_RE)
+    assert "modal.unsupported_ext" in zh_keys, (
+        "modal.unsupported_ext missing from zh-CN locale"
+    )
+    assert "modal.unsupported_ext" in en_keys, (
+        "modal.unsupported_ext missing from en-US locale"
+    )
+
+
+def test_nmr_bruker_zip_upload_unchanged() -> None:
+    """The NMR Bruker zip upload must remain independent (accept=.zip, parse=false)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert 'id="nmr-bruker-file"' in html, "NMR Bruker file input missing"
+    bruker_block = html.split('id="nmr-bruker-file"')[1].split(">")[0]
+    assert ".zip" in bruker_block, "NMR Bruker input must accept .zip"
+    # Must NOT have the structure extensions
+    assert ".xyz" not in bruker_block, "NMR Bruker input must not list .xyz"
+
+
+def test_is_accepted_structure_file_case_insensitive() -> None:
+    """isAcceptedStructureFile must compare extensions case-insensitively."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    fn_body = html.split("function isAcceptedStructureFile(")[1].split("\nfunction ")[0]
+    assert ".toLowerCase()" in fn_body or ".toLowerCase()" in fn_body.replace(" ", ""), (
+        "isAcceptedStructureFile must use toLowerCase() for case-insensitive comparison"
+    )
+
+
+def _extract_all_modal_keys(html: str, block_re: re.Pattern[str]) -> set[str]:  # type: ignore[type-arg]
+    """Extract all modal.* i18n keys from a single locale block."""
+    modal_key_re = re.compile(r'"(modal\.[^"]+)":')
+    m = block_re.search(html)
+    if not m:
+        return set()
+    return set(modal_key_re.findall(m.group(1)))
