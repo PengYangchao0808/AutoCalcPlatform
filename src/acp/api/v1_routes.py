@@ -1354,7 +1354,11 @@ def create_job(req: V1JobCreateRequest, request: Request) -> V1JobCreatedRespons
     try:
         validate_execution_request(spec)
     except ExecutionTargetError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        # Same D12 dict shape as the continue endpoint; the conflict check
+        # in nodes.py carries no code, so stamp the stable one here.
+        detail = _target_validation_detail(exc)
+        detail["code"] = getattr(exc, "code", None) or "execution_mode_conflict"
+        raise HTTPException(status_code=400, detail=detail) from exc
     try:
         validate_submission_target(spec, registry=manager.registry)
     except (ExecutionTargetError, NoCapableNodeError) as exc:
@@ -4270,6 +4274,7 @@ def _node_status_to_model(status) -> NodeStatusModel:
         disk_usage_pct=status.disk_usage_pct,
         last_check=status.last_check,
         error=status.error,
+        queue=getattr(status, "queue", None),
         software=status.software,
         declared=status.declared,
         capability_state=status.capability_state,
@@ -4359,7 +4364,7 @@ def _node_matching_item(
     required_tags: frozenset[str],
 ) -> NodeMatchingItem:
     """Match one node against the requirements (single shared implementation)."""
-    declared, enabled, queue = _node_declared_inputs(nm, status)
+    declared, enabled, _ = _node_declared_inputs(nm, status)
     match = matches_capabilities(
         required_software,
         required_tags,
@@ -4374,7 +4379,8 @@ def _node_matching_item(
         running_jobs=int(getattr(status, "running_jobs", 0) or 0),
         max_jobs=int(getattr(status, "max_jobs", 0) or 0),
         disk_usage_pct=int(getattr(status, "disk_usage_pct", 0) or 0),
-        queue=queue,
+        # Same top-level source as /nodes — visible for undeclared nodes too.
+        queue=getattr(status, "queue", None),
         tags=list(declared.tags) if declared is not None else [],
         capability_state=getattr(status, "capability_state", "unknown"),
         declared_ok=getattr(status, "declared_ok", None),
@@ -4419,7 +4425,8 @@ def node_matching(
     §2.2): derives the required software exactly as dispatch does (same
     :func:`derive_required_software` / :func:`matches_capabilities` calls)
     and reports per-node satisfies/missing fields.  Reuses the NodeManager
-    30 s status cache; never forces an SSH refresh.
+    30 s status cache; a cold cache triggers the same live SSH probe as
+    ``GET /nodes``, so latency matches that endpoint.
 
     The raw body is validated explicitly so an absent ``node_tags`` key
     fails with HTTP 400 (FastAPI's pydantic default for a required field is

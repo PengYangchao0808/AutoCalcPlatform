@@ -190,15 +190,22 @@ def capability_state_fields(
     stale cache).  Probe failure only affects *undeclared* nodes: a declared
     node keeps ``capability_state="declared"`` with ``declared_ok=None``.
 
+    For *undeclared* nodes the state signal is keyed on the same resolved
+    subset :func:`acp.scheduler.capabilities.matches_capabilities` judges:
+    ``probe-inferred`` requires at least one software entry with a truthy
+    ``resolved`` value; a report that parsed zero software is ``unknown``
+    (the matching layer treats it as generic — the label must agree).
+
     Args:
         capabilities: Static declaration (``None`` = generic node sentinel).
-        queue: Per-node LSF queue override (displayed inside ``declared``
-            only; never a filtering axis).
+        queue: Per-node LSF queue override.  A submission attribute of the
+            configured node regardless of declaration — surfaced top level
+            so undeclared nodes display it too (never a filtering axis).
         software: Latest ``{name: {configured, resolved, version}}`` probe
             report, or ``{}`` when no probe has ever succeeded.
 
     Returns:
-        Mapping of the five :class:`NodeStatus` capability fields —
+        Mapping of the :class:`NodeStatus` capability fields — ``queue``,
         ``declared``, ``capability_state``, ``declared_ok``, ``mismatch``,
         ``probe_note`` — safe to splat into the constructor.
     """
@@ -226,14 +233,16 @@ def capability_state_fields(
             mismatch = [name for name in capabilities.software if name not in probed_ok]
             declared_ok = not mismatch
         return {
+            "queue": queue,
             "declared": declared,
             "capability_state": "declared",
             "declared_ok": declared_ok,
             "mismatch": mismatch,
             "probe_note": None,
         }
-    if software:
+    if probed_ok:
         return {
+            "queue": queue,
             "declared": None,
             "capability_state": "probe-inferred",
             "declared_ok": None,
@@ -241,6 +250,7 @@ def capability_state_fields(
             "probe_note": None,
         }
     return {
+        "queue": queue,
         "declared": None,
         "capability_state": "unknown",
         "declared_ok": None,
@@ -259,13 +269,16 @@ class NodeStatus:
             resolved, version}}``), refreshed on a slower cadence than the
             status metrics.  Empty when the node is offline or the probe
             has never succeeded.
+        queue: Per-node LSF queue override from :class:`RemoteNode` —
+            carried for every node regardless of declaration (submission
+            attribute; never a filtering axis).  ``None`` when unset.
         declared: Static capability snapshot ``{software: [...], tags:
             [...], queue: str|None}`` from :class:`RemoteNode`; ``None``
             when the node declares nothing (generic sentinel).
         capability_state: Mixed capability model (design D8) —
             ``"declared"`` (declaration is authoritative),
-            ``"probe-inferred"`` (undeclared, probe succeeded), or
-            ``"unknown"`` (undeclared, no successful probe yet).
+            ``"probe-inferred"`` (undeclared, probe resolved at least one
+            software), or ``"unknown"`` (undeclared, nothing resolved yet).
         declared_ok: Declared nodes only: ``True`` when the probed software
             covers every declared item, ``False`` when the probe misses
             declared items (see :attr:`mismatch`), ``None`` when no probe
@@ -284,6 +297,7 @@ class NodeStatus:
     disk_usage_pct: int = 0
     last_check: str = ""
     error: str | None = None
+    queue: str | None = None
     software: dict[str, dict[str, Any]] = field(default_factory=dict)
     declared: dict[str, Any] | None = None
     capability_state: str = "unknown"  # "declared" | "probe-inferred" | "unknown"

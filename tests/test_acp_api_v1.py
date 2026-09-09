@@ -228,6 +228,50 @@ def test_v1_job_create_defaults_node_tags_to_empty(client: TestClient) -> None:
     assert detail.json()["spec"]["node_tags"] == []
 
 
+def test_v1_job_create_mode_conflict_returns_400_code(client: TestClient) -> None:
+    """A validate_execution_request conflict shares the D12 dict detail (m4).
+
+    Same shape as the continue endpoint and the unknown/disabled target
+    errors: a dict with a stable machine-readable ``code``.
+    """
+    response = client.post(
+        "/api/v1/jobs",
+        json={
+            "workflow": "fake",
+            "name": "conflict-fake",
+            "input": {"source": "CCO"},
+            "method": {"protocol": "ext"},
+            "execution_mode": "remote",
+            "target_node": "local",
+        },
+    )
+    assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert isinstance(detail, dict)
+    assert detail["code"] == "execution_mode_conflict"
+    assert "conflict" in detail["message"]
+
+
+def test_v1_job_create_normalizes_node_tags(client: TestClient) -> None:
+    """node_tags are stripped, deduped, empties dropped and capped (m7)."""
+    valid_long = "g" * 63
+    too_long = "x" * 65
+    created = _submit_fake_job(
+        client,
+        name="tag-normalized",
+        node_tags=["gpu", "", " gpu ", "gpu", valid_long, too_long],
+    )
+    job_id = str(created["job_id"])
+
+    detail = client.get(f"/api/v1/jobs/{job_id}")
+    assert detail.status_code == 200
+    assert detail.json()["spec"]["node_tags"] == ["gpu", valid_long]
+
+    record = client.app.state.job_manager.get(job_id)
+    assert record is not None
+    assert record.spec.node_tags == ["gpu", valid_long]
+
+
 def test_v1_job_move_to_project(client: TestClient) -> None:
     source = _create_project(client, name="Source")
     target = _create_project(client, name="Target")
@@ -2072,6 +2116,7 @@ def _matching_node(
         running_jobs=running,
         max_jobs=node.max_concurrent_jobs,
         disk_usage_pct=disk,
+        queue=queue,
         software=software_probe,
         declared=declared,
         capability_state=capability_state,
@@ -2227,6 +2272,47 @@ def test_v1_node_matching_unknown_workflow_is_400(client: TestClient) -> None:
     )
     assert response.status_code == 400
     assert "not_a_workflow" in response.json()["detail"]
+
+
+def test_v1_node_matching_normalizes_node_tags(client: TestClient) -> None:
+    """Matching node_tags are stripped/deduped/emptied and capped (m7)."""
+    valid_long = "g" * 63
+    too_long = "x" * 65
+    payload = _matching_payload(
+        node_tags=["gpu", "", " gpu ", "gpu", valid_long, too_long],
+    )
+    response = client.post("/api/v1/nodes/matching", json=payload)
+    assert response.status_code == 200, response.text
+    assert response.json()["node_tags"] == ["gpu", valid_long]
+
+
+def test_v1_node_matching_blank_node_tags_mean_no_constraint(client: TestClient) -> None:
+    """Tags that normalize to empty impose no constraint (m7).
+
+    Before normalization ``[""]`` produced an unsatisfiable filter (every
+    node reported missing_tags=[""]); now it degrades to "no constraint"
+    and an unknown undeclared node satisfies the preview.
+    """
+    node, status = _matching_node("comp-01", host="10.0.0.1")
+    from acp.scheduler.remote.config import RemoteExecutionConfig
+
+    config = RemoteExecutionConfig(execution_mode="remote", nodes=[node])
+    fake = _MatchingFakeNodeManager(config, [status])
+    manager = client.app.state.job_manager
+    manager._node_manager = fake
+    try:
+        response = client.post(
+            "/api/v1/nodes/matching",
+            json=_matching_payload(node_tags=["", "   "]),
+        )
+    finally:
+        manager._node_manager = None
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["node_tags"] == []
+    item = body["nodes"][0]
+    assert item["missing_tags"] == []
+    assert item["satisfies"] is True
 
 
 def _seed_job(client: TestClient, record: JobRecord) -> None:

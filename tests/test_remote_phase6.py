@@ -719,6 +719,50 @@ def test_node_status_unknown_when_probe_never_succeeded() -> None:
     assert status.probe_note == "capability unknown; treated as generic"
 
 
+def test_node_status_unknown_when_probe_resolves_nothing() -> None:
+    """Report exists but zero resolved software → unknown + note (M3).
+
+    matches_capabilities judges undeclared nodes on the *resolved* subset
+    (empty → generic/unknown fallback); the display signal must agree — a
+    report that parsed nothing must NOT render green "probe-inferred".
+    """
+    report = {"xtb": {"configured": "xtb", "resolved": None, "version": None}}
+    fields = capability_state_fields(None, None, report)
+    assert fields["capability_state"] == "unknown"
+    assert fields["probe_note"] == "capability unknown; treated as generic"
+
+    pool = _pool_with_software(report)
+    nm = NodeManager(_config([_node()]), pool, monitor=_ok_monitor())
+    status = nm.get_node_status("compute-01")
+    assert status.capability_state == "unknown"
+    assert status.probe_note == "capability unknown; treated as generic"
+    # the raw (all-unresolved) report still rides along unchanged
+    assert status.software == report
+
+
+def test_node_status_queue_top_level_for_all_nodes() -> None:
+    """RemoteNode.queue lands on the top-level NodeStatus.queue (m6).
+
+    The queue is a submission attribute of every configured node — declared
+    or not — so the display projection carries it outside the declared
+    snapshot too (same source the matching preview reads).
+    """
+    assert capability_state_fields(None, "bigmem", {})["queue"] == "bigmem"
+    assert (
+        capability_state_fields(NodeCapabilities(software=("orca",)), "gpu-q", {})["queue"]
+        == "gpu-q"
+    )
+
+    nm = NodeManager(
+        _config([_node(queue="bigmem")]),
+        _pool_with_software(_SOFTWARE_REPORT),
+        monitor=_ok_monitor(),
+    )
+    status = nm.get_node_status("compute-01")
+    assert status.declared is None  # undeclared node
+    assert status.queue == "bigmem"
+
+
 def test_node_status_declared_unaffected_by_probe_failure() -> None:
     """Probe failure only affects undeclared nodes (D8): declared_ok → None."""
     node = _node(capabilities=NodeCapabilities(software=("orca", "xtb")))

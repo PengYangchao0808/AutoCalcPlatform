@@ -7,9 +7,49 @@ Pydantic models for the ACP Workbench v2 ``/api/v1`` surface.
 
 from __future__ import annotations
 
+import logging
 from typing import Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+logger = logging.getLogger(__name__)
+
+#: node_tags sanitation caps (m7): at most 16 tags of at most 64 chars each.
+NODE_TAGS_MAX_COUNT = 16
+NODE_TAGS_MAX_LENGTH = 64
+
+
+def normalize_node_tags(values: list[str]) -> list[str]:
+    """Sanitize a ``node_tags`` list: strip, drop empties, dedupe
+    (order-preserving), cap at :data:`NODE_TAGS_MAX_COUNT` tags of at most
+    :data:`NODE_TAGS_MAX_LENGTH` chars.
+
+    Over-limit entries are dropped with a warning; a list that normalizes
+    to empty imposes no tag constraint (never an unsatisfiable filter).
+    """
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for raw in values:
+        tag = str(raw).strip()
+        if not tag or tag in seen:
+            continue
+        if len(tag) > NODE_TAGS_MAX_LENGTH:
+            logger.warning(
+                "node_tags entry dropped (exceeds %d chars): %.64s",
+                NODE_TAGS_MAX_LENGTH,
+                tag,
+            )
+            continue
+        if len(cleaned) >= NODE_TAGS_MAX_COUNT:
+            logger.warning(
+                "node_tags entry dropped (more than %d tags): %.64s",
+                NODE_TAGS_MAX_COUNT,
+                tag,
+            )
+            continue
+        seen.add(tag)
+        cleaned.append(tag)
+    return cleaned
 
 
 class ProjectModel(BaseModel):
@@ -201,6 +241,11 @@ class V1JobSpecModel(BaseModel):
     task_name: str = ""
     remark: str = ""
 
+    @field_validator("node_tags")
+    @classmethod
+    def _normalize_node_tags(cls, value: list[str]) -> list[str]:
+        return normalize_node_tags(value)
+
 
 class JobLiveMetric(BaseModel):
     """One display-ready metric describing a job's live computation state.
@@ -291,6 +336,11 @@ class V1JobCreateRequest(BaseModel):
     molecule_name: str = ""
     task_name: str = ""
     remark: str = ""
+
+    @field_validator("node_tags")
+    @classmethod
+    def _normalize_node_tags(cls, value: list[str]) -> list[str]:
+        return normalize_node_tags(value)
 
 
 class MechanismRolePayload(BaseModel):
@@ -981,6 +1031,7 @@ class NodeStatusModel(BaseModel):
     disk_usage_pct: int = 0
     last_check: str = ""
     error: str | None = None
+    queue: str | None = None
     software: dict[str, Any] = Field(default_factory=dict)
     declared: dict[str, Any] | None = None
     capability_state: str = "unknown"  # "declared" | "probe-inferred" | "unknown"
@@ -1011,6 +1062,12 @@ class NodeMatchingRequest(BaseModel):
     method: dict[str, Any] = Field(default_factory=dict)
     protocol: str | None = None
     node_tags: list[str] | None
+
+    @field_validator("node_tags")
+    @classmethod
+    def _normalize_node_tags(cls, value: list[str] | None) -> list[str] | None:
+        # ``null`` = "no tag constraint" (design R6) — preserved as-is.
+        return None if value is None else normalize_node_tags(value)
 
 
 class NodeMatchingItem(BaseModel):

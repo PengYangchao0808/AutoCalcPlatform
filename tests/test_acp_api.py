@@ -140,6 +140,7 @@ def test_v1_nodes_capability_state(client: TestClient) -> None:
             name="compute-01",
             host="10.0.0.1",
             status="online",
+            queue="bigmem",
             declared={"software": ["orca", "xtb"], "tags": ["gpu"], "queue": "bigmem"},
             capability_state="declared",
             declared_ok=False,
@@ -149,6 +150,7 @@ def test_v1_nodes_capability_state(client: TestClient) -> None:
             name="compute-02",
             host="10.0.0.2",
             status="online",
+            queue="short-q",
             capability_state="unknown",
             probe_note="capability unknown; treated as generic",
         ),
@@ -177,11 +179,14 @@ def test_v1_nodes_capability_state(client: TestClient) -> None:
     assert nodes["compute-01"]["declared_ok"] is False
     assert nodes["compute-01"]["mismatch"] == ["xtb"]
     assert nodes["compute-01"]["probe_note"] is None
+    assert nodes["compute-01"]["queue"] == "bigmem"
     assert nodes["compute-02"]["capability_state"] == "unknown"
     assert nodes["compute-02"]["declared"] is None
     assert nodes["compute-02"]["declared_ok"] is None
     assert nodes["compute-02"]["mismatch"] == []
     assert nodes["compute-02"]["probe_note"] == "capability unknown; treated as generic"
+    # queue is visible for undeclared nodes too (m6 — same RemoteNode source)
+    assert nodes["compute-02"]["queue"] == "short-q"
 
 
 def test_workflows_and_protocols(client: TestClient) -> None:

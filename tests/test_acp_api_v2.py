@@ -469,6 +469,39 @@ def test_v2_batch_node_fields_passthrough_to_spec(
     assert detail.json()["node_id"] == "comp-01"
 
 
+def test_v2_batch_item_normalizes_node_tags(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Batch-item node_tags are stripped/deduped/emptied and capped (m7).
+
+    The spy captures the spec handed to the shared target validator — the
+    item itself is rejected afterwards (no registry pins the node), but the
+    schema-level normalization has already happened by then.
+    """
+    from acp.api import v2_routes
+
+    captured: list[Any] = []
+
+    def spy(spec: Any, *, registry: NodeRegistry) -> None:
+        captured.append(spec)
+
+    monkeypatch.setattr(v2_routes, "validate_submission_target", spy)
+    valid_long = "g" * 63
+    too_long = "x" * 65
+    _batch_create(
+        client,
+        [
+            _valid_fake_item(
+                "ethanol",
+                node_tags=["gpu", "", " gpu ", "gpu", valid_long, too_long],
+            )
+        ],
+    )
+    assert len(captured) == 1
+    assert captured[0].node_tags == ["gpu", valid_long]
+
+
 def test_v2_batch_without_node_fields_matches_previous_behaviour(
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
