@@ -274,6 +274,42 @@ class LogParser:
     }
 
     @staticmethod
+    def extract_from_text(
+        content: str, engine_type: str = "auto"
+    ) -> Tuple[Optional[np.ndarray], Optional[List[str]], Optional[str]]:
+        """
+        Extract last converged geometry from log content.
+
+        Args:
+            content: Gaussian or ORCA output text
+            engine_type: 'gaussian', 'orca', 'auto' (default)
+
+        Returns:
+            Tuple of (coordinates, symbols, error_message)
+            - coordinates: (N, 3) numpy array or None
+            - symbols: List of element symbols or None
+            - error_message: Error description if failed, else None
+        """
+        if engine_type == "auto":
+            detection_content = content[:4096]
+            if "Gaussian" in detection_content and "ORCA" not in detection_content:
+                engine_type = "gaussian"
+            else:
+                engine_type = "orca"
+
+        try:
+            if engine_type == "gaussian":
+                return LogParser._parse_gaussian_content(content)
+            if engine_type == "orca":
+                coords, symbols, err = LogParser._parse_orca_content(content)
+                if coords is not None:
+                    return coords, symbols, err
+                return LogParser._parse_gaussian_content(content)
+            return None, None, f"Unknown engine type: {engine_type}"
+        except Exception as e:
+            return None, None, f"Parse error: {str(e)}"
+
+    @staticmethod
     def extract_last_converged_coords(
         log_file: Path, engine_type: str = "auto"
     ) -> Tuple[Optional[np.ndarray], Optional[List[str]], Optional[str]]:
@@ -324,11 +360,17 @@ class LogParser:
         log_file: Path,
     ) -> Tuple[Optional[np.ndarray], Optional[List[str]], Optional[str]]:
         """Parse Gaussian log file for last converged geometry."""
-        coords_blocks = []
-        symbols = None
-
         with open(log_file, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
+
+        return LogParser._parse_gaussian_content(content)
+
+    @staticmethod
+    def _parse_gaussian_content(
+        content: str,
+    ) -> Tuple[Optional[np.ndarray], Optional[List[str]], Optional[str]]:
+        coords_blocks = []
+        symbols = None
 
         standard_orient_pattern = (
             r"Standard orientation:.*?Coordinates \(Angstroms\)(.*?)(\n\s+-+\n)(?=\s+Rotational)"
@@ -387,11 +429,17 @@ class LogParser:
         out_file: Path,
     ) -> Tuple[Optional[np.ndarray], Optional[List[str]], Optional[str]]:
         """Parse ORCA output file for last geometry."""
-        coords_blocks = []
-        symbols = None
-
         with open(out_file, "r", encoding="utf-8", errors="replace") as f:
             content = f.read()
+
+        return LogParser._parse_orca_content(content)
+
+    @staticmethod
+    def _parse_orca_content(
+        content: str,
+    ) -> Tuple[Optional[np.ndarray], Optional[List[str]], Optional[str]]:
+        coords_blocks = []
+        symbols = None
 
         cartesian_pattern = r"CARTESIAN COORDINATES \(ANGSTROEM\)\s+-{3,}(.*?)-{3,}"
         matches = re.findall(cartesian_pattern, content, re.DOTALL)
