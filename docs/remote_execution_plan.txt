@@ -83,7 +83,7 @@ ACP Server (本地)
                  |  SSH/SFTP port 22
                  v
     Remote Compute Node Pool
-      Node A: 10.16.5.157 ({remote_code_dir}/src + OpenLAVA + QC全套)
+      Node A: 192.168.1.100 ({remote_code_dir}/src + OpenLAVA + QC全套)
       Node B: <future>
       {remote_code_dir}/
         src/acp/ (排除 api/, scheduler/)
@@ -176,7 +176,7 @@ scripts/run_g16_worker.sh — Gaussian 包装脚本
 
 评审日期：2026-07-12 ｜ 文件：config.py (163行) / ssh.py (286行) / sftp.py (266行) / sync.py (269行) / __init__.py (32行)
 
-测试：mock 单元测试 23/23 通过（含 8 个 P0 修复测试） + 真实节点 10.16.5.157 集成测试 3/3 通过 ｜ lint：ruff 0 error ｜ 类型：mypy 0 error
+测试：mock 单元测试 23/23 通过（含 8 个 P0 修复测试） + 真实节点 192.168.1.100 集成测试 3/3 通过 ｜ lint：ruff 0 error ｜ 类型：mypy 0 error
 
 ✅ 优点
 
@@ -551,7 +551,7 @@ shutdown() 关闭 SSHConnectionPool 所有空闲连接
 
 评审日期：2026-07-12 ｜ 改动文件：config.py / defaults.yaml / runner.py / manager.py / server.py / jobs.py / v1_schemas.py / v1_routes.py / monitor.py / sftp.py / sync.py
 
-测试：mock 单元测试 93/93 通过（Phase 1: 23 + Phase 2: 35 + Phase 3: 35） ｜ lint：ruff 0 error ｜ 真实节点集成测试：✅ CCO conformer 搜索在 10.16.5.157 上成功执行（CREST → ISOSTAT → 完成，LSF Job 561）
+测试：mock 单元测试 93/93 通过（Phase 1: 23 + Phase 2: 35 + Phase 3: 35） ｜ lint：ruff 0 error ｜ 真实节点集成测试：✅ CCO conformer 搜索在 192.168.1.100 上成功执行（CREST → ISOSTAT → 完成，LSF Job 561）
 
 ✅ 集成测试验证结果（CCO 远程 conformer 搜索）
 
@@ -569,7 +569,7 @@ LSF 提交：bsub 成功，LSF Job <561> 在 workstation 节点 8 核执行
 
 不下载文件：本地 work_dir 仅有 events.jsonl / job.json / inputs/，QC 输出全部保留在远程节点
 
-provenance.hostname：正确记录为 10.16.5.157（远程节点），非 ACP Server
+provenance.hostname：正确记录为 192.168.1.100（远程节点），非 ACP Server
 
 wall_time：43.88 秒（含 CREST 两阶段 + ISOSTAT 聚类，CCO 2 个构象异构体）
 
@@ -809,7 +809,7 @@ if protocol not in ('ext', 'full', 'lite', 'zero', 'benchmark'):
 
 步骤 CS-7：远程回归测试 ✓ 完成（2026-07-13）
 
-ACP Server 是纯调度器，不在本地运行 cccp。所有 QC 验证通过远程节点（10.16.5.157）直接执行 python -m acp.cli run conformer（PYTHONPATH=/home/<user>/acp_code/src）进行：
+ACP Server 是纯调度器，不在本地运行 cccp。所有 QC 验证通过远程节点（192.168.1.100）直接执行 python -m acp.cli run conformer（PYTHONPATH=/home/<user>/acp_code/src）进行：
 
  | 协议 | 结果 | 关键指标
 
@@ -933,7 +933,7 @@ GET /jobs/{id}/remote-logs/{name} — 获取日志尾部（stdout.log / stderr.l
 
 评审日期：2026-07-13 ｜ 文件：fetcher.py (196行) / v1_routes.py (+118行) / v1_schemas.py (+25行) / manager.py (+6行) / remote/__init__.py (+3导出)
 
-测试：mock 单元测试 28/28 通过（resolve/is_remote_job/list_files/file_exists/read_file/stream_file/log_tail/path-traversal/manager-wiring）+ 真实节点 10.16.5.157 端到端验证（list/download/log-tail 均通过） ｜ lint：ruff 0 error（除既有 N816 rdDetermineBonds） ｜ 格式：ruff format 通过
+测试：mock 单元测试 28/28 通过（resolve/is_remote_job/list_files/file_exists/read_file/stream_file/log_tail/path-traversal/manager-wiring）+ 真实节点 192.168.1.100 端到端验证（list/download/log-tail 均通过） ｜ lint：ruff 0 error（除既有 N816 rdDetermineBonds） ｜ 格式：ruff format 通过
 
 ✅ 优点
 
@@ -941,7 +941,7 @@ GET /jobs/{id}/remote-logs/{name} — 获取日志尾部（stdout.log / stderr.l
 
 路径遍历防护：_safe_join() 用 posixpath.normpath + 前缀校验，../../etc/passwd 和绝对路径 /etc/shadow 均被拦截并返回 400
 
-流式下载不占满内存：stream_file 64KB 分块 yield，借 sftp_session 上下文管理器，迭代结束自动归还连接。10.16.5.157 真实下载 CCO_remote_v2_global_min.xyz（541B）和 submit.lsf（587B）验证通过
+流式下载不占满内存：stream_file 64KB 分块 yield，借 sftp_session 上下文管理器，迭代结束自动归还连接。192.168.1.100 真实下载 CCO_remote_v2_global_min.xyz（541B）和 submit.lsf（587B）验证通过
 
 日志尾部高效：仅读末尾 4MB（_LOG_TAIL_MAX_BYTES），从 max(0, size - 4MB) seek，截断首行丢弃不完整行。GB 级日志不爆内存
 
@@ -977,7 +977,7 @@ JobManager 惰性集成：remote_fetcher 属性仅在远程启用时构造，本
  | stream_file 借 SFTP 会话期间若池满则阻塞（默认 60s borrow 超时）
  | 可接受：下载为低频用户操作，非并发场景
 
-真实节点端到端验证（10.16.5.157）
+真实节点端到端验证（192.168.1.100）
 
  | 端点 | 测试用例 | 结果
 
@@ -1132,7 +1132,7 @@ JobManager 惰性集成：remote_fetcher 属性仅在远程启用时构造，本
  | ⏳ 待修复
 
  | P2-6 | P4 | api/v1_routes.py:543, 547
- | 信息泄露：主机名在 RemoteFileListResponse 中暴露：host 字段泄露了内部计算节点的主机名。API 消费者可以看到 10.16.5.157 等值
+ | 信息泄露：主机名在 RemoteFileListResponse 中暴露：host 字段泄露了内部计算节点的主机名。API 消费者可以看到 192.168.1.100 等值
  | 从 RemoteFileListResponse schema 中移除 host 字段，或在仅限管理员查看的场景中保留
  | ✅ 已修复 — schema 和 API 响应中移除 host 字段
 
@@ -2272,7 +2272,7 @@ POST /api/v1/nodes/{name}/ping — 测试节点连通性
   "nodes": [
     {
       "name": "compute-01",
-      "host": "10.16.5.157",
+      "host": "192.168.1.100",
       "status": "online",
       "running_jobs": 2,
       "max_jobs": 5,
@@ -2388,7 +2388,7 @@ UI 组件示意：
 ┌──────────────────────────────────────────────┐
 │ 远程节点状态                                  │
 │ ┌──────────────────────────────────────────┐ │
-│ │ compute-01  10.16.5.157  🟢 在线         │ │
+│ │ compute-01  192.168.1.100  🟢 在线         │ │
 │ │ 运行作业: 2/5  磁盘: 45%  [测试连接]     │ │
 │ ├──────────────────────────────────────────┤ │
 │ │ compute-02  10.16.5.200  🔴 离线         │ │
@@ -2492,7 +2492,7 @@ fail-closed：当远程执行未配置时，/nodes 返回 503，前端面板显�
 
  | test_remote_sync.py | Mock SFTP 同步、验证排除 api/scheduler、本地 mtime 记录与比较逻辑
 
- | test_remote_integration.py | 真实 SSH/SFTP 连接 10.16.5.157、提交 LSF 作业、日志 tail 验证
+ | test_remote_integration.py | 真实 SSH/SFTP 连接 192.168.1.100、提交 LSF 作业、日志 tail 验证
 
  | test_remote_phase3.py ✓ 35 tests | Phase 3 集成测试：config defaults、execution_mode 校验、walltime 解析、JobSpec.target_node、_should_run_remote 分发、JobManager 远程接线、server 降级、监控超时、部分失败清理、started_at 语义、task_id 缓存、shlex.quote、原子写入、_ensure_remote_dir 去重
 
@@ -2515,7 +2515,7 @@ YAML 声明示例（与 config/defaults.yaml cluster 段注释示例、cccp.conf
 cluster:
   nodes:
     - name: compute-01
-      host: 10.16.5.157
+      host: 192.168.1.100
       username: <user>
       remote_work_dir: /scratch/<user>/acp_jobs
       remote_code_dir: /home/<user>/acp_code
@@ -2743,7 +2743,7 @@ cluster:
   auto_sync: true
   nodes:
     - name: "compute-01"
-      host: "10.16.5.157"
+      host: "192.168.1.100"
       username: "<user>"
       # password 通过环境变量设置：export ACP_REMOTE_PASSWORD_COMPUTE_01="..."
       # 或使用密钥认证：
@@ -2906,7 +2906,7 @@ P1 — 建议在 Phase 3/4 完成
 
  | P1-3 | 监控循环添加超时上限 | 添加 max_monitor_seconds（walltime + 1h），超时标记 FAILED | ✓ 已修复
 
- | P1-4 | bjobs 命令在真实节点验证 | 在 10.16.5.157 上确认输出格式 | ✓ 已验证 + 修复
+ | P1-4 | bjobs 命令在真实节点验证 | 在 192.168.1.100 上确认输出格式 | ✓ 已验证 + 修复
 
 P2 — 后续迭代
 
