@@ -112,7 +112,7 @@ def test_default_workbench_keeps_original_v2_frontend_and_v1_contract() -> None:
 
     # Convergence panel hooks
     assert 'data-optimization-convergence' in html
-    assert "function energyOptCriteriaRows(data)" in html
+    assert "function energyOptCriteriaRows(data, cycleMetadata)" in html
 
     # Unified geometry loader
     assert "function energyGraphLoadFrameGeometry(node)" in html
@@ -276,6 +276,120 @@ def test_optimization_chart_single_view_switching_contract() -> None:
     # The force view draws displacement; derivative views use backend series.
     assert '"rms_displacement", "max_displacement"' in html
     assert '"rms_gradient_delta", "max_gradient_delta"' in html
+
+
+def test_optimization_status_panel_dual_mode_contract() -> None:
+    """Dual-mode panel contract (2026-09): explicit user pick → per-cycle
+    convergence criteria; otherwise → task status card.
+
+    ``selectedNodeId`` alone cannot carry the "user picked a cycle" semantic
+    because the poller auto-writes the latest cycle into it, so the state
+    machine lives in ``energyGraphState.selectionOrigin``
+    (none | user | follow).  Only ``user`` activates the convergence mode.
+    Without an explicit pick the panel must never render the misleading
+    four-row "no data" convergence block — it shows the task status instead.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # 1. State machine: selectionOrigin field + selectJob reset.
+    assert 'selectionOrigin: "none",' in html
+    select_job = html.split("async function selectJob(jobId)", 1)[1].split("\nasync function ", 1)[0]
+    assert 'energyGraphState.selectionOrigin = "none";' in select_job
+
+    # 2. Panel entry: one pure model decides the mode; the old last_cycle
+    #    reader is gone and the render path never touches metadata.last_cycle.
+    assert "function optimizationStatusPanelModel(data, job)" in html
+    assert "function optimizationStatusPanelMarkup(data)" in html
+    assert "optimizationConvergencePanelMarkup" not in html
+    model = html.split("function optimizationStatusPanelModel(data, job)", 1)[1].split("\nfunction ", 1)[0]
+    assert "optimizationExplicitSelectedNode(data)" in model
+    assert "buildSelectedCycleConvergenceModel(data, selected)" in model
+    assert "buildTaskStatusModel(data, job)" in model
+    criteria = html.split("function energyOptCriteriaRows(data, cycleMetadata)", 1)[1].split("\n}\n", 1)[0]
+    assert "last_cycle" not in criteria
+    assert "metadata.last_cycle" not in html.split("function optimizationWorkspaceMarkup(data)", 1)[1]
+
+    # 3. Explicit-pick detection requires selectionOrigin === "user" and must
+    #    not fall back to another node (inspector/panel node consistency).
+    explicit = html.split("function optimizationExplicitSelectedNode(data)", 1)[1].split("\nfunction ", 1)[0]
+    assert 'energyGraphState.selectionOrigin !== "user"' in explicit
+    assert "nodes[0]" not in explicit
+
+    # 4. Selected-cycle mode reads the picked node's own metadata, so a
+    #    historical complete cycle shows its numbers even when the last cycle
+    #    is incomplete.
+    selected_model = html.split("function buildSelectedCycleConvergenceModel(data, node)", 1)[1].split("\nfunction ", 1)[0]
+    assert "energyOptCriteriaRows(data, nodeMeta)" in selected_model
+    assert 't("energy.conv.cycle_title"' in html
+
+    # 5. Missing semantics are split: absent measurement → value_missing;
+    #    absent threshold → threshold_missing.  The unified "missing" key is
+    #    retired from both locales.
+    assert 't("energy.conv.value_missing")' in criteria
+    assert 't("energy.conv.threshold_missing")' in criteria
+    assert "energy.conv.missing" not in html
+
+    # 6. Task-status mode: status prefers the job object, falls back to
+    #    data.status; running/paused carry the current cycle, completed may
+    #    add the converged note, failed/cancelled keep the last trajectory
+    #    cycle, and a failed job with an incomplete last cycle adds the
+    #    incomplete-cycle note.
+    task_model = html.split("function buildTaskStatusModel(data, job)", 1)[1].split("\nfunction ", 1)[0]
+    assert "(job && job.status) || (data && data.status)" in task_model
+    assert 'rawStatus === "queued" || rawStatus === "starting" || rawStatus === "pending"' in task_model
+    assert 'rawStatus === "running" || rawStatus === "partial"' in task_model
+    assert 'rawStatus === "paused"' in task_model
+    assert 'rawStatus === "cancelling"' in task_model
+    assert 'rawStatus === "waiting_review"' in task_model
+    assert 'kind === "running" || kind === "paused"' in task_model
+    assert 't("energy.task.current_cycle", { n: currentCycle })' in task_model
+    assert 'kind === "completed" && data && data.complete' in task_model
+    assert 't("energy.task.converged")' in task_model
+    assert '(kind === "failed" || kind === "cancelled") && lastCycle != null' in task_model
+    assert 't("energy.task.last_cycle", { n: lastCycle })' in task_model
+    assert 'kind === "failed" && optimizationLastCycleIncomplete(data)' in task_model
+    assert 't("energy.task.incomplete_cycle")' in task_model
+
+    # 7. Transitions: chart click / prev-next / keyboard → user (+follow off);
+    #    "back to latest" → follow; refresh keeps a surviving user pick and
+    #    falls back to follow when the picked node disappears.
+    select_frame = html.split("function energyGraphSelectFrame(frameIndex, origin)", 1)[1].split("\nfunction ", 1)[0]
+    assert 'energyGraphState.selectionOrigin = origin === "follow" ? "follow" : "user";' in select_frame
+    assert 'energyGraphSelectFrame(nodes[nodes.length - 1].frame_index, "follow")' in html
+    opt_bind = html.split("function optimizationGraphBind(root)", 1)[1].split("\nfunction ", 1)[0]
+    assert "energyGraphState.liveFollow = false;" in opt_bind
+    nav = html.split("function energyGraphBindInspectorButtons(root)", 1)[1].split("\nfunction ", 1)[0]
+    assert nav.count("energyGraphState.liveFollow = false;") >= 2
+    keydown = html.split('if (e.key === "ArrowLeft")', 1)[1].split("switch (e.key)", 1)[0]
+    assert keydown.count("energyGraphState.liveFollow = false;") >= 2
+    refresh = html.split('if (String(data.view_type || "") === "optimization")', 1)[1].split("\n    }", 1)[0]
+    assert 'energyGraphState.selectionOrigin = "follow";' in refresh
+    assert "energyGraphState.liveFollow = true;" in refresh
+
+    # 8. Bilingual copy: every new key exists in both locales.
+    new_keys = (
+        "energy.conv.cycle_title",
+        "energy.conv.value_missing",
+        "energy.conv.threshold_missing",
+        "energy.task.title",
+        "energy.task.current_cycle",
+        "energy.task.converged",
+        "energy.task.last_cycle",
+        "energy.task.incomplete_cycle",
+        "energy.task.status.queued",
+        "energy.task.status.running",
+        "energy.task.status.paused",
+        "energy.task.status.cancelling",
+        "energy.task.status.waiting_review",
+        "energy.task.status.completed",
+        "energy.task.status.failed",
+        "energy.task.status.cancelled",
+    )
+    zh_keys = _extract_energy_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_energy_keys(html, _EN_BLOCK_RE)
+    for key in new_keys:
+        assert key in zh_keys, f"{key} missing from zh-CN"
+        assert key in en_keys, f"{key} missing from en-US"
 
 
 def test_energy_i18n_keys_complete_across_locales() -> None:

@@ -1464,6 +1464,7 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .energy-conv-value { color: var(--text-primary); font-family: var(--font-mono, monospace); min-width: 100px; }
 .energy-conv-sep { color: var(--text-tertiary); font-size: 10px; }
 .energy-conv-threshold { color: var(--text-tertiary); font-family: var(--font-mono, monospace); min-width: 100px; }
+.energy-task-note { color: var(--text-secondary); }
 .energy-badge { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 10px; border: 1px solid transparent; }
 .energy-badge.ok { color: #b8f0c8; border-color: rgba(56,193,114,.3); background: rgba(56,193,114,.08); }
 .energy-badge.err { color: #ffc5c5; border-color: rgba(229,83,83,.35); background: rgba(229,83,83,.10); }
@@ -4731,6 +4732,10 @@ let energyGraphState = {
   energySeriesId: "relative_energy",
   liveFollow: true,
   selectedNodeId: "",
+  // "none" = just opened, no explicit pick; "user" = user picked a cycle;
+  // "follow" = auto-following the latest cycle.  Only "user" activates the
+  // selected-cycle convergence panel; "none"/"follow" show the task status.
+  selectionOrigin: "none",
   selectedAnnotationId: "",
   annotationMode: "all",
   viewMode: "",
@@ -5508,11 +5513,26 @@ const I18N = {
     "energy.conv.title": "收敛判据",
     "energy.conv.met": "达标",
     "energy.conv.unmet": "未达标",
-    "energy.conv.missing": "数据缺失",
     "energy.conv.rms_gradient": "RMS 梯度",
     "energy.conv.max_gradient": "MAX 梯度",
     "energy.conv.rms_displacement": "RMS 位移",
     "energy.conv.max_displacement": "MAX 位移",
+    "energy.conv.cycle_title": "收敛判据 · Cycle {n}",
+    "energy.conv.value_missing": "该周期未采集",
+    "energy.conv.threshold_missing": "阈值不可用",
+    "energy.task.title": "任务状态",
+    "energy.task.current_cycle": "当前优化周期 {n}",
+    "energy.task.converged": "优化已收敛",
+    "energy.task.last_cycle": "优化轨迹已保留至 Cycle {n}",
+    "energy.task.incomplete_cycle": "末周期收敛数据未完整生成",
+    "energy.task.status.queued": "等待执行",
+    "energy.task.status.running": "运行中",
+    "energy.task.status.paused": "已暂停",
+    "energy.task.status.cancelling": "正在取消",
+    "energy.task.status.waiting_review": "等待人工审核",
+    "energy.task.status.completed": "已完成",
+    "energy.task.status.failed": "失败",
+    "energy.task.status.cancelled": "已取消",
     "energy.sampling.tabs.energy": "能量轨迹",
     "energy.sampling.tabs.space": "采样空间",
     "energy.sampling.tabs.coverage": "覆盖度",
@@ -6331,11 +6351,26 @@ const I18N = {
     "energy.conv.title": "Convergence Criteria",
     "energy.conv.met": "Met",
     "energy.conv.unmet": "Not met",
-    "energy.conv.missing": "No data",
     "energy.conv.rms_gradient": "RMS Gradient",
     "energy.conv.max_gradient": "MAX Gradient",
     "energy.conv.rms_displacement": "RMS Displacement",
     "energy.conv.max_displacement": "MAX Displacement",
+    "energy.conv.cycle_title": "Convergence Criteria · Cycle {n}",
+    "energy.conv.value_missing": "Not sampled this cycle",
+    "energy.conv.threshold_missing": "Threshold unavailable",
+    "energy.task.title": "Task Status",
+    "energy.task.current_cycle": "Current optimization cycle {n}",
+    "energy.task.converged": "Optimization converged",
+    "energy.task.last_cycle": "Trajectory preserved up to Cycle {n}",
+    "energy.task.incomplete_cycle": "Final cycle convergence data incomplete",
+    "energy.task.status.queued": "Queued",
+    "energy.task.status.running": "Running",
+    "energy.task.status.paused": "Paused",
+    "energy.task.status.cancelling": "Cancelling",
+    "energy.task.status.waiting_review": "Waiting for review",
+    "energy.task.status.completed": "Completed",
+    "energy.task.status.failed": "Failed",
+    "energy.task.status.cancelled": "Cancelled",
     "energy.sampling.tabs.energy": "Energy Trajectory",
     "energy.sampling.tabs.space": "Sampling Space",
     "energy.sampling.tabs.coverage": "Coverage",
@@ -7586,8 +7621,8 @@ function energyGraphBindInspectorButtons(root) {
       if (frame == null) return;
       var nodes = data.nodes || [];
       var index = nodes.findIndex(function(item) { return Number(item.frame_index) === frame; });
-      if (action === "prev" && index > 0) energyGraphSelectFrame(nodes[index - 1].frame_index);
-      if (action === "next" && index >= 0 && index < nodes.length - 1) energyGraphSelectFrame(nodes[index + 1].frame_index);
+      if (action === "prev" && index > 0) { energyGraphState.liveFollow = false; energyGraphSelectFrame(nodes[index - 1].frame_index); }
+      if (action === "next" && index >= 0 && index < nodes.length - 1) { energyGraphState.liveFollow = false; energyGraphSelectFrame(nodes[index + 1].frame_index); }
     });
   });
   root.querySelectorAll("[data-energy-role]").forEach(function(button) {
@@ -8704,10 +8739,10 @@ function optimizationLegendMarkup(data, view) {
   }).join("");
 }
 
-function energyOptCriteriaRows(data) {
+function energyOptCriteriaRows(data, cycleMetadata) {
   var metadata = data.metadata || {};
   var thresholds = metadata.thresholds || {};
-  var lastCycle = metadata.last_cycle || {};
+  var cycle = cycleMetadata || {};
   var criteria = [
     { key: "rms_gradient", i18n: "energy.conv.rms_gradient", unit: "Eh/Bohr" },
     { key: "max_gradient", i18n: "energy.conv.max_gradient", unit: "Eh/Bohr" },
@@ -8715,13 +8750,16 @@ function energyOptCriteriaRows(data) {
     { key: "max_displacement", i18n: "energy.conv.max_displacement", unit: "bohr" }
   ];
   return criteria.map(function(c) {
-    var value = lastCycle[c.key];
+    var value = cycle[c.key];
     var threshold = thresholds[c.key];
     var valueStr = value != null ? energyGraphFormatNumber(value, 6) : null;
     var thresholdStr = threshold != null ? energyGraphFormatNumber(threshold, 6) : null;
     var status, badgeClass;
-    if (value == null || threshold == null) {
-      status = t("energy.conv.missing");
+    if (value == null) {
+      status = t("energy.conv.value_missing");
+      badgeClass = "missing";
+    } else if (threshold == null) {
+      status = t("energy.conv.threshold_missing");
       badgeClass = "missing";
     } else if (value <= threshold) {
       status = t("energy.conv.met");
@@ -8741,24 +8779,104 @@ function energyOptCriteriaRows(data) {
   });
 }
 
-function optimizationConvergencePanelMarkup(data) {
-  var rows = energyOptCriteriaRows(data);
-  var hasAnyData = rows.some(function(r) { return r.value != null || r.threshold != null; });
-  if (!hasAnyData) return '';
-  var rowsHtml = rows.map(function(r) {
-    var valueDisplay = r.value != null ? escapeHtml(r.value) + ' ' + escapeHtml(r.unit) : '--';
-    var thresholdDisplay = r.threshold != null ? escapeHtml(r.threshold) + ' ' + escapeHtml(r.unit) : '--';
-    return '<div class="energy-conv-row">' +
-      '<span class="energy-conv-label">' + escapeHtml(r.label) + '</span>' +
-      '<span class="energy-conv-value">' + valueDisplay + '</span>' +
-      '<span class="energy-conv-sep">vs</span>' +
-      '<span class="energy-conv-threshold">' + thresholdDisplay + '</span>' +
-      '<span class="energy-badge ' + escapeHtml(r.badgeClass) + '">' + escapeHtml(r.status) + '</span>' +
+/* ── Dual-mode status panel: explicit user pick → per-cycle convergence;
+   otherwise → task status card.  The model functions are pure so the render
+   path never reads metadata.last_cycle directly. ── */
+function optimizationExplicitSelectedNode(data) {
+  if (energyGraphState.selectionOrigin !== "user") return null;
+  var nodes = Array.isArray(data && data.nodes) ? data.nodes : [];
+  return nodes.find(function(item) { return String(item.id) === String(energyGraphState.selectedNodeId); }) || null;
+}
+
+function buildSelectedCycleConvergenceModel(data, node) {
+  var nodeMeta = (node && node.metadata) || {};
+  var cycle = nodeMeta.cycle != null ? nodeMeta.cycle : (node && node.x != null ? node.x : null);
+  return {
+    mode: "selected",
+    cycle: cycle,
+    rows: energyOptCriteriaRows(data, nodeMeta)
+  };
+}
+
+function optimizationLastCycleIncomplete(data) {
+  var nodes = Array.isArray(data && data.nodes) ? data.nodes : [];
+  if (!nodes.length) return false;
+  var lastMeta = nodes[nodes.length - 1].metadata || {};
+  return ["rms_gradient", "max_gradient", "rms_displacement", "max_displacement"].some(function(key) {
+    return lastMeta[key] == null;
+  });
+}
+
+function buildTaskStatusModel(data, job) {
+  var meta = (data && data.metadata) || {};
+  var nodes = Array.isArray(data && data.nodes) ? data.nodes : [];
+  var lastNode = nodes.length ? nodes[nodes.length - 1] : null;
+  var rawStatus = String((job && job.status) || (data && data.status) || "").toLowerCase();
+  var currentCycle = meta.current_cycle != null ? meta.current_cycle : (lastNode && lastNode.x != null ? lastNode.x : null);
+  var lastCycle = lastNode && lastNode.x != null ? lastNode.x : (meta.n_cycles != null ? meta.n_cycles : null);
+  var kind;
+  if (rawStatus === "queued" || rawStatus === "starting" || rawStatus === "pending") kind = "queued";
+  else if (rawStatus === "running" || rawStatus === "partial") kind = "running";
+  else if (rawStatus === "paused") kind = "paused";
+  else if (rawStatus === "cancelling") kind = "cancelling";
+  else if (rawStatus === "waiting_review") kind = "waiting_review";
+  else if (rawStatus === "completed") kind = "completed";
+  else if (rawStatus === "failed") kind = "failed";
+  else if (rawStatus === "cancelled") kind = "cancelled";
+  else kind = "";
+  var statusLabel = kind ? t("energy.task.status." + kind) : translateStatus(rawStatus || "unknown");
+  var notes = [];
+  if ((kind === "running" || kind === "paused") && currentCycle != null) {
+    notes.push(t("energy.task.current_cycle", { n: currentCycle }));
+  }
+  if (kind === "completed" && data && data.complete) {
+    notes.push(t("energy.task.converged"));
+  }
+  if ((kind === "failed" || kind === "cancelled") && lastCycle != null) {
+    notes.push(t("energy.task.last_cycle", { n: lastCycle }));
+  }
+  if (kind === "failed" && optimizationLastCycleIncomplete(data)) {
+    notes.push(t("energy.task.incomplete_cycle"));
+  }
+  return { mode: "task", kind: kind, statusLabel: statusLabel, notes: notes };
+}
+
+function optimizationStatusPanelModel(data, job) {
+  var selected = optimizationExplicitSelectedNode(data);
+  if (selected) {
+    return buildSelectedCycleConvergenceModel(data, selected);
+  }
+  return buildTaskStatusModel(data, job);
+}
+
+function optimizationStatusPanelMarkup(data) {
+  var model = optimizationStatusPanelModel(data, lastSelectedJob);
+  if (model.mode === "selected") {
+    var rowsHtml = model.rows.map(function(r) {
+      var valueDisplay = r.value != null ? escapeHtml(r.value) + ' ' + escapeHtml(r.unit) : '--';
+      var thresholdDisplay = r.threshold != null ? escapeHtml(r.threshold) + ' ' + escapeHtml(r.unit) : '--';
+      return '<div class="energy-conv-row">' +
+        '<span class="energy-conv-label">' + escapeHtml(r.label) + '</span>' +
+        '<span class="energy-conv-value">' + valueDisplay + '</span>' +
+        '<span class="energy-conv-sep">vs</span>' +
+        '<span class="energy-conv-threshold">' + thresholdDisplay + '</span>' +
+        '<span class="energy-badge ' + escapeHtml(r.badgeClass) + '">' + escapeHtml(r.status) + '</span>' +
+      '</div>';
+    }).join("");
+    return '<div class="energy-convergence-panel" data-optimization-convergence>' +
+      '<div class="energy-conv-title">' + escapeHtml(t("energy.conv.cycle_title", { n: model.cycle != null ? model.cycle : "--" })) + '</div>' +
+      rowsHtml +
     '</div>';
+  }
+  var badgeClass = model.kind === "completed" ? "ok" : (model.kind === "failed" || model.kind === "cancelled") ? "err" : model.kind === "paused" ? "missing" : "";
+  var statusRow = '<div class="energy-conv-row"><span class="energy-badge' + (badgeClass ? ' ' + badgeClass : '') + '">' + escapeHtml(model.statusLabel) + '</span></div>';
+  var notesHtml = model.notes.map(function(note) {
+    return '<div class="energy-conv-row"><span class="energy-task-note">' + escapeHtml(note) + '</span></div>';
   }).join("");
   return '<div class="energy-convergence-panel" data-optimization-convergence>' +
-    '<div class="energy-conv-title">' + escapeHtml(t("energy.conv.title")) + '</div>' +
-    rowsHtml +
+    '<div class="energy-conv-title">' + escapeHtml(t("energy.task.title")) + '</div>' +
+    statusRow +
+    notesHtml +
   '</div>';
 }
 
@@ -8783,7 +8901,7 @@ function optimizationWorkspaceMarkup(data) {
   return '<div class="optimization-workspace" data-energy-workspace data-energy-view="optimization">' +
     '<div class="optimization-workspace-head"><div><div class="optimization-workspace-kicker">任务观察 · Optimization Viewer</div><div class="optimization-workspace-title">' + escapeHtml(String(job.name || job.id || data.job_id || "几何结构优化")) + '</div></div><div class="optimization-workspace-meta"><span>几何优化</span><span>当前周期 ' + escapeHtml(String(currentCycle)) + '</span><span class="live">' + escapeHtml(statusText) + '</span></div></div>' +
     '<div class="optimization-workspace-toolbar"><div class="optimization-view-switch" role="tablist">' + viewButtons + '</div><label for="optimization-energy-series" data-optimization-energy-label' + energyPickerHidden + '>能量曲线</label><select id="optimization-energy-series" class="tool-select" data-optimization-energy' + energyPickerHidden + '>' + energyOptions + '</select><span class="optimization-toolbar-spacer"></span><div class="optimization-action-group"><button class="plot-tool' + (energyGraphState.optimizationTool === "box" ? ' active' : '') + '" data-optimization-action="box" type="button" title="框选放大" aria-label="框选放大">⬚</button><button class="plot-tool' + (energyGraphState.optimizationTool !== "box" ? ' active' : '') + '" data-optimization-action="pan" type="button" title="拖动平移" aria-label="拖动平移">✥</button><button class="plot-tool" data-optimization-action="reset" type="button" title="重置视图" aria-label="重置视图">⟲</button><button class="optimization-follow-btn' + (energyGraphState.liveFollow ? ' active' : '') + '" data-optimization-action="follow" type="button">' + (energyGraphState.liveFollow ? '跟随最新周期' : '回到最新周期') + '</button><button class="plot-tool optimization-reload-btn" data-optimization-action="reload" type="button" title="刷新" aria-label="刷新"><svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10a7 7 0 1 1 2 5M3 10v4M3 10h4"/></svg><span class="reload-label">刷新</span></button></div></div>' +
-    '<div class="optimization-grid"><div class="optimization-charts"><section class="optimization-chart-card"><div class="optimization-chart-card-head"><span class="optimization-chart-card-title" data-optimization-title>' + escapeHtml(cfg.title) + ' \u00b7 ' + ((data.nodes || []).length) + ' ' + t("energy.header.frames") + '</span><span class="optimization-chart-card-subtitle" data-optimization-subtitle style="color:' + energyHeaderStatusInfo(data).color + ';">\u25cf ' + escapeHtml(energyHeaderStatusInfo(data).text) + '</span></div><div class="optimization-chart-scroll" data-optimization-scroll="main">' + optimizationGraphBuildSvg(data, view) + '</div><div class="optimization-chart-legend" data-optimization-legend>' + optimizationLegendMarkup(data, view) + '</div></section>' + optimizationConvergencePanelMarkup(data) + '</div><aside class="energy-inspector-panel"><div class="energy-inspector-head"><div class="energy-inspector-title">结构查看器</div><div class="energy-inspector-subtitle">点选周期查看对应几何</div></div><div id="energy-structure-viewer" class="energy-structure-viewer' + (selectedNode && selectedNode.geometry_ref ? '' : ' empty') + '">' + (selectedNode && selectedNode.geometry_ref ? '' : '当前周期没有可加载的 XYZ 结构') + '</div>' + energyGraphInspectorMarkup(data) + '</aside></div>' +
+    '<div class="optimization-grid"><div class="optimization-charts"><section class="optimization-chart-card"><div class="optimization-chart-card-head"><span class="optimization-chart-card-title" data-optimization-title>' + escapeHtml(cfg.title) + ' \u00b7 ' + ((data.nodes || []).length) + ' ' + t("energy.header.frames") + '</span><span class="optimization-chart-card-subtitle" data-optimization-subtitle style="color:' + energyHeaderStatusInfo(data).color + ';">\u25cf ' + escapeHtml(energyHeaderStatusInfo(data).text) + '</span></div><div class="optimization-chart-scroll" data-optimization-scroll="main">' + optimizationGraphBuildSvg(data, view) + '</div><div class="optimization-chart-legend" data-optimization-legend>' + optimizationLegendMarkup(data, view) + '</div></section>' + optimizationStatusPanelMarkup(data) + '</div><aside class="energy-inspector-panel"><div class="energy-inspector-head"><div class="energy-inspector-title">结构查看器</div><div class="energy-inspector-subtitle">点选周期查看对应几何</div></div><div id="energy-structure-viewer" class="energy-structure-viewer' + (selectedNode && selectedNode.geometry_ref ? '' : ' empty') + '">' + (selectedNode && selectedNode.geometry_ref ? '' : '当前周期没有可加载的 XYZ 结构') + '</div>' + energyGraphInspectorMarkup(data) + '</aside></div>' +
     '<div class="optimization-workspace-footer"><span>数据源：<strong>' + escapeHtml(String(data.source || '--')) + '</strong> · 周期 ' + escapeHtml(String(nCycles)) + selectedItem + '</span><span>' + optimizationQualityBadge(data) + ' · revision <strong>' + escapeHtml(String(data.revision || '--')) + '</strong></span></div></div>';
 }
 
@@ -8831,12 +8949,12 @@ function optimizationGraphRenderCurrent() {
   if (qualitySlot) qualitySlot.outerHTML = optimizationQualityBadge(data);
   var convergenceSlot = root.querySelector("[data-optimization-convergence]");
   if (convergenceSlot) {
-    convergenceSlot.outerHTML = optimizationConvergencePanelMarkup(data);
+    convergenceSlot.outerHTML = optimizationStatusPanelMarkup(data);
   } else {
     var chartsDiv = root.querySelector(".optimization-charts");
     if (chartsDiv) {
       var chartCard = chartsDiv.querySelector(".optimization-chart-card");
-      if (chartCard) chartCard.insertAdjacentHTML("afterend", optimizationConvergencePanelMarkup(data));
+      if (chartCard) chartCard.insertAdjacentHTML("afterend", optimizationStatusPanelMarkup(data));
     }
   }
   var body = root.querySelector(".energy-inspector-body");
@@ -9031,7 +9149,7 @@ function optimizationGraphBind(root) {
       if (action === "follow") {
         energyGraphState.liveFollow = true;
         var nodes = energyGraphState.data && energyGraphState.data.nodes || [];
-        if (nodes.length) energyGraphSelectFrame(nodes[nodes.length - 1].frame_index);
+        if (nodes.length) energyGraphSelectFrame(nodes[nodes.length - 1].frame_index, "follow");
       }
     });
   });
@@ -9607,7 +9725,7 @@ function energyGraphBindChartInteractions(root) {
       var prevFrame = energyGraphFrameIndexForNode(energyGraphState.data, energyGraphState.selectedNodeId);
       energyGraphState.selectedAnnotationId = annotationId || "";
       var node = (energyGraphState.data.nodes || []).find(function(item) { return Number(item.frame_index) === frame; });
-      if (node) energyGraphState.selectedNodeId = String(node.id);
+      if (node) { energyGraphState.selectedNodeId = String(node.id); energyGraphState.selectionOrigin = "user"; }
       var chartRebuilt = !!annotationId;
       if (chartRebuilt) energyGraphUpdateChart();
       energyGraphUpdateSelection(Number(prevFrame) !== frame, chartRebuilt);
@@ -9722,13 +9840,14 @@ function energyGraphBind(root) {
   energyGraphBindInspectorButtons(root);
 }
 
-function energyGraphSelectFrame(frameIndex) {
+function energyGraphSelectFrame(frameIndex, origin) {
   const data = energyGraphState.data;
   if (!data) return;
   const node = (data.nodes || []).find(function(item) { return Number(item.frame_index) === Number(frameIndex); });
   if (!node) return;
   var oldFrame = energyGraphFrameIndexForNode(data, energyGraphState.selectedNodeId);
   energyGraphState.selectedNodeId = String(node.id);
+  energyGraphState.selectionOrigin = origin === "follow" ? "follow" : "user";
   const annotation = (data.annotations || []).find(function(item) { return Number(item.frame_index) === Number(frameIndex) && ["ts", "intermediate"].indexOf(item.type) >= 0; });
   energyGraphState.selectedAnnotationId = annotation ? String(annotation.id) : "";
   energyGraphUpdateSelection(Number(frameIndex) !== Number(oldFrame));
@@ -10353,9 +10472,18 @@ async function renderEnergyGraphWorkspace(job, options) {
       }
       var optNodes = Array.isArray(data.nodes) ? data.nodes : [];
       var selectedOpt = optNodes.find(function(item) { return String(item.id) === String(energyGraphState.selectedNodeId); });
-      if (!selectedOpt || energyGraphState.liveFollow) {
+      if (energyGraphState.liveFollow) {
+        // Auto-follow the newest cycle: never counts as an explicit user pick.
         if (optNodes.length) energyGraphState.selectedNodeId = String(optNodes[optNodes.length - 1].id);
+        energyGraphState.selectionOrigin = "follow";
+      } else if (!selectedOpt) {
+        // The user's picked cycle vanished from the refreshed trajectory:
+        // fall back to the task-status mode and re-attach to the latest cycle.
+        if (optNodes.length) energyGraphState.selectedNodeId = String(optNodes[optNodes.length - 1].id);
+        energyGraphState.selectionOrigin = "follow";
+        energyGraphState.liveFollow = true;
       }
+      // Otherwise the user's pick survived the refresh: keep "user" as-is.
     }
     if (!energyGraphState.seriesId) {
       var allSeries = Array.isArray(data.series) ? data.series : [];
@@ -15684,6 +15812,7 @@ async function selectJob(jobId) {
   energyGraphState.energySeriesId = "relative_energy";
   energyGraphState.liveFollow = true;
   energyGraphState.selectedNodeId = "";
+  energyGraphState.selectionOrigin = "none";
   energyGraphState.selectedAnnotationId = "";
   energyGraphState.xDomain = null;
   energyGraphState.yDomain = null;
@@ -20402,8 +20531,8 @@ function setupEventListeners() {
         activatePlotTool("pan");
         return;
       }
-      if (e.key === "ArrowLeft") { var d = energyGraphState.data; var n = energyGraphCurrentNode(d); var fi = n && n.frame_index != null ? Number(n.frame_index) : null; if (fi != null) { var ns = d.nodes || []; var idx = ns.findIndex(function(item) { return Number(item.frame_index) === fi; }); if (idx > 0) energyGraphSelectFrame(ns[idx - 1].frame_index); } e.preventDefault(); return; }
-      if (e.key === "ArrowRight") { var d2 = energyGraphState.data; var n2 = energyGraphCurrentNode(d2); var fi2 = n2 && n2.frame_index != null ? Number(n2.frame_index) : null; if (fi2 != null) { var ns2 = d2.nodes || []; var idx2 = ns2.findIndex(function(item) { return Number(item.frame_index) === fi2; }); if (idx2 >= 0 && idx2 < ns2.length - 1) energyGraphSelectFrame(ns2[idx2 + 1].frame_index); } e.preventDefault(); return; }
+      if (e.key === "ArrowLeft") { var d = energyGraphState.data; var n = energyGraphCurrentNode(d); var fi = n && n.frame_index != null ? Number(n.frame_index) : null; if (fi != null) { var ns = d.nodes || []; var idx = ns.findIndex(function(item) { return Number(item.frame_index) === fi; }); if (idx > 0) { energyGraphState.liveFollow = false; energyGraphSelectFrame(ns[idx - 1].frame_index); } } e.preventDefault(); return; }
+      if (e.key === "ArrowRight") { var d2 = energyGraphState.data; var n2 = energyGraphCurrentNode(d2); var fi2 = n2 && n2.frame_index != null ? Number(n2.frame_index) : null; if (fi2 != null) { var ns2 = d2.nodes || []; var idx2 = ns2.findIndex(function(item) { return Number(item.frame_index) === fi2; }); if (idx2 >= 0 && idx2 < ns2.length - 1) { energyGraphState.liveFollow = false; energyGraphSelectFrame(ns2[idx2 + 1].frame_index); } } e.preventDefault(); return; }
     }
     switch (e.key) {
       case "f":
