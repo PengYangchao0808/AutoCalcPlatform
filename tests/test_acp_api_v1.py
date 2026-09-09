@@ -53,6 +53,22 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[TestCli
         yield test_client
 
 
+@pytest.fixture()
+def qc_capable_local(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Simulate a server with all QC binaries installed.
+
+    Creation-time validation resolves ``local_satisfies`` at call time via
+    the capabilities module, while dispatch resolves it through manager's
+    by-name import — patch both so these API tests stay hermetic on
+    machines without QC binaries (CI).
+    """
+    import acp.scheduler.capabilities as capabilities_module
+    import acp.scheduler.manager as manager_module
+
+    monkeypatch.setattr(capabilities_module, "local_satisfies", lambda required: True)
+    monkeypatch.setattr(manager_module, "local_satisfies", lambda required: True)
+
+
 def _create_project(client: TestClient, name: str = "Alpha") -> dict[str, object]:
     response = client.post(
         "/api/v1/projects",
@@ -528,7 +544,9 @@ def test_v1_batch_optimize_from_job_inherits_source_target_node(
     assert spec.target_node == "comp-01"
 
 
-def test_v1_batch_optimize_auto_source_stays_auto(client: TestClient, tmp_path: Path) -> None:
+def test_v1_batch_optimize_auto_source_stays_auto(
+    client: TestClient, tmp_path: Path, qc_capable_local: None
+) -> None:
     """An auto source (no pinned target) leaves the child auto — unchanged."""
     manager = client.app.state.job_manager
     source_dir = tmp_path / "auto-pes-source"
@@ -1136,7 +1154,9 @@ def _submit_batch_optimize(client: TestClient, items: list[dict[str, object]]) -
     return response.json()
 
 
-def test_v1_batch_structures_inline_xyz_submission(client: TestClient) -> None:
+def test_v1_batch_structures_inline_xyz_submission(
+    client: TestClient, qc_capable_local: None
+) -> None:
     job = _submit_batch_optimize(
         client,
         [
@@ -1188,7 +1208,9 @@ def test_v1_batch_structures_inline_xyz_submission(client: TestClient) -> None:
     ]
 
 
-def test_v1_batch_structures_source_id_resolution(client: TestClient, tmp_path: Path) -> None:
+def test_v1_batch_structures_source_id_resolution(
+    client: TestClient, tmp_path: Path, qc_capable_local: None
+) -> None:
     # 2026-09-03 wave: source_id references are inlined to XYZ at submission
     # so the runner materializer never sees unresolved references.
     # Complete an upstream PESsearch job whose result list exposes a candidate.
@@ -1250,7 +1272,9 @@ def test_v1_batch_structures_source_id_resolution(client: TestClient, tmp_path: 
     assert items[0]["name"] == "ts_1"
 
 
-def test_v1_batch_structures_requires_nonempty_items(client: TestClient) -> None:
+def test_v1_batch_structures_requires_nonempty_items(
+    client: TestClient, qc_capable_local: None
+) -> None:
     response = client.post(
         "/api/v1/jobs",
         json={
@@ -1271,7 +1295,9 @@ def test_v1_batch_structures_requires_nonempty_items(client: TestClient) -> None
     assert record.spec.input["items"] == []
 
 
-def test_v1_batch_structures_rejects_bad_item(client: TestClient) -> None:
+def test_v1_batch_structures_rejects_bad_item(
+    client: TestClient, qc_capable_local: None
+) -> None:
     response = client.post(
         "/api/v1/jobs",
         json={
@@ -1608,7 +1634,7 @@ def test_route_matrix_v1(
     )
 
 
-def test_batchoptimize_submit_stageplan(client: TestClient) -> None:
+def test_batchoptimize_submit_stageplan(client: TestClient, qc_capable_local: None) -> None:
     """BatchOptimize submit yields a queued task with profile-trimmed stage plan."""
     job = _submit_batch_optimize(
         client,
@@ -1927,7 +1953,9 @@ def test_v1_terminal_job_projects_pending_as_skipped(client: TestClient) -> None
         assert entry["status"] != "running"
 
 
-def test_bond_scan_create_job_accepts_double_coordinates(client: TestClient) -> None:
+def test_bond_scan_create_job_accepts_double_coordinates(
+    client: TestClient, qc_capable_local: None
+) -> None:
     xyz = "5\nC5 chain\nC 0.0 0.0 0.0\nC 1.4 0.0 0.0\nC 2.8 0.0 0.0\nC 4.2 0.0 0.0\nC 5.6 0.0 0.0\n"
     coordinate = {"kind": "distance", "atoms": [0, 1], "start": 1.2, "end": 2.2, "n_points": 4}
     payload = {
