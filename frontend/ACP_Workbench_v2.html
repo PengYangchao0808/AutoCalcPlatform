@@ -4824,6 +4824,7 @@ let energyGraphState = {
   abortController: null,
   structureAbort: null,
   structureResizeObserver: null,
+  structureFramingPending: false,
   priorViewMode: "",
   resizeObserver: null,
   viewSize: { width: 0, height: 0 },
@@ -5645,7 +5646,8 @@ const I18N = {
     "energy.card.subtitle_mark": "标记当前帧的候选类型",
     "energy.card.type_ts": "TS · 过渡态",
     "energy.card.type_int": "INT · 中间体",
-    "energy.card.type_none": "无标记",
+    "energy.card.type_none": "取消候选",
+    "energy.card.type_none_hint": "移除该帧候选，保存并锁定后生效",
     "energy.card.cancel": "取消",
     "energy.card.locked": "已锁定",
     "energy.card.saved": "已保存",
@@ -6513,7 +6515,8 @@ const I18N = {
     "energy.card.subtitle_mark": "Mark candidate type for current frame",
     "energy.card.type_ts": "TS · Transition State",
     "energy.card.type_int": "INT · Intermediate",
-    "energy.card.type_none": "No Mark",
+    "energy.card.type_none": "Remove Candidate",
+    "energy.card.type_none_hint": "Removes this frame's candidate; takes effect after Save & Lock",
     "energy.card.cancel": "Cancel",
     "energy.card.locked": "Locked",
     "energy.card.saved": "Saved",
@@ -6845,8 +6848,6 @@ async function energyGraphLoadFrameGeometry(node) {
       try { energyGraphState.viewer.removeAllModels(); } catch (e) {}
       energyGraphState.viewer.addModel(xyz, "xyz");
       energyGraphState.viewer.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.26 } });
-      energyGraphState.viewer.zoomTo();
-      energyGraphState.viewer.render();
     } else {
       container.innerHTML = "";
       if (typeof $3Dmol === "undefined") {
@@ -6857,10 +6858,33 @@ async function energyGraphLoadFrameGeometry(node) {
       energyGraphState.viewer = $3Dmol.createViewer(container, { backgroundColor: "0x0e1419", antialias: true });
       energyGraphState.viewer.addModel(xyz, "xyz");
       energyGraphState.viewer.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.26 } });
-      energyGraphState.viewer.zoomTo();
-      energyGraphState.viewer.render();
     }
-    /* ResizeObserver: keep 3Dmol viewer in sync with container size */
+    /* Reframe AFTER layout settles: the viewer sits in a responsive grid, so
+       at mount its box can still carry the previous layout round's size;
+       3Dmol then builds an oversized canvas that the overflow:hidden parent
+       clips (molecule shifted right / cut off). Waiting a frame (double rAF
+       = one full layout+paint cycle) lets the grid settle; then resize()
+       adopts the true box and zoomTo() recomputes the default framing
+       against it. Token+isConnected guards keep a stale load from
+       clobbering a newer one. */
+    energyGraphState.structureFramingPending = true;
+    requestAnimationFrame(function() {
+      requestAnimationFrame(function() {
+        if (!container.isConnected || tk !== energyGraphState.requestToken) return;
+        energyGraphState.structureFramingPending = false;
+        if (!energyGraphState.viewer) return;
+        try {
+          energyGraphState.viewer.resize();
+          energyGraphState.viewer.zoomTo();
+          energyGraphState.viewer.render();
+        } catch (e) {}
+      });
+    });
+    /* ResizeObserver: keep 3Dmol viewer in sync with container size.
+       While the post-load reframing above is pending it stays hands-off
+       (that pass already resizes with the default framing); afterwards it
+       deliberately does NOT zoomTo() — only fit the canvas to the new box,
+       so the user's manual rotation/zoom survives column-width drags. */
     if (energyGraphState.structureResizeObserver) { energyGraphState.structureResizeObserver.disconnect(); energyGraphState.structureResizeObserver = null; }
     if (typeof ResizeObserver !== "undefined" && energyGraphState.viewer) {
       var structResizeTimer = null;
@@ -6869,6 +6893,7 @@ async function energyGraphLoadFrameGeometry(node) {
         structResizeTimer = setTimeout(function() {
           structResizeTimer = null;
           if (!container.isConnected || !energyGraphState.viewer) return;
+          if (energyGraphState.structureFramingPending) return;
           try { energyGraphState.viewer.resize(); energyGraphState.viewer.render(); } catch (e) {}
         }, 100);
       });
@@ -9220,8 +9245,14 @@ function energyCandidateCardMarkup(data, node, opts) {
   var currentRole = opts.currentRole;
   var recommendedRole = opts.recommendedRole;
 
-  /* Dual mode: scan/PES uses s2scanState; non-PES uses POST /frame-candidate */
-  var isScanPES = canEditRole;
+  /* Dual mode: scan/PES uses s2scanState; non-PES uses POST /frame-candidate.
+     The card flavour is decided by workflow + view_type — NEVER by
+     canEditRole.  canEditRole also encodes !selectionLocked, so keying the
+     branch on it made a *locked* PES selection degrade to the generic
+     save-candidate card, whose handler POSTs /frame-candidate — an endpoint
+     the backend rejects for PESsearch jobs.  canEditRole only decides
+     whether the PES role buttons below are disabled. */
+  var isScanPES = isPES && String(data.view_type || "") === "scan";
 
   /* Disabled state: job not terminal (must precede saved variant) */
   if (!jobTerminal && !isScanPES) {
@@ -9276,14 +9307,16 @@ function energyCandidateCardMarkup(data, node, opts) {
         ? (workingEntry.saved && !s2scanState.dirty ? t("energy.card.saved") : t("energy.card.modified"))
         : t("energy.card.unmarked");
     var roleStateNote = selectionLocked ? ' · ' + t("energy.card.locked_note") : '';
+    var noneHint = escapeHtml(t("energy.card.type_none_hint"));
     return '<div class="energy-candidate-card" data-energy-card-state="scan">' +
       '<div class="energy-card-title">' + escapeHtml(t("energy.card.title")) + '</div>' +
       '<div class="energy-card-subtitle">' + escapeHtml(t("energy.card.subtitle_mark")) + '</div>' +
       '<div class="energy-card-type-row">' +
-        '<button type="button" class="energy-card-type-btn' + (currentRole === "ts" ? " active" : "") + '" data-energy-role="ts" data-candidate-type="ts"' + (selectionLocked ? " disabled" : '') + '>' + escapeHtml(t("energy.card.type_ts")) + '</button>' +
-        '<button type="button" class="energy-card-type-btn' + (currentRole === "intermediate" ? " active" : "") + '" data-energy-role="intermediate" data-candidate-type="int"' + (selectionLocked ? " disabled" : '') + '>' + escapeHtml(t("energy.card.type_int")) + '</button>' +
-        '<button type="button" class="energy-card-type-btn' + (currentRole === "" ? " active" : "") + '" data-energy-role="none"' + (selectionLocked ? " disabled" : '') + '>' + escapeHtml(t("energy.card.type_none")) + '</button>' +
+        '<button type="button" class="energy-card-type-btn' + (currentRole === "ts" ? " active" : "") + '" data-energy-role="ts" data-candidate-type="ts"' + (canEditRole ? "" : " disabled") + '>' + escapeHtml(t("energy.card.type_ts")) + '</button>' +
+        '<button type="button" class="energy-card-type-btn' + (currentRole === "intermediate" ? " active" : "") + '" data-energy-role="intermediate" data-candidate-type="int"' + (canEditRole ? "" : " disabled") + '>' + escapeHtml(t("energy.card.type_int")) + '</button>' +
+        '<button type="button" class="energy-card-type-btn' + (currentRole === "" ? " active" : "") + '" data-energy-role="none" title="' + noneHint + '"' + (canEditRole ? "" : " disabled") + '>' + escapeHtml(t("energy.card.type_none")) + '</button>' +
       '</div>' +
+      (canEditRole ? '<div class="energy-card-disabled-note">' + noneHint + '</div>' : '') +
       (recommendedRole ? '<div class="energy-card-subtitle">' + escapeHtml(t("energy.card.algo_rec", { role: recommendedRole === "ts" ? "TS" : "INT" })) + '</div>' : '') +
       '<div class="energy-card-disabled-note">' + escapeHtml(roleStateText) + escapeHtml(roleStateNote) + '</div>' +
       '<div class="energy-card-error" data-energy-card-error style="display:none;"></div>' +
@@ -10310,6 +10343,7 @@ function energyGraphDestroyViewer() {
     try { energyGraphState.viewer.clear(); } catch (e) {}
     energyGraphState.viewer = null;
   }
+  energyGraphState.structureFramingPending = false;
   energyGraphState.loadedFrameIndex = null;
 }
 
@@ -11087,7 +11121,7 @@ function energyGraphReviewPayload() {
 }
 
 function energyGraphSelectionActionLabel() {
-  if (s2scanState.selectionLocked) return "选点已锁定";
+  if (s2scanState.selectionLocked) return "选点已锁定 · 点击解锁";
   if (s2scanState.reviewStatus === "confirmed" && !s2scanState.dirty) return "选点可编辑";
   if (s2scanState.reviewStatus === "confirmed") return "保存并锁定选点";
   return "确认并锁定选点";

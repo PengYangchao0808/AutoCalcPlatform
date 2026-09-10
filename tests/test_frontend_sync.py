@@ -741,6 +741,136 @@ def test_frame_candidate_post_body_includes_item_id() -> None:
 
 
 # ---------------------------------------------------------------------------
+# PES manual review — candidate card mode vs editability (2026-09 regression)
+# ---------------------------------------------------------------------------
+
+def _candidate_card_source(html: str) -> str:
+    """Source of energyCandidateCardMarkup() up to the next top-level function."""
+    return html.split("function energyCandidateCardMarkup(", 1)[1].split("\nfunction ", 1)[0]
+
+
+def test_pes_candidate_card_mode_is_workflow_view_driven() -> None:
+    """Regression guard (2026-09): the PES card flavour must not depend on editability.
+
+    ``energyCandidateCardMarkup()`` used to compute ``isScanPES = canEditRole``.
+    Because ``canEditRole`` also encodes ``!selectionLocked``, a *locked* PES
+    selection degraded to the generic single-frame candidate card whose save
+    button POSTs /frame-candidate — an endpoint the backend rejects for
+    PESsearch jobs with a pointer to /pes/review.  The card flavour must be
+    decided by workflow + view_type alone; ``canEditRole`` may only disable
+    the TS/INT/none role buttons inside the PES card.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+    card = _candidate_card_source(html)
+
+    # The bug form is banned: editability must never select the card mode.
+    assert "var isScanPES = canEditRole;" not in card, (
+        "isScanPES must not be derived from canEditRole — a locked PES "
+        "selection would render the generic /frame-candidate card"
+    )
+    # Mode is workflow (PESsearch) + scan view.
+    assert 'var isScanPES = isPES && String(data.view_type || "") === "scan";' in card, (
+        "isScanPES must be decided by PESsearch workflow + scan view_type"
+    )
+
+    # canEditRole only controls button disabling inside the PES card —
+    # one occurrence per role button (ts / intermediate / none).
+    assert card.count('(canEditRole ? "" : " disabled")') == 3, (
+        "the three PES role buttons must be disabled via canEditRole"
+    )
+    assert "(selectionLocked ? \" disabled\" : '')" not in card, (
+        "role-button disabling must use canEditRole, not the raw lock flag"
+    )
+
+
+def test_pes_locked_selection_never_renders_generic_save_button() -> None:
+    """Regression guard (2026-09): the PES card must never offer /frame-candidate.
+
+    With ``selectionLocked=true`` the PESsearch energy viewer used to fall
+    back to the generic "保存为候选" card bound to
+    ``data-energy-action="save-candidate"`` → POST /jobs/{id}/frame-candidate,
+    which the backend rejects (400) for PESsearch.  The PES card branch must
+    not bind that action at all — locking only disables the role buttons and
+    saving goes through the toolbar lock button → /pes/review.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+    card = _candidate_card_source(html)
+
+    assert "if (isScanPES) {" in card, "sanity: PES card branch exists"
+    pes_branch = card.split("if (isScanPES) {", 1)[1].split("/* Default: idle state", 1)[0]
+
+    assert 'data-energy-action="save-candidate"' not in pes_branch, (
+        "the PES card branch must never bind the generic save-candidate action"
+    )
+    assert "data-energy-role" in pes_branch, (
+        "the PES card branch must expose the TS/INT/none role buttons"
+    )
+
+
+def test_pes_review_confirm_accepts_single_candidate() -> None:
+    """Regression guard (2026-09): a one-frame PES selection must be confirmable.
+
+    The backend accepts one-element (and even empty) candidate lists, so the
+    confirm dialog must POST the *entire* working candidate set to
+    /pes/review without any minimum-size gate.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    payload = html.split("function energyGraphReviewPayload()", 1)[1]
+    payload = payload.split("\nfunction ", 1)[0]
+    assert "s2scanState.candidates.map(" in payload, (
+        "the review payload must carry the whole working candidate set"
+    )
+    assert re.search(r"candidates\.length\s*[<>]=?\s*2", payload) is None, (
+        "the frontend must not impose a >=2 candidate gate — a single TS "
+        "frame is a valid selection"
+    )
+
+    dialog = html.split("function energyGraphOpenSaveDialog()", 1)[1]
+    dialog = dialog.split("\nfunction energyGraphRenderCurrent", 1)[0]
+    assert '"/jobs/" + encodeURIComponent(jobId) + "/pes/review"' in dialog, (
+        "confirming the selection must POST to /pes/review, not /frame-candidate"
+    )
+    assert "/frame-candidate" not in dialog, (
+        "the PES confirm dialog must never call /frame-candidate"
+    )
+
+
+def test_pes_none_role_labeled_cancel_candidate_with_effect_hint() -> None:
+    """Regression guard (2026-09): the PES "none" role must read as 取消候选.
+
+    The third role button cancels the frame's candidate by removing it from
+    the working set; the removal only takes effect once the user saves and
+    locks the selection via /pes/review.  The label must therefore say
+    取消候选 (not the ambiguous 无标记) and carry a "保存并锁定后生效"
+    hint — as a button tooltip plus an edit-mode note line.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Labels in both locales.
+    assert '"energy.card.type_none": "取消候选"' in html, (
+        "zh label must read 取消候选, not 无标记"
+    )
+    assert '"energy.card.type_none": "Remove Candidate"' in html
+    # Effect hint shipped in both locales (2 i18n definitions + 1 t() call site).
+    assert html.count('"energy.card.type_none_hint":') == 2
+    assert 't("energy.card.type_none_hint")' in html
+    assert "保存并锁定后生效" in html
+
+    card = _candidate_card_source(html)
+    # The none button exposes the hint as a tooltip.
+    none_btn = card.split('data-energy-role="none"', 1)[1].split("</button>", 1)[0]
+    assert "noneHint" in none_btn, (
+        "取消候选 button must carry the effect hint as its title"
+    )
+    # The hint note renders only while the role buttons are editable.
+    assert (
+        "(canEditRole ? '<div class=\"energy-card-disabled-note\">' + noneHint + '</div>' : '')"
+        in card
+    ), "the effect-hint note must be gated on canEditRole (edit mode only)"
+
+
+# ---------------------------------------------------------------------------
 # S5 — Structure upload validation (STRUCTURE_UPLOAD_EXTS + reject helpers)
 # ---------------------------------------------------------------------------
 
