@@ -806,3 +806,143 @@ class TestExecutorRegistersNormalModesProduct:
         assert not (
             tmp_path / "RESULT" / "frequencies" / "normal_modes.json"
         ).is_file()
+
+
+# ── Batch per-item registration (todo 24) ───────────────────────────────
+
+
+class TestBatchPerItemNormalModes:
+    """BatchOptimizeEngine copies per-item normal_modes.json to RESULT/frequencies/."""
+
+    def test_batch_item_normal_modes_with_geometry_binding(
+        self, fake_backend: object, tmp_path: Path
+    ) -> None:
+        """opt_freq batch item → RESULT/frequencies/{item_id}__normal_modes.json + product."""
+        import json as _json
+
+        import numpy as np
+
+        from acp.backends.base import QCResult
+        from acp.calculations.batch.engine import BatchOptimizeEngine
+        from acp.calculations.batch.models import BatchStructureItem
+        from acp.storage.manifest import ProductKind, ResultManifest
+        from tests.conftest import FakeBackend
+
+        fb: FakeBackend = fake_backend  # type: ignore[assignment]
+
+        freq_log = tmp_path / "orca_freq.log"
+        freq_log.write_text(
+            FULL_MODES_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+        coordinates = np.array(
+            [[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]], dtype=float
+        )
+        fb.set_result(
+            "optimize",
+            QCResult(
+                success=True,
+                energy=-76.4,
+                coordinates=coordinates,
+                symbols=["O", "H", "H"],
+                converged=True,
+            ),
+        )
+        fb.set_result(
+            "frequency",
+            QCResult(
+                success=True,
+                frequencies=[-797.72, -791.36, 1411.55],
+                has_frequencies=True,
+                freq_log_file=freq_log,
+            ),
+        )
+
+        item = BatchStructureItem(
+            item_id="opt_item_001",
+            name="Test molecule",
+            tag="",
+            xyz="3\nTAG: INT | candidate_id=opt_item_001\nO 0 0 0\nH 0 0 1\nH 0 1 0\n",
+            candidate_id="opt_item_001",
+        )
+
+        task_root = tmp_path / "task"
+        engine = BatchOptimizeEngine(
+            work_root=task_root / "WORK",
+            result_root=task_root / "RESULT",
+        )
+        outcome = engine.run([item], profile="opt_freq", layout_mode="single_flat")
+        assert outcome.items[0].status == "completed"
+
+        nm_dest = task_root / "RESULT" / "frequencies" / "opt_item_001__normal_modes.json"
+        assert nm_dest.is_file()
+        product = _json.loads(nm_dest.read_text(encoding="utf-8"))
+        assert product["schema_version"] == "normal_modes_v1"
+        assert len(product["modes"]) == 9
+
+        manifest = ResultManifest.read(task_root / "RESULT")
+        freq_modes = [
+            p for p in manifest.products if p.kind == ProductKind.FREQUENCY_MODES
+        ]
+        assert len(freq_modes) == 1
+        assert freq_modes[0].path == "frequencies/opt_item_001__normal_modes.json"
+        assert freq_modes[0].metadata["geometry_product_id"] == "batch_opt_item_001"
+
+    def test_batch_item_no_modes_no_product(
+        self, fake_backend: object, tmp_path: Path
+    ) -> None:
+        """Frequency without ORCA modes → no FREQUENCY_MODES product for batch item."""
+        import numpy as np
+
+        from acp.backends.base import QCResult
+        from acp.calculations.batch.engine import BatchOptimizeEngine
+        from acp.calculations.batch.models import BatchStructureItem
+        from acp.storage.manifest import ProductKind, ResultManifest
+        from tests.conftest import FakeBackend
+
+        fb: FakeBackend = fake_backend  # type: ignore[assignment]
+
+        coordinates = np.array([[0.0, 0.0, 0.0]], dtype=float)
+        fb.set_result(
+            "optimize",
+            QCResult(
+                success=True,
+                energy=-40.0,
+                coordinates=coordinates,
+                symbols=["C"],
+                converged=True,
+            ),
+        )
+        fb.set_result(
+            "frequency",
+            QCResult(
+                success=True,
+                frequencies=[350.0, 1200.0],
+                has_frequencies=True,
+            ),
+        )
+
+        item = BatchStructureItem(
+            item_id="opt_item_002",
+            name="Simple mol",
+            tag="",
+            xyz="1\n\nC 0 0 0\n",
+            candidate_id="opt_item_002",
+        )
+
+        task_root = tmp_path / "task"
+        engine = BatchOptimizeEngine(
+            work_root=task_root / "WORK",
+            result_root=task_root / "RESULT",
+        )
+        outcome = engine.run([item], profile="opt_freq", layout_mode="single_flat")
+        assert outcome.items[0].status == "completed"
+
+        manifest = ResultManifest.read(task_root / "RESULT")
+        freq_modes = [
+            p for p in manifest.products if p.kind == ProductKind.FREQUENCY_MODES
+        ]
+        assert len(freq_modes) == 0
+        assert not (
+            task_root / "RESULT" / "frequencies" / "opt_item_002__normal_modes.json"
+        ).is_file()

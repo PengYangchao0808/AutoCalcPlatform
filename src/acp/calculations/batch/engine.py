@@ -1195,6 +1195,7 @@ class BatchOptimizeEngine:
         result_manifest = self._read_result_manifest()
         for item in completed:
             self._materialize_optimization_trajectory(item)
+            self._materialize_normal_modes(item, result_manifest)
             source = self._resolve_output_geometry(item)
             if source is None:
                 logger.warning(
@@ -1264,6 +1265,43 @@ class BatchOptimizeEngine:
                     target_dir / cycles.relative_to(source_dir),
                     dirs_exist_ok=True,
                 )
+
+    def _materialize_normal_modes(
+        self, item: BatchCalculationItem, result_manifest: ResultManifest
+    ) -> None:
+        """Copy per-item normal_modes.json to ``RESULT/frequencies/``.
+
+        The frequency primitive writes ``normal_modes.json`` into the item's
+        frequency step directory.  This method copies it to the canonical
+        per-item result path and registers a ``FREQUENCY_MODES`` product with
+        geometry binding metadata.  Never fails the item — all errors are
+        silently logged at debug level.
+        """
+        freq_step_dir = self._step_dir(item, StepKind.FREQUENCY)
+        source = freq_step_dir / "normal_modes.json"
+        if not source.is_file():
+            return
+
+        freq_dir = self._result_root / "frequencies"
+        freq_dir.mkdir(parents=True, exist_ok=True)
+        dest = freq_dir / f"{item.item_id}__normal_modes.json"
+        try:
+            _ = shutil.copy2(source, dest)
+        except OSError:
+            logger.debug(
+                "batch: could not copy normal_modes.json for %s; skipping",
+                item.item_id,
+            )
+            return
+
+        rel_path = dest.relative_to(self._result_root).as_posix()
+        _ = result_manifest.add_product(
+            f"batch_{item.item_id}_normal_modes",
+            f"{item.name} — normal modes",
+            rel_path,
+            ProductKind.FREQUENCY_MODES,
+            metadata={"geometry_product_id": f"batch_{item.item_id}"},
+        )
 
     def _resolve_output_geometry(self, item: BatchCalculationItem) -> Path | None:
         """Resolve an item's optimized geometry."""
