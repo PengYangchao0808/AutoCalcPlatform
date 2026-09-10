@@ -377,15 +377,15 @@ class TestDispatcherSkeleton:
         assert hasattr(payload.groups, "__iter__")
         assert hasattr(payload.warnings, "__iter__")
 
-    def test_unimplemented_resolver_warns_for_scan(self, tmp_path: Path):
-        """Resolvers not yet implemented produce a specific warning."""
+    def test_scan_no_trajectory_warns(self, tmp_path: Path):
+        """Scan with no trajectory produces a warning."""
         from acp.results.structure_viewer import build_structure_viewer_payload
 
         task = _make_task_dir(tmp_path)
         payload = build_structure_viewer_payload(
             task, job_id="j1", workflow="scan", job_status="completed"
         )
-        assert any("not yet implemented" in w.lower() for w in payload.warnings)
+        assert any("no scan trajectory" in w.lower() for w in payload.warnings)
 
 
 # ---------------------------------------------------------------------------
@@ -938,11 +938,12 @@ def _make_batch_task(
     return tmp_path
 
 
-def _optimization_trajectory(*, status: str = "completed",
+def _optimization_trajectory(*, status: str = "completed", converged: bool = True,
                              cycles: list[dict] | None = None) -> dict:
     return {
-        "schema_version": "optimization_trajectory_v1",
+        "schema_version": 1,
         "status": status,
+        "converged": converged,
         "cycles": cycles or [
             {"cycle": 1, "energy_hartree": -1.0, "geometry_ref": "cycles/cycle_0001.xyz",
              "rms_gradient": 1e-4, "max_gradient": 3e-4},
@@ -1164,3 +1165,387 @@ class TestBatchResolver:
         entry = payload.entries[0]
         assert entry.source.kind == "last_valid_cycle"
         assert entry.source.geometry_ref is None
+
+
+# ---------------------------------------------------------------------------
+# Simple/scan resolver tests
+# ---------------------------------------------------------------------------
+
+
+def _make_simple_task(
+    tmp_path: Path,
+    *,
+    workflow: str = "optimize",
+    products: list[dict] | None = None,
+    optimization_trajectory: dict | None = None,
+    input_xyz: str | None = None,
+) -> Path:
+    """Create a task dir for simple workflow tests."""
+    (tmp_path / "job.json").write_text("{}")
+    (tmp_path / "task.json").write_text("{}")
+    result_dir = tmp_path / "RESULT"
+    result_dir.mkdir(exist_ok=True)
+
+    manifest = {
+        "version": 2,
+        "task_id": "",
+        "workflow": workflow,
+        "status": "completed",
+        "products": products or [],
+    }
+    (result_dir / "result_manifest.json").write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
+
+    for product in (products or []):
+        if product.get("path"):
+            product_path = result_dir / product["path"]
+            product_path.parent.mkdir(parents=True, exist_ok=True)
+            if not product_path.is_file():
+                product_path.write_text("1\ntest\nH 0 0 0\n", encoding="utf-8")
+
+    if optimization_trajectory is not None:
+        opt_dir = tmp_path / "WORK" / "03_OPT"
+        opt_dir.mkdir(parents=True, exist_ok=True)
+        (opt_dir / "optimization_trajectory.json").write_text(
+            json.dumps(optimization_trajectory), encoding="utf-8"
+        )
+        for cycle in optimization_trajectory.get("cycles", []):
+            geom_ref = cycle.get("geometry_ref", "")
+            if geom_ref:
+                cycle_file = opt_dir / geom_ref
+                cycle_file.parent.mkdir(parents=True, exist_ok=True)
+                cycle_file.write_text("1\ntest\nH 0 0 0\n", encoding="utf-8")
+
+    if input_xyz is not None:
+        (tmp_path / "input.xyz").write_text(input_xyz, encoding="utf-8")
+
+    return tmp_path
+
+
+def _make_scan_task(
+    tmp_path: Path,
+    *,
+    trajectory: dict,
+    frame_files: dict[str, str] | None = None,
+) -> Path:
+    """Create a task dir for scan workflow tests."""
+    (tmp_path / "job.json").write_text("{}")
+    (tmp_path / "task.json").write_text("{}")
+    result_dir = tmp_path / "RESULT"
+    result_dir.mkdir(exist_ok=True)
+
+    traj_dir = result_dir / "trajectories"
+    traj_dir.mkdir(parents=True, exist_ok=True)
+    (traj_dir / "scan_trajectory.json").write_text(
+        json.dumps(trajectory), encoding="utf-8"
+    )
+
+    manifest = {
+        "version": 2,
+        "task_id": "",
+        "workflow": "scan",
+        "status": "completed",
+        "products": [
+            {"id": "scan_trajectory", "label": "Relaxed scan trajectory",
+             "path": "trajectories/scan_trajectory.json", "kind": "trajectory"},
+        ],
+    }
+    (result_dir / "result_manifest.json").write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
+
+    if frame_files:
+        for rel_path, content in frame_files.items():
+            frame_path = result_dir / rel_path
+            frame_path.parent.mkdir(parents=True, exist_ok=True)
+            frame_path.write_text(content, encoding="utf-8")
+
+    return tmp_path
+
+
+class TestSimpleResolver:
+    """Simple workflow resolver: optimize/xtb-optimize/singlepoint/frequency."""
+
+    def test_optimize_completed_formal_product(self, tmp_path: Path):
+        """Optimize with formal structure product -> formal_result default."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [
+            {"id": "step_0_optimize_structure", "label": "optimize (step 0) — structure",
+             "path": "WORK/03_OPT/optimized.xyz", "kind": "structure"},
+            {"id": "step_0_optimize_energy", "label": "optimize (step 0) — energy",
+             "path": "", "kind": "energy_report"},
+        ]
+        task = _make_simple_task(tmp_path, workflow="optimize", products=products)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="optimize", job_status="completed"
+        )
+        assert len(payload.entries) == 1
+        entry = payload.entries[0]
+        assert entry.id == "simple_optimize"
+        assert entry.source.kind == "formal_result"
+        assert entry.status == "completed"
+        assert payload.default_entry_id == "simple_optimize"
+
+    def test_optimize_failed_trajectory(self, tmp_path: Path):
+        """Optimize with failed trajectory -> last_valid_cycle, badge, label."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        traj = _optimization_trajectory(
+            status="failed",
+            converged=False,
+            cycles=[
+                {"cycle": 1, "energy_hartree": -1.0, "geometry_ref": "cycles/cycle_0001.xyz",
+                 "rms_gradient": 1e-3, "max_gradient": 3e-3},
+                {"cycle": 2, "energy_hartree": -1.1, "geometry_ref": "cycles/cycle_0002.xyz",
+                 "rms_gradient": 5e-4, "max_gradient": 1e-3},
+            ],
+        )
+        task = _make_simple_task(tmp_path, workflow="optimize", optimization_trajectory=traj)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="optimize", job_status="failed"
+        )
+        assert len(payload.entries) == 1
+        entry = payload.entries[0]
+        assert entry.id == "simple_optimize"
+        assert entry.source.kind == "last_valid_cycle"
+        assert entry.status == "failed"
+        assert "failed-last-frame" in entry.badges
+        assert "未收敛" in entry.label
+        assert "最后有效结构" in entry.label
+        assert entry.source.geometry_ref == "WORK/03_OPT/cycles/cycle_0002.xyz"
+
+    def test_optimize_no_geometry_warning(self, tmp_path: Path):
+        """Optimize with no geometry at all -> warnings + no entries, no crash."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        task = _make_simple_task(tmp_path, workflow="optimize", products=[])
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="optimize", job_status="completed"
+        )
+        assert len(payload.entries) == 0
+        assert len(payload.warnings) > 0
+
+    def test_singlepoint_input_structure(self, tmp_path: Path):
+        """Singlepoint -> input structure + energy + '几何未改变' badge."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [
+            {"id": "step_0_singlepoint_energy", "label": "singlepoint (step 0) — energy",
+             "path": "", "kind": "energy_report", "metadata": {"energy_hartree": -76.5}},
+        ]
+        input_xyz = "3\nwater\nO 0 0 0\nH 0 0 1\nH 0 1 0\n"
+        task = _make_simple_task(
+            tmp_path, workflow="singlepoint", products=products, input_xyz=input_xyz
+        )
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="singlepoint", job_status="completed"
+        )
+        assert len(payload.entries) == 1
+        entry = payload.entries[0]
+        assert entry.id == "simple_singlepoint"
+        assert entry.source.kind == "calculation_input"
+        assert entry.source.geometry_ref == "input.xyz"
+        assert "几何未改变" in entry.badges
+        assert entry.energy.value == pytest.approx(-76.5)
+
+    def test_frequency_input_structure(self, tmp_path: Path):
+        """Frequency -> input structure."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        input_xyz = "3\nwater\nO 0 0 0\nH 0 0 1\nH 0 1 0\n"
+        task = _make_simple_task(
+            tmp_path, workflow="frequency", products=[], input_xyz=input_xyz
+        )
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="frequency", job_status="completed"
+        )
+        assert len(payload.entries) == 1
+        entry = payload.entries[0]
+        assert entry.id == "simple_frequency"
+        assert entry.source.kind == "calculation_input"
+        assert entry.source.geometry_ref == "input.xyz"
+        assert entry.vibrations.available is False
+
+    def test_xtb_optimize_uses_optimize_resolver(self, tmp_path: Path):
+        """xtb-optimize follows the same path as optimize."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [
+            {"id": "step_0_optimize_structure", "label": "optimize (step 0) — structure",
+             "path": "WORK/03_OPT/optimized.xyz", "kind": "structure"},
+        ]
+        task = _make_simple_task(tmp_path, workflow="xtb-optimize", products=products)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="xtb-optimize", job_status="completed"
+        )
+        assert len(payload.entries) == 1
+        assert payload.entries[0].source.kind == "formal_result"
+
+    def test_priority_formal_over_trajectory(self, tmp_path: Path):
+        """Formal product takes priority over optimization trajectory."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [
+            {"id": "step_0_optimize_structure", "label": "optimize (step 0) — structure",
+             "path": "WORK/03_OPT/optimized.xyz", "kind": "structure"},
+        ]
+        traj = _optimization_trajectory(status="failed", converged=False)
+        task = _make_simple_task(
+            tmp_path, workflow="optimize", products=products, optimization_trajectory=traj
+        )
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="optimize", job_status="completed"
+        )
+        assert len(payload.entries) == 1
+        assert payload.entries[0].source.kind == "formal_result"
+
+    def test_no_result_manifest_warning(self, tmp_path: Path):
+        """No result manifest -> warning, no entries."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        (tmp_path / "job.json").write_text("{}")
+        (tmp_path / "task.json").write_text("{}")
+        payload = build_structure_viewer_payload(
+            tmp_path, job_id="j1", workflow="optimize", job_status="completed"
+        )
+        assert len(payload.entries) == 0
+        assert len(payload.warnings) > 0
+
+
+class TestScanResolver:
+    """Scan resolver: frame entries in file order, default = lowest energy."""
+
+    def test_scan_four_frames(self, tmp_path: Path):
+        """4-frame scan -> 4 entries in file order, default = lowest-energy frame."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        trajectory = {
+            "workflow": "scan",
+            "frame_count": 4,
+            "successful_frame_count": 4,
+            "frames": [
+                {"index": 0, "path": "structures/scan_frame_000.xyz", "progress": 0.0, "energy_hartree": -1.0},
+                {"index": 1, "path": "structures/scan_frame_001.xyz", "progress": 0.33, "energy_hartree": -1.2},
+                {"index": 2, "path": "structures/scan_frame_002.xyz", "progress": 0.67, "energy_hartree": -1.5},
+                {"index": 3, "path": "structures/scan_frame_003.xyz", "progress": 1.0, "energy_hartree": -1.1},
+            ],
+        }
+        frame_files = {
+            "structures/scan_frame_000.xyz": "1\ntest\nH 0 0 0\n",
+            "structures/scan_frame_001.xyz": "1\ntest\nH 0 0 1\n",
+            "structures/scan_frame_002.xyz": "1\ntest\nH 0 1 0\n",
+            "structures/scan_frame_003.xyz": "1\ntest\nH 1 0 0\n",
+        }
+        task = _make_scan_task(tmp_path, trajectory=trajectory, frame_files=frame_files)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="scan", job_status="completed"
+        )
+        assert len(payload.entries) == 4
+
+        # Entries in file order
+        ids = [e.id for e in payload.entries]
+        assert ids == ["scan_frame_0", "scan_frame_1", "scan_frame_2", "scan_frame_3"]
+
+        # Default = lowest energy (frame 2, energy -1.5)
+        assert payload.default_entry_id == "scan_frame_2"
+
+        # All entries have correct source
+        for entry in payload.entries:
+            assert entry.source.kind == "formal_result"
+            assert entry.source.frame_index is not None
+
+    def test_scan_default_lowest_energy(self, tmp_path: Path):
+        """Default is the frame with lowest energy, not first or last."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        trajectory = {
+            "workflow": "scan",
+            "frame_count": 3,
+            "frames": [
+                {"index": 0, "path": "structures/scan_frame_000.xyz", "energy_hartree": -1.0},
+                {"index": 1, "path": "structures/scan_frame_001.xyz", "energy_hartree": -2.0},
+                {"index": 2, "path": "structures/scan_frame_002.xyz", "energy_hartree": -1.5},
+            ],
+        }
+        task = _make_scan_task(tmp_path, trajectory=trajectory)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="scan", job_status="completed"
+        )
+        assert payload.default_entry_id == "scan_frame_1"
+
+    def test_scan_failed_frame_status(self, tmp_path: Path):
+        """Frame with None energy -> status='failed'."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        trajectory = {
+            "workflow": "scan",
+            "frame_count": 2,
+            "frames": [
+                {"index": 0, "path": "structures/scan_frame_000.xyz", "energy_hartree": -1.0},
+                {"index": 1, "path": "structures/scan_frame_001.xyz", "energy_hartree": None},
+            ],
+        }
+        task = _make_scan_task(tmp_path, trajectory=trajectory)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="scan", job_status="completed"
+        )
+        assert len(payload.entries) == 2
+        assert payload.entries[0].status == "completed"
+        assert payload.entries[1].status == "failed"
+
+    def test_scan_no_trajectory_warning(self, tmp_path: Path):
+        """No scan trajectory -> warning, no entries."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        (tmp_path / "job.json").write_text("{}")
+        (tmp_path / "task.json").write_text("{}")
+        result_dir = tmp_path / "RESULT"
+        result_dir.mkdir(exist_ok=True)
+        manifest = {"version": 2, "task_id": "", "workflow": "scan", "status": "completed", "products": []}
+        (result_dir / "result_manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+        payload = build_structure_viewer_payload(
+            tmp_path, job_id="j1", workflow="scan", job_status="completed"
+        )
+        assert len(payload.entries) == 0
+        assert len(payload.warnings) > 0
+
+    def test_scan_not_reordered_by_energy(self, tmp_path: Path):
+        """Entries stay in file order even if energies are not sorted."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        trajectory = {
+            "workflow": "scan",
+            "frame_count": 3,
+            "frames": [
+                {"index": 0, "path": "structures/scan_frame_000.xyz", "energy_hartree": -3.0},
+                {"index": 1, "path": "structures/scan_frame_001.xyz", "energy_hartree": -1.0},
+                {"index": 2, "path": "structures/scan_frame_002.xyz", "energy_hartree": -2.0},
+            ],
+        }
+        task = _make_scan_task(tmp_path, trajectory=trajectory)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="scan", job_status="completed"
+        )
+        energies = [e.energy.value for e in payload.entries]
+        assert energies == [-3.0, -1.0, -2.0]
+
+    def test_scan_geometry_endpoint(self, tmp_path: Path):
+        """Geometry endpoint uses job_id and entry_id."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        trajectory = {
+            "workflow": "scan",
+            "frame_count": 1,
+            "frames": [
+                {"index": 0, "path": "structures/scan_frame_000.xyz", "energy_hartree": -1.0},
+            ],
+        }
+        task = _make_scan_task(tmp_path, trajectory=trajectory)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="scan", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert entry.geometry.endpoint == "/api/v1/jobs/j1/structure-viewer/entries/scan_frame_0/geometry"

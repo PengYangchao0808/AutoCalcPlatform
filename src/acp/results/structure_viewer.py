@@ -455,14 +455,14 @@ def _compute_revision(task_root: Path, job_status: str) -> str:
 
 # ── Workflow dispatch table ─────────────────────────────────────────────────
 # Type alias for resolver functions.
-# Each resolver receives (task_root, job_id, warnings, item_id) and returns
-# (groups, entries, default_entry_id).
+# Each resolver receives (task_root, workflow, job_id, warnings, item_id) and
+# returns (groups, entries, default_entry_id).
 _ResolverResult = tuple[
     list[StructureViewerGroup],
     list[StructureViewerEntry],
     str | None,
 ]
-_Resolver = Any  # Callable[[Path, str, list[str], str | None], _ResolverResult]
+_Resolver = Any  # Callable[[Path, str, str, list[str], str | None], _ResolverResult]
 
 
 def _compute_boltzmann_weights(
@@ -500,7 +500,7 @@ def _compute_boltzmann_weights(
     return result
 
 
-def _resolve_confsearch(task_root: Path, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
+def _resolve_confsearch(task_root: Path, workflow: str, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
     """Resolve Confsearch manifest → structure viewer entries.
 
     Reads ``RESULT/confsearch/confsearch_manifest.json`` via the authoritative
@@ -675,7 +675,7 @@ def _read_pes_json(task_root: Path, relative: str) -> dict[str, Any] | None:
 _CONFIDENCE_ORDER: dict[str, int] = {"high": 0, "medium": 1, "low": 2}
 
 
-def _resolve_pessearch(task_root: Path, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
+def _resolve_pessearch(task_root: Path, workflow: str, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
     """Resolve PESsearch recommendations + review → structure viewer entries."""
     recs_payload = _read_pes_json(task_root, "RESULT/pes_search/pes_recommendations.json")
     review_payload = _read_pes_json(task_root, "RESULT/pes_search/pes_review.json")
@@ -817,7 +817,7 @@ def _resolve_pessearch(task_root: Path, job_id: str, warnings: list[str], item_i
     return groups, entries, default_id
 
 
-def _resolve_batchoptimize(task_root: Path, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
+def _resolve_batchoptimize(task_root: Path, workflow: str, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
     """Resolve BatchOptimize result_manifest products + failed-item trajectories."""
     import re as _re
 
@@ -936,25 +936,245 @@ def _resolve_batchoptimize(task_root: Path, job_id: str, warnings: list[str], it
     return groups, entries, default_id
 
 
-def _resolve_simple(task_root: Path, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
-    """Simple workflow resolver — placeholder for todo 5."""
-    warnings.append("Simple workflow resolver not yet implemented")
-    return [], [], None
+def _resolve_simple(task_root: Path, workflow: str, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
+    """Resolve simple workflows (optimize/xtb-optimize/singlepoint/frequency).
+
+    Priority chain: formal RESULT product > optimization trajectory (failed) >
+    calculation input.  The workflow string selects which step kind to look for.
+    """
+    from acp.results.manifest import find_products, load_result_manifest
+
+    # Map workflow name → step kind for product lookup
+    _WORKFLOW_STEP_KIND = {
+        "optimize": "optimize",
+        "xtb-optimize": "optimize",
+        "singlepoint": "singlepoint",
+        "frequency": "frequency",
+    }
+    step_kind = _WORKFLOW_STEP_KIND.get(workflow, "optimize")
+
+    # Map workflow name → display label
+    _WORKFLOW_LABELS = {
+        "optimize": "优化",
+        "xtb-optimize": "xTB 优化",
+        "singlepoint": "单点能",
+        "frequency": "频率",
+    }
+    label = _WORKFLOW_LABELS.get(workflow, workflow)
+
+    manifest = load_result_manifest(task_root)
+    if manifest is None:
+        warnings.append(f"No result manifest found for {workflow}")
+        return [], [], None
+
+    # Look for formal structure products from this step
+    structure_products = find_products(manifest, "structure")
+    step_structure = [p for p in structure_products if step_kind in p.id.lower()]
+
+    # Also look for energy products
+    energy_products = find_products(manifest, "energy_report")
+    step_energy = [p for p in energy_products if step_kind in p.id.lower()]
+
+    groups: list[StructureViewerGroup] = []
+    entries: list[StructureViewerEntry] = []
+    default_id: str | None = None
+
+    # Priority 1: formal RESULT structure product
+    if step_structure:
+        product = step_structure[0]
+        entry_id = simple_entry_id(step_kind)
+        geometry_ref = f"RESULT/{product.path}" if product.path else None
+
+        # Try to get energy from energy product
+        energy_val: float | None = None
+        if step_energy:
+            energy_meta = step_energy[0].metadata.get("energy_hartree") if step_energy[0].metadata else None
+            if energy_meta is not None:
+                energy_val = _number(energy_meta)
+
+        entries.append(StructureViewerEntry(
+            id=entry_id,
+            group_id="",
+            label=label,
+            role="minimum",
+            status="completed",
+            geometry=StructureViewerGeometry(
+                endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+                format="xyz",
+            ),
+            energy=StructureViewerEnergy(value=energy_val, unit="hartree", kind="electronic"),
+            source=StructureViewerSource(kind="formal_result", geometry_ref=geometry_ref),
+            vibrations=StructureViewerVibrations(available=False),
+        ))
+        default_id = entry_id
+        return groups, entries, default_id
+
+    # Priority 2: optimization trajectory (for optimize/xtb-optimize)
+    if step_kind == "optimize":
+        from acp.results.energy_graph import find_optimization_trajectory
+
+        traj_path, payload = find_optimization_trajectory(task_root)
+        if traj_path is not None and payload is not None:
+            cycles = payload.get("cycles")
+            if isinstance(cycles, list) and cycles:
+                last_cycle = cycles[-1]
+                last_geom_ref = str(last_cycle.get("geometry_ref") or "")
+                last_energy = _number(last_cycle.get("energy_hartree"))
+                status = str(payload.get("status") or "").lower()
+                converged = bool(payload.get("converged"))
+
+                if not converged or status == "failed":
+                    # Failed optimization — show last valid cycle
+                    entry_id = simple_entry_id(step_kind)
+                    geometry_ref = f"WORK/03_OPT/{last_geom_ref}" if last_geom_ref else None
+
+                    entries.append(StructureViewerEntry(
+                        id=entry_id,
+                        group_id="",
+                        label=f"{label} 未收敛 · 最后有效结构",
+                        role="minimum",
+                        status="failed",
+                        geometry=StructureViewerGeometry(
+                            endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+                            format="xyz",
+                        ),
+                        energy=StructureViewerEnergy(value=last_energy, unit="hartree", kind="electronic"),
+                        source=StructureViewerSource(kind="last_valid_cycle", geometry_ref=geometry_ref),
+                        badges=("failed-last-frame",),
+                        vibrations=StructureViewerVibrations(available=False),
+                    ))
+                    default_id = entry_id
+                    return groups, entries, default_id
+
+    # Priority 3: calculation input (for singlepoint/frequency, or as fallback)
+    if step_kind in ("singlepoint", "frequency"):
+        # For singlepoint/frequency, the input structure IS the structure
+        input_xyz = task_root / "input.xyz"
+        if input_xyz.is_file():
+            entry_id = simple_entry_id(step_kind)
+            geometry_ref = "input.xyz"
+
+            # For singlepoint, try to get energy from energy product
+            energy_val = None
+            if step_kind == "singlepoint" and step_energy:
+                energy_meta = step_energy[0].metadata.get("energy_hartree") if step_energy[0].metadata else None
+                if energy_meta is not None:
+                    energy_val = _number(energy_meta)
+
+            badges: list[str] = []
+            if step_kind == "singlepoint":
+                badges.append("几何未改变")
+
+            entries.append(StructureViewerEntry(
+                id=entry_id,
+                group_id="",
+                label=label,
+                role="minimum",
+                status="completed",
+                geometry=StructureViewerGeometry(
+                    endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+                    format="xyz",
+                ),
+                energy=StructureViewerEnergy(value=energy_val, unit="hartree", kind="electronic"),
+                source=StructureViewerSource(kind="calculation_input", geometry_ref=geometry_ref),
+                badges=tuple(badges),
+                vibrations=StructureViewerVibrations(available=False),
+            ))
+            default_id = entry_id
+            return groups, entries, default_id
+
+    warnings.append(f"No structure found for {workflow}")
+    return groups, entries, default_id
 
 
-def _resolve_scan(task_root: Path, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
-    """Scan resolver — placeholder for todo 5."""
-    warnings.append("Scan resolver not yet implemented")
-    return [], [], None
+def _resolve_scan(task_root: Path, workflow: str, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
+    """Resolve scan trajectory → structure viewer entries.
+
+    Reads ``RESULT/trajectories/scan_trajectory.json`` via the scan primitive's
+    persisted output.  Produces one entry per frame in file order, with the
+    lowest-energy frame as default selection.
+    """
+    traj_path = task_root / "RESULT" / "trajectories" / "scan_trajectory.json"
+    if not traj_path.is_file():
+        warnings.append("No scan trajectory found")
+        return [], [], None
+
+    try:
+        payload = json.loads(traj_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        warnings.append(f"Cannot read scan trajectory: {exc}")
+        return [], [], None
+
+    if not isinstance(payload, dict):
+        warnings.append("Scan trajectory is not a JSON object")
+        return [], [], None
+
+    frames = payload.get("frames")
+    if not isinstance(frames, list) or not frames:
+        warnings.append("Scan trajectory has no frames")
+        return [], [], None
+
+    groups: list[StructureViewerGroup] = []
+    entries: list[StructureViewerEntry] = []
+    default_id: str | None = None
+    min_energy: float | None = None
+    min_energy_entry_id: str | None = None
+
+    for frame in frames:
+        if not isinstance(frame, dict):
+            continue
+        frame_index_raw = frame.get("index")
+        if frame_index_raw is None:
+            continue
+        frame_index = int(frame_index_raw)
+        entry_id = scan_entry_id(frame_index)
+
+        energy_val = _number(frame.get("energy_hartree"))
+        relative_path = str(frame.get("path") or "")
+        geometry_ref = f"RESULT/{relative_path}" if relative_path else None
+        status = "failed" if energy_val is None else "completed"
+
+        entries.append(StructureViewerEntry(
+            id=entry_id,
+            group_id="",
+            label=f"扫描帧 {frame_index}",
+            role="minimum",
+            status=status,
+            geometry=StructureViewerGeometry(
+                endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+                format="xyz",
+            ),
+            energy=StructureViewerEnergy(value=energy_val, unit="hartree", kind="electronic"),
+            source=StructureViewerSource(
+                kind="formal_result",
+                frame_index=frame_index,
+                geometry_ref=geometry_ref,
+            ),
+            vibrations=StructureViewerVibrations(available=False),
+        ))
+
+        # Track lowest energy for default selection
+        if energy_val is not None:
+            if min_energy is None or energy_val < min_energy:
+                min_energy = energy_val
+                min_energy_entry_id = entry_id
+
+    if not entries:
+        warnings.append("No valid scan frames found")
+        return groups, entries, None
+
+    # Default = lowest-energy frame (NOT reordered — entries stay in file order)
+    default_id = min_energy_entry_id or entries[0].id
+    return groups, entries, default_id
 
 
-def _resolve_irc(task_root: Path, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
+def _resolve_irc(task_root: Path, workflow: str, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
     """IRC resolver — placeholder for todo 6."""
     warnings.append("IRC resolver not yet implemented")
     return [], [], None
 
 
-def _resolve_legacy(task_root: Path, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
+def _resolve_legacy(task_root: Path, workflow: str, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
     """Legacy fallback resolver — placeholder for todo 6."""
     warnings.append("Legacy resolver not yet implemented")
     return [], [], None
@@ -1038,7 +1258,7 @@ def build_structure_viewer_payload(
 
     resolver = _DISPATCH_TABLE.get(workflow, _resolve_legacy)
     try:
-        groups_raw, entries_raw, default_id = resolver(root, job_id, warnings, item_id)
+        groups_raw, entries_raw, default_id = resolver(root, workflow, job_id, warnings, item_id)
     except StructureViewerError:
         raise
     except Exception as exc:
