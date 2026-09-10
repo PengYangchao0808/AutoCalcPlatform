@@ -53,6 +53,10 @@ class BatchMethodOptions:
     scf_convergence: str = "tight"
     scf_strategy: str = "normal"
     scf_orbital_inherit: bool = True
+    scf_damp: bool = False
+    scf_damp_fac: float = 0.50
+    scf_shift: bool = False
+    scf_shift_fac: float = 0.30
 
     def for_role(self, is_transition_state: bool) -> tuple[str, str]:
         """Return the method and basis selected for one item role."""
@@ -109,6 +113,10 @@ class BatchMethodOptions:
                 "scf_convergence": self.scf_convergence,
                 "scf_strategy": self.scf_strategy,
                 "scf_orbital_inherit": self.scf_orbital_inherit,
+                "scf_damp": self.scf_damp,
+                "scf_damp_fac": self.scf_damp_fac,
+                "scf_shift": self.scf_shift,
+                "scf_shift_fac": self.scf_shift_fac,
             },
             sort_keys=True,
             separators=(",", ":"),

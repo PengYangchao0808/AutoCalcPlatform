@@ -464,6 +464,10 @@ _SCF_OPTIONS_KEYS = frozenset(
         "no_use_sym",
         "write_spin_density",
         "scf_extra_lines",
+        "damp",
+        "dampfac",
+        "shift",
+        "shiftfac",
     }
 )
 
@@ -542,6 +546,18 @@ def render_scf_block(scf_options: dict | None) -> str | None:
     maxiter = scf_options.get("maxiter")
     if isinstance(maxiter, (int, float)) and maxiter > 0:
         lines.append(f"  MaxIter {int(maxiter)}")
+
+    damp = scf_options.get("damp")
+    if damp:
+        lines.append("  Damp true")
+        dampfac = scf_options.get("dampfac", 0.50)
+        lines.append(f"  DampFac {float(dampfac):.2f}")
+
+    shift = scf_options.get("shift")
+    if shift:
+        lines.append("  Shift true")
+        shiftfac = scf_options.get("shiftfac", 0.30)
+        lines.append(f"  ShiftFac {float(shiftfac):.2f}")
 
     for extra in scf_options.get("scf_extra_lines") or []:
         if isinstance(extra, str) and extra.strip():
@@ -1699,6 +1715,14 @@ class ORCAInterface(QCInterfaceBase):
                 kwargs["scf_options"] = _scf_opts
             _scf_opts.setdefault("mo_read_path", _mo_read_path)
 
+        for _damp_key in ("scf_damp", "scf_damp_fac", "scf_shift", "scf_shift_fac"):
+            _damp_val = kwargs.pop(_damp_key, None)
+            if _damp_val is not None:
+                _scf_opts_key = _damp_key.replace("scf_", "", 1)
+                _scf_opts = kwargs.get("scf_options") or {}
+                _scf_opts.setdefault(_scf_opts_key, _damp_val)
+                kwargs["scf_options"] = _scf_opts
+
         self._write_input(
             input_file,
             coordinates,
@@ -2261,6 +2285,14 @@ class ORCAInterface(QCInterfaceBase):
                 kwargs["scf_options"] = _scf_opts
             _scf_opts.setdefault("mo_read_path", _mo_read_path)
 
+        for _damp_key in ("scf_damp", "scf_damp_fac", "scf_shift", "scf_shift_fac"):
+            _damp_val = kwargs.pop(_damp_key, None)
+            if _damp_val is not None:
+                _scf_opts_key = _damp_key.replace("scf_", "", 1)
+                _scf_opts = kwargs.get("scf_options") or {}
+                _scf_opts.setdefault(_scf_opts_key, _damp_val)
+                kwargs["scf_options"] = _scf_opts
+
         self._write_input(
             input_file,
             coordinates,
@@ -2356,6 +2388,14 @@ class ORCAInterface(QCInterfaceBase):
                 _scf_opts = {}
                 kwargs["scf_options"] = _scf_opts
             _scf_opts.setdefault("mo_read_path", _mo_read_path)
+
+        for _damp_key in ("scf_damp", "scf_damp_fac", "scf_shift", "scf_shift_fac"):
+            _damp_val = kwargs.pop(_damp_key, None)
+            if _damp_val is not None:
+                _scf_opts_key = _damp_key.replace("scf_", "", 1)
+                _scf_opts = kwargs.get("scf_options") or {}
+                _scf_opts.setdefault(_scf_opts_key, _damp_val)
+                kwargs["scf_options"] = _scf_opts
 
         self._write_input(
             input_file,

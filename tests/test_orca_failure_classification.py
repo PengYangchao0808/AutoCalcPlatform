@@ -16,6 +16,7 @@ from acp.calculations.primitives.optimize import (
     IRC_MIDPOINT_RECOVERY,
     MODE_DISPLACEMENT,
     SADDLE_BREAK,
+    SCF_DAMP_SHIFT,
     SCF_INCREASE_MAXITER,
     SCF_SLOWCONV,
     SCF_SOSCF,
@@ -163,10 +164,11 @@ class TestScfRescueMatrix:
     def test_scf_failure_has_rescue_chain(self) -> None:
         for kind in ("ts", "intermediate", "minimum", "precursor", "product"):
             strategies = _RESCUE_MATRIX[("scf_failure", kind)]
-            assert len(strategies) == 3
+            assert len(strategies) == 4
             assert strategies[0] == SCF_INCREASE_MAXITER
             assert strategies[1] == SCF_SLOWCONV
             assert strategies[2] == SCF_SOSCF
+            assert strategies[3] == SCF_DAMP_SHIFT
 
     def test_memory_failure_is_terminal(self) -> None:
         for kind in ("ts", "intermediate", "minimum", "precursor", "product"):
@@ -184,12 +186,22 @@ class TestScfRescueMatrix:
         kw = _rescue_kwargs(SCF_SOSCF)
         assert kw == {"scf_maxiter": 500, "scf_strategy": "soscf"}
 
+    def test_scf_damp_shift_rescue_kwargs(self) -> None:
+        kw = _rescue_kwargs(SCF_DAMP_SHIFT)
+        assert kw["scf_maxiter"] == 500
+        assert kw["scf_strategy"] == "soscf"
+        assert kw["scf_damp"] is True
+        assert kw["scf_damp_fac"] == 0.50
+        assert kw["scf_shift"] is True
+        assert kw["scf_shift_fac"] == 0.30
+
     def test_scf_failure_build_rescue_plan(self) -> None:
         plan = build_rescue_plan("scf_failure", "ts")
-        assert len(plan.actions) == 3
+        assert len(plan.actions) == 4
         assert plan.actions[0].strategy == SCF_INCREASE_MAXITER
         assert plan.actions[1].strategy == SCF_SLOWCONV
         assert plan.actions[2].strategy == SCF_SOSCF
+        assert plan.actions[3].strategy == SCF_DAMP_SHIFT
         assert plan.terminal is False
 
     def test_memory_failure_build_rescue_plan(self) -> None:
@@ -257,7 +269,7 @@ class TestRescuePolicy:
 
     def test_max_rescue_attempts_limit(self) -> None:
         plan = build_rescue_plan("scf_failure", "ts")
-        assert len(plan.actions) == 3
+        assert len(plan.actions) == 4
         max_rescue = 2
         assert len(plan.actions[:max_rescue]) == 2
 

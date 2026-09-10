@@ -239,3 +239,39 @@ class TestDefaultsUnchanged:
         blocks, _ = orca._build_input_blocks("freq", symbols=_SYMBOLS)
         assert "%geom" not in blocks
         assert "MaxIter" not in blocks
+
+
+class TestScfDampingAndShift:
+    def test_damp_rendered(self) -> None:
+        block = render_scf_block({"damp": True, "dampfac": 0.50})
+        assert block is not None
+        assert "Damp true" in block
+        assert "DampFac 0.50" in block
+
+    def test_shift_rendered(self) -> None:
+        block = render_scf_block({"shift": True, "shiftfac": 0.30})
+        assert block is not None
+        assert "Shift true" in block
+        assert "ShiftFac 0.30" in block
+
+    def test_damp_and_shift_combined(self) -> None:
+        block = render_scf_block({"damp": True, "dampfac": 0.50, "shift": True, "shiftfac": 0.30})
+        assert block is not None
+        assert "Damp true" in block
+        assert "DampFac 0.50" in block
+        assert "Shift true" in block
+        assert "ShiftFac 0.30" in block
+
+    def test_damp_not_rendered_when_false(self) -> None:
+        block = render_scf_block({"damp": False})
+        assert block is None
+
+    def test_damp_default_fac(self) -> None:
+        block = render_scf_block({"damp": True})
+        assert block is not None
+        assert "DampFac 0.50" in block
+
+    def test_shift_default_fac(self) -> None:
+        block = render_scf_block({"shift": True})
+        assert block is not None
+        assert "ShiftFac 0.30" in block

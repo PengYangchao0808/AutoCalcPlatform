@@ -54,6 +54,7 @@ IRC_MIDPOINT_RECOVERY = "irc_midpoint_recovery"
 SCF_INCREASE_MAXITER = "scf_increase_maxiter"
 SCF_SLOWCONV = "scf_slowconv"
 SCF_SOSCF = "scf_soscf"
+SCF_DAMP_SHIFT = "scf_damp_shift"
 
 FAILURE_EXIT: Final[frozenset[str]] = frozenset({"crash_timeout", "memory_failure"})
 _STRUCTURE_KINDS: Final[frozenset[str]] = frozenset(
@@ -89,11 +90,11 @@ _RESCUE_MATRIX: Final[dict[tuple[str, str], tuple[str, ...]]] = {
     ("minimum_with_imaginary", "intermediate"): (MODE_DISPLACEMENT,),
     ("minimum_with_imaginary", "minimum"): (MODE_DISPLACEMENT,),
     ("collapsed_to_product", "intermediate"): (IRC_MIDPOINT_RECOVERY,),
-    ("scf_failure", "ts"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF),
-    ("scf_failure", "intermediate"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF),
-    ("scf_failure", "minimum"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF),
-    ("scf_failure", "precursor"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF),
-    ("scf_failure", "product"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF),
+    ("scf_failure", "ts"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF, SCF_DAMP_SHIFT),
+    ("scf_failure", "intermediate"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF, SCF_DAMP_SHIFT),
+    ("scf_failure", "minimum"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF, SCF_DAMP_SHIFT),
+    ("scf_failure", "precursor"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF, SCF_DAMP_SHIFT),
+    ("scf_failure", "product"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF, SCF_DAMP_SHIFT),
     ("memory_failure", "ts"): (),
     ("memory_failure", "intermediate"): (),
     ("memory_failure", "minimum"): (),
@@ -118,6 +119,7 @@ _RESCUE_DESCRIPTIONS: Final[dict[str, str]] = {
     SCF_INCREASE_MAXITER: "increase SCF MaxIter to 500",
     SCF_SLOWCONV: "increase SCF MaxIter to 500 with SlowConv strategy",
     SCF_SOSCF: "increase SCF MaxIter to 500 with SOSCF strategy",
+    SCF_DAMP_SHIFT: "SOSCF with damping and level shift",
 }
 _BACKEND_FAILURES = (OSError, RuntimeError, ValueError)
 logger = logging.getLogger(__name__)
@@ -489,6 +491,15 @@ def _rescue_kwargs(strategy: str) -> dict[str, JsonValue]:
         return {"scf_maxiter": 500, "scf_strategy": "slowconv"}
     if strategy == SCF_SOSCF:
         return {"scf_maxiter": 500, "scf_strategy": "soscf"}
+    if strategy == SCF_DAMP_SHIFT:
+        return {
+            "scf_maxiter": 500,
+            "scf_strategy": "soscf",
+            "scf_damp": True,
+            "scf_damp_fac": 0.50,
+            "scf_shift": True,
+            "scf_shift_fac": 0.30,
+        }
     return {}
 
 

@@ -1021,6 +1021,12 @@ class BatchOptimizeEngine:
             }
         kwargs["opt_rescue_policy"] = self._active_methods.opt_rescue_policy
         kwargs["opt_max_rescue"] = self._active_methods.opt_max_rescue
+        if self._active_methods.scf_damp:
+            kwargs["scf_damp"] = True
+            kwargs["scf_damp_fac"] = self._active_methods.scf_damp_fac
+        if self._active_methods.scf_shift:
+            kwargs["scf_shift"] = True
+            kwargs["scf_shift_fac"] = self._active_methods.scf_shift_fac
         return kwargs
 
     def _step_state_payload(
