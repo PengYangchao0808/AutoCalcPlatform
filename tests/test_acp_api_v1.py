@@ -1272,6 +1272,68 @@ def test_v1_batch_structures_source_id_resolution(
     assert items[0]["name"] == "ts_1"
 
 
+def test_v1_structure_sources_metadata_and_detail_provenance(
+    client: TestClient, tmp_path: Path
+) -> None:
+    """Failed-job saved structures surface with metadata; the detail response
+    carries job/project provenance (artifact-validity-first plan §3/§4)."""
+    work_dir = tmp_path / "uncategorized" / "failed_batch"
+    structures = work_dir / "RESULT" / "structures"
+    structures.mkdir(parents=True, exist_ok=True)
+    (structures / "item_001__TAG_TS__optimized.xyz").write_text(
+        "2\nTAG: TS | candidate_id=pes_ts_frame_027 | source=batch-opt_freq\nC 0 0 0\nO 1.2 0 0\n",
+        encoding="utf-8",
+    )
+    (work_dir / "RESULT" / "result_manifest.json").write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "workflow": "BatchOptimize",
+                "products": [
+                    {
+                        "id": "batch_item_001",
+                        "path": "structures/item_001__TAG_TS__optimized.xyz",
+                        "kind": "structure",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    manager = client.app.state.job_manager
+    manager.store.create(
+        JobRecord(
+            id="failed_batch",
+            spec=JobSpec(workflow="BatchOptimize", name="failed batch"),
+            status=JobStatus.FAILED,
+            work_dir=str(work_dir),
+            project_id="uncategorized",
+            completed_at="2026-09-09T00:00:00+00:00",
+        )
+    )
+
+    listing = client.get("/api/v1/structure-sources/recent?project_id=uncategorized")
+    assert listing.status_code == 200, listing.text
+    sources = listing.json()["sources"]
+    assert len(sources) == 1
+    source = sources[0]
+    assert source["job_status"] == "failed"
+    assert source["source_kind"] == "partial_result"
+    assert source["candidate_id"] == "pes_ts_frame_027"
+    assert source["available_at"] == "2026-09-09T00:00:00+00:00"
+    assert source["project_name"]
+
+    detail = client.get("/api/v1/structure-sources/" + source["source_id"])
+    assert detail.status_code == 200, detail.text
+    body = detail.json()
+    assert body["job_id"] == "failed_batch"
+    assert body["project_id"] == "uncategorized"
+    assert body["job_status"] == "failed"
+    assert body["path"] == "RESULT/structures/item_001__TAG_TS__optimized.xyz"
+    assert (body["checksum"] or "").startswith("sha256:")
+    assert body["structure"]["xyz"]
+
+
 def test_v1_batch_structures_requires_nonempty_items(
     client: TestClient, qc_capable_local: None
 ) -> None:

@@ -235,6 +235,19 @@ class JobStore:
             ).fetchall()
         return [_row_to_record(r) for r in rows]
 
+    def project_name_map(self) -> dict[str, str]:
+        """Map ``project_id → display name`` for source summaries.
+
+        Returns an empty dict when the projects table does not exist yet
+        (a fresh database that only JobStore has initialised).
+        """
+        try:
+            with self._lock, self._connect() as conn:
+                rows = conn.execute("SELECT project_id, name FROM projects").fetchall()
+        except sqlite3.Error:
+            return {}
+        return {str(r["project_id"]): str(r["name"]) for r in rows if r["project_id"]}
+
     def list_enriched(
         self,
         status: str | None = None,

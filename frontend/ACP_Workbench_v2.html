@@ -2664,6 +2664,7 @@ option, optgroup {
 .results-toolbar .modal-input { flex: 1; min-width: 0; padding: 5px 10px; font-size: 12px; }
 .results-toolbar .btn { padding: 5px 12px; font-size: 12px; }
 .results-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+.results-group-label { font-size: 11px; font-weight: 600; color: var(--text-tertiary); margin: 6px 0 0; padding-left: 2px; }
 .results-list-note { padding: 14px 10px; text-align: center; color: var(--text-tertiary); font-size: 12px; }
 .results-list-note.err { color: var(--red); }
 .result-source-row { border: 1px solid var(--border-subtle); border-radius: 10px; padding: 6px 10px; background: rgba(255,255,255,0.02); display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; }
@@ -3601,7 +3602,16 @@ option, optgroup {
       <button class="modal-close" id="modal-close">X</button>
     </div>
     <div class="modal-body">
+      <!-- Step 1: project target — deciding WHERE the job belongs comes
+           before configuring WHAT to run (structure/workflow/protocol). -->
+      <div class="modal-section" id="modal-project-section">
+        <label for="modal-project-select" data-i18n="modal.step1">1. 选择项目</label>
+        <select id="modal-project-select" class="modal-select"></select>
+        <div class="project-hint dim" id="modal-project-hint" style="font-size:11px;margin-top:6px;display:none;"></div>
+      </div>
+
       <div class="wizard-input-section">
+        <div class="modal-section-title" data-i18n="modal.step2">2. 选择结构来源</div>
         <div class="input-mode-tabs">
           <button class="input-mode-tab active" data-input-mode="structure" data-i18n="modal.mode_structure">结构输入（自动识别）</button>
           <button class="input-mode-tab" data-input-mode="results" data-i18n="modal.mode_results">任务结果</button>
@@ -3616,13 +3626,11 @@ option, optgroup {
         <div class="input-panel" id="input-panel-results" style="display:none;">
           <div class="muted" style="margin-bottom:6px;" data-i18n="results.title">任务结果</div>
           <div class="results-toolbar">
-            <select id="results-project" class="modal-select">
-              <option value="current" data-i18n="results.project_current">当前项目</option>
-              <option value="all" data-i18n="results.project_all">全部项目</option>
-            </select>
-            <input type="text" id="results-search" class="modal-input" placeholder="搜索任务名称…" data-i18n-ph="results.search_placeholder">
+            <select id="results-project" class="modal-select"></select>
+            <input type="text" id="results-search" class="modal-input" placeholder="搜索名称/项目/状态/候选编号…" data-i18n-ph="results.search_placeholder">
             <button type="button" class="btn ghost" id="results-reload" data-i18n="results.reload">刷新</button>
           </div>
+          <div id="results-cross-hint" style="display:none;margin:4px 0 6px;font-size:11px;color:#ffb454;"></div>
           <div class="results-list" id="results-list"></div>
         </div>
 
@@ -3906,7 +3914,7 @@ option, optgroup {
 
       <div class="config-cards-row">
         <div class="config-card" id="workflow-card">
-          <div class="config-card-label" data-i18n="modal.step2">工作流</div>
+          <div class="config-card-label" data-i18n="modal.step3">工作流</div>
           <div class="config-card-body">
             <strong id="workflow-card-title">Conformer Search</strong>
             <span id="workflow-card-desc" class="config-card-desc">CREST → DFT → SP → Thermo</span>
@@ -3914,19 +3922,13 @@ option, optgroup {
           <button class="btn ghost config-card-btn" id="btn-config-workflow" data-i18n="modal.configure">配置</button>
         </div>
         <div class="config-card" id="method-card">
-          <div class="config-card-label" data-i18n="modal.step3">计算协议</div>
+          <div class="config-card-label" data-i18n="modal.step4">计算协议</div>
           <div class="config-card-body">
             <strong id="method-card-title">Lite Protocol</strong>
             <span id="method-card-desc" class="config-card-desc">xTB: GFN2 | DFT: r2SCAN-3c | SP: wB97M-V/def2-TZVPP</span>
           </div>
           <button class="btn ghost config-card-btn" id="btn-config-method" data-i18n="modal.configure">配置</button>
         </div>
-      </div>
-
-      <div class="modal-section" id="modal-project-section">
-        <label for="modal-project-select" data-i18n="modal.project">项目</label>
-        <select id="modal-project-select" class="modal-select"></select>
-        <div class="project-hint dim" id="modal-project-hint" style="font-size:11px;margin-top:6px;display:none;"></div>
       </div>
 
       <div class="modal-section">
@@ -3943,7 +3945,7 @@ option, optgroup {
       </div>
 
       <div class="modal-section">
-        <label data-i18n="modal.resources">资源设置</label>
+        <label data-i18n="modal.step5">5. 资源设置并提交</label>
         <div class="resource-grid">
           <div class="resource-field">
             <label for="modal-nproc" data-i18n="modal.nproc">核数</label>
@@ -5158,14 +5160,17 @@ const I18N = {
   "parse.no_3d_embedded": "解析成功，但缺少 3D 坐标（3D 嵌入失败）——该结构无法提交需要坐标的计算，鼠标悬停查看原因。",
   "parse.no_3d_waiting": "无 3D 坐标",
     "results.title": "任务结果",
-    "results.project_current": "当前项目",
+    "results.project_target": "目标项目",
     "results.project_all": "全部项目",
-    "results.search_placeholder": "搜索任务名称…",
+    "results.search_placeholder": "搜索名称/项目/状态/候选编号…",
     "results.empty": "暂无可复用的结构",
   "results.scope_project": "范围：项目 {project}",
   "results.scope_all": "范围：全部项目",
-  "results.empty_hint": "仅显示已完成且写入结构产物（result_manifest.json / result_summary.json）的任务；singlepoint/frequency 等无结构产出的任务不会出现在此列表。",
-  "results.project_current_top_all": "顶部筛选为全部，即全部项目",
+  "results.empty_hint": "仅显示已写入正式结构产物（result_manifest.json / result_summary.json）的终态任务；失败/取消任务仅展示已保存的结构；singlepoint/frequency 等无结构产出的任务不会出现在此列表。",
+  "results.status_completed": "已完成",
+  "results.status_failed_saved": "失败任务 · 已保存结构",
+  "results.status_cancelled_saved": "已取消任务 · 已保存结构",
+  "results.cross_project": "来源：项目 {source} → 新任务：项目 {target}",
     "results.loading": "加载中…",
     "results.error": "加载失败",
     "results.load": "载入",
@@ -5226,9 +5231,11 @@ const I18N = {
     "modal.parse_first": "请先解析结构",
     "modal.structures_parsed": "个结构",
     "modal.parse_failed": "解析失败",
-    "modal.step2": "2. 选择工作流",
-    "modal.step3": "3. 计算协议",
-    "modal.step4": "4. 资源设置",
+    "modal.step1": "1. 选择项目",
+    "modal.step2": "2. 选择结构来源",
+    "modal.step3": "3. 选择工作流",
+    "modal.step4": "4. 计算协议",
+    "modal.step5": "5. 资源设置并提交",
     "modal.project": "项目",
     "modal.project_default": "(默认)",
     "modal.project_current": "将提交到项目",
@@ -6002,14 +6009,17 @@ const I18N = {
   "parse.no_3d_embedded": "Parsed OK, but no 3D coordinates (3D embedding failed) — this structure cannot be submitted for coordinate-requiring jobs. Hover for the reason.",
   "parse.no_3d_waiting": "No 3D coordinates",
     "results.title": "Job Results",
-    "results.project_current": "Current Project",
+    "results.project_target": "Target Project",
     "results.project_all": "All Projects",
-    "results.search_placeholder": "Search job name…",
+    "results.search_placeholder": "Search name/project/status/candidate id…",
     "results.empty": "No reusable structures yet",
   "results.scope_project": "Scope: project {project}",
   "results.scope_all": "Scope: all projects",
-  "results.empty_hint": "Only COMPLETED jobs that wrote structure products (result_manifest.json / result_summary.json) are listed; jobs without structure products (e.g. singlepoint/frequency) never appear here.",
-  "results.project_current_top_all": "top filter is All, i.e. all projects",
+  "results.empty_hint": "Only terminal jobs with formally registered structure products (result_manifest.json / result_summary.json) are listed; failed/cancelled jobs contribute explicitly saved structures only; jobs without structure products (e.g. singlepoint/frequency) never appear.",
+  "results.status_completed": "Completed",
+  "results.status_failed_saved": "Failed · saved structures",
+  "results.status_cancelled_saved": "Cancelled · saved structures",
+  "results.cross_project": "Source: project {source} → new job: project {target}",
     "results.loading": "Loading…",
     "results.error": "Failed to load",
     "results.load": "Load",
@@ -6070,9 +6080,11 @@ const I18N = {
     "modal.parse_first": "Please parse structures first",
     "modal.structures_parsed": "structures parsed",
     "modal.parse_failed": "Parse failed",
-    "modal.step2": "2. Select Workflow",
-    "modal.step3": "3. Calculation Protocol",
-    "modal.step4": "4. Resource Settings",
+    "modal.step1": "1. Select Project",
+    "modal.step2": "2. Choose Structure Source",
+    "modal.step3": "3. Select Workflow",
+    "modal.step4": "4. Calculation Protocol",
+    "modal.step5": "5. Resources & Submit",
     "modal.project": "Project",
     "modal.project_default": "(default)",
     "modal.project_current": "Will submit to project",
@@ -11206,21 +11218,40 @@ function renderProjects() {
   });
   select.value = selectedProjectId;
   updateDeleteProjectButton();
-  updateResultsProjectLabel();
+  renderResultsProjectOptions();
 }
 
-// Keep the results-toolbar "当前项目" option honest about what it resolves
-// to (P1): the top project filter, or all projects when the filter is 全部.
-function updateResultsProjectLabel() {
-  var opt = document.querySelector('#results-project option[value="current"]');
-  if (!opt) return;
-  if (selectedProjectId) {
-    var proj = projectsCache.find(function(p) { return String(p.project_id || "") === selectedProjectId; });
-    var name = proj ? (proj.name || selectedProjectId) : selectedProjectId;
-    opt.textContent = t("results.project_current") + "（" + name + "）";
-  } else {
-    opt.textContent = t("results.project_current") + "（" + t("results.project_current_top_all") + "）";
-  }
+function resultsProjectTargetId() {
+  var sel = document.getElementById("modal-project-select");
+  return (sel && sel.value ? String(sel.value) : "") || "uncategorized";
+}
+
+function projectNameOf(projectId) {
+  var pid = String(projectId || "");
+  if (!pid) return t("results.project_all");
+  var proj = projectsCache.find(function(p) { return String(p.project_id || "") === pid; });
+  return (proj && (proj.name || proj.project_id)) || pid;
+}
+
+// Dynamic results filter: 目标项目 (modal submission target) / 全部项目 /
+// one option per project. Rebuilt whenever projects or the target change.
+function renderResultsProjectOptions() {
+  var sel = document.getElementById("results-project");
+  if (!sel) return;
+  var prev = sel.value || "target";
+  var targetId = resultsProjectTargetId();
+  var html = '<option value="target">' +
+    escapeHtml(t("results.project_target") + "（" + projectNameOf(targetId) + "）") +
+    "</option>" +
+    '<option value="all">' + escapeHtml(t("results.project_all")) + "</option>";
+  projectsCache.forEach(function(p) {
+    var pid = String(p.project_id || "");
+    if (!pid) return;
+    html += '<option value="' + escapeHtml(pid) + '">' + escapeHtml(p.name || pid) + "</option>";
+  });
+  sel.innerHTML = html;
+  var valid = sel.querySelector('option[value="' + prev.replace(/"/g, '\\"') + '"]');
+  sel.value = valid ? prev : "target";
 }
 
 function updateDeleteProjectButton() {
@@ -16616,6 +16647,7 @@ function openModal() {
   updateConfigCards();
   renderModalProjects();
   setModalProjectDefault();
+  renderResultsProjectOptions();
   // Mechanism builder reset: cleared per open so stale plans/routes never leak.
   mechProductStructure = null;
   mechTsGuessStructure = null;
@@ -17377,7 +17409,9 @@ function resetResultsPanel() {
   var searchEl = document.getElementById("results-search");
   if (searchEl) searchEl.value = "";
   var projEl = document.getElementById("results-project");
-  if (projEl) projEl.value = "current";
+  if (projEl) projEl.value = "target";
+  var hintEl = document.getElementById("results-cross-hint");
+  if (hintEl) { hintEl.style.display = "none"; hintEl.textContent = ""; }
   var list = document.getElementById("results-list");
   if (list) list.innerHTML = "";
 }
@@ -17391,16 +17425,16 @@ async function loadStructureSources(force) {
   // browser/proxy response from the previous parser implementation.
   var url = "/structure-sources/recent?limit=50&_t=" + Date.now();
   var projEl = document.getElementById("results-project");
-  if (projEl && projEl.value === "all") {
+  var mode = projEl && projEl.value ? projEl.value : "target";
+  if (mode === "all") {
     url += "&all_projects=true";
-  } else if (selectedProjectId) {
-    // "当前项目" follows the top project filter — NOT the modal
-    // project select, which is a submission target and silently falls
-    // back to "uncategorized" when the top filter is "全部" (P1).
-    url += "&project_id=" + encodeURIComponent(selectedProjectId);
+  } else if (mode === "target") {
+    // "目标项目" follows the modal submission target — NOT the top project
+    // filter (P1 regression guard: loading from project B while submitting
+    // to project A must stay an explicit choice).
+    url += "&project_id=" + encodeURIComponent(resultsProjectTargetId());
   } else {
-    // Top filter is "全部": no silent uncategorized narrowing.
-    url += "&all_projects=true";
+    url += "&project_id=" + encodeURIComponent(mode);
   }
   try {
     var body = await api(url);
@@ -17441,49 +17475,40 @@ function renderResultsList() {
   var q = (searchEl && searchEl.value || "").trim().toLowerCase();
   var items = resultsSources.filter(function(src) {
     if (!q) return true;
-    var hay = (src.molecule_name || "") + " " + (src.job_name || "") + " " + (src.label || "") + " " + (src.formula || "") + " " + (src.workflow || "");
+    var hay = (src.molecule_name || "") + " " + (src.job_name || "") + " " + (src.label || "") + " " + (src.formula || "") + " " + (src.workflow || "") + " " + (src.candidate_id || "") + " " + (src.job_status || "") + " " + projectNameOf(src.project_id);
     return hay.toLowerCase().indexOf(q) >= 0;
   });
+  var projEl = document.getElementById("results-project");
+  var mode = projEl && projEl.value ? projEl.value : "target";
+  updateResultsCrossHint(mode);
   if (!items.length) {
     // Empty state must explain WHY: effective project scope + the
     // manifest-only source policy (P2: silent filtering confused users).
-    var projEl = document.getElementById("results-project");
-    var scopeAll = !projEl || projEl.value === "all" || !selectedProjectId;
-    var scopeText = scopeAll
+    var scopeText = mode === "all"
       ? t("results.scope_all")
-      : t("results.scope_project", { project: selectedProjectId });
+      : t("results.scope_project", { project: projectNameOf(mode === "target" ? resultsProjectTargetId() : mode) });
     list.innerHTML = '<div class="results-list-note">' + escapeHtml(t("results.empty")) +
       '<br><span class="muted">' + escapeHtml(scopeText) + " · " + escapeHtml(t("results.empty_hint")) + "</span></div>";
     return;
   }
-  list.innerHTML = items.map(function(src) {
-    var when = src.completed_at ? formatDateTime(src.completed_at) : "--";
-    var sourceTitle = [
-      src.label || "",
-      src.formula ? (src.formula + " · " + (src.atom_count || 0) + " atoms") : "",
-      "q=" + (src.charge !== undefined ? src.charge : 0) + " / mult=" + (src.multiplicity || 1)
-    ].filter(Boolean).join(" · ");
-    var locBadge = src.remote
-      ? '<span class="badge waiting_review">' + escapeHtml(t("results.remote")) + "</span>"
-      : '<span class="badge completed">' + escapeHtml(t("results.local")) + "</span>";
-    var tagBadge = "";
-    if (src.tag === "TS") {
-      tagBadge = ' <span class="badge" style="color:#0f0">TS</span>';
-    }
-    return '<div class="result-source-row' + (src.needs_fetch ? " needs-fetch" : "") + '" data-source-id="' + escapeHtml(src.source_id) + '" title="' + escapeHtml(sourceTitle) + '">' +
-      '<div class="result-source-main">' +
-        "<strong>" + escapeHtml(sourceMoleculeName(src) || src.job_id || "--") + "</strong>" +
-        '<span class="badge">' + escapeHtml(src.workflow || "--") + "</span>" +
-        locBadge +
-        tagBadge +
-        '<span class="muted">' + escapeHtml(when) + "</span>" +
-      "</div>" +
-      '<div class="result-source-actions">' +
-        '<span class="result-row-error" style="display:none;"></span>' +
-        '<button type="button" class="btn ghost result-load-btn"' + (src.needs_fetch ? " disabled" : "") + '>' + escapeHtml(t("results.load")) + "</button>" +
-      "</div>" +
-    "</div>";
-  }).join("");
+  var html = "";
+  if (mode === "all") {
+    // 全部项目: group rows by project so cross-project sources stay scannable.
+    var groups = {};
+    items.forEach(function(src) {
+      var pid = String(src.project_id || "uncategorized");
+      (groups[pid] = groups[pid] || []).push(src);
+    });
+    Object.keys(groups)
+      .sort(function(a, b) { return projectNameOf(a).localeCompare(projectNameOf(b)); })
+      .forEach(function(pid) {
+        html += '<div class="results-group-label">' + escapeHtml(projectNameOf(pid)) + "</div>";
+        html += groups[pid].map(function(src) { return resultSourceRowMarkup(src, true); }).join("");
+      });
+  } else {
+    html = items.map(function(src) { return resultSourceRowMarkup(src, false); }).join("");
+  }
+  list.innerHTML = html;
   list.querySelectorAll(".result-load-btn").forEach(function(btn) {
     btn.addEventListener("click", function() {
       var row = btn.closest(".result-source-row");
@@ -17491,6 +17516,67 @@ function renderResultsList() {
       if (sid) loadStructureSource(sid, row);
     });
   });
+}
+
+function updateResultsCrossHint(mode) {
+  var el = document.getElementById("results-cross-hint");
+  if (!el) return;
+  var targetId = resultsProjectTargetId();
+  var text = "";
+  if (mode !== "all" && mode !== "target" && mode !== targetId) {
+    text = t("results.cross_project", { source: projectNameOf(mode), target: projectNameOf(targetId) });
+  }
+  el.textContent = text;
+  el.style.display = text ? "block" : "none";
+}
+
+function resultStatusBadge(src) {
+  var status = String(src.job_status || "");
+  if (!status) return "";
+  if (status === "failed") {
+    return ' <span class="badge failed">' + escapeHtml(t("results.status_failed_saved")) + "</span>";
+  }
+  if (status === "cancelled") {
+    return ' <span class="badge cancelled">' + escapeHtml(t("results.status_cancelled_saved")) + "</span>";
+  }
+  if (status === "completed") {
+    return ' <span class="badge completed">' + escapeHtml(t("results.status_completed")) + "</span>";
+  }
+  return "";
+}
+
+function resultSourceRowMarkup(src, showProject) {
+  var when = (src.available_at || src.completed_at) ? formatDateTime(src.available_at || src.completed_at) : "--";
+  var sourceTitle = [
+    src.label || "",
+    src.formula ? (src.formula + " · " + (src.atom_count || 0) + " atoms") : "",
+    "q=" + (src.charge !== undefined ? src.charge : 0) + " / mult=" + (src.multiplicity || 1)
+  ].filter(Boolean).join(" · ");
+  var locBadge = src.remote
+    ? '<span class="badge waiting_review">' + escapeHtml(t("results.remote")) + "</span>"
+    : '<span class="badge completed">' + escapeHtml(t("results.local")) + "</span>";
+  var tagBadge = "";
+  if (src.tag === "TS") {
+    tagBadge = ' <span class="badge" style="color:#0f0">TS</span>';
+  }
+  var projectBadge = showProject && src.project_id
+    ? ' <span class="badge">' + escapeHtml(projectNameOf(src.project_id)) + "</span>"
+    : "";
+  return '<div class="result-source-row' + (src.needs_fetch ? " needs-fetch" : "") + '" data-source-id="' + escapeHtml(src.source_id) + '" title="' + escapeHtml(sourceTitle) + '">' +
+    '<div class="result-source-main">' +
+      "<strong>" + escapeHtml(sourceMoleculeName(src) || src.job_id || "--") + "</strong>" +
+      '<span class="badge">' + escapeHtml(src.workflow || "--") + "</span>" +
+      locBadge +
+      resultStatusBadge(src) +
+      projectBadge +
+      tagBadge +
+      '<span class="muted">' + escapeHtml(when) + "</span>" +
+    "</div>" +
+    '<div class="result-source-actions">' +
+      '<span class="result-row-error" style="display:none;"></span>' +
+      '<button type="button" class="btn ghost result-load-btn"' + (src.needs_fetch ? " disabled" : "") + '>' + escapeHtml(t("results.load")) + "</button>" +
+    "</div>" +
+  "</div>";
 }
 
 function structureFromSourceDetail(a, sourceId) {
@@ -17531,8 +17617,10 @@ function structureFromSourceDetail(a, sourceId) {
     source_ref: {
       origin: "job_artifact",
       job_id: jobId,
+      project_id: (sourceMeta && sourceMeta.project_id) || a.project_id || "",
       path: relPath,
-      checksum: ""
+      checksum: "",
+      job_status: (sourceMeta && sourceMeta.job_status) || a.job_status || ""
     }
   };
 }
@@ -17548,6 +17636,8 @@ async function loadStructureSource(sourceId, rowEl) {
     var a = body.structure || {};
     var struct = structureFromSourceDetail(a, sourceId);
     struct.source_ref.checksum = body.checksum || "";
+    struct.source_ref.project_id = struct.source_ref.project_id || body.project_id || "";
+    struct.source_ref.job_status = struct.source_ref.job_status || body.job_status || "";
     var existingIndex = wizardStructures.findIndex(function(existing) {
       var left = existing && existing.source_ref;
       var right = struct.source_ref;
@@ -17571,6 +17661,13 @@ async function loadStructureSource(sourceId, rowEl) {
     if (errBox) errBox.style.display = "none";
     renderStructurePreview(wizardStructures, wizardParseWarnings);
     showParseStatus(t("parse.success", { count: wizardStructures.length }), false);
+    var loadedMeta = resultsSources.find(function(s) { return s.source_id === sourceId; });
+    var loadedProject = (loadedMeta && loadedMeta.project_id) || body.project_id || "";
+    var targetId = resultsProjectTargetId();
+    if (loadedProject && String(loadedProject) !== String(targetId)) {
+      // Cross-project reuse: make 来源 → 目标 explicit before submission.
+      showParseStatus(t("results.cross_project", { source: projectNameOf(loadedProject), target: projectNameOf(targetId) }), false);
+    }
     if (wizardState.workflow && wizardState.workflow.id === "mechanism") {
       var mechPanel = document.getElementById("mech-builder-panel");
       if (mechPanel) mechPanel.style.display = "block";
@@ -19699,7 +19796,8 @@ async function submitPESsearchTask() {
     ];
   }
   var projectId = String(document.getElementById("modal-project-select").value || "").trim();
-  if (projectId) body.project_id = projectId;
+  if (!projectId) projectId = "uncategorized";
+  body.project_id = projectId;
   applyNodeSelectionToBody(body);
   var submitButton = document.getElementById("modal-submit");
   if (submitButton) submitButton.disabled = true;
@@ -20525,6 +20623,13 @@ function setupEventListeners() {
 
   document.getElementById("modal-project-select").addEventListener("change", function() {
     updateModalProjectHint();
+    renderResultsProjectOptions();
+    // 目标项目联动: refresh immediately only while the filter still points
+    // at "目标项目"; an explicit 项目 B / 全部项目 choice stays untouched.
+    var projEl = document.getElementById("results-project");
+    if (projEl && projEl.value === "target" && resultsLoaded) {
+      loadStructureSources(true);
+    }
   });
 
   document.getElementById("btn-new-calc").addEventListener("click", openModal);

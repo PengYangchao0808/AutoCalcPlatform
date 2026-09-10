@@ -97,6 +97,11 @@ def _coerce_int(value: Any, default: int) -> int:
         return default
 
 
+def _available_at(record: JobRecord) -> str:
+    """Best availability timestamp: completion, else last update, else creation."""
+    return record.completed_at or record.updated_at or record.created_at or ""
+
+
 def _first_frame_comment(text: str) -> str:
     """Return the comment line of the first XYZ frame ("" when absent)."""
     lines = text.strip().splitlines()
@@ -307,6 +312,28 @@ def _select_frame_candidate_products(products: list[Any]) -> list[dict[str, Any]
     return selected
 
 
+def _select_terminal_registered_products(products: list[Any]) -> list[dict[str, Any]]:
+    """Select formally registered structure products from a terminal manifest.
+
+    Failed/cancelled jobs contribute only deliberately durable artifacts:
+    manually saved frame candidates and products explicitly written with a
+    structure ``kind`` (e.g. a batch item that finished and was registered
+    in ``result_manifest.json`` before a later item failed the job).
+    Untyped loose ``.xyz`` pointers are ignored so that unfinished scratch
+    files never surface as reusable results.
+    """
+    selected: list[dict[str, Any]] = []
+    for item in products:
+        if not isinstance(item, dict) or not item.get("path"):
+            continue
+        if not _product_is_xyz(item):
+            continue
+        if str(item.get("kind") or "") not in _STRUCTURE_KINDS:
+            continue
+        selected.append(item)
+    return selected
+
+
 def _select_minimum_manifest_products(products: list[Any]) -> list[dict[str, Any]]:
     """Select exactly one final minimum from a legacy v2 structure manifest."""
     structures = _select_manifest_structure_products(products)
@@ -440,9 +467,9 @@ class StructureSourceService:
             entries.extend(self._discover_job(record))
         return self._deduplicate_entries(entries)[:limit]
 
-    def _discover_terminal_frame_candidates(self, record: JobRecord) -> list[dict[str, Any]]:
-        """Return only deliberately saved frames from a non-completed terminal job."""
-        selectors = ((_RESULT_MANIFEST_FILENAME, _select_frame_candidate_products),)
+    def _discover_terminal_sources(self, record: JobRecord) -> list[dict[str, Any]]:
+        """Return only formally registered products from a non-completed terminal job."""
+        selectors = ((_RESULT_MANIFEST_FILENAME, _select_terminal_registered_products),)
         if self._is_remote(record):
             return self._probe_remote_product_listings(
                 record, selectors=selectors, candidate_hints=True
@@ -503,7 +530,7 @@ class StructureSourceService:
                 )
             allowed_paths = {
                 str(entry.get("path") or "")
-                for entry in self._discover_terminal_frame_candidates(record)
+                for entry in self._discover_terminal_sources(record)
             }
             if rel_path not in allowed_paths:
                 raise ValueError(
@@ -802,13 +829,18 @@ class StructureSourceService:
 
     def _remote_placeholder(self, record: JobRecord) -> dict[str, Any]:
         """Coarse listing entry for a remote job whose files were not probed."""
+        project_id = record.project_id or record.spec.project_id
         return {
             "source_id": f"job_{record.id}:",
             "job_id": record.id,
             "job_name": record.spec.name,
             "workflow": record.spec.workflow,
-            "project_id": record.project_id or record.spec.project_id,
+            "project_id": project_id,
+            "project_name": self.project_name_map().get(str(project_id or "")),
             "completed_at": record.completed_at or "",
+            "job_status": record.status.value,
+            "source_kind": "final",
+            "available_at": _available_at(record),
             "label": record.spec.name or record.id,
             "path": "",
             "formula": "",
@@ -1245,8 +1277,8 @@ class StructureSourceService:
             return name
         return canonical_molecule_name(rel_path, fallback="mol")
 
-    @staticmethod
     def _entry(
+        self,
         record: JobRecord,
         item: dict[str, Any],
         rel_posix: str,
@@ -1255,6 +1287,15 @@ class StructureSourceService:
         remote: bool,
         needs_fetch: bool,
     ) -> dict[str, Any]:
+        metadata = item.get("metadata")
+        is_manual = (
+            isinstance(metadata, dict) and metadata.get("selection_source") == "manual_frame"
+        )
+        if record.status == JobStatus.COMPLETED:
+            source_kind = "saved_candidate" if is_manual else "final"
+        else:
+            source_kind = "saved_candidate" if is_manual else "partial_result"
+        project_id = record.project_id or record.spec.project_id
         return {
             "source_id": f"job_{record.id}:{rel_posix}",
             "job_id": record.id,
@@ -1263,8 +1304,12 @@ class StructureSourceService:
                 record, rel_posix, candidate_id=str(meta.get("candidate_id") or "")
             ),
             "workflow": record.spec.workflow,
-            "project_id": record.project_id or record.spec.project_id,
+            "project_id": project_id,
+            "project_name": self.project_name_map().get(str(project_id or "")),
             "completed_at": record.completed_at or "",
+            "job_status": record.status.value,
+            "source_kind": source_kind,
+            "available_at": _available_at(record),
             "label": str(item.get("label") or item.get("path") or ""),
             "path": rel_posix,
             "formula": meta["formula"],
@@ -1277,3 +1322,24 @@ class StructureSourceService:
             "remote": remote,
             "needs_fetch": needs_fetch,
         }
+
+    def project_name_map(self) -> dict[str, str]:
+        """Cached ``project_id → display name`` lookup for source summaries.
+
+        Degrades to an empty map when the store cannot answer (stub stores
+        in tests, missing projects table) — project names are cosmetic and
+        must never break structure discovery.
+        """
+        if self._project_names is None:
+            lookup = getattr(self._store, "project_name_map", None)
+            if not callable(lookup):
+                self._project_names = {}
+            else:
+                try:
+                    self._project_names = {
+                        str(k): str(v) for k, v in dict(lookup()).items()
+                    }
+                except (OSError, TypeError, ValueError, sqlite3.Error) as exc:
+                    logger.debug("Project-name lookup failed: %s", exc)
+                    self._project_names = {}
+        return self._project_names

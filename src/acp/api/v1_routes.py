@@ -3805,19 +3805,33 @@ def list_structure_sources(
 @router.get("/structure-sources/{source_id:path}", response_model=StructureSourceDetailResponse)
 def get_structure_source(request: Request, source_id: str) -> StructureSourceDetailResponse:
     """Load one structure source (local disk or on-demand remote fetch)."""
+    manager = _manager(request)
     service = _structure_source_service(request)
     try:
-        StructureSourceService.parse_source_id(source_id)
+        job_id, rel_path = StructureSourceService.parse_source_id(source_id)
     except ValueError:
         raise HTTPException(status_code=404, detail=f"Invalid source_id: {source_id}")
     try:
         asset, checksum = service.get(source_id)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    record = manager.get(job_id)
+    project_id = None
+    project_name = None
+    job_status = ""
+    if record is not None:
+        project_id = record.project_id or record.spec.project_id
+        job_status = record.status.value
+        project_name = service.project_name_map().get(str(project_id or ""))
     return StructureSourceDetailResponse(
         source_id=source_id,
         checksum=checksum,
         structure=StructureAssetModel(**asset),
+        job_id=job_id,
+        project_id=project_id,
+        project_name=project_name,
+        job_status=job_status,
+        path=rel_path,
     )
 
 

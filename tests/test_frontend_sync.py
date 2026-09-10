@@ -896,3 +896,119 @@ def _extract_all_modal_keys(html: str, block_re: re.Pattern[str]) -> set[str]:  
     if not m:
         return set()
     return set(modal_key_re.findall(m.group(1)))
+
+
+def test_wizard_project_section_is_first_step() -> None:
+    """Project target must be wizard step 1 — before structure and workflow.
+
+    Regression guard (2026-09 plan §1): the project block used to sit after
+    the workflow/protocol cards, so users configured the job before deciding
+    where it belongs.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+    modal = html.split('id="job-modal"', 1)[1].split('class="modal-overlay"', 1)[0]
+
+    proj_pos = modal.find('id="modal-project-section"')
+    wizard_pos = modal.find('class="wizard-input-section"')
+    cards_pos = modal.find('class="config-cards-row"')
+    assert proj_pos != -1 and wizard_pos != -1 and cards_pos != -1
+    assert proj_pos < wizard_pos < cards_pos
+
+    assert 'data-i18n="modal.step1"' in modal
+    assert 'data-i18n="modal.step2"' in modal
+    assert 'data-i18n="modal.step3">工作流' in modal
+    assert 'data-i18n="modal.step4">计算协议' in modal
+    assert 'data-i18n="modal.step5"' in modal
+    assert 'data-i18n="modal.step2">工作流' not in modal
+
+    for key in (
+        '"modal.step1": "1. 选择项目"',
+        '"modal.step2": "2. 选择结构来源"',
+        '"modal.step3": "3. 选择工作流"',
+        '"modal.step4": "4. 计算协议"',
+        '"modal.step5": "5. 资源设置并提交"',
+        '"modal.step1": "1. Select Project"',
+        '"modal.step2": "2. Choose Structure Source"',
+        '"modal.step3": "3. Select Workflow"',
+        '"modal.step4": "4. Calculation Protocol"',
+        '"modal.step5": "5. Resources & Submit"',
+    ):
+        assert key in html, f"missing i18n entry: {key}"
+
+
+def test_results_filter_targets_modal_project_not_top_filter() -> None:
+    """任务结果 filter must follow the modal target project (plan §2).
+
+    The old static "当前项目" option bound to the top selectedProjectId,
+    so a user preparing submission to project A queried results of the
+    top-filtered project B.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    toolbar = html.split('id="results-project"', 1)[1].split("</select>", 1)[0]
+    assert 'value="current"' not in toolbar
+    assert "<option" not in toolbar
+
+    assert "function resultsProjectTargetId()" in html
+    assert "function renderResultsProjectOptions()" in html
+
+    loader = html.split("async function loadStructureSources(", 1)[1].split("\nfunction ", 1)[0]
+    assert "selectedProjectId" not in loader
+    assert 'mode === "target"' in loader
+    assert "resultsProjectTargetId()" in loader
+    assert "all_projects=true" in loader
+
+    change_block = html.split('modal-project-select").addEventListener("change"', 1)[1]
+    change_block = change_block.split("});", 1)[0]
+    assert "renderResultsProjectOptions()" in change_block
+    assert 'projEl.value === "target"' in change_block
+    assert "loadStructureSources(true)" in change_block
+
+
+def test_results_rows_status_badges_project_labels_and_search_scope() -> None:
+    """Status badges, project grouping/labels, and the widened search hay."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    for key in (
+        '"results.status_completed": "已完成"',
+        '"results.status_failed_saved": "失败任务 · 已保存结构"',
+        '"results.status_cancelled_saved": "已取消任务 · 已保存结构"',
+        '"results.cross_project": "来源：项目 {source} → 新任务：项目 {target}"',
+        '"results.status_completed": "Completed"',
+        '"results.status_failed_saved": "Failed · saved structures"',
+        '"results.status_cancelled_saved": "Cancelled · saved structures"',
+        '"results.cross_project": "Source: project {source} → new job: project {target}"',
+    ):
+        assert key in html, f"missing i18n entry: {key}"
+
+    assert "function resultStatusBadge(src)" in html
+    assert 'if (!status) return "";' in html
+    assert "badge failed" in html
+    assert "badge cancelled" in html
+
+    assert "results-group-label" in html
+    assert "function resultSourceRowMarkup(src, showProject)" in html
+
+    render_body = html.split("function renderResultsList()", 1)[1].split("\nfunction ", 1)[0]
+    assert 'mode === "all"' in render_body
+    assert "projectNameOf(src.project_id)" in render_body
+    assert "(src.candidate_id || \"\")" in render_body
+    assert "(src.job_status || \"\")" in render_body
+
+    assert "function updateResultsCrossHint(" in html
+    assert 'id="results-cross-hint"' in html
+
+
+def test_structure_source_ref_records_project_provenance() -> None:
+    """source_ref must carry project_id/job_status so cross-project loads stay traceable."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    ref_body = html.split("source_ref: {", 1)[1].split("}", 1)[0]
+    assert "project_id" in ref_body
+    assert "job_status" in ref_body
+    assert "checksum" in ref_body
+
+    loader = html.split("async function loadStructureSource(", 1)[1].split("\nfunction ", 1)[0]
+    assert "body.project_id" in loader
+    assert "body.job_status" in loader
+    assert "results.cross_project" in loader

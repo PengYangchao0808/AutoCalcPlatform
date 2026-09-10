@@ -320,10 +320,11 @@ def test_non_completed_jobs_excluded(service: StructureSourceService, store, tmp
 
 
 @pytest.mark.parametrize("status", [JobStatus.FAILED, JobStatus.CANCELLED])
-def test_terminal_job_exposes_only_manually_saved_frame_candidates(
+def test_terminal_job_frame_candidate_visible_unbacked_product_hidden(
     service: StructureSourceService, store, tmp_path, status: JobStatus
 ) -> None:
-    """A failed/cancelled calculation may expose an explicit user save only."""
+    """Terminal jobs expose saved frames; products without a backing file
+    (or outside the manifest) never surface."""
     work_dir = tmp_path / "uncategorized" / f"terminal_{status.value}"
     candidate_id = "opt_item_001_frame_0114"
     _write(
@@ -365,6 +366,254 @@ def test_terminal_job_exposes_only_manually_saved_frame_candidates(
     assert asset["candidate_id"] == candidate_id
     with pytest.raises(ValueError, match="not completed"):
         service.get(f"job_{record.id}:RESULT/structures/partial.xyz")
+
+
+@pytest.mark.parametrize("status", [JobStatus.FAILED, JobStatus.CANCELLED])
+def test_terminal_job_exposes_registered_batch_item_structures(
+    service: StructureSourceService, store, tmp_path, status: JobStatus
+) -> None:
+    """A batch item that finished and was registered survives its job's failure."""
+    work_dir = tmp_path / "uncategorized" / f"batch_{status.value}"
+    _write(
+        work_dir / "RESULT" / "structures" / "item_001__TAG_TS__optimized.xyz",
+        "2\nTAG: TS | candidate_id=pes_ts_frame_027 | source=batch-opt_freq\nC 0 0 0\nO 1.2 0 0\n",
+    )
+    _write(
+        work_dir / "RESULT" / "result_manifest.json",
+        json.dumps(
+            {
+                "products": [
+                    {
+                        "id": "batch_item_001",
+                        "label": "mol (TS, opt_freq)",
+                        "path": "structures/item_001__TAG_TS__optimized.xyz",
+                        "kind": "structure",
+                    }
+                ]
+            }
+        ),
+    )
+    record = _make_record(
+        f"batch_{status.value}",
+        workflow="BatchOptimize",
+        status=status,
+        work_dir=work_dir,
+    )
+    store.create(record)
+
+    entries = service.list_recent()
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry["candidate_id"] == "pes_ts_frame_027"
+    assert entry["tag"] == "TS"
+    assert entry["job_status"] == status.value
+    assert entry["source_kind"] == "partial_result"
+    assert entry["available_at"] == (record.completed_at or record.updated_at)
+    asset, checksum = service.get(entry["source_id"])
+    assert checksum.startswith("sha256:")
+    assert asset["tag"] == "TS"
+
+
+def test_terminal_job_hides_unregistered_and_unsafe_xyz(
+    service: StructureSourceService, store, tmp_path
+) -> None:
+    """WORK/ scratch XYZ and manifest-unbacked traversal paths never surface."""
+    work_dir = tmp_path / "uncategorized" / "scratch_failed"
+    _write(work_dir / "WORK" / "03_OPT" / "running.xyz", _XYZ_PLAIN)
+    _write(work_dir / "RESULT" / "structures" / "loose.xyz", _XYZ_PLAIN)
+    _write(
+        work_dir / "RESULT" / "result_manifest.json",
+        json.dumps(
+            {
+                "products": [
+                    {
+                        "id": "escape",
+                        "path": "../../WORK/03_OPT/running.xyz",
+                        "kind": "structure",
+                    }
+                ]
+            }
+        ),
+    )
+    store.create(
+        _make_record(
+            "scratch_failed",
+            workflow="BatchOptimize",
+            status=JobStatus.FAILED,
+            work_dir=work_dir,
+        )
+    )
+    assert service.list_recent() == []
+
+
+def test_terminal_remote_job_uses_same_manifest_rule(
+    store: JobStore, tmp_path: Path
+) -> None:
+    """Remote failed jobs apply the identical manifest-gated policy."""
+    files = {
+        "RESULT/result_manifest.json": json.dumps(
+            {
+                "products": [
+                    {
+                        "id": "frame_candidate_x",
+                        "path": "structures/x.xyz",
+                        "kind": "structure",
+                        "metadata": {
+                            "candidate_id": "opt_item_001_frame_0002",
+                            "selection_source": "manual_frame",
+                        },
+                    },
+                    {
+                        "id": "batch_item_001",
+                        "path": "structures/item1.xyz",
+                        "kind": "structure",
+                    },
+                ]
+            }
+        ).encode("utf-8"),
+        "RESULT/structures/x.xyz": (
+            b"2\nTAG: INT | candidate_id=opt_item_001_frame_0002 | selection_source=manual_frame\n"
+            b"C 0 0 0\nO 1.2 0 0\n"
+        ),
+        "RESULT/structures/item1.xyz": (
+            b"2\nTAG: INT | candidate_id=pes_int_frame_002 | source=batch-opt_freq\n"
+            b"C 0 0 0\nO 1.2 0 0\n"
+        ),
+    }
+    service = StructureSourceService(store, tmp_path, fetcher=FakeFetcher(files))
+    record = _make_record(
+        "remote_failed",
+        workflow="BatchOptimize",
+        status=JobStatus.FAILED,
+        work_dir=tmp_path / "uncategorized" / "remote_failed",
+        remote_job_id="LSF123",
+    )
+    store.create(record)
+
+    entries = service.list_recent()
+    assert {entry["candidate_id"] for entry in entries} == {
+        "opt_item_001_frame_0002",
+        "pes_int_frame_002",
+    }
+    for entry in entries:
+        assert entry["job_status"] == "failed"
+        assert entry["remote"] is True
+        assert entry["source_kind"] in {"saved_candidate", "partial_result"}
+
+
+def test_entry_metadata_project_name_and_source_kind(tmp_path: Path) -> None:
+    """Entries carry job_status / source_kind / project_name / available_at."""
+    from acp.scheduler.projects import ProjectManager
+
+    store = JobStore(tmp_path / "meta.db")
+    projects = ProjectManager(store, tmp_path)
+    created = projects.create_project("Project A")
+
+    work_dir = tmp_path / created["project_id"] / "job_a"
+    _write(work_dir / "RESULT" / "structures" / "final.xyz", _XYZ_PLAIN)
+    _write(
+        work_dir / "RESULT" / "result_manifest.json",
+        json.dumps(
+            {
+                "products": [
+                    {
+                        "id": "batch_item_001",
+                        "path": "structures/final.xyz",
+                        "kind": "structure",
+                    }
+                ]
+            }
+        ),
+    )
+    record = _make_record(
+        "job_a",
+        workflow="BatchOptimize",
+        status=JobStatus.COMPLETED,
+        project_id=created["project_id"],
+        work_dir=work_dir,
+    )
+    store.create(record)
+
+    service = StructureSourceService(store, tmp_path)
+    entries = service.list_recent()
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry["job_status"] == "completed"
+    assert entry["source_kind"] == "final"
+    assert entry["project_name"] == "Project A"
+    assert entry["available_at"] == record.completed_at
+
+
+def test_project_filter_and_all_projects_with_names(tmp_path: Path) -> None:
+    """project_id=A returns only A; no filter returns every project with names."""
+    from acp.scheduler.projects import ProjectManager
+
+    store = JobStore(tmp_path / "filter.db")
+    projects = ProjectManager(store, tmp_path)
+    pa = projects.create_project("Alpha")
+    pb = projects.create_project("Beta")
+
+    for pid, job_id in ((pa["project_id"], "job_a"), (pb["project_id"], "job_b")):
+        work_dir = tmp_path / pid / job_id
+        _write(work_dir / "RESULT" / "structures" / "final.xyz", _XYZ_PLAIN)
+        _write(
+            work_dir / "RESULT" / "result_manifest.json",
+            json.dumps(
+                {
+                    "products": [
+                        {"id": "batch_item", "path": "structures/final.xyz", "kind": "structure"}
+                    ]
+                }
+            ),
+        )
+        store.create(
+            _make_record(
+                job_id,
+                workflow="BatchOptimize",
+                status=JobStatus.COMPLETED,
+                project_id=pid,
+                work_dir=work_dir,
+            )
+        )
+
+    service = StructureSourceService(store, tmp_path)
+    only_a = service.list_recent(project_id=pa["project_id"])
+    assert {entry["project_id"] for entry in only_a} == {pa["project_id"]}
+    assert only_a[0]["project_name"] == "Alpha"
+
+    every = service.list_recent()
+    assert {entry["project_id"] for entry in every} == {pa["project_id"], pb["project_id"]}
+    names = {entry["project_id"]: entry["project_name"] for entry in every}
+    assert names == {pa["project_id"]: "Alpha", pb["project_id"]: "Beta"}
+
+
+def test_list_recent_terminal_orders_by_availability(store: JobStore, tmp_path: Path) -> None:
+    """Store-level: failed/cancelled rows interleave by completion/update time."""
+    for job_id, status, completed in (
+        ("job_done", JobStatus.COMPLETED, "2026-08-20T10:00:00+00:00"),
+        ("job_fail", JobStatus.FAILED, None),
+        ("job_cancel", JobStatus.CANCELLED, None),
+        ("job_running", JobStatus.RUNNING, None),
+    ):
+        record = _make_record(
+            job_id,
+            status=status,
+            completed_at=completed,
+            work_dir=tmp_path / job_id,
+        )
+        if completed is None:
+            record.updated_at = f"2026-08-2{2 if job_id == 'job_fail' else 3}T10:00:00+00:00"
+        store.create(record)
+
+    records = store.list_recent_terminal()
+    assert [r.id for r in records] == ["job_cancel", "job_fail", "job_done"]
+    assert all(r.status.is_terminal for r in records)
+
+
+def test_project_name_map_missing_table(tmp_path: Path) -> None:
+    """A fresh store without a projects table degrades to an empty map."""
+    store = JobStore(tmp_path / "fresh.db")
+    assert store.project_name_map() == {}
 
 
 def test_broken_pointer_and_traversal_dropped_silently(
