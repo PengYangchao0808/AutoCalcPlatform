@@ -1,6 +1,6 @@
 /**
- * ACP Vibration Viewer — frequency inspector + displacement arrows (Wave 5, todos 27-28)
- * @version 0.3.0
+ * ACP Vibration Viewer — frequency inspector + arrows + animation (Wave 5, todos 27-29)
+ * @version 0.4.0
  *
  * Namespace: window.ACPVibrationViewer
  *
@@ -13,6 +13,10 @@
  *   - refreshArrows()                  (clear + re-apply arrows on the MAIN viewer)
  *   - setDisplayMode(mode)             ("arrows" | "animation" | "combo")
  *   - setAmplitude(v)                  (clamped amplitude setter)
+ *   - playAnimation() / pauseAnimation() / togglePlay()
+ *   - stopAnimation()                  (cancel rAF + exact equilibrium restore)
+ *   - setSpeed(v) / toggleInvertPhase()
+ *   - animationState                   (the live animation state)
  *
  * Pure helpers (Node-testable):
  *   - sortModesNegativesFirst(modes)   (most-negative first, then ascending; stable)
@@ -23,10 +27,14 @@
  *   - hydrogenSkipMask(symbols, atomCount) (skip H above H_SKIP_ATOM_THRESHOLD=50)
  *   - applyArrows(viewer, endpoints, symbols, opts) -> count (viewer.addArrow)
  *   - clearArrows(viewer)              (viewer.removeAllShapes)
+ *   - computeDisplacedCoords(coords, vectors, amp, phase, opts) (r_i = r_i0 + A·sin(φ)·n_i)
+ *   - buildDisplacedXyz(symbols, coords, comment)     (atom order unchanged)
+ *   - clampSpeed(v)                    ([0.25, 2.0], default 1)
  *
  * Internal (test-overridable via namespace property):
  *   - _fetchImpl                       (default: window.fetch; tests inject a fake)
  *   - _viewerImpl                      (default: resolves the app's main `viewer`)
+ *   - _rafImpl / _cancelRafImpl / _nowImpl (rAF loop injectables for Node tests)
  *   - _t                               (i18n lookup with STR-table fallback)
  *   - _esc                             (XSS-safe text conversion)
  *
@@ -37,18 +45,20 @@
  *   reasons: no_normal_modes / geometry_mismatch / pending_fetch / historical_unavailable
  *   NEVER fabricate frequencies; NEVER render modes when available=false.
  *   Stored mode vectors are NEVER mutated (normalization is display-only).
- *   Arrows are drawn on the app's MAIN 3Dmol viewer instance only.
+ *   Arrows/animation are drawn on the app's MAIN 3Dmol viewer instance only.
+ *   The animation loop NEVER uses the viewer built-in animation API (it has
+ *   no variable speed or phase) and NEVER changes atom ordering; the camera
+ *   is preserved via getView()/setView() around every per-frame rebuild.
  *
  * Remaining Wave 5 todos:
- *   TODO(todo-29): rAF animation loop (toggle "动画"/combo are stubs with hint)
- *   TODO(todo-30): editing/animation mutual exclusion + equilibrium restore
+ *   TODO(todo-30): editing/animation mutual exclusion + teardown on switch
  *   TODO(todo-31): TS judgment hints + phase-B contract tests
  */
 (function () {
   "use strict";
 
   /** Version tag — bump on every structural change. */
-  var VERSION = "0.3.0";
+  var VERSION = "0.4.0";
 
   /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
@@ -63,9 +73,12 @@
     DISPLAY_ARROWS: "\u7bad\u5934",                                       // 箭头
     DISPLAY_ANIMATION: "\u52a8\u753b",                                     // 动画
     DISPLAY_COMBO: "\u7bad\u5934+\u52a8\u753b",                           // 箭头+动画
-    ANIMATION_SOON: "\u52a8\u753b\u5373\u5c06\u4e0a\u7ebf",               // 动画即将上线
     NO_GEOMETRY: "\u6682\u65e0\u5f53\u524d\u7ed3\u6784\u7684\u51e0\u4f55\u5750\u6807", // 暂无当前结构的几何坐标
     UNIT_ANGSTROM: "\u00c5",                                               // Å
+    PLAY: "\u64ad\u653e",                                                   // 播放
+    PAUSE: "\u6682\u505c",                                                 // 暂停
+    SPEED: "\u901f\u5ea6",                                                 // 速度
+    INVERT: "\u76f8\u4f4d\u53cd\u8f6c",                                   // 相位反转
     REASONS: {
       no_normal_modes: "\u65e0\u632f\u52a8\u6a21\u5f0f\u6570\u636e",           // 无振动模式数据
       geometry_mismatch: "\u6a21\u5f0f\u4e0e\u5f53\u524d\u51e0\u4f55\u4e0d\u5339\u914d",   // 模式与当前几何不匹配
@@ -159,6 +172,42 @@
     displayMode: "arrows",
     _lastCount: 0,
     _hint: null,
+  };
+
+  /* ---- animation constants (todo 29) ---- */
+
+  /** Minimum interval between rendered frames (~30 fps throttle). */
+  var FRAME_MIN_MS = 33;
+  /** Oscillation rate in cycles per second at speed 1x. */
+  var CYCLE_RATE_HZ = 0.6;
+  var SPEED_MIN = 0.25;
+  var SPEED_MAX = 2.0;
+  var SPEED_OPTIONS = [0.25, 0.5, 1, 2];
+
+  /**
+   * @typedef {Object} AnimationState
+   * @property {boolean} playing
+   * @property {number} phase        - oscillation phase in radians
+   * @property {number} speed        - playback speed multiplier (0.25-2.0)
+   * @property {number} amplitude    - mirrors arrowState.amplitude while playing
+   * @property {boolean} invertPhase - flip the displacement sign
+   * @property {number|null} rafHandle
+   * @property {number|null} lastFrameTs
+   * @property {Object|null} savedView   - last camera view captured per frame
+   * @property {string|null} equilibriumXyz - snapshot for exact restore on stop
+   * @property {boolean} _active      - a session has played since last stop
+   */
+  var animationState = {
+    playing: false,
+    phase: 0,
+    speed: 1,
+    amplitude: AMP_DEFAULT,
+    invertPhase: false,
+    rafHandle: null,
+    lastFrameTs: null,
+    savedView: null,
+    equilibriumXyz: null,
+    _active: false,
   };
 
   /* ---- pure helpers (exported for tests) ---- */
@@ -390,6 +439,43 @@
   }
 
   /**
+   * Gather the animation/arrow geometry context: selected mode + the
+   * displayed structure's coords/symbols, guarded by entry identity and
+   * atom-count match.  Shared by refreshArrows and the animation loop.
+   *
+   * @returns {{ok: boolean, hint: string|null, mode: Object|null,
+   *            coords: Array|null, symbols: Array|null}}
+   */
+  function _vibGeometry() {
+    var mode = _selectedMode();
+    if (!mode || !mode.vectors) {
+      return { ok: false, hint: null, mode: mode, coords: null, symbols: null };
+    }
+    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
+      ? window.ACPStructureViewer.state
+      : null;
+    var coords = svState ? svState.displayedCoords : null;
+    var symbols = svState ? svState.displayedSymbols : null;
+    var sameEntry = !!(svState && svState.displayedEntryId &&
+      svState.displayedEntryId === vibrationState.entryId);
+    if (!coords || !sameEntry) {
+      return {
+        ok: false,
+        hint: _t("structure.vib.arrow.no_geometry", STR.NO_GEOMETRY),
+        mode: mode, coords: coords, symbols: symbols,
+      };
+    }
+    if (mode.vectors.length !== coords.length) {
+      return {
+        ok: false,
+        hint: reasonText("geometry_mismatch"),
+        mode: mode, coords: coords, symbols: symbols,
+      };
+    }
+    return { ok: true, hint: null, mode: mode, coords: coords, symbols: symbols };
+  }
+
+  /**
    * Whether arrows are drawn for the current displayMode.  "animation"
    * hides arrows until todo 29 lands; "arrows" and "combo" show them.
    *
@@ -403,39 +489,28 @@
    * Clear and re-apply displacement arrows on the main viewer for the
    * selected mode.  Sets arrowState.enabled/_hint; never throws.  Arrows
    * are disabled with a hint when the displayed geometry is missing or
-   * its atom count does not match the mode vectors.
+   * its atom count does not match the mode vectors.  While the animation
+   * loop is playing it owns the canvas — this is a no-op.
    */
   function refreshArrows() {
+    if (animationState.playing) return;
     var viewerObj = _getMainViewer();
     clearArrows(viewerObj);
     arrowState._lastCount = 0;
     arrowState.modeIndex = vibrationState.selectedModeIndex;
 
-    var mode = _selectedMode();
-    var hint = null;
-    if (mode && mode.vectors && _arrowsVisible()) {
-      var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
-        ? window.ACPStructureViewer.state
-        : null;
-      var coords = svState ? svState.displayedCoords : null;
-      var symbols = svState ? svState.displayedSymbols : null;
-      var sameEntry = !!(svState && svState.displayedEntryId &&
-        svState.displayedEntryId === vibrationState.entryId);
-      if (!coords || !sameEntry) {
-        hint = _t("structure.vib.arrow.no_geometry", STR.NO_GEOMETRY);
-      } else if (mode.vectors.length !== coords.length) {
-        hint = reasonText("geometry_mismatch");
-      } else {
-        var endpoints = computeArrowEndpoints(coords, mode.vectors, arrowState.amplitude);
-        var color = _isImaginary(mode) ? COLOR_IMAGINARY : COLOR_NEUTRAL;
-        arrowState._lastCount = applyArrows(viewerObj, endpoints, symbols, { color: color });
-        if (viewerObj && typeof viewerObj.render === "function") {
-          try { viewerObj.render(); } catch (_) { /* render is best-effort */ }
-        }
-        arrowState.enabled = true;
-        arrowState._hint = null;
-        return;
+    var ctx = _vibGeometry();
+    var hint = ctx.hint;
+    if (ctx.ok && _arrowsVisible()) {
+      var endpoints = computeArrowEndpoints(ctx.coords, ctx.mode.vectors, arrowState.amplitude);
+      var color = _isImaginary(ctx.mode) ? COLOR_IMAGINARY : COLOR_NEUTRAL;
+      arrowState._lastCount = applyArrows(viewerObj, endpoints, ctx.symbols, { color: color });
+      if (viewerObj && typeof viewerObj.render === "function") {
+        try { viewerObj.render(); } catch (_) { /* render is best-effort */ }
       }
+      arrowState.enabled = true;
+      arrowState._hint = null;
+      return;
     }
     arrowState.enabled = false;
     arrowState._hint = hint;
@@ -443,14 +518,22 @@
 
   /**
    * Three-state display toggle: "arrows" | "animation" | "combo".
-   * Animation playback is todo 29 — selecting animation/combo today only
-   * toggles arrow visibility and shows the coming-soon hint.
+   * Switching to pure "arrows" while playing stops the loop (equilibrium
+   * restore + static arrows); animation<->combo switches keep playing and
+   * the loop picks up arrow visibility on the next frame.
    *
    * @param {string} mode
    */
   function setDisplayMode(mode) {
     if (mode !== "arrows" && mode !== "animation" && mode !== "combo") return;
     arrowState.displayMode = mode;
+    if (animationState.playing && mode === "arrows") {
+      stopAnimation();
+      return;
+    }
+    if (animationState.playing) {
+      return;
+    }
     refreshArrows();
     renderFrequencyInspector();
   }
@@ -463,6 +546,366 @@
   function setAmplitude(v) {
     arrowState.amplitude = clampAmplitude(v);
     refreshArrows();
+  }
+
+  /* ---- mode animation (todo 29) ---- */
+
+  /**
+   * Displaced coordinates at oscillation phase `phase`:
+   * r_i = r_i0 + A * sin(phase) * normalize(v_i) (sign flipped when
+   * opts.invert).  Zero-length/NaN vectors and opts.skipMask rows stay at
+   * equilibrium.  The stored vectors array is read-only here.
+   *
+   * @param {Array<Array<number>>|null} equilibriumCoords
+   * @param {Array<Array<number>>|null} vectors
+   * @param {number} amplitude
+   * @param {number} phase - radians
+   * @param {{ invert?: boolean, skipMask?: Array<boolean> }} [opts]
+   * @returns {Array<Array<number>>|null}
+   */
+  function computeDisplacedCoords(equilibriumCoords, vectors, amplitude, phase, opts) {
+    if (!equilibriumCoords || !vectors) return null;
+    opts = opts || {};
+    var amp = clampAmplitude(amplitude);
+    var sign = opts.invert ? -1 : 1;
+    var s = amp * Math.sin(phase) * sign;
+    var out = [];
+    for (var i = 0; i < equilibriumCoords.length; i++) {
+      var c = equilibriumCoords[i];
+      var v = vectors[i];
+      if (!c || c.length < 3) { out.push(null); continue; }
+      var cx = +c[0], cy = +c[1], cz = +c[2];
+      if (!isFinite(cx) || !isFinite(cy) || !isFinite(cz)) { out.push(null); continue; }
+      var placed = false;
+      if (v && v.length >= 3 && !(opts.skipMask && opts.skipMask[i])) {
+        var vx = +v[0], vy = +v[1], vz = +v[2];
+        var norm = Math.sqrt(vx * vx + vy * vy + vz * vz);
+        if (isFinite(norm) && norm >= VECTOR_EPS) {
+          var k = s / norm;
+          out.push([cx + vx * k, cy + vy * k, cz + vz * k]);
+          placed = true;
+        }
+      }
+      if (!placed) {
+        out.push([cx, cy, cz]);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Build XYZ text from symbols + coordinates.  The symbol sequence (atom
+   * ordering) is preserved exactly; coordinates are written at 6 decimals
+   * (matching the app's atomsToXYZ).
+   *
+   * @param {Array<string>|null} symbols
+   * @param {Array<Array<number>>|null} coords
+   * @param {string} [comment]
+   * @returns {string} XYZ text ("" when inputs are unusable)
+   */
+  function buildDisplacedXyz(symbols, coords, comment) {
+    if (!symbols || !coords || symbols.length !== coords.length || !symbols.length) {
+      return "";
+    }
+    var out = String(coords.length) + "\n" + (comment || "") + "\n";
+    for (var i = 0; i < coords.length; i++) {
+      var c = coords[i];
+      if (!c || c.length < 3) return "";
+      out += symbols[i] + " " + (+c[0]).toFixed(6) + " " +
+        (+c[1]).toFixed(6) + " " + (+c[2]).toFixed(6) + "\n";
+    }
+    return out;
+  }
+
+  /**
+   * Clamp a playback speed multiplier to [SPEED_MIN, SPEED_MAX]
+   * (non-finite input falls back to 1).
+   *
+   * @param {*} v
+   * @returns {number}
+   */
+  function clampSpeed(v) {
+    var n = typeof v === "number" ? v : parseFloat(v);
+    if (!isFinite(n)) return 1;
+    return Math.min(SPEED_MAX, Math.max(SPEED_MIN, n));
+  }
+
+  /** @returns {Function|null} */
+  function _getRafImpl() {
+    if (typeof window !== "undefined" && window.ACPVibrationViewer &&
+        typeof window.ACPVibrationViewer._rafImpl === "function") {
+      return window.ACPVibrationViewer._rafImpl;
+    }
+    if (typeof requestAnimationFrame === "function") {
+      return requestAnimationFrame;
+    }
+    return null;
+  }
+
+  /** @returns {Function|null} */
+  function _getCancelRafImpl() {
+    if (typeof window !== "undefined" && window.ACPVibrationViewer &&
+        typeof window.ACPVibrationViewer._cancelRafImpl === "function") {
+      return window.ACPVibrationViewer._cancelRafImpl;
+    }
+    if (typeof cancelAnimationFrame === "function") {
+      return cancelAnimationFrame;
+    }
+    return null;
+  }
+
+  /** @returns {number} monotonic-ish timestamp in ms */
+  function _now() {
+    if (typeof window !== "undefined" && window.ACPVibrationViewer &&
+        typeof window.ACPVibrationViewer._nowImpl === "function") {
+      return window.ACPVibrationViewer._nowImpl();
+    }
+    return Date.now();
+  }
+
+  /**
+   * Equilibrium XYZ text: svState.equilibriumXyz raw text when available,
+   * otherwise rebuilt from displayedCoords/Symbols (displayed geometry IS
+   * the equilibrium — the app loads it via the _svLoadXyzToViewer bridge).
+   *
+   * @returns {string|null}
+   */
+  function _buildEquilibriumXyz() {
+    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
+      ? window.ACPStructureViewer.state
+      : null;
+    if (!svState) return null;
+    if (typeof svState.equilibriumXyz === "string" && svState.equilibriumXyz) {
+      return svState.equilibriumXyz;
+    }
+    if (svState.displayedCoords && svState.displayedSymbols &&
+        svState.displayedCoords.length === svState.displayedSymbols.length) {
+      return buildDisplacedXyz(svState.displayedSymbols, svState.displayedCoords, "");
+    }
+    return null;
+  }
+
+  /**
+   * Re-apply the app's model style after a per-frame rebuild so the look
+   * matches the main viewer (applyStylePreset(molDoc.style) + invisible
+   * clickspheres, mirroring renderMolDoc).  Falls back to a neutral
+   * sphere/stick style when the app functions are unavailable.
+   *
+   * @param {Object} viewerObj
+   */
+  function _styleModel(viewerObj) {
+    try {
+      if (typeof applyStylePreset === "function" &&
+          typeof molDoc !== "undefined" && molDoc && molDoc.style) {
+        applyStylePreset(molDoc.style);
+        if (typeof getCurrentSphereScale === "function" &&
+            typeof viewerObj.addStyle === "function") {
+          viewerObj.addStyle({}, {
+            clicksphere: { radius: Math.max(0.3, getCurrentSphereScale() * 1.5) },
+          });
+        }
+        return;
+      }
+    } catch (_) { /* fall through to the default style below */ }
+    if (typeof viewerObj.addStyle === "function") {
+      viewerObj.addStyle({}, { sphere: { scale: 0.22 }, stick: { radius: 0.12 } });
+    }
+  }
+
+  /**
+   * Render one animation frame: capture the camera ONCE, rebuild the model
+   * from displaced XYZ (removeAllModels + addModel + style), clear shapes,
+   * re-apply arrows anchored at the displaced positions when the display
+   * mode is "combo", then restore the camera and render.  Never uses the
+   * viewer built-in animation API; never re-frames the camera.
+   *
+   * @param {Object} viewerObj
+   * @param {Array} displacedCoords
+   * @param {Array} symbols
+   * @param {{ mode: Object, coords: Array, vectors: Array }} ctx
+   */
+  function _renderAnimationFrame(viewerObj, displacedCoords, symbols, ctx) {
+    var savedView = (typeof viewerObj.getView === "function") ? viewerObj.getView() : null;
+    if (typeof viewerObj.removeAllModels === "function") viewerObj.removeAllModels();
+    var xyzText = buildDisplacedXyz(symbols, displacedCoords, "");
+    viewerObj.addModel(xyzText, "xyz");
+    _styleModel(viewerObj);
+    if (typeof viewerObj.removeAllShapes === "function") viewerObj.removeAllShapes();
+    if (arrowState.displayMode === "combo") {
+      var endpoints = computeArrowEndpoints(displacedCoords, ctx.mode.vectors, arrowState.amplitude);
+      var color = _isImaginary(ctx.mode) ? COLOR_IMAGINARY : COLOR_NEUTRAL;
+      applyArrows(viewerObj, endpoints, symbols, { color: color });
+    }
+    if (savedView !== null && typeof viewerObj.setView === "function") {
+      viewerObj.setView(savedView);
+    }
+    animationState.savedView = savedView;
+    if (typeof viewerObj.render === "function") {
+      try { viewerObj.render(); } catch (_) { /* render is best-effort */ }
+    }
+  }
+
+  /**
+   * The rAF tick: throttled to ~30fps (FRAME_MIN_MS), advances the phase
+   * by dt * speed * 2π * CYCLE_RATE_HZ, and rebuilds the model with the
+   * displacement at the new phase (H atoms frozen above the skip
+   * threshold).  Stops itself via stopAnimation() when the geometry
+   * context becomes invalid mid-play.
+   *
+   * @param {number} [ts] - rAF timestamp (ms); _nowImpl() when absent
+   */
+  function tick(ts) {
+    if (!animationState.playing) return;
+    var now = (ts != null) ? ts : _now();
+    if (animationState.lastFrameTs != null &&
+        now - animationState.lastFrameTs < FRAME_MIN_MS) {
+      animationState.rafHandle = _scheduleNextFrame();
+      return;
+    }
+    var dt = animationState.lastFrameTs == null ? 0 : (now - animationState.lastFrameTs) / 1000;
+    if (dt < 0) dt = 0;
+    animationState.lastFrameTs = now;
+    animationState.phase += dt * animationState.speed * 2 * Math.PI * CYCLE_RATE_HZ;
+
+    var ctx = _vibGeometry();
+    var viewerObj = _getMainViewer();
+    if (!ctx.ok || !viewerObj) {
+      stopAnimation();
+      return;
+    }
+    var mask = (ctx.symbols && ctx.coords.length > H_SKIP_ATOM_THRESHOLD)
+      ? hydrogenSkipMask(ctx.symbols, ctx.coords.length)
+      : null;
+    var displaced = computeDisplacedCoords(
+      ctx.coords, ctx.mode.vectors, arrowState.amplitude, animationState.phase,
+      { invert: animationState.invertPhase, skipMask: mask }
+    );
+    _renderAnimationFrame(viewerObj, displaced, ctx.symbols, ctx);
+    animationState.rafHandle = _scheduleNextFrame();
+  }
+
+  function _scheduleNextFrame() {
+    var raf = _getRafImpl();
+    if (!raf) {
+      animationState.playing = false;
+      return null;
+    }
+    try {
+      return raf(tick);
+    } catch (_) {
+      animationState.playing = false;
+      return null;
+    }
+  }
+
+  /**
+   * Start (or resume) the animation loop.  No-op when already playing or
+   * when the geometry context is invalid (hint surfaced in the UI).
+   */
+  function playAnimation() {
+    if (animationState.playing) return;
+    var ctx = _vibGeometry();
+    if (!ctx.ok) {
+      arrowState.enabled = false;
+      arrowState._hint = ctx.hint;
+      renderFrequencyInspector();
+      return;
+    }
+    animationState.equilibriumXyz = _buildEquilibriumXyz();
+    animationState.playing = true;
+    animationState._active = true;
+    animationState.lastFrameTs = null;
+    animationState.rafHandle = _scheduleNextFrame();
+    renderFrequencyInspector();
+  }
+
+  /**
+   * Pause the loop but keep the currently displayed displaced model.
+   */
+  function pauseAnimation() {
+    if (!animationState.playing) return;
+    if (animationState.rafHandle != null) {
+      var cancel = _getCancelRafImpl();
+      if (cancel) {
+        try { cancel(animationState.rafHandle); } catch (_) { /* already gone */ }
+      }
+      animationState.rafHandle = null;
+    }
+    animationState.playing = false;
+    renderFrequencyInspector();
+  }
+
+  /**
+   * Full stop: cancel the rAF loop and rebuild the EXACT equilibrium
+   * model (same XYZ the app loaded), restore the saved camera, and
+   * re-apply static arrows when the display mode includes them.
+   * Idempotent — extra calls are no-ops.
+   */
+  function stopAnimation() {
+    if (animationState.rafHandle != null) {
+      var cancel = _getCancelRafImpl();
+      if (cancel) {
+        try { cancel(animationState.rafHandle); } catch (_) { /* already gone */ }
+      }
+      animationState.rafHandle = null;
+    }
+    animationState.playing = false;
+    animationState.lastFrameTs = null;
+    if (!animationState._active) {
+      return;
+    }
+    animationState._active = false;
+
+    var viewerObj = _getMainViewer();
+    if (viewerObj) {
+      var savedView = animationState.savedView !== null
+        ? animationState.savedView
+        : (typeof viewerObj.getView === "function" ? viewerObj.getView() : null);
+      if (typeof viewerObj.removeAllModels === "function") viewerObj.removeAllModels();
+      var eqXyz = animationState.equilibriumXyz || _buildEquilibriumXyz();
+      if (eqXyz) {
+        viewerObj.addModel(eqXyz, "xyz");
+      }
+      _styleModel(viewerObj);
+      if (typeof viewerObj.removeAllShapes === "function") viewerObj.removeAllShapes();
+      if (savedView !== null && typeof viewerObj.setView === "function") {
+        viewerObj.setView(savedView);
+      }
+      if (typeof viewerObj.render === "function") {
+        try { viewerObj.render(); } catch (_) { /* render is best-effort */ }
+      }
+    }
+    animationState.savedView = null;
+    if (arrowState.displayMode !== "animation") {
+      refreshArrows();
+    }
+    renderFrequencyInspector();
+  }
+
+  /**
+   * Play/pause toggle for the controls button.
+   */
+  function togglePlay() {
+    if (animationState.playing) {
+      pauseAnimation();
+    } else {
+      playAnimation();
+    }
+  }
+
+  /**
+   * @param {*} v - clamped into [SPEED_MIN, SPEED_MAX]
+   */
+  function setSpeed(v) {
+    animationState.speed = clampSpeed(v);
+  }
+
+  /**
+   * Flip the displacement sign (phase inversion).
+   */
+  function toggleInvertPhase() {
+    animationState.invertPhase = !animationState.invertPhase;
+    renderFrequencyInspector();
   }
 
   /* ---- fetch ---- */
@@ -744,13 +1187,55 @@
     toggleRow.appendChild(group);
     controls.appendChild(toggleRow);
 
-    /* hints */
-    if (arrowState.displayMode !== "arrows") {
-      var soonHint = document.createElement("div");
-      soonHint.className = "sv-vib-hint";
-      soonHint.textContent = _t("structure.vib.arrow.animation_soon", STR.ANIMATION_SOON);
-      controls.appendChild(soonHint);
+    /* playback controls: play/pause + speed + phase inversion */
+    var playRow = document.createElement("div");
+    playRow.className = "sv-vib-control-row";
+
+    var playBtn = document.createElement("button");
+    playBtn.setAttribute("type", "button");
+    playBtn.className = "sv-vib-play-btn";
+    playBtn.textContent = animationState.playing
+      ? _t("structure.vib.anim.pause", STR.PAUSE)
+      : _t("structure.vib.anim.play", STR.PLAY);
+    playBtn.addEventListener("click", function () {
+      togglePlay();
+    });
+    playRow.appendChild(playBtn);
+
+    var speedLbl = document.createElement("span");
+    speedLbl.className = "sv-vib-control-label";
+    speedLbl.textContent = _t("structure.vib.anim.speed", STR.SPEED);
+    playRow.appendChild(speedLbl);
+
+    var speedSelect = document.createElement("select");
+    speedSelect.className = "sv-vib-speed-select";
+    for (var spi = 0; spi < SPEED_OPTIONS.length; spi++) {
+      var sopt = document.createElement("option");
+      sopt.value = String(SPEED_OPTIONS[spi]);
+      sopt.textContent = SPEED_OPTIONS[spi] + "x";
+      if (SPEED_OPTIONS[spi] === animationState.speed) {
+        sopt.selected = true;
+      }
+      speedSelect.appendChild(sopt);
     }
+    speedSelect.addEventListener("change", function () {
+      setSpeed(parseFloat(speedSelect.value));
+    });
+    playRow.appendChild(speedSelect);
+
+    var invertBtn = document.createElement("button");
+    invertBtn.setAttribute("type", "button");
+    invertBtn.className = "sv-vib-toggle" +
+      (animationState.invertPhase ? " sv-active" : "");
+    invertBtn.setAttribute("data-invert-phase", "1");
+    invertBtn.textContent = _t("structure.vib.anim.invert", STR.INVERT);
+    invertBtn.addEventListener("click", function () {
+      toggleInvertPhase();
+    });
+    playRow.appendChild(invertBtn);
+    controls.appendChild(playRow);
+
+    /* arrow-availability hint */
     if (arrowState._hint) {
       var hintBox = document.createElement("div");
       hintBox.className = "sv-vib-hint";
@@ -827,6 +1312,7 @@
     state: vibrationState,
     STR: STR,
     arrowState: arrowState,
+    animationState: animationState,
     H_SKIP_ATOM_THRESHOLD: H_SKIP_ATOM_THRESHOLD,
     loadVibrations: loadVibrations,
     renderFrequencyInspector: renderFrequencyInspector,
@@ -834,6 +1320,12 @@
     refreshArrows: refreshArrows,
     setDisplayMode: setDisplayMode,
     setAmplitude: setAmplitude,
+    playAnimation: playAnimation,
+    pauseAnimation: pauseAnimation,
+    togglePlay: togglePlay,
+    stopAnimation: stopAnimation,
+    setSpeed: setSpeed,
+    toggleInvertPhase: toggleInvertPhase,
     sortModesNegativesFirst: sortModesNegativesFirst,
     defaultModeIndex: defaultModeIndex,
     reasonText: reasonText,
@@ -842,12 +1334,18 @@
     hydrogenSkipMask: hydrogenSkipMask,
     applyArrows: applyArrows,
     clearArrows: clearArrows,
+    computeDisplacedCoords: computeDisplacedCoords,
+    buildDisplacedXyz: buildDisplacedXyz,
+    clampSpeed: clampSpeed,
     _t: _t,
     _esc: _esc,
     _vibrationsUrl: _vibrationsUrl,
     _getMainViewer: _getMainViewer,
     _arrowsVisible: _arrowsVisible,
     _viewerImpl: null,
+    _rafImpl: null,
+    _cancelRafImpl: null,
+    _nowImpl: null,
     _fetchImpl: (typeof window !== "undefined" && window.fetch) ? window.fetch.bind(window) : null,
   };
 })();

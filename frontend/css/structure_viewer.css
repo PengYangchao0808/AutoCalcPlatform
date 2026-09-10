@@ -1,6 +1,6 @@
 /**
  * ACP Structure Viewer — Stylesheet
- * @version 0.4.0
+ * @version 0.5.0
  *
  * Design tokens inherited from ACP_Workbench_v2.html :root variables.
  * Three-column layout: list | canvas | inspector.
@@ -521,6 +521,35 @@
   font-size: 11px;
   color: var(--sv-amber);
   font-style: italic;
+}
+
+/* ===== Vibration playback controls (Wave 5, todo 29) ===== */
+.sv-vib-play-btn {
+  padding: 3px 12px;
+  border: 1px solid var(--sv-accent);
+  border-radius: var(--sv-radius-sm);
+  background: transparent;
+  color: var(--sv-accent);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--sv-transition);
+}
+
+.sv-vib-play-btn:hover {
+  background: var(--sv-accent-soft);
+}
+
+.sv-vib-speed-select {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--sv-border-default);
+  border-radius: var(--sv-radius-sm);
+  background: var(--sv-bg-elevated);
+  color: var(--sv-text-primary);
+  font-size: 12px;
 }
 
 /* ===== Playback bar (bottom) ===== */

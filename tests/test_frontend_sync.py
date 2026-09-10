@@ -2883,7 +2883,7 @@ def test_vibration_viewer_arrow_contract() -> None:
         assert name in sv, f"{name} missing from structure_viewer.js"
     assert "ACPVibrationViewer.refreshArrows" in sv
 
-    # Toggle labels + hints in BOTH locales
+    # Toggle labels in BOTH locales (animation_soon stub key removed in todo 29)
     for zh, en in (
         ('"structure.vib.arrow.display_arrows": "箭头"',
          '"structure.vib.arrow.display_arrows": "Arrows"'),
@@ -2891,8 +2891,6 @@ def test_vibration_viewer_arrow_contract() -> None:
          '"structure.vib.arrow.display_animation": "Animation"'),
         ('"structure.vib.arrow.display_combo": "箭头+动画"',
          '"structure.vib.arrow.display_combo": "Arrows+Animation"'),
-        ('"structure.vib.arrow.animation_soon": "动画即将上线"',
-         '"structure.vib.arrow.animation_soon": "Animation coming soon"'),
     ):
         assert zh in html, f"zh toggle label missing: {zh}"
         assert en in html, f"en toggle label missing: {en}"
@@ -3104,5 +3102,338 @@ def test_structure_viewer_node_parse_xyz_first_frame() -> None:
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
         f"Node xyz-parser test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Wave 5 / todo 29: rAF animation + controls + camera preservation
+# ---------------------------------------------------------------------------
+
+
+def test_vibration_viewer_animation_contract() -> None:
+    """Contract: rAF loop, getView/setView camera save/restore,
+    removeAllModels+addModel rebuild, NO viewer.animate(), throttle
+    constant, speed clamp, injectables, style reuse, control labels."""
+    vib = _VIB_JS.read_text(encoding="utf-8")
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # rAF loop + injectables
+    assert "requestAnimationFrame" in vib
+    for name in ("_rafImpl", "_cancelRafImpl", "_nowImpl"):
+        assert name in vib, f"{name} injectable missing"
+
+    # Camera preservation + per-frame rebuild recipe
+    assert "getView" in vib
+    assert "setView" in vib
+    assert "removeAllModels" in vib
+    assert 'addModel(' in vib
+
+    # Built-in viewer.animate() is FORBIDDEN (no variable speed/phase)
+    assert ".animate(" not in vib, "viewer.animate() must not be used"
+
+    # Throttle + rate + speed clamp constants
+    assert "FRAME_MIN_MS = 33" in vib
+    assert "CYCLE_RATE_HZ = 0.6" in vib
+    assert "SPEED_MIN = 0.25" in vib
+    assert "SPEED_MAX = 2" in vib
+    assert "SPEED_OPTIONS = [0.25, 0.5, 1, 2]" in vib
+
+    # Pure helpers + control functions
+    for name in (
+        "computeDisplacedCoords",
+        "buildDisplacedXyz",
+        "clampSpeed",
+        "playAnimation",
+        "pauseAnimation",
+        "togglePlay",
+        "stopAnimation",
+        "setSpeed",
+        "toggleInvertPhase",
+        "animationState",
+    ):
+        assert name in vib, f"{name} missing from vibration_viewer.js"
+
+    # Per-frame style reuses the app's style path
+    assert "applyStylePreset(molDoc.style)" in vib
+    assert "getCurrentSphereScale" in vib
+
+    # Stub hint fully removed (JS + dictionaries)
+    assert "animation_soon" not in vib
+    assert "animation_soon" not in html
+
+    # Playback control labels in BOTH locales
+    for zh, en in (
+        ('"structure.vib.anim.play": "播放"', '"structure.vib.anim.play": "Play"'),
+        ('"structure.vib.anim.pause": "暂停"', '"structure.vib.anim.pause": "Pause"'),
+        ('"structure.vib.anim.speed": "速度"', '"structure.vib.anim.speed": "Speed"'),
+        ('"structure.vib.anim.invert": "相位反转"',
+         '"structure.vib.anim.invert": "Invert Phase"'),
+    ):
+        assert zh in html, f"zh label missing: {zh}"
+        assert en in html, f"en label missing: {en}"
+
+
+def test_vibration_viewer_node_displacement_math() -> None:
+    """Node logic: r = r0 + A*sin(phase)*normalize(v); invert mirrors;
+    zero/NaN stay at equilibrium; skipMask freezes atoms; vectors not
+    mutated; buildDisplacedXyz preserves atom ordering."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPVibrationViewer;
+        function close(a, b) { return Math.abs(a - b) <= 1e-9; }
+
+        var eq = [[0, 0, 0]];
+        var v = [[1, 0, 0]];
+        var before = JSON.stringify(v);
+
+        function rowAt(phase, opts) {
+            return ns.computeDisplacedCoords(eq, v, 0.25, phase, opts)[0];
+        }
+        var atPeak = rowAt(Math.PI / 2);
+        if (!close(atPeak[0], 0.25) || !close(atPeak[1], 0) || !close(atPeak[2], 0)) {
+            console.error("FAIL: phase pi/2 -> " + JSON.stringify(atPeak));
+            process.exit(1);
+        }
+        var atZero = rowAt(0);
+        if (!close(atZero[0], 0)) { console.error("FAIL: phase 0"); process.exit(1); }
+        var atTrough = rowAt(Math.PI * 1.5);
+        if (!close(atTrough[0], -0.25)) { console.error("FAIL: trough phase"); process.exit(1); }
+        var inverted = rowAt(Math.PI / 2, { invert: true });
+        if (!close(inverted[0], -0.25)) { console.error("FAIL: invert mirror"); process.exit(1); }
+
+        // zero / NaN vectors stay at equilibrium
+        var mixed = ns.computeDisplacedCoords(
+            [[1, 1, 1], [2, 2, 2]],
+            [[0, 0, 0], [NaN, 1, 0]],
+            0.25, Math.PI / 2, {}
+        );
+        if (!close(mixed[0][0], 1) || !close(mixed[1][0], 2)) {
+            console.error("FAIL: zero/NaN must stay at equilibrium");
+            process.exit(1);
+        }
+        // skipMask freezes the masked atom
+        var masked = ns.computeDisplacedCoords(
+            [[0, 0, 0], [5, 5, 5]],
+            [[1, 0, 0], [1, 0, 0]],
+            0.25, Math.PI / 2, { skipMask: [false, true] }
+        );
+        if (!close(masked[0][0], 0.25) || !close(masked[1][0], 5)) {
+            console.error("FAIL: skipMask must freeze atom");
+            process.exit(1);
+        }
+        // normalization display-only
+        if (JSON.stringify(v) !== before) {
+            console.error("FAIL: vectors mutated");
+            process.exit(1);
+        }
+        if (ns.computeDisplacedCoords(null, v, 0.25, 0) !== null) {
+            console.error("FAIL: null input");
+            process.exit(1);
+        }
+
+        // buildDisplacedXyz: atom ordering + header preserved
+        var xyz = ns.buildDisplacedXyz(
+            ["C", "H", "O"],
+            [[0, 0, 0], [1.1, 0, 0], [0, 0, 2.2]],
+            "comment"
+        );
+        var lines = xyz.trim().split("\\n");
+        if (lines[0] !== "3" || lines[1] !== "comment") {
+            console.error("FAIL: xyz header");
+            process.exit(1);
+        }
+        var syms = [];
+        for (var li = 2; li <= 4; li++) syms.push(lines[li].split(/\\s+/)[0]);
+        if (JSON.stringify(syms) !== JSON.stringify(["C", "H", "O"])) {
+            console.error("FAIL: atom order changed: " + JSON.stringify(syms));
+            process.exit(1);
+        }
+        if (ns.clampSpeed(10) !== 2 || ns.clampSpeed(0.01) !== 0.25 || ns.clampSpeed(1) !== 1) {
+            console.error("FAIL: clampSpeed bounds");
+            process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(_VIB_JS)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node displacement-math test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_vibration_viewer_node_animation_loop() -> None:
+    """Node logic with fake rAF + fake viewer: camera captured before the
+    rebuild and restored with the SAME view object, ~30fps throttle,
+    phase advance, equilibrium restore on stop, rAF cancel, idempotency."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPVibrationViewer;
+
+        var calls = [];
+        var viewSeq = 0, lastView = null, lastSetView = null;
+        var models = [], arrows = 0, renders = 0;
+        var fakeViewer = {
+            getView: function () {
+                viewSeq += 1;
+                lastView = { seq: viewSeq };
+                calls.push("getView");
+                return lastView;
+            },
+            setView: function (v) {
+                lastSetView = v;
+                calls.push("setView");
+            },
+            removeAllModels: function () { calls.push("removeAllModels"); },
+            addModel: function (xyz, fmt) {
+                calls.push("addModel");
+                models.push({ xyz: xyz, fmt: fmt });
+                return {};
+            },
+            addStyle: function () {},
+            removeAllShapes: function () { calls.push("removeAllShapes"); },
+            addArrow: function () { arrows += 1; },
+            render: function () { renders += 1; }
+        };
+        ns._viewerImpl = function () { return fakeViewer; };
+
+        var queue = [], idSeq = 0, cancelled = [];
+        ns._rafImpl = function (fn) {
+            idSeq += 1;
+            queue.push({ id: idSeq, fn: fn });
+            return idSeq;
+        };
+        ns._cancelRafImpl = function (h) {
+            cancelled.push(h);
+            for (var i = 0; i < queue.length; i++) {
+                if (queue[i].id === h) { queue.splice(i, 1); break; }
+            }
+        };
+        var nowMs = 0;
+        ns._nowImpl = function () { return nowMs; };
+        function flush(ts) {
+            nowMs = ts;
+            var q = queue.splice(0, queue.length);
+            for (var i = 0; i < q.length; i++) q[i].fn(ts);
+        }
+
+        var coords = [[0, 0, 0], [1, 1, 1], [2, 2, 2]];
+        var vectors = [[1, 0, 0], [0, 2, 0], [0, 0, 2]];
+        ns.state.jobId = "job1";
+        ns.state.entryId = "e1";
+        ns.state.data = {
+            available: true, reason: null,
+            modes: [{ mode_index: 6, frequency_cm1: -797.72, imaginary: true,
+                      ir_intensity: null, vectors: vectors }]
+        };
+        ns.state.selectedModeIndex = 6;
+        window.ACPStructureViewer = {
+            state: {
+                displayedCoords: coords,
+                displayedSymbols: ["C", "O", "C"],
+                displayedEntryId: "e1"
+            }
+        };
+        ns.arrowState.displayMode = "combo";
+        ns.arrowState.enabled = true;
+
+        ns.playAnimation();
+        if (!ns.animationState.playing || queue.length !== 1) {
+            console.error("FAIL: playAnimation must schedule exactly one rAF");
+            process.exit(1);
+        }
+
+        calls.length = 0;
+        flush(1000);
+        // frame 1 sequence: getView < removeAllModels < addModel < removeShapes < setView < render
+        function idx(tag) {
+            for (var i = 0; i < calls.length; i++) if (calls[i] === tag) return i;
+            return -1;
+        }
+        var ig = idx("getView"), irm = idx("removeAllModels"), iam = idx("addModel");
+        var irs = idx("removeAllShapes"), isv = idx("setView");
+        if (ig < 0 || irm < 0 || iam < 0 || irs < 0 || isv < 0 ||
+            !(ig < irm && irm < iam && iam < irs && irs < isv)) {
+            console.error("FAIL: frame call order " + JSON.stringify(calls));
+            process.exit(1);
+        }
+        if (lastSetView === null || lastSetView.seq !== viewSeq) {
+            console.error("FAIL: setView must receive the SAME view object as getView");
+            process.exit(1);
+        }
+        if (models.length !== 1) {
+            console.error("FAIL: expected 1 model after first frame");
+            process.exit(1);
+        }
+        if (arrows !== 3) {
+            console.error("FAIL: combo mode must draw 3 arrows per frame");
+            process.exit(1);
+        }
+
+        // throttle: +10ms -> no new frame; +40ms -> advances
+        flush(1010);
+        if (models.length !== 1) {
+            console.error("FAIL: 10ms gap must be throttled");
+            process.exit(1);
+        }
+        flush(1040);
+        if (models.length !== 2) {
+            console.error("FAIL: 40ms gap must render a frame");
+            process.exit(1);
+        }
+        if (ns.animationState.phase <= 0) {
+            console.error("FAIL: phase must advance");
+            process.exit(1);
+        }
+        if (models[1].xyz === models[0].xyz) {
+            console.error("FAIL: displaced xyz must differ from equilibrium");
+            process.exit(1);
+        }
+        if (models[1].fmt !== "xyz") {
+            console.error("FAIL: addModel format must be xyz");
+            process.exit(1);
+        }
+
+        // stop: cancel + exact equilibrium restore + idempotent
+        var pendingHandle = ns.animationState.rafHandle;
+        var modelCountBeforeStop = models.length;
+        ns.stopAnimation();
+        if (cancelled.indexOf(pendingHandle) < 0) {
+            console.error("FAIL: stop must cancel the pending rAF handle");
+            process.exit(1);
+        }
+        if (ns.animationState.playing) {
+            console.error("FAIL: stop must clear playing");
+            process.exit(1);
+        }
+        var equilibriumXyz = ns.buildDisplacedXyz(["C", "O", "C"], coords, "");
+        if (models[models.length - 1].xyz !== equilibriumXyz) {
+            console.error("FAIL: stop must rebuild the exact equilibrium model");
+            process.exit(1);
+        }
+        ns.stopAnimation();
+        if (models.length !== modelCountBeforeStop + 1) {
+            console.error("FAIL: stopAnimation must be idempotent");
+            process.exit(1);
+        }
+        if (ns.animationState.playing) {
+            console.error("FAIL: playing after repeated stop");
+            process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(_VIB_JS)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node animation-loop test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
