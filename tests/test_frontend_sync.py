@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import pytest
 from pydantic import TypeAdapter
 from typing_extensions import TypedDict
 
@@ -14,6 +15,17 @@ from acp.catalog import METHOD_SCHEMAS, WORKFLOW_CATALOG
 REPO_ROOT = Path(__file__).parents[1]
 FRONTEND = REPO_ROOT / "frontend" / "ACP_Workbench_v2.html"
 SERVER = REPO_ROOT / "src" / "acp" / "api" / "server.py"
+
+# Structure-viewer extracted modules (todo 13)
+FRONTEND_JS_DIR = REPO_ROOT / "frontend" / "js"
+FRONTEND_CSS_DIR = REPO_ROOT / "frontend" / "css"
+FRONTEND_FILES: list[Path] = [
+    FRONTEND,
+    FRONTEND_JS_DIR / "structure_viewer.js",
+    FRONTEND_JS_DIR / "structure_editor.js",
+    FRONTEND_JS_DIR / "vibration_viewer.js",
+    FRONTEND_CSS_DIR / "structure_viewer.css",
+]
 
 _I18N_KEY_RE = re.compile(r'"((?:energy|tab\.energy)\.[^"]+)":')
 _NODES_I18N_KEY_RE = re.compile(r'"(nodes\.[^"]+)":')
@@ -1316,3 +1328,59 @@ def test_frontend_script_has_no_syntax_errors() -> None:
         assert result.returncode == 0, (
             f"node --check failed:\n{result.stderr}"
         )
+
+
+def test_frontend_files_exist_and_readable() -> None:
+    for path in FRONTEND_FILES:
+        assert path.exists(), f"Frontend file missing: {path}"
+        content = path.read_text(encoding="utf-8")
+        assert len(content) > 0, f"Frontend file is empty: {path}"
+
+
+def test_structure_viewer_js_has_namespace() -> None:
+    js = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+    assert "window.ACPStructureViewer" in js
+    assert "loadStructureViewer" in js
+    assert "structureViewerState" in js
+
+
+def test_structure_editor_js_has_namespace() -> None:
+    js = (FRONTEND_JS_DIR / "structure_editor.js").read_text(encoding="utf-8")
+    assert "window.ACPStructureEditor" in js
+
+
+def test_vibration_viewer_js_has_namespace() -> None:
+    js = (FRONTEND_JS_DIR / "vibration_viewer.js").read_text(encoding="utf-8")
+    assert "window.ACPVibrationViewer" in js
+
+
+def test_v2_html_loads_structure_viewer_modules() -> None:
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert '<link rel="stylesheet" href="css/structure_viewer.css">' in html
+    assert '<script src="js/structure_viewer.js"></script>' in html
+    assert '<script src="js/structure_editor.js"></script>' in html
+    assert '<script src="js/vibration_viewer.js"></script>' in html
+
+
+@pytest.mark.parametrize(
+    "js_file",
+    [
+        "structure_viewer.js",
+        "structure_editor.js",
+        "vibration_viewer.js",
+    ],
+)
+def test_extracted_js_passes_node_check(js_file: str) -> None:
+    if not shutil.which("node"):
+        import pytest as _pytest
+        _pytest.skip("node not available")
+
+    path = FRONTEND_JS_DIR / js_file
+    result = subprocess.run(
+        ["node", "--check", str(path)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"node --check {js_file} failed:\n{result.stderr}"
+    )

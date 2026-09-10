@@ -1,0 +1,35 @@
+/**
+ * ACP Structure Viewer — Stylesheet
+ * @version 0.1.0
+ *
+ * Design tokens inherited from ACP_Workbench_v2.html :root variables.
+ * Filled incrementally by todos 16-19.
+ */
+
+/* ===== Token aliases (structure-viewer scoped) ===== */
+:root {
+  --sv-bg-panel: var(--bg-panel, #111821);
+  --sv-bg-elevated: var(--bg-elevated, #1a2332);
+  --sv-border-subtle: var(--border-subtle, #1e2832);
+  --sv-border-default: var(--border-default, #24303b);
+  --sv-text-primary: var(--text-primary, #e5edf5);
+  --sv-text-secondary: var(--text-secondary, #b0bec8);
+  --sv-text-tertiary: var(--text-tertiary, #6b7b8a);
+  --sv-accent: var(--accent, #4ea1ff);
+  --sv-accent-soft: var(--accent-soft, rgba(78, 161, 255, 0.14));
+  --sv-green: var(--green, #38c172);
+  --sv-amber: var(--amber, #f2b84b);
+  --sv-red: var(--red, #e55353);
+  --sv-radius: var(--radius, 10px);
+  --sv-radius-sm: var(--radius-sm, 6px);
+  --sv-transition: var(--transition, 0.15s ease);
+}
+
+/* ===== Structure list (left panel) ===== */
+/* TODO(todo-16): .sv-structure-list, .sv-group-header, .sv-entry-row, .sv-badge */
+
+/* ===== Inspector (right panel) ===== */
+/* TODO(todo-16): .sv-inspector, .sv-inspector-section, .sv-inspector-label */
+
+/* ===== Narrow-screen drawers ===== */
+/* TODO(todo-16): .sv-drawer-overlay, .sv-drawer, .sv-drawer-open */
