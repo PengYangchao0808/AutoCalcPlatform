@@ -8,6 +8,7 @@
  *   - state                     (the live structureViewerState object)
  *   - loadStructureViewer(jobId, opts)
  *   - onJobSelected(jobId, opts) (called from selectJob; loads catalog + default geometry)
+ *   - onEnergyNodeSelected(jobId, entryMeta) (energy-graph one-way push; phase A)
  *   - selectEntry(entryId, origin)
  *   - refreshIfChanged()
  *   - loadSelectedGeometry()    (fetches geometry for selected entry)
@@ -23,7 +24,6 @@
  *   - _esc                      (XSS-safe text insertion)
  *   - _sha256hex(str)            (sync SHA-256 → hex string)
  *
- * TODO(todo-18): energy-graph selection push via selectEntry + selectionToken
  * TODO(todo-19): phase-A contract tests + i18n completeness
  */
 (function () {
@@ -963,6 +963,151 @@
     if (overlay) overlay.classList.remove("sv-drawer-open");
   }
 
+  /* ---- energy-graph → structure-viewer push (one-way, phase A) ---- */
+
+  /**
+   * Map an energy-graph node descriptor to a structure-viewer entry id.
+   *
+   * Accepts either:
+   *   - { entryId: "conf_0001" }        (ready-made id)
+   *   - { kind: "conformer", key: "0001" }  → "conf_0001"
+   *   - { kind: "batch", key: "opt_item_001" }  → "batch_opt_item_001"
+   *   - { kind: "scan", frameIndex: 5 } → "scan_frame_5"
+   *   - { kind: "pes", candidateId: "ts_frame_005" } → "pes_ts_frame_005"
+   *   - { kind: "optimization", frameIndex: 12 } → null (transient)
+   *   - { kind: "simple", stepKind: "optimize" } → "simple_optimize"
+   *
+   * @param {Object} meta
+   * @returns {string|null} entry id or null for transient
+   */
+  function _entryIdFromEnergyNode(meta) {
+    if (!meta) return null;
+    if (meta.entryId) return meta.entryId;
+
+    var kind = meta.kind || "";
+    var key = meta.key || "";
+
+    if (kind === "conformer") {
+      return "conf_" + (key || String(meta.frameIndex || ""));
+    }
+    if (kind === "batch") {
+      return "batch_" + key;
+    }
+    if (kind === "scan") {
+      return "scan_frame_" + String(meta.frameIndex != null ? meta.frameIndex : key);
+    }
+    if (kind === "pes") {
+      return "pes_" + (meta.candidateId || key);
+    }
+    if (kind === "simple") {
+      return "simple_" + (meta.stepKind || key);
+    }
+    if (kind === "irc") {
+      return "irc_" + (meta.endpoint || "") + "_" + String(meta.frameIndex != null ? meta.frameIndex : 0);
+    }
+    /* optimization frames are transient — no stable entry id */
+    if (kind === "optimization") {
+      return null;
+    }
+    /* fallback: treat key as raw entry id */
+    return key || null;
+  }
+
+  /**
+   * Called from the energy/trajectory viewer when a node is selected.
+   * One-way push (phase A): energy → structure viewer only.
+   * Wave 7 (todo 38) revisits shared ownership.
+   *
+   * @param {string} jobId  - current job id (stale-job guard)
+   * @param {Object} entryMeta - node descriptor from energy viewer
+   *   (see _entryIdFromEnergyNode for accepted shapes)
+   * @returns {number|null} selectionToken or null if ignored
+   */
+  function onEnergyNodeSelected(jobId, entryMeta) {
+    var state = structureViewerState;
+
+    /* Stale-job guard: ignore if the energy viewer is reporting for a
+       different job than the structure viewer currently shows. */
+    if (!state.jobId || state.jobId !== jobId) {
+      return null;
+    }
+
+    var entryId = _entryIdFromEnergyNode(entryMeta);
+    var capturedToken = state.selectionToken;
+
+    if (entryId) {
+      /* Try to find the entry in the current payload */
+      var entries = (state.payload && state.payload.entries) || [];
+      var found = false;
+      for (var i = 0; i < entries.length; i++) {
+        if (entries[i].id === entryId) { found = true; break; }
+      }
+
+      if (found) {
+        /* Entry exists in catalog — select it and load geometry */
+        return selectEntry(entryId, "energy_graph");
+      }
+    }
+
+    /* Entry not in catalog (e.g. optimization trajectory frame not yet
+       in the structure catalog).  Create a transient entry so the
+       structure viewer can still highlight and load geometry. */
+    if (!entryId && entryMeta) {
+      /* For optimization frames, synthesize a transient id */
+      if (entryMeta.kind === "optimization" && entryMeta.frameIndex != null) {
+        entryId = "transient_opt_" + String(entryMeta.frameIndex);
+      } else if (entryMeta.frameIndex != null) {
+        entryId = "transient_frame_" + String(entryMeta.frameIndex);
+      }
+    }
+
+    if (!entryId) return null;
+
+    /* Build a transient entry */
+    var transient = {
+      id: entryId,
+      group_id: "__transient",
+      label: entryMeta.label || entryId,
+      role: "minimum",
+      status: "completed",
+      geometry: entryMeta.geometryEndpoint ? {
+        endpoint: entryMeta.geometryEndpoint,
+        format: "xyz",
+      } : null,
+      source: { kind: "last_valid_cycle", geometry_ref: entryMeta.geometryRef || "" },
+      badges: [],
+      vibrations: { available: false },
+    };
+
+    /* Inject into payload if not already present */
+    if (!state.payload) {
+      state.payload = {
+        schema_version: "structure_viewer_v1",
+        job_id: jobId,
+        workflow: "",
+        job_status: "",
+        availability: "ready",
+        revision: null,
+        default_entry_id: entryId,
+        groups: [],
+        entries: [transient],
+        warnings: [],
+      };
+    } else {
+      var existingEntries = state.payload.entries || [];
+      var dup = false;
+      for (var j = 0; j < existingEntries.length; j++) {
+        if (existingEntries[j].id === entryId) { dup = true; break; }
+      }
+      if (!dup) {
+        existingEntries.push(transient);
+        state.payload.entries = existingEntries;
+      }
+    }
+
+    return selectEntry(entryId, "energy_graph");
+  }
+
   /* ---- public namespace ---- */
   window.ACPStructureViewer = {
     version: VERSION,
@@ -970,6 +1115,7 @@
     STR: STR,
     loadStructureViewer: loadStructureViewer,
     onJobSelected: onJobSelected,
+    onEnergyNodeSelected: onEnergyNodeSelected,
     selectEntry: selectEntry,
     refreshIfChanged: refreshIfChanged,
     loadSelectedGeometry: loadSelectedGeometry,
@@ -983,6 +1129,7 @@
     _esc: _esc,
     _sha256hex: _sha256hex,
     _manualEntryId: _manualEntryId,
+    _entryIdFromEnergyNode: _entryIdFromEnergyNode,
     _fetchImpl: (typeof window !== "undefined" && window.fetch) ? window.fetch.bind(window) : null,
   };
 })();

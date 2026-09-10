@@ -11012,6 +11012,29 @@ function energyGraphSelectFrame(frameIndex, origin) {
   const annotation = (data.annotations || []).find(function(item) { return Number(item.frame_index) === Number(frameIndex) && ["ts", "intermediate"].indexOf(item.type) >= 0; });
   energyGraphState.selectedAnnotationId = annotation ? String(annotation.id) : "";
   energyGraphUpdateSelection(Number(frameIndex) !== Number(oldFrame));
+  /* Push selection to structure viewer (one-way; phase A).
+     Wave 7 (todo 38) revisits shared ownership. */
+  if (window.ACPStructureViewer && window.ACPStructureViewer.onEnergyNodeSelected) {
+    var view = String(data.view_type || "");
+    var entryMeta = { kind: view, frameIndex: Number(frameIndex) };
+    if (view === "conformer") {
+      entryMeta.kind = "conformer";
+      entryMeta.key = String(node.id || "").replace(/^conf_/, "");
+    } else if (view === "scan" || view === "scan_trajectory") {
+      entryMeta.kind = "scan";
+    } else if (view === "optimization") {
+      entryMeta.kind = "optimization";
+    } else if (view === "sampling") {
+      entryMeta.kind = "optimization";
+    }
+    if (annotation && annotation.candidate_id) {
+      entryMeta.kind = "pes";
+      entryMeta.candidateId = String(annotation.candidate_id);
+    }
+    entryMeta.geometryRef = node.geometry_ref || "";
+    entryMeta.label = node.label || "";
+    window.ACPStructureViewer.onEnergyNodeSelected(energyGraphState.jobId, entryMeta);
+  }
 }
 
 function energyGenCandidateName(frameIndex, role) {

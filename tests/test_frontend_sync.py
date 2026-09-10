@@ -2007,3 +2007,239 @@ def test_structure_viewer_svload_xyz_bridge_exists() -> None:
     assert "parseMultiFrameXYZ" in html, (
         "_svLoadXyzToViewer must use parseMultiFrameXYZ"
     )
+
+
+# ---------------------------------------------------------------------------
+# Todo 18: energy graph -> structure viewer one-way push
+# ---------------------------------------------------------------------------
+
+def test_energy_selectframe_pushes_to_structure_viewer() -> None:
+    """Contract: energyGraphSelectFrame calls onEnergyNodeSelected."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    select_frame = html.split("function energyGraphSelectFrame(frameIndex, origin)", 1)[1]
+    select_frame = select_frame.split("\nfunction ", 1)[0]
+
+    assert "onEnergyNodeSelected" in select_frame, (
+        "energyGraphSelectFrame must push selection to structure viewer"
+    )
+    assert 'energyGraphState.jobId' in select_frame, (
+        "Push must pass jobId from energyGraphState"
+    )
+
+
+def test_structure_viewer_js_has_energy_push_api() -> None:
+    """Contract: onEnergyNodeSelected + _entryIdFromEnergyNode exist."""
+    js = FRONTEND_JS_DIR / "structure_viewer.js"
+    content = js.read_text(encoding="utf-8")
+
+    assert "onEnergyNodeSelected" in content
+    assert "_entryIdFromEnergyNode" in content
+    assert '"energy_graph"' in content, (
+        'Must use "energy_graph" origin for energy-graph push'
+    )
+
+
+def test_structure_viewer_energy_push_forbidden_ids_still_absent() -> None:
+    """Contract: forbidden identifiers from anti-pattern #29 must stay absent."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "energyGraphConfirmAndBatch" not in html, (
+        "energyGraphConfirmAndBatch must stay absent (anti-pattern #29)"
+    )
+    assert 'data-energy-action="to-batch"' not in html, (
+        "to-batch action must stay absent (anti-pattern #29)"
+    )
+
+
+def test_structure_viewer_node_energy_stale_job_guard() -> None:
+    """Node logic: onEnergyNodeSelected ignores mismatched jobId."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    js_path = FRONTEND_JS_DIR / "structure_viewer.js"
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPStructureViewer;
+        var state = ns.state;
+
+        state.jobId = "job-A";
+        state.payload = { entries: [{ id: "conf_1" }], groups: [] };
+        state.selectedEntryId = "conf_1";
+
+        var result = ns.onEnergyNodeSelected("job-B", { kind: "conformer", key: "1" });
+        if (result !== null) {
+            console.error("FAIL: stale job should be ignored, got " + result);
+            process.exit(1);
+        }
+        if (state.selectedEntryId !== "conf_1") {
+            console.error("FAIL: selectedEntryId should not change");
+            process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(js_path)))
+
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, (
+        f"Stale-job guard test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_structure_viewer_node_energy_entry_id_mapping() -> None:
+    """Node logic: _entryIdFromEnergyNode maps kind/key to correct ids."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    js_path = FRONTEND_JS_DIR / "structure_viewer.js"
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPStructureViewer;
+        var map = ns._entryIdFromEnergyNode;
+
+        var cases = [
+          [{ entryId: "conf_0001" }, "conf_0001"],
+          [{ kind: "conformer", key: "0001" }, "conf_0001"],
+          [{ kind: "batch", key: "opt_item_001" }, "batch_opt_item_001"],
+          [{ kind: "scan", frameIndex: 5 }, "scan_frame_5"],
+          [{ kind: "pes", candidateId: "ts_frame_005" }, "pes_ts_frame_005"],
+          [{ kind: "simple", stepKind: "optimize" }, "simple_optimize"],
+          [{ kind: "irc", endpoint: "forward", frameIndex: 0 }, "irc_forward_0"],
+          [{ kind: "optimization", frameIndex: 12 }, null],
+        ];
+        for (var i = 0; i < cases.length; i++) {
+          var input = cases[i][0];
+          var expected = cases[i][1];
+          var got = map(input);
+          if (got !== expected) {
+            console.error("FAIL: _entryIdFromEnergyNode(" + JSON.stringify(input) + ") = " + got + ", expected " + expected);
+            process.exit(1);
+          }
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(js_path)))
+
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, (
+        f"Entry-id mapping test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_structure_viewer_node_energy_token_guard() -> None:
+    """Node logic: rapid selections — older token's effects are superseded."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    js_path = FRONTEND_JS_DIR / "structure_viewer.js"
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPStructureViewer;
+        var state = ns.state;
+
+        state.jobId = "job-1";
+        state.payload = {
+          entries: [
+            { id: "conf_1", group_id: "", label: "C1", role: "minimum", status: "completed",
+              geometry: { endpoint: "/e1", format: "xyz" }, source: { kind: "formal_result" },
+              badges: [], vibrations: { available: false } },
+            { id: "conf_2", group_id: "", label: "C2", role: "minimum", status: "completed",
+              geometry: { endpoint: "/e2", format: "xyz" }, source: { kind: "formal_result" },
+              badges: [], vibrations: { available: false } },
+          ],
+          groups: []
+        };
+
+        // First push
+        var tok1 = ns.onEnergyNodeSelected("job-1", { kind: "conformer", key: "1" });
+        // Second push immediately after
+        var tok2 = ns.onEnergyNodeSelected("job-1", { kind: "conformer", key: "2" });
+
+        if (tok2 !== tok1 + 1) {
+          console.error("FAIL: token should increment, got tok1=" + tok1 + " tok2=" + tok2);
+          process.exit(1);
+        }
+        if (state.selectedEntryId !== "conf_2") {
+          console.error("FAIL: selectedEntryId should be conf_2, got " + state.selectedEntryId);
+          process.exit(1);
+        }
+        if (state.selectionOrigin !== "energy_graph") {
+          console.error("FAIL: selectionOrigin should be energy_graph, got " + state.selectionOrigin);
+          process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(js_path)))
+
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, (
+        f"Token guard test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_structure_viewer_node_energy_transient_entry() -> None:
+    """Node logic: unknown optimization frame creates a transient entry."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    js_path = FRONTEND_JS_DIR / "structure_viewer.js"
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPStructureViewer;
+        var state = ns.state;
+
+        state.jobId = "job-1";
+        state.payload = {
+          entries: [],
+          groups: []
+        };
+
+        var tok = ns.onEnergyNodeSelected("job-1", {
+          kind: "optimization",
+          frameIndex: 12,
+          geometryRef: "WORK/03_OPT/optimization_trajectory.json",
+          label: "Cycle 12"
+        });
+
+        if (!tok) {
+          console.error("FAIL: should return a token");
+          process.exit(1);
+        }
+        if (state.selectedEntryId !== "transient_opt_12") {
+          console.error("FAIL: selectedEntryId should be transient_opt_12, got " + state.selectedEntryId);
+          process.exit(1);
+        }
+        // Verify transient entry was injected
+        var entries = state.payload.entries;
+        var found = false;
+        for (var i = 0; i < entries.length; i++) {
+          if (entries[i].id === "transient_opt_12") { found = true; break; }
+        }
+        if (!found) {
+          console.error("FAIL: transient entry not injected into payload");
+          process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(js_path)))
+
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, (
+        f"Transient entry test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
