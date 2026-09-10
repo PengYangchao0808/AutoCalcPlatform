@@ -7544,42 +7544,53 @@ function energyGraphChartGeometry() {
 /* ── Nice-number tick generator ── */
 function energyChartNiceTicks(lo, hi, targetCount, integerMode) {
   /* Returns {values: [...], step: N} using 1/2/2.5/5×10^k step sizes.
-   * integerMode forces integer tick values (for cycle/frame axes).
+   * All returned ticks are clamped to [lo, hi].  Iterates candidate steps
+   * from the largest ≤ rawStep upward, picking the first that yields
+   * ≤ targetCount+1 in-domain ticks.  integerMode forces integer values.
    * Handles lo===hi and tiny spans gracefully.
    */
   if (lo === hi) { lo -= 0.5; hi += 0.5; }
   var range = hi - lo;
   if (range <= 0) range = 1;
   targetCount = targetCount || 5;
-  var step;
-  if (integerMode) {
-    var span = Math.ceil(hi) - Math.floor(lo);
-    if (span <= targetCount + 1) {
-      step = 1;
-    } else {
-      var rawInt = Math.ceil(span / targetCount);
-      var expI = Math.floor(Math.log10(Math.max(rawInt, 1)));
-      var fracI = rawInt / Math.pow(10, expI);
-      if (fracI <= 1) step = Math.pow(10, expI);
-      else if (fracI <= 2) step = 2 * Math.pow(10, expI);
-      else if (fracI <= 5) step = 5 * Math.pow(10, expI);
-      else step = 10 * Math.pow(10, expI);
-    }
-  } else {
-    var rawStep = range / targetCount;
-    var exponent = Math.floor(Math.log10(rawStep));
-    var fraction = rawStep / Math.pow(10, exponent);
-    if (fraction <= 1) step = Math.pow(10, exponent);
-    else if (fraction <= 2) step = 2 * Math.pow(10, exponent);
-    else if (fraction <= 2.5) step = 2.5 * Math.pow(10, exponent);
-    else if (fraction <= 5) step = 5 * Math.pow(10, exponent);
-    else step = 10 * Math.pow(10, exponent);
+  /* Build sorted candidate steps: {1,2[,2.5],5} × 10^k for k ∈ [-10..10] */
+  var baseSteps = integerMode ? [1, 2, 5] : [1, 2, 2.5, 5];
+  var candidates = [];
+  for (var k = -10; k <= 10; k++) {
+    var mult = Math.pow(10, k);
+    for (var b = 0; b < baseSteps.length; b++) { candidates.push(baseSteps[b] * mult); }
   }
-  var niceLo = Math.floor(lo / step) * step;
-  var niceHi = Math.ceil(hi / step) * step;
+  candidates.sort(function(a, b) { return a - b; });
+  /* Find largest candidate ≤ rawStep */
+  var rawStep = range / targetCount;
+  var startIdx = 0;
+  for (var i = candidates.length - 1; i >= 0; i--) {
+    if (candidates[i] <= rawStep + 1e-12) { startIdx = i; break; }
+  }
+  /* Iterate upward from startIdx; pick first step with ≤ targetCount+1 in-domain ticks */
+  for (var j = startIdx; j < candidates.length; j++) {
+    var step = candidates[j];
+    var nLo = Math.ceil(lo / step - 1e-9) * step;
+    var nHi = Math.floor(hi / step + 1e-9) * step;
+    if (nHi < nLo - 1e-9) continue;                      /* no in-domain ticks */
+    var count = Math.round((nHi - nLo) / step) + 1;
+    if (count <= targetCount + 1) {
+      var ticks = [];
+      for (var t = nLo; t <= nHi + step * 0.001; t += step) {
+        var v = integerMode ? Math.round(t) : +t.toPrecision(12);
+        if (v >= lo - 1e-9 && v <= hi + 1e-9) ticks.push(v);
+      }
+      return { values: ticks, step: step };
+    }
+  }
+  /* Fallback (should not happen for reasonable domains) */
+  var step = candidates[candidates.length - 1];
+  var nLo = Math.ceil(lo / step - 1e-9) * step;
+  var nHi = Math.floor(hi / step + 1e-9) * step;
   var ticks = [];
-  for (var t = niceLo; t <= niceHi + step * 0.001; t += step) {
-    ticks.push(integerMode ? Math.round(t) : +t.toPrecision(12));
+  for (var t = nLo; t <= nHi + step * 0.001; t += step) {
+    var v = integerMode ? Math.round(t) : +t.toPrecision(12);
+    if (v >= lo - 1e-9 && v <= hi + 1e-9) ticks.push(v);
   }
   return { values: ticks, step: step };
 }
