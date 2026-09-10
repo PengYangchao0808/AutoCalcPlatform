@@ -1062,8 +1062,7 @@ body.resizing-v canvas {
 .energy-point-group:hover .energy-point, .energy-point.selected, .energy-point.failed { opacity: 1; }
 .energy-point-group:hover .energy-point { stroke: var(--text-primary); stroke-width: 3; }
 .energy-point.selected { fill: var(--accent); stroke: #fff; stroke-width: 2; opacity: 1; }
-.energy-point-hit { fill: transparent; stroke: none; pointer-events: none; }
-.energy-point-halo { display: none; }
+.energy-point-hit { fill: transparent; stroke: none; pointer-events: all; }
 .energy-marker-line { stroke: rgba(176, 190, 200, 0.45); stroke-width: 1; stroke-dasharray: 4 4; }
 .energy-current-line { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 3 3; opacity: .35; }
 .energy-marker-label { fill: var(--text-primary); font-size: 11px; font-weight: 600; pointer-events: none; }
@@ -1399,7 +1398,7 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .energy-chart-svg.mode-pan.panning { cursor: grabbing; }
 .energy-box-select-rect { fill: rgba(56,189,248,0.12); stroke: rgba(56,189,248,0.55); stroke-width: 1; stroke-dasharray: 4 3; pointer-events: none; }
 .energy-chart-svg.labels-hidden [data-energy-annotation] { display: none; }
-.energy-point, .energy-point-halo, .energy-marker-ts, .energy-marker-int, .energy-marker-min, .energy-marker-failed, .energy-marker-basin, .energy-marker-line, .energy-current-line { vector-effect: non-scaling-stroke; }
+.energy-point, .energy-marker-ts, .energy-marker-int, .energy-marker-min, .energy-marker-failed, .energy-marker-basin, .energy-marker-line, .energy-current-line { vector-effect: non-scaling-stroke; }
 .plot-tip { position: fixed; z-index: 9999; pointer-events: none; opacity: 0; transition: opacity 120ms ease; background: #0d141c; border: 1px solid rgba(78,161,255,0.35); border-radius: 6px; padding: 6px 9px; color: #e8f2ff; font-size: 11px; line-height: 1.5; box-shadow: 0 6px 18px rgba(0,0,0,0.45); max-width: 240px; }
 .plot-tip.show { opacity: 1; }
 .plot-tip-keys { display: inline-flex; gap: 4px; margin-left: 6px; }
@@ -1480,7 +1479,7 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .optimization-point-group:hover .optimization-point, .optimization-point.selected { opacity: 1; }
 .optimization-point-group:hover .optimization-point { stroke: #fff; stroke-width: 2; }
 .optimization-point.selected { stroke: #fff; stroke-width: 2; opacity: 1; }
-.optimization-point-hit { fill: transparent; stroke: none; pointer-events: none; }
+.optimization-point-hit { fill: transparent; stroke: none; pointer-events: all; }
 .optimization-current-line { stroke: rgba(255,255,255,.36); stroke-width: 1; stroke-dasharray: 4 4; }
 .optimization-threshold { stroke: rgba(242,184,75,.52); stroke-width: 1; stroke-dasharray: 4 4; }
 .optimization-threshold.disp { stroke: rgba(255,138,107,.45); }
@@ -5652,7 +5651,7 @@ const I18N = {
     "energy.card.modified": "已修改，尚未保存",
     "energy.card.unmarked": "未标记",
     "energy.card.algo_rec": "算法推荐：{role}",
-    "energy.card.locked_note": "点击顶部"选点已锁定"可进入编辑模式",
+    "energy.card.locked_note": "点击顶部\u201c选点已锁定\u201d可进入编辑模式",
     "energy.card.conflict": "数据已更新，已自动刷新",
     "energy.band.overflow": "共 {count} 个候选 ›",
     "energy.band.cycle": "· 周期 {n}",
@@ -6750,9 +6749,10 @@ function energyGraphFrameCandidateFor(viewType, frameIndex) {
 
 function energyGraphApplyFrameCandidates(payload) {
   if (!payload) return;
+  var src = Array.isArray(payload.candidates) ? payload.candidates : (Array.isArray(payload.list) ? payload.list : []);
   energyGraphState.frameCandidates = {
     revision: Number(payload.revision) || 0,
-    list: Array.isArray(payload.candidates) ? payload.candidates : [],
+    list: src,
   };
 }
 
@@ -7687,6 +7687,10 @@ function energyChartNiceTicks(lo, hi, targetCount, integerMode) {
     var v = integerMode ? Math.round(t) : +t.toPrecision(12);
     if (v >= lo - 1e-9 && v <= hi + 1e-9) ticks.push(v);
   }
+  /* Integer-mode fallback: if no integer ticks in domain, retry without integerMode */
+  if (integerMode && ticks.length === 0) {
+    return energyChartNiceTicks(lo, hi, targetCount, false);
+  }
   return { values: ticks, step: step };
 }
 
@@ -7709,7 +7713,6 @@ function energyGraphAxesMarkup(xDom, yDom, geom, xTickMode) {
   for (var j = 0; j < xTicks.values.length; j += 1) {
     var x = xTicks.values[j];
     var px = xFor(x);
-    var isEdge = j === 0 || j === xTicks.values.length - 1;
     var xAnchor = j === 0 ? "start" : j === xTicks.values.length - 1 ? "end" : "middle";
     var xLabel = j === 0 ? px + 2 : j === xTicks.values.length - 1 ? px - 2 : px;
     markup += '<text class="energy-axis-text" x="' + xLabel + '" y="' + (H - pad.bottom + 23) + '" text-anchor="' + xAnchor + '">' + escapeHtml(energyGraphFormatNumber(x, xIntMode ? 0 : 3)) + '</text>';
@@ -8127,6 +8130,7 @@ function energyProjectCandidatesAsAnnotations(data) {
 function energyCandidateBandLayoutCore(chips, plotLeft, plotRight) {
   var chipGap = 8, maxRows = 2;
   var rows = [[], []];
+  chips.sort(function(a, b) { return a.anchorPx - b.anchorPx; });
   chips.forEach(function(chip) {
     var anchorPx = chip.anchorPx;
     var placed = false;
@@ -8374,23 +8378,32 @@ function renderTrajectoryAnnotations(opts) {
       label: String(item.annotation.label || item.annotation.id), caption: item.value !== null ? formatValue(item.value) : "" };
   });
   pixelItems.sort(function(a, b) { return a.x - b.x; });
-  /* ── Render system annotations (flag mode: vertical line + shape at top) ── */
+  /* ── Render system annotations ── */
   pixelItems.forEach(function(item) {
     var annotation = item.annotation;
     var ax = item.x, ay = item.y, at = item.type;
     var isSelected = annotation.id === energyGraphState.selectedAnnotationId;
     var selectedClass = isSelected ? " selected" : "";
     var labelClass = isSelected ? " selected-label" : "";
+    var isEnergyView = opts.viewType === "energy";
     svg += '<g data-energy-annotation="' + escapeHtml(String(annotation.id)) + '" data-energy-frame="' + escapeHtml(String(item.frameIndex)) + '">';
-    svg += '<line class="energy-marker-line" x1="' + ax + '" y1="' + (H - pad.bottom) + '" x2="' + ax + '" y2="' + pad.top + '"></line>';
-    if (at === "minimum") {
-      svg += '<circle class="energy-marker-min' + selectedClass + '" cx="' + ax + '" cy="' + (pad.top + 8) + '" r="4"></circle>';
-    } else if (at === "failed") {
-      svg += '<path class="energy-marker-failed" d="M ' + (ax - 6) + ' ' + (pad.top + 2) + ' L ' + (ax + 6) + ' ' + (pad.top + 14) + ' M ' + (ax + 6) + ' ' + (pad.top + 2) + ' L ' + (ax - 6) + ' ' + (pad.top + 14) + '"></path>';
-    } else if (at === "new_basin") {
-      svg += '<path class="energy-marker-basin' + selectedClass + '" d="M ' + ax + ' ' + (pad.top + 2) + ' L ' + (ax + 6) + ' ' + (pad.top + 8) + ' L ' + ax + ' ' + (pad.top + 14) + ' L ' + (ax - 6) + ' ' + (pad.top + 8) + ' Z"></path>';
+    if (at === "minimum" && isEnergyView) {
+      /* Full mode for minimum in energy view: circle at data coords, line from bottom */
+      svg += '<circle class="energy-marker-min' + selectedClass + '" cx="' + ax + '" cy="' + ay + '" r="6"></circle>';
+      svg += '<line class="energy-marker-line" x1="' + ax + '" y1="' + (H - pad.bottom) + '" x2="' + ax + '" y2="' + ay + '"></line>';
+      svg += '<text class="energy-marker-label' + labelClass + '" x="' + ax + '" y="' + (ay - 12) + '" text-anchor="middle">' + escapeHtml(String(annotation.label || annotation.id)) + '</text>';
+    } else {
+      /* Flag mode: vertical line + shape at top */
+      svg += '<line class="energy-marker-line" x1="' + ax + '" y1="' + (H - pad.bottom) + '" x2="' + ax + '" y2="' + pad.top + '"></line>';
+      if (at === "minimum") {
+        svg += '<circle class="energy-marker-min' + selectedClass + '" cx="' + ax + '" cy="' + (pad.top + 8) + '" r="4"></circle>';
+      } else if (at === "failed") {
+        svg += '<path class="energy-marker-failed" d="M ' + (ax - 6) + ' ' + (pad.top + 2) + ' L ' + (ax + 6) + ' ' + (pad.top + 14) + ' M ' + (ax + 6) + ' ' + (pad.top + 2) + ' L ' + (ax - 6) + ' ' + (pad.top + 14) + '"></path>';
+      } else if (at === "new_basin") {
+        svg += '<path class="energy-marker-basin' + selectedClass + '" d="M ' + ax + ' ' + (pad.top + 2) + ' L ' + (ax + 6) + ' ' + (pad.top + 8) + ' L ' + ax + ' ' + (pad.top + 14) + ' L ' + (ax - 6) + ' ' + (pad.top + 8) + ' Z"></path>';
+      }
+      svg += '<text class="energy-marker-label' + labelClass + '" x="' + ax + '" y="' + (pad.top + 24) + '" text-anchor="middle">' + escapeHtml(String(annotation.label || annotation.id)) + '</text>';
     }
-    svg += '<text class="energy-marker-label' + labelClass + '" x="' + ax + '" y="' + (pad.top + 24) + '" text-anchor="middle">' + escapeHtml(String(annotation.label || annotation.id)) + '</text>';
     svg += '</g>';
   });
   return { svg: svg, bandSvg: bandResult.bandSvg, bandHeight: bandResult.bandHeight, plotSvg: bandResult.plotSvg };
@@ -8466,7 +8479,6 @@ function energyAnnotationToolbarMarkup() {
  *   xDom, yDom,            // left-axis domains
  *   linePath, areaPath,    // pre-computed SVG path d strings
  *   selectedGuide,         // {x, y1, y2} | null  (vertical guide line)
- *   selectedHalo,          // {cx, cy} | null      (halo + selected dot centre)
  *   points,                // [{cx, cy, r, cssClass, frameIndex, nodeId}]
  *   annotationOpts,        // passed to renderTrajectoryAnnotations
  *   xLabel, xUnit, yLabel, yUnit,  // axis label texts
@@ -8811,6 +8823,7 @@ function energyGraphBuildSvg(data) {
       xDom: xDom,
       yDom: yDom,
       mode: "full",
+      viewType: "energy",
       selectedNodeId: String(energyGraphState.selectedNodeId || ""),
       selectionLocked: !!s2scanState.selectionLocked,
     },
@@ -9680,6 +9693,7 @@ function optimizationGraphBuildSvg(data, view) {
       geom: geom,
       xDom: xDom,
       mode: optAnnMode,
+      viewType: "optimization",
       selectedNodeId: String(energyGraphState.selectedNodeId || ""),
       selectionLocked: false,
     },

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
+import tempfile
 from pathlib import Path
 
 from acp.catalog import METHOD_SCHEMAS, WORKFLOW_CATALOG
@@ -1049,3 +1052,29 @@ def test_energy_viewer_refactor_dom_contracts() -> None:
     assert "clamp(340px, 24vw, 380px)" in html, "Right column clamp width missing"
     assert "structureResizeObserver" in html, "Structure ResizeObserver field missing"
     assert "data-expandable" in html, "Expandable field attribute missing"
+
+
+def test_frontend_script_has_no_syntax_errors() -> None:
+    """Regression guard: the main <script> block must pass node --check."""
+    if not shutil.which("node"):
+        import pytest
+        pytest.skip("node not available")
+
+    html = FRONTEND.read_text(encoding="utf-8")
+    script_start = html.find("<script>")
+    script_end = html.rfind("</script>")
+    assert script_start != -1 and script_end != -1, "Could not find <script> block"
+
+    js_start = html.index("\n", script_start) + 1
+    js_content = html[js_start:script_end]
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".js", delete=False) as f:
+        f.write(js_content)
+        f.flush()
+        result = subprocess.run(
+            ["node", "--check", f.name],
+            capture_output=True, text=True,
+        )
+        assert result.returncode == 0, (
+            f"node --check failed:\n{result.stderr}"
+        )
