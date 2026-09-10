@@ -7902,7 +7902,18 @@ function energyGraphBindInspectorButtons(root) {
     button.addEventListener("click", function() {
       var card = button.closest(".energy-candidate-card");
       if (!card) return;
-      /* Reset to idle: deselect types, disable save */
+      /* If there's a saved candidate for this frame, re-render to restore saved view */
+      if (data) {
+        var node = energyGraphCurrentNode(data);
+        if (node && node.frame_index != null) {
+          var savedEntry = energyGraphFrameCandidateFor(data.view_type, node.frame_index);
+          if (savedEntry) {
+            energyGraphRenderCurrent();
+            return;
+          }
+        }
+      }
+      /* No saved candidate: reset to idle */
       card.querySelectorAll(".energy-card-type-btn").forEach(function(btn) { btn.classList.remove("active"); });
       var saveBtn = card.querySelector('[data-energy-action="save-candidate"]');
       if (saveBtn) saveBtn.disabled = true;
