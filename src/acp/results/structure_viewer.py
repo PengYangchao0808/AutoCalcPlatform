@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,21 @@ _REVISION_SOURCES: list[tuple[str, str]] = [
     ("RESULT/pes_search/pes_recommendations.json", "pes_recommendations.json"),
     ("RESULT/pes_search/pes_review.json", "pes_review.json"),
 ]
+
+_DEFAULT_TEMPERATURE_K = 298.15
+_R_KCAL_PER_MOL_K = 1.987204259e-3
+_HARTREE_TO_KCAL = 627.5094740631
+
+
+def _number(value: Any) -> float | None:
+    """Return a finite float or None."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if math.isfinite(result) else None
 
 
 # ── Exceptions ──────────────────────────────────────────────────────────────
@@ -446,10 +462,199 @@ _ResolverResult = tuple[
 _Resolver = Any  # Callable[[Path, str, list[str]], _ResolverResult]
 
 
+def _compute_boltzmann_weights(
+    energies: list[float | None],
+    temperature_k: float,
+) -> list[float | None]:
+    """Compute Boltzmann weights from a list of energies.
+
+    Args:
+        energies: Energy values (hartree). ``None`` entries get ``None`` weight.
+        temperature_k: Temperature in Kelvin.
+
+    Returns:
+        List of Boltzmann weights summing to 1.0, or ``None`` per missing entry.
+    """
+    valid = [(i, e) for i, e in enumerate(energies) if e is not None]
+    if not valid:
+        return [None] * len(energies)
+
+    e_min = min(e for _, e in valid)
+    rt = _R_KCAL_PER_MOL_K * temperature_k
+    raw: list[tuple[int, float]] = []
+    for i, e in valid:
+        delta_hartree = e - e_min
+        delta_kcal = delta_hartree * _HARTREE_TO_KCAL
+        raw.append((i, math.exp(-delta_kcal / rt)))
+
+    total = sum(w for _, w in raw)
+    if total <= 0:
+        return [None] * len(energies)
+
+    result: list[float | None] = [None] * len(energies)
+    for i, w in raw:
+        result[i] = w / total
+    return result
+
+
 def _resolve_confsearch(task_root: Path, job_id: str, warnings: list[str]) -> _ResolverResult:
-    """Confsearch resolver — placeholder for todo 2."""
-    warnings.append("Confsearch resolver not yet implemented")
-    return [], [], None
+    """Resolve Confsearch manifest → structure viewer entries.
+
+    Reads ``RESULT/confsearch/confsearch_manifest.json`` via the authoritative
+    ``acp.confsearch.manifest`` readers.  Produces one entry per conformer in
+    manifest order, with rank-1 as the default selection.
+    """
+    from acp.confsearch.manifest import find_confsearch_manifest, read_manifest
+
+    manifest_path = find_confsearch_manifest(task_root)
+    if manifest_path is None:
+        warnings.append("No confsearch manifest found")
+        return [], [], None
+
+    try:
+        payload = read_manifest(manifest_path)
+    except (OSError, json.JSONDecodeError, ValueError, KeyError) as exc:
+        warnings.append(f"Cannot read confsearch manifest: {exc}")
+        return [], [], None
+
+    conformers_raw = payload.get("conformers")
+    if not isinstance(conformers_raw, list) or not conformers_raw:
+        warnings.append("Confsearch manifest has no conformers")
+        return [], [], None
+
+    temperature_k = _number(payload.get("temperature_k")) or _DEFAULT_TEMPERATURE_K
+
+    groups = [StructureViewerGroup(id="final_conformers", label="最终构象", kind="ensemble")]
+
+    parsed: list[dict[str, Any]] = []
+    for conformer in conformers_raw:
+        if not isinstance(conformer, dict):
+            parsed.append({})
+            continue
+        has_gibbs = conformer.get("free_energy_hartree") is not None
+        energy_val = _number(
+            conformer.get("free_energy_hartree") if has_gibbs
+            else conformer.get("energy_hartree")
+        )
+        parsed.append({
+            "conformer": conformer,
+            "has_gibbs": has_gibbs,
+            "energy_val": energy_val,
+        })
+
+    any_rel_missing = any(
+        p.get("conformer", {}).get("relative_energy_kcal") is None
+        and p.get("energy_val") is not None
+        for p in parsed
+        if p
+    )
+    min_energy: float | None = None
+    if any_rel_missing:
+        valid_energies = [p["energy_val"] for p in parsed if p.get("energy_val") is not None]
+        if valid_energies:
+            min_energy = min(valid_energies)
+
+    entries: list[StructureViewerEntry] = []
+    seen_ids: set[str] = set()
+    rank1_entry_id: str | None = None
+
+    for item in parsed:
+        if not item:
+            continue
+        conformer = item["conformer"]
+        has_gibbs: bool = item["has_gibbs"]
+        energy_value: float | None = item["energy_val"]
+
+        conf_id = str(conformer.get("conf_id") or "")
+        rank_raw = conformer.get("rank")
+        rank = int(rank_raw) if isinstance(rank_raw, (int, float)) and rank_raw > 0 else None
+
+        entry_id = confsearch_entry_id(conformer_id=conf_id or None, rank=rank)
+        if entry_id in seen_ids:
+            geometry_ref = str(conformer.get("geometry") or "")
+            entry_id = resolve_collision(entry_id, geometry_ref)
+        seen_ids.add(entry_id)
+
+        energy_kind = "gibbs" if has_gibbs else "electronic"
+
+        relative_kcal = _number(conformer.get("relative_energy_kcal"))
+        if relative_kcal is None and energy_value is not None and min_energy is not None:
+            relative_kcal = (energy_value - min_energy) * _HARTREE_TO_KCAL
+
+        weight = _number(conformer.get("boltzmann_weight"))
+
+        badges: list[str] = []
+        if rank is not None:
+            badges.append(f"rank-{rank}")
+            if rank == 1:
+                badges.append("selected")
+                rank1_entry_id = entry_id
+
+        geometry_ref = str(conformer.get("geometry") or "")
+        full_geometry_ref = f"RESULT/confsearch/{geometry_ref}" if geometry_ref else None
+
+        entries.append(StructureViewerEntry(
+            id=entry_id,
+            group_id="final_conformers",
+            label=f"构象 {conf_id}" if conf_id else f"构象 rank-{rank}",
+            role="minimum",
+            status="completed",
+            geometry=StructureViewerGeometry(
+                endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+                format="xyz",
+            ),
+            energy=StructureViewerEnergy(
+                value=energy_value,
+                unit="hartree",
+                kind=energy_kind,
+                temperature_k=temperature_k if has_gibbs else None,
+            ),
+            relative_energy_kcal=relative_kcal,
+            boltzmann_weight=weight,
+            source=StructureViewerSource(
+                kind="formal_result",
+                geometry_ref=full_geometry_ref,
+            ),
+            badges=tuple(badges),
+            vibrations=StructureViewerVibrations(available=False),
+        ))
+
+    if not entries:
+        warnings.append("No valid conformer entries in confsearch manifest")
+        return [], [], None
+
+    any_weight_missing = any(e.boltzmann_weight is None for e in entries)
+    if any_weight_missing:
+        warnings.append("Boltzmann weights missing from manifest; computed from energies")
+        energies_for_weights: list[float | None] = [
+            p.get("energy_val") if p else None for p in parsed
+        ]
+        computed_weights = _compute_boltzmann_weights(energies_for_weights, temperature_k)
+        rebuilt: list[StructureViewerEntry] = []
+        for entry, cw in zip(entries, computed_weights, strict=False):
+            if entry.boltzmann_weight is None and cw is not None:
+                rebuilt.append(StructureViewerEntry(
+                    id=entry.id,
+                    group_id=entry.group_id,
+                    label=entry.label,
+                    role=entry.role,
+                    status=entry.status,
+                    geometry=entry.geometry,
+                    energy=entry.energy,
+                    relative_energy_kcal=entry.relative_energy_kcal,
+                    boltzmann_weight=cw,
+                    source=entry.source,
+                    badges=entry.badges,
+                    vibrations=entry.vibrations,
+                ))
+            else:
+                rebuilt.append(entry)
+        entries = rebuilt
+
+    if rank1_entry_id is None and entries:
+        rank1_entry_id = entries[0].id
+
+    return groups, entries, rank1_entry_id
 
 
 def _resolve_pessearch(task_root: Path, job_id: str, warnings: list[str]) -> _ResolverResult:

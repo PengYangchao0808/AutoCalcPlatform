@@ -377,13 +377,294 @@ class TestDispatcherSkeleton:
         assert hasattr(payload.groups, "__iter__")
         assert hasattr(payload.warnings, "__iter__")
 
-    def test_unimplemented_resolver_warns(self, tmp_path: Path):
+    def test_unimplemented_resolver_warns_for_pessearch(self, tmp_path: Path):
         """Resolvers not yet implemented produce a specific warning."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        task = _make_task_dir(tmp_path)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="PESsearch", job_status="completed"
+        )
+        assert any("not yet implemented" in w.lower() for w in payload.warnings)
+
+
+# ---------------------------------------------------------------------------
+# Confsearch resolver tests
+# ---------------------------------------------------------------------------
+
+
+def _confsearch_manifest(*, conformers: list[dict], temperature_k: float | None = None) -> dict:
+    """Build a realistic confsearch_manifest.json fixture."""
+    payload: dict = {
+        "schema_version": "confsearch_v1",
+        "workflow": "Confsearch",
+        "protocol": "censo-crest",
+        "profile": "default",
+        "refinement_policy": "screen",
+        "backend": "native",
+        "input": {},
+        "sampling": {},
+        "conformers": conformers,
+        "selected_conformers": [c["conf_id"] for c in conformers[:1]],
+        "refinement": {},
+        "provenance": {},
+        "quality_gates": {},
+    }
+    if temperature_k is not None:
+        payload["temperature_k"] = temperature_k
+    return payload
+
+
+def _conf(*, conf_id: str, rank: int, energy: float, gibbs: float | None = None,
+          weight: float | None = None, relative: float | None = None) -> dict:
+    """Build one conformer dict matching the ConformerEntry.to_dict() shape."""
+    entry: dict = {
+        "conf_id": conf_id,
+        "geometry": f"conformers/{conf_id}.xyz",
+        "energy_hartree": energy,
+        "free_energy_hartree": gibbs,
+        "relative_energy_kcal": relative,
+        "boltzmann_weight": weight,
+        "rank": rank,
+    }
+    return entry
+
+
+class TestConfsearchResolver:
+    """Confsearch resolver: entries, ΔE, weights, manifest order, default selection."""
+
+    def test_confsearch_entries_basic(self, tmp_path: Path):
+        """3-conformer fixture → 3 entries, correct ids, roles, group."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0, gibbs=-99.5, weight=0.7, relative=0.0),
+            _conf(conf_id="0002", rank=2, energy=-99.8, gibbs=-99.3, weight=0.2, relative=1.25),
+            _conf(conf_id="0003", rank=3, energy=-99.6, gibbs=-99.1, weight=0.1, relative=2.51),
+        ]
+        task = _make_task_dir(tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers))
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+
+        assert len(payload.entries) == 3
+        assert payload.entries[0].id == "conf_0001"
+        assert payload.entries[1].id == "conf_0002"
+        assert payload.entries[2].id == "conf_0003"
+        for entry in payload.entries:
+            assert entry.role == "minimum"
+            assert entry.group_id == "final_conformers"
+        assert any(g.id == "final_conformers" for g in payload.groups)
+
+    def test_confsearch_default_is_rank1(self, tmp_path: Path):
+        """default_entry_id = rank-1 conformer id."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0, weight=0.5),
+            _conf(conf_id="0002", rank=2, energy=-99.8, weight=0.5),
+        ]
+        task = _make_task_dir(tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers))
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        assert payload.default_entry_id == "conf_0001"
+
+    def test_confsearch_selected_badge_on_rank1(self, tmp_path: Path):
+        """Rank-1 entry carries 'selected' and 'rank-1' badges."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0, weight=0.6),
+            _conf(conf_id="0002", rank=2, energy=-99.5, weight=0.4),
+        ]
+        task = _make_task_dir(tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers))
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        rank1 = payload.entries[0]
+        assert "selected" in rank1.badges
+        assert "rank-1" in rank1.badges
+
+    def test_confsearch_rank_badges(self, tmp_path: Path):
+        """Each entry carries 'rank-<n>' badge."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0, weight=0.5),
+            _conf(conf_id="0002", rank=2, energy=-99.8, weight=0.3),
+            _conf(conf_id="0003", rank=3, energy=-99.5, weight=0.2),
+        ]
+        task = _make_task_dir(tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers))
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        assert "rank-1" in payload.entries[0].badges
+        assert "rank-2" in payload.entries[1].badges
+        assert "rank-3" in payload.entries[2].badges
+
+    def test_confsearch_relative_energy_kcal(self, tmp_path: Path):
+        """relative_energy_kcal computed vs group minimum."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0, weight=0.5),
+            _conf(conf_id="0002", rank=2, energy=-99.8, weight=0.5),
+        ]
+        task = _make_task_dir(tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers))
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        assert payload.entries[0].relative_energy_kcal == 0.0
+        assert payload.entries[1].relative_energy_kcal is not None
+        assert payload.entries[1].relative_energy_kcal > 0.0
+
+    def test_confsearch_energy_kind_gibbs(self, tmp_path: Path):
+        """energy.kind = 'gibbs' when free_energy_hartree present."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0, gibbs=-99.5, weight=0.5),
+        ]
+        task = _make_task_dir(tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers))
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        assert payload.entries[0].energy.kind == "gibbs"
+        assert payload.entries[0].energy.value == -99.5
+
+    def test_confsearch_energy_kind_electronic(self, tmp_path: Path):
+        """energy.kind = 'electronic' when only energy_hartree present."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0, weight=0.5),
+        ]
+        task = _make_task_dir(tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers))
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        assert payload.entries[0].energy.kind == "electronic"
+        assert payload.entries[0].energy.value == -100.0
+
+    def test_confsearch_weights_sum_to_one(self, tmp_path: Path):
+        """Boltzmann weights from manifest sum to 1.0 within 1e-6."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0, weight=0.7),
+            _conf(conf_id="0002", rank=2, energy=-99.8, weight=0.2),
+            _conf(conf_id="0003", rank=3, energy=-99.5, weight=0.1),
+        ]
+        task = _make_task_dir(tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers))
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        total = sum(e.boltzmann_weight for e in payload.entries if e.boltzmann_weight is not None)
+        assert abs(total - 1.0) < 1e-6
+
+    def test_confsearch_missing_weights_computed(self, tmp_path: Path):
+        """When boltzmann_weight absent, computed from energies → sums to 1."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0),
+            _conf(conf_id="0002", rank=2, energy=-99.8),
+            _conf(conf_id="0003", rank=3, energy=-99.5),
+        ]
+        task = _make_task_dir(tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers))
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        for entry in payload.entries:
+            assert entry.boltzmann_weight is not None
+        total = sum(e.boltzmann_weight for e in payload.entries)
+        assert abs(total - 1.0) < 1e-6
+
+    def test_confsearch_missing_weights_warning(self, tmp_path: Path):
+        """Missing weights → a warning about fallback computation."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0),
+            _conf(conf_id="0002", rank=2, energy=-99.8),
+        ]
+        task = _make_task_dir(tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers))
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        assert any("boltzmann" in w.lower() or "weight" in w.lower() for w in payload.warnings)
+
+    def test_confsearch_manifest_order_preserved(self, tmp_path: Path):
+        """Entries appear in manifest order, NOT reordered by energy."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-99.0, weight=0.1),
+            _conf(conf_id="0002", rank=2, energy=-100.0, weight=0.5),
+            _conf(conf_id="0003", rank=3, energy=-99.5, weight=0.4),
+        ]
+        task = _make_task_dir(tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers))
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        ids = [e.id for e in payload.entries]
+        assert ids == ["conf_0001", "conf_0002", "conf_0003"]
+
+    def test_confsearch_missing_manifest_yields_no_entries(self, tmp_path: Path):
+        """No confsearch manifest → 0 Confsearch entries + warning."""
         from acp.results.structure_viewer import build_structure_viewer_payload
 
         task = _make_task_dir(tmp_path)
         payload = build_structure_viewer_payload(
             task, job_id="j1", workflow="Confsearch", job_status="completed"
         )
-        # Todos 2-6 replace these — for now, expect the scaffold warning
-        assert any("not yet implemented" in w.lower() for w in payload.warnings)
+        confsearch_entries = [e for e in payload.entries if e.id.startswith("conf_")]
+        assert len(confsearch_entries) == 0
+        assert len(payload.warnings) > 0
+
+    def test_confsearch_source_fields(self, tmp_path: Path):
+        """source.kind = formal_result, geometry_ref = RESULT/confsearch/conformers/..."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0, weight=0.5),
+        ]
+        task = _make_task_dir(tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers))
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert entry.source.kind == "formal_result"
+        assert entry.source.geometry_ref is not None
+        assert "conformers/0001.xyz" in entry.source.geometry_ref
+
+    def test_confsearch_geometry_endpoint(self, tmp_path: Path):
+        """geometry.endpoint uses job_id and entry_id."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0, weight=0.5),
+        ]
+        task = _make_task_dir(tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers))
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert "j1" in entry.geometry.endpoint
+        assert "conf_0001" in entry.geometry.endpoint
+
+    def test_confsearch_temperature_k_propagated(self, tmp_path: Path):
+        """temperature_k from manifest → energy.temperature_k."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0, gibbs=-99.5, weight=0.5),
+        ]
+        task = _make_task_dir(tmp_path, confsearch_manifest=_confsearch_manifest(
+            conformers=conformers, temperature_k=350.0
+        ))
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        assert payload.entries[0].energy.temperature_k == 350.0
