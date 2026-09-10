@@ -1,7 +1,8 @@
-"""Tests for ORCA normal-mode parsing with stable mode indices (todo 20)."""
+"""Tests for ORCA normal-mode parsing (todo 20) + normal_modes_v1 product (todo 21)."""
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import pytest
@@ -178,3 +179,238 @@ VIBRATIONAL FREQUENCIES
 
         assert hasattr(mod, "_CCCP_AVAILABLE")
         assert isinstance(mod._CCCP_AVAILABLE, bool)
+
+
+# ── build_normal_modes_product (todo 21) ────────────────────────────────────
+
+
+class TestBuildNormalModesProduct:
+    """build_normal_modes_product emits normal_modes_v1 schema."""
+
+    def test_happy_path_from_fixture(self) -> None:
+        """Full fixture → 9 modes ordered 0..8, mode 6 imaginary, vectors correct."""
+        from acp.results.frequencies import build_normal_modes_product
+
+        text = FULL_MODES_FIXTURE.read_text(encoding="utf-8")
+        calc = OrcaOutputParser().parse_text(text)
+        product = build_normal_modes_product(calc, geometry_product_id=None, atom_count=3)
+
+        assert product["schema_version"] == "normal_modes_v1"
+        assert product["units"]["frequency"] == "cm-1"
+        assert product["units"]["displacement"] == "dimensionless_orca_normal_mode"
+        assert product["atom_count"] == 3
+        assert product["geometry_product_id"] is None
+
+        modes = product["modes"]
+        assert len(modes) == 9
+
+        # Ordered by mode_index ascending
+        indices = [m["mode_index"] for m in modes]
+        assert indices == list(range(9))
+
+        mode6 = modes[6]
+        assert mode6["mode_index"] == 6
+        assert mode6["frequency_cm1"] == pytest.approx(-797.72)
+        assert mode6["imaginary"] is True
+        assert mode6["ir_intensity"] == pytest.approx(66.542)
+        assert len(mode6["vectors"]) == 3
+        for row in mode6["vectors"]:
+            assert len(row) == 3
+            for val in row:
+                assert isinstance(val, float)
+                assert math.isfinite(val)
+
+        mode8 = modes[8]
+        assert mode8["frequency_cm1"] == pytest.approx(1411.55)
+        assert mode8["imaginary"] is False
+
+        assert product["warnings"] == []
+
+    def test_geometry_product_id_passed_through(self) -> None:
+        """geometry_product_id is included in product."""
+        from acp.results.frequencies import build_normal_modes_product
+
+        text = FULL_MODES_FIXTURE.read_text(encoding="utf-8")
+        calc = OrcaOutputParser().parse_text(text)
+        product = build_normal_modes_product(calc, geometry_product_id="batch_item_001", atom_count=3)
+
+        assert product["geometry_product_id"] == "batch_item_001"
+
+    def test_ir_intensity_null_when_absent(self) -> None:
+        """Mode without IR intensity → ir_intensity omitted from mode dict."""
+        from acp.results.frequencies import build_normal_modes_product
+
+        calc = OrcaCalculation(
+            mode_frequencies={0: 0.0, 1: 100.0},
+            mode_vectors={
+                0: ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0)),
+                1: ((0.01, 0.02, 0.03), (0.04, 0.05, 0.06)),
+            },
+            mode_ir_intensities=None,
+        )
+        product = build_normal_modes_product(calc, geometry_product_id=None, atom_count=2)
+
+        assert len(product["modes"]) == 2
+        for m in product["modes"]:
+            assert "ir_intensity" not in m
+
+    def test_corrupt_mode_skipped_with_warning(self) -> None:
+        """Mode with wrong atom_count → skipped + warning, product still valid."""
+        from acp.results.frequencies import build_normal_modes_product
+
+        calc = OrcaCalculation(
+            mode_frequencies={0: 0.0, 1: 100.0},
+            mode_vectors={
+                0: ((0.0, 0.0, 0.0), (0.0, 0.0, 0.0)),
+                1: ((0.01,),),
+            },
+            mode_ir_intensities=None,
+        )
+        product = build_normal_modes_product(calc, geometry_product_id=None, atom_count=2)
+
+        assert len(product["modes"]) == 1
+        assert product["modes"][0]["mode_index"] == 0
+        assert len(product["warnings"]) == 1
+        assert "1" in product["warnings"][0]
+
+    def test_corrupt_mode_wrong_atom_count(self) -> None:
+        """Mode with wrong number of rows → skipped + warning."""
+        from acp.results.frequencies import build_normal_modes_product
+
+        calc = OrcaCalculation(
+            mode_frequencies={0: 100.0},
+            mode_vectors={
+                0: ((0.01, 0.02, 0.03),),
+            },
+            mode_ir_intensities=None,
+        )
+        product = build_normal_modes_product(calc, geometry_product_id=None, atom_count=3)
+
+        assert len(product["modes"]) == 0
+        assert len(product["warnings"]) == 1
+
+    def test_corrupt_mode_nan_vector(self) -> None:
+        """Mode with NaN in vectors → skipped + warning."""
+        from acp.results.frequencies import build_normal_modes_product
+
+        calc = OrcaCalculation(
+            mode_frequencies={0: 100.0},
+            mode_vectors={
+                0: ((float("nan"), 0.0, 0.0), (0.0, 0.0, 0.0)),
+            },
+            mode_ir_intensities=None,
+        )
+        product = build_normal_modes_product(calc, geometry_product_id=None, atom_count=2)
+
+        assert len(product["modes"]) == 0
+        assert len(product["warnings"]) == 1
+
+    def test_missing_frequency_skips_mode(self) -> None:
+        """Mode in vectors but not in frequencies → skipped + warning."""
+        from acp.results.frequencies import build_normal_modes_product
+
+        calc = OrcaCalculation(
+            mode_frequencies={0: 100.0},
+            mode_vectors={
+                0: ((0.01, 0.02, 0.03),),
+                1: ((0.04, 0.05, 0.06),),
+            },
+            mode_ir_intensities=None,
+        )
+        product = build_normal_modes_product(calc, geometry_product_id=None, atom_count=1)
+
+        assert len(product["modes"]) == 1
+        assert product["modes"][0]["mode_index"] == 0
+        assert len(product["warnings"]) == 1
+        assert "1" in product["warnings"][0]
+
+    def test_empty_mode_vectors(self) -> None:
+        """No mode_vectors → empty modes list, no warnings."""
+        from acp.results.frequencies import build_normal_modes_product
+
+        calc = OrcaCalculation(
+            mode_frequencies={0: 100.0},
+            mode_vectors={},
+            mode_ir_intensities=None,
+        )
+        product = build_normal_modes_product(calc, geometry_product_id=None, atom_count=1)
+
+        assert product["modes"] == []
+        assert product["warnings"] == []
+
+
+class TestBuildFrequencyReportExtension:
+    """build_frequency_report extended with normal_modes integration."""
+
+    def test_with_modes_returns_normal_modes_available_true(self) -> None:
+        """Calc with mode_vectors → normal_modes_available=True + normal_modes product."""
+        from acp.results.frequencies import build_frequency_report
+
+        text = FULL_MODES_FIXTURE.read_text(encoding="utf-8")
+        calc = OrcaOutputParser().parse_text(text)
+        report = build_frequency_report(calc)
+
+        assert report["normal_modes_available"] is True
+        assert "normal_modes" in report
+        assert report["normal_modes"]["schema_version"] == "normal_modes_v1"
+        assert len(report["normal_modes"]["modes"]) == 9
+
+    def test_without_modes_keeps_backward_compat(self) -> None:
+        """Calc without mode_vectors → normal_modes_available=False, key preserved."""
+        from acp.results.frequencies import build_frequency_report
+
+        calc = OrcaCalculation(frequencies=[1615.84])
+        report = build_frequency_report(calc)
+
+        assert report["normal_modes_available"] is False
+        assert "normal_modes" not in report
+
+    def test_existing_keys_unchanged(self) -> None:
+        """Key set difference is exactly additive (normal_modes + normal_modes_available change)."""
+        from acp.results.frequencies import build_frequency_report
+
+        calc_no_modes = OrcaCalculation(
+            frequencies=[-797.72, 1615.84],
+            imaginary_modes=[-797.72],
+            ir_intensities=[66.542, 81.914],
+        )
+        report_no = build_frequency_report(calc_no_modes)
+
+        calc_with_modes = OrcaCalculation(
+            frequencies=[-797.72, 1615.84],
+            imaginary_modes=[-797.72],
+            ir_intensities=[66.542, 81.914],
+            mode_frequencies={6: -797.72, 7: 1615.84},
+            mode_vectors={
+                6: ((0.01, 0.02, 0.03),),
+                7: ((0.04, 0.05, 0.06),),
+            },
+            mode_ir_intensities={6: 66.542, 7: 81.914},
+        )
+        report_yes = build_frequency_report(calc_with_modes)
+
+        for key in report_no:
+            if key in ("normal_modes_available",):
+                continue
+            assert key in report_yes, f"Key {key} missing from report with modes"
+
+        extra_keys = set(report_yes) - set(report_no)
+        assert extra_keys == {"normal_modes"}
+
+    def test_backward_compat_ir_intensities_key_preserved(self) -> None:
+        """ir_intensities key is preserved in both branches."""
+        from acp.results.frequencies import build_frequency_report
+
+        calc = OrcaCalculation(
+            frequencies=[-797.72],
+            imaginary_modes=[-797.72],
+            ir_intensities=[66.542],
+            mode_frequencies={6: -797.72},
+            mode_vectors={6: ((0.01, 0.02, 0.03),)},
+            mode_ir_intensities={6: 66.542},
+        )
+        report = build_frequency_report(calc)
+
+        assert "ir_intensities" in report
+        assert report["ir_intensities"] == [66.542]
+        assert report["has_imaginary"] is True
