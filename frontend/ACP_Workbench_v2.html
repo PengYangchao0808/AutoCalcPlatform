@@ -8092,6 +8092,75 @@ function energyAnnotationToolbarMarkup() {
   '</div>';
 }
 
+/* ── Unified SVG chart core ── */
+/* Config shape (energy + optimisation reusable):
+ * {
+ *   svgOpen,               // <svg ...> open tag (pre-built by caller)
+ *   clipId,                // clipPath id
+ *   geom,                  // {W, H, pad, plotRect}
+ *   xDom, yDom,            // left-axis domains
+ *   linePath, areaPath,    // pre-computed SVG path d strings
+ *   selectedGuide,         // {x, y1, y2} | null  (vertical guide line)
+ *   selectedHalo,          // {cx, cy} | null      (halo + selected dot centre)
+ *   points,                // [{cx, cy, r, cssClass, frameIndex, nodeId}]
+ *   annotationOpts,        // passed to renderTrajectoryAnnotations
+ *   xLabel, xUnit, yLabel, yUnit,  // axis label texts
+ *   /* group/data-attr overrides (energy defaults) *​/
+ *   plotAttr, overlayAttr, axesAttr,
+ *   gridClass, axisTextClass, axisLineClass,
+ * }
+ * Returns complete <svg>...</svg> string.
+ */
+function energyChartBuildSvg(cfg) {
+  var geom = cfg.geom, pad = geom.pad;
+  var W = geom.W, H = geom.H;
+  var xDom = cfg.xDom, yDom = cfg.yDom;
+  var plotAttr = cfg.plotAttr || "data-energy-plot";
+  var overlayAttr = cfg.overlayAttr || "data-energy-overlay";
+  var axesAttr = cfg.axesAttr || "data-energy-axes";
+  var gridClass = cfg.gridClass || "energy-gridline";
+  var axisTextClass = cfg.axisTextClass || "energy-axis-text";
+  var axisLineClass = cfg.axisLineClass || "energy-axis";
+  var Pw = W - pad.left - pad.right, Ph = H - pad.top - pad.bottom;
+  var svg = cfg.svgOpen;
+  /* clipPath */
+  svg += '<defs><clipPath id="' + cfg.clipId + '"><rect x="' + pad.left + '" y="' + pad.top + '" width="' + Pw + '" height="' + Ph + '"/></clipPath></defs>';
+  /* plot group */
+  svg += '<g ' + plotAttr + ' clip-path="url(#' + cfg.clipId + ')">';
+  /* area + line */
+  if (cfg.areaPath) svg += '<path class="energy-area" d="' + cfg.areaPath + '"></path>';
+  if (cfg.linePath) svg += '<path class="energy-line" d="' + cfg.linePath + '"></path>';
+  /* selected frame guide line + halo */
+  if (cfg.selectedGuide) {
+    svg += '<line class="energy-current-line" x1="' + cfg.selectedGuide.x + '" y1="' + cfg.selectedGuide.y1 + '" x2="' + cfg.selectedGuide.x + '" y2="' + cfg.selectedGuide.y2 + '"></line>';
+    if (cfg.selectedHalo) {
+      svg += '<circle class="energy-point-halo" cx="' + cfg.selectedHalo.cx + '" cy="' + cfg.selectedHalo.cy + '" r="11"></circle>';
+      svg += '<circle class="energy-point selected" cx="' + cfg.selectedHalo.cx + '" cy="' + cfg.selectedHalo.cy + '" r="6"></circle>';
+    }
+  }
+  /* dot layer */
+  var pts = cfg.points || [];
+  for (var pi = 0; pi < pts.length; pi += 1) {
+    var p = pts[pi];
+    svg += '<g data-energy-frame="' + escapeHtml(String(p.frameIndex)) + '" data-energy-node="' + escapeHtml(String(p.nodeId)) + '">';
+    svg += '<circle class="energy-point' + p.cssClass + '" cx="' + p.cx + '" cy="' + p.cy + '" r="' + p.r + '"></circle>';
+    svg += '</g>';
+  }
+  /* annotation layer (delegates to shared renderer) */
+  svg += renderTrajectoryAnnotations(cfg.annotationOpts);
+  svg += '</g>';
+  /* overlay */
+  svg += '<g ' + overlayAttr + '></g>';
+  /* axes */
+  svg += '<g ' + axesAttr + '>';
+  svg += energyGraphAxesMarkup(xDom, yDom, geom);
+  svg += '<text class="' + axisTextClass + '" x="' + ((pad.left + W - pad.right) / 2) + '" y="' + (H - 17) + '" text-anchor="middle">' + escapeHtml(cfg.xLabel) + ' (' + escapeHtml(cfg.xUnit) + ')</text>';
+  svg += '<text class="' + axisTextClass + '" x="18" y="' + (H / 2) + '" text-anchor="middle" transform="rotate(-90 18 ' + (H / 2) + ')">' + escapeHtml(cfg.yLabel) + ' (' + escapeHtml(cfg.yUnit) + ')</text>';
+  svg += '</g>';
+  svg += '</svg>';
+  return svg;
+}
+
 function energyGraphBuildSvg(data) {
   var series = energyGraphSeries(data);
   var nodes = Array.isArray(data.nodes) ? data.nodes : [];
@@ -8165,13 +8234,8 @@ function energyGraphBuildSvg(data) {
       areaPath += cmds + " L " + xFor(s[s.length - 1].x) + " " + yFor(yDom[0]) + " L " + xFor(s[0].x) + " " + yFor(yDom[0]) + " Z ";
     }
   });
-  /* ── SVG root + clipPath (c) ── */
-  var svg = '<svg class="energy-chart-svg' + (energyGraphState.viewMode === "box" ? " mode-box" : "") + (energyGraphState.viewMode === "pan" ? " mode-pan" : "") + (energyGraphState.annotationMode === "hide" ? " labels-hidden" : "") + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + escapeHtml(String(data.title || "能量与轨迹")) + '" data-energy-chart>';
-  svg += '<defs><clipPath id="energy-plot-clip"><rect x="' + pad.left + '" y="' + pad.top + '" width="' + Pw + '" height="' + Ph + '"/></clipPath></defs>';
-  svg += '<g data-energy-plot clip-path="url(#energy-plot-clip)">';
-  if (areaPath) svg += '<path class="energy-area" d="' + areaPath + '"></path>';
-  if (linePath) svg += '<path class="energy-line" d="' + linePath + '"></path>';
   /* ── Selected frame guide line + halo (c: domain-boundary clipping) ── */
+  var selectedGuide = null, selectedHalo = null;
   var selectedFrame = energyGraphFrameIndexForNode(data, energyGraphState.selectedNodeId);
   if (selectedFrame != null) {
     var selNode = nodes.find(function(node) { return Number(node.frame_index) === selectedFrame; });
@@ -8180,21 +8244,26 @@ function energyGraphBuildSvg(data) {
       var selY = energyGraphSeriesValueAtFrame(data, series, selectedFrame);
       var selInDomain = selX >= xDom[0] && selX <= xDom[1] && (selY === null || (selY >= yDom[0] && selY <= yDom[1]));
       if (selInDomain) {
-        svg += '<line class="energy-current-line" x1="' + xFor(selNode.x) + '" y1="' + pad.top + '" x2="' + xFor(selNode.x) + '" y2="' + (H - pad.bottom) + '"></line>';
+        selectedGuide = { x: xFor(selNode.x), y1: pad.top, y2: H - pad.bottom };
         if (selY !== null) {
-          svg += '<circle class="energy-point-halo" cx="' + xFor(selNode.x) + '" cy="' + yFor(selY) + '" r="11"></circle>';
-          svg += '<circle class="energy-point selected" cx="' + xFor(selNode.x) + '" cy="' + yFor(selY) + '" r="6"></circle>';
+          selectedHalo = { cx: xFor(selNode.x), cy: yFor(selY) };
         }
       }
     }
   }
+  /* ── Points config ── */
+  var pointCfgs = [];
   points.forEach(function(point) {
     var nodeId = point.node && point.node.id != null ? point.node.id : "";
     var selected = String(nodeId) === String(energyGraphState.selectedNodeId) ? " selected" : "";
     var failed = point.node && point.node.status === "failed" ? " failed" : "";
-    svg += '<g data-energy-frame="' + escapeHtml(String(point.node && point.node.frame_index != null ? point.node.frame_index : point.index)) + '" data-energy-node="' + escapeHtml(String(nodeId)) + '">';
-    svg += '<circle class="energy-point' + selected + failed + '" cx="' + xFor(point.x) + '" cy="' + yFor(point.y) + '" r="' + (selected ? 6 : 4) + '"></circle>';
-    svg += '</g>';
+    pointCfgs.push({
+      cx: xFor(point.x), cy: yFor(point.y),
+      r: selected ? 6 : 4,
+      cssClass: selected + failed,
+      frameIndex: point.node && point.node.frame_index != null ? point.node.frame_index : point.index,
+      nodeId: nodeId,
+    });
   });
   /* ── Annotations: merge backend + projected candidates, delegate to shared renderer ── */
   var annotations = Array.isArray(data.annotations) ? data.annotations : [];
@@ -8208,27 +8277,36 @@ function energyGraphBuildSvg(data) {
     seenIds[a.id] = true;
     deduped.push(a);
   });
-  svg += renderTrajectoryAnnotations({
-    annotations: deduped,
-    nodes: nodes,
-    xFor: xFor,
-    yFor: yFor,
+  /* ── SVG open tag ── */
+  var svgOpen = '<svg class="energy-chart-svg' + (energyGraphState.viewMode === "box" ? " mode-box" : "") + (energyGraphState.viewMode === "pan" ? " mode-pan" : "") + (energyGraphState.annotationMode === "hide" ? " labels-hidden" : "") + '" viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + escapeHtml(String(data.title || "能量与轨迹")) + '" data-energy-chart>';
+  /* ── Build SVG via unified core ── */
+  return energyChartBuildSvg({
+    svgOpen: svgOpen,
+    clipId: "energy-plot-clip",
     geom: geom,
-    xDom: xDom,
-    yDom: yDom,
-    mode: "full",
-    selectedNodeId: String(energyGraphState.selectedNodeId || ""),
-    selectionLocked: !!s2scanState.selectionLocked,
+    xDom: xDom, yDom: yDom,
+    linePath: linePath,
+    areaPath: areaPath,
+    selectedGuide: selectedGuide,
+    selectedHalo: selectedHalo,
+    points: pointCfgs,
+    annotationOpts: {
+      annotations: deduped,
+      nodes: nodes,
+      xFor: xFor,
+      yFor: yFor,
+      geom: geom,
+      xDom: xDom,
+      yDom: yDom,
+      mode: "full",
+      selectedNodeId: String(energyGraphState.selectedNodeId || ""),
+      selectionLocked: !!s2scanState.selectionLocked,
+    },
+    xLabel: String((data.x_axis || {}).label || "坐标"),
+    xUnit: String((data.x_axis || {}).unit || ""),
+    yLabel: String(series.label || "能量"),
+    yUnit: String(series.unit || ""),
   });
-  svg += '</g>';
-  svg += '<g data-energy-overlay></g>';
-  svg += '<g data-energy-axes>';
-  svg += energyGraphAxesMarkup(xDom, yDom, geom);
-  svg += '<text class="energy-axis-text" x="' + ((pad.left + W - pad.right) / 2) + '" y="' + (H - 17) + '" text-anchor="middle">' + escapeHtml(String((data.x_axis || {}).label || "坐标")) + ' (' + escapeHtml(String((data.x_axis || {}).unit || "")) + ')</text>';
-  svg += '<text class="energy-axis-text" x="18" y="' + (H / 2) + '" text-anchor="middle" transform="rotate(-90 18 ' + (H / 2) + ')">' + escapeHtml(String(series.label || "能量")) + ' (' + escapeHtml(String(series.unit || "")) + ')</text>';
-  svg += '</g>';
-  svg += '</svg>';
-  return svg;
 }
 
 /* ── Deterministic jitter for MDS scatter (seeded by frame_index) ── */
