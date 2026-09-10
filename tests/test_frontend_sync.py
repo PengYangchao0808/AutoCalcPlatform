@@ -97,6 +97,21 @@ def test_default_workbench_keeps_original_v2_frontend_and_v1_contract() -> None:
     assert "await submitJobBatch(batchBodies);" in html
     assert "var batchBody = {" not in html
 
+    # Structure viewer tab: conformers removed, 3d renamed to structure
+    assert 'data-tab="conformers"' not in html, "conformers tab must be removed"
+    assert 'data-tab="structure"' in html, "structure tab must exist"
+    assert '>结构查看器</button>' in html
+    assert '"tab.structure": "结构查看器"' in html
+    assert '"tab.structure": "Structure Viewer"' in html
+    assert '"tab.conformers"' not in html, "tab.conformers i18n key must be removed"
+    assert '"tab.3d"' not in html, "tab.3d i18n key must be removed"
+    # Other tabs must remain
+    assert 'data-tab="path"' in html
+    assert 'data-tab="energy"' in html
+    assert 'data-tab="wavefunction"' in html
+    # Compat mapping: stale "3d"/"conformers" -> "structure"
+    assert 'tab === "3d" || tab === "conformers"' in html or 'tab === "conformers" || tab === "3d"' in html
+
     # Renamed tab: HTML button + i18n zh-CN + i18n en-US
     assert '>能量与轨迹</button>' in html
     assert '"tab.energy": "能量与轨迹"' in html

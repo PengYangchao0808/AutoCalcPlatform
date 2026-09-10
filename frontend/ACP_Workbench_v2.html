@@ -3474,8 +3474,7 @@ option, optgroup {
     <section class="center-col">
       <div class="canvas-area">
         <nav class="canvas-tabs" aria-label="Workbench Tabs">
-          <button class="canvas-tab active" data-tab="3d" data-i18n="tab.3d">三维结构</button>
-          <button class="canvas-tab" data-tab="conformers" data-i18n="tab.conformers">构象集合</button>
+          <button class="canvas-tab active" data-tab="structure" data-i18n="tab.structure">结构查看器</button>
           <button class="canvas-tab" data-tab="path" data-i18n="tab.path">反应路径</button>
           <button class="canvas-tab" data-tab="energy" data-i18n="tab.energy">能量与轨迹</button>
           <button class="canvas-tab" data-tab="wavefunction" data-i18n="tab.wavefunction">波函数</button>
@@ -4859,7 +4858,7 @@ var _logTruncated = false;
 // job wrote result_summary.json). Rendered on top of the file tree.
 let lastPinnedItems = [];
 let lastSelectedJob = null;
-let activeViewerTab = "3d";
+let activeViewerTab = "structure";
 let mechanismStudiesByJob = {};
 let mechanismStudyDetailsById = {};
 let mechanismStudyReportsById = {};
@@ -5086,8 +5085,7 @@ const I18N = {
     "info.formula": "分子式",
     "info.frame": "当前帧",
     "info.selection": "选择",
-    "tab.3d": "三维结构",
-    "tab.conformers": "构象集合",
+    "tab.structure": "结构查看器",
     "tab.path": "反应路径",
     "tab.energy": "能量与轨迹",
     "tab.wavefunction": "波函数",
@@ -5955,8 +5953,7 @@ const I18N = {
     "info.formula": "Formula",
     "info.frame": "Frame",
     "info.selection": "Selection",
-    "tab.3d": "3D Structure",
-    "tab.conformers": "Conformer Set",
+    "tab.structure": "Structure Viewer",
     "tab.path": "Reaction Path",
     "tab.energy": "Energy & Trajectory",
     "tab.wavefunction": "Wavefunction",
@@ -12110,6 +12107,7 @@ function clearViewer() {
 }
 
 async function setViewerTab(tab) {
+  if (tab === "3d" || tab === "conformers") tab = "structure";
   activeViewerTab = tab;
   document.querySelectorAll(".canvas-tab").forEach(function(btn) {
     btn.classList.toggle("active", btn.getAttribute("data-tab") === tab);
@@ -12131,7 +12129,7 @@ async function setViewerTab(tab) {
     await renderEnergyGraphWorkspace(lastSelectedJob);
     return;
   }
-  if (tab === "3d") {
+  if (tab === "structure") {
     if (mechanism) mechanism.style.display = "none";
     comingSoon.style.display = "none";
     empty.style.display = viewerModelLoaded ? "none" : "grid";
@@ -16917,7 +16915,7 @@ async function openJobFile(jobId, node) {
   const ext = node.name.includes(".") ? node.name.split(".").pop().toLowerCase() : "";
   if (node.path.endsWith(".xyz") || node.path.endsWith(".sdf") || node.path.endsWith(".mol")) {
     await loadStructureFile(jobId, node.path);
-    setViewerTab("3d");
+    setViewerTab("structure");
     appendLogLine("file-loaded", t("log.file_loaded", { path: node.path }));
     return;
   }
@@ -16948,7 +16946,7 @@ async function openRemoteFilePreview(jobId, node) {
   if (isStructure) {
     try {
       await loadRemoteStructureFile(jobId, node.path);
-      setViewerTab("3d");
+      setViewerTab("structure");
       appendLogLine("file-loaded", t("log.file_loaded", { path: node.path }));
     } catch (e) {
       appendLogLine("error", "Preview failed: " + String(e.message || e));
@@ -22441,7 +22439,7 @@ function s2scanClose() {
 }
 
 function s2scanCloseReport() {
-  if (activeViewerTab === "energy") setViewerTab("3d");
+  if (activeViewerTab === "energy") setViewerTab("structure");
 }
 
 function s2scanResetState() {
