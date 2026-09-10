@@ -146,6 +146,7 @@ from acp.api.v1_schemas import (
     StructureSourceListResponse,
     StructureSourceSummary,
     StructureViewerPayloadModel,
+    StructureViewerVibrationsResponse,
     StudyPromoteResponse,
     StudyResumeResponse,
     UploadResponse,
@@ -2200,29 +2201,6 @@ def _resolve_geometry_path(work_dir: Path, geometry_ref: str) -> Path | None:
     return resolve_safe(work_dir, f"RESULT/{ref}")
 
 
-def _extract_first_xyz_frame(xyz_text: str) -> str:
-    """Return the first XYZ frame from a (possibly multi-frame) XYZ string."""
-    lines = xyz_text.splitlines()
-    offset = 0
-    while offset < len(lines):
-        header = lines[offset].strip()
-        if not header:
-            offset += 1
-            continue
-        try:
-            atom_count = int(header)
-        except ValueError:
-            offset += 1
-            continue
-        if atom_count == 0:
-            break
-        end = offset + 2 + atom_count
-        if end > len(lines):
-            break
-        return "\n".join(lines[offset:end]) + "\n"
-    return xyz_text
-
-
 @router.get(
     "/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
     response_class=Response,
@@ -2309,6 +2287,160 @@ def get_structure_viewer_geometry(
         xyz_text += "\n"
 
     return Response(content=xyz_text, media_type="text/plain; charset=utf-8")
+
+
+@router.get(
+    "/jobs/{job_id}/structure-viewer/entries/{entry_id}/vibrations",
+    response_model=StructureViewerVibrationsResponse,
+)
+def get_structure_viewer_vibrations(
+    job_id: str,
+    entry_id: str,
+    request: Request,
+) -> StructureViewerVibrationsResponse:
+    """Return vibration data for a structure-viewer entry.
+
+    Wave 2 stub: reads ``RESULT/frequencies/normal_modes.json`` if present.
+    For batch entries, probes ``{item_id}__normal_modes.json`` first (todo 24).
+
+    Never returns 500 — malformed/missing data yields ``available=false``
+    with an appropriate ``reason``.
+
+    409 pending_fetch is reserved for remote unsynced (todo 11 wiring).
+
+    Raises:
+        404: Unknown job or unknown entry.
+    """
+    from acp.api.v1_schemas import StructureViewerModeModel
+    from acp.results.structure_viewer import (
+        StructureViewerError,
+        build_structure_viewer_payload,
+    )
+
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if not record.work_dir:
+        raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
+
+    work_dir = Path(record.work_dir)
+    workflow = str(record.spec.workflow or "")
+    job_status = record.status.value
+
+    try:
+        payload = build_structure_viewer_payload(
+            work_dir,
+            job_id=job_id,
+            workflow=workflow,
+            job_status=job_status,
+        )
+    except StructureViewerError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    entry = None
+    for e in payload.entries:
+        if e.id == entry_id:
+            entry = e
+            break
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Entry not found: {entry_id}")
+
+    # TODO(todo-11): 409 pending_fetch for remote unsynced jobs
+
+    def _not_available(reason: str) -> StructureViewerVibrationsResponse:
+        return StructureViewerVibrationsResponse(
+            available=False,
+            reason=reason,
+            threshold_cm1=-50.0,
+            threshold_source="default",
+            modes=[],
+            atom_count=0,
+            geometry_product_id=None,
+        )
+
+    freq_dir = work_dir / "RESULT" / "frequencies"
+    if not freq_dir.is_dir():
+        return _not_available("no_normal_modes")
+
+    # TODO(todo-24): wire per-item normal_modes for BatchOptimize
+    modes_path: Path | None = None
+    entry_id_str = entry.id
+    if entry_id_str.startswith("batch_"):
+        item_suffix = entry_id_str.removeprefix("batch_")
+        item_path = freq_dir / f"{item_suffix}__normal_modes.json"
+        if item_path.is_file():
+            modes_path = item_path
+
+    if modes_path is None:
+        global_path = freq_dir / "normal_modes.json"
+        if global_path.is_file():
+            modes_path = global_path
+
+    if modes_path is None:
+        return _not_available("no_normal_modes")
+
+    try:
+        raw = modes_path.read_text(encoding="utf-8")
+        data = json.loads(raw)
+    except (OSError, json.JSONDecodeError, ValueError):
+        logger.warning("Malformed normal_modes file: %s", modes_path)
+        return _not_available("no_normal_modes")
+
+    if not isinstance(data, dict):
+        logger.warning("normal_modes is not a dict: %s", modes_path)
+        return _not_available("no_normal_modes")
+
+    schema_version = data.get("schema_version")
+    if schema_version != "normal_modes_v1":
+        logger.warning(
+            "normal_modes schema_version mismatch: expected 'normal_modes_v1', got %r",
+            schema_version,
+        )
+        return _not_available("no_normal_modes")
+
+    modes_raw = data.get("modes")
+    if not isinstance(modes_raw, list):
+        logger.warning("normal_modes.modes is not a list: %s", modes_path)
+        return _not_available("no_normal_modes")
+
+    atom_count = int(data.get("atom_count") or 0)
+    geometry_product_id = data.get("geometry_product_id")
+
+    # TODO(todo-25/31): geometry fingerprint consistency check
+    # TODO(todo-26): config-driven threshold
+
+    modes = []
+    for m in modes_raw:
+        if not isinstance(m, dict):
+            continue
+        try:
+            vectors_raw = m.get("vectors") or []
+            vectors = [
+                [float(v) for v in vec]
+                for vec in vectors_raw
+                if isinstance(vec, list) and len(vec) == 3
+            ]
+            mode = StructureViewerModeModel(
+                mode_index=int(m.get("mode_index", 0)),
+                frequency_cm1=float(m.get("frequency_cm1", 0.0)),
+                imaginary=bool(m.get("imaginary", False)),
+                ir_intensity=float(m["ir_intensity"]) if m.get("ir_intensity") is not None else None,
+                vectors=vectors,
+            )
+            modes.append(mode)
+        except (TypeError, ValueError, KeyError):
+            continue
+
+    return StructureViewerVibrationsResponse(
+        available=True,
+        reason=None,
+        threshold_cm1=-50.0,
+        threshold_source="default",
+        modes=modes,
+        atom_count=atom_count,
+        geometry_product_id=geometry_product_id,
+    )
 
 
 # ---------------------------------------------------------------------------

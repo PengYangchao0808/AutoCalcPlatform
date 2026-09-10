@@ -662,3 +662,206 @@ class TestGeometryEndpoint:
         assert lines[0] == "2"
         assert "frame 0" in lines[1]
         assert "frame 1" not in body
+
+
+# ── Vibrations endpoint tests (todo 10) ─────────────────────────────────────
+
+
+def _make_normal_modes_json(
+    *,
+    atom_count: int = 3,
+    geometry_product_id: str | None = None,
+    modes: list[dict] | None = None,
+) -> dict:
+    """Build a normal_modes_v1 fixture matching doc §4.2."""
+    return {
+        "schema_version": "normal_modes_v1",
+        "units": {"frequency": "cm-1", "displacement": "dimensionless_orca_normal_mode"},
+        "atom_count": atom_count,
+        "geometry_product_id": geometry_product_id,
+        "modes": modes or [
+            {
+                "mode_index": 6,
+                "frequency_cm1": -797.72,
+                "imaginary": True,
+                "ir_intensity": 24.8,
+                "vectors": [[0.01, -0.02, 0.03], [0.04, -0.05, 0.06], [0.07, -0.08, 0.09]],
+            },
+            {
+                "mode_index": 7,
+                "frequency_cm1": 500.0,
+                "imaginary": False,
+                "ir_intensity": 10.0,
+                "vectors": [[0.1, 0.0, 0.0], [0.0, 0.1, 0.0], [0.0, 0.0, 0.1]],
+            },
+            {
+                "mode_index": 8,
+                "frequency_cm1": 1200.5,
+                "imaginary": False,
+                "ir_intensity": None,
+                "vectors": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            },
+        ],
+    }
+
+
+def _write_normal_modes(work_dir: Path, data: dict, filename: str = "normal_modes.json") -> None:
+    freq_dir = work_dir / "RESULT" / "frequencies"
+    freq_dir.mkdir(parents=True, exist_ok=True)
+    (freq_dir / filename).write_text(json.dumps(data), encoding="utf-8")
+
+
+class TestVibrationsEndpoint:
+    """GET /api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/vibrations"""
+
+    def test_valid_normal_modes_available_true(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """Fixture with 3 modes (incl. 1 imaginary) → available=true, modes round-trip."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest_with_xyz(work_dir)
+        _write_normal_modes(work_dir, _make_normal_modes_json())
+
+        catalog = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+
+        resp = sv_client.get(
+            f"/api/v1/jobs/sv-test-001/structure-viewer/entries/{default_id}/vibrations"
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["available"] is True
+        assert body["reason"] is None
+        assert body["threshold_cm1"] == -50.0
+        assert body["threshold_source"] == "default"
+        assert body["atom_count"] == 3
+        assert len(body["modes"]) == 3
+
+        imaginary_mode = next(m for m in body["modes"] if m["imaginary"])
+        assert imaginary_mode["mode_index"] == 6
+        assert imaginary_mode["frequency_cm1"] == -797.72
+        assert imaginary_mode["ir_intensity"] == 24.8
+        assert len(imaginary_mode["vectors"]) == 3
+
+        non_imag = next(m for m in body["modes"] if m["mode_index"] == 8)
+        assert non_imag["ir_intensity"] is None
+
+    def test_no_product_available_false(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """No normal_modes.json → 200, available=false, reason=no_normal_modes."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest_with_xyz(work_dir)
+
+        catalog = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+
+        resp = sv_client.get(
+            f"/api/v1/jobs/sv-test-001/structure-viewer/entries/{default_id}/vibrations"
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["available"] is False
+        assert body["reason"] == "no_normal_modes"
+        assert body["modes"] == []
+        assert body["atom_count"] == 0
+
+    def test_malformed_json_available_false(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """Malformed JSON → 200, available=false (never 500)."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest_with_xyz(work_dir)
+        freq_dir = work_dir / "RESULT" / "frequencies"
+        freq_dir.mkdir(parents=True, exist_ok=True)
+        (freq_dir / "normal_modes.json").write_text("NOT JSON {{{", encoding="utf-8")
+
+        catalog = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+
+        resp = sv_client.get(
+            f"/api/v1/jobs/sv-test-001/structure-viewer/entries/{default_id}/vibrations"
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["available"] is False
+        assert body["reason"] == "no_normal_modes"
+
+    def test_wrong_schema_version_available_false(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """Wrong schema_version → 200, available=false."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest_with_xyz(work_dir)
+        bad = _make_normal_modes_json()
+        bad["schema_version"] = "wrong_version"
+        _write_normal_modes(work_dir, bad)
+
+        catalog = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+
+        resp = sv_client.get(
+            f"/api/v1/jobs/sv-test-001/structure-viewer/entries/{default_id}/vibrations"
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["available"] is False
+
+    def test_unknown_entry_404(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """Unknown entry id → 404."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest_with_xyz(work_dir)
+
+        resp = sv_client.get(
+            "/api/v1/jobs/sv-test-001/structure-viewer/entries/nonexistent/vibrations"
+        )
+        assert resp.status_code == 404
+
+    def test_batch_entry_probes_item_scoped_file(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """Batch entry probes {item_id}__normal_modes.json first."""
+        work_dir = _seed_job(
+            sv_client, tmp_path,
+            job_id="sv-batch-vib-001",
+            workflow="BatchOptimize",
+        )
+        _write_batch_manifest(work_dir, items=[
+            {
+                "id": "batch_item_001",
+                "label": "item_001 (TS, opt_freq_sp_thermo)",
+                "path": "structures/item_001__TAG_TS__optimized.xyz",
+                "kind": "structure",
+            },
+        ])
+        xyz_path = work_dir / "RESULT" / "structures" / "item_001__TAG_TS__optimized.xyz"
+        xyz_path.parent.mkdir(parents=True, exist_ok=True)
+        xyz_path.write_text("3\n\nC 0 0 0\nH 0 0 1\nH 0 1 0\n", encoding="utf-8")
+
+        item_data = _make_normal_modes_json(
+            atom_count=3,
+            geometry_product_id="batch_item_001",
+            modes=[
+                {
+                    "mode_index": 1,
+                    "frequency_cm1": 100.0,
+                    "imaginary": False,
+                    "ir_intensity": 5.0,
+                    "vectors": [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+                },
+            ],
+        )
+        _write_normal_modes(work_dir, item_data, filename="item_001__normal_modes.json")
+
+        resp = sv_client.get(
+            "/api/v1/jobs/sv-batch-vib-001/structure-viewer/entries/batch_item_001/vibrations"
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["available"] is True
+        assert body["atom_count"] == 3
+        assert body["geometry_product_id"] == "batch_item_001"
+        assert len(body["modes"]) == 1
+        assert body["modes"][0]["frequency_cm1"] == 100.0
