@@ -79,7 +79,12 @@ def _resolve_scan_geometry(task_root: Path, frame_index: int) -> str:
         raise FrameCandidateError(f"unreadable scan frame: {frame_path}") from exc
 
 
-def _resolve_optimization_geometry(task_root: Path, frame_index: int) -> str:
+def _resolve_optimization_geometry(
+    task_root: Path,
+    frame_index: int,
+    *,
+    item_id: str | None = None,
+) -> str:
     """Read optimization cycle geometry.
 
     Uses ``find_optimization_trajectory`` then resolves the cycle's
@@ -88,7 +93,7 @@ def _resolve_optimization_geometry(task_root: Path, frame_index: int) -> str:
     """
     from acp.results.energy_graph import find_optimization_trajectory
 
-    traj_path, payload = find_optimization_trajectory(task_root, None)
+    traj_path, payload = find_optimization_trajectory(task_root, item_id)
     if traj_path is None or payload is None:
         raise FrameCandidateError("no optimization trajectory found")
     cycles = payload.get("cycles")
@@ -179,6 +184,7 @@ def resolve_frame_geometry(
     view_type: str,
     frame_index: int,
     workflow: str,
+    item_id: str | None = None,
 ) -> str:
     """Return the XYZ text for one trajectory frame.
 
@@ -189,6 +195,9 @@ def resolve_frame_geometry(
         frame_index: 0-based frame index (indices may be non-contiguous
             for scan).
         workflow: Workflow name (used only for error context).
+        item_id: Optional BatchOptimize item identifier; when given,
+            the optimization resolver narrows trajectory lookup to the
+            specific item subdirectory.
 
     Returns:
         XYZ text of the requested frame.
@@ -203,9 +212,10 @@ def resolve_frame_geometry(
             f"unknown view_type {view_type!r} "
             f"(expected one of {', '.join(sorted(_VALID_VIEW_TYPES))})"
         )
+    if view_type == "optimization":
+        return _resolve_optimization_geometry(root, frame_index, item_id=item_id)
     resolvers = {
         "scan": _resolve_scan_geometry,
-        "optimization": _resolve_optimization_geometry,
         "sampling": _resolve_sampling_geometry,
         "conformer": _resolve_conformer_geometry,
     }

@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -33,17 +34,33 @@ __all__ = [
 ]
 
 FRAME_CANDIDATES_RELATIVE_PATH = "RESULT/frame_candidates.json"
-FRAME_CANDIDATES_SCHEMA = "frame_candidates_v1"
+FRAME_CANDIDATES_SCHEMA_V1 = "frame_candidates_v1"
+FRAME_CANDIDATES_SCHEMA = "frame_candidates_v2"
 
 _ROLE_TOKEN_MAP = {"TS": "ts", "INT": "int", "NONE": "none"}
+_SLUG_RE = re.compile(r"[^a-zA-Z0-9_-]+")
 
 
 class RevisionConflictError(FrameCandidateError):
     """The save/remove was attempted against a stale revision (concurrent edit)."""
 
 
+def _sanitize_item_id(item_id: str) -> str:
+    """Sanitize item_id to alnum/underscore/dash only (slugify)."""
+    return _SLUG_RE.sub("_", item_id).strip("_") or "item"
+
+
 def load_authority(task_root: Path) -> dict[str, Any] | None:
-    """Read ``RESULT/frame_candidates.json``; ``None`` when missing or corrupt."""
+    """Read ``RESULT/frame_candidates.json``; ``None`` when missing or corrupt.
+
+    Accepts both v1 and v2 schemas.  When a v1 file is read, the payload is
+    migrated in memory (NOT rewritten to disk): each candidate gains
+    ``item_id=None``, ``created_seq`` (1-based file order), and
+    ``role_index`` (numbered per (role, item_id) ordered by (saved_at,
+    frame_index)).  ``display_label`` is set to ``f"{role}{role_index}"``.
+    The schema_version is upgraded to v2 in the returned dict; the next
+    ``write_authority`` call persists v2.
+    """
     path = task_root / FRAME_CANDIDATES_RELATIVE_PATH
     if not path.is_file():
         return None
@@ -51,13 +68,57 @@ def load_authority(task_root: Path) -> dict[str, Any] | None:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return None
-    return payload if isinstance(payload, dict) else None
+    if not isinstance(payload, dict):
+        return None
+    schema = str(payload.get("schema_version") or "")
+    if schema == FRAME_CANDIDATES_SCHEMA_V1:
+        return _migrate_v1_to_v2(payload)
+    return payload
 
 
-def candidate_id_for(prefix: str, role: str, frame_index: int) -> str:
-    """Deterministic candidate id: ``scan_ts_frame_000`` / ``opt_int_frame_003``."""
-    token = _ROLE_TOKEN_MAP.get(role, "none")
-    return f"{prefix}_{token}_frame_{frame_index:03d}"
+def _migrate_v1_to_v2(payload: dict[str, Any]) -> dict[str, Any]:
+    """Migrate a v1 authority payload to v2 shape (in-memory only)."""
+    candidates = list(payload.get("candidates") or [])
+    # Assign created_seq in file order (1-based)
+    for seq, candidate in enumerate(candidates, start=1):
+        candidate.setdefault("item_id", None)
+        candidate.setdefault("created_seq", seq)
+    # Compute role_index per (role, item_id) ordered by (saved_at, frame_index)
+    from collections import defaultdict
+
+    groups: dict[tuple[str, str | None], list[dict[str, Any]]] = defaultdict(list)
+    for candidate in candidates:
+        role = str(candidate.get("role") or "TS").upper()
+        item_id = candidate.get("item_id")
+        groups[(role, item_id)].append(candidate)
+    for (role, _item_id), group in groups.items():
+        group.sort(
+            key=lambda c: (
+                str(c.get("saved_at") or ""),
+                int(c.get("frame_index") or 0),
+            )
+        )
+        for idx, candidate in enumerate(group, start=1):
+            candidate.setdefault("role_index", idx)
+            candidate.setdefault("display_label", f"{role}{idx}")
+    payload["schema_version"] = FRAME_CANDIDATES_SCHEMA
+    return payload
+
+
+def candidate_id_for(
+    prefix: str,
+    frame_index: int,
+    item_id: str | None = None,
+) -> str:
+    """Deterministic candidate id (v2): role-free geometric identity.
+
+    Format: ``{prefix}_frame_{frame_index:04d}`` when no item_id,
+    ``{prefix}_{item_id}_frame_{frame_index:04d}`` when item_id present.
+    """
+    if item_id is not None:
+        safe = _sanitize_item_id(str(item_id))
+        return f"{prefix}_{safe}_frame_{frame_index:04d}"
+    return f"{prefix}_frame_{frame_index:04d}"
 
 
 def atomic_write_text(path: Path, text: str) -> None:

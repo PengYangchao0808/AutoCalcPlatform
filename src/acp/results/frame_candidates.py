@@ -5,7 +5,7 @@ may promote it to a reusable candidate structure.  This module is the single
 writer for the frame-candidate artifacts:
 
 - ``RESULT/frame_candidates.json`` — authoritative candidate record
-  (schema ``frame_candidates_v1``) with a monotonic ``revision`` counter.
+  (schema ``frame_candidates_v2``) with a monotonic ``revision`` counter.
 - ``RESULT/structures/<candidate_id>.xyz`` — one materialised XYZ per
   saved frame, with a rewritten TAG comment carrying the stable
   ``candidate_id`` and ``selection_source=manual_frame``.
@@ -14,8 +14,8 @@ writer for the frame-candidate artifacts:
 
 All candidates are validated before anything is written (all-or-nothing).
 Re-saving the same frame is idempotent: candidate ids are derived
-deterministically from ``view_type + role + frame_index``, so repeat saves
-reuse the same files and manifest ids.
+deterministically from ``view_type + frame_index + item_id`` (role is
+mutable metadata, not part of the identity).
 
 PESsearch jobs are rejected with guidance to use the dedicated
 ``/pes/review`` endpoint.
@@ -89,6 +89,7 @@ def save_frame_candidate(
     name: str | None = None,
     expected_revision: int | None = None,
     now: datetime | None = None,
+    item_id: str | None = None,
 ) -> dict[str, Any]:
     """Validate and persist a frame candidate (all-or-nothing).
 
@@ -100,11 +101,14 @@ def save_frame_candidate(
             ``conformer``.
         frame_index: 0-based frame index.
         role: One of ``TS``, ``INT``.  Re-saving the same frame with the
-            other role atomically replaces the previous candidate.
-        name: Optional display name; defaults to the candidate_id.
+            other role performs an in-place role change (candidate_id
+            and created_seq are preserved).
+        name: Optional display name; defaults to the display_label.
         expected_revision: When given, the currently stored revision must
             match.
         now: Injectable timestamp (tests); defaults to local time now.
+        item_id: Optional BatchOptimize item identifier; when given,
+            narrows optimization trajectory lookup to the specific item.
 
     Returns:
         The saved candidate entry dict.
@@ -124,9 +128,6 @@ def save_frame_candidate(
         )
 
     # --- Validate role ---
-    # Only TS / INT are meaningful candidate roles.  ``NONE`` was accepted
-    # historically but produced self-contradictory artifacts (authority said
-    # NONE while the XYZ TAG comment read ``TAG: INT``); it is now rejected.
     effective_role = role.upper().strip()
     if effective_role not in _VALID_ROLES:
         raise FrameCandidateError(f"invalid candidate role: {role!r} (expected TS or INT)")
@@ -146,20 +147,84 @@ def save_frame_candidate(
         view_type=view_type,
         frame_index=frame_index,
         workflow=workflow,
+        item_id=item_id,
     )
 
-    # --- Build candidate_id ---
+    # --- Build candidate_id (v2: no role in id) ---
     prefix = _PREFIX_MAP.get(view_type, "unknown")
-    cid = candidate_id_for(prefix, effective_role, frame_index)
+    cid = candidate_id_for(prefix, frame_index, item_id=item_id)
+
+    candidates_list = list(existing.get("candidates", [])) if existing else []
+
+    # --- Find existing entry for same (item_id, view_type, frame_index) ---
+    existing_entry = _find_matching_entry(candidates_list, item_id, view_type, frame_index)
+
+    if existing_entry is not None:
+        # Idempotent or role-change: update in place
+        old_role = str(existing_entry.get("role") or "").upper()
+        if effective_role == old_role:
+            # Idempotent: keep role_index, created_seq, display_label
+            existing_entry["name"] = str(name or existing_entry.get("display_label") or cid)
+            existing_entry["saved_at"] = (now or datetime.now().astimezone()).isoformat(
+                timespec="seconds"
+            )
+            existing_entry["structure_path"] = f"structures/{cid}.xyz"
+        else:
+            # Role change: keep candidate_id and created_seq, compute new role_index
+            old_role_index = int(existing_entry.get("role_index") or 0)
+            new_role_index = _next_role_index(candidates_list, effective_role, item_id)
+            existing_entry["role"] = effective_role
+            existing_entry["role_index"] = new_role_index
+            display_label = f"{effective_role}{new_role_index}"
+            existing_entry["display_label"] = display_label
+            existing_entry["name"] = str(name or display_label)
+            existing_entry["saved_at"] = (now or datetime.now().astimezone()).isoformat(
+                timespec="seconds"
+            )
+            existing_entry["structure_path"] = f"structures/{cid}.xyz"
+            logger.debug(
+                "Role change for %s: %s%d → %s%d (candidate_id preserved)",
+                cid,
+                old_role,
+                old_role_index,
+                effective_role,
+                new_role_index,
+            )
+        entry = existing_entry
+        new_created_seq = int(entry.get("created_seq") or 1)
+    else:
+        # Genuinely new candidate
+        role_index = _next_role_index(candidates_list, effective_role, item_id)
+        display_label = f"{effective_role}{role_index}"
+        max_seq = max((int(c.get("created_seq") or 0) for c in candidates_list), default=0)
+        new_created_seq = max_seq + 1
+        entry = {
+            "candidate_id": cid,
+            "view_type": view_type,
+            "frame_index": frame_index,
+            "role": effective_role,
+            "role_index": role_index,
+            "display_label": display_label,
+            "item_id": item_id,
+            "created_seq": new_created_seq,
+            "name": str(name or display_label),
+            "structure_path": f"structures/{cid}.xyz",
+            "saved_at": (now or datetime.now().astimezone()).isoformat(timespec="seconds"),
+        }
+        candidates_list.append(entry)
 
     # --- Build TAG comment line ---
     tag_role = normalized_role or "INT"
+    role_idx = int(entry.get("role_index") or 1)
+    display_label = str(
+        entry.get("display_label") or f"{effective_role}{role_idx}"
+    )
     tag_comment = build_tag_title(
         tag_role,
         candidate_id=cid,
         source=workflow,
         frame=frame_index,
-        extra="selection_source=manual_frame",
+        extra=f"candidate_label={display_label},selection_source=manual_frame",
     )
 
     # --- Write structures XYZ ---
@@ -170,34 +235,6 @@ def save_frame_candidate(
     atomic_write_text(target, xyz_text)
 
     # --- Update authority file ---
-    entry: dict[str, Any] = {
-        "candidate_id": cid,
-        "view_type": view_type,
-        "frame_index": frame_index,
-        "role": effective_role,
-        "name": str(name or cid),
-        "structure_path": f"structures/{cid}.xyz",
-        "saved_at": (now or datetime.now().astimezone()).isoformat(timespec="seconds"),
-    }
-    candidates_list = list(existing.get("candidates", [])) if existing else []
-    # Role change is an atomic replace: one frame can only carry one role, so
-    # any stale entry for the same (view_type, frame_index) under a different
-    # candidate_id (e.g. TS -> INT) is dropped together with its manifest
-    # product.  Its materialised XYZ is kept on disk, matching remove().
-    stale_ids = {
-        str(c.get("candidate_id"))
-        for c in candidates_list
-        if c.get("view_type") == view_type
-        and c.get("frame_index") == frame_index
-        and c.get("candidate_id") != cid
-    }
-    # Idempotent: replace existing entry with same candidate_id
-    candidates_list = [
-        c
-        for c in candidates_list
-        if c.get("candidate_id") != cid and c.get("candidate_id") not in stale_ids
-    ]
-    candidates_list.append(entry)
     new_revision = current_revision + 1
     authority_payload: dict[str, Any] = {
         "schema_version": FRAME_CANDIDATES_SCHEMA,
@@ -214,12 +251,6 @@ def save_frame_candidate(
     except (FileNotFoundError, OSError, json.JSONDecodeError, ValueError, TypeError, KeyError):
         manifest = ResultManifest()
     manifest.task_id = manifest.task_id or job_id
-    if stale_ids:
-        manifest.products = [
-            p
-            for p in manifest.products
-            if p.id not in {f"frame_candidate_{sid}" for sid in stale_ids}
-        ]
     product_id = f"frame_candidate_{cid}"
     manifest.add_product(
         id=product_id,
@@ -233,6 +264,8 @@ def save_frame_candidate(
             "source": workflow,
             "selection_source": "manual_frame",
             "view_type": view_type,
+            "display_label": display_label,
+            "item_id": item_id,
         },
     )
     try:
@@ -249,6 +282,38 @@ def save_frame_candidate(
     return entry
 
 
+def _find_matching_entry(
+    candidates_list: list[dict[str, Any]],
+    item_id: str | None,
+    view_type: str,
+    frame_index: int,
+) -> dict[str, Any] | None:
+    """Find existing candidate matching (item_id, view_type, frame_index)."""
+    for c in candidates_list:
+        if (
+            c.get("view_type") == view_type
+            and c.get("frame_index") == frame_index
+            and c.get("item_id") == item_id
+        ):
+            return c
+    return None
+
+
+def _next_role_index(
+    candidates_list: list[dict[str, Any]],
+    role: str,
+    item_id: str | None,
+) -> int:
+    """Return the next role_index for (role, item_id): max existing + 1."""
+    max_idx = 0
+    for c in candidates_list:
+        if c.get("role") == role and c.get("item_id") == item_id:
+            idx = int(c.get("role_index") or 0)
+            if idx > max_idx:
+                max_idx = idx
+    return max_idx + 1
+
+
 def list_frame_candidates(task_root: Path | str) -> dict[str, Any]:
     """Return the current frame-candidates payload (None-safe).
 
@@ -258,7 +323,7 @@ def list_frame_candidates(task_root: Path | str) -> dict[str, Any]:
     Returns:
         The authority payload (``schema_version``, ``candidates``,
         ``revision``), or an empty payload with ``revision=0`` when
-        missing/corrupt.
+        missing/corrupt.  V1 files are migrated in memory.
     """
     root = Path(task_root).expanduser().resolve()
     existing = load_authority(root)
@@ -276,7 +341,10 @@ def remove_frame_candidate(
     candidate_id: str,
     expected_revision: int | None = None,
 ) -> dict[str, Any]:
-    """Remove a candidate atomically; its XYZ file is kept on disk."""
+    """Remove a candidate atomically; its XYZ file is kept on disk.
+
+    No renumbering of remaining candidates occurs.
+    """
     root = Path(task_root).expanduser().resolve()
     existing = load_authority(root)
     if existing is None:
@@ -292,7 +360,7 @@ def remove_frame_candidate(
     if not any(c.get("candidate_id") == candidate_id for c in candidates_list):
         raise FrameCandidateError(f"candidate not found: {candidate_id}")
 
-    # Remove from authority
+    # Remove from authority — no renumbering
     new_revision = current_revision + 1
     authority_payload: dict[str, Any] = {
         "schema_version": FRAME_CANDIDATES_SCHEMA,
