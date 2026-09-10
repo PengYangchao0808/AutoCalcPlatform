@@ -668,6 +668,89 @@ def test_continue_node_override_and_stage_preselect_lock() -> None:
     assert "selectedJobIsRemote = !!(job.result && job.result.node)" not in html
 
 
+def test_frame_candidate_save_uses_terminal_status_predicate() -> None:
+    """Red-first contract: the energy inspector save/role-picker gate must use a
+    terminal-status predicate (completed OR failed OR cancelled) instead of a
+    completed-only variable.
+
+    The current source defines ``jobCompleted = ... === "completed"`` and
+    passes it to both the save-candidate gate and the role-picker visibility
+    condition.  A failed or cancelled job is also terminal — the predicate
+    must recognise all three.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Extract the inspector rendering block that contains the save gate.
+    assert "var jobCompleted" in html, "sanity: jobCompleted variable exists"
+    inspector = html.split("var jobCompleted", 1)[1]
+    inspector = inspector.split("\nfunction ", 1)[0]
+
+    # The block must check for all three terminal statuses, not just
+    # "completed".  Currently only ``=== "completed"`` is tested.
+    assert '"failed"' in inspector, (
+        "Inspector must recognise 'failed' as a terminal status "
+        "(currently only checks 'completed')"
+    )
+    assert '"cancelled"' in inspector, (
+        "Inspector must recognise 'cancelled' as a terminal status "
+        "(currently only checks 'completed')"
+    )
+
+
+def test_frame_candidate_role_picker_gate_uses_terminal_predicate() -> None:
+    """Red-first contract: the role-picker visibility must NOT be gated by the
+    completed-only ``jobCompleted`` variable.
+
+    ``rolePickerHtml = (!isPES && jobCompleted)`` only shows the TS/INT
+    picker when the job status is exactly "completed".  A terminal-status
+    predicate (completed / failed / cancelled) must replace it.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # The role-picker gate must use a terminal predicate, not the
+    # completed-only variable.
+    assert "(!isPES && jobCompleted)" not in html, (
+        "Role-picker gate must use terminal-status predicate, "
+        "not completed-only jobCompleted"
+    )
+
+
+def test_frame_candidate_disabled_active_job_branch_retained() -> None:
+    """Regression guard: the disabled save-candidate button for active
+    (non-terminal) jobs must remain with an explanatory badge.
+
+    This assertion must PASS against the current source — it guards the
+    existing disabled branch so a future refactor cannot silently drop it.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "energy.inspector.save_after_complete" in html
+    assert 'save-candidate" data-energy-frame-id="\' + escapeHtml(frameIdStr) + \'" disabled' in html
+
+
+def test_frame_candidate_post_body_includes_item_id() -> None:
+    """Red-first contract: the frame-candidate POST body must propagate
+    ``item_id`` from the graph metadata so the backend can associate the
+    saved candidate with the correct batch item.
+
+    The current POST body contains ``view_type``, ``frame_index``,
+    ``role``, and ``expected_revision`` — but no ``item_id``.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Extract the role-picker click handler that builds the POST body.
+    assert "[data-energy-candidate-role]" in html, (
+        "sanity: role-picker button selector exists"
+    )
+    handler = html.split("[data-energy-candidate-role]", 1)[1]
+    handler = handler.split("\nfunction ", 1)[0]
+
+    # The POST body construction must include item_id.
+    assert "item_id" in handler, (
+        "Frame-candidate POST body must include item_id from graph metadata"
+    )
+
+
 # ---------------------------------------------------------------------------
 # S5 — Structure upload validation (STRUCTURE_UPLOAD_EXTS + reject helpers)
 # ---------------------------------------------------------------------------

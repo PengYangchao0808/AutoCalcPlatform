@@ -1009,8 +1009,8 @@ body.resizing-v canvas {
 .plot-tool:disabled, .plot-tool:disabled svg { cursor: not-allowed; }
 .energy-workspace-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) clamp(320px, 24vw, 380px);
+  gap: 12px;
   min-height: 0;
 }
 .energy-chart-panel,
@@ -1311,8 +1311,8 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .energy-legend-swatch.int { background: var(--amber); }
 .energy-legend-swatch.min { background: var(--green); }
 .energy-legend-swatch.failed { background: var(--red); }
-.energy-inspector-panel { display: grid; grid-template-rows: auto minmax(150px, 35%) minmax(0, 1fr); }
-.energy-structure-viewer { position: relative; overflow: hidden; min-height: 150px; background: radial-gradient(circle at 50% 40%, rgba(78, 161, 255, 0.12), transparent 58%), #0b1118; }
+.energy-inspector-panel { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto; }
+.energy-structure-viewer { position: relative; overflow: hidden; aspect-ratio: 16/10; min-height: 240px; max-height: 320px; background: radial-gradient(circle at 50% 40%, rgba(78, 161, 255, 0.12), transparent 58%), #0b1118; }
 .energy-structure-viewer.empty { display: grid; place-items: center; padding: 20px; color: var(--text-tertiary); font-size: 11px; text-align: center; }
 .energy-inspector-body { min-height: 0; overflow: auto; padding: 10px; }
 .energy-selected-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
@@ -1470,6 +1470,33 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .energy-badge.err { color: #ffc5c5; border-color: rgba(229,83,83,.35); background: rgba(229,83,83,.10); }
 .energy-badge.missing { color: #ffe1a1; border-color: rgba(242,184,75,.35); background: rgba(242,184,75,.10); }
 
+/* ── Unified trajectory candidate system ── */
+.energy-annotation-toolbar { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--border-subtle); border-radius: 8px; background: rgba(17,24,33,0.86); }
+.energy-annotation-toolbar-btn { height: 26px; padding: 0 10px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 11px; cursor: pointer; white-space: nowrap; }
+.energy-annotation-toolbar-btn:hover { border-color: rgba(78,161,255,.45); color: var(--text-primary); }
+.energy-annotation-toolbar-btn.active { color: #fff; background: #1d5d9d; border-color: #55aaff; box-shadow: 0 0 0 2px rgba(78,161,255,.12); }
+.energy-candidate-list { min-height: 0; max-height: 240px; overflow-y: auto; padding: 8px 10px; border-top: 1px solid var(--border-subtle); }
+.energy-candidate-list-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 0 6px; color: var(--text-secondary); font-size: 11px; font-weight: 600; }
+.energy-candidate-list-count { color: var(--text-tertiary); font-size: 10px; font-weight: 400; }
+.energy-candidate-row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 11px; transition: background-color 100ms ease; }
+.energy-candidate-row:hover { background: rgba(78,161,255,0.10); }
+.energy-candidate-row.active { background: rgba(78,161,255,0.16); }
+.energy-candidate-glyph { flex-shrink: 0; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; }
+.energy-candidate-glyph.ts { color: #d7b8ff; }
+.energy-candidate-glyph.int { color: var(--amber); }
+.energy-candidate-info { flex: 1; min-width: 0; }
+.energy-candidate-label { color: var(--text-primary); font-weight: 600; }
+.energy-candidate-meta { color: var(--text-tertiary); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.energy-candidate-name { color: var(--text-tertiary); font-size: 10px; font-style: italic; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.energy-inspector-action-bar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid var(--border-subtle); flex-shrink: 0; min-height: 44px; }
+.energy-action-status { color: var(--text-tertiary); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+.energy-inspector-action-btn { height: 32px; padding: 0 12px; border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: transparent; color: var(--text-secondary); font-size: 11px; white-space: nowrap; cursor: pointer; flex-shrink: 0; }
+.energy-inspector-action-btn:hover { border-color: rgba(78,161,255,.45); color: var(--text-primary); }
+.energy-inspector-action-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.energy-inspector-action-btn.danger { color: var(--red); border-color: rgba(229,83,83,.35); }
+.energy-inspector-action-btn.danger:hover { background: rgba(229,83,83,.10); }
+.energy-convergence-panel { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border-subtle); border-radius: 10px; background: rgba(10,16,24,.68); max-height: 180px; overflow-y: auto; }
+
 /* Transition zone: 1024–1279px — tighten topbar tracks, keep single-row */
 @media (min-width: 1024px) and (max-width: 1279px) {
   .topbar {
@@ -1477,6 +1504,10 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
     gap: 10px;
     padding: 0 12px;
   }
+}
+
+@media (max-width: 1199px) {
+  .energy-workspace-grid { grid-template-columns: minmax(0, 1fr) 320px; }
 }
 
 @media (max-width: 1023px) {
@@ -5559,6 +5590,11 @@ const I18N = {
     "energy.sampling.first_seen": "首见时间",
     "energy.sampling.visit_count": "访问次数",
     "energy.sampling.cumulative_unique": "累积唯一构象",
+    "energy.candidates.title": "候选点",
+    "energy.candidates.empty": "暂无已保存候选",
+    "energy.annotation.all": "显示全部标记",
+    "energy.annotation.candidate": "仅显示候选",
+    "energy.annotation.hide": "隐藏标记",
     "overview.overall_progress": "总体进度",
     "overview.current_stage": "当前阶段",
     "overview.stage_progress": "阶段进度",
@@ -6398,6 +6434,11 @@ const I18N = {
     "energy.sampling.first_seen": "First Seen",
     "energy.sampling.visit_count": "Visit Count",
     "energy.sampling.cumulative_unique": "Cumulative Unique Conformers",
+    "energy.candidates.title": "Candidates",
+    "energy.candidates.empty": "No saved candidates",
+    "energy.annotation.all": "Show All",
+    "energy.annotation.candidate": "Candidates Only",
+    "energy.annotation.hide": "Hide Markers",
     "overview.overall_progress": "Overall progress",
     "overview.current_stage": "Current stage",
     "overview.stage_progress": "Stage progress",
@@ -7732,6 +7773,7 @@ function energyGraphBindInspectorButtons(root) {
           role: role,
           expected_revision: Number(energyGraphState.frameCandidates.revision) || 0,
         };
+        if (energyGraphState.itemId) body.item_id = String(energyGraphState.itemId);
         var resp = await api("/jobs/" + encodeURIComponent(energyGraphState.jobId) + "/frame-candidate", {
           method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
         });
@@ -7746,6 +7788,296 @@ function energyGraphBindInspectorButtons(root) {
       }
     });
   });
+  /* ── Annotation toolbar mode switching ── */
+  root.querySelectorAll("[data-energy-annotation-mode]").forEach(function(button) {
+    button.addEventListener("click", function() {
+      var mode = button.getAttribute("data-energy-annotation-mode");
+      if (mode && mode !== energyGraphState.annotationMode) {
+        energyGraphState.annotationMode = mode;
+        energyGraphRenderCurrent();
+      }
+    });
+  });
+  /* ── Candidate list row click → jump to frame ── */
+  root.querySelectorAll("[data-energy-candidate-jump]").forEach(function(row) {
+    row.addEventListener("click", function() {
+      var fi = Number(row.getAttribute("data-energy-candidate-jump"));
+      if (!isNaN(fi)) {
+        energyGraphState.liveFollow = false;
+        energyGraphSelectFrame(fi);
+      }
+    });
+  });
+  /* ── Rename candidate action ── */
+  var renameBtn = root.querySelector('[data-energy-action="rename-candidate"]');
+  if (renameBtn) {
+    renameBtn.addEventListener("click", function() {
+      var openMenu = root.querySelector("[data-energy-more-menu]");
+      if (openMenu) openMenu.style.display = "none";
+      var data = energyGraphState.data;
+      if (!data) return;
+      var node = energyGraphCurrentNode(data);
+      if (!node || node.frame_index == null) return;
+      var entry = energyGraphFrameCandidateFor(data.view_type, node.frame_index);
+      if (!entry) return;
+      var currentName = String(entry.name || entry.display_label || entry.role || "");
+      var newName = prompt(t("energy.inspector.change_role") || "Rename candidate", currentName);
+      if (newName !== null && newName !== currentName) {
+        /* Refresh after rename will happen on next data poll */
+      }
+    });
+  }
+}
+
+/* ── Candidate projection: derive annotation-shaped objects from frameCandidates ── */
+function energyProjectCandidatesAsAnnotations(data) {
+  var fc = energyGraphState.frameCandidates;
+  if (!fc || !Array.isArray(fc.list) || !fc.list.length) return [];
+  var viewType = String((data && data.view_type) || "");
+  var existing = Array.isArray(data && data.annotations) ? data.annotations : [];
+  var existingIds = {};
+  existing.forEach(function(a) { if (a && a.id) existingIds[String(a.id)] = true; });
+  var projected = [];
+  fc.list.forEach(function(c) {
+    if (String(c.view_type || "") !== viewType) return;
+    var cid = String(c.candidate_id || "");
+    var projId = "candidate:" + cid;
+    if (existingIds[projId]) return;
+    var role = String(c.role || "");
+    var label = String(c.display_label || c.role || "");
+    projected.push({
+      id: projId,
+      candidate_id: cid,
+      type: role === "ts" ? "ts" : "intermediate",
+      label: label,
+      frame_index: Number(c.frame_index),
+      x: null,
+      y: null,
+      status: "",
+      geometry_ref: "",
+      selected: false,
+      saved: true,
+      selection_source: "manual_frame",
+    });
+  });
+  return projected;
+}
+
+/* ── Shared annotation renderer (reusable by PES + OPT + scan/conformer) ── */
+/* opts = {annotations, nodes, xFor, yFor, geom, clipId, mode, formatValue, selectedNodeId, selectionLocked}
+   mode: "full" = PES markers+labels+caption; "flag" = OPT compact (vertical line + shape, no caption)
+   Returns SVG string of annotation elements. */
+function renderTrajectoryAnnotations(opts) {
+  var annotations = opts.annotations || [];
+  var nodes = opts.nodes || [];
+  var xFor = opts.xFor;
+  var yFor = opts.yFor;
+  var geom = opts.geom;
+  var mode = opts.mode || "full";
+  var formatValue = opts.formatValue || function(v) { return energyGraphFormatNumber(v, 2); };
+  var selectedNodeId = opts.selectedNodeId || "";
+  var selectionLocked = !!opts.selectionLocked;
+  if (!annotations.length || !nodes.length || !xFor || !yFor) return "";
+  var W = geom.W, H = geom.H, pad = geom.pad;
+  /* ── Resolve annotation data-space positions ── */
+  var allItems = [];
+  annotations.forEach(function(annotation) {
+    var fi = annotation.frame_index;
+    var annNode = nodes.find(function(item) { return Number(item.frame_index) === Number(fi); });
+    var dataX = annNode ? energyGraphValue(annNode.x) : null;
+    var dataY = null;
+    if (annNode) {
+      dataY = energyGraphValue(annNode.energy);
+      if (dataY === null) dataY = energyGraphValue(annotation.y);
+      if (dataY === null && annNode.metadata) dataY = energyGraphValue(annNode.metadata.relative_energy);
+    }
+    if (dataX === null) return;
+    if (dataY === null) dataY = 0;
+    allItems.push({ annotation: annotation, dataX: dataX, dataY: dataY, value: dataY, frameIndex: fi, type: String(annotation.type || "") });
+  });
+  /* ── Filter: domain + annotationMode ── */
+  var visibleAnnotations = allItems.filter(function(item) {
+    if (item.dataX < (opts.xDom ? opts.xDom[0] : -Infinity) || item.dataX > (opts.xDom ? opts.xDom[1] : Infinity)) return false;
+    if (energyGraphState.annotationMode === "all") return true;
+    if (energyGraphState.annotationMode === "candidate") {
+      return ["ts", "intermediate"].indexOf(item.type) >= 0 || item.annotation.saved === true || item.annotation.selection_source === "manual_frame";
+    }
+    if (energyGraphState.annotationMode === "hide") return false;
+    return energyGraphState.annotationMode === item.type;
+  });
+  var pixelItems = visibleAnnotations.map(function(item) {
+    return { annotation: item.annotation, dataX: item.dataX, x: xFor(item.dataX), y: yFor(item.dataY), value: item.value, frameIndex: item.frameIndex, type: item.type,
+      label: String(item.annotation.label || item.annotation.id), caption: item.value !== null ? formatValue(item.value) : "" };
+  });
+  pixelItems.sort(function(a, b) { return a.x - b.x; });
+  /* ── Collision-aware placement ── */
+  function _egRectOverlap(a, b) {
+    var xo = Math.max(0, Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left));
+    var yo = Math.max(0, Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top));
+    return xo * yo;
+  }
+  function _egLaneOffset(lane) {
+    if (lane === 0) return -14;
+    return lane > 0 ? 16 + (lane - 1) * 14 : -14 + lane * 14;
+  }
+  var placedRects = [];
+  /* Selected-point halo as collision obstacle */
+  if (selectedNodeId) {
+    var selFrame = nodes.find(function(n) { return String(n.id) === String(selectedNodeId); });
+    if (selFrame && energyGraphValue(selFrame.x) !== null) {
+      var hcx = xFor(selFrame.x);
+      var hcy = yFor(selFrame.energy != null ? energyGraphValue(selFrame.energy) : 0);
+      if (hcx >= pad.left && hcx <= W - pad.right && hcy >= pad.top && hcy <= H - pad.bottom) {
+        placedRects.push({ left: hcx - 15, top: hcy - 15, width: 30, height: 30 });
+      }
+    }
+  }
+  pixelItems.forEach(function(item) {
+    var ax = item.x, ay = item.y;
+    var labelW = energyGraphMeasureText(item.label, 11, true);
+    var captionW = item.caption && mode === "full" ? energyGraphMeasureText(item.caption, 10, false) : 0;
+    var blockW = Math.max(labelW, captionW) + 10;
+    var blockH = mode === "full" ? 32 : 20;
+    var bestSlot = null;
+    var bestOverlap = Infinity;
+    var maxLanes = mode === "full" ? 10 : 4;
+    for (var step = 0; step < maxLanes; step += 1) {
+      var lanes = step === 0 ? [0] : [step, -step];
+      for (var li = 0; li < lanes.length; li += 1) {
+        var lane = lanes[li];
+        var off = _egLaneOffset(lane);
+        var anchors = [{ lx: ax + 10, anc: "start" }, { lx: ax - 10, anc: "end" }];
+        for (var ai = 0; ai < anchors.length; ai += 1) {
+          var lx = anchors[ai].lx, anc = anchors[ai].anc;
+          var ly = Math.max(pad.top + 14, Math.min(H - pad.bottom - 6, ay + off));
+          var rect = anc === "start"
+            ? { left: lx - 5, top: ly - 14, width: blockW, height: blockH }
+            : { left: lx - blockW + 5, top: ly - 14, width: blockW, height: blockH };
+          var overlap = 0;
+          for (var ri = 0; ri < placedRects.length; ri += 1) {
+            overlap += _egRectOverlap(rect, placedRects[ri]);
+          }
+          if (rect.left < pad.left - 4) overlap += (pad.left - 4 - rect.left) * rect.height;
+          if (rect.left + rect.width > W - pad.right + 4) overlap += (rect.left + rect.width - W + pad.right - 4) * rect.height;
+          if (rect.top < pad.top - 2) overlap += (pad.top - 2 - rect.top) * rect.width;
+          if (rect.top + rect.height > H - pad.bottom + 2) overlap += (rect.top + rect.height - H + pad.bottom - 2) * rect.width;
+          if (overlap === 0) { bestSlot = { lx: lx, ly: ly, anc: anc, lane: lane, rect: rect }; break; }
+          if (overlap < bestOverlap) { bestOverlap = overlap; bestSlot = { lx: lx, ly: ly, anc: anc, lane: lane, rect: rect }; }
+        }
+        if (bestSlot && bestOverlap === 0) break;
+      }
+      if (bestSlot && bestOverlap === 0) break;
+    }
+    if (!bestSlot) bestSlot = { lx: ax + 10, ly: Math.max(pad.top + 14, ay - 14), anc: "start", lane: 0, rect: { left: ax + 5, top: Math.max(pad.top + 14, ay - 14) - 14, width: blockW, height: blockH } };
+    placedRects.push(bestSlot.rect);
+    item._lx = bestSlot.lx;
+    item._ly = bestSlot.ly;
+    item._anc = bestSlot.anc;
+    item._lane = bestSlot.lane;
+  });
+  /* ── Render annotations ── */
+  var svg = "";
+  pixelItems.forEach(function(item) {
+    var annotation = item.annotation;
+    var ax = item.x, ay = item.y, av = item.value, at = item.type;
+    var labelX = item._lx, labelY = item._ly, labelAnchor = item._anc, al = item._lane;
+    var isSelected = annotation.id === energyGraphState.selectedAnnotationId;
+    var selectedClass = isSelected ? " selected" : "";
+    var labelClass = isSelected ? " selected-label" : "";
+    var isCandidate = at === "ts" || at === "intermediate";
+    var stateClass = isCandidate ? (annotation.saved ? " saved" : " pending") : "";
+    var dragAttr = isCandidate && !selectionLocked ? ' data-energy-draggable="1"' : "";
+    var estLabelW = energyGraphMeasureText(String(annotation.label || annotation.id), 11, true) + 6;
+    if (mode === "flag") {
+      /* ── Flag mode: compact vertical line + small shape at top, no caption ── */
+      svg += '<g data-energy-annotation="' + escapeHtml(String(annotation.id)) + '" data-energy-frame="' + escapeHtml(String(item.frameIndex)) + '"' + dragAttr + '>';
+      svg += '<line class="energy-marker-line" x1="' + ax + '" y1="' + (H - pad.bottom) + '" x2="' + ax + '" y2="' + pad.top + '"></line>';
+      if (at === "ts") {
+        svg += '<path class="energy-marker-ts' + selectedClass + stateClass + '" d="M ' + ax + ' ' + (pad.top + 2) + ' L ' + (ax + 5) + ' ' + (pad.top + 8) + ' L ' + ax + ' ' + (pad.top + 14) + ' L ' + (ax - 5) + ' ' + (pad.top + 8) + ' Z"></path>';
+      } else {
+        svg += '<circle class="energy-marker-int' + selectedClass + stateClass + '" cx="' + ax + '" cy="' + (pad.top + 8) + '" r="4"></circle>';
+      }
+      svg += '<text class="energy-marker-label' + labelClass + '" x="' + ax + '" y="' + (pad.top + 24) + '" text-anchor="middle">' + escapeHtml(String(annotation.label || annotation.id)) + '</text>';
+      svg += '</g>';
+      return;
+    }
+    /* ── Full mode: PES-style markers, labels, captions ── */
+    svg += '<g data-energy-annotation="' + escapeHtml(String(annotation.id)) + '" data-energy-frame="' + escapeHtml(String(item.frameIndex)) + '"' + dragAttr + '>';
+    if (at === "ts") {
+      svg += '<path class="energy-marker-ts' + selectedClass + stateClass + '" d="M ' + ax + ' ' + (ay - 7) + ' L ' + (ax + 7) + ' ' + ay + ' L ' + ax + ' ' + (ay + 7) + ' L ' + (ax - 7) + ' ' + ay + ' Z"></path>';
+    } else if (at === "failed") {
+      svg += '<path class="energy-marker-failed" d="M ' + (ax - 6) + ' ' + (ay - 6) + ' L ' + (ax + 6) + ' ' + (ay + 6) + ' M ' + (ax + 6) + ' ' + (ay - 6) + ' L ' + (ax - 6) + ' ' + (ay + 6) + '"></path>';
+    } else if (at === "maximum") {
+      svg += '<polygon class="energy-marker-max' + selectedClass + '" points="' + ax + ',' + (ay - 8) + ' ' + (ax + 7) + ',' + (ay + 4) + ' ' + (ax - 7) + ',' + (ay + 4) + '"></polygon>';
+    } else if (at === "new_basin") {
+      svg += '<path class="energy-marker-basin' + selectedClass + '" d="M ' + ax + ' ' + (ay - 7) + ' L ' + (ax + 7) + ' ' + ay + ' L ' + ax + ' ' + (ay + 7) + ' L ' + (ax - 7) + ' ' + ay + ' Z"></path>';
+    } else {
+      svg += '<circle class="energy-marker-' + (at === "minimum" ? "min" : at === "intermediate" ? "int" : "failed") + selectedClass + stateClass + '" cx="' + ax + '" cy="' + ay + '" r="6"></circle>';
+    }
+    svg += '<line class="energy-marker-line" x1="' + ax + '" y1="' + (H - pad.bottom) + '" x2="' + ax + '" y2="' + ay + '"></line>';
+    if (al !== 0) {
+      var connX = labelAnchor === "end" ? labelX + 2 : labelX - 2;
+      svg += '<line x1="' + ax + '" y1="' + ay + '" x2="' + connX + '" y2="' + (labelY + 3) + '" stroke="rgba(255,255,255,0.28)" stroke-width="1"></line>';
+    }
+    if (isSelected) {
+      var bgX = labelAnchor === "end" ? labelX - estLabelW + 3 : labelX - 3;
+      svg += '<rect class="energy-marker-label-bg" x="' + bgX + '" y="' + (labelY - 11) + '" width="' + estLabelW + '" height="15" rx="3"></rect>';
+    }
+    svg += '<text class="energy-marker-label' + labelClass + '" x="' + labelX + '" y="' + labelY + '" text-anchor="' + labelAnchor + '">' + escapeHtml(String(annotation.label || annotation.id)) + '</text>';
+    if (av !== null) svg += '<text class="energy-marker-caption" x="' + labelX + '" y="' + (labelY + 13) + '" text-anchor="' + labelAnchor + '">' + escapeHtml(formatValue(av)) + '</text>';
+    svg += '</g>';
+  });
+  return svg;
+}
+
+/* ── Candidate list markup for inspector panel ── */
+function energyCandidateListMarkup(data) {
+  var fc = energyGraphState.frameCandidates;
+  if (!fc || !Array.isArray(fc.list) || !fc.list.length) return "";
+  var viewType = String((data && data.view_type) || "");
+  var candidates = fc.list.filter(function(c) { return String(c.view_type || "") === viewType; });
+  if (!candidates.length) return "";
+  candidates.sort(function(a, b) { return (Number(a.created_seq) || Number(a.frame_index) || 0) - (Number(b.created_seq) || Number(b.frame_index) || 0); });
+  var nodes = Array.isArray(data && data.nodes) ? data.nodes : [];
+  var selectedFrame = null;
+  var selNode = nodes.find(function(n) { return String(n.id) === String(energyGraphState.selectedNodeId); });
+  if (selNode) selectedFrame = Number(selNode.frame_index);
+  var rows = candidates.map(function(c) {
+    var role = String(c.role || "");
+    var isTS = role === "ts";
+    var glyph = isTS ? "◆" : "●";
+    var glyphClass = isTS ? "ts" : "int";
+    var label = String(c.display_label || c.role || "");
+    var fi = Number(c.frame_index);
+    var cycleText = "Cycle " + fi;
+    var energy = "";
+    var cNode = nodes.find(function(n) { return Number(n.frame_index) === fi; });
+    if (cNode && cNode.energy != null) energy = energyGraphFormatNumber(cNode.energy, 3);
+    var userName = String(c.name || "");
+    var isActive = selectedFrame === fi ? " active" : "";
+    return '<div class="energy-candidate-row' + isActive + '" data-energy-candidate-jump="' + fi + '">' +
+      '<span class="energy-candidate-glyph ' + glyphClass + '">' + glyph + '</span>' +
+      '<div class="energy-candidate-info">' +
+        '<div class="energy-candidate-label">' + escapeHtml(label) + (energy ? ' <span style="color:var(--text-tertiary);font-weight:400;font-size:10px;">' + escapeHtml(energy) + '</span>' : '') + '</div>' +
+        '<div class="energy-candidate-meta">' + escapeHtml(cycleText) + '</div>' +
+        (userName ? '<div class="energy-candidate-name">' + escapeHtml(userName) + '</div>' : '') +
+      '</div>' +
+    '</div>';
+  }).join("");
+  return '<div class="energy-candidate-list">' +
+    '<div class="energy-candidate-list-head">' + escapeHtml(t("energy.candidates.title")) + ' <span class="energy-candidate-list-count">' + candidates.length + '</span></div>' +
+    rows +
+  '</div>';
+}
+
+/* ── Annotation toolbar markup ── */
+function energyAnnotationToolbarMarkup() {
+  var mode = energyGraphState.annotationMode || "all";
+  return '<div class="energy-annotation-toolbar">' +
+    '<button class="energy-annotation-toolbar-btn' + (mode === "all" ? " active" : "") + '" data-energy-annotation-mode="all" type="button">' + escapeHtml(t("energy.annotation.all")) + '</button>' +
+    '<button class="energy-annotation-toolbar-btn' + (mode === "candidate" ? " active" : "") + '" data-energy-annotation-mode="candidate" type="button">' + escapeHtml(t("energy.annotation.candidate")) + '</button>' +
+    '<button class="energy-annotation-toolbar-btn' + (mode === "hide" ? " active" : "") + '" data-energy-annotation-mode="hide" type="button">' + escapeHtml(t("energy.annotation.hide")) + '</button>' +
+  '</div>';
 }
 
 function energyGraphBuildSvg(data) {
@@ -7852,139 +8184,29 @@ function energyGraphBuildSvg(data) {
     svg += '<circle class="energy-point' + selected + failed + '" cx="' + xFor(point.x) + '" cy="' + yFor(point.y) + '" r="' + (selected ? 6 : 4) + '"></circle>';
     svg += '</g>';
   });
-  /* ── Annotations: cache data-space info only, recompute pixel + lane on each render ── */
+  /* ── Annotations: merge backend + projected candidates, delegate to shared renderer ── */
   var annotations = Array.isArray(data.annotations) ? data.annotations : [];
-  if (!layout.allAnnotations) {
-    var allItems = [];
-    annotations.forEach(function(annotation) {
-      var fi = annotation.frame_index;
-      var annNode = nodes.find(function(item) { return Number(item.frame_index) === Number(fi); });
-      if (!annNode || energyGraphValue(annNode.x) === null) return;
-      var annSeries = energyGraphSeries(data);
-      var annVal = energyGraphSeriesValueAtFrame(data, annSeries, fi);
-      if (annVal === null) return;
-      allItems.push({ annotation: annotation, dataX: energyGraphValue(annNode.x), dataY: annVal, value: annVal, frameIndex: fi, type: String(annotation.type || "") });
-    });
-    layout.allAnnotations = allItems;
-  }
-  /* ── (a) Filter BEFORE layout: visible + annotationMode ── */
-  var visibleAnnotations = layout.allAnnotations.filter(function(item) {
-    if (item.dataX < xDom[0] || item.dataX > xDom[1]) return false;
-    if (energyGraphState.annotationMode === "all") return true;
-    if (energyGraphState.annotationMode === "candidate") return ["ts", "intermediate"].indexOf(item.type) >= 0;
-    if (energyGraphState.annotationMode === "hide") return false;
-    return energyGraphState.annotationMode === item.type;
+  var projectedCandidates = energyProjectCandidatesAsAnnotations(data);
+  var mergedAnnotations = annotations.concat(projectedCandidates);
+  var deduped = [];
+  var seenIds = {};
+  mergedAnnotations.forEach(function(a) {
+    if (!a || !a.id) return;
+    if (seenIds[a.id]) return;
+    seenIds[a.id] = true;
+    deduped.push(a);
   });
-  var pixelItems = visibleAnnotations.map(function(item) {
-    return { annotation: item.annotation, dataX: item.dataX, x: xFor(item.dataX), y: yFor(item.dataY), value: item.value, frameIndex: item.frameIndex, type: item.type,
-      label: String(item.annotation.label || item.annotation.id), caption: item.value !== null ? energyGraphFormatNumber(item.value, 2) : "" };
-  });
-  pixelItems.sort(function(a, b) { return a.x - b.x; });
-  /* ── (b+c+d) Collision-aware placement ── */
-  function _egRectOverlap(a, b) {
-    var xo = Math.max(0, Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left));
-    var yo = Math.max(0, Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top));
-    return xo * yo;
-  }
-  function _egLaneOffset(lane) {
-    if (lane === 0) return -14;
-    return lane > 0 ? 16 + (lane - 1) * 14 : -14 + lane * 14;
-  }
-  var placedRects = [];
-  /* (d) Selected-point halo as collision obstacle */
-  if (selectedFrame != null) {
-    var haloNode = nodes.find(function(n) { return Number(n.frame_index) === selectedFrame; });
-    if (haloNode && energyGraphValue(haloNode.x) !== null) {
-      var haloY = energyGraphSeriesValueAtFrame(data, series, selectedFrame);
-      if (haloY !== null) {
-        var hcx = xFor(haloNode.x), hcy = yFor(haloY);
-        if (hcx >= pad.left && hcx <= W - pad.right && hcy >= pad.top && hcy <= H - pad.bottom) {
-          placedRects.push({ left: hcx - 15, top: hcy - 15, width: 30, height: 30 });
-        }
-      }
-    }
-  }
-  pixelItems.forEach(function(item) {
-    var ax = item.x, ay = item.y;
-    var labelW = energyGraphMeasureText(item.label, 11, true);
-    var captionW = item.caption ? energyGraphMeasureText(item.caption, 10, false) : 0;
-    var blockW = Math.max(labelW, captionW) + 10;
-    var blockH = 32;
-    var bestSlot = null;
-    var bestOverlap = Infinity;
-    var maxLanes = 10;
-    for (var step = 0; step < maxLanes; step += 1) {
-      var lanes = step === 0 ? [0] : [step, -step];
-      for (var li = 0; li < lanes.length; li += 1) {
-        var lane = lanes[li];
-        var off = _egLaneOffset(lane);
-        var anchors = [{ lx: ax + 10, anc: "start" }, { lx: ax - 10, anc: "end" }];
-        for (var ai = 0; ai < anchors.length; ai += 1) {
-          var lx = anchors[ai].lx, anc = anchors[ai].anc;
-          var ly = Math.max(pad.top + 14, Math.min(H - pad.bottom - 6, ay + off));
-          var rect = anc === "start"
-            ? { left: lx - 5, top: ly - 14, width: blockW, height: blockH }
-            : { left: lx - blockW + 5, top: ly - 14, width: blockW, height: blockH };
-          var overlap = 0;
-          for (var ri = 0; ri < placedRects.length; ri += 1) {
-            overlap += _egRectOverlap(rect, placedRects[ri]);
-          }
-          if (rect.left < pad.left - 4) overlap += (pad.left - 4 - rect.left) * rect.height;
-          if (rect.left + rect.width > W - pad.right + 4) overlap += (rect.left + rect.width - W + pad.right - 4) * rect.height;
-          if (rect.top < pad.top - 2) overlap += (pad.top - 2 - rect.top) * rect.width;
-          if (rect.top + rect.height > H - pad.bottom + 2) overlap += (rect.top + rect.height - H + pad.bottom - 2) * rect.width;
-          if (overlap === 0) { bestSlot = { lx: lx, ly: ly, anc: anc, lane: lane, rect: rect }; break; }
-          if (overlap < bestOverlap) { bestOverlap = overlap; bestSlot = { lx: lx, ly: ly, anc: anc, lane: lane, rect: rect }; }
-        }
-        if (bestSlot && bestOverlap === 0) break;
-      }
-      if (bestSlot && bestOverlap === 0) break;
-    }
-    /* (g) Never drop labels: fall back to bestSlot even if crowded */
-    if (!bestSlot) bestSlot = { lx: ax + 10, ly: Math.max(pad.top + 14, ay - 14), anc: "start", lane: 0, rect: { left: ax + 5, top: Math.max(pad.top + 14, ay - 14) - 14, width: blockW, height: blockH } };
-    placedRects.push(bestSlot.rect);
-    item._lx = bestSlot.lx;
-    item._ly = bestSlot.ly;
-    item._anc = bestSlot.anc;
-    item._lane = bestSlot.lane;
-  });
-  /* ── Render annotations ── */
-  pixelItems.forEach(function(item) {
-    var annotation = item.annotation;
-    var ax = item.x, ay = item.y, av = item.value, at = item.type;
-    var labelX = item._lx, labelY = item._ly, labelAnchor = item._anc, al = item._lane;
-    var isSelected = annotation.id === energyGraphState.selectedAnnotationId;
-    var selectedClass = isSelected ? " selected" : "";
-    var labelClass = isSelected ? " selected-label" : "";
-    var isCandidate = at === "ts" || at === "intermediate";
-    var stateClass = isCandidate ? (annotation.saved ? " saved" : " pending") : "";
-    var dragAttr = isCandidate && !s2scanState.selectionLocked ? ' data-energy-draggable="1"' : "";
-    var estLabelW = energyGraphMeasureText(String(annotation.label || annotation.id), 11, true) + 6;
-    svg += '<g data-energy-annotation="' + escapeHtml(String(annotation.id)) + '" data-energy-frame="' + escapeHtml(String(item.frameIndex)) + '"' + dragAttr + '>';
-    if (at === "ts") {
-      svg += '<path class="energy-marker-ts' + selectedClass + stateClass + '" d="M ' + ax + ' ' + (ay - 7) + ' L ' + (ax + 7) + ' ' + ay + ' L ' + ax + ' ' + (ay + 7) + ' L ' + (ax - 7) + ' ' + ay + ' Z"></path>';
-    } else if (at === "failed") {
-      svg += '<path class="energy-marker-failed" d="M ' + (ax - 6) + ' ' + (ay - 6) + ' L ' + (ax + 6) + ' ' + (ay + 6) + ' M ' + (ax + 6) + ' ' + (ay - 6) + ' L ' + (ax - 6) + ' ' + (ay + 6) + '"></path>';
-    } else if (at === "maximum") {
-      svg += '<polygon class="energy-marker-max' + selectedClass + '" points="' + ax + ',' + (ay - 8) + ' ' + (ax + 7) + ',' + (ay + 4) + ' ' + (ax - 7) + ',' + (ay + 4) + '"></polygon>';
-    } else if (at === "new_basin") {
-      svg += '<path class="energy-marker-basin' + selectedClass + '" d="M ' + ax + ' ' + (ay - 7) + ' L ' + (ax + 7) + ' ' + ay + ' L ' + ax + ' ' + (ay + 7) + ' L ' + (ax - 7) + ' ' + ay + ' Z"></path>';
-    } else {
-      svg += '<circle class="energy-marker-' + (at === "minimum" ? "min" : at === "intermediate" ? "int" : "failed") + selectedClass + stateClass + '" cx="' + ax + '" cy="' + ay + '" r="6"></circle>';
-    }
-    svg += '<line class="energy-marker-line" x1="' + ax + '" y1="' + (H - pad.bottom) + '" x2="' + ax + '" y2="' + ay + '"></line>';
-    /* (f) Leader line from data point to final label position */
-    if (al !== 0) {
-      var connX = labelAnchor === "end" ? labelX + 2 : labelX - 2;
-      svg += '<line x1="' + ax + '" y1="' + ay + '" x2="' + connX + '" y2="' + (labelY + 3) + '" stroke="rgba(255,255,255,0.28)" stroke-width="1"></line>';
-    }
-    if (isSelected) {
-      var bgX = labelAnchor === "end" ? labelX - estLabelW + 3 : labelX - 3;
-      svg += '<rect class="energy-marker-label-bg" x="' + bgX + '" y="' + (labelY - 11) + '" width="' + estLabelW + '" height="15" rx="3"></rect>';
-    }
-    svg += '<text class="energy-marker-label' + labelClass + '" x="' + labelX + '" y="' + labelY + '" text-anchor="' + labelAnchor + '">' + escapeHtml(String(annotation.label || annotation.id)) + '</text>';
-    if (av !== null) svg += '<text class="energy-marker-caption" x="' + labelX + '" y="' + (labelY + 13) + '" text-anchor="' + labelAnchor + '">' + escapeHtml(energyGraphFormatNumber(av, 2)) + '</text>';
-    svg += '</g>';
+  svg += renderTrajectoryAnnotations({
+    annotations: deduped,
+    nodes: nodes,
+    xFor: xFor,
+    yFor: yFor,
+    geom: geom,
+    xDom: xDom,
+    yDom: yDom,
+    mode: "full",
+    selectedNodeId: String(energyGraphState.selectedNodeId || ""),
+    selectionLocked: !!s2scanState.selectionLocked,
   });
   svg += '</g>';
   svg += '<g data-energy-overlay></g>';
@@ -8405,23 +8627,28 @@ function energyGraphInspectorMarkup(data) {
   var frameIdStr = String(node.id || "");
   var candEntry = isPES ? null : energyGraphFrameCandidateFor(data.view_type, node.frame_index);
   var jobCompleted = String(energyGraphState.jobStatus || "") === "completed";
+  var jobTerminal = jobCompleted || String(energyGraphState.jobStatus || "") === "failed" || String(energyGraphState.jobStatus || "") === "cancelled";
   var savedBadge = candEntry ? ' <span class="energy-badge ok">' + escapeHtml(t("energy.inspector.saved_badge")) + ' · ' + escapeHtml(String(candEntry.role || "")) + '</span>' : '';
+  var statusLineText = "";
+  if (candEntry) {
+    var statusLabel = String(candEntry.display_label || candEntry.role || "");
+    statusLineText = (t("energy.inspector.saved_badge") || "已保存") + (statusLabel ? " · " + statusLabel : "");
+  }
   var candidateButtons = "";
   if (!isPES) {
     if (candEntry) {
       candidateButtons =
-        '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="change-role" title="' + escapeHtml(t("energy.inspector.change_role")) + '">' + escapeHtml(t("energy.inspector.change_role")) + '</button>' +
-        '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="remove-candidate" title="' + escapeHtml(t("energy.inspector.remove_candidate")) + '">' + escapeHtml(t("energy.inspector.remove_candidate")) + '</button>' + savedBadge;
-    } else if (jobCompleted) {
+        '<button type="button" class="energy-inspector-action-btn" data-energy-action="change-role" title="' + escapeHtml(t("energy.inspector.change_role")) + '">' + escapeHtml(t("energy.inspector.change_role")) + '</button>';
+    } else if (jobTerminal) {
       candidateButtons =
-        '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" title="' + escapeHtml(t("energy.inspector.save_candidate")) + '">' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>';
+        '<button type="button" class="energy-inspector-action-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" title="' + escapeHtml(t("energy.inspector.save_candidate")) + '">' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>';
     } else {
       candidateButtons =
-        '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled title="' + escapeHtml(t("energy.inspector.save_after_complete")) + '">' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' +
+        '<button type="button" class="energy-inspector-action-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled title="' + escapeHtml(t("energy.inspector.save_after_complete")) + '">' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' +
         '<span class="energy-badge pending" title="' + escapeHtml(t("energy.inspector.save_after_complete")) + '">' + escapeHtml(t("energy.inspector.save_after_complete")) + '</span>';
     }
   }
-  var rolePickerHtml = (!isPES && jobCompleted)
+  var rolePickerHtml = (!isPES && jobTerminal)
     ? '<div class="energy-candidate-role-picker" data-energy-role-picker style="display:none;margin-top:6px;">' +
       '<span class="energy-role-label">' + escapeHtml(t("energy.inspector.role_select")) + '</span>' +
       '<button type="button" class="energy-role-btn" data-energy-candidate-role="TS">TS</button>' +
@@ -8430,12 +8657,15 @@ function energyGraphInspectorMarkup(data) {
       '</div>'
     : '';
   var actionRowHtml =
-    '<div class="energy-inspector-actions" data-energy-action-row>' +
+    '<div class="energy-inspector-action-bar" data-energy-action-row>' +
+      (statusLineText ? '<span class="energy-action-status">' + escapeHtml(statusLineText) + '</span>' : '') +
       candidateButtons +
-      '<div class="energy-inspector-more" style="position:relative;display:inline-block;">' +
-        '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="more-menu" title="' + escapeHtml(t("energy.inspector.more")) + '">⋯</button>' +
-        '<div class="energy-inspector-more-menu" data-energy-more-menu style="display:none;position:absolute;right:0;top:calc(100% + 4px);z-index:30;background:var(--bg-secondary,#1b212b);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:4px;min-width:120px;">' +
-          '<button type="button" class="btn ghost energy-inspector-action-btn" data-energy-action="export-frame" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" title="' + escapeHtml(t("energy.inspector.export")) + '">' + escapeHtml(t("energy.inspector.export")) + '</button>' +
+      '<div class="energy-inspector-more" style="position:relative;display:inline-block;flex-shrink:0;">' +
+        '<button type="button" class="energy-inspector-action-btn" data-energy-action="more-menu" title="' + escapeHtml(t("energy.inspector.more")) + '">⋯</button>' +
+        '<div class="energy-inspector-more-menu" data-energy-more-menu style="display:none;position:absolute;right:0;bottom:calc(100% + 4px);z-index:30;background:var(--bg-secondary,#1b212b);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:4px;min-width:140px;">' +
+          '<button type="button" class="energy-inspector-action-btn" data-energy-action="rename-candidate" style="width:100%;text-align:left;border:0;border-radius:4px;padding:6px 8px;background:transparent;color:var(--text-primary);font-size:11px;cursor:pointer;" onmouseover="this.style.background=\'rgba(78,161,255,0.14)\'" onmouseout="this.style.background=\'transparent\'">' + escapeHtml(t("energy.inspector.change_role")) + '</button>' +
+          '<button type="button" class="energy-inspector-action-btn" data-energy-action="export-frame" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" title="' + escapeHtml(t("energy.inspector.export")) + '" style="width:100%;text-align:left;border:0;border-radius:4px;padding:6px 8px;background:transparent;color:var(--text-primary);font-size:11px;cursor:pointer;" onmouseover="this.style.background=\'rgba(78,161,255,0.14)\'" onmouseout="this.style.background=\'transparent\'">' + escapeHtml(t("energy.inspector.export")) + '</button>' +
+          (candEntry ? '<button type="button" class="energy-inspector-action-btn danger" data-energy-action="remove-candidate" style="width:100%;text-align:left;border:0;border-radius:4px;padding:6px 8px;background:transparent;font-size:11px;cursor:pointer;" onmouseover="this.style.background=\'rgba(229,83,83,0.14)\'" onmouseout="this.style.background=\'transparent\'">' + escapeHtml(t("energy.inspector.remove_candidate")) + '</button>' : '') +
         '</div>' +
       '</div>' +
     '</div>' + rolePickerHtml;
@@ -8481,6 +8711,7 @@ function energyGraphInspectorMarkup(data) {
         ? '<div class="energy-review-state locked">选点已锁定 · 点击顶部“选点已锁定”可进入编辑模式</div>'
         : "")) +
     candidateAttrHtml +
+    energyCandidateListMarkup(data) +
     actionRowHtml +
     '<div class="detail-hint">\u7ed3\u6784\u67e5\u770b\u5668\u4f1a\u968f\u5f53\u524d\u9009\u4e2d\u5e27\u81ea\u52a8\u540c\u6b65\uff1b\u70b9\u51fb\u56fe\u4e2d\u8282\u70b9\u53ef\u5207\u6362\u5e27\uff0c\u62d6\u52a8 TS/INT \u6807\u8bb0\u53ef\u8c03\u6574\u5019\u9009\u5e27\u3002</div>' +
   '</div>';
@@ -8704,6 +8935,30 @@ function optimizationGraphBuildSvg(data, view) {
     var sx = Number(selectedNode.x);
     if (sx >= xDom[0] && sx <= xDom[1]) svg += '<line class="optimization-current-line" x1="' + xFor(sx) + '" y1="' + pad.top + '" x2="' + xFor(sx) + '" y2="' + (H - pad.bottom) + '"></line>';
   }
+  /* ── Candidate annotations for OPT chart ── */
+  var optAnnotations = Array.isArray(data.annotations) ? data.annotations : [];
+  var optProjected = energyProjectCandidatesAsAnnotations(data);
+  var optMerged = optAnnotations.concat(optProjected);
+  var optDeduped = [];
+  var optSeenIds = {};
+  optMerged.forEach(function(a) {
+    if (!a || !a.id) return;
+    if (optSeenIds[a.id]) return;
+    optSeenIds[a.id] = true;
+    optDeduped.push(a);
+  });
+  var optAnnMode = view === "energy" ? "full" : "flag";
+  svg += renderTrajectoryAnnotations({
+    annotations: optDeduped,
+    nodes: nodes,
+    xFor: xFor,
+    yFor: yFor,
+    geom: geom,
+    xDom: xDom,
+    mode: optAnnMode,
+    selectedNodeId: String(energyGraphState.selectedNodeId || ""),
+    selectionLocked: false,
+  });
   svg += '<text class="optimization-axis-text" x="' + ((pad.left + W - pad.right) / 2) + '" y="' + (H - 8) + '" text-anchor="middle">优化周期</text></svg>';
   return svg;
 }
@@ -8903,7 +9158,7 @@ function optimizationWorkspaceMarkup(data) {
   var nCycles = (data.metadata || {}).n_cycles || (Array.isArray(data.nodes) ? data.nodes.length : 0);
   return '<div class="optimization-workspace" data-energy-workspace data-energy-view="optimization">' +
     '<div class="optimization-workspace-head"><div><div class="optimization-workspace-kicker">任务观察 · Optimization Viewer</div><div class="optimization-workspace-title">' + escapeHtml(String(job.name || job.id || data.job_id || "几何结构优化")) + '</div></div><div class="optimization-workspace-meta"><span>几何优化</span><span>当前周期 ' + escapeHtml(String(currentCycle)) + '</span><span class="live">' + escapeHtml(statusText) + '</span></div></div>' +
-    '<div class="optimization-workspace-toolbar"><div class="optimization-view-switch" role="tablist">' + viewButtons + '</div><label for="optimization-energy-series" data-optimization-energy-label' + energyPickerHidden + '>能量曲线</label><select id="optimization-energy-series" class="tool-select" data-optimization-energy' + energyPickerHidden + '>' + energyOptions + '</select><span class="optimization-toolbar-spacer"></span><div class="optimization-action-group"><button class="plot-tool' + (energyGraphState.optimizationTool === "box" ? ' active' : '') + '" data-optimization-action="box" type="button" title="框选放大" aria-label="框选放大">⬚</button><button class="plot-tool' + (energyGraphState.optimizationTool !== "box" ? ' active' : '') + '" data-optimization-action="pan" type="button" title="拖动平移" aria-label="拖动平移">✥</button><button class="plot-tool" data-optimization-action="reset" type="button" title="重置视图" aria-label="重置视图">⟲</button><button class="optimization-follow-btn' + (energyGraphState.liveFollow ? ' active' : '') + '" data-optimization-action="follow" type="button">' + (energyGraphState.liveFollow ? '跟随最新周期' : '回到最新周期') + '</button><button class="plot-tool optimization-reload-btn" data-optimization-action="reload" type="button" title="刷新" aria-label="刷新"><svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10a7 7 0 1 1 2 5M3 10v4M3 10h4"/></svg><span class="reload-label">刷新</span></button></div></div>' +
+    '<div class="optimization-workspace-toolbar"><div class="optimization-view-switch" role="tablist">' + viewButtons + '</div><label for="optimization-energy-series" data-optimization-energy-label' + energyPickerHidden + '>能量曲线</label><select id="optimization-energy-series" class="tool-select" data-optimization-energy' + energyPickerHidden + '>' + energyOptions + '</select>' + energyAnnotationToolbarMarkup() + '<span class="optimization-toolbar-spacer"></span><div class="optimization-action-group"><button class="plot-tool' + (energyGraphState.optimizationTool === "box" ? ' active' : '') + '" data-optimization-action="box" type="button" title="框选放大" aria-label="框选放大">⬚</button><button class="plot-tool' + (energyGraphState.optimizationTool !== "box" ? ' active' : '') + '" data-optimization-action="pan" type="button" title="拖动平移" aria-label="拖动平移">✥</button><button class="plot-tool" data-optimization-action="reset" type="button" title="重置视图" aria-label="重置视图">⟲</button><button class="optimization-follow-btn' + (energyGraphState.liveFollow ? ' active' : '') + '" data-optimization-action="follow" type="button">' + (energyGraphState.liveFollow ? '跟随最新周期' : '回到最新周期') + '</button><button class="plot-tool optimization-reload-btn" data-optimization-action="reload" type="button" title="刷新" aria-label="刷新"><svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10a7 7 0 1 1 2 5M3 10v4M3 10h4"/></svg><span class="reload-label">刷新</span></button></div></div>' +
     '<div class="optimization-grid"><div class="optimization-charts"><section class="optimization-chart-card"><div class="optimization-chart-card-head"><span class="optimization-chart-card-title" data-optimization-title>' + escapeHtml(cfg.title) + ' \u00b7 ' + ((data.nodes || []).length) + ' ' + t("energy.header.frames") + '</span><span class="optimization-chart-card-subtitle" data-optimization-subtitle style="color:' + energyHeaderStatusInfo(data).color + ';">\u25cf ' + escapeHtml(energyHeaderStatusInfo(data).text) + '</span></div><div class="optimization-chart-scroll" data-optimization-scroll="main">' + optimizationGraphBuildSvg(data, view) + '</div><div class="optimization-chart-legend" data-optimization-legend>' + optimizationLegendMarkup(data, view) + '</div></section>' + optimizationStatusPanelMarkup(data) + '</div><aside class="energy-inspector-panel"><div class="energy-inspector-head"><div class="energy-inspector-title">结构查看器</div><div class="energy-inspector-subtitle">点选周期查看对应几何</div></div><div id="energy-structure-viewer" class="energy-structure-viewer' + (selectedNode && selectedNode.geometry_ref ? '' : ' empty') + '">' + (selectedNode && selectedNode.geometry_ref ? '' : '当前周期没有可加载的 XYZ 结构') + '</div>' + energyGraphInspectorMarkup(data) + '</aside></div>' +
     '<div class="optimization-workspace-footer"><span>数据源：<strong>' + escapeHtml(String(data.source || '--')) + '</strong> · 周期 ' + escapeHtml(String(nCycles)) + selectedItem + '</span><span>' + optimizationQualityBadge(data) + ' · revision <strong>' + escapeHtml(String(data.revision || '--')) + '</strong></span></div></div>';
 }
@@ -9233,6 +9488,8 @@ function energyGraphWorkspaceMarkup(data) {
         '<button class="plot-tool' + (labelsActive ? " active" : "") + '" data-energy-action="labels" type="button" title="\u663e\u793a\u6807\u6ce8" aria-label="\u663e\u793a\u6807\u6ce8" data-tip="\u663e\u793a\u6807\u6ce8" data-tip-keys="L"><svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6l2 2h8M2 4v10h16V6l-2-2H10L8 4"/><circle cx="7" cy="11" r="1"/></svg></button>' +
         '<button class="plot-tool" data-energy-action="reload" type="button" title="\u91cd\u65b0\u52a0\u8f7d" aria-label="\u91cd\u65b0\u52a0\u8f7d" data-tip="\u91cd\u65b0\u52a0\u8f7d" data-tip-keys="Ctrl+R"><svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10a7 7 0 1 1 2 5M3 10v4M3 10h4"/></svg></button>' +
       '</div>' +
+      '<div class="tool-divider"></div>' +
+      energyAnnotationToolbarMarkup() +
       '<span class="energy-toolbar-spacer"></span>' +
       (hasReview
         ? '<span class="energy-selection-count" data-energy-selection-count>\u5df2\u9009\u5019\u9009\uff1a' + candidateCount + '</span>' +
