@@ -1,6 +1,6 @@
 /**
- * ACP Vibration Viewer — frequency inspector list (Wave 5, todo 27)
- * @version 0.2.0
+ * ACP Vibration Viewer — frequency inspector + displacement arrows (Wave 5, todos 27-28)
+ * @version 0.3.0
  *
  * Namespace: window.ACPVibrationViewer
  *
@@ -8,15 +8,25 @@
  *   - state                            (the live vibrationState object)
  *   - loadVibrations(jobId, entryId, opts)  (fetch GET .../vibrations; stale guard)
  *   - renderFrequencyInspector(container)   (render mode list / reason; XSS-safe)
- *   - selectMode(modeIndex)            (row click -> select + highlight)
+ *   - selectMode(modeIndex)            (row/dropdown click -> select + highlight)
+ *   - arrowState                       (the live arrow display state)
+ *   - refreshArrows()                  (clear + re-apply arrows on the MAIN viewer)
+ *   - setDisplayMode(mode)             ("arrows" | "animation" | "combo")
+ *   - setAmplitude(v)                  (clamped amplitude setter)
  *
  * Pure helpers (Node-testable):
  *   - sortModesNegativesFirst(modes)   (most-negative first, then ascending; stable)
  *   - defaultModeIndex(modes)          (most-negative imaginary, else first mode)
  *   - reasonText(reason)               (reason code -> localized text)
+ *   - computeArrowEndpoints(coords, vectors, amplitude) (per-atom {start,end}|null)
+ *   - clampAmplitude(v)                ([0.05, 0.6], default 0.25)
+ *   - hydrogenSkipMask(symbols, atomCount) (skip H above H_SKIP_ATOM_THRESHOLD=50)
+ *   - applyArrows(viewer, endpoints, symbols, opts) -> count (viewer.addArrow)
+ *   - clearArrows(viewer)              (viewer.removeAllShapes)
  *
  * Internal (test-overridable via namespace property):
  *   - _fetchImpl                       (default: window.fetch; tests inject a fake)
+ *   - _viewerImpl                      (default: resolves the app's main `viewer`)
  *   - _t                               (i18n lookup with STR-table fallback)
  *   - _esc                             (XSS-safe text conversion)
  *
@@ -26,10 +36,11 @@
  *       atom_count, geometry_product_id|null, source|null}
  *   reasons: no_normal_modes / geometry_mismatch / pending_fetch / historical_unavailable
  *   NEVER fabricate frequencies; NEVER render modes when available=false.
+ *   Stored mode vectors are NEVER mutated (normalization is display-only).
+ *   Arrows are drawn on the app's MAIN 3Dmol viewer instance only.
  *
  * Remaining Wave 5 todos:
- *   TODO(todo-28): displacement arrows + mode selector + toggles
- *   TODO(todo-29): requestAnimationFrame animation + controls + camera
+ *   TODO(todo-29): rAF animation loop (toggle "动画"/combo are stubs with hint)
  *   TODO(todo-30): editing/animation mutual exclusion + equilibrium restore
  *   TODO(todo-31): TS judgment hints + phase-B contract tests
  */
@@ -37,7 +48,7 @@
   "use strict";
 
   /** Version tag — bump on every structural change. */
-  var VERSION = "0.2.0";
+  var VERSION = "0.3.0";
 
   /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
@@ -47,6 +58,14 @@
     IMAGINARY_SUMMARY: "\u865a\u9891 {count} / {total}\u3001{freq} cm\u207b\u00b9", // 虚频 {count} / {total}、{freq} cm⁻¹
     FREQ_UNIT: "cm\u207b\u00b9",                                           // cm⁻¹
     IR_UNIT: "km/mol",
+    MODE: "\u6a21\u5f0f",                                                 // 模式
+    AMPLITUDE: "\u632f\u5e45",                                             // 振幅
+    DISPLAY_ARROWS: "\u7bad\u5934",                                       // 箭头
+    DISPLAY_ANIMATION: "\u52a8\u753b",                                     // 动画
+    DISPLAY_COMBO: "\u7bad\u5934+\u52a8\u753b",                           // 箭头+动画
+    ANIMATION_SOON: "\u52a8\u753b\u5373\u5c06\u4e0a\u7ebf",               // 动画即将上线
+    NO_GEOMETRY: "\u6682\u65e0\u5f53\u524d\u7ed3\u6784\u7684\u51e0\u4f55\u5750\u6807", // 暂无当前结构的几何坐标
+    UNIT_ANGSTROM: "\u00c5",                                               // Å
     REASONS: {
       no_normal_modes: "\u65e0\u632f\u52a8\u6a21\u5f0f\u6570\u636e",           // 无振动模式数据
       geometry_mismatch: "\u6a21\u5f0f\u4e0e\u5f53\u524d\u51e0\u4f55\u4e0d\u5339\u914d",   // 模式与当前几何不匹配
@@ -109,6 +128,37 @@
     loading: false,
     error: null,
     requestToken: 0,
+  };
+
+  /* ---- arrow display constants (todo 28) ---- */
+
+  /** Above this atom count, hydrogen displacement arrows are skipped. */
+  var H_SKIP_ATOM_THRESHOLD = 50;
+  var AMP_MIN = 0.05;
+  var AMP_MAX = 0.6;
+  var AMP_DEFAULT = 0.25;
+  var ARROW_RADIUS = 0.06;
+  /** Vectors with norm below this are treated as zero-length (no arrow). */
+  var VECTOR_EPS = 1e-8;
+  var COLOR_IMAGINARY = "#e55353";
+  var COLOR_NEUTRAL = "#4ea1ff";
+
+  /**
+   * @typedef {Object} ArrowState
+   * @property {boolean} enabled      - arrows applicable (mode + geometry available)
+   * @property {number} amplitude     - arrow length in Å (clamped [AMP_MIN, AMP_MAX])
+   * @property {number|null} modeIndex - mode the arrows depict (mirrors selection)
+   * @property {string} displayMode   - "arrows" | "animation" | "combo"
+   * @property {number} _lastCount    - arrows actually drawn by the last refresh
+   * @property {string|null} _hint    - why arrows are unavailable (shown in UI)
+   */
+  var arrowState = {
+    enabled: false,
+    amplitude: AMP_DEFAULT,
+    modeIndex: null,
+    displayMode: "arrows",
+    _lastCount: 0,
+    _hint: null,
   };
 
   /* ---- pure helpers (exported for tests) ---- */
@@ -195,6 +245,226 @@
     return String(reason);
   }
 
+  /* ---- displacement arrows (todo 28) ---- */
+
+  /**
+   * Clamp an amplitude value to [AMP_MIN, AMP_MAX]; non-finite input
+   * falls back to AMP_DEFAULT.
+   *
+   * @param {*} v
+   * @returns {number}
+   */
+  function clampAmplitude(v) {
+    var n = typeof v === "number" ? v : parseFloat(v);
+    if (!isFinite(n)) return AMP_DEFAULT;
+    return Math.min(AMP_MAX, Math.max(AMP_MIN, n));
+  }
+
+  /**
+   * Per-atom hydrogen skip mask.  At or below H_SKIP_ATOM_THRESHOLD atoms
+   * nothing is skipped; above it, hydrogen rows are masked (skipped).
+   *
+   * @param {Array<string>|null} symbols
+   * @param {number} [atomCount] - defaults to symbols.length
+   * @returns {Array<boolean>}
+   */
+  function hydrogenSkipMask(symbols, atomCount) {
+    if (!symbols || !symbols.length) return [];
+    var n = (atomCount == null) ? symbols.length : atomCount;
+    var mask = [];
+    for (var i = 0; i < symbols.length; i++) {
+      var sym = String(symbols[i] || "").trim().toUpperCase();
+      mask.push(n > H_SKIP_ATOM_THRESHOLD && sym === "H");
+    }
+    return mask;
+  }
+
+  /**
+   * Compute per-atom arrow endpoints: end = start + normalize(v) * amp.
+   *
+   * Zero-length (norm < VECTOR_EPS) and NaN-bearing vectors yield null rows
+   * (no arrow, never NaN).  The stored vectors array is read-only here —
+   * normalization results go into fresh arrays, never written back.
+   *
+   * @param {Array<Array<number>>|null} equilibriumCoords - [[x,y,z], ...]
+   * @param {Array<Array<number>>|null} vectors           - [[x,y,z], ...]
+   * @param {number} amplitude
+   * @returns {Array<{start:[number,number,number], end:[number,number,number]}|null>|null}
+   */
+  function computeArrowEndpoints(equilibriumCoords, vectors, amplitude) {
+    if (!equilibriumCoords || !vectors) return null;
+    var amp = clampAmplitude(amplitude);
+    var rows = [];
+    for (var i = 0; i < equilibriumCoords.length; i++) {
+      var c = equilibriumCoords[i];
+      var v = vectors[i];
+      if (!c || !v || c.length < 3 || v.length < 3) {
+        rows.push(null);
+        continue;
+      }
+      var cx = +c[0], cy = +c[1], cz = +c[2];
+      var vx = +v[0], vy = +v[1], vz = +v[2];
+      var norm = Math.sqrt(vx * vx + vy * vy + vz * vz);
+      if (!isFinite(norm) || norm < VECTOR_EPS ||
+          !isFinite(cx) || !isFinite(cy) || !isFinite(cz)) {
+        rows.push(null);
+        continue;
+      }
+      var k = amp / norm;
+      rows.push({
+        start: [cx, cy, cz],
+        end: [cx + vx * k, cy + vy * k, cz + vz * k],
+      });
+    }
+    return rows;
+  }
+
+  /**
+   * Draw arrows on a 3Dmol viewer via viewer.addArrow; returns the number
+   * of arrows added.  Null endpoints and masked (skipped-H) rows draw
+   * nothing.
+   *
+   * @param {Object} viewerObj  - 3Dmol viewer (must expose addArrow)
+   * @param {Array<Object>|null} endpoints - from computeArrowEndpoints
+   * @param {Array<string>|null} symbols   - for the H skip mask
+   * @param {{ color?: string }} [opts]
+   * @returns {number}
+   */
+  function applyArrows(viewerObj, endpoints, symbols, opts) {
+    opts = opts || {};
+    if (!viewerObj || typeof viewerObj.addArrow !== "function" || !endpoints) {
+      return 0;
+    }
+    var color = opts.color || COLOR_NEUTRAL;
+    var mask = symbols ? hydrogenSkipMask(symbols, endpoints.length) : null;
+    var count = 0;
+    for (var i = 0; i < endpoints.length; i++) {
+      var ep = endpoints[i];
+      if (!ep || (mask && mask[i])) continue;
+      viewerObj.addArrow({
+        start: { x: ep.start[0], y: ep.start[1], z: ep.start[2] },
+        end: { x: ep.end[0], y: ep.end[1], z: ep.end[2] },
+        radius: ARROW_RADIUS,
+        color: color,
+      });
+      count += 1;
+    }
+    return count;
+  }
+
+  /**
+   * Clear all shapes (arrows) from a viewer via viewer.removeAllShapes().
+   *
+   * @param {Object} viewerObj
+   */
+  function clearArrows(viewerObj) {
+    if (viewerObj && typeof viewerObj.removeAllShapes === "function") {
+      viewerObj.removeAllShapes();
+    }
+  }
+
+  /**
+   * Resolve the app's MAIN 3Dmol viewer instance (the one displaying the
+   * current entry).  Never creates a viewer.  Tests (and future callers)
+   * may inject `_viewerImpl` on the namespace.
+   *
+   * @returns {Object|null}
+   */
+  function _getMainViewer() {
+    if (typeof window !== "undefined" && window.ACPVibrationViewer &&
+        typeof window.ACPVibrationViewer._viewerImpl === "function") {
+      return window.ACPVibrationViewer._viewerImpl();
+    }
+    /* The app declares the main viewer as a top-level `let viewer` in the
+       inline script — reachable here as a global lexical binding. */
+    try {
+      if (typeof viewer !== "undefined" && viewer) return viewer;
+    } catch (_) { /* not loaded — stay null */ }
+    return null;
+  }
+
+  function _selectedMode() {
+    var data = vibrationState.data;
+    if (!data || data.available === false || !data.modes) return null;
+    return _findMode(data.modes, vibrationState.selectedModeIndex);
+  }
+
+  /**
+   * Whether arrows are drawn for the current displayMode.  "animation"
+   * hides arrows until todo 29 lands; "arrows" and "combo" show them.
+   *
+   * @returns {boolean}
+   */
+  function _arrowsVisible() {
+    return arrowState.enabled && arrowState.displayMode !== "animation";
+  }
+
+  /**
+   * Clear and re-apply displacement arrows on the main viewer for the
+   * selected mode.  Sets arrowState.enabled/_hint; never throws.  Arrows
+   * are disabled with a hint when the displayed geometry is missing or
+   * its atom count does not match the mode vectors.
+   */
+  function refreshArrows() {
+    var viewerObj = _getMainViewer();
+    clearArrows(viewerObj);
+    arrowState._lastCount = 0;
+    arrowState.modeIndex = vibrationState.selectedModeIndex;
+
+    var mode = _selectedMode();
+    var hint = null;
+    if (mode && mode.vectors && _arrowsVisible()) {
+      var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
+        ? window.ACPStructureViewer.state
+        : null;
+      var coords = svState ? svState.displayedCoords : null;
+      var symbols = svState ? svState.displayedSymbols : null;
+      var sameEntry = !!(svState && svState.displayedEntryId &&
+        svState.displayedEntryId === vibrationState.entryId);
+      if (!coords || !sameEntry) {
+        hint = _t("structure.vib.arrow.no_geometry", STR.NO_GEOMETRY);
+      } else if (mode.vectors.length !== coords.length) {
+        hint = reasonText("geometry_mismatch");
+      } else {
+        var endpoints = computeArrowEndpoints(coords, mode.vectors, arrowState.amplitude);
+        var color = _isImaginary(mode) ? COLOR_IMAGINARY : COLOR_NEUTRAL;
+        arrowState._lastCount = applyArrows(viewerObj, endpoints, symbols, { color: color });
+        if (viewerObj && typeof viewerObj.render === "function") {
+          try { viewerObj.render(); } catch (_) { /* render is best-effort */ }
+        }
+        arrowState.enabled = true;
+        arrowState._hint = null;
+        return;
+      }
+    }
+    arrowState.enabled = false;
+    arrowState._hint = hint;
+  }
+
+  /**
+   * Three-state display toggle: "arrows" | "animation" | "combo".
+   * Animation playback is todo 29 — selecting animation/combo today only
+   * toggles arrow visibility and shows the coming-soon hint.
+   *
+   * @param {string} mode
+   */
+  function setDisplayMode(mode) {
+    if (mode !== "arrows" && mode !== "animation" && mode !== "combo") return;
+    arrowState.displayMode = mode;
+    refreshArrows();
+    renderFrequencyInspector();
+  }
+
+  /**
+   * Clamped amplitude setter (programmatic + slider handler).
+   *
+   * @param {*} v
+   */
+  function setAmplitude(v) {
+    arrowState.amplitude = clampAmplitude(v);
+    refreshArrows();
+  }
+
   /* ---- fetch ---- */
 
   /**
@@ -268,6 +538,7 @@
         } else {
           state.selectedModeIndex = null;
         }
+        refreshArrows();
         renderFrequencyInspector();
       })
       .catch(function (err) {
@@ -287,6 +558,7 @@
    */
   function selectMode(modeIndex) {
     vibrationState.selectedModeIndex = modeIndex;
+    refreshArrows();
     renderFrequencyInspector();
   }
 
@@ -372,6 +644,121 @@
       list.appendChild(_renderModeRow(sorted[ri]));
     }
     container.appendChild(list);
+
+    _appendArrowControls(container, modes);
+  }
+
+  /**
+   * Append the arrow controls: mode selector (synced with the list
+   * selection), amplitude slider, and the three-state 箭头/动画/箭头+动画
+   * toggle group (animation playback itself arrives in todo 29).
+   *
+   * @param {HTMLElement} container
+   * @param {Array<Object>} modes
+   */
+  function _appendArrowControls(container, modes) {
+    var controls = document.createElement("div");
+    controls.className = "sv-vib-controls";
+
+    /* mode selector */
+    var modeRow = document.createElement("div");
+    modeRow.className = "sv-vib-control-row";
+    var modeLbl = document.createElement("span");
+    modeLbl.className = "sv-vib-control-label";
+    modeLbl.textContent = _t("structure.vib.arrow.mode", STR.MODE);
+    modeRow.appendChild(modeLbl);
+
+    var select = document.createElement("select");
+    select.className = "sv-vib-mode-select";
+    var sorted = sortModesNegativesFirst(modes);
+    for (var mi = 0; mi < sorted.length; mi++) {
+      var m = sorted[mi];
+      var opt = document.createElement("option");
+      opt.value = String(m.mode_index);
+      opt.textContent = "#" + m.mode_index + "  " + m.frequency_cm1.toFixed(2) + " " + STR.FREQ_UNIT +
+        (_isImaginary(m) ? " " + _t("structure.vib.imaginary_chip", STR.IMAGINARY) : "");
+      if (m.mode_index === vibrationState.selectedModeIndex) {
+        opt.selected = true;
+      }
+      select.appendChild(opt);
+    }
+    select.addEventListener("change", function () {
+      var idx = parseInt(select.value, 10);
+      if (!isNaN(idx)) selectMode(idx);
+    });
+    modeRow.appendChild(select);
+    controls.appendChild(modeRow);
+
+    /* amplitude slider */
+    var ampRow = document.createElement("div");
+    ampRow.className = "sv-vib-control-row";
+    var ampLbl = document.createElement("span");
+    ampLbl.className = "sv-vib-control-label";
+    ampLbl.textContent = _t("structure.vib.arrow.amplitude", STR.AMPLITUDE);
+    ampRow.appendChild(ampLbl);
+
+    var slider = document.createElement("input");
+    slider.className = "sv-vib-amp-slider";
+    slider.setAttribute("type", "range");
+    slider.setAttribute("min", String(AMP_MIN));
+    slider.setAttribute("max", String(AMP_MAX));
+    slider.setAttribute("step", "0.01");
+    slider.setAttribute("value", String(arrowState.amplitude));
+    ampRow.appendChild(slider);
+
+    var ampVal = document.createElement("span");
+    ampVal.className = "sv-vib-amp-value";
+    ampVal.textContent = arrowState.amplitude.toFixed(2) + " " + STR.UNIT_ANGSTROM;
+    ampRow.appendChild(ampVal);
+    controls.appendChild(ampRow);
+
+    slider.addEventListener("input", function () {
+      setAmplitude(parseFloat(slider.value));
+      /* no full re-render here — the slider must survive the drag */
+      ampVal.textContent = arrowState.amplitude.toFixed(2) + " " + STR.UNIT_ANGSTROM;
+    });
+
+    /* three-state toggle group */
+    var toggleRow = document.createElement("div");
+    toggleRow.className = "sv-vib-control-row";
+    var group = document.createElement("div");
+    group.className = "sv-vib-toggle-group";
+    var toggles = [
+      { mode: "arrows", key: "structure.vib.arrow.display_arrows", fb: STR.DISPLAY_ARROWS },
+      { mode: "animation", key: "structure.vib.arrow.display_animation", fb: STR.DISPLAY_ANIMATION },
+      { mode: "combo", key: "structure.vib.arrow.display_combo", fb: STR.DISPLAY_COMBO },
+    ];
+    for (var ti = 0; ti < toggles.length; ti++) {
+      var tg = toggles[ti];
+      var btn = document.createElement("button");
+      btn.setAttribute("type", "button");
+      btn.className = "sv-vib-toggle" +
+        (arrowState.displayMode === tg.mode ? " sv-active" : "");
+      btn.setAttribute("data-display-mode", tg.mode);
+      btn.textContent = _t(tg.key, tg.fb);
+      btn.addEventListener("click", function (choice) {
+        return function () { setDisplayMode(choice); };
+      }(tg.mode));
+      group.appendChild(btn);
+    }
+    toggleRow.appendChild(group);
+    controls.appendChild(toggleRow);
+
+    /* hints */
+    if (arrowState.displayMode !== "arrows") {
+      var soonHint = document.createElement("div");
+      soonHint.className = "sv-vib-hint";
+      soonHint.textContent = _t("structure.vib.arrow.animation_soon", STR.ANIMATION_SOON);
+      controls.appendChild(soonHint);
+    }
+    if (arrowState._hint) {
+      var hintBox = document.createElement("div");
+      hintBox.className = "sv-vib-hint";
+      hintBox.textContent = arrowState._hint;
+      controls.appendChild(hintBox);
+    }
+
+    container.appendChild(controls);
   }
 
   function _findMode(modes, modeIndex) {
@@ -439,15 +826,28 @@
     version: VERSION,
     state: vibrationState,
     STR: STR,
+    arrowState: arrowState,
+    H_SKIP_ATOM_THRESHOLD: H_SKIP_ATOM_THRESHOLD,
     loadVibrations: loadVibrations,
     renderFrequencyInspector: renderFrequencyInspector,
     selectMode: selectMode,
+    refreshArrows: refreshArrows,
+    setDisplayMode: setDisplayMode,
+    setAmplitude: setAmplitude,
     sortModesNegativesFirst: sortModesNegativesFirst,
     defaultModeIndex: defaultModeIndex,
     reasonText: reasonText,
+    computeArrowEndpoints: computeArrowEndpoints,
+    clampAmplitude: clampAmplitude,
+    hydrogenSkipMask: hydrogenSkipMask,
+    applyArrows: applyArrows,
+    clearArrows: clearArrows,
     _t: _t,
     _esc: _esc,
     _vibrationsUrl: _vibrationsUrl,
+    _getMainViewer: _getMainViewer,
+    _arrowsVisible: _arrowsVisible,
+    _viewerImpl: null,
     _fetchImpl: (typeof window !== "undefined" && window.fetch) ? window.fetch.bind(window) : null,
   };
 })();

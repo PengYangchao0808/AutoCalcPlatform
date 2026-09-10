@@ -2775,8 +2775,9 @@ def test_vibration_viewer_node_render_modes_header_and_rows() -> None:
         var container = fakeEl("div");
         ns.renderFrequencyInspector(container);
 
-        if (container.children.length !== 2) {
-            console.error("FAIL: expected summary + list, got " + container.children.length);
+        // summary + list + arrow controls (todo 28)
+        if (container.children.length !== 3) {
+            console.error("FAIL: expected 3 sections, got " + container.children.length);
             process.exit(1);
         }
         var summary = container.children[0];
@@ -2785,8 +2786,7 @@ def test_vibration_viewer_node_render_modes_header_and_rows() -> None:
             process.exit(1);
         }
 
-        var rows = container.children[1].children;
-        if (rows.length !== 4) {
+        var rows = container.children[1].children;        if (rows.length !== 4) {
             console.error("FAIL: expected 4 rows, got " + rows.length);
             process.exit(1);
         }
@@ -2824,5 +2824,285 @@ def test_vibration_viewer_node_render_modes_header_and_rows() -> None:
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
         f"Node modes-render test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Wave 5 / todo 28: displacement arrows + mode selector + toggles
+# ---------------------------------------------------------------------------
+
+_SV_JS_PATH = FRONTEND_JS_DIR / "structure_viewer.js"
+
+
+def test_vibration_viewer_arrow_contract() -> None:
+    """Contract: addArrow/removeAllShapes usage, clamp bounds, H-skip
+    threshold constant, slider attrs, viewer resolution, displayed-coords
+    source, and the three toggle labels in both locales."""
+    vib = _VIB_JS.read_text(encoding="utf-8")
+    sv = _SV_JS_PATH.read_text(encoding="utf-8")
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # 3Dmol shape API usage + arrow spec
+    assert ".addArrow(" in vib, "viewer.addArrow usage missing"
+    assert "removeAllShapes" in vib, "clearArrows must use removeAllShapes"
+    assert "ARROW_RADIUS = 0.06" in vib
+    assert "radius: ARROW_RADIUS" in vib
+
+    # Amplitude clamp [0.05, 0.6], default 0.25
+    assert "AMP_MIN = 0.05" in vib
+    assert "AMP_MAX = 0.6" in vib
+    assert "AMP_DEFAULT = 0.25" in vib
+    assert "clampAmplitude" in vib
+
+    # Zero-vector guard + named H-skip threshold
+    assert "VECTOR_EPS" in vib
+    assert "H_SKIP_ATOM_THRESHOLD = 50" in vib
+    assert "hydrogenSkipMask" in vib
+
+    # Arrow API surface
+    for name in (
+        "computeArrowEndpoints",
+        "applyArrows",
+        "clearArrows",
+        "refreshArrows",
+        "setDisplayMode",
+        "setAmplitude",
+        "arrowState",
+        "_viewerImpl",
+    ):
+        assert name in vib, f"{name} missing from vibration_viewer.js"
+
+    # Slider bounds/step + toggle state machine values
+    assert '"0.01"' in vib
+    assert '"arrows"' in vib and '"animation"' in vib and '"combo"' in vib
+
+    # Displayed-coordinates source + geometry-load arrow refresh hook
+    for name in ("displayedCoords", "displayedSymbols", "displayedEntryId",
+                 "_parseXyzFirstFrame"):
+        assert name in sv, f"{name} missing from structure_viewer.js"
+    assert "ACPVibrationViewer.refreshArrows" in sv
+
+    # Toggle labels + hints in BOTH locales
+    for zh, en in (
+        ('"structure.vib.arrow.display_arrows": "箭头"',
+         '"structure.vib.arrow.display_arrows": "Arrows"'),
+        ('"structure.vib.arrow.display_animation": "动画"',
+         '"structure.vib.arrow.display_animation": "Animation"'),
+        ('"structure.vib.arrow.display_combo": "箭头+动画"',
+         '"structure.vib.arrow.display_combo": "Arrows+Animation"'),
+        ('"structure.vib.arrow.animation_soon": "动画即将上线"',
+         '"structure.vib.arrow.animation_soon": "Animation coming soon"'),
+    ):
+        assert zh in html, f"zh toggle label missing: {zh}"
+        assert en in html, f"en toggle label missing: {en}"
+
+
+def test_vibration_viewer_node_arrow_math() -> None:
+    """Node logic: endpoint math within 1e-9, zero/NaN guards, no vector
+    mutation, clamp bounds, H-skip at 50/51 atoms, applyArrows/clearArrows
+    against a fake viewer, and the three-state toggle machine."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPVibrationViewer;
+
+        function close(a, b) { return Math.abs(a - b) <= 1e-9; }
+
+        // 3-atom fixture: unit-ish vectors, amp 0.25
+        var coords = [[0, 0, 0], [1, 1, 1], [2, 2, 2]];
+        var vectors = [[1, 0, 0], [0, 2, 0], [0, 0, -1]];
+        var before = JSON.stringify(vectors);
+        var rows = ns.computeArrowEndpoints(coords, vectors, 0.25);
+        if (!rows || rows.length !== 3) {
+            console.error("FAIL: expected 3 rows");
+            process.exit(1);
+        }
+        var expectedEnds = [[0.25, 0, 0], [1, 1.25, 1], [2, 2, 1.75]];
+        for (var i = 0; i < 3; i++) {
+            for (var k = 0; k < 3; k++) {
+                if (!close(rows[i].start[k], coords[i][k]) ||
+                    !close(rows[i].end[k], expectedEnds[i][k])) {
+                    console.error("FAIL: atom " + i + " axis " + k);
+                    process.exit(1);
+                }
+            }
+        }
+        if (JSON.stringify(vectors) !== before) {
+            console.error("FAIL: stored vectors were mutated");
+            process.exit(1);
+        }
+
+        // zero-length and NaN vectors -> null rows (never NaN)
+        var rows2 = ns.computeArrowEndpoints(
+            [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
+            [[0, 0, 0], [NaN, 0, 0], [1, 1, 1]],
+            0.25
+        );
+        if (rows2[0] !== null || rows2[1] !== null || rows2[2] === null) {
+            console.error("FAIL: zero/NaN guards");
+            process.exit(1);
+        }
+        if (ns.computeArrowEndpoints(null, vectors, 0.25) !== null) {
+            console.error("FAIL: null coords should return null");
+            process.exit(1);
+        }
+
+        // clamp bounds
+        var clamps = { "-1": 0.05, "0.25": 0.25, "5": 0.6, "0.03": 0.05 };
+        for (var input in clamps) {
+            if (ns.clampAmplitude(parseFloat(input)) !== clamps[input]) {
+                console.error("FAIL: clamp(" + input + ")");
+                process.exit(1);
+            }
+        }
+        if (ns.clampAmplitude(undefined) !== 0.25) {
+            console.error("FAIL: clamp default");
+            process.exit(1);
+        }
+
+        // H skip at threshold boundary: 50 -> no skip, 51 -> H masked
+        var syms50 = [], syms51 = [];
+        for (var s = 0; s < 50; s++) syms50.push(s % 2 ? "H" : "C");
+        for (var s2 = 0; s2 < 51; s2++) syms51.push(s2 % 2 ? "h" : "C");
+        var mask50 = ns.hydrogenSkipMask(syms50, 50);
+        var mask51 = ns.hydrogenSkipMask(syms51, 51);
+        for (var m = 0; m < 50; m++) {
+            if (mask50[m]) { console.error("FAIL: skip at 50 atoms"); process.exit(1); }
+        }
+        for (var m2 = 0; m2 < 51; m2++) {
+            if (mask51[m2] !== (m2 % 2 === 1)) {
+                console.error("FAIL: H mask at 51 atoms, idx " + m2);
+                process.exit(1);
+            }
+        }
+
+        // applyArrows / clearArrows against a fake viewer
+        var added = [], cleared = 0;
+        var fakeViewer = {
+            addArrow: function (spec) { added.push(spec); },
+            removeAllShapes: function () { cleared += 1; },
+            render: function () {}
+        };
+        var count = ns.applyArrows(fakeViewer, rows, ["C", "C", "C"], { color: "#ff0000" });
+        if (count !== 3 || added.length !== 3) {
+            console.error("FAIL: applyArrows count " + count);
+            process.exit(1);
+        }
+        if (added[0].radius !== 0.06 || added[0].color !== "#ff0000") {
+            console.error("FAIL: arrow spec radius/color");
+            process.exit(1);
+        }
+        if (added[1].start.x !== 1 || !close(added[1].end.y, 1.25)) {
+            console.error("FAIL: arrow endpoints");
+            process.exit(1);
+        }
+        // null endpoints skipped; H skipped above threshold
+        var count2 = ns.applyArrows(fakeViewer, rows2, ["C", "C", "C"], {});
+        if (count2 !== 1) {
+            console.error("FAIL: null rows must be skipped, got " + count2);
+            process.exit(1);
+        }
+        var bigRows = [], bigSyms = [];
+        for (var b = 0; b < 51; b++) {
+            bigRows.push({ start: [b, 0, 0], end: [b, 0.25, 0] });
+            bigSyms.push(b % 2 ? "H" : "C");
+        }
+        var count3 = ns.applyArrows(fakeViewer, bigRows, bigSyms, {});
+        if (count3 !== 26) {
+            console.error("FAIL: expected 26 non-H arrows, got " + count3);
+            process.exit(1);
+        }
+        ns.clearArrows(fakeViewer);
+        if (cleared !== 1) {
+            console.error("FAIL: clearArrows must call removeAllShapes");
+            process.exit(1);
+        }
+        if (ns.applyArrows(null, rows, null, {}) !== 0) {
+            console.error("FAIL: null viewer must be a no-op");
+            process.exit(1);
+        }
+
+        // three-state toggle machine
+        ns.setDisplayMode("animation");
+        if (ns.arrowState.displayMode !== "animation") {
+            console.error("FAIL: displayMode animation");
+            process.exit(1);
+        }
+        ns.setDisplayMode("combo");
+        ns.setDisplayMode("bogus");
+        if (ns.arrowState.displayMode !== "combo") {
+            console.error("FAIL: invalid displayMode must be ignored");
+            process.exit(1);
+        }
+        ns.arrowState.enabled = true;
+        ns.arrowState.displayMode = "arrows";
+        if (!ns._arrowsVisible()) { console.error("FAIL: arrows visible"); process.exit(1); }
+        ns.arrowState.displayMode = "animation";
+        if (ns._arrowsVisible()) { console.error("FAIL: animation hides arrows"); process.exit(1); }
+        ns.arrowState.displayMode = "combo";
+        if (!ns._arrowsVisible()) { console.error("FAIL: combo shows arrows"); process.exit(1); }
+
+        // clamped amplitude setter
+        ns.setAmplitude(5);
+        if (ns.arrowState.amplitude !== 0.6) {
+            console.error("FAIL: setAmplitude clamp");
+            process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(_VIB_JS)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node arrow-math test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_structure_viewer_node_parse_xyz_first_frame() -> None:
+    """Node logic: _parseXyzFirstFrame feeds displayedCoords for arrows."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        require(JS_PATH);
+        var ns = window.ACPStructureViewer;
+
+        var xyz = "3\\ncomment line\\nC 0.0 0.0 0.0\\nH 1.1 0.0 0.0\\nO 0.0 1.2 0.0\\n";
+        var parsed = ns._parseXyzFirstFrame(xyz);
+        if (!parsed || parsed.symbols.length !== 3 || parsed.coords.length !== 3) {
+            console.error("FAIL: basic parse");
+            process.exit(1);
+        }
+        if (parsed.symbols[0] !== "C" || parsed.symbols[2] !== "O") {
+            console.error("FAIL: symbols");
+            process.exit(1);
+        }
+        if (parsed.coords[1][0] !== 1.1 || parsed.coords[2][1] !== 1.2) {
+            console.error("FAIL: coords");
+            process.exit(1);
+        }
+        if (ns._parseXyzFirstFrame("garbage") !== null ||
+            ns._parseXyzFirstFrame("") !== null ||
+            ns._parseXyzFirstFrame(null) !== null) {
+            console.error("FAIL: invalid inputs must return null");
+            process.exit(1);
+        }
+        // truncated frame (claims 5 atoms, has 2)
+        if (ns._parseXyzFirstFrame("5\\nc\\nC 0 0 0\\nH 1 0 0\\n") !== null) {
+            console.error("FAIL: truncated frame must return null");
+            process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(_SV_JS_PATH)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node xyz-parser test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout

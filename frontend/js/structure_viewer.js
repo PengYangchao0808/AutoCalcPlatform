@@ -1,6 +1,6 @@
 /**
  * ACP Structure Viewer — state store + catalog fetch + stale-response guard
- * @version 0.5.0
+ * @version 0.6.0
  *
  * Namespace: window.ACPStructureViewer
  *
@@ -30,7 +30,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "0.5.0";
+  var VERSION = "0.6.0";
 
   /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
@@ -238,6 +238,9 @@
     error: null,
     geometryLoadedFor: null,
     pendingGeometryRetry: false,
+    displayedCoords: null,
+    displayedSymbols: null,
+    displayedEntryId: null,
     _abortController: null,
   };
 
@@ -309,6 +312,9 @@
     structureViewerState.newerAvailable = false;
     structureViewerState.selectedEntryId = null;
     structureViewerState.selectionOrigin = null;
+    structureViewerState.displayedCoords = null;
+    structureViewerState.displayedSymbols = null;
+    structureViewerState.displayedEntryId = null;
 
     var fetchFn = _getFetchImpl();
     if (!fetchFn) {
@@ -421,6 +427,33 @@
   }
 
   /**
+   * Parse the first XYZ frame into element symbols + coordinates.
+   * Pure; feeds vibration arrows (todo 28) via state.displayedCoords.
+   *
+   * @param {string} xyzText
+   * @returns {{symbols: string[], coords: Array<[number,number,number]>}|null}
+   */
+  function _parseXyzFirstFrame(xyzText) {
+    if (!xyzText) return null;
+    var lines = String(xyzText).trim().split(/\r?\n/);
+    if (lines.length < 2) return null;
+    var n = parseInt(lines[0], 10);
+    if (isNaN(n) || n <= 0 || lines.length < 2 + n) return null;
+    var symbols = [];
+    var coords = [];
+    for (var j = 0; j < n; j++) {
+      var parts = (lines[2 + j] || "").trim().split(/\s+/);
+      if (parts.length < 4) continue;
+      var x = +parts[1], y = +parts[2], z = +parts[3];
+      if (!isFinite(x) || !isFinite(y) || !isFinite(z)) continue;
+      symbols.push(parts[0]);
+      coords.push([x, y, z]);
+    }
+    if (!coords.length) return null;
+    return { symbols: symbols, coords: coords };
+  }
+
+  /**
    * Load geometry for the currently selected entry.
    * Fetches geometry.endpoint, handles 409 pending_fetch with auto-retry,
    * then hands XYZ text to the app's existing model-loading path.
@@ -476,7 +509,15 @@
         if (capturedToken !== state.selectionToken) { return; }
         state.geometryLoadedFor = state.selectedEntryId;
         state.pendingGeometryRetry = false;
+        var parsed = _parseXyzFirstFrame(xyzText);
+        state.displayedCoords = parsed ? parsed.coords : null;
+        state.displayedSymbols = parsed ? parsed.symbols : null;
+        state.displayedEntryId = entry.id;
         _loadXyzToViewer(xyzText);
+        if (typeof window !== "undefined" && window.ACPVibrationViewer &&
+            typeof window.ACPVibrationViewer.refreshArrows === "function") {
+          window.ACPVibrationViewer.refreshArrows();
+        }
       })
       .catch(function (err) {
         if (err && err.name === "AbortError") { return; }
@@ -1167,6 +1208,7 @@
     _sha256hex: _sha256hex,
     _manualEntryId: _manualEntryId,
     _entryIdFromEnergyNode: _entryIdFromEnergyNode,
+    _parseXyzFirstFrame: _parseXyzFirstFrame,
     _fetchImpl: (typeof window !== "undefined" && window.fetch) ? window.fetch.bind(window) : null,
   };
 })();

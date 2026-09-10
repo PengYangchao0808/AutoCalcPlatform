@@ -1,6 +1,6 @@
 /**
  * ACP Structure Viewer — Stylesheet
- * @version 0.3.0
+ * @version 0.4.0
  *
  * Design tokens inherited from ACP_Workbench_v2.html :root variables.
  * Three-column layout: list | canvas | inspector.
@@ -437,6 +437,90 @@
   color: var(--sv-text-tertiary);
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+/* ===== Vibration arrow controls (Wave 5, todo 28) ===== */
+.sv-vib-controls {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sv-vib-control-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.sv-vib-control-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--sv-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  min-width: 34px;
+  flex-shrink: 0;
+}
+
+.sv-vib-mode-select {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--sv-border-default);
+  border-radius: var(--sv-radius-sm);
+  background: var(--sv-bg-elevated);
+  color: var(--sv-text-primary);
+  font-size: 12px;
+}
+
+.sv-vib-amp-slider {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--sv-accent);
+}
+
+.sv-vib-amp-value {
+  font-size: 11px;
+  color: var(--sv-text-secondary);
+  min-width: 42px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.sv-vib-toggle-group {
+  display: inline-flex;
+  border: 1px solid var(--sv-border-default);
+  border-radius: var(--sv-radius-sm);
+  overflow: hidden;
+}
+
+.sv-vib-toggle {
+  padding: 3px 8px;
+  border: none;
+  background: transparent;
+  color: var(--sv-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background var(--sv-transition), color var(--sv-transition);
+}
+
+.sv-vib-toggle:hover {
+  background: var(--sv-accent-soft);
+}
+
+.sv-vib-toggle.sv-active {
+  background: var(--sv-accent-soft);
+  color: var(--sv-accent);
+  font-weight: 600;
+}
+
+.sv-vib-hint {
+  font-size: 11px;
+  color: var(--sv-amber);
+  font-style: italic;
 }
 
 /* ===== Playback bar (bottom) ===== */
