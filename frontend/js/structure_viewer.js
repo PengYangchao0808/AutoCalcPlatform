@@ -1,6 +1,6 @@
 /**
  * ACP Structure Viewer — state store + catalog fetch + stale-response guard
- * @version 0.4.0
+ * @version 0.5.0
  *
  * Namespace: window.ACPStructureViewer
  *
@@ -30,7 +30,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "0.4.0";
+  var VERSION = "0.5.0";
 
   /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
@@ -61,6 +61,7 @@
       manual_file: "\u624b\u52a8\u6587\u4ef6",                     // 手动文件
     },
     VIBRATIONS_NA: "\u6682\u4e0d\u53ef\u7528",                     // 暂不可用
+    VIB_NONE: "\u65e0\u632f\u52a8\u6570\u636e",                   // 无振动数据 (Wave 5: catalog says available=false)
     MEASUREMENTS_PLACEHOLDER: "\u9009\u62e9\u539f\u5b50\u540e\u663e\u793a\u6d4b\u91cf\u7ed3\u679c", // 选择原子后显示测量结果
     EDIT_PLACEHOLDER: "\u7f16\u8f91\u529f\u80fd\u5c06\u5728\u540e\u7eed\u7248\u672c\u5f00\u653e", // 编辑功能将在后续版本开放
   };
@@ -878,19 +879,35 @@
       inspBody.appendChild(weightDiv);
     }
 
-    /* vibrations placeholder */
+    /* vibrations — delegated to ACPVibrationViewer (Wave 5, todo 27) */
     var vibDiv = document.createElement("div");
     vibDiv.className = "sv-inspector-section";
     var vibLbl = document.createElement("div");
     vibLbl.className = "sv-inspector-label";
     vibLbl.textContent = _t("structure.vibrations", STR.VIBRATIONS);
     vibDiv.appendChild(vibLbl);
-    var vibVal = document.createElement("div");
-    vibVal.className = "sv-inspector-value sv-muted";
-    var vibAvail = entry.vibrations && entry.vibrations.available;
-    vibVal.textContent = vibAvail ? "\u53ef\u7528" : _t("structure.vibrations_na", STR.VIBRATIONS_NA);
-    vibDiv.appendChild(vibVal);
+    var vibContainer = document.createElement("div");
+    vibContainer.id = "structure-inspector-vibrations";
+    vibDiv.appendChild(vibContainer);
     inspBody.appendChild(vibDiv);
+
+    if (entry.vibrations && entry.vibrations.available !== false) {
+      /* contract: fetch the authoritative answer; never fabricate locally */
+      if (typeof window !== "undefined" && window.ACPVibrationViewer &&
+          typeof window.ACPVibrationViewer.loadVibrations === "function") {
+        var vibOpts = {};
+        if (entry.vibrations.endpoint) {
+          vibOpts.endpoint = entry.vibrations.endpoint;
+        }
+        window.ACPVibrationViewer.loadVibrations(structureViewerState.jobId, entry.id, vibOpts);
+      }
+    } else {
+      /* contract: available=false -> local text only, NO fetch */
+      var vibNone = document.createElement("div");
+      vibNone.className = "sv-inspector-value sv-muted";
+      vibNone.textContent = _t("structure.vib.none", STR.VIB_NONE);
+      vibContainer.appendChild(vibNone);
+    }
 
     /* measurements placeholder */
     var measDiv = document.createElement("div");

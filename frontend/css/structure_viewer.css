@@ -1,6 +1,6 @@
 /**
  * ACP Structure Viewer — Stylesheet
- * @version 0.2.0
+ * @version 0.3.0
  *
  * Design tokens inherited from ACP_Workbench_v2.html :root variables.
  * Three-column layout: list | canvas | inspector.
@@ -348,6 +348,95 @@
   background: var(--sv-accent-soft);
   border: 1px solid rgba(78, 161, 255, 0.25);
   color: var(--sv-accent);
+}
+
+/* ===== Vibration frequency inspector (Wave 5) ===== */
+.sv-vib-loading {
+  font-size: 12px;
+  color: var(--sv-text-tertiary);
+  font-style: italic;
+  padding: 4px 0;
+}
+
+.sv-vib-summary {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sv-red);
+  padding: 4px 8px;
+  margin-bottom: 6px;
+  background: rgba(229, 83, 83, 0.08);
+  border: 1px solid rgba(229, 83, 83, 0.22);
+  border-radius: var(--sv-radius-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.sv-vib-list {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--sv-border-subtle);
+  border-radius: var(--sv-radius-sm);
+  background: var(--sv-bg-elevated);
+}
+
+.sv-vib-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background var(--sv-transition);
+  font-variant-numeric: tabular-nums;
+}
+
+.sv-vib-row:hover {
+  background: var(--sv-accent-soft);
+}
+
+.sv-vib-row.sv-active {
+  background: var(--sv-accent-soft);
+  border-left-color: var(--sv-accent);
+}
+
+.sv-vib-mode-idx {
+  font-size: 11px;
+  color: var(--sv-text-tertiary);
+  min-width: 30px;
+  flex-shrink: 0;
+}
+
+.sv-vib-freq {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--sv-text-primary);
+  white-space: nowrap;
+}
+
+.sv-vib-freq-imag {
+  color: var(--sv-red);
+  font-weight: 600;
+}
+
+.sv-vib-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.5;
+  background: rgba(229, 83, 83, 0.18);
+  color: var(--sv-red);
+  border: 1px solid rgba(242, 184, 75, 0.35);
+  flex-shrink: 0;
+}
+
+.sv-vib-ir {
+  font-size: 11px;
+  color: var(--sv-text-tertiary);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* ===== Playback bar (bottom) ===== */

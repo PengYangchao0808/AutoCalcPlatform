@@ -2411,3 +2411,418 @@ def test_phase_a_i18n_structure_keys_in_js_have_str_fallback() -> None:
     assert len(t_calls) >= 20, (
         f"Expected >=20 _t() calls with STR fallback, found {len(t_calls)}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Wave 5 / todo 27: vibration frequency inspector (ACPVibrationViewer)
+# ---------------------------------------------------------------------------
+
+_VIB_JS = FRONTEND_JS_DIR / "vibration_viewer.js"
+_VIB_I18N_KEY_RE = re.compile(r'"(structure\.vib\.[^"]+)":')
+
+
+def _extract_vib_keys(html: str, block_re: re.Pattern[str]) -> set[str]:  # type: ignore[type-arg]
+    """Extract structure.vib.* i18n keys from a single locale block."""
+    m = block_re.search(html)
+    if not m:
+        return set()
+    return set(_VIB_I18N_KEY_RE.findall(m.group(1)))
+
+
+def test_vibration_viewer_frequency_inspector_contract() -> None:
+    """Contract: state fields, API names, endpoint URL, reason mapping,
+    negatives-first sort, and the no-mode-render-when-unavailable branch."""
+    vib = _VIB_JS.read_text(encoding="utf-8")
+    sv = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+
+    for field in ("jobId", "entryId", "data", "selectedModeIndex", "loading", "error"):
+        assert field in vib, f"vibrationState field {field!r} missing"
+
+    for name in (
+        "loadVibrations",
+        "renderFrequencyInspector",
+        "sortModesNegativesFirst",
+        "defaultModeIndex",
+        "reasonText",
+        "_fetchImpl",
+    ):
+        assert name in vib, f"{name} missing from vibration_viewer.js"
+
+    # Canonical endpoint URL construction
+    assert "/structure-viewer/entries/" in vib
+    assert '"/vibrations"' in vib or "/vibrations" in vib
+
+    # Reason i18n keys are built dynamically in JS ("structure.vib.reason." + reason);
+    # locale-side existence of all four keys is asserted by the i18n completeness test.
+    assert '"structure.vib.reason." + reason' in vib
+    for reason in (
+        "no_normal_modes",
+        "geometry_mismatch",
+        "pending_fetch",
+        "historical_unavailable",
+    ):
+        assert reason in vib, f"reason code {reason!r} unmapped"
+
+    # Display units + imaginary chip
+    assert "cm\u207b\u00b9" in vib  # cm⁻¹
+    assert "km/mol" in vib
+    assert "\u865a\u9891" in vib  # 虚频
+
+    # Unavailable branch: reason ONLY, never mode rows (must not fabricate)
+    assert "data.available === false" in vib
+
+    # Inspector hook: container id + delegation + no-fetch local branch
+    assert 'id = "structure-inspector-vibrations"' in sv
+    assert "ACPVibrationViewer.loadVibrations" in sv
+    assert "structure.vib.none" in sv
+
+
+def test_vibration_viewer_i18n_keys_complete_across_locales() -> None:
+    """Every structure.vib.* key must exist in BOTH zh-CN and en-US, and the
+    required Wave-5 subset (loading/none/chip/summary/4 reasons) is present."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    zh_keys = _extract_vib_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_vib_keys(html, _EN_BLOCK_RE)
+
+    required = {
+        "structure.vib.loading",
+        "structure.vib.none",
+        "structure.vib.imaginary_chip",
+        "structure.vib.imaginary_summary",
+        "structure.vib.reason.no_normal_modes",
+        "structure.vib.reason.geometry_mismatch",
+        "structure.vib.reason.pending_fetch",
+        "structure.vib.reason.historical_unavailable",
+    }
+
+    assert required <= zh_keys, f"Missing zh-CN vib keys: {sorted(required - zh_keys)}"
+    assert required <= en_keys, f"Missing en-US vib keys: {sorted(required - en_keys)}"
+    assert zh_keys == en_keys, (
+        f"structure.vib.* locale mismatch: only-zh={sorted(zh_keys - en_keys)} "
+        f"only-en={sorted(en_keys - zh_keys)}"
+    )
+
+    # Summary template carries the required placeholders in both locales
+    assert '"structure.vib.imaginary_summary": "虚频 {count} / {total}、{freq} cm⁻¹"' in html
+    assert '"structure.vib.imaginary_summary": "Imaginary {count} / {total}, {freq} cm⁻¹"' in html
+
+
+def test_vibration_viewer_node_sort_negatives_first() -> None:
+    """Node logic: sortModesNegativesFirst on [-797.72, -100, 0, 1411.55]
+    yields negatives first (most-negative first), then ascending."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPVibrationViewer;
+
+        var modes = [
+            { mode_index: 5, frequency_cm1: 1411.55, imaginary: false },
+            { mode_index: 6, frequency_cm1: 0.0, imaginary: false },
+            { mode_index: 7, frequency_cm1: -100.0, imaginary: true },
+            { mode_index: 8, frequency_cm1: -797.72, imaginary: true }
+        ];
+        var sorted = ns.sortModesNegativesFirst(modes);
+        var freqs = sorted.map(function (m) { return m.frequency_cm1; });
+        var expected = [-797.72, -100.0, 0.0, 1411.55];
+        if (JSON.stringify(freqs) !== JSON.stringify(expected)) {
+            console.error("FAIL: order " + JSON.stringify(freqs));
+            process.exit(1);
+        }
+        // Input array untouched
+        if (modes[0].frequency_cm1 !== 1411.55) {
+            console.error("FAIL: input mutated");
+            process.exit(1);
+        }
+        // Empty / null safe
+        if (ns.sortModesNegativesFirst([]).length !== 0) {
+            console.error("FAIL: empty input");
+            process.exit(1);
+        }
+        if (ns.sortModesNegativesFirst(null).length !== 0) {
+            console.error("FAIL: null input");
+            process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(_VIB_JS)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node sort test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_vibration_viewer_node_default_mode_and_reasons() -> None:
+    """Node logic: defaultModeIndex picks the most-negative imaginary mode
+    (falling back to the first mode), and reasonText maps all 4 reasons."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPVibrationViewer;
+
+        var tsModes = [
+            { mode_index: 5, frequency_cm1: 0.0, imaginary: false },
+            { mode_index: 6, frequency_cm1: -797.72, imaginary: true },
+            { mode_index: 7, frequency_cm1: -100.0, imaginary: true }
+        ];
+        if (ns.defaultModeIndex(tsModes) !== 6) {
+            console.error("FAIL: expected 6, got " + ns.defaultModeIndex(tsModes));
+            process.exit(1);
+        }
+
+        var plainModes = [
+            { mode_index: 3, frequency_cm1: 12.34, imaginary: false },
+            { mode_index: 4, frequency_cm1: 56.78, imaginary: false }
+        ];
+        if (ns.defaultModeIndex(plainModes) !== 3) {
+            console.error("FAIL: no-imaginary default should be first mode");
+            process.exit(1);
+        }
+        if (ns.defaultModeIndex([]) !== null || ns.defaultModeIndex(null) !== null) {
+            console.error("FAIL: empty/null default should be null");
+            process.exit(1);
+        }
+
+        var expected = {
+            no_normal_modes: "无振动模式数据",
+            geometry_mismatch: "模式与当前几何不匹配",
+            pending_fetch: "等待远程结果拉取",
+            historical_unavailable: "历史任务数据不可用"
+        };
+        for (var key in expected) {
+            if (ns.reasonText(key) !== expected[key]) {
+                console.error("FAIL: reason " + key + " -> " + ns.reasonText(key));
+                process.exit(1);
+            }
+        }
+        if (ns.reasonText(null) !== null) {
+            console.error("FAIL: null reason");
+            process.exit(1);
+        }
+        if (ns.reasonText("something_odd") !== "something_odd") {
+            console.error("FAIL: unknown reason must be verbatim");
+            process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(_VIB_JS)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node default/reason test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_vibration_viewer_node_load_stale_guard_and_default_selection() -> None:
+    """Node logic: stale response for a superseded entry is discarded; the
+    winning entry's most-negative imaginary mode is auto-selected; re-calls
+    for the same entry short-circuit without refetching."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPVibrationViewer;
+        var state = ns.state;
+
+        var resolveE1, resolveE2, fetchCount = 0;
+        ns._fetchImpl = function (url) {
+            fetchCount++;
+            if (url.indexOf("entry1") >= 0) {
+                return new Promise(function (r) { resolveE1 = r; });
+            }
+            return new Promise(function (r) { resolveE2 = r; });
+        };
+
+        var modes = [
+            { mode_index: 5, frequency_cm1: 0.0, imaginary: false },
+            { mode_index: 6, frequency_cm1: -797.72, imaginary: true },
+            { mode_index: 7, frequency_cm1: 1411.55, imaginary: false }
+        ];
+
+        ns.loadVibrations("job1", "entry1");
+        ns.loadVibrations("job1", "entry2");
+
+        resolveE2({ ok: true, status: 200, statusText: "OK", json: function () {
+            return Promise.resolve({
+                available: true, reason: null, threshold_cm1: -50.0,
+                threshold_source: "default", modes: modes, atom_count: 3
+            });
+        }});
+        resolveE1({ ok: true, status: 200, statusText: "OK", json: function () {
+            return Promise.resolve({
+                available: true, reason: null, modes: [
+                    { mode_index: 0, frequency_cm1: 99.99, imaginary: false }
+                ], atom_count: 1
+            });
+        }});
+
+        setTimeout(function () {
+            if (state.entryId !== "entry2") {
+                console.error("FAIL: entryId should be entry2, got " + state.entryId);
+                process.exit(1);
+            }
+            if (!state.data || state.data.atom_count !== 3) {
+                console.error("FAIL: stale entry1 response was applied");
+                process.exit(1);
+            }
+            if (state.selectedModeIndex !== 6) {
+                console.error("FAIL: default mode " + state.selectedModeIndex);
+                process.exit(1);
+            }
+            // Same entry again -> short-circuit, no refetch
+            var before = fetchCount;
+            ns.loadVibrations("job1", "entry2");
+            if (fetchCount !== before) {
+                console.error("FAIL: same-entry reload must not refetch");
+                process.exit(1);
+            }
+            console.log("PASS");
+        }, 50);
+    """).replace("JS_PATH", json.dumps(str(_VIB_JS)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node stale-guard test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+_VIB_DOM_STUB = """\
+    function fakeEl(tag) {
+        return {
+            tagName: tag, children: [], className: "", textContent: "", style: {},
+            setAttribute: function (k, v) { this["attr_" + k] = v; },
+            addEventListener: function () {},
+            appendChild: function (c) { this.children.push(c); return c; }
+        };
+    }
+    var document = { createElement: fakeEl, getElementById: function () { return null; } };
+"""
+
+
+def test_vibration_viewer_node_render_unavailable_reason_only() -> None:
+    """Node logic: available=false renders ONLY the reason text — no mode
+    rows, no summary, no fabricated frequencies."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPVibrationViewer;
+""" + _VIB_DOM_STUB + """
+        ns.state.loading = false;
+        ns.state.error = null;
+        ns.state.data = { available: false, reason: "geometry_mismatch", modes: [] };
+
+        var container = fakeEl("div");
+        ns.renderFrequencyInspector(container);
+
+        if (container.children.length !== 1) {
+            console.error("FAIL: expected exactly 1 child, got " + container.children.length);
+            process.exit(1);
+        }
+        if (container.children[0].textContent !== "模式与当前几何不匹配") {
+            console.error("FAIL: reason text mismatch: " + container.children[0].textContent);
+            process.exit(1);
+        }
+        var rendered = JSON.stringify(container);
+        if (rendered.indexOf("sv-vib-row") >= 0 || rendered.indexOf("sv-vib-summary") >= 0) {
+            console.error("FAIL: mode rows rendered while available=false");
+            process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(_VIB_JS)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node unavailable-render test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_vibration_viewer_node_render_modes_header_and_rows() -> None:
+    """Node logic: available=true renders the 虚频 K / N summary header and
+    negatives-first rows with chip + IR intensity + selected highlight."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPVibrationViewer;
+""" + _VIB_DOM_STUB + """
+        var modes = [
+            { mode_index: 5, frequency_cm1: 0.0, imaginary: false, ir_intensity: null },
+            { mode_index: 6, frequency_cm1: -797.72, imaginary: true, ir_intensity: 24.8 },
+            { mode_index: 7, frequency_cm1: 1411.55, imaginary: false, ir_intensity: 3.25 },
+            { mode_index: 8, frequency_cm1: -100.0, imaginary: true, ir_intensity: null }
+        ];
+        ns.state.loading = false;
+        ns.state.error = null;
+        ns.state.data = { available: true, reason: null, modes: modes, atom_count: 3 };
+        ns.state.selectedModeIndex = ns.defaultModeIndex(modes);
+
+        var container = fakeEl("div");
+        ns.renderFrequencyInspector(container);
+
+        if (container.children.length !== 2) {
+            console.error("FAIL: expected summary + list, got " + container.children.length);
+            process.exit(1);
+        }
+        var summary = container.children[0];
+        if (summary.textContent !== "虚频 2 / 4、-797.72 cm⁻¹") {
+            console.error("FAIL: summary mismatch: " + summary.textContent);
+            process.exit(1);
+        }
+
+        var rows = container.children[1].children;
+        if (rows.length !== 4) {
+            console.error("FAIL: expected 4 rows, got " + rows.length);
+            process.exit(1);
+        }
+        // Negatives first, most-negative first
+        if (rows[0].children[1].textContent !== "-797.72 cm⁻¹") {
+            console.error("FAIL: first row freq " + rows[0].children[1].textContent);
+            process.exit(1);
+        }
+        if (rows[1].children[1].textContent !== "-100.00 cm⁻¹") {
+            console.error("FAIL: second row freq " + rows[1].children[1].textContent);
+            process.exit(1);
+        }
+        // Default-selected most-negative imaginary row is highlighted
+        if (rows[0].className.indexOf("sv-active") < 0 || rows[0]["attr_data-mode-index"] !== "6") {
+            console.error("FAIL: mode 6 row not highlighted");
+            process.exit(1);
+        }
+        // Imaginary chip text
+        if (rows[0].children[2].textContent !== "虚频") {
+            console.error("FAIL: chip text " + rows[0].children[2].textContent);
+            process.exit(1);
+        }
+        // IR intensity 1dp only when present
+        if (rows[0].children[3].textContent !== "24.8 km/mol") {
+            console.error("FAIL: ir text " + rows[0].children[3].textContent);
+            process.exit(1);
+        }
+        if (rows[1].children.length !== 3) {
+            console.error("FAIL: null ir_intensity must render no IR span");
+            process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(_VIB_JS)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node modes-render test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
