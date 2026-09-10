@@ -1292,13 +1292,28 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .energy-marker-ts.pending, .energy-marker-int.pending { fill-opacity: 0.45; stroke-opacity: 0.65; stroke-dasharray: 3 2; }
 .energy-marker-ts.saved, .energy-marker-int.saved { stroke: var(--text-primary); stroke-width: 1.6; }
 .energy-drag-guide { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.8; }
-.energy-role-row { display: flex; align-items: center; gap: 6px; margin: 10px 0; }
-.energy-role-row .energy-role-label { color: var(--text-tertiary); font-size: 11px; flex: none; }
-.energy-role-btn { flex: 1; height: 26px; border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 11px; cursor: pointer; }
-.energy-role-btn:hover { border-color: var(--accent); color: var(--text-primary); }
-.energy-role-btn.active[data-energy-role="ts"] { border-color: #d7b8ff; color: #e4ccff; background: rgba(215,184,255,0.14); }
-.energy-role-btn.active[data-energy-role="intermediate"] { border-color: var(--amber); color: #ffe1a1; background: rgba(242,184,75,0.14); }
-.energy-role-btn.active[data-energy-role="none"] { border-color: var(--text-secondary); color: var(--text-primary); background: rgba(255,255,255,0.08); }
+/* Candidate action card */
+.energy-candidate-card { margin: 10px 0; padding: 12px 14px; border-radius: 8px; background: rgba(255,255,255,0.025); border: 1px solid var(--border-subtle); }
+.energy-card-title { color: var(--text-primary); font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+.energy-card-subtitle { color: var(--text-tertiary); font-size: 11px; margin-bottom: 10px; }
+.energy-card-type-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.energy-card-type-btn { flex: 1; height: 36px; border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; }
+.energy-card-type-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+.energy-card-type-btn.active[data-candidate-type="ts"] { border-color: #d7b8ff; color: #e4ccff; background: rgba(215,184,255,0.14); }
+.energy-card-type-btn.active[data-candidate-type="int"] { border-color: var(--amber); color: #ffe1a1; background: rgba(242,184,75,0.14); }
+.energy-card-type-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.energy-card-action-row { display: flex; gap: 8px; }
+.energy-card-save-btn { flex: 1; height: 32px; border: 1px solid var(--accent); border-radius: 6px; background: rgba(78,161,255,0.14); color: var(--accent); font-size: 11px; font-weight: 500; cursor: pointer; }
+.energy-card-save-btn:hover { background: rgba(78,161,255,0.24); }
+.energy-card-save-btn:disabled { opacity: 0.35; cursor: not-allowed; border-color: rgba(255,255,255,0.14); background: transparent; color: var(--text-tertiary); }
+.energy-card-cancel-btn { height: 32px; padding: 0 12px; border: 1px solid var(--border-default); border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 11px; cursor: pointer; }
+.energy-card-cancel-btn:hover { border-color: rgba(255,255,255,0.25); color: var(--text-primary); }
+.energy-card-status { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.energy-card-status-text { color: var(--text-tertiary); font-size: 11px; }
+.energy-card-change-btn { height: 26px; padding: 0 10px; border: 1px solid var(--border-default); border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 11px; cursor: pointer; }
+.energy-card-change-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+.energy-card-error { color: var(--red); font-size: 11px; margin-top: 6px; }
+.energy-card-disabled-note { color: var(--text-tertiary); font-size: 11px; margin-top: 6px; }
 .energy-review-state { margin: 8px 0 0; padding: 6px 8px; border-radius: 6px; background: rgba(255,255,255,0.04); color: var(--text-tertiary); font-size: 11px; }
 .energy-review-state.dirty { border: 1px solid rgba(242,184,75,0.45); color: #ffe1a1; }
 .energy-review-state.locked { border: 1px solid rgba(56,193,114,0.28); color: #b8f0c8; background: rgba(56,193,114,0.08); }
@@ -7783,76 +7798,45 @@ function energyGraphBindInspectorButtons(root) {
       }
     });
   }
-  /* ── Frame candidate save / change-role / remove + more-menu actions ── */
-  root.querySelectorAll('[data-energy-action-row] [data-energy-action]').forEach(function(button) {
-    button.addEventListener("click", async function() {
-      var action = button.getAttribute("data-energy-action");
-      if (!data) return;
-      var node = energyGraphCurrentNode(data);
-      if (!node) return;
-      if (action === "more-menu") {
-        var menu = root.querySelector("[data-energy-more-menu]");
-        if (menu) menu.style.display = menu.style.display === "none" ? "" : "none";
-        return;
-      }
-      if (action === "export-frame") {
-        var openMenu = root.querySelector("[data-energy-more-menu]");
-        if (openMenu) openMenu.style.display = "none";
-        try {
-          var xyz = await energyGraphFetchFrameXyz(node);
-          if (!xyz) throw new Error("frame geometry unavailable");
-          var blob = new Blob([xyz], { type: "chemical/x-xyz" });
-          var fname = String(energyGraphState.jobId || "job") + "_" + String(node.id || "frame") + ".xyz";
-          var a = document.createElement("a");
-          a.href = URL.createObjectURL(blob);
-          a.download = fname;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(a.href);
-        } catch (e) {
-          alert(String((e && e.message) || e));
-        }
-        return;
-      }
-      if (action === "save-candidate" || action === "change-role") {
-        var picker = root.querySelector("[data-energy-role-picker]");
-        if (picker) picker.style.display = picker.style.display === "none" ? "" : "none";
-        return;
-      }
-      if (action === "remove-candidate") {
-        var entry = energyGraphFrameCandidateFor(data.view_type, node.frame_index);
-        if (!entry) return;
-        if (!confirm(t("energy.inspector.remove_candidate") + ": " + String(entry.candidate_id || "") + "?")) return;
-        button.disabled = true;
-        try {
-          var delUrl = "/jobs/" + encodeURIComponent(energyGraphState.jobId) + "/frame-candidate/" + encodeURIComponent(String(entry.candidate_id)) + "?expected_revision=" + String(Number(energyGraphState.frameCandidates.revision) || 0);
-          var delResp = await api(delUrl, { method: "DELETE" });
-          if (delResp) {
-            energyGraphApplyFrameCandidates(delResp);
-            energyGraphRenderCurrent();
-          }
-        } catch (e) {
-          alert(String((e && e.message) || e));
-        } finally {
-          button.disabled = false;
-        }
-        return;
-      }
+  /* ── Candidate card actions ── */
+  /* Type button selection (non-PES mode: select type, enable save) */
+  root.querySelectorAll('.energy-card-type-btn[data-energy-candidate-role]').forEach(function(button) {
+    button.addEventListener("click", function() {
+      var card = button.closest(".energy-candidate-card");
+      if (!card) return;
+      var state = card.getAttribute("data-energy-card-state");
+      if (state === "disabled" || state === "scan") return;
+      /* Highlight selected type */
+      card.querySelectorAll(".energy-card-type-btn").forEach(function(btn) { btn.classList.remove("active"); });
+      button.classList.add("active");
+      /* Enable save button */
+      var saveBtn = card.querySelector('[data-energy-action="save-candidate"]');
+      if (saveBtn) saveBtn.disabled = false;
+      /* Transition to type-selected */
+      card.setAttribute("data-energy-card-state", "type-selected");
+      /* Hide error */
+      var errorEl = card.querySelector("[data-energy-card-error]");
+      if (errorEl) errorEl.style.display = "none";
     });
   });
-  root.querySelectorAll("[data-energy-candidate-role]").forEach(function(button) {
+  /* Save candidate button */
+  root.querySelectorAll('[data-energy-action="save-candidate"]').forEach(function(button) {
     button.addEventListener("click", async function() {
-      var role = String(button.getAttribute("data-energy-candidate-role") || "");
+      var card = button.closest(".energy-candidate-card");
+      if (!card) return;
+      var state = card.getAttribute("data-energy-card-state");
+      if (state !== "type-selected") return;
       if (!data) return;
-      if (!role) {
-        var pickerEl = root.querySelector("[data-energy-role-picker]");
-        if (pickerEl) pickerEl.style.display = "none";
-        return;
-      }
       var node = energyGraphCurrentNode(data);
       if (!node || node.frame_index == null) return;
-      button.disabled = true;
+      /* Get selected role */
+      var activeBtn = card.querySelector(".energy-card-type-btn.active");
+      if (!activeBtn) return;
+      var role = String(activeBtn.getAttribute("data-energy-candidate-role") || "");
+      if (!role) return;
+      /* Saving state: disable all */
+      card.setAttribute("data-energy-card-state", "saving");
+      card.querySelectorAll("button").forEach(function(btn) { btn.disabled = true; });
       try {
         var body = {
           view_type: String(data.view_type || ""),
@@ -7866,6 +7850,112 @@ function energyGraphBindInspectorButtons(root) {
         });
         if (resp) {
           energyGraphApplyFrameCandidates(resp);
+          energyGraphRenderCurrent();
+        }
+      } catch (e) {
+        var errMsg = String((e && e.message) || e);
+        /* Conflict: 409 / expected_revision mismatch */
+        if (errMsg.indexOf("409") >= 0 || errMsg.indexOf("revision") >= 0 || errMsg.indexOf("conflict") >= 0) {
+          var errorEl = card.querySelector("[data-energy-card-error]");
+          if (errorEl) { errorEl.textContent = "数据已更新，已自动刷新"; errorEl.style.display = ""; }
+          /* Re-fetch candidates */
+          var fresh = await energyGraphFetchFrameCandidates(energyGraphState.jobId);
+          if (fresh) { energyGraphApplyFrameCandidates(fresh); energyGraphRenderCurrent(); }
+        } else {
+          var errorEl2 = card.querySelector("[data-energy-card-error]");
+          if (errorEl2) { errorEl2.textContent = errMsg; errorEl2.style.display = ""; }
+          /* Restore type-selected state */
+          card.setAttribute("data-energy-card-state", "type-selected");
+          card.querySelectorAll(".energy-card-type-btn").forEach(function(btn) { btn.disabled = false; });
+          button.disabled = false;
+        }
+      }
+    });
+  });
+  /* Change role button (saved state → show type row) */
+  root.querySelectorAll('[data-energy-action="change-role"]').forEach(function(button) {
+    button.addEventListener("click", function() {
+      var card = button.closest(".energy-candidate-card");
+      if (!card) return;
+      var typeRow = card.querySelector("[data-energy-card-type-row]");
+      var actionRow = card.querySelector("[data-energy-card-action-row]");
+      if (typeRow) typeRow.style.display = "";
+      if (actionRow) actionRow.style.display = "";
+      /* Pre-select current role */
+      var node = data ? energyGraphCurrentNode(data) : null;
+      var candEntry = node ? energyGraphFrameCandidateFor(data.view_type, node.frame_index) : null;
+      if (candEntry) {
+        var currentRole = String(candEntry.role || "").toLowerCase();
+        card.querySelectorAll(".energy-card-type-btn").forEach(function(btn) {
+          var btnRole = String(btn.getAttribute("data-energy-candidate-role") || "").toLowerCase();
+          btn.classList.toggle("active", btnRole === currentRole);
+        });
+        var saveBtn = card.querySelector('[data-energy-action="save-candidate"]');
+        if (saveBtn) saveBtn.disabled = false;
+      }
+      card.setAttribute("data-energy-card-state", "type-selected");
+      button.style.display = "none";
+    });
+  });
+  /* Cancel button */
+  root.querySelectorAll('[data-energy-action="card-cancel"]').forEach(function(button) {
+    button.addEventListener("click", function() {
+      var card = button.closest(".energy-candidate-card");
+      if (!card) return;
+      /* Reset to idle: deselect types, disable save */
+      card.querySelectorAll(".energy-card-type-btn").forEach(function(btn) { btn.classList.remove("active"); });
+      var saveBtn = card.querySelector('[data-energy-action="save-candidate"]');
+      if (saveBtn) saveBtn.disabled = true;
+      card.setAttribute("data-energy-card-state", "idle");
+      var errorEl = card.querySelector("[data-energy-card-error]");
+      if (errorEl) errorEl.style.display = "none";
+    });
+  });
+  /* More menu / export / remove (preserved from old handler) */
+  root.querySelectorAll('[data-energy-action="more-menu"]').forEach(function(button) {
+    button.addEventListener("click", function() {
+      var menu = root.querySelector("[data-energy-more-menu]");
+      if (menu) menu.style.display = menu.style.display === "none" ? "" : "none";
+    });
+  });
+  root.querySelectorAll('[data-energy-action="export-frame"]').forEach(function(button) {
+    button.addEventListener("click", async function() {
+      var openMenu = root.querySelector("[data-energy-more-menu]");
+      if (openMenu) openMenu.style.display = "none";
+      if (!data) return;
+      var node = energyGraphCurrentNode(data);
+      if (!node) return;
+      try {
+        var xyz = await energyGraphFetchFrameXyz(node);
+        if (!xyz) throw new Error("frame geometry unavailable");
+        var blob = new Blob([xyz], { type: "chemical/x-xyz" });
+        var fname = String(energyGraphState.jobId || "job") + "_" + String(node.id || "frame") + ".xyz";
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = fname;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+      } catch (e) {
+        alert(String((e && e.message) || e));
+      }
+    });
+  });
+  root.querySelectorAll('[data-energy-action="remove-candidate"]').forEach(function(button) {
+    button.addEventListener("click", async function() {
+      if (!data) return;
+      var node = energyGraphCurrentNode(data);
+      if (!node) return;
+      var entry = energyGraphFrameCandidateFor(data.view_type, node.frame_index);
+      if (!entry) return;
+      if (!confirm(t("energy.inspector.remove_candidate") + ": " + String(entry.candidate_id || "") + "?")) return;
+      button.disabled = true;
+      try {
+        var delUrl = "/jobs/" + encodeURIComponent(energyGraphState.jobId) + "/frame-candidate/" + encodeURIComponent(String(entry.candidate_id)) + "?expected_revision=" + String(Number(energyGraphState.frameCandidates.revision) || 0);
+        var delResp = await api(delUrl, { method: "DELETE" });
+        if (delResp) {
+          energyGraphApplyFrameCandidates(delResp);
           energyGraphRenderCurrent();
         }
       } catch (e) {
@@ -8999,6 +9089,95 @@ function energyGraphSelectedAnnotation(data, node) {
     || null;
 }
 
+/* Candidate action card markup */
+function energyCandidateCardMarkup(data, node, opts) {
+  var frameIdStr = String(node.id || "");
+  var frameIndexNum = node.frame_index == null ? null : Number(node.frame_index);
+  var isPES = !!(lastSelectedJob && lastSelectedJob.spec && lastSelectedJob.spec.workflow === "PESsearch");
+  var canEditRole = opts.canEditRole;
+  var selectionLocked = opts.selectionLocked;
+  var workingEntry = opts.workingEntry;
+  var jobTerminal = opts.jobTerminal;
+  var candEntry = opts.candEntry;
+  var currentRole = opts.currentRole;
+  var recommendedRole = opts.recommendedRole;
+
+  /* Dual mode: scan/PES uses s2scanState; non-PES uses POST /frame-candidate */
+  var isScanPES = canEditRole;
+
+  /* Saved state: show status + "修改类型" */
+  if (candEntry && !isScanPES) {
+    var statusLabel = String(candEntry.display_label || candEntry.role || "");
+    var statusText = (t("energy.inspector.saved_badge") || "已保存") + (statusLabel ? " · " + statusLabel : "");
+    return '<div class="energy-candidate-card" data-energy-card-state="saved">' +
+      '<div class="energy-card-title">候选结构</div>' +
+      '<div class="energy-card-status">' +
+        '<span class="energy-card-status-text">' + escapeHtml(statusText) + '</span>' +
+        '<button type="button" class="energy-card-change-btn" data-energy-action="change-role" title="' + escapeHtml(t("energy.inspector.change_role")) + '">' + escapeHtml(t("energy.inspector.change_role")) + '</button>' +
+      '</div>' +
+      '<div class="energy-card-type-row" data-energy-card-type-row style="display:none;">' +
+        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="TS" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">TS · 过渡态</button>' +
+        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="INT" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">INT · 中间体</button>' +
+      '</div>' +
+      '<div class="energy-card-action-row" data-energy-card-action-row style="display:none;">' +
+        '<button type="button" class="energy-card-save-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' +
+        '<button type="button" class="energy-card-cancel-btn" data-energy-action="card-cancel">取消</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  /* Disabled state: job not terminal */
+  if (!jobTerminal && !isScanPES) {
+    return '<div class="energy-candidate-card" data-energy-card-state="disabled">' +
+      '<div class="energy-card-title">候选结构</div>' +
+      '<div class="energy-card-subtitle">将当前周期保存为候选</div>' +
+      '<div class="energy-card-type-row">' +
+        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="TS" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>TS · 过渡态</button>' +
+        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="INT" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>INT · 中间体</button>' +
+      '</div>' +
+      '<div class="energy-card-action-row">' +
+        '<button type="button" class="energy-card-save-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' +
+      '</div>' +
+      '<div class="energy-card-disabled-note">' + escapeHtml(t("energy.inspector.save_after_complete")) + '</div>' +
+    '</div>';
+  }
+
+  /* Scan/PES mode: immediate role selection */
+  if (isScanPES) {
+    var roleStateText = selectionLocked
+      ? "已锁定"
+      : workingEntry
+        ? (workingEntry.saved && !s2scanState.dirty ? "已保存" : "已修改，尚未保存")
+        : "未标记";
+    return '<div class="energy-candidate-card" data-energy-card-state="scan">' +
+      '<div class="energy-card-title">候选结构</div>' +
+      '<div class="energy-card-subtitle">标记当前帧的候选类型</div>' +
+      '<div class="energy-card-type-row">' +
+        '<button type="button" class="energy-card-type-btn' + (currentRole === "ts" ? " active" : "") + '" data-energy-role="ts"' + (selectionLocked ? " disabled" : '') + '>TS · 过渡态</button>' +
+        '<button type="button" class="energy-card-type-btn' + (currentRole === "intermediate" ? " active" : "") + '" data-energy-role="intermediate"' + (selectionLocked ? " disabled" : '') + '>INT · 中间体</button>' +
+        '<button type="button" class="energy-card-type-btn' + (currentRole === "" ? " active" : "") + '" data-energy-role="none"' + (selectionLocked ? " disabled" : '') + '>无标记</button>' +
+      '</div>' +
+      (recommendedRole ? '<div class="energy-card-subtitle">算法推荐：' + escapeHtml(recommendedRole === "ts" ? "TS" : "INT") + '</div>' : '') +
+      '<div class="energy-card-disabled-note">' + escapeHtml(roleStateText) + (selectionLocked ? ' · 点击顶部"选点已锁定"可进入编辑模式' : '') + '</div>' +
+    '</div>';
+  }
+
+  /* Default: idle state for non-PES terminal */
+  return '<div class="energy-candidate-card" data-energy-card-state="idle">' +
+    '<div class="energy-card-title">候选结构</div>' +
+    '<div class="energy-card-subtitle">将当前周期保存为候选</div>' +
+    '<div class="energy-card-type-row">' +
+      '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="TS" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">TS · 过渡态</button>' +
+      '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="INT" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">INT · 中间体</button>' +
+    '</div>' +
+    '<div class="energy-card-action-row">' +
+      '<button type="button" class="energy-card-save-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' +
+      '<button type="button" class="energy-card-cancel-btn" data-energy-action="card-cancel">取消</button>' +
+    '</div>' +
+    '<div class="energy-card-error" data-energy-card-error style="display:none;"></div>' +
+  '</div>';
+}
+
 function energyGraphInspectorMarkup(data) {
   const node = energyGraphSelectedNode(data);
   if (!node) return '<div class="energy-inspector-body"><div class="energy-empty">暂无选中节点</div></div>';
@@ -9063,46 +9242,6 @@ function energyGraphInspectorMarkup(data) {
   var jobCompleted = String(energyGraphState.jobStatus || "") === "completed";
   var jobTerminal = jobCompleted || String(energyGraphState.jobStatus || "") === "failed" || String(energyGraphState.jobStatus || "") === "cancelled";
   var savedBadge = candEntry ? ' <span class="energy-badge ok">' + escapeHtml(t("energy.inspector.saved_badge")) + ' · ' + escapeHtml(String(candEntry.role || "")) + '</span>' : '';
-  var statusLineText = "";
-  if (candEntry) {
-    var statusLabel = String(candEntry.display_label || candEntry.role || "");
-    statusLineText = (t("energy.inspector.saved_badge") || "已保存") + (statusLabel ? " · " + statusLabel : "");
-  }
-  var candidateButtons = "";
-  if (!isPES) {
-    if (candEntry) {
-      candidateButtons =
-        '<button type="button" class="energy-inspector-action-btn" data-energy-action="change-role" title="' + escapeHtml(t("energy.inspector.change_role")) + '">' + escapeHtml(t("energy.inspector.change_role")) + '</button>';
-    } else if (jobTerminal) {
-      candidateButtons =
-        '<button type="button" class="energy-inspector-action-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" title="' + escapeHtml(t("energy.inspector.save_candidate")) + '">' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>';
-    } else {
-      candidateButtons =
-        '<button type="button" class="energy-inspector-action-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled title="' + escapeHtml(t("energy.inspector.save_after_complete")) + '">' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' +
-        '<span class="energy-badge pending" title="' + escapeHtml(t("energy.inspector.save_after_complete")) + '">' + escapeHtml(t("energy.inspector.save_after_complete")) + '</span>';
-    }
-  }
-  var rolePickerHtml = (!isPES && jobTerminal)
-    ? '<div class="energy-candidate-role-picker" data-energy-role-picker style="display:none;margin-top:6px;">' +
-      '<span class="energy-role-label">' + escapeHtml(t("energy.inspector.role_select")) + '</span>' +
-      '<button type="button" class="energy-role-btn" data-energy-candidate-role="TS">TS</button>' +
-      '<button type="button" class="energy-role-btn" data-energy-candidate-role="INT">INT</button>' +
-      '<button type="button" class="energy-role-btn" data-energy-candidate-role="">' + escapeHtml(t("energy.inspector.role_cancel")) + '</button>' +
-      '</div>'
-    : '';
-  var actionRowHtml =
-    '<div class="energy-inspector-action-bar" data-energy-action-row>' +
-      (statusLineText ? '<span class="energy-action-status">' + escapeHtml(statusLineText) + '</span>' : '') +
-      candidateButtons +
-      '<div class="energy-inspector-more" style="position:relative;display:inline-block;flex-shrink:0;">' +
-        '<button type="button" class="energy-inspector-action-btn" data-energy-action="more-menu" title="' + escapeHtml(t("energy.inspector.more")) + '">⋯</button>' +
-        '<div class="energy-inspector-more-menu" data-energy-more-menu style="display:none;position:absolute;right:0;bottom:calc(100% + 4px);z-index:30;background:var(--bg-secondary,#1b212b);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:4px;min-width:140px;">' +
-          '<button type="button" class="energy-inspector-action-btn" data-energy-action="rename-candidate" style="width:100%;text-align:left;border:0;border-radius:4px;padding:6px 8px;background:transparent;color:var(--text-primary);font-size:11px;cursor:pointer;" onmouseover="this.style.background=\'rgba(78,161,255,0.14)\'" onmouseout="this.style.background=\'transparent\'">' + escapeHtml(t("energy.inspector.change_role")) + '</button>' +
-          '<button type="button" class="energy-inspector-action-btn" data-energy-action="export-frame" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" title="' + escapeHtml(t("energy.inspector.export")) + '" style="width:100%;text-align:left;border:0;border-radius:4px;padding:6px 8px;background:transparent;color:var(--text-primary);font-size:11px;cursor:pointer;" onmouseover="this.style.background=\'rgba(78,161,255,0.14)\'" onmouseout="this.style.background=\'transparent\'">' + escapeHtml(t("energy.inspector.export")) + '</button>' +
-          (candEntry ? '<button type="button" class="energy-inspector-action-btn danger" data-energy-action="remove-candidate" style="width:100%;text-align:left;border:0;border-radius:4px;padding:6px 8px;background:transparent;font-size:11px;cursor:pointer;" onmouseover="this.style.background=\'rgba(229,83,83,0.14)\'" onmouseout="this.style.background=\'transparent\'">' + escapeHtml(t("energy.inspector.remove_candidate")) + '</button>' : '') +
-        '</div>' +
-      '</div>' +
-    '</div>' + rolePickerHtml;
   return '<div class="energy-inspector-body">' +
     '<div class="energy-selected-title"><strong>' + escapeHtml(title) + '</strong><span class="energy-badge ' + badgeClass + '">' + escapeHtml(annotation ? String(annotation.type).toUpperCase() : translateStatus(node.status || "unknown")) + '</span></div>' +
     '<div class="frame-nav-row" style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">' +
@@ -9129,24 +9268,27 @@ function energyGraphInspectorMarkup(data) {
       energyInspectorMetadataRows(data, node, metadata) +
       '<dt>\u7ed3\u6784\u6765\u6e90</dt><dd title="' + escapeHtml(geometry || "--") + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;">' + escapeHtml(geometry || "--") + '</dd>' +
     '</dl>' +
-    (canEditRole
-      ? '<div class="energy-role-row">' +
-          '<span class="energy-role-label">\u5f53\u524d\u6807\u8bb0</span>' +
-          '<button type="button" class="energy-role-btn' + (currentRole === "" ? " active" : "") + '" data-energy-role="none">\u65e0\u6807\u8bb0</button>' +
-          '<button type="button" class="energy-role-btn' + (currentRole === "ts" ? " active" : "") + '" data-energy-role="ts">TS</button>' +
-          '<button type="button" class="energy-role-btn' + (currentRole === "intermediate" ? " active" : "") + '" data-energy-role="intermediate">INT</button>' +
-        '</div>' +
-        '<div class="energy-review-state' + (workingEntry && !workingEntry.saved ? " dirty" : "") + '">' +
-          '\u7b97\u6cd5\u63a8\u8350\uff1a' + escapeHtml(recommendedRole ? (recommendedRole === "ts" ? "TS" : "INT") : "\u65e0") +
-          ' \u00b7 \u5f53\u524d\u6807\u8bb0\uff1a' + escapeHtml(currentRole === "ts" ? "TS" : currentRole === "intermediate" ? "INT" : "\u65e0\u6807\u8bb0") +
-          ' \u00b7 \u72b6\u6001\uff1a' + escapeHtml(roleStateText) +
-        '</div>'
-      : (selectionLocked && workingEntry
-        ? '<div class="energy-review-state locked">选点已锁定 · 点击顶部“选点已锁定”可进入编辑模式</div>'
-        : "")) +
+    energyCandidateCardMarkup(data, node, {
+      canEditRole: canEditRole,
+      selectionLocked: selectionLocked,
+      workingEntry: workingEntry,
+      jobTerminal: jobTerminal,
+      candEntry: candEntry,
+      currentRole: currentRole,
+      recommendedRole: recommendedRole,
+    }) +
     candidateAttrHtml +
     energyCandidateListMarkup(data) +
-    actionRowHtml +
+    '<div class="energy-inspector-more" style="display:flex;justify-content:flex-end;padding:6px 0;">' +
+      '<div style="position:relative;display:inline-block;">' +
+        '<button type="button" class="energy-inspector-action-btn" data-energy-action="more-menu" title="' + escapeHtml(t("energy.inspector.more")) + '">⋯</button>' +
+        '<div class="energy-inspector-more-menu" data-energy-more-menu style="display:none;position:absolute;right:0;bottom:calc(100% + 4px);z-index:30;background:var(--bg-secondary,#1b212b);border:1px solid rgba(255,255,255,0.1);border-radius:6px;padding:4px;min-width:140px;">' +
+          '<button type="button" class="energy-inspector-action-btn" data-energy-action="rename-candidate" style="width:100%;text-align:left;border:0;border-radius:4px;padding:6px 8px;background:transparent;color:var(--text-primary);font-size:11px;cursor:pointer;" onmouseover="this.style.background=\'rgba(78,161,255,0.14)\'" onmouseout="this.style.background=\'transparent\'">' + escapeHtml(t("energy.inspector.change_role")) + '</button>' +
+          '<button type="button" class="energy-inspector-action-btn" data-energy-action="export-frame" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" title="' + escapeHtml(t("energy.inspector.export")) + '" style="width:100%;text-align:left;border:0;border-radius:4px;padding:6px 8px;background:transparent;color:var(--text-primary);font-size:11px;cursor:pointer;" onmouseover="this.style.background=\'rgba(78,161,255,0.14)\'" onmouseout="this.style.background=\'transparent\'">' + escapeHtml(t("energy.inspector.export")) + '</button>' +
+          (candEntry ? '<button type="button" class="energy-inspector-action-btn danger" data-energy-action="remove-candidate" style="width:100%;text-align:left;border:0;border-radius:4px;padding:6px 8px;background:transparent;font-size:11px;cursor:pointer;" onmouseover="this.style.background=\'rgba(229,83,83,0.14)\'" onmouseout="this.style.background=\'transparent\'">' + escapeHtml(t("energy.inspector.remove_candidate")) + '</button>' : '') +
+        '</div>' +
+      '</div>' +
+    '</div>' +
     '<div class="detail-hint">\u7ed3\u6784\u67e5\u770b\u5668\u4f1a\u968f\u5f53\u524d\u9009\u4e2d\u5e27\u81ea\u52a8\u540c\u6b65\uff1b\u70b9\u51fb\u56fe\u4e2d\u8282\u70b9\u53ef\u5207\u6362\u5e27\uff0c\u62d6\u52a8 TS/INT \u6807\u8bb0\u53ef\u8c03\u6574\u5019\u9009\u5e27\u3002</div>' +
   '</div>';
 }
