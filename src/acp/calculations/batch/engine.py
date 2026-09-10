@@ -397,6 +397,22 @@ class BatchOptimizeEngine:
         """Task root is one level above ``WORK/``."""
         return self._work_root.parent
 
+    @property
+    def _imaginary_threshold(self) -> float:
+        """Read the significant-imaginary cutoff from config (default -50.0 cm⁻¹)."""
+        if self._config is None:
+            return -50.0
+        theory = self._config.get("theory")
+        if not isinstance(theory, Mapping):
+            return -50.0
+        freq = theory.get("frequency")
+        if not isinstance(freq, Mapping):
+            return -50.0
+        raw = freq.get("imaginary_threshold_cm1")
+        if isinstance(raw, (int, float)):
+            return float(raw)
+        return -50.0
+
     def _item_work_dir(self, item: BatchStructureItem) -> Path:
         """Return the work root that owns *item* in the active layout."""
         if self._active_layout_mode == "single_flat":
@@ -930,7 +946,9 @@ class BatchOptimizeEngine:
                 record.frequency["frequencies"] = frequency_values
                 record.frequency["status"] = "completed"
                 if is_ts:
-                    valid, msg = _ts_frequency_judgment(current_result.frequencies)
+                    valid, msg = _ts_frequency_judgment(
+                        current_result.frequencies, cutoff=self._imaginary_threshold
+                    )
                     if not valid:
                         raise RuntimeError(
                             f"TS frequency judgment failed for {item.item_id}: {msg}"

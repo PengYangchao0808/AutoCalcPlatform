@@ -2353,6 +2353,9 @@ def get_structure_viewer_geometry(
 def _try_historical_mode_projection(
     work_dir: Path,
     entry_id_str: str,
+    *,
+    threshold_cm1: float = -50.0,
+    threshold_source: str = "default",
 ) -> StructureViewerVibrationsResponse | None:
     """Read-only fallback: parse ORCA output on-the-fly when normal_modes.json is absent.
 
@@ -2420,8 +2423,8 @@ def _try_historical_mode_projection(
             return StructureViewerVibrationsResponse(
                 available=True,
                 reason=None,
-                threshold_cm1=-50.0,
-                threshold_source="default",
+                threshold_cm1=threshold_cm1,
+                threshold_source=threshold_source,
                 modes=modes,
                 atom_count=atom_count,
                 geometry_product_id=None,
@@ -2489,12 +2492,23 @@ def get_structure_viewer_vibrations(
 
     # TODO(todo-11): 409 pending_fetch for remote unsynced jobs
 
+    def _resolve_imaginary_threshold() -> tuple[float, str]:
+        """Read the significant-imaginary cutoff from job method metadata."""
+        method = record.spec.method
+        if isinstance(method, dict):
+            raw = method.get("imaginary_threshold_cm1")
+            if isinstance(raw, (int, float)):
+                return float(raw), "job_config"
+        return -50.0, "default"
+
+    threshold_val, threshold_src = _resolve_imaginary_threshold()
+
     def _not_available(reason: str) -> StructureViewerVibrationsResponse:
         return StructureViewerVibrationsResponse(
             available=False,
             reason=reason,
-            threshold_cm1=-50.0,
-            threshold_source="default",
+            threshold_cm1=threshold_val,
+            threshold_source=threshold_src,
             modes=[],
             atom_count=0,
             geometry_product_id=None,
@@ -2505,7 +2519,9 @@ def get_structure_viewer_vibrations(
     if not freq_dir.is_dir():
         if is_remote:
             return _not_available("pending_fetch")
-        projected = _try_historical_mode_projection(work_dir, entry.id)
+        projected = _try_historical_mode_projection(
+            work_dir, entry.id, threshold_cm1=threshold_val, threshold_source=threshold_src
+        )
         if projected is not None:
             return projected
         return _not_available("no_normal_modes")
@@ -2524,7 +2540,9 @@ def get_structure_viewer_vibrations(
             modes_path = global_path
 
     if modes_path is None:
-        projected = _try_historical_mode_projection(work_dir, entry_id_str)
+        projected = _try_historical_mode_projection(
+            work_dir, entry_id_str, threshold_cm1=threshold_val, threshold_source=threshold_src
+        )
         if projected is not None:
             return projected
         return _not_available("no_normal_modes")
@@ -2557,7 +2575,6 @@ def get_structure_viewer_vibrations(
     geometry_product_id = data.get("geometry_product_id")
 
     # TODO(todo-25/31): geometry fingerprint consistency check
-    # TODO(todo-26): config-driven threshold
 
     modes = []
     for m in modes_raw:
@@ -2584,8 +2601,8 @@ def get_structure_viewer_vibrations(
     return StructureViewerVibrationsResponse(
         available=True,
         reason=None,
-        threshold_cm1=-50.0,
-        threshold_source="default",
+        threshold_cm1=threshold_val,
+        threshold_source=threshold_src,
         modes=modes,
         atom_count=atom_count,
         geometry_product_id=geometry_product_id,

@@ -217,7 +217,8 @@ def _get_default_config() -> dict[str, Any]:
                 'solvent_model': 'none'
             },
             'frequency': {
-                'engine': 'orca'
+                'engine': 'orca',
+                'imaginary_threshold_cm1': -50.0,
             },
             'single_point': {
                 'method': 'wB97M-V',

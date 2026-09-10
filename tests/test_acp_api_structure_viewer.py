@@ -952,6 +952,63 @@ class TestHistoricalModeProjection:
         assert body["source"] == "product"
 
 
+class TestThresholdSource:
+    """Configurable significant-imaginary threshold (todo 26)."""
+
+    def test_default_threshold_source(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """No imaginary_threshold_cm1 in job method → threshold=-50.0, source=default."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest_with_xyz(work_dir)
+        _write_normal_modes(work_dir, _make_normal_modes_json())
+
+        catalog = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+
+        resp = sv_client.get(
+            f"/api/v1/jobs/sv-test-001/structure-viewer/entries/{default_id}/vibrations"
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["threshold_cm1"] == -50.0
+        assert body["threshold_source"] == "default"
+
+    def test_job_config_threshold_source(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """imaginary_threshold_cm1 in job method → threshold from config, source=job_config."""
+        manager = sv_client.app.state.job_manager
+        work_dir = tmp_path / "sv-threshold-001"
+        work_dir.mkdir(parents=True, exist_ok=True)
+        record = JobRecord(
+            id="sv-threshold-001",
+            spec=JobSpec(
+                workflow="Confsearch",
+                name="sv-threshold-001",
+                project_id=manager.default_project_id,
+                method={"imaginary_threshold_cm1": -30.0},
+            ),
+            status=JobStatus.COMPLETED,
+            work_dir=str(work_dir),
+            project_id=manager.default_project_id,
+        )
+        manager.store.create(record)
+        _write_confsearch_manifest_with_xyz(work_dir)
+        _write_normal_modes(work_dir, _make_normal_modes_json())
+
+        catalog = sv_client.get("/api/v1/jobs/sv-threshold-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+
+        resp = sv_client.get(
+            f"/api/v1/jobs/sv-threshold-001/structure-viewer/entries/{default_id}/vibrations"
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["threshold_cm1"] == -30.0
+        assert body["threshold_source"] == "job_config"
+
+
 # ── Remote structure cache tests (todo 11) ─────────────────────────────────
 
 
