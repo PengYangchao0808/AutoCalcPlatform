@@ -5634,6 +5634,25 @@ const I18N = {
     "energy.sampling.cumulative_unique": "累积唯一构象",
     "energy.candidates.title": "候选点",
     "energy.candidates.empty": "暂无已保存候选",
+    "energy.card.title": "候选结构",
+    "energy.card.subtitle_save": "将当前周期保存为候选",
+    "energy.card.subtitle_mark": "标记当前帧的候选类型",
+    "energy.card.type_ts": "TS · 过渡态",
+    "energy.card.type_int": "INT · 中间体",
+    "energy.card.type_none": "无标记",
+    "energy.card.cancel": "取消",
+    "energy.card.locked": "已锁定",
+    "energy.card.saved": "已保存",
+    "energy.card.modified": "已修改，尚未保存",
+    "energy.card.unmarked": "未标记",
+    "energy.card.algo_rec": "算法推荐：{role}",
+    "energy.card.locked_note": "点击顶部"选点已锁定"可进入编辑模式",
+    "energy.card.conflict": "数据已更新，已自动刷新",
+    "energy.band.overflow": "共 {count} 个候选 ›",
+    "energy.band.cycle": "· 周期 {n}",
+    "energy.band.cycle_multi": "· 周期 {n} (+{extra})",
+    "energy.list.group_head": "周期 {n}",
+    "energy.point.title": "周期 {n} · {series} {energy}{unit}",
     "energy.annotation.all": "显示全部标记",
     "energy.annotation.candidate": "仅显示候选",
     "energy.annotation.hide": "隐藏标记",
@@ -6483,6 +6502,25 @@ const I18N = {
     "energy.sampling.cumulative_unique": "Cumulative Unique Conformers",
     "energy.candidates.title": "Candidates",
     "energy.candidates.empty": "No saved candidates",
+    "energy.card.title": "Candidate Structure",
+    "energy.card.subtitle_save": "Save current cycle as candidate",
+    "energy.card.subtitle_mark": "Mark candidate type for current frame",
+    "energy.card.type_ts": "TS · Transition State",
+    "energy.card.type_int": "INT · Intermediate",
+    "energy.card.type_none": "No Mark",
+    "energy.card.cancel": "Cancel",
+    "energy.card.locked": "Locked",
+    "energy.card.saved": "Saved",
+    "energy.card.modified": "Modified, not saved",
+    "energy.card.unmarked": "Unmarked",
+    "energy.card.algo_rec": "Algorithm recommends: {role}",
+    "energy.card.locked_note": "Click \"Selection Locked\" at top to enter edit mode",
+    "energy.card.conflict": "Data updated, auto-refreshed",
+    "energy.band.overflow": "{count} candidates ›",
+    "energy.band.cycle": "· Cycle {n}",
+    "energy.band.cycle_multi": "· Cycle {n} (+{extra})",
+    "energy.list.group_head": "Cycle {n}",
+    "energy.point.title": "Cycle {n} · {series} {energy}{unit}",
     "energy.annotation.all": "Show All",
     "energy.annotation.candidate": "Candidates Only",
     "energy.annotation.hide": "Hide Markers",
@@ -7857,7 +7895,7 @@ function energyGraphBindInspectorButtons(root) {
         /* Conflict: 409 / expected_revision mismatch */
         if (errMsg.indexOf("409") >= 0 || errMsg.indexOf("revision") >= 0 || errMsg.indexOf("conflict") >= 0) {
           var errorEl = card.querySelector("[data-energy-card-error]");
-          if (errorEl) { errorEl.textContent = "数据已更新，已自动刷新"; errorEl.style.display = ""; }
+          if (errorEl) { errorEl.textContent = t("energy.card.conflict"); errorEl.style.display = ""; }
           /* Re-fetch candidates */
           var fresh = await energyGraphFetchFrameCandidates(energyGraphState.jobId);
           if (fresh) { energyGraphApplyFrameCandidates(fresh); energyGraphRenderCurrent(); }
@@ -8101,7 +8139,7 @@ function energyCandidateBandLayout(items, geom, xFor, yFor, opts) {
     var group = byFrame[fi];
     var first = group[0];
     var label = String(first.annotation.label || first.annotation.id);
-    var chipText = label + " \u00b7 \u5468\u671f " + fi + (group.length > 1 ? " (+" + (group.length - 1) + ")" : "");
+    var chipText = label + " " + t("energy.band.cycle", { n: fi }) + (group.length > 1 ? " (+" + (group.length - 1) + ")" : "");
     merged.push({ items: group, frameIndex: Number(fi), chipText: chipText, anchorPx: xFor(first.dataX), dataX: first.dataX, dataY: first.dataY, type: first.type });
   });
   /* ── Measure chip widths ── */
@@ -8112,10 +8150,10 @@ function energyCandidateBandLayout(items, geom, xFor, yFor, opts) {
   energyCandidateBandLayoutCore(merged, plotLeft, plotRight);
   var placed = merged.filter(function(m) { return !m._skip; });
   var skipped = merged.filter(function(m) { return m._skip; });
-  /* ── Overflow merge chip: "共 N 个候选 ›" ── */
+  /* ── Overflow merge chip ── */
   var overflowChip = null;
   if (skipped.length > 0) {
-    var overflowText = "\u5171 " + skipped.length + " \u4e2a\u5019\u9009 \u203a";
+    var overflowText = t("energy.band.overflow", { count: skipped.length });
     var overflowW = energyGraphMeasureText(overflowText, 11, true) + 18;
     overflowChip = { chipW: overflowW, anchorPx: plotRight - overflowW / 2, _isOverflow: true, _skipCount: skipped.length };
     /* Try to place at end of row 1, then row 2 */
@@ -8149,7 +8187,7 @@ function energyCandidateBandLayout(items, geom, xFor, yFor, opts) {
     if (m._isOverflow) {
       /* Overflow merge chip */
       bandSvg += '<rect class="energy-band-chip-bg energy-band-chip-overflow" x="' + m._x + '" y="' + (cy - chipH / 2) + '" width="' + m.chipW + '" height="' + chipH + '" rx="4"/>';
-      var overflowText = "\u5171 " + m._skipCount + " \u4e2a\u5019\u9009 \u203a";
+      var overflowText = t("energy.band.overflow", { count: m._skipCount });
       bandSvg += '<text class="energy-band-chip-label energy-band-chip-label-overflow" x="' + cx + '" y="' + (cy + 4) + '" text-anchor="middle">' + escapeHtml(overflowText) + '</text>';
       return;
     }
@@ -8214,7 +8252,7 @@ function energyCandidateBandPreHeight(items, xFor, plotLeft, plotRight) {
     var group = byFrame[fi];
     var first = group[0];
     var label = String(first.annotation.label || first.annotation.id);
-    var chipText = label + " \u00b7 \u5468\u671f " + fi + (group.length > 1 ? " (+" + (group.length - 1) + ")" : "");
+    var chipText = label + " " + t("energy.band.cycle", { n: fi }) + (group.length > 1 ? " (+" + (group.length - 1) + ")" : "");
     merged.push({ chipW: energyGraphMeasureText(chipText, 11, true) + 18, anchorPx: xFor(first.dataX) });
   });
   /* Greedy2-row dry run (shared core) */
@@ -8223,7 +8261,7 @@ function energyCandidateBandPreHeight(items, xFor, plotLeft, plotRight) {
   var skipped = merged.filter(function(m) { return m._skip; });
   /* Account for overflow chip */
   if (skipped.length > 0) {
-    var overflowText = "\u5171 " + skipped.length + " \u4e2a\u5019\u9009 \u203a";
+    var overflowText = t("energy.band.overflow", { count: skipped.length });
     var overflowW = energyGraphMeasureText(overflowText, 11, true) + 18;
     var chipGap = 8;
     var overflowPlaced = false;
@@ -8353,7 +8391,7 @@ function energyCandidateListMarkup(data) {
   var rows = "";
   Object.keys(byFrame).sort(function(a, b) { return Number(a) - Number(b); }).forEach(function(fi) {
     var group = byFrame[fi];
-    rows += '<div class="energy-candidate-group-head" data-energy-candidate-frame="' + fi + '">\u5468\u671f ' + fi + '</div>';
+    rows += '<div class="energy-candidate-group-head" data-energy-candidate-frame="' + fi + '">' + escapeHtml(t("energy.list.group_head", { n: fi })) + '</div>';
     group.forEach(function(c) {
       var role = String(c.role || "");
       var isTS = role === "ts";
@@ -8692,7 +8730,7 @@ function energyGraphBuildSvg(data) {
     }
   }
   /* ── Points config ── */
-  var seriesLabel = series ? (series.label || series.id || "能量") : "能量";
+  var seriesLabel = series ? (series.label || series.id || t("energy.header.status.unknown")) : t("energy.header.status.unknown");
   var seriesUnit = series && series.unit ? series.unit : "";
   var pointCfgs = [];
   points.forEach(function(point) {
@@ -8701,7 +8739,9 @@ function energyGraphBuildSvg(data) {
     var failed = point.node && point.node.status === "failed" ? " failed" : "";
     var frameIdx = point.node && point.node.frame_index != null ? point.node.frame_index : point.index;
     var energyVal = energyGraphValue(point.y);
-    var titleText = "周期 " + frameIdx + " · " + seriesLabel + " " + (energyVal !== null ? energyGraphFormatNumber(energyVal, 2) : "--") + (seriesUnit ? " " + seriesUnit : "");
+    var energyStr = energyVal !== null ? energyGraphFormatNumber(energyVal, 2) : "--";
+    var unitStr = seriesUnit ? " " + seriesUnit : "";
+    var titleText = t("energy.point.title", { n: frameIdx, series: seriesLabel, energy: energyStr, unit: unitStr });
     pointCfgs.push({
       cx: xFor(point.x), cy: yFor(point.y),
       r: selected ? 6 : 4,
@@ -9119,20 +9159,20 @@ function energyCandidateCardMarkup(data, node, opts) {
   /* Saved state: show status + "修改类型" */
   if (candEntry && !isScanPES) {
     var statusLabel = String(candEntry.display_label || candEntry.role || "");
-    var statusText = (t("energy.inspector.saved_badge") || "已保存") + (statusLabel ? " · " + statusLabel : "");
+    var statusText = t("energy.card.saved") + (statusLabel ? " · " + statusLabel : "");
     return '<div class="energy-candidate-card" data-energy-card-state="saved">' +
-      '<div class="energy-card-title">候选结构</div>' +
+      '<div class="energy-card-title">' + escapeHtml(t("energy.card.title")) + '</div>' +
       '<div class="energy-card-status">' +
         '<span class="energy-card-status-text">' + escapeHtml(statusText) + '</span>' +
         '<button type="button" class="energy-card-change-btn" data-energy-action="change-role" title="' + escapeHtml(t("energy.inspector.change_role")) + '">' + escapeHtml(t("energy.inspector.change_role")) + '</button>' +
       '</div>' +
       '<div class="energy-card-type-row" data-energy-card-type-row style="display:none;">' +
-        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="TS" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">TS · 过渡态</button>' +
-        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="INT" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">INT · 中间体</button>' +
+        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="TS" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">' + escapeHtml(t("energy.card.type_ts")) + '</button>' +
+        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="INT" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">' + escapeHtml(t("energy.card.type_int")) + '</button>' +
       '</div>' +
       '<div class="energy-card-action-row" data-energy-card-action-row style="display:none;">' +
         '<button type="button" class="energy-card-save-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' +
-        '<button type="button" class="energy-card-cancel-btn" data-energy-action="card-cancel">取消</button>' +
+        '<button type="button" class="energy-card-cancel-btn" data-energy-action="card-cancel">' + escapeHtml(t("energy.card.cancel")) + '</button>' +
       '</div>' +
     '</div>';
   }
@@ -9140,11 +9180,11 @@ function energyCandidateCardMarkup(data, node, opts) {
   /* Disabled state: job not terminal */
   if (!jobTerminal && !isScanPES) {
     return '<div class="energy-candidate-card" data-energy-card-state="disabled">' +
-      '<div class="energy-card-title">候选结构</div>' +
-      '<div class="energy-card-subtitle">将当前周期保存为候选</div>' +
+      '<div class="energy-card-title">' + escapeHtml(t("energy.card.title")) + '</div>' +
+      '<div class="energy-card-subtitle">' + escapeHtml(t("energy.card.subtitle_save")) + '</div>' +
       '<div class="energy-card-type-row">' +
-        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="TS" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>TS · 过渡态</button>' +
-        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="INT" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>INT · 中间体</button>' +
+        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="TS" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.card.type_ts")) + '</button>' +
+        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="INT" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.card.type_int")) + '</button>' +
       '</div>' +
       '<div class="energy-card-action-row">' +
         '<button type="button" class="energy-card-save-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' +
@@ -9156,34 +9196,35 @@ function energyCandidateCardMarkup(data, node, opts) {
   /* Scan/PES mode: immediate role selection */
   if (isScanPES) {
     var roleStateText = selectionLocked
-      ? "已锁定"
+      ? t("energy.card.locked")
       : workingEntry
-        ? (workingEntry.saved && !s2scanState.dirty ? "已保存" : "已修改，尚未保存")
-        : "未标记";
+        ? (workingEntry.saved && !s2scanState.dirty ? t("energy.card.saved") : t("energy.card.modified"))
+        : t("energy.card.unmarked");
+    var roleStateNote = selectionLocked ? ' · ' + t("energy.card.locked_note") : '';
     return '<div class="energy-candidate-card" data-energy-card-state="scan">' +
-      '<div class="energy-card-title">候选结构</div>' +
-      '<div class="energy-card-subtitle">标记当前帧的候选类型</div>' +
+      '<div class="energy-card-title">' + escapeHtml(t("energy.card.title")) + '</div>' +
+      '<div class="energy-card-subtitle">' + escapeHtml(t("energy.card.subtitle_mark")) + '</div>' +
       '<div class="energy-card-type-row">' +
-        '<button type="button" class="energy-card-type-btn' + (currentRole === "ts" ? " active" : "") + '" data-energy-role="ts"' + (selectionLocked ? " disabled" : '') + '>TS · 过渡态</button>' +
-        '<button type="button" class="energy-card-type-btn' + (currentRole === "intermediate" ? " active" : "") + '" data-energy-role="intermediate"' + (selectionLocked ? " disabled" : '') + '>INT · 中间体</button>' +
-        '<button type="button" class="energy-card-type-btn' + (currentRole === "" ? " active" : "") + '" data-energy-role="none"' + (selectionLocked ? " disabled" : '') + '>无标记</button>' +
+        '<button type="button" class="energy-card-type-btn' + (currentRole === "ts" ? " active" : "") + '" data-energy-role="ts"' + (selectionLocked ? " disabled" : '') + '>' + escapeHtml(t("energy.card.type_ts")) + '</button>' +
+        '<button type="button" class="energy-card-type-btn' + (currentRole === "intermediate" ? " active" : "") + '" data-energy-role="intermediate"' + (selectionLocked ? " disabled" : '') + '>' + escapeHtml(t("energy.card.type_int")) + '</button>' +
+        '<button type="button" class="energy-card-type-btn' + (currentRole === "" ? " active" : "") + '" data-energy-role="none"' + (selectionLocked ? " disabled" : '') + '>' + escapeHtml(t("energy.card.type_none")) + '</button>' +
       '</div>' +
-      (recommendedRole ? '<div class="energy-card-subtitle">算法推荐：' + escapeHtml(recommendedRole === "ts" ? "TS" : "INT") + '</div>' : '') +
-      '<div class="energy-card-disabled-note">' + escapeHtml(roleStateText) + (selectionLocked ? ' · 点击顶部"选点已锁定"可进入编辑模式' : '') + '</div>' +
+      (recommendedRole ? '<div class="energy-card-subtitle">' + escapeHtml(t("energy.card.algo_rec", { role: recommendedRole === "ts" ? "TS" : "INT" })) + '</div>' : '') +
+      '<div class="energy-card-disabled-note">' + escapeHtml(roleStateText) + escapeHtml(roleStateNote) + '</div>' +
     '</div>';
   }
 
   /* Default: idle state for non-PES terminal */
   return '<div class="energy-candidate-card" data-energy-card-state="idle">' +
-    '<div class="energy-card-title">候选结构</div>' +
-    '<div class="energy-card-subtitle">将当前周期保存为候选</div>' +
+    '<div class="energy-card-title">' + escapeHtml(t("energy.card.title")) + '</div>' +
+    '<div class="energy-card-subtitle">' + escapeHtml(t("energy.card.subtitle_save")) + '</div>' +
     '<div class="energy-card-type-row">' +
-      '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="TS" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">TS · 过渡态</button>' +
-      '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="INT" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">INT · 中间体</button>' +
+      '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="TS" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">' + escapeHtml(t("energy.card.type_ts")) + '</button>' +
+      '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="INT" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">' + escapeHtml(t("energy.card.type_int")) + '</button>' +
     '</div>' +
     '<div class="energy-card-action-row">' +
       '<button type="button" class="energy-card-save-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' +
-      '<button type="button" class="energy-card-cancel-btn" data-energy-action="card-cancel">取消</button>' +
+      '<button type="button" class="energy-card-cancel-btn" data-energy-action="card-cancel">' + escapeHtml(t("energy.card.cancel")) + '</button>' +
     '</div>' +
     '<div class="energy-card-error" data-energy-card-error style="display:none;"></div>' +
   '</div>';
