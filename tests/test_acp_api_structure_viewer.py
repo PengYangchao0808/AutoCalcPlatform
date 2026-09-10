@@ -1237,3 +1237,97 @@ class TestRemoteAvailabilityEndpoints:
         )
         assert resp.status_code == 200
         assert resp.text.strip().startswith("3")
+
+
+# ── Additional coverage tests (todo 12 gap-fill) ───────────────────────────
+
+
+class TestCatalogAdditionalCoverage:
+    """Additional catalog endpoint coverage for todo 12 gap-fill."""
+
+    def test_catalog_revision_stable(self, sv_client: TestClient, tmp_path: Path) -> None:
+        """Two identical catalog calls → same revision (stability)."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest(work_dir)
+
+        resp1 = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer")
+        resp2 = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer")
+        assert resp1.status_code == 200
+        assert resp2.status_code == 200
+        assert resp1.json()["revision"] == resp2.json()["revision"]
+
+    def test_catalog_default_entry_id_present(self, sv_client: TestClient, tmp_path: Path) -> None:
+        """Catalog response includes a non-None default_entry_id."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest(work_dir)
+
+        resp = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["default_entry_id"] is not None
+        assert isinstance(body["default_entry_id"], str)
+        assert len(body["default_entry_id"]) > 0
+
+    def test_catalog_warnings_list(self, sv_client: TestClient, tmp_path: Path) -> None:
+        """Catalog response includes a warnings list (even if empty)."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest(work_dir)
+
+        resp = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert "warnings" in body
+        assert isinstance(body["warnings"], list)
+
+    def test_item_id_filter_excludes_other_items(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """item_id filter returns only the requested item, not others."""
+        work_dir = _seed_job(
+            sv_client, tmp_path,
+            job_id="sv-batch-exclude-001",
+            workflow="BatchOptimize",
+        )
+        _write_batch_manifest(work_dir, items=[
+            {
+                "id": "batch_item_001",
+                "label": "item_001 (TS, opt_freq_sp_thermo)",
+                "path": "structures/item_001__TAG_TS__optimized.xyz",
+                "kind": "structure",
+            },
+            {
+                "id": "batch_item_002",
+                "label": "item_002 (INT, opt_freq_sp_thermo)",
+                "path": "structures/item_002__TAG_INT__optimized.xyz",
+                "kind": "structure",
+            },
+        ])
+        for item_id in ("item_001", "item_002"):
+            xyz_path = work_dir / "RESULT" / "structures" / f"{item_id}__TAG_TS__optimized.xyz"
+            xyz_path.parent.mkdir(parents=True, exist_ok=True)
+            xyz_path.write_text("3\n\nC 0 0 0\nH 0 0 1\nH 0 1 0\n", encoding="utf-8")
+
+        resp = sv_client.get("/api/v1/jobs/sv-batch-exclude-001/structure-viewer?item_id=item_001")
+        assert resp.status_code == 200
+        body = resp.json()
+        entry_ids = [e["id"] for e in body["entries"]]
+        assert "batch_item_001" in entry_ids
+        assert "batch_item_002" not in entry_ids
+
+    def test_catalog_no_410_for_retired(self, sv_client: TestClient, tmp_path: Path) -> None:
+        """No structure-viewer endpoint returns 410 — retired jobs served read-only at 200.
+
+        By design, the structure viewer DISPLAYS retired/legacy jobs rather
+        than blocking them with 410 (which is reserved for mutation endpoints
+        like mechanism review). This test documents that decision.
+        """
+        work_dir = _seed_job(
+            sv_client, tmp_path,
+            job_id="sv-retired-001",
+            workflow="ensemble",
+        )
+        _write_confsearch_manifest(work_dir)
+
+        resp = sv_client.get("/api/v1/jobs/sv-retired-001/structure-viewer")
+        assert resp.status_code == 200
+        assert resp.json()["schema_version"] == "structure_viewer_v1"
