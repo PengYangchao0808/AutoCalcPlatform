@@ -377,13 +377,13 @@ class TestDispatcherSkeleton:
         assert hasattr(payload.groups, "__iter__")
         assert hasattr(payload.warnings, "__iter__")
 
-    def test_unimplemented_resolver_warns_for_batchoptimize(self, tmp_path: Path):
+    def test_unimplemented_resolver_warns_for_scan(self, tmp_path: Path):
         """Resolvers not yet implemented produce a specific warning."""
         from acp.results.structure_viewer import build_structure_viewer_payload
 
         task = _make_task_dir(tmp_path)
         payload = build_structure_viewer_payload(
-            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+            task, job_id="j1", workflow="scan", job_status="completed"
         )
         assert any("not yet implemented" in w.lower() for w in payload.warnings)
 
@@ -874,3 +874,267 @@ class TestPesResolver:
         )
         assert len(payload.entries) == 0
         assert len(payload.warnings) > 0
+
+
+# ---------------------------------------------------------------------------
+# Batch resolver tests
+# ---------------------------------------------------------------------------
+
+
+def _batch_product(*, item_id: str, tag: str = "INT", profile: str = "opt_freq",
+                   path: str | None = None) -> dict:
+    """Build a result_manifest product dict for a batch item."""
+    p = path or f"structures/{item_id}__TAG_{tag}__optimized.xyz"
+    return {
+        "id": f"batch_{item_id}",
+        "label": f"{item_id} ({tag}, {profile})",
+        "path": p,
+        "kind": "structure",
+    }
+
+
+def _make_batch_task(
+    tmp_path: Path,
+    *,
+    products: list[dict],
+    trajectories: dict[str, dict] | None = None,
+    workflow: str = "BatchOptimize",
+) -> Path:
+    """Create a task dir with result_manifest + optional optimization trajectories."""
+    (tmp_path / "job.json").write_text("{}")
+    (tmp_path / "task.json").write_text("{}")
+    result_dir = tmp_path / "RESULT"
+    result_dir.mkdir(exist_ok=True)
+    manifest = {
+        "version": 2,
+        "task_id": "",
+        "workflow": workflow,
+        "status": "completed",
+        "products": products,
+    }
+    (result_dir / "result_manifest.json").write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
+    for product in products:
+        struct_path = result_dir / product["path"]
+        struct_path.parent.mkdir(parents=True, exist_ok=True)
+        if not struct_path.is_file():
+            struct_path.write_text("1\ntest\nH 0 0 0\n", encoding="utf-8")
+    if trajectories:
+        for item_id, traj_payload in trajectories.items():
+            traj_dir = tmp_path / "WORK" / "03_OPT" / "batch" / item_id / "optimize"
+            traj_dir.mkdir(parents=True, exist_ok=True)
+            (traj_dir / "optimization_trajectory.json").write_text(
+                json.dumps(traj_payload), encoding="utf-8"
+            )
+            cycles_dir = traj_dir / "cycles"
+            cycles_dir.mkdir(exist_ok=True)
+            for cycle in traj_payload.get("cycles", []):
+                geom_ref = cycle.get("geometry_ref", "")
+                if geom_ref:
+                    cycle_file = cycles_dir / geom_ref
+                    cycle_file.write_text("1\ntest\nH 0 0 0\n", encoding="utf-8")
+    return tmp_path
+
+
+def _optimization_trajectory(*, status: str = "completed",
+                             cycles: list[dict] | None = None) -> dict:
+    return {
+        "schema_version": "optimization_trajectory_v1",
+        "status": status,
+        "cycles": cycles or [
+            {"cycle": 1, "energy_hartree": -1.0, "geometry_ref": "cycle_001.xyz",
+             "rms_gradient": 1e-4, "max_gradient": 3e-4},
+        ],
+    }
+
+
+class TestBatchResolver:
+    """BatchOptimize resolver: per-item entries, roles, failure state, item_id filter."""
+
+    def test_batch_two_items_completed(self, tmp_path: Path):
+        """2 completed items -> 2 entries, both formal_result."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [
+            _batch_product(item_id="item_001", tag="TS"),
+            _batch_product(item_id="item_002", tag="INT"),
+        ]
+        task = _make_batch_task(tmp_path, products=products)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        assert len(payload.entries) == 2
+        ids = [e.id for e in payload.entries]
+        assert "batch_item_001" in ids
+        assert "batch_item_002" in ids
+        for entry in payload.entries:
+            assert entry.source.kind == "formal_result"
+            assert entry.status == "completed"
+
+    def test_batch_role_from_tag_ts(self, tmp_path: Path):
+        """TAG=TS -> role='ts'."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [_batch_product(item_id="item_001", tag="TS")]
+        task = _make_batch_task(tmp_path, products=products)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        assert payload.entries[0].role == "ts"
+
+    def test_batch_role_from_tag_int(self, tmp_path: Path):
+        """TAG=INT -> role='minimum'."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [_batch_product(item_id="item_001", tag="INT")]
+        task = _make_batch_task(tmp_path, products=products)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        assert payload.entries[0].role == "minimum"
+
+    def test_batch_badges_ts(self, tmp_path: Path):
+        """TS item -> badge 'TS'."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [_batch_product(item_id="item_001", tag="TS")]
+        task = _make_batch_task(tmp_path, products=products)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        assert "TS" in payload.entries[0].badges
+
+    def test_batch_failed_last_valid_cycle(self, tmp_path: Path):
+        """Failed item with optimization trajectory -> source.kind='last_valid_cycle', badge."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        traj = _optimization_trajectory(
+            status="failed",
+            cycles=[
+                {"cycle": 1, "energy_hartree": -1.0, "geometry_ref": "cycle_001.xyz",
+                 "rms_gradient": 1e-4, "max_gradient": 3e-4},
+                {"cycle": 2, "energy_hartree": -1.1, "geometry_ref": "cycle_002.xyz",
+                 "rms_gradient": 5e-5, "max_gradient": 1e-4},
+            ],
+        )
+        task = _make_batch_task(
+            tmp_path, products=[], trajectories={"item_001": traj}
+        )
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        assert len(payload.entries) == 1
+        entry = payload.entries[0]
+        assert entry.source.kind == "last_valid_cycle"
+        assert "failed-last-frame" in entry.badges
+        assert "未收敛" in entry.label or "最后有效结构" in entry.label
+
+    def test_batch_failed_entry_not_labeled_optimized(self, tmp_path: Path):
+        """Failed entry label does NOT say 'optimized'."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        traj = _optimization_trajectory(status="failed")
+        task = _make_batch_task(
+            tmp_path, products=[], trajectories={"item_001": traj}
+        )
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert "optimized" not in entry.label.lower()
+        assert "optimized" not in (entry.source.geometry_ref or "").lower()
+
+    def test_batch_item_id_filter_returns_one(self, tmp_path: Path):
+        """item_id filter -> exactly one entry."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [
+            _batch_product(item_id="item_001", tag="TS"),
+            _batch_product(item_id="item_002", tag="INT"),
+        ]
+        task = _make_batch_task(tmp_path, products=products)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed",
+            item_id="item_002",
+        )
+        assert len(payload.entries) == 1
+        assert payload.entries[0].id == "batch_item_002"
+
+    def test_batch_unknown_item_id_raises(self, tmp_path: Path):
+        """Unknown item_id -> StructureViewerError."""
+        from acp.results.structure_viewer import (
+            StructureViewerError,
+            build_structure_viewer_payload,
+        )
+
+        products = [_batch_product(item_id="item_001")]
+        task = _make_batch_task(tmp_path, products=products)
+        with pytest.raises(StructureViewerError):
+            build_structure_viewer_payload(
+                task, job_id="j1", workflow="BatchOptimize", job_status="completed",
+                item_id="nonexistent",
+            )
+
+    def test_batch_default_is_requested_item(self, tmp_path: Path):
+        """item_id given -> default_entry_id = that item."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [
+            _batch_product(item_id="item_001", tag="TS"),
+            _batch_product(item_id="item_002", tag="INT"),
+        ]
+        task = _make_batch_task(tmp_path, products=products)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed",
+            item_id="item_002",
+        )
+        assert payload.default_entry_id == "batch_item_002"
+
+    def test_batch_default_first_completed(self, tmp_path: Path):
+        """No item_id -> default = first completed item."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [
+            _batch_product(item_id="item_001", tag="TS"),
+            _batch_product(item_id="item_002", tag="INT"),
+        ]
+        task = _make_batch_task(tmp_path, products=products)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        assert payload.default_entry_id == "batch_item_001"
+
+    def test_batch_no_items_warning(self, tmp_path: Path):
+        """No batch products and no trajectories -> warning."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        task = _make_batch_task(tmp_path, products=[])
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        assert len(payload.entries) == 0
+        assert len(payload.warnings) > 0
+
+    def test_batch_geometry_endpoint(self, tmp_path: Path):
+        """Geometry endpoint uses job_id and entry_id."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [_batch_product(item_id="item_001")]
+        task = _make_batch_task(tmp_path, products=products)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert "/api/v1/jobs/j1/structure-viewer/entries/batch_item_001/geometry" == entry.geometry.endpoint
+
+    def test_batch_vibrations_available_false(self, tmp_path: Path):
+        """TS item has vibrations.available=False (Wave 1)."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [_batch_product(item_id="item_001", tag="TS")]
+        task = _make_batch_task(tmp_path, products=products)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        assert payload.entries[0].vibrations.available is False

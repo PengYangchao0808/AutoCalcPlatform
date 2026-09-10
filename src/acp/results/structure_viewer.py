@@ -455,14 +455,14 @@ def _compute_revision(task_root: Path, job_status: str) -> str:
 
 # ── Workflow dispatch table ─────────────────────────────────────────────────
 # Type alias for resolver functions.
-# Each resolver receives (task_root, job_id, warnings) and returns
+# Each resolver receives (task_root, job_id, warnings, item_id) and returns
 # (groups, entries, default_entry_id).
 _ResolverResult = tuple[
     list[StructureViewerGroup],
     list[StructureViewerEntry],
     str | None,
 ]
-_Resolver = Any  # Callable[[Path, str, list[str]], _ResolverResult]
+_Resolver = Any  # Callable[[Path, str, list[str], str | None], _ResolverResult]
 
 
 def _compute_boltzmann_weights(
@@ -500,7 +500,7 @@ def _compute_boltzmann_weights(
     return result
 
 
-def _resolve_confsearch(task_root: Path, job_id: str, warnings: list[str]) -> _ResolverResult:
+def _resolve_confsearch(task_root: Path, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
     """Resolve Confsearch manifest → structure viewer entries.
 
     Reads ``RESULT/confsearch/confsearch_manifest.json`` via the authoritative
@@ -675,7 +675,7 @@ def _read_pes_json(task_root: Path, relative: str) -> dict[str, Any] | None:
 _CONFIDENCE_ORDER: dict[str, int] = {"high": 0, "medium": 1, "low": 2}
 
 
-def _resolve_pessearch(task_root: Path, job_id: str, warnings: list[str]) -> _ResolverResult:
+def _resolve_pessearch(task_root: Path, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
     """Resolve PESsearch recommendations + review → structure viewer entries."""
     recs_payload = _read_pes_json(task_root, "RESULT/pes_search/pes_recommendations.json")
     review_payload = _read_pes_json(task_root, "RESULT/pes_search/pes_review.json")
@@ -817,31 +817,144 @@ def _resolve_pessearch(task_root: Path, job_id: str, warnings: list[str]) -> _Re
     return groups, entries, default_id
 
 
-def _resolve_batchoptimize(task_root: Path, job_id: str, warnings: list[str]) -> _ResolverResult:
-    """BatchOptimize resolver — placeholder for todo 4."""
-    warnings.append("BatchOptimize resolver not yet implemented")
-    return [], [], None
+def _resolve_batchoptimize(task_root: Path, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
+    """Resolve BatchOptimize result_manifest products + failed-item trajectories."""
+    import re as _re
+
+    from acp.results.manifest import find_products, load_result_manifest
+
+    manifest = load_result_manifest(task_root)
+    if manifest is None:
+        warnings.append("No result manifest found for BatchOptimize")
+        return [], [], None
+
+    structure_products = find_products(manifest, "structure")
+    batch_products = [p for p in structure_products if p.id.startswith("batch_")]
+
+    if item_id is not None:
+        target_id = f"batch_{item_id}"
+        matched = [p for p in batch_products if p.id == target_id]
+        if not matched:
+            traj_path = task_root / "WORK" / "03_OPT" / "batch" / item_id / "optimize" / "optimization_trajectory.json"
+            if not traj_path.is_file():
+                raise StructureViewerError(f"Unknown batch item: {item_id}")
+        batch_products = matched
+
+    groups = [StructureViewerGroup(id="batch_items", label="批量优化", kind="batch")]
+    entries: list[StructureViewerEntry] = []
+    completed_item_ids: set[str] = set()
+    default_id: str | None = None
+
+    tag_re = _re.compile(r"__TAG_(TS|INT)__", _re.IGNORECASE)
+
+    for product in batch_products:
+        raw_item_id = product.id.removeprefix("batch_")
+        completed_item_ids.add(raw_item_id)
+
+        tag_match = tag_re.search(product.path)
+        tag = tag_match.group(1).upper() if tag_match else "INT"
+        role = "ts" if tag == "TS" else "minimum"
+
+        entry_id = batch_entry_id(raw_item_id)
+        geometry_ref = f"RESULT/{product.path}"
+
+        energy_val: float | None = None
+        energy_meta = product.metadata.get("energy_hartree") if product.metadata else None
+        if energy_meta is not None:
+            energy_val = _number(energy_meta)
+
+        entry = StructureViewerEntry(
+            id=entry_id,
+            group_id="batch_items",
+            label=product.label or raw_item_id,
+            role=role,
+            status="completed",
+            geometry=StructureViewerGeometry(
+                endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+                format="xyz",
+            ),
+            energy=StructureViewerEnergy(value=energy_val, unit="hartree", kind="electronic"),
+            source=StructureViewerSource(kind="formal_result", geometry_ref=geometry_ref),
+            badges=(tag,),
+            vibrations=StructureViewerVibrations(available=False),  # TODO(todo-24): wire frequency binding
+        )
+        entries.append(entry)
+
+        if default_id is None:
+            default_id = entry_id
+
+    if item_id is None:
+        batch_work = task_root / "WORK" / "03_OPT" / "batch"
+        if batch_work.is_dir():
+            for child in sorted(batch_work.iterdir()):
+                if not child.is_dir():
+                    continue
+                child_id = child.name
+                if child_id in completed_item_ids:
+                    continue
+                traj_path = child / "optimize" / "optimization_trajectory.json"
+                if not traj_path.is_file():
+                    continue
+                try:
+                    traj_payload = json.loads(traj_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    continue
+                if not isinstance(traj_payload, dict):
+                    continue
+                cycles = traj_payload.get("cycles")
+                if not isinstance(cycles, list) or not cycles:
+                    continue
+
+                last_cycle = cycles[-1]
+                last_geom_ref = str(last_cycle.get("geometry_ref") or "")
+                last_energy = _number(last_cycle.get("energy_hartree"))
+                cycle_count = len(cycles)
+
+                entry_id = batch_entry_id(child_id)
+                geometry_ref = f"WORK/03_OPT/batch/{child_id}/optimize/cycles/{last_geom_ref}" if last_geom_ref else None
+
+                entry = StructureViewerEntry(
+                    id=entry_id,
+                    group_id="batch_items",
+                    label=f"{child_id} 未收敛 · 最后有效结构",
+                    role="minimum",
+                    status="failed",
+                    geometry=StructureViewerGeometry(
+                        endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+                        format="xyz",
+                    ),
+                    energy=StructureViewerEnergy(value=last_energy, unit="hartree", kind="electronic"),
+                    source=StructureViewerSource(kind="last_valid_cycle", geometry_ref=geometry_ref),
+                    badges=("failed-last-frame",),
+                    vibrations=StructureViewerVibrations(available=False),  # TODO(todo-24): wire frequency binding
+                )
+                entries.append(entry)
+
+    if not entries:
+        warnings.append("No batch items found in result manifest or optimization trajectories")
+
+    return groups, entries, default_id
 
 
-def _resolve_simple(task_root: Path, job_id: str, warnings: list[str]) -> _ResolverResult:
+def _resolve_simple(task_root: Path, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
     """Simple workflow resolver — placeholder for todo 5."""
     warnings.append("Simple workflow resolver not yet implemented")
     return [], [], None
 
 
-def _resolve_scan(task_root: Path, job_id: str, warnings: list[str]) -> _ResolverResult:
+def _resolve_scan(task_root: Path, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
     """Scan resolver — placeholder for todo 5."""
     warnings.append("Scan resolver not yet implemented")
     return [], [], None
 
 
-def _resolve_irc(task_root: Path, job_id: str, warnings: list[str]) -> _ResolverResult:
+def _resolve_irc(task_root: Path, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
     """IRC resolver — placeholder for todo 6."""
     warnings.append("IRC resolver not yet implemented")
     return [], [], None
 
 
-def _resolve_legacy(task_root: Path, job_id: str, warnings: list[str]) -> _ResolverResult:
+def _resolve_legacy(task_root: Path, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
     """Legacy fallback resolver — placeholder for todo 6."""
     warnings.append("Legacy resolver not yet implemented")
     return [], [], None
@@ -925,7 +1038,9 @@ def build_structure_viewer_payload(
 
     resolver = _DISPATCH_TABLE.get(workflow, _resolve_legacy)
     try:
-        groups_raw, entries_raw, default_id = resolver(root, job_id, warnings)
+        groups_raw, entries_raw, default_id = resolver(root, job_id, warnings, item_id)
+    except StructureViewerError:
+        raise
     except Exception as exc:
         logger.warning("resolver for %s failed: %s", workflow, exc)
         warnings.append(f"Resolver for {workflow} failed: {exc}")
