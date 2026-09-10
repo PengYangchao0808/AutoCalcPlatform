@@ -1012,3 +1012,40 @@ def test_structure_source_ref_records_project_provenance() -> None:
     assert "body.project_id" in loader
     assert "body.job_status" in loader
     assert "results.cross_project" in loader
+
+
+def test_energy_viewer_refactor_dom_contracts() -> None:
+    """Structural contracts for the energy-viewer-denoise-candidate-card refactor.
+
+    These assertions guard the new DOM structure introduced across Todos 1-10:
+    candidate band, candidate card, hit layers, removed elements, nice ticks,
+    unified chart core, and responsive layout.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "energy-candidate-band" in html, "Band container class missing"
+    assert 'data-energy-candidate-jump="' in html, "Chip jump attribute missing"
+    assert 'data-energy-candidate-expand="' in html, "Overflow expand attribute missing"
+    assert "energy-band-chip-hit" in html, "Chip hit target class missing"
+
+    assert "energy-candidate-card" in html, "Card container class missing"
+    assert 'data-energy-card-state="' in html, "Card state attribute missing"
+    assert "energy-card-type-btn" in html, "Card type button class missing"
+    assert 'data-energy-action="card-cancel"' in html, "Card cancel action missing"
+
+    assert "energy-point-hit" in html, "Energy point hit class missing"
+    assert "energy-point-group" in html, "Energy point group class missing"
+    assert "optimization-point-hit" in html, "Optimization point hit class missing"
+
+    assert ".energy-marker-max" not in html, ".energy-marker-max CSS still present"
+    assert "energy-role-row" not in html, ".energy-role-row still present"
+    assert 'type !== "maximum"' in html or "type !== 'maximum'" in html, (
+        "Defensive maximum-type filter missing"
+    )
+
+    assert "function energyChartBuildSvg(cfg)" in html, "Unified chart core missing"
+    assert "function energyChartNiceTicks(" in html, "Nice ticks function missing"
+
+    assert "clamp(340px, 24vw, 380px)" in html, "Right column clamp width missing"
+    assert "structureResizeObserver" in html, "Structure ResizeObserver field missing"
+    assert "data-expandable" in html, "Expandable field attribute missing"
