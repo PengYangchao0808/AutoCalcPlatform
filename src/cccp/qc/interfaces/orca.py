@@ -53,6 +53,63 @@ from cccp.utils.solvent_map import orca_smd_solvent
 
 logger = logging.getLogger(__name__)
 
+# ORCA output failure classification patterns
+_SCF_FAILURE_PATTERNS = [
+    "SCF NOT CONVERGED",
+    "SCF failed to converge",
+    "DIIS convergence not achieved",
+    "ERROR: SCF convergence",
+]
+_GEOMETRY_NOT_CONVERGED_PATTERNS = [
+    "THE OPTIMIZATION HAS NOT CONVERGED",
+    "OPTIMIZATION DID NOT CONVERGE",
+    "GEOMETRY OPTIMIZATION DID NOT CONVERGE",
+]
+_MEMORY_FAILURE_PATTERNS = [
+    "cannot allocate",
+    "out of memory",
+    "insufficient memory",
+    "memory allocation failed",
+    "std::bad_alloc",
+]
+
+
+def classify_orca_failure(output_path: Path) -> str:
+    """Classify an ORCA failure mode from the output file.
+
+    Reads the tail of *output_path* and returns one of:
+    ``"scf_failure"``, ``"geometry_not_converged"``, ``"memory_failure"``,
+    ``"crash_timeout"``, or ``"unknown"``.
+    """
+    try:
+        output_path = Path(output_path)
+        if not output_path.is_file():
+            return "unknown"
+        text = output_path.read_text(encoding="utf-8", errors="replace")
+        tail_lines = text[-80_000:].splitlines()
+    except OSError:
+        return "unknown"
+
+    tail_text = "\n".join(tail_lines)
+    tail_lower = tail_text.lower()
+
+    for pat in _MEMORY_FAILURE_PATTERNS:
+        if pat in tail_lower:
+            return "memory_failure"
+
+    for pat in _GEOMETRY_NOT_CONVERGED_PATTERNS:
+        if pat.lower() in tail_lower:
+            return "geometry_not_converged"
+
+    for pat in _SCF_FAILURE_PATTERNS:
+        if pat.lower() in tail_lower:
+            return "scf_failure"
+
+    if "scf iterations" in tail_lower and "scf converged" not in tail_lower:
+        return "scf_failure"
+
+    return "unknown"
+
 
 def _resolve_method_meta(method: str | None) -> dict[str, Any] | None:
     """Look up ``METHOD_META`` for *method* (case-insensitive).
@@ -368,6 +425,24 @@ def _is_orca_gfn_xtb_method(method: str | None) -> bool:
     return normalized.startswith("GFN") and normalized.endswith("-XTB")
 
 
+_OPT_LEVEL_MAP: dict[str, str] = {
+    "tight": "TightOpt",
+    "verytight": "VeryTightOpt",
+    "loose": "LooseOpt",
+}
+
+_SCF_CONVERGENCE_MAP: dict[str, str] = {
+    "tight": "TightSCF",
+    "verytight": "VeryTightSCF",
+    "loose": "LooseSCF",
+}
+
+_SCF_STRATEGY_MAP: dict[str, str] = {
+    "slowconv": "SlowConv",
+    "soscf": "SOSCF",
+}
+
+
 # ── Electronic-state SCF block renderer (design doc §9) ─────────────────
 #
 # ``scf_options`` is a JSON-safe dict produced by the ACP electronic-state
@@ -463,6 +538,10 @@ def render_scf_block(scf_options: dict | None) -> str | None:
         lines.append("  STABPerform true")
         if _scf_option_bool(scf_options, "stab_restart"):
             lines.append("  STABRestartUHFifUnstable true")
+
+    maxiter = scf_options.get("maxiter")
+    if isinstance(maxiter, (int, float)) and maxiter > 0:
+        lines.append(f"  MaxIter {int(maxiter)}")
 
     for extra in scf_options.get("scf_extra_lines") or []:
         if isinstance(extra, str) and extra.strip():
@@ -1106,6 +1185,12 @@ class ORCAInterface(QCInterfaceBase):
         symbols: list[str] | None = None,
         geom_extra_lines: list[str] | None = None,
         scf_options: dict | None = None,
+        trust_radius: float | None = None,
+        initial_hessian: str | None = None,
+        opt_level: str | None = None,
+        scf_maxiter: int | None = None,
+        scf_convergence: str | None = None,
+        scf_strategy: str | None = None,
     ) -> tuple[str, Any]:
         """Build ORCA input blocks.
 
@@ -1154,6 +1239,39 @@ class ORCAInterface(QCInterfaceBase):
 
         blocks = []
 
+        meta = _resolve_method_meta(_method)
+        basis_inline = True if meta is None else bool(meta.get("basis_inline", True))
+
+        _extras_upper = {str(x).upper() for x in _route_extras}
+
+        if opt_level is not None:
+            _opt_kw = _OPT_LEVEL_MAP.get(opt_level.strip().lower())
+            if _opt_kw and _opt_kw.upper() not in _extras_upper:
+                _route_extras.append(_opt_kw)
+                _extras_upper.add(_opt_kw.upper())
+
+        _dlpno_tight_scf = (
+            not basis_inline and _method.lower() == "dlpno-ccsd(t)"
+        )
+        if scf_convergence is not None:
+            _scf_conv_kw = _SCF_CONVERGENCE_MAP.get(scf_convergence.strip().lower())
+            if _scf_conv_kw:
+                if _scf_conv_kw.upper() not in _extras_upper and not (
+                    _scf_conv_kw.upper() == "TIGHTSCF" and _dlpno_tight_scf
+                ):
+                    _route_extras.append(_scf_conv_kw)
+                    _extras_upper.add(_scf_conv_kw.upper())
+
+        if scf_strategy is not None:
+            _scf_strat_kw = _SCF_STRATEGY_MAP.get(scf_strategy.strip().lower())
+            if _scf_strat_kw and _scf_strat_kw.upper() not in _extras_upper:
+                _route_extras.append(_scf_strat_kw)
+
+        if scf_maxiter is not None and scf_maxiter > 0:
+            if scf_options is None:
+                scf_options = {}
+            scf_options.setdefault("maxiter", scf_maxiter)
+
         calc_type_map = {
             "opt": "Opt",
             "freq": "Freq",
@@ -1170,8 +1288,6 @@ class ORCAInterface(QCInterfaceBase):
         ):
             route = "NumFreq"
 
-        meta = _resolve_method_meta(_method)
-        basis_inline = True if meta is None else bool(meta.get("basis_inline", True))
         ri_support = (meta or {}).get("ri_support", "user")
 
         _aux_j = aux_j_basis
@@ -1277,13 +1393,12 @@ class ORCAInterface(QCInterfaceBase):
                 symbols=symbols,
             )
             blocks.append("%geom")
-            # Recalc_Hess N: exact Hessian at step 1 and recalculated
-            # after N, 2N, ... steps. interval == 0 suppresses the
-            # directive entirely: ORCA then NEVER computes an exact
-            # Hessian — it uses its default approximate (model) initial
-            # Hessian with BFGS updates throughout.
+            if initial_hessian == "calculate":
+                blocks.append("  Calc_Hess true")
             if resolution.interval > 0:
                 blocks.append(f"  Recalc_Hess {resolution.interval}")
+            if trust_radius is not None:
+                blocks.append(f"  Trust {float(trust_radius):g}")
             if geom_maxiter is not None and geom_maxiter > 0:
                 blocks.append(f"  MaxIter {int(geom_maxiter)}")
             if geom_extra_lines:
@@ -1356,33 +1471,14 @@ class ORCAInterface(QCInterfaceBase):
         aux_c_basis: str = None,
         geom_extra_lines: list[str] | None = None,
         scf_options: dict | None = None,
+        trust_radius: float | None = None,
+        initial_hessian: str | None = None,
+        opt_level: str | None = None,
+        scf_maxiter: int | None = None,
+        scf_convergence: str | None = None,
+        scf_strategy: str | None = None,
     ):
-        """Write ORCA input file.
-
-        Args:
-            input_file: Output input file path
-            coordinates: Molecular coordinates
-            symbols: Element symbols
-            calc_type: Calculation type
-            charge: Molecular charge
-            multiplicity: Spin multiplicity written to the ``* xyz`` line —
-                for FlipSpin broken-symmetry states the caller passes the
-                reference multiplicity (§3.1)
-            method: Override method (uses self.method if None)
-            basis: Override basis (uses self.basis if None)
-            route_extras: Extra route-line keywords (see _build_input_blocks)
-            geom_maxiter: Optional MaxIter for the %geom block
-            extra_blocks: Extra raw input blocks
-            recalc_hess: Hessian policy ("auto"/0/N/None) for the %geom block
-            solvent: Override solvent (uses self.solvent if None)
-            solvent_model: Override solvent model (uses self.solvent_model if None)
-            aux_basis: Legacy auxiliary basis (backward compat)
-            aux_j_basis: Auxiliary /J basis for RI-J fitting
-            aux_c_basis: Auxiliary /C basis for RI-MP2 correlation
-            geom_extra_lines: Extra lines appended inside the generated
-                ``%geom`` block.
-            scf_options: Structured electronic-state options (§9.6)
-        """
+        """Write ORCA input file."""
         charge = charge if charge is not None else self.charge
         multiplicity = multiplicity if multiplicity is not None else self.multiplicity
 
@@ -1402,6 +1498,12 @@ class ORCAInterface(QCInterfaceBase):
             symbols=symbols,
             geom_extra_lines=geom_extra_lines,
             scf_options=scf_options,
+            trust_radius=trust_radius,
+            initial_hessian=initial_hessian,
+            opt_level=opt_level,
+            scf_maxiter=scf_maxiter,
+            scf_convergence=scf_convergence,
+            scf_strategy=scf_strategy,
         )
 
         ensure_dir(input_file.parent)
@@ -1589,6 +1691,14 @@ class ORCAInterface(QCInterfaceBase):
         _solvent_model = kwargs.pop("solvent_model", None)
         _output_callback = kwargs.pop("output_callback", None)
 
+        _mo_read_path = kwargs.pop("mo_read_path", None)
+        if _mo_read_path:
+            _scf_opts = kwargs.get("scf_options")
+            if _scf_opts is None:
+                _scf_opts = {}
+                kwargs["scf_options"] = _scf_opts
+            _scf_opts.setdefault("mo_read_path", _mo_read_path)
+
         self._write_input(
             input_file,
             coordinates,
@@ -1599,7 +1709,7 @@ class ORCAInterface(QCInterfaceBase):
             method=method,
             basis=basis,
             route_extras=kwargs.get("route_extras"),
-            geom_maxiter=kwargs.get("geom_maxiter"),
+            geom_maxiter=kwargs.pop("geom_maxiter", kwargs.pop("max_cycles", None)),
             extra_blocks=kwargs.get("extra_blocks"),
             recalc_hess=kwargs.get("recalc_hess"),
             solvent=_solvent,
@@ -1608,6 +1718,12 @@ class ORCAInterface(QCInterfaceBase):
             aux_j_basis=kwargs.get("aux_j_basis"),
             aux_c_basis=kwargs.get("aux_c_basis"),
             scf_options=kwargs.get("scf_options"),
+            trust_radius=kwargs.get("trust_radius"),
+            initial_hessian=kwargs.get("initial_hessian"),
+            opt_level=kwargs.get("opt_level"),
+            scf_maxiter=kwargs.get("scf_maxiter"),
+            scf_convergence=kwargs.get("scf_convergence"),
+            scf_strategy=kwargs.get("scf_strategy"),
         )
 
         success = (
@@ -1617,9 +1733,10 @@ class ORCAInterface(QCInterfaceBase):
         )
 
         if not success:
+            failure_class = classify_orca_failure(output_file)
             return QCResult(
                 success=False,
-                error_message="ORCA optimization failed",
+                error_message=f"ORCA optimization failed [{failure_class}]",
                 output_file=input_file,
                 log_file=output_file,
             )
@@ -2136,6 +2253,14 @@ class ORCAInterface(QCInterfaceBase):
         _solvent = kwargs.pop("solvent", None)
         _solvent_model = kwargs.pop("solvent_model", None)
 
+        _mo_read_path = kwargs.pop("mo_read_path", None)
+        if _mo_read_path:
+            _scf_opts = kwargs.get("scf_options")
+            if _scf_opts is None:
+                _scf_opts = {}
+                kwargs["scf_options"] = _scf_opts
+            _scf_opts.setdefault("mo_read_path", _mo_read_path)
+
         self._write_input(
             input_file,
             coordinates,
@@ -2224,6 +2349,14 @@ class ORCAInterface(QCInterfaceBase):
         _solvent = kwargs.pop("solvent", None)
         _solvent_model = kwargs.pop("solvent_model", None)
 
+        _mo_read_path = kwargs.pop("mo_read_path", None)
+        if _mo_read_path:
+            _scf_opts = kwargs.get("scf_options")
+            if _scf_opts is None:
+                _scf_opts = {}
+                kwargs["scf_options"] = _scf_opts
+            _scf_opts.setdefault("mo_read_path", _mo_read_path)
+
         self._write_input(
             input_file,
             coordinates,
@@ -2241,6 +2374,9 @@ class ORCAInterface(QCInterfaceBase):
             aux_j_basis=kwargs.get("aux_j_basis"),
             aux_c_basis=kwargs.get("aux_c_basis"),
             scf_options=kwargs.get("scf_options"),
+            scf_maxiter=kwargs.get("scf_maxiter"),
+            scf_convergence=kwargs.get("scf_convergence"),
+            scf_strategy=kwargs.get("scf_strategy"),
         )
 
         success = self._run_orca(input_file, output_file)
@@ -2679,9 +2815,10 @@ class ORCAInterface(QCInterfaceBase):
         )
 
         if not success:
+            failure_class = classify_orca_failure(output_file)
             return TsOptResult(
                 success=False,
-                error_message="ORCA transition-state optimization failed",
+                error_message=f"ORCA transition-state optimization failed [{failure_class}]",
                 output_file=input_file,
                 log_file=output_file,
             )

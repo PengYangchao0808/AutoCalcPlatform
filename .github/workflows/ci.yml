@@ -49,6 +49,16 @@ jobs:
         # require --run-slow and external QC binaries (ORCA/CREST/xTB/...).
         run: pytest tests/ -m "not slow" -q
 
+      - name: Install browser test dependencies
+        if: matrix.python-version == '3.11'
+        run: |
+          pip install -e '.[browser]'
+          python -m playwright install --with-deps chromium
+
+      - name: Run browser tests
+        if: matrix.python-version == '3.11'
+        run: pytest tests/test_frontend_viewer_framing_browser.py --run-slow -q
+
       # --- deferred lint/format gates (see header note) ---
       # - name: Lint with ruff
       #   run: ruff check src tests

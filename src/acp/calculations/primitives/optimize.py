@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -50,8 +51,11 @@ SADDLE_BREAK = "saddle_break"
 CALCALL_OPT = "calcall_opt"
 TIGHT_OPT_CALCHESS = "tight_opt_calchess"
 IRC_MIDPOINT_RECOVERY = "irc_midpoint_recovery"
+SCF_INCREASE_MAXITER = "scf_increase_maxiter"
+SCF_SLOWCONV = "scf_slowconv"
+SCF_SOSCF = "scf_soscf"
 
-FAILURE_EXIT: Final[frozenset[str]] = frozenset({"scf_failure", "crash_timeout"})
+FAILURE_EXIT: Final[frozenset[str]] = frozenset({"crash_timeout", "memory_failure"})
 _STRUCTURE_KINDS: Final[frozenset[str]] = frozenset(
     {"ts", "intermediate", "minimum", "precursor", "product"}
 )
@@ -64,6 +68,7 @@ _FAILURE_TYPES: Final[frozenset[str]] = frozenset(
         "scf_failure",
         "crash_timeout",
         "collapsed_to_product",
+        "memory_failure",
     }
 )
 
@@ -84,11 +89,16 @@ _RESCUE_MATRIX: Final[dict[tuple[str, str], tuple[str, ...]]] = {
     ("minimum_with_imaginary", "intermediate"): (MODE_DISPLACEMENT,),
     ("minimum_with_imaginary", "minimum"): (MODE_DISPLACEMENT,),
     ("collapsed_to_product", "intermediate"): (IRC_MIDPOINT_RECOVERY,),
-    ("scf_failure", "ts"): (),
-    ("scf_failure", "intermediate"): (),
-    ("scf_failure", "minimum"): (),
-    ("scf_failure", "precursor"): (),
-    ("scf_failure", "product"): (),
+    ("scf_failure", "ts"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF),
+    ("scf_failure", "intermediate"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF),
+    ("scf_failure", "minimum"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF),
+    ("scf_failure", "precursor"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF),
+    ("scf_failure", "product"): (SCF_INCREASE_MAXITER, SCF_SLOWCONV, SCF_SOSCF),
+    ("memory_failure", "ts"): (),
+    ("memory_failure", "intermediate"): (),
+    ("memory_failure", "minimum"): (),
+    ("memory_failure", "precursor"): (),
+    ("memory_failure", "product"): (),
     ("crash_timeout", "ts"): (),
     ("crash_timeout", "intermediate"): (),
     ("crash_timeout", "minimum"): (),
@@ -105,6 +115,9 @@ _RESCUE_DESCRIPTIONS: Final[dict[str, str]] = {
     MODE_DISPLACEMENT: "displace ±0.30 Å along the imaginary mode",
     TIGHT_OPT_CALCHESS: "tight optimization with calculated Hessian",
     IRC_MIDPOINT_RECOVERY: "re-seed from the IRC midpoint (collapsed INT recovery)",
+    SCF_INCREASE_MAXITER: "increase SCF MaxIter to 500",
+    SCF_SLOWCONV: "increase SCF MaxIter to 500 with SlowConv strategy",
+    SCF_SOSCF: "increase SCF MaxIter to 500 with SOSCF strategy",
 }
 _BACKEND_FAILURES = (OSError, RuntimeError, ValueError)
 logger = logging.getLogger(__name__)
@@ -175,6 +188,32 @@ def _finalize_trajectory(target_dir: Path | None, selected_backend: str, item_id
         )
 
 
+def _inject_gbw_continuation(
+    source_dir: Path | None,
+    target_dir: Path | None,
+    kwargs: dict[str, Any],
+) -> None:
+    """Copy .gbw from a failed attempt into a rescue attempt directory.
+
+    Sets ``mo_read_path`` in *kwargs* so the ORCAInterface renders a
+    ``%moinp`` block and ``Moread`` route keyword, enabling orbital
+    inheritance across rescue attempts.
+    """
+    if source_dir is None or target_dir is None:
+        return
+    source_dir = Path(source_dir)
+    target_dir = Path(target_dir)
+    if not source_dir.is_dir():
+        return
+    gbw_files = list(source_dir.glob("*.gbw"))
+    if not gbw_files:
+        return
+    target_dir.mkdir(parents=True, exist_ok=True)
+    dest = target_dir / gbw_files[0].name
+    shutil.copy2(gbw_files[0], dest)
+    kwargs.setdefault("mo_read_path", str(dest))
+
+
 def run_optimize(
     req: CalculationRequest,
     *,
@@ -230,7 +269,24 @@ def run_optimize(
     plan = build_rescue_plan(failure_type, structure_kind)
     rescue_metadata = _plan_metadata(plan)
 
-    for action in plan.actions:
+    rescue_enabled = req.resources.get("opt_rescue_policy", "adaptive") != "off"
+    max_rescue = int(req.resources.get("opt_max_rescue", 2))
+
+    if not rescue_enabled or not plan.actions:
+        rescue_metadata["rescue_attempts"] = 0
+        _finalize_trajectory(target_dir, selected_backend, trajectory_item_id)
+        return result_from_qc(
+            req,
+            selected_backend,
+            qc_result,
+            errors,
+            all_artifacts,
+            rescue_metadata,
+            status="failed",
+        )
+
+    last_attempt_dir = target_dir
+    for action in plan.actions[:max_rescue]:
         attempt_kwargs = dict(base_kwargs)
         attempt_kwargs.update(_rescue_kwargs(action.strategy))
         attempt_dir = (
@@ -238,6 +294,7 @@ def run_optimize(
             if target_dir is not None
             else None
         )
+        _inject_gbw_continuation(last_attempt_dir, attempt_dir, attempt_kwargs)
         qc_result, failure = _run_attempt(
             backend,
             capability,
@@ -248,6 +305,7 @@ def run_optimize(
             trajectory_item_id=trajectory_item_id,
             progress_reporter=progress_reporter,
         )
+        last_attempt_dir = attempt_dir
         if qc_result is not None:
             all_artifacts = artifacts_from_qc(qc_result, selected_backend, all_artifacts)
         if _successful_geometry(qc_result):
@@ -389,6 +447,14 @@ def _failure_type(request: CalculationRequest, message: str) -> str:
     if isinstance(override, str) and override in _FAILURE_TYPES:
         return override
     normalized = message.lower()
+    if "[scf_failure]" in normalized:
+        return "scf_failure"
+    if "[geometry_not_converged]" in normalized:
+        return "geometry_not_converged"
+    if "[memory_failure]" in normalized:
+        return "memory_failure"
+    if "[crash_timeout]" in normalized:
+        return "crash_timeout"
     if "scf" in normalized:
         return "scf_failure"
     if "timeout" in normalized or "timed out" in normalized or "time out" in normalized:
@@ -417,6 +483,12 @@ def _rescue_kwargs(strategy: str) -> dict[str, JsonValue]:
         return {"opt_level": "tight", "initial_hessian": "calculate"}
     if strategy == IRC_MIDPOINT_RECOVERY:
         return {"rescue_metadata": {"irc_midpoint_reseed": True}}
+    if strategy == SCF_INCREASE_MAXITER:
+        return {"scf_maxiter": 500}
+    if strategy == SCF_SLOWCONV:
+        return {"scf_maxiter": 500, "scf_strategy": "slowconv"}
+    if strategy == SCF_SOSCF:
+        return {"scf_maxiter": 500, "scf_strategy": "soscf"}
     return {}
 
 

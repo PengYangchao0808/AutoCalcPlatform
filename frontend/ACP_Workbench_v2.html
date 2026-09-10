@@ -3100,6 +3100,72 @@ option, optgroup {
   flex: 0 0 auto; font-size: 10px; color: var(--text-tertiary);
 }
 
+/* ── Advanced field groups (BatchOptimize wave 2026-09) ────────────── */
+.mc-adv-group { margin-top: 6px; }
+.mc-adv-group-header {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 0; cursor: pointer; user-select: none;
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-tertiary);
+}
+.mc-adv-group-header:hover { color: var(--accent); }
+.mc-adv-group-header .mc-adv-group-chevron {
+  display: inline-flex; width: 10px; height: 10px;
+  transition: transform 0.15s ease;
+}
+.mc-adv-group-header .mc-adv-group-chevron.open { transform: rotate(90deg); }
+.mc-adv-group-fields {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  margin-top: 4px;
+}
+.mc-adv-group-fields.collapsed { display: none; }
+/* Preset bar */
+.mc-preset-bar {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;
+  padding: 6px 0; border-bottom: 1px solid var(--border-subtle);
+}
+.mc-preset-btn {
+  appearance: none; -webkit-appearance: none;
+  padding: 4px 10px; border: 1px solid var(--border-default); border-radius: 6px;
+  background: rgba(255,255,255,0.03); color: var(--text-secondary);
+  font-size: 11px; cursor: pointer;
+  transition: border-color 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+.mc-preset-btn:hover { color: var(--text-primary); border-color: var(--accent); }
+.mc-preset-btn.active {
+  border-color: var(--accent); color: var(--accent);
+  background: rgba(78,161,255,0.10);
+}
+/* Role differences info panel */
+.mc-role-info {
+  margin: 8px 0; padding: 10px 12px;
+  border: 1px solid var(--border-subtle); border-radius: 8px;
+  background: rgba(255,255,255,0.02);
+}
+.mc-role-info-title {
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-tertiary); margin-bottom: 8px;
+}
+.mc-role-info-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  font-size: 11px; line-height: 1.6; color: var(--text-secondary);
+}
+.mc-role-info-col strong { color: var(--text-primary); }
+.mc-role-info-note {
+  margin-top: 8px; padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 10px; color: var(--text-tertiary); line-height: 1.45;
+}
+/* Preset applied toast */
+.mc-preset-toast {
+  position: absolute; top: 8px; right: 8px; z-index: 5;
+  padding: 4px 10px; border-radius: 6px;
+  background: rgba(78,161,255,0.15); color: var(--accent);
+  font-size: 11px; font-weight: 500; pointer-events: none;
+  opacity: 0; transition: opacity 0.2s ease;
+}
+.mc-preset-toast.show { opacity: 1; }
+
 /* Prevent horizontal overflow inside modal frames: grid/flex children
    default to min-width:auto and refuse to shrink below content width. */
 .mc-wrap, .mc-left, .method-fields, .mc-level-advanced-fields,
@@ -4523,6 +4589,7 @@ let jobsPollInFlight = false;
 let jobsCache = [];
 let projectsCache = [];
 let viewer = null;
+var mainViewerFraming = { pending: false, settled: false, observer: null, timer: null, lastW: 0, lastH: 0, epoch: 0 };
 let currentModel = null;
 let currentModelAtoms = [];
 let viewerModelLoaded = false;
@@ -4642,6 +4709,7 @@ function applyLayout(opts) {
   if (lc) lc.classList.toggle("file-tree-collapsed", !!ft);
   syncSidebarButtonGlyphs();
   if (!(opts && opts.skipViewer) && viewer && typeof viewer.resize === "function") {
+    if (mainViewerFraming.pending) return;
     viewer.resize();
     viewer.render();
   }
@@ -4823,8 +4891,7 @@ let energyGraphState = {
   loadedFrameIndex: null,
   abortController: null,
   structureAbort: null,
-  structureResizeObserver: null,
-  structureFramingPending: false,
+  structureFraming: { pending: false, settled: false, observer: null, timer: null, lastW: 0, lastH: 0, epoch: 0 },
   priorViewMode: "",
   resizeObserver: null,
   viewSize: { width: 0, height: 0 },
@@ -6774,7 +6841,14 @@ async function energyGraphLoadFrameGeometry(node) {
   if (!data || !container || !node) return;
   var frameIndex = node.frame_index;
   if (frameIndex == null) return;
-  if (Number(frameIndex) === energyGraphState.loadedFrameIndex && energyGraphState.viewer && container.isConnected && container.querySelector("canvas")) return;
+  if (Number(frameIndex) === energyGraphState.loadedFrameIndex && energyGraphState.viewer && container.isConnected && container.querySelector("canvas")) {
+    var _fs = energyGraphState.structureFraming;
+    if (_fs.settled && (container.clientWidth !== _fs.lastW || container.clientHeight !== _fs.lastH)) {
+      var _tk = energyGraphState.requestToken;
+      scheduleViewerFraming(container, _fs, function() { return energyGraphState.viewer; }, { isValid: function() { return _tk === energyGraphState.requestToken; } });
+    }
+    return;
+  }
   if (energyGraphState.structureAbort) { energyGraphState.structureAbort.abort(); energyGraphState.structureAbort = null; }
   var ac = (typeof AbortController !== "undefined") ? new AbortController() : null;
   energyGraphState.structureAbort = ac;
@@ -6859,47 +6933,9 @@ async function energyGraphLoadFrameGeometry(node) {
       energyGraphState.viewer.addModel(xyz, "xyz");
       energyGraphState.viewer.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.26 } });
     }
-    /* Reframe AFTER layout settles: the viewer sits in a responsive grid, so
-       at mount its box can still carry the previous layout round's size;
-       3Dmol then builds an oversized canvas that the overflow:hidden parent
-       clips (molecule shifted right / cut off). Waiting a frame (double rAF
-       = one full layout+paint cycle) lets the grid settle; then resize()
-       adopts the true box and zoomTo() recomputes the default framing
-       against it. Token+isConnected guards keep a stale load from
-       clobbering a newer one. */
-    energyGraphState.structureFramingPending = true;
-    requestAnimationFrame(function() {
-      requestAnimationFrame(function() {
-        if (!container.isConnected || tk !== energyGraphState.requestToken) return;
-        energyGraphState.structureFramingPending = false;
-        if (!energyGraphState.viewer) return;
-        try {
-          energyGraphState.viewer.resize();
-          energyGraphState.viewer.zoomTo();
-          energyGraphState.viewer.render();
-        } catch (e) {}
-      });
-    });
-    /* ResizeObserver: keep 3Dmol viewer in sync with container size.
-       While the post-load reframing above is pending it stays hands-off
-       (that pass already resizes with the default framing); afterwards it
-       deliberately does NOT zoomTo() — only fit the canvas to the new box,
-       so the user's manual rotation/zoom survives column-width drags. */
-    if (energyGraphState.structureResizeObserver) { energyGraphState.structureResizeObserver.disconnect(); energyGraphState.structureResizeObserver = null; }
-    if (typeof ResizeObserver !== "undefined" && energyGraphState.viewer) {
-      var structResizeTimer = null;
-      var sro = new ResizeObserver(function() {
-        if (structResizeTimer) clearTimeout(structResizeTimer);
-        structResizeTimer = setTimeout(function() {
-          structResizeTimer = null;
-          if (!container.isConnected || !energyGraphState.viewer) return;
-          if (energyGraphState.structureFramingPending) return;
-          try { energyGraphState.viewer.resize(); energyGraphState.viewer.render(); } catch (e) {}
-        }, 100);
-      });
-      sro.observe(container);
-      energyGraphState.structureResizeObserver = sro;
-    }
+    /* Reframe AFTER layout settles using the shared framing helper.
+       Token+isConnected guards keep a stale load from clobbering a newer one. */
+    scheduleViewerFraming(container, energyGraphState.structureFraming, function() { return energyGraphState.viewer; }, { isValid: function() { return tk === energyGraphState.requestToken; } });
     energyGraphState.loadedFrameIndex = Number(frameIndex);
   } catch (e) {
     if (e && e.name === "AbortError") return;
@@ -10337,13 +10373,12 @@ function energyGraphWorkspaceMarkup(data) {
 
 function energyGraphDestroyViewer() {
   if (energyGraphState.resizeObserver) { energyGraphState.resizeObserver.disconnect(); energyGraphState.resizeObserver = null; }
-  if (energyGraphState.structureResizeObserver) { energyGraphState.structureResizeObserver.disconnect(); energyGraphState.structureResizeObserver = null; }
+  disposeViewerFraming(energyGraphState.structureFraming);
   if (energyGraphState.structureAbort) { energyGraphState.structureAbort.abort(); energyGraphState.structureAbort = null; }
   if (energyGraphState.viewer) {
     try { energyGraphState.viewer.clear(); } catch (e) {}
     energyGraphState.viewer = null;
   }
-  energyGraphState.structureFramingPending = false;
   energyGraphState.loadedFrameIndex = null;
 }
 
@@ -11814,6 +11849,100 @@ function bindMechanismPromoteButton() { /* retired */ }
 // Retained for the SR display path, which still calls this legacy hook.
 function updateSrPickButtons() { /* retired */ }
 
+// === Unified 3Dmol viewer framing (shared by ALL viewers) ===
+function frame3DViewer(viewer3dmol, options) {
+  if (!viewer3dmol) return;
+  options = options || {};
+  try {
+    viewer3dmol.resize();
+    if (!options.preserveView) {
+      viewer3dmol.center({}, 0);
+      viewer3dmol.zoomTo({}, 0);
+    }
+    viewer3dmol.render();
+  } catch (e) {}
+}
+
+function waitForContainerStable(container, callback, options) {
+  if (!container || !callback) return;
+  options = options || {};
+  var maxFrames = typeof options.maxFrames === "number" ? options.maxFrames : 45;
+  var isValid = typeof options.isValid === "function" ? options.isValid : null;
+  var frames = 0;
+  var lastW = 0, lastH = 0;
+  var stableCount = 0;
+  function tick() {
+    if (!container.isConnected) return;
+    if (isValid && !isValid()) return;
+    frames++;
+    var w = container.clientWidth;
+    var h = container.clientHeight;
+    if (w > 0 && h > 0 && w === lastW && h === lastH) {
+      stableCount++;
+    } else {
+      stableCount = 0;
+    }
+    lastW = w;
+    lastH = h;
+    if ((w > 0 && h > 0 && stableCount >= 1) || frames >= maxFrames) {
+      if (w > 0 && h > 0) {
+        callback();
+      }
+      return;
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+function scheduleViewerFraming(container, framingState, getViewer, options) {
+  if (!container || !framingState) return;
+  options = options || {};
+  framingState.epoch += 1;
+  framingState.pending = true;
+  framingState.settled = false;
+  var epoch = framingState.epoch;
+  waitForContainerStable(container, function() {
+    if (epoch !== framingState.epoch) return;
+    if (!container.isConnected) return;
+    var v = getViewer();
+    if (!v) return;
+    frame3DViewer(v, options);
+    framingState.lastW = container.clientWidth;
+    framingState.lastH = container.clientHeight;
+    framingState.pending = false;
+    framingState.settled = true;
+  }, {
+    isValid: function() {
+      return epoch === framingState.epoch && container.isConnected && (options.isValid ? options.isValid() : true);
+    }
+  });
+  if (framingState.observer) { framingState.observer.disconnect(); }
+  if (typeof ResizeObserver !== "undefined") {
+    var resizeTimer = null;
+    framingState.observer = new ResizeObserver(function() {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function() {
+        resizeTimer = null;
+        if (framingState.pending) return;
+        if (!container.isConnected) return;
+        var v = getViewer();
+        if (!v) return;
+        try { v.resize(); v.render(); } catch (e) {}
+      }, 100);
+    });
+    framingState.observer.observe(container);
+  }
+}
+
+function disposeViewerFraming(framingState) {
+  if (!framingState) return;
+  if (framingState.observer) { framingState.observer.disconnect(); framingState.observer = null; }
+  if (framingState.timer) { clearTimeout(framingState.timer); framingState.timer = null; }
+  framingState.epoch += 1;
+  framingState.pending = false;
+  framingState.settled = false;
+}
 
 function initViewer() {
   if (typeof $3Dmol === "undefined") {
@@ -11936,7 +12065,7 @@ function renderMolDoc(options) {
   applySelectionHighlight();
   renderMeasurements();
   setupClickableForCurrentModel();
-  if (options.zoomTo) viewer.zoomTo();
+  if (options.zoomTo) scheduleViewerFraming(document.getElementById("viewer-3d"), mainViewerFraming, function() { return viewer; });
   viewer.render();
   renderMeasurementList();
 }
@@ -11948,6 +12077,7 @@ function restoreInitialView() {
 }
 
 function clearViewer() {
+  disposeViewerFraming(mainViewerFraming);
   stopFramePlayback();
   molDoc.frames = [];
   molDoc.currentFrame = 0;
@@ -15597,9 +15727,12 @@ function renderReactionChanges3D() {
     }
   }
   if (preservedView) {
-    try { reactionViewer.setView(preservedView); } catch (e) { reactionViewer.zoomTo(); }
+    try { reactionViewer.resize(); reactionViewer.setView(preservedView); } catch (e) { frame3DViewer(reactionViewer); }
   } else {
-    reactionViewer.zoomTo();
+    reactionViewer.render();
+    scheduleViewerFraming(document.getElementById("mech-reaction-3d"), reactionViewerFraming, function() { return reactionViewer; });
+    renderReactionStatsBar();
+    return;
   }
   reactionViewer.render();
   renderReactionStatsBar();
@@ -17041,6 +17174,7 @@ function rejectUnsupportedFile(file) {
 let workflowCatalogCache = [];
 let methodCatalogCache = {};
 let previewViewer = null;
+var previewViewerFraming = { pending: false, settled: false, observer: null, timer: null, lastW: 0, lastH: 0, epoch: 0 };
 let previewModel = null;
 let pesSelectionState = {
   mode: "functional",
@@ -17052,6 +17186,7 @@ let pesSelectionState = {
   shapes: [],
 };
 let reactionViewer = null;              // mechanism builder: reaction-changes 3D viewer (P1)
+var reactionViewerFraming = { pending: false, settled: false, observer: null, timer: null, lastW: 0, lastH: 0, epoch: 0 };
 let reactionChangesViewMode = "reactant"; // active side for the reaction-changes 3D viewer
 // Manual bond edit mode (P2): model ref for click/hover wiring, locked first
 // atom of the two-click pair flow, transient hover shape, camera-preserving
@@ -17519,6 +17654,8 @@ function openModal() {
   if (mechReactionEmpty) mechReactionEmpty.style.display = "block";
   // Reaction-changes 3D viewer reset (P1): drop stale models/shapes/labels,
   // hide the viewer wrap and restore the default reactant view mode.
+  disposeViewerFraming(reactionViewerFraming);
+  disposeViewerFraming(previewViewerFraming);
   reactionChangesViewMode = "reactant";
   updateReactionViewToggleButtons();
   var mechReaction3dWrap = document.getElementById("mech-reaction-3d-wrap");
@@ -17895,8 +18032,8 @@ function renderPreviewStructure3D(structure) {
     previewModel = previewViewer.addModel(modelData, fmt);
     previewViewer.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.26 } });
     attachPESPreviewSelection();
-    previewViewer.zoomTo();
     previewViewer.render();
+    scheduleViewerFraming(document.getElementById("structure-preview-3d"), previewViewerFraming, function() { return previewViewer; });
   }
 }
 
@@ -19150,6 +19287,16 @@ function applyBatchOptimizeMethodFields(methodPayload) {
   ["minimum_method", "minimum_basis", "transition_state_method", "transition_state_basis"].forEach(function(key) {
     if (hasOwn(stage, key) && stage[key] !== "") methodPayload[key] = stage[key];
   });
+  // Optimization controls
+  methodPayload.opt_max_iter = value("opt_max_iter", null);
+  methodPayload.opt_convergence = value("opt_convergence", "tight");
+  methodPayload.opt_trust_radius = value("opt_trust_radius", null);
+  methodPayload.opt_initial_hessian = value("opt_initial_hessian", null);
+  methodPayload.opt_recalc_hess = value("opt_recalc_hess", null);
+  // SCF convergence controls
+  methodPayload.scf_max_iter = value("scf_max_iter", 300);
+  methodPayload.scf_convergence = value("scf_convergence", "tight");
+  methodPayload.scf_strategy = value("scf_strategy", "normal");
   return methodPayload;
 }
 
@@ -19570,7 +19717,7 @@ async function openMethodConfig() {
       // Hessian field is rendered by a dedicated tri-state control that
       // also drives a backend preview (plan §13). Bypass the generic
       // select/number renderer entirely.
-      if (fieldName === "recalc_hess") {
+      if (fieldName === "recalc_hess" || fieldName === "opt_recalc_hess") {
         buildHessianFieldRow(dest);
         return;
       }
@@ -20199,6 +20346,7 @@ async function openMethodConfig() {
     if (advancedFields.length) {
       var advWrap = document.createElement("div");
       advWrap.className = "mc-level-advanced";
+      advWrap.style.position = "relative";
       var advToggle = document.createElement("div");
       advToggle.className = "mc-level-advanced-toggle";
       var pesAdvancedVisible = wizardState.workflow.id === "PESsearch";
@@ -20208,7 +20356,187 @@ async function openMethodConfig() {
       var advDiv = document.createElement("div");
       advDiv.className = "mc-level-advanced-fields";
       advDiv.style.display = pesAdvancedVisible ? "grid" : "none";
-      advancedFields.forEach(function(fn) { buildFieldRow(fn, advDiv); });
+
+      // ── Grouped advanced fields for BatchOptimize ──────────────────
+      if (lvDef.level_id === "batch") {
+        var FIELD_GROUPS = [
+          {
+            id: "opt_control",
+            label: "Optimization Control",
+            label_zh: "\u4f18\u5316\u63a7\u5236",
+            fields: ["opt_max_iter", "opt_convergence", "opt_trust_radius", "opt_initial_hessian", "opt_recalc_hess"],
+            collapsed: false,
+          },
+          {
+            id: "scf_control",
+            label: "SCF Convergence Control",
+            label_zh: "SCF \u6536\u655b\u63a7\u5236",
+            fields: ["scf_max_iter", "scf_convergence", "scf_strategy"],
+            collapsed: false,
+          },
+          {
+            id: "expert_overrides",
+            label: "Expert: Role-Level Method Overrides",
+            label_zh: "\u4e13\u5bb6\u8bbe\u7f6e\uff1a\u89d2\u8272\u7ea7\u65b9\u6cd5\u8986\u76d6",
+            fields: ["minimum_method", "minimum_basis", "transition_state_method", "transition_state_basis"],
+            collapsed: true,
+          },
+        ];
+
+        // Partition advancedFields into groups + ungrouped
+        var grouped = {};
+        var groupedSet = {};
+        FIELD_GROUPS.forEach(function(g) { grouped[g.id] = []; });
+        advancedFields.forEach(function(fn) {
+          var placed = false;
+          FIELD_GROUPS.forEach(function(g) {
+            if (g.fields.indexOf(fn) >= 0) { grouped[g.id].push(fn); groupedSet[fn] = true; placed = true; }
+          });
+          if (!placed) { if (!grouped._other) grouped._other = []; grouped._other.push(fn); }
+        });
+
+        // ── Preset bar ──
+        var BATCH_PRESETS = {
+          "standard": {
+            label: "Standard", label_zh: "\u6807\u51c6\u4f18\u5316",
+            values: { opt_convergence: "tight", scf_max_iter: 300, opt_initial_hessian: null, opt_recalc_hess: null, scf_strategy: "normal", scf_convergence: "tight" },
+          },
+          "difficult_geometry": {
+            label: "Difficult Geometry", label_zh: "\u56f0\u96be\u51e0\u4f55",
+            values: { opt_max_iter: 400, opt_trust_radius: 0.10, opt_recalc_hess: 5, opt_convergence: "tight" },
+          },
+          "difficult_scf": {
+            label: "Difficult SCF", label_zh: "\u56f0\u96beSCF",
+            values: { scf_max_iter: 500, scf_strategy: "slowconv", scf_convergence: "tight" },
+          },
+          "high_precision": {
+            label: "High Precision", label_zh: "\u9ad8\u7cbe\u5ea6\u786e\u8ba4",
+            values: { opt_convergence: "verytight", scf_convergence: "verytight", scf_max_iter: 500 },
+          },
+        };
+
+        var presetBar = document.createElement("div");
+        presetBar.className = "mc-preset-bar";
+        Object.keys(BATCH_PRESETS).forEach(function(pk) {
+          var preset = BATCH_PRESETS[pk];
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "mc-preset-btn";
+          btn.textContent = currentLang === "zh-CN" ? preset.label_zh : preset.label;
+          btn.addEventListener("click", function() {
+            var stage = wizardState.method.stages.batch;
+            if (!stage) { stage = {}; wizardState.method.stages.batch = stage; }
+            // Write actual values into stage
+            Object.keys(preset.values).forEach(function(k) {
+              if (preset.values[k] === null) { delete stage[k]; }
+              else { stage[k] = preset.values[k]; }
+            });
+            // Clear active state on siblings, set on clicked
+            presetBar.querySelectorAll(".mc-preset-btn").forEach(function(b) { b.classList.remove("active"); });
+            btn.classList.add("active");
+            // Show toast
+            var toast = advWrap.querySelector(".mc-preset-toast");
+            if (toast) {
+              toast.textContent = (currentLang === "zh-CN" ? "\u5df2\u5e94\u7528\uff1a" : "Applied: ") + (currentLang === "zh-CN" ? preset.label_zh : preset.label);
+              toast.classList.add("show");
+              setTimeout(function() { toast.classList.remove("show"); }, 1500);
+            }
+            rebuildLevelCard("batch");
+          });
+          presetBar.appendChild(btn);
+        });
+        advDiv.appendChild(presetBar);
+
+        // Toast element (positioned relative to advWrap)
+        var toastEl = document.createElement("div");
+        toastEl.className = "mc-preset-toast";
+        advWrap.appendChild(toastEl);
+
+        // ── Render grouped fields ──
+        FIELD_GROUPS.forEach(function(g) {
+          var fields = grouped[g.id];
+          if (!fields || !fields.length) return;
+          var grp = document.createElement("div");
+          grp.className = "mc-adv-group";
+          grp.setAttribute("data-group-id", g.id);
+
+          var grpHdr = document.createElement("div");
+          grpHdr.className = "mc-adv-group-header";
+          var chevron = document.createElement("span");
+          chevron.className = "mc-adv-group-chevron" + (g.collapsed ? "" : " open");
+          chevron.innerHTML = '<svg viewBox="0 0 16 16" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2"><path d="M6 4l4 4-4 4"/></svg>';
+          grpHdr.appendChild(chevron);
+          var grpLabel = document.createElement("span");
+          grpLabel.textContent = currentLang === "zh-CN" ? (g.label_zh || g.label) : g.label;
+          grpHdr.appendChild(grpLabel);
+          grp.appendChild(grpHdr);
+
+          var grpFields = document.createElement("div");
+          grpFields.className = "mc-adv-group-fields" + (g.collapsed ? " collapsed" : "");
+          fields.forEach(function(fn) { buildFieldRow(fn, grpFields); });
+          grp.appendChild(grpFields);
+
+          grpHdr.addEventListener("click", function() {
+            var isCollapsed = grpFields.classList.contains("collapsed");
+            grpFields.classList.toggle("collapsed", !isCollapsed);
+            chevron.classList.toggle("open", isCollapsed);
+          });
+
+          // Insert role info panel after scf_control, before expert_overrides
+          if (g.id === "scf_control") {
+            advDiv.appendChild(grp);
+            var roleInfo = document.createElement("div");
+            roleInfo.className = "mc-role-info";
+            roleInfo.innerHTML =
+              '<div class="mc-role-info-title">' + (currentLang === "zh-CN" ? "\u89d2\u8272\u5dee\u5f02" : "Role Differences") + '</div>' +
+              '<div class="mc-role-info-grid">' +
+              '<div class="mc-role-info-col"><strong>INT (\u6781\u5c0f\u503c)</strong><br>' +
+              'MaxIter: 250<br>Trust: Auto<br>Hessian: Model<br>Recalc: Auto<br>Convergence: TightOpt</div>' +
+              '<div class="mc-role-info-col"><strong>TS (\u8fc7\u6e21\u6001)</strong><br>' +
+              'MaxIter: 300<br>Trust: 0.15<br>Hessian: Calculate<br>Recalc: Every 5<br>Convergence: TightOpt</div>' +
+              '</div>' +
+              '<div class="mc-role-info-note">' +
+              (currentLang === "zh-CN"
+                ? "\u4ee5\u4e0a\u4e3a\u89d2\u8272\u9ed8\u8ba4\u503c\u3002\u5728\u4e0a\u65b9\u4f18\u5316\u63a7\u5236\u4e2d\u8bbe\u7f6e\u7684\u503c\u5c06\u8986\u76d6\u5bf9\u5e94\u89d2\u8272\u7684\u9ed8\u8ba4\u503c\u3002"
+                : "Above are role defaults. Values set in Optimization Control above override the corresponding role defaults.") +
+              '</div>';
+            advDiv.appendChild(roleInfo);
+            return; // already appended grp above
+          }
+
+          advDiv.appendChild(grp);
+        });
+
+        // Ungrouped "Other" fields
+        if (grouped._other && grouped._other.length) {
+          var otherGrp = document.createElement("div");
+          otherGrp.className = "mc-adv-group";
+          var otherHdr = document.createElement("div");
+          otherHdr.className = "mc-adv-group-header";
+          var otherChevron = document.createElement("span");
+          otherChevron.className = "mc-adv-group-chevron open";
+          otherChevron.innerHTML = '<svg viewBox="0 0 16 16" width="10" height="10" stroke="currentColor" fill="none" stroke-width="2"><path d="M6 4l4 4-4 4"/></svg>';
+          otherHdr.appendChild(otherChevron);
+          var otherLabel = document.createElement("span");
+          otherLabel.textContent = currentLang === "zh-CN" ? "\u5176\u4ed6" : "Other";
+          otherHdr.appendChild(otherLabel);
+          otherGrp.appendChild(otherHdr);
+          var otherFields = document.createElement("div");
+          otherFields.className = "mc-adv-group-fields";
+          grouped._other.forEach(function(fn) { buildFieldRow(fn, otherFields); });
+          otherGrp.appendChild(otherFields);
+          otherHdr.addEventListener("click", function() {
+            var isCollapsed = otherFields.classList.contains("collapsed");
+            otherFields.classList.toggle("collapsed", !isCollapsed);
+            otherChevron.classList.toggle("open", isCollapsed);
+          });
+          advDiv.appendChild(otherGrp);
+        }
+      } else {
+        // Non-batch levels: flat advanced list (original behavior)
+        advancedFields.forEach(function(fn) { buildFieldRow(fn, advDiv); });
+      }
+
       advWrap.appendChild(advDiv);
 
       advToggle.addEventListener("click", function() {
@@ -21139,6 +21467,7 @@ function applyAppSection(section) {
     btn.classList.toggle("active", btn.getAttribute("data-section") === appSection);
   });
   if (viewer && typeof viewer.resize === "function") {
+    if (mainViewerFraming.pending) return;
     viewer.resize();
     viewer.render();
   }
@@ -21641,8 +21970,7 @@ function setupEventListeners() {
 
   document.getElementById("btn-fit").addEventListener("click", function() {
     if (viewer) {
-      viewer.zoomTo();
-      viewer.render();
+      frame3DViewer(viewer);
     }
   });
 
@@ -21763,7 +22091,7 @@ function setupEventListeners() {
     switch (e.key) {
       case "f":
       case "F":
-        if (viewer) { viewer.zoomTo(); viewer.render(); }
+        if (viewer) { frame3DViewer(viewer); }
         break;
       case "r":
       case "R":
@@ -22051,6 +22379,9 @@ var s2scanState = {
   revision: 0,
   activeCount: 0,
   sourceXyz: "",
+  previewFraming: { pending: false, settled: false, observer: null, timer: null, lastW: 0, lastH: 0, epoch: 0 },
+  bondFraming: { pending: false, settled: false, observer: null, timer: null, lastW: 0, lastH: 0, epoch: 0 },
+  resultFraming: { pending: false, settled: false, observer: null, timer: null, lastW: 0, lastH: 0, epoch: 0 },
 };
 
 function s2scanEl(id) { return document.getElementById(id); }
@@ -22097,6 +22428,9 @@ function s2scanOpen() {
 }
 
 function s2scanClose() {
+  disposeViewerFraming(s2scanState.previewFraming);
+  disposeViewerFraming(s2scanState.bondFraming);
+  disposeViewerFraming(s2scanState.resultFraming);
   if (s2scanState.viewer) { try { s2scanState.viewer.clear(); } catch(e){} s2scanState.viewer = null; }
   if (s2scanState.resultViewer) { try { s2scanState.resultViewer.clear(); } catch(e){} s2scanState.resultViewer = null; }
   closeModal();
@@ -22107,6 +22441,9 @@ function s2scanCloseReport() {
 }
 
 function s2scanResetState() {
+  disposeViewerFraming(s2scanState.previewFraming);
+  disposeViewerFraming(s2scanState.bondFraming);
+  disposeViewerFraming(s2scanState.resultFraming);
   if (s2scanState.viewer) { try { s2scanState.viewer.clear(); } catch(e){} s2scanState.viewer = null; }
   s2scanState.step = 1;
   s2scanState.sourceType = "task_artifact";
@@ -22237,8 +22574,8 @@ function s2scanLoadPreview(xyzText) {
   s2scanState.viewer.removeAllShapes();
   s2scanState.model = s2scanState.viewer.addModel(xyzText, "xyz");
   s2scanState.viewer.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.26 } });
-  s2scanState.viewer.zoomTo();
   s2scanState.viewer.render();
+  scheduleViewerFraming(container, s2scanState.previewFraming, function() { return s2scanState.viewer; });
 }
 
 async function s2scanPreviewSource(source) {
@@ -22324,12 +22661,13 @@ function s2scanInitCoordinateViewer() {
   s2scanState.selSpheres = [];
   var container = s2scanEl("s2scan-bond-3d");
   if (!container) return;
+  disposeViewerFraming(s2scanState.previewFraming);
   if (s2scanState.viewer) { try { s2scanState.viewer.clear(); } catch(e){} s2scanState.viewer = null; }
   try { s2scanState.viewer = $3Dmol.createViewer(container, { backgroundColor: "0x0e1419", antialias: true }); } catch(e) { return; }
   s2scanState.model = s2scanState.viewer.addModel(xyzText, "xyz");
   s2scanState.viewer.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.26 } });
-  s2scanState.viewer.zoomTo();
   s2scanState.viewer.render();
+  scheduleViewerFraming(container, s2scanState.bondFraming, function() { return s2scanState.viewer; });
   if (s2scanState.model) {
     s2scanState.model.setClickable({}, true, function(atom) {
       s2scanHandleAtomClick(atom);
@@ -22916,8 +23254,8 @@ async function s2scanLoadResultFrame(frameIndex) {
       s2scanState.resultViewer.removeAllShapes();
       s2scanState.resultViewer.addModel(frame.xyz || "", "xyz");
       s2scanState.resultViewer.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.26 } });
-      s2scanState.resultViewer.zoomTo();
       s2scanState.resultViewer.render();
+      scheduleViewerFraming(container, s2scanState.resultFraming, function() { return s2scanState.resultViewer; });
     }
     var detail = s2scanEl("s2scan-frame-detail");
     if (detail) {

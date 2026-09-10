@@ -1007,17 +1007,21 @@ class BatchOptimizeEngine:
         optimization defaults.
         """
         if is_ts:
-            return {
+            kwargs: dict[str, JsonValue] = {
                 "initial_hessian": "calculate",
                 "recalc_hess": 5,
                 "trust_radius": 0.3,
                 "max_cycles": 200,
                 "structure_kind": "ts",
             }
-        return {
-            "max_cycles": 200,
-            "structure_kind": "minimum",
-        }
+        else:
+            kwargs = {
+                "max_cycles": 200,
+                "structure_kind": "minimum",
+            }
+        kwargs["opt_rescue_policy"] = self._active_methods.opt_rescue_policy
+        kwargs["opt_max_rescue"] = self._active_methods.opt_max_rescue
+        return kwargs
 
     def _step_state_payload(
         self,

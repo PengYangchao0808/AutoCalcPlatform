@@ -6,6 +6,9 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from pydantic import TypeAdapter
+from typing_extensions import TypedDict
+
 from acp.catalog import METHOD_SCHEMAS, WORKFLOW_CATALOG
 
 REPO_ROOT = Path(__file__).parents[1]
@@ -16,6 +19,10 @@ _I18N_KEY_RE = re.compile(r'"((?:energy|tab\.energy)\.[^"]+)":')
 _NODES_I18N_KEY_RE = re.compile(r'"(nodes\.[^"]+)":')
 _ZH_BLOCK_RE = re.compile(r'"zh-CN":\s*\{(.*?)\n\s*"en-US":', re.DOTALL)
 _EN_BLOCK_RE = re.compile(r'"en-US":\s*\{(.*?)(?:\n\s*\};)', re.DOTALL)
+
+
+class _ProfileRecord(TypedDict, total=False):
+    profile_id: str
 
 
 def _extract_energy_keys(html: str, block_re: re.Pattern[str]) -> set[str]:  # type: ignore[type-arg]
@@ -178,11 +185,24 @@ def test_wizard_default_workflow_and_protocol_are_catalog_driven() -> None:
         "confsearch_unified must define profiles (xtb-crest/xtb-md/"
         "censo-crest/xtbmd-censo) for the wizard default"
     )
-    censo_ids = {p["profile_id"] for p in METHOD_SCHEMAS["confsearch_unified"]["profiles"]}
+    profiles = TypeAdapter(list[_ProfileRecord]).validate_python(
+        METHOD_SCHEMAS["confsearch_unified"]["profiles"]
+    )
+    censo_ids: set[str] = set()
+    for profile in profiles:
+        profile_id = profile.get("profile_id")
+        if profile_id is not None:
+            censo_ids.add(profile_id)
     assert "censo-crest" in censo_ids
 
     # 2. No hardcoded retired workflow id may serve as the wizard default.
-    retired_ids = [w["id"] for w in WORKFLOW_CATALOG if w.get("status") != "active"]
+    retired_ids: list[str] = []
+    for workflow in WORKFLOW_CATALOG:
+        if workflow.get("status") == "active":
+            continue
+        workflow_id = workflow.get("id")
+        if isinstance(workflow_id, str):
+            retired_ids.append(workflow_id)
     for rid in retired_ids:
         assert f'wizardState.workflow.id || "{rid}"' not in html, (
             f"retired workflow {rid!r} must not be a hardcoded wizard default"
@@ -1166,8 +1186,110 @@ def test_energy_viewer_refactor_dom_contracts() -> None:
     assert "function energyChartNiceTicks(" in html, "Nice ticks function missing"
 
     assert "clamp(340px, 24vw, 380px)" in html, "Right column clamp width missing"
-    assert "structureResizeObserver" in html, "Structure ResizeObserver field missing"
+    assert "structureFraming" in html, "Structure framing state missing"
+    assert "scheduleViewerFraming(" in html, "Shared framing scheduler missing"
     assert "data-expandable" in html, "Expandable field attribute missing"
+
+
+def test_viewer_framing_shared_helper_call_order() -> None:
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    marker = "function frame3DViewer("
+    assert html.count(marker) == 1, "Shared framing helper must be defined once"
+    body = html.split(marker, 1)[1].split("\nfunction ", 1)[0]
+    for token in (".resize()", ".center(", ".zoomTo(", ".render()"):
+        assert token in body, f"Shared framing helper missing {token}"
+    assert body.find(".resize()") < body.find(".center(") < body.find(".zoomTo(") < body.find(
+        ".render()"
+    ), "Shared framing helper call order changed"
+    assert "preserveView" in body, "Shared framing helper must preserve user view"
+
+
+def test_viewer_framing_container_stability_wait() -> None:
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    wait_marker = "function waitForContainerStable("
+    schedule_marker = "function scheduleViewerFraming("
+    assert html.count(wait_marker) == 1, "Container stability helper must be defined once"
+    assert html.count(schedule_marker) == 1, "Framing scheduler must be defined once"
+
+    wait_body = html.split(wait_marker, 1)[1].split("\nfunction ", 1)[0]
+    for token in ("clientWidth", "clientHeight", "requestAnimationFrame"):
+        assert token in wait_body, f"Container stability helper missing {token}"
+
+    schedule_body = html.split(schedule_marker, 1)[1].split("\nfunction ", 1)[0]
+    for token in (
+        "waitForContainerStable(",
+        "frame3DViewer(",
+        "ResizeObserver",
+        "lastW",
+        "lastH",
+        "pending",
+        "settled",
+        ".resize()",
+        ".render()",
+    ):
+        assert token in schedule_body, f"Framing scheduler missing {token}"
+
+
+def test_all_viewer_load_sites_use_shared_framing() -> None:
+    html = FRONTEND.read_text(encoding="utf-8")
+    load_sites = (
+        "renderMolDoc",
+        "energyGraphLoadFrameGeometry",
+        "renderPreviewStructure3D",
+        "renderReactionChanges3D",
+        "s2scanLoadPreview",
+        "s2scanInitCoordinateViewer",
+        "s2scanLoadResultFrame",
+    )
+
+    for name in load_sites:
+        marker = f"function {name}("
+        assert html.count(marker) == 1, f"{name} must be defined once"
+        body = html.split(marker, 1)[1]
+        body = body.split("\nasync function ", 1)[0].split("\nfunction ", 1)[0]
+        assert "scheduleViewerFraming(" in body, f"{name} bypasses shared framing"
+        assert ".zoomTo();" not in body, f"{name} contains a bare zoomTo call"
+
+
+def test_energy_viewer_same_frame_guard_allows_relayout_reframe() -> None:
+    html = FRONTEND.read_text(encoding="utf-8")
+    marker = "function energyGraphLoadFrameGeometry("
+    assert html.count(marker) == 1, "Energy geometry loader must be defined once"
+    body = html.split(marker, 1)[1].split("\nasync function ", 1)[0].split("\nfunction ", 1)[0]
+
+    same_frame_start = body.find("loadedFrameIndex")
+    assert same_frame_start >= 0, "Energy same-frame guard missing"
+    same_frame_return = body.find("return;", same_frame_start)
+    assert same_frame_return >= 0, "Energy same-frame guard missing early return"
+    same_frame_region = body[same_frame_start:same_frame_return]
+    assert "lastW" in same_frame_region and "lastH" in same_frame_region, (
+        "Energy same-frame guard must compare both container dimensions"
+    )
+    schedule_position = body.find("scheduleViewerFraming(", same_frame_start)
+    assert schedule_position >= 0, "Energy same-frame guard must schedule reframing"
+    assert schedule_position < same_frame_return, (
+        "Energy same-frame guard must reframe before returning"
+    )
+    assert "structureFramingPending" not in html, "Legacy framing pending state remains"
+    assert "structureFraming" in html, "Energy framing state missing"
+
+
+def test_viewer_framing_disposed_in_cleanup_paths() -> None:
+    html = FRONTEND.read_text(encoding="utf-8")
+    cleanup_paths = (
+        "energyGraphDestroyViewer",
+        "clearViewer",
+        "s2scanClose",
+        "s2scanResetState",
+    )
+
+    for name in cleanup_paths:
+        marker = f"function {name}("
+        assert html.count(marker) == 1, f"{name} must be defined once"
+        body = html.split(marker, 1)[1].split("\nfunction ", 1)[0]
+        assert "disposeViewerFraming(" in body, f"{name} omits framing cleanup"
 
 
 def test_frontend_script_has_no_syntax_errors() -> None:
@@ -1185,8 +1307,8 @@ def test_frontend_script_has_no_syntax_errors() -> None:
     js_content = html[js_start:script_end]
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".js", delete=False) as f:
-        f.write(js_content)
-        f.flush()
+        _ = f.write(js_content)
+        _ = f.flush()
         result = subprocess.run(
             ["node", "--check", f.name],
             capture_output=True, text=True,

@@ -56,6 +56,9 @@ dev = [
     "pre-commit>=3.6.0",
     "httpx>=0.27",
 ]
+browser = [
+    "playwright>=1.40",
+]
 
 [project.scripts]
 acp = "acp.cli:main"

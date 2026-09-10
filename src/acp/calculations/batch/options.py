@@ -39,6 +39,21 @@ class BatchMethodOptions:
     pressure: float = 1.0
     scale_factor: float = 0.9905
 
+    # Optimization controls
+    opt_max_iter: int | None = None
+    opt_convergence: str = "tight"
+    opt_trust_radius: float | None = None
+    opt_initial_hessian: str | None = None
+    opt_recalc_hess: str | int | None = None
+    opt_rescue_policy: str = "adaptive"
+    opt_max_rescue: int = 2
+
+    # SCF controls
+    scf_max_iter: int = 300
+    scf_convergence: str = "tight"
+    scf_strategy: str = "normal"
+    scf_orbital_inherit: bool = True
+
     def for_role(self, is_transition_state: bool) -> tuple[str, str]:
         """Return the method and basis selected for one item role."""
         method = self.optimization_method or self.minimum_method
@@ -83,6 +98,17 @@ class BatchMethodOptions:
                 "transition_state_basis": self.transition_state_basis,
                 "frequency_method": self.frequency_method,
                 "frequency_basis": self.frequency_basis,
+                "opt_max_iter": self.opt_max_iter,
+                "opt_convergence": self.opt_convergence,
+                "opt_trust_radius": self.opt_trust_radius,
+                "opt_initial_hessian": self.opt_initial_hessian,
+                "opt_recalc_hess": self.opt_recalc_hess,
+                "opt_rescue_policy": self.opt_rescue_policy,
+                "opt_max_rescue": self.opt_max_rescue,
+                "scf_max_iter": self.scf_max_iter,
+                "scf_convergence": self.scf_convergence,
+                "scf_strategy": self.scf_strategy,
+                "scf_orbital_inherit": self.scf_orbital_inherit,
             },
             sort_keys=True,
             separators=(",", ":"),
