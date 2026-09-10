@@ -742,6 +742,10 @@ class CalculationPlanExecutor:
             status=status,
         )
 
+        # Track the OPTIMIZE step's product id and geometry ref for binding.
+        optimize_product_id: str | None = None
+        optimize_geometry_ref: str | None = None
+
         for state in step_states:
             if state.result is None:
                 continue
@@ -749,18 +753,88 @@ class CalculationPlanExecutor:
             product_id = f"step_{state.index}_{state.kind.value}"
             label = f"{state.kind.value} (step {state.index})"
 
-            # register artifacts from the step result
-            for artifact in state.result.artifacts:
-                try:
-                    rel_path = str(artifact.path.relative_to(result_dir.parent))
-                except ValueError:
-                    rel_path = str(artifact.path)
-                manifest.add_product(
-                    id=f"{product_id}_{artifact.type}",
-                    label=f"{label} — {artifact.type}",
-                    path=rel_path,
-                    kind=product_kind,
-                )
+            # Record the OPTIMIZE step's structure product for geometry binding.
+            if state.kind is StepKind.OPTIMIZE and optimize_product_id is None:
+                optimize_product_id = product_id
+                for artifact in state.result.artifacts:
+                    try:
+                        optimize_geometry_ref = str(
+                            artifact.path.relative_to(result_dir.parent)
+                        )
+                    except ValueError:
+                        optimize_geometry_ref = str(artifact.path)
+                    break
+
+            # FREQUENCY steps: register normal_modes product with geometry binding.
+            if state.kind is StepKind.FREQUENCY:
+                normal_modes_ref = None
+                other_artifacts = []
+                for artifact in state.result.artifacts:
+                    if artifact.type == "normal_modes":
+                        normal_modes_ref = artifact
+                    else:
+                        other_artifacts.append(artifact)
+
+                if normal_modes_ref is not None:
+                    freq_dir = result_dir / "frequencies"
+                    freq_dir.mkdir(parents=True, exist_ok=True)
+                    dest = freq_dir / "normal_modes.json"
+                    try:
+                        import shutil
+
+                        shutil.copy2(normal_modes_ref.path, dest)
+                        geo_fingerprint = ""
+                        if optimize_geometry_ref is not None:
+                            geo_path = result_dir.parent / optimize_geometry_ref
+                            if geo_path.is_file():
+                                geo_fingerprint = hashlib.sha256(
+                                    geo_path.read_bytes()
+                                ).hexdigest()[:16]
+                        manifest.add_product(
+                            id=f"{product_id}_normal_modes",
+                            label=f"{label} — normal modes",
+                            path="frequencies/normal_modes.json",
+                            kind=ProductKind.FREQUENCY_MODES,
+                            metadata={
+                                "geometry_product_id": optimize_product_id,
+                                "geometry_ref": optimize_geometry_ref,
+                                "geometry_fingerprint": geo_fingerprint,
+                            },
+                        )
+                    except OSError:
+                        logger.debug(
+                            "executor: could not copy normal_modes.json to RESULT; skipping"
+                        )
+
+                # Remaining frequency artifacts (logs, etc.) as FILE products.
+                for artifact in other_artifacts:
+                    try:
+                        rel_path = str(
+                            artifact.path.relative_to(result_dir.parent)
+                        )
+                    except ValueError:
+                        rel_path = str(artifact.path)
+                    manifest.add_product(
+                        id=f"{product_id}_{artifact.type}",
+                        label=f"{label} — {artifact.type}",
+                        path=rel_path,
+                        kind=ProductKind.FILE,
+                    )
+            else:
+                # Non-frequency steps: register artifacts with step-mapped kind.
+                for artifact in state.result.artifacts:
+                    try:
+                        rel_path = str(
+                            artifact.path.relative_to(result_dir.parent)
+                        )
+                    except ValueError:
+                        rel_path = str(artifact.path)
+                    manifest.add_product(
+                        id=f"{product_id}_{artifact.type}",
+                        label=f"{label} — {artifact.type}",
+                        path=rel_path,
+                        kind=product_kind,
+                    )
 
             # register energy as a file product if available
             if state.result.energy is not None:

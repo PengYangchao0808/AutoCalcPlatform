@@ -638,3 +638,171 @@ class TestPrimitiveMaterializesModes:
         assert not (out / "normal_modes.json").is_file()
         nm_artifacts = [a for a in result.artifacts if a.type == "normal_modes"]
         assert len(nm_artifacts) == 0
+
+
+# ── Executor registration (todo 23) ─────────────────────────────────────
+
+
+class TestExecutorRegistersNormalModesProduct:
+    """Executor copies normal_modes.json to RESULT/frequencies/ with geometry binding."""
+
+    def test_executor_registers_frequency_modes_with_geometry_binding(
+        self, fake_backend: object, tmp_path: Path
+    ) -> None:
+        """OPT+freq plan → RESULT/frequencies/normal_modes.json + FREQUENCY_MODES product with metadata."""
+        import json as _json
+
+        import numpy as np
+
+        from acp.backends.base import QCResult
+        from acp.calculations.contracts import CalculationPlan, CalculationStep, StructureArtifact, StepKind
+        from acp.calculations.executor import CalculationPlanExecutor
+        from acp.storage.manifest import ProductKind, ResultManifest
+        from tests.conftest import FakeBackend
+
+        fb: FakeBackend = fake_backend  # type: ignore[assignment]
+
+        freq_log = tmp_path / "orca_freq.log"
+        freq_log.write_text(FULL_MODES_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+
+        opt_dir = tmp_path / "WORK" / "03_OPT"
+        freq_dir = tmp_path / "WORK" / "04_FREQ"
+        coordinates = np.array(
+            [[0.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]], dtype=float
+        )
+        opt_out = opt_dir / "opt.out"
+        opt_log = opt_dir / "opt.log"
+        freq_out = freq_dir / "freq.out"
+
+        # Pre-create output files so the executor can hash them for fingerprint.
+        opt_dir.mkdir(parents=True, exist_ok=True)
+        opt_out.write_text("optimized geometry content", encoding="utf-8")
+        opt_log.write_text("optimization log", encoding="utf-8")
+
+        fb.set_result(
+            "optimize",
+            QCResult(
+                success=True,
+                energy=-76.4,
+                coordinates=coordinates,
+                symbols=["O", "H", "H"],
+                converged=True,
+                output_file=opt_out,
+                log_file=opt_log,
+            ),
+        )
+        fb.set_result(
+            "frequency",
+            QCResult(
+                success=True,
+                frequencies=[-797.72, -791.36, 1411.55],
+                has_frequencies=True,
+                freq_log_file=freq_log,
+                output_file=freq_out,
+            ),
+        )
+
+        input_path = tmp_path / "input.xyz"
+        input_path.write_text("3\n\nO 0 0 0\nH 0 0 1\nH 0 1 0\n", encoding="utf-8")
+        plan = CalculationPlan(
+            workflow="test",
+            profile="r2SCAN-3c",
+            items=[
+                StructureArtifact(path=input_path, elements=["O", "H", "H"], source="test")
+            ],
+            steps=[
+                CalculationStep(kind=StepKind.OPTIMIZE),
+                CalculationStep(kind=StepKind.FREQUENCY),
+            ],
+        )
+
+        result = CalculationPlanExecutor().execute(plan, task_root=tmp_path)
+        assert result.is_completed
+
+        # RESULT/frequencies/normal_modes.json was created.
+        nm_dest = tmp_path / "RESULT" / "frequencies" / "normal_modes.json"
+        assert nm_dest.is_file()
+        product = _json.loads(nm_dest.read_text(encoding="utf-8"))
+        assert product["schema_version"] == "normal_modes_v1"
+        assert len(product["modes"]) == 9
+
+        # Manifest has exactly one FREQUENCY_MODES product with geometry binding.
+        manifest = ResultManifest.read(tmp_path / "RESULT")
+        freq_modes = [
+            p for p in manifest.products if p.kind == ProductKind.FREQUENCY_MODES
+        ]
+        assert len(freq_modes) == 1
+        assert freq_modes[0].path == "frequencies/normal_modes.json"
+        meta = freq_modes[0].metadata
+        assert meta["geometry_product_id"] == "step_0_optimize"
+        assert isinstance(meta["geometry_ref"], str)
+        assert len(meta["geometry_fingerprint"]) == 16
+        int(meta["geometry_fingerprint"], 16)
+
+        # Other frequency artifacts are FILE products, not FREQUENCY_MODES.
+        file_products = [
+            p
+            for p in manifest.products
+            if p.kind == ProductKind.FILE and "frequency" in p.id
+        ]
+        assert len(file_products) >= 1
+
+    def test_no_normal_modes_keeps_existing_behavior(
+        self, fake_backend: object, tmp_path: Path
+    ) -> None:
+        """Frequency without ORCA modes → no FREQUENCY_MODES product."""
+        import numpy as np
+
+        from acp.backends.base import QCResult
+        from acp.calculations.contracts import CalculationPlan, CalculationStep, StructureArtifact, StepKind
+        from acp.calculations.executor import CalculationPlanExecutor
+        from acp.storage.manifest import ProductKind, ResultManifest
+        from tests.conftest import FakeBackend
+
+        fb: FakeBackend = fake_backend  # type: ignore[assignment]
+
+        coordinates = np.array([[0.0, 0.0, 0.0]], dtype=float)
+        fb.set_result(
+            "optimize",
+            QCResult(
+                success=True,
+                energy=-40.0,
+                coordinates=coordinates,
+                symbols=["C"],
+                converged=True,
+                output_file=tmp_path / "WORK" / "03_OPT" / "opt.out",
+            ),
+        )
+        fb.set_result(
+            "frequency",
+            QCResult(
+                success=True,
+                frequencies=[350.0, 1200.0],
+                has_frequencies=True,
+                output_file=tmp_path / "WORK" / "04_FREQ" / "freq.out",
+            ),
+        )
+
+        input_path = tmp_path / "input.xyz"
+        input_path.write_text("1\n\nC 0 0 0\n", encoding="utf-8")
+        plan = CalculationPlan(
+            workflow="test",
+            profile="r2SCAN-3c",
+            items=[StructureArtifact(path=input_path, elements=["C"], source="test")],
+            steps=[
+                CalculationStep(kind=StepKind.OPTIMIZE),
+                CalculationStep(kind=StepKind.FREQUENCY),
+            ],
+        )
+
+        result = CalculationPlanExecutor().execute(plan, task_root=tmp_path)
+        assert result.is_completed
+
+        manifest = ResultManifest.read(tmp_path / "RESULT")
+        freq_modes = [
+            p for p in manifest.products if p.kind == ProductKind.FREQUENCY_MODES
+        ]
+        assert len(freq_modes) == 0
+        assert not (
+            tmp_path / "RESULT" / "frequencies" / "normal_modes.json"
+        ).is_file()
