@@ -192,6 +192,41 @@ class JobStore:
             rows = conn.execute(query, params).fetchall()
         return [_row_to_record(r) for r in rows]
 
+    def list_recent_terminal(
+        self,
+        limit: int = 20,
+        *,
+        project_id: str | None = None,
+        workflow: str | None = None,
+    ) -> list[JobRecord]:
+        """List terminal jobs, newest terminal update first.
+
+        Unlike :meth:`list_recent_completed`, this includes failed and
+        cancelled jobs.  Callers must still apply their own artifact policy:
+        a terminal job is not, by itself, evidence that every file in its
+        working directory is safe to reuse.
+        """
+        clauses: list[str] = ["status IN (?, ?, ?)"]
+        params: list[Any] = [
+            JobStatus.COMPLETED.value,
+            JobStatus.FAILED.value,
+            JobStatus.CANCELLED.value,
+        ]
+        if project_id is not None:
+            clauses.append("project_id=?")
+            params.append(project_id)
+        if workflow is not None:
+            clauses.append("workflow=?")
+            params.append(workflow)
+        query = (
+            f"SELECT * FROM jobs WHERE {' AND '.join(clauses)} "
+            "ORDER BY COALESCE(completed_at, updated_at, created_at) DESC LIMIT ?"
+        )
+        params.append(limit)
+        with self._lock, self._connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [_row_to_record(r) for r in rows]
+
     def list_by_project(self, project_id: str, limit: int = 200) -> list[JobRecord]:
         with self._lock, self._connect() as conn:
             rows = conn.execute(

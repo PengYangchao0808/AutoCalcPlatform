@@ -319,6 +319,54 @@ def test_non_completed_jobs_excluded(service: StructureSourceService, store, tmp
     assert service.list_recent() == []
 
 
+@pytest.mark.parametrize("status", [JobStatus.FAILED, JobStatus.CANCELLED])
+def test_terminal_job_exposes_only_manually_saved_frame_candidates(
+    service: StructureSourceService, store, tmp_path, status: JobStatus
+) -> None:
+    """A failed/cancelled calculation may expose an explicit user save only."""
+    work_dir = tmp_path / "uncategorized" / f"terminal_{status.value}"
+    candidate_id = "opt_item_001_frame_0114"
+    _write(
+        work_dir / "RESULT" / "structures" / f"{candidate_id}.xyz",
+        "2\nTAG: INT | candidate_id=opt_item_001_frame_0114 | selection_source=manual_frame\n"
+        "C 0 0 0\nO 1.2 0 0\n",
+    )
+    _write(
+        work_dir / "RESULT" / "result_manifest.json",
+        json.dumps(
+            {
+                "products": [
+                    {
+                        "id": f"frame_candidate_{candidate_id}",
+                        "path": f"structures/{candidate_id}.xyz",
+                        "kind": "structure",
+                        "metadata": {
+                            "candidate_id": candidate_id,
+                            "selection_source": "manual_frame",
+                        },
+                    },
+                    {"id": "partial_output", "path": "structures/partial.xyz", "kind": "structure"},
+                ]
+            }
+        ),
+    )
+    record = _make_record(
+        f"terminal_{status.value}",
+        workflow="BatchOptimize",
+        status=status,
+        work_dir=work_dir,
+    )
+    store.create(record)
+
+    entries = service.list_recent()
+    assert [entry["candidate_id"] for entry in entries] == [candidate_id]
+    asset, _checksum = service.get(entries[0]["source_id"])
+    assert asset["tag"] == ""
+    assert asset["candidate_id"] == candidate_id
+    with pytest.raises(ValueError, match="not completed"):
+        service.get(f"job_{record.id}:RESULT/structures/partial.xyz")
+
+
 def test_broken_pointer_and_traversal_dropped_silently(
     service: StructureSourceService, store, tmp_path
 ):

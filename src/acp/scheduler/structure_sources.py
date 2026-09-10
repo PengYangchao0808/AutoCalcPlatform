@@ -2,7 +2,8 @@
 Structure Source Discovery
 ==========================
 
-Discover reusable final structures from COMPLETED scheduler jobs so the
+Discover reusable structures from terminal scheduler jobs (COMPLETED plus
+FAILED/CANCELLED jobs that carry formally saved structure products) so the
 frontend "job results" tab can offer them as input for new jobs.
 
 Read-only by design: this module never writes ``result_summary.json`` and
@@ -19,6 +20,7 @@ import json
 import logging
 import posixpath
 import re
+import sqlite3
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -77,7 +79,7 @@ _TAG_ID_RE = re.compile(r"\bcandidate_id\s*=\s*([^\s|]+)", re.IGNORECASE)
 # (``acp.calculations.pes.review.candidate_id_for``); the bare ``*_guess_*``
 # forms are the legacy S2/engine recommendation names.
 _CANDIDATE_PATH_RE = re.compile(
-    r"(?<![A-Za-z0-9])((?:pes_)?(?:ts|int)_(?:guess|candidate|frame)_[A-Za-z0-9_-]+)",
+    r"(?<![A-Za-z0-9])((?:pes_)?(?:(?:ts|int)_)?(?:guess|candidate|frame)_[A-Za-z0-9_-]+)",
     re.IGNORECASE,
 )
 _S2_CANDIDATE_ID_RE = re.compile(r"s2_candidate[_-]([A-Za-z0-9_-]+)", re.IGNORECASE)
@@ -358,7 +360,7 @@ def _select_legacy_s2_products(products: list[Any]) -> list[dict[str, Any]]:
 
 
 class StructureSourceService:
-    """Discover and load reusable final structures from completed jobs.
+    """Discover reusable structures from completed jobs and saved terminal frames.
 
     Args:
         store: Scheduler :class:`JobStore` used for job queries.
@@ -378,6 +380,7 @@ class StructureSourceService:
         self._run_root = Path(run_root)
         self._fetcher = fetcher
         self._probe_cache: dict[str, tuple[float, list[dict[str, Any]] | None]] = {}
+        self._project_names: dict[str, str] | None = None
 
     # ------------------------------------------------------------------ #
     # Listing
@@ -391,15 +394,21 @@ class StructureSourceService:
         workflow: str | None = None,
         include_remote: bool = True,
     ) -> list[dict[str, Any]]:
-        """Return one entry per reusable structure from recent COMPLETED jobs."""
+        """Return reusable structures from recent terminal jobs.
+
+        Completed jobs use their normal workflow-specific source policy.
+        Failed or cancelled jobs contribute only formally registered
+        structure products (manually saved frames plus items that finished
+        and were written to ``result_manifest.json`` before the job
+        terminated); unfinished scratch output remains unavailable.
+        """
         if workflow in _EXCLUDED_WORKFLOWS:
             return []
-        records = self._store.list_recent_completed(
+        records = self._store.list_recent_terminal(
             limit=max(limit * 3, 20),
             project_id=project_id,
             workflow=workflow,
         )
-        records = [r for r in records if r.status == JobStatus.COMPLETED]
         remote_count = sum(
             1 for r in records if r.spec.workflow not in _EXCLUDED_WORKFLOWS and self._is_remote(r)
         )
@@ -410,6 +419,14 @@ class StructureSourceService:
             if len(entries) >= limit:
                 break
             if record.spec.workflow in _EXCLUDED_WORKFLOWS:
+                continue
+            if record.status != JobStatus.COMPLETED:
+                entries.extend(self._discover_terminal_sources(record))
+                continue
+            if record.status != JobStatus.COMPLETED:
+                if self._is_remote(record) and not include_remote:
+                    continue
+                entries.extend(self._discover_terminal_frame_candidates(record))
                 continue
             if self._is_remote(record):
                 if not include_remote:
@@ -422,6 +439,17 @@ class StructureSourceService:
                 continue
             entries.extend(self._discover_job(record))
         return self._deduplicate_entries(entries)[:limit]
+
+    def _discover_terminal_frame_candidates(self, record: JobRecord) -> list[dict[str, Any]]:
+        """Return only deliberately saved frames from a non-completed terminal job."""
+        selectors = ((_RESULT_MANIFEST_FILENAME, _select_frame_candidate_products),)
+        if self._is_remote(record):
+            return self._probe_remote_product_listings(
+                record, selectors=selectors, candidate_hints=True
+            ) or []
+        return self._discover_product_listings(
+            record, selectors=selectors, candidate_hints=True
+        )
 
     @staticmethod
     def _deduplicate_entries(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -469,7 +497,18 @@ class StructureSourceService:
         if record is None:
             raise ValueError(f"Job not found: {job_id}")
         if record.status != JobStatus.COMPLETED:
-            raise ValueError(f"Job {job_id} is not completed (status={record.status.value})")
+            if not record.status.is_terminal:
+                raise ValueError(
+                    f"Job {job_id} is not completed (status={record.status.value})"
+                )
+            allowed_paths = {
+                str(entry.get("path") or "")
+                for entry in self._discover_terminal_frame_candidates(record)
+            }
+            if rel_path not in allowed_paths:
+                raise ValueError(
+                    f"Job {job_id} is not completed (status={record.status.value})"
+                )
         if record.spec.workflow in _EXCLUDED_WORKFLOWS:
             raise ValueError(
                 f"Workflow {record.spec.workflow!r} does not provide reusable structures"
