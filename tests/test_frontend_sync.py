@@ -2243,3 +2243,171 @@ def test_structure_viewer_node_energy_transient_entry() -> None:
         f"Transient entry test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Todo 19: Phase-A contract tests + i18n completeness
+# ---------------------------------------------------------------------------
+# This section consolidates all phase-A structural locks for the structure
+# viewer.  Every assertion here guards a contract established in todos 13-18.
+# Removing or weakening any assertion turns the corresponding test red.
+
+_STRUCTURE_I18N_KEY_RE = re.compile(r'"(structure\.[^"]+)":')
+
+
+def _extract_structure_keys(html: str, block_re: re.Pattern[str]) -> set[str]:  # type: ignore[type-arg]
+    """Extract structure.* i18n keys from a single locale block."""
+    m = block_re.search(html)
+    if not m:
+        return set()
+    return set(_STRUCTURE_I18N_KEY_RE.findall(m.group(1)))
+
+
+def test_phase_a_structure_tab_contract() -> None:
+    """Phase-A lock: single structure tab, conformers/3d absent (todo 14)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert 'data-tab="conformers"' not in html, "conformers tab must be removed"
+    assert 'data-tab="3d"' not in html, "3d tab must be renamed to structure"
+    assert 'data-tab="structure"' in html, "structure tab must exist"
+    assert '>结构查看器</button>' in html
+    assert '"tab.structure": "结构查看器"' in html
+    assert '"tab.structure": "Structure Viewer"' in html
+    assert '"tab.conformers"' not in html
+    assert '"tab.3d"' not in html
+    # Other tabs must remain
+    assert 'data-tab="path"' in html
+    assert 'data-tab="energy"' in html
+    assert 'data-tab="wavefunction"' in html
+    # Compat mapping
+    assert 'tab === "3d" || tab === "conformers"' in html or 'tab === "conformers" || tab === "3d"' in html
+
+
+def test_phase_a_store_api_names() -> None:
+    """Phase-A lock: structure_viewer.js exposes all required API names (todos 15-18)."""
+    js = FRONTEND_JS_DIR / "structure_viewer.js"
+    content = js.read_text(encoding="utf-8")
+
+    required = [
+        "structureViewerState",
+        "loadStructureViewer",
+        "selectEntry",
+        "refreshIfChanged",
+        "onJobSelected",
+        "injectManualEntry",
+        "onEnergyNodeSelected",
+        "loadSelectedGeometry",
+    ]
+    for name in required:
+        assert name in content, f"{name} missing from structure_viewer.js namespace"
+
+
+def test_phase_a_selectjob_autoload_call() -> None:
+    """Phase-A lock: selectJob calls onJobSelected which triggers loadStructureViewer (todo 17)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    select_job = html.split("async function selectJob(jobId)", 1)[1].split("\nasync function ", 1)[0]
+    assert "onJobSelected" in select_job, (
+        "selectJob must call ACPStructureViewer.onJobSelected"
+    )
+
+
+def test_phase_a_manual_file_injection_and_sha256_parity() -> None:
+    """Phase-A lock: manual_file injection path + SHA-256 parity (todo 17)."""
+    js = FRONTEND_JS_DIR / "structure_viewer.js"
+    content = js.read_text(encoding="utf-8")
+
+    assert "injectManualEntry" in content
+    assert "_manualEntryId" in content
+    assert '_sha256hex(relpath).slice(0, 12)' in content, (
+        "manual entry id must use sha256(relpath)[:12]"
+    )
+
+
+def test_phase_a_energy_push_token_guard() -> None:
+    """Phase-A lock: energy push uses selectionToken guard (todo 18)."""
+    js = FRONTEND_JS_DIR / "structure_viewer.js"
+    content = js.read_text(encoding="utf-8")
+
+    assert "onEnergyNodeSelected" in content
+    assert '"energy_graph"' in content, (
+        'Must use "energy_graph" origin for energy-graph push'
+    )
+
+
+def test_phase_a_dirty_guard_branch() -> None:
+    """Phase-A lock: dirty guard prevents coordinate replacement (todo 15)."""
+    js = FRONTEND_JS_DIR / "structure_viewer.js"
+    content = js.read_text(encoding="utf-8")
+
+    assert "newerAvailable" in content
+    assert "structure.newer_available" in content or "NEWER_AVAILABLE" in content
+
+
+def test_phase_a_forbidden_identifiers_absent() -> None:
+    """Phase-A lock: forbidden identifiers must stay absent (anti-pattern #29)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "energyGraphConfirmAndBatch" not in html
+    assert 'data-energy-action="to-batch"' not in html
+    assert 'data-energy-action="lock-frame"' not in html
+    assert "isFrameLocked" not in html
+    assert "acp-frame-lock" not in html
+
+
+def test_phase_a_i18n_structure_keys_complete_across_locales() -> None:
+    """Phase-A lock: every structure.* key in zh-CN must also exist in en-US
+    and vice-versa.
+
+    A future edit that adds a structure key to only one locale will fail here.
+    """
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    zh_keys = _extract_structure_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_structure_keys(html, _EN_BLOCK_RE)
+
+    assert zh_keys, "No structure.* keys found in zh-CN block"
+    assert en_keys, "No structure.* keys found in en-US block"
+
+    only_zh = zh_keys - en_keys
+    only_en = en_keys - zh_keys
+    assert not only_zh, f"Keys in zh-CN but missing from en-US: {sorted(only_zh)}"
+    assert not only_en, f"Keys in en-US but missing from zh-CN: {sorted(only_en)}"
+
+
+def test_phase_a_i18n_structure_keys_used_in_js_exist_in_both_locales() -> None:
+    """Phase-A lock: every structure.* key referenced by _t() in
+    structure_viewer.js must exist in both locale dictionaries."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    js = FRONTEND_JS_DIR / "structure_viewer.js"
+    js_content = js.read_text(encoding="utf-8")
+
+    # Extract keys used in _t("structure.xxx", ...) calls
+    # Filter out dynamic keys like "structure.source_kind." (empty suffix)
+    t_call_re = re.compile(r'_t\("(structure\.[^"]+)"')
+    used_keys = {k for k in t_call_re.findall(js_content) if not k.endswith(".")}
+
+    zh_keys = _extract_structure_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_structure_keys(html, _EN_BLOCK_RE)
+
+    missing_zh = used_keys - zh_keys
+    missing_en = used_keys - en_keys
+    assert not missing_zh, (
+        f"structure.* keys used in JS but missing from zh-CN: {sorted(missing_zh)}"
+    )
+    assert not missing_en, (
+        f"structure.* keys used in JS but missing from en-US: {sorted(missing_en)}"
+    )
+
+
+def test_phase_a_i18n_structure_keys_in_js_have_str_fallback() -> None:
+    """Phase-A lock: every _t() call in structure_viewer.js must have a
+    STR-table fallback (second argument) for Node.js environments."""
+    js = FRONTEND_JS_DIR / "structure_viewer.js"
+    content = js.read_text(encoding="utf-8")
+
+    # Match _t("structure.xxx", STR.YYY) — must have two arguments
+    t_calls = re.findall(r'_t\("structure\.[^"]+",\s*STR\.\w+\)', content)
+    assert len(t_calls) >= 20, (
+        f"Expected >=20 _t() calls with STR fallback, found {len(t_calls)}"
+    )

@@ -24,14 +24,15 @@
  *   - _esc                      (XSS-safe text insertion)
  *   - _sha256hex(str)            (sync SHA-256 → hex string)
  *
- * TODO(todo-19): phase-A contract tests + i18n completeness
+ * i18n: structure.* keys migrated to I18N dictionaries (zh-CN + en-US);
+ *       _t() helper reads from app's t() with STR-table fallback for Node.js.
  */
 (function () {
   "use strict";
 
   var VERSION = "0.4.0";
 
-  /* ---- user-visible strings (zh constants; todo 19 moves to i18n) ---- */
+  /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
     NEWER_AVAILABLE: "\u6709\u65b0\u7ed3\u6784\u53ef\u7528",       // 有新结构可用
     PENDING_FETCH: "\u7b49\u5f85\u8fdc\u7a0b\u7ed3\u679c",         // 等待远程结果
@@ -63,6 +64,23 @@
     MEASUREMENTS_PLACEHOLDER: "\u9009\u62e9\u539f\u5b50\u540e\u663e\u793a\u6d4b\u91cf\u7ed3\u679c", // 选择原子后显示测量结果
     EDIT_PLACEHOLDER: "\u7f16\u8f91\u529f\u80fd\u5c06\u5728\u540e\u7eed\u7248\u672c\u5f00\u653e", // 编辑功能将在后续版本开放
   };
+
+  /**
+   * i18n lookup with STR-table fallback.
+   * Tries the app's t(key) first (browser); falls back to STR[fallbackKey]
+   * for Node.js test environments where the app's t() is unavailable.
+   *
+   * @param {string} key        - i18n key (e.g. "structure.newer_available")
+   * @param {string} fallback   - fallback value (STR table constant)
+   * @returns {string}
+   */
+  function _t(key, fallback) {
+    if (typeof t === "function") {
+      var val = t(key);
+      if (val && val !== key) return val;
+    }
+    return fallback;
+  }
 
   /** @returns {Function|null} */
   function _getFetchImpl() {
@@ -591,7 +609,7 @@
     if (structureViewerState.availability === "pending_fetch") {
       var notice = document.createElement("div");
       notice.className = "sv-notice sv-notice-pending";
-      notice.textContent = STR.PENDING_FETCH + "\u2014" + STR.PENDING_RETRY;
+      notice.textContent = _t("structure.pending_fetch", STR.PENDING_FETCH) + "\u2014" + _t("structure.pending_retry", STR.PENDING_RETRY);
       listBody.appendChild(notice);
     }
     if (structureViewerState.error) {
@@ -617,7 +635,7 @@
       return;
     }
 
-    listHeader.textContent = STR.LIST_TITLE;
+    listHeader.textContent = _t("structure.list_title", STR.LIST_TITLE);
 
     /* group entries by group_id */
     var groupMap = {};
@@ -729,7 +747,7 @@
     if (!inspHeader || !inspBody) return;
 
     inspBody.innerHTML = "";
-    inspHeader.textContent = STR.INSPECTOR_TITLE;
+    inspHeader.textContent = _t("structure.inspector_title", STR.INSPECTOR_TITLE);
 
     var payload = structureViewerState.payload;
     var entries = (payload && payload.entries) || [];
@@ -739,10 +757,10 @@
     if (structureViewerState.newerAvailable) {
       var newerNotice = document.createElement("div");
       newerNotice.className = "sv-notice sv-notice-newer";
-      newerNotice.textContent = STR.NEWER_AVAILABLE;
+      newerNotice.textContent = _t("structure.newer_available", STR.NEWER_AVAILABLE);
       var refreshBtn = document.createElement("button");
       refreshBtn.className = "sv-refresh-btn";
-      refreshBtn.textContent = STR.REFRESH;
+      refreshBtn.textContent = _t("structure.refresh", STR.REFRESH);
       refreshBtn.addEventListener("click", function () {
         structureViewerState.newerAvailable = false;
         refreshIfChanged();
@@ -756,7 +774,7 @@
     if (structureViewerState.pendingGeometryRetry) {
       var pendingNotice = document.createElement("div");
       pendingNotice.className = "sv-notice sv-notice-pending";
-      pendingNotice.textContent = STR.PENDING_FETCH;
+      pendingNotice.textContent = _t("structure.pending_fetch", STR.PENDING_FETCH);
       inspBody.appendChild(pendingNotice);
     }
 
@@ -769,19 +787,20 @@
     if (!entry) {
       var noEntry = document.createElement("div");
       noEntry.className = "sv-inspector-value sv-muted";
-      noEntry.textContent = STR.NO_ENTRY;
+      noEntry.textContent = _t("structure.no_entry", STR.NO_ENTRY);
       inspBody.appendChild(noEntry);
       return;
     }
 
     /* status section */
-    inspBody.appendChild(_inspectorSection(STR.STATUS,
-      entry.status === "completed" ? STR.COMPLETED : STR.FAILED));
+    inspBody.appendChild(_inspectorSection(_t("structure.status", STR.STATUS),
+      entry.status === "completed" ? _t("structure.completed", STR.COMPLETED) : _t("structure.failed", STR.FAILED)));
 
     /* source section */
     var sourceKind = (entry.source && entry.source.kind) || "";
-    var sourceLabel = STR.SOURCE_KINDS[sourceKind] || _esc(sourceKind);
-    inspBody.appendChild(_inspectorSection(STR.SOURCE, sourceLabel));
+    var sourceFallback = STR.SOURCE_KINDS[sourceKind] || _esc(sourceKind);
+    var sourceLabel = sourceKind ? _t("structure.source_kind." + sourceKind, sourceFallback) : sourceFallback;
+    inspBody.appendChild(_inspectorSection(_t("structure.source", STR.SOURCE), sourceLabel));
 
     /* energy section */
     if (entry.energy && entry.energy.value != null) {
@@ -790,7 +809,7 @@
 
       var lbl = document.createElement("div");
       lbl.className = "sv-inspector-label";
-      lbl.textContent = STR.ENERGY;
+      lbl.textContent = _t("structure.energy", STR.ENERGY);
       energyDiv.appendChild(lbl);
 
       var valRow = document.createElement("div");
@@ -828,7 +847,7 @@
       deltaDiv.className = "sv-inspector-section";
       var deltaLbl = document.createElement("div");
       deltaLbl.className = "sv-inspector-label";
-      deltaLbl.textContent = STR.DELTA_E;
+      deltaLbl.textContent = _t("structure.delta_e", STR.DELTA_E);
       deltaDiv.appendChild(deltaLbl);
       var deltaVal = document.createElement("div");
       deltaVal.className = "sv-inspector-delta";
@@ -843,7 +862,7 @@
       weightDiv.className = "sv-inspector-section";
       var weightLbl = document.createElement("div");
       weightLbl.className = "sv-inspector-label";
-      weightLbl.textContent = STR.WEIGHT;
+      weightLbl.textContent = _t("structure.weight", STR.WEIGHT);
       weightDiv.appendChild(weightLbl);
       var weightVal = document.createElement("div");
       weightVal.className = "sv-inspector-value";
@@ -864,12 +883,12 @@
     vibDiv.className = "sv-inspector-section";
     var vibLbl = document.createElement("div");
     vibLbl.className = "sv-inspector-label";
-    vibLbl.textContent = STR.VIBRATIONS;
+    vibLbl.textContent = _t("structure.vibrations", STR.VIBRATIONS);
     vibDiv.appendChild(vibLbl);
     var vibVal = document.createElement("div");
     vibVal.className = "sv-inspector-value sv-muted";
     var vibAvail = entry.vibrations && entry.vibrations.available;
-    vibVal.textContent = vibAvail ? "\u53ef\u7528" : STR.VIBRATIONS_NA;
+    vibVal.textContent = vibAvail ? "\u53ef\u7528" : _t("structure.vibrations_na", STR.VIBRATIONS_NA);
     vibDiv.appendChild(vibVal);
     inspBody.appendChild(vibDiv);
 
@@ -878,11 +897,11 @@
     measDiv.className = "sv-inspector-section";
     var measLbl = document.createElement("div");
     measLbl.className = "sv-inspector-label";
-    measLbl.textContent = STR.MEASUREMENTS;
+    measLbl.textContent = _t("structure.measurements", STR.MEASUREMENTS);
     measDiv.appendChild(measLbl);
     var measVal = document.createElement("div");
     measVal.className = "sv-inspector-value sv-muted";
-    measVal.textContent = STR.MEASUREMENTS_PLACEHOLDER;
+    measVal.textContent = _t("structure.measurements_placeholder", STR.MEASUREMENTS_PLACEHOLDER);
     measDiv.appendChild(measVal);
     inspBody.appendChild(measDiv);
 
@@ -891,7 +910,7 @@
     editDiv.className = "sv-inspector-section";
     var editVal = document.createElement("div");
     editVal.className = "sv-inspector-value sv-muted";
-    editVal.textContent = STR.EDIT_PLACEHOLDER;
+    editVal.textContent = _t("structure.edit_placeholder", STR.EDIT_PLACEHOLDER);
     editDiv.appendChild(editVal);
     inspBody.appendChild(editDiv);
 
@@ -902,7 +921,7 @@
       warnDiv.className = "sv-inspector-section";
       var warnLbl = document.createElement("div");
       warnLbl.className = "sv-inspector-label";
-      warnLbl.textContent = STR.WARNINGS;
+      warnLbl.textContent = _t("structure.warnings", STR.WARNINGS);
       warnDiv.appendChild(warnLbl);
       var warnList = document.createElement("ul");
       warnList.className = "sv-warning-list";
@@ -1127,6 +1146,7 @@
     closeAllDrawers: closeAllDrawers,
     _applyCatalogResponse: _applyCatalogResponse,
     _esc: _esc,
+    _t: _t,
     _sha256hex: _sha256hex,
     _manualEntryId: _manualEntryId,
     _entryIdFromEnergyNode: _entryIdFromEnergyNode,
