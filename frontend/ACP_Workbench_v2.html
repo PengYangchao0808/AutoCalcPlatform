@@ -1075,8 +1075,17 @@ body.resizing-v canvas {
 .energy-marker-int { fill: var(--amber); stroke: var(--amber); pointer-events: none; }
 .energy-marker-min { fill: var(--green); stroke: var(--green); pointer-events: none; }
 .energy-marker-failed { stroke: var(--red); pointer-events: none; }
-.energy-marker-max { fill: none; stroke: var(--red); stroke-width: 1.6; pointer-events: none; }
 .energy-marker-basin { fill: none; stroke: #5dd6ff; stroke-width: 1.6; pointer-events: none; }
+/* ── Candidate label band ── */
+.energy-candidate-band { pointer-events: none; }
+.energy-band-chip-bg { fill: rgba(78, 161, 255, 0.12); stroke: rgba(78, 161, 255, 0.35); stroke-width: 1; }
+.energy-band-chip-bg.selected { fill: rgba(78, 161, 255, 0.25); stroke: var(--accent); stroke-width: 1.5; }
+.energy-band-chip-bg.saved { stroke: rgba(78, 161, 255, 0.25); }
+.energy-band-chip-bg.pending { stroke: rgba(255, 184, 93, 0.45); }
+.energy-band-chip-label { fill: var(--text-primary); font-size: 11px; font-weight: 600; pointer-events: none; }
+.energy-band-chip-label.selected { fill: var(--accent); }
+.energy-band-leader { stroke: rgba(255, 255, 255, 0.28); stroke-width: 1; stroke-dasharray: 2 2; }
+.energy-band-chip-hit { cursor: pointer; pointer-events: all; }
 .sampling-workspace {
   position: relative;
   height: 100%;
@@ -1365,7 +1374,7 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .energy-chart-svg.mode-pan.panning { cursor: grabbing; }
 .energy-box-select-rect { fill: rgba(56,189,248,0.12); stroke: rgba(56,189,248,0.55); stroke-width: 1; stroke-dasharray: 4 3; pointer-events: none; }
 .energy-chart-svg.labels-hidden [data-energy-annotation] { display: none; }
-.energy-point, .energy-point-halo, .energy-marker-ts, .energy-marker-int, .energy-marker-min, .energy-marker-failed, .energy-marker-max, .energy-marker-basin, .energy-marker-line, .energy-current-line { vector-effect: non-scaling-stroke; }
+.energy-point, .energy-point-halo, .energy-marker-ts, .energy-marker-int, .energy-marker-min, .energy-marker-failed, .energy-marker-basin, .energy-marker-line, .energy-current-line { vector-effect: non-scaling-stroke; }
 .plot-tip { position: fixed; z-index: 9999; pointer-events: none; opacity: 0; transition: opacity 120ms ease; background: #0d141c; border: 1px solid rgba(78,161,255,0.35); border-radius: 6px; padding: 6px 9px; color: #e8f2ff; font-size: 11px; line-height: 1.5; box-shadow: 0 6px 18px rgba(0,0,0,0.45); max-width: 240px; }
 .plot-tip.show { opacity: 1; }
 .plot-tip-keys { display: inline-flex; gap: 4px; margin-left: 6px; }
@@ -7936,10 +7945,163 @@ function energyProjectCandidatesAsAnnotations(data) {
   return projected;
 }
 
+/* ── Candidate band layout: greedy2-row chips above plot area ── */
+/* items: [{annotation, dataX, dataY, frameIndex, type, value}] sorted by dataX
+ * geom: {W, H, pad}
+ * Returns {bandSvg, plotSvg, bandHeight} — bandSvg for pad.top area, plotSvg for markers at real coords */
+function energyCandidateBandLayout(items, geom, xFor, yFor, opts) {
+  if (!items.length) return { bandSvg: "", plotSvg: "", bandHeight: 0 };
+  var W = geom.W, pad = geom.pad;
+  var plotLeft = pad.left, plotRight = W - pad.right;
+  var plotWidth = plotRight - plotLeft;
+  var rowHeight = 28, rowGap = 8, chipGap = 8, chipH = 22, maxRows = 2;
+  /* ── Group by frame_index: same frame → single chip ── */
+  var byFrame = {};
+  items.forEach(function(item) {
+    var fi = Number(item.frameIndex);
+    if (!byFrame[fi]) byFrame[fi] = [];
+    byFrame[fi].push(item);
+  });
+  var merged = [];
+  Object.keys(byFrame).sort(function(a, b) { return Number(a) - Number(b); }).forEach(function(fi) {
+    var group = byFrame[fi];
+    var first = group[0];
+    var label = String(first.annotation.label || first.annotation.id);
+    var chipText = label + (group.length > 1 ? " (+" + (group.length - 1) + ")" : "");
+    merged.push({ items: group, frameIndex: Number(fi), chipText: chipText, dataX: first.dataX, dataY: first.dataY, type: first.type });
+  });
+  /* ── Measure chip widths ── */
+  merged.forEach(function(m) {
+    m.chipW = energyGraphMeasureText(m.chipText, 11, true) + 18;
+  });
+  /* ── Greedy2-row layout ── */
+  var rows = [[], []];
+  merged.forEach(function(m) {
+    var anchorX = m.dataX;
+    var placed = false;
+    for (var r = 0; r < maxRows && !placed; r++) {
+      var row = rows[r];
+      var startX = Math.max(plotLeft, Math.min(plotRight - m.chipW, anchorX - m.chipW / 2));
+      if (row.length > 0) {
+        var last = row[row.length - 1];
+        var minStart = last._x + last.chipW + chipGap;
+        if (startX < minStart) startX = minStart;
+      }
+      if (startX + m.chipW <= plotRight + 1) {
+        m._x = startX;
+        m._row = r;
+        row.push(m);
+        placed = true;
+      }
+    }
+    if (!placed) {
+      /* TODO: overflow — truncate or merge (Todo 7 capacity limit) */
+      m._x = plotRight - m.chipW;
+      m._row = 1;
+      rows[1].push(m);
+    }
+  });
+  var usedRows = (rows[0].length > 0 ? 1 : 0) + (rows[1].length > 0 ? 1 : 0);
+  var bandHeight = usedRows * rowHeight + (usedRows > 1 ? rowGap : 0);
+  /* ── Render band SVG (chips + leader lines) ── */
+  var bandSvg = "";
+  var plotSvg = "";
+  var selectionLocked = !!(opts && opts.selectionLocked);
+  merged.forEach(function(m) {
+    var cx = m._x + m.chipW / 2;
+    var cy = m._row === 0 ? rowHeight / 2 : rowHeight + rowGap + rowHeight / 2;
+    /* Chip background */
+    var savedClass = m.items[0].annotation.saved ? " saved" : " pending";
+    var isSelected = m.items[0].annotation.id === energyGraphState.selectedAnnotationId;
+    var selectedClass = isSelected ? " selected" : "";
+    bandSvg += '<rect class="energy-band-chip-bg' + selectedClass + savedClass + '" x="' + m._x + '" y="' + (cy - chipH / 2) + '" width="' + m.chipW + '" height="' + chipH + '" rx="4"/>';
+    /* Chip text */
+    bandSvg += '<text class="energy-band-chip-label' + selectedClass + '" x="' + cx + '" y="' + (cy + 4) + '" text-anchor="middle">' + escapeHtml(m.chipText) + '</text>';
+    /* Leader line from chip bottom to candidate point */
+    var pointX = xFor(m.dataX);
+    var pointY = yFor(m.dataY);
+    bandSvg += '<line class="energy-band-leader" x1="' + cx + '" y1="' + (cy + chipH / 2) + '" x2="' + pointX + '" y2="' + pointY + '"/>';
+    /* Candidate markers at real coordinates (inside plot group) */
+    m.items.forEach(function(item) {
+      var annotation = item.annotation;
+      var ax = xFor(item.dataX), ay = yFor(item.dataY);
+      var isTS = item.type === "ts";
+      var stateClass = annotation.saved ? " saved" : " pending";
+      var annSelected = annotation.id === energyGraphState.selectedAnnotationId;
+      var annSelClass = annSelected ? " selected" : "";
+      var dragAttr = !selectionLocked ? ' data-energy-draggable="1"' : "";
+      plotSvg += '<g data-energy-annotation="' + escapeHtml(String(annotation.id)) + '" data-energy-frame="' + escapeHtml(String(item.frameIndex)) + '"' + dragAttr + '>';
+      if (isTS) {
+        plotSvg += '<path class="energy-marker-ts' + annSelClass + stateClass + '" d="M ' + ax + ' ' + (ay - 7) + ' L ' + (ax + 7) + ' ' + ay + ' L ' + ax + ' ' + (ay + 7) + ' L ' + (ax - 7) + ' ' + ay + ' Z"></path>';
+      } else {
+        plotSvg += '<circle class="energy-marker-int' + annSelClass + stateClass + '" cx="' + ax + '" cy="' + ay + '" r="6"></circle>';
+      }
+      plotSvg += '</g>';
+    });
+  });
+  /* Chip click → select frame */
+  bandSvg = '<g class="energy-candidate-band">' + bandSvg;
+  merged.forEach(function(m) {
+    bandSvg += '<rect class="energy-band-chip-hit" data-energy-candidate-jump="' + m.frameIndex + '" x="' + m._x + '" y="' + (m._row === 0 ? 0 : rowHeight + rowGap) + '" width="' + m.chipW + '" height="' + rowHeight + '" fill="transparent" rx="4"/>';
+  });
+  bandSvg += '</g>';
+  return { bandSvg: bandSvg, plotSvg: plotSvg, bandHeight: bandHeight };
+}
+
+/* ── Candidate band height pre-compute (dry run, no SVG) ── */
+function energyCandidateBandPreHeight(items, plotWidth) {
+  if (!items.length) return 0;
+  var rowHeight = 28, rowGap = 8, chipGap = 8, maxRows = 2;
+  var plotLeft = 0, plotRight = plotWidth;
+  /* Group by frame_index */
+  var byFrame = {};
+  items.forEach(function(item) {
+    var fi = Number(item.frameIndex);
+    if (!byFrame[fi]) byFrame[fi] = [];
+    byFrame[fi].push(item);
+  });
+  var merged = [];
+  Object.keys(byFrame).sort(function(a, b) { return Number(a) - Number(b); }).forEach(function(fi) {
+    var group = byFrame[fi];
+    var first = group[0];
+    var label = String(first.annotation.label || first.annotation.id);
+    var chipText = label + (group.length > 1 ? " (+" + (group.length - 1) + ")" : "");
+    merged.push({ chipW: energyGraphMeasureText(chipText, 11, true) + 18, dataX: first.dataX });
+  });
+  /* Greedy2-row dry run */
+  var rows = [[], []];
+  merged.forEach(function(m) {
+    var anchorX = m.dataX;
+    var placed = false;
+    for (var r = 0; r < maxRows && !placed; r++) {
+      var row = rows[r];
+      var startX = Math.max(plotLeft, Math.min(plotRight - m.chipW, anchorX - m.chipW / 2));
+      if (row.length > 0) {
+        var last = row[row.length - 1];
+        var minStart = last._x + last.chipW + chipGap;
+        if (startX < minStart) startX = minStart;
+      }
+      if (startX + m.chipW <= plotRight + 1) {
+        m._x = startX;
+        m._row = r;
+        row.push(m);
+        placed = true;
+      }
+    }
+    if (!placed) {
+      m._x = plotRight - m.chipW;
+      m._row = 1;
+      rows[1].push(m);
+    }
+  });
+  var usedRows = (rows[0].length > 0 ? 1 : 0) + (rows[1].length > 0 ? 1 : 0);
+  return usedRows * rowHeight + (usedRows > 1 ? rowGap : 0);
+}
+
 /* ── Shared annotation renderer (reusable by PES + OPT + scan/conformer) ── */
 /* opts = {annotations, nodes, xFor, yFor, geom, clipId, mode, formatValue, selectedNodeId, selectionLocked}
    mode: "full" = PES markers+labels+caption; "flag" = OPT compact (vertical line + shape, no caption)
-   Returns SVG string of annotation elements. */
+   Returns {svg, bandSvg, bandHeight} — svg for plot group, bandSvg for pad.top area */
 function renderTrajectoryAnnotations(opts) {
   var annotations = opts.annotations || [];
   var nodes = opts.nodes || [];
@@ -7950,8 +8112,10 @@ function renderTrajectoryAnnotations(opts) {
   var formatValue = opts.formatValue || function(v) { return energyGraphFormatNumber(v, 2); };
   var selectedNodeId = opts.selectedNodeId || "";
   var selectionLocked = !!opts.selectionLocked;
-  if (!annotations.length || !nodes.length || !xFor || !yFor) return "";
+  if (!annotations.length || !nodes.length || !xFor || !yFor) return { svg: "", bandSvg: "", bandHeight: 0 };
   var W = geom.W, H = geom.H, pad = geom.pad;
+  /* ── Defensive filter: remove maximum type (backend no longer produces) ── */
+  annotations = annotations.filter(function(a) { return a && a.type !== "maximum"; });
   /* ── Resolve annotation data-space positions ── */
   var allItems = [];
   annotations.forEach(function(annotation) {
@@ -7978,129 +8142,45 @@ function renderTrajectoryAnnotations(opts) {
     if (energyGraphState.annotationMode === "hide") return false;
     return energyGraphState.annotationMode === item.type;
   });
-  var pixelItems = visibleAnnotations.map(function(item) {
+  /* ── Split candidates vs system annotations ── */
+  var candidateItems = [];
+  var systemItems = [];
+  visibleAnnotations.forEach(function(item) {
+    if (item.type === "ts" || item.type === "intermediate") {
+      candidateItems.push(item);
+    } else {
+      systemItems.push(item);
+    }
+  });
+  /* ── Candidate band layout ── */
+  var bandResult = energyCandidateBandLayout(candidateItems, geom, xFor, yFor, { selectionLocked: selectionLocked });
+  /* ── System annotations: flag mode (minimum/failed/new_basin) ── */
+  var svg = "";
+  var pixelItems = systemItems.map(function(item) {
     return { annotation: item.annotation, dataX: item.dataX, x: xFor(item.dataX), y: yFor(item.dataY), value: item.value, frameIndex: item.frameIndex, type: item.type,
       label: String(item.annotation.label || item.annotation.id), caption: item.value !== null ? formatValue(item.value) : "" };
   });
   pixelItems.sort(function(a, b) { return a.x - b.x; });
-  /* ── Collision-aware placement ── */
-  function _egRectOverlap(a, b) {
-    var xo = Math.max(0, Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left));
-    var yo = Math.max(0, Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top));
-    return xo * yo;
-  }
-  function _egLaneOffset(lane) {
-    if (lane === 0) return -14;
-    return lane > 0 ? 16 + (lane - 1) * 14 : -14 + lane * 14;
-  }
-  var placedRects = [];
-  /* Selected-point halo as collision obstacle */
-  if (selectedNodeId) {
-    var selFrame = nodes.find(function(n) { return String(n.id) === String(selectedNodeId); });
-    if (selFrame && energyGraphValue(selFrame.x) !== null) {
-      var hcx = xFor(selFrame.x);
-      var hcy = yFor(selFrame.energy != null ? energyGraphValue(selFrame.energy) : 0);
-      if (hcx >= pad.left && hcx <= W - pad.right && hcy >= pad.top && hcy <= H - pad.bottom) {
-        placedRects.push({ left: hcx - 15, top: hcy - 15, width: 30, height: 30 });
-      }
-    }
-  }
-  pixelItems.forEach(function(item) {
-    var ax = item.x, ay = item.y;
-    var labelW = energyGraphMeasureText(item.label, 11, true);
-    var captionW = item.caption && mode === "full" ? energyGraphMeasureText(item.caption, 10, false) : 0;
-    var blockW = Math.max(labelW, captionW) + 10;
-    var blockH = mode === "full" ? 32 : 20;
-    var bestSlot = null;
-    var bestOverlap = Infinity;
-    var maxLanes = mode === "full" ? 10 : 4;
-    for (var step = 0; step < maxLanes; step += 1) {
-      var lanes = step === 0 ? [0] : [step, -step];
-      for (var li = 0; li < lanes.length; li += 1) {
-        var lane = lanes[li];
-        var off = _egLaneOffset(lane);
-        var anchors = [{ lx: ax + 10, anc: "start" }, { lx: ax - 10, anc: "end" }];
-        for (var ai = 0; ai < anchors.length; ai += 1) {
-          var lx = anchors[ai].lx, anc = anchors[ai].anc;
-          var ly = Math.max(pad.top + 14, Math.min(H - pad.bottom - 6, ay + off));
-          var rect = anc === "start"
-            ? { left: lx - 5, top: ly - 14, width: blockW, height: blockH }
-            : { left: lx - blockW + 5, top: ly - 14, width: blockW, height: blockH };
-          var overlap = 0;
-          for (var ri = 0; ri < placedRects.length; ri += 1) {
-            overlap += _egRectOverlap(rect, placedRects[ri]);
-          }
-          if (rect.left < pad.left - 4) overlap += (pad.left - 4 - rect.left) * rect.height;
-          if (rect.left + rect.width > W - pad.right + 4) overlap += (rect.left + rect.width - W + pad.right - 4) * rect.height;
-          if (rect.top < pad.top - 2) overlap += (pad.top - 2 - rect.top) * rect.width;
-          if (rect.top + rect.height > H - pad.bottom + 2) overlap += (rect.top + rect.height - H + pad.bottom - 2) * rect.width;
-          if (overlap === 0) { bestSlot = { lx: lx, ly: ly, anc: anc, lane: lane, rect: rect }; break; }
-          if (overlap < bestOverlap) { bestOverlap = overlap; bestSlot = { lx: lx, ly: ly, anc: anc, lane: lane, rect: rect }; }
-        }
-        if (bestSlot && bestOverlap === 0) break;
-      }
-      if (bestSlot && bestOverlap === 0) break;
-    }
-    if (!bestSlot) bestSlot = { lx: ax + 10, ly: Math.max(pad.top + 14, ay - 14), anc: "start", lane: 0, rect: { left: ax + 5, top: Math.max(pad.top + 14, ay - 14) - 14, width: blockW, height: blockH } };
-    placedRects.push(bestSlot.rect);
-    item._lx = bestSlot.lx;
-    item._ly = bestSlot.ly;
-    item._anc = bestSlot.anc;
-    item._lane = bestSlot.lane;
-  });
-  /* ── Render annotations ── */
-  var svg = "";
+  /* ── Render system annotations (flag mode: vertical line + shape at top) ── */
   pixelItems.forEach(function(item) {
     var annotation = item.annotation;
-    var ax = item.x, ay = item.y, av = item.value, at = item.type;
-    var labelX = item._lx, labelY = item._ly, labelAnchor = item._anc, al = item._lane;
+    var ax = item.x, ay = item.y, at = item.type;
     var isSelected = annotation.id === energyGraphState.selectedAnnotationId;
     var selectedClass = isSelected ? " selected" : "";
     var labelClass = isSelected ? " selected-label" : "";
-    var isCandidate = at === "ts" || at === "intermediate";
-    var stateClass = isCandidate ? (annotation.saved ? " saved" : " pending") : "";
-    var dragAttr = isCandidate && !selectionLocked ? ' data-energy-draggable="1"' : "";
-    var estLabelW = energyGraphMeasureText(String(annotation.label || annotation.id), 11, true) + 6;
-    if (mode === "flag") {
-      /* ── Flag mode: compact vertical line + small shape at top, no caption ── */
-      svg += '<g data-energy-annotation="' + escapeHtml(String(annotation.id)) + '" data-energy-frame="' + escapeHtml(String(item.frameIndex)) + '"' + dragAttr + '>';
-      svg += '<line class="energy-marker-line" x1="' + ax + '" y1="' + (H - pad.bottom) + '" x2="' + ax + '" y2="' + pad.top + '"></line>';
-      if (at === "ts") {
-        svg += '<path class="energy-marker-ts' + selectedClass + stateClass + '" d="M ' + ax + ' ' + (pad.top + 2) + ' L ' + (ax + 5) + ' ' + (pad.top + 8) + ' L ' + ax + ' ' + (pad.top + 14) + ' L ' + (ax - 5) + ' ' + (pad.top + 8) + ' Z"></path>';
-      } else {
-        svg += '<circle class="energy-marker-int' + selectedClass + stateClass + '" cx="' + ax + '" cy="' + (pad.top + 8) + '" r="4"></circle>';
-      }
-      svg += '<text class="energy-marker-label' + labelClass + '" x="' + ax + '" y="' + (pad.top + 24) + '" text-anchor="middle">' + escapeHtml(String(annotation.label || annotation.id)) + '</text>';
-      svg += '</g>';
-      return;
-    }
-    /* ── Full mode: PES-style markers, labels, captions ── */
-    svg += '<g data-energy-annotation="' + escapeHtml(String(annotation.id)) + '" data-energy-frame="' + escapeHtml(String(item.frameIndex)) + '"' + dragAttr + '>';
-    if (at === "ts") {
-      svg += '<path class="energy-marker-ts' + selectedClass + stateClass + '" d="M ' + ax + ' ' + (ay - 7) + ' L ' + (ax + 7) + ' ' + ay + ' L ' + ax + ' ' + (ay + 7) + ' L ' + (ax - 7) + ' ' + ay + ' Z"></path>';
+    svg += '<g data-energy-annotation="' + escapeHtml(String(annotation.id)) + '" data-energy-frame="' + escapeHtml(String(item.frameIndex)) + '">';
+    svg += '<line class="energy-marker-line" x1="' + ax + '" y1="' + (H - pad.bottom) + '" x2="' + ax + '" y2="' + pad.top + '"></line>';
+    if (at === "minimum") {
+      svg += '<circle class="energy-marker-min' + selectedClass + '" cx="' + ax + '" cy="' + (pad.top + 8) + '" r="4"></circle>';
     } else if (at === "failed") {
-      svg += '<path class="energy-marker-failed" d="M ' + (ax - 6) + ' ' + (ay - 6) + ' L ' + (ax + 6) + ' ' + (ay + 6) + ' M ' + (ax + 6) + ' ' + (ay - 6) + ' L ' + (ax - 6) + ' ' + (ay + 6) + '"></path>';
-    } else if (at === "maximum") {
-      svg += '<polygon class="energy-marker-max' + selectedClass + '" points="' + ax + ',' + (ay - 8) + ' ' + (ax + 7) + ',' + (ay + 4) + ' ' + (ax - 7) + ',' + (ay + 4) + '"></polygon>';
+      svg += '<path class="energy-marker-failed" d="M ' + (ax - 6) + ' ' + (pad.top + 2) + ' L ' + (ax + 6) + ' ' + (pad.top + 14) + ' M ' + (ax + 6) + ' ' + (pad.top + 2) + ' L ' + (ax - 6) + ' ' + (pad.top + 14) + '"></path>';
     } else if (at === "new_basin") {
-      svg += '<path class="energy-marker-basin' + selectedClass + '" d="M ' + ax + ' ' + (ay - 7) + ' L ' + (ax + 7) + ' ' + ay + ' L ' + ax + ' ' + (ay + 7) + ' L ' + (ax - 7) + ' ' + ay + ' Z"></path>';
-    } else {
-      svg += '<circle class="energy-marker-' + (at === "minimum" ? "min" : at === "intermediate" ? "int" : "failed") + selectedClass + stateClass + '" cx="' + ax + '" cy="' + ay + '" r="6"></circle>';
+      svg += '<path class="energy-marker-basin' + selectedClass + '" d="M ' + ax + ' ' + (pad.top + 2) + ' L ' + (ax + 6) + ' ' + (pad.top + 8) + ' L ' + ax + ' ' + (pad.top + 14) + ' L ' + (ax - 6) + ' ' + (pad.top + 8) + ' Z"></path>';
     }
-    svg += '<line class="energy-marker-line" x1="' + ax + '" y1="' + (H - pad.bottom) + '" x2="' + ax + '" y2="' + ay + '"></line>';
-    if (al !== 0) {
-      var connX = labelAnchor === "end" ? labelX + 2 : labelX - 2;
-      svg += '<line x1="' + ax + '" y1="' + ay + '" x2="' + connX + '" y2="' + (labelY + 3) + '" stroke="rgba(255,255,255,0.28)" stroke-width="1"></line>';
-    }
-    if (isSelected) {
-      var bgX = labelAnchor === "end" ? labelX - estLabelW + 3 : labelX - 3;
-      svg += '<rect class="energy-marker-label-bg" x="' + bgX + '" y="' + (labelY - 11) + '" width="' + estLabelW + '" height="15" rx="3"></rect>';
-    }
-    svg += '<text class="energy-marker-label' + labelClass + '" x="' + labelX + '" y="' + labelY + '" text-anchor="' + labelAnchor + '">' + escapeHtml(String(annotation.label || annotation.id)) + '</text>';
-    if (av !== null) svg += '<text class="energy-marker-caption" x="' + labelX + '" y="' + (labelY + 13) + '" text-anchor="' + labelAnchor + '">' + escapeHtml(formatValue(av)) + '</text>';
+    svg += '<text class="energy-marker-label' + labelClass + '" x="' + ax + '" y="' + (pad.top + 24) + '" text-anchor="middle">' + escapeHtml(String(annotation.label || annotation.id)) + '</text>';
     svg += '</g>';
   });
-  return svg;
+  return { svg: svg, bandSvg: bandResult.bandSvg, bandHeight: bandResult.bandHeight, plotSvg: bandResult.plotSvg };
 }
 
 /* ── Candidate list markup for inspector panel ── */
@@ -8297,8 +8377,11 @@ function energyChartBuildSvg(cfg) {
     svg += '</g>';
   }
   /* annotation layer (inside plot group for energy) */
+  var _annResult = { svg: "", bandSvg: "", bandHeight: 0, plotSvg: "" };
   if (cfg.annotationsInPlotGroup !== false) {
-    svg += renderTrajectoryAnnotations(cfg.annotationOpts);
+    _annResult = renderTrajectoryAnnotations(cfg.annotationOpts);
+    svg += _annResult.svg;
+    svg += _annResult.plotSvg;
   }
   svg += '</g>';
   /* overlay */
@@ -8309,7 +8392,9 @@ function energyChartBuildSvg(cfg) {
   }
   /* annotation layer (after overlay for optimization) */
   if (cfg.annotationsInPlotGroup === false) {
-    svg += renderTrajectoryAnnotations(cfg.annotationOpts);
+    _annResult = renderTrajectoryAnnotations(cfg.annotationOpts);
+    svg += _annResult.svg;
+    svg += _annResult.plotSvg;
   }
   /* axes after plot group (energy) */
   if (!cfg.axesBeforePlot) {
@@ -8322,6 +8407,10 @@ function energyChartBuildSvg(cfg) {
   /* bottom label (optimization) */
   if (cfg.bottomLabel) {
     svg += '<text class="' + axisTextClass + '" x="' + ((pad.left + W - pad.right) / 2) + '" y="' + (H - 8) + '" text-anchor="middle">' + escapeHtml(cfg.bottomLabel) + '</text>';
+  }
+  /* candidate band (outside clip, above plot in pad.top area) */
+  if (_annResult.bandSvg) {
+    svg += _annResult.bandSvg;
   }
   svg += '</svg>';
   return svg;
@@ -8344,6 +8433,31 @@ function energyGraphBuildSvg(data) {
   if (!points.length) return '<div class="energy-empty"><div><strong>暂无可绘制数据</strong><span>曲线数据正在生成，完成后会自动刷新。</span></div></div>';
   var geom = energyGraphChartGeometry();
   var W = geom.W, H = geom.H, pad = geom.pad;
+  /* ── Pre-compute candidate band height and adjust pad.top ── */
+  var _preAnnotations = Array.isArray(data.annotations) ? data.annotations : [];
+  var _preProjected = energyProjectCandidatesAsAnnotations(data);
+  var _preMerged = _preAnnotations.concat(_preProjected);
+  var _preDeduped = [];
+  var _preSeen = {};
+  _preMerged.forEach(function(a) { if (a && a.id && !_preSeen[a.id]) { _preSeen[a.id] = true; _preDeduped.push(a); } });
+  var _preCandidates = _preDeduped.filter(function(a) { return a && (a.type === "ts" || a.type === "intermediate"); });
+  var _preItems = [];
+  _preCandidates.forEach(function(a) {
+    var fi = a.frame_index;
+    var annNode = nodes.find(function(item) { return Number(item.frame_index) === Number(fi); });
+    var dataX = annNode ? energyGraphValue(annNode.x) : null;
+    if (dataX === null) return;
+    var dataY = annNode ? (energyGraphValue(annNode.energy) || energyGraphValue(a.y) || 0) : 0;
+    _preItems.push({ annotation: a, dataX: dataX, dataY: dataY, frameIndex: fi, type: String(a.type || "") });
+  });
+  _preItems.sort(function(a, b) { return a.dataX - b.dataX; });
+  var plotWidth = W - pad.left - pad.right;
+  var bandHeight = energyCandidateBandPreHeight(_preItems, plotWidth);
+  if (bandHeight > 0) {
+    pad.top += bandHeight;
+    geom.pad.top = pad.top;
+    H = geom.H;
+  }
   var layout = energyGraphState.layout;
   if (!layout || layout._seriesId !== energyGraphState.seriesId || layout._jobId !== energyGraphState.jobId) {
     var xExtent = [Math.min.apply(null, points.map(function(p) { return p.x; })), Math.max.apply(null, points.map(function(p) { return p.x; }))];
@@ -9102,6 +9216,31 @@ function optimizationGraphBuildSvg(data, view) {
   var hasRight = groups.right.length > 0;
   var geom = optimizationChartGeometry(hasRight);
   var W = geom.W, H = geom.H, pad = geom.pad;
+  /* ── Pre-compute candidate band height and adjust pad.top ── */
+  var _optAnnotations = Array.isArray(data.annotations) ? data.annotations : [];
+  var _optProjected = energyProjectCandidatesAsAnnotations(data);
+  var _optMerged = _optAnnotations.concat(_optProjected);
+  var _optDeduped = [];
+  var _optSeen = {};
+  _optMerged.forEach(function(a) { if (a && a.id && !_optSeen[a.id]) { _optSeen[a.id] = true; _optDeduped.push(a); } });
+  var _optCandidates = _optDeduped.filter(function(a) { return a && (a.type === "ts" || a.type === "intermediate"); });
+  var _optItems = [];
+  _optCandidates.forEach(function(a) {
+    var fi = a.frame_index;
+    var annNode = nodes.find(function(item) { return Number(item.frame_index) === Number(fi); });
+    var dataX = annNode ? energyGraphValue(annNode.x) : null;
+    if (dataX === null) return;
+    var dataY = annNode ? (energyGraphValue(annNode.energy) || energyGraphValue(a.y) || 0) : 0;
+    _optItems.push({ annotation: a, dataX: dataX, dataY: dataY, frameIndex: fi, type: String(a.type || "") });
+  });
+  _optItems.sort(function(a, b) { return a.dataX - b.dataX; });
+  var _optPlotWidth = W - pad.left - pad.right;
+  var _optBandHeight = energyCandidateBandPreHeight(_optItems, _optPlotWidth);
+  if (_optBandHeight > 0) {
+    pad.top += _optBandHeight;
+    geom.pad.top = pad.top;
+    H = geom.H;
+  }
   var nodeX = nodes.map(function(node, index) { return energyGraphValue(node.x) == null ? index + 1 : Number(node.x); });
   var xMin = Math.min.apply(null, nodeX), xMax = Math.max.apply(null, nodeX);
   if (xMin === xMax) { xMin -= 0.5; xMax += 0.5; }
@@ -10289,6 +10428,17 @@ function energyGraphBindChartInteractions(root) {
       var chartRebuilt = !!annotationId;
       if (chartRebuilt) energyGraphUpdateChart();
       energyGraphUpdateSelection(Number(prevFrame) !== frame, chartRebuilt);
+    });
+  });
+  /* ── Candidate band chip clicks → jump to frame ── */
+  svg.querySelectorAll("[data-energy-candidate-jump]").forEach(function(chip) {
+    chip.addEventListener("click", function(event) {
+      event.stopPropagation();
+      var fi = Number(chip.getAttribute("data-energy-candidate-jump"));
+      if (!isNaN(fi)) {
+        energyGraphState.liveFollow = false;
+        energyGraphSelectFrame(fi);
+      }
     });
   });
   energyGraphBindMarkerDrag(root);
