@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
 import tempfile
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -1356,7 +1358,10 @@ def test_structure_viewer_js_has_namespace() -> None:
     js = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
     assert "window.ACPStructureViewer" in js
     assert "loadStructureViewer" in js
-    assert "structureViewerState" in js
+    assert "selectEntry" in js
+    assert "refreshIfChanged" in js
+    assert "loadSelectedGeometry" in js
+    assert "_applyCatalogResponse" in js
 
 
 def test_structure_editor_js_has_namespace() -> None:
@@ -1399,3 +1404,231 @@ def test_extracted_js_passes_node_check(js_file: str) -> None:
     assert result.returncode == 0, (
         f"node --check {js_file} failed:\n{result.stderr}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Todo 15: structureViewerState store + payload fetch + revision/token
+# ---------------------------------------------------------------------------
+
+def test_structure_viewer_state_store_contract() -> None:
+    """Contract: state fields, AbortController, requestToken, _fetchImpl exist."""
+    js = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+
+    for field in (
+        "jobId", "payload", "revision", "selectedEntryId",
+        "selectionOrigin", "selectionToken", "dirty", "editState",
+        "requestToken", "availability", "newerAvailable",
+    ):
+        assert field in js, f"state field {field!r} missing from structure_viewer.js"
+
+    assert "AbortController" in js, "AbortController usage missing"
+    assert "requestToken" in js, "requestToken guard missing"
+    assert "_fetchImpl" in js, "_fetchImpl injectable missing"
+    assert "_applyCatalogResponse" in js, "_applyCatalogResponse pure helper missing"
+    assert "_catalogUrl" in js, "_catalogUrl helper missing"
+    assert "/structure-viewer" in js, "catalog endpoint path missing"
+    assert "selectionToken" in js, "selectionToken guard missing"
+
+
+def test_structure_viewer_node_logic_stale_response_discarded() -> None:
+    """Node logic: job A slow resolves after job B -> B wins."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    js_path = FRONTEND_JS_DIR / "structure_viewer.js"
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        // Load the module (IIFE reads window, attaches namespace)
+        require(JS_PATH);
+
+        var ns = window.ACPStructureViewer;
+        var state = ns.state;
+
+        // Inject a fake fetch that returns controlled promises.
+        var resolveA, resolveB;
+        ns._fetchImpl = function(url) {
+            if (url.indexOf("jobA") >= 0) {
+                return new Promise(function(r) { resolveA = r; });
+            }
+            return new Promise(function(r) { resolveB = r; });
+        };
+
+        // Start load A, then load B (B supersedes A).
+        ns.loadStructureViewer("jobA");
+        var tokenAfterA = state.requestToken;
+        ns.loadStructureViewer("jobB");
+        var tokenAfterB = state.requestToken;
+
+        // B's token is newer.
+        if (tokenAfterB <= tokenAfterA) {
+            console.error("FAIL: requestToken must increase");
+            process.exit(1);
+        }
+
+        // Resolve B first (as it should in real usage).
+        resolveB({ ok: true, status: 200, statusText: "OK", json: function() {
+            return Promise.resolve({
+                schema_version: "structure_viewer_v1",
+                revision: "revB",
+                availability: "ready",
+                default_entry_id: "e2",
+                groups: [], entries: [], warnings: []
+            });
+        }});
+
+        // Now resolve A (stale — should be discarded).
+        resolveA({ ok: true, status: 200, statusText: "OK", json: function() {
+            return Promise.resolve({
+                schema_version: "structure_viewer_v1",
+                revision: "revA",
+                availability: "ready",
+                default_entry_id: "e1",
+                groups: [], entries: [], warnings: []
+            });
+        }});
+
+        // Give promises time to settle.
+        setTimeout(function() {
+            if (state.revision !== "revB") {
+                console.error("FAIL: expected revB, got " + state.revision);
+                process.exit(1);
+            }
+            if (state.selectedEntryId !== "e2") {
+                console.error("FAIL: expected e2, got " + state.selectedEntryId);
+                process.exit(1);
+            }
+            console.log("PASS");
+        }, 50);
+    """).replace("JS_PATH", json.dumps(str(js_path)))
+
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, (
+        f"Node logic test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_structure_viewer_node_logic_dirty_guard() -> None:
+    """Node logic: dirty=true -> refreshIfChanged sets newerAvailable, not payload."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    js_path = FRONTEND_JS_DIR / "structure_viewer.js"
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        require(JS_PATH);
+
+        var ns = window.ACPStructureViewer;
+        var state = ns.state;
+
+        // Seed state with a loaded payload.
+        ns._fetchImpl = function(url) {
+            return Promise.resolve({ ok: true, status: 200, statusText: "OK", json: function() {
+                return Promise.resolve({
+                    schema_version: "structure_viewer_v1",
+                    revision: "rev1",
+                    availability: "ready",
+                    default_entry_id: "e1",
+                    groups: [], entries: [{id:"e1", group_id:"g1"}], warnings: []
+                });
+            }});
+        };
+
+        ns.loadStructureViewer("jobX").then(function() {
+            if (state.revision !== "rev1") {
+                console.error("FAIL: initial load revision");
+                process.exit(1);
+            }
+            // Mark dirty (simulating Wave 6 edits).
+            state.dirty = true;
+
+            // Now simulate a server-side revision change.
+            ns._fetchImpl = function(url) {
+                return Promise.resolve({ ok: true, status: 200, statusText: "OK", json: function() {
+                    return Promise.resolve({
+                        schema_version: "structure_viewer_v1",
+                        revision: "rev2",
+                        availability: "ready",
+                        default_entry_id: "e2",
+                        groups: [], entries: [{id:"e2", group_id:"g1"}], warnings: []
+                    });
+                }});
+            };
+
+            return ns.refreshIfChanged();
+        }).then(function() {
+            if (!state.newerAvailable) {
+                console.error("FAIL: newerAvailable should be true");
+                process.exit(1);
+            }
+            if (state.payload && state.payload.revision === "rev2") {
+                console.error("FAIL: payload should NOT be replaced when dirty");
+                process.exit(1);
+            }
+            console.log("PASS");
+        }).catch(function(e) {
+            console.error("FAIL: unexpected error", e);
+            process.exit(1);
+        });
+    """).replace("JS_PATH", json.dumps(str(js_path)))
+
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, (
+        f"Node dirty-guard test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_structure_viewer_node_logic_select_entry_token() -> None:
+    """Node logic: selectEntry increments selectionToken each call."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    js_path = FRONTEND_JS_DIR / "structure_viewer.js"
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        require(JS_PATH);
+
+        var ns = window.ACPStructureViewer;
+        var state = ns.state;
+
+        var t0 = state.selectionToken;
+        var t1 = ns.selectEntry("e1", "user");
+        var t2 = ns.selectEntry("e2", "energy_graph");
+
+        if (t1 !== t0 + 1) {
+            console.error("FAIL: first selectEntry token should be " + (t0+1) + ", got " + t1);
+            process.exit(1);
+        }
+        if (t2 !== t1 + 1) {
+            console.error("FAIL: second selectEntry token should be " + (t1+1) + ", got " + t2);
+            process.exit(1);
+        }
+        if (state.selectedEntryId !== "e2") {
+            console.error("FAIL: selectedEntryId should be e2");
+            process.exit(1);
+        }
+        if (state.selectionOrigin !== "energy_graph") {
+            console.error("FAIL: selectionOrigin should be energy_graph");
+            process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(js_path)))
+
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, (
+        f"Node selectEntry token test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
