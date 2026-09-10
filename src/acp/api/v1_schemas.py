@@ -821,6 +821,7 @@ class StructureAssetModel(BaseModel):
     normalized_path: str | None = None
     warnings: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class StructureParseRequest(BaseModel):
@@ -1185,6 +1186,108 @@ class NodeBootstrapResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Structure-viewer models (docs/ACP_Structure_Viewer_Modification_Plan.md §4).
+# ---------------------------------------------------------------------------
+
+
+class StructureViewerGeometryModel(BaseModel):
+    """Geometry reference for a structure-viewer entry."""
+
+    endpoint: str = ""
+    format: str = "xyz"
+
+
+class StructureViewerEnergyModel(BaseModel):
+    """Energy information for a structure-viewer entry."""
+
+    value: float | None = None
+    unit: str = "hartree"
+    kind: str = "electronic"
+    temperature_k: float | None = None
+
+
+class StructureViewerSourceModel(BaseModel):
+    """Source provenance for a structure-viewer entry."""
+
+    kind: str = ""
+    product_id: str | None = None
+    frame_index: int | None = None
+    geometry_ref: str | None = None
+    confirmed: bool | None = None
+
+
+class StructureViewerVibrationsAvailabilityModel(BaseModel):
+    """Vibration availability for a structure-viewer entry."""
+
+    available: bool = False
+    endpoint: str | None = None
+
+
+class StructureViewerEntryModel(BaseModel):
+    """One structure entry in the viewer catalog."""
+
+    id: str
+    group_id: str = ""
+    label: str = ""
+    role: str = ""
+    status: str = "completed"
+    geometry: StructureViewerGeometryModel = Field(default_factory=StructureViewerGeometryModel)
+    energy: StructureViewerEnergyModel = Field(default_factory=StructureViewerEnergyModel)
+    relative_energy_kcal: float | None = None
+    boltzmann_weight: float | None = None
+    source: StructureViewerSourceModel = Field(default_factory=StructureViewerSourceModel)
+    badges: list[str] = Field(default_factory=list)
+    vibrations: StructureViewerVibrationsAvailabilityModel = Field(
+        default_factory=StructureViewerVibrationsAvailabilityModel
+    )
+
+
+class StructureViewerGroupModel(BaseModel):
+    """A logical grouping of entries."""
+
+    id: str
+    label: str = ""
+    kind: str = ""
+
+
+class StructureViewerPayloadModel(BaseModel):
+    """Top-level structure-viewer payload (doc §4.1)."""
+
+    schema_version: str
+    job_id: str = ""
+    workflow: str = ""
+    job_status: str = ""
+    availability: Literal["ready", "pending_fetch", "unavailable"] = "ready"
+    revision: str = "empty"
+    default_entry_id: str | None = None
+    groups: list[StructureViewerGroupModel] = Field(default_factory=list)
+    entries: list[StructureViewerEntryModel] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class StructureViewerModeModel(BaseModel):
+    """One normal mode in the vibrations response."""
+
+    mode_index: int
+    frequency_cm1: float
+    imaginary: bool = False
+    ir_intensity: float | None = None
+    vectors: list[list[float]] = Field(default_factory=list)
+
+
+class StructureViewerVibrationsResponse(BaseModel):
+    """Response for structure-viewer vibrations endpoint."""
+
+    available: bool
+    reason: str | None = None
+    threshold_cm1: float = -50.0
+    threshold_source: str = "default"
+    modes: list[StructureViewerModeModel] = Field(default_factory=list)
+    atom_count: int
+    geometry_product_id: str | None = None
+
+
+# ---------------------------------------------------------------------------
 # S2 bond-length scan (docs/ACP_S2_Bond_Length_Scan_MD_Plan.md §7, §11).
 # ---------------------------------------------------------------------------
 
@@ -1195,6 +1298,10 @@ class StructureAssetCreateRequest(BaseModel):
     charge: int = 0
     multiplicity: int = 1
     project_id: str | None = None
+    parent_job_id: str | None = None
+    parent_entry_id: str | None = None
+    edit_operations: list[dict[str, Any]] = Field(default_factory=list)
+    provenance: dict[str, Any] = Field(default_factory=dict)
 
 
 class StructureAssetResponse(BaseModel):
@@ -1626,6 +1733,15 @@ __all__ = [
     "StructureAssetResponse",
     "StructureParseRequest",
     "StructureParseResponse",
+    "StructureViewerEntryModel",
+    "StructureViewerEnergyModel",
+    "StructureViewerGeometryModel",
+    "StructureViewerGroupModel",
+    "StructureViewerModeModel",
+    "StructureViewerPayloadModel",
+    "StructureViewerSourceModel",
+    "StructureViewerVibrationsAvailabilityModel",
+    "StructureViewerVibrationsResponse",
     "UploadResponse",
     "ValidateMethodRequest",
     "ValidateMethodResponse",
