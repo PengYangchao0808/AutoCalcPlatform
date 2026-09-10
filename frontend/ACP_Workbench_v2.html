@@ -7949,12 +7949,40 @@ function energyProjectCandidatesAsAnnotations(data) {
 /* items: [{annotation, dataX, dataY, frameIndex, type, value}] sorted by dataX
  * geom: {W, H, pad}
  * Returns {bandSvg, plotSvg, bandHeight} — bandSvg for pad.top area, plotSvg for markers at real coords */
+/* ── Shared greedy2-row chip layout core ── */
+/* chips: [{chipW, anchorPx}] — already measured, anchorPx in pixel coords
+ * plotLeft/plotRight: pixel bounds of the plot area
+ * Returns chips with ._x and ._row set; unplaceable chips get ._skip = true */
+function energyCandidateBandLayoutCore(chips, plotLeft, plotRight) {
+  var chipGap = 8, maxRows = 2;
+  var rows = [[], []];
+  chips.forEach(function(chip) {
+    var anchorPx = chip.anchorPx;
+    var placed = false;
+    for (var r = 0; r < maxRows && !placed; r++) {
+      var row = rows[r];
+      var startX = Math.max(plotLeft, Math.min(plotRight - chip.chipW, anchorPx - chip.chipW / 2));
+      if (row.length > 0) {
+        var last = row[row.length - 1];
+        var minStart = last._x + last.chipW + chipGap;
+        if (startX < minStart) startX = minStart;
+      }
+      if (startX + chip.chipW <= plotRight + 1) {
+        chip._x = startX;
+        chip._row = r;
+        row.push(chip);
+        placed = true;
+      }
+    }
+    if (!placed) chip._skip = true; /* overflow: skip rendering (Todo 7 merge chip) */
+  });
+}
+
 function energyCandidateBandLayout(items, geom, xFor, yFor, opts) {
   if (!items.length) return { bandSvg: "", plotSvg: "", bandHeight: 0 };
   var W = geom.W, pad = geom.pad;
   var plotLeft = pad.left, plotRight = W - pad.right;
-  var plotWidth = plotRight - plotLeft;
-  var rowHeight = 28, rowGap = 8, chipGap = 8, chipH = 22, maxRows = 2;
+  var rowHeight = 28, rowGap = 8, chipH = 22;
   /* ── Group by frame_index: same frame → single chip ── */
   var byFrame = {};
   items.forEach(function(item) {
@@ -7967,47 +7995,24 @@ function energyCandidateBandLayout(items, geom, xFor, yFor, opts) {
     var group = byFrame[fi];
     var first = group[0];
     var label = String(first.annotation.label || first.annotation.id);
-    var chipText = label + (group.length > 1 ? " (+" + (group.length - 1) + ")" : "");
-    merged.push({ items: group, frameIndex: Number(fi), chipText: chipText, dataX: first.dataX, dataY: first.dataY, type: first.type });
+    var chipText = label + " \u00b7 \u5468\u671f " + fi + (group.length > 1 ? " (+" + (group.length - 1) + ")" : "");
+    merged.push({ items: group, frameIndex: Number(fi), chipText: chipText, anchorPx: xFor(first.dataX), dataX: first.dataX, dataY: first.dataY, type: first.type });
   });
   /* ── Measure chip widths ── */
   merged.forEach(function(m) {
     m.chipW = energyGraphMeasureText(m.chipText, 11, true) + 18;
   });
-  /* ── Greedy2-row layout ── */
-  var rows = [[], []];
-  merged.forEach(function(m) {
-    var anchorX = m.dataX;
-    var placed = false;
-    for (var r = 0; r < maxRows && !placed; r++) {
-      var row = rows[r];
-      var startX = Math.max(plotLeft, Math.min(plotRight - m.chipW, anchorX - m.chipW / 2));
-      if (row.length > 0) {
-        var last = row[row.length - 1];
-        var minStart = last._x + last.chipW + chipGap;
-        if (startX < minStart) startX = minStart;
-      }
-      if (startX + m.chipW <= plotRight + 1) {
-        m._x = startX;
-        m._row = r;
-        row.push(m);
-        placed = true;
-      }
-    }
-    if (!placed) {
-      /* TODO: overflow — truncate or merge (Todo 7 capacity limit) */
-      m._x = plotRight - m.chipW;
-      m._row = 1;
-      rows[1].push(m);
-    }
-  });
-  var usedRows = (rows[0].length > 0 ? 1 : 0) + (rows[1].length > 0 ? 1 : 0);
+  /* ── Greedy2-row layout (shared core) ── */
+  energyCandidateBandLayoutCore(merged, plotLeft, plotRight);
+  var placed = merged.filter(function(m) { return !m._skip; });
+  var usedRows = 0;
+  placed.forEach(function(m) { if (m._row >= usedRows) usedRows = m._row + 1; });
   var bandHeight = usedRows * rowHeight + (usedRows > 1 ? rowGap : 0);
   /* ── Render band SVG (chips + leader lines) ── */
   var bandSvg = "";
   var plotSvg = "";
   var selectionLocked = !!(opts && opts.selectionLocked);
-  merged.forEach(function(m) {
+  placed.forEach(function(m) {
     var cx = m._x + m.chipW / 2;
     var cy = m._row === 0 ? rowHeight / 2 : rowHeight + rowGap + rowHeight / 2;
     /* Chip background */
@@ -8041,7 +8046,7 @@ function energyCandidateBandLayout(items, geom, xFor, yFor, opts) {
   });
   /* Chip click → select frame */
   bandSvg = '<g class="energy-candidate-band">' + bandSvg;
-  merged.forEach(function(m) {
+  placed.forEach(function(m) {
     bandSvg += '<rect class="energy-band-chip-hit" data-energy-candidate-jump="' + m.frameIndex + '" x="' + m._x + '" y="' + (m._row === 0 ? 0 : rowHeight + rowGap) + '" width="' + m.chipW + '" height="' + rowHeight + '" fill="transparent" rx="4"/>';
   });
   bandSvg += '</g>';
@@ -8049,10 +8054,12 @@ function energyCandidateBandLayout(items, geom, xFor, yFor, opts) {
 }
 
 /* ── Candidate band height pre-compute (dry run, no SVG) ── */
-function energyCandidateBandPreHeight(items, plotWidth) {
+/* items: [{annotation, dataX, frameIndex, type}] — dataX in data coords
+ * xFor: data→pixel mapper (pad.top doesn't affect x mapping)
+ * plotLeft/plotRight: pixel bounds */
+function energyCandidateBandPreHeight(items, xFor, plotLeft, plotRight) {
   if (!items.length) return 0;
-  var rowHeight = 28, rowGap = 8, chipGap = 8, maxRows = 2;
-  var plotLeft = 0, plotRight = plotWidth;
+  var rowHeight = 28, rowGap = 8;
   /* Group by frame_index */
   var byFrame = {};
   items.forEach(function(item) {
@@ -8065,36 +8072,14 @@ function energyCandidateBandPreHeight(items, plotWidth) {
     var group = byFrame[fi];
     var first = group[0];
     var label = String(first.annotation.label || first.annotation.id);
-    var chipText = label + (group.length > 1 ? " (+" + (group.length - 1) + ")" : "");
-    merged.push({ chipW: energyGraphMeasureText(chipText, 11, true) + 18, dataX: first.dataX });
+    var chipText = label + " \u00b7 \u5468\u671f " + fi + (group.length > 1 ? " (+" + (group.length - 1) + ")" : "");
+    merged.push({ chipW: energyGraphMeasureText(chipText, 11, true) + 18, anchorPx: xFor(first.dataX) });
   });
-  /* Greedy2-row dry run */
-  var rows = [[], []];
-  merged.forEach(function(m) {
-    var anchorX = m.dataX;
-    var placed = false;
-    for (var r = 0; r < maxRows && !placed; r++) {
-      var row = rows[r];
-      var startX = Math.max(plotLeft, Math.min(plotRight - m.chipW, anchorX - m.chipW / 2));
-      if (row.length > 0) {
-        var last = row[row.length - 1];
-        var minStart = last._x + last.chipW + chipGap;
-        if (startX < minStart) startX = minStart;
-      }
-      if (startX + m.chipW <= plotRight + 1) {
-        m._x = startX;
-        m._row = r;
-        row.push(m);
-        placed = true;
-      }
-    }
-    if (!placed) {
-      m._x = plotRight - m.chipW;
-      m._row = 1;
-      rows[1].push(m);
-    }
-  });
-  var usedRows = (rows[0].length > 0 ? 1 : 0) + (rows[1].length > 0 ? 1 : 0);
+  /* Greedy2-row dry run (shared core) */
+  energyCandidateBandLayoutCore(merged, plotLeft, plotRight);
+  var placed = merged.filter(function(m) { return !m._skip; });
+  var usedRows = 0;
+  placed.forEach(function(m) { if (m._row >= usedRows) usedRows = m._row + 1; });
   return usedRows * rowHeight + (usedRows > 1 ? rowGap : 0);
 }
 
@@ -8451,8 +8436,13 @@ function energyGraphBuildSvg(data) {
     _preItems.push({ annotation: a, dataX: dataX, dataY: dataY, frameIndex: fi, type: String(a.type || "") });
   });
   _preItems.sort(function(a, b) { return a.dataX - b.dataX; });
-  var plotWidth = W - pad.left - pad.right;
-  var bandHeight = energyCandidateBandPreHeight(_preItems, plotWidth);
+  /* Temporary xFor using base domain (pad.top doesn't affect x mapping) */
+  var _preXExtent = [Math.min.apply(null, points.map(function(p) { return p.x; })), Math.max.apply(null, points.map(function(p) { return p.x; }))];
+  var _preXSpread = Math.max(1e-9, _preXExtent[1] - _preXExtent[0]);
+  var _preBaseX = [_preXExtent[0] - _preXSpread * 0.06, _preXExtent[1] + _preXSpread * 0.06];
+  var _prePw = W - pad.left - pad.right;
+  function _preXFor(value) { return pad.left + ((value - _preBaseX[0]) / (_preBaseX[1] - _preBaseX[0] || 1)) * _prePw; }
+  var bandHeight = energyCandidateBandPreHeight(_preItems, _preXFor, pad.left, W - pad.right);
   if (bandHeight > 0) {
     pad.top += bandHeight;
     geom.pad.top = pad.top;
@@ -9234,8 +9224,14 @@ function optimizationGraphBuildSvg(data, view) {
     _optItems.push({ annotation: a, dataX: dataX, dataY: dataY, frameIndex: fi, type: String(a.type || "") });
   });
   _optItems.sort(function(a, b) { return a.dataX - b.dataX; });
-  var _optPlotWidth = W - pad.left - pad.right;
-  var _optBandHeight = energyCandidateBandPreHeight(_optItems, _optPlotWidth);
+  /* Temporary xFor using base domain (pad.top doesn't affect x mapping) */
+  var _optNodeX = nodes.map(function(node, index) { return energyGraphValue(node.x) == null ? index + 1 : Number(node.x); });
+  var _optXMin = Math.min.apply(null, _optNodeX), _optXMax = Math.max.apply(null, _optNodeX);
+  if (_optXMin === _optXMax) { _optXMin -= 0.5; _optXMax += 0.5; }
+  var _optBaseX = [_optXMin, _optXMax];
+  var _optPw = W - pad.left - pad.right;
+  function _optXFor(value) { return pad.left + ((value - _optBaseX[0]) / (_optBaseX[1] - _optBaseX[0] || 1)) * _optPw; }
+  var _optBandHeight = energyCandidateBandPreHeight(_optItems, _optXFor, pad.left, W - pad.right);
   if (_optBandHeight > 0) {
     pad.top += _optBandHeight;
     geom.pad.top = pad.top;
