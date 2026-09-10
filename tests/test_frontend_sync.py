@@ -1632,3 +1632,105 @@ def test_structure_viewer_node_logic_select_entry_token() -> None:
         f"Node selectEntry token test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Todo 16: structure list + inspector + narrow-screen drawers
+# ---------------------------------------------------------------------------
+
+def test_structure_list_inspector_html_contract() -> None:
+    """HTML contract: list/inspector/playback container ids present inside structure tab."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert 'id="structure-list-panel"' in html
+    assert 'id="structure-inspector-panel"' in html
+    assert 'id="structure-playback-bar"' in html
+    assert 'id="sv-layout"' in html
+    assert 'id="sv-list-header"' in html
+    assert 'id="sv-list-body"' in html
+    assert 'id="sv-inspector-header"' in html
+    assert 'id="sv-inspector-body"' in html
+
+    # viewer-3d must still exist exactly once (no new canvas)
+    assert html.count('id="viewer-3d"') == 1
+
+
+def test_structure_viewer_render_functions_exist() -> None:
+    """JS contract: renderStructureViewer, renderInspector, _esc, STR exist."""
+    js = FRONTEND_JS_DIR / "structure_viewer.js"
+    content = js.read_text(encoding="utf-8")
+
+    assert "renderStructureViewer" in content
+    assert "renderInspector" in content
+    assert "_esc" in content
+    assert "STR" in content
+    assert "toggleListDrawer" in content
+    assert "toggleInspectorDrawer" in content
+    assert "closeAllDrawers" in content
+
+
+def test_structure_viewer_badge_chips_include_unconfirmed_legacy() -> None:
+    """JS contract: badge rendering includes 未确认/兼容模式 classes."""
+    js = FRONTEND_JS_DIR / "structure_viewer.js"
+    content = js.read_text(encoding="utf-8")
+
+    assert "sv-badge-unconfirmed" in content
+    assert "sv-badge-legacy" in content
+    assert "sv-badge-failed-frame" in content
+    assert "sv-badge-role" in content
+    assert "sv-badge-rank" in content
+
+
+def test_structure_viewer_group_hide_logic() -> None:
+    """JS contract: single-entry payloads hide the list panel."""
+    js = FRONTEND_JS_DIR / "structure_viewer.js"
+    content = js.read_text(encoding="utf-8")
+
+    assert "sv-list-hidden" in content
+    assert "entries.length > 1" in content or "entries.length>1" in content
+
+
+def test_structure_viewer_availability_pending_notice() -> None:
+    """JS contract: availability pending_fetch shows notice string."""
+    js = FRONTEND_JS_DIR / "structure_viewer.js"
+    content = js.read_text(encoding="utf-8")
+
+    assert "pending_fetch" in content
+    assert "\u7b49\u5f85\u8fdc\u7a0b\u7ed3\u679c" in content  # 等待远程结果
+
+
+def test_structure_viewer_source_kind_labels() -> None:
+    """JS contract: source.kind localized labels map."""
+    js = FRONTEND_JS_DIR / "structure_viewer.js"
+    content = js.read_text(encoding="utf-8")
+
+    assert "\u6b63\u5f0f\u7ed3\u679c" in content      # 正式结果
+    assert "\u81ea\u52a8\u63a8\u8350" in content        # 自动推荐
+    assert "\u4eba\u5de5\u786e\u8ba4" in content        # 人工确认
+    assert "\u6700\u540e\u6709\u6548\u5468\u671f" in content  # 最后有效周期
+    assert "\u8ba1\u7b97\u8f93\u5165" in content        # 计算输入
+    assert "\u624b\u52a8\u6587\u4ef6" in content        # 手动文件
+
+
+def test_structure_viewer_css_drawer_media_queries() -> None:
+    """CSS contract: drawer media queries present."""
+    css = FRONTEND_CSS_DIR / "structure_viewer.css"
+    content = css.read_text(encoding="utf-8")
+
+    assert "@media" in content
+    assert "sv-drawer-open" in content
+    assert "sv-drawer-overlay" in content
+    assert "1100px" in content
+    assert "860px" in content
+
+
+def test_structure_viewer_css_three_column_grid() -> None:
+    """CSS contract: three-column grid layout for sv-layout."""
+    css = FRONTEND_CSS_DIR / "structure_viewer.css"
+    content = css.read_text(encoding="utf-8")
+
+    assert "grid-template-columns" in content
+    assert "sv-layout" in content
+    assert "sv-list-panel" in content
+    assert "sv-inspector-panel" in content
+    assert "sv-canvas-col" in content

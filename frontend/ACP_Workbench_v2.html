@@ -3571,36 +3571,48 @@ option, optgroup {
           </div>
         </div>
 
-        <div class="viewer-container">
-          <div id="viewer-3d"></div>
-          <div class="viewer-mechanism" id="viewer-mechanism" style="display:none;"></div>
-          <div class="viewer-empty" id="viewer-empty">
-            <div class="viewer-empty-inner">
-              <strong data-i18n="viewer.empty_title">等待结构加载</strong>
-              <span data-i18n="viewer.empty">点击左侧文件树中的 .xyz 文件以加载结构</span>
+        <div class="sv-layout" id="sv-layout">
+          <div class="sv-list-panel" id="structure-list-panel">
+            <div class="sv-list-header" id="sv-list-header"></div>
+            <div class="sv-list-body" id="sv-list-body"></div>
+          </div>
+          <div class="sv-canvas-col">
+            <div class="viewer-container">
+              <div id="viewer-3d"></div>
+              <div class="viewer-mechanism" id="viewer-mechanism" style="display:none;"></div>
+              <div class="viewer-empty" id="viewer-empty">
+                <div class="viewer-empty-inner">
+                  <strong data-i18n="viewer.empty_title">等待结构加载</strong>
+                  <span data-i18n="viewer.empty">点击左侧文件树中的 .xyz 文件以加载结构</span>
+                </div>
+              </div>
+              <div class="viewer-coming-soon" id="viewer-coming-soon" style="display:none;">
+                <div class="viewer-coming-soon-inner">
+                  <strong data-i18n="viewer.coming_title">功能开发中</strong>
+                  <span data-i18n="viewer.coming">该工作台将在后续阶段开放</span>
+                </div>
+              </div>
+              <div id="viewer-energy" class="viewer-energy" style="display:none;"></div>
+            </div>
+            <div class="frame-controller" id="frame-controller" style="display:none;">
+              <button class="frame-btn" id="frame-prev">
+                <svg viewBox="0 0 20 20" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2"><path d="M12 4L6 10L12 16"/></svg>
+              </button>
+              <span class="frame-info"><span id="frame-current">1</span> / <span id="frame-total">1</span></span>
+              <button class="frame-btn" id="frame-next">
+                <svg viewBox="0 0 20 20" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2"><path d="M8 4L14 10L8 16"/></svg>
+              </button>
+              <button class="frame-btn" id="frame-play" data-i18n="frame.play" title="播放">Play</button>
+              <input type="range" class="frame-slider" id="frame-slider" min="0" max="0" value="0">
+              <span class="frame-energy" id="frame-energy"></span>
             </div>
           </div>
-          <div class="viewer-coming-soon" id="viewer-coming-soon" style="display:none;">
-            <div class="viewer-coming-soon-inner">
-              <strong data-i18n="viewer.coming_title">功能开发中</strong>
-              <span data-i18n="viewer.coming">该工作台将在后续阶段开放</span>
-            </div>
+          <div class="sv-inspector-panel" id="structure-inspector-panel">
+            <div class="sv-inspector-header" id="sv-inspector-header"></div>
+            <div class="sv-inspector-body" id="sv-inspector-body"></div>
           </div>
-          <div id="viewer-energy" class="viewer-energy" style="display:none;"></div>
         </div>
-
-        <div class="frame-controller" id="frame-controller" style="display:none;">
-          <button class="frame-btn" id="frame-prev">
-            <svg viewBox="0 0 20 20" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2"><path d="M12 4L6 10L12 16"/></svg>
-          </button>
-          <span class="frame-info"><span id="frame-current">1</span> / <span id="frame-total">1</span></span>
-          <button class="frame-btn" id="frame-next">
-            <svg viewBox="0 0 20 20" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2"><path d="M8 4L14 10L8 16"/></svg>
-          </button>
-          <button class="frame-btn" id="frame-play" data-i18n="frame.play" title="播放">Play</button>
-          <input type="range" class="frame-slider" id="frame-slider" min="0" max="0" value="0">
-          <span class="frame-energy" id="frame-energy"></span>
-        </div>
+        <div class="sv-playback-bar" id="structure-playback-bar" style="display:none;"></div>
       </div>
     </section>
 
