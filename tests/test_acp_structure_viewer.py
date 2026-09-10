@@ -377,13 +377,13 @@ class TestDispatcherSkeleton:
         assert hasattr(payload.groups, "__iter__")
         assert hasattr(payload.warnings, "__iter__")
 
-    def test_unimplemented_resolver_warns_for_pessearch(self, tmp_path: Path):
+    def test_unimplemented_resolver_warns_for_batchoptimize(self, tmp_path: Path):
         """Resolvers not yet implemented produce a specific warning."""
         from acp.results.structure_viewer import build_structure_viewer_payload
 
         task = _make_task_dir(tmp_path)
         payload = build_structure_viewer_payload(
-            task, job_id="j1", workflow="PESsearch", job_status="completed"
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
         )
         assert any("not yet implemented" in w.lower() for w in payload.warnings)
 
@@ -668,3 +668,209 @@ class TestConfsearchResolver:
             task, job_id="j1", workflow="Confsearch", job_status="completed"
         )
         assert payload.entries[0].energy.temperature_k == 350.0
+
+
+# ---------------------------------------------------------------------------
+# PES resolver tests
+# ---------------------------------------------------------------------------
+
+
+def _pes_recommendation(*, candidate_id: str, kind: str = "ts", frame_index: int = 0,
+                        geometry_path: str = "frame_000.xyz", score: float = 0.9,
+                        confidence: str = "high") -> dict:
+    return {
+        "candidate_id": candidate_id,
+        "kind": kind,
+        "frame_index": frame_index,
+        "geometry_path": geometry_path,
+        "score": score,
+        "confidence": confidence,
+        "evidence": {},
+        "reason": "",
+    }
+
+
+def _pes_review_entry(*, candidate_id: str, frame_index: int, role: str = "TS",
+                      name: str = "") -> dict:
+    return {
+        "candidate_id": candidate_id,
+        "frame_index": frame_index,
+        "role": role,
+        "name": name or candidate_id,
+        "selection_source": "manual",
+        "structure_path": f"structures/{candidate_id}.xyz",
+    }
+
+
+class TestPesResolver:
+    """PES resolver: two groups, source.kind, badges, default selection."""
+
+    def test_pes_two_groups(self, tmp_path: Path):
+        """Profile + recommendations + review → two strictly separated groups."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        recs = [_pes_recommendation(candidate_id="ts_frame_005", confidence="high")]
+        review_entries = [_pes_review_entry(candidate_id="ts_frame_005", frame_index=5)]
+        task = _make_task_dir(tmp_path,
+                              pes_recommendations={"schema_version": "pes_recommendations_v1", "workflow": "PESsearch", "scan_dir": "WORK/07_PATH/pes_scan_001", "ts": recs, "intermediates": []},
+                              pes_review={"schema_version": "pes_review_v1", "job_id": "j1", "status": "confirmed", "revision": 1, "selected": review_entries})
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="PESsearch", job_status="completed"
+        )
+        group_ids = {g.id for g in payload.groups}
+        assert "pes_recommendations" in group_ids
+        assert "pes_confirmed" in group_ids
+        rec_entries = [e for e in payload.entries if e.group_id == "pes_recommendations"]
+        conf_entries = [e for e in payload.entries if e.group_id == "pes_confirmed"]
+        assert len(rec_entries) == 1
+        assert len(conf_entries) == 1
+
+    def test_pes_source_kind_recommendation(self, tmp_path: Path):
+        """Recommendation entries have source.kind = 'algorithm_recommendation'."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        recs = [_pes_recommendation(candidate_id="ts_frame_005")]
+        task = _make_task_dir(tmp_path,
+                              pes_recommendations={"schema_version": "pes_recommendations_v1", "workflow": "PESsearch", "scan_dir": "WORK/07_PATH/pes_scan_001", "ts": recs, "intermediates": []})
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="PESsearch", job_status="completed"
+        )
+        rec_entries = [e for e in payload.entries if e.group_id == "pes_recommendations"]
+        assert len(rec_entries) == 1
+        assert rec_entries[0].source.kind == "algorithm_recommendation"
+
+    def test_pes_source_kind_confirmed(self, tmp_path: Path):
+        """Confirmed entries have source.kind = 'manual_review'."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        review_entries = [_pes_review_entry(candidate_id="ts_frame_005", frame_index=5)]
+        task = _make_task_dir(tmp_path,
+                              pes_recommendations={"schema_version": "pes_recommendations_v1", "workflow": "PESsearch", "scan_dir": "WORK/07_PATH/pes_scan_001", "ts": [], "intermediates": []},
+                              pes_review={"schema_version": "pes_review_v1", "job_id": "j1", "status": "confirmed", "revision": 1, "selected": review_entries})
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="PESsearch", job_status="completed"
+        )
+        conf_entries = [e for e in payload.entries if e.group_id == "pes_confirmed"]
+        assert len(conf_entries) == 1
+        assert conf_entries[0].source.kind == "manual_review"
+
+    def test_pes_recommendation_confirmed_false_flag(self, tmp_path: Path):
+        """Recommendation entries carry confirmed=False machine-readable flag."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        recs = [_pes_recommendation(candidate_id="ts_frame_005")]
+        task = _make_task_dir(tmp_path,
+                              pes_recommendations={"schema_version": "pes_recommendations_v1", "workflow": "PESsearch", "scan_dir": "WORK/07_PATH/pes_scan_001", "ts": recs, "intermediates": []})
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="PESsearch", job_status="completed"
+        )
+        rec_entries = [e for e in payload.entries if e.group_id == "pes_recommendations"]
+        assert rec_entries[0].source.confirmed is False
+        d = rec_entries[0].source.to_dict()
+        assert d["confirmed"] is False
+
+    def test_pes_recommendation_badge_unconfirmed(self, tmp_path: Path):
+        """Recommendation entries carry badge '未确认'."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        recs = [_pes_recommendation(candidate_id="ts_frame_005")]
+        task = _make_task_dir(tmp_path,
+                              pes_recommendations={"schema_version": "pes_recommendations_v1", "workflow": "PESsearch", "scan_dir": "WORK/07_PATH/pes_scan_001", "ts": recs, "intermediates": []})
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="PESsearch", job_status="completed"
+        )
+        rec_entries = [e for e in payload.entries if e.group_id == "pes_recommendations"]
+        assert "未确认" in rec_entries[0].badges
+
+    def test_pes_default_highest_confidence_ts(self, tmp_path: Path):
+        """Default = highest-confidence TS recommendation."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        recs = [
+            _pes_recommendation(candidate_id="ts_frame_001", confidence="low", score=0.3),
+            _pes_recommendation(candidate_id="ts_frame_005", confidence="high", score=0.9),
+            _pes_recommendation(candidate_id="ts_frame_010", confidence="medium", score=0.6),
+        ]
+        task = _make_task_dir(tmp_path,
+                              pes_recommendations={"schema_version": "pes_recommendations_v1", "workflow": "PESsearch", "scan_dir": "WORK/07_PATH/pes_scan_001", "ts": recs, "intermediates": []})
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="PESsearch", job_status="completed"
+        )
+        assert payload.default_entry_id == "pes_ts_frame_005"
+
+    def test_pes_default_highest_energy_peak_when_no_ts(self, tmp_path: Path):
+        """No TS recs → default = highest-energy-peak (max score) intermediate."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        ints = [
+            _pes_recommendation(candidate_id="int_frame_003", kind="intermediate", score=0.5),
+            _pes_recommendation(candidate_id="int_frame_008", kind="intermediate", score=0.9),
+        ]
+        task = _make_task_dir(tmp_path,
+                              pes_recommendations={"schema_version": "pes_recommendations_v1", "workflow": "PESsearch", "scan_dir": "WORK/07_PATH/pes_scan_001", "ts": [], "intermediates": ints})
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="PESsearch", job_status="completed"
+        )
+        assert payload.default_entry_id == "pes_int_frame_008"
+
+    def test_pes_default_first_confirmed_when_no_recs(self, tmp_path: Path):
+        """No recommendations → default = first confirmed entry."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        review_entries = [
+            _pes_review_entry(candidate_id="ts_frame_005", frame_index=5),
+            _pes_review_entry(candidate_id="int_frame_010", frame_index=10, role="INT"),
+        ]
+        task = _make_task_dir(tmp_path,
+                              pes_recommendations={"schema_version": "pes_recommendations_v1", "workflow": "PESsearch", "scan_dir": "WORK/07_PATH/pes_scan_001", "ts": [], "intermediates": []},
+                              pes_review={"schema_version": "pes_review_v1", "job_id": "j1", "status": "confirmed", "revision": 1, "selected": review_entries})
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="PESsearch", job_status="completed"
+        )
+        assert payload.default_entry_id == "pes_ts_frame_005"
+
+    def test_pes_review_missing_confirmed_absent(self, tmp_path: Path):
+        """Review missing → confirmed group absent, recommendations still present."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        recs = [_pes_recommendation(candidate_id="ts_frame_005")]
+        task = _make_task_dir(tmp_path,
+                              pes_recommendations={"schema_version": "pes_recommendations_v1", "workflow": "PESsearch", "scan_dir": "WORK/07_PATH/pes_scan_001", "ts": recs, "intermediates": []})
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="PESsearch", job_status="completed"
+        )
+        group_ids = {g.id for g in payload.groups}
+        assert "pes_confirmed" not in group_ids
+        rec_entries = [e for e in payload.entries if e.group_id == "pes_recommendations"]
+        assert len(rec_entries) == 1
+
+    def test_pes_no_merge_same_candidate_id(self, tmp_path: Path):
+        """Same candidate_id in both groups → separate entries, collision on rec side."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        cid = "ts_frame_005"
+        recs = [_pes_recommendation(candidate_id=cid)]
+        review_entries = [_pes_review_entry(candidate_id=cid, frame_index=5)]
+        task = _make_task_dir(tmp_path,
+                              pes_recommendations={"schema_version": "pes_recommendations_v1", "workflow": "PESsearch", "scan_dir": "WORK/07_PATH/pes_scan_001", "ts": recs, "intermediates": []},
+                              pes_review={"schema_version": "pes_review_v1", "job_id": "j1", "status": "confirmed", "revision": 1, "selected": review_entries})
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="PESsearch", job_status="completed"
+        )
+        rec_entries = [e for e in payload.entries if e.group_id == "pes_recommendations"]
+        conf_entries = [e for e in payload.entries if e.group_id == "pes_confirmed"]
+        assert len(rec_entries) == 1
+        assert len(conf_entries) == 1
+        assert rec_entries[0].id != conf_entries[0].id
+        assert conf_entries[0].id == f"pes_{cid}"
+
+    def test_pes_no_files_at_all(self, tmp_path: Path):
+        """No PES files → empty payload + warning, no exception."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        task = _make_task_dir(tmp_path)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="PESsearch", job_status="completed"
+        )
+        assert len(payload.entries) == 0
+        assert len(payload.warnings) > 0

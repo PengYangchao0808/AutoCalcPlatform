@@ -138,6 +138,7 @@ class StructureViewerSource:
     product_id: str | None = None
     frame_index: int | None = None
     geometry_ref: str | None = None
+    confirmed: bool | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise to JSON-safe dict."""
@@ -148,6 +149,8 @@ class StructureViewerSource:
             d["frame_index"] = self.frame_index
         if self.geometry_ref is not None:
             d["geometry_ref"] = self.geometry_ref
+        if self.confirmed is not None:
+            d["confirmed"] = self.confirmed
         return d
 
 
@@ -657,10 +660,161 @@ def _resolve_confsearch(task_root: Path, job_id: str, warnings: list[str]) -> _R
     return groups, entries, rank1_entry_id
 
 
+def _read_pes_json(task_root: Path, relative: str) -> dict[str, Any] | None:
+    path = task_root / relative
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.debug("cannot read %s: %s", path, exc)
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+_CONFIDENCE_ORDER: dict[str, int] = {"high": 0, "medium": 1, "low": 2}
+
+
 def _resolve_pessearch(task_root: Path, job_id: str, warnings: list[str]) -> _ResolverResult:
-    """PES resolver — placeholder for todo 3."""
-    warnings.append("PESsearch resolver not yet implemented")
-    return [], [], None
+    """Resolve PESsearch recommendations + review → structure viewer entries."""
+    recs_payload = _read_pes_json(task_root, "RESULT/pes_search/pes_recommendations.json")
+    review_payload = _read_pes_json(task_root, "RESULT/pes_search/pes_review.json")
+
+    if recs_payload is None and review_payload is None:
+        warnings.append("No PES search results found")
+        return [], [], None
+
+    groups: list[StructureViewerGroup] = []
+    entries: list[StructureViewerEntry] = []
+    seen_ids: set[str] = set()
+    default_id: str | None = None
+
+    scan_dir = "WORK/07_PATH/pes_scan_001"
+    if recs_payload is not None:
+        scan_dir = str(recs_payload.get("scan_dir") or scan_dir)
+
+    if review_payload is not None:
+        groups.append(StructureViewerGroup(
+            id="pes_confirmed", label="人工确认", kind="confirmed"
+        ))
+        selected = review_payload.get("selected") or []
+        for entry_data in selected:
+            if not isinstance(entry_data, dict):
+                continue
+            candidate_id = str(entry_data.get("candidate_id") or "")
+            if not candidate_id:
+                continue
+
+            entry_id = pes_entry_id(candidate_id)
+            if entry_id in seen_ids:
+                entry_id = resolve_collision(entry_id, candidate_id)
+            seen_ids.add(entry_id)
+
+            frame_index_raw = entry_data.get("frame_index")
+            frame_index = int(frame_index_raw) if frame_index_raw is not None else None
+            role_raw = str(entry_data.get("role") or "").upper()
+            role = "ts" if role_raw == "TS" else "endpoint"
+            structure_path = str(entry_data.get("structure_path") or "")
+            geometry_ref = structure_path if structure_path else None
+            name = str(entry_data.get("name") or candidate_id)
+
+            entries.append(StructureViewerEntry(
+                id=entry_id,
+                group_id="pes_confirmed",
+                label=name,
+                role=role,
+                status="completed",
+                geometry=StructureViewerGeometry(
+                    endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+                    format="xyz",
+                ),
+                source=StructureViewerSource(
+                    kind="manual_review",
+                    frame_index=frame_index,
+                    geometry_ref=geometry_ref,
+                    confirmed=True,
+                ),
+                vibrations=StructureViewerVibrations(available=False),
+            ))
+
+            if default_id is None:
+                default_id = entry_id
+
+    if recs_payload is not None:
+        groups.append(StructureViewerGroup(
+            id="pes_recommendations", label="自动推荐", kind="recommendations"
+        ))
+        ts_list = recs_payload.get("ts") or []
+        int_list = recs_payload.get("intermediates") or []
+        all_recs = list(ts_list) + list(int_list)
+
+        best_ts: dict[str, Any] | None = None
+        best_peak: dict[str, Any] | None = None
+
+        for rec in all_recs:
+            if not isinstance(rec, dict):
+                continue
+            candidate_id = str(rec.get("candidate_id") or "")
+            if not candidate_id:
+                continue
+
+            entry_id = pes_entry_id(candidate_id)
+            if entry_id in seen_ids:
+                entry_id = resolve_collision(entry_id, candidate_id)
+            seen_ids.add(entry_id)
+
+            kind = str(rec.get("kind") or "")
+            confidence = str(rec.get("confidence") or "low")
+            score = _number(rec.get("score"))
+            frame_index_raw = rec.get("frame_index")
+            frame_index = int(frame_index_raw) if frame_index_raw is not None else None
+            geometry_path = str(rec.get("geometry_path") or "")
+
+            role = "ts" if kind == "ts" else "endpoint"
+            geometry_ref = f"{scan_dir}/{geometry_path}" if geometry_path else None
+
+            badges: list[str] = ["未确认"]
+
+            entries.append(StructureViewerEntry(
+                id=entry_id,
+                group_id="pes_recommendations",
+                label=candidate_id,
+                role=role,
+                status="completed",
+                geometry=StructureViewerGeometry(
+                    endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+                    format="xyz",
+                ),
+                energy=StructureViewerEnergy(value=score, unit="score", kind="score"),
+                source=StructureViewerSource(
+                    kind="algorithm_recommendation",
+                    frame_index=frame_index,
+                    geometry_ref=geometry_ref,
+                    confirmed=False,
+                ),
+                badges=tuple(badges),
+                vibrations=StructureViewerVibrations(available=False),
+            ))
+
+            if kind == "ts":
+                if best_ts is None or _CONFIDENCE_ORDER.get(confidence, 9) < _CONFIDENCE_ORDER.get(str(best_ts.get("confidence") or "low"), 9):
+                    best_ts = rec
+                    best_ts["_entry_id"] = entry_id
+            else:
+                if best_peak is None or (score or 0) > (_number(best_peak.get("score")) or 0):
+                    best_peak = rec
+                    best_peak["_entry_id"] = entry_id
+
+        if default_id is None:
+            if best_ts is not None:
+                default_id = best_ts.get("_entry_id")
+            elif best_peak is not None:
+                default_id = best_peak.get("_entry_id")
+
+    if not entries:
+        warnings.append("No PES entries found in recommendations or review")
+
+    return groups, entries, default_id
 
 
 def _resolve_batchoptimize(task_root: Path, job_id: str, warnings: list[str]) -> _ResolverResult:
