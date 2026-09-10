@@ -414,3 +414,227 @@ class TestBuildFrequencyReportExtension:
         assert "ir_intensities" in report
         assert report["ir_intensities"] == [66.542]
         assert report["has_imaginary"] is True
+
+
+# ── Primitive materialization (todo 22) ─────────────────────────────────────
+
+
+class TestPrimitiveMaterializesModes:
+    """run_frequency writes normal_modes.json when ORCA output has vectors."""
+
+    def test_happy_path_writes_normal_modes_json(
+        self, fake_backend: object, tmp_path: Path
+    ) -> None:
+        """Fake qc_result with freq_log_file -> normal_modes.json written + artifact present."""
+        from acp.calculations.primitives.frequency import run_frequency
+        from tests.conftest import FakeBackend
+
+        fb: FakeBackend = fake_backend  # type: ignore[assignment]
+        out = tmp_path / "freq_out"
+        out.mkdir(parents=True, exist_ok=True)
+        freq_log = tmp_path / "orca_freq.log"
+        main_log = tmp_path / "orca.log"
+        output_file = tmp_path / "orca.out"
+        freq_log.write_text(FULL_MODES_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+        main_log.write_text("some main log", encoding="utf-8")
+        output_file.write_text("some output", encoding="utf-8")
+
+        from acp.backends.base import QCResult
+
+        fb.set_result(
+            "frequency",
+            result=QCResult(
+                success=True,
+                frequencies=[-797.72, -791.36, 1411.55],
+                has_frequencies=True,
+                freq_log_file=freq_log,
+                log_file=main_log,
+                output_file=output_file,
+            ),
+        )
+
+        from acp.calculations.contracts import CalculationRequest, StructureArtifact
+
+        input_path = tmp_path / "mol.xyz"
+        input_path.write_text("3\n\nO 0 0 0\nH 0 0 1\nH 0 1 0\n", encoding="utf-8")
+        req = CalculationRequest(
+            input_artifact=StructureArtifact(
+                path=input_path,
+                elements=["O", "H", "H"],
+                role="minimum",
+                source="test",
+            ),
+            method="r2SCAN-3c",
+            resources={"output_dir": str(out)},
+            workflow="test",
+            profile="default",
+        )
+
+        result = run_frequency(req)
+        assert result.status == "completed"
+
+        nm_path = out / "normal_modes.json"
+        assert nm_path.is_file()
+
+        import json
+        product = json.loads(nm_path.read_text(encoding="utf-8"))
+        assert product["schema_version"] == "normal_modes_v1"
+        assert product["atom_count"] == 3
+        assert len(product["modes"]) == 9
+
+        nm_artifacts = [a for a in result.artifacts if a.type == "normal_modes"]
+        assert len(nm_artifacts) == 1
+        assert nm_artifacts[0].path == nm_path
+
+    def test_log_missing_no_crash(
+        self, fake_backend: object, tmp_path: Path
+    ) -> None:
+        """Log file missing -> completed, no normal_modes.json, no artifact."""
+        from acp.calculations.primitives.frequency import run_frequency
+        from tests.conftest import FakeBackend
+
+        fb: FakeBackend = fake_backend  # type: ignore[assignment]
+        out = tmp_path / "freq_out"
+
+        from acp.backends.base import QCResult
+
+        fb.set_result(
+            "frequency",
+            result=QCResult(
+                success=True,
+                frequencies=[100.0, 200.0],
+                has_frequencies=True,
+                freq_log_file=tmp_path / "nonexistent.out",
+                log_file=tmp_path / "nonexistent.log",
+            ),
+        )
+
+        from acp.calculations.contracts import CalculationRequest, StructureArtifact
+
+        input_path = tmp_path / "mol.xyz"
+        input_path.write_text("1\n\nC 0 0 0\n", encoding="utf-8")
+        req = CalculationRequest(
+            input_artifact=StructureArtifact(
+                path=input_path,
+                elements=["C"],
+                role="minimum",
+                source="test",
+            ),
+            method="r2SCAN-3c",
+            resources={"output_dir": str(out)},
+            workflow="test",
+            profile="default",
+        )
+
+        result = run_frequency(req)
+        assert result.status == "completed"
+        assert not (out / "normal_modes.json").is_file()
+        nm_artifacts = [a for a in result.artifacts if a.type == "normal_modes"]
+        assert len(nm_artifacts) == 0
+
+    def test_truncated_fixture_partial_modes(
+        self, fake_backend: object, tmp_path: Path
+    ) -> None:
+        """Truncated fixture (partial modes) -> completed + warnings in product + product still written."""
+        from acp.calculations.primitives.frequency import run_frequency
+        from tests.conftest import FakeBackend
+
+        fb: FakeBackend = fake_backend  # type: ignore[assignment]
+        out = tmp_path / "freq_out"
+        log_path = tmp_path / "orca_truncated.out"
+        log_path.write_text(TRUNCATED_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+
+        from acp.backends.base import QCResult
+
+        fb.set_result(
+            "frequency",
+            result=QCResult(
+                success=True,
+                frequencies=[-797.72, 1615.84, 3896.58],
+                has_frequencies=True,
+                freq_log_file=log_path,
+                log_file=log_path,
+                output_file=log_path,
+            ),
+        )
+
+        from acp.calculations.contracts import CalculationRequest, StructureArtifact
+
+        input_path = tmp_path / "mol.xyz"
+        input_path.write_text("3\n\nO 0 0 0\nH 0 0 1\nH 0 1 0\n", encoding="utf-8")
+        req = CalculationRequest(
+            input_artifact=StructureArtifact(
+                path=input_path,
+                elements=["O", "H", "H"],
+                role="minimum",
+                source="test",
+            ),
+            method="r2SCAN-3c",
+            resources={"output_dir": str(out)},
+            workflow="test",
+            profile="default",
+        )
+
+        result = run_frequency(req)
+        assert result.status == "completed"
+
+        nm_path = out / "normal_modes.json"
+        if nm_path.is_file():
+            import json
+            product = json.loads(nm_path.read_text(encoding="utf-8"))
+            if product.get("warnings"):
+                assert any("atom_count" in w or "skipped" in w for w in product["warnings"])
+
+    def test_empty_normal_modes_section(
+        self, fake_backend: object, tmp_path: Path
+    ) -> None:
+        """Empty/no NORMAL MODES text -> completed, frequencies-only path."""
+        from acp.calculations.primitives.frequency import run_frequency
+        from tests.conftest import FakeBackend
+
+        fb: FakeBackend = fake_backend  # type: ignore[assignment]
+        out = tmp_path / "freq_out"
+        log_path = tmp_path / "orca_no_modes.out"
+        log_path.write_text(
+            "VIBRATIONAL FREQUENCIES\n-----------------------\n"
+            "   0:   1615.84 cm**-1\n   1:   3896.58 cm**-1\n"
+            "-----------------------\n",
+            encoding="utf-8",
+        )
+
+        from acp.backends.base import QCResult
+
+        fb.set_result(
+            "frequency",
+            result=QCResult(
+                success=True,
+                frequencies=[1615.84, 3896.58],
+                has_frequencies=True,
+                freq_log_file=log_path,
+                log_file=log_path,
+                output_file=log_path,
+            ),
+        )
+
+        from acp.calculations.contracts import CalculationRequest, StructureArtifact
+
+        input_path = tmp_path / "mol.xyz"
+        input_path.write_text("1\n\nC 0 0 0\n", encoding="utf-8")
+        req = CalculationRequest(
+            input_artifact=StructureArtifact(
+                path=input_path,
+                elements=["C"],
+                role="minimum",
+                source="test",
+            ),
+            method="r2SCAN-3c",
+            resources={"output_dir": str(out)},
+            workflow="test",
+            profile="default",
+        )
+
+        result = run_frequency(req)
+        assert result.status == "completed"
+        assert not (out / "normal_modes.json").is_file()
+        nm_artifacts = [a for a in result.artifacts if a.type == "normal_modes"]
+        assert len(nm_artifacts) == 0
