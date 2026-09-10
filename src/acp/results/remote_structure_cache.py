@@ -129,6 +129,9 @@ class RemoteStructureCache:
                 return None
 
             fetcher = self._fetcher_factory(job_id)
+            if fetcher is None:
+                logger.debug("Fetcher unavailable for job %s; cannot fetch %s", job_id, rel_path)
+                return None
             try:
                 data = fetcher.read_file(record, rel_path)
             except FileNotFoundError:

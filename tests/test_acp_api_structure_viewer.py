@@ -1212,3 +1212,28 @@ class TestRemoteAvailabilityEndpoints:
         body = resp.json()
         assert body["available"] is False
         assert body["reason"] == "pending_fetch"
+
+    def test_geometry_fetch_uses_production_fetcher(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """Production path: inject _remote_fetcher on manager (no manual cache) → fetch=1 works."""
+        work_dir = self._seed_remote_job(sv_client, tmp_path)
+        _write_confsearch_manifest(work_dir)
+        xyz_content = "3\n\nC 0 0 0\nH 0 0 1\nH 0 1 0\n"
+
+        manager = sv_client.app.state.job_manager
+
+        class FakeFetcher:
+            def read_file(self, record: Any, filename: str) -> bytes:
+                return xyz_content.encode("utf-8")
+
+        manager._remote_fetcher = FakeFetcher()  # type: ignore[attr-defined]
+
+        catalog = sv_client.get("/api/v1/jobs/remote-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+
+        resp = sv_client.get(
+            f"/api/v1/jobs/remote-001/structure-viewer/entries/{default_id}/geometry?fetch=1"
+        )
+        assert resp.status_code == 200
+        assert resp.text.strip().startswith("3")

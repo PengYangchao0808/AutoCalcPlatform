@@ -267,7 +267,11 @@ def _remote_structure_cache(request: Request) -> Any:
     manager = _manager(request)
     cache = getattr(manager, "_remote_structure_cache", None)
     if cache is None:
-        cache = RemoteStructureCache(manager.run_root)
+
+        def _fetcher_factory(job_id: str) -> Any:
+            return getattr(manager, "_remote_fetcher", None)
+
+        cache = RemoteStructureCache(manager.run_root, fetcher_factory=_fetcher_factory)
         manager._remote_structure_cache = cache  # type: ignore[attr-defined]
     return cache
 
