@@ -865,3 +865,350 @@ class TestVibrationsEndpoint:
         assert body["geometry_product_id"] == "batch_item_001"
         assert len(body["modes"]) == 1
         assert body["modes"][0]["frequency_cm1"] == 100.0
+
+
+# ── Remote structure cache tests (todo 11) ─────────────────────────────────
+
+
+class TestRemoteStructureCache:
+    """Unit tests for RemoteStructureCache (no network, no API)."""
+
+    def test_cache_path_basic(self, tmp_path: Path) -> None:
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        cache = RemoteStructureCache(tmp_path)
+        p = cache.cache_path("job-1", "RESULT/confsearch/confsearch_manifest.json")
+        assert p == tmp_path / ".remote_cache" / "job-1" / "RESULT" / "confsearch" / "confsearch_manifest.json"
+
+    def test_cache_path_rejects_escape(self, tmp_path: Path) -> None:
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        cache = RemoteStructureCache(tmp_path)
+        with pytest.raises(ValueError, match="escapes"):
+            cache.cache_path("job-1", "../../etc/passwd")
+
+    def test_cache_path_rejects_dot_dot_in_middle(self, tmp_path: Path) -> None:
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        cache = RemoteStructureCache(tmp_path)
+        with pytest.raises(ValueError, match="escapes"):
+            cache.cache_path("job-1", "RESULT/../../../etc/passwd")
+
+    def test_get_cached_miss(self, tmp_path: Path) -> None:
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        cache = RemoteStructureCache(tmp_path)
+        assert cache.get_cached("job-1", "RESULT/x.json") is None
+
+    def test_get_cached_hit(self, tmp_path: Path) -> None:
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        cache = RemoteStructureCache(tmp_path)
+        target = cache.cache_path("job-1", "RESULT/x.json")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text('{"ok":true}', encoding="utf-8")
+        assert cache.get_cached("job-1", "RESULT/x.json") == target
+
+    def test_fetch_writes_atomically(self, tmp_path: Path) -> None:
+        """fetch() writes file atomically (no partial files on success)."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        content = b"3\n\nC 0 0 0\nH 0 0 1\nH 0 1 0\n"
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                return content
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda job_id: FakeFetcher())
+
+        class FakeRecord:
+            id = "job-1"
+            result = {"node": "n1", "remote_dir": "/remote/job-1"}
+
+        result = cache.fetch(FakeRecord(), "RESULT/structures/geom.xyz")  # type: ignore[arg-type]
+        assert result is not None
+        assert result.read_bytes() == content
+        # No tmp files left behind
+        assert not list(result.parent.glob("*.tmp"))
+
+    def test_fetch_returns_cached(self, tmp_path: Path) -> None:
+        """fetch() returns cached path without calling fetcher on second call."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        call_count = 0
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                nonlocal call_count
+                call_count += 1
+                return b"data"
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+
+        class FakeRecord:
+            id = "j1"
+            result = {"node": "n1", "remote_dir": "/r"}
+
+        r1 = cache.fetch(FakeRecord(), "RESULT/x.json")  # type: ignore[arg-type]
+        r2 = cache.fetch(FakeRecord(), "RESULT/x.json")  # type: ignore[arg-type]
+        assert r1 == r2
+        assert call_count == 1
+
+    def test_fetch_no_write_inside_task_dir(self, tmp_path: Path) -> None:
+        """fetch() must NOT write inside the task work_dir."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        work_dir = tmp_path / "projects" / "default" / "job-1"
+        work_dir.mkdir(parents=True)
+        (work_dir / "RESULT").mkdir()
+        initial_files = set(work_dir.rglob("*"))
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                return b"content"
+
+        cache = RemoteStructureCache(tmp_path, fetcher_factory=lambda jid: FakeFetcher())
+
+        record = type("FakeRecord", (), {
+            "id": "job-1",
+            "result": {"node": "n1", "remote_dir": "/remote"},
+            "work_dir": str(work_dir),
+        })()
+
+        cache.fetch(record, "RESULT/test.json")
+        final_files = set(work_dir.rglob("*"))
+        assert initial_files == final_files
+
+    def test_purge_job_removes_dir(self, tmp_path: Path) -> None:
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        cache = RemoteStructureCache(tmp_path)
+        target = cache.cache_path("job-1", "RESULT/x.json")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("data", encoding="utf-8")
+        assert target.exists()
+        cache.purge_job("job-1")
+        assert not target.parent.parent.exists()
+
+    def test_sweep_expired_removes_old(self, tmp_path: Path) -> None:
+        import os
+        import time
+
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        cache = RemoteStructureCache(tmp_path)
+        target = cache.cache_path("old-job", "RESULT/x.json")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("data", encoding="utf-8")
+        # Set mtime on the job directory to 8 days ago
+        job_dir = cache._cache_root / "old-job"
+        old_time = time.time() - 8 * 86400
+        os.utime(str(job_dir), (old_time, old_time))
+        removed = cache.sweep_expired(ttl_days=7)
+        assert removed >= 1
+        assert not job_dir.exists()
+
+    def test_sweep_expired_keeps_fresh(self, tmp_path: Path) -> None:
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        cache = RemoteStructureCache(tmp_path)
+        target = cache.cache_path("new-job", "RESULT/x.json")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("data", encoding="utf-8")
+        removed = cache.sweep_expired(ttl_days=7)
+        assert removed == 0
+        assert target.exists()
+
+    def test_required_files_absent_confsearch(self, tmp_path: Path) -> None:
+        """Confsearch: manifest missing → True."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        cache = RemoteStructureCache(tmp_path)
+        assert cache.required_files_absent(tmp_path, "Confsearch") is True
+
+    def test_required_files_absent_confsearch_present(self, tmp_path: Path) -> None:
+        """Confsearch: manifest present → False."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        cs_dir = tmp_path / "RESULT" / "confsearch"
+        cs_dir.mkdir(parents=True)
+        (cs_dir / "confsearch_manifest.json").write_text("{}", encoding="utf-8")
+        cache = RemoteStructureCache(tmp_path)
+        assert cache.required_files_absent(tmp_path, "Confsearch") is False
+
+    def test_required_files_absent_batch(self, tmp_path: Path) -> None:
+        """BatchOptimize: result_manifest.json missing → True."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        cache = RemoteStructureCache(tmp_path)
+        assert cache.required_files_absent(tmp_path, "BatchOptimize") is True
+
+    def test_required_files_absent_scan(self, tmp_path: Path) -> None:
+        """scan: scan_trajectory.json missing → True."""
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        cache = RemoteStructureCache(tmp_path)
+        assert cache.required_files_absent(tmp_path, "scan") is True
+
+
+class TestRemoteAvailabilityEndpoints:
+    """Integration tests for remote job availability in structure-viewer endpoints."""
+
+    def _seed_remote_job(
+        self,
+        client: TestClient,
+        tmp_path: Path,
+        *,
+        job_id: str = "remote-001",
+        workflow: str = "Confsearch",
+    ) -> Path:
+        """Seed a remote job (has node_id/host/result.node)."""
+        manager = client.app.state.job_manager
+        work_dir = tmp_path / job_id
+        work_dir.mkdir(parents=True, exist_ok=True)
+        record = JobRecord(
+            id=job_id,
+            spec=JobSpec(workflow=workflow, name=job_id, project_id=manager.default_project_id),
+            status=JobStatus.COMPLETED,
+            work_dir=str(work_dir),
+            project_id=manager.default_project_id,
+            node_id="node1",
+            host="compute-01",
+            result={"node": "node1", "remote_dir": f"/remote/{job_id}"},
+        )
+        manager.store.create(record)
+        return work_dir
+
+    def test_catalog_pending_fetch_when_remote_unsynced(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """Remote job with required files absent → availability=pending_fetch."""
+        self._seed_remote_job(sv_client, tmp_path)
+        resp = sv_client.get("/api/v1/jobs/remote-001/structure-viewer")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["availability"] == "pending_fetch"
+        assert any("pending_fetch" in w for w in body["warnings"])
+
+    def test_catalog_ready_when_files_present(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """Remote job with files on disk → availability=ready."""
+        work_dir = self._seed_remote_job(sv_client, tmp_path)
+        _write_confsearch_manifest_with_xyz(work_dir)
+        resp = sv_client.get("/api/v1/jobs/remote-001/structure-viewer")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["availability"] == "ready"
+
+    def test_geometry_409_pending_fetch_when_unsynced(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """Remote job geometry absent + no fetch param → 409 pending_fetch."""
+        work_dir = self._seed_remote_job(sv_client, tmp_path)
+        _write_confsearch_manifest(work_dir)
+        catalog = sv_client.get("/api/v1/jobs/remote-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+        resp = sv_client.get(
+            f"/api/v1/jobs/remote-001/structure-viewer/entries/{default_id}/geometry"
+        )
+        assert resp.status_code == 409
+        assert resp.json()["detail"] == "pending_fetch"
+
+    def test_geometry_fetch_param_triggers_download(
+        self, sv_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Geometry ?fetch=1 with FakeFetcher → 200, file lands in cache, NOT in task dir."""
+        work_dir = self._seed_remote_job(sv_client, tmp_path)
+        _write_confsearch_manifest(work_dir)
+        xyz_content = "3\n\nC 0 0 0\nH 0 0 1\nH 0 1 0\n"
+
+        # Patch the cache fetcher factory on the manager
+        manager = sv_client.app.state.job_manager
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                return xyz_content.encode("utf-8")
+
+        # Inject a cache with our fake fetcher
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        cache = RemoteStructureCache(
+            manager.run_root,
+            fetcher_factory=lambda jid: FakeFetcher(),
+        )
+        manager._remote_structure_cache = cache  # type: ignore[attr-defined]
+
+        catalog = sv_client.get("/api/v1/jobs/remote-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+
+        # Snapshot task dir before
+        work_dir_path = Path(work_dir)
+        task_files_before = set(work_dir_path.rglob("*"))
+
+        resp = sv_client.get(
+            f"/api/v1/jobs/remote-001/structure-viewer/entries/{default_id}/geometry?fetch=1"
+        )
+        assert resp.status_code == 200
+        assert resp.text.strip().startswith("3")
+
+        # Verify NO writes inside task dir
+        task_files_after = set(work_dir_path.rglob("*"))
+        assert task_files_before == task_files_after
+
+        # Verify cache was populated
+        assert cache.get_cached("remote-001", f"RESULT/confsearch/conformers/0001.xyz") is not None
+
+    def test_geometry_retry_after_fetch_succeeds(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """After fetch=1 populates cache, retry without fetch → 200 from cache."""
+        work_dir = self._seed_remote_job(sv_client, tmp_path)
+        _write_confsearch_manifest(work_dir)
+        xyz_content = "3\n\nC 0 0 0\nH 0 0 1\nH 0 1 0\n"
+
+        manager = sv_client.app.state.job_manager
+
+        class FakeFetcher:
+            def read_file(self, record, filename: str) -> bytes:
+                return xyz_content.encode("utf-8")
+
+        from acp.results.remote_structure_cache import RemoteStructureCache
+
+        cache = RemoteStructureCache(
+            manager.run_root,
+            fetcher_factory=lambda jid: FakeFetcher(),
+        )
+        manager._remote_structure_cache = cache  # type: ignore[attr-defined]
+
+        catalog = sv_client.get("/api/v1/jobs/remote-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+
+        # First: fetch
+        resp1 = sv_client.get(
+            f"/api/v1/jobs/remote-001/structure-viewer/entries/{default_id}/geometry?fetch=1"
+        )
+        assert resp1.status_code == 200
+
+        # Second: retry without fetch → still 200 from cache
+        resp2 = sv_client.get(
+            f"/api/v1/jobs/remote-001/structure-viewer/entries/{default_id}/geometry"
+        )
+        assert resp2.status_code == 200
+        assert resp2.text.strip().startswith("3")
+
+    def test_vibrations_pending_fetch_when_unsynced(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """Remote job vibrations absent → available=false, reason=pending_fetch."""
+        work_dir = self._seed_remote_job(sv_client, tmp_path)
+        _write_confsearch_manifest_with_xyz(work_dir)
+        catalog = sv_client.get("/api/v1/jobs/remote-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+        resp = sv_client.get(
+            f"/api/v1/jobs/remote-001/structure-viewer/entries/{default_id}/vibrations"
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["available"] is False
+        assert body["reason"] == "pending_fetch"

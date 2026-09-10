@@ -254,6 +254,24 @@ def _manager(request: Request) -> JobManager:
     return manager
 
 
+def _is_remote_job(record: Any) -> bool:
+    """True when *record* carries remote execution metadata."""
+    result = record.result or {}
+    return bool(result.get("node") and result.get("remote_dir"))
+
+
+def _remote_structure_cache(request: Request) -> Any:
+    """Return (or lazily create) the RemoteStructureCache singleton."""
+    from acp.results.remote_structure_cache import RemoteStructureCache
+
+    manager = _manager(request)
+    cache = getattr(manager, "_remote_structure_cache", None)
+    if cache is None:
+        cache = RemoteStructureCache(manager.run_root)
+        manager._remote_structure_cache = cache  # type: ignore[attr-defined]
+    return cache
+
+
 def _db_path(request: Request) -> Path:
     db_path = getattr(request.app.state, "db_path", None)
     if not db_path:
@@ -2173,8 +2191,17 @@ def get_structure_viewer_catalog(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     body = payload.to_dict()
-    # TODO(todo-11): compute availability from remote sync state; "ready" for now.
-    body["availability"] = "ready"
+    warnings_list: list[str] = list(body.get("warnings") or [])
+
+    cache = _remote_structure_cache(request)
+    is_remote = _is_remote_job(record)
+    if is_remote and cache.required_files_absent(work_dir, workflow):
+        body["availability"] = "pending_fetch"
+        warnings_list.append("pending_fetch")
+    else:
+        body["availability"] = "ready"
+
+    body["warnings"] = warnings_list
     return StructureViewerPayloadModel.model_validate(body)
 
 
@@ -2209,6 +2236,7 @@ def get_structure_viewer_geometry(
     job_id: str,
     entry_id: str,
     request: Request,
+    fetch: bool = Query(default=False),
 ) -> Response:
     """Return the XYZ geometry for a structure-viewer entry.
 
@@ -2216,11 +2244,14 @@ def get_structure_viewer_geometry(
     ``resolve_safe``, and returns ``text/plain`` XYZ bytes.
     Multi-frame files (IRC) return the first frame only.
 
-    409 pending_fetch is reserved for remote unsynced (todo 11 wiring);
-    410 is NOT needed for display (same decision as todo 8).
+    For remote jobs, when the geometry file is absent locally:
+    - Without ``?fetch=1``: returns 409 ``pending_fetch``.
+    - With ``?fetch=1``: attempts a synchronous fetch via the
+      ``RemoteStructureCache``; 200 on success, 502/504 on failure.
 
     Raises:
         404: Unknown job, unknown entry, missing geometry_ref, or file missing.
+        409: Remote file not yet synced (without fetch param).
     """
     from acp.confsearch.sampling_models import read_traj_frame_xyz
     from acp.results.structure_viewer import (
@@ -2238,6 +2269,7 @@ def get_structure_viewer_geometry(
     work_dir = Path(record.work_dir)
     workflow = str(record.spec.workflow or "")
     job_status = record.status.value
+    is_remote = _is_remote_job(record)
 
     try:
         payload = build_structure_viewer_payload(
@@ -2265,6 +2297,31 @@ def get_structure_viewer_geometry(
         )
 
     resolved = _resolve_geometry_path(work_dir, geometry_ref)
+
+    # Remote job: file absent locally → try cache or fetch
+    if resolved is None and is_remote:
+        cache = _remote_structure_cache(request)
+        cached = cache.get_cached(job_id, geometry_ref)
+        if cached is not None:
+            resolved = cached
+        elif fetch:
+            try:
+                fetched = cache.fetch(record, geometry_ref)
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Failed to fetch geometry from remote: {exc}",
+                ) from exc
+            if fetched is not None:
+                resolved = fetched
+            else:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Geometry not available on remote: {geometry_ref}",
+                )
+        else:
+            raise HTTPException(status_code=409, detail="pending_fetch")
+
     if resolved is None:
         raise HTTPException(
             status_code=404,
@@ -2360,7 +2417,10 @@ def get_structure_viewer_vibrations(
         )
 
     freq_dir = work_dir / "RESULT" / "frequencies"
+    is_remote = _is_remote_job(record)
     if not freq_dir.is_dir():
+        if is_remote:
+            return _not_available("pending_fetch")
         return _not_available("no_normal_modes")
 
     # TODO(todo-24): wire per-item normal_modes for BatchOptimize

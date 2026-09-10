@@ -881,6 +881,13 @@ class JobManager:
     def _purge_job_records(self, job_id: str) -> None:
         """Cascade-delete every DB row owned by *job_id* (jobs + children)."""
         self.store.purge_cascade(job_id)
+        # Evict the remote structure cache for this job (todo 11).
+        cache = getattr(self, "_remote_structure_cache", None)
+        if cache is not None:
+            try:
+                cache.purge_job(job_id)
+            except Exception:
+                logger.debug("Failed to purge remote cache for job %s", job_id, exc_info=True)
 
     def _delete_job_disk(self, record: JobRecord) -> None:
         """Remove a job's remote directories and local work directory."""
