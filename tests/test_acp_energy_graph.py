@@ -923,8 +923,8 @@ def _write_opt(tmp_path, payload):
     return path
 
 
-def test_optimization_five_cycle_annotations_min_max(tmp_path):
-    """Five distinct-energy cycles produce both minimum and maximum annotations."""
+def test_optimization_five_cycle_annotations_only_minimum(tmp_path):
+    """Five distinct-energy cycles produce only minimum annotation, no maximum."""
     _write_opt(
         tmp_path,
         _opt_payload(
@@ -944,20 +944,14 @@ def test_optimization_five_cycle_annotations_min_max(tmp_path):
     annotations = graph["annotations"]
     ann_types = [a["type"] for a in annotations]
     assert ann_types.count("minimum") == 1
-    assert ann_types.count("maximum") == 1
+    assert "maximum" not in ann_types
     min_ann = next(a for a in annotations if a["type"] == "minimum")
-    max_ann = next(a for a in annotations if a["type"] == "maximum")
     assert min_ann["label"] == "最低能量周期"
-    assert max_ann["label"] == "最高能量周期"
     assert min_ann["selected"] is False
-    assert max_ann["selected"] is False
-    # Cycle 4 has energy -10.2 (lowest); cycle 3 has -9.9 (highest)
+    # Cycle 4 has energy -10.2 (lowest)
     assert min_ann["frame_index"] == 3
-    assert max_ann["frame_index"] == 2
     assert min_ann["x"] == 4.0
-    assert max_ann["x"] == 3.0
     assert min_ann["y"] is not None
-    assert max_ann["y"] is not None
 
 
 def test_optimization_single_cycle_only_minimum(tmp_path):
@@ -996,8 +990,8 @@ def test_optimization_all_none_energies_no_annotations(tmp_path):
     assert all(a["type"] not in {"minimum", "maximum"} for a in annotations)
 
 
-def test_optimization_min_max_coincide_skips_maximum(tmp_path):
-    """When minimum and maximum coincide, only minimum is emitted."""
+def test_optimization_equal_energies_only_minimum(tmp_path):
+    """When all energies are equal, only minimum is emitted (no maximum)."""
     _write_opt(
         tmp_path,
         _opt_payload(
@@ -1044,11 +1038,11 @@ def test_optimization_annotations_do_not_alter_series_x_axis_nodes(tmp_path):
         assert set(node.keys()) == NODE_WIRE_KEYS
     # Annotations do not carry node metadata keys
     for ann in graph["annotations"]:
-        assert ann["type"] in {"minimum", "maximum"}
+        assert ann["type"] == "minimum"
 
 
-def test_optimization_min_max_annotations_wire_key_parity(tmp_path):
-    """Min/max annotations have exactly the standard annotation wire keys."""
+def test_optimization_minimum_annotation_wire_key_parity(tmp_path):
+    """Minimum annotation has exactly the standard annotation wire keys."""
     _write_opt(
         tmp_path,
         _opt_payload(

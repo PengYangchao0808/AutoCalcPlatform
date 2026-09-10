@@ -205,7 +205,6 @@ def test_annotation_types_are_closed() -> None:
             "ts",
             "intermediate",
             "minimum",
-            "maximum",
             "failed",
             "new_basin",
             "cluster_representative",

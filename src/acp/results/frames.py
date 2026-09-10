@@ -144,7 +144,6 @@ ANNOTATION_TYPES = frozenset(
         "ts",
         "intermediate",
         "minimum",
-        "maximum",
         "failed",
         "new_basin",
         "cluster_representative",

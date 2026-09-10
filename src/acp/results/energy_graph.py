@@ -721,13 +721,11 @@ def _step_deltas(values: list[float | None]) -> list[float | None]:
 
 
 def _energy_cycle_annotations(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Emit minimum/maximum cycle annotations over finite relative energies.
+    """Emit minimum-energy cycle annotation over finite relative energies.
 
     The minimum annotation (labeled 最低能量周期) is always
-    emitted when at least one node carries a finite energy.  The maximum
-    annotation (labeled 最高能量周期) is emitted only when
-    its target differs from the minimum.  Both annotations have
-    selected=False.
+    emitted when at least one node carries a finite energy.  The annotation
+    has ``selected=False``.
     """
     finite_nodes = [node for node in nodes if node.get("energy") is not None]
     if not finite_nodes:
@@ -745,20 +743,6 @@ def _energy_cycle_annotations(nodes: list[dict[str, Any]]) -> list[dict[str, Any
             geometry_ref=minimum["geometry_ref"],
         ).to_annotation()
     ]
-    maximum = max(finite_nodes, key=lambda node: float(node["energy"]))
-    if maximum["frame_index"] != minimum["frame_index"]:
-        annotations.append(
-            TrajectoryAnnotation(
-                id=f"maximum_{maximum['frame_index']}",
-                type="maximum",
-                label="最高能量周期",
-                frame_index=maximum["frame_index"],
-                x=maximum["x"],
-                y=maximum["energy"],
-                status=maximum["status"],
-                geometry_ref=maximum["geometry_ref"],
-            ).to_annotation()
-        )
     return annotations
 
 
