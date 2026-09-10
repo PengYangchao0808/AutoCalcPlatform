@@ -8093,6 +8093,11 @@ function energyGraphBindInspectorButtons(root) {
     if (card) {
       var errorEl = card.querySelector("[data-energy-card-error]");
       if (errorEl) { errorEl.textContent = pending.message; errorEl.style.display = ""; }
+      /* Un-hide type/action rows (saved variant renders them hidden) */
+      var typeRow = card.querySelector("[data-energy-card-type-row]");
+      if (typeRow) typeRow.style.display = "";
+      var actionRow = card.querySelector("[data-energy-card-action-row]");
+      if (actionRow) actionRow.style.display = "";
       /* Restore type-selected state with the user's chosen role re-highlighted */
       card.setAttribute("data-energy-card-state", "type-selected");
       card.querySelectorAll(".energy-card-type-btn").forEach(function(btn) {
