@@ -1549,3 +1549,448 @@ class TestScanResolver:
         )
         entry = payload.entries[0]
         assert entry.geometry.endpoint == "/api/v1/jobs/j1/structure-viewer/entries/scan_frame_0/geometry"
+
+
+# ---------------------------------------------------------------------------
+# Legacy resolver tests
+# ---------------------------------------------------------------------------
+
+
+def _make_legacy_task(
+    tmp_path: Path,
+    *,
+    result_manifest: dict | None = None,
+    result_summary: dict | None = None,
+) -> Path:
+    """Create a task dir for legacy resolver tests."""
+    (tmp_path / "job.json").write_text("{}")
+    (tmp_path / "task.json").write_text("{}")
+
+    if result_manifest is not None:
+        result_dir = tmp_path / "RESULT"
+        result_dir.mkdir(exist_ok=True)
+        (result_dir / "result_manifest.json").write_text(
+            json.dumps(result_manifest), encoding="utf-8"
+        )
+        # Create structure files referenced by products
+        for product in result_manifest.get("products", []):
+            if product.get("path") and product.get("kind") in ("structure", "xyz"):
+                struct_path = result_dir / product["path"]
+                struct_path.parent.mkdir(parents=True, exist_ok=True)
+                if not struct_path.is_file():
+                    struct_path.write_text("1\ntest\nH 0 0 0\n", encoding="utf-8")
+
+    if result_summary is not None:
+        result_dir = tmp_path / "RESULT"
+        result_dir.mkdir(exist_ok=True)
+        (result_dir / "result_summary.json").write_text(
+            json.dumps(result_summary), encoding="utf-8"
+        )
+        for product in result_summary.get("products", []):
+            if product.get("path"):
+                struct_path = result_dir / product["path"]
+                struct_path.parent.mkdir(parents=True, exist_ok=True)
+                if not struct_path.is_file():
+                    struct_path.write_text("1\ntest\nH 0 0 0\n", encoding="utf-8")
+
+    return tmp_path
+
+
+class TestLegacyResolver:
+    """Legacy fallback: result_manifest products then result_summary.json."""
+
+    def test_legacy_result_manifest_products(self, tmp_path: Path):
+        """result_manifest structure products → legacy entries with 兼容模式 badge."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        manifest = {
+            "version": 2,
+            "task_id": "",
+            "workflow": "nmr",
+            "status": "completed",
+            "products": [
+                {"id": "conf_0001", "label": "Conformer 0001", "path": "conformers/0001.xyz", "kind": "structure"},
+                {"id": "conf_0002", "label": "Conformer 0002", "path": "conformers/0002.xyz", "kind": "structure"},
+            ],
+        }
+        task = _make_legacy_task(tmp_path, result_manifest=manifest)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="nmr", job_status="completed"
+        )
+        assert len(payload.entries) == 2
+        for entry in payload.entries:
+            assert entry.source.kind == "formal_result"
+            assert "兼容模式" in entry.badges
+            assert entry.id.startswith("legacy_")
+            assert len(entry.id) == len("legacy_") + 12
+
+    def test_legacy_entry_id_deterministic(self, tmp_path: Path):
+        """Legacy entry ids are deterministic sha256(relpath)[:12]."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        manifest = {
+            "version": 2,
+            "task_id": "",
+            "workflow": "nmr",
+            "status": "completed",
+            "products": [
+                {"id": "p1", "label": "S", "path": "conformers/0001.xyz", "kind": "structure"},
+            ],
+        }
+        task = _make_legacy_task(tmp_path, result_manifest=manifest)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="nmr", job_status="completed"
+        )
+        expected_hash = hashlib.sha256("conformers/0001.xyz".encode("utf-8")).hexdigest()[:12]
+        assert payload.entries[0].id == f"legacy_{expected_hash}"
+
+    def test_legacy_result_summary_fallback(self, tmp_path: Path):
+        """No result_manifest → fall back to result_summary.json products."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        summary = {
+            "workflow": "energy",
+            "status": "completed",
+            "products": [
+                {"path": "finalDFT/global_min.xyz", "role": "final_stable_structure", "kind": "xyz"},
+            ],
+        }
+        task = _make_legacy_task(tmp_path, result_summary=summary)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="energy", job_status="completed"
+        )
+        assert len(payload.entries) == 1
+        assert payload.entries[0].source.kind == "formal_result"
+        assert "兼容模式" in payload.entries[0].badges
+
+    def test_legacy_default_first_entry(self, tmp_path: Path):
+        """default_entry_id = first legacy entry."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        manifest = {
+            "version": 2,
+            "task_id": "",
+            "workflow": "nmr",
+            "status": "completed",
+            "products": [
+                {"id": "p1", "label": "A", "path": "a.xyz", "kind": "structure"},
+                {"id": "p2", "label": "B", "path": "b.xyz", "kind": "structure"},
+            ],
+        }
+        task = _make_legacy_task(tmp_path, result_manifest=manifest)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="nmr", job_status="completed"
+        )
+        assert payload.default_entry_id == payload.entries[0].id
+
+    def test_legacy_no_products_warning(self, tmp_path: Path):
+        """No products at all → empty + warning, no exception."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        manifest = {
+            "version": 2,
+            "task_id": "",
+            "workflow": "nmr",
+            "status": "completed",
+            "products": [],
+        }
+        task = _make_legacy_task(tmp_path, result_manifest=manifest)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="nmr", job_status="completed"
+        )
+        assert len(payload.entries) == 0
+        assert len(payload.warnings) > 0
+
+    def test_legacy_geometry_endpoint(self, tmp_path: Path):
+        """Legacy entry geometry endpoint uses job_id and entry_id."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        manifest = {
+            "version": 2,
+            "task_id": "",
+            "workflow": "nmr",
+            "status": "completed",
+            "products": [
+                {"id": "p1", "label": "S", "path": "s.xyz", "kind": "structure"},
+            ],
+        }
+        task = _make_legacy_task(tmp_path, result_manifest=manifest)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="nmr", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert "j1" in entry.geometry.endpoint
+        assert entry.id in entry.geometry.endpoint
+
+    def test_legacy_skips_non_structure_products(self, tmp_path: Path):
+        """Non-structure kind products are skipped."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        manifest = {
+            "version": 2,
+            "task_id": "",
+            "workflow": "nmr",
+            "status": "completed",
+            "products": [
+                {"id": "report", "label": "Report", "path": "report.json", "kind": "report"},
+                {"id": "p1", "label": "S", "path": "s.xyz", "kind": "structure"},
+            ],
+        }
+        task = _make_legacy_task(tmp_path, result_manifest=manifest)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="nmr", job_status="completed"
+        )
+        assert len(payload.entries) == 1
+
+
+# ---------------------------------------------------------------------------
+# IRC resolver tests
+# ---------------------------------------------------------------------------
+
+
+def _make_irc_task(
+    tmp_path: Path,
+    *,
+    forward_xyz: str | None = None,
+    reverse_xyz: str | None = None,
+) -> Path:
+    """Create a task dir with optional IRC endpoint files."""
+    (tmp_path / "job.json").write_text("{}")
+    (tmp_path / "task.json").write_text("{}")
+    result_dir = tmp_path / "RESULT"
+    irc_dir = result_dir / "irc"
+    irc_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest = {
+        "version": 2,
+        "task_id": "",
+        "workflow": "irc",
+        "status": "completed",
+        "products": [],
+    }
+    (result_dir / "result_manifest.json").write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
+
+    if forward_xyz is not None:
+        (irc_dir / "irc_forward.xyz").write_text(forward_xyz, encoding="utf-8")
+    if reverse_xyz is not None:
+        (irc_dir / "irc_reverse.xyz").write_text(reverse_xyz, encoding="utf-8")
+
+    return tmp_path
+
+
+class TestIrcResolver:
+    """IRC placeholder: entries from RESULT/irc/*.xyz, awaiting_projection warning."""
+
+    def test_irc_two_endpoints(self, tmp_path: Path):
+        """irc_forward.xyz + irc_reverse.xyz → 2 entries, forward-first."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        xyz = "3\nendpoint\nO 0 0 0\nH 0 0 1\nH 0 1 0\n"
+        task = _make_irc_task(tmp_path, forward_xyz=xyz, reverse_xyz=xyz)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="irc", job_status="completed"
+        )
+        assert len(payload.entries) == 2
+        ids = [e.id for e in payload.entries]
+        assert ids[0] == "irc_forward_0"
+        assert ids[1] == "irc_reverse_0"
+
+    def test_irc_awaiting_projection_warning(self, tmp_path: Path):
+        """awaiting_projection appears in warnings."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        xyz = "3\nendpoint\nO 0 0 0\nH 0 0 1\nH 0 1 0\n"
+        task = _make_irc_task(tmp_path, forward_xyz=xyz, reverse_xyz=xyz)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="irc", job_status="completed"
+        )
+        assert any("awaiting_projection" in w.lower() for w in payload.warnings)
+
+    def test_irc_no_files_group_still_present(self, tmp_path: Path):
+        """No IRC files → group present + awaiting_projection warning, no entries."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        task = _make_irc_task(tmp_path)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="irc", job_status="completed"
+        )
+        assert any(g.id == "irc_paths" for g in payload.groups)
+        assert len(payload.entries) == 0
+        assert any("awaiting_projection" in w.lower() for w in payload.warnings)
+
+    def test_irc_forward_before_reverse(self, tmp_path: Path):
+        """Forward endpoint comes before reverse (filename sort)."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        xyz = "3\nendpoint\nO 0 0 0\nH 0 0 1\nH 0 1 0\n"
+        task = _make_irc_task(tmp_path, forward_xyz=xyz, reverse_xyz=xyz)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="irc", job_status="completed"
+        )
+        assert payload.entries[0].id == "irc_forward_0"
+        assert payload.entries[1].id == "irc_reverse_0"
+
+    def test_irc_entry_source_fields(self, tmp_path: Path):
+        """IRC entry source.kind = 'formal_result', frame_index = 0."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        xyz = "3\nendpoint\nO 0 0 0\nH 0 0 1\nH 0 1 0\n"
+        task = _make_irc_task(tmp_path, forward_xyz=xyz)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="irc", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert entry.source.kind == "formal_result"
+        assert entry.source.frame_index == 0
+        assert entry.source.geometry_ref is not None
+        assert "irc_forward.xyz" in entry.source.geometry_ref
+
+    def test_irc_geometry_endpoint(self, tmp_path: Path):
+        """IRC entry geometry endpoint uses job_id and entry_id."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        xyz = "3\nendpoint\nO 0 0 0\nH 0 0 1\nH 0 1 0\n"
+        task = _make_irc_task(tmp_path, forward_xyz=xyz)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="irc", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert "j1" in entry.geometry.endpoint
+        assert "irc_forward_0" in entry.geometry.endpoint
+
+    def test_irc_only_forward(self, tmp_path: Path):
+        """Only forward file → 1 entry."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        xyz = "3\nendpoint\nO 0 0 0\nH 0 0 1\nH 0 1 0\n"
+        task = _make_irc_task(tmp_path, forward_xyz=xyz)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="irc", job_status="completed"
+        )
+        assert len(payload.entries) == 1
+        assert payload.entries[0].id == "irc_forward_0"
+
+
+# ---------------------------------------------------------------------------
+# Manual entry helper tests
+# ---------------------------------------------------------------------------
+
+
+class TestManualEntryHelper:
+    """make_manual_entry: pure function, correct id/kind/vibrations."""
+
+    def test_manual_entry_id_matches_helper(self):
+        """make_manual_entry id matches manual_entry_id(relpath)."""
+        from acp.results.structure_viewer import make_manual_entry, manual_entry_id
+
+        entry = make_manual_entry(job_id="j1", relpath="some/file.xyz", label="Test")
+        expected_id = manual_entry_id("some/file.xyz")
+        assert entry.id == expected_id
+
+    def test_manual_entry_source_kind(self):
+        """source.kind = 'manual_file'."""
+        from acp.results.structure_viewer import make_manual_entry
+
+        entry = make_manual_entry(job_id="j1", relpath="f.xyz", label="F")
+        assert entry.source.kind == "manual_file"
+
+    def test_manual_entry_vibrations_unavailable(self):
+        """vibrations.available = False always."""
+        from acp.results.structure_viewer import make_manual_entry
+
+        entry = make_manual_entry(job_id="j1", relpath="f.xyz", label="F")
+        assert entry.vibrations.available is False
+
+    def test_manual_entry_geometry_endpoint(self):
+        """geometry.endpoint uses job_id and entry_id."""
+        from acp.results.structure_viewer import make_manual_entry
+
+        entry = make_manual_entry(job_id="j1", relpath="f.xyz", label="F")
+        assert "j1" in entry.geometry.endpoint
+        assert entry.id in entry.geometry.endpoint
+
+    def test_manual_entry_label_propagated(self):
+        """Label is propagated from argument."""
+        from acp.results.structure_viewer import make_manual_entry
+
+        entry = make_manual_entry(job_id="j1", relpath="f.xyz", label="My Molecule")
+        assert entry.label == "My Molecule"
+
+    def test_manual_entry_geometry_ref(self):
+        """source.geometry_ref = relpath."""
+        from acp.results.structure_viewer import make_manual_entry
+
+        entry = make_manual_entry(job_id="j1", relpath="path/to/file.xyz", label="F")
+        assert entry.source.geometry_ref == "path/to/file.xyz"
+
+
+# ---------------------------------------------------------------------------
+# Revision refresh tests
+# ---------------------------------------------------------------------------
+
+
+class TestRevisionRefresh:
+    """Revision refresh: changes on manifest touch, stable on rebuild, immutability."""
+
+    def test_revision_changes_on_confsearch_manifest_touch(self, tmp_path: Path):
+        """Touch confsearch_manifest.json → different revision."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        cs = {"schema_version": "confsearch_v1", "workflow": "Confsearch", "conformers": []}
+        task = _make_task_dir(tmp_path, confsearch_manifest=cs)
+
+        p1 = build_structure_viewer_payload(task, job_id="j1", workflow="Confsearch", job_status="completed")
+        r1 = p1.revision
+
+        cs["conformers"] = [{"id": "c1"}]
+        (task / "RESULT" / "confsearch" / "confsearch_manifest.json").write_text(
+            json.dumps(cs), encoding="utf-8"
+        )
+
+        p2 = build_structure_viewer_payload(task, job_id="j1", workflow="Confsearch", job_status="completed")
+        r2 = p2.revision
+        assert r1 != r2
+
+    def test_revision_stable_on_rebuild(self, tmp_path: Path):
+        """Same inputs → same revision across two calls."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        rm = {"version": 2, "task_id": "t", "workflow": "nmr", "status": "completed", "products": []}
+        task = _make_task_dir(tmp_path, result_manifest=rm)
+
+        p1 = build_structure_viewer_payload(task, job_id="j1", workflow="nmr", job_status="completed")
+        p2 = build_structure_viewer_payload(task, job_id="j1", workflow="nmr", job_status="completed")
+        assert p1.revision == p2.revision
+
+    def test_payload_frozen_cannot_be_mutated(self, tmp_path: Path):
+        """Frozen dataclass → cannot mutate fields after construction."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        task = _make_task_dir(tmp_path)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="optimize", job_status="completed"
+        )
+        with pytest.raises(AttributeError):
+            payload.revision = "tampered"  # type: ignore[misc]
+
+    def test_entries_tuple_frozen(self, tmp_path: Path):
+        """entries is a tuple, not a list — cannot append."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        task = _make_task_dir(tmp_path)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="optimize", job_status="completed"
+        )
+        assert isinstance(payload.entries, tuple)
+
+    def test_warnings_tuple_frozen(self, tmp_path: Path):
+        """warnings is a tuple, not a list."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        task = _make_task_dir(tmp_path)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="optimize", job_status="completed"
+        )
+        assert isinstance(payload.warnings, tuple)

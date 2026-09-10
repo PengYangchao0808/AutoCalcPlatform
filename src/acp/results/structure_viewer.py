@@ -26,6 +26,7 @@ __all__ = [
     "StructureViewerPayload",
     "StructureViewerError",
     "build_structure_viewer_payload",
+    "make_manual_entry",
     "confsearch_entry_id",
     "pes_entry_id",
     "batch_entry_id",
@@ -412,6 +413,46 @@ def resolve_collision(entry_id: str, geometry_ref: str) -> str:
     """
     suffix = hashlib.sha256(geometry_ref.encode("utf-8")).hexdigest()[:6]
     return f"{entry_id}_{suffix}"
+
+
+def make_manual_entry(
+    *,
+    job_id: str,
+    relpath: str,
+    label: str,
+) -> StructureViewerEntry:
+    """Build a ``manual_file`` entry for API-layer injection.
+
+    This is a **pure helper** (no disk I/O) called by the API layer
+    (todo 17) after ``build_structure_viewer_payload`` to inject
+    manually-selected files into the payload entries.
+
+    Args:
+        job_id: Job identifier (for geometry endpoint construction).
+        relpath: Relative path to the geometry file.
+        label: Human-readable label.
+
+    Returns:
+        A ``StructureViewerEntry`` with ``source.kind="manual_file"``
+        and ``vibrations.available=False``.
+    """
+    entry_id = manual_entry_id(relpath)
+    return StructureViewerEntry(
+        id=entry_id,
+        group_id="",
+        label=label,
+        role="minimum",
+        status="completed",
+        geometry=StructureViewerGeometry(
+            endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+            format="xyz",
+        ),
+        source=StructureViewerSource(
+            kind="manual_file",
+            geometry_ref=relpath,
+        ),
+        vibrations=StructureViewerVibrations(available=False),
+    )
 
 
 # ── Revision computation ────────────────────────────────────────────────────
@@ -1169,15 +1210,164 @@ def _resolve_scan(task_root: Path, workflow: str, job_id: str, warnings: list[st
 
 
 def _resolve_irc(task_root: Path, workflow: str, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
-    """IRC resolver — placeholder for todo 6."""
-    warnings.append("IRC resolver not yet implemented")
-    return [], [], None
+    """Resolve IRC endpoint files → structure viewer entries.
+
+    Wave 1 placeholder: reads ``RESULT/irc/*.xyz`` sorted by filename
+    (forward before reverse naturally).  Each file is treated as a single
+    frame (frame_index=0).  Multi-frame XYZ projection is deferred to Wave 7.
+
+    The ``irc_paths`` group is always present with an ``awaiting_projection``
+    warning so the frontend can show a placeholder even when no files exist.
+    """
+    import re as _re
+
+    groups = [StructureViewerGroup(id="irc_paths", label="IRC 路径", kind="irc")]
+    entries: list[StructureViewerEntry] = []
+    default_id: str | None = None
+
+    irc_dir = task_root / "RESULT" / "irc"
+    warnings.append("IRC projection awaiting Wave 7 (awaiting_projection)")
+
+    if not irc_dir.is_dir():
+        return groups, entries, default_id
+
+    xyz_files = sorted(irc_dir.glob("*.xyz"))
+    if not xyz_files:
+        return groups, entries, default_id
+
+    endpoint_re = _re.compile(r"^irc_(forward|reverse)\.xyz$", _re.IGNORECASE)
+
+    for xyz_path in xyz_files:
+        match = endpoint_re.match(xyz_path.name)
+        if not match:
+            continue
+        endpoint = match.group(1).lower()
+        entry_id = irc_entry_id(endpoint, 0)
+
+        geometry_ref = f"RESULT/irc/{xyz_path.name}"
+
+        entries.append(StructureViewerEntry(
+            id=entry_id,
+            group_id="irc_paths",
+            label=f"IRC {endpoint}",
+            role="endpoint",
+            status="completed",
+            geometry=StructureViewerGeometry(
+                endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+                format="xyz",
+            ),
+            source=StructureViewerSource(
+                kind="formal_result",
+                frame_index=0,
+                geometry_ref=geometry_ref,
+            ),
+            vibrations=StructureViewerVibrations(available=False),
+        ))
+
+        if default_id is None:
+            default_id = entry_id
+
+    return groups, entries, default_id
 
 
 def _resolve_legacy(task_root: Path, workflow: str, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
-    """Legacy fallback resolver — placeholder for todo 6."""
-    warnings.append("Legacy resolver not yet implemented")
-    return [], [], None
+    """Legacy fallback for workflows without a dedicated resolver.
+
+    Reads ``result_manifest.json`` products of kind ``structure`` first, then
+    falls back to ``result_summary.json`` (via ``acp.compat.legacy.manifests``).
+    Each product becomes an entry with ``source.kind="formal_result"`` and
+    badge ``兼容模式``.  This covers retired workflows (ensemble, energy,
+    mechanism, etc.) and unknown workflow strings.
+    """
+    from acp.results.manifest import find_products, load_result_manifest
+
+    _STRUCTURE_KINDS = frozenset({"structure", "xyz"})
+    groups: list[StructureViewerGroup] = []
+    entries: list[StructureViewerEntry] = []
+    default_id: str | None = None
+    seen_paths: set[str] = set()
+
+    manifest = load_result_manifest(task_root)
+    if manifest is not None:
+        for kind_str in _STRUCTURE_KINDS:
+            for product in find_products(manifest, kind_str):
+                if not product.path:
+                    continue
+                rel_posix = product.path.replace("\\", "/")
+                if rel_posix in seen_paths:
+                    continue
+                seen_paths.add(rel_posix)
+
+                entry_id = legacy_entry_id(rel_posix)
+                geometry_ref = f"RESULT/{rel_posix}"
+
+                entries.append(StructureViewerEntry(
+                    id=entry_id,
+                    group_id="",
+                    label=product.label or rel_posix,
+                    role="minimum",
+                    status="completed",
+                    geometry=StructureViewerGeometry(
+                        endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+                        format="xyz",
+                    ),
+                    source=StructureViewerSource(
+                        kind="formal_result",
+                        product_id=product.id,
+                        geometry_ref=geometry_ref,
+                    ),
+                    badges=("兼容模式",),
+                    vibrations=StructureViewerVibrations(available=False),
+                ))
+                if default_id is None:
+                    default_id = entry_id
+
+    if not entries:
+        summary_path = task_root / "RESULT" / "result_summary.json"
+        if summary_path.is_file():
+            try:
+                from acp.compat.legacy.manifests import read_result_summary
+                summary = read_result_summary(summary_path)
+                for product in summary.get("products") or []:
+                    if not isinstance(product, dict):
+                        continue
+                    rel_path = str(product.get("path") or "")
+                    if not rel_path:
+                        continue
+                    rel_posix = rel_path.replace("\\", "/")
+                    if rel_posix in seen_paths:
+                        continue
+                    seen_paths.add(rel_posix)
+
+                    entry_id = legacy_entry_id(rel_posix)
+                    geometry_ref = f"RESULT/{rel_posix}"
+
+                    entries.append(StructureViewerEntry(
+                        id=entry_id,
+                        group_id="",
+                        label=str(product.get("label") or rel_posix),
+                        role="minimum",
+                        status="completed",
+                        geometry=StructureViewerGeometry(
+                            endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+                            format="xyz",
+                        ),
+                        source=StructureViewerSource(
+                            kind="formal_result",
+                            geometry_ref=geometry_ref,
+                        ),
+                        badges=("兼容模式",),
+                        vibrations=StructureViewerVibrations(available=False),
+                    ))
+                    if default_id is None:
+                        default_id = entry_id
+            except (ValueError, OSError) as exc:
+                warnings.append(f"Cannot read result_summary.json: {exc}")
+
+    if not entries:
+        warnings.append(f"No structure products found for workflow '{workflow}'")
+
+    return groups, entries, default_id
 
 
 # Dispatch table: workflow string → resolver function.
