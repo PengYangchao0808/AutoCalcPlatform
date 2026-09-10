@@ -1009,7 +1009,7 @@ body.resizing-v canvas {
 .plot-tool:disabled, .plot-tool:disabled svg { cursor: not-allowed; }
 .energy-workspace-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(320px, 24vw, 380px);
+  grid-template-columns: minmax(0, 1fr) clamp(340px, 24vw, 380px);
   gap: 12px;
   min-height: 0;
 }
@@ -1358,6 +1358,11 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .energy-data-list dt,
 .energy-data-list dd { margin: 0; }
 .energy-data-list dd { color: var(--text-primary); text-align: right; word-break: break-word; }
+.energy-data-list dd[data-expandable] { cursor: pointer; transition: max-height 0.2s ease; }
+.energy-data-list dd[data-expandable]:not(.expanded) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; display: inline-block; vertical-align: bottom; }
+.energy-data-list dd[data-expandable].expanded { white-space: normal; word-break: break-all; max-width: none; display: inline; }
+.energy-data-list dd[data-expandable]::after { content: " ▾"; font-size: 9px; opacity: 0.5; }
+.energy-data-list dd[data-expandable].expanded::after { content: " ▴"; }
 .frame-nav-btn {
   width: 30px; height: 30px;
   display: inline-flex; align-items: center; justify-content: center;
@@ -1542,7 +1547,7 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 }
 
 @media (max-width: 1199px) {
-  .energy-workspace-grid { grid-template-columns: minmax(0, 1fr) 320px; }
+  .energy-workspace-grid { grid-template-columns: minmax(0, 1fr) 340px; }
 }
 
 @media (max-width: 1023px) {
@@ -4819,6 +4824,7 @@ let energyGraphState = {
   loadedFrameIndex: null,
   abortController: null,
   structureAbort: null,
+  structureResizeObserver: null,
   priorViewMode: "",
   resizeObserver: null,
   viewSize: { width: 0, height: 0 },
@@ -6853,6 +6859,21 @@ async function energyGraphLoadFrameGeometry(node) {
       energyGraphState.viewer.zoomTo();
       energyGraphState.viewer.render();
     }
+    /* ResizeObserver: keep 3Dmol viewer in sync with container size */
+    if (energyGraphState.structureResizeObserver) { energyGraphState.structureResizeObserver.disconnect(); energyGraphState.structureResizeObserver = null; }
+    if (typeof ResizeObserver !== "undefined" && energyGraphState.viewer) {
+      var structResizeTimer = null;
+      var sro = new ResizeObserver(function() {
+        if (structResizeTimer) clearTimeout(structResizeTimer);
+        structResizeTimer = setTimeout(function() {
+          structResizeTimer = null;
+          if (!container.isConnected || !energyGraphState.viewer) return;
+          try { energyGraphState.viewer.resize(); energyGraphState.viewer.render(); } catch (e) {}
+        }, 100);
+      });
+      sro.observe(container);
+      energyGraphState.structureResizeObserver = sro;
+    }
     energyGraphState.loadedFrameIndex = Number(frameIndex);
   } catch (e) {
     if (e && e.name === "AbortError") return;
@@ -8053,6 +8074,12 @@ function energyGraphBindInspectorButtons(root) {
       }
     });
   }
+  /* ── Expandable long fields (geometry_ref etc.) ── */
+  root.querySelectorAll("[data-expandable]").forEach(function(el) {
+    el.addEventListener("click", function() {
+      el.classList.toggle("expanded");
+    });
+  });
 }
 
 /* ── Candidate projection: derive annotation-shaped objects from frameCandidates ── */
@@ -9318,7 +9345,7 @@ function energyGraphInspectorMarkup(data) {
         }).join("");
       })() +
       energyInspectorMetadataRows(data, node, metadata) +
-      '<dt>\u7ed3\u6784\u6765\u6e90</dt><dd title="' + escapeHtml(geometry || "--") + '" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;">' + escapeHtml(geometry || "--") + '</dd>' +
+      '<dt>\u7ed3\u6784\u6765\u6e90</dt><dd data-expandable title="' + escapeHtml(geometry || "--") + '">' + escapeHtml(geometry || "--") + '</dd>' +
     '</dl>' +
     energyCandidateCardMarkup(data, node, {
       canEditRole: canEditRole,
@@ -10227,6 +10254,7 @@ function energyGraphWorkspaceMarkup(data) {
 
 function energyGraphDestroyViewer() {
   if (energyGraphState.resizeObserver) { energyGraphState.resizeObserver.disconnect(); energyGraphState.resizeObserver = null; }
+  if (energyGraphState.structureResizeObserver) { energyGraphState.structureResizeObserver.disconnect(); energyGraphState.structureResizeObserver = null; }
   if (energyGraphState.structureAbort) { energyGraphState.structureAbort.abort(); energyGraphState.structureAbort = null; }
   if (energyGraphState.viewer) {
     try { energyGraphState.viewer.clear(); } catch (e) {}
