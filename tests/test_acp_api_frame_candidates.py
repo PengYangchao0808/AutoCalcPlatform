@@ -259,21 +259,21 @@ class TestFrameCandidateCRUD:
         body = resp.json()
         assert body["revision"] == 1
         assert body["candidate"] is not None
-        assert body["candidate"]["candidate_id"] == "opt_ts_frame_001"
+        assert body["candidate"]["candidate_id"] == "opt_frame_0001"
         assert body["candidate"]["role"] == "TS"
 
-        xyz_path = work_dir / "RESULT" / "structures" / "opt_ts_frame_001.xyz"
+        xyz_path = work_dir / "RESULT" / "structures" / "opt_frame_0001.xyz"
         assert xyz_path.is_file()
         xyz_content = xyz_path.read_text(encoding="utf-8")
-        assert "candidate_id=opt_ts_frame_001" in xyz_content
+        assert "candidate_id=opt_frame_0001" in xyz_content
 
         resp = client.get(f"/api/v1/jobs/{job_id}/frame-candidates")
         assert resp.status_code == 200
         body = resp.json()
         assert len(body["candidates"]) == 1
-        assert body["candidates"][0]["candidate_id"] == "opt_ts_frame_001"
+        assert body["candidates"][0]["candidate_id"] == "opt_frame_0001"
 
-        resp = client.delete(f"/api/v1/jobs/{job_id}/frame-candidate/opt_ts_frame_001")
+        resp = client.delete(f"/api/v1/jobs/{job_id}/frame-candidate/opt_frame_0001")
         assert resp.status_code == 200
         body = resp.json()
         assert len(body["candidates"]) == 0
@@ -288,7 +288,7 @@ class TestFrameCandidateCRUD:
         )
         assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
         body = resp.json()
-        assert body["candidate"]["candidate_id"] == "conf_int_frame_000"
+        assert body["candidate"]["candidate_id"] == "conf_frame_0000"
 
     def test_idempotent_resave(self, client: TestClient, tmp_path: Path) -> None:
         work_dir = _make_optimization_task(tmp_path)
@@ -308,7 +308,7 @@ class TestFrameCandidateCRUD:
         assert resp2.status_code == 200
         rev2 = resp2.json()["revision"]
         assert rev2 == rev1 + 1
-        # Same candidate_id (opt_ts_frame_000) so it replaces the previous entry
+        # Same candidate_id (opt_frame_0000) so it replaces the previous entry
         assert len(resp2.json()["candidates"]) == 1
         assert resp2.json()["candidate"]["name"] == "updated"
 
@@ -340,7 +340,7 @@ class TestFrameCandidateCRUD:
             json={"view_type": "optimization", "frame_index": 0, "role": "TS"},
         )
         resp = client.delete(
-            f"/api/v1/jobs/{job_id}/frame-candidate/opt_ts_frame_000?expected_revision=999",
+            f"/api/v1/jobs/{job_id}/frame-candidate/opt_frame_0000?expected_revision=999",
         )
         assert resp.status_code == 409
 
@@ -370,6 +370,26 @@ class TestFrameCandidateErrors:
             json={"view_type": "optimization", "frame_index": 0, "role": "TS"},
         )
         assert resp.status_code == 409
+
+    @pytest.mark.parametrize("status", [JobStatus.FAILED, JobStatus.CANCELLED])
+    def test_terminal_states_can_save(
+        self, client: TestClient, tmp_path: Path, status: JobStatus
+    ) -> None:
+        """All terminal states may save already-materialised frames."""
+        work_dir = _make_optimization_task(tmp_path)
+        job_id = _register_job(
+            client,
+            tmp_path,
+            work_dir,
+            job_id=f"opt_{status.value}",
+            workflow="optimize",
+            status=status,
+        )
+        resp = client.post(
+            f"/api/v1/jobs/{job_id}/frame-candidate",
+            json={"view_type": "optimization", "frame_index": 0, "role": "TS"},
+        )
+        assert resp.status_code == 200, f"POST failed: {resp.status_code} {resp.text}"
 
     def test_pessearch_rejected(self, client: TestClient, tmp_path: Path) -> None:
         work_dir = _make_pes_task(tmp_path)
@@ -487,9 +507,7 @@ class TestSamplingFrameEndpoint:
         code used basin_ids[frame_index] which returned None (or IndexError).
         """
         work_dir = _make_sampling_task_with_equilibration_cut(tmp_path)
-        job_id = _register_job(
-            client, tmp_path, work_dir, job_id="samp_cut", workflow="Confsearch"
-        )
+        job_id = _register_job(client, tmp_path, work_dir, job_id="samp_cut", workflow="Confsearch")
         # frame_index=3 is at positional index 1 (indices 2,3,4 -> positions 0,1,2)
         # basin_ids[1] == 20 (distinct from basin_ids[0]=10 and basin_ids[2]=30)
         resp = client.get(f"/api/v1/jobs/{job_id}/sampling/frame/3")
@@ -498,9 +516,7 @@ class TestSamplingFrameEndpoint:
         assert body["frame_index"] == 3
         assert body["basin_id"] == 20
 
-    def test_sampling_frame_beyond_basin_ids_len(
-        self, client: TestClient, tmp_path: Path
-    ) -> None:
+    def test_sampling_frame_beyond_basin_ids_len(self, client: TestClient, tmp_path: Path) -> None:
         """Trajectory index 4 > len(basin_ids)=3 but positional index 2 < len.
 
         The old buggy code checked ``frame_index < len(basin_ids)`` which

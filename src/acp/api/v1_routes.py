@@ -2124,7 +2124,7 @@ def save_pes_review_endpoint(
 
 
 def _frame_candidate_work_dir(
-    request: Request, job_id: str, *, require_completed: bool
+    request: Request, job_id: str, *, require_terminal: bool
 ) -> tuple[Path, str]:
     """Resolve work_dir + workflow for frame-candidate operations.
 
@@ -2133,7 +2133,9 @@ def _frame_candidate_work_dir(
 
     Raises:
         404: job/work_dir missing.
-        409: job not COMPLETED (POST/DELETE only).
+        409: job not in a terminal state yet (POST only).  All terminal
+            states (COMPLETED/FAILED/CANCELLED) are accepted so that
+            already-materialised trajectory frames stay reusable.
     """
     manager = _manager(request)
     record = manager.get(job_id)
@@ -2142,10 +2144,10 @@ def _frame_candidate_work_dir(
     if not record.work_dir:
         raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
     work_dir = Path(record.work_dir)
-    if require_completed and record.status != JobStatus.COMPLETED:
+    if require_terminal and not record.status.is_terminal:
         raise HTTPException(
             status_code=409,
-            detail=f"Job {job_id} is not completed yet (status={record.status.value})",
+            detail=f"Job {job_id} is still active (status={record.status.value})",
         )
     return work_dir, str(record.spec.workflow or "")
 
@@ -2161,7 +2163,7 @@ def save_frame_candidate_endpoint(
     request: Request,
 ) -> V1FrameCandidateResponse:
     """Save an energy-viewer frame as a tagged candidate structure."""
-    work_dir, workflow = _frame_candidate_work_dir(request, job_id, require_completed=True)
+    work_dir, workflow = _frame_candidate_work_dir(request, job_id, require_terminal=True)
 
     from acp.results.frame_candidate_geometry import FrameCandidateError
     from acp.results.frame_candidate_store import RevisionConflictError
@@ -2177,6 +2179,7 @@ def save_frame_candidate_endpoint(
             role=req.role,
             name=req.name,
             expected_revision=req.expected_revision,
+            item_id=req.item_id,
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -2204,6 +2207,10 @@ def save_frame_candidate_endpoint(
             name=str(c.get("name", "")),
             structure_path=str(c.get("structure_path", "")),
             saved_at=str(c.get("saved_at", "")),
+            item_id=c.get("item_id"),
+            role_index=int(c.get("role_index") or 0),
+            display_label=str(c.get("display_label") or ""),
+            created_seq=int(c.get("created_seq") or 0),
         )
         for c in payload.get("candidates", [])
     ]
@@ -2225,7 +2232,7 @@ def list_frame_candidates_endpoint(
     request: Request,
 ) -> V1FrameCandidateListResponse:
     """List all saved frame candidates for a job."""
-    work_dir, _workflow = _frame_candidate_work_dir(request, job_id, require_completed=False)
+    work_dir, _workflow = _frame_candidate_work_dir(request, job_id, require_terminal=False)
 
     from acp.results.frame_candidates import list_frame_candidates
 
@@ -2239,6 +2246,10 @@ def list_frame_candidates_endpoint(
             name=str(c.get("name", "")),
             structure_path=str(c.get("structure_path", "")),
             saved_at=str(c.get("saved_at", "")),
+            item_id=c.get("item_id"),
+            role_index=int(c.get("role_index") or 0),
+            display_label=str(c.get("display_label") or ""),
+            created_seq=int(c.get("created_seq") or 0),
         )
         for c in payload.get("candidates", [])
     ]
@@ -2260,7 +2271,7 @@ def delete_frame_candidate_endpoint(
     expected_revision: int | None = Query(default=None),
 ) -> V1FrameCandidateListResponse:
     """Remove a frame candidate (authority + manifest; XYZ kept on disk)."""
-    work_dir, _workflow = _frame_candidate_work_dir(request, job_id, require_completed=False)
+    work_dir, _workflow = _frame_candidate_work_dir(request, job_id, require_terminal=False)
 
     from acp.results.frame_candidate_geometry import FrameCandidateError
     from acp.results.frame_candidate_store import RevisionConflictError
@@ -2286,6 +2297,10 @@ def delete_frame_candidate_endpoint(
             name=str(c.get("name", "")),
             structure_path=str(c.get("structure_path", "")),
             saved_at=str(c.get("saved_at", "")),
+            item_id=c.get("item_id"),
+            role_index=int(c.get("role_index") or 0),
+            display_label=str(c.get("display_label") or ""),
+            created_seq=int(c.get("created_seq") or 0),
         )
         for c in payload.get("candidates", [])
     ]
@@ -3768,7 +3783,7 @@ def list_structure_sources(
     limit: int = Query(20, ge=1, le=50),
     include_remote: bool = True,
 ) -> StructureSourceListResponse:
-    """List reusable final structures from recent COMPLETED jobs."""
+    """List reusable structures and explicitly saved terminal-job frames."""
     service = _structure_source_service(request)
     if project_id:
         effective_project = project_id

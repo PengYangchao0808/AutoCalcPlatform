@@ -867,6 +867,11 @@ class StructureSourceSummary(BaseModel):
     candidate_id: str = ""
     remote: bool = False
     needs_fetch: bool = False
+    # Artifact-validity-first metadata (all optional for legacy payloads).
+    project_name: str | None = None
+    job_status: str = ""
+    source_kind: str = ""  # final | saved_candidate | partial_result
+    available_at: str = ""
 
 
 class StructureSourceListResponse(BaseModel):
@@ -877,6 +882,12 @@ class StructureSourceDetailResponse(BaseModel):
     source_id: str
     checksum: str | None = None
     structure: StructureAssetModel
+    # Source provenance (source_ref) so cross-project loads stay traceable.
+    job_id: str | None = None
+    project_id: str | None = None
+    project_name: str | None = None
+    job_status: str = ""
+    path: str = ""
 
 
 class ValidateMethodRequest(BaseModel):
@@ -1427,6 +1438,7 @@ class V1FrameCandidateRequest(BaseModel):
     role: str  # TS | INT
     name: str | None = None
     expected_revision: int | None = None
+    item_id: str | None = None  # BatchOptimize item scoping
 
 
 class V1FrameCandidateInfo(BaseModel):
@@ -1439,6 +1451,10 @@ class V1FrameCandidateInfo(BaseModel):
     name: str = ""
     structure_path: str = ""
     saved_at: str = ""
+    item_id: str | None = None
+    role_index: int = 0
+    display_label: str = ""
+    created_seq: int = 0
 
 
 class V1FrameCandidateResponse(BaseModel):
