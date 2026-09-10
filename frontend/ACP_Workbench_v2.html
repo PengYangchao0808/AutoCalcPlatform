@@ -1052,8 +1052,8 @@ body.resizing-v canvas {
   min-height: 0;
   height: 100%;
 }
-.energy-gridline { stroke: rgba(255, 255, 255, 0.05); stroke-width: 1; }
-.energy-axis { stroke: rgba(255, 255, 255, 0.22); stroke-width: 1; }
+.energy-gridline { stroke: rgba(255, 255, 255, 0.035); stroke-width: 1; }
+.energy-axis { stroke: rgba(255, 255, 255, 0.14); stroke-width: 1; }
 .energy-axis-text { fill: var(--text-tertiary); font-size: 11px; }
 .energy-line { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
 .energy-area { fill: rgba(78, 161, 255, 0.13); }
@@ -1429,8 +1429,8 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 .optimization-quality.q-partial { color: #ffe1a1; border-color: rgba(242,184,75,.35); background: rgba(242,184,75,.10); }
 .optimization-quality.q-missing { color: #ffc5c5; border-color: rgba(229,83,83,.35); background: rgba(229,83,83,.10); }
 .optimization-zero-line { stroke: rgba(255,255,255,.30); stroke-width: 1; }
-.optimization-gridline { stroke: rgba(255,255,255,.075); stroke-width: 1; }
-.optimization-axis { stroke: rgba(255,255,255,.22); stroke-width: 1; }
+.optimization-gridline { stroke: rgba(255,255,255,.05); stroke-width: 1; }
+.optimization-axis { stroke: rgba(255,255,255,.14); stroke-width: 1; }
 .optimization-axis-text { fill: #8fa1b5; font-size: 10px; }
 .optimization-series-energy { fill: none; stroke: #55aaff; stroke-width: 2.4; }
 .optimization-series-delta { fill: none; stroke: #b792ff; stroke-width: 1.8; stroke-dasharray: 5 4; }
@@ -7132,10 +7132,14 @@ function energyHeaderStatusInfo(data) {
 /* Unified header strip markup: <title> · N 帧 · ● status */
 function energyHeaderStripMarkup(data, titleFallback) {
   var title = escapeHtml(String((data && data.title) || titleFallback || t("tab.energy")));
+  var series = energyGraphSeries(data);
+  var seriesLabel = series ? escapeHtml(series.label || series.id) : '';
+  var seriesUnit = series && series.unit ? escapeHtml(series.unit) : '';
+  var seriesSuffix = seriesLabel ? ' \u00b7 ' + seriesLabel + (seriesUnit ? ' (' + seriesUnit + ')' : '') : '';
   var frameCount = (data && Array.isArray(data.nodes)) ? data.nodes.length : ((data && data.metadata && data.metadata.frame_count) || 0);
   var info = energyHeaderStatusInfo(data);
   return '<div class="energy-chart-head">' +
-    '<div class="energy-chart-title">' + title + ' \u00b7 ' + frameCount + ' ' + t("energy.header.frames") + '</div>' +
+    '<div class="energy-chart-title">' + title + seriesSuffix + ' \u00b7 ' + frameCount + ' ' + t("energy.header.frames") + '</div>' +
     '<div class="energy-chart-subtitle" style="color:' + info.color + ';">\u25cf ' + escapeHtml(info.text) + '</div>' +
   '</div>';
 }
@@ -7537,27 +7541,72 @@ function energyGraphChartGeometry() {
   return { W: W, H: H, pad: pad, plotRect: { left: pad.left, top: pad.top, right: W - pad.right, bottom: H - pad.bottom } };
 }
 
-function energyGraphAxesMarkup(xDom, yDom, geom) {
+/* ── Nice-number tick generator ── */
+function energyChartNiceTicks(lo, hi, targetCount, integerMode) {
+  /* Returns {values: [...], step: N} using 1/2/2.5/5×10^k step sizes.
+   * integerMode forces integer tick values (for cycle/frame axes).
+   * Handles lo===hi and tiny spans gracefully.
+   */
+  if (lo === hi) { lo -= 0.5; hi += 0.5; }
+  var range = hi - lo;
+  if (range <= 0) range = 1;
+  targetCount = targetCount || 5;
+  var step;
+  if (integerMode) {
+    var span = Math.ceil(hi) - Math.floor(lo);
+    if (span <= targetCount + 1) {
+      step = 1;
+    } else {
+      var rawInt = Math.ceil(span / targetCount);
+      var expI = Math.floor(Math.log10(Math.max(rawInt, 1)));
+      var fracI = rawInt / Math.pow(10, expI);
+      if (fracI <= 1) step = Math.pow(10, expI);
+      else if (fracI <= 2) step = 2 * Math.pow(10, expI);
+      else if (fracI <= 5) step = 5 * Math.pow(10, expI);
+      else step = 10 * Math.pow(10, expI);
+    }
+  } else {
+    var rawStep = range / targetCount;
+    var exponent = Math.floor(Math.log10(rawStep));
+    var fraction = rawStep / Math.pow(10, exponent);
+    if (fraction <= 1) step = Math.pow(10, exponent);
+    else if (fraction <= 2) step = 2 * Math.pow(10, exponent);
+    else if (fraction <= 2.5) step = 2.5 * Math.pow(10, exponent);
+    else if (fraction <= 5) step = 5 * Math.pow(10, exponent);
+    else step = 10 * Math.pow(10, exponent);
+  }
+  var niceLo = Math.floor(lo / step) * step;
+  var niceHi = Math.ceil(hi / step) * step;
+  var ticks = [];
+  for (var t = niceLo; t <= niceHi + step * 0.001; t += step) {
+    ticks.push(integerMode ? Math.round(t) : +t.toPrecision(12));
+  }
+  return { values: ticks, step: step };
+}
+
+function energyGraphAxesMarkup(xDom, yDom, geom, xTickMode) {
   var W = geom.W, H = geom.H, pad = geom.pad;
   var markup = "";
   function xFor(v) { return pad.left + ((v - xDom[0]) / (xDom[1] - xDom[0] || 1)) * (W - pad.left - pad.right); }
   function yFor(v) { return pad.top + (1 - ((v - yDom[0]) / (yDom[1] - yDom[0] || 1))) * (H - pad.top - pad.bottom); }
-  for (var i = 0; i <= 4; i += 1) {
-    var y = yDom[0] + (yDom[1] - yDom[0]) * i / 4;
+  /* Y axis: nice-number ticks */
+  var yTicks = energyChartNiceTicks(yDom[0], yDom[1], 5, false);
+  for (var i = 0; i < yTicks.values.length; i += 1) {
+    var y = yTicks.values[i];
     var py = yFor(y);
     markup += '<line class="energy-gridline" x1="' + pad.left + '" y1="' + py + '" x2="' + (W - pad.right) + '" y2="' + py + '"></line>';
     markup += '<text class="energy-axis-text" x="' + (pad.left - 12) + '" y="' + (py + 4) + '" text-anchor="end">' + escapeHtml(energyGraphFormatNumber(y, 2)) + '</text>';
   }
-  for (var j = 0; j <= 4; j += 1) {
-    var x = xDom[0] + (xDom[1] - xDom[0]) * j / 4;
+  /* X axis: nice-number or integer ticks */
+  var xIntMode = xTickMode === "integer" || (xTickMode !== "nice" && xDom[0] === Math.round(xDom[0]) && xDom[1] === Math.round(xDom[1]));
+  var xTicks = energyChartNiceTicks(xDom[0], xDom[1], 5, xIntMode);
+  for (var j = 0; j < xTicks.values.length; j += 1) {
+    var x = xTicks.values[j];
     var px = xFor(x);
-    // Keep edge tick labels inside the SVG viewport.  Centering the first
-    // and last labels on the plot boundary lets half of the text fall into
-    // the clipped padding on narrow panels, which made the axis look skewed
-    // after a resize or zoom.
-    var xAnchor = j === 0 ? "start" : j === 4 ? "end" : "middle";
-    var xLabel = j === 0 ? px + 2 : j === 4 ? px - 2 : px;
-    markup += '<text class="energy-axis-text" x="' + xLabel + '" y="' + (H - pad.bottom + 23) + '" text-anchor="' + xAnchor + '">' + escapeHtml(energyGraphFormatNumber(x, 3)) + '</text>';
+    var isEdge = j === 0 || j === xTicks.values.length - 1;
+    var xAnchor = j === 0 ? "start" : j === xTicks.values.length - 1 ? "end" : "middle";
+    var xLabel = j === 0 ? px + 2 : j === xTicks.values.length - 1 ? px - 2 : px;
+    markup += '<text class="energy-axis-text" x="' + xLabel + '" y="' + (H - pad.bottom + 23) + '" text-anchor="' + xAnchor + '">' + escapeHtml(energyGraphFormatNumber(x, xIntMode ? 0 : 3)) + '</text>';
   }
   markup += '<line class="energy-axis" x1="' + pad.left + '" y1="' + pad.top + '" x2="' + pad.left + '" y2="' + (H - pad.bottom) + '"></line>';
   markup += '<line class="energy-axis" x1="' + pad.left + '" y1="' + (H - pad.bottom) + '" x2="' + (W - pad.right) + '" y2="' + (H - pad.bottom) + '"></line>';
@@ -8140,28 +8189,36 @@ function energyChartBuildSvg(cfg) {
     var _xDig = cfg.xDigits != null ? cfg.xDigits : 0;
     var _yTOff = cfg.yTickXOffset != null ? cfg.yTickXOffset : -8;
     var _xTOff = cfg.xTickYOffset != null ? cfg.xTickYOffset : 20;
+    var _xTickMode = cfg.xTickMode || "integer";
     (function() {
       function xF(v) { return pad.left + ((v - xDom[0]) / (xDom[1] - xDom[0] || 1)) * Pw; }
       function yF(v) { return pad.top + (1 - ((v - yDom[0]) / (yDom[1] - yDom[0] || 1))) * Ph; }
       function y2F(v) { var d = y2Dom || [0, 1]; return pad.top + (1 - ((v - d[0]) / (d[1] - d[0] || 1))) * Ph; }
-      for (var gi = 0; gi <= 4; gi += 1) {
-        var gy = yDom[0] + (yDom[1] - yDom[0]) * gi / 4;
+      /* Y axis: nice-number ticks */
+      var yNice = energyChartNiceTicks(yDom[0], yDom[1], 5, false);
+      for (var gi = 0; gi < yNice.values.length; gi += 1) {
+        var gy = yNice.values[gi];
         var py = yF(gy);
         svg += '<line class="' + gridClass + '" x1="' + pad.left + '" y1="' + py + '" x2="' + (W - pad.right) + '" y2="' + py + '"></line>';
         svg += '<text class="' + axisTextClass + '" x="' + (pad.left + _yTOff) + '" y="' + (py + 4) + '" text-anchor="end">' + escapeHtml(energyGraphFormatNumber(gy, _yDig)) + '</text>';
       }
+      /* Y2 axis: nice-number ticks */
       if (y2Dom) {
-        for (var ri = 0; ri <= 4; ri += 1) {
-          var rv = y2Dom[0] + (y2Dom[1] - y2Dom[0]) * ri / 4;
+        var y2Nice = energyChartNiceTicks(y2Dom[0], y2Dom[1], 5, false);
+        for (var ri = 0; ri < y2Nice.values.length; ri += 1) {
+          var rv = y2Nice.values[ri];
           svg += '<text class="' + axisTextClass + ' right" x="' + (W - pad.right + 8) + '" y="' + (y2F(rv) + 4) + '" text-anchor="start">' + escapeHtml(energyGraphFormatNumber(rv, 4)) + '</text>';
         }
         svg += '<line class="' + axisLineClass + '" x1="' + (W - pad.right) + '" y1="' + pad.top + '" x2="' + (W - pad.right) + '" y2="' + (H - pad.bottom) + '"></line>';
       }
-      for (var xi = 0; xi <= 4; xi += 1) {
-        var xv = xDom[0] + (xDom[1] - xDom[0]) * xi / 4;
-        var xA = xi === 0 ? "start" : xi === 4 ? "end" : "middle";
-        var xP = xi === 0 ? xF(xv) + 2 : xi === 4 ? xF(xv) - 2 : xF(xv);
-        svg += '<text class="' + axisTextClass + '" x="' + xP + '" y="' + (H - pad.bottom + _xTOff) + '" text-anchor="' + xA + '">' + escapeHtml(energyGraphFormatNumber(xv, _xDig)) + '</text>';
+      /* X axis: nice-number or integer ticks */
+      var xIntMode = _xTickMode === "integer";
+      var xNice = energyChartNiceTicks(xDom[0], xDom[1], 5, xIntMode);
+      for (var xi = 0; xi < xNice.values.length; xi += 1) {
+        var xv = xNice.values[xi];
+        var xA = xi === 0 ? "start" : xi === xNice.values.length - 1 ? "end" : "middle";
+        var xP = xi === 0 ? xF(xv) + 2 : xi === xNice.values.length - 1 ? xF(xv) - 2 : xF(xv);
+        svg += '<text class="' + axisTextClass + '" x="' + xP + '" y="' + (H - pad.bottom + _xTOff) + '" text-anchor="' + xA + '">' + escapeHtml(energyGraphFormatNumber(xv, xIntMode ? 0 : _xDig)) + '</text>';
       }
       svg += '<line class="' + axisLineClass + '" x1="' + pad.left + '" y1="' + pad.top + '" x2="' + pad.left + '" y2="' + (H - pad.bottom) + '"></line>';
       svg += '<line class="' + axisLineClass + '" x1="' + pad.left + '" y1="' + (H - pad.bottom) + '" x2="' + (W - pad.right) + '" y2="' + (H - pad.bottom) + '"></line>';
@@ -8240,7 +8297,7 @@ function energyChartBuildSvg(cfg) {
   /* axes after plot group (energy) */
   if (!cfg.axesBeforePlot) {
     svg += '<g ' + axesAttr + '>';
-    svg += energyGraphAxesMarkup(xDom, yDom, geom);
+    svg += energyGraphAxesMarkup(xDom, yDom, geom, cfg.xTickMode || "auto");
     svg += '<text class="' + axisTextClass + '" x="' + ((pad.left + W - pad.right) / 2) + '" y="' + (H - 17) + '" text-anchor="middle">' + escapeHtml(cfg.xLabel) + ' (' + escapeHtml(cfg.xUnit) + ')</text>';
     svg += '<text class="' + axisTextClass + '" x="18" y="' + (H / 2) + '" text-anchor="middle" transform="rotate(-90 18 ' + (H / 2) + ')">' + escapeHtml(cfg.yLabel) + ' (' + escapeHtml(cfg.yUnit) + ')</text>';
     svg += '</g>';
@@ -8288,9 +8345,9 @@ function energyGraphBuildSvg(data) {
   /* ── Dynamic padLeft: prevent Y-axis title/tick overlap ── */
   (function() {
     var maxTickW = 0;
-    for (var ti = 0; ti <= 4; ti += 1) {
-      var yv = yDom[0] + (yDom[1] - yDom[0]) * ti / 4;
-      var tw = energyGraphMeasureText(energyGraphFormatNumber(yv, 2), 11, false);
+    var yNice = energyChartNiceTicks(yDom[0], yDom[1], 5, false);
+    for (var ti = 0; ti < yNice.values.length; ti += 1) {
+      var tw = energyGraphMeasureText(energyGraphFormatNumber(yNice.values[ti], 2), 11, false);
       if (tw > maxTickW) maxTickW = tw;
     }
     /* title at x=18 rotated occupies ~11px in x-direction (font-size); tick text
@@ -8900,14 +8957,19 @@ function energyGraphInspectorMarkup(data) {
 }
 
 function energyGraphLegendMarkup(data) {
-  const series = energyGraphSeries(data);
-  return '<div class="energy-legend">' +
-    '<span class="energy-legend-item"><i class="energy-legend-swatch line"></i>' + escapeHtml(series ? series.label : "能量") + '</span>' +
-    '<span class="energy-legend-item"><i class="energy-legend-swatch ts"></i>TS 候选</span>' +
-    '<span class="energy-legend-item"><i class="energy-legend-swatch int"></i>中间体</span>' +
-    '<span class="energy-legend-item"><i class="energy-legend-swatch min"></i>最低能量</span>' +
-    '<span class="energy-legend-item"><i class="energy-legend-swatch failed"></i>未收敛</span>' +
-  '</div>';
+  var items = '';
+  var annotations = (data && data.annotations) || [];
+  var nodes = (data && data.nodes) || [];
+  var hasTS = annotations.some(function(a) { return a.type === 'ts'; });
+  var hasINT = annotations.some(function(a) { return a.type === 'intermediate'; });
+  var hasMin = annotations.some(function(a) { return a.type === 'minimum'; });
+  var hasFailed = nodes.some(function(n) { return n.status === 'failed'; });
+  if (hasTS) items += '<span class="energy-legend-item"><i class="energy-legend-swatch ts"></i>TS 候选</span>';
+  if (hasINT) items += '<span class="energy-legend-item"><i class="energy-legend-swatch int"></i>中间体</span>';
+  if (hasMin) items += '<span class="energy-legend-item"><i class="energy-legend-swatch min"></i>最低能量</span>';
+  if (hasFailed) items += '<span class="energy-legend-item"><i class="energy-legend-swatch failed"></i>未收敛</span>';
+  if (!items) return '';
+  return '<div class="energy-legend">' + items + '</div>';
 }
 
 function optimizationGraphSeries(data, id) {
@@ -9147,6 +9209,7 @@ function optimizationGraphBuildSvg(data, view) {
     xDigits: 0,
     yTickXOffset: -8,
     xTickYOffset: 20,
+    xTickMode: "integer",
     unitLabels: unitLabels,
     /* plot content */
     plotAttr: "data-optimization-plot",
@@ -9201,6 +9264,8 @@ function optimizationQualityBadge(data) {
 
 function optimizationLegendMarkup(data, view) {
   var groups = optimizationViewSeries(data, view);
+  var allSeries = groups.left.concat(groups.right);
+  if (allSeries.length <= 1) return '';
   var chipFor = function(id) {
     if (id === "rms_gradient" || id === "rms_gradient_delta") return "rms";
     if (id === "max_gradient" || id === "max_gradient_delta") return "max";
@@ -9209,7 +9274,7 @@ function optimizationLegendMarkup(data, view) {
     if (id === "delta_energy") return "delta";
     return "";
   };
-  return groups.left.concat(groups.right).map(function(series) {
+  return allSeries.map(function(series) {
     return '<span><i class="' + chipFor(String(series.id)) + '"></i>' + escapeHtml(String(series.label || series.id)) + '</span>';
   }).join("");
 }

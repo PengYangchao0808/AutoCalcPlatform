@@ -237,8 +237,8 @@ def test_energy_chart_axes_cannot_scroll_out_of_viewport() -> None:
     assert ".optimization-chart-card { display: flex; flex-direction: column;" in html
 
     # Axes are still generated and appended inside the SVG viewBox.
-    assert "function energyGraphAxesMarkup(xDom, yDom, geom)" in html
-    assert "svg += energyGraphAxesMarkup(xDom, yDom, geom);" in html
+    assert "function energyGraphAxesMarkup(xDom, yDom, geom" in html
+    assert "svg += energyGraphAxesMarkup(xDom, yDom, geom" in html
 
 
 def test_optimization_chart_single_view_switching_contract() -> None:
