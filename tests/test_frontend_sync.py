@@ -1734,3 +1734,276 @@ def test_structure_viewer_css_three_column_grid() -> None:
     assert "sv-list-panel" in content
     assert "sv-inspector-panel" in content
     assert "sv-canvas-col" in content
+
+
+# ---------------------------------------------------------------------------
+# Todo 17: auto-load on job select + manual_file injection + dirty guard
+# ---------------------------------------------------------------------------
+
+def test_selectjob_calls_onjobselected() -> None:
+    """Contract: selectJob must call ACPStructureViewer.onJobSelected."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    select_job = html.split("async function selectJob(jobId)", 1)[1]
+    select_job = select_job.split("\nasync function ", 1)[0]
+
+    assert "ACPStructureViewer.onJobSelected" in select_job, (
+        "selectJob must call ACPStructureViewer.onJobSelected"
+    )
+    assert 'window.ACPStructureViewer && window.ACPStructureViewer.onJobSelected' in select_job, (
+        "onJobSelected call must be guarded by existence check"
+    )
+
+
+def test_polling_calls_refreshifchanged() -> None:
+    """Contract: summaryPoll must call ACPStructureViewer.refreshIfChanged."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    summary_poll = html.split("async function summaryPoll()", 1)[1]
+    summary_poll = summary_poll.split("\n    } catch", 1)[0]
+
+    assert "ACPStructureViewer.refreshIfChanged" in summary_poll, (
+        "summaryPoll must call ACPStructureViewer.refreshIfChanged"
+    )
+
+
+def test_file_tree_xyz_click_calls_injectmanualentry() -> None:
+    """Contract: file-tree .xyz click must call injectManualEntry."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    xyz_block = html.split('node.path.endsWith(".xyz")', 1)[1]
+    xyz_block = xyz_block.split("return;", 1)[0]
+
+    assert "ACPStructureViewer.injectManualEntry" in xyz_block, (
+        "File-tree .xyz click must call ACPStructureViewer.injectManualEntry"
+    )
+
+
+def test_structure_viewer_js_has_todo17_functions() -> None:
+    """JS contract: onJobSelected, injectManualEntry, loadSelectedGeometry exist."""
+    js = FRONTEND_JS_DIR / "structure_viewer.js"
+    content = js.read_text(encoding="utf-8")
+
+    assert "onJobSelected" in content
+    assert "injectManualEntry" in content
+    assert "loadSelectedGeometry" in content
+    assert "_sha256hex" in content
+    assert "_manualEntryId" in content
+    assert "pendingGeometryRetry" in content
+    assert "geometryLoadedFor" in content
+
+
+def test_structure_viewer_node_manual_entry_id_matches_python() -> None:
+    """Node logic: manual_entry_id matches Python sha256[:12] for sample paths."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    js_path = FRONTEND_JS_DIR / "structure_viewer.js"
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPStructureViewer;
+
+        var cases = [
+          ["RESULT/confsearch/conformers/0001.xyz", "5072cff2b42b"],
+          ["WORK/03_OPT/batch/opt_item_001/optimize/cycles/cycle_0001.xyz", "092f7b2db5a3"],
+        ];
+        for (var i = 0; i < cases.length; i++) {
+          var path = cases[i][0];
+          var expected = cases[i][1];
+          var got = ns._manualEntryId(path);
+          if (got !== "manual_" + expected) {
+            console.error("FAIL: _manualEntryId(" + path + ") = " + got + ", expected manual_" + expected);
+            process.exit(1);
+          }
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(js_path)))
+
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, (
+        f"Node manual_entry_id test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_structure_viewer_node_sha256_vectors() -> None:
+    """Node logic: _sha256hex produces correct digests for known inputs."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    js_path = FRONTEND_JS_DIR / "structure_viewer.js"
+
+    # Pre-computed expected digests
+    import hashlib
+    test_vectors = [
+        ("", hashlib.sha256(b"").hexdigest()),
+        ("abc", hashlib.sha256(b"abc").hexdigest()),
+        ("hello world", hashlib.sha256(b"hello world").hexdigest()),
+    ]
+
+    vectors_js = json.dumps(test_vectors)
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPStructureViewer;
+        var vectors = VECTORS;
+        for (var i = 0; i < vectors.length; i++) {
+          var input = vectors[i][0];
+          var expected = vectors[i][1];
+          var got = ns._sha256hex(input);
+          if (got !== expected) {
+            console.error("FAIL: _sha256hex(" + JSON.stringify(input) + ") = " + got + ", expected " + expected);
+            process.exit(1);
+          }
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(js_path))).replace("VECTORS", vectors_js)
+
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, (
+        f"Node sha256 test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_structure_viewer_node_dirty_guard_no_replace() -> None:
+    """Node logic: dirty=true + poll -> coordinates untouched, newerAvailable set."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    js_path = FRONTEND_JS_DIR / "structure_viewer.js"
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPStructureViewer;
+        var state = ns.state;
+
+        // Simulate a loaded payload
+        state.jobId = "test-job";
+        state.revision = "rev1";
+        state.dirty = true;
+        state.payload = { revision: "rev1", entries: [], groups: [] };
+
+        // Mock fetch to return a different revision
+        var callCount = 0;
+        ns._fetchImpl = function(url, opts) {
+          callCount++;
+          return Promise.resolve({
+            ok: true,
+            json: function() {
+              return Promise.resolve({
+                schema_version: "structure_viewer_v1",
+                revision: "rev2",
+                availability: "ready",
+                default_entry_id: null,
+                groups: [],
+                entries: [],
+                warnings: []
+              });
+            }
+          });
+        };
+
+        ns.refreshIfChanged().then(function() {
+          if (!state.newerAvailable) {
+            console.error("FAIL: newerAvailable should be true when dirty");
+            process.exit(1);
+          }
+          if (state.payload.revision !== "rev1") {
+            console.error("FAIL: payload revision should not change when dirty");
+            process.exit(1);
+          }
+          console.log("PASS");
+        }).catch(function(e) {
+          console.error("FAIL: unexpected error", e);
+          process.exit(1);
+        });
+    """).replace("JS_PATH", json.dumps(str(js_path)))
+
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, (
+        f"Node dirty-guard test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_structure_viewer_node_geometry_409_retry() -> None:
+    """Node logic: geometry 409 -> pendingGeometryRetry flag set."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    js_path = FRONTEND_JS_DIR / "structure_viewer.js"
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPStructureViewer;
+        var state = ns.state;
+
+        // Set up state with a selected entry
+        state.jobId = "test-job";
+        state.selectedEntryId = "entry1";
+        state.selectionToken = 1;
+        state.payload = {
+          entries: [{
+            id: "entry1",
+            geometry: { endpoint: "/api/v1/jobs/test/structure-viewer/entries/entry1/geometry", format: "xyz" }
+          }]
+        };
+
+        var fetchCalls = 0;
+        ns._fetchImpl = function(url, opts) {
+          fetchCalls++;
+          if (fetchCalls === 1) {
+            // First call: 409
+            return Promise.resolve({ status: 409, ok: false });
+          }
+          // Retry call with fetch=1: also 409
+          return Promise.resolve({ status: 409, ok: false });
+        };
+
+        ns.loadSelectedGeometry().then(function() {
+          if (!state.pendingGeometryRetry) {
+            console.error("FAIL: pendingGeometryRetry should be true after 409");
+            process.exit(1);
+          }
+          if (fetchCalls !== 2) {
+            console.error("FAIL: expected 2 fetch calls (initial + retry), got " + fetchCalls);
+            process.exit(1);
+          }
+          console.log("PASS");
+        }).catch(function(e) {
+          console.error("FAIL: unexpected error", e);
+          process.exit(1);
+        });
+    """).replace("JS_PATH", json.dumps(str(js_path)))
+
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0, (
+        f"Node geometry 409 test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_structure_viewer_svload_xyz_bridge_exists() -> None:
+    """Contract: _svLoadXyzToViewer bridge function exists in HTML."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "window._svLoadXyzToViewer" in html, (
+        "Bridge function _svLoadXyzToViewer must exist in HTML"
+    )
+    assert "parseMultiFrameXYZ" in html, (
+        "_svLoadXyzToViewer must use parseMultiFrameXYZ"
+    )

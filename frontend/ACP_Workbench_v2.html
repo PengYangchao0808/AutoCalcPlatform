@@ -14737,6 +14737,30 @@ async function loadRemoteStructureFile(jobId, filePath) {
   updateInfoPanel(lastSelectedJob);
 }
 
+// Bridge for structure_viewer.js: load XYZ text directly into the main viewer.
+// Called by ACPStructureViewer.loadSelectedGeometry() after fetching geometry.
+window._svLoadXyzToViewer = function(xyzText, entryId) {
+  try {
+    if (!xyzText || typeof parseMultiFrameXYZ !== "function") return;
+    var frames = parseMultiFrameXYZ(xyzText);
+    if (!frames.length) return;
+    stopFramePlayback();
+    molDoc.frames = frames;
+    molDoc.currentFrame = 0;
+    molDoc.selection.clear();
+    molDoc.measures = [];
+    measureBuffer = [];
+    molDoc.meta.source = entryId || "structure-viewer";
+    molDoc.meta.formula = countFormula(frames[0].atoms);
+    renderMolDoc({ zoomTo: true });
+    initialView = viewer ? viewer.getView().slice() : null;
+    updateFrameController();
+    updateInfoPanel(lastSelectedJob);
+  } catch (e) {
+    console.error("Structure viewer geometry load failed:", e);
+  }
+};
+
 function downloadRemoteFile(jobId, filePath) {
   if (!filePath || filePath.endsWith("/")) return;
   const url = API_BASE + "/jobs/" + encodeURIComponent(jobId) + "/remote-files/" + filePath.split("/").map(encodeURIComponent).join("/");
@@ -16929,6 +16953,10 @@ async function openJobFile(jobId, node) {
     await loadStructureFile(jobId, node.path);
     setViewerTab("structure");
     appendLogLine("file-loaded", t("log.file_loaded", { path: node.path }));
+    // Structure viewer: inject as manual_file entry so it appears in the list.
+    if (window.ACPStructureViewer && window.ACPStructureViewer.injectManualEntry) {
+      window.ACPStructureViewer.injectManualEntry(node.path, node.name);
+    }
     return;
   }
   const pathUrl = "/jobs/" + encodeURIComponent(jobId) + "/files/" + node.path.split("/").map(encodeURIComponent).join("/");
@@ -17147,6 +17175,10 @@ async function selectJob(jobId) {
   // Q3-P0: render the real stdout tail first; SSE status lines append on top.
   pollLogTail(jobId);
   await refreshJobs();
+  // Structure viewer: auto-load catalog + default entry geometry.
+  if (window.ACPStructureViewer && window.ACPStructureViewer.onJobSelected) {
+    window.ACPStructureViewer.onJobSelected(String(jobId));
+  }
   // T7: mechanism jobs auto-expand to the v2 WORK stage tree so the
   // search/path/opt computation directories are visible without manual
   // clicks. expandPath stops silently when WORK/ does not exist
@@ -22265,6 +22297,10 @@ function startPolling() {
           await renderEnergyGraphWorkspace(lastSelectedJob, { silent: true });
         }
         if (appSection === "mechanism") await refreshMechSectionStudies(true);
+        // Structure viewer: refresh catalog if revision changed (dirty guard built-in).
+        if (window.ACPStructureViewer && window.ACPStructureViewer.refreshIfChanged) {
+          window.ACPStructureViewer.refreshIfChanged();
+        }
       }
     } catch (e) {
       console.error("Summary poll error:", e);

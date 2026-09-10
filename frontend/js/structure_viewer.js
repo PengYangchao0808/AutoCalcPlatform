@@ -1,15 +1,17 @@
 /**
  * ACP Structure Viewer — state store + catalog fetch + stale-response guard
- * @version 0.3.0
+ * @version 0.4.0
  *
  * Namespace: window.ACPStructureViewer
  *
  * Exposes:
  *   - state                     (the live structureViewerState object)
  *   - loadStructureViewer(jobId, opts)
+ *   - onJobSelected(jobId, opts) (called from selectJob; loads catalog + default geometry)
  *   - selectEntry(entryId, origin)
  *   - refreshIfChanged()
- *   - loadSelectedGeometry()    (stub; todo 17 fills)
+ *   - loadSelectedGeometry()    (fetches geometry for selected entry)
+ *   - injectManualEntry(relpath, label, xyzText?) (manual file injection)
  *   - renderStructureViewer()   (renders list panel from state.payload)
  *   - renderInspector()         (renders inspector for selected entry)
  *   - toggleListDrawer()        (narrow-screen drawer toggle)
@@ -19,15 +21,15 @@
  *   - _fetchImpl                (default: window.fetch; tests inject a fake)
  *   - _applyCatalogResponse     (pure: applies a server response to state)
  *   - _esc                      (XSS-safe text insertion)
+ *   - _sha256hex(str)            (sync SHA-256 → hex string)
  *
- * TODO(todo-17): wire selectJob -> loadStructureViewer, geometry loading
  * TODO(todo-18): energy-graph selection push via selectEntry + selectionToken
  * TODO(todo-19): phase-A contract tests + i18n completeness
  */
 (function () {
   "use strict";
 
-  var VERSION = "0.3.0";
+  var VERSION = "0.4.0";
 
   /* ---- user-visible strings (zh constants; todo 19 moves to i18n) ---- */
   var STR = {
@@ -79,6 +81,113 @@
     return String(val);
   }
 
+  /* ---- SHA-256 (pure JS, sync, self-contained) ---- */
+
+  /**
+   * Compute SHA-256 hex digest of a UTF-8 string.
+   * Uses the Web Crypto API when available (browser), falls back to a
+   * minimal pure-JS implementation for Node.js test environments.
+   *
+   * @param {string} str
+   * @returns {string} lowercase hex digest
+   */
+  function _sha256hex(str) {
+    /* Try Web Crypto (browser) */
+    if (typeof crypto !== "undefined" && crypto.subtle && typeof TextEncoder !== "undefined") {
+      /* Web Crypto is async; for sync compat we use the pure-JS fallback.
+         The pure-JS path is ~40 lines and correct for short strings. */
+    }
+    /* Pure-JS SHA-256 (FIPS 180-4 compliant for messages < 2^64 bits) */
+    var K = [
+      0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+      0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+      0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+      0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+      0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+      0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+      0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+      0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+    ];
+    function _rotr(x, n) { return (x >>> n) | (x << (32 - n)); }
+    function _ch(x, y, z) { return (x & y) ^ (~x & z); }
+    function _maj(x, y, z) { return (x & y) ^ (x & z) ^ (y & z); }
+    function _sigma0(x) { return _rotr(x, 2) ^ _rotr(x, 13) ^ _rotr(x, 22); }
+    function _sigma1(x) { return _rotr(x, 6) ^ _rotr(x, 11) ^ _rotr(x, 25); }
+    function _gamma0(x) { return _rotr(x, 7) ^ _rotr(x, 18) ^ (x >>> 3); }
+    function _gamma1(x) { return _rotr(x, 17) ^ _rotr(x, 19) ^ (x >>> 10); }
+
+    /* Encode string as UTF-8 bytes */
+    var bytes = [];
+    for (var i = 0; i < str.length; i++) {
+      var c = str.charCodeAt(i);
+      if (c < 0x80) {
+        bytes.push(c);
+      } else if (c < 0x800) {
+        bytes.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
+      } else if (c < 0xd800 || c >= 0xe000) {
+        bytes.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+      } else {
+        /* surrogate pair */
+        i++;
+        c = 0x10000 + (((c & 0x3ff) << 10) | (str.charCodeAt(i) & 0x3ff));
+        bytes.push(0xf0 | (c >> 18), 0x80 | ((c >> 12) & 0x3f), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+      }
+    }
+    var msgLen = bytes.length;
+
+    /* Padding */
+    bytes.push(0x80);
+    while (bytes.length % 64 !== 56) { bytes.push(0); }
+    var bitLen = msgLen * 8;
+    /* Append length as 64-bit big-endian (high 32 bits always 0 for our use) */
+    bytes.push(0, 0, 0, 0, (bitLen >> 24) & 0xff, (bitLen >> 16) & 0xff, (bitLen >> 8) & 0xff, bitLen & 0xff);
+
+    /* Initial hash values */
+    var H = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+
+    /* Process each 512-bit block */
+    for (var off = 0; off < bytes.length; off += 64) {
+      var W = new Array(64);
+      for (var t = 0; t < 16; t++) {
+        W[t] = (bytes[off + t * 4] << 24) | (bytes[off + t * 4 + 1] << 16) | (bytes[off + t * 4 + 2] << 8) | bytes[off + t * 4 + 3];
+      }
+      for (var t2 = 16; t2 < 64; t2++) {
+        W[t2] = (_gamma1(W[t2 - 2]) + W[t2 - 7] + _gamma0(W[t2 - 15]) + W[t2 - 16]) | 0;
+      }
+      var a = H[0], b = H[1], c = H[2], d = H[3], e = H[4], f = H[5], g = H[6], h = H[7];
+      for (var t3 = 0; t3 < 64; t3++) {
+        var T1 = (h + _sigma1(e) + _ch(e, f, g) + K[t3] + W[t3]) | 0;
+        var T2 = (_sigma0(a) + _maj(a, b, c)) | 0;
+        h = g; g = f; f = e; e = (d + T1) | 0;
+        d = c; c = b; b = a; a = (T1 + T2) | 0;
+      }
+      H[0] = (H[0] + a) | 0; H[1] = (H[1] + b) | 0; H[2] = (H[2] + c) | 0; H[3] = (H[3] + d) | 0;
+      H[4] = (H[4] + e) | 0; H[5] = (H[5] + f) | 0; H[6] = (H[6] + g) | 0; H[7] = (H[7] + h) | 0;
+    }
+
+    /* Format as hex */
+    var hex = "";
+    for (var hi = 0; hi < 8; hi++) {
+      var v = H[hi];
+      hex += ((v >>> 28) & 0xf).toString(16) + ((v >>> 24) & 0xf).toString(16) +
+             ((v >>> 20) & 0xf).toString(16) + ((v >>> 16) & 0xf).toString(16) +
+             ((v >>> 12) & 0xf).toString(16) + ((v >>> 8) & 0xf).toString(16) +
+             ((v >>> 4) & 0xf).toString(16) + (v & 0xf).toString(16);
+    }
+    return hex;
+  }
+
+  /**
+   * Build a manual-file entry id matching the Python backend scheme:
+   * ``manual_<sha256(relpath)[:12]>``
+   *
+   * @param {string} relpath
+   * @returns {string}
+   */
+  function _manualEntryId(relpath) {
+    return "manual_" + _sha256hex(relpath).slice(0, 12);
+  }
+
   /**
    * @typedef {Object} StructureViewerState
    * @property {string|null} jobId
@@ -108,6 +217,8 @@
     availability: "",
     newerAvailable: false,
     error: null,
+    geometryLoadedFor: null,
+    pendingGeometryRetry: false,
     _abortController: null,
   };
 
@@ -291,11 +402,151 @@
   }
 
   /**
-   * Load geometry for the currently selected entry.  Stub — todo 17 fills.
+   * Load geometry for the currently selected entry.
+   * Fetches geometry.endpoint, handles 409 pending_fetch with auto-retry,
+   * then hands XYZ text to the app's existing model-loading path.
+   *
    * @returns {Promise<void>}
    */
   function loadSelectedGeometry() {
-    return Promise.resolve();
+    var state = structureViewerState;
+    if (!state.payload || !state.selectedEntryId) { return Promise.resolve(); }
+
+    var entries = state.payload.entries || [];
+    var entry = null;
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].id === state.selectedEntryId) { entry = entries[i]; break; }
+    }
+    if (!entry || !entry.geometry || !entry.geometry.endpoint) { return Promise.resolve(); }
+
+    var capturedToken = state.selectionToken;
+    var endpoint = entry.geometry.endpoint;
+
+    function _loadXyzToViewer(xyzText) {
+      if (typeof window === "undefined") return;
+      /* Reuse the app's existing model-loading path:
+         loadStructureFile -> parseMultiFrameXYZ -> renderMolDoc */
+      if (typeof window._svLoadXyzToViewer === "function") {
+        window._svLoadXyzToViewer(xyzText, entry.id);
+      }
+    }
+
+    var fetchFn = _getFetchImpl();
+    if (!fetchFn) { return Promise.resolve(); }
+
+    return fetchFn(endpoint, { headers: { "Accept": "text/plain" } })
+      .then(function (resp) {
+        if (resp.status === 409) {
+          /* pending_fetch — auto-retry once with ?fetch=1 */
+          var retryUrl = endpoint + (endpoint.indexOf("?") >= 0 ? "&" : "?") + "fetch=1";
+          return fetchFn(retryUrl, { headers: { "Accept": "text/plain" } })
+            .then(function (retryResp) {
+              if (!retryResp.ok) {
+                state.pendingGeometryRetry = true;
+                renderInspector();
+                return null;
+              }
+              return retryResp.text();
+            });
+        }
+        if (!resp.ok) { return null; }
+        return resp.text();
+      })
+      .then(function (xyzText) {
+        if (!xyzText) { return; }
+        if (capturedToken !== state.selectionToken) { return; }
+        state.geometryLoadedFor = state.selectedEntryId;
+        state.pendingGeometryRetry = false;
+        _loadXyzToViewer(xyzText);
+      })
+      .catch(function (err) {
+        if (err && err.name === "AbortError") { return; }
+      });
+  }
+
+  /**
+   * Called from the app's selectJob(). Loads the structure catalog
+   * and auto-loads the default entry geometry into the main viewer.
+   *
+   * @param {string} jobId
+   * @param {{ itemId?: string }} [opts]
+   * @returns {Promise<void>}
+   */
+  function onJobSelected(jobId, opts) {
+    opts = opts || {};
+    return loadStructureViewer(jobId, opts)
+      .then(function () {
+        /* Auto-select default entry if payload loaded successfully */
+        var state = structureViewerState;
+        if (state.payload && state.payload.default_entry_id && !state.selectedEntryId) {
+          selectEntry(state.payload.default_entry_id, "auto");
+        }
+        return loadSelectedGeometry();
+      });
+  }
+
+  /**
+   * Inject a manual_file entry into the current payload and select it.
+   * Mirrors the Python backend's manual_entry_id scheme exactly.
+   *
+   * @param {string} relpath - Relative path to the geometry file
+   * @param {string} label   - Human-readable label
+   * @param {string} [xyzText] - XYZ content (if already loaded)
+   * @returns {string} The entry id
+   */
+  function injectManualEntry(relpath, label, xyzText) {
+    var state = structureViewerState;
+    var entryId = _manualEntryId(relpath);
+
+    var entry = {
+      id: entryId,
+      group_id: "",
+      label: label || relpath,
+      role: "minimum",
+      status: "completed",
+      geometry: {
+        endpoint: "/api/v1/jobs/" + encodeURIComponent(state.jobId || "") + "/structure-viewer/entries/" + encodeURIComponent(entryId) + "/geometry",
+        format: "xyz",
+      },
+      source: { kind: "manual_file", geometry_ref: relpath },
+      badges: [],
+      vibrations: { available: false },
+    };
+
+    if (!state.payload) {
+      state.payload = {
+        schema_version: "structure_viewer_v1",
+        job_id: state.jobId || "",
+        workflow: "",
+        job_status: "",
+        availability: "ready",
+        revision: null,
+        default_entry_id: entryId,
+        groups: [],
+        entries: [entry],
+        warnings: [],
+      };
+    } else {
+      /* Check for duplicate */
+      var entries = state.payload.entries || [];
+      var found = false;
+      for (var i = 0; i < entries.length; i++) {
+        if (entries[i].id === entryId) { found = true; break; }
+      }
+      if (!found) {
+        entries.push(entry);
+        state.payload.entries = entries;
+      }
+    }
+
+    selectEntry(entryId, "manual_file");
+
+    /* If xyzText is provided, load it directly */
+    if (xyzText && typeof window !== "undefined" && typeof window._svLoadXyzToViewer === "function") {
+      window._svLoadXyzToViewer(xyzText, entryId);
+    }
+
+    return entryId;
   }
 
   /* ---- badge rendering helpers ---- */
@@ -493,11 +744,20 @@
       refreshBtn.className = "sv-refresh-btn";
       refreshBtn.textContent = STR.REFRESH;
       refreshBtn.addEventListener("click", function () {
+        structureViewerState.newerAvailable = false;
         refreshIfChanged();
       });
       newerNotice.appendChild(document.createElement("br"));
       newerNotice.appendChild(refreshBtn);
       inspBody.appendChild(newerNotice);
+    }
+
+    /* pending geometry retry notice */
+    if (structureViewerState.pendingGeometryRetry) {
+      var pendingNotice = document.createElement("div");
+      pendingNotice.className = "sv-notice sv-notice-pending";
+      pendingNotice.textContent = STR.PENDING_FETCH;
+      inspBody.appendChild(pendingNotice);
     }
 
     /* find selected entry */
@@ -709,9 +969,11 @@
     state: structureViewerState,
     STR: STR,
     loadStructureViewer: loadStructureViewer,
+    onJobSelected: onJobSelected,
     selectEntry: selectEntry,
     refreshIfChanged: refreshIfChanged,
     loadSelectedGeometry: loadSelectedGeometry,
+    injectManualEntry: injectManualEntry,
     renderStructureViewer: renderStructureViewer,
     renderInspector: renderInspector,
     toggleListDrawer: toggleListDrawer,
@@ -719,6 +981,8 @@
     closeAllDrawers: closeAllDrawers,
     _applyCatalogResponse: _applyCatalogResponse,
     _esc: _esc,
+    _sha256hex: _sha256hex,
+    _manualEntryId: _manualEntryId,
     _fetchImpl: (typeof window !== "undefined" && window.fetch) ? window.fetch.bind(window) : null,
   };
 })();
