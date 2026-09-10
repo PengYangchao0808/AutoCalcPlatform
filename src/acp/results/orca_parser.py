@@ -67,6 +67,26 @@ def _local_parse_frequency_map(log_text: str) -> dict[int, float]:
     return result
 
 
+def _local_parse_all_frequency_pairs(log_text: str) -> dict[int, float]:
+    """Parse ALL frequency pairs including zero modes (no filtering).
+
+    Same format as ``_local_parse_frequency_map`` but keeps 0.0 entries
+    so that the index map preserves ORCA mode indices without compaction.
+    """
+    result: dict[int, float] = {}
+    sections = log_text.split(_FREQ_SECTION_HEADER)
+    if len(sections) < 2:
+        return result
+    for match in _FREQ_LINE_RE.finditer(sections[-1]):
+        try:
+            mode_index = int(match.group(1))
+            freq = float(match.group(2))
+        except (ValueError, IndexError):
+            continue
+        result[mode_index] = freq
+    return result
+
+
 def _local_parse_mode_vectors(log_text: str) -> dict[int, tuple[tuple[float, float, float], ...]]:
     """Minimal local mirror of ``parse_ts_mode_vectors`` semantics (returns tuples)."""
     sections = log_text.split(_NORMAL_MODES_SECTION_HEADER)
@@ -327,6 +347,15 @@ class OrcaOutputParser:
                 freq_map = _local_parse_frequency_map(text)
         else:
             freq_map = _local_parse_frequency_map(text)
+
+        # Supplement freq_map with zero-frequency modes from the vectors map.
+        # cccp's parse_ts_frequency_map and the local mirror both filter out
+        # 0.0 entries, but the spec requires the index map to keep ORCA mode
+        # indices without zero-mode compaction.
+        all_pairs = _local_parse_all_frequency_pairs(text)
+        for mode_idx, freq_val in all_pairs.items():
+            if mode_idx not in freq_map:
+                freq_map[mode_idx] = freq_val
 
         if _CCCP_AVAILABLE and _parse_ts_mode_vectors is not None:
             try:

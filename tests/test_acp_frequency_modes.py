@@ -30,10 +30,9 @@ class TestParseNormalModes:
         text = FULL_MODES_FIXTURE.read_text(encoding="utf-8")
         calc = OrcaOutputParser().parse_text(text)
 
-        # parse_ts_frequency_map / local mirror drops 0.0 frequencies
-        # so zero modes should NOT appear in mode_frequencies
         for mode in range(6):
-            assert mode not in calc.mode_frequencies
+            assert mode in calc.mode_frequencies
+            assert calc.mode_frequencies[mode] == pytest.approx(0.0)
 
     def test_mode_vectors_shape_for_imaginary(self) -> None:
         """Vectors for mode 6: 3 atoms × 3 components, finite, nonzero."""
@@ -77,6 +76,16 @@ class TestParseNormalModes:
         calc = OrcaOutputParser().parse_text(text_no_ir)
 
         assert calc.mode_ir_intensities is None
+
+    def test_vector_keys_subset_of_frequency_keys(self) -> None:
+        """Regression: vector-map keys ⊆ frequency-map keys (alignment guarantee)."""
+        text = FULL_MODES_FIXTURE.read_text(encoding="utf-8")
+        calc = OrcaOutputParser().parse_text(text)
+
+        for mode_idx in calc.mode_vectors:
+            assert mode_idx in calc.mode_frequencies, (
+                f"mode_vectors has key {mode_idx} missing from mode_frequencies"
+            )
 
 
 class TestTruncatedFixtureResilience:
