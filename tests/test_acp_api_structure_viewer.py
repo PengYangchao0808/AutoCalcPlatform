@@ -357,3 +357,195 @@ class TestStructureAssetModelCompat:
         }
         model = StructureAssetModel.model_validate(d)
         assert model.metadata == {"edit_source": "structure_viewer", "parent_job_id": "j1"}
+
+
+# ── Catalog endpoint tests (todo 8) ─────────────────────────────────────────
+
+from collections.abc import Generator
+from typing import Any
+
+import pytest
+from fastapi.testclient import TestClient
+
+from acp.scheduler.jobs import JobRecord, JobSpec, JobStatus
+
+
+def _make_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    monkeypatch.setenv("ACP_RUN_ROOT", str(tmp_path))
+    from acp.api.server import create_app
+
+    return TestClient(create_app(run_root=tmp_path, max_running=2))
+
+
+@pytest.fixture()
+def sv_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
+    with _make_client(tmp_path, monkeypatch) as c:
+        yield c
+
+
+def _seed_job(
+    client: TestClient,
+    tmp_path: Path,
+    *,
+    job_id: str = "sv-test-001",
+    workflow: str = "Confsearch",
+    status: JobStatus = JobStatus.COMPLETED,
+    work_dir_name: str | None = None,
+) -> Path:
+    """Insert a job record into the store and return its work_dir path."""
+    manager = client.app.state.job_manager
+    work_dir = tmp_path / (work_dir_name or job_id)
+    work_dir.mkdir(parents=True, exist_ok=True)
+    record = JobRecord(
+        id=job_id,
+        spec=JobSpec(
+            workflow=workflow,
+            name=job_id,
+            project_id=manager.default_project_id,
+        ),
+        status=status,
+        work_dir=str(work_dir),
+        project_id=manager.default_project_id,
+    )
+    manager.store.create(record)
+    return work_dir
+
+
+def _write_confsearch_manifest(work_dir: Path) -> None:
+    """Write a minimal confsearch manifest with 3 conformers."""
+    cs_dir = work_dir / "RESULT" / "confsearch"
+    cs_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {
+        "schema_version": "confsearch_v1",
+        "workflow": "Confsearch",
+        "conformers": [
+            {
+                "conf_id": "0001",
+                "geometry": "conformers/0001.xyz",
+                "energy_hartree": -100.0,
+                "free_energy_hartree": -99.5,
+                "relative_energy_kcal": 0.0,
+                "boltzmann_weight": 0.6,
+                "rank": 1,
+            },
+            {
+                "conf_id": "0002",
+                "geometry": "conformers/0002.xyz",
+                "energy_hartree": -99.8,
+                "free_energy_hartree": -99.3,
+                "relative_energy_kcal": 1.25,
+                "boltzmann_weight": 0.3,
+                "rank": 2,
+            },
+            {
+                "conf_id": "0003",
+                "geometry": "conformers/0003.xyz",
+                "energy_hartree": -99.6,
+                "free_energy_hartree": -99.1,
+                "relative_energy_kcal": 2.51,
+                "boltzmann_weight": 0.1,
+                "rank": 3,
+            },
+        ],
+    }
+    (cs_dir / "confsearch_manifest.json").write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
+
+
+def _write_batch_manifest(work_dir: Path, *, items: list[dict[str, Any]] | None = None) -> None:
+    """Write a minimal result_manifest with batch structure products."""
+    result_dir = work_dir / "RESULT"
+    result_dir.mkdir(parents=True, exist_ok=True)
+    products = items or [
+        {
+            "id": "batch_item_001",
+            "label": "item_001 (TS, opt_freq_sp_thermo)",
+            "path": "structures/item_001__TAG_TS__optimized.xyz",
+            "kind": "structure",
+        },
+    ]
+    manifest = {
+        "schema_version": "result_manifest_v1",
+        "workflow": "BatchOptimize",
+        "products": products,
+    }
+    (result_dir / "result_manifest.json").write_text(
+        json.dumps(manifest), encoding="utf-8"
+    )
+    struct_dir = result_dir / "structures"
+    struct_dir.mkdir(parents=True, exist_ok=True)
+    for p in products:
+        xyz_path = result_dir / p["path"]
+        xyz_path.parent.mkdir(parents=True, exist_ok=True)
+        xyz_path.write_text("3\n\nC 0 0 0\nH 0 0 1\nH 0 1 0\n", encoding="utf-8")
+
+
+class TestCatalogEndpoint:
+    """GET /api/v1/jobs/{job_id}/structure-viewer"""
+
+    def test_happy_confsearch_200(self, sv_client: TestClient, tmp_path: Path) -> None:
+        """Completed Confsearch job → 200 with schema_version, entries, availability=ready."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest(work_dir)
+
+        resp = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["schema_version"] == "structure_viewer_v1"
+        assert body["job_id"] == "sv-test-001"
+        assert body["workflow"] == "Confsearch"
+        assert body["availability"] == "ready"
+        assert len(body["entries"]) == 3
+        assert body["default_entry_id"] is not None
+
+    def test_unknown_job_404(self, sv_client: TestClient, tmp_path: Path) -> None:
+        """Unknown job id → 404."""
+        resp = sv_client.get("/api/v1/jobs/nonexistent/structure-viewer")
+        assert resp.status_code == 404
+        body = resp.json()
+        assert "not found" in body["detail"].lower()
+
+    def test_unknown_item_id_404(self, sv_client: TestClient, tmp_path: Path) -> None:
+        """Unknown item_id on BatchOptimize → 404."""
+        work_dir = _seed_job(
+            sv_client, tmp_path,
+            job_id="sv-batch-001",
+            workflow="BatchOptimize",
+        )
+        _write_batch_manifest(work_dir)
+
+        resp = sv_client.get("/api/v1/jobs/sv-batch-001/structure-viewer?item_id=nonexistent")
+        assert resp.status_code == 404
+
+    def test_item_id_filter_happy(self, sv_client: TestClient, tmp_path: Path) -> None:
+        """Valid item_id filter → single entry returned."""
+        work_dir = _seed_job(
+            sv_client, tmp_path,
+            job_id="sv-batch-002",
+            workflow="BatchOptimize",
+        )
+        _write_batch_manifest(work_dir, items=[
+            {
+                "id": "batch_item_001",
+                "label": "item_001 (TS, opt_freq_sp_thermo)",
+                "path": "structures/item_001__TAG_TS__optimized.xyz",
+                "kind": "structure",
+            },
+            {
+                "id": "batch_item_002",
+                "label": "item_002 (INT, opt_freq_sp_thermo)",
+                "path": "structures/item_002__TAG_INT__optimized.xyz",
+                "kind": "structure",
+            },
+        ]        )
+        for item_id in ("item_001", "item_002"):
+            xyz_path = work_dir / "RESULT" / "structures" / f"{item_id}__TAG_TS__optimized.xyz"
+            xyz_path.parent.mkdir(parents=True, exist_ok=True)
+            xyz_path.write_text("3\n\nC 0 0 0\nH 0 0 1\nH 0 1 0\n", encoding="utf-8")
+
+        resp = sv_client.get("/api/v1/jobs/sv-batch-002/structure-viewer?item_id=item_001")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body["entries"]) == 1
+        assert body["entries"][0]["id"] == "batch_item_001"

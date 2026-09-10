@@ -145,6 +145,7 @@ from acp.api.v1_schemas import (
     StructureSourceDetailResponse,
     StructureSourceListResponse,
     StructureSourceSummary,
+    StructureViewerPayloadModel,
     StudyPromoteResponse,
     StudyResumeResponse,
     UploadResponse,
@@ -2115,6 +2116,65 @@ def save_pes_review_endpoint(
             for row in payload.get("selected") or []
         ],
     )
+
+
+# ---------------------------------------------------------------------------
+# Structure viewer catalog
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/jobs/{job_id}/structure-viewer",
+    response_model=StructureViewerPayloadModel,
+)
+def get_structure_viewer_catalog(
+    job_id: str,
+    request: Request,
+    item_id: str | None = Query(default=None),
+) -> StructureViewerPayloadModel:
+    """Return the structure-viewer catalog for a job.
+
+    Resolves the job via the store, builds the payload via
+    ``build_structure_viewer_payload``, and returns it with
+    ``availability="ready"`` (remote pending_fetch wiring is todo 11).
+
+    Retired/legacy workflows are served read-only (200 with legacy entries),
+    not 410 — the structure viewer DISPLAYS retired jobs.
+
+    Raises:
+        404: Unknown job or unknown ``item_id`` (via ``StructureViewerError``).
+    """
+    from acp.results.structure_viewer import (
+        StructureViewerError,
+        build_structure_viewer_payload,
+    )
+
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if not record.work_dir:
+        raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
+
+    work_dir = Path(record.work_dir)
+    workflow = str(record.spec.workflow or "")
+    job_status = record.status.value
+
+    try:
+        payload = build_structure_viewer_payload(
+            work_dir,
+            job_id=job_id,
+            workflow=workflow,
+            job_status=job_status,
+            item_id=item_id,
+        )
+    except StructureViewerError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    body = payload.to_dict()
+    # TODO(todo-11): compute availability from remote sync state; "ready" for now.
+    body["availability"] = "ready"
+    return StructureViewerPayloadModel.model_validate(body)
 
 
 # ---------------------------------------------------------------------------
