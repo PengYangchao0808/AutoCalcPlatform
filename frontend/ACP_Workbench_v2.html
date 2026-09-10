@@ -8563,7 +8563,7 @@ function energyChartBuildSvg(cfg) {
       /* X axis: nice-number or integer ticks */
       var xIntMode = _xTickMode === "integer";
       var xNice = energyChartNiceTicks(xDom[0], xDom[1], 5, xIntMode);
-      var xDigits = xNice.step >= 1 ? 0 : _xDig;
+      var xDigits = xNice.step >= 1 ? 0 : Math.max(_xDig, 3);
       for (var xi = 0; xi < xNice.values.length; xi += 1) {
         var xv = xNice.values[xi];
         var xA = xi === 0 ? "start" : xi === xNice.values.length - 1 ? "end" : "middle";
@@ -9218,6 +9218,29 @@ function energyCandidateCardMarkup(data, node, opts) {
   /* Dual mode: scan/PES uses s2scanState; non-PES uses POST /frame-candidate */
   var isScanPES = canEditRole;
 
+  /* Disabled state: job not terminal (must precede saved variant) */
+  if (!jobTerminal && !isScanPES) {
+    var savedLabel = "";
+    if (candEntry) {
+      var sl = String(candEntry.display_label || candEntry.role || "");
+      savedLabel = '<div class="energy-card-status"><span class="energy-card-status-text">' + escapeHtml(t("energy.card.saved") + (sl ? " · " + sl : "")) + '</span></div>';
+    }
+    return '<div class="energy-candidate-card" data-energy-card-state="disabled">' +
+      '<div class="energy-card-title">' + escapeHtml(t("energy.card.title")) + '</div>' +
+      savedLabel +
+      '<div class="energy-card-subtitle">' + escapeHtml(t("energy.card.subtitle_save")) + '</div>' +
+      '<div class="energy-card-type-row">' +
+        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="TS" data-candidate-type="ts" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.card.type_ts")) + '</button>' +
+        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="INT" data-candidate-type="int" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.card.type_int")) + '</button>' +
+      '</div>' +
+      '<div class="energy-card-action-row">' +
+        '<button type="button" class="energy-card-save-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' +
+      '</div>' +
+      '<div class="energy-card-disabled-note">' + escapeHtml(t("energy.inspector.save_after_complete")) + '</div>' +
+      '<div class="energy-card-error" data-energy-card-error style="display:none;"></div>' +
+    '</div>';
+  }
+
   /* Saved state: show status + "修改类型" */
   if (candEntry && !isScanPES) {
     var statusLabel = String(candEntry.display_label || candEntry.role || "");
@@ -9236,22 +9259,7 @@ function energyCandidateCardMarkup(data, node, opts) {
         '<button type="button" class="energy-card-save-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' +
         '<button type="button" class="energy-card-cancel-btn" data-energy-action="card-cancel">' + escapeHtml(t("energy.card.cancel")) + '</button>' +
       '</div>' +
-    '</div>';
-  }
-
-  /* Disabled state: job not terminal */
-  if (!jobTerminal && !isScanPES) {
-    return '<div class="energy-candidate-card" data-energy-card-state="disabled">' +
-      '<div class="energy-card-title">' + escapeHtml(t("energy.card.title")) + '</div>' +
-      '<div class="energy-card-subtitle">' + escapeHtml(t("energy.card.subtitle_save")) + '</div>' +
-      '<div class="energy-card-type-row">' +
-        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="TS" data-candidate-type="ts" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.card.type_ts")) + '</button>' +
-        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="INT" data-candidate-type="int" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.card.type_int")) + '</button>' +
-      '</div>' +
-      '<div class="energy-card-action-row">' +
-        '<button type="button" class="energy-card-save-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' +
-      '</div>' +
-      '<div class="energy-card-disabled-note">' + escapeHtml(t("energy.inspector.save_after_complete")) + '</div>' +
+      '<div class="energy-card-error" data-energy-card-error style="display:none;"></div>' +
     '</div>';
   }
 
@@ -9267,12 +9275,13 @@ function energyCandidateCardMarkup(data, node, opts) {
       '<div class="energy-card-title">' + escapeHtml(t("energy.card.title")) + '</div>' +
       '<div class="energy-card-subtitle">' + escapeHtml(t("energy.card.subtitle_mark")) + '</div>' +
       '<div class="energy-card-type-row">' +
-        '<button type="button" class="energy-card-type-btn' + (currentRole === "ts" ? " active" : "") + '" data-energy-role="ts"' + (selectionLocked ? " disabled" : '') + '>' + escapeHtml(t("energy.card.type_ts")) + '</button>' +
-        '<button type="button" class="energy-card-type-btn' + (currentRole === "intermediate" ? " active" : "") + '" data-energy-role="intermediate"' + (selectionLocked ? " disabled" : '') + '>' + escapeHtml(t("energy.card.type_int")) + '</button>' +
+        '<button type="button" class="energy-card-type-btn' + (currentRole === "ts" ? " active" : "") + '" data-energy-role="ts" data-candidate-type="ts"' + (selectionLocked ? " disabled" : '') + '>' + escapeHtml(t("energy.card.type_ts")) + '</button>' +
+        '<button type="button" class="energy-card-type-btn' + (currentRole === "intermediate" ? " active" : "") + '" data-energy-role="intermediate" data-candidate-type="int"' + (selectionLocked ? " disabled" : '') + '>' + escapeHtml(t("energy.card.type_int")) + '</button>' +
         '<button type="button" class="energy-card-type-btn' + (currentRole === "" ? " active" : "") + '" data-energy-role="none"' + (selectionLocked ? " disabled" : '') + '>' + escapeHtml(t("energy.card.type_none")) + '</button>' +
       '</div>' +
       (recommendedRole ? '<div class="energy-card-subtitle">' + escapeHtml(t("energy.card.algo_rec", { role: recommendedRole === "ts" ? "TS" : "INT" })) + '</div>' : '') +
       '<div class="energy-card-disabled-note">' + escapeHtml(roleStateText) + escapeHtml(roleStateNote) + '</div>' +
+      '<div class="energy-card-error" data-energy-card-error style="display:none;"></div>' +
     '</div>';
   }
 
