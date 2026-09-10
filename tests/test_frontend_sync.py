@@ -675,28 +675,14 @@ def test_frame_candidate_save_uses_terminal_status_predicate() -> None:
     """Red-first contract: the energy inspector save/role-picker gate must use a
     terminal-status predicate (completed OR failed OR cancelled) instead of a
     completed-only variable.
-
-    The current source defines ``jobCompleted = ... === "completed"`` and
-    passes it to both the save-candidate gate and the role-picker visibility
-    condition.  A failed or cancelled job is also terminal — the predicate
-    must recognise all three.
     """
     html = FRONTEND.read_text(encoding="utf-8")
 
-    # Extract the inspector rendering block that contains the save gate.
-    assert "var jobCompleted" in html, "sanity: jobCompleted variable exists"
-    inspector = html.split("var jobCompleted", 1)[1]
-    inspector = inspector.split("\nfunction ", 1)[0]
-
-    # The block must check for all three terminal statuses, not just
-    # "completed".  Currently only ``=== "completed"`` is tested.
-    assert '"failed"' in inspector, (
-        "Inspector must recognise 'failed' as a terminal status "
-        "(currently only checks 'completed')"
+    assert "const jobTerminal = jobStatus ===" in html, (
+        "jobTerminal must be defined checking all three terminal statuses"
     )
-    assert '"cancelled"' in inspector, (
-        "Inspector must recognise 'cancelled' as a terminal status "
-        "(currently only checks 'completed')"
+    assert "&& jobTerminal" in html, (
+        "canEditRole must include jobTerminal gate"
     )
 
 

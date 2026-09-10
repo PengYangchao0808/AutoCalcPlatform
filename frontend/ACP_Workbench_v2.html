@@ -4835,6 +4835,7 @@ let energyGraphState = {
   optimizationViewSize: { width: 0, height: 0 },
   frameCandidates: { revision: 0, list: [] },
   jobStatus: "",
+  pendingCardError: null,
 };
 let samplingState = {
   activeSubview: "energy",
@@ -7710,12 +7711,13 @@ function energyGraphAxesMarkup(xDom, yDom, geom, xTickMode) {
   /* X axis: nice-number or integer ticks */
   var xIntMode = xTickMode === "integer" || (xTickMode !== "nice" && xDom[0] === Math.round(xDom[0]) && xDom[1] === Math.round(xDom[1]));
   var xTicks = energyChartNiceTicks(xDom[0], xDom[1], 5, xIntMode);
+  var xDigits = xTicks.step >= 1 ? 0 : 3;
   for (var j = 0; j < xTicks.values.length; j += 1) {
     var x = xTicks.values[j];
     var px = xFor(x);
     var xAnchor = j === 0 ? "start" : j === xTicks.values.length - 1 ? "end" : "middle";
     var xLabel = j === 0 ? px + 2 : j === xTicks.values.length - 1 ? px - 2 : px;
-    markup += '<text class="energy-axis-text" x="' + xLabel + '" y="' + (H - pad.bottom + 23) + '" text-anchor="' + xAnchor + '">' + escapeHtml(energyGraphFormatNumber(x, xIntMode ? 0 : 3)) + '</text>';
+    markup += '<text class="energy-axis-text" x="' + xLabel + '" y="' + (H - pad.bottom + 23) + '" text-anchor="' + xAnchor + '">' + escapeHtml(energyGraphFormatNumber(x, xDigits)) + '</text>';
   }
   markup += '<line class="energy-axis" x1="' + pad.left + '" y1="' + pad.top + '" x2="' + pad.left + '" y2="' + (H - pad.bottom) + '"></line>';
   markup += '<line class="energy-axis" x1="' + pad.left + '" y1="' + (H - pad.bottom) + '" x2="' + (W - pad.right) + '" y2="' + (H - pad.bottom) + '"></line>';
@@ -7918,8 +7920,8 @@ function energyGraphBindInspectorButtons(root) {
         var errMsg = String((e && e.message) || e);
         /* Conflict: 409 / expected_revision mismatch */
         if (errMsg.indexOf("409") >= 0 || errMsg.indexOf("revision") >= 0 || errMsg.indexOf("conflict") >= 0) {
-          var errorEl = card.querySelector("[data-energy-card-error]");
-          if (errorEl) { errorEl.textContent = t("energy.card.conflict"); errorEl.style.display = ""; }
+          /* Save conflict state before re-render destroys the card DOM */
+          energyGraphState.pendingCardError = { message: t("energy.card.conflict"), role: role };
           /* Re-fetch candidates */
           var fresh = await energyGraphFetchFrameCandidates(energyGraphState.jobId);
           if (fresh) { energyGraphApplyFrameCandidates(fresh); energyGraphRenderCurrent(); }
@@ -8083,6 +8085,25 @@ function energyGraphBindInspectorButtons(root) {
       el.classList.toggle("expanded");
     });
   });
+  /* ── Restore pending conflict notice after re-render ── */
+  if (energyGraphState.pendingCardError) {
+    var pending = energyGraphState.pendingCardError;
+    energyGraphState.pendingCardError = null;
+    var card = root.querySelector(".energy-candidate-card");
+    if (card) {
+      var errorEl = card.querySelector("[data-energy-card-error]");
+      if (errorEl) { errorEl.textContent = pending.message; errorEl.style.display = ""; }
+      /* Restore type-selected state with the user's chosen role re-highlighted */
+      card.setAttribute("data-energy-card-state", "type-selected");
+      card.querySelectorAll(".energy-card-type-btn").forEach(function(btn) {
+        var btnRole = String(btn.getAttribute("data-energy-candidate-role") || "");
+        if (btnRole === pending.role) btn.classList.add("active");
+        btn.disabled = false;
+      });
+      var saveBtn = card.querySelector('[data-energy-action="save-candidate"]');
+      if (saveBtn) saveBtn.disabled = false;
+    }
+  }
 }
 
 /* ── Candidate projection: derive annotation-shaped objects from frameCandidates ── */
@@ -8542,11 +8563,12 @@ function energyChartBuildSvg(cfg) {
       /* X axis: nice-number or integer ticks */
       var xIntMode = _xTickMode === "integer";
       var xNice = energyChartNiceTicks(xDom[0], xDom[1], 5, xIntMode);
+      var xDigits = xNice.step >= 1 ? 0 : _xDig;
       for (var xi = 0; xi < xNice.values.length; xi += 1) {
         var xv = xNice.values[xi];
         var xA = xi === 0 ? "start" : xi === xNice.values.length - 1 ? "end" : "middle";
         var xP = xi === 0 ? xF(xv) + 2 : xi === xNice.values.length - 1 ? xF(xv) - 2 : xF(xv);
-        svg += '<text class="' + axisTextClass + '" x="' + xP + '" y="' + (H - pad.bottom + _xTOff) + '" text-anchor="' + xA + '">' + escapeHtml(energyGraphFormatNumber(xv, xIntMode ? 0 : _xDig)) + '</text>';
+        svg += '<text class="' + axisTextClass + '" x="' + xP + '" y="' + (H - pad.bottom + _xTOff) + '" text-anchor="' + xA + '">' + escapeHtml(energyGraphFormatNumber(xv, xDigits)) + '</text>';
       }
       svg += '<line class="' + axisLineClass + '" x1="' + pad.left + '" y1="' + pad.top + '" x2="' + pad.left + '" y2="' + (H - pad.bottom) + '"></line>';
       svg += '<line class="' + axisLineClass + '" x1="' + pad.left + '" y1="' + (H - pad.bottom) + '" x2="' + (W - pad.right) + '" y2="' + (H - pad.bottom) + '"></line>';
@@ -9207,8 +9229,8 @@ function energyCandidateCardMarkup(data, node, opts) {
         '<button type="button" class="energy-card-change-btn" data-energy-action="change-role" title="' + escapeHtml(t("energy.inspector.change_role")) + '">' + escapeHtml(t("energy.inspector.change_role")) + '</button>' +
       '</div>' +
       '<div class="energy-card-type-row" data-energy-card-type-row style="display:none;">' +
-        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="TS" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">' + escapeHtml(t("energy.card.type_ts")) + '</button>' +
-        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="INT" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">' + escapeHtml(t("energy.card.type_int")) + '</button>' +
+        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="TS" data-candidate-type="ts" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">' + escapeHtml(t("energy.card.type_ts")) + '</button>' +
+        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="INT" data-candidate-type="int" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">' + escapeHtml(t("energy.card.type_int")) + '</button>' +
       '</div>' +
       '<div class="energy-card-action-row" data-energy-card-action-row style="display:none;">' +
         '<button type="button" class="energy-card-save-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' +
@@ -9223,8 +9245,8 @@ function energyCandidateCardMarkup(data, node, opts) {
       '<div class="energy-card-title">' + escapeHtml(t("energy.card.title")) + '</div>' +
       '<div class="energy-card-subtitle">' + escapeHtml(t("energy.card.subtitle_save")) + '</div>' +
       '<div class="energy-card-type-row">' +
-        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="TS" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.card.type_ts")) + '</button>' +
-        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="INT" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.card.type_int")) + '</button>' +
+        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="TS" data-candidate-type="ts" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.card.type_ts")) + '</button>' +
+        '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="INT" data-candidate-type="int" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.card.type_int")) + '</button>' +
       '</div>' +
       '<div class="energy-card-action-row">' +
         '<button type="button" class="energy-card-save-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' +
@@ -9259,8 +9281,8 @@ function energyCandidateCardMarkup(data, node, opts) {
     '<div class="energy-card-title">' + escapeHtml(t("energy.card.title")) + '</div>' +
     '<div class="energy-card-subtitle">' + escapeHtml(t("energy.card.subtitle_save")) + '</div>' +
     '<div class="energy-card-type-row">' +
-      '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="TS" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">' + escapeHtml(t("energy.card.type_ts")) + '</button>' +
-      '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="INT" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">' + escapeHtml(t("energy.card.type_int")) + '</button>' +
+      '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="TS" data-candidate-type="ts" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">' + escapeHtml(t("energy.card.type_ts")) + '</button>' +
+      '<button type="button" class="energy-card-type-btn" data-energy-candidate-role="INT" data-candidate-type="int" data-energy-frame-id="' + escapeHtml(frameIdStr) + '">' + escapeHtml(t("energy.card.type_int")) + '</button>' +
     '</div>' +
     '<div class="energy-card-action-row">' +
       '<button type="button" class="energy-card-save-btn" data-energy-action="save-candidate" data-energy-frame-id="' + escapeHtml(frameIdStr) + '" disabled>' + escapeHtml(t("energy.inspector.save_candidate")) + '</button>' +
@@ -9294,7 +9316,9 @@ function energyGraphInspectorMarkup(data) {
       ? (workingEntry.saved && !s2scanState.dirty ? "已保存" : "已修改，尚未保存")
       : "未标记";
   const hasReview = !!(data.metadata && data.metadata.review);
-  const canEditRole = data.view_type === "scan" && frameIndexNum != null && !selectionLocked && hasReview;
+  const jobStatus = String(energyGraphState.jobStatus || "");
+  const jobTerminal = jobStatus === "completed" || jobStatus === "failed" || jobStatus === "cancelled";
+  const canEditRole = data.view_type === "scan" && frameIndexNum != null && !selectionLocked && hasReview && jobTerminal;
   const isScanFrame = data.view_type === "scan" && frameIndexNum != null;
   const nodes = Array.isArray(data.nodes) ? data.nodes : [];
   const nodeIndex = nodes.findIndex(function(item) { return String(item.id) === String(node.id); });
@@ -9331,8 +9355,6 @@ function energyGraphInspectorMarkup(data) {
   var isPES = !!(lastSelectedJob && lastSelectedJob.spec && lastSelectedJob.spec.workflow === "PESsearch");
   var frameIdStr = String(node.id || "");
   var candEntry = isPES ? null : energyGraphFrameCandidateFor(data.view_type, node.frame_index);
-  var jobCompleted = String(energyGraphState.jobStatus || "") === "completed";
-  var jobTerminal = jobCompleted || String(energyGraphState.jobStatus || "") === "failed" || String(energyGraphState.jobStatus || "") === "cancelled";
   var savedBadge = candEntry ? ' <span class="energy-badge ok">' + escapeHtml(t("energy.inspector.saved_badge")) + ' · ' + escapeHtml(String(candEntry.role || "")) + '</span>' : '';
   return '<div class="energy-inspector-body">' +
     '<div class="energy-selected-title"><strong>' + escapeHtml(title) + '</strong><span class="energy-badge ' + badgeClass + '">' + escapeHtml(annotation ? String(annotation.type).toUpperCase() : translateStatus(node.status || "unknown")) + '</span></div>' +
