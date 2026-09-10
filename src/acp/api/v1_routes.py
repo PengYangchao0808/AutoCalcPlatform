@@ -2177,6 +2177,140 @@ def get_structure_viewer_catalog(
     return StructureViewerPayloadModel.model_validate(body)
 
 
+def _resolve_geometry_path(work_dir: Path, geometry_ref: str) -> Path | None:
+    """Resolve a geometry_ref to an absolute safe path under work_dir.
+
+    geometry_ref patterns from the structure viewer resolvers:
+    - ``RESULT/confsearch/conformers/0001.xyz`` (prefixed with base)
+    - ``RESULT/structures/item_001__TAG_TS__optimized.xyz``
+    - ``WORK/03_OPT/batch/...``
+    - ``input.xyz`` (bare filename — probe work_dir/<ref> then work_dir/RESULT/<ref>)
+    - ``structures/pes_ts_frame_005.xyz`` (PES review — relative to RESULT/)
+
+    Uses ``resolve_safe`` to guard against path-escape.
+    """
+    if not geometry_ref:
+        return None
+    ref = geometry_ref.replace("\\", "/")
+    if "/" in ref:
+        return resolve_safe(work_dir, ref)
+    found = resolve_safe(work_dir, ref)
+    if found is not None:
+        return found
+    return resolve_safe(work_dir, f"RESULT/{ref}")
+
+
+def _extract_first_xyz_frame(xyz_text: str) -> str:
+    """Return the first XYZ frame from a (possibly multi-frame) XYZ string."""
+    lines = xyz_text.splitlines()
+    offset = 0
+    while offset < len(lines):
+        header = lines[offset].strip()
+        if not header:
+            offset += 1
+            continue
+        try:
+            atom_count = int(header)
+        except ValueError:
+            offset += 1
+            continue
+        if atom_count == 0:
+            break
+        end = offset + 2 + atom_count
+        if end > len(lines):
+            break
+        return "\n".join(lines[offset:end]) + "\n"
+    return xyz_text
+
+
+@router.get(
+    "/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+    response_class=Response,
+)
+def get_structure_viewer_geometry(
+    job_id: str,
+    entry_id: str,
+    request: Request,
+) -> Response:
+    """Return the XYZ geometry for a structure-viewer entry.
+
+    Resolves the entry via the catalog, guards the path with
+    ``resolve_safe``, and returns ``text/plain`` XYZ bytes.
+    Multi-frame files (IRC) return the first frame only.
+
+    409 pending_fetch is reserved for remote unsynced (todo 11 wiring);
+    410 is NOT needed for display (same decision as todo 8).
+
+    Raises:
+        404: Unknown job, unknown entry, missing geometry_ref, or file missing.
+    """
+    from acp.confsearch.sampling_models import read_traj_frame_xyz
+    from acp.results.structure_viewer import (
+        StructureViewerError,
+        build_structure_viewer_payload,
+    )
+
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if not record.work_dir:
+        raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
+
+    work_dir = Path(record.work_dir)
+    workflow = str(record.spec.workflow or "")
+    job_status = record.status.value
+
+    try:
+        payload = build_structure_viewer_payload(
+            work_dir,
+            job_id=job_id,
+            workflow=workflow,
+            job_status=job_status,
+        )
+    except StructureViewerError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    entry = None
+    for e in payload.entries:
+        if e.id == entry_id:
+            entry = e
+            break
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Entry not found: {entry_id}")
+
+    geometry_ref = entry.source.geometry_ref
+    if not geometry_ref:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Entry {entry_id} has no geometry reference",
+        )
+
+    resolved = _resolve_geometry_path(work_dir, geometry_ref)
+    if resolved is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Geometry file not found or unsafe: {geometry_ref}",
+        )
+
+    try:
+        xyz_text = resolved.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise HTTPException(
+            status_code=404, detail=f"Cannot read geometry file: {exc}"
+        ) from exc
+
+    if entry.source.frame_index is not None:
+        frame = read_traj_frame_xyz(resolved, entry.source.frame_index)
+        if frame is not None:
+            xyz_text = frame
+
+    if not xyz_text.endswith("\n"):
+        xyz_text += "\n"
+
+    return Response(content=xyz_text, media_type="text/plain; charset=utf-8")
+
+
 # ---------------------------------------------------------------------------
 # Frame-candidate CRUD: save/list/remove energy-viewer frames as tagged
 # structures.  Follows the PES review ordering and revision-guard pattern.

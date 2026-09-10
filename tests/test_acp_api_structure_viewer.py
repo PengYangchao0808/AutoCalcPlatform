@@ -549,3 +549,116 @@ class TestCatalogEndpoint:
         body = resp.json()
         assert len(body["entries"]) == 1
         assert body["entries"][0]["id"] == "batch_item_001"
+
+
+# ── Geometry endpoint tests (todo 9) ────────────────────────────────────────
+
+
+def _write_confsearch_manifest_with_xyz(work_dir: Path) -> None:
+    """Write confsearch manifest + actual XYZ geometry files."""
+    _write_confsearch_manifest(work_dir)
+    conf_dir = work_dir / "RESULT" / "confsearch" / "conformers"
+    conf_dir.mkdir(parents=True, exist_ok=True)
+    for i in range(1, 4):
+        xyz = f"3\n\nC 0 0 0\nH 0 0 {i}\nH 0 {i} 0\n"
+        (conf_dir / f"000{i}.xyz").write_text(xyz, encoding="utf-8")
+
+
+class TestGeometryEndpoint:
+    """GET /api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry"""
+
+    def test_confsearch_rank1_geometry_200(self, sv_client: TestClient, tmp_path: Path) -> None:
+        """Confsearch rank-1 geometry → 200 text/plain, starts with atom count."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest_with_xyz(work_dir)
+
+        catalog = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+        assert default_id is not None
+
+        resp = sv_client.get(
+            f"/api/v1/jobs/sv-test-001/structure-viewer/entries/{default_id}/geometry"
+        )
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/plain")
+        body = resp.text
+        first_line = body.strip().splitlines()[0]
+        assert first_line.isdigit()
+        assert int(first_line) == 3
+
+    def test_unknown_entry_404(self, sv_client: TestClient, tmp_path: Path) -> None:
+        """Unknown entry id → 404."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest_with_xyz(work_dir)
+
+        resp = sv_client.get(
+            "/api/v1/jobs/sv-test-001/structure-viewer/entries/nonexistent/geometry"
+        )
+        assert resp.status_code == 404
+
+    def test_path_escape_404(self, sv_client: TestClient, tmp_path: Path) -> None:
+        """Path-escape via crafted product path → 404, no file contents leak."""
+        work_dir = _seed_job(
+            sv_client, tmp_path,
+            job_id="sv-escape-001",
+            workflow="BatchOptimize",
+        )
+        _write_batch_manifest(work_dir, items=[
+            {
+                "id": "batch_evil",
+                "label": "evil",
+                "path": "structures/../../../../../../etc/passwd",
+                "kind": "structure",
+            },
+        ])
+        (work_dir / "RESULT" / "structures").mkdir(parents=True, exist_ok=True)
+
+        resp = sv_client.get(
+            "/api/v1/jobs/sv-escape-001/structure-viewer/entries/batch_evil/geometry"
+        )
+        assert resp.status_code == 404
+        assert "root:" not in resp.text
+
+    def test_missing_file_404(self, sv_client: TestClient, tmp_path: Path) -> None:
+        """Entry exists but geometry file missing → 404."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest(work_dir)
+
+        catalog = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+
+        resp = sv_client.get(
+            f"/api/v1/jobs/sv-test-001/structure-viewer/entries/{default_id}/geometry"
+        )
+        assert resp.status_code == 404
+
+    def test_multi_frame_irc_first_frame(self, sv_client: TestClient, tmp_path: Path) -> None:
+        """Multi-frame IRC file → first frame returned."""
+        work_dir = _seed_job(
+            sv_client, tmp_path,
+            job_id="sv-irc-001",
+            workflow="irc",
+        )
+        irc_dir = work_dir / "RESULT" / "irc"
+        irc_dir.mkdir(parents=True, exist_ok=True)
+        frame1 = "2\nframe 0\nC 0 0 0\nH 0 0 1\n"
+        frame2 = "2\nframe 1\nC 0 0 0\nH 0 0 2\n"
+        (irc_dir / "irc_forward.xyz").write_text(frame1 + frame2, encoding="utf-8")
+
+        catalog = sv_client.get("/api/v1/jobs/sv-irc-001/structure-viewer").json()
+        entry_id = None
+        for e in catalog["entries"]:
+            if e["id"].startswith("irc_"):
+                entry_id = e["id"]
+                break
+        assert entry_id is not None
+
+        resp = sv_client.get(
+            f"/api/v1/jobs/sv-irc-001/structure-viewer/entries/{entry_id}/geometry"
+        )
+        assert resp.status_code == 200
+        body = resp.text.strip()
+        lines = body.splitlines()
+        assert lines[0] == "2"
+        assert "frame 0" in lines[1]
+        assert "frame 1" not in body
