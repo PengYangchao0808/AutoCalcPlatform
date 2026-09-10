@@ -1,0 +1,78 @@
+# ORCA 5.x frequency output — hand-extended from real excerpt (orca_optfreq_real_sections.txt).
+# 3-atom molecule (H2O-like). Modes 0-5 are zero (translational/rotational).
+# Modes 6,7 imaginary (TS). Mode 8 real. NORMAL MODES section is COMPLETE for
+# all 9 modes in two column batches (6+3). IR SPECTRUM section has intensities
+# for modes 6-8 only (non-zero modes).  Displacement values are physically
+# plausible small magnitudes (0.01..0.18), all finite.
+VIBRATIONAL FREQUENCIES
+-----------------------
+
+Scaling factor for frequencies =  1.000000000  (already applied!)
+
+   0:         0.00 cm**-1
+   1:         0.00 cm**-1
+   2:         0.00 cm**-1
+   3:         0.00 cm**-1
+   4:         0.00 cm**-1
+   5:         0.00 cm**-1
+   6:      -797.72 cm**-1 ***imaginary mode***
+   7:      -791.36 cm**-1 ***imaginary mode***
+   8:      1411.55 cm**-1
+
+
+------------
+NORMAL MODES
+------------
+
+These modes are the Cartesian displacements weighted by the diagonal matrix
+M(i,i)=1/sqrt(m[i]) where m[i] is the mass of the displaced atom
+Thus, these vectors are normalized but *not* orthogonal
+
+                  0          1          2          3          4          5
+      0       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+      1       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+      2       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+      3       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+      4       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+      5       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+      6       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+      7       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+      8       0.000000   0.000000   0.000000   0.000000   0.000000   0.000000
+
+                  6          7          8
+      0       0.010000   0.050000   0.100000
+      1      -0.020000   0.060000   0.110000
+      2       0.030000   0.070000   0.120000
+      3       0.040000   0.080000   0.130000
+      4      -0.050000   0.090000   0.140000
+      5       0.060000   0.100000   0.150000
+      6       0.070000   0.110000   0.160000
+      7      -0.080000   0.120000   0.170000
+      8       0.090000   0.130000   0.180000
+
+VIBRATIONAL FREQUENCIES
+-----------------------
+
+Scaling factor for frequencies =  1.000000000  (already applied!)
+
+   0:         0.00 cm**-1
+   1:         0.00 cm**-1
+   2:         0.00 cm**-1
+   3:         0.00 cm**-1
+   4:         0.00 cm**-1
+   5:         0.00 cm**-1
+   6:      -797.72 cm**-1 ***imaginary mode***
+   7:      -791.36 cm**-1 ***imaginary mode***
+   8:      1411.55 cm**-1
+
+
+------------
+IR SPECTRUM
+------------
+
+ Mode    freq (cm**-1)   eps      T**2     TX       TY       TZ   intensity (km/mol)  (rel)
+   6:       -797.72   2.31e-05  1.02e-04  -0.004  -0.010  -0.001    66.542   0.812
+   7:       -791.36   1.50e-05  8.00e-05  -0.003  -0.008  -0.001    45.123   0.551
+   8:       1411.55   4.79e-04  1.32e-03   0.032  -0.008  -0.020    81.914   1.000
+
+****ORCA-CHEMISTRY JOB DONE****
