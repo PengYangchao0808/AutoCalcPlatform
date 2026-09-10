@@ -1340,6 +1340,16 @@ def build_energy_graph_from_job(
 
     *view* selects among ``available_views``.  An unknown or ``None`` view
     falls back to the default projection for the workflow.
+
+    Saved frame candidates from ``RESULT/frame_candidates.json`` are
+    automatically merged as annotations for all views except
+    ``unsupported``.  Existing annotations win on id collision so that
+    algorithm-recommended markers (PESsearch) are never overwritten.
+    For BatchOptimize optimization views, item_id scoping is respected:
+    when *item_id* is provided, only candidates whose item_id matches are
+    projected; when *item_id* is ``None``, only candidates with
+    ``item_id=None`` are projected (consistent with
+    ``resolve_frame_geometry`` item scoping).
     """
     projection: dict[str, Any] = _sanitize_json(
         _build_energy_graph_projection(
@@ -1355,6 +1365,41 @@ def build_energy_graph_from_job(
             view=view,
         )
     )
+    # Merge saved frame candidates as annotations (all views except unsupported)
+    projection = _merge_frame_candidate_annotations(projection, work_dir, item_id=item_id)
+    return projection
+
+
+def _merge_frame_candidate_annotations(
+    projection: dict[str, Any],
+    work_dir: Path,
+    *,
+    item_id: str | None = None,
+) -> dict[str, Any]:
+    """Merge saved frame candidate annotations into *projection*.
+
+    Existing annotations win on id collision.  Returns the projection
+    unchanged when the view is ``unsupported`` or the authority file is
+    missing.
+    """
+    view_type = str(projection.get("view_type") or "")
+    if view_type == "unsupported":
+        return projection
+    from acp.results.frame_candidate_annotations import build_frame_candidate_annotations
+
+    candidate_annotations = build_frame_candidate_annotations(
+        work_dir,
+        view_type=view_type,
+        item_id=item_id,
+    )
+    if not candidate_annotations:
+        return projection
+    existing_ids = {str(a.get("id") or "") for a in projection.get("annotations") or []}
+    merged = list(projection.get("annotations") or [])
+    for annotation in candidate_annotations:
+        if str(annotation.get("id") or "") not in existing_ids:
+            merged.append(annotation)
+    projection["annotations"] = merged
     return projection
 
 
