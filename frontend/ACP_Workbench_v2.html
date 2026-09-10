@@ -7553,10 +7553,11 @@ function energyChartNiceTicks(lo, hi, targetCount, integerMode) {
   var range = hi - lo;
   if (range <= 0) range = 1;
   targetCount = targetCount || 5;
-  /* Build sorted candidate steps: {1,2[,2.5],5} × 10^k for k ∈ [-10..10] */
+  /* Build sorted candidate steps: {1,2[,2.5],5} × 10^k; integerMode restricts k≥0 so step≥1 */
   var baseSteps = integerMode ? [1, 2, 5] : [1, 2, 2.5, 5];
   var candidates = [];
-  for (var k = -10; k <= 10; k++) {
+  var kMin = integerMode ? 0 : -10;
+  for (var k = kMin; k <= 10; k++) {
     var mult = Math.pow(10, k);
     for (var b = 0; b < baseSteps.length; b++) { candidates.push(baseSteps[b] * mult); }
   }
