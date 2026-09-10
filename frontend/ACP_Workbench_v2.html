@@ -1082,6 +1082,11 @@ body.resizing-v canvas {
 .energy-band-chip-bg.selected { fill: rgba(78, 161, 255, 0.25); stroke: var(--accent); stroke-width: 1.5; }
 .energy-band-chip-bg.saved { stroke: rgba(78, 161, 255, 0.25); }
 .energy-band-chip-bg.pending { stroke: rgba(255, 184, 93, 0.45); }
+.energy-band-chip-overflow { fill: rgba(255, 255, 255, 0.06); stroke: rgba(255, 255, 255, 0.2); stroke-width: 1; cursor: pointer; }
+.energy-band-chip-label-overflow { fill: var(--text-tertiary); font-weight: 400; }
+.energy-candidate-list-highlight { animation: energy-candidate-highlight-fade 1.5s ease-out; }
+@keyframes energy-candidate-highlight-fade { from { background: rgba(78, 161, 255, 0.2); } to { background: transparent; } }
+.energy-candidate-group-head { padding: 6px 0 2px; color: var(--text-tertiary); font-size: 10px; font-weight: 600; border-bottom: 1px solid var(--border-subtle); margin-bottom: 4px; }
 .energy-band-chip-label { fill: var(--text-primary); font-size: 11px; font-weight: 600; pointer-events: none; }
 .energy-band-chip-label.selected { fill: var(--accent); }
 .energy-band-leader { stroke: rgba(255, 255, 255, 0.28); stroke-width: 1; stroke-dasharray: 2 2; }
@@ -8005,6 +8010,31 @@ function energyCandidateBandLayout(items, geom, xFor, yFor, opts) {
   /* ── Greedy2-row layout (shared core) ── */
   energyCandidateBandLayoutCore(merged, plotLeft, plotRight);
   var placed = merged.filter(function(m) { return !m._skip; });
+  var skipped = merged.filter(function(m) { return m._skip; });
+  /* ── Overflow merge chip: "共 N 个候选 ›" ── */
+  var overflowChip = null;
+  if (skipped.length > 0) {
+    var overflowText = "\u5171 " + skipped.length + " \u4e2a\u5019\u9009 \u203a";
+    var overflowW = energyGraphMeasureText(overflowText, 11, true) + 18;
+    overflowChip = { chipW: overflowW, anchorPx: plotRight - overflowW / 2, _isOverflow: true, _skipCount: skipped.length };
+    /* Try to place at end of row 1, then row 2 */
+    var chipGap = 8;
+    for (var r = 0; r < 2; r++) {
+      var row = placed.filter(function(m) { return m._row === r; });
+      var startX = plotRight - overflowW;
+      if (row.length > 0) {
+        var last = row[row.length - 1];
+        var minStart = last._x + last.chipW + chipGap;
+        if (startX < minStart) startX = minStart;
+      }
+      if (startX + overflowW <= plotRight + 1) {
+        overflowChip._x = startX;
+        overflowChip._row = r;
+        placed.push(overflowChip);
+        break;
+      }
+    }
+  }
   var usedRows = 0;
   placed.forEach(function(m) { if (m._row >= usedRows) usedRows = m._row + 1; });
   var bandHeight = usedRows * rowHeight + (usedRows > 1 ? rowGap : 0);
@@ -8015,7 +8045,14 @@ function energyCandidateBandLayout(items, geom, xFor, yFor, opts) {
   placed.forEach(function(m) {
     var cx = m._x + m.chipW / 2;
     var cy = m._row === 0 ? rowHeight / 2 : rowHeight + rowGap + rowHeight / 2;
-    /* Chip background */
+    if (m._isOverflow) {
+      /* Overflow merge chip */
+      bandSvg += '<rect class="energy-band-chip-bg energy-band-chip-overflow" x="' + m._x + '" y="' + (cy - chipH / 2) + '" width="' + m.chipW + '" height="' + chipH + '" rx="4"/>';
+      var overflowText = "\u5171 " + m._skipCount + " \u4e2a\u5019\u9009 \u203a";
+      bandSvg += '<text class="energy-band-chip-label energy-band-chip-label-overflow" x="' + cx + '" y="' + (cy + 4) + '" text-anchor="middle">' + escapeHtml(overflowText) + '</text>';
+      return;
+    }
+    /* Normal chip */
     var savedClass = m.items[0].annotation.saved ? " saved" : " pending";
     var isSelected = m.items[0].annotation.id === energyGraphState.selectedAnnotationId;
     var selectedClass = isSelected ? " selected" : "";
@@ -8044,10 +8081,14 @@ function energyCandidateBandLayout(items, geom, xFor, yFor, opts) {
       plotSvg += '</g>';
     });
   });
-  /* Chip click → select frame */
+  /* Chip click hit targets */
   bandSvg = '<g class="energy-candidate-band">' + bandSvg;
   placed.forEach(function(m) {
-    bandSvg += '<rect class="energy-band-chip-hit" data-energy-candidate-jump="' + m.frameIndex + '" x="' + m._x + '" y="' + (m._row === 0 ? 0 : rowHeight + rowGap) + '" width="' + m.chipW + '" height="' + rowHeight + '" fill="transparent" rx="4"/>';
+    if (m._isOverflow) {
+      bandSvg += '<rect class="energy-band-chip-hit" data-energy-candidate-expand="1" x="' + m._x + '" y="' + (m._row === 0 ? 0 : rowHeight + rowGap) + '" width="' + m.chipW + '" height="' + rowHeight + '" fill="transparent" rx="4"/>';
+    } else {
+      bandSvg += '<rect class="energy-band-chip-hit" data-energy-candidate-jump="' + m.frameIndex + '" x="' + m._x + '" y="' + (m._row === 0 ? 0 : rowHeight + rowGap) + '" width="' + m.chipW + '" height="' + rowHeight + '" fill="transparent" rx="4"/>';
+    }
   });
   bandSvg += '</g>';
   return { bandSvg: bandSvg, plotSvg: plotSvg, bandHeight: bandHeight };
@@ -8078,6 +8119,27 @@ function energyCandidateBandPreHeight(items, xFor, plotLeft, plotRight) {
   /* Greedy2-row dry run (shared core) */
   energyCandidateBandLayoutCore(merged, plotLeft, plotRight);
   var placed = merged.filter(function(m) { return !m._skip; });
+  var skipped = merged.filter(function(m) { return m._skip; });
+  /* Account for overflow chip */
+  if (skipped.length > 0) {
+    var overflowText = "\u5171 " + skipped.length + " \u4e2a\u5019\u9009 \u203a";
+    var overflowW = energyGraphMeasureText(overflowText, 11, true) + 18;
+    var chipGap = 8;
+    var overflowPlaced = false;
+    for (var r = 0; r < 2 && !overflowPlaced; r++) {
+      var row = placed.filter(function(m) { return m._row === r; });
+      var startX = plotRight - overflowW;
+      if (row.length > 0) {
+        var last = row[row.length - 1];
+        var minStart = last._x + last.chipW + chipGap;
+        if (startX < minStart) startX = minStart;
+      }
+      if (startX + overflowW <= plotRight + 1) {
+        placed.push({ _x: startX, _row: r, chipW: overflowW });
+        overflowPlaced = true;
+      }
+    }
+  }
   var usedRows = 0;
   placed.forEach(function(m) { if (m._row >= usedRows) usedRows = m._row + 1; });
   return usedRows * rowHeight + (usedRows > 1 ? rowGap : 0);
@@ -8180,28 +8242,39 @@ function energyCandidateListMarkup(data) {
   var selectedFrame = null;
   var selNode = nodes.find(function(n) { return String(n.id) === String(energyGraphState.selectedNodeId); });
   if (selNode) selectedFrame = Number(selNode.frame_index);
-  var rows = candidates.map(function(c) {
-    var role = String(c.role || "");
-    var isTS = role === "ts";
-    var glyph = isTS ? "◆" : "●";
-    var glyphClass = isTS ? "ts" : "int";
-    var label = String(c.display_label || c.role || "");
+  /* Group by frame_index */
+  var byFrame = {};
+  candidates.forEach(function(c) {
     var fi = Number(c.frame_index);
-    var cycleText = "Cycle " + fi;
-    var energy = "";
-    var cNode = nodes.find(function(n) { return Number(n.frame_index) === fi; });
-    if (cNode && cNode.energy != null) energy = energyGraphFormatNumber(cNode.energy, 3);
-    var userName = String(c.name || "");
-    var isActive = selectedFrame === fi ? " active" : "";
-    return '<div class="energy-candidate-row' + isActive + '" data-energy-candidate-jump="' + fi + '">' +
-      '<span class="energy-candidate-glyph ' + glyphClass + '">' + glyph + '</span>' +
-      '<div class="energy-candidate-info">' +
-        '<div class="energy-candidate-label">' + escapeHtml(label) + (energy ? ' <span style="color:var(--text-tertiary);font-weight:400;font-size:10px;">' + escapeHtml(energy) + '</span>' : '') + '</div>' +
-        '<div class="energy-candidate-meta">' + escapeHtml(cycleText) + '</div>' +
-        (userName ? '<div class="energy-candidate-name">' + escapeHtml(userName) + '</div>' : '') +
-      '</div>' +
-    '</div>';
-  }).join("");
+    if (!byFrame[fi]) byFrame[fi] = [];
+    byFrame[fi].push(c);
+  });
+  var rows = "";
+  Object.keys(byFrame).sort(function(a, b) { return Number(a) - Number(b); }).forEach(function(fi) {
+    var group = byFrame[fi];
+    rows += '<div class="energy-candidate-group-head" data-energy-candidate-frame="' + fi + '">\u5468\u671f ' + fi + '</div>';
+    group.forEach(function(c) {
+      var role = String(c.role || "");
+      var isTS = role === "ts";
+      var glyph = isTS ? "\u25c6" : "\u25cf";
+      var glyphClass = isTS ? "ts" : "int";
+      var label = String(c.display_label || c.role || "");
+      var cycleText = "Cycle " + fi;
+      var energy = "";
+      var cNode = nodes.find(function(n) { return Number(n.frame_index) === fi; });
+      if (cNode && cNode.energy != null) energy = energyGraphFormatNumber(cNode.energy, 3);
+      var userName = String(c.name || "");
+      var isActive = selectedFrame === fi ? " active" : "";
+      rows += '<div class="energy-candidate-row' + isActive + '" data-energy-candidate-jump="' + fi + '">' +
+        '<span class="energy-candidate-glyph ' + glyphClass + '">' + glyph + '</span>' +
+        '<div class="energy-candidate-info">' +
+          '<div class="energy-candidate-label">' + escapeHtml(label) + (energy ? ' <span style="color:var(--text-tertiary);font-weight:400;font-size:10px;">' + escapeHtml(energy) + '</span>' : '') + '</div>' +
+          '<div class="energy-candidate-meta">' + escapeHtml(cycleText) + '</div>' +
+          (userName ? '<div class="energy-candidate-name">' + escapeHtml(userName) + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    });
+  });
   return '<div class="energy-candidate-list">' +
     '<div class="energy-candidate-list-head">' + escapeHtml(t("energy.candidates.title")) + ' <span class="energy-candidate-list-count">' + candidates.length + '</span></div>' +
     rows +
@@ -10434,6 +10507,34 @@ function energyGraphBindChartInteractions(root) {
       if (!isNaN(fi)) {
         energyGraphState.liveFollow = false;
         energyGraphSelectFrame(fi);
+        /* Scroll right panel candidate list to frame group */
+        var list = root.querySelector(".energy-candidate-list");
+        if (list) {
+          var groupHead = list.querySelector('[data-energy-candidate-frame="' + fi + '"]');
+          if (groupHead) {
+            list.scrollTop = groupHead.offsetTop - list.offsetTop;
+            /* Highlight matching rows */
+            list.querySelectorAll('[data-energy-candidate-jump="' + fi + '"]').forEach(function(row) {
+              row.classList.add("energy-candidate-list-highlight");
+              setTimeout(function() { row.classList.remove("energy-candidate-list-highlight"); }, 1500);
+            });
+          }
+        }
+      }
+    });
+  });
+  /* ── Overflow chip click → scroll candidate list to top ── */
+  svg.querySelectorAll("[data-energy-candidate-expand]").forEach(function(chip) {
+    chip.addEventListener("click", function(event) {
+      event.stopPropagation();
+      var list = root.querySelector(".energy-candidate-list");
+      if (list) {
+        list.scrollTop = 0;
+        /* Highlight all rows briefly */
+        list.querySelectorAll(".energy-candidate-row").forEach(function(row) {
+          row.classList.add("energy-candidate-list-highlight");
+          setTimeout(function() { row.classList.remove("energy-candidate-list-highlight"); }, 1500);
+        });
       }
     });
   });
