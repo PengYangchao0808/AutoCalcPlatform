@@ -867,6 +867,91 @@ class TestVibrationsEndpoint:
         assert body["modes"][0]["frequency_cm1"] == 100.0
 
 
+class TestHistoricalModeProjection:
+    """Read-only fallback: parse ORCA output on-the-fly when normal_modes.json is absent."""
+
+    def test_historical_projection_returns_modes(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """ORCA output in WORK/04_FREQ/ → available=true, source=historical_projection."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest_with_xyz(work_dir)
+
+        freq_dir = work_dir / "WORK" / "04_FREQ"
+        freq_dir.mkdir(parents=True, exist_ok=True)
+        from tests.test_acp_frequency_modes import FULL_MODES_FIXTURE
+
+        (freq_dir / "orca_freq.out").write_text(
+            FULL_MODES_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+        snapshots_before = {
+            p: (p.stat().st_mtime_ns, p.stat().st_size)
+            for p in freq_dir.rglob("*")
+            if p.is_file()
+        }
+
+        catalog = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+
+        resp = sv_client.get(
+            f"/api/v1/jobs/sv-test-001/structure-viewer/entries/{default_id}/vibrations"
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["available"] is True
+        assert body["source"] == "historical_projection"
+        assert body["atom_count"] == 3
+        assert len(body["modes"]) == 9
+
+        imaginary = [m for m in body["modes"] if m["imaginary"]]
+        assert len(imaginary) == 2
+
+        snapshots_after = {
+            p: (p.stat().st_mtime_ns, p.stat().st_size)
+            for p in freq_dir.rglob("*")
+            if p.is_file()
+        }
+        assert snapshots_before == snapshots_after
+
+    def test_historical_projection_no_orca_output(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """No ORCA output → available=false, reason=no_normal_modes."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest_with_xyz(work_dir)
+
+        catalog = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+
+        resp = sv_client.get(
+            f"/api/v1/jobs/sv-test-001/structure-viewer/entries/{default_id}/vibrations"
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["available"] is False
+        assert body["reason"] == "no_normal_modes"
+
+    def test_product_source_when_normal_modes_json_exists(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """normal_modes.json present → source=product (not historical_projection)."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest_with_xyz(work_dir)
+        _write_normal_modes(work_dir, _make_normal_modes_json())
+
+        catalog = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+
+        resp = sv_client.get(
+            f"/api/v1/jobs/sv-test-001/structure-viewer/entries/{default_id}/vibrations"
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["available"] is True
+        assert body["source"] == "product"
+
+
 # ── Remote structure cache tests (todo 11) ─────────────────────────────────
 
 

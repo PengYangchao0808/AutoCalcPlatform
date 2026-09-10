@@ -2350,6 +2350,86 @@ def get_structure_viewer_geometry(
     return Response(content=xyz_text, media_type="text/plain; charset=utf-8")
 
 
+def _try_historical_mode_projection(
+    work_dir: Path,
+    entry_id_str: str,
+) -> StructureViewerVibrationsResponse | None:
+    """Read-only fallback: parse ORCA output on-the-fly when normal_modes.json is absent.
+
+    Searches for ORCA output files in the frequency step directory and parses
+    normal-mode vectors.  Never writes any file.
+    """
+    from acp.api.v1_schemas import StructureViewerModeModel
+    from acp.results.orca_parser import OrcaOutputParser
+
+    work = work_dir / "WORK"
+    if not work.is_dir():
+        return None
+
+    candidates: list[Path] = []
+    freq_dir = work / "04_FREQ"
+    if freq_dir.is_dir():
+        candidates.extend(sorted(freq_dir.glob("*.out")))
+        candidates.extend(sorted(freq_dir.glob("*.log")))
+
+    if entry_id_str.startswith("batch_"):
+        item_id = entry_id_str.removeprefix("batch_")
+        for batch_freq in [
+            work / item_id / "frequency",
+            work / "04_FREQ" / "batch" / item_id / "frequency",
+        ]:
+            if batch_freq.is_dir():
+                candidates.extend(sorted(batch_freq.glob("*.out")))
+                candidates.extend(sorted(batch_freq.glob("*.log")))
+
+    parser = OrcaOutputParser()
+    for candidate in candidates:
+        try:
+            text = candidate.read_text(encoding="utf-8", errors="replace")
+            calc = parser.parse_text(text)
+        except (OSError, ValueError):
+            continue
+        if not calc.mode_vectors:
+            continue
+
+        atom_count = 0
+        modes: list[StructureViewerModeModel] = []
+        for mode_idx in sorted(calc.mode_vectors.keys()):
+            freq = calc.mode_frequencies.get(mode_idx, 0.0)
+            vectors_tuple = calc.mode_vectors.get(mode_idx, ())
+            if not atom_count and vectors_tuple:
+                atom_count = len(vectors_tuple)
+            ir = (
+                calc.mode_ir_intensities.get(mode_idx)
+                if calc.mode_ir_intensities
+                else None
+            )
+            try:
+                mode = StructureViewerModeModel(
+                    mode_index=mode_idx,
+                    frequency_cm1=freq,
+                    imaginary=freq < 0,
+                    ir_intensity=ir,
+                    vectors=[list(v) for v in vectors_tuple],
+                )
+                modes.append(mode)
+            except (TypeError, ValueError):
+                continue
+
+        if modes:
+            return StructureViewerVibrationsResponse(
+                available=True,
+                reason=None,
+                threshold_cm1=-50.0,
+                threshold_source="default",
+                modes=modes,
+                atom_count=atom_count,
+                geometry_product_id=None,
+                source="historical_projection",
+            )
+    return None
+
+
 @router.get(
     "/jobs/{job_id}/structure-viewer/entries/{entry_id}/vibrations",
     response_model=StructureViewerVibrationsResponse,
@@ -2425,9 +2505,11 @@ def get_structure_viewer_vibrations(
     if not freq_dir.is_dir():
         if is_remote:
             return _not_available("pending_fetch")
+        projected = _try_historical_mode_projection(work_dir, entry.id)
+        if projected is not None:
+            return projected
         return _not_available("no_normal_modes")
 
-    # TODO(todo-24): wire per-item normal_modes for BatchOptimize
     modes_path: Path | None = None
     entry_id_str = entry.id
     if entry_id_str.startswith("batch_"):
@@ -2442,6 +2524,9 @@ def get_structure_viewer_vibrations(
             modes_path = global_path
 
     if modes_path is None:
+        projected = _try_historical_mode_projection(work_dir, entry_id_str)
+        if projected is not None:
+            return projected
         return _not_available("no_normal_modes")
 
     try:
@@ -2504,6 +2589,7 @@ def get_structure_viewer_vibrations(
         modes=modes,
         atom_count=atom_count,
         geometry_product_id=geometry_product_id,
+        source="product",
     )
 
 

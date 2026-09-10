@@ -1285,6 +1285,7 @@ class StructureViewerVibrationsResponse(BaseModel):
     modes: list[StructureViewerModeModel] = Field(default_factory=list)
     atom_count: int
     geometry_product_id: str | None = None
+    source: str | None = None
 
 
 # ---------------------------------------------------------------------------
