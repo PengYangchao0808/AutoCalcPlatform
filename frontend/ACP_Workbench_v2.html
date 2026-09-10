@@ -8112,27 +8112,93 @@ function energyAnnotationToolbarMarkup() {
  * Returns complete <svg>...</svg> string.
  */
 function energyChartBuildSvg(cfg) {
+  /* Unified SVG chart core.
+   * Energy path (default): axes after plot, selected+annotations inside plot group.
+   * Optimization path: axesBeforePlot, selectedInPlotGroup=false, annotationsInPlotGroup=false.
+   * All new config fields default to energy-chart values for backward compat.
+   */
   var geom = cfg.geom, pad = geom.pad;
   var W = geom.W, H = geom.H;
   var xDom = cfg.xDom, yDom = cfg.yDom;
+  var y2Dom = cfg.y2Dom || null;
   var plotAttr = cfg.plotAttr || "data-energy-plot";
   var overlayAttr = cfg.overlayAttr || "data-energy-overlay";
   var axesAttr = cfg.axesAttr || "data-energy-axes";
   var gridClass = cfg.gridClass || "energy-gridline";
   var axisTextClass = cfg.axisTextClass || "energy-axis-text";
   var axisLineClass = cfg.axisLineClass || "energy-axis";
+  var selectedLineClass = cfg.selectedLineClass || "energy-current-line";
+  var pointClass = cfg.pointClass || "energy-point";
+  var zeroLineClass = cfg.zeroLineClass || "energy-zero-line";
   var Pw = W - pad.left - pad.right, Ph = H - pad.top - pad.bottom;
   var svg = cfg.svgOpen;
   /* clipPath */
   svg += '<defs><clipPath id="' + cfg.clipId + '"><rect x="' + pad.left + '" y="' + pad.top + '" width="' + Pw + '" height="' + Ph + '"/></clipPath></defs>';
+  /* axes before plot group (optimization) */
+  if (cfg.axesBeforePlot) {
+    var _yDig = cfg.yDigits != null ? cfg.yDigits : 5;
+    var _xDig = cfg.xDigits != null ? cfg.xDigits : 0;
+    var _yTOff = cfg.yTickXOffset != null ? cfg.yTickXOffset : -8;
+    var _xTOff = cfg.xTickYOffset != null ? cfg.xTickYOffset : 20;
+    (function() {
+      function xF(v) { return pad.left + ((v - xDom[0]) / (xDom[1] - xDom[0] || 1)) * Pw; }
+      function yF(v) { return pad.top + (1 - ((v - yDom[0]) / (yDom[1] - yDom[0] || 1))) * Ph; }
+      function y2F(v) { var d = y2Dom || [0, 1]; return pad.top + (1 - ((v - d[0]) / (d[1] - d[0] || 1))) * Ph; }
+      for (var gi = 0; gi <= 4; gi += 1) {
+        var gy = yDom[0] + (yDom[1] - yDom[0]) * gi / 4;
+        var py = yF(gy);
+        svg += '<line class="' + gridClass + '" x1="' + pad.left + '" y1="' + py + '" x2="' + (W - pad.right) + '" y2="' + py + '"></line>';
+        svg += '<text class="' + axisTextClass + '" x="' + (pad.left + _yTOff) + '" y="' + (py + 4) + '" text-anchor="end">' + escapeHtml(energyGraphFormatNumber(gy, _yDig)) + '</text>';
+      }
+      if (y2Dom) {
+        for (var ri = 0; ri <= 4; ri += 1) {
+          var rv = y2Dom[0] + (y2Dom[1] - y2Dom[0]) * ri / 4;
+          svg += '<text class="' + axisTextClass + ' right" x="' + (W - pad.right + 8) + '" y="' + (y2F(rv) + 4) + '" text-anchor="start">' + escapeHtml(energyGraphFormatNumber(rv, 4)) + '</text>';
+        }
+        svg += '<line class="' + axisLineClass + '" x1="' + (W - pad.right) + '" y1="' + pad.top + '" x2="' + (W - pad.right) + '" y2="' + (H - pad.bottom) + '"></line>';
+      }
+      for (var xi = 0; xi <= 4; xi += 1) {
+        var xv = xDom[0] + (xDom[1] - xDom[0]) * xi / 4;
+        var xA = xi === 0 ? "start" : xi === 4 ? "end" : "middle";
+        var xP = xi === 0 ? xF(xv) + 2 : xi === 4 ? xF(xv) - 2 : xF(xv);
+        svg += '<text class="' + axisTextClass + '" x="' + xP + '" y="' + (H - pad.bottom + _xTOff) + '" text-anchor="' + xA + '">' + escapeHtml(energyGraphFormatNumber(xv, _xDig)) + '</text>';
+      }
+      svg += '<line class="' + axisLineClass + '" x1="' + pad.left + '" y1="' + pad.top + '" x2="' + pad.left + '" y2="' + (H - pad.bottom) + '"></line>';
+      svg += '<line class="' + axisLineClass + '" x1="' + pad.left + '" y1="' + (H - pad.bottom) + '" x2="' + (W - pad.right) + '" y2="' + (H - pad.bottom) + '"></line>';
+      if (cfg.unitLabels) {
+        if (cfg.unitLabels.left) svg += '<text class="' + axisTextClass + '" x="' + (pad.left - 8) + '" y="' + (pad.top - 9) + '" text-anchor="end">' + escapeHtml(cfg.unitLabels.left) + '</text>';
+        if (cfg.unitLabels.right) svg += '<text class="' + axisTextClass + ' right" x="' + (W - pad.right + 8) + '" y="' + (pad.top - 9) + '" text-anchor="start">' + escapeHtml(cfg.unitLabels.right) + '</text>';
+      }
+    })();
+  }
   /* plot group */
   svg += '<g ' + plotAttr + ' clip-path="url(#' + cfg.clipId + ')">';
-  /* area + line */
+  /* zero baseline (inside plot group) */
+  if (cfg.zeroBaseline && yDom[0] < 0 && yDom[1] > 0) {
+    var y0 = pad.top + (1 - ((0 - yDom[0]) / (yDom[1] - yDom[0] || 1))) * Ph;
+    svg += '<line class="' + zeroLineClass + '" x1="' + pad.left + '" y1="' + y0 + '" x2="' + (W - pad.right) + '" y2="' + y0 + '"></line>';
+  }
+  /* threshold lines (inside plot group) */
+  if (cfg.thresholds) {
+    for (var ti = 0; ti < cfg.thresholds.length; ti += 1) {
+      var th = cfg.thresholds[ti];
+      svg += '<line class="' + th.lineClass + '" x1="' + pad.left + '" y1="' + th.y + '" x2="' + (W - pad.right) + '" y2="' + th.y + '"></line>';
+      svg += '<text class="' + th.labelClass + '" x="' + (W - pad.right - 4) + '" y="' + (th.y - 4) + '" text-anchor="end">' + escapeHtml(th.label) + '</text>';
+    }
+  }
+  /* multi-series paths (optimization) */
+  if (cfg.series) {
+    for (var si = 0; si < cfg.series.length; si += 1) {
+      var s = cfg.series[si];
+      if (s.linePath) svg += '<path class="' + s.cssClass + '" d="' + s.linePath + '"></path>';
+    }
+  }
+  /* area + line (single series, energy) */
   if (cfg.areaPath) svg += '<path class="energy-area" d="' + cfg.areaPath + '"></path>';
   if (cfg.linePath) svg += '<path class="energy-line" d="' + cfg.linePath + '"></path>';
-  /* selected frame guide line + halo */
-  if (cfg.selectedGuide) {
-    svg += '<line class="energy-current-line" x1="' + cfg.selectedGuide.x + '" y1="' + cfg.selectedGuide.y1 + '" x2="' + cfg.selectedGuide.x + '" y2="' + cfg.selectedGuide.y2 + '"></line>';
+  /* selected guide (inside plot group for energy, after overlay for optimization) */
+  if (cfg.selectedInPlotGroup !== false && cfg.selectedGuide) {
+    svg += '<line class="' + selectedLineClass + '" x1="' + cfg.selectedGuide.x + '" y1="' + cfg.selectedGuide.y1 + '" x2="' + cfg.selectedGuide.x + '" y2="' + cfg.selectedGuide.y2 + '"></line>';
     if (cfg.selectedHalo) {
       svg += '<circle class="energy-point-halo" cx="' + cfg.selectedHalo.cx + '" cy="' + cfg.selectedHalo.cy + '" r="11"></circle>';
       svg += '<circle class="energy-point selected" cx="' + cfg.selectedHalo.cx + '" cy="' + cfg.selectedHalo.cy + '" r="6"></circle>';
@@ -8142,21 +8208,47 @@ function energyChartBuildSvg(cfg) {
   var pts = cfg.points || [];
   for (var pi = 0; pi < pts.length; pi += 1) {
     var p = pts[pi];
-    svg += '<g data-energy-frame="' + escapeHtml(String(p.frameIndex)) + '" data-energy-node="' + escapeHtml(String(p.nodeId)) + '">';
-    svg += '<circle class="energy-point' + p.cssClass + '" cx="' + p.cx + '" cy="' + p.cy + '" r="' + p.r + '"></circle>';
-    svg += '</g>';
+    if (p.title != null) {
+      /* optimization style: attrs on circle, with <title> tooltip */
+      svg += '<circle class="' + pointClass + p.cssClass + '" data-energy-frame="' + escapeHtml(String(p.frameIndex)) + '" data-energy-node="' + escapeHtml(String(p.nodeId)) + '" cx="' + p.cx + '" cy="' + p.cy + '" r="' + p.r + '"';
+      if (p.fill) svg += ' fill="' + p.fill + '"';
+      if (p.stroke) svg += ' stroke="' + p.stroke + '"';
+      if (p.strokeWidth) svg += ' stroke-width="' + p.strokeWidth + '"';
+      svg += '><title>' + escapeHtml(p.title) + '</title></circle>';
+    } else {
+      /* energy style: g wrapper */
+      svg += '<g data-energy-frame="' + escapeHtml(String(p.frameIndex)) + '" data-energy-node="' + escapeHtml(String(p.nodeId)) + '">';
+      svg += '<circle class="' + pointClass + p.cssClass + '" cx="' + p.cx + '" cy="' + p.cy + '" r="' + p.r + '"></circle>';
+      svg += '</g>';
+    }
   }
-  /* annotation layer (delegates to shared renderer) */
-  svg += renderTrajectoryAnnotations(cfg.annotationOpts);
+  /* annotation layer (inside plot group for energy) */
+  if (cfg.annotationsInPlotGroup !== false) {
+    svg += renderTrajectoryAnnotations(cfg.annotationOpts);
+  }
   svg += '</g>';
   /* overlay */
   svg += '<g ' + overlayAttr + '></g>';
-  /* axes */
-  svg += '<g ' + axesAttr + '>';
-  svg += energyGraphAxesMarkup(xDom, yDom, geom);
-  svg += '<text class="' + axisTextClass + '" x="' + ((pad.left + W - pad.right) / 2) + '" y="' + (H - 17) + '" text-anchor="middle">' + escapeHtml(cfg.xLabel) + ' (' + escapeHtml(cfg.xUnit) + ')</text>';
-  svg += '<text class="' + axisTextClass + '" x="18" y="' + (H / 2) + '" text-anchor="middle" transform="rotate(-90 18 ' + (H / 2) + ')">' + escapeHtml(cfg.yLabel) + ' (' + escapeHtml(cfg.yUnit) + ')</text>';
-  svg += '</g>';
+  /* selected guide (after overlay for optimization) */
+  if (cfg.selectedInPlotGroup === false && cfg.selectedGuide) {
+    svg += '<line class="' + selectedLineClass + '" x1="' + cfg.selectedGuide.x + '" y1="' + cfg.selectedGuide.y1 + '" x2="' + cfg.selectedGuide.x + '" y2="' + cfg.selectedGuide.y2 + '"></line>';
+  }
+  /* annotation layer (after overlay for optimization) */
+  if (cfg.annotationsInPlotGroup === false) {
+    svg += renderTrajectoryAnnotations(cfg.annotationOpts);
+  }
+  /* axes after plot group (energy) */
+  if (!cfg.axesBeforePlot) {
+    svg += '<g ' + axesAttr + '>';
+    svg += energyGraphAxesMarkup(xDom, yDom, geom);
+    svg += '<text class="' + axisTextClass + '" x="' + ((pad.left + W - pad.right) / 2) + '" y="' + (H - 17) + '" text-anchor="middle">' + escapeHtml(cfg.xLabel) + ' (' + escapeHtml(cfg.xUnit) + ')</text>';
+    svg += '<text class="' + axisTextClass + '" x="18" y="' + (H / 2) + '" text-anchor="middle" transform="rotate(-90 18 ' + (H / 2) + ')">' + escapeHtml(cfg.yLabel) + ' (' + escapeHtml(cfg.yUnit) + ')</text>';
+    svg += '</g>';
+  }
+  /* bottom label (optimization) */
+  if (cfg.bottomLabel) {
+    svg += '<text class="' + axisTextClass + '" x="' + ((pad.left + W - pad.right) / 2) + '" y="' + (H - 8) + '" text-anchor="middle">' + escapeHtml(cfg.bottomLabel) + '</text>';
+  }
   svg += '</svg>';
   return svg;
 }
@@ -8916,6 +9008,7 @@ function optimizationGraphScheduleRender() {
 }
 
 function optimizationGraphBuildSvg(data, view) {
+  /* Data processing: view config, series groups, domains, coordinate mappers. */
   var nodes = Array.isArray(data && data.nodes) ? data.nodes : [];
   if (!nodes.length) return '<div class="energy-empty"><div><strong>暂无优化周期</strong><span>优化数据正在生成。</span></div></div>';
   var cfg = optimizationViewConfig(view);
@@ -8936,7 +9029,6 @@ function optimizationGraphBuildSvg(data, view) {
   var baseY = optimizationSeriesExtent(groups.left, nodeX) || [0, 1];
   var baseY2 = hasRight ? optimizationSeriesExtent(groups.right, nodeX) : null;
   if (view === "force" || view === "energy_derivative" || view === "force_derivative") {
-    // Convergence metrics and derivatives read against a zero baseline.
     if (baseY[0] > 0) baseY[0] = 0;
     if (baseY2 && baseY2[0] > 0) baseY2[0] = 0;
     if (view !== "force" && baseY[1] < 0) baseY[1] = 0;
@@ -8952,52 +9044,10 @@ function optimizationGraphBuildSvg(data, view) {
   function yFor(value) { return pad.top + (1 - ((value - yDom[0]) / (yDom[1] - yDom[0] || 1))) * Ph; }
   function y2For(value) { var dom = y2Dom || [0, 1]; return pad.top + (1 - ((value - dom[0]) / (dom[1] - dom[0] || 1))) * Ph; }
 
-  var svg = '<svg class="optimization-chart-svg' + (energyGraphState.optimizationTool === "box" ? " mode-box" : "") + '" data-optimization-chart viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + escapeHtml(cfg.title) + '">';
-  svg += '<defs><clipPath id="optimization-plot-clip"><rect x="' + pad.left + '" y="' + pad.top + '" width="' + Pw + '" height="' + Ph + '"/></clipPath></defs>';
-  var leftDigits = view === "energy" ? 2 : 5;
-  for (var gi = 0; gi <= 4; gi += 1) {
-    var gy = yDom[0] + (yDom[1] - yDom[0]) * gi / 4;
-    var py = yFor(gy);
-    svg += '<line class="optimization-gridline" x1="' + pad.left + '" y1="' + py + '" x2="' + (W - pad.right) + '" y2="' + py + '"></line>';
-    svg += '<text class="optimization-axis-text" x="' + (pad.left - 8) + '" y="' + (py + 4) + '" text-anchor="end">' + escapeHtml(energyGraphFormatNumber(gy, leftDigits)) + '</text>';
-  }
-  if (hasRight && y2Dom) {
-    for (var ri = 0; ri <= 4; ri += 1) {
-      var rv = y2Dom[0] + (y2Dom[1] - y2Dom[0]) * ri / 4;
-      svg += '<text class="optimization-axis-text right" x="' + (W - pad.right + 8) + '" y="' + (y2For(rv) + 4) + '" text-anchor="start">' + escapeHtml(energyGraphFormatNumber(rv, 4)) + '</text>';
-    }
-    svg += '<line class="optimization-axis" x1="' + (W - pad.right) + '" y1="' + pad.top + '" x2="' + (W - pad.right) + '" y2="' + (H - pad.bottom) + '"></line>';
-  }
-  for (var xi = 0; xi <= 4; xi += 1) {
-    var xv = xDom[0] + (xDom[1] - xDom[0]) * xi / 4;
-    var xAnchor = xi === 0 ? "start" : xi === 4 ? "end" : "middle";
-    var xPos = xi === 0 ? xFor(xv) + 2 : xi === 4 ? xFor(xv) - 2 : xFor(xv);
-    svg += '<text class="optimization-axis-text" x="' + xPos + '" y="' + (H - pad.bottom + 20) + '" text-anchor="' + xAnchor + '">' + escapeHtml(energyGraphFormatNumber(xv, 0)) + '</text>';
-  }
-  svg += '<line class="optimization-axis" x1="' + pad.left + '" y1="' + pad.top + '" x2="' + pad.left + '" y2="' + (H - pad.bottom) + '"></line><line class="optimization-axis" x1="' + pad.left + '" y1="' + (H - pad.bottom) + '" x2="' + (W - pad.right) + '" y2="' + (H - pad.bottom) + '"></line>';
-  var leftUnit = String((groups.left[0] || {}).unit || "");
-  if (leftUnit) svg += '<text class="optimization-axis-text" x="' + (pad.left - 8) + '" y="' + (pad.top - 9) + '" text-anchor="end">' + escapeHtml(leftUnit) + '</text>';
-  if (hasRight) {
-    var rightUnit = String((groups.right[0] || {}).unit || "");
-    if (rightUnit) svg += '<text class="optimization-axis-text right" x="' + (W - pad.right + 8) + '" y="' + (pad.top - 9) + '" text-anchor="start">' + escapeHtml(rightUnit) + '</text>';
-  }
-  svg += '<g data-optimization-plot clip-path="url(#optimization-plot-clip)">';
-  if (view !== "energy" && view !== "force" && yDom[0] < 0 && yDom[1] > 0) {
-    svg += '<line class="optimization-zero-line" x1="' + pad.left + '" y1="' + yFor(0) + '" x2="' + (W - pad.right) + '" y2="' + yFor(0) + '"></line>';
-  }
-  if (view === "force") {
-    var thresholds = (data.metadata || {}).thresholds || {};
-    [{ key: "rms_gradient", label: "RMS 阈值", disp: false }, { key: "max_gradient", label: "MAX 阈值", disp: false },
-     { key: "rms_displacement", label: "RMS 位移阈值", disp: true }, { key: "max_displacement", label: "MAX 位移阈值", disp: true }].forEach(function(item) {
-      var dom = item.disp ? y2Dom : yDom;
-      if (!dom) return;
-      var threshold = energyGraphValue(thresholds[item.key]);
-      if (threshold === null || threshold < dom[0] || threshold > dom[1]) return;
-      var ty = item.disp ? y2For(threshold) : yFor(threshold);
-      svg += '<line class="optimization-threshold' + (item.disp ? ' disp' : '') + '" x1="' + pad.left + '" y1="' + ty + '" x2="' + (W - pad.right) + '" y2="' + ty + '"></line><text class="optimization-threshold-label' + (item.disp ? ' disp' : '') + '" x="' + (W - pad.right - 4) + '" y="' + (ty - 4) + '" text-anchor="end">' + escapeHtml(item.label) + '</text>';
-    });
-  }
-  function drawSeries(series, axisFor) {
+  /* Build series paths + per-point configs. */
+  var seriesCfgs = [];
+  var allPoints = [];
+  function buildSeries(series, axisFor) {
     var values = Array.isArray(series.values) ? series.values : [];
     var color = OPTIMIZATION_SERIES_COLORS[series.id] || "#55aaff";
     var path = [];
@@ -9007,25 +9057,60 @@ function optimizationGraphBuildSvg(data, view) {
       if (nodeX[index] < xDom[0] || nodeX[index] > xDom[1]) return;
       path.push((path.length ? "L" : "M") + xFor(nodeX[index]) + " " + axisFor(y));
     });
-    if (path.length) svg += '<path class="' + optimizationSeriesClass(String(series.id)) + '" d="' + path.join(" ") + '"></path>';
+    if (path.length) seriesCfgs.push({ linePath: path.join(" "), cssClass: optimizationSeriesClass(String(series.id)) });
     values.forEach(function(value, index) {
       var y = energyGraphValue(value);
       if (y === null || nodeX[index] == null || !nodes[index]) return;
       if (nodeX[index] < xDom[0] || nodeX[index] > xDom[1]) return;
       var isSelected = String(nodes[index].id) === String(energyGraphState.selectedNodeId);
-      svg += '<circle class="optimization-point' + (isSelected ? ' selected' : '') + '" data-energy-frame="' + escapeHtml(String(nodes[index].frame_index)) + '" data-energy-node="' + escapeHtml(String(nodes[index].id)) + '" cx="' + xFor(nodeX[index]) + '" cy="' + axisFor(y) + '" r="' + (isSelected ? '5.5' : '3.5') + '" fill="' + color + '" stroke="#0b0f14" stroke-width="1.2"><title>' + escapeHtml(String(nodes[index].label || "Cycle")) + ' · ' + escapeHtml(String(series.label || series.id)) + ': ' + escapeHtml(energyGraphFormatNumber(y, 6)) + ' ' + escapeHtml(String(series.unit || "")) + '</title></circle>';
+      allPoints.push({
+        cx: xFor(nodeX[index]), cy: axisFor(y),
+        r: isSelected ? '5.5' : '3.5',
+        cssClass: isSelected ? ' selected' : '',
+        frameIndex: nodes[index].frame_index, nodeId: nodes[index].id,
+        fill: color, stroke: "#0b0f14", strokeWidth: "1.2",
+        title: String(nodes[index].label || "Cycle") + ' · ' + String(series.label || series.id) + ': ' + energyGraphFormatNumber(y, 6) + ' ' + String(series.unit || ""),
+      });
     });
   }
-  groups.left.forEach(function(series) { drawSeries(series, yFor); });
-  groups.right.forEach(function(series) { drawSeries(series, y2For); });
-  svg += '</g>';
-  svg += '<g data-optimization-overlay></g>';
+  groups.left.forEach(function(series) { buildSeries(series, yFor); });
+  groups.right.forEach(function(series) { buildSeries(series, y2For); });
+
+  /* Zero baseline. */
+  var zeroBaseline = (view !== "energy" && view !== "force" && yDom[0] < 0 && yDom[1] > 0);
+
+  /* Threshold lines (force view). */
+  var thresholdsCfg = null;
+  if (view === "force") {
+    var thresholdData = (data.metadata || {}).thresholds || {};
+    var thresholdItems = [
+      { key: "rms_gradient", label: "RMS 阈值", disp: false }, { key: "max_gradient", label: "MAX 阈值", disp: false },
+      { key: "rms_displacement", label: "RMS 位移阈值", disp: true }, { key: "max_displacement", label: "MAX 位移阈值", disp: true },
+    ];
+    thresholdItems.forEach(function(item) {
+      var dom = item.disp ? y2Dom : yDom;
+      if (!dom) return;
+      var threshold = energyGraphValue(thresholdData[item.key]);
+      if (threshold === null || threshold < dom[0] || threshold > dom[1]) return;
+      var ty = item.disp ? y2For(threshold) : yFor(threshold);
+      if (!thresholdsCfg) thresholdsCfg = [];
+      thresholdsCfg.push({
+        y: ty, label: item.label,
+        lineClass: "optimization-threshold" + (item.disp ? " disp" : ""),
+        labelClass: "optimization-threshold-label" + (item.disp ? " disp" : ""),
+      });
+    });
+  }
+
+  /* Selected guide. */
+  var selectedGuide = null;
   var selectedNode = energyGraphSelectedNode(data);
   if (selectedNode && energyGraphValue(selectedNode.x) !== null) {
     var sx = Number(selectedNode.x);
-    if (sx >= xDom[0] && sx <= xDom[1]) svg += '<line class="optimization-current-line" x1="' + xFor(sx) + '" y1="' + pad.top + '" x2="' + xFor(sx) + '" y2="' + (H - pad.bottom) + '"></line>';
+    if (sx >= xDom[0] && sx <= xDom[1]) selectedGuide = { x: xFor(sx), y1: pad.top, y2: H - pad.bottom };
   }
-  /* ── Candidate annotations for OPT chart ── */
+
+  /* Annotations: merge backend + projected candidates. */
   var optAnnotations = Array.isArray(data.annotations) ? data.annotations : [];
   var optProjected = energyProjectCandidatesAsAnnotations(data);
   var optMerged = optAnnotations.concat(optProjected);
@@ -9038,19 +9123,61 @@ function optimizationGraphBuildSvg(data, view) {
     optDeduped.push(a);
   });
   var optAnnMode = view === "energy" ? "full" : "flag";
-  svg += renderTrajectoryAnnotations({
-    annotations: optDeduped,
-    nodes: nodes,
-    xFor: xFor,
-    yFor: yFor,
+
+  /* Unit labels. */
+  var leftUnit = String((groups.left[0] || {}).unit || "");
+  var rightUnit = hasRight ? String((groups.right[0] || {}).unit || "") : "";
+  var unitLabels = (leftUnit || rightUnit) ? { left: leftUnit || undefined, right: rightUnit || undefined } : null;
+
+  /* SVG open tag. */
+  var svgOpen = '<svg class="optimization-chart-svg' + (energyGraphState.optimizationTool === "box" ? " mode-box" : "") + '" data-optimization-chart viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + escapeHtml(cfg.title) + '">';
+
+  /* Build SVG via unified core. */
+  return energyChartBuildSvg({
+    svgOpen: svgOpen,
+    clipId: "optimization-plot-clip",
     geom: geom,
-    xDom: xDom,
-    mode: optAnnMode,
-    selectedNodeId: String(energyGraphState.selectedNodeId || ""),
-    selectionLocked: false,
+    xDom: xDom, yDom: yDom, y2Dom: y2Dom,
+    /* axes */
+    axesBeforePlot: true,
+    gridClass: "optimization-gridline",
+    axisTextClass: "optimization-axis-text",
+    axisLineClass: "optimization-axis",
+    yDigits: view === "energy" ? 2 : 5,
+    xDigits: 0,
+    yTickXOffset: -8,
+    xTickYOffset: 20,
+    unitLabels: unitLabels,
+    /* plot content */
+    plotAttr: "data-optimization-plot",
+    series: seriesCfgs,
+    zeroBaseline: zeroBaseline,
+    zeroLineClass: "optimization-zero-line",
+    thresholds: thresholdsCfg,
+    /* selected */
+    selectedGuide: selectedGuide,
+    selectedLineClass: "optimization-current-line",
+    selectedInPlotGroup: false,
+    /* points */
+    points: allPoints,
+    pointClass: "optimization-point",
+    /* annotations */
+    annotationOpts: {
+      annotations: optDeduped,
+      nodes: nodes,
+      xFor: xFor,
+      yFor: yFor,
+      geom: geom,
+      xDom: xDom,
+      mode: optAnnMode,
+      selectedNodeId: String(energyGraphState.selectedNodeId || ""),
+      selectionLocked: false,
+    },
+    annotationsInPlotGroup: false,
+    /* overlay + bottom label */
+    overlayAttr: "data-optimization-overlay",
+    bottomLabel: "优化周期",
   });
-  svg += '<text class="optimization-axis-text" x="' + ((pad.left + W - pad.right) / 2) + '" y="' + (H - 8) + '" text-anchor="middle">优化周期</text></svg>';
-  return svg;
 }
 
 function optimizationQualityBadge(data) {
