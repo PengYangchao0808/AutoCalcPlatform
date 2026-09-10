@@ -911,7 +911,7 @@ def _resolve_batchoptimize(task_root: Path, job_id: str, warnings: list[str], it
                 cycle_count = len(cycles)
 
                 entry_id = batch_entry_id(child_id)
-                geometry_ref = f"WORK/03_OPT/batch/{child_id}/optimize/cycles/{last_geom_ref}" if last_geom_ref else None
+                geometry_ref = f"WORK/03_OPT/batch/{child_id}/optimize/{last_geom_ref}" if last_geom_ref else None
 
                 entry = StructureViewerEntry(
                     id=entry_id,

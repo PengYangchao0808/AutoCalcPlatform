@@ -932,7 +932,8 @@ def _make_batch_task(
             for cycle in traj_payload.get("cycles", []):
                 geom_ref = cycle.get("geometry_ref", "")
                 if geom_ref:
-                    cycle_file = cycles_dir / geom_ref
+                    cycle_file = traj_dir / geom_ref
+                    cycle_file.parent.mkdir(parents=True, exist_ok=True)
                     cycle_file.write_text("1\ntest\nH 0 0 0\n", encoding="utf-8")
     return tmp_path
 
@@ -943,7 +944,7 @@ def _optimization_trajectory(*, status: str = "completed",
         "schema_version": "optimization_trajectory_v1",
         "status": status,
         "cycles": cycles or [
-            {"cycle": 1, "energy_hartree": -1.0, "geometry_ref": "cycle_001.xyz",
+            {"cycle": 1, "energy_hartree": -1.0, "geometry_ref": "cycles/cycle_0001.xyz",
              "rms_gradient": 1e-4, "max_gradient": 3e-4},
         ],
     }
@@ -1012,9 +1013,9 @@ class TestBatchResolver:
         traj = _optimization_trajectory(
             status="failed",
             cycles=[
-                {"cycle": 1, "energy_hartree": -1.0, "geometry_ref": "cycle_001.xyz",
+                {"cycle": 1, "energy_hartree": -1.0, "geometry_ref": "cycles/cycle_0001.xyz",
                  "rms_gradient": 1e-4, "max_gradient": 3e-4},
-                {"cycle": 2, "energy_hartree": -1.1, "geometry_ref": "cycle_002.xyz",
+                {"cycle": 2, "energy_hartree": -1.1, "geometry_ref": "cycles/cycle_0002.xyz",
                  "rms_gradient": 5e-5, "max_gradient": 1e-4},
             ],
         )
@@ -1029,6 +1030,7 @@ class TestBatchResolver:
         assert entry.source.kind == "last_valid_cycle"
         assert "failed-last-frame" in entry.badges
         assert "未收敛" in entry.label or "最后有效结构" in entry.label
+        assert entry.source.geometry_ref == "WORK/03_OPT/batch/item_001/optimize/cycles/cycle_0002.xyz"
 
     def test_batch_failed_entry_not_labeled_optimized(self, tmp_path: Path):
         """Failed entry label does NOT say 'optimized'."""
@@ -1138,3 +1140,27 @@ class TestBatchResolver:
             task, job_id="j1", workflow="BatchOptimize", job_status="completed"
         )
         assert payload.entries[0].vibrations.available is False
+
+    def test_batch_failed_empty_geometry_ref_no_crash(self, tmp_path: Path):
+        """Last cycle with empty/missing geometry_ref -> entry built with geometry_ref=None, no crash."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        traj = _optimization_trajectory(
+            status="failed",
+            cycles=[
+                {"cycle": 1, "energy_hartree": -1.0, "geometry_ref": "cycles/cycle_0001.xyz",
+                 "rms_gradient": 1e-4, "max_gradient": 3e-4},
+                {"cycle": 2, "energy_hartree": -1.1, "geometry_ref": "",
+                 "rms_gradient": 5e-5, "max_gradient": 1e-4},
+            ],
+        )
+        task = _make_batch_task(
+            tmp_path, products=[], trajectories={"item_001": traj}
+        )
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        assert len(payload.entries) == 1
+        entry = payload.entries[0]
+        assert entry.source.kind == "last_valid_cycle"
+        assert entry.source.geometry_ref is None
