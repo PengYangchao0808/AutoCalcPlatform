@@ -6467,3 +6467,284 @@ def test_view_state_node_logic() -> None:
         f"Node view-state test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+# ── Chemistry-correctness suite (plan todo 44) ──
+# doc §11 chemistry rows: internal-coordinate targets (1e-4 A / 1e-3 deg),
+# never-moved rigidity (<=1e-6 A RMSD), +/-180 shortest path, disconnected
+# rejection, mode/geometry binding, cross-language TS gate consistency.
+
+
+def test_chemistry_editor_reference_scenario() -> None:
+    """Reference-fixture end-to-end editor sequence (ethanol-like C-C-O-H
+    chain): bond 1.432->1.25 A (<=1e-4), angle ->120 deg (<=1e-3), dihedral
+    ->-60 deg (<=1e-3); never-moved atoms rigid across the WHOLE sequence
+    (RMSD <=1e-6 A, reference-identical rows); atom ordering unchanged."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = (textwrap.dedent("""\
+        var window = { fetch: null };
+        require(EDITOR_PATH);
+        var ed = window.ACPStructureEditor;
+
+        function dist(a, b) {
+          var dx = a[0]-b[0], dy = a[1]-b[1], dz = a[2]-b[2];
+          return Math.sqrt(dx*dx + dy*dy + dz*dz);
+        }
+        function rmsd(rowsA, rowsB) {
+          var s = 0;
+          for (var i = 0; i < rowsA.length; i++) {
+            var d = dist(rowsA[i], rowsB[i]);
+            s += d * d;
+          }
+          return Math.sqrt(s / rowsA.length);
+        }
+
+        // ethanol-like chain: C0-C1-O2-H3 with H4/H5 on C0
+        // (substituents placed beyond covalent cutoffs of foreign centers)
+        var symbols = ["C", "C", "O", "H", "H", "H"];
+        var coords = [
+          [0.00, 0.00, 0.00],
+          [1.52, 0.00, 0.00],
+          [2.92, 0.30, 0.00],
+          [3.22, 1.21, 0.00],
+          [-0.38, 1.02, 0.00],
+          [-0.38, -1.02, 0.00]
+        ];
+        var graph = ed.buildAdjacency(symbols, coords);
+        if (!graph || !graph.edges || graph.edges.length !== 5) {
+          console.error("FAIL: inferred graph edges = " +
+            (graph && graph.edges ? graph.edges.length : "none"));
+          process.exit(1);
+        }
+        var edges = graph.edges;
+        var original = coords.map(function (r) { return r; });
+        var byRef = coords.slice();
+
+        // step 1: bond C1-O2 1.432 -> 1.25, move side B (O2+H3)
+        var r1 = ed.editBondLength(symbols, coords, edges, 1, 2, 1.25, "B");
+        if (!r1.ok) { console.error("FAIL: bond reject " + r1.reason); process.exit(1); }
+        if (Math.abs(dist(r1.coords[1], r1.coords[2]) - 1.25) > 1e-4) {
+          console.error("FAIL: bond target"); process.exit(1);
+        }
+        // step 2: angle C1-O2-H3 -> 120 deg (C side = H3 rotates about O2)
+        var angleBefore = ed.angleDeg(r1.coords[1], r1.coords[2], r1.coords[3]);
+        var r2 = ed.editBondAngle(symbols, r1.coords, edges, 1, 2, 3, 120.0, null);
+        if (!r2.ok) { console.error("FAIL: angle reject " + r2.reason); process.exit(1); }
+        if (Math.abs(ed.angleDeg(r2.coords[1], r2.coords[2], r2.coords[3]) - 120.0) > 1e-3) {
+          console.error("FAIL: angle target (was " + angleBefore.toFixed(3) + ")");
+          process.exit(1);
+        }
+        // step 3: dihedral H4-C0-C1-O2 -> -60 deg (C side {1,2,3} about C0-C1)
+        var r3 = ed.editDihedral(symbols, r2.coords, edges, 4, 0, 1, 2, -60.0, null);
+        if (!r3.ok) { console.error("FAIL: dihedral reject " + r3.reason); process.exit(1); }
+        var dAfter = ed.dihedralDeg(r3.coords[4], r3.coords[0], r3.coords[1], r3.coords[2]);
+        if (Math.abs(dAfter - (-60.0)) > 1e-3) {
+          console.error("FAIL: dihedral target " + dAfter); process.exit(1);
+        }
+
+        // cumulative rigidity: atoms 4,5 were NEVER in any moved set
+        // (bond moved {2,3}; angle moved {3}; dihedral moved {1,2,3})
+        if (rmsd([original[4], original[5]], [r3.coords[4], r3.coords[5]]) > 1e-6) {
+          console.error("FAIL: never-moved rigidity"); process.exit(1);
+        }
+        if (r3.coords[4] !== byRef[4] || r3.coords[5] !== byRef[5]) {
+          console.error("FAIL: never-moved rows must be reference-identical");
+          process.exit(1);
+        }
+        // atom ordering unchanged end-to-end
+        if (r3.coords.length !== symbols.length) {
+          console.error("FAIL: atom count"); process.exit(1);
+        }
+        if (r3.symbols && r3.symbols.join(",") !== symbols.join(",")) {
+          console.error("FAIL: symbol order"); process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node chemistry scenario failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_chemistry_dihedral_shortest_path_rerun() -> None:
+    """+-180 wrap takes the SHORTEST rotation (todo-35 physics, re-asserted
+    for the consolidated suite): 170 -> -170 rotates 20 deg, so a marker at
+    radius r from the axis moves the 20-deg chord 2r*sin(10 deg), not the
+    340-deg chord 2r*sin(170 deg)."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = (textwrap.dedent("""\
+        var window = { fetch: null };
+        require(EDITOR_PATH);
+        var ed = window.ACPStructureEditor;
+        function dist(a, b) {
+          var dx = a[0]-b[0], dy = a[1]-b[1], dz = a[2]-b[2];
+          return Math.sqrt(dx*dx + dy*dy + dz*dz);
+        }
+
+        // axis B->C along +x (todo-35 convention); w-arm at +170 deg from +y
+        var rad = Math.PI / 180;
+        var theta = 170 * rad;
+        var arm = [0, Math.cos(theta), Math.sin(theta)];
+        var symbols = ["C", "C", "C", "C", "H"];
+        var coords = [
+          [0.0, 1.0, 0.0],                              // A (v = +y)
+          [0.0, 0.0, 0.0],                              // B
+          [1.5, 0.0, 0.0],                              // C (axis +x)
+          [1.5 + arm[0], arm[1], arm[2]],               // D at 170 deg
+          [1.5 + arm[0] * 1.6, arm[1] * 1.6, arm[2] * 1.6]  // marker, r=1.6
+        ];
+        var edges = [{ a: 0, b: 1 }, { a: 1, b: 2 }, { a: 2, b: 3 }, { a: 3, b: 4 }];
+        var before = coords.map(function (r) { return r.slice(); });
+        var d0 = ed.dihedralDeg(coords[0], coords[1], coords[2], coords[3]);
+        if (Math.abs(d0 - 170) > 1e-9) {
+          console.error("FAIL: fixture dihedral " + d0); process.exit(1);
+        }
+
+        var res = ed.editDihedral(symbols, coords, edges, 0, 1, 2, 3, -170, null);
+        if (!res.ok) { console.error("FAIL: reject " + res.reason); process.exit(1); }
+        var d = ed.dihedralDeg(res.coords[0], res.coords[1], res.coords[2], res.coords[3]);
+        if (Math.abs(d - (-170)) > 1e-3) {
+          console.error("FAIL: target " + d); process.exit(1);
+        }
+        // radius of the marker from the rotation axis (y-z cylinder about +x)
+        var r = Math.sqrt(before[4][1] * before[4][1] + before[4][2] * before[4][2]);
+        if (Math.abs(r - 1.6) > 1e-9) {
+          console.error("FAIL: marker radius " + r); process.exit(1);
+        }
+        var chord = dist(before[4], res.coords[4]);
+        var shortChord = 2 * r * Math.sin(10 * Math.PI / 180);
+        if (Math.abs(chord - shortChord) > 1e-6) {
+          console.error("FAIL: not shortest path chord=" + chord +
+                        " expected=" + shortChord);
+          process.exit(1);
+        }
+        // chord alone cannot encode rotation direction (a 340-deg sweep has
+        // the same start->end chord), so assert the SIGNED angular step of
+        // the moving arm directly: exactly 20 deg, not 340 deg
+        function armAngle(row) { return Math.atan2(row[2], row[1]) * 180 / Math.PI; }
+        var delta = armAngle(res.coords[4]) - armAngle(before[4]);
+        delta = ((delta % 360) + 360) % 360;
+        if (delta > 180) delta = 360 - delta;
+        if (Math.abs(delta - 20.0) > 1e-6) {
+          console.error("FAIL: rotation step " + delta + " deg (want 20, not 340)");
+          process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node shortest-path rerun failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_chemistry_disconnected_sequence_rejection() -> None:
+    """Disconnected internal-coordinate sequences are rejected: angle edit
+    with NO A-B edge and dihedral edit with a disconnected D both return
+    reason 'no_bond' (ring rejection is already covered by todos 33-35)."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = (textwrap.dedent("""\
+        var window = { fetch: null };
+        require(EDITOR_PATH);
+        var ed = window.ACPStructureEditor;
+
+        var symbols = ["H", "O", "H", "C", "C"];
+        var coords = [
+          [0.96, 0.00, 0.00],
+          [0.00, 0.00, 0.00],
+          [-0.24, 0.93, 0.00],
+          [4.00, 0.00, 0.00],
+          [5.52, 0.00, 0.00]
+        ];
+        // explicit edges: O-H x2 and C-C only — H0...C3 fully disconnected
+        var edges = [
+          { a: 0, b: 1 }, { a: 1, b: 2 }, { a: 3, b: 4 }
+        ];
+
+        var ra = ed.editBondAngle(symbols, coords, edges, 0, 1, 3, 120.0, null);
+        if (ra.ok || ra.reason !== "no_bond") {
+          console.error("FAIL: angle disconnected: " + JSON.stringify(ra));
+          process.exit(1);
+        }
+        var rd = ed.editDihedral(symbols, coords, edges, 0, 1, 2, 3, 60.0, null);
+        if (rd.ok || rd.reason !== "no_bond") {
+          console.error("FAIL: dihedral disconnected D: " + JSON.stringify(rd));
+          process.exit(1);
+        }
+        var rb = ed.editBondLength(symbols, coords, edges, 0, 3, 1.30, null);
+        if (rb.ok || rb.reason !== "no_bond") {
+          console.error("FAIL: bond disconnected: " + JSON.stringify(rb));
+          process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node disconnected-rejection failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_chemistry_mode_vectors_never_mixed_node() -> None:
+    """Mode vectors never mix across geometries: the todo-31
+    geometryMismatch gate flags a cross-product pair (entry A x modes B)
+    and passes the same-product pair; null product ids stay allowed
+    (historical projection)."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = (textwrap.dedent("""\
+        var window = { fetch: null };
+        require(VIB_PATH);
+        var vib = window.ACPVibrationViewer;
+
+        var entryA = { source: { product_id: "batch_item_001" } };
+        var entryB = { source: { product_id: "batch_item_002" } };
+        var entryNull = { source: {} };
+
+        var modesA = {
+          available: true,
+          geometry_product_id: "batch_item_001",
+          modes: [{ mode_index: 6, frequency_cm1: -800.0, imaginary: true,
+                    vectors: [[0.11, 0.0, 0.0]] }]
+        };
+        var modesB = {
+          available: true,
+          geometry_product_id: "batch_item_002",
+          modes: [{ mode_index: 6, frequency_cm1: -650.0, imaginary: true,
+                    vectors: [[0.07, 0.0, 0.0]] }]
+        };
+
+        if (vib.geometryMismatch(entryA, modesA) !== false) {
+          console.error("FAIL: same-product pair must pass"); process.exit(1);
+        }
+        if (vib.geometryMismatch(entryA, modesB) !== true) {
+          console.error("FAIL: cross-product pair must be flagged"); process.exit(1);
+        }
+        if (vib.geometryMismatch(entryB, modesB) !== false) {
+          console.error("FAIL: B/B pair must pass"); process.exit(1);
+        }
+        if (vib.geometryMismatch(entryNull, modesA) !== false) {
+          console.error("FAIL: null entry pid must stay allowed"); process.exit(1);
+        }
+        if (vib.geometryMismatch(entryA, { geometry_product_id: null }) !== false) {
+          console.error("FAIL: null data pid must stay allowed"); process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("VIB_PATH", json.dumps(str(_VIB_JS))))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node mode-binding test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from acp.results.orca_parser import OrcaCalculation, OrcaOutputParser
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "structure_viewer"
 FULL_MODES_FIXTURE = FIXTURES / "orca_freq_modes_full.txt"
+_VIB_JS_MODULE_PATH = Path(__file__).resolve().parents[1] / "frontend" / "js" / "vibration_viewer.js"
 TRUNCATED_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "orca_optfreq_real_sections.txt"
 
 
@@ -996,3 +998,130 @@ class TestParserMatrix:
         # non-zero modes must agree between the two structures
         for mode in (6, 7, 8):
             assert calc.frequencies[mode - 6] == pytest.approx(calc.mode_frequencies[mode])
+
+
+# ── Chemistry-correctness suite (plan todo 44) ──
+# doc §11 chemistry rows: mode/geometry binding + TS imaginary-count
+# consistency across the BatchOptimize gate, the frontend tsJudgment
+# helper, and the IRC identity gate.
+
+
+class TestChemistryModeBinding:
+    """Mode vectors never mix across geometries (product-level + gate)."""
+
+    def test_mode_products_from_different_geometries_not_interchangeable(self) -> None:
+        """Two products built from DIFFERENT calc parses carry distinct mode
+        sets and distinct vector payloads — a cross-geometry substitution is
+        detectable (and the endpoint binding is per-entry, see todo 24)."""
+        from acp.results.frequencies import build_normal_modes_product
+
+        text = FULL_MODES_FIXTURE.read_text(encoding="utf-8")
+        calc_a = OrcaOutputParser().parse_text(text)
+        # perturb: different frequencies -> a genuinely different geometry's data
+        calc_b = OrcaOutputParser().parse_text(
+            text.replace("-797.72", "-812.40")
+                .replace("1411.55", "1399.10")
+                .replace("0.010000", "0.013000")  # mode-6 displacement differs too
+        )
+
+        prod_a = build_normal_modes_product(
+            calc_a, geometry_product_id="batch_item_001", atom_count=3
+        )
+        prod_b = build_normal_modes_product(
+            calc_b, geometry_product_id="batch_item_002", atom_count=3
+        )
+
+        assert prod_a["geometry_product_id"] != prod_b["geometry_product_id"]
+        freqs_a = {m["mode_index"]: m["frequency_cm1"] for m in prod_a["modes"]}
+        freqs_b = {m["mode_index"]: m["frequency_cm1"] for m in prod_b["modes"]}
+        assert freqs_a[6] != freqs_b[6]
+        assert freqs_a[8] != freqs_b[8]
+        vec_a_6 = prod_a["modes"][6]["vectors"]
+        vec_b_6 = prod_b["modes"][6]["vectors"]
+        assert vec_a_6 != vec_b_6
+        # every mode keeps exactly its own product binding
+        for mode in prod_a["modes"]:
+            assert prod_a["geometry_product_id"] == "batch_item_001"
+        for mode in prod_b["modes"]:
+            assert prod_b["geometry_product_id"] == "batch_item_002"
+
+
+class TestChemistryTsGateConsistency:
+    """TS imaginary counts consistent across gates (cross-language)."""
+
+    _CASES: list[list[float]] = [
+        [-30.0, 100.0],                # k=0 significant (small negative above cutoff)
+        [-797.72, -30.0, 100.0],       # k=1
+        [-60.0, -800.0, 50.0],         # k=2
+        [-50.0, 120.0],                # exact-threshold boundary (at-or-below counts)
+        [-49.9999, 120.0],             # just above the threshold
+    ]
+
+    def _frontend_ts_judgment(self, freqs: list[float]) -> tuple[int, str]:
+        import shutil
+        import subprocess
+
+        if not shutil.which("node"):
+            pytest.skip("node not available")
+        script = (
+            "var window = { fetch: null };\n"
+            f'require({json.dumps(str(_VIB_JS_MODULE_PATH))});\n'
+            "var vib = window.ACPVibrationViewer;\n"
+            f"var modes = {json.dumps([{'frequency_cm1': f} for f in freqs])};\n"
+            "var r = vib.tsJudgment(modes, -50.0);\n"
+            "console.log(JSON.stringify(r));\n"
+        )
+        result = subprocess.run(
+            ["node", "-e", script], capture_output=True, text=True, timeout=10, check=True
+        )
+        parsed = json.loads(result.stdout.strip().splitlines()[-1])
+        return int(parsed["significantCount"]), str(parsed["hint"])
+
+    def test_frontend_judgment_matches_batch_gate(self) -> None:
+        """For every case (k=0,1,2 + boundary): the frontend tsJudgment
+        significantCount equals the backend _count_significant_imaginary and
+        the first_order hint coincides exactly with the batch gate's
+        count==1 validity (both at-or-below -50 cm-1)."""
+        from acp.calculations.batch.engine import (
+            _count_significant_imaginary,
+            _ts_frequency_judgment,
+        )
+
+        for freqs in self._CASES:
+            py_count = _count_significant_imaginary(freqs, cutoff=-50.0)
+            py_valid = _ts_frequency_judgment(freqs, cutoff=-50.0)[0]
+            js_count, js_hint = self._frontend_ts_judgment(freqs)
+            assert js_count == py_count, f"{freqs}: JS {js_count} != PY {py_count}"
+            assert (js_hint == "first_order") == py_valid, freqs
+
+    def test_irc_gate_shared_cutoff_and_documented_divergence(self) -> None:
+        """IRC classify_ts_identity shares the -50 cm-1 magnitude cutoff but
+        counts ALL negative frequencies (its imaginary_frequencies input is
+        expected pre-filtered to negatives). Where the inputs coincide the
+        gates agree; the [-60, -40] pair is a DOCUMENTED divergence: batch
+        ignores the small-magnitude -40 (valid TS), IRC rejects the second
+        negative outright (invalid) — different gates by design."""
+        from acp.calculations.batch.engine import _ts_frequency_judgment
+        from acp.calculations.irc.validation import classify_ts_identity
+
+        # single strong imaginary: both gates valid
+        assert _ts_frequency_judgment([-797.72, 100.0], cutoff=-50.0)[0] is True
+        irc = classify_ts_identity([-797.72, 100.0])
+        assert irc.valid is True
+        assert irc.imaginary_count == 1
+
+        # no significant imaginary: both gates invalid
+        assert _ts_frequency_judgment([-30.0, 100.0], cutoff=-50.0)[0] is False
+        irc_small = classify_ts_identity([-30.0, 100.0])
+        assert irc_small.valid is False  # count==1 but above cutoff
+        assert "above cutoff" in "; ".join(irc_small.messages)
+
+        # boundary: exactly -50.0 is significant in the shared cutoff semantics
+        assert _ts_frequency_judgment([-50.0], cutoff=-50.0)[0] is True
+        assert classify_ts_identity([-50.0]).valid is True
+
+        # documented divergence: two negatives, only one below the cutoff
+        assert _ts_frequency_judgment([-60.0, -40.0], cutoff=-50.0)[0] is True
+        irc_two = classify_ts_identity([-60.0, -40.0])
+        assert irc_two.valid is False
+        assert irc_two.imaginary_count == 2
