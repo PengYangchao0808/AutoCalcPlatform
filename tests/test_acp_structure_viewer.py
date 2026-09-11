@@ -883,12 +883,12 @@ class TestPesResolver:
 
 
 def _batch_product(*, item_id: str, tag: str = "INT", profile: str = "opt_freq",
-                   path: str | None = None) -> dict:
+                   path: str | None = None, label: str | None = None) -> dict:
     """Build a result_manifest product dict for a batch item."""
     p = path or f"structures/{item_id}__TAG_{tag}__optimized.xyz"
     return {
         "id": f"batch_{item_id}",
-        "label": f"{item_id} ({tag}, {profile})",
+        "label": label if label is not None else f"{item_id} ({tag}, {profile})",
         "path": p,
         "kind": "structure",
     }
@@ -2576,3 +2576,118 @@ class TestF2BoltzmannAlignment:
         assert weights == [0.7, 0.3]
         assert abs(sum(weights) - 1.0) < 1e-6
         assert not any("malformed" in w for w in payload.warnings)
+
+
+# ---------------------------------------------------------------------------
+# Display-label normalization: formal results must never read as "input"
+# ---------------------------------------------------------------------------
+
+
+class TestDisplayLabelNormalization:
+    """Formal-result labels carrying the legacy ``input`` prefix (BatchOptimize
+    CLI items) are rewritten at projection time; meaningful labels and
+    calculation-input structures stay untouched."""
+
+    def test_batch_formal_result_label_not_input(self, tmp_path: Path):
+        """'input (TS, opt_freq)' -> 'TS 优化结果'; INT -> '优化结果'."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [
+            _batch_product(item_id="item_001", tag="TS", label="input (TS, opt_freq)"),
+            _batch_product(item_id="item_002", tag="INT", label="input (INT, opt_freq)"),
+        ]
+        task = _make_batch_task(tmp_path, products=products)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        by_id = {e.id: e for e in payload.entries}
+        ts_label = by_id["batch_item_001"].label
+        int_label = by_id["batch_item_002"].label
+        assert not ts_label.lower().startswith("input")
+        assert not int_label.lower().startswith("input")
+        assert "优化" in ts_label or "TS" in ts_label
+        assert ts_label == "TS 优化结果"
+        assert int_label == "优化结果"
+
+    def test_batch_formal_result_label_preserved_when_meaningful(self, tmp_path: Path):
+        """A meaningful item name ('mol_A ...') passes through unchanged."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [
+            _batch_product(item_id="item_001", tag="TS", label="mol_A (TS, opt_freq)"),
+        ]
+        task = _make_batch_task(tmp_path, products=products)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        assert payload.entries[0].label == "mol_A (TS, opt_freq)"
+
+    def test_legacy_formal_result_label_normalized(self, tmp_path: Path):
+        """Legacy manifest product 'input (something)' -> generic '计算结果'."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        manifest = {
+            "version": 2,
+            "task_id": "",
+            "workflow": "nmr",
+            "status": "completed",
+            "products": [
+                {"id": "p1", "label": "input (something)",
+                 "path": "conformers/0001.xyz", "kind": "structure"},
+            ],
+        }
+        task = _make_legacy_task(tmp_path, result_manifest=manifest)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="nmr", job_status="completed"
+        )
+        label = payload.entries[0].label
+        assert not label.lower().startswith("input")
+        assert label == "计算结果"
+
+    def test_calculation_input_label_not_normalized(self, tmp_path: Path):
+        """calculation_input entries keep their label — only formal results are
+        rewritten, and the simple-resolver input fallback is untouched."""
+        from acp.results.structure_viewer import (
+            _normalize_display_label,
+            build_structure_viewer_payload,
+        )
+
+        assert (
+            _normalize_display_label("input.xyz", "calculation_input", "singlepoint")
+            == "input.xyz"
+        )
+
+        input_xyz = "3\nwater\nO 0 0 0\nH 0 0 1\nH 0 1 0\n"
+        task = _make_simple_task(
+            tmp_path, workflow="singlepoint", products=[], input_xyz=input_xyz
+        )
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="singlepoint", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert entry.source.kind == "calculation_input"
+        assert entry.label == "单点能"
+
+    def test_default_entry_prefers_formal_result(self, tmp_path: Path):
+        """With a formal structure product AND input.xyz both available, the
+        formal result wins priority and is the default selection."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [
+            {"id": "step_0_singlepoint_structure", "label": "input (singlepoint)",
+             "path": "WORK/03_SP/optimized.xyz", "kind": "structure"},
+            {"id": "step_0_singlepoint_energy", "label": "singlepoint (step 0) — energy",
+             "path": "", "kind": "energy_report", "metadata": {"energy_hartree": -76.5}},
+        ]
+        input_xyz = "3\nwater\nO 0 0 0\nH 0 0 1\nH 0 1 0\n"
+        task = _make_simple_task(
+            tmp_path, workflow="singlepoint", products=products, input_xyz=input_xyz
+        )
+        assert (task / "input.xyz").is_file(), "calculation-input source must exist"
+
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="singlepoint", job_status="completed"
+        )
+        formal_ids = [e.id for e in payload.entries if e.source.kind == "formal_result"]
+        assert formal_ids, "formal result must be present when a structure product exists"
+        assert payload.default_entry_id == formal_ids[0]

@@ -63,7 +63,6 @@
     NO_ENTRY: "\u672a\u9009\u62e9\u7ed3\u6784",                     // 未选择结构
     NO_ENTRY_HINT: "\u8bf7\u4ece\u5de6\u4fa7\u5217\u8868\u9009\u62e9\u4e00\u4e2a\u7ed3\u6784", // 请从左侧列表选择一个结构
     REFRESH: "\u5237\u65b0",                                         // 刷新
-    LIST_TITLE: "\u7ed3\u6784\u5217\u8868",                         // 结构列表
     INSPECTOR_TITLE: "\u68c0\u67e5\u5668",                           // 检查器
     SOURCE: "\u6765\u6e90",                                           // 来源
     STATUS: "\u72b6\u6001",                                           // 状态
@@ -120,6 +119,22 @@
     PERF_PARTIAL_LIST: "\u2026\u663e\u793a\u90e8\u5206",                   // …显示部分
     PERF_SAMPLED: "\u5df2\u62bd\u6837\u663e\u793a",                         // 已抽样显示
     VIEW_RESTORED_MEASUREMENTS: "\u6062\u590d\u7684\u6d4b\u91cf",           // 恢复的测量
+    SWITCHER_CONFORMER: "\u6784\u8c61",                                       // 构象
+    SWITCHER_CANDIDATE: "\u5019\u9009",                                       // 候选
+    SWITCHER_BATCH_ITEM: "\u9879\u76ee",                                      // 项目
+    SWITCHER_UNCONFIRMED: "\u672a\u786e\u8ba4",                              // 未确认
+    SWITCHER_FILTER_PLACEHOLDER: "\u7b5b\u9009\u2026",                        // 筛选…
+    SWITCHER_HAS_IMAG: "\u6709\u865a\u9891",                                  // 有虚频
+    TOGGLE_RESULT: "\u7ed3\u679c",                                             // 结果
+    TOGGLE_INPUT: "\u521d\u59cb",                                               // 初始
+    OVERLAY_COMPARE: "\u53e0\u5408\u6bd4\u8f83",                              // 叠合比较
+    STRIP_TOGGLE_SHOW: "\u6784\u8c61\u6761",                                  // 构象条
+    SUMMARY_BAR: "\u7ed3\u679c\u6458\u8981",                                  // 结果摘要
+    INPUT_RESULT_TOGGLE: "\u8f93\u5165/\u7ed3\u679c\u5207\u6362",             // 输入/结果切换
+    STRIP_LABEL: "\u6784\u8c61\u5217\u8868",                                  // 构象列表
+    SWITCHER_LABEL: "\u5207\u6362\u6761\u76ee",                               // 切换条目
+    DRAWER_CLOSE: "\u5173\u95ed",                                              // 关闭
+    DRAWER_MORE: "\u66f4\u591a\u64cd\u4f5c",                                  // 更多操作
   };
 
   /**
@@ -301,6 +316,16 @@
     _abortController: null,
   };
 
+  var _activeSwitcherDropdown = null;
+  var _activeSwitcherOverlay = null;
+  var _stripExpanded = false;
+  var _activeDrawerId = null;
+  var _drawerTrigger = null;
+  var _switcherActiveIdx = -1;
+  var _switcherEntries = [];
+  var _switcherAnchor = null;
+  var _drawerContentCache = {};
+
   /**
    * Apply a catalog response to the state object.  Pure-ish: mutates the
    * supplied state but performs no I/O and is deterministic for a given input.
@@ -434,9 +459,18 @@
     structureViewerState.selectionOrigin = origin || "user";
     renderStructureViewer();
     renderInspector();
-    stopIrcPlayback(); /* entry switch ends playback (todo-30 ordering spirit) */
-    clearOverlay(); /* entry switch clears the overlay second model */
+    _syncStripActive();
+    stopIrcPlayback();
+    clearOverlay();
+    closeAllDrawers();
     loadSelectedGeometry();
+    var savedDrawer = _getDrawerPersist(structureViewerState.jobId, entryId);
+    if (savedDrawer) {
+      _defer(function () { openDrawer(savedDrawer); });
+    }
+    if (typeof window !== "undefined" && typeof window._energyGraphSyncFromStructure === "function") {
+      try { window._energyGraphSyncFromStructure(entryId); } catch (_) { /* sync is best-effort */ }
+    }
     return structureViewerState.selectionToken;
   }
 
@@ -907,6 +941,10 @@
       return;
     }
     /* self-stop when the structure tab is hidden (tab-switch teardown) */
+    if (typeof activeViewerTab !== "undefined" && activeViewerTab !== "structure") {
+      stopIrcPlayback();
+      return;
+    }
     var layout = (typeof document !== "undefined") ? document.getElementById("sv-layout") : null;
     if (layout && layout.offsetWidth === 0 && layout.offsetHeight === 0) {
       stopIrcPlayback();
@@ -1025,49 +1063,107 @@
     if (typeof document === "undefined") return;
     var bar = document.getElementById("structure-playback-bar");
     if (!bar) return;
-    var hasIrc = _ircEntries("forward").length > 0 || _ircEntries("reverse").length > 0;
     var degraded = !!geometryStore.lastLoadDegraded;
-    if (!hasIrc && !degraded) { bar.style.display = "none"; bar.textContent = ""; return; }
+    if (!degraded) { bar.style.display = "none"; bar.textContent = ""; return; }
     bar.style.display = "";
     bar.textContent = "";
-    if (degraded) {
-      var degradeNotice = document.createElement("span");
-      degradeNotice.className = "sv-notice sv-notice-degrade";
-      degradeNotice.setAttribute("aria-live", "polite");
-      degradeNotice.textContent = _t("structure.perf.degrade_notice", STR.PERF_DEGRADE_NOTICE);
-      bar.appendChild(degradeNotice);
-    }
+    var degradeNotice = document.createElement("span");
+    degradeNotice.className = "sv-notice sv-notice-degrade";
+    degradeNotice.setAttribute("aria-live", "polite");
+    degradeNotice.textContent = _t("structure.perf.degrade_notice", STR.PERF_DEGRADE_NOTICE);
+    bar.appendChild(degradeNotice);
+    _renderIrcFrameController();
+  }
+
+  function _renderIrcFrameController() {
+    if (typeof document === "undefined") return;
+    var controller = document.getElementById("frame-controller");
+    if (!controller) return;
+    var fwdEntries = _ircEntries("forward");
+    var revEntries = _ircEntries("reverse");
+    var hasIrc = fwdEntries.length > 0 || revEntries.length > 0;
     if (!hasIrc) return;
+
+    controller.style.display = "flex";
+    controller.innerHTML = "";
+
     var title = document.createElement("span");
     title.className = "sv-playback-title";
+    title.style.fontSize = "11px";
+    title.style.color = "var(--sv-text-tertiary)";
     title.textContent = _t("structure.irc.title", STR.IRC_TITLE);
-    bar.appendChild(title);
+    controller.appendChild(title);
+
     if (ircPlayback.playing) {
       var status = document.createElement("span");
-      status.className = "sv-playback-status";
-      var dirLabel = ircPlayback.direction === "forward"
-        ? _t("structure.irc.play_forward", STR.IRC_PLAY_FORWARD)
-        : _t("structure.irc.play_reverse", STR.IRC_PLAY_REVERSE);
-      var progress = ircPlayback.loading
-        ? _t("structure.irc.loading", STR.IRC_LOADING)
-        : " " + Math.min(ircPlayback.frameIndex + 1, ircPlayback.frames.length) + "/" + ircPlayback.frames.length;
-      status.textContent = _t("structure.irc.playing", STR.IRC_PLAYING) + " · " + dirLabel + progress;
-      if (ircPlayback.sampledTotal) {
-        status.textContent += " · " + _t("structure.perf.sampled", STR.PERF_SAMPLED) +
-          " " + ircPlayback.frames.length + "/" + ircPlayback.sampledTotal;
-      }
-      bar.appendChild(status);
-      bar.appendChild(_playbackBtn("structure.irc.stop", STR.IRC_STOP, function () {
-        stopIrcPlayback();
-      }));
-    } else {
-      bar.appendChild(_playbackBtn("structure.irc.play_forward", STR.IRC_PLAY_FORWARD, function () {
-        playIrcPath("forward");
-      }));
-      bar.appendChild(_playbackBtn("structure.irc.play_reverse", STR.IRC_PLAY_REVERSE, function () {
-        playIrcPath("reverse");
-      }));
+      status.className = "frame-info";
+      status.textContent = _t("structure.irc.playing", STR.IRC_PLAYING);
+      controller.appendChild(status);
     }
+
+    var prevBtn = document.createElement("button");
+    prevBtn.className = "frame-btn";
+    prevBtn.innerHTML = '<svg viewBox="0 0 20 20" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2"><path d="M12 4L6 10L12 16"/></svg>';
+    prevBtn.addEventListener("click", function () {
+      if (ircPlayback.playing) {
+        stopIrcPlayback();
+      }
+    });
+    controller.appendChild(prevBtn);
+
+    var info = document.createElement("span");
+    info.className = "frame-info";
+    if (ircPlayback.playing && !ircPlayback.loading) {
+      info.textContent = Math.min(ircPlayback.frameIndex + 1, ircPlayback.frames.length) + " / " + ircPlayback.frames.length;
+    } else if (ircPlayback.loading) {
+      info.textContent = _t("structure.irc.loading", STR.IRC_LOADING);
+    } else {
+      var totalIrcFrames = fwdEntries.length + revEntries.length;
+      info.textContent = "0 / " + totalIrcFrames;
+    }
+    controller.appendChild(info);
+
+    var nextBtn = document.createElement("button");
+    nextBtn.className = "frame-btn";
+    nextBtn.innerHTML = '<svg viewBox="0 0 20 20" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2"><path d="M8 4L14 10L8 16"/></svg>';
+    nextBtn.addEventListener("click", function () {
+      if (ircPlayback.playing) {
+        stopIrcPlayback();
+      }
+    });
+    controller.appendChild(nextBtn);
+
+    if (ircPlayback.playing) {
+      var stopBtn = document.createElement("button");
+      stopBtn.className = "frame-btn";
+      stopBtn.textContent = _t("structure.irc.stop", STR.IRC_STOP);
+      stopBtn.addEventListener("click", function () { stopIrcPlayback(); });
+      controller.appendChild(stopBtn);
+    } else {
+      if (fwdEntries.length > 0) {
+        var fwdBtn = document.createElement("button");
+        fwdBtn.className = "frame-btn";
+        fwdBtn.textContent = _t("structure.irc.play_forward", STR.IRC_PLAY_FORWARD);
+        fwdBtn.addEventListener("click", function () { playIrcPath("forward"); });
+        controller.appendChild(fwdBtn);
+      }
+      if (revEntries.length > 0) {
+        var revBtn = document.createElement("button");
+        revBtn.className = "frame-btn";
+        revBtn.textContent = _t("structure.irc.play_reverse", STR.IRC_PLAY_REVERSE);
+        revBtn.addEventListener("click", function () { playIrcPath("reverse"); });
+        controller.appendChild(revBtn);
+      }
+    }
+
+    var slider = document.createElement("input");
+    slider.type = "range";
+    slider.className = "frame-slider";
+    slider.min = "0";
+    slider.max = String(Math.max(ircPlayback.frames.length - 1, 0));
+    slider.value = String(Math.max(ircPlayback.frameIndex - 1, 0));
+    slider.disabled = !ircPlayback.playing || ircPlayback.loading;
+    controller.appendChild(slider);
   }
 
   /* ---- structure overlay + RMSD (todo 40) ---- */
@@ -1380,19 +1476,17 @@
    */
   function onJobSelected(jobId, opts) {
     opts = opts || {};
-    /* job switch: stop IRC playback first (todo-30 teardown call site),
-       then full vibration teardown — no running loop or stale arrows may
-       survive into the new job */
-    saveViewState(); /* job-switch teardown: keep the outgoing view */
+    saveViewState();
     stopIrcPlayback();
     clearOverlay();
+    closeAllDrawers();
     if (typeof window !== "undefined" && window.ACPVibrationViewer &&
         typeof window.ACPVibrationViewer.handleTeardown === "function") {
       window.ACPVibrationViewer.handleTeardown();
     }
+    _stripExpanded = _getStripExpanded(jobId);
     return loadStructureViewer(jobId, opts)
       .then(function () {
-        /* Auto-select default entry if payload loaded successfully */
         var state = structureViewerState;
         if (state.payload && state.payload.default_entry_id && !state.selectedEntryId) {
           selectEntry(state.payload.default_entry_id, "auto");
@@ -1647,67 +1741,476 @@
     return span;
   }
 
-  /* ---- render: structure list ---- */
+  /* ---- render: structure viewer (summary bar + bottom strip) ---- */
+
+  function _detectSwitcherKind(payload) {
+    if (!payload) return null;
+    var wf = String(payload.workflow || "").toLowerCase();
+    if (wf.indexOf("confsearch") >= 0 || wf.indexOf("conformer") >= 0 || wf.indexOf("ensemble") >= 0 || wf.indexOf("energy") >= 0 || wf.indexOf("xtbmd_censo") >= 0) return "conformer";
+    if (wf.indexOf("pessearch") >= 0 || wf.indexOf("pes") >= 0 || wf.indexOf("mechanism") >= 0) return "candidate";
+    if (wf.indexOf("batch") >= 0 || wf.indexOf("lowconfirm") >= 0 || wf.indexOf("highconfirm") >= 0) return "batch";
+    var entries = (payload && payload.entries) || [];
+    if (entries.length > 1) {
+      var hasBoltz = false, hasTsBadge = false, hasBatchSrc = false;
+      for (var i = 0; i < entries.length; i++) {
+        if (entries[i].boltzmann_weight != null) hasBoltz = true;
+        var badges = entries[i].badges || [];
+        for (var b = 0; b < badges.length; b++) {
+          if (badges[b] === "TS" || badges[b] === "INT") hasTsBadge = true;
+        }
+        if (entries[i].source && entries[i].source.kind === "formal_result" && entries[i].group_id && entries[i].group_id.indexOf("batch") >= 0) hasBatchSrc = true;
+      }
+      if (hasBoltz) return "conformer";
+      if (hasTsBadge && !hasBatchSrc) return "candidate";
+      if (hasBatchSrc) return "batch";
+    }
+    return null;
+  }
+
+  function _switcherLabel(kind, index, total) {
+    if (kind === "conformer") return _t("structure.switcher.conformer", STR.SWITCHER_CONFORMER) + " " + (index + 1) + "/" + total;
+    if (kind === "candidate") return _t("structure.switcher.candidate", STR.SWITCHER_CANDIDATE) + " " + (index + 1) + "/" + total;
+    if (kind === "batch") return _t("structure.switcher.batch_item", STR.SWITCHER_BATCH_ITEM) + " " + (index + 1) + "/" + total;
+    return (index + 1) + "/" + total;
+  }
+
+  function _closeSwitcherDropdown() {
+    if (_activeSwitcherDropdown) {
+      _activeSwitcherDropdown.remove();
+      _activeSwitcherDropdown = null;
+    }
+    if (_activeSwitcherOverlay) {
+      _activeSwitcherOverlay.remove();
+      _activeSwitcherOverlay = null;
+    }
+    if (_switcherAnchor) {
+      _switcherAnchor.setAttribute("aria-expanded", "false");
+      _switcherAnchor.focus();
+      _switcherAnchor = null;
+    }
+    _switcherActiveIdx = -1;
+    _switcherEntries = [];
+  }
+
+  function _openSwitcherDropdown(anchorEl, entries, kind) {
+    _closeSwitcherDropdown();
+    _switcherEntries = entries;
+    _switcherActiveIdx = -1;
+    _switcherAnchor = anchorEl;
+    anchorEl.setAttribute("aria-expanded", "true");
+    var dd = document.createElement("div");
+    dd.className = "sv-switcher-dropdown";
+    dd.setAttribute("role", "listbox");
+    dd.setAttribute("aria-label", _t("structure.switcher.label", STR.SWITCHER_LABEL));
+
+    var filterInput = document.createElement("input");
+    filterInput.className = "sv-switcher-filter";
+    filterInput.setAttribute("type", "text");
+    filterInput.setAttribute("placeholder", _t("structure.switcher.filter_placeholder", STR.SWITCHER_FILTER_PLACEHOLDER));
+    filterInput.setAttribute("aria-label", _t("structure.switcher.filter_placeholder", STR.SWITCHER_FILTER_PLACEHOLDER));
+    dd.appendChild(filterInput);
+
+    var list = document.createElement("div");
+    list.className = "sv-switcher-list";
+    dd.appendChild(list);
+
+    function _visibleItems() {
+      return list.querySelectorAll(".sv-switcher-item");
+    }
+
+    function _syncSwitcherFocus() {
+      var items = _visibleItems();
+      for (var si = 0; si < items.length; si++) {
+        items[si].classList.toggle("sv-switcher-focus", si === _switcherActiveIdx);
+        items[si].setAttribute("aria-selected", si === _switcherActiveIdx ? "true" : "false");
+      }
+      if (_switcherActiveIdx >= 0 && _switcherActiveIdx < items.length) {
+        if (typeof items[_switcherActiveIdx].scrollIntoView === "function") {
+          items[_switcherActiveIdx].scrollIntoView({ block: "nearest" });
+        }
+      }
+    }
+
+    function renderItems(filter) {
+      list.innerHTML = "";
+      var lf = (filter || "").toLowerCase();
+      for (var i = 0; i < entries.length; i++) {
+        var e = entries[i];
+        var label = e.label || e.id;
+        if (lf && label.toLowerCase().indexOf(lf) < 0 && String(i + 1).indexOf(lf) < 0) continue;
+        var item = document.createElement("div");
+        item.className = "sv-switcher-item";
+        item.setAttribute("role", "option");
+        item.setAttribute("aria-selected", "false");
+        if (e.id === structureViewerState.selectedEntryId) {
+          item.className += " active";
+          item.setAttribute("aria-selected", "true");
+        }
+
+        var rank = document.createElement("span");
+        rank.className = "sv-switcher-item-rank";
+        rank.textContent = String(i + 1);
+        item.appendChild(rank);
+
+        var lbl = document.createElement("span");
+        lbl.className = "sv-switcher-item-label";
+        var badges = e.badges || [];
+        var badgePrefix = "";
+        for (var b = 0; b < badges.length; b++) {
+          if (badges[b] === "TS" || badges[b] === "INT") badgePrefix = "[" + badges[b] + "] ";
+        }
+        if (kind === "candidate" && badges.indexOf("\u672a\u786e\u8ba4") >= 0) {
+          badgePrefix += "[" + _t("structure.switcher.unconfirmed", STR.SWITCHER_UNCONFIRMED) + "] ";
+        }
+        if (kind === "batch" && e.status === "failed") {
+          badgePrefix += "[" + _t("structure.failed", STR.FAILED) + "] ";
+        }
+        if (kind === "batch" && e.vibrations && e.vibrations.imaginary_count > 0) {
+          badgePrefix += "[" + _t("structure.switcher.has_imag", STR.SWITCHER_HAS_IMAG) + "] ";
+        }
+        lbl.textContent = badgePrefix + label;
+        item.appendChild(lbl);
+
+        if (e.relative_energy_kcal != null) {
+          var energy = document.createElement("span");
+          energy.className = "sv-switcher-item-energy";
+          energy.textContent = (e.relative_energy_kcal > 0 ? "+" : "") + e.relative_energy_kcal.toFixed(1) + " kcal/mol";
+          item.appendChild(energy);
+        }
+
+        if (e.boltzmann_weight != null) {
+          var bar = document.createElement("div");
+          bar.className = "sv-switcher-item-boltz";
+          var fill = document.createElement("div");
+          fill.className = "sv-switcher-item-boltz-fill";
+          fill.style.width = Math.round(e.boltzmann_weight * 100) + "%";
+          bar.appendChild(fill);
+          item.appendChild(bar);
+        }
+
+        (function (entryId) {
+          item.addEventListener("click", function () {
+            _closeSwitcherDropdown();
+            selectEntry(entryId, "switcher");
+          });
+        })(e.id);
+        list.appendChild(item);
+      }
+      _switcherActiveIdx = -1;
+    }
+
+    renderItems("");
+    filterInput.addEventListener("input", function () {
+      renderItems(filterInput.value);
+    });
+
+    filterInput.addEventListener("keydown", function (ev) {
+      var items = _visibleItems();
+      if (ev.key === "ArrowDown") {
+        ev.preventDefault();
+        _switcherActiveIdx = Math.min(_switcherActiveIdx + 1, items.length - 1);
+        _syncSwitcherFocus();
+      } else if (ev.key === "ArrowUp") {
+        ev.preventDefault();
+        _switcherActiveIdx = Math.max(_switcherActiveIdx - 1, 0);
+        _syncSwitcherFocus();
+      } else if (ev.key === "Enter") {
+        ev.preventDefault();
+        if (_switcherActiveIdx >= 0 && _switcherActiveIdx < items.length) {
+          var activeItem = items[_switcherActiveIdx];
+          _closeSwitcherDropdown();
+          var clickEvt = new MouseEvent("click", { bubbles: true });
+          activeItem.dispatchEvent(clickEvt);
+        }
+      } else if (ev.key === "Escape") {
+        ev.preventDefault();
+        _closeSwitcherDropdown();
+      } else if (ev.key === "Tab") {
+        _closeSwitcherDropdown();
+      }
+    });
+
+    list.addEventListener("keydown", function (ev) {
+      var items = _visibleItems();
+      if (ev.key === "ArrowDown") {
+        ev.preventDefault();
+        _switcherActiveIdx = Math.min(_switcherActiveIdx + 1, items.length - 1);
+        _syncSwitcherFocus();
+      } else if (ev.key === "ArrowUp") {
+        ev.preventDefault();
+        _switcherActiveIdx = Math.max(_switcherActiveIdx - 1, 0);
+        _syncSwitcherFocus();
+      } else if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        if (_switcherActiveIdx >= 0 && _switcherActiveIdx < items.length) {
+          var activeItem = items[_switcherActiveIdx];
+          _closeSwitcherDropdown();
+          var clickEvt = new MouseEvent("click", { bubbles: true });
+          activeItem.dispatchEvent(clickEvt);
+        }
+      } else if (ev.key === "Escape") {
+        ev.preventDefault();
+        _closeSwitcherDropdown();
+      } else if (ev.key === "Home") {
+        ev.preventDefault();
+        _switcherActiveIdx = 0;
+        _syncSwitcherFocus();
+      } else if (ev.key === "End") {
+        ev.preventDefault();
+        _switcherActiveIdx = items.length - 1;
+        _syncSwitcherFocus();
+      }
+    });
+
+    var rect = anchorEl.getBoundingClientRect();
+    dd.style.left = Math.max(0, rect.left - 8) + "px";
+    document.body.appendChild(dd);
+
+    var ddRect = dd.getBoundingClientRect();
+    if (ddRect.right > window.innerWidth) {
+      dd.style.left = Math.max(0, window.innerWidth - ddRect.width - 8) + "px";
+    }
+
+    var overlay = document.createElement("div");
+    overlay.style.cssText = "position:fixed;inset:0;z-index:119;";
+    overlay.addEventListener("mousedown", function () { _closeSwitcherDropdown(); });
+    overlay.setAttribute("tabindex", "-1");
+    document.body.appendChild(overlay);
+    _activeSwitcherOverlay = overlay;
+
+    _activeSwitcherDropdown = dd;
+    filterInput.focus();
+  }
+
+  function _findCalculationInputEntry(payload) {
+    var entries = (payload && payload.entries) || [];
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].source && entries[i].source.kind === "calculation_input") return entries[i];
+    }
+    return null;
+  }
+
+  function _inputResultKey(jobId) {
+    return viewStateStore.NS + "inputResult." + (jobId || "");
+  }
+
+  function _getInputResultChoice(jobId) {
+    var raw = _storageGet(_inputResultKey(jobId));
+    return raw === "input" ? "input" : "result";
+  }
+
+  function _setInputResultChoice(jobId, choice) {
+    _storageSet(_inputResultKey(jobId), choice);
+  }
+
+  function _drawerPersistKey(jobId, entryId) {
+    return viewStateStore.NS + "drawer." + (jobId || "") + ":" + (entryId || "");
+  }
+
+  function _getDrawerPersist(jobId, entryId) {
+    return _storageGet(_drawerPersistKey(jobId, entryId));
+  }
+
+  function _setDrawerPersist(jobId, entryId, drawerId) {
+    if (drawerId) {
+      _storageSet(_drawerPersistKey(jobId, entryId), drawerId);
+    } else {
+      _storageRemove(_drawerPersistKey(jobId, entryId));
+    }
+  }
+
+  function _stripExpandedKey(jobId) {
+    return viewStateStore.NS + "stripExpanded." + (jobId || "");
+  }
+
+  function _getStripExpanded(jobId) {
+    return _storageGet(_stripExpandedKey(jobId)) === "true";
+  }
+
+  function _setStripExpanded(jobId, expanded) {
+    _storageSet(_stripExpandedKey(jobId), expanded ? "true" : "false");
+  }
 
   /**
-   * Render the structure list panel from state.payload.
-   * Groups section rendered only when >1 entry or a named group exists.
-   * Single-entry payloads hide the list panel entirely.
+   * Render the structure viewer from state.payload.
+   * Populates the summary bar with selected entry info and the bottom strip
+   * with compact entry items for multi-entry payloads.
    */
   function renderStructureViewer() {
     if (typeof document === "undefined") return;
-    var listHeader = document.getElementById("sv-list-header");
-    var listBody = document.getElementById("sv-list-body");
+    var summaryBar = document.getElementById("sv-summary-bar");
+    var bottomStrip = document.getElementById("sv-bottom-strip");
     var layout = document.getElementById("sv-layout");
-    if (!listHeader || !listBody || !layout) return;
+    if (!summaryBar || !layout) return;
 
-    listBody.innerHTML = "";
+    if (!layout._svEscapeInit) {
+      layout._svEscapeInit = true;
+      layout.addEventListener("keydown", function (ev) {
+        if (ev.key === "Escape" && _activeDrawerId) {
+          ev.stopPropagation();
+          closeDrawer(_activeDrawerId);
+        }
+      });
+    }
 
     var payload = structureViewerState.payload;
     var entries = (payload && payload.entries) || [];
     var groups = (payload && payload.groups) || [];
+    var selectedId = structureViewerState.selectedEntryId;
+
+    /* find selected entry */
+    var entry = null;
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].id === selectedId) { entry = entries[i]; break; }
+    }
+
+    /* --- summary bar --- */
+    summaryBar.innerHTML = "";
+    summaryBar.setAttribute("role", "toolbar");
+    summaryBar.setAttribute("aria-label", _t("structure.summary_bar", STR.SUMMARY_BAR));
+    if (entry) {
+      var switcherKind = _detectSwitcherKind(payload);
+      var showSwitcher = switcherKind && entries.length > 1;
+      if (switcherKind === "batch" && entries.length <= 1) showSwitcher = false;
+
+      if (showSwitcher) {
+        var switcherLabel = document.createElement("span");
+        switcherLabel.className = "sv-summary-switcher";
+        switcherLabel.textContent = _switcherLabel(switcherKind, _entryIndex(entries, selectedId), entries.length) + " \u25bc";
+        switcherLabel.setAttribute("role", "button");
+        switcherLabel.setAttribute("tabindex", "0");
+        switcherLabel.setAttribute("aria-expanded", "false");
+        switcherLabel.setAttribute("aria-haspopup", "listbox");
+        switcherLabel.addEventListener("click", function (ev) {
+          if (_activeSwitcherDropdown) { _closeSwitcherDropdown(); return; }
+          _openSwitcherDropdown(switcherLabel, entries, switcherKind);
+        });
+        switcherLabel.addEventListener("keydown", function (ev) {
+          if (ev.key === "Enter" || ev.key === " ") {
+            ev.preventDefault();
+            if (_activeSwitcherDropdown) { _closeSwitcherDropdown(); } else { _openSwitcherDropdown(switcherLabel, entries, switcherKind); }
+          }
+        });
+        summaryBar.appendChild(switcherLabel);
+      }
+
+      var title = document.createElement("span");
+      title.className = "sv-summary-title";
+      title.textContent = _esc(entry.label || entry.id);
+      summaryBar.appendChild(title);
+
+      var badges = entry.badges || [];
+      for (var bi = 0; bi < badges.length; bi++) {
+        summaryBar.appendChild(_renderBadgeChip(badges[bi]));
+      }
+
+      if (entry.energy && entry.energy.value != null) {
+        var energySpan = document.createElement("span");
+        energySpan.className = "sv-summary-energy";
+        energySpan.textContent = _formatEnergy(entry.energy);
+        summaryBar.appendChild(energySpan);
+      }
+
+      if (entry.status) {
+        var statusBadge = document.createElement("span");
+        statusBadge.className = "sv-summary-badge";
+        statusBadge.style.background = entry.status === "completed" ? "rgba(56,193,114,0.12)" : "rgba(229,83,83,0.12)";
+        statusBadge.style.color = entry.status === "completed" ? "var(--sv-green)" : "var(--sv-red)";
+        statusBadge.textContent = entry.status === "completed" ? _t("structure.completed", STR.COMPLETED) : _t("structure.failed", STR.FAILED);
+        summaryBar.appendChild(statusBadge);
+      }
+
+      var inputEntry = _findCalculationInputEntry(payload);
+      if (inputEntry) {
+        var choice = _getInputResultChoice(structureViewerState.jobId);
+        var toggle = document.createElement("div");
+        toggle.className = "sv-input-result-toggle";
+        toggle.setAttribute("role", "radiogroup");
+        toggle.setAttribute("aria-label", _t("structure.input_result_toggle", STR.INPUT_RESULT_TOGGLE));
+        var btnResult = document.createElement("button");
+        btnResult.className = "sv-toggle-btn" + (choice === "result" ? " active" : "");
+        btnResult.setAttribute("role", "radio");
+        btnResult.setAttribute("aria-checked", choice === "result" ? "true" : "false");
+        btnResult.textContent = _t("structure.toggle_result", STR.TOGGLE_RESULT);
+        btnResult.addEventListener("click", function () {
+          _setInputResultChoice(structureViewerState.jobId, "result");
+          renderStructureViewer();
+        });
+        var btnInput = document.createElement("button");
+        btnInput.className = "sv-toggle-btn" + (choice === "input" ? " active" : "");
+        btnInput.setAttribute("role", "radio");
+        btnInput.setAttribute("aria-checked", choice === "input" ? "true" : "false");
+        btnInput.textContent = _t("structure.toggle_input", STR.TOGGLE_INPUT);
+        btnInput.addEventListener("click", function () {
+          _setInputResultChoice(structureViewerState.jobId, "input");
+          selectEntry(inputEntry.id, "input_toggle");
+        });
+        toggle.appendChild(btnResult);
+        toggle.appendChild(btnInput);
+        summaryBar.appendChild(toggle);
+
+        if (choice === "result" && entry.id !== inputEntry.id) {
+          var compareBtn = document.createElement("button");
+          compareBtn.className = "sv-overlay-compare-btn";
+          compareBtn.textContent = _t("structure.overlay_compare", STR.OVERLAY_COMPARE);
+          compareBtn.addEventListener("click", function () {
+            loadOverlay(entry.id, inputEntry.id);
+          });
+          summaryBar.appendChild(compareBtn);
+        }
+      }
+
+      if (entries.length > 1) {
+        var stripToggle = document.createElement("button");
+        stripToggle.className = "sv-strip-toggle";
+        stripToggle.setAttribute("aria-expanded", _stripExpanded ? "true" : "false");
+        stripToggle.setAttribute("aria-controls", "sv-bottom-strip");
+        stripToggle.textContent = _t("structure.strip_toggle_show", STR.STRIP_TOGGLE_SHOW);
+        stripToggle.addEventListener("click", function () {
+          var strip = document.getElementById("sv-bottom-strip");
+          if (!strip) return;
+          _stripExpanded = !_stripExpanded;
+          strip.classList.toggle("expanded", _stripExpanded);
+          stripToggle.setAttribute("aria-expanded", _stripExpanded ? "true" : "false");
+          _setStripExpanded(structureViewerState.jobId, _stripExpanded);
+        });
+        summaryBar.appendChild(stripToggle);
+      }
+
+      var detailsBtn = document.createElement("button");
+      detailsBtn.className = "sv-edit-btn";
+      detailsBtn.textContent = "\u8be6\u60c5";
+      detailsBtn.setAttribute("aria-expanded", _activeDrawerId === "source" ? "true" : "false");
+      detailsBtn.addEventListener("click", function () { openDrawer("source", detailsBtn); });
+      summaryBar.appendChild(detailsBtn);
+    }
 
     /* availability / error notices */
     if (structureViewerState.availability === "pending_fetch") {
-      var notice = document.createElement("div");
+      var notice = document.createElement("span");
       notice.className = "sv-notice sv-notice-pending";
+      notice.style.fontSize = "11px";
       notice.textContent = _t("structure.pending_fetch", STR.PENDING_FETCH) + "\u2014" + _t("structure.pending_retry", STR.PENDING_RETRY);
-      listBody.appendChild(notice);
+      summaryBar.appendChild(notice);
     }
     if (structureViewerState.error) {
-      var errNotice = document.createElement("div");
+      var errNotice = document.createElement("span");
       errNotice.className = "sv-notice sv-notice-error";
+      errNotice.style.fontSize = "11px";
       errNotice.textContent = _esc(structureViewerState.error);
-      listBody.appendChild(errNotice);
+      summaryBar.appendChild(errNotice);
     }
 
-    /* hide list for single-entry payloads (no named groups) */
-    var hasNamedGroup = false;
-    for (var g = 0; g < groups.length; g++) {
-      if (groups[g].label && groups[g].label !== groups[g].id) {
-        hasNamedGroup = true;
-        break;
-      }
-    }
-    var showList = entries.length > 1 || hasNamedGroup;
-    layout.classList.toggle("sv-list-hidden", !showList);
+    /* --- bottom strip --- */
+    if (!bottomStrip) return;
+    bottomStrip.innerHTML = "";
 
-    if (!showList) {
-      listHeader.textContent = "";
-      return;
-    }
+    var showStrip = entries.length > 1;
+    bottomStrip.classList.toggle("expanded", showStrip && _stripExpanded);
+    if (!showStrip) { _renderPlaybackBar(); return; }
 
-    listHeader.textContent = _t("structure.list_title", STR.LIST_TITLE);
-    _initListbox(listBody);
+    _initListbox(bottomStrip);
 
-    /* group entries by group_id */
-    var groupMap = {};
-    for (var gi = 0; gi < groups.length; gi++) {
-      groupMap[groups[gi].id] = groups[gi];
-    }
-
-    /* entry-list virtualization (todo 41): fixed head+tail windows above
-       LIST_VIRTUALIZE_THRESHOLD; selected + default entries force-included */
     var viz = virtualizeEntries(entries, LIST_VIRTUALIZE_THRESHOLD, [
       structureViewerState.selectedEntryId,
       (payload && payload.default_entry_id) || null,
@@ -1715,6 +2218,12 @@
     var visibleSet = viz.windowed ? {} : null;
     if (visibleSet) {
       for (var vi = 0; vi < viz.visible.length; vi++) visibleSet[viz.visible[vi].id] = true;
+    }
+
+    /* group entries by group_id */
+    var groupMap = {};
+    for (var gi = 0; gi < groups.length; gi++) {
+      groupMap[groups[gi].id] = groups[gi];
     }
 
     var entriesByGroup = {};
@@ -1731,41 +2240,94 @@
       var group = groupMap[groupId];
       var groupEntries = entriesByGroup[groupId];
 
-      /* group header (only if named group exists) */
       if (group && group.label) {
-        var header = document.createElement("div");
+        var header = document.createElement("span");
         header.className = "sv-group-header";
+        header.style.padding = "0 4px";
+        header.style.fontSize = "10px";
         header.textContent = _esc(group.label);
-        listBody.appendChild(header);
+        bottomStrip.appendChild(header);
       }
 
-      /* trajectory sampling (todo 41): per-frame groups (every entry carries
-         source.frame_index — IRC directions, scan frames) above threshold */
       if (_isPerFrameGroup(groupEntries)) {
         var sampled = sampleFrames(groupEntries, TRAJECTORY_SAMPLE_THRESHOLD, TRAJECTORY_SAMPLE_TARGET);
         if (sampled.length < groupEntries.length) {
-          listBody.appendChild(_listMarker(_t("structure.perf.sampled", STR.PERF_SAMPLED),
-            sampled.length, groupEntries.length));
-          groupEntries = sampled;
+          var sampleMarker = document.createElement("span");
+          sampleMarker.className = "sv-list-marker";
+          sampleMarker.style.borderTop = "none";
+          sampleMarker.style.borderBottom = "none";
+          sampleMarker.textContent = _t("structure.perf.sampled", STR.PERF_SAMPLED) + " " + sampled.length + "/" + groupEntries.length;
+          bottomStrip.appendChild(sampleMarker);
         }
+        groupEntries = sampled;
       }
 
       for (var ej = 0; ej < groupEntries.length; ej++) {
-        var entry = groupEntries[ej];
-        if (visibleSet && !visibleSet[entry.id]) continue;
-        var row = _renderEntryRow(entry);
-        listBody.appendChild(row);
-        _renderedEntryIds.push(entry.id);
+        var entryItem = groupEntries[ej];
+        if (visibleSet && !visibleSet[entryItem.id]) continue;
+        var item = _renderStripItem(entryItem);
+        bottomStrip.appendChild(item);
+        _renderedEntryIds.push(entryItem.id);
       }
     }
 
     if (viz.windowed) {
-      listBody.appendChild(_listMarker(_t("structure.perf.partial_list", STR.PERF_PARTIAL_LIST),
-        viz.visible.length, viz.total));
+      var marker = document.createElement("span");
+      marker.className = "sv-list-marker";
+      marker.style.borderTop = "none";
+      marker.style.borderBottom = "none";
+      marker.textContent = _t("structure.perf.partial_list", STR.PERF_PARTIAL_LIST) + " " + viz.visible.length + "/" + viz.total;
+      bottomStrip.appendChild(marker);
     }
 
-    _syncListboxActive(listBody);
+    _syncListboxActive(bottomStrip);
     _renderPlaybackBar();
+  }
+
+  function _entryIndex(entries, id) {
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].id === id) return i;
+    }
+    return 0;
+  }
+
+  function _renderStripItem(entry) {
+    var item = document.createElement("div");
+    item.className = "sv-strip-item";
+    var isSelected = entry.id === structureViewerState.selectedEntryId;
+    if (isSelected) {
+      item.className += " active";
+    }
+    item.setAttribute("data-entry-id", _esc(entry.id));
+    item.setAttribute("role", "option");
+    item.setAttribute("aria-selected", isSelected ? "true" : "false");
+    item.setAttribute("id", "sv-opt-" + _esc(entry.id));
+
+    var label = document.createElement("span");
+    label.textContent = _esc(entry.label || entry.id);
+    item.appendChild(label);
+
+    if (entry.relative_energy_kcal != null) {
+      var delta = document.createElement("span");
+      delta.style.fontSize = "10px";
+      delta.style.color = "var(--sv-green)";
+      delta.textContent = (entry.relative_energy_kcal > 0 ? "+" : "") + entry.relative_energy_kcal.toFixed(1);
+      item.appendChild(delta);
+    }
+
+    if (entry.boltzmann_weight != null) {
+      var bar = document.createElement("div");
+      bar.className = "sv-strip-boltz";
+      bar.style.width = Math.round(entry.boltzmann_weight * 100) + "%";
+      bar.style.maxWidth = "40px";
+      item.appendChild(bar);
+    }
+
+    item.addEventListener("click", function () {
+      selectEntry(entry.id, "list");
+    });
+
+    return item;
   }
 
   /* ---- listbox a11y (todo 42): WAI-ARIA listbox pattern on the entry
@@ -1778,7 +2340,7 @@
   function _initListbox(listBody) {
     listBody.setAttribute("role", "listbox");
     listBody.setAttribute("tabindex", "0");
-    listBody.setAttribute("aria-label", _t("structure.list_title", STR.LIST_TITLE));
+    listBody.setAttribute("aria-label", _t("structure.strip_label", STR.STRIP_LABEL));
     if (!listBody._svListboxInit) {
       listBody._svListboxInit = true;
       listBody.addEventListener("keydown", function (ev) {
@@ -1792,7 +2354,9 @@
   function _onListboxKeydown(ev, listBody) {
     if (!ev || !_renderedEntryIds.length) return;
     var key = ev.key;
-    if (key !== "ArrowDown" && key !== "ArrowUp" && key !== "Enter" && key !== " ") {
+    if (key !== "ArrowDown" && key !== "ArrowUp" && key !== "ArrowLeft" &&
+        key !== "ArrowRight" && key !== "Enter" && key !== " " &&
+        key !== "Home" && key !== "End") {
       return;
     }
     ev.preventDefault();
@@ -1802,10 +2366,17 @@
       }
       return;
     }
-    _listActiveIdx = key === "ArrowDown"
-      ? Math.min(_listActiveIdx + 1, _renderedEntryIds.length - 1)
-      : Math.max(_listActiveIdx - 1, 0);
+    if (key === "Home") {
+      _listActiveIdx = 0;
+    } else if (key === "End") {
+      _listActiveIdx = _renderedEntryIds.length - 1;
+    } else if (key === "ArrowDown" || key === "ArrowRight") {
+      _listActiveIdx = Math.min(_listActiveIdx + 1, _renderedEntryIds.length - 1);
+    } else {
+      _listActiveIdx = Math.max(_listActiveIdx - 1, 0);
+    }
     _syncListboxActive(listBody);
+    _scrollToActiveItem(listBody);
   }
 
   function _syncListboxActive(listBody) {
@@ -1824,6 +2395,20 @@
       if (typeof row.classList === "undefined") continue;
       var isActive = row.getAttribute && row.getAttribute("data-entry-id") === activeId;
       row.classList.toggle("sv-option-focus", isActive);
+    }
+  }
+
+  function _scrollToActiveItem(listBody) {
+    if (_listActiveIdx < 0 || _listActiveIdx >= _renderedEntryIds.length) return;
+    var activeId = _renderedEntryIds[_listActiveIdx];
+    var rows = listBody.children;
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].getAttribute && rows[i].getAttribute("data-entry-id") === activeId) {
+        if (typeof rows[i].scrollIntoView === "function") {
+          rows[i].scrollIntoView({ block: "nearest", inline: "nearest" });
+        }
+        break;
+      }
     }
   }
 
@@ -1923,252 +2508,39 @@
     return val.toFixed(4) + " " + _esc(unit);
   }
 
-  /* ---- render: inspector ---- */
+  /* ---- render: inspector (drawer-based) ---- */
 
   /**
-   * Render the inspector panel for the currently selected entry.
+   * Refresh any open drawer content for the currently selected entry.
+   * Also loads vibrations for the selected entry (contract: always fetch
+   * when available=true, regardless of drawer visibility).
    */
   function renderInspector() {
     if (typeof document === "undefined") return;
-    var inspHeader = document.getElementById("sv-inspector-header");
-    var inspBody = document.getElementById("sv-inspector-body");
-    if (!inspHeader || !inspBody) return;
-
-    inspBody.innerHTML = "";
-    inspHeader.textContent = _t("structure.inspector_title", STR.INSPECTOR_TITLE);
 
     var payload = structureViewerState.payload;
     var entries = (payload && payload.entries) || [];
-    var selectedId = structureViewerState.selectedEntryId;
-
-    /* newer-available notice */
-    if (structureViewerState.newerAvailable) {
-      var newerNotice = document.createElement("div");
-      newerNotice.className = "sv-notice sv-notice-newer";
-      newerNotice.textContent = _t("structure.newer_available", STR.NEWER_AVAILABLE);
-      var refreshBtn = document.createElement("button");
-      refreshBtn.className = "sv-refresh-btn";
-      refreshBtn.textContent = _t("structure.refresh", STR.REFRESH);
-      refreshBtn.addEventListener("click", function () {
-        structureViewerState.newerAvailable = false;
-        refreshIfChanged();
-      });
-      newerNotice.appendChild(document.createElement("br"));
-      newerNotice.appendChild(refreshBtn);
-      inspBody.appendChild(newerNotice);
-    }
-
-    /* pending geometry retry notice */
-    if (structureViewerState.pendingGeometryRetry) {
-      var pendingNotice = document.createElement("div");
-      pendingNotice.className = "sv-notice sv-notice-pending";
-      pendingNotice.textContent = _t("structure.pending_fetch", STR.PENDING_FETCH);
-      inspBody.appendChild(pendingNotice);
-    }
-
-    /* find selected entry */
     var entry = null;
     for (var i = 0; i < entries.length; i++) {
-      if (entries[i].id === selectedId) { entry = entries[i]; break; }
+      if (entries[i].id === structureViewerState.selectedEntryId) { entry = entries[i]; break; }
     }
 
-    if (!entry) {
-      var noEntry = document.createElement("div");
-      noEntry.className = "sv-inspector-value sv-muted";
-      noEntry.textContent = _t("structure.no_entry", STR.NO_ENTRY);
-      inspBody.appendChild(noEntry);
-      return;
-    }
-
-    /* status section */
-    inspBody.appendChild(_inspectorSection(_t("structure.status", STR.STATUS),
-      entry.status === "completed" ? _t("structure.completed", STR.COMPLETED) : _t("structure.failed", STR.FAILED)));
-
-    /* source section */
-    var sourceKind = (entry.source && entry.source.kind) || "";
-    var sourceFallback = STR.SOURCE_KINDS[sourceKind] || _esc(sourceKind);
-    var sourceLabel = sourceKind ? _t("structure.source_kind." + sourceKind, sourceFallback) : sourceFallback;
-    inspBody.appendChild(_inspectorSection(_t("structure.source", STR.SOURCE), sourceLabel));
-
-    /* energy section */
-    if (entry.energy && entry.energy.value != null) {
-      var energyDiv = document.createElement("div");
-      energyDiv.className = "sv-inspector-section";
-      _ariaGroup(energyDiv, _t("structure.energy", STR.ENERGY));
-
-      var lbl = document.createElement("div");
-      lbl.className = "sv-inspector-label";
-      lbl.textContent = _t("structure.energy", STR.ENERGY);
-      energyDiv.appendChild(lbl);
-
-      var valRow = document.createElement("div");
-      valRow.className = "sv-inspector-energy";
-      var valSpan = document.createElement("span");
-      valSpan.className = "sv-inspector-energy-value";
-      valSpan.textContent = entry.energy.value.toFixed(6);
-      valRow.appendChild(valSpan);
-      var unitSpan = document.createElement("span");
-      unitSpan.className = "sv-inspector-energy-unit";
-      unitSpan.textContent = _esc(entry.energy.unit || "hartree");
-      valRow.appendChild(unitSpan);
-      energyDiv.appendChild(valRow);
-
-      if (entry.energy.kind) {
-        var kindSpan = document.createElement("div");
-        kindSpan.className = "sv-inspector-value sv-muted";
-        kindSpan.textContent = _esc(entry.energy.kind);
-        energyDiv.appendChild(kindSpan);
-      }
-
-      if (entry.energy.temperature_k != null) {
-        var tempSpan = document.createElement("div");
-        tempSpan.className = "sv-inspector-value sv-muted";
-        tempSpan.textContent = "T = " + entry.energy.temperature_k + " K";
-        energyDiv.appendChild(tempSpan);
-      }
-
-      inspBody.appendChild(energyDiv);
-    }
-
-    /* delta E */
-    if (entry.relative_energy_kcal != null) {
-      var deltaDiv = document.createElement("div");
-      deltaDiv.className = "sv-inspector-section";
-      _ariaGroup(deltaDiv, _t("structure.delta_e", STR.DELTA_E));
-      var deltaLbl = document.createElement("div");
-      deltaLbl.className = "sv-inspector-label";
-      deltaLbl.textContent = _t("structure.delta_e", STR.DELTA_E);
-      deltaDiv.appendChild(deltaLbl);
-      var deltaVal = document.createElement("div");
-      deltaVal.className = "sv-inspector-delta";
-      deltaVal.textContent = entry.relative_energy_kcal.toFixed(2) + " kcal/mol";
-      deltaDiv.appendChild(deltaVal);
-      inspBody.appendChild(deltaDiv);
-    }
-
-    /* boltzmann weight */
-    if (entry.boltzmann_weight != null) {
-      var weightDiv = document.createElement("div");
-      weightDiv.className = "sv-inspector-section";
-      _ariaGroup(weightDiv, _t("structure.weight", STR.WEIGHT));
-      var weightLbl = document.createElement("div");
-      weightLbl.className = "sv-inspector-label";
-      weightLbl.textContent = _t("structure.weight", STR.WEIGHT);
-      weightDiv.appendChild(weightLbl);
-      var weightVal = document.createElement("div");
-      weightVal.className = "sv-inspector-value";
-      weightVal.textContent = (entry.boltzmann_weight * 100).toFixed(1) + "%";
-      weightDiv.appendChild(weightVal);
-      var weightBar = document.createElement("div");
-      weightBar.className = "sv-inspector-weight-bar";
-      var weightFill = document.createElement("div");
-      weightFill.className = "sv-inspector-weight-bar-fill";
-      weightFill.style.width = Math.round(entry.boltzmann_weight * 100) + "%";
-      weightBar.appendChild(weightFill);
-      weightDiv.appendChild(weightBar);
-      inspBody.appendChild(weightDiv);
-    }
-
-    /* vibrations — delegated to ACPVibrationViewer (Wave 5, todo 27) */
-    var vibDiv = document.createElement("div");
-    vibDiv.className = "sv-inspector-section";
-    _ariaGroup(vibDiv, _t("structure.vibrations", STR.VIBRATIONS));
-    var vibLbl = document.createElement("div");
-    vibLbl.className = "sv-inspector-label";
-    vibLbl.textContent = _t("structure.vibrations", STR.VIBRATIONS);
-    vibDiv.appendChild(vibLbl);
-    var vibContainer = document.createElement("div");
-    vibContainer.id = "structure-inspector-vibrations";
-    vibDiv.appendChild(vibContainer);
-    inspBody.appendChild(vibDiv);
-
-    if (entry.vibrations && entry.vibrations.available !== false) {
-      /* contract: fetch the authoritative answer; never fabricate locally */
+    if (entry && entry.vibrations && entry.vibrations.available !== false) {
       if (typeof window !== "undefined" && window.ACPVibrationViewer &&
           typeof window.ACPVibrationViewer.loadVibrations === "function") {
         var vibOpts = {};
-        if (entry.vibrations.endpoint) {
-          vibOpts.endpoint = entry.vibrations.endpoint;
-        }
+        if (entry.vibrations.endpoint) vibOpts.endpoint = entry.vibrations.endpoint;
         window.ACPVibrationViewer.loadVibrations(structureViewerState.jobId, entry.id, vibOpts);
       }
-    } else {
-      /* contract: available=false -> local text only, NO fetch */
-      var vibNone = document.createElement("div");
-      vibNone.className = "sv-inspector-value sv-muted";
-      vibNone.textContent = _t("structure.vib.none", STR.VIB_NONE);
-      vibContainer.appendChild(vibNone);
     }
 
-    /* measurements placeholder — disabled with a note while an overlay is
-       active but its atom mapping is unproven (todo 40 clearing rule) */
-    var measDiv = document.createElement("div");
-    measDiv.className = "sv-inspector-section";
-    _ariaGroup(measDiv, _t("structure.measurements", STR.MEASUREMENTS));
-    if (overlayMeasurementsBlocked()) {
-      measDiv.className += " sv-measurements-blocked";
-    }
-    var measLbl = document.createElement("div");
-    measLbl.className = "sv-inspector-label";
-    measLbl.textContent = _t("structure.measurements", STR.MEASUREMENTS);
-    measDiv.appendChild(measLbl);
-    var measVal = document.createElement("div");
-    measVal.className = "sv-inspector-value sv-muted";
-    measVal.textContent = overlayMeasurementsBlocked()
-      ? _t("structure.overlay.unproven", STR.OVERLAY_UNPROVEN)
-      : _t("structure.measurements_placeholder", STR.MEASUREMENTS_PLACEHOLDER);
-    measDiv.appendChild(measVal);
-    inspBody.appendChild(measDiv);
-
-    if (structureViewerState.restoredMeasurements &&
-        structureViewerState.restoredMeasurements.length) {
-      var restoredDiv = document.createElement("div");
-      restoredDiv.className = "sv-inspector-section sv-view-restored";
-      _ariaGroup(restoredDiv, _t("structure.view.restored_measurements", STR.VIEW_RESTORED_MEASUREMENTS));
-      var rLbl = document.createElement("div");
-      rLbl.className = "sv-inspector-label";
-      rLbl.textContent = _t("structure.view.restored_measurements", STR.VIEW_RESTORED_MEASUREMENTS);
-      restoredDiv.appendChild(rLbl);
-      for (var ri = 0; ri < structureViewerState.restoredMeasurements.length; ri++) {
-        var rec = structureViewerState.restoredMeasurements[ri];
-        var rLine = document.createElement("div");
-        rLine.className = "sv-inspector-value sv-muted";
-        rLine.textContent = _esc(rec.type) + " · " +
-          (rec.atoms || []).join("-") +
-          (rec.value != null ? " · " + rec.value.toFixed(3) : "");
-        restoredDiv.appendChild(rLine);
+    var ids = ["source", "vibration", "measure", "more"];
+    for (var j = 0; j < ids.length; j++) {
+      var drawer = document.getElementById("sv-drawer-" + ids[j]);
+      if (drawer && drawer.style.display !== "none") {
+        _renderDrawerContent(ids[j]);
       }
-      inspBody.appendChild(restoredDiv);
     }
-
-    _renderOverlaySection(inspBody);
-
-    /* geometry edit panel (todo 36): provenance + dirty badge +
-       transaction controls + dirty-switch prompt + collision warnings */
-    inspBody.appendChild(_renderEditPanel());
-
-    /* warnings */
-    var warnings = (payload && payload.warnings) || [];
-    if (warnings.length > 0) {
-      var warnDiv = document.createElement("div");
-      warnDiv.className = "sv-inspector-section";
-      _ariaGroup(warnDiv, _t("structure.warnings", STR.WARNINGS));
-      var warnLbl = document.createElement("div");
-      warnLbl.className = "sv-inspector-label";
-      warnLbl.textContent = _t("structure.warnings", STR.WARNINGS);
-      warnDiv.appendChild(warnLbl);
-      var warnList = document.createElement("ul");
-      warnList.className = "sv-warning-list";
-      for (var wi = 0; wi < warnings.length; wi++) {
-        var warnItem = document.createElement("li");
-        warnItem.className = "sv-warning-item";
-        warnItem.textContent = _esc(warnings[wi]);
-        warnList.appendChild(warnItem);
-      }
-      warnDiv.appendChild(warnList);
-      inspBody.appendChild(warnDiv);
-    }
-
     _renderPlaybackBar();
   }
 
@@ -2322,35 +2694,291 @@
 
   /* ---- drawer toggles ---- */
 
-  function toggleListDrawer() {
+  function _syncStripActive() {
     if (typeof document === "undefined") return;
-    var panel = document.getElementById("structure-list-panel");
-    var overlay = document.getElementById("sv-drawer-overlay");
-    if (!panel) return;
-    var isOpen = panel.classList.contains("sv-drawer-open");
-    panel.classList.toggle("sv-drawer-open", !isOpen);
-    if (overlay) overlay.classList.toggle("sv-drawer-open", !isOpen);
+    var strip = document.getElementById("sv-bottom-strip");
+    if (!strip) return;
+    var items = strip.querySelectorAll(".sv-strip-item");
+    for (var i = 0; i < items.length; i++) {
+      var id = items[i].getAttribute("data-entry-id");
+      var isActive = id === structureViewerState.selectedEntryId;
+      items[i].classList.toggle("active", isActive);
+      items[i].setAttribute("aria-selected", isActive ? "true" : "false");
+    }
   }
 
-  function toggleInspectorDrawer() {
+  var _DRAWER_ARIA_LABELS = {
+    measure: function () { return _t("structure.measurements", STR.MEASUREMENTS); },
+    vibration: function () { return _t("structure.vibrations", STR.VIBRATIONS); },
+    source: function () { return _t("structure.inspector_title", STR.INSPECTOR_TITLE); },
+    more: function () { return _t("structure.drawer.more", STR.DRAWER_MORE); },
+  };
+
+  function openDrawer(id, triggerElement) {
     if (typeof document === "undefined") return;
-    var panel = document.getElementById("structure-inspector-panel");
-    var overlay = document.getElementById("sv-drawer-overlay");
-    if (!panel) return;
-    var isOpen = panel.classList.contains("sv-drawer-open");
-    panel.classList.toggle("sv-drawer-open", !isOpen);
-    if (overlay) overlay.classList.toggle("sv-drawer-open", !isOpen);
+    closeAllDrawers();
+    _activeDrawerId = id;
+    _drawerTrigger = triggerElement || null;
+    var drawer = document.getElementById("sv-drawer-" + id);
+    if (!drawer) return;
+    drawer.style.display = "block";
+    drawer.setAttribute("role", "dialog");
+    drawer.setAttribute("aria-modal", "false");
+    var labelFn = _DRAWER_ARIA_LABELS[id];
+    drawer.setAttribute("aria-label", labelFn ? labelFn() : id);
+    _renderDrawerContent(id);
+    _setDrawerPersist(structureViewerState.jobId, structureViewerState.selectedEntryId, id);
+    /* Focus management: move focus to drawer's first focusable element */
+    _defer(function () {
+      var focusable = drawer.querySelector(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      if (focusable && typeof focusable.focus === "function") {
+        focusable.focus();
+      }
+    });
+  }
+
+  function closeDrawer(id) {
+    if (typeof document === "undefined") return;
+    var drawer = document.getElementById("sv-drawer-" + id);
+    if (drawer) {
+      drawer.style.display = "none";
+      drawer.removeAttribute("role");
+      drawer.removeAttribute("aria-modal");
+      drawer.removeAttribute("aria-label");
+    }
+    if (_activeDrawerId === id) {
+      _activeDrawerId = null;
+      _setDrawerPersist(structureViewerState.jobId, structureViewerState.selectedEntryId, null);
+      /* Focus return: restore focus to the trigger element */
+      if (_drawerTrigger && typeof _drawerTrigger.focus === "function") {
+        _defer(function () { _drawerTrigger.focus(); });
+      }
+      _drawerTrigger = null;
+    }
   }
 
   function closeAllDrawers() {
     if (typeof document === "undefined") return;
-    var list = document.getElementById("structure-list-panel");
-    var insp = document.getElementById("structure-inspector-panel");
-    var overlay = document.getElementById("sv-drawer-overlay");
-    if (list) list.classList.remove("sv-drawer-open");
-    if (insp) insp.classList.remove("sv-drawer-open");
-    if (overlay) overlay.classList.remove("sv-drawer-open");
+    var ids = ["measure", "vibration", "source", "more"];
+    for (var i = 0; i < ids.length; i++) {
+      var drawer = document.getElementById("sv-drawer-" + ids[i]);
+      if (drawer) {
+        drawer.style.display = "none";
+        drawer.removeAttribute("role");
+        drawer.removeAttribute("aria-modal");
+        drawer.removeAttribute("aria-label");
+      }
+    }
+    if (_activeDrawerId) {
+      _setDrawerPersist(structureViewerState.jobId, structureViewerState.selectedEntryId, null);
+      _activeDrawerId = null;
+    }
+    _drawerContentCache = {};
   }
+
+  function _renderDrawerContent(id) {
+    var drawer = document.getElementById("sv-drawer-" + id);
+    if (!drawer) return;
+    drawer.innerHTML = "";
+
+    var header = document.createElement("div");
+    header.className = "sv-drawer-header";
+    var title = document.createElement("span");
+    var titles = { measure: _t("structure.measurements", STR.MEASUREMENTS), vibration: _t("structure.vibrations", STR.VIBRATIONS), source: _t("structure.inspector_title", STR.INSPECTOR_TITLE), more: "\u66f4\u591a" };
+    title.textContent = titles[id] || id;
+    header.appendChild(title);
+    var closeBtn = document.createElement("button");
+    closeBtn.className = "sv-drawer-close";
+    closeBtn.setAttribute("aria-label", _t("structure.drawer.close", STR.DRAWER_CLOSE));
+    closeBtn.textContent = "\u00d7";
+    closeBtn.addEventListener("click", function () { closeDrawer(id); });
+    header.appendChild(closeBtn);
+    drawer.appendChild(header);
+
+    drawer.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape") {
+        ev.stopPropagation();
+        closeDrawer(id);
+      }
+    });
+
+    var body = document.createElement("div");
+    body.className = "sv-drawer-body";
+    drawer.appendChild(body);
+
+    if (id === "source") {
+      _renderSourceDrawer(body);
+    } else if (id === "vibration") {
+      _renderVibrationDrawer(body);
+    } else if (id === "measure") {
+      _renderMeasureDrawer(body);
+    } else if (id === "more") {
+      _renderMoreDrawer(body);
+    }
+  }
+
+  function _renderSourceDrawer(body) {
+    var payload = structureViewerState.payload;
+    var entries = (payload && payload.entries) || [];
+    var entry = null;
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].id === structureViewerState.selectedEntryId) { entry = entries[i]; break; }
+    }
+    if (!entry) {
+      body.textContent = _t("structure.no_entry", STR.NO_ENTRY);
+      return;
+    }
+    body.appendChild(_inspectorSection(_t("structure.status", STR.STATUS),
+      entry.status === "completed" ? _t("structure.completed", STR.COMPLETED) : _t("structure.failed", STR.FAILED)));
+    var sourceKind = (entry.source && entry.source.kind) || "";
+    var sourceFallback = STR.SOURCE_KINDS[sourceKind] || _esc(sourceKind);
+    var sourceLabel = sourceKind ? _t("structure.source_kind." + sourceKind, sourceFallback) : sourceFallback;
+    body.appendChild(_inspectorSection(_t("structure.source", STR.SOURCE), sourceLabel));
+    if (entry.energy && entry.energy.value != null) {
+      var energyDiv = document.createElement("div");
+      energyDiv.className = "sv-inspector-section";
+      var lbl = document.createElement("div");
+      lbl.className = "sv-inspector-label";
+      lbl.textContent = _t("structure.energy", STR.ENERGY);
+      energyDiv.appendChild(lbl);
+      var valSpan = document.createElement("div");
+      valSpan.className = "sv-inspector-value";
+      valSpan.textContent = entry.energy.value.toFixed(6) + " " + _esc(entry.energy.unit || "hartree");
+      energyDiv.appendChild(valSpan);
+      body.appendChild(energyDiv);
+    }
+    if (entry.relative_energy_kcal != null) {
+      body.appendChild(_inspectorSection(_t("structure.delta_e", STR.DELTA_E),
+        entry.relative_energy_kcal.toFixed(2) + " kcal/mol"));
+    }
+    if (entry.boltzmann_weight != null) {
+      body.appendChild(_inspectorSection(_t("structure.weight", STR.WEIGHT),
+        (entry.boltzmann_weight * 100).toFixed(1) + "%"));
+    }
+    if (structureViewerState.newerAvailable) {
+      var newerNotice = document.createElement("div");
+      newerNotice.className = "sv-notice sv-notice-newer";
+      newerNotice.textContent = _t("structure.newer_available", STR.NEWER_AVAILABLE);
+      var refreshBtn = document.createElement("button");
+      refreshBtn.className = "sv-refresh-btn";
+      refreshBtn.textContent = _t("structure.refresh", STR.REFRESH);
+      refreshBtn.addEventListener("click", function () {
+        structureViewerState.newerAvailable = false;
+        refreshIfChanged();
+      });
+      newerNotice.appendChild(document.createElement("br"));
+      newerNotice.appendChild(refreshBtn);
+      body.appendChild(newerNotice);
+    }
+    _renderOverlaySection(body);
+    body.appendChild(_renderEditPanel());
+    var warnings = (payload && payload.warnings) || [];
+    if (warnings.length > 0) {
+      var warnDiv = document.createElement("div");
+      warnDiv.className = "sv-inspector-section";
+      var warnLbl = document.createElement("div");
+      warnLbl.className = "sv-inspector-label";
+      warnLbl.textContent = _t("structure.warnings", STR.WARNINGS);
+      warnDiv.appendChild(warnLbl);
+      var warnList = document.createElement("ul");
+      warnList.className = "sv-warning-list";
+      for (var wi = 0; wi < warnings.length; wi++) {
+        var warnItem = document.createElement("li");
+        warnItem.className = "sv-warning-item";
+        warnItem.textContent = _esc(warnings[wi]);
+        warnList.appendChild(warnItem);
+      }
+      warnDiv.appendChild(warnList);
+      body.appendChild(warnDiv);
+    }
+  }
+
+  function _renderVibrationDrawer(body) {
+    var payload = structureViewerState.payload;
+    var entries = (payload && payload.entries) || [];
+    var entry = null;
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].id === structureViewerState.selectedEntryId) { entry = entries[i]; break; }
+    }
+    var vibSection = document.createElement("div");
+    vibSection.className = "sv-inspector-section";
+    _ariaGroup(vibSection, _t("structure.vibrations", STR.VIBRATIONS));
+    var vibLbl = document.createElement("div");
+    vibLbl.className = "sv-inspector-label";
+    vibLbl.textContent = _t("structure.vibrations", STR.VIBRATIONS);
+    vibSection.appendChild(vibLbl);
+    var vibContainer = document.createElement("div");
+    vibContainer.id = "structure-inspector-vibrations";
+    vibSection.appendChild(vibContainer);
+    body.appendChild(vibSection);
+    if (entry && entry.vibrations && entry.vibrations.available !== false) {
+      if (typeof window !== "undefined" && window.ACPVibrationViewer &&
+          typeof window.ACPVibrationViewer.loadVibrations === "function") {
+        var vibOpts = {};
+        if (entry.vibrations.endpoint) vibOpts.endpoint = entry.vibrations.endpoint;
+        window.ACPVibrationViewer.loadVibrations(structureViewerState.jobId, entry.id, vibOpts);
+      }
+    } else {
+      var vibNone = document.createElement("div");
+      vibNone.className = "sv-inspector-value sv-muted";
+      vibNone.textContent = _t("structure.vib.none", STR.VIB_NONE);
+      vibContainer.appendChild(vibNone);
+    }
+  }
+
+  function _renderMeasureDrawer(body) {
+    var measDiv = document.createElement("div");
+    measDiv.className = "sv-inspector-section";
+    if (overlayMeasurementsBlocked()) {
+      measDiv.className += " sv-measurements-blocked";
+    }
+    _ariaGroup(measDiv, _t("structure.measurements", STR.MEASUREMENTS));
+    var measLbl = document.createElement("div");
+    measLbl.className = "sv-inspector-label";
+    measLbl.textContent = _t("structure.measurements", STR.MEASUREMENTS);
+    measDiv.appendChild(measLbl);
+    var measVal = document.createElement("div");
+    measVal.className = "sv-inspector-value sv-muted";
+    measVal.textContent = overlayMeasurementsBlocked()
+      ? _t("structure.overlay.unproven", STR.OVERLAY_UNPROVEN)
+      : _t("structure.measurements_placeholder", STR.MEASUREMENTS_PLACEHOLDER);
+    measDiv.appendChild(measVal);
+    body.appendChild(measDiv);
+
+    if (structureViewerState.restoredMeasurements && structureViewerState.restoredMeasurements.length) {
+      var restoredDiv = document.createElement("div");
+      restoredDiv.className = "sv-inspector-section sv-view-restored";
+      _ariaGroup(restoredDiv, _t("structure.view.restored_measurements", STR.VIEW_RESTORED_MEASUREMENTS));
+      var rLbl = document.createElement("div");
+      rLbl.className = "sv-inspector-label";
+      rLbl.textContent = _t("structure.view.restored_measurements", STR.VIEW_RESTORED_MEASUREMENTS);
+      restoredDiv.appendChild(rLbl);
+      for (var ri = 0; ri < structureViewerState.restoredMeasurements.length; ri++) {
+        var rec = structureViewerState.restoredMeasurements[ri];
+        var rLine = document.createElement("div");
+        rLine.className = "sv-inspector-value sv-muted";
+        rLine.textContent = _esc(rec.type) + " \u00b7 " + (rec.atoms || []).join("-") + (rec.value != null ? " \u00b7 " + rec.value.toFixed(3) : "");
+        restoredDiv.appendChild(rLine);
+      }
+      body.appendChild(restoredDiv);
+    }
+  }
+
+  function _renderMoreDrawer(body) {
+    var payload = structureViewerState.payload;
+    var entries = (payload && payload.entries) || [];
+    var entry = null;
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].id === structureViewerState.selectedEntryId) { entry = entries[i]; break; }
+    }
+    if (!entry) { body.textContent = _t("structure.no_entry", STR.NO_ENTRY); return; }
+    body.appendChild(_renderEditPanel());
+  }
+
+  function toggleListDrawer() { /* legacy stub — no-op */ }
+  function toggleInspectorDrawer() { /* legacy stub — no-op */ }
 
   /* ---- energy-graph → structure-viewer push (one-way, phase A) ---- */
 
@@ -2540,6 +3168,10 @@
     toggleListDrawer: toggleListDrawer,
     toggleInspectorDrawer: toggleInspectorDrawer,
     closeAllDrawers: closeAllDrawers,
+    openDrawer: openDrawer,
+    closeDrawer: closeDrawer,
+    _closeSwitcherDropdown: _closeSwitcherDropdown,
+    _renderIrcFrameController: _renderIrcFrameController,
     _applyCatalogResponse: _applyCatalogResponse,
     _esc: _esc,
     _t: _t,

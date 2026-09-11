@@ -16,6 +16,7 @@ import hashlib
 import json
 import logging
 import math
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -69,6 +70,71 @@ def _number(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return result if math.isfinite(result) else None
+
+
+# ── Display-label normalization ─────────────────────────────────────────────
+
+_FORMAL_RESULT_FALLBACK_LABEL = "计算结果"
+_OPTIMIZE_RESULT_LABEL = "优化结果"
+_TS_OPTIMIZE_RESULT_LABEL = "TS 优化结果"
+_SIMPLE_RESULT_LABELS: dict[str, str] = {
+    "singlepoint": "单点能计算结构",
+    "frequency": "频率计算结构",
+}
+_OPTIMIZE_WORKFLOW_KEYS = frozenset(
+    {"batch", "batchoptimize", "optimize", "xtb-optimize"}
+)
+_INPUT_LABEL_RE = re.compile(r"^input\b", re.IGNORECASE)
+_TS_LABEL_RE = re.compile(r"\bTS\b", re.IGNORECASE)
+
+
+def _normalize_display_label(
+    label: str,
+    source_kind: str,
+    workflow: str | None = None,
+) -> str:
+    """Normalize a formal-result display label at projection time.
+
+    The BatchOptimize engine labels CLI ``--items-file`` products as
+    ``"{item.name} ({tag}, {profile})"`` where ``item.name`` defaults to
+    ``"input"`` — hence historical ``"input (TS, opt_freq)"`` labels in
+    ``result_manifest.json``.  The structure viewer must never surface that
+    raw ``input`` prefix as the main title of a *formal result*, so it is
+    replaced with a workflow-appropriate label here.  Stored data is never
+    rewritten.
+
+    Rules:
+        * ``source_kind != "formal_result"`` → label unchanged (input
+          structures keep their original name).
+        * Label not starting with ``input`` → unchanged.
+        * Optimize-family workflows → ``"TS 优化结果"`` when the label
+          carries a TS tag, else ``"优化结果"``.
+        * Simple ``singlepoint``/``frequency`` → dedicated Chinese labels.
+        * Anything else → ``"计算结果"``.
+
+    Args:
+        label: Raw product label from the result manifest.
+        source_kind: Entry source kind (``"formal_result"``,
+            ``"calculation_input"``, ...).
+        workflow: Optional workflow hint (``"batch"``, ``"optimize"``,
+            ``"singlepoint"``, ``"frequency"``, ...).
+
+    Returns:
+        The normalized label, or ``label`` unchanged.
+    """
+    if source_kind != "formal_result" or not label:
+        return label
+    if not _INPUT_LABEL_RE.match(label):
+        return label
+    workflow_key = (workflow or "").lower()
+    if workflow_key in _OPTIMIZE_WORKFLOW_KEYS:
+        if _TS_LABEL_RE.search(label):
+            return _TS_OPTIMIZE_RESULT_LABEL
+        return _OPTIMIZE_RESULT_LABEL
+    simple_label = _SIMPLE_RESULT_LABELS.get(workflow_key)
+    if simple_label is not None:
+        return simple_label
+    return _FORMAL_RESULT_FALLBACK_LABEL
 
 
 # ── Exceptions ──────────────────────────────────────────────────────────────
@@ -926,7 +992,7 @@ def _resolve_batchoptimize(task_root: Path, workflow: str, job_id: str, warnings
         entry = StructureViewerEntry(
             id=entry_id,
             group_id="batch_items",
-            label=product.label or raw_item_id,
+            label=_normalize_display_label(product.label or raw_item_id, "formal_result", "batch"),
             role=role,
             status="completed",
             geometry=StructureViewerGeometry(
@@ -1350,7 +1416,9 @@ def _resolve_legacy(task_root: Path, workflow: str, job_id: str, warnings: list[
                 entries.append(StructureViewerEntry(
                     id=entry_id,
                     group_id="",
-                    label=product.label or rel_posix,
+                    label=_normalize_display_label(
+                        product.label or rel_posix, "formal_result", "legacy"
+                    ),
                     role="minimum",
                     status="completed",
                     geometry=StructureViewerGeometry(
@@ -1391,7 +1459,9 @@ def _resolve_legacy(task_root: Path, workflow: str, job_id: str, warnings: list[
                     entries.append(StructureViewerEntry(
                         id=entry_id,
                         group_id="",
-                        label=str(product.get("label") or rel_posix),
+                        label=_normalize_display_label(
+                            str(product.get("label") or rel_posix), "formal_result", "legacy"
+                        ),
                         role="minimum",
                         status="completed",
                         geometry=StructureViewerGeometry(

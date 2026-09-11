@@ -1,6 +1,6 @@
 # 结构查看器（Structure Viewer）设计文档
 
-**状态**: v1.0（2026-09-11，计划 todos 1-44 全部交付；测试矩阵与化学正确性套件见 §10）
+**状态**: v1.1（2026-09-11，UX spec v2.0 P0+P1 已交付；标签归一化 + default_entry_id 优先级锁定；测试矩阵与化学正确性套件见 §10）
 **范围**: Workbench「结构查看器」标签页的统一结构浏览、虚频可视化、轻量几何编辑，
 以及后端 `structure_viewer_v1` 目录契约 / `normal_modes_v1` 振动产物 / 4 个 REST 端点
 
@@ -25,6 +25,29 @@
 - 超长条目列表的虚拟化是固定 head 50 + tail 50 双窗口（**非滚动位置感知**）。
 - 叠合（overlay）展示两个原始帧，不返回/施加叠合变换矩阵；RMSD 由后端 Kabsch 计算。
 - 视图状态只存 `localStorage`（`acp.sv.view.*`），**绝不**写入 RESULT/ 或任务清单。
+
+### UX spec v2.0 布局与交互契约（P0+P1 已交付，P2 进行中）
+
+v2.0 重构将结构查看器从三栏固定面板布局改为**单列弹性工作区**。核心变更：
+
+**布局结构**：
+- `#sv-layout` 使用 `display:flex; flex-direction:column`，取代旧的 `grid-template-columns: 220px` 三栏 grid
+- `.sv-canvas-col` 包含 summary bar、3D viewer 容器、bottom strip、frame controller
+- 旧 `.sv-list-panel` 和 `.sv-inspector-panel` 已移除
+- 能量工作区（`#viewer-energy`）现在是 `#sv-layout` 的 **peer 视图**（sibling），不再嵌套在 sv-layout 内部
+
+**UI 元素**：
+- **Result summary bar**（`#sv-summary-bar`）：显示当前选中条目的标签、能量、badges、状态徽标、切换器、输入/结果切换、详情按钮、strip 展开按钮
+- **Bottom strip**（`#sv-bottom-strip`）：可折叠的条目列表，默认隐藏（单条目时始终隐藏），最大高度 88px；多条目时展示为横向滚动的 `sv-strip-item` 卡片，每个卡片显示标签、相对能量、Boltzmann 权重条
+- **Overlay drawers**（`#sv-drawer-measure/vibration/source/more`）：四个可覆盖抽屉，默认 `display:none`；由 `openDrawer(id)` 打开、`closeDrawer(id)` 关闭；每次只允许一个抽屉打开（`closeAllDrawers()` 互斥）
+- **Switcher dropdown**：conformer/candidate/batch 三种 kind，点击 summary bar 中的切换器标签展开下拉列表，带过滤输入框和 rank/energy/boltzmann 权重显示
+- **Input/result toggle**：当条目同时包含 `formal_result` 和 `calculation_input` 时，显示"结果"/"输入"切换按钮，切换时重绘 summary bar 并选择对应条目
+- **Unified frame controller**：IRC/scan 路径的统一播放控件（prev/next/play/slider/energy display）
+
+**交互契约**：
+- 条目选择通过 `selectEntry(entryId, origin)` 统一入口，origin 区分 `"user"`（列表点击）、`"energy_graph"`（能量图推送）、`"input_toggle"`（输入/结果切换）、`"switcher"`（切换器选择）
+- 选择时同步更新：summary bar 重绘、bottom strip active 样式、3D viewer 加载几何、IRC 播放停止、叠合清除
+- **双向同步**：选择条目时调用 `window._energyGraphSyncFromStructure(entryId)` 反向推送能量图高亮（best-effort，异常静默忽略）
 
 ## 2. `structure_viewer_v1` 载荷契约
 
@@ -53,6 +76,19 @@ entries/warnings 为 tuple；对缺失/损坏清单**从不抛异常**，错误�
   `read_traj_frame_xyz` 提取精确帧块。
 - `badges`：`selected`（rank-1）、`rank-N`、`TS`/`INT`、`未确认`、`兼容模式`、
   `failed-last-frame` 等。
+
+**显示标签归一化**：正式结果（`source.kind == "formal_result"`）的条目标签在投影时
+经 `_normalize_display_label()` 归一化。BatchOptimize 引擎给 CLI `--items-file` 产物
+的默认标签形如 `"input (TS, opt_freq)"`，其中 `input` 前缀来源于 item.name 的缺省值。
+结构查看器从不把这个原始 `input` 前缀作为正式结果的主标题显示。归一化规则：
+- `source_kind != "formal_result"` → 标签不变（input 结构保留原名）
+- 标签不以 `input` 开头 → 不变
+- Optimize 系工作流 → 含 TS 标签时 `"TS 优化结果"`，否则 `"优化结果"`
+- simple `singlepoint`/`frequency` → 专用中文标签
+- 其余 → `"计算结果"`
+- 有意义的 item 名称（如 `"mol_A (TS, opt_freq)"`）直接透传，不触发归一化
+
+（已锁定：`test_batch_formal_result_label_not_input`、`test_batch_formal_result_label_preserved_when_meaningful`、`test_legacy_formal_result_label_normalized`、`test_calculation_input_label_not_normalized`）
 
 **固定语义（矩阵测试锁定，todo 43）**：条目顺序 = 文件/清单顺序，**绝不**按能量重排；
 Confsearch 默认 rank-1；PES 默认链 = 最高置信 TS 推荐 → 最高分峰推荐 → 首个确认条目；
@@ -97,6 +133,19 @@ hexdigest 前 16 位。源顺序：`RESULT/result_manifest.json` →
 | scan | `RESULT/trajectories/scan_trajectory.json` 每帧一条，文件顺序，默认最低能帧 |
 | irc | `RESULT/irc/irc_{forward,reverse}.xyz`（单/多帧）逐帧条目，组 irc_forward(正向)/irc_reverse(反向)，默认 `irc_forward_0`；缺一个方向时 warning |
 | 其余/退役 | `_resolve_legacy`：result_manifest 结构/xyz 产品 → `result_summary.json` 回退，`兼容模式` 徽标，只读展示（**200，不用 410**） |
+
+**`default_entry_id` 选择优先级**（各解析器返回）：
+
+- simple 工作流：`formal_result`（正式结构产品）> `last_valid_cycle`（失败轨迹末帧）> `calculation_input`（input.xyz 回退）。正式结果和 input 同时存在时，正式结果胜出（`test_default_entry_prefers_formal_result` 锁定）
+- Confsearch：rank-1 条目
+- PESsearch：最高置信 TS 推荐 → 最高分峰推荐 → 首个确认条目
+- BatchOptimize：请求的 item_id（如指定了 `?item_id=`）> 首个完成项；全部失败时 `None`
+- IRC：`irc_forward_0`
+- scan：最低能帧
+
+**显示标签归一化**（投影时，非存储时）：formal_result 条目标签以 `"input"` 开头时
+按 §2 规则替换为工作流相关中文标签（`"TS 优化结果"` / `"优化结果"` / `"计算结果"` 等）。
+calculation_input 条目标签不受影响。详见 §2 `_normalize_display_label()` 条目。
 
 ## 6. API 面（`src/acp/api/v1_routes.py`）
 
@@ -166,10 +215,10 @@ run_root 权限）。`sweep_expired(ttl_days=7)` 清理；`manager._purge_job_re
 
 | 模块 | 命名空间 / 版本 | 职责 |
 |------|----------------|------|
-| `frontend/js/structure_viewer.js` | `window.ACPStructureViewer` 0.14.0 | 状态店（jobId/payload/revision/selectionToken/requestToken/dirty/displayed*）；目录拉取 + 409 重试；**共享几何加载器** `sharedLoadGeometry({canvasId, source})` + `geometryStore{currentXyz, stylePreset, cameras, loaderVersion, userPresetChosen, lastLoadDegraded}` + `registerCanvasLoader`/`saveCamera`/`restoreCamera`/`setStylePreset`；IRC 播放 `playIrcPath/stopIrcPlayback`（~4 fps，相机不跳变）；叠合 `loadOverlay/renderOverlay/clearOverlay`（第二模型 cyanCarbon + 最大位移原子高亮，unproven → 测量清除提示）；性能阈值 `LIST_VIRTUALIZE_THRESHOLD=100`（head50+tail50 双窗口 + 强制含选中/默认）、`TRAJECTORY_SAMPLE_THRESHOLD=500 → TARGET=200`（首尾保留、stride 采样，列表分组与 IRC 播放共用）、`LARGE_SYSTEM_ATOM_THRESHOLD=200`（>200 原子按次降级线框 + aria-live 通知，用户显式选样式则不降级）；视图状态 `localStorage["acp.sv.view.{job}:{entry}"]` `{version:1, camera, stylePreset, measurements, atomCount, savedAt}`（相机恢复带 atomCount 守卫；损坏/版本不符静默默认）；listbox 无障碍（role/aria-selected/aria-activedescendant + 方向键/Enter） |
+| `frontend/js/structure_viewer.js` | `window.ACPStructureViewer` 0.12.0 | **单列工作区布局**：渲染 summary bar + bottom strip + overlay drawers（旧 list panel / inspector panel 已移除）。**状态店**（jobId/payload/revision/selectionToken/requestToken/dirty/displayed*）；目录拉取 + 409 重试；**共享几何加载器** `sharedLoadGeometry({canvasId, source})` + `geometryStore{currentXyz, stylePreset, cameras, loaderVersion, userPresetChosen, lastLoadDegraded}` + `registerCanvasLoader`/`saveCamera`/`restoreCamera`/`setStylePreset`；IRC 播放 `playIrcPath/stopIrcPlayback`（~4 fps，相机不跳变）；叠合 `loadOverlay/renderOverlay/clearOverlay`（第二模型 cyanCarbon + 最大位移原子高亮，unproven → 测量清除提示）；性能阈值 `LIST_VIRTUALIZE_THRESHOLD=100`（head50+tail50 双窗口 + 强制含选中/默认）、`TRAJECTORY_SAMPLE_THRESHOLD=500 → TARGET=200`（首尾保留、stride 采样，列表分组与 IRC 播放共用）、`LARGE_SYSTEM_ATOM_THRESHOLD=200`（>200 原子按次降级线框 + aria-live 通知，用户显式选样式则不降级）；视图状态 `localStorage["acp.sv.view.{job}:{entry}"]` `{version:1, camera, stylePreset, measurements, atomCount, savedAt}`（相机恢复带 atomCount 守卫；损坏/版本不符静默默认）；listbox 无障碍（role/aria-selected/aria-activedescendant + 方向键/Enter）；**抽屉系统** `openDrawer(id)`/`closeDrawer(id)`/`closeAllDrawers()`/`_renderDrawerContent(id)` → `_renderSourceDrawer`/`_renderVibrationDrawer`/`_renderMeasureDrawer`/`_renderMoreDrawer`；**底部条** `_renderStripItem(entry)` + `_syncStripActive()`（选择同步 active 样式）；**切换器** `_openSwitcherDropdown`/`_closeSwitcherDropdown`（conformer/candidate/batch 三种 kind，过滤输入框 + rank 列表）；**输入/结果切换** `sv-input-result-toggle`（formal_result vs calculation_input 条目间切换）；**双向同步**：选择条目时调用 `window._energyGraphSyncFromStructure(entryId)` 反向推送能量图高亮 |
 | `frontend/js/vibration_viewer.js` | `window.ACPVibrationViewer` 0.6.0 | 频率检查器（负频置顶排序、IR 强度）、位移箭头（振幅 0.05-0.6、>50 原子跳氢）、rAF 动画（30fps 节流、getView/setView 相机保持、禁用内置 animate）、播放/编辑互斥（`ACPStructureEditor.setLocked`）、拆卸契约 `stopAnimationAndRestore/handleTeardown`（切 tab/切 job/销毁 viewer/切条目）、TS 证据 `tsJudgment`（仅证据展示，判定归 Batch/IRC）、`geometryMismatch` 几何绑定门 |
 | `frontend/js/structure_editor.js` | `window.ACPStructureEditor` 0.8.0 | 邻接图（显式键或共价半径 1.3 推断）、键长 0.4-5.0 Å / 键角 1-179° / 二面角（(-180,180] 最短旋转）编辑、环/断开拒绝、事务引擎（undo/redo/reset 字节级还原、碰撞 <0.55·(ri+rj) 警告、entry 作用域）、dirty 同步到查看器刷新守卫、导出 XYZ + 另存为结构资产（POST `/structure-assets`，provenance 注释 + edit_operations 全量）+ 新建计算预填（**绝不**代提交） |
-| `frontend/css/structure_viewer.css` | 0.8.0 | 三栏布局/抽屉/徽标/播放条/降级通知/焦点可见样式 |
+| `frontend/css/structure_viewer.css` | 0.8.0 | 单列 flex 工作区（`.sv-layout { display:flex; flex-direction:column }`）；summary bar / bottom strip / overlay drawers / switcher dropdown / 输入结果切换 / 播放条 / 降级通知 / 焦点可见样式；1100px 断点抽屉响应式 |
 
 合规：视图投影一律经 `TrajectoryFrame.to_node()`（反模式 #28）；查看器只读 +
 绝不代提交任务（#29）；所有 viewer 装载路径复用 `scheduleViewerFraming`
@@ -179,9 +228,9 @@ run_root 权限）。`sweep_expired(ttl_days=7)` 清理；`manager._purge_job_re
 
 | 文件 | 锁定内容 |
 |------|----------|
-| `tests/test_acp_structure_viewer.py` | 载荷契约、revision、id 方案、损坏清单、8 类解析器、叠合 RMSD（Kabsch 精度）、**TestAcceptanceMatrix**（状态矩阵/全序/Boltzmann 混合/全失败 Batch/解析器级只读快照） |
+| `tests/test_acp_structure_viewer.py` | 载荷契约、revision、id 方案、损坏清单、8 类解析器、叠合 RMSD（Kabsch 精度）、**TestAcceptanceMatrix**（状态矩阵/全序/Boltzmann 混合/全失败 Batch/解析器级只读快照）、**标签归一化**（`test_batch_formal_result_label_not_input`："input (TS, opt_freq)" → "TS 优化结果"；`test_batch_formal_result_label_preserved_when_meaningful`：有意义名称透传；`test_legacy_formal_result_label_normalized`：遗留清单 "input" → "计算结果"；`test_calculation_input_label_not_normalized`：input 条目不触发归一化）、**default_entry_id 优先级**（`test_default_entry_prefers_formal_result`：formal_result > calculation_input） |
 | `tests/test_acp_api_structure_viewer.py` | 4 端点全覆盖：404/409/路径逃逸/远程 pending_fetch + fetch=1/历史投影 no-write 快照/IRC 逐帧几何/叠合端点 |
 | `tests/test_acp_frequency_modes.py` | ORCA 解析矩阵（分块/多 section 末节生效/零模分流/索引对齐）、`normal_modes_v1` 产品、executor/Batch 落盘、**化学正确性**（产物不可互换、跨语言 TS 门一致性、IRC 门差异锁定） |
 | `tests/test_acp_irc_projection.py` | `VIEW_REGISTRY["irc"]`、块解析、双方向路径序（非单调能量证明不重排）、无能量降级、单方向 warning |
 | `tests/test_acp_sampling_graph.py` | sampling 投影 + VIEW_REGISTRY 回归（irc 注册后保持完整） |
-| `tests/test_frontend_sync.py` | 前端全合同：命名空间/i18n 双语完整（含 STR 机械扫描）/禁用标识符/viewer framing/store 懒加载与陈旧守卫/共享加载器/IRC 播放/叠合/性能阈值/视图状态/listbox 无障碍/**化学正确性**（参考分子编辑序列、±180 最短路径、断开拒绝、模式不混用） |
+| `tests/test_frontend_sync.py` | 前端全合同：命名空间/i18n 双语完整（含 STR 机械扫描）/禁用标识符/viewer framing/store 懒加载与陈旧守卫/共享加载器/IRC 播放/叠合/性能阈值/视图状态/listbox 无障碍/**化学正确性**（参考分子编辑序列、±180 最短路径、断开拒绝、模式不混用）/**UX spec v2.0 布局合同**：`test_tab_independence_energy_not_in_sv_layout`（energy workspace 与 sv-layout peer 关系）、`test_drawers_default_closed`（四个抽屉 display:none 默认）、`test_summary_bar_exists_in_html`（summary bar 存在 + CSS flex）、`test_bottom_strip_defaults_hidden`（底部条默认隐藏）、`test_no_empty_inspector_sections`（renderInspector 驱动抽屉渲染而非空段落）、`test_structure_viewer_summary_strip_rendering`（renderStructureViewer 驱动 summary bar + bottom strip）、`test_energy_workspace_peer_layout_contract`（energy workspace 70/30 grid + focus mode + 响应式） |

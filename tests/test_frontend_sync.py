@@ -1182,12 +1182,12 @@ def test_structure_source_ref_records_project_provenance() -> None:
     assert "results.cross_project" in loader
 
 
-def test_energy_viewer_refactor_dom_contracts() -> None:
-    """Structural contracts for the energy-viewer-denoise-candidate-card refactor.
+def test_energy_workspace_peer_layout_contract() -> None:
+    """Structural contracts for the energy viewer after the P0 workspace split.
 
-    These assertions guard the new DOM structure introduced across Todos 1-10:
-    candidate band, candidate card, hit layers, removed elements, nice ticks,
-    unified chart core, and responsive layout.
+    The energy workspace is a peer canvas view (sibling of #sv-layout), using a
+    70/30 chart/inspector grid with a focus mode and a narrow-screen fallback.
+    Candidate band / card / hit-layer contracts from the denoise refactor stay.
     """
     html = FRONTEND.read_text(encoding="utf-8")
 
@@ -1214,7 +1214,23 @@ def test_energy_viewer_refactor_dom_contracts() -> None:
     assert "function energyChartBuildSvg(cfg)" in html, "Unified chart core missing"
     assert "function energyChartNiceTicks(" in html, "Nice ticks function missing"
 
-    assert "clamp(340px, 24vw, 380px)" in html, "Right column clamp width missing"
+    # Peer layout (UX spec v2.0 P0): the energy workspace is NOT a child of
+    # #sv-layout; it renders after the structure workspace closes.
+    _, layout_end = _div_span(html, 'id="sv-layout"')
+    assert html.index('id="viewer-energy"') > layout_end, (
+        "#viewer-energy must appear after the closing #sv-layout tag (peer view)"
+    )
+
+    assert "grid-template-columns: minmax(0, 7fr) minmax(0, 3fr)" in html, (
+        "Energy workspace 70/30 chart/inspector split missing"
+    )
+    assert "energy-focus-mode" in html, "Energy focus-mode class missing"
+
+    energy_media = html.split("@media (max-width: 1100px)", 1)[1].split("}", 1)[0]
+    assert ".energy-workspace-grid" in energy_media, (
+        "Energy workspace must collapse to one column at <=1100px"
+    )
+
     assert "structureFraming" in html, "Structure framing state missing"
     assert "scheduleViewerFraming(" in html, "Shared framing scheduler missing"
     assert "data-expandable" in html, "Expandable field attribute missing"
@@ -1638,18 +1654,29 @@ def test_structure_viewer_node_logic_select_entry_token() -> None:
 # Todo 16: structure list + inspector + narrow-screen drawers
 # ---------------------------------------------------------------------------
 
-def test_structure_list_inspector_html_contract() -> None:
-    """HTML contract: list/inspector/playback container ids present inside structure tab."""
+def test_structure_workspace_html_contract() -> None:
+    """HTML contract: single-column workspace (summary bar + strip + drawers).
+
+    The legacy list/inspector panels were removed in the UX spec v2.0 P0
+    restructure; their ids must never come back into the static markup.
+    """
     html = FRONTEND.read_text(encoding="utf-8")
 
-    assert 'id="structure-list-panel"' in html
-    assert 'id="structure-inspector-panel"' in html
     assert 'id="structure-playback-bar"' in html
     assert 'id="sv-layout"' in html
-    assert 'id="sv-list-header"' in html
-    assert 'id="sv-list-body"' in html
-    assert 'id="sv-inspector-header"' in html
-    assert 'id="sv-inspector-body"' in html
+    assert 'id="sv-summary-bar"' in html
+    assert 'id="sv-bottom-strip"' in html
+    assert 'id="sv-drawer-measure"' in html
+    assert 'id="sv-drawer-vibration"' in html
+    assert 'id="sv-drawer-source"' in html
+    assert 'id="sv-drawer-more"' in html
+
+    assert 'id="sv-list-header"' not in html
+    assert 'id="sv-list-body"' not in html
+    assert 'id="sv-inspector-header"' not in html
+    assert 'id="sv-inspector-body"' not in html
+    assert 'id="structure-list-panel"' not in html
+    assert 'id="structure-inspector-panel"' not in html
 
     # viewer-3d must still exist exactly once (no new canvas)
     assert html.count('id="viewer-3d"') == 1
@@ -1681,13 +1708,20 @@ def test_structure_viewer_badge_chips_include_unconfirmed_legacy() -> None:
     assert "sv-badge-rank" in content
 
 
-def test_structure_viewer_group_hide_logic() -> None:
-    """JS contract: single-entry payloads hide the list panel."""
+def test_structure_viewer_summary_strip_rendering() -> None:
+    """JS contract: renderStructureViewer drives the summary bar + bottom strip."""
     js = FRONTEND_JS_DIR / "structure_viewer.js"
     content = js.read_text(encoding="utf-8")
 
-    assert "sv-list-hidden" in content
-    assert "entries.length > 1" in content or "entries.length>1" in content
+    assert "sv-list-hidden" not in content
+
+    marker = "function renderStructureViewer()"
+    assert content.count(marker) == 1
+    render_body = content.split(marker, 1)[1]
+    render_body = render_body[: render_body.index("function _renderStripItem(")]
+
+    assert "sv-summary-bar" in render_body
+    assert "sv-bottom-strip" in render_body
 
 
 def test_structure_viewer_availability_pending_notice() -> None:
@@ -1712,28 +1746,130 @@ def test_structure_viewer_source_kind_labels() -> None:
     assert "\u624b\u52a8\u6587\u4ef6" in content        # 手动文件
 
 
-def test_structure_viewer_css_drawer_media_queries() -> None:
-    """CSS contract: drawer media queries present."""
+def test_structure_viewer_css_drawer_responsive() -> None:
+    """CSS contract: overlay drawers shrink at the 1100px breakpoint."""
     css = FRONTEND_CSS_DIR / "structure_viewer.css"
     content = css.read_text(encoding="utf-8")
 
-    assert "@media" in content
     assert "sv-drawer-open" in content
     assert "sv-drawer-overlay" in content
-    assert "1100px" in content
-    assert "860px" in content
+    assert "@media (max-width: 1100px)" in content
+
+    media_block = content.split("@media (max-width: 1100px)", 1)[1].split("@media", 1)[0]
+    assert ".sv-drawer" in media_block
+    assert "width" in media_block
 
 
-def test_structure_viewer_css_three_column_grid() -> None:
-    """CSS contract: three-column grid layout for sv-layout."""
+def test_structure_viewer_css_single_column_layout() -> None:
+    """CSS contract: single-column flex workspace; legacy list/inspector panels gone."""
     css = FRONTEND_CSS_DIR / "structure_viewer.css"
     content = css.read_text(encoding="utf-8")
 
-    assert "grid-template-columns" in content
-    assert "sv-layout" in content
-    assert "sv-list-panel" in content
-    assert "sv-inspector-panel" in content
-    assert "sv-canvas-col" in content
+    layout_block = content.split(".sv-layout {", 1)[1].split("}", 1)[0]
+    assert "display: flex" in layout_block
+    assert "flex-direction: column" in layout_block
+    assert "display: grid" not in layout_block
+
+    assert ".sv-summary-bar" in content
+    assert ".sv-bottom-strip" in content
+    assert ".sv-drawer" in content
+    assert ".sv-canvas-col" in content
+
+    assert "grid-template-columns: 220px" not in content
+    assert ".sv-list-panel" not in content
+    assert ".sv-inspector-panel" not in content
+
+
+# ---------------------------------------------------------------------------
+# UX spec v2.0 P0: single-column workspace + summary bar + strip + drawers
+# ---------------------------------------------------------------------------
+
+def _div_span(html: str, id_token: str) -> tuple[int, int]:
+    """Return the (start, end) character span of the <div> carrying id_token."""
+    token_pos = html.index(id_token)
+    start = html.rindex("<div", 0, token_pos)
+    depth = 0
+    pos = start
+    while True:
+        next_open = html.find("<div", pos)
+        next_close = html.find("</div>", pos)
+        if next_close == -1:
+            raise AssertionError(f"unbalanced div nesting while scanning {id_token}")
+        if next_open != -1 and next_open < next_close:
+            depth += 1
+            pos = next_open + len("<div")
+        else:
+            depth -= 1
+            pos = next_close + len("</div>")
+            if depth == 0:
+                return start, pos
+
+
+def test_tab_independence_energy_not_in_sv_layout() -> None:
+    """#viewer-energy is a peer canvas view, not a descendant of #sv-layout."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert html.count('id="sv-layout"') == 1
+    assert html.count('id="viewer-energy"') == 1
+
+    layout_start, layout_end = _div_span(html, 'id="sv-layout"')
+    assert html.index('id="viewer-energy"') > layout_end, (
+        "#viewer-energy must be rendered after the closing </div> of #sv-layout"
+    )
+    layout_block = html[layout_start:layout_end]
+    assert 'id="viewer-energy"' not in layout_block
+    assert 'id="structure-playback-bar"' not in layout_block
+
+
+def test_drawers_default_closed() -> None:
+    """All four overlay drawers start hidden in the static HTML."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    for drawer_id in ("measure", "vibration", "source", "more"):
+        pattern = '<div[^>]*id="sv-drawer-' + drawer_id + '"[^>]*>'
+        match = re.search(pattern, html)
+        assert match is not None, f"drawer div missing: sv-drawer-{drawer_id}"
+        assert "display:none" in match.group(0).replace(" ", ""), (
+            f"sv-drawer-{drawer_id} must default to display:none"
+        )
+
+
+def test_summary_bar_exists_in_html() -> None:
+    """Summary bar id exists and has dedicated CSS rules."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    css = (FRONTEND_CSS_DIR / "structure_viewer.css").read_text(encoding="utf-8")
+
+    assert 'id="sv-summary-bar"' in html
+    assert ".sv-summary-bar" in css
+    summary_block = css.split(".sv-summary-bar {", 1)[1].split("}", 1)[0]
+    assert "display: flex" in summary_block
+
+
+def test_bottom_strip_defaults_hidden() -> None:
+    """Bottom strip exists in HTML but starts hidden for single-entry payloads."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    match = re.search(r'<div[^>]*id="sv-bottom-strip"[^>]*>', html)
+    assert match is not None, "sv-bottom-strip div missing"
+    assert "display:none" in match.group(0).replace(" ", ""), (
+        "sv-bottom-strip must default to display:none"
+    )
+
+
+def test_no_empty_inspector_sections() -> None:
+    """renderInspector refreshes open drawers instead of fabricating empty sections."""
+    js = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+
+    inspector_body = js.split("function renderInspector()", 1)[1].split("\n  function ", 1)[0]
+    assert "sv-inspector-section" not in inspector_body
+
+    for fn in (
+        "_renderSourceDrawer",
+        "_renderVibrationDrawer",
+        "_renderMeasureDrawer",
+        "_renderMoreDrawer",
+    ):
+        assert f"function {fn}(" in js, f"drawer content renderer missing: {fn}"
 
 
 # ---------------------------------------------------------------------------

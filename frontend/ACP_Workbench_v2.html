@@ -739,13 +739,15 @@ body.resizing-v canvas {
 .canvas-area {
   height: 100%;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
   min-height: 0;
 }
 .canvas-tabs { grid-row: 1; }
 .canvas-toolbar { grid-row: 2; }
-.viewer-container { grid-row: 3; }
+.sv-layout { grid-row: 3; min-height: 0; }
+#viewer-energy { grid-row: 3; min-height: 0; }
 .frame-controller { grid-row: 4; }
+.sv-playback-bar { grid-row: 5; }
 
 .canvas-tabs {
   display: flex;
@@ -831,8 +833,7 @@ body.resizing-v canvas {
 #viewer-3d,
 .viewer-mechanism,
 .viewer-coming-soon,
-.viewer-empty,
-#viewer-energy {
+.viewer-empty {
   position: absolute;
   inset: 0;
 }
@@ -849,10 +850,11 @@ body.resizing-v canvas {
 }
 
 .viewer-energy {
-  z-index: 2;
   display: none;
-  padding: 12px;
+  min-height: 0;
+  flex: 1;
   overflow: hidden;
+  padding: 12px;
   background:
     linear-gradient(180deg, rgba(10, 14, 20, 0.72), rgba(10, 14, 20, 0.84)),
     radial-gradient(circle at top left, rgba(78, 161, 255, 0.10), transparent 26%);
@@ -1009,9 +1011,15 @@ body.resizing-v canvas {
 .plot-tool:disabled, .plot-tool:disabled svg { cursor: not-allowed; }
 .energy-workspace-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(340px, 24vw, 380px);
+  grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
   gap: 12px;
   min-height: 0;
+}
+.energy-workspace-grid.energy-focus-mode {
+  grid-template-columns: minmax(0, 1fr);
+}
+.energy-workspace-grid.energy-focus-mode .energy-inspector-panel {
+  display: none;
 }
 .energy-chart-panel,
 .energy-inspector-panel {
@@ -1546,7 +1554,11 @@ g[data-energy-draggable].dragging { cursor: grabbing; opacity: 0.85; }
 }
 
 @media (max-width: 1199px) {
-  .energy-workspace-grid { grid-template-columns: minmax(0, 1fr) 340px; }
+  .energy-workspace-grid { grid-template-columns: minmax(0, 1fr) minmax(280px, 30%); }
+}
+
+@media (max-width: 1100px) {
+  .energy-workspace-grid { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; }
 }
 
 @media (max-width: 1023px) {
@@ -3572,11 +3584,8 @@ option, optgroup {
         </div>
 
         <div class="sv-layout" id="sv-layout">
-          <div class="sv-list-panel" id="structure-list-panel">
-            <div class="sv-list-header" id="sv-list-header"></div>
-            <div class="sv-list-body" id="sv-list-body"></div>
-          </div>
           <div class="sv-canvas-col">
+            <div class="sv-summary-bar" id="sv-summary-bar"></div>
             <div class="viewer-container">
               <div id="viewer-3d"></div>
               <div class="viewer-mechanism" id="viewer-mechanism" style="display:none;"></div>
@@ -3592,8 +3601,8 @@ option, optgroup {
                   <span data-i18n="viewer.coming">该工作台将在后续阶段开放</span>
                 </div>
               </div>
-              <div id="viewer-energy" class="viewer-energy" style="display:none;"></div>
             </div>
+            <div class="sv-bottom-strip" id="sv-bottom-strip" style="display:none;"></div>
             <div class="frame-controller" id="frame-controller" style="display:none;">
               <button class="frame-btn" id="frame-prev">
                 <svg viewBox="0 0 20 20" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2"><path d="M12 4L6 10L12 16"/></svg>
@@ -3607,11 +3616,12 @@ option, optgroup {
               <span class="frame-energy" id="frame-energy"></span>
             </div>
           </div>
-          <div class="sv-inspector-panel" id="structure-inspector-panel">
-            <div class="sv-inspector-header" id="sv-inspector-header"></div>
-            <div class="sv-inspector-body" id="sv-inspector-body"></div>
-          </div>
+          <div class="sv-drawer" id="sv-drawer-measure" style="display:none;"></div>
+          <div class="sv-drawer" id="sv-drawer-vibration" style="display:none;"></div>
+          <div class="sv-drawer" id="sv-drawer-source" style="display:none;"></div>
+          <div class="sv-drawer" id="sv-drawer-more" style="display:none;"></div>
         </div>
+        <div id="viewer-energy" class="viewer-energy" style="display:none;"></div>
         <div class="sv-playback-bar" id="structure-playback-bar" role="toolbar" aria-label="结构查看器播放控制" style="display:none;"></div>
       </div>
     </section>
@@ -5919,6 +5929,22 @@ const I18N = {
     "structure.perf.partial_list": "…显示部分",
     "structure.perf.sampled": "已抽样显示",
     "structure.view.restored_measurements": "恢复的测量",
+    "structure.switcher.conformer": "构象",
+    "structure.switcher.candidate": "候选",
+    "structure.switcher.batch_item": "项目",
+    "structure.switcher.unconfirmed": "未确认",
+    "structure.switcher.filter_placeholder": "筛选…",
+    "structure.switcher.has_imag": "有虚频",
+    "structure.toggle_result": "结果",
+    "structure.toggle_input": "初始",
+    "structure.overlay_compare": "叠合比较",
+    "structure.strip_toggle_show": "构象条",
+    "structure.summary_bar": "结果摘要",
+    "structure.input_result_toggle": "输入/结果切换",
+    "structure.strip_label": "构象列表",
+    "structure.switcher.label": "切换条目",
+    "structure.drawer.close": "关闭",
+    "structure.drawer.more": "更多操作",
     "structure.edit.move_left": "移动左侧",
     "structure.edit.move_right": "移动右侧",
     "structure.edit.prov_explicit": "文件显式键",
@@ -6884,6 +6910,22 @@ const I18N = {
     "structure.perf.partial_list": "…showing",
     "structure.perf.sampled": "sampled",
     "structure.view.restored_measurements": "Restored measurements",
+    "structure.switcher.conformer": "Conformer",
+    "structure.switcher.candidate": "Candidate",
+    "structure.switcher.batch_item": "Item",
+    "structure.switcher.unconfirmed": "unconfirmed",
+    "structure.switcher.filter_placeholder": "Filter…",
+    "structure.switcher.has_imag": "imag. freq.",
+    "structure.toggle_result": "Result",
+    "structure.toggle_input": "Input",
+    "structure.overlay_compare": "Overlay",
+    "structure.strip_toggle_show": "Strip",
+    "structure.summary_bar": "Result Summary",
+    "structure.input_result_toggle": "Input/Result Toggle",
+    "structure.strip_label": "Conformer List",
+    "structure.switcher.label": "Switch Entry",
+    "structure.drawer.close": "Close",
+    "structure.drawer.more": "More Actions",
     "structure.edit.move_left": "Move left side",
     "structure.edit.move_right": "Move right side",
     "structure.edit.prov_explicit": "Explicit file bonds",
@@ -10569,6 +10611,10 @@ function energyGraphWorkspaceMarkup(data) {
         '<button class="plot-tool" data-energy-action="reload" type="button" title="\u91cd\u65b0\u52a0\u8f7d" aria-label="\u91cd\u65b0\u52a0\u8f7d" data-tip="\u91cd\u65b0\u52a0\u8f7d" data-tip-keys="Ctrl+R"><svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10a7 7 0 1 1 2 5M3 10v4M3 10h4"/></svg></button>' +
       '</div>' +
       '<div class="tool-divider"></div>' +
+      '<div class="tool-group">' +
+        '<button class="plot-tool" data-energy-action="focus-curve" type="button" title="\u4e13\u6ce8\u66f2\u7ebf" aria-label="\u4e13\u6ce8\u66f2\u7ebf" data-tip="\u4e13\u6ce8\u66f2\u7ebf"><svg viewBox="0 0 20 20" width="16" height="16" stroke="currentColor" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h14v14H3z"/><path d="M7 3v14M3 7h14" opacity="0.3"/></svg></button>' +
+      '</div>' +
+      '<div class="tool-divider"></div>' +
       energyAnnotationToolbarMarkup() +
       '<span class="energy-toolbar-spacer"></span>' +
       (hasReview
@@ -11154,6 +11200,14 @@ function energyGraphBind(root) {
       if (action === "toggle-selection-lock") { energyGraphToggleSelectionLock(); return; }
       if (action === "reload") { renderEnergyGraphWorkspace(lastSelectedJob); return; }
       if (action === "retry") { renderEnergyGraphWorkspace(lastSelectedJob); return; }
+      if (action === "focus-curve") {
+        var grid = root.querySelector(".energy-workspace-grid");
+        if (grid) {
+          grid.classList.toggle("energy-focus-mode");
+          button.classList.toggle("active", grid.classList.contains("energy-focus-mode"));
+        }
+        return;
+      }
       const node = energyGraphCurrentNode(data);
       const frame = node && node.frame_index != null ? Number(node.frame_index) : null;
       if (frame == null) return;
@@ -11259,6 +11313,40 @@ function energyGraphSelectFrame(frameIndex, origin) {
     window.ACPStructureViewer.onEnergyNodeSelected(energyGraphState.jobId, entryMeta);
   }
 }
+
+window._energyGraphSyncFromStructure = function(entryId) {
+  if (!entryId || !energyGraphState.data || !energyGraphState.jobId) return;
+  var data = energyGraphState.data;
+  var nodes = data.nodes || [];
+  var annotations = data.annotations || [];
+  var view = String(data.view_type || "");
+  var matchedNode = null;
+
+  if (entryId.indexOf("conf_") === 0) {
+    var key = entryId.replace(/^conf_/, "");
+    matchedNode = nodes.find(function(n) { return String(n.id) === entryId || String(n.id) === "conf_" + key; });
+  } else if (entryId.indexOf("pes_") === 0) {
+    var candidateId = entryId.replace(/^pes_/, "");
+    var ann = annotations.find(function(a) { return a.candidate_id === candidateId; });
+    if (ann) matchedNode = nodes.find(function(n) { return Number(n.frame_index) === Number(ann.frame_index); });
+  } else if (entryId.indexOf("scan_frame_") === 0) {
+    var fi = Number(entryId.replace("scan_frame_", ""));
+    matchedNode = nodes.find(function(n) { return Number(n.frame_index) === fi; });
+  } else if (entryId.indexOf("batch_") === 0) {
+    matchedNode = nodes.find(function(n) { return String(n.id) === entryId; });
+  } else {
+    matchedNode = nodes.find(function(n) { return String(n.id) === entryId; });
+  }
+
+  if (matchedNode && String(matchedNode.id) !== String(energyGraphState.selectedNodeId)) {
+    energyGraphState.selectedNodeId = String(matchedNode.id);
+    energyGraphState.selectionOrigin = "structure_sync";
+    energyGraphState.liveFollow = false;
+    if (activeViewerTab === "energy") {
+      energyGraphUpdateSelection(true, false);
+    }
+  }
+};
 
 function energyGenCandidateName(frameIndex, role) {
   var tag = role === "ts" ? "TS" : "INT";
@@ -12383,6 +12471,7 @@ async function setViewerTab(tab) {
   });
   var canvasArea = document.querySelector(".canvas-area");
   if (canvasArea) canvasArea.classList.toggle("energy-mode", tab === "energy");
+  var svLayout = document.getElementById("sv-layout");
   var comingSoon = document.getElementById("viewer-coming-soon");
   var empty = document.getElementById("viewer-empty");
   var frameController = document.getElementById("frame-controller");
@@ -12390,21 +12479,39 @@ async function setViewerTab(tab) {
   var energy = getEnergyViewerContainer();
   if (tab !== "energy") { if (energy) energy.style.display = "none"; energyGraphDestroyViewer(); }
   if (tab === "energy") {
+    if (svLayout) svLayout.style.display = "none";
     comingSoon.style.display = "none";
     empty.style.display = "none";
     frameController.style.display = "none";
     if (mechanism) mechanism.style.display = "none";
     if (energy) energy.style.display = "block";
     await renderEnergyGraphWorkspace(lastSelectedJob);
+    if (energyGraphState.data) {
+      energyGraphUpdateSelection(true, true);
+      energyGraphUpdateSelectionToolbar();
+    }
     return;
   }
   if (tab === "structure") {
+    if (svLayout) svLayout.style.display = "";
     if (mechanism) mechanism.style.display = "none";
     comingSoon.style.display = "none";
     empty.style.display = viewerModelLoaded ? "none" : "grid";
     frameController.style.display = molDoc.frames.length > 1 ? "flex" : "none";
+    if (energyGraphState.data && energyGraphState.selectedNodeId && window.ACPStructureViewer && window.ACPStructureViewer.onEnergyNodeSelected) {
+      var nodes = energyGraphState.data.nodes || [];
+      var selNode = nodes.find(function(n) { return String(n.id) === String(energyGraphState.selectedNodeId); });
+      if (selNode) {
+        var entryMeta = { kind: String(energyGraphState.data.view_type || ""), frameIndex: Number(selNode.frame_index) };
+        if (entryMeta.kind === "conformer") { entryMeta.key = String(selNode.id || "").replace(/^conf_/, ""); }
+        var ann = (energyGraphState.data.annotations || []).find(function(a) { return Number(a.frame_index) === Number(selNode.frame_index) && ["ts", "intermediate"].indexOf(a.type) >= 0; });
+        if (ann && ann.candidate_id) { entryMeta.kind = "pes"; entryMeta.candidateId = String(ann.candidate_id); }
+        window.ACPStructureViewer.onEnergyNodeSelected(energyGraphState.jobId, entryMeta);
+      }
+    }
     return;
   }
+  if (svLayout) svLayout.style.display = "";
   empty.style.display = "none";
   frameController.style.display = "none";
   if (tab === "path") {
