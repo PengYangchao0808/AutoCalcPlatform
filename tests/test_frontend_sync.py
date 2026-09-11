@@ -1770,6 +1770,20 @@ def test_structure_viewer_css_single_column_layout() -> None:
     assert "flex-direction: column" in layout_block
     assert "display: grid" not in layout_block
 
+    # Regression guard (2026-09-11): .sv-layout switched from the three-column
+    # grid to a flex column, but .sv-canvas-col kept only content height (no
+    # flex-grow) -> the viewer container collapsed to 0px and nothing rendered.
+    canvas_col_block = content.split(".sv-canvas-col {", 1)[1].split("}", 1)[0]
+    assert re.search(r"\bflex(-grow)?:\s*1", canvas_col_block), (
+        ".sv-canvas-col must declare flex: 1 to fill the workspace height"
+    )
+
+    viewer_container_block = (
+        content.split(".sv-canvas-col .viewer-container {", 1)[1].split("}", 1)[0]
+    )
+    assert "flex: 1" in viewer_container_block
+    assert "min-height: 0" in viewer_container_block
+
     assert ".sv-summary-bar" in content
     assert ".sv-bottom-strip" in content
     assert ".sv-drawer" in content
@@ -1778,6 +1792,24 @@ def test_structure_viewer_css_single_column_layout() -> None:
     assert "grid-template-columns: 220px" not in content
     assert ".sv-list-panel" not in content
     assert ".sv-inspector-panel" not in content
+
+
+def test_structure_viewer_css_ultrawide_canvas_col_width() -> None:
+    """CSS contract: >=1920px canvas column fills width up to 1600px, centered.
+
+    Regression guard (2026-09-11): `margin: 0 auto` disables flex cross-axis
+    stretch, so the ultrawide rule must set an explicit width or the canvas
+    column shrinks to fit-content (measured ~175px at a 2560px viewport).
+    """
+    css = FRONTEND_CSS_DIR / "structure_viewer.css"
+    content = css.read_text(encoding="utf-8")
+
+    assert "@media (min-width: 1920px)" in content
+    media_block = content.split("@media (min-width: 1920px)", 1)[1].split("@media", 1)[0]
+    canvas_block = media_block.split(".sv-canvas-col {", 1)[1].split("}", 1)[0]
+    assert "width: 100%" in canvas_block
+    assert "max-width: 1600px" in canvas_block
+    assert "margin: 0 auto" in canvas_block
 
 
 # ---------------------------------------------------------------------------

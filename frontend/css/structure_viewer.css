@@ -1,10 +1,13 @@
 /**
  * ACP Structure Viewer — Stylesheet
- * @version 0.8.0
+ * @version 0.8.1
  *
  * Design tokens inherited from ACP_Workbench_v2.html :root variables.
- * Three-column layout: list | canvas | inspector.
- * Narrow screens: list and inspector become drawers.
+ * Single-column elastic workspace (UX v2.0): summary bar | canvas | bottom
+ * strip | overlay drawers.
+ * Layout invariant: .sv-canvas-col must flex-grow to fill #sv-layout; at
+ * >=1920px it needs an explicit width so `margin: 0 auto` does not collapse
+ * it to fit-content.
  */
 
 /* ===== Token aliases (structure-viewer scoped) ===== */
@@ -172,6 +175,7 @@
 .sv-canvas-col {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -713,6 +717,7 @@
 
 @media (min-width: 1920px) {
   .sv-canvas-col {
+    width: 100%;
     max-width: 1600px;
     margin: 0 auto;
   }
