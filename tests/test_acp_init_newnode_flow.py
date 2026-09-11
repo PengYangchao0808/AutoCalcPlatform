@@ -15,6 +15,7 @@ import contextlib
 import io
 import os
 import stat
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -786,3 +787,52 @@ def test_integration_real_stages_over_fake_ssh_pool(tmp_path: Path, capsys: Any)
     cfg = nm_cls.call_args.args[0]
     assert cfg.execution_mode == "remote"
     assert cfg.nodes[0].name == "node-i"
+
+
+# --------------------------------------------------------------------------- #
+# Per-flow paramiko guard (D7): core-only install must abort cleanly
+# --------------------------------------------------------------------------- #
+
+
+def test_new_node_flow_paramiko_absent_returns_cleanly(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: Any
+) -> None:
+    """Guard fires BEFORE the type menu: install hint + clean abort."""
+    monkeypatch.setitem(sys.modules, "paramiko", None)
+    target, target_data = _write_target(tmp_path, {"cluster": {"type": "local"}})
+    prompts = FakePrompts(
+        menu_choices=[1, 1],  # LSF + 密码 — only consumed if the guard is missing
+        ask_answers=["10.0.0.8", "n1", "22", "ops"],
+        secrets=["pw"],
+    )
+
+    result = run_new_node(prompts.bundle(), target, target_data)
+
+    assert result == FlowResult(persisted=False, node_name=None, aborted_cleanly=True)
+    out = capsys.readouterr().out
+    assert "paramiko" in out
+    assert "pip install -e" in out  # same install hint as the existing-node flow
+    # Guard is the FIRST statement: no prompt (type menu included) was consumed.
+    assert prompts.menu_calls == []
+    assert prompts.ask_calls == []
+    assert prompts.secret_calls == []
+
+
+def test_new_node_flow_paramiko_absent_target_untouched(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setitem(sys.modules, "paramiko", None)
+    target, target_data = _write_target(tmp_path, {})
+    before = target.read_bytes()
+    prompts = FakePrompts(
+        menu_choices=[1, 1],
+        ask_answers=["10.0.0.8", "n1", "22", "ops"],
+        secrets=["pw"],
+    )
+
+    result = run_new_node(prompts.bundle(), target, target_data)
+
+    assert result == FlowResult(persisted=False, node_name=None, aborted_cleanly=True)
+    assert target.read_bytes() == before  # byte-identical — nothing persisted
+    assert "cluster" not in target_data  # no cluster.* key added
+    assert not list(tmp_path.glob("cccp.yaml.bak-*"))

@@ -673,6 +673,10 @@ def run_new_node(
 ) -> FlowResult:
     """Full new-cluster wizard flow (T7): declare → connect → bootstrap → persist.
 
+    A per-flow paramiko availability guard runs first (D7): a core-only
+    install gets the ``pip install -e '.[remote]'`` hint and a clean
+    ``aborted_cleanly=True`` result instead of an ImportError traceback.
+
     Orchestration order: 集群类型 menu → host → name (default host, D14d
     collision confirm) → port → username → auth menu (D14b expanduser) →
     :func:`run_connect_stage` → in-memory ``RemoteNode`` carrying the
@@ -702,6 +706,12 @@ def run_new_node(
         放弃 returns ``aborted_cleanly=True`` with nothing persisted and
         target_data untouched.
     """
+    try:
+        import paramiko  # noqa: F401 — per-flow availability guard (D7)
+    except ImportError:
+        print("声明新集群流程需要 paramiko。请先安装后重试：pip install -e '.[remote]'")
+        return FlowResult(persisted=False, node_name=None, aborted_cleanly=True)
+
     choice = prompts.menu("集群类型", ["LSF", "Openlava"])
     if choice == 0:
         return FlowResult(persisted=False, node_name=None, aborted_cleanly=True)
