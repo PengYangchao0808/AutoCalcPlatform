@@ -1,6 +1,6 @@
 /**
- * ACP Structure Editor — graph + bond-length/angle edits (Wave 6, todos 32-34)
- * @version 0.5.0
+ * ACP Structure Editor — graph + bond/angle/dihedral edits (Wave 6, todos 32-35)
+ * @version 0.6.0
  *
  * Namespace: window.ACPStructureEditor
  *
@@ -16,10 +16,13 @@
  *   - COVALENT_RADII / BOND_TOLERANCE / DEFAULT_RADIUS (named constants)
  *   - editBondLength(symbols, coords, edges, a, b, target, moveSide) (PURE)
  *   - editBondAngle(symbols, coords, edges, a, b, c, targetDeg, moveSide) (PURE)
+ *   - editDihedral(symbols, coords, edges, a, b, c, d, targetDeg, moveSide) (PURE)
+ *   - dihedralDeg(a, b, c, d) / normalizeDihedral(deg)  (PURE helpers)
  *   - angleDeg(p, q, r) / _principalAxis(points)   (PURE helpers)
  *   - resolveMoveSide(fragments, a, b, preferred) / defaultMoveSide(...) (PURE)
  *   - applyBondLengthEdit(a, b, targetLength, moveSide) (orchestration)
  *   - applyBondAngleEdit(a, b, c, targetDeg, moveSide) (orchestration)
+ *   - applyDihedralEdit(a, b, c, d, targetDeg, moveSide) (orchestration)
  *
  * Contract (doc §6.1-§6.3): edits are INTERNAL-COORDINATE ONLY — a bond
  * edit rigidly TRANSLATES one fragment, an angle edit rigidly ROTATES the
@@ -28,10 +31,11 @@
  * [0.4, 5.0] Å and angle targets outside [1, 179]° are rejected; ring
  * bonds (graph still connected after the cut) are rejected; collinear
  * angle input falls back to the most stable orthonormal axis with a
- * warning.  Accepted edits are staged in editorState.pendingEdit —
- * pushing them to the viewer and the undo/redo UI is todo 36.
+ * warning; dihedral targets normalize to (-180, 180] and rotate the
+ * C-side by the SHORTEST rotation.  Accepted edits are staged in
+ * editorState.pendingEdit — pushing them to the viewer and the undo/redo
+ * UI is todo 36.
  *
- * TODO(todo-35): dihedral edit
  * TODO(todo-36): undo/redo stack + dirty state + preview/apply pipeline
  * TODO(todo-37): save-as-asset + provenance metadata
  */
@@ -39,7 +43,7 @@
   "use strict";
 
   /** Version tag — bump on every structural change. */
-  var VERSION = "0.5.0";
+  var VERSION = "0.6.0";
 
   /* ---- user-visible strings (zh fallback; i18n dictionary keys land in todo 36) ---- */
   var STR = {
@@ -645,6 +649,180 @@
     return false;
   }
 
+  /* ---- dihedral edit (todo 35) ---- */
+
+  /**
+   * Signed dihedral A-B-C-D in degrees, normalized to (-180, 180]
+   * (praxeolitic formula).  Convention: the angle between plane A-B-C and
+   * plane B-C-D measured looking down the B -> C axis; POSITIVE when the
+   * far bond (C-D) appears rotated CLOCKWISE relative to the near bond
+   * (B-A)... equivalently, with b1 = normalize(C - B), the projection of
+   * the B -> A direction onto the plane orthogonal to b1 is v, the
+   * projection of the C -> D direction is w, and
+   *   dihedral = atan2((b1 x v) . w, v . w)
+   * Rotating the C-side about +b1 by delta ADDS delta to the dihedral
+   * (verified numerically in the todo-35 tests).
+   *
+   * @param {Array<number>} pA
+   * @param {Array<number>} pB
+   * @param {Array<number>} pC
+   * @param {Array<number>} pD
+   * @returns {number} degrees in (-180, 180]; 0 for degenerate input
+   */
+  function dihedralDeg(pA, pB, pC, pD) {
+    var b0 = [+pA[0] - +pB[0], +pA[1] - +pB[1], +pA[2] - +pB[2]];
+    var b1 = _normalize([+pC[0] - +pB[0], +pC[1] - +pB[1], +pC[2] - +pB[2]]);
+    var b2 = [+pD[0] - +pC[0], +pD[1] - +pC[1], +pD[2] - +pC[2]];
+    if (!b1) return 0;
+    var d0 = _dot(b0, b1);
+    var d2 = _dot(b2, b1);
+    var v = [b0[0] - d0 * b1[0], b0[1] - d0 * b1[1], b0[2] - d0 * b1[2]];
+    var w = [b2[0] - d2 * b1[0], b2[1] - d2 * b1[1], b2[2] - d2 * b1[2]];
+    var b1xv = _cross(b1, v);
+    return Math.atan2(_dot(b1xv, w), _dot(v, w)) * 180 / Math.PI;
+  }
+
+  /**
+   * Normalize an angle to (-180, 180] degrees.  -180 maps to +180 (the
+   * interval is half-open on the negative side).
+   *
+   * @param {number} deg
+   * @returns {number}
+   */
+  function normalizeDihedral(deg) {
+    var d = +deg;
+    if (!isFinite(d)) return 0;
+    d = d % 360;
+    if (d > 180) d -= 360;
+    else if (d <= -180) d += 360;
+    return d;
+  }
+
+  /**
+   * Edit the A-B-C-D dihedral to `targetDeg` by rigidly rotating the
+   * C-side fragment about the B-C axis.  The target is normalized to
+   * (-180, 180] first; the rotation delta = normalizeDihedral(target -
+   * current) is the SHORTEST rotation (|delta| <= 180, never a 340°
+   * scenic route).  The A-side (atoms A and B) NEVER moves — for dihedral
+   * edits the C/D side is the only rotatable side, so `moveSide` is
+   * normalized to "C" exactly like the angle edit (anything but
+   * "A"/"B"/"C"/null rejects invalid_move_side).
+   *
+   * Atom ordering and bond topology are untouched: the returned array has
+   * the same length and index mapping, unmoved rows are the SAME
+   * references, and no edge data is modified.
+   *
+   * Rejections: missing A-B, B-C, or C-D edge -> "no_bond"; ring
+   * containing B-C (graph still connected after the cut) -> "ring_bond";
+   * degenerate |B-C| -> "degenerate".
+   *
+   * PURE: NEW coords array; C-side rigid (rotation about the B-C line
+   * preserves every internal distance; C itself lies ON the axis), input
+   * never mutated.
+   *
+   * @param {Array<string>} symbols
+   * @param {Array<Array<number>>} coords
+   * @param {Array<{a: number, b: number}>} edges
+   * @param {number} atomA
+   * @param {number} atomB
+   * @param {number} atomC
+   * @param {number} atomD
+   * @param {number} targetDeg
+   * @param {string|null} [moveSide] - normalized to "C" for dihedral edits
+   * @returns {{ok: boolean, reason?: string, coords?: Array<Array<number>>}}
+   */
+  function editDihedral(symbols, coords, edges, atomA, atomB, atomC, atomD, targetDeg, moveSide) {
+    var target = normalizeDihedral(targetDeg);
+    if (moveSide != null && moveSide !== "A" && moveSide !== "B" && moveSide !== "C") {
+      return { ok: false, reason: "invalid_move_side" };
+    }
+    if (!symbols || !coords || !edges) {
+      return { ok: false, reason: "no_bond" };
+    }
+    if (!_hasEdge(edges, atomA, atomB) || !_hasEdge(edges, atomB, atomC) ||
+        !_hasEdge(edges, atomC, atomD)) {
+      return { ok: false, reason: "no_bond" };
+    }
+
+    var fragments = fragmentsAfterCut(edges, coords.length, atomB, atomC);
+    var sideA = _componentOf(fragments, atomA);
+    var sideC = _componentOf(fragments, atomC);
+    if (sideA && sideC && sideA === sideC) {
+      return { ok: false, reason: "ring_bond" };
+    }
+    if (!sideA || !sideC) {
+      return { ok: false, reason: "no_bond" };
+    }
+
+    var rb = coords[atomB];
+    var rc = coords[atomC];
+    var axis = _normalize([+rc[0] - +rb[0], +rc[1] - +rb[1], +rc[2] - +rb[2]]);
+    if (!axis) {
+      return { ok: false, reason: "degenerate" };
+    }
+
+    var current = dihedralDeg(coords[atomA], rb, rc, coords[atomD]);
+    /* shortest rotation taking current -> target: |delta| <= 180 */
+    var delta = normalizeDihedral(target - current) * Math.PI / 180;
+
+    var movingSet = {};
+    for (var mi = 0; mi < sideC.length; mi++) movingSet[sideC[mi]] = true;
+
+    var out = [];
+    for (var i = 0; i < coords.length; i++) {
+      if (movingSet[i]) {
+        var v = [+coords[i][0] - +rb[0], +coords[i][1] - +rb[1], +coords[i][2] - +rb[2]];
+        var rotated = _rotateRodrigues(v, axis, delta);
+        out.push([rotated[0] + +rb[0], rotated[1] + +rb[1], rotated[2] + +rb[2]]);
+      } else {
+        out.push(coords[i]);
+      }
+    }
+    return { ok: true, coords: out };
+  }
+
+  /**
+   * Orchestration for a dihedral edit on the currently displayed entry
+   * (mirrors applyBondAngleEdit; viewer push deferred to todo 36).
+   *
+   * @param {number} atomA
+   * @param {number} atomB
+   * @param {number} atomC
+   * @param {number} atomD
+   * @param {number} targetDeg
+   * @param {string|null} [moveSide] - normalized to "C"
+   * @returns {{ok: boolean, reason?: string, coords?: Array<Array<number>>}}
+   */
+  function applyDihedralEdit(atomA, atomB, atomC, atomD, targetDeg, moveSide) {
+    if (locked) return { ok: false, reason: "locked" };
+    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
+      ? window.ACPStructureViewer.state
+      : null;
+    if (!svState || !svState.displayedCoords || !svState.displayedSymbols) {
+      return { ok: false, reason: "no_structure" };
+    }
+    var graph = editorState.graph || buildGraphFromCurrentEntry();
+    if (!graph) return { ok: false, reason: "no_structure" };
+
+    var result = editDihedral(
+      svState.displayedSymbols, svState.displayedCoords, graph.edges,
+      atomA, atomB, atomC, atomD, targetDeg, moveSide
+    );
+    if (result.ok) {
+      editorState.pendingEdit = {
+        type: "dihedral",
+        atomA: atomA,
+        atomB: atomB,
+        atomC: atomC,
+        atomD: atomD,
+        target: normalizeDihedral(targetDeg),
+        moveSide: "C",
+        coords: result.coords,
+      };
+    }
+    return result;
+  }
+
   /**
    * Orchestration for a bond-angle edit on the currently displayed entry
    * (mirrors applyBondLengthEdit; viewer push deferred to todo 36).
@@ -776,11 +954,15 @@
     parseMolBonds: parseMolBonds,
     editBondLength: editBondLength,
     editBondAngle: editBondAngle,
+    editDihedral: editDihedral,
+    dihedralDeg: dihedralDeg,
+    normalizeDihedral: normalizeDihedral,
     angleDeg: angleDeg,
     _principalAxis: _principalAxis,
     resolveMoveSide: resolveMoveSide,
     defaultMoveSide: defaultMoveSide,
     applyBondLengthEdit: applyBondLengthEdit,
     applyBondAngleEdit: applyBondAngleEdit,
+    applyDihedralEdit: applyDihedralEdit,
   };
 })();

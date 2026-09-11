@@ -4631,3 +4631,201 @@ def test_structure_editor_node_bond_angle_edit() -> None:
         f"Node angle-edit test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Wave 6 / todo 35: dihedral edit + shortest rotation + ring refusal
+# ---------------------------------------------------------------------------
+
+
+def test_structure_editor_dihedral_edit_contract() -> None:
+    """Contract: dihedral API names, normalization interval, shortest-
+    rotation comment, moveSide normalization, topology-preservation note."""
+    js = _EDITOR_JS_PATH.read_text(encoding="utf-8")
+
+    for name in (
+        "editDihedral",
+        "applyDihedralEdit",
+        "dihedralDeg",
+        "normalizeDihedral",
+    ):
+        assert name in js, f"{name} missing from structure_editor.js"
+
+    assert "(-180, 180]" in js
+    assert "SHORTEST rotation" in js
+    assert 'normalized to "C"' in js
+    assert "praxeolitic" in js
+
+
+def test_structure_editor_node_dihedral_edit() -> None:
+    """Node logic: dihedral hits target (1e-3 deg), shortest physical
+    rotation across the +-180 wrap (marker displacement), rigidity 1e-9,
+    A-side untouched, ring/no-bond rejections, normalization, staging."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = (textwrap.dedent("""\
+        var window = { fetch: null };
+        require(EDITOR_PATH);
+        var ed = window.ACPStructureEditor;
+
+        function dist(a, b) {
+            var dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
+            return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        }
+        function close(a, b, eps) { return Math.abs(a - b) <= (eps || 1e-9); }
+
+        // (c) normalizeDihedral
+        var cases = { 180: 180, "-180": 180, 190: -170, "-190": 170, 360: 0, 0: 0, 540: 180 };
+        for (var input in cases) {
+            if (ed.normalizeDihedral(parseFloat(input)) !== cases[input]) {
+                console.error("FAIL: normalize(" + input + ") = " +
+                    ed.normalizeDihedral(parseFloat(input)));
+                process.exit(1);
+            }
+        }
+
+        // dihedralDeg sanity: eclipsed 0, anti 180, +90, -90 (B->C along +x)
+        var B = [0, 0, 0], C = [1.5, 0, 0];
+        var A0 = [0, 1, 0];
+        if (!close(ed.dihedralDeg(A0, B, C, [1.5, 1, 0]), 0, 1e-9) ||
+            !close(ed.dihedralDeg(A0, B, C, [1.5, -1, 0]), 180, 1e-9) ||
+            !close(ed.dihedralDeg(A0, B, C, [1.5, 0, 1]), 90, 1e-9) ||
+            !close(ed.dihedralDeg(A0, B, C, [1.5, 0, -1]), -90, 1e-9)) {
+            console.error("FAIL: dihedralDeg convention");
+            process.exit(1);
+        }
+
+        // (a) butane-like chain A0-B1-C2-D3 + C-side marker E4
+        var symbols = ["C", "C", "C", "C", "H"];
+        var coords = [
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [1.5, 0.0, 0.0],
+            [1.5, 1.0, 0.0],
+            [2.4, 1.2, 0.5]
+        ];
+        var edges = [{ a: 0, b: 1 }, { a: 1, b: 2 }, { a: 2, b: 3 }, { a: 3, b: 4 }];
+        var snapshot = JSON.stringify(coords);
+
+        var res = ed.editDihedral(symbols, coords, edges, 0, 1, 2, 3, 60, null);
+        if (!res.ok) {
+            console.error("FAIL: rejected " + res.reason);
+            process.exit(1);
+        }
+        var out = res.coords;
+        var got = ed.dihedralDeg(out[0], out[1], out[2], out[3]);
+        if (!close(got, 60, 1e-3)) {
+            console.error("FAIL: dihedral " + got);
+            process.exit(1);
+        }
+        if (out[0] !== coords[0] || out[1] !== coords[1]) {
+            console.error("FAIL: A-side rows must keep identity");
+            process.exit(1);
+        }
+        if (out.length !== coords.length) {
+            console.error("FAIL: atom count/order changed");
+            process.exit(1);
+        }
+        if (!close(dist(out[2], out[3]), dist(coords[2], coords[3])) ||
+            !close(dist(out[3], out[4]), dist(coords[3], coords[4])) ||
+            !close(dist(out[2], out[4]), dist(coords[2], coords[4]))) {
+            console.error("FAIL: C-side deformed");
+            process.exit(1);
+        }
+        if (!close(dist(out[1], out[2]), dist(coords[1], coords[2]))) {
+            console.error("FAIL: B-C length changed");
+            process.exit(1);
+        }
+        if (JSON.stringify(coords) !== snapshot) {
+            console.error("FAIL: input mutated");
+            process.exit(1);
+        }
+
+        // (b) shortest path across the +-180 wrap: current +170 -> target -170
+        var Bb = [0, 0, 0], Cb = [1.0, 0, 0], Ab = [0, 1, 0];
+        var rad = Math.PI / 180;
+        var Db = [1.0, Math.cos(170 * rad), Math.sin(170 * rad)];
+        var marker = [1.0, Math.cos(170 * rad) * 2, Math.sin(170 * rad) * 2];
+        var wrapCoords = [Ab, Bb, Cb, Db, marker];
+        var wrapEdges = [{ a: 0, b: 1 }, { a: 1, b: 2 }, { a: 2, b: 3 }, { a: 2, b: 4 }];
+        var wrapRes = ed.editDihedral(symbols, wrapCoords, wrapEdges, 0, 1, 2, 3, -170, null);
+        if (!wrapRes.ok) {
+            console.error("FAIL: wrap rejected " + wrapRes.reason);
+            process.exit(1);
+        }
+        var wOut = wrapRes.coords;
+        var finalDihedral = ed.dihedralDeg(wOut[0], wOut[1], wOut[2], wOut[3]);
+        if (!close(finalDihedral, -170, 1e-3)) {
+            console.error("FAIL: wrap final " + finalDihedral);
+            process.exit(1);
+        }
+        // PHYSICAL shortest-path check: the marker sits at radius 2 from
+        // the axis; a 20-degree sweep moves it 2*2*sin(10 deg) = 0.6946,
+        // whereas a 340-degree sweep would move it ~3.985.
+        var disp = dist(wOut[4], marker);
+        if (!close(disp, 4 * Math.sin(10 * rad), 1e-6)) {
+            console.error("FAIL: marker displacement " + disp +
+                " is not the 20-degree chord");
+            process.exit(1);
+        }
+
+        // (d) ring 4-cycle -> ring_bond
+        var ring = [{ a: 0, b: 1 }, { a: 1, b: 2 }, { a: 2, b: 3 }, { a: 3, b: 0 }];
+        if (ed.editDihedral(symbols, coords, ring, 0, 1, 2, 3, 60, null).reason !== "ring_bond") {
+            console.error("FAIL: ring dihedral must reject");
+            process.exit(1);
+        }
+
+        // (e) missing each of the three edges -> no_bond
+        var missAB = [{ a: 1, b: 2 }, { a: 2, b: 3 }];
+        var missBC = [{ a: 0, b: 1 }, { a: 2, b: 3 }];
+        var missCD = [{ a: 0, b: 1 }, { a: 1, b: 2 }];
+        if (ed.editDihedral(symbols, coords, missAB, 0, 1, 2, 3, 60, null).reason !== "no_bond" ||
+            ed.editDihedral(symbols, coords, missBC, 0, 1, 2, 3, 60, null).reason !== "no_bond" ||
+            ed.editDihedral(symbols, coords, missCD, 0, 1, 2, 3, 60, null).reason !== "no_bond") {
+            console.error("FAIL: missing edges must reject no_bond");
+            process.exit(1);
+        }
+
+        // moveSide normalization + invalid
+        var norm = ed.editDihedral(symbols, coords, edges, 0, 1, 2, 3, 60, "A");
+        if (!norm.ok || JSON.stringify(norm.coords) !== JSON.stringify(res.coords)) {
+            console.error("FAIL: moveSide A must normalize to C");
+            process.exit(1);
+        }
+        if (ed.editDihedral(symbols, coords, edges, 0, 1, 2, 3, 60, "X").reason !==
+            "invalid_move_side") {
+            console.error("FAIL: invalid moveSide");
+            process.exit(1);
+        }
+
+        // staging: locked -> locked; unlocked (pre-seeded graph) -> pendingEdit
+        window.ACPStructureViewer = {
+            state: { displayedCoords: coords, displayedSymbols: symbols, displayedEntryId: "e1" }
+        };
+        ed.editorState.graph = { edges: edges, provenance: "fixture" };
+        ed.setLocked(true);
+        var lockedRes = ed.applyDihedralEdit(0, 1, 2, 3, 190, null);
+        if (lockedRes.ok || lockedRes.reason !== "locked") {
+            console.error("FAIL: locked dihedral edit");
+            process.exit(1);
+        }
+        ed.setLocked(false);
+        var staged = ed.applyDihedralEdit(0, 1, 2, 3, 190, null);
+        if (!staged.ok || !ed.editorState.pendingEdit ||
+            ed.editorState.pendingEdit.type !== "dihedral" ||
+            ed.editorState.pendingEdit.target !== -170 ||
+            ed.editorState.pendingEdit.moveSide !== "C") {
+            console.error("FAIL: pendingEdit staging (target must normalize 190 -> -170)");
+            process.exit(1);
+        }
+        console.log("PASS");
+    """)
+        .replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node dihedral test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
