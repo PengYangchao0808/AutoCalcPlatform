@@ -7007,3 +7007,269 @@ def test_f2_vibrations_fetch_gate_contract() -> None:
         f"Node vibrations-gate test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Wire fix: summary bar vibration + measure buttons, measure drawer live data
+# ---------------------------------------------------------------------------
+
+
+def test_summary_bar_vibration_and_measure_buttons() -> None:
+    """Summary bar producers for openDrawer("vibration") and openDrawer("measure")
+    exist, vibration label references imaginary_count."""
+    sv = _SV_JS_PATH.read_text(encoding="utf-8")
+
+    assert 'openDrawer("vibration"' in sv, "vibration drawer openDrawer call missing"
+    assert 'openDrawer("measure"' in sv, "measure drawer openDrawer call missing"
+    assert "imaginary_count" in sv, "imaginary_count reference missing"
+    assert "VIB_IMAG_BTN" in sv, "imaginary button label key missing"
+    assert "VIB_BTN" in sv, "vibration button label key missing"
+    assert "MEASURE_BTN" in sv, "measure button label key missing"
+
+    summary_fn = sv.split("function renderStructureViewer()", 1)[1]
+    summary_fn = summary_fn[:summary_fn.index("function _renderStripItem(")]
+    assert 'openDrawer("vibration"' in summary_fn, "vibration button not in summary bar"
+    assert 'openDrawer("measure"' in summary_fn, "measure button not in summary bar"
+    assert "imaginary_count" in summary_fn, "imaginary_count not in summary bar"
+    assert "entry.vibrations.available !== false" in summary_fn, (
+        "vibration availability gate missing from summary bar button"
+    )
+
+
+def test_render_measure_drawer_reads_moldoc_measures() -> None:
+    """_renderMeasureDrawer reads molDoc.measures (live render) and re-seeds
+    applied measurements after geometry reload."""
+    sv = _SV_JS_PATH.read_text(encoding="utf-8")
+
+    measure_fn = sv.split("function _renderMeasureDrawer(body)", 1)[1]
+    measure_fn = measure_fn[:measure_fn.index("function _renderMoreDrawer(")]
+    assert "molDoc.measures" in measure_fn, "_renderMeasureDrawer must read molDoc.measures"
+    assert "molDoc.measures.length" in measure_fn, "_renderMeasureDrawer must check measures length"
+    assert "applyMeasuredEdit" in measure_fn, "_renderMeasureDrawer must call applyMeasuredEdit"
+    assert "bond_length" in measure_fn, "type mapping bond_length missing"
+    assert "bond_angle" in measure_fn, "type mapping bond_angle missing"
+    assert "dihedral" in measure_fn, "type mapping dihedral missing"
+    assert "_applied" in measure_fn, "_applied flag detection missing for re-seeded measurements"
+    assert "measurementValue" in measure_fn, "measurementValue recompute missing for post-apply re-seed"
+    assert "molDoc.measures.push" in measure_fn, "post-apply re-seed push missing"
+    assert "_svMeasureAppliedIds = {}" in sv, (
+        "applied map must be reset on successful apply to prevent index reuse"
+    )
+    assert "[-180, 180]" in sv, "dihedral range must be [-180, 180] for negative angles"
+
+
+def test_apply_measured_edit_call_site_in_viewer() -> None:
+    """A production call site of applyMeasuredEdit exists in sv_js (viewer),
+    not only in structure_editor.js/tests. Index-based _appliedSet is removed;
+    applied state is on the re-seeded object only."""
+    sv = _SV_JS_PATH.read_text(encoding="utf-8")
+
+    assert "applyMeasuredEdit" in sv, "applyMeasuredEdit must be referenced in structure_viewer.js"
+    assert "ACPStructureEditor.applyMeasuredEdit" in sv, (
+        "viewer must call ACPStructureEditor.applyMeasuredEdit"
+    )
+    assert "bond_length" in sv and "bond_angle" in sv, (
+        "type mapping tokens must appear in viewer"
+    )
+    measure_fn = sv.split("function _renderMeasureDrawer(body)", 1)[1]
+    measure_fn = measure_fn[:measure_fn.index("function _renderMoreDrawer(")]
+    assert "_appliedSet" not in measure_fn, (
+        "index-based _appliedSet must be removed; use _applied flag on object"
+    )
+
+
+def test_edit_panel_in_measure_drawer_only() -> None:
+    """The edit panel is rendered ONLY in the measure drawer (not source/more)."""
+    sv = _SV_JS_PATH.read_text(encoding="utf-8")
+
+    source_fn = sv.split("function _renderSourceDrawer(body)", 1)[1]
+    source_fn = source_fn[:source_fn.index("function _renderVibrationDrawer(")]
+    assert "_renderEditPanel" not in source_fn, (
+        "_renderEditPanel must NOT be in _renderSourceDrawer"
+    )
+
+    more_fn = sv.split("function _renderMoreDrawer(body)", 1)[1]
+    more_fn = more_fn[:more_fn.index("function toggleListDrawer(")]
+    assert "_renderEditPanel" not in more_fn, (
+        "_renderEditPanel must NOT be in _renderMoreDrawer"
+    )
+
+    measure_fn = sv.split("function _renderMeasureDrawer(body)", 1)[1]
+    measure_fn = measure_fn[:measure_fn.index("function _renderMoreDrawer(")]
+    assert "_renderEditPanel" in measure_fn, (
+        "_renderEditPanel MUST be in _renderMeasureDrawer"
+    )
+
+
+def test_handle_measure_click_opens_drawer_and_updates_status() -> None:
+    """handleMeasureClick calls openDrawer("measure"), updates measure-status,
+    and resets status after measurement completes (post-completion _updateMeasureStatus)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    handler = html.split("function handleMeasureClick(atom)", 1)[1]
+    handler = handler[:handler.index("// ── Mechanism Builder")]
+    assert 'openDrawer("measure"' in handler, (
+        "handleMeasureClick must auto-open measure drawer"
+    )
+    assert "_updateMeasureStatus" in handler, (
+        "handleMeasureClick must call _updateMeasureStatus"
+    )
+    assert "renderMeasurementList" in handler, (
+        "handleMeasureClick must call renderMeasurementList after measurement"
+    )
+    update_calls = handler.count("_updateMeasureStatus")
+    assert update_calls >= 2, (
+        f"_updateMeasureStatus must be called at least twice (before+after completion), got {update_calls}"
+    )
+    after_reset = handler.split("measureBuffer = []", 1)[1]
+    assert "_updateMeasureStatus" in after_reset, (
+        "_updateMeasureStatus must be called after measureBuffer reset"
+    )
+
+
+def test_measure_status_element_and_update_function() -> None:
+    """measure-mode-status span exists and _updateMeasureStatus function is defined."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert 'id="measure-mode-status"' in html, "measure-mode-status span missing"
+    assert "function _updateMeasureStatus()" in html, (
+        "_updateMeasureStatus function missing"
+    )
+
+    update_fn = html.split("function _updateMeasureStatus()", 1)[1]
+    update_fn = update_fn[:update_fn.index("function setMode(")]
+    assert "measure-mode-status" in update_fn, "_updateMeasureStatus must reference the status element"
+    assert "measureBuffer" in update_fn, "_updateMeasureStatus must read measureBuffer"
+    assert "measureType" in update_fn, "_updateMeasureStatus must read measureType"
+
+
+def test_set_mode_calls_update_measure_status() -> None:
+    """setMode calls _updateMeasureStatus."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    setmode_fn = html.split("function setMode(mode)", 1)[1]
+    setmode_fn = setmode_fn[:setmode_fn.index("function updateFrameController")]
+    assert "_updateMeasureStatus" in setmode_fn, (
+        "setMode must call _updateMeasureStatus"
+    )
+
+
+def test_measure_i18n_keys_in_both_locales() -> None:
+    """New i18n keys exist in both zh-CN and en-US locale blocks."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    for zh, en in (
+        ('"structure.vib.btn": "振动模式"', '"structure.vib.btn": "Vibrations"'),
+        ('"structure.vib.imaginary_btn": "虚频 {count}"', '"structure.vib.imaginary_btn": "Imaginary {count}"'),
+        ('"structure.measure.btn": "测量"', '"structure.measure.btn": "Measure"'),
+        ('"structure.measure.type_distance": "距离"', '"structure.measure.type_distance": "Distance"'),
+        ('"structure.measure.type_angle": "角度"', '"structure.measure.type_angle": "Angle"'),
+        ('"structure.measure.type_dihedral": "二面角"', '"structure.measure.type_dihedral": "Dihedral"'),
+        ('"structure.measure.apply": "应用修改"', '"structure.measure.apply": "Apply Edit"'),
+        ('"structure.measure.applied": "已应用"', '"structure.measure.applied": "Applied"'),
+        ('"structure.measure.range_warn": "值超出范围"', '"structure.measure.range_warn": "Value out of range"'),
+        ('"structure.measure.status_label": "测量："', '"structure.measure.status_label": "Measure: "'),
+        ('"structure.measure.status_selected": "已选"', '"structure.measure.status_selected": "selected"'),
+    ):
+        assert zh in html, f"zh-CN key missing: {zh}"
+        assert en in html, f"en-US key missing: {en}"
+
+
+def test_str_keys_linked_via_t_calls() -> None:
+    """All new STR keys are linked via _t() calls in structure_viewer.js."""
+    sv = _SV_JS_PATH.read_text(encoding="utf-8")
+
+    for key in ("VIB_BTN", "VIB_IMAG_BTN", "MEASURE_BTN",
+                "MEASURE_TYPE_DISTANCE", "MEASURE_TYPE_ANGLE", "MEASURE_TYPE_DIHEDRAL",
+                "MEASURE_APPLY", "MEASURE_APPLIED", "MEASURE_RANGE_WARN"):
+        assert f"STR.{key}" in sv, f"STR.{key} not referenced via _t() in structure_viewer.js"
+
+
+def test_vibration_summary_bar_node_logic() -> None:
+    """Node logic: vibration button shows imaginary badge when count > 0."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        function fakeEl(tag) {
+          return {
+            tag: tag, children: [], className: "", textContent: "",
+            attrs: {}, style: {},
+            classList: {
+              _classes: [],
+              toggle: function (cls, on) {
+                var idx = this._classes.indexOf(cls);
+                if (on && idx < 0) this._classes.push(cls);
+                if (!on && idx >= 0) this._classes.splice(idx, 1);
+              },
+              contains: function (cls) { return this._classes.indexOf(cls) >= 0; },
+            },
+            setAttribute: function (k, v) { this.attrs[k] = v; },
+            getAttribute: function (k) { return this.attrs[k]; },
+            addEventListener: function () {},
+            appendChild: function (c) { this.children.push(c); return c; },
+            querySelectorAll: function () { return []; },
+          };
+        }
+        var _summaryBar = fakeEl("div");
+        var _bottomStrip = fakeEl("div");
+        var _layout = fakeEl("div");
+        _layout.addEventListener = function () {};
+        var document = {
+          createElement: fakeEl,
+          getElementById: function (id) {
+            if (id === "sv-summary-bar") return _summaryBar;
+            if (id === "sv-bottom-strip") return _bottomStrip;
+            if (id === "sv-layout") return _layout;
+            return null;
+          },
+        };
+        require(SV_PATH);
+        var ns = window.ACPStructureViewer;
+
+        ns.state.payload = {
+          entries: [{
+            id: "e1", group_id: "g1", label: "TS1",
+            status: "completed", badges: [],
+            energy: null, source: { kind: "formal_result" },
+            vibrations: { available: true, imaginary_count: 2, endpoint: "/vib" },
+            geometry: { endpoint: "/geo", format: "xyz" },
+          }],
+          default_entry_id: "e1",
+          groups: [{ id: "g1" }],
+          warnings: [],
+        };
+        ns.state.selectedEntryId = "e1";
+        ns.state.jobId = "job-vib";
+        ns.renderStructureViewer();
+
+        var bar = _summaryBar;
+        var btnTexts = bar.children.map(function(c) { return c.textContent; }).join(" | ");
+        if (btnTexts.indexOf("\\u865a\\u9891") < 0) {
+          console.error("FAIL: imaginary badge missing, got: " + btnTexts);
+          process.exit(1);
+        }
+        if (btnTexts.indexOf("\\u6d4b\\u91cf") < 0) {
+          console.error("FAIL: measure button missing, got: " + btnTexts);
+          process.exit(1);
+        }
+
+        ns.state.payload.entries[0].vibrations.imaginary_count = 0;
+        _summaryBar.children.length = 0;
+        ns.renderStructureViewer();
+        var bar2 = _summaryBar;
+        var btnTexts2 = bar2.children.map(function(c) { return c.textContent; }).join(" | ");
+        if (btnTexts2.indexOf("\\u632f\\u52a8\\u6a21\\u5f0f") < 0) {
+          console.error("FAIL: plain vib label missing when count=0, got: " + btnTexts2);
+          process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("SV_PATH", json.dumps(str(_SV_JS_PATH)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Vibration summary bar test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout

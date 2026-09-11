@@ -135,6 +135,15 @@
     SWITCHER_LABEL: "\u5207\u6362\u6761\u76ee",                               // 切换条目
     DRAWER_CLOSE: "\u5173\u95ed",                                              // 关闭
     DRAWER_MORE: "\u66f4\u591a\u64cd\u4f5c",                                  // 更多操作
+    VIB_BTN: "\u632f\u52a8\u6a21\u5f0f",                                       // 振动模式
+    VIB_IMAG_BTN: "\u865a\u9891 {count}",                                      // 虚频 {count}
+    MEASURE_BTN: "\u6d4b\u91cf",                                               // 测量
+    MEASURE_TYPE_DISTANCE: "\u8ddd\u79bb",                                     // 距离
+    MEASURE_TYPE_ANGLE: "\u89d2\u5ea6",                                         // 角度
+    MEASURE_TYPE_DIHEDRAL: "\u4e8c\u9762\u89d2",                               // 二面角
+    MEASURE_APPLY: "\u5e94\u7528\u4fee\u6539",                                 // 应用修改
+    MEASURE_APPLIED: "\u5df2\u5e94\u7528",                                     // 已应用
+    MEASURE_RANGE_WARN: "\u503c\u8d85\u51fa\u8303\u56f4",                       // 值超出范围
   };
 
   /**
@@ -325,6 +334,7 @@
   var _switcherEntries = [];
   var _switcherAnchor = null;
   var _drawerContentCache = {};
+  var _svMeasureAppliedIds = {};
 
   /**
    * Apply a catalog response to the state object.  Pure-ish: mutates the
@@ -2183,6 +2193,29 @@
       detailsBtn.setAttribute("aria-expanded", _activeDrawerId === "source" ? "true" : "false");
       detailsBtn.addEventListener("click", function () { openDrawer("source", detailsBtn); });
       summaryBar.appendChild(detailsBtn);
+
+      /* Vibration button: visible when vibration data is likely available */
+      if (entry.vibrations && entry.vibrations.available !== false) {
+        var vibBtn = document.createElement("button");
+        vibBtn.className = "sv-edit-btn";
+        var imagCount = entry.vibrations.imaginary_count;
+        if (imagCount != null && imagCount > 0) {
+          vibBtn.textContent = _t("structure.vib.imaginary_btn", STR.VIB_IMAG_BTN).replace("{count}", String(imagCount));
+        } else {
+          vibBtn.textContent = _t("structure.vib.btn", STR.VIB_BTN);
+        }
+        vibBtn.setAttribute("aria-expanded", _activeDrawerId === "vibration" ? "true" : "false");
+        vibBtn.addEventListener("click", function () { openDrawer("vibration", vibBtn); });
+        summaryBar.appendChild(vibBtn);
+      }
+
+      /* Measure button: always visible for geometry editing */
+      var measBtn = document.createElement("button");
+      measBtn.className = "sv-edit-btn";
+      measBtn.textContent = _t("structure.measure.btn", STR.MEASURE_BTN);
+      measBtn.setAttribute("aria-expanded", _activeDrawerId === "measure" ? "true" : "false");
+      measBtn.addEventListener("click", function () { openDrawer("measure", measBtn); });
+      summaryBar.appendChild(measBtn);
     }
 
     /* availability / error notices */
@@ -2873,7 +2906,6 @@
       body.appendChild(newerNotice);
     }
     _renderOverlaySection(body);
-    body.appendChild(_renderEditPanel());
     var warnings = (payload && payload.warnings) || [];
     if (warnings.length > 0) {
       var warnDiv = document.createElement("div");
@@ -2939,12 +2971,124 @@
     measLbl.className = "sv-inspector-label";
     measLbl.textContent = _t("structure.measurements", STR.MEASUREMENTS);
     measDiv.appendChild(measLbl);
-    var measVal = document.createElement("div");
-    measVal.className = "sv-inspector-value sv-muted";
-    measVal.textContent = overlayMeasurementsBlocked()
-      ? _t("structure.overlay.unproven", STR.OVERLAY_UNPROVEN)
-      : _t("structure.measurements_placeholder", STR.MEASUREMENTS_PLACEHOLDER);
-    measDiv.appendChild(measVal);
+
+    var hasMeasures = false;
+    try {
+      if (typeof molDoc !== "undefined" && Array.isArray(molDoc.measures) && molDoc.measures.length) {
+        hasMeasures = true;
+      }
+    } catch (_) { /* molDoc guard */ }
+
+    if (overlayMeasurementsBlocked()) {
+      var blockedVal = document.createElement("div");
+      blockedVal.className = "sv-inspector-value sv-muted";
+      blockedVal.textContent = _t("structure.overlay.unproven", STR.OVERLAY_UNPROVEN);
+      measDiv.appendChild(blockedVal);
+    } else if (!hasMeasures) {
+      var measVal = document.createElement("div");
+      measVal.className = "sv-inspector-value sv-muted";
+      measVal.textContent = _t("structure.measurements_placeholder", STR.MEASUREMENTS_PLACEHOLDER);
+      measDiv.appendChild(measVal);
+    } else {
+      var _measureTypeLabels = {
+        distance: function () { return _t("structure.measure.type_distance", STR.MEASURE_TYPE_DISTANCE); },
+        angle: function () { return _t("structure.measure.type_angle", STR.MEASURE_TYPE_ANGLE); },
+        dihedral: function () { return _t("structure.measure.type_dihedral", STR.MEASURE_TYPE_DIHEDRAL); },
+      };
+      var _measureKindMap = { distance: "bond_length", angle: "bond_angle", dihedral: "dihedral" };
+      var _measureRange = {
+        distance: [0.4, 5.0],
+        angle: [1, 179],
+        dihedral: [-180, 180],
+      };
+      for (var mi = 0; mi < molDoc.measures.length; mi++) {
+        (function (idx) {
+          var m = molDoc.measures[idx];
+          var mRow = document.createElement("div");
+          mRow.className = "sv-inspector-value";
+
+          var typeLabelFn = _measureTypeLabels[m.type];
+          var tLabel = typeLabelFn ? typeLabelFn() : m.type;
+          var atoms = Array.isArray(m.atoms) ? m.atoms : [];
+          var atomStr = atoms.map(function (a) { return String(a); }).join("-");
+          var valStr = m.value != null ? (m.type === "distance" ? m.value.toFixed(3) + " \u00c5" : m.value.toFixed(1) + "\u00b0") : "";
+
+          var applied = !!m._applied;
+          if (applied) {
+            var appliedLabel = _t("structure.measure.applied", STR.MEASURE_APPLIED);
+            var recomputedVal = m.value != null ? (m.type === "distance" ? m.value.toFixed(3) + " \u00c5" : m.value.toFixed(1) + "\u00b0") : "";
+            mRow.textContent = tLabel + " \u00b7 " + atomStr + " \u00b7 " + recomputedVal + " \u00b7 " + appliedLabel;
+            mRow.style.color = "var(--sv-green)";
+          } else {
+            mRow.textContent = tLabel + " \u00b7 " + atomStr + " \u00b7 " + valStr;
+          }
+          measDiv.appendChild(mRow);
+
+          if (!applied) {
+            var editRow = document.createElement("div");
+            editRow.className = "sv-edit-row";
+            var targetInput = document.createElement("input");
+            targetInput.type = "number";
+            targetInput.className = "sv-edit-btn";
+            targetInput.style.width = "80px";
+            targetInput.style.padding = "2px 4px";
+            targetInput.style.fontSize = "11px";
+            if (m.value != null) targetInput.value = m.type === "distance" ? m.value.toFixed(3) : m.value.toFixed(1);
+            var range = _measureRange[m.type] || [0, 999];
+            targetInput.min = String(range[0]);
+            targetInput.max = String(range[1]);
+            targetInput.step = m.type === "distance" ? "0.01" : "1";
+            editRow.appendChild(targetInput);
+
+            var applyBtn = document.createElement("button");
+            applyBtn.className = "sv-edit-btn";
+            applyBtn.textContent = _t("structure.measure.apply", STR.MEASURE_APPLY);
+            applyBtn.addEventListener("click", function () {
+              var targetNum = parseFloat(targetInput.value);
+              if (isNaN(targetNum)) return;
+              var kind = _measureKindMap[m.type];
+              if (!kind) return;
+              var r = _measureRange[m.type] || [0, 999];
+              if (targetNum < r[0] || targetNum > r[1]) {
+                var warn = document.createElement("div");
+                warn.className = "sv-edit-collision";
+                warn.textContent = _t("structure.measure.range_warn", STR.MEASURE_RANGE_WARN);
+                editRow.appendChild(warn);
+                return;
+              }
+              if (typeof window === "undefined" || !window.ACPStructureEditor ||
+                  typeof window.ACPStructureEditor.applyMeasuredEdit !== "function") return;
+              var capturedType = m.type;
+              var capturedAtoms = atoms.slice();
+              var result = window.ACPStructureEditor.applyMeasuredEdit(kind, capturedAtoms, targetNum);
+              if (result && result.ok) {
+                _svMeasureAppliedIds = {};
+                try {
+                  if (typeof molDoc !== "undefined" && Array.isArray(molDoc.measures) &&
+                      typeof measurementValue === "function") {
+                    var recomputed = measurementValue(capturedType, capturedAtoms);
+                    molDoc.measures.push({
+                      type: capturedType,
+                      atoms: capturedAtoms,
+                      value: recomputed,
+                      _applied: true,
+                    });
+                  }
+                } catch (_) { /* re-seed is best-effort */ }
+                _renderDrawerContent("measure");
+              } else if (result && result.reason) {
+                var err = document.createElement("div");
+                err.className = "sv-edit-collision";
+                err.textContent = result.reason;
+                editRow.appendChild(err);
+              }
+            });
+            editRow.appendChild(applyBtn);
+            measDiv.appendChild(editRow);
+          }
+        })(mi);
+      }
+    }
     body.appendChild(measDiv);
 
     if (structureViewerState.restoredMeasurements && structureViewerState.restoredMeasurements.length) {
@@ -2964,6 +3108,8 @@
       }
       body.appendChild(restoredDiv);
     }
+
+    body.appendChild(_renderEditPanel());
   }
 
   function _renderMoreDrawer(body) {
@@ -2974,7 +3120,6 @@
       if (entries[i].id === structureViewerState.selectedEntryId) { entry = entries[i]; break; }
     }
     if (!entry) { body.textContent = _t("structure.no_entry", STR.NO_ENTRY); return; }
-    body.appendChild(_renderEditPanel());
   }
 
   function toggleListDrawer() { /* legacy stub — no-op */ }

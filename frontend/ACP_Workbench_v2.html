@@ -3571,6 +3571,7 @@ option, optgroup {
               </div>
             </div>
           </div>
+          <span id="measure-mode-status" class="sv-muted" style="font-size:11px;margin-left:4px;"></span>
 
           <div class="tool-divider"></div>
 
@@ -5953,7 +5954,18 @@ const I18N = {
     "structure.edit.edited_suffix": "已编辑",
     "structure.vib.freq_unit": "cm⁻¹",
     "structure.vib.ir_unit": "km/mol",
-    "structure.vib.unit_angstrom": "Å"
+    "structure.vib.unit_angstrom": "Å",
+    "structure.vib.btn": "振动模式",
+    "structure.vib.imaginary_btn": "虚频 {count}",
+    "structure.measure.btn": "测量",
+    "structure.measure.type_distance": "距离",
+    "structure.measure.type_angle": "角度",
+    "structure.measure.type_dihedral": "二面角",
+    "structure.measure.apply": "应用修改",
+    "structure.measure.applied": "已应用",
+    "structure.measure.range_warn": "值超出范围",
+    "structure.measure.status_label": "测量：",
+    "structure.measure.status_selected": "已选"
   },
   "en-US": {
     "app.title": "ACP Molecular Workbench",
@@ -6934,7 +6946,18 @@ const I18N = {
     "structure.edit.edited_suffix": "edited",
     "structure.vib.freq_unit": "cm⁻¹",
     "structure.vib.ir_unit": "km/mol",
-    "structure.vib.unit_angstrom": "Å"
+    "structure.vib.unit_angstrom": "Å",
+    "structure.vib.btn": "Vibrations",
+    "structure.vib.imaginary_btn": "Imaginary {count}",
+    "structure.measure.btn": "Measure",
+    "structure.measure.type_distance": "Distance",
+    "structure.measure.type_angle": "Angle",
+    "structure.measure.type_dihedral": "Dihedral",
+    "structure.measure.apply": "Apply Edit",
+    "structure.measure.applied": "Applied",
+    "structure.measure.range_warn": "Value out of range",
+    "structure.measure.status_label": "Measure: ",
+    "structure.measure.status_selected": "selected"
   }
 };
 
@@ -15214,6 +15237,7 @@ function handleMeasureClick(atom) {
   measureBuffer.push(atom.acpId);
   molDoc.selection.add(atom.acpId);
   renderMolDoc();
+  _updateMeasureStatus();
   const needed = molDoc.measureType === "distance" ? 2 : molDoc.measureType === "angle" ? 3 : 4;
   if (measureBuffer.length >= needed) {
     if (molDoc.measureType === "distance") doDistance(measureBuffer[0], measureBuffer[1]);
@@ -15223,6 +15247,12 @@ function handleMeasureClick(atom) {
     molDoc.selection.clear();
     renderMolDoc();
     updateInfoPanel(lastSelectedJob);
+    renderMeasurementList();
+    _updateMeasureStatus();
+    if (typeof window !== "undefined" && window.ACPStructureViewer &&
+        typeof window.ACPStructureViewer.openDrawer === "function") {
+      window.ACPStructureViewer.openDrawer("measure");
+    }
   }
 }
 
@@ -17256,6 +17286,16 @@ function buildMultiInstallDetails(discovery, resolvedPath) {
   return details;
 }
 
+function _updateMeasureStatus() {
+  var el = document.getElementById("measure-mode-status");
+  if (!el) return;
+  if (molDoc.mode !== "measure") { el.textContent = ""; return; }
+  var typeLabels = { distance: t("measure.distance"), angle: t("measure.angle"), dihedral: t("measure.dihedral") };
+  var needed = molDoc.measureType === "distance" ? 2 : molDoc.measureType === "angle" ? 3 : 4;
+  var label = typeLabels[molDoc.measureType] || molDoc.measureType;
+  el.textContent = t("structure.measure.status_label") + label + " \u00b7 " + t("structure.measure.status_selected") + " " + measureBuffer.length + "/" + needed;
+}
+
 function setMode(mode) {
   const previousMode = molDoc.mode;
   molDoc.mode = mode;
@@ -17267,6 +17307,7 @@ function setMode(mode) {
     if (molDoc.measureType === "angle") document.getElementById("btn-measure-angle").classList.add("active");
     if (molDoc.measureType === "dihedral") document.getElementById("btn-measure-dihedral").classList.add("active");
   }
+  _updateMeasureStatus();
   updateSrPickButtons();
   // Refresh overlays when entering/leaving SR mode so dashed pair cylinders
   // appear/disappear immediately (select/measure behaviour unchanged).

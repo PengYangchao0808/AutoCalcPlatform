@@ -1367,14 +1367,13 @@ class TestSimpleResolver:
         assert entry.id == "simple_frequency"
         assert entry.source.kind == "calculation_input"
         assert entry.source.geometry_ref == "input.xyz"
-        # F2 fix: frequency jobs enable the vibrations fetch — the endpoint
-        # serves the normal_modes product AND the WORK/04_FREQ historical
-        # projection, so the catalog flag must not gate it off.
-        assert entry.vibrations.available is True
-        assert entry.vibrations.endpoint is not None
-        assert entry.vibrations.endpoint.endswith(
-            "/structure-viewer/entries/simple_frequency/vibrations"
-        )
+        # F2 fix: frequency jobs only report available=True when actual
+        # frequency data exists (product JSON or historical ORCA output).
+        # This fixture has no data, so available=False is correct.
+        assert entry.vibrations.available is False
+        assert entry.vibrations.endpoint is None
+        assert entry.vibrations.imaginary_count is None
+        assert entry.vibrations.source is None
 
     def test_xtb_optimize_uses_optimize_resolver(self, tmp_path: Path):
         """xtb-optimize follows the same path as optimize."""
@@ -2477,7 +2476,10 @@ class TestF2CatalogVibrations:
         task = _make_batch_task(tmp_path, products=products)
         freq_dir = task / "RESULT" / "frequencies"
         freq_dir.mkdir(parents=True, exist_ok=True)
-        (freq_dir / "item_001__normal_modes.json").write_text("{}", encoding="utf-8")
+        (freq_dir / "item_001__normal_modes.json").write_text(
+            json.dumps({"schema_version": "normal_modes_v1", "atom_count": 1, "modes": []}),
+            encoding="utf-8",
+        )
 
         payload = build_structure_viewer_payload(
             task, job_id="j1", workflow="BatchOptimize", job_status="completed"
@@ -2501,7 +2503,10 @@ class TestF2CatalogVibrations:
         task = _make_batch_task(tmp_path, products=products)
         freq_dir = task / "RESULT" / "frequencies"
         freq_dir.mkdir(parents=True, exist_ok=True)
-        (freq_dir / "item_001__normal_modes.json").write_text("{}", encoding="utf-8")
+        (freq_dir / "item_001__normal_modes.json").write_text(
+            json.dumps({"schema_version": "normal_modes_v1", "atom_count": 1, "modes": []}),
+            encoding="utf-8",
+        )
 
         payload = build_structure_viewer_payload(
             task, job_id="j1", workflow="BatchOptimize", job_status="completed"
@@ -2524,6 +2529,177 @@ class TestF2CatalogVibrations:
             task, job_id="j1", workflow="BatchOptimize", job_status="failed"
         )
         assert payload.entries[0].vibrations.available is False
+
+    def test_batch_historical_only_available_true(self, tmp_path: Path):
+        """Batch item with ONLY WORK/04_FREQ/*.out (no product JSON) →
+        catalog available=True, imaginary_count, source=historical_projection."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [_batch_product(item_id="item_001", tag="INT")]
+        task = _make_batch_task(tmp_path, products=products)
+        freq_dir = task / "WORK" / "04_FREQ" / "batch" / "item_001" / "frequency"
+        freq_dir.mkdir(parents=True, exist_ok=True)
+        fixture = Path(__file__).resolve().parent / "fixtures" / "structure_viewer" / "orca_freq_modes_full.txt"
+        (freq_dir / "orca_freq.out").write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert entry.id == "batch_item_001"
+        assert entry.vibrations.available is True
+        assert entry.vibrations.source == "historical_projection"
+        assert entry.vibrations.imaginary_count == 2
+        assert entry.vibrations.endpoint.endswith("/vibrations")
+
+    def test_batch_product_json_imaginary_count(self, tmp_path: Path):
+        """Product JSON with 1 imaginary mode → imaginary_count=1, source=product."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [_batch_product(item_id="item_001", tag="TS")]
+        task = _make_batch_task(tmp_path, products=products)
+        freq_dir = task / "RESULT" / "frequencies"
+        freq_dir.mkdir(parents=True, exist_ok=True)
+        modes_data = {
+            "schema_version": "normal_modes_v1",
+            "atom_count": 3,
+            "geometry_product_id": None,
+            "modes": [
+                {"mode_index": 6, "frequency_cm1": -700.0, "imaginary": True, "vectors": [[0.0]*3]*3},
+                {"mode_index": 7, "frequency_cm1": 500.0, "imaginary": False, "vectors": [[0.0]*3]*3},
+            ],
+        }
+        (freq_dir / "item_001__normal_modes.json").write_text(json.dumps(modes_data), encoding="utf-8")
+
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert entry.vibrations.available is True
+        assert entry.vibrations.source == "product"
+        assert entry.vibrations.imaginary_count == 1
+
+    def test_simple_frequency_historical_only(self, tmp_path: Path):
+        """Simple frequency workflow with only WORK/04_FREQ → available=True, source=historical_projection."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        input_xyz = "3\nwater\nO 0 0 0\nH 0 0 1\nH 0 1 0\n"
+        task = _make_simple_task(tmp_path, workflow="frequency", products=[], input_xyz=input_xyz)
+        freq_dir = task / "WORK" / "04_FREQ"
+        freq_dir.mkdir(parents=True, exist_ok=True)
+        fixture = Path(__file__).resolve().parent / "fixtures" / "structure_viewer" / "orca_freq_modes_full.txt"
+        (freq_dir / "orca_freq.out").write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="frequency", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert entry.vibrations.available is True
+        assert entry.vibrations.source == "historical_projection"
+        assert entry.vibrations.imaginary_count == 2
+        assert entry.vibrations.endpoint.endswith("/vibrations")
+
+    def test_no_data_vibrations_unavailable(self, tmp_path: Path):
+        """No frequency data at all → available=False, imaginary_count=None, source=None."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [_batch_product(item_id="item_001", tag="INT")]
+        task = _make_batch_task(tmp_path, products=products)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert entry.vibrations.available is False
+        assert entry.vibrations.imaginary_count is None
+        assert entry.vibrations.source is None
+
+    def test_invalid_product_json_no_historical_unavailable(self, tmp_path: Path):
+        """Malformed product JSON + no historical ORCA → catalog available=False."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [_batch_product(item_id="item_001", tag="INT")]
+        task = _make_batch_task(tmp_path, products=products)
+        freq_dir = task / "RESULT" / "frequencies"
+        freq_dir.mkdir(parents=True, exist_ok=True)
+        (freq_dir / "item_001__normal_modes.json").write_text("NOT VALID JSON {{{", encoding="utf-8")
+
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert entry.vibrations.available is False
+        assert entry.vibrations.imaginary_count is None
+        assert entry.vibrations.source is None
+
+    def test_invalid_product_json_falls_back_to_historical(self, tmp_path: Path):
+        """Invalid product JSON + valid historical ORCA → catalog available=True,
+        source=historical_projection (fallback to tier 3)."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [_batch_product(item_id="item_001", tag="INT")]
+        task = _make_batch_task(tmp_path, products=products)
+        freq_dir = task / "RESULT" / "frequencies"
+        freq_dir.mkdir(parents=True, exist_ok=True)
+        (freq_dir / "item_001__normal_modes.json").write_text("NOT VALID JSON {{{", encoding="utf-8")
+        orca_dir = task / "WORK" / "04_FREQ" / "batch" / "item_001" / "frequency"
+        orca_dir.mkdir(parents=True, exist_ok=True)
+        fixture = Path(__file__).resolve().parent / "fixtures" / "structure_viewer" / "orca_freq_modes_full.txt"
+        (orca_dir / "orca_freq.out").write_text(fixture.read_text(encoding="utf-8"), encoding="utf-8")
+
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert entry.vibrations.available is True
+        assert entry.vibrations.source == "historical_projection"
+        assert entry.vibrations.imaginary_count == 2
+
+    def test_wrong_schema_version_product_unavailable(self, tmp_path: Path):
+        """Product JSON with wrong schema_version → treated as invalid, available=False."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [_batch_product(item_id="item_001", tag="INT")]
+        task = _make_batch_task(tmp_path, products=products)
+        freq_dir = task / "RESULT" / "frequencies"
+        freq_dir.mkdir(parents=True, exist_ok=True)
+        bad_data = {"schema_version": "wrong_version", "modes": []}
+        (freq_dir / "item_001__normal_modes.json").write_text(json.dumps(bad_data), encoding="utf-8")
+
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert entry.vibrations.available is False
+
+    def test_priority1_frequency_with_valid_product(self, tmp_path: Path):
+        """Priority-1 (formal result) + frequency workflow + valid product →
+        catalog available=True, source=product."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [
+            {"id": "step_0_frequency_structure", "label": "frequency (step 0) — structure",
+             "path": "WORK/04_FREQ/optimized.xyz", "kind": "structure"},
+        ]
+        task = _make_simple_task(tmp_path, workflow="frequency", products=products)
+        freq_dir = task / "RESULT" / "frequencies"
+        freq_dir.mkdir(parents=True, exist_ok=True)
+        modes_data = {
+            "schema_version": "normal_modes_v1",
+            "atom_count": 3,
+            "geometry_product_id": None,
+            "modes": [
+                {"mode_index": 6, "frequency_cm1": -700.0, "imaginary": True, "vectors": [[0.0]*3]*3},
+            ],
+        }
+        (freq_dir / "normal_modes.json").write_text(json.dumps(modes_data), encoding="utf-8")
+
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="frequency", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert entry.vibrations.available is True
+        assert entry.vibrations.source == "product"
+        assert entry.vibrations.imaginary_count == 1
 
 
 class TestF2BoltzmannAlignment:

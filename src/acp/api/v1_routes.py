@@ -2444,6 +2444,7 @@ def _try_historical_mode_projection(
                 continue
 
         if modes:
+            imaginary_count = sum(1 for m in modes if m.imaginary)
             return StructureViewerVibrationsResponse(
                 available=True,
                 reason=None,
@@ -2453,6 +2454,7 @@ def _try_historical_mode_projection(
                 atom_count=atom_count,
                 geometry_product_id=None,
                 source="historical_projection",
+                imaginary_count=imaginary_count,
             )
     return None
 
@@ -2537,40 +2539,43 @@ def get_structure_viewer_vibrations(
             modes=[],
             atom_count=0,
             geometry_product_id=None,
+            imaginary_count=None,
         )
 
     freq_dir = work_dir / "RESULT" / "frequencies"
     is_remote = _is_remote_job(record)
-    if not freq_dir.is_dir():
-        if is_remote:
-            return _not_available("pending_fetch")
-        projected = _try_historical_mode_projection(
-            work_dir, entry.id, threshold_cm1=threshold_val, threshold_source=threshold_src
-        )
-        if projected is not None:
-            return projected
-        return _not_available("no_normal_modes")
 
-    modes_path: Path | None = None
     entry_id_str = entry.id
-    if entry_id_str.startswith("batch_"):
-        item_suffix = entry_id_str.removeprefix("batch_")
-        item_path = freq_dir / f"{item_suffix}__normal_modes.json"
-        if item_path.is_file():
-            modes_path = item_path
+    is_batch_entry = entry_id_str.startswith("batch_")
+    item_suffix = entry_id_str.removeprefix("batch_") if is_batch_entry else None
 
-    if modes_path is None:
-        global_path = freq_dir / "normal_modes.json"
-        if global_path.is_file():
-            modes_path = global_path
+    from acp.results.vibration_projection import find_vibration_source
 
-    if modes_path is None:
+    vib_source = find_vibration_source(
+        work_dir,
+        item_id=item_suffix,
+        is_batch=is_batch_entry,
+    )
+
+    if vib_source is None:
+        if is_remote and not freq_dir.is_dir():
+            return _not_available("pending_fetch")
         projected = _try_historical_mode_projection(
             work_dir, entry_id_str, threshold_cm1=threshold_val, threshold_source=threshold_src
         )
         if projected is not None:
             return projected
         return _not_available("no_normal_modes")
+
+    if vib_source.kind == "historical":
+        projected = _try_historical_mode_projection(
+            work_dir, entry_id_str, threshold_cm1=threshold_val, threshold_source=threshold_src
+        )
+        if projected is not None:
+            return projected
+        return _not_available("no_normal_modes")
+
+    modes_path = vib_source.path
 
     try:
         raw = modes_path.read_text(encoding="utf-8")
@@ -2633,6 +2638,7 @@ def get_structure_viewer_vibrations(
         atom_count=atom_count,
         geometry_product_id=geometry_product_id,
         source="product",
+        imaginary_count=sum(1 for m in modes if m.imaginary),
     )
 
 

@@ -1221,6 +1221,8 @@ class StructureViewerVibrationsAvailabilityModel(BaseModel):
 
     available: bool = False
     endpoint: str | None = None
+    imaginary_count: int | None = None
+    source: str | None = None
 
 
 class StructureViewerEntryModel(BaseModel):
@@ -1286,6 +1288,7 @@ class StructureViewerVibrationsResponse(BaseModel):
     atom_count: int
     geometry_product_id: str | None = None
     source: str | None = None
+    imaginary_count: int | None = None
 
 
 class StructureViewerOverlayMaxDisplacement(BaseModel):

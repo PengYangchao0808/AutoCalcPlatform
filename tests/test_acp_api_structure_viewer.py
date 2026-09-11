@@ -1683,3 +1683,207 @@ class TestF2CatalogVibrationsIntegration:
         assert vib["available"] is True
         assert len(vib["modes"]) == 1
         assert vib["modes"][0]["frequency_cm1"] == -700.0
+
+
+class TestVibrationImaginaryCount:
+    """imaginary_count + source fields on catalog and endpoint."""
+
+    def test_product_path_imaginary_count(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """Product JSON with 1 imaginary mode → endpoint returns imaginary_count=1."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest_with_xyz(work_dir)
+        _write_normal_modes(work_dir, _make_normal_modes_json())
+
+        catalog = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+
+        resp = sv_client.get(
+            f"/api/v1/jobs/sv-test-001/structure-viewer/entries/{default_id}/vibrations"
+        )
+        body = resp.json()
+        assert body["available"] is True
+        assert body["source"] == "product"
+        assert body["imaginary_count"] == 1
+
+    def test_historical_path_imaginary_count(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """ORCA output with 2 imaginary modes → endpoint returns imaginary_count=2."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest_with_xyz(work_dir)
+
+        freq_dir = work_dir / "WORK" / "04_FREQ"
+        freq_dir.mkdir(parents=True, exist_ok=True)
+        from tests.test_acp_frequency_modes import FULL_MODES_FIXTURE
+
+        (freq_dir / "orca_freq.out").write_text(
+            FULL_MODES_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+        catalog = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+
+        resp = sv_client.get(
+            f"/api/v1/jobs/sv-test-001/structure-viewer/entries/{default_id}/vibrations"
+        )
+        body = resp.json()
+        assert body["available"] is True
+        assert body["source"] == "historical_projection"
+        assert body["imaginary_count"] == 2
+
+    def test_no_data_imaginary_count_none(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """No frequency data → endpoint returns imaginary_count=None."""
+        work_dir = _seed_job(sv_client, tmp_path)
+        _write_confsearch_manifest_with_xyz(work_dir)
+
+        catalog = sv_client.get("/api/v1/jobs/sv-test-001/structure-viewer").json()
+        default_id = catalog["default_entry_id"]
+
+        resp = sv_client.get(
+            f"/api/v1/jobs/sv-test-001/structure-viewer/entries/{default_id}/vibrations"
+        )
+        body = resp.json()
+        assert body["available"] is False
+        assert body["imaginary_count"] is None
+
+    def test_catalog_vs_endpoint_consistency_historical(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """CATALOG and ENDPOINT must agree on available + imaginary_count
+        for a historical-only job (no product JSON)."""
+        work_dir = _seed_job(
+            sv_client, tmp_path,
+            job_id="sv-consistency-001",
+            workflow="BatchOptimize",
+        )
+        _write_batch_manifest(work_dir, items=[
+            {
+                "id": "batch_item_001",
+                "label": "item_001 (TS, opt_freq)",
+                "path": "structures/item_001__TAG_TS__optimized.xyz",
+                "kind": "structure",
+            },
+        ])
+        freq_dir = work_dir / "WORK" / "04_FREQ" / "batch" / "item_001" / "frequency"
+        freq_dir.mkdir(parents=True, exist_ok=True)
+        from tests.test_acp_frequency_modes import FULL_MODES_FIXTURE
+
+        (freq_dir / "orca_freq.out").write_text(
+            FULL_MODES_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+        catalog = sv_client.get(
+            "/api/v1/jobs/sv-consistency-001/structure-viewer"
+        ).json()
+        entry = next(e for e in catalog["entries"] if e["id"] == "batch_item_001")
+        cat_vib = entry["vibrations"]
+
+        resp = sv_client.get(
+            "/api/v1/jobs/sv-consistency-001/structure-viewer/entries/"
+            "batch_item_001/vibrations"
+        )
+        ep_body = resp.json()
+
+        assert cat_vib["available"] == ep_body["available"]
+        assert cat_vib["available"] is True
+        assert cat_vib["imaginary_count"] == ep_body["imaginary_count"]
+        assert cat_vib["imaginary_count"] == 2
+        assert cat_vib["source"] == ep_body["source"]
+        assert cat_vib["source"] == "historical_projection"
+
+
+class TestInvalidProductJsonConsistency:
+    """Catalog and endpoint must agree when product JSON is invalid."""
+
+    def test_invalid_product_no_historical_both_unavailable(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """Invalid product JSON + no historical → catalog and endpoint both available=false."""
+        work_dir = _seed_job(
+            sv_client, tmp_path,
+            job_id="sv-invalid-001",
+            workflow="BatchOptimize",
+        )
+        _write_batch_manifest(work_dir, items=[
+            {
+                "id": "batch_item_001",
+                "label": "item_001 (INT, opt_freq)",
+                "path": "structures/item_001__TAG_INT__optimized.xyz",
+                "kind": "structure",
+            },
+        ])
+        freq_dir = work_dir / "RESULT" / "frequencies"
+        freq_dir.mkdir(parents=True, exist_ok=True)
+        (freq_dir / "item_001__normal_modes.json").write_text(
+            "NOT VALID JSON {{{", encoding="utf-8"
+        )
+
+        catalog = sv_client.get(
+            "/api/v1/jobs/sv-invalid-001/structure-viewer"
+        ).json()
+        entry = next(e for e in catalog["entries"] if e["id"] == "batch_item_001")
+        cat_vib = entry["vibrations"]
+
+        resp = sv_client.get(
+            "/api/v1/jobs/sv-invalid-001/structure-viewer/entries/"
+            "batch_item_001/vibrations"
+        )
+        ep_body = resp.json()
+
+        assert cat_vib["available"] is False
+        assert ep_body["available"] is False
+        assert cat_vib["available"] == ep_body["available"]
+
+    def test_invalid_product_fallback_to_historical_consistent(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        """Invalid product JSON + valid historical ORCA → catalog and endpoint
+        both available=true, source=historical_projection."""
+        work_dir = _seed_job(
+            sv_client, tmp_path,
+            job_id="sv-invalid-002",
+            workflow="BatchOptimize",
+        )
+        _write_batch_manifest(work_dir, items=[
+            {
+                "id": "batch_item_001",
+                "label": "item_001 (INT, opt_freq)",
+                "path": "structures/item_001__TAG_INT__optimized.xyz",
+                "kind": "structure",
+            },
+        ])
+        freq_dir = work_dir / "RESULT" / "frequencies"
+        freq_dir.mkdir(parents=True, exist_ok=True)
+        (freq_dir / "item_001__normal_modes.json").write_text(
+            "NOT VALID JSON {{{", encoding="utf-8"
+        )
+        orca_dir = work_dir / "WORK" / "04_FREQ" / "batch" / "item_001" / "frequency"
+        orca_dir.mkdir(parents=True, exist_ok=True)
+        from tests.test_acp_frequency_modes import FULL_MODES_FIXTURE
+
+        (orca_dir / "orca_freq.out").write_text(
+            FULL_MODES_FIXTURE.read_text(encoding="utf-8"), encoding="utf-8"
+        )
+
+        catalog = sv_client.get(
+            "/api/v1/jobs/sv-invalid-002/structure-viewer"
+        ).json()
+        entry = next(e for e in catalog["entries"] if e["id"] == "batch_item_001")
+        cat_vib = entry["vibrations"]
+
+        resp = sv_client.get(
+            "/api/v1/jobs/sv-invalid-002/structure-viewer/entries/"
+            "batch_item_001/vibrations"
+        )
+        ep_body = resp.json()
+
+        assert cat_vib["available"] is True
+        assert ep_body["available"] is True
+        assert cat_vib["source"] == "historical_projection"
+        assert ep_body["source"] == "historical_projection"
+        assert cat_vib["imaginary_count"] == ep_body["imaginary_count"]
+        assert cat_vib["imaginary_count"] == 2

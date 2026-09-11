@@ -229,14 +229,25 @@ class StructureViewerVibrations:
     Attributes:
         available: Whether vibration data is available.
         endpoint: Relative API suffix for vibration data, if available.
+        imaginary_count: Number of imaginary modes (``freq < 0``), or ``None``
+            when unavailable or not yet probed.
+        source: Data provenance (``"product"`` or ``"historical_projection"``),
+            or ``None`` when unavailable.
     """
 
     available: bool = False
     endpoint: str | None = None
+    imaginary_count: int | None = None
+    source: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise to JSON-safe dict."""
-        return {"available": self.available, "endpoint": self.endpoint}
+        return {
+            "available": self.available,
+            "endpoint": self.endpoint,
+            "imaginary_count": self.imaginary_count,
+            "source": self.source,
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -976,18 +987,22 @@ def _resolve_batchoptimize(task_root: Path, workflow: str, job_id: str, warnings
         if energy_meta is not None:
             energy_val = _number(energy_meta)
 
-        # Frequency availability follows the per-item product file written by
-        # the batch engine (todo 24); the vibrations endpoint probes this same
-        # file first, so the catalog flag never fabricates data.
-        vib_path = task_root / "RESULT" / "frequencies" / f"{raw_item_id}__normal_modes.json"
-        vibrations = (
-            StructureViewerVibrations(
+        # Frequency availability follows the shared 3-tier resolution
+        # (product → global → historical) so catalog and endpoint never diverge.
+        from acp.results.vibration_projection import probe_vibration_projection
+
+        vib_probe = probe_vibration_projection(
+            task_root, item_id=raw_item_id, is_batch=True,
+        )
+        if vib_probe.available:
+            vibrations = StructureViewerVibrations(
                 available=True,
                 endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/vibrations",
+                imaginary_count=vib_probe.imaginary_count,
+                source=vib_probe.source,
             )
-            if vib_path.is_file()
-            else StructureViewerVibrations(available=False)
-        )
+        else:
+            vibrations = StructureViewerVibrations(available=False)
 
         entry = StructureViewerEntry(
             id=entry_id,
@@ -1107,6 +1122,19 @@ def _resolve_simple(task_root: Path, workflow: str, job_id: str, warnings: list[
     entries: list[StructureViewerEntry] = []
     default_id: str | None = None
 
+    def _freq_vibrations(task_root: Path, job_id: str, entry_id: str) -> StructureViewerVibrations:
+        from acp.results.vibration_projection import probe_vibration_projection
+
+        vib_probe = probe_vibration_projection(task_root)
+        if vib_probe.available:
+            return StructureViewerVibrations(
+                available=True,
+                endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/vibrations",
+                imaginary_count=vib_probe.imaginary_count,
+                source=vib_probe.source,
+            )
+        return StructureViewerVibrations(available=False)
+
     # Priority 1: formal RESULT structure product
     if step_structure:
         product = step_structure[0]
@@ -1120,6 +1148,7 @@ def _resolve_simple(task_root: Path, workflow: str, job_id: str, warnings: list[
             if energy_meta is not None:
                 energy_val = _number(energy_meta)
 
+        vib = _freq_vibrations(task_root, job_id, entry_id) if step_kind == "frequency" else StructureViewerVibrations(available=False)
         entries.append(StructureViewerEntry(
             id=entry_id,
             group_id="",
@@ -1132,7 +1161,7 @@ def _resolve_simple(task_root: Path, workflow: str, job_id: str, warnings: list[
             ),
             energy=StructureViewerEnergy(value=energy_val, unit="hartree", kind="electronic"),
             source=StructureViewerSource(kind="formal_result", geometry_ref=geometry_ref),
-            vibrations=StructureViewerVibrations(available=False),
+            vibrations=vib,
         ))
         default_id = entry_id
         return groups, entries, default_id
@@ -1196,14 +1225,7 @@ def _resolve_simple(task_root: Path, workflow: str, job_id: str, warnings: list[
             # frequency jobs: the vibrations endpoint serves the
             # normal_modes product AND the WORK/04_FREQ historical
             # projection — the catalog flag may safely enable fetching
-            vibrations = (
-                StructureViewerVibrations(
-                    available=True,
-                    endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/vibrations",
-                )
-                if step_kind == "frequency"
-                else StructureViewerVibrations(available=False)
-            )
+            vibrations = _freq_vibrations(task_root, job_id, entry_id) if step_kind == "frequency" else StructureViewerVibrations(available=False)
 
             entries.append(StructureViewerEntry(
                 id=entry_id,
