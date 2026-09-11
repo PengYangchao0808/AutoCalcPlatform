@@ -43,9 +43,7 @@ _GEOMETRY_REF_TEMPLATE = "RESULT/irc/irc_{direction}.xyz"
 
 # "E = -76.1234" / "energy: -76.1234" / "Energy = ..." anchored match first;
 # a bare decimal float ("IRC 2.5000 endpoint" style) as fallback.
-_ENERGY_ANCHORED_RE = re.compile(
-    r"(?:^|\s)(?:e|energy)\s*[=:]\s*(-?\d+(?:\.\d+)?)", re.IGNORECASE
-)
+_ENERGY_ANCHORED_RE = re.compile(r"(?:^|\s)(?:e|energy)\s*[=:]\s*(-?\d+(?:\.\d+)?)", re.IGNORECASE)
 _DECIMAL_RE = re.compile(r"-?\d+\.\d+")
 
 
@@ -243,8 +241,10 @@ def _build_graph(
                     ).to_annotation()
                 )
 
-    default_series = "irc_forward" if any(s["id"] == "irc_forward" for s in series) else (
-        series[0]["id"] if series else ""
+    default_series = (
+        "irc_forward"
+        if any(s["id"] == "irc_forward" for s in series)
+        else (series[0]["id"] if series else "")
     )
 
     return {

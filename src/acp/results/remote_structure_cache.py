@@ -77,9 +77,7 @@ class RemoteStructureCache:
         normalized = Path(rel_path)
         parts = normalized.parts
         if any(p == ".." for p in parts):
-            raise ValueError(
-                f"Cache path {rel_path!r} escapes the cache directory"
-            )
+            raise ValueError(f"Cache path {rel_path!r} escapes the cache directory")
         return (self._cache_root / job_id / rel_path).resolve()
 
     def _get_path_lock(self, cache_key: str) -> threading.Lock:
@@ -142,9 +140,7 @@ class RemoteStructureCache:
                 return None
 
             target.parent.mkdir(parents=True, exist_ok=True)
-            fd, tmp_path = tempfile.mkstemp(
-                dir=str(target.parent), suffix=".tmp"
-            )
+            fd, tmp_path = tempfile.mkstemp(dir=str(target.parent), suffix=".tmp")
             try:
                 with os.fdopen(fd, "wb") as f:
                     f.write(data)
@@ -198,7 +194,11 @@ class RemoteStructureCache:
             if mtime < cutoff:
                 shutil.rmtree(job_dir, ignore_errors=True)
                 removed += 1
-                logger.info("Swept expired cache: %s (age=%.1f days)", job_dir.name, (time.time() - mtime) / 86400)
+                logger.info(
+                    "Swept expired cache: %s (age=%.1f days)",
+                    job_dir.name,
+                    (time.time() - mtime) / 86400,
+                )
 
         return removed
 
