@@ -146,6 +146,7 @@ from acp.api.v1_schemas import (
     StructureSourceListResponse,
     StructureSourceSummary,
     StructureViewerPayloadModel,
+    StructureViewerOverlayResponse,
     StructureViewerVibrationsResponse,
     StudyPromoteResponse,
     StudyResumeResponse,
@@ -2628,6 +2629,89 @@ def get_structure_viewer_vibrations(
         atom_count=atom_count,
         geometry_product_id=geometry_product_id,
         source="product",
+    )
+
+
+@router.get(
+    "/jobs/{job_id}/structure-viewer/overlay",
+    response_model=StructureViewerOverlayResponse,
+)
+def get_structure_viewer_overlay(
+    job_id: str,
+    request: Request,
+    entry_a: str = Query(default=""),
+    entry_b: str = Query(default=""),
+) -> StructureViewerOverlayResponse:
+    """Overlay mapping + optimal RMSD between two structure-viewer entries.
+
+    The mapping is computed server-side only (identity when symbol sequences
+    match, else a UNIQUE RDKit MCS mapping; never guessed).  Mapping failures
+    return ``ok=false`` with a reason — the endpoint never 500s on them.
+
+    Raises:
+        404: Unknown job, or unknown ``entry_a``/``entry_b``.
+    """
+    from acp.results.structure_viewer import (
+        StructureViewerError,
+        build_structure_viewer_payload,
+        compute_overlay,
+    )
+
+    manager = _manager(request)
+    record = manager.get(job_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    if not record.work_dir:
+        raise HTTPException(status_code=404, detail=f"Job has no work dir: {job_id}")
+
+    work_dir = Path(record.work_dir)
+    if not entry_a or not entry_b:
+        raise HTTPException(status_code=404, detail="entry_a and entry_b are required")
+
+    try:
+        payload = build_structure_viewer_payload(
+            work_dir,
+            job_id=job_id,
+            workflow=str(record.spec.workflow or ""),
+            job_status=record.status.value,
+        )
+    except StructureViewerError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    def _find(entry_id: str) -> Any:
+        for item in payload.entries:
+            if item.id == entry_id:
+                return item
+        return None
+
+    entry_obj_a = _find(entry_a)
+    entry_obj_b = _find(entry_b)
+    if entry_obj_a is None:
+        raise HTTPException(status_code=404, detail=f"Entry not found: {entry_a}")
+    if entry_obj_b is None:
+        raise HTTPException(status_code=404, detail=f"Entry not found: {entry_b}")
+
+    try:
+        result = compute_overlay(job_id, work_dir, entry_obj_a, entry_obj_b)
+    except Exception as exc:  # noqa: BLE001 — mapping failure must not 500
+        result = {
+            "ok": False,
+            "mapping": None,
+            "rmsd": None,
+            "max_displacement": None,
+            "n_mapped": 0,
+            "reason": "failed",
+        }
+        logger.warning("overlay computation failed for %s: %s", job_id, exc)
+
+    max_disp = result.get("max_displacement")
+    return StructureViewerOverlayResponse(
+        ok=bool(result.get("ok")),
+        mapping=result.get("mapping"),
+        rmsd=result.get("rmsd"),
+        max_displacement=max_disp,
+        n_mapped=int(result.get("n_mapped") or 0),
+        reason=str(result.get("reason") or "unproven"),
     )
 
 

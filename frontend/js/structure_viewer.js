@@ -1,6 +1,6 @@
 /**
  * ACP Structure Viewer — state store + catalog fetch + stale-response guard
- * @version 0.11.0
+ * @version 0.12.0
  *
  * Namespace: window.ACPStructureViewer
  *
@@ -11,6 +11,9 @@
  *   - registerCanvasLoader(canvasId, fn)  (per-canvas load adapters)
  *   - saveCamera(canvasId) / restoreCamera(canvasId)
  *   - setStylePreset(name) / getStylePreset()
+ *   - loadOverlay(a, b)          (server-mapped overlay + RMSD, todo 40)
+ *   - clearOverlay()              (remove the overlay second model)
+ *   - overlayMeasurementsBlocked() (unproven-mapping clearing rule)
  *   - playIrcPath(direction)     (IRC forward/reverse frame playback, todo 39)
  *   - stopIrcPlayback()          (idempotent playback teardown)
  *   - isIrcPlaying()             (true while playback active/loading)
@@ -41,7 +44,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "0.11.0";
+  var VERSION = "0.12.0";
 
   /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
@@ -96,6 +99,14 @@
     IRC_STOP: "\u505c\u6b62",                                             // 停止
     IRC_PLAYING: "\u64ad\u653e\u4e2d",                                   // 播放中
     IRC_LOADING: "\u52a0\u8f7d\u5e27\u2026",                               // 加载帧…
+    OVERLAY_TITLE: "\u53e0\u5408\u5bf9\u6bd4",                             // 叠合对比
+    OVERLAY_RMSD: "RMSD",
+    OVERLAY_MAPPED_COUNT: "\u5df2\u6620\u5c04\u539f\u5b50",               // 已映射原子
+    OVERLAY_SOURCE_IDENTITY: "\u540c\u5e8f",                               // 同序
+    OVERLAY_SOURCE_MCS: "\u6700\u5927\u516c\u5171\u5b50\u7ed3\u6784",     // 最大公共子结构
+    OVERLAY_UNPROVEN: "\u65e0\u6cd5\u5efa\u7acb\u539f\u5b50\u6620\u5c04\uff0c\u6d4b\u91cf\u5df2\u6e05\u9664", // 无法建立原子映射，测量已清除
+    OVERLAY_CLEAR: "\u6e05\u9664\u53e0\u5408",                             // 清除叠合
+    OVERLAY_MAX_ATOM: "\u6700\u5927\u4f4d\u79fb\u539f\u5b50",             // 最大位移原子
   };
 
   /**
@@ -408,6 +419,7 @@
     renderStructureViewer();
     renderInspector();
     stopIrcPlayback(); /* entry switch ends playback (todo-30 ordering spirit) */
+    clearOverlay(); /* entry switch clears the overlay second model */
     loadSelectedGeometry();
     return structureViewerState.selectionToken;
   }
@@ -809,6 +821,7 @@
   function playIrcPath(direction) {
     if (direction !== "forward" && direction !== "reverse") return false;
     stopIrcPlayback();
+    clearOverlay();
     var entries = _ircEntries(direction);
     if (!entries.length) return false;
     var fetchFn = _getFetchImpl();
@@ -920,6 +933,235 @@
     }
   }
 
+  /* ---- structure overlay + RMSD (todo 40) ---- */
+
+  /* Distinct style for the overlaid SECOND model on the existing main
+     viewer — cyan carbons + translucency separate it from model A. */
+  var OVERLAY_STYLE_B = {
+    stick: { radius: 0.14, colorscheme: "cyanCarbon", opacity: 0.85 },
+    sphere: { scale: 0.24, colorscheme: "cyanCarbon", opacity: 0.55 },
+  };
+
+  var overlayState = {
+    active: false,
+    entryA: null,
+    entryB: null,
+    data: null,
+    xyzB: null,
+    loading: false,
+    error: null,
+  };
+
+  /**
+   * True while an ACTIVE overlay could not prove an atom mapping — the
+   * inspector must show the clearing note and disable measurement UI
+   * (cross-structure measurements are never kept on an unproven mapping).
+   */
+  function overlayMeasurementsBlocked() {
+    return !!(overlayState.active && overlayState.data &&
+      overlayState.data.reason === "unproven");
+  }
+
+  function _overlayUrl(entryA, entryB) {
+    return "/api/v1/jobs/" + encodeURIComponent(structureViewerState.jobId || "") +
+      "/structure-viewer/overlay?entry_a=" + encodeURIComponent(entryA) +
+      "&entry_b=" + encodeURIComponent(entryB);
+  }
+
+  function _removeOverlayModels() {
+    var v = _canvasViewer("main");
+    if (!v) return;
+    try {
+      while (typeof v.getModelCount === "function" && v.getModelCount() > 1) {
+        v.removeModel(v.getModel(1));
+      }
+      if (typeof v.render === "function") v.render();
+    } catch (_) { /* viewer may be empty */ }
+  }
+
+  /**
+   * Add geometry B as a SECOND model (cyan/transparent) on the existing
+   * main viewer, with the max-displacement atom highlighted on model A.
+   * Never creates a viewer instance; model A stays untouched.
+   */
+  function renderOverlay() {
+    if (!overlayState.active || !overlayState.xyzB) return;
+    var v = _canvasViewer("main");
+    if (!v || typeof v.addModel !== "function") return;
+    _removeOverlayModels();
+    var modelB = null;
+    try { modelB = v.addModel(overlayState.xyzB, "xyz"); } catch (_) { return; }
+    if (modelB && typeof modelB.setStyle === "function") {
+      try { modelB.setStyle({}, OVERLAY_STYLE_B); } catch (_) { /* keep default */ }
+    }
+    var md = overlayState.data && overlayState.data.max_displacement;
+    if (md && typeof md.i === "number") {
+      var baseScale = 0.25;
+      try { if (typeof getCurrentSphereScale === "function") baseScale = getCurrentSphereScale(); } catch (_) { /* app helper absent */ }
+      try {
+        v.addStyle({ index: md.i, model: 0 }, {
+          sphere: { scale: baseScale + 0.14, color: "yellow", opacity: 0.6 },
+        });
+      } catch (_) { /* highlight is cosmetic */ }
+    }
+    try { v.render(); } catch (_) { /* render is best-effort */ }
+  }
+
+  /**
+   * Fetch the server-side overlay (mapping + Kabsch RMSD — the mapping is
+   * NEVER guessed client-side) plus geometry B, then render the overlay.
+   *
+   * @param {string} entryIdA - base entry (the selected one)
+   * @param {string} entryIdB - entry to overlay on top
+   * @returns {Promise<boolean>} true when the overlay request succeeded
+   */
+  function loadOverlay(entryIdA, entryIdB) {
+    if (!entryIdA || !entryIdB || entryIdA === entryIdB) {
+      return Promise.resolve(false);
+    }
+    clearOverlay();
+    var fetchFn = _getFetchImpl();
+    if (!fetchFn) {
+      overlayState.active = true;
+      overlayState.error = "fetch not available";
+      renderInspector();
+      return Promise.resolve(false);
+    }
+    overlayState.active = true;
+    overlayState.loading = true;
+    overlayState.entryA = entryIdA;
+    overlayState.entryB = entryIdB;
+    overlayState.data = null;
+    overlayState.xyzB = null;
+    overlayState.error = null;
+    renderInspector();
+    var capturedToken = structureViewerState.selectionToken;
+
+    var entryB = null;
+    var entries = (structureViewerState.payload && structureViewerState.payload.entries) || [];
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].id === entryIdB) { entryB = entries[i]; break; }
+    }
+
+    return fetchFn(_overlayUrl(entryIdA, entryIdB), { headers: { "Accept": "application/json" } })
+      .then(function (resp) {
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        return resp.json();
+      })
+      .then(function (data) {
+        if (capturedToken !== structureViewerState.selectionToken) return false;
+        overlayState.data = data;
+        if (!entryB || !entryB.geometry || !entryB.geometry.endpoint) return true;
+        return fetchFn(entryB.geometry.endpoint, { headers: { "Accept": "text/plain" } })
+          .then(function (resp) { return resp.ok ? resp.text() : null; })
+          .then(function (xyzB) {
+            if (capturedToken !== structureViewerState.selectionToken) return false;
+            overlayState.xyzB = xyzB;
+            return true;
+          })
+          .catch(function () { return true; });
+      })
+      .then(function (okFetch) {
+        overlayState.loading = false;
+        if (capturedToken !== structureViewerState.selectionToken) {
+          clearOverlay();
+          return false;
+        }
+        if (!okFetch) return false;
+        renderOverlay();
+        renderInspector();
+        return true;
+      })
+      .catch(function (err) {
+        overlayState.loading = false;
+        overlayState.error = (err && err.message) ? err.message : String(err);
+        renderInspector();
+        return false;
+      });
+  }
+
+  /**
+   * Clear the active overlay: removes the second model from the main
+   * viewer and resets the state.  Idempotent.  Wired into the entry/job
+   * switch teardown paths and IRC playback start.
+   */
+  function clearOverlay() {
+    var wasActive = overlayState.active;
+    overlayState.active = false;
+    overlayState.entryA = null;
+    overlayState.entryB = null;
+    overlayState.data = null;
+    overlayState.xyzB = null;
+    overlayState.loading = false;
+    overlayState.error = null;
+    if (wasActive) {
+      _removeOverlayModels();
+      if (typeof document !== "undefined") renderInspector();
+    }
+  }
+
+  function _overlaySourceText(reason) {
+    if (reason === "identity") return _t("structure.overlay.source_identity", STR.OVERLAY_SOURCE_IDENTITY);
+    if (reason === "mcs") return _t("structure.overlay.source_mcs", STR.OVERLAY_SOURCE_MCS);
+    return reason || "";
+  }
+
+  function _renderOverlaySection(inspBody) {
+    if (!overlayState.active) return;
+    var div = document.createElement("div");
+    div.className = "sv-inspector-section sv-overlay-panel";
+    var lbl = document.createElement("div");
+    lbl.className = "sv-inspector-label";
+    lbl.textContent = _t("structure.overlay.title", STR.OVERLAY_TITLE);
+    div.appendChild(lbl);
+
+    if (overlayState.loading) {
+      var loading = document.createElement("div");
+      loading.className = "sv-inspector-value sv-muted";
+      loading.textContent = _t("structure.irc.loading", STR.IRC_LOADING);
+      div.appendChild(loading);
+    } else if (overlayState.error) {
+      var errLine = document.createElement("div");
+      errLine.className = "sv-edit-collision";
+      errLine.textContent = overlayState.error;
+      div.appendChild(errLine);
+    } else if (overlayState.data) {
+      var data = overlayState.data;
+      if (data.reason === "unproven") {
+        var note = document.createElement("div");
+        note.className = "sv-edit-collision";
+        note.textContent = _t("structure.overlay.unproven", STR.OVERLAY_UNPROVEN);
+        div.appendChild(note);
+      } else {
+        var rmsdLine = document.createElement("div");
+        rmsdLine.className = "sv-inspector-value";
+        rmsdLine.textContent = _t("structure.overlay.rmsd", STR.OVERLAY_RMSD) + " " +
+          (data.rmsd != null ? data.rmsd.toFixed(3) : "--") + " \u00c5";
+        div.appendChild(rmsdLine);
+        var mappedLine = document.createElement("div");
+        mappedLine.className = "sv-inspector-value sv-muted";
+        mappedLine.textContent = _t("structure.overlay.mapped_count", STR.OVERLAY_MAPPED_COUNT) +
+          ": " + (data.n_mapped || 0) + " \u00b7 " + _overlaySourceText(data.reason);
+        div.appendChild(mappedLine);
+        var md = data.max_displacement;
+        if (md && typeof md.distance === "number") {
+          var maxLine = document.createElement("div");
+          maxLine.className = "sv-inspector-value sv-muted";
+          maxLine.textContent = _t("structure.overlay.max_atom", STR.OVERLAY_MAX_ATOM) +
+            ": A#" + md.i + " \u2194 B#" + md.j + " (" + md.distance.toFixed(3) + " \u00c5)";
+          div.appendChild(maxLine);
+        }
+      }
+    }
+    var row = document.createElement("div");
+    row.className = "sv-edit-row";
+    row.appendChild(_editBtn("structure.overlay.clear", STR.OVERLAY_CLEAR, function () {
+      clearOverlay();
+    }));
+    div.appendChild(row);
+    inspBody.appendChild(div);
+  }
+
   /**
    * Load geometry for the currently selected entry.
    * Fetches geometry.endpoint, handles 409 pending_fetch with auto-retry,
@@ -1000,6 +1242,7 @@
        then full vibration teardown — no running loop or stale arrows may
        survive into the new job */
     stopIrcPlayback();
+    clearOverlay();
     if (typeof window !== "undefined" && window.ACPVibrationViewer &&
         typeof window.ACPVibrationViewer.handleTeardown === "function") {
       window.ACPVibrationViewer.handleTeardown();
@@ -1231,6 +1474,20 @@
       row.appendChild(bar);
     }
 
+    /* overlay action (todo 40): compare this entry against the SELECTED
+       one — a click here must NOT change the selection */
+    if (entry.id !== structureViewerState.selectedEntryId) {
+      var overlayBtn = document.createElement("button");
+      overlayBtn.setAttribute("type", "button");
+      overlayBtn.className = "sv-edit-btn sv-overlay-btn";
+      overlayBtn.textContent = _t("structure.overlay.title", STR.OVERLAY_TITLE);
+      overlayBtn.addEventListener("click", function (ev) {
+        if (ev && typeof ev.stopPropagation === "function") ev.stopPropagation();
+        loadOverlay(structureViewerState.selectedEntryId, entry.id);
+      });
+      row.appendChild(overlayBtn);
+    }
+
     /* click handler */
     row.addEventListener("click", function () {
       selectEntry(entry.id, "list");
@@ -1422,18 +1679,26 @@
       vibContainer.appendChild(vibNone);
     }
 
-    /* measurements placeholder */
+    /* measurements placeholder — disabled with a note while an overlay is
+       active but its atom mapping is unproven (todo 40 clearing rule) */
     var measDiv = document.createElement("div");
     measDiv.className = "sv-inspector-section";
+    if (overlayMeasurementsBlocked()) {
+      measDiv.className += " sv-measurements-blocked";
+    }
     var measLbl = document.createElement("div");
     measLbl.className = "sv-inspector-label";
     measLbl.textContent = _t("structure.measurements", STR.MEASUREMENTS);
     measDiv.appendChild(measLbl);
     var measVal = document.createElement("div");
     measVal.className = "sv-inspector-value sv-muted";
-    measVal.textContent = _t("structure.measurements_placeholder", STR.MEASUREMENTS_PLACEHOLDER);
+    measVal.textContent = overlayMeasurementsBlocked()
+      ? _t("structure.overlay.unproven", STR.OVERLAY_UNPROVEN)
+      : _t("structure.measurements_placeholder", STR.MEASUREMENTS_PLACEHOLDER);
     measDiv.appendChild(measVal);
     inspBody.appendChild(measDiv);
+
+    _renderOverlaySection(inspBody);
 
     /* geometry edit panel (todo 36): provenance + dirty badge +
        transaction controls + dirty-switch prompt + collision warnings */
@@ -1796,6 +2061,11 @@
     playIrcPath: playIrcPath,
     stopIrcPlayback: stopIrcPlayback,
     isIrcPlaying: isIrcPlaying,
+    overlayState: overlayState,
+    loadOverlay: loadOverlay,
+    renderOverlay: renderOverlay,
+    clearOverlay: clearOverlay,
+    overlayMeasurementsBlocked: overlayMeasurementsBlocked,
     loadStructureViewer: loadStructureViewer,
     onJobSelected: onJobSelected,
     onEnergyNodeSelected: onEnergyNodeSelected,

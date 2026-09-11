@@ -1288,6 +1288,30 @@ class StructureViewerVibrationsResponse(BaseModel):
     source: str | None = None
 
 
+class StructureViewerOverlayMaxDisplacement(BaseModel):
+    """Largest mapped-pair distance after Kabsch superposition."""
+
+    i: int
+    j: int
+    distance: float
+
+
+class StructureViewerOverlayResponse(BaseModel):
+    """Response for the structure-viewer overlay endpoint (todo 40).
+
+    ``reason``: ``identity`` (same symbol sequence) | ``mcs`` (unique RDKit
+    MCS mapping) | ``unproven`` (mapping withheld — never guessed) |
+    ``geometry_unreadable`` | ``failed``.
+    """
+
+    ok: bool
+    mapping: list[list[int]] | None = None
+    rmsd: float | None = None
+    max_displacement: StructureViewerOverlayMaxDisplacement | None = None
+    n_mapped: int = 0
+    reason: str = "unproven"
+
+
 # ---------------------------------------------------------------------------
 # S2 bond-length scan (docs/ACP_S2_Bond_Length_Scan_MD_Plan.md §7, §11).
 # ---------------------------------------------------------------------------

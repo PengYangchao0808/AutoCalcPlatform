@@ -5750,3 +5750,206 @@ def test_irc_playback_node_logic() -> None:
         f"Node IRC playback test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Wave 7 / todo 40: structure overlay + RMSD
+# ---------------------------------------------------------------------------
+
+
+def test_overlay_contract() -> None:
+    """Todo-40 lock: overlay API surface, distinct second-model style, teardown
+    clears, unproven-mapping note, i18n both locales."""
+    sv = _SV_JS_PATH.read_text(encoding="utf-8")
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    for name in ("loadOverlay", "renderOverlay", "clearOverlay", "overlayMeasurementsBlocked"):
+        assert f"{name}: {name}," in sv, f"{name} missing from namespace"
+    assert "overlayState: overlayState," in sv
+
+    # Second model gets a DISTINCT style on the EXISTING viewer (no new viewer)
+    assert "OVERLAY_STYLE_B" in sv
+    assert "cyanCarbon" in sv
+    assert "addModel" in sv.split("function renderOverlay()", 1)[1].split("\n  function ", 1)[0]
+
+    # Overlay extras are removed without touching model A / the viewer
+    assert "_removeOverlayModels" in sv
+    assert "getModelCount" in sv and "removeModel" in sv
+
+    # Max-displacement atom highlight mirrors applySelectionHighlight's pattern
+    overlay_fn = sv.split("function renderOverlay()", 1)[1].split("\n  function ", 1)[0]
+    assert "addStyle" in overlay_fn and "sphere" in overlay_fn
+
+    # Teardown: entry switch, job switch, and IRC playback all clear the overlay
+    select_fn = sv.split("function selectEntry(", 1)[1].split("\n  function ", 1)[0]
+    assert "clearOverlay()" in select_fn
+    on_job = sv.split("function onJobSelected(", 1)[1].split("\n  function ", 1)[0]
+    assert "clearOverlay()" in on_job
+    play_fn = sv.split("function playIrcPath(", 1)[1].split("\n  function ", 1)[0]
+    assert "clearOverlay()" in play_fn
+
+    # Unproven mapping: measurements section blocked + note (never kept)
+    assert "sv-measurements-blocked" in sv
+    assert "structure.overlay.unproven" in sv
+    blocked_fn = sv.split("function overlayMeasurementsBlocked()", 1)[1]
+    blocked_fn = blocked_fn.split("\n  function ", 1)[0]
+    assert '"unproven"' in blocked_fn
+
+    # List rows gain the overlay action (does NOT change selection)
+    assert "sv-overlay-btn" in sv
+    assert "stopPropagation" in sv
+
+    # i18n completeness: all 8 structure.overlay.* keys in BOTH locales
+    zh_keys = _extract_structure_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_structure_keys(html, _EN_BLOCK_RE)
+    expected = {
+        "structure.overlay.title",
+        "structure.overlay.rmsd",
+        "structure.overlay.mapped_count",
+        "structure.overlay.source_identity",
+        "structure.overlay.source_mcs",
+        "structure.overlay.unproven",
+        "structure.overlay.clear",
+        "structure.overlay.max_atom",
+    }
+    assert expected <= zh_keys, f"missing zh keys: {sorted(expected - zh_keys)}"
+    assert expected <= en_keys, f"missing en keys: {sorted(expected - en_keys)}"
+
+
+def test_overlay_node_logic() -> None:
+    """Node logic: overlay state transitions, second model styled distinctly,
+    unproven mapping blocks measurements, clear/entry-switch teardown."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        require(JS_PATH);
+        var ns = window.ACPStructureViewer;
+
+        var viewerCalls = [];
+        var models = [];
+        var count = 1;
+        var fakeViewer = {
+          getModelCount: function () { return count; },
+          getModel: function (i) { return models[i]; },
+          removeModel: function (m) {
+            viewerCalls.push(["removeModel"]);
+            count -= 1;
+          },
+          addModel: function (text, fmt) {
+            viewerCalls.push(["addModel", text]);
+            count += 1;
+            var rec = { styledWith: null, setStyle: function (sel, spec) {
+              viewerCalls.push(["modelStyle", spec]);
+              rec.styledWith = spec;
+            } };
+            models.push(rec);
+            return rec;
+          },
+          addStyle: function (sel, spec) { viewerCalls.push(["addStyle", sel, spec]); },
+          render: function () { viewerCalls.push(["render"]); },
+          getView: function () { return [0]; },
+          setView: function () {},
+        };
+        ns._mainViewerImpl = function () { return fakeViewer; };
+
+        ns.state.jobId = "job-ov";
+        ns.state.selectedEntryId = "conf_0001";
+        ns.state.payload = {
+          entries: [
+            { id: "conf_0001", group_id: "g", geometry: { endpoint: "/geo/1" },
+              source: {}, badges: [], vibrations: { available: false } },
+            { id: "conf_0002", group_id: "g", geometry: { endpoint: "/geo/2" },
+              source: {}, badges: [], vibrations: { available: false } },
+          ],
+          default_entry_id: "conf_0001",
+          groups: [],
+        };
+
+        var overlayPayload = null;
+        ns._fetchImpl = function (url) {
+          if (url.indexOf("overlay?") >= 0) {
+            return Promise.resolve({ ok: true, json: function () { return overlayPayload; } });
+          }
+          return Promise.resolve({ ok: true, text: function () {
+            return "2\\nb\\nH 0 0 0\\nH 0 0 1\\n";
+          } });
+        };
+
+        overlayPayload = {
+          ok: true, reason: "identity", rmsd: 0.123,
+          mapping: [[0, 0], [1, 1]], n_mapped: 2,
+          max_displacement: { i: 1, j: 1, distance: 0.2 },
+        };
+
+        ns.loadOverlay("conf_0001", "conf_0001").then(function (sameFlag) {
+          if (sameFlag !== false) {
+            console.error("FAIL: same-id guard"); process.exit(1);
+          }
+          return ns.loadOverlay("conf_0001", "conf_0002");
+        }).then(function (okFlag) {
+          if (!okFlag) {
+            console.error("FAIL: loadOverlay ok"); process.exit(1);
+          }
+          if (!ns.overlayState.active) {
+            console.error("FAIL: active"); process.exit(1);
+          }
+          if (ns.overlayState.data.reason !== "identity") {
+            console.error("FAIL: data"); process.exit(1);
+          }
+          if (ns.overlayMeasurementsBlocked()) {
+            console.error("FAIL: proven must not block"); process.exit(1);
+          }
+          var adds = viewerCalls.filter(function (c) { return c[0] === "addModel"; });
+          if (adds.length !== 1) {
+            console.error("FAIL: second model added once"); process.exit(1);
+          }
+          var styleCalls = viewerCalls.filter(function (c) { return c[0] === "modelStyle"; });
+          if (styleCalls.length !== 1 || !styleCalls[0][1].stick.colorscheme) {
+            console.error("FAIL: distinct second-model style"); process.exit(1);
+          }
+          var highlights = viewerCalls.filter(function (c) { return c[0] === "addStyle"; });
+          if (highlights.length !== 1 || highlights[0][1].index !== 1) {
+            console.error("FAIL: max-displacement highlight"); process.exit(1);
+          }
+
+          // clearOverlay removes the extra model and resets state
+          ns.clearOverlay();
+          if (ns.overlayState.active || ns.overlayMeasurementsBlocked()) {
+            console.error("FAIL: clear state"); process.exit(1);
+          }
+          if (!viewerCalls.some(function (c) { return c[0] === "removeModel"; })) {
+            console.error("FAIL: removeModel on clear"); process.exit(1);
+          }
+          ns.clearOverlay();
+
+          // unproven mapping -> measurements blocked
+          overlayPayload = { ok: true, reason: "unproven", mapping: null,
+                             rmsd: null, n_mapped: 0, max_displacement: null };
+          ns.loadOverlay("conf_0001", "conf_0002").then(function (ok2) {
+            if (!ok2) { console.error("FAIL: unproven load ok"); process.exit(1); }
+            if (!ns.overlayMeasurementsBlocked()) {
+              console.error("FAIL: unproven must block measurements"); process.exit(1);
+            }
+            // entry switch tears the overlay down (stale-selection guard path)
+            ns.selectEntry("conf_0002", "user");
+            if (ns.overlayState.active) {
+              console.error("FAIL: entry switch must clear overlay"); process.exit(1);
+            }
+            if (ns.overlayMeasurementsBlocked()) {
+              console.error("FAIL: blocked flag after clear"); process.exit(1);
+            }
+            console.log("PASS");
+          });
+        }).catch(function (e) {
+          console.error("FAIL: unexpected", e); process.exit(1);
+        });
+    """).replace("JS_PATH", json.dumps(str(_SV_JS_PATH)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node overlay test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout

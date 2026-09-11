@@ -27,6 +27,7 @@ __all__ = [
     "StructureViewerError",
     "build_structure_viewer_payload",
     "make_manual_entry",
+    "compute_overlay",
     "confsearch_entry_id",
     "pes_entry_id",
     "batch_entry_id",
@@ -1484,3 +1485,187 @@ def build_structure_viewer_payload(
         entries=entries,
         warnings=tuple(warnings),
     )
+
+# ── Structure overlay + RMSD (todo 40) ──────────────────────────────────────
+
+
+def _parse_xyz_atoms(text: str) -> tuple[list[str], list[list[float]]] | None:
+    """Parse the first XYZ frame into (symbols, coords); None when invalid."""
+    lines = (text or "").strip().splitlines()
+    if len(lines) < 2:
+        return None
+    try:
+        n_atoms = int(lines[0].strip())
+    except ValueError:
+        return None
+    if n_atoms <= 0 or len(lines) < 2 + n_atoms:
+        return None
+    symbols: list[str] = []
+    coords: list[list[float]] = []
+    for row in lines[2 : 2 + n_atoms]:
+        parts = row.split()
+        if len(parts) < 4:
+            return None
+        try:
+            x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
+        except ValueError:
+            return None
+        if not (math.isfinite(x) and math.isfinite(y) and math.isfinite(z)):
+            return None
+        symbols.append(parts[0])
+        coords.append([x, y, z])
+    return symbols, coords
+
+
+def _read_entry_xyz(
+    work_dir: Path, entry: StructureViewerEntry
+) -> tuple[list[str], list[list[float]]] | None:
+    """Resolve one entry's geometry to (symbols, coords).
+
+    Mirrors the todo-9 geometry endpoint: path-safe ``resolve_safe`` under
+    ``work_dir`` (with a bare-ref ``RESULT/`` probe), multi-frame extraction
+    via ``read_traj_frame_xyz`` when ``source.frame_index`` is set.
+    """
+    from acp.confsearch.sampling_models import read_traj_frame_xyz
+    from acp.scheduler.files import resolve_safe
+
+    geometry_ref = getattr(entry.source, "geometry_ref", None)
+    if not geometry_ref:
+        return None
+    resolved = resolve_safe(work_dir, geometry_ref)
+    if resolved is None and not geometry_ref.startswith(("RESULT/", "WORK/")):
+        resolved = resolve_safe(work_dir, f"RESULT/{geometry_ref}")
+    if resolved is None:
+        return None
+    try:
+        text = resolved.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    frame_index = getattr(entry.source, "frame_index", None)
+    if frame_index is not None:
+        frame = read_traj_frame_xyz(resolved, int(frame_index))
+        if frame is not None:
+            text = frame
+    return _parse_xyz_atoms(text)
+
+
+def _kabsch_pair_distances(
+    coords_a: list[list[float]],
+    coords_b: list[list[float]],
+    pairs: list[tuple[int, int]],
+) -> tuple[float, list[float]]:
+    """Optimal (Kabsch) superposition of the mapped B atoms onto A atoms.
+
+    Returns ``(rmsd, per_pair_distances)`` after superposition — the RMSD is
+    the rotation/translation-invariant minimum over the mapped pairs.
+    """
+    import numpy as np
+
+    p = np.asarray([coords_a[i] for i, _ in pairs], dtype=float)
+    q = np.asarray([coords_b[j] for _, j in pairs], dtype=float)
+    if len(pairs) == 1:
+        return 0.0, [0.0]
+    p_c = p - p.mean(axis=0)
+    q_c = q - q.mean(axis=0)
+    h = p_c.T @ q_c
+    u, _s, vt = np.linalg.svd(h)
+    d = float(np.sign(np.linalg.det(vt.T @ u.T)))
+    diag = np.eye(3)
+    diag[2, 2] = d
+    rotation = vt.T @ diag @ u.T
+    q_aligned = q_c @ rotation
+    diff = p_c - q_aligned
+    distances = np.sqrt(np.sum(diff * diff, axis=1))
+    rmsd = float(np.sqrt(np.mean(distances**2)))
+    return rmsd, [float(v) for v in distances]
+
+
+def _mcs_mapping(
+    symbols_a: list[str],
+    coords_a: list[list[float]],
+    symbols_b: list[str],
+    coords_b: list[list[float]],
+) -> list[tuple[int, int]] | None:
+    """RDKit MCS mapping via the ``acp.calculations.pes.atom_mapping`` pattern.
+
+    Only a UNIQUE candidate is accepted — an ambiguous mapping is never
+    guessed.  Returns ``None`` when RDKit is unavailable or the search fails.
+    """
+    try:
+        from acp.calculations.pes.atom_mapping import map_reactant_to_product
+    except ImportError:
+        logger.debug("atom_mapping import failed; overlay MCS path unavailable")
+        return None
+    try:
+        result = map_reactant_to_product(symbols_a, coords_a, symbols_b, coords_b)
+    except Exception as exc:  # noqa: BLE001 — mapping must never raise out
+        logger.debug("overlay MCS mapping failed: %s", exc)
+        return None
+    if result.status != "unique" or not result.candidates:
+        return None
+    return [(int(i), int(j)) for i, j in result.candidates[0].mapping]
+
+
+def compute_overlay(
+    job_id: str,
+    work_dir: Path,
+    entry_a: StructureViewerEntry,
+    entry_b: StructureViewerEntry,
+) -> dict[str, Any]:
+    """Compute the overlay mapping + optimal RMSD between two entries.
+
+    Mapping authority (never guessed client-side):
+    identity when both symbol sequences match exactly, else an RDKit MCS
+    mapping accepted only when unique, else ``mapping=None, reason="unproven"``
+    (RMSD withheld).  ``max_displacement`` is the largest mapped-pair distance
+    AFTER Kabsch superposition.
+    """
+    _ = job_id  # reserved for provenance; mapping depends only on geometry
+    loaded_a = _read_entry_xyz(Path(work_dir), entry_a)
+    loaded_b = _read_entry_xyz(Path(work_dir), entry_b)
+    if loaded_a is None or loaded_b is None:
+        return {
+            "ok": False,
+            "mapping": None,
+            "rmsd": None,
+            "max_displacement": None,
+            "n_mapped": 0,
+            "reason": "geometry_unreadable",
+        }
+    symbols_a, coords_a = loaded_a
+    symbols_b, coords_b = loaded_b
+    norm_a = [s.strip().capitalize() for s in symbols_a]
+    norm_b = [s.strip().capitalize() for s in symbols_b]
+
+    if norm_a == norm_b and len(norm_a) == len(norm_b):
+        pairs = [(i, i) for i in range(len(norm_a))]
+        reason = "identity"
+    else:
+        pairs = _mcs_mapping(norm_a, coords_a, norm_b, coords_b) or []
+        reason = "mcs" if pairs else "unproven"
+
+    if not pairs:
+        return {
+            "ok": True,
+            "mapping": None,
+            "rmsd": None,
+            "max_displacement": None,
+            "n_mapped": 0,
+            "reason": "unproven",
+        }
+
+    rmsd, distances = _kabsch_pair_distances(coords_a, coords_b, pairs)
+    worst = max(range(len(distances)), key=lambda idx: distances[idx])
+    max_displacement = {
+        "i": int(pairs[worst][0]),
+        "j": int(pairs[worst][1]),
+        "distance": distances[worst],
+    }
+    return {
+        "ok": True,
+        "mapping": [[int(i), int(j)] for i, j in pairs],
+        "rmsd": rmsd,
+        "max_displacement": max_displacement,
+        "n_mapped": len(pairs),
+        "reason": reason,
+    }

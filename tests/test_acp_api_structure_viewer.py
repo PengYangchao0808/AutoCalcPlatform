@@ -1570,3 +1570,55 @@ def test_asset_legacy_post_without_metadata(sv_client: TestClient) -> None:
     body = resp.json()
     assert body["ok"] is True
     assert body["metadata"] == {}
+
+
+class TestOverlayEndpoint:
+    """GET /api/v1/jobs/{job_id}/structure-viewer/overlay (todo 40)."""
+
+    def test_overlay_identity_200(self, sv_client: TestClient, tmp_path: Path) -> None:
+        """Same-order conformers → 200 with identity mapping + Kabsch RMSD."""
+        work_dir = _seed_job(
+            sv_client, tmp_path, job_id="sv-overlay-001", workflow="Confsearch"
+        )
+        _write_confsearch_manifest_with_xyz(work_dir)
+
+        catalog = sv_client.get(
+            "/api/v1/jobs/sv-overlay-001/structure-viewer"
+        ).json()
+        ids = sorted(e["id"] for e in catalog["entries"])[:2]
+        assert len(ids) == 2
+
+        resp = sv_client.get(
+            "/api/v1/jobs/sv-overlay-001/structure-viewer/overlay",
+            params={"entry_a": ids[0], "entry_b": ids[1]},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is True
+        assert body["reason"] == "identity"
+        assert body["mapping"] == [[0, 0], [1, 1], [2, 2]]
+        assert body["n_mapped"] == 3
+        assert isinstance(body["rmsd"], float)
+        assert body["rmsd"] > 0
+        assert body["max_displacement"]["i"] in {0, 1, 2}
+        assert body["max_displacement"]["distance"] >= body["rmsd"]
+
+    def test_overlay_unknown_entry_404(self, sv_client: TestClient, tmp_path: Path) -> None:
+        work_dir = _seed_job(
+            sv_client, tmp_path, job_id="sv-overlay-002", workflow="Confsearch"
+        )
+        _write_confsearch_manifest_with_xyz(work_dir)
+
+        resp = sv_client.get(
+            "/api/v1/jobs/sv-overlay-002/structure-viewer/overlay",
+            params={"entry_a": "conf_0001", "entry_b": "conf_nope"},
+        )
+        assert resp.status_code == 404
+        assert "conf_nope" in resp.json()["detail"]
+
+    def test_overlay_unknown_job_404(self, sv_client: TestClient) -> None:
+        resp = sv_client.get(
+            "/api/v1/jobs/sv-ghost/structure-viewer/overlay",
+            params={"entry_a": "a", "entry_b": "b"},
+        )
+        assert resp.status_code == 404

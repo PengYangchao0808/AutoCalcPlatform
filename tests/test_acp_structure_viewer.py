@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -2000,3 +2001,205 @@ class TestRevisionRefresh:
             task, job_id="j1", workflow="optimize", job_status="completed"
         )
         assert isinstance(payload.warnings, tuple)
+
+
+# ---------------------------------------------------------------------------
+# Overlay + RMSD tests (todo 40)
+# ---------------------------------------------------------------------------
+
+_ETHANOL_LIKE = [
+    ("C", 0.000, 0.000, 0.000),
+    ("O", 1.430, 0.000, 0.000),
+    ("H", -0.360, 1.030, 0.000),
+    ("H", -0.360, -0.515, 0.890),
+    ("H", -0.360, -0.515, -0.890),
+    ("H", 1.740, 0.900, 0.000),
+]
+
+
+def _rotated(rows: list[tuple[str, float, float, float]], angle: float, shift: tuple[float, float, float]) -> list[tuple[str, float, float, float]]:
+    cos_a, sin_a = math.cos(angle), math.sin(angle)
+    out = []
+    for sym, x, y, z in rows:
+        xr = x * cos_a - y * sin_a + shift[0]
+        yr = x * sin_a + y * cos_a + shift[1]
+        out.append((sym, xr, yr, z + shift[2]))
+    return out
+
+
+def _xyz_text(rows: list[tuple[str, float, float, float]]) -> str:
+    lines = [str(len(rows)), "overlay-fixture"]
+    for sym, x, y, z in rows:
+        lines.append(f"{sym} {x:.6f} {y:.6f} {z:.6f}")
+    return "\n".join(lines) + "\n"
+
+
+def _overlay_entry(entry_id: str, ref: str, frame_index: int | None = None):
+    from acp.results.structure_viewer import (
+        StructureViewerEntry,
+        StructureViewerGeometry,
+        StructureViewerSource,
+        StructureViewerVibrations,
+    )
+
+    return StructureViewerEntry(
+        id=entry_id,
+        group_id="g",
+        label=entry_id,
+        role="minimum",
+        status="completed",
+        geometry=StructureViewerGeometry(endpoint="/x", format="xyz"),
+        source=StructureViewerSource(
+            kind="formal_result", frame_index=frame_index, geometry_ref=ref
+        ),
+        vibrations=StructureViewerVibrations(available=False),
+    )
+
+
+def _overlay_workdir(tmp_path: Path, files: dict[str, str]) -> Path:
+    geo_dir = tmp_path / "RESULT" / "overlay"
+    geo_dir.mkdir(parents=True, exist_ok=True)
+    for name, text in files.items():
+        (geo_dir / name).write_text(text, encoding="utf-8")
+    return tmp_path
+
+
+def test_overlay_rmsd(tmp_path: Path):
+    """Acceptance: identity mapping on same-order geometries gives the exact
+    Kabsch RMSD (< 1e-6 for a pure rotation+translation); permuted atom order
+    resolves via unique MCS; unprovable pairs withhold the mapping."""
+    from acp.results.structure_viewer import compute_overlay
+
+    rotated_rows = _rotated(_ETHANOL_LIKE, 0.7, (5.0, -2.0, 0.5))
+    work_dir = _overlay_workdir(
+        tmp_path,
+        {
+            "a.xyz": _xyz_text(_ETHANOL_LIKE),
+            "c.xyz": _xyz_text(rotated_rows),
+        },
+    )
+    entry_a = _overlay_entry("a", "RESULT/overlay/a.xyz")
+    entry_c = _overlay_entry("c", "RESULT/overlay/c.xyz")
+
+    result = compute_overlay("job", work_dir, entry_a, entry_c)
+    assert result["ok"] is True
+    assert result["reason"] == "identity"
+    assert result["mapping"] == [[i, i] for i in range(6)]
+    assert result["n_mapped"] == 6
+    assert result["rmsd"] is not None and result["rmsd"] < 1e-6
+    assert result["max_displacement"]["distance"] < 1e-5
+    assert set(result["max_displacement"]) == {"i", "j", "distance"}
+
+    # Permuted atom order -> MCS path finds the unique mapping, RMSD ~ 0
+    perm = [2, 0, 3, 1, 4, 5]
+    permuted = [_ETHANOL_LIKE[i] for i in perm]
+    permuted_rot = _rotated(permuted, -0.4, (1.0, 1.0, -0.3))
+    work_dir2 = _overlay_workdir(
+        tmp_path,
+        {"p.xyz": _xyz_text(permuted_rot)},
+    )
+    entry_p = _overlay_entry("p", "RESULT/overlay/p.xyz")
+    result_p = compute_overlay("job", work_dir2, entry_a, entry_p)
+    assert result_p["ok"] is True
+    assert result_p["reason"] == "mcs"
+    assert result_p["mapping"] is not None
+    assert len(result_p["mapping"]) == 6
+    # inverse of the shuffle: a-atom i maps to its position in the perm file
+    expected = {i: perm.index(i) for i in range(6)}
+    for i, j in result_p["mapping"]:
+        assert expected[i] == j
+    assert result_p["rmsd"] is not None and result_p["rmsd"] < 1e-6
+
+    # Unprovable: H2O vs ethane -> mapping withheld, ok stays true
+    water = [("O", 0.0, 0.0, 0.0), ("H", 0.96, 0.0, 0.0), ("H", -0.24, 0.93, 0.0)]
+    ethane = [
+        ("C", -0.77, 0.0, 0.0), ("C", 0.77, 0.0, 0.0),
+        ("H", -1.16, 1.02, 0.0), ("H", -1.16, -0.51, 0.88), ("H", -1.16, -0.51, -0.88),
+        ("H", 1.16, 1.02, 0.0), ("H", 1.16, -0.51, 0.88), ("H", 1.16, -0.51, -0.88),
+    ]
+    work_dir3 = _overlay_workdir(
+        tmp_path,
+        {"w.xyz": _xyz_text(water), "e.xyz": _xyz_text(ethane)},
+    )
+    entry_w = _overlay_entry("w", "RESULT/overlay/w.xyz")
+    entry_e = _overlay_entry("e", "RESULT/overlay/e.xyz")
+    result_u = compute_overlay("job", work_dir3, entry_w, entry_e)
+    assert result_u["ok"] is True
+    assert result_u["reason"] == "unproven"
+    assert result_u["mapping"] is None
+    assert result_u["rmsd"] is None
+    assert result_u["n_mapped"] == 0
+
+
+def test_overlay_max_displacement_after_superposition(tmp_path: Path):
+    """Perturb ONE atom -> that pair is the max-displacement pair."""
+    from acp.results.structure_viewer import compute_overlay
+
+    perturbed = list(_ETHANOL_LIKE)
+    sym, x, y, z = perturbed[3]
+    perturbed[3] = (sym, x + 0.30, y, z)
+    work_dir = _overlay_workdir(
+        tmp_path,
+        {"a.xyz": _xyz_text(_ETHANOL_LIKE), "b.xyz": _xyz_text(perturbed)},
+    )
+    result = compute_overlay(
+        "job",
+        work_dir,
+        _overlay_entry("a", "RESULT/overlay/a.xyz"),
+        _overlay_entry("b", "RESULT/overlay/b.xyz"),
+    )
+    assert result["reason"] == "identity"
+    assert result["max_displacement"]["i"] == 3
+    assert result["max_displacement"]["j"] == 3
+    # Kabsch redistributes part of the single-atom perturbation into the
+    # optimal rotation/translation, so the post-superposition distance is
+    # below the raw 0.30 shift but remains the largest mapped-pair distance.
+    assert 0.15 < result["max_displacement"]["distance"] < 0.31
+    assert result["rmsd"] <= result["max_displacement"]["distance"]
+
+
+def test_overlay_frame_index_extraction(tmp_path: Path):
+    """Multi-frame geometry_ref + frame_index reads the right block."""
+    from acp.results.structure_viewer import compute_overlay
+
+    frames = _xyz_text(_ETHANOL_LIKE) + _xyz_text(_rotated(_ETHANOL_LIKE, 0.9, (2, 2, 2)))
+    work_dir = _overlay_workdir(tmp_path, {"traj.xyz": frames})
+    result = compute_overlay(
+        "job",
+        work_dir,
+        _overlay_entry("f0", "RESULT/overlay/traj.xyz", frame_index=0),
+        _overlay_entry("f1", "RESULT/overlay/traj.xyz", frame_index=1),
+    )
+    assert result["reason"] == "identity"
+    assert result["rmsd"] is not None and result["rmsd"] < 1e-6
+
+
+def test_overlay_geometry_unreadable(tmp_path: Path):
+    """Missing geometry files -> ok=False + geometry_unreadable."""
+    from acp.results.structure_viewer import compute_overlay
+
+    work_dir = _overlay_workdir(tmp_path, {})
+    result = compute_overlay(
+        "job",
+        work_dir,
+        _overlay_entry("a", "RESULT/overlay/nope.xyz"),
+        _overlay_entry("b", "RESULT/overlay/nope2.xyz"),
+    )
+    assert result["ok"] is False
+    assert result["reason"] == "geometry_unreadable"
+    assert result["mapping"] is None
+
+
+def test_overlay_path_escape_rejected(tmp_path: Path):
+    """geometry_ref may not escape the work dir."""
+    from acp.results.structure_viewer import compute_overlay
+
+    work_dir = _overlay_workdir(tmp_path, {"a.xyz": _xyz_text(_ETHANOL_LIKE)})
+    result = compute_overlay(
+        "job",
+        work_dir,
+        _overlay_entry("a", "RESULT/overlay/a.xyz"),
+        _overlay_entry("evil", "../../etc/passwd"),
+    )
+    assert result["ok"] is False
+    assert result["reason"] == "geometry_unreadable"
