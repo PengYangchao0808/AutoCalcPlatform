@@ -1,6 +1,6 @@
 /**
- * ACP Structure Editor — graph + bond/angle/dihedral edits (Wave 6, todos 32-35)
- * @version 0.6.0
+ * ACP Structure Editor — edits + validation + transactions (Wave 6, todos 32-36)
+ * @version 0.7.0
  *
  * Namespace: window.ACPStructureEditor
  *
@@ -23,6 +23,10 @@
  *   - applyBondLengthEdit(a, b, targetLength, moveSide) (orchestration)
  *   - applyBondAngleEdit(a, b, c, targetDeg, moveSide) (orchestration)
  *   - applyDihedralEdit(a, b, c, d, targetDeg, moveSide) (orchestration)
+ *   - applyMeasuredEdit(kind, atomIds, target)  (measurement-tool hook)
+ *   - checkCollisions(symbols, coords, edges)   (PURE post-edit safety check)
+ *   - bindEntry(entryId, symbols, coords) / confirmSwitch(action)
+ *   - undoEdit() / redoEdit() / resetEdits() / isDirty() / syncDirtyFlag()
  *
  * Contract (doc §6.1-§6.3): edits are INTERNAL-COORDINATE ONLY — a bond
  * edit rigidly TRANSLATES one fragment, an angle edit rigidly ROTATES the
@@ -32,18 +36,25 @@
  * bonds (graph still connected after the cut) are rejected; collinear
  * angle input falls back to the most stable orthonormal axis with a
  * warning; dihedral targets normalize to (-180, 180] and rotate the
- * C-side by the SHORTEST rotation.  Accepted edits are staged in
- * editorState.pendingEdit — pushing them to the viewer and the undo/redo
- * UI is todo 36.
+ * C-side by the SHORTEST rotation.  Accepted edits run through the
+ * transaction engine: every apply* validates, applies the new coordinates
+ * to the displayed entry, records {type, atom_ids, before, after,
+ * moved_atom_ids, collision_warnings}, and syncs the viewer dirty flag.
+ * Edits are scoped to the bound entry (bindEntry) — an apply against a
+ * different displayed entry rejects entry_mismatch; switching entries
+ * while dirty raises a pendingSwitch prompt (放弃 / 另存为 / 取消) instead
+ * of silently discarding.  Collision check: non-bonded pairs closer than
+ * COLLISION_FACTOR*(r_a+r_b) warn (severe) but stay undoable.  Edits touch
+ * COORDINATES ONLY — never bond orders, elements, or hydrogens.  The
+ * save-as-asset POST is todo 37 (saveRequested flag + hook only).
  *
- * TODO(todo-36): undo/redo stack + dirty state + preview/apply pipeline
- * TODO(todo-37): save-as-asset + provenance metadata
+ * TODO(todo-37): save-as-asset + provenance metadata + new-calculation handoff
  */
 (function () {
   "use strict";
 
   /** Version tag — bump on every structural change. */
-  var VERSION = "0.6.0";
+  var VERSION = "0.7.0";
 
   /* ---- user-visible strings (zh fallback; i18n dictionary keys land in todo 36) ---- */
   var STR = {
@@ -52,6 +63,15 @@
     MOVE_LEFT: "\u79fb\u52a8\u5de6\u4fa7",                                 // 移动左侧
     MOVE_RIGHT: "\u79fb\u52a8\u53f3\u4fa7",                               // 移动右侧
     COLLINEAR_WARNING: "\u5171\u7ebf\u89d2\u5ea6\u8f93\u5165\uff0c\u65cb\u8f6c\u8f74\u53d6\u6700\u7a33\u5b9a\u6b63\u4ea4\u8f74", // 共线角度输入，旋转轴取最稳定正交轴
+    DIRTY: "\u5df2\u4fee\u6539\uff0c\u672a\u4fdd\u5b58",                           // 已修改，未保存
+    UNDO: "\u64a4\u9500",                                                           // 撤销
+    REDO: "\u91cd\u505a",                                                           // 重做
+    RESET: "\u91cd\u7f6e",                                                           // 重置
+    DISCARD: "\u653e\u5f03",                                                         // 放弃
+    SAVE_AS: "\u53e6\u5b58\u4e3a",                                                 // 另存为
+    CANCEL: "\u53d6\u6d88",                                                         // 取消
+    COLLISION: "\u4e25\u91cd\u78b0\u649e",                                         // 严重碰撞
+    ENTRY_MISMATCH: "\u7f16\u8f91\u4f1a\u8bdd\u4e0e\u5f53\u524d\u7ed3\u6784\u4e0d\u4e00\u81f4", // 编辑会话与当前结构不一致
   };
 
   /**
@@ -82,11 +102,20 @@
   /** |cross(u_BA, u_BC)| below this counts as collinear A-B-C. */
   var COLLINEAR_EPS = 1e-6;
 
+  /** Non-bonded pairs closer than this fraction of (r_a + r_b) collide. */
+  var COLLISION_FACTOR = 0.55;
+
   /** @typedef {Object} EditorState @property {Object|null} graph @property {string|null} provenance */
   var editorState = {
     graph: null,
     provenance: null,
     pendingEdit: null,
+    entryId: null,
+    originalCoords: null,
+    transactions: [],
+    redoStack: [],
+    pendingSwitch: null,
+    saveRequested: false,
   };
 
   /** Animation mutual-exclusion flag (todo 30; Wave 6 edits check this). */
@@ -795,12 +824,9 @@
    */
   function applyDihedralEdit(atomA, atomB, atomC, atomD, targetDeg, moveSide) {
     if (locked) return { ok: false, reason: "locked" };
-    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
-      ? window.ACPStructureViewer.state
-      : null;
-    if (!svState || !svState.displayedCoords || !svState.displayedSymbols) {
-      return { ok: false, reason: "no_structure" };
-    }
+    var guard = _entryScopeGuard();
+    if (!guard.ok) return guard;
+    var svState = window.ACPStructureViewer.state;
     var graph = editorState.graph || buildGraphFromCurrentEntry();
     if (!graph) return { ok: false, reason: "no_structure" };
 
@@ -819,6 +845,7 @@
         moveSide: "C",
         coords: result.coords,
       };
+      _commitEdit("dihedral", [atomA, atomB, atomC, atomD], result.coords);
     }
     return result;
   }
@@ -837,12 +864,9 @@
    */
   function applyBondAngleEdit(atomA, atomB, atomC, targetDeg, moveSide) {
     if (locked) return { ok: false, reason: "locked" };
-    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
-      ? window.ACPStructureViewer.state
-      : null;
-    if (!svState || !svState.displayedCoords || !svState.displayedSymbols) {
-      return { ok: false, reason: "no_structure" };
-    }
+    var guard = _entryScopeGuard();
+    if (!guard.ok) return guard;
+    var svState = window.ACPStructureViewer.state;
     var graph = editorState.graph || buildGraphFromCurrentEntry();
     if (!graph) return { ok: false, reason: "no_structure" };
 
@@ -863,6 +887,7 @@
       if (result.warning) {
         editorState.pendingEdit.warning = result.warning;
       }
+      _commitEdit("bond_angle", [atomA, atomB, atomC], result.coords);
     }
     return result;
   }
@@ -882,12 +907,9 @@
    */
   function applyBondLengthEdit(atomA, atomB, targetLength, moveSide) {
     if (locked) return { ok: false, reason: "locked" };
-    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
-      ? window.ACPStructureViewer.state
-      : null;
-    if (!svState || !svState.displayedCoords || !svState.displayedSymbols) {
-      return { ok: false, reason: "no_structure" };
-    }
+    var guard = _entryScopeGuard();
+    if (!guard.ok) return guard;
+    var svState = window.ACPStructureViewer.state;
     var graph = editorState.graph || buildGraphFromCurrentEntry();
     if (!graph) return { ok: false, reason: "no_structure" };
 
@@ -905,8 +927,323 @@
         moveSide: resolveMoveSide(fragments, atomA, atomB, moveSide),
         coords: result.coords,
       };
+      _commitEdit("bond_length", [atomA, atomB], result.coords);
     }
     return result;
+  }
+
+  /* ---- transactions + collision validation + entry scoping (todo 36) ---- */
+
+  /**
+   * Post-edit safety check (doc §6.3): every NON-bonded pair (no shared
+   * edge) with distance < COLLISION_FACTOR*(r_a + r_b) (strictly) is a
+   * severe collision.  PURE; nothing is mutated.  Warnings never block —
+   * the edit stays applied and undoable.
+   *
+   * @param {Array<string>} symbols
+   * @param {Array<Array<number>>} coords
+   * @param {Array<{a: number, b: number}>|null} edges
+   * @returns {Array<{a: number, b: number, distance: number, severity: string}>}
+   */
+  function checkCollisions(symbols, coords, edges) {
+    var hits = [];
+    if (!symbols || !coords) return hits;
+    var bonded = {};
+    if (edges && edges.length) {
+      for (var e = 0; e < edges.length; e++) {
+        var lo = Math.min(edges[e].a, edges[e].b);
+        var hi = Math.max(edges[e].a, edges[e].b);
+        bonded[lo + "-" + hi] = true;
+      }
+    }
+    for (var i = 0; i < coords.length; i++) {
+      var ci = coords[i];
+      if (!ci) continue;
+      for (var j = i + 1; j < coords.length; j++) {
+        if (bonded[i + "-" + j]) continue;
+        var cj = coords[j];
+        if (!cj) continue;
+        var dx = +ci[0] - +cj[0], dy = +ci[1] - +cj[1], dz = +ci[2] - +cj[2];
+        var dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (!isFinite(dist)) continue;
+        if (dist < COLLISION_FACTOR * (_radiusOf(symbols[i]) + _radiusOf(symbols[j]))) {
+          hits.push({ a: i, b: j, distance: dist, severity: "severe" });
+        }
+      }
+    }
+    return hits;
+  }
+
+  /**
+   * Bind the edit session to an entry (called by structure_viewer when
+   * geometry loads).  Binding a DIFFERENT entry while dirty does NOT
+   * auto-discard: it records editorState.pendingSwitch and returns
+   * {ok:false, reason:"dirty_switch"} — the UI shows the 放弃/另存为/取消
+   * prompt and confirmSwitch finishes the switch.
+   *
+   * @param {string} entryId
+   * @param {Array<string>} symbols
+   * @param {Array<Array<number>>} coords
+   * @returns {{ok: boolean, reason?: string}}
+   */
+  function bindEntry(entryId, symbols, coords) {
+    if (editorState.entryId !== null && editorState.entryId !== entryId && isDirty()) {
+      editorState.pendingSwitch = {
+        targetEntryId: entryId,
+        targetSymbols: symbols,
+        targetCoords: coords,
+      };
+      return { ok: false, reason: "dirty_switch" };
+    }
+    _rebind(entryId, symbols, coords);
+    return { ok: true };
+  }
+
+  function _rebind(entryId, symbols, coords, keepGraph) {
+    editorState.entryId = entryId;
+    editorState.originalCoords = coords
+      ? coords.map(function (row) { return [+row[0], +row[1], +row[2]]; })
+      : null;
+    editorState.transactions = [];
+    editorState.redoStack = [];
+    editorState.pendingEdit = null;
+    editorState.pendingSwitch = null;
+    if (!keepGraph) {
+      editorState.graph = null;
+      editorState.provenance = null;
+    }
+    syncDirtyFlag();
+  }
+
+  /**
+   * Resolve a pending dirty-switch prompt.
+   * "discard" -> drop transactions and rebind to the pending entry;
+   * "save"    -> set saveRequested, call the todo-37 hook
+   *              (window.ACPStructureViewer.requestSaveEditedAsset) when
+   *              present, then rebind exactly like discard;
+   * "cancel"  -> stay on the current entry (prompt cleared, edits kept).
+   *
+   * @param {string} action - "discard" | "save" | "cancel"
+   * @returns {{switched: boolean}|null} null for invalid actions
+   */
+  function confirmSwitch(action) {
+    var pending = editorState.pendingSwitch;
+    if (!pending) return null;
+    if (action === "cancel") {
+      editorState.pendingSwitch = null;
+      return { switched: false };
+    }
+    if (action !== "discard" && action !== "save") return null;
+    if (action === "save") {
+      editorState.saveRequested = true;
+      var sv = (typeof window !== "undefined" && window.ACPStructureViewer)
+        ? window.ACPStructureViewer
+        : null;
+      if (sv && typeof sv.requestSaveEditedAsset === "function") {
+        try { sv.requestSaveEditedAsset(); } catch (_) { /* hook is best-effort */ }
+      }
+    }
+    _rebind(pending.targetEntryId, pending.targetSymbols, pending.targetCoords);
+    return { switched: true };
+  }
+
+  /**
+   * Net applied transaction count > 0 (undos pop the stack, so the length
+   * is the live dirty state).
+   *
+   * @returns {boolean}
+   */
+  function isDirty() {
+    return editorState.transactions.length > 0;
+  }
+
+  /**
+   * Mirror isDirty() into the structure viewer store (todo 15's dirty
+   * guard in refreshIfChanged goes live through this) and refresh the
+   * inspector edit panel when a DOM is present.
+   */
+  function syncDirtyFlag() {
+    if (typeof window !== "undefined" && window.ACPStructureViewer &&
+        window.ACPStructureViewer.state) {
+      window.ACPStructureViewer.state.dirty = isDirty();
+    }
+    if (typeof document !== "undefined" && window.ACPStructureViewer &&
+        typeof window.ACPStructureViewer.renderInspector === "function") {
+      try { window.ACPStructureViewer.renderInspector(); } catch (_) { /* render is best-effort */ }
+    }
+  }
+
+  /**
+   * Shared commit path for every apply*: entry scoping, transaction record
+   * {type, atom_ids, before, after, moved_atom_ids, collision_warnings},
+   * live application to the displayed coordinates, and a best-effort
+   * refresh of the 3D model via the app's xyz loading bridge.  Edits touch
+   * coordinates ONLY — symbols, bond orders, and topology never change.
+   *
+   * @param {string} type - "bond_length" | "bond_angle" | "dihedral"
+   * @param {Array<number>} atomIds
+   * @param {Array<Array<number>>} afterCoords
+   * @returns {void}
+   */
+  function _commitEdit(type, atomIds, afterCoords) {
+    var svState = window.ACPStructureViewer.state;
+    var before = svState.displayedCoords;
+    var moved = [];
+    for (var i = 0; i < afterCoords.length; i++) {
+      if (afterCoords[i] !== before[i]) moved.push(i);
+    }
+    var warnings = checkCollisions(svState.displayedSymbols, afterCoords, _graphEdges());
+    editorState.transactions.push({
+      type: type,
+      atom_ids: atomIds.slice(),
+      before: before,
+      after: afterCoords,
+      moved_atom_ids: moved,
+      collision_warnings: warnings,
+    });
+    editorState.redoStack = [];
+    svState.displayedCoords = afterCoords;
+    syncDirtyFlag();
+    _pushModelToViewer();
+  }
+
+  function _graphEdges() {
+    var graph = editorState.graph || buildGraphFromCurrentEntry();
+    return graph ? graph.edges : [];
+  }
+
+  function _xyzText(symbols, coords) {
+    var out = String(coords.length) + "\n\n";
+    for (var i = 0; i < coords.length; i++) {
+      out += symbols[i] + " " + (+coords[i][0]).toFixed(6) + " " +
+        (+coords[i][1]).toFixed(6) + " " + (+coords[i][2]).toFixed(6) + "\n";
+    }
+    return out;
+  }
+
+  /**
+   * Best-effort refresh of the displayed 3D model through the app's
+   * existing xyz bridge (no new viewer, no re-framing contract change).
+   */
+  function _pushModelToViewer() {
+    if (typeof window === "undefined") return;
+    var svState = window.ACPStructureViewer ? window.ACPStructureViewer.state : null;
+    if (!svState || !svState.displayedCoords || !svState.displayedSymbols) return;
+    if (typeof window._svLoadXyzToViewer === "function") {
+      try {
+        window._svLoadXyzToViewer(
+          _xyzText(svState.displayedSymbols, svState.displayedCoords),
+          svState.displayedEntryId
+        );
+      } catch (_) { /* display refresh is best-effort */ }
+    }
+  }
+
+  /**
+   * Entry-scope guard shared by the apply* paths: rejects when the edit
+   * session is bound to a different entry than the viewer displays
+   * ("must NOT apply an edit outside the current entry"); auto-binds on
+   * the first edit of a session.
+   *
+   * @returns {{ok: boolean, reason?: string}}
+   */
+  function _entryScopeGuard() {
+    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
+      ? window.ACPStructureViewer.state
+      : null;
+    if (!svState || !svState.displayedCoords || !svState.displayedSymbols ||
+        !svState.displayedEntryId) {
+      return { ok: false, reason: "no_structure" };
+    }
+    if (editorState.entryId === null) {
+      /* first edit of a session: adopt the displayed entry; a graph
+         already built/seeded for it stays valid */
+      _rebind(svState.displayedEntryId, svState.displayedSymbols,
+        svState.displayedCoords, true);
+    } else if (editorState.entryId !== svState.displayedEntryId) {
+      return { ok: false, reason: "entry_mismatch" };
+    }
+    return { ok: true };
+  }
+
+  /**
+   * Undo the last transaction: displayed coordinates revert to `before`
+   * (byte-identical row references), the transaction moves to the redo
+   * stack.
+   *
+   * @returns {{ok: boolean, reason?: string}}
+   */
+  function undoEdit() {
+    if (locked) return { ok: false, reason: "locked" };
+    var guard = _entryScopeGuard();
+    if (!guard.ok) return guard;
+    if (!editorState.transactions.length) return { ok: false, reason: "nothing_to_undo" };
+    var txn = editorState.transactions.pop();
+    editorState.redoStack.push(txn);
+    window.ACPStructureViewer.state.displayedCoords = txn.before;
+    syncDirtyFlag();
+    _pushModelToViewer();
+    return { ok: true, transaction: txn };
+  }
+
+  /**
+   * Redo the last undone transaction.
+   *
+   * @returns {{ok: boolean, reason?: string}}
+   */
+  function redoEdit() {
+    if (locked) return { ok: false, reason: "locked" };
+    var guard = _entryScopeGuard();
+    if (!guard.ok) return guard;
+    if (!editorState.redoStack.length) return { ok: false, reason: "nothing_to_redo" };
+    var txn = editorState.redoStack.pop();
+    editorState.transactions.push(txn);
+    window.ACPStructureViewer.state.displayedCoords = txn.after;
+    syncDirtyFlag();
+    _pushModelToViewer();
+    return { ok: true, transaction: txn };
+  }
+
+  /**
+   * Revert ALL transactions: displayed coordinates return to the
+   * originalCoords snapshot captured when the entry was bound.
+   *
+   * @returns {{ok: boolean, reason?: string}}
+   */
+  function resetEdits() {
+    if (locked) return { ok: false, reason: "locked" };
+    if (!editorState.originalCoords) return { ok: false, reason: "no_structure" };
+    editorState.transactions = [];
+    editorState.redoStack = [];
+    window.ACPStructureViewer.state.displayedCoords = editorState.originalCoords;
+    syncDirtyFlag();
+    _pushModelToViewer();
+    return { ok: true };
+  }
+
+  /**
+   * Measurement-tool hook: the app's 键长/键角/二面角 measurement UI
+   * raises edit intent through this dispatcher (kind + selected atom ids
+   * + target).  Not wired into the HTML yet — exposed and documented for
+   * the measurement panel integration.
+   *
+   * @param {string} kind - "bond_length" | "bond_angle" | "dihedral"
+   * @param {Array<number>} atomIds - 2 / 3 / 4 atom indices
+   * @param {number} target
+   * @returns {{ok: boolean, reason?: string, coords?: Array, warning?: string}}
+   */
+  function applyMeasuredEdit(kind, atomIds, target) {
+    if (!atomIds || !atomIds.length) return { ok: false, reason: "no_bond" };
+    if (kind === "bond_length" && atomIds.length >= 2) {
+      return applyBondLengthEdit(atomIds[0], atomIds[1], target, null);
+    }
+    if (kind === "bond_angle" && atomIds.length >= 3) {
+      return applyBondAngleEdit(atomIds[0], atomIds[1], atomIds[2], target, null);
+    }
+    if (kind === "dihedral" && atomIds.length >= 4) {
+      return applyDihedralEdit(atomIds[0], atomIds[1], atomIds[2], atomIds[3], target, null);
+    }
+    return { ok: false, reason: "no_bond" };
   }
 
   /**
@@ -964,5 +1301,15 @@
     applyBondLengthEdit: applyBondLengthEdit,
     applyBondAngleEdit: applyBondAngleEdit,
     applyDihedralEdit: applyDihedralEdit,
+    applyMeasuredEdit: applyMeasuredEdit,
+    checkCollisions: checkCollisions,
+    bindEntry: bindEntry,
+    confirmSwitch: confirmSwitch,
+    undoEdit: undoEdit,
+    redoEdit: redoEdit,
+    resetEdits: resetEdits,
+    isDirty: isDirty,
+    syncDirtyFlag: syncDirtyFlag,
+    COLLISION_FACTOR: COLLISION_FACTOR,
   };
 })();

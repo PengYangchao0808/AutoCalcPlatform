@@ -1,6 +1,6 @@
 /**
  * ACP Structure Viewer — Stylesheet
- * @version 0.5.0
+ * @version 0.6.0
  *
  * Design tokens inherited from ACP_Workbench_v2.html :root variables.
  * Three-column layout: list | canvas | inspector.
@@ -550,6 +550,68 @@
   background: var(--sv-bg-elevated);
   color: var(--sv-text-primary);
   font-size: 12px;
+}
+
+/* ===== Geometry edit panel (Wave 6, todo 36) ===== */
+.sv-edit-panel {
+  border: 1px solid var(--sv-border-subtle);
+  border-radius: var(--sv-radius-sm);
+  padding: 8px;
+  background: var(--sv-bg-elevated);
+}
+
+.sv-edit-provenance {
+  font-size: 12px;
+  color: var(--sv-text-secondary);
+  margin-bottom: 6px;
+}
+
+.sv-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sv-edit-btn {
+  padding: 3px 10px;
+  border: 1px solid var(--sv-border-default);
+  border-radius: var(--sv-radius-sm);
+  background: transparent;
+  color: var(--sv-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background var(--sv-transition), color var(--sv-transition);
+}
+
+.sv-edit-btn:hover {
+  background: var(--sv-accent-soft);
+  color: var(--sv-accent);
+}
+
+.sv-badge.sv-badge-dirty {
+  background: rgba(242, 184, 75, 0.18);
+  color: var(--sv-amber);
+  border: 1px solid rgba(242, 184, 75, 0.35);
+}
+
+.sv-edit-collision {
+  font-size: 11px;
+  color: var(--sv-red);
+  padding: 2px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.sv-edit-prompt {
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 1px solid rgba(242, 184, 75, 0.35);
+  border-radius: var(--sv-radius-sm);
+  background: rgba(242, 184, 75, 0.08);
+}
+
+.sv-edit-prompt .sv-edit-row {
+  margin-top: 4px;
 }
 
 /* ===== Playback bar (bottom) ===== */

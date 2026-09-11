@@ -1,6 +1,6 @@
 /**
  * ACP Structure Viewer — state store + catalog fetch + stale-response guard
- * @version 0.7.0
+ * @version 0.8.0
  *
  * Namespace: window.ACPStructureViewer
  *
@@ -30,7 +30,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "0.7.0";
+  var VERSION = "0.8.0";
 
   /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
@@ -62,6 +62,16 @@
     },
     VIBRATIONS_NA: "\u6682\u4e0d\u53ef\u7528",                     // 暂不可用
     VIB_NONE: "\u65e0\u632f\u52a8\u6570\u636e",                   // 无振动数据 (Wave 5: catalog says available=false)
+    EDIT_TITLE: "\u51e0\u4f55\u7f16\u8f91",                             // 几何编辑
+    BOND_SOURCE: "\u6210\u952e\u6765\u6e90",                           // 成键来源
+    EDIT_DIRTY: "\u5df2\u4fee\u6539\uff0c\u672a\u4fdd\u5b58",           // 已修改，未保存
+    EDIT_UNDO: "\u64a4\u9500",                                           // 撤销
+    EDIT_REDO: "\u91cd\u505a",                                           // 重做
+    EDIT_RESET: "\u91cd\u7f6e",                                           // 重置
+    EDIT_DISCARD: "\u653e\u5f03",                                         // 放弃
+    EDIT_SAVE_AS: "\u53e6\u5b58\u4e3a",                                 // 另存为
+    EDIT_CANCEL: "\u53d6\u6d88",                                         // 取消
+    EDIT_COLLISION: "\u4e25\u91cd\u78b0\u649e",                         // 严重碰撞
     MEASUREMENTS_PLACEHOLDER: "\u9009\u62e9\u539f\u5b50\u540e\u663e\u793a\u6d4b\u91cf\u7ed3\u679c", // 选择原子后显示测量结果
     EDIT_PLACEHOLDER: "\u7f16\u8f91\u529f\u80fd\u5c06\u5728\u540e\u7eed\u7248\u672c\u5f00\u653e", // 编辑功能将在后续版本开放
   };
@@ -520,6 +530,11 @@
         state.displayedSymbols = parsed ? parsed.symbols : null;
         state.displayedEntryId = entry.id;
         _loadXyzToViewer(xyzText);
+        if (typeof window !== "undefined" && window.ACPStructureEditor &&
+            typeof window.ACPStructureEditor.bindEntry === "function" && parsed) {
+          /* dirty switches raise editorState.pendingSwitch (todo 36 prompt) */
+          try { window.ACPStructureEditor.bindEntry(entry.id, parsed.symbols, parsed.coords); } catch (_) { /* editor is optional */ }
+        }
         if (typeof window !== "undefined" && window.ACPVibrationViewer &&
             typeof window.ACPVibrationViewer.refreshArrows === "function") {
           window.ACPVibrationViewer.refreshArrows();
@@ -975,14 +990,9 @@
     measDiv.appendChild(measVal);
     inspBody.appendChild(measDiv);
 
-    /* edit placeholder */
-    var editDiv = document.createElement("div");
-    editDiv.className = "sv-inspector-section";
-    var editVal = document.createElement("div");
-    editVal.className = "sv-inspector-value sv-muted";
-    editVal.textContent = _t("structure.edit_placeholder", STR.EDIT_PLACEHOLDER);
-    editDiv.appendChild(editVal);
-    inspBody.appendChild(editDiv);
+    /* geometry edit panel (todo 36): provenance + dirty badge +
+       transaction controls + dirty-switch prompt + collision warnings */
+    inspBody.appendChild(_renderEditPanel());
 
     /* warnings */
     var warnings = (payload && payload.warnings) || [];
@@ -1018,6 +1028,105 @@
     val.textContent = _esc(value);
     div.appendChild(val);
     return div;
+  }
+
+  /**
+   * Geometry edit panel (todo 36): bond provenance, dirty badge,
+   * undo/redo/reset transaction controls, collision warnings from the
+   * last transaction, and the dirty-switch prompt.  Degrades to the
+   * placeholder text when the editor module is absent.
+   */
+  function _renderEditPanel() {
+    var div = document.createElement("div");
+    div.className = "sv-inspector-section sv-edit-panel";
+    var lbl = document.createElement("div");
+    lbl.className = "sv-inspector-label";
+    lbl.textContent = _t("structure.edit.title", STR.EDIT_TITLE);
+    div.appendChild(lbl);
+
+    var ed = (typeof window !== "undefined" && window.ACPStructureEditor)
+      ? window.ACPStructureEditor
+      : null;
+    if (!ed || typeof ed.isDirty !== "function") {
+      var na = document.createElement("div");
+      na.className = "sv-inspector-value sv-muted";
+      na.textContent = _t("structure.edit_placeholder", STR.EDIT_PLACEHOLDER);
+      div.appendChild(na);
+      return div;
+    }
+
+    var body = document.createElement("div");
+    body.id = "structure-inspector-edit";
+
+    var prov = ed.editorState && ed.editorState.provenance;
+    if (!prov && typeof ed.buildGraphFromCurrentEntry === "function" && !ed.isLocked()) {
+      try { ed.buildGraphFromCurrentEntry(); } catch (_) { /* graph build is best-effort */ }
+      prov = ed.editorState.provenance;
+    }
+    if (prov) {
+      var provLine = document.createElement("div");
+      provLine.className = "sv-inspector-value sv-edit-provenance";
+      provLine.textContent = _t("structure.edit.bond_source", STR.BOND_SOURCE) + ": " + prov;
+      body.appendChild(provLine);
+    }
+
+    var row = document.createElement("div");
+    row.className = "sv-edit-row";
+    if (ed.isDirty()) {
+      var badge = document.createElement("span");
+      badge.className = "sv-badge sv-badge-dirty";
+      badge.textContent = _t("structure.edit.dirty", STR.EDIT_DIRTY);
+      row.appendChild(badge);
+    }
+    row.appendChild(_editBtn("structure.edit.undo", STR.EDIT_UNDO, function () { ed.undoEdit(); }));
+    row.appendChild(_editBtn("structure.edit.redo", STR.EDIT_REDO, function () { ed.redoEdit(); }));
+    row.appendChild(_editBtn("structure.edit.reset", STR.EDIT_RESET, function () { ed.resetEdits(); }));
+    body.appendChild(row);
+
+    var txns = (ed.editorState && ed.editorState.transactions) || [];
+    var last = txns.length ? txns[txns.length - 1] : null;
+    if (last && last.collision_warnings && last.collision_warnings.length) {
+      for (var ci = 0; ci < last.collision_warnings.length; ci++) {
+        var cw = last.collision_warnings[ci];
+        var line = document.createElement("div");
+        line.className = "sv-edit-collision";
+        line.textContent = _t("structure.edit.collision", STR.EDIT_COLLISION) +
+          ": atoms " + _esc(cw.a) + "-" + _esc(cw.b) +
+          " @ " + cw.distance.toFixed(2) + " \u00c5";
+        body.appendChild(line);
+      }
+    }
+
+    if (ed.editorState && ed.editorState.pendingSwitch) {
+      var prompt = document.createElement("div");
+      prompt.className = "sv-edit-prompt";
+      var ptxt = document.createElement("div");
+      ptxt.className = "sv-inspector-value";
+      ptxt.textContent = _t("structure.edit.dirty", STR.EDIT_DIRTY);
+      prompt.appendChild(ptxt);
+      var prow = document.createElement("div");
+      prow.className = "sv-edit-row";
+      prow.appendChild(_editBtn("structure.edit.discard", STR.EDIT_DISCARD,
+        function () { ed.confirmSwitch("discard"); }));
+      prow.appendChild(_editBtn("structure.edit.save_as", STR.EDIT_SAVE_AS,
+        function () { ed.confirmSwitch("save"); }));
+      prow.appendChild(_editBtn("structure.edit.cancel", STR.EDIT_CANCEL,
+        function () { ed.confirmSwitch("cancel"); }));
+      prompt.appendChild(prow);
+      body.appendChild(prompt);
+    }
+
+    div.appendChild(body);
+    return div;
+  }
+
+  function _editBtn(key, fallback, handler) {
+    var btn = document.createElement("button");
+    btn.setAttribute("type", "button");
+    btn.className = "sv-edit-btn";
+    btn.textContent = _t(key, fallback);
+    btn.addEventListener("click", handler);
+    return btn;
   }
 
   /* ---- drawer toggles ---- */

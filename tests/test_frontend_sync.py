@@ -4386,9 +4386,14 @@ def test_structure_editor_node_bond_length_edit() -> None:
                 JSON.stringify(ed.editorState.pendingEdit && ed.editorState.pendingEdit.type));
             process.exit(1);
         }
-        // displayed coords untouched by staging (preview is todo 36)
-        if (JSON.stringify(window.ACPStructureViewer.state.displayedCoords) !== snapshot) {
-            console.error("FAIL: staging must not touch displayed coords");
+        // todo 36: edits now APPLY through the transaction engine —
+        // displayed coords become the edited array and dirty goes live
+        if (window.ACPStructureViewer.state.displayedCoords !== applied.coords) {
+            console.error("FAIL: applied edit must update displayed coords");
+            process.exit(1);
+        }
+        if (window.ACPStructureViewer.state.dirty !== true) {
+            console.error("FAIL: dirty flag must be live after edit");
             process.exit(1);
         }
         console.log("PASS");
@@ -4618,8 +4623,13 @@ def test_structure_editor_node_bond_angle_edit() -> None:
             console.error("FAIL: pendingEdit staging");
             process.exit(1);
         }
-        if (JSON.stringify(window.ACPStructureViewer.state.displayedCoords) !== snapshot) {
-            console.error("FAIL: staging must not touch displayed coords");
+        // todo 36: edits apply live — displayed coords are the edited array
+        if (window.ACPStructureViewer.state.displayedCoords !== staged.coords) {
+            console.error("FAIL: applied edit must update displayed coords");
+            process.exit(1);
+        }
+        if (window.ACPStructureViewer.state.dirty !== true) {
+            console.error("FAIL: dirty flag must be live after edit");
             process.exit(1);
         }
         console.log("PASS");
@@ -4827,5 +4837,273 @@ def test_structure_editor_node_dihedral_edit() -> None:
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
         f"Node dihedral test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Wave 6 / todo 36: validation + collision warnings + transactions
+# ---------------------------------------------------------------------------
+
+
+def test_structure_editor_transaction_contract() -> None:
+    """Contract: transaction API names, COLLISION_FACTOR, dirty sync,
+    entry scoping, i18n keys both locales, coords-only edits."""
+    ed_js = _EDITOR_JS_PATH.read_text(encoding="utf-8")
+    sv_js = _SV_JS_PATH.read_text(encoding="utf-8")
+    css = (FRONTEND_CSS_DIR / "structure_viewer.css").read_text(encoding="utf-8")
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    for name in (
+        "checkCollisions",
+        "bindEntry",
+        "confirmSwitch",
+        "undoEdit",
+        "redoEdit",
+        "resetEdits",
+        "isDirty",
+        "syncDirtyFlag",
+        "applyMeasuredEdit",
+        "_commitEdit",
+        "collision_warnings",
+        "moved_atom_ids",
+        "originalCoords",
+        "pendingSwitch",
+        "saveRequested",
+    ):
+        assert name in ed_js, f"{name} missing from structure_editor.js"
+
+    assert "COLLISION_FACTOR = 0.55" in ed_js
+    assert "entry_mismatch" in ed_js and "dirty_switch" in ed_js
+    # Dirty flag syncs into the todo-15 store field
+    assert "state.dirty = isDirty()" in ed_js
+
+    # Coords-only edits: no atom/bond mutation machinery anywhere
+    assert "addAtom" not in ed_js and "removeAtom" not in ed_js
+    assert "addHydrogen" not in ed_js and "addHydrogens" not in ed_js
+
+    # structure_viewer integration: bindEntry on geometry load + edit panel
+    assert "bindEntry" in sv_js
+    assert 'id = "structure-inspector-edit"' in sv_js
+    assert "undoEdit" in sv_js and "resetEdits" in sv_js
+    assert "confirmSwitch" in sv_js
+    assert "sv-edit-panel" in sv_js and "sv-badge-dirty" in sv_js
+
+    # CSS: edit panel + dirty badge (amber) + collision (red) + prompt
+    for cls in (".sv-edit-panel", ".sv-badge-dirty", ".sv-edit-collision",
+                ".sv-edit-prompt", ".sv-edit-btn"):
+        assert cls in css, f"{cls} missing from structure_viewer.css"
+
+    # i18n keys in BOTH locales
+    for zh, en in (
+        ('"structure.edit.title": "几何编辑"', '"structure.edit.title": "Geometry Editing"'),
+        ('"structure.edit.bond_source": "成键来源"', '"structure.edit.bond_source": "Bond Source"'),
+        ('"structure.edit.dirty": "已修改，未保存"', '"structure.edit.dirty": "Modified, unsaved"'),
+        ('"structure.edit.undo": "撤销"', '"structure.edit.undo": "Undo"'),
+        ('"structure.edit.redo": "重做"', '"structure.edit.redo": "Redo"'),
+        ('"structure.edit.reset": "重置"', '"structure.edit.reset": "Reset"'),
+        ('"structure.edit.discard": "放弃"', '"structure.edit.discard": "Discard"'),
+        ('"structure.edit.save_as": "另存为"', '"structure.edit.save_as": "Save As"'),
+        ('"structure.edit.cancel": "取消"', '"structure.edit.cancel": "Cancel"'),
+        ('"structure.edit.collision": "严重碰撞"',
+         '"structure.edit.collision": "Severe collision"'),
+    ):
+        assert zh in html, f"zh edit key missing: {zh}"
+        assert en in html, f"en edit key missing: {en}"
+
+
+def test_structure_editor_node_transactions() -> None:
+    """Node logic: validation in apply* path, collisions (pure + in
+    transaction), undo/redo/reset byte-exact, moved ids, dirty sync,
+    pendingSwitch flow, entry mismatch, coords-only."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = (textwrap.dedent("""\
+        var window = { fetch: null };
+        require(EDITOR_PATH);
+        var ed = window.ACPStructureEditor;
+
+        function dist(a, b) {
+            var dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
+            return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        }
+
+        // checkCollisions pure: boundary strictly below factor
+        var syms2 = ["C", "C"];
+        var close = ed.checkCollisions(syms2, [[0, 0, 0], [0.83, 0, 0]], []);
+        var atLimit = ed.checkCollisions(syms2, [[0, 0, 0], [0.837, 0, 0]], []);
+        if (close.length !== 1 || close[0].severity !== "severe" ||
+            close[0].a !== 0 || close[0].b !== 1) {
+            console.error("FAIL: severe collision expected at 0.83 A");
+            process.exit(1);
+        }
+        if (atLimit.length !== 0) {
+            console.error("FAIL: exactly-at-factor must NOT warn (strictly <)");
+            process.exit(1);
+        }
+        // bonded pairs never collide
+        var bonded = ed.checkCollisions(syms2, [[0, 0, 0], [0.5, 0, 0]], [{ a: 0, b: 1 }]);
+        if (bonded.length !== 0) {
+            console.error("FAIL: bonded pair must not warn");
+            process.exit(1);
+        }
+
+        // U-shaped chain: angle edit folds atom 2 onto atom 0 -> collision
+        var symbols = ["C", "C", "C", "C"];
+        var coords = [
+            [0.0, 0.0, 0.0],
+            [1.5, 0.0, 0.0],
+            [1.5, 1.5, 0.0],
+            [0.0, 1.5, 0.0]
+        ];
+        var edges = [{ a: 0, b: 1 }, { a: 1, b: 2 }, { a: 2, b: 3 }];
+        window.ACPStructureViewer = {
+            state: {
+                displayedCoords: coords,
+                displayedSymbols: symbols,
+                displayedEntryId: "e1"
+            }
+        };
+        ed.editorState.graph = { edges: edges, provenance: "fixture" };
+
+        // validation runs in the apply* path too
+        var badRange = ed.applyBondLengthEdit(0, 1, 0.3, null);
+        if (badRange.ok || badRange.reason !== "out_of_range" || ed.isDirty()) {
+            console.error("FAIL: apply-path validation");
+            process.exit(1);
+        }
+
+        var fold = ed.applyBondAngleEdit(0, 1, 2, 1, null);
+        if (!fold.ok) {
+            console.error("FAIL: fold rejected " + fold.reason);
+            process.exit(1);
+        }
+        var txn = ed.editorState.transactions[0];
+        if (txn.type !== "bond_angle" ||
+            JSON.stringify(txn.atom_ids) !== JSON.stringify([0, 1, 2]) ||
+            JSON.stringify(txn.moved_atom_ids) !== JSON.stringify([2, 3])) {
+            console.error("FAIL: transaction shape " + JSON.stringify(txn).slice(0, 120));
+            process.exit(1);
+        }
+        if (!txn.collision_warnings.length ||
+            txn.collision_warnings[0].a !== 0 || txn.collision_warnings[0].b !== 2) {
+            console.error("FAIL: fold must produce collision 0-2");
+            process.exit(1);
+        }
+        if (window.ACPStructureViewer.state.dirty !== true || !ed.isDirty()) {
+            console.error("FAIL: dirty after edit");
+            process.exit(1);
+        }
+        if (window.ACPStructureViewer.state.displayedSymbols !== symbols) {
+            console.error("FAIL: symbols must never be touched");
+            process.exit(1);
+        }
+
+        var beforeSnapshot = JSON.stringify(txn.before);
+
+        // undo restores before EXACTLY (byte-identical) and clears dirty
+        var undoRes = ed.undoEdit();
+        if (!undoRes.ok ||
+            JSON.stringify(window.ACPStructureViewer.state.displayedCoords) !== beforeSnapshot ||
+            window.ACPStructureViewer.state.displayedCoords !== txn.before) {
+            console.error("FAIL: undo must restore before exactly");
+            process.exit(1);
+        }
+        if (ed.isDirty() || window.ACPStructureViewer.state.dirty !== false) {
+            console.error("FAIL: dirty cleared after undo");
+            process.exit(1);
+        }
+        // redo reapplies
+        var redoRes = ed.redoEdit();
+        if (!redoRes.ok || window.ACPStructureViewer.state.displayedCoords !== txn.after) {
+            console.error("FAIL: redo must reapply after");
+            process.exit(1);
+        }
+        // second edit then reset restores the ORIGINAL entry coords
+        var orig = ed.editorState.originalCoords;
+        var second = ed.applyBondLengthEdit(1, 2, 2.0, null);
+        if (!second.ok || ed.editorState.transactions.length !== 2) {
+            console.error("FAIL: second edit");
+            process.exit(1);
+        }
+        var resetRes = ed.resetEdits();
+        if (!resetRes.ok ||
+            window.ACPStructureViewer.state.displayedCoords !== orig ||
+            ed.isDirty() || ed.editorState.transactions.length !== 0) {
+            console.error("FAIL: reset must restore originalCoords");
+            process.exit(1);
+        }
+
+        // pendingSwitch: dirty bind to a new entry defers, does not discard
+        ed.applyBondLengthEdit(1, 2, 2.0, null); // dirty again
+        var sw = ed.bindEntry("e2", symbols, coords.map(function (r) { return r.slice(); }));
+        if (sw.ok || sw.reason !== "dirty_switch" || !ed.editorState.pendingSwitch ||
+            ed.editorState.pendingSwitch.targetEntryId !== "e2") {
+            console.error("FAIL: dirty switch must defer with pendingSwitch");
+            process.exit(1);
+        }
+        if (ed.editorState.transactions.length !== 1) {
+            console.error("FAIL: transactions must survive the deferral");
+            process.exit(1);
+        }
+        // apply while the viewer shows the OTHER entry -> entry_mismatch
+        window.ACPStructureViewer.state.displayedEntryId = "e2";
+        var mm = ed.applyBondLengthEdit(1, 2, 2.0, null);
+        if (mm.ok || mm.reason !== "entry_mismatch") {
+            console.error("FAIL: cross-entry edit must reject entry_mismatch");
+            process.exit(1);
+        }
+        // cancel: stay, keep edits
+        var cancelRes = ed.confirmSwitch("cancel");
+        if (!cancelRes || cancelRes.switched !== false || ed.editorState.pendingSwitch ||
+            ed.editorState.transactions.length !== 1) {
+            console.error("FAIL: cancel keeps edits");
+            process.exit(1);
+        }
+        // discard: rebind + clear
+        ed.bindEntry("e2", symbols, coords);
+        var disc = ed.confirmSwitch("discard");
+        if (!disc || disc.switched !== true || ed.editorState.entryId !== "e2" ||
+            ed.editorState.transactions.length !== 0 || ed.isDirty()) {
+            console.error("FAIL: discard rebinds and clears");
+            process.exit(1);
+        }
+        // save: flag + hook + rebind (re-seed graph — rebind cleared it and
+        // the U fixture would infer a closing square = ring)
+        var hookCalls = 0;
+        window.ACPStructureViewer.requestSaveEditedAsset = function () { hookCalls += 1; };
+        window.ACPStructureViewer.state.displayedEntryId = "e2";
+        ed.editorState.graph = { edges: edges, provenance: "fixture" };
+        ed.applyBondLengthEdit(1, 2, 2.0, null); // dirty on e2
+        ed.bindEntry("e3", symbols, coords);
+        var saveRes = ed.confirmSwitch("save");
+        if (!saveRes || saveRes.switched !== true || !ed.editorState.saveRequested ||
+            hookCalls !== 1 || ed.editorState.entryId !== "e3" ||
+            ed.editorState.transactions.length !== 0) {
+            console.error("FAIL: save flow (flag + hook + rebind)");
+            process.exit(1);
+        }
+
+        // applyMeasuredEdit dispatch
+        window.ACPStructureViewer.state.displayedEntryId = "e3";
+        ed.editorState.graph = { edges: edges, provenance: "fixture" };
+        var m1 = ed.applyMeasuredEdit("bond_length", [1, 2], 1.8, null);
+        if (!m1.ok || ed.editorState.transactions[0].type !== "bond_length") {
+            console.error("FAIL: applyMeasuredEdit bond_length");
+            process.exit(1);
+        }
+        var m2 = ed.applyMeasuredEdit("dihedral", [0, 1, 2], 60);
+        if (m2.ok || m2.reason !== "no_bond") {
+            console.error("FAIL: applyMeasuredEdit arity guard");
+            process.exit(1);
+        }
+        console.log("PASS");
+    """)
+        .replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node transaction test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
