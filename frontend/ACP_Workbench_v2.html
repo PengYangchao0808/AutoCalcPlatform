@@ -5875,7 +5875,8 @@ const I18N = {
     "structure.vib.anim.play": "播放",
     "structure.vib.anim.pause": "暂停",
     "structure.vib.anim.speed": "速度",
-    "structure.vib.anim.invert": "相位反转"
+    "structure.vib.anim.invert": "相位反转",
+    "structure.vib.locked_hint": "动画播放中，编辑已暂停"
   },
   "en-US": {
     "app.title": "ACP Molecular Workbench",
@@ -6788,7 +6789,8 @@ const I18N = {
     "structure.vib.anim.play": "Play",
     "structure.vib.anim.pause": "Pause",
     "structure.vib.anim.speed": "Speed",
-    "structure.vib.anim.invert": "Invert Phase"
+    "structure.vib.anim.invert": "Invert Phase",
+    "structure.vib.locked_hint": "Editing is paused while the animation plays"
   }
 };
 
@@ -10475,6 +10477,10 @@ function energyGraphWorkspaceMarkup(data) {
 }
 
 function energyGraphDestroyViewer() {
+  // Vibration teardown (todo 30): this path also fires from clearViewer().
+  if (window.ACPVibrationViewer && typeof window.ACPVibrationViewer.handleTeardown === "function") {
+    window.ACPVibrationViewer.handleTeardown();
+  }
   if (energyGraphState.resizeObserver) { energyGraphState.resizeObserver.disconnect(); energyGraphState.resizeObserver = null; }
   disposeViewerFraming(energyGraphState.structureFraming);
   if (energyGraphState.structureAbort) { energyGraphState.structureAbort.abort(); energyGraphState.structureAbort = null; }
@@ -12203,6 +12209,11 @@ function restoreInitialView() {
 }
 
 function clearViewer() {
+  // Vibration teardown (todo 30): cancel the rAF loop + clear arrows before
+  // disposing the main viewer; handleTeardown is idempotent.
+  if (window.ACPVibrationViewer && typeof window.ACPVibrationViewer.handleTeardown === "function") {
+    window.ACPVibrationViewer.handleTeardown();
+  }
   disposeViewerFraming(mainViewerFraming);
   stopFramePlayback();
   molDoc.frames = [];
@@ -12234,6 +12245,12 @@ function clearViewer() {
 async function setViewerTab(tab) {
   if (tab === "3d" || tab === "conformers") tab = "structure";
   activeViewerTab = tab;
+  // Leaving the structure tab: tear down the vibration animation + arrows
+  // (todo 30 — no running rAF loop or stale shapes may survive the switch).
+  if (tab !== "structure" && window.ACPVibrationViewer &&
+      typeof window.ACPVibrationViewer.handleTeardown === "function") {
+    window.ACPVibrationViewer.handleTeardown();
+  }
   document.querySelectorAll(".canvas-tab").forEach(function(btn) {
     btn.classList.toggle("active", btn.getAttribute("data-tab") === tab);
   });

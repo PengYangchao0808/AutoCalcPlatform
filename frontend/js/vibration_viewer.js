@@ -1,6 +1,6 @@
 /**
- * ACP Vibration Viewer — frequency inspector + arrows + animation (Wave 5, todos 27-29)
- * @version 0.4.0
+ * ACP Vibration Viewer — frequency inspector + arrows + animation (Wave 5, todos 27-30)
+ * @version 0.5.0
  *
  * Namespace: window.ACPVibrationViewer
  *
@@ -14,7 +14,11 @@
  *   - setDisplayMode(mode)             ("arrows" | "animation" | "combo")
  *   - setAmplitude(v)                  (clamped amplitude setter)
  *   - playAnimation() / pauseAnimation() / togglePlay()
- *   - stopAnimation()                  (cancel rAF + exact equilibrium restore)
+ *   - stopAnimationAndRestore()      (cancel rAF + exact equilibrium restore
+ *                                     + editor unlock; idempotent)
+ *   - stopAnimation()                (alias of stopAnimationAndRestore)
+ *   - isAnimationActive()            (mutual-exclusion probe)
+ *   - handleTeardown()               (tab/job switch + viewer destroy hook)
  *   - setSpeed(v) / toggleInvertPhase()
  *   - animationState                   (the live animation state)
  *
@@ -49,16 +53,20 @@
  *   The animation loop NEVER uses the viewer built-in animation API (it has
  *   no variable speed or phase) and NEVER changes atom ordering; the camera
  *   is preserved via getView()/setView() around every per-frame rebuild.
+ *   While playing, geometry editing is disabled via
+ *   ACPStructureEditor.setLocked(true) (mutual exclusion, todo 30); every
+ *   teardown path (tab switch / job switch / entry switch / viewer destroy)
+ *   funnels through stopAnimationAndRestore()/handleTeardown() so no loop
+ *   or stale arrows survive.
  *
  * Remaining Wave 5 todos:
- *   TODO(todo-30): editing/animation mutual exclusion + teardown on switch
  *   TODO(todo-31): TS judgment hints + phase-B contract tests
  */
 (function () {
   "use strict";
 
   /** Version tag — bump on every structural change. */
-  var VERSION = "0.4.0";
+  var VERSION = "0.5.0";
 
   /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
@@ -79,6 +87,7 @@
     PAUSE: "\u6682\u505c",                                                 // 暂停
     SPEED: "\u901f\u5ea6",                                                 // 速度
     INVERT: "\u76f8\u4f4d\u53cd\u8f6c",                                   // 相位反转
+    LOCKED_HINT: "\u52a8\u753b\u64ad\u653e\u4e2d\uff0c\u7f16\u8f91\u5df2\u6682\u505c", // 动画播放中，编辑已暂停
     REASONS: {
       no_normal_modes: "\u65e0\u632f\u52a8\u6a21\u5f0f\u6570\u636e",           // 无振动模式数据
       geometry_mismatch: "\u6a21\u5f0f\u4e0e\u5f53\u524d\u51e0\u4f55\u4e0d\u5339\u914d",   // 模式与当前几何不匹配
@@ -800,7 +809,8 @@
 
   /**
    * Start (or resume) the animation loop.  No-op when already playing or
-   * when the geometry context is invalid (hint surfaced in the UI).
+   * when the geometry context is invalid (hint surfaced in the UI).  While
+   * a session is active, geometry editing is locked (mutual exclusion).
    */
   function playAnimation() {
     if (animationState.playing) return;
@@ -814,6 +824,7 @@
     animationState.equilibriumXyz = _buildEquilibriumXyz();
     animationState.playing = true;
     animationState._active = true;
+    _setEditorLocked(true);
     animationState.lastFrameTs = null;
     animationState.rafHandle = _scheduleNextFrame();
     renderFrequencyInspector();
@@ -836,12 +847,13 @@
   }
 
   /**
-   * Full stop: cancel the rAF loop and rebuild the EXACT equilibrium
-   * model (same XYZ the app loaded), restore the saved camera, and
-   * re-apply static arrows when the display mode includes them.
-   * Idempotent — extra calls are no-ops.
+   * Full stop (todo 30 hardening of the todo-29 stop): cancel the rAF
+   * loop, rebuild the EXACT equilibrium model (same XYZ the app loaded),
+   * restore the saved camera, clear shapes, re-apply static arrows when
+   * the display mode includes them, reset the phase, and release the
+   * editor lock.  Idempotent — the second call performs no viewer calls.
    */
-  function stopAnimation() {
+  function stopAnimationAndRestore() {
     if (animationState.rafHandle != null) {
       var cancel = _getCancelRafImpl();
       if (cancel) {
@@ -851,6 +863,8 @@
     }
     animationState.playing = false;
     animationState.lastFrameTs = null;
+    animationState.phase = 0;
+    _setEditorLocked(false);
     if (!animationState._active) {
       return;
     }
@@ -880,6 +894,58 @@
       refreshArrows();
     }
     renderFrequencyInspector();
+  }
+
+  /**
+   * Back-compat alias for the todo-29 API surface.
+   */
+  function stopAnimation() {
+    stopAnimationAndRestore();
+  }
+
+  /**
+   * Mutual-exclusion probe: true while the animation loop is playing.
+   *
+   * @returns {boolean}
+   */
+  function isAnimationActive() {
+    return animationState.playing;
+  }
+
+  /**
+   * Teardown hook for tab switch / job switch / viewer destroy: stop and
+   * restore, clear every arrow, reset the vibration state (a new job or
+   * re-selection refetches anyway), and release the editor lock.  Must
+   * never leave a running loop or stale arrows behind.
+   */
+  function handleTeardown() {
+    stopAnimationAndRestore();
+    var viewerObj = _getMainViewer();
+    clearArrows(viewerObj);
+    arrowState.enabled = false;
+    arrowState.modeIndex = null;
+    arrowState._hint = null;
+    arrowState._lastCount = 0;
+    vibrationState.data = null;
+    vibrationState.selectedModeIndex = null;
+    vibrationState.error = null;
+    vibrationState.loading = false;
+    vibrationState.jobId = null;
+    vibrationState.entryId = null;
+    _setEditorLocked(false);
+  }
+
+  /**
+   * Set the geometry-editor lock (best-effort; the editor is a Wave 6
+   * skeleton — the contract exists today).
+   *
+   * @param {boolean} value
+   */
+  function _setEditorLocked(value) {
+    if (typeof window !== "undefined" && window.ACPStructureEditor &&
+        typeof window.ACPStructureEditor.setLocked === "function") {
+      try { window.ACPStructureEditor.setLocked(value); } catch (_) { /* editor absent */ }
+    }
   }
 
   /**
@@ -1243,6 +1309,14 @@
       controls.appendChild(hintBox);
     }
 
+    /* editing paused while an animation session is active (todo 30) */
+    if (animationState._active) {
+      var lockedHint = document.createElement("div");
+      lockedHint.className = "sv-vib-hint sv-vib-locked-hint";
+      lockedHint.textContent = _t("structure.vib.locked_hint", STR.LOCKED_HINT);
+      controls.appendChild(lockedHint);
+    }
+
     container.appendChild(controls);
   }
 
@@ -1324,6 +1398,9 @@
     pauseAnimation: pauseAnimation,
     togglePlay: togglePlay,
     stopAnimation: stopAnimation,
+    stopAnimationAndRestore: stopAnimationAndRestore,
+    isAnimationActive: isAnimationActive,
+    handleTeardown: handleTeardown,
     setSpeed: setSpeed,
     toggleInvertPhase: toggleInvertPhase,
     sortModesNegativesFirst: sortModesNegativesFirst,

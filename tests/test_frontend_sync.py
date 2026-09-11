@@ -3437,3 +3437,272 @@ def test_vibration_viewer_node_animation_loop() -> None:
         f"Node animation-loop test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Wave 5 / todo 30: mutual exclusion + equilibrium restore + teardown
+# ---------------------------------------------------------------------------
+
+_EDITOR_JS_PATH = FRONTEND_JS_DIR / "structure_editor.js"
+
+
+def _fn_body(source: str, header: str) -> str:
+    """Return the body of a function whose definition starts with `header`."""
+    assert header in source, f"function not found: {header}"
+    return source.split(header, 1)[1].split("\nfunction ", 1)[0].split("\nasync function ", 1)[0]
+
+
+def test_vibration_viewer_teardown_contract() -> None:
+    """Contract: teardown hooks at all three sites (tab switch / job switch /
+    viewer destroy), entry-switch stops first, editor lock API, locked hint,
+    and the idempotent-stop cancel guard."""
+    vib = _VIB_JS.read_text(encoding="utf-8")
+    sv = _SV_JS_PATH.read_text(encoding="utf-8")
+    editor = _EDITOR_JS_PATH.read_text(encoding="utf-8")
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    for name in (
+        "stopAnimationAndRestore",
+        "isAnimationActive",
+        "handleTeardown",
+        "_setEditorLocked",
+    ):
+        assert name in vib, f"{name} missing from vibration_viewer.js"
+    assert "stopAnimationAndRestore" in vib
+    # Idempotent stop: the cancel branch is guarded by a null check on the handle
+    assert "animationState.rafHandle != null" in vib
+
+    # Editor lock contract exists today (Wave 6 consumes isLocked)
+    assert "setLocked" in editor and "isLocked" in editor
+    assert "setLocked(true)" in vib.replace("_setEditorLocked(true)", "setLocked(true)")
+
+    # Locked hint: STR fallback + class + i18n key in BOTH locales
+    assert "sv-vib-locked-hint" in vib
+    assert "structure.vib.locked_hint" in vib
+    assert '"structure.vib.locked_hint": "动画播放中，编辑已暂停"' in html
+    assert '"structure.vib.locked_hint": "Editing is paused while the animation plays"' in html
+
+    # Site 1: tab switch (leaving the structure tab) tears down
+    set_tab = _fn_body(html, "async function setViewerTab(tab) {")
+    assert "handleTeardown" in set_tab
+    assert 'tab !== "structure"' in set_tab
+
+    # Site 2: job switch tears down FIRST (before loadStructureViewer)
+    on_job = _fn_body(sv, "function onJobSelected(jobId, opts) {")
+    teardown_idx = on_job.find("handleTeardown")
+    load_idx = on_job.find("loadStructureViewer(jobId")
+    assert teardown_idx != -1 and load_idx != -1 and teardown_idx < load_idx
+
+    # Site 3: viewer destroy paths tear down
+    clear_body = _fn_body(html, "function clearViewer() {")
+    destroy_body = _fn_body(html, "function energyGraphDestroyViewer() {")
+    assert "handleTeardown" in clear_body
+    assert "handleTeardown" in destroy_body
+
+    # Entry switch: animation stops BEFORE the new geometry loads
+    select_body = _fn_body(sv, "function selectEntry(entryId, origin) {")
+    stop_idx = select_body.find("stopAnimationAndRestore")
+    load_geom_idx = select_body.find("loadSelectedGeometry()")
+    assert stop_idx != -1 and load_geom_idx != -1 and stop_idx < load_geom_idx
+
+
+def test_vibration_viewer_node_mutual_exclusion_and_teardown() -> None:
+    """Node logic with fake rAF + fake viewer + real editor skeleton:
+    (i) play locks editing, stop unlocks + exact equilibrium + camera +
+    idempotent; (ii) handleTeardown mid-play cancels + restores + resets;
+    (iii) entry switch mid-play stops BEFORE the new geometry loads."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = (textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        require(EDITOR_PATH);
+        require(SV_PATH);
+        require(VIB_PATH);
+        var ns = window.ACPVibrationViewer;
+        var ns2 = window.ACPStructureViewer;
+        var ed = window.ACPStructureEditor;
+
+        var events = [];
+        var viewSeq = 0, lastView = null, lastSetView = null;
+        var addModelCount = 0, cancelCount = 0, removeShapesCount = 0;
+        var fakeViewer = {
+            getView: function () { viewSeq += 1; lastView = { seq: viewSeq }; return lastView; },
+            setView: function (v) { lastSetView = v; events.push("setView"); },
+            removeAllModels: function () { events.push("removeAllModels"); },
+            addModel: function (xyz) {
+                addModelCount += 1;
+                this.lastModelXyz = xyz;
+                events.push("addModel");
+                return {};
+            },
+            addStyle: function () {},
+            removeAllShapes: function () {
+                removeShapesCount += 1;
+                events.push("removeAllShapes");
+            },
+            addArrow: function () {},
+            render: function () {}
+        };
+        ns._viewerImpl = function () { return fakeViewer; };
+
+        var queue = [], idSeq = 0;
+        ns._rafImpl = function (fn) {
+            idSeq += 1; queue.push({ id: idSeq, fn: fn }); return idSeq;
+        };
+        ns._cancelRafImpl = function (h) {
+            cancelCount += 1; events.push("cancel");
+            for (var i = 0; i < queue.length; i++) {
+                if (queue[i].id === h) { queue.splice(i, 1); break; }
+            }
+        };
+        var nowMs = 0;
+        ns._nowImpl = function () { return nowMs; };
+        function flush(ts) {
+            nowMs = ts;
+            var q = queue.splice(0, queue.length);
+            for (var i = 0; i < q.length; i++) q[i].fn(ts);
+        }
+
+        var coords = [[0, 0, 0], [1, 1, 1], [2, 2, 2]];
+        var vectors = [[1, 0, 0], [0, 2, 0], [0, 0, 2]];
+        ns.state.jobId = "job1";
+        ns.state.entryId = "e1";
+        ns.state.data = {
+            available: true, reason: null,
+            modes: [{ mode_index: 6, frequency_cm1: -797.72, imaginary: true,
+                      ir_intensity: null, vectors: vectors }]
+        };
+        ns.state.selectedModeIndex = 6;
+        ns2.state.displayedCoords = coords;
+        ns2.state.displayedSymbols = ["C", "O", "C"];
+        ns2.state.displayedEntryId = "e1";
+        ns.arrowState.displayMode = "arrows";
+        ns.arrowState.enabled = true;
+
+        // (i) play -> locked; stop -> unlock + equilibrium + camera + idempotent
+        ns.playAnimation();
+        if (!ns.isAnimationActive() || !ed.isLocked()) {
+            console.error("FAIL: playing must lock the editor");
+            process.exit(1);
+        }
+        flush(1000);
+        flush(1040);
+        if (addModelCount !== 2) {
+            console.error("FAIL: expected 2 frames, got " + addModelCount);
+            process.exit(1);
+        }
+        var viewBeforeStop = lastView;
+        ns.stopAnimationAndRestore();
+        if (ns.isAnimationActive() || ed.isLocked()) {
+            console.error("FAIL: stop must unlock + deactivate");
+            process.exit(1);
+        }
+        if (ns.animationState.phase !== 0) {
+            console.error("FAIL: stop must reset phase");
+            process.exit(1);
+        }
+        var eqXyz = ns.buildDisplacedXyz(["C", "O", "C"], coords, "");
+        var lastModelXyz = fakeViewer.lastModelXyz;
+        if (lastModelXyz !== eqXyz) {
+            console.error("FAIL: equilibrium not restored exactly");
+            process.exit(1);
+        }
+        if (!lastSetView || lastSetView.seq !== viewBeforeStop.seq) {
+            console.error("FAIL: stop must setView the saved view");
+            process.exit(1);
+        }
+        var counts = [addModelCount, cancelCount, removeShapesCount];
+        ns.stopAnimationAndRestore();
+        if (addModelCount !== counts[0] || cancelCount !== counts[1] ||
+            removeShapesCount !== counts[2]) {
+            console.error("FAIL: second stop must be a full no-op");
+            process.exit(1);
+        }
+
+        // (ii) teardown mid-play: cancel + equilibrium + reset + unlock
+        ns.playAnimation();
+        flush(2000);
+        if (!ns.isAnimationActive()) { console.error("FAIL: replay"); process.exit(1); }
+        var pending = ns.animationState.rafHandle;
+        ns.handleTeardown();
+        if (ns.isAnimationActive()) { console.error("FAIL: teardown stops loop"); process.exit(1); }
+        if (events.indexOf("cancel") < 0) {
+            console.error("FAIL: teardown must cancel rAF");
+            process.exit(1);
+        }
+        if (fakeViewer.lastModelXyz !== eqXyz) {
+            console.error("FAIL: teardown restores equilibrium");
+            process.exit(1);
+        }
+        if (ed.isLocked()) { console.error("FAIL: teardown unlocks editor"); process.exit(1); }
+        if (ns.state.data !== null || ns.state.selectedModeIndex !== null) {
+            console.error("FAIL: teardown resets vibration state");
+            process.exit(1);
+        }
+
+        // (iii) entry switch mid-play: stop BEFORE new geometry load
+        ns.state.jobId = "job1";
+        ns.state.entryId = "e1";
+        ns.state.data = {
+            available: true, reason: null,
+            modes: [{ mode_index: 6, frequency_cm1: -797.72, imaginary: true,
+                      ir_intensity: null, vectors: vectors }]
+        };
+        ns.state.selectedModeIndex = 6;
+        ns2.state.displayedCoords = coords;
+        ns2.state.displayedSymbols = ["C", "O", "C"];
+        ns2.state.displayedEntryId = "e1";
+        ns2.state.payload = {
+            entries: [
+                { id: "e1", geometry: { endpoint: "/g/e1" }, vibrations: { available: false } },
+                { id: "e2", geometry: { endpoint: "/g/e2" }, vibrations: { available: false } }
+            ]
+        };
+        ns2.state.selectedEntryId = "e1";
+        ns2._fetchImpl = function () {
+            return Promise.resolve({
+                ok: true, status: 200, statusText: "OK",
+                text: function () {
+                    return Promise.resolve("2\\nsecond\\nC 0 0 0\\nO 1 1 1\\n");
+                }
+            });
+        };
+        window._svLoadXyzToViewer = function () { events.push("loadxyz"); };
+
+        ns.playAnimation();
+        flush(3000);
+        events.length = 0;
+        ns2.selectEntry("e2", "user");
+        setTimeout(function () {
+            var loadAt = events.indexOf("loadxyz");
+            if (loadAt < 0) {
+                console.error("FAIL: new entry geometry never loaded: " +
+                    JSON.stringify(events));
+                process.exit(1);
+            }
+            var lastAdd = events.lastIndexOf("addModel");
+            var cancelAt = events.indexOf("cancel");
+            if (lastAdd < 0 || !(lastAdd < loadAt)) {
+                console.error("FAIL: stop must rebuild equilibrium BEFORE new load: " +
+                    JSON.stringify(events));
+                process.exit(1);
+            }
+            if (cancelAt < 0 || !(cancelAt < loadAt)) {
+                console.error("FAIL: rAF cancel must precede new load");
+                process.exit(1);
+            }
+            console.log("PASS");
+        }, 30);
+    """)
+        .replace("VIB_PATH", json.dumps(str(_VIB_JS)))
+        .replace("SV_PATH", json.dumps(str(_SV_JS_PATH)))
+        .replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH)))
+    )
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node teardown test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout

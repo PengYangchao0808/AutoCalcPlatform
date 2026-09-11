@@ -1,6 +1,6 @@
 /**
  * ACP Structure Viewer — state store + catalog fetch + stale-response guard
- * @version 0.6.0
+ * @version 0.7.0
  *
  * Namespace: window.ACPStructureViewer
  *
@@ -30,7 +30,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "0.6.0";
+  var VERSION = "0.7.0";
 
   /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
@@ -357,6 +357,12 @@
    * @returns {number} The new selectionToken
    */
   function selectEntry(entryId, origin) {
+    /* entry switch mid-play: stop the mode animation + restore equilibrium
+       BEFORE the new entry's geometry swaps in (todo 30 ordering contract) */
+    if (typeof window !== "undefined" && window.ACPVibrationViewer &&
+        typeof window.ACPVibrationViewer.stopAnimationAndRestore === "function") {
+      window.ACPVibrationViewer.stopAnimationAndRestore();
+    }
     structureViewerState.selectionToken += 1;
     structureViewerState.selectedEntryId = entryId;
     structureViewerState.selectionOrigin = origin || "user";
@@ -534,6 +540,12 @@
    */
   function onJobSelected(jobId, opts) {
     opts = opts || {};
+    /* job switch: full vibration teardown first — no running loop or stale
+       arrows may survive into the new job (todo 30) */
+    if (typeof window !== "undefined" && window.ACPVibrationViewer &&
+        typeof window.ACPVibrationViewer.handleTeardown === "function") {
+      window.ACPVibrationViewer.handleTeardown();
+    }
     return loadStructureViewer(jobId, opts)
       .then(function () {
         /* Auto-select default entry if payload loaded successfully */
