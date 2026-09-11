@@ -135,8 +135,10 @@
     SWITCHER_LABEL: "\u5207\u6362\u6761\u76ee",                               // 切换条目
     DRAWER_CLOSE: "\u5173\u95ed",                                              // 关闭
     DRAWER_MORE: "\u66f4\u591a\u64cd\u4f5c",                                  // 更多操作
-    VIB_BTN: "\u632f\u52a8\u6a21\u5f0f",                                       // 振动模式
-    VIB_IMAG_BTN: "\u865a\u9891 {count}",                                      // 虚频 {count}
+    VIB_BTN: "\u632f\u52a8\u6a21\u5f0f",
+    VIB_IMAG_BTN: "\u865a\u9891 {count}",
+    VIB_IMAG_SUMMARY: "\u865a\u9891 {count} \u00b7 {freq} cm\u207b\u00b9",
+    VIB_MODES_SUMMARY: "\u632f\u52a8\u6a21\u5f0f {count}",
     MEASURE_BTN: "\u6d4b\u91cf",                                               // 测量
     MEASURE_TYPE_DISTANCE: "\u8ddd\u79bb",                                     // 距离
     MEASURE_TYPE_ANGLE: "\u89d2\u5ea6",                                         // 角度
@@ -335,6 +337,8 @@
   var _switcherAnchor = null;
   var _drawerContentCache = {};
   var _svMeasureAppliedIds = {};
+  var _vibrationDockExpanded = false;
+  var _vibrationDockHeight = 236;
 
   /**
    * Apply a catalog response to the state object.  Pure-ish: mutates the
@@ -1490,11 +1494,18 @@
     stopIrcPlayback();
     clearOverlay();
     closeAllDrawers();
+    closeVibrationDock();
     if (typeof window !== "undefined" && window.ACPVibrationViewer &&
         typeof window.ACPVibrationViewer.handleTeardown === "function") {
       window.ACPVibrationViewer.handleTeardown();
     }
     _stripExpanded = _getStripExpanded(jobId);
+    var dockPersist = _getDockPersist(jobId);
+    if (dockPersist) {
+      _vibrationDockHeight = dockPersist.height || DOCK_DEFAULT_HEIGHT;
+    } else {
+      _vibrationDockHeight = DOCK_DEFAULT_HEIGHT;
+    }
     return loadStructureViewer(jobId, opts)
       .then(function () {
         var state = structureViewerState;
@@ -1502,6 +1513,11 @@
           selectEntry(state.payload.default_entry_id, "auto");
         }
         return loadSelectedGeometry();
+      })
+      .then(function () {
+        if (dockPersist && dockPersist.expanded) {
+          openVibrationDock();
+        }
       });
   }
 
@@ -2196,17 +2212,46 @@
 
       /* Vibration button: visible when vibration data is likely available */
       if (entry.vibrations && entry.vibrations.available !== false) {
-        var vibBtn = document.createElement("button");
-        vibBtn.className = "sv-edit-btn";
-        var imagCount = entry.vibrations.imaginary_count;
-        if (imagCount != null && imagCount > 0) {
-          vibBtn.textContent = _t("structure.vib.imaginary_btn", STR.VIB_IMAG_BTN).replace("{count}", String(imagCount));
-        } else {
-          vibBtn.textContent = _t("structure.vib.btn", STR.VIB_BTN);
+        var vibLoading = false;
+        if (typeof window !== "undefined" && window.ACPVibrationViewer &&
+            window.ACPVibrationViewer.state) {
+          vibLoading = !!window.ACPVibrationViewer.state.loading;
         }
-        vibBtn.setAttribute("aria-expanded", _activeDrawerId === "vibration" ? "true" : "false");
-        vibBtn.addEventListener("click", function () { openDrawer("vibration", vibBtn); });
-        summaryBar.appendChild(vibBtn);
+        var imagCount = entry.vibrations.imaginary_count;
+        var modeCount = entry.vibrations.mode_count;
+        var mostNegFreq = entry.vibrations.most_negative_freq;
+
+        if (vibLoading && imagCount == null) {
+          var loadingEntry = document.createElement("span");
+          loadingEntry.className = "sv-vib-summary-entry sv-vib-summary-modes";
+          var spinner = document.createElement("span");
+          spinner.className = "sv-vib-summary-loading";
+          loadingEntry.appendChild(spinner);
+          loadingEntry.addEventListener("click", function () { toggleVibrationDock(); });
+          summaryBar.appendChild(loadingEntry);
+        } else {
+          if (imagCount != null && imagCount > 0) {
+            var imagEntry = document.createElement("span");
+            imagEntry.className = "sv-vib-summary-entry sv-vib-summary-imag";
+            var imagText = _t("structure.vib.imaginary_btn", STR.VIB_IMAG_BTN).replace("{count}", String(imagCount));
+            if (mostNegFreq != null) {
+              imagText = _t("structure.vib.imag_summary", STR.VIB_IMAG_SUMMARY)
+                .replace("{count}", String(imagCount))
+                .replace("{freq}", mostNegFreq.toFixed(2));
+            }
+            imagEntry.textContent = imagText;
+            imagEntry.addEventListener("click", function () { toggleVibrationDock(); });
+            summaryBar.appendChild(imagEntry);
+          }
+
+          var modesEntry = document.createElement("span");
+          modesEntry.className = "sv-vib-summary-entry sv-vib-summary-modes";
+          modesEntry.textContent = modeCount != null
+            ? _t("structure.vib.modes_summary", STR.VIB_MODES_SUMMARY).replace("{count}", String(modeCount))
+            : _t("structure.vib.btn", STR.VIB_BTN);
+          modesEntry.addEventListener("click", function () { toggleVibrationDock(); });
+          summaryBar.appendChild(modesEntry);
+        }
       }
 
       /* Measure button: always visible for geometry editing */
@@ -2563,11 +2608,24 @@
           typeof window.ACPVibrationViewer.loadVibrations === "function") {
         var vibOpts = {};
         if (entry.vibrations.endpoint) vibOpts.endpoint = entry.vibrations.endpoint;
-        window.ACPVibrationViewer.loadVibrations(structureViewerState.jobId, entry.id, vibOpts);
+        var vibPromise = window.ACPVibrationViewer.loadVibrations(
+          structureViewerState.jobId, entry.id, vibOpts
+        );
+        if (vibPromise && typeof vibPromise.then === "function") {
+          vibPromise.then(function () { renderStructureViewer(); });
+        }
       }
     }
 
-    var ids = ["source", "vibration", "measure", "more"];
+    if (_vibrationDockExpanded) {
+      var dock = document.getElementById("sv-vibration-dock");
+      if (dock && typeof window !== "undefined" && window.ACPVibrationViewer &&
+          typeof window.ACPVibrationViewer.renderFrequencyInspector === "function") {
+        window.ACPVibrationViewer.renderFrequencyInspector(dock);
+      }
+    }
+
+    var ids = ["source", "measure", "more"];
     for (var j = 0; j < ids.length; j++) {
       var drawer = document.getElementById("sv-drawer-" + ids[j]);
       if (drawer && drawer.style.display !== "none") {
@@ -2740,9 +2798,148 @@
     }
   }
 
+  var DOCK_DEFAULT_HEIGHT = 236;
+  var DOCK_MIN_HEIGHT = 180;
+  var DOCK_MAX_HEIGHT = 340;
+  var DOCK_MAX_RATIO = 0.42;
+
+  function _dockPersistKey(jobId) {
+    return viewStateStore.NS + "vibDock." + (jobId || "");
+  }
+
+  function _getDockPersist(jobId) {
+    var raw = _storageGet(_dockPersistKey(jobId));
+    if (!raw) return null;
+    try { return JSON.parse(raw); } catch (_) { return null; }
+  }
+
+  function _setDockPersist(jobId, expanded, height) {
+    _storageSet(_dockPersistKey(jobId), JSON.stringify({ expanded: expanded, height: height }));
+  }
+
+  function toggleVibrationDock() {
+    if (_vibrationDockExpanded) {
+      closeVibrationDock();
+    } else {
+      openVibrationDock();
+    }
+  }
+
+  function openVibrationDock() {
+    if (typeof document === "undefined") return;
+    var dock = document.getElementById("sv-vibration-dock");
+    if (!dock) return;
+    _vibrationDockExpanded = true;
+    var maxRatio = Math.floor(_workspaceHeight() * DOCK_MAX_RATIO);
+    var height = Math.min(_vibrationDockHeight, maxRatio);
+    height = Math.max(DOCK_MIN_HEIGHT, height);
+    dock.style.display = "flex";
+    dock.style.height = height + "px";
+    _vibrationDockHeight = height;
+    _setDockPersist(structureViewerState.jobId, true, height);
+    if (typeof window !== "undefined" && window.ACPVibrationViewer &&
+        typeof window.ACPVibrationViewer.renderFrequencyInspector === "function") {
+      window.ACPVibrationViewer.renderFrequencyInspector(dock);
+    }
+    _attachDockGripListener();
+    _triggerViewerResize();
+  }
+
+  function closeVibrationDock() {
+    if (typeof document === "undefined") return;
+    var dock = document.getElementById("sv-vibration-dock");
+    if (!dock) return;
+    _vibrationDockExpanded = false;
+    if (_dockDragState) {
+      document.removeEventListener("mousemove", _onDockDragMove);
+      document.removeEventListener("mouseup", _onDockDragEnd);
+      _dockDragState = null;
+    }
+    dock.style.display = "none";
+    dock.textContent = "";
+    _setDockPersist(structureViewerState.jobId, false, _vibrationDockHeight);
+    if (typeof window !== "undefined" && window.ACPVibrationViewer &&
+        typeof window.ACPVibrationViewer.stopAnimationAndRestore === "function") {
+      window.ACPVibrationViewer.stopAnimationAndRestore();
+    }
+    _triggerViewerResize();
+  }
+
+  function _workspaceHeight() {
+    var layout = document.getElementById("sv-layout");
+    if (layout) return layout.offsetHeight;
+    return 600;
+  }
+
+  function _triggerViewerResize() {
+    if (typeof window === "undefined") return;
+    try {
+      if (typeof viewer !== "undefined" && viewer && typeof viewer.resize === "function") {
+        viewer.resize();
+      }
+    } catch (_) { /* viewer may not exist */ }
+  }
+
+  var _dockDragState = null;
+
+  function _clampDockHeight(h) {
+    var maxRatio = Math.floor(_workspaceHeight() * DOCK_MAX_RATIO);
+    var max = Math.min(DOCK_MAX_HEIGHT, maxRatio);
+    return Math.max(DOCK_MIN_HEIGHT, Math.min(max, h));
+  }
+
+  function _onDockGripMouseDown(ev) {
+    if (typeof document === "undefined") return;
+    if (ev.button !== 0) return;
+    ev.preventDefault();
+    var dock = document.getElementById("sv-vibration-dock");
+    if (!dock) return;
+    _dockDragState = {
+      startY: ev.clientY,
+      startHeight: dock.offsetHeight,
+      dock: dock,
+      _rafPending: false,
+    };
+    document.addEventListener("mousemove", _onDockDragMove);
+    document.addEventListener("mouseup", _onDockDragEnd);
+  }
+
+  function _onDockDragMove(ev) {
+    if (!_dockDragState) return;
+    var delta = _dockDragState.startY - ev.clientY;
+    var newHeight = _clampDockHeight(_dockDragState.startHeight + delta);
+    _dockDragState.dock.style.height = newHeight + "px";
+    _vibrationDockHeight = newHeight;
+    if (!_dockDragState._rafPending) {
+      _dockDragState._rafPending = true;
+      var raf = (typeof requestAnimationFrame === "function") ? requestAnimationFrame : function (fn) { setTimeout(fn, 16); };
+      raf(function () {
+        _dockDragState._rafPending = false;
+        _triggerViewerResize();
+      });
+    }
+  }
+
+  function _onDockDragEnd() {
+    if (!_dockDragState) return;
+    document.removeEventListener("mousemove", _onDockDragMove);
+    document.removeEventListener("mouseup", _onDockDragEnd);
+    _setDockPersist(structureViewerState.jobId, true, _vibrationDockHeight);
+    _triggerViewerResize();
+    _dockDragState = null;
+  }
+
+  function _attachDockGripListener() {
+    if (typeof document === "undefined") return;
+    var grip = document.querySelector(".sv-vib-dock-grip");
+    if (grip && !grip._svDragBound) {
+      grip._svDragBound = true;
+      grip.addEventListener("mousedown", _onDockGripMouseDown);
+    }
+  }
+
   var _DRAWER_ARIA_LABELS = {
     measure: function () { return _t("structure.measurements", STR.MEASUREMENTS); },
-    vibration: function () { return _t("structure.vibrations", STR.VIBRATIONS); },
     source: function () { return _t("structure.inspector_title", STR.INSPECTOR_TITLE); },
     more: function () { return _t("structure.drawer.more", STR.DRAWER_MORE); },
   };
@@ -2794,7 +2991,7 @@
 
   function closeAllDrawers() {
     if (typeof document === "undefined") return;
-    var ids = ["measure", "vibration", "source", "more"];
+    var ids = ["measure", "source", "more"];
     for (var i = 0; i < ids.length; i++) {
       var drawer = document.getElementById("sv-drawer-" + ids[i]);
       if (drawer) {
@@ -2819,7 +3016,7 @@
     var header = document.createElement("div");
     header.className = "sv-drawer-header";
     var title = document.createElement("span");
-    var titles = { measure: _t("structure.measurements", STR.MEASUREMENTS), vibration: _t("structure.vibrations", STR.VIBRATIONS), source: _t("structure.inspector_title", STR.INSPECTOR_TITLE), more: "\u66f4\u591a" };
+    var titles = { measure: _t("structure.measurements", STR.MEASUREMENTS), source: _t("structure.inspector_title", STR.INSPECTOR_TITLE), more: "\u66f4\u591a" };
     title.textContent = titles[id] || id;
     header.appendChild(title);
     var closeBtn = document.createElement("button");
@@ -2843,8 +3040,6 @@
 
     if (id === "source") {
       _renderSourceDrawer(body);
-    } else if (id === "vibration") {
-      _renderVibrationDrawer(body);
     } else if (id === "measure") {
       _renderMeasureDrawer(body);
     } else if (id === "more") {
@@ -2933,6 +3128,12 @@
     var entry = null;
     for (var i = 0; i < entries.length; i++) {
       if (entries[i].id === structureViewerState.selectedEntryId) { entry = entries[i]; break; }
+    }
+    var dock = document.getElementById("sv-vibration-dock");
+    if (dock && typeof window !== "undefined" && window.ACPVibrationViewer &&
+        typeof window.ACPVibrationViewer.renderFrequencyInspector === "function") {
+      window.ACPVibrationViewer.renderFrequencyInspector(dock);
+      return;
     }
     var vibSection = document.createElement("div");
     vibSection.className = "sv-inspector-section";
@@ -3315,6 +3516,9 @@
     closeAllDrawers: closeAllDrawers,
     openDrawer: openDrawer,
     closeDrawer: closeDrawer,
+    toggleVibrationDock: toggleVibrationDock,
+    openVibrationDock: openVibrationDock,
+    closeVibrationDock: closeVibrationDock,
     _closeSwitcherDropdown: _closeSwitcherDropdown,
     _renderIrcFrameController: _renderIrcFrameController,
     _applyCatalogResponse: _applyCatalogResponse,

@@ -1,6 +1,6 @@
 /**
  * ACP Structure Viewer — Stylesheet
- * @version 0.8.1
+ * @version 0.9.0
  *
  * Design tokens inherited from ACP_Workbench_v2.html :root variables.
  * Single-column elastic workspace (UX v2.0): summary bar | canvas | bottom
@@ -28,6 +28,9 @@
   --sv-radius-sm: var(--radius-sm, 6px);
   --sv-transition: var(--transition, 0.15s ease);
   --sv-accent-dim: var(--accent-dim, rgba(78, 161, 255, 0.10));
+  /* Typography tokens (plan §7.1) */
+  --font-ui: "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
 }
 
 /* ===== Single-column workspace layout ===== */
@@ -894,4 +897,413 @@
 }
 .sv-overlay-compare-btn:hover {
   background: var(--sv-accent-soft);
+}
+
+/* ===== Vibration bottom dock (UX optimization §3) ===== */
+.sv-vibration-dock {
+  border-top: 1px solid var(--sv-border-subtle);
+  background: var(--sv-bg-panel);
+  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  font-family: var(--font-ui);
+}
+
+.sv-vib-dock-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--sv-border-subtle);
+  user-select: none;
+  min-height: 30px;
+  position: relative;
+}
+
+.sv-vib-dock-grip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+  z-index: 2;
+}
+
+.sv-vib-dock-grip::after {
+  content: "";
+  display: block;
+  width: 32px;
+  height: 3px;
+  background: var(--sv-border-default);
+  border-radius: 2px;
+  margin: 1px auto 0;
+}
+
+.sv-vib-dock-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--sv-text-primary);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sv-vib-dock-title-mode {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--sv-text-secondary);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  margin-left: 4px;
+}
+
+.sv-vib-dock-close {
+  background: none;
+  border: none;
+  color: var(--sv-text-tertiary);
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.sv-vib-dock-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sv-vib-dock-col-ts {
+  width: 220px;
+  min-width: 180px;
+  padding: 8px 12px;
+  border-right: 1px solid var(--sv-border-subtle);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.sv-vib-dock-col-modes {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sv-vib-dock-col-controls {
+  width: 320px;
+  min-width: 280px;
+  padding: 8px 12px;
+  border-left: 1px solid var(--sv-border-subtle);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.sv-vib-dock-section-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--sv-text-tertiary);
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sv-vib-dock-ts-verdict {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sv-text-primary);
+  padding: 4px 0;
+  line-height: 1.5;
+}
+
+.sv-vib-dock-ts-verdict.sv-vib-ts-ok {
+  color: var(--sv-green);
+}
+
+.sv-vib-dock-ts-verdict.sv-vib-ts-warn {
+  color: var(--sv-amber);
+}
+
+.sv-vib-dock-ts-threshold {
+  font-size: 11px;
+  color: var(--sv-text-tertiary);
+  padding: 2px 0;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.sv-vib-dock-ts-suffix {
+  font-size: 11px;
+  color: var(--sv-text-tertiary);
+  padding: 2px 0;
+}
+
+/* Filter tabs (plan §4.1) */
+.sv-vib-filter-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--sv-border-subtle);
+  flex-shrink: 0;
+}
+
+.sv-vib-filter-tab {
+  flex: 1;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  color: var(--sv-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  border-bottom: 2px solid transparent;
+  transition: color var(--sv-transition), border-color var(--sv-transition);
+  font-family: var(--font-ui);
+}
+
+.sv-vib-filter-tab:hover {
+  color: var(--sv-accent);
+}
+
+.sv-vib-filter-tab.sv-active {
+  color: var(--sv-accent);
+  border-bottom-color: var(--sv-accent);
+}
+
+/* Mode track (horizontal scrolling mode items) */
+.sv-vib-mode-track {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-content: flex-start;
+}
+
+.sv-vib-mode-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: 1px solid var(--sv-border-subtle);
+  border-radius: var(--sv-radius-sm);
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: background var(--sv-transition), border-color var(--sv-transition);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  min-width: 144px;
+  height: 32px;
+  box-sizing: border-box;
+}
+
+.sv-vib-mode-item:hover {
+  background: var(--sv-accent-soft);
+}
+
+.sv-vib-mode-item.sv-active {
+  border-color: var(--sv-accent);
+  background: var(--sv-accent-dim);
+}
+
+.sv-vib-mode-item-imag {
+  color: var(--sv-red);
+  border-color: rgba(229, 83, 83, 0.3);
+}
+
+.sv-vib-mode-item-idx {
+  font-size: 11px;
+  color: var(--sv-text-tertiary);
+  min-width: 24px;
+}
+
+.sv-vib-mode-item-freq {
+  font-size: 12px;
+  color: var(--sv-text-primary);
+  flex: 1;
+}
+
+.sv-vib-mode-item-freq.sv-imag {
+  color: var(--sv-red);
+  font-weight: 600;
+}
+
+.sv-vib-mode-item-ir {
+  font-size: 10px;
+  color: var(--sv-text-tertiary);
+}
+
+.sv-vib-zero-collapse {
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--sv-text-tertiary);
+  cursor: pointer;
+  width: 100%;
+  border: 1px dashed var(--sv-border-subtle);
+  border-radius: var(--sv-radius-sm);
+  text-align: center;
+  background: transparent;
+  font-family: var(--font-ui);
+}
+
+.sv-vib-zero-collapse:hover {
+  background: var(--sv-accent-soft);
+}
+
+/* Current mode info line below track */
+.sv-vib-current-info {
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--sv-text-secondary);
+  border-top: 1px solid var(--sv-border-subtle);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.sv-vib-current-info .sv-vib-freq-imag {
+  color: var(--sv-red);
+  font-weight: 600;
+}
+
+/* Controls grid (plan §6) */
+.sv-vib-ctrl-grid {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  gap: 4px 8px;
+  align-items: center;
+}
+
+.sv-vib-ctrl-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--sv-text-tertiary);
+  text-align: right;
+  padding-right: 4px;
+}
+
+.sv-vib-ctrl-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+}
+
+.sv-vib-ctrl-field button,
+.sv-vib-ctrl-field select,
+.sv-vib-ctrl-field input {
+  height: 30px;
+  font-family: inherit;
+}
+
+.sv-vib-dock-locked-hint {
+  font-size: 11px;
+  color: var(--sv-amber);
+  padding: 4px 8px;
+  border-top: 1px solid rgba(242, 184, 75, 0.2);
+  flex-shrink: 0;
+}
+
+/* Summary bar vibration entries */
+.sv-vib-summary-entries {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.sv-vib-summary-entry {
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--sv-transition);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sv-vib-summary-entry:hover {
+  background: var(--sv-accent-soft);
+}
+
+.sv-vib-summary-imag {
+  border: 1px solid rgba(229, 83, 83, 0.4);
+  background: rgba(229, 83, 83, 0.1);
+  color: var(--sv-red);
+}
+
+.sv-vib-summary-imag.sv-vib-ok {
+  border-color: rgba(56, 193, 114, 0.4);
+  background: rgba(56, 193, 114, 0.1);
+  color: var(--sv-green);
+}
+
+.sv-vib-summary-modes {
+  border: 1px solid var(--sv-border-default);
+  background: var(--sv-bg-elevated);
+  color: var(--sv-text-secondary);
+}
+
+.sv-vib-summary-loading {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--sv-border-default);
+  border-top-color: var(--sv-accent);
+  border-radius: 50%;
+  animation: sv-spin 0.6s linear infinite;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+@keyframes sv-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive: medium screens (800-1199px) */
+@media (max-width: 1199px) and (min-width: 800px) {
+  .sv-vib-dock-body {
+    flex-direction: column;
+  }
+  .sv-vib-dock-col-ts {
+    width: 100%;
+    min-width: 0;
+    border-right: none;
+    border-bottom: 1px solid var(--sv-border-subtle);
+    padding: 6px 12px;
+  }
+  .sv-vib-dock-col-controls {
+    width: 100%;
+    min-width: 0;
+    border-left: none;
+    border-top: 1px solid var(--sv-border-subtle);
+    padding: 6px 12px;
+  }
+}
+
+/* Responsive: small screens (<800px) */
+@media (max-width: 799px) {
+  .sv-vib-dock-body {
+    flex-direction: column;
+  }
+  .sv-vib-dock-col-ts {
+    display: none;
+  }
+  .sv-vib-dock-col-controls {
+    width: 100%;
+    min-width: 0;
+    border-left: none;
+    border-top: 1px solid var(--sv-border-subtle);
+    padding: 6px 12px;
+  }
+  .sv-vib-mode-select-fallback {
+    display: block;
+  }
 }

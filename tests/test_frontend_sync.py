@@ -1667,7 +1667,7 @@ def test_structure_workspace_html_contract() -> None:
     assert 'id="sv-summary-bar"' in html
     assert 'id="sv-bottom-strip"' in html
     assert 'id="sv-drawer-measure"' in html
-    assert 'id="sv-drawer-vibration"' in html
+    assert 'id="sv-vibration-dock"' in html
     assert 'id="sv-drawer-source"' in html
     assert 'id="sv-drawer-more"' in html
 
@@ -1854,16 +1854,22 @@ def test_tab_independence_energy_not_in_sv_layout() -> None:
 
 
 def test_drawers_default_closed() -> None:
-    """All four overlay drawers start hidden in the static HTML."""
+    """All three overlay drawers start hidden; vibration dock also hidden."""
     html = FRONTEND.read_text(encoding="utf-8")
 
-    for drawer_id in ("measure", "vibration", "source", "more"):
+    for drawer_id in ("measure", "source", "more"):
         pattern = '<div[^>]*id="sv-drawer-' + drawer_id + '"[^>]*>'
         match = re.search(pattern, html)
         assert match is not None, f"drawer div missing: sv-drawer-{drawer_id}"
         assert "display:none" in match.group(0).replace(" ", ""), (
             f"sv-drawer-{drawer_id} must default to display:none"
         )
+
+    dock_match = re.search(r'<div[^>]*id="sv-vibration-dock"[^>]*>', html)
+    assert dock_match is not None, "sv-vibration-dock div missing"
+    assert "display:none" in dock_match.group(0).replace(" ", ""), (
+        "sv-vibration-dock must default to display:none"
+    )
 
 
 def test_summary_bar_exists_in_html() -> None:
@@ -2633,7 +2639,7 @@ def test_vibration_viewer_frequency_inspector_contract() -> None:
 
     # Display units + imaginary chip
     assert "cm\u207b\u00b9" in vib  # cm⁻¹
-    assert "km/mol" in vib
+    assert "km\u00b7mol\u207b\u00b9" in vib
     assert "\u865a\u9891" in vib  # 虚频
 
     # Unavailable branch: reason ONLY, never mode rows (must not fabricate)
@@ -2672,8 +2678,8 @@ def test_vibration_viewer_i18n_keys_complete_across_locales() -> None:
     )
 
     # Summary template carries the required placeholders in both locales
-    assert '"structure.vib.imaginary_summary": "虚频 {count} / {total}、{freq} cm⁻¹"' in html
-    assert '"structure.vib.imaginary_summary": "Imaginary {count} / {total}, {freq} cm⁻¹"' in html
+    assert '"structure.vib.imaginary_summary": "显著虚频 {count} 个"' in html
+    assert '"structure.vib.imaginary_summary": "{count} significant imaginary mode(s)"' in html
 
 
 def test_vibration_viewer_node_sort_negatives_first() -> None:
@@ -2919,7 +2925,7 @@ def test_vibration_viewer_node_render_unavailable_reason_only() -> None:
 
 
 def test_vibration_viewer_node_render_modes_header_and_rows() -> None:
-    """Node logic: available=true renders the 虚频 K / N summary header and
+    """Node logic: available=true renders the 虚频 summary and
     negatives-first rows with chip + IR intensity + selected highlight."""
     if not shutil.which("node"):
         pytest.skip("node not available")
@@ -2950,7 +2956,7 @@ def test_vibration_viewer_node_render_modes_header_and_rows() -> None:
         }
         var summary = container.children[0];
         var tsBlock = container.children[1];
-        if (summary.textContent !== "虚频 2 / 4、-797.72 cm⁻¹") {
+        if (summary.textContent !== "显著虚频 2 个") {
             console.error("FAIL: summary mismatch: " + summary.textContent);
             process.exit(1);
         }
@@ -2995,7 +3001,7 @@ def test_vibration_viewer_node_render_modes_header_and_rows() -> None:
             process.exit(1);
         }
         // IR intensity 1dp only when present
-        if (rows[0].children[3].textContent !== "24.8 km/mol") {
+        if (rows[0].children[3].textContent !== "24.8 km·mol⁻¹") {
             console.error("FAIL: ir text " + rows[0].children[3].textContent);
             process.exit(1);
         }
@@ -3014,8 +3020,332 @@ def test_vibration_viewer_node_render_modes_header_and_rows() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Wave 5 / todo 28: displacement arrows + mode selector + toggles
+# Vibration dock regression tests (UX optimization plan)
 # ---------------------------------------------------------------------------
+
+def test_vibration_dock_host_element_exists() -> None:
+    """Dock host element exists in HTML with display:none default."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    dock_match = re.search(r'<div[^>]*id="sv-vibration-dock"[^>]*>', html)
+    assert dock_match is not None, "sv-vibration-dock div missing from HTML"
+    assert "display:none" in dock_match.group(0).replace(" ", ""), (
+        "sv-vibration-dock must default to display:none"
+    )
+
+
+def test_vibration_dock_css_exists() -> None:
+    """CSS has dock layout styles with font tokens and height constants."""
+    css = (FRONTEND_CSS_DIR / "structure_viewer.css").read_text(encoding="utf-8")
+    assert ".sv-vibration-dock" in css
+    assert ".sv-vib-dock-header" in css
+    assert ".sv-vib-dock-body" in css
+    assert ".sv-vib-dock-col-ts" in css
+    assert ".sv-vib-dock-col-modes" in css
+    assert ".sv-vib-dock-col-controls" in css
+    assert "--font-mono" in css
+    assert "--font-ui" in css
+    assert ".sv-vib-filter-tabs" in css
+    assert ".sv-vib-filter-tab" in css
+    assert ".sv-vib-mode-track" in css
+    assert ".sv-vib-mode-item" in css
+
+
+def test_vibration_dock_height_constants() -> None:
+    """Dock height constants: default 236, min 180, max 340, max ratio 42%."""
+    sv = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+    assert "DOCK_DEFAULT_HEIGHT = 236" in sv
+    assert "DOCK_MIN_HEIGHT = 180" in sv
+    assert "DOCK_MAX_HEIGHT = 340" in sv
+    assert "DOCK_MAX_RATIO = 0.42" in sv
+
+
+def test_vibration_dock_state_persistence() -> None:
+    """Dock state persisted under acp.sv.view.* namespace."""
+    sv = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+    assert "vibDock" in sv
+    assert "_getDockPersist" in sv
+    assert "_setDockPersist" in sv
+
+
+def test_vibration_dock_viewer_resize_called() -> None:
+    """viewer.resize() called on dock toggle (no zoomTo)."""
+    sv = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+    assert "_triggerViewerResize" in sv
+    assert "viewer.resize()" in sv
+    assert "zoomTo" not in sv.split("_triggerViewerResize")[1].split("function ")[0]
+
+
+def test_vibration_dock_summary_entries() -> None:
+    """Summary bar has vibration summary entries (imaginary + modes)."""
+    sv = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+    assert "sv-vib-summary-imag" in sv
+    assert "sv-vib-summary-modes" in sv
+    assert "toggleVibrationDock" in sv
+
+
+def test_vibration_dock_no_positive_freq_labeled_imaginary() -> None:
+    """Positive frequency modes must show positive label, not imaginary."""
+    vib = _VIB_JS.read_text(encoding="utf-8")
+    assert "POSITIVE_LABEL" in vib
+    assert "IMAGINARY_LABEL" in vib
+    assert "\\u6b63\\u9891" in vib
+
+
+def test_vibration_dock_filter_tabs() -> None:
+    """Filter tabs: 虚频/有效模式/全部 with mode categorization."""
+    vib = _VIB_JS.read_text(encoding="utf-8")
+    assert "_categorizeModes" in vib
+    assert "FILTER_IMAGINARY" in vib
+    assert "FILTER_VALID" in vib
+    assert "FILTER_ALL" in vib
+    assert "sv-vib-filter-tab" in vib
+    assert "_filterTab" in vib
+
+
+def test_vibration_dock_zero_mode_collapse() -> None:
+    """Zero modes collapsed by default with expand button."""
+    vib = _VIB_JS.read_text(encoding="utf-8")
+    assert "ZERO_MODES" in vib
+    assert "sv-vib-zero-collapse" in vib
+    assert "\\u5e73\\u79fb/\\u8f6c\\u52a8\\u96f6\\u6a21" in vib
+
+
+def test_vibration_dock_keyboard_navigation() -> None:
+    """Keyboard left/right mode switching in the dock."""
+    vib = _VIB_JS.read_text(encoding="utf-8")
+    assert "_navigateMode" in vib
+    assert "ArrowRight" in vib
+    assert "ArrowLeft" in vib
+
+
+def test_vibration_dock_default_mode_selection_order() -> None:
+    """Default mode selection: most-negative significant → most-negative other → first positive."""
+    vib = _VIB_JS.read_text(encoding="utf-8")
+    assert "bestSigNeg" in vib
+    assert "bestOtherNeg" in vib
+    assert "firstPos" in vib
+    assert "threshold" in vib
+
+
+def test_vibration_dock_i18n_keys_new() -> None:
+    """New dock i18n keys exist in both locales."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    zh_keys = _extract_vib_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_vib_keys(html, _EN_BLOCK_RE)
+    new_keys = {
+        "structure.vib.current_positive",
+        "structure.vib.current_imaginary",
+        "structure.vib.dock_title",
+        "structure.vib.filter_imaginary",
+        "structure.vib.filter_valid",
+        "structure.vib.filter_all",
+        "structure.vib.zero_modes",
+        "structure.vib.positive_label",
+        "structure.vib.imaginary_label",
+        "structure.vib.imag_summary",
+        "structure.vib.modes_summary",
+    }
+    assert new_keys <= zh_keys, f"Missing zh-CN new dock keys: {sorted(new_keys - zh_keys)}"
+    assert new_keys <= en_keys, f"Missing en-US new dock keys: {sorted(new_keys - en_keys)}"
+
+
+def test_vibration_viewer_version_bump() -> None:
+    """ACPVibrationViewer bumped to 0.7.0."""
+    vib = _VIB_JS.read_text(encoding="utf-8")
+    assert 'var VERSION = "0.7.0"' in vib
+
+
+def test_vibration_dock_ir_unit_updated() -> None:
+    """IR unit updated from km/mol to km·mol⁻¹."""
+    vib = _VIB_JS.read_text(encoding="utf-8")
+    assert "km\u00b7mol\u207b\u00b9" in vib
+    assert "IR_UNIT" in vib
+
+
+def test_vibration_old_drawer_removed_from_html() -> None:
+    """Old sv-drawer-vibration div removed from HTML."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert 'id="sv-drawer-vibration"' not in html
+
+
+def test_vibration_viewer_node_default_mode_order() -> None:
+    """Node logic: defaultModeIndex picks most-negative significant first."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPVibrationViewer;
+
+        // Case 1: has significant imaginary (-419.46 <= -50)
+        var tsModes = [
+            { mode_index: 5, frequency_cm1: 42.44, imaginary: false },
+            { mode_index: 6, frequency_cm1: -419.46, imaginary: true },
+            { mode_index: 7, frequency_cm1: -30.0, imaginary: true }
+        ];
+        if (ns.defaultModeIndex(tsModes) !== 6) {
+            console.error("FAIL: expected 6 (significant), got " + ns.defaultModeIndex(tsModes));
+            process.exit(1);
+        }
+
+        // Case 2: no significant, has other negative
+        var negModes = [
+            { mode_index: 3, frequency_cm1: -30.0, imaginary: true },
+            { mode_index: 4, frequency_cm1: 100.0, imaginary: false }
+        ];
+        if (ns.defaultModeIndex(negModes) !== 3) {
+            console.error("FAIL: expected 3 (other neg), got " + ns.defaultModeIndex(negModes));
+            process.exit(1);
+        }
+
+        // Case 3: no negatives at all
+        var posModes = [
+            { mode_index: 1, frequency_cm1: 50.0, imaginary: false },
+            { mode_index: 2, frequency_cm1: 100.0, imaginary: false }
+        ];
+        if (ns.defaultModeIndex(posModes) !== 1) {
+            console.error("FAIL: expected 1 (first pos), got " + ns.defaultModeIndex(posModes));
+            process.exit(1);
+        }
+
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(_VIB_JS)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node default mode order test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_vibration_viewer_node_categorize_modes() -> None:
+    """Node logic: _categorizeModes splits into imaginary/valid/all/zeros."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        require(JS_PATH);
+        var ns = window.ACPVibrationViewer;
+
+        var modes = [
+            { mode_index: 1, frequency_cm1: 0.0, imaginary: false },
+            { mode_index: 2, frequency_cm1: 0.1, imaginary: false },
+            { mode_index: 3, frequency_cm1: -419.46, imaginary: true },
+            { mode_index: 4, frequency_cm1: -30.0, imaginary: true },
+            { mode_index: 5, frequency_cm1: 100.0, imaginary: false },
+            { mode_index: 6, frequency_cm1: 200.0, imaginary: false }
+        ];
+        var cats = ns._categorizeModes(modes);
+        if (cats.imaginary.length !== 2) {
+            console.error("FAIL: imaginary count " + cats.imaginary.length);
+            process.exit(1);
+        }
+        if (cats.valid.length !== 2) {
+            console.error("FAIL: valid count " + cats.valid.length);
+            process.exit(1);
+        }
+        if (cats.zeros.length !== 2) {
+            console.error("FAIL: zeros count " + cats.zeros.length);
+            process.exit(1);
+        }
+        if (cats.all.length !== 6) {
+            console.error("FAIL: all count " + cats.all.length);
+            process.exit(1);
+        }
+        if (cats.significantCount !== 1) {
+            console.error("FAIL: significant count " + cats.significantCount);
+            process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(_VIB_JS)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node categorize modes test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_vibration_dock_drag_handle_exists() -> None:
+    """Dock grip element rendered in JS with correct CSS class."""
+    vib = _VIB_JS.read_text(encoding="utf-8")
+    sv = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+    css = (FRONTEND_CSS_DIR / "structure_viewer.css").read_text(encoding="utf-8")
+    assert "sv-vib-dock-grip" in vib, "grip element class missing from vibration_viewer.js"
+    assert "sv-vib-dock-grip" in css, "grip CSS class missing"
+    assert "_onDockGripMouseDown" in sv, "drag mousedown handler missing"
+    assert "_onDockDragMove" in sv, "drag mousemove handler missing"
+    assert "_onDockDragEnd" in sv, "drag mouseup handler missing"
+    assert "_attachDockGripListener" in sv, "grip listener attachment missing"
+
+
+def test_vibration_dock_drag_clamp_constants() -> None:
+    """Drag logic uses the correct clamp constants (180/340/0.42)."""
+    sv = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+    assert "_clampDockHeight" in sv, "clamp function missing"
+    assert "DOCK_MIN_HEIGHT" in sv
+    assert "DOCK_MAX_HEIGHT" in sv
+    assert "DOCK_MAX_RATIO" in sv
+    clamp_fn = sv.split("function _clampDockHeight(", 1)[1].split("}", 1)[0]
+    assert "DOCK_MIN_HEIGHT" in clamp_fn, "clamp must reference DOCK_MIN_HEIGHT"
+    assert "DOCK_MAX_HEIGHT" in clamp_fn, "clamp must reference DOCK_MAX_HEIGHT"
+    assert "DOCK_MAX_RATIO" in clamp_fn, "clamp must reference DOCK_MAX_RATIO"
+
+
+def test_vibration_dock_drag_persistence_on_mouseup() -> None:
+    """Drag end persists height and calls viewer resize."""
+    sv = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+    drag_end = sv.split("function _onDockDragEnd(", 1)[1].split("\n  function ", 1)[0]
+    assert "_setDockPersist" in drag_end, "drag end must persist height"
+    assert "_triggerViewerResize" in drag_end, "drag end must trigger resize"
+    assert "removeEventListener" in drag_end, "drag end must clean up listeners"
+
+
+def test_vibration_dock_drag_no_leak() -> None:
+    """Drag cleanup removes both mousemove and mouseup listeners."""
+    sv = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+    close_fn = sv.split("function closeVibrationDock(", 1)[1].split("\n  function ", 1)[0]
+    assert "removeEventListener" in close_fn, "closeVibrationDock must clean up drag listeners"
+    assert "_dockDragState" in close_fn, "closeVibrationDock must reset drag state"
+
+
+def test_vibration_summary_loading_class_used() -> None:
+    """sv-vib-summary-loading class used in summary bar during fetch."""
+    sv = (FRONTEND_JS_DIR / "structure_viewer.js").read_text(encoding="utf-8")
+    assert "sv-vib-summary-loading" in sv, "loading spinner class missing"
+    render_fn = sv.split("function renderStructureViewer()", 1)[1]
+    render_fn = render_fn[:render_fn.index("function _renderStripItem(")]
+    assert "sv-vib-summary-loading" in render_fn, (
+        "loading class must be used in renderStructureViewer"
+    )
+    assert "vibLoading" in render_fn, "loading state check missing from summary bar"
+
+
+def test_vibration_summary_loading_no_height_change() -> None:
+    """Loading indicator is inline (no block-level height change)."""
+    css = (FRONTEND_CSS_DIR / "structure_viewer.css").read_text(encoding="utf-8")
+    loading_block = css.split(".sv-vib-summary-loading {", 1)[1].split("}", 1)[0]
+    assert "display: inline-block" in loading_block or "display:inline-block" in loading_block.replace(" ", ""), (
+        "loading indicator must be inline-block to avoid height change"
+    )
+    assert "12px" in loading_block or "10px" in loading_block, (
+        "loading indicator must be small (10-12px)"
+    )
+
+
+def test_vibration_grip_css_cursor_and_position() -> None:
+    """Grip element has ns-resize cursor and is positioned at dock top."""
+    css = (FRONTEND_CSS_DIR / "structure_viewer.css").read_text(encoding="utf-8")
+    grip_block = css.split(".sv-vib-dock-grip {", 1)[1].split("}", 1)[0]
+    assert "cursor: ns-resize" in grip_block or "cursor:ns-resize" in grip_block.replace(" ", ""), (
+        "grip must have ns-resize cursor"
+    )
+    assert "position: absolute" in grip_block or "position:absolute" in grip_block.replace(" ", ""), (
+        "grip must be absolutely positioned"
+    )
+
 
 _SV_JS_PATH = FRONTEND_JS_DIR / "structure_viewer.js"
 
@@ -6516,7 +6846,11 @@ def test_view_state_contract() -> None:
     assert '"aria-activedescendant"' in sv
     assert '"ArrowDown"' in sv and '"ArrowUp"' in sv and '"Enter"' in sv
     assert 'listBody.addEventListener("keydown"' in sv
-    assert "window.addEventListener" not in sv and "document.addEventListener" not in sv
+    assert "window.addEventListener" not in sv
+    dock_drag_uses = sv.count("document.addEventListener")
+    assert dock_drag_uses <= 2, (
+        "document.addEventListener allowed only for dock drag (mousemove/mouseup)"
+    )
 
     # a11y: inspector groups + button labels + live notice + real buttons
     assert "_ariaGroup" in sv and 'setAttribute("aria-label"' in sv
@@ -7015,24 +7349,23 @@ def test_f2_vibrations_fetch_gate_contract() -> None:
 
 
 def test_summary_bar_vibration_and_measure_buttons() -> None:
-    """Summary bar producers for openDrawer("vibration") and openDrawer("measure")
-    exist, vibration label references imaginary_count."""
+    """Summary bar has vibration dock entries + measure drawer button."""
     sv = _SV_JS_PATH.read_text(encoding="utf-8")
 
-    assert 'openDrawer("vibration"' in sv, "vibration drawer openDrawer call missing"
     assert 'openDrawer("measure"' in sv, "measure drawer openDrawer call missing"
     assert "imaginary_count" in sv, "imaginary_count reference missing"
-    assert "VIB_IMAG_BTN" in sv, "imaginary button label key missing"
+    assert "VIB_IMAG_BTN" in sv or "VIB_IMAG_SUMMARY" in sv, "imaginary label key missing"
     assert "VIB_BTN" in sv, "vibration button label key missing"
     assert "MEASURE_BTN" in sv, "measure button label key missing"
+    assert "toggleVibrationDock" in sv, "dock toggle missing"
 
     summary_fn = sv.split("function renderStructureViewer()", 1)[1]
     summary_fn = summary_fn[:summary_fn.index("function _renderStripItem(")]
-    assert 'openDrawer("vibration"' in summary_fn, "vibration button not in summary bar"
+    assert "toggleVibrationDock" in summary_fn, "vibration dock toggle not in summary bar"
     assert 'openDrawer("measure"' in summary_fn, "measure button not in summary bar"
     assert "imaginary_count" in summary_fn, "imaginary_count not in summary bar"
     assert "entry.vibrations.available !== false" in summary_fn, (
-        "vibration availability gate missing from summary bar button"
+        "vibration availability gate missing from summary bar"
     )
 
 

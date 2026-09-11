@@ -1,6 +1,6 @@
 /**
  * ACP Vibration Viewer — frequency inspector + arrows + animation (Wave 5, todos 27-31)
- * @version 0.6.0
+ * @version 0.7.0
  *
  * Namespace: window.ACPVibrationViewer
  *
@@ -71,43 +71,50 @@
   "use strict";
 
   /** Version tag — bump on every structural change. */
-  var VERSION = "0.6.0";
+  var VERSION = "0.7.0";
 
   /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
-    LOADING: "\u52a0\u8f7d\u4e2d\u2026",                                   // 加载中…
-    NONE: "\u65e0\u632f\u52a8\u6570\u636e",                               // 无振动数据
-    IMAGINARY: "\u865a\u9891",                                             // 虚频
-    IMAGINARY_SUMMARY: "\u865a\u9891 {count} / {total}\u3001{freq} cm\u207b\u00b9", // 虚频 {count} / {total}、{freq} cm⁻¹
-    FREQ_UNIT: "cm\u207b\u00b9",                                           // cm⁻¹
-    IR_UNIT: "km/mol",
-    MODE: "\u6a21\u5f0f",                                                 // 模式
-    AMPLITUDE: "\u632f\u5e45",                                             // 振幅
-    DISPLAY_ARROWS: "\u7bad\u5934",                                       // 箭头
-    DISPLAY_ANIMATION: "\u52a8\u753b",                                     // 动画
-    DISPLAY_COMBO: "\u7bad\u5934+\u52a8\u753b",                           // 箭头+动画
-    NO_GEOMETRY: "\u6682\u65e0\u5f53\u524d\u7ed3\u6784\u7684\u51e0\u4f55\u5750\u6807", // 暂无当前结构的几何坐标
-    UNIT_ANGSTROM: "\u00c5",                                               // Å
-    PLAY: "\u64ad\u653e",                                                   // 播放
-    PAUSE: "\u6682\u505c",                                                 // 暂停
-    SPEED: "\u901f\u5ea6",                                                 // 速度
-    INVERT: "\u76f8\u4f4d\u53cd\u8f6c",                                   // 相位反转
-    LOCKED_HINT: "\u52a8\u753b\u64ad\u653e\u4e2d\uff0c\u7f16\u8f91\u5df2\u6682\u505c", // 动画播放中，编辑已暂停
+    LOADING: "\u52a0\u8f7d\u4e2d\u2026",
+    NONE: "\u65e0\u632f\u52a8\u6570\u636e",
+    IMAGINARY: "\u865a\u9891",
+    IMAGINARY_SUMMARY: "\u663e\u8457\u865a\u9891 {count} \u4e2a",
+    FREQ_UNIT: "cm\u207b\u00b9",
+    IR_UNIT: "km\u00b7mol\u207b\u00b9",
+    MODE: "\u6a21\u5f0f",
+    AMPLITUDE: "\u632f\u5e45",
+    DISPLAY_ARROWS: "\u7bad\u5934",
+    DISPLAY_ANIMATION: "\u52a8\u753b",
+    DISPLAY_COMBO: "\u7bad\u5934+\u52a8\u753b",
+    NO_GEOMETRY: "\u6682\u65e0\u5f53\u524d\u7ed3\u6784\u7684\u51e0\u4f55\u5750\u6807",
+    UNIT_ANGSTROM: "\u00c5",
+    PLAY: "\u64ad\u653e",
+    PAUSE: "\u6682\u505c",
+    SPEED: "\u901f\u5ea6",
+    INVERT: "\u76f8\u4f4d\u53cd\u8f6c",
+    LOCKED_HINT: "\u52a8\u753b\u64ad\u653e\u4e2d\uff0c\u7f16\u8f91\u5df2\u6682\u505c",
+    DOCK_TITLE: "\u632f\u52a8\u6a21\u5f0f",
+    FILTER_IMAGINARY: "\u865a\u9891 {count}",
+    FILTER_VALID: "\u6709\u6548\u6a21\u5f0f {count}",
+    FILTER_ALL: "\u5168\u90e8 {count}",
+    ZERO_MODES: "\u5e73\u79fb/\u8f6c\u52a8\u96f6\u6a21 {count} \u4e2a",
+    POSITIVE_LABEL: "\u6b63\u9891",
+    IMAGINARY_LABEL: "\u865a\u9891",
     TS_HINTS: {
-      first_order: "\u9891\u7387\u6570\u91cf\u7b26\u5408\u4e00\u9636\u978d\u70b9",     // 频率数量符合一阶鞍点
-      no_evidence: "\u4e0d\u662f\u4e00\u9636\u978d\u70b9\u8bc1\u636e",                 // 不是一阶鞍点证据
-      higher_order: "\u9ad8\u9636\u978d\u70b9\u6216\u672a\u5145\u5206\u4f18\u5316",   // 高阶鞍点或未充分优化
+      first_order: "\u9891\u7387\u6570\u91cf\u7b26\u5408\u4e00\u9636\u978d\u70b9",
+      no_evidence: "\u4e0d\u662f\u4e00\u9636\u978d\u70b9\u8bc1\u636e",
+      higher_order: "\u9ad8\u9636\u978d\u70b9\u6216\u672a\u5145\u5206\u4f18\u5316",
     },
-    TS_SUFFIX: "\u4ecd\u9700\u68c0\u67e5\u632f\u52a8\u65b9\u5411\u53ca IRC",           // 仍需检查振动方向及 IRC
-    THRESHOLD_LABEL: "\u663e\u8457\u865a\u9891\u9608\u503c",                           // 显著虚频阈值
-    SOURCE_DEFAULT: "\u9ed8\u8ba4",                                                     // 默认
-    SOURCE_JOB_CONFIG: "\u4efb\u52a1\u914d\u7f6e",                                     // 任务配置
-    MISMATCH_REASON: "\u6a21\u5f0f\u4e0e\u5f53\u524d\u51e0\u4f55\u4e0d\u5339\u914d",   // 模式与当前几何不匹配
+    TS_SUFFIX: "\u4ecd\u9700\u68c0\u67e5\u632f\u52a8\u65b9\u5411\u53ca IRC",
+    THRESHOLD_LABEL: "\u663e\u8457\u865a\u9891\u9608\u503c",
+    SOURCE_DEFAULT: "\u9ed8\u8ba4",
+    SOURCE_JOB_CONFIG: "\u4efb\u52a1\u914d\u7f6e",
+    MISMATCH_REASON: "\u6a21\u5f0f\u4e0e\u5f53\u524d\u51e0\u4f55\u4e0d\u5339\u914d",
     REASONS: {
-      no_normal_modes: "\u65e0\u632f\u52a8\u6a21\u5f0f\u6570\u636e",           // 无振动模式数据
-      geometry_mismatch: "\u6a21\u5f0f\u4e0e\u5f53\u524d\u51e0\u4f55\u4e0d\u5339\u914d",   // 模式与当前几何不匹配
-      pending_fetch: "\u7b49\u5f85\u8fdc\u7a0b\u7ed3\u679c\u62c9\u53d6",       // 等待远程结果拉取
-      historical_unavailable: "\u5386\u53f2\u4efb\u52a1\u6570\u636e\u4e0d\u53ef\u7528",   // 历史任务数据不可用
+      no_normal_modes: "\u65e0\u632f\u52a8\u6a21\u5f0f\u6570\u636e",
+      geometry_mismatch: "\u6a21\u5f0f\u4e0e\u5f53\u524d\u51e0\u4f55\u4e0d\u5339\u914d",
+      pending_fetch: "\u7b49\u5f85\u8fdc\u7a0b\u7ed3\u679c\u62c9\u53d6",
+      historical_unavailable: "\u5386\u53f2\u4efb\u52a1\u6570\u636e\u4e0d\u53ef\u7528",
     },
   };
 
@@ -290,15 +297,27 @@
    */
   function defaultModeIndex(modes) {
     if (!modes || !modes.length) return null;
-    var best = null;
+    var bestSigNeg = null;
+    var bestOtherNeg = null;
+    var firstPos = null;
+    var threshold = -50.0;
     for (var i = 0; i < modes.length; i++) {
       var m = modes[i];
-      if (!_isImaginary(m)) continue;
-      if (best === null || m.frequency_cm1 < best.frequency_cm1) {
-        best = m;
+      var f = m.frequency_cm1;
+      if (typeof f !== "number" || !isFinite(f)) continue;
+      if (f < 0) {
+        if (f <= threshold) {
+          if (bestSigNeg === null || f < bestSigNeg.frequency_cm1) bestSigNeg = m;
+        } else {
+          if (bestOtherNeg === null || f < bestOtherNeg.frequency_cm1) bestOtherNeg = m;
+        }
+      } else if (f > 0 && firstPos === null) {
+        firstPos = m;
       }
     }
-    if (best !== null) return best.mode_index;
+    if (bestSigNeg !== null) return bestSigNeg.mode_index;
+    if (bestOtherNeg !== null) return bestOtherNeg.mode_index;
+    if (firstPos !== null) return firstPos.mode_index;
     return modes[0].mode_index;
   }
 
@@ -1205,7 +1224,7 @@
    * available=true  -> imaginary summary header (when imaginary modes
    *                    exist) + all mode rows negatives-first; each row:
    *                    mode index + frequency (2dp, cm⁻¹) + 虚频 chip for
-   *                    imaginary modes + IR intensity (1dp, km/mol) when
+   *                    imaginary modes + IR intensity (1dp, km·mol⁻¹) when
    *                    present.  Rows are click-selectable.
    * available=false -> ONLY the reason text; no mode rows are rendered.
    *
@@ -1213,6 +1232,9 @@
    */
   function renderFrequencyInspector(container) {
     if (typeof document === "undefined") return;
+    if (!container) {
+      container = document.getElementById("sv-vibration-dock");
+    }
     if (!container) {
       container = document.getElementById("structure-inspector-vibrations");
     }
@@ -1240,7 +1262,6 @@
 
     var data = state.data;
     if (!data || data.available === false) {
-      /* Non-available: exact reason ONLY — never render mode rows here. */
       var reasonLine = document.createElement("div");
       reasonLine.className = "sv-inspector-value sv-muted";
       reasonLine.textContent = reasonText(data && data.reason) || _t("structure.vib.none", STR.NONE);
@@ -1257,25 +1278,28 @@
       return;
     }
 
-    var sorted = sortModesNegativesFirst(modes);
+    if (container.id === "sv-vibration-dock") {
+      _renderDockContent(container, modes, data);
+    } else {
+      _renderLegacyInspector(container, modes, data);
+    }
+  }
 
-    /* imaginary summary header (虚频 K / N、{freq} cm⁻¹) */
+  function _renderLegacyInspector(container, modes, data) {
+    var sorted = sortModesNegativesFirst(modes);
     var imagCount = 0;
     for (var ci = 0; ci < modes.length; ci++) {
       if (_isImaginary(modes[ci])) imagCount++;
     }
     if (imagCount > 0) {
-      var selMode = _findMode(modes, state.selectedModeIndex) || sorted[0];
       var summary = document.createElement("div");
       summary.className = "sv-vib-summary";
       summary.textContent = _format(
         _t("structure.vib.imaginary_summary", STR.IMAGINARY_SUMMARY),
-        { count: imagCount, total: modes.length, freq: selMode.frequency_cm1.toFixed(2) }
+        { count: imagCount, total: modes.length }
       );
       container.appendChild(summary);
     }
-
-    /* TS evidence block (todo 31 — display only, never a validation verdict) */
     var judgment = tsJudgment(modes, data.threshold_cm1);
     var tsBlock = document.createElement("div");
     tsBlock.className = "sv-vib-ts-hint";
@@ -1293,22 +1317,418 @@
     thrLine.textContent = thresholdText(data.threshold_cm1, data.threshold_source);
     tsBlock.appendChild(thrLine);
     container.appendChild(tsBlock);
-
     var list = document.createElement("div");
     list.className = "sv-vib-list";
     for (var ri = 0; ri < sorted.length; ri++) {
       list.appendChild(_renderModeRow(sorted[ri]));
     }
     container.appendChild(list);
-
     if (geometryMismatch(_catalogEntry(), data)) {
-      /* mismatch: animation + arrows disabled — reason instead of controls */
       var mmReason = document.createElement("div");
       mmReason.className = "sv-vib-hint";
       mmReason.textContent = _t("structure.vib.ts.mismatch_reason", STR.MISMATCH_REASON);
       container.appendChild(mmReason);
     } else {
       _appendArrowControls(container, modes);
+    }
+  }
+
+  function _categorizeModes(modes) {
+    var significant = [];
+    var otherNeg = [];
+    var positives = [];
+    var zeros = [];
+    var threshold = -50.0;
+    for (var i = 0; i < modes.length; i++) {
+      var m = modes[i];
+      var f = m.frequency_cm1;
+      if (typeof f !== "number" || !isFinite(f)) { zeros.push(m); continue; }
+      if (Math.abs(f) < 0.5) { zeros.push(m); continue; }
+      if (f < 0) {
+        if (f <= threshold) { significant.push(m); }
+        else { otherNeg.push(m); }
+      } else {
+        positives.push(m);
+      }
+    }
+    significant.sort(function (a, b) { return a.frequency_cm1 - b.frequency_cm1; });
+    otherNeg.sort(function (a, b) { return a.frequency_cm1 - b.frequency_cm1; });
+    positives.sort(function (a, b) { return a.frequency_cm1 - b.frequency_cm1; });
+    return {
+      imaginary: significant.concat(otherNeg),
+      valid: positives,
+      all: modes,
+      zeros: zeros,
+      significantCount: significant.length,
+      validCount: positives.length,
+      totalCount: modes.length,
+    };
+  }
+
+  function _renderDockContent(dock, modes, data) {
+    dock.textContent = "";
+    var cats = _categorizeModes(modes);
+    var selMode = _findMode(modes, vibrationState.selectedModeIndex);
+
+    var header = document.createElement("div");
+    header.className = "sv-vib-dock-header";
+    var grip = document.createElement("div");
+    grip.className = "sv-vib-dock-grip";
+    grip.setAttribute("aria-label", "drag to resize");
+    header.appendChild(grip);
+    var title = document.createElement("span");
+    title.className = "sv-vib-dock-title";
+    title.textContent = _t("structure.vib.dock_title", STR.DOCK_TITLE);
+    if (selMode) {
+      var modeSpan = document.createElement("span");
+      modeSpan.className = "sv-vib-dock-title-mode";
+      var isNeg = _isImaginary(selMode);
+      modeSpan.textContent = "#" + selMode.mode_index + "  " +
+        selMode.frequency_cm1.toFixed(2) + " " + STR.FREQ_UNIT +
+        " \u00b7 " + (isNeg
+          ? _t("structure.vib.imaginary_label", STR.IMAGINARY_LABEL)
+          : _t("structure.vib.positive_label", STR.POSITIVE_LABEL));
+      title.appendChild(modeSpan);
+    }
+    header.appendChild(title);
+    var closeBtn = document.createElement("button");
+    closeBtn.className = "sv-vib-dock-close";
+    closeBtn.setAttribute("aria-label", "close");
+    closeBtn.textContent = "\u00d7";
+    closeBtn.addEventListener("click", function () {
+      if (typeof window !== "undefined" && window.ACPStructureViewer &&
+          typeof window.ACPStructureViewer.closeVibrationDock === "function") {
+        window.ACPStructureViewer.closeVibrationDock();
+      }
+    });
+    header.appendChild(closeBtn);
+    dock.appendChild(header);
+
+    var body = document.createElement("div");
+    body.className = "sv-vib-dock-body";
+
+    var tsCol = document.createElement("div");
+    tsCol.className = "sv-vib-dock-col-ts";
+    _renderTsColumn(tsCol, modes, data);
+    body.appendChild(tsCol);
+
+    var modesCol = document.createElement("div");
+    modesCol.className = "sv-vib-dock-col-modes";
+    _renderModesColumn(modesCol, modes, cats);
+    body.appendChild(modesCol);
+
+    var ctrlCol = document.createElement("div");
+    ctrlCol.className = "sv-vib-dock-col-controls";
+    if (geometryMismatch(_catalogEntry(), data)) {
+      var mmReason = document.createElement("div");
+      mmReason.className = "sv-vib-hint";
+      mmReason.textContent = _t("structure.vib.ts.mismatch_reason", STR.MISMATCH_REASON);
+      ctrlCol.appendChild(mmReason);
+    } else {
+      _renderControlsColumn(ctrlCol, modes);
+    }
+    body.appendChild(ctrlCol);
+
+    dock.appendChild(body);
+
+    if (animationState._active) {
+      var lockedHint = document.createElement("div");
+      lockedHint.className = "sv-vib-dock-locked-hint";
+      lockedHint.textContent = _t("structure.vib.locked_hint", STR.LOCKED_HINT);
+      dock.appendChild(lockedHint);
+    }
+  }
+
+  function _renderTsColumn(col, modes, data) {
+    var label = document.createElement("div");
+    label.className = "sv-vib-dock-section-label";
+    label.textContent = "TS \u8bc1\u636e";
+    col.appendChild(label);
+
+    var imagCount = 0;
+    for (var i = 0; i < modes.length; i++) {
+      if (_isImaginary(modes[i])) imagCount++;
+    }
+    var verdict = document.createElement("div");
+    verdict.className = "sv-vib-dock-ts-verdict";
+    var judgment = tsJudgment(modes, data.threshold_cm1);
+    verdict.className += judgment.hint === "first_order" ? " sv-vib-ts-ok" : " sv-vib-ts-warn";
+    verdict.textContent = _format(
+      _t("structure.vib.imaginary_summary", STR.IMAGINARY_SUMMARY),
+      { count: imagCount }
+    );
+    col.appendChild(verdict);
+
+    var hintLine = document.createElement("div");
+    hintLine.className = "sv-vib-dock-ts-suffix";
+    hintLine.textContent = tsHintText(judgment.hint);
+    col.appendChild(hintLine);
+
+    var thrLine = document.createElement("div");
+    thrLine.className = "sv-vib-dock-ts-threshold";
+    thrLine.textContent = thresholdText(data.threshold_cm1, data.threshold_source);
+    col.appendChild(thrLine);
+
+    var suffixLine = document.createElement("div");
+    suffixLine.className = "sv-vib-dock-ts-suffix";
+    suffixLine.textContent = tsSuffixText();
+    col.appendChild(suffixLine);
+  }
+
+  function _renderModesColumn(col, modes, cats) {
+    if (!vibrationState._filterTab) {
+      vibrationState._filterTab = "imaginary";
+      if (cats.significantCount === 0) {
+        vibrationState._filterTab = cats.validCount > 0 ? "valid" : "all";
+      }
+    }
+
+    var tabs = document.createElement("div");
+    tabs.className = "sv-vib-filter-tabs";
+    var tabDefs = [
+      { key: "imaginary", label: _format(_t("structure.vib.filter_imaginary", STR.FILTER_IMAGINARY), { count: cats.imaginary.length }) },
+      { key: "valid", label: _format(_t("structure.vib.filter_valid", STR.FILTER_VALID), { count: cats.validCount }) },
+      { key: "all", label: _format(_t("structure.vib.filter_all", STR.FILTER_ALL), { count: cats.totalCount }) },
+    ];
+    for (var ti = 0; ti < tabDefs.length; ti++) {
+      var tab = document.createElement("button");
+      tab.className = "sv-vib-filter-tab" +
+        (vibrationState._filterTab === tabDefs[ti].key ? " sv-active" : "");
+      tab.setAttribute("type", "button");
+      tab.textContent = tabDefs[ti].label;
+      tab.setAttribute("data-filter", tabDefs[ti].key);
+      tab.addEventListener("click", function (key) {
+        return function () {
+          vibrationState._filterTab = key;
+          renderFrequencyInspector();
+        };
+      }(tabDefs[ti].key));
+      tabs.appendChild(tab);
+    }
+    col.appendChild(tabs);
+
+    var track = document.createElement("div");
+    track.className = "sv-vib-mode-track";
+    track.setAttribute("tabindex", "0");
+
+    var filtered;
+    if (vibrationState._filterTab === "imaginary") {
+      filtered = cats.imaginary;
+    } else if (vibrationState._filterTab === "valid") {
+      filtered = cats.valid;
+    } else {
+      filtered = cats.all;
+    }
+
+    var zeroShown = false;
+    for (var ri = 0; ri < filtered.length; ri++) {
+      var m = filtered[ri];
+      if (Math.abs(m.frequency_cm1) < 0.5) {
+        if (!zeroShown && vibrationState._filterTab !== "all") {
+          zeroShown = true;
+          var collapseBtn = document.createElement("button");
+          collapseBtn.className = "sv-vib-zero-collapse";
+          collapseBtn.setAttribute("type", "button");
+          collapseBtn.textContent = _format(
+            _t("structure.vib.zero_modes", STR.ZERO_MODES),
+            { count: cats.zeros.length }
+          );
+          collapseBtn.addEventListener("click", function () {
+            vibrationState._filterTab = "all";
+            renderFrequencyInspector();
+          });
+          track.appendChild(collapseBtn);
+        }
+        if (vibrationState._filterTab !== "all") continue;
+      }
+      track.appendChild(_renderModeItem(m));
+    }
+
+    track.addEventListener("keydown", function (ev) {
+      if (ev.key === "ArrowRight" || ev.key === "ArrowDown") {
+        ev.preventDefault();
+        _navigateMode(filtered, 1);
+      } else if (ev.key === "ArrowLeft" || ev.key === "ArrowUp") {
+        ev.preventDefault();
+        _navigateMode(filtered, -1);
+      }
+    });
+    col.appendChild(track);
+
+    var currentInfo = document.createElement("div");
+    currentInfo.className = "sv-vib-current-info";
+    var selMode = _findMode(modes, vibrationState.selectedModeIndex);
+    if (selMode) {
+      var isNeg = _isImaginary(selMode);
+      currentInfo.innerHTML = "#" + _esc(selMode.mode_index) + "  " +
+        '<span class="' + (isNeg ? "sv-vib-freq-imag" : "") + '">' +
+        selMode.frequency_cm1.toFixed(2) + " " + STR.FREQ_UNIT + "</span>";
+      if (selMode.ir_intensity != null && typeof selMode.ir_intensity === "number") {
+        currentInfo.innerHTML += " \u00b7 IR " + selMode.ir_intensity.toFixed(1) + " " + STR.IR_UNIT;
+      }
+    }
+    col.appendChild(currentInfo);
+  }
+
+  function _renderModeItem(mode) {
+    var imag = _isImaginary(mode);
+    var item = document.createElement("div");
+    item.className = "sv-vib-mode-item" +
+      (mode.mode_index === vibrationState.selectedModeIndex ? " sv-active" : "") +
+      (imag ? " sv-vib-mode-item-imag" : "");
+    item.setAttribute("data-mode-index", _esc(mode.mode_index));
+    item.setAttribute("title", "#" + mode.mode_index + "  " +
+      mode.frequency_cm1.toFixed(2) + " " + STR.FREQ_UNIT +
+      (mode.ir_intensity != null ? " \u00b7 IR " + mode.ir_intensity.toFixed(1) + " " + STR.IR_UNIT : ""));
+
+    var idx = document.createElement("span");
+    idx.className = "sv-vib-mode-item-idx";
+    idx.textContent = "#" + _esc(mode.mode_index);
+    item.appendChild(idx);
+
+    var freq = document.createElement("span");
+    freq.className = "sv-vib-mode-item-freq" + (imag ? " sv-imag" : "");
+    freq.textContent = mode.frequency_cm1.toFixed(2);
+    item.appendChild(freq);
+
+    if (mode.ir_intensity != null && typeof mode.ir_intensity === "number") {
+      var ir = document.createElement("span");
+      ir.className = "sv-vib-mode-item-ir";
+      ir.textContent = mode.ir_intensity.toFixed(1);
+      item.appendChild(ir);
+    }
+
+    item.addEventListener("click", function () {
+      selectMode(mode.mode_index);
+    });
+    return item;
+  }
+
+  function _navigateMode(filtered, delta) {
+    if (!filtered || !filtered.length) return;
+    var curIdx = -1;
+    for (var i = 0; i < filtered.length; i++) {
+      if (filtered[i].mode_index === vibrationState.selectedModeIndex) { curIdx = i; break; }
+    }
+    var nextIdx = curIdx + delta;
+    if (nextIdx < 0) nextIdx = filtered.length - 1;
+    if (nextIdx >= filtered.length) nextIdx = 0;
+    selectMode(filtered[nextIdx].mode_index);
+  }
+
+  function _renderControlsColumn(col, modes) {
+    var dispLabel = document.createElement("div");
+    dispLabel.className = "sv-vib-dock-section-label";
+    dispLabel.textContent = "\u663e\u793a";
+    col.appendChild(dispLabel);
+
+    var grid = document.createElement("div");
+    grid.className = "sv-vib-ctrl-grid";
+
+    var lbl1 = document.createElement("span");
+    lbl1.className = "sv-vib-ctrl-label";
+    lbl1.textContent = _t("structure.vib.arrow.amplitude", STR.AMPLITUDE);
+    grid.appendChild(lbl1);
+    var ampField = document.createElement("div");
+    ampField.className = "sv-vib-ctrl-field";
+    var slider = document.createElement("input");
+    slider.className = "sv-vib-amp-slider";
+    slider.setAttribute("type", "range");
+    slider.setAttribute("min", String(AMP_MIN));
+    slider.setAttribute("max", String(AMP_MAX));
+    slider.setAttribute("step", "0.01");
+    slider.setAttribute("value", String(arrowState.amplitude));
+    ampField.appendChild(slider);
+    var ampVal = document.createElement("span");
+    ampVal.className = "sv-vib-amp-value";
+    ampVal.textContent = arrowState.amplitude.toFixed(2) + " " + STR.UNIT_ANGSTROM;
+    ampField.appendChild(ampVal);
+    slider.addEventListener("input", function () {
+      setAmplitude(parseFloat(slider.value));
+      ampVal.textContent = arrowState.amplitude.toFixed(2) + " " + STR.UNIT_ANGSTROM;
+    });
+    grid.appendChild(ampField);
+
+    var lbl2 = document.createElement("span");
+    lbl2.className = "sv-vib-ctrl-label";
+    lbl2.textContent = "\u663e\u793a";
+    grid.appendChild(lbl2);
+    var toggleField = document.createElement("div");
+    toggleField.className = "sv-vib-ctrl-field";
+    var group = document.createElement("div");
+    group.className = "sv-vib-toggle-group";
+    var toggles = [
+      { mode: "arrows", key: "structure.vib.arrow.display_arrows", fb: STR.DISPLAY_ARROWS },
+      { mode: "animation", key: "structure.vib.arrow.display_animation", fb: STR.DISPLAY_ANIMATION },
+      { mode: "combo", key: "structure.vib.arrow.display_combo", fb: STR.DISPLAY_COMBO },
+    ];
+    for (var ti = 0; ti < toggles.length; ti++) {
+      var tg = toggles[ti];
+      var btn = document.createElement("button");
+      btn.setAttribute("type", "button");
+      btn.className = "sv-vib-toggle" +
+        (arrowState.displayMode === tg.mode ? " sv-active" : "");
+      btn.setAttribute("data-display-mode", tg.mode);
+      btn.textContent = _t(tg.key, tg.fb);
+      btn.addEventListener("click", function (choice) {
+        return function () { setDisplayMode(choice); };
+      }(tg.mode));
+      group.appendChild(btn);
+    }
+    toggleField.appendChild(group);
+    grid.appendChild(toggleField);
+
+    var lbl3 = document.createElement("span");
+    lbl3.className = "sv-vib-ctrl-label";
+    lbl3.textContent = _t("structure.vib.anim.play", STR.PLAY);
+    grid.appendChild(lbl3);
+    var playField = document.createElement("div");
+    playField.className = "sv-vib-ctrl-field";
+    var playBtn = document.createElement("button");
+    playBtn.setAttribute("type", "button");
+    playBtn.className = "sv-vib-play-btn";
+    playBtn.textContent = animationState.playing
+      ? _t("structure.vib.anim.pause", STR.PAUSE)
+      : _t("structure.vib.anim.play", STR.PLAY);
+    playBtn.addEventListener("click", function () { togglePlay(); });
+    playField.appendChild(playBtn);
+    grid.appendChild(playField);
+
+    var lbl4 = document.createElement("span");
+    lbl4.className = "sv-vib-ctrl-label";
+    lbl4.textContent = _t("structure.vib.anim.speed", STR.SPEED);
+    grid.appendChild(lbl4);
+    var speedField = document.createElement("div");
+    speedField.className = "sv-vib-ctrl-field";
+    var speedSelect = document.createElement("select");
+    speedSelect.className = "sv-vib-speed-select";
+    for (var spi = 0; spi < SPEED_OPTIONS.length; spi++) {
+      var sopt = document.createElement("option");
+      sopt.value = String(SPEED_OPTIONS[spi]);
+      sopt.textContent = SPEED_OPTIONS[spi] + "x";
+      if (SPEED_OPTIONS[spi] === animationState.speed) sopt.selected = true;
+      speedSelect.appendChild(sopt);
+    }
+    speedSelect.addEventListener("change", function () {
+      setSpeed(parseFloat(speedSelect.value));
+    });
+    speedField.appendChild(speedSelect);
+    var invertBtn = document.createElement("button");
+    invertBtn.setAttribute("type", "button");
+    invertBtn.className = "sv-vib-toggle" + (animationState.invertPhase ? " sv-active" : "");
+    invertBtn.setAttribute("data-invert-phase", "1");
+    invertBtn.textContent = _t("structure.vib.anim.invert", STR.INVERT);
+    invertBtn.addEventListener("click", function () { toggleInvertPhase(); });
+    speedField.appendChild(invertBtn);
+    grid.appendChild(speedField);
+
+    col.appendChild(grid);
+
+    if (arrowState._hint) {
+      var hintBox = document.createElement("div");
+      hintBox.className = "sv-vib-hint";
+      hintBox.textContent = arrowState._hint;
+      col.appendChild(hintBox);
     }
   }
 
@@ -1574,6 +1994,7 @@
     tsSuffixText: tsSuffixText,
     thresholdText: thresholdText,
     geometryMismatch: geometryMismatch,
+    _categorizeModes: _categorizeModes,
     _catalogEntry: _catalogEntry,
     _t: _t,
     _esc: _esc,
