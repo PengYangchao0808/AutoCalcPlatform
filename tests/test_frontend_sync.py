@@ -5345,3 +5345,230 @@ def test_structure_editor_node_asset_save() -> None:
         f"Node asset-save test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Wave 7 / todo 38: shared geometry loader + style/camera store (phase D)
+# ---------------------------------------------------------------------------
+
+
+def test_shared_geometry_loader_contract() -> None:
+    """Phase-D lock: ONE shared loader; energy viewer keeps its canvas but
+    loses its duplicate parse/style/load logic; no new viewer instances;
+    reaction/preview/s2scan viewers untouched."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    sv = _SV_JS_PATH.read_text(encoding="utf-8")
+
+    for name in (
+        "geometryStore",
+        "sharedLoadGeometry",
+        "registerCanvasLoader",
+        "saveCamera",
+        "restoreCamera",
+        "setStylePreset",
+        "getStylePreset",
+        "_resolveStyleSpec",
+    ):
+        assert f"{name}: {name}," in sv, f"{name} missing from structure_viewer.js namespace"
+
+    assert 'sharedLoadGeometry(xyzText, { canvasId: "main"' in sv, (
+        "loadSelectedGeometry/injectManualEntry must route through the shared loader"
+    )
+
+    load_fn = sv.split("function loadSelectedGeometry()", 1)[1].split("\n  function ", 1)[0]
+    assert 'sharedLoadGeometry(xyzText, { canvasId: "main"' in load_fn
+
+    # Energy region: the delegation block + energyGraphLoadFrameGeometry
+    region = html.split("Shared-loader delegation", 1)[1].split("Fetch Frame XYZ", 1)[0]
+    assert 'registerCanvasLoader("energy-mini"' in region
+    assert "sphere: { scale: 0.26 }" not in region, (
+        "energy region must not re-declare its old hardcoded style"
+    )
+
+    frame_fn = html.split("async function energyGraphLoadFrameGeometry", 1)[1]
+    frame_fn = frame_fn.split("Fetch Frame XYZ", 1)[0]
+    assert "sharedLoadGeometry" in frame_fn and '"energy-mini"' in frame_fn
+    for gone in ("addModel", "setStyle", "createViewer"):
+        assert gone not in frame_fn, (
+            f"energyGraphLoadFrameGeometry must not contain {gone} — "
+            "loading is delegated to the shared loader"
+        )
+
+    # The energy mini canvas keeps its own element + instance lifecycle
+    assert 'id="energy-structure-viewer"' in html
+    assert "function energyGraphDestroyViewer()" in html
+
+    # No new viewer instances: code-level createViewer count is unchanged (7)
+    assert html.count("$3Dmol.createViewer") == 7, "viewer instance count changed"
+
+    # reaction/preview/s2scan viewers untouched
+    assert "reactionViewer = $3Dmol.createViewer" in html
+    assert "previewViewer = $3Dmol.createViewer" in html
+    assert "s2scanState.viewer = $3Dmol.createViewer" in html
+    assert "s2scanState.resultViewer = $3Dmol.createViewer" in html
+    assert html.count("previewViewer.setStyle") == 2, "preview viewer styling must stay untouched"
+    assert "s2scanState.viewer.setStyle" in html
+
+
+def test_shared_geometry_loader_node_logic() -> None:
+    """Node logic: sharedLoadGeometry dispatches per canvas id, applies the
+    store's style preset, saves/restores cameras per canvas id, and updates
+    displayedCoords only on the main canvas."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        require(JS_PATH);
+        var ns = window.ACPStructureViewer;
+
+        var mainLoads = [];
+        window._svLoadXyzToViewer = function (text, entryId) { mainLoads.push([text, entryId]); };
+
+        var miniCalls = [];
+        ns.registerCanvasLoader("energy-mini", function (text, spec) {
+          miniCalls.push([text, spec]);
+          return true;
+        });
+
+        var marker = { marker: true };
+        ns._styleSpecImpl = function (name) { return name === "test-preset" ? marker : null; };
+        ns.setStylePreset("test-preset");
+        if (ns.getStylePreset() !== "test-preset") {
+          console.error("FAIL: preset store"); process.exit(1);
+        }
+        if (ns.geometryStore.stylePreset !== "test-preset") {
+          console.error("FAIL: store field"); process.exit(1);
+        }
+        if (ns.geometryStore.loaderVersion !== 0) {
+          console.error("FAIL: initial loaderVersion"); process.exit(1);
+        }
+
+        var xyzMini = "2\\nmini\\nC 0 0 0\\nH 1 0 0\\n";
+        var r1 = ns.sharedLoadGeometry(xyzMini, {
+          canvasId: "energy-mini", source: "energy_graph"
+        });
+        if (!r1 || !r1.loaded) { console.error("FAIL: mini load result"); process.exit(1); }
+        if (miniCalls.length !== 1 || miniCalls[0][0] !== xyzMini || miniCalls[0][1] !== marker) {
+          console.error("FAIL: mini loader call or style spec from store"); process.exit(1);
+        }
+        if (mainLoads.length !== 0) {
+          console.error("FAIL: main bridge must not fire for mini"); process.exit(1);
+        }
+        if (ns.state.displayedCoords !== null) {
+          console.error("FAIL: displayedCoords must stay null for mini"); process.exit(1);
+        }
+        if (ns.geometryStore.currentXyz !== xyzMini || ns.geometryStore.loaderVersion !== 1) {
+          console.error("FAIL: store tracking"); process.exit(1);
+        }
+
+        var xyzMain = "1\\nmain\\nO 0 0 0\\n";
+        ns.state.selectedEntryId = "conf_0001";
+        var r2 = ns.sharedLoadGeometry(xyzMain, { canvasId: "main", source: "structure_list" });
+        if (!r2 || !r2.loaded || mainLoads.length !== 1 || mainLoads[0][1] !== "conf_0001") {
+          console.error("FAIL: main load via bridge"); process.exit(1);
+        }
+        if (!r2.parsed || r2.parsed.symbols[0] !== "O") {
+          console.error("FAIL: main parsed"); process.exit(1);
+        }
+        if (!ns.state.displayedCoords || ns.state.displayedCoords.length !== 1) {
+          console.error("FAIL: displayedCoords on main"); process.exit(1);
+        }
+        if (ns.state.displayedEntryId !== "conf_0001") {
+          console.error("FAIL: displayedEntryId"); process.exit(1);
+        }
+        if (ns.geometryStore.loaderVersion !== 2) {
+          console.error("FAIL: version bump"); process.exit(1);
+        }
+
+        if (ns.sharedLoadGeometry("", { canvasId: "main" }) !== null ||
+            ns.sharedLoadGeometry("1\\nx\\nH 0 0 0\\n", { canvasId: "nope" }) !== null) {
+          console.error("FAIL: empty/unknown canvas must return null"); process.exit(1);
+        }
+
+        var setViews = [];
+        var fakeViewer = {
+          getView: function () { return [1, 2, 3, 4]; },
+          setView: function (v) { setViews.push(v); },
+          render: function () {},
+        };
+        ns._canvasViewerImpl = function (id) { return id === "energy-mini" ? fakeViewer : null; };
+        if (ns.saveCamera("energy-mini") !== true) {
+          console.error("FAIL: saveCamera"); process.exit(1);
+        }
+        if (ns.restoreCamera("energy-mini") !== true) {
+          console.error("FAIL: restoreCamera"); process.exit(1);
+        }
+        if (setViews.length !== 1 || setViews[0].join(",") !== "1,2,3,4") {
+          console.error("FAIL: camera roundtrip"); process.exit(1);
+        }
+        if (ns.saveCamera("main") !== false || ns.restoreCamera("ghost") !== false) {
+          console.error("FAIL: missing-viewer guards"); process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(_SV_JS_PATH)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node shared-loader test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_shared_loader_selection_token_stale_guard() -> None:
+    """Regression (todos 15/18): after the shared-loader refactor the single
+    selectionToken still drops stale geometry loads on both sides."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        require(JS_PATH);
+        var ns = window.ACPStructureViewer;
+        var loads = [];
+        window._svLoadXyzToViewer = function (text, entryId) { loads.push(entryId); };
+
+        function mkEntry(id) {
+          return { id: id, geometry: { endpoint: "/geo/" + id, format: "xyz" },
+                   badges: [], vibrations: { available: false } };
+        }
+        ns.state.jobId = "job-1";
+        ns.state.payload = { entries: [mkEntry("e1"), mkEntry("e2")], default_entry_id: "e1" };
+
+        var pending = [];
+        ns._fetchImpl = function (url) {
+          return new Promise(function (resolve) {
+            pending.push({ url: url, go: function () {
+              resolve({ ok: true, text: function () { return "1\\nt\\nH 0 0 0\\n"; } });
+            } });
+          });
+        };
+
+        var t1 = ns.selectEntry("e1", "user");
+        var t2 = ns.selectEntry("e2", "user");
+        if (t2 !== t1 + 1) { console.error("FAIL: token monotonic"); process.exit(1); }
+        if (pending.length !== 2) { console.error("FAIL: two fetches"); process.exit(1); }
+
+        pending[0].go();
+        setTimeout(function () {
+          if (loads.length !== 0) { console.error("FAIL: stale load leaked"); process.exit(1); }
+          pending[1].go();
+          setTimeout(function () {
+            if (loads.length !== 1 || loads[0] !== "e2") {
+              console.error("FAIL: fresh load missing"); process.exit(1);
+            }
+            if (ns.state.displayedEntryId !== "e2" || !ns.state.displayedCoords) {
+              console.error("FAIL: shared-loader displayed state"); process.exit(1);
+            }
+            console.log("PASS");
+          }, 0);
+        }, 0);
+    """).replace("JS_PATH", json.dumps(str(_SV_JS_PATH)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node stale-token guard test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout

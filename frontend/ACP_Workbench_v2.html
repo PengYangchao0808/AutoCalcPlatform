@@ -6987,6 +6987,32 @@ async function energyGraphFetchFrameCandidates(jobId) {
   } catch (e) { return null; }
 }
 
+/* ── Shared-loader delegation (phase D, todo 38) ──
+   The energy mini canvas registers its load adapter with the SHARED
+   geometry loader in structure_viewer.js (one parse/style/load path for
+   every canvas). This canvas keeps its own element + 3Dmol instance; only
+   the duplicate load logic is removed. The lazy viewer creation below is
+   the SAME creation point that always lived here — not a new viewer. */
+if (window.ACPStructureViewer && typeof window.ACPStructureViewer.registerCanvasLoader === "function") {
+  window.ACPStructureViewer.registerCanvasLoader("energy-mini", function(xyzText, styleSpec) {
+    var container = document.getElementById("energy-structure-viewer");
+    if (!container) return false;
+    if (energyGraphState.viewer && container.querySelector("canvas")) {
+      try { energyGraphState.viewer.removeAllModels(); } catch (e) {}
+    } else {
+      container.innerHTML = "";
+      if (typeof $3Dmol === "undefined") return false;
+      energyGraphState.viewer = $3Dmol.createViewer(container, { backgroundColor: "0x0e1419", antialias: true });
+    }
+    energyGraphState.viewer.addModel(xyzText, "xyz");
+    energyGraphState.viewer.setStyle({}, styleSpec);
+    return true;
+  });
+  window.ACPStructureViewer._canvasViewerImpl = function(canvasId) {
+    return canvasId === "energy-mini" ? energyGraphState.viewer : null;
+  };
+}
+
 /* ── Unified Geometry Loader ── */
 async function energyGraphLoadFrameGeometry(node) {
   var data = energyGraphState.data;
@@ -7071,20 +7097,19 @@ async function energyGraphLoadFrameGeometry(node) {
       return;
     }
     container.className = "energy-structure-viewer";
-    if (energyGraphState.viewer && container.querySelector("canvas")) {
-      try { energyGraphState.viewer.removeAllModels(); } catch (e) {}
-      energyGraphState.viewer.addModel(xyz, "xyz");
-      energyGraphState.viewer.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.26 } });
-    } else {
-      container.innerHTML = "";
-      if (typeof $3Dmol === "undefined") {
-        container.className = "energy-structure-viewer empty";
-        container.textContent = "3D \u67e5\u770b\u5668\u672a\u52a0\u8f7d";
-        return;
-      }
-      energyGraphState.viewer = $3Dmol.createViewer(container, { backgroundColor: "0x0e1419", antialias: true });
-      energyGraphState.viewer.addModel(xyz, "xyz");
-      energyGraphState.viewer.setStyle({}, { stick: { radius: 0.14 }, sphere: { scale: 0.26 } });
+    /* Phase D (todo 38): the LOAD goes through the shared geometry loader
+       (style preset from the shared store). The frame-endpoint FETCHes above
+       are energy-viewer-specific and stay here; only the duplicated
+       parse/style/model-load logic was removed. */
+    var sharedLoad = window.ACPStructureViewer ? window.ACPStructureViewer.sharedLoadGeometry : null;
+    var sharedResult = null;
+    try {
+      sharedResult = sharedLoad ? sharedLoad.call(window.ACPStructureViewer, xyz, { canvasId: "energy-mini", source: "energy_graph" }) : null;
+    } catch (e) { sharedResult = null; }
+    if (!sharedResult || !sharedResult.loaded || !energyGraphState.viewer) {
+      container.className = "energy-structure-viewer empty";
+      container.textContent = "3D \u67e5\u770b\u5668\u672a\u52a0\u8f7d";
+      return;
     }
     /* Reframe AFTER layout settles using the shared framing helper.
        Token+isConnected guards keep a stale load from clobbering a newer one. */

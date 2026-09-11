@@ -1,11 +1,16 @@
 /**
  * ACP Structure Viewer — state store + catalog fetch + stale-response guard
- * @version 0.9.0
+ * @version 0.10.0
  *
  * Namespace: window.ACPStructureViewer
  *
  * Exposes:
  *   - state                     (the live structureViewerState object)
+ *   - geometryStore             (shared geometry/style/camera store, phase D)
+ *   - sharedLoadGeometry(xyzText, {canvasId, source})  (ONE load path)
+ *   - registerCanvasLoader(canvasId, fn)  (per-canvas load adapters)
+ *   - saveCamera(canvasId) / restoreCamera(canvasId)
+ *   - setStylePreset(name) / getStylePreset()
  *   - loadStructureViewer(jobId, opts)
  *   - onJobSelected(jobId, opts) (called from selectJob; loads catalog + default geometry)
  *   - onEnergyNodeSelected(jobId, entryMeta) (energy-graph one-way push; phase A)
@@ -20,6 +25,9 @@
  *
  * Internal (test-overridable via namespace property):
  *   - _fetchImpl                (default: window.fetch; tests inject a fake)
+ *   - _styleSpecImpl            (default: app STYLE_PRESETS table -> module default)
+ *   - _mainViewerImpl           (default: app's global lexical `viewer`)
+ *   - _canvasViewerImpl         (per-canvasId viewer resolution, non-main)
  *   - _applyCatalogResponse     (pure: applies a server response to state)
  *   - _esc                      (XSS-safe text insertion)
  *   - _sha256hex(str)            (sync SHA-256 → hex string)
@@ -30,7 +38,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "0.9.0";
+  var VERSION = "0.10.0";
 
   /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
@@ -380,6 +388,13 @@
     }
     structureViewerState.selectionToken += 1;
     structureViewerState.selectedEntryId = entryId;
+    /* Shared selection ownership (todo 38): every selection — list click,
+       energy-graph push, manual/auto — flows through HERE and shares the
+       single selectionToken above. The energy viewer sets origin
+       "energy_graph"; list clicks set "list" so a future todo can
+       distinguish user intent. Deliberate scope: NO reverse feedback —
+       selecting in the structure list does NOT auto-highlight energy
+       nodes (no bidirectional loop in this todo). */
     structureViewerState.selectionOrigin = origin || "user";
     renderStructureViewer();
     renderInspector();
@@ -474,6 +489,217 @@
     return { symbols: symbols, coords: coords };
   }
 
+  /* ---- shared geometry loader + style/camera store (phase D, todo 38) ---- */
+
+  /**
+   * Fallback canvas style spec (the energy mini viewer's original look).
+   * Used only when the app's STYLE_PRESETS table is not reachable (Node
+   * test environments); in the browser the shared preset always wins.
+   */
+  var _DEFAULT_CANVAS_STYLE = { stick: { radius: 0.14 }, sphere: { scale: 0.26 } };
+
+  /**
+   * Shared geometry/style/camera store. ONE owner for what is displayed on
+   * every structure canvas (main viewer, energy mini viewer, future canvases).
+   *
+   * @typedef {Object} GeometryStore
+   * @property {string|null} currentXyz   - last XYZ text loaded via the shared loader
+   * @property {string} stylePreset      - shared style preset name for ALL canvases
+   * @property {Object} cameras          - canvasId -> saved view array (viewer.getView())
+   * @property {number} loaderVersion    - bumped on every sharedLoadGeometry call
+   */
+  var geometryStore = {
+    currentXyz: null,
+    stylePreset: "ball-stick",
+    cameras: {},
+    loaderVersion: 0,
+  };
+
+  /**
+   * Per-canvas load adapters. Each adapter loads into the canvas's EXISTING
+   * viewer instance via the app's existing loading paths — the shared loader
+   * never creates a viewer. The main canvas goes through the app bridge
+   * (window._svLoadXyzToViewer); other canvases register their own adapter
+   * via registerCanvasLoader().
+   *
+   * @type {Object<string, Function>}
+   */
+  var _canvasLoaders = {
+    main: function (xyzText) {
+      if (typeof window === "undefined") return false;
+      if (typeof window._svLoadXyzToViewer === "function") {
+        window._svLoadXyzToViewer(xyzText, structureViewerState.selectedEntryId);
+        return true;
+      }
+      return false;
+    },
+  };
+
+  /**
+   * Register (or replace) the load adapter for a canvas id.
+   *
+   * @param {string} canvasId
+   * @param {Function} fn - (xyzText, styleSpec) => boolean
+   */
+  function registerCanvasLoader(canvasId, fn) {
+    if (!canvasId || typeof fn !== "function") return false;
+    _canvasLoaders[canvasId] = fn;
+    return true;
+  }
+
+  /**
+   * Resolve the style spec object for a preset name.
+   * Injectable via namespace property `_styleSpecImpl` (tests); then the
+   * app's global STYLE_PRESETS table; then the module default.
+   *
+   * @param {string} presetName
+   * @returns {Object} style spec (never null)
+   */
+  function _resolveStyleSpec(presetName) {
+    var impl = (typeof window !== "undefined" && window.ACPStructureViewer &&
+      typeof window.ACPStructureViewer._styleSpecImpl === "function")
+      ? window.ACPStructureViewer._styleSpecImpl : null;
+    if (impl) {
+      var injected = impl(presetName);
+      if (injected) return injected;
+    }
+    /* STYLE_PRESETS is a top-level const in the app's inline script —
+       reachable here as a global lexical binding at call time. */
+    try {
+      if (typeof STYLE_PRESETS !== "undefined" && STYLE_PRESETS[presetName]) {
+        return STYLE_PRESETS[presetName].style;
+      }
+    } catch (_) { /* not loaded — fall through */ }
+    return _DEFAULT_CANVAS_STYLE;
+  }
+
+  /**
+   * Resolve the LIVE viewer instance for a canvas id (never creates one).
+   * Main canvas: injectable `_mainViewerImpl`, else the app's global lexical
+   * `viewer`. Other canvases: injectable `_canvasViewerImpl(canvasId)`.
+   *
+   * @param {string} canvasId
+   * @returns {Object|null}
+   */
+  function _canvasViewer(canvasId) {
+    if (canvasId === "main") {
+      if (typeof window !== "undefined" && window.ACPStructureViewer &&
+          typeof window.ACPStructureViewer._mainViewerImpl === "function") {
+        try { return window.ACPStructureViewer._mainViewerImpl(); } catch (_) { return null; }
+      }
+      try {
+        if (typeof viewer !== "undefined" && viewer) return viewer;
+      } catch (_) { /* not loaded — stay null */ }
+      return null;
+    }
+    var impl = (typeof window !== "undefined" && window.ACPStructureViewer &&
+      typeof window.ACPStructureViewer._canvasViewerImpl === "function")
+      ? window.ACPStructureViewer._canvasViewerImpl : null;
+    if (impl) {
+      try { return impl(canvasId); } catch (_) { return null; }
+    }
+    return null;
+  }
+
+  /**
+   * THE shared geometry loader (phase D). Parses the XYZ (reusing
+   * _parseXyzFirstFrame), applies the current shared style preset, and loads
+   * into the target canvas's EXISTING viewer instance via its registered
+   * adapter. Main-canvas loads also update state.displayedCoords/Symbols.
+   *
+   * @param {string} xyzText
+   * @param {{ canvasId?: string, source?: string }} [opts]
+   * @returns {{ loaded: boolean, parsed: Object|null }|null} null when no
+   *   loader is registered for the canvas or xyzText is empty
+   */
+  function sharedLoadGeometry(xyzText, opts) {
+    opts = opts || {};
+    var canvasId = opts.canvasId || "main";
+    if (!xyzText || typeof _canvasLoaders[canvasId] !== "function") {
+      return null;
+    }
+    geometryStore.loaderVersion += 1;
+    geometryStore.currentXyz = xyzText;
+
+    var styleSpec = _resolveStyleSpec(geometryStore.stylePreset);
+    var loaded = false;
+    try {
+      loaded = !!_canvasLoaders[canvasId](xyzText, styleSpec);
+    } catch (_) {
+      loaded = false;
+    }
+
+    var parsed = null;
+    if (canvasId === "main") {
+      parsed = _parseXyzFirstFrame(xyzText);
+      structureViewerState.displayedCoords = parsed ? parsed.coords : null;
+      structureViewerState.displayedSymbols = parsed ? parsed.symbols : null;
+      structureViewerState.displayedEntryId = structureViewerState.selectedEntryId;
+    }
+    return { loaded: loaded, parsed: parsed };
+  }
+
+  /**
+   * Save the current camera of a canvas into the shared store.
+   *
+   * @param {string} canvasId
+   * @returns {boolean}
+   */
+  function saveCamera(canvasId) {
+    var v = _canvasViewer(canvasId);
+    if (!v || typeof v.getView !== "function") return false;
+    try {
+      geometryStore.cameras[canvasId] = v.getView();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /**
+   * Restore a previously saved camera onto a canvas.
+   *
+   * @param {string} canvasId
+   * @returns {boolean}
+   */
+  function restoreCamera(canvasId) {
+    var v = _canvasViewer(canvasId);
+    var view = geometryStore.cameras[canvasId];
+    if (!v || !view || typeof v.setView !== "function") return false;
+    try {
+      v.setView(view);
+      if (typeof v.render === "function") v.render();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /**
+   * Set the shared style preset for ALL canvases. Persists in the store;
+   * applies immediately to the main canvas through the app's existing
+   * applyStylePreset path when a viewer is live; other canvases pick the
+   * preset up on their next sharedLoadGeometry call.
+   *
+   * @param {string} name
+   * @returns {string} the stored preset name
+   */
+  function setStylePreset(name) {
+    if (!name) return geometryStore.stylePreset;
+    geometryStore.stylePreset = String(name);
+    if (_canvasViewer("main") && typeof applyStylePreset === "function") {
+      try { applyStylePreset(geometryStore.stylePreset); } catch (_) { /* empty viewer */ }
+    }
+    return geometryStore.stylePreset;
+  }
+
+  /**
+   * @returns {string} the current shared style preset name
+   */
+  function getStylePreset() {
+    return geometryStore.stylePreset;
+  }
+
   /**
    * Load geometry for the currently selected entry.
    * Fetches geometry.endpoint, handles 409 pending_fetch with auto-retry,
@@ -494,15 +720,6 @@
 
     var capturedToken = state.selectionToken;
     var endpoint = entry.geometry.endpoint;
-
-    function _loadXyzToViewer(xyzText) {
-      if (typeof window === "undefined") return;
-      /* Reuse the app's existing model-loading path:
-         loadStructureFile -> parseMultiFrameXYZ -> renderMolDoc */
-      if (typeof window._svLoadXyzToViewer === "function") {
-        window._svLoadXyzToViewer(xyzText, entry.id);
-      }
-    }
 
     var fetchFn = _getFetchImpl();
     if (!fetchFn) { return Promise.resolve(); }
@@ -530,11 +747,10 @@
         if (capturedToken !== state.selectionToken) { return; }
         state.geometryLoadedFor = state.selectedEntryId;
         state.pendingGeometryRetry = false;
-        var parsed = _parseXyzFirstFrame(xyzText);
-        state.displayedCoords = parsed ? parsed.coords : null;
-        state.displayedSymbols = parsed ? parsed.symbols : null;
-        state.displayedEntryId = entry.id;
-        _loadXyzToViewer(xyzText);
+        /* Phase D (todo 38): ONE load path — parse + style + model load all
+           live in sharedLoadGeometry (main canvas -> _svLoadXyzToViewer). */
+        var result = sharedLoadGeometry(xyzText, { canvasId: "main", source: "structure_list" });
+        var parsed = result ? result.parsed : null;
         if (typeof window !== "undefined" && window.ACPStructureEditor &&
             typeof window.ACPStructureEditor.bindEntry === "function" && parsed) {
           /* dirty switches raise editorState.pendingSwitch (todo 36 prompt) */
@@ -633,9 +849,9 @@
 
     selectEntry(entryId, "manual_file");
 
-    /* If xyzText is provided, load it directly */
-    if (xyzText && typeof window !== "undefined" && typeof window._svLoadXyzToViewer === "function") {
-      window._svLoadXyzToViewer(xyzText, entryId);
+    /* If xyzText is provided, load it directly through the shared loader */
+    if (xyzText) {
+      sharedLoadGeometry(xyzText, { canvasId: "main", source: "manual_file" });
     }
 
     return entryId;
@@ -1245,8 +1461,9 @@
 
   /**
    * Called from the energy/trajectory viewer when a node is selected.
-   * One-way push (phase A): energy → structure viewer only.
-   * Wave 7 (todo 38) revisits shared ownership.
+   * Shared selection ownership (phase D, todo 38): the push goes through
+   * selectEntry, so energy-graph picks and structure-list picks share the
+   * single selectionToken. Still one-way visually — see selectEntry.
    *
    * @param {string} jobId  - current job id (stale-job guard)
    * @param {Object} entryMeta - node descriptor from energy viewer
@@ -1343,6 +1560,13 @@
     version: VERSION,
     state: structureViewerState,
     STR: STR,
+    geometryStore: geometryStore,
+    sharedLoadGeometry: sharedLoadGeometry,
+    registerCanvasLoader: registerCanvasLoader,
+    saveCamera: saveCamera,
+    restoreCamera: restoreCamera,
+    setStylePreset: setStylePreset,
+    getStylePreset: getStylePreset,
     loadStructureViewer: loadStructureViewer,
     onJobSelected: onJobSelected,
     onEnergyNodeSelected: onEnergyNodeSelected,
@@ -1362,6 +1586,7 @@
     _manualEntryId: _manualEntryId,
     _entryIdFromEnergyNode: _entryIdFromEnergyNode,
     _parseXyzFirstFrame: _parseXyzFirstFrame,
+    _resolveStyleSpec: _resolveStyleSpec,
     _fetchImpl: (typeof window !== "undefined" && window.fetch) ? window.fetch.bind(window) : null,
   };
 })();
