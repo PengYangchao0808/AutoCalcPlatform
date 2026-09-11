@@ -42,9 +42,24 @@ Workbench "能量与轨迹"标签页是 PES 扫描、几何优化、构象搜索
 - 通用帧操作：查看结构 / 锁定 / 导出 XYZ / 保存为候选（TS / INT / NONE）
 - xtb-md / xtbmd-censo 协议额外提供采样历史三视图：能量轨迹、采样空间（MDS 二维散点）、覆盖度（饱和度指标 + 累计唯一曲线）
 - 优化视图收敛面板：RMS/MAX 梯度和位移 vs 阈值达标判定
-- IRC / NEB 视图已注册占位，暂无数据投影
+- IRC / NEB 视图已注册（能量图数据投影暂未接线；IRC 逐帧结构浏览与路径动画由下方结构查看器提供）
 
 详见 `docs/ACP_Energy_Trajectory_Viewer_DevDoc.md`
+
+#### 结构查看器（Structure Viewer）
+
+Workbench "结构查看器"标签页（原 3D + 构象集合合并）在选中任务后自动加载结构目录：
+- 按工作流自动解析：Confsearch 构象（能量 + Boltzmann 权重）、PES 推荐/人工确认（严格分组）、
+  BatchOptimize 条目（含失败末帧）、scan 帧、IRC 正/反向逐帧、退役任务只读兼容模式
+- 虚频可视化：频率列表、位移箭头、振动动画、TS 一阶鞍点证据提示（只读证据，判定归 Batch/IRC）
+- 轻量几何编辑：键长/键角/二面角 + 撤销/重做 + 碰撞警告 + 另存为结构资产
+- 结构叠合 RMSD（同序直配 / RDKit MCS 唯一映射 / 无法证明则清除跨结构测量）
+- IRC 路径动画、大体系线框降级、视图状态（相机/样式/测量）本地持久化
+
+结构查看器端点：`GET /api/v1/jobs/{id}/structure-viewer` · `GET .../entries/{e}/geometry` ·
+`GET .../entries/{e}/vibrations` · `GET .../structure-viewer/overlay?entry_a=&entry_b=`
+
+详见 `docs/ACP_Structure_Viewer_DevDoc.md`
 
 ### 3. BatchOptimize — 批量优化确认 `acp run BatchOptimize`
 - 对 PESsearch 候选或其他结构进行 per-item Opt/TS + 频率 + 单点能 + 热力学修正

@@ -28,7 +28,7 @@ ACP_V1_20260811/
 │   ├── confsearch/        # Unified conformer search: engine, contracts, manifest, profiles, selection, protocols/ (xtb-crest/xtb-md/censo-crest/xtbmd-censo), shared/, sampling.py + sampling_models.py
 │   ├── calculations/      # Calculation-plan primitives and engines: contracts, checkpoint, executor, plans, primitives/ (sp/opt/freq/scan/irc/thermochemistry), pes/, batch/, irc/
 │   ├── compat/            # Read-only legacy manifest readers and layout compatibility (legacy/ subpkg)
-│   ├── results/           # Unified result manifest reader (result_manifest.json) + frame contracts (frames.py) + sampling projection (sampling_graph.py) + frame-candidate service (frame_candidates.py + frame_candidate_geometry.py + frame_candidate_store.py)
+│   ├── results/           # Unified result manifest reader (result_manifest.json) + frame contracts (frames.py) + sampling projection (sampling_graph.py) + frame-candidate service (frame_candidates.py + frame_candidate_geometry.py + frame_candidate_store.py) + structure-viewer catalog/resolvers/overlay (structure_viewer.py) + IRC frame projection (irc_projection.py) + remote geometry cache (remote_structure_cache.py) + ORCA parser (orca_parser.py) + normal_modes_v1 product (frequencies.py)
 │   ├── storage/           # Unified v2 result manifest write (result_manifest.json schema)
 │   ├── core/              # Shared mechanism: Structure, WorkflowRunner, Registry, State, Config
 │   ├── backends/          # QC backends with capability Protocols — thin adapters only (no subprocess; see 2026-08-02 consolidation)
@@ -43,7 +43,7 @@ ACP_V1_20260811/
 ├── frontend/              # ACP Workbench (v1 + v2) single-page dark dashboards
 ├── scripts/               # start_acp.sh, bootstrap_venv.sh, install_systemd.sh
 ├── config/defaults.yaml   # Default YAML config (may diverge from Python built-in — built-in is authoritative)
-├── tests/                 # 96 test files (~1315 tests), conftest.py, fixtures/, baseline/ (audit artifact)
+├── tests/                 # 144 test files (~2860 tests), conftest.py, fixtures/ (incl. structure_viewer/), baseline/ (audit artifact); structure-viewer suites: test_acp_structure_viewer / test_acp_api_structure_viewer / test_acp_frequency_modes / test_acp_irc_projection + test_frontend_sync frontend contracts
 ├── docs/                  # Dev docs: CENSO, NMR_DP4, xTBMD_CENSO, Mechanism Research, Job File Layout, Remote execution, Simple Workflows
 ├── requirements-node.txt  # Remote compute-node runtime deps (numpy/rdkit/pyyaml only — NOT pyproject); installed by NodeManager.bootstrap_node() and auto-synced by CodeSyncer. Add any new `acp run` runtime import HERE + pyproject.toml
 └── pyproject.toml         # api/remote/nmr/dev optional deps; console script `acp = acp.cli:main`
@@ -107,6 +107,14 @@ ACP_V1_20260811/
 | Frame-candidate service | `src/acp/results/frame_candidates.py` | `save_frame_candidate` / `list_frame_candidates` / `remove_frame_candidate`; authority file `RESULT/frame_candidates.json` (schema `frame_candidates_v1`) |
 | Frame geometry resolution | `src/acp/results/frame_candidate_geometry.py` | `resolve_frame_geometry` dispatcher; per-view_type resolvers (scan / optimization / sampling / conformer); path-escape guard |
 | Frame-candidate store | `src/acp/results/frame_candidate_store.py` | Authority file read/write/delete, `candidate_id_for`, `rewrite_xyz_comment`, `atomic_write_text`; `RevisionConflictError` |
+| Structure-viewer catalog | `src/acp/results/structure_viewer.py` | `build_structure_viewer_payload` + per-workflow resolvers (confsearch/pes/batch/simple/scan/irc/legacy), entry-id + revision schemes, `make_manual_entry`, `compute_overlay` (identity/unique-MCS mapping + Kabsch RMSD); see docs/ACP_Structure_Viewer_DevDoc.md |
+| IRC frame projection | `src/acp/results/irc_projection.py` | `build_irc_energy_graph` two-direction series in strict file order; `parse_irc_xyz_frames` block walker; `VIEW_REGISTRY["irc"]` = node_type irc_point / x_unit frame |
+| Remote structure cache | `src/acp/results/remote_structure_cache.py` | `run_root/.remote_cache/<job>/<rel>`; pending_fetch catalog flag, geometry 409 + `?fetch=1`, `sweep_expired(ttl_days=7)`, purge hook |
+| ORCA parser (modes) | `src/acp/results/orca_parser.py` | `OrcaOutputParser` → `mode_frequencies`/`mode_vectors`/`mode_ir_intensities` with ORCA-native indices, zero modes retained in the index map, final frequency section wins |
+| normal_modes_v1 product | `src/acp/results/frequencies.py` | `build_normal_modes_product` + `build_frequency_report` extension (corrupt modes skipped with warnings, never fatal) |
+| Structure-viewer endpoints | `src/acp/api/v1_routes.py` | GET `/jobs/{id}/structure-viewer` (+`?item_id=`), `.../entries/{e}/geometry` (409 pending_fetch + `?fetch=1`), `.../entries/{e}/vibrations` (never 500), `.../structure-viewer/overlay?entry_a=&entry_b=`; 410 deliberately NOT used |
+| Structure viewer frontend | `frontend/js/structure_viewer.js` + `structure_editor.js` + `vibration_viewer.js` + `css/structure_viewer.css` | ACPStructureViewer 0.14.0 (store, shared geometry loader + geometryStore, IRC playback, overlay, perf thresholds 100/500/200/200, view-state localStorage `acp.sv.view.*`, listbox a11y), ACPStructureEditor 0.8.0 (edit math + transactions + asset save), ACPVibrationViewer 0.6.0 (inspector + arrows + rAF animation + TS hints); dev doc docs/ACP_Structure_Viewer_DevDoc.md |
+| Structure-viewer dev doc | `docs/ACP_Structure_Viewer_DevDoc.md` | structure_viewer_v1 / normal_modes_v1 contracts, revision + entry-id schemes, API error codes, frontend modules, test map |
 | Confsearch sampling capture | `src/acp/confsearch/sampling.py` | `parse_traj_frames` / `equilibration_cutoff` / `assign_basins` / `mds_2d` / `compute_sampling_history` / `read_traj_frame_xyz` |
 | Sampling data models | `src/acp/confsearch/sampling_models.py` | `TrajFrame` / `BasinInfo` / `SamplingSaturation` / `SamplingHistory` frozen dataclasses; `sampling_history_v1` schema; `to_dict` / `from_dict` |
 | PES manual-review doc | `docs/ACP_PES_Manual_Review_DevDoc.md` | PESsearch 人工确认选点 → BatchOptimize 批量确认的完整链路设计 |

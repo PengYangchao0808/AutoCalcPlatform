@@ -15,7 +15,7 @@ acp/
 ├── confsearch/          # Unified conformer search: engine, contracts, manifest, profiles, selection, protocols/ (xtb-crest/xtb-md/censo-crest/xtbmd-censo), shared/, sampling.py + sampling_models.py
 ├── calculations/        # Calculation-plan primitives and engines: contracts, checkpoint, executor, plans, primitives/ (sp/opt/freq/scan/irc/thermochemistry), pes/, batch/, irc/
 ├── compat/              # Read-only legacy manifest readers and layout compatibility (legacy/ subpkg)
-├── results/             # Unified result manifest reader (result_manifest.json) + frame contracts (frames.py) + sampling projection (sampling_graph.py) + frame-candidate service (frame_candidates.py + frame_candidate_geometry.py + frame_candidate_store.py)
+├── results/             # Unified result manifest reader (result_manifest.json) + frame contracts (frames.py) + sampling projection (sampling_graph.py) + frame-candidate service (frame_candidates.py + frame_candidate_geometry.py + frame_candidate_store.py) + structure-viewer catalog/resolvers/overlay (structure_viewer.py) + IRC projection (irc_projection.py) + remote structure cache (remote_structure_cache.py) + ORCA parser (orca_parser.py) + normal_modes_v1 (frequencies.py)
 ├── storage/             # Unified v2 result manifest write (result_manifest.json schema)
 ├── core/                # Generic mechanism: Structure, WorkflowRunner, Registry, State, Config
 ├── backends/            # Capability-Protocol QC adapters (ORCA/CREST/xTB/CENSO/Isostat/Molclus/external)
@@ -83,6 +83,11 @@ acp/
 | Frame-candidate service | `results/frame_candidates.py` | `save_frame_candidate` / `list_frame_candidates` / `remove_frame_candidate`; authority file `RESULT/frame_candidates.json` (schema `frame_candidates_v1`) |
 | Frame geometry resolution | `results/frame_candidate_geometry.py` | `resolve_frame_geometry` dispatcher; per-view_type resolvers (scan / optimization / sampling / conformer); path-escape guard |
 | Frame-candidate store | `results/frame_candidate_store.py` | Authority file read/write/delete, `candidate_id_for`, `rewrite_xyz_comment`, `atomic_write_text`; `RevisionConflictError` |
+| Structure-viewer catalog | `results/structure_viewer.py` | `build_structure_viewer_payload` + per-workflow resolvers, entry-id/revision schemes, `make_manual_entry`, `compute_overlay` (identity/unique-MCS + Kabsch RMSD) |
+| IRC frame projection | `results/irc_projection.py` | `build_irc_energy_graph` (two direction series, strict file order); `parse_irc_xyz_frames`; energy-comment parser |
+| Remote structure cache | `results/remote_structure_cache.py` | `run_root/.remote_cache/`; pending_fetch + `?fetch=1`; `sweep_expired(ttl_days=7)`; purge hook |
+| ORCA parser | `results/orca_parser.py` | `OrcaOutputParser` normal modes with ORCA-native indices; zero modes kept in index map; final section wins |
+| normal_modes_v1 | `results/frequencies.py` | `build_normal_modes_product` + `build_frequency_report` extension; corrupt modes skipped, never fatal |
 | Confsearch sampling capture | `confsearch/sampling.py` | `parse_traj_frames` / `equilibration_cutoff` / `assign_basins` / `mds_2d` / `compute_sampling_history` / `read_traj_frame_xyz` |
 | Sampling data models | `confsearch/sampling_models.py` | `TrajFrame` / `BasinInfo` / `SamplingSaturation` / `SamplingHistory` frozen dataclasses; `sampling_history_v1` schema; `to_dict` / `from_dict` |
 | Scheduler tasks | `scheduler/tasks.py` | Task-level scheduling for stage workflows |
