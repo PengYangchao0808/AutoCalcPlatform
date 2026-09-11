@@ -946,3 +946,53 @@ class TestBatchPerItemNormalModes:
         assert not (
             task_root / "RESULT" / "frequencies" / "opt_item_002__normal_modes.json"
         ).is_file()
+
+
+class TestParserMatrix:
+    """Doc §11 parser matrix (todo 43): multiple frequency sections, zero-mode
+    filtering split, mode-index alignment."""
+
+    def test_multiple_frequency_sections_final_wins(self) -> None:
+        """Two VIBRATIONAL FREQUENCIES sections -> the FINAL section wins for
+        both calc.frequencies (zeros excluded) and mode_frequencies (zeros
+        kept via the all-pairs supplement); the first section is ignored."""
+        log = (
+            "VIBRATIONAL FREQUENCIES\n"
+            "   0:      100.00 cm**-1\n"
+            "   1:      200.00 cm**-1\n"
+            "---- intermediate output ----\n"
+            "VIBRATIONAL FREQUENCIES\n"
+            "   0:        0.00 cm**-1\n"
+            "   1:     -500.00 cm**-1\n"
+            "   2:      300.00 cm**-1\n"
+        )
+        calc = OrcaOutputParser().parse_text(log)
+
+        assert calc.frequencies == [-500.0, 300.0]
+        assert calc.mode_frequencies == {0: 0.0, 1: -500.0, 2: 300.0}
+        # no NORMAL MODES section -> no vectors, yet the index map survives
+        assert calc.mode_vectors == {}
+
+    def test_zero_mode_filter_split(self) -> None:
+        """Exact-0.0 modes are excluded from the calc.frequencies LIST (the
+        6 translational/rotational modes) while mode_frequencies KEEPS their
+        ORCA-native indices pinned at 0.0."""
+        text = FULL_MODES_FIXTURE.read_text(encoding="utf-8")
+        calc = OrcaOutputParser().parse_text(text)
+
+        assert 0.0 not in calc.frequencies
+        assert calc.frequencies == pytest.approx([-797.72, -791.36, 1411.55])
+        for mode in range(6):
+            assert calc.mode_frequencies[mode] == pytest.approx(0.0)
+
+    def test_mode_index_alignment_vectors_equal_frequency_keys(self) -> None:
+        """Mode-index alignment: the vector map covers EXACTLY the frequency
+        map's indices (set equality — tightens the older subset assertion)."""
+        text = FULL_MODES_FIXTURE.read_text(encoding="utf-8")
+        calc = OrcaOutputParser().parse_text(text)
+
+        assert set(calc.mode_vectors) == set(calc.mode_frequencies)
+        assert set(calc.mode_frequencies) == set(range(9))
+        # non-zero modes must agree between the two structures
+        for mode in (6, 7, 8):
+            assert calc.frequencies[mode - 6] == pytest.approx(calc.mode_frequencies[mode])

@@ -2203,3 +2203,250 @@ def test_overlay_path_escape_rejected(tmp_path: Path):
     )
     assert result["ok"] is False
     assert result["reason"] == "geometry_unreadable"
+
+
+# ---------------------------------------------------------------------------
+# Cross-workflow acceptance matrix (todo 43, doc §11 backend rows)
+# ---------------------------------------------------------------------------
+
+
+class TestAcceptanceMatrix:
+    """Doc §11 backend rows: status matrix, full entry orders, Boltzmann
+    degradation, all-failed batch, resolver-level read-only."""
+
+    _STATUSES = ("completed", "failed", "cancelled", "running")
+
+    @staticmethod
+    def _subdir(tmp_path: Path, name: str) -> Path:
+        sub = tmp_path / name
+        sub.mkdir(parents=True, exist_ok=True)
+        return sub
+
+    @staticmethod
+    def _confsearch_task(tmp_path: Path) -> Path:
+        conformers = [
+            _conf(conf_id="0002", rank=2, energy=-99.9, weight=0.3),
+            _conf(conf_id="0001", rank=1, energy=-100.0, weight=0.5),
+            _conf(conf_id="0003", rank=3, energy=-99.8, weight=0.2),
+        ]
+        return _make_task_dir(
+            tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers)
+        )
+
+    @staticmethod
+    def _pes_task(tmp_path: Path) -> Path:
+        recs_ts = [_pes_recommendation(candidate_id="ts_frame_005", kind="ts",
+                                       confidence="high", frame_index=5)]
+        recs_int = [_pes_recommendation(candidate_id="int_frame_002", kind="intermediate",
+                                        confidence="medium", frame_index=2)]
+        review = [
+            _pes_review_entry(candidate_id="ts_frame_005", frame_index=5, role="TS"),
+            _pes_review_entry(candidate_id="int_frame_009", frame_index=9, role="INT"),
+        ]
+        return _make_task_dir(
+            tmp_path,
+            pes_recommendations={
+                "schema_version": "pes_recommendations_v1", "workflow": "PESsearch",
+                "scan_dir": "WORK/07_PATH/pes_scan_001",
+                "ts": recs_ts, "intermediates": recs_int,
+            },
+            pes_review={
+                "schema_version": "pes_review_v1", "job_id": "j1",
+                "status": "confirmed", "revision": 1, "selected": review,
+            },
+        )
+
+    @staticmethod
+    def _batch_task(tmp_path: Path) -> Path:
+        products = [
+            _batch_product(item_id="item_002", tag="INT"),
+            _batch_product(item_id="item_001", tag="TS"),
+        ]
+        traj = _optimization_trajectory(
+            status="failed", converged=False,
+            cycles=[{"cycle": 1, "energy_hartree": -1.0,
+                     "geometry_ref": "cycles/cycle_0001.xyz"}],
+        )
+        return _make_batch_task(tmp_path, products=products, trajectories={"item_003": traj})
+
+    def test_status_matrix_payloads_build_all_workflows(self, tmp_path: Path):
+        """completed/failed/cancelled/running: payload builds for every
+        workflow; entry ids + default are status-stable; revision varies."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        builders = {
+            "Confsearch": self._confsearch_task,
+            "PESsearch": self._pes_task,
+            "BatchOptimize": self._batch_task,
+        }
+        for workflow, builder in builders.items():
+            task = builder(self._subdir(tmp_path, workflow.lower()))
+            by_status = {}
+            for status in self._STATUSES:
+                payload = build_structure_viewer_payload(
+                    task, job_id="j1", workflow=workflow, job_status=status
+                )
+                assert payload.entries, f"{workflow}/{status}: no entries"
+                assert payload.job_status == status
+                by_status[status] = payload
+            ids_baseline = [e.id for e in by_status["completed"].entries]
+            default_baseline = by_status["completed"].default_entry_id
+            for status in self._STATUSES:
+                assert [e.id for e in by_status[status].entries] == ids_baseline
+                assert by_status[status].default_entry_id == default_baseline
+            revisions = {p.revision for p in by_status.values()}
+            assert len(revisions) >= 2, f"{workflow}: revision must vary with status"
+
+    def test_confsearch_full_order_and_default_per_status(self, tmp_path: Path):
+        """Manifest order (fixture deliberately non-sorted) + rank-1 default
+        hold for failed/cancelled/running exactly as for completed."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        task = self._confsearch_task(tmp_path)
+        for status in self._STATUSES:
+            payload = build_structure_viewer_payload(
+                task, job_id="j1", workflow="Confsearch", job_status=status
+            )
+            assert [e.id for e in payload.entries] == [
+                "conf_0002", "conf_0001", "conf_0003",
+            ]
+            assert payload.default_entry_id == "conf_0001"
+
+    def test_pes_full_entry_order_confirmed_first(self, tmp_path: Path):
+        """Confirmed group leads (review order), then recommendations
+        (ts then intermediates); recs stay algorithm_recommendation with
+        confirmed=False and never become formal products."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        task = self._pes_task(tmp_path)
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="PESsearch", job_status="completed"
+        )
+        assert [g.id for g in payload.groups] == ["pes_confirmed", "pes_recommendations"]
+        assert [e.id for e in payload.entries] == [
+            "pes_ts_frame_005", "pes_int_frame_009",  # confirmed (review order)
+            "pes_ts_frame_005_d783f0",                # collision-resolved duplicate rec
+            "pes_int_frame_002",
+        ]
+        assert payload.default_entry_id == "pes_ts_frame_005"
+        for entry in payload.entries:
+            if entry.group_id == "pes_recommendations":
+                assert entry.source.kind == "algorithm_recommendation"
+                assert entry.source.confirmed is False
+            else:
+                assert entry.source.kind == "manual_review"
+                assert entry.source.confirmed is True
+
+    def test_batch_completed_manifest_order_then_failed_appended(self, tmp_path: Path):
+        """Completed items keep MANIFEST (product-list) order; failed items
+        are appended after them; cancelled behaves identically."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        task = self._batch_task(tmp_path)
+        expected_ids = ["batch_item_002", "batch_item_001", "batch_item_003"]
+        expected_kinds = ["formal_result", "formal_result", "last_valid_cycle"]
+        for status in ("completed", "cancelled"):
+            payload = build_structure_viewer_payload(
+                task, job_id="j1", workflow="BatchOptimize", job_status=status
+            )
+            assert [e.id for e in payload.entries] == expected_ids
+            assert [e.source.kind for e in payload.entries] == expected_kinds
+            assert payload.default_entry_id == "batch_item_002"
+
+    def test_batch_all_items_failed_default_none(self, tmp_path: Path):
+        """All-items-failed batch: every entry is last_valid_cycle and the
+        resolver yields default None — PINNED observed behavior (the resolver
+        defines no fallback default when no completed item exists; the
+        frontend simply renders the first entry). Do not invent a default."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        traj = _optimization_trajectory(
+            status="failed", converged=False,
+            cycles=[{"cycle": 1, "energy_hartree": -1.0,
+                     "geometry_ref": "cycles/cycle_0001.xyz"}],
+        )
+        task = _make_batch_task(
+            tmp_path, products=[], trajectories={"item_002": traj, "item_001": traj}
+        )
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="failed"
+        )
+        assert [e.id for e in payload.entries] == ["batch_item_001", "batch_item_002"]
+        assert all(e.source.kind == "last_valid_cycle" for e in payload.entries)
+        assert payload.default_entry_id is None
+
+    def test_boltzmann_mixed_weights_fill_only_missing(self, tmp_path: Path):
+        """Mixed weights: manifest-present values kept VERBATIM (no
+        renormalization — sum may differ from 1 by design), only None
+        entries filled with computed values, warning present; all-computed
+        case sums to 1 within 1e-6."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0, weight=0.5),
+            _conf(conf_id="0002", rank=2, energy=-99.9, weight=None),
+            _conf(conf_id="0003", rank=3, energy=-99.8, weight=0.3),
+        ]
+        task = _make_task_dir(
+            tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers)
+        )
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        weights = [e.boltzmann_weight for e in payload.entries]
+        assert weights[0] == 0.5
+        assert weights[2] == 0.3
+        assert weights[1] is not None and 0.0 < weights[1] <= 1.0
+        assert any("Boltzmann weights missing" in w for w in payload.warnings)
+
+        all_missing = [
+            _conf(conf_id=f"000{i}", rank=i, energy=-100.0 + 0.1 * (i - 1), weight=None)
+            for i in (1, 2, 3)
+        ]
+        task2 = _make_task_dir(
+            self._subdir(tmp_path, "b"),
+            confsearch_manifest=_confsearch_manifest(conformers=all_missing),
+        )
+        payload2 = build_structure_viewer_payload(
+            task2, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        assert abs(sum(e.boltzmann_weight for e in payload2.entries) - 1.0) < 1e-6
+
+    def test_resolver_level_no_disk_writes(self, tmp_path: Path):
+        """Resolver-level historical read-only: building payloads never
+        mutates the task tree (API-level snapshot exists; this is the
+        resolver equivalent across three workflows)."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        self._confsearch_task(self._subdir(tmp_path, "cs"))
+        self._pes_task(self._subdir(tmp_path, "pes"))
+        _ = _make_task_dir(
+            self._subdir(tmp_path, "legacy"),
+            result_manifest={
+                "version": 2, "task_id": "", "workflow": "ensemble",
+                "status": "completed",
+                "products": [{"id": "p1", "label": "s", "path": "structures/a.xyz",
+                              "kind": "xyz"}],
+            },
+        )
+        snapshot = {
+            p: (p.stat().st_mtime_ns, p.stat().st_size)
+            for p in sorted(tmp_path.rglob("*")) if p.is_file()
+        }
+        assert len(snapshot) >= 5
+
+        for workflow, root in (
+            ("Confsearch", self._subdir(tmp_path, "cs")),
+            ("PESsearch", self._subdir(tmp_path, "pes")),
+            ("ensemble", self._subdir(tmp_path, "legacy")),
+        ):
+            payload = build_structure_viewer_payload(
+                root, job_id="j1", workflow=workflow, job_status="completed"
+            )
+            assert payload.schema_version == "structure_viewer_v1"
+
+        after = {
+            p: (p.stat().st_mtime_ns, p.stat().st_size)
+            for p in sorted(tmp_path.rglob("*")) if p.is_file()
+        }
+        assert snapshot == after
