@@ -10,6 +10,7 @@ workflow runs in-process, so these tests need no external QC binaries.
 from __future__ import annotations
 
 import os
+import re
 import time
 from collections.abc import Generator
 from pathlib import Path
@@ -241,6 +242,37 @@ def test_legacy_frontend_index_served(client: TestClient) -> None:
     r = client.get("/legacy/")
     assert r.status_code == 200
     assert "ACP Workbench" in r.text
+
+
+def test_frontend_static_assets_served(client: TestClient) -> None:
+    """Every js/css asset referenced by the workbench HTML must resolve over HTTP.
+
+    Regression gate for the blank-viewer incident: the extracted viewer
+    modules returned 404 because /js and /css were never mounted.
+    """
+    html = client.get("/").text
+    refs = sorted(set(re.findall(r'(?:src|href)="((?:js|css)/[^"?#]+)"', html)))
+    assert refs, "no frontend js/css references found in served HTML"
+    for ref in refs:
+        r = client.get(f"/{ref}")
+        assert r.status_code == 200, f"{ref} -> {r.status_code}"
+        if ref.endswith(".js"):
+            assert "javascript" in r.headers["content-type"]
+        elif ref.endswith(".css"):
+            assert "text/css" in r.headers["content-type"]
+
+
+def test_frontend_static_assets_cover_viewer_modules(client: TestClient) -> None:
+    """The structure-viewer modules extracted in 46a5626 must be served."""
+    for path in (
+        "/css/structure_viewer.css",
+        "/js/structure_viewer.js",
+        "/js/structure_editor.js",
+        "/js/vibration_viewer.js",
+    ):
+        r = client.get(path)
+        assert r.status_code == 200, f"{path} -> {r.status_code}"
+        assert len(r.content) > 0
 
 
 def test_create_job_rejects_unknown_workflow(client: TestClient) -> None:

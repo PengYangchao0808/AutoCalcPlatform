@@ -15,6 +15,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from acp import __version__
 from acp.api.mechanism_readonly import router as mechanism_readonly_router
@@ -212,6 +213,16 @@ def create_app(
     app.include_router(mechanism_readonly_router, prefix="/api/v1")
     app.include_router(v2_router, prefix="/api/v2")
     app.include_router(api_router, prefix="/api")
+
+    # Without these mounts /js|/css 404 and the viewer tabs render blank (46a5626 regression).
+    for sub in ("js", "css"):
+        asset_dir = _FRONTEND_DIR / sub
+        if asset_dir.is_dir():
+            app.mount(
+                f"/{sub}",
+                StaticFiles(directory=asset_dir),
+                name=f"frontend-{sub}",
+            )
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def index() -> HTMLResponse:
