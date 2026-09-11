@@ -1367,7 +1367,14 @@ class TestSimpleResolver:
         assert entry.id == "simple_frequency"
         assert entry.source.kind == "calculation_input"
         assert entry.source.geometry_ref == "input.xyz"
-        assert entry.vibrations.available is False
+        # F2 fix: frequency jobs enable the vibrations fetch — the endpoint
+        # serves the normal_modes product AND the WORK/04_FREQ historical
+        # projection, so the catalog flag must not gate it off.
+        assert entry.vibrations.available is True
+        assert entry.vibrations.endpoint is not None
+        assert entry.vibrations.endpoint.endswith(
+            "/structure-viewer/entries/simple_frequency/vibrations"
+        )
 
     def test_xtb_optimize_uses_optimize_resolver(self, tmp_path: Path):
         """xtb-optimize follows the same path as optimize."""
@@ -2450,3 +2457,122 @@ class TestAcceptanceMatrix:
             for p in sorted(tmp_path.rglob("*")) if p.is_file()
         }
         assert snapshot == after
+
+
+# ---------------------------------------------------------------------------
+# F2 post-review fixes: catalog vibrations wiring + Boltzmann alignment
+# ---------------------------------------------------------------------------
+
+
+class TestF2CatalogVibrations:
+    """F2 MAJOR-1: the catalog flag follows the per-item frequency product,
+    making the Wave-5 vibration UI reachable end-to-end."""
+
+    def test_batch_item_with_normal_modes_product_available_true(self, tmp_path: Path):
+        """Completed batch item WITH {item}__normal_modes.json -> catalog
+        available=True + vibrations endpoint set."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [_batch_product(item_id="item_001", tag="TS")]
+        task = _make_batch_task(tmp_path, products=products)
+        freq_dir = task / "RESULT" / "frequencies"
+        freq_dir.mkdir(parents=True, exist_ok=True)
+        (freq_dir / "item_001__normal_modes.json").write_text("{}", encoding="utf-8")
+
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        entry = payload.entries[0]
+        assert entry.id == "batch_item_001"
+        assert entry.vibrations.available is True
+        assert entry.vibrations.endpoint == (
+            "/api/v1/jobs/j1/structure-viewer/entries/batch_item_001/vibrations"
+        )
+
+    def test_batch_mixed_items_partial_frequency(self, tmp_path: Path):
+        """One item with the product, one without -> availability differs per
+        entry (partial-frequency case at catalog level)."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        products = [
+            _batch_product(item_id="item_001", tag="TS"),
+            _batch_product(item_id="item_002", tag="INT"),
+        ]
+        task = _make_batch_task(tmp_path, products=products)
+        freq_dir = task / "RESULT" / "frequencies"
+        freq_dir.mkdir(parents=True, exist_ok=True)
+        (freq_dir / "item_001__normal_modes.json").write_text("{}", encoding="utf-8")
+
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="completed"
+        )
+        by_id = {e.id: e for e in payload.entries}
+        assert by_id["batch_item_001"].vibrations.available is True
+        assert by_id["batch_item_002"].vibrations.available is False
+
+    def test_batch_failed_item_stays_unavailable(self, tmp_path: Path):
+        """Failed-trajectory items have no frequency product by design."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        traj = _optimization_trajectory(
+            status="failed", converged=False,
+            cycles=[{"cycle": 1, "energy_hartree": -1.0,
+                     "geometry_ref": "cycles/cycle_0001.xyz"}],
+        )
+        task = _make_batch_task(tmp_path, products=[], trajectories={"item_001": traj})
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="BatchOptimize", job_status="failed"
+        )
+        assert payload.entries[0].vibrations.available is False
+
+
+class TestF2BoltzmannAlignment:
+    """F2 MAJOR-2: malformed manifest rows must never shift weights."""
+
+    def test_malformed_row_skipped_weights_aligned(self, tmp_path: Path):
+        """[non-dict, rank1-low-energy, rank2-high-energy] -> 2 entries; the
+        rank-1 conformer gets the LARGER weight; weights sum to 1 within
+        1e-6; malformed-skip warning present."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers: list[object] = [
+            "not-a-dict",
+            _conf(conf_id="0001", rank=1, energy=-100.0, weight=None),
+            _conf(conf_id="0002", rank=2, energy=-99.9, weight=None),
+        ]
+        # a real writer corruption leaves the malformed row in place
+        manifest = _confsearch_manifest(
+            conformers=[c for c in conformers if isinstance(c, dict)]  # type: ignore[misc]
+        )
+        manifest["conformers"] = conformers  # type: ignore[assignment]
+        task = _make_task_dir(tmp_path, confsearch_manifest=manifest)
+
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        assert [e.id for e in payload.entries] == ["conf_0001", "conf_0002"]
+        assert any("Skipped 1 malformed" in w for w in payload.warnings)
+        w1 = payload.entries[0].boltzmann_weight
+        w2 = payload.entries[1].boltzmann_weight
+        assert w1 is not None and w2 is not None
+        assert w1 > w2, "rank-1 (lower energy) must carry the larger weight"
+        assert abs((w1 + w2) - 1.0) < 1e-6
+
+    def test_all_present_weights_still_sum_to_one(self, tmp_path: Path):
+        """Regression: the un-corrupted path is byte-identical (sum 1e-6)."""
+        from acp.results.structure_viewer import build_structure_viewer_payload
+
+        conformers = [
+            _conf(conf_id="0001", rank=1, energy=-100.0, weight=0.7),
+            _conf(conf_id="0002", rank=2, energy=-99.9, weight=0.3),
+        ]
+        task = _make_task_dir(
+            tmp_path, confsearch_manifest=_confsearch_manifest(conformers=conformers)
+        )
+        payload = build_structure_viewer_payload(
+            task, job_id="j1", workflow="Confsearch", job_status="completed"
+        )
+        weights = [e.boltzmann_weight for e in payload.entries]
+        assert weights == [0.7, 0.3]
+        assert abs(sum(weights) - 1.0) < 1e-6
+        assert not any("malformed" in w for w in payload.warnings)

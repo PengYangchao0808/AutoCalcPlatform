@@ -6748,3 +6748,94 @@ def test_chemistry_mode_vectors_never_mixed_node() -> None:
         f"Node mode-binding test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# F2 post-review fix: catalog vibrations wiring reaches the frontend gate
+# ---------------------------------------------------------------------------
+
+
+def test_f2_vibrations_fetch_gate_contract() -> None:
+    """F2 MAJOR-1: the frontend fetch-gate contract is
+    `available !== false -> fetch` (backend authoritative). Once the catalog
+    emits available=true, the gate must actually call loadVibrations; the
+    genuinely-absent case keeps the local 无振动数据 text with NO fetch."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    sv_js = _SV_JS_PATH.read_text(encoding="utf-8")
+    assert "entry.vibrations && entry.vibrations.available !== false" in sv_js
+
+    script = (textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+
+        // minimal DOM stub (fakeEl pattern from the Wave-5 node tests)
+        function fakeEl(tag) {
+          return {
+            tag: tag, children: [], className: "", textContent: "",
+            attrs: {}, style: {},
+            setAttribute: function (k, v) { this.attrs[k] = v; },
+            getAttribute: function (k) { return this.attrs[k]; },
+            addEventListener: function () {},
+            appendChild: function (c) { this.children.push(c); return c; },
+          };
+        }
+        var document = {
+          createElement: fakeEl,
+          getElementById: function (id) {
+            if (id === "sv-inspector-body") return fakeEl("div");
+            if (id === "sv-inspector-header") return fakeEl("div");
+            return null;  // playback bar etc. -> guarded early-returns
+          },
+        };
+
+        var vibCalls = [];
+        window.ACPVibrationViewer = {
+          loadVibrations: function (jobId, entryId, opts) {
+            vibCalls.push([jobId, entryId, opts]);
+          },
+        };
+
+        require(SV_PATH);
+        var ns = window.ACPStructureViewer;
+        ns.state.jobId = "job-f2";
+        ns.state.selectedEntryId = "batch_item_001";
+
+        function entryWith(available, endpoint) {
+          return {
+            id: "batch_item_001", group_id: "batch_items", label: "item",
+            role: "ts", status: "completed",
+            geometry: { endpoint: "/geo", format: "xyz" },
+            energy: null, badges: [],
+            source: { kind: "formal_result", geometry_ref: "x" },
+            vibrations: { available: available, endpoint: endpoint || null },
+          };
+        }
+
+        ns.state.payload = {
+          entries: [entryWith(true, "/vib/1")], default_entry_id: "batch_item_001",
+          groups: [], warnings: [],
+        };
+        ns.renderInspector();
+        if (vibCalls.length !== 1 || vibCalls[0][1] !== "batch_item_001" ||
+            vibCalls[0][2].endpoint !== "/vib/1") {
+          console.error("FAIL: available=true must fetch through the gate");
+          process.exit(1);
+        }
+
+        vibCalls.length = 0;
+        ns.state.payload.entries = [entryWith(false, null)];
+        ns.renderInspector();
+        if (vibCalls.length !== 0) {
+          console.error("FAIL: available=false must NOT fetch");
+          process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("SV_PATH", json.dumps(str(_SV_JS_PATH))))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node vibrations-gate test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout

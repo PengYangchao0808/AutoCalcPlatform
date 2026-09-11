@@ -571,11 +571,16 @@ def _resolve_confsearch(task_root: Path, workflow: str, job_id: str, warnings: l
 
     groups = [StructureViewerGroup(id="final_conformers", label="最终构象", kind="ensemble")]
 
+    # Skip malformed (non-dict) conformer rows BEFORE parsing so that
+    # entries and energies_for_weights stay 1:1 aligned by construction —
+    # a skipped row must never shift weights onto the wrong conformer.
+    valid_conformers = [c for c in conformers_raw if isinstance(c, dict)]
+    dropped = len(conformers_raw) - len(valid_conformers)
+    if dropped:
+        warnings.append(f"Skipped {dropped} malformed conformer entries")
+
     parsed: list[dict[str, Any]] = []
-    for conformer in conformers_raw:
-        if not isinstance(conformer, dict):
-            parsed.append({})
-            continue
+    for conformer in valid_conformers:
         has_gibbs = conformer.get("free_energy_hartree") is not None
         energy_val = _number(
             conformer.get("free_energy_hartree") if has_gibbs
@@ -676,7 +681,7 @@ def _resolve_confsearch(task_root: Path, workflow: str, job_id: str, warnings: l
         ]
         computed_weights = _compute_boltzmann_weights(energies_for_weights, temperature_k)
         rebuilt: list[StructureViewerEntry] = []
-        for entry, cw in zip(entries, computed_weights, strict=False):
+        for entry, cw in zip(entries, computed_weights, strict=True):
             if entry.boltzmann_weight is None and cw is not None:
                 rebuilt.append(StructureViewerEntry(
                     id=entry.id,
@@ -905,6 +910,19 @@ def _resolve_batchoptimize(task_root: Path, workflow: str, job_id: str, warnings
         if energy_meta is not None:
             energy_val = _number(energy_meta)
 
+        # Frequency availability follows the per-item product file written by
+        # the batch engine (todo 24); the vibrations endpoint probes this same
+        # file first, so the catalog flag never fabricates data.
+        vib_path = task_root / "RESULT" / "frequencies" / f"{raw_item_id}__normal_modes.json"
+        vibrations = (
+            StructureViewerVibrations(
+                available=True,
+                endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/vibrations",
+            )
+            if vib_path.is_file()
+            else StructureViewerVibrations(available=False)
+        )
+
         entry = StructureViewerEntry(
             id=entry_id,
             group_id="batch_items",
@@ -918,7 +936,7 @@ def _resolve_batchoptimize(task_root: Path, workflow: str, job_id: str, warnings
             energy=StructureViewerEnergy(value=energy_val, unit="hartree", kind="electronic"),
             source=StructureViewerSource(kind="formal_result", geometry_ref=geometry_ref),
             badges=(tag,),
-            vibrations=StructureViewerVibrations(available=False),  # TODO(todo-24): wire frequency binding
+            vibrations=vibrations,
         )
         entries.append(entry)
 
@@ -968,7 +986,9 @@ def _resolve_batchoptimize(task_root: Path, workflow: str, job_id: str, warnings
                     energy=StructureViewerEnergy(value=last_energy, unit="hartree", kind="electronic"),
                     source=StructureViewerSource(kind="last_valid_cycle", geometry_ref=geometry_ref),
                     badges=("failed-last-frame",),
-                    vibrations=StructureViewerVibrations(available=False),  # TODO(todo-24): wire frequency binding
+                    # failed items have no frequency product by design — the
+                    # frequency step never ran for them
+                    vibrations=StructureViewerVibrations(available=False),
                 )
                 entries.append(entry)
 
@@ -1107,6 +1127,18 @@ def _resolve_simple(task_root: Path, workflow: str, job_id: str, warnings: list[
             if step_kind == "singlepoint":
                 badges.append("几何未改变")
 
+            # frequency jobs: the vibrations endpoint serves the
+            # normal_modes product AND the WORK/04_FREQ historical
+            # projection — the catalog flag may safely enable fetching
+            vibrations = (
+                StructureViewerVibrations(
+                    available=True,
+                    endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/vibrations",
+                )
+                if step_kind == "frequency"
+                else StructureViewerVibrations(available=False)
+            )
+
             entries.append(StructureViewerEntry(
                 id=entry_id,
                 group_id="",
@@ -1120,7 +1152,7 @@ def _resolve_simple(task_root: Path, workflow: str, job_id: str, warnings: list[
                 energy=StructureViewerEnergy(value=energy_val, unit="hartree", kind="electronic"),
                 source=StructureViewerSource(kind="calculation_input", geometry_ref=geometry_ref),
                 badges=tuple(badges),
-                vibrations=StructureViewerVibrations(available=False),
+                vibrations=vibrations,
             ))
             default_id = entry_id
             return groups, entries, default_id

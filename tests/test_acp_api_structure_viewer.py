@@ -1622,3 +1622,64 @@ class TestOverlayEndpoint:
             params={"entry_a": "a", "entry_b": "b"},
         )
         assert resp.status_code == 404
+
+
+class TestF2CatalogVibrationsIntegration:
+    """F2 MAJOR-1 end-to-end: the CATALOG (not just the endpoint) reports
+    available=true when the per-item frequency product exists, so the
+    frontend fetch-gate (`available !== false -> fetch`) actually fires."""
+
+    def test_batch_catalog_available_true_end_to_end(
+        self, sv_client: TestClient, tmp_path: Path
+    ) -> None:
+        work_dir = _seed_job(
+            sv_client, tmp_path,
+            job_id="sv-f2-catalog-001",
+            workflow="BatchOptimize",
+        )
+        _write_batch_manifest(work_dir, items=[
+            {
+                "id": "batch_item_001",
+                "label": "item_001 (TS, opt_freq)",
+                "path": "structures/item_001__TAG_TS__optimized.xyz",
+                "kind": "structure",
+            },
+        ])
+        xyz_path = work_dir / "RESULT" / "structures" / "item_001__TAG_TS__optimized.xyz"
+        xyz_path.parent.mkdir(parents=True, exist_ok=True)
+        xyz_path.write_text("3\n\nC 0 0 0\nH 0 0 1\nH 0 1 0\n", encoding="utf-8")
+        _write_normal_modes(
+            work_dir,
+            _make_normal_modes_json(
+                atom_count=3,
+                geometry_product_id="batch_item_001",
+                modes=[
+                    {
+                        "mode_index": 6,
+                        "frequency_cm1": -700.0,
+                        "imaginary": True,
+                        "vectors": [
+                            [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0],
+                        ],
+                    },
+                ],
+            ),
+            filename="item_001__normal_modes.json",
+        )
+
+        catalog = sv_client.get(
+            "/api/v1/jobs/sv-f2-catalog-001/structure-viewer"
+        ).json()
+        entry = next(e for e in catalog["entries"] if e["id"] == "batch_item_001")
+        assert entry["vibrations"]["available"] is True
+        assert entry["vibrations"]["endpoint"].endswith(
+            "/structure-viewer/entries/batch_item_001/vibrations"
+        )
+
+        vib = sv_client.get(
+            "/api/v1/jobs/sv-f2-catalog-001/structure-viewer/entries/"
+            "batch_item_001/vibrations"
+        ).json()
+        assert vib["available"] is True
+        assert len(vib["modes"]) == 1
+        assert vib["modes"][0]["frequency_cm1"] == -700.0

@@ -2179,9 +2179,10 @@ def get_structure_viewer_catalog(
 ) -> StructureViewerPayloadModel:
     """Return the structure-viewer catalog for a job.
 
-    Resolves the job via the store, builds the payload via
-    ``build_structure_viewer_payload``, and returns it with
-    ``availability="ready"`` (remote pending_fetch wiring is todo 11).
+    Resolves the job via the store and builds the payload via
+    ``build_structure_viewer_payload``.  ``availability`` is ``ready`` for
+    local jobs and ``pending_fetch`` for remote jobs whose primary manifest
+    files are absent locally (``RemoteStructureCache`` wiring, todo 11).
 
     Retired/legacy workflows are served read-only (200 with legacy entries),
     not 410 — the structure viewer DISPLAYS retired jobs.
@@ -2267,8 +2268,9 @@ def get_structure_viewer_geometry(
     """Return the XYZ geometry for a structure-viewer entry.
 
     Resolves the entry via the catalog, guards the path with
-    ``resolve_safe``, and returns ``text/plain`` XYZ bytes.
-    Multi-frame files (IRC) return the first frame only.
+    ``resolve_safe``, and returns ``text/plain`` XYZ bytes.  Entries with a
+    ``frame_index`` (IRC/scan/trajectory frames) return exactly that frame,
+    extracted via ``read_traj_frame_xyz``.
 
     For remote jobs, when the geometry file is absent locally:
     - Without ``?fetch=1``: returns 409 ``pending_fetch``.
@@ -2466,13 +2468,16 @@ def get_structure_viewer_vibrations(
 ) -> StructureViewerVibrationsResponse:
     """Return vibration data for a structure-viewer entry.
 
-    Wave 2 stub: reads ``RESULT/frequencies/normal_modes.json`` if present.
-    For batch entries, probes ``{item_id}__normal_modes.json`` first (todo 24).
+    Probes, in order: the per-item product
+    ``RESULT/frequencies/{item_id}__normal_modes.json`` (batch entries),
+    the global ``RESULT/frequencies/normal_modes.json``, then the read-only
+    historical projection parsing ``WORK/04_FREQ`` ORCA outputs
+    (``source="historical_projection"``).
 
     Never returns 500 — malformed/missing data yields ``available=false``
-    with an appropriate ``reason``.
-
-    409 pending_fetch is reserved for remote unsynced (todo 11 wiring).
+    with an appropriate ``reason`` (remote unsynced jobs report
+    ``pending_fetch`` as the reason; the vibrations endpoint itself stays
+    200, unlike geometry which uses 409).
 
     Raises:
         404: Unknown job or unknown entry.
@@ -2511,8 +2516,6 @@ def get_structure_viewer_vibrations(
             break
     if entry is None:
         raise HTTPException(status_code=404, detail=f"Entry not found: {entry_id}")
-
-    # TODO(todo-11): 409 pending_fetch for remote unsynced jobs
 
     def _resolve_imaginary_threshold() -> tuple[float, str]:
         """Read the significant-imaginary cutoff from job method metadata."""
@@ -2596,7 +2599,8 @@ def get_structure_viewer_vibrations(
     atom_count = int(data.get("atom_count") or 0)
     geometry_product_id = data.get("geometry_product_id")
 
-    # TODO(todo-25/31): geometry fingerprint consistency check
+    # Server-side fingerprint deep-check is future hardening; the
+    # frontend geometryMismatch product-id guard ships today (todo 31).
 
     modes = []
     for m in modes_raw:
