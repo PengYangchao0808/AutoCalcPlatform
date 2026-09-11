@@ -1,6 +1,6 @@
 /**
- * ACP Structure Editor — adjacency graph + bond-length edit (Wave 6, todos 32-33)
- * @version 0.4.0
+ * ACP Structure Editor — graph + bond-length/angle edits (Wave 6, todos 32-34)
+ * @version 0.5.0
  *
  * Namespace: window.ACPStructureEditor
  *
@@ -15,18 +15,22 @@
  *   - parseMolBonds(molText)               (minimal V2000 bond-block reader)
  *   - COVALENT_RADII / BOND_TOLERANCE / DEFAULT_RADIUS (named constants)
  *   - editBondLength(symbols, coords, edges, a, b, target, moveSide) (PURE)
+ *   - editBondAngle(symbols, coords, edges, a, b, c, targetDeg, moveSide) (PURE)
+ *   - angleDeg(p, q, r) / _principalAxis(points)   (PURE helpers)
  *   - resolveMoveSide(fragments, a, b, preferred) / defaultMoveSide(...) (PURE)
  *   - applyBondLengthEdit(a, b, targetLength, moveSide) (orchestration)
+ *   - applyBondAngleEdit(a, b, c, targetDeg, moveSide) (orchestration)
  *
  * Contract (doc §6.1-§6.3): edits are INTERNAL-COORDINATE ONLY — a bond
- * edit rigidly TRANSLATES one fragment (never rotates/deforms it, never
- * touches the non-moved side); bond topology, elements, and atom count
- * never change.  Targets outside [0.4, 5.0] Å are rejected, ring bonds
- * (graph still connected after the cut) are rejected.  Accepted edits are
- * staged in editorState.pendingEdit — pushing them to the viewer and the
- * undo/redo UI is todo 36.
+ * edit rigidly TRANSLATES one fragment, an angle edit rigidly ROTATES the
+ * C-side fragment (never the A-B side; never deformed); bond topology,
+ * elements, and atom count never change.  Length targets outside
+ * [0.4, 5.0] Å and angle targets outside [1, 179]° are rejected; ring
+ * bonds (graph still connected after the cut) are rejected; collinear
+ * angle input falls back to the most stable orthonormal axis with a
+ * warning.  Accepted edits are staged in editorState.pendingEdit —
+ * pushing them to the viewer and the undo/redo UI is todo 36.
  *
- * TODO(todo-34): bond-angle edit + collinear fallback
  * TODO(todo-35): dihedral edit
  * TODO(todo-36): undo/redo stack + dirty state + preview/apply pipeline
  * TODO(todo-37): save-as-asset + provenance metadata
@@ -35,7 +39,7 @@
   "use strict";
 
   /** Version tag — bump on every structural change. */
-  var VERSION = "0.4.0";
+  var VERSION = "0.5.0";
 
   /* ---- user-visible strings (zh fallback; i18n dictionary keys land in todo 36) ---- */
   var STR = {
@@ -43,6 +47,7 @@
     PROV_INFERRED: "\u5171\u4ef7\u534a\u5f84\u63a8\u65ad (tolerance {tol})", // 共价半径推断 (tolerance 1.3)
     MOVE_LEFT: "\u79fb\u52a8\u5de6\u4fa7",                                 // 移动左侧
     MOVE_RIGHT: "\u79fb\u52a8\u53f3\u4fa7",                               // 移动右侧
+    COLLINEAR_WARNING: "\u5171\u7ebf\u89d2\u5ea6\u8f93\u5165\uff0c\u65cb\u8f6c\u8f74\u53d6\u6700\u7a33\u5b9a\u6b63\u4ea4\u8f74", // 共线角度输入，旋转轴取最稳定正交轴
   };
 
   /**
@@ -65,6 +70,13 @@
   /** Allowed bond-length edit range in Å (inclusive; doc §6.3). */
   var BOND_LENGTH_MIN = 0.4;
   var BOND_LENGTH_MAX = 5.0;
+
+  /** Allowed bond-angle edit range in degrees (inclusive; doc §6.3). */
+  var ANGLE_MIN = 1;
+  var ANGLE_MAX = 179;
+
+  /** |cross(u_BA, u_BC)| below this counts as collinear A-B-C. */
+  var COLLINEAR_EPS = 1e-6;
 
   /** @typedef {Object} EditorState @property {Object|null} graph @property {string|null} provenance */
   var editorState = {
@@ -405,6 +417,278 @@
     return { ok: true, coords: out };
   }
 
+  /* ---- bond-angle edit (todo 34) ---- */
+
+  function _dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+
+  function _cross(a, b) {
+    return [
+      a[1] * b[2] - a[2] * b[1],
+      a[2] * b[0] - a[0] * b[2],
+      a[0] * b[1] - a[1] * b[0],
+    ];
+  }
+
+  function _normalize(v) {
+    var n = Math.sqrt(_dot(v, v));
+    if (!isFinite(n) || n < 1e-12) return null;
+    return [v[0] / n, v[1] / n, v[2] / n];
+  }
+
+  /**
+   * Angle p-q-r at vertex q, in degrees [0, 180] via
+   * atan2(|u1 x u2|, u1 . u2).  0 when either arm is degenerate.
+   *
+   * @param {Array<number>} p
+   * @param {Array<number>} q
+   * @param {Array<number>} r
+   * @returns {number}
+   */
+  function angleDeg(p, q, r) {
+    var u1 = _normalize([p[0] - q[0], p[1] - q[1], p[2] - q[2]]);
+    var u2 = _normalize([r[0] - q[0], r[1] - q[1], r[2] - q[2]]);
+    if (!u1 || !u2) return 0;
+    var c = _cross(u1, u2);
+    return Math.atan2(Math.sqrt(_dot(c, c)), _dot(u1, u2)) * 180 / Math.PI;
+  }
+
+  /**
+   * Principal axis of a point set: the eigenvector of the unit-mass
+   * covariance (inertia) tensor with the LARGEST eigenvalue — the
+   * fragment's long axis.  Deterministic power iteration (fixed start
+   * vector, 50 iterations); falls back to (1,0,0) for degenerate input.
+   *
+   * @param {Array<Array<number>>} points
+   * @returns {Array<number>} unit vector
+   */
+  function _principalAxis(points) {
+    if (!points || !points.length) return [1, 0, 0];
+    var cx = 0, cy = 0, cz = 0;
+    for (var i = 0; i < points.length; i++) {
+      cx += +points[i][0]; cy += +points[i][1]; cz += +points[i][2];
+    }
+    cx /= points.length; cy /= points.length; cz /= points.length;
+    var xx = 0, xy = 0, xz = 0, yy = 0, yz = 0, zz = 0;
+    for (var j = 0; j < points.length; j++) {
+      var dx = +points[j][0] - cx, dy = +points[j][1] - cy, dz = +points[j][2] - cz;
+      xx += dx * dx; xy += dx * dy; xz += dx * dz;
+      yy += dy * dy; yz += dy * dz; zz += dz * dz;
+    }
+    var v = [0.577, 0.577, 0.577];
+    for (var it = 0; it < 50; it++) {
+      var nv = [
+        xx * v[0] + xy * v[1] + xz * v[2],
+        xy * v[0] + yy * v[1] + yz * v[2],
+        xz * v[0] + yz * v[1] + zz * v[2],
+      ];
+      var unit = _normalize(nv);
+      if (!unit) break;
+      v = unit;
+    }
+    return v;
+  }
+
+  /**
+   * Collinear fallback axis: of the two unit vectors orthogonal to u_BC,
+   * pick the one with the SMALLER |dot| against the C-side fragment's
+   * principal axis p (least aligned with the fragment's long axis — the
+   * best-conditioned rotation).
+   *
+   * @param {Array<number>} uBC      - unit vector B -> C
+   * @param {Array<number>} p        - fragment principal axis (unit)
+   * @returns {Array<number>} unit rotation axis orthogonal to uBC
+   */
+  function _stableOrthogonalAxis(uBC, p) {
+    var ref = Math.abs(uBC[0]) < 0.9 ? [1, 0, 0] : [0, 1, 0];
+    var e1 = _normalize(_cross(uBC, ref));
+    var e2 = _cross(uBC, e1);
+    return Math.abs(_dot(p, e1)) <= Math.abs(_dot(p, e2)) ? e1 : e2;
+  }
+
+  /**
+   * Rotate vector v about the unit axis k by radians theta (Rodrigues):
+   *   v' = v cos(theta) + (k x v) sin(theta) + k (k . v)(1 - cos(theta))
+   */
+  function _rotateRodrigues(v, k, theta) {
+    var cos = Math.cos(theta);
+    var sin = Math.sin(theta);
+    var kxv = _cross(k, v);
+    var kdv = _dot(k, v);
+    return [
+      v[0] * cos + kxv[0] * sin + k[0] * kdv * (1 - cos),
+      v[1] * cos + kxv[1] * sin + k[1] * kdv * (1 - cos),
+      v[2] * cos + kxv[2] * sin + k[2] * kdv * (1 - cos),
+    ];
+  }
+
+  /**
+   * Edit the A-B-C bond angle (vertex B) to `targetDeg` by rigidly
+   * rotating the C-side fragment about the axis through B perpendicular
+   * to the A-B-C plane.  The A-B side is NEVER moved — for angle edits
+   * the C side is the only rotatable side by definition, so a `moveSide`
+   * argument of "A"/"B" is normalized to "C" (documented; anything else
+   * rejects with invalid_move_side).
+   *
+   * Sign convention: axis n = normalize(u_BA x u_BC) (u_BA points B -> A,
+   * u_BC points B -> C); rotating the C side about +n by
+   * delta = target - current (degrees) moves u_BC away from u_BA exactly
+   * when delta > 0 (opens the angle) and toward it when delta < 0 (closes).
+   *
+   * Collinear A-B-C (|u_BA x u_BC| < COLLINEAR_EPS): the plane normal is
+   * undefined, so the axis is the unit vector orthogonal to u_BC that is
+   * least aligned with the C-side fragment's principal axis (most stable
+   * against the inertia axis), and the result carries `warning`
+   * (STR.COLLINEAR_WARNING).  From collinearity, rotating by |delta|
+   * yields exactly |delta| degrees (parallel case) or 180 - |delta|
+   * (anti-parallel case) — both equal the target.
+   *
+   * Rejections: target outside [ANGLE_MIN, ANGLE_MAX] -> "out_of_range";
+   * missing A-B or B-C edge -> "no_bond"; ring containing B-C ->
+   * "ring_bond"; degenerate |A-B| or |B-C| -> "degenerate".
+   *
+   * PURE: NEW coords array; non-C-side rows keep byte-identical
+   * references, the C side is rigid (Rodrigues rotation about B preserves
+   * every internal distance), the input is never mutated.
+   *
+   * @param {Array<string>} symbols
+   * @param {Array<Array<number>>} coords
+   * @param {Array<{a: number, b: number}>} edges
+   * @param {number} atomA
+   * @param {number} atomB
+   * @param {number} atomC
+   * @param {number} targetDeg
+   * @param {string|null} [moveSide] - normalized to "C" for angle edits
+   * @returns {{ok: boolean, reason?: string, coords?: Array<Array<number>>,
+   *            warning?: string}}
+   */
+  function editBondAngle(symbols, coords, edges, atomA, atomB, atomC, targetDeg, moveSide) {
+    var t = +targetDeg;
+    if (!isFinite(t) || t < ANGLE_MIN || t > ANGLE_MAX) {
+      return { ok: false, reason: "out_of_range" };
+    }
+    if (moveSide != null && moveSide !== "A" && moveSide !== "B" && moveSide !== "C") {
+      return { ok: false, reason: "invalid_move_side" };
+    }
+    if (!symbols || !coords || !edges) {
+      return { ok: false, reason: "no_bond" };
+    }
+    if (!_hasEdge(edges, atomA, atomB) || !_hasEdge(edges, atomB, atomC)) {
+      return { ok: false, reason: "no_bond" };
+    }
+
+    var fragments = fragmentsAfterCut(edges, coords.length, atomB, atomC);
+    var sideA = _componentOf(fragments, atomA);
+    var sideC = _componentOf(fragments, atomC);
+    if (sideA && sideC && sideA === sideC) {
+      return { ok: false, reason: "ring_bond" };
+    }
+    if (!sideA || !sideC) {
+      return { ok: false, reason: "no_bond" };
+    }
+
+    var rb = coords[atomB];
+    var uBA = _normalize([
+      +coords[atomA][0] - +rb[0],
+      +coords[atomA][1] - +rb[1],
+      +coords[atomA][2] - +rb[2],
+    ]);
+    var uBC = _normalize([
+      +coords[atomC][0] - +rb[0],
+      +coords[atomC][1] - +rb[1],
+      +coords[atomC][2] - +rb[2],
+    ]);
+    if (!uBA || !uBC) {
+      return { ok: false, reason: "degenerate" };
+    }
+
+    var crossBA_BC = _cross(uBA, uBC);
+    var crossNorm = Math.sqrt(_dot(crossBA_BC, crossBA_BC));
+    var warning = null;
+    var axis;
+    if (crossNorm < COLLINEAR_EPS) {
+      var cSide = [];
+      for (var si = 0; si < sideC.length; si++) {
+        cSide.push(coords[sideC[si]]);
+      }
+      axis = _stableOrthogonalAxis(uBC, _principalAxis(cSide));
+      warning = STR.COLLINEAR_WARNING;
+    } else {
+      axis = [crossBA_BC[0] / crossNorm, crossBA_BC[1] / crossNorm, crossBA_BC[2] / crossNorm];
+    }
+
+    var current = angleDeg(coords[atomA], rb, coords[atomC]);
+    var delta = (t - current) * Math.PI / 180;
+
+    var movingSet = {};
+    for (var mi = 0; mi < sideC.length; mi++) movingSet[sideC[mi]] = true;
+
+    var out = [];
+    for (var i = 0; i < coords.length; i++) {
+      if (movingSet[i]) {
+        var v = [+coords[i][0] - +rb[0], +coords[i][1] - +rb[1], +coords[i][2] - +rb[2]];
+        var rotated = _rotateRodrigues(v, axis, delta);
+        out.push([rotated[0] + +rb[0], rotated[1] + +rb[1], rotated[2] + +rb[2]]);
+      } else {
+        out.push(coords[i]);
+      }
+    }
+    var result = { ok: true, coords: out };
+    if (warning) result.warning = warning;
+    return result;
+  }
+
+  function _hasEdge(edges, x, y) {
+    for (var i = 0; i < edges.length; i++) {
+      var e = edges[i];
+      if ((e.a === x && e.b === y) || (e.a === y && e.b === x)) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Orchestration for a bond-angle edit on the currently displayed entry
+   * (mirrors applyBondLengthEdit; viewer push deferred to todo 36).
+   *
+   * @param {number} atomA
+   * @param {number} atomB
+   * @param {number} atomC
+   * @param {number} targetDeg
+   * @param {string|null} [moveSide] - normalized to "C"
+   * @returns {{ok: boolean, reason?: string, coords?: Array<Array<number>>,
+   *            warning?: string}}
+   */
+  function applyBondAngleEdit(atomA, atomB, atomC, targetDeg, moveSide) {
+    if (locked) return { ok: false, reason: "locked" };
+    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
+      ? window.ACPStructureViewer.state
+      : null;
+    if (!svState || !svState.displayedCoords || !svState.displayedSymbols) {
+      return { ok: false, reason: "no_structure" };
+    }
+    var graph = editorState.graph || buildGraphFromCurrentEntry();
+    if (!graph) return { ok: false, reason: "no_structure" };
+
+    var result = editBondAngle(
+      svState.displayedSymbols, svState.displayedCoords, graph.edges,
+      atomA, atomB, atomC, targetDeg, moveSide
+    );
+    if (result.ok) {
+      editorState.pendingEdit = {
+        type: "bond_angle",
+        atomA: atomA,
+        atomB: atomB,
+        atomC: atomC,
+        target: +targetDeg,
+        moveSide: "C",
+        coords: result.coords,
+      };
+      if (result.warning) {
+        editorState.pendingEdit.warning = result.warning;
+      }
+    }
+    return result;
+  }
+
   /**
    * Orchestration for a bond-length edit on the currently displayed
    * entry: respects the animation lock, reads displayed coords/symbols +
@@ -491,8 +775,12 @@
     fragmentsAfterCut: fragmentsAfterCut,
     parseMolBonds: parseMolBonds,
     editBondLength: editBondLength,
+    editBondAngle: editBondAngle,
+    angleDeg: angleDeg,
+    _principalAxis: _principalAxis,
     resolveMoveSide: resolveMoveSide,
     defaultMoveSide: defaultMoveSide,
     applyBondLengthEdit: applyBondLengthEdit,
+    applyBondAngleEdit: applyBondAngleEdit,
   };
 })();

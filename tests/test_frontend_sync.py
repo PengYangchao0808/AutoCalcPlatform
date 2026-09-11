@@ -4400,3 +4400,234 @@ def test_structure_editor_node_bond_length_edit() -> None:
         f"Node bond-edit test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Wave 6 / todo 34: bond-angle edit + collinear fallback
+# ---------------------------------------------------------------------------
+
+
+def test_structure_editor_angle_edit_contract() -> None:
+    """Contract: angle-edit API names, range constants, collinear warning
+    constant, Rodrigues formula documented, moveSide normalization."""
+    js = _EDITOR_JS_PATH.read_text(encoding="utf-8")
+
+    for name in (
+        "editBondAngle",
+        "applyBondAngleEdit",
+        "angleDeg",
+        "_principalAxis",
+        "_stableOrthogonalAxis",
+        "_rotateRodrigues",
+    ):
+        assert name in js, f"{name} missing from structure_editor.js"
+
+    assert "ANGLE_MIN = 1" in js
+    assert "ANGLE_MAX = 179" in js
+    assert "COLLINEAR_EPS = 1e-6" in js
+
+    # Collinear fallback warning constant (surfaced via result.warning)
+    assert "\u5171\u7ebf\u89d2\u5ea6\u8f93\u5165" in js  # 共线角度输入
+    # second half of the warning: 旋转轴取最稳定正交轴
+    assert "\u65cb\u8f6c\u8f74\u53d6\u6700\u7a33\u5b9a\u6b63\u4ea4\u8f74" in js
+
+    # Rodrigues formula documented in the code
+    assert "Rodrigues" in js
+    assert "(k . v)(1 - cos(theta))" in js
+
+    # Angle-edit moveSide normalization: only "C" is rotatable
+    assert 'normalized to "C"' in js
+
+
+def test_structure_editor_node_bond_angle_edit() -> None:
+    """Node logic: rotation hits target (1e-3 deg), A-side untouched,
+    C-side rigid (1e-9), range boundaries, no_bond/ring rejections,
+    collinear fallback axis choice + warning, staging, locked."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = (textwrap.dedent("""\
+        var window = { fetch: null };
+        require(EDITOR_PATH);
+        var ed = window.ACPStructureEditor;
+
+        function dist(a, b) {
+            var dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
+            return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        }
+        function close(a, b, eps) { return Math.abs(a - b) <= (eps || 1e-9); }
+
+        // angleDeg sanity
+        if (!close(ed.angleDeg([1, 0, 0], [0, 0, 0], [0, 1, 0]), 90)) {
+            console.error("FAIL: angleDeg 90");
+            process.exit(1);
+        }
+        if (ed.angleDeg([1, 0, 0], [1, 0, 0], [0, 1, 0]) !== 0) {
+            console.error("FAIL: degenerate arm must be 0");
+            process.exit(1);
+        }
+
+        // fixture: A0-B1-C2 with 130 deg at B, D3 on the A side, E4 on the C side
+        var rad = Math.PI / 180;
+        var symbols = ["C", "C", "C", "H", "H"];
+        var coords = [
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [1.5 * Math.cos(130 * rad), 1.5 * Math.sin(130 * rad), 0.0],
+            [1.5, 0.5, 0.3],
+            [2.6 * Math.cos(130 * rad), 2.6 * Math.sin(130 * rad), 0.0]
+        ];
+        var edges = [{ a: 0, b: 1 }, { a: 1, b: 2 }, { a: 0, b: 3 }, { a: 2, b: 4 }];
+        var snapshot = JSON.stringify(coords);
+
+        if (!close(ed.angleDeg(coords[0], coords[1], coords[2]), 130, 1e-9)) {
+            console.error("FAIL: fixture angle " + ed.angleDeg(coords[0], coords[1], coords[2]));
+            process.exit(1);
+        }
+
+        // (a) close 130 -> 120: A side (0,1,3) byte-identical
+        var res = ed.editBondAngle(symbols, coords, edges, 0, 1, 2, 120, null);
+        if (!res.ok) {
+            console.error("FAIL: rejected " + res.reason);
+            process.exit(1);
+        }
+        var out = res.coords;
+        for (var fixedIdx = 0; fixedIdx <= 3; fixedIdx++) {
+            if (fixedIdx === 2) continue;
+            if (JSON.stringify(out[fixedIdx]) !== JSON.stringify(coords[fixedIdx])) {
+                console.error("FAIL: A-side atom " + fixedIdx + " moved");
+                process.exit(1);
+            }
+        }
+        if (!close(ed.angleDeg(out[0], out[1], out[2]), 120, 1e-3)) {
+            console.error("FAIL: angle " + ed.angleDeg(out[0], out[1], out[2]));
+            process.exit(1);
+        }
+        if (!close(dist(out[2], out[4]), dist(coords[2], coords[4]))) {
+            console.error("FAIL: C-side deformed");
+            process.exit(1);
+        }
+        if (!close(dist(out[1], out[2]), dist(coords[1], coords[2]))) {
+            console.error("FAIL: B-C bond length changed");
+            process.exit(1);
+        }
+        if (JSON.stringify(coords) !== snapshot) {
+            console.error("FAIL: input mutated");
+            process.exit(1);
+        }
+
+        // (b) open 130 -> 150
+        var open = ed.editBondAngle(symbols, coords, edges, 0, 1, 2, 150, null);
+        var openAngle = ed.angleDeg(open.coords[0], open.coords[1], open.coords[2]);
+        if (!open.ok || !close(openAngle, 150, 1e-3)) {
+            console.error("FAIL: opening sign convention");
+            process.exit(1);
+        }
+
+        // moveSide "A"/"B" normalize to "C" (identical output); invalid rejects
+        var normA = ed.editBondAngle(symbols, coords, edges, 0, 1, 2, 120, "A");
+        if (!normA.ok || JSON.stringify(normA.coords) !== JSON.stringify(res.coords)) {
+            console.error("FAIL: moveSide A must normalize to C");
+            process.exit(1);
+        }
+        if (ed.editBondAngle(symbols, coords, edges, 0, 1, 2, 120, "X").reason !==
+            "invalid_move_side") {
+            console.error("FAIL: invalid moveSide");
+            process.exit(1);
+        }
+
+        // (c) range boundaries
+        var tooSmall = ed.editBondAngle(symbols, coords, edges, 0, 1, 2, 0.9, null);
+        var tooBig = ed.editBondAngle(symbols, coords, edges, 0, 1, 2, 179.5, null);
+        if (tooSmall.reason !== "out_of_range" || tooBig.reason !== "out_of_range") {
+            console.error("FAIL: out-of-range angles must reject");
+            process.exit(1);
+        }
+        if (!ed.editBondAngle(symbols, coords, edges, 0, 1, 2, 1, null).ok ||
+            !ed.editBondAngle(symbols, coords, edges, 0, 1, 2, 179, null).ok) {
+            console.error("FAIL: boundary angles must be accepted");
+            process.exit(1);
+        }
+
+        // (d) missing A-B edge -> no_bond
+        var noAB = [{ a: 1, b: 2 }, { a: 2, b: 4 }];
+        if (ed.editBondAngle(symbols, coords, noAB, 0, 1, 2, 120, null).reason !== "no_bond") {
+            console.error("FAIL: missing A-B edge");
+            process.exit(1);
+        }
+
+        // (e) ring containing B-C -> ring_bond
+        var ring = [{ a: 0, b: 1 }, { a: 1, b: 2 }, { a: 0, b: 2 }];
+        if (ed.editBondAngle(symbols, coords, ring, 0, 1, 2, 120, null).reason !== "ring_bond") {
+            console.error("FAIL: ring must reject");
+            process.exit(1);
+        }
+
+        // (f) collinear fallback: A-B-C on +x, C-side elongated along y
+        var linCoords = [
+            [-1.0, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [2.0, 0.0, 0.0],
+            [2.1, 1.0, 0.0],
+            [2.1, -1.0, 0.0]
+        ];
+        var linEdges = [{ a: 0, b: 1 }, { a: 1, b: 2 }, { a: 2, b: 3 }, { a: 2, b: 4 }];
+        var p = ed._principalAxis([linCoords[2], linCoords[3], linCoords[4]]);
+        if (Math.abs(p[1]) < 0.99) {
+            console.error("FAIL: fixture principal axis should be y, got " + JSON.stringify(p));
+            process.exit(1);
+        }
+        var col = ed.editBondAngle(symbols, linCoords, linEdges, 0, 1, 2, 90, null);
+        if (!col.ok || col.warning !== "共线角度输入，旋转轴取最稳定正交轴") {
+            console.error("FAIL: collinear warning missing");
+            process.exit(1);
+        }
+        var cNew = col.coords[2];
+        // axis avoided y (the fragment long axis) -> rotation plane is xz-free:
+        // C sweeps in the plane orthogonal to z => C' lands on the y axis
+        if (Math.abs(cNew[0]) > 1e-9 || Math.abs(cNew[2]) > 1e-9 ||
+            !close(Math.abs(cNew[1]), 2.0, 1e-9)) {
+            console.error("FAIL: collinear axis choice " + JSON.stringify(cNew));
+            process.exit(1);
+        }
+        if (!close(ed.angleDeg(col.coords[0], col.coords[1], cNew), 90, 1e-3)) {
+            console.error("FAIL: collinear target angle");
+            process.exit(1);
+        }
+        if (!close(dist(col.coords[2], col.coords[3]), dist(linCoords[2], linCoords[3]))) {
+            console.error("FAIL: collinear C-side deformed");
+            process.exit(1);
+        }
+
+        // orchestration: locked -> locked; unlocked -> stages pendingEdit
+        window.ACPStructureViewer = {
+            state: { displayedCoords: coords, displayedSymbols: symbols, displayedEntryId: "e1" }
+        };
+        ed.setLocked(true);
+        var lockedRes = ed.applyBondAngleEdit(0, 1, 2, 120, null);
+        if (lockedRes.ok || lockedRes.reason !== "locked") {
+            console.error("FAIL: locked angle edit");
+            process.exit(1);
+        }
+        ed.setLocked(false);
+        var staged = ed.applyBondAngleEdit(0, 1, 2, 120, "A");
+        if (!staged.ok || !ed.editorState.pendingEdit ||
+            ed.editorState.pendingEdit.type !== "bond_angle" ||
+            ed.editorState.pendingEdit.target !== 120 ||
+            ed.editorState.pendingEdit.moveSide !== "C") {
+            console.error("FAIL: pendingEdit staging");
+            process.exit(1);
+        }
+        if (JSON.stringify(window.ACPStructureViewer.state.displayedCoords) !== snapshot) {
+            console.error("FAIL: staging must not touch displayed coords");
+            process.exit(1);
+        }
+        console.log("PASS");
+    """)
+        .replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node angle-edit test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
