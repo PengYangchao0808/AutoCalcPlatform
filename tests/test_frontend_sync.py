@@ -2775,18 +2775,35 @@ def test_vibration_viewer_node_render_modes_header_and_rows() -> None:
         var container = fakeEl("div");
         ns.renderFrequencyInspector(container);
 
-        // summary + list + arrow controls (todo 28)
-        if (container.children.length !== 3) {
-            console.error("FAIL: expected 3 sections, got " + container.children.length);
+        // summary + TS evidence block (todo 31) + list + arrow controls
+        if (container.children.length !== 4) {
+            console.error("FAIL: expected 4 sections, got " + container.children.length);
             process.exit(1);
         }
         var summary = container.children[0];
+        var tsBlock = container.children[1];
         if (summary.textContent !== "虚频 2 / 4、-797.72 cm⁻¹") {
             console.error("FAIL: summary mismatch: " + summary.textContent);
             process.exit(1);
         }
 
-        var rows = container.children[1].children;        if (rows.length !== 4) {
+        var tsHintDiv = tsBlock.children[0];
+        if (tsHintDiv.textContent !== "高阶鞍点或未充分优化") {
+            console.error("FAIL: TS hint text " + tsHintDiv.textContent);
+            process.exit(1);
+        }
+        var tsSuffixDiv = tsBlock.children[1];
+        if (tsSuffixDiv.textContent !== "仍需检查振动方向及 IRC") {
+            console.error("FAIL: TS suffix " + tsSuffixDiv.textContent);
+            process.exit(1);
+        }
+        var tsThrDiv = tsBlock.children[2];
+        if (tsThrDiv.textContent !== "显著虚频阈值 ≤ -50.0 cm⁻¹ (默认)") {
+            console.error("FAIL: threshold text " + tsThrDiv.textContent);
+            process.exit(1);
+        }
+
+        var rows = container.children[2].children;        if (rows.length !== 4) {
             console.error("FAIL: expected 4 rows, got " + rows.length);
             process.exit(1);
         }
@@ -3704,5 +3721,247 @@ def test_vibration_viewer_node_mutual_exclusion_and_teardown() -> None:
     result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
     assert result.returncode == 0, (
         f"Node teardown test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Wave 5 / todo 31: TS judgment hints + phase-B contract tests (phase-B gate)
+# ---------------------------------------------------------------------------
+
+
+def test_vibration_viewer_ts_evidence_contract() -> None:
+    """Phase-B contract: three hint strings + suffix + threshold display +
+    mismatch-disable branch in both locales; pure-helper names; evidence-only
+    (no batch/irc validation calls)."""
+    vib = _VIB_JS.read_text(encoding="utf-8")
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    for name in ("tsJudgment", "tsHintText", "tsSuffixText", "thresholdText",
+                 "geometryMismatch", "_catalogEntry"):
+        assert name in vib, f"{name} missing from vibration_viewer.js"
+
+    # At-or-below threshold rule (matches backend _count_significant_imaginary)
+    assert "<= thr" in vib or "<= thresholdCm1" in vib or "f <= thr" in vib
+
+    # Threshold display: ≤ symbol + unit + both source labels
+    assert "\\u2264" in vib or "\u2264" in vib
+    assert "source_job_config" in vib and "source_default" in vib
+
+    # Mismatch-disable branch: controls suppressed, reason shown
+    assert "geometryMismatch(_catalogEntry(), data)" in vib
+    assert "structure.vib.ts.mismatch_reason" in vib
+
+    # Selector contract hooks
+    for cls in ("sv-vib-ts-hint", "sv-vib-ts-line", "sv-vib-ts-suffix",
+                "sv-vib-ts-threshold"):
+        assert cls in vib, f"{cls} class missing"
+
+    # All phase-B labels in BOTH locales
+    for zh, en in (
+        ('"structure.vib.ts.first_order": "频率数量符合一阶鞍点"',
+         '"structure.vib.ts.first_order": "Frequency count is consistent '
+         'with a first-order saddle point"'),
+        ('"structure.vib.ts.no_evidence": "不是一阶鞍点证据"',
+         '"structure.vib.ts.no_evidence": "Not evidence of a first-order saddle point"'),
+        ('"structure.vib.ts.higher_order": "高阶鞍点或未充分优化"',
+         '"structure.vib.ts.higher_order": "Higher-order saddle or insufficiently optimized"'),
+        ('"structure.vib.ts.suffix": "仍需检查振动方向及 IRC"',
+         '"structure.vib.ts.suffix": "Still verify the vibration direction and IRC"'),
+        ('"structure.vib.ts.threshold_label": "显著虚频阈值"',
+         '"structure.vib.ts.threshold_label": "Significant imaginary threshold"'),
+        ('"structure.vib.ts.source_default": "默认"',
+         '"structure.vib.ts.source_default": "default"'),
+        ('"structure.vib.ts.source_job_config": "任务配置"',
+         '"structure.vib.ts.source_job_config": "job config"'),
+        ('"structure.vib.ts.mismatch_reason": "模式与当前几何不匹配"',
+         '"structure.vib.ts.mismatch_reason": "The modes do not match the displayed geometry"'),
+    ):
+        assert zh in html, f"zh TS label missing: {zh}"
+        assert en in html, f"en TS label missing: {en}"
+
+    # Evidence only: the hint block must never call batch/irc validation
+    assert "batch" not in vib, "vibration_viewer.js must not call batch validation"
+    assert "/irc" not in vib and "irc/" not in vib, "no IRC validation calls"
+    assert "validate" not in vib, "no validation endpoints in the viewer"
+
+
+def test_vibration_viewer_node_ts_judgment_logic() -> None:
+    """Node logic: tsJudgment counts (<= rule, boundary, default threshold),
+    tsHintText mapping, thresholdText formatting, geometryMismatch cases,
+    and the mismatch-disable render branch (no controls, animation refused)."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = (textwrap.dedent("""\
+        var window = { fetch: null };
+        require(VIB_PATH);
+        var ns = window.ACPVibrationViewer;
+
+        function modesOf(freqs) {
+            return freqs.map(function (f, i) {
+                return { mode_index: i, frequency_cm1: f, imaginary: f < 0 };
+            });
+        }
+
+        var one = ns.tsJudgment(modesOf([-797.72]), -50.0);
+        if (one.significantCount !== 1 || one.hint !== "first_order") {
+            console.error("FAIL: 1 imaginary -> first_order");
+            process.exit(1);
+        }
+        var none = ns.tsJudgment(modesOf([1411.55, 3896.58]), -50.0);
+        if (none.significantCount !== 0 || none.hint !== "no_evidence") {
+            console.error("FAIL: 0 -> no_evidence");
+            process.exit(1);
+        }
+        var two = ns.tsJudgment(modesOf([-797.72, -100.0]), -50.0);
+        if (two.significantCount !== 2 || two.hint !== "higher_order") {
+            console.error("FAIL: 2 -> higher_order");
+            process.exit(1);
+        }
+        // boundary: frequency exactly == threshold is significant (<=)
+        var boundary = ns.tsJudgment(modesOf([-50.0]), -50.0);
+        if (boundary.significantCount !== 1) {
+            console.error("FAIL: == threshold must count");
+            process.exit(1);
+        }
+        var justAbove = ns.tsJudgment(modesOf([-49.9]), -50.0);
+        if (justAbove.significantCount !== 0) {
+            console.error("FAIL: > threshold must not count");
+            process.exit(1);
+        }
+        // non-finite threshold -> backend default -50.0
+        var defaulted = ns.tsJudgment(modesOf([-50.0]), null);
+        if (defaulted.significantCount !== 1 || defaulted.hint !== "first_order") {
+            console.error("FAIL: default threshold -50.0");
+            process.exit(1);
+        }
+
+        // hint text mapping (zh STR fallbacks in Node)
+        if (ns.tsHintText("first_order") !== "频率数量符合一阶鞍点" ||
+            ns.tsHintText("no_evidence") !== "不是一阶鞍点证据" ||
+            ns.tsHintText("higher_order") !== "高阶鞍点或未充分优化") {
+            console.error("FAIL: tsHintText mapping");
+            process.exit(1);
+        }
+        if (ns.tsHintText("bogus") !== "" || ns.tsSuffixText() !== "仍需检查振动方向及 IRC") {
+            console.error("FAIL: unknown hint / suffix");
+            process.exit(1);
+        }
+
+        // threshold display formatting
+        if (ns.thresholdText(-50.0, "default") !== "显著虚频阈值 ≤ -50.0 cm⁻¹ (默认)") {
+            console.error("FAIL: thresholdText default: " + ns.thresholdText(-50.0, "default"));
+            process.exit(1);
+        }
+        if (ns.thresholdText(-30.0, "job_config") !== "显著虚频阈值 ≤ -30.0 cm⁻¹ (任务配置)") {
+            console.error("FAIL: thresholdText job_config");
+            process.exit(1);
+        }
+        if (ns.thresholdText(null, null).indexOf("-50.0") < 0) {
+            console.error("FAIL: thresholdText fallback value");
+            process.exit(1);
+        }
+
+        // geometryMismatch cases
+        var entryMatch = { id: "e1", source: { product_id: "batch_item_001" } };
+        var entryDiff = { id: "e1", source: { product_id: "batch_item_002" } };
+        var entryNone = { id: "e1", source: {} };
+        var vibMatch = { geometry_product_id: "batch_item_001" };
+        var vibNone = { geometry_product_id: null };
+        if (ns.geometryMismatch(entryMatch, vibMatch) !== false ||
+            ns.geometryMismatch(entryDiff, vibMatch) !== true ||
+            ns.geometryMismatch(entryNone, vibMatch) !== false ||
+            ns.geometryMismatch(entryMatch, vibNone) !== false ||
+            ns.geometryMismatch(null, vibMatch) !== false ||
+            ns.geometryMismatch(entryMatch, null) !== false) {
+            console.error("FAIL: geometryMismatch rule");
+            process.exit(1);
+        }
+        console.log("PASS");
+    """)
+        .replace("VIB_PATH", json.dumps(str(_VIB_JS))))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node TS-judgment test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_vibration_viewer_node_mismatch_disables_controls() -> None:
+    """Node logic (DOM stub): geometry mismatch -> reason rendered, no arrow
+    controls, playAnimation refused."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = (textwrap.dedent("""\
+        var window = { fetch: null };
+        require(VIB_PATH);
+        var ns = window.ACPVibrationViewer;
+        function fakeEl(tag) {
+            return {
+                tagName: tag, children: [], className: "", textContent: "", style: {},
+                setAttribute: function (k, v) { this["attr_" + k] = v; },
+                addEventListener: function () {},
+                appendChild: function (c) { this.children.push(c); return c; }
+            };
+        }
+        var document = { createElement: fakeEl, getElementById: function () { return null; } };
+
+        var modes = [
+            { mode_index: 6, frequency_cm1: -797.72, imaginary: true,
+              ir_intensity: null, vectors: [[1, 0, 0], [0, 1, 0]] }
+        ];
+        ns.state.jobId = "job1";
+        ns.state.entryId = "e1";
+        ns.state.data = {
+            available: true, reason: null, threshold_cm1: -50.0,
+            threshold_source: "default", modes: modes, atom_count: 2,
+            geometry_product_id: "batch_item_002"
+        };
+        ns.state.selectedModeIndex = 6;
+        window.ACPStructureViewer = {
+            state: {
+                payload: {
+                    entries: [{ id: "e1", source: { product_id: "batch_item_001" } }]
+                },
+                displayedCoords: [[0, 0, 0], [1, 1, 1]],
+                displayedSymbols: ["C", "O"],
+                displayedEntryId: "e1"
+            }
+        };
+
+        var container = fakeEl("div");
+        ns.renderFrequencyInspector(container);
+        var rendered = JSON.stringify(container);
+        if (rendered.indexOf("sv-vib-controls") >= 0) {
+            console.error("FAIL: controls must be suppressed on mismatch");
+            process.exit(1);
+        }
+        var lastChild = container.children[container.children.length - 1];
+        if (lastChild.textContent !== "模式与当前几何不匹配") {
+            console.error("FAIL: mismatch reason missing: " + lastChild.textContent);
+            process.exit(1);
+        }
+        // TS evidence still rendered (frequency info remains viewable)
+        if (rendered.indexOf("sv-vib-ts-hint") < 0) {
+            console.error("FAIL: TS evidence block missing");
+            process.exit(1);
+        }
+        // animation refused
+        ns._viewerImpl = function () { return { getView: function () { return {}; } }; };
+        ns.playAnimation();
+        if (ns.isAnimationActive()) {
+            console.error("FAIL: animation must be disabled on mismatch");
+            process.exit(1);
+        }
+        console.log("PASS");
+    """)
+        .replace("VIB_PATH", json.dumps(str(_VIB_JS))))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node mismatch-disable test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout

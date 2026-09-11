@@ -1,6 +1,6 @@
 /**
- * ACP Vibration Viewer — frequency inspector + arrows + animation (Wave 5, todos 27-30)
- * @version 0.5.0
+ * ACP Vibration Viewer — frequency inspector + arrows + animation (Wave 5, todos 27-31)
+ * @version 0.6.0
  *
  * Namespace: window.ACPVibrationViewer
  *
@@ -20,6 +20,10 @@
  *   - isAnimationActive()            (mutual-exclusion probe)
  *   - handleTeardown()               (tab/job switch + viewer destroy hook)
  *   - setSpeed(v) / toggleInvertPhase()
+ *   - tsJudgment(modes, thresholdCm1)  (PURE: significant-imaginary evidence)
+ *   - tsHintText(hint) / tsSuffixText() (TS evidence i18n)
+ *   - thresholdText(cm1, source)       (PURE: threshold display line)
+ *   - geometryMismatch(entry, vibData) (PURE: product-id mismatch guard)
  *   - animationState                   (the live animation state)
  *
  * Pure helpers (Node-testable):
@@ -58,15 +62,16 @@
  *   teardown path (tab switch / job switch / entry switch / viewer destroy)
  *   funnels through stopAnimationAndRestore()/handleTeardown() so no loop
  *   or stale arrows survive.
+ *   or stale arrows survive.  TS judgment hints are DISPLAY EVIDENCE only —
+ *   they never replace the BatchOptimize/IRC validation status.
  *
- * Remaining Wave 5 todos:
- *   TODO(todo-31): TS judgment hints + phase-B contract tests
+ * Wave 5 complete (todos 27-31). Wave 6 (geometry editor) follows.
  */
 (function () {
   "use strict";
 
   /** Version tag — bump on every structural change. */
-  var VERSION = "0.5.0";
+  var VERSION = "0.6.0";
 
   /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
@@ -88,6 +93,16 @@
     SPEED: "\u901f\u5ea6",                                                 // 速度
     INVERT: "\u76f8\u4f4d\u53cd\u8f6c",                                   // 相位反转
     LOCKED_HINT: "\u52a8\u753b\u64ad\u653e\u4e2d\uff0c\u7f16\u8f91\u5df2\u6682\u505c", // 动画播放中，编辑已暂停
+    TS_HINTS: {
+      first_order: "\u9891\u7387\u6570\u91cf\u7b26\u5408\u4e00\u9636\u978d\u70b9",     // 频率数量符合一阶鞍点
+      no_evidence: "\u4e0d\u662f\u4e00\u9636\u978d\u70b9\u8bc1\u636e",                 // 不是一阶鞍点证据
+      higher_order: "\u9ad8\u9636\u978d\u70b9\u6216\u672a\u5145\u5206\u4f18\u5316",   // 高阶鞍点或未充分优化
+    },
+    TS_SUFFIX: "\u4ecd\u9700\u68c0\u67e5\u632f\u52a8\u65b9\u5411\u53ca IRC",           // 仍需检查振动方向及 IRC
+    THRESHOLD_LABEL: "\u663e\u8457\u865a\u9891\u9608\u503c",                           // 显著虚频阈值
+    SOURCE_DEFAULT: "\u9ed8\u8ba4",                                                     // 默认
+    SOURCE_JOB_CONFIG: "\u4efb\u52a1\u914d\u7f6e",                                     // 任务配置
+    MISMATCH_REASON: "\u6a21\u5f0f\u4e0e\u5f53\u524d\u51e0\u4f55\u4e0d\u5339\u914d",   // 模式与当前几何不匹配
     REASONS: {
       no_normal_modes: "\u65e0\u632f\u52a8\u6a21\u5f0f\u6570\u636e",           // 无振动模式数据
       geometry_mismatch: "\u6a21\u5f0f\u4e0e\u5f53\u524d\u51e0\u4f55\u4e0d\u5339\u914d",   // 模式与当前几何不匹配
@@ -481,6 +496,13 @@
         mode: mode, coords: coords, symbols: symbols,
       };
     }
+    if (geometryMismatch(_catalogEntry(), vibrationState.data)) {
+      return {
+        ok: false,
+        hint: _t("structure.vib.ts.mismatch_reason", STR.MISMATCH_REASON),
+        mode: mode, coords: coords, symbols: symbols,
+      };
+    }
     return { ok: true, hint: null, mode: mode, coords: coords, symbols: symbols };
   }
 
@@ -637,6 +659,112 @@
     var n = typeof v === "number" ? v : parseFloat(v);
     if (!isFinite(n)) return 1;
     return Math.min(SPEED_MAX, Math.max(SPEED_MIN, n));
+  }
+
+  /* ---- TS judgment evidence (todo 31 — display only) ---- */
+
+  /**
+   * Count significant imaginary frequencies (frequency_cm1 <= threshold,
+   * matching the backend _count_significant_imaginary at-or-below rule)
+   * and classify the evidence hint:
+   *   1  -> "first_order"   (频率数量符合一阶鞍点)
+   *   0  -> "no_evidence"   (不是一阶鞍点证据)
+   *   >1 -> "higher_order"  (高阶鞍点或未充分优化)
+   * Evidence only — never replaces BatchOptimize/IRC validation status.
+   *
+   * @param {Array<Object>|null} modes
+   * @param {number} [thresholdCm1] - defaults to -50.0 when non-finite
+   * @returns {{significantCount: number, hint: string}}
+   */
+  function tsJudgment(modes, thresholdCm1) {
+    var thr = (typeof thresholdCm1 === "number" && isFinite(thresholdCm1))
+      ? thresholdCm1
+      : -50.0;
+    var count = 0;
+    if (modes && modes.length) {
+      for (var i = 0; i < modes.length; i++) {
+        var f = modes[i] ? modes[i].frequency_cm1 : null;
+        if (typeof f === "number" && isFinite(f) && f <= thr) {
+          count += 1;
+        }
+      }
+    }
+    var hint = count === 1 ? "first_order" : (count > 1 ? "higher_order" : "no_evidence");
+    return { significantCount: count, hint: hint };
+  }
+
+  /**
+   * Localized TS evidence hint text (without the always-on suffix).
+   *
+   * @param {string} hint - "first_order" | "no_evidence" | "higher_order"
+   * @returns {string} "" for unknown hints
+   */
+  function tsHintText(hint) {
+    if (!Object.prototype.hasOwnProperty.call(STR.TS_HINTS, hint)) return "";
+    return _t("structure.vib.ts." + hint, STR.TS_HINTS[hint]);
+  }
+
+  /**
+   * The always-appended verification reminder (仍需检查振动方向及 IRC).
+   *
+   * @returns {string}
+   */
+  function tsSuffixText() {
+    return _t("structure.vib.ts.suffix", STR.TS_SUFFIX);
+  }
+
+  /**
+   * Threshold display line, e.g. "显著虚频阈值 ≤ -50.0 cm⁻¹ (默认)".
+   *
+   * @param {number} thresholdCm1
+   * @param {string} [thresholdSource] - "default" | "job_config"
+   * @returns {string}
+   */
+  function thresholdText(thresholdCm1, thresholdSource) {
+    var val = (typeof thresholdCm1 === "number" && isFinite(thresholdCm1))
+      ? thresholdCm1
+      : -50.0;
+    var srcLabel = thresholdSource === "job_config"
+      ? _t("structure.vib.ts.source_job_config", STR.SOURCE_JOB_CONFIG)
+      : _t("structure.vib.ts.source_default", STR.SOURCE_DEFAULT);
+    return _t("structure.vib.ts.threshold_label", STR.THRESHOLD_LABEL) +
+      " \u2264 " + val.toFixed(1) + " " + STR.FREQ_UNIT + " (" + srcLabel + ")";
+  }
+
+  /**
+   * Geometry-identity mismatch guard: true only when BOTH the vibrations
+   * response carries a geometry_product_id AND the catalog entry has a
+   * source.product_id AND they differ.  Either side null/unknown -> false
+   * (allow; historical projection has a null product id by design).
+   *
+   * @param {Object|null} entry   - catalog entry (entry.source.product_id)
+   * @param {Object|null} vibData - vibrations response (geometry_product_id)
+   * @returns {boolean}
+   */
+  function geometryMismatch(entry, vibData) {
+    if (!entry || !vibData) return false;
+    var vibPid = vibData.geometry_product_id;
+    var entryPid = (entry.source && entry.source.product_id) ? entry.source.product_id : null;
+    if (vibPid == null || entryPid == null) return false;
+    return String(vibPid) !== String(entryPid);
+  }
+
+  /**
+   * Resolve the currently selected catalog entry from the structure
+   * viewer's payload (by vibrationState.entryId).
+   *
+   * @returns {Object|null}
+   */
+  function _catalogEntry() {
+    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
+      ? window.ACPStructureViewer.state
+      : null;
+    if (!svState || !svState.payload || !svState.payload.entries) return null;
+    var entries = svState.payload.entries;
+    for (var i = 0; i < entries.length; i++) {
+      if (entries[i].id === vibrationState.entryId) return entries[i];
+    }
+    return null;
   }
 
   /** @returns {Function|null} */
@@ -1147,6 +1275,25 @@
       container.appendChild(summary);
     }
 
+    /* TS evidence block (todo 31 — display only, never a validation verdict) */
+    var judgment = tsJudgment(modes, data.threshold_cm1);
+    var tsBlock = document.createElement("div");
+    tsBlock.className = "sv-vib-ts-hint";
+    var hintLine = document.createElement("div");
+    hintLine.className = "sv-vib-ts-line" +
+      (judgment.hint === "first_order" ? " sv-vib-ts-ok" : " sv-vib-ts-warn");
+    hintLine.textContent = tsHintText(judgment.hint);
+    tsBlock.appendChild(hintLine);
+    var suffixLine = document.createElement("div");
+    suffixLine.className = "sv-vib-ts-suffix";
+    suffixLine.textContent = tsSuffixText();
+    tsBlock.appendChild(suffixLine);
+    var thrLine = document.createElement("div");
+    thrLine.className = "sv-vib-ts-threshold";
+    thrLine.textContent = thresholdText(data.threshold_cm1, data.threshold_source);
+    tsBlock.appendChild(thrLine);
+    container.appendChild(tsBlock);
+
     var list = document.createElement("div");
     list.className = "sv-vib-list";
     for (var ri = 0; ri < sorted.length; ri++) {
@@ -1154,7 +1301,15 @@
     }
     container.appendChild(list);
 
-    _appendArrowControls(container, modes);
+    if (geometryMismatch(_catalogEntry(), data)) {
+      /* mismatch: animation + arrows disabled — reason instead of controls */
+      var mmReason = document.createElement("div");
+      mmReason.className = "sv-vib-hint";
+      mmReason.textContent = _t("structure.vib.ts.mismatch_reason", STR.MISMATCH_REASON);
+      container.appendChild(mmReason);
+    } else {
+      _appendArrowControls(container, modes);
+    }
   }
 
   /**
@@ -1414,6 +1569,12 @@
     computeDisplacedCoords: computeDisplacedCoords,
     buildDisplacedXyz: buildDisplacedXyz,
     clampSpeed: clampSpeed,
+    tsJudgment: tsJudgment,
+    tsHintText: tsHintText,
+    tsSuffixText: tsSuffixText,
+    thresholdText: thresholdText,
+    geometryMismatch: geometryMismatch,
+    _catalogEntry: _catalogEntry,
     _t: _t,
     _esc: _esc,
     _vibrationsUrl: _vibrationsUrl,
