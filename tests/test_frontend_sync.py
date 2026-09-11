@@ -5953,3 +5953,269 @@ def test_overlay_node_logic() -> None:
         f"Node overlay test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Wave 7 / todo 41: performance thresholds + degradation
+# ---------------------------------------------------------------------------
+
+
+def test_perf_threshold_contract() -> None:
+    """Todo-41 lock: the four named thresholds with exact values, degrade
+    branch in the shared loader, sampling in playback/list, notice keys."""
+    sv = _SV_JS_PATH.read_text(encoding="utf-8")
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    for name, value in (
+        ("LIST_VIRTUALIZE_THRESHOLD", "100"),
+        ("TRAJECTORY_SAMPLE_THRESHOLD", "500"),
+        ("TRAJECTORY_SAMPLE_TARGET", "200"),
+        ("LARGE_SYSTEM_ATOM_THRESHOLD", "200"),
+    ):
+        assert f"{name}: {name}," in sv, f"{name} missing from namespace"
+        assert f"var {name} = {value};" in sv, f"{name} must be exactly {value}"
+
+    # Large-system branch lives INSIDE the shared loader
+    loader = sv.split("function sharedLoadGeometry(", 1)[1].split("\n  function ", 1)[0]
+    assert "LARGE_SYSTEM_ATOM_THRESHOLD" in loader
+    assert '"wireframe"' in loader
+    assert "userPresetChosen" in loader
+    assert "lastLoadDegraded" in loader
+    # Explicit preset choice is honored (never degraded)
+    preset_fn = sv.split("function setStylePreset(", 1)[1].split("\n  function ", 1)[0]
+    assert "userPresetChosen = true" in preset_fn
+
+    # Virtualization + sampling wired into list rendering and IRC playback
+    list_fn = sv.split("function renderStructureViewer()", 1)[1].split("\n  function ", 1)[0]
+    assert "virtualizeEntries" in list_fn and "LIST_VIRTUALIZE_THRESHOLD" in list_fn
+    assert "structure.perf.partial_list" in list_fn
+    assert "sampleFrames" in list_fn and "structure.perf.sampled" in list_fn
+    play_fn = sv.split("function playIrcPath(", 1)[1].split("\n  function ", 1)[0]
+    assert "sampleFrames" in play_fn and "TRAJECTORY_SAMPLE_THRESHOLD" in play_fn
+
+    # Visible degradation notice + marker styles
+    assert "sv-notice-degrade" in sv
+    css = (FRONTEND_CSS_DIR / "structure_viewer.css").read_text(encoding="utf-8")
+    assert "sv-notice-degrade" in css and "sv-list-marker" in css
+
+    # Three notice keys in BOTH locales
+    zh_keys = _extract_structure_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_structure_keys(html, _EN_BLOCK_RE)
+    expected = {
+        "structure.perf.degrade_notice",
+        "structure.perf.partial_list",
+        "structure.perf.sampled",
+    }
+    assert expected <= zh_keys, f"missing zh keys: {sorted(expected - zh_keys)}"
+    assert expected <= en_keys, f"missing en keys: {sorted(expected - en_keys)}"
+
+
+def test_perf_lazy_geometry_contract() -> None:
+    """Lazy geometry (todos 15/17): the catalog fetch carries NO geometry
+    bytes — geometry text only enters the store on explicit selection loads."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        require(JS_PATH);
+        var ns = window.ACPStructureViewer;
+
+        var catalog = {
+          schema_version: "structure_viewer_v1", job_id: "j", workflow: "scan",
+          availability: "ready", revision: "r1", default_entry_id: "scan_frame_0",
+          groups: [], warnings: [],
+          entries: [
+            { id: "scan_frame_0", group_id: "", label: "f0", role: "minimum",
+              status: "completed",
+              geometry: { endpoint: "/geo/0", format: "xyz" },
+              source: { kind: "formal_result", frame_index: 0, geometry_ref: "x" },
+              badges: [], vibrations: { available: false } },
+          ],
+        };
+        ns._fetchImpl = function () {
+          return Promise.resolve({ ok: true, json: function () { return catalog; } });
+        };
+        ns.loadStructureViewer("j").then(function () {
+          var e = ns.state.payload.entries[0];
+          if (!e.geometry || !e.geometry.endpoint || e.geometry.endpoint.indexOf("/geo/") < 0) {
+            console.error("FAIL: endpoint missing"); process.exit(1);
+          }
+          for (var key in e) {
+            if (/xyz|content|text|coords/i.test(key)) {
+              console.error("FAIL: geometry bytes in catalog: " + key); process.exit(1);
+            }
+          }
+          for (var gk in e.geometry) {
+            if (/xyz|content|text/i.test(gk)) {
+              console.error("FAIL: geometry field carries bytes: " + gk); process.exit(1);
+            }
+          }
+          if (ns.geometryStore.currentXyz !== null) {
+            console.error("FAIL: store must stay empty before selection load"); process.exit(1);
+          }
+          console.log("PASS");
+        });
+    """).replace("JS_PATH", json.dumps(str(_SV_JS_PATH)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node lazy-geometry test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_perf_virtualize_and_sample_logic() -> None:
+    """Node logic: virtualizeEntries windows only above threshold with
+    forced ids included; sampleFrames is even, first+last, bounded by target
+    and returns the SAME reference at or below threshold."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        require(JS_PATH);
+        var ns = window.ACPStructureViewer;
+
+        function mk(n) {
+          var out = [];
+          for (var i = 0; i < n; i++) out.push({ id: "e" + i });
+          return out;
+        }
+
+        var small = ns.virtualizeEntries(mk(99), ns.LIST_VIRTUALIZE_THRESHOLD);
+        if (small.windowed !== false || small.total !== 99 || small.visible.length !== 99) {
+          console.error("FAIL: 99 entries must render fully"); process.exit(1);
+        }
+
+        var big = ns.virtualizeEntries(mk(150), ns.LIST_VIRTUALIZE_THRESHOLD, ["e120", "e75"]);
+        if (big.windowed !== true || big.total !== 150) {
+          console.error("FAIL: 150 must window"); process.exit(1);
+        }
+        if (big.visible.length >= big.total) {
+          console.error("FAIL: visible must be < total"); process.exit(1);
+        }
+        var ids = {};
+        big.visible.forEach(function (e) { ids[e.id] = true; });
+        if (!ids.e0 || !ids.e149) { console.error("FAIL: head+tail edges"); process.exit(1); }
+        if (!ids.e120 || !ids.e75) { console.error("FAIL: forced ids included"); process.exit(1); }
+        // head(0-49) + tail(100-149) covers e120; only e75 is force-appended
+        if (big.visible.length !== 50 + 1 + 50) {
+          console.error("FAIL: marker/window count " + big.visible.length); process.exit(1);
+        }
+
+        var mid = ns.virtualizeEntries(mk(150), ns.LIST_VIRTUALIZE_THRESHOLD, ["e10"]);
+        if (mid.visible.length !== 100) {
+          console.error("FAIL: in-window forced id must not duplicate"); process.exit(1);
+        }
+
+        var frames600 = [];
+        for (var f = 0; f < 600; f++) frames600.push("f" + f);
+        var s600 = ns.sampleFrames(
+          frames600, ns.TRAJECTORY_SAMPLE_THRESHOLD, ns.TRAJECTORY_SAMPLE_TARGET
+        );
+        if (s600 === frames600 || s600.length > ns.TRAJECTORY_SAMPLE_TARGET) {
+          console.error("FAIL: 600 must sample to <= 200"); process.exit(1);
+        }
+        if (s600[0] !== "f0" || s600[s600.length - 1] !== "f599") {
+          console.error("FAIL: first+last kept"); process.exit(1);
+        }
+        if (s600.length < 190) { console.error("FAIL: ~200 expected"); process.exit(1); }
+
+        var frames501 = [];
+        for (var f2 = 0; f2 < 501; f2++) frames501.push("g" + f2);
+        var s501 = ns.sampleFrames(
+          frames501, ns.TRAJECTORY_SAMPLE_THRESHOLD, ns.TRAJECTORY_SAMPLE_TARGET
+        );
+        if (s501[0] !== "g0" || s501[s501.length - 1] !== "g500" || s501.length > 200) {
+          console.error("FAIL: 501 sampling"); process.exit(1);
+        }
+
+        var frames400 = [];
+        for (var f3 = 0; f3 < 400; f3++) frames400.push("h" + f3);
+        if (ns.sampleFrames(frames400, ns.TRAJECTORY_SAMPLE_THRESHOLD, 200) !== frames400) {
+          console.error("FAIL: 400 must be returned unchanged (same ref)"); process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(_SV_JS_PATH)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node virtualize/sample test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
+
+
+def test_perf_large_system_loader_logic() -> None:
+    """Node logic: >200-atom loads degrade to wireframe (per-load, notice
+    flag); <=200 loads keep the default preset byte-identically; an explicit
+    user preset survives even for large systems."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        require(JS_PATH);
+        var ns = window.ACPStructureViewer;
+
+        var specs = [];
+        ns._styleSpecImpl = function (name) {
+          return name === "wireframe" ? { wire: true } : { preset: name };
+        };
+        ns.registerCanvasLoader("probe", function (text, spec) {
+          specs.push(spec);
+          return true;
+        });
+
+        function bigXyz(n) {
+          var lines = [String(n), "big"];
+          for (var i = 0; i < n; i++) lines.push("H 0 0 " + i);
+          return lines.join("\\n") + "\\n";
+        }
+
+        // 250 atoms -> wireframe spec + degraded flag
+        ns.sharedLoadGeometry(bigXyz(250), { canvasId: "probe", source: "test" });
+        if (!specs.length || !specs[0].wire) {
+          console.error("FAIL: 250 atoms must load wireframe spec"); process.exit(1);
+        }
+        if (ns.geometryStore.lastLoadDegraded !== true) {
+          console.error("FAIL: degrade flag"); process.exit(1);
+        }
+        if (ns.geometryStore.stylePreset !== "ball-stick") {
+          console.error("FAIL: degrade must not persist as global preset"); process.exit(1);
+        }
+
+        // 50 atoms -> default preset spec, NOT degraded (byte-identical path)
+        specs.length = 0;
+        ns.sharedLoadGeometry(bigXyz(50), { canvasId: "probe", source: "test" });
+        if (!specs[0] || specs[0].preset !== "ball-stick" || specs[0].wire) {
+          console.error("FAIL: 50 atoms keep default preset"); process.exit(1);
+        }
+        if (ns.geometryStore.lastLoadDegraded !== false) {
+          console.error("FAIL: small load must clear degrade"); process.exit(1);
+        }
+
+        // explicit user preset survives even for large systems
+        ns.setStylePreset("publication");
+        if (ns.geometryStore.userPresetChosen !== true) {
+          console.error("FAIL: userPresetChosen flag"); process.exit(1);
+        }
+        specs.length = 0;
+        ns.sharedLoadGeometry(bigXyz(250), { canvasId: "probe", source: "test" });
+        if (specs[0].preset !== "publication" || specs[0].wire) {
+          console.error("FAIL: explicit preset must survive large system"); process.exit(1);
+        }
+        if (ns.geometryStore.lastLoadDegraded !== false) {
+          console.error("FAIL: user choice means no degrade"); process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(_SV_JS_PATH)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node large-system test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout

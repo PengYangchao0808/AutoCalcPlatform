@@ -11,6 +11,7 @@
  *   - registerCanvasLoader(canvasId, fn)  (per-canvas load adapters)
  *   - saveCamera(canvasId) / restoreCamera(canvasId)
  *   - setStylePreset(name) / getStylePreset()
+ *   - virtualizeEntries/sampleFrames (perf thresholds, todo 41)
  *   - loadOverlay(a, b)          (server-mapped overlay + RMSD, todo 40)
  *   - clearOverlay()              (remove the overlay second model)
  *   - overlayMeasurementsBlocked() (unproven-mapping clearing rule)
@@ -44,7 +45,14 @@
 (function () {
   "use strict";
 
-  var VERSION = "0.12.0";
+  var VERSION = "0.13.0";
+
+  /* ---- performance thresholds (todo 41; the ONLY degradation knobs) ---- */
+  var LIST_VIRTUALIZE_THRESHOLD = 100;   /* entry-list windowing above this */
+  var TRAJECTORY_SAMPLE_THRESHOLD = 500; /* frame-list sampling above this */
+  var TRAJECTORY_SAMPLE_TARGET = 200;    /* down-sample target count */
+  var LARGE_SYSTEM_ATOM_THRESHOLD = 200; /* per-load wireframe default above */
+  var _LIST_WINDOW = 50;                 /* head+tail window size */
 
   /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
@@ -107,6 +115,9 @@
     OVERLAY_UNPROVEN: "\u65e0\u6cd5\u5efa\u7acb\u539f\u5b50\u6620\u5c04\uff0c\u6d4b\u91cf\u5df2\u6e05\u9664", // 无法建立原子映射，测量已清除
     OVERLAY_CLEAR: "\u6e05\u9664\u53e0\u5408",                             // 清除叠合
     OVERLAY_MAX_ATOM: "\u6700\u5927\u4f4d\u79fb\u539f\u5b50",             // 最大位移原子
+    PERF_DEGRADE_NOTICE: "\u5927\u4f53\u7cfb\u6a21\u5f0f\uff1a\u5df2\u5207\u6362\u7ebf\u6846\u6837\u5f0f\u5e76\u5173\u95ed\u6807\u7b7e (>200 \u539f\u5b50)", // 大体系模式：已切换线框样式并关闭标签 (>200 原子)
+    PERF_PARTIAL_LIST: "\u2026\u663e\u793a\u90e8\u5206",                   // …显示部分
+    PERF_SAMPLED: "\u5df2\u62bd\u6837\u663e\u793a",                         // 已抽样显示
   };
 
   /**
@@ -535,7 +546,17 @@
     stylePreset: "ball-stick",
     cameras: {},
     loaderVersion: 0,
+    /* true once the user explicitly picks a preset — large-system degrade
+       then never overrides their choice (todo 41) */
+    userPresetChosen: false,
+    /* true when the LAST shared load exceeded LARGE_SYSTEM_ATOM_THRESHOLD
+       and was degraded to wireframe (drives the visible notice) */
+    lastLoadDegraded: false,
   };
+
+  /* tracks the main-canvas degrade state so a following SMALL load restores
+     the store preset exactly once (never touched for small-only sessions) */
+  var _mainStyleDegraded = false;
 
   /**
    * Per-canvas load adapters. Each adapter loads into the canvas's EXISTING
@@ -643,7 +664,15 @@
     geometryStore.loaderVersion += 1;
     geometryStore.currentXyz = xyzText;
 
-    var styleSpec = _resolveStyleSpec(geometryStore.stylePreset);
+    var parsed = _parseXyzFirstFrame(xyzText);
+    var atomCount = parsed ? parsed.coords.length : 0;
+    /* large-system default (todo 41): per-load wireframe override — never
+       persisted as the user's global choice, never applied when the user
+       explicitly picked a preset */
+    var degraded = atomCount > LARGE_SYSTEM_ATOM_THRESHOLD && !geometryStore.userPresetChosen;
+    geometryStore.lastLoadDegraded = degraded;
+
+    var styleSpec = _resolveStyleSpec(degraded ? "wireframe" : geometryStore.stylePreset);
     var loaded = false;
     try {
       loaded = !!_canvasLoaders[canvasId](xyzText, styleSpec);
@@ -651,14 +680,92 @@
       loaded = false;
     }
 
-    var parsed = null;
     if (canvasId === "main") {
-      parsed = _parseXyzFirstFrame(xyzText);
       structureViewerState.displayedCoords = parsed ? parsed.coords : null;
       structureViewerState.displayedSymbols = parsed ? parsed.symbols : null;
       structureViewerState.displayedEntryId = structureViewerState.selectedEntryId;
+      /* the main bridge applies molDoc.style internally — re-apply the
+         per-load preset AFTER the load; restore exactly once when a degrade
+         is followed by a small system (small-only sessions untouched) */
+      if (!geometryStore.userPresetChosen) {
+        if (degraded) {
+          _applyPresetSafe("wireframe");
+          _mainStyleDegraded = true;
+        } else if (_mainStyleDegraded) {
+          _applyPresetSafe(geometryStore.stylePreset);
+          _mainStyleDegraded = false;
+        }
+      }
     }
+    if (typeof document !== "undefined") _renderPlaybackBar();
     return { loaded: loaded, parsed: parsed };
+  }
+
+  function _applyPresetSafe(name) {
+    if (typeof applyStylePreset === "function" && _canvasViewer("main")) {
+      try { applyStylePreset(name); } catch (_) { /* empty viewer */ }
+    }
+  }
+
+  /**
+   * Window a long entry list for rendering (todo 41).
+   *
+   * v1 simplification: fixed head+tail windows (no scroll-position math).
+   * Selected/default entries are force-included even outside the windows.
+   *
+   * @param {Array} entries
+   * @param {number} threshold
+   * @param {Array<string>} [forceIds] - entry ids to force-include
+   * @returns {{ visible: Array, total: number, windowed: boolean }}
+   */
+  function virtualizeEntries(entries, threshold, forceIds) {
+    var list = entries || [];
+    var total = list.length;
+    if (total <= threshold) {
+      return { visible: list.slice(), total: total, windowed: false };
+    }
+    var head = list.slice(0, _LIST_WINDOW);
+    var tail = list.slice(Math.max(_LIST_WINDOW, total - _LIST_WINDOW));
+    var forced = [];
+    var ids = forceIds || [];
+    for (var f = 0; f < ids.length; f++) {
+      var wantId = ids[f];
+      if (wantId == null) continue;
+      var covered = false;
+      for (var h = 0; h < head.length; h++) { if (head[h].id === wantId) { covered = true; break; } }
+      if (!covered) {
+        for (var t = 0; t < tail.length; t++) { if (tail[t].id === wantId) { covered = true; break; } }
+      }
+      if (covered) continue;
+      for (var e = 0; e < list.length; e++) {
+        if (list[e].id === wantId) { forced.push(list[e]); break; }
+      }
+    }
+    return { visible: head.concat(forced, tail), total: total, windowed: true };
+  }
+
+  /**
+   * Evenly down-sample a long frame list (todo 41).  Above the threshold,
+   * keep every stride-th frame (stride = ceil(len/target)) with the FIRST
+   * and LAST frames always kept; the tail slot is replaced by the true last
+   * frame so the count never exceeds the target.  At or below the threshold
+   * the input array is returned UNCHANGED (same reference).
+   *
+   * @param {Array} frames
+   * @param {number} threshold
+   * @param {number} target
+   * @returns {Array}
+   */
+  function sampleFrames(frames, threshold, target) {
+    var list = frames || [];
+    if (list.length <= threshold) return list;
+    var stride = Math.ceil(list.length / target);
+    var out = [];
+    for (var i = 0; i < list.length; i += stride) out.push(list[i]);
+    if (out.length && out[out.length - 1] !== list[list.length - 1]) {
+      out[out.length - 1] = list[list.length - 1];
+    }
+    return out;
   }
 
   /**
@@ -709,6 +816,8 @@
   function setStylePreset(name) {
     if (!name) return geometryStore.stylePreset;
     geometryStore.stylePreset = String(name);
+    /* explicit user choice — large-system degrade never overrides it */
+    geometryStore.userPresetChosen = true;
     if (_canvasViewer("main") && typeof applyStylePreset === "function") {
       try { applyStylePreset(geometryStore.stylePreset); } catch (_) { /* empty viewer */ }
     }
@@ -734,6 +843,7 @@
     frames: [],
     timerHandle: null,
     selectionToken: 0,
+    sampledTotal: 0,
   };
 
   /* IRC playback adapter: rebuilds the model on the MAIN viewer with the
@@ -824,6 +934,13 @@
     clearOverlay();
     var entries = _ircEntries(direction);
     if (!entries.length) return false;
+    /* trajectory sampling (todo 41): huge IRC paths play the sampled set —
+       stepping 500+ DOM frames defeats the purpose of the threshold */
+    var totalEntries = entries.length;
+    if (entries.length > TRAJECTORY_SAMPLE_THRESHOLD) {
+      entries = sampleFrames(entries, TRAJECTORY_SAMPLE_THRESHOLD, TRAJECTORY_SAMPLE_TARGET);
+    }
+    ircPlayback.sampledTotal = entries.length < totalEntries ? totalEntries : 0;
     var fetchFn = _getFetchImpl();
     if (!fetchFn) return false;
     /* both animations own the main viewer — never run them interleaved */
@@ -878,6 +995,7 @@
     ircPlayback.direction = null;
     ircPlayback.frames = [];
     ircPlayback.frameIndex = 0;
+    ircPlayback.sampledTotal = 0;
     if (wasActive && typeof document !== "undefined") _renderPlaybackBar();
   }
 
@@ -902,9 +1020,17 @@
     var bar = document.getElementById("structure-playback-bar");
     if (!bar) return;
     var hasIrc = _ircEntries("forward").length > 0 || _ircEntries("reverse").length > 0;
-    if (!hasIrc) { bar.style.display = "none"; bar.textContent = ""; return; }
+    var degraded = !!geometryStore.lastLoadDegraded;
+    if (!hasIrc && !degraded) { bar.style.display = "none"; bar.textContent = ""; return; }
     bar.style.display = "";
     bar.textContent = "";
+    if (degraded) {
+      var degradeNotice = document.createElement("span");
+      degradeNotice.className = "sv-notice sv-notice-degrade";
+      degradeNotice.textContent = _t("structure.perf.degrade_notice", STR.PERF_DEGRADE_NOTICE);
+      bar.appendChild(degradeNotice);
+    }
+    if (!hasIrc) return;
     var title = document.createElement("span");
     title.className = "sv-playback-title";
     title.textContent = _t("structure.irc.title", STR.IRC_TITLE);
@@ -919,6 +1045,10 @@
         ? _t("structure.irc.loading", STR.IRC_LOADING)
         : " " + Math.min(ircPlayback.frameIndex + 1, ircPlayback.frames.length) + "/" + ircPlayback.frames.length;
       status.textContent = _t("structure.irc.playing", STR.IRC_PLAYING) + " · " + dirLabel + progress;
+      if (ircPlayback.sampledTotal) {
+        status.textContent += " · " + _t("structure.perf.sampled", STR.PERF_SAMPLED) +
+          " " + ircPlayback.frames.length + "/" + ircPlayback.sampledTotal;
+      }
       bar.appendChild(status);
       bar.appendChild(_playbackBtn("structure.irc.stop", STR.IRC_STOP, function () {
         stopIrcPlayback();
@@ -1398,6 +1528,17 @@
       groupMap[groups[gi].id] = groups[gi];
     }
 
+    /* entry-list virtualization (todo 41): fixed head+tail windows above
+       LIST_VIRTUALIZE_THRESHOLD; selected + default entries force-included */
+    var viz = virtualizeEntries(entries, LIST_VIRTUALIZE_THRESHOLD, [
+      structureViewerState.selectedEntryId,
+      (payload && payload.default_entry_id) || null,
+    ]);
+    var visibleSet = viz.windowed ? {} : null;
+    if (visibleSet) {
+      for (var vi = 0; vi < viz.visible.length; vi++) visibleSet[viz.visible[vi].id] = true;
+    }
+
     var entriesByGroup = {};
     for (var ei = 0; ei < entries.length; ei++) {
       var e = entries[ei];
@@ -1420,14 +1561,47 @@
         listBody.appendChild(header);
       }
 
+      /* trajectory sampling (todo 41): per-frame groups (every entry carries
+         source.frame_index — IRC directions, scan frames) above threshold */
+      if (_isPerFrameGroup(groupEntries)) {
+        var sampled = sampleFrames(groupEntries, TRAJECTORY_SAMPLE_THRESHOLD, TRAJECTORY_SAMPLE_TARGET);
+        if (sampled.length < groupEntries.length) {
+          listBody.appendChild(_listMarker(_t("structure.perf.sampled", STR.PERF_SAMPLED),
+            sampled.length, groupEntries.length));
+          groupEntries = sampled;
+        }
+      }
+
       for (var ej = 0; ej < groupEntries.length; ej++) {
         var entry = groupEntries[ej];
+        if (visibleSet && !visibleSet[entry.id]) continue;
         var row = _renderEntryRow(entry);
         listBody.appendChild(row);
       }
     }
 
+    if (viz.windowed) {
+      listBody.appendChild(_listMarker(_t("structure.perf.partial_list", STR.PERF_PARTIAL_LIST),
+        viz.visible.length, viz.total));
+    }
+
     _renderPlaybackBar();
+  }
+
+  function _isPerFrameGroup(groupEntries) {
+    if (!groupEntries || !groupEntries.length) return false;
+    for (var i = 0; i < groupEntries.length; i++) {
+      var src = groupEntries[i] && groupEntries[i].source;
+      if (!src || src.frame_index == null) return false;
+    }
+    return true;
+  }
+
+  function _listMarker(label, shown, total) {
+    var marker = document.createElement("div");
+    marker.className = "sv-list-marker";
+    marker.textContent = label + " " + shown + "/" + total;
+    return marker;
   }
 
   function _renderEntryRow(entry) {
@@ -2058,6 +2232,12 @@
     restoreCamera: restoreCamera,
     setStylePreset: setStylePreset,
     getStylePreset: getStylePreset,
+    LIST_VIRTUALIZE_THRESHOLD: LIST_VIRTUALIZE_THRESHOLD,
+    TRAJECTORY_SAMPLE_THRESHOLD: TRAJECTORY_SAMPLE_THRESHOLD,
+    TRAJECTORY_SAMPLE_TARGET: TRAJECTORY_SAMPLE_TARGET,
+    LARGE_SYSTEM_ATOM_THRESHOLD: LARGE_SYSTEM_ATOM_THRESHOLD,
+    virtualizeEntries: virtualizeEntries,
+    sampleFrames: sampleFrames,
     playIrcPath: playIrcPath,
     stopIrcPlayback: stopIrcPlayback,
     isIrcPlaying: isIrcPlaying,

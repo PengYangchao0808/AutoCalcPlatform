@@ -1,6 +1,6 @@
 /**
  * ACP Structure Viewer — Stylesheet
- * @version 0.6.0
+ * @version 0.7.0
  *
  * Design tokens inherited from ACP_Workbench_v2.html :root variables.
  * Three-column layout: list | canvas | inspector.
@@ -348,6 +348,24 @@
   background: var(--sv-accent-soft);
   border: 1px solid rgba(78, 161, 255, 0.25);
   color: var(--sv-accent);
+}
+
+/* ===== Performance degradation notices (Wave 7 / todo 41) ===== */
+.sv-notice-degrade {
+  background: rgba(242, 184, 75, 0.1);
+  border: 1px solid rgba(242, 184, 75, 0.25);
+  color: var(--sv-amber);
+  margin-right: 12px;
+}
+
+.sv-list-marker {
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--sv-text-tertiary);
+  font-style: italic;
+  border-top: 1px dashed var(--sv-border-subtle);
+  border-bottom: 1px dashed var(--sv-border-subtle);
+  margin: 4px 0;
 }
 
 /* ===== Vibration frequency inspector (Wave 5) ===== */
