@@ -3965,3 +3965,212 @@ def test_vibration_viewer_node_mismatch_disables_controls() -> None:
         f"Node mismatch-disable test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Wave 6 / todo 32: adjacency graph + provenance + fragments
+# ---------------------------------------------------------------------------
+
+
+def test_structure_editor_graph_contract() -> None:
+    """Contract: covalent-radii table, tolerance constant, pure graph API,
+    provenance strings, locked-flag guard, no-structure-mutation markers."""
+    js = _EDITOR_JS_PATH.read_text(encoding="utf-8")
+
+    assert "COVALENT_RADII" in js
+    for pair in ("H: 0.31", "C: 0.76", "O: 0.66", "Cl: 1.02", "Cu: 1.32"):
+        assert pair in js, f"covalent radius missing: {pair}"
+    assert "DEFAULT_RADIUS = 1.0" in js
+    assert "BOND_TOLERANCE = 1.3" in js
+
+    for name in (
+        "buildAdjacency",
+        "connectedComponents",
+        "fragmentsAfterCut",
+        "parseMolBonds",
+        "buildGraphFromCurrentEntry",
+        "editorState",
+    ):
+        assert name in js, f"{name} missing from structure_editor.js"
+
+    # Edge source markers + provenance strings (zh STR fallbacks)
+    assert '"explicit"' in js and '"inferred"' in js
+    assert "\u6587\u4ef6\u663e\u5f0f\u952e" in js  # 文件显式键
+    assert "\u5171\u4ef7\u534a\u5f84\u63a8\u65ad" in js  # 共价半径推断
+
+    # Locked guard + read-only contract
+    assert "if (locked) return null" in js
+    assert "displayedCoords" in js and "displayedSymbols" in js
+
+
+def test_structure_editor_node_adjacency_logic() -> None:
+    """Node logic: explicit-vs-inferred edges, tolerance boundary (<=),
+    unknown-element default radius, fragments preserved, coords unmutated,
+    connectedComponents + fragmentsAfterCut, parseMolBonds, locked guard."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = (textwrap.dedent("""\
+        var window = { fetch: null };
+        require(EDITOR_PATH);
+        var ed = window.ACPStructureEditor;
+
+        // (a) explicit bonds win exclusively (H2O geometry, but only one
+        // explicit edge is used even though O-H distances would bond)
+        var symbols = ["O", "H", "H"];
+        var coords = [[0, 0, 0], [0.96, 0, 0], [-0.4, 0.87, 0]];
+        var explicit = ed.buildAdjacency(symbols, coords, [{ a: 0, b: 1, order: 2 }]);
+        if (explicit.edges.length !== 1 ||
+            explicit.edges[0].a !== 0 || explicit.edges[0].b !== 1 ||
+            explicit.edges[0].order !== 2 || explicit.edges[0].source !== "explicit") {
+            console.error("FAIL: explicit edges " + JSON.stringify(explicit.edges));
+            process.exit(1);
+        }
+        if (explicit.provenance !== "文件显式键") {
+            console.error("FAIL: explicit provenance " + explicit.provenance);
+            process.exit(1);
+        }
+
+        // inferred water: O-H 0.96 <= 1.3*(0.66+0.31)=1.261 bonded x2;
+        // H-H ~1.61 > 1.3*(0.31+0.31)=0.806 NOT bonded
+        var before = JSON.stringify(coords);
+        var inferred = ed.buildAdjacency(symbols, coords, null);
+        if (inferred.edges.length !== 2) {
+            console.error("FAIL: expected 2 inferred O-H edges, got " +
+                JSON.stringify(inferred.edges));
+            process.exit(1);
+        }
+        for (var i = 0; i < inferred.edges.length; i++) {
+            if (inferred.edges[i].source !== "inferred" ||
+                inferred.edges[i].order !== 1) {
+                console.error("FAIL: inferred edge fields");
+                process.exit(1);
+            }
+        }
+        if (inferred.provenance !== "共价半径推断 (tolerance 1.3)") {
+            console.error("FAIL: inferred provenance " + inferred.provenance);
+            process.exit(1);
+        }
+        if (JSON.stringify(coords) !== before) {
+            console.error("FAIL: coords were mutated");
+            process.exit(1);
+        }
+
+        // (b) tolerance boundary: dist == 1.3*(r_i+r_j) bonds; above does not
+        var d = 1.3 * (0.76 + 0.76);
+        var atBoundary = ed.buildAdjacency(
+            ["C", "C"], [[0, 0, 0], [d, 0, 0]], null);
+        if (atBoundary.edges.length !== 1) {
+            console.error("FAIL: == boundary must bond");
+            process.exit(1);
+        }
+        var above = ed.buildAdjacency(["C", "C"], [[0, 0, 0], [2.0, 0, 0]], null);
+        if (above.edges.length !== 0) {
+            console.error("FAIL: above cutoff must not bond");
+            process.exit(1);
+        }
+        // unknown element -> DEFAULT_RADIUS 1.0 (cutoff 2.6)
+        var unk = ed.buildAdjacency(["Xx", "Xx"], [[0, 0, 0], [2.0, 0, 0]], null);
+        if (unk.edges.length !== 1) {
+            console.error("FAIL: unknown element default radius");
+            process.exit(1);
+        }
+        var unkFar = ed.buildAdjacency(["Xx", "Xx"], [[0, 0, 0], [2.7, 0, 0]], null);
+        if (unkFar.edges.length !== 0) {
+            console.error("FAIL: unknown element above default cutoff");
+            process.exit(1);
+        }
+
+        // (c) disconnected fragments preserved — no auto-bonding
+        var iso = ed.buildAdjacency(
+            ["H", "H"], [[0, 0, 0], [8.0, 0, 0]], null);
+        if (iso.edges.length !== 0) {
+            console.error("FAIL: isolated atoms must stay unbonded");
+            process.exit(1);
+        }
+        var comps = ed.connectedComponents(iso.edges, 2);
+        if (JSON.stringify(comps) !== JSON.stringify([[0], [1]])) {
+            console.error("FAIL: fragments " + JSON.stringify(comps));
+            process.exit(1);
+        }
+
+        // (e) linear 3-atom chain: A-B-C
+        var chain = [{ a: 0, b: 1 }, { a: 1, b: 2 }];
+        var whole = ed.connectedComponents(chain, 3);
+        if (JSON.stringify(whole) !== JSON.stringify([[0, 1, 2]])) {
+            console.error("FAIL: chain components " + JSON.stringify(whole));
+            process.exit(1);
+        }
+        var cut01 = ed.fragmentsAfterCut(chain, 3, 0, 1);
+        if (JSON.stringify(cut01) !== JSON.stringify([[0], [1, 2]])) {
+            console.error("FAIL: cut 0-1 -> " + JSON.stringify(cut01));
+            process.exit(1);
+        }
+        var cut12 = ed.fragmentsAfterCut(chain, 3, 2, 1);
+        if (JSON.stringify(cut12) !== JSON.stringify([[0, 1], [2]])) {
+            console.error("FAIL: cut 1-2 (reversed args) -> " + JSON.stringify(cut12));
+            process.exit(1);
+        }
+        if (JSON.stringify(chain) !== JSON.stringify([{ a: 0, b: 1 }, { a: 1, b: 2 }])) {
+            console.error("FAIL: fragmentsAfterCut mutated edges");
+            process.exit(1);
+        }
+
+        // (f) parseMolBonds minimal V2000 (2 atoms, 1 single bond)
+        var mol = [
+            "minimal",
+            "  ACP",
+            "",
+            "  2  1  0  0  0  0  0  0  0  0999 V2000",
+            "    0.0000    0.0000    0.0000 O   0  0  0  0  0  0  0  0  0  0  0  0",
+            "    0.9600    0.0000    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0",
+            "  1  2  1  0  0  0  0"
+        ].join("\\n");
+        var parsed = ed.parseMolBonds(mol);
+        if (JSON.stringify(parsed) !== JSON.stringify([{ a: 0, b: 1, order: 1 }])) {
+            console.error("FAIL: parseMolBonds " + JSON.stringify(parsed));
+            process.exit(1);
+        }
+        if (ed.parseMolBonds("") !== null && ed.parseMolBonds("").length !== 0) {
+            console.error("FAIL: parseMolBonds empty input");
+            process.exit(1);
+        }
+
+        // (g) locked -> buildGraphFromCurrentEntry refuses
+        window.ACPStructureViewer = {
+            state: {
+                displayedCoords: coords,
+                displayedSymbols: symbols,
+                displayedEntryId: "e1"
+            }
+        };
+        ed.setLocked(true);
+        if (ed.buildGraphFromCurrentEntry() !== null) {
+            console.error("FAIL: locked build must return null");
+            process.exit(1);
+        }
+        ed.setLocked(false);
+        var built = ed.buildGraphFromCurrentEntry();
+        if (!built || built.edges.length !== 2 ||
+            built.provenance !== "共价半径推断 (tolerance 1.3)") {
+            console.error("FAIL: buildGraphFromCurrentEntry " + JSON.stringify(built));
+            process.exit(1);
+        }
+        if (ed.editorState.graph !== built || ed.editorState.provenance !== built.provenance) {
+            console.error("FAIL: editorState cache not populated");
+            process.exit(1);
+        }
+        ed.setLocked(true);
+        if (ed.buildGraphFromCurrentEntry() !== null || !ed.isLocked()) {
+            console.error("FAIL: lock state");
+            process.exit(1);
+        }
+        console.log("PASS");
+    """)
+        .replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node adjacency test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
