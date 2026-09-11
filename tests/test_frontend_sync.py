@@ -4174,3 +4174,229 @@ def test_structure_editor_node_adjacency_logic() -> None:
         f"Node adjacency test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Wave 6 / todo 33: bond-length edit + move-side toggle
+# ---------------------------------------------------------------------------
+
+
+def test_structure_editor_bond_edit_contract() -> None:
+    """Contract: edit API names, range constants, rejection reasons,
+    move-side toggle labels (todo 36 UI consumes the constants)."""
+    js = _EDITOR_JS_PATH.read_text(encoding="utf-8")
+
+    for name in (
+        "editBondLength",
+        "resolveMoveSide",
+        "defaultMoveSide",
+        "applyBondLengthEdit",
+        "pendingEdit",
+    ):
+        assert name in js, f"{name} missing from structure_editor.js"
+
+    assert "BOND_LENGTH_MIN = 0.4" in js
+    assert "BOND_LENGTH_MAX = 5.0" in js
+    for reason in ("out_of_range", "no_bond", "ring_bond", "locked"):
+        assert f'"{reason}"' in js, f"rejection reason {reason} missing"
+
+    # Sign derivation must be documented (s = L - T root choice)
+    assert "s = L - T" in js
+
+    # Move-side toggle labels (zh STR fallbacks for the todo-36 UI)
+    assert "\u79fb\u52a8\u5de6\u4fa7" in js  # 移动左侧
+    assert "\u79fb\u52a8\u53f3\u4fa7" in js  # 移动右侧
+
+    # Rigid translation only inside editBondLength: no rotation math there
+    # (todos 34-35 add rotation in their own functions)
+    edit_body = js.split("function editBondLength", 1)[1]
+    edit_body = edit_body.split("\n  function ", 1)[0]
+    assert "Math.cos" not in edit_body and "Math.sin" not in edit_body
+
+
+def test_structure_editor_node_bond_length_edit() -> None:
+    """Node logic: rigid translation to target, move-side toggle, range
+    boundaries, ring/no-bond rejections, rigidity (<=1e-9), non-moved side
+    byte-identical, input unmutated, locked rejection."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = (textwrap.dedent("""\
+        var window = { fetch: null };
+        require(EDITOR_PATH);
+        var ed = window.ACPStructureEditor;
+
+        function dist(a, b) {
+            var dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
+            return Math.sqrt(dx * dx + dy * dy + dz * dz);
+        }
+        function close(a, b, eps) { return Math.abs(a - b) <= (eps || 1e-9); }
+
+        // 4-atom chain, non-collinear coordinates
+        var symbols = ["C", "C", "C", "C"];
+        var coords = [
+            [0.0, 0.0, 0.0],
+            [1.5, 0.2, -0.1],
+            [3.0, 0.1, 0.3],
+            [4.5, -0.2, 0.1]
+        ];
+        var chain = [{ a: 0, b: 1 }, { a: 1, b: 2 }, { a: 2, b: 3 }];
+        var snapshot = JSON.stringify(coords);
+
+        // resolve/default move side semantics
+        var frags = ed.fragmentsAfterCut(chain, 4, 1, 2); // [[0,1],[2,3]]
+        if (ed.defaultMoveSide(frags, 1, 2) !== "A") {
+            console.error("FAIL: tie must default to side A");
+            process.exit(1);
+        }
+        if (ed.resolveMoveSide(frags, 1, 2, "B") !== "B" ||
+            ed.resolveMoveSide(frags, 1, 2, null) !== "A" ||
+            ed.resolveMoveSide(frags, 1, 2, "X") !== null) {
+            console.error("FAIL: resolveMoveSide rules");
+            process.exit(1);
+        }
+        var fragsSmall = ed.fragmentsAfterCut(chain, 3, 0, 1); // [[0],[1,2]]
+        if (ed.defaultMoveSide(fragsSmall, 0, 1) !== "A") {
+            console.error("FAIL: smaller side is A here");
+            process.exit(1);
+        }
+        if (ed.defaultMoveSide(fragsSmall, 1, 0) !== "B") {
+            console.error("FAIL: smaller side is B when viewed from atom 1");
+            process.exit(1);
+        }
+
+        // (a) default side (tie -> A): atoms 0,1 move by the SAME vector
+        var resA = ed.editBondLength(symbols, coords, chain, 1, 2, 1.2, null);
+        if (!resA.ok) {
+            console.error("FAIL: edit rejected " + resA.reason);
+            process.exit(1);
+        }
+        var out = resA.coords;
+        // non-moved side byte-identical
+        if (JSON.stringify(out[2]) !== JSON.stringify(coords[2]) ||
+            JSON.stringify(out[3]) !== JSON.stringify(coords[3])) {
+            console.error("FAIL: non-moved atoms changed");
+            process.exit(1);
+        }
+        // moved atoms share one rigid shift
+        var shift = [out[0][0] - coords[0][0], out[0][1] - coords[0][1], out[0][2] - coords[0][2]];
+        if (!close(out[1][0] - coords[1][0], shift[0]) ||
+            !close(out[1][1] - coords[1][1], shift[1]) ||
+            !close(out[1][2] - coords[1][2], shift[2])) {
+            console.error("FAIL: moved atoms not shifted identically");
+            process.exit(1);
+        }
+        // new bond length hits target within 1e-4
+        if (!close(dist(out[1], out[2]), 1.2, 1e-4)) {
+            console.error("FAIL: length " + dist(out[1], out[2]));
+            process.exit(1);
+        }
+        // moved fragment internal distance preserved (0-1 bond)
+        if (!close(dist(out[0], out[1]), dist(coords[0], coords[1]))) {
+            console.error("FAIL: moved fragment deformed");
+            process.exit(1);
+        }
+        // input never mutated
+        if (JSON.stringify(coords) !== snapshot) {
+            console.error("FAIL: input coords mutated");
+            process.exit(1);
+        }
+
+        // (b) explicit moveSide B: atoms 0,1 unchanged; 2,3 rigidly shifted
+        var resB = ed.editBondLength(symbols, coords, chain, 1, 2, 1.2, "B");
+        var outB = resB.coords;
+        if (!resB.ok ||
+            JSON.stringify(outB[0]) !== JSON.stringify(coords[0]) ||
+            JSON.stringify(outB[1]) !== JSON.stringify(coords[1])) {
+            console.error("FAIL: side A must be untouched when moving B");
+            process.exit(1);
+        }
+        if (!close(dist(outB[1], outB[2]), 1.2, 1e-4)) {
+            console.error("FAIL: side-B edit length");
+            process.exit(1);
+        }
+        var shiftB = outB[2].map(function (v, k) { return v - coords[2][k]; });
+        for (var k2 = 0; k2 < 3; k2++) {
+            if (!close(outB[3][k2] - coords[3][k2], shiftB[k2])) {
+                console.error("FAIL: side-B rigid shift");
+                process.exit(1);
+            }
+        }
+
+        // (c) range: exclusive outside, inclusive boundaries
+        if (ed.editBondLength(symbols, coords, chain, 1, 2, 0.39, null).reason !== "out_of_range" ||
+            ed.editBondLength(symbols, coords, chain, 1, 2, 5.01, null).reason !== "out_of_range") {
+            console.error("FAIL: out-of-range must reject");
+            process.exit(1);
+        }
+        if (!ed.editBondLength(symbols, coords, chain, 1, 2, 0.4, null).ok ||
+            !ed.editBondLength(symbols, coords, chain, 1, 2, 5.0, null).ok) {
+            console.error("FAIL: boundary targets must be accepted");
+            process.exit(1);
+        }
+
+        // (d) ring bond: triangle stays connected after the cut
+        var ring = [{ a: 0, b: 1 }, { a: 1, b: 2 }, { a: 0, b: 2 }];
+        if (ed.editBondLength(symbols, coords, ring, 0, 1, 1.2, null).reason !== "ring_bond") {
+            console.error("FAIL: ring bond must reject");
+            process.exit(1);
+        }
+
+        // (e) non-bonded pair
+        if (ed.editBondLength(symbols, coords, chain, 0, 3, 1.2, null).reason !== "no_bond") {
+            console.error("FAIL: non-bonded pair must reject");
+            process.exit(1);
+        }
+
+        // disconnected extra fragment stays untouched (general fragments)
+        var coords2 = coords.concat([[20, 5, 5], [21, 5, 5]]);
+        var chain2 = chain.concat([{ a: 4, b: 5 }]);
+        var resD = ed.editBondLength(symbols.concat(["H", "H"]), coords2, chain2, 1, 2, 1.2, "B");
+        if (!resD.ok ||
+            JSON.stringify(resD.coords[4]) !== JSON.stringify(coords2[4]) ||
+            JSON.stringify(resD.coords[5]) !== JSON.stringify(coords2[5])) {
+            console.error("FAIL: unrelated fragment must not move");
+            process.exit(1);
+        }
+
+        // (h) locked -> applyBondLengthEdit rejects; unlocked -> stages pendingEdit
+        window.ACPStructureViewer = {
+            state: {
+                displayedCoords: coords,
+                displayedSymbols: symbols,
+                displayedEntryId: "e1"
+            }
+        };
+        ed.setLocked(true);
+        var lockedRes = ed.applyBondLengthEdit(1, 2, 1.2, null);
+        if (lockedRes.ok || lockedRes.reason !== "locked") {
+            console.error("FAIL: locked edit must reject");
+            process.exit(1);
+        }
+        ed.setLocked(false);
+        var applied = ed.applyBondLengthEdit(1, 2, 1.2, "B");
+        if (!applied.ok || !ed.editorState.pendingEdit ||
+            ed.editorState.pendingEdit.type !== "bond_length" ||
+            ed.editorState.pendingEdit.atomA !== 1 ||
+            ed.editorState.pendingEdit.atomB !== 2 ||
+            ed.editorState.pendingEdit.target !== 1.2 ||
+            ed.editorState.pendingEdit.moveSide !== "B" ||
+            ed.editorState.pendingEdit.coords !== applied.coords) {
+            console.error("FAIL: pendingEdit not staged: " +
+                JSON.stringify(ed.editorState.pendingEdit && ed.editorState.pendingEdit.type));
+            process.exit(1);
+        }
+        // displayed coords untouched by staging (preview is todo 36)
+        if (JSON.stringify(window.ACPStructureViewer.state.displayedCoords) !== snapshot) {
+            console.error("FAIL: staging must not touch displayed coords");
+            process.exit(1);
+        }
+        console.log("PASS");
+    """)
+        .replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node bond-edit test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout

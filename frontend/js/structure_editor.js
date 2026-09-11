@@ -1,44 +1,48 @@
 /**
- * ACP Structure Editor — adjacency graph + provenance + fragments (Wave 6, todo 32)
- * @version 0.3.0
+ * ACP Structure Editor — adjacency graph + bond-length edit (Wave 6, todos 32-33)
+ * @version 0.4.0
  *
  * Namespace: window.ACPStructureEditor
  *
  * Exposes:
  *   - setLocked(true|false) / isLocked()  (animation mutual exclusion, todo 30)
- *   - editorState                         ({graph, provenance} cache)
+ *   - editorState                         ({graph, provenance, pendingEdit})
  *   - buildGraphFromCurrentEntry(explicitBonds?)  (reads ACPStructureViewer.state;
  *                                          null when locked or no coordinates)
  *   - buildAdjacency(symbols, coords, explicitBonds) (PURE graph build)
  *   - connectedComponents(edges, atomCount)          (PURE fragment partition)
- *   - fragmentsAfterCut(edges, atomCount, cutA, cutB) (PURE — todo 33 move-side)
+ *   - fragmentsAfterCut(edges, atomCount, cutA, cutB) (PURE — move-side logic)
  *   - parseMolBonds(molText)               (minimal V2000 bond-block reader)
  *   - COVALENT_RADII / BOND_TOLERANCE / DEFAULT_RADIUS (named constants)
+ *   - editBondLength(symbols, coords, edges, a, b, target, moveSide) (PURE)
+ *   - resolveMoveSide(fragments, a, b, preferred) / defaultMoveSide(...) (PURE)
+ *   - applyBondLengthEdit(a, b, targetLength, moveSide) (orchestration)
  *
- * Contract (doc §6.1-§6.2): the adjacency graph is EDIT-ONLY data —
- * building it NEVER modifies the displayed model or the stored structure,
- * and NEVER adds/removes atoms or bonds.  Explicit bonds (parsed SDF/MOL
- * bond blocks) take precedence; otherwise bonds are inferred from the
- * covalent-radius table with tolerance 1.3*(r_i+r_j) and every inferred
- * edge is marked as such.  Disconnected fragments stay disconnected —
- * no auto-bonding.
+ * Contract (doc §6.1-§6.3): edits are INTERNAL-COORDINATE ONLY — a bond
+ * edit rigidly TRANSLATES one fragment (never rotates/deforms it, never
+ * touches the non-moved side); bond topology, elements, and atom count
+ * never change.  Targets outside [0.4, 5.0] Å are rejected, ring bonds
+ * (graph still connected after the cut) are rejected.  Accepted edits are
+ * staged in editorState.pendingEdit — pushing them to the viewer and the
+ * undo/redo UI is todo 36.
  *
- * TODO(todo-33): bond-length edit + move-side toggle (consumes fragmentsAfterCut)
  * TODO(todo-34): bond-angle edit + collinear fallback
  * TODO(todo-35): dihedral edit
- * TODO(todo-36): undo/redo stack + dirty state + provenance inspector line
+ * TODO(todo-36): undo/redo stack + dirty state + preview/apply pipeline
  * TODO(todo-37): save-as-asset + provenance metadata
  */
 (function () {
   "use strict";
 
   /** Version tag — bump on every structural change. */
-  var VERSION = "0.3.0";
+  var VERSION = "0.4.0";
 
   /* ---- user-visible strings (zh fallback; i18n dictionary keys land in todo 36) ---- */
   var STR = {
     PROV_EXPLICIT: "\u6587\u4ef6\u663e\u5f0f\u952e",                       // 文件显式键
     PROV_INFERRED: "\u5171\u4ef7\u534a\u5f84\u63a8\u65ad (tolerance {tol})", // 共价半径推断 (tolerance 1.3)
+    MOVE_LEFT: "\u79fb\u52a8\u5de6\u4fa7",                                 // 移动左侧
+    MOVE_RIGHT: "\u79fb\u52a8\u53f3\u4fa7",                               // 移动右侧
   };
 
   /**
@@ -58,10 +62,15 @@
   /** Inferred-bond distance cutoff multiplier: dist <= 1.3*(r_i + r_j). */
   var BOND_TOLERANCE = 1.3;
 
+  /** Allowed bond-length edit range in Å (inclusive; doc §6.3). */
+  var BOND_LENGTH_MIN = 0.4;
+  var BOND_LENGTH_MAX = 5.0;
+
   /** @typedef {Object} EditorState @property {Object|null} graph @property {string|null} provenance */
   var editorState = {
     graph: null,
     provenance: null,
+    pendingEdit: null,
   };
 
   /** Animation mutual-exclusion flag (todo 30; Wave 6 edits check this). */
@@ -260,6 +269,184 @@
     return bonds;
   }
 
+  /* ---- bond-length edit (todo 33) ---- */
+
+  /**
+   * Default move side for a cut bond: the fragment with FEWER atoms
+   * moves; ties go to side A (the fragment containing atomA).
+   *
+   * @param {Array<Array<number>>} fragments - connectedComponents output
+   * @param {number} atomA
+   * @param {number} atomB
+   * @returns {string} "A" | "B"
+   */
+  function defaultMoveSide(fragments, atomA, atomB) {
+    var sideA = _componentOf(fragments, atomA);
+    var sideB = _componentOf(fragments, atomB);
+    var sizeA = sideA ? sideA.length : 0;
+    var sizeB = sideB ? sideB.length : 0;
+    return sizeB < sizeA ? "B" : "A";
+  }
+
+  /**
+   * Resolve the move side: an explicit "A"/"B" preference is honored,
+   * null/undefined falls back to defaultMoveSide, anything else is
+   * invalid (returns null).
+   *
+   * @param {Array<Array<number>>} fragments
+   * @param {number} atomA
+   * @param {number} atomB
+   * @param {string|null} [preferred]
+   * @returns {string|null}
+   */
+  function resolveMoveSide(fragments, atomA, atomB, preferred) {
+    if (preferred === "A" || preferred === "B") return preferred;
+    if (preferred == null) return defaultMoveSide(fragments, atomA, atomB);
+    return null;
+  }
+
+  function _componentOf(fragments, atomIndex) {
+    if (!fragments) return null;
+    for (var i = 0; i < fragments.length; i++) {
+      if (fragments[i].indexOf(atomIndex) >= 0) return fragments[i];
+    }
+    return null;
+  }
+
+  /**
+   * Edit the A-B bond length to `targetLength` by rigidly translating ONE
+   * side of the temporarily cut bond.  PURE: a NEW coords array is
+   * returned; the input is never mutated and the non-moved rows keep
+   * byte-identical values.
+   *
+   * Math (u = (r_B - r_A)/L, the unit vector A -> B, L = current length,
+   * T = target):
+   *   moving side B: every side-B atom shifts by (T - L) * u, so
+   *     r_B' - r_A = T*u  ->  |A-B'| = T.
+   *   moving side A: every side-A atom shifts by s*u with s = L - T (the
+   *     near-root of |L - s| = T; s = L + T would push A AWAY past B and
+   *     invert the bond direction), so
+   *     r_B - r_A' = (L - s)*u = T*u  ->  |A'-B| = T.
+   * Both cases are pure translations: internal geometry of the moved
+   * fragment and every non-moved atom are exactly preserved.
+   *
+   * Rejections: target outside [BOND_LENGTH_MIN, BOND_LENGTH_MAX] ->
+   * "out_of_range"; a-b not bonded -> "no_bond"; graph still connected
+   * after the cut (ring bond) -> "ring_bond"; zero-length bond (no unit
+   * vector) -> "degenerate"; invalid moveSide -> "invalid_move_side".
+   *
+   * @param {Array<string>} symbols
+   * @param {Array<Array<number>>} coords
+   * @param {Array<{a: number, b: number}>} edges
+   * @param {number} atomA
+   * @param {number} atomB
+   * @param {number} targetLength
+   * @param {string|null} [moveSide] - "A" | "B" | null (default smaller side)
+   * @returns {{ok: boolean, reason?: string, coords?: Array<Array<number>>}}
+   */
+  function editBondLength(symbols, coords, edges, atomA, atomB, targetLength, moveSide) {
+    var t = +targetLength;
+    if (!isFinite(t) || t < BOND_LENGTH_MIN || t > BOND_LENGTH_MAX) {
+      return { ok: false, reason: "out_of_range" };
+    }
+    if (!symbols || !coords || !edges) {
+      return { ok: false, reason: "no_bond" };
+    }
+    var hasBond = false;
+    for (var e = 0; e < edges.length; e++) {
+      var edge = edges[e];
+      if ((edge.a === atomA && edge.b === atomB) ||
+          (edge.a === atomB && edge.b === atomA)) {
+        hasBond = true;
+        break;
+      }
+    }
+    if (!hasBond) return { ok: false, reason: "no_bond" };
+
+    var fragments = fragmentsAfterCut(edges, coords.length, atomA, atomB);
+    var sideA = _componentOf(fragments, atomA);
+    var sideB = _componentOf(fragments, atomB);
+    if (sideA && sideB && sideA === sideB) {
+      return { ok: false, reason: "ring_bond" };
+    }
+    if (!sideA || !sideB) {
+      return { ok: false, reason: "no_bond" };
+    }
+
+    var side = resolveMoveSide(fragments, atomA, atomB, moveSide);
+    if (side !== "A" && side !== "B") {
+      return { ok: false, reason: "invalid_move_side" };
+    }
+
+    var ra = coords[atomA];
+    var rb = coords[atomB];
+    var dx = +rb[0] - +ra[0];
+    var dy = +rb[1] - +ra[1];
+    var dz = +rb[2] - +ra[2];
+    var len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    if (!isFinite(len) || len < 1e-12) {
+      return { ok: false, reason: "degenerate" };
+    }
+    var ux = dx / len, uy = dy / len, uz = dz / len;
+    var shift = (side === "B") ? (t - len) : (len - t);
+
+    var moving = (side === "B") ? sideB : sideA;
+    var movingSet = {};
+    for (var m = 0; m < moving.length; m++) movingSet[moving[m]] = true;
+
+    var out = [];
+    for (var i = 0; i < coords.length; i++) {
+      if (movingSet[i]) {
+        out.push([+coords[i][0] + shift * ux, +coords[i][1] + shift * uy, +coords[i][2] + shift * uz]);
+      } else {
+        out.push(coords[i]);
+      }
+    }
+    return { ok: true, coords: out };
+  }
+
+  /**
+   * Orchestration for a bond-length edit on the currently displayed
+   * entry: respects the animation lock, reads displayed coords/symbols +
+   * the cached graph, runs the pure edit, and STAGES the result in
+   * editorState.pendingEdit (the viewer preview/apply pipeline lands in
+   * todo 36 — nothing is pushed to the display here).
+   *
+   * @param {number} atomA
+   * @param {number} atomB
+   * @param {number} targetLength
+   * @param {string|null} [moveSide]
+   * @returns {{ok: boolean, reason?: string, coords?: Array<Array<number>>}}
+   */
+  function applyBondLengthEdit(atomA, atomB, targetLength, moveSide) {
+    if (locked) return { ok: false, reason: "locked" };
+    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
+      ? window.ACPStructureViewer.state
+      : null;
+    if (!svState || !svState.displayedCoords || !svState.displayedSymbols) {
+      return { ok: false, reason: "no_structure" };
+    }
+    var graph = editorState.graph || buildGraphFromCurrentEntry();
+    if (!graph) return { ok: false, reason: "no_structure" };
+
+    var result = editBondLength(
+      svState.displayedSymbols, svState.displayedCoords, graph.edges,
+      atomA, atomB, targetLength, moveSide
+    );
+    if (result.ok) {
+      var fragments = fragmentsAfterCut(graph.edges, svState.displayedCoords.length, atomA, atomB);
+      editorState.pendingEdit = {
+        type: "bond_length",
+        atomA: atomA,
+        atomB: atomB,
+        target: +targetLength,
+        moveSide: resolveMoveSide(fragments, atomA, atomB, moveSide),
+        coords: result.coords,
+      };
+    }
+    return result;
+  }
+
   /**
    * Build the graph for the structure viewer's currently displayed entry
    * (reads ACPStructureViewer.state.displayedCoords/Symbols).  Explicit
@@ -303,5 +490,9 @@
     connectedComponents: connectedComponents,
     fragmentsAfterCut: fragmentsAfterCut,
     parseMolBonds: parseMolBonds,
+    editBondLength: editBondLength,
+    resolveMoveSide: resolveMoveSide,
+    defaultMoveSide: defaultMoveSide,
+    applyBondLengthEdit: applyBondLengthEdit,
   };
 })();
