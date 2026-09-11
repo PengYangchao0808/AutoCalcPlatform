@@ -22,7 +22,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
+from acp.init_wizard.persist import (
+    save_target,
+    set_cluster_type,
+    set_execution_mode_remote,
+    upsert_node,
+)
 from acp.init_wizard.prompts import ask, ask_local_path, ask_remote_dir, ask_secret, menu
+from acp.init_wizard.sniff_remote import (
+    apply_remote_manual_spec,
+    make_remote_symlinks,
+    read_remote_config,
+    remote_home,
+    sniff_remote,
+    write_remote_config,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +44,13 @@ __all__ = [
     "BootstrapOutcome",
     "ConnectedAuth",
     "ConnectResult",
+    "FlowResult",
     "PromptBundle",
     "TofuCapture",
     "connect_once",
     "run_bootstrap_stage",
     "run_connect_stage",
+    "run_new_node",
 ]
 
 #: D11 — the connect stage gives up (back to the parent menu) after this
@@ -477,3 +493,276 @@ def run_bootstrap_stage(pool: Any, node: Any, prompts: PromptBundle) -> Bootstra
 # T7 placeholder: the full new-cluster wizard flow (run_new_node) appends
 # BELOW this separator — keep the connection/bootstrap sections above stable.
 # --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class FlowResult:
+    """Outcome of one :func:`run_new_node` invocation.
+
+    Attributes:
+        persisted: Whether the node entry was written to the target config.
+        node_name: Name of the persisted node (``None`` when nothing was
+            persisted).
+        aborted_cleanly: ``True`` when the user quit mid-flow (menu ``q``,
+            connect abort, bootstrap 放弃) — nothing was persisted and the
+            caller (T8 resource menu) simply returns to the menu.
+    """
+
+    persisted: bool
+    node_name: str | None
+    aborted_cleanly: bool
+
+
+def _validate_positive_int(raw: str) -> str | None:
+    """Prompt validator: positive decimal integer (max_concurrent_jobs)."""
+    if raw.isdigit() and int(raw) > 0:
+        return None
+    return "请输入正整数"
+
+
+def _validate_remote_path(raw: str) -> str | None:
+    """Prompt validator for remote absolute executable paths (D12)."""
+    if " " in raw:
+        return "路径不能包含空格"
+    if not (raw.startswith("/") or raw.startswith("~/")):
+        return "路径必须是绝对路径或以 ~/ 开头"
+    return None
+
+
+def _node_name_exists(target_data: dict[str, Any], name: str) -> bool:
+    """Whether ``cluster.nodes[]`` already contains an entry named *name*."""
+    cluster = target_data.get("cluster")
+    nodes = cluster.get("nodes", []) if isinstance(cluster, dict) else []
+    return any(isinstance(entry, dict) and entry.get("name") == name for entry in nodes)
+
+
+def _ask_node_name(prompts: PromptBundle, target_data: dict[str, Any], host: str) -> str:
+    """Ask the node name (default = host) with the D14d collision loop.
+
+    A name colliding with an existing ``cluster.nodes[]`` entry triggers a
+    confirm-overwrite menu whose default (换个名称) re-prompts; only an
+    explicit 覆盖 choice keeps the colliding name.
+    """
+    name = prompts.ask("节点名称", default=host)
+    while _node_name_exists(target_data, name):
+        choice = prompts.menu(
+            f"节点名称 {name} 已存在于配置中",
+            ["换个名称（推荐）", "覆盖已有节点"],
+            allow_q=False,
+        )
+        if choice == 2:
+            break
+        name = prompts.ask("节点名称", default=host)
+    return name
+
+
+def _password_decision(prompts: PromptBundle, node: Any) -> bool:
+    """D5 password decision — default keeps the password OUT of the YAML.
+
+    Opt-out (default, also on menu ``q``) prints the
+    ``ACP_REMOTE_PASSWORD_<NAME>`` export instruction plus shell-profile
+    advice (history hygiene).  Opt-in requires the confirm phrase: the
+    user must RE-TYPE the password via ``ask_secret`` (getpass — never
+    echoed, never logged); an exact match stores it, any mismatch falls
+    back to the opt-out guidance.
+
+    Returns:
+        ``True`` only when the user opted in AND the confirm phrase matched.
+    """
+    if not node.password:
+        return False
+    choice = prompts.menu(
+        "是否将密码写入配置文件？",
+        ["否，使用环境变量（推荐）", "是，写入配置文件（0600 权限）"],
+        allow_q=True,
+    )
+    if choice == 2:
+        confirm = prompts.ask_secret("请再次输入密码以确认写入（两次一致才会写入）")
+        if confirm == node.password:
+            print("密码将以 0600 权限写入配置文件")
+            return True
+        print("两次输入不一致，密码不会写入配置文件")
+    from acp.scheduler.remote.config import _env_var_name
+
+    print("请在运行 ACP 的环境中设置以下环境变量提供密码：")
+    print(f"export {_env_var_name(node.name)}={node.password}")
+    print("建议将该 export 写入 shell 配置文件（如 ~/.bashrc），避免留在命令历史中")
+    return False
+
+
+def _sniff_and_specify(
+    prompts: PromptBundle, pool: Any, node: Any, target_data: dict[str, Any]
+) -> None:
+    """Remote sniff + manual spec + remote-config merge (reuses T5).
+
+    Renders a compact missing summary, prompts one absolute remote path per
+    missing software (empty = skip; space-free / absolute validated per
+    D12), applies the spec to the ACP-side target dict, offers immediate
+    ``~/bin`` symlink creation, and — when anything was specified — merges
+    the SAME executables paths into the REMOTE ``~/.cccp.yaml`` and writes
+    it back (D9).  With no specs the remote config file is left untouched.
+    """
+    home = remote_home(pool, node)
+    report = sniff_remote(pool, node)
+    software = report.get("software") or {}
+    missing = [sn for sn, info in software.items() if not (info or {}).get("resolved")]
+    found = [sn for sn, info in software.items() if (info or {}).get("resolved")]
+    print(
+        f"远端软件嗅探：已找到 {'、'.join(found) if found else '无'}；"
+        f"未找到 {'、'.join(missing) if missing else '无'}"
+    )
+
+    specs: dict[str, str] = {}
+    for sw_name in missing:
+        raw = prompts.ask(
+            f"请输入 {sw_name} 在节点上的绝对路径（直接回车跳过）",
+            validate=_validate_remote_path,
+            allow_empty=True,
+        )
+        if raw:
+            specs[sw_name] = raw
+    if not specs:
+        return
+
+    apply_remote_manual_spec(target_data, node.name, specs)
+    # Mirror the spec onto the in-memory node so the authoritative
+    # to_config_dict serialization (upsert replaces the placeholder entry)
+    # still carries bin_symlinks + capabilities.software (D9b).
+    from acp.scheduler.remote.config import NodeCapabilities
+
+    node.bin_symlinks.update(specs)
+    existing = node.capabilities.software if node.capabilities is not None else ()
+    tags = node.capabilities.tags if node.capabilities is not None else ()
+    node.capabilities = NodeCapabilities(
+        software=(*existing, *(sw for sw in specs if sw not in existing)),
+        tags=tags,
+    )
+    if prompts.menu("是否立即在节点上创建 ~/bin 符号链接？", ["创建", "跳过"]) == 1:
+        make_remote_symlinks(pool, node, specs)
+
+    remote_data, remote_mode = read_remote_config(pool, node, home)
+    executables = remote_data.get("executables")
+    if not isinstance(executables, dict):
+        executables = {}
+        remote_data["executables"] = executables
+    for sw_name, sw_path in specs.items():
+        entry = executables.get(sw_name)
+        if not isinstance(entry, dict):
+            entry = {}
+            executables[sw_name] = entry
+        entry["path"] = sw_path
+    write_remote_config(pool, node, home, remote_data, remote_mode)
+
+
+def run_new_node(
+    prompts: PromptBundle, target_path: Path, target_data: dict[str, Any]
+) -> FlowResult:
+    """Full new-cluster wizard flow (T7): declare → connect → bootstrap → persist.
+
+    Orchestration order: 集群类型 menu → host → name (default host, D14d
+    collision confirm) → port → username → auth menu (D14b expanduser) →
+    :func:`run_connect_stage` → in-memory ``RemoteNode`` carrying the
+    auth credentials + prompted dirs/max_concurrent_jobs/queue → ONE
+    ``SSHConnectionPool`` (closed in ``finally`` — no exit path leaks it)
+    reused for bootstrap, sniff and the remote config write → D14c python
+    back-write → D5 password decision → password sanitization BEFORE
+    serialization → ``RemoteNode.to_config_dict()`` + ``upsert_node`` +
+    ``set_cluster_type`` (D2: only absent/"local") + D3 execution_mode
+    confirm → ``save_target``.  ``cluster.enabled`` is never written
+    (GAP-1).  The 添加另一个节点 loop is T8's job.
+
+    Args:
+        prompts: Prompt helper bundle (fakes injectable in tests).
+        target_path: Wizard target YAML file path (for ``save_target``).
+        target_data: Raw target mapping (mutated in place, then saved).
+
+    Returns:
+        :class:`FlowResult` describing the outcome.
+
+    Raises:
+        WizardAborted: On EOF/Ctrl-C (propagates per D15; pool still closed).
+        InitAbort: On unrecoverable config errors (propagates; pool closed).
+    """
+    choice = prompts.menu("集群类型", ["LSF", "Openlava"])
+    if choice == 0:
+        return FlowResult(persisted=False, node_name=None, aborted_cleanly=True)
+    node_type = "lsf" if choice == 1 else "openlava"
+
+    host = prompts.ask("请输入节点主机地址")
+    name = _ask_node_name(prompts, target_data, host)
+    port = int(prompts.ask("SSH 端口", default="22", validate=_validate_port))
+    username = prompts.ask("请输入 SSH 用户名")
+
+    creds = _ask_auth(prompts)
+    if creds is None:
+        return FlowResult(persisted=False, node_name=None, aborted_cleanly=True)
+    password, key_file = creds
+
+    auth = run_connect_stage(
+        prompts,
+        {
+            "host": host,
+            "port": port,
+            "username": username,
+            "password": password,
+            "key_file": key_file,
+        },
+    )
+    if auth is None:
+        return FlowResult(persisted=False, node_name=None, aborted_cleanly=True)
+
+    # FUNCTION-LOCAL imports (D7): the scheduler.remote package eagerly
+    # imports paramiko-dependent modules — never at module level here.
+    from acp.scheduler.remote.config import RemoteNode
+    from acp.scheduler.remote.ssh import SSHConnectionPool
+
+    # Pool lifecycle + credential ordering (round-2 O-MINOR-7): the node is
+    # built FIRST carrying the auth credentials; dirs/limits are prompted
+    # next and set on it; the pool is created last and closed in finally.
+    node = RemoteNode(
+        name=name,
+        host=auth.host,
+        port=auth.port,
+        username=auth.username,
+        remote_work_dir="~/acp_jobs",
+        remote_code_dir="~/acp_code",
+        password=auth.password,
+        key_file=auth.key_file,
+        host_key_policy=auth.host_key_policy,
+        type=node_type,
+    )
+    node.remote_code_dir = prompts.ask_remote_dir("远端代码目录", "~/acp_code")
+    node.remote_work_dir = prompts.ask_remote_dir("远端任务目录", "~/acp_jobs")
+    node.max_concurrent_jobs = int(
+        prompts.ask("最大并发任务数", default="5", validate=_validate_positive_int)
+    )
+    node.queue = prompts.ask("LSF 队列名称", default="normal")
+
+    pool = SSHConnectionPool()
+    try:
+        outcome = run_bootstrap_stage(pool, node, prompts)
+        if not outcome.ok:
+            # D18a: 放弃 persists NOTHING — no node, no cluster.* writes.
+            return FlowResult(persisted=False, node_name=None, aborted_cleanly=True)
+        if outcome.python_executable and outcome.python_executable != "python":
+            node.python_executable = outcome.python_executable  # D14c back-write
+
+        _sniff_and_specify(prompts, pool, node, target_data)
+
+        store_password = _password_decision(prompts, node)
+        # PASSWORD SANITIZATION (round-3 O-MAJOR) — before ANY serialization:
+        # opt-out clears the credential FIRST so the pool-credentialed node
+        # can never leak it into the YAML via to_config_dict.
+        save_mode: int | None = None
+        if store_password:
+            save_mode = 0o600
+        else:
+            node.password = None
+        upsert_node(target_data, node.to_config_dict())
+        set_cluster_type(target_data, node_type)
+        if prompts.menu("是否将该集群的执行模式设为 remote？", ["设为 remote", "保持 local"]) == 1:
+            set_execution_mode_remote(target_data)
+        save_target(target_path, target_data, mode=save_mode)
+        return FlowResult(persisted=True, node_name=node.name, aborted_cleanly=False)
+    finally:
+        pool.close()
