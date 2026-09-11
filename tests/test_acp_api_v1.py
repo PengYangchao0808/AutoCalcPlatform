@@ -1064,7 +1064,9 @@ def test_v1_hessian_preview_auto_missing_symbols_422(client: TestClient) -> None
     assert "symbols or formula" in body["errors"][0]["message"]
 
 
-def test_v1_hessian_preview_source_mapping(client: TestClient) -> None:
+def test_v1_hessian_preview_source_mapping(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """source vocabulary: explicit-Auto → 'auto'; null → 'config'."""
     # Explicit Auto
     r = client.post(
@@ -1072,7 +1074,9 @@ def test_v1_hessian_preview_source_mapping(client: TestClient) -> None:
         json={"recalc_hess": "auto", "structures": [{"name": "x", "symbols": ["C"]}]},
     )
     assert r.json()["results"][0]["source"] == "auto"
-    # Omitted → config (server config defaults to 'auto')
+    # Omitted → config (server config defaults to 'auto'); pin it so an ambient
+    # ~/.cccp.yaml recalc_hess setting cannot leak into this contract test.
+    monkeypatch.setattr("acp.api.v1_routes._resolve_configured_recalc_hess", lambda: "auto")
     r = client.post(
         "/api/v1/hessian-preview",
         json={"structures": [{"name": "x", "symbols": ["C"]}]},
