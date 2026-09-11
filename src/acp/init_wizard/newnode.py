@@ -23,12 +23,20 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from acp.init_wizard.persist import (
+    InitAbort,
     save_target,
     set_cluster_type,
     set_execution_mode_remote,
     upsert_node,
 )
-from acp.init_wizard.prompts import ask, ask_local_path, ask_remote_dir, ask_secret, menu
+from acp.init_wizard.prompts import (
+    WizardAborted,
+    ask,
+    ask_local_path,
+    ask_remote_dir,
+    ask_secret,
+    menu,
+)
 from acp.init_wizard.sniff_remote import (
     apply_remote_manual_spec,
     make_remote_symlinks,
@@ -597,10 +605,15 @@ def _sniff_and_specify(
 
     Renders a compact missing summary, prompts one absolute remote path per
     missing software (empty = skip; space-free / absolute validated per
-    D12), applies the spec to the ACP-side target dict, offers immediate
-    ``~/bin`` symlink creation, and — when anything was specified — merges
-    the SAME executables paths into the REMOTE ``~/.cccp.yaml`` and writes
-    it back (D9).  With no specs the remote config file is left untouched.
+    D12), and — when anything was specified — merges the SAME executables
+    paths into the REMOTE ``~/.cccp.yaml`` and writes it back (D9), offers
+    immediate ``~/bin`` symlink creation, and ONLY THEN applies the spec to
+    the ACP-side target dict and mirrors it onto the in-memory node, so a
+    remote failure or 放弃 (via the caller's retry menu) leaves
+    target_data untouched (no phantom ``cluster.nodes`` entry). With no
+    specs nothing happens beyond the sniff. The remote read/merge/write is
+    idempotent under the caller's retry loop (backup + rewrite of the same
+    content).
     """
     home = remote_home(pool, node)
     report = sniff_remote(pool, node)
@@ -624,6 +637,22 @@ def _sniff_and_specify(
     if not specs:
         return
 
+    remote_data, remote_mode = read_remote_config(pool, node, home)
+    executables = remote_data.get("executables")
+    if not isinstance(executables, dict):
+        executables = {}
+        remote_data["executables"] = executables
+    for sw_name, sw_path in specs.items():
+        entry = executables.get(sw_name)
+        if not isinstance(entry, dict):
+            entry = {}
+            executables[sw_name] = entry
+        entry["path"] = sw_path
+    write_remote_config(pool, node, home, remote_data, remote_mode)
+
+    if prompts.menu("是否立即在节点上创建 ~/bin 符号链接？", ["创建", "跳过"]) == 1:
+        make_remote_symlinks(pool, node, specs)
+
     apply_remote_manual_spec(target_data, node.name, specs)
     # Mirror the spec onto the in-memory node so the authoritative
     # to_config_dict serialization (upsert replaces the placeholder entry)
@@ -637,21 +666,6 @@ def _sniff_and_specify(
         software=(*existing, *(sw for sw in specs if sw not in existing)),
         tags=tags,
     )
-    if prompts.menu("是否立即在节点上创建 ~/bin 符号链接？", ["创建", "跳过"]) == 1:
-        make_remote_symlinks(pool, node, specs)
-
-    remote_data, remote_mode = read_remote_config(pool, node, home)
-    executables = remote_data.get("executables")
-    if not isinstance(executables, dict):
-        executables = {}
-        remote_data["executables"] = executables
-    for sw_name, sw_path in specs.items():
-        entry = executables.get(sw_name)
-        if not isinstance(entry, dict):
-            entry = {}
-            executables[sw_name] = entry
-        entry["path"] = sw_path
-    write_remote_config(pool, node, home, remote_data, remote_mode)
 
 
 def run_new_node(
@@ -682,6 +696,11 @@ def run_new_node(
     Raises:
         WizardAborted: On EOF/Ctrl-C (propagates per D15; pool still closed).
         InitAbort: On unrecoverable config errors (propagates; pool closed).
+
+        Ordinary remote sniff/config-write failures do NOT propagate — they
+        loop through a 重试/放弃 menu (mirroring the existing-node flow);
+        放弃 returns ``aborted_cleanly=True`` with nothing persisted and
+        target_data untouched.
     """
     choice = prompts.menu("集群类型", ["LSF", "Openlava"])
     if choice == 0:
@@ -747,7 +766,17 @@ def run_new_node(
         if outcome.python_executable and outcome.python_executable != "python":
             node.python_executable = outcome.python_executable  # D14c back-write
 
-        _sniff_and_specify(prompts, pool, node, target_data)
+        while True:
+            try:
+                _sniff_and_specify(prompts, pool, node, target_data)
+                break
+            except (WizardAborted, InitAbort):
+                raise
+            except Exception as exc:  # noqa: BLE001 — transport/config failures get a menu, not a traceback
+                print(f"\n远端嗅探或配置写入失败：{exc}")
+                choice = prompts.menu("远端处理失败", ["重试", "放弃（节点不保存）"], allow_q=False)
+                if choice != 1:
+                    return FlowResult(persisted=False, node_name=None, aborted_cleanly=True)
 
         store_password = _password_decision(prompts, node)
         # PASSWORD SANITIZATION (round-3 O-MAJOR) — before ANY serialization:

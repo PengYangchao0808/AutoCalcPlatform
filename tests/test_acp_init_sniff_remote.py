@@ -385,6 +385,60 @@ def test_read_remote_config_empty_file_loads_empty_dict():
 
 
 # ====================================================================== #
+# write_remote_config failure branches — remote tmp cleanup (F2 M2)
+# ====================================================================== #
+
+
+class ExplodingUploadStager:
+    """Fake FileStager: target-absence probe works, SFTP upload dies mid-flight."""
+
+    def __init__(self, pool: Any) -> None:
+        self.uploaded: list[str] = []
+
+    def remote_exists(self, node: RemoteNode, path: str) -> bool:
+        return False
+
+    def upload_text(self, node: RemoteNode, text: str, remote_path: str) -> None:
+        self.uploaded.append(remote_path)
+        raise OSError("sftp connection lost mid-upload")
+
+
+def test_upload_failure_cleans_remote_tmp_and_aborts(monkeypatch: pytest.MonkeyPatch):
+    node = make_node()
+    pool = FakePool()
+    stager = ExplodingUploadStager(pool)
+    monkeypatch.setattr("acp.scheduler.remote.sftp.FileStager", lambda pool: stager)
+
+    with pytest.raises(InitAbort, match="远端上传失败") as excinfo:
+        sniff_remote.write_remote_config(pool, node, HOME, {"a": 1}, None)
+
+    tmp_path = f"{CFG_PATH}.tmp-{os.getpid()}"
+    assert stager.uploaded == [tmp_path]
+    assert tmp_path in str(excinfo.value)
+    # The ONLY command issued is the tmp cleanup — no chmod/mv may follow.
+    assert pool.commands == [f"rm -f {tmp_path}"]
+
+
+def test_chmod_failure_cleanup_unchanged_by_upload_guard(monkeypatch: pytest.MonkeyPatch):
+    node = make_node()
+    sftp = FakeSFTP()
+    sftp.files[CFG_PATH] = b"a: 1\n"
+    pool = FakePool(sftp=sftp, results=[("chmod", (1, "", "Operation not permitted"))])
+    monkeypatch.setattr(sniff_remote, "_backup_timestamp", lambda: "20260911-130000")
+
+    with pytest.raises(InitAbort, match="远端 chmod 失败"):
+        sniff_remote.write_remote_config(pool, node, HOME, {"a": 1}, 0o600)
+
+    tmp_path = f"{CFG_PATH}.tmp-{os.getpid()}"
+    assert pool.commands == [
+        f"cp -p {CFG_PATH} {CFG_PATH}.bak-20260911-130000",
+        f"chmod 600 {tmp_path}",
+        f"rm -f {tmp_path}",
+    ]
+    assert not any(c.startswith("mv ") for c in pool.commands)
+
+
+# ====================================================================== #
 # make_remote_symlinks
 # ====================================================================== #
 

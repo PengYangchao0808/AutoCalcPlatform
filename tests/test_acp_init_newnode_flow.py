@@ -33,6 +33,7 @@ from acp.init_wizard.newnode import (  # noqa: E402
     run_new_node,
 )
 from acp.init_wizard.persist import InitAbort, load_target  # noqa: E402
+from acp.init_wizard.prompts import WizardAborted  # noqa: E402
 from acp.scheduler.remote.config import RemoteNode  # noqa: E402
 from acp.scheduler.remote.node_manager import BootstrapResult  # noqa: E402
 
@@ -623,6 +624,87 @@ def test_pool_closed_and_nothing_persisted_when_remote_write_aborts(tmp_path: Pa
     assert m.pools[0].closed  # finally-close on the exception path
     assert target.read_text(encoding="utf-8") == before
     assert not list(tmp_path.glob("cccp.yaml.bak-*"))
+
+
+# --------------------------------------------------------------------------- #
+# Sniff-segment failure menu (F2 M1): transport errors get a menu, not a traceback
+# --------------------------------------------------------------------------- #
+
+
+def test_sniff_failure_retry_then_success_persists(tmp_path: Path) -> None:
+    target, target_data = _write_target(tmp_path, {"cluster": {"type": "local"}})
+    prompts = FakePrompts(
+        menu_choices=[1, 1, 1, 1, 2],  # LSF, 密码, 重试, D5 opt-out, D3 decline
+        ask_answers=["10.0.0.9", "node-b", "22", "ops"],
+        secrets=["pw"],
+    )
+    with StageMocks(
+        auth=ConnectedAuth(host="10.0.0.9", port=22, username="ops", password="pw"),
+        outcome=BootstrapOutcome(ok=True, python_executable=None, error=None),
+    ) as m:
+        flaky = mock.MagicMock(
+            side_effect=[RuntimeError("connection dropped mid-sniff"), None],
+        )
+        with mock.patch("acp.init_wizard.newnode._sniff_and_specify", flaky):
+            result = run_new_node(prompts.bundle(), target, target_data)
+
+    assert result == FlowResult(persisted=True, node_name="node-b", aborted_cleanly=False)
+    assert flaky.call_count == 2
+    retry_menu = next(c for c in prompts.menu_calls if c[0] == "远端处理失败")
+    assert retry_menu[1] == ["重试", "放弃（节点不保存）"]
+    assert retry_menu[2] is False  # allow_q=False — no q escape from the failure menu
+    assert m.pools[0].closed
+
+
+def test_sniff_failure_give_up_aborts_cleanly_without_phantom(tmp_path: Path) -> None:
+    target, target_data = _write_target(tmp_path, {"cluster": {"type": "local"}})
+    before = target.read_text(encoding="utf-8")
+    prompts = FakePrompts(
+        menu_choices=[1, 1, 2],  # LSF, 密码, 放弃
+        ask_answers=["10.0.0.9", "node-b", "22", "ops"],
+        secrets=["pw"],
+    )
+    with StageMocks(
+        auth=ConnectedAuth(host="10.0.0.9", port=22, username="ops", password="pw"),
+        outcome=BootstrapOutcome(ok=True, python_executable=None, error=None),
+    ) as m:
+        flaky = mock.MagicMock(side_effect=[RuntimeError("connection dropped mid-sniff")])
+        with mock.patch("acp.init_wizard.newnode._sniff_and_specify", flaky):
+            result = run_new_node(prompts.bundle(), target, target_data)
+
+    assert result == FlowResult(persisted=False, node_name=None, aborted_cleanly=True)
+    assert flaky.call_count == 1
+    # NO phantom node entry in target_data (F2 M1 residue hazard)
+    cluster = target_data.get("cluster", {})
+    assert not any(
+        isinstance(entry, dict) and entry.get("name") == "node-b"
+        for entry in cluster.get("nodes", [])
+    )
+    assert target.read_text(encoding="utf-8") == before
+    assert m.pools[0].closed
+
+
+def test_sniff_wizard_aborted_propagates_and_pool_still_closes(tmp_path: Path) -> None:
+    target, target_data = _write_target(tmp_path, {"cluster": {"type": "local"}})
+    prompts = FakePrompts(
+        menu_choices=[1, 1],  # LSF, 密码 — no failure menu expected
+        ask_answers=["10.0.0.9", "node-b", "22", "ops"],
+        secrets=["pw"],
+    )
+    with StageMocks(
+        auth=ConnectedAuth(host="10.0.0.9", port=22, username="ops", password="pw"),
+        outcome=BootstrapOutcome(ok=True, python_executable=None, error=None),
+    ) as m:
+        flaky = mock.MagicMock(side_effect=WizardAborted())
+        with (
+            mock.patch("acp.init_wizard.newnode._sniff_and_specify", flaky),
+            pytest.raises(WizardAborted),
+        ):
+            run_new_node(prompts.bundle(), target, target_data)
+
+    assert flaky.call_count == 1
+    assert m.pools[0].closed  # finally-close survives the propagating abort
+    assert not prompts.menu_calls or all(c[0] != "远端处理失败" for c in prompts.menu_calls)
 
 
 # --------------------------------------------------------------------------- #

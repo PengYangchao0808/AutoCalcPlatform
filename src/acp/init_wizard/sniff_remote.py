@@ -253,8 +253,8 @@ def write_remote_config(
     the absolute path via :func:`remote_home`.
 
     Raises:
-        InitAbort: On backup/chmod/mv failure (the tmp file is cleaned up
-            best-effort before raising).
+        InitAbort: On upload/backup/chmod/mv failure (the tmp file is
+            cleaned up best-effort before raising).
     """
     from acp.scheduler.remote.sftp import FileStager
 
@@ -273,7 +273,14 @@ def write_remote_config(
             raise InitAbort(f"远端备份失败：{node.name}:{path}（{err.strip()}）")
         logger.info("已备份 %s:%s -> %s", node.name, path, backup_path)
 
-    stager.upload_text(node, text, tmp_path)
+    try:
+        stager.upload_text(node, text, tmp_path)
+    except Exception as exc:  # noqa: BLE001 — mid-upload SFTP failure gets cleanup + InitAbort
+        try:
+            pool.execute(node, f"rm -f {shlex.quote(tmp_path)}")
+        except Exception as cleanup_exc:  # noqa: BLE001 — best-effort cleanup only
+            logger.warning("远端 tmp 清理失败 %s:%s：%s", node.name, tmp_path, cleanup_exc)
+        raise InitAbort(f"远端上传失败：{node.name}:{tmp_path}（{exc}）") from exc
 
     code, _out, err = pool.execute(node, f"chmod {mode_arg} {shlex.quote(tmp_path)}")
     if code != 0:
