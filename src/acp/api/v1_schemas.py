@@ -1316,6 +1316,9 @@ class StructureAssetResponse(BaseModel):
     asset_path: str = ""
     ok: bool = True
     errors: list[str] = Field(default_factory=list)
+    # Edit-provenance metadata (todo 37): parent job/entry ids, the full
+    # edit_operations list, and the provenance dict round-trip here.
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class BondLengthScanSource(BaseModel):

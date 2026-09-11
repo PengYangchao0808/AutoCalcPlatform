@@ -1865,6 +1865,26 @@ def create_structure_asset(
     rel_path = normalized.relative_to(manager.run_root).as_posix()
     charge = req.charge if req.charge != 0 else int(asset.charge or 0)
     multiplicity = req.multiplicity if req.multiplicity != 1 else int(asset.multiplicity or 1)
+
+    # Edit provenance (todo 37): persist the four extended fields as the
+    # asset's metadata sidecar and round-trip them in the response.  Legacy
+    # posts without them keep an empty metadata dict (backward compatible).
+    edit_metadata: dict[str, Any] = {}
+    if req.parent_job_id:
+        edit_metadata["parent_job_id"] = req.parent_job_id
+    if req.parent_entry_id:
+        edit_metadata["parent_entry_id"] = req.parent_entry_id
+    if req.edit_operations:
+        edit_metadata["edit_operations"] = req.edit_operations
+    if req.provenance:
+        edit_metadata["provenance"] = req.provenance
+    if edit_metadata:
+        meta_path = storage.upload_dir(project_id, _asset_id) / "metadata.json"
+        meta_path.parent.mkdir(parents=True, exist_ok=True)
+        meta_path.write_text(
+            json.dumps(edit_metadata, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
     return StructureAssetResponse(
         asset_id=_asset_id,
         name=req.name or "paste",
@@ -1875,6 +1895,7 @@ def create_structure_asset(
         xyz=str(asset.xyz),
         asset_path=rel_path,
         ok=True,
+        metadata=edit_metadata,
     )
 
 

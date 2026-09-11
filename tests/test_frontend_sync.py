@@ -5107,3 +5107,241 @@ def test_structure_editor_node_transactions() -> None:
         f"Node transaction test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Wave 6 / todo 37: asset save + export + new-calculation handoff
+# ---------------------------------------------------------------------------
+
+
+def test_structure_editor_asset_contract() -> None:
+    """Contract: export/save/prefill API names, POST body fields, wizard
+    hook WITHOUT submit, no RESULT/WORK writes, i18n keys both locales."""
+    ed_js = _EDITOR_JS_PATH.read_text(encoding="utf-8")
+    sv_js = _SV_JS_PATH.read_text(encoding="utf-8")
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    for name in (
+        "buildEditedXyz",
+        "provenanceComment",
+        "exportEditedXyz",
+        "saveEditedAsset",
+        "requestSaveEditedAsset",
+        "prefillNewCalculation",
+        "savedAssetId",
+        "saveError",
+    ):
+        assert name in ed_js, f"{name} missing from structure_editor.js"
+
+    for field in ("parent_job_id", "parent_entry_id", "edit_operations", "provenance"):
+        assert field in ed_js, f"POST field {field} missing"
+    assert "/api/v1/structure-assets" in ed_js
+
+    # Wizard bridge exists; prefill NEVER submits (anti-pattern #29)
+    assert "window._svPrefillNewCalculation" in html
+    bridge = html.split("window._svPrefillNewCalculation = function", 1)[1]
+    bridge = bridge.split("\n};", 1)[0]
+    assert "submit" not in bridge.lower()
+    assert "submitJob" not in ed_js, "editor must never submit jobs"
+
+    # In-memory + POST only: no task-dir writes anywhere in the editor
+    assert "RESULT/" not in ed_js and "WORK/" not in ed_js
+
+    # structure_viewer panel wiring
+    for name in ("exportEditedXyz", "saveEditedAsset", "prefillNewCalculation",
+                 "structure.edit.export_xyz", "structure.edit.save_asset",
+                 "structure.edit.new_calc"):
+        assert name in sv_js, f"{name} missing from structure_viewer.js"
+
+    # i18n keys in BOTH locales
+    for zh, en in (
+        ('"structure.edit.export_xyz": "导出 XYZ"',
+         '"structure.edit.export_xyz": "Export XYZ"'),
+        ('"structure.edit.save_asset": "另存为结构资产"',
+         '"structure.edit.save_asset": "Save As Structure Asset"'),
+        ('"structure.edit.new_calc": "以此结构新建计算"',
+         '"structure.edit.new_calc": "New Calculation From This Structure"'),
+        ('"structure.edit.saved": "已保存"', '"structure.edit.saved": "Saved"'),
+        ('"structure.edit.save_error": "保存失败"',
+         '"structure.edit.save_error": "Save failed"'),
+    ):
+        assert zh in html, f"zh key missing: {zh}"
+        assert en in html, f"en key missing: {en}"
+
+
+def test_structure_editor_node_asset_save() -> None:
+    """Node logic: buildEditedXyz exact format, export returns text in Node,
+    saveEditedAsset POST round-trip (all four fields), success/failure
+    states, requestSaveEditedAsset completes the pending switch, prefill
+    calls the wizard bridge."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = (textwrap.dedent("""\
+        var window = { fetch: null };
+        require(EDITOR_PATH);
+        var ed = window.ACPStructureEditor;
+
+        var symbols = ["O", "H", "H"];
+        var coords = [[0, 0, 0], [0.96, 0, 0], [-0.4, 0.87, 0]];
+        var txns = [
+            { type: "bond_length", atom_ids: [0, 1], before: [], after: [],
+              moved_atom_ids: [1], collision_warnings: [] },
+            { type: "bond_length", atom_ids: [0, 2], before: [], after: [],
+              moved_atom_ids: [2], collision_warnings: [] },
+            { type: "dihedral", atom_ids: [0, 1, 2, 3], before: [], after: [],
+              moved_atom_ids: [2, 3], collision_warnings: [] }
+        ];
+
+        // buildEditedXyz: exact format incl. provenance summary
+        var xyz = ed.buildEditedXyz(symbols, coords, "orig", {
+            jobId: "job1", entryId: "e1", transactions: txns
+        });
+        var lines = xyz.trim().split("\\n");
+        if (lines[0] !== "3") { console.error("FAIL: count line"); process.exit(1); }
+        if (lines[1] !== "ACP edit: parent=job1 entry=e1 ops=3 (bond_length:2, dihedral:1)") {
+            console.error("FAIL: provenance line " + lines[1]);
+            process.exit(1);
+        }
+        if (lines[2].split(/\\s+/)[0] !== "O" ||
+            lines[3].split(/\\s+/)[1] !== "0.960000") {
+            console.error("FAIL: coordinate lines");
+            process.exit(1);
+        }
+        // original comment fallback when no provenance info
+        var plain = ed.buildEditedXyz(symbols, coords, "original comment", null);
+        if (plain.split("\\n")[1] !== "original comment") {
+            console.error("FAIL: original comment fallback");
+            process.exit(1);
+        }
+
+        window.ACPStructureViewer = {
+            state: {
+                jobId: "job1",
+                displayedCoords: coords,
+                displayedSymbols: symbols,
+                displayedEntryId: "e1"
+            }
+        };
+        ed.editorState.entryId = "e1";
+        ed.editorState.transactions = txns;
+
+        // exportEditedXyz in Node: returns text, no DOM crash
+        var exported = ed.exportEditedXyz();
+        if (exported == null || exported.split("\\n")[1] !== lines[1]) {
+            console.error("FAIL: exportEditedXyz node path");
+            process.exit(1);
+        }
+
+        // saveEditedAsset: fake fetch round-trip
+        var calls = [];
+        ed._fetchImpl = function (url, opts) {
+            calls.push({ url: url, body: JSON.parse(opts.body) });
+            return Promise.resolve({
+                ok: true, status: 201, statusText: "Created",
+                json: function () { return Promise.resolve({ asset_id: "up_abc", ok: true }); }
+            });
+        };
+        ed.saveEditedAsset().then(function (res) {
+            if (!res.ok || res.assetId !== "up_abc" ||
+                ed.editorState.savedAssetId !== "up_abc" || ed.editorState.saveError !== null) {
+                console.error("FAIL: save success state");
+                process.exit(1);
+            }
+            var body = calls[0].body;
+            if (calls[0].url !== "/api/v1/structure-assets") {
+                console.error("FAIL: POST url");
+                process.exit(1);
+            }
+            if (body.parent_job_id !== "job1" || body.parent_entry_id !== "e1") {
+                console.error("FAIL: parent ids in body");
+                process.exit(1);
+            }
+            if (body.edit_operations.length !== 3 ||
+                body.edit_operations[2].type !== "dihedral") {
+                console.error("FAIL: edit_operations list");
+                process.exit(1);
+            }
+            if (!body.provenance || body.provenance.op_count !== 3 ||
+                body.provenance.comment !== lines[1]) {
+                console.error("FAIL: provenance dict");
+                process.exit(1);
+            }
+            if (body.xyz_text.split("\\n")[1] !== lines[1]) {
+                console.error("FAIL: xyz_text carries provenance");
+                process.exit(1);
+            }
+            if (body.name.indexOf("\\u5df2\\u7f16\\u8f91") < 0) {
+                console.error("FAIL: default name uses edited suffix");
+                process.exit(1);
+            }
+
+            // failure path: keeps edits + error state
+            ed._fetchImpl = function () {
+                return Promise.resolve({
+                    ok: false, status: 500, statusText: "Server Error",
+                    json: function () { return Promise.resolve({}); }
+                });
+            };
+            return ed.saveEditedAsset();
+        }).then(function (failRes) {
+            if (failRes.ok || !ed.editorState.saveError ||
+                ed.editorState.transactions.length !== 3) {
+                console.error("FAIL: failure keeps edits + error");
+                process.exit(1);
+            }
+
+            // requestSaveEditedAsset: success completes the pending switch
+            ed.editorState.pendingSwitch = {
+                targetEntryId: "e2",
+                targetSymbols: symbols,
+                targetCoords: coords
+            };
+            ed._fetchImpl = function (url, opts) {
+                return Promise.resolve({
+                    ok: true, status: 201, statusText: "Created",
+                    json: function () { return Promise.resolve({ asset_id: "up_def", ok: true }); }
+                });
+            };
+            return ed.requestSaveEditedAsset();
+        }).then(function (res) {
+            if (!res.ok || res.assetId !== "up_def") {
+                console.error("FAIL: requestSave success");
+                process.exit(1);
+            }
+            if (ed.editorState.entryId !== "e2" ||
+                ed.editorState.transactions.length !== 0 ||
+                ed.editorState.pendingSwitch !== null) {
+                console.error("FAIL: pending switch completed after save");
+                process.exit(1);
+            }
+
+            // prefill: bridge receives the xyz; NEVER submits
+            var prefilled = null;
+            window._svPrefillNewCalculation = function (text) { prefilled = text; };
+            ed.editorState.entryId = "e9";
+            var pf = ed.prefillNewCalculation();
+            if (!pf.ok || prefilled == null ||
+                prefilled.split("\\n")[0] !== "3") {
+                console.error("FAIL: prefill bridge call");
+                process.exit(1);
+            }
+            delete window._svPrefillNewCalculation;
+            var noBridge = ed.prefillNewCalculation();
+            if (noBridge.ok || noBridge.xyz == null) {
+                console.error("FAIL: prefill without bridge");
+                process.exit(1);
+            }
+            console.log("PASS");
+        }).catch(function (e) {
+            console.error("FAIL: unexpected", e);
+            process.exit(1);
+        });
+    """)
+        .replace("EDITOR_PATH", json.dumps(str(_EDITOR_JS_PATH))))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node asset-save test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout

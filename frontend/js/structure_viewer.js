@@ -1,6 +1,6 @@
 /**
  * ACP Structure Viewer — state store + catalog fetch + stale-response guard
- * @version 0.8.0
+ * @version 0.9.0
  *
  * Namespace: window.ACPStructureViewer
  *
@@ -30,7 +30,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "0.8.0";
+  var VERSION = "0.9.0";
 
   /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
@@ -72,6 +72,11 @@
     EDIT_SAVE_AS: "\u53e6\u5b58\u4e3a",                                 // 另存为
     EDIT_CANCEL: "\u53d6\u6d88",                                         // 取消
     EDIT_COLLISION: "\u4e25\u91cd\u78b0\u649e",                         // 严重碰撞
+    EDIT_EXPORT: "\u5bfc\u51fa XYZ",                                     // 导出 XYZ
+    EDIT_SAVE_ASSET: "\u53e6\u5b58\u4e3a\u7ed3\u6784\u8d44\u4ea7",       // 另存为结构资产
+    EDIT_NEW_CALC: "\u4ee5\u6b64\u7ed3\u6784\u65b0\u5efa\u8ba1\u7b97",   // 以此结构新建计算
+    EDIT_SAVED: "\u5df2\u4fdd\u5b58",                                   // 已保存
+    EDIT_SAVE_ERROR: "\u4fdd\u5b58\u5931\u8d25",                         // 保存失败
     MEASUREMENTS_PLACEHOLDER: "\u9009\u62e9\u539f\u5b50\u540e\u663e\u793a\u6d4b\u91cf\u7ed3\u679c", // 选择原子后显示测量结果
     EDIT_PLACEHOLDER: "\u7f16\u8f91\u529f\u80fd\u5c06\u5728\u540e\u7eed\u7248\u672c\u5f00\u653e", // 编辑功能将在后续版本开放
   };
@@ -1082,6 +1087,33 @@
     row.appendChild(_editBtn("structure.edit.redo", STR.EDIT_REDO, function () { ed.redoEdit(); }));
     row.appendChild(_editBtn("structure.edit.reset", STR.EDIT_RESET, function () { ed.resetEdits(); }));
     body.appendChild(row);
+
+    /* export / save / new-calculation handoff (todo 37) */
+    var actionsRow = document.createElement("div");
+    actionsRow.className = "sv-edit-row";
+    actionsRow.appendChild(_editBtn("structure.edit.export_xyz", STR.EDIT_EXPORT, function () {
+      if (typeof ed.exportEditedXyz === "function") { ed.exportEditedXyz(); }
+    }));
+    actionsRow.appendChild(_editBtn("structure.edit.save_asset", STR.EDIT_SAVE_ASSET, function () {
+      if (typeof ed.saveEditedAsset === "function") { ed.saveEditedAsset(); }
+    }));
+    actionsRow.appendChild(_editBtn("structure.edit.new_calc", STR.EDIT_NEW_CALC, function () {
+      if (typeof ed.prefillNewCalculation === "function") { ed.prefillNewCalculation(); }
+    }));
+    body.appendChild(actionsRow);
+    if (ed.editorState && ed.editorState.savedAssetId) {
+      var savedLine = document.createElement("div");
+      savedLine.className = "sv-inspector-value sv-muted";
+      savedLine.textContent = _t("structure.edit.saved", STR.EDIT_SAVED);
+      body.appendChild(savedLine);
+    }
+    if (ed.editorState && ed.editorState.saveError) {
+      var errLine = document.createElement("div");
+      errLine.className = "sv-edit-collision";
+      errLine.textContent = _t("structure.edit.save_error", STR.EDIT_SAVE_ERROR) +
+        ": " + ed.editorState.saveError;
+      body.appendChild(errLine);
+    }
 
     var txns = (ed.editorState && ed.editorState.transactions) || [];
     var last = txns.length ? txns[txns.length - 1] : null;

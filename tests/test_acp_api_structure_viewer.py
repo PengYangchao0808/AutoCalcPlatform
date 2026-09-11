@@ -1473,3 +1473,73 @@ class TestCatalogAdditionalCoverage:
         resp = sv_client.get("/api/v1/jobs/sv-retired-001/structure-viewer")
         assert resp.status_code == 200
         assert resp.json()["schema_version"] == "structure_viewer_v1"
+
+
+# ── Todo 37: structure-asset edit-provenance metadata persistence ──
+
+
+def test_asset_edit_metadata(sv_client: TestClient, tmp_path: Path) -> None:
+    """POST /structure-assets persists parent ids + the full edit_operations
+    list + provenance into metadata (response round-trip + sidecar on disk);
+    legacy posts without the fields stay valid with empty metadata."""
+    xyz = "3\nedited\nC 0.0 0.0 0.0\nH 1.1 0.0 0.0\nH -0.4 0.9 0.0\n"
+    ops = [
+        {
+            "type": "bond_length",
+            "atom_ids": [0, 1],
+            "before": [[0, 0, 0], [1.2, 0, 0]],
+            "after": [[0, 0, 0], [1.1, 0, 0]],
+            "moved_atom_ids": [1],
+            "collision_warnings": [],
+        },
+        {
+            "type": "dihedral",
+            "atom_ids": [0, 1, 2, 3],
+            "before": [],
+            "after": [],
+            "moved_atom_ids": [2, 3],
+            "collision_warnings": [],
+        },
+    ]
+    prov = {"comment": "ACP edit: parent=job1 entry=e1 ops=2", "created_at": "2026-09-11T00:00:00", "op_count": 2}
+    resp = sv_client.post(
+        "/api/v1/structure-assets",
+        json={
+            "name": "edited-asset",
+            "xyz_text": xyz,
+            "parent_job_id": "job1",
+            "parent_entry_id": "e1",
+            "edit_operations": ops,
+            "provenance": prov,
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["ok"] is True
+    meta = body["metadata"]
+    assert meta["parent_job_id"] == "job1"
+    assert meta["parent_entry_id"] == "e1"
+    assert meta["edit_operations"] == ops
+    assert meta["provenance"] == prov
+
+    # metadata sidecar persisted next to the stored upload (run_root-relative)
+    asset_path = tmp_path / body["asset_path"]
+    meta_file = asset_path.parent.parent / "metadata.json"
+    assert meta_file.exists(), f"metadata.json missing at {meta_file}"
+    stored = json.loads(meta_file.read_text(encoding="utf-8"))
+    assert stored["parent_job_id"] == "job1"
+    assert len(stored["edit_operations"]) == 2
+    assert stored["edit_operations"][1]["type"] == "dihedral"
+
+
+def test_asset_legacy_post_without_metadata(sv_client: TestClient) -> None:
+    """Legacy POST (no extended fields) still succeeds with empty metadata."""
+    xyz = "2\nplain\nC 0.0 0.0 0.0\nH 1.1 0.0 0.0\n"
+    resp = sv_client.post(
+        "/api/v1/structure-assets",
+        json={"name": "plain", "xyz_text": xyz},
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["ok"] is True
+    assert body["metadata"] == {}

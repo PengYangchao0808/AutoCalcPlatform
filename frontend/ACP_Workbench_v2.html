@@ -5895,7 +5895,12 @@ const I18N = {
     "structure.edit.save_as": "另存为",
     "structure.edit.cancel": "取消",
     "structure.edit.collision": "严重碰撞",
-    "structure.edit.entry_mismatch": "编辑会话与当前结构不一致"
+    "structure.edit.entry_mismatch": "编辑会话与当前结构不一致",
+    "structure.edit.export_xyz": "导出 XYZ",
+    "structure.edit.save_asset": "另存为结构资产",
+    "structure.edit.new_calc": "以此结构新建计算",
+    "structure.edit.saved": "已保存",
+    "structure.edit.save_error": "保存失败"
   },
   "en-US": {
     "app.title": "ACP Molecular Workbench",
@@ -6828,7 +6833,12 @@ const I18N = {
     "structure.edit.save_as": "Save As",
     "structure.edit.cancel": "Cancel",
     "structure.edit.collision": "Severe collision",
-    "structure.edit.entry_mismatch": "Edit session does not match the displayed entry"
+    "structure.edit.entry_mismatch": "Edit session does not match the displayed entry",
+    "structure.edit.export_xyz": "Export XYZ",
+    "structure.edit.save_asset": "Save As Structure Asset",
+    "structure.edit.new_calc": "New Calculation From This Structure",
+    "structure.edit.saved": "Saved",
+    "structure.edit.save_error": "Save failed"
   }
 };
 
@@ -14926,6 +14936,23 @@ window._svLoadXyzToViewer = function(xyzText, entryId) {
     updateInfoPanel(lastSelectedJob);
   } catch (e) {
     console.error("Structure viewer geometry load failed:", e);
+  }
+};
+
+// Bridge for structure_editor.js: prefill the new-task wizard with an edited
+// XYZ (todo 37). Opens the modal and fills the structure textarea, then the
+// existing input-driven parse previews it. NEVER submits — the user confirms
+// method/charge/multiplicity and clicks 提交 themselves (anti-pattern #29).
+window._svPrefillNewCalculation = function(xyzText) {
+  try {
+    openModal();
+    var ta = document.getElementById("modal-structure-input");
+    if (ta && xyzText) {
+      ta.value = xyzText;
+      if (typeof scheduleParseStructures === "function") scheduleParseStructures();
+    }
+  } catch (e) {
+    console.error("Wizard prefill failed:", e);
   }
 };
 

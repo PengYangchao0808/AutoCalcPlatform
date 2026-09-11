@@ -1,6 +1,6 @@
 /**
- * ACP Structure Editor — edits + validation + transactions (Wave 6, todos 32-36)
- * @version 0.7.0
+ * ACP Structure Editor — edits + transactions + asset save (Wave 6, todos 32-37)
+ * @version 0.8.0
  *
  * Namespace: window.ACPStructureEditor
  *
@@ -27,6 +27,10 @@
  *   - checkCollisions(symbols, coords, edges)   (PURE post-edit safety check)
  *   - bindEntry(entryId, symbols, coords) / confirmSwitch(action)
  *   - undoEdit() / redoEdit() / resetEdits() / isDirty() / syncDirtyFlag()
+ *   - buildEditedXyz(symbols, coords, originalComment, provenanceInfo) (PURE)
+ *   - exportEditedXyz()                       (download; Node: returns text)
+ *   - saveEditedAsset(name?) / requestSaveEditedAsset()  (POST /structure-assets)
+ *   - prefillNewCalculation()                 (new-task wizard, NO submit)
  *
  * Contract (doc §6.1-§6.3): edits are INTERNAL-COORDINATE ONLY — a bond
  * edit rigidly TRANSLATES one fragment, an angle edit rigidly ROTATES the
@@ -46,15 +50,23 @@
  * of silently discarding.  Collision check: non-bonded pairs closer than
  * COLLISION_FACTOR*(r_a+r_b) warn (severe) but stay undoable.  Edits touch
  * COORDINATES ONLY — never bond orders, elements, or hydrogens.  The
- * save-as-asset POST is todo 37 (saveRequested flag + hook only).
+ * save-as-asset POST (todo 37): saveEditedAsset posts the edited XYZ with
+ * parent job/entry ids, the full edit_operations list, and provenance to
+ * /api/v1/structure-assets; requestSaveEditedAsset completes a pending
+ * dirty-switch after a successful save.  prefillNewCalculation copies the
+ * in-memory XYZ into the new-task wizard WITHOUT submitting (anti-pattern
+ * #29) — the user confirms method/charge/multiplicity.  Nothing ever
+ * writes into task directories (results, work scratch, or source files):
+ * in-memory edits + API POST only.
  *
- * TODO(todo-37): save-as-asset + provenance metadata + new-calculation handoff
+ * TODO(todo-37b/Wave 8): asset library surfacing + wizard structure-source
+ * panel listing saved edit assets.
  */
 (function () {
   "use strict";
 
   /** Version tag — bump on every structural change. */
-  var VERSION = "0.7.0";
+  var VERSION = "0.8.0";
 
   /* ---- user-visible strings (zh fallback; i18n dictionary keys land in todo 36) ---- */
   var STR = {
@@ -72,6 +84,12 @@
     CANCEL: "\u53d6\u6d88",                                                         // 取消
     COLLISION: "\u4e25\u91cd\u78b0\u649e",                                         // 严重碰撞
     ENTRY_MISMATCH: "\u7f16\u8f91\u4f1a\u8bdd\u4e0e\u5f53\u524d\u7ed3\u6784\u4e0d\u4e00\u81f4", // 编辑会话与当前结构不一致
+    EXPORT_XYZ: "\u5bfc\u51fa XYZ",                                       // 导出 XYZ
+    SAVE_ASSET: "\u53e6\u5b58\u4e3a\u7ed3\u6784\u8d44\u4ea7",             // 另存为结构资产
+    NEW_CALC: "\u4ee5\u6b64\u7ed3\u6784\u65b0\u5efa\u8ba1\u7b97",         // 以此结构新建计算
+    SAVE_ERROR: "\u4fdd\u5b58\u5931\u8d25",                               // 保存失败
+    SAVED_ASSET: "\u5df2\u4fdd\u5b58",                                   // 已保存
+    EDITED_SUFFIX: "\u5df2\u7f16\u8f91",                                 // 已编辑
   };
 
   /**
@@ -116,6 +134,8 @@
     redoStack: [],
     pendingSwitch: null,
     saveRequested: false,
+    savedAssetId: null,
+    saveError: null,
   };
 
   /** Animation mutual-exclusion flag (todo 30; Wave 6 edits check this). */
@@ -1246,6 +1266,233 @@
     return { ok: false, reason: "no_bond" };
   }
 
+  /* ---- export + save-as-asset + wizard handoff (todo 37) ---- */
+
+  /**
+   * Provenance comment line for exported/edited XYZ:
+   * "ACP edit: parent={jobId} entry={entryId} ops={n} ({summary})" where
+   * summary counts operations by type, e.g. "bond_length:1, dihedral:2".
+   *
+   * @param {{jobId: string|null, entryId: string|null,
+   *          transactions: Array<Object>}|null} provenanceInfo
+   * @returns {string}
+   */
+  function provenanceComment(provenanceInfo) {
+    var txns = (provenanceInfo && provenanceInfo.transactions) || [];
+    var counts = {};
+    var order = [];
+    for (var i = 0; i < txns.length; i++) {
+      var t = txns[i].type;
+      if (counts[t] === undefined) {
+        counts[t] = 0;
+        order.push(t);
+      }
+      counts[t] += 1;
+    }
+    var summary = order.map(function (t) { return t + ":" + counts[t]; }).join(", ");
+    return "ACP edit: parent=" + (provenanceInfo ? provenanceInfo.jobId : "") +
+      " entry=" + (provenanceInfo ? provenanceInfo.entryId : "") +
+      " ops=" + txns.length + " (" + summary + ")";
+  }
+
+  /**
+   * Build the edited XYZ text.  Line 2 carries the provenance comment
+   * (doc §6.3: parent job, parent entry, edit summary); the original
+   * comment is kept only when no provenance info is supplied.  PURE.
+   *
+   * @param {Array<string>} symbols
+   * @param {Array<Array<number>>} coords
+   * @param {string} [originalComment]
+   * @param {{jobId: string|null, entryId: string|null,
+   *          transactions: Array<Object>}|null} [provenanceInfo]
+   * @returns {string}
+   */
+  function buildEditedXyz(symbols, coords, originalComment, provenanceInfo) {
+    if (!symbols || !coords || symbols.length !== coords.length || !symbols.length) {
+      return "";
+    }
+    var comment = provenanceInfo
+      ? provenanceComment(provenanceInfo)
+      : (originalComment || "");
+    var out = String(coords.length) + "\n" + comment + "\n";
+    for (var i = 0; i < coords.length; i++) {
+      var c = coords[i];
+      if (!c || c.length < 3) return "";
+      out += symbols[i] + " " + (+c[0]).toFixed(6) + " " +
+        (+c[1]).toFixed(6) + " " + (+c[2]).toFixed(6) + "\n";
+    }
+    return out;
+  }
+
+  function _currentProvenanceInfo() {
+    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
+      ? window.ACPStructureViewer.state
+      : null;
+    return {
+      jobId: svState ? svState.jobId : null,
+      entryId: editorState.entryId,
+      transactions: editorState.transactions,
+    };
+  }
+
+  /**
+   * Export the edited structure as an XYZ download (Blob + a.click).  In
+   * Node (no DOM) the text is returned without any download attempt.
+   *
+   * @returns {string|null} the exported XYZ text
+   */
+  function exportEditedXyz() {
+    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
+      ? window.ACPStructureViewer.state
+      : null;
+    if (!svState || !svState.displayedCoords || !svState.displayedSymbols) {
+      return null;
+    }
+    var text = buildEditedXyz(
+      svState.displayedSymbols, svState.displayedCoords, "",
+      _currentProvenanceInfo()
+    );
+    if (!text) return null;
+    if (typeof document === "undefined" || typeof Blob === "undefined") {
+      return text;
+    }
+    try {
+      var blob = new Blob([text], { type: "chemical/x-xyz" });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = (editorState.entryId || "edited") + "_edited.xyz";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    } catch (_) { /* download is best-effort; the text is still returned */ }
+    return text;
+  }
+
+  function _getFetchImpl() {
+    if (typeof window !== "undefined" && window.ACPStructureEditor &&
+        typeof window.ACPStructureEditor._fetchImpl === "function") {
+      return window.ACPStructureEditor._fetchImpl;
+    }
+    if (typeof window !== "undefined" && typeof window.fetch === "function") {
+      return window.fetch.bind(window);
+    }
+    return null;
+  }
+
+  /**
+   * POST the edited structure to /api/v1/structure-assets with the four
+   * extended fields (parent_job_id, parent_entry_id, edit_operations —
+   * the FULL transaction list — and provenance).  Edits stay in memory;
+   * success records editorState.savedAssetId, failure records saveError
+   * and keeps everything.  Task directories are never written.
+   *
+   * @param {string} [name]
+   * @returns {Promise<{ok: boolean, assetId?: string, error?: string}>}
+   */
+  function saveEditedAsset(name) {
+    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
+      ? window.ACPStructureViewer.state
+      : null;
+    if (!svState || !svState.displayedCoords || !svState.displayedSymbols) {
+      return Promise.resolve({ ok: false, error: "no_structure" });
+    }
+    var fetchFn = _getFetchImpl();
+    if (!fetchFn) {
+      return Promise.resolve({ ok: false, error: "fetch not available" });
+    }
+    var xyzText = buildEditedXyz(
+      svState.displayedSymbols, svState.displayedCoords, "",
+      _currentProvenanceInfo()
+    );
+    var body = {
+      name: name || ((editorState.entryId || "structure") + " " + STR.EDITED_SUFFIX),
+      xyz_text: xyzText,
+      charge: 0,
+      multiplicity: 1,
+      parent_job_id: svState.jobId,
+      parent_entry_id: editorState.entryId,
+      edit_operations: editorState.transactions,
+      provenance: {
+        comment: provenanceComment(_currentProvenanceInfo()),
+        created_at: new Date().toISOString(),
+        op_count: editorState.transactions.length,
+      },
+    };
+    return fetchFn("/api/v1/structure-assets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+      .then(function (resp) {
+        if (!resp.ok) {
+          throw new Error("HTTP " + resp.status + " " + resp.statusText);
+        }
+        return resp.json();
+      })
+      .then(function (data) {
+        editorState.savedAssetId = data.asset_id || null;
+        editorState.saveError = null;
+        return { ok: true, assetId: data.asset_id };
+      })
+      .catch(function (err) {
+        editorState.saveError = (err && err.message) ? err.message : String(err);
+        return { ok: false, error: editorState.saveError };
+      });
+  }
+
+  /**
+   * Todo-36 dirty-switch hook: save the edited asset; on success complete
+   * the pending switch (rebind to the target entry per confirmSwitch
+   * semantics).  Never discards edits on failure.
+   *
+   * @returns {Promise<{ok: boolean, assetId?: string, error?: string}>}
+   */
+  function requestSaveEditedAsset() {
+    editorState.saveRequested = true;
+    return saveEditedAsset().then(function (res) {
+      if (res.ok && editorState.pendingSwitch) {
+        var pending = editorState.pendingSwitch;
+        _rebind(pending.targetEntryId, pending.targetSymbols, pending.targetCoords);
+      }
+      return res;
+    });
+  }
+
+  /**
+   * 以此结构新建计算: copy the current in-memory edited XYZ into the
+   * new-task wizard via the app bridge (window._svPrefillNewCalculation —
+   * opens the modal and prefills the structure textarea).  The user still
+   * confirms method/charge/multiplicity; NO submission is ever triggered
+   * here (anti-pattern #29).  No parent-job files are modified.
+   *
+   * @returns {{ok: boolean, xyz?: string, error?: string}}
+   */
+  function prefillNewCalculation() {
+    var svState = (typeof window !== "undefined" && window.ACPStructureViewer)
+      ? window.ACPStructureViewer.state
+      : null;
+    if (!svState || !svState.displayedCoords || !svState.displayedSymbols) {
+      return { ok: false, error: "no_structure" };
+    }
+    var xyzText = buildEditedXyz(
+      svState.displayedSymbols, svState.displayedCoords, "",
+      _currentProvenanceInfo()
+    );
+    if (!xyzText) {
+      return { ok: false, error: "no_structure" };
+    }
+    if (typeof window !== "undefined" &&
+        typeof window._svPrefillNewCalculation === "function") {
+      try {
+        window._svPrefillNewCalculation(xyzText);
+      } catch (_) { /* wizard bridge is best-effort */ }
+      return { ok: true, xyz: xyzText };
+    }
+    return { ok: false, error: "wizard bridge unavailable", xyz: xyzText };
+  }
+
   /**
    * Build the graph for the structure viewer's currently displayed entry
    * (reads ACPStructureViewer.state.displayedCoords/Symbols).  Explicit
@@ -1311,5 +1558,12 @@
     isDirty: isDirty,
     syncDirtyFlag: syncDirtyFlag,
     COLLISION_FACTOR: COLLISION_FACTOR,
+    buildEditedXyz: buildEditedXyz,
+    provenanceComment: provenanceComment,
+    exportEditedXyz: exportEditedXyz,
+    saveEditedAsset: saveEditedAsset,
+    requestSaveEditedAsset: requestSaveEditedAsset,
+    prefillNewCalculation: prefillNewCalculation,
+    _fetchImpl: null,
   };
 })();
