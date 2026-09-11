@@ -663,6 +663,33 @@ class TestGeometryEndpoint:
         assert "frame 0" in lines[1]
         assert "frame 1" not in body
 
+    def test_irc_per_frame_geometry_third_frame(self, sv_client: TestClient, tmp_path: Path) -> None:
+        """Todo 39: irc_forward_2 → exactly the THIRD frame block."""
+        work_dir = _seed_job(
+            sv_client, tmp_path,
+            job_id="sv-irc-003",
+            workflow="irc",
+        )
+        irc_dir = work_dir / "RESULT" / "irc"
+        irc_dir.mkdir(parents=True, exist_ok=True)
+        frames = "".join(
+            f"2\nframe {i}\nC 0 0 {i}\nH 0 0 {i + 1}\n" for i in range(3)
+        )
+        (irc_dir / "irc_forward.xyz").write_text(frames, encoding="utf-8")
+
+        catalog = sv_client.get("/api/v1/jobs/sv-irc-003/structure-viewer").json()
+        ids = [e["id"] for e in catalog["entries"] if e["id"].startswith("irc_forward")]
+        assert ids == ["irc_forward_0", "irc_forward_1", "irc_forward_2"]
+
+        resp = sv_client.get(
+            "/api/v1/jobs/sv-irc-003/structure-viewer/entries/irc_forward_2/geometry"
+        )
+        assert resp.status_code == 200
+        body = resp.text.strip()
+        assert "frame 2" in body
+        assert "frame 0" not in body
+        assert "frame 1" not in body
+
 
 # ── Vibrations endpoint tests (todo 10) ─────────────────────────────────────
 

@@ -1,6 +1,6 @@
 /**
  * ACP Structure Viewer — state store + catalog fetch + stale-response guard
- * @version 0.10.0
+ * @version 0.11.0
  *
  * Namespace: window.ACPStructureViewer
  *
@@ -11,6 +11,9 @@
  *   - registerCanvasLoader(canvasId, fn)  (per-canvas load adapters)
  *   - saveCamera(canvasId) / restoreCamera(canvasId)
  *   - setStylePreset(name) / getStylePreset()
+ *   - playIrcPath(direction)     (IRC forward/reverse frame playback, todo 39)
+ *   - stopIrcPlayback()          (idempotent playback teardown)
+ *   - isIrcPlaying()             (true while playback active/loading)
  *   - loadStructureViewer(jobId, opts)
  *   - onJobSelected(jobId, opts) (called from selectJob; loads catalog + default geometry)
  *   - onEnergyNodeSelected(jobId, entryMeta) (energy-graph one-way push; phase A)
@@ -38,7 +41,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "0.10.0";
+  var VERSION = "0.11.0";
 
   /* ---- user-visible strings (zh fallback; primary source is I18N dict via _t()) ---- */
   var STR = {
@@ -87,6 +90,12 @@
     EDIT_SAVE_ERROR: "\u4fdd\u5b58\u5931\u8d25",                         // 保存失败
     MEASUREMENTS_PLACEHOLDER: "\u9009\u62e9\u539f\u5b50\u540e\u663e\u793a\u6d4b\u91cf\u7ed3\u679c", // 选择原子后显示测量结果
     EDIT_PLACEHOLDER: "\u7f16\u8f91\u529f\u80fd\u5c06\u5728\u540e\u7eed\u7248\u672c\u5f00\u653e", // 编辑功能将在后续版本开放
+    IRC_TITLE: "IRC \u8def\u5f84\u52a8\u753b",                             // IRC 路径动画
+    IRC_PLAY_FORWARD: "\u64ad\u653e\u6b63\u5411",                         // 播放正向
+    IRC_PLAY_REVERSE: "\u64ad\u653e\u53cd\u5411",                         // 播放反向
+    IRC_STOP: "\u505c\u6b62",                                             // 停止
+    IRC_PLAYING: "\u64ad\u653e\u4e2d",                                   // 播放中
+    IRC_LOADING: "\u52a0\u8f7d\u5e27\u2026",                               // 加载帧…
   };
 
   /**
@@ -398,6 +407,7 @@
     structureViewerState.selectionOrigin = origin || "user";
     renderStructureViewer();
     renderInspector();
+    stopIrcPlayback(); /* entry switch ends playback (todo-30 ordering spirit) */
     loadSelectedGeometry();
     return structureViewerState.selectionToken;
   }
@@ -700,6 +710,216 @@
     return geometryStore.stylePreset;
   }
 
+  /* ---- IRC path playback (todo 39) ---- */
+
+  var IRC_FRAME_MS = 250; /* ~4 frames/s */
+
+  var ircPlayback = {
+    direction: null,
+    playing: false,
+    loading: false,
+    frameIndex: 0,
+    frames: [],
+    timerHandle: null,
+    selectionToken: 0,
+  };
+
+  /* IRC playback adapter: rebuilds the model on the MAIN viewer with the
+     todo-29 per-frame recipe (getView → removeAllModels → addModel → style
+     → setView → render) so the camera NEVER jumps between frames. */
+  registerCanvasLoader("main-irc", function (xyzText, styleSpec) {
+    var v = _canvasViewer("main");
+    if (!v || typeof v.addModel !== "function") return false;
+    var view = null;
+    try { if (typeof v.getView === "function") view = v.getView(); } catch (_) { view = null; }
+    try { if (typeof v.removeAllModels === "function") v.removeAllModels(); } catch (_) { /* empty */ }
+    v.addModel(xyzText, "xyz");
+    if (styleSpec && typeof v.setStyle === "function") v.setStyle({}, styleSpec);
+    if (view && typeof v.setView === "function") { try { v.setView(view); } catch (_) { /* keep */ } }
+    try { if (typeof v.render === "function") v.render(); } catch (_) { /* keep */ }
+    return true;
+  });
+
+  function _ircSetInterval(fn, ms) {
+    var impl = (typeof window !== "undefined" && window.ACPStructureViewer &&
+      typeof window.ACPStructureViewer._setIntervalImpl === "function")
+      ? window.ACPStructureViewer._setIntervalImpl : null;
+    if (impl) return impl(fn, ms);
+    if (typeof setInterval === "function") return setInterval(fn, ms);
+    return null;
+  }
+
+  function _ircClearInterval(handle) {
+    var impl = (typeof window !== "undefined" && window.ACPStructureViewer &&
+      typeof window.ACPStructureViewer._clearIntervalImpl === "function")
+      ? window.ACPStructureViewer._clearIntervalImpl : null;
+    if (impl) { impl(handle); return; }
+    if (typeof clearInterval === "function") clearInterval(handle);
+  }
+
+  function _ircEntries(direction) {
+    var payload = structureViewerState.payload;
+    var entries = (payload && payload.entries) || [];
+    var out = [];
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i];
+      if (e && e.group_id === "irc_" + direction && e.geometry && e.geometry.endpoint) out.push(e);
+    }
+    out.sort(function (a, b) {
+      var fa = (a.source && a.source.frame_index) || 0;
+      var fb = (b.source && b.source.frame_index) || 0;
+      return fa - fb;
+    });
+    return out;
+  }
+
+  function _ircStep() {
+    if (!ircPlayback.playing) return;
+    if (ircPlayback.selectionToken !== structureViewerState.selectionToken) {
+      stopIrcPlayback();
+      return;
+    }
+    /* self-stop when the structure tab is hidden (tab-switch teardown) */
+    var layout = (typeof document !== "undefined") ? document.getElementById("sv-layout") : null;
+    if (layout && layout.offsetWidth === 0 && layout.offsetHeight === 0) {
+      stopIrcPlayback();
+      return;
+    }
+    if (ircPlayback.frameIndex >= ircPlayback.frames.length) {
+      stopIrcPlayback();
+      return;
+    }
+    sharedLoadGeometry(ircPlayback.frames[ircPlayback.frameIndex], {
+      canvasId: "main-irc",
+      source: "irc_playback",
+    });
+    ircPlayback.frameIndex += 1;
+    _renderPlaybackBar();
+  }
+
+  /**
+   * Play the IRC path for one direction, frame by frame in FILE ORDER
+   * (~4 frames/s), through the shared loader onto the main canvas with a
+   * stable camera.  Prefetches frame XYZ via each entry's geometry endpoint;
+   * stops on tab/job/entry switch (see stopIrcPlayback callers).
+   *
+   * @param {string} direction - "forward" | "reverse"
+   * @returns {boolean} false when the direction has no playable frames
+   */
+  function playIrcPath(direction) {
+    if (direction !== "forward" && direction !== "reverse") return false;
+    stopIrcPlayback();
+    var entries = _ircEntries(direction);
+    if (!entries.length) return false;
+    var fetchFn = _getFetchImpl();
+    if (!fetchFn) return false;
+    /* both animations own the main viewer — never run them interleaved */
+    if (typeof window !== "undefined" && window.ACPVibrationViewer &&
+        typeof window.ACPVibrationViewer.isAnimationActive === "function" &&
+        window.ACPVibrationViewer.isAnimationActive() &&
+        typeof window.ACPVibrationViewer.stopAnimationAndRestore === "function") {
+      window.ACPVibrationViewer.stopAnimationAndRestore();
+    }
+
+    ircPlayback.direction = direction;
+    ircPlayback.playing = true;
+    ircPlayback.loading = true;
+    ircPlayback.frameIndex = 0;
+    ircPlayback.frames = [];
+    ircPlayback.selectionToken = structureViewerState.selectionToken;
+    var capturedToken = structureViewerState.selectionToken;
+
+    var fetches = entries.map(function (e) {
+      return fetchFn(e.geometry.endpoint, { headers: { "Accept": "text/plain" } })
+        .then(function (resp) { return resp.ok ? resp.text() : null; })
+        .catch(function () { return null; });
+    });
+    Promise.all(fetches).then(function (texts) {
+      if (capturedToken !== structureViewerState.selectionToken) { stopIrcPlayback(); return; }
+      var frames = [];
+      for (var i = 0; i < texts.length; i++) { if (texts[i]) frames.push(texts[i]); }
+      if (!frames.length) { stopIrcPlayback(); return; }
+      ircPlayback.frames = frames;
+      ircPlayback.loading = false;
+      _renderPlaybackBar();
+      _ircStep();
+      ircPlayback.timerHandle = _ircSetInterval(_ircStep, IRC_FRAME_MS);
+    });
+    _renderPlaybackBar();
+    return true;
+  }
+
+  /**
+   * Stop IRC playback.  Idempotent; safe before any playback started.
+   * Wired into the job-switch (onJobSelected) and entry-switch (selectEntry)
+   * teardown paths plus the per-step tab-visibility self-stop.
+   */
+  function stopIrcPlayback() {
+    var wasActive = ircPlayback.playing || ircPlayback.loading;
+    if (ircPlayback.timerHandle !== null) {
+      _ircClearInterval(ircPlayback.timerHandle);
+      ircPlayback.timerHandle = null;
+    }
+    ircPlayback.playing = false;
+    ircPlayback.loading = false;
+    ircPlayback.direction = null;
+    ircPlayback.frames = [];
+    ircPlayback.frameIndex = 0;
+    if (wasActive && typeof document !== "undefined") _renderPlaybackBar();
+  }
+
+  /**
+   * @returns {boolean} true while IRC playback is active or loading frames
+   */
+  function isIrcPlaying() {
+    return !!(ircPlayback.playing || ircPlayback.loading);
+  }
+
+  function _playbackBtn(key, fallback, handler) {
+    var btn = document.createElement("button");
+    btn.setAttribute("type", "button");
+    btn.className = "sv-edit-btn";
+    btn.textContent = _t(key, fallback);
+    btn.addEventListener("click", handler);
+    return btn;
+  }
+
+  function _renderPlaybackBar() {
+    if (typeof document === "undefined") return;
+    var bar = document.getElementById("structure-playback-bar");
+    if (!bar) return;
+    var hasIrc = _ircEntries("forward").length > 0 || _ircEntries("reverse").length > 0;
+    if (!hasIrc) { bar.style.display = "none"; bar.textContent = ""; return; }
+    bar.style.display = "";
+    bar.textContent = "";
+    var title = document.createElement("span");
+    title.className = "sv-playback-title";
+    title.textContent = _t("structure.irc.title", STR.IRC_TITLE);
+    bar.appendChild(title);
+    if (ircPlayback.playing) {
+      var status = document.createElement("span");
+      status.className = "sv-playback-status";
+      var dirLabel = ircPlayback.direction === "forward"
+        ? _t("structure.irc.play_forward", STR.IRC_PLAY_FORWARD)
+        : _t("structure.irc.play_reverse", STR.IRC_PLAY_REVERSE);
+      var progress = ircPlayback.loading
+        ? _t("structure.irc.loading", STR.IRC_LOADING)
+        : " " + Math.min(ircPlayback.frameIndex + 1, ircPlayback.frames.length) + "/" + ircPlayback.frames.length;
+      status.textContent = _t("structure.irc.playing", STR.IRC_PLAYING) + " · " + dirLabel + progress;
+      bar.appendChild(status);
+      bar.appendChild(_playbackBtn("structure.irc.stop", STR.IRC_STOP, function () {
+        stopIrcPlayback();
+      }));
+    } else {
+      bar.appendChild(_playbackBtn("structure.irc.play_forward", STR.IRC_PLAY_FORWARD, function () {
+        playIrcPath("forward");
+      }));
+      bar.appendChild(_playbackBtn("structure.irc.play_reverse", STR.IRC_PLAY_REVERSE, function () {
+        playIrcPath("reverse");
+      }));
+    }
+  }
+
   /**
    * Load geometry for the currently selected entry.
    * Fetches geometry.endpoint, handles 409 pending_fetch with auto-retry,
@@ -776,8 +996,10 @@
    */
   function onJobSelected(jobId, opts) {
     opts = opts || {};
-    /* job switch: full vibration teardown first — no running loop or stale
-       arrows may survive into the new job (todo 30) */
+    /* job switch: stop IRC playback first (todo-30 teardown call site),
+       then full vibration teardown — no running loop or stale arrows may
+       survive into the new job */
+    stopIrcPlayback();
     if (typeof window !== "undefined" && window.ACPVibrationViewer &&
         typeof window.ACPVibrationViewer.handleTeardown === "function") {
       window.ACPVibrationViewer.handleTeardown();
@@ -961,6 +1183,8 @@
         listBody.appendChild(row);
       }
     }
+
+    _renderPlaybackBar();
   }
 
   function _renderEntryRow(entry) {
@@ -1235,6 +1459,8 @@
       warnDiv.appendChild(warnList);
       inspBody.appendChild(warnDiv);
     }
+
+    _renderPlaybackBar();
   }
 
   function _inspectorSection(label, value) {
@@ -1567,6 +1793,9 @@
     restoreCamera: restoreCamera,
     setStylePreset: setStylePreset,
     getStylePreset: getStylePreset,
+    playIrcPath: playIrcPath,
+    stopIrcPlayback: stopIrcPlayback,
+    isIrcPlaying: isIrcPlaying,
     loadStructureViewer: loadStructureViewer,
     onJobSelected: onJobSelected,
     onEnergyNodeSelected: onEnergyNodeSelected,

@@ -5572,3 +5572,181 @@ def test_shared_loader_selection_token_stale_guard() -> None:
         f"Node stale-token guard test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Wave 7 / todo 39: IRC frame playback + projection contract
+# ---------------------------------------------------------------------------
+
+
+def test_irc_playback_contract() -> None:
+    """Todo-39 lock: playIrcPath/stopIrcPlayback exist, teardown stops playback,
+    playback goes through the shared loader (main-irc adapter), buttons +
+    i18n present in both locales."""
+    sv = _SV_JS_PATH.read_text(encoding="utf-8")
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    for name in ("playIrcPath", "stopIrcPlayback", "isIrcPlaying"):
+        assert f"{name}: {name}," in sv, f"{name} missing from namespace"
+
+    # Playback loads through the SHARED loader via the main-irc adapter
+    assert 'registerCanvasLoader("main-irc"' in sv
+    assert 'canvasId: "main-irc"' in sv
+    assert 'source: "irc_playback"' in sv
+    # Camera preservation recipe inside the adapter (todo-29 pattern)
+    adapter = sv.split('registerCanvasLoader("main-irc"', 1)[1].split("});", 1)[0]
+    for piece in ("getView", "removeAllModels", "addModel", "setView", "render"):
+        assert piece in adapter
+
+    # Teardown wiring: job switch + entry switch stop playback; per-step
+    # self-stop when the structure tab is hidden
+    on_job = sv.split("function onJobSelected(", 1)[1].split("\n  function ", 1)[0]
+    assert "stopIrcPlayback()" in on_job
+    select_fn = sv.split("function selectEntry(", 1)[1].split("\n  function ", 1)[0]
+    assert "stopIrcPlayback()" in select_fn
+    step_fn = sv.split("function _ircStep()", 1)[1].split("\n  function ", 1)[0]
+    assert "sv-layout" in step_fn
+
+    # Playback bar: renders into the todo-16 container with both buttons + stop
+    assert 'getElementById("structure-playback-bar")' in sv
+    assert "structure.irc.play_forward" in sv and "structure.irc.play_reverse" in sv
+    assert "structure.irc.stop" in sv
+    assert 'id="structure-playback-bar"' in html
+
+    # i18n completeness: all 6 structure.irc.* keys in BOTH locales
+    zh_keys = _extract_structure_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_structure_keys(html, _EN_BLOCK_RE)
+    expected = {
+        "structure.irc.title",
+        "structure.irc.play_forward",
+        "structure.irc.play_reverse",
+        "structure.irc.stop",
+        "structure.irc.playing",
+        "structure.irc.loading",
+    }
+    assert expected <= zh_keys, f"missing zh keys: {sorted(expected - zh_keys)}"
+    assert expected <= en_keys, f"missing en keys: {sorted(expected - en_keys)}"
+
+
+def test_irc_playback_node_logic() -> None:
+    """Node logic: playback steps frames in FILE ORDER through the shared
+    loader, camera is preserved per frame, stop is idempotent, and selection
+    changes stop playback."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        require(JS_PATH);
+        var ns = window.ACPStructureViewer;
+
+        var viewerCalls = [];
+        var viewSeq = 0;
+        var currentView = null;
+        var fakeViewer = {
+          getView: function () { currentView = { seq: ++viewSeq }; return currentView; },
+          setView: function (v) { viewerCalls.push(["setView", v]); },
+          removeAllModels: function () { viewerCalls.push(["removeAllModels"]); },
+          addModel: function (text, fmt) { viewerCalls.push(["addModel", text]); },
+          setStyle: function (sel, spec) { viewerCalls.push(["setStyle", spec]); },
+          render: function () { viewerCalls.push(["render"]); },
+        };
+        ns._mainViewerImpl = function () { return fakeViewer; };
+        ns._styleSpecImpl = function (name) { return name === "p1" ? { marker: 1 } : null; };
+        ns.setStylePreset("p1");
+
+        function ircEntry(direction, i) {
+          return {
+            id: "irc_" + direction + "_" + i,
+            group_id: "irc_" + direction,
+            label: "f" + i,
+            geometry: { endpoint: "/api/f/" + direction + "/" + i, format: "xyz" },
+            source: { kind: "formal_result", frame_index: i, geometry_ref: "x" },
+            badges: [], vibrations: { available: false },
+          };
+        }
+        ns.state.jobId = "job-irc";
+        ns.state.payload = {
+          entries: [
+            ircEntry("forward", 1), ircEntry("forward", 0), ircEntry("forward", 2),
+            ircEntry("reverse", 0),
+            { id: "other", group_id: "g", geometry: { endpoint: "/o" }, badges: [] },
+          ],
+          default_entry_id: "irc_forward_0",
+          groups: [{ id: "irc_forward", label: "F", kind: "irc" }],
+        };
+        ns._fetchImpl = function (url) {
+          return Promise.resolve({ ok: true, text: function () {
+            return "1\\nf\\nH 0 0 " + url.slice(-1) + "\\n";
+          } });
+        };
+
+        var intervals = [];
+        ns._setIntervalImpl = function (fn, ms) { intervals.push(fn); return intervals.length; };
+        var cleared = [];
+        ns._clearIntervalImpl = function (h) { cleared.push(h); };
+
+        if (ns.playIrcPath("sideways") !== false) {
+          console.error("FAIL: invalid direction must return false"); process.exit(1);
+        }
+        if (ns.playIrcPath("forward") !== true) {
+          console.error("FAIL: play forward"); process.exit(1);
+        }
+        if (!ns.isIrcPlaying()) { console.error("FAIL: playing flag"); process.exit(1); }
+
+        setTimeout(function () {
+          if (!intervals.length) { console.error("FAIL: interval scheduled"); process.exit(1); }
+          var step = intervals[0];
+          var models = function () {
+            return viewerCalls.filter(function (c) { return c[0] === "addModel"; })
+              .map(function (c) { return c[1]; });
+          };
+          // frame 0 stepped immediately after prefetch
+          if (models().length !== 1) { console.error("FAIL: first frame"); process.exit(1); }
+          step(); step();
+          if (models().length !== 3) { console.error("FAIL: stepped 3 frames"); process.exit(1); }
+          // FILE ORDER by frame_index (0,1,2) — payload listed them shuffled
+          var last = models()[2].trim().split("\\n");
+          if (last[2].indexOf("2") < 0) {
+            console.error("FAIL: order by frame_index"); process.exit(1);
+          }
+          // end of path auto-stops
+          step();
+          if (ns.isIrcPlaying()) { console.error("FAIL: auto-stop at end"); process.exit(1); }
+          var versAtStop = ns.geometryStore.loaderVersion;
+
+          // camera preserved: every setView got the view from the SAME step
+          var views = viewerCalls.filter(function (c) { return c[0] === "setView"; });
+          if (views.length !== 3 || views.some(function (v) { return !v[1] || !v[1].seq; })) {
+            console.error("FAIL: camera setView per frame"); process.exit(1);
+          }
+          var styles = viewerCalls.filter(function (c) { return c[0] === "setStyle"; });
+          if (styles.length !== 3 || styles[0][1].marker !== 1) {
+            console.error("FAIL: shared style preset applied per frame"); process.exit(1);
+          }
+
+          // idempotent stop — no throw, no extra clearInterval
+          ns.stopIrcPlayback(); ns.stopIrcPlayback();
+
+          // selection change stops an active playback
+          ns._fetchImpl = function () {
+            return Promise.resolve({ ok: false, text: function () { return ""; } });
+          };
+          ns.playIrcPath("reverse");
+          ns.selectEntry("other", "user");
+          if (ns.isIrcPlaying()) {
+            console.error("FAIL: selection must stop playback"); process.exit(1);
+          }
+          if (ns.geometryStore.loaderVersion !== versAtStop) {
+            console.error("FAIL: no loads after stop"); process.exit(1);
+          }
+          console.log("PASS");
+        }, 0);
+    """).replace("JS_PATH", json.dumps(str(_SV_JS_PATH)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node IRC playback test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout

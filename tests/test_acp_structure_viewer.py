@@ -1781,96 +1781,102 @@ def _make_irc_task(
 
 
 class TestIrcResolver:
-    """IRC placeholder: entries from RESULT/irc/*.xyz, awaiting_projection warning."""
+    """IRC per-frame projection: one entry per frame, forward/reverse groups."""
 
-    def test_irc_two_endpoints(self, tmp_path: Path):
-        """irc_forward.xyz + irc_reverse.xyz → 2 entries, forward-first."""
+    @staticmethod
+    def _frames_xyz(comments: list[str]) -> str:
+        blocks = []
+        for i, comment in enumerate(comments):
+            blocks.append(f"2\n{comment}\nC 0 0 {i}\nH 0 0 {i + 1}\n")
+        return "".join(blocks)
+
+    def test_irc_multiframe_six_entries(self, tmp_path: Path):
+        """3+3 frames → 6 per-frame entries, two direction groups, forward_0 default."""
         from acp.results.structure_viewer import build_structure_viewer_payload
 
-        xyz = "3\nendpoint\nO 0 0 0\nH 0 0 1\nH 0 1 0\n"
-        task = _make_irc_task(tmp_path, forward_xyz=xyz, reverse_xyz=xyz)
+        fwd = self._frames_xyz(["ts", "mid", "energy = -1.5"])
+        rev = self._frames_xyz(["ts", "mid", "energy = -2.5"])
+        task = _make_irc_task(tmp_path, forward_xyz=fwd, reverse_xyz=rev)
         payload = build_structure_viewer_payload(
             task, job_id="j1", workflow="irc", job_status="completed"
         )
-        assert len(payload.entries) == 2
-        ids = [e.id for e in payload.entries]
-        assert ids[0] == "irc_forward_0"
-        assert ids[1] == "irc_reverse_0"
+        assert [e.id for e in payload.entries] == [
+            "irc_forward_0", "irc_forward_1", "irc_forward_2",
+            "irc_reverse_0", "irc_reverse_1", "irc_reverse_2",
+        ]
+        group_ids = {g.id: g for g in payload.groups}
+        assert set(group_ids) == {"irc_forward", "irc_reverse"}
+        assert group_ids["irc_forward"].label == "正向"
+        assert group_ids["irc_reverse"].label == "反向"
+        assert payload.default_entry_id == "irc_forward_0"
+        assert not any("awaiting_projection" in w.lower() for w in payload.warnings)
 
-    def test_irc_awaiting_projection_warning(self, tmp_path: Path):
-        """awaiting_projection appears in warnings."""
+    def test_irc_entries_keep_file_order(self, tmp_path: Path):
+        """Entries stay in file order (never reordered), frame_index per frame."""
         from acp.results.structure_viewer import build_structure_viewer_payload
 
-        xyz = "3\nendpoint\nO 0 0 0\nH 0 0 1\nH 0 1 0\n"
-        task = _make_irc_task(tmp_path, forward_xyz=xyz, reverse_xyz=xyz)
+        fwd = self._frames_xyz(["e = 5.0", "e = 1.0", "e = 3.0"])  # non-monotonic
+        rev = self._frames_xyz(["e = 4.0", "e = 0.5", "e = 2.0"])
+        task = _make_irc_task(tmp_path, forward_xyz=fwd, reverse_xyz=rev)
         payload = build_structure_viewer_payload(
             task, job_id="j1", workflow="irc", job_status="completed"
         )
-        assert any("awaiting_projection" in w.lower() for w in payload.warnings)
+        forward_frames = [e.source.frame_index for e in payload.entries if e.group_id == "irc_forward"]
+        assert forward_frames == [0, 1, 2]
+        assert payload.entries[0].label == "IRC 正向 1"
 
-    def test_irc_no_files_group_still_present(self, tmp_path: Path):
-        """No IRC files → group present + awaiting_projection warning, no entries."""
+    def test_irc_no_files_no_placeholder_warning(self, tmp_path: Path):
+        """No IRC files → groups present, no entries, no awaiting_projection."""
         from acp.results.structure_viewer import build_structure_viewer_payload
 
         task = _make_irc_task(tmp_path)
         payload = build_structure_viewer_payload(
             task, job_id="j1", workflow="irc", job_status="completed"
         )
-        assert any(g.id == "irc_paths" for g in payload.groups)
+        assert {g.id for g in payload.groups} == {"irc_forward", "irc_reverse"}
         assert len(payload.entries) == 0
-        assert any("awaiting_projection" in w.lower() for w in payload.warnings)
+        assert not any("awaiting_projection" in w.lower() for w in payload.warnings)
 
-    def test_irc_forward_before_reverse(self, tmp_path: Path):
-        """Forward endpoint comes before reverse (filename sort)."""
+    def test_irc_only_forward_missing_reverse_warning(self, tmp_path: Path):
+        """Only forward file → 3 entries, default irc_forward_0, reverse-missing warning."""
         from acp.results.structure_viewer import build_structure_viewer_payload
 
-        xyz = "3\nendpoint\nO 0 0 0\nH 0 0 1\nH 0 1 0\n"
-        task = _make_irc_task(tmp_path, forward_xyz=xyz, reverse_xyz=xyz)
+        fwd = self._frames_xyz(["ts", "mid", "end"])
+        task = _make_irc_task(tmp_path, forward_xyz=fwd)
         payload = build_structure_viewer_payload(
             task, job_id="j1", workflow="irc", job_status="completed"
         )
-        assert payload.entries[0].id == "irc_forward_0"
-        assert payload.entries[1].id == "irc_reverse_0"
+        assert [e.id for e in payload.entries] == ["irc_forward_0", "irc_forward_1", "irc_forward_2"]
+        assert payload.default_entry_id == "irc_forward_0"
+        assert any("reverse" in w and "missing" in w.lower() for w in payload.warnings)
 
     def test_irc_entry_source_fields(self, tmp_path: Path):
-        """IRC entry source.kind = 'formal_result', frame_index = 0."""
+        """Per-frame source: frame_index matches the frame, ref points at the file."""
         from acp.results.structure_viewer import build_structure_viewer_payload
 
-        xyz = "3\nendpoint\nO 0 0 0\nH 0 0 1\nH 0 1 0\n"
-        task = _make_irc_task(tmp_path, forward_xyz=xyz)
+        fwd = self._frames_xyz(["a", "b", "c"])
+        task = _make_irc_task(tmp_path, forward_xyz=fwd)
         payload = build_structure_viewer_payload(
             task, job_id="j1", workflow="irc", job_status="completed"
         )
-        entry = payload.entries[0]
-        assert entry.source.kind == "formal_result"
-        assert entry.source.frame_index == 0
-        assert entry.source.geometry_ref is not None
-        assert "irc_forward.xyz" in entry.source.geometry_ref
+        third = next(e for e in payload.entries if e.id == "irc_forward_2")
+        assert third.source.kind == "formal_result"
+        assert third.source.frame_index == 2
+        assert third.source.geometry_ref is not None
+        assert "irc_forward.xyz" in third.source.geometry_ref
 
     def test_irc_geometry_endpoint(self, tmp_path: Path):
         """IRC entry geometry endpoint uses job_id and entry_id."""
         from acp.results.structure_viewer import build_structure_viewer_payload
 
-        xyz = "3\nendpoint\nO 0 0 0\nH 0 0 1\nH 0 1 0\n"
-        task = _make_irc_task(tmp_path, forward_xyz=xyz)
+        fwd = self._frames_xyz(["ts", "mid", "end"])
+        task = _make_irc_task(tmp_path, forward_xyz=fwd)
         payload = build_structure_viewer_payload(
             task, job_id="j1", workflow="irc", job_status="completed"
         )
         entry = payload.entries[0]
         assert "j1" in entry.geometry.endpoint
         assert "irc_forward_0" in entry.geometry.endpoint
-
-    def test_irc_only_forward(self, tmp_path: Path):
-        """Only forward file → 1 entry."""
-        from acp.results.structure_viewer import build_structure_viewer_payload
-
-        xyz = "3\nendpoint\nO 0 0 0\nH 0 0 1\nH 0 1 0\n"
-        task = _make_irc_task(tmp_path, forward_xyz=xyz)
-        payload = build_structure_viewer_payload(
-            task, job_id="j1", workflow="irc", job_status="completed"
-        )
-        assert len(payload.entries) == 1
-        assert payload.entries[0].id == "irc_forward_0"
 
 
 # ---------------------------------------------------------------------------

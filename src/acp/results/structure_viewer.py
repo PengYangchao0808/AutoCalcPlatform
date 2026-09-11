@@ -1210,62 +1210,75 @@ def _resolve_scan(task_root: Path, workflow: str, job_id: str, warnings: list[st
 
 
 def _resolve_irc(task_root: Path, workflow: str, job_id: str, warnings: list[str], item_id: str | None = None) -> _ResolverResult:
-    """Resolve IRC endpoint files → structure viewer entries.
+    """Resolve IRC path files → per-frame structure viewer entries (todo 39).
 
-    Wave 1 placeholder: reads ``RESULT/irc/*.xyz`` sorted by filename
-    (forward before reverse naturally).  Each file is treated as a single
-    frame (frame_index=0).  Multi-frame XYZ projection is deferred to Wave 7.
-
-    The ``irc_paths`` group is always present with an ``awaiting_projection``
-    warning so the frontend can show a placeholder even when no files exist.
+    Reads ``RESULT/irc/irc_forward.xyz`` + ``irc_reverse.xyz`` (single- or
+    multi-frame) and emits ONE ENTRY PER FRAME via ``irc_entry_id(endpoint,
+    frame_index)``.  Frames stay in FILE ORDER (IRC path order is physically
+    meaningful — never reordered).  ``source.frame_index`` makes the todo-9
+    geometry endpoint extract the exact frame block via
+    ``read_traj_frame_xyz``.  Groups: ``irc_forward`` (正向) +
+    ``irc_reverse`` (反向).  Default entry = ``irc_forward_0`` — frame 0 of
+    the forward path as the TS/path-center proxy (doc §5); a pure display
+    default, NOT a TS-identity claim.  A missing direction adds a warning
+    when the other direction is present.
     """
-    import re as _re
+    from acp.results.irc_projection import IRC_DIRECTIONS, parse_irc_xyz_frames
 
-    groups = [StructureViewerGroup(id="irc_paths", label="IRC 路径", kind="irc")]
+    direction_labels = {"forward": "正向", "reverse": "反向"}
+    groups = [
+        StructureViewerGroup(id="irc_forward", label="正向", kind="irc"),
+        StructureViewerGroup(id="irc_reverse", label="反向", kind="irc"),
+    ]
     entries: list[StructureViewerEntry] = []
     default_id: str | None = None
+    found: list[str] = []
 
     irc_dir = task_root / "RESULT" / "irc"
-    warnings.append("IRC projection awaiting Wave 7 (awaiting_projection)")
 
-    if not irc_dir.is_dir():
-        return groups, entries, default_id
-
-    xyz_files = sorted(irc_dir.glob("*.xyz"))
-    if not xyz_files:
-        return groups, entries, default_id
-
-    endpoint_re = _re.compile(r"^irc_(forward|reverse)\.xyz$", _re.IGNORECASE)
-
-    for xyz_path in xyz_files:
-        match = endpoint_re.match(xyz_path.name)
-        if not match:
+    for direction in IRC_DIRECTIONS:
+        xyz_path = irc_dir / f"irc_{direction}.xyz"
+        if not xyz_path.is_file():
             continue
-        endpoint = match.group(1).lower()
-        entry_id = irc_entry_id(endpoint, 0)
-
+        frames = parse_irc_xyz_frames(xyz_path)
+        if not frames:
+            warnings.append(f"IRC {direction} file has no parseable frames: irc_{direction}.xyz")
+            continue
+        found.append(direction)
         geometry_ref = f"RESULT/irc/{xyz_path.name}"
 
-        entries.append(StructureViewerEntry(
-            id=entry_id,
-            group_id="irc_paths",
-            label=f"IRC {endpoint}",
-            role="endpoint",
-            status="completed",
-            geometry=StructureViewerGeometry(
-                endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
-                format="xyz",
-            ),
-            source=StructureViewerSource(
-                kind="formal_result",
-                frame_index=0,
-                geometry_ref=geometry_ref,
-            ),
-            vibrations=StructureViewerVibrations(available=False),
-        ))
+        for frame in frames:
+            entry_id = irc_entry_id(direction, frame.index)
+            is_endpoint = frame.index == len(frames) - 1
+            entries.append(StructureViewerEntry(
+                id=entry_id,
+                group_id=f"irc_{direction}",
+                label=f"IRC {direction_labels[direction]} {frame.index + 1}",
+                role="endpoint" if is_endpoint else "path",
+                status="completed",
+                geometry=StructureViewerGeometry(
+                    endpoint=f"/api/v1/jobs/{job_id}/structure-viewer/entries/{entry_id}/geometry",
+                    format="xyz",
+                ),
+                source=StructureViewerSource(
+                    kind="formal_result",
+                    frame_index=frame.index,
+                    geometry_ref=geometry_ref,
+                ),
+                vibrations=StructureViewerVibrations(available=False),
+            ))
 
-        if default_id is None:
-            default_id = entry_id
+        if default_id is None and direction == "forward":
+            default_id = irc_entry_id("forward", 0)
+
+    if found and len(found) < len(IRC_DIRECTIONS):
+        missing = [d for d in IRC_DIRECTIONS if d not in found]
+        for direction in missing:
+            warnings.append(f"IRC {direction} trajectory missing (irc_{direction}.xyz)")
+
+    if default_id is None and entries:
+        # Forward absent → first reverse frame is the path-center proxy.
+        default_id = entries[0].id
 
     return groups, entries, default_id
 

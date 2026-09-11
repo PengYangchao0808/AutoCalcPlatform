@@ -209,7 +209,7 @@ VIEW_REGISTRY: dict[str, ViewSpec] = {
         "progress",
         "reaction_point",
     ),
-    "irc": ViewSpec("irc", "IRC 能量剖面", "IRC Energy Profile", "反应坐标", "", ""),
+    "irc": ViewSpec("irc", "IRC 能量剖面", "IRC Energy Profile", "反应坐标", "frame", "irc_point"),
     "neb": ViewSpec("neb", "NEB 最小能量路径", "NEB Minimum Energy Path", "路径坐标", "", ""),
     "unsupported": ViewSpec("unsupported", "能量图不可用", "Energy Graph Unavailable", "", "", ""),
 }
