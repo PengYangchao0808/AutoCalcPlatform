@@ -1296,6 +1296,22 @@ Examples:
         help="Logging level (default: INFO)",
     )
 
+    init_parser = subparsers.add_parser(
+        "init",
+        help="Interactive setup wizard for the user config (local software + remote nodes)",
+    )
+    init_parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path.home() / ".cccp.yaml",
+        help="target user config file to create/update (default ~/.cccp.yaml)",
+    )
+    init_parser.add_argument(
+        "--log-level",
+        default="INFO",
+        help="Logging level (default: INFO)",
+    )
+
     # -- run ensemble -------------------------------------------------------
     ens = run_sub.add_parser(
         "ensemble",
@@ -2880,6 +2896,20 @@ def _handle_doctor(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def _handle_init(args: argparse.Namespace) -> int:
+    """``acp init`` — interactive setup wizard for the user config.
+
+    Delegates to :func:`acp.init_wizard.flows.run_init` (exit-code mapping
+    stays in the CLI layer; the wizard module itself stays import-safe on
+    core-only installs — remote-stack imports live inside its flows).
+    """
+    logging.basicConfig(level=getattr(logging, str(args.log_level).upper(), logging.INFO))
+
+    from acp.init_wizard.flows import run_init
+
+    return run_init(Path(args.config))
+
+
 def main(argv: list[str] | None = None) -> int:
     """
     ACP CLI entry point.
@@ -2927,6 +2957,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "doctor":
         return _handle_doctor(args)
+
+    if args.command == "init":
+        return _handle_init(args)
 
     if args.command != "run":
         parser.print_help()

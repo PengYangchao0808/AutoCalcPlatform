@@ -49,7 +49,7 @@ def menu(title: str, options: list[str], allow_q: bool = True) -> int:
     re-prompt.
     """
     numbered = "\n".join(f"  {i}) {opt}" for i, opt in enumerate(options, start=1))
-    quit_line = "  q) 退出" if allow_q else ""
+    quit_line = "\n  q) 退出" if allow_q else ""
     while True:
         print(f"{title}\n{numbered}{quit_line}")
         raw = _read_input("请选择: ")

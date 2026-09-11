@@ -24,6 +24,7 @@ ACP_V1_20260811/
 │   └── utils/             # File I/O, geometry, constants, solvent maps
 ├── src/acp/               # Unified module (~130 .py, ~65k lines incl. API/scheduler/nmr)
 │   ├── cli.py             # argparse subcommand CLI: `acp run Confsearch|PESsearch|BatchOptimize|irc|scan|nmr|serve|simple` (2608 lines)
+│   ├── init_wizard/       # `acp init` interactive setup wizard: prompts/persist/sniff_local/sniff_remote/newnode/flows (paramiko imported per-flow only)
 │   ├── catalog.py         # WORKFLOW_CATALOG + METHOD_META + METHOD_SCHEMAS (2915 lines — retired entries kept as status:"retired")
 │   ├── confsearch/        # Unified conformer search: engine, contracts, manifest, profiles, selection, protocols/ (xtb-crest/xtb-md/censo-crest/xtbmd-censo), shared/, sampling.py + sampling_models.py
 │   ├── calculations/      # Calculation-plan primitives and engines: contracts, checkpoint, executor, plans, primitives/ (sp/opt/freq/scan/irc/thermochemistry), pes/, batch/, irc/
@@ -257,6 +258,9 @@ acp run nmr --input "CCO" --backend orca --reference "13C=185.0" "1H=31.5"
 acp run singlepoint --input "CCO" --method "wB97X-D4" --basis "def2-TZVPPD"
 acp run optimize --input molecule.xyz --method "r2SCAN-3c"
 acp run frequency --input molecule.xyz
+
+# init wizard — interactive config setup (local executables + remote cluster nodes)
+acp init
 
 # web server
 acp run serve --port 8765
