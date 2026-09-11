@@ -471,7 +471,8 @@ def create_cluster_adapter(config: Dict[str, Any]) -> ClusterAdapterBase:
     if not cluster_enabled:
         return LocalClusterAdapter(config)
     
-    if cluster_type == 'lsf':
+    if cluster_type in ('lsf', 'openlava'):
+        # openlava is bsub-compatible → same LSF adapter
         return LSFClusterAdapter(config)
     elif cluster_type == 'local':
         return LocalClusterAdapter(config)

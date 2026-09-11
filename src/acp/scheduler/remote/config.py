@@ -33,6 +33,10 @@ DECLARED_SOFTWARE_NAMES: frozenset[str] = frozenset(
     {"orca", "xtb", "crest", "censo", "shermo", "isostat", "molclus"}
 )
 
+#: Cluster scheduler flavours a node may declare under ``type``.  Both
+#: drive the identical bsub-compatible remote runner (design D2).
+_VALID_NODE_TYPES: frozenset[str] = frozenset({"lsf", "openlava"})
+
 
 @dataclass(frozen=True)
 class NodeCapabilities:
@@ -106,6 +110,11 @@ class RemoteNode:
         capabilities: Static capability declaration
             (:class:`NodeCapabilities`). ``None`` (default) marks the node
             *generic* for the submission-time capability filter.
+        type: Declarative cluster type — ``"lsf"`` (default) or
+            ``"openlava"``. Purely informational today: both flavours drive
+            the identical bsub-compatible remote runner; an unrecognised
+            value falls back to ``"lsf"`` with a warning (never raises —
+            see :func:`_parse_node_type`).
     """
 
     name: str
@@ -123,6 +132,7 @@ class RemoteNode:
     host_key_policy: str = "reject"
     queue: str | None = None
     capabilities: NodeCapabilities | None = None
+    type: str = "lsf"
 
     def resolved_password(self) -> str | None:
         """Return the effective password, honouring env-var override.
@@ -145,10 +155,12 @@ class RemoteNode:
         Required keys: ``name``, ``host``, ``username``,
         ``remote_work_dir``, ``remote_code_dir``.
         Optional keys: ``port``, ``password``, ``key_file``,
-        ``max_concurrent_jobs``, ``enabled``, ``queue``, ``capabilities``.
+        ``max_concurrent_jobs``, ``enabled``, ``queue``, ``capabilities``,
+        ``type``.
         A missing/blank ``queue`` or a missing ``capabilities`` block yields
         ``None`` (generic-node sentinel); unknown ``capabilities.software``
-        names are dropped with a warning and never abort parsing.
+        names are dropped with a warning and never abort parsing; an
+        unknown ``type`` falls back to ``"lsf"`` with a warning.
 
         Raises:
             ValueError: If a required key is missing or ``remote_work_dir``
@@ -183,7 +195,51 @@ class RemoteNode:
             host_key_policy=str(data.get("host_key_policy", "reject")),
             queue=_parse_node_queue(data.get("queue")),
             capabilities=_parse_capabilities(data.get("capabilities"), node_name),
+            type=_parse_node_type(data.get("type"), node_name),
         )
+
+    def to_config_dict(self) -> dict[str, Any]:
+        """Serialize the node back to its YAML ``nodes:`` entry shape.
+
+        Schema owner for whole-node persistence (init-wizard plan D17) —
+        consumers must not hand-build node dicts.  Always emits ``name``,
+        ``host``, ``username``, ``remote_work_dir``, ``remote_code_dir``,
+        ``type`` and ``enabled``; every other field is emitted only when it
+        differs from its parse default, so
+        ``RemoteNode.from_config_dict(node.to_config_dict()) == node``
+        holds and persisted configs stay minimal.
+        """
+        data: dict[str, Any] = {
+            "name": self.name,
+            "host": self.host,
+            "username": self.username,
+            "remote_work_dir": self.remote_work_dir,
+            "remote_code_dir": self.remote_code_dir,
+            "type": self.type,
+            "enabled": self.enabled,
+        }
+        if self.port != 22:
+            data["port"] = self.port
+        if self.password is not None:
+            data["password"] = self.password
+        if self.key_file is not None:
+            data["key_file"] = self.key_file
+        if self.python_executable != "python":
+            data["python_executable"] = self.python_executable
+        if self.bin_symlinks:
+            data["bin_symlinks"] = dict(self.bin_symlinks)
+        if self.max_concurrent_jobs != 5:
+            data["max_concurrent_jobs"] = self.max_concurrent_jobs
+        if self.host_key_policy != "reject":
+            data["host_key_policy"] = self.host_key_policy
+        if self.queue is not None:
+            data["queue"] = self.queue
+        if self.capabilities is not None:
+            data["capabilities"] = {
+                "software": list(self.capabilities.software),
+                "tags": list(self.capabilities.tags),
+            }
+        return data
 
 
 @dataclass
@@ -334,6 +390,32 @@ def _parse_node_queue(value: Any) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _parse_node_type(value: Any, node_name: str) -> str:
+    """Parse the declarative cluster ``type`` (design D2 — never raises).
+
+    Absent values default to ``"lsf"``.  Anything outside
+    :data:`_VALID_NODE_TYPES` — including non-string values — logs a
+    warning and falls back to ``"lsf"`` instead of aborting:
+    :meth:`RemoteExecutionConfig.from_config_dict` runs at API-server
+    startup and in ``acp doctor``, so one typo'd node entry must never
+    take configuration loading down (mirrors the ``_parse_capabilities``
+    never-abort precedent).
+    """
+    if value is None:
+        return "lsf"
+    if isinstance(value, str):
+        text = value.strip()
+        if text in _VALID_NODE_TYPES:
+            return text
+    logger.warning(
+        "RemoteNode %r: unknown cluster type %r (valid: %s); falling back to 'lsf'",
+        node_name,
+        value,
+        ", ".join(sorted(_VALID_NODE_TYPES)),
+    )
+    return "lsf"
 
 
 def _parse_capabilities(value: Any, node_name: str) -> NodeCapabilities | None:
