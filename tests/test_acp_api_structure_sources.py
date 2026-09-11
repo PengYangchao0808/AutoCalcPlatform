@@ -382,6 +382,7 @@ def test_remote_source_with_fetcher(client: TestClient, tmp_path: Path) -> None:
 
 def test_remote_source_without_fetcher(client: TestClient, tmp_path: Path) -> None:
     _seed_job(client, tmp_path, "rjob1", result=dict(_REMOTE_RESULT))
+    client.app.state.job_manager._remote_fetcher = None
 
     response = client.get("/api/v1/structure-sources/recent")
     assert response.status_code == 200

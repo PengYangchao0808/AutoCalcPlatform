@@ -336,6 +336,9 @@ acp run frequency --input molecule.xyz
 acp run nmr --input "CCO" --output ./nmr_results
 acp run nmr --input "CCO" --backend orca --reference "13C=185.0" "1H=31.5"
 
+# === 初始化向导（交互式配置本地软件与远程计算节点） ===
+acp init
+
 # === Web 服务 ===
 acp run serve --port 8765
 ```

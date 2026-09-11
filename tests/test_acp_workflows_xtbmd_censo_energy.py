@@ -695,6 +695,14 @@ def _wf_sample_config() -> dict[str, Any]:
         },
         "resources": {"nproc": 4},
         "censo": {"preset": "censo-light", "temperature": 298.15},
+        "thermo": {
+            "temperature_k": 298.15,
+            "pressure_atm": 1.0,
+            "scl_zpe": 0.9905,
+            "shermo_ilowfreq": 2,
+            "shermo_imagreal": 0,
+            "shermo_conc": 1.0,
+        },
     }
 
 
