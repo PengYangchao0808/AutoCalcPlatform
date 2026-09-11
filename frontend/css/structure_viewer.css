@@ -1,6 +1,6 @@
 /**
  * ACP Structure Viewer — Stylesheet
- * @version 0.7.0
+ * @version 0.8.0
  *
  * Design tokens inherited from ACP_Workbench_v2.html :root variables.
  * Three-column layout: list | canvas | inspector.
@@ -366,6 +366,24 @@
   border-top: 1px dashed var(--sv-border-subtle);
   border-bottom: 1px dashed var(--sv-border-subtle);
   margin: 4px 0;
+}
+
+/* ===== Accessibility: focus visibility (Wave 7 / todo 42) ===== */
+.sv-entry-row:focus-visible,
+.sv-edit-btn:focus-visible,
+.sv-list-body:focus-visible,
+[role="listbox"]:focus-visible {
+  outline: 2px solid var(--sv-accent);
+  outline-offset: 2px;
+}
+
+.sv-option-focus {
+  box-shadow: inset 0 0 0 1px var(--sv-accent);
+}
+
+.sv-view-restored {
+  border-left: 2px solid var(--sv-border-subtle);
+  padding-left: 8px;
 }
 
 /* ===== Vibration frequency inspector (Wave 5) ===== */

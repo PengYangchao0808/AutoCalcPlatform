@@ -12,6 +12,7 @@
  *   - saveCamera(canvasId) / restoreCamera(canvasId)
  *   - setStylePreset(name) / getStylePreset()
  *   - virtualizeEntries/sampleFrames (perf thresholds, todo 41)
+ *   - saveViewState/restoreViewState/clearViewState (todo 42)
  *   - loadOverlay(a, b)          (server-mapped overlay + RMSD, todo 40)
  *   - clearOverlay()              (remove the overlay second model)
  *   - overlayMeasurementsBlocked() (unproven-mapping clearing rule)
@@ -45,7 +46,7 @@
 (function () {
   "use strict";
 
-  var VERSION = "0.13.0";
+  var VERSION = "0.14.0";
 
   /* ---- performance thresholds (todo 41; the ONLY degradation knobs) ---- */
   var LIST_VIRTUALIZE_THRESHOLD = 100;   /* entry-list windowing above this */
@@ -118,6 +119,7 @@
     PERF_DEGRADE_NOTICE: "\u5927\u4f53\u7cfb\u6a21\u5f0f\uff1a\u5df2\u5207\u6362\u7ebf\u6846\u6837\u5f0f\u5e76\u5173\u95ed\u6807\u7b7e (>200 \u539f\u5b50)", // 大体系模式：已切换线框样式并关闭标签 (>200 原子)
     PERF_PARTIAL_LIST: "\u2026\u663e\u793a\u90e8\u5206",                   // …显示部分
     PERF_SAMPLED: "\u5df2\u62bd\u6837\u663e\u793a",                         // 已抽样显示
+    VIEW_RESTORED_MEASUREMENTS: "\u6062\u590d\u7684\u6d4b\u91cf",           // 恢复的测量
   };
 
   /**
@@ -295,6 +297,7 @@
     displayedCoords: null,
     displayedSymbols: null,
     displayedEntryId: null,
+    restoredMeasurements: null,
     _abortController: null,
   };
 
@@ -369,6 +372,7 @@
     structureViewerState.displayedCoords = null;
     structureViewerState.displayedSymbols = null;
     structureViewerState.displayedEntryId = null;
+    structureViewerState.restoredMeasurements = null;
 
     var fetchFn = _getFetchImpl();
     if (!fetchFn) {
@@ -417,6 +421,7 @@
         typeof window.ACPVibrationViewer.stopAnimationAndRestore === "function") {
       window.ACPVibrationViewer.stopAnimationAndRestore();
     }
+    saveViewState(); /* persist the outgoing entry's view before switching */
     structureViewerState.selectionToken += 1;
     structureViewerState.selectedEntryId = entryId;
     /* Shared selection ownership (todo 38): every selection — list click,
@@ -1009,6 +1014,7 @@
   function _playbackBtn(key, fallback, handler) {
     var btn = document.createElement("button");
     btn.setAttribute("type", "button");
+    btn.setAttribute("aria-label", _t(key, fallback));
     btn.className = "sv-edit-btn";
     btn.textContent = _t(key, fallback);
     btn.addEventListener("click", handler);
@@ -1027,6 +1033,7 @@
     if (degraded) {
       var degradeNotice = document.createElement("span");
       degradeNotice.className = "sv-notice sv-notice-degrade";
+      degradeNotice.setAttribute("aria-live", "polite");
       degradeNotice.textContent = _t("structure.perf.degrade_notice", STR.PERF_DEGRADE_NOTICE);
       bar.appendChild(degradeNotice);
     }
@@ -1240,6 +1247,7 @@
     if (!overlayState.active) return;
     var div = document.createElement("div");
     div.className = "sv-inspector-section sv-overlay-panel";
+    _ariaGroup(div, _t("structure.overlay.title", STR.OVERLAY_TITLE));
     var lbl = document.createElement("div");
     lbl.className = "sv-inspector-label";
     lbl.textContent = _t("structure.overlay.title", STR.OVERLAY_TITLE);
@@ -1352,6 +1360,10 @@
             typeof window.ACPVibrationViewer.refreshArrows === "function") {
           window.ACPVibrationViewer.refreshArrows();
         }
+        restoreViewState(state.jobId, entry.id);
+        if (structureViewerState.restoredMeasurements && typeof document !== "undefined") {
+          renderInspector();
+        }
       })
       .catch(function (err) {
         if (err && err.name === "AbortError") { return; }
@@ -1371,6 +1383,7 @@
     /* job switch: stop IRC playback first (todo-30 teardown call site),
        then full vibration teardown — no running loop or stale arrows may
        survive into the new job */
+    saveViewState(); /* job-switch teardown: keep the outgoing view */
     stopIrcPlayback();
     clearOverlay();
     if (typeof window !== "undefined" && window.ACPVibrationViewer &&
@@ -1452,6 +1465,170 @@
     return entryId;
   }
 
+  /* ---- view-state persistence (todo 42) ---- */
+
+  /**
+   * localStorage namespace for per-job+entry VIEW state only (camera, style
+   * preset, measurements).  NEVER results/manifests — the result tree stays
+   * the single authority for data; this store holds presentation state.
+   */
+  var viewStateStore = {
+    NS: "acp.sv.view.",
+    VERSION: 1,
+  };
+
+  function _getStorage() {
+    if (typeof window !== "undefined" && window.ACPStructureViewer &&
+        window.ACPStructureViewer._storageImpl) {
+      return window.ACPStructureViewer._storageImpl;
+    }
+    try {
+      return (typeof window !== "undefined" && window.localStorage) || null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function _viewKey(jobId, entryId) {
+    return viewStateStore.NS + jobId + ":" + entryId;
+  }
+
+  function _storageGet(key) {
+    var storage = _getStorage();
+    if (!storage || typeof storage.getItem !== "function") return null;
+    try { return storage.getItem(key); } catch (_) { return null; }
+  }
+
+  function _storageSet(key, value) {
+    var storage = _getStorage();
+    if (!storage || typeof storage.setItem !== "function") return false;
+    try { storage.setItem(key, value); return true; } catch (_) { return false; }
+  }
+
+  function _storageRemove(key) {
+    var storage = _getStorage();
+    if (!storage || typeof storage.removeItem !== "function") return false;
+    try { storage.removeItem(key); return true; } catch (_) { return false; }
+  }
+
+  function _defer(fn) {
+    var impl = (typeof window !== "undefined" && window.ACPStructureViewer &&
+      typeof window.ACPStructureViewer._setTimeoutImpl === "function")
+      ? window.ACPStructureViewer._setTimeoutImpl : null;
+    if (impl) { impl(fn, 180); return; }
+    if (typeof setTimeout === "function") setTimeout(fn, 180);
+  }
+
+  /**
+   * Persist the current view state (camera, style preset, measurement atom
+   * indices, atom count) for jobId+selectedEntryId.  Called on entry switch
+   * and job-switch teardown.  Corrupt/unavailable storage is silent.
+   *
+   * @returns {Object|null} the saved payload (null when nothing to save)
+   */
+  function saveViewState() {
+    var state = structureViewerState;
+    if (!state.jobId || !state.selectedEntryId) return null;
+    var camera = null;
+    var viewer = _canvasViewer("main");
+    if (viewer && typeof viewer.getView === "function") {
+      try { camera = viewer.getView(); } catch (_) { camera = null; }
+    }
+    var measures = null;
+    try {
+      /* molDoc.measures is the app's global-lexical measurement state
+         ({type, atoms: [acpId...], value} entries) */
+      if (typeof molDoc !== "undefined" && Array.isArray(molDoc.measures) && molDoc.measures.length) {
+        measures = molDoc.measures.map(function (m) {
+          return {
+            type: m.type,
+            atoms: Array.isArray(m.atoms) ? m.atoms.slice() : [],
+            value: typeof m.value === "number" ? m.value : null,
+          };
+        });
+      }
+    } catch (_) { measures = null; }
+    var payload = {
+      version: viewStateStore.VERSION,
+      camera: camera,
+      stylePreset: geometryStore.stylePreset,
+      measurements: measures,
+      atomCount: state.displayedCoords ? state.displayedCoords.length : null,
+      savedAt: new Date().toISOString(),
+    };
+    _storageSet(_viewKey(state.jobId, state.selectedEntryId), JSON.stringify(payload));
+    return payload;
+  }
+
+  /**
+   * Restore a saved view state for jobId+entryId (called after the entry's
+   * geometry load).  Camera restores via setView ONLY when a saved state
+   * exists AND its atomCount matches the displayed geometry — else skipped.
+   * The setView is deferred one framing tick because the main-canvas load
+   * path schedules an async zoomTo reframe.  Corrupted JSON / absent keys /
+   * unknown version -> silent defaults.  Measurements are replayed through
+   * the app's measurement mechanism when reachable and ALWAYS surfaced as a
+   * 恢复的测量 record in the inspector.
+   *
+   * @returns {Object|null} the restored payload
+   */
+  function restoreViewState(jobId, entryId) {
+    if (!jobId || !entryId) return null;
+    var raw = _storageGet(_viewKey(jobId, entryId));
+    if (!raw) return null;
+    var saved = null;
+    try { saved = JSON.parse(raw); } catch (_) { return null; }
+    if (!saved || typeof saved !== "object" || saved.version !== viewStateStore.VERSION) {
+      return null;
+    }
+    if (saved.stylePreset) {
+      try { setStylePreset(saved.stylePreset); } catch (_) { /* preset is cosmetic */ }
+    }
+    var token = structureViewerState.selectionToken;
+    var atomCount = structureViewerState.displayedCoords
+      ? structureViewerState.displayedCoords.length : null;
+    if (saved.camera && Array.isArray(saved.camera) &&
+        saved.atomCount != null && saved.atomCount === atomCount) {
+      _defer(function () {
+        if (token !== structureViewerState.selectionToken) return;
+        var viewer = _canvasViewer("main");
+        if (viewer && typeof viewer.setView === "function") {
+          try {
+            viewer.setView(saved.camera);
+            if (typeof viewer.render === "function") viewer.render();
+          } catch (_) { /* camera restore is best-effort */ }
+        }
+      });
+    }
+    structureViewerState.restoredMeasurements =
+      (saved.measurements && saved.measurements.length) ? saved.measurements : null;
+    if (structureViewerState.restoredMeasurements) {
+      try {
+        if (typeof molDoc !== "undefined" && Array.isArray(molDoc.measures)) {
+          molDoc.measures = structureViewerState.restoredMeasurements.map(function (m) {
+            return {
+              type: m.type,
+              atoms: Array.isArray(m.atoms) ? m.atoms.slice() : [],
+              value: m.value,
+            };
+          });
+          if (typeof renderMeasurements === "function") renderMeasurements();
+        }
+      } catch (_) { /* programmatic replay is best-effort; record still shows */ }
+    }
+    return saved;
+  }
+
+  /**
+   * Delete the saved view state for jobId+entryId.
+   *
+   * @returns {boolean}
+   */
+  function clearViewState(jobId, entryId) {
+    if (!jobId || !entryId) return false;
+    return _storageRemove(_viewKey(jobId, entryId));
+  }
+
   /* ---- badge rendering helpers ---- */
 
   function _badgeClass(badge) {
@@ -1521,6 +1698,7 @@
     }
 
     listHeader.textContent = _t("structure.list_title", STR.LIST_TITLE);
+    _initListbox(listBody);
 
     /* group entries by group_id */
     var groupMap = {};
@@ -1577,6 +1755,7 @@
         if (visibleSet && !visibleSet[entry.id]) continue;
         var row = _renderEntryRow(entry);
         listBody.appendChild(row);
+        _renderedEntryIds.push(entry.id);
       }
     }
 
@@ -1585,7 +1764,67 @@
         viz.visible.length, viz.total));
     }
 
+    _syncListboxActive(listBody);
     _renderPlaybackBar();
+  }
+
+  /* ---- listbox a11y (todo 42): WAI-ARIA listbox pattern on the entry
+     list — arrows move the active option, Enter/Space selects it.  The
+     handler lives on the list container only, so other tabs' keyboard
+     handling is untouched. ---- */
+  var _renderedEntryIds = [];
+  var _listActiveIdx = -1;
+
+  function _initListbox(listBody) {
+    listBody.setAttribute("role", "listbox");
+    listBody.setAttribute("tabindex", "0");
+    listBody.setAttribute("aria-label", _t("structure.list_title", STR.LIST_TITLE));
+    if (!listBody._svListboxInit) {
+      listBody._svListboxInit = true;
+      listBody.addEventListener("keydown", function (ev) {
+        _onListboxKeydown(ev, listBody);
+      });
+    }
+    _renderedEntryIds = [];
+    _listActiveIdx = -1;
+  }
+
+  function _onListboxKeydown(ev, listBody) {
+    if (!ev || !_renderedEntryIds.length) return;
+    var key = ev.key;
+    if (key !== "ArrowDown" && key !== "ArrowUp" && key !== "Enter" && key !== " ") {
+      return;
+    }
+    ev.preventDefault();
+    if (key === "Enter" || key === " ") {
+      if (_listActiveIdx >= 0 && _listActiveIdx < _renderedEntryIds.length) {
+        selectEntry(_renderedEntryIds[_listActiveIdx], "list");
+      }
+      return;
+    }
+    _listActiveIdx = key === "ArrowDown"
+      ? Math.min(_listActiveIdx + 1, _renderedEntryIds.length - 1)
+      : Math.max(_listActiveIdx - 1, 0);
+    _syncListboxActive(listBody);
+  }
+
+  function _syncListboxActive(listBody) {
+    if (_listActiveIdx < 0 || _listActiveIdx >= _renderedEntryIds.length) {
+      _listActiveIdx = _renderedEntryIds.length ? 0 : -1;
+    }
+    if (_listActiveIdx < 0) {
+      listBody.removeAttribute("aria-activedescendant");
+      return;
+    }
+    var activeId = _renderedEntryIds[_listActiveIdx];
+    listBody.setAttribute("aria-activedescendant", "sv-opt-" + activeId);
+    var rows = listBody.children;
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      if (typeof row.classList === "undefined") continue;
+      var isActive = row.getAttribute && row.getAttribute("data-entry-id") === activeId;
+      row.classList.toggle("sv-option-focus", isActive);
+    }
   }
 
   function _isPerFrameGroup(groupEntries) {
@@ -1611,6 +1850,10 @@
       row.className += " sv-active";
     }
     row.setAttribute("data-entry-id", _esc(entry.id));
+    row.setAttribute("role", "option");
+    row.setAttribute("id", "sv-opt-" + _esc(entry.id));
+    row.setAttribute("aria-selected", entry.id === structureViewerState.selectedEntryId
+      ? "true" : "false");
 
     /* status dot */
     var dot = document.createElement("span");
@@ -1751,6 +1994,7 @@
     if (entry.energy && entry.energy.value != null) {
       var energyDiv = document.createElement("div");
       energyDiv.className = "sv-inspector-section";
+      _ariaGroup(energyDiv, _t("structure.energy", STR.ENERGY));
 
       var lbl = document.createElement("div");
       lbl.className = "sv-inspector-label";
@@ -1790,6 +2034,7 @@
     if (entry.relative_energy_kcal != null) {
       var deltaDiv = document.createElement("div");
       deltaDiv.className = "sv-inspector-section";
+      _ariaGroup(deltaDiv, _t("structure.delta_e", STR.DELTA_E));
       var deltaLbl = document.createElement("div");
       deltaLbl.className = "sv-inspector-label";
       deltaLbl.textContent = _t("structure.delta_e", STR.DELTA_E);
@@ -1805,6 +2050,7 @@
     if (entry.boltzmann_weight != null) {
       var weightDiv = document.createElement("div");
       weightDiv.className = "sv-inspector-section";
+      _ariaGroup(weightDiv, _t("structure.weight", STR.WEIGHT));
       var weightLbl = document.createElement("div");
       weightLbl.className = "sv-inspector-label";
       weightLbl.textContent = _t("structure.weight", STR.WEIGHT);
@@ -1826,6 +2072,7 @@
     /* vibrations — delegated to ACPVibrationViewer (Wave 5, todo 27) */
     var vibDiv = document.createElement("div");
     vibDiv.className = "sv-inspector-section";
+    _ariaGroup(vibDiv, _t("structure.vibrations", STR.VIBRATIONS));
     var vibLbl = document.createElement("div");
     vibLbl.className = "sv-inspector-label";
     vibLbl.textContent = _t("structure.vibrations", STR.VIBRATIONS);
@@ -1857,6 +2104,7 @@
        active but its atom mapping is unproven (todo 40 clearing rule) */
     var measDiv = document.createElement("div");
     measDiv.className = "sv-inspector-section";
+    _ariaGroup(measDiv, _t("structure.measurements", STR.MEASUREMENTS));
     if (overlayMeasurementsBlocked()) {
       measDiv.className += " sv-measurements-blocked";
     }
@@ -1872,6 +2120,27 @@
     measDiv.appendChild(measVal);
     inspBody.appendChild(measDiv);
 
+    if (structureViewerState.restoredMeasurements &&
+        structureViewerState.restoredMeasurements.length) {
+      var restoredDiv = document.createElement("div");
+      restoredDiv.className = "sv-inspector-section sv-view-restored";
+      _ariaGroup(restoredDiv, _t("structure.view.restored_measurements", STR.VIEW_RESTORED_MEASUREMENTS));
+      var rLbl = document.createElement("div");
+      rLbl.className = "sv-inspector-label";
+      rLbl.textContent = _t("structure.view.restored_measurements", STR.VIEW_RESTORED_MEASUREMENTS);
+      restoredDiv.appendChild(rLbl);
+      for (var ri = 0; ri < structureViewerState.restoredMeasurements.length; ri++) {
+        var rec = structureViewerState.restoredMeasurements[ri];
+        var rLine = document.createElement("div");
+        rLine.className = "sv-inspector-value sv-muted";
+        rLine.textContent = _esc(rec.type) + " · " +
+          (rec.atoms || []).join("-") +
+          (rec.value != null ? " · " + rec.value.toFixed(3) : "");
+        restoredDiv.appendChild(rLine);
+      }
+      inspBody.appendChild(restoredDiv);
+    }
+
     _renderOverlaySection(inspBody);
 
     /* geometry edit panel (todo 36): provenance + dirty badge +
@@ -1883,6 +2152,7 @@
     if (warnings.length > 0) {
       var warnDiv = document.createElement("div");
       warnDiv.className = "sv-inspector-section";
+      _ariaGroup(warnDiv, _t("structure.warnings", STR.WARNINGS));
       var warnLbl = document.createElement("div");
       warnLbl.className = "sv-inspector-label";
       warnLbl.textContent = _t("structure.warnings", STR.WARNINGS);
@@ -1902,9 +2172,15 @@
     _renderPlaybackBar();
   }
 
+  function _ariaGroup(el, label) {
+    el.setAttribute("role", "group");
+    el.setAttribute("aria-label", _esc(label));
+  }
+
   function _inspectorSection(label, value) {
     var div = document.createElement("div");
     div.className = "sv-inspector-section";
+    _ariaGroup(div, label);
     var lbl = document.createElement("div");
     lbl.className = "sv-inspector-label";
     lbl.textContent = _esc(label);
@@ -1925,6 +2201,7 @@
   function _renderEditPanel() {
     var div = document.createElement("div");
     div.className = "sv-inspector-section sv-edit-panel";
+    _ariaGroup(div, _t("structure.edit.title", STR.EDIT_TITLE));
     var lbl = document.createElement("div");
     lbl.className = "sv-inspector-label";
     lbl.textContent = _t("structure.edit.title", STR.EDIT_TITLE);
@@ -2036,6 +2313,7 @@
   function _editBtn(key, fallback, handler) {
     var btn = document.createElement("button");
     btn.setAttribute("type", "button");
+    btn.setAttribute("aria-label", _t(key, fallback));
     btn.className = "sv-edit-btn";
     btn.textContent = _t(key, fallback);
     btn.addEventListener("click", handler);
@@ -2238,6 +2516,10 @@
     LARGE_SYSTEM_ATOM_THRESHOLD: LARGE_SYSTEM_ATOM_THRESHOLD,
     virtualizeEntries: virtualizeEntries,
     sampleFrames: sampleFrames,
+    viewStateStore: viewStateStore,
+    saveViewState: saveViewState,
+    restoreViewState: restoreViewState,
+    clearViewState: clearViewState,
     playIrcPath: playIrcPath,
     stopIrcPlayback: stopIrcPlayback,
     isIrcPlaying: isIrcPlaying,

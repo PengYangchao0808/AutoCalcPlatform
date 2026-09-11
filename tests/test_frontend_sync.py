@@ -6219,3 +6219,251 @@ def test_perf_large_system_loader_logic() -> None:
         f"Node large-system test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
     )
     assert "PASS" in result.stdout
+
+
+# ---------------------------------------------------------------------------
+# Wave 7 / todo 42: view-state persistence + accessibility + i18n sweep
+# ---------------------------------------------------------------------------
+
+# STR fallbacks that are NOT linked through _t()/_editBtn/_playbackBtn call
+# sites get their dictionary key DECLARED here (mechanical completeness).
+_STR_DECLARED_KEY_MAP: dict[str, dict[str, str]] = {
+    "structure_viewer.js": {
+        "NO_ENTRY_HINT": "structure.no_entry_hint",
+        "VIBRATIONS_NA": "structure.vibrations_na",
+        "EDIT_UNDO": "structure.edit.undo",
+        "EDIT_REDO": "structure.edit.redo",
+        "EDIT_RESET": "structure.edit.reset",
+        "EDIT_DISCARD": "structure.edit.discard",
+        "EDIT_SAVE_AS": "structure.edit.save_as",
+        "EDIT_CANCEL": "structure.edit.cancel",
+        "EDIT_EXPORT": "structure.edit.export_xyz",
+        "EDIT_SAVE_ASSET": "structure.edit.save_asset",
+        "EDIT_NEW_CALC": "structure.edit.new_calc",
+        "IRC_STOP": "structure.irc.stop",
+        "OVERLAY_CLEAR": "structure.overlay.clear",
+    },
+    "structure_editor.js": {
+        "PROV_EXPLICIT": "structure.edit.prov_explicit",
+        "PROV_INFERRED": "structure.edit.prov_inferred",
+        "MOVE_LEFT": "structure.edit.move_left",
+        "MOVE_RIGHT": "structure.edit.move_right",
+        "COLLINEAR_WARNING": "structure.edit.collinear_warning",
+        "DIRTY": "structure.edit.dirty",
+        "UNDO": "structure.edit.undo",
+        "REDO": "structure.edit.redo",
+        "RESET": "structure.edit.reset",
+        "DISCARD": "structure.edit.discard",
+        "SAVE_AS": "structure.edit.save_as",
+        "CANCEL": "structure.edit.cancel",
+        "COLLISION": "structure.edit.collision",
+        "ENTRY_MISMATCH": "structure.edit.entry_mismatch",
+        "EXPORT_XYZ": "structure.edit.export_xyz",
+        "SAVE_ASSET": "structure.edit.save_asset",
+        "NEW_CALC": "structure.edit.new_calc",
+        "SAVE_ERROR": "structure.edit.save_error",
+        "SAVED_ASSET": "structure.edit.saved",
+        "EDITED_SUFFIX": "structure.edit.edited_suffix",
+    },
+    "vibration_viewer.js": {
+        "FREQ_UNIT": "structure.vib.freq_unit",
+        "IR_UNIT": "structure.vib.ir_unit",
+        "UNIT_ANGSTROM": "structure.vib.unit_angstrom",
+        "DISPLAY_ARROWS": "structure.vib.arrow.display_arrows",
+        "DISPLAY_ANIMATION": "structure.vib.arrow.display_animation",
+        "DISPLAY_COMBO": "structure.vib.arrow.display_combo",
+    },
+}
+
+# STR names dispatched dynamically (map lookups) — covered by the dedicated
+# dynamic-key tests, never linked at a call site.
+_DYNAMIC_STR_NAMES = {"SOURCE_KINDS", "REASONS", "TS_HINTS"}
+
+
+def test_i18n_str_fallback_sweep() -> None:
+    """Todo-42 mechanical sweep: every STR fallback across the three viewer
+    modules maps to a dictionary key present in BOTH locales — via a _t /
+    _editBtn / _playbackBtn call-site link or the declared map above."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    zh_keys = _extract_structure_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_structure_keys(html, _EN_BLOCK_RE)
+
+    for module_name, declared in _STR_DECLARED_KEY_MAP.items():
+        src = (FRONTEND_JS_DIR / module_name).read_text(encoding="utf-8")
+        str_block = src.split("var STR = {", 1)[1].split("\n  };", 1)[0]
+        str_names = set(re.findall(r"\b([A-Z][A-Z0-9_]+):", str_block))
+        str_names -= _DYNAMIC_STR_NAMES
+        assert str_names, f"{module_name}: STR table not parsed"
+
+        linked = {
+            name: key
+            for key, name in re.findall(r'_t\("([^"]+)",\s*STR\.([A-Z][A-Z0-9_]+)\)', src)
+        }
+        for helper in ("_editBtn", "_playbackBtn"):
+            for key, name in re.findall(
+                rf'{helper}\("([^"]+)",\s*STR\.([A-Z][A-Z0-9_]+)\)', src
+            ):
+                linked[name] = key
+
+        orphans = str_names - set(linked) - set(declared)
+        assert not orphans, (
+            f"{module_name}: STR fallbacks with no dictionary link: {sorted(orphans)}"
+        )
+        for str_name in str_names:
+            key = linked.get(str_name) or declared.get(str_name)
+            assert key is not None, str_name
+            assert key in zh_keys, f"{module_name} {str_name}: {key} missing zh-CN"
+            assert key in en_keys, f"{module_name} {str_name}: {key} missing en-US"
+
+
+def test_view_state_contract() -> None:
+    """Todo-42 lock: viewStateStore API + namespace + version, save/restore
+    wiring, listbox ARIA + keyboard, aria-labels/live, storage NEVER touches
+    result data."""
+    sv = _SV_JS_PATH.read_text(encoding="utf-8")
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    for name in ("viewStateStore", "saveViewState", "restoreViewState", "clearViewState"):
+        assert f"{name}: {name}," in sv, f"{name} missing from namespace"
+    assert 'NS: "acp.sv.view."' in sv
+    assert "VERSION: 1" in sv and "version: viewStateStore.VERSION" in sv
+
+    # wiring: save on entry switch + job teardown, restore after geometry load
+    select_fn = sv.split("function selectEntry(", 1)[1].split("\n  function ", 1)[0]
+    assert "saveViewState()" in select_fn
+    on_job = sv.split("function onJobSelected(", 1)[1].split("\n  function ", 1)[0]
+    assert "saveViewState()" in on_job
+    load_fn = sv.split("function loadSelectedGeometry()", 1)[1].split("\n  function ", 1)[0]
+    assert "restoreViewState(" in load_fn
+
+    # storage ONLY for view state — never results/manifests, namespace-prefixed
+    assert "result_manifest" not in sv
+    assert sv.count("localStorage") <= 2  # guarded default only
+    assert "storage.setItem" in sv  # all writes go through _storageSet
+
+    # a11y: listbox pattern + scoped keyboard handler
+    assert 'setAttribute("role", "listbox")' in sv
+    assert 'setAttribute("role", "option")' in sv
+    assert '"aria-selected"' in sv
+    assert '"aria-activedescendant"' in sv
+    assert '"ArrowDown"' in sv and '"ArrowUp"' in sv and '"Enter"' in sv
+    assert 'listBody.addEventListener("keydown"' in sv
+    assert "window.addEventListener" not in sv and "document.addEventListener" not in sv
+
+    # a11y: inspector groups + button labels + live notice + real buttons
+    assert "_ariaGroup" in sv and 'setAttribute("aria-label"' in sv
+    assert '"aria-live"' in sv and '"polite"' in sv
+    vib = _VIB_JS.read_text(encoding="utf-8")
+    assert 'createElement("button")' in vib
+    css = (FRONTEND_CSS_DIR / "structure_viewer.css").read_text(encoding="utf-8")
+    assert ":focus-visible" in css and ".sv-option-focus" in css
+    assert 'id="structure-playback-bar" role="toolbar"' in html
+
+    # restored measurements record + its i18n key in both locales
+    assert "restoredMeasurements" in sv
+    assert "structure.view.restored_measurements" in sv
+    zh_keys = _extract_structure_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_structure_keys(html, _EN_BLOCK_RE)
+    assert "structure.view.restored_measurements" in zh_keys
+    assert "structure.view.restored_measurements" in en_keys
+
+
+def test_view_state_node_logic() -> None:
+    """Node logic with fake storage: save->restore round-trip (camera +
+    preset + measurements + atomCount guard), corrupted/missing -> defaults,
+    version guard, clear works."""
+    if not shutil.which("node"):
+        pytest.skip("node not available")
+
+    script = textwrap.dedent("""\
+        var window = { fetch: null };
+        var AbortController = class { constructor() { this.signal = null; } abort() {} };
+        var molDoc = { measures: [{ type: "distance", atoms: [1, 2], value: 1.5 }] };
+        require(JS_PATH);
+        var ns = window.ACPStructureViewer;
+
+        var storageData = {};
+        ns._storageImpl = {
+          getItem: function (k) { return (k in storageData) ? storageData[k] : null; },
+          setItem: function (k, v) { storageData[k] = String(v); },
+          removeItem: function (k) { delete storageData[k]; },
+        };
+        var setViews = [];
+        ns._mainViewerImpl = function () {
+          return { getView: function () { return [7, 8, 9]; },
+                   setView: function (v) { setViews.push(v); },
+                   render: function () {} };
+        };
+        var timers = [];
+        ns._setTimeoutImpl = function (fn) { timers.push(fn); };
+
+        ns.state.jobId = "job1";
+        ns.state.selectedEntryId = "e1";
+        ns.state.displayedCoords = [[0,0,0],[1,1,1],[2,2,2]];
+        ns.geometryStore.stylePreset = "publication";
+
+        var saved = ns.saveViewState();
+        if (!saved || saved.version !== 1) { console.error("FAIL: payload"); process.exit(1); }
+        if (saved.atomCount !== 3 || saved.camera.join(",") !== "7,8,9") {
+          console.error("FAIL: camera/atomCount"); process.exit(1);
+        }
+        if (!saved.measurements || saved.measurements[0].type !== "distance") {
+          console.error("FAIL: measurements persisted"); process.exit(1);
+        }
+        var raw = storageData["acp.sv.view.job1:e1"];
+        if (!raw || JSON.parse(raw).stylePreset !== "publication") {
+          console.error("FAIL: storage key/preset"); process.exit(1);
+        }
+
+        ns.state.restoredMeasurements = null;
+        var restored = ns.restoreViewState("job1", "e1");
+        if (!restored || restored.version !== 1) {
+          console.error("FAIL: restore"); process.exit(1);
+        }
+        if (ns.geometryStore.stylePreset !== "publication") {
+          console.error("FAIL: preset restored"); process.exit(1);
+        }
+        if (!ns.state.restoredMeasurements || ns.state.restoredMeasurements.length !== 1) {
+          console.error("FAIL: restoredMeasurements"); process.exit(1);
+        }
+        if (timers.length !== 1) { console.error("FAIL: deferred camera"); process.exit(1); }
+        timers[0]();
+        if (setViews.length !== 1 || setViews[0].join(",") !== "7,8,9") {
+          console.error("FAIL: camera setView"); process.exit(1);
+        }
+        if (molDoc.measures.length !== 1 || molDoc.measures[0].atoms[0] !== 1) {
+          console.error("FAIL: measurement replay"); process.exit(1);
+        }
+
+        // atomCount mismatch -> camera skipped
+        timers.length = 0;
+        ns.state.displayedCoords = [[0,0,0],[1,1,1],[2,2,2],[3,3,3]];
+        ns.restoreViewState("job1", "e1");
+        if (timers.length !== 0) {
+          console.error("FAIL: mismatch must skip camera"); process.exit(1);
+        }
+
+        // corrupted / missing / wrong-version -> silent null
+        storageData["acp.sv.view.job1:bad"] = "{not json";
+        if (ns.restoreViewState("job1", "bad") !== null) {
+          console.error("FAIL: corrupted must be null"); process.exit(1);
+        }
+        if (ns.restoreViewState("job1", "ghost") !== null) {
+          console.error("FAIL: missing must be null"); process.exit(1);
+        }
+        storageData["acp.sv.view.job1:old"] = JSON.stringify({ version: 99, camera: [1] });
+        if (ns.restoreViewState("job1", "old") !== null) {
+          console.error("FAIL: version guard"); process.exit(1);
+        }
+
+        if (ns.clearViewState("job1", "e1") !== true || "acp.sv.view.job1:e1" in storageData) {
+          console.error("FAIL: clear"); process.exit(1);
+        }
+        console.log("PASS");
+    """).replace("JS_PATH", json.dumps(str(_SV_JS_PATH)))
+
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, (
+        f"Node view-state test failed:\nstdout={result.stdout}\nstderr={result.stderr}"
+    )
+    assert "PASS" in result.stdout
