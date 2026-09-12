@@ -379,7 +379,9 @@
 .sv-overlay-compare-btn:focus-visible,
 .sv-vib-toggle:focus-visible,
 .sv-vib-play-btn:focus-visible,
-.sv-refresh-btn:focus-visible {
+.sv-refresh-btn:focus-visible,
+.sv-measure-editbar-btn:focus-visible,
+.sv-measure-editbar-target:focus-visible {
   outline: 2px solid var(--sv-accent);
   outline-offset: 2px;
 }
@@ -1243,6 +1245,136 @@
   border-color: rgba(56, 193, 114, 0.4);
   background: rgba(56, 193, 114, 0.1);
   color: var(--sv-green);
+}
+
+/* ===== Measurement edit bar (canvas-bottom overlay) ===== */
+.sv-measure-editbar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: rgba(17, 24, 33, 0.92);
+  border-top: 1px solid var(--sv-border-default);
+  backdrop-filter: blur(8px);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--sv-text-primary);
+  flex-wrap: wrap;
+  min-height: 36px;
+}
+
+.sv-measure-editbar-label {
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sv-measure-editbar-msg {
+  color: var(--sv-amber);
+  font-size: 11px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sv-measure-editbar-msg.sv-measure-editbar-msg-error {
+  color: var(--sv-red);
+}
+
+.sv-measure-editbar-target-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--sv-text-secondary);
+}
+
+.sv-measure-editbar-target {
+  width: 72px;
+  padding: 2px 6px;
+  border: 1px solid var(--sv-border-default);
+  border-radius: var(--sv-radius-sm);
+  background: var(--sv-bg-elevated);
+  color: var(--sv-text-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.sv-measure-editbar-target:focus {
+  border-color: rgba(78, 161, 255, 0.7);
+  outline: none;
+}
+
+.sv-measure-editbar-target:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sv-measure-editbar-unit {
+  color: var(--sv-text-tertiary);
+  font-size: 11px;
+}
+
+.sv-measure-editbar-btn {
+  padding: 3px 10px;
+  border: 1px solid var(--sv-border-default);
+  border-radius: var(--sv-radius-sm);
+  background: transparent;
+  color: var(--sv-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background var(--sv-transition), color var(--sv-transition);
+}
+
+.sv-measure-editbar-btn:hover {
+  background: var(--sv-accent-soft);
+  color: var(--sv-accent);
+}
+
+.sv-measure-editbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sv-measure-editbar-btn:disabled:hover {
+  background: transparent;
+  color: var(--sv-text-secondary);
+}
+
+.sv-measure-editbar-btn-primary {
+  border-color: var(--sv-accent);
+  color: var(--sv-accent);
+  font-weight: 600;
+}
+
+.sv-measure-editbar-btn-primary:hover {
+  background: var(--sv-accent-soft);
+}
+
+/* Responsive: narrow screens */
+@media (max-width: 600px) {
+  .sv-measure-editbar {
+    gap: 6px;
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  .sv-measure-editbar-target { width: 56px; }
+  .sv-measure-editbar-btn { padding: 2px 8px; font-size: 10px; }
 }
 
 .sv-vib-summary-modes {

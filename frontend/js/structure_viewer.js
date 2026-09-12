@@ -7,6 +7,9 @@
  * Exposes:
  *   - state                     (the live structureViewerState object)
  *   - geometryStore             (shared geometry/style/camera store, phase D)
+ *   - geometryDoc               (window.ACPGeometryStore, store-first measure/edit)
+ *   - editBlockReason()         (single interaction-gating verdict: locked >
+ *                                vibration > IRC playback > overlay)
  *   - sharedLoadGeometry(xyzText, {canvasId, source})  (ONE load path)
  *   - registerCanvasLoader(canvasId, fn)  (per-canvas load adapters)
  *   - saveCamera(canvasId) / restoreCamera(canvasId)
@@ -340,6 +343,68 @@
   var _vibrationDockExpanded = false;
   var _vibrationDockHeight = 236;
 
+  /* ---- unified geometry-store bridge (store-first measurement/edit) ---- */
+
+  /* one-time subscription guard for window.ACPGeometryStore */
+  var _storesubscribed = false;
+
+  /**
+   * Snapshot of window.ACPGeometryStore, or null when the store is absent.
+   * Lazily attaches the one-time store subscription when the store appeared
+   * after this module loaded.
+   *
+   * @returns {Object|null}
+   */
+  function _storeSnapshot() {
+    _ensureStoreSubscription();
+    var store = (typeof window !== "undefined" && window) ? window.ACPGeometryStore : null;
+    if (!store || typeof store.snapshot !== "function") return null;
+    try { return store.snapshot(); } catch (_) { return null; }
+  }
+
+  /**
+   * Mirror store geometry into structureViewerState.  Never touches the 3D
+   * canvas — the host page owns canvas rendering.
+   *
+   * @param {Object|null} snap
+   */
+  function _mirrorStoreGeometry(snap) {
+    if (!snap) return;
+    structureViewerState.displayedCoords = Array.isArray(snap.coordinates) ? snap.coordinates : null;
+    structureViewerState.displayedSymbols = Array.isArray(snap.symbols) ? snap.symbols : null;
+    structureViewerState.displayedEntryId = snap.entryId;
+  }
+
+  /**
+   * One-time subscription to the unified store.  The listener runs
+   * synchronously on every store mutation and only mirrors state or refreshes
+   * an open drawer; listener exceptions never break the store.
+   */
+  function _ensureStoreSubscription() {
+    if (_storesubscribed) return;
+    var store = (typeof window !== "undefined" && window) ? window.ACPGeometryStore : null;
+    if (!store || typeof store.subscribe !== "function") return;
+    _storesubscribed = true;
+    try {
+      store.subscribe(function (snap, change) {
+        try {
+          if (change === "load" || change === "coordinates") {
+            _mirrorStoreGeometry(snap);
+          } else if (change === "selection" || change === "measurement") {
+            if (typeof document === "undefined") return;
+            if (_activeDrawerId === "measure") {
+              _renderDrawerContent("measure");
+            } else if (_activeDrawerId === "inspector" && typeof renderInspector === "function") {
+              renderInspector();
+            }
+          }
+        } catch (_) { /* store listener is best-effort */ }
+      });
+    } catch (_) {
+      _storesubscribed = false;
+    }
+  }
+
   /**
    * Apply a catalog response to the state object.  Pure-ish: mutates the
    * supplied state but performs no I/O and is deterministic for a given input.
@@ -476,6 +541,7 @@
     _syncStripActive();
     stopIrcPlayback();
     clearOverlay();
+    _broadcastInteractionState("selectEntry");
     closeAllDrawers();
     loadSelectedGeometry();
     var savedDrawer = _getDrawerPersist(structureViewerState.jobId, entryId);
@@ -1015,6 +1081,7 @@
     ircPlayback.frames = [];
     ircPlayback.selectionToken = structureViewerState.selectionToken;
     var capturedToken = structureViewerState.selectionToken;
+    _broadcastInteractionState("playIrcPath");
 
     var fetches = entries.map(function (e) {
       return fetchFn(e.geometry.endpoint, { headers: { "Accept": "text/plain" } })
@@ -1054,6 +1121,7 @@
     ircPlayback.frameIndex = 0;
     ircPlayback.sampledTotal = 0;
     if (wasActive && typeof document !== "undefined") _renderPlaybackBar();
+    _broadcastInteractionState("stopIrcPlayback");
   }
 
   /**
@@ -1281,6 +1349,7 @@
     overlayState.data = null;
     overlayState.xyzB = null;
     overlayState.error = null;
+    _broadcastInteractionState("loadOverlay");
     renderInspector();
     var capturedToken = structureViewerState.selectionToken;
 
@@ -1345,6 +1414,7 @@
       _removeOverlayModels();
       if (typeof document !== "undefined") renderInspector();
     }
+    _broadcastInteractionState("clearOverlay");
   }
 
   function _overlaySourceText(reason) {
@@ -1493,6 +1563,7 @@
     saveViewState();
     stopIrcPlayback();
     clearOverlay();
+    _broadcastInteractionState("onJobSelected");
     closeAllDrawers();
     closeVibrationDock();
     if (typeof window !== "undefined" && window.ACPVibrationViewer &&
@@ -1656,9 +1727,18 @@
     }
     var measures = null;
     try {
-      /* molDoc.measures is the app's global-lexical measurement state
-         ({type, atoms: [acpId...], value} entries) */
-      if (typeof molDoc !== "undefined" && Array.isArray(molDoc.measures) && molDoc.measures.length) {
+      var storeSnap = _storeSnapshot();
+      if (storeSnap) {
+        if (Array.isArray(storeSnap.measurements) && storeSnap.measurements.length) {
+          measures = storeSnap.measurements.map(function (m) {
+            return {
+              type: m.type,
+              atoms: Array.isArray(m.atoms) ? m.atoms.slice() : [],
+              value: typeof m.value === "number" ? m.value : null,
+            };
+          });
+        }
+      } else if (typeof molDoc !== "undefined" && Array.isArray(molDoc.measures) && molDoc.measures.length) {
         measures = molDoc.measures.map(function (m) {
           return {
             type: m.type,
@@ -1724,7 +1804,17 @@
       (saved.measurements && saved.measurements.length) ? saved.measurements : null;
     if (structureViewerState.restoredMeasurements) {
       try {
-        if (typeof molDoc !== "undefined" && Array.isArray(molDoc.measures)) {
+        var restoreStore = (typeof window !== "undefined" && window) ? window.ACPGeometryStore : null;
+        if (restoreStore && typeof restoreStore.addMeasurement === "function") {
+          var restoreArity = { distance: 2, angle: 3, dihedral: 4 };
+          for (var rmi = 0; rmi < structureViewerState.restoredMeasurements.length; rmi++) {
+            var rm = structureViewerState.restoredMeasurements[rmi];
+            if (!rm || !Array.isArray(rm.atoms)) continue;
+            var wantArity = restoreArity[rm.type];
+            if (!wantArity || rm.atoms.length !== wantArity) continue;
+            try { restoreStore.addMeasurement(rm.type, rm.atoms.slice()); } catch (_) { /* skip invalid entry */ }
+          }
+        } else if (typeof molDoc !== "undefined" && Array.isArray(molDoc.measures)) {
           molDoc.measures = structureViewerState.restoredMeasurements.map(function (m) {
             return {
               type: m.type,
@@ -3161,6 +3251,31 @@
     }
   }
 
+  /**
+   * Build the "C1—O2" atom label from a measurement's canonical atom ids.
+   * Falls back to raw ids when no symbol table is available.
+   *
+   * @param {Object} m
+   * @param {string[]|null} symbols
+   * @returns {string}
+   */
+  function _measureAtomLabel(m, symbols) {
+    var atoms = Array.isArray(m.atoms) ? m.atoms : [];
+    var joiner = m.type === "distance" ? "\u2014" : "-";
+    if (!symbols) return atoms.map(function (a) { return String(a); }).join(joiner);
+    return atoms.map(function (id) {
+      var numeric = Number(id);
+      return String(symbols[numeric] || "?") + (isFinite(numeric) ? numeric + 1 : "");
+    }).join(joiner);
+  }
+
+  function _measureErrorLine(text) {
+    var err = document.createElement("div");
+    err.className = "sv-edit-collision";
+    err.textContent = text;
+    return err;
+  }
+
   function _renderMeasureDrawer(body) {
     var measDiv = document.createElement("div");
     measDiv.className = "sv-inspector-section";
@@ -3173,12 +3288,21 @@
     measLbl.textContent = _t("structure.measurements", STR.MEASUREMENTS);
     measDiv.appendChild(measLbl);
 
-    var hasMeasures = false;
-    try {
-      if (typeof molDoc !== "undefined" && Array.isArray(molDoc.measures) && molDoc.measures.length) {
-        hasMeasures = true;
-      }
-    } catch (_) { /* molDoc guard */ }
+    /* Store-first: ACPGeometryStore owns the measurement list; molDoc.measures
+       is the read-only legacy fallback for hosts without the store. */
+    var snap = _storeSnapshot();
+    var measurements = null;
+    if (snap) {
+      measurements = Array.isArray(snap.measurements) ? snap.measurements : [];
+    } else {
+      try {
+        if (typeof molDoc !== "undefined" && Array.isArray(molDoc.measures) && molDoc.measures.length) {
+          measurements = molDoc.measures;
+        }
+      } catch (_) { /* molDoc guard */ }
+    }
+    var hasMeasures = !!(measurements && measurements.length);
+    var symbols = (snap && Array.isArray(snap.symbols)) ? snap.symbols : null;
 
     if (overlayMeasurementsBlocked()) {
       var blockedVal = document.createElement("div");
@@ -3202,16 +3326,17 @@
         angle: [1, 179],
         dihedral: [-180, 180],
       };
-      for (var mi = 0; mi < molDoc.measures.length; mi++) {
+      var block = editBlockReason();
+      for (var mi = 0; mi < measurements.length; mi++) {
         (function (idx) {
-          var m = molDoc.measures[idx];
+          var m = measurements[idx];
           var mRow = document.createElement("div");
           mRow.className = "sv-inspector-value";
 
           var typeLabelFn = _measureTypeLabels[m.type];
           var tLabel = typeLabelFn ? typeLabelFn() : m.type;
           var atoms = Array.isArray(m.atoms) ? m.atoms : [];
-          var atomStr = atoms.map(function (a) { return String(a); }).join("-");
+          var atomStr = _measureAtomLabel(m, symbols);
           var valStr = m.value != null ? (m.type === "distance" ? m.value.toFixed(3) + " \u00c5" : m.value.toFixed(1) + "\u00b0") : "";
 
           var applied = !!m._applied;
@@ -3220,12 +3345,18 @@
             var recomputedVal = m.value != null ? (m.type === "distance" ? m.value.toFixed(3) + " \u00c5" : m.value.toFixed(1) + "\u00b0") : "";
             mRow.textContent = tLabel + " \u00b7 " + atomStr + " \u00b7 " + recomputedVal + " \u00b7 " + appliedLabel;
             mRow.style.color = "var(--sv-green)";
+            measDiv.appendChild(mRow);
+          } else if (m.editable === false) {
+            mRow.textContent = tLabel + " \u00b7 " + atomStr + " \u00b7 " + valStr;
+            measDiv.appendChild(mRow);
+            var why = document.createElement("div");
+            why.className = "sv-inspector-value sv-muted";
+            why.textContent = m.message || _editorReasonMessage(m.reason) || "\u5f53\u524d\u6d4b\u91cf\u4e0d\u53ef\u7f16\u8f91";
+            measDiv.appendChild(why);
           } else {
             mRow.textContent = tLabel + " \u00b7 " + atomStr + " \u00b7 " + valStr;
-          }
-          measDiv.appendChild(mRow);
+            measDiv.appendChild(mRow);
 
-          if (!applied) {
             var editRow = document.createElement("div");
             editRow.className = "sv-edit-row";
             var targetInput = document.createElement("input");
@@ -3239,53 +3370,56 @@
             targetInput.min = String(range[0]);
             targetInput.max = String(range[1]);
             targetInput.step = m.type === "distance" ? "0.01" : "1";
+            if (block.blocked) targetInput.disabled = true;
             editRow.appendChild(targetInput);
 
             var applyBtn = document.createElement("button");
             applyBtn.className = "sv-edit-btn";
             applyBtn.textContent = _t("structure.measure.apply", STR.MEASURE_APPLY);
+            if (block.blocked) applyBtn.disabled = true;
             applyBtn.addEventListener("click", function () {
+              var currentBlock = editBlockReason();
+              if (currentBlock.blocked) {
+                editRow.appendChild(_measureErrorLine(currentBlock.message));
+                return;
+              }
               var targetNum = parseFloat(targetInput.value);
               if (isNaN(targetNum)) return;
               var kind = _measureKindMap[m.type];
               if (!kind) return;
               var r = _measureRange[m.type] || [0, 999];
               if (targetNum < r[0] || targetNum > r[1]) {
-                var warn = document.createElement("div");
-                warn.className = "sv-edit-collision";
-                warn.textContent = _t("structure.measure.range_warn", STR.MEASURE_RANGE_WARN);
-                editRow.appendChild(warn);
+                editRow.appendChild(_measureErrorLine(_t("structure.measure.range_warn", STR.MEASURE_RANGE_WARN)));
                 return;
               }
               if (typeof window === "undefined" || !window.ACPStructureEditor ||
                   typeof window.ACPStructureEditor.applyMeasuredEdit !== "function") return;
-              var capturedType = m.type;
-              var capturedAtoms = atoms.slice();
-              var result = window.ACPStructureEditor.applyMeasuredEdit(kind, capturedAtoms, targetNum);
+              var result = window.ACPStructureEditor.applyMeasuredEdit(kind, atoms.slice(), targetNum, m.id);
               if (result && result.ok) {
                 _svMeasureAppliedIds = {};
-                try {
-                  if (typeof molDoc !== "undefined" && Array.isArray(molDoc.measures) &&
-                      typeof measurementValue === "function") {
-                    var recomputed = measurementValue(capturedType, capturedAtoms);
-                    molDoc.measures.push({
-                      type: capturedType,
-                      atoms: capturedAtoms,
-                      value: recomputed,
-                      _applied: true,
-                    });
-                  }
-                } catch (_) { /* re-seed is best-effort */ }
+                var store = (typeof window !== "undefined" && window) ? window.ACPGeometryStore : null;
+                if (store && typeof store.markApplied === "function") {
+                  try { store.markApplied(m.id, true); } catch (_) { /* store is best-effort */ }
+                } else {
+                  try { m._applied = true; } catch (_) { /* legacy fallback */ }
+                }
                 _renderDrawerContent("measure");
               } else if (result && result.reason) {
-                var err = document.createElement("div");
-                err.className = "sv-edit-collision";
-                err.textContent = result.reason;
-                editRow.appendChild(err);
+                var failBlock = editBlockReason();
+                var failText = (failBlock.blocked || result.reason === "locked")
+                  ? (failBlock.message || _editorReasonMessage(result.reason))
+                  : _editorReasonMessage(result.reason);
+                editRow.appendChild(_measureErrorLine(failText));
               }
             });
             editRow.appendChild(applyBtn);
             measDiv.appendChild(editRow);
+            if (block.blocked) {
+              var blockMsg = document.createElement("div");
+              blockMsg.className = "sv-inspector-value sv-muted";
+              blockMsg.textContent = block.message;
+              measDiv.appendChild(blockMsg);
+            }
           }
         })(mi);
       }
@@ -3472,12 +3606,86 @@
     return selectEntry(entryId, "energy_graph");
   }
 
+  /* ---- interaction gating + host broadcast (measure/edit state machine) ---- */
+
+  var _EDIT_BLOCK_TEXT = {
+    locked: "\u7ed3\u6784\u5df2\u9501\u5b9a\uff0c\u8bf7\u5148\u89e3\u9501",                   // 结构已锁定，请先解锁
+    vibration_active: "\u632f\u52a8\u52a8\u753b\u8fdb\u884c\u4e2d\uff0c\u8bf7\u5148\u505c\u6b62\u52a8\u753b", // 振动动画进行中，请先停止动画
+    irc_playing: "IRC \u8def\u5f84\u64ad\u653e\u4e2d\uff0c\u8bf7\u5148\u505c\u6b62\u64ad\u653e", // IRC 路径播放中，请先停止播放
+    overlay_active: "\u53e0\u5408\u6bd4\u8f83\u8fdb\u884c\u4e2d\uff0c\u8bf7\u5148\u6e05\u9664\u53e0\u5408", // 叠合比较进行中，请先清除叠合
+  };
+
+  /**
+   * Translate an internal edit reason into a user-facing string.  Prefers
+   * ACPStructureEditor.reasonMessage; never returns a raw reason code.
+   *
+   * @param {string|null} reason
+   * @returns {string}
+   */
+  function _editorReasonMessage(reason) {
+    if (!reason) return "";
+    var ed = (typeof window !== "undefined" && window) ? window.ACPStructureEditor : null;
+    if (ed && typeof ed.reasonMessage === "function") {
+      try {
+        var text = ed.reasonMessage(reason);
+        if (text && String(text) !== String(reason)) return String(text);
+      } catch (_) { /* fall through to the Chinese fallback */ }
+    }
+    return _EDIT_BLOCK_TEXT[reason] || "\u5f53\u524d\u64cd\u4f5c\u4e0d\u53ef\u7528";
+  }
+
+  /**
+   * Single interaction-gating verdict for measurement editing.
+   * First match wins: locked > vibration animation > IRC playback > overlay.
+   *
+   * @returns {{blocked: boolean, reason: string|null, message: string}}
+   */
+  function editBlockReason() {
+    var reason = null;
+    var ed = (typeof window !== "undefined" && window) ? window.ACPStructureEditor : null;
+    if (ed && typeof ed.isLocked === "function" && ed.isLocked()) {
+      reason = "locked";
+    } else if (typeof window !== "undefined" && window.ACPVibrationViewer &&
+        typeof window.ACPVibrationViewer.isAnimationActive === "function" &&
+        window.ACPVibrationViewer.isAnimationActive()) {
+      reason = "vibration_active";
+    } else if (ircPlayback && ircPlayback.playing) {
+      reason = "irc_playing";
+    } else if (overlayMeasurementsBlocked()) {
+      reason = "overlay_active";
+    }
+    if (!reason) return { blocked: false, reason: null, message: "" };
+    return { blocked: true, reason: reason, message: _editorReasonMessage(reason) };
+  }
+
+  /**
+   * Notify the host page that the structure-viewer interaction state changed.
+   * Best-effort: CustomEvent + optional host refresh hook; never throws.
+   *
+   * @param {string} source
+   */
+  function _broadcastInteractionState(source) {
+    try {
+      if (typeof CustomEvent === "function" && typeof window !== "undefined" && window &&
+          typeof window.dispatchEvent === "function") {
+        window.dispatchEvent(new CustomEvent("acp:interaction-state", { detail: { source: source } }));
+      }
+    } catch (_) { /* broadcast is best-effort */ }
+    try {
+      if (typeof window !== "undefined" && window &&
+          typeof window._svRefreshInteractionState === "function") {
+        window._svRefreshInteractionState();
+      }
+    } catch (_) { /* host hook is best-effort */ }
+  }
+
   /* ---- public namespace ---- */
   window.ACPStructureViewer = {
     version: VERSION,
     state: structureViewerState,
     STR: STR,
     geometryStore: geometryStore,
+    geometryDoc: (typeof window !== "undefined" && window.ACPGeometryStore) ? window.ACPGeometryStore : null,
     sharedLoadGeometry: sharedLoadGeometry,
     registerCanvasLoader: registerCanvasLoader,
     saveCamera: saveCamera,
@@ -3529,6 +3737,13 @@
     _entryIdFromEnergyNode: _entryIdFromEnergyNode,
     _parseXyzFirstFrame: _parseXyzFirstFrame,
     _resolveStyleSpec: _resolveStyleSpec,
+    editBlockReason: editBlockReason,
+    _storeSnapshot: _storeSnapshot,
+    _broadcastInteractionState: _broadcastInteractionState,
     _fetchImpl: (typeof window !== "undefined" && window.fetch) ? window.fetch.bind(window) : null,
   };
+
+  /* module init: one-time store subscription + initial interaction broadcast */
+  _ensureStoreSubscription();
+  _broadcastInteractionState("init");
 })();
