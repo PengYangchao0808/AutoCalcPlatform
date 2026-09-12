@@ -1575,6 +1575,28 @@ class JobManager:
             encoding="utf-8",
         )
 
+    def _write_effective_config(self, record: JobRecord) -> None:
+        """Persist the resolved method config for BatchOptimize jobs.
+
+        Writes ``effective_config.json`` to the task root so the detail API
+        and result provenance can display the actual parameters used.
+        """
+        try:
+            from acp.calculations.batch.effective_config import (
+                compute_effective_from_method,
+                write_effective_config,
+            )
+
+            method_payload = record.spec.method or {}
+            config = compute_effective_from_method(method_payload)
+            write_effective_config(Path(record.work_dir), config)
+        except Exception:
+            logger.warning(
+                "Could not write effective_config.json for job %s",
+                record.id,
+                exc_info=True,
+            )
+
     def _sync_task_status(self, record: JobRecord) -> None:
         """Best-effort task-index refresh after a status transition."""
         if self.tasks is None:
@@ -1707,10 +1729,12 @@ class JobManager:
                     record.error = f"Submission error: {exc}"
                     record.completed_at = _utc_now_iso()
                     record.touch()
+                    # Terminal event first — same poller-consistency invariant
+                    # as the fake-completion branch in _submit_job.
+                    self._event_log(record).append("job.failed", job_id=job_id, error=str(exc))
                     self.store.update(record)
                     self._sync_task_status(record)
                     self._write_job_json(record)
-                    self._event_log(record).append("job.failed", job_id=job_id, error=str(exc))
                     self._stage_task_observer.finalize_job(job_id, "failed")
                 self._release_reservation(job_id)
                 return
@@ -1814,6 +1838,10 @@ class JobManager:
         cancel_event = self._cancel_events.get(job_id, threading.Event())
         event_log = self._event_log(record)
 
+        # Snapshot the effective config for BatchOptimize jobs (plan §5.5).
+        if record.spec.workflow == "BatchOptimize":
+            self._write_effective_config(record)
+
         # ------------------------------------------------------------------
         # Fake workflow: run in-process to completion, mark COMPLETED now.
         # ------------------------------------------------------------------
@@ -1824,10 +1852,12 @@ class JobManager:
             record.progress = 1.0
             record.completed_at = _utc_now_iso()
             record.touch()
+            # Publish the terminal event before the terminal status so pollers
+            # that observe COMPLETED always find a consistent event tail.
+            event_log.append("job.completed", job_id=job_id, exit_code=record.exit_code)
             self.store.update(record)
             self._sync_task_status(record)
             self._write_job_json(record)
-            event_log.append("job.completed", job_id=job_id, exit_code=record.exit_code)
             self._stage_task_observer.finalize_job(job_id, "completed")
             with self._lock:
                 self._cancel_events.pop(job_id, None)

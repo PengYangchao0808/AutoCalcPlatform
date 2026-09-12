@@ -678,6 +678,120 @@ Examples:
         default=0.9905,
         help="Frequency scale factor for thermochemistry (default: 0.9905)",
     )
+    batch.add_argument(
+        "--opt-max-iter",
+        type=int,
+        default=None,
+        help="Max geometry-optimization iterations (None = ORCA default)",
+    )
+    batch.add_argument(
+        "--opt-convergence",
+        choices=["loose", "normal", "tight", "verytight"],
+        default=None,
+        help="Geometry-optimization convergence level",
+    )
+    batch.add_argument(
+        "--opt-trust-radius",
+        type=float,
+        default=None,
+        help="Geometry-optimization trust radius in Bohr",
+    )
+    batch.add_argument(
+        "--opt-initial-hessian",
+        choices=["auto", "model", "calculate"],
+        default=None,
+        help="Initial Hessian construction strategy",
+    )
+    batch.add_argument(
+        "--opt-recalc-hess",
+        default=None,
+        help="Hessian recalculation: auto / off / integer interval",
+    )
+    # ── per-role optimization overrides ──────────────────────────────────
+    batch.add_argument(
+        "--minimum-opt-trust-radius",
+        "--int-opt-trust-radius",
+        type=float,
+        default=None,
+        help="INT role trust radius override in Bohr",
+    )
+    batch.add_argument(
+        "--minimum-opt-initial-hessian",
+        "--int-opt-initial-hessian",
+        choices=["auto", "model", "calculate"],
+        default=None,
+        help="INT role initial Hessian strategy",
+    )
+    batch.add_argument(
+        "--minimum-opt-recalc-hess",
+        "--int-opt-recalc-hess",
+        default=None,
+        help="INT role Hessian recalculation: auto / off / integer interval",
+    )
+    batch.add_argument(
+        "--transition-state-opt-trust-radius",
+        "--ts-opt-trust-radius",
+        type=float,
+        default=None,
+        help="TS role trust radius override in Bohr (default 0.3)",
+    )
+    batch.add_argument(
+        "--transition-state-opt-initial-hessian",
+        "--ts-opt-initial-hessian",
+        choices=["auto", "model", "calculate"],
+        default=None,
+        help="TS role initial Hessian strategy (default calculate)",
+    )
+    batch.add_argument(
+        "--transition-state-opt-recalc-hess",
+        "--ts-opt-recalc-hess",
+        default=None,
+        help="TS role Hessian recalculation: auto / off / integer interval (default 5)",
+    )
+    batch.add_argument(
+        "--opt-rescue-policy",
+        choices=["off", "adaptive"],
+        default=None,
+        help="Optimization rescue strategy for failed steps",
+    )
+    batch.add_argument(
+        "--opt-max-rescue",
+        type=int,
+        default=None,
+        help="Maximum rescue attempts per optimization (0-10)",
+    )
+    batch.add_argument(
+        "--scf-max-iter",
+        type=int,
+        default=None,
+        help="Maximum SCF iterations",
+    )
+    batch.add_argument(
+        "--scf-convergence",
+        choices=["normal", "tight", "verytight"],
+        default=None,
+        help="SCF convergence level",
+    )
+    batch.add_argument(
+        "--scf-strategy",
+        choices=["normal", "slowconv", "soscf"],
+        default=None,
+        help="SCF convergence accelerator strategy",
+    )
+    scf_inherit = batch.add_mutually_exclusive_group()
+    scf_inherit.add_argument(
+        "--scf-orbital-inherit",
+        dest="scf_orbital_inherit",
+        action="store_true",
+        default=None,
+        help="Inherit orbitals from previous calculation (default)",
+    )
+    scf_inherit.add_argument(
+        "--no-scf-orbital-inherit",
+        dest="scf_orbital_inherit",
+        action="store_false",
+        help="Do not inherit orbitals from previous calculation",
+    )
     batch.add_argument("--minimum-method", help="ORCA method override for minimum structures")
     batch.add_argument("--minimum-basis", help="ORCA basis override for minimum structures")
     batch.add_argument(
@@ -1200,6 +1314,7 @@ def _handle_batch_optimize(args: argparse.Namespace) -> int:
     from acp.calculations.batch.engine import batch_stage_names
     from acp.calculations.batch.options import BatchMethodOptions
     from acp.calculations.progress import ProgressReporter
+    from acp.chem.composition import normalize_recalc_hess
     from acp.workflows.batch_optimize import BatchOptimizeInputError, run_batch_optimize
 
     setup_logging(args.log_level)
@@ -1214,6 +1329,63 @@ def _handle_batch_optimize(args: argparse.Namespace) -> int:
         source = _resolve_batch_artifact_from_job(from_job, args.from_artifact)
     else:
         source = args.items_file or args.from_artifact
+
+    method_kwargs: dict[str, Any] = {
+        "optimization_method": args.optimization_method,
+        "optimization_basis": args.optimization_basis,
+        "single_point_method": args.single_point_method,
+        "single_point_basis": args.single_point_basis,
+        "temperature": args.temperature,
+        "pressure": args.pressure,
+        "scale_factor": args.scale_factor,
+        "minimum_method": args.minimum_method or "",
+        "minimum_basis": args.minimum_basis or "",
+        "transition_state_method": args.transition_state_method or "",
+        "transition_state_basis": args.transition_state_basis or "",
+    }
+    if args.opt_max_iter is not None:
+        method_kwargs["opt_max_iter"] = args.opt_max_iter
+    if args.opt_convergence is not None:
+        method_kwargs["opt_convergence"] = args.opt_convergence
+    if args.opt_trust_radius is not None:
+        method_kwargs["opt_trust_radius"] = args.opt_trust_radius
+    if args.opt_initial_hessian is not None:
+        method_kwargs["opt_initial_hessian"] = args.opt_initial_hessian
+    if args.opt_recalc_hess is not None:
+        method_kwargs["opt_recalc_hess"] = normalize_recalc_hess(args.opt_recalc_hess)
+    if getattr(args, "minimum_opt_trust_radius", None) is not None:
+        method_kwargs["minimum_opt_trust_radius"] = args.minimum_opt_trust_radius
+    if getattr(args, "minimum_opt_initial_hessian", None) is not None:
+        method_kwargs["minimum_opt_initial_hessian"] = args.minimum_opt_initial_hessian
+    if getattr(args, "minimum_opt_recalc_hess", None) is not None:
+        method_kwargs["minimum_opt_recalc_hess"] = normalize_recalc_hess(
+            args.minimum_opt_recalc_hess
+        )
+    if getattr(args, "transition_state_opt_trust_radius", None) is not None:
+        method_kwargs["transition_state_opt_trust_radius"] = (
+            args.transition_state_opt_trust_radius
+        )
+    if getattr(args, "transition_state_opt_initial_hessian", None) is not None:
+        method_kwargs["transition_state_opt_initial_hessian"] = (
+            args.transition_state_opt_initial_hessian
+        )
+    if getattr(args, "transition_state_opt_recalc_hess", None) is not None:
+        method_kwargs["transition_state_opt_recalc_hess"] = normalize_recalc_hess(
+            args.transition_state_opt_recalc_hess
+        )
+    if args.opt_rescue_policy is not None:
+        method_kwargs["opt_rescue_policy"] = args.opt_rescue_policy
+    if args.opt_max_rescue is not None:
+        method_kwargs["opt_max_rescue"] = args.opt_max_rescue
+    if args.scf_max_iter is not None:
+        method_kwargs["scf_max_iter"] = args.scf_max_iter
+    if args.scf_convergence is not None:
+        method_kwargs["scf_convergence"] = args.scf_convergence
+    if args.scf_strategy is not None:
+        method_kwargs["scf_strategy"] = args.scf_strategy
+    if args.scf_orbital_inherit is not None:
+        method_kwargs["scf_orbital_inherit"] = args.scf_orbital_inherit
+
     try:
         result = run_batch_optimize(
             source,
@@ -1223,19 +1395,7 @@ def _handle_batch_optimize(args: argparse.Namespace) -> int:
             charge=args.charge,
             multiplicity=args.multiplicity,
             select=_parse_select(args.select),
-            methods=BatchMethodOptions(
-                optimization_method=args.optimization_method,
-                optimization_basis=args.optimization_basis,
-                single_point_method=args.single_point_method,
-                single_point_basis=args.single_point_basis,
-                temperature=args.temperature,
-                pressure=args.pressure,
-                scale_factor=args.scale_factor,
-                minimum_method=args.minimum_method or "",
-                minimum_basis=args.minimum_basis or "",
-                transition_state_method=args.transition_state_method or "",
-                transition_state_basis=args.transition_state_basis or "",
-            ),
+            methods=BatchMethodOptions(**method_kwargs),
             layout_mode=args.layout_mode,
             progress_reporter=reporter,
         )
