@@ -43,7 +43,16 @@ Amendments (plan-sanctioned, wave-2 backend wiring):
        module-level block from ``_SCF_OPTIONS_KEYS`` through
        ``parse_casscf_output``, the six method bodies, and the
        ``ORCABackend.casscf`` thin forwarder.  Teeth: the renderer must emit
-       ``FlipSpin`` and the CASSCF parser must read the NEVPT2 results block.
+        ``FlipSpin`` and the CASSCF parser must read the NEVPT2 results block.
+    F. ``orca_ts.py`` + ``orca.py``: IRC path-capture wave (2026-09) — the
+       ``IrcPathPoint`` / ``discover_irc_trajectory_files`` /
+       ``parse_irc_trajectory_xyz`` / ``parse_irc_iteration_energies`` module
+       block, the ``IrcResult.trajectory_files`` field, and the
+       ``ORCAInterface.irc`` ``output_callback`` + ``discover_irc_trajectory_files``
+       plumbing.  Sanctioned scopes are the named module block and the
+       ``ORCAInterface.irc`` method only.  Teeth: the parsers and
+       ``IrcPathPoint`` must exist, ``parse_irc_endpoints`` must survive, and
+       ``ORCAInterface.irc`` must accept ``output_callback``.
 """
 
 from __future__ import annotations
@@ -374,6 +383,90 @@ def _is_amendment_e_deletion(ln: int, baseline_src: str) -> bool:
     )
 
 
+# ── Amendment F: IRC path capture (2026-09) ──────────────────────────────────
+
+_F_ORCA_TS_SYMBOLS = (
+    "IrcPathPoint",
+    "discover_irc_trajectory_files",
+    "parse_irc_trajectory_xyz",
+    "parse_irc_iteration_energies",
+    "irc_energy_from_comment",
+)
+
+
+def _amendment_f_orca_ts_block(src: str) -> tuple[int, int] | None:
+    """Contiguous ``orca_ts.py`` F block: first IRC regex constant..iteration parser."""
+    lines = src.splitlines()
+    start = None
+    for idx, line in enumerate(lines, start=1):
+        if line.startswith("_IRC_TRJ_FILE_RE"):
+            start = idx
+            break
+    end_range = _func_ranges(src).get("parse_irc_iteration_energies")
+    if start is None or end_range is None:
+        return None
+    return (start, end_range[1])
+
+
+def _is_amendment_f_orca_ts_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``orca_ts.py`` additions for the IRC path-capture wave."""
+    block = _amendment_f_orca_ts_block(worktree_src)
+    if block is not None and block[0] <= ln <= block[1]:
+        return True
+    stripped = txt.strip()
+    if stripped == "trajectory_files: dict[str, Path] | None = None":
+        return True
+    return any(symbol in stripped for symbol in _F_ORCA_TS_SYMBOLS)
+
+
+def _amendment_f_orca_ts_teeth(worktree: str) -> list[str]:
+    """Teeth: the IRC parsers landed and the endpoint parser survives."""
+    issues: list[str] = []
+    ranges = _func_ranges(worktree)
+    for name in (
+        "parse_irc_trajectory_xyz",
+        "parse_irc_iteration_energies",
+        "discover_irc_trajectory_files",
+    ):
+        if name not in ranges:
+            issues.append(f"  Amendment F scope missing {name}")
+    if "class IrcPathPoint" not in worktree:
+        issues.append("  Amendment F scope missing IrcPathPoint")
+    if "parse_irc_endpoints" not in ranges:
+        issues.append("  Amendment F must preserve parse_irc_endpoints")
+    return issues
+
+
+def _is_amendment_f_orca_addition(ln: int, txt: str, worktree_src: str) -> bool:
+    """Allowlisted ``orca.py`` additions for the IRC path-capture wave."""
+    stripped = txt.strip()
+    if "discover_irc_trajectory_files" in stripped:
+        return True
+    irc_range = _func_range(worktree_src, "irc", "ORCAInterface")
+    return irc_range is not None and irc_range[0] <= ln <= irc_range[1]
+
+
+def _is_amendment_f_orca_deletion(ln: int, txt: str, baseline_src: str) -> bool:
+    """Sanctioned ``orca.py`` deletions live inside ``ORCAInterface.irc``."""
+    irc_range = _func_range(baseline_src, "irc", "ORCAInterface")
+    return irc_range is not None and irc_range[0] <= ln <= irc_range[1]
+
+
+def _amendment_f_orca_teeth(worktree: str) -> list[str]:
+    """Teeth: ``ORCAInterface.irc`` gained the streaming callback."""
+    issues: list[str] = []
+    irc_range = _func_range(worktree, "irc", "ORCAInterface")
+    if irc_range is None:
+        issues.append("  Amendment F scope ORCAInterface.irc missing")
+    else:
+        head = "\n".join(worktree.splitlines()[irc_range[0] - 1 : irc_range[0] + 24])
+        if "output_callback" not in head:
+            issues.append("  Amendment F: ORCAInterface.irc lacks output_callback")
+    if "discover_irc_trajectory_files" not in worktree:
+        issues.append("  Amendment F: discover_irc_trajectory_files wiring missing")
+    return issues
+
+
 def _target_orca(src: str) -> set[int]:
     """Target-region line numbers for baseline ``orca.py``."""
     lines = src.splitlines()
@@ -446,12 +539,17 @@ def test_algorithm_body_untouched() -> None:
     for fp in ALLOWED_PY:
         added, deleted = _diff_hunks(fp)
 
-        # ── orca_ts.py: zero changes ──────────────────────────────────────
+        # ── orca_ts.py: Amendment F only ──────────────────────────────────
         if fp == "src/cccp/qc/interfaces/orca_ts.py":
+            worktree = _worktree_content(fp)
             for ln, txt in added:
                 stripped = txt.strip()
-                if stripped and not stripped.startswith("#"):
-                    violations.append(f"  {fp}:{ln}: {txt!r}")
+                if not stripped or stripped.startswith("#"):
+                    continue
+                if _is_amendment_f_orca_ts_addition(ln, txt, worktree):
+                    continue
+                violations.append(f"  {fp}:{ln}: {txt!r}")
+            violations.extend(_amendment_f_orca_ts_teeth(worktree))
             continue
 
         # ── backends/orca.py: Amendment A + E ─────────────────────────────
@@ -522,6 +620,8 @@ def test_algorithm_body_untouched() -> None:
                     continue
                 if _is_amendment_e_addition(ln, txt, worktree, None):
                     continue
+                if _is_amendment_f_orca_addition(ln, txt, worktree):
+                    continue
                 if _is_optfreq_removal_line(ln, txt, deleted, build_range):
                     optfreq_added_count += 1
                     continue
@@ -559,16 +659,28 @@ def test_algorithm_body_untouched() -> None:
                 )
             if _func_range(worktree, "casscf", "ORCAInterface") is None:
                 violations.append(f"  {fp}: Amendment E scope ORCAInterface.casscf missing")
+            violations.extend(_amendment_f_orca_teeth(worktree))
             continue
 
     assert not violations, "Non-comment added lines detected:\n" + "\n".join(violations)
 
 
 def test_orca_ts_no_changes() -> None:
-    """① ``orca_ts.py`` must have zero changes (empty target set)."""
-    assert "src/cccp/qc/interfaces/orca_ts.py" not in _changed_files(), (
-        "orca_ts.py has changes but target-region set is empty"
-    )
+    """① ``orca_ts.py`` additions are confined to Amendment F (IRC path)."""
+    fp = "src/cccp/qc/interfaces/orca_ts.py"
+    if fp not in _changed_files():
+        return
+    worktree = _worktree_content(fp)
+    added, _ = _diff_hunks(fp)
+    violations = [
+        f"  {fp}:{ln}: {txt!r}"
+        for ln, txt in added
+        if txt.strip()
+        and not txt.strip().startswith("#")
+        and not _is_amendment_f_orca_ts_addition(ln, txt, worktree)
+    ]
+    violations.extend(_amendment_f_orca_ts_teeth(worktree))
+    assert not violations, "orca_ts.py additions outside Amendment F:\n" + "\n".join(violations)
 
 
 def test_deleted_lines_in_target_regions() -> None:
@@ -586,7 +698,12 @@ def test_deleted_lines_in_target_regions() -> None:
             bad_entries = [
                 (ln, t)
                 for ln, t in bad_entries
-                if not _is_amendment_c_deletion(ln, t, baseline_src)
+                if not _is_amendment_e_deletion(ln, baseline_src)
+            ]
+            bad_entries = [
+                (ln, t)
+                for ln, t in bad_entries
+                if not _is_amendment_f_orca_deletion(ln, t, baseline_src)
             ]
             bad_entries = [
                 (ln, t)

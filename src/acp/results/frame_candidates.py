@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -70,7 +71,17 @@ _PREFIX_MAP = {
     "sampling": "md",
     "scan": "scan",
     "conformer": "conf",
+    "irc": "irc",
 }
+_IRC_FRAME_ID_RE = re.compile(r"^irc_(forward|reverse)_(\d+)$")
+
+
+def _irc_direction(view_type: str, frame_id: str | None) -> str | None:
+    """Direction derived from an IRC energy-node id (``irc_{direction}_{index}``)."""
+    if view_type != "irc":
+        return None
+    match = _IRC_FRAME_ID_RE.match(str(frame_id or ""))
+    return match.group(1) if match else None
 
 
 # ---------------------------------------------------------------------------
@@ -90,6 +101,7 @@ def save_frame_candidate(
     expected_revision: int | None = None,
     now: datetime | None = None,
     item_id: str | None = None,
+    frame_id: str | None = None,
 ) -> dict[str, Any]:
     """Validate and persist a frame candidate (all-or-nothing).
 
@@ -132,6 +144,7 @@ def save_frame_candidate(
     if effective_role not in _VALID_ROLES:
         raise FrameCandidateError(f"invalid candidate role: {role!r} (expected TS or INT)")
     normalized_role = normalize_tag(effective_role)
+    direction = _irc_direction(view_type, frame_id)
 
     # --- Check revision ---
     existing = load_authority(root)
@@ -148,16 +161,21 @@ def save_frame_candidate(
         frame_index=frame_index,
         workflow=workflow,
         item_id=item_id,
+        frame_id=frame_id,
     )
 
     # --- Build candidate_id (v2: no role in id) ---
     prefix = _PREFIX_MAP.get(view_type, "unknown")
+    if view_type == "irc" and direction:
+        prefix = f"irc_{direction}"
     cid = candidate_id_for(prefix, frame_index, item_id=item_id)
 
     candidates_list = list(existing.get("candidates", [])) if existing else []
 
-    # --- Find existing entry for same (item_id, view_type, frame_index) ---
-    existing_entry = _find_matching_entry(candidates_list, item_id, view_type, frame_index)
+    # --- Find existing entry for same (item_id, view_type, frame_index[, direction]) ---
+    existing_entry = _find_matching_entry(
+        candidates_list, item_id, view_type, frame_index, direction=direction
+    )
 
     if existing_entry is not None:
         # Idempotent or role-change: update in place
@@ -211,6 +229,8 @@ def save_frame_candidate(
             "structure_path": f"structures/{cid}.xyz",
             "saved_at": (now or datetime.now().astimezone()).isoformat(timespec="seconds"),
         }
+        if direction is not None:
+            entry["direction"] = direction
         candidates_list.append(entry)
 
     # --- Build TAG comment line ---
@@ -287,13 +307,16 @@ def _find_matching_entry(
     item_id: str | None,
     view_type: str,
     frame_index: int,
+    *,
+    direction: str | None = None,
 ) -> dict[str, Any] | None:
-    """Find existing candidate matching (item_id, view_type, frame_index)."""
+    """Find existing candidate matching (item_id, view_type, frame_index[, direction])."""
     for c in candidates_list:
         if (
             c.get("view_type") == view_type
             and c.get("frame_index") == frame_index
             and c.get("item_id") == item_id
+            and (direction is None or c.get("direction") == direction)
         ):
             return c
     return None

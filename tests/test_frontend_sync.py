@@ -406,9 +406,9 @@ def test_optimization_status_panel_dual_mode_contract() -> None:
     # 7. Transitions: chart click / prev-next / keyboard → user (+follow off);
     #    "back to latest" → follow; refresh keeps a surviving user pick and
     #    falls back to follow when the picked node disappears.
-    select_frame = html.split("function energyGraphSelectFrame(frameIndex, origin)", 1)[1].split("\nfunction ", 1)[0]
+    select_frame = html.split("function energyGraphSelectFrame(frameIndex, origin, nodeId)", 1)[1].split("\nfunction ", 1)[0]
     assert 'energyGraphState.selectionOrigin = origin === "follow" ? "follow" : "user";' in select_frame
-    assert 'energyGraphSelectFrame(nodes[nodes.length - 1].frame_index, "follow")' in html
+    assert 'energyGraphSelectFrame(nodes[nodes.length - 1].frame_index, "follow", nodes[nodes.length - 1].id)' in html
     opt_bind = html.split("function optimizationGraphBind(root)", 1)[1].split("\nfunction ", 1)[0]
     assert "energyGraphState.liveFollow = false;" in opt_bind
     nav = html.split("function energyGraphBindInspectorButtons(root)", 1)[1].split("\nfunction ", 1)[0]
@@ -2211,7 +2211,7 @@ def test_energy_selectframe_pushes_to_structure_viewer() -> None:
     """Contract: energyGraphSelectFrame calls onEnergyNodeSelected."""
     html = FRONTEND.read_text(encoding="utf-8")
 
-    select_frame = html.split("function energyGraphSelectFrame(frameIndex, origin)", 1)[1]
+    select_frame = html.split("function energyGraphSelectFrame(frameIndex, origin, nodeId)", 1)[1]
     select_frame = select_frame.split("\nfunction ", 1)[0]
 
     assert "onEnergyNodeSelected" in select_frame, (
@@ -7921,25 +7921,21 @@ def test_electronic_state_module_renderer_dispatch() -> None:
 # ---------------------------------------------------------------------------
 
 def test_batch_preset_chip_labels() -> None:
-    """P1a contract: preset chips use renamed labels (标准/困难几何/困难 SCF/严格收敛/自定义)."""
+    """P1a contract: preset chips use renamed labels (标准/困难几何/困难 SCF/严格收敛)."""
     html = FRONTEND.read_text(encoding="utf-8")
 
-    # All five preset labels (zh, stored as \uXXXX escapes in JS) must appear
     for label in (
         r"\u6807\u51c6",
         r"\u56f0\u96be\u51e0\u4f55",
         r"\u56f0\u96be SCF",
         r"\u4e25\u683c\u6536\u655b",
-        r"\u81ea\u5b9a\u4e49",
-):
+    ):
         assert label in html, f"Preset label {label!r} missing from frontend"
 
-    # Old labels that should be gone
     assert r"\u6807\u51c6\u4f18\u5316" not in html, "Old label '标准优化' must be renamed to '标准'"
     assert r"\u9ad8\u7cbe\u5ea6\u786e\u8ba4" not in html, (
         "Old label '高精度确认' must be renamed to '严格收敛'"
     )
-    # "困难SCF" (no space) must be replaced by "困难 SCF" (with space)
     assert r"\u56f0\u96beSCF" not in html, "'困难SCF' must have a space: '困难 SCF'"
 
 
@@ -7958,6 +7954,8 @@ def test_batch_reset_defaults_control_present() -> None:
     assert "mc-adv-reset-btn" in html, "Reset button CSS class missing"
     assert "mc-adv-header-bar" in html, "Header bar CSS class missing"
     assert "mc-adv-custom-count" in html, "Custom count CSS class missing"
+    assert r"\u9ed8\u8ba4\u914d\u7f6e" in html, "Default config label missing"
+    assert r"\u81ea\u5b9a\u4e49\u914d\u7f6e" in html, "Custom config label missing"
 
 
 def test_batch_payload_includes_rescue_and_orbital_fields() -> None:
@@ -8000,15 +7998,17 @@ def test_batch_trust_radius_label() -> None:
     )
 
 
-def test_batch_effective_summary_source_badges() -> None:
-    """P1c contract: effective summary uses source badges (默认/预设/自定义)."""
+def test_batch_effective_summary_plain_text() -> None:
+    """P1c contract: modal effective summary is plain text, no chips/badges; pending marker + ORCA details present."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert "mc-effective-summary" in html, "Effective summary CSS class missing"
-    assert "mc-eff-chip" in html, "Effective chip CSS class missing"
-    assert "mc-eff-src" in html, "Source badge CSS class missing"
-    assert "src-default" in html, "Default source badge class missing"
-    assert "src-preset" in html, "Preset source badge class missing"
-    assert "src-custom" in html, "Custom source badge class missing"
+    assert "mc-effective-text" in html, "Effective summary plain text class missing"
+    # Chips/badges still exist for job-detail renderer (P2c)
+    assert "mc-eff-chip" in html, "Effective chip CSS class still present (used by P2c)"
+    assert "mc-eff-src" in html, "Source badge CSS class still present (used by P2c)"
+    # Pending marker
+    assert r"\u6b63\u5728\u66f4\u65b0" in html or "Updating" in html, "Pending marker text missing"
+    # ORCA input details
+    assert r"\u67e5\u770b\u5b9e\u9645\u8f93\u5165" in html, "View actual input details label missing"
 
 
 def test_batch_groups_grid_css() -> None:
@@ -8037,15 +8037,15 @@ def test_batch_role_tab_strip_present() -> None:
     assert "mc-role-tab-strip" in html, "Tab strip class missing"
     assert "mc-role-tab-btn" in html, "Tab button class missing"
     assert "mc-role-tab-pane" in html, "Tab pane class missing"
-    assert r"\u901a\u7528" in html, "Common tab label (\u901a\u7528) missing"
-    assert 'label: "INT"' in html or "label: 'INT'" in html
+    assert r"\u901a\u7528\u8bbe\u7f6e" in html, "Common tab label (\u901a\u7528\u8bbe\u7f6e) missing"
+    assert "Intermediate INT" in html or r"\u666e\u901a\u9a7b\u70b9 INT" in html, "INT tab label missing"
 
 
 def test_batch_role_tab_labels_zh_en() -> None:
     """P2a: tab labels have both zh and en variants."""
     html = FRONTEND.read_text(encoding="utf-8")
     assert "label_zh:" in html, "label_zh key missing in tab definitions"
-    assert r"\u901a\u7528" in html, "Chinese Common tab label (\u901a\u7528) missing"
+    assert r"\u901a\u7528\u8bbe\u7f6e" in html, "Chinese Common tab label (\u901a\u7528\u8bbe\u7f6e) missing"
 
 
 def test_batch_role_override_payload_keys() -> None:
@@ -8074,12 +8074,13 @@ def test_batch_role_fields_excluded_from_common_groups() -> None:
     )
 
 
-def test_batch_role_inherit_badge_class() -> None:
-    """P2a: inherit/override badge classes present."""
+def test_batch_role_inherit_switch() -> None:
+    """P2a: inherit switch replaces badge; override inputs conditional on switch state."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert "mc-role-inherit-badge" in html, "Inherit badge class missing"
-    assert "badge-inherit" in html, "badge-inherit subclass missing"
-    assert "badge-override" in html, "badge-override subclass missing"
+    assert "mc-role-inherit-switch" in html, "Inherit switch class missing"
+    assert r"\u4f7f\u7528\u901a\u7528\u8bbe\u7f6e" in html, "Switch label '使用通用设置' missing"
+    # Badge classes still present for job-detail renderer (P2c), not removed
+    assert "mc-role-inherit-badge" in html, "Inherit badge class still present (used by P2c)"
 
 
 def test_batch_role_override_field_defs_present() -> None:
@@ -8174,22 +8175,201 @@ def test_batch_role_preset_match_skips_role_keys() -> None:
     )
 
 
-def test_batch_server_preview_role_chips_rendering() -> None:
-    """P2a: _renderServerPreview renders role-separated chips."""
+def test_batch_server_preview_rendering() -> None:
+    """P2a: _renderServerPreview renders plain text with ORCA details."""
     html = FRONTEND.read_text(encoding="utf-8")
     assert "function _renderServerPreview(data)" in html, "_renderServerPreview function missing"
-    assert "mc-eff-role-label" in html, "Role label CSS class missing in preview renderer"
     assert "orca_summary" in html, "orca_summary key reference missing"
+    assert "_previewGeneration" in html, "Generation token for stale detection missing"
 
 
 def test_batch_role_tab_default_active_is_common() -> None:
     """P2a: default active tab is Common (\u901a\u7528)."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert '(idx === 0 ? " active" : "")' in html, "Default active tab logic missing"
-    assert 'mc-role-tab-pane" + (idx === 0 ? " active" : "")' in html or \
-           "mc-role-tab-pane\" + (idx === 0 ? \" active\" : \"\")" in html, (
-        "Default active pane logic missing"
+    # New pattern: scope tab tracks active state via _batchScopeTab variable
+    assert "_batchScopeTab" in html, "_batchScopeTab state variable missing"
+    assert 'tn.id === _batchScopeTab ? " active"' in html or \
+           'tn.id === _batchScopeTab ? \' active\'' in html, \
+        "Scope tab active state logic missing"
+
+
+# ---------------------------------------------------------------------------
+# P2b: BatchOptimize modal redesign contracts (2026-09-12)
+# ---------------------------------------------------------------------------
+
+def test_batch_single_column_nesting() -> None:
+    """P2b: .mc-adv-group-fields is single column; .mc-level-advanced-fields no 2-col; hessian spans full width."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert ".mc-level-advanced-fields { display: grid; grid-template-columns: 1fr;" in html, (
+        "mc-level-advanced-fields must be single column (1fr)"
     )
+    assert ".mc-adv-group-fields" in html, "mc-adv-group-fields class missing"
+    assert "grid-template-columns: 1fr 1fr" in html, "mc-adv-groups-grid keeps 2-col"
+    assert 'data-group-id="hessian_control"' in html, "hessian_control group id missing"
+    assert "grid-column: 1 / -1" in html, "Full-width span rule missing"
+
+
+def test_batch_typography_updates() -> None:
+    """P2b: .mc-field label 13px without uppercase; .mc-field-help 12px; controls 36px."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert ".mc-field label { font-size: 13px" in html, "Label font-size must be 13px"
+    assert "text-transform: uppercase" not in html.split(".mc-field label")[1].split("}")[0], (
+        "Label must not have text-transform: uppercase"
+    )
+    assert ".mc-field-help { color:" in html, "mc-field-help class missing"
+    assert "font-size: 12px" in html.split(".mc-field-help")[1].split("}")[0], (
+        "Help text font-size must be 12px"
+    )
+    assert "height: 36px" in html, "Control height must be 36px"
+
+
+def test_batch_convergence_canonicalization() -> None:
+    """P2b: presets/defaults use canonical casing; case-insensitive helper present."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    fn_body = html.split("function applyBatchOptimizeMethodFields(methodPayload)", 1)[1]
+    fn_body = fn_body.split("\nfunction ", 1)[0]
+    assert '"Tight"' in fn_body, "Canonical 'Tight' casing in payload builder"
+    assert '"Normal"' in fn_body, "Canonical 'Normal' casing in payload builder"
+    assert "_canonMatch" in html, "Case-insensitive helper _canonMatch missing"
+    assert 'String(curVal).toLowerCase() === String(o).toLowerCase()' in html, (
+        "Select binding must use case-insensitive comparison"
+    )
+
+
+def test_batch_scope_tabs_above_groups() -> None:
+    """P2b: scope tabs inserted before groups grid; summary NOT in scope-hide logic."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "advDiv.insertBefore(roleTabs, groupsGrid)" in html, (
+        "Scope tabs must be inserted before groups grid"
+    )
+    assert "mc-role-inherit-value" in html, "Inherit value class missing for scope swap"
+    assert 'headerBar.style.display = isCommon ? "" : "none"' in html or \
+           "headerBar.style.display = isCommon" in html, (
+        "headerBar must hide when scope !== common"
+    )
+    assert "batchSummaryBlock" in html, "Summary block must be stashed outside advDiv"
+    assert "bodyDiv.appendChild(batchSummaryBlock)" in html or \
+           "bodyDiv.appendChild(effSummary)" not in html, (
+        "Summary must be appended to bodyDiv outside advWrap"
+    )
+
+
+def test_batch_step_bar_present() -> None:
+    """P2b: step bar with zh step names present for batch profile."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "mc-step-bar" in html, "Step bar CSS class missing"
+    assert r"\u4f18\u5316" in html, "Step label '优化' missing"
+    assert r"\u9891\u7387" in html, "Step label '频率' missing"
+    assert r"\u5355\u70b9\u80fd" in html, "Step label '单点能' missing"
+    assert r"\u70ed\u5316\u5b66" in html, "Step label '热化学' missing"
+    assert "mc-step" in html, "Step element class missing"
+    assert "mc-step-arrow" in html, "Step arrow class missing"
+
+
+def test_batch_orca_details_and_stale_token() -> None:
+    """P2b: ORCA input details + pending indicator + stale generation token."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert r"\u67e5\u770b\u5b9e\u9645\u8f93\u5165" in html, "View actual input label missing"
+    assert "_previewGeneration" in html, "Generation token variable missing"
+    assert "_eff-pending-marker" in html, "Pending marker element id missing"
+    assert 'myGen !== _previewGeneration' in html, "Stale response guard missing"
+
+
+def test_batch_basis_readonly_display() -> None:
+    """P2b: single-option locked basis shows read-only display, not disabled select."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "mc-basis-readonly" in html, "Basis read-only display class missing"
+    assert r"\u5185\u7f6e\uff1a" in html, "Built-in prefix missing"
+    assert 'sel.style.display = "none"' in html, "Select must be hidden for locked basis"
+
+
+def test_batch_info_tooltip() -> None:
+    """P2b: help text uses info tooltip instead of always-visible paragraph."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "mc-info-tip" in html, "Info tooltip class missing"
+    assert r"\u24d8" in html, "Info tooltip character missing"
+
+
+def test_batch_scope_shows_inherited_values() -> None:
+    """P2b: INT/TS panes show inherited-value rows; override fields also render inherit value."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "mc-role-inherit-value" in html, "mc-role-inherit-value class missing"
+    assert "_buildInheritValueRow" in html or "_resolveRoleValue" in html, (
+        "Inherit value resolution function missing"
+    )
+    assert "_buildRoleScopePane" in html, "Role scope pane builder missing"
+    assert "_formatInheritValue" in html, "Shared format helper missing"
+    # Override field path must also render inherit value line
+    assert 'inheritValDiv.className = "mc-field"' in html or \
+           "inheritValDiv.className = 'mc-field'" in html, (
+        "Override field must render inherit value div"
+    )
+
+
+def test_batch_hessian_group_renders_combined_once() -> None:
+    """P2b: hessian_control group uses combined control, not duplicate generic fields."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert 'g.id === "hessian_control"' in html or "g.id === 'hessian_control'" in html, (
+        "hessian_control special-case branch missing"
+    )
+    assert 'buildHessianFieldRow(grpFields)' in html or \
+           "buildHessianFieldRow(grpFields)" in html, (
+        "hessian_control must call buildHessianFieldRow directly"
+    )
+
+
+def test_batch_flow_selector_zh_only() -> None:
+    """P2b: profile row label becomes 计算流程 for BatchOptimize; summary in option.title."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert r"\u8ba1\u7b97\u6d41\u7a0b" in html, "计算流程 label missing"
+    assert 'o.title = profileSummary' in html or 'o.title = profileSummary || ""' in html, (
+        "Profile summary must go into option.title for BatchOptimize"
+    )
+
+
+def test_batch_modal_subtitle() -> None:
+    """P2b: BatchOptimize modal title = 批量优化设置 with subtitle."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert r"\u6279\u91cf\u4f18\u5316\u8bbe\u7f6e" in html, "批量优化设置 title missing"
+    assert "modal-subtitle" in html, "Subtitle element class missing"
+    assert r"\u914d\u7f6e\u65b9\u6cd5\u3001\u6536\u655b\u7b56\u7565\u53ca Hessian" in html, (
+        "Subtitle text missing"
+    )
+
+
+def test_batch_hessian_combined_row() -> None:
+    """P2b: Hessian has initial select + recalc segmented in one row with effective line."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "mc-hessian-row" in html, "Hessian combined row class missing"
+    assert "mc-hessian-effective" in html, "Hessian effective line class missing"
+    assert r"\u5f53\u524d\u6709\u6548\u7b56\u7565" in html, "当前有效策略 label missing"
+    assert r"\u6bcf N \u4e2a\u4f18\u5316\u5faa\u73af" in html, "每 N 个优化循环 segmented label missing"
+    # Old '自定义' label must NOT be the third segmented button for batch hessian
+    assert r"\u521d\u59cb\u7b56\u7565" in html, "初始策略 label missing for initial Hessian select"
+    assert r"\u91cd\u7b97\u7b56\u7565" in html, "重算策略 label missing for recalc segmented"
+
+
+def test_batch_nullable_auto_placeholder() -> None:
+    """P2b: batch nullable fields show 自动 placeholder; empty stores null."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "isBatchNullable" in html, "Batch nullable field detection missing"
+    assert r'\u81ea\u52a8' in html or r"\u81ea\u52a8" in html, "自动 placeholder text missing"
+    assert 'delete getLevelState(lvDef.level_id)[fieldName]' in html, (
+        "Empty nullable field must delete key (store null)"
+    )
+
+
+def test_batch_preset_summary_hides_when_empty() -> None:
+    """P2b: empty preset summary hides element; temperature/pressure labels localized."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert 'presetSummary.style.display = pstText ? "" : "none"' in html or \
+           "presetSummary.style.display = pstText" in html, (
+        "Empty preset summary must hide element"
+    )
+    assert r"\u6e29\u5ea6" in html, "Temperature label (温度) missing"
+    assert r"\u538b\u529b" in html, "Pressure label (压力) missing"
+    assert r"\u9891\u7387\u7f29\u653e\u56e0\u5b50" in html, "Frequency scale factor label missing"
+    assert r"\u6162\u6536\u655b" in html, "SlowConv zh label (慢收敛) missing from scf_strategy map"
 
 
 # ── P2c: job detail effective config for BatchOptimize ────────────────

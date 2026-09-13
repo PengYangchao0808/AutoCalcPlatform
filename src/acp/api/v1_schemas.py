@@ -1572,12 +1572,13 @@ class PesReviewRestoreResponse(BaseModel):
 class V1FrameCandidateRequest(BaseModel):
     """Body for POST /jobs/{job_id}/frame-candidate."""
 
-    view_type: str  # scan | optimization | sampling | conformer
+    view_type: str  # scan | optimization | sampling | conformer | irc
     frame_index: int
     role: str  # TS | INT
     name: str | None = None
     expected_revision: int | None = None
     item_id: str | None = None  # BatchOptimize item scoping
+    frame_id: str | None = None  # IRC direction disambiguation (irc_{forward|reverse}_{index})
 
 
 class V1FrameCandidateInfo(BaseModel):

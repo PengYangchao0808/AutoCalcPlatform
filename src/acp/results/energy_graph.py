@@ -1447,6 +1447,15 @@ def _build_energy_graph_projection(
         return build_scan_trajectory_energy_graph(
             job_id, work_dir
         ) or build_unavailable_energy_graph(job_id, workflow=workflow, reason="energy_data_missing")
+    if workflow == "irc":
+        from acp.results.irc_projection import (
+            build_irc_energy_graph,
+            build_irc_pending_energy_graph,
+        )
+
+        return build_irc_energy_graph(
+            job_id, work_dir
+        ) or build_irc_pending_energy_graph(job_id, work_dir)
     return build_unavailable_energy_graph(
         job_id, workflow=workflow, reason="workflow_has_no_energy_graph"
     )

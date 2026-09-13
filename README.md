@@ -42,7 +42,7 @@ Workbench "能量与轨迹"标签页是 PES 扫描、几何优化、构象搜索
 - 通用帧操作：查看结构 / 锁定 / 导出 XYZ / 保存为候选（TS / INT / NONE）
 - xtb-md / xtbmd-censo 协议额外提供采样历史三视图：能量轨迹、采样空间（MDS 二维散点）、覆盖度（饱和度指标 + 累计唯一曲线）
 - 优化视图收敛面板：RMS/MAX 梯度和位移 vs 阈值达标判定
-- IRC / NEB 视图已注册（能量图数据投影暂未接线；IRC 逐帧结构浏览与路径动画由下方结构查看器提供）
+- IRC / NEB 视图已注册（IRC 能量曲线已接线：`irc_trajectory_v1` 正/反向双 series，运行中自动刷新，可从历史 `WORK/<stage>/ORCA` 轨迹只读回填；NEB 投影仍未实现）。IRC 逐帧结构浏览与路径动画由下方结构查看器提供
 
 详见 `docs/ACP_Energy_Trajectory_Viewer_DevDoc.md`
 

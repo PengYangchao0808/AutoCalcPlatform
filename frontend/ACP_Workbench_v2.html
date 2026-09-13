@@ -2630,6 +2630,15 @@ option, optgroup {
   overflow: hidden;
 }
 .modal-dialog-wide { width: min(860px, 96vw); }
+#method-config-modal .modal-dialog { width: min(1000px, calc(100vw - 48px)); max-height: calc(100dvh - 64px); font-family: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+#method-config-modal .modal-header h2 { font-size: 18px; font-weight: 600; }
+#method-config-modal .modal-subtitle { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; line-height: 1.4; }
+#method-config-modal .mc-profile-label { font-size: 13px; text-transform: none; letter-spacing: normal; color: var(--text-secondary); }
+#method-config-modal .modal-body { padding: 24px; overflow-y: auto; }
+#method-config-modal .modal-footer { height: 64px; }
+#method-config-modal .btn.primary { height: 38px; }
+#method-config-modal .mc-adv-groups-grid { gap: 12px 20px; }
+@media (max-width: 840px) { #method-config-modal .mc-adv-groups-grid { grid-template-columns: 1fr; } #method-config-modal .method-fields { grid-template-columns: 1fr !important; } }
 .modal-body textarea.modal-input { resize: vertical; font-family: "SFMono-Regular", Consolas, monospace; font-size: 12px; line-height: 1.6; }
 
 .input-mode-tabs { display: flex; gap: 4px; margin-bottom: 14px; }
@@ -3033,11 +3042,11 @@ option, optgroup {
 .mc-level-advanced { margin-top: 4px; }
 .mc-level-advanced-toggle { font-size: 10px; color: var(--text-tertiary); cursor: pointer; padding: 4px 0; }
 .mc-level-advanced-toggle:hover { color: var(--accent); }
-.mc-level-advanced-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px; }
+.mc-level-advanced-fields { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 6px; }
 
 .mc-field { display: flex; flex-direction: column; gap: 3px; }
-.mc-field label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); }
-.mc-field select, .mc-field input { appearance: none; -webkit-appearance: none; padding: 5px 24px 5px 8px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--bg-elevated); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='none' stroke='%236b7b8a' stroke-width='1.2' d='M2 3.5l3 3 3-3'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; color: var(--text-primary); font-size: 11px; }
+.mc-field label { font-size: 13px; font-weight: 500; color: var(--text-tertiary); }
+.mc-field select, .mc-field input { appearance: none; -webkit-appearance: none; height: 36px; padding: 5px 24px 5px 8px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--bg-elevated); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='none' stroke='%236b7b8a' stroke-width='1.2' d='M2 3.5l3 3 3-3'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 6px center; color: var(--text-primary); font-size: 13px; }
 .mc-field select:focus, .mc-field input:focus { border-color: var(--accent); }
 .mc-field input { background-image: none; }
 .mc-number-with-unit { display: flex; align-items: stretch; min-width: 0; border: 1px solid var(--border-default); border-radius: 6px; overflow: hidden; background: var(--bg-elevated); transition: border-color 0.15s ease, box-shadow 0.15s ease; }
@@ -3047,7 +3056,7 @@ option, optgroup {
 .mc-number-unit { display: inline-flex; align-items: center; flex: 0 0 auto; padding: 0 10px 0 9px; border-left: 1px solid var(--border-subtle); background: rgba(255,255,255,0.035); color: var(--text-secondary); font-size: 10px; font-weight: 600; letter-spacing: 0.05em; line-height: 1; }
 .mc-field input[type="checkbox"] { appearance: auto; -webkit-appearance: checkbox; width: 14px; height: 14px; padding: 0; margin: 1px 0 0; border: none; border-radius: 0; background: transparent; cursor: pointer; accent-color: var(--accent-blue, #4ea1ff); }
 .mc-bool-wrap { display: flex; align-items: center; min-height: 25px; }
-.mc-field-help { color: var(--text-tertiary); font-size: 10px; line-height: 1.45; }
+.mc-field-help { color: var(--text-tertiary); font-size: 12px; line-height: 1.5; }
 /* Dispersion field "built-in" badge: shown when METHOD_META.builtin_dispersion
    is non-null (e.g. wB97X-D4 → D4, wB97M-V → VV10). Replaces the dropdown so
    the user cannot change a value that the functional already hardwires. */
@@ -3117,8 +3126,8 @@ option, optgroup {
 .mc-adv-group-header {
   display: flex; align-items: center; gap: 6px;
   padding: 5px 0; cursor: pointer; user-select: none;
-  font-size: 10px; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--text-tertiary);
+  font-size: 14px; font-weight: 600;
+  color: var(--text-tertiary);
 }
 .mc-adv-group-header:hover { color: var(--accent); }
 .mc-adv-group-header .mc-adv-group-chevron {
@@ -3127,7 +3136,7 @@ option, optgroup {
 }
 .mc-adv-group-header .mc-adv-group-chevron.open { transform: rotate(90deg); }
 .mc-adv-group-fields {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+  display: grid; grid-template-columns: 1fr; gap: 12px;
   margin-top: 4px;
 }
 .mc-adv-group-fields.collapsed { display: none; }
@@ -3203,6 +3212,31 @@ option, optgroup {
 .mc-role-inherit-badge.badge-override {
   background: rgba(100,220,130,0.15); color: var(--green);
 }
+/* Scope inherit switch (P2a redesign) */
+.mc-role-inherit-switch { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.mc-role-inherit-switch label { font-size: 12px; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.mc-role-inherit-switch input[type="checkbox"] { appearance: auto; -webkit-appearance: checkbox; width: 14px; height: 14px; accent-color: var(--accent-blue, #4ea1ff); cursor: pointer; }
+/* Hessian full-width row */
+.mc-hessian-row { display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.mc-hessian-row .mc-field { flex: 1; min-width: 200px; }
+.mc-hessian-effective { font-size: 12px; color: var(--text-tertiary); margin-top: 8px; line-height: 1.5; }
+/* Effective summary plain text */
+.mc-effective-text { font-size: 13px; color: var(--text-secondary); line-height: 1.6; padding: 8px 0; }
+.mc-effective-text .pending { color: var(--text-tertiary); font-style: italic; }
+.mc-effective-text details { margin-top: 6px; }
+.mc-effective-text details summary { font-size: 12px; color: var(--text-tertiary); cursor: pointer; }
+.mc-effective-text details pre { font-size: 12px; font-family: "SFMono-Regular", Consolas, monospace; background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 8px 10px; margin-top: 4px; overflow-x: auto; white-space: pre-wrap; color: var(--text-secondary); }
+/* Step bar for batch profile */
+.mc-step-bar { display: flex; align-items: center; gap: 0; margin: 4px 0 8px; font-size: 12px; color: var(--text-tertiary); }
+.mc-step-bar .mc-step { padding: 3px 10px; border: 1px solid var(--border-subtle); border-radius: 4px; background: var(--bg-elevated); }
+.mc-step-bar .mc-step.disabled { opacity: 0.4; }
+.mc-step-bar .mc-step-arrow { margin: 0 4px; color: var(--text-tertiary); font-size: 11px; }
+/* Built-in basis read-only display */
+.mc-basis-readonly { font-size: 13px; color: var(--text-secondary); padding: 7px 0; line-height: 36px; }
+/* Info tooltip (ⓘ) */
+.mc-info-tip { display: inline-block; margin-left: 4px; font-size: 11px; color: var(--text-tertiary); cursor: help; position: relative; }
+.mc-info-tip:hover { color: var(--accent); }
+.mc-info-tip[title] { text-decoration: none; }
 .mc-role-inherit-hint {
   font-size: 10px; color: var(--text-tertiary); line-height: 1.4;
   margin-bottom: 8px; padding: 4px 0;
@@ -3247,6 +3281,11 @@ option, optgroup {
 @media (max-width: 720px) {
   .mc-adv-groups-grid { grid-template-columns: 1fr; }
 }
+/* Hessian, freq/thermo, expert groups span full width */
+.mc-adv-groups-grid > [data-group-id="hessian_control"],
+.mc-adv-groups-grid > [data-group-id="freq_thermo"],
+.mc-adv-groups-grid > [data-group-id="expert_overrides"],
+.mc-adv-groups-grid > [data-group-id="other"] { grid-column: 1 / -1; }
 /* Effective params summary bar */
 .mc-effective-summary {
   display: flex; flex-wrap: wrap; gap: 4px; align-items: center;
@@ -4266,6 +4305,7 @@ option, optgroup {
   <div class="modal-dialog modal-dialog-wide">
     <div class="modal-header">
       <h2 id="mc-modal-title" data-i18n="modal.method_config">配置计算方法</h2>
+      <div class="modal-subtitle" id="mc-modal-subtitle" style="display:none;"></div>
       <button class="modal-close" id="mt-config-close">X</button>
     </div>
     <div class="modal-body" style="display:grid;gap:12px;">
@@ -5800,6 +5840,7 @@ const I18N = {
     "energy.error": "能量与轨迹数据加载失败",
     "energy.idle_prompt": "请选择任务后查看能量与轨迹。",
     "energy.unsupported": "该任务没有可绘制的能量曲线，但结果文件仍然可用。",
+    "energy.irc_pending": "IRC 正在计算，尚无可用路径点。计算完成后曲线会自动刷新。",
     "energy.header.frames": "帧",
     "energy.header.status.running": "运行中",
     "energy.header.status.partial": "部分完成",
@@ -6804,6 +6845,7 @@ const I18N = {
     "energy.error": "Failed to load energy & trajectory data",
     "energy.idle_prompt": "Select a job to view Energy & Trajectory.",
     "energy.unsupported": "This job has no plottable energy curve, but its result files remain available.",
+    "energy.irc_pending": "IRC is still running; no path points are available yet. The curve refreshes automatically once points are published.",
     "energy.header.frames": "frames",
     "energy.header.status.running": "Running",
     "energy.header.status.partial": "Partial",
@@ -8347,9 +8389,10 @@ function energyGraphBindInspectorButtons(root) {
       var frame = node && node.frame_index != null ? Number(node.frame_index) : null;
       if (frame == null) return;
       var nodes = data.nodes || [];
-      var index = nodes.findIndex(function(item) { return Number(item.frame_index) === frame; });
-      if (action === "prev" && index > 0) { energyGraphState.liveFollow = false; energyGraphSelectFrame(nodes[index - 1].frame_index); }
-      if (action === "next" && index >= 0 && index < nodes.length - 1) { energyGraphState.liveFollow = false; energyGraphSelectFrame(nodes[index + 1].frame_index); }
+      var index = nodes.findIndex(function(item) { return String(item.id) === String(energyGraphState.selectedNodeId); });
+      if (index < 0) index = nodes.findIndex(function(item) { return Number(item.frame_index) === frame; });
+      if (action === "prev" && index > 0) { energyGraphState.liveFollow = false; energyGraphSelectFrame(nodes[index - 1].frame_index, undefined, nodes[index - 1].id); }
+      if (action === "next" && index >= 0 && index < nodes.length - 1) { energyGraphState.liveFollow = false; energyGraphSelectFrame(nodes[index + 1].frame_index, undefined, nodes[index + 1].id); }
     });
   });
   root.querySelectorAll("[data-energy-role]").forEach(function(button) {
@@ -8422,6 +8465,7 @@ function energyGraphBindInspectorButtons(root) {
         var body = {
           view_type: String(data.view_type || ""),
           frame_index: Number(node.frame_index),
+          frame_id: String(node.id || ""),
           role: role,
           expected_revision: Number(energyGraphState.frameCandidates.revision) || 0,
         };
@@ -10711,16 +10755,17 @@ function optimizationGraphBind(root) {
       if (action === "follow") {
         energyGraphState.liveFollow = true;
         var nodes = energyGraphState.data && energyGraphState.data.nodes || [];
-        if (nodes.length) energyGraphSelectFrame(nodes[nodes.length - 1].frame_index, "follow");
+        if (nodes.length) energyGraphSelectFrame(nodes[nodes.length - 1].frame_index, "follow", nodes[nodes.length - 1].id);
       }
     });
   });
   root.addEventListener("click", function(event) {
-    var target = event.target.closest ? event.target.closest("[data-energy-frame]") : null;
+    var target = event.target.closest ? event.target.closest("[data-energy-node], [data-energy-frame]") : null;
     if (!target) return;
     event.stopPropagation();
     energyGraphState.liveFollow = false;
-    energyGraphSelectFrame(Number(target.getAttribute("data-energy-frame")));
+    var clickedNodeId = target.getAttribute("data-energy-node") || "";
+    energyGraphSelectFrame(Number(target.getAttribute("data-energy-frame")), undefined, clickedNodeId || undefined);
   });
   energyGraphBindInspectorButtons(root);
   /* ResizeObserver: the chart geometry follows the live container size, so
@@ -11394,9 +11439,10 @@ function energyGraphBind(root) {
       const frame = node && node.frame_index != null ? Number(node.frame_index) : null;
       if (frame == null) return;
       const nodes = data.nodes || [];
-      const index = nodes.findIndex(function(item) { return Number(item.frame_index) === frame; });
-      if (action === "prev" && index > 0) energyGraphSelectFrame(nodes[index - 1].frame_index);
-      if (action === "next" && index >= 0 && index < nodes.length - 1) energyGraphSelectFrame(nodes[index + 1].frame_index);
+      const index = nodes.findIndex(function(item) { return String(item.id) === String(energyGraphState.selectedNodeId); });
+      const fallbackIndex = index >= 0 ? index : nodes.findIndex(function(item) { return Number(item.frame_index) === frame; });
+      if (action === "prev" && fallbackIndex > 0) energyGraphSelectFrame(nodes[fallbackIndex - 1].frame_index, undefined, nodes[fallbackIndex - 1].id);
+      if (action === "next" && fallbackIndex >= 0 && fallbackIndex < nodes.length - 1) energyGraphSelectFrame(nodes[fallbackIndex + 1].frame_index, undefined, nodes[fallbackIndex + 1].id);
     });
   });
   /* ── ResizeObserver ── */
@@ -11460,22 +11506,26 @@ function energyGraphBind(root) {
   energyGraphBindInspectorButtons(root);
 }
 
-function energyGraphSelectFrame(frameIndex, origin) {
+function energyGraphSelectFrame(frameIndex, origin, nodeId) {
   const data = energyGraphState.data;
   if (!data) return;
-  const node = (data.nodes || []).find(function(item) { return Number(item.frame_index) === Number(frameIndex); });
+  var nodes = data.nodes || [];
+  const node = nodeId
+    ? nodes.find(function(item) { return String(item.id) === String(nodeId); })
+    : nodes.find(function(item) { return Number(item.frame_index) === Number(frameIndex); });
   if (!node) return;
+  var effectiveFrame = Number(node.frame_index);
   var oldFrame = energyGraphFrameIndexForNode(data, energyGraphState.selectedNodeId);
   energyGraphState.selectedNodeId = String(node.id);
   energyGraphState.selectionOrigin = origin === "follow" ? "follow" : "user";
-  const annotation = (data.annotations || []).find(function(item) { return Number(item.frame_index) === Number(frameIndex) && ["ts", "intermediate"].indexOf(item.type) >= 0; });
+  const annotation = (data.annotations || []).find(function(item) { return Number(item.frame_index) === effectiveFrame && ["ts", "intermediate"].indexOf(item.type) >= 0; });
   energyGraphState.selectedAnnotationId = annotation ? String(annotation.id) : "";
-  energyGraphUpdateSelection(Number(frameIndex) !== Number(oldFrame));
+  energyGraphUpdateSelection(Number(effectiveFrame) !== Number(oldFrame));
   /* Push selection to structure viewer (one-way; phase A).
      Wave 7 (todo 38) revisits shared ownership. */
   if (window.ACPStructureViewer && window.ACPStructureViewer.onEnergyNodeSelected) {
     var view = String(data.view_type || "");
-    var entryMeta = { kind: view, frameIndex: Number(frameIndex) };
+    var entryMeta = { kind: view, frameIndex: Number(effectiveFrame) };
     if (view === "conformer") {
       entryMeta.kind = "conformer";
       entryMeta.key = String(node.id || "").replace(/^conf_/, "");
@@ -11485,6 +11535,9 @@ function energyGraphSelectFrame(frameIndex, origin) {
       entryMeta.kind = "optimization";
     } else if (view === "sampling") {
       entryMeta.kind = "optimization";
+    } else if (view === "irc") {
+      entryMeta.kind = "irc";
+      entryMeta.endpoint = String((node.metadata && node.metadata.direction) || "");
     }
     if (annotation && annotation.candidate_id) {
       entryMeta.kind = "pes";
@@ -12125,6 +12178,14 @@ async function renderEnergyGraphWorkspace(job, options) {
       energyGraphState.loading = false;
       energyGraphState.status = "empty";
       energyGraphRenderState("empty", t("energy.unsupported"));
+      return true;
+    }
+    if (data && String(data.view_type || "") === "irc" && !(Array.isArray(data.nodes) && data.nodes.length) && !(Array.isArray(data.series) && data.series.length)) {
+      energyGraphState.data = data;
+      energyGraphState.dataRevision = energyGraphDataRevision(data);
+      energyGraphState.loading = false;
+      energyGraphState.status = "empty";
+      energyGraphRenderState("empty", t("energy.irc_pending"));
       return true;
     }
     var nextRevision = energyGraphDataRevision(data);
@@ -20381,14 +20442,14 @@ function applyBatchOptimizeMethodFields(methodPayload) {
   });
   // Optimization controls
   methodPayload.opt_max_iter = value("opt_max_iter", null);
-  methodPayload.opt_convergence = value("opt_convergence", "tight");
+  methodPayload.opt_convergence = value("opt_convergence", "Tight");
   methodPayload.opt_trust_radius = value("opt_trust_radius", null);
   methodPayload.opt_initial_hessian = value("opt_initial_hessian", null);
   methodPayload.opt_recalc_hess = value("opt_recalc_hess", null);
   // SCF convergence controls
   methodPayload.scf_max_iter = value("scf_max_iter", 300);
-  methodPayload.scf_convergence = value("scf_convergence", "tight");
-  methodPayload.scf_strategy = value("scf_strategy", "normal");
+  methodPayload.scf_convergence = value("scf_convergence", "Tight");
+  methodPayload.scf_strategy = value("scf_strategy", "Normal");
   // Rescue / expert controls (P1e)
   methodPayload.opt_rescue_policy = value("opt_rescue_policy", "adaptive");
   methodPayload.opt_max_rescue = value("opt_max_rescue", 2);
@@ -20627,13 +20688,23 @@ function loadDefaultMethodProfile(schemaId) {
 async function openMethodConfig() {
   ensureWizardWorkflowValid();
   var title = document.getElementById("mc-modal-title");
+  var subtitle = document.getElementById("mc-modal-subtitle");
   var wfEntry = workflowCatalogCache.find(function(w) { return w.id === wizardState.workflow.id; });
   var wfLabel = wfEntry
     ? (currentLang === "zh-CN" ? (wfEntry.label_zh || wfEntry.label || wfEntry.id) : (wfEntry.label || wfEntry.id))
     : "";
-  title.textContent = (wizardState.workflow.id === "PESsearch"
-    ? "配置计算协议"
-    : (t("modal.method_config") || "\u914d\u7f6e\u8ba1\u7b97\u65b9\u6cd5")) + " - " + wfLabel;
+  if (wizardState.workflow.id === "BatchOptimize") {
+    title.textContent = currentLang === "zh-CN" ? "\u6279\u91cf\u4f18\u5316\u8bbe\u7f6e" : "Batch Optimization Settings";
+    subtitle.textContent = currentLang === "zh-CN" ? "\u914d\u7f6e\u65b9\u6cd5\u3001\u6536\u655b\u7b56\u7565\u53ca Hessian \u8ba1\u7b97" : "Methods, convergence strategy and Hessian";
+    subtitle.style.display = "";
+  } else {
+    title.textContent = (wizardState.workflow.id === "PESsearch"
+      ? "配置计算协议"
+      : (t("modal.method_config") || "\u914d\u7f6e\u8ba1\u7b97\u65b9\u6cd5")) + " - " + wfLabel;
+    subtitle.style.display = "none";
+  }
+  // _batchScopeTab lives in the openMethodConfig closure so it survives rebuildLevelCard
+  if (typeof _batchScopeTab === "undefined") var _batchScopeTab = "common";
   // rank1-only default applies only on first entry per workflow; a user's
   // explicit choice must survive modal re-open (otherwise it is silently
   // reset to the energy-workflow default on every open).
@@ -20830,10 +20901,18 @@ async function openMethodConfig() {
       var fieldFdLbl = ((methodCatalogCache.field_definitions || {})[fieldName] || {});
       var lblKey = currentLang === "zh-CN" ? "label_zh" : "label";
       var batchLabelOverrides = {
-        functional: { label: "Optimization + Frequency Method", label_zh: "优化与频率方法" },
-        basis: { label: "Optimization + Frequency Basis", label_zh: "优化与频率基组" },
-        opt_trust_radius: { label: "Initial Trust Radius (Step Control)", label_zh: "\u521d\u59cb\u4fe1\u8d56\u534a\u5f84\uff08\u6b65\u957f\u63a7\u5236\uff09" },
+        functional: { label: "Optimization + Frequency Method", label_zh: "\u4f18\u5316\u4e0e\u9891\u7387\u65b9\u6cd5" },
+        basis: { label: "Optimization + Frequency Basis", label_zh: "\u4f18\u5316\u4e0e\u9891\u7387\u57fa\u7ec4" },
+        opt_max_iter: { label: "Max Optimization Iterations", label_zh: "\u6700\u5927\u4f18\u5316\u5faa\u73af" },
+        opt_convergence: { label: "Convergence Criteria", label_zh: "\u6536\u655b\u6807\u51c6" },
+        opt_trust_radius: { label: "Initial Trust Radius", label_zh: "\u521d\u59cb\u4fe1\u8d56\u534a\u5f84" },
         opt_recalc_hess: { label: "Recalculate Every N Optimization Cycles", label_zh: "\u6bcf N \u4e2a\u4f18\u5316\u5faa\u73af\u91cd\u7b97" },
+        scf_max_iter: { label: "Max SCF Iterations", label_zh: "\u6700\u5927 SCF \u5faa\u73af" },
+        scf_convergence: { label: "SCF Convergence", label_zh: "\u6536\u655b\u6807\u51c6" },
+        scf_strategy: { label: "SCF Strategy", label_zh: "\u6536\u655b\u7b56\u7565" },
+        temperature: { label: "Temperature", label_zh: "\u6e29\u5ea6" },
+        pressure: { label: "Pressure", label_zh: "\u538b\u529b" },
+        scale_factor: { label: "Frequency Scale Factor", label_zh: "\u9891\u7387\u7f29\u653e\u56e0\u5b50" },
       };
       var labelOverride = lvDef.level_id === "batch" ? batchLabelOverrides[fieldName] : null;
       lbl.textContent = (labelOverride && labelOverride[lblKey]) || fieldFdLbl[lblKey] || fieldName.replace(/_/g, " ");
@@ -20965,7 +21044,7 @@ async function openMethodConfig() {
           if (optionMeta[o]) {
             opt.title = optionMeta[o];
           }
-          if (String(curVal) === String(o)) { opt.selected = true; hasMatch = true; }
+          if (String(curVal).toLowerCase() === String(o).toLowerCase()) { opt.selected = true; hasMatch = true; }
           sel.appendChild(opt);
         });
         if (supportsCustom) {
@@ -21094,13 +21173,14 @@ async function openMethodConfig() {
           });
         }
         fDiv.appendChild(sel);
-        if (isSingleLocked && !supportsCustom) {
-          var note = document.createElement("span");
-          note.className = "muted";
-          note.style.fontSize = "11px";
-          note.style.marginLeft = "4px";
-          note.textContent = "built-in";
-          fDiv.appendChild(note);
+        if (isBasisSingleLocked) {
+          // Single-option locked basis (e.g. 3c composite): render read-only display
+          sel.style.display = "none";
+          var roSpan = document.createElement("span");
+          roSpan.className = "mc-basis-readonly";
+          roSpan.textContent = (currentLang === "zh-CN" ? "\u5185\u7f6e\uff1a" : "Built-in: ") + (opts[0] || curVal);
+          roSpan.title = (currentLang === "zh-CN" ? "\u7531 " + functional + " \u56fa\u5b9a" : "Fixed by " + functional);
+          fDiv.appendChild(roSpan);
         }
         if (isCustomActive) {
           var customWrap = document.createElement("div");
@@ -21132,10 +21212,22 @@ async function openMethodConfig() {
         }
         if (fdNum.min !== undefined) inp.min = String(fdNum.min);
         if (fdNum.max !== undefined) inp.max = String(fdNum.max);
-        inp.value = curVal;
+        // Batch nullable fields: show 自动 placeholder when null
+        var isBatchNullable = lvDef.level_id === "batch" && ["opt_max_iter", "opt_trust_radius"].indexOf(fieldName) >= 0;
+        if (isBatchNullable && (curVal === null || curVal === undefined || curVal === "")) {
+          inp.value = "";
+          inp.placeholder = currentLang === "zh-CN" ? "\u81ea\u52a8" : "Auto";
+        } else {
+          inp.value = curVal;
+        }
         inp.addEventListener("change", function() {
           if (inp.value === "") {
-            getLevelState(lvDef.level_id)[fieldName] = "";
+            // Batch nullable: store null; others store ""
+            if (isBatchNullable) {
+              delete getLevelState(lvDef.level_id)[fieldName];
+            } else {
+              getLevelState(lvDef.level_id)[fieldName] = "";
+            }
           } else if (isIntField) {
             getLevelState(lvDef.level_id)[fieldName] = parseInt(inp.value, 10);
           } else {
@@ -21186,10 +21278,19 @@ async function openMethodConfig() {
       var fieldHelpKey = currentLang === "zh-CN" ? "help_zh" : "help";
       var fieldHelp = fieldFdLbl[fieldHelpKey] || fieldFdLbl.help;
       if (fieldHelp) {
-        var helpEl = document.createElement("div");
-        helpEl.className = "mc-field-help";
-        helpEl.textContent = fieldHelp;
-        fDiv.appendChild(helpEl);
+        // Use ⓘ tooltip instead of always-visible help text
+        var helpTip = document.createElement("span");
+        helpTip.className = "mc-info-tip";
+        helpTip.textContent = "\u24d8";
+        helpTip.title = fieldHelp;
+        var labelEl = fDiv.querySelector("label");
+        if (labelEl) { labelEl.appendChild(helpTip); }
+        else {
+          var helpEl = document.createElement("div");
+          helpEl.className = "mc-field-help";
+          helpEl.textContent = fieldHelp;
+          fDiv.appendChild(helpEl);
+        }
       }
       dest.appendChild(fDiv);
     }
@@ -21295,13 +21396,10 @@ async function openMethodConfig() {
     function buildHessianFieldRow(dest) {
       var fDiv = document.createElement("div");
       fDiv.className = "mc-field mc-field-hessian";
-      var lbl = document.createElement("label");
-      lbl.textContent = (t("modal.hessian_label") || "Hessian 重算");
-      fDiv.appendChild(lbl);
+      var zh = currentLang === "zh-CN";
 
       var st = getLevelState(lvDef.level_id);
       // Normalise persisted value into one of: "auto" / 0 / <int>.
-      // Default mirrors the catalog field default ("auto").
       var rawVal = st.recalc_hess;
       var mode = "auto";
       var customVal = 10;
@@ -21312,46 +21410,73 @@ async function openMethodConfig() {
       }
       st.recalc_hess = (mode === "auto") ? "auto" : (mode === "off" ? 0 : customVal);
 
+      // Combined horizontal row: initial Hessian select + recalc segmented
+      var hessianRow = document.createElement("div");
+      hessianRow.className = "mc-hessian-row";
+      var isBatchLevel = lvDef.level_id === "batch";
+
+      // Initial Hessian select (batch only — non-batch keeps pure recalc control)
+      if (isBatchLevel) {
+        var initDiv = document.createElement("div");
+        initDiv.className = "mc-field";
+        var initLbl = document.createElement("label");
+        initLbl.textContent = zh ? "\u521d\u59cb\u7b56\u7565" : "Initial Strategy";
+        initDiv.appendChild(initLbl);
+        var initSel = document.createElement("select");
+        var initOpts = [
+          { value: "", text: zh ? "\u81ea\u52a8" : "Auto" },
+          { value: "model", text: zh ? "\u6a21\u578b Hessian" : "Model Hessian" },
+          { value: "calculate", text: zh ? "\u542f\u52a8\u65f6\u8ba1\u7b97" : "Calculate at start" },
+        ];
+        initOpts.forEach(function(io) {
+          var o = document.createElement("option");
+          o.value = io.value;
+          o.textContent = io.text;
+          if ((st.opt_initial_hessian || "") === io.value) o.selected = true;
+          initSel.appendChild(o);
+        });
+        initSel.addEventListener("change", function() {
+          st.opt_initial_hessian = initSel.value || null;
+          updateHessianEffective();
+          scheduleValidate();
+        });
+        initDiv.appendChild(initSel);
+        hessianRow.appendChild(initDiv);
+      }
+
+      // Recalc segmented
+      var recalcDiv = document.createElement("div");
+      recalcDiv.className = "mc-field";
+      var recalcLbl = document.createElement("label");
+      recalcLbl.textContent = zh ? "\u91cd\u7b97\u7b56\u7565" : "Recalc Strategy";
+      recalcDiv.appendChild(recalcLbl);
+
       var segWrap = document.createElement("div");
       segWrap.className = "mc-hessian-seg";
-      segWrap.setAttribute("role", "group");
-      segWrap.setAttribute("aria-label", lbl.textContent);
 
-      function makeSeg(segMode, label, title) {
+      function makeSeg(segMode, label) {
         var btn = document.createElement("button");
         btn.type = "button";
-        btn.className = "mc-hessian-seg-btn";
+        btn.className = "mc-hessian-seg-btn" + (mode === segMode ? " active" : "");
         btn.textContent = label;
-        btn.title = title || "";
-        btn.setAttribute("aria-pressed", mode === segMode ? "true" : "false");
-        if (mode === segMode) btn.classList.add("active");
         btn.addEventListener("click", function() {
           mode = segMode;
-          segWrap.querySelectorAll(".mc-hessian-seg-btn").forEach(function(b) {
-            b.classList.remove("active");
-            b.setAttribute("aria-pressed", "false");
-          });
+          segWrap.querySelectorAll(".mc-hessian-seg-btn").forEach(function(b) { b.classList.remove("active"); });
           btn.classList.add("active");
-          btn.setAttribute("aria-pressed", "true");
           if (mode === "auto") { st.recalc_hess = "auto"; customRow.style.display = "none"; }
           else if (mode === "off") { st.recalc_hess = 0; customRow.style.display = "none"; }
           else { st.recalc_hess = customVal; customRow.style.display = ""; }
+          updateHessianEffective();
           scheduleHessianPreview();
           scheduleValidate();
         });
         return btn;
       }
 
-      segWrap.appendChild(makeSeg("auto",
-        (t("modal.hessian_auto") || "自动"),
-        (t("modal.hessian_auto_hint") || "")));
-      segWrap.appendChild(makeSeg("off",
-        (t("modal.hessian_off") || "不重算"),
-        (t("modal.hessian_off_hint") || "")));
-      segWrap.appendChild(makeSeg("custom",
-        (t("modal.hessian_custom") || "自定义"),
-        (t("modal.hessian_custom_hint") || "")));
-      fDiv.appendChild(segWrap);
+      segWrap.appendChild(makeSeg("auto", zh ? "\u81ea\u52a8" : "Auto"));
+      segWrap.appendChild(makeSeg("off", zh ? "\u4e0d\u91cd\u7b97" : "No recalc"));
+      segWrap.appendChild(makeSeg("custom", zh ? "\u6bcf N \u4e2a\u4f18\u5316\u5faa\u73af" : "Every N cycles"));
+      recalcDiv.appendChild(segWrap);
 
       // Custom numeric input (only visible in Custom mode).
       var customRow = document.createElement("div");
@@ -21363,36 +21488,58 @@ async function openMethodConfig() {
       numInp.max = "1000";
       numInp.step = "1";
       numInp.value = String(customVal);
-      numInp.setAttribute("aria-label", "Hessian recalculation interval");
       numInp.addEventListener("change", function() {
         var v = parseInt(numInp.value, 10);
         if (isNaN(v) || v < 1) v = 1;
         if (v > 1000) v = 1000;
         numInp.value = String(v);
         customVal = v;
-        if (mode === "custom") { st.recalc_hess = v; scheduleHessianPreview(); scheduleValidate(); }
+        if (mode === "custom") { st.recalc_hess = v; updateHessianEffective(); scheduleHessianPreview(); scheduleValidate(); }
       });
       var unitLbl = document.createElement("span");
       unitLbl.className = "unit";
-      unitLbl.textContent = (t("modal.hessian_steps_unit") || "步");
+      unitLbl.textContent = zh ? "\u4e2a\u4f18\u5316\u5faa\u73af" : "optimization cycles";
       customRow.appendChild(numInp);
       customRow.appendChild(unitLbl);
-      fDiv.appendChild(customRow);
+      recalcDiv.appendChild(customRow);
+      hessianRow.appendChild(recalcDiv);
+      fDiv.appendChild(hessianRow);
 
-      // Preview container — backend resolves the actual interval per
-      // structure. Only refreshed in Auto mode (the other modes are
-      // fully determined by the user's selection).
+      // Effective strategy line
+      var effectiveLine = document.createElement("div");
+      effectiveLine.className = "mc-hessian-effective";
+      fDiv.appendChild(effectiveLine);
+
+      function updateHessianEffective() {
+        var initVal = st.opt_initial_hessian || "";
+        var recalcVal = st.recalc_hess;
+        var parts = [];
+        if (initVal === "calculate") {
+          parts.push(zh ? "\u542f\u52a8\u65f6\u8ba1\u7b97" : "Calculate at start");
+        } else if (initVal === "model") {
+          parts.push(zh ? "\u6a21\u578b Hessian" : "Model Hessian");
+        }
+        if (recalcVal === "auto") {
+          parts.push(zh ? "\u81ea\u52a8\u6309\u5143\u7d20\u5224\u5b9a" : "Auto by element");
+        } else if (recalcVal === 0 || recalcVal === "0") {
+          parts.push(zh ? "\u4e0d\u91cd\u7b97" : "No recalculation");
+        } else {
+          parts.push(zh ? "\u6bcf " + recalcVal + " \u4e2a\u4f18\u5316\u5faa\u73af\u91cd\u7b97\u4e00\u6b21" : "Recalc every " + recalcVal + " optimization cycles");
+        }
+        effectiveLine.textContent = (zh ? "\u5f53\u524d\u6709\u6548\u7b56\u7565\uff1a" : "Current effective strategy: ") + (parts.join(zh ? "\uff0c" : ", ") || (zh ? "\u81ea\u52a8" : "Auto"));
+      }
+      updateHessianEffective();
+
+      // Preview container
       var previewBox = document.createElement("div");
       previewBox.className = "mc-hessian-preview";
       previewBox.style.display = "none";
       fDiv.appendChild(previewBox);
 
-      // Hint: in Auto mode show the graded rule; in Custom mode show
-      // nothing extra (the input is self-explanatory); hidden for Off.
+      // Hint for no-structures case
       var hint = document.createElement("div");
       hint.className = "mc-hessian-hint";
       hint.style.display = "none";
-      hint.textContent = (t("modal.hessian_auto_hint") || "");
       fDiv.appendChild(hint);
 
       function setPreviewVisible(visible) {
@@ -21406,66 +21553,42 @@ async function openMethodConfig() {
         previewBox.innerHTML = "";
         var row = document.createElement("div");
         row.className = "mc-hessian-preview-row";
-        row.textContent = (t("modal.hessian_loading") || "正在解析…");
+        row.textContent = zh ? "\u6b63\u5728\u89e3\u6790\u2026" : "Parsing\u2026";
         previewBox.appendChild(row);
       }
 
       function renderPreviewRows(results, summary) {
         setPreviewVisible(true);
         previewBox.innerHTML = "";
-
-        // Summary header, e.g. "3 个结构：2 个将重算 Hessian"
         var sumEl = document.createElement("div");
         sumEl.className = "mc-hessian-preview-summary";
         var enabledN = (summary && summary.enabled) || 0;
         var totalN = (summary && summary.total) || 0;
-        sumEl.textContent = (t("modal.hessian_summary") || "{total} 个结构：{enabled} 个将重算 Hessian")
-          .replace("{enabled}", enabledN)
-          .replace("{total}", totalN);
+        sumEl.textContent = (zh ? "{total} \u4e2a\u7ed3\u6784\uff1a{enabled} \u4e2a\u5c06\u91cd\u7b97 Hessian" : "{total} structures: {enabled} will recalc Hessian")
+          .replace("{enabled}", enabledN).replace("{total}", totalN);
         previewBox.appendChild(sumEl);
-
-        // Per-structure rows with color-coded dot.
         (results || []).forEach(function(r) {
           var row = document.createElement("div");
           row.className = "mc-hessian-preview-row";
-
           var dot = document.createElement("span");
           dot.className = "dot " + (r.enabled ? "on" : "off");
-          dot.setAttribute("aria-hidden", "true");
-
           var name = document.createElement("span");
           name.className = "name";
           name.textContent = r.name || "?";
-          name.title = r.name || "";
-
           var val = document.createElement("span");
           val.className = "val";
           val.textContent = r.enabled
-            ? (t("modal.hessian_every_n") || "每 {n} 步").replace("{n}", r.interval)
-            : (t("modal.hessian_initial_only") || "不计算");
-
-          row.appendChild(dot);
-          row.appendChild(name);
-          row.appendChild(val);
-
+            ? (zh ? "\u6bcf {n} \u6b65" : "Every {n} steps").replace("{n}", r.interval)
+            : (zh ? "\u4e0d\u8ba1\u7b97" : "No calc");
+          row.appendChild(dot); row.appendChild(name); row.appendChild(val);
           if (r.heavy_elements && r.heavy_elements.length) {
             var elems = document.createElement("span");
             elems.className = "elems";
             elems.textContent = "(" + r.heavy_elements.join(", ") + ")";
             row.appendChild(elems);
           }
-
           previewBox.appendChild(row);
         });
-      }
-
-      function renderPreviewError(msg) {
-        setPreviewVisible(true);
-        previewBox.innerHTML = "";
-        var row = document.createElement("div");
-        row.className = "mc-hessian-preview-row";
-        row.textContent = msg || (t("modal.hessian_preview_error") || "预览失败");
-        previewBox.appendChild(row);
       }
 
       function scheduleHessianPreview() {
@@ -21481,25 +21604,19 @@ async function openMethodConfig() {
       function fetchHessianPreview() {
         if (mode !== "auto") return;
         var myToken = ++hessianPreviewToken;
-        // Collect symbols (preferred) or formula from each wizard structure.
         var structures = (wizardStructures || []).map(function(s) {
           var out = { name: s.name || "" };
           if (Array.isArray(s.symbols) && s.symbols.length) out.symbols = s.symbols;
           else if (s.formula) out.formula = s.formula;
-          else if (s.xyz) {
-            // Best-effort: parse element symbols out of an XYZ string.
-            var lines = String(s.xyz).split(/\r?\n/);
-            var syms = [];
-            for (var i = 2; i < lines.length; i++) {
-              var tok = lines[i].trim().split(/\s+/)[0];
-              if (tok && /^[A-Za-z]+$/.test(tok)) syms.push(tok.charAt(0).toUpperCase() + tok.slice(1).toLowerCase());
-            }
-            if (syms.length) out.symbols = syms;
-          }
           return out;
         });
         if (!structures.length) {
-          renderPreviewError(t("modal.hessian_no_structures") || "请先添加结构");
+          setPreviewVisible(true);
+          previewBox.innerHTML = "";
+          var hintRow = document.createElement("div");
+          hintRow.className = "mc-hessian-preview-row";
+          hintRow.textContent = zh ? "\u6dfb\u52a0\u7ed3\u6784\u540e\u53ef\u9884\u89c8\u81ea\u52a8 Hessian \u7b56\u7565\uff1b\u5f53\u524d\u8bbe\u7f6e\u4ecd\u53ef\u4fdd\u5b58\u3002" : "Add structures to preview auto Hessian strategy; current settings are still saved.";
+          previewBox.appendChild(hintRow);
           return;
         }
         var body = {
@@ -21516,17 +21633,19 @@ async function openMethodConfig() {
           if (!r.ok) return r.json().then(function(e) { throw new Error((e.errors || []).map(function(x){return x.message;}).join("; ") || ("HTTP " + r.status)); });
           return r.json();
         }).then(function(data) {
-          if (myToken !== hessianPreviewToken) return;  // stale
+          if (myToken !== hessianPreviewToken) return;
           renderPreviewRows(data.results || [], data.summary || {});
         }).catch(function(err) {
           if (myToken !== hessianPreviewToken) return;
-          renderPreviewError((t("modal.hessian_preview_error") || "预览失败") + ": " + err.message);
+          previewBox.innerHTML = "";
+          var errRow = document.createElement("div");
+          errRow.className = "mc-hessian-preview-row";
+          errRow.textContent = (zh ? "\u9884\u89c8\u5931\u8d25" : "Preview failed") + ": " + err.message;
+          previewBox.appendChild(errRow);
         });
       }
 
-      // Initial render: trigger one preview in Auto mode.
       scheduleHessianPreview();
-
       dest.appendChild(fDiv);
     }
 
@@ -21541,6 +21660,31 @@ async function openMethodConfig() {
       getLevelState(lvDef.level_id).engine = lvDef.allowed_engines[0];
     }
 
+    // Step bar for batch profile (shows which steps are active)
+    if (lvDef.level_id === "batch" && batchSteps.length) {
+      var stepBar = document.createElement("div");
+      stepBar.className = "mc-step-bar";
+      var allSteps = [
+        { id: "optimize", label_zh: "\u4f18\u5316", label: "Optimize" },
+        { id: "frequency", label_zh: "\u9891\u7387", label: "Frequency" },
+        { id: "singlepoint", label_zh: "\u5355\u70b9\u80fd", label: "Single-point" },
+        { id: "thermochemistry", label_zh: "\u70ed\u5316\u5b66", label: "Thermochemistry" },
+      ];
+      allSteps.forEach(function(step, si) {
+        if (si > 0) {
+          var arrow = document.createElement("span");
+          arrow.className = "mc-step-arrow";
+          arrow.textContent = "\u2192";
+          stepBar.appendChild(arrow);
+        }
+        var stepEl = document.createElement("span");
+        stepEl.className = "mc-step" + (batchSteps.indexOf(step.id) >= 0 ? "" : " disabled");
+        stepEl.textContent = currentLang === "zh-CN" ? step.label_zh : step.label;
+        stepBar.appendChild(stepEl);
+      });
+      bodyDiv.appendChild(stepBar);
+    }
+
     var coreDiv = document.createElement("div");
     coreDiv.className = "method-fields";
     coreFields.forEach(function(fn) { buildFieldRow(fn, coreDiv); });
@@ -21553,12 +21697,14 @@ async function openMethodConfig() {
       var advToggle = document.createElement("div");
       advToggle.className = "mc-level-advanced-toggle";
       var pesAdvancedVisible = wizardState.workflow.id === "PESsearch";
-      advToggle.textContent = (pesAdvancedVisible ? "- " : "+ ") + (t("modal.advanced") || "\u9ad8\u7ea7");
+      var batchAdvancedVisible = lvDef.level_id === "batch";
+      var advDefaultExpanded = pesAdvancedVisible || batchAdvancedVisible;
+      advToggle.textContent = (advDefaultExpanded ? "- " : "+ ") + (lvDef.level_id === "batch" ? (currentLang === "zh-CN" ? "\u9ad8\u7ea7\u8ba1\u7b97\u63a7\u5236" : "Advanced Calculation Controls") : (t("modal.advanced") || "\u9ad8\u7ea7"));
       advWrap.appendChild(advToggle);
 
       var advDiv = document.createElement("div");
       advDiv.className = "mc-level-advanced-fields";
-      advDiv.style.display = pesAdvancedVisible ? "grid" : "none";
+      advDiv.style.display = advDefaultExpanded ? "grid" : "none";
 
       // ── Grouped advanced fields for BatchOptimize (P1 rework) ────
       if (lvDef.level_id === "batch") {
@@ -21566,19 +21712,19 @@ async function openMethodConfig() {
         var BATCH_PRESETS = {
           "standard": {
             label: "Standard", label_zh: "\u6807\u51c6",
-            values: { opt_convergence: "tight", scf_max_iter: 300, opt_initial_hessian: null, opt_recalc_hess: null, scf_strategy: "normal", scf_convergence: "tight" },
+            values: { opt_convergence: "Tight", scf_max_iter: 300, opt_initial_hessian: null, opt_recalc_hess: null, scf_strategy: "Normal", scf_convergence: "Tight" },
           },
           "difficult_geometry": {
             label: "Difficult Geometry", label_zh: "\u56f0\u96be\u51e0\u4f55",
-            values: { opt_max_iter: 400, opt_trust_radius: 0.10, opt_recalc_hess: 5, opt_convergence: "tight" },
+            values: { opt_max_iter: 400, opt_trust_radius: 0.10, opt_recalc_hess: 5, opt_convergence: "Tight" },
           },
           "difficult_scf": {
             label: "Difficult SCF", label_zh: "\u56f0\u96be SCF",
-            values: { scf_max_iter: 500, scf_strategy: "slowconv", scf_convergence: "tight" },
+            values: { scf_max_iter: 500, scf_strategy: "SlowConv", scf_convergence: "Tight" },
           },
           "high_precision": {
             label: "VeryTight", label_zh: "\u4e25\u683c\u6536\u655b",
-            values: { opt_convergence: "verytight", scf_convergence: "verytight", scf_max_iter: 500 },
+            values: { opt_convergence: "VeryTight", scf_convergence: "VeryTight", scf_max_iter: 500 },
           },
         };
 
@@ -21587,9 +21733,15 @@ async function openMethodConfig() {
         // These mirror the hardcoded backend defaults for INT/TS roles and are
         // informational only; the backend remains authoritative.
         var _BATCH_ENGINE_DEFAULTS = {
-          INT: { opt_max_iter: 250, opt_convergence: "tight", scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal" },
-          TS:  { opt_max_iter: 200, opt_convergence: "tight", opt_trust_radius: 0.3, opt_initial_hessian: "calculate", opt_recalc_hess: 5, scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal" },
+          INT: { opt_max_iter: 250, opt_convergence: "Tight", scf_max_iter: 300, scf_convergence: "Tight", scf_strategy: "Normal" },
+          TS:  { opt_max_iter: 200, opt_convergence: "Tight", opt_trust_radius: 0.3, opt_initial_hessian: "calculate", opt_recalc_hess: 5, scf_max_iter: 300, scf_convergence: "Tight", scf_strategy: "Normal" },
         };
+
+        // ── Case-insensitive match helper ──
+        function _canonMatch(a, b) {
+          if (a == null || b == null) return a === b;
+          return String(a).toLowerCase() === String(b).toLowerCase();
+        }
 
         // ── _batchPresetMatch: pure function — returns preset id or "custom" ──
         function _batchPresetMatch(stageVals) {
@@ -21630,7 +21782,7 @@ async function openMethodConfig() {
                 // preset says "delete" — stage must not have this key (or have null/undefined)
                 if (svk !== null && svk !== undefined) { match = false; break; }
               } else {
-                if (svk !== pvk) { match = false; break; }
+                if (!_canonMatch(svk, pvk)) { match = false; break; }
               }
             }
             if (match) return pid;
@@ -21638,76 +21790,59 @@ async function openMethodConfig() {
           return "custom";
         }
 
-        // ── buildBatchEffectiveSummary: informational effective params ──
+        // ── buildBatchEffectiveSummary: returns array of plain text lines (≤2) ──
         function buildBatchEffectiveSummary(stageVals) {
-          // Merge role defaults → user values, produce chip list
+          var zh = currentLang === "zh-CN";
           var eff = {};
-          var src = {};
           var roleKeys = ["INT", "TS"];
           var paramKeys = ["opt_max_iter", "opt_convergence", "opt_trust_radius", "opt_initial_hessian", "opt_recalc_hess", "scf_max_iter", "scf_convergence", "scf_strategy"];
-          // Start with INT defaults
           roleKeys.forEach(function(role) {
             var rd = _BATCH_ENGINE_DEFAULTS[role] || {};
             paramKeys.forEach(function(k) {
-              if (eff[k] === undefined && rd[k] !== undefined) {
-                eff[k] = rd[k];
-                src[k] = "default";
-              }
+              if (eff[k] === undefined && rd[k] !== undefined) eff[k] = rd[k];
             });
           });
-          // Overlay active preset values
           var activePresetId = _batchPresetMatch(stageVals);
           if (activePresetId !== "custom" && BATCH_PRESETS[activePresetId]) {
             var pv = BATCH_PRESETS[activePresetId].values;
             Object.keys(pv).forEach(function(k) {
-              if (pv[k] !== null) {
-                eff[k] = pv[k];
-                src[k] = "preset";
-              } else {
-                delete eff[k];
-                delete src[k];
-              }
+              if (pv[k] !== null) eff[k] = pv[k];
+              else delete eff[k];
             });
           }
-          // Overlay user explicit values (from state)
-          var userAdvancedKeys = ["opt_max_iter", "opt_convergence", "opt_trust_radius", "opt_initial_hessian", "opt_recalc_hess", "opt_rescue_policy", "opt_max_rescue", "scf_max_iter", "scf_convergence", "scf_strategy", "scf_orbital_inherit"];
-          userAdvancedKeys.forEach(function(k) {
-            if (stageVals[k] !== null && stageVals[k] !== undefined) {
-              if (src[k] === undefined || activePresetId === "custom") {
-                eff[k] = stageVals[k];
-                src[k] = "custom";
-              }
-            }
+          var userKeys = ["opt_max_iter", "opt_convergence", "opt_trust_radius", "opt_initial_hessian", "opt_recalc_hess", "scf_max_iter", "scf_convergence", "scf_strategy"];
+          userKeys.forEach(function(k) {
+            if (stageVals[k] !== null && stageVals[k] !== undefined) eff[k] = stageVals[k];
           });
-          // Build summary chips
-          var chips = [];
-          if (eff.opt_convergence) {
-            var convLabel = { "tight": "TightOpt", "verytight": "VeryTightOpt", "loose": "LooseOpt" }[eff.opt_convergence] || eff.opt_convergence;
-            chips.push({ text: convLabel, src: src.opt_convergence || "default" });
+
+          var convKey = String(eff.opt_convergence || "Tight").toLowerCase();
+          var convLabel = { "tight": "TightOpt", "verytight": "VeryTightOpt", "loose": "LooseOpt", "normal": "NormalOpt" }[convKey] || eff.opt_convergence || "TightOpt";
+          var scfConvKey = String(eff.scf_convergence || "Tight").toLowerCase();
+          var scfLabel = { "tight": "TightSCF", "verytight": "VeryTightSCF", "normal": "NormalSCF" }[scfConvKey] || eff.scf_convergence || "TightSCF";
+          var maxIter = eff.opt_max_iter != null ? String(eff.opt_max_iter) : (zh ? "\u81ea\u52a8" : "auto");
+          var trustStr = eff.opt_trust_radius != null ? ("Trust " + eff.opt_trust_radius) : (zh ? "Trust \u81ea\u52a8" : "Trust auto");
+
+          var line1 = (zh ? "\u4f18\u5316\uff1a" : "Opt: ") + convLabel + (zh ? "\uff0c\u6700\u5927\u5faa\u73af " : ", MaxIter ") + maxIter + ", " + trustStr;
+          var line2 = (zh ? "SCF\uff1a" : "SCF: ") + scfLabel + (zh ? "\uff0c" : ", ") + (eff.scf_max_iter || 300) + (zh ? " \u6b21" : " iter");
+
+          // Hessian hint
+          var hessParts = [];
+          if (eff.opt_initial_hessian === "calculate") {
+            hessParts.push(zh ? "TS Hessian\uff1a\u542f\u52a8\u65f6\u8ba1\u7b97" : "TS Hessian: calculate at start");
           }
-          if (eff.scf_convergence) {
-            var scfLabel = { "tight": "TightSCF", "verytight": "VeryTightSCF", "normal": "NormalSCF" }[eff.scf_convergence] || eff.scf_convergence;
-            chips.push({ text: scfLabel, src: src.scf_convergence || "default" });
+          if (eff.opt_recalc_hess != null && eff.opt_recalc_hess !== "auto" && eff.opt_recalc_hess !== 0) {
+            hessParts.push(zh ? "\u6bcf " + eff.opt_recalc_hess + " \u6b65\u91cd\u7b97" : "recalc every " + eff.opt_recalc_hess + " steps");
           }
-          if (eff.opt_max_iter != null) {
-            chips.push({ text: "MaxIter " + eff.opt_max_iter, src: src.opt_max_iter || "default" });
-          }
-          if (eff.opt_trust_radius != null) {
-            chips.push({ text: "Trust " + eff.opt_trust_radius + (src.opt_trust_radius === "default" ? "(TS)" : ""), src: src.opt_trust_radius || "default" });
-          }
-          if (eff.opt_recalc_hess != null) {
-            chips.push({ text: "Recalc " + eff.opt_recalc_hess + (src.opt_recalc_hess === "default" ? "(TS)" : ""), src: src.opt_recalc_hess || "default" });
-          }
-          if (eff.scf_strategy && eff.scf_strategy !== "normal") {
-            chips.push({ text: eff.scf_strategy, src: src.scf_strategy || "default" });
-          }
-          return chips;
+          if (hessParts.length) line2 += (zh ? "\uff1b" : "; ") + hessParts.join(zh ? "\uff0c" : ", ");
+
+          return [line1, line2];
         }
 
         // ── Server preview wiring (P2a): debounced config-preview endpoint ──
         var _previewDebounceTimer = null;
         var _previewAbortCtrl = null;
         var _PREVIEW_DEBOUNCE_MS = 400;
+        var _previewGeneration = 0; // monotonically increasing token for stale detection
 
         function _fetchBatchConfigPreview() {
           if (_previewDebounceTimer) { clearTimeout(_previewDebounceTimer); _previewDebounceTimer = null; }
@@ -21717,6 +21852,7 @@ async function openMethodConfig() {
             var abortCtrl = null;
             if (typeof AbortController !== "undefined") { abortCtrl = new AbortController(); }
             _previewAbortCtrl = abortCtrl;
+            var myGen = ++_previewGeneration;
             var tmpPayload = {};
             try { applyBatchOptimizeMethodFields(tmpPayload); } catch(_e) { return; }
             var fetchOpts = {
@@ -21731,12 +21867,15 @@ async function openMethodConfig() {
                 return r.json();
               })
               .then(function(data) {
+                if (myGen !== _previewGeneration) return; // stale response
                 if (data.schema !== "batch_optimize_preview_v1") return;
                 _renderServerPreview(data);
               })
               .catch(function(err) {
                 if (err && err.name === "AbortError") return;
+                if (myGen !== _previewGeneration) return;
                 console.warn("[batch-config-preview] fallback to local:", err && err.message);
+                _renderLocalSummary(false);
               });
           }, _PREVIEW_DEBOUNCE_MS);
         }
@@ -21744,69 +21883,63 @@ async function openMethodConfig() {
         function _renderServerPreview(data) {
           if (!effSummary) return;
           effSummary.innerHTML = "";
+          var zh = currentLang === "zh-CN";
           var roleOrder = ["int", "ts"];
+          var lines = [];
           roleOrder.forEach(function(role) {
             var roleData = (data.roles || {})[role];
             if (!roleData) return;
-            var roleLabel = document.createElement("span");
-            roleLabel.className = "mc-eff-role-label";
-            roleLabel.textContent = role.toUpperCase() + ": ";
-            effSummary.appendChild(roleLabel);
-            var orcaChips = ((data.orca_summary || {})[role]) || [];
-            orcaChips.forEach(function(chipText) {
-              var chip = document.createElement("span");
-              chip.className = "mc-eff-chip";
-              chip.textContent = chipText;
-              var badge = document.createElement("span");
-              var srcKey = ((roleData.sources || {})[chipText.toLowerCase().replace(/\s+/g, "_")] || "");
-              badge.className = "mc-eff-src src-" + (srcKey || "default");
-              badge.textContent = (currentLang === "zh-CN"
-                ? { "user": "\u81ea\u5b9a\u4e49", "role_default": "\u89d2\u8272\u9ed8\u8ba4", "default": "\u9ed8\u8ba4" }[srcKey]
-                : { "user": "custom", "role_default": "role", "default": "def" }[srcKey]) || srcKey;
-              chip.appendChild(badge);
-              effSummary.appendChild(chip);
-            });
-            // Add separator between roles
-            if (role !== "ts") {
-              var sep = document.createElement("span");
-              sep.style.margin = "0 4px";
-              sep.style.color = "var(--text-tertiary)";
-              sep.textContent = " | ";
-              effSummary.appendChild(sep);
+            var orcaKw = ((data.orca_summary || {})[role]) || [];
+            if (orcaKw.length) {
+              lines.push(role.toUpperCase() + ": " + orcaKw.join(", "));
             }
           });
-          // If no role data rendered, fall back to local
-          if (!effSummary.children.length) {
-            _renderLocalSummary();
+          if (!lines.length) {
+            _renderLocalSummary(false);
+            return;
           }
+          var lineDiv = document.createElement("div");
+          lineDiv.textContent = (zh ? "\u6709\u6548\u8bbe\u7f6e\uff1a" : "Effective: ") + lines.join(" | ");
+          effSummary.appendChild(lineDiv);
+          // ORCA input details (collapsible)
+          var details = document.createElement("details");
+          var summaryEl = document.createElement("summary");
+          summaryEl.textContent = zh ? "\u67e5\u770b\u5b9e\u9645\u8f93\u5165" : "View actual input";
+          details.appendChild(summaryEl);
+          var pre = document.createElement("pre");
+          var detailLines = [];
+          roleOrder.forEach(function(role) {
+            var orcaKw = ((data.orca_summary || {})[role]) || [];
+            if (orcaKw.length) {
+              detailLines.push(role.toUpperCase() + ": ! " + orcaKw.join(" "));
+            }
+          });
+          pre.textContent = detailLines.join("\n");
+          details.appendChild(pre);
+          effSummary.appendChild(details);
         }
 
-        function _renderLocalSummary() {
+        function _renderLocalSummary(withPending) {
           if (!effSummary) return;
           effSummary.innerHTML = "";
-          var lbl = document.createElement("span");
-          lbl.textContent = (currentLang === "zh-CN" ? "\u751f\u6548\u53c2\u6570 " : "Effective: ");
-          lbl.style.marginRight = "4px";
-          effSummary.appendChild(lbl);
+          var zh = currentLang === "zh-CN";
           var s = wizardState.method.stages.batch || {};
-          var localChips = buildBatchEffectiveSummary(s);
-          localChips.forEach(function(c) {
-            var chip = document.createElement("span");
-            chip.className = "mc-eff-chip";
-            chip.textContent = c.text;
-            var badge = document.createElement("span");
-            badge.className = "mc-eff-src src-" + c.src;
-            badge.textContent = (currentLang === "zh-CN"
-              ? { "default": "\u9ed8\u8ba4", "preset": "\u9884\u8bbe", "custom": "\u81ea\u5b9a\u4e49" }[c.src]
-              : { "default": "def", "preset": "preset", "custom": "custom" }[c.src]) || c.src;
-            chip.appendChild(badge);
-            effSummary.appendChild(chip);
-          });
+          var lines = buildBatchEffectiveSummary(s);
+          var lineDiv = document.createElement("div");
+          lineDiv.textContent = lines.join(" | ");
+          effSummary.appendChild(lineDiv);
+          if (withPending !== false) {
+            var pending = document.createElement("span");
+            pending.className = "pending";
+            pending.textContent = (zh ? " \u6b63\u5728\u66f4\u65b0\u2026" : " Updating\u2026");
+            pending.id = "_eff-pending-marker";
+            effSummary.appendChild(pending);
+          }
         }
 
         // ── Count custom (non-default) advanced keys ──
         function _batchCustomCount(stageVals) {
-          var defaults = { opt_convergence: "tight", scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal", opt_rescue_policy: "adaptive", opt_max_rescue: 2, scf_orbital_inherit: true };
+          var defaults = { opt_convergence: "Tight", scf_max_iter: 300, scf_convergence: "Tight", scf_strategy: "Normal", opt_rescue_policy: "adaptive", opt_max_rescue: 2, scf_orbital_inherit: true };
           var keys = ["opt_max_iter", "opt_convergence", "opt_trust_radius", "opt_initial_hessian", "opt_recalc_hess", "opt_rescue_policy", "opt_max_rescue", "scf_max_iter", "scf_convergence", "scf_strategy", "scf_orbital_inherit"];
           var roleKeys = ["minimum_opt_trust_radius", "minimum_opt_initial_hessian", "minimum_opt_recalc_hess", "transition_state_opt_trust_radius", "transition_state_opt_initial_hessian", "transition_state_opt_recalc_hess"];
           var count = 0;
@@ -21814,7 +21947,7 @@ async function openMethodConfig() {
             var sv = stageVals[k];
             if (sv === null || sv === undefined) return;
             var dv = defaults[k];
-            if (dv !== undefined && sv === dv) return;
+            if (dv !== undefined && String(sv).toLowerCase() === String(dv).toLowerCase()) return;
             count++;
           });
           roleKeys.forEach(function(k) {
@@ -21828,15 +21961,17 @@ async function openMethodConfig() {
         function _presetSummaryText(presetId) {
           if (presetId === "custom" || !BATCH_PRESETS[presetId]) return "";
           var pv = BATCH_PRESETS[presetId].values;
-          var parts = [];
-          if (pv.opt_max_iter != null) parts.push("MaxIter " + pv.opt_max_iter);
-          if (pv.opt_trust_radius != null) parts.push("Trust " + pv.opt_trust_radius);
-          if (pv.opt_convergence) parts.push(pv.opt_convergence);
-          if (pv.opt_recalc_hess != null) parts.push((currentLang === "zh-CN" ? "\u6bcf " : "Every ") + pv.opt_recalc_hess + (currentLang === "zh-CN" ? " \u6b65\u91cd\u7b97" : " steps"));
-          if (pv.scf_max_iter != null) parts.push("SCF " + pv.scf_max_iter);
-          if (pv.scf_strategy && pv.scf_strategy !== "normal") parts.push(pv.scf_strategy);
-          if (pv.scf_convergence && pv.scf_convergence !== "tight") parts.push(pv.scf_convergence);
-          return parts.join(" \u00b7 ");
+          var zh = currentLang === "zh-CN";
+          if (presetId === "difficult_geometry") {
+            return zh ? "\u56f0\u96be\u51e0\u4f55\uff1a\u4f18\u5316\u4e0a\u9650 400\uff0c\u521d\u59cb Trust 0.10\uff0c\u6bcf 5 \u6b65\u91cd\u7b97 Hessian\u3002" : "Difficult geometry: MaxIter 400, Trust 0.10, recalc every 5.";
+          }
+          if (presetId === "difficult_scf") {
+            return zh ? "\u56f0\u96be SCF\uff1aSCF \u4e0a\u9650 500\uff0c\u4f7f\u7528 SlowConv \u7b56\u7565\u3002" : "Difficult SCF: SCF MaxIter 500, SlowConv strategy.";
+          }
+          if (presetId === "high_precision") {
+            return zh ? "\u4e25\u683c\u6536\u655b\uff1a\u4f18\u5316\u4e0e SCF \u5747\u4f7f\u7528 VeryTight\u3002" : "VeryTight: optimization and SCF both use VeryTight.";
+          }
+          return zh ? "\u6807\u51c6\uff1aSCF \u4e0a\u9650 300\uff0c\u9ed8\u8ba4\u6536\u655b\u6807\u51c6\u3002" : "Standard: SCF MaxIter 300, default convergence.";
         }
 
         var stage = wizardState.method.stages.batch || {};
@@ -21848,7 +21983,11 @@ async function openMethodConfig() {
         var customN = _batchCustomCount(stage);
         var countSpan = document.createElement("span");
         countSpan.className = "mc-adv-custom-count";
-        countSpan.textContent = (currentLang === "zh-CN" ? "\u5df2\u81ea\u5b9a\u4e49 " : "Customized ") + customN + (currentLang === "zh-CN" ? " \u9879" : " items");
+        if (customN > 0) {
+          countSpan.textContent = (currentLang === "zh-CN" ? "\u81ea\u5b9a\u4e49\u914d\u7f6e \u00b7 \u4fee\u6539\u4e86 " : "Custom config \u00b7 ") + customN + (currentLang === "zh-CN" ? " \u9879" : " items");
+        } else {
+          countSpan.textContent = currentLang === "zh-CN" ? "\u9ed8\u8ba4\u914d\u7f6e" : "Default config";
+        }
         headerBar.appendChild(countSpan);
         var resetBtn = document.createElement("button");
         resetBtn.type = "button";
@@ -21884,43 +22023,22 @@ async function openMethodConfig() {
           });
           presetBar.appendChild(btn);
         });
-        // "自定义" pseudo-button (non-clickable indicator)
-        var customBtn = document.createElement("button");
-        customBtn.type = "button";
-        customBtn.className = "mc-preset-btn" + (activePresetId === "custom" ? " active" : "");
-        customBtn.textContent = currentLang === "zh-CN" ? "\u81ea\u5b9a\u4e49" : "Custom";
-        customBtn.style.opacity = activePresetId === "custom" ? "1" : "0.45";
-        customBtn.style.cursor = "default";
-        presetBar.appendChild(customBtn);
         advDiv.appendChild(presetBar);
 
         // ── Preset diff summary ──
         var presetSummary = document.createElement("div");
         presetSummary.className = "mc-preset-summary";
-        presetSummary.textContent = _presetSummaryText(activePresetId);
+        var presetSummaryText = _presetSummaryText(activePresetId);
+        presetSummary.textContent = presetSummaryText;
+        presetSummary.style.display = presetSummaryText ? "" : "none";
         advDiv.appendChild(presetSummary);
 
-        // ── Effective params summary bar ──
-        var effSummary = document.createElement("div");
-        effSummary.className = "mc-effective-summary";
-        var effLabel = document.createElement("span");
-        effLabel.textContent = (currentLang === "zh-CN" ? "\u751f\u6548\u53c2\u6570 " : "Effective: ");
-        effLabel.style.marginRight = "4px";
-        effSummary.appendChild(effLabel);
-        var effChips = buildBatchEffectiveSummary(stage);
-        effChips.forEach(function(c) {
-          var chip = document.createElement("span");
-          chip.className = "mc-eff-chip";
-          chip.textContent = c.text;
-          var badge = document.createElement("span");
-          badge.className = "mc-eff-src src-" + c.src;
-          badge.textContent = (currentLang === "zh-CN"
-            ? { "default": "\u9ed8\u8ba4", "preset": "\u9884\u8bbe", "custom": "\u81ea\u5b9a\u4e49" }[c.src]
-            : { "default": "def", "preset": "preset", "custom": "custom" }[c.src]) || c.src;
-          chip.appendChild(badge);
-          effSummary.appendChild(chip);
-        });
-        advDiv.appendChild(effSummary);
+        // ── Effective params summary (plain text, no chips) ──
+        // Stashed outside advDiv so it stays visible in all scopes
+        var batchSummaryBlock = document.createElement("div");
+        batchSummaryBlock.className = "mc-effective-text";
+        var effSummary = batchSummaryBlock;
+        _renderLocalSummary();
         // Trigger server preview (debounced) on initial render
         _fetchBatchConfigPreview();
 
@@ -21994,42 +22112,25 @@ async function openMethodConfig() {
         function _onAdvancedFieldChange() {
           var s = wizardState.method.stages.batch || {};
           var matched = _batchPresetMatch(s);
-          // Update custom button state
-          var cBtn = advDiv.querySelector(".mc-preset-btn:last-child");
-          if (cBtn) {
-            cBtn.style.opacity = matched === "custom" ? "1" : "0.45";
-          }
           // Update preset bar active states
           presetBar.querySelectorAll(".mc-preset-btn").forEach(function(b) { b.classList.remove("active"); });
           if (matched !== "custom") {
             var idx = allPresetKeys.indexOf(matched);
             if (idx >= 0 && presetBar.children[idx]) presetBar.children[idx].classList.add("active");
-          } else if (cBtn) {
-            cBtn.classList.add("active");
           }
           // Update summary line
-          presetSummary.textContent = _presetSummaryText(matched);
+          var pstText = _presetSummaryText(matched);
+          presetSummary.textContent = pstText;
+          presetSummary.style.display = pstText ? "" : "none";
           // Update header count
-          countSpan.textContent = (currentLang === "zh-CN" ? "\u5df2\u81ea\u5b9a\u4e49 " : "Customized ") + _batchCustomCount(s) + (currentLang === "zh-CN" ? " \u9879" : " items");
-          // Update effective summary
-          effSummary.innerHTML = "";
-          var lbl = document.createElement("span");
-          lbl.textContent = (currentLang === "zh-CN" ? "\u751f\u6548\u53c2\u6570 " : "Effective: ");
-          lbl.style.marginRight = "4px";
-          effSummary.appendChild(lbl);
-          var newChips = buildBatchEffectiveSummary(s);
-          newChips.forEach(function(c) {
-            var chip = document.createElement("span");
-            chip.className = "mc-eff-chip";
-            chip.textContent = c.text;
-            var badge = document.createElement("span");
-            badge.className = "mc-eff-src src-" + c.src;
-            badge.textContent = (currentLang === "zh-CN"
-              ? { "default": "\u9ed8\u8ba4", "preset": "\u9884\u8bbe", "custom": "\u81ea\u5b9a\u4e49" }[c.src]
-              : { "default": "def", "preset": "preset", "custom": "custom" }[c.src]) || c.src;
-            chip.appendChild(badge);
-            effSummary.appendChild(chip);
-          });
+          var cn = _batchCustomCount(s);
+          if (cn > 0) {
+            countSpan.textContent = (currentLang === "zh-CN" ? "\u81ea\u5b9a\u4e49\u914d\u7f6e \u00b7 \u4fee\u6539\u4e86 " : "Custom config \u00b7 ") + cn + (currentLang === "zh-CN" ? " \u9879" : " items");
+          } else {
+            countSpan.textContent = currentLang === "zh-CN" ? "\u9ed8\u8ba4\u914d\u7f6e" : "Default config";
+          }
+          // Update effective summary (plain text)
+          _renderLocalSummary();
           // Trigger server preview (debounced) on field change
           _fetchBatchConfigPreview();
         }
@@ -22061,8 +22162,13 @@ async function openMethodConfig() {
 
           var grpFields = document.createElement("div");
           grpFields.className = "mc-adv-group-fields" + (g.collapsed ? " collapsed" : "");
-          var mainFields = (fields || []).filter(function(fn) { return expertFields.indexOf(fn) < 0; });
-          mainFields.forEach(function(fn) { buildFieldRow(fn, grpFields); });
+          // For hessian_control: use combined control instead of generic field rows
+          if (g.id === "hessian_control") {
+            buildHessianFieldRow(grpFields);
+          } else {
+            var mainFields = (fields || []).filter(function(fn) { return expertFields.indexOf(fn) < 0; });
+            mainFields.forEach(function(fn) { buildFieldRow(fn, grpFields); });
+          }
 
           // Expert sub-row for rescue/orbital_inherit
           if (expertFields.length) {
@@ -22101,16 +22207,76 @@ async function openMethodConfig() {
         var _ROLE_FIELD_DEFS = {
           minimum_opt_trust_radius: { type: "float", min: 0.01, max: 1.0, step: 0.01, label_zh: "INT 信赖半径", label: "INT Trust Radius" },
           minimum_opt_initial_hessian: { type: "select", options: ["auto", "model", "calculate"], label_zh: "INT 初始 Hessian", label: "INT Initial Hessian", option_labels_zh: { auto: "自动", model: "模型 Hessian", calculate: "显式计算" } },
-          minimum_opt_recalc_hess: { type: "select", options: ["auto", "off", "5", "10"], label_zh: "INT Hessian 重算", label: "INT Hessian Recalc", option_labels_zh: { auto: "自动", off: "不重算", "5": "每 5 步", "10": "每 10 步" } },
+          minimum_opt_recalc_hess: { type: "select", options: ["auto", "0", "5", "10"], label_zh: "INT Hessian 重算", label: "INT Hessian Recalc", option_labels_zh: { auto: "自动", "0": "不重算", "5": "每 5 步", "10": "每 10 步" } },
           transition_state_opt_trust_radius: { type: "float", min: 0.01, max: 1.0, step: 0.01, label_zh: "TS 信赖半径", label: "TS Trust Radius" },
           transition_state_opt_initial_hessian: { type: "select", options: ["auto", "model", "calculate"], label_zh: "TS 初始 Hessian", label: "TS Initial Hessian", option_labels_zh: { auto: "自动", model: "模型 Hessian", calculate: "显式计算" } },
-          transition_state_opt_recalc_hess: { type: "select", options: ["auto", "off", "5", "10"], label_zh: "TS Hessian 重算", label: "TS Hessian Recalc", option_labels_zh: { auto: "自动", off: "不重算", "5": "每 5 步", "10": "每 10 步" } },
+          transition_state_opt_recalc_hess: { type: "select", options: ["auto", "0", "5", "10"], label_zh: "TS Hessian 重算", label: "TS Hessian Recalc", option_labels_zh: { auto: "自动", "0": "不重算", "5": "每 5 步", "10": "每 10 步" } },
         };
+
+        function _formatInheritValue(fieldName, val) {
+          if (val === null || val === undefined) return currentLang === "zh-CN" ? "\u81ea\u52a8" : "auto";
+          if (fieldName === "opt_convergence") {
+            return { "Tight": "TightOpt", "VeryTight": "VeryTightOpt", "Normal": "Opt", "Loose": "LooseOpt" }[String(val)] || String(val);
+          }
+          if (fieldName === "scf_convergence") {
+            return { "Tight": "TightSCF", "VeryTight": "VeryTightSCF", "Normal": "NormalSCF" }[String(val)] || String(val);
+          }
+          if (fieldName === "scf_strategy") {
+            if (currentLang === "zh-CN") {
+              return { "Normal": "\u6807\u51c6", "normal": "\u6807\u51c6", "SlowConv": "\u6162\u6536\u655b", "slowconv": "\u6162\u6536\u655b", "SOSCF": "SOSCF", "soscf": "SOSCF" }[String(val)] || String(val);
+            }
+            return String(val);
+          }
+          if (fieldName === "opt_initial_hessian") {
+            return { "calculate": (currentLang === "zh-CN" ? "\u542f\u52a8\u65f6\u8ba1\u7b97" : "Calculate at start"), "model": (currentLang === "zh-CN" ? "\u6a21\u578b Hessian" : "Model Hessian"), "auto": (currentLang === "zh-CN" ? "\u81ea\u52a8" : "Auto") }[String(val)] || String(val);
+          }
+          return String(val);
+        }
 
         function _buildRoleOverrideField(parent, key) {
           var def = _ROLE_FIELD_DEFS[key];
           if (!def) return;
           var st = wizardState.method.stages.batch || {};
+          var currentVal = st[key];
+          var isOverridden = currentVal != null && currentVal !== "";
+          var role = key.indexOf("minimum_") === 0 ? "int" : "ts";
+          var fieldName = key.replace(/^(minimum_|transition_state_)/, "");
+
+          var container = document.createElement("div");
+          container.style.marginBottom = "8px";
+
+          // Inherit switch
+          var switchWrap = document.createElement("div");
+          switchWrap.className = "mc-role-inherit-switch";
+          var switchCb = document.createElement("input");
+          switchCb.type = "checkbox";
+          switchCb.checked = !isOverridden;
+          var switchLabel = document.createElement("label");
+          switchLabel.textContent = currentLang === "zh-CN" ? "\u4f7f\u7528\u901a\u7528\u8bbe\u7f6e" : "Use common settings";
+          switchLabel.prepend(switchCb);
+          switchWrap.appendChild(switchLabel);
+          container.appendChild(switchWrap);
+
+          // Inherited value line (visible when inheriting)
+          var inheritValDiv = document.createElement("div");
+          inheritValDiv.className = "mc-field";
+          inheritValDiv.style.display = isOverridden ? "none" : "";
+          var inheritLbl = document.createElement("label");
+          inheritLbl.textContent = (currentLang === "zh-CN" ? def.label_zh : def.label);
+          inheritValDiv.appendChild(inheritLbl);
+          var inheritSpan = document.createElement("span");
+          inheritSpan.className = "mc-role-inherit-value";
+          inheritSpan.style.fontSize = "13px";
+          inheritSpan.style.color = "var(--text-secondary)";
+          var resolvedVal = _resolveRoleValue(role, fieldName);
+          inheritSpan.textContent = _formatInheritValue(fieldName, resolvedVal);
+          inheritValDiv.appendChild(inheritSpan);
+          container.appendChild(inheritValDiv);
+
+          // Override input (hidden when inheriting)
+          var inputWrap = document.createElement("div");
+          inputWrap.style.display = isOverridden ? "" : "none";
+
           var row = document.createElement("div");
           row.className = "mc-role-override-row";
           var fDiv = document.createElement("div");
@@ -22118,29 +22284,33 @@ async function openMethodConfig() {
           var lbl = document.createElement("label");
           lbl.textContent = (currentLang === "zh-CN" ? def.label_zh : def.label);
           fDiv.appendChild(lbl);
-          var currentVal = st[key];
 
           if (def.type === "float") {
             var inp = document.createElement("input");
             inp.type = "number"; inp.min = String(def.min); inp.max = String(def.max);
-            inp.step = String(def.step); inp.placeholder = currentLang === "zh-CN" ? "\u7ee7\u627f\u901a\u7528" : "Inherit";
-            if (currentVal != null) inp.value = String(currentVal);
+            inp.step = String(def.step);
+            inp.placeholder = currentLang === "zh-CN" ? "\u81ea\u52a8" : "Auto";
+            if (currentVal != null && currentVal !== "") inp.value = String(currentVal);
             inp.addEventListener("change", function() {
-              var v = parseFloat(inp.value);
-              if (isNaN(v) || v < def.min) v = def.min;
-              if (v > def.max) v = def.max;
-              inp.value = String(v);
-              if (!wizardState.method.stages.batch) wizardState.method.stages.batch = {};
-              wizardState.method.stages.batch[key] = v;
-              _updateRoleBadge(badge, key);
+              if (inp.value === "") {
+                if (wizardState.method.stages.batch) delete wizardState.method.stages.batch[key];
+                switchCb.checked = true;
+                inputWrap.style.display = "none";
+                inheritValDiv.style.display = "";
+                inheritSpan.textContent = _formatInheritValue(fieldName, _resolveRoleValue(role, fieldName));
+              } else {
+                var v = parseFloat(inp.value);
+                if (isNaN(v) || v < def.min) v = def.min;
+                if (v > def.max) v = def.max;
+                inp.value = String(v);
+                if (!wizardState.method.stages.batch) wizardState.method.stages.batch = {};
+                wizardState.method.stages.batch[key] = v;
+              }
               _onAdvancedFieldChange();
             });
             fDiv.appendChild(inp);
           } else {
             var sel = document.createElement("select");
-            var emptyOpt = document.createElement("option");
-            emptyOpt.value = ""; emptyOpt.textContent = currentLang === "zh-CN" ? "\u2014 \u7ee7\u627f\u901a\u7528 \u2014" : "\u2014 Inherit \u2014";
-            sel.appendChild(emptyOpt);
             (def.options || []).forEach(function(opt) {
               var o = document.createElement("option");
               o.value = opt;
@@ -22150,32 +22320,37 @@ async function openMethodConfig() {
             if (currentVal != null && currentVal !== "") sel.value = String(currentVal);
             sel.addEventListener("change", function() {
               if (!wizardState.method.stages.batch) wizardState.method.stages.batch = {};
-              if (sel.value === "") { delete wizardState.method.stages.batch[key]; }
-              else { wizardState.method.stages.batch[key] = sel.value; }
-              _updateRoleBadge(badge, key);
+              var parsedNum = parseInt(sel.value, 10);
+              wizardState.method.stages.batch[key] = (!isNaN(parsedNum) && String(parsedNum) === sel.value) ? parsedNum : sel.value;
               _onAdvancedFieldChange();
             });
             fDiv.appendChild(sel);
           }
           row.appendChild(fDiv);
+          inputWrap.appendChild(row);
+          container.appendChild(inputWrap);
 
-          var badge = document.createElement("span");
-          badge.className = "mc-role-inherit-badge " + (currentVal != null && currentVal !== "" ? "badge-override" : "badge-inherit");
-          badge.textContent = (currentVal != null && currentVal !== "")
-            ? (currentLang === "zh-CN" ? "\u5df2\u8986\u76d6" : "Override")
-            : (currentLang === "zh-CN" ? "\u7ee7\u627f" : "Inherit");
-          row.appendChild(badge);
-          parent.appendChild(row);
-        }
+          // Switch handler
+          switchCb.addEventListener("change", function() {
+            if (switchCb.checked) {
+              if (wizardState.method.stages.batch) delete wizardState.method.stages.batch[key];
+              inputWrap.style.display = "none";
+              inheritValDiv.style.display = "";
+              inheritSpan.textContent = _formatInheritValue(fieldName, _resolveRoleValue(role, fieldName));
+            } else {
+              inputWrap.style.display = "";
+              inheritValDiv.style.display = "none";
+              if (!wizardState.method.stages.batch) wizardState.method.stages.batch = {};
+              if (def.type === "float" && (currentVal == null || currentVal === "")) {
+                wizardState.method.stages.batch[key] = def.min;
+              } else if (def.type === "select" && (currentVal == null || currentVal === "")) {
+                wizardState.method.stages.batch[key] = def.options[0];
+              }
+            }
+            _onAdvancedFieldChange();
+          });
 
-        function _updateRoleBadge(badgeEl, key) {
-          var st = wizardState.method.stages.batch || {};
-          var v = st[key];
-          var overridden = v != null && v !== "";
-          badgeEl.className = "mc-role-inherit-badge " + (overridden ? "badge-override" : "badge-inherit");
-          badgeEl.textContent = overridden
-            ? (currentLang === "zh-CN" ? "\u5df2\u8986\u76d6" : "Override")
-            : (currentLang === "zh-CN" ? "\u7ee7\u627f" : "Inherit");
+          parent.appendChild(container);
         }
 
         // Build tab component
@@ -22185,74 +22360,165 @@ async function openMethodConfig() {
         var tabStrip = document.createElement("div");
         tabStrip.className = "mc-role-tab-strip";
         var tabNames = [
-          { id: "common", label_zh: "\u901a\u7528", label: "Common" },
-          { id: "int", label_zh: "INT", label: "INT" },
-          { id: "ts", label_zh: "TS", label: "TS" },
+          { id: "common", label_zh: "\u901a\u7528\u8bbe\u7f6e", label: "Common Settings" },
+          { id: "int", label_zh: "\u666e\u901a\u9a7b\u70b9 INT", label: "Intermediate INT" },
+          { id: "ts", label_zh: "\u8fc7\u6e21\u6001 TS", label: "Transition State TS" },
         ];
         var tabPanes = {};
 
         tabNames.forEach(function(tn, idx) {
           var btn = document.createElement("button");
           btn.type = "button";
-          btn.className = "mc-role-tab-btn" + (idx === 0 ? " active" : "");
+          btn.className = "mc-role-tab-btn" + (tn.id === _batchScopeTab ? " active" : "");
           btn.textContent = currentLang === "zh-CN" ? tn.label_zh : tn.label;
           btn.setAttribute("data-tab-id", tn.id);
           btn.addEventListener("click", function() {
+            _batchScopeTab = tn.id;
             tabStrip.querySelectorAll(".mc-role-tab-btn").forEach(function(b) { b.classList.remove("active"); });
             btn.classList.add("active");
             Object.keys(tabPanes).forEach(function(pid) {
               tabPanes[pid].classList.toggle("active", pid === tn.id);
             });
+            // Show/hide shared elements based on scope
+            var isCommon = tn.id === "common";
+            if (headerBar) headerBar.style.display = isCommon ? "" : "none";
+            if (presetBar) presetBar.style.display = isCommon ? "" : "none";
+            if (presetSummary) presetSummary.style.display = isCommon ? "" : "none";
+            if (groupsGrid) groupsGrid.style.display = isCommon ? "" : "none";
+            if (otherGroupEl) otherGroupEl.style.display = isCommon ? "" : "none";
           });
           tabStrip.appendChild(btn);
 
           var pane = document.createElement("div");
-          pane.className = "mc-role-tab-pane" + (idx === 0 ? " active" : "");
+          pane.className = "mc-role-tab-pane" + (tn.id === _batchScopeTab ? " active" : "");
           pane.setAttribute("data-tab-pane", tn.id);
           tabPanes[tn.id] = pane;
         });
         roleTabs.appendChild(tabStrip);
 
-        // Common pane: informational note (groups already rendered above)
+        function _resolveRoleValue(role, fieldName) {
+          var st = wizardState.method.stages.batch || {};
+          var rolePrefix = role === "int" ? "minimum_" : "transition_state_";
+          var roleKey = rolePrefix + fieldName;
+          if (st[roleKey] != null && st[roleKey] !== "") return st[roleKey];
+          if (st[fieldName] != null && st[fieldName] !== "") return st[fieldName];
+          var defaults = _BATCH_ENGINE_DEFAULTS[role.toUpperCase()] || {};
+          if (defaults[fieldName] != null) return defaults[fieldName];
+          return null;
+        }
+
+        function _buildInheritValueRow(parent, role, fieldName, label_zh, label_en) {
+          var row = document.createElement("div");
+          row.className = "mc-field";
+          var lbl = document.createElement("label");
+          lbl.textContent = currentLang === "zh-CN" ? label_zh : label_en;
+          row.appendChild(lbl);
+          var val = _resolveRoleValue(role, fieldName);
+          var valEl = document.createElement("span");
+          valEl.className = "mc-role-inherit-value";
+          valEl.style.fontSize = "13px";
+          valEl.style.color = "var(--text-secondary)";
+          valEl.textContent = _formatInheritValue(fieldName, val);
+          row.appendChild(valEl);
+          parent.appendChild(row);
+        }
+
+        function _buildRoleScopePane(pane, role) {
+          pane.innerHTML = "";
+          var hint = document.createElement("div");
+          hint.className = "mc-role-inherit-hint";
+          hint.textContent = role === "int"
+            ? (currentLang === "zh-CN" ? "\u7ee7\u627f\uff1a\u901a\u7528\u8bbe\u7f6e" : "Inherits: Common settings")
+            : (currentLang === "zh-CN" ? "\u7ee7\u627f\uff1aTS \u9ed8\u8ba4 Trust 0.3 \u00b7 \u542f\u52a8\u65f6\u8ba1\u7b97 Hessian \u00b7 \u6bcf 5 \u6b65\u91cd\u7b97" : "Inherits: TS defaults Trust 0.3 \u00b7 Calculate Hessian \u00b7 Recalc every 5");
+          pane.appendChild(hint);
+
+          // Optimizer group
+          var optGrp = document.createElement("div");
+          optGrp.className = "mc-adv-group";
+          var optHdr = document.createElement("div");
+          optHdr.className = "mc-adv-group-header";
+          optHdr.textContent = currentLang === "zh-CN" ? "\u4f18\u5316\u5668" : "Optimizer";
+          optGrp.appendChild(optHdr);
+          var optFields = document.createElement("div");
+          optFields.className = "mc-adv-group-fields";
+          _buildInheritValueRow(optFields, role, "opt_max_iter", "\u6700\u5927\u4f18\u5316\u5faa\u73af", "Max Optimization Iterations");
+          _buildInheritValueRow(optFields, role, "opt_convergence", "\u6536\u655b\u6807\u51c6", "Convergence Criteria");
+          if (role === "ts") {
+            _buildRoleOverrideField(optFields, "transition_state_opt_trust_radius");
+          } else {
+            _buildRoleOverrideField(optFields, "minimum_opt_trust_radius");
+          }
+          optGrp.appendChild(optFields);
+          pane.appendChild(optGrp);
+
+          // SCF group
+          var scfGrp = document.createElement("div");
+          scfGrp.className = "mc-adv-group";
+          var scfHdr = document.createElement("div");
+          scfHdr.className = "mc-adv-group-header";
+          scfHdr.textContent = "SCF";
+          scfGrp.appendChild(scfHdr);
+          var scfFields = document.createElement("div");
+          scfFields.className = "mc-adv-group-fields";
+          _buildInheritValueRow(scfFields, role, "scf_max_iter", "\u6700\u5927 SCF \u5faa\u73af", "Max SCF Iterations");
+          _buildInheritValueRow(scfFields, role, "scf_convergence", "\u6536\u655b\u6807\u51c6", "SCF Convergence");
+          _buildInheritValueRow(scfFields, role, "scf_strategy", "\u6536\u655b\u7b56\u7565", "SCF Strategy");
+          scfGrp.appendChild(scfFields);
+          pane.appendChild(scfGrp);
+
+          // Hessian group
+          var hessGrp = document.createElement("div");
+          hessGrp.className = "mc-adv-group";
+          var hessHdr = document.createElement("div");
+          hessHdr.className = "mc-adv-group-header";
+          hessHdr.textContent = "Hessian";
+          hessGrp.appendChild(hessHdr);
+          var hessFields = document.createElement("div");
+          hessFields.className = "mc-adv-group-fields";
+          if (role === "ts") {
+            _buildRoleOverrideField(hessFields, "transition_state_opt_initial_hessian");
+            _buildRoleOverrideField(hessFields, "transition_state_opt_recalc_hess");
+          } else {
+            _buildRoleOverrideField(hessFields, "minimum_opt_initial_hessian");
+            _buildRoleOverrideField(hessFields, "minimum_opt_recalc_hess");
+          }
+          hessGrp.appendChild(hessFields);
+          pane.appendChild(hessGrp);
+        }
+
+        // Common pane
         var commonPane = tabPanes["common"];
-        var commonNote = document.createElement("div");
-        commonNote.className = "mc-role-inherit-hint";
-        commonNote.textContent = currentLang === "zh-CN"
-          ? "\u4e0a\u65b9\u5206\u7ec4\u4e2d\u7684\u53c2\u6570\u4e3a\u901a\u7528\u8bbe\u7f6e\uff0cINT \u548c TS \u53ef\u5206\u522b\u8986\u76d6\u3002"
-          : "Parameters in the groups above are common settings. INT and TS can override individually.";
-        commonPane.appendChild(commonNote);
 
         // INT pane
-        var intPane = tabPanes["int"];
-        var intHint = document.createElement("div");
-        intHint.className = "mc-role-inherit-hint";
-        intHint.textContent = currentLang === "zh-CN"
-          ? "\u7ee7\u627f\uff1a\u901a\u7528\u8bbe\u7f6e"
-          : "Inherits: Common settings";
-        intPane.appendChild(intHint);
-        ["minimum_opt_trust_radius", "minimum_opt_initial_hessian", "minimum_opt_recalc_hess"].forEach(function(k) { _buildRoleOverrideField(intPane, k); });
+        _buildRoleScopePane(tabPanes["int"], "int");
 
         // TS pane
-        var tsPane = tabPanes["ts"];
-        var tsHint = document.createElement("div");
-        tsHint.className = "mc-role-inherit-hint";
-        tsHint.textContent = currentLang === "zh-CN"
-          ? "\u7ee7\u627f\uff1aTS \u9ed8\u8ba4 Trust 0.3 \u00b7 \u542f\u52a8\u65f6\u8ba1\u7b97 Hessian \u00b7 \u6bcf 5 \u6b65\u91cd\u7b97"
-          : "Inherits: TS defaults Trust 0.3 \u00b7 Calculate Hessian \u00b7 Recalc every 5";
-        tsPane.appendChild(tsHint);
-        ["transition_state_opt_trust_radius", "transition_state_opt_initial_hessian", "transition_state_opt_recalc_hess"].forEach(function(k) { _buildRoleOverrideField(tsPane, k); });
+        _buildRoleScopePane(tabPanes["ts"], "ts");
 
         Object.keys(tabPanes).forEach(function(pid) { roleTabs.appendChild(tabPanes[pid]); });
-        advDiv.appendChild(roleTabs);
+        // Scope tabs go ABOVE the groups grid
+        advDiv.insertBefore(roleTabs, groupsGrid);
+
+        // Apply initial visibility based on persisted scope
+        if (_batchScopeTab !== "common") {
+          if (headerBar) headerBar.style.display = "none";
+          if (presetBar) presetBar.style.display = "none";
+          if (presetSummary) presetSummary.style.display = "none";
+          if (groupsGrid) groupsGrid.style.display = "none";
+          if (otherGroupEl) otherGroupEl.style.display = "none";
+        }
 
         // ── Wire change listener on advDiv for preset auto-flip ──
         advDiv.addEventListener("change", _onAdvancedFieldChange);
         advDiv.addEventListener("input", _onAdvancedFieldChange);
 
         // Ungrouped "Other" fields
+        var otherGroupEl = null;
         if (grouped._other && grouped._other.length) {
           var otherGrp = document.createElement("div");
           otherGrp.className = "mc-adv-group";
+          otherGrp.setAttribute("data-group-id", "other");
+          otherGroupEl = otherGrp;
           var otherHdr = document.createElement("div");
           otherHdr.className = "mc-adv-group-header";
           var otherChevron = document.createElement("span");
@@ -22284,10 +22550,15 @@ async function openMethodConfig() {
       advToggle.addEventListener("click", function() {
         var shown = advDiv.style.display !== "none";
         advDiv.style.display = shown ? "none" : "grid";
-        advToggle.textContent = shown ? "+ " + (t("modal.advanced") || "\u9ad8\u7ea7") : "- " + (t("modal.advanced") || "\u9ad8\u7ea7");
+        var toggleLabel = lvDef.level_id === "batch" ? (currentLang === "zh-CN" ? "\u9ad8\u7ea7\u8ba1\u7b97\u63a7\u5236" : "Advanced Calculation Controls") : (t("modal.advanced") || "\u9ad8\u7ea7");
+        advToggle.textContent = shown ? "+ " + toggleLabel : "- " + toggleLabel;
       });
 
       bodyDiv.appendChild(advWrap);
+      // Append summary block outside advWrap (always visible in all scopes)
+      if (typeof batchSummaryBlock !== "undefined" && batchSummaryBlock) {
+        bodyDiv.appendChild(batchSummaryBlock);
+      }
     }
 
     card.appendChild(bodyDiv);
@@ -22426,6 +22697,12 @@ async function openMethodConfig() {
   // Profile selector
   var profileSel = document.getElementById("mc-profile-select");
   profileSel.innerHTML = "";
+  var profileLabelEl = document.querySelector(".mc-profile-label");
+  if (wizardState.workflow.id === "BatchOptimize" && profileLabelEl) {
+    profileLabelEl.textContent = currentLang === "zh-CN" ? "\u8ba1\u7b97\u6d41\u7a0b" : "Calculation flow";
+  } else if (profileLabelEl) {
+    profileLabelEl.textContent = t("modal.profile") || "\u8ba1\u7b97\u65b9\u6848";
+  }
   var profiles = schema.profiles || [];
   if (profiles.length) {
     var topicOpt = document.createElement("optgroup");
@@ -22435,7 +22712,12 @@ async function openMethodConfig() {
       o.value = p.profile_id;
       var profileLabel = currentLang === "zh-CN" ? (p.label_zh || p.label) : p.label;
       var profileSummary = currentLang === "zh-CN" ? (p.summary_zh || p.summary) : p.summary;
-      o.textContent = profileLabel + " - " + profileSummary;
+      if (wizardState.workflow.id === "BatchOptimize") {
+        o.textContent = profileLabel;
+        o.title = profileSummary || "";
+      } else {
+        o.textContent = profileLabel + " - " + profileSummary;
+      }
       if (p.profile_id === wizardState.method.profile_id) o.selected = true;
       topicOpt.appendChild(o);
     });
@@ -23827,8 +24109,8 @@ function setupEventListeners() {
         activatePlotTool("pan");
         return;
       }
-      if (e.key === "ArrowLeft") { var d = energyGraphState.data; var n = energyGraphCurrentNode(d); var fi = n && n.frame_index != null ? Number(n.frame_index) : null; if (fi != null) { var ns = d.nodes || []; var idx = ns.findIndex(function(item) { return Number(item.frame_index) === fi; }); if (idx > 0) { energyGraphState.liveFollow = false; energyGraphSelectFrame(ns[idx - 1].frame_index); } } e.preventDefault(); return; }
-      if (e.key === "ArrowRight") { var d2 = energyGraphState.data; var n2 = energyGraphCurrentNode(d2); var fi2 = n2 && n2.frame_index != null ? Number(n2.frame_index) : null; if (fi2 != null) { var ns2 = d2.nodes || []; var idx2 = ns2.findIndex(function(item) { return Number(item.frame_index) === fi2; }); if (idx2 >= 0 && idx2 < ns2.length - 1) { energyGraphState.liveFollow = false; energyGraphSelectFrame(ns2[idx2 + 1].frame_index); } } e.preventDefault(); return; }
+      if (e.key === "ArrowLeft") { var d = energyGraphState.data; var n = energyGraphCurrentNode(d); if (n) { var ns = d.nodes || []; var idx = ns.findIndex(function(item) { return String(item.id) === String(energyGraphState.selectedNodeId); }); if (idx < 0) idx = ns.findIndex(function(item) { return Number(item.frame_index) === Number(n.frame_index); }); if (idx > 0) { energyGraphState.liveFollow = false; energyGraphSelectFrame(ns[idx - 1].frame_index, undefined, ns[idx - 1].id); } } e.preventDefault(); return; }
+      if (e.key === "ArrowRight") { var d2 = energyGraphState.data; var n2 = energyGraphCurrentNode(d2); if (n2) { var ns2 = d2.nodes || []; var idx2 = ns2.findIndex(function(item) { return String(item.id) === String(energyGraphState.selectedNodeId); }); if (idx2 < 0) idx2 = ns2.findIndex(function(item) { return Number(item.frame_index) === Number(n2.frame_index); }); if (idx2 >= 0 && idx2 < ns2.length - 1) { energyGraphState.liveFollow = false; energyGraphSelectFrame(ns2[idx2 + 1].frame_index, undefined, ns2[idx2 + 1].id); } } e.preventDefault(); return; }
     }
     switch (e.key) {
       case "f":

@@ -2788,6 +2788,7 @@ def save_frame_candidate_endpoint(
             name=req.name,
             expected_revision=req.expected_revision,
             item_id=req.item_id,
+            frame_id=req.frame_id,
         )
     except RevisionConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

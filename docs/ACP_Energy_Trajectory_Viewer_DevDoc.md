@@ -16,7 +16,7 @@ Workbench 原有的"能量图"标签页升级为"能量与轨迹 / Energy & Traj
 2. **不创建任务**：帧操作仅限"保存为候选"（物化 XYZ + 注册 manifest），
    不提供任务提交/预填入口。`energyGraphConfirmAndBatch` 和 `data-energy-action="to-batch"`
    保持前端禁止标识符（tests/test_frontend_sync.py 锁定）。
-3. **渐进扩展**：IRC / NEB 视图在 `VIEW_REGISTRY` 注册占位，但不产出任何数据投影。
+3. **渐进扩展**：IRC 视图由 `irc_trajectory_v1` 轨迹投影（`build_irc_energy_graph`，正/反向两条 series，轨迹缺失时可从历史 `WORK/<stage>/ORCA` 只读回填）；NEB 仍为 `VIEW_REGISTRY` 注册占位，不产出数据投影。
 4. **无新依赖**：后端仅用 numpy（MDS）+ 已有 plain_rmsd；前端不引入新图表库。
 
 ## 2. TrajectoryFrame / TrajectoryAnnotation 契约
@@ -96,11 +96,11 @@ ANNOTATION_TYPES = frozenset({
 | `conformer` | 构象能量分布 | Conformer Energy Distribution | 构象排名 | rank | conformer | 已实现 |
 | `sampling` | 构象搜索轨迹 | Conformer Search Trajectory | 模拟时间 | ps | frame | 已实现 |
 | `reaction_path` | 反应路径能量图 | Reaction Path Energy | 反应进程 | progress | reaction_point | 已实现 |
-| `irc` | IRC 能量剖面 | IRC Energy Profile | 反应坐标 | * | * | 占位（未实现） |
+| `irc` | IRC 能量剖面 | IRC Energy Profile | 反应坐标 | frame | irc_point | 已实现（`irc_trajectory_v1`） |
 | `neb` | NEB 最小能量路径 | NEB Minimum Energy Path | 路径坐标 | * | * | 占位（未实现） |
 | `unsupported` | 能量图不可用 | Energy Graph Unavailable | * | * | * | 兜底 |
 
-`irc` 和 `neb` 在注册表中有条目，但没有任何 builder 产出对应投影。前端收到 `unsupported` 视图时显示不可用提示。
+`irc` 由 `acp.results.irc_projection.build_irc_energy_graph` 投影：优先读取 `RESULT/trajectories/irc_trajectory.json`（运行中为原子快照，结束后为最终轨迹），缺失时只读回填 `WORK/<stage>/ORCA` 下的 `*_IRC_[FB]_trj.xyz`，再退化为 `RESULT/irc/irc_*.xyz` 端点（端点仅单帧，不伪造路径曲线）。无任何路径点时返回 `view_type="irc"` 的 pending 投影（前端显示"IRC 正在计算，尚无可用路径点"）。`neb` 仍无 builder，前端走 `unsupported` 兜底。
 
 ## 3. 数据 Schema
 
@@ -344,8 +344,11 @@ PESsearch 任务隐藏此操作（条件渲染）。
 6. **prompt() 角色选择器**：v1 使用浏览器原生 `prompt()` 获取角色名，体验较粗糙。
    后续版本应替换为模态对话框。
 
-7. **IRC / NEB 视图未实现**：`VIEW_REGISTRY` 中注册了 `irc` 和 `neb`，但没有对应的
-   builder 或数据投影。前端收到这些视图时走 `unsupported` 兜底。
+7. **NEB 视图未实现**：`VIEW_REGISTRY` 中注册了 `neb`，但没有对应的 builder 或数据
+   投影。前端收到该视图时走 `unsupported` 兜底。IRC 已实现（见 §2 注册表与 `irc_trajectory_v1`）：
+   后端解析 ORCA `*_IRC_[FB]_trj.xyz`（帧注释内嵌能量，几何与能量同帧），运行中按完整帧
+   原子发布快照，正/反向各自保持计算顺序；曲线纵轴保留原始 Hartree 相对值（`unit="Eh"`），
+   显示换算交由查看器单位机制。
 
 8. **NO create-task 操作**：帧操作仅限"保存为候选"。任务创建统一走"新建任务"流程，
    通过"载入全部候选"发现已保存的帧候选结构。

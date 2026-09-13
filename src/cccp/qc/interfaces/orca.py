@@ -34,6 +34,7 @@ from cccp.qc.interfaces.constraints import (
 from cccp.qc.interfaces.orca_ts import (
     IrcResult,
     TsOptResult,
+    discover_irc_trajectory_files,
     freq_block_for_ts,
     irc_block,
     irc_route,
@@ -2909,6 +2910,7 @@ class ORCAInterface(QCInterfaceBase):
         direction: str = "both",
         max_iter: int = 100,
         hess_file: Path | None = None,
+        output_callback: Callable[[str], None] | None = None,
         **kwargs,
     ) -> IrcResult:
         """Run an ORCA IRC from a converged transition state.
@@ -2925,6 +2927,8 @@ class ORCAInterface(QCInterfaceBase):
             direction: ``"forward"`` / ``"reverse"`` / ``"both"`` (default).
             max_iter: Maximum IRC steps.
             hess_file: Optional Hessian file to stage as ``<output_name>.hess``.
+            output_callback: Optional per-line stdout hook for live trajectory
+                capture (streams ORCA output while the IRC runs).
             **kwargs: ``solvent`` / ``solvent_model`` /
                 ``irc_midpoint_reseed`` / ``geometry_source`` overrides.
 
@@ -2987,7 +2991,7 @@ class ORCAInterface(QCInterfaceBase):
                 f.write(f"{symbol:2s} {coord[0]:15.10f} {coord[1]:15.10f} {coord[2]:15.10f}\n")
             f.write("*\n")
 
-        success = self._run_orca(input_file, output_file)
+        success = self._run_orca(input_file, output_file, output_callback=output_callback)
 
         if not success:
             return IrcResult(
@@ -2995,6 +2999,8 @@ class ORCAInterface(QCInterfaceBase):
                 error_message="ORCA IRC calculation failed",
                 output_file=input_file,
                 log_file=output_file,
+                trajectory_files=discover_irc_trajectory_files(output_dir, stem=output_name)
+                or None,
             )
 
         output_text = output_file.read_text(encoding="utf-8", errors="replace")
@@ -3015,6 +3021,7 @@ class ORCAInterface(QCInterfaceBase):
             output_file=input_file,
             log_file=output_file,
             final_geometries=final_geometries,
+            trajectory_files=discover_irc_trajectory_files(output_dir, stem=output_name) or None,
         )
 
     def _write_nmr_input(

@@ -1,21 +1,23 @@
 """IRC frame projection for forward/reverse intrinsic reaction paths.
 
-Builds the frames-contract energy-graph projection for the ``irc`` view from
-``RESULT/irc/irc_forward.xyz`` and ``RESULT/irc/irc_reverse.xyz``.  Each
-direction becomes its own series; nodes keep STRICT FILE ORDER (path order is
-physically meaningful for an IRC and is never reordered by energy).  Frame
-comments carry the geometry reference and — when the writer emits them — an
-energy value; the current IRC primitive writes single-frame endpoint files
-with the title ``IRC {direction} endpoint`` (no energy), in which case the
-projection degrades to path-order nodes without a series.
+Builds the frames-contract energy-graph projection for the ``irc`` view.  The
+preferred source is the ``irc_trajectory_v1`` snapshot produced by the IRC
+primitive (``RESULT/trajectories/irc_trajectory.json``); historical jobs that
+only left ORCA output under ``WORK/<stage>/ORCA`` are back-filled by parsing
+the ``*_IRC_[FB]_trj.xyz`` trajectories directly.  ``RESULT/irc/irc_*.xyz``
+endpoint files are a compatibility fallback and never fabricate a
+path curve from endpoint geometry alone.
 
-This module is display-only: it shows path order and endpoints, and does not
-perform connectivity analysis or TS-identity validation (that belongs to
-``acp.calculations.irc.validation``).
+Each direction becomes its own series; nodes keep STRICT FILE ORDER (path
+order is physically meaningful for an IRC and is never reordered by energy).
+This module is display-only: it does not perform connectivity analysis or
+TS-identity validation (that belongs to ``acp.calculations.irc.validation``).
 """
 
+# pyright: reportAny=false, reportExplicitAny=false, reportUnknownVariableType=false, reportUnknownMemberType=false, reportUnknownArgumentType=false, reportUnknownParameterType=false
 from __future__ import annotations
 
+import json
 import logging
 import re
 from dataclasses import dataclass
@@ -30,6 +32,7 @@ __all__ = [
     "IRC_DIRECTIONS",
     "IrcFrameBlock",
     "build_irc_energy_graph",
+    "build_irc_pending_energy_graph",
     "frame_energy_from_comment",
     "parse_irc_xyz_frames",
 ]
@@ -54,6 +57,28 @@ class IrcFrameBlock:
     index: int
     comment: str
     atom_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class _PathFrame:
+    """One normalised IRC path point (trajectory JSON or endpoint XYZ)."""
+
+    index: int
+    comment: str
+    energy_raw: float | None
+    geometry_ref: str
+    status: str
+
+
+@dataclass(frozen=True, slots=True)
+class _PathInput:
+    """Normalised path data plus projection status for one source."""
+
+    per_direction: dict[str, list[_PathFrame]]
+    status: str
+    complete: bool
+    source: str
+    live: bool
 
 
 def parse_irc_xyz_frames(path: Path) -> list[IrcFrameBlock]:
@@ -124,15 +149,125 @@ def frame_energy_from_comment(comment: str) -> float | None:
     return None
 
 
-def build_irc_energy_graph(job_id: str, work_dir: Path) -> dict[str, Any] | None:
-    """Build the ``irc`` frames-contract projection for a job.
+def _read_json(path: Path) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return payload if isinstance(payload, dict) else None
 
-    Returns ``None`` when neither direction file exists.  Path order equals
-    file order — nodes are NEVER reordered by energy.  A missing direction
-    degrades to a single series with a note in ``metadata.warnings``.
-    """
-    irc_dir = Path(work_dir) / "RESULT" / "irc"
-    per_direction: dict[str, list[IrcFrameBlock]] = {}
+
+def _coerce_float(value: Any) -> float | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _manifest_status(work_dir: Path) -> str:
+    payload = _read_json(work_dir / "RESULT" / "result_manifest.json")
+    return str(payload.get("status") or "") if payload else ""
+
+
+def _trajectory_input(work_dir: Path) -> _PathInput | None:
+    """Build a projection input from the persisted ``irc_trajectory_v1`` file."""
+    payload = _read_json(work_dir / "RESULT" / "trajectories" / "irc_trajectory.json")
+    if payload is None:
+        return None
+    raw_frames = payload.get("frames")
+    if not isinstance(raw_frames, list):
+        return None
+    per_direction: dict[str, list[_PathFrame]] = {}
+    for entry in raw_frames:
+        if not isinstance(entry, dict):
+            continue
+        direction = str(entry.get("direction") or "")
+        if direction not in IRC_DIRECTIONS:
+            continue
+        index = entry.get("index", entry.get("frame_index"))
+        try:
+            frame_index = int(str(index))
+        except (TypeError, ValueError):
+            continue
+        per_direction.setdefault(direction, []).append(
+            _PathFrame(
+                index=frame_index,
+                comment=str(entry.get("comment") or ""),
+                energy_raw=_coerce_float(entry.get("energy_hartree")),
+                geometry_ref=str(entry.get("geometry_ref") or ""),
+                status=str(entry.get("status") or "completed"),
+            )
+        )
+    if not any(per_direction.values()):
+        return None
+    status = str(payload.get("status") or "completed")
+    complete = bool(payload.get("complete"))
+    return _PathInput(
+        per_direction=per_direction,
+        status=status,
+        complete=complete,
+        source="RESULT/trajectories/irc_trajectory.json",
+        live=not complete,
+    )
+
+
+def _work_trajectory_input(work_dir: Path) -> _PathInput | None:
+    """Back-fill a path from historical ORCA trajectories left under ``WORK``."""
+    from cccp.qc.interfaces.orca_ts import (
+        discover_irc_trajectory_files,
+        parse_irc_trajectory_xyz,
+    )
+
+    candidates = [work_dir / "WORK" / "07_PATH" / "ORCA"]
+    candidates.extend(path for path in work_dir.glob("WORK/*/ORCA") if path.is_dir())
+    for orca_dir in candidates:
+        if not orca_dir.is_dir():
+            continue
+        files = discover_irc_trajectory_files(orca_dir)
+        if not files:
+            continue
+        per_direction: dict[str, list[_PathFrame]] = {}
+        for direction in IRC_DIRECTIONS:
+            trajectory_path = files.get(direction)
+            if trajectory_path is None:
+                continue
+            points = parse_irc_trajectory_xyz(trajectory_path, direction)
+            if not points:
+                continue
+            try:
+                geometry_ref = trajectory_path.relative_to(work_dir).as_posix()
+            except ValueError:
+                geometry_ref = str(trajectory_path)
+            per_direction[direction] = [
+                _PathFrame(
+                    index=point.index,
+                    comment=point.comment,
+                    energy_raw=point.energy_hartree,
+                    geometry_ref=geometry_ref,
+                    status="completed",
+                )
+                for point in points
+            ]
+        if not per_direction:
+            continue
+        manifest_status = _manifest_status(work_dir)
+        terminal = manifest_status in {"completed", "failed", "cancelled"}
+        return _PathInput(
+            per_direction=per_direction,
+            status=manifest_status or "running",
+            complete=manifest_status == "completed",
+            source=orca_dir.relative_to(work_dir).as_posix(),
+            live=not terminal,
+        )
+    return None
+
+
+def _endpoint_input(work_dir: Path) -> tuple[_PathInput, list[str]] | None:
+    """Compatibility fallback: parse ``RESULT/irc/irc_*.xyz`` endpoints."""
+    irc_dir = work_dir / "RESULT" / "irc"
+    per_direction: dict[str, list[_PathFrame]] = {}
     notes: list[str] = []
     for direction in IRC_DIRECTIONS:
         path = irc_dir / f"irc_{direction}.xyz"
@@ -143,21 +278,104 @@ def build_irc_energy_graph(job_id: str, work_dir: Path) -> dict[str, Any] | None
         if not blocks:
             notes.append(f"unparseable_direction:{direction}")
             continue
-        per_direction[direction] = blocks
+        geometry_ref = _GEOMETRY_REF_TEMPLATE.format(direction=direction)
+        frames: list[_PathFrame] = []
+        for block in blocks:
+            energy = frame_energy_from_comment(block.comment)
+            frames.append(
+                _PathFrame(
+                    index=block.index,
+                    comment=block.comment,
+                    energy_raw=energy,
+                    geometry_ref=geometry_ref,
+                    status="completed" if energy is not None else "unknown",
+                )
+            )
+        per_direction[direction] = frames
     if not per_direction:
         return None
-    return _build_graph(job_id, per_direction, notes)
+    return (
+        _PathInput(
+            per_direction=per_direction,
+            status="completed",
+            complete=True,
+            source="RESULT/irc/",
+            live=False,
+        ),
+        notes,
+    )
+
+
+def build_irc_energy_graph(job_id: str, work_dir: Path) -> dict[str, Any] | None:
+    """Build the ``irc`` frames-contract projection for a job.
+
+    Resolution order: persisted trajectory JSON, historical ORCA trajectories
+    under ``WORK``, then ``RESULT/irc/irc_*.xyz`` endpoints.  Returns ``None``
+    when no source has any point.  Path order equals source order — nodes are
+    NEVER reordered by energy.
+    """
+    work_dir = Path(work_dir)
+    path_input = _trajectory_input(work_dir) or _work_trajectory_input(work_dir)
+    notes: list[str] = []
+    if path_input is None:
+        fallback = _endpoint_input(work_dir)
+        if fallback is None:
+            return None
+        path_input, notes = fallback
+    return _build_graph(
+        job_id,
+        path_input.per_direction,
+        notes,
+        status=path_input.status,
+        complete=path_input.complete,
+        source=path_input.source,
+        live=path_input.live,
+    )
+
+
+def build_irc_pending_energy_graph(job_id: str, work_dir: Path | None = None) -> dict[str, Any]:
+    """Projection returned while an IRC path has no usable points yet."""
+    spec = VIEW_REGISTRY["irc"]
+    manifest_status = _manifest_status(Path(work_dir)) if work_dir is not None else ""
+    terminal = manifest_status in {"completed", "failed", "cancelled"}
+    return {
+        "job_id": job_id,
+        "view_type": "irc",
+        "title": spec.title_zh,
+        "status": manifest_status or "running",
+        "complete": False,
+        "revision": "",
+        "default_series": "",
+        "available_views": ["irc"],
+        "x_axis": {"label": spec.x_label_zh, "unit": spec.x_unit},
+        "series": [],
+        "nodes": [],
+        "edges": [],
+        "annotations": [],
+        "source": "RESULT/trajectories/irc_trajectory.json",
+        "provenance": {},
+        "metadata": {
+            "reason": "irc_path_missing" if terminal else "irc_path_pending",
+            "workflow": "irc",
+            "live": not terminal,
+        },
+    }
 
 
 def _build_graph(
     job_id: str,
-    per_direction: dict[str, list[IrcFrameBlock]],
+    per_direction: dict[str, list[_PathFrame]],
     notes: list[str],
+    *,
+    status: str = "completed",
+    complete: bool = True,
+    source: str = "RESULT/irc/",
+    live: bool = False,
 ) -> dict[str, Any]:
     spec = VIEW_REGISTRY["irc"]
     raw_energies: dict[str, list[float | None]] = {
-        direction: [frame_energy_from_comment(b.comment) for b in blocks]
-        for direction, blocks in per_direction.items()
+        direction: [frame.energy_raw for frame in frames]
+        for direction, frames in per_direction.items()
     }
     finite = [e for values in raw_energies.values() for e in values if e is not None]
     energy_available = bool(finite)
@@ -166,25 +384,25 @@ def _build_graph(
     nodes: list[dict[str, Any]] = []
     node_slots: dict[str, list[int]] = {}
     for direction in IRC_DIRECTIONS:
-        blocks = per_direction.get(direction)
-        if not blocks:
+        frames = per_direction.get(direction)
+        if not frames:
             continue
         label = _DIRECTION_LABELS_ZH[direction]
         slots: list[int] = []
-        for block in blocks:
-            raw = raw_energies[direction][block.index]
+        for frame in frames:
+            raw = frame.energy_raw
             relative = None if raw is None or min_energy is None else raw - min_energy
             slots.append(len(nodes))
             nodes.append(
                 TrajectoryFrame(
-                    frame_id=f"irc_{direction}_{block.index}",
-                    label=f"IRC {label} {block.index + 1}",
-                    frame_index=block.index,
-                    x=float(block.index),
+                    frame_id=f"irc_{direction}_{frame.index}",
+                    label=f"IRC {label} {frame.index + 1}",
+                    frame_index=frame.index,
+                    x=float(frame.index),
                     energy=relative,
-                    status="completed" if raw is not None else "unknown",
-                    geometry_ref=_GEOMETRY_REF_TEMPLATE.format(direction=direction),
-                    step=block.index,
+                    status=frame.status or ("completed" if raw is not None else "unknown"),
+                    geometry_ref=frame.geometry_ref,
+                    step=frame.index,
                     metadata={
                         "direction": direction,
                         "energy_raw": raw,
@@ -195,12 +413,12 @@ def _build_graph(
 
     series: list[dict[str, Any]] = []
     for direction in IRC_DIRECTIONS:
-        blocks = per_direction.get(direction)
-        if not blocks:
+        frames = per_direction.get(direction)
+        if not frames:
             continue
         values: list[float | None] = [None] * len(nodes)
-        for slot, block in zip(node_slots[direction], blocks):
-            raw = raw_energies[direction][block.index]
+        for slot, frame in zip(node_slots[direction], frames):
+            raw = frame.energy_raw
             values[slot] = None if raw is None or min_energy is None else raw - min_energy
         if not any(v is not None for v in values):
             continue
@@ -208,7 +426,7 @@ def _build_graph(
             {
                 "id": f"irc_{direction}",
                 "label": _DIRECTION_LABELS_ZH[direction],
-                "unit": "kcal/mol",
+                "unit": "Eh",
                 "axis": "left",
                 "values": values,
             }
@@ -217,17 +435,17 @@ def _build_graph(
     annotations: list[dict[str, Any]] = []
     if energy_available:
         for direction in IRC_DIRECTIONS:
-            slots = node_slots.get(direction)
-            if not slots:
+            direction_slots = node_slots.get(direction)
+            if not direction_slots:
                 continue
-            values = [raw_energies[direction][b.index] for b in per_direction[direction]]
+            values = [frame.energy_raw for frame in per_direction[direction]]
             finite_dir = [v for v in values if v is not None]
             if not finite_dir:
                 continue
             # Endpoint marker only when the path endpoint is also the
             # directional minimum (the usual IRC descent) — display-only.
             if values[-1] is not None and values[-1] == min(finite_dir):
-                node = nodes[slots[-1]]
+                node = nodes[direction_slots[-1]]
                 annotations.append(
                     TrajectoryAnnotation(
                         id=f"irc_{direction}_endpoint",
@@ -251,8 +469,8 @@ def _build_graph(
         "job_id": job_id,
         "view_type": "irc",
         "title": spec.title_zh,
-        "status": "completed",
-        "complete": True,
+        "status": status or "completed",
+        "complete": bool(complete),
         "revision": "",
         "default_series": default_series,
         "available_views": ["irc"],
@@ -261,12 +479,13 @@ def _build_graph(
         "nodes": nodes,
         "edges": [],
         "annotations": annotations,
-        "source": "RESULT/irc/",
+        "source": source,
         "provenance": {},
         "metadata": {
             "frame_count": len(nodes),
             "directions": {d: len(per_direction[d]) for d in per_direction},
             "energy_available": energy_available,
             "warnings": notes,
+            "live": bool(live),
         },
     }

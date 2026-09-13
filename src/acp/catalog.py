@@ -763,7 +763,10 @@ FIELD_DEFINITIONS: dict[str, Any] = {
     "opt_convergence": {
         "type": "select",
         "advanced": True,
+        "label": "Convergence Criteria",
+        "label_zh": "\u6536\u655b\u6807\u51c6",
         "options": ["Loose", "Normal", "Tight", "VeryTight"],
+        "option_labels_zh": {"Loose": "\u5bbd\u677e", "Normal": "\u6807\u51c6", "Tight": "\u4e25\u683c", "VeryTight": "\u975e\u5e38\u4e25\u683c"},
         "default": {"*": "Tight"},
     },
     "max_steps": {"type": "int", "advanced": True, "min": 1, "max": 10000, "default": {"*": 100}},

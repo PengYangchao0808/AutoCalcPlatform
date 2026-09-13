@@ -38,6 +38,7 @@ from ._common import (
     output_dir,
     result_from_qc,
 )
+from .irc_trajectory import IrcTrajectoryRecorder
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,8 @@ def run_irc(
         backend = backend_for_request(request, selected_backend)
         target_dir = output_dir(request) or Path.cwd() / "irc_work"
         target_dir.mkdir(parents=True, exist_ok=True)
+        result_dir = _result_dir(request, target_dir)
+        recorder = IrcTrajectoryRecorder(result_dir, target_dir, directions=tuple(directions))
 
         direction_str = _resolve_direction(directions)
         if progress_reporter is not None:
@@ -132,6 +135,9 @@ def run_irc(
             active_stage = direction_stage
 
         # --- Backend call ---
+        irc_kwargs = _irc_kwargs(request)
+        if selected_backend == "orca":
+            irc_kwargs["output_callback"] = recorder.feed_line
         try:
             raw_result = backend.irc(
                 inputs.coordinates,
@@ -140,18 +146,25 @@ def run_irc(
                 multiplicity=inputs.multiplicity,
                 output_dir=target_dir,
                 direction=direction_str,
-                **_irc_kwargs(request),
+                **irc_kwargs,
             )
         except _BACKEND_FAILURES as error:
             if progress_reporter is not None and active_stage is not None:
                 progress_reporter.fail_stage(active_stage, error_text(error))
+            partial = recorder.finish(status="failed", complete=False)
+            partial_artifacts = _register_trajectory_products(
+                result_dir, selected_backend, partial
+            )
+            metadata = _irc_metadata(directions)
+            if partial is not None:
+                metadata["trajectory_frame_count"] = len(partial.get("frames") or [])
             return result_from_qc(
                 request,
                 selected_backend,
                 None,
                 [error_text(error)],
-                [],
-                metadata=_irc_metadata(directions),
+                partial_artifacts,
+                metadata=metadata,
                 status="failed",
             )
 
@@ -189,7 +202,6 @@ def run_irc(
         # metric rather than exposing a fabricated count.
 
         # --- Materialise endpoint structures ---
-        result_dir = _result_dir(request, target_dir)
         artifacts = _write_endpoint_products(
             request,
             selected_backend,
@@ -198,6 +210,11 @@ def run_irc(
             inputs,
             success,
         )
+        trajectory = recorder.finish(
+            status="completed" if success else "failed",
+            complete=bool(success),
+        )
+        artifacts.extend(_register_trajectory_products(result_dir, selected_backend, trajectory))
 
         if success and progress_reporter is not None and active_stage is not None:
             progress_reporter.complete_stage(active_stage)
@@ -209,6 +226,10 @@ def run_irc(
             key = f"{direction}_endpoint"
             if direction in endpoints:
                 metadata[key] = str(endpoints[direction]["path"])
+        if trajectory is not None:
+            metadata["trajectory_path"] = "trajectories/irc_trajectory.json"
+            metadata["trajectory_frame_count"] = len(trajectory.get("frames") or [])
+            metadata["path_files"] = dict(trajectory.get("geometry_files") or {})
 
         return result_from_qc(
             request,
@@ -384,6 +405,53 @@ def _write_endpoint_products(
             kind=ProductKind.IRC_ENDPOINT,
         )
 
+    _ = manifest.write(result_dir)
+    return artifacts
+
+
+def _register_trajectory_products(
+    result_dir: Path,
+    backend: str,
+    trajectory: dict[str, Any] | None,
+) -> list[ArtifactRef]:
+    """Register the IRC path trajectory and per-direction geometry products."""
+    if trajectory is None:
+        return []
+    artifacts: list[ArtifactRef] = []
+    trajectory_path = result_dir / "trajectories" / "irc_trajectory.json"
+    if trajectory_path.is_file():
+        artifacts.append(ArtifactRef(path=trajectory_path, type="trajectory", source=backend))
+    try:
+        manifest = ResultManifest.read(result_dir)
+    except FileNotFoundError:
+        manifest = ResultManifest(
+            task_id="",
+            workflow="irc",
+            status=str(trajectory.get("status") or "running"),
+        )
+    manifest.workflow = "irc"
+    manifest.status = str(trajectory.get("status") or manifest.status)
+    _ = manifest.add_product(
+        id="irc_trajectory",
+        label="IRC path trajectory",
+        path="trajectories/irc_trajectory.json",
+        kind=ProductKind.TRAJECTORY,
+    )
+    geometry_files = trajectory.get("geometry_files") or {}
+    if isinstance(geometry_files, dict):
+        for direction in ("forward", "reverse"):
+            relative_path = geometry_files.get(direction)
+            if not relative_path:
+                continue
+            path = result_dir / str(relative_path)
+            if path.is_file():
+                artifacts.append(ArtifactRef(path=path, type="structure", source=backend))
+            _ = manifest.add_product(
+                id=f"irc_{direction}_path",
+                label=f"IRC {direction} path",
+                path=str(relative_path),
+                kind=ProductKind.STRUCTURE,
+            )
     _ = manifest.write(result_dir)
     return artifacts
 

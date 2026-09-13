@@ -1358,12 +1358,14 @@ def _resolve_irc(task_root: Path, workflow: str, job_id: str, warnings: list[str
     irc_dir = task_root / "RESULT" / "irc"
 
     for direction in IRC_DIRECTIONS:
-        xyz_path = irc_dir / f"irc_{direction}.xyz"
+        path_file = irc_dir / f"irc_{direction}_path.xyz"
+        endpoint_file = irc_dir / f"irc_{direction}.xyz"
+        xyz_path = path_file if path_file.is_file() else endpoint_file
         if not xyz_path.is_file():
             continue
         frames = parse_irc_xyz_frames(xyz_path)
         if not frames:
-            warnings.append(f"IRC {direction} file has no parseable frames: irc_{direction}.xyz")
+            warnings.append(f"IRC {direction} file has no parseable frames: {xyz_path.name}")
             continue
         found.append(direction)
         geometry_ref = f"RESULT/irc/{xyz_path.name}"
