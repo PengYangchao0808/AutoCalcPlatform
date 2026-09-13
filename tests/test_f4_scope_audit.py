@@ -390,19 +390,22 @@ _F_ORCA_TS_SYMBOLS = (
     "discover_irc_trajectory_files",
     "parse_irc_trajectory_xyz",
     "parse_irc_iteration_energies",
+    "parse_irc_ts_energy",
+    "resolve_irc_ts_energy",
+    "HARTREE_TO_KCAL",
     "irc_energy_from_comment",
 )
 
 
 def _amendment_f_orca_ts_block(src: str) -> tuple[int, int] | None:
-    """Contiguous ``orca_ts.py`` F block: first IRC regex constant..iteration parser."""
+    """Contiguous ``orca_ts.py`` F block: first IRC regex constant..TS resolver."""
     lines = src.splitlines()
     start = None
     for idx, line in enumerate(lines, start=1):
         if line.startswith("_IRC_TRJ_FILE_RE"):
             start = idx
             break
-    end_range = _func_ranges(src).get("parse_irc_iteration_energies")
+    end_range = _func_ranges(src).get("resolve_irc_ts_energy")
     if start is None or end_range is None:
         return None
     return (start, end_range[1])
@@ -414,6 +417,8 @@ def _is_amendment_f_orca_ts_addition(ln: int, txt: str, worktree_src: str) -> bo
     if block is not None and block[0] <= ln <= block[1]:
         return True
     stripped = txt.strip()
+    if stripped == "import os":
+        return True
     if stripped == "trajectory_files: dict[str, Path] | None = None":
         return True
     return any(symbol in stripped for symbol in _F_ORCA_TS_SYMBOLS)
@@ -426,6 +431,8 @@ def _amendment_f_orca_ts_teeth(worktree: str) -> list[str]:
     for name in (
         "parse_irc_trajectory_xyz",
         "parse_irc_iteration_energies",
+        "parse_irc_ts_energy",
+        "resolve_irc_ts_energy",
         "discover_irc_trajectory_files",
     ):
         if name not in ranges:

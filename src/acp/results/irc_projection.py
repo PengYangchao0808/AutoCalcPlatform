@@ -79,6 +79,9 @@ class _PathInput:
     complete: bool
     source: str
     live: bool
+    merged: bool = False
+    ts_energy: float | None = None
+    ts_ref: str = ""
 
 
 def parse_irc_xyz_frames(path: Path) -> list[IrcFrameBlock]:
@@ -171,6 +174,24 @@ def _manifest_status(work_dir: Path) -> str:
     return str(payload.get("status") or "") if payload else ""
 
 
+def _resolve_ts_from_work(
+    work_dir: Path, per_direction: dict[str, list[_PathFrame]]
+) -> float | None:
+    """TS reference energy from ORCA output left under ``WORK`` (when available)."""
+    from cccp.qc.interfaces.orca_ts import resolve_irc_ts_energy
+
+    candidates = [work_dir / "WORK" / "07_PATH" / "ORCA"]
+    candidates.extend(path for path in work_dir.glob("WORK/*/ORCA") if path.is_dir())
+    reverse_frames = len(per_direction.get("reverse") or [])
+    for orca_dir in candidates:
+        if not orca_dir.is_dir():
+            continue
+        ts_energy = resolve_irc_ts_energy(orca_dir, reverse_frames=reverse_frames)
+        if ts_energy is not None:
+            return ts_energy
+    return None
+
+
 def _trajectory_input(work_dir: Path) -> _PathInput | None:
     """Build a projection input from the persisted ``irc_trajectory_v1`` file."""
     payload = _read_json(work_dir / "RESULT" / "trajectories" / "irc_trajectory.json")
@@ -204,12 +225,18 @@ def _trajectory_input(work_dir: Path) -> _PathInput | None:
         return None
     status = str(payload.get("status") or "completed")
     complete = bool(payload.get("complete"))
+    ts_energy = _coerce_float(payload.get("ts_energy_hartree"))
+    if ts_energy is None:
+        ts_energy = _resolve_ts_from_work(work_dir, per_direction)
     return _PathInput(
         per_direction=per_direction,
         status=status,
         complete=complete,
         source="RESULT/trajectories/irc_trajectory.json",
         live=not complete,
+        merged=True,
+        ts_energy=ts_energy,
+        ts_ref="input.xyz" if (work_dir / "input.xyz").is_file() else "",
     )
 
 
@@ -254,12 +281,18 @@ def _work_trajectory_input(work_dir: Path) -> _PathInput | None:
             continue
         manifest_status = _manifest_status(work_dir)
         terminal = manifest_status in {"completed", "failed", "cancelled"}
+        from cccp.qc.interfaces.orca_ts import resolve_irc_ts_energy
+
+        reverse_frames = len(per_direction.get("reverse") or [])
         return _PathInput(
             per_direction=per_direction,
             status=manifest_status or "running",
             complete=manifest_status == "completed",
             source=orca_dir.relative_to(work_dir).as_posix(),
             live=not terminal,
+            merged=True,
+            ts_energy=resolve_irc_ts_energy(orca_dir, reverse_frames=reverse_frames),
+            ts_ref="input.xyz" if (work_dir / "input.xyz").is_file() else "",
         )
     return None
 
@@ -330,6 +363,9 @@ def build_irc_energy_graph(job_id: str, work_dir: Path) -> dict[str, Any] | None
         complete=path_input.complete,
         source=path_input.source,
         live=path_input.live,
+        merged=path_input.merged,
+        ts_energy=path_input.ts_energy,
+        ts_ref=path_input.ts_ref,
     )
 
 
@@ -371,7 +407,22 @@ def _build_graph(
     complete: bool = True,
     source: str = "RESULT/irc/",
     live: bool = False,
+    merged: bool = False,
+    ts_energy: float | None = None,
+    ts_ref: str = "",
 ) -> dict[str, Any]:
+    if merged:
+        return _build_merged_graph(
+            job_id,
+            per_direction,
+            notes,
+            status=status,
+            complete=complete,
+            source=source,
+            live=live,
+            ts_energy=ts_energy,
+            ts_ref=ts_ref,
+        )
     spec = VIEW_REGISTRY["irc"]
     raw_energies: dict[str, list[float | None]] = {
         direction: [frame.energy_raw for frame in frames]
@@ -487,5 +538,179 @@ def _build_graph(
             "energy_available": energy_available,
             "warnings": notes,
             "live": bool(live),
+        },
+    }
+
+
+def _build_merged_graph(
+    job_id: str,
+    per_direction: dict[str, list[_PathFrame]],
+    notes: list[str],
+    *,
+    status: str,
+    complete: bool,
+    source: str,
+    live: bool,
+    ts_energy: float | None,
+    ts_ref: str,
+) -> dict[str, Any]:
+    """Merge both directions around the TS: reverse ← 0 → forward.
+
+    X is a signed step count (TS = 0, reverse negative, forward positive), so
+    the real sampling spacing (e.g. 5 vs 50 frames) is preserved instead of
+    stretching both sides to equal length.  Y is ``E - E_TS`` for both sides;
+    when the TS energy cannot be resolved, the shared global minimum is used
+    and a warning is recorded.
+    """
+    spec = VIEW_REGISTRY["irc"]
+    finite = [
+        frame.energy_raw
+        for frames in per_direction.values()
+        for frame in frames
+        if frame.energy_raw is not None
+    ]
+    if ts_energy is None:
+        if finite:
+            notes.append("ts_energy_missing")
+        reference = min(finite) if finite else None
+        reference_kind = "min"
+    else:
+        reference = ts_energy
+        reference_kind = "ts"
+
+    nodes: list[dict[str, Any]] = []
+    ordered: list[tuple[str, _PathFrame | None]] = []
+    for frame in reversed(per_direction.get("reverse") or []):
+        ordered.append(("reverse", frame))
+    ordered.append(("ts", None))
+    for frame in per_direction.get("forward") or []:
+        ordered.append(("forward", frame))
+
+    slots: dict[tuple[str, int], int] = {}
+    for direction, frame in ordered:
+        if direction == "ts":
+            energy = 0.0 if reference_kind == "ts" else None
+            nodes.append(
+                TrajectoryFrame(
+                    frame_id="irc_ts",
+                    label="TS",
+                    frame_index=-1,
+                    x=0.0,
+                    energy=energy,
+                    status="completed",
+                    geometry_ref=ts_ref,
+                    metadata={"direction": "ts", "energy_raw": ts_energy},
+                ).to_node(spec.node_type)
+            )
+            continue
+        if frame is None:
+            continue
+        signed_x = (
+            float(frame.index + 1) if direction == "forward" else float(-(frame.index + 1))
+        )
+        energy = (
+            None if frame.energy_raw is None or reference is None else frame.energy_raw - reference
+        )
+        slots[(direction, frame.index)] = len(nodes)
+        nodes.append(
+            TrajectoryFrame(
+                frame_id=f"irc_{direction}_{frame.index}",
+                label=f"IRC {_DIRECTION_LABELS_ZH[direction]} {frame.index + 1}",
+                frame_index=frame.index,
+                x=signed_x,
+                energy=energy,
+                status=frame.status or ("completed" if frame.energy_raw is not None else "unknown"),
+                geometry_ref=frame.geometry_ref,
+                step=frame.index,
+                metadata={
+                    "direction": direction,
+                    "energy_raw": frame.energy_raw,
+                    "signed_step": signed_x,
+                },
+            ).to_node(spec.node_type)
+        )
+
+    forward_values: list[float | None] = [None] * len(nodes)
+    reverse_values: list[float | None] = [None] * len(nodes)
+    path_values: list[float | None] = [None] * len(nodes)
+    for slot, node in enumerate(nodes):
+        path_values[slot] = node["energy"]
+        direction = str(node["metadata"].get("direction") or "")
+        if direction == "forward":
+            forward_values[slot] = node["energy"]
+        elif direction == "reverse":
+            reverse_values[slot] = node["energy"]
+
+    series: list[dict[str, Any]] = []
+    for series_id, label, values in (
+        ("irc_path", "全部（TS 居中）", path_values),
+        ("irc_forward", _DIRECTION_LABELS_ZH["forward"], forward_values),
+        ("irc_reverse", _DIRECTION_LABELS_ZH["reverse"], reverse_values),
+    ):
+        if any(value is not None for value in values):
+            series.append(
+                {"id": series_id, "label": label, "unit": "Eh", "axis": "left", "values": values}
+            )
+
+    annotations: list[dict[str, Any]] = []
+    if reference is not None:
+        for direction in IRC_DIRECTIONS:
+            frames = per_direction.get(direction) or []
+            if not frames:
+                continue
+            values = [frame.energy_raw for frame in frames]
+            finite_dir = [value for value in values if value is not None]
+            if not finite_dir:
+                continue
+            if values[-1] is not None and values[-1] == min(finite_dir):
+                last = frames[-1]
+                slot = slots.get((direction, last.index))
+                if slot is None:
+                    continue
+                node = nodes[slot]
+                annotations.append(
+                    TrajectoryAnnotation(
+                        id=f"irc_{direction}_endpoint",
+                        type="minimum",
+                        label=f"{_DIRECTION_LABELS_ZH[direction]}终点",
+                        frame_index=node["frame_index"],
+                        x=node["x"],
+                        y=node["energy"],
+                        status=node["status"],
+                        geometry_ref=node["geometry_ref"],
+                    ).to_annotation()
+                )
+
+    default_series = (
+        "irc_path"
+        if any(item["id"] == "irc_path" for item in series)
+        else (series[0]["id"] if series else "")
+    )
+
+    return {
+        "job_id": job_id,
+        "view_type": "irc",
+        "title": spec.title_zh,
+        "status": status or "completed",
+        "complete": bool(complete),
+        "revision": "",
+        "default_series": default_series,
+        "available_views": ["irc"],
+        "x_axis": {"label": spec.x_label_zh, "unit": spec.x_unit},
+        "series": series,
+        "nodes": nodes,
+        "edges": [],
+        "annotations": annotations,
+        "source": source,
+        "provenance": {},
+        "metadata": {
+            "frame_count": len(nodes),
+            "directions": {d: len(per_direction[d]) for d in per_direction},
+            "energy_available": bool(finite),
+            "warnings": notes,
+            "live": bool(live),
+            "signed_x": True,
+            "energy_reference": reference_kind,
+            "ts_energy_hartree": ts_energy,
         },
     }

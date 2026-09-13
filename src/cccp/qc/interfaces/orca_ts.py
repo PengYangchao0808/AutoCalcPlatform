@@ -12,12 +12,15 @@ Author: QCcalc Team
 from __future__ import annotations
 
 import logging
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 from numpy.typing import NDArray
+
+from cccp.utils.constants import HARTREE_TO_KCAL
 
 logger = logging.getLogger(__name__)
 
@@ -591,6 +594,92 @@ def parse_ts_mode_vectors(log_text: str) -> dict[int, NDArray[np.float64]]:
     return vectors
 
 
+def parse_irc_ts_energy(log_text: str) -> float | None:
+    """Extract the TS reference energy from an ORCA IRC output.
+
+    Prefers the ``IRC PATH SUMMARY`` row flagged ``<= TS``.  Otherwise derives
+    it from the first iteration row of either direction, where ORCA prints the
+    offset ``dE`` (kcal/mol) relative to the TS: ``E_TS = E - dE/627.509``.
+    """
+    lines = str(log_text).splitlines()
+    for line in lines:
+        if "<= TS" not in line:
+            continue
+        row = _IRC_ITERATION_ROW_RE.match(line.replace("<= TS", "").rstrip())
+        if row:
+            try:
+                return _irc_float(row.group(2))
+            except ValueError:
+                continue
+    for line in lines:
+        row = _IRC_ITERATION_ROW_RE.match(line)
+        if not row:
+            continue
+        try:
+            energy = _irc_float(row.group(2))
+            delta = _irc_float(row.group(3))
+        except ValueError:
+            continue
+        return energy - delta / HARTREE_TO_KCAL
+    return None
+
+
+def _pick_irc_output_file(work_dir: Path) -> Path | None:
+    preferred = work_dir / "irc.out"
+    if preferred.is_file():
+        return preferred
+    try:
+        candidates = [path for path in work_dir.glob("*.out") if path.is_file()]
+    except OSError:
+        return None
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: path.stat().st_mtime_ns)
+
+
+def _pick_irc_full_trajectory(work_dir: Path) -> Path | None:
+    try:
+        candidates = [path for path in work_dir.glob("*_IRC_Full_trj.xyz") if path.is_file()]
+    except OSError:
+        return None
+    if not candidates:
+        return None
+    return max(candidates, key=lambda path: path.stat().st_mtime_ns)
+
+
+def _read_text_tail(path: Path, max_bytes: int) -> str:
+    with open(path, "rb") as handle:
+        handle.seek(0, os.SEEK_END)
+        size = handle.tell()
+        handle.seek(max(0, size - max_bytes))
+        return handle.read().decode("utf-8", errors="replace")
+
+
+def resolve_irc_ts_energy(work_dir: Path, *, reverse_frames: int = 0) -> float | None:
+    """TS reference energy from an ORCA IRC work directory.
+
+    Reads the ``.out`` tail first (PATH SUMMARY / iteration rows); falls back
+    to the TS frame of ``*_IRC_Full_trj.xyz`` at index *reverse_frames* (the
+    combined trajectory is backward-reversed + TS + forward).
+    """
+    work_dir = Path(work_dir)
+    output = _pick_irc_output_file(work_dir)
+    if output is not None:
+        try:
+            text = _read_text_tail(output, 512_000)
+        except OSError:
+            text = ""
+        ts_energy = parse_irc_ts_energy(text)
+        if ts_energy is not None:
+            return ts_energy
+    full_trajectory = _pick_irc_full_trajectory(work_dir)
+    if full_trajectory is not None and reverse_frames > 0:
+        points = parse_irc_trajectory_xyz(full_trajectory, "forward")
+        if len(points) > reverse_frames:
+            return points[reverse_frames].energy_hartree
+    return None
+
+
 def parse_irc_endpoints(log_text: str, work_dir: Path) -> dict[str, Path]:
     """Locate IRC endpoint XYZ files produced in *work_dir*.
 
@@ -659,7 +748,9 @@ __all__ = [
     "parse_final_energy_hartree",
     "parse_irc_endpoints",
     "parse_irc_iteration_energies",
+    "parse_irc_ts_energy",
     "parse_irc_trajectory_xyz",
+    "resolve_irc_ts_energy",
     "parse_ts_frequency_map",
     "parse_ts_frequencies",
     "parse_ts_mode_vectors",

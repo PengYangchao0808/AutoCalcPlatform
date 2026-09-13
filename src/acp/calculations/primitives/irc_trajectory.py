@@ -109,6 +109,17 @@ def _signature(per_direction: dict[str, list[IrcPathPoint]]) -> str:
     return "|".join(parts)
 
 
+def resolve_ts_energy(
+    target_dir: Path,
+    per_direction: dict[str, list[IrcPathPoint]],
+) -> float | None:
+    """TS reference energy for the merged IRC view (ORCA output / Full_trj)."""
+    from cccp.qc.interfaces.orca_ts import resolve_irc_ts_energy
+
+    reverse_frames = len(per_direction.get("reverse") or [])
+    return resolve_irc_ts_energy(Path(target_dir), reverse_frames=reverse_frames)
+
+
 def _materialize(
     result_dir: Path,
     per_direction: dict[str, list[IrcPathPoint]],
@@ -118,6 +129,7 @@ def _materialize(
     requested_directions: tuple[str, ...],
     source_log: Path | None,
     warnings: list[str] | None,
+    ts_energy: float | None = None,
 ) -> dict[str, Any] | None:
     """Write the path XYZs and the JSON snapshot; ``None`` when no points."""
     result_dir = Path(result_dir)
@@ -161,6 +173,7 @@ def _materialize(
         "status": status,
         "complete": bool(complete),
         "reference_energy_hartree": min(energies) if energies else None,
+        "ts_energy_hartree": ts_energy,
         "directions": [direction for direction in IRC_DIRECTIONS if per_direction.get(direction)],
         "requested_directions": list(requested_directions),
         "geometry_files": geometry_files,
@@ -198,6 +211,7 @@ def write_irc_trajectory(
         requested_directions=directions,
         source_log=source_log,
         warnings=warnings,
+        ts_energy=resolve_ts_energy(Path(target_dir), per_direction),
     )
 
 
@@ -254,6 +268,7 @@ class IrcTrajectoryRecorder:
                     requested_directions=self.directions,
                     source_log=None,
                     warnings=None,
+                    ts_energy=resolve_ts_energy(self.target_dir, per_direction),
                 )
         except (OSError, ValueError):
             logger.debug("Could not refresh IRC trajectory snapshot", exc_info=True)
@@ -278,6 +293,7 @@ class IrcTrajectoryRecorder:
                     requested_directions=self.directions,
                     source_log=None,
                     warnings=None,
+                    ts_energy=resolve_ts_energy(self.target_dir, per_direction),
                 )
         except (OSError, ValueError):
             logger.debug("Could not finalize IRC trajectory snapshot", exc_info=True)

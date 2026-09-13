@@ -13,6 +13,8 @@ import shutil
 import threading
 from pathlib import Path
 
+import pytest
+
 from acp.calculations.primitives.irc_trajectory import (
     IrcTrajectoryRecorder,
     write_irc_trajectory,
@@ -22,7 +24,9 @@ from acp.results.irc_projection import build_irc_energy_graph
 from cccp.qc.interfaces.orca_ts import (
     discover_irc_trajectory_files,
     parse_irc_iteration_energies,
+    parse_irc_ts_energy,
     parse_irc_trajectory_xyz,
+    resolve_irc_ts_energy,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures" / "irc"
@@ -125,8 +129,9 @@ def test_writer_single_direction_produces_one_series(tmp_path: Path) -> None:
     assert (tmp_path / "RESULT" / "irc" / "irc_forward_path.xyz").is_file()
     graph = build_irc_energy_graph("job-single", tmp_path)
     assert graph is not None
-    assert [series["id"] for series in graph["series"]] == ["irc_forward"]
+    assert [series["id"] for series in graph["series"]] == ["irc_path", "irc_forward"]
     assert graph["series"][0]["unit"] == "Eh"
+    assert graph["default_series"] == "irc_path"
 
 
 def test_failed_run_keeps_partial_path(tmp_path: Path) -> None:
@@ -154,7 +159,7 @@ def test_projection_prefers_persisted_trajectory_over_endpoints(tmp_path: Path) 
     graph = build_irc_energy_graph("job-prefer", tmp_path)
     assert graph is not None
     assert graph["source"] == "RESULT/trajectories/irc_trajectory.json"
-    assert len(graph["nodes"]) == 12
+    assert len(graph["nodes"]) == 13
 
 
 def test_projection_backfills_from_work_orca_files(tmp_path: Path) -> None:
@@ -162,8 +167,11 @@ def test_projection_backfills_from_work_orca_files(tmp_path: Path) -> None:
     graph = build_irc_energy_graph("job-backfill", tmp_path)
     assert graph is not None
     assert graph["source"] == "WORK/07_PATH/ORCA"
-    assert len(graph["nodes"]) == 12
-    assert [node["metadata"]["energy_raw"] for node in graph["nodes"][:6]] == FWD_ENERGIES
+    assert len(graph["nodes"]) == 13
+    forward = [node for node in graph["nodes"] if node["metadata"].get("direction") == "forward"]
+    reverse = [node for node in graph["nodes"] if node["metadata"].get("direction") == "reverse"]
+    assert [node["metadata"]["energy_raw"] for node in forward] == FWD_ENERGIES
+    assert [node["metadata"]["energy_raw"] for node in reverse] == list(reversed(REV_ENERGIES))
 
 
 def test_projection_none_keeps_existing_contract(tmp_path: Path) -> None:
@@ -175,7 +183,7 @@ def test_dispatcher_irc_branch_returns_irc_or_pending(tmp_path: Path) -> None:
     graph = build_energy_graph_from_job("job-dispatch", workflow="irc", method=None, work_dir=tmp_path)
     assert graph["view_type"] == "irc"
     assert graph["metadata"].get("reason") != "workflow_has_no_energy_graph"
-    assert [series["id"] for series in graph["series"]] == ["irc_forward"]
+    assert [series["id"] for series in graph["series"]] == ["irc_path", "irc_forward"]
 
 
 def test_dispatcher_irc_pending_when_no_path(tmp_path: Path) -> None:
@@ -201,6 +209,8 @@ def test_writer_materialises_single_frame_geometry_per_point(tmp_path: Path) -> 
     assert graph is not None
     for node in graph["nodes"]:
         direction = node["metadata"]["direction"]
+        if direction == "ts":
+            continue
         assert node["geometry_ref"] == (
             f"RESULT/irc/irc_{direction}_point_{node['frame_index']:04d}.xyz"
         )
@@ -229,3 +239,74 @@ def test_recorder_concurrent_refresh_is_atomic(tmp_path: Path) -> None:
     )
     assert payload["frames"]
     assert not list((tmp_path / "RESULT").rglob("*.tmp"))
+
+
+def test_parse_irc_ts_energy_real_output() -> None:
+    text = (FIXTURES / "orca_irc_h2o2.out").read_text(encoding="utf-8", errors="replace")
+    value = parse_irc_ts_energy(text)
+    assert value == pytest.approx(-151.532087, abs=1e-6)
+
+
+def test_resolve_irc_ts_energy_prefers_output_then_full_trajectory(tmp_path: Path) -> None:
+    orca = _seed_orca(
+        tmp_path, ("h2o2_IRC_F_trj.xyz", "h2o2_IRC_B_trj.xyz", "h2o2_IRC_Full_trj.xyz")
+    )
+    assert resolve_irc_ts_energy(orca, reverse_frames=6) == pytest.approx(
+        -151.532087224846, abs=1e-9
+    )
+    shutil.copy(FIXTURES / "orca_irc_h2o2.out", orca / "irc.out")
+    assert resolve_irc_ts_energy(orca, reverse_frames=6) == pytest.approx(-151.532087, abs=1e-6)
+
+
+def test_merged_projection_ts_centered_with_shared_reference(tmp_path: Path) -> None:
+    orca = _seed_orca(tmp_path, ("h2o2_IRC_F_trj.xyz", "h2o2_IRC_B_trj.xyz"))
+    shutil.copy(FIXTURES / "orca_irc_h2o2.out", orca / "irc.out")
+    payload = write_irc_trajectory(tmp_path / "RESULT", target_dir=orca)
+    assert payload is not None
+    ts_energy = payload["ts_energy_hartree"]
+    assert ts_energy is not None
+
+    graph = build_irc_energy_graph("job-merged", tmp_path)
+    assert graph is not None
+    assert graph["default_series"] == "irc_path"
+    assert [series["id"] for series in graph["series"]] == [
+        "irc_path",
+        "irc_forward",
+        "irc_reverse",
+    ]
+    assert graph["metadata"]["energy_reference"] == "ts"
+    assert graph["metadata"]["signed_x"] is True
+    assert graph["metadata"]["ts_energy_hartree"] == ts_energy
+
+    xs = [node["x"] for node in graph["nodes"]]
+    assert xs == [-6.0, -5.0, -4.0, -3.0, -2.0, -1.0, 0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0]
+    ts_node = graph["nodes"][6]
+    assert ts_node["id"] == "irc_ts"
+    assert ts_node["energy"] == 0.0
+
+    path_series = graph["series"][0]
+    assert all(value is not None for value in path_series["values"])
+    forward = [n for n in graph["nodes"] if n["metadata"].get("direction") == "forward"]
+    reverse = [n for n in graph["nodes"] if n["metadata"].get("direction") == "reverse"]
+    assert [n["metadata"]["energy_raw"] for n in forward] == FWD_ENERGIES
+    assert [n["metadata"]["energy_raw"] for n in reverse] == list(reversed(REV_ENERGIES))
+    for node in forward + reverse:
+        raw = node["metadata"]["energy_raw"]
+        if raw is None:
+            continue
+        assert node["energy"] == pytest.approx(raw - ts_energy, abs=1e-9)
+
+
+def test_merged_projection_without_ts_uses_shared_min(tmp_path: Path) -> None:
+    orca = _seed_orca(tmp_path, ("h2o2_IRC_F_trj.xyz", "h2o2_IRC_B_trj.xyz"))
+    payload = write_irc_trajectory(tmp_path / "RESULT", target_dir=orca)
+    assert payload is not None
+    assert payload["ts_energy_hartree"] is None
+
+    graph = build_irc_energy_graph("job-min-ref", tmp_path)
+    assert graph is not None
+    assert graph["metadata"]["energy_reference"] == "min"
+    assert "ts_energy_missing" in graph["metadata"]["warnings"]
+    assert len([node for node in graph["nodes"] if node["energy"] == 0.0]) == 1
+    reverse_endpoint = next(node for node in graph["nodes"] if node["id"] == "irc_reverse_5")
+    assert reverse_endpoint["energy"] > 0.0

@@ -257,6 +257,14 @@ def _resolve_irc_geometry(
     trajectories under ``WORK``.
     """
     direction = _irc_direction_from_frame_id(frame_id)
+    if str(frame_id or "") == "irc_ts":
+        input_path = task_root / "input.xyz"
+        if input_path.is_file():
+            try:
+                return input_path.read_text(encoding="utf-8", errors="replace")
+            except OSError as exc:
+                raise FrameCandidateError(f"unreadable IRC TS geometry: {input_path}") from exc
+        raise FrameCandidateError("IRC TS geometry not found (input.xyz missing)")
     trajectory_path = task_root / "RESULT" / "trajectories" / "irc_trajectory.json"
     payload: dict[str, object] | None = None
     if trajectory_path.is_file():

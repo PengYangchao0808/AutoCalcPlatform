@@ -1064,6 +1064,8 @@ body.resizing-v canvas {
 .energy-axis { stroke: rgba(255, 255, 255, 0.14); stroke-width: 1; }
 .energy-axis-text { fill: var(--text-tertiary); font-size: 11px; }
 .energy-line { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.energy-line-forward { stroke: #4ea1ff; }
+.energy-line-reverse { stroke: #e8b45a; }
 .energy-area { fill: rgba(78, 161, 255, 0.13); }
 .energy-point-group { cursor: pointer; }
 .energy-point { fill: var(--accent); stroke: var(--bg-canvas); stroke-width: 2; pointer-events: none; opacity: 0; transition: opacity 0.12s; }
@@ -8155,7 +8157,8 @@ function energyGraphFrameIndexForNode(data, nodeId) {
 
 function energyGraphSeriesValueAtFrame(data, series, frameIndex) {
   const nodes = Array.isArray(data.nodes) ? data.nodes : [];
-  const nodeIndex = nodes.findIndex(function(node) { return Number(node.frame_index) === Number(frameIndex); });
+  let nodeIndex = nodes.findIndex(function(node) { return String(node.id) === String(energyGraphState.selectedNodeId); });
+  if (nodeIndex < 0) nodeIndex = nodes.findIndex(function(node) { return Number(node.frame_index) === Number(frameIndex); });
   const values = Array.isArray(series && series.values) ? series.values : [];
   return nodeIndex >= 0 ? energyGraphValue(values[nodeIndex]) : null;
 }
@@ -8340,7 +8343,8 @@ function energyGraphUpdateSelection(frameChanged, skipSvg) {
       if (frame != null) {
         var layout = energyGraphState.layout;
         if (layout) {
-          var node = data.nodes.find(function(n) { return Number(n.frame_index) === frame; });
+          var node = data.nodes.find(function(n) { return String(n.id) === String(energyGraphState.selectedNodeId); })
+            || data.nodes.find(function(n) { return Number(n.frame_index) === frame; });
           if (node && energyGraphValue(node.x) !== null) {
             var series = energyGraphSeries(data);
             var yVal = energyGraphSeriesValueAtFrame(data, series, frame);
@@ -9347,7 +9351,8 @@ function energyGraphBuildSvg(data) {
   var selectedGuide = null;
   var selectedFrame = energyGraphFrameIndexForNode(data, energyGraphState.selectedNodeId);
   if (selectedFrame != null) {
-    var selNode = nodes.find(function(node) { return Number(node.frame_index) === selectedFrame; });
+    var selNode = nodes.find(function(node) { return String(node.id) === String(energyGraphState.selectedNodeId); })
+      || nodes.find(function(node) { return Number(node.frame_index) === selectedFrame; });
     if (selNode && energyGraphValue(selNode.x) !== null) {
       var selX = energyGraphValue(selNode.x);
       var selInDomain = selX >= xDom[0] && selX <= xDom[1];
@@ -9378,6 +9383,26 @@ function energyGraphBuildSvg(data) {
       titleText: titleText,
     });
   });
+  /* ── IRC merged view: colour the two directions separately ── */
+  var ircLines = null;
+  if (String(data.view_type || "") === "irc" && String(series && series.id || "") === "irc_path") {
+    var reversePts = [], forwardPts = [], tsPoint = null;
+    visiblePoints.forEach(function(pt) {
+      var dir = pt.node && pt.node.metadata ? String(pt.node.metadata.direction || "") : "";
+      if (dir === "reverse") reversePts.push(pt);
+      else if (dir === "forward") forwardPts.push(pt);
+      else if (dir === "ts") tsPoint = pt;
+    });
+    function ircCmds(seq) {
+      return seq.map(function(pt, idx) { return (idx ? "L" : "M") + xFor(pt.x) + " " + yFor(pt.y); }).join(" ");
+    }
+    ircLines = [];
+    var reverseSeq = reversePts.concat(tsPoint ? [tsPoint] : []);
+    var forwardSeq = (tsPoint ? [tsPoint] : []).concat(forwardPts);
+    if (reverseSeq.length > 1) ircLines.push({ cssClass: "energy-line energy-line-reverse", linePath: ircCmds(reverseSeq) });
+    if (forwardSeq.length > 1) ircLines.push({ cssClass: "energy-line energy-line-forward", linePath: ircCmds(forwardSeq) });
+    if (!ircLines.length) ircLines = null;
+  }
   /* ── Annotations: merge backend + projected candidates, delegate to shared renderer ── */
   var annotations = Array.isArray(data.annotations) ? data.annotations : [];
   var projectedCandidates = energyProjectCandidatesAsAnnotations(data);
@@ -9398,8 +9423,9 @@ function energyGraphBuildSvg(data) {
     clipId: "energy-plot-clip",
     geom: geom,
     xDom: xDom, yDom: yDom,
-    linePath: linePath,
-    areaPath: areaPath,
+    linePath: ircLines ? "" : linePath,
+    areaPath: ircLines ? "" : areaPath,
+    series: ircLines || undefined,
     selectedGuide: selectedGuide,
     points: pointCfgs,
     annotationOpts: {
@@ -10899,7 +10925,9 @@ async function energyGraphLoadStructure(frameIndex) {
   var data = energyGraphState.data;
   if (!data || frameIndex == null) return;
   var nodes = Array.isArray(data.nodes) ? data.nodes : [];
-  var node = nodes.find(function(n) { return Number(n.frame_index) === Number(frameIndex); }) || nodes[0];
+  var node = nodes.find(function(n) { return String(n.id) === String(energyGraphState.selectedNodeId); })
+    || nodes.find(function(n) { return Number(n.frame_index) === Number(frameIndex); })
+    || nodes[0];
   if (node) return energyGraphLoadFrameGeometry(node);
 }
 
