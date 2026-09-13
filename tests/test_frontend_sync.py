@@ -8224,12 +8224,15 @@ def test_batch_typography_updates() -> None:
 
 
 def test_batch_convergence_canonicalization() -> None:
-    """P2b: presets/defaults use canonical casing; case-insensitive helper present."""
+    """P2b + 2026-09-13: payload builder submits lowercase enum values
+    (aligned with CLI choices); case-insensitive helper still present for
+    legacy title-case display/preset matching."""
     html = FRONTEND.read_text(encoding="utf-8")
     fn_body = html.split("function applyBatchOptimizeMethodFields(methodPayload)", 1)[1]
     fn_body = fn_body.split("\nfunction ", 1)[0]
-    assert '"Tight"' in fn_body, "Canonical 'Tight' casing in payload builder"
-    assert '"Normal"' in fn_body, "Canonical 'Normal' casing in payload builder"
+    assert '"tight"' in fn_body, "Canonical 'tight' casing in payload builder"
+    assert '"normal"' in fn_body, "Canonical 'normal' casing in payload builder"
+    assert '"Tight"' not in fn_body, "Payload builder must not submit title-case enums"
     assert "_canonMatch" in html, "Case-insensitive helper _canonMatch missing"
     assert 'String(curVal).toLowerCase() === String(o).toLowerCase()' in html, (
         "Select binding must use case-insensitive comparison"

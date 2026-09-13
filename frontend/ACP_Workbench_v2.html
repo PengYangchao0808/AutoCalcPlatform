@@ -4136,10 +4136,10 @@ option, optgroup {
           <div class="pes-selection-head">
             <div>
               <div class="pes-selection-title" data-i18n="pes.selection.title">PESsearch 通用原子选择</div>
-              <div class="pes-selection-hint" data-i18n="pes.selection.hint">先选择功能，再按顺序点击原子。邻接关系由输入结构自动校验。</div>
+              <div class="pes-selection-hint" data-i18n="pes.selection.hint">先选择功能，再按顺序点击原子。距离扫描可选择任意两个原子，无需化学键；扫描方向不限（近→远或远→近均可）。</div>
             </div>
             <div class="pes-selection-actions">
-              <button type="button" class="btn ghost pes-function-btn active" data-selection-kind="bond_stretch" data-i18n="pes.function.bond_stretch">单键拉伸（2）</button>
+              <button type="button" class="btn ghost pes-function-btn active" data-selection-kind="bond_stretch" data-i18n="pes.function.bond_stretch">距离扫描（2）</button>
               <button type="button" class="btn ghost pes-function-btn" data-selection-kind="angle" data-i18n="pes.function.angle">键角（3）</button>
               <button type="button" class="btn ghost pes-function-btn" data-selection-kind="dihedral" data-i18n="pes.function.dihedral">二面角（4）</button>
               <button type="button" class="btn ghost pes-function-btn" data-selection-kind="double_bond_scan" data-i18n="pes.function.double_bond_scan">双键同步扫描（2+2）</button>
@@ -5782,8 +5782,8 @@ const I18N = {
     "s2scan.intent_custom": "自定义",
     "s2scan.intent_custom_desc": "自定义起止距离",
     "pes.selection.title": "PESsearch 通用原子选择",
-    "pes.selection.hint": "先选择功能，再按顺序点击原子。邻接关系由输入结构自动校验。",
-    "pes.function.bond_stretch": "单键拉伸（2）",
+    "pes.selection.hint": "先选择功能，再按顺序点击原子。距离扫描可选择任意两个原子，无需化学键；扫描方向不限（近→远或远→近均可）。",
+    "pes.function.bond_stretch": "距离扫描（2）",
     "pes.function.angle": "键角（3）",
     "pes.function.dihedral": "二面角（4）",
     "pes.function.double_bond_scan": "双键同步扫描（2+2）",
@@ -6787,8 +6787,8 @@ const I18N = {
     "s2scan.intent_custom": "Custom",
     "s2scan.intent_custom_desc": "Custom start/end distances",
     "pes.selection.title": "PESsearch Atom Selection",
-    "pes.selection.hint": "Pick a function first, then click atoms in order. Adjacency is validated against the input structure.",
-    "pes.function.bond_stretch": "Bond Stretch (2)",
+    "pes.selection.hint": "Pick a function first, then click atoms in order. Distance scan accepts any two atoms — no bond required — and direction is free (near→far or far→near).",
+    "pes.function.bond_stretch": "Distance Scan (2)",
     "pes.function.angle": "Angle (3)",
     "pes.function.dihedral": "Dihedral (4)",
     "pes.function.double_bond_scan": "Double-Bond Sync (2+2)",
@@ -19317,7 +19317,7 @@ function pesCoordinateUnit() {
 
 function pesSelectionKindLabel(kind) {
   return ({
-    bond_stretch: "单键拉伸",
+    bond_stretch: "距离扫描",
     angle: "键角扫描",
     dihedral: "二面角扫描",
     double_bond_scan: "双键同步扫描",
@@ -20470,14 +20470,14 @@ function applyBatchOptimizeMethodFields(methodPayload) {
   });
   // Optimization controls
   methodPayload.opt_max_iter = value("opt_max_iter", null);
-  methodPayload.opt_convergence = value("opt_convergence", "Tight");
+  methodPayload.opt_convergence = value("opt_convergence", "tight");
   methodPayload.opt_trust_radius = value("opt_trust_radius", null);
   methodPayload.opt_initial_hessian = value("opt_initial_hessian", null);
   methodPayload.opt_recalc_hess = value("opt_recalc_hess", null);
   // SCF convergence controls
   methodPayload.scf_max_iter = value("scf_max_iter", 300);
-  methodPayload.scf_convergence = value("scf_convergence", "Tight");
-  methodPayload.scf_strategy = value("scf_strategy", "Normal");
+  methodPayload.scf_convergence = value("scf_convergence", "tight");
+  methodPayload.scf_strategy = value("scf_strategy", "normal");
   // Rescue / expert controls (P1e)
   methodPayload.opt_rescue_policy = value("opt_rescue_policy", "adaptive");
   methodPayload.opt_max_rescue = value("opt_max_rescue", 2);
@@ -21740,19 +21740,19 @@ async function openMethodConfig() {
         var BATCH_PRESETS = {
           "standard": {
             label: "Standard", label_zh: "\u6807\u51c6",
-            values: { opt_convergence: "Tight", scf_max_iter: 300, opt_initial_hessian: null, opt_recalc_hess: null, scf_strategy: "Normal", scf_convergence: "Tight" },
+            values: { opt_convergence: "tight", scf_max_iter: 300, opt_initial_hessian: null, opt_recalc_hess: null, scf_strategy: "normal", scf_convergence: "tight" },
           },
           "difficult_geometry": {
             label: "Difficult Geometry", label_zh: "\u56f0\u96be\u51e0\u4f55",
-            values: { opt_max_iter: 400, opt_trust_radius: 0.10, opt_recalc_hess: 5, opt_convergence: "Tight" },
+            values: { opt_max_iter: 400, opt_trust_radius: 0.10, opt_recalc_hess: 5, opt_convergence: "tight" },
           },
           "difficult_scf": {
             label: "Difficult SCF", label_zh: "\u56f0\u96be SCF",
-            values: { scf_max_iter: 500, scf_strategy: "SlowConv", scf_convergence: "Tight" },
+            values: { scf_max_iter: 500, scf_strategy: "slowconv", scf_convergence: "tight" },
           },
           "high_precision": {
             label: "VeryTight", label_zh: "\u4e25\u683c\u6536\u655b",
-            values: { opt_convergence: "VeryTight", scf_convergence: "VeryTight", scf_max_iter: 500 },
+            values: { opt_convergence: "verytight", scf_convergence: "verytight", scf_max_iter: 500 },
           },
         };
 
@@ -21761,8 +21761,8 @@ async function openMethodConfig() {
         // These mirror the hardcoded backend defaults for INT/TS roles and are
         // informational only; the backend remains authoritative.
         var _BATCH_ENGINE_DEFAULTS = {
-          INT: { opt_max_iter: 250, opt_convergence: "Tight", scf_max_iter: 300, scf_convergence: "Tight", scf_strategy: "Normal" },
-          TS:  { opt_max_iter: 200, opt_convergence: "Tight", opt_trust_radius: 0.3, opt_initial_hessian: "calculate", opt_recalc_hess: 5, scf_max_iter: 300, scf_convergence: "Tight", scf_strategy: "Normal" },
+          INT: { opt_max_iter: 250, opt_convergence: "tight", scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal" },
+          TS:  { opt_max_iter: 200, opt_convergence: "tight", opt_trust_radius: 0.3, opt_initial_hessian: "calculate", opt_recalc_hess: 5, scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal" },
         };
 
         // ── Case-insensitive match helper ──
@@ -21843,9 +21843,9 @@ async function openMethodConfig() {
             if (stageVals[k] !== null && stageVals[k] !== undefined) eff[k] = stageVals[k];
           });
 
-          var convKey = String(eff.opt_convergence || "Tight").toLowerCase();
+          var convKey = String(eff.opt_convergence || "tight").toLowerCase();
           var convLabel = { "tight": "TightOpt", "verytight": "VeryTightOpt", "loose": "LooseOpt", "normal": "NormalOpt" }[convKey] || eff.opt_convergence || "TightOpt";
-          var scfConvKey = String(eff.scf_convergence || "Tight").toLowerCase();
+          var scfConvKey = String(eff.scf_convergence || "tight").toLowerCase();
           var scfLabel = { "tight": "TightSCF", "verytight": "VeryTightSCF", "normal": "NormalSCF" }[scfConvKey] || eff.scf_convergence || "TightSCF";
           var maxIter = eff.opt_max_iter != null ? String(eff.opt_max_iter) : (zh ? "\u81ea\u52a8" : "auto");
           var trustStr = eff.opt_trust_radius != null ? ("Trust " + eff.opt_trust_radius) : (zh ? "Trust \u81ea\u52a8" : "Trust auto");
@@ -21967,7 +21967,7 @@ async function openMethodConfig() {
 
         // ── Count custom (non-default) advanced keys ──
         function _batchCustomCount(stageVals) {
-          var defaults = { opt_convergence: "Tight", scf_max_iter: 300, scf_convergence: "Tight", scf_strategy: "Normal", opt_rescue_policy: "adaptive", opt_max_rescue: 2, scf_orbital_inherit: true };
+          var defaults = { opt_convergence: "tight", scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal", opt_rescue_policy: "adaptive", opt_max_rescue: 2, scf_orbital_inherit: true };
           var keys = ["opt_max_iter", "opt_convergence", "opt_trust_radius", "opt_initial_hessian", "opt_recalc_hess", "opt_rescue_policy", "opt_max_rescue", "scf_max_iter", "scf_convergence", "scf_strategy", "scf_orbital_inherit"];
           var roleKeys = ["minimum_opt_trust_radius", "minimum_opt_initial_hessian", "minimum_opt_recalc_hess", "transition_state_opt_trust_radius", "transition_state_opt_initial_hessian", "transition_state_opt_recalc_hess"];
           var count = 0;
@@ -22244,10 +22244,10 @@ async function openMethodConfig() {
         function _formatInheritValue(fieldName, val) {
           if (val === null || val === undefined) return currentLang === "zh-CN" ? "\u81ea\u52a8" : "auto";
           if (fieldName === "opt_convergence") {
-            return { "Tight": "TightOpt", "VeryTight": "VeryTightOpt", "Normal": "Opt", "Loose": "LooseOpt" }[String(val)] || String(val);
+            return { "tight": "TightOpt", "Tight": "TightOpt", "verytight": "VeryTightOpt", "VeryTight": "VeryTightOpt", "normal": "Opt", "Normal": "Opt", "loose": "LooseOpt", "Loose": "LooseOpt" }[String(val)] || String(val);
           }
           if (fieldName === "scf_convergence") {
-            return { "Tight": "TightSCF", "VeryTight": "VeryTightSCF", "Normal": "NormalSCF" }[String(val)] || String(val);
+            return { "tight": "TightSCF", "Tight": "TightSCF", "verytight": "VeryTightSCF", "VeryTight": "VeryTightSCF", "normal": "NormalSCF", "Normal": "NormalSCF" }[String(val)] || String(val);
           }
           if (fieldName === "scf_strategy") {
             if (currentLang === "zh-CN") {
