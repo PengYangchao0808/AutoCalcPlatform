@@ -752,22 +752,27 @@ FIELD_DEFINITIONS: dict[str, Any] = {
         "advanced": True,
         "label": "SCF Convergence",
         "label_zh": "SCF 收敛标准",
-        "options": ["Normal", "Tight", "VeryTight"],
+        "options": ["normal", "tight", "verytight"],
         "option_labels_zh": {
-            "Normal": "标准",
-            "Tight": "严格",
-            "VeryTight": "非常严格",
+            "normal": "标准",
+            "tight": "严格",
+            "verytight": "非常严格",
         },
-        "default": {"*": "Tight"},
+        "default": {"*": "tight"},
     },
     "opt_convergence": {
         "type": "select",
         "advanced": True,
         "label": "Convergence Criteria",
         "label_zh": "\u6536\u655b\u6807\u51c6",
-        "options": ["Loose", "Normal", "Tight", "VeryTight"],
-        "option_labels_zh": {"Loose": "\u5bbd\u677e", "Normal": "\u6807\u51c6", "Tight": "\u4e25\u683c", "VeryTight": "\u975e\u5e38\u4e25\u683c"},
-        "default": {"*": "Tight"},
+        "options": ["loose", "normal", "tight", "verytight"],
+        "option_labels_zh": {
+            "loose": "\u5bbd\u677e",
+            "normal": "\u6807\u51c6",
+            "tight": "\u4e25\u683c",
+            "verytight": "\u975e\u5e38\u4e25\u683c",
+        },
+        "default": {"*": "tight"},
     },
     "max_steps": {"type": "int", "advanced": True, "min": 1, "max": 10000, "default": {"*": 100}},
     "method": {
@@ -3128,8 +3133,8 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "solvent_model": "none",
                         "solvent": "",
                         "grid": "UltraFine",
-                        "scf_convergence": "Tight",
-                        "opt_convergence": "Normal",
+                        "scf_convergence": "tight",
+                        "opt_convergence": "normal",
                         "max_steps": 200,
                     },
                     "refinement_sp": {
@@ -3201,8 +3206,8 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "solvent_model": "none",
                         "solvent": "",
                         "grid": "UltraFine",
-                        "scf_convergence": "Tight",
-                        "opt_convergence": "Normal",
+                        "scf_convergence": "tight",
+                        "opt_convergence": "normal",
                         "max_steps": 200,
                     },
                     "refinement_sp": {
@@ -3383,8 +3388,8 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "solvent_model": "none",
                         "solvent": "",
                         "grid": "UltraFine",
-                        "scf_convergence": "Tight",
-                        "opt_convergence": "Normal",
+                        "scf_convergence": "tight",
+                        "opt_convergence": "normal",
                         "max_steps": 200,
                     },
                     "refinement_sp": {
@@ -3514,8 +3519,8 @@ METHOD_SCHEMAS: dict[str, Any] = {    "confsearch": {
                         "solvent_model": "none",
                         "solvent": "",
                         "grid": "UltraFine",
-                        "scf_convergence": "Tight",
-                        "opt_convergence": "Normal",
+                        "scf_convergence": "tight",
+                        "opt_convergence": "normal",
                         "max_steps": 200,
                     },
                     "refinement_sp": {
@@ -4086,7 +4091,20 @@ def normalize_legacy_method(method: dict[str, Any]) -> dict[str, Any]:
     return method
 
 
-_CASE_INSENSITIVE_FIELDS = frozenset({"solvent_model", "dispersion"})
+# ``solvent_model`` / ``dispersion`` legacy members plus the opt/SCF
+# enum trio (2026-09-13): historical payloads and pre-2026-09 presets
+# carry title-case values ("Tight"); membership here both validates them
+# case-insensitively (canonicalising to the lowercase schema options) and
+# lowercases them at CLI-flag emission (``method_levels_to_cli_flags``).
+_CASE_INSENSITIVE_FIELDS = frozenset(
+    {
+        "solvent_model",
+        "dispersion",
+        "opt_convergence",
+        "scf_convergence",
+        "scf_strategy",
+    }
+)
 
 
 def _normalize_solvent(levels: dict, schema: dict) -> dict:

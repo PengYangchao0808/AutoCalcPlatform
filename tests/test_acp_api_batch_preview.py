@@ -90,17 +90,18 @@ class TestDefaultPayload:
         assert "opt_recalc_hess" not in int_eff
 
     def test_engine_constants_shared(self, client: TestClient) -> None:
-        """max_cycles=200, opt_level=Tight (catalog default), scf trio defaults."""
+        """max_cycles=200, opt_level=tight (catalog default), scf trio defaults."""
         resp = client.post(_URL, json={"method": {}})
         assert resp.status_code == 200
         for role_key in ("int", "ts"):
             eff = resp.json()["roles"][role_key]["effective"]
             assert eff["max_cycles"] == 200
-            # Catalog default for opt_convergence is "Tight" (capitalised)
-            assert eff["opt_level"] == "Tight"
+            # Catalog default for opt_convergence is "tight" (lowercase,
+            # aligned with CLI choices since 2026-09-13)
+            assert eff["opt_level"] == "tight"
             assert eff["scf_maxiter"] == 300
-            # Catalog default for scf_convergence is "Tight"
-            assert eff["scf_convergence"] == "Tight"
+            # Catalog default for scf_convergence is "tight"
+            assert eff["scf_convergence"] == "tight"
             assert eff["scf_strategy"] == "normal"
 
     def test_shared_sources_are_default(self, client: TestClient) -> None:
@@ -122,11 +123,13 @@ class TestUserOverrides:
     """User-provided values → 'user' source."""
 
     def test_user_opt_convergence(self, client: TestClient) -> None:
+        # Title-case input: validated case-insensitively, canonicalised to
+        # the lowercase schema option (legacy-payload compatibility).
         resp = client.post(_URL, json={"method": {"opt_convergence": "VeryTight"}})
         assert resp.status_code == 200
         for role_key in ("int", "ts"):
             eff = resp.json()["roles"][role_key]["effective"]
-            assert eff["opt_level"] == "VeryTight"
+            assert eff["opt_level"] == "verytight"
             src = resp.json()["roles"][role_key]["sources"]
             assert src["opt_level"] == "user"
 
@@ -162,7 +165,7 @@ class TestUserOverrides:
         assert resp.status_code == 200
         for role_key in ("int", "ts"):
             eff = resp.json()["roles"][role_key]["effective"]
-            assert eff["scf_convergence"] == "VeryTight"
+            assert eff["scf_convergence"] == "verytight"
             src = resp.json()["roles"][role_key]["sources"]
             assert src["scf_convergence"] == "user"
 
