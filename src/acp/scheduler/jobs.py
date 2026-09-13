@@ -467,6 +467,29 @@ _BATCHOPTIMIZE_PROFILES: frozenset[str] = frozenset(
     {"opt_only", "opt_freq", "opt_freq_sp", "opt_freq_sp_thermo"}
 )
 
+# Enum-like scalar keys whose CLI choices are lowercase-only. Upstream
+# payload sources (pre-2026-09 catalog presets, stored JobSpec method
+# dicts, API clients) have historically sent title-case values
+# ("Tight" / "Normal" / "Auto"); the BatchOptimize argparse rejects those
+# with exit 2 (2026-09-13 regression). Normalise here — the single E7
+# emission point shared by local runner and remote script_gen — so the
+# emitted flags always satisfy the CLI choices. Method/basis names are
+# deliberately NOT in this set (case-sensitive ORCA identifiers).
+_BATCHOPTIMIZE_LOWERED_KEYS: frozenset[str] = frozenset(
+    {
+        "opt_convergence",
+        "scf_convergence",
+        "scf_strategy",
+        "opt_initial_hessian",
+        "minimum_opt_initial_hessian",
+        "transition_state_opt_initial_hessian",
+        "opt_rescue_policy",
+        "opt_recalc_hess",
+        "minimum_opt_recalc_hess",
+        "transition_state_opt_recalc_hess",
+    }
+)
+
 
 def batchoptimize_method_flags(
     method: Mapping[str, Any],
@@ -489,19 +512,22 @@ def batchoptimize_method_flags(
     for key, flag in _BATCHOPTIMIZE_SCALAR_FLAGS.items():
         value = method.get(key)
         if value is not None and value != "":
-            flags += [flag, str(value)]
+            if key in _BATCHOPTIMIZE_LOWERED_KEYS:
+                flags += [flag, str(value).strip().lower()]
+            else:
+                flags += [flag, str(value)]
 
     opt_recalc = method.get("opt_recalc_hess")
     if opt_recalc is not None and opt_recalc != "":
-        flags += ["--opt-recalc-hess", str(opt_recalc)]
+        flags += ["--opt-recalc-hess", str(opt_recalc).strip().lower()]
 
     min_opt_recalc = method.get("minimum_opt_recalc_hess")
     if min_opt_recalc is not None and min_opt_recalc != "":
-        flags += ["--minimum-opt-recalc-hess", str(min_opt_recalc)]
+        flags += ["--minimum-opt-recalc-hess", str(min_opt_recalc).strip().lower()]
 
     ts_opt_recalc = method.get("transition_state_opt_recalc_hess")
     if ts_opt_recalc is not None and ts_opt_recalc != "":
-        flags += ["--transition-state-opt-recalc-hess", str(ts_opt_recalc)]
+        flags += ["--transition-state-opt-recalc-hess", str(ts_opt_recalc).strip().lower()]
 
     orbital_inherit = method.get("scf_orbital_inherit")
     if orbital_inherit is False:

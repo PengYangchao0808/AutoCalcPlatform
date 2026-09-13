@@ -263,6 +263,40 @@ class TestSchedulerFlagParity:
         flags = batchoptimize_method_flags(_ADVANCED_METHOD)
         assert _options_from_cli(tmp_path, flags) == _EXPECTED_ADVANCED
 
+    def test_title_case_method_dict_round_trips(self, tmp_path: Path) -> None:
+        """Regression (2026-09-13): title-case payload values survive the
+        flags → CLI → options round trip (historical presets / stored specs)."""
+        from acp.scheduler.jobs import batchoptimize_method_flags
+
+        method = {
+            **_ADVANCED_METHOD,
+            "opt_convergence": "VeryTight",
+            "scf_convergence": "Tight",
+            "scf_strategy": "SOSCF",
+            "opt_initial_hessian": "Model",
+            "opt_rescue_policy": "Off",
+        }
+        flags = batchoptimize_method_flags(method)
+        assert _options_from_cli(tmp_path, flags) == _EXPECTED_ADVANCED
+
+    def test_cli_accepts_title_case_convergence_flags(self, tmp_path: Path) -> None:
+        """The parser itself canonicalises case (type=str.lower), so a
+        hand-typed ``--opt-convergence Tight`` no longer exits 2."""
+        opts = _options_from_cli(
+            tmp_path,
+            [
+                "--opt-convergence",
+                "Tight",
+                "--scf-convergence",
+                "VeryTight",
+                "--scf-strategy",
+                "SlowConv",
+            ],
+        )
+        assert opts.opt_convergence == "tight"
+        assert opts.scf_convergence == "verytight"
+        assert opts.scf_strategy == "slowconv"
+
     def test_orbital_inherit_true_emits_no_flag_and_keeps_default(self, tmp_path: Path) -> None:
         from acp.scheduler.jobs import batchoptimize_method_flags
 

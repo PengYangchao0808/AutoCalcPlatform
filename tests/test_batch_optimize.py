@@ -340,6 +340,45 @@ def test_batchoptimize_method_flags_advanced_opt_scf() -> None:
     ]
 
 
+def test_batchoptimize_method_flags_normalize_enum_casing() -> None:
+    """Regression (2026-09-13): title-case enum values must not reach the CLI.
+
+    Historical payloads (pre-2026-09 catalog presets, stored JobSpec method
+    dicts) carry "Tight"/"Normal"/"Auto"; the BatchOptimize argparse choices
+    are lowercase-only and rejected them with exit 2.
+    """
+    from acp.scheduler.jobs import batchoptimize_method_flags
+
+    flags = batchoptimize_method_flags(
+        {
+            "opt_convergence": "Tight",
+            "scf_convergence": "Tight",
+            "scf_strategy": "Normal",
+            "opt_initial_hessian": "Auto",
+            "opt_rescue_policy": "Adaptive",
+            "opt_recalc_hess": "Auto",
+            "minimum_opt_initial_hessian": "Calculate",
+            "transition_state_opt_recalc_hess": "Auto",
+            "optimization_method": "r2SCAN-3c",
+        }
+    )
+
+    def flag_value(flag: str) -> str:
+        assert flag in flags, f"missing flag {flag} in {flags}"
+        return flags[flags.index(flag) + 1]
+
+    assert flag_value("--opt-convergence") == "tight"
+    assert flag_value("--scf-convergence") == "tight"
+    assert flag_value("--scf-strategy") == "normal"
+    assert flag_value("--opt-initial-hessian") == "auto"
+    assert flag_value("--opt-rescue-policy") == "adaptive"
+    assert flag_value("--opt-recalc-hess") == "auto"
+    assert flag_value("--minimum-opt-initial-hessian") == "calculate"
+    assert flag_value("--transition-state-opt-recalc-hess") == "auto"
+    # Case-sensitive identifiers pass through untouched.
+    assert flag_value("--method") == "r2SCAN-3c"
+
+
 def test_batchoptimize_method_flags_scf_orbital_inherit_false() -> None:
     from acp.scheduler.jobs import batchoptimize_method_flags
 
