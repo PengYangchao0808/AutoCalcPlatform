@@ -52,6 +52,7 @@ def _replace_atomic(path: Path, text: str) -> None:
     try:
         with os.fdopen(handle_fd, "w", encoding="utf-8") as handle:
             _ = handle.write(text)
+        os.chmod(tmp_name, 0o644)
         os.replace(tmp_name, path)
     except BaseException:
         try:
