@@ -294,9 +294,10 @@ def _add_simple_workflow_args(parser: argparse.ArgumentParser, wf: str) -> None:
         )
         parser.add_argument(
             "--opt-convergence",
-            default="Tight",
-            choices=["Loose", "Normal", "Tight", "VeryTight"],
-            help="Optimization convergence (default: Tight)",
+            type=str.lower,
+            default="tight",
+            choices=["loose", "normal", "tight", "verytight"],
+            help="Optimization convergence (default: tight; case-insensitive)",
         )
         # Hessian policy (plan §9): mutually-exclusive group replaces the
         # legacy --recalc-hess flag. Omit all three to follow config.
@@ -686,9 +687,10 @@ Examples:
     )
     batch.add_argument(
         "--opt-convergence",
+        type=str.lower,
         choices=["loose", "normal", "tight", "verytight"],
         default=None,
-        help="Geometry-optimization convergence level",
+        help="Geometry-optimization convergence level (case-insensitive)",
     )
     batch.add_argument(
         "--opt-trust-radius",
@@ -768,15 +770,17 @@ Examples:
     )
     batch.add_argument(
         "--scf-convergence",
+        type=str.lower,
         choices=["normal", "tight", "verytight"],
         default=None,
-        help="SCF convergence level",
+        help="SCF convergence level (case-insensitive)",
     )
     batch.add_argument(
         "--scf-strategy",
+        type=str.lower,
         choices=["normal", "slowconv", "soscf"],
         default=None,
-        help="SCF convergence accelerator strategy",
+        help="SCF convergence accelerator strategy (case-insensitive)",
     )
     scf_inherit = batch.add_mutually_exclusive_group()
     scf_inherit.add_argument(
