@@ -5843,6 +5843,7 @@ const I18N = {
     "energy.idle_prompt": "请选择任务后查看能量与轨迹。",
     "energy.unsupported": "该任务没有可绘制的能量曲线，但结果文件仍然可用。",
     "energy.irc_pending": "IRC 正在计算，尚无可用路径点。计算完成后曲线会自动刷新。",
+  "energy.pes_pending": "PES 扫描正在计算，尚无已完成的扫描点。曲线会随扫描点收敛自动出现。",
     "energy.header.frames": "帧",
     "energy.header.status.running": "运行中",
     "energy.header.status.partial": "部分完成",
@@ -6848,6 +6849,7 @@ const I18N = {
     "energy.idle_prompt": "Select a job to view Energy & Trajectory.",
     "energy.unsupported": "This job has no plottable energy curve, but its result files remain available.",
     "energy.irc_pending": "IRC is still running; no path points are available yet. The curve refreshes automatically once points are published.",
+  "energy.pes_pending": "PES scan is running; no scan point has converged yet. The curve appears automatically as points converge.",
     "energy.header.frames": "frames",
     "energy.header.status.running": "Running",
     "energy.header.status.partial": "Partial",
@@ -12216,6 +12218,14 @@ async function renderEnergyGraphWorkspace(job, options) {
       energyGraphRenderState("empty", t("energy.irc_pending"));
       return true;
     }
+    if (data && String(data.view_type || "") === "scan" && !(Array.isArray(data.nodes) && data.nodes.length) && !(Array.isArray(data.series) && data.series.length) && data.metadata && data.metadata.reason === "pes_scan_pending") {
+      energyGraphState.data = data;
+      energyGraphState.dataRevision = energyGraphDataRevision(data);
+      energyGraphState.loading = false;
+      energyGraphState.status = "empty";
+      energyGraphRenderState("empty", t("energy.pes_pending"));
+      return true;
+    }
     var nextRevision = energyGraphDataRevision(data);
     if (options.silent && wasReady && previousRevision === nextRevision) {
       // The task may still be polled for status, but unchanged graph data is a
@@ -12250,6 +12260,18 @@ async function renderEnergyGraphWorkspace(job, options) {
         energyGraphState.liveFollow = true;
       }
       // Otherwise the user's pick survived the refresh: keep "user" as-is.
+    }
+    if (String(data.view_type || "") === "scan") {
+      var scanNodes = Array.isArray(data.nodes) ? data.nodes : [];
+      var selectedScan = scanNodes.find(function(item) { return String(item.id) === String(energyGraphState.selectedNodeId); });
+      if (energyGraphState.liveFollow) {
+        if (scanNodes.length) energyGraphState.selectedNodeId = String(scanNodes[scanNodes.length - 1].id);
+        energyGraphState.selectionOrigin = "follow";
+      } else if (!selectedScan) {
+        if (scanNodes.length) energyGraphState.selectedNodeId = String(scanNodes[scanNodes.length - 1].id);
+        energyGraphState.selectionOrigin = "follow";
+        energyGraphState.liveFollow = true;
+      }
     }
     if (!energyGraphState.seriesId) {
       var allSeries = Array.isArray(data.series) ? data.series : [];
