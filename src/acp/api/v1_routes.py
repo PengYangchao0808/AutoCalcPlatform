@@ -1692,7 +1692,14 @@ def get_energy_graph(
         from acp.calculations.pes.review import load_pes_review
         from acp.compat.legacy.manifests import read_s2_candidate_manifest, read_s2_review
 
-        _manifest_path, s2_payload = _pes_profile_for_job(manager, job_id)
+        try:
+            _manifest_path, s2_payload = _pes_profile_for_job(manager, job_id)
+        except HTTPException as exc:
+            # Missing final profile on a running job → live/pending 200;
+            # corrupt-profile 422 and missing-job/work-dir 404 still raise.
+            if exc.status_code != 404 or not str(exc.detail).startswith("No PES profile"):
+                raise
+            _manifest_path, s2_payload = None, None
         if s2_payload is not None:
             manual_review = load_pes_review(work_dir)
             if manual_review is not None:
@@ -1735,6 +1742,9 @@ def get_energy_graph(
             report = _build_mechanism_report(study_id, job_id, study_dir)
             mechanism_report = report.model_dump()
 
+    job_status = (
+        record.status.value if getattr(record.status, "value", None) else str(record.status)
+    )
     graph = build_energy_graph_from_job(
         job_id,
         workflow=workflow,
@@ -1746,6 +1756,7 @@ def get_energy_graph(
         s2_review_state=s2_review_state,
         item_id=item_id,
         view=view,
+        job_status=job_status,
     )
     # view_type or explicit view param must match the returned projection;
     # unknown views safely default to the default projection (200, never 500)
@@ -1764,7 +1775,11 @@ def get_energy_graph(
                 s2_review_state=s2_review_state,
                 item_id=item_id,
                 view=None,
+                job_status=job_status,
             )
+    graph_metadata = dict(graph.get("metadata") or {})
+    graph_metadata.setdefault("job_status", job_status)
+    graph["metadata"] = graph_metadata
     return EnergyGraphResponse.model_validate(graph)
 
 
@@ -2622,7 +2637,9 @@ def get_structure_viewer_vibrations(
                 mode_index=int(m.get("mode_index", 0)),
                 frequency_cm1=float(m.get("frequency_cm1", 0.0)),
                 imaginary=bool(m.get("imaginary", False)),
-                ir_intensity=float(m["ir_intensity"]) if m.get("ir_intensity") is not None else None,
+                ir_intensity=float(m["ir_intensity"])
+                if m.get("ir_intensity") is not None
+                else None,
                 vectors=vectors,
             )
             modes.append(mode)
