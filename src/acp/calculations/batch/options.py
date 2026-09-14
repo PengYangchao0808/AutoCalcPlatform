@@ -12,20 +12,42 @@ from acp.calculations.contracts import JsonValue, StepKind
 
 # ── role-override constants ───────────────────────────────────────────────
 _ROLE_OVERRIDE_FIELDS: Final[tuple[str, ...]] = (
+    "opt_max_iter",
+    "opt_convergence",
     "opt_trust_radius",
     "opt_initial_hessian",
     "opt_recalc_hess",
+    "opt_rescue_policy",
+    "opt_max_rescue",
+    "scf_max_iter",
+    "scf_convergence",
+    "scf_strategy",
 )
 _ROLE_PREFIX: Final[dict[str, str]] = {
     "int": "minimum_",
     "ts": "transition_state_",
 }
 _INHERIT: Final[dict[str, tuple[object, ...]]] = {
+    "opt_max_iter": (None,),
+    "opt_convergence": (None, ""),
     "opt_trust_radius": (None, ""),
     "opt_initial_hessian": (None, "", "auto"),
     "opt_recalc_hess": (None, "", "auto"),
+    "opt_rescue_policy": (None, ""),
+    "opt_max_rescue": (None,),
+    "scf_max_iter": (None,),
+    "scf_convergence": (None, ""),
+    "scf_strategy": (None, ""),
 }
-#: Built-in TS role defaults (INT has none — values are omitted).
+#: Base fields the engine consumes ONLY via ``resolve_role_options`` —
+#: their common value must flow through the resolved dict.  All other
+#: role-resolvable fields are read from the common attribute by the
+#: engine directly, so they resolve only when explicitly overridden.
+_ROLE_OVERRIDE_PULL_COMMON: Final[frozenset[str]] = frozenset(
+    {"opt_trust_radius", "opt_initial_hessian", "opt_recalc_hess"}
+)
+#: Built-in TS role defaults (INT has none — values are omitted).  Fields
+#: not listed here fall through to the shared common value / engine default.
 ROLE_DEFAULTS: Final[dict[str, dict[str, object]]] = {
     "int": {},
     "ts": {
@@ -46,10 +68,11 @@ class BatchMethodOptions:
     but frequency-specific fields are deliberately ignored so an old config
     cannot silently make optimization and frequency inconsistent.
 
-    Per-role optimization overrides (``minimum_opt_*`` and
-    ``transition_state_opt_*``) allow TS and minimum structures to receive
-    different trust radii, initial-Hessian strategies, and Hessian
-    recalculation intervals.  Resolution priority per plan §5.4::
+    Per-role optimization overrides (``minimum_*`` and ``transition_state_*``
+    prefixed) allow TS and minimum structures to receive different trust
+    radii, initial-Hessian strategies, Hessian recalculation intervals,
+    iteration caps, convergence levels, SCF settings, and rescue policies.
+    Resolution priority per plan §5.4::
 
         role_override > common > role_default > omitted
     """
@@ -100,6 +123,22 @@ class BatchMethodOptions:
     transition_state_opt_initial_hessian: str | None = None
     transition_state_opt_recalc_hess: str | int | None = None
 
+    # ── per-role optimizer / SCF / rescue overrides ──────────────────────
+    minimum_opt_max_iter: int | None = None
+    minimum_opt_convergence: str | None = None
+    minimum_scf_max_iter: int | None = None
+    minimum_scf_convergence: str | None = None
+    minimum_scf_strategy: str | None = None
+    minimum_opt_rescue_policy: str | None = None
+    minimum_opt_max_rescue: int | None = None
+    transition_state_opt_max_iter: int | None = None
+    transition_state_opt_convergence: str | None = None
+    transition_state_scf_max_iter: int | None = None
+    transition_state_scf_convergence: str | None = None
+    transition_state_scf_strategy: str | None = None
+    transition_state_opt_rescue_policy: str | None = None
+    transition_state_opt_max_rescue: int | None = None
+
     def for_role(self, is_transition_state: bool) -> tuple[str, str]:
         """Return the method and basis selected for one item role.
 
@@ -142,8 +181,9 @@ class BatchMethodOptions:
         Resolution chain (plan §5.4):
             role_override > common > role_default > omitted
 
-        Returns a dict with keys ``opt_trust_radius`` / ``opt_initial_hessian``
-        / ``opt_recalc_hess`` — only keys whose resolved value is not ``None``.
+        Covers every base field in :data:`_ROLE_OVERRIDE_FIELDS`
+        (optimizer, Hessian, SCF, and rescue controls).  Returns only the
+        keys whose resolved value is not ``None``.
         """
         role = "ts" if is_transition_state else "int"
         prefix = _ROLE_PREFIX[role]
@@ -151,8 +191,13 @@ class BatchMethodOptions:
 
         for name in _ROLE_OVERRIDE_FIELDS:
             override = getattr(self, f"{prefix}{name}")
-            common = getattr(self, name)
-            value: object = override if override not in _INHERIT[name] else common
+            value: object
+            if override not in _INHERIT[name]:
+                value = override
+            elif name in _ROLE_OVERRIDE_PULL_COMMON:
+                value = getattr(self, name)
+            else:
+                value = None
             if value in _INHERIT[name]:
                 value = ROLE_DEFAULTS[role].get(name)
             if value is not None:

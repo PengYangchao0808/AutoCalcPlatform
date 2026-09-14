@@ -965,6 +965,8 @@ class BatchOptimizeEngine:
                             "scf_maxiter": opt_kwargs.get("scf_maxiter"),
                             "scf_convergence": opt_kwargs.get("scf_convergence"),
                             "scf_strategy": opt_kwargs.get("scf_strategy"),
+                            "rescue_policy": opt_kwargs.get("opt_rescue_policy"),
+                            "max_rescue": opt_kwargs.get("opt_max_rescue"),
                             "method": resolved_methods.for_step(
                                 StepKind.OPTIMIZE, is_ts
                             )[0],
@@ -973,9 +975,18 @@ class BatchOptimizeEngine:
                             )[1],
                         },
                         "role_resolution": {
-                            "opt_trust_radius": role_opts.get("opt_trust_radius"),
-                            "opt_initial_hessian": role_opts.get("opt_initial_hessian"),
-                            "opt_recalc_hess": role_opts.get("opt_recalc_hess"),
+                            key: role_opts.get(key) for key in (
+                                "opt_max_iter",
+                                "opt_convergence",
+                                "opt_trust_radius",
+                                "opt_initial_hessian",
+                                "opt_recalc_hess",
+                                "opt_rescue_policy",
+                                "opt_max_rescue",
+                                "scf_max_iter",
+                                "scf_convergence",
+                                "scf_strategy",
+                            )
                         },
                     }
                     rescue_meta = current_result.metadata.get("rescue_attempts")
@@ -1097,18 +1108,31 @@ class BatchOptimizeEngine:
     def _optimization_kwargs(self, is_ts: bool) -> dict[str, JsonValue]:
         """Build optimization keyword arguments for a request.
 
-        Delegates trust_radius / initial_hessian / recalc_hess resolution
-        to :meth:`BatchMethodOptions.resolve_role_options` — the single
-        source of per-role defaults (plan §5.4).
+        Delegates all per-role-resolvable controls (trust radius, Hessian
+        strategy, recalc interval, iteration cap, convergence level, SCF
+        trio, rescue policy) to :meth:`BatchMethodOptions.resolve_role_options`
+        — the single source of per-role resolution (plan §5.4).  Keys the
+        role did not override fall back to the shared common value.
         """
         m = self._active_methods
+        role_opts = m.resolve_role_options(is_ts)
+
+        max_cycles = role_opts.get("opt_max_iter")
+        if max_cycles is None:
+            max_cycles = m.opt_max_iter if m.opt_max_iter is not None else 200
+        scf_maxiter = role_opts.get("scf_max_iter")
+        if scf_maxiter is None:
+            scf_maxiter = m.scf_max_iter
+        max_rescue = role_opts.get("opt_max_rescue")
+        if max_rescue is None:
+            max_rescue = m.opt_max_rescue
+
         kwargs: dict[str, JsonValue] = {
-            "max_cycles": m.opt_max_iter if m.opt_max_iter is not None else 200,
-            "opt_level": m.opt_convergence,
+            "max_cycles": max_cycles,
+            "opt_level": role_opts.get("opt_convergence") or m.opt_convergence,
             "structure_kind": "ts" if is_ts else "minimum",
         }
 
-        role_opts = m.resolve_role_options(is_ts)
         if "opt_trust_radius" in role_opts:
             kwargs["trust_radius"] = role_opts["opt_trust_radius"]
         if "opt_initial_hessian" in role_opts:
@@ -1116,9 +1140,8 @@ class BatchOptimizeEngine:
         if "opt_recalc_hess" in role_opts:
             kwargs["recalc_hess"] = role_opts["opt_recalc_hess"]
 
-        # rescue + scf damping/shifting (unchanged)
-        kwargs["opt_rescue_policy"] = m.opt_rescue_policy
-        kwargs["opt_max_rescue"] = m.opt_max_rescue
+        kwargs["opt_rescue_policy"] = role_opts.get("opt_rescue_policy") or m.opt_rescue_policy
+        kwargs["opt_max_rescue"] = max_rescue
         if m.scf_damp:
             kwargs["scf_damp"] = True
             kwargs["scf_damp_fac"] = m.scf_damp_fac
@@ -1127,9 +1150,9 @@ class BatchOptimizeEngine:
             kwargs["scf_shift_fac"] = m.scf_shift_fac
 
         # SCF trio forwarded to ORCA optimize
-        kwargs["scf_maxiter"] = m.scf_max_iter
-        kwargs["scf_convergence"] = m.scf_convergence
-        kwargs["scf_strategy"] = m.scf_strategy
+        kwargs["scf_maxiter"] = scf_maxiter
+        kwargs["scf_convergence"] = role_opts.get("scf_convergence") or m.scf_convergence
+        kwargs["scf_strategy"] = role_opts.get("scf_strategy") or m.scf_strategy
 
         return kwargs
 
