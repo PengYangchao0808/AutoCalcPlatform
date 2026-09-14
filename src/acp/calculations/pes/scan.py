@@ -78,6 +78,7 @@ from acp.calculations.pes.path_selection import (
     policy_from_config,
     select_path_seeds,
 )
+from acp.calculations.pes.scan_snapshot import PesScanSnapshotWriter
 from acp.calculations.progress import LiveMetric, ProgressReporter
 from acp.storage.layout import TaskStorage
 from cccp.qc.interfaces.constraints import ConstraintKind, CoordinateSpec, ReactionCoordinatePlan
@@ -182,6 +183,7 @@ def run_pes_scan(
     if progress_reporter is not None:
         progress_reporter.initialize()
 
+    snapshot_writer: PesScanSnapshotWriter | None = None
     try:
         cfg = config or {}
         out_root = Path(output_dir).resolve()
@@ -231,6 +233,14 @@ def run_pes_scan(
         # -- run_relaxed_scan --
         if progress_reporter is not None:
             progress_reporter.start_stage("run_relaxed_scan")
+        snapshot_writer = PesScanSnapshotWriter(
+            out_root / "RESULT",
+            scan_dir=scan_dir,
+            coordinate=coordinate.to_dict(),
+            coordinates=[item.to_dict() for item in scan_coordinates],
+            points_total=int(scan_coordinates[0].n_points),
+            driver=str(protocol.scan_driver.software),
+        )
         scan_result = _run_relaxed_scan_backend(
             coords=coords,
             symbols=symbols,
@@ -240,12 +250,14 @@ def run_pes_scan(
             protocol=protocol,
             scan_dir=scan_dir,
             cfg=cfg,
+            point_callback=snapshot_writer.publish_point,
         )
         if not scan_result.success:
             # Fail fast: partial scan geometries must never reach frame
             # extraction, single points, or candidate recommendation.  The
             # per-frame artifacts already written by the backend stay on disk
             # as diagnostics only.
+            snapshot_writer.finalize("failed")
             raise RuntimeError(f"Relaxed scan failed: {scan_result.message}")
         if progress_reporter is not None:
             progress_reporter.complete_stage("run_relaxed_scan")
@@ -264,6 +276,8 @@ def run_pes_scan(
         )
         if progress_reporter is not None:
             progress_reporter.complete_stage("extract_frames")
+        if snapshot_writer is not None:
+            snapshot_writer.replace_frames(frames)
 
         # -- run_single_points --
         if progress_reporter is not None:
@@ -277,7 +291,17 @@ def run_pes_scan(
             scan_dir,
             cfg,
             reporter=progress_reporter,
+            on_frame_done=(
+                _snapshot_sp_publisher(snapshot_writer) if snapshot_writer is not None else None
+            ),
         )
+        if snapshot_writer is not None:
+            for frame in frames:
+                snapshot_writer.publish_sp(
+                    frame.index,
+                    frame.single_point_energy_hartree,
+                    str(frame.single_point_status),
+                )
         if progress_reporter is not None:
             progress_reporter.complete_stage("run_single_points")
 
@@ -320,8 +344,12 @@ def run_pes_scan(
             )
         if progress_reporter is not None:
             progress_reporter.complete_stage("select_candidates")
+        if snapshot_writer is not None:
+            snapshot_writer.finalize("completed")
 
     except Exception as exc:
+        if snapshot_writer is not None:
+            snapshot_writer.finalize("failed")
         if progress_reporter is not None:
             progress_reporter.fail_stage(progress_reporter.current_stage or "unknown", str(exc))
         raise
@@ -404,6 +432,24 @@ def _materialize_xyz_text(source: StructureSource, work_root: Path) -> Path:
 # ── relaxed scan via backend ───────────────────────────────────────────
 
 
+def _snapshot_sp_publisher(
+    writer: PesScanSnapshotWriter,
+) -> Callable[[str, float | None, str], None]:
+    """Bridge executor ``on_frame_done`` events into snapshot SP updates."""
+
+    def _publish(frame_id: str, energy: float | None, status: str) -> None:
+        _, separator, raw_index = frame_id.rpartition("_")
+        if not separator:
+            return
+        try:
+            index = int(raw_index)
+        except ValueError:
+            return
+        writer.publish_sp(index, energy, status)
+
+    return _publish
+
+
 def _run_relaxed_scan_backend(
     *,
     coords: np.ndarray[Any, Any],
@@ -415,6 +461,7 @@ def _run_relaxed_scan_backend(
     protocol: ScanProtocol,
     scan_dir: Path,
     cfg: dict[str, Any],
+    point_callback: Callable[[Any], None] | None = None,
 ) -> RelaxedScanResult:
     """Execute the relaxed scan via ``get_backend("orca").relaxed_scan``.
 
@@ -451,6 +498,7 @@ def _run_relaxed_scan_backend(
         geom_maxiter=int(
             protocol.scan_optimizer.max_iterations or protocol.scan_driver.max_iterations
         ),
+        point_callback=point_callback,
     )
     if not isinstance(result, RelaxedScanResult):
         raise TypeError("Relaxed-scan backend returned an invalid result")
@@ -688,8 +736,13 @@ def _run_single_points(
     scan_dir: Path,
     cfg: dict[str, Any],
     reporter: ProgressReporter | None = None,
+    on_frame_done: Callable[[str, float | None, str], None] | None = None,
 ) -> None:
-    """Run one cached, isolated single point per extracted scan frame."""
+    """Run one cached, isolated single point per extracted scan frame.
+
+    ``on_frame_done(frame_id, energy_hartree, status)`` fires as each frame
+    resolves (including cache hits and failures) for live snapshot updates.
+    """
     if not sp_spec.enabled:
         for i, frame in enumerate(frames):
             frames[i] = replace(frame, single_point_status="skipped")
@@ -800,6 +853,7 @@ def _run_single_points(
         scf_convergence=sp_spec.scf_convergence,
         progress_callback=sp_callback,
         on_frame_start=on_frame_start,
+        on_frame_done=on_frame_done,
     ).run()
     if reporter is not None:
         reporter.set_live_metrics(
