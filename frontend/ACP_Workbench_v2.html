@@ -3197,6 +3197,44 @@ option, optgroup {
 }
 .mc-role-tab-pane { display: none; padding: 10px 0; }
 .mc-role-tab-pane.active { display: block; }
+/* ── Role columns section (P3: one window, INT | TS side by side) ── */
+.mc-role-section { margin: 12px 0 4px; }
+.mc-role-section-header {
+  font-size: 12px; font-weight: 600; color: var(--text-secondary);
+  padding: 6px 0; border-bottom: 1px solid var(--border-subtle);
+}
+.mc-role-link-row {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 8px 0;
+}
+.mc-role-link { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+.mc-role-link input[type="checkbox"] { appearance: auto; -webkit-appearance: checkbox; width: 14px; height: 14px; accent-color: var(--accent-blue, #4ea1ff); cursor: pointer; }
+.mc-role-columns {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  align-items: start;
+}
+@media (max-width: 900px) { .mc-role-columns { grid-template-columns: 1fr; } }
+.mc-role-col {
+  border: 1px solid var(--border-subtle); border-radius: 8px;
+  padding: 8px 10px; background: var(--bg-elevated);
+  min-width: 0;
+}
+.mc-role-col-title { font-size: 12px; font-weight: 600; color: var(--accent); padding-bottom: 6px; }
+.mc-role-linked-note { font-size: 12px; color: var(--text-tertiary); padding: 6px 0; }
+/* Source badges (默认 / 已修改) */
+.mc-badge {
+  display: inline-flex; align-items: center; padding: 1px 6px;
+  border-radius: 4px; font-size: 9px; font-weight: 600;
+  letter-spacing: 0.03em; flex-shrink: 0; vertical-align: middle;
+}
+.mc-badge-default { background: rgba(255,255,255,0.06); color: var(--text-tertiary); }
+.mc-badge-modified { background: rgba(100,220,130,0.15); color: var(--green); }
+/* Preview honesty states */
+.mc-preview-failure { color: #f66; font-size: 12px; font-weight: 600; }
+.mc-preview-unverified { color: var(--text-tertiary); font-size: 11px; font-style: italic; margin: 2px 0 4px; }
+.mc-preview-role { margin-bottom: 4px; }
+.mc-preview-role-title { font-size: 11px; font-weight: 600; color: var(--text-secondary); }
+.mc-preview-config-key { margin-top: 6px; font-size: 11px; color: var(--text-tertiary); font-family: "SFMono-Regular", Consolas, monospace; }
 .mc-role-override-row {
   display: flex; align-items: center; gap: 8px;
   margin-bottom: 8px;
@@ -4072,12 +4110,13 @@ option, optgroup {
             <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
               <button type="button" class="btn ghost" id="batch-optimize-pick-results" data-i18n="modal.stage_batch_from_results">从任务结果选择</button>
               <button type="button" class="btn ghost" id="batch-optimize-use-wizard" data-i18n="modal.stage_batch_from_wizard">使用当前解析结构</button>
+              <button type="button" class="btn ghost" id="batch-optimize-assign" title="将全局电荷/自旋应用到全部结构">按全局电荷/自旋批量赋值</button>
               <span class="muted" style="font-size:11px;" data-i18n="modal.stage_batch_hint">未检测到 TAG 的结构默认按 INT 处理；可逐项修改。</span>
             </div>
             <div id="batch-optimize-profile-summary" class="muted" style="font-size:12px;margin-bottom:8px;"></div>
             <div id="batch-optimize-picker" style="display:none;border:1px solid var(--border-subtle,#333);border-radius:6px;padding:8px;margin-bottom:8px;max-height:200px;overflow-y:auto;"></div>
             <table class="preview-table" style="width:100%;font-size:12px;margin-top:8px;">
-              <thead><tr><th>选择</th><th>#</th><th>结构名</th><th>TAG</th><th>来源</th><th>原子</th><th>电荷</th><th>自旋</th><th>操作</th></tr></thead>
+              <thead><tr><th>选择</th><th>#</th><th>结构名</th><th>TAG</th><th>来源</th><th>原子</th><th>电荷</th><th>自旋</th><th>检查</th><th>操作</th></tr></thead>
               <tbody id="batch-optimize-tbody"></tbody>
             </table>
             <div id="batch-optimize-empty" class="muted" style="font-size:11px;padding:6px;" data-i18n="modal.stage_batch_empty">尚未添加结构</div>
@@ -20268,6 +20307,58 @@ function stageBatchAddItem(name, tag, xyz, charge, multiplicity, atomCount, form
   renderStageBatchPreview();
 }
 
+// Atomic numbers for client-side electron-count validation of batch items.
+var _ELEMENT_Z = { H:1,He:2,Li:3,Be:4,B:5,C:6,N:7,O:8,F:9,Ne:10,Na:11,Mg:12,Al:13,Si:14,P:15,S:16,Cl:17,Ar:18,K:19,Ca:20,Sc:21,Ti:22,V:23,Cr:24,Mn:25,Fe:26,Co:27,Ni:28,Cu:29,Zn:30,Ga:31,Ge:32,As:33,Se:34,Br:35,Kr:36,Rb:37,Sr:38,Y:39,Zr:40,Nb:41,Mo:42,Tc:43,Ru:44,Rh:45,Pd:46,Ag:47,Cd:48,In:49,Sn:50,Sb:51,Te:52,I:53,Xe:54,Cs:55,Ba:56,La:57,Ce:58,Pr:59,Nd:60,Pm:61,Sm:62,Eu:63,Gd:64,Tb:65,Dy:66,Ho:67,Er:68,Tm:69,Yb:70,Lu:71,Hf:72,Ta:73,W:74,Re:75,Os:76,Ir:77,Pt:78,Au:79,Hg:80,Tl:81,Pb:82,Bi:83,Po:84,At:85,Rn:86 };
+
+function _batchItemSymbols(item) {
+  if (Array.isArray(item.symbols) && item.symbols.length) return item.symbols;
+  if (item.xyz) {
+    try {
+      var lines = item.xyz.split(/\r?\n/);
+      var n = parseInt(lines[0], 10);
+      var syms = [];
+      for (var i = 0; i < n && i + 2 < lines.length; i++) {
+        var parts = lines[i + 2].trim().split(/\s+/);
+        if (parts.length >= 4) syms.push(parts[0]);
+      }
+      if (syms.length) return syms;
+    } catch (_e) { /* fall through to formula */ }
+  }
+  if (item.formula) {
+    var m, re = /([A-Z][a-z]?)(\d*)/g;
+    var syms2 = [];
+    while ((m = re.exec(item.formula))) {
+      if (!m[1]) continue;
+      var cnt = m[2] ? parseInt(m[2], 10) : 1;
+      for (var k = 0; k < cnt; k++) syms2.push(m[1]);
+    }
+    if (syms2.length) return syms2;
+  }
+  return null;
+}
+
+function _batchCheckItem(item) {
+  var zh = currentLang === "zh-CN";
+  var symbols = _batchItemSymbols(item);
+  if (!symbols) return { ok: true, text: "--" };
+  var electrons = 0, unknown = false;
+  symbols.forEach(function(s) {
+    if (_ELEMENT_Z[s] != null) electrons += _ELEMENT_Z[s];
+    else unknown = true;
+  });
+  if (unknown) return { ok: true, text: zh ? "未检查" : "n/a" };
+  electrons -= item.charge || 0;
+  var mult = item.multiplicity || 1;
+  if (electrons <= 0) return { ok: false, text: zh ? "电荷过高：无剩余电子" : "no electrons left" };
+  if (mult > electrons + 1) {
+    return { ok: false, text: zh ? "多重度 " + mult + " 超出上限 " + (electrons + 1) : "multiplicity too high" };
+  }
+  if ((electrons - (mult - 1)) % 2 !== 0) {
+    return { ok: false, text: zh ? "多重度 " + mult + " 与 " + electrons + "e 奇偶不符" : "parity mismatch" };
+  }
+  return { ok: true, text: "\u2713 " + electrons + "e" };
+}
+
 function renderStageBatchPreview() {
   var tbody = document.getElementById("batch-optimize-tbody");
   var emptyEl = document.getElementById("batch-optimize-empty");
@@ -20282,6 +20373,8 @@ function renderStageBatchPreview() {
   tbody.innerHTML = batchPreviewItems.map(function(item, idx) {
     var tagTsStyle = item.tag === "TS" ? "opacity:1;font-weight:bold" : "opacity:0.45";
     var tagNote = item.tagAuto && !item.tag ? '<div class="muted" style="font-size:10px;">未检测到 TAG</div>' : "";
+    var chk = _batchCheckItem(item);
+    var chargeBadge = item.chargeMultCustom ? ' <span class="mc-badge mc-badge-modified" style="font-size:9px;">单独</span>' : "";
     return '<tr data-key="' + escapeHtml(item.key) + '">' +
       '<td><input type="checkbox" class="batch-include"' + (item.include ? " checked" : "") + '></td>' +
       '<td>' + (idx + 1) + '</td>' +
@@ -20291,8 +20384,9 @@ function renderStageBatchPreview() {
           tagNote + '</td>' +
       '<td>' + escapeHtml(sourceLabels[item.sourceType] || item.sourceType) + '</td>' +
       '<td>' + (item.atomCount || '--') + '</td>' +
-      '<td><input type="number" class="modal-input batch-charge" style="width:48px;font-size:12px;" value="' + item.charge + '"></td>' +
+      '<td><input type="number" class="modal-input batch-charge" style="width:48px;font-size:12px;" value="' + item.charge + '">' + chargeBadge + '</td>' +
       '<td><input type="number" class="modal-input batch-mult" style="width:48px;font-size:12px;" value="' + item.multiplicity + '"></td>' +
+      '<td class="batch-check" style="font-size:11px;' + (chk.ok ? "color:var(--text-secondary,#999)" : "color:#f66;font-weight:bold") + '">' + escapeHtml(chk.text) + '</td>' +
       '<td><button type="button" class="btn ghost batch-del-btn">' + escapeHtml(t("modal.stage_batch_del")) + '</button></td>' +
     '</tr>';
   }).join("");
@@ -20408,6 +20502,15 @@ function setupStageBatchListeners() {
       stageBatchFromWizard();
     });
   }
+  var assignBtn = document.getElementById("batch-optimize-assign");
+  if (assignBtn) {
+    assignBtn.addEventListener("click", function() {
+      var gc = parseInt(document.getElementById("modal-charge").value, 10) || 0;
+      var gm = parseInt(document.getElementById("modal-mult").value, 10) || 1;
+      batchPreviewItems.forEach(function(it) { it.charge = gc; it.multiplicity = gm; it.chargeMultCustom = false; });
+      renderStageBatchPreview();
+    });
+  }
   var pickResultsBtn = document.getElementById("batch-optimize-pick-results");
   if (pickResultsBtn) {
     pickResultsBtn.addEventListener("click", function() {
@@ -20430,8 +20533,12 @@ function setupStageBatchListeners() {
         item.name = target.value;
       } else if (target.classList.contains("batch-charge")) {
         item.charge = parseInt(target.value, 10) || 0;
+        item.chargeMultCustom = true;
+        renderStageBatchPreview();
       } else if (target.classList.contains("batch-mult")) {
         item.multiplicity = parseInt(target.value, 10) || 1;
+        item.chargeMultCustom = true;
+        renderStageBatchPreview();
       }
     });
     batchTbody.addEventListener("click", function(e) {
@@ -20511,6 +20618,21 @@ function applyBatchOptimizeMethodFields(methodPayload) {
   methodPayload.transition_state_opt_trust_radius = value("transition_state_opt_trust_radius", null);
   methodPayload.transition_state_opt_initial_hessian = value("transition_state_opt_initial_hessian", null);
   methodPayload.transition_state_opt_recalc_hess = value("transition_state_opt_recalc_hess", null);
+  // Per-role optimizer / SCF / rescue overrides (P3) — null = inherit
+  methodPayload.minimum_opt_max_iter = value("minimum_opt_max_iter", null);
+  methodPayload.minimum_opt_convergence = value("minimum_opt_convergence", null);
+  methodPayload.minimum_scf_max_iter = value("minimum_scf_max_iter", null);
+  methodPayload.minimum_scf_convergence = value("minimum_scf_convergence", null);
+  methodPayload.minimum_scf_strategy = value("minimum_scf_strategy", null);
+  methodPayload.minimum_opt_rescue_policy = value("minimum_opt_rescue_policy", null);
+  methodPayload.minimum_opt_max_rescue = value("minimum_opt_max_rescue", null);
+  methodPayload.transition_state_opt_max_iter = value("transition_state_opt_max_iter", null);
+  methodPayload.transition_state_opt_convergence = value("transition_state_opt_convergence", null);
+  methodPayload.transition_state_scf_max_iter = value("transition_state_scf_max_iter", null);
+  methodPayload.transition_state_scf_convergence = value("transition_state_scf_convergence", null);
+  methodPayload.transition_state_scf_strategy = value("transition_state_scf_strategy", null);
+  methodPayload.transition_state_opt_rescue_policy = value("transition_state_opt_rescue_policy", null);
+  methodPayload.transition_state_opt_max_rescue = value("transition_state_opt_max_rescue", null);
   return methodPayload;
 }
 
@@ -20737,6 +20859,16 @@ function loadDefaultMethodProfile(schemaId) {
 
 async function openMethodConfig() {
   ensureWizardWorkflowValid();
+  // Draft semantics (P-fix §2⑤): every field handler mutates
+  // wizardState.method directly, so snapshot it on open. Cancel/close
+  // restores the snapshot; only the confirm button keeps the changes.
+  var _methodDraft = JSON.parse(JSON.stringify(wizardState.method));
+  function revertMethodDraft() {
+    wizardState.method = _methodDraft;
+    document.getElementById("method-config-modal").style.display = "none";
+    updateConfigCards();
+  }
+  window._revertMethodDraft = revertMethodDraft;
   var title = document.getElementById("mc-modal-title");
   var subtitle = document.getElementById("mc-modal-subtitle");
   var wfEntry = workflowCatalogCache.find(function(w) { return w.id === wizardState.workflow.id; });
@@ -20753,8 +20885,6 @@ async function openMethodConfig() {
       : (t("modal.method_config") || "\u914d\u7f6e\u8ba1\u7b97\u65b9\u6cd5")) + " - " + wfLabel;
     subtitle.style.display = "none";
   }
-  // _batchScopeTab lives in the openMethodConfig closure so it survives rebuildLevelCard
-  if (typeof _batchScopeTab === "undefined") var _batchScopeTab = "common";
   // rank1-only default applies only on first entry per workflow; a user's
   // explicit choice must survive modal re-open (otherwise it is silently
   // reset to the energy-workflow default on every open).
@@ -21387,10 +21517,58 @@ async function openMethodConfig() {
       return presets[0] || "auto_ground_state";
     }
 
+    var _ES_PRESET_DETAILS = {
+      auto_ground_state: {
+        zh: "\u5e38\u89c4\u8ba1\u7b97\uff1a\u6309\u5df2\u786e\u8ba4\u7684\u7535\u8377\u548c\u591a\u91cd\u5ea6\u9009\u62e9\u9ed8\u8ba4\u6ce2\u51fd\u6570\u5904\u7406\u65b9\u5f0f\uff08\u4e0d\u4f1a\u81ea\u52a8\u641c\u7d22\u57fa\u6001\uff09",
+        en: "Regular: default wavefunction treatment from the confirmed charge and multiplicity (no automatic ground-state search)",
+      },
+      closed_shell_singlet: {
+        zh: "\u95ed\u58f3\u5c42\u5355\u91cd\u6001\uff1a\u591a\u91cd\u5ea6 1\uff0c\u9650\u5236\u6027\u5904\u7406",
+        en: "Closed-shell singlet: multiplicity 1, restricted",
+      },
+      unrestricted_doublet: {
+        zh: "\u975e\u9650\u5236\u6027\u4e8c\u91cd\u6001\uff1a\u591a\u91cd\u5ea6 2",
+        en: "Unrestricted doublet: multiplicity 2",
+      },
+      unrestricted_triplet: {
+        zh: "\u975e\u9650\u5236\u6027\u4e09\u91cd\u6001\uff1a\u591a\u91cd\u5ea6 3",
+        en: "Unrestricted triplet: multiplicity 3",
+      },
+      bs_singlet_guessmix: {
+        zh: "\u7834\u7f3a\u5bf9\u79f0\u5355\u91cd\u6001\uff1aGuessMix \u521d\u731c\uff08\u9700\u6838\u5bf9\u53c2\u8003\u6001\u4e0e\u81ea\u65cb\u5e03\u5c45\uff09",
+        en: "Broken-symmetry singlet: GuessMix initial guess (check reference state and spin population)",
+      },
+      bs_singlet_flipspin: {
+        zh: "\u7834\u7f3a\u5bf9\u79f0\u5355\u91cd\u6001\uff1aFlipSpin \u521d\u731c\uff08\u9700\u6838\u5bf9\u53c2\u8003\u6001\u4e0e\u81ea\u65cb\u5e03\u5c45\uff09",
+        en: "Broken-symmetry singlet: FlipSpin initial guess (check reference state and spin population)",
+      },
+      singlet_triplet_pair: {
+        zh: "\u6bd4\u8f83\u591a\u4e2a\u81ea\u65cb\u6001\uff1a\u5c06\u751f\u6210 2 \u4e2a\u8ba1\u7b97\u5206\u652f\uff08\u5355\u91cd\u6001 + \u4e09\u91cd\u6001\uff09",
+        en: "Spin comparison: 2 branches will be generated (singlet + triplet)",
+      },
+      bs_singlet_triplet_pair: {
+        zh: "\u6bd4\u8f83\u591a\u4e2a\u81ea\u65cb\u6001\uff1a\u5c06\u751f\u6210 2 \u4e2a\u5206\u652f\uff08\u7834\u7f3a\u5bf9\u79f0\u5355\u91cd\u6001 + \u4e09\u91cd\u6001\uff09",
+        en: "Spin comparison: 2 branches (BS singlet + triplet)",
+      },
+      spin_ladder_1_3_5: {
+        zh: "\u81ea\u65cb\u9636\u68af\uff1a\u5c06\u751f\u6210 3 \u4e2a\u8ba1\u7b97\u5206\u652f\uff08\u591a\u91cd\u5ea6 1/3/5\uff09",
+        en: "Spin ladder: 3 branches will be generated (multiplicity 1/3/5)",
+      },
+    };
+
     function _esSummaryText(curVal) {
       if (!curVal || typeof curVal !== "object") return "";
+      var zh = currentLang === "zh-CN";
+      if (curVal.preset_id) {
+        var detail = _ES_PRESET_DETAILS[curVal.preset_id];
+        if (detail) return zh ? detail.zh : detail.en;
+        var meta = _ES_PRESET_LABELS[curVal.preset_id];
+        return (meta && (zh ? meta.label_zh : meta.label)) || curVal.preset_id;
+      }
       if (curVal.mode === "automatic" || !curVal.states || !curVal.states.length) {
-        return currentLang === "zh-CN" ? "由后端自动确定电子态" : "Backend determines electronic state automatically";
+        return zh
+          ? "\u5e38\u89c4\u8ba1\u7b97\uff1a\u6309\u5df2\u786e\u8ba4\u7684\u7535\u8377\u548c\u591a\u91cd\u5ea6\u9009\u62e9\u9ed8\u8ba4\u6ce2\u51fd\u6570\u5904\u7406\u65b9\u5f0f"
+          : "Regular: default wavefunction treatment from the confirmed charge and multiplicity";
       }
       var parts = [];
       for (var i = 0; i < curVal.states.length; i++) {
@@ -21402,8 +21580,10 @@ async function openMethodConfig() {
         var tag = sm === "restricted" ? "R" : sm === "broken_symmetry" ? "BS" : sm === "unrestricted" ? "U" : sm;
         parts.push(lbl + (mult ? " " + mult : "") + (tag ? " [" + tag + "]" : ""));
       }
-      var modeLabel = curVal.execution_mode === "state_sweep" ? "sweep" : "single";
-      return modeLabel + ": " + parts.join(", ");
+      var modeLabel = curVal.execution_mode === "state_sweep"
+        ? (zh ? "\u81ea\u65cb\u6bd4\u8f83\uff0c\u5171 " + curVal.states.length + " \u4e2a\u5206\u652f: " : "sweep, " + curVal.states.length + " branches: ")
+        : (zh ? "\u5355\u4e00\u7535\u5b50\u6001: " : "single: ");
+      return modeLabel + parts.join(", ");
     }
 
     function buildElectronicStateFieldRow(fieldName, fDiv, fieldFd, curVal) {
@@ -21449,8 +21629,15 @@ async function openMethodConfig() {
       var zh = currentLang === "zh-CN";
 
       var st = getLevelState(lvDef.level_id);
+      // Canonical field is opt_recalc_hess (the field serialization and the
+      // backend both read). Older sessions wrote recalc_hess — migrate once,
+      // then drop the legacy key so only one source of truth remains.
+      if (st.opt_recalc_hess === undefined && st.recalc_hess !== undefined) {
+        st.opt_recalc_hess = st.recalc_hess;
+      }
+      delete st.recalc_hess;
       // Normalise persisted value into one of: "auto" / 0 / <int>.
-      var rawVal = st.recalc_hess;
+      var rawVal = st.opt_recalc_hess;
       var mode = "auto";
       var customVal = 10;
       if (rawVal === 0) { mode = "off"; }
@@ -21458,7 +21645,7 @@ async function openMethodConfig() {
         var parsed = parseInt(rawVal, 10);
         if (!isNaN(parsed) && parsed > 0) { mode = "custom"; customVal = parsed; }
       }
-      st.recalc_hess = (mode === "auto") ? "auto" : (mode === "off" ? 0 : customVal);
+      st.opt_recalc_hess = (mode === "auto") ? "auto" : (mode === "off" ? 0 : customVal);
 
       // Combined horizontal row: initial Hessian select + recalc segmented
       var hessianRow = document.createElement("div");
@@ -21488,6 +21675,7 @@ async function openMethodConfig() {
         initSel.addEventListener("change", function() {
           st.opt_initial_hessian = initSel.value || null;
           updateHessianEffective();
+          if (typeof _onAdvancedFieldChange === "function") _onAdvancedFieldChange();
           scheduleValidate();
         });
         initDiv.appendChild(initSel);
@@ -21513,10 +21701,11 @@ async function openMethodConfig() {
           mode = segMode;
           segWrap.querySelectorAll(".mc-hessian-seg-btn").forEach(function(b) { b.classList.remove("active"); });
           btn.classList.add("active");
-          if (mode === "auto") { st.recalc_hess = "auto"; customRow.style.display = "none"; }
-          else if (mode === "off") { st.recalc_hess = 0; customRow.style.display = "none"; }
-          else { st.recalc_hess = customVal; customRow.style.display = ""; }
+          if (mode === "auto") { st.opt_recalc_hess = "auto"; customRow.style.display = "none"; }
+          else if (mode === "off") { st.opt_recalc_hess = 0; customRow.style.display = "none"; }
+          else { st.opt_recalc_hess = customVal; customRow.style.display = ""; }
           updateHessianEffective();
+          if (typeof _onAdvancedFieldChange === "function") _onAdvancedFieldChange();
           scheduleHessianPreview();
           scheduleValidate();
         });
@@ -21544,7 +21733,7 @@ async function openMethodConfig() {
         if (v > 1000) v = 1000;
         numInp.value = String(v);
         customVal = v;
-        if (mode === "custom") { st.recalc_hess = v; updateHessianEffective(); scheduleHessianPreview(); scheduleValidate(); }
+        if (mode === "custom") { st.opt_recalc_hess = v; updateHessianEffective(); if (typeof _onAdvancedFieldChange === "function") _onAdvancedFieldChange(); scheduleHessianPreview(); scheduleValidate(); }
       });
       var unitLbl = document.createElement("span");
       unitLbl.className = "unit";
@@ -21562,7 +21751,7 @@ async function openMethodConfig() {
 
       function updateHessianEffective() {
         var initVal = st.opt_initial_hessian || "";
-        var recalcVal = st.recalc_hess;
+        var recalcVal = st.opt_recalc_hess;
         var parts = [];
         if (initVal === "calculate") {
           parts.push(zh ? "\u542f\u52a8\u65f6\u8ba1\u7b97" : "Calculate at start");
@@ -21672,7 +21861,7 @@ async function openMethodConfig() {
         var body = {
           schema_id: wizardState.method.schema_id || "",
           level_id: lvDef.level_id,
-          recalc_hess: st.recalc_hess,
+          recalc_hess: st.opt_recalc_hess,
           structures: structures,
         };
         fetch("/api/v1/hessian-preview", {
@@ -21783,8 +21972,8 @@ async function openMethodConfig() {
         // These mirror the hardcoded backend defaults for INT/TS roles and are
         // informational only; the backend remains authoritative.
         var _BATCH_ENGINE_DEFAULTS = {
-          INT: { opt_max_iter: 250, opt_convergence: "tight", scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal" },
-          TS:  { opt_max_iter: 200, opt_convergence: "tight", opt_trust_radius: 0.3, opt_initial_hessian: "calculate", opt_recalc_hess: 5, scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal" },
+          INT: { opt_max_iter: 200, opt_convergence: "tight", scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal", opt_rescue_policy: "adaptive", opt_max_rescue: 2 },
+          TS:  { opt_max_iter: 200, opt_convergence: "tight", opt_trust_radius: 0.3, opt_initial_hessian: "calculate", opt_recalc_hess: 5, scf_max_iter: 300, scf_convergence: "tight", scf_strategy: "normal", opt_rescue_policy: "adaptive", opt_max_rescue: 2 },
         };
 
         // ── Case-insensitive match helper ──
@@ -21872,8 +22061,11 @@ async function openMethodConfig() {
           var maxIter = eff.opt_max_iter != null ? String(eff.opt_max_iter) : (zh ? "\u81ea\u52a8" : "auto");
           var trustStr = eff.opt_trust_radius != null ? ("Trust " + eff.opt_trust_radius) : (zh ? "Trust \u81ea\u52a8" : "Trust auto");
 
-          var line1 = (zh ? "\u4f18\u5316\uff1a" : "Opt: ") + convLabel + (zh ? "\uff0c\u6700\u5927\u5faa\u73af " : ", MaxIter ") + maxIter + ", " + trustStr;
-          var line2 = (zh ? "SCF\uff1a" : "SCF: ") + scfLabel + (zh ? "\uff0c" : ", ") + (eff.scf_max_iter || 300) + (zh ? " \u6b21" : " iter");
+          var line1 = (zh ? "\u4f18\u5316\uff1a" : "Opt: ") + convLabel
+            + (zh ? "\uff0c\u4f18\u5316\u6700\u5927\u5faa\u73af " : ", opt max cycles ") + maxIter
+            + ", " + trustStr;
+          var line2 = (zh ? "SCF\uff1a" : "SCF: ") + scfLabel
+            + (zh ? "\uff0cSCF \u6700\u5927\u5faa\u73af " : ", SCF max cycles ") + (eff.scf_max_iter || 300);
 
           // Hessian hint
           var hessParts = [];
@@ -21924,8 +22116,7 @@ async function openMethodConfig() {
               .catch(function(err) {
                 if (err && err.name === "AbortError") return;
                 if (myGen !== _previewGeneration) return;
-                console.warn("[batch-config-preview] fallback to local:", err && err.message);
-                _renderLocalSummary(false);
+                _renderPreviewFailure((err && err.message) || String(err));
               });
           }, _PREVIEW_DEBOUNCE_MS);
         }
@@ -21935,38 +22126,87 @@ async function openMethodConfig() {
           effSummary.innerHTML = "";
           var zh = currentLang === "zh-CN";
           var roleOrder = ["int", "ts"];
-          var lines = [];
+          var effLabels = {
+            max_cycles: zh ? "\u4f18\u5316\u6700\u5927\u5faa\u73af" : "opt max cycles",
+            opt_level: zh ? "\u4f18\u5316\u6536\u655b" : "opt level",
+            opt_trust_radius: zh ? "\u4fe1\u8d56\u534a\u5f84" : "trust",
+            opt_initial_hessian: zh ? "\u521d\u59cb Hessian" : "initial Hessian",
+            opt_recalc_hess: zh ? "Hessian \u91cd\u7b97" : "Hessian recalc",
+            scf_maxiter: zh ? "SCF \u6700\u5927\u5faa\u73af" : "SCF max cycles",
+            scf_convergence: zh ? "SCF \u6536\u655b" : "SCF conv",
+            scf_strategy: zh ? "SCF \u7b56\u7565" : "SCF strategy",
+            rescue_policy: zh ? "\u5931\u8d25\u91cd\u8bd5\u7b56\u7565" : "retry policy",
+            max_rescue: zh ? "\u91cd\u8bd5\u4e0a\u9650" : "max retries",
+          };
+          var effToField = { max_cycles: "opt_max_iter", opt_level: "opt_convergence", scf_maxiter: "scf_max_iter" };
           roleOrder.forEach(function(role) {
             var roleData = (data.roles || {})[role];
             if (!roleData) return;
-            var orcaKw = ((data.orca_summary || {})[role]) || [];
-            if (orcaKw.length) {
-              lines.push(role.toUpperCase() + ": " + orcaKw.join(", "));
-            }
+            var eff = roleData.effective || {};
+            var src = roleData.sources || {};
+            var colDiv = document.createElement("div");
+            colDiv.className = "mc-preview-role";
+            var title = document.createElement("div");
+            title.className = "mc-preview-role-title";
+            title.textContent = role.toUpperCase() + (zh ? "\uff08\u5e94\u7528\u4e8e\u5168\u90e8 " + (role === "ts" ? "TS" : "INT") + "\uff09" : "");
+            colDiv.appendChild(title);
+            var bits = [];
+            Object.keys(effLabels).forEach(function(k) {
+              if (eff[k] === undefined || eff[k] === null) return;
+              var fieldName = effToField[k] || k;
+              var vTxt = (typeof _formatInheritValue === "function") ? _formatInheritValue(fieldName, eff[k]) : String(eff[k]);
+              var badge = src[k] === "user" ? (zh ? "\u5df2\u4fee\u6539" : "modified") : (zh ? "\u9ed8\u8ba4" : "default");
+              bits.push(effLabels[k] + " " + vTxt + " [" + badge + "]");
+            });
+            var line = document.createElement("div");
+            line.textContent = bits.join(zh ? "\uff0c" : ", ");
+            colDiv.appendChild(line);
+            effSummary.appendChild(colDiv);
           });
-          if (!lines.length) {
-            _renderLocalSummary(false);
-            return;
-          }
-          var lineDiv = document.createElement("div");
-          lineDiv.textContent = (zh ? "\u6709\u6548\u8bbe\u7f6e\uff1a" : "Effective: ") + lines.join(" | ");
-          effSummary.appendChild(lineDiv);
-          // ORCA input details (collapsible)
-          var details = document.createElement("details");
-          var summaryEl = document.createElement("summary");
-          summaryEl.textContent = zh ? "\u67e5\u770b\u5b9e\u9645\u8f93\u5165" : "View actual input";
-          details.appendChild(summaryEl);
-          var pre = document.createElement("pre");
-          var detailLines = [];
+          var kwLines = [];
           roleOrder.forEach(function(role) {
             var orcaKw = ((data.orca_summary || {})[role]) || [];
-            if (orcaKw.length) {
-              detailLines.push(role.toUpperCase() + ": ! " + orcaKw.join(" "));
-            }
+            if (orcaKw.length) kwLines.push(role.toUpperCase() + ": ! " + orcaKw.join(" "));
           });
-          pre.textContent = detailLines.join("\n");
+          if (!kwLines.length) { _renderLocalSummary(false); return; }
+          var details = document.createElement("details");
+          var summaryEl = document.createElement("summary");
+          summaryEl.textContent = zh ? "\u751f\u6548\u914d\u7f6e\u8be6\u60c5\uff08\u540e\u7aef\u89e3\u6790\uff09" : "Effective config details (backend-parsed)";
+          details.appendChild(summaryEl);
+          var pre = document.createElement("pre");
+          pre.textContent = (zh
+            ? "ORCA \u5173\u952e\u8bcd\u6458\u8981\uff08\u975e\u5b8c\u6574\u8f93\u5165\u6587\u4ef6\uff1b\u5750\u6807\u7b49\u5728\u8fd0\u884c\u65f6\u751f\u6210\uff09\uff1a\n"
+            : "ORCA keyword summary (not the literal input file; coordinates are runtime-generated):\n")
+            + kwLines.join("\n");
           details.appendChild(pre);
+          if (data.config_key) {
+            var keyDiv = document.createElement("div");
+            keyDiv.className = "mc-preview-config-key";
+            keyDiv.textContent = (zh ? "\u914d\u7f6e\u7248\u672c\uff1a" : "Config key: ") + String(data.config_key).slice(0, 12) + "\u2026";
+            details.appendChild(keyDiv);
+          }
           effSummary.appendChild(details);
+        }
+
+        function _renderPreviewFailure(errMsg) {
+          if (!effSummary) return;
+          effSummary.innerHTML = "";
+          var zh = currentLang === "zh-CN";
+          var failDiv = document.createElement("div");
+          failDiv.className = "mc-preview-failure";
+          failDiv.textContent = (zh ? "\u540e\u7aef\u9884\u89c8\u5931\u8d25\uff1a" : "Backend preview failed: ") + errMsg;
+          effSummary.appendChild(failDiv);
+          var noteDiv = document.createElement("div");
+          noteDiv.className = "mc-preview-unverified";
+          noteDiv.textContent = zh
+            ? "\u4ee5\u4e0b\u4e3a\u672c\u5730\u63a8\u65ad\uff0c\u672a\u7ecf\u540e\u7aef\u9a8c\u8bc1\uff0c\u4e0d\u80fd\u89c6\u4e3a\u5df2\u786e\u8ba4\u7684\u5b9e\u9645\u8bbe\u7f6e\u3002"
+            : "Local inference below is NOT backend-verified.";
+          effSummary.appendChild(noteDiv);
+          var s = wizardState.method.stages.batch || {};
+          var lines = buildBatchEffectiveSummary(s);
+          var lineDiv = document.createElement("div");
+          lineDiv.textContent = lines.join(" | ");
+          effSummary.appendChild(lineDiv);
         }
 
         function _renderLocalSummary(withPending) {
@@ -22045,7 +22285,8 @@ async function openMethodConfig() {
         resetBtn.textContent = currentLang === "zh-CN" ? "\u6062\u590d\u9ed8\u8ba4" : "Reset to defaults";
         resetBtn.addEventListener("click", function() {
           var s = wizardState.method.stages.batch || {};
-          ["opt_max_iter", "opt_convergence", "opt_trust_radius", "opt_initial_hessian", "opt_recalc_hess", "opt_rescue_policy", "opt_max_rescue", "scf_max_iter", "scf_convergence", "scf_strategy", "scf_orbital_inherit", "minimum_opt_trust_radius", "minimum_opt_initial_hessian", "minimum_opt_recalc_hess", "transition_state_opt_trust_radius", "transition_state_opt_initial_hessian", "transition_state_opt_recalc_hess"].forEach(function(k) { delete s[k]; });
+          ["opt_max_iter", "opt_convergence", "opt_trust_radius", "opt_initial_hessian", "opt_recalc_hess", "opt_rescue_policy", "opt_max_rescue", "scf_max_iter", "scf_convergence", "scf_strategy", "scf_orbital_inherit"].forEach(function(k) { delete s[k]; });
+          _ROLE_COLUMN_FIELDS.forEach(function(k) { delete s[k]; });
           wizardState.method.stages.batch = s;
           rebuildLevelCard("batch");
         });
@@ -22097,23 +22338,21 @@ async function openMethodConfig() {
         toastEl.className = "mc-preset-toast";
         advWrap.appendChild(toastEl);
 
-        // ── FIELD_GROUPS: four groups per plan §3.2-3.4 ──
+        // ── FIELD_GROUPS: batch-shared (common) groups ──
         var FIELD_GROUPS = [
           {
             id: "opt_control",
             label: "Optimizer",
             label_zh: "\u4f18\u5316\u5668",
-            fields: ["opt_max_iter", "opt_convergence", "opt_trust_radius"],
+            fields: ["opt_max_iter", "opt_convergence", "opt_trust_radius", "opt_rescue_policy", "opt_max_rescue"],
             collapsed: false,
-            expert_fields: ["opt_rescue_policy", "opt_max_rescue"],
           },
           {
             id: "scf_control",
             label: "SCF",
             label_zh: "SCF",
-            fields: ["scf_max_iter", "scf_convergence", "scf_strategy"],
+            fields: ["scf_max_iter", "scf_convergence", "scf_strategy", "scf_orbital_inherit"],
             collapsed: false,
-            expert_fields: ["scf_orbital_inherit"],
           },
           {
             id: "hessian_control",
@@ -22129,27 +22368,28 @@ async function openMethodConfig() {
             fields: [], // temperature/pressure/scale_factor rendered here for batch
             collapsed: false,
           },
-          {
-            id: "expert_overrides",
-            label: "Expert: Role-Level Method Overrides",
-            label_zh: "\u4e13\u5bb6\u8bbe\u7f6e\uff1a\u89d2\u8272\u7ea7\u65b9\u6cd5\u8986\u76d6",
-            fields: ["minimum_method", "minimum_basis", "transition_state_method", "transition_state_basis"],
-            collapsed: true,
-          },
         ];
 
         // Partition advancedFields into groups + ungrouped
-        // Exclude role-override fields — they render in INT/TS tabs, not common groups (P2a)
-        var _ROLE_OVERRIDE_FIELDS = ["minimum_opt_trust_radius", "minimum_opt_initial_hessian", "minimum_opt_recalc_hess", "transition_state_opt_trust_radius", "transition_state_opt_initial_hessian", "transition_state_opt_recalc_hess"];
+        // Exclude role-column fields — they render in the INT/TS columns, not common groups (P3)
+        var _ROLE_COLUMN_FIELDS = [
+          "minimum_method", "minimum_basis", "transition_state_method", "transition_state_basis",
+          "minimum_opt_trust_radius", "minimum_opt_initial_hessian", "minimum_opt_recalc_hess",
+          "minimum_opt_max_iter", "minimum_opt_convergence", "minimum_scf_max_iter", "minimum_scf_convergence",
+          "minimum_scf_strategy", "minimum_opt_rescue_policy", "minimum_opt_max_rescue",
+          "transition_state_opt_trust_radius", "transition_state_opt_initial_hessian", "transition_state_opt_recalc_hess",
+          "transition_state_opt_max_iter", "transition_state_opt_convergence", "transition_state_scf_max_iter",
+          "transition_state_scf_convergence", "transition_state_scf_strategy", "transition_state_opt_rescue_policy",
+          "transition_state_opt_max_rescue",
+        ];
         var grouped = {};
         var groupedSet = {};
         FIELD_GROUPS.forEach(function(g) { grouped[g.id] = []; });
         advancedFields.forEach(function(fn) {
-          if (_ROLE_OVERRIDE_FIELDS.indexOf(fn) >= 0) return; // render in role tabs only
+          if (_ROLE_COLUMN_FIELDS.indexOf(fn) >= 0) return; // render in role columns only
           var placed = false;
           FIELD_GROUPS.forEach(function(g) {
-            var allGroupFields = (g.fields || []).concat(g.expert_fields || []);
-            if (allGroupFields.indexOf(fn) >= 0) { grouped[g.id].push(fn); groupedSet[fn] = true; placed = true; }
+            if ((g.fields || []).indexOf(fn) >= 0) { grouped[g.id].push(fn); groupedSet[fn] = true; placed = true; }
           });
           // temperature/pressure/scale_factor → freq_thermo group (batch only)
           if (!placed && ["temperature", "pressure", "scale_factor"].indexOf(fn) >= 0) {
@@ -22161,6 +22401,14 @@ async function openMethodConfig() {
         // ── Wire change/input listeners to flip preset to custom ──
         function _onAdvancedFieldChange() {
           var s = wizardState.method.stages.batch || {};
+          // TS↔INT method link: mirror INT method edits into TS while linked.
+          if (linkCb.checked) {
+            var before = JSON.stringify([s.transition_state_method, s.transition_state_basis]);
+            _linkTsMethods();
+            var s2 = wizardState.method.stages.batch || {};
+            var after = JSON.stringify([s2.transition_state_method, s2.transition_state_basis]);
+            if (before !== after) { rebuildLevelCard("batch"); return; }
+          }
           var matched = _batchPresetMatch(s);
           // Update preset bar active states
           presetBar.querySelectorAll(".mc-preset-btn").forEach(function(b) { b.classList.remove("active"); });
@@ -22191,7 +22439,6 @@ async function openMethodConfig() {
 
         FIELD_GROUPS.forEach(function(g) {
           var fields = grouped[g.id];
-          var expertFields = (g.expert_fields || []).filter(function(fn) { return grouped[g.id].indexOf(fn) >= 0; });
           // For freq_thermo, only show if it has fields
           if (g.id === "freq_thermo" && (!fields || !fields.length)) return;
 
@@ -22216,30 +22463,7 @@ async function openMethodConfig() {
           if (g.id === "hessian_control") {
             buildHessianFieldRow(grpFields);
           } else {
-            var mainFields = (fields || []).filter(function(fn) { return expertFields.indexOf(fn) < 0; });
-            mainFields.forEach(function(fn) { buildFieldRow(fn, grpFields); });
-          }
-
-          // Expert sub-row for rescue/orbital_inherit
-          if (expertFields.length) {
-            var expertSub = document.createElement("div");
-            expertSub.className = "mc-expert-sub";
-            var expertToggle = document.createElement("div");
-            expertToggle.className = "mc-expert-sub-toggle";
-            expertToggle.textContent = (currentLang === "zh-CN" ? "\u4e13\u5bb6\u9879 \u25b6" : "Expert \u25b6");
-            expertSub.appendChild(expertToggle);
-            var expertFieldsDiv = document.createElement("div");
-            expertFieldsDiv.className = "mc-expert-sub-fields";
-            expertFields.forEach(function(fn) { buildFieldRow(fn, expertFieldsDiv); });
-            expertSub.appendChild(expertFieldsDiv);
-            expertToggle.addEventListener("click", function() {
-              var isOpen = expertFieldsDiv.classList.contains("open");
-              expertFieldsDiv.classList.toggle("open", !isOpen);
-              expertToggle.textContent = (currentLang === "zh-CN"
-                ? ("\u4e13\u5bb6\u9879 " + (isOpen ? "\u25b6" : "\u25bc"))
-                : ("Expert " + (isOpen ? "\u25b6" : "\u25bc")));
-            });
-            grpFields.appendChild(expertSub);
+            (fields || []).forEach(function(fn) { buildFieldRow(fn, grpFields); });
           }
           grp.appendChild(grpFields);
 
@@ -22253,15 +22477,30 @@ async function openMethodConfig() {
         });
         advDiv.appendChild(groupsGrid);
 
-        // ── Role override tabs (P2a: replaces static .mc-role-info panel) ──
+        // ── Role column field defs (P3: applied to ALL INT / ALL TS) ──
         var _ROLE_FIELD_DEFS = {
-          minimum_opt_trust_radius: { type: "float", min: 0.01, max: 1.0, step: 0.01, label_zh: "INT 信赖半径", label: "INT Trust Radius" },
-          minimum_opt_initial_hessian: { type: "select", options: ["auto", "model", "calculate"], label_zh: "INT 初始 Hessian", label: "INT Initial Hessian", option_labels_zh: { auto: "自动", model: "模型 Hessian", calculate: "显式计算" } },
-          minimum_opt_recalc_hess: { type: "select", options: ["auto", "0", "5", "10"], label_zh: "INT Hessian 重算", label: "INT Hessian Recalc", option_labels_zh: { auto: "自动", "0": "不重算", "5": "每 5 步", "10": "每 10 步" } },
-          transition_state_opt_trust_radius: { type: "float", min: 0.01, max: 1.0, step: 0.01, label_zh: "TS 信赖半径", label: "TS Trust Radius" },
-          transition_state_opt_initial_hessian: { type: "select", options: ["auto", "model", "calculate"], label_zh: "TS 初始 Hessian", label: "TS Initial Hessian", option_labels_zh: { auto: "自动", model: "模型 Hessian", calculate: "显式计算" } },
-          transition_state_opt_recalc_hess: { type: "select", options: ["auto", "0", "5", "10"], label_zh: "TS Hessian 重算", label: "TS Hessian Recalc", option_labels_zh: { auto: "自动", "0": "不重算", "5": "每 5 步", "10": "每 10 步" } },
+          minimum_opt_max_iter: { type: "int", min: 1, label_zh: "最大优化循环", label: "Max Opt Cycles" },
+          minimum_opt_convergence: { type: "select", options: ["loose", "normal", "tight", "verytight"], label_zh: "优化收敛标准", label: "Opt Convergence", option_labels_zh: { loose: "LooseOpt", normal: "Opt", tight: "TightOpt", verytight: "VeryTightOpt" } },
+          minimum_opt_trust_radius: { type: "float", min: 0.01, max: 1.0, step: 0.01, label_zh: "信赖半径", label: "Trust Radius" },
+          minimum_opt_initial_hessian: { type: "select", options: ["auto", "model", "calculate"], label_zh: "初始 Hessian", label: "Initial Hessian", option_labels_zh: { auto: "自动", model: "模型 Hessian", calculate: "显式计算" } },
+          minimum_opt_recalc_hess: { type: "select", options: ["auto", "0", "5", "10", "20"], label_zh: "Hessian 重算", label: "Hessian Recalc", option_labels_zh: { auto: "自动", "0": "不重算", "5": "每 5 步", "10": "每 10 步", "20": "每 20 步" } },
+          minimum_scf_max_iter: { type: "int", min: 1, label_zh: "SCF 最大循环", label: "SCF Max Cycles" },
+          minimum_scf_convergence: { type: "select", options: ["loose", "tight", "verytight"], label_zh: "SCF 收敛标准", label: "SCF Convergence", option_labels_zh: { loose: "LooseSCF", tight: "TightSCF", verytight: "VeryTightSCF" } },
+          minimum_scf_strategy: { type: "select", options: ["normal", "slowconv", "soscf"], label_zh: "SCF 策略", label: "SCF Strategy", option_labels_zh: { normal: "标准", slowconv: "慢收敛", soscf: "SOSCF" } },
+          minimum_opt_rescue_policy: { type: "select", options: ["off", "adaptive"], label_zh: "失败后自动重试", label: "Auto-Retry", option_labels_zh: { off: "关闭", adaptive: "自适应" } },
+          minimum_opt_max_rescue: { type: "int", min: 0, max: 10, label_zh: "重试次数上限", label: "Max Retries" },
+          transition_state_opt_max_iter: { type: "int", min: 1, label_zh: "最大优化循环", label: "Max Opt Cycles" },
+          transition_state_opt_convergence: { type: "select", options: ["loose", "normal", "tight", "verytight"], label_zh: "优化收敛标准", label: "Opt Convergence", option_labels_zh: { loose: "LooseOpt", normal: "Opt", tight: "TightOpt", verytight: "VeryTightOpt" } },
+          transition_state_opt_trust_radius: { type: "float", min: 0.01, max: 1.0, step: 0.01, label_zh: "信赖半径", label: "Trust Radius" },
+          transition_state_opt_initial_hessian: { type: "select", options: ["auto", "model", "calculate"], label_zh: "初始 Hessian", label: "Initial Hessian", option_labels_zh: { auto: "自动", model: "模型 Hessian", calculate: "显式计算" } },
+          transition_state_opt_recalc_hess: { type: "select", options: ["auto", "0", "5", "10", "20"], label_zh: "Hessian 重算", label: "Hessian Recalc", option_labels_zh: { auto: "自动", "0": "不重算", "5": "每 5 步", "10": "每 10 步", "20": "每 20 步" } },
+          transition_state_scf_max_iter: { type: "int", min: 1, label_zh: "SCF 最大循环", label: "SCF Max Cycles" },
+          transition_state_scf_convergence: { type: "select", options: ["loose", "tight", "verytight"], label_zh: "SCF 收敛标准", label: "SCF Convergence", option_labels_zh: { loose: "LooseSCF", tight: "TightSCF", verytight: "VeryTightSCF" } },
+          transition_state_scf_strategy: { type: "select", options: ["normal", "slowconv", "soscf"], label_zh: "SCF 策略", label: "SCF Strategy", option_labels_zh: { normal: "标准", slowconv: "慢收敛", soscf: "SOSCF" } },
+          transition_state_opt_rescue_policy: { type: "select", options: ["off", "adaptive"], label_zh: "失败后自动重试", label: "Auto-Retry", option_labels_zh: { off: "关闭", adaptive: "自适应" } },
+          transition_state_opt_max_rescue: { type: "int", min: 0, max: 10, label_zh: "重试次数上限", label: "Max Retries" },
         };
+        var _ROLE_COLUMN_BASE_FIELDS = ["opt_max_iter", "opt_convergence", "opt_trust_radius", "opt_initial_hessian", "opt_recalc_hess", "scf_max_iter", "scf_convergence", "scf_strategy", "opt_rescue_policy", "opt_max_rescue"];
 
         function _formatInheritValue(fieldName, val) {
           if (val === null || val === undefined) return currentLang === "zh-CN" ? "\u81ea\u52a8" : "auto";
@@ -22291,20 +22530,38 @@ async function openMethodConfig() {
           var isOverridden = currentVal != null && currentVal !== "";
           var role = key.indexOf("minimum_") === 0 ? "int" : "ts";
           var fieldName = key.replace(/^(minimum_|transition_state_)/, "");
+          var zh = currentLang === "zh-CN";
 
           var container = document.createElement("div");
+          container.className = "mc-role-field";
           container.style.marginBottom = "8px";
 
-          // Inherit switch
+          function _updateBadge() {
+            var s = wizardState.method.stages.batch || {};
+            var overridden = s[key] != null && s[key] !== "";
+            var defaults = _BATCH_ENGINE_DEFAULTS[role.toUpperCase()] || {};
+            var resolved = _resolveRoleValue(role, fieldName);
+            var text;
+            if (overridden) text = zh ? "已修改" : "modified";
+            else if (defaults[fieldName] != null && resolved === defaults[fieldName]) text = zh ? "默认（角色默认）" : "role default";
+            else text = zh ? "默认（沿用通用）" : "default";
+            badgeSpan.className = "mc-badge " + (overridden ? "mc-badge-modified" : "mc-badge-default");
+            badgeSpan.textContent = text;
+          }
+
+          // Inherit switch + source badge
           var switchWrap = document.createElement("div");
           switchWrap.className = "mc-role-inherit-switch";
           var switchCb = document.createElement("input");
           switchCb.type = "checkbox";
           switchCb.checked = !isOverridden;
           var switchLabel = document.createElement("label");
-          switchLabel.textContent = currentLang === "zh-CN" ? "\u4f7f\u7528\u901a\u7528\u8bbe\u7f6e" : "Use common settings";
+          switchLabel.textContent = zh ? "\u4f7f\u7528\u901a\u7528\u8bbe\u7f6e" : "Use common settings";
           switchLabel.prepend(switchCb);
           switchWrap.appendChild(switchLabel);
+          var badgeSpan = document.createElement("span");
+          _updateBadge();
+          switchWrap.appendChild(badgeSpan);
           container.appendChild(switchWrap);
 
           // Inherited value line (visible when inheriting)
@@ -22335,10 +22592,10 @@ async function openMethodConfig() {
           lbl.textContent = (currentLang === "zh-CN" ? def.label_zh : def.label);
           fDiv.appendChild(lbl);
 
-          if (def.type === "float") {
+          if (def.type === "float" || def.type === "int") {
             var inp = document.createElement("input");
-            inp.type = "number"; inp.min = String(def.min); inp.max = String(def.max);
-            inp.step = String(def.step);
+            inp.type = "number"; inp.min = String(def.min); inp.max = String(def.max || "");
+            inp.step = def.type === "int" ? "1" : String(def.step);
             inp.placeholder = currentLang === "zh-CN" ? "\u81ea\u52a8" : "Auto";
             if (currentVal != null && currentVal !== "") inp.value = String(currentVal);
             inp.addEventListener("change", function() {
@@ -22349,13 +22606,14 @@ async function openMethodConfig() {
                 inheritValDiv.style.display = "";
                 inheritSpan.textContent = _formatInheritValue(fieldName, _resolveRoleValue(role, fieldName));
               } else {
-                var v = parseFloat(inp.value);
+                var v = def.type === "int" ? parseInt(inp.value, 10) : parseFloat(inp.value);
                 if (isNaN(v) || v < def.min) v = def.min;
-                if (v > def.max) v = def.max;
+                if (def.max != null && v > def.max) v = def.max;
                 inp.value = String(v);
                 if (!wizardState.method.stages.batch) wizardState.method.stages.batch = {};
                 wizardState.method.stages.batch[key] = v;
               }
+              _updateBadge();
               _onAdvancedFieldChange();
             });
             fDiv.appendChild(inp);
@@ -22372,6 +22630,7 @@ async function openMethodConfig() {
               if (!wizardState.method.stages.batch) wizardState.method.stages.batch = {};
               var parsedNum = parseInt(sel.value, 10);
               wizardState.method.stages.batch[key] = (!isNaN(parsedNum) && String(parsedNum) === sel.value) ? parsedNum : sel.value;
+              _updateBadge();
               _onAdvancedFieldChange();
             });
             fDiv.appendChild(sel);
@@ -22393,58 +22652,18 @@ async function openMethodConfig() {
               if (!wizardState.method.stages.batch) wizardState.method.stages.batch = {};
               if (def.type === "float" && (currentVal == null || currentVal === "")) {
                 wizardState.method.stages.batch[key] = def.min;
+              } else if (def.type === "int" && (currentVal == null || currentVal === "")) {
+                wizardState.method.stages.batch[key] = def.min;
               } else if (def.type === "select" && (currentVal == null || currentVal === "")) {
                 wizardState.method.stages.batch[key] = def.options[0];
               }
             }
+            _updateBadge();
             _onAdvancedFieldChange();
           });
 
           parent.appendChild(container);
         }
-
-        // Build tab component
-        var roleTabs = document.createElement("div");
-        roleTabs.className = "mc-role-tabs";
-
-        var tabStrip = document.createElement("div");
-        tabStrip.className = "mc-role-tab-strip";
-        var tabNames = [
-          { id: "common", label_zh: "\u901a\u7528\u8bbe\u7f6e", label: "Common Settings" },
-          { id: "int", label_zh: "\u666e\u901a\u9a7b\u70b9 INT", label: "Intermediate INT" },
-          { id: "ts", label_zh: "\u8fc7\u6e21\u6001 TS", label: "Transition State TS" },
-        ];
-        var tabPanes = {};
-
-        tabNames.forEach(function(tn, idx) {
-          var btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "mc-role-tab-btn" + (tn.id === _batchScopeTab ? " active" : "");
-          btn.textContent = currentLang === "zh-CN" ? tn.label_zh : tn.label;
-          btn.setAttribute("data-tab-id", tn.id);
-          btn.addEventListener("click", function() {
-            _batchScopeTab = tn.id;
-            tabStrip.querySelectorAll(".mc-role-tab-btn").forEach(function(b) { b.classList.remove("active"); });
-            btn.classList.add("active");
-            Object.keys(tabPanes).forEach(function(pid) {
-              tabPanes[pid].classList.toggle("active", pid === tn.id);
-            });
-            // Show/hide shared elements based on scope
-            var isCommon = tn.id === "common";
-            if (headerBar) headerBar.style.display = isCommon ? "" : "none";
-            if (presetBar) presetBar.style.display = isCommon ? "" : "none";
-            if (presetSummary) presetSummary.style.display = isCommon ? "" : "none";
-            if (groupsGrid) groupsGrid.style.display = isCommon ? "" : "none";
-            if (otherGroupEl) otherGroupEl.style.display = isCommon ? "" : "none";
-          });
-          tabStrip.appendChild(btn);
-
-          var pane = document.createElement("div");
-          pane.className = "mc-role-tab-pane" + (tn.id === _batchScopeTab ? " active" : "");
-          pane.setAttribute("data-tab-pane", tn.id);
-          tabPanes[tn.id] = pane;
-        });
-        roleTabs.appendChild(tabStrip);
 
         function _resolveRoleValue(role, fieldName) {
           var st = wizardState.method.stages.batch || {};
@@ -22457,106 +22676,163 @@ async function openMethodConfig() {
           return null;
         }
 
-        function _buildInheritValueRow(parent, role, fieldName, label_zh, label_en) {
-          var row = document.createElement("div");
-          row.className = "mc-field";
-          var lbl = document.createElement("label");
-          lbl.textContent = currentLang === "zh-CN" ? label_zh : label_en;
-          row.appendChild(lbl);
-          var val = _resolveRoleValue(role, fieldName);
-          var valEl = document.createElement("span");
-          valEl.className = "mc-role-inherit-value";
-          valEl.style.fontSize = "13px";
-          valEl.style.color = "var(--text-secondary)";
-          valEl.textContent = _formatInheritValue(fieldName, val);
-          row.appendChild(valEl);
-          parent.appendChild(row);
+        // ── TS↔INT method link + one-shot copy (P3) ──
+        function _linkEnabled() {
+          var s = wizardState.method.stages.batch || {};
+          var im = s.minimum_method || "", ib = s.minimum_basis || "";
+          var tm = s.transition_state_method || "", tb = s.transition_state_basis || "";
+          if (!im && !ib && !tm && !tb) return true;
+          return Boolean(im) && im === tm && ib === tb;
+        }
+        function _linkTsMethods() {
+          var s = wizardState.method.stages.batch;
+          if (!s) return;
+          ["minimum_method", "minimum_basis"].forEach(function(srcKey) {
+            var dstKey = "transition_state_" + srcKey.slice("minimum_".length);
+            if (s[srcKey]) s[dstKey] = s[srcKey];
+            else delete s[dstKey];
+          });
+        }
+        function _copyIntToTs() {
+          var s = wizardState.method.stages.batch;
+          if (!s) return;
+          ["minimum_method", "minimum_basis"].forEach(function(srcKey) {
+            var dstKey = "transition_state_" + srcKey.slice("minimum_".length);
+            if (s[srcKey]) s[dstKey] = s[srcKey]; else delete s[dstKey];
+          });
+          _ROLE_COLUMN_BASE_FIELDS.forEach(function(name) {
+            var srcKey = "minimum_" + name;
+            var dstKey = "transition_state_" + name;
+            if (s[srcKey] != null && s[srcKey] !== "") s[dstKey] = s[srcKey];
+            else delete s[dstKey];
+          });
         }
 
-        function _buildRoleScopePane(pane, role) {
-          pane.innerHTML = "";
-          var hint = document.createElement("div");
-          hint.className = "mc-role-inherit-hint";
-          hint.textContent = role === "int"
-            ? (currentLang === "zh-CN" ? "\u7ee7\u627f\uff1a\u901a\u7528\u8bbe\u7f6e" : "Inherits: Common settings")
-            : (currentLang === "zh-CN" ? "\u7ee7\u627f\uff1aTS \u9ed8\u8ba4 Trust 0.3 \u00b7 \u542f\u52a8\u65f6\u8ba1\u7b97 Hessian \u00b7 \u6bcf 5 \u6b65\u91cd\u7b97" : "Inherits: TS defaults Trust 0.3 \u00b7 Calculate Hessian \u00b7 Recalc every 5");
-          pane.appendChild(hint);
+        // ── Role columns section: one window, INT | TS side by side ──
+        var roleSection = document.createElement("div");
+        roleSection.className = "mc-role-section";
+        var roleSectionHdr = document.createElement("div");
+        roleSectionHdr.className = "mc-role-section-header";
+        roleSectionHdr.textContent = currentLang === "zh-CN"
+          ? "\u6309\u89d2\u8272\u8bbe\u7f6e\uff08\u5206\u522b\u5e94\u7528\u4e8e\u5168\u90e8 INT / \u5168\u90e8 TS\uff09"
+          : "Per-role settings (applied to all INT / all TS)";
+        roleSection.appendChild(roleSectionHdr);
+
+        var linkRow = document.createElement("div");
+        linkRow.className = "mc-role-link-row";
+        var linkWrap = document.createElement("label");
+        linkWrap.className = "mc-role-link";
+        var linkCb = document.createElement("input");
+        linkCb.type = "checkbox";
+        linkCb.checked = _linkEnabled();
+        linkWrap.appendChild(linkCb);
+        linkWrap.appendChild(document.createTextNode(currentLang === "zh-CN"
+          ? "TS \u65b9\u6cd5\u4e0e INT \u76f8\u540c\uff08\u8054\u52a8\uff09"
+          : "TS method follows INT (linked)"));
+        linkRow.appendChild(linkWrap);
+        var copyBtn = document.createElement("button");
+        copyBtn.type = "button";
+        copyBtn.className = "btn ghost mc-role-copy-btn";
+        copyBtn.textContent = currentLang === "zh-CN" ? "\u590d\u5236 INT \u8bbe\u7f6e\u5230 TS\uff08\u4e00\u6b21\u6027\uff09" : "Copy INT settings to TS (one-shot)";
+        copyBtn.addEventListener("click", function() {
+          _copyIntToTs();
+          rebuildLevelCard("batch");
+        });
+        linkRow.appendChild(copyBtn);
+        roleSection.appendChild(linkRow);
+
+        var columnsWrap = document.createElement("div");
+        columnsWrap.className = "mc-role-columns";
+        var intCol = document.createElement("div");
+        intCol.className = "mc-role-col";
+        var tsCol = document.createElement("div");
+        tsCol.className = "mc-role-col";
+        columnsWrap.appendChild(intCol);
+        columnsWrap.appendChild(tsCol);
+        roleSection.appendChild(columnsWrap);
+
+        linkCb.addEventListener("change", function() {
+          if (linkCb.checked) {
+            _linkTsMethods();
+            rebuildLevelCard("batch");
+          }
+        });
+
+        function _buildRoleGroupCol(titleZh, titleEn) {
+          var grp = document.createElement("div");
+          grp.className = "mc-adv-group";
+          var hdr = document.createElement("div");
+          hdr.className = "mc-adv-group-header";
+          hdr.textContent = currentLang === "zh-CN" ? titleZh : titleEn;
+          grp.appendChild(hdr);
+          var fields = document.createElement("div");
+          fields.className = "mc-adv-group-fields";
+          grp.appendChild(fields);
+          return { grp: grp, fields: fields };
+        }
+
+        function _buildRoleColumn(col, role) {
+          col.innerHTML = "";
+          var prefix = role === "int" ? "minimum_" : "transition_state_";
+          var zh = currentLang === "zh-CN";
+
+          var head = document.createElement("div");
+          head.className = "mc-role-col-title";
+          head.textContent = role === "int"
+            ? (zh ? "INT\uff1a\u5e94\u7528\u4e8e\u5168\u90e8\u666e\u901a\u9a7b\u70b9" : "INT: applied to all intermediates")
+            : (zh ? "TS\uff1a\u5e94\u7528\u4e8e\u5168\u90e8\u8fc7\u6e21\u6001" : "TS: applied to all transition states");
+          col.appendChild(head);
+
+          // Method group (INT/TS share the optimization/frequency method pair)
+          var methodGroup = _buildRoleGroupCol("\u65b9\u6cd5", "Method");
+          if (role === "ts" && _linkEnabled()) {
+            var linkedNote = document.createElement("div");
+            var _stL = wizardState.method.stages.batch || {};
+            linkedNote.className = "mc-role-linked-note";
+            linkedNote.textContent = zh
+              ? "\u4e0e INT \u76f8\u540c\uff08\u8054\u52a8\u4e2d\uff09\uff1a" + (_stL.minimum_method || _stL.functional || "--")
+              : "Same as INT (linked): " + (_stL.minimum_method || _stL.functional || "--");
+            methodGroup.fields.appendChild(linkedNote);
+          } else {
+            buildFieldRow(prefix + "method", methodGroup.fields);
+            buildFieldRow(prefix + "basis", methodGroup.fields);
+          }
+          col.appendChild(methodGroup.grp);
 
           // Optimizer group
-          var optGrp = document.createElement("div");
-          optGrp.className = "mc-adv-group";
-          var optHdr = document.createElement("div");
-          optHdr.className = "mc-adv-group-header";
-          optHdr.textContent = currentLang === "zh-CN" ? "\u4f18\u5316\u5668" : "Optimizer";
-          optGrp.appendChild(optHdr);
-          var optFields = document.createElement("div");
-          optFields.className = "mc-adv-group-fields";
-          _buildInheritValueRow(optFields, role, "opt_max_iter", "\u6700\u5927\u4f18\u5316\u5faa\u73af", "Max Optimization Iterations");
-          _buildInheritValueRow(optFields, role, "opt_convergence", "\u6536\u655b\u6807\u51c6", "Convergence Criteria");
-          if (role === "ts") {
-            _buildRoleOverrideField(optFields, "transition_state_opt_trust_radius");
-          } else {
-            _buildRoleOverrideField(optFields, "minimum_opt_trust_radius");
-          }
-          optGrp.appendChild(optFields);
-          pane.appendChild(optGrp);
-
-          // SCF group
-          var scfGrp = document.createElement("div");
-          scfGrp.className = "mc-adv-group";
-          var scfHdr = document.createElement("div");
-          scfHdr.className = "mc-adv-group-header";
-          scfHdr.textContent = "SCF";
-          scfGrp.appendChild(scfHdr);
-          var scfFields = document.createElement("div");
-          scfFields.className = "mc-adv-group-fields";
-          _buildInheritValueRow(scfFields, role, "scf_max_iter", "\u6700\u5927 SCF \u5faa\u73af", "Max SCF Iterations");
-          _buildInheritValueRow(scfFields, role, "scf_convergence", "\u6536\u655b\u6807\u51c6", "SCF Convergence");
-          _buildInheritValueRow(scfFields, role, "scf_strategy", "\u6536\u655b\u7b56\u7565", "SCF Strategy");
-          scfGrp.appendChild(scfFields);
-          pane.appendChild(scfGrp);
+          var optGroup = _buildRoleGroupCol("\u4f18\u5316\u5668", "Optimizer");
+          _buildRoleOverrideField(optGroup.fields, prefix + "opt_max_iter");
+          _buildRoleOverrideField(optGroup.fields, prefix + "opt_convergence");
+          _buildRoleOverrideField(optGroup.fields, prefix + "opt_trust_radius");
+          col.appendChild(optGroup.grp);
 
           // Hessian group
-          var hessGrp = document.createElement("div");
-          hessGrp.className = "mc-adv-group";
-          var hessHdr = document.createElement("div");
-          hessHdr.className = "mc-adv-group-header";
-          hessHdr.textContent = "Hessian";
-          hessGrp.appendChild(hessHdr);
-          var hessFields = document.createElement("div");
-          hessFields.className = "mc-adv-group-fields";
-          if (role === "ts") {
-            _buildRoleOverrideField(hessFields, "transition_state_opt_initial_hessian");
-            _buildRoleOverrideField(hessFields, "transition_state_opt_recalc_hess");
-          } else {
-            _buildRoleOverrideField(hessFields, "minimum_opt_initial_hessian");
-            _buildRoleOverrideField(hessFields, "minimum_opt_recalc_hess");
-          }
-          hessGrp.appendChild(hessFields);
-          pane.appendChild(hessGrp);
+          var hessGroup = _buildRoleGroupCol("Hessian", "Hessian");
+          _buildRoleOverrideField(hessGroup.fields, prefix + "opt_initial_hessian");
+          _buildRoleOverrideField(hessGroup.fields, prefix + "opt_recalc_hess");
+          col.appendChild(hessGroup.grp);
+
+          // SCF group
+          var scfGroup = _buildRoleGroupCol("SCF", "SCF");
+          _buildRoleOverrideField(scfGroup.fields, prefix + "scf_max_iter");
+          _buildRoleOverrideField(scfGroup.fields, prefix + "scf_convergence");
+          _buildRoleOverrideField(scfGroup.fields, prefix + "scf_strategy");
+          col.appendChild(scfGroup.grp);
+
+          // Auto-retry group
+          var retryGroup = _buildRoleGroupCol(
+            zh ? "\u5931\u8d25\u540e\u81ea\u52a8\u91cd\u8bd5" : "Auto-retry after failure",
+            "Auto-retry after failure");
+          _buildRoleOverrideField(retryGroup.fields, prefix + "opt_rescue_policy");
+          _buildRoleOverrideField(retryGroup.fields, prefix + "opt_max_rescue");
+          col.appendChild(retryGroup.grp);
         }
 
-        // Common pane
-        var commonPane = tabPanes["common"];
+        _buildRoleColumn(intCol, "int");
+        _buildRoleColumn(tsCol, "ts");
 
-        // INT pane
-        _buildRoleScopePane(tabPanes["int"], "int");
-
-        // TS pane
-        _buildRoleScopePane(tabPanes["ts"], "ts");
-
-        Object.keys(tabPanes).forEach(function(pid) { roleTabs.appendChild(tabPanes[pid]); });
-        // Scope tabs go ABOVE the groups grid
-        advDiv.insertBefore(roleTabs, groupsGrid);
-
-        // Apply initial visibility based on persisted scope
-        if (_batchScopeTab !== "common") {
-          if (headerBar) headerBar.style.display = "none";
-          if (presetBar) presetBar.style.display = "none";
-          if (presetSummary) presetSummary.style.display = "none";
-          if (groupsGrid) groupsGrid.style.display = "none";
-          if (otherGroupEl) otherGroupEl.style.display = "none";
-        }
+        // Role columns sit BELOW the common groups (shared batch settings on top)
+        advDiv.appendChild(roleSection);
 
         // ── Wire change listener on advDiv for preset auto-flip ──
         advDiv.addEventListener("change", _onAdvancedFieldChange);
@@ -22681,7 +22957,11 @@ async function openMethodConfig() {
         body: JSON.stringify({ schema_id: schemaId, levels: levels })
       });
       var body = await resp.json();
-      if (body.normalized_levels) {
+      // Skip the normalized write-back once the modal has been closed
+      // (cancel already restored the draft) — a late validation response
+      // must not mutate restored state.
+      var modalHidden = document.getElementById("method-config-modal").style.display === "none";
+      if (body.normalized_levels && !modalHidden) {
         Object.keys(body.normalized_levels).forEach(function(lid) {
           var norm = body.normalized_levels[lid];
           if (!wizardState.method.stages[lid]) return; // don't resurrect disabled/absent levels
@@ -23909,8 +24189,14 @@ function setupEventListeners() {
     document.getElementById("workflow-config-modal").style.display = "none";
     updateConfigCards();
   });
-  document.getElementById("mt-config-close").addEventListener("click", function() { document.getElementById("method-config-modal").style.display = "none"; });
-  document.getElementById("mt-config-cancel").addEventListener("click", function() { document.getElementById("method-config-modal").style.display = "none"; });
+  document.getElementById("mt-config-close").addEventListener("click", function() {
+    if (typeof window._revertMethodDraft === "function") window._revertMethodDraft();
+    else document.getElementById("method-config-modal").style.display = "none";
+  });
+  document.getElementById("mt-config-cancel").addEventListener("click", function() {
+    if (typeof window._revertMethodDraft === "function") window._revertMethodDraft();
+    else document.getElementById("method-config-modal").style.display = "none";
+  });
   document.getElementById("mt-config-ok").addEventListener("click", function() {
     document.getElementById("method-config-modal").style.display = "none";
     updateConfigCards();
