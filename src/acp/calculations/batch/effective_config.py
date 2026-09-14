@@ -66,21 +66,31 @@ def build_effective_role(
 ) -> dict[str, Any]:
     """Build per-role effective dict from resolved options.
 
-    Combines ``resolve_role_options`` (trust/hessian/recalc) with engine
-    constants (max_cycles, opt_level, scf trio).
+    Role-resolved values (trust/hessian/recalc/iterations/convergence/SCF/
+    rescue) take priority; keys without a role resolution fall back to the
+    shared common value (engine constants where ``None``).
     """
+    from acp.calculations.batch.options import _ROLE_OVERRIDE_FIELDS
+
     role_opts = opts.resolve_role_options(is_ts)
     effective: dict[str, Any] = {}
-    for name in ("opt_trust_radius", "opt_initial_hessian", "opt_recalc_hess"):
+    for name in _ROLE_OVERRIDE_FIELDS:
         if name in role_opts:
             effective[name] = role_opts[name]
+    max_cycles = role_opts.get("opt_max_iter")
+    if max_cycles is None:
+        max_cycles = opts.opt_max_iter
     effective["max_cycles"] = (
-        opts.opt_max_iter if opts.opt_max_iter is not None else _ENGINE_MAX_CYCLES_DEFAULT
+        int(max_cycles) if max_cycles is not None else _ENGINE_MAX_CYCLES_DEFAULT
     )
-    effective["opt_level"] = opts.opt_convergence
-    effective["scf_maxiter"] = opts.scf_max_iter
-    effective["scf_convergence"] = opts.scf_convergence
-    effective["scf_strategy"] = opts.scf_strategy
+    effective["opt_level"] = role_opts.get("opt_convergence") or opts.opt_convergence
+    scf_maxiter = role_opts.get("scf_max_iter")
+    effective["scf_maxiter"] = int(scf_maxiter) if scf_maxiter is not None else opts.scf_max_iter
+    effective["scf_convergence"] = role_opts.get("scf_convergence") or opts.scf_convergence
+    effective["scf_strategy"] = role_opts.get("scf_strategy") or opts.scf_strategy
+    effective["rescue_policy"] = role_opts.get("opt_rescue_policy") or opts.opt_rescue_policy
+    max_rescue = role_opts.get("opt_max_rescue")
+    effective["max_rescue"] = int(max_rescue) if max_rescue is not None else opts.opt_max_rescue
     return effective
 
 
@@ -209,14 +219,20 @@ def build_opts_from_method_dict(method: dict[str, Any]) -> BatchMethodOptions:
         kwargs["scf_orbital_inherit"] = bool(method["scf_orbital_inherit"])
 
     # Per-role overrides
+    from acp.calculations.batch.options import _ROLE_OVERRIDE_FIELDS
+
     for prefix in ("minimum_", "transition_state_"):
-        for name in ("opt_trust_radius", "opt_initial_hessian", "opt_recalc_hess"):
+        for name in _ROLE_OVERRIDE_FIELDS:
             field = f"{prefix}{name}"
-            if method.get(field) is not None:
-                if name == "opt_recalc_hess":
-                    kwargs[field] = normalize_recalc_hess(method[field])
-                else:
-                    kwargs[field] = method[field]
+            raw = method.get(field)
+            if raw is None or raw == "":
+                continue
+            if name == "opt_recalc_hess":
+                kwargs[field] = normalize_recalc_hess(raw)
+            elif name in ("opt_max_iter", "scf_max_iter", "opt_max_rescue"):
+                kwargs[field] = int(raw)
+            else:
+                kwargs[field] = raw
 
     return BatchMethodOptions(**kwargs)
 

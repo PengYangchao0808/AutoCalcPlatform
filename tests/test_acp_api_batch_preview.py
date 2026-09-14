@@ -237,6 +237,79 @@ class TestRoleOverrides:
         assert int_role["effective"]["opt_trust_radius"] == 0.2
         assert int_role["sources"]["opt_trust_radius"] == "user"
 
+    # ── extended role overrides (optimizer / SCF / rescue, 2026-09) ──
+
+    def test_ts_role_max_iter_and_scf_strategy(self, client: TestClient) -> None:
+        resp = client.post(
+            _URL,
+            json={
+                "method": {
+                    "transition_state_opt_max_iter": 350,
+                    "transition_state_scf_strategy": "slowconv",
+                }
+            },
+        )
+        assert resp.status_code == 200
+        ts = resp.json()["roles"]["ts"]
+        assert ts["effective"]["max_cycles"] == 350
+        assert ts["effective"]["scf_strategy"] == "slowconv"
+        assert ts["sources"]["max_cycles"] == "user"
+        assert ts["sources"]["scf_strategy"] == "user"
+        # INT stays on engine defaults.
+        int_role = resp.json()["roles"]["int"]
+        assert int_role["effective"]["max_cycles"] == 200
+        assert int_role["effective"]["scf_strategy"] == "normal"
+        assert int_role["sources"]["max_cycles"] == "default"
+
+    def test_int_role_convergence_and_scf_max_iter(self, client: TestClient) -> None:
+        resp = client.post(
+            _URL,
+            json={
+                "method": {
+                    "minimum_opt_convergence": "loose",
+                    "minimum_scf_max_iter": 500,
+                }
+            },
+        )
+        assert resp.status_code == 200
+        int_role = resp.json()["roles"]["int"]
+        assert int_role["effective"]["opt_level"] == "loose"
+        assert int_role["effective"]["scf_maxiter"] == 500
+        assert int_role["sources"]["opt_level"] == "user"
+        assert int_role["sources"]["scf_maxiter"] == "user"
+        # TS unaffected.
+        ts = resp.json()["roles"]["ts"]
+        assert ts["effective"]["opt_level"] == "tight"
+        assert ts["effective"]["scf_maxiter"] == 300
+
+    def test_role_rescue_override(self, client: TestClient) -> None:
+        resp = client.post(
+            _URL,
+            json={
+                "method": {
+                    "transition_state_opt_rescue_policy": "off",
+                    "transition_state_opt_max_rescue": 0,
+                }
+            },
+        )
+        assert resp.status_code == 200
+        ts = resp.json()["roles"]["ts"]
+        assert ts["effective"]["rescue_policy"] == "off"
+        assert ts["effective"]["max_rescue"] == 0
+        assert ts["sources"]["rescue_policy"] == "user"
+
+    def test_response_contains_config_key(self, client: TestClient) -> None:
+        """config_key ties the preview to the engine-side cache identity."""
+        resp = client.post(_URL, json={"method": {"opt_recalc_hess": 1}})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert isinstance(data.get("config_key"), str) and data["config_key"]
+        # Same payload → same key; changed payload → different key.
+        resp2 = client.post(_URL, json={"method": {"opt_recalc_hess": 1}})
+        assert resp2.json()["config_key"] == data["config_key"]
+        resp3 = client.post(_URL, json={"method": {"opt_recalc_hess": 2}})
+        assert resp3.json()["config_key"] != data["config_key"]
+
 
 # ── invalid input → 422 ─────────────────────────────────────────────────
 
