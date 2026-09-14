@@ -462,6 +462,20 @@ _BATCHOPTIMIZE_SCALAR_FLAGS: dict[str, str] = {
     "minimum_opt_initial_hessian": "--minimum-opt-initial-hessian",
     "transition_state_opt_trust_radius": "--transition-state-opt-trust-radius",
     "transition_state_opt_initial_hessian": "--transition-state-opt-initial-hessian",
+    "minimum_opt_max_iter": "--minimum-opt-max-iter",
+    "minimum_opt_convergence": "--minimum-opt-convergence",
+    "minimum_scf_max_iter": "--minimum-scf-max-iter",
+    "minimum_scf_convergence": "--minimum-scf-convergence",
+    "minimum_scf_strategy": "--minimum-scf-strategy",
+    "minimum_opt_rescue_policy": "--minimum-opt-rescue-policy",
+    "minimum_opt_max_rescue": "--minimum-opt-max-rescue",
+    "transition_state_opt_max_iter": "--transition-state-opt-max-iter",
+    "transition_state_opt_convergence": "--transition-state-opt-convergence",
+    "transition_state_scf_max_iter": "--transition-state-scf-max-iter",
+    "transition_state_scf_convergence": "--transition-state-scf-convergence",
+    "transition_state_scf_strategy": "--transition-state-scf-strategy",
+    "transition_state_opt_rescue_policy": "--transition-state-opt-rescue-policy",
+    "transition_state_opt_max_rescue": "--transition-state-opt-max-rescue",
 }
 _BATCHOPTIMIZE_PROFILES: frozenset[str] = frozenset(
     {"opt_only", "opt_freq", "opt_freq_sp", "opt_freq_sp_thermo"}
@@ -487,6 +501,14 @@ _BATCHOPTIMIZE_LOWERED_KEYS: frozenset[str] = frozenset(
         "opt_recalc_hess",
         "minimum_opt_recalc_hess",
         "transition_state_opt_recalc_hess",
+        "minimum_opt_convergence",
+        "transition_state_opt_convergence",
+        "minimum_scf_convergence",
+        "transition_state_scf_convergence",
+        "minimum_scf_strategy",
+        "transition_state_scf_strategy",
+        "minimum_opt_rescue_policy",
+        "transition_state_opt_rescue_policy",
     }
 )
 

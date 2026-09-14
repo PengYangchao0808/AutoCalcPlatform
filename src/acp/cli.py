@@ -750,6 +750,56 @@ Examples:
         default=None,
         help="TS role Hessian recalculation: auto / off / integer interval (default 5)",
     )
+    # ── per-role optimizer / SCF / rescue overrides ──────────────────────
+    for _role_flag_prefix, _role_dest_prefix, _role_label in (
+        ("--minimum", "minimum_", "INT"),
+        ("--transition-state", "transition_state_", "TS"),
+    ):
+        batch.add_argument(
+            f"{_role_flag_prefix}-opt-max-iter",
+            type=int,
+            default=None,
+            help=f"{_role_label} role max optimization iterations override",
+        )
+        batch.add_argument(
+            f"{_role_flag_prefix}-opt-convergence",
+            type=str.lower,
+            choices=["loose", "normal", "tight", "verytight"],
+            default=None,
+            help=f"{_role_label} role optimization convergence level",
+        )
+        batch.add_argument(
+            f"{_role_flag_prefix}-scf-max-iter",
+            type=int,
+            default=None,
+            help=f"{_role_label} role max SCF iterations override",
+        )
+        batch.add_argument(
+            f"{_role_flag_prefix}-scf-convergence",
+            type=str.lower,
+            choices=["loose", "tight", "verytight"],
+            default=None,
+            help=f"{_role_label} role SCF convergence level",
+        )
+        batch.add_argument(
+            f"{_role_flag_prefix}-scf-strategy",
+            type=str.lower,
+            choices=["normal", "slowconv", "soscf"],
+            default=None,
+            help=f"{_role_label} role SCF convergence strategy",
+        )
+        batch.add_argument(
+            f"{_role_flag_prefix}-opt-rescue-policy",
+            choices=["off", "adaptive"],
+            default=None,
+            help=f"{_role_label} role rescue strategy override",
+        )
+        batch.add_argument(
+            f"{_role_flag_prefix}-opt-max-rescue",
+            type=int,
+            default=None,
+            help=f"{_role_label} role maximum rescue attempts override",
+        )
     batch.add_argument(
         "--opt-rescue-policy",
         choices=["off", "adaptive"],
@@ -1377,6 +1427,19 @@ def _handle_batch_optimize(args: argparse.Namespace) -> int:
         method_kwargs["transition_state_opt_recalc_hess"] = normalize_recalc_hess(
             args.transition_state_opt_recalc_hess
         )
+    for _prefix in ("minimum_", "transition_state_"):
+        for _name in (
+            "opt_max_iter",
+            "opt_convergence",
+            "scf_max_iter",
+            "scf_convergence",
+            "scf_strategy",
+            "opt_rescue_policy",
+            "opt_max_rescue",
+        ):
+            _value = getattr(args, f"{_prefix}{_name}", None)
+            if _value is not None:
+                method_kwargs[f"{_prefix}{_name}"] = _value
     if args.opt_rescue_policy is not None:
         method_kwargs["opt_rescue_policy"] = args.opt_rescue_policy
     if args.opt_max_rescue is not None:

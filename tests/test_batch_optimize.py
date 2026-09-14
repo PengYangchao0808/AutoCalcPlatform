@@ -1774,3 +1774,90 @@ class TestRoleOverrides:
         int_kwargs = engine._optimization_kwargs(is_ts=False)
         assert ts_kwargs["trust_radius"] == 0.15
         assert "trust_radius" not in int_kwargs
+
+    # -- extended role overrides: optimizer / SCF / rescue ────────────────
+
+    def test_ts_scf_and_max_iter_override_reaches_kwargs(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        methods = BatchMethodOptions(
+            transition_state_opt_max_iter=350,
+            transition_state_scf_strategy="slowconv",
+            transition_state_scf_max_iter=500,
+        )
+        engine = BatchOptimizeEngine(
+            work_root=tmp_path / "task" / "WORK",
+            result_root=tmp_path / "task" / "RESULT",
+            methods=methods,
+        )
+        ts_kwargs = engine._optimization_kwargs(is_ts=True)
+        int_kwargs = engine._optimization_kwargs(is_ts=False)
+        assert ts_kwargs["max_cycles"] == 350
+        assert ts_kwargs["scf_strategy"] == "slowconv"
+        assert ts_kwargs["scf_maxiter"] == 500
+        # INT keeps the engine defaults.
+        assert int_kwargs["max_cycles"] == 200
+        assert int_kwargs["scf_strategy"] == "normal"
+        assert int_kwargs["scf_maxiter"] == 300
+
+    def test_int_rescue_override_reaches_kwargs(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        methods = BatchMethodOptions(
+            minimum_opt_rescue_policy="off",
+            minimum_opt_max_rescue=0,
+        )
+        engine = BatchOptimizeEngine(
+            work_root=tmp_path / "task" / "WORK",
+            result_root=tmp_path / "task" / "RESULT",
+            methods=methods,
+        )
+        int_kwargs = engine._optimization_kwargs(is_ts=False)
+        assert int_kwargs["opt_rescue_policy"] == "off"
+        assert int_kwargs["opt_max_rescue"] == 0
+        # TS keeps the common default policy.
+        ts_kwargs = engine._optimization_kwargs(is_ts=True)
+        assert ts_kwargs["opt_rescue_policy"] == "adaptive"
+        assert ts_kwargs["opt_max_rescue"] == 2
+
+    def test_role_convergence_override_reaches_kwargs(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        methods = BatchMethodOptions(
+            minimum_opt_convergence="normal",
+            transition_state_opt_convergence="verytight",
+        )
+        engine = BatchOptimizeEngine(
+            work_root=tmp_path / "task" / "WORK",
+            result_root=tmp_path / "task" / "RESULT",
+            methods=methods,
+        )
+        assert engine._optimization_kwargs(is_ts=False)["opt_level"] == "normal"
+        assert engine._optimization_kwargs(is_ts=True)["opt_level"] == "verytight"
+
+    def test_new_role_fields_do_not_cross_contaminate(
+        self, tmp_path: Path, fake_backend: object,
+    ) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        methods = BatchMethodOptions(
+            transition_state_scf_max_iter=500,
+            minimum_opt_max_iter=400,
+        )
+        engine = BatchOptimizeEngine(
+            work_root=tmp_path / "task" / "WORK",
+            result_root=tmp_path / "task" / "RESULT",
+            methods=methods,
+        )
+        ts_kwargs = engine._optimization_kwargs(is_ts=True)
+        int_kwargs = engine._optimization_kwargs(is_ts=False)
+        assert ts_kwargs["scf_maxiter"] == 500
+        assert ts_kwargs["max_cycles"] == 200
+        assert int_kwargs["max_cycles"] == 400
+        assert int_kwargs["scf_maxiter"] == 300
