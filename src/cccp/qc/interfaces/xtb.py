@@ -11,7 +11,7 @@ import logging
 import os
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import numpy as np
 
@@ -338,6 +338,7 @@ class XTBInterface:
         max_steps: Optional[int] = None,
         timeout: Optional[int] = None,
         scan_plan: Optional[dict] = None,
+        point_callback: Optional[Callable[[RelaxedScanPoint], None]] = None,
         **kwargs
     ) -> RelaxedScanResult:
         """Run a sequential multi-frame relaxed scan along *plan*.
@@ -361,6 +362,10 @@ class XTBInterface:
             max_steps: Optional per-frame ``$opt maxcycle``.
             timeout: Per-frame subprocess timeout in seconds.
             scan_plan: JSON-style plan dict (fallback when *plan* is None).
+            point_callback: Invoked with each terminal RelaxedScanPoint
+                (success or failure) right after it is appended, so callers can
+                publish live scan snapshots. Callback errors are logged and
+                never abort the scan.
             **kwargs: Additional parameters.
 
         Returns:
@@ -410,6 +415,11 @@ class XTBInterface:
                     coordinate_values=coordinate_values,
                 )
             )
+            if point_callback is not None:
+                try:
+                    point_callback(points[-1])
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("relaxed-scan point_callback failed: %s", exc)
 
             if frame_result.success and frame_result.coordinates is not None:
                 prev_coordinates = frame_result.coordinates

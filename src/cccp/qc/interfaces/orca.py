@@ -894,7 +894,20 @@ def _parse_all_cartesian_blocks(log_text: str) -> list[tuple[NDArray[np.float64]
     return blocks
 
 
-def _parse_relaxed_scan_cartesian_blocks(
+def _notify_scan_point(
+    point_callback: Callable[[object], None] | None,
+    point: object,
+) -> None:
+    """Invoke a relaxed-scan point callback, never raising into the scan loop."""
+    if point_callback is None:
+        return
+    try:
+        point_callback(point)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("relaxed-scan point_callback failed: %s", exc)
+
+
+def parse_relaxed_scan_cartesian_blocks(
     log_text: str,
 ) -> list[tuple[NDArray[np.float64], list[str]]]:
     """Extract the converged geometry of every relaxed-scan step.
@@ -921,7 +934,7 @@ def _parse_relaxed_scan_cartesian_blocks(
     return blocks
 
 
-def _parse_relaxed_scan_allxyz_frames(
+def parse_relaxed_scan_allxyz_frames(
     allxyz_path: Path,
 ) -> list[tuple[NDArray[np.float64], list[str]]]:
     """Read converged per-step geometries from ORCA's ``*.allxyz`` trajectory."""
@@ -996,7 +1009,7 @@ def _parse_relaxed_scan_energy_rows(
     return energies
 
 
-def _parse_relaxed_scan_energy_ledger(path: Path, coordinate_count: int = 1) -> list[float]:
+def parse_relaxed_scan_energy_ledger(path: Path, coordinate_count: int = 1) -> list[float]:
     """Parse ORCA's ``*.relaxscanact.dat`` energy ledger when present."""
     energies: list[float] = []
     try:
@@ -1917,6 +1930,7 @@ class ORCAInterface(QCInterfaceBase):
                 geom_maxiter=kwargs.pop("geom_maxiter", kwargs.pop("max_cycles", None)),
                 recalc_hess=kwargs.pop("recalc_hess", 0),
                 route_extras=kwargs.pop("route_extras", None),
+                point_callback=kwargs.pop("point_callback", None),
             )
         if scan_coordinate is None or points is None:
             raise ValueError("ORCA relaxed_scan requires one scan coordinate and points")
@@ -1950,6 +1964,13 @@ class ORCAInterface(QCInterfaceBase):
         )
         recalc_hess = kwargs.pop("recalc_hess", 0)
         geom_maxiter = kwargs.pop("geom_maxiter", kwargs.pop("max_cycles", None))
+        if kwargs.pop("point_callback", None) is not None:
+            # Native scans are one blocking subprocess (no per-point hook);
+            # live data comes from the incremental reader in acp.results.
+            logger.debug(
+                "point_callback ignored for native ORCA relaxed scan; "
+                "live data comes from the incremental scan-artifact reader"
+            )
         route_extras, input_solvent, input_solvent_model = _orca_scan_route_settings(
             eff_method,
             eff_solvent,
@@ -2040,6 +2061,7 @@ class ORCAInterface(QCInterfaceBase):
         geom_maxiter: int | None,
         recalc_hess: object,
         route_extras: list[str] | None,
+        point_callback: Callable[[object], None] | None = None,
     ) -> RelaxedScanResult:
         """Run multiple driven coordinates at one shared progress value.
 
@@ -2047,6 +2069,11 @@ class ORCAInterface(QCInterfaceBase):
         coordinate in this interface.  The generic four-atom double-bond
         selection therefore uses one constrained optimization per frame,
         placing both distance constraints in the same ``%geom`` block.
+
+        ``point_callback`` is invoked with each terminal
+        :class:`~cccp.qc.interfaces.xtb_scan.RelaxedScanPoint` (success or
+        failure) so callers can publish live scan snapshots; callback
+        errors are logged and never abort the scan.
         """
         output_dir = Path(output_dir) if output_dir else Path.cwd()
         ensure_dir(output_dir)
@@ -2115,6 +2142,7 @@ class ORCAInterface(QCInterfaceBase):
                         coordinate_values=targets,
                     )
                 )
+                _notify_scan_point(point_callback, result_points[-1])
                 return RelaxedScanResult(
                     points=result_points,
                     input_xyz=input_xyz,
@@ -2138,6 +2166,7 @@ class ORCAInterface(QCInterfaceBase):
                     coordinate_values=targets,
                 )
             )
+            _notify_scan_point(point_callback, result_points[-1])
 
         return RelaxedScanResult(
             points=result_points,
@@ -2200,9 +2229,9 @@ class ORCAInterface(QCInterfaceBase):
         scan_coordinate: CoordinateSpec,
         points: int,
     ) -> list[RelaxedScanPoint]:
-        frame_blocks = _parse_relaxed_scan_allxyz_frames(output_dir / f"{output_name}.allxyz")
+        frame_blocks = parse_relaxed_scan_allxyz_frames(output_dir / f"{output_name}.allxyz")
         if len(frame_blocks) != points:
-            frame_blocks = _parse_relaxed_scan_cartesian_blocks(output_text)
+            frame_blocks = parse_relaxed_scan_cartesian_blocks(output_text)
             if len(frame_blocks) > points:
                 frame_blocks = frame_blocks[-points:]
 
@@ -2210,7 +2239,7 @@ class ORCAInterface(QCInterfaceBase):
         if len(energies) < len(frame_blocks):
             ledger_matches = sorted(output_dir.glob(f"{output_name}*.relaxscanact.dat"))
             for ledger_path in ledger_matches:
-                ledger_energies = _parse_relaxed_scan_energy_ledger(ledger_path, coordinate_count=1)
+                ledger_energies = parse_relaxed_scan_energy_ledger(ledger_path, coordinate_count=1)
                 if len(ledger_energies) >= len(frame_blocks):
                     energies = ledger_energies
         if len(energies) > len(frame_blocks):
