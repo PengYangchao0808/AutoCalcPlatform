@@ -1315,6 +1315,7 @@ def build_energy_graph_from_job(
     s2_review_state: dict[str, Any] | None = None,
     item_id: str | None = None,
     view: str | None = None,
+    job_status: str | None = None,
 ) -> dict[str, Any]:
     """Select the first supported energy projection for a scheduler job.
 
@@ -1347,6 +1348,7 @@ def build_energy_graph_from_job(
             s2_review_state=s2_review_state,
             item_id=item_id,
             view=view,
+            job_status=job_status,
         )
     )
     # Merge saved frame candidates as annotations (all views except unsupported)
@@ -1399,14 +1401,24 @@ def _build_energy_graph_projection(
     s2_review_state: dict[str, Any] | None = None,
     item_id: str | None = None,
     view: str | None = None,
+    job_status: str | None = None,
 ) -> dict[str, Any]:
     """Dispatch to the workflow-specific projection builder."""
-    if workflow == "PESsearch" and str((method or {}).get("mode") or "") == "bond_length_scan":
-        return build_pes_energy_graph(
-            job_id,
-            s2_payload or {},
-            s2_candidates=s2_candidates,
-            s2_review_state=s2_review_state,
+    if workflow == "PESsearch":
+        if s2_payload:
+            return build_pes_energy_graph(
+                job_id,
+                s2_payload,
+                s2_candidates=s2_candidates,
+                s2_review_state=s2_review_state,
+            )
+        from acp.results.pes_scan_live import (
+            build_pes_scan_live_graph,
+            build_pes_scan_pending_energy_graph,
+        )
+
+        return build_pes_scan_live_graph(job_id, work_dir, job_status=job_status) or (
+            build_pes_scan_pending_energy_graph(job_id, job_status=job_status)
         )
     if workflow == "mechanism" and mechanism_report:
         result = build_mechanism_energy_graph(job_id, mechanism_report)
