@@ -74,19 +74,19 @@ _ADVANCED_METHOD: dict[str, object] = {
     "scf_orbital_inherit": False,
 }
 
-_EXPECTED_ADVANCED = BatchMethodOptions(
-    opt_max_iter=400,
-    opt_convergence="verytight",
-    opt_trust_radius=0.1,
-    opt_initial_hessian="model",
-    opt_recalc_hess=20,
-    opt_rescue_policy="off",
-    opt_max_rescue=5,
-    scf_max_iter=500,
-    scf_convergence="tight",
-    scf_strategy="soscf",
-    scf_orbital_inherit=False,
-)
+_EXPECTED_ADVANCED = BatchMethodOptions.from_method_dict({
+    "opt_max_iter": 400,
+    "opt_convergence": "verytight",
+    "opt_trust_radius": 0.1,
+    "opt_initial_hessian": "model",
+    "opt_recalc_hess": 20,
+    "opt_rescue_policy": "off",
+    "opt_max_rescue": 5,
+    "scf_max_iter": 500,
+    "scf_convergence": "tight",
+    "scf_strategy": "soscf",
+    "scf_orbital_inherit": False,
+})
 
 
 def _make_config(**overrides: Any) -> dict[str, Any]:
@@ -453,3 +453,167 @@ class TestRoleOverridesThroughInputPath:
         assert options.minimum_opt_trust_radius == 0.10
         assert options.minimum_opt_initial_hessian == "calculate"
         assert options.minimum_opt_recalc_hess == 2
+
+
+# ── recalc_hess N=1 agreement (test 2) ────────────────────────────────────
+
+
+class TestRecalcHessAgreement:
+    """recalc_hess=1 renders identically in preview orca_summary and execution input."""
+
+    def test_recalc_hess_1_preview_and_execution(self, tmp_path: Path) -> None:
+        from acp.calculations.batch.effective_config import (
+            build_batch_effective_config,
+            build_orca_summary,
+        )
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts = BatchMethodOptions.from_method_dict({
+            "batch_roles": {
+                "int": {"method": "B3LYP", "opt_recalc_hess": 1},
+                "ts": {"method": "B3LYP"},
+            }
+        })
+        config = build_batch_effective_config(opts)
+        int_summary = build_orca_summary(config["roles"]["int"])
+        assert "Recalc_Hess 1" in int_summary
+
+        kwargs = _engine(tmp_path, opts)._optimization_kwargs(is_ts=False)
+        orca = ORCAInterface(_make_config(), method="B3LYP")
+        blocks, _ = orca._build_input_blocks(
+            "opt",
+            geom_maxiter=kwargs.get("max_cycles"),
+            recalc_hess=kwargs.get("recalc_hess"),
+            trust_radius=kwargs.get("trust_radius"),
+            initial_hessian=kwargs.get("initial_hessian"),
+            opt_level=kwargs.get("opt_level"),
+            scf_maxiter=kwargs.get("scf_maxiter"),
+            scf_convergence=kwargs.get("scf_convergence"),
+            scf_strategy=kwargs.get("scf_strategy"),
+            symbols=_SYMBOLS,
+        )
+        assert "Recalc_Hess 1" in _block(blocks, "%geom")
+
+    def test_recalc_hess_0_renders_neither_preview_nor_execution(
+        self, tmp_path: Path,
+    ) -> None:
+        from acp.calculations.batch.effective_config import (
+            build_batch_effective_config,
+            build_orca_summary,
+        )
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts = BatchMethodOptions.from_method_dict({
+            "batch_roles": {
+                "int": {"method": "B3LYP", "opt_recalc_hess": 0},
+                "ts": {"method": "B3LYP"},
+            }
+        })
+        config = build_batch_effective_config(opts)
+        int_summary = build_orca_summary(config["roles"]["int"])
+        assert not any("Recalc_Hess" in kw for kw in int_summary)
+
+        kwargs = _engine(tmp_path, opts)._optimization_kwargs(is_ts=False)
+        orca = ORCAInterface(_make_config(), method="B3LYP")
+        blocks, _ = orca._build_input_blocks(
+            "opt",
+            geom_maxiter=kwargs.get("max_cycles"),
+            recalc_hess=kwargs.get("recalc_hess"),
+            trust_radius=kwargs.get("trust_radius"),
+            initial_hessian=kwargs.get("initial_hessian"),
+            opt_level=kwargs.get("opt_level"),
+            scf_maxiter=kwargs.get("scf_maxiter"),
+            scf_convergence=kwargs.get("scf_convergence"),
+            scf_strategy=kwargs.get("scf_strategy"),
+            symbols=_SYMBOLS,
+        )
+        assert "Recalc_Hess" not in blocks
+
+    def test_recalc_hess_0_does_not_fall_back_to_ts_default(self, tmp_path: Path) -> None:
+        from acp.calculations.batch.effective_config import (
+            build_batch_effective_config,
+            build_orca_summary,
+        )
+        from acp.calculations.batch.options import BatchMethodOptions
+
+        opts = BatchMethodOptions.from_method_dict({
+            "batch_roles": {
+                "int": {"method": "B3LYP", "opt_recalc_hess": 0},
+                "ts": {"method": "B3LYP"},
+            }
+        })
+        config = build_batch_effective_config(opts)
+        ts_summary = build_orca_summary(config["roles"]["ts"])
+        assert "Recalc_Hess 5" in ts_summary
+
+
+# ── new-style scheduler flag parity (test 3) ──────────────────────────────
+
+
+class TestNewStyleSchedulerFlagParity:
+    """batch_roles method dict → --batch-roles-json → CLI → identical per-role values."""
+
+    def test_new_style_round_trips_through_flags_and_cli(self, tmp_path: Path) -> None:
+        from acp.calculations.batch.options import BatchMethodOptions
+        from acp.scheduler.jobs import batchoptimize_method_flags
+
+        method = {
+            "batch_roles": {
+                "int": {
+                    "method": "B3LYP", "basis": "def2-SVP",
+                    "opt_trust_radius": None, "opt_initial_hessian": "auto",
+                    "opt_recalc_hess": "auto",
+                },
+                "ts": {
+                    "method": "wB97X-D4", "basis": "def2-TZVP",
+                    "opt_trust_radius": 0.3, "opt_initial_hessian": "calculate",
+                    "opt_recalc_hess": 5,
+                },
+            }
+        }
+        flags = batchoptimize_method_flags(method)
+        assert "--batch-roles-json" in flags
+        idx = flags.index("--batch-roles-json")
+        import json
+        payload = json.loads(flags[idx + 1])
+        assert "int" in payload
+        assert "ts" in payload
+
+        opts = BatchMethodOptions.from_method_dict(method)
+        roundtrip = _options_from_cli(tmp_path, flags)
+        assert roundtrip.for_role(False) == opts.for_role(False)
+        assert roundtrip.for_role(True) == opts.for_role(True)
+        for is_ts in (False, True):
+            assert roundtrip.resolve_role_options(is_ts) == opts.resolve_role_options(is_ts)
+
+    def test_null_vs_auto_vs_zero_preserved(self, tmp_path: Path) -> None:
+        from acp.scheduler.jobs import batchoptimize_method_flags
+
+        method = {
+            "batch_roles": {
+                "int": {
+                    "method": "B3LYP",
+                    "opt_trust_radius": None,
+                    "opt_initial_hessian": None,
+                    "opt_recalc_hess": 0,
+                },
+                "ts": {
+                    "method": "B3LYP",
+                    "opt_trust_radius": 0.3,
+                    "opt_initial_hessian": "calculate",
+                    "opt_recalc_hess": 5,
+                },
+            }
+        }
+        flags = batchoptimize_method_flags(method)
+        roundtrip = _options_from_cli(tmp_path, flags)
+
+        int_resolved = roundtrip.resolve_role_options(is_transition_state=False)
+        ts_resolved = roundtrip.resolve_role_options(is_transition_state=True)
+
+        assert int_resolved.get("opt_trust_radius") is None
+        assert int_resolved.get("opt_initial_hessian") is None
+        assert int_resolved.get("opt_recalc_hess") == 0
+        assert ts_resolved.get("opt_trust_radius") == 0.3
+        assert ts_resolved.get("opt_initial_hessian") == "calculate"
+        assert ts_resolved.get("opt_recalc_hess") == 5

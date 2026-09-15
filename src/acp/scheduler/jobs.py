@@ -518,6 +518,8 @@ def batchoptimize_method_flags(
     inp: Mapping[str, Any] | None = None,
 ) -> list[str]:
     """Emit BatchOptimize profile, shared settings, and override flags."""
+    import json as _json
+
     flags: list[str] = []
     profile = method.get("profile") or method.get("profile_id")
     if profile is not None and str(profile) in _BATCHOPTIMIZE_PROFILES:
@@ -530,6 +532,10 @@ def batchoptimize_method_flags(
         flags += ["--select", ",".join(str(value) for value in selection)]
     elif isinstance(selection, str) and selection.strip():
         flags += ["--select", selection.strip()]
+
+    if "batch_roles" in method:
+        flags += ["--batch-roles-json", _json.dumps(method["batch_roles"], separators=(",", ":"))]
+        return flags
 
     for key, flag in _BATCHOPTIMIZE_SCALAR_FLAGS.items():
         value = method.get(key)

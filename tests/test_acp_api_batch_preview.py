@@ -426,3 +426,100 @@ class TestOrcaSummary:
         assert resp.status_code == 200
         ts_summary = resp.json()["orca_summary"]["ts"]
         assert "Calc_Hess" not in ts_summary
+
+
+# ── preview new-style batch_roles (test 4) ────────────────────────────────
+
+
+class TestPreviewNewStyle:
+    """POST batch_roles body → 200, correct effective values and source labels."""
+
+    def test_new_style_200_with_correct_effective(self, client: TestClient) -> None:
+        body = {
+            "method": {
+                "batch_roles": {
+                    "int": {"method": "B3LYP", "basis": "def2-SVP"},
+                    "ts": {"method": "wB97X-D4", "basis": "def2-TZVP"},
+                }
+            }
+        }
+        resp = client.post(_URL, json=body)
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["schema"] == "batch_optimize_preview_v1"
+        assert "int" in data["roles"]
+        assert "ts" in data["roles"]
+
+    def test_new_style_effective_matches_payload(self, client: TestClient) -> None:
+        body = {
+            "method": {
+                "batch_roles": {
+                    "int": {"method": "B3LYP", "opt_trust_radius": 0.1},
+                    "ts": {"method": "wB97X-D4", "opt_trust_radius": 0.3},
+                }
+            }
+        }
+        resp = client.post(_URL, json=body)
+        assert resp.status_code == 200
+        int_eff = resp.json()["roles"]["int"]["effective"]
+        ts_eff = resp.json()["roles"]["ts"]["effective"]
+        assert int_eff["opt_trust_radius"] == 0.1
+        assert ts_eff["opt_trust_radius"] == 0.3
+
+    def test_new_style_source_labels(self, client: TestClient) -> None:
+        body = {
+            "method": {
+                "batch_roles": {
+                    "int": {"method": "B3LYP", "opt_trust_radius": 0.1},
+                    "ts": {"method": "wB97X-D4"},
+                }
+            }
+        }
+        resp = client.post(_URL, json=body)
+        assert resp.status_code == 200
+        int_sources = resp.json()["roles"]["int"]["sources"]
+        ts_sources = resp.json()["roles"]["ts"]["sources"]
+        assert int_sources["opt_trust_radius"] == "user"
+        assert ts_sources["opt_trust_radius"] == "engine_default"
+
+    def test_new_style_null_source_is_engine_default(self, client: TestClient) -> None:
+        body = {
+            "method": {
+                "batch_roles": {
+                    "int": {"method": "B3LYP", "opt_initial_hessian": None},
+                    "ts": {"method": "B3LYP"},
+                }
+            }
+        }
+        resp = client.post(_URL, json=body)
+        assert resp.status_code == 200
+        int_sources = resp.json()["roles"]["int"]["sources"]
+        assert int_sources["opt_initial_hessian"] == "engine_default"
+
+    def test_new_style_invalid_enum_422(self, client: TestClient) -> None:
+        body = {
+            "method": {
+                "batch_roles": {
+                    "int": {"method": "B3LYP", "opt_convergence": "SuperTight"},
+                    "ts": {"method": "B3LYP"},
+                }
+            }
+        }
+        resp = client.post(_URL, json=body)
+        assert resp.status_code == 422
+
+    def test_new_style_orca_summary(self, client: TestClient) -> None:
+        body = {
+            "method": {
+                "batch_roles": {
+                    "int": {"method": "B3LYP", "opt_recalc_hess": 1},
+                    "ts": {"method": "B3LYP", "opt_recalc_hess": 5},
+                }
+            }
+        }
+        resp = client.post(_URL, json=body)
+        assert resp.status_code == 200
+        int_summary = resp.json()["orca_summary"]["int"]
+        ts_summary = resp.json()["orca_summary"]["ts"]
+        assert "Recalc_Hess 1" in int_summary
+        assert "Recalc_Hess 5" in ts_summary

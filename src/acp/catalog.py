@@ -4420,9 +4420,78 @@ def _normalize_electronic_state_module(
     return expanded, []
 
 
+def _validate_batch_roles(
+    batch_roles: dict[str, Any],
+    schema: dict[str, Any],
+    errors: list[str],
+) -> tuple[dict[str, Any], list[str]]:
+    """Validate new-style ``batch_roles`` payload against the schema.
+
+    Returns (normalised_batch_roles_dict, errors).  Each role's fields are
+    validated against the ``batch`` level's field definitions.
+    """
+    for lv_def in schema.get("method_levels", []):
+        if lv_def.get("level_id") == "batch":
+            break
+
+    validated_roles: dict[str, Any] = {}
+    for role_key in ("int", "ts"):
+        role_cfg = batch_roles.get(role_key, {})
+        if not isinstance(role_cfg, dict):
+            errors.append(f"batch_roles.{role_key}: must be an object")
+            continue
+        validated: dict[str, Any] = {}
+        for field_name, field_val in role_cfg.items():
+            if field_val is None:
+                validated[field_name] = None
+                continue
+            fd = FIELD_DEFINITIONS.get(field_name)
+            if fd and fd.get("type") == "hessian_interval" and field_name in ("opt_recalc_hess",):
+                try:
+                    validated[field_name] = normalize_recalc_hess(field_val)
+                except ValueError as exc:
+                    errors.append(f"batch_roles.{role_key}.{field_name}: {exc}")
+                continue
+            if fd and fd.get("options"):
+                options = fd["options"]
+                ci_fields = _CASE_INSENSITIVE_FIELDS
+                if field_name in ci_fields or field_name == "functional":
+                    match = _match_option_case_insensitive(options, field_val)
+                    if match is None:
+                        errors.append(
+                            f"batch_roles.{role_key}.{field_name}: "
+                            f"value '{field_val}' not in allowed options"
+                        )
+                        continue
+                    _, canonical = match
+                    if field_name == "solvent_model":
+                        validated[field_name] = str(field_val).lower()
+                    else:
+                        validated[field_name] = canonical
+                elif str(field_val) not in [str(o) for o in options]:
+                    if fd.get("supports_custom") and str(field_val).strip() and len(options) > 1:
+                        validated[field_name] = field_val
+                    else:
+                        errors.append(
+                            f"batch_roles.{role_key}.{field_name}: "
+                            f"value '{field_val}' not in allowed options"
+                        )
+                        continue
+                else:
+                    validated[field_name] = field_val
+            else:
+                validated[field_name] = field_val
+        validated_roles[role_key] = validated
+
+    return {"batch_roles": validated_roles}, errors
+
+
 def normalize_and_validate_method_config(method: dict, schema: dict) -> tuple[dict, list[str]]:
     """Return (normalized_levels, errors)."""
     errors: list[str] = []
+
+    if "batch_roles" in method:
+        return _validate_batch_roles(method["batch_roles"], schema, errors)
 
     levels: dict[str, Any] = {}
     for lv_def in schema.get("method_levels", []):

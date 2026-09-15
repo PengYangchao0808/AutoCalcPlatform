@@ -8,6 +8,14 @@ provenance, and human-readable ORCA keyword summaries.
 
 No job creation, no disk writes — pure read-only projection.
 
+Accepts both legacy flat payloads (``minimum_*`` / ``transition_state_*``
+prefixed keys) and new-style ``batch_roles`` payloads.  Source tracking
+for new-style payloads uses three labels:
+
+* ``"user"`` — explicit user value
+* ``"engine_default"`` — ``None`` in the role config (engine handles)
+* ``"default"`` — value matches :data:`ROLE_PRODUCT_DEFAULTS`
+
 Author: QCcalc Team
 """
 
@@ -27,6 +35,7 @@ from acp.calculations.batch.effective_config import (
 from acp.calculations.batch.options import (
     _ROLE_OVERRIDE_FIELDS,
     ROLE_DEFAULTS,
+    ROLE_PRODUCT_DEFAULTS,
 )
 
 logger = logging.getLogger(__name__)
@@ -72,13 +81,18 @@ def _track_sources(
 ) -> dict[str, str]:
     """Determine the provenance of each effective field value.
 
-    Returns a dict mapping effective field names to one of:
+    For legacy payloads, returns one of:
     ``"user"`` (explicit user value incl. role override),
     ``"role_default"`` (from :data:`ROLE_DEFAULTS`), or
     ``"default"`` (dataclass / product default).
+
+    For new-style ``batch_roles`` payloads, returns one of:
+    ``"user"``, ``"engine_default"`` (None in role config), or
+    ``"default"`` (matches :data:`ROLE_PRODUCT_DEFAULTS`).
     """
     role = "ts" if is_ts else "int"
     prefix = _ROLE_PREFIX[role]
+    role_key = role
 
     def _explicit(value: Any) -> bool:
         return value is not None and value != ""
@@ -86,8 +100,23 @@ def _track_sources(
     sources: dict[str, str] = {}
     for name in _ROLE_OVERRIDE_FIELDS:
         eff_key = _ROLE_EFFECTIVE_KEY[name]
+
+        if "batch_roles" in user_batch:
+            role_cfg = user_batch.get("batch_roles", {}).get(role_key, {})
+            raw_value = role_cfg.get(name)
+            product_default = ROLE_PRODUCT_DEFAULTS.get(role_key, {}).get(name)
+            if raw_value is None:
+                sources[eff_key] = "engine_default"
+            elif eff_key in effective and effective[eff_key] == product_default:
+                sources[eff_key] = "default"
+            else:
+                sources[eff_key] = "user"
+            continue
+
         if eff_key not in effective:
             continue
+
+        # Legacy source tracking
         role_value = user_batch.get(f"{prefix}{name}")
         common_value = user_batch.get(name)
         if _explicit(role_value):
@@ -132,28 +161,40 @@ def batch_optimize_config_preview(
         # Should never happen — batch_optimize is a core schema.
         schema = METHOD_SCHEMAS.get("batch_optimize", {})
 
-    method_payload = {"levels": body.method.get("levels", {"batch": body.method})}
+    if "batch_roles" in body.method:
+        normalised, errors = normalize_and_validate_method_config(body.method, schema)
+        if errors:
+            raise HTTPException(status_code=422, detail="; ".join(errors))
+        user_batch = body.method
+        try:
+            opts = build_opts_from_method_dict(normalised)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    else:
+        method_payload = {"levels": body.method.get("levels", {"batch": body.method})}
 
-    # If body.method already has "levels", use it as-is; otherwise
-    # treat the whole method dict as the batch level.
-    if "levels" not in body.method:
-        method_payload = {"levels": {"batch": body.method}}
+        # If body.method already has "levels", use it as-is; otherwise
+        # treat the whole method dict as the batch level.
+        if "levels" not in body.method:
+            method_payload = {"levels": {"batch": body.method}}
 
-    normalised, errors = normalize_and_validate_method_config(method_payload, schema)
-    if errors:
-        raise HTTPException(status_code=422, detail="; ".join(errors))
+        normalised, errors = normalize_and_validate_method_config(method_payload, schema)
+        if errors:
+            raise HTTPException(status_code=422, detail="; ".join(errors))
 
-    normalised_batch = normalised.get("batch", {})
+        normalised_batch = normalised.get("batch", {})
 
-    # User's original batch-level input for source tracking
-    user_batch = (
-        body.method.get("levels", {}).get("batch", {}) if "levels" in body.method else body.method
-    )
+        # User's original batch-level input for source tracking
+        user_batch = (
+            body.method.get("levels", {}).get("batch", {})
+            if "levels" in body.method
+            else body.method
+        )
 
-    try:
-        opts = build_opts_from_method_dict(normalised_batch)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        try:
+            opts = build_opts_from_method_dict(normalised_batch)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     roles: dict[str, dict[str, Any]] = {}
     orca_summary: dict[str, list[str]] = {}
@@ -166,7 +207,7 @@ def batch_optimize_config_preview(
 
     return {
         "schema": "batch_optimize_preview_v1",
-        "common": normalised_batch,
+        "common": user_batch if "batch_roles" in user_batch else normalised_batch,
         "roles": roles,
         "orca_summary": orca_summary,
         "config_key": opts.cache_key,

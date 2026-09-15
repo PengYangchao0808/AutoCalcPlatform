@@ -863,6 +863,12 @@ Examples:
     batch.add_argument("--mem", type=str, help="Memory limit (overrides config)")
     batch.add_argument("--config", type=str, help="Configuration YAML file")
     batch.add_argument(
+        "--batch-roles-json",
+        type=str,
+        default=None,
+        help="New-style per-role config as JSON string (e.g. '{\"int\":{...},\"ts\":{...}}')",
+    )
+    batch.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         default="INFO",
@@ -1384,74 +1390,83 @@ def _handle_batch_optimize(args: argparse.Namespace) -> int:
     else:
         source = args.items_file or args.from_artifact
 
-    method_kwargs: dict[str, Any] = {
-        "optimization_method": args.optimization_method,
-        "optimization_basis": args.optimization_basis,
-        "single_point_method": args.single_point_method,
-        "single_point_basis": args.single_point_basis,
-        "temperature": args.temperature,
-        "pressure": args.pressure,
-        "scale_factor": args.scale_factor,
-        "minimum_method": args.minimum_method or "",
-        "minimum_basis": args.minimum_basis or "",
-        "transition_state_method": args.transition_state_method or "",
-        "transition_state_basis": args.transition_state_basis or "",
-    }
-    if args.opt_max_iter is not None:
-        method_kwargs["opt_max_iter"] = args.opt_max_iter
-    if args.opt_convergence is not None:
-        method_kwargs["opt_convergence"] = args.opt_convergence
-    if args.opt_trust_radius is not None:
-        method_kwargs["opt_trust_radius"] = args.opt_trust_radius
-    if args.opt_initial_hessian is not None:
-        method_kwargs["opt_initial_hessian"] = args.opt_initial_hessian
-    if args.opt_recalc_hess is not None:
-        method_kwargs["opt_recalc_hess"] = normalize_recalc_hess(args.opt_recalc_hess)
-    if getattr(args, "minimum_opt_trust_radius", None) is not None:
-        method_kwargs["minimum_opt_trust_radius"] = args.minimum_opt_trust_radius
-    if getattr(args, "minimum_opt_initial_hessian", None) is not None:
-        method_kwargs["minimum_opt_initial_hessian"] = args.minimum_opt_initial_hessian
-    if getattr(args, "minimum_opt_recalc_hess", None) is not None:
-        method_kwargs["minimum_opt_recalc_hess"] = normalize_recalc_hess(
-            args.minimum_opt_recalc_hess
-        )
-    if getattr(args, "transition_state_opt_trust_radius", None) is not None:
-        method_kwargs["transition_state_opt_trust_radius"] = (
-            args.transition_state_opt_trust_radius
-        )
-    if getattr(args, "transition_state_opt_initial_hessian", None) is not None:
-        method_kwargs["transition_state_opt_initial_hessian"] = (
-            args.transition_state_opt_initial_hessian
-        )
-    if getattr(args, "transition_state_opt_recalc_hess", None) is not None:
-        method_kwargs["transition_state_opt_recalc_hess"] = normalize_recalc_hess(
-            args.transition_state_opt_recalc_hess
-        )
-    for _prefix in ("minimum_", "transition_state_"):
-        for _name in (
-            "opt_max_iter",
-            "opt_convergence",
-            "scf_max_iter",
-            "scf_convergence",
-            "scf_strategy",
-            "opt_rescue_policy",
-            "opt_max_rescue",
-        ):
-            _value = getattr(args, f"{_prefix}{_name}", None)
-            if _value is not None:
-                method_kwargs[f"{_prefix}{_name}"] = _value
-    if args.opt_rescue_policy is not None:
-        method_kwargs["opt_rescue_policy"] = args.opt_rescue_policy
-    if args.opt_max_rescue is not None:
-        method_kwargs["opt_max_rescue"] = args.opt_max_rescue
-    if args.scf_max_iter is not None:
-        method_kwargs["scf_max_iter"] = args.scf_max_iter
-    if args.scf_convergence is not None:
-        method_kwargs["scf_convergence"] = args.scf_convergence
-    if args.scf_strategy is not None:
-        method_kwargs["scf_strategy"] = args.scf_strategy
-    if args.scf_orbital_inherit is not None:
-        method_kwargs["scf_orbital_inherit"] = args.scf_orbital_inherit
+    batch_roles_json = getattr(args, "batch_roles_json", None)
+    if batch_roles_json is not None:
+        try:
+            parsed_roles = json.loads(batch_roles_json)
+        except json.JSONDecodeError as exc:
+            logger.error("Invalid --batch-roles-json: %s", exc)
+            return 2
+        method_kwargs: dict[str, Any] = {"batch_roles": parsed_roles}
+    else:
+        method_kwargs = {
+            "optimization_method": args.optimization_method,
+            "optimization_basis": args.optimization_basis,
+            "single_point_method": args.single_point_method,
+            "single_point_basis": args.single_point_basis,
+            "temperature": args.temperature,
+            "pressure": args.pressure,
+            "scale_factor": args.scale_factor,
+            "minimum_method": args.minimum_method or "",
+            "minimum_basis": args.minimum_basis or "",
+            "transition_state_method": args.transition_state_method or "",
+            "transition_state_basis": args.transition_state_basis or "",
+        }
+        if args.opt_max_iter is not None:
+            method_kwargs["opt_max_iter"] = args.opt_max_iter
+        if args.opt_convergence is not None:
+            method_kwargs["opt_convergence"] = args.opt_convergence
+        if args.opt_trust_radius is not None:
+            method_kwargs["opt_trust_radius"] = args.opt_trust_radius
+        if args.opt_initial_hessian is not None:
+            method_kwargs["opt_initial_hessian"] = args.opt_initial_hessian
+        if args.opt_recalc_hess is not None:
+            method_kwargs["opt_recalc_hess"] = normalize_recalc_hess(args.opt_recalc_hess)
+        if getattr(args, "minimum_opt_trust_radius", None) is not None:
+            method_kwargs["minimum_opt_trust_radius"] = args.minimum_opt_trust_radius
+        if getattr(args, "minimum_opt_initial_hessian", None) is not None:
+            method_kwargs["minimum_opt_initial_hessian"] = args.minimum_opt_initial_hessian
+        if getattr(args, "minimum_opt_recalc_hess", None) is not None:
+            method_kwargs["minimum_opt_recalc_hess"] = normalize_recalc_hess(
+                args.minimum_opt_recalc_hess
+            )
+        if getattr(args, "transition_state_opt_trust_radius", None) is not None:
+            method_kwargs["transition_state_opt_trust_radius"] = (
+                args.transition_state_opt_trust_radius
+            )
+        if getattr(args, "transition_state_opt_initial_hessian", None) is not None:
+            method_kwargs["transition_state_opt_initial_hessian"] = (
+                args.transition_state_opt_initial_hessian
+            )
+        if getattr(args, "transition_state_opt_recalc_hess", None) is not None:
+            method_kwargs["transition_state_opt_recalc_hess"] = normalize_recalc_hess(
+                args.transition_state_opt_recalc_hess
+            )
+        for _prefix in ("minimum_", "transition_state_"):
+            for _name in (
+                "opt_max_iter",
+                "opt_convergence",
+                "scf_max_iter",
+                "scf_convergence",
+                "scf_strategy",
+                "opt_rescue_policy",
+                "opt_max_rescue",
+            ):
+                _value = getattr(args, f"{_prefix}{_name}", None)
+                if _value is not None:
+                    method_kwargs[f"{_prefix}{_name}"] = _value
+        if args.opt_rescue_policy is not None:
+            method_kwargs["opt_rescue_policy"] = args.opt_rescue_policy
+        if args.opt_max_rescue is not None:
+            method_kwargs["opt_max_rescue"] = args.opt_max_rescue
+        if args.scf_max_iter is not None:
+            method_kwargs["scf_max_iter"] = args.scf_max_iter
+        if args.scf_convergence is not None:
+            method_kwargs["scf_convergence"] = args.scf_convergence
+        if args.scf_strategy is not None:
+            method_kwargs["scf_strategy"] = args.scf_strategy
+        if args.scf_orbital_inherit is not None:
+            method_kwargs["scf_orbital_inherit"] = args.scf_orbital_inherit
 
     try:
         result = run_batch_optimize(
@@ -1462,7 +1477,7 @@ def _handle_batch_optimize(args: argparse.Namespace) -> int:
             charge=args.charge,
             multiplicity=args.multiplicity,
             select=_parse_select(args.select),
-            methods=BatchMethodOptions(**method_kwargs),
+            methods=BatchMethodOptions.from_method_dict(method_kwargs),
             layout_mode=args.layout_mode,
             progress_reporter=reporter,
         )

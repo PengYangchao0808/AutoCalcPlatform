@@ -67,28 +67,36 @@ _ADVANCED_FIELD_NAMES = frozenset(
         "minimum_basis",
         "transition_state_method",
         "transition_state_basis",
-        # Electronic-state module (design doc §4.1: advanced composite card).
         "electronic_state",
-        # BatchOptimize optimization controls.
         "opt_max_iter",
         "opt_trust_radius",
         "opt_initial_hessian",
         "opt_recalc_hess",
         "opt_rescue_policy",
         "opt_max_rescue",
-        # BatchOptimize per-role optimization overrides (P2a).
         "minimum_opt_trust_radius",
         "minimum_opt_initial_hessian",
         "minimum_opt_recalc_hess",
         "transition_state_opt_trust_radius",
         "transition_state_opt_initial_hessian",
         "transition_state_opt_recalc_hess",
-        # BatchOptimize SCF controls.
+        "minimum_opt_max_iter",
+        "minimum_opt_convergence",
+        "minimum_scf_max_iter",
+        "minimum_scf_convergence",
+        "minimum_scf_strategy",
+        "minimum_opt_rescue_policy",
+        "minimum_opt_max_rescue",
+        "transition_state_opt_max_iter",
+        "transition_state_opt_convergence",
+        "transition_state_scf_max_iter",
+        "transition_state_scf_convergence",
+        "transition_state_scf_strategy",
+        "transition_state_opt_rescue_policy",
+        "transition_state_opt_max_rescue",
         "scf_max_iter",
         "scf_strategy",
         "scf_orbital_inherit",
-        # xtbmd_censo_energy control group (DevDoc §10.1): 17 advanced fields;
-        # md_temperature / md_seeds are regular (high-frequency user controls).
         "opt_level",
         "md_time_ps",
         "md_dump_fs",
@@ -107,14 +115,11 @@ _ADVANCED_FIELD_NAMES = frozenset(
         "edis",
         "gdis",
         "resume",
-        # NMR TMS reference overrides (P1a, DevDoc §6.4) — advanced.
         "tms_shielding_h",
         "tms_shielding_c",
-        # Mechanism scan/TS controls — advanced.
         "scan_points",
         "irc_points",
         "ts_initial_hessian",
-        # Mechanism-study orchestration controls.
         "conformer_mode",
         "max_elementary_steps",
         "int_extension",
