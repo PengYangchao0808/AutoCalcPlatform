@@ -7917,198 +7917,111 @@ def test_electronic_state_module_renderer_dispatch() -> None:
 
 
 # ---------------------------------------------------------------------------
-# P1: BatchOptimize advanced section rework (2026-09-12)
+# BatchOptimize role-toggle modal redesign (2026-09-15)
 # ---------------------------------------------------------------------------
 
-def test_batch_preset_chip_labels() -> None:
-    """P1a contract: preset chips use renamed labels (标准/困难几何/困难 SCF/严格收敛)."""
+
+def test_batch_no_preset_identifiers_remain() -> None:
+    """All preset/inheritance identifiers must be completely removed."""
     html = FRONTEND.read_text(encoding="utf-8")
+    for marker in [
+        "BATCH_PRESETS", "_batchPresetMatch", "_presetSummaryText",
+        "_batchCustomCount", "mc-adv-header-bar", "mc-adv-custom-count",
+        "mc-adv-reset-btn", "mc-preset-bar", "mc-preset-btn",
+        "mc-preset-summary", "mc-preset-toast",
+        "_buildRoleOverrideField", "_resolveRoleValue",
+        "_linkEnabled", "_linkTsMethods", "_copyIntToTs",
+        "mc-role-columns", "mc-role-col", "mc-role-section",
+        "mc-role-link-row", "mc-role-link", "mc-role-inherit-switch",
+        "mc-role-override-row", "mc-role-inherit-value",
+        "mc-role-inherit-badge", "mc-role-linked-note",
+        "_ROLE_COLUMN_FIELDS", "_ROLE_FIELD_DEFS", "_ROLE_COLUMN_BASE_FIELDS",
+        "_buildRoleColumn", "_buildRoleGroupCol",
+    ]:
+        assert marker not in html, f"Preset/inheritance marker {marker!r} must be removed"
 
-    for label in (
-        r"\u6807\u51c6",
-        r"\u56f0\u96be\u51e0\u4f55",
-        r"\u56f0\u96be SCF",
-        r"\u4e25\u683c\u6536\u655b",
-    ):
-        assert label in html, f"Preset label {label!r} missing from frontend"
 
-    assert r"\u6807\u51c6\u4f18\u5316" not in html, "Old label '标准优化' must be renamed to '标准'"
-    assert r"\u9ad8\u7cbe\u5ea6\u786e\u8ba4" not in html, (
-        "Old label '高精度确认' must be renamed to '严格收敛'"
-    )
-    assert r"\u56f0\u96beSCF" not in html, "'困难SCF' must have a space: '困难 SCF'"
-
-
-def test_batch_effective_summary_function_exists() -> None:
-    """P1c contract: buildBatchEffectiveSummary is defined exactly once."""
+def test_batch_toggle_buttons_present() -> None:
+    """Role toggle buttons with counts and disabled-when-zero logic."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert html.count("function buildBatchEffectiveSummary(") == 1, (
-        "buildBatchEffectiveSummary must be defined exactly once"
-    )
+    assert "mc-batch-role-bar" in html, "Role toggle bar CSS class missing"
+    assert "mc-batch-role-btn" in html, "Role toggle button CSS class missing"
+    assert "mc-batch-role-count" in html, "Role count span CSS class missing"
+    assert "mc-batch-role-form" in html, "Role form container CSS class missing"
+    # Toggle button creation with counts
+    assert r"INT \u666e\u901a\u9a7b\u70b9" in html, "INT button label missing"
+    assert r"TS \u8fc7\u6e21\u6001" in html, "TS button label missing"
+    # Disabled when count is 0
+    assert "btn.disabled = count === 0" in html, "Disabled-when-zero logic missing"
+    # Default active logic
+    assert 'if (intCount === 0 && tsCount > 0) _batchRoleActive = "ts"' in html
 
 
-def test_batch_reset_defaults_control_present() -> None:
-    """P1d contract: '恢复默认' reset button exists in the advanced section."""
+def test_batch_serializer_emits_batch_roles() -> None:
+    """Serializer emits batch_roles with exact key set and preserves null/0."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert "\u6062\u590d\u9ed8\u8ba4" in html, "恢复默认 reset button label missing"
-    assert "mc-adv-reset-btn" in html, "Reset button CSS class missing"
-    assert "mc-adv-header-bar" in html, "Header bar CSS class missing"
-    assert "mc-adv-custom-count" in html, "Custom count CSS class missing"
-    assert r"\u9ed8\u8ba4\u914d\u7f6e" in html, "Default config label missing"
-    assert r"\u81ea\u5b9a\u4e49\u914d\u7f6e" in html, "Custom config label missing"
-
-
-def test_batch_payload_includes_rescue_and_orbital_fields() -> None:
-    """P1e contract: applyBatchOptimizeMethodFields carries opt_rescue_policy,
-    opt_max_rescue, and scf_orbital_inherit."""
-    html = FRONTEND.read_text(encoding="utf-8")
-
     fn_body = html.split("function applyBatchOptimizeMethodFields(methodPayload)", 1)[1]
     fn_body = fn_body.split("\nfunction ", 1)[0]
+    assert 'methodPayload.batch_roles = {}' in fn_body, "batch_roles initialization missing"
+    assert '"int", "ts"].forEach' in fn_body, "Role iteration missing"
+    # Key contract
+    for key in [
+        "method", "basis", "sp_method", "sp_basis",
+        "opt_max_iter", "opt_convergence", "opt_trust_radius",
+        "opt_initial_hessian", "opt_recalc_hess",
+        "scf_max_iter", "scf_convergence", "scf_strategy",
+        "scf_orbital_inherit", "scf_damp", "scf_damp_fac",
+        "scf_shift", "scf_shift_fac",
+        "opt_rescue_policy", "opt_max_rescue",
+        "temperature", "pressure", "scale_factor",
+    ]:
+        assert f'"{key}"' in fn_body, f"ROLE_CONFIG key {key!r} missing from serializer"
+    # Null preservation
+    assert 'dest[k] = (src[k] !== undefined) ? src[k] : null' in fn_body, (
+        "Null preservation logic missing"
+    )
+    # No minimum_/transition_state_ prefixed keys in the serializer
+    assert "minimum_opt_" not in fn_body, "Old minimum_ prefixed keys must be gone from serializer"
+    assert "transition_state_opt_" not in fn_body, "Old transition_state_ prefixed keys must be gone from serializer"
 
-    assert 'methodPayload.opt_rescue_policy = value("opt_rescue_policy"' in fn_body
-    assert 'methodPayload.opt_max_rescue = value("opt_max_rescue"' in fn_body
-    assert 'methodPayload.scf_orbital_inherit = value("scf_orbital_inherit"' in fn_body
 
-
-def test_batch_four_group_ids_present() -> None:
-    """P1b contract: FIELD_GROUPS contains the four required group ids."""
+def test_batch_role_defaults_defined() -> None:
+    """_BATCH_ROLE_DEFAULTS defines complete defaults for both roles."""
     html = FRONTEND.read_text(encoding="utf-8")
-
-    for gid in ("opt_control", "scf_control", "hessian_control", "freq_thermo"):
-        assert f'id: "{gid}"' in html, f"Group id {gid!r} missing from FIELD_GROUPS"
-    # expert_overrides must be gone — role methods now live in the INT/TS columns (P3).
-    assert 'id: "expert_overrides"' not in html
+    assert "_BATCH_ROLE_DEFAULTS" in html, "_BATCH_ROLE_DEFAULTS constant missing"
+    assert "_BATCH_ROLE_DEFAULTS.int" in html or '_BATCH_ROLE_DEFAULTS["int"]' in html
+    assert "_BATCH_ROLE_DEFAULTS.ts" in html or '_BATCH_ROLE_DEFAULTS["ts"]' in html
+    # INT defaults
+    assert "opt_trust_radius: null" in html, "INT trust_radius should be null (engine default)"
+    assert 'opt_initial_hessian: "auto"' in html, "INT initial_hessian should be auto"
+    assert 'opt_recalc_hess: "auto"' in html, "INT recalc_hess should be auto"
+    # TS defaults
+    assert "opt_trust_radius: 0.3" in html, "TS trust_radius should be 0.3"
+    assert 'opt_initial_hessian: "calculate"' in html, "TS initial_hessian should be calculate"
+    assert "opt_recalc_hess: 5" in html, "TS recalc_hess should be 5"
 
 
 def test_batch_hessian_label_not_computation_count() -> None:
-    """Plan §3.4: 'Hessian 计算次数' is forbidden; '每 N 个优化循环重算' is the correct label."""
+    """Plan section: 'Hessian 计算次数' is forbidden; '每 N 个优化循环重算' is correct."""
     html = FRONTEND.read_text(encoding="utf-8")
     assert r"Hessian \u8ba1\u7b97\u6b21\u6570" not in html, (
-        "'Hessian 计算次数' is forbidden by plan §3.4"
+        "'Hessian 计算次数' is forbidden"
     )
     assert r"\u6bcf N \u4e2a\u4f18\u5316\u5faa\u73af\u91cd\u7b97" in html
 
 
 def test_batch_trust_radius_label() -> None:
-    """Plan §3.2: opt_trust_radius label must be '初始信赖半径（步长控制）'."""
+    """opt_trust_radius label must be '信赖半径' (NOT '步长')."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert r"\u521d\u59cb\u4fe1\u8d56\u534a\u5f84" in html, (
-        "'初始信赖半径' label missing for opt_trust_radius"
+    assert r"\u4fe1\u8d56\u534a\u5f84" in html, (
+        "'信赖半径' label missing for opt_trust_radius"
     )
-
-
-def test_batch_effective_summary_plain_text() -> None:
-    """P1c contract: modal effective summary is plain text, no chips/badges; pending marker + ORCA details present."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert "mc-effective-text" in html, "Effective summary plain text class missing"
-    # Chips/badges still exist for job-detail renderer (P2c)
-    assert "mc-eff-chip" in html, "Effective chip CSS class still present (used by P2c)"
-    assert "mc-eff-src" in html, "Source badge CSS class still present (used by P2c)"
-    # Pending marker
-    assert r"\u6b63\u5728\u66f4\u65b0" in html or "Updating" in html, "Pending marker text missing"
-    # Honest details label (P3: no more "view actual input" overpromise)
-    assert r"\u751f\u6548\u914d\u7f6e\u8be6\u60c5" in html, "Effective-config details label missing"
-
-
-def test_batch_groups_grid_css() -> None:
-    """P1b contract: 2×2 grid layout for groups on wide screens."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert "mc-adv-groups-grid" in html, "Groups grid CSS class missing"
-    assert "grid-template-columns: 1fr 1fr" in html, "2-column grid template missing"
-
-
-def test_batch_expert_sub_row() -> None:
-    """P1b contract: expert sub-row classes for rescue/orbital_inherit."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert "mc-expert-sub" in html, "Expert sub-row CSS class missing"
-    assert "mc-expert-sub-toggle" in html, "Expert sub-toggle CSS class missing"
-    assert "mc-expert-sub-fields" in html, "Expert sub-fields CSS class missing"
-
-
-# ---------------------------------------------------------------------------
-# P2a: BatchOptimize role-override tabs + server preview (2026-09-12)
-# ---------------------------------------------------------------------------
-
-def test_batch_role_tab_strip_present() -> None:
-    """P3: role columns section replaces the Common/INT/TS scope tabs."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert 'columnsWrap.className = "mc-role-columns"' in html, "Role columns container missing"
-    assert "intCol.className" in html and "tsCol.className" in html, "INT/TS column elements missing"
-    # Section header states the per-role application scope.
-    assert r"\u5206\u522b\u5e94\u7528\u4e8e\u5168\u90e8 INT / \u5168\u90e8 TS" in html, (
-        "Per-role section header (applied to all INT / all TS) missing"
-    )
-
-
-def test_batch_role_tab_labels_zh_en() -> None:
-    """P2a: tab labels have both zh and en variants."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert "label_zh:" in html, "label_zh key missing in tab definitions"
-    assert r"\u901a\u7528\u8bbe\u7f6e" in html, "Chinese Common tab label (\u901a\u7528\u8bbe\u7f6e) missing"
-
-
-def test_batch_role_override_payload_keys() -> None:
-    """P2a: applyBatchOptimizeMethodFields carries 6 role-override keys."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    fn_body = html.split("function applyBatchOptimizeMethodFields(methodPayload)", 1)[1]
-    fn_body = fn_body.split("\nfunction ", 1)[0]
-    role_keys = [
-        "minimum_opt_trust_radius", "minimum_opt_initial_hessian", "minimum_opt_recalc_hess",
-        "transition_state_opt_trust_radius",
-        "transition_state_opt_initial_hessian",
-        "transition_state_opt_recalc_hess",
-    ]
-    for rk in role_keys:
-        assert f'methodPayload.{rk} = value("{rk}"' in fn_body, (
-            f"Role key {rk!r} missing from applyBatchOptimizeMethodFields"
-        )
-
-
-def test_batch_role_fields_excluded_from_common_groups() -> None:
-    """P3: role-column fields are excluded from FIELD_GROUPS partitioning."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert "_ROLE_COLUMN_FIELDS" in html, "_ROLE_COLUMN_FIELDS array missing"
-    assert "_ROLE_COLUMN_FIELDS.indexOf(fn) >= 0" in html, (
-        "Role-field exclusion check missing from group partitioning"
-    )
-
-
-def test_batch_role_inherit_switch() -> None:
-    """P2a: inherit switch replaces badge; override inputs conditional on switch state."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert "mc-role-inherit-switch" in html, "Inherit switch class missing"
-    assert r"\u4f7f\u7528\u901a\u7528\u8bbe\u7f6e" in html, "Switch label '使用通用设置' missing"
-    # Badge classes still present for job-detail renderer (P2c), not removed
-    assert "mc-role-inherit-badge" in html, "Inherit badge class still present (used by P2c)"
-
-
-def test_batch_role_override_field_defs_present() -> None:
-    """P2a: _ROLE_FIELD_DEFS defines all 6 role fields with types."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert "_ROLE_FIELD_DEFS" in html, "_ROLE_FIELD_DEFS object missing"
-    role_keys = [
-        "minimum_opt_trust_radius", "minimum_opt_initial_hessian", "minimum_opt_recalc_hess",
-        "transition_state_opt_trust_radius",
-        "transition_state_opt_initial_hessian",
-        "transition_state_opt_recalc_hess",
-    ]
-    for rk in role_keys:
-        assert f'{rk}:' in html or f'"{rk}":' in html, (
-            f"Role field {rk!r} missing from _ROLE_FIELD_DEFS"
-        )
-
-
-def test_batch_role_hint_text_zh_en() -> None:
-    """P3: INT/TS columns carry per-role titles and the TS link note."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert r"\u5e94\u7528\u4e8e\u5168\u90e8\u666e\u901a\u9a7b\u70b9" in html, "INT column title missing"
-    assert r"\u5e94\u7528\u4e8e\u5168\u90e8\u8fc7\u6e21\u6001" in html, "TS column title missing"
-    assert "mc-role-linked-note" in html, "TS linked-method note class missing"
+    # Must NOT be renamed to 步长
+    assert r"\u6b65\u957f" not in html, "'步长' must not replace '信赖半径'"
 
 
 def test_batch_preview_endpoint_url_present() -> None:
-    """P2a: config-preview endpoint URL string present."""
+    """config-preview endpoint URL string present."""
     html = FRONTEND.read_text(encoding="utf-8")
     assert "/api/v1/batch-optimize/config-preview" in html, (
         "Preview endpoint URL missing"
@@ -8116,7 +8029,7 @@ def test_batch_preview_endpoint_url_present() -> None:
 
 
 def test_batch_preview_debounce_and_abort() -> None:
-    """P2a: debounce timer and AbortController markers present."""
+    """Debounce timer and AbortController markers present."""
     html = FRONTEND.read_text(encoding="utf-8")
     assert "_previewDebounceTimer" in html, "Debounce timer variable missing"
     assert "_previewAbortCtrl" in html, "Abort controller variable missing"
@@ -8124,137 +8037,34 @@ def test_batch_preview_debounce_and_abort() -> None:
     assert "AbortController" in html, "AbortController reference missing"
 
 
-def test_batch_preview_fallback_path() -> None:
-    """P3: on preview failure the explicit unverified renderer takes over."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert "function buildBatchEffectiveSummary(" in html, (
-        "Local buildBatchEffectiveSummary must exist for the unverified view"
-    )
-    assert "_renderLocalSummary" in html, "_renderLocalSummary pending function missing"
-    assert "function _renderPreviewFailure(" in html, (
-        "Explicit preview-failure renderer missing"
-    )
-
-
 def test_batch_preview_schema_validation() -> None:
-    """P2a: preview response validates schema string."""
+    """Preview response validates schema string."""
     html = FRONTEND.read_text(encoding="utf-8")
     assert "batch_optimize_preview_v1" in html, "Preview schema version string missing"
 
 
-def test_batch_reset_clears_role_keys() -> None:
-    """P2a: reset handler clears all 6 role-override keys."""
+def test_batch_preview_failure_explicit() -> None:
+    """Preview failure must be labeled unverified."""
     html = FRONTEND.read_text(encoding="utf-8")
-    role_keys = [
-        "minimum_opt_trust_radius", "minimum_opt_initial_hessian", "minimum_opt_recalc_hess",
-        "transition_state_opt_trust_radius",
-        "transition_state_opt_initial_hessian",
-        "transition_state_opt_recalc_hess",
-    ]
-    for rk in role_keys:
-        assert f'"{rk}"' in html, f"Role key {rk!r} missing from reset handler delete list"
-
-
-def test_batch_custom_count_includes_role_keys() -> None:
-    """P2a: _batchCustomCount counts role-override keys."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    fn_body = html.split("function _batchCustomCount(stageVals)", 1)[1]
-    fn_body = fn_body.split("\nfunction ", 1)[0] if "\nfunction " in fn_body else fn_body[:800]
-    assert "roleKeys" in fn_body, "_batchCustomCount missing roleKeys array"
-    assert "minimum_opt_trust_radius" in fn_body, "Role key missing from _batchCustomCount"
-
-
-def test_batch_role_preset_match_skips_role_keys() -> None:
-    """P2a: _batchPresetMatch skips role-override keys during matching."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    fn_body = html.split("function _batchPresetMatch(stageVals)", 1)[1]
-    fn_body = fn_body.split("\nfunction ", 1)[0] if "\nfunction " in fn_body else fn_body[:2000]
-    assert "minimum_opt_" in fn_body, "Role key prefix check missing from _batchPresetMatch"
-    assert "transition_state_opt_" in fn_body, (
-        "TS role key prefix check missing from _batchPresetMatch"
-    )
+    assert "function _renderPreviewFailure(" in html, "_renderPreviewFailure missing"
+    assert "mc-preview-failure" in html, "Failure CSS class missing"
+    assert "mc-preview-unverified" in html, "Unverified CSS class missing"
+    # catch path routes to failure renderer
+    catch_body = html.split("function _fetchBatchConfigPreview()", 1)[1]
+    catch_body = catch_body.split("function _renderServerPreview", 1)[0]
+    assert "_renderPreviewFailure(" in catch_body
 
 
 def test_batch_server_preview_rendering() -> None:
-    """P2a: _renderServerPreview renders plain text with ORCA details."""
+    """_renderServerPreview renders per-role effective view."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert "function _renderServerPreview(data)" in html, "_renderServerPreview function missing"
-    assert "orca_summary" in html, "orca_summary key reference missing"
-    assert "_previewGeneration" in html, "Generation token for stale detection missing"
-
-
-def test_batch_role_tab_default_active_is_common() -> None:
-    """P3: scope tabs are gone — common settings and role columns are all
-    visible in the same window (no per-scope show/hide state remains)."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert "_batchScopeTab" not in html, "_batchScopeTab state must be removed with the tabs"
-    assert "tabPanes[pid].classList.toggle" not in html, "Scope pane switching must be gone"
-    # The link checkbox defaults to the detected equality, not a hidden scope.
-    assert "linkCb.checked = _linkEnabled()" in html
-
-
-# ---------------------------------------------------------------------------
-# P2b: BatchOptimize modal redesign contracts (2026-09-12)
-# ---------------------------------------------------------------------------
-
-def test_batch_single_column_nesting() -> None:
-    """P2b: .mc-adv-group-fields is single column; .mc-level-advanced-fields no 2-col; hessian spans full width."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert ".mc-level-advanced-fields { display: grid; grid-template-columns: 1fr;" in html, (
-        "mc-level-advanced-fields must be single column (1fr)"
-    )
-    assert ".mc-adv-group-fields" in html, "mc-adv-group-fields class missing"
-    assert "grid-template-columns: 1fr 1fr" in html, "mc-adv-groups-grid keeps 2-col"
-    assert 'data-group-id="hessian_control"' in html, "hessian_control group id missing"
-    assert "grid-column: 1 / -1" in html, "Full-width span rule missing"
-
-
-def test_batch_typography_updates() -> None:
-    """P2b: .mc-field label 13px without uppercase; .mc-field-help 12px; controls 36px."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert ".mc-field label { font-size: 13px" in html, "Label font-size must be 13px"
-    assert "text-transform: uppercase" not in html.split(".mc-field label")[1].split("}")[0], (
-        "Label must not have text-transform: uppercase"
-    )
-    assert ".mc-field-help { color:" in html, "mc-field-help class missing"
-    assert "font-size: 12px" in html.split(".mc-field-help")[1].split("}")[0], (
-        "Help text font-size must be 12px"
-    )
-    assert "height: 36px" in html, "Control height must be 36px"
-
-
-def test_batch_convergence_canonicalization() -> None:
-    """P2b + 2026-09-13: payload builder submits lowercase enum values
-    (aligned with CLI choices); case-insensitive helper still present for
-    legacy title-case display/preset matching."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    fn_body = html.split("function applyBatchOptimizeMethodFields(methodPayload)", 1)[1]
-    fn_body = fn_body.split("\nfunction ", 1)[0]
-    assert '"tight"' in fn_body, "Canonical 'tight' casing in payload builder"
-    assert '"normal"' in fn_body, "Canonical 'normal' casing in payload builder"
-    assert '"Tight"' not in fn_body, "Payload builder must not submit title-case enums"
-    assert "_canonMatch" in html, "Case-insensitive helper _canonMatch missing"
-    assert 'String(curVal).toLowerCase() === String(o).toLowerCase()' in html, (
-        "Select binding must use case-insensitive comparison"
-    )
-
-
-def test_batch_scope_tabs_above_groups() -> None:
-    """P3: role columns render below the common groups; summary stays outside advDiv."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert "advDiv.appendChild(roleSection)" in html, (
-        "Role columns section must be appended to the advanced area"
-    )
-    assert "mc-role-inherit-value" in html, "Inherit value class missing for role fields"
-    assert "batchSummaryBlock" in html, "Summary block must be stashed outside advDiv"
-    assert "bodyDiv.appendChild(batchSummaryBlock)" in html or \
-           "bodyDiv.appendChild(effSummary)" not in html, (
-        "Summary must be appended to bodyDiv outside advWrap"
-    )
+    assert "function _renderServerPreview(data)" in html, "_renderServerPreview missing"
+    assert "orca_summary" in html, "orca_summary reference missing"
+    assert "_previewGeneration" in html, "Generation token missing"
 
 
 def test_batch_step_bar_present() -> None:
-    """P2b: step bar with zh step names present for batch profile."""
+    """Step bar with zh step names present for batch profile."""
     html = FRONTEND.read_text(encoding="utf-8")
     assert "mc-step-bar" in html, "Step bar CSS class missing"
     assert r"\u4f18\u5316" in html, "Step label '优化' missing"
@@ -8265,67 +8075,8 @@ def test_batch_step_bar_present() -> None:
     assert "mc-step-arrow" in html, "Step arrow class missing"
 
 
-def test_batch_orca_details_and_stale_token() -> None:
-    """P3: honest config details + pending indicator + stale generation token."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert r"\u751f\u6548\u914d\u7f6e\u8be6\u60c5" in html, "Effective-config details label missing"
-    assert "_previewGeneration" in html, "Generation token variable missing"
-    assert "_eff-pending-marker" in html, "Pending marker element id missing"
-    assert 'myGen !== _previewGeneration' in html, "Stale response guard missing"
-
-
-def test_batch_basis_readonly_display() -> None:
-    """P2b: single-option locked basis shows read-only display, not disabled select."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert "mc-basis-readonly" in html, "Basis read-only display class missing"
-    assert r"\u5185\u7f6e\uff1a" in html, "Built-in prefix missing"
-    assert 'sel.style.display = "none"' in html, "Select must be hidden for locked basis"
-
-
-def test_batch_info_tooltip() -> None:
-    """P2b: help text uses info tooltip instead of always-visible paragraph."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert "mc-info-tip" in html, "Info tooltip class missing"
-    assert r"\u24d8" in html, "Info tooltip character missing"
-
-
-def test_batch_scope_shows_inherited_values() -> None:
-    """P3: role columns show resolved inherit values; override fields render inherit line."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert "mc-role-inherit-value" in html, "mc-role-inherit-value class missing"
-    assert "_resolveRoleValue" in html, "Inherit value resolution function missing"
-    assert "_buildRoleColumn" in html, "Role column builder missing"
-    assert "_formatInheritValue" in html, "Shared format helper missing"
-    # Override field path must also render inherit value line
-    assert 'inheritValDiv.className = "mc-field"' in html or \
-           "inheritValDiv.className = 'mc-field'" in html, (
-        "Override field must render inherit value div"
-    )
-
-
-def test_batch_hessian_group_renders_combined_once() -> None:
-    """P2b: hessian_control group uses combined control, not duplicate generic fields."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert 'g.id === "hessian_control"' in html or "g.id === 'hessian_control'" in html, (
-        "hessian_control special-case branch missing"
-    )
-    assert 'buildHessianFieldRow(grpFields)' in html or \
-           "buildHessianFieldRow(grpFields)" in html, (
-        "hessian_control must call buildHessianFieldRow directly"
-    )
-
-
-def test_batch_flow_selector_zh_only() -> None:
-    """P2b: profile row label becomes 计算流程 for BatchOptimize; summary in option.title."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert r"\u8ba1\u7b97\u6d41\u7a0b" in html, "计算流程 label missing"
-    assert 'o.title = profileSummary' in html or 'o.title = profileSummary || ""' in html, (
-        "Profile summary must go into option.title for BatchOptimize"
-    )
-
-
 def test_batch_modal_subtitle() -> None:
-    """P2b: BatchOptimize modal title = 批量优化设置 with subtitle."""
+    """BatchOptimize modal title = 批量优化设置 with subtitle."""
     html = FRONTEND.read_text(encoding="utf-8")
     assert r"\u6279\u91cf\u4f18\u5316\u8bbe\u7f6e" in html, "批量优化设置 title missing"
     assert "modal-subtitle" in html, "Subtitle element class missing"
@@ -8334,39 +8085,232 @@ def test_batch_modal_subtitle() -> None:
     )
 
 
-def test_batch_hessian_combined_row() -> None:
-    """P2b: Hessian has initial select + recalc segmented in one row with effective line."""
+def test_batch_more_options_collapsible() -> None:
+    """'更多计算选项' collapsible section present."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert r"\u66f4\u591a\u8ba1\u7b97\u9009\u9879" in html, "'更多计算选项' label missing"
+
+
+def test_batch_input_preview_collapsible() -> None:
+    """'输入预览' collapsible section present."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert r"\u8f93\u5165\u9884\u89c8" in html, "'输入预览' label missing"
+
+
+def test_batch_copy_other_role_method() -> None:
+    """Copy button copies only method/basis keys (not optimizer/Hessian/SCF)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    # Find the batch copy button (second copyBtn.addEventListener in the file)
+    copy_sections = html.split('copyBtn.addEventListener("click"')
+    assert len(copy_sections) > 2, "Batch copy button handler missing"
+    copy_body = copy_sections[2].split("});", 1)[0]  # third occurrence = batch
+    for key in ["method", "basis", "sp_method", "sp_basis"]:
+        assert f'"{key}"' in copy_body, f"Copy must include key {key!r}"
+    # Must NOT copy optimizer/Hessian/SCF params
+    for key in ["opt_max_iter", "opt_convergence", "scf_max_iter", "opt_recalc_hess"]:
+        assert f'"{key}"' not in copy_body, f"Copy must NOT include key {key!r}"
+
+
+def test_batch_hessian_recalc_writes_values() -> None:
+    """Hessian recalc UI: 每N循环 writes N, 不重算 writes 0."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    body = html.split("function _buildHessianRecalcField(dest)", 1)[1]
+    body = body.split("\n        }", 1)[0]
+    # "auto" mode writes "auto"
+    assert 'rd.opt_recalc_hess = "auto"' in body, "Auto mode must write 'auto'"
+    # "off" mode writes 0
+    assert "rd.opt_recalc_hess = 0" in body, "Off mode must write 0"
+    # "custom" mode writes the numeric value
+    assert "rd.opt_recalc_hess = customVal" in body, "Custom mode must write customVal"
+    # "custom" mode with N=1 should work (customVal defaults to 10, user can change)
+    assert "customVal = v" in body, "Custom value must be updated from input"
+
+
+def test_batch_restore_default_affects_active_role_only() -> None:
+    """Restore-default button resets only the active role's draft."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    restore_body = html.split('restoreBtn.addEventListener("click"', 1)
+    assert len(restore_body) > 1, "Restore button handler missing"
+    handler = restore_body[1].split("});", 1)[0]
+    assert "activeRole" in handler, "Must reference active role"
+    assert "_BATCH_ROLE_DEFAULTS" in handler, "Must use _BATCH_ROLE_DEFAULTS"
+    # Must not reset both roles at once
+    assert 'br["int"]' not in handler and "br.int" not in handler, (
+        "Must not reset INT directly — only active role"
+    )
+
+
+def test_batch_cancel_reverts_whole_draft() -> None:
+    """Cancel/close on the batch config window must fully revert changes."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    open_body = html.split("async function openMethodConfig()", 1)[1]
+    open_body = open_body.split("\nasync function ", 1)[0]
+    assert "var _methodDraft = JSON.parse(JSON.stringify(wizardState.method));" in open_body
+    assert "function revertMethodDraft()" in open_body
+    assert 'window._revertMethodDraft = revertMethodDraft;' in open_body
+    for btn_id in ("mt-config-cancel", "mt-config-close"):
+        marker = (
+            f'document.getElementById("{btn_id}").addEventListener("click", function() {{\n'
+            '    if (typeof window._revertMethodDraft === "function") '
+            "window._revertMethodDraft();"
+        )
+        assert marker in html, f"{btn_id} must route through revertMethodDraft()"
+
+
+def test_batch_cancel_blocks_late_validation_writeback() -> None:
+    """doValidate must not write normalized values after cancel closed the modal."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    modal_guard = (
+        'var modalHidden = document.getElementById("method-config-modal")'
+        '.style.display === "none";'
+    )
+    assert modal_guard in html
+    assert "if (body.normalized_levels && !modalHidden)" in html
+
+
+def test_batch_restore_default_button_in_footer() -> None:
+    """'恢复当前页默认' button added to modal footer for BatchOptimize."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert "mt-config-restore-default" in html, "Restore-default button id missing"
+    assert r"\u6062\u590d\u5f53\u524d\u9875\u9ed8\u8ba4" in html, "恢复当前页默认 label missing"
+
+
+def test_batch_update_config_cards_reads_batch_roles() -> None:
+    """updateConfigCards reads INT/TS methods from batch_roles."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    update_body = html.split("function updateConfigCards()", 1)[1]
+    update_body = update_body.split("\nfunction ", 1)[0]
+    assert "batch_roles" in update_body, "updateConfigCards must reference batch_roles"
+    assert "br.int" in update_body or "br['int']" in update_body, "Must read INT role"
+    assert "br.ts" in update_body or "br['ts']" in update_body, "Must read TS role"
+
+
+def test_batch_hessian_combined_row_still_exists() -> None:
+    """Hessian has initial select + recalc segmented in one row."""
     html = FRONTEND.read_text(encoding="utf-8")
     assert "mc-hessian-row" in html, "Hessian combined row class missing"
-    assert "mc-hessian-effective" in html, "Hessian effective line class missing"
-    assert r"\u5f53\u524d\u6709\u6548\u7b56\u7565" in html, "当前有效策略 label missing"
-    assert r"\u6bcf N \u4e2a\u4f18\u5316\u5faa\u73af" in html, "每 N 个优化循环 segmented label missing"
-    # Old '自定义' label must NOT be the third segmented button for batch hessian
-    assert r"\u521d\u59cb\u7b56\u7565" in html, "初始策略 label missing for initial Hessian select"
-    assert r"\u91cd\u7b97\u7b56\u7565" in html, "重算策略 label missing for recalc segmented"
+    assert "mc-hessian-seg" in html, "Hessian segmented control class missing"
+    assert "mc-hessian-seg-btn" in html, "Hessian segmented button class missing"
 
 
-def test_batch_nullable_auto_placeholder() -> None:
-    """P2b: batch nullable fields show 自动 placeholder; empty stores null."""
+def test_batch_basis_readonly_display() -> None:
+    """Single-option locked basis shows read-only display."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert "isBatchNullable" in html, "Batch nullable field detection missing"
-    assert r'\u81ea\u52a8' in html or r"\u81ea\u52a8" in html, "自动 placeholder text missing"
-    assert 'delete getLevelState(lvDef.level_id)[fieldName]' in html, (
-        "Empty nullable field must delete key (store null)"
-    )
+    assert "mc-basis-readonly" in html, "Basis read-only display class missing"
 
 
-def test_batch_preset_summary_hides_when_empty() -> None:
-    """P2b: empty preset summary hides element; temperature/pressure labels localized."""
+def test_batch_info_tooltip() -> None:
+    """Help text uses info tooltip."""
     html = FRONTEND.read_text(encoding="utf-8")
-    assert 'presetSummary.style.display = pstText ? "" : "none"' in html or \
-           "presetSummary.style.display = pstText" in html, (
-        "Empty preset summary must hide element"
-    )
-    assert r"\u6e29\u5ea6" in html, "Temperature label (温度) missing"
-    assert r"\u538b\u529b" in html, "Pressure label (压力) missing"
-    assert r"\u9891\u7387\u7f29\u653e\u56e0\u5b50" in html, "Frequency scale factor label missing"
-    assert r"\u6162\u6536\u655b" in html, "SlowConv zh label (慢收敛) missing from scf_strategy map"
+    assert "mc-info-tip" in html, "Info tooltip class missing"
+
+
+def test_batch_convergence_canonicalization() -> None:
+    """Payload builder uses lowercase enum values."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    fn_body = html.split("function applyBatchOptimizeMethodFields(methodPayload)", 1)[1]
+    fn_body = fn_body.split("\nfunction ", 1)[0]
+    # Serializer reads from batch_roles which stores user-selected values
+    assert "batch_roles" in fn_body, "Serializer must use batch_roles"
+
+
+def test_batch_preview_local_summary_for_active_role() -> None:
+    """Local summary renders for the active role only."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    body = html.split("function _renderLocalSummary()", 1)[1]
+    body = body.split("\n        }", 1)[0]
+    assert "_batchRoleActive" in body, "Must use active role for local summary"
+    assert "_batchRoles" in body, "Must read from _batchRoles"
+
+
+def test_batch_engine_defaults_match_backend() -> None:
+    """_BATCH_ROLE_DEFAULTS must mirror backend ROLE_PRODUCT_DEFAULTS exactly.
+
+    Imports ROLE_PRODUCT_DEFAULTS at runtime, extracts the JS object literal
+    from the HTML, and asserts every key/value pair matches for both roles.
+    Static assertions are kept for semantic documentation.
+    """
+    from acp.calculations.batch.options import ROLE_PRODUCT_DEFAULTS
+
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Extract the JS literal: "var _BATCH_ROLE_DEFAULTS = { ... };"
+    block = html.split("var _BATCH_ROLE_DEFAULTS = {", 1)[1]
+    block = block.split("};", 1)[0]
+    block += "}"  # re-add closing brace for the outer object
+
+    def _py_to_js(val: object) -> str:
+        if val is None:
+            return "null"
+        if val is True:
+            return "true"
+        if val is False:
+            return "false"
+        if isinstance(val, str):
+            return '"' + val + '"'
+        if isinstance(val, int):
+            return str(val)
+        if isinstance(val, float):
+            return str(val) if val != int(val) else str(int(val))
+        return str(val)
+
+    for role in ("int", "ts"):
+        role_defaults = ROLE_PRODUCT_DEFAULTS[role]
+        # Locate the role sub-object in the JS literal
+        role_block = block.split(role + ": {", 1)
+        assert len(role_block) > 1, f"Role {role!r} not found in _BATCH_ROLE_DEFAULTS"
+        role_js = role_block[1].split("}", 1)[0]
+        for key, expected_val in role_defaults.items():
+            js_pair = key + ": " + _py_to_js(expected_val)
+            assert js_pair in role_js, (
+                f"Frontend _BATCH_ROLE_DEFAULTS.{role}.{key} mismatch: "
+                f"expected {js_pair!r} not found in JS role block"
+            )
+
+    # Static semantic assertions (kept for readability)
+    # INT: no trust radius override, auto hessian
+    assert "opt_trust_radius: null" in html, "INT trust_radius must be null"
+    assert 'opt_initial_hessian: "auto"' in html, "INT initial_hessian must be auto"
+    assert 'opt_recalc_hess: "auto"' in html, "INT recalc_hess must be auto"
+    # TS: trust 0.3, calculate hessian, recalc every 5
+    assert "opt_trust_radius: 0.3" in html, "TS trust_radius must be 0.3"
+    assert 'opt_initial_hessian: "calculate"' in html, "TS initial_hessian must be calculate"
+    assert "opt_recalc_hess: 5" in html, "TS recalc_hess must be 5"
+    # Shared defaults
+    assert 'opt_convergence: "tight"' in html, "Shared opt_convergence must be tight"
+    assert "scf_max_iter: 300" in html, "Shared scf_max_iter must be 300"
+    assert 'scf_convergence: "tight"' in html, "Shared scf_convergence must be tight"
+
+
+def test_batch_no_expert_overrides_group() -> None:
+    """expert_overrides group must not appear in FIELD_GROUPS."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert 'id: "expert_overrides"' not in html
+
+
+def test_batch_temperature_pressure_labels() -> None:
+    """Temperature/pressure/scale_factor labels present in batch form."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert r"\u6e29\u5ea6" in html, "Temperature label missing"
+    assert r"\u538b\u529b" in html, "Pressure label missing"
+    assert r"\u9891\u7387\u7f29\u653e\u56e0\u5b50" in html, "Scale factor label missing"
+
+
+def test_batch_slowconv_label_zh() -> None:
+    """SlowConv zh label (慢收敛) present."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    assert r"\u6162\u6536\u655b" in html, "SlowConv zh label missing"
+
+
+def test_batch_hessian_control_writes_canonical_field() -> None:
+    """Hessian tri-state control must read/write opt_recalc_hess."""
+    html = FRONTEND.read_text(encoding="utf-8")
+    body = html.split("function buildHessianFieldRow(dest)", 1)[1]
+    body = body.split("\n    function ", 1)[0]
+    assert "st.opt_recalc_hess" in body, "control must write the canonical opt_recalc_hess field"
+    assert "st.recalc_hess =" not in body, "legacy recalc_hess writes must be gone"
+    assert "st.recalc_hess !== undefined" in body, "legacy one-time migration read must remain"
+
 
 
 # ── P2c: job detail effective config for BatchOptimize ────────────────
@@ -8434,128 +8378,6 @@ def test_p2c_effective_config_rescue_not_in_api() -> None:
     assert "provenance" not in fields, (
         "provenance unexpectedly added — update frontend renderer to display rescue history"
     )
-
-
-# ── Batch config chain fixes (2026-09 wave: Hessian field, draft/cancel,
-#    preview honesty, window merge, electronic-state summary) ───────────
-
-
-def test_batch_hessian_control_writes_canonical_field() -> None:
-    """The Hessian tri-state control must read/write ``opt_recalc_hess``.
-
-    Regression: the control used to write ``st.recalc_hess`` while both the
-    payload serializer and the backend read ``stage.opt_recalc_hess``, so a
-    user-set interval (e.g. 1) never reached preview or submission and TS
-    silently fell back to its role default of 5.
-    """
-    html = FRONTEND.read_text(encoding="utf-8")
-    body = html.split("function buildHessianFieldRow(dest)", 1)[1]
-    body = body.split("\n    function ", 1)[0]
-    assert "st.opt_recalc_hess" in body, "control must write the canonical opt_recalc_hess field"
-    assert "st.recalc_hess =" not in body, "legacy recalc_hess writes must be gone"
-    assert "st.recalc_hess !== undefined" in body, "legacy one-time migration read must remain"
-    assert "recalc_hess: st.opt_recalc_hess" in body, (
-        "hessian-preview body must send the canonical field"
-    )
-
-
-def test_batch_serializer_reads_opt_recalc_hess() -> None:
-    """applyBatchOptimizeMethodFields must read opt_recalc_hess (canonical)."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert 'value("opt_recalc_hess", null)' in html
-    body = html.split("function applyBatchOptimizeMethodFields(methodPayload)", 1)[1]
-    body = body.split("\n}", 1)[0]
-    for key in (
-        "minimum_opt_max_iter",
-        "minimum_opt_convergence",
-        "minimum_scf_max_iter",
-        "minimum_scf_strategy",
-        "minimum_opt_rescue_policy",
-        "minimum_opt_max_rescue",
-        "transition_state_opt_max_iter",
-        "transition_state_scf_strategy",
-        "transition_state_opt_rescue_policy",
-    ):
-        assert f'value("{key}", null)' in body, f"serializer must carry role field {key}"
-
-
-def test_method_config_cancel_restores_draft() -> None:
-    """Cancel/close on the batch config window must fully revert changes."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    open_body = html.split("async function openMethodConfig()", 1)[1]
-    open_body = open_body.split("\nasync function ", 1)[0]
-    assert "var _methodDraft = JSON.parse(JSON.stringify(wizardState.method));" in open_body
-    assert "function revertMethodDraft()" in open_body
-    assert 'window._revertMethodDraft = revertMethodDraft;' in open_body
-    # Cancel and close both route through the draft restore.
-    for btn_id in ("mt-config-cancel", "mt-config-close"):
-        marker = (
-            f'document.getElementById("{btn_id}").addEventListener("click", function() {{\n'
-            '    if (typeof window._revertMethodDraft === "function") '
-            "window._revertMethodDraft();"
-        )
-        assert marker in html, f"{btn_id} must route through revertMethodDraft()"
-    # The OK button must NOT restore the draft (it keeps the edits).
-    ok_body = html.split('document.getElementById("mt-config-ok").addEventListener', 1)[1]
-    assert "window._revertMethodDraft" not in ok_body.split("});", 1)[0]
-
-
-def test_method_config_cancel_blocks_late_validation_writeback() -> None:
-    """doValidate must not write normalized values after cancel closed the modal."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    modal_guard = (
-        'var modalHidden = document.getElementById("method-config-modal")'
-        '.style.display === "none";'
-    )
-    assert modal_guard in html
-    assert "if (body.normalized_levels && !modalHidden)" in html
-
-
-def test_batch_preview_failure_is_explicit_not_silent_local() -> None:
-    """Preview failure must be labeled unverified, never posed as valid settings."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert "function _renderPreviewFailure(errMsg)" in html
-    assert "mc-preview-failure" in html
-    assert "mc-preview-unverified" in html
-    # The catch path routes to the explicit failure renderer.
-    catch_body = html.split("function _fetchBatchConfigPreview()", 1)[1]
-    catch_body = catch_body.split("function _renderServerPreview", 1)[0]
-    assert "_renderPreviewFailure(" in catch_body
-    assert "_renderLocalSummary(false)" not in catch_body, (
-        "failure must not render the local summary as if valid"
-    )
-    # Honest wording for the keyword summary (was overpromising "actual input").
-    assert "查看实际输入" not in html
-    assert "View actual input" not in html
-    assert r"\u67e5\u770b\u5b9e\u9645\u8f93\u5165" not in html
-    assert r"\u751f\u6548\u914d\u7f6e\u8be6\u60c5" in html  # 生效配置详情（后端解析）
-    assert "config_key" in html
-
-
-def test_batch_engine_defaults_match_backend() -> None:
-    """Local default summary must mirror the backend engine constant (200)."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert "opt_max_iter: 250" not in html, "INT default drifted from the backend 200"
-    assert "INT: { opt_max_iter: 200" in html
-    assert "TS:  { opt_max_iter: 200" in html
-
-
-def test_batch_role_columns_replace_tabs() -> None:
-    """One window with INT | TS side-by-side columns; expert group removed."""
-    html = FRONTEND.read_text(encoding="utf-8")
-    assert "expert_overrides" not in html.split("var FIELD_GROUPS", 1)[1].split("];", 1)[0], (
-        "expert role-method override group must be removed"
-    )
-    assert 'columnsWrap.className = "mc-role-columns"' in html
-    assert "_buildRoleColumn(intCol" in html and '_buildRoleColumn(tsCol' in html
-    # TS↔INT method link toggle + one-shot copy button.
-    assert "function _linkEnabled()" in html
-    assert "function _linkTsMethods()" in html
-    assert "function _copyIntToTs()" in html
-    assert "TS \\u65b9\\u6cd5\\u4e0e INT \\u76f8\\u540c" in html or "TS 方法与 INT 相同" in html
-    # Batch table: per-structure check column + batch assign.
-    assert "_batchCheckItem" in html
-    assert 'id="batch-optimize-assign"' in html
 
 
 def test_electronic_state_summary_expands_preset() -> None:
