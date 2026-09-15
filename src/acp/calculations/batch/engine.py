@@ -1070,6 +1070,15 @@ class BatchOptimizeEngine:
             elif step_kind is StepKind.THERMOCHEMISTRY:
                 if frequency_log_path is None or sp_energy is None:
                     raise RuntimeError(f"thermochemistry requires freq + sp for {item.item_id}")
+                thermo_resolved = resolved_methods.resolve_for_step(
+                    StepKind.THERMOCHEMISTRY, is_ts
+                )
+                thermo_temp = float(
+                    thermo_resolved.get("temperature", resolved_methods.temperature)
+                )
+                thermo_press = float(
+                    thermo_resolved.get("pressure", resolved_methods.pressure)
+                )
                 current_result = ThermochemistryCalculator(
                     config=self._config,
                     output_dir=step_dir,
@@ -1077,8 +1086,8 @@ class BatchOptimizeEngine:
                 ).compute(
                     freq_log_path=frequency_log_path,
                     sp_energy_hartree=sp_energy,
-                    temperature=resolved_methods.temperature,
-                    pressure=resolved_methods.pressure,
+                    temperature=thermo_temp,
+                    pressure=thermo_press,
                     standard_state="1atm",
                 )
                 thermochemistry: dict[str, BatchJsonValue] = {
@@ -1236,17 +1245,19 @@ class BatchOptimizeEngine:
     ) -> CalculationRequest:
         coordinates = _json_coordinates(opt_result.coords)
         symbols_json = _json_text_list(symbols)
-        method, basis = methods.for_step(StepKind.FREQUENCY, item.tag == "TS")
+        is_ts = item.tag == "TS"
+        resolved = methods.resolve_for_step(StepKind.FREQUENCY, is_ts)
         resources: dict[str, JsonValue] = {
             "output_dir": str(output_dir),
             "charge": charge,
             "multiplicity": multiplicity,
             "coordinates": coordinates,
             "symbols": symbols_json,
-            "scf_maxiter": methods.scf_max_iter,
-            "scf_convergence": methods.scf_convergence,
-            "scf_strategy": methods.scf_strategy,
+            "scf_maxiter": resolved.get("scf_maxiter", methods.scf_max_iter),
+            "scf_convergence": resolved.get("scf_convergence", methods.scf_convergence),
+            "scf_strategy": resolved.get("scf_strategy", methods.scf_strategy),
         }
+        basis = resolved.get("basis")
         if basis:
             resources["basis"] = basis
         if electronic_state:
@@ -1254,9 +1265,9 @@ class BatchOptimizeEngine:
         return CalculationRequest(
             input_artifact=StructureArtifact(
                 path=self._item_input_path(item),
-                role=StructureRole.TRANSITION_STATE if item.tag == "TS" else StructureRole.MINIMUM,
+                role=StructureRole.TRANSITION_STATE if is_ts else StructureRole.MINIMUM,
             ),
-            method=method,
+            method=resolved.get("method", ""),
             resources=resources,
             workflow="BatchOptimize",
         )
@@ -1275,17 +1286,19 @@ class BatchOptimizeEngine:
     ) -> CalculationRequest:
         coordinates = _json_coordinates(result.coords)
         symbols_json = _json_text_list(symbols)
-        method, basis = methods.for_step(StepKind.SINGLEPOINT, item.tag == "TS")
+        is_ts = item.tag == "TS"
+        resolved = methods.resolve_for_step(StepKind.SINGLEPOINT, is_ts)
         resources: dict[str, JsonValue] = {
             "output_dir": str(output_dir),
             "charge": charge,
             "multiplicity": multiplicity,
             "coordinates": coordinates,
             "symbols": symbols_json,
-            "scf_maxiter": methods.scf_max_iter,
-            "scf_convergence": methods.scf_convergence,
-            "scf_strategy": methods.scf_strategy,
+            "scf_maxiter": resolved.get("scf_maxiter", methods.scf_max_iter),
+            "scf_convergence": resolved.get("scf_convergence", methods.scf_convergence),
+            "scf_strategy": resolved.get("scf_strategy", methods.scf_strategy),
         }
+        basis = resolved.get("basis")
         if basis:
             resources["basis"] = basis
         if electronic_state:
@@ -1293,9 +1306,9 @@ class BatchOptimizeEngine:
         return CalculationRequest(
             input_artifact=StructureArtifact(
                 path=self._item_input_path(item),
-                role=StructureRole.TRANSITION_STATE if item.tag == "TS" else StructureRole.MINIMUM,
+                role=StructureRole.TRANSITION_STATE if is_ts else StructureRole.MINIMUM,
             ),
-            method=method,
+            method=resolved.get("method", ""),
             resources=resources,
             workflow="BatchOptimize",
         )
