@@ -443,7 +443,7 @@ class TestFacetsExclusion:
         )
         mol_keys = {m["key"] for m in result["facets"]["molecules"]}
         # proj2 has EtOH → proj1 facets must not list it
-        assert "ethanol" not in mol_keys
+        assert "etoh" not in mol_keys
         # proj1 facets only contain proj1 molecule keys
         for mk in mol_keys:
             assert mk in {"bcb-allene", "meoh", "__unassigned__"}
@@ -502,6 +502,7 @@ class TestSorting:
             )
 
     def test_created_desc_groups_descending(self, tmp_path: Path) -> None:
+        """Group-level ordering: created_desc groups by max(created_at) DESC."""
         from acp.scheduler.task_views import (
             GroupBy,
             TaskSort,
@@ -510,17 +511,114 @@ class TestSorting:
         )
 
         idx, proj = _setup_project_and_tasks(tmp_path)
+
+        # --- created_desc: groups ordered by max(created_at) DESC ---
         result = query_project_tasks(
             idx,
             TaskViewQuery(
                 project_id=proj,
                 sort=TaskSort.created_desc,
-                group_by=GroupBy.none,
+                group_by=GroupBy.molecule,
             ),
         )
-        times = [r["created_at"] for r in result["groups"][0]["jobs"]]
-        assert times == sorted(times, reverse=True), (
-            "created_desc should render newest first"
+        group_keys = [g["key"] for g in result["groups"]]
+        # Fixture (non-archived proj1):
+        #   meoh: max(created_at) = 2026-01-07T03:00:00 (t7)
+        #   bcb-allene: max(created_at) = 2026-01-06T04:00:00 (t6)
+        #   __unassigned__: max(created_at) = 2026-01-04T06:00:00 (t4)
+        assert group_keys == ["meoh", "bcb-allene", "__unassigned__"], (
+            f"created_desc groups should order newest-max-first, got {group_keys}"
+        )
+
+        # --- created_asc: groups ordered by min(created_at) ASC ---
+        result_asc = query_project_tasks(
+            idx,
+            TaskViewQuery(
+                project_id=proj,
+                sort=TaskSort.created_asc,
+                group_by=GroupBy.molecule,
+            ),
+        )
+        group_keys_asc = [g["key"] for g in result_asc["groups"]]
+        #   bcb-allene: min(created_at) = 2026-01-01T09:00:00 (t1)
+        #   meoh: min(created_at) = 2026-01-03T07:00:00 (t3)
+        #   __unassigned__: min(created_at) = 2026-01-04T06:00:00 (t4)
+        assert group_keys_asc == ["bcb-allene", "meoh", "__unassigned__"], (
+            f"created_asc groups should order oldest-min-first, got {group_keys_asc}"
+        )
+
+        # --- name_asc: groups ordered A→Z by key ---
+        result_name = query_project_tasks(
+            idx,
+            TaskViewQuery(
+                project_id=proj,
+                sort=TaskSort.name_asc,
+                group_by=GroupBy.molecule,
+            ),
+        )
+        group_keys_name = [g["key"] for g in result_name["groups"]]
+        assert group_keys_name == ["__unassigned__", "bcb-allene", "meoh"], (
+            f"name_asc groups should order A→Z by key, got {group_keys_name}"
+        )
+
+        # --- Tie-stability: two groups with identical created_at ---
+        shared_ts = "2026-02-01T00:00:00"
+        for mol, tid in [("AAA", "t_tie_aaa"), ("BBB", "t_tie_bbb")]:
+            idx.upsert({
+                "task_id": tid,
+                "job_id": tid,
+                "project_id": proj,
+                "molecule_name": mol,
+                "task_name": "tie_test",
+                "remark": "",
+                "display_name": mol,
+                "workflow": "Confsearch",
+                "task_dir_name": f"dir_{tid}",
+                "status": "completed",
+                "node_id": "local",
+                "node_path": "/tmp",
+                "input_hash": None,
+                "result_manifest_path": None,
+                "current_stage": None,
+                "storage_mode": "local",
+                "layout_version": 2,
+                "created_at": shared_ts,
+                "updated_at": shared_ts,
+                "molecule_key": mol.lower(),
+                "tags": "[]",
+                "archived": 0,
+                "batch_id": None,
+                "last_activity_at": None,
+                "started_at": None,
+                "completed_at": None,
+                "group_id": tid,
+                "progress": None,
+            })
+
+        result_desc = query_project_tasks(
+            idx,
+            TaskViewQuery(
+                project_id=proj,
+                sort=TaskSort.created_desc,
+                group_by=GroupBy.molecule,
+            ),
+        )
+        desc_keys = [g["key"] for g in result_desc["groups"]]
+        assert desc_keys.index("aaa") < desc_keys.index("bbb"), (
+            f"Tie-stability created_desc: 'aaa' should precede 'bbb', got {desc_keys}"
+        )
+
+        result_asc2 = query_project_tasks(
+            idx,
+            TaskViewQuery(
+                project_id=proj,
+                sort=TaskSort.created_asc,
+                group_by=GroupBy.molecule,
+            ),
+        )
+        asc_keys = [g["key"] for g in result_asc2["groups"]]
+        assert asc_keys.index("aaa") < asc_keys.index("bbb"), (
+            f"Tie-stability created_asc: 'aaa' should precede 'bbb', got {asc_keys}"
         )
 
     def test_completed_desc_null_last(self, tmp_path: Path) -> None:
