@@ -352,5 +352,61 @@ class TaskIndex:
             (project_id, _utc_now_iso(), task_id),
         )
 
+    def update_display_fields(
+        self,
+        task_id: str,
+        *,
+        molecule_name: str | None = None,
+        task_name: str | None = None,
+        remark: str | None = None,
+        tags: list[str] | None = None,
+    ) -> bool:
+        """Update only the user-editable display columns.
+
+        When *molecule_name* is provided the ``molecule_key`` is recomputed.
+        *tags* are stored as a JSON-serialised list.  Never touches the
+        ``jobs`` table or ``spec_json``.
+
+        Returns ``True`` when the row existed and was updated.
+        """
+        existing = self.get(task_id)
+        if existing is None:
+            return False
+
+        sets: list[str] = []
+        params: list[Any] = []
+
+        if molecule_name is not None:
+            from acp.scheduler.naming import molecule_group_key
+
+            sets.append("molecule_name=?")
+            params.append(molecule_name)
+            sets.append("molecule_key=?")
+            params.append(molecule_group_key(molecule_name))
+
+        if task_name is not None:
+            sets.append("task_name=?")
+            params.append(task_name)
+
+        if remark is not None:
+            sets.append("remark=?")
+            params.append(remark)
+
+        if tags is not None:
+            sets.append("tags=?")
+            params.append(json.dumps(tags))
+
+        if not sets:
+            return False
+
+        sets.append("updated_at=?")
+        params.append(_utc_now_iso())
+        params.append(task_id)
+        self._run(
+            f"UPDATE tasks SET {', '.join(sets)} WHERE task_id=?",
+            tuple(params),
+        )
+        return True
+
 
 __all__ = ["TaskIndex"]

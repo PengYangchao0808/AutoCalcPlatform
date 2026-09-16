@@ -22,7 +22,12 @@ __all__ = [
     "V2TaskBatchRequest",
     "V2TaskBatchResponse",
     "V2TaskDetail",
+    "V2TaskPatchRequest",
+    "V2TaskRowModel",
     "V2TaskSummary",
+    "V2TaskViewFacetsModel",
+    "V2TaskViewGroupModel",
+    "V2TaskViewResponse",
     "V2TreeResponse",
 ]
 
@@ -122,3 +127,84 @@ class V2TaskBatchResponse(BaseModel):
 
     created: list[V2TaskSummary] = Field(default_factory=list)
     failed: list[dict[str, Any]] = Field(default_factory=list)
+
+
+# ── Task-view models (T3) ────────────────────────────────────────────────
+
+
+class V2TaskRowModel(BaseModel):
+    """Flat task row for the grouped task view, aligned with
+    ``task_views._row_to_task`` output plus optional active-row enrichment."""
+
+    id: str
+    status: str
+    group_id: str | None = None
+    project_id: str = ""
+    project_name: str = ""
+    created_at: str = ""
+    updated_at: str = ""
+    started_at: str | None = None
+    completed_at: str | None = None
+    last_activity_at: str | None = None
+    current_stage: str | None = None
+    progress: float | None = None
+    molecule_name: str = ""
+    task_name: str = ""
+    remark: str = ""
+    display_name: str = ""
+    task_dir_name: str = ""
+    workflow: str = ""
+    tags: list[str] = Field(default_factory=list)
+    archived: bool = False
+    batch_id: str | None = None
+    spec: dict[str, Any] = Field(default_factory=dict)
+    # Active-row enrichment fields (populated only for active-status rows)
+    stage_index: int | None = None
+    stage_total: int | None = None
+    stage_detail: str | None = None
+    progress_state: str | None = None
+    live_status: dict[str, Any] | None = None
+    display_method: str | None = None
+
+
+class V2TaskViewGroupModel(BaseModel):
+    """One group in the grouped task view response."""
+
+    key: str
+    display_name: str = ""
+    unassigned: bool = False
+    retired: bool = False
+    count: int = 0
+    truncated: bool = False
+    min_created_at: str | None = None
+    jobs: list[V2TaskRowModel] = Field(default_factory=list)
+
+
+class V2TaskViewFacetsModel(BaseModel):
+    """Faceted counts for each filter dimension."""
+
+    statuses: dict[str, int] = Field(default_factory=dict)
+    workflows: list[dict[str, Any]] = Field(default_factory=list)
+    molecules: list[dict[str, Any]] = Field(default_factory=list)
+    tags: list[dict[str, Any]] = Field(default_factory=list)
+    batches: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class V2TaskViewResponse(BaseModel):
+    """Full task-view response with groups, facets, counts, and query echo."""
+
+    groups: list[V2TaskViewGroupModel] = Field(default_factory=list)
+    facets: V2TaskViewFacetsModel = Field(default_factory=V2TaskViewFacetsModel)
+    total: int = 0
+    truncated: bool = False
+    counts: dict[str, int] = Field(default_factory=dict)
+    query: dict[str, Any] = Field(default_factory=dict)
+
+
+class V2TaskPatchRequest(BaseModel):
+    """Request body for PATCH /tasks/{task_id} — user-editable display fields only."""
+
+    molecule_name: str | None = None
+    task_name: str | None = None
+    remark: str | None = None
+    tags: list[str] | None = None

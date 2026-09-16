@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
@@ -24,12 +25,17 @@ from acp.api.v2_schemas import (
     V2TaskBatchRequest,
     V2TaskBatchResponse,
     V2TaskDetail,
+    V2TaskPatchRequest,
+    V2TaskRowModel,
     V2TaskSummary,
+    V2TaskViewFacetsModel,
+    V2TaskViewGroupModel,
+    V2TaskViewResponse,
     V2TreeResponse,
 )
 from acp.scheduler.capabilities import NoCapableNodeError
 from acp.scheduler.files import resolve_safe
-from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec
+from acp.scheduler.jobs import SUPPORTED_WORKFLOWS, JobRecord, JobSpec, JobStatus
 from acp.scheduler.manager import JobManager
 from acp.scheduler.nodes import (
     ExecutionTargetError,
@@ -101,6 +107,52 @@ def _task_or_404(request: Request, task_id: str) -> JobRecord:
     return record
 
 
+_ACTIVE_STATUSES_FOR_ENRICHMENT: frozenset[str] = frozenset({
+    s.value for s in JobStatus if s.is_active
+})
+_ENRICHMENT_CAP = 200
+
+
+def _enrich_active_rows(
+    request: Request,
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Enrich active-row dicts with live stage/progress fields from state.json."""
+    from acp.api.v1_routes import _enrich_job_snapshot, _record_to_v1_model
+
+    manager = _manager(request)
+    enriched_count = 0
+    for row in rows:
+        if row.get("status") not in _ACTIVE_STATUSES_FOR_ENRICHMENT:
+            continue
+        if enriched_count >= _ENRICHMENT_CAP:
+            logger.warning(
+                "task-view enrichment cap (%d) reached; skipping remaining active rows",
+                _ENRICHMENT_CAP,
+            )
+            break
+        record = manager.store.get(row["id"])
+        if record is None:
+            continue
+        job_model = _record_to_v1_model(record)
+        enriched = _enrich_job_snapshot(record, job_model, include_event=False)
+        for field in (
+            "stage_index", "stage_total", "stage_detail",
+            "progress_state", "display_method",
+        ):
+            val = getattr(enriched, field, None)
+            if val is not None:
+                row[field] = val
+        live = getattr(enriched, "live_status", None)
+        if live is not None:
+            if hasattr(live, "model_dump"):
+                row["live_status"] = live.model_dump()
+            elif isinstance(live, dict):
+                row["live_status"] = live
+        enriched_count += 1
+    return rows
+
+
 def _storage_for(record: JobRecord) -> TaskStorageBackend:
     """Storage backend serving a task's files (§9: server stores no copies).
 
@@ -148,10 +200,153 @@ def list_project_tasks(
     return [_task_summary(record) for record in records]
 
 
+@router.get("/task-view", response_model=V2TaskViewResponse)
+def get_task_view(
+    request: Request,
+    project_id: str | None = Query(default=None),
+    group_by: str = Query(
+        default="molecule",
+        pattern=r"^(molecule|remark|workflow|batch|tag|none)$",
+    ),
+    sort: str = Query(
+        default="created_desc",
+        pattern=r"^(created_desc|created_asc|completed_desc|activity_desc|name_asc|name_desc)$",
+    ),
+    status: str | None = Query(default=None),
+    workflow: str | None = Query(default=None),
+    molecule: str | None = Query(default=None),
+    tag: str | None = Query(default=None),
+    batch: str | None = Query(default=None),
+    remark: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    archived: str = Query(default="exclude", pattern=r"^(exclude|include|only)$"),
+    running_first: bool = False,
+    group_limit: int = Query(default=200, ge=1, le=1000),
+) -> V2TaskViewResponse:
+    """Grouped task view with filters, facets, and counts (T3)."""
+    from acp.scheduler.task_views import (
+        ArchivedFilter,
+        GroupBy,
+        TaskSort,
+        TaskViewQuery,
+        query_project_tasks,
+    )
+
+    manager = _manager(request)
+    if project_id is not None and manager.projects.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
+
+    def _parse_csv(val: str | None) -> tuple[str, ...]:
+        if not val:
+            return ()
+        return tuple(v.strip() for v in val.split(",") if v.strip())
+
+    q = TaskViewQuery(
+        project_id=project_id,
+        group_by=GroupBy(group_by),
+        sort=TaskSort(sort),
+        statuses=_parse_csv(status),
+        workflows=_parse_csv(workflow),
+        molecule_keys=_parse_csv(molecule),
+        tags=_parse_csv(tag),
+        batch_ids=_parse_csv(batch),
+        remarks=_parse_csv(remark),
+        search=q or "",
+        archived=ArchivedFilter(archived),
+        running_first=running_first,
+        group_limit=group_limit,
+    )
+    result = query_project_tasks(manager.tasks, q)
+
+    # Enrich active rows with live stage/progress fields
+    for group in result.get("groups", []):
+        jobs = group.get("jobs", [])
+        if jobs:
+            _enrich_active_rows(request, jobs)
+
+    facets_raw = result.get("facets", {})
+    facets = V2TaskViewFacetsModel(
+        statuses=facets_raw.get("statuses", {}),
+        workflows=facets_raw.get("workflows", []),
+        molecules=facets_raw.get("molecules", []),
+        tags=facets_raw.get("tags", []),
+        batches=facets_raw.get("batches", []),
+    )
+
+    groups = [
+        V2TaskViewGroupModel(
+            key=g["key"],
+            display_name=g.get("display_name", g["key"]),
+            unassigned=g.get("unassigned", False),
+            retired=g.get("retired", False),
+            count=g["count"],
+            truncated=g.get("truncated", False),
+            min_created_at=g.get("min_created_at"),
+            jobs=[V2TaskRowModel(**j) for j in g.get("jobs", [])],
+        )
+        for g in result.get("groups", [])
+    ]
+
+    return V2TaskViewResponse(
+        groups=groups,
+        facets=facets,
+        total=result.get("total", 0),
+        truncated=result.get("truncated", False),
+        counts=result.get("counts", {}),
+        query=result.get("query", {}),
+    )
+
+
 @router.get("/tasks/{task_id}", response_model=V2TaskDetail)
 def get_task(task_id: str, request: Request) -> V2TaskDetail:
     """Fetch one task's detail projection (§12)."""
     return _task_detail(_task_or_404(request, task_id))
+
+
+@router.patch("/tasks/{task_id}")
+def patch_task(task_id: str, body: V2TaskPatchRequest, request: Request) -> dict[str, Any]:
+    """Update user-editable display fields on a task row (T3).
+
+    Only touches the tasks index — never modifies jobs/spec_json/work_dir.
+    """
+    manager = _manager(request)
+    existing = manager.tasks.get(task_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
+
+    if body.molecule_name is not None and len(body.molecule_name) > 200:
+        raise HTTPException(status_code=422, detail="molecule_name must be ≤ 200 characters")
+    if body.task_name is not None and len(body.task_name) > 200:
+        raise HTTPException(status_code=422, detail="task_name must be ≤ 200 characters")
+    if body.remark is not None and len(body.remark) > 200:
+        raise HTTPException(status_code=422, detail="remark must be ≤ 200 characters")
+
+    if body.tags is not None:
+        if len(body.tags) > 20:
+            raise HTTPException(status_code=422, detail="tags must contain at most 20 items")
+        cleaned_tags: list[str] = []
+        for raw_tag in body.tags:
+            tag = raw_tag.strip()
+            if not tag:
+                raise HTTPException(status_code=422, detail="tags must not contain empty strings")
+            if len(tag) > 32:
+                raise HTTPException(status_code=422, detail="each tag must be ≤ 32 characters")
+            cleaned_tags.append(tag)
+        tags_to_write = cleaned_tags
+    else:
+        tags_to_write = None
+
+    manager.tasks.update_display_fields(
+        task_id,
+        molecule_name=body.molecule_name,
+        task_name=body.task_name,
+        remark=body.remark,
+        tags=tags_to_write,
+    )
+
+    updated = manager.tasks.get(task_id)
+    assert updated is not None
+    return updated
 
 
 @router.get("/tasks/{task_id}/tree", response_model=V2TreeResponse)
@@ -258,13 +453,15 @@ def create_task_batch(req: V2TaskBatchRequest, request: Request) -> V2TaskBatchR
     """Create one independent task per array element (§12 batch submission).
 
     Per-item failures are collected into ``failed`` instead of aborting
-    the batch.
+    the batch.  Each request gets a shared ``batch_id`` injected into
+    item resources (when absent) so the task view can group them.
     """
     manager = _manager(request)
+    req_batch_id = "batch_" + uuid4().hex[:12]
     created: list[V2TaskSummary] = []
     failed: list[dict[str, Any]] = []
     for item in req.tasks:
-        outcome = _submit_batch_item(manager, item, req.project_id)
+        outcome = _submit_batch_item(manager, item, req.project_id, req_batch_id)
         if isinstance(outcome, V2TaskSummary):
             created.append(outcome)
         else:
@@ -300,23 +497,24 @@ def _submit_batch_item(
     manager: JobManager,
     item: V2TaskBatchItem,
     request_project_id: str | None,
+    req_batch_id: str | None = None,
 ) -> V2TaskSummary | str:
     """Submit one batch item; returns the summary or an error message.
 
-    Node-selection fields (``execution_mode`` / ``target_node`` /
-    ``node_tags``) pass straight through to the job spec.  The creation-time
-    target validation shared with v1 (``validate_submission_target``) runs
-    here too, but a rejected item becomes a ``failed[]`` entry carrying the
-    error ``code`` — it never aborts the batch as a whole.
+    When *req_batch_id* is given and the item's resources lack a
+    ``batch_id``, it is injected so the task view can group batch items.
     """
     if item.workflow not in SUPPORTED_WORKFLOWS:
         return f"Unsupported workflow '{item.workflow}'. Supported: {list(SUPPORTED_WORKFLOWS)}"
+    resources = dict(item.resources) if item.resources else {}
+    if req_batch_id and "batch_id" not in resources:
+        resources["batch_id"] = req_batch_id
     spec = JobSpec(
         workflow=item.workflow,
         name=item.name or f"{item.molecule_name}_{item.task_name}",
         input=item.input,
         method=item.method,
-        resources=item.resources,
+        resources=resources,
         project_id=item.project_id or request_project_id,
         molecule_name=item.molecule_name,
         task_name=item.task_name,
