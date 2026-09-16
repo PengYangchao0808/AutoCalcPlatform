@@ -330,7 +330,7 @@ CREATE TABLE IF NOT EXISTS jobs (
                 }
             ),
         )
-        self._insert_legacy_job(conn, job_id="j4")
+        self._insert_legacy_job(conn, job_id="j4", group_id="root_999")
         self._insert_legacy_job(conn, job_id="j5")
         conn.commit()
         conn.close()
@@ -347,6 +347,8 @@ CREATE TABLE IF NOT EXISTS jobs (
         assert rows["j1"]["batch_id"] is None
         assert rows["j4"]["batch_id"] is None
         assert rows["j5"]["batch_id"] is None
+
+        assert rows["j4"]["group_id"] == "root_999"
 
         j2_gid = conn.execute(
             "SELECT group_id FROM jobs WHERE id='j2'"
@@ -413,6 +415,60 @@ CREATE TABLE IF NOT EXISTS jobs (
         assert row["tags"] == '["user-tag"]'
         assert row["remark"] == "user-edit"
         assert row["molecule_name"] == "CustomMol"
+
+    def test_014_idempotent_backfill_fieldwise_identical(self, tmp_path: Path) -> None:
+        db = self._setup_legacy_db(tmp_path)
+        conn = sqlite3.connect(str(db))
+        self._insert_legacy_job(conn, job_id="j1")
+        self._insert_legacy_job(
+            conn,
+            job_id="j2",
+            spec_json=json.dumps(
+                {
+                    "workflow": "Confsearch",
+                    "name": "BCB_search__01",
+                    "input": {"molecule_name": "BCB-Allene"},
+                    "method": {},
+                    "resources": {"batch_id": "batch_shared_001"},
+                    "tags": ["chem-16"],
+                    "project_id": "proj1",
+                    "molecule_name": "BCB-Allene",
+                    "task_name": "search",
+                    "remark": "test batch",
+                }
+            ),
+        )
+        self._insert_legacy_job(conn, job_id="j3")
+        self._insert_legacy_job(conn, job_id="j4", group_id="root_999")
+        self._insert_legacy_job(conn, job_id="j5")
+        conn.commit()
+        conn.close()
+
+        migrate(db)
+
+        conn = sqlite3.connect(str(db))
+        conn.row_factory = sqlite3.Row
+        rows_after_first = {
+            r["task_id"]: dict(r)
+            for r in conn.execute("SELECT * FROM tasks ORDER BY task_id").fetchall()
+        }
+        conn.close()
+
+        migrate(db)
+
+        conn = sqlite3.connect(str(db))
+        conn.row_factory = sqlite3.Row
+        rows_after_second = {
+            r["task_id"]: dict(r)
+            for r in conn.execute("SELECT * FROM tasks ORDER BY task_id").fetchall()
+        }
+        conn.close()
+
+        assert rows_after_first.keys() == rows_after_second.keys()
+        for task_id in rows_after_first:
+            assert rows_after_first[task_id] == rows_after_second[task_id], (
+                f"Field-by-field mismatch for {task_id} after second migrate()"
+            )
 
 
 class TestOverwriteProtection:
@@ -499,8 +555,14 @@ class TestCompareBeforeWrite:
         assert row2["updated_at"] == ts1_updated
         assert row2["last_activity_at"] == ts1_activity
 
+        idx.sync_job_transition(record)
+        row3 = idx.get("j1")
+        assert row3["updated_at"] == ts1_updated
+        assert row3["last_activity_at"] == ts1_activity
+
     def test_status_change_updates_last_activity(self, tmp_path: Path) -> None:
         idx = self._setup_running_task(tmp_path)
+        prior_activity = idx.get("j1")["last_activity_at"]
         record = _make_record(
             job_id="j1",
             status=JobStatus.COMPLETED,
@@ -511,6 +573,7 @@ class TestCompareBeforeWrite:
         assert row["status"] == "completed"
         assert row["current_stage"] == "S2"
         assert row["last_activity_at"] is not None
+        assert row["last_activity_at"] != prior_activity
 
     def test_started_at_set_once(self, tmp_path: Path) -> None:
         idx = self._setup_running_task(tmp_path)
@@ -632,6 +695,46 @@ class TestMoveJobWiring:
         idx.update_project("j1", p2_id)
         row = idx.get("j1")
         assert row["project_id"] == p2_id
+
+    def test_move_job_via_manager_wiring(self, tmp_path: Path) -> None:
+        from unittest.mock import MagicMock
+
+        from acp.scheduler.manager import JobManager
+
+        runner = MagicMock()
+        runner.poll.return_value = (False, None)
+        mgr = JobManager(run_root=tmp_path, runner=runner, poll_interval=30)
+        try:
+            p1 = mgr.projects.create_project("Source", str(tmp_path / "src"))
+            p2 = mgr.projects.create_project("Target", str(tmp_path / "tgt"))
+            p1_id = p1["project_id"]
+            p2_id = p2["project_id"]
+
+            record = mgr.submit(
+                JobSpec(
+                    workflow="Confsearch",
+                    name="demo",
+                    input={"source": "CCO"},
+                    molecule_name="ethanol",
+                    task_name="opt",
+                    remark="test",
+                    project_id=p1_id,
+                )
+            )
+            job_id = record.id
+            mgr.cancel(job_id)
+            assert mgr.tasks is not None
+            task_row = mgr.tasks.get(job_id)
+            assert task_row is not None
+            assert task_row["project_id"] == p1_id
+
+            mgr.move_job(job_id, p2_id)
+
+            task_row2 = mgr.tasks.get(job_id)
+            assert task_row2 is not None
+            assert task_row2["project_id"] == p2_id
+        finally:
+            mgr.shutdown()
 
 
 class TestMoleculeGroupKey:
