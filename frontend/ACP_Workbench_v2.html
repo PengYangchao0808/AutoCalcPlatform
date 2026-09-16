@@ -4873,6 +4873,24 @@ H -0.500  0.900  0.000" data-i18n-ph="s2scan.xyz_paste_ph" style="font-family:mo
 <script>
 const API_BASE = "/api/v1";
 const STRUCTURE_UPLOAD_EXTS = [".xyz", ".sdf", ".sd", ".mol", ".gjf", ".com", ".inp", ".log", ".out"];
+const DEFAULT_TASK_VIEW = { groupBy: "molecule", sort: "created_desc", filters: { status: [], workflow: [], molecule: [], tag: [], batch: [], remark: [] }, q: "", archived: "exclude", runningFirst: false };
+var taskViewPrefs = null;
+function loadTaskViewPrefs(projectId) {
+  var key = "acp.taskview." + (projectId || "__all__");
+  try {
+    var raw = localStorage.getItem(key);
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") { taskViewPrefs = parsed; return; }
+    }
+  } catch (e) {}
+  taskViewPrefs = JSON.parse(JSON.stringify(DEFAULT_TASK_VIEW));
+}
+function saveTaskViewPrefs() {
+  if (!taskViewPrefs) return;
+  var key = "acp.taskview." + (selectedProjectId || "__all__");
+  try { localStorage.setItem(key, JSON.stringify(taskViewPrefs)); } catch (e) {}
+}
 let currentLang = localStorage.getItem("acp-lang") || "zh-CN";
 let selectedProjectId = "";
 let selectedJobId = "";
@@ -4884,6 +4902,7 @@ let jobsPollTimer = null;
 let jobsPollGeneration = 0;
 let jobsPollInFlight = false;
 let jobsCache = [];
+let taskViewCache = null;
 let projectsCache = [];
 let viewer = null;
 var mainViewerFraming = { pending: false, settled: false, observer: null, timer: null, lastW: 0, lastH: 0, epoch: 0 };
@@ -7625,6 +7644,44 @@ async function api(path, opts) {
           // FastAPI 422 request-validation errors: detail is a list of
           // {loc, msg, type} objects — flatten them into readable text
           // instead of letting String() collapse them to "[object Object]".
+          msg = d.map(function(item) {
+            if (item && typeof item === "object") {
+              const loc = Array.isArray(item.loc) ? item.loc.join(".") : "";
+              return (loc ? loc + ": " : "") + (item.msg || JSON.stringify(item));
+            }
+            return String(item);
+          }).join("; ");
+        } else {
+          msg = JSON.stringify(d);
+        }
+      }
+    } catch (e) {}
+    throw new Error(msg);
+  }
+  const ct = response.headers.get("content-type") || "";
+  return ct.includes("application/json") ? response.json() : response.text();
+}
+
+// T4: v2 API helper — same error handling as api(), fetches "/api/v2" + path.
+// api() and API_BASE are NOT changed (40+ v1 call sites depend on them).
+async function apiV2(path, opts) {
+  opts = opts || {};
+  if (!opts.signal && typeof AbortController !== "undefined") {
+    var _ac = new AbortController();
+    var _timer = setTimeout(function() { _ac.abort(); }, 8000);
+    opts.signal = _ac.signal;
+  }
+  const response = await fetch("/api/v2" + path, opts);
+  if (_timer) clearTimeout(_timer);
+  if (!response.ok) {
+    let msg = "HTTP " + response.status;
+    try {
+      const body = await response.json();
+      if (body && body.detail) {
+        const d = body.detail;
+        if (typeof d === "string") {
+          msg = d;
+        } else if (Array.isArray(d)) {
           msg = d.map(function(item) {
             if (item && typeof item === "object") {
               const loc = Array.isArray(item.loc) ? item.loc.join(".") : "";
@@ -13543,14 +13600,42 @@ async function loadProjects() {
 }
 
 async function refreshJobs() {
-  const query = new URLSearchParams();
-  query.set("limit", "50");
-  if (selectedProjectId) query.set("project_id", selectedProjectId);
-  const body = await api("/jobs?" + query.toString());
-  jobsCache = body.jobs || [];
-  renderQueue(body.counts || {});
-  if (selectedJobId) highlightQueueRow(selectedJobId);
-  updateMobileStatusBar();
+  // T4: load per-project view prefs (localStorage) then build query from them.
+  loadTaskViewPrefs(selectedProjectId);
+  var prefs = taskViewPrefs || DEFAULT_TASK_VIEW;
+  var params = new URLSearchParams();
+  if (selectedProjectId) params.set("project_id", selectedProjectId);
+  params.set("group_by", prefs.groupBy || "molecule");
+  params.set("sort", prefs.sort || "created_desc");
+  params.set("group_limit", "200");
+  ["status", "workflow", "molecule", "tag", "batch", "remark"].forEach(function(dim) {
+    var arr = prefs.filters && prefs.filters[dim];
+    if (arr && arr.length) params.set(dim, arr.join(","));
+  });
+  if (prefs.q) params.set("q", prefs.q);
+  if (prefs.archived && prefs.archived !== "exclude") params.set("archived", prefs.archived);
+  if (prefs.runningFirst) params.set("running_first", "true");
+  try {
+    var body = await apiV2("/task-view?" + params.toString());
+    taskViewCache = body;
+    // Derive jobsCache: flatten groups in group order so existing consumers
+    // (buildQueueRow, canonicalTaskName, pruneQueueSelection, highlightQueueRow)
+    // keep working with V1JobRecordModel-compatible rows.
+    var flat = [];
+    if (body && body.groups) {
+      body.groups.forEach(function(g) {
+        if (g.jobs) {
+          g.jobs.forEach(function(row) { flat.push(row); });
+        }
+      });
+    }
+    jobsCache = flat;
+    renderQueue(body.counts || {});
+    if (selectedJobId) highlightQueueRow(selectedJobId);
+    updateMobileStatusBar();
+  } catch (e) {
+    console.error("refreshJobs failed:", e);
+  }
 }
 
 function getQueueCounts(countsArg) {
@@ -23953,6 +24038,7 @@ function setupEventListeners() {
 
   document.getElementById("project-select").addEventListener("change", async function(event) {
     selectedProjectId = event.target.value;
+    loadTaskViewPrefs(selectedProjectId);
     updateDeleteProjectButton();
     await refreshJobs();
     if (jobsCache.length) {

@@ -8406,3 +8406,131 @@ def test_electronic_state_summary_expands_preset() -> None:
     # Old misleading automatic wording is gone.
     assert "由后端自动确定电子态" not in html
     assert r"\u7531\u540e\u7aef\u81ea\u52a8\u786e\u5b9a\u7535\u5b50\u6001" not in html
+
+
+# ---------------------------------------------------------------------------
+# T4 — Task-view data layer (apiV2 + prefs + refreshJobs rewrite)
+# ---------------------------------------------------------------------------
+
+def test_task_view_data_layer() -> None:
+    """T4 data-layer contract: apiV2, DEFAULT_TASK_VIEW, prefs, refreshJobs rewrite."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # (1) apiV2 function definition and "/api/v2" literal present.
+    assert "async function apiV2(path, opts)" in html, (
+        "apiV2 function definition missing"
+    )
+    assert '"/api/v2"' in html or "fetch(\"/api/v2\"" in html, (
+        '"/api/v2" literal missing from apiV2'
+    )
+
+    # (2) DEFAULT_TASK_VIEW with correct shape.
+    assert 'groupBy: "molecule"' in html, (
+        'DEFAULT_TASK_VIEW.groupBy must be "molecule"'
+    )
+    assert 'sort: "created_desc"' in html, (
+        'DEFAULT_TASK_VIEW.sort must be "created_desc"'
+    )
+
+    # (3) localStorage prefix and __all__ fallback.
+    assert '"acp.taskview."' in html or "acp.taskview." in html, (
+        "acp.taskview. localStorage prefix missing"
+    )
+    assert "__all__" in html, "__all__ fallback literal missing from loadTaskViewPrefs"
+
+    # (4) refreshJobs uses apiV2("/task-view...) and no longer sets limit=50.
+    refresh_body = html.split("async function refreshJobs()", 1)[1].split("\nfunction ", 1)[0]
+    assert 'apiV2("/task-view' in refresh_body, (
+        'refreshJobs must call apiV2("/task-view...)'
+    )
+    assert 'query.set("limit", "50")' not in refresh_body, (
+        "refreshJobs must no longer set limit=50"
+    )
+
+    # (5) API_BASE unchanged.
+    assert 'const API_BASE = "/api/v1"' in html, (
+        'API_BASE must remain "/api/v1"'
+    )
+
+    # (6) taskViewCache defined and jobsCache derived from groups.
+    assert "let taskViewCache" in html or "var taskViewCache" in html, (
+        "taskViewCache variable missing"
+    )
+    assert "taskViewCache = body" in refresh_body, (
+        "refreshJobs must store full body in taskViewCache"
+    )
+    assert "body.groups" in refresh_body, (
+        "refreshJobs must derive jobsCache from body.groups"
+    )
+
+    # (7) try/catch around JSON.parse in loadTaskViewPrefs.
+    prefs_fn = html.split("function loadTaskViewPrefs(", 1)[1].split("\nfunction ", 1)[0]
+    assert "try" in prefs_fn and "catch" in prefs_fn, (
+        "loadTaskViewPrefs must have try/catch for corrupt JSON fallback"
+    )
+    assert "JSON.parse" in prefs_fn, (
+        "loadTaskViewPrefs must use JSON.parse"
+    )
+
+    # (8) loadTaskViewPrefs hook at selectedProjectId change site.
+    change_handler = html.split('getElementById("project-select").addEventListener("change"', 1)[1]
+    change_handler = change_handler.split("});")[0]
+    assert "loadTaskViewPrefs(" in change_handler, (
+        "loadTaskViewPrefs must be called on project-select change"
+    )
+
+    # (9) v1 api("/ call count: refreshJobs switched from api("/jobs") to
+    #     apiV2("/task-view") so the count dropped by exactly 1 vs the
+    #     pre-T4 baseline (which was 53).
+    api_v1_count = html.count('api("/')
+    assert api_v1_count == 52, (
+        f"v1 api('/ call count expected 52 (53 baseline minus refreshJobs), got {api_v1_count}"
+    )
+
+
+def test_task_view_prefs_corrupt_fallback() -> None:
+    """T4 contract: corrupt localStorage JSON must fall back to DEFAULT_TASK_VIEW clone."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # The loadTaskViewPrefs function must have a catch branch that assigns
+    # a JSON.parse(JSON.stringify(DEFAULT_TASK_VIEW)) deep clone as fallback.
+    prefs_fn = html.split("function loadTaskViewPrefs(", 1)[1].split("\nfunction ", 1)[0]
+    assert "catch" in prefs_fn, (
+        "loadTaskViewPrefs must have a catch branch for corrupt JSON"
+    )
+    # The fallback must produce a fresh DEFAULT_TASK_VIEW clone.
+    assert "DEFAULT_TASK_VIEW" in prefs_fn, (
+        "loadTaskViewPrefs must reference DEFAULT_TASK_VIEW in fallback"
+    )
+
+
+def test_task_view_prefs_constants_structure() -> None:
+    """T4 contract: DEFAULT_TASK_VIEW must declare all filter dimensions."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Extract the DEFAULT_TASK_VIEW definition.
+    start = html.index("const DEFAULT_TASK_VIEW")
+    end = html.index(";", start) + 1
+    definition = html[start:end]
+
+    for dim in ("status", "workflow", "molecule", "tag", "batch", "remark"):
+        assert f"{dim}: []" in definition, (
+            f"DEFAULT_TASK_VIEW.filters must include {dim}: []"
+        )
+    assert 'archived: "exclude"' in definition, (
+        'DEFAULT_TASK_VIEW.archived must be "exclude"'
+    )
+    assert "runningFirst: false" in definition, (
+        "DEFAULT_TASK_VIEW.runningFirst must be false"
+    )
+
+
+def test_apiV2_after_api_definition() -> None:
+    """T4 contract: apiV2 must be defined AFTER api() (not replacing it)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    api_pos = html.index("async function api(path, opts)")
+    api_v2_pos = html.index("async function apiV2(path, opts)")
+    assert api_v2_pos > api_pos, (
+        "apiV2 must be defined after api() — it is a separate helper"
+    )
