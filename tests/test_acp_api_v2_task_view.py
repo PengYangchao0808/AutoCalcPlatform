@@ -114,6 +114,8 @@ def _write_state_json(work_dir: Path, data: dict[str, Any]) -> None:
 
 
 def test_task_view_default_molecule_grouping(client: TestClient) -> None:
+    from acp.scheduler.jobs import JobStatus
+
     pid = _default_project_id(client)
     _create_multi_tasks(client, pid)
 
@@ -132,8 +134,17 @@ def test_task_view_default_molecule_grouping(client: TestClient) -> None:
     assert "ethanol" in molecule_keys or any("ethanol" in k for k in molecule_keys)
 
     counts = body["counts"]
-    for status_key in ("queued", "running", "completed", "failed", "cancelled", "pending"):
-        assert status_key in counts
+    for status in JobStatus:
+        assert status.value in counts, f"missing status key '{status.value}' in counts"
+    assert len(counts) == len(JobStatus)
+
+    for g in body["groups"]:
+        jobs = g["jobs"]
+        for i in range(len(jobs) - 1):
+            assert jobs[i]["created_at"] >= jobs[i + 1]["created_at"], (
+                f"within-group '{g['key']}' not in created_at descending: "
+                f"{jobs[i]['created_at']} < {jobs[i+1]['created_at']}"
+            )
 
     assert "facets" in body
     assert "statuses" in body["facets"]
@@ -209,12 +220,26 @@ def test_patch_remark_changes_task_row(client: TestClient) -> None:
 
 
 def test_patch_molecule_name_recomputes_molecule_key(client: TestClient) -> None:
+    import sqlite3
+
     pid = _default_project_id(client)
     task = _create_task(client, molecule_name="Ethanol", task_name="opt")
     task_id = task["task_id"]
 
+    db_path = client.app.state.job_manager.store.db_path
+    with sqlite3.connect(str(db_path)) as conn:
+        before = conn.execute(
+            "SELECT hex(spec_json) FROM jobs WHERE id=?", (task_id,)
+        ).fetchone()
+
     r = client.patch(f"/api/v2/tasks/{task_id}", json={"molecule_name": "METHANOL"})
     assert r.status_code == 200
+
+    with sqlite3.connect(str(db_path)) as conn:
+        after = conn.execute(
+            "SELECT hex(spec_json) FROM jobs WHERE id=?", (task_id,)
+        ).fetchone()
+    assert before == after, "spec_json was mutated by PATCH — must be immutable"
 
     r2 = client.get(f"/api/v2/task-view?project_id={pid}&group_by=molecule")
     assert r2.status_code == 200
@@ -223,8 +248,11 @@ def test_patch_molecule_name_recomputes_molecule_key(client: TestClient) -> None
 
 
 def test_patch_tags_replaces(client: TestClient) -> None:
+    import sqlite3
+
     task = _create_task(client, molecule_name="ethanol", task_name="opt")
     task_id = task["task_id"]
+    pid = _default_project_id(client)
 
     r = client.patch(f"/api/v2/tasks/{task_id}", json={"tags": ["alpha", "beta"]})
     assert r.status_code == 200
@@ -234,6 +262,23 @@ def test_patch_tags_replaces(client: TestClient) -> None:
 
     r3 = client.get(f"/api/v2/tasks/{task_id}")
     assert r3.status_code == 200
+
+    db_path = client.app.state.job_manager.store.db_path
+    with sqlite3.connect(str(db_path)) as conn:
+        row = conn.execute("SELECT tags FROM tasks WHERE task_id=?", (task_id,)).fetchone()
+        assert row is not None
+        db_tags = json.loads(row[0])
+    assert db_tags == ["gamma"]
+
+    r_view = client.get(f"/api/v2/task-view?project_id={pid}&group_by=tag")
+    assert r_view.status_code == 200
+    for g in r_view.json()["groups"]:
+        if g["key"] in ("alpha", "beta"):
+            job_ids = {j["id"] for j in g["jobs"]}
+            assert task_id not in job_ids, f"task still in stale tag group '{g['key']}'"
+    gamma_groups = [g for g in r_view.json()["groups"] if g["key"] == "gamma"]
+    assert len(gamma_groups) == 1
+    assert any(j["id"] == task_id for j in gamma_groups[0]["jobs"])
 
 
 # ── ⑤ PATCH failures ──────────────────────────────────────────────────
@@ -374,10 +419,30 @@ def test_legacy_project_tasks_endpoint_unchanged(client: TestClient) -> None:
 # ── ⑧ active-row enrichment ───────────────────────────────────────────
 
 
-def test_active_row_enrichment(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_active_row_enrichment(client: TestClient) -> None:
+    """Real-path enrichment: flip job to RUNNING, write state.json, verify enrichment fields."""
+    import time
+
+    from acp.scheduler.jobs import JobStatus
+
     pid = _default_project_id(client)
     task = _create_task(client, molecule_name="ethanol", task_name="opt")
     task_id = task["task_id"]
+
+    manager = client.app.state.job_manager
+
+    for _ in range(50):
+        rec = manager.store.get(task_id)
+        if rec is not None and rec.status.is_terminal:
+            break
+        time.sleep(0.1)
+
+    record = manager.store.get(task_id)
+    assert record is not None
+    record.status = JobStatus.RUNNING
+    manager.store.update(record)
+
+    manager.tasks.update_status(task_id, "running")
 
     r_detail = client.get(f"/api/v2/tasks/{task_id}")
     assert r_detail.status_code == 200
@@ -385,24 +450,9 @@ def test_active_row_enrichment(client: TestClient, monkeypatch: pytest.MonkeyPat
 
     _write_state_json(work_dir, {
         "stage_index": 2,
-        "stage_total": 3,
-        "stage_detail": "2/3 stages",
-        "progress_state": "indeterminate",
-        "current_stage": "compute",
+        "stage_total": 5,
+        "stage_detail": "probe",
     })
-
-    from acp.api import v2_routes
-
-    def _patched_enrich(request, rows):
-        for row in rows:
-            if row["id"] == task_id:
-                row["stage_index"] = 2
-                row["stage_total"] = 3
-                row["stage_detail"] = "2/3 stages"
-                row["progress_state"] = "indeterminate"
-        return rows
-
-    monkeypatch.setattr(v2_routes, "_enrich_active_rows", _patched_enrich)
 
     r = client.get(f"/api/v2/task-view?project_id={pid}")
     assert r.status_code == 200
@@ -410,9 +460,9 @@ def test_active_row_enrichment(client: TestClient, monkeypatch: pytest.MonkeyPat
     for g in r.json()["groups"]:
         for j in g["jobs"]:
             if j["id"] == task_id:
-                assert j.get("stage_index") == 2
-                assert j.get("stage_total") == 3
-                assert j.get("stage_detail") == "2/3 stages"
+                assert j["stage_index"] == 2
+                assert j["stage_total"] == 5
+                assert j["stage_detail"] == "probe"
                 found = True
     assert found, f"task {task_id} not found in task-view groups"
 
