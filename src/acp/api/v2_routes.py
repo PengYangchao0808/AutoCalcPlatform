@@ -25,6 +25,8 @@ from acp.api.v2_schemas import (
     V2BatchOpsRequest,
     V2BatchOpsResult,
     V2FileEntry,
+    V2LineageNode,
+    V2LineageResponse,
     V2MoleculeGroupInfo,
     V2MoleculeGroupSuggestion,
     V2MoleculeMergeRequest,
@@ -1030,3 +1032,145 @@ def delete_molecule_alias(
                 updated += 1
 
     return V2TagOpResult(updated=updated)
+
+
+# ── Task lineage endpoint (T12) ────────────────────────────────────────
+
+_MAX_LINEAGE_DEPTH = 10
+
+
+def _extract_upstream_refs(spec_input: dict[str, Any]) -> list[tuple[str, str]]:
+    """Extract (task_id, relation) pairs from spec.input source references.
+
+    Walks the ``source`` sub-dict looking for ``source_job_id`` and ``asset_id``
+    patterns that reference other scheduler tasks.  ``artifact_path`` is a file
+    path, not a task reference, so it is excluded.
+    """
+    refs: list[tuple[str, str]] = []
+    source = spec_input.get("source")
+    if not isinstance(source, dict):
+        return refs
+
+    for key in ("source_job_id", "asset_id"):
+        value = source.get(key)
+        if isinstance(value, str) and value.strip():
+            refs.append((value.strip(), f"input.source.{key}"))
+
+    return refs
+
+
+def _build_lineage_node(
+    record: JobRecord,
+    relation: str,
+    depth: int,
+) -> V2LineageNode:
+    spec = record.spec
+    return V2LineageNode(
+        task_id=record.id,
+        workflow=spec.workflow,
+        status=record.status.value,
+        molecule_name=spec.molecule_name,
+        task_name=spec.task_name,
+        remark=spec.remark,
+        relation=relation,
+        depth=depth,
+    )
+
+
+def _resolve_upstream(
+    manager: JobManager,
+    task_id: str,
+) -> list[V2LineageNode]:
+    """Recursively resolve upstream lineage via spec.input source references."""
+    upstream: list[V2LineageNode] = []
+    visited: set[str] = set()
+    queue: list[tuple[str, int]] = [(task_id, 0)]
+
+    while queue:
+        current_id, depth = queue.pop(0)
+        if current_id in visited:
+            continue
+        visited.add(current_id)
+
+        record = manager.store.get(current_id)
+        if record is None:
+            logger.warning("lineage: task %s not found, skipping", current_id)
+            continue
+
+        spec_input = record.spec.input
+        if not isinstance(spec_input, dict):
+            continue
+
+        for ref_id, relation in _extract_upstream_refs(spec_input):
+            if ref_id in visited:
+                continue
+            ref_record = manager.store.get(ref_id)
+            if ref_record is None:
+                logger.warning(
+                    "lineage: upstream task %s (from %s) not found, skipping",
+                    ref_id, current_id,
+                )
+                continue
+            next_depth = depth + 1
+            upstream.append(_build_lineage_node(ref_record, relation, next_depth))
+            if next_depth < _MAX_LINEAGE_DEPTH:
+                queue.append((ref_id, next_depth))
+
+    return upstream
+
+
+def _resolve_downstream(
+    manager: JobManager,
+    task_id: str,
+) -> list[V2LineageNode]:
+    """Find downstream tasks whose spec_json references this task_id."""
+    store = manager.store
+    downstream: list[V2LineageNode] = []
+
+    with store._lock, store._connect() as conn:
+        rows = conn.execute(
+            "SELECT id FROM jobs WHERE spec_json LIKE ?",
+            (f"%{task_id}%",),
+        ).fetchall()
+
+    for row in rows:
+        candidate_id = row["id"] if hasattr(row, "keys") else row[0]
+        if candidate_id == task_id:
+            continue
+        record = manager.store.get(candidate_id)
+        if record is None:
+            continue
+        spec_input = record.spec.input
+        if not isinstance(spec_input, dict):
+            continue
+        for ref_id, relation in _extract_upstream_refs(spec_input):
+            if ref_id == task_id:
+                downstream.append(
+                    _build_lineage_node(record, relation, 0)
+                )
+                break
+
+    return downstream
+
+
+@router.get("/tasks/{task_id}/lineage", response_model=V2LineageResponse)
+def get_task_lineage(task_id: str, request: Request) -> V2LineageResponse:
+    """Return upstream/downstream lineage for a task (read-only, T12).
+
+    Upstream: recursively resolve spec.input source references (depth ≤ 10,
+    cycle-guarded). Downstream: reverse-scan all jobs for references to this
+    task_id.  All reads only — never writes data.
+    """
+    manager = _manager(request)
+    record = manager.store.get(task_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"Task not found: {task_id}")
+
+    upstream = _resolve_upstream(manager, task_id)
+    downstream = _resolve_downstream(manager, task_id)
+
+    return V2LineageResponse(
+        task_id=task_id,
+        upstream=upstream,
+        downstream=downstream,
+    )

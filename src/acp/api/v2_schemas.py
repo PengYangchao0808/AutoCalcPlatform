@@ -42,6 +42,8 @@ __all__ = [
     "V2TagOpResult",
     "V2TagRenameRequest",
     "V2TreeResponse",
+    "V2LineageNode",
+    "V2LineageResponse",
 ]
 
 
@@ -348,3 +350,27 @@ class V2MoleculeAliasUpsert(BaseModel):
 
     alias_key: str
     group_key: str
+
+
+# ── Lineage models (T12) ───────────────────────────────────────────────
+
+
+class V2LineageNode(BaseModel):
+    """One node in the lineage chain (upstream or downstream)."""
+
+    task_id: str
+    workflow: str = ""
+    status: str = ""
+    molecule_name: str = ""
+    task_name: str = ""
+    remark: str = ""
+    relation: str = ""
+    depth: int = 0
+
+
+class V2LineageResponse(BaseModel):
+    """Upstream/downstream lineage for a task (read-only)."""
+
+    task_id: str
+    upstream: list[V2LineageNode] = Field(default_factory=list)
+    downstream: list[V2LineageNode] = Field(default_factory=list)
