@@ -234,7 +234,7 @@ Your next move: 阅读下方计划后启动执行（`$start-work task-organizati
   QA scenarios: happy——三级链全量断言；failure——损坏 spec_json 行跳过并 warning（不 500）。Evidence `.omo/evidence/task-organization/task-12.md`
   Commit: Y | feat(api,workbench): read-only task lineage browsing
 
-- [ ] 13. 文档与知识库同步
+- [x] 13. 文档与知识库同步
   What to do: ① `docs/ACP_Project_Task_Storage_Design_v2.md` §9.1 增补新列/索引/同步规则（首写胜出白名单、transition 写入集、purge 级联含 tasks）；② 修正 `src/acp/api/v2_routes.py:6-7` 模块 docstring（"the jobs table is the task index" → tasks 表为服务端任务索引，jobs 为执行事实）；③ 根 `AGENTS.md`：anti-pattern #20 更新（`purge_cascade` 现含 tasks 删除）、WHERE TO LOOK 增 `scheduler/task_views.py` 行；④ 新建 `docs/ACP_Task_Organization_DevDoc.md`：分组/筛选/排序契约、计数语义（tag 分组 sum≥total）、batch_id 沿革（resources.batch_id）、API 面、i18n 命名空间、测试图谱；⑤ README「任务队列操作」段补分组浏览一句。
   Must NOT do: 不改任何运行代码（docstring 修正除外，属注释）。
   Parallelization: Wave 6 | Blocked by: T1,T2,T3 | Blocks: —
