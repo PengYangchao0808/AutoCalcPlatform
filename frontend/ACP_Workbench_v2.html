@@ -413,6 +413,9 @@ body.resizing-v canvas {
 .panel-section.collapsed > .panel-body,
 .panel-section.collapsed > .logs-content,
 .queue-panel.collapsed .queue-expanded { display: none; }
+.queue-panel.collapsed .task-view-toolbar,
+.queue-panel.collapsed .task-view-chips,
+.queue-panel.collapsed .task-view-filter-panel { display: none !important; }
 .panel-section.collapsed,
 .queue-panel.collapsed { flex: 0 0 auto !important; }
 .queue-panel.collapsed .queue-counts,
@@ -1876,6 +1879,26 @@ option, optgroup {
 }
 
 .queue-panel { min-height: 0; display: flex; flex-direction: column; }
+.task-view-toolbar { display: flex; align-items: center; gap: 6px; padding: 6px 14px; flex: 0 0 auto; flex-wrap: wrap; }
+.task-view-toolbar .modal-input { flex: 1; min-width: 80px; padding: 4px 8px; font-size: 12px; }
+.task-view-toolbar .modal-select { width: auto; padding: 4px 24px 4px 8px; font-size: 12px; }
+.task-view-toolbar .mini-btn { position: relative; }
+.filter-badge { display: inline-block; background: var(--accent); color: #fff; border-radius: 999px; font-size: 10px; padding: 0 5px; margin-left: 2px; line-height: 16px; }
+.task-view-filter-panel { position: absolute; z-index: 200; right: 14px; margin-top: 4px; width: 280px; max-height: 320px; background: var(--bg-raised, #1e2a36); border: 1px solid var(--border-default); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); overflow: hidden; display: flex; flex-direction: column; }
+.filter-panel-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; font-size: 12px; font-weight: 600; color: var(--text-primary); border-bottom: 1px solid var(--border-subtle); }
+.filter-panel-body { overflow-y: auto; padding: 8px 12px; flex: 1; }
+.filter-group { margin-bottom: 10px; }
+.filter-group-title { font-size: 11px; font-weight: 600; color: var(--text-tertiary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.03em; }
+.filter-group-item { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+.filter-group-item input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; }
+.filter-group-item .filter-count { margin-left: auto; font-size: 10px; color: var(--text-tertiary); }
+.filter-no-facets { padding: 12px 0; text-align: center; font-size: 12px; color: var(--text-tertiary); }
+.task-view-chips { display: flex; align-items: center; gap: 4px; padding: 2px 14px 6px; flex-wrap: wrap; }
+.task-view-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: rgba(78, 161, 255, 0.12); color: var(--accent); font-size: 11px; border: 1px solid rgba(78, 161, 255, 0.25); }
+.task-view-chip .chip-remove { cursor: pointer; font-size: 12px; line-height: 1; opacity: 0.7; }
+.task-view-chip .chip-remove:hover { opacity: 1; }
+.task-view-chips .chip-clear { font-size: 11px; color: var(--text-tertiary); cursor: pointer; margin-left: 4px; }
+.task-view-chips .chip-clear:hover { color: var(--text-primary); }
 .queue-summary { padding: 14px 14px 10px; flex: 0 0 auto; }
 .queue-summary-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .queue-toggle { border: 1px solid var(--border-default); border-radius: 999px; background: rgba(255, 255, 255, 0.03); color: var(--text-secondary); padding: 6px 10px; font-size: 12px; }
@@ -3911,6 +3934,34 @@ option, optgroup {
           </div>
           <div class="queue-counts" id="queue-counts">加载中…</div>
         </div>
+        <div class="task-view-toolbar" id="task-view-toolbar">
+          <input type="text" id="task-view-search" class="modal-input" data-i18n-ph="queue.view.search_placeholder" placeholder="搜索任务、分子、备注…">
+          <select id="task-view-group" class="modal-select">
+            <option value="molecule" data-i18n-opt="queue.view.group_molecule">分子</option>
+            <option value="remark" data-i18n-opt="queue.view.group_remark">备注</option>
+            <option value="workflow" data-i18n-opt="queue.view.group_workflow">任务类型</option>
+            <option value="batch" data-i18n-opt="queue.view.group_batch">提交批次</option>
+            <option value="tag" data-i18n-opt="queue.view.group_tag" disabled data-i18n-title="queue.view.tag_group_disabled">自定义标签</option>
+            <option value="none" data-i18n-opt="queue.view.group_none">不分组</option>
+          </select>
+          <select id="task-view-sort" class="modal-select">
+            <option value="created_desc" data-i18n-opt="queue.view.sort_created_desc">创建时间：新→旧</option>
+            <option value="created_asc" data-i18n-opt="queue.view.sort_created_asc">创建时间：旧→新</option>
+            <option value="completed_desc" data-i18n-opt="queue.view.sort_completed_desc">完成时间：新→旧</option>
+            <option value="name_asc" data-i18n-opt="queue.view.sort_name_asc">名称：A→Z</option>
+            <option value="name_desc" data-i18n-opt="queue.view.sort_name_desc">名称：Z→A</option>
+            <option value="activity_desc" data-i18n-opt="queue.view.sort_activity_desc">最近活动</option>
+          </select>
+          <button type="button" class="mini-btn" id="task-view-filter-btn"><span data-i18n="queue.view.filter_btn">筛选</span> <span class="filter-badge" id="task-view-filter-badge" style="display:none;"></span></button>
+        </div>
+        <div class="task-view-filter-panel" id="task-view-filter-panel" style="display:none;">
+          <div class="filter-panel-header">
+            <span data-i18n="queue.view.filter_panel_title">筛选条件</span>
+            <button type="button" class="mini-btn" id="task-view-filter-close">✕</button>
+          </div>
+          <div class="filter-panel-body" id="task-view-filter-body"></div>
+        </div>
+        <div class="task-view-chips" id="task-view-chips" style="display:none;"></div>
         <div class="queue-expanded" id="queue-expanded">
           <div class="queue-table-wrap">
             <div class="queue-list" id="queue-list"></div>
@@ -6060,6 +6111,34 @@ const I18N = {
     "actions.details": "详情",
     "stage_pattern.xy": "第 {x} / {y} 阶段",
     "queue.project_summary": "{name} · {total} 个任务 · 运行 {running} · 排队 {queued} · 完成 {completed} · 失败 {failed}",
+    "queue.view.group_molecule": "分子",
+    "queue.view.group_remark": "备注",
+    "queue.view.group_workflow": "任务类型",
+    "queue.view.group_batch": "提交批次",
+    "queue.view.group_tag": "自定义标签",
+    "queue.view.group_none": "不分组",
+    "queue.view.sort_created_desc": "创建时间：新→旧",
+    "queue.view.sort_created_asc": "创建时间：旧→新",
+    "queue.view.sort_completed_desc": "完成时间：新→旧",
+    "queue.view.sort_name_asc": "名称：A→Z",
+    "queue.view.sort_name_desc": "名称：Z→A",
+    "queue.view.sort_activity_desc": "最近活动",
+    "queue.view.search_placeholder": "搜索任务、分子、备注…",
+    "queue.view.filter_btn": "筛选",
+    "queue.view.filter_badge": "筛选 {count}",
+    "queue.view.filter_panel_title": "筛选条件",
+    "queue.view.filter_status": "状态",
+    "queue.view.filter_workflow": "类型",
+    "queue.view.filter_molecule": "分子",
+    "queue.view.filter_tag": "标签",
+    "queue.view.filter_batch": "批次",
+    "queue.view.filter_no_facets": "暂无可用筛选条件",
+    "queue.view.chip_clear": "清除",
+    "queue.view.unassigned_molecule": "未标注分子",
+    "queue.view.unassigned_remark": "未填写备注",
+    "queue.view.singles": "单独提交",
+    "queue.view.untagged": "无标签",
+    "queue.view.tag_group_disabled": "标签分组将在标签功能上线后启用",
     "time.just_now": "刚刚",
     "time.seconds_ago": "{n}秒前",
     "time.minutes_ago": "{n}分钟前",
@@ -7066,6 +7145,34 @@ const I18N = {
     "actions.details": "Details",
     "stage_pattern.xy": "Stage {x} / {y}",
     "queue.project_summary": "{name} · {total} tasks · running {running} · queued {queued} · completed {completed} · failed {failed}",
+    "queue.view.group_molecule": "Molecule",
+    "queue.view.group_remark": "Remark",
+    "queue.view.group_workflow": "Workflow",
+    "queue.view.group_batch": "Batch",
+    "queue.view.group_tag": "Tags",
+    "queue.view.group_none": "No grouping",
+    "queue.view.sort_created_desc": "Created: Newest",
+    "queue.view.sort_created_asc": "Created: Oldest",
+    "queue.view.sort_completed_desc": "Completed: Newest",
+    "queue.view.sort_name_asc": "Name: A→Z",
+    "queue.view.sort_name_desc": "Name: Z→A",
+    "queue.view.sort_activity_desc": "Recent activity",
+    "queue.view.search_placeholder": "Search tasks, molecules, remarks…",
+    "queue.view.filter_btn": "Filter",
+    "queue.view.filter_badge": "Filter {count}",
+    "queue.view.filter_panel_title": "Filters",
+    "queue.view.filter_status": "Status",
+    "queue.view.filter_workflow": "Type",
+    "queue.view.filter_molecule": "Molecule",
+    "queue.view.filter_tag": "Tag",
+    "queue.view.filter_batch": "Batch",
+    "queue.view.filter_no_facets": "No filters available",
+    "queue.view.chip_clear": "Clear",
+    "queue.view.unassigned_molecule": "Unassigned molecule",
+    "queue.view.unassigned_remark": "No remark",
+    "queue.view.singles": "Single submission",
+    "queue.view.untagged": "No tags",
+    "queue.view.tag_group_disabled": "Tag grouping will be available when tags feature is enabled",
     "time.just_now": "just now",
     "time.seconds_ago": "{n}s ago",
     "time.minutes_ago": "{n}m ago",
@@ -7795,9 +7902,13 @@ function applyI18n() {
   document.querySelectorAll("[data-i18n-title]").forEach(function(el) {
     el.setAttribute("title", t(el.getAttribute("data-i18n-title")));
   });
+  document.querySelectorAll("[data-i18n-opt]").forEach(function(el) {
+    el.textContent = t(el.getAttribute("data-i18n-opt"));
+  });
   document.title = t("app.title");
   renderProjects();
   renderQueue();
+  renderChips();
   renderFileTree(lastFileListing || [], selectedJobId);
   updateInfoPanel(lastSelectedJob);
   renderMeasurementList();
@@ -13633,9 +13744,267 @@ async function refreshJobs() {
     renderQueue(body.counts || {});
     if (selectedJobId) highlightQueueRow(selectedJobId);
     updateMobileStatusBar();
+    _applyTaskViewPrefsToControls();
+    renderChips();
   } catch (e) {
     console.error("refreshJobs failed:", e);
   }
+}
+
+// --- T5: Task view toolbar, filter panel, chips ---
+var _taskViewSearchTimer = null;
+
+function scheduleTaskViewSearch() {
+  if (_taskViewSearchTimer) clearTimeout(_taskViewSearchTimer);
+  _taskViewSearchTimer = setTimeout(function() {
+    _taskViewSearchTimer = null;
+    var el = document.getElementById("task-view-search");
+    var q = el ? el.value.trim() : "";
+    var next = _clonePrefs();
+    next.q = q;
+    taskViewPrefs = next;
+    saveTaskViewPrefs();
+    refreshJobs();
+  }, 300);
+}
+
+function _clonePrefs() {
+  return JSON.parse(JSON.stringify(taskViewPrefs || DEFAULT_TASK_VIEW));
+}
+
+function _applyTaskViewPrefsToControls() {
+  var p = taskViewPrefs || DEFAULT_TASK_VIEW;
+  var searchEl = document.getElementById("task-view-search");
+  if (searchEl && document.activeElement !== searchEl) searchEl.value = p.q || "";
+  var groupEl = document.getElementById("task-view-group");
+  if (groupEl) groupEl.value = p.groupBy || "molecule";
+  var sortEl = document.getElementById("task-view-sort");
+  if (sortEl) sortEl.value = p.sort || "created_desc";
+  _updateFilterBadge();
+}
+
+function _activeFilterCount() {
+  var p = taskViewPrefs || DEFAULT_TASK_VIEW;
+  var f = p.filters || {};
+  var n = 0;
+  ["status", "workflow", "molecule", "tag", "batch", "remark"].forEach(function(dim) {
+    if (f[dim] && f[dim].length) n += f[dim].length;
+  });
+  return n;
+}
+
+function _updateFilterBadge() {
+  var badge = document.getElementById("task-view-filter-badge");
+  if (!badge) return;
+  var n = _activeFilterCount();
+  if (n > 0) {
+    badge.textContent = n;
+    badge.style.display = "";
+  } else {
+    badge.style.display = "none";
+  }
+}
+
+var _TASK_VIEW_FILTER_DIMS = [
+  { key: "status", labelKey: "queue.view.filter_status", facetKey: "statuses" },
+  { key: "workflow", labelKey: "queue.view.filter_workflow", facetKey: "workflows" },
+  { key: "molecule", labelKey: "queue.view.filter_molecule", facetKey: "molecules", nameField: "name" },
+  { key: "tag", labelKey: "queue.view.filter_tag", facetKey: "tags", facetItemKey: "tag" },
+  { key: "batch", labelKey: "queue.view.filter_batch", facetKey: "batches", facetItemKey: "batch_id" }
+];
+
+function renderFilterPanel() {
+  var body = document.getElementById("task-view-filter-body");
+  if (!body) return;
+  body.innerHTML = "";
+  var facets = (taskViewCache && taskViewCache.facets) || {};
+  var prefs = taskViewPrefs || DEFAULT_TASK_VIEW;
+  var hasAny = false;
+
+  _TASK_VIEW_FILTER_DIMS.forEach(function(dim) {
+    var facetArr = facets[dim.facetKey];
+    if (!facetArr || !facetArr.length) return;
+    hasAny = true;
+    var group = document.createElement("div");
+    group.className = "filter-group";
+    var title = document.createElement("div");
+    title.className = "filter-group-title";
+    title.textContent = t(dim.labelKey);
+    group.appendChild(title);
+
+    facetArr.forEach(function(item) {
+      var value = dim.facetItemKey ? item[dim.facetItemKey] : (item.key || item);
+      var count = item.count || 0;
+      var displayName = dim.nameField ? (item[dim.nameField] || value) : value;
+      var label = document.createElement("label");
+      label.className = "filter-group-item";
+      var cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = (prefs.filters[dim.key] || []).indexOf(value) >= 0;
+      cb.dataset.filterDim = dim.key;
+      cb.dataset.filterValue = value;
+      cb.addEventListener("change", function() {
+        var next = _clonePrefs();
+        var arr = next.filters[dim.key] || [];
+        if (cb.checked) {
+          if (arr.indexOf(value) < 0) arr.push(value);
+        } else {
+          arr = arr.filter(function(v) { return v !== value; });
+        }
+        next.filters[dim.key] = arr;
+        taskViewPrefs = next;
+        saveTaskViewPrefs();
+        _updateFilterBadge();
+        renderChips();
+        refreshJobs();
+      });
+      label.appendChild(cb);
+      var nameSpan = document.createElement("span");
+      nameSpan.textContent = displayName;
+      label.appendChild(nameSpan);
+      var countSpan = document.createElement("span");
+      countSpan.className = "filter-count";
+      countSpan.textContent = count;
+      label.appendChild(countSpan);
+      group.appendChild(label);
+    });
+    body.appendChild(group);
+  });
+
+  if (!hasAny) {
+    var empty = document.createElement("div");
+    empty.className = "filter-no-facets";
+    empty.setAttribute("data-i18n", "queue.view.filter_no_facets");
+    empty.textContent = t("queue.view.filter_no_facets");
+    body.appendChild(empty);
+  }
+}
+
+function _toggleFilterPanel() {
+  var panel = document.getElementById("task-view-filter-panel");
+  if (!panel) return;
+  if (panel.style.display === "none") {
+    renderFilterPanel();
+    panel.style.display = "";
+    // Close on outside click
+    setTimeout(function() {
+      document.addEventListener("click", _closeFilterPanelOutside, true);
+      document.addEventListener("keydown", _closeFilterPanelEsc, true);
+    }, 0);
+  } else {
+    _closeFilterPanel();
+  }
+}
+
+function _closeFilterPanel() {
+  var panel = document.getElementById("task-view-filter-panel");
+  if (panel) panel.style.display = "none";
+  document.removeEventListener("click", _closeFilterPanelOutside, true);
+  document.removeEventListener("keydown", _closeFilterPanelEsc, true);
+}
+
+function _closeFilterPanelOutside(e) {
+  var panel = document.getElementById("task-view-filter-panel");
+  var btn = document.getElementById("task-view-filter-btn");
+  if (panel && !panel.contains(e.target) && btn && !btn.contains(e.target)) {
+    _closeFilterPanel();
+  }
+}
+
+function _closeFilterPanelEsc(e) {
+  if (e.key === "Escape") _closeFilterPanel();
+}
+
+var _CHIP_DIM_LABELS = {
+  status: function(v) { return translateStatus(v); },
+  workflow: function(v) { return v; },
+  molecule: function(v) { return v; },
+  tag: function(v) { return v; },
+  batch: function(v) { return v; },
+  remark: function(v) { return v; }
+};
+
+function renderChips() {
+  var container = document.getElementById("task-view-chips");
+  if (!container) return;
+  container.innerHTML = "";
+  var prefs = taskViewPrefs || DEFAULT_TASK_VIEW;
+  var f = prefs.filters || {};
+  var hasAny = false;
+
+  ["status", "workflow", "molecule", "tag", "batch", "remark"].forEach(function(dim) {
+    var arr = f[dim] || [];
+    arr.forEach(function(val) {
+      hasAny = true;
+      var chip = document.createElement("span");
+      chip.className = "task-view-chip";
+      var labelFn = _CHIP_DIM_LABELS[dim] || (function(v) { return v; });
+      chip.textContent = labelFn(val);
+      var remove = document.createElement("span");
+      remove.className = "chip-remove";
+      remove.textContent = "×";
+      remove.dataset.chipDim = dim;
+      remove.dataset.chipValue = val;
+      remove.addEventListener("click", function() {
+        var next = _clonePrefs();
+        next.filters[dim] = (next.filters[dim] || []).filter(function(v) { return v !== val; });
+        taskViewPrefs = next;
+        saveTaskViewPrefs();
+        _updateFilterBadge();
+        renderChips();
+        refreshJobs();
+      });
+      chip.appendChild(remove);
+      container.appendChild(chip);
+    });
+  });
+
+  if (hasAny) {
+    var clear = document.createElement("span");
+    clear.className = "chip-clear";
+    clear.setAttribute("data-i18n", "queue.view.chip_clear");
+    clear.textContent = t("queue.view.chip_clear");
+    clear.addEventListener("click", function() {
+      var next = _clonePrefs();
+      next.filters = { status: [], workflow: [], molecule: [], tag: [], batch: [], remark: [] };
+      taskViewPrefs = next;
+      saveTaskViewPrefs();
+      _updateFilterBadge();
+      renderChips();
+      refreshJobs();
+    });
+    container.appendChild(clear);
+    container.style.display = "";
+  } else {
+    container.style.display = "none";
+  }
+}
+
+function _bindTaskViewToolbar() {
+  var searchEl = document.getElementById("task-view-search");
+  if (searchEl) searchEl.addEventListener("input", scheduleTaskViewSearch);
+  var groupEl = document.getElementById("task-view-group");
+  if (groupEl) groupEl.addEventListener("change", function() {
+    var next = _clonePrefs();
+    next.groupBy = groupEl.value;
+    taskViewPrefs = next;
+    saveTaskViewPrefs();
+    refreshJobs();
+  });
+  var sortEl = document.getElementById("task-view-sort");
+  if (sortEl) sortEl.addEventListener("change", function() {
+    var next = _clonePrefs();
+    next.sort = sortEl.value;
+    taskViewPrefs = next;
+    saveTaskViewPrefs();
+    refreshJobs();
+  });
+  var filterBtn = document.getElementById("task-view-filter-btn");
+  if (filterBtn) filterBtn.addEventListener("click", function(e) { e.stopPropagation(); _toggleFilterPanel(); });
+  var filterClose = document.getElementById("task-view-filter-close");
+  if (filterClose) filterClose.addEventListener("click", function() { _closeFilterPanel(); });
+  // Apply initial prefs to controls
+  _applyTaskViewPrefsToControls();
 }
 
 function getQueueCounts(countsArg) {
@@ -24196,6 +24565,9 @@ function setupEventListeners() {
     loadStructureSources(true);
   });
   document.getElementById("results-search").addEventListener("input", scheduleResultsSearch);
+
+  // T5: bind task-view toolbar controls (search, group, sort, filter)
+  _bindTaskViewToolbar();
 
   var dropzone = document.getElementById("upload-dropzone");
   var fileInput = document.getElementById("upload-file-input");

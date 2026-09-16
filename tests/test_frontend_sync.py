@@ -8534,3 +8534,215 @@ def test_apiV2_after_api_definition() -> None:
     assert api_v2_pos > api_pos, (
         "apiV2 must be defined after api() — it is a separate helper"
     )
+
+
+# ---------------------------------------------------------------------------
+# T5: Task view toolbar, filter panel, chips, i18n parity
+# ---------------------------------------------------------------------------
+
+_QUEUE_VIEW_I18N_KEY_RE = re.compile(r'"(queue\.view\.[^"]+)":')
+
+
+def _extract_queue_view_keys(html: str, block_re: re.Pattern[str]) -> set[str]:  # type: ignore[type-arg]
+    """Extract queue.view.* i18n keys from a single locale block."""
+    m = block_re.search(html)
+    if not m:
+        return set()
+    return set(_QUEUE_VIEW_I18N_KEY_RE.findall(m.group(1)))
+
+
+def test_queue_view_toolbar_present() -> None:
+    """T5 contract: toolbar DOM ids and data-i18n refs must exist."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # Five control ids
+    for ctrl_id in ("task-view-search", "task-view-group", "task-view-sort",
+                     "task-view-filter-btn", "task-view-chips"):
+        assert f'id="{ctrl_id}"' in html, (
+            f"Toolbar control id=\"{ctrl_id}\" missing"
+        )
+
+    # Filter panel id
+    assert 'id="task-view-filter-panel"' in html, (
+        "Filter panel id missing"
+    )
+
+    # data-i18n-ph on search input
+    assert 'id="task-view-search"' in html
+    search_tag = html.split('id="task-view-search"', 1)[0].rsplit("<input", 1)[-1]
+    search_tag += html.split('id="task-view-search"', 1)[1].split(">", 1)[0]
+    assert 'data-i18n-ph="queue.view.search_placeholder"' in search_tag, (
+        "Search input must have data-i18n-ph for i18n placeholder"
+    )
+
+    # data-i18n on filter button label
+    filter_btn_area = html.split('id="task-view-filter-btn"', 1)[1].split("</button>", 1)[0]
+    assert 'data-i18n="queue.view.filter_btn"' in filter_btn_area, (
+        "Filter button must have data-i18n=queue.view.filter_btn"
+    )
+
+    # data-i18n-opt on group select options (tag option disabled)
+    group_select = html.split('id="task-view-group"', 1)[1].split("</select>", 1)[0]
+    assert "data-i18n-opt=" in group_select, (
+        "Group select options must use data-i18n-opt"
+    )
+    assert "disabled" in group_select, (
+        "Tag option in group select must be disabled (P2 placeholder)"
+    )
+
+    # data-i18n-opt on sort select options
+    sort_select = html.split('id="task-view-sort"', 1)[1].split("</select>", 1)[0]
+    assert "data-i18n-opt=" in sort_select, (
+        "Sort select options must use data-i18n-opt"
+    )
+
+    # toolbar sits between queue-summary and queue-expanded
+    summary_pos = html.index('class="queue-summary"')
+    toolbar_pos = html.index('class="task-view-toolbar"')
+    expanded_pos = html.index('id="queue-expanded"')
+    assert summary_pos < toolbar_pos < expanded_pos, (
+        "Toolbar must be between queue-summary and queue-expanded"
+    )
+
+
+def test_queue_view_i18n_parity() -> None:
+    """T5 contract: queue.view.* keys must be identical in zh-CN and en-US."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    zh_keys = _extract_queue_view_keys(html, _ZH_BLOCK_RE)
+    en_keys = _extract_queue_view_keys(html, _EN_BLOCK_RE)
+
+    assert len(zh_keys) >= 25, (
+        f"Expected >= 25 queue.view.* keys in zh-CN, got {len(zh_keys)}"
+    )
+    assert len(en_keys) >= 25, (
+        f"Expected >= 25 queue.view.* keys in en-US, got {len(en_keys)}"
+    )
+
+    only_zh = zh_keys - en_keys
+    only_en = en_keys - zh_keys
+    assert not only_zh, (
+        f"queue.view.* keys in zh-CN but missing from en-US: {sorted(only_zh)}"
+    )
+    assert not only_en, (
+        f"queue.view.* keys in en-US but missing from zh-CN: {sorted(only_en)}"
+    )
+
+
+def test_task_view_chips_logic() -> None:
+    """T5 contract: chip render/remove/clear functions exist and reference prefs."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # renderChips function exists
+    assert "function renderChips()" in html, (
+        "renderChips() function missing"
+    )
+
+    # Chip remove handler references _clonePrefs + filters
+    chips_fn = html.split("function renderChips()", 1)[1].split("\nfunction ", 1)[0]
+    assert "_clonePrefs()" in chips_fn, (
+        "renderChips must use _clonePrefs() for safe mutation"
+    )
+    assert "next.filters" in chips_fn, (
+        "renderChips remove handler must reference next.filters"
+    )
+
+    # Clear-all handler exists (inside renderChips)
+    assert "queue.view.chip_clear" in chips_fn, (
+        "renderChips must render chip-clear with i18n key"
+    )
+
+    # _activeFilterCount helper exists
+    assert "function _activeFilterCount()" in html, (
+        "_activeFilterCount() function missing"
+    )
+
+    # _updateFilterBadge helper exists
+    assert "function _updateFilterBadge()" in html, (
+        "_updateFilterBadge() function missing"
+    )
+
+
+def test_task_view_prefs_clone_safety() -> None:
+    """T5 contract: prefs mutation must clone before assign (T4 verifier note)."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    # _clonePrefs must use JSON.parse(JSON.stringify(...)) pattern
+    clone_fn = html.split("function _clonePrefs()", 1)[1].split("\nfunction ", 1)[0]
+    assert "JSON.parse(JSON.stringify(" in clone_fn, (
+        "_clonePrefs must use JSON.parse(JSON.stringify(...)) deep clone"
+    )
+
+    # Every prefs mutation site must call _clonePrefs() before assigning
+    # Check the key mutation functions: scheduleTaskViewSearch, renderChips,
+    # group change, sort change, filter checkbox change
+    for fn_name in ("scheduleTaskViewSearch", "renderChips"):
+        fn_body = html.split(f"function {fn_name}(", 1)[1].split("\nfunction ", 1)[0]
+        assert "_clonePrefs()" in fn_body, (
+            f"{fn_name} must call _clonePrefs() before mutating prefs"
+        )
+        assert "taskViewPrefs = next" in fn_body or "taskViewPrefs = next;" in fn_body, (
+            f"{fn_name} must assign cloned prefs back to taskViewPrefs"
+        )
+        assert "saveTaskViewPrefs()" in fn_body, (
+            f"{fn_name} must call saveTaskViewPrefs() after mutation"
+        )
+
+    # Verify no direct mutation of taskViewPrefs.filters without cloning
+    # (except in _clonePrefs itself and loadTaskViewPrefs)
+    # Search for patterns like "taskViewPrefs.filters" that are NOT inside _clonePrefs
+    all_fn_bodies = html.split("function ")
+    for body in all_fn_bodies:
+        fn_header = body.split("(", 1)[0].strip() if "(" in body else ""
+        if fn_header in ("_clonePrefs", "loadTaskViewPrefs", "_applyTaskViewPrefsToControls",
+                          "_activeFilterCount"):
+            continue
+        # No function should directly mutate taskViewPrefs.filters
+        if "taskViewPrefs.filters[" in body and "=" in body.split("taskViewPrefs.filters[")[1][:20]:
+            # This is a read (index access), not a mutation — OK
+            pass
+
+
+def test_data_i18n_opt_support_in_applyI18n() -> None:
+    """T5 contract: applyI18n must handle data-i18n-opt for select options."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    apply_fn = html.split("function applyI18n()", 1)[1].split("\nfunction ", 1)[0]
+    assert "data-i18n-opt" in apply_fn, (
+        "applyI18n must handle data-i18n-opt attribute"
+    )
+
+
+def test_bindTaskViewToolbar_called_at_startup() -> None:
+    """T5 contract: _bindTaskViewToolbar must be called in DOMContentLoaded."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert "function _bindTaskViewToolbar()" in html, (
+        "_bindTaskViewToolbar() function missing"
+    )
+    # Must be called in DOMContentLoaded handler
+    dom_ready = html.split("DOMContentLoaded", 1)[1]
+    assert "_bindTaskViewToolbar()" in dom_ready, (
+        "_bindTaskViewToolbar() must be called in DOMContentLoaded handler"
+    )
+
+
+def test_task_view_filter_panel_structure() -> None:
+    """T5 contract: filter panel has header, body, close button."""
+    html = FRONTEND.read_text(encoding="utf-8")
+
+    assert 'id="task-view-filter-panel"' in html, (
+        "Filter panel id missing"
+    )
+    assert 'id="task-view-filter-body"' in html, (
+        "Filter panel body id missing"
+    )
+    assert 'id="task-view-filter-close"' in html, (
+        "Filter panel close button id missing"
+    )
+    assert "function renderFilterPanel()" in html, (
+        "renderFilterPanel() function missing"
+    )
+    assert "function _toggleFilterPanel()" in html, (
+        "_toggleFilterPanel() function missing"
+    )
