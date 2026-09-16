@@ -14340,19 +14340,23 @@ function _resolveGroupDisplayName(group, groupBy) {
 
 // T6: render a group-level status summary line ("运行 x · 排队 x · 完成 x · 失败 x").
 function _renderGroupStatusLine(group) {
-  var counts = group.counts || {};
-  var r = counts.running || 0;
-  var q = counts.queued || 0;
-  var c = counts.completed || 0;
-  var f = counts.failed || 0;
+  var r = 0, q = 0, c = 0, f = 0;
+  (group.jobs || []).forEach(function(row) {
+    var s = String(row.status || "").toLowerCase();
+    if (s === "running") r++;
+    else if (s === "queued" || s === "starting" || s === "pending") q++;
+    else if (s === "completed") c++;
+    else if (s === "failed" || s === "cancelled") f++;
+  });
   var parts = [];
   if (r > 0) parts.push(t("queue.view.status_running", { count: r }));
   if (q > 0) parts.push(t("queue.view.status_queued", { count: q }));
   if (c > 0) parts.push(t("queue.view.status_completed", { count: c }));
   if (f > 0) parts.push(t("queue.view.status_failed", { count: f }));
+  if (!parts.length) return document.createElement("span");
   var el = document.createElement("span");
   el.className = "queue-group-status-line";
-  el.textContent = parts.length ? parts.join(" · ") : "";
+  el.textContent = parts.join(" · ");
   return el;
 }
 

@@ -8818,6 +8818,15 @@ def test_task_view_group_render() -> None:
     assert "queue.view.status_failed" in summary_fn, (
         "_renderGroupStatusLine must use queue.view.status_failed"
     )
+    assert "group.jobs" in summary_fn, (
+        "_renderGroupStatusLine must derive counts from group.jobs (backend never emits group.counts)"
+    )
+    assert "group.counts" not in summary_fn, (
+        "_renderGroupStatusLine must NOT read group.counts (never emitted by backend)"
+    )
+    assert "!parts.length" in summary_fn or "parts.length === 0" in summary_fn or "!parts" in summary_fn, (
+        "_renderGroupStatusLine must guard span creation on non-empty parts"
+    )
 
     # (5) Tag-group hint function exists.
     assert "function _renderTagGroupHint()" in html, (
