@@ -210,7 +210,7 @@ Your next move: 阅读下方计划后启动执行（`$start-work task-organizati
   QA scenarios: happy——保存→套用→删除循环；failure——重名保存 409 或后写覆盖（按实现断言其一并文档化）。Evidence `.omo/evidence/task-organization/task-10.md`
   Commit: Y | feat(api,workbench): saved task views in project settings
 
-- [ ] 11. P3：自动打标规则（用户显式建立）
+- [x] 11. P3：自动打标规则（用户显式建立）
   What to do:
   a) 模型与存储：`projects.settings.auto_tag_rules: [{id, field: remark|molecule_name|workflow, op: contains|equals, value: str, tag: str, enabled: bool}]`——仅用户显式创建，无默认规则。
   b) 应用点：`src/acp/api/v1_routes.py` 与 `v2_routes._submit_batch_item` 提交成功后（或 `manager.submit` 后统一）调 `apply_auto_tag_rules(project_settings, task_row) -> list[str]` 命中即并入 tasks.tags（经 T3 的 update_display_fields；放 API 层而非 manager，避免 scheduler 依赖 projects 读取——**决策：API 提交路径应用**）。
